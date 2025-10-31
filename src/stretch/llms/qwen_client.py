@@ -88,7 +88,10 @@ class Qwen25Client(AbstractLLMClient):
         if quantization is not None:
             quantization = quantization.lower()
             # Note: there were supposed to be other options but this is the only one that worked this way
-            if quantization in ["int8", "int4"]:
+            if quantization == "awq":
+                model_kwargs["torch_dtype"] = torch.float16
+                model_name += "-AWQ"
+            elif quantization in ["int8", "int4"]:
                 try:
                     import bitsandbytes  # noqa: F401
                     from transformers import BitsAndBytesConfig

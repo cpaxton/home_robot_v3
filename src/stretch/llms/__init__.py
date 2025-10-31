@@ -46,7 +46,6 @@ llms = {
 # Add all the various Qwen25 variants
 qwen_variants = get_qwen_variants()
 llms.update({variant: Qwen25Client for variant in qwen_variants})
-
 llms.update({variant: GemmaClient for variant in ["gemma4b", "gemma1b"]})
 
 
