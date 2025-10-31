@@ -20,6 +20,7 @@ import torch
 from stretch.motion import Footprint
 from stretch.utils.morphology import binary_dilation, get_edges
 
+from .voxel import SparseVoxelMapProxy
 from .voxel_dynamem import SparseVoxelMap
 from .voxel_map import SparseVoxelMapNavigationSpace as SparseVoxelMapNavigationSpaceBase
 
@@ -31,7 +32,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
 
     def __init__(
         self,
-        voxel_map: SparseVoxelMap,
+        voxel_map: SparseVoxelMap | SparseVoxelMapProxy,
         step_size: float = 0.1,
         rotation_step_size: float = 0.5,
         use_orientation: bool = False,
@@ -193,7 +194,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             alignments_heuristics = self._alignment_heuristic(
                 alignments_heuristics, outside_frontier, debug=debug
             )
-            total_heuristics = time_heuristics + 0.5 * alignments_heuristics
+            total_heuristics = time_heuristics + 0.3 * alignments_heuristics
         else:
             alignments_heuristics = None
             total_heuristics = time_heuristics

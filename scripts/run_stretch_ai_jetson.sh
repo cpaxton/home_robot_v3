@@ -56,7 +56,7 @@ echo "Source version: $VERSION"
 VERSION="latest"
 echo "Docker image version: $VERSION"
 
-echo "Running docker image hellorobotinc/stretch-ai_cuda-11.8:$VERSION"
+echo "Running docker image hellorobotinc/stretch-ai_jetson:$VERSION"
 
 # Check dev flag
 if [[ "$*" == *"--dev"* ]]; then
@@ -69,11 +69,13 @@ fi
 
 echo "===================================================="
 echo "Running docker container with GPU support"
+export DATA_DIR=$HOME/data
+echo " - mounting data at $DATA_DIR"
 
 # Make sure the image is up to date
 # Update the Docker image if --update flag is set
 if $update; then
-    run_docker_command pull hellorobotinc/stretch-ai_cuda-11.8:$VERSION
+    run_docker_command pull hellorobotinc/stretch-ai_jetson:$VERSION
 fi
 
 # Run the container
@@ -95,14 +97,26 @@ run_docker_command run \
     -it \
     --runtime nvidia \
     --gpus all \
+    --shm-size=8g \
     -v /dev:/dev \
+    -v /etc/localtime:/etc/localtime:ro -v /etc/timezone:/etc/timezone:ro \
     --device /dev/snd \
+    --device /dev/bus/usb \
     --privileged=true \
     --network host \
     --env DISPLAY="$DISPLAY" \
+    --env HF_HOME=$HF_HOME \
+    --volume /tmp/argus_socket:/tmp/argus_socket \
+    --volume /etc/enctune.conf:/etc/enctune.conf \
+    --volume /etc/nv_tegra_release:/etc/nv_tegra_release \
+    --volume /tmp/nv_jetson_model:/tmp/nv_jetson_model \
+    --volume /var/run/dbus:/var/run/dbus \
+    --volume /var/run/avahi-daemon/socket:/var/run/avahi-daemon/socket \
+    --volume /var/run/docker.sock:/var/run/docker.sock \
+    --volume $DATA_DIR:/data \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -v /run/dbus/:/run/dbus/:rw \
     -v /dev/shm:/dev/shm \
     --group-add=audio \
     $mount_option \
-   stretch-ai_jetson:$VERSION
+    hellorobotinc/stretch-ai_jetson:$VERSION
