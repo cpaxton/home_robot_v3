@@ -101,11 +101,11 @@ def choose_layout():
     layout = choose_option(
             layouts, "kitchen layout", default=-1, default_message="random layouts"
         )
-    
+
     if layout == -1:
         layout = np.random.choice(range(10))
         print(colored(f"Randomly choosing layout... id: {layout}", "yellow"))
-    
+
     return layout
 
 def choose_style():
@@ -115,7 +115,7 @@ def choose_style():
     if style == -1:
         style = np.random.choice(range(11))
         print(colored(f"Randomly choosing style... id: {style}", "yellow"))
-    
+
     return style
 
 def layout_from_str(layout:str) -> int:

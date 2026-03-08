@@ -71,7 +71,7 @@ Then, in the terminal, it will ask you to specify an object and a receptacle. Fo
 
 ```bash
 Enter the target object: brown moose toy
-Enter the target receptacle: white laundry basket 
+Enter the target receptacle: white laundry basket
 ```
 
 ![Example of using the ai_pickup app with a toy moose and a laundry basket.](images/ai_pickup_moose_and_basket_example.jpg)
@@ -161,9 +161,9 @@ This will create an LLM client (for example, the [OpenAI client](../src/emet/llm
 Take a look at how the prompt starts out:
 
 > You are a friendly, helpful robot named Stretch. You are always helpful, and answer questions concisely. You will never harm a human or suggest harm.
-> 
+>
 > When prompted, you will respond using these actions:
-> 
+>
 > - pickup(object_name)  # object_name is the name of the object to pick up
 > - explore(int)  # explore the environment for a certain number of steps
 > - place(location_name)  # location_name is the name of the receptacle to place object in

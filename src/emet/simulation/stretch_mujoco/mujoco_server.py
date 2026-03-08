@@ -208,29 +208,29 @@ class MujocoServer:
 
     def change_start_pose(self,model: MjModel, translation: list|None, rotation_quat: list|None):
         body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
-        
+
         if body_id == -1:
             raise ValueError("Body 'base_link' not found in the MjModel.")
-    
+
         joint_id = -1
         for j in range(model.njnt):
             if model.jnt_bodyid[j] == body_id:
                 joint_id = j
                 break
-    
+
         # Since the model has a Free Joint, we must change the default QPOS (qpos0).
         qadr = model.jnt_qposadr[joint_id]
 
         if translation is not None:
             model.qpos0[qadr:qadr+3] = translation
-            
+
         if rotation_quat is not None:
             model.qpos0[qadr+3:qadr+7] = rotation_quat
 
         print(f"Start pose: {model.qpos0[qadr:qadr+3]}, {model.qpos0[qadr+3:qadr+7]}")
 
         return model
-        
+
 
 
     def __init__(

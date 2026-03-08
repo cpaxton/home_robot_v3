@@ -87,8 +87,8 @@ emet serve mujoco --use-robocasa
 emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo --match-method class
 ```
 
-- `-S` / `--skip`: skip confirmations for autonomous runs  
-- `--visual-servo` / `-V`: use visual servoing (required in sim; AnyGrasp needs real robot)  
+- `-S` / `--skip`: skip confirmations for autonomous runs
+- `--visual-servo` / `-V`: use visual servoing (required in sim; AnyGrasp needs real robot)
 - `--match-method class`: class-based matching (works well in sim)
 
 For CPU-only:
@@ -152,9 +152,9 @@ emet serve mujoco --use-robocasa
 
 Options:
 
-- `--robocasa-task`: task name (default: PnPCounterToCab)  
-- `--robocasa-style`: style index  
-- `--robocasa-layout`: layout index  
+- `--robocasa-task`: task name (default: PnPCounterToCab)
+- `--robocasa-style`: style index
+- `--robocasa-layout`: layout index
 
 Then run DynaMem or other apps as above.
 
@@ -191,9 +191,9 @@ python examples/run_stretch_simulation.py --headless
 
 Scenes are MuJoCo XML files under `src/emet/assets/robot/`:
 
-- `scene.xml` – default (robot + docking station)  
-- `stretch.xml` – robot only  
-- `docking_station.xml` – docking station  
+- `scene.xml` – default (robot + docking station)
+- `stretch.xml` – robot only
+- `docking_station.xml` – docking station
 
 Custom scene:
 
@@ -205,20 +205,20 @@ emet serve mujoco --scene-path /path/to/your/scene.xml
 
 ## Troubleshooting
 
-**"DISPLAY environment variable is missing"**  
+**"DISPLAY environment variable is missing"**
 On Linux, `--headless` uses EGL automatically (no display needed). On Mac/Windows, use Xvfb: `Xvfb :99 &` then `DISPLAY=:99 emet serve mujoco --headless`.
 
-**"gladLoadGL error" in headless**  
+**"gladLoadGL error" in headless**
 Ensure EGL libraries are installed (Linux): `sudo apt install libegl1-mesa libgles2-mesa`. Or use Xvfb: `Xvfb :99 &` then `DISPLAY=:99`.
 
-**"mesh volume is too small"**  
+**"mesh volume is too small"**
 MuJoCo is pinned to 3.2.6 for compatibility. Ensure `uv sync --extra sim` or `pip install -e ".[sim]"` is used.
 
-**Grasp/detection fails in sim**  
+**Grasp/detection fails in sim**
 Use `sim_planner.yaml` and `--parameter_file sim_planner.yaml` for grasp_object.
 
-**Robocasa import errors**  
+**Robocasa import errors**
 Install Robocasa and dependencies with `./scripts/install_simulation.sh`.
 
-**DynaMem / Rerun headless**  
+**DynaMem / Rerun headless**
 When running DynaMem without a display, the Rerun web server starts automatically. Connect from a laptop at `http://<server-ip>:9090?url=ws://<server-ip>:9877`. See [Debug: Headless and Rerun](debug.md#headless-and-rerun).

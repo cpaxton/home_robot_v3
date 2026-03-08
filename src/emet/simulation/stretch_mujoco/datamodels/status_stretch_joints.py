@@ -41,15 +41,15 @@ class StatusStretchJoints:
     def __getitem__(self, name:str):
         """For backward compatibility: allows access with the square brackets []"""
         return getattr(self, name)
-    
+
     def to_dict(self):
         return asdict(self)
-    
+
     def copy(self):
         return StatusStretchJoints.from_dict(copy.copy(self.to_dict()))
-    
+
     @staticmethod
-    def from_dict(dict_data:dict)-> "StatusStretchJoints": 
+    def from_dict(dict_data:dict)-> "StatusStretchJoints":
         return dataclass_from_dict(StatusStretchJoints, dict_data) #type: ignore
 
 

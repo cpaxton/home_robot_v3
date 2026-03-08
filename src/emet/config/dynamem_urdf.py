@@ -36,7 +36,7 @@ for joint in root.findall("joint"):
 # Add joint fake if not already added
 if not fake_exist:
     xml_snippet = """
-    
+
         <link name="fake_link_x">
             <inertial>
                 <origin rpy="0.0 0.0 0." xyz="0. 0. 0."/>

@@ -102,32 +102,32 @@ To use the Docker script, run the following command in the *stretch-ai* reposito
 You will see something like the following in the terminal as the Docker image is downloaded:
 
 ```
-(base) hello-robot@stretch-se3-2005:~/src/stretchpy$ ./scripts/run_stretch_ai_ros2_bridge_server.sh 
+(base) hello-robot@stretch-se3-2005:~/src/stretchpy$ ./scripts/run_stretch_ai_ros2_bridge_server.sh
 Starting Stretch AI ROS2 Bridge Server on stretch-se3-3005
 =========================================================
 Unable to find image 'hellorobotinc/stretch-ai-ros2-bridge:latest' locally
 latest: Pulling from hellorobotinc/stretch-ai-ros2-bridge
-762bedf4b1b7: Pull complete                                         
-84ceaedb8a21: Pull complete                                         
-c558ecc26f22: Pull complete                                         
+762bedf4b1b7: Pull complete
+84ceaedb8a21: Pull complete
+c558ecc26f22: Pull complete
 1006c31c0071: Downloading [===>                                               ]  33.99MB/484MB
-2883f1b72f50: Download complete                                     
-c29b29edc871: Download complete                                     
-75fa503deb0b: Download complete                                     
-03297d3829eb: Download complete 
-fcf26cd86178: Download complete 
-5bcaaf1fd219: Download complete 
-431ffe29be39: Download complete 
-79e926b74f85: Download complete 
-4f4fb700ef54: Verifying Checksum 
+2883f1b72f50: Download complete
+c29b29edc871: Download complete
+75fa503deb0b: Download complete
+03297d3829eb: Download complete
+fcf26cd86178: Download complete
+5bcaaf1fd219: Download complete
+431ffe29be39: Download complete
+79e926b74f85: Download complete
+4f4fb700ef54: Verifying Checksum
 27ae57810c0a: Downloading [=>                                                 ]  19.43MB/570.5MB
-9ecd20cd6844: Download complete 
-51c071dfcd29: Download complete 
-438302fc8bd8: Download complete 
+9ecd20cd6844: Download complete
+51c071dfcd29: Download complete
+438302fc8bd8: Download complete
 44999d133959: Downloading [>                                                  ]  10.79MB/10.57GB
-a5ed971e796e: Pulling fs layer                                      
-f570a0dd636d: Waiting                                               
-1a08cbb00ee1: Waiting                                               
+a5ed971e796e: Pulling fs layer
+f570a0dd636d: Waiting
+1a08cbb00ee1: Waiting
 ```
 
 The Docker image can be large (i.e., > 10GB), so it takes time to download. You can plug an ethernet cable into your router and Stretch to speed up the download. You will only need to download each version of the *stretch-ai* Docker image a single time.
@@ -139,12 +139,12 @@ After downloading the Docker image, the server will begin running on your robot.
 [server-12] j='joint_wrist_pitch' idx=11 idx_q=11
 [server-12] j='joint_wrist_roll' idx=12 idx_q=12
 [server-12] ==========================================
-[server-12] Starting up threads:                                    
+[server-12] Starting up threads:
 [server-12]  - Starting send thread
 [server-12]  - Starting recv thread
 [server-12]  - Sending state information
 [server-12]  - Sending servo information
-[server-12] Running all...                                          
+[server-12] Running all...
 [server-12] Starting to send full state
 [stretch_driver-3] [INFO] [1727454898.725969113] [stretch_driver]: Changed to mode = position
 ```
@@ -165,7 +165,7 @@ You should see something like the following:
 
 ```bash
 root@olympia:/app# nvidia-smi
-Fri Sep 27 16:12:43 2024       
+Fri Sep 27 16:12:43 2024
 +-----------------------------------------------------------------------------------------+
 | NVIDIA-SMI 550.54.15              Driver Version: 550.54.15      CUDA Version: 12.4     |
 |-----------------------------------------+------------------------+----------------------+
@@ -177,7 +177,7 @@ Fri Sep 27 16:12:43 2024
 |  0%   38C    P8             22W /  450W |     415MiB /  24564MiB |      0%      Default |
 |                                         |                        |                  N/A |
 +-----------------------------------------+------------------------+----------------------+
-                                                                                         
+
 +-----------------------------------------------------------------------------------------+
 | Processes:                                                                              |
 |  GPU   GI   CI        PID   Type   Process name                              GPU Memory |

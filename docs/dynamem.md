@@ -5,7 +5,7 @@
 [![Code Style: Black](https://img.shields.io/badge/Code%20Style-Black-262626?style=for-the-badge)](https://github.com/psf/black)
 [![PyTorch](https://img.shields.io/badge/Videos-Website-db6a4b.svg?style=for-the-badge&logo=airplayvideo)](https://dynamem.github.io)
 
-Dynamem is an open vocabulary mobile manipulation system that works life long in any unseen environments. It can continuously process text queries in the form of "pick up A and place it on B" (e.g. "pick up apple and place it on the plate"). 
+Dynamem is an open vocabulary mobile manipulation system that works life long in any unseen environments. It can continuously process text queries in the form of "pick up A and place it on B" (e.g. "pick up apple and place it on the plate").
 
 Compared to Stretch AI Agent mentioned [here](llm_agent.md), Dynamem can
 * continuously update its semantic memory when they observe the environment changes, which allows the system to work life long in homes without rescanning the environments;
@@ -22,7 +22,7 @@ _Click to follow the link to YouTube:_
 [Above](https://youtu.be/oBHzOfUdRnE) shows Dynamem running in NYU kitchen.
 
 # Understanding Dynamem code structure
-Dynamem consists of three components, navigation, picking, and placing. 
+Dynamem consists of three components, navigation, picking, and placing.
 To complete "Pick up A and Place it on B", it will call 4 commands sequentially:
 - `navigate(A)`
 - `pick(A)`
@@ -138,7 +138,7 @@ For more information on how to launch your robot, see the [Stretch AI startup gu
 
 ## On the workstation
 
-Most of AI codes (e.g. VLMs, mLLMs) should be run on the workstation. 
+Most of AI codes (e.g. VLMs, mLLMs) should be run on the workstation.
 
 You need to first install the conda environments on the workstation, we recommend you run
 ```
@@ -146,7 +146,7 @@ You need to first install the conda environments on the workstation, we recommen
 mamba activate stretch_ai
 ```
 
-If you use AnyGrasp manipulation, please refer to [these instructions](#prepare-manipulation-with-anygrasp) for the installation, 
+If you use AnyGrasp manipulation, please refer to [these instructions](#prepare-manipulation-with-anygrasp) for the installation,
 you would need to create a new conda environment on your worstation.
 
 ### Copying URDF from robot to workstation
@@ -156,7 +156,7 @@ No matter whether you choose to run which manipulation, having a well calibrated
 ```
 scp hello-robot@[ROBOT IP]:~/ament_ws/src/stretch_ros2/stretch_description/urdf/stretch.urdf stretch_ai/src/emet/config/urdf/
 ```
-- Run the following python scripts to replace urdf modification described in [OK Robot calibration docs](https://github.com/ok-robot/ok-robot/blob/main/docs/robot-calibration.md) 
+- Run the following python scripts to replace urdf modification described in [OK Robot calibration docs](https://github.com/ok-robot/ok-robot/blob/main/docs/robot-calibration.md)
 ```
 python src/emet/config/dynamem_urdf.py --urdf-path src/emet/config/urdf/stretch.urdf
 ```
@@ -180,7 +180,7 @@ Once the robot starts doing OVMM, a rerun window will be popped up to visualize 
 ![Example of Dynamem in the wild](images/dynamem_rerun.png)
 
 ### Manipulation with AnyGrasp
-The very first thing is to make sure OK-Robot repo is a submodule in your Stretch AI repo in `third_party/`!!! 
+The very first thing is to make sure OK-Robot repo is a submodule in your Stretch AI repo in `third_party/`!!!
 If not, run `git submodule update --init --recursive` to update all submodules.
 
 Next, please strictly follow [aforementioned steps](#copying-urdf-from-robot-to-workstation) to prepare accurate robot URDF!!!
@@ -216,7 +216,7 @@ python -m emet.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SER
 ```
 
 ### Visual grounding with GPT4o
-[As mentioned previously](#navigation-and-exploration), by default we run visual grounding by doing object detection on the robot observataion with the highest cosine similarity. While this strategy is fast, another querying strategy, prompting GPT-4o to process top-k robot observations has better accuracy. 
+[As mentioned previously](#navigation-and-exploration), by default we run visual grounding by doing object detection on the robot observataion with the highest cosine similarity. While this strategy is fast, another querying strategy, prompting GPT-4o to process top-k robot observations has better accuracy.
 
 To try this querying strategy that uses GPT-4o boost your navigation accuracy, you first need to follow [OPENAI's instructions](https://platform.openai.com/docs/overview) to create API keys. After that you can try this version by turning on mllm(`-M`) in your scripts:
 ```
@@ -226,7 +226,7 @@ OPNEAI_API_KEY=$YOUR_API_KEY python -m emet.app.run_dynamem --robot_ip $ROBOT_IP
 ### Loading from previous semantic memory
 Dynamem stores the semantic memory as a pickle file after initial rotation-in-place and every time `navigate(A)` is executed. This allows Dynamem to read from saved pickle file so that it can directly load the semantic memory from previous runs without rotating in place and scanning surroundings again.
 
-You can control memory saving and reading by specifying `input-path` and `output-path`. 
+You can control memory saving and reading by specifying `input-path` and `output-path`.
 
 By specifying `output-path`, the semantic memory will be saved to `dynamem_log/` + `specified-output-path` + `.pkl`; otherwise, the semantic memory will be saved to pickle file named by the current datetime in `dynamem_log/`.
 
@@ -239,9 +239,9 @@ python -m emet.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SER
 ```
 
 ### Ask for humans' confirmations before doing each subtask
-Dynamem OVMM task implementation hardcodes such API calling sequence: navigating to the target object `navigate(A)`, picking up the object `pick(A)`, navigating to the target receptacle `navigate(B)`, placing the object on the receptacle `place(B)`. However, sometimes we might want to interfere with robot task planning. For example, if first picking up fails, we humans might want the robot to try again. 
+Dynamem OVMM task implementation hardcodes such API calling sequence: navigating to the target object `navigate(A)`, picking up the object `pick(A)`, navigating to the target receptacle `navigate(B)`, placing the object on the receptacle `place(B)`. However, sometimes we might want to interfere with robot task planning. For example, if first picking up fails, we humans might want the robot to try again.
 
-So how can we steer robot actions? One functionality we provided is asking for humans' confirmations. That is to say, even though by default the system still calls `navigate(A)`, `pick(A)`, `navigate(B)`, `place(B)` in sequence, but before it implements each module, humans can explicitly tell the robot whether they want it to call this API call. 
+So how can we steer robot actions? One functionality we provided is asking for humans' confirmations. That is to say, even though by default the system still calls `navigate(A)`, `pick(A)`, `navigate(B)`, `place(B)` in sequence, but before it implements each module, humans can explicitly tell the robot whether they want it to call this API call.
 
 How is that functionality helpful? Sometimes when the robot is already facing the object, we might not want to waste time in navigation, by selecting `N` (no) when asked "Do you want to run navigation?", the robot can skip navigation and directly pick up objects.
 

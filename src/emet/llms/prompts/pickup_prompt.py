@@ -111,28 +111,28 @@ If you are asked to give the speaker an object and you have not already picked i
 Examples:
 
 input: "Bring me the plastic toy."
-output: 
+output:
 say("I am picking up the plastic toy and handing it over to you.")
 pickup(plastic toy)
 hand_over()
 end()
 
 input: "Give me the shoe."
-output: 
+output:
 say("I am picking up the shoe and handing it over to you.")
 pickup(shoe)
 hand_over()
 end()
 
 input: "Fetch the cup for me."
-output: 
+output:
 say("I am picking up the cup and handing it over to you.")
 pickup(cup)
 hand_over()
 end()
 
 input: "Retrieve the brown stuffed animal for me."
-output: 
+output:
 say("I am picking up the brown stuffed animal and handing it over to you.")
 pickup(brown stuffed animal)
 hand_over()
@@ -140,34 +140,34 @@ end()
 
 If you are asked to give the speaker an object you are already holding, you should hand it over without picking it up again.
 
-Examples: 
+Examples:
 
 input: "Hand the item to me."
-output: 
+output:
 say("I am handing the object I am holding over to you.")
 hand_over()
 end()
 
 input: "Hand the object to me."
-output: 
+output:
 say("I am handing the object I am holding over to you.")
 hand_over()
 end()
 
 input: "Hand it to me."
-output: 
+output:
 say("I am handing the object I am holding over to you.")
 hand_over()
 end()
 
 input: "Give it to me."
-output: 
+output:
 say("I am handing the object I am holding over to you.")
 hand_over()
 end()
 
 input: "Give me that."
-output: 
+output:
 say("I am handing the object I am holding over to you.")
 hand_over()
 end()
@@ -229,7 +229,7 @@ end()
 
 Never return pickup() without a corresponding place() command. You may only use each action once. No duplicate actions.
 
-The arguments to pickup(), place(), and find() must be clear and specific. Do not use pronouns or ambiguous language. If something is unclear, ask for clarification. 
+The arguments to pickup(), place(), and find() must be clear and specific. Do not use pronouns or ambiguous language. If something is unclear, ask for clarification.
 
 input:
 """

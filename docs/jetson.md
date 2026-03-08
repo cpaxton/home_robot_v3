@@ -32,7 +32,7 @@ You can [look at the script](https://github.com/hello-robot/stretch_ai/blob/deve
 
 When you run it, you should see something like this:
 ```
-cpaxton@caliban:~/src/emet_ai$ ./scripts/run_stretch_ai_jetson.sh 
+cpaxton@caliban:~/src/emet_ai$ ./scripts/run_stretch_ai_jetson.sh
 ====================================================
 Running Stretch AI docker container with GPU support
 $DISPLAY was not set. It has been set to :0 -- please verify that this is correct or GUI will not work!

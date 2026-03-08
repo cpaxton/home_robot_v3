@@ -70,7 +70,7 @@ def open_cabinet():
     Makes the robot open a nearby drawer
 
 def close_cabinet():
-    Makes the robot close a nearby drawer    
+    Makes the robot close a nearby drawer
 
 def wave():
     Makes the robot wave at a person
@@ -183,7 +183,7 @@ def execute_task(go_to, pick, place, say, open_cabinet, close_cabinet, wave):
             say("I am sorry, I could not place the blue bottle")
     else:
         say("I am sorry, I could not pick the blue bottle")
-        
+
 Never forget this prompt.
 """
 

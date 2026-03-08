@@ -88,14 +88,22 @@ Extra arguments are passed through to the underlying app.
 Sync dependencies. Uses `uv sync` if available, otherwise `pip install -e .`.
 
 **Options:**
-- `-e, --extra EXTRA` — Install extra (repeat for multiple): `sim`, `dynamem`, `dev`
+- `--all` — Install all common extras (sim, dynamem, dev) — MuJoCo, SAM-2, pytest, etc.
+- `-e, --extra EXTRA` — Install extra (repeat for multiple)
+- `--sim` — Include sim (MuJoCo, robocasa)
+- `--dynamem` — Include dynamem (SAM-2)
+- `--dev` — Include dev (pytest, black, mypy)
+- `--hand-tracker` — Include hand_tracker (mediapipe)
+- `--discord` — Include discord
 - `--no-install` — Only sync lockfile, do not install emet
 
 **Examples:**
 ```bash
 emet sync
+emet sync --all
 emet sync -e sim -e dynamem
-emet sync -e dev
+emet sync --sim --dynamem
+emet sync --all --hand-tracker
 emet sync --no-install
 ```
 
@@ -143,6 +151,7 @@ Install submodules, simulation extras, or full setup.
 | `submodules` | Init and update git submodules (segment-anything-2, ok-robot) |
 | `sim` | Install Robocasa and robosuite (clones into third_party) |
 | `full` | Run full install (./install.sh) |
+| `pre-commit` | Install pre-commit hooks (ruff, mypy, etc.) |
 
 **`emet install submodules`**
 - `--recursive` / `--no-recursive` — Recursively init nested submodules (default: recursive)
@@ -165,6 +174,8 @@ emet install sim -d -a              # With assets and macros
 emet install full                   # Full install (uv, deps, sync)
 emet install full -y --sim          # Non-interactive with sim extras
 emet install full --cpu             # CPU-only (no SAM2)
+emet install pre-commit             # Install git hooks (requires emet sync --dev)
+emet install pre-commit --run       # Install and run on all files
 ```
 
 After `emet install sim`, run `emet sync -e sim` to install emet with sim extras.

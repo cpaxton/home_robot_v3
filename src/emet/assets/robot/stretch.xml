@@ -241,7 +241,7 @@
       <body name="base_imu" pos="-0.12838 0.0031592 0.1474" euler="-3.1416 0 1.5708">
         <site name="base_imu" pos="0 0 0"/>
       </body>
-        
+
       <body name="link_mast" pos="-0.067 0.135 0.0284" quat="1 1 0 0">
         <geom material="Generic_Black" mesh="link_mast" class="visual"/>
         <geom mesh="link_mast" class="collision" mass="1.8285"/>
@@ -275,7 +275,7 @@
         <geom material="Laser_Black" mesh="laser" class="visual" mass="0.24"/>
         <geom mesh="laser" class="collision"/>
 
-        <replicate count="360" euler="0 0 0.0174533">   
+        <replicate count="360" euler="0 0 0.0174533">
             <site name="lidar" zaxis="1 0 0"/>
         </replicate>
 
@@ -370,11 +370,11 @@
                           <joint name="joint_wrist_roll" class="wrist_roll"/>
                           <geom material="Generic_Black" mesh="link_SG3_gripper_body" mass="0.29" class="visual"/>
                           <geom mesh="link_SG3_gripper_body" class="collision"/>
-                          <body name="link_SG3_aruco_d405" pos="0 0.0671264013906604 0.0297716109784749" euler="-1.397059993 3.139694278 -0.001741181" gravcomp="1"> 
+                          <body name="link_SG3_aruco_d405" pos="0 0.0671264013906604 0.0297716109784749" euler="-1.397059993 3.139694278 -0.001741181" gravcomp="1">
                             <geom material="Aruco_gripper_cam_Sticker" mesh="link_SG3_aruco_d405" class="visual" mass="3.6E-06"
                             shellinertia="true"/>
                             <geom mesh="link_SG3_aruco_d405" class="collision"/>
-                            <body name="link_d405" pos="0 -0.03068 0" euler="1.57 0 0"> 
+                            <body name="link_d405" pos="0 -0.03068 0" euler="1.57 0 0">
                               <geom material="Reflective_Metal" mesh="link_d405" mass="0.29" class="visual"/>
                               <geom material="Gray_Lens" mesh="link_d405_lens" pos="0 0 0" euler="0 0 0" mass="3.6E-06" class="visual"/>
                               <geom material="Pantone_Black_6_U" mesh="link_d405_front_plate" pos="0 0 0" euler="0 0 0" mass="3.6E-06" class="visual"/>
@@ -405,7 +405,7 @@
                                   <!-- <geom class="visual" type="box"  size="0.02 0.02 0.01" pos="0 0 0.01" mass="0.005" material="suction_rubber"/> -->
                                   <geom type="box"  size="0.02 0.02 0.01" pos="0 0 0.01" class="rubber"/>
                                 </body>
-                                <body name="link_SG3_gripper_left_finger_aruco" pos="-0.14425 0.0014877 -0.005189" euler="0.19199 0.95993 3.1312"> 
+                                <body name="link_SG3_gripper_left_finger_aruco" pos="-0.14425 0.0014877 -0.005189" euler="0.19199 0.95993 3.1312">
                                   <geom material="Aruco_left_finger_Sticker" mesh="link_SG3_gripper_left_finger_aruco" class="visual" mass="3.6E-06" shellinertia="true"/>
                                   <geom mesh="link_SG3_gripper_left_finger_aruco" class="collision"/>
                                 </body>
@@ -425,7 +425,7 @@
                                   <!-- <geom class="visual" type="box"  size="0.02 0.02 0.01" pos="0 0 0.01" mass="0.005" material="suction_rubber"/> -->
                                   <geom type="box"   size="0.02 0.02 0.01" pos="0 0 0.01" class="rubber"/>
                                 </body>
-                                <body name="link_SG3_gripper_right_finger_aruco" pos="0.14426 0 0.005189" euler="-2.9496 -0.95993 3.1416"> 
+                                <body name="link_SG3_gripper_right_finger_aruco" pos="0.14426 0 0.005189" euler="-2.9496 -0.95993 3.1416">
                                   <geom material="Aruco_right_finger_Sticker" mesh="link_SG3_gripper_right_finger_aruco" class="visual" mass="3.6E-06" shellinertia="true"/>
                                   <geom mesh="link_SG3_gripper_right_finger_aruco" class="collision"/>
                                 </body>

@@ -12,22 +12,25 @@ We use the SAP [CLA Assistant bot](https://github.com/cla-assistant/cla-assistan
 
 Install the code and set up the pre-commit hooks:
 
-```
+```bash
 git clone https://github.com/hello-robot/stretch_ai.git --recursive
-cd stretch_ai/src
-pip install -e .[dev]
-pre-commit install
+cd stretch_ai
+emet sync --dev
+emet install pre-commit
 ```
+
+Or with pip: `pip install -e .[dev]` then `pre-commit install`.
 
 ### Style
 
-We use [black](https://black.readthedocs.io/en/stable/) and [flake8](https://flake8.pycqa.org/en/latest/) to format our code.
-In addition, we use [isort](https://pycqa.github.io/isort/) for sorting imports, [mypy](https://mypy-lang.org/) for static type checking, and [codespell](https://github.com/codespell-project/codespell) for spell checking, among other things.
+We use [ruff](https://docs.astral.sh/ruff/) for linting and formatting (replaces black, flake8, isort).
+In addition, we use [mypy](https://mypy-lang.org/) for static type checking and [codespell](https://github.com/codespell-project/codespell) for spell checking.
 
 You can run the pre-commit hooks on all files with:
 
-```
+```bash
 pre-commit run --all-files
+# or: emet install pre-commit --run
 ```
 
 Please make sure that all changes are made and that the pre-commit hooks pass before submitting a pull request.

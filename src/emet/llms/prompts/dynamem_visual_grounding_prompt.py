@@ -16,7 +16,7 @@ DYNAMEM_VISUAL_GROUNDING_PROMPT = f"""
             Output:
                 Caption:
                     Image 1 is a red bottle. Image 2 is a blue mug. Image 3 is a blue bag. Image 4 is a blue bottle. Image 5 is a blue bottle
-                Images: 
+                Images:
                     4, 5
 
         Example #2:

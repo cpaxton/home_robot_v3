@@ -4,7 +4,7 @@
 
 Our data collection system is based on a low-cost teleoperation framework called [Dex Teleop](https://github.com/hello-robot/stretch_dex_teleop). You use a webcam to track a unique tool with AR markers, and the robot follows the tool. This system is designed to be easy to use and it allows us to collect high-quality data for training robot learning algorithms.
 
-To start with, we recommend you using our [Stretch Dexterous Teleop Kit](https://hello-robot.com/stretch-dex-teleop-kit). To collect data, connect the logitech C930 camera with the machine where you want to run data collection script and save the collected data. 
+To start with, we recommend you using our [Stretch Dexterous Teleop Kit](https://hello-robot.com/stretch-dex-teleop-kit). To collect data, connect the logitech C930 camera with the machine where you want to run data collection script and save the collected data.
 
 ## Prerequisites:
 
@@ -19,7 +19,7 @@ python -m pip install webcam mediapipe
 ### On PC:
 
 - Linux instructions: if using a Linux PC, run `install_dex_teleop.sh` to update `udev` rules
-  
+
   ```bash
   cd /path/to/stretch_ai/scripts
   ./install_dex_teleop.sh
@@ -27,7 +27,7 @@ python -m pip install webcam mediapipe
 
 - [Camera calibration](https://github.com/hello-robot/stretch_dex_teleop?tab=readme-ov-file#generate-specialized-urdfs) for dex teleop
 
-We recommend running all data collection commands without using docker, but we also realize that Dex teleop scripts might be unstable on some machine, it is also a good idea to use the docker for it. You should first make sure you understand how we use [Docker](./docker.md) in this repo. Then, follow these commands to open docker terminal. 
+We recommend running all data collection commands without using docker, but we also realize that Dex teleop scripts might be unstable on some machine, it is also a good idea to use the docker for it. You should first make sure you understand how we use [Docker](./docker.md) in this repo. Then, follow these commands to open docker terminal.
 
 To build docker image, run
 ```bash

@@ -145,7 +145,7 @@ Then, in the terminal, it will ask you to specify an object and a receptacle. Fo
 
 ```
 Enter the target object: plush rabbit toy
-Enter the target receptacle: yellow chair 
+Enter the target receptacle: yellow chair
 ```
 
 ![RabbitChair](https://github.com/user-attachments/assets/dc7c19d2-49bd-45af-95ef-42abf22be5aa)

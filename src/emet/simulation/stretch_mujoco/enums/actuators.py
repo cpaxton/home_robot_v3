@@ -57,7 +57,7 @@ class Actuators(Enum):
             return ["joint_head_tilt"]
 
         raise NotImplementedError(f"Joint names for {self} are not defined.")
-    
+
     @staticmethod
     @cache
     def get_actuator_by_joint_names_in_mjcf(joint_name: str) -> "Actuators":
@@ -95,7 +95,7 @@ class Actuators(Enum):
             return Actuators.base_translate
         if joint_name == 'rotate_mobile_base':
             return Actuators.base_rotate
-        
+
         if joint_name == "joint_lift":
             return Actuators.lift
         if "joint_arm" in joint_name:

@@ -149,7 +149,7 @@ class MujocoServerPassive(MujocoServer):
         colors = np.array([[1, 0, 0, 1],   # +X
                         [0, 1, 0, 1],      # +Y
                         [0, 0, 1, 1]])     # +Z
-        
+
         rot_matrix = Rx(rotation[0]) @ Ry(rotation[1]) @ Rz(rotation[2])
         for axis in range(3):
             if axis == 0:
@@ -168,7 +168,7 @@ class MujocoServerPassive(MujocoServer):
                 ])
             elif axis ==2:
                 # No rotation needed
-                R = np.eye(3) 
+                R = np.eye(3)
 
             R = rot_matrix @ R
 

@@ -81,32 +81,32 @@ To use the Docker script, run the following command in the *stretch-ai* reposito
 You will see something like the following in the terminal as the Docker image is downloaded:
 
 ```
-(base) hello-robot@stretch-se3-2005:~/src/stretchpy$ ./scripts/run_stretch_ai_ros2_bridge_server.sh 
+(base) hello-robot@stretch-se3-2005:~/src/stretchpy$ ./scripts/run_stretch_ai_ros2_bridge_server.sh
 Starting Stretch AI ROS2 Bridge Server on stretch-se3-3005
 =========================================================
 Unable to find image 'hellorobotinc/stretch-ai-ros2-bridge:latest' locally
 latest: Pulling from hellorobotinc/stretch-ai-ros2-bridge
-762bedf4b1b7: Pull complete                                         
-84ceaedb8a21: Pull complete                                         
-c558ecc26f22: Pull complete                                         
+762bedf4b1b7: Pull complete
+84ceaedb8a21: Pull complete
+c558ecc26f22: Pull complete
 1006c31c0071: Downloading [===>                                               ]  33.99MB/484MB
-2883f1b72f50: Download complete                                     
-c29b29edc871: Download complete                                     
-75fa503deb0b: Download complete                                     
-03297d3829eb: Download complete 
-fcf26cd86178: Download complete 
-5bcaaf1fd219: Download complete 
-431ffe29be39: Download complete 
-79e926b74f85: Download complete 
-4f4fb700ef54: Verifying Checksum 
+2883f1b72f50: Download complete
+c29b29edc871: Download complete
+75fa503deb0b: Download complete
+03297d3829eb: Download complete
+fcf26cd86178: Download complete
+5bcaaf1fd219: Download complete
+431ffe29be39: Download complete
+79e926b74f85: Download complete
+4f4fb700ef54: Verifying Checksum
 27ae57810c0a: Downloading [=>                                                 ]  19.43MB/570.5MB
-9ecd20cd6844: Download complete 
-51c071dfcd29: Download complete 
-438302fc8bd8: Download complete 
+9ecd20cd6844: Download complete
+51c071dfcd29: Download complete
+438302fc8bd8: Download complete
 44999d133959: Downloading [>                                                  ]  10.79MB/10.57GB
-a5ed971e796e: Pulling fs layer                                      
-f570a0dd636d: Waiting                                               
-1a08cbb00ee1: Waiting                                               
+a5ed971e796e: Pulling fs layer
+f570a0dd636d: Waiting
+1a08cbb00ee1: Waiting
 ```
 
 The Docker image can be large (i.e., > 10GB), so it takes time to download. You can plug an ethernet cable into your router and Stretch to speed up the download. You will only need to download each version of the *stretch-ai* Docker image a single time.
@@ -118,12 +118,12 @@ After downloading the Docker image, the server will begin running on your robot.
 [server-12] j='joint_wrist_pitch' idx=11 idx_q=11
 [server-12] j='joint_wrist_roll' idx=12 idx_q=12
 [server-12] ==========================================
-[server-12] Starting up threads:                                    
+[server-12] Starting up threads:
 [server-12]  - Starting send thread
 [server-12]  - Starting recv thread
 [server-12]  - Sending state information
 [server-12]  - Sending servo information
-[server-12] Running all...                                          
+[server-12] Running all...
 [server-12] Starting to send full state
 [stretch_driver-3] [INFO] [1727454898.725969113] [stretch_driver]: Changed to mode = position
 ```
@@ -237,7 +237,7 @@ cd stretch_ai/
 bash ./install.sh
 ```
 
-We assume [ROS2](https://docs.ros.org/en/foxy/index.html) has already been installed on your robot and the main directory for ros2 packages is `~/ament_ws`. 
+We assume [ROS2](https://docs.ros.org/en/foxy/index.html) has already been installed on your robot and the main directory for ros2 packages is `~/ament_ws`.
 After you install `stretch_ai`, you need to copy `stretch_ros2_bridge` folder in `stretch_ai/src/` folder into `~/ament_ws/` by
 ```
 # Ignore this line if you are already in stretch ai folder
@@ -245,7 +245,7 @@ cd stretch_ai/
 
 ln -s src/stretch_ros2_bridge ~/ament_ws/src/stretch_ros2_bridge
 ```
-and run 
+and run
 ```
 cd ~/ament_ws
 colcon build --symlink

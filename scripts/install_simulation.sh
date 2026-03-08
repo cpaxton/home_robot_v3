@@ -68,4 +68,3 @@ fi
 cd "$ROOT_DIR" || exit 1
 
 echo "Installation complete!"
-
