@@ -90,7 +90,7 @@ discord = [
     "python-dotenv",
 ]
 sim = [
-    "mujoco>=3.2.6",
+    "mujoco==3.2.6",  # Pinned for Stretch model compatibility
     "hello-robot-stretch-urdf",
     "grpcio",
     "click>=8.1.8",
