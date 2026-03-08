@@ -20,6 +20,51 @@
 
 Much of the code is licensed under the Apache 2.0 license. See the [LICENSE](LICENSE) file for more information. Parts of it are derived from the Meta [HomeRobot](https://github.com/facebookresearch/home-robot) project and are licensed under the [MIT license](META_LICENSE).
 
+## Installation (Astral uv)
+
+This project installs with [Astral uv](https://docs.astral.sh/uv/) (no conda required).
+
+**1. Install uv** (if needed):
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Ensure ~/.local/bin is on your PATH
+```
+
+**2. Clone the repo and install the project:**
+
+```bash
+git clone <this-repo>
+cd home_robot_v3   # or your clone directory
+```
+
+**Option A — one-shot script (recommended):**
+
+```bash
+./install.sh              # dev extras, prompts for system deps
+./install.sh --sim -y     # + simulation, non-interactive
+./install.sh --no-sam2    # skip DynaMem/SAM2
+```
+
+**Option B — uv directly:**
+
+```bash
+uv sync --extra dev                          # base + dev tools
+uv sync --extra dev --extra sim              # + MuJoCo simulation
+uv sync --extra dev --extra sim --extra dynamem   # + DynaMem (SAM-2)
+```
+
+The script installs system deps (e.g. `portaudio`, `espeak`, `ffmpeg`) and runs `uv sync` for you. For reproducible installs, a `uv.lock` is included; `uv sync` uses it automatically.
+
+**3. Use the environment:**
+
+```bash
+source .venv/bin/activate
+# or run without activating:
+uv run emet --help
+uv run python -m emet.app.ai_pickup
+```
+
 ## Quick Start (Simulation)
 
 Run DynaMem in MuJoCo simulation in a few steps:
@@ -171,16 +216,15 @@ Check out additional documentation for ways to use Stretch AI:
 
 ## Development
 
-Clone this repo and install with [uv](https://docs.astral.sh/uv/):
+Clone the repo, then install with [Astral uv](https://docs.astral.sh/uv/) as in [Installation (Astral uv)](#installation-astral-uv):
 
 ```bash
-cd stretch_ai
 ./install.sh
 # or: uv sync --extra dev
 pre-commit install
 ```
 
-For simulation: `uv sync --extra sim`. For DynaMem (SAM2): `uv sync --extra dynamem`.
+For simulation: `uv sync --extra sim` (or `./install.sh --sim -y`). For DynaMem (SAM2): `uv sync --extra dynamem`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for more information, and [debug](docs/debug.md) / [update](docs/update.md) for troubleshooting. You can test most code in [simulation](docs/simulation.md) without a physical robot.
 

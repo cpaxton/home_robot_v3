@@ -106,6 +106,10 @@ dynamem = [
     "SAM-2",
 ]
 
+[tool.uv]
+# Install the whole project with: uv sync [--extra dev] [--extra sim] [--extra dynamem]
+# Or from repo root: ./install.sh [--sim] [-y]
+
 [tool.uv.sources]
 "SAM-2" = { path = "third_party/segment-anything-2", editable = true }
 
