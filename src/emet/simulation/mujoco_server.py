@@ -39,6 +39,8 @@ from emet.utils.config import get_control_config
 from emet.utils.geometry import pose_global_to_base, xyt_base_to_global, xyt_global_to_base
 from emet.utils.image import scale_camera_matrix
 
+from emet.robots.stretch import StretchBackend
+from emet.robots.base import RobotSpec
 from emet.utils.assets import get_mujoco_models_path
 
 default_scene_xml_path = str(get_mujoco_models_path() / "scene.xml")
@@ -94,6 +96,10 @@ class MujocoZmqServer(BaseZmqServer):
     # Print debug messages for control loop
     debug_control_loop = False
     debug_set_goal_pose = False
+
+    def get_robot_spec(self) -> RobotSpec:
+        """Which robot does this simulator emulate?"""
+        return StretchBackend().get_spec()
 
     def get_body_xyt(self, body_name: str) -> np.ndarray:
         """Get the se(2) base pose: x, y, and theta"""

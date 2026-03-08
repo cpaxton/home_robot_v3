@@ -10,7 +10,7 @@ from pathlib import Path
 
 def get_assets_root() -> Path:
     """Return the path to the stretch package's assets directory."""
-    return Path(str(importlib.resources.files("stretch") / "assets"))
+    return Path(str(importlib.resources.files("emet") / "assets"))
 
 
 def get_robot_assets_path() -> Path:
