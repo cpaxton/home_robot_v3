@@ -1684,8 +1684,7 @@ class HomeRobotZmqClient(AbstractRobotClient):
                 self._rerun.step(self._obs, self._servo)
                 step_count += 1
                 if self._rerun_debug:
-                    import time as _time
-                    now = _time.time()
+                    now = time.time()
                     if now - last_debug_t >= 2.0:
                         has_obs = self._obs is not None
                         has_servo = self._servo is not None
@@ -1694,13 +1693,10 @@ class HomeRobotZmqClient(AbstractRobotClient):
                             if (self._servo is not None and getattr(self._servo, "rgb", None) is not None)
                             else None
                         )
-                        msg = (
-                            f"[RERUN] steps={step_count} obs={has_obs} servo={has_servo} "
-                            f"rgb_shape={rgb_shape}"
+                        print(
+                            f"[RERUN] obs={has_obs} servo={has_servo} rgb_shape={rgb_shape}"
+                            + (" — start MuJoCo server first" if not (has_obs and has_servo) else "")
                         )
-                        if not has_obs or not has_servo:
-                            msg += " — start MuJoCo server first: python -m stretch.simulation.mujoco_server"
-                        print(msg)
                         last_debug_t = now
                 # Avoid CPU spin when no data (obs/servo come from ZMQ; step() returns immediately)
                 if not self._obs or not self._servo:

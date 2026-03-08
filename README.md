@@ -20,6 +20,27 @@
 
 Much of the code is licensed under the Apache 2.0 license. See the [LICENSE](LICENSE) file for more information. Parts of it are derived from the Meta [HomeRobot](https://github.com/facebookresearch/home-robot) project and are licensed under the [MIT license](META_LICENSE).
 
+## Quick Start (Simulation)
+
+Run DynaMem in MuJoCo simulation in a few steps:
+
+```bash
+# 1. Install (includes simulation + DynaMem/SAM2)
+./install.sh --sim -y
+
+# 2. Terminal 1 — start simulation server
+python -m stretch.simulation.mujoco_server --use-robocasa
+
+# 3. Terminal 2 — run DynaMem
+python -m stretch.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class --headless
+```
+
+**4. View in browser:** Open `http://localhost:9090?url=ws://localhost:9877` to see the Rerun visualization (cameras, 3D scene, robot).
+
+**At the prompt:** `E` = explore, `M` = pick and place, `Q` = quit.
+
+For headless/SSH: use `--headless` and open the URL from your laptop (or use SSH port forwarding). See [Debug: Headless and Rerun](docs/debug.md#headless-and-rerun).
+
 ## Hardware Requirements
 
 We recommend the following hardware to run Stretch AI. Other GPUs and other versions of Stretch may support some of the capabilities found in this repository, but our development and testing have focused on the following hardware.
@@ -138,7 +159,7 @@ Check out additional documentation for ways to use Stretch AI:
 - [Simulation](docs/simulation.md) -- Run DynaMem, grasp, and mapping in MuJoCo without a physical robot
 - [LLM Agent](docs/llm_agent.md) -- How to use the LLM agent for language-directed pick and place
 - [Add a New LLM Task](docs/adding_a_new_task.md) -- How to add a new task that can be called by an LLM
-- [DynaMem](docs/dynamem.md) -- Open-vocabulary mobile manipulation; works in simulation and headless (connect Rerun viewer at `http://<server>:9090`)
+- [DynaMem](docs/dynamem.md) -- Open-vocabulary mobile manipulation; works in simulation and headless (connect Rerun at `http://<server>:9090?url=ws://<server>:9877`)
 - [Data Collection for Learning from Demonstration](docs/data_collection.md) -- How to collect data for learning from demonstration
 - [Embodied Question Answering](docs/eqa.md) -- Allow the robot to explore the environment and answer questions from the users about the environment.
 - [Learning from Demonstration](docs/learning_from_demonstration.md)  -- How to train and evaluate policies with LfD
