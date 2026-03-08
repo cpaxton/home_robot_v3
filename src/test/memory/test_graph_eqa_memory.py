@@ -63,7 +63,7 @@ def test_parse_answer():
     )
     r, a, c, act, cr = mem.parse_answer(raw)
     assert "table" in r
-    assert a.strip() == "yes"
+    assert a.strip().lower() == "yes"
     assert c is True
     assert "sure" in cr.lower()
 

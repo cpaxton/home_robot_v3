@@ -14,6 +14,8 @@ _Click this large image to follow the link to YouTube:_
 
 In previous EQA work [GraphEQA](https://arxiv.org/abs/2412.14480), researchers provided a multimodal large language models (mLLMs), such as Google's Gemini and OpenAI's GPT, with a prompt that includes a object-centric semantic scene graph and task-relevant robot image observations. GraphEQA utilizes third party scene graph modules [Hydra](https://arxiv.org/abs/2201.13360) based on ROS Noetic. Installing this module can be difficult due to OS and software version compatibility. To provide a more user friendly alternative, we adapted the methods of [GraphEQA](https://arxiv.org/abs/2412.14480) for use with existing code in the Stretch AI repo.
 
+**Alternative: GraphEQA memory model.** Stretch AI also includes a separate [GraphEQA-style memory](graph_eqa.md) that uses an explicit scene graph (nodes = objects, edges = relations) instead of the voxel-based memory. Run it with `emet run graph-eqa`. See [GraphEQA docs](graph_eqa.md) for when to use it and how it differs from this EQA pipeline.
+
 In GraphEQA, mLLMs are expected to answer the question based on task-relevant image observations and plan exploration based on a scene graph string. Stretch AI has useful capabilities that can serve similar roles. For example, [DynaMem system](dynamem.md) finds task-relevant images and VLM models, such as [Qwen](../src/emet/llms/qwen_client.py) and [OpenAI GPT](../src/emet/llms/openai_client.py), extract visual clues from image observations by listing featured objects in the images such as beds, tables, etc.
 
 The Stretch AI EQA module builds on these existing capabilities resulting in a pipeline that only requires a Stretch robot, a GPU machine with 12GB VRAM, and Internet connection to the following cloud-based AI models:
@@ -39,8 +41,8 @@ This module shares or extends core dependencies (mapping, perception, llms) with
 | File locations                  | Purpose                                                     |
 | ----------------------- | ---------------------------------------------------------------- |
 | [`src/emet/app/run_eqa.py`](../src/emet/app/run_eqa.py)       |       Entry point for EQA module                       |
-| [`src/emet/agent/task/dynamem/dynamem_task.py`](../src/emet/agent/task/dynamem/dynamem_task.py?plain=1#L409)  | An executor wrapper for EQA module |
-| [`src/emet/agent/robot_agent_eqa.py`](../src/emet/agent/robot_agent_eqa.py)             | Robot agent class containing all useful APIs for question answering  |
+| [`src/emet/controller/task/dynamem/dynamem_task.py`](../src/emet/controller/task/dynamem/dynamem_task.py)  | An executor wrapper for EQA module (`EQAExecuter`) |
+| [`src/emet/controller/robot_agent_dynamem.py`](../src/emet/controller/robot_agent_dynamem.py) | Robot agent (DynaMem) used for EQA; also see [GraphEQA](graph_eqa.md) for graph-based memory agent |
 | [`src/emet/mapping/voxel/voxel_dynamem.py`](../src/emet/mapping/voxel/voxel_dynamem.py#928)         | We added EQA utilities to [DynaMem voxel.py](../src/emet/mapping/voxel/voxel_dynamem.py)            |
 
 ## Instructions

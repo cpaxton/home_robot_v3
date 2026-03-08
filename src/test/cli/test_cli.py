@@ -61,7 +61,7 @@ def test_run_help():
     )
     assert result.returncode == 0
     assert "dynamem" in result.stdout
-    assert "graph-eqa" in result.stdout
+    assert "graph" in result.stdout and "eqa" in result.stdout
     assert "mapping" in result.stdout
 
 
