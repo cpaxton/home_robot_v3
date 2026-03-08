@@ -234,9 +234,16 @@ class RerunVisualizer:
 
         if output_path is not None:
             rr.save(output_path / "rerun_log.rrd")
-        # open_browser = True
-        if open_browser:
-            rr.serve(open_browser=open_browser, server_memory_limit=server_memory_limit)
+        # Start web server: open_browser when we have a display, or always when headless (connect from laptop)
+        if open_browser or not has_display():
+            rr.serve(
+                open_browser=open_browser and has_display(),
+                server_memory_limit=server_memory_limit,
+            )
+            if not has_display():
+                logger.info(
+                    "Rerun web viewer: connect from another machine at http://<this-host>:9090"
+                )
 
         self.display_robot_mesh = display_robot_mesh
         self.show_cameras_in_3d_view = show_cameras_in_3d_view
