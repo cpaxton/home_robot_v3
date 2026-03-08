@@ -1694,11 +1694,17 @@ class HomeRobotZmqClient(AbstractRobotClient):
                             if (self._servo is not None and getattr(self._servo, "rgb", None) is not None)
                             else None
                         )
-                        print(
+                        msg = (
                             f"[RERUN] steps={step_count} obs={has_obs} servo={has_servo} "
                             f"rgb_shape={rgb_shape}"
                         )
+                        if not has_obs or not has_servo:
+                            msg += " — start MuJoCo server first: python -m stretch.simulation.mujoco_server"
+                        print(msg)
                         last_debug_t = now
+                # Avoid CPU spin when no data (obs/servo come from ZMQ; step() returns immediately)
+                if not self._obs or not self._servo:
+                    time.sleep(0.1)
 
     @property
     def is_homed(self) -> bool:
