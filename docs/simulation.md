@@ -6,7 +6,7 @@ You can install Robocasa by following the instructions below. The MuJoCo simulat
 
 ## Installation
 
-First, you need to make sure you have already installed [Stretch AI](./install_details.md) and activate the installed conda env.
+First, you need to make sure you have already installed [Stretch AI](./install_details.md) and activated the virtual environment (`source .venv/bin/activate`).
 
 Install the stretch package with simulation extras:
 

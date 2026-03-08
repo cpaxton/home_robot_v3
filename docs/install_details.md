@@ -1,6 +1,6 @@
 # Stretch AI Installation
 
-Stretch AI supports Python 3.10. We recommend using [mamba](https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html) to manage dependencies, or [starting with Docker](./start_with_docker.md).
+Stretch AI supports Python 3.10–3.12. We recommend using [uv](https://docs.astral.sh/uv/) for fast, reproducible installs (no conda required), or [starting with Docker](./start_with_docker.md).
 
 If you do not start with docker, follow the [install guide](docs/install_details.md).
 
@@ -33,12 +33,18 @@ git clone https://github.com/hello-robot/stretch_ai.git
 
 #### Install On PC
 
-The installation script will install the package and its dependencies, as well as (optionally) some perception modules.
+The installation script uses [uv](https://docs.astral.sh/uv/) to create a virtual environment and install dependencies (no conda required):
 
 ```bash
 cd stretch_ai
 ./install.sh
 ```
+
+Options:
+- `-y` / `--yes`: Skip confirmation prompts
+- `--cpu`: CPU-only (skips Segment Anything 2)
+- `--sim`: Include simulation extras (MuJoCo)
+- `--no-sam2`: Skip Segment Anything 2 installation
 
 #### Install On the Robot
 
@@ -55,32 +61,32 @@ You will need to link Stretch AI into your ROS workspace. There are two ways to 
 To install in the base python environment, you need to make sure build tools are up to date:
 
 ```bash
-conda deactivate  # only if you are in a conda environment
+deactivate  # only if you are in a virtual environment
 pip install --upgrade pip setuptools packaging build meson ninja
 ```
 
 This is particularly an issue for scikit-fmm, which is used for motion planning. After this is done, you can install the package as normal:
 
 ```bash
-pip install ./src
+pip install .
 ```
 
 Then, [set up the ROS2 bridge](#set-up-ament-workspace-on-the-robot).
 
-##### Option 2: Link Conda Environment into ROS (Advanced).
+##### Option 2: Link Virtual Environment into ROS (Advanced)
 
-If you are using a conda environment, you can link the conda environment into ROS. This is a bit more advanced, but can be useful if you want to keep your ROS and conda environments separate.
+If you are using the uv-created virtual environment, you can link it into ROS. This is a bit more advanced, but can be useful if you want to keep your ROS and Python environments separate.
 
-Install using the installation script, but using the `--cpu` flag for a CPU-only installation:
+Install using the installation script with the `--cpu` flag for a CPU-only installation:
 
 ```bash
 ./install.sh --cpu
 ```
 
-Then, activate the conda environment:
+Then, activate the virtual environment:
 
 ```bash
-conda activate stretch_ai_$VERSION_cpu
+source .venv/bin/activate
 ```
 
 Then, [link the package into your ament workspace](#set-up-ament-workspace-on-the-robot) and install the package:

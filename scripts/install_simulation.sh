@@ -50,11 +50,10 @@ cd ..
 git clone https://github.com/robocasa/robocasa
 cd robocasa || exit 1
 pip install -e .
-
-# Install numba
-conda install -c numba numba -y
+cd ..
 
 # Run robocasa scripts based on flags
+# Run robocasa scripts (we're in third_party, robocasa/scripts/ in the cloned repo)
 if [ "$DOWNLOAD_ASSETS" = true ]; then
     echo "Downloading kitchen assets..."
     python robocasa/scripts/download_kitchen_assets.py

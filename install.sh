@@ -1,179 +1,101 @@
 #!/usr/bin/env bash
 # This script (c) 2024 Hello Robot under the MIT license: https://opensource.org/licenses/MIT
-# This script is designed to install the HomeRobot/StretchPy environment.
-export PYTHON_VERSION=3.10
+# Installs Stretch AI using uv (https://docs.astral.sh/uv/) - no conda required.
 
-script_dir="$(dirname "$0")"
-VERSION=`python3 $script_dir/src/stretch/version.py`
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$ROOT_DIR"
+
+# Parse options
 CPU_ONLY="false"
-NO_REMOVE="false"
-NO_SUBMODULES="false"
-MAMBA=mamba
-NO_VERSION="false"
-# Two cases: -y for yes, --cpu for cpu only
-# One more: --conda for conda
-for arg in "$@"
-do
+SKIP_ASKING="false"
+NO_SAM2="false"
+EXTRAS="dev"
+
+for arg in "$@"; do
     case $arg in
         -y|--yes)
-            yn="y"
             SKIP_ASKING="true"
-            shift
             ;;
         --cpu)
             CPU_ONLY="true"
-            shift
+            NO_SAM2="true"
             ;;
-        --conda)
-            MAMBA=conda
-            shift
+        --no-sam2)
+            NO_SAM2="true"
             ;;
-        --no-remove)
-            NO_REMOVE="true"
-            shift
-            ;;
-        --no-submodules)
-            NO_SUBMODULES="true"
-            shift
-            ;;
-        --no-version)
-            NO_VERSION="true"
-            shift
+        --sim)
+            EXTRAS="$EXTRAS,sim"
             ;;
         *)
-            shift
-            # unknown option
             ;;
     esac
 done
 
-
-# Check if the user has the required packages
-# If not, install them
-# If these packages are not installed, you will run into issues with pyaudio
-sudo apt-get update
-echo "Checking for required packages: "
-echo "     libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 espeak ffmpeg"
-echo "If these are not installed, you will run into issues with pyaudio."
-if [ "$SKIP_ASKING" == "true" ]; then
-    sudo apt-get install libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 espeak ffmpeg build-essential wget unzip libsndfile1 -y
-else
-    sudo apt-get install libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 espeak ffmpeg build-essential wget unzip libsndfile1
-fi
-
-# If cpu only, set the cuda version to cpu
-if [ "$CPU_ONLY" == "true" ]; then
-    if [ "$NO_VERSION" == "true" ]; then
-        ENV_NAME=stretch_ai_cpu
-    else
-        ENV_NAME=stretch_ai_cpu_${VERSION}
-    fi
-    ENV_NAME=stretch_ai_cpu_${VERSION}
-else
-    if [ "$NO_VERSION" == "true" ]; then
-        ENV_NAME=stretch_ai
-    else
-        ENV_NAME=stretch_ai_${VERSION}
-    fi
-fi
-
 echo "=============================================="
-echo "         INSTALLING STRETCH AI TOOLS"
+echo "         INSTALLING STRETCH AI (uv)"
 echo "=============================================="
+echo "Options: CPU_ONLY=$CPU_ONLY, NO_SAM2=$NO_SAM2, EXTRAS=$EXTRAS"
 echo "---------------------------------------------"
-echo "Environment name: $ENV_NAME"
-echo "Python Version: $PYTHON_VERSION"
-echo "Using tool: $MAMBA"
-echo "---------------------------------------------"
-echo "Notes:"
-echo " - This script will remove the existing environment if it exists."
-echo " - This script will install the following packages:"
-echo "   - torchvision"
-if [[ $INSTALL_TORCH_GEOMETRIC == "true" ]]; then
-    echo "   - torch-geometric"
-    echo "   - torch-cluster"
-    echo "   - torch-scatter"
+
+# Ensure uv is installed
+if ! command -v uv &>/dev/null; then
+    echo "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
 fi
-echo "   - python=$PYTHON_VERSION"
-echo "---------------------------------------------"
-echo "Currently:"
-echo " - python=`which python`"
 
+echo "Using uv: $(uv --version)"
 
-# if -y flag was passed in, do not bother asking
-#
-if [ "$SKIP_ASKING" == "true" ]; then
-    yn="y"
+# System dependencies
+echo ""
+echo "Checking system dependencies..."
+if [ "$SKIP_ASKING" = "true" ]; then
+    sudo apt-get update
+    sudo apt-get install -y libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 espeak ffmpeg build-essential wget unzip libsndfile1
 else
-    read -p "Does all this look correct? (y/n) " yn
+    echo "Required packages: libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 espeak ffmpeg build-essential wget unzip libsndfile1"
+    echo "Install with: sudo apt-get install libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 espeak ffmpeg build-essential wget unzip libsndfile1"
+    read -p "Install these now? (y/n) " yn
     case $yn in
-        y ) echo "Starting installation..." ;;
-        n ) echo "Exiting...";
-            exit ;;
-        * ) echo Invalid response!;
-            exit 1 ;;
+        y|Y) sudo apt-get update && sudo apt-get install -y libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 espeak ffmpeg build-essential wget unzip libsndfile1 ;;
+        *) echo "Skipping. You may need to install these manually." ;;
     esac
 fi
 
-# Exit immediately if anything fails
-set -e
-
-# Install git-lfs
-echo "Installing git-lfs..."
-echo "If this fails, install git-lfs with:"
+# Git LFS
 echo ""
-echo "     sudo apt-get install git-lfs"
-echo ""
-git lfs install
+echo "Setting up git-lfs..."
+git lfs install || { echo "Install git-lfs: sudo apt-get install git-lfs"; exit 1; }
 
-# Only remove if NO_REMOVe is false
-if [ "$NO_REMOVE" == "false" ]; then
-    echo "Removing existing environment..."
-    $MAMBA env remove -n $ENV_NAME -y || true
+# Create venv and install with uv (uv sync creates .venv automatically)
+echo ""
+echo "Creating virtual environment and installing dependencies..."
+EXTRA_ARGS="--extra dev"
+[[ "$EXTRAS" == *"sim"* ]] && EXTRA_ARGS="$EXTRA_ARGS --extra sim"
+uv sync $EXTRA_ARGS
+
+# Uninstall av to avoid conflict (from old install.sh)
+source .venv/bin/activate
+uv pip uninstall av -y 2>/dev/null || true
+
+# Optional: Segment Anything 2 (requires GPU, CUDA)
+if [ "$NO_SAM2" = "false" ] && [ -d "third_party/segment-anything-2" ]; then
+    echo ""
+    echo "Installing Segment Anything 2 (SAM2)..."
+    uv pip install -e third_party/segment-anything-2
 fi
-
-$MAMBA create -n $ENV_NAME python=$PYTHON_VERSION -y
-
-echo "Activate env $ENV_NAME"
-
-# If you don't install conda and only have mamba, please don't use this script from here and manually install everything.
-eval "$(conda shell.bash hook)"
-source activate $ENV_NAME
-
-echo "Install a version of setuptools for which clip works."
-python -m pip install setuptools==69.5.1
-
-echo ""
-echo "---------------------------------------------"
-echo "---- INSTALLING STRETCH AI DEPENDENCIES  ----"
-echo "Will be installed via pip into env: $ENV_NAME"
-
-if [ "$CPU_ONLY" = "false" ]; then
-    echo "Installing segment-anything-2..."
-
-    cd third_party/segment-anything-2
-    python -m pip install -e . --no-cache-dir
-    cd ../..
-else
-    # Provide feedback if the condition is not met
-    echo "Skipping segment-anything-2 installation because CPU_ONLY is 'true'."
-fi
-
-
-echo "Installing other stretch-ai dependencies"
-python -m pip install -e ./src[dev] --no-cache-dir
-
-# Uninstall av to avoid conflict between torchvision and cv2.imshow
-python -m pip uninstall av -y
 
 echo ""
 echo "=============================================="
 echo "         INSTALLATION COMPLETE"
-echo "Finished setting up the StretchPy environment."
-echo "Environment name: $ENV_NAME"
-echo "Python Version: $PYTHON_VERSION"
-echo "python=`which python`"
-echo "You can start using it with:"
-echo ""
-echo "     $MAMBA activate $ENV_NAME"
 echo "=============================================="
+echo ""
+echo "Activate the environment with:"
+echo "  source .venv/bin/activate"
+echo ""
+echo "Or run commands with:"
+echo "  uv run python -m stretch.app.<module>"
+echo ""

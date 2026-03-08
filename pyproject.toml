@@ -1,2 +1,122 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stretch_ai"
+dynamic = ["version"]
+description = "Stretch Python API"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10,<3.13"
+authors = [
+    { name = "Hello Robot Inc.", email = "support@hello-robot.com" },
+]
+keywords = ["robotics", "stretch", "hello-robot"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "torch>=2.6",
+    "torchvision",
+    "torchaudio",
+    "pyyaml",
+    "pyzmq",
+    "numpy<2",
+    "numba",
+    "opencv-python",
+    "scipy",
+    "matplotlib",
+    "trimesh>=3.10.0",
+    "yacs",
+    "scikit-image>=0.21.0",
+    "sophuspy",
+    "pin",
+    "pynput",
+    "pyusb",
+    "schema",
+    "overrides",
+    "wget",
+    "openai>=1.88.0",
+    "openai-clip",
+    "google-genai",
+    "ultralytics==8.3.161",
+    "hello-robot-stretch-urdf",
+    "pyrealsense2",
+    "urchin",
+    "rerun-sdk==0.18.0",
+    "sentencepiece",
+    "gitpython",
+    "hydra-core",
+    "timm>1.0.0",
+    "huggingface_hub[cli]>=0.24.7",
+    "open-clip-torch>=2.32.0",
+    "transformers>=4.50.0",
+    "retry",
+    "qwen_vl_utils",
+    "bitsandbytes",
+    "triton>=2.3.1",
+    "accelerate>=1.5.0",
+    "einops",
+    "protobuf",
+    "pyliblzfse",
+    "webp>=0.3.0",
+    "termcolor",
+    "librosa",
+    "PyAudio>=0.2.14",
+    "openai-whisper",
+    "pydub",
+    "simpleaudio",
+    "scikit-fmm",
+    "open3d",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+    "pytest",
+    "flake8",
+    "black",
+    "mypy",
+    "lark",
+]
+discord = [
+    "discord.py",
+    "python-dotenv",
+]
+sim = [
+    "mujoco>=3.2.6",
+    "hello-robot-stretch-urdf",
+    "grpcio",
+    "click>=8.1.8",
+    "inputs>=0.5",
+]
+hand_tracker = [
+    "mediapipe",
+    "webcam",
+]
+
+[project.urls]
+Homepage = "https://github.com/hello-robot/stretchpy"
+Repository = "https://github.com/hello-robot/stretchpy"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+stretch = [
+    "config/**/*.yaml",
+    "perception/*.tsv",
+    "simulation/stretch_mujoco/models/**/*",
+]
+
+[tool.setuptools.dynamic]
+version = { file = "src/stretch/version.py", pattern = '__version__ = "(.+)"' }
+
 [tool.black]
 line-length = 100
