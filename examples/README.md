@@ -32,7 +32,7 @@ Loads the MuJoCo stretch model without starting the simulation.
 
 ```bash
 python examples/load_stretch_mujoco.py --run
-python examples/load_stretch_mujoco.py --run --headless
+python examples/load_stretch_mujoco.py --run --headless  # No display (SSH, servers)
 ```
 
 Or use the dedicated launcher:
@@ -40,8 +40,10 @@ Or use the dedicated launcher:
 ```bash
 python examples/run_stretch_simulation.py
 python examples/run_stretch_simulation.py --headless
-python examples/run_stretch_simulation.py --cameras  # Show camera feeds
+python examples/run_stretch_simulation.py --cameras  # Show camera feeds (requires DISPLAY)
 ```
+
+**No display (SSH, headless server)?** Use `--headless`. Camera rendering requires OpenGL/DISPLAY, so cameras are disabled in headless mode.
 
 ### 4. Load URDF model
 
