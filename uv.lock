@@ -1510,6 +1510,17 @@ wheels = [
 ]
 
 [[package]]
+name = "iopath"
+version = "0.1.10"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "portalocker" },
+    { name = "tqdm" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/72/73/b3d451dfc523756cf177d3ebb0af76dc7751b341c60e2a21871be400ae29/iopath-0.1.10.tar.gz", hash = "sha256:3311c16a4d9137223e20f141655759933e1eda24f8bff166af834af3c645ef01", size = 42226, upload-time = "2022-07-09T19:00:50.866Z" }
+
+[[package]]
 name = "itsdangerous"
 version = "2.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2830,6 +2841,18 @@ wheels = [
 ]
 
 [[package]]
+name = "portalocker"
+version = "3.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5e/77/65b857a69ed876e1951e88aaba60f5ce6120c33703f7cb61a3c894b8c1b6/portalocker-3.2.0.tar.gz", hash = "sha256:1f3002956a54a8c3730586c5c77bf18fae4149e07eaf1c29fc3faf4d5a3f89ac", size = 95644, upload-time = "2025-06-14T13:20:40.03Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4b/a6/38c8e2f318bf67d338f4d629e93b0b4b9af331f455f0390ea8ce4a099b26/portalocker-3.2.0-py3-none-any.whl", hash = "sha256:3cdc5f565312224bc570c49337bd21428bba0ef363bbcf58b9ef4a9f11779968", size = 22424, upload-time = "2025-06-14T13:20:38.083Z" },
+]
+
+[[package]]
 name = "pre-commit"
 version = "4.5.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3447,6 +3470,22 @@ wheels = [
 ]
 
 [[package]]
+name = "pywin32"
+version = "311"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7b/40/44efbb0dfbd33aca6a6483191dae0716070ed99e2ecb0c53683f400a0b4f/pywin32-311-cp310-cp310-win32.whl", hash = "sha256:d03ff496d2a0cd4a5893504789d4a15399133fe82517455e78bad62efbb7f0a3", size = 8760432, upload-time = "2025-07-14T20:13:05.9Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/bf/360243b1e953bd254a82f12653974be395ba880e7ec23e3731d9f73921cc/pywin32-311-cp310-cp310-win_amd64.whl", hash = "sha256:797c2772017851984b97180b0bebe4b620bb86328e8a884bb626156295a63b3b", size = 9590103, upload-time = "2025-07-14T20:13:07.698Z" },
+    { url = "https://files.pythonhosted.org/packages/57/38/d290720e6f138086fb3d5ffe0b6caa019a791dd57866940c82e4eeaf2012/pywin32-311-cp310-cp310-win_arm64.whl", hash = "sha256:0502d1facf1fed4839a9a51ccbcc63d952cf318f78ffc00a7e78528ac27d7a2b", size = 8778557, upload-time = "2025-07-14T20:13:11.11Z" },
+    { url = "https://files.pythonhosted.org/packages/7c/af/449a6a91e5d6db51420875c54f6aff7c97a86a3b13a0b4f1a5c13b988de3/pywin32-311-cp311-cp311-win32.whl", hash = "sha256:184eb5e436dea364dcd3d2316d577d625c0351bf237c4e9a5fabbcfa5a58b151", size = 8697031, upload-time = "2025-07-14T20:13:13.266Z" },
+    { url = "https://files.pythonhosted.org/packages/51/8f/9bb81dd5bb77d22243d33c8397f09377056d5c687aa6d4042bea7fbf8364/pywin32-311-cp311-cp311-win_amd64.whl", hash = "sha256:3ce80b34b22b17ccbd937a6e78e7225d80c52f5ab9940fe0506a1a16f3dab503", size = 9508308, upload-time = "2025-07-14T20:13:15.147Z" },
+    { url = "https://files.pythonhosted.org/packages/44/7b/9c2ab54f74a138c491aba1b1cd0795ba61f144c711daea84a88b63dc0f6c/pywin32-311-cp311-cp311-win_arm64.whl", hash = "sha256:a733f1388e1a842abb67ffa8e7aad0e70ac519e09b0f6a784e65a136ec7cefd2", size = 8703930, upload-time = "2025-07-14T20:13:16.945Z" },
+    { url = "https://files.pythonhosted.org/packages/e7/ab/01ea1943d4eba0f850c3c61e78e8dd59757ff815ff3ccd0a84de5f541f42/pywin32-311-cp312-cp312-win32.whl", hash = "sha256:750ec6e621af2b948540032557b10a2d43b0cee2ae9758c54154d711cc852d31", size = 8706543, upload-time = "2025-07-14T20:13:20.765Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/a8/a0e8d07d4d051ec7502cd58b291ec98dcc0c3fff027caad0470b72cfcc2f/pywin32-311-cp312-cp312-win_amd64.whl", hash = "sha256:b8c095edad5c211ff31c05223658e71bf7116daa0ecf3ad85f3201ea3190d067", size = 9495040, upload-time = "2025-07-14T20:13:22.543Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/3a/2ae996277b4b50f17d61f0603efd8253cb2d79cc7ae159468007b586396d/pywin32-311-cp312-cp312-win_arm64.whl", hash = "sha256:e286f46a9a39c4a18b319c28f59b61de793654af2f395c102b4f819e584b5852", size = 8710102, upload-time = "2025-07-14T20:13:24.682Z" },
+]
+
+[[package]]
 name = "pyyaml"
 version = "6.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -3789,6 +3828,56 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/d3/0b/4811bfec67fa260e791369b16dab105e4bae82686120554cc484064e22b4/safetensors-0.7.0-pp310-pypy310_pp73-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:0071bffba4150c2f46cae1432d31995d77acfd9f8db598b5d1a2ce67e8440ad2", size = 623890, upload-time = "2025-11-19T15:18:22.666Z" },
     { url = "https://files.pythonhosted.org/packages/58/5b/632a58724221ef03d78ab65062e82a1010e1bef8e8e0b9d7c6d7b8044841/safetensors-0.7.0-pp310-pypy310_pp73-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:473b32699f4200e69801bf5abf93f1a4ecd432a70984df164fc22ccf39c4a6f3", size = 531885, upload-time = "2025-11-19T15:18:27.146Z" },
 ]
+
+[[package]]
+name = "sam-2"
+version = "1.0"
+source = { editable = "third_party/segment-anything-2" }
+dependencies = [
+    { name = "hydra-core" },
+    { name = "iopath" },
+    { name = "numpy" },
+    { name = "pillow" },
+    { name = "torch" },
+    { name = "torchvision" },
+    { name = "tqdm" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "av", marker = "extra == 'interactive-demo'", specifier = ">=13.0.0" },
+    { name = "black", marker = "extra == 'dev'", specifier = "==24.2.0" },
+    { name = "dataclasses-json", marker = "extra == 'interactive-demo'", specifier = ">=0.6.7" },
+    { name = "eva-decord", marker = "extra == 'interactive-demo'", specifier = ">=0.6.1" },
+    { name = "eva-decord", marker = "extra == 'notebooks'", specifier = ">=0.6.1" },
+    { name = "flask", marker = "extra == 'interactive-demo'", specifier = ">=3.0.3" },
+    { name = "flask-cors", marker = "extra == 'interactive-demo'", specifier = ">=5.0.0" },
+    { name = "fvcore", marker = "extra == 'dev'", specifier = ">=0.1.5.post20221221" },
+    { name = "gunicorn", marker = "extra == 'interactive-demo'", specifier = ">=23.0.0" },
+    { name = "hydra-core", specifier = ">=1.3.2" },
+    { name = "imagesize", marker = "extra == 'interactive-demo'", specifier = ">=1.4.1" },
+    { name = "iopath", specifier = ">=0.1.10" },
+    { name = "jupyter", marker = "extra == 'notebooks'", specifier = ">=1.0.0" },
+    { name = "matplotlib", marker = "extra == 'notebooks'", specifier = ">=3.9.1" },
+    { name = "numpy", specifier = ">=1.24.4" },
+    { name = "opencv-python", marker = "extra == 'dev'", specifier = ">=4.7.0" },
+    { name = "opencv-python", marker = "extra == 'notebooks'", specifier = ">=4.7.0" },
+    { name = "pandas", marker = "extra == 'dev'", specifier = ">=2.2.2" },
+    { name = "pillow", specifier = ">=9.4.0" },
+    { name = "pycocotools", marker = "extra == 'dev'", specifier = ">=2.0.8" },
+    { name = "pycocotools", marker = "extra == 'interactive-demo'", specifier = ">=2.0.8" },
+    { name = "scikit-image", marker = "extra == 'dev'", specifier = ">=0.24.0" },
+    { name = "strawberry-graphql", marker = "extra == 'interactive-demo'", specifier = ">=0.243.0" },
+    { name = "submitit", marker = "extra == 'dev'", specifier = ">=1.5.1" },
+    { name = "tensorboard", marker = "extra == 'dev'", specifier = ">=2.17.0" },
+    { name = "tensordict", marker = "extra == 'dev'", specifier = ">=0.6.0" },
+    { name = "torch", specifier = ">=2.5.1" },
+    { name = "torchvision", specifier = ">=0.20.1" },
+    { name = "tqdm", specifier = ">=4.66.1" },
+    { name = "ufmt", marker = "extra == 'dev'", specifier = "==2.0.0b2" },
+    { name = "usort", marker = "extra == 'dev'", specifier = "==1.0.2" },
+]
+provides-extras = ["notebooks", "interactive-demo", "dev"]
 
 [[package]]
 name = "schema"
@@ -4302,6 +4391,9 @@ discord = [
     { name = "discord-py" },
     { name = "python-dotenv" },
 ]
+dynamem = [
+    { name = "sam-2" },
+]
 hand-tracker = [
     { name = "mediapipe" },
     { name = "webcam" },
@@ -4361,6 +4453,7 @@ requires-dist = [
     { name = "qwen-vl-utils" },
     { name = "rerun-sdk", specifier = "==0.18.0" },
     { name = "retry" },
+    { name = "sam-2", marker = "extra == 'dynamem'", editable = "third_party/segment-anything-2" },
     { name = "schema" },
     { name = "scikit-fmm" },
     { name = "scikit-image", specifier = ">=0.21.0" },
@@ -4383,7 +4476,7 @@ requires-dist = [
     { name = "wget" },
     { name = "yacs" },
 ]
-provides-extras = ["dev", "discord", "sim", "hand-tracker"]
+provides-extras = ["dev", "discord", "sim", "hand-tracker", "dynamem"]
 
 [[package]]
 name = "sympy"

@@ -64,6 +64,8 @@ The disadvantages includes:
 
 You can run DynaMem in MuJoCo simulation without a physical robot. See [Simulation docs](simulation.md) for setup.
 
+**Install SAM2** (required for OWL+SAM segmentation): `uv sync --extra dynamem` or run `./install.sh` (includes SAM2 by default; use `--no-sam2` to skip).
+
 **Terminal 1** – Start the MuJoCo server (Robocasa recommended for richer scenes):
 
 ```bash

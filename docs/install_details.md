@@ -44,7 +44,9 @@ Options:
 - `-y` / `--yes`: Skip confirmation prompts
 - `--cpu`: CPU-only (skips Segment Anything 2)
 - `--sim`: Include simulation extras (MuJoCo)
-- `--no-sam2`: Skip Segment Anything 2 installation
+- `--no-sam2`: Skip Segment Anything 2 (required for DynaMem OWL+SAM segmentation)
+
+To add SAM2 after install: `uv sync --extra dynamem`
 
 #### Install On the Robot
 
