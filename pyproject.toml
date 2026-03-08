@@ -22,7 +22,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "setuptools<82",  # pkg_resources removed in 82; openai-clip requires it
     "torch>=2.6",
     "torchvision",
     "torchaudio",
@@ -44,7 +43,6 @@ dependencies = [
     "overrides",
     "wget",
     "openai>=1.88.0",
-    "openai-clip",
     "google-genai",
     "ultralytics==8.3.161",
     "hello-robot-stretch-urdf",
@@ -101,6 +99,12 @@ hand_tracker = [
     "mediapipe",
     "webcam",
 ]
+dynamem = [
+    "SAM-2",
+]
+
+[tool.uv.sources]
+"SAM-2" = { path = "third_party/segment-anything-2", editable = true }
 
 [project.urls]
 Homepage = "https://github.com/hello-robot/stretchpy"

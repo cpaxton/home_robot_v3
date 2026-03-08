@@ -59,7 +59,6 @@ setuptools.setup(
         "wget",
         # From openai
         "openai >= 1.88.0",
-        "openai-clip",
         # For gemini
         "google-genai",
         # For Yolo

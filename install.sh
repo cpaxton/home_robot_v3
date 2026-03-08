@@ -75,18 +75,12 @@ echo ""
 echo "Creating virtual environment and installing dependencies..."
 EXTRA_ARGS="--extra dev"
 [[ "$EXTRAS" == *"sim"* ]] && EXTRA_ARGS="$EXTRA_ARGS --extra sim"
+[[ "$NO_SAM2" == "false" ]] && [ -d "third_party/segment-anything-2" ] && EXTRA_ARGS="$EXTRA_ARGS --extra dynamem"
 uv sync $EXTRA_ARGS
 
 # Uninstall av to avoid conflict (from old install.sh)
 source .venv/bin/activate
 uv pip uninstall av -y 2>/dev/null || true
-
-# Optional: Segment Anything 2 (requires GPU, CUDA)
-if [ "$NO_SAM2" = "false" ] && [ -d "third_party/segment-anything-2" ]; then
-    echo ""
-    echo "Installing Segment Anything 2 (SAM2)..."
-    uv pip install -e third_party/segment-anything-2
-fi
 
 echo ""
 echo "=============================================="

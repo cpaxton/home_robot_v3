@@ -2552,17 +2552,6 @@ wheels = [
 ]
 
 [[package]]
-name = "openai-clip"
-version = "1.0.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "ftfy" },
-    { name = "regex" },
-    { name = "tqdm" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/3f/81/26d701ef9fface424b4ca808a5c5674df645ac46447720a540143d11c41e/openai-clip-1.0.1.tar.gz", hash = "sha256:cd40bf2f205c096c49524fcbff484339f793b52afd6e7ffad80a2fe108151721", size = 1371625, upload-time = "2022-07-19T12:56:52.824Z" }
-
-[[package]]
 name = "openai-whisper"
 version = "20250625"
 source = { registry = "https://pypi.org/simple" }
@@ -4260,7 +4249,6 @@ dependencies = [
     { name = "open-clip-torch" },
     { name = "open3d" },
     { name = "openai" },
-    { name = "openai-clip" },
     { name = "openai-whisper" },
     { name = "opencv-python" },
     { name = "overrides" },
@@ -4284,7 +4272,6 @@ dependencies = [
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "sentencepiece" },
-    { name = "setuptools" },
     { name = "simpleaudio" },
     { name = "sophuspy" },
     { name = "termcolor" },
@@ -4355,7 +4342,6 @@ requires-dist = [
     { name = "open-clip-torch", specifier = ">=2.32.0" },
     { name = "open3d" },
     { name = "openai", specifier = ">=1.88.0" },
-    { name = "openai-clip" },
     { name = "openai-whisper" },
     { name = "opencv-python" },
     { name = "overrides" },
@@ -4380,7 +4366,6 @@ requires-dist = [
     { name = "scikit-image", specifier = ">=0.21.0" },
     { name = "scipy" },
     { name = "sentencepiece" },
-    { name = "setuptools", specifier = "<82" },
     { name = "simpleaudio" },
     { name = "sophuspy" },
     { name = "termcolor" },
