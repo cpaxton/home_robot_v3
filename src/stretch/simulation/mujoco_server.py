@@ -29,8 +29,6 @@ except ImportError:
         "Not installing mujoco yet! Please install robosuite, robocasa and stretch_mujoco in order to use model generation wizard."
     )
 
-from importlib.resources import as_file, files
-
 import stretch.motion.constants as constants
 import stretch.utils.compression as compression
 import stretch.utils.logger as logger
@@ -41,9 +39,9 @@ from stretch.utils.config import get_control_config
 from stretch.utils.geometry import pose_global_to_base, xyt_base_to_global, xyt_global_to_base
 from stretch.utils.image import scale_camera_matrix
 
-ref = files("stretch.simulation.stretch_mujoco") / "models"
-with as_file(ref) as models_dir:
-    default_scene_xml_path = str(models_dir / "scene.xml")
+from stretch.utils.assets import get_mujoco_models_path
+
+default_scene_xml_path = str(get_mujoco_models_path() / "scene.xml")
 
 # Maps HelloStretchIdx to actuators
 mujoco_actuators = {

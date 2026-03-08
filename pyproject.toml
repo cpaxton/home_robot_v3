@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stretch_ai"
-version = "0.3.3"
+version = "0.3.3"  # Keep in sync with src/stretch/version.py
 description = "Stretch Python API"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -112,7 +112,7 @@ where = ["src"]
 stretch = [
     "config/**/*.yaml",
     "perception/*.tsv",
-    "simulation/stretch_mujoco/models/**/*",
+    "assets/**/*",
 ]
 
 [tool.black]

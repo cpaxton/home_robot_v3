@@ -85,4 +85,4 @@ Using the `--robot_ip` option will update your default IP address; you will need
 
 ## Creating your own scenes
 
-Mujoco scenes are stored as XML files. You can see an example at `src/stretch/simulation/stretch_mujoco/models/scene.xml`. You can create your own scenes by modifying this file or creating a new one.
+Mujoco scenes are stored as XML files. You can see an example at `src/stretch/assets/robot/scene.xml`. You can create your own scenes by modifying this file or creating a new one.

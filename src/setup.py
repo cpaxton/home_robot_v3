@@ -31,7 +31,7 @@ setuptools.setup(
         "stretch": [
             "config/**/*.yaml",
             "perception/*.tsv",
-            "simulation/stretch_mujoco/models/**/*",
+            "assets/**/*",
         ]
     },
     install_requires=[

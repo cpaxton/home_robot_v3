@@ -29,9 +29,12 @@ if TYPE_CHECKING:
     from stretch.simulation.stretch_mujoco.stretch_mujoco_simulator import StretchMujocoSimulator
 
 
-models_path = str(importlib.resources.files("stretch.simulation.stretch_mujoco") / "models")
-default_scene_xml_path = models_path + "/scene.xml"
-default_robot_xml_path = models_path + "/stretch.xml"
+from stretch.utils.assets import get_mujoco_models_path
+
+_models_path = get_mujoco_models_path()
+models_path = str(_models_path)
+default_scene_xml_path = str(_models_path / "scene.xml")
+default_robot_xml_path = str(_models_path / "stretch.xml")
 
 pkg_path = str(importlib.resources.files("stretch_urdf"))
 model_name = "SE3"  # RE1V0, RE2V0, SE3
