@@ -1,6 +1,14 @@
 # Debug
 
-### Apps for Debugging
+## Headless and Rerun
+
+When running without a display (SSH, servers, Docker):
+
+- **Rerun**: The native viewer is disabled, but the web server starts automatically. Connect from another machine at `http://<server-ip>:9090` to view the visualization. Ports 9090 (HTTP) and 9877 (WebSocket) must be reachable.
+- **SSH port forwarding**: If the server binds to localhost only, use `ssh -L 9090:localhost:9090 -L 9877:localhost:9877 user@server`, then open `http://localhost:9090` on your laptop.
+- **winit / DISPLAY errors**: These occur when a GUI tries to spawn without a display. DynaMem and other apps now detect headless and disable the native Rerun viewer; the web server still runs.
+
+## Apps for Debugging
 
 - [Test Timing](#test-timing) - Test the timing of the robot's control loop over the network.
 - [Camera Info](#camera-info) - Print out camera information.

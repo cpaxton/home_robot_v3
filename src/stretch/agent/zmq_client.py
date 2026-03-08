@@ -115,6 +115,7 @@ class HomeRobotZmqClient(AbstractRobotClient):
         manip_mode_controlled_joints: Optional[List[str]] = None,
         start_immediately: bool = True,
         enable_rerun_server: bool = True,
+        rerun_headless: bool = False,
         resend_all_actions: bool = False,
         publish_observations: bool = False,
     ):
@@ -226,7 +227,10 @@ class HomeRobotZmqClient(AbstractRobotClient):
             if output_path is not None and not output_path.exists():
                 output_path.mkdir(parents=True, exist_ok=True)
 
-            self._rerun = RerunVisualizer(output_path=output_path)
+            self._rerun = RerunVisualizer(
+                output_path=output_path,
+                headless=rerun_headless,
+            )
         else:
             self._rerun = None
             self._rerun_thread = None

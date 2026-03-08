@@ -105,6 +105,16 @@ from stretch.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, g
     is_flag=True,
     help="Run everything on CPU",
 )
+@click.option(
+    "--headless",
+    is_flag=True,
+    help="Run without native Rerun viewer; connect at http://<server-ip>:9090",
+)
+@click.option(
+    "--no-rerun",
+    is_flag=True,
+    help="Disable Rerun visualization entirely",
+)
 def main(
     server_ip,
     manual_wait,
@@ -125,6 +135,8 @@ def main(
     llm: str = "qwen25-3B-Instruct",
     manipulation_only: bool = False,
     cpu_only: bool = False,
+    headless: bool = False,
+    no_rerun: bool = False,
     **kwargs,
 ):
     """
@@ -138,7 +150,11 @@ def main(
     parameters = get_parameters("dynav_config.yaml")
 
     print("- Create robot client")
-    robot = HomeRobotZmqClient(robot_ip=robot_ip)
+    robot = HomeRobotZmqClient(
+        robot_ip=robot_ip,
+        enable_rerun_server=not no_rerun,
+        rerun_headless=headless,
+    )
 
     print("- Create task executor")
     executor = DynamemTaskExecutor(
@@ -178,9 +194,11 @@ def main(
         if llm_client is None:
             # Call the LLM client and parse
             explore = input(
-                "Enter desired mode [E (explore and mapping) / M (Open vocabulary pick and place)]: "
-            )
-            if explore.upper() == "E":
+                "Enter desired mode [E (explore and mapping) / M (Open vocabulary pick and place) / Q (quit)]: "
+            ).strip()
+            if explore.upper() in ("Q", "QUIT"):
+                llm_response = [("quit", "")]
+            elif explore.upper() == "E":
                 llm_response = [("explore", None)]
             else:
                 if target_object is None or len(target_object) == 0:

@@ -207,6 +207,7 @@ class RerunVisualizer:
         display_robot_mesh: bool = True,
         spawn_gui: bool = True,
         open_browser: bool = False,
+        headless: bool = False,
         server_memory_limit: str = "4GB",
         collapse_panels: bool = True,
         show_cameras_in_3d_view: bool = False,
@@ -217,11 +218,15 @@ class RerunVisualizer:
         Args:
             display_robot_mesh (bool): Display robot mesh
             open_browser (bool): Open browser at start
+            headless (bool): If True, disable native viewer and serve web only (connect at :9090)
             server_memory_limit (str): Server memory limit E.g. 2GB or 20%
             collapse_panels (bool): Set to false to have customizable rerun panels
         """
         self.open_browser = open_browser
-        if spawn_gui or open_browser:
+        if headless:
+            spawn_gui = False
+            open_browser = False
+        elif spawn_gui or open_browser:
             # Check environment variables to see if this is docker
             if "DOCKER" in os.environ:
                 spawn_gui = False
@@ -235,12 +240,12 @@ class RerunVisualizer:
         if output_path is not None:
             rr.save(output_path / "rerun_log.rrd")
         # Start web server: open_browser when we have a display, or always when headless (connect from laptop)
-        if open_browser or not has_display():
+        if open_browser or not has_display() or headless:
             rr.serve(
-                open_browser=open_browser and has_display(),
+                open_browser=open_browser and has_display() and not headless,
                 server_memory_limit=server_memory_limit,
             )
-            if not has_display():
+            if not has_display() or headless:
                 logger.info(
                     "Rerun web viewer: connect from another machine at http://<this-host>:9090"
                 )

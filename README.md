@@ -49,6 +49,23 @@ Once you've completed this installation, you can start the server on your Stretc
 
 After this, we recommend trying the [Language-Directed Pick and Place](#language-directed-pick-and-place) demo.
 
+### Simulation (try without a robot)
+
+You can run AI apps in MuJoCo simulation before connecting a physical robot:
+
+```bash
+# Install simulation support
+uv sync --extra sim
+
+# Terminal 1: start simulation server
+python -m stretch.simulation.mujoco_server
+
+# Terminal 2: run an app (use 127.0.0.1 for local sim)
+python -m stretch.app.grasp_object --robot_ip 127.0.0.1 --target_object "red cylinder" --parameter_file sim_planner.yaml --show_gui
+```
+
+Use `--headless` when running without a display (e.g. SSH); on Linux, EGL enables cameras. See [Simulation](docs/simulation.md) for DynaMem, mapping, Robocasa, and demo scripts.
+
 #### Experimental support for Older Robots
 
 The older model of Stretch, the Stretch RE2, did not have an camera on the gripper. If you want to use this codebase with an older robot, you can purchase a [Stretch 2 Upgrade Kit](https://hello-robot.com/stretch-2-upgrade) to give your Stretch 2 the capabilities of a Stretch 3. Alternatively, you can run a version of the server with no d405 camera support on your robot.
@@ -118,9 +135,10 @@ Find out more about the LLM-based AI agent in its [documentation](docs/llm_agent
 
 Check out additional documentation for ways to use Stretch AI:
 
+- [Simulation](docs/simulation.md) -- Run DynaMem, grasp, and mapping in MuJoCo without a physical robot
 - [LLM Agent](docs/llm_agent.md) -- How to use the LLM agent for language-directed pick and place
 - [Add a New LLM Task](docs/adding_a_new_task.md) -- How to add a new task that can be called by an LLM
-- [DynaMem](docs/dynamem.md) -- Run the LLM agent in dynamic scenes, meaning you can walk around and place objects as the robot explores
+- [DynaMem](docs/dynamem.md) -- Open-vocabulary mobile manipulation; works in simulation and headless (connect Rerun viewer at `http://<server>:9090`)
 - [Data Collection for Learning from Demonstration](docs/data_collection.md) -- How to collect data for learning from demonstration
 - [Embodied Question Answering](docs/eqa.md) -- Allow the robot to explore the environment and answer questions from the users about the environment.
 - [Learning from Demonstration](docs/learning_from_demonstration.md)  -- How to train and evaluate policies with LfD
@@ -130,17 +148,18 @@ Check out additional documentation for ways to use Stretch AI:
 
 ## Development
 
-Clone this repo on your Stretch and PC, and install it locally using pip with the "editable" flag:
+Clone this repo and install with [uv](https://docs.astral.sh/uv/):
 
-```
-cd stretch_ai/src
-pip install -e .[dev]
+```bash
+cd stretch_ai
+./install.sh
+# or: uv sync --extra dev
 pre-commit install
 ```
 
-Then follow the quickstart section. See [CONTRIBUTING.md](CONTRIBUTING.md) for more information. There is some information on how to [debug](docs/debug.md) and [update](docs/update.md) the codebase.
+For simulation: `uv sync --extra sim`. For DynaMem (SAM2): `uv sync --extra dynamem`.
 
-You can test out most code in the [simulation](docs/simulation.md) environment, which is a good way to test code without needing a robot.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for more information, and [debug](docs/debug.md) / [update](docs/update.md) for troubleshooting. You can test most code in [simulation](docs/simulation.md) without a physical robot.
 
 ### Updating Code on the Robot
 

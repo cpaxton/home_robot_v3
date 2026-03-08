@@ -80,13 +80,15 @@ python -m stretch.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S 
 python -m stretch.app.mapping --robot_ip 127.0.0.1
 ```
 
-Or use the demo script:
+Or use the demo script (uses `uv run`; start MuJoCo server in another terminal first):
 
 ```bash
 ./scripts/demo_simulation.sh grasp
 ./scripts/demo_simulation.sh dynamem
 ./scripts/demo_simulation.sh mapping
 ```
+
+**Headless**: Use `--headless` for the MuJoCo server when no display is available. On Linux, EGL enables cameras. See [Simulation](../docs/simulation.md) and [Debug: Headless](../docs/debug.md#headless-and-rerun).
 
 ---
 

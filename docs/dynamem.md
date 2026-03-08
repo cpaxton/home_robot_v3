@@ -66,7 +66,9 @@ You can run DynaMem in MuJoCo simulation without a physical robot. See [Simulati
 
 **Install SAM2** (required for OWL+SAM segmentation): `uv sync --extra dynamem` or run `./install.sh` (includes SAM2 by default; use `--no-sam2` to skip).
 
-**Headless (no DISPLAY)**: The native Rerun viewer is disabled, but the web server starts automatically. Connect from a laptop at `http://<server-ip>:9090` to view the visualization. If that fails (firewall or binding), use SSH port forwarding: `ssh -L 9090:localhost:9090 -L 9877:localhost:9877 user@server`.
+**Headless (no DISPLAY)**: The native Rerun viewer is disabled, but the web server starts automatically. Connect from a laptop at `http://<server-ip>:9090` to view the visualization. If that fails (firewall or binding), use SSH port forwarding: `ssh -L 9090:localhost:9090 -L 9877:localhost:9877 user@server`. See [Debug: Headless and Rerun](debug.md#headless-and-rerun) for more.
+
+**Explicit headless (`--headless`)**: Use when you have a display but want to view Rerun from another machine (e.g. SSH). Disables the native viewer and serves only the web UI at `:9090`.
 
 **Terminal 1** – Start the MuJoCo server (Robocasa recommended for richer scenes):
 
@@ -80,7 +82,13 @@ python -m stretch.simulation.mujoco_server --use-robocasa
 python -m stretch.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class
 ```
 
-For CPU-only: add `--cpu`. The `-S` flag skips confirmations for autonomous runs.
+For headless (view Rerun from another machine at `http://<server-ip>:9090`):
+
+```bash
+python -m stretch.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class --headless
+```
+
+For CPU-only: add `--cpu`. The `-S` flag skips confirmations for autonomous runs. At the mode prompt, enter **Q** (or **quit**) to exit cleanly.
 
 ---
 

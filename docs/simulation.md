@@ -156,16 +156,23 @@ Then run DynaMem or other apps as above.
 
 ## Demo scripts
 
-Convenience scripts in `examples/`:
+Convenience scripts:
 
 | Script | Description |
 |--------|-------------|
-| `load_stretch_assets.py` | Check asset paths |
-| `load_stretch_mujoco.py` | Load MuJoCo model; `--run` to start sim |
-| `load_stretch_urdf.py` | Load URDF model |
-| `run_stretch_simulation.py` | Start simulation |
+| `scripts/demo_simulation.sh` | Run grasp, DynaMem, or mapping demo (uses `uv run`) |
+| `examples/load_stretch_assets.py` | Check asset paths |
+| `examples/load_stretch_mujoco.py` | Load MuJoCo model; `--run` to start sim |
+| `examples/load_stretch_urdf.py` | Load URDF model |
+| `examples/run_stretch_simulation.py` | Start simulation |
 
 ```bash
+# AI demos (start MuJoCo server in another terminal first)
+./scripts/demo_simulation.sh grasp
+./scripts/demo_simulation.sh dynamem
+./scripts/demo_simulation.sh mapping
+
+# Basic sim
 python examples/load_stretch_mujoco.py --run          # With viewer
 python examples/load_stretch_mujoco.py --run --headless
 python examples/run_stretch_simulation.py --headless
@@ -205,3 +212,6 @@ Use `sim_planner.yaml` and `--parameter_file sim_planner.yaml` for grasp_object.
 
 **Robocasa import errors**  
 Install Robocasa and dependencies with `./scripts/install_simulation.sh`.
+
+**DynaMem / Rerun headless**  
+When running DynaMem without a display, the Rerun web server starts automatically. Connect from a laptop at `http://<server-ip>:9090`. See [Debug: Headless and Rerun](debug.md#headless-and-rerun).
