@@ -28,6 +28,7 @@ from PIL import Image
 from stretch.agent.manipulation.dynamem_manipulation.dynamem_manipulation import (
     DynamemManipulationWrapper as ManipulationWrapper,
 )
+from stretch.visualization.rerun import has_display
 from stretch.agent.manipulation.dynamem_manipulation.grasper_utils import (
     capture_and_process_image,
     move_to_point,
@@ -294,14 +295,15 @@ class RobotAgent(RobotAgentBase):
                 rrb.Spatial2DView(name="relevant image", origin="/observation_similar_to_text"),
             ),
             rrb.Vertical(
-                rrb.Spatial2DView(name="head_rgb", origin="/world/head_camera"),
-                rrb.Spatial2DView(name="ee_rgb", origin="/world/ee_camera"),
+                rrb.Spatial2DView(name="head_rgb", origin="/world/head_camera/rgb"),
+                rrb.Spatial2DView(name="ee_rgb", origin="/world/ee_camera/rgb"),
             ),
             column_shares=[2, 1, 1],
         )
+        collapse = getattr(self.rerun_visualizer, "collapse_panels", True)
         my_blueprint = rrb.Blueprint(
             rrb.Vertical(main, rrb.TimePanel(state=True)),
-            collapse_panels=True,
+            collapse_panels=collapse,
         )
         rr.send_blueprint(my_blueprint)
 
@@ -563,7 +565,7 @@ class RobotAgent(RobotAgentBase):
         It will call execute_action function until it is ready for manipulation
         """
         # Start a new rerun recording to avoid an overly large rerun video.
-        rr.init("Stretch_robot", recording_id=uuid4(), spawn=True)
+        rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
         if self.save_rerun:
             if not os.path.exists(self.log):
                 os.makedirs(self.log)
@@ -754,7 +756,7 @@ class RobotAgent(RobotAgentBase):
         """
         API for calling EQA module
         """
-        rr.init("Stretch_robot", recording_id=uuid4(), spawn=True)
+        rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
         if self.save_rerun:
             if not os.path.exists(self.log):
                 os.makedirs(self.log)

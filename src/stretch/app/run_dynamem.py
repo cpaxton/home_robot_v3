@@ -7,9 +7,14 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+import logging
 from typing import Optional
 
 import click
+
+# Suppress HuggingFace/transformers/httpx INFO spam when loading SigLIP
+for _name in ("httpx", "httpcore", "huggingface_hub", "transformers"):
+    logging.getLogger(_name).setLevel(logging.WARNING)
 
 from stretch.agent.task.dynamem import DynamemTaskExecutor
 from stretch.agent.zmq_client import HomeRobotZmqClient
@@ -105,6 +110,26 @@ from stretch.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, g
     is_flag=True,
     help="Run everything on CPU",
 )
+@click.option(
+    "--headless",
+    is_flag=True,
+    help="Run without native Rerun viewer; connect at http://<server-ip>:9090",
+)
+@click.option(
+    "--no-rerun",
+    is_flag=True,
+    help="Disable Rerun visualization entirely",
+)
+@click.option(
+    "--rerun-show-panels",
+    is_flag=True,
+    help="Show Rerun blueprint/selection panel (useful for debugging)",
+)
+@click.option(
+    "--rerun-debug",
+    is_flag=True,
+    help="Print Rerun logging status (obs/servo received, step count)",
+)
 def main(
     server_ip,
     manual_wait,
@@ -125,6 +150,10 @@ def main(
     llm: str = "qwen25-3B-Instruct",
     manipulation_only: bool = False,
     cpu_only: bool = False,
+    headless: bool = False,
+    no_rerun: bool = False,
+    rerun_show_panels: bool = False,
+    rerun_debug: bool = False,
     **kwargs,
 ):
     """
@@ -138,7 +167,13 @@ def main(
     parameters = get_parameters("dynav_config.yaml")
 
     print("- Create robot client")
-    robot = HomeRobotZmqClient(robot_ip=robot_ip)
+    robot = HomeRobotZmqClient(
+        robot_ip=robot_ip,
+        enable_rerun_server=not no_rerun,
+        rerun_headless=headless,
+        rerun_show_panels=rerun_show_panels,
+        rerun_debug=rerun_debug,
+    )
 
     print("- Create task executor")
     executor = DynamemTaskExecutor(
@@ -178,9 +213,11 @@ def main(
         if llm_client is None:
             # Call the LLM client and parse
             explore = input(
-                "Enter desired mode [E (explore and mapping) / M (Open vocabulary pick and place)]: "
-            )
-            if explore.upper() == "E":
+                "Enter desired mode [E (explore and mapping) / M (Open vocabulary pick and place) / Q (quit)]: "
+            ).strip()
+            if explore.upper() in ("Q", "QUIT"):
+                llm_response = [("quit", "")]
+            elif explore.upper() == "E":
                 llm_response = [("explore", None)]
             else:
                 if target_object is None or len(target_object) == 0:

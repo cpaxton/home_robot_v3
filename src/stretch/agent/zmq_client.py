@@ -115,6 +115,9 @@ class HomeRobotZmqClient(AbstractRobotClient):
         manip_mode_controlled_joints: Optional[List[str]] = None,
         start_immediately: bool = True,
         enable_rerun_server: bool = True,
+        rerun_headless: bool = False,
+        rerun_show_panels: bool = False,
+        rerun_debug: bool = False,
         resend_all_actions: bool = False,
         publish_observations: bool = False,
     ):
@@ -226,10 +229,15 @@ class HomeRobotZmqClient(AbstractRobotClient):
             if output_path is not None and not output_path.exists():
                 output_path.mkdir(parents=True, exist_ok=True)
 
-            self._rerun = RerunVisualizer(output_path=output_path)
+            self._rerun = RerunVisualizer(
+                output_path=output_path,
+                headless=rerun_headless,
+                collapse_panels=not rerun_show_panels,
+            )
         else:
             self._rerun = None
             self._rerun_thread = None
+        self._rerun_debug = rerun_debug if enable_rerun_server else False
 
         if start_immediately:
             self.start()
@@ -1669,8 +1677,34 @@ class HomeRobotZmqClient(AbstractRobotClient):
 
     def blocking_spin_rerun(self) -> None:
         """Use the rerun server so that we can visualize what is going on as the robot takes actions in the world."""
+        step_count = 0
+        last_debug_t = 0
         while not self._finish:
-            self._rerun.step(self._obs, self._servo)
+            if self._rerun:
+                self._rerun.step(self._obs, self._servo)
+                step_count += 1
+                if self._rerun_debug:
+                    import time as _time
+                    now = _time.time()
+                    if now - last_debug_t >= 2.0:
+                        has_obs = self._obs is not None
+                        has_servo = self._servo is not None
+                        rgb_shape = (
+                            self._servo.rgb.shape
+                            if (self._servo is not None and getattr(self._servo, "rgb", None) is not None)
+                            else None
+                        )
+                        msg = (
+                            f"[RERUN] steps={step_count} obs={has_obs} servo={has_servo} "
+                            f"rgb_shape={rgb_shape}"
+                        )
+                        if not has_obs or not has_servo:
+                            msg += " — start MuJoCo server first: python -m stretch.simulation.mujoco_server"
+                        print(msg)
+                        last_debug_t = now
+                # Avoid CPU spin when no data (obs/servo come from ZMQ; step() returns immediately)
+                if not self._obs or not self._servo:
+                    time.sleep(0.1)
 
     @property
     def is_homed(self) -> bool:

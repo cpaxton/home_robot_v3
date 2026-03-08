@@ -2,7 +2,7 @@
 
 Stretch AI supports Python 3.10–3.12. We recommend using [uv](https://docs.astral.sh/uv/) for fast, reproducible installs (no conda required), or [starting with Docker](./start_with_docker.md).
 
-If you do not start with docker, follow the [install guide](docs/install_details.md).
+**Try simulation first?** You can run AI apps without a robot using [Simulation](simulation.md). Install with `uv sync --extra sim` and run `python -m stretch.simulation.mujoco_server` plus your chosen app.
 
 ### System Dependencies
 
@@ -44,7 +44,9 @@ Options:
 - `-y` / `--yes`: Skip confirmation prompts
 - `--cpu`: CPU-only (skips Segment Anything 2)
 - `--sim`: Include simulation extras (MuJoCo)
-- `--no-sam2`: Skip Segment Anything 2 installation
+- `--no-sam2`: Skip Segment Anything 2 (required for DynaMem OWL+SAM segmentation)
+
+To add SAM2 after install: `uv sync --extra dynamem`
 
 #### Install On the Robot
 

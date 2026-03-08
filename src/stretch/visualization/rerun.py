@@ -16,6 +16,14 @@ from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import rerun as rr
+
+# Rerun's native viewer requires a display; use spawn=False when headless
+def has_display() -> bool:
+    return bool(
+        os.environ.get("DISPLAY")
+        or os.environ.get("WAYLAND_DISPLAY")
+        or os.environ.get("WAYLAND_SOCKET")
+    )
 import rerun.blueprint as rrb
 import torch
 
@@ -199,6 +207,7 @@ class RerunVisualizer:
         display_robot_mesh: bool = True,
         spawn_gui: bool = True,
         open_browser: bool = False,
+        headless: bool = False,
         server_memory_limit: str = "4GB",
         collapse_panels: bool = True,
         show_cameras_in_3d_view: bool = False,
@@ -209,23 +218,39 @@ class RerunVisualizer:
         Args:
             display_robot_mesh (bool): Display robot mesh
             open_browser (bool): Open browser at start
+            headless (bool): If True, disable native viewer and serve web only (connect at :9090)
             server_memory_limit (str): Server memory limit E.g. 2GB or 20%
             collapse_panels (bool): Set to false to have customizable rerun panels
         """
         self.open_browser = open_browser
-        if spawn_gui or open_browser:
+        # RERUN_HEADLESS=1 forces web-only (useful when DISPLAY is set but native viewer is unwanted)
+        if os.environ.get("RERUN_HEADLESS", "").lower() in ("1", "true", "yes"):
+            headless = True
+        if headless:
+            spawn_gui = False
+            open_browser = False
+        elif spawn_gui or open_browser:
             # Check environment variables to see if this is docker
             if "DOCKER" in os.environ:
                 spawn_gui = False
                 open_browser = True
                 logger.warning("Docker environment detected. Disabling GUI.")
+            if not has_display():
+                spawn_gui = False
+                logger.warning("No DISPLAY/WAYLAND set. Disabling Rerun GUI (spawn=False).")
         rr.init("Stretch_robot", spawn=spawn_gui)
 
         if output_path is not None:
             rr.save(output_path / "rerun_log.rrd")
-        # open_browser = True
-        if open_browser:
-            rr.serve(open_browser=open_browser, server_memory_limit=server_memory_limit)
+        # Always start web server so :9090 is available (for remote viewing even when native viewer spawns)
+        rr.serve(
+            open_browser=open_browser and has_display() and not headless,
+            server_memory_limit=server_memory_limit,
+        )
+        if not has_display() or headless:
+            logger.info(
+                "Rerun web viewer: connect at http://<this-host>:9090"
+            )
 
         self.display_robot_mesh = display_robot_mesh
         self.show_cameras_in_3d_view = show_cameras_in_3d_view
@@ -253,6 +278,7 @@ class RerunVisualizer:
 
         self.bbox_colors_memory = {}
         self.step_delay_s = 0.3
+        self.collapse_panels = collapse_panels
         self.setup_blueprint(collapse_panels)
 
     def setup_blueprint(self, collapse_panels: bool):
@@ -264,8 +290,8 @@ class RerunVisualizer:
         main = rrb.Horizontal(
             rrb.Spatial3DView(name="3D View", origin="world"),
             rrb.Vertical(
-                rrb.Spatial2DView(name="head_rgb", origin="/world/head_camera"),
-                rrb.Spatial2DView(name="ee_rgb", origin="/world/ee_camera"),
+                rrb.Spatial2DView(name="head_rgb", origin="/world/head_camera/rgb"),
+                rrb.Spatial2DView(name="ee_rgb", origin="/world/ee_camera/rgb"),
             ),
             column_shares=[3, 1],
         )
@@ -374,7 +400,7 @@ class RerunVisualizer:
                 ),
             )
         else:
-            log_to_rerun("world/head_camera/depth", rr.depthimage(obs.head_depth))
+            log_to_rerun("world/head_camera/depth", rr.depthimage(obs.depth))
 
         if self.show_cameras_in_3d_view:
             rot, trans = decompose_homogeneous_matrix(obs.camera_pose)
