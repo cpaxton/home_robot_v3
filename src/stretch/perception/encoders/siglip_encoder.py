@@ -92,9 +92,12 @@ class SiglipEncoder(BaseImageTextEncoder):
         inputs = self.tokenizer([text], padding="max_length", return_tensors="pt")
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         with torch.no_grad():
-            text_features = self.model.get_text_features(**inputs)
+            out = self.model.get_text_features(**inputs)
+        text_features = out.pooler_output if hasattr(out, "pooler_output") and out.pooler_output is not None else out
+        if not isinstance(text_features, torch.Tensor):
+            text_features = out.last_hidden_state[:, 0]
         if self.normalize:
-            text_features /= text_features.norm(dim=-1, keepdim=True)
+            text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         return text_features.float()
 
     def classify(self, image: Union[np.ndarray, torch.Tensor], text: str) -> torch.Tensor:
@@ -126,7 +129,10 @@ class SiglipEncoder(BaseImageTextEncoder):
         inputs = self.tokenizer(texts, padding="max_length", return_tensors="pt")
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         with torch.no_grad():
-            text_features = self.model.get_text_features(**inputs)
+            out = self.model.get_text_features(**inputs)
+        text_features = out.pooler_output if hasattr(out, "pooler_output") and out.pooler_output is not None else out
+        if not isinstance(text_features, torch.Tensor):
+            text_features = out.last_hidden_state[:, 0]
         return text_features.float()
 
     def compute_score(self, image: torch.Tensor, text: torch.Tensor) -> torch.Tensor:
