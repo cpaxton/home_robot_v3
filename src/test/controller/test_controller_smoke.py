@@ -61,10 +61,10 @@ def test_dynamem_controller_is_base_subclass():
 
 
 def test_graph_eqa_controller_import():
-    """GraphEQAController can be imported and has graph_memory and run_eqa."""
-    assert hasattr(GraphEQAController, "graph_memory")
+    """GraphEQAController can be imported and has run_eqa and update (overrides)."""
     assert hasattr(GraphEQAController, "run_eqa")
     assert hasattr(GraphEQAController, "run_eqa_one_iter")
+    assert hasattr(GraphEQAController, "update")
 
 
 def test_graph_eqa_controller_is_dynamem_subclass():
