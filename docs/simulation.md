@@ -214,4 +214,4 @@ Use `sim_planner.yaml` and `--parameter_file sim_planner.yaml` for grasp_object.
 Install Robocasa and dependencies with `./scripts/install_simulation.sh`.
 
 **DynaMem / Rerun headless**  
-When running DynaMem without a display, the Rerun web server starts automatically. Connect from a laptop at `http://<server-ip>:9090`. See [Debug: Headless and Rerun](debug.md#headless-and-rerun).
+When running DynaMem without a display, the Rerun web server starts automatically. Connect from a laptop at `http://<server-ip>:9090?url=ws://<server-ip>:9877`. See [Debug: Headless and Rerun](debug.md#headless-and-rerun).

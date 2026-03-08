@@ -249,7 +249,7 @@ class RerunVisualizer:
         )
         if not has_display() or headless:
             logger.info(
-                "Rerun web viewer: connect at http://<this-host>:9090"
+                "Rerun web viewer: connect at http://<this-host>:9090?url=ws://<this-host>:9877"
             )
 
         self.display_robot_mesh = display_robot_mesh
@@ -290,8 +290,8 @@ class RerunVisualizer:
         main = rrb.Horizontal(
             rrb.Spatial3DView(name="3D View", origin="world"),
             rrb.Vertical(
-                rrb.Spatial2DView(name="head_rgb", origin="/world/head_camera/rgb"),
-                rrb.Spatial2DView(name="ee_rgb", origin="/world/ee_camera/rgb"),
+                rrb.Spatial2DView(name="head_rgb", origin="world/head_camera"),
+                rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera"),
             ),
             column_shares=[3, 1],
         )
@@ -389,16 +389,18 @@ class RerunVisualizer:
         log_to_rerun("world/head_camera/rgb", rr.Image(obs.rgb))
 
         if self.show_camera_point_clouds:
-            head_xyz = obs.get_xyz_in_world_frame().reshape(-1, 3)
-            head_rgb = obs.rgb.reshape(-1, 3)
-            log_to_rerun(
-                "world/head_camera/points",
-                rr.Points3D(
-                    positions=head_xyz,
-                    radii=np.ones(head_xyz.shape[:2]) * self.camera_point_radius,
-                    colors=np.int64(head_rgb),
-                ),
-            )
+            head_xyz = obs.get_xyz_in_world_frame()
+            if head_xyz is not None:
+                head_xyz = head_xyz.reshape(-1, 3)
+                head_rgb = obs.rgb.reshape(-1, 3)
+                log_to_rerun(
+                    "world/head_camera/points",
+                    rr.Points3D(
+                        positions=head_xyz,
+                        radii=np.ones(head_xyz.shape[:2]) * self.camera_point_radius,
+                        colors=np.int64(head_rgb),
+                    ),
+                )
         else:
             log_to_rerun("world/head_camera/depth", rr.depthimage(obs.depth))
 

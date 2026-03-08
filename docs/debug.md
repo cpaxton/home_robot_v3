@@ -4,12 +4,12 @@
 
 When running without a display (SSH, servers, Docker):
 
-- **Rerun**: The native viewer is disabled, but the web server starts automatically. Connect from another machine at `http://<server-ip>:9090` to view the visualization. Ports 9090 (HTTP) and 9877 (WebSocket) must be reachable.
-- **SSH port forwarding**: If the server binds to localhost only, use `ssh -L 9090:localhost:9090 -L 9877:localhost:9877 user@server`, then open `http://localhost:9090` on your laptop.
-- **Correct URL**: Open `http://<server-ip>:9090` (or `http://localhost:9090` when local)—the same machine where DynaMem is running. Do **not** open https://app.rerun.io; that is a different app. The viewer at :9090 auto-connects to the stream; there is no Connect button.
+- **Rerun**: The native viewer is disabled, but the web server starts automatically. Connect from another machine at `http://<server-ip>:9090?url=ws://<server-ip>:9877`. Ports 9090 (HTTP) and 9877 (WebSocket) must be reachable.
+- **SSH port forwarding**: If the server binds to localhost only, use `ssh -L 9090:localhost:9090 -L 9877:localhost:9877 user@server`, then open `http://localhost:9090?url=ws://localhost:9877` on your laptop.
+- **Correct URL**: Open `http://localhost:9090?url=ws://localhost:9877` (or `http://<server-ip>:9090?url=ws://<server-ip>:9877` when remote). The `?url=ws://...` tells the viewer which WebSocket to connect to. Do **not** open https://app.rerun.io.
 - **Native app spawning instead of web**: If the native Rerun viewer opens instead of the web viewer, use `--headless` or set `RERUN_HEADLESS=1`. The web server now always runs on :9090, so you can open that URL even when the native app spawns.
 - **No blueprint panel**: Use `--rerun-show-panels` when running DynaMem to reveal the entity tree and view options.
-- **Still not seeing anything**: Run `uv run python scripts/test_rerun.py` to verify Rerun works in isolation. Use `--rerun-debug` with DynaMem to print obs/servo status every 2s (confirms data is reaching Rerun). Ensure the MuJoCo server is running in another terminal before starting DynaMem.
+- **Still not seeing anything** (but `[RERUN] obs=True servo=True`): Data is flowing. Use the full URL: `http://localhost:9090?url=ws://localhost:9877` (the `?url=ws://...` is required to connect to the stream). Also try: (1) `--rerun-show-panels` to reveal the entity tree; (2) check the timeline is playing; (3) hard refresh (Ctrl+Shift+R).
 - **winit / DISPLAY errors**: These occur when a GUI tries to spawn without a display. DynaMem and other apps now detect headless and disable the native Rerun viewer; the web server still runs.
 
 ## Apps for Debugging
