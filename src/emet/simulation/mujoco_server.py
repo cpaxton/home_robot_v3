@@ -9,12 +9,14 @@
 # license information maybe found below, if so.
 
 import random
+import sys
 import threading
 import time
 import timeit
 from typing import Any, Dict, Optional
 
 import click
+import zmq
 import numpy as np
 from overrides import override
 from emet.simulation.stretch_mujoco import StretchMujocoSimulator
@@ -542,7 +544,8 @@ class MujocoZmqServer(BaseZmqServer):
             t = getattr(self, name, None)
             if t is not None and t.is_alive():
                 t.join(timeout=1.0)
-        self.robot_sim.stop()
+        if hasattr(self, "robot_sim") and self.robot_sim is not None:
+            self.robot_sim.stop()
 
     @override
     def get_control_mode(self) -> str:
@@ -878,20 +881,30 @@ def main(
     if scene_path is None or len(scene_path) == 0:
         scene_path = default_scene_xml_path
 
-    server = MujocoZmqServer(
-        send_port,
-        recv_port,
-        send_state_port,
-        send_servo_port,
-        use_remote_computer=use_remote_computer,
-        verbose=verbose,
-        image_scaling=image_scaling,
-        ee_image_scaling=ee_image_scaling,
-        depth_scaling=depth_scaling,
-        scene_path=scene_path,
-        scene_model=scene_model,
-        objects_info=objects_info,
-    )
+    try:
+        server = MujocoZmqServer(
+            send_port,
+            recv_port,
+            send_state_port,
+            send_servo_port,
+            use_remote_computer=use_remote_computer,
+            verbose=verbose,
+            image_scaling=image_scaling,
+            ee_image_scaling=ee_image_scaling,
+            depth_scaling=depth_scaling,
+            scene_path=scene_path,
+            scene_model=scene_model,
+            objects_info=objects_info,
+        )
+    except zmq.error.ZMQError as e:
+        if "Address already in use" in str(e):
+            print(
+                f"\nPort already in use. Kill the existing process with:\n"
+                f"  kill $(lsof -t -i:{send_port})  # or: pkill -f mujoco_server\n",
+                file=sys.stderr,
+            )
+        raise
+
     try:
         server.start(
             show_viewer_ui=show_viewer_ui,
@@ -900,7 +913,8 @@ def main(
         )
 
     except KeyboardInterrupt:
-        server.robot_sim.stop()
+        if hasattr(server, "robot_sim") and server.robot_sim is not None:
+            server.robot_sim.stop()
 
 
 if __name__ == "__main__":

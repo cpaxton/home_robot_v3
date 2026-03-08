@@ -8,6 +8,7 @@
 # license information maybe found below, if so.
 
 import logging
+import os
 from typing import Optional
 
 import click
@@ -130,6 +131,12 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
     is_flag=True,
     help="Print Rerun logging status (obs/servo received, step count)",
 )
+@click.option(
+    "--rerun-bind",
+    is_flag=True,
+    help="Bind Rerun to 0.0.0.0 for remote viewing (Tailscale, etc.). "
+    "If direct connection fails, use SSH port forwarding instead.",
+)
 def main(
     server_ip,
     manual_wait,
@@ -154,6 +161,7 @@ def main(
     no_rerun: bool = False,
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
+    rerun_bind: bool = False,
     **kwargs,
 ):
     """
@@ -165,6 +173,9 @@ def main(
 
     print("- Load parameters")
     parameters = get_parameters("dynav_config.yaml")
+
+    if rerun_bind:
+        os.environ["RERUN_BIND_ALL"] = "1"
 
     print("- Create robot client")
     robot = HomeRobotZmqClient(

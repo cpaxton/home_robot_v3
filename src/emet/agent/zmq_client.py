@@ -279,7 +279,10 @@ class HomeRobotZmqClient(AbstractRobotClient):
             while self._state is None:
                 time.sleep(1e-4)
                 if timeit.default_timer() - t0 > timeout:
-                    logger.error("Timeout waiting for state message")
+                    logger.error(
+                        "Timeout waiting for state message. Is the simulator running? "
+                        "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
+                    )
                     return None, None, None
             joint_positions = self._state["joint_positions"]
             joint_velocities = self._state["joint_velocities"]
@@ -293,7 +296,10 @@ class HomeRobotZmqClient(AbstractRobotClient):
             while self._state is None:
                 time.sleep(1e-4)
                 if timeit.default_timer() - t0 > timeout:
-                    logger.error("Timeout waiting for state message")
+                    logger.error(
+                        "Timeout waiting for state message. Is the simulator running? "
+                        "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
+                    )
                     return None
             joint_positions = self._state["joint_positions"]
         return joint_positions
@@ -319,7 +325,10 @@ class HomeRobotZmqClient(AbstractRobotClient):
             while self._state is None:
                 time.sleep(1e-4)
                 if timeit.default_timer() - t0 > timeout:
-                    logger.error("Timeout waiting for state message")
+                    logger.error(
+                        "Timeout waiting for state message. Is the simulator running? "
+                        "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
+                    )
                     return None
             joint_velocities = self._state["joint_velocities"]
         return joint_velocities
@@ -339,7 +348,10 @@ class HomeRobotZmqClient(AbstractRobotClient):
             while self._state is None:
                 time.sleep(1e-4)
                 if timeit.default_timer() - t0 > timeout:
-                    logger.error("Timeout waiting for state message")
+                    logger.error(
+                        "Timeout waiting for state message. Is the simulator running? "
+                        "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
+                    )
                     return None
             joint_efforts = self._state["joint_efforts"]
         return joint_efforts
@@ -370,7 +382,10 @@ class HomeRobotZmqClient(AbstractRobotClient):
                 while self._state is None:
                     time.sleep(1e-4)
                     if timeit.default_timer() - t0 > timeout:
-                        logger.error("Timeout waiting for state message")
+                        logger.error(
+                            "Timeout waiting for state message. Is the simulator running? "
+                            "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
+                        )
                         return None
                 xyt = self._state["base_pose"]
         return xyt
@@ -381,8 +396,12 @@ class HomeRobotZmqClient(AbstractRobotClient):
         Returns:
             Tuple[float, float]: The pan and tilt angles
         """
-
         joint_positions, _, _ = self.get_joint_state()
+        if joint_positions is None:
+            raise RuntimeError(
+                "No robot state received. Is the simulator/robot running? "
+                "Start with: emet serve mujoco (then emet run dynamem --robot-ip 127.0.0.1)"
+            )
         return joint_positions[HelloStretchIdx.HEAD_PAN], joint_positions[HelloStretchIdx.HEAD_TILT]
 
     def get_gripper_position(self):
@@ -392,6 +411,11 @@ class HomeRobotZmqClient(AbstractRobotClient):
             float: The position of the gripper
         """
         joint_state = self.get_joint_positions()
+        if joint_state is None:
+            raise RuntimeError(
+                "No robot state received. Is the simulator/robot running? "
+                "Start with: emet serve mujoco (then emet run dynamem --robot-ip 127.0.0.1)"
+            )
         return joint_state[HelloStretchIdx.GRIPPER]
 
     def get_ee_pose(self, matrix=False, link_name=None, q=None):

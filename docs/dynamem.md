@@ -66,7 +66,7 @@ You can run DynaMem in MuJoCo simulation without a physical robot. See [Simulati
 
 **Install SAM2** (required for OWL+SAM segmentation): `emet sync -e dynamem` or `uv sync --extra dynamem` or run `./install.sh` (includes SAM2 by default; use `--no-sam2` to skip).
 
-**Headless (no DISPLAY)**: The native Rerun viewer is disabled, but the web server starts automatically. Connect from a laptop at `http://<server-ip>:9090?url=ws://<server-ip>:9877`. If that fails (firewall or binding), use SSH port forwarding: `ssh -L 9090:localhost:9090 -L 9877:localhost:9877 user@server`, then open `http://localhost:9090?url=ws://localhost:9877`. See [Debug: Headless and Rerun](debug.md#headless-and-rerun) for more.
+**Headless (no DISPLAY)**: The native Rerun viewer is disabled, but the web server starts automatically. To view from a laptop over Tailscale or VPN, use SSH port forwarding: `ssh -L 9090:localhost:9090 -L 9877:localhost:9877 user@<robot-ip>`, then open `http://localhost:9090?url=ws://localhost:9877`. Direct connection at `http://<robot-ip>:9090?url=ws://<robot-ip>:9877` may fail because Rerun binds to localhost by default. See [Debug: Headless and Rerun](debug.md#headless-and-rerun) for more.
 
 **Explicit headless (`--headless`)**: Use when you have a display but want to view Rerun from another machine (e.g. SSH). Disables the native viewer and serves only the web UI at `:9090`.
 

@@ -226,6 +226,10 @@ class RerunVisualizer:
         # RERUN_HEADLESS=1 forces web-only (useful when DISPLAY is set but native viewer is unwanted)
         if os.environ.get("RERUN_HEADLESS", "").lower() in ("1", "true", "yes"):
             headless = True
+        # RERUN_BIND_ALL=1 makes the server listen on 0.0.0.0 for remote viewing (Tailscale, etc.)
+        if os.environ.get("RERUN_BIND_ALL", "").lower() in ("1", "true", "yes"):
+            os.environ["RERUN_SERVER_HOST"] = "0.0.0.0"
+            os.environ["RERUN_SERVER_WS_HOST"] = "0.0.0.0"
         if headless:
             spawn_gui = False
             open_browser = False

@@ -7,7 +7,19 @@ See also: [emet CLI](cli.md) for `emet run timing`, `emet show <rrd>`, etc.
 When running without a display (SSH, servers, Docker):
 
 - **Rerun**: The native viewer is disabled, but the web server starts automatically. Connect from another machine at `http://<server-ip>:9090?url=ws://<server-ip>:9877`. Ports 9090 (HTTP) and 9877 (WebSocket) must be reachable.
-- **SSH port forwarding**: If the server binds to localhost only, use `ssh -L 9090:localhost:9090 -L 9877:localhost:9877 user@server`, then open `http://localhost:9090?url=ws://localhost:9877` on your laptop.
+- **SSH port forwarding** (recommended for Tailscale/VPN): Rerun binds to localhost by default. To view from your laptop over Tailscale or VPN, use SSH port forwarding:
+  ```bash
+  # On your laptop — forwards local ports to the robot
+  ssh -L 9090:localhost:9090 -L 9877:localhost:9877 user@100.74.38.77
+  ```
+  Then open **http://localhost:9090?url=ws://localhost:9877** in your browser. Works over Tailscale, WireGuard, or any SSH-accessible host.
+- **Direct connection** (if Rerun binds to 0.0.0.0): Try `--rerun-bind` or `RERUN_BIND_ALL=1` when starting the app. If your Rerun version supports it, you can then connect at `http://<robot-ip>:9090?url=ws://<robot-ip>:9877`. If that fails, use SSH port forwarding above.
+- **socat workaround** (on the robot, before starting the app): If you have `socat` installed and `--rerun-bind` doesn't work:
+  ```bash
+  socat TCP-LISTEN:9090,fork,bind=0.0.0.0 TCP:127.0.0.1:9090 &
+  socat TCP-LISTEN:9877,fork,bind=0.0.0.0 TCP:127.0.0.1:9877 &
+  ```
+  Then connect at `http://<robot-ip>:9090?url=ws://<robot-ip>:9877`.
 - **Correct URL**: Open `http://localhost:9090?url=ws://localhost:9877` (or `http://<server-ip>:9090?url=ws://<server-ip>:9877` when remote). The `?url=ws://...` tells the viewer which WebSocket to connect to. Do **not** open https://app.rerun.io.
 - **Native app spawning instead of web**: If the native Rerun viewer opens instead of the web viewer, use `--headless` or set `RERUN_HEADLESS=1`. The web server now always runs on :9090, so you can open that URL even when the native app spawns.
 - **No blueprint panel**: Use `--rerun-show-panels` when running DynaMem to reveal the entity tree and view options.
