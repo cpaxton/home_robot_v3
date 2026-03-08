@@ -62,24 +62,24 @@ Run a robot agent or app.
 | `timing` | Network timing test |
 
 **Common options:**
-- `--robot-ip IP` — Robot or simulator IP (default: 127.0.0.1)
-- `--server-ip IP` — Server IP for AnyGrasp (dynamem)
+- `--robot-ip` / `--robot_ip` — Robot or simulator IP (default: 127.0.0.1)
+- `--server-ip` / `--server_ip` — Server IP for AnyGrasp (dynamem)
 - `-S, --skip` — Skip confirmations
 - `--headless` — Run without display
-- `--visual-servo, -V` — Use visual servoing (dynamem)
-- `--target-object OBJ` — Target object (grasp)
-- `--parameter-file FILE` — Planner config (e.g. sim_planner.yaml)
+- `--visual-servo` / `-V` / `--visual_servo` — Use visual servoing (dynamem)
+- `--target-object` / `--target_object` — Target object (grasp)
+- `--parameter-file` / `--parameter_file` — Planner config (e.g. sim_planner.yaml)
+
+Unknown options (e.g. `--match-method`, `--rerun-debug`) are passed through to the underlying app.
 
 **Examples:**
 ```bash
 emet run dynamem --robot-ip 127.0.0.1 -S
-emet run dynamem -S --visual-servo --match-method class
+emet run dynamem -S --visual-servo --match-method class --rerun-debug
 emet run mapping --robot-ip 127.0.0.1
 emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
 emet run timing --robot-ip 192.168.1.15 --headless
 ```
-
-Extra arguments are passed through to the underlying app.
 
 ---
 
