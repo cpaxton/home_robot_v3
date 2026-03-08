@@ -29,10 +29,12 @@ Run DynaMem in MuJoCo simulation in a few steps:
 ./install.sh --sim -y
 
 # 2. Terminal 1 — start simulation server
-python -m emet.simulation.mujoco_server --use-robocasa
+emet serve mujoco --use-robocasa
+# or: python -m emet.simulation.mujoco_server --use-robocasa
 
 # 3. Terminal 2 — run DynaMem
-python -m emet.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class --headless
+emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo --headless
+# or: python -m emet.app.run_dynamem ...
 ```
 
 **4. View in browser:** Open `http://localhost:9090?url=ws://localhost:9877` to see the Rerun visualization (cameras, 3D scene, robot).
@@ -85,7 +87,7 @@ python -m emet.simulation.mujoco_server
 python -m emet.app.grasp_object --robot_ip 127.0.0.1 --target_object "red cylinder" --parameter_file sim_planner.yaml --show_gui
 ```
 
-Use `--headless` when running without a display (e.g. SSH); on Linux, EGL enables cameras. See [Simulation](docs/simulation.md) for DynaMem, mapping, Robocasa, and demo scripts.
+Use `--headless` when running without a display (e.g. SSH); on Linux, EGL enables cameras. See [Simulation](docs/simulation.md) for DynaMem, mapping, Robocasa, and demo scripts. The [emet CLI](docs/cli.md) (`emet serve`, `emet run`, `emet test`, etc.) provides a unified interface.
 
 #### Experimental support for Older Robots
 

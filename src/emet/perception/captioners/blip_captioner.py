@@ -7,6 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+from pathlib import Path
 from typing import Optional, Union
 
 import click
@@ -81,7 +82,11 @@ class BlipCaptioner:
 
 
 @click.command()
-@click.option("--image_path", default="example.jpg", help="Path to image file")
+@click.option(
+    "--image_path",
+    default=str(Path(__file__).parent / "example.jpg"),
+    help="Path to image file",
+)
 def main(image_path: str):
     captioner = BlipCaptioner()
 

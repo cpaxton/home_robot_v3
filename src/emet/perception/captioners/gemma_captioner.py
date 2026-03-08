@@ -109,6 +109,9 @@ class GemmaCaptioner:
 
 
 if __name__ == "__main__":
+    from pathlib import Path
+
     captioner = GemmaCaptioner()
-    caption = captioner.caption_image(Image.open("example.jpg"))
+    example_path = Path(__file__).parent / "example.jpg"
+    caption = captioner.caption_image(Image.open(example_path))
     print("caption for the image:", caption)

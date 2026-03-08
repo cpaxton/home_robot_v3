@@ -123,6 +123,9 @@ class QwenCaptioner:
 
 
 if __name__ == "__main__":
+    from pathlib import Path
+
     captioner = QwenCaptioner()
-    caption = captioner.caption_image(Image.open("example.jpg"), verbose=True)
+    example_path = Path(__file__).parent / "example.jpg"
+    caption = captioner.caption_image(Image.open(example_path), verbose=True)
     print("caption for the image:", caption)

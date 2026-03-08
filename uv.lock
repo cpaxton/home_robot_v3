@@ -908,6 +908,7 @@ source = { editable = "." }
 dependencies = [
     { name = "accelerate" },
     { name = "bitsandbytes" },
+    { name = "click" },
     { name = "einops" },
     { name = "gitpython" },
     { name = "google-genai" },
@@ -994,6 +995,7 @@ requires-dist = [
     { name = "accelerate", specifier = ">=1.5.0" },
     { name = "bitsandbytes" },
     { name = "black", marker = "extra == 'dev'" },
+    { name = "click", specifier = ">=8.1.8" },
     { name = "click", marker = "extra == 'sim'", specifier = ">=8.1.8" },
     { name = "discord-py", marker = "extra == 'discord'" },
     { name = "einops" },

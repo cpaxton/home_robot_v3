@@ -73,7 +73,11 @@ dependencies = [
     "simpleaudio",
     "scikit-fmm",
     "open3d",
+    "click>=8.1.8",
 ]
+
+[project.scripts]
+emet = "emet.cli:main"
 
 [project.optional-dependencies]
 dev = [

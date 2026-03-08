@@ -48,10 +48,11 @@ User is in Docker group. Running command without sudo.
 root@caliban:/stretch_ai#
 ```
 
-You can then run Stretch AI commands from the container. For example, you can run the `llm_agent` with:
+You can then run Stretch AI commands from the container. For example, you can run the LLM chat or ai_pickup:
 
 ```
-root@caliban:/stretch_ai# python3 -m emet.app.llm_agent
+root@caliban:/stretch_ai# python3 -m emet.app.chat --llm qwen25
+root@caliban:/stretch_ai# python3 -m emet.app.ai_pickup --use_llm
 ```
 
 Make sure to use the `python3` command instead of `python`.

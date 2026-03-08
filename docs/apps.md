@@ -27,7 +27,15 @@ There are also some apps for [debugging](debug.md).
 
 ## List of Apps
 
-Stretch AI is a collection of tools and applications for the Stretch robot. These tools are designed to be run on the robot itself, or on a remote computer connected to the robot. The tools are designed to be run from the command line, and are organized as Python modules. You can run them with `python -m emet.app.<app_name>`.
+Stretch AI is a collection of tools and applications for the Stretch robot. These tools are designed to be run on the robot itself, or on a remote computer connected to the robot.
+
+**Run apps** with the [emet CLI](cli.md) (`emet run <app>`) or `python -m emet.app.<app_name>`:
+
+```bash
+emet run dynamem --robot-ip 127.0.0.1 -S
+emet run mapping --robot-ip 127.0.0.1
+emet run timing --robot-ip $ROBOT_IP
+```
 
 Some, like `print_joint_states`, are simple tools that print out information about the robot. Others, like `mapping`, are more complex and involve the robot moving around and interacting with its environment.
 
@@ -40,7 +48,7 @@ python -m emet.app.print_joint_states --robot_ip $ROBOT_IP
 
 ### Simulation
 
-You can run many of these apps in MuJoCo simulation without a physical robot. Use `--robot_ip 127.0.0.1` and start the simulation server first. See [Simulation](simulation.md) for setup, Robocasa, demo scripts (`./scripts/demo_simulation.sh`), and headless usage.
+You can run many of these apps in MuJoCo simulation without a physical robot. Use `emet serve mujoco` and `emet run <app> --robot-ip 127.0.0.1`. See [Simulation](simulation.md) for setup, Robocasa, demo scripts (`./scripts/demo_simulation.sh`), and headless usage.
 
 ### Debugging Tools
 
