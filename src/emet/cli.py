@@ -158,7 +158,7 @@ def kill_mujoco_server(port: int, kill_all: bool) -> None:
 
 
 @main.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
-@click.argument("app", type=click.Choice(["dynamem", "mapping", "grasp", "chat", "ai_pickup", "timing"]))
+@click.argument("app", type=click.Choice(["dynamem", "graph-eqa", "mapping", "grasp", "chat", "ai_pickup", "timing"]))
 @click.option("--robot-ip", "--robot_ip", default="127.0.0.1", help="Robot or simulator IP")
 @click.option("--server-ip", "--server_ip", default="127.0.0.1", help="Server IP (e.g. for AnyGrasp)")
 @click.option("-S", "--skip", "skip_confirmations", is_flag=True, help="Skip confirmations")
@@ -199,6 +199,8 @@ def run(
         if visual_servo:
             args.append("--visual-servo")
         sys.exit(_run_module("emet.app.run_dynamem", args))
+    elif app == "graph-eqa":
+        sys.exit(_run_module("emet.app.run_graph_eqa", args))
     elif app == "mapping":
         sys.exit(_run_module("emet.app.mapping", args))
     elif app == "grasp":
