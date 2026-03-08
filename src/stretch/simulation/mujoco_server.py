@@ -17,14 +17,14 @@ from typing import Any, Dict, Optional
 import click
 import numpy as np
 from overrides import override
-from stretch_mujoco import StretchMujocoSimulator
-from stretch_mujoco.enums.stretch_cameras import StretchCameras
+from stretch.simulation.stretch_mujoco import StretchMujocoSimulator
+from stretch.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 
 from stretch.motion.constants import STRETCH_CAMERA_FRAME
 
 try:
-    from stretch_mujoco.robocasa_gen import model_generation_wizard
-except ImportError as e:
+    from stretch.simulation.stretch_mujoco.robocasa_gen import model_generation_wizard
+except ImportError:
     print(
         "Not installing mujoco yet! Please install robosuite, robocasa and stretch_mujoco in order to use model generation wizard."
     )
@@ -41,7 +41,7 @@ from stretch.utils.config import get_control_config
 from stretch.utils.geometry import pose_global_to_base, xyt_base_to_global, xyt_global_to_base
 from stretch.utils.image import scale_camera_matrix
 
-ref = files("stretch_mujoco") / "models"
+ref = files("stretch.simulation.stretch_mujoco") / "models"
 with as_file(ref) as models_dir:
     default_scene_xml_path = str(models_dir / "scene.xml")
 
@@ -289,11 +289,7 @@ class MujocoZmqServer(BaseZmqServer):
 
         Args:
             xyt_goal (np.ndarray): Goal pose for the robot in world coordinates (x, y, theta).
-            me/cpaxton/miniforge3/envs/stretch_ai_0.0.10/lib/python3.10/threading.py", line 1016, in _bootstrap_inner
-                self.run()
-                  File "/home/cpaxton/miniforge3/envs/stretch_ai_0.0.10/lib/python3.10/threading.py", line 953, in run
-                      self._target(*self._args, **self._kwargs)
-
+            relative (bool): If True, the goal is relative to the current pose.
         """
         assert len(xyt_goal) == 3, "Goal pose should be of size 3 (x, y, theta)"
 

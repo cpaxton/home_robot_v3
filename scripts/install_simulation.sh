@@ -37,11 +37,8 @@ fi
 # Change to the third_party directory
 cd "$ROOT_DIR/third_party" || exit 1
 
-# Clone stretch_mujoco
-git clone https://github.com/hello-robot/stretch_mujoco
-cd stretch_mujoco || exit 1
-pip install -e .
-cd ..
+# Note: stretch_mujoco is now merged into src/stretch/simulation/ in this repo.
+# Install the stretch package with sim extras: pip install -e ".[sim]"
 
 # Clone robosuite
 git clone https://github.com/ARISE-Initiative/robosuite -b robocasa_v0.1

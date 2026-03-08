@@ -1,27 +1,35 @@
 # Robocasa Installation
 
-You can install Robocasa by following the instructions below. Our simulation has three dependencies:
+You can install Robocasa by following the instructions below. The MuJoCo simulation stack (stretch_mujoco) is now merged into this repository under `src/stretch/simulation/`. For Robocasa support, you also need:
   - [Robosuite](https://github.com/ARISE-Initiative/robosuite)
   - [Robocasa](https://github.com/robocasa/robocasa) - [project page](https://robocasa.ai/)
-  - [Stretch Mujoco](https://github.com/hello-robot/stretch_mujoco/)
 
 ## Installation
 
-Here we provide a script to follow installation instructions in [Stretch Mujoco](https://github.com/hello-robot/stretch_mujoco/tree/main#getting-started)
+First, you need to make sure you have already installed [Stretch AI](./install_details.md) and activate the installed conda env.
 
-First, you need to make sure you have already installed [Stretch AI](./install_details.md) and activate installed conda env.
-
-After that, following these scripts to install the remaining dependencies.
+Install the stretch package with simulation extras:
 
 ```bash
-git clone https://github.com/hello-robot/stretch_mujoco --recurse-submodules
-cd stretch_mujoco
-pip install -e .
-pip install -e "third_party/robocasa"
-pip install -e "third_party/robosuite"
-python third_party/robosuite/robosuite/scripts/setup_macros.py
-python third_party/robocasa/robocasa/scripts/setup_macros.py
-python third_party/robocasa/robocasa/scripts/download_kitchen_assets.py
+pip install -e ".[sim]"
+```
+
+For Robocasa support (scene generation, etc.), use the install script from the repo root:
+
+```bash
+./scripts/install_simulation.sh
+```
+
+Or manually install the remaining dependencies:
+
+```bash
+cd third_party
+git clone https://github.com/ARISE-Initiative/robosuite -b robocasa_v0.1
+cd robosuite && pip install -e . && cd ..
+git clone https://github.com/robocasa/robocasa
+cd robocasa && pip install -e .
+python robocasa/scripts/setup_macros.py
+python robocasa/scripts/download_kitchen_assets.py  # if needed
 ```
 
 As of 2024-12-04, you may need to update Google protobuf because of an issue with Google text-to-speech:
@@ -77,4 +85,4 @@ Using the `--robot_ip` option will update your default IP address; you will need
 
 ## Creating your own scenes
 
-Mujoco scenes are stored as XML files. You can see an example at [stretch_mujoco/models/scene.xml](https://github.com/hello-robot/stretch_mujoco/blob/main/stretch_mujoco/models/stretch.xml). You can create your own scenes by modifying this file or creating a new one.
+Mujoco scenes are stored as XML files. You can see an example at `src/stretch/simulation/stretch_mujoco/models/scene.xml`. You can create your own scenes by modifying this file or creating a new one.

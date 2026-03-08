@@ -27,7 +27,13 @@ setuptools.setup(
     url="https://github.com/hello-robot/stretchpy",
     packages=setuptools.find_packages(),
     include_package_data=True,
-    package_data={"stretch": ["config/**/*.yaml", "perception/*.tsv", "simulation/models/*"]},
+    package_data={
+        "stretch": [
+            "config/**/*.yaml",
+            "perception/*.tsv",
+            "simulation/stretch_mujoco/models/**/*",
+        ]
+    },
     install_requires=[
         # Machine learning code, we will install these packages in install.sh instead
         "torch>=2.6",
@@ -113,9 +119,11 @@ setuptools.setup(
             "python-dotenv",
         ],
         "sim": [
-            "mujoco",
+            "mujoco>=3.2.6",
             "hello-robot-stretch-urdf",
             "grpcio",
+            "click>=8.1.8",
+            "inputs>=0.5",
         ],
         "hand_tracker": [
             "mediapipe",
