@@ -61,7 +61,19 @@ def test_run_help():
     )
     assert result.returncode == 0
     assert "dynamem" in result.stdout
+    assert "graph-eqa" in result.stdout
     assert "mapping" in result.stdout
+
+
+def test_run_graph_eqa_help():
+    """emet run graph-eqa --help works (GraphEQA app is wired)."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "run", "graph-eqa", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "robot" in result.stdout.lower() or "robot_ip" in result.stdout
 
 
 def test_sync_help():

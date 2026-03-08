@@ -96,3 +96,34 @@ def test_on_floor_heuristic():
     """_on_floor returns True when z <= threshold."""
     assert _on_floor(np.array([0, 0, 0.02])) is True
     assert _on_floor(np.array([0, 0, 0.2])) is False
+
+
+def test_query_answer_returns_tuple_with_mock_client():
+    """query_answer returns (reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images)."""
+    def mock_eqa(commands):
+        return (
+            "reasoning: I see a table.\n"
+            "answer: Yes\n"
+            "confidence: true\n"
+            "action: \n"
+            "confidence_reasoning: Sure."
+        )
+
+    mem = GraphEQAMemory(
+        eqa_client=mock_eqa,
+        image_description_client=lambda x: "table",
+    )
+    mem.add_observation(
+        np.zeros((60, 80, 3), dtype=np.uint8),
+        np.array([0.0, 0.0, 0.5]),
+        ["table"],
+    )
+    out = mem.query_answer("Is there a table?", None, None)
+    assert len(out) == 6
+    reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images = out
+    assert isinstance(reasoning, str)
+    assert isinstance(answer, str)
+    assert isinstance(confidence, bool)
+    assert isinstance(confidence_reasoning, str)
+    assert target_point is None  # confident, so no exploration
+    assert isinstance(relevant_images, list)
