@@ -6,7 +6,10 @@ import mujoco._callbacks
 import mujoco._render
 import mujoco._enums
 import mujoco.viewer
-from mujoco._structs import MjData, MjModel
+try:
+    from mujoco import MjData, MjModel
+except ImportError:
+    from mujoco._structs import MjData, MjModel
 
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 from emet.simulation.stretch_mujoco.mujoco_server import MujocoServer

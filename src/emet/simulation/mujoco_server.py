@@ -533,10 +533,16 @@ class MujocoZmqServer(BaseZmqServer):
         self.stop()
 
     def stop(self):
-        """Stop the server and the robot."""
-        self.running = False
+        """Stop the server and the robot. Sets _done first so spin threads exit cleanly."""
+        self._done = True
+        time.sleep(0.3)
+        if hasattr(self, "_control_thread") and self._control_thread is not None:
+            self._control_thread.join(timeout=2.0)
+        for name in ("_send_thread", "_recv_thread", "_send_state_thread", "_send_servo_thread"):
+            t = getattr(self, name, None)
+            if t is not None and t.is_alive():
+                t.join(timeout=1.0)
         self.robot_sim.stop()
-        self._control_thread.join()
 
     @override
     def get_control_mode(self) -> str:

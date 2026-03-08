@@ -12,7 +12,10 @@ import mujoco
 import mujoco._functions
 import mujoco._enums
 import numpy as np
-from mujoco._structs import MjData, MjModel
+try:
+    from mujoco import MjData, MjModel
+except ImportError:
+    from mujoco._structs import MjData, MjModel
 import mujoco._enums
 
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras

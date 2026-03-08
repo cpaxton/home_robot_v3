@@ -11,7 +11,10 @@ import time
 
 import click
 import numpy as np
-from mujoco._structs import MjModel
+try:
+    from mujoco import MjModel
+except ImportError:
+    from mujoco._structs import MjModel
 
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_joints import StatusStretchJoints

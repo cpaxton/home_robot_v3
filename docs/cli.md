@@ -134,6 +134,43 @@ emet test -k test_serve
 
 ---
 
+### `emet install <subcommand> [options]`
+
+Install submodules, simulation extras, or full setup.
+
+| Subcommand | Description |
+|------------|-------------|
+| `submodules` | Init and update git submodules (segment-anything-2, ok-robot) |
+| `sim` | Install Robocasa and robosuite (clones into third_party) |
+| `full` | Run full install (./install.sh) |
+
+**`emet install submodules`**
+- `--recursive` / `--no-recursive` — Recursively init nested submodules (default: recursive)
+
+**`emet install sim`**
+- `-d, --download-assets` — Download Robocasa kitchen assets
+- `-a, --setup-macros` — Run Robocasa setup_macros.py
+
+**`emet install full`**
+- `-y, --yes` — Skip confirmation prompts
+- `--sim` — Include simulation extras
+- `--cpu` — CPU-only (skip SAM2)
+- `--no-sam2` — Skip Segment Anything 2
+
+**Examples:**
+```bash
+emet install submodules              # Init and update submodules
+emet install sim                    # Install Robocasa, robosuite
+emet install sim -d -a              # With assets and macros
+emet install full                   # Full install (uv, deps, sync)
+emet install full -y --sim          # Non-interactive with sim extras
+emet install full --cpu             # CPU-only (no SAM2)
+```
+
+After `emet install sim`, run `emet sync -e sim` to install emet with sim extras.
+
+---
+
 ### `emet install-completion [options]`
 
 Print shell completion script for bash or zsh.

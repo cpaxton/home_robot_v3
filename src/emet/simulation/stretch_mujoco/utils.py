@@ -20,7 +20,10 @@ import mujoco._render
 import mujoco._enums
 import mujoco.viewer
 import numpy as np
-from mujoco._structs import MjModel
+try:
+    from mujoco import MjModel
+except ImportError:
+    from mujoco._structs import MjModel
 from mujoco.glfw import GLContext as GlFwContext
 
 import emet.simulation.stretch_mujoco.config as config

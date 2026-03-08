@@ -75,8 +75,8 @@ This shows what `a` and `b` are expected to be and what the function returns -- 
 We use [pytest](https://docs.pytest.org/en/7.0.1/) for testing. Please make sure to add tests for new features or changes to existing code. You can run the tests with:
 
 ```
-cd src
-pytest
+emet test
+# or: pytest src/test
 ```
 
 ### File Structure
@@ -97,7 +97,7 @@ The code is organized as follows. Inside the core package `src/emet`:
   - [agent/task](src/emet/agent/task) contains task-specific code, such as for the `pickup` task. This is divided between "Managers" like [pickup_manager.py](src/emet/agent/task/pickup_manager.py) which are composed of "Operations." Each operation is a composable state machine node with pre- and post-conditions.
   - [agent/operations](src/emet/agent/operations) contains the individual operations, such as `move_to_pose.py` which moves the robot to a given pose.
 
-The [stretch_ros2_bridge](src/emet_ros2_bridge) package is a ROS2 bridge that allows the Stretch AI code to communicate with the ROS2 ecosystem. It is a separate package that is symlinked into the `ament_ws` workspace on the robot.
+The [stretch_ros2_bridge](src/stretch_ros2_bridge) package is a ROS2 bridge that allows the Stretch AI code to communicate with the ROS2 ecosystem. It is a separate package that is symlinked into the `ament_ws` workspace on the robot.
 
 #### Trying individual components
 
