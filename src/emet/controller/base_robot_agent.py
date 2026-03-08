@@ -119,6 +119,31 @@ class BaseRobotAgent(ABC):
         """Return the voxel size in meters."""
         return self._voxel_size
 
+    def start(
+        self,
+        goal: Optional[str] = None,
+        visualize_map_at_start: bool = False,
+        can_move: bool = True,
+        verbose: bool = True,
+    ) -> None:
+        """Start the robot and put it in a ready state (nav posture, navigation mode)."""
+        started = self.robot.start()
+        if not started:
+            raise RuntimeError("Robot failed to start!")
+        if verbose:
+            print("ZMQ connection to robot started.")
+        if can_move:
+            self.robot.switch_to_manipulation_mode()
+            self.robot.open_gripper()
+            if verbose:
+                print("Sending arm to home...")
+            self.robot.move_to_nav_posture()
+            if verbose:
+                print("... done.")
+        self.robot.switch_to_navigation_mode()
+        if verbose:
+            print("- Update map after switching to navigation posture")
+
     @abstractmethod
     def get_voxel_map(self):
         """Return the voxel map in use by this controller. Subclasses implement."""

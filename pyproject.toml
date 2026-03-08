@@ -147,3 +147,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+
+[tool.pytest.ini_options]
+testpaths = ["src/test"]
+addopts = "-ra -q"

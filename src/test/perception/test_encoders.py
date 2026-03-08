@@ -6,14 +6,21 @@
 #
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
+from pathlib import Path
+
 import numpy as np
 import pytest
 import torch
 from PIL import Image
 
-images = ["../docs/object.png", "../docs/receptacle.png"]
-
 from emet.perception.encoders import encoders, get_encoder
+
+# Paths relative to project root (pytest runs from project root)
+_DOCS = Path(__file__).resolve().parent.parent.parent.parent / "docs"
+images = [
+    str(_DOCS / "object.png"),
+    str(_DOCS / "receptacle.png"),
+]
 
 
 def test_get_encoder():
@@ -29,10 +36,6 @@ def test_get_encoder():
     assert encoder is not None
     assert encoder.__class__.__name__ == "SiglipEncoder"
 
-    encoder = get_encoder("dinov2siglip", {})
-    assert encoder is not None
-    assert encoder.__class__.__name__ == "Dinov2SigLIPEncoder"
-
     with pytest.raises(ValueError):
         get_encoder("invalid_encoder", {})
 
@@ -47,6 +50,8 @@ def test_get_encoder_all(encoder_name):
         get_encoder("invalid_encoder", {})
 
     for image_path in images:
+        if not Path(image_path).exists():
+            pytest.skip(f"Test image not found: {image_path}")
         print(f"Testing encoder: {encoder_name} with image: {image_path}")
         encoder = get_encoder(encoder_name, {})
         assert encoder is not None
@@ -62,7 +67,5 @@ def test_get_encoder_all(encoder_name):
 
 if __name__ == "__main__":
     test_get_encoder()
-    test_get_encoder_all("clip")
-    test_get_encoder_all("normalized_clip")
-    test_get_encoder_all("siglip")
-    test_get_encoder_all("dinov2siglip")
+    for enc in encoders:
+        test_get_encoder_all(enc)

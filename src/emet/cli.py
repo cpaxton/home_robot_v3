@@ -46,6 +46,12 @@ def main() -> None:
 @click.option("--headless", is_flag=True, help="Run without native viewer")
 @click.option("--scene-path", type=click.Path(exists=True), help="Path to MuJoCo scene XML")
 @click.option("--seed", default=0, type=int, help="Random seed")
+@click.option(
+    "--port-offset",
+    default=0,
+    type=int,
+    help="Add to default ports when 4401 etc. are in use (e.g. 100 → 4501–4504)",
+)
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
 def serve(
     backend: str,
@@ -53,6 +59,7 @@ def serve(
     headless: bool,
     scene_path: str | None,
     seed: int,
+    port_offset: int,
     extra: tuple[str, ...],
 ) -> None:
     """Start a simulation server.
@@ -61,6 +68,7 @@ def serve(
       emet serve
       emet serve mujoco --headless
       emet serve mujoco --use-robocasa
+      emet serve mujoco --port-offset 100   # use ports 4501–4504 if default in use
     """
     if backend == "mujoco":
         args = list(extra)
@@ -71,10 +79,82 @@ def serve(
         if scene_path:
             args.extend(["--scene_path", scene_path])
         args.extend(["--seed", str(seed)])
+        if port_offset:
+            args.extend(["--port-offset", str(port_offset)])
         sys.exit(_run_module("emet.simulation.mujoco_server", args))
     else:
         click.echo(f"Unknown backend: {backend}", err=True)
         sys.exit(1)
+
+
+def _kill_processes_on_port(port: int) -> bool:
+    """Kill processes using the given port. Returns True if any were killed."""
+    try:
+        out = subprocess.run(
+            ["lsof", "-t", f"-i:{port}"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    if out.returncode != 0 or not out.stdout.strip():
+        return False
+    pids = [s for s in out.stdout.strip().split() if s.isdigit()]
+    if not pids:
+        return False
+    for pid in pids:
+        try:
+            subprocess.run(["kill", pid], check=False, capture_output=True)
+        except Exception:
+            pass
+    return True
+
+
+@main.command("kill-mujoco-server")
+@click.option(
+    "--port",
+    default=4401,
+    type=int,
+    help="Kill process using this port (default: 4401, mujoco server).",
+)
+@click.option(
+    "--all",
+    "kill_all",
+    is_flag=True,
+    help="Kill mujoco_server by name (all instances), then free default ports 4401–4404.",
+)
+def kill_mujoco_server(port: int, kill_all: bool) -> None:
+    """Stop MuJoCo simulation server(s) so ports are free.
+
+    Examples:
+      emet kill-mujoco-server              # kill process on port 4401
+      emet kill-mujoco-server --port 4501  # kill process on port 4501
+      emet kill-mujoco-server --all        # pkill mujoco_server, then free 4401–4404
+    """
+    killed_any = False
+    if kill_all:
+        r = subprocess.run(
+            ["pkill", "-f", "mujoco_server"],
+            capture_output=True,
+            text=True,
+        )
+        if r.returncode == 0:
+            click.echo("Stopped mujoco_server process(es).")
+            killed_any = True
+        else:
+            click.echo("No mujoco_server process found.", err=True)
+        for p in (4401, 4402, 4403, 4404):
+            if _kill_processes_on_port(p):
+                click.echo(f"Freed port {p}.")
+                killed_any = True
+    else:
+        if _kill_processes_on_port(port):
+            click.echo(f"Killed process on port {port}.")
+            killed_any = True
+        else:
+            click.echo(f"No process found on port {port}.", err=True)
+    sys.exit(0 if killed_any else 1)
 
 
 @main.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
@@ -269,6 +349,10 @@ def test(verbose: bool, no_cov: bool, pytest_args: tuple[str, ...]) -> None:
     """
     root = _project_root()
     os.chdir(root)
+    env = os.environ.copy()
+    src = root / "src"
+    if src.exists():
+        env["PYTHONPATH"] = str(src) + os.pathsep + env.get("PYTHONPATH", "")
 
     cmd = [sys.executable, "-m", "pytest"]
     if verbose:
@@ -289,7 +373,7 @@ def test(verbose: bool, no_cov: bool, pytest_args: tuple[str, ...]) -> None:
                 break
         else:
             cmd.append("src/emet")
-    sys.exit(subprocess.call(cmd))
+    sys.exit(subprocess.call(cmd, env=env))
 
 
 @main.group()

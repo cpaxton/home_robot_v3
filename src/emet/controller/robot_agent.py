@@ -1299,32 +1299,7 @@ class InstanceMemoryController(BaseRobotAgent):
         can_move: bool = True,
         verbose: bool = True,
     ) -> None:
-
-        # Call the robot's own startup hooks
-        started = self.robot.start()
-        if not started:
-            # update here
-            raise RuntimeError("Robot failed to start!")
-
-        if verbose:
-            print("ZMQ connection to robot started.")
-
-        if can_move:
-            # First, open the gripper...
-            self.robot.switch_to_manipulation_mode()
-            self.robot.open_gripper()
-
-            # Tuck the arm away
-            if verbose:
-                print("Sending arm to home...")
-            self.robot.move_to_nav_posture()
-            if verbose:
-                print("... done.")
-
-        # Move the robot into navigation mode
-        self.robot.switch_to_navigation_mode()
-        if verbose:
-            print("- Update map after switching to navigation posture")
+        super().start(goal=goal, visualize_map_at_start=False, can_move=can_move, verbose=verbose)
 
         # Add some debugging stuff - show what 3d point clouds look like
         if visualize_map_at_start:

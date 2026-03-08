@@ -791,10 +791,16 @@ class MujocoZmqServer(BaseZmqServer):
 
 
 @click.command()
-@click.option("--send_port", default=4401, help="Port to send messages to clients")
-@click.option("--recv_port", default=4402, help="Port to receive messages from clients")
-@click.option("--send_state_port", default=4403, help="Port to send state-only messages to clients")
-@click.option("--send_servo_port", default=4404, help="Port to send images for visual servoing")
+@click.option(
+    "--port-offset",
+    default=0,
+    type=int,
+    help="Add this to all port numbers (e.g. 100 → 4501,4502,4503,4504). Use when default ports are in use.",
+)
+@click.option("--send_port", default=None, help="Port to send messages to clients (default 4401 + port-offset)")
+@click.option("--recv_port", default=None, help="Port to receive messages from clients (default 4402 + port-offset)")
+@click.option("--send_state_port", default=None, help="Port for state-only messages (default 4403 + port-offset)")
+@click.option("--send_servo_port", default=None, help="Port for visual servoing images (default 4404 + port-offset)")
 @click.option("--use_remote_computer", default=True, help="Whether to use a remote computer")
 @click.option("--verbose", default=False, help="Whether to print verbose messages", is_flag=True)
 @click.option("--image_scaling", default=1.0, help="Scaling factor for images")
@@ -842,10 +848,11 @@ class MujocoZmqServer(BaseZmqServer):
     is_flag=True,
 )
 def main(
-    send_port: int,
-    recv_port: int,
-    send_state_port: int,
-    send_servo_port: int,
+    port_offset: int,
+    send_port: Optional[int],
+    recv_port: Optional[int],
+    send_state_port: Optional[int],
+    send_servo_port: Optional[int],
     use_remote_computer: bool,
     verbose: bool,
     image_scaling: float,
@@ -864,6 +871,12 @@ def main(
 
     scene_model = None
     objects_info = None
+
+    base_ports = (4401, 4402, 4403, 4404)
+    send_port = send_port if send_port is not None else base_ports[0] + port_offset
+    recv_port = recv_port if recv_port is not None else base_ports[1] + port_offset
+    send_state_port = send_state_port if send_state_port is not None else base_ports[2] + port_offset
+    send_servo_port = send_servo_port if send_servo_port is not None else base_ports[3] + port_offset
 
     if seed is not None:
         np.random.seed(seed)
@@ -899,8 +912,14 @@ def main(
     except zmq.error.ZMQError as e:
         if "Address already in use" in str(e):
             print(
-                f"\nPort already in use. Kill the existing process with:\n"
-                f"  kill $(lsof -t -i:{send_port})  # or: pkill -f mujoco_server\n",
+                f"\nPort {send_port} (or another server port) is already in use.\n\n"
+                f"Option 1 – free the port:\n"
+                f"  kill $(lsof -t -i:{send_port})\n"
+                f"  # or: pkill -f mujoco_server\n\n"
+                f"Option 2 – use different ports (e.g. 4501–4504):\n"
+                f"  emet serve mujoco --port-offset 100\n\n"
+                f"Option 3 – stop the server then retry:\n"
+                f"  emet kill-mujoco-server\n",
                 file=sys.stderr,
             )
         raise

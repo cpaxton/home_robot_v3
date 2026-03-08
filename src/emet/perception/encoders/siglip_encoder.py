@@ -81,9 +81,16 @@ class SiglipEncoder(BaseImageTextEncoder):
         inputs = self.processor(images=image, return_tensors="pt")
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         with torch.no_grad():
-            image_features = self.model.get_image_features(**inputs)
+            out = self.model.get_image_features(**inputs)
+        image_features = (
+            out.pooler_output
+            if hasattr(out, "pooler_output") and out.pooler_output is not None
+            else out
+        )
+        if not isinstance(image_features, torch.Tensor):
+            image_features = out.last_hidden_state[:, 0]
         if self.normalize:
-            image_features /= image_features.norm(dim=-1, keepdim=True)
+            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
         return image_features.float()
 
     def encode_text(self, text: str) -> torch.Tensor:
