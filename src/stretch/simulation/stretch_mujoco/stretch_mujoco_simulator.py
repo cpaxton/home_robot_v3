@@ -1,4 +1,5 @@
 import atexit
+import os
 from multiprocessing import Lock, Manager, Process
 
 import multiprocessing
@@ -99,6 +100,19 @@ class StretchMujocoSimulator:
 
         multiprocessing.set_start_method("spawn", force=True)
 
+        # Headless rendering: use EGL on Linux (no display needed), or rely on DISPLAY (e.g. Xvfb).
+        # Only disable cameras when headless + no display + not Linux (Mac/Windows have no headless GL).
+        if headless and not os.environ.get("DISPLAY"):
+            if platform.system() == "Linux":
+                os.environ.setdefault("MUJOCO_GL", "egl")  # GPU headless rendering
+                cameras_for_server = self._cameras_to_use
+            else:
+                cameras_for_server = []  # Mac/Windows: no EGL, disable cameras
+        elif headless and os.environ.get("DISPLAY"):
+            cameras_for_server = self._cameras_to_use  # Xvfb or real display
+        else:
+            cameras_for_server = self._cameras_to_use
+
         self._server_process = Process(
             target=mujoco_server.launch_server,
             name="MujocoProcess",
@@ -109,7 +123,7 @@ class StretchMujocoSimulator:
                 show_viewer_ui,
                 self._stop_mujoco_process_event,
                 self.data_proxies,
-                self._cameras_to_use,
+                cameras_for_server,
                 self._start_translation,
                 self._start_rotation_quat,
             ),

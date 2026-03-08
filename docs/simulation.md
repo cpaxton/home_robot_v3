@@ -40,7 +40,17 @@ python -m stretch.app.grasp_object --robot_ip 127.0.0.1 --target_object "red cyl
 python -m stretch.simulation.mujoco_server --headless
 ```
 
-Camera rendering needs OpenGL/DISPLAY, so cameras are disabled in headless mode.
+On **Linux**, headless mode automatically uses EGL for GPU-accelerated camera rendering (no display needed). AI apps like grasp and DynaMem work with cameras.
+
+On **Mac/Windows** without a display, cameras are disabled. Use **Xvfb** for a virtual display:
+
+```bash
+# Terminal 1: start virtual display
+Xvfb :99 -screen 0 1024x768x24 &
+
+# Terminal 2: run with that display
+DISPLAY=:99 python -m stretch.simulation.mujoco_server --headless
+```
 
 ---
 
@@ -182,7 +192,10 @@ python -m stretch.simulation.mujoco_server --scene_path /path/to/your/scene.xml
 ## Troubleshooting
 
 **"DISPLAY environment variable is missing"**  
-Run with `--headless` or use Xvfb for a virtual display.
+On Linux, `--headless` uses EGL automatically (no display needed). On Mac/Windows, use Xvfb: `Xvfb :99 &` then `DISPLAY=:99 python -m stretch.simulation.mujoco_server --headless`.
+
+**"gladLoadGL error" in headless**  
+Ensure EGL libraries are installed (Linux): `sudo apt install libegl1-mesa libgles2-mesa`. Or use Xvfb: `Xvfb :99 &` then `DISPLAY=:99`.
 
 **"mesh volume is too small"**  
 MuJoCo is pinned to 3.2.6 for compatibility. Ensure `uv sync --extra sim` or `pip install -e ".[sim]"` is used.
