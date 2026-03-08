@@ -59,7 +59,30 @@ The disadvantages includes:
 - Reliance on accurate robot calibration and urdf.
 
 # Running Dynamem
-You should follow the these instructions to run Dynamem. SLAM and control codes are supposed to be run on the robot while perception models are supposed to be run on the workstation (e.g. a laptop, a lambda machine; might also be run on the robot but not recommended).
+
+## Running DynaMem in Simulation
+
+You can run DynaMem in MuJoCo simulation without a physical robot. See [Simulation docs](simulation.md) for setup.
+
+**Terminal 1** – Start the MuJoCo server (Robocasa recommended for richer scenes):
+
+```bash
+python -m stretch.simulation.mujoco_server --use-robocasa
+```
+
+**Terminal 2** – Run DynaMem with visual servoing (AnyGrasp requires real robot):
+
+```bash
+python -m stretch.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class
+```
+
+For CPU-only: add `--cpu`. The `-S` flag skips confirmations for autonomous runs.
+
+---
+
+## Running DynaMem on Physical Robot
+
+You should follow the these instructions to run DynaMem. SLAM and control codes are supposed to be run on the robot while perception models are supposed to be run on the workstation (e.g. a laptop, a lambda machine; might also be run on the robot but not recommended).
 
 So you should clone stretch ai repo with this command
 ```

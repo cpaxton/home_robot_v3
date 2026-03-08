@@ -38,6 +38,10 @@ export ROBOT_IP=192.168.1.15
 python -m stretch.app.print_joint_states --robot_ip $ROBOT_IP
 ```
 
+### Simulation
+
+You can run many of these apps in MuJoCo simulation without a physical robot. Use `--robot_ip 127.0.0.1` and start the simulation server first. See [Simulation](simulation.md) for setup, Robocasa, and demo commands (DynaMem, grasp, mapping).
+
 ### Debugging Tools
 
 #### Keyboard Teleop
