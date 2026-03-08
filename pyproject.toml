@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stretch_ai"
-dynamic = ["version"]
+version = "0.3.3"
 description = "Stretch Python API"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -114,9 +114,6 @@ stretch = [
     "perception/*.tsv",
     "simulation/stretch_mujoco/models/**/*",
 ]
-
-[tool.setuptools.dynamic]
-version = { file = "src/stretch/version.py", pattern = '__version__ = "(.+)"' }
 
 [tool.black]
 line-length = 100
