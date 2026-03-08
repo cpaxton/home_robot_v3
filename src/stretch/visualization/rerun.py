@@ -16,6 +16,14 @@ from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import rerun as rr
+
+# Rerun's native viewer requires a display; use spawn=False when headless
+def has_display() -> bool:
+    return bool(
+        os.environ.get("DISPLAY")
+        or os.environ.get("WAYLAND_DISPLAY")
+        or os.environ.get("WAYLAND_SOCKET")
+    )
 import rerun.blueprint as rrb
 import torch
 
@@ -219,6 +227,9 @@ class RerunVisualizer:
                 spawn_gui = False
                 open_browser = True
                 logger.warning("Docker environment detected. Disabling GUI.")
+            if not has_display():
+                spawn_gui = False
+                logger.warning("No DISPLAY/WAYLAND set. Disabling Rerun GUI (spawn=False).")
         rr.init("Stretch_robot", spawn=spawn_gui)
 
         if output_path is not None:

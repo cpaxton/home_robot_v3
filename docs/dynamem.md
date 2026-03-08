@@ -66,6 +66,8 @@ You can run DynaMem in MuJoCo simulation without a physical robot. See [Simulati
 
 **Install SAM2** (required for OWL+SAM segmentation): `uv sync --extra dynamem` or run `./install.sh` (includes SAM2 by default; use `--no-sam2` to skip).
 
+**Headless (no DISPLAY)**: Rerun visualization is disabled automatically when no display is detected. You may see "Failed to connect to Rerun server" – this is expected; the run continues without the viewer.
+
 **Terminal 1** – Start the MuJoCo server (Robocasa recommended for richer scenes):
 
 ```bash

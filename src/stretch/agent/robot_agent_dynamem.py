@@ -28,6 +28,7 @@ from PIL import Image
 from stretch.agent.manipulation.dynamem_manipulation.dynamem_manipulation import (
     DynamemManipulationWrapper as ManipulationWrapper,
 )
+from stretch.visualization.rerun import has_display
 from stretch.agent.manipulation.dynamem_manipulation.grasper_utils import (
     capture_and_process_image,
     move_to_point,
@@ -563,7 +564,7 @@ class RobotAgent(RobotAgentBase):
         It will call execute_action function until it is ready for manipulation
         """
         # Start a new rerun recording to avoid an overly large rerun video.
-        rr.init("Stretch_robot", recording_id=uuid4(), spawn=True)
+        rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
         if self.save_rerun:
             if not os.path.exists(self.log):
                 os.makedirs(self.log)
@@ -754,7 +755,7 @@ class RobotAgent(RobotAgentBase):
         """
         API for calling EQA module
         """
-        rr.init("Stretch_robot", recording_id=uuid4(), spawn=True)
+        rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
         if self.save_rerun:
             if not os.path.exists(self.log):
                 os.makedirs(self.log)
