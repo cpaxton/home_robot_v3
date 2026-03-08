@@ -9,9 +9,9 @@
 
 import click
 
-from emet.agent.robot_agent_dynamem import RobotAgent
-from emet.agent.task.dynamem import EQAExecuter
-from emet.agent.zmq_client import HomeRobotZmqClient
+from emet.controller.robot_agent_dynamem import RobotAgent
+from emet.controller.task.dynamem import EQAExecuter
+from emet.controller.zmq_client import HomeRobotZmqClient
 
 # Mapping and perception
 from emet.core.parameters import get_parameters

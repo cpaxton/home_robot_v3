@@ -13,7 +13,7 @@ import time
 
 import click
 
-from emet.agent.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.motion import HelloStretchIdx
 
 

@@ -17,8 +17,8 @@ from typing import Optional
 import click
 
 # Mapping and perception
-from emet.agent.robot_agent import RobotAgent
-from emet.agent.zmq_client import HomeRobotZmqClient
+from emet.controller.robot_agent import RobotAgent
+from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.core import AbstractRobotClient, Parameters, get_parameters
 from emet.perception import create_semantic_sensor
 

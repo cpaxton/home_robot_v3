@@ -1,0 +1,440 @@
+#!/usr/bin/env python
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+
+"""Emet CLI — start simulations, run agents, sync deps, view logs, run tests."""
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import click
+
+# Enable shell completion for bash/zsh
+_CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
+
+
+def _project_root() -> Path:
+    """Return project root (parent of src/emet)."""
+    return Path(__file__).resolve().parent.parent.parent
+
+
+def _run_module(module: str, args: list[str], env: dict | None = None) -> int:
+    """Run a Python module. Returns exit code."""
+    cmd = [sys.executable, "-m", module] + args
+    env = env or os.environ.copy()
+    return subprocess.call(cmd, env=env)
+
+
+@click.group(context_settings=_CONTEXT_SETTINGS)
+@click.version_option(version="0.3.3", prog_name="emet")
+def main() -> None:
+    """Emet — Embodied Multi-robot Environment Toolkit.
+
+    Start simulations, run robot agents, sync dependencies, view logs, and run tests.
+    """
+    pass
+
+
+@main.command()
+@click.argument("backend", type=click.Choice(["mujoco"]), default="mujoco")
+@click.option("--use-robocasa", is_flag=True, help="Use Robocasa for scene generation")
+@click.option("--headless", is_flag=True, help="Run without native viewer")
+@click.option("--scene-path", type=click.Path(exists=True), help="Path to MuJoCo scene XML")
+@click.option("--seed", default=0, type=int, help="Random seed")
+@click.argument("extra", nargs=-1, type=click.UNPROCESSED)
+def serve(
+    backend: str,
+    use_robocasa: bool,
+    headless: bool,
+    scene_path: str | None,
+    seed: int,
+    extra: tuple[str, ...],
+) -> None:
+    """Start a simulation server.
+
+    Examples:
+      emet serve
+      emet serve mujoco --headless
+      emet serve mujoco --use-robocasa
+    """
+    if backend == "mujoco":
+        args = list(extra)
+        if use_robocasa:
+            args.append("--use-robocasa")
+        if headless:
+            args.append("--headless")
+        if scene_path:
+            args.extend(["--scene_path", scene_path])
+        args.extend(["--seed", str(seed)])
+        sys.exit(_run_module("emet.simulation.mujoco_server", args))
+    else:
+        click.echo(f"Unknown backend: {backend}", err=True)
+        sys.exit(1)
+
+
+@main.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+@click.argument("app", type=click.Choice(["dynamem", "mapping", "grasp", "chat", "ai_pickup", "timing"]))
+@click.option("--robot-ip", "--robot_ip", default="127.0.0.1", help="Robot or simulator IP")
+@click.option("--server-ip", "--server_ip", default="127.0.0.1", help="Server IP (e.g. for AnyGrasp)")
+@click.option("-S", "--skip", "skip_confirmations", is_flag=True, help="Skip confirmations")
+@click.option("--headless", is_flag=True, help="Run without display")
+@click.option("--visual-servo", "-V", "--visual_servo", is_flag=True, help="Use visual servoing (dynamem)")
+@click.option("--target-object", "--target_object", help="Target object to grasp")
+@click.option("--parameter-file", "--parameter_file", help="Planner config (e.g. sim_planner.yaml)")
+@click.pass_context
+def run(
+    ctx: click.Context,
+    app: str,
+    robot_ip: str,
+    server_ip: str,
+    skip_confirmations: bool,
+    headless: bool,
+    visual_servo: bool,
+    target_object: str | None,
+    parameter_file: str | None,
+) -> None:
+    """Run a robot agent or app.
+
+    Unknown options (e.g. --match-method, --rerun-debug) are passed through to the app.
+
+    Examples:
+      emet run dynamem --robot-ip 127.0.0.1 -S
+      emet run dynamem -S --visual-servo --match-method class --rerun-debug
+      emet run mapping --robot-ip 127.0.0.1
+      emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
+    """
+    args = list(ctx.args)
+    args.extend(["--robot_ip", robot_ip])
+    if app == "dynamem":
+        args.extend(["--server_ip", server_ip])
+        if skip_confirmations:
+            args.append("-S")
+        if headless:
+            args.append("--headless")
+        if visual_servo:
+            args.append("--visual-servo")
+        sys.exit(_run_module("emet.app.run_dynamem", args))
+    elif app == "mapping":
+        sys.exit(_run_module("emet.app.mapping", args))
+    elif app == "grasp":
+        if target_object:
+            args.extend(["--target_object", target_object])
+        if parameter_file:
+            args.extend(["--parameter_file", parameter_file])
+        args.append("--show_gui")
+        sys.exit(_run_module("emet.app.grasp_object", args))
+    elif app == "chat":
+        sys.exit(_run_module("emet.app.chat", args))
+    elif app == "ai_pickup":
+        if skip_confirmations:
+            args.append("-S")
+        sys.exit(_run_module("emet.app.ai_pickup", args))
+    elif app == "timing":
+        args.extend(["--robot_ip", robot_ip])
+        if headless:
+            args.append("--headless")
+        sys.exit(_run_module("emet.app.timing", args))
+    else:
+        click.echo(f"Unknown app: {app}", err=True)
+        sys.exit(1)
+
+
+_SYNC_ALL_EXTRAS = ("sim", "dynamem", "dev")  # MuJoCo, SAM-2, pytest, etc.
+
+
+@main.command()
+@click.option("--extra", "-e", "extra_list", multiple=True, help="Extra to install (sim, dynamem, dev, etc.)")
+@click.option("--all", "sync_all", is_flag=True, help="Install all common extras (sim, dynamem, dev)")
+@click.option("--sim", is_flag=True, help="Include sim (MuJoCo, robocasa)")
+@click.option("--dynamem", "dynamem_flag", is_flag=True, help="Include dynamem (SAM-2)")
+@click.option("--dev", "dev_flag", is_flag=True, help="Include dev (pytest, black, mypy)")
+@click.option("--hand-tracker", is_flag=True, help="Include hand_tracker (mediapipe)")
+@click.option("--discord", is_flag=True, help="Include discord")
+@click.option("--no-install", is_flag=True, help="Only sync lockfile, do not install emet")
+def sync(
+    extra_list: tuple[str, ...],
+    sync_all: bool,
+    sim: bool,
+    dynamem_flag: bool,
+    dev_flag: bool,
+    hand_tracker: bool,
+    discord: bool,
+    no_install: bool,
+) -> None:
+    """Sync dependencies (uv sync or pip install -e .).
+
+    Use --all for sim + dynamem + dev, or pick extras with -e or individual flags.
+
+    Examples:
+
+      emet sync
+      emet sync --all
+      emet sync -e sim -e dynamem
+      emet sync --sim --dynamem
+      emet sync --all --hand-tracker
+    """
+    extras: list[str] = list(extra_list)
+    if sync_all:
+        extras.extend(_SYNC_ALL_EXTRAS)
+    if sim:
+        extras.append("sim")
+    if dynamem_flag:
+        extras.append("dynamem")
+    if dev_flag:
+        extras.append("dev")
+    if hand_tracker:
+        extras.append("hand_tracker")
+    if discord:
+        extras.append("discord")
+    # Deduplicate, preserve order
+    seen: set[str] = set()
+    extras = [e for e in extras if e not in seen and not seen.add(e)]
+
+    root = _project_root()
+    os.chdir(root)
+
+    if _has_uv():
+        cmd = ["uv", "sync"]
+        for e in extras:
+            cmd.extend(["--extra", e])
+        if no_install:
+            cmd.append("--no-install-project")
+        result = subprocess.call(cmd)
+        sys.exit(result)
+    else:
+        # Fallback to pip
+        extras_str = "[" + ",".join(extras) + "]" if extras else ""
+        spec = f".{extras_str}"
+        result = subprocess.call([sys.executable, "-m", "pip", "install", "-e", spec])
+        sys.exit(result)
+
+
+def _has_uv() -> bool:
+    try:
+        subprocess.run(["uv", "--version"], capture_output=True, check=True)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
+@main.command()
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--web", is_flag=True, help="Open in web viewer (default: native)")
+def show(path: str, web: bool) -> None:
+    """View Rerun logs (.rrd) or other visualization data.
+
+    Examples:
+
+      emet show data_0.rrd
+      emet show logs/run_001.rrd --web
+    """
+    path_obj = Path(path).resolve()
+    if not path_obj.exists():
+        click.echo(f"File not found: {path_obj}", err=True)
+        sys.exit(1)
+
+    suffix = path_obj.suffix.lower()
+    if suffix == ".rrd":
+        env = os.environ.copy()
+        if web:
+            env["RERUN_VIEWER"] = "web"
+        result = subprocess.call(
+            [sys.executable, "-m", "rerun", str(path_obj)],
+            env=env,
+        )
+        sys.exit(result)
+    else:
+        click.echo(f"Unknown format: {suffix}. Supported: .rrd (Rerun)", err=True)
+        sys.exit(1)
+
+
+@main.command()
+@click.option("--verbose", "-v", is_flag=True, help="Verbose output")
+@click.option("--no-cov", "no_cov", is_flag=True, help="Disable coverage")
+@click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
+def test(verbose: bool, no_cov: bool, pytest_args: tuple[str, ...]) -> None:
+    """Run tests with pytest.
+
+    Examples:
+
+      emet test
+      emet test -v
+      emet test tests/test_cli.py
+      emet test -k test_serve
+    """
+    root = _project_root()
+    os.chdir(root)
+
+    cmd = [sys.executable, "-m", "pytest"]
+    if verbose:
+        cmd.append("-v")
+    if not no_cov and Path("pyproject.toml").exists():
+        # Only add coverage if pytest-cov is likely available
+        try:
+            import pytest_cov  # noqa: F401
+            cmd.extend(["--cov=emet", "--cov-report=term-missing"])
+        except ImportError:
+            pass
+    cmd.extend(list(pytest_args))
+    if not pytest_args:
+        # Prefer src/test (project convention), then tests/
+        for test_dir in (root / "src" / "test", root / "tests"):
+            if test_dir.exists():
+                cmd.append(str(test_dir))
+                break
+        else:
+            cmd.append("src/emet")
+    sys.exit(subprocess.call(cmd))
+
+
+@main.group()
+def install() -> None:
+    """Install submodules, simulation extras, or full setup."""
+    pass
+
+
+@install.command("submodules")
+@click.option("--recursive/--no-recursive", default=True, help="Recursively init submodules")
+def install_submodules(recursive: bool) -> None:
+    """Init and update git submodules (segment-anything-2, ok-robot, etc.).
+
+    Examples:
+      emet install submodules
+      emet install submodules --no-recursive
+    """
+    root = _project_root()
+    os.chdir(root)
+    cmd = ["git", "submodule", "update", "--init"]
+    if recursive:
+        cmd.append("--recursive")
+    result = subprocess.call(cmd)
+    if result == 0:
+        click.echo("Submodules initialized and updated.")
+    sys.exit(result)
+
+
+@install.command("sim")
+@click.option("-d", "--download-assets", is_flag=True, help="Download Robocasa kitchen assets")
+@click.option("-a", "--setup-macros", is_flag=True, help="Run Robocasa setup_macros.py")
+def install_sim(download_assets: bool, setup_macros: bool) -> None:
+    """Install simulation extras (Robocasa, robosuite).
+
+    Clones robosuite and robocasa into third_party, installs them.
+    Run from project root.
+
+    Examples:
+      emet install sim
+      emet install sim -d -a
+    """
+    root = _project_root()
+    script = root / "scripts" / "install_simulation.sh"
+    if not script.exists():
+        click.echo(f"Script not found: {script}", err=True)
+        sys.exit(1)
+    args = []
+    if download_assets:
+        args.append("-d")
+    if setup_macros:
+        args.append("-a")
+    result = subprocess.call(["bash", str(script)] + args)
+    if result == 0:
+        click.echo("Simulation install complete. Run: emet sync -e sim")
+    sys.exit(result)
+
+
+@install.command("full")
+@click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompts")
+@click.option("--sim", is_flag=True, help="Include simulation extras")
+@click.option("--cpu", is_flag=True, help="CPU-only (skip SAM2)")
+@click.option("--no-sam2", is_flag=True, help="Skip Segment Anything 2")
+def install_full(yes: bool, sim: bool, cpu: bool, no_sam2: bool) -> None:
+    """Run full install (./install.sh).
+
+    Installs uv, system deps, git-lfs, and syncs dependencies.
+
+    Examples:
+      emet install full
+      emet install full -y --sim
+      emet install full --cpu
+    """
+    root = _project_root()
+    script = root / "install.sh"
+    if not script.exists():
+        click.echo(f"install.sh not found: {script}", err=True)
+        sys.exit(1)
+    args = []
+    if yes:
+        args.append("-y")
+    if sim:
+        args.append("--sim")
+    if cpu:
+        args.append("--cpu")
+    if no_sam2:
+        args.append("--no-sam2")
+    result = subprocess.call(["bash", str(script)] + args)
+    sys.exit(result)
+
+
+@install.command("pre-commit")
+@click.option("--install-hooks", is_flag=True, default=True, help="Install git hook scripts")
+@click.option("--run/--no-run", "run_hooks", default=False, help="Run hooks on all files after install")
+def install_pre_commit(install_hooks: bool, run_hooks: bool) -> None:
+    """Install pre-commit hooks (lint, format, type-check).
+
+    Requires: emet sync --dev (installs pre-commit).
+
+    Examples:
+      emet install pre-commit
+      emet install pre-commit --run
+    """
+    root = _project_root()
+    os.chdir(root)
+    try:
+        import pre_commit  # noqa: F401
+    except ImportError:
+        click.echo("pre-commit not installed. Run: emet sync --dev", err=True)
+        sys.exit(1)
+    if install_hooks:
+        result = subprocess.call([sys.executable, "-m", "pre_commit", "install"])
+        if result != 0:
+            sys.exit(result)
+        click.echo("Pre-commit hooks installed.")
+    if run_hooks:
+        result = subprocess.call(
+            [sys.executable, "-m", "pre_commit", "run", "--all-files"]
+        )
+        sys.exit(result)
+    sys.exit(0)
+
+
+@main.command("install-completion")
+@click.option("--shell", "-s", type=click.Choice(["bash", "zsh"]), default=None)
+def install_completion(shell: str | None) -> None:
+    """Print shell completion script for bash or zsh.
+
+    Add to your shell config:
+
+      # Bash: add to ~/.bashrc
+      eval \"$(emet install-completion --shell bash)\"
+
+      # Zsh: add to ~/.zshrc
+      eval \"$(emet install-completion --shell zsh)\"
+    """
+    from click.shell_completion import get_completion_class
+
+    shell = shell or (os.environ.get("SHELL", "").endswith("zsh") and "zsh" or "bash")
+    comp_cls = get_completion_class(shell)
+    if comp_cls is None:
+        click.echo(f"Completion not supported for {shell}", err=True)
+        sys.exit(1)
+    comp = comp_cls(main, {}, "emet", "_EMET_COMPLETE")
+    click.echo(comp.source())
+
+
+if __name__ == "__main__":
+    main()

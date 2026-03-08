@@ -7,7 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from emet.agent.operations import (
+from emet.controller.operations import (
     GoToNavOperation,
     GraspObjectOperation,
     NavigateToObjectOperation,
@@ -19,7 +19,7 @@ from emet.agent.operations import (
     SpeakOperation,
     WaveOperation,
 )
-from emet.agent.robot_agent import RobotAgent
+from emet.controller.robot_agent import RobotAgent
 from emet.core.task import Task
 
 

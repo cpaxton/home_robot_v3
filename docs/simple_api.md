@@ -21,7 +21,7 @@ You should see windows popping up with camera viers from the robot, and the arm 
 Then, on your PC, you can easily send commands and stream data:
 
 ```python
-from emet.agent import RobotClient
+from emet.controller import RobotClient
 robot = RobotClient(robot_ip="192.168.1.15")  # Replace with your robot's IP
 # On future connection attempts, the IP address can be left blank
 

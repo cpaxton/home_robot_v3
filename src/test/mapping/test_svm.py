@@ -9,7 +9,7 @@
 
 import numpy as np
 
-from emet.agent import RobotAgent
+from emet.controller import RobotAgent
 from emet.core import Parameters
 from emet.utils.config import Config
 from emet.utils.dummy_stretch_client import DummyStretchClient

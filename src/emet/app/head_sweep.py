@@ -14,7 +14,7 @@
 import click
 import numpy as np
 
-from emet.agent import RobotAgent, RobotClient
+from emet.controller import RobotAgent, RobotClient
 from emet.perception import create_semantic_sensor
 
 

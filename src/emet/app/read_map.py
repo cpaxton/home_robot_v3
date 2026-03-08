@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import emet.utils.memory as memory
-from emet.agent import RobotAgent
+from emet.controller import RobotAgent
 from emet.core import get_parameters
 from emet.mapping import SparseVoxelMap
 from emet.perception import create_semantic_sensor

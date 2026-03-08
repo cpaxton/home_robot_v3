@@ -9,7 +9,7 @@
 
 import time
 
-from emet.agent import RobotClient
+from emet.controller import RobotClient
 
 print("Initialize the robot client")
 print("robot = RobotClient()")

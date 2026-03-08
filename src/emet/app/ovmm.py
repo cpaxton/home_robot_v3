@@ -14,9 +14,9 @@
 import click
 
 # Mapping and perception
-from emet.agent.robot_agent import RobotAgent
-from emet.agent.task.llm_plan import LLMPlanExecutor
-from emet.agent.zmq_client import HomeRobotZmqClient
+from emet.controller.robot_agent import RobotAgent
+from emet.controller.task.llm_plan import LLMPlanExecutor
+from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.core import get_parameters
 from emet.llms import get_llm_client
 from emet.llms.prompts import ObjectManipNavPromptBuilder

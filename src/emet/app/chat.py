@@ -15,7 +15,7 @@ import timeit
 import click
 from termcolor import colored
 
-from emet.agent.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices

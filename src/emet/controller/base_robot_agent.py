@@ -1,0 +1,125 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+"""Base class for robot controllers. Shared by InstanceMemoryController and DynamemController."""
+
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Optional, Union
+
+from emet.core.interfaces import Observations
+from emet.core.parameters import Parameters
+from emet.core.robot import AbstractRobotClient
+from emet.mapping.instance import Instance
+from emet.motion import PlanResult
+
+
+def _parse_parameters(
+    parameters: Optional[Union[Parameters, Dict[str, Any]]],
+    default_path: Optional[str] = "default_planner.yaml",
+) -> Parameters:
+    """Parse parameters from dict, Parameters, or None (load from default)."""
+    if parameters is None:
+        if default_path is None:
+            raise RuntimeError("parameters is None and no default_config_path provided")
+        from emet.core.parameters import get_parameters
+
+        return get_parameters(default_path)
+    if isinstance(parameters, Dict):
+        return Parameters(**parameters)
+    if isinstance(parameters, Parameters):
+        return parameters
+    raise RuntimeError(f"parameters of unsupported type: {type(parameters)}")
+
+
+class BaseRobotAgent(ABC):
+    """Base class for robot controllers. Provides common state and methods."""
+
+    def __init__(
+        self,
+        robot: AbstractRobotClient,
+        parameters: Optional[Union[Parameters, Dict[str, Any]]] = None,
+        use_instance_memory: bool = False,
+        realtime_updates: bool = False,
+        default_config_path: Optional[str] = "default_planner.yaml",
+    ):
+        self.robot = robot
+        self.parameters = _parse_parameters(parameters, default_config_path)
+
+        self.pos_err_threshold = self.parameters["trajectory_pos_err_threshold"]
+        self.rot_err_threshold = self.parameters["trajectory_rot_err_threshold"]
+
+        self.current_receptacle: Optional[Instance] = None
+        self.current_object: Optional[Instance] = None
+        self.target_object: Optional[str] = None
+        self.target_receptacle: Optional[str] = None
+
+        self._is_match_threshold = self.parameters.get(
+            "encoder_args/feature_match_threshold", 0.05
+        )
+        self._grasp_match_threshold = self.parameters.get(
+            "encoder_args/grasp_feature_match_threshold", 0.05
+        )
+
+        self._default_expand_frontier_size = self.parameters["motion_planner"]["frontier"][
+            "default_expand_frontier_size"
+        ]
+        self._frontier_min_dist = self.parameters["motion_planner"]["frontier"]["min_dist"]
+        self._frontier_step_dist = self.parameters["motion_planner"]["frontier"]["step_dist"]
+        self._manipulation_radius = self.parameters["motion_planner"]["goals"][
+            "manipulation_radius"
+        ]
+        self._voxel_size = self.parameters.get("voxel_size", 0.05)
+
+        self.obs_count = 0
+        self.obs_history: List[Observations] = []
+
+        self.guarantee_instance_is_reachable = self.parameters.guarantee_instance_is_reachable
+        self.use_scene_graph = self.parameters["use_scene_graph"]
+
+        self._use_instance_memory = use_instance_memory
+        self._realtime_updates = realtime_updates
+        self._sweep_head_on_update = self.parameters.get(
+            "agent/sweep_head_on_update", False
+        )
+
+        self.scene_graph = None
+        self._previous_goal = None
+        self._running = True
+
+        self.reset_object_plans()
+
+    def reset_object_plans(self) -> None:
+        """Clear stored object planning information."""
+        self._object_attempts: Dict[int, int] = {}
+        self._cached_plans: Dict[int, PlanResult] = {}
+        self.unreachable_instances = set()
+
+    def get_robot(self) -> AbstractRobotClient:
+        """Return the robot in use by this controller."""
+        return self.robot
+
+    @property
+    def feature_match_threshold(self) -> float:
+        """Return the feature match threshold."""
+        return self._is_match_threshold
+
+    @property
+    def grasp_feature_match_threshold(self) -> float:
+        """Return the feature match threshold for grasping."""
+        return self._grasp_match_threshold
+
+    @property
+    def voxel_size(self) -> float:
+        """Return the voxel size in meters."""
+        return self._voxel_size
+
+    @abstractmethod
+    def get_voxel_map(self):
+        """Return the voxel map in use by this controller. Subclasses implement."""
+        pass

@@ -12,9 +12,9 @@
 import click
 
 # import emet.utils.logger as logger
-from emet.agent.robot_agent import RobotAgent
-from emet.agent.task.pickup import PickupExecutor
-from emet.agent.zmq_client import HomeRobotZmqClient
+from emet.controller.robot_agent import RobotAgent
+from emet.controller.task.pickup import PickupExecutor
+from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.core import get_parameters
 from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_llm_client
 from emet.perception import create_semantic_sensor
