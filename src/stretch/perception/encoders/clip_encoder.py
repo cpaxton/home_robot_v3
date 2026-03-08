@@ -13,12 +13,22 @@
 # LICENSE file in the root directory of this source tree.
 from typing import Optional, Union
 
-import clip
 import numpy as np
+import open_clip
 import torch
 from PIL import Image
 
 from .base_encoder import BaseImageTextEncoder
+
+# Map legacy openai-clip version names to open_clip model names
+_VERSION_MAP = {
+    "ViT-B/32": "ViT-B-32",
+    "ViT-B/16": "ViT-B-16",
+}
+
+
+def _to_open_clip_version(version: str) -> str:
+    return _VERSION_MAP.get(version, version.replace("/", "-"))
 
 
 class ClipEncoder(BaseImageTextEncoder):
@@ -34,7 +44,12 @@ class ClipEncoder(BaseImageTextEncoder):
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device
         self.version = version
-        self.model, self.preprocess = clip.load(self.version, device=self.device)
+        model_name = _to_open_clip_version(version)
+        self.model, _, self.preprocess = open_clip.create_model_and_transforms(
+            model_name, pretrained="openai", device=device
+        )
+        self.tokenizer = open_clip.get_tokenizer(model_name)
+        self.model.eval()
         self.feature_matching_threshold = feature_matching_threshold
 
     def encode_image(self, image: Union[torch.tensor, np.ndarray]) -> torch.Tensor:
@@ -50,9 +65,9 @@ class ClipEncoder(BaseImageTextEncoder):
 
     def encode_text(self, text: str) -> torch.Tensor:
         """Return clip vector for text"""
-        text = clip.tokenize([text]).to(self.device)
+        text_tokens = self.tokenizer([text]).to(self.device)
         with torch.no_grad():
-            text_features = self.model.encode_text(text)
+            text_features = self.model.encode_text(text_tokens)
         return text_features.float()
 
     def compute_score(self, image: torch.Tensor, text: torch.Tensor) -> torch.Tensor:
