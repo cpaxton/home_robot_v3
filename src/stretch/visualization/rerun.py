@@ -287,8 +287,8 @@ class RerunVisualizer:
         main = rrb.Horizontal(
             rrb.Spatial3DView(name="3D View", origin="world"),
             rrb.Vertical(
-                rrb.Spatial2DView(name="head_rgb", origin="/world/head_camera"),
-                rrb.Spatial2DView(name="ee_rgb", origin="/world/ee_camera"),
+                rrb.Spatial2DView(name="head_rgb", origin="/world/head_camera/rgb"),
+                rrb.Spatial2DView(name="ee_rgb", origin="/world/ee_camera/rgb"),
             ),
             column_shares=[3, 1],
         )
@@ -397,7 +397,7 @@ class RerunVisualizer:
                 ),
             )
         else:
-            log_to_rerun("world/head_camera/depth", rr.depthimage(obs.head_depth))
+            log_to_rerun("world/head_camera/depth", rr.depthimage(obs.depth))
 
         if self.show_cameras_in_3d_view:
             rot, trans = decompose_homogeneous_matrix(obs.camera_pose)
