@@ -17,7 +17,7 @@ import librosa
 import numpy as np
 
 # Local imports
-from stretch.audio.text_to_speech import PiperTextToSpeech
+from emet.audio.text_to_speech import PiperTextToSpeech
 
 
 # Adapted from https://github.com/markstent/audio-similarity/blob/main/audio_similarity/audio_similarity.py

@@ -1,9 +1,28 @@
+# Pre-commit hooks for emet — see https://pre-commit.com
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+
+default_language_version:
+  python: python3
+
 repos:
+  # General-purpose hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
       - id: check-added-large-files
+        args: ["--maxkb=1000"]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: debug-statements
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
 
+  # License header for Python files
   - repo: https://github.com/Lucas-C/pre-commit-hooks
     rev: v1.1.12
     hooks:
@@ -11,71 +30,57 @@ repos:
         args: ["--license-file", "docs/license_header.txt"]
         types_or: [python]
 
-  - repo: https://github.com/psf/black
-    rev: 22.3.0
+  # Ruff: lint + format (replaces flake8, isort, black)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.5
     hooks:
-      - id: black
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
 
-  - repo: https://github.com/pycqa/isort
-    rev: 5.11.5
-    hooks:
-      - id: isort
-        args: ["--profile", "black", "--filter-files"]
-
-  - repo: https://github.com/pycqa/flake8
-    rev: 5.0.4
-    hooks:
-      - id: flake8
-        args: ["--config=.flake8"]
-
+  # Type checking
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v0.981
+    rev: v1.14.0
     hooks:
       - id: mypy
-        types: [python]
+        additional_dependencies: [types-PyYAML]
         exclude: >
           (?x)^(
-            src/stretch/app|
-            src/stretch_ros2_bridge|
+            src/emet/app/|
+            src/stretch_ros2_bridge/|
             third_party/|
-            src/stretch/agent|
-            src/stretch/perception|
-            src/stretch/visualization
+            src/emet/agent/|
+            src/emet/perception/|
+            src/emet/visualization/
           )
         args:
           - --ignore-missing-imports
-          - --install-types
-          - --non-interactive
           - --no-strict-optional
           - --disable-error-code=override
           - --disable-error-code=attr-defined
+
+  # Strip notebook outputs
   - repo: https://github.com/kynan/nbstripout
     rev: 0.6.1
     hooks:
       - id: nbstripout
 
-  # Beautysh formats Bash scripts 
-  - repo: https://github.com/lovesegfault/beautysh 
-    rev: v6.2.1 
-    hooks: 
-      - id: beautysh 
+  # Format shell scripts
+  - repo: https://github.com/lovesegfault/beautysh
+    rev: v6.2.1
+    hooks:
+      - id: beautysh
 
-  # Mdformat formats Markdown files 
-  #- repo: https://github.com/executablebooks/mdformat 
-  #  rev: 0.7.16 
-  #  hooks: 
-  #    - id: mdformat 
-
-  # Codespell checks the code for common misspellings 
-  - repo: https://github.com/codespell-project/codespell 
-    rev: v2.2.4 
-    hooks: 
-      - id: codespell 
-        args: 
+  # Spell check
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.2.4
+    hooks:
+      - id: codespell
+        args:
           - --ignore-words=.codespell-ignore-words.txt
-        exclude: > 
-          (?x)^( 
-            | .*\.svg 
-            | .*\.tsv
-            | ^src/test/audio/test_text_to_speech.py
-          )$ 
+        exclude: >
+          (?x)^(
+            .*\.svg|
+            .*\.tsv|
+            ^src/test/audio/test_text_to_speech\.py
+          )$

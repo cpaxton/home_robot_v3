@@ -1,6 +1,6 @@
 # Open Vocabulary Mobile Manipulation
 
-Leverage LLMs to generate code policies and VLMs to generate online semantic memory to perform long-horizon tasks. 
+Leverage LLMs to generate code policies and VLMs to generate online semantic memory to perform long-horizon tasks.
 
 ## Pipeline
 
@@ -19,7 +19,7 @@ cd stretch_ai && bash scripts/run_stretch_ai_ros2_bridge.sh
 Then proceed to run OVMM on your PC with this command:
 ```
 cd stretch_ai && bash scripts/run_stretch_ai_gpu_client.sh
-python3 -m stretch.app.run_ovmm --robot_ip $ROBOT_IP --enable-realtime-updates
+python3 -m emet.app.run_ovmm --robot_ip $ROBOT_IP --enable-realtime-updates
 ```
 
 - The `robot_ip` is used to communicate with the robot.

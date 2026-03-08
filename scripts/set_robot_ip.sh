@@ -26,4 +26,3 @@ else
     echo "Error: Failed to create or write to ~/.stretch/robot_ip.txt"
     exit 1
 fi
-

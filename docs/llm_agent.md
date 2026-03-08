@@ -11,20 +11,20 @@ _Click to follow the link to YouTube:_
 [Above](https://www.youtube.com/watch?v=oO9qRkiuiAQ): example of the AI agent being used with the voice command and the open-source [Qwen2.5 LLM](https://huggingface.co/Qwen). The specific commands used in the video are:
 
 ```
-python -m stretch.app.ai_pickup --use_llm --use_voice
+python -m emet.app.ai_pickup --use_llm --use_voice
 ```
 
 You can also run individual components:
 
 ```
 # AI agent chat only
-python -m stretch.app.chat --prompt pickup
+python -m emet.app.chat --prompt pickup
 
 # Exploration and mapping
-python -m stretch.app.mapping
+python -m emet.app.mapping
 
 # Grasping objects
-python -m stretch.app.grasp_object --target_object "stuffed toy leopard"
+python -m emet.app.grasp_object --target_object "stuffed toy leopard"
 ```
 
 For more details see the following sections:
@@ -44,7 +44,7 @@ Stretch AI also has a set of [apps](apps.md), which are standalone programs you 
 The entry point to the AI demo is the `ai_pickup` script:
 
 ```bash
-python -m stretch.app.ai_pickup
+python -m emet.app.ai_pickup
 ```
 
 When you run the `ai_pickup` demo, Stretch will attempt to pick up an object from the floor and place it inside a nearby receptacle on the floor. You will use words to describe the object and the receptacle that you'd like Stretch to use.
@@ -71,7 +71,7 @@ Then, in the terminal, it will ask you to specify an object and a receptacle. Fo
 
 ```bash
 Enter the target object: brown moose toy
-Enter the target receptacle: white laundry basket 
+Enter the target receptacle: white laundry basket
 ```
 
 ![Example of using the ai_pickup app with a toy moose and a laundry basket.](images/ai_pickup_moose_and_basket_example.jpg)
@@ -80,7 +80,7 @@ At Hello Robot, people have successfully commanded the robot to pick up a variet
 
 ### What is the AI Agent?
 
-When you run the `ai_pickup` command, it will create a [Pickup Executor](../src/stretch/agent/task/pickup/pickup_executor.py) object, which parses instructions from either an LLM or from a handful of templates and uses them to create a reactive task plan for the robot to execute. When you use this with the `--use_llm` flag -- which is recommended -- it will instantiate one of a number of LLM clients to generate the instructions. The LLM clients are defined in the [llm_agent.py](../src/stretch/agent/llm/__init__.py) file and are:
+When you run the `ai_pickup` command, it will create a [Pickup Executor](../src/emet/agent/task/pickup/pickup_executor.py) object, which parses instructions from either an LLM or from a handful of templates and uses them to create a reactive task plan for the robot to execute. When you use this with the `--use_llm` flag -- which is recommended -- it will instantiate one of a number of LLM clients to generate the instructions. The LLM clients are defined in the [llm_agent.py](../src/emet/agent/llm/__init__.py) file and are:
 
 - `qwen25` and variants: the Qwen2.5 model from Tencent; a permissively-licensed model. The default is `qwen25-3B-Instruct`.
 - `openai`: the OpenAI GPT-4o-mini model; a proprietary model accessed through the OpenAI API.
@@ -91,7 +91,7 @@ We recommend `qwen25-3B-Instruct` or `gemma` if running locally on a powerful ma
 For example if you want to test with Gemma 2b, you can run:
 
 ```bash
-python -m stretch.app.ai_pickup --use_llm --llm gemma
+python -m emet.app.ai_pickup --use_llm --llm gemma
 ```
 
 You can also run many of the components individually, as explained below:
@@ -113,7 +113,7 @@ Then, restart your terminal or run `source ~/.bashrc` or `source ~/.bash_profile
 You can specify that you want to use the OpenAI model by passing the `--llm openai` flag to the `ai_pickup` command:
 
 ```bash
-python -m stretch.app.ai_pickup --use_llm --llm openai
+python -m emet.app.ai_pickup --use_llm --llm openai
 ```
 
 ### Testing the LLM Agent
@@ -123,7 +123,7 @@ You can use an LLM to provide free-form text input to the pick and place demo wi
 Running the following command will first download an open LLM model. Currently, the default model is [Qwen2.5-3B-Instruct](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct). Running this command downloads ~10GB of data. Using an ethernet cable instead of Wifi is recommended.
 
 ```bash
-python -m stretch.app.ai_pickup --use_llm
+python -m emet.app.ai_pickup --use_llm
 ```
 
 Once it's ready, you should see the prompt `You:` after which you can write your text request. Pressing the `Enter` key on your keyboard will provide your request to the robot.
@@ -142,11 +142,11 @@ Currently, the prompt used by the LLM encourages the robot to both pick and plac
 
 You can find the prompt used by the LLM at the following location. When running the `ai_pickup` demo, you can modify this file to see how it changes the robot's behavior:
 
-[./../src/stretch/llms/prompts/pickup_prompt.py](../src/stretch/llms/prompts/pickup_prompt.py)
+[./../src/emet/llms/prompts/pickup_prompt.py](../src/emet/llms/prompts/pickup_prompt.py)
 
 ## Agent Architecture
 
-The entry point into the LLM Agent is the [ai_pickup.py](../src/stretch/app/ai_pickup.py) file. This file creates an instance of the [PickupExecutor](../src/stretch/agent/task/pickup/pickup_executor.py) class, which is responsible for parsing the instructions from the LLM and creating a task plan for the robot to execute.
+The entry point into the LLM Agent is the [ai_pickup.py](../src/emet/app/ai_pickup.py) file. This file creates an instance of the [PickupExecutor](../src/emet/agent/task/pickup/pickup_executor.py) class, which is responsible for parsing the instructions from the LLM and creating a task plan for the robot to execute.
 
 In addition, if you run it with the `--use_llm` flag, it creates a chat wrapper:
 
@@ -156,14 +156,14 @@ if use_llm:
         chat_wrapper = LLMChatWrapper(llm_client, prompt=prompt, voice=use_voice)
 ```
 
-This will create an LLM client (for example, the [OpenAI client](../src/stretch/llms/openai_client.py)), and provide it a [prompt](../src/stretch/llms/prompts). The prompt used in the LLM Agent demo is the [pickup_prompt.py](../src/stretch/llms/prompts/pickup_prompt.py).
+This will create an LLM client (for example, the [OpenAI client](../src/emet/llms/openai_client.py)), and provide it a [prompt](../src/emet/llms/prompts). The prompt used in the LLM Agent demo is the [pickup_prompt.py](../src/emet/llms/prompts/pickup_prompt.py).
 
 Take a look at how the prompt starts out:
 
 > You are a friendly, helpful robot named Stretch. You are always helpful, and answer questions concisely. You will never harm a human or suggest harm.
-> 
+>
 > When prompted, you will respond using these actions:
-> 
+>
 > - pickup(object_name)  # object_name is the name of the object to pick up
 > - explore(int)  # explore the environment for a certain number of steps
 > - place(location_name)  # location_name is the name of the receptacle to place object in
@@ -176,14 +176,14 @@ Take a look at how the prompt starts out:
 > - go_home()  # navigate back to where you started
 > - quit()  # end the conversation
 
-This lists the different functions that the LLM agent can use to interact with the world. If you wanted to add your own functions to this list, you would start by adding them here. You would then add them to the `parse_command` function in the [PickupPrompt](../src/stretch/llms/prompts/pickup_prompt.py) class, and add the appropriate logic handling the function call to the [PickupExecutor](../src/stretch/agent/task/pickup/pickup_executor.py) class.
+This lists the different functions that the LLM agent can use to interact with the world. If you wanted to add your own functions to this list, you would start by adding them here. You would then add them to the `parse_command` function in the [PickupPrompt](../src/emet/llms/prompts/pickup_prompt.py) class, and add the appropriate logic handling the function call to the [PickupExecutor](../src/emet/agent/task/pickup/pickup_executor.py) class.
 
 ### Tasks and Operations
 
-The agent code uses two additional abstractions, [Operations and Tasks](../src/stretch/core/task.py), to manage the robot's behavior. These are:
+The agent code uses two additional abstractions, [Operations and Tasks](../src/emet/core/task.py), to manage the robot's behavior. These are:
 
-- An *Operation* is a single, useful component: it's the basic API that the agent calls to interact with the world most of the time. An example is the [GraspObjectOperation](../src/stretch/agent/operations/grasp_object.py), which defines how the robot should grasp an object.
-- A *Task* is a simple finite state machine which defines how a set of operations. An example is the [PickupTask](../src/stretch/agent/task/pickup/pickup_task.py), which defines how the robot should pick up an object and place it in a receptacle by searching for both the object and the receptacle, grasping the object, and placing it in the receptacle.
+- An *Operation* is a single, useful component: it's the basic API that the agent calls to interact with the world most of the time. An example is the [GraspObjectOperation](../src/emet/agent/operations/grasp_object.py), which defines how the robot should grasp an object.
+- A *Task* is a simple finite state machine which defines how a set of operations. An example is the [PickupTask](../src/emet/agent/task/pickup/pickup_task.py), which defines how the robot should pick up an object and place it in a receptacle by searching for both the object and the receptacle, grasping the object, and placing it in the receptacle.
 
 ### Testing Individual Components
 
@@ -191,12 +191,12 @@ The agent code uses two additional abstractions, [Operations and Tasks](../src/s
 
 [![Rerun visualization of partly-mapped home](images/rerun_map.png)](images/rerun_map.png)
 
-[Mapping](../src/stretch/app/mapping.py) is a key component of the robot's ability to navigate and interact with the world.
+[Mapping](../src/emet/app/mapping.py) is a key component of the robot's ability to navigate and interact with the world.
 
 You can test the mapping capabilities of the robot by running the following command:
 
 ```bash
-python -m stretch.app.mapping
+python -m emet.app.mapping
 ```
 
 This will start the robot in a mapping mode, where it will explore the environment and build a map of the room. You should be able to see this map in Rerun.
@@ -204,13 +204,13 @@ This will start the robot in a mapping mode, where it will explore the environme
 You can run this command with the `--explore-iter` flag to set the number of iterations the robot should explore for:
 
 ```bash
-python -m stretch.app.mapping --explore-iter 10
+python -m emet.app.mapping --explore-iter 10
 ```
 
 And if you do not like the robot spending time talking to you, run it with the silent flag:
 
 ```bash
-python -m stretch.app.mapping --silent
+python -m emet.app.mapping --silent
 ```
 
 #### Grasping
@@ -224,7 +224,7 @@ The AI demo operates on detected images of objects, like these:
 You may want to test the robot's grasping capabilities by running the following command:
 
 ```bash
-python -m stretch.app.grasp_object --target_object "stuffed toy leopard"
+python -m emet.app.grasp_object --target_object "stuffed toy leopard"
 ```
 
 This will have the robot attempt to grasp the object described in the `--target_object` argument.
@@ -236,10 +236,10 @@ _Click to follow the link to YouTube:_
 To test the grasping app, place an object directly in front of the robot, and run the command. The robot should attempt to grasp the object, pick it up, and release it. You can see an example of this in the video above, where multiple cups are placed in front of the robot, and it successfully picks up the pink one. The command given was:
 
 ```bash
-python -m stretch.app.grasp_object --target_object "pink plastic cup"
+python -m emet.app.grasp_object --target_object "pink plastic cup"
 ```
 
-Grasping is implemented in the [GraspObjectOperation](../src/stretch/agent/operations/grasp_object.py) class. This class has a lot of options, available via the `configure()` function. Some to note:
+Grasping is implemented in the [GraspObjectOperation](../src/emet/agent/operations/grasp_object.py) class. This class has a lot of options, available via the `configure()` function. Some to note:
 
 - `talk: bool` - whether the robot should speak out loud while performing the task (if false, the robot will stay quiet)
 - `match_method` - either `feature` or `class`; if `feature`, the robot will attempt to match the object to a feature vector, and if `class`, the robot will attempt to match the object to a class label.
@@ -251,7 +251,7 @@ _Click to follow the link to YouTube:_
 
 [![Pick up the stuffed toy zebra](https://img.youtube.com/vi/OISraQrl8rA/0.jpg)](https://www.youtube.com/watch?v=OISraQrl8rA)
 
-Other parameters will configure how visual servoing operates and how close the robot needs to get to the object before closing the gripper; to understand these, it's best to look at the [GraspObjectOperation source code](../src/stretch/agent/operations/grasp_object.py).
+Other parameters will configure how visual servoing operates and how close the robot needs to get to the object before closing the gripper; to understand these, it's best to look at the [GraspObjectOperation source code](../src/emet/agent/operations/grasp_object.py).
 
 ##### Visual Servoing GUI
 
@@ -266,19 +266,19 @@ This GUI will only appear when using the `grasp_object` app directly. It shows t
 You can chat with the robot using LLMs by running the following command:
 
 ```bash
-python -m stretch.app.chat
+python -m emet.app.chat
 ```
 
 You can run this command with the `--llm` flag to set a specific backend:
 
 ```bash
-python -m stretch.app.chat --llm qwen25
+python -m emet.app.chat --llm qwen25
 ```
 
 This returns something like:
 
 ```
-(stretch_ai) cpaxton@olympia:~/../src/stretchpy$ python -m stretch.app.chat --llm qwen25
+(stretch_ai) cpaxton@olympia:~/../src/emetpy$ python -m emet.app.chat --llm qwen25
 Loading checkpoint shards: 100%|█████████████████████████████████████████████████████████████████████████████| 2/2 [00:00<00:00,4.61it/s]
 You: hello who are you
 Response: Hello! I'm Stretch, a friendly and helpful robot from California. How can I assist you today?
@@ -295,7 +295,7 @@ Time taken: 0.4540962891187519
 Alternately, if you run it with the Pickup prompt from the AI demo:
 
 ```bash
-python -m stretch.app.chat --llm qwen25 --prompt pickup
+python -m emet.app.chat --llm qwen25 --prompt pickup
 ```
 
 You can see that it returns a list of API calls:
@@ -308,7 +308,7 @@ Response: [('say', '"Hello! My name is Stretch. I am here to help you with any t
 Finally, you can run it with the `--voice` flag to test audio input, e.g.:
 
 ```bash
-python -m stretch.app.chat --voice
+python -m emet.app.chat --voice
 ```
 
 Press enter to speak. The robot will respond to your voice input, processed using [OpenAI Whisper](https://www.openai.com/whisper/).
@@ -316,20 +316,20 @@ Press enter to speak. The robot will respond to your voice input, processed usin
 If you want the robot to speak back, you can enable this with the `--talk` flag:
 
 ```bash
-python -m stretch.app.chat --voice --talk
+python -m emet.app.chat --voice --talk
 ```
 
 And optionally specify the IP address of the robot:
 
 ```bash
-python -m stretch.app.chat --voice --talk --robot_ip 192.168.1.69
+python -m emet.app.chat --voice --talk --robot_ip 192.168.1.69
 ```
 
 ### Common Issues
 
 #### Motion Planning
 
-The robot uses a motion planner to avoid obstacles on its feature-rich 3D map of the environment. If you are having trouble, you may want to tune the [config file](../src/stretch/config/default_planner.yaml) until it works. Some advice below.
+The robot uses a motion planner to avoid obstacles on its feature-rich 3D map of the environment. If you are having trouble, you may want to tune the [config file](../src/emet/config/default_planner.yaml) until it works. Some advice below.
 
 You can find the motion planning block in the config file:
 
@@ -359,10 +359,10 @@ If you want to try `a_star`, you can set `algorithm` to `a_star`. This is a simp
 
 ##### Try Mapping with A Star Planner
 
-An alternate [configuration file for A star](../src/stretch/config/a_star_planner.yaml) is available. You can use this by running the following command:
+An alternate [configuration file for A star](../src/emet/config/a_star_planner.yaml) is available. You can use this by running the following command:
 
 ```bash
-python -m stretch.app.mapping --explore-iter 15 --parameter-file a_star_planner.yaml
+python -m emet.app.mapping --explore-iter 15 --parameter-file a_star_planner.yaml
 ```
 
 #### Too Many Obstacles in 3D Map
@@ -399,13 +399,13 @@ The `grasp_object` app will try to display what the robot is seeing using opencv
 You can use the `reset` app to have the robot move back to wherever you started the robot server from, *without any further observations or obstacle avoidance*:
 
 ```bash
-python -m stretch.app.reset
+python -m emet.app.reset
 ```
 
 You can also prepend a trial of `ai_pickup` with the `--reset` flag to accomplish the same:
 
 ```bash
-python -m stretch.app.ai_pickup --reset <other flags>
+python -m emet.app.ai_pickup --reset <other flags>
 ```
 
 Be careful with this command, as it does not avoid obstacles! It's just a convenience function to move the robot back to a known starting position.
@@ -415,13 +415,13 @@ Be careful with this command, as it does not avoid obstacles! It's just a conven
 You can add the `--robot_ip` flag to the `ai_pickup` command to specify the robot's IP address. For example, if your robot's IP address is `192.168.1.69`, you might run the following command:
 
 ```bash
-python -m stretch.app.ai_pickup --robot_ip 192.168.1.69 --use-llm --llm openai --use-voice
+python -m emet.app.ai_pickup --robot_ip 192.168.1.69 --use-llm --llm openai --use-voice
 ```
 
 And to move it back to (0, 0, 0):
 
 ```bash
-python -m stretch.app.ai_pickup --reset --robot_ip 192.168.1.69 --use-llm --llm openai --use-voice
+python -m emet.app.ai_pickup --reset --robot_ip 192.168.1.69 --use-llm --llm openai --use-voice
 ```
 
 #### General Debugging Strategy
@@ -429,50 +429,50 @@ python -m stretch.app.ai_pickup --reset --robot_ip 192.168.1.69 --use-llm --llm 
 Run the `view_images` app to make sure images are streaming from the robot and it can move its arm:
 
 ```bash
-python -m stretch.app.view_images
+python -m emet.app.view_images
 
 # Optionally set robot IP address
-python -m stretch.app.view_images --robot_ip $ROBOT_IP
+python -m emet.app.view_images --robot_ip $ROBOT_IP
 ```
 
 Then try running mapping with 0 iterations, so the robot just spins in place:
 
 ```bash
-python -m stretch.app.mapping --explore-iter 0
+python -m emet.app.mapping --explore-iter 0
 ```
 
 Then a larger map:
 
 ```bash
-python -m stretch.app.mapping --explore-iter 10
+python -m emet.app.mapping --explore-iter 10
 ```
 
 Then reset the robot, either manually or with the `reset` app:
 
 ```bash
-python -m stretch.app.reset
+python -m emet.app.reset
 ```
 
 Then try running the `grasp_object` app with the `--target_object` flag set to an object in the robot's view, setting the objects up in front of the robot as described in the [Grasping](#grasping) section above.
 
 ```bash
-python -m stretch.app.grasp_object --target_object "stuffed toy leopard"
+python -m emet.app.grasp_object --target_object "stuffed toy leopard"
 ```
 
 Finally you can try AI pickup without an LLM:
 
 ```bash
-python -m stretch.app.ai_pickup
+python -m emet.app.ai_pickup
 ```
 
 Then with an LLM:
 
 ```bash
-python -m stretch.app.ai_pickup --use_llm
+python -m emet.app.ai_pickup --use_llm
 ```
 
 Then with voiceE:
 
 ```bash
-python -m stretch.app.ai_pickup --use_llm --use_voice
+python -m emet.app.ai_pickup --use_llm --use_voice
 ```

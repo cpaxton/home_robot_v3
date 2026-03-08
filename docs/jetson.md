@@ -32,11 +32,11 @@ You can [look at the script](https://github.com/hello-robot/stretch_ai/blob/deve
 
 When you run it, you should see something like this:
 ```
-cpaxton@caliban:~/src/stretch_ai$ ./scripts/run_stretch_ai_jetson.sh 
+cpaxton@caliban:~/src/emet_ai$ ./scripts/run_stretch_ai_jetson.sh
 ====================================================
 Running Stretch AI docker container with GPU support
 $DISPLAY was not set. It has been set to :0 -- please verify that this is correct or GUI will not work!
-Reading version from /home/cpaxton/src/stretch_ai/src/stretch/version.py
+Reading version from /home/cpaxton/src/emet_ai/src/emet/version.py
 Source version: 0.2.6
 Docker image version: latest
 Running docker image hellorobotinc/stretch-ai_cuda-11.8:latest
@@ -48,10 +48,11 @@ User is in Docker group. Running command without sudo.
 root@caliban:/stretch_ai#
 ```
 
-You can then run Stretch AI commands from the container. For example, you can run the `llm_agent` with:
+You can then run Stretch AI commands from the container. For example, you can run the LLM chat or ai_pickup:
 
 ```
-root@caliban:/stretch_ai# python3 -m stretch.app.llm_agent
+root@caliban:/stretch_ai# python3 -m emet.app.chat --llm qwen25
+root@caliban:/stretch_ai# python3 -m emet.app.ai_pickup --use_llm
 ```
 
 Make sure to use the `python3` command instead of `python`.
@@ -73,7 +74,7 @@ FROM dustynv/l4t-text-generation:r35.3.1
 
 You can check your Jetpack version directly with:
 ```bash
-cpaxton@caliban:~/src/stretch_ai$ cat /etc/nv_tegra_release
+cpaxton@caliban:~/src/emet_ai$ cat /etc/nv_tegra_release
 # R35 (release), REVISION: 4.1, GCID: 33958178, BOARD: t186ref, EABI: aarch64, DATE: Tue Aug  1 19:57:35 UTC 2023
 ```
 
@@ -159,7 +160,7 @@ After each step, make sure CUDA still works, and that you have the right version
 
 Your torch version will look something like this:
 ```
-cpaxton@caliban:~/src/stretch_ai$ pip show torch
+cpaxton@caliban:~/src/emet_ai$ pip show torch
 Name: torch
 Version: 2.0.0.nv23.05
 Summary: Tensors and Dynamic neural networks in Python with strong GPU acceleration

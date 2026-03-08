@@ -16,9 +16,9 @@ from typing import Optional, Tuple
 import numpy as np
 import trimesh.transformations as tra
 
-from stretch.motion.constants import STRETCH_CAMERA_FRAME
-from stretch.motion.kinematics import HelloStretchIdx
-from stretch.motion.robot import RobotModel
+from emet.motion.constants import STRETCH_CAMERA_FRAME
+from emet.motion.kinematics import HelloStretchIdx
+from emet.motion.robot import RobotModel
 
 from .abstract import AbstractControlModule
 

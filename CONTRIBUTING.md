@@ -12,22 +12,25 @@ We use the SAP [CLA Assistant bot](https://github.com/cla-assistant/cla-assistan
 
 Install the code and set up the pre-commit hooks:
 
-```
+```bash
 git clone https://github.com/hello-robot/stretch_ai.git --recursive
-cd stretch_ai/src
-pip install -e .[dev]
-pre-commit install
+cd stretch_ai
+emet sync --dev
+emet install pre-commit
 ```
+
+Or with pip: `pip install -e .[dev]` then `pre-commit install`.
 
 ### Style
 
-We use [black](https://black.readthedocs.io/en/stable/) and [flake8](https://flake8.pycqa.org/en/latest/) to format our code.
-In addition, we use [isort](https://pycqa.github.io/isort/) for sorting imports, [mypy](https://mypy-lang.org/) for static type checking, and [codespell](https://github.com/codespell-project/codespell) for spell checking, among other things.
+We use [ruff](https://docs.astral.sh/ruff/) for linting and formatting (replaces black, flake8, isort).
+In addition, we use [mypy](https://mypy-lang.org/) for static type checking and [codespell](https://github.com/codespell-project/codespell) for spell checking.
 
 You can run the pre-commit hooks on all files with:
 
-```
+```bash
 pre-commit run --all-files
+# or: emet install pre-commit --run
 ```
 
 Please make sure that all changes are made and that the pre-commit hooks pass before submitting a pull request.
@@ -75,27 +78,27 @@ This shows what `a` and `b` are expected to be and what the function returns -- 
 We use [pytest](https://docs.pytest.org/en/7.0.1/) for testing. Please make sure to add tests for new features or changes to existing code. You can run the tests with:
 
 ```
-cd src
-pytest
+emet test
+# or: pytest src/test
 ```
 
 ### File Structure
 
-The code is organized as follows. Inside the core package `src/stretch`:
+The code is organized as follows. Inside the core package `src/emet`:
 
-- [core](src/stretch/core) is basic tools and interfaces
-- [app](src/stretch/app) contains individual endpoints, runnable as `python -m stretch.app.<app_name>`, such as mapping, discussed above.
-- [motion](src/stretch/motion) contains motion planning tools, including [algorithms](src/stretch/motion/algo) like RRT.
-- [mapping](src/stretch/mapping) is broken up into tools for voxel (3d / ok-robot style), instance mapping
-- [perception](src/stretch/perception) contains tools for perception, such as object detection and pose estimation.
-  - [perception/encoders](src/stretch/perception/encoders) contains tools for encoding vision and language features, such as the [SiglipEncoder](src/stretch/perception/encoders/siglip_encoder.py) class.
-  - [perception/captioners](src/stretch/perception/captioners) contains tools for generating captions from images, such as the [MoonbeamCaptioner](src/stretch/perception/captioners/moonbeam_captioner.py) class.
-- [agent](src/stretch/agent) is aggregate functionality, particularly robot_agent which includes lots of common tools including motion planning algorithms.
+- [core](src/emet/core) is basic tools and interfaces
+- [app](src/emet/app) contains individual endpoints, runnable as `python -m emet.app.<app_name>`, such as mapping, discussed above.
+- [motion](src/emet/motion) contains motion planning tools, including [algorithms](src/emet/motion/algo) like RRT.
+- [mapping](src/emet/mapping) is broken up into tools for voxel (3d / ok-robot style), instance mapping
+- [perception](src/emet/perception) contains tools for perception, such as object detection and pose estimation.
+  - [perception/encoders](src/emet/perception/encoders) contains tools for encoding vision and language features, such as the [SiglipEncoder](src/emet/perception/encoders/siglip_encoder.py) class.
+  - [perception/captioners](src/emet/perception/captioners) contains tools for generating captions from images, such as the [MoonbeamCaptioner](src/emet/perception/captioners/moonbeam_captioner.py) class.
+- [agent](src/emet/agent) is aggregate functionality, particularly robot_agent which includes lots of common tools including motion planning algorithms.
   - In particular, `agent/zmq_client.py` is specifically the robot control API, an implementation of the client in core/interfaces.py. there's another ROS client in `stretch_ros2_bridge`.
-  - [agent/robot_agent.py](src/stretch/agent/robot_agent.py) is the main robot agent, which is a high-level interface to the robot. It is used in the `app` scripts.
-  - [agent/base](src/stretch/agent/base) contains base classes for creating common and sequentially executed robot operations through the [ManagedOperation](src/stretch/agent/base/managed_operation.py) class.
-  - [agent/task](src/stretch/agent/task) contains task-specific code, such as for the `pickup` task. This is divided between "Managers" like [pickup_manager.py](src/stretch/agent/task/pickup_manager.py) which are composed of "Operations." Each operation is a composable state machine node with pre- and post-conditions.
-  - [agent/operations](src/stretch/agent/operations) contains the individual operations, such as `move_to_pose.py` which moves the robot to a given pose.
+  - [agent/robot_agent.py](src/emet/agent/robot_agent.py) is the main robot agent, which is a high-level interface to the robot. It is used in the `app` scripts.
+  - [agent/base](src/emet/agent/base) contains base classes for creating common and sequentially executed robot operations through the [ManagedOperation](src/emet/agent/base/managed_operation.py) class.
+  - [agent/task](src/emet/agent/task) contains task-specific code, such as for the `pickup` task. This is divided between "Managers" like [pickup_manager.py](src/emet/agent/task/pickup_manager.py) which are composed of "Operations." Each operation is a composable state machine node with pre- and post-conditions.
+  - [agent/operations](src/emet/agent/operations) contains the individual operations, such as `move_to_pose.py` which moves the robot to a given pose.
 
 The [stretch_ros2_bridge](src/stretch_ros2_bridge) package is a ROS2 bridge that allows the Stretch AI code to communicate with the ROS2 ecosystem. It is a separate package that is symlinked into the `ament_ws` workspace on the robot.
 
@@ -116,21 +119,21 @@ You can try the captioners with:
 ```bash
 # Moonbeam captioner
 # Gives: "A plush toy resembling a spotted animal is lying on its back on a wooden floor, with its head and front paws raised."
-python -m stretch.perception.captioners.moonbeam_captioner --image_path object.png
+python -m emet.perception.captioners.moonbeam_captioner --image_path object.png
 # Gives: "An open cardboard box rests on a wooden floor, with a stuffed animal lying next to it."
-python -m stretch.perception.captioners.moonbeam_captioner --image_path receptacle.png
+python -m emet.perception.captioners.moonbeam_captioner --image_path receptacle.png
 
 # ViT + GPT2 captioner
 # Gives: "a cat laying on the floor next to a door"
-python -m stretch.perception.captioners.vit_gpt2_captioner --image_path object.png
+python -m emet.perception.captioners.vit_gpt2_captioner --image_path object.png
 # Gives: "a box with a cat laying on top of it"
-python -m stretch.perception.captioners.vit_gpt2_captioner --image_path receptacle.png
+python -m emet.perception.captioners.vit_gpt2_captioner --image_path receptacle.png
 
 # Git Captioner
 # Gives: "a stuffed animal that is laying on the floor"
-python -m stretch.perception.captioners.git_captioner --image_path object.png
+python -m emet.perception.captioners.git_captioner --image_path object.png
 # Gives: "a cardboard box on the floor"
-python -m stretch.perception.captioners.git_captioner --image_path receptacle.png
+python -m emet.perception.captioners.git_captioner --image_path receptacle.png
 ```
 
 ### Developing on the Robot

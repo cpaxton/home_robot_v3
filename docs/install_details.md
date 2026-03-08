@@ -2,7 +2,7 @@
 
 Stretch AI supports Python 3.10–3.12. We recommend using [uv](https://docs.astral.sh/uv/) for fast, reproducible installs (no conda required), or [starting with Docker](./start_with_docker.md).
 
-**Try simulation first?** You can run AI apps without a robot using [Simulation](simulation.md). Install with `uv sync --extra sim` and run `python -m stretch.simulation.mujoco_server` plus your chosen app.
+**Try simulation first?** You can run AI apps without a robot using [Simulation](simulation.md). Install with `emet sync -e sim` or `uv sync --extra sim`, then run `emet serve mujoco` and `emet run dynamem` (or other apps). See [CLI](cli.md).
 
 ### System Dependencies
 
@@ -46,7 +46,7 @@ Options:
 - `--sim`: Include simulation extras (MuJoCo)
 - `--no-sam2`: Skip Segment Anything 2 (required for DynaMem OWL+SAM segmentation)
 
-To add SAM2 after install: `uv sync --extra dynamem`
+To add SAM2 after install: `emet sync -e dynamem` or `uv sync --extra dynamem`
 
 #### Install On the Robot
 
@@ -144,10 +144,10 @@ This will require a personal access token created on the Huggingface website. Af
 
 ```bash
 # Start a local chat with Gamma 2-2B -- requires ~5gb GPU memory
-python -m stretch.llms.gemma_client
+python -m emet.llms.gemma_client
 
 # Start a local chat with Llama 3.1 8B -- requires a bigger GPU
-python -m stretch.llms.llama_client
+python -m emet.llms.llama_client
 ```
 
 ## Installing CUDA 11.8

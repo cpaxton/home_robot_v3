@@ -8,7 +8,7 @@ Or:  uv run python examples/load_stretch_assets.py
 
 from pathlib import Path
 
-from stretch.utils.assets import get_assets_root, get_mujoco_models_path, get_robot_assets_path
+from emet.utils.assets import get_assets_root, get_mujoco_models_path, get_robot_assets_path
 
 
 def main():

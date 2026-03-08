@@ -7,7 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from stretch.core.task import Operation, Task
+from emet.core.task import Operation, Task
 
 
 class Data:

@@ -17,11 +17,11 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 from std_srvs.srv import Trigger
 
-import stretch.motion.conversions as conversions
-from stretch.motion.constants import STRETCH_HOME_Q
-from stretch.motion.kinematics import HelloStretchIdx
-from stretch.motion.robot import RobotModel
-from stretch.utils.geometry import pose_global_to_base_xyt, posquat2sophus, sophus2posquat
+import emet.motion.conversions as conversions
+from emet.motion.constants import STRETCH_HOME_Q
+from emet.motion.kinematics import HelloStretchIdx
+from emet.motion.robot import RobotModel
+from emet.utils.geometry import pose_global_to_base_xyt, posquat2sophus, sophus2posquat
 
 from .abstract import AbstractControlModule, enforce_enabled
 

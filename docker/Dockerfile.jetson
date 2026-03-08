@@ -46,8 +46,8 @@ RUN python3 -m pip install scikit-fmm
 # Set the working directory
 WORKDIR /stretch_ai
 
-# Copy the src/stretch directory into /stretch_ai/src/stretch
-COPY ./src/stretch /stretch_ai/src/stretch
+# Copy the src/emet directory into /stretch_ai/src/emet
+COPY ./src/emet /stretch_ai/src/emet
 
 # Copy the data directory into /stretch_ai/data
 COPY ./data /stretch_ai/data

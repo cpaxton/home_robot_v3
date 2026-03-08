@@ -30,7 +30,7 @@ setup(
             glob(os.path.join("config", "*")),
         ),
     ],
-    install_requires=["setuptools", "stretch"],
+    install_requires=["setuptools", "emet"],
     zip_safe=True,
     maintainer="hello-robot",
     maintainer_email="hello-robot@todo.todo",

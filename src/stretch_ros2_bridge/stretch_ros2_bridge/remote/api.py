@@ -19,12 +19,12 @@ import numpy as np
 import torch
 import trimesh.transformations as tra
 
-from stretch.core.interfaces import Observations
-from stretch.core.robot import AbstractRobotClient, ControlMode
-from stretch.motion import RobotModel
-from stretch.motion.constants import STRETCH_CAMERA_FRAME, STRETCH_NAVIGATION_Q, STRETCH_PREGRASP_Q
-from stretch.motion.kinematics import HelloStretchIdx, HelloStretchKinematics
-from stretch.utils.geometry import xyt2sophus
+from emet.core.interfaces import Observations
+from emet.core.robot import AbstractRobotClient, ControlMode
+from emet.motion import RobotModel
+from emet.motion.constants import STRETCH_CAMERA_FRAME, STRETCH_NAVIGATION_Q, STRETCH_PREGRASP_Q
+from emet.motion.kinematics import HelloStretchIdx, HelloStretchKinematics
+from emet.utils.geometry import xyt2sophus
 
 from .modules.head import StretchHeadClient
 from .modules.manip import StretchManipulationClient

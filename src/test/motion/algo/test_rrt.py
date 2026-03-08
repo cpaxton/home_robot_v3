@@ -16,10 +16,10 @@ import random
 import numpy as np
 import pytest
 
-from stretch.motion.algo.rrt import RRT
-from stretch.motion.algo.rrt_connect import RRTConnect
-from stretch.motion.algo.shortcut import Shortcut
-from stretch.motion.utils.simple_env import SimpleEnv
+from emet.motion.algo.rrt import RRT
+from emet.motion.algo.rrt_connect import RRTConnect
+from emet.motion.algo.shortcut import Shortcut
+from emet.motion.utils.simple_env import SimpleEnv
 
 
 def _run_simple_env(planner, env, start, goal, visualize: bool = False):

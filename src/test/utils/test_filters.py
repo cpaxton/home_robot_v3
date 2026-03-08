@@ -11,7 +11,7 @@ import time
 
 import numpy as np
 
-from stretch.utils.filters import MaskTemporalFilter, TemporalFilter
+from emet.utils.filters import MaskTemporalFilter, TemporalFilter
 
 
 def test_temporal_filter(debug_print: bool = False):

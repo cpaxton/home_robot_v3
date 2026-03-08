@@ -27,9 +27,9 @@ from rclpy.time import Time
 from std_msgs.msg import Bool, Float32
 from std_srvs.srv import SetBool, Trigger
 
-from stretch.motion.control.goto_controller import GotoVelocityController
-from stretch.utils.config import get_control_config
-from stretch.utils.geometry import sophus2xyt
+from emet.motion.control.goto_controller import GotoVelocityController
+from emet.utils.config import get_control_config
+from emet.utils.geometry import sophus2xyt
 from stretch_ros2_bridge.ros.utils import matrix_from_pose_msg
 from stretch_ros2_bridge.ros.visualizer import Visualizer
 

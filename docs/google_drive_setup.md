@@ -52,7 +52,7 @@ In your Python code, use the path to the downloaded JSON file as the `credential
 from google.oauth2.service_account import Credentials
 
 creds = Credentials.from_service_account_file(
-    'path/to/your/downloaded/service-account-key.json', 
+    'path/to/your/downloaded/service-account-key.json',
     scopes=['https://www.googleapis.com/auth/drive.file']
 )
 ```
