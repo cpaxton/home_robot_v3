@@ -19,8 +19,8 @@ import rclpy
 from geometry_msgs.msg import Twist
 from std_srvs.srv import SetBool, Trigger
 
-from stretch.motion.robot import RobotModel
-from stretch.utils.geometry import angle_difference, sophus2xyt, xyt2sophus, xyt_base_to_global
+from emet.motion.robot import RobotModel
+from emet.utils.geometry import angle_difference, sophus2xyt, xyt2sophus, xyt_base_to_global
 from stretch_ros2_bridge.constants import T_LOC_STABILIZE
 from stretch_ros2_bridge.ros.utils import matrix_to_pose_msg
 

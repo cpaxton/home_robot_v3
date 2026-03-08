@@ -9,7 +9,7 @@
 
 import time
 
-from stretch.agent import RobotClient
+from emet.agent import RobotClient
 
 print("Initialize the robot client")
 print("robot = RobotClient()")

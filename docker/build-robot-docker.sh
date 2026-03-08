@@ -5,7 +5,7 @@
 set -e
 
 # Get the current version of the package.
-VERSION=`python3 src/stretch/version.py`
+VERSION=`python3 src/emet/version.py`
 echo "Building docker image with tag hellorobotinc/stretch-ai-ros2-bridge:$VERSION"
 
 SKIP_ASKING="false"

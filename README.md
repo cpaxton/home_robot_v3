@@ -29,10 +29,10 @@ Run DynaMem in MuJoCo simulation in a few steps:
 ./install.sh --sim -y
 
 # 2. Terminal 1 — start simulation server
-python -m stretch.simulation.mujoco_server --use-robocasa
+python -m emet.simulation.mujoco_server --use-robocasa
 
 # 3. Terminal 2 — run DynaMem
-python -m stretch.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class --headless
+python -m emet.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class --headless
 ```
 
 **4. View in browser:** Open `http://localhost:9090?url=ws://localhost:9877` to see the Rerun visualization (cameras, 3D scene, robot).
@@ -79,10 +79,10 @@ You can run AI apps in MuJoCo simulation before connecting a physical robot:
 uv sync --extra sim
 
 # Terminal 1: start simulation server
-python -m stretch.simulation.mujoco_server
+python -m emet.simulation.mujoco_server
 
 # Terminal 2: run an app (use 127.0.0.1 for local sim)
-python -m stretch.app.grasp_object --robot_ip 127.0.0.1 --target_object "red cylinder" --parameter_file sim_planner.yaml --show_gui
+python -m emet.app.grasp_object --robot_ip 127.0.0.1 --target_object "red cylinder" --parameter_file sim_planner.yaml --show_gui
 ```
 
 Use `--headless` when running without a display (e.g. SSH); on Linux, EGL enables cameras. See [Simulation](docs/simulation.md) for DynaMem, mapping, Robocasa, and demo scripts.
@@ -132,7 +132,7 @@ You need to let the GPU computer know the IP address (#.#.#.#) for your Stretch 
 Next, run the application on your GPU computer:
 
 ```bash
-python -m stretch.app.ai_pickup
+python -m emet.app.ai_pickup
 ```
 
 It will first spend time downloading various models that it depends on. Once the program starts, you will be able to bring up a [Rerun-based GUI](https://rerun.io/) in your web browser.

@@ -22,13 +22,13 @@ When running without a display (SSH, servers, Docker):
 Test the timing of the robot's control loop over the network. This will print out the time it takes to send a command to the robot and receive a response. It will show a histogram after a fixed number of iterations given by the `--iterations` flag (default is 500).
 
 ```bash
-python -m stretch.app.timing --robot_ip $ROBOT_IP
+python -m emet.app.timing --robot_ip $ROBOT_IP
 
 # Headless mode - no display
-python -m stretch.app.timing --headless
+python -m emet.app.timing --headless
 
 # Set the number of iterations per histogram to 1000
-python -m stretch.app.timing --iterations 1000
+python -m emet.app.timing --iterations 1000
 ```
 
 #### Camera Info
@@ -36,7 +36,7 @@ python -m stretch.app.timing --iterations 1000
 Print out information about the cameras on the robot for debugging purposes:
 
 ```bash
-python -m stretch.app.debug.camera_info --robot_ip $ROBOT_IP
+python -m emet.app.debug.camera_info --robot_ip $ROBOT_IP
 ```
 
 This will print out information about the resolutions of different images sent by the robot's cameras, and should show something like this:

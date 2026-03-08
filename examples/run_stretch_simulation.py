@@ -32,8 +32,8 @@ def main():
         print("Warning: --cameras has no effect in headless mode")
 
     try:
-        from stretch.simulation.stretch_mujoco import StretchMujocoSimulator
-        from stretch.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
+        from emet.simulation.stretch_mujoco import StretchMujocoSimulator
+        from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
     except ImportError as e:
         print("Error: Could not import simulation modules.")
         print("Install with: pip install -e \".[sim]\"")

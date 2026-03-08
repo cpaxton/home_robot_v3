@@ -47,8 +47,8 @@ echo "========================================================="
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 parent_dir="$(dirname "$script_dir")"
 
-# echo "Reading version from $parent_dir/src/stretch/version.py"
-VERSION=`python3 $parent_dir/src/stretch/version.py`
+# echo "Reading version from $parent_dir/src/emet/version.py"
+VERSION=`python3 $parent_dir/src/emet/version.py`
 echo "Source version: $VERSION"
 
 VERSION="latest"

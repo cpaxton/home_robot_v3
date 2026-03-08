@@ -11,7 +11,7 @@ import time
 
 import numpy as np
 
-from stretch.utils.loop_stats import LoopStats
+from emet.utils.loop_stats import LoopStats
 
 
 def test_loop_mark_start():

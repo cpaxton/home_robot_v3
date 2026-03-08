@@ -14,11 +14,11 @@ echo "  Stretch AI Simulation Demo: $DEMO"
 echo "=============================================="
 echo ""
 echo "Start the MuJoCo server in another terminal first:"
-echo "  uv run python -m stretch.simulation.mujoco_server"
+echo "  uv run python -m emet.simulation.mujoco_server"
 echo ""
 if [ "$DEMO" = "robocasa" ] || [ "$DEMO" = "dynamem" ]; then
     echo "For $DEMO, use Robocasa:"
-    echo "  uv run python -m stretch.simulation.mujoco_server --use-robocasa"
+    echo "  uv run python -m emet.simulation.mujoco_server --use-robocasa"
     echo ""
 fi
 echo "Press Enter to run the $DEMO demo..."
@@ -27,7 +27,7 @@ read -r
 case "$DEMO" in
     grasp)
         echo "Running grasp_object (red cylinder)..."
-        uv run python -m stretch.app.grasp_object \
+        uv run python -m emet.app.grasp_object \
             --robot_ip 127.0.0.1 \
             --target_object "red cylinder" \
             --parameter_file sim_planner.yaml \
@@ -35,7 +35,7 @@ case "$DEMO" in
         ;;
     dynamem)
         echo "Running DynaMem with visual servoing..."
-        uv run python -m stretch.app.run_dynamem \
+        uv run python -m emet.app.run_dynamem \
             --robot_ip 127.0.0.1 \
             --server_ip 127.0.0.1 \
             -S \
@@ -44,13 +44,13 @@ case "$DEMO" in
         ;;
     mapping)
         echo "Running mapping..."
-        uv run python -m stretch.app.mapping --robot_ip 127.0.0.1
+        uv run python -m emet.app.mapping --robot_ip 127.0.0.1
         ;;
     robocasa)
         echo "Robocasa: Start the server with --use-robocasa, then run grasp or dynamem."
         echo ""
-        echo "Terminal 1: uv run python -m stretch.simulation.mujoco_server --use-robocasa"
-        echo "Terminal 2: uv run python -m stretch.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo"
+        echo "Terminal 1: uv run python -m emet.simulation.mujoco_server --use-robocasa"
+        echo "Terminal 2: uv run python -m emet.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo"
         ;;
     *)
         echo "Unknown demo: $DEMO"

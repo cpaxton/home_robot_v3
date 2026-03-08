@@ -13,7 +13,7 @@ from PIL import Image
 
 images = ["../docs/object.png", "../docs/receptacle.png"]
 
-from stretch.perception.encoders import encoders, get_encoder
+from emet.perception.encoders import encoders, get_encoder
 
 
 def test_get_encoder():

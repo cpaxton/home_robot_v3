@@ -151,7 +151,7 @@ import torch
 torch.cuda.is_available() # should return True
 
 # Run view-images demo (make sure server is running on robot)
-python3 -m stretch.app.view_images --robot_ip $ROBOT_IP
+python3 -m emet.app.view_images --robot_ip $ROBOT_IP
 ```
 
 ### Tips for Windows 11

@@ -9,8 +9,8 @@
 
 import torch
 
-from stretch.utils.pytorch3d import box3d_overlap
-from stretch.utils.pytorch3d.pytorch3d_helpers import _box3d_overlap
+from emet.utils.pytorch3d import box3d_overlap
+from emet.utils.pytorch3d.pytorch3d_helpers import _box3d_overlap
 
 
 def _make_box(l1, l2, l3):

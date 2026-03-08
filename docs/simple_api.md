@@ -13,7 +13,7 @@ ros2 launch stretch_ros2_bridge server.launch.py
 Make sure the core test app runs:
 
 ```python
-python -m stretch.app.view_images --robot_ip $ROBOT_IP
+python -m emet.app.view_images --robot_ip $ROBOT_IP
 ```
 
 You should see windows popping up with camera viers from the robot, and the arm should move into a default position. The head should also turn to face the robot hand. If this all happens, you are good to go! Press `q` to quit the app.
@@ -21,7 +21,7 @@ You should see windows popping up with camera viers from the robot, and the arm 
 Then, on your PC, you can easily send commands and stream data:
 
 ```python
-from stretch.agent import RobotClient
+from emet.agent import RobotClient
 robot = RobotClient(robot_ip="192.168.1.15")  # Replace with your robot's IP
 # On future connection attempts, the IP address can be left blank
 

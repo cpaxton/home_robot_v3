@@ -63,21 +63,21 @@ Run AI apps (DynaMem, grasp, mapping) in simulation. See [Simulation docs](../do
 **Terminal 1** – Start MuJoCo server:
 
 ```bash
-python -m stretch.simulation.mujoco_server
-# Or with Robocasa (richer scenes): python -m stretch.simulation.mujoco_server --use-robocasa
+python -m emet.simulation.mujoco_server
+# Or with Robocasa (richer scenes): python -m emet.simulation.mujoco_server --use-robocasa
 ```
 
 **Terminal 2** – Run an app:
 
 ```bash
 # Visual servoing grasp (default scene has red/blue cylinders)
-python -m stretch.app.grasp_object --robot_ip 127.0.0.1 --target_object "red cylinder" --parameter_file sim_planner.yaml --show_gui
+python -m emet.app.grasp_object --robot_ip 127.0.0.1 --target_object "red cylinder" --parameter_file sim_planner.yaml --show_gui
 
 # DynaMem (use --use-robocasa for server for kitchen scenes)
-python -m stretch.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class
+python -m emet.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class
 
 # Mapping
-python -m stretch.app.mapping --robot_ip 127.0.0.1
+python -m emet.app.mapping --robot_ip 127.0.0.1
 ```
 
 Or use the demo script (uses `uv run`; start MuJoCo server in another terminal first):

@@ -12,7 +12,7 @@ import sys
 
 def main():
     try:
-        from stretch.visualization.urdf_visualizer import URDFVisualizer
+        from emet.visualization.urdf_visualizer import URDFVisualizer
     except ImportError as e:
         print("Error: Could not import URDFVisualizer.")
         print("Install hello-robot-stretch-urdf: pip install hello-robot-stretch-urdf")

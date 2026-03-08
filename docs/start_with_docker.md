@@ -210,7 +210,7 @@ First, you need to let the GPU computer know the IP address (#.#.#.#) for your S
 Next, run the `view_images` application in the Docker container on your GPU computer.
 
 ```
-python -m stretch.app.view_images
+python -m emet.app.view_images
 ```
 
 With a functioning installation, the robot's gripper will open, the arm will move, and then you will see video from the robot's cameras displayed on your GPU computer.

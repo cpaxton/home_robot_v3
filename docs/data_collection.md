@@ -45,7 +45,7 @@ To run terminal command in your docker image. The `src` argument allows you to l
 
 ```bash
 cd stretch_ai
-python3 src/stretch/app/dex_teleop/prepare_specialized_urdfs.py
+python3 src/emet/app/dex_teleop/prepare_specialized_urdfs.py
 ```
 
 *Then, move URDFs from robot to PC.* URDFs should now have been generated into the `stretch_ai` folder on the robot:
@@ -74,7 +74,7 @@ Click this thumbnail to see data collection teleop in action:
 [![Dex Teleop with Clutch and Base X motion](https://img.youtube.com/vi/ZQQWOkSkw5o/0.jpg)](https://www.youtube.com/watch?v=ZQQWOkSkw5o)
 
 ```bash
-python -m stretch.app.dex_teleop.ros2_leader -i $ROBOT_IP --task-name default_task
+python -m emet.app.dex_teleop.ros2_leader -i $ROBOT_IP --task-name default_task
 ```
 
 A GUI displaying RGB and depth feeds from both cameras will now pop up. All commands are sent by pressing the keyboard with this GUI selected as the active window.
@@ -97,13 +97,13 @@ Launch this command from the directory where URDFs are stored (default is root o
 If you have already ran an app with `--robot-ip` flag, such as the `view_images` test app, you can omit the flag in subsequent runs.
 
 ```bash
-python3 -m stretch.app.dex_teleop.ros2_leader --robot_ip $ROBOT_IP --task-name $TASK_NAME --teleop-mode <teleop-mode> --clutch
+python3 -m emet.app.dex_teleop.ros2_leader --robot_ip $ROBOT_IP --task-name $TASK_NAME --teleop-mode <teleop-mode> --clutch
 ```
 
 For example:
 
 ```bash
-python3 -m stretch.app.dex_teleop.ros2_leader --task-name default_task --teleop-mode base_x --clutch
+python3 -m emet.app.dex_teleop.ros2_leader --task-name default_task --teleop-mode base_x --clutch
 ```
 
 The optional `--clutch` flag enables the clutch. While your hand is over the dex teleop webcam, the robot will not move. This makes it easier to operate the robot and to collect data.
@@ -119,7 +119,7 @@ There are three teleop modes available:
 The default is `base_x`. So, if you want to use `base_x`, you can omit the `--teleop-mode` flag:
 
 ```bash
-python3 -m stretch.app.dex_teleop.ros2_leader --task-name default_task --save-images
+python3 -m emet.app.dex_teleop.ros2_leader --task-name default_task --save-images
 ```
 
 ### Record episodes

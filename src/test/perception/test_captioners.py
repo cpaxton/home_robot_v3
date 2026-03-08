@@ -10,7 +10,7 @@
 import pytest
 from PIL import Image
 
-from stretch.perception.captioners import get_captioner
+from emet.perception.captioners import get_captioner
 
 captioners = ["qwen", "blip"]
 

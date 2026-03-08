@@ -10,14 +10,14 @@
 import setuptools
 
 __version__ = None
-with open("stretch/version.py") as f:
+with open("emet/version.py") as f:
     exec(f.read())  # overrides __version__
 
 with open("../README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="stretch_ai",
+    name="emet",
     version=__version__,
     author="Hello Robot Inc.",
     author_email="support@hello-robot.com",
@@ -28,7 +28,7 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     include_package_data=True,
     package_data={
-        "stretch": [
+        "emet": [
             "config/**/*.yaml",
             "perception/*.tsv",
             "assets/**/*",

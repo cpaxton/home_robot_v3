@@ -78,7 +78,7 @@ where `$TOKEN` is the one you got [here](#set-privileged-intents-and-get-token).
 You can now run the bot with the following command:
 
 ```bash
-python3 -m stretch.app.run_discord --robot_ip $ROBOT_IP --llm openai
+python3 -m emet.app.run_discord --robot_ip $ROBOT_IP --llm openai
 ```
 
 *BE VERY CAREFUL WITH THIS.* This command can and will send images from your robot to the internet! Know your environment, and make sure that you are using the robot in a safe and secure location. Do not leave the robot unnatended while running this command.

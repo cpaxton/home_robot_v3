@@ -17,7 +17,7 @@ from typing import List
 
 import numpy as np
 
-from stretch.motion.pinocchio_ik_solver import PinocchioIKSolver
+from emet.motion.pinocchio_ik_solver import PinocchioIKSolver
 
 EPS_IK_CORRECT = 0.05  # max IK error
 

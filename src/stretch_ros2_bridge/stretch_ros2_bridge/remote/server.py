@@ -17,10 +17,10 @@ import numpy as np
 import rclpy
 from overrides import override
 
-import stretch.utils.compression as compression
-import stretch.utils.logger as logger
-from stretch.core.server import BaseZmqServer
-from stretch.utils.image import adjust_gamma, scale_camera_matrix
+import emet.utils.compression as compression
+import emet.utils.logger as logger
+from emet.core.server import BaseZmqServer
+from emet.utils.image import adjust_gamma, scale_camera_matrix
 from stretch_ros2_bridge.remote import StretchClient
 
 

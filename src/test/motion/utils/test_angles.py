@@ -14,7 +14,7 @@
 
 import numpy as np
 
-from stretch.motion.utils.geometry import PI2, angle_difference, interpolate_angles
+from emet.motion.utils.geometry import PI2, angle_difference, interpolate_angles
 
 
 def _eval_angle_difference(a, b, expected, expected_step):

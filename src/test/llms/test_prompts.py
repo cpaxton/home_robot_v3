@@ -9,8 +9,8 @@
 
 import pytest
 
-from stretch.llms.base import AbstractPromptBuilder
-from stretch.llms.prompts import (
+from emet.llms.base import AbstractPromptBuilder
+from emet.llms.prompts import (
     ObjectManipNavPromptBuilder,
     OkRobotPromptBuilder,
     SimpleStretchPromptBuilder,

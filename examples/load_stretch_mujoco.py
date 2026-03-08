@@ -21,7 +21,7 @@ def test_load_model():
         print("Error: mujoco not installed. Run: pip install -e \".[sim]\"")
         return False
 
-    from stretch.utils.assets import get_mujoco_models_path
+    from emet.utils.assets import get_mujoco_models_path
 
     models_path = get_mujoco_models_path()
     scene_xml = models_path / "scene.xml"
@@ -44,8 +44,8 @@ def test_load_model():
 def run_simulation(headless: bool = False):
     """Start the Stretch MuJoCo simulation."""
     try:
-        from stretch.simulation.stretch_mujoco import StretchMujocoSimulator
-        from stretch.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
+        from emet.simulation.stretch_mujoco import StretchMujocoSimulator
+        from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
     except ImportError as e:
         print(f"Error: Could not import simulation. Run: pip install -e \".[sim]\"\n  {e}")
         return

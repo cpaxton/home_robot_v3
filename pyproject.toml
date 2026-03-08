@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "stretch_ai"
-version = "0.3.3"  # Keep in sync with src/stretch/version.py
+name = "emet"
+version = "0.3.3"  # Keep in sync with src/emet/version.py
 description = "Stretch Python API"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -114,7 +114,7 @@ Repository = "https://github.com/hello-robot/stretchpy"
 where = ["src"]
 
 [tool.setuptools.package-data]
-stretch = [
+emet = [
     "config/**/*.yaml",
     "perception/*.tsv",
     "assets/**/*",

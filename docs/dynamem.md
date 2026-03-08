@@ -73,19 +73,19 @@ You can run DynaMem in MuJoCo simulation without a physical robot. See [Simulati
 **Terminal 1** – Start the MuJoCo server (Robocasa recommended for richer scenes):
 
 ```bash
-python -m stretch.simulation.mujoco_server --use-robocasa
+python -m emet.simulation.mujoco_server --use-robocasa
 ```
 
 **Terminal 2** – Run DynaMem with visual servoing (AnyGrasp requires real robot):
 
 ```bash
-python -m stretch.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class
+python -m emet.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class
 ```
 
 For headless (view Rerun from another machine at `http://<server-ip>:9090?url=ws://<server-ip>:9877`):
 
 ```bash
-python -m stretch.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class --headless
+python -m emet.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class --headless
 ```
 
 For CPU-only: add `--cpu`. The `-S` flag skips confirmations for autonomous runs. At the mode prompt, enter **Q** (or **quit**) to exit cleanly.
@@ -150,13 +150,13 @@ you would need to create a new conda environment on your worstation.
 ### Copying URDF from robot to workstation
 No matter whether you choose to run which manipulation, having a well calibrated robot URDF is important, you should follow these steps to set up robot URDF (while visual servo picking does not require accurate robot URDF, placing heuristic is shared between these two systems):
 - On your robot, follow instructions described in [Stretch Ros2](https://github.com/hello-robot/stretch_ros2/tree/humble/stretch_calibration) to calibrate your robot.
-- Once you have a well calibrated urdf (in `~/ament_ws/src/stretch_ros2/stretch_description/urdf/stretch.urdf` on your stretch robot), copy it to your workstation `src/stretch/config/urdf/stretch.urdf`. It is recommended to run following commands on your workstation:
+- Once you have a well calibrated urdf (in `~/ament_ws/src/stretch_ros2/stretch_description/urdf/stretch.urdf` on your stretch robot), copy it to your workstation `src/emet/config/urdf/stretch.urdf`. It is recommended to run following commands on your workstation:
 ```
-scp hello-robot@[ROBOT IP]:~/ament_ws/src/stretch_ros2/stretch_description/urdf/stretch.urdf stretch_ai/src/stretch/config/urdf/
+scp hello-robot@[ROBOT IP]:~/ament_ws/src/stretch_ros2/stretch_description/urdf/stretch.urdf stretch_ai/src/emet/config/urdf/
 ```
 - Run the following python scripts to replace urdf modification described in [OK Robot calibration docs](https://github.com/ok-robot/ok-robot/blob/main/docs/robot-calibration.md) 
 ```
-python src/stretch/config/dynamem_urdf.py --urdf-path src/stretch/config/urdf/stretch.urdf
+python src/emet/config/dynamem_urdf.py --urdf-path src/emet/config/urdf/stretch.urdf
 ```
 
 Note that while URDF calibration is important for both manipulation systems, AnyGrasp manipulation has much higher requirement on robot calibration. On the other hand, even though the calibration is not perfect in visual servo manipulation, in most cases the robot is still going to complete the task.
@@ -169,7 +169,7 @@ You might want to check your calibration if the following things happen:
 
 Firstly you should know the ip address of your robot and workstation by running `ifconfig` on these two machines. Continuously tracking ips of different machines is an annoying task. We recommend using [Tailscale](https://tailscale.com) to manage a series of virtual ip addresses. Run following command on the workstation to run dynamem
 ```
-python -m stretch.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SERVER_IP -S
+python -m emet.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SERVER_IP -S
 ```
 `robot_ip` is used to communicate robot and `server_ip` is used to communicate the server where AnyGrasp runs. If you don't run anygrasp (e.g. navigation only or running Stretch AI visual servoing manipulation instead), then set `server_ip` to `127.0.0.1` or just leave it blank.
 If you plan to run AnyGrasp on the same workstation, we highly recommend you find the ip of this workstation instead of naivly setting `server_ip` to `127.0.0.1`.
@@ -199,7 +199,7 @@ To understand more options in running AnyGrasp, please read [OK Robot Manipulati
 
 After AnyGrasp is launched, you can run default Dynamem commands as described above.
 ```
-python -m stretch.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SERVER_IP
+python -m emet.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SERVER_IP
 ```
 
 ### Two DynaMem modes: exploration and manipulation
@@ -210,7 +210,7 @@ One exploration iteration includes
 * Moving towards the point of interest in the map.
 To specify how many exploration iterations you want the robot to run after selecting exploration, set up `explore-iter`. For example, if you want the robot to explore for 5 iterations, use the command.
 ```
-python -m stretch.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SERVER_IP -S --explore-iter 5
+python -m emet.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SERVER_IP -S --explore-iter 5
 ```
 
 ### Visual grounding with GPT4o
@@ -218,7 +218,7 @@ python -m stretch.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_
 
 To try this querying strategy that uses GPT-4o boost your navigation accuracy, you first need to follow [OPENAI's instructions](https://platform.openai.com/docs/overview) to create API keys. After that you can try this version by turning on mllm(`-M`) in your scripts:
 ```
-OPNEAI_API_KEY=$YOUR_API_KEY python -m stretch.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SERVER_IP -S -M
+OPNEAI_API_KEY=$YOUR_API_KEY python -m emet.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SERVER_IP -S -M
 ```
 
 ### Loading from previous semantic memory
@@ -233,7 +233,7 @@ By specifying `intput-path`, the robot will first read semantic memory from spec
 The command looks like this
 
 ```
-python -m stretch.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SERVER_IP --output-path $PICKLE_FILE_PATH --input-path $PICKLE_FILE_PATH -S
+python -m emet.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SERVER_IP --output-path $PICKLE_FILE_PATH --input-path $PICKLE_FILE_PATH -S
 ```
 
 ### Ask for humans' confirmations before doing each subtask
@@ -246,14 +246,14 @@ How is that functionality helpful? Sometimes when the robot is already facing th
 The flag `-S` in previous commands, it configures Dyname to skip these human confirmantions. To enable this functionality, you need to run
 
 ```
-python -m stretch.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SERVER_IP
+python -m emet.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SERVER_IP
 ```
 
 ### Manipulation with Stretch AI visual servoing manipulation
 
 If you do not have access to AnyGrasp, you can run with the Stretch AI Visual Servoing code, as described in the [LLM Agent documentation](llm_agent.md). In this case, you can run Dynamem with the following command:
 ```
-python -m stretch.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SERVER_IP --visual-servo
+python -m emet.app.run_dynamem --robot_ip $ROBOT_IP --server_ip $WORKSTATION_SERVER_IP --visual-servo
 ```
 
 If you use this manipulation on GPU, it will use Owlv2 + SAMv2 as segmentation models. This means that you need to install SAMv2. **Be aware that Stretch AI does not install SAMvs by default**, so you need to install SAMv2 yourself. Following these commands:
@@ -267,23 +267,23 @@ pip install -e .
 
 You can also run an equivalent of the [LLM agent](llm_agent.md) with Dynamem. In this case, you can run Dynamem with the following command:
 ```
-python -m stretch.app.run_dynamem --use-llm
+python -m emet.app.run_dynamem --use-llm
 ```
 
 All of the flags [in the agent documentation](llm_agent.md) are also available in Dynamem:
 ```
 # Start with voice chat
-python -m stretch.app.run_dynamem --use-llm --use-voice
+python -m emet.app.run_dynamem --use-llm --use-voice
 ```
 
 You can specify an LLM, e.g.:
 ```bash
 # Run Gemma 2B from Google locally
-python -m stretch.app.run_dynamem --use-llm --llm gemma
+python -m emet.app.run_dynamem --use-llm --llm gemma
 
 # Run Openai GPT-4o-mini on the cloud, using an OpenAI API key
 OPENAI_API_KEY=your_key_here
-python -m stretch.app.run_dynamem --use-llm --llm openai
+python -m emet.app.run_dynamem --use-llm --llm openai
 ```
 
 ### Running on CPU
@@ -330,7 +330,7 @@ conda activate stretch_ai_cpu_<version>
 
 Run DynaMem on CPU with:
 ```bash
-python -m stretch.app.run_dynamem --robot_ip $ROBOT_IP --cpu --match-method "class" --vs
+python -m emet.app.run_dynamem --robot_ip $ROBOT_IP --cpu --match-method "class" --vs
 ```
 
 **Required flags for CPU mode:**
@@ -371,7 +371,7 @@ A typical workflow for running DynaMem on the robot's NUC (CPU-only):
 2. **On the robot** - Run DynaMem:
 ```bash
 conda activate stretch_ai_cpu_<version>
-python -m stretch.app.run_dynamem --robot_ip 127.0.0.1 --cpu --match-method "class" --vs -S
+python -m emet.app.run_dynamem --robot_ip 127.0.0.1 --cpu --match-method "class" --vs -S
 ```
 
 The `-S` flag skips human confirmations for autonomous operation.

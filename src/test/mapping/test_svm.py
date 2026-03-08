@@ -9,10 +9,10 @@
 
 import numpy as np
 
-from stretch.agent import RobotAgent
-from stretch.core import Parameters
-from stretch.utils.config import Config
-from stretch.utils.dummy_stretch_client import DummyStretchClient
+from emet.agent import RobotAgent
+from emet.core import Parameters
+from emet.utils.config import Config
+from emet.utils.dummy_stretch_client import DummyStretchClient
 
 SMALL_DATA_FILE = "test/mapping/hq_small.pkl"
 LARGE_DATA_FILE = "test/mapping/hq_large.pkl"

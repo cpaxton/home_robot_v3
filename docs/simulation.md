@@ -25,19 +25,19 @@ python examples/load_stretch_mujoco.py
 **Terminal 1** – Start the MuJoCo server:
 
 ```bash
-python -m stretch.simulation.mujoco_server
+python -m emet.simulation.mujoco_server
 ```
 
 **Terminal 2** – Run an app (use `127.0.0.1` for local simulation):
 
 ```bash
-python -m stretch.app.grasp_object --robot_ip 127.0.0.1 --target_object "red cylinder" --parameter_file sim_planner.yaml --show_gui
+python -m emet.app.grasp_object --robot_ip 127.0.0.1 --target_object "red cylinder" --parameter_file sim_planner.yaml --show_gui
 ```
 
 **No display (SSH, headless server)?** Use `--headless`:
 
 ```bash
-python -m stretch.simulation.mujoco_server --headless
+python -m emet.simulation.mujoco_server --headless
 ```
 
 On **Linux**, headless mode automatically uses EGL for GPU-accelerated camera rendering (no display needed). AI apps like grasp and DynaMem work with cameras.
@@ -49,7 +49,7 @@ On **Mac/Windows** without a display, cameras are disabled. Use **Xvfb** for a v
 Xvfb :99 -screen 0 1024x768x24 &
 
 # Terminal 2: run with that display
-DISPLAY=:99 python -m stretch.simulation.mujoco_server --headless
+DISPLAY=:99 python -m emet.simulation.mujoco_server --headless
 ```
 
 ---
@@ -62,10 +62,10 @@ All Stretch AI apps that use the ZMQ robot interface work in simulation by setti
 
 ```bash
 # Terminal 1
-python -m stretch.simulation.mujoco_server
+python -m emet.simulation.mujoco_server
 
 # Terminal 2
-python -m stretch.app.grasp_object --robot_ip 127.0.0.1 --target_object "red cylinder" --parameter_file sim_planner.yaml --show_gui
+python -m emet.app.grasp_object --robot_ip 127.0.0.1 --target_object "red cylinder" --parameter_file sim_planner.yaml --show_gui
 ```
 
 The default scene has a red and blue cylinder. Use `sim_planner.yaml` for simulation (lower thresholds, tuned detection).
@@ -76,10 +76,10 @@ DynaMem supports exploration, pick-and-place, and semantic memory. Use visual se
 
 ```bash
 # Terminal 1 – MuJoCo server (Robocasa recommended for richer scenes)
-python -m stretch.simulation.mujoco_server --use-robocasa
+python -m emet.simulation.mujoco_server --use-robocasa
 
 # Terminal 2 – DynaMem with visual servoing
-python -m stretch.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class
+python -m emet.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class
 ```
 
 - `-S` / `--skip`: skip confirmations for autonomous runs  
@@ -89,7 +89,7 @@ python -m stretch.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S 
 For CPU-only:
 
 ```bash
-python -m stretch.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --cpu --match-method class --visual-servo
+python -m emet.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --cpu --match-method class --visual-servo
 ```
 
 See [DynaMem docs](dynamem.md) for full options.
@@ -98,10 +98,10 @@ See [DynaMem docs](dynamem.md) for full options.
 
 ```bash
 # Terminal 1
-python -m stretch.simulation.mujoco_server
+python -m emet.simulation.mujoco_server
 
 # Terminal 2
-python -m stretch.app.mapping --robot_ip 127.0.0.1
+python -m emet.app.mapping --robot_ip 127.0.0.1
 ```
 
 ### Other apps
@@ -109,9 +109,9 @@ python -m stretch.app.mapping --robot_ip 127.0.0.1
 Any app that takes `--robot_ip` can run in simulation:
 
 ```bash
-python -m stretch.app.view_images --robot_ip 127.0.0.1
-python -m stretch.app.show_point_cloud --robot_ip 127.0.0.1
-python -m stretch.app.keyboard_teleop --robot_ip 127.0.0.1
+python -m emet.app.view_images --robot_ip 127.0.0.1
+python -m emet.app.show_point_cloud --robot_ip 127.0.0.1
+python -m emet.app.keyboard_teleop --robot_ip 127.0.0.1
 ```
 
 ---
@@ -141,7 +141,7 @@ python robocasa/scripts/download_kitchen_assets.py  # optional, for assets
 ### Run with Robocasa
 
 ```bash
-python -m stretch.simulation.mujoco_server --use-robocasa
+python -m emet.simulation.mujoco_server --use-robocasa
 ```
 
 Options:
@@ -182,7 +182,7 @@ python examples/run_stretch_simulation.py --headless
 
 ## Scene files
 
-Scenes are MuJoCo XML files under `src/stretch/assets/robot/`:
+Scenes are MuJoCo XML files under `src/emet/assets/robot/`:
 
 - `scene.xml` – default (robot + docking station)  
 - `stretch.xml` – robot only  
@@ -191,7 +191,7 @@ Scenes are MuJoCo XML files under `src/stretch/assets/robot/`:
 Custom scene:
 
 ```bash
-python -m stretch.simulation.mujoco_server --scene_path /path/to/your/scene.xml
+python -m emet.simulation.mujoco_server --scene_path /path/to/your/scene.xml
 ```
 
 ---
@@ -199,7 +199,7 @@ python -m stretch.simulation.mujoco_server --scene_path /path/to/your/scene.xml
 ## Troubleshooting
 
 **"DISPLAY environment variable is missing"**  
-On Linux, `--headless` uses EGL automatically (no display needed). On Mac/Windows, use Xvfb: `Xvfb :99 &` then `DISPLAY=:99 python -m stretch.simulation.mujoco_server --headless`.
+On Linux, `--headless` uses EGL automatically (no display needed). On Mac/Windows, use Xvfb: `Xvfb :99 &` then `DISPLAY=:99 python -m emet.simulation.mujoco_server --headless`.
 
 **"gladLoadGL error" in headless**  
 Ensure EGL libraries are installed (Linux): `sudo apt install libegl1-mesa libgles2-mesa`. Or use Xvfb: `Xvfb :99 &` then `DISPLAY=:99`.

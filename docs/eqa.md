@@ -14,7 +14,7 @@ _Click this large image to follow the link to YouTube:_
 
 In previous EQA work [GraphEQA](https://arxiv.org/abs/2412.14480), researchers provided a multimodal large language models (mLLMs), such as Google's Gemini and OpenAI's GPT, with a prompt that includes a object-centric semantic scene graph and task-relevant robot image observations. GraphEQA utilizes third party scene graph modules [Hydra](https://arxiv.org/abs/2201.13360) based on ROS Noetic. Installing this module can be difficult due to OS and software version compatibility. To provide a more user friendly alternative, we adapted the methods of [GraphEQA](https://arxiv.org/abs/2412.14480) for use with existing code in the Stretch AI repo.
 
-In GraphEQA, mLLMs are expected to answer the question based on task-relevant image observations and plan exploration based on a scene graph string. Stretch AI has useful capabilities that can serve similar roles. For example, [DynaMem system](dynamem.md) finds task-relevant images and VLM models, such as [Qwen](../src/stretch/llms/qwen_client.py) and [OpenAI GPT](../src/stretch/llms/openai_client.py), extract visual clues from image observations by listing featured objects in the images such as beds, tables, etc. 
+In GraphEQA, mLLMs are expected to answer the question based on task-relevant image observations and plan exploration based on a scene graph string. Stretch AI has useful capabilities that can serve similar roles. For example, [DynaMem system](dynamem.md) finds task-relevant images and VLM models, such as [Qwen](../src/emet/llms/qwen_client.py) and [OpenAI GPT](../src/emet/llms/openai_client.py), extract visual clues from image observations by listing featured objects in the images such as beds, tables, etc. 
 
 The Stretch AI EQA module builds on these existing capabilities resulting in a pipeline that only requires a Stretch robot, a GPU machine with 12GB VRAM, and Internet connection to the following cloud-based AI models:
 - A lightweight VLM running on the local worstation. We use `Qwen-VL-2.5-3B` here.
@@ -38,10 +38,10 @@ This module shares or extends core dependencies (mapping, perception, llms) with
 
 | File locations                  | Purpose                                                     |
 | ----------------------- | ---------------------------------------------------------------- |
-| [`src/stretch/app/run_eqa.py`](../src/stretch/app/run_eqa.py)       |       Entry point for EQA module                       |
-| [`src/stretch/agent/task/dynamem/dynamem_task.py`](../src/stretch/agent/task/dynamem/dynamem_task.py?plain=1#L409)  | An executor wrapper for EQA module |
-| [`src/stretch/agent/robot_agent_eqa.py`](../src/stretch/agent/robot_agent_eqa.py)             | Robot agent class containing all useful APIs for question answering  |
-| [`src/stretch/mapping/voxel/voxel_dynamem.py`](../src/stretch/mapping/voxel/voxel_dynamem.py#928)         | We added EQA utilities to [DynaMem voxel.py](../src/stretch/mapping/voxel/voxel_dynamem.py)            |
+| [`src/emet/app/run_eqa.py`](../src/emet/app/run_eqa.py)       |       Entry point for EQA module                       |
+| [`src/emet/agent/task/dynamem/dynamem_task.py`](../src/emet/agent/task/dynamem/dynamem_task.py?plain=1#L409)  | An executor wrapper for EQA module |
+| [`src/emet/agent/robot_agent_eqa.py`](../src/emet/agent/robot_agent_eqa.py)             | Robot agent class containing all useful APIs for question answering  |
+| [`src/emet/mapping/voxel/voxel_dynamem.py`](../src/emet/mapping/voxel/voxel_dynamem.py#928)         | We added EQA utilities to [DynaMem voxel.py](../src/emet/mapping/voxel/voxel_dynamem.py)            |
 
 ## Instructions
 
@@ -76,7 +76,7 @@ export DISCORD_TOKEN=$YOUR_DICORD_TOKEN
 ```
 
 ```bash
-python -m stretch.app.run_eqa --robot_ip $ROBOT_IP
+python -m emet.app.run_eqa --robot_ip $ROBOT_IP
 ```
 
 Other options
@@ -90,17 +90,17 @@ Assume your robot ip is `192.168.1.42`.
 * Skip initial rotation-in-place scan:
 
   ```bash
-  python -m stretch.app.run_eqa --robot_ip 192.168.1.42 -N
+  python -m emet.app.run_eqa --robot_ip 192.168.1.42 -N
   ```
 * Enable Discord for remote users:
 
   ```bash
-  python -m stretch.app.run_eqa --robot_ip 192.168.1.42 -D
+  python -m emet.app.run_eqa --robot_ip 192.168.1.42 -D
   ```
 * No initial rotation-in-place scan, save rerun visualization, enable discord:
 
   ```bash
-  python -m stretch.app.run_eqa --robot_ip 192.168.1.42 -N -D --SR
+  python -m emet.app.run_eqa --robot_ip 192.168.1.42 -N -D --SR
   ```
 
 

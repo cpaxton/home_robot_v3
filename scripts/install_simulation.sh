@@ -37,7 +37,7 @@ fi
 # Change to the third_party directory
 cd "$ROOT_DIR/third_party" || exit 1
 
-# Note: stretch_mujoco is now merged into src/stretch/simulation/ in this repo.
+# Note: stretch_mujoco is now merged into src/emet/simulation/ in this repo.
 # Install the stretch package with sim extras: pip install -e ".[sim]"
 
 # Clone robosuite

@@ -27,7 +27,7 @@ There are also some apps for [debugging](debug.md).
 
 ## List of Apps
 
-Stretch AI is a collection of tools and applications for the Stretch robot. These tools are designed to be run on the robot itself, or on a remote computer connected to the robot. The tools are designed to be run from the command line, and are organized as Python modules. You can run them with `python -m stretch.app.<app_name>`.
+Stretch AI is a collection of tools and applications for the Stretch robot. These tools are designed to be run on the robot itself, or on a remote computer connected to the robot. The tools are designed to be run from the command line, and are organized as Python modules. You can run them with `python -m emet.app.<app_name>`.
 
 Some, like `print_joint_states`, are simple tools that print out information about the robot. Others, like `mapping`, are more complex and involve the robot moving around and interacting with its environment.
 
@@ -35,7 +35,7 @@ All of these take the `--robot_ip` flag to specify the robot's IP address. You s
 
 ```bash
 export ROBOT_IP=192.168.1.15
-python -m stretch.app.print_joint_states --robot_ip $ROBOT_IP
+python -m emet.app.print_joint_states --robot_ip $ROBOT_IP
 ```
 
 ### Simulation
@@ -49,10 +49,10 @@ You can run many of these apps in MuJoCo simulation without a physical robot. Us
 Use the WASD keys to move the robot around.
 
 ```bash
-python -m stretch.app.keyboard_teleop --robot_ip $ROBOT_IP
+python -m emet.app.keyboard_teleop --robot_ip $ROBOT_IP
 
 # You may also run in a headless mode without the OpenCV gui
-python -m stretch.app.keyboard_teleop --headless
+python -m emet.app.keyboard_teleop --headless
 ```
 
 Remember, you should only need to provide the IP address the first time you run any app from a particular endpoint (e.g., your laptop).
@@ -62,13 +62,13 @@ Remember, you should only need to provide the IP address the first time you run 
 To make sure the robot is connected or debug particular behaviors, you can print the joint states of the robot with the `print_joint_states` tool:
 
 ```bash
-python -m stretch.app.print_joint_states --robot_ip $ROBOT_IP
+python -m emet.app.print_joint_states --robot_ip $ROBOT_IP
 ```
 
 You can also print out just one specific joint. For example, to just get arm extension in a loop, run:
 
 ```
-python -m stretch.app.print_joint_states --joint arm
+python -m emet.app.print_joint_states --joint arm
 ```
 
 #### Visualization and Streaming Video
@@ -76,19 +76,19 @@ python -m stretch.app.print_joint_states --joint arm
 Visualize output from the cameras and other sensors on the robot. This will open multiple windows with wrist camera and both low and high resolution head camera feeds.
 
 ```bash
-python -m stretch.app.view_images --robot_ip $ROBOT_IP
+python -m emet.app.view_images --robot_ip $ROBOT_IP
 ```
 
 You can also visualize it with semantic segmentation (defaults to [YOLOE](https://docs.ultralytics.com/models/yoloe/):
 
 ```bash
-python -m stretch.app.view_images --robot_ip $ROBOT_IP ----run_semantic_segmentation
+python -m emet.app.view_images --robot_ip $ROBOT_IP ----run_semantic_segmentation
 ```
 
 You can visualize gripper Aruco markers as well; the aruco markers can be used to determine the finger locations in the image.
 
 ```bash
-python -m stretch.app.view_images --robot_ip $ROBOT_IP --aruco
+python -m emet.app.view_images --robot_ip $ROBOT_IP --aruco
 ```
 
 #### Show Point Cloud
@@ -96,13 +96,13 @@ python -m stretch.app.view_images --robot_ip $ROBOT_IP --aruco
 Show a joint point cloud from the end effector and head cameras. This will open an Open3d window with the point cloud, aggregated between the two cameras and displayed in world frame. It will additionally show the map's origin with a small coordinate axis; the blue arrow points up (z), the red arrow points right (x), and the green arrow points forward (y).
 
 ```bash
-python -m stretch.app.show_point_cloud
+python -m emet.app.show_point_cloud
 ```
 
 You can use the `--reset` flag to put the robot into its default manipulation posture on the origin (0, 0, 0). Note that this is a blind, unsafe motion! Use with care.
 
 ```bash
-python -m stretch.app.show_point_cloud --reset
+python -m emet.app.show_point_cloud --reset
 ```
 
 #### Use the Gripper
@@ -110,8 +110,8 @@ python -m stretch.app.show_point_cloud --reset
 Open and close the gripper:
 
 ```
-python -m stretch.app.gripper --robot_ip $ROBOT_IP --open
-python -m stretch.app.gripper --robot_ip $ROBOT_IP --close
+python -m emet.app.gripper --robot_ip $ROBOT_IP --open
+python -m emet.app.gripper --robot_ip $ROBOT_IP --close
 ```
 
 #### Rerun Web Server
@@ -119,7 +119,7 @@ python -m stretch.app.gripper --robot_ip $ROBOT_IP --close
 We provide the tools to publish information from the robot to a [Rerun](https://rerun.io/) web server. This is run automatically with our other apps, but if you want to just run the web server, you can do so with:
 
 ```bash
-python -m stretch.app.rerun --robot_ip $ROBOT_IP
+python -m emet.app.rerun --robot_ip $ROBOT_IP
 ```
 
 You should see something like this:
@@ -134,7 +134,7 @@ You should see something like this:
 Chat with the robot using LLMs.
 
 ```bash
-python -m stretch.app.chat --voice
+python -m emet.app.chat --voice
 ```
 
 ### Dex Teleop for Data Collection
@@ -150,7 +150,7 @@ python -m pip install mediapipe
 ```
 
 ```bash
-python -m stretch.app.dex_teleop.ros2_leader -i $ROBOT_IP --teleop-mode base_x --save-images --record-success --task-name default_task
+python -m emet.app.dex_teleop.ros2_leader -i $ROBOT_IP --teleop-mode base_x --save-images --record-success --task-name default_task
 ```
 
 [Read the data collection documentation](data_collection.md) for more details.
@@ -164,19 +164,19 @@ After this, [read the learning from demonstration instructions](learning_from_de
 This app has the robot grasp an object positioned in front of its arm, on the floor, about a meter away. You can see the [grasp practice video on YouTube](https://youtu.be/YmJKvmYRQ9o) to see how it works.
 
 ```bash
-python -m stretch.app.grasp_object --robot_ip $ROBOT_IP --target_object "object description"
+python -m emet.app.grasp_object --robot_ip $ROBOT_IP --target_object "object description"
 ```
 
 ### Automatic 3d Mapping
 
 ```bash
-python -m stretch.app.mapping
+python -m emet.app.mapping
 ```
 
 You can show visualizations with:
 
 ```bash
-python -m stretch.app.mapping --show-intermediate-maps --show-final-map
+python -m emet.app.mapping --show-intermediate-maps --show-final-map
 ```
 
 The flag `--show-intermediate-maps` shows the 3d map after each large motion (waypoint reached), and `--show-final-map` shows the final map after exploration is done.
@@ -190,38 +190,38 @@ Another useful flag when testing is the `--reset` flag, which will reset the rob
 You can test the voxel code on a captured pickle file. We recommend trying with the included [hq_small.pkl](../src/test/mapping/hq_small.pkl)  or [hq_large](../src/test/mapping/hq_large.pkl) files, which contain a short and a long captured trajectory from Hello Robot.
 
 ```bash
-python -m stretch.app.read_map -i hq_small.pkl
+python -m emet.app.read_map -i hq_small.pkl
 ```
 
 Optional open3d visualization of the scene:
 
 ```bash
-python -m stretch.app.read_map -i hq_small.pkl  --show-svm
+python -m emet.app.read_map -i hq_small.pkl  --show-svm
 ```
 
 You can visualize instances in the voxel map with the `--show-instances` flag:
 
 ```bash
-python -m stretch.app.read_map -i hq_small.pkl  --show-instances
+python -m emet.app.read_map -i hq_small.pkl  --show-instances
 ```
 
 You can also re-run perception with the `--run-segmentation` flag and provide a new export file with the `--export` flag:
 
 ```bash
- python -m stretch.app.read_map -i hq_small.pkl --export hq_small_v2.pkl --run-segmentation
+ python -m emet.app.read_map -i hq_small.pkl --export hq_small_v2.pkl --run-segmentation
 ```
 
 You can test motion planning, frontier exploration, etc., as well. Use the `--start` flag to set the robot's starting position:
 
 ```bash
 # Test motion planning
-python -m stretch.app.read_map -i hq_small.pkl --test-planning --start 4.5,1.3,2.1
+python -m emet.app.read_map -i hq_small.pkl --test-planning --start 4.5,1.3,2.1
 # Test planning to frontiers with current parameters file
-python -m stretch.app.read_map -i hq_small.pkl --test-plan-to-frontier --start 4.0,1.4,0.0
+python -m emet.app.read_map -i hq_small.pkl --test-plan-to-frontier --start 4.0,1.4,0.0
 # Test sampling movement to objects
-python -m stretch.app.read_map -i hq_small.pkl --test-sampling --start 4.5,1.4,0.0
+python -m emet.app.read_map -i hq_small.pkl --test-sampling --start 4.5,1.4,0.0
 # Test removing an object from the map
-python -m stretch.app.read_map -i hq_small.pkl --test-remove --show-instances --query "cardboard box"
+python -m emet.app.read_map -i hq_small.pkl --test-remove --show-instances --query "cardboard box"
 ```
 
 ## Experimental
@@ -231,7 +231,7 @@ python -m stretch.app.read_map -i hq_small.pkl --test-remove --show-instances --
 This is an experimental app that uses a language model to generate commands for the robot given a natural language input. It is not yet fully functional.
 
 ```bash
-python -m stretch.app.ovmm
+python -m emet.app.ovmm
 ```
 
 Options include:
