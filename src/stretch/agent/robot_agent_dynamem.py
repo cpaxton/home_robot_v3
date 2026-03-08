@@ -300,9 +300,10 @@ class RobotAgent(RobotAgentBase):
             ),
             column_shares=[2, 1, 1],
         )
+        collapse = getattr(self.rerun_visualizer, "collapse_panels", True)
         my_blueprint = rrb.Blueprint(
             rrb.Vertical(main, rrb.TimePanel(state=True)),
-            collapse_panels=True,
+            collapse_panels=collapse,
         )
         rr.send_blueprint(my_blueprint)
 

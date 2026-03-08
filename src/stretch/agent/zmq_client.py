@@ -116,6 +116,8 @@ class HomeRobotZmqClient(AbstractRobotClient):
         start_immediately: bool = True,
         enable_rerun_server: bool = True,
         rerun_headless: bool = False,
+        rerun_show_panels: bool = False,
+        rerun_debug: bool = False,
         resend_all_actions: bool = False,
         publish_observations: bool = False,
     ):
@@ -230,10 +232,12 @@ class HomeRobotZmqClient(AbstractRobotClient):
             self._rerun = RerunVisualizer(
                 output_path=output_path,
                 headless=rerun_headless,
+                collapse_panels=not rerun_show_panels,
             )
         else:
             self._rerun = None
             self._rerun_thread = None
+        self._rerun_debug = rerun_debug if enable_rerun_server else False
 
         if start_immediately:
             self.start()
@@ -1673,8 +1677,28 @@ class HomeRobotZmqClient(AbstractRobotClient):
 
     def blocking_spin_rerun(self) -> None:
         """Use the rerun server so that we can visualize what is going on as the robot takes actions in the world."""
+        step_count = 0
+        last_debug_t = 0
         while not self._finish:
-            self._rerun.step(self._obs, self._servo)
+            if self._rerun:
+                self._rerun.step(self._obs, self._servo)
+                step_count += 1
+                if self._rerun_debug:
+                    import time as _time
+                    now = _time.time()
+                    if now - last_debug_t >= 2.0:
+                        has_obs = self._obs is not None
+                        has_servo = self._servo is not None
+                        rgb_shape = (
+                            self._servo.rgb.shape
+                            if (self._servo is not None and getattr(self._servo, "rgb", None) is not None)
+                            else None
+                        )
+                        print(
+                            f"[RERUN] steps={step_count} obs={has_obs} servo={has_servo} "
+                            f"rgb_shape={rgb_shape}"
+                        )
+                        last_debug_t = now
 
     @property
     def is_homed(self) -> bool:

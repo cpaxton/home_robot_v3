@@ -223,6 +223,9 @@ class RerunVisualizer:
             collapse_panels (bool): Set to false to have customizable rerun panels
         """
         self.open_browser = open_browser
+        # RERUN_HEADLESS=1 forces web-only (useful when DISPLAY is set but native viewer is unwanted)
+        if os.environ.get("RERUN_HEADLESS", "").lower() in ("1", "true", "yes"):
+            headless = True
         if headless:
             spawn_gui = False
             open_browser = False
@@ -239,16 +242,15 @@ class RerunVisualizer:
 
         if output_path is not None:
             rr.save(output_path / "rerun_log.rrd")
-        # Start web server: open_browser when we have a display, or always when headless (connect from laptop)
-        if open_browser or not has_display() or headless:
-            rr.serve(
-                open_browser=open_browser and has_display() and not headless,
-                server_memory_limit=server_memory_limit,
+        # Always start web server so :9090 is available (for remote viewing even when native viewer spawns)
+        rr.serve(
+            open_browser=open_browser and has_display() and not headless,
+            server_memory_limit=server_memory_limit,
+        )
+        if not has_display() or headless:
+            logger.info(
+                "Rerun web viewer: connect at http://<this-host>:9090"
             )
-            if not has_display() or headless:
-                logger.info(
-                    "Rerun web viewer: connect from another machine at http://<this-host>:9090"
-                )
 
         self.display_robot_mesh = display_robot_mesh
         self.show_cameras_in_3d_view = show_cameras_in_3d_view
@@ -276,6 +278,7 @@ class RerunVisualizer:
 
         self.bbox_colors_memory = {}
         self.step_delay_s = 0.3
+        self.collapse_panels = collapse_panels
         self.setup_blueprint(collapse_panels)
 
     def setup_blueprint(self, collapse_panels: bool):

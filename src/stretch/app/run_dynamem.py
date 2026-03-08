@@ -120,6 +120,16 @@ from stretch.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, g
     is_flag=True,
     help="Disable Rerun visualization entirely",
 )
+@click.option(
+    "--rerun-show-panels",
+    is_flag=True,
+    help="Show Rerun blueprint/selection panel (useful for debugging)",
+)
+@click.option(
+    "--rerun-debug",
+    is_flag=True,
+    help="Print Rerun logging status (obs/servo received, step count)",
+)
 def main(
     server_ip,
     manual_wait,
@@ -142,6 +152,8 @@ def main(
     cpu_only: bool = False,
     headless: bool = False,
     no_rerun: bool = False,
+    rerun_show_panels: bool = False,
+    rerun_debug: bool = False,
     **kwargs,
 ):
     """
@@ -159,6 +171,8 @@ def main(
         robot_ip=robot_ip,
         enable_rerun_server=not no_rerun,
         rerun_headless=headless,
+        rerun_show_panels=rerun_show_panels,
+        rerun_debug=rerun_debug,
     )
 
     print("- Create task executor")
