@@ -97,27 +97,10 @@ def serve(
 
 
 def _kill_processes_on_port(port: int) -> bool:
-    """Kill processes using the given port. Returns True if any were killed."""
-    try:
-        out = subprocess.run(
-            ["lsof", "-t", f"-i:{port}"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-    if out.returncode != 0 or not out.stdout.strip():
-        return False
-    pids = [s for s in out.stdout.strip().split() if s.isdigit()]
-    if not pids:
-        return False
-    for pid in pids:
-        try:
-            subprocess.run(["kill", pid], check=False, capture_output=True)
-        except Exception:
-            pass
-    return True
+    """Thin wrapper for emet.utils.port_utils.kill_processes_on_port."""
+    from emet.utils.port_utils import kill_processes_on_port
+
+    return kill_processes_on_port(port)
 
 
 @main.command("kill-mujoco-server", short_help="Stop MuJoCo server (free ports)")
@@ -173,7 +156,8 @@ def kill_mujoco_server(port: int, kill_all: bool) -> None:
 @click.option("-S", "--skip", "skip_confirmations", is_flag=True, help="Skip confirmations")
 @click.option("--headless", is_flag=True, help="Run without display")
 @click.option("--visual-servo", "-V", "--visual_servo", is_flag=True, help="Use visual servoing (dynamem)")
-@click.option("--target-object", "--target_object", help="Target object to grasp")
+@click.option("--target-object", "--target_object", help="Target object to grasp (grasp) or pick (dynamem)")
+@click.option("--target-receptacle", "--target_receptacle", help="Target receptacle to place on (dynamem)")
 @click.option("--parameter-file", "--parameter_file", help="Planner config (e.g. sim_planner.yaml)")
 @click.pass_context
 def run(
@@ -185,6 +169,7 @@ def run(
     headless: bool,
     visual_servo: bool,
     target_object: str | None,
+    target_receptacle: str | None,
     parameter_file: str | None,
 ) -> None:
     """Run a robot agent or app.
@@ -193,7 +178,7 @@ def run(
 
     Examples:
       emet run dynamem --robot-ip 127.0.0.1 -S
-      emet run dynamem -S --visual-servo --match-method class --rerun-debug
+      emet run dynamem -S --visual-servo --match-method class --target-object apple --target-receptacle plate
       emet run mapping --robot-ip 127.0.0.1
       emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
     """
@@ -207,6 +192,10 @@ def run(
             args.append("--headless")
         if visual_servo:
             args.append("--visual-servo")
+        if target_object:
+            args.extend(["--target_object", target_object])
+        if target_receptacle:
+            args.extend(["--target_receptacle", target_receptacle])
         sys.exit(_run_module("emet.app.run_dynamem", args))
     elif app == "graph-eqa":
         sys.exit(_run_module("emet.app.run_graph_eqa", args))

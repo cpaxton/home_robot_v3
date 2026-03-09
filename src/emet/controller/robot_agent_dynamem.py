@@ -41,6 +41,7 @@ from emet.core.interfaces import Observations
 from emet.core.parameters import Parameters
 from emet.core.robot import AbstractRobotClient
 from emet.mapping.instance import Instance
+from emet.mapping.scene_graph import SceneGraph
 from emet.mapping.voxel import SparseVoxelMapDynamem as SparseVoxelMap
 from emet.mapping.voxel import (
     SparseVoxelMapNavigationSpaceDynamem as SparseVoxelMapNavigationSpace,
@@ -283,6 +284,16 @@ class DynamemController(BaseRobotAgent):
                 self.rerun_visualizer.update_scene_graph(
                     self.scene_graph, self.semantic_sensor
                 )
+
+    def _update_scene_graph(self) -> None:
+        """Update the scene graph with the latest instances from the voxel map."""
+        if self.scene_graph is None:
+            self.scene_graph = SceneGraph(
+                self.parameters, self.get_voxel_map().get_instances()
+            )
+        else:
+            self.scene_graph.update(self.get_voxel_map().get_instances())
+        self.scene_graph.get_relationships(debug=False)
 
     def look_around(self):
         """
