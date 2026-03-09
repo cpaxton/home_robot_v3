@@ -43,13 +43,26 @@ cd "$ROOT_DIR/third_party" || exit 1
 
 # Use the same Python as the emet CLI (e.g. venv) so we don't install into system site-packages.
 PYTHON="${EMET_PYTHON:-python}"
+echo "Using Python: $PYTHON"
+
+# Prefer uv pip when available (venvs created with uv often don't have pip).
+# EMET_USE_UV=1 is set by the CLI when uv is available.
+pip_install_editable() {
+    if [ -n "${EMET_USE_UV:-}" ] && command -v uv >/dev/null 2>&1; then
+        uv pip install -e .
+    elif command -v uv >/dev/null 2>&1; then
+        uv pip install -e .
+    else
+        "$PYTHON" -m pip install -e .
+    fi
+}
 
 # Clone robosuite (required by robocasa)
 if [ ! -d "robosuite" ]; then
     git clone https://github.com/ARISE-Initiative/robosuite -b robocasa_v0.1
 fi
 cd robosuite || exit 1
-"$PYTHON" -m pip install -e . || { echo "robosuite install failed." >&2; exit 1; }
+pip_install_editable || { echo "robosuite install failed." >&2; exit 1; }
 cd ..
 
 # Clone robocasa at v0.2 (compatible mujoco/numpy)
@@ -59,7 +72,7 @@ fi
 cd robocasa || exit 1
 git fetch --tags origin 2>/dev/null || true
 git checkout v0.2 2>/dev/null || true
-"$PYTHON" -m pip install -e . || { echo "robocasa install failed." >&2; exit 1; }
+pip_install_editable || { echo "robocasa install failed." >&2; exit 1; }
 cd ..
 
 # Run robocasa scripts from third_party (robocasa/scripts/ in the cloned repo)
