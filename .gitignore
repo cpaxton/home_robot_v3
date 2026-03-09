@@ -134,6 +134,10 @@ policy/
 data/
 log/
 
+# Third-party sim (cloned by emet install sim / emet install robocasa)
+third_party/robocasa/
+third_party/robosuite/
+
 # install folder
 install/
 

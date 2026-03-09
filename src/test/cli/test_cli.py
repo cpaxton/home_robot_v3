@@ -133,6 +133,17 @@ def test_install_sim_help():
     assert "robocasa" in result.stdout.lower() or "sim" in result.stdout.lower()
 
 
+def test_install_robocasa_help():
+    """emet install robocasa --help works (same as install sim)."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "install", "robocasa", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "robocasa" in result.stdout.lower()
+
+
 def test_install_full_help():
     """emet install full --help works."""
     result = subprocess.run(

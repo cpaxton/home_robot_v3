@@ -152,13 +152,15 @@ Install submodules, simulation extras, or full setup.
 |------------|-------------|
 | `submodules` | Init and update git submodules (segment-anything-2, ok-robot) |
 | `sim` | Install Robocasa and robosuite (clones into third_party) |
+| `robocasa` | Same as `sim` |
 | `full` | Run full install (./install.sh) |
 | `pre-commit` | Install pre-commit hooks (ruff, mypy, etc.) |
 
 **`emet install submodules`**
 - `--recursive` / `--no-recursive` — Recursively init nested submodules (default: recursive)
 
-**`emet install sim`**
+**`emet install sim`** / **`emet install robocasa`** (same)
+- Clones robosuite and **Robocasa v0.2** (pinned for MuJoCo 3.2.6 / numpy compatibility; main/v1.0 can conflict).
 - `-d, --download-assets` — Download Robocasa kitchen assets
 - `-a, --setup-macros` — Run Robocasa setup_macros.py
 
@@ -171,7 +173,8 @@ Install submodules, simulation extras, or full setup.
 **Examples:**
 ```bash
 emet install submodules              # Init and update submodules
-emet install sim                    # Install Robocasa, robosuite
+emet install sim                    # Install Robocasa, robosuite (third_party)
+emet install robocasa               # Same as install sim
 emet install sim -d -a              # With assets and macros
 emet install full                   # Full install (uv, deps, sync)
 emet install full -y --sim          # Non-interactive with sim extras
