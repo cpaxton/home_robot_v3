@@ -467,10 +467,18 @@ class SparseVoxelMap(SparseVoxelMapBase):
         alignments = self.find_alignment_over_model(text).cpu().squeeze()
         obs_counts = self.semantic_memory._obs_counts.cpu()
 
+        num_points = alignments.numel()
+        if num_points == 0:
+            return (
+                torch.tensor([], dtype=obs_counts.dtype, device=obs_counts.device),
+                torch.zeros(0, points.size(1), device=points.device),
+                torch.tensor([], dtype=alignments.dtype, device=alignments.device),
+            )
+        idx = min(min_point_num, num_points)
         turning_point = (
-            min(min_similarity_threshold, alignments[torch.argsort(alignments)[-min_point_num]])
+            min(min_similarity_threshold, alignments[torch.argsort(alignments)[-idx]].item())
             if min_similarity_threshold is not None
-            else alignments[torch.argsort(alignments)[-min_point_num]]
+            else alignments[torch.argsort(alignments)[-idx]].item()
         )
         mask = alignments >= turning_point
         obs_counts = obs_counts[mask]
@@ -500,15 +508,27 @@ class SparseVoxelMap(SparseVoxelMapBase):
             points_with_max_alignment[i] = point_with_max_alignment
             max_alignments[i] = cluster_alignments.max()
 
+        # Only use clusters we actually filled (skip zero-alignment clusters from skipped small clusters)
+        valid = max_alignments > 0
+        if not valid.any():
+            return (
+                torch.tensor([], dtype=obs_counts.dtype, device=obs_counts.device),
+                torch.zeros(0, points.size(1), device=points.device),
+                torch.tensor([], dtype=alignments.dtype, device=alignments.device),
+            )
+        valid_obs = unique_obs_counts[valid]
+        valid_points = points_with_max_alignment[valid]
+        valid_alignments = max_alignments[valid]
+
         if max_img_num is not None:
-            top_k = min(max_img_num, len(max_alignments))
+            top_k = min(max_img_num, len(valid_alignments))
         else:
-            top_k = len(max_alignments)
+            top_k = len(valid_alignments)
         top_alignments, top_indices = torch.topk(
-            max_alignments, k=top_k, dim=0, largest=True, sorted=True
+            valid_alignments, k=top_k, dim=0, largest=True, sorted=True
         )
-        top_points = points_with_max_alignment[top_indices]
-        top_obs_counts = unique_obs_counts[top_indices]
+        top_points = valid_points[top_indices]
+        top_obs_counts = valid_obs[top_indices]
 
         sorted_obs_counts, sorted_indices = torch.sort(top_obs_counts, descending=False)
         sorted_points = top_points[sorted_indices]
@@ -590,14 +610,35 @@ class SparseVoxelMap(SparseVoxelMapBase):
             text,
             max_img_num=3,
         )
-        target_id = self.llm_locator(image_ids, text)
+        n_candidates = len(image_ids) if hasattr(image_ids, "__len__") else image_ids.numel()
+        if n_candidates == 0:
+            target_id = None
+        else:
+            target_id = self.llm_locator(image_ids, text)
+            # LLM returns 1-based index; validate before converting to 0-based
+            if target_id is not None and (target_id < 1 or target_id > n_candidates):
+                logger.warning(
+                    "llm_locator returned out-of-range image id %s (have %d candidates); ignoring.",
+                    target_id,
+                    n_candidates,
+                )
+                target_id = None
 
         if target_id is None:
-            debug_text += "#### - Cannot verify whether this instance is the target. **😞** \n"
-            image_id = None
-            point = None
+            # Single candidate: treat as identified (LLM may have said "None" due to format)
+            if n_candidates == 1:
+                target_id = 1
+                target_id -= 1  # 0-based
+                target_point = points[target_id]
+                image_id = image_ids[target_id]
+                point = points[target_id]
+                debug_text += "#### - An image is identified (single candidate)\n"
+            else:
+                debug_text += "#### - Cannot verify whether this instance is the target. **😞** \n"
+                image_id = None
+                point = None
         else:
-            target_id -= 1
+            target_id -= 1  # 1-based -> 0-based index into candidates
             target_point = points[target_id]
             image_id = image_ids[target_id]
             point = points[target_id]
