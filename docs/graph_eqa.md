@@ -56,6 +56,68 @@ emet run graph-eqa --robot-ip 127.0.0.1 -N
 
 Then type questions at the prompt; the agent will explore and answer using the graph memory.
 
+## Testing Graph EQA in Robocasa
+
+Use [Robocasa](simulation.md#robocasa-rich-kitchen-scenes) kitchen scenes so the robot can explore and fill the graph with real objects (fruit, pots, sink, etc.), then answer questions about them.
+
+### 1. Prerequisites
+
+- Robocasa and sim extra installed:
+  ```bash
+  emet install robocasa
+  emet sync -e sim
+  ```
+- Gemini API key set: `export GOOGLE_API_KEY=your_key`
+
+### 2. Start the MuJoCo server with Robocasa
+
+**Terminal 1** – from the project root:
+
+```bash
+emet serve mujoco --use-robocasa
+```
+
+Optional: change task, style, or layout (see [simulation.md](simulation.md#run-with-robocasa)):
+
+```bash
+emet serve mujoco --use-robocasa --robocasa-task PnPCounterToCab --robocasa-style 1 --robocasa-layout 0
+```
+
+Wait until the simulator window shows the kitchen scene and the robot is ready.
+
+### 3. Run Graph EQA
+
+**Terminal 2** – from the project root:
+
+```bash
+export GOOGLE_API_KEY=your_key
+emet run graph-eqa --robot-ip 127.0.0.1
+```
+
+- By default, the robot does an **initial rotation-in-place** to scan the room and build the first graph nodes from what the camera sees.
+- To skip the initial scan: `emet run graph-eqa --robot-ip 127.0.0.1 -N`
+- To save Rerun logs: add `--save_rerun` (or `--SR`).
+- CPU-only: the app uses the same encoder as DynaMem; if you need CPU, you may need to set config/CLI options that disable GPU-heavy models (see [simulation.md](simulation.md) for DynaMem CPU notes).
+
+### 4. Explore until the robot finds a known object
+
+1. After startup (and optional rotate-in-place), you get a prompt: **Question (Press enter to quit):**
+2. Type a question about something that **exists in the kitchen scene**, for example:
+   - *Where is the apple?*
+   - *What is on the counter?*
+   - *Is there a pot on the stove?*
+3. The agent will:
+   - Use the current scene graph (and task-relevant images) to try to answer.
+   - If not confident, it will **navigate to a suggested frontier** and **look around** again; each observation updates the graph with new object labels from the encoder.
+   - Repeat until it can answer with confidence or hits the step limit.
+4. The graph is updated on every observation (from the voxel map’s image descriptions); objects like “apple”, “sink”, “pot” appear as nodes as the robot explores.
+
+So “find some known object” means: **ask about an object that is actually in the scene** (e.g. an apple or a pot in the default Robocasa task). The robot will explore until the graph contains enough information for the mLLM to answer.
+
+### 5. First-run model downloads
+
+As with DynaMem/EQA, the first run may download vision/encoder models (e.g. for image descriptions). See [simulation.md](simulation.md) for typical first-run messages and caches.
+
 ### Programmatic use
 
 - **Graph memory only**: use `emet.memory.graph_eqa.GraphEQAMemory` to build a scene graph from observations and call `query_answer(question, xyt, planner)` (same return contract as the DynaMem voxel map).

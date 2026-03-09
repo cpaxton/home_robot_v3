@@ -130,6 +130,7 @@ class StretchMujocoSimulator:
                 )
                 os.environ["MUJOCO_GL"] = "egl"
 
+        self._cameras_passed = cameras_for_server  # used so parent only waits for camera data when cameras are enabled
         self._server_process = Process(
             target=mujoco_server.launch_server,
             name="MujocoProcess",
@@ -154,7 +155,10 @@ class StretchMujocoSimulator:
         atexit.register(self.stop)
 
         logger.alert("Starting Stretch MuJoCo Simulator...")
-        while self.pull_status().time == 0 or self.pull_camera_data().time == 0:
+        need_camera = len(self._cameras_passed) > 0
+        while self.pull_status().time == 0 or (
+            need_camera and self.pull_camera_data().time == 0
+        ):
             time.sleep(1)
             logger.warning("Still waiting to connect to the MuJoCo Simulator.")
 

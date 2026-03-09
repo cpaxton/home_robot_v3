@@ -49,6 +49,10 @@ emet serve mujoco --headless
 
 On **Linux**, headless mode automatically uses EGL for GPU-accelerated camera rendering (no display needed). AI apps like grasp and DynaMem work with cameras.
 
+**"Still waiting to connect to the MuJoCo Simulator" for a long time?** Without `--headless`, the server opens a viewer window. If there is no display (SSH, WSL, or headless machine), the child process can block there and never signal ready. **Use `emet serve mujoco --headless`** so it skips the viewer and uses EGL for cameras only; startup should then finish within a few seconds.
+
+**WSL: still hanging with `--headless`?** On WSL, EGL camera rendering can hang when creating the first offscreen renderer. Use **`--no-cameras`** so the server runs without camera rendering (physics and control only). The sim will connect quickly; vision-based apps will get no camera images. Example: `emet serve mujoco --headless --no-cameras`.
+
 On **Mac/Windows** without a display, cameras are disabled. Use **Xvfb** for a virtual display:
 
 ```bash

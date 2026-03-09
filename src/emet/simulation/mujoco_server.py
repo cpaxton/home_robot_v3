@@ -184,6 +184,13 @@ class MujocoZmqServer(BaseZmqServer):
         """Reset the robot to the initial state."""
         self.robot_sim.reset_state()
 
+    _default_cameras = [
+        StretchCameras.cam_d405_rgb,
+        StretchCameras.cam_d435i_rgb,
+        StretchCameras.cam_d405_depth,
+        StretchCameras.cam_d435i_depth,
+    ]
+
     def __init__(
         self,
         *args,
@@ -193,9 +200,11 @@ class MujocoZmqServer(BaseZmqServer):
         camera_hz: int = 15,
         config_name: str = "noplan_velocity_sim",
         objects_info: Optional[Dict[str, Any]] = None,
+        no_cameras: bool = False,
         **kwargs,
     ):
         super(MujocoZmqServer, self).__init__(*args, **kwargs)
+        cameras_to_use = [] if no_cameras else self._default_cameras
         # TODO: decide how we want to save scenes, if they should be here in stretch_ai or in stretch_mujoco
         # They should probably stay in stretch mujoco
         if scene_path is None:
@@ -205,23 +214,13 @@ class MujocoZmqServer(BaseZmqServer):
                 logger.warning("Both scene model and scene path provided. Using scene model.")
             self.robot_sim = StretchMujocoSimulator(
                 model=scene_model,
-                cameras_to_use=[
-                    StretchCameras.cam_d405_rgb,
-                    StretchCameras.cam_d435i_rgb,
-                    StretchCameras.cam_d405_depth,
-                    StretchCameras.cam_d435i_depth,
-                ],
+                cameras_to_use=cameras_to_use,
                 camera_hz=camera_hz,
             )
         else:
             self.robot_sim = StretchMujocoSimulator(
                 scene_xml_path=scene_path,
-                cameras_to_use=[
-                    StretchCameras.cam_d405_rgb,
-                    StretchCameras.cam_d435i_rgb,
-                    StretchCameras.cam_d405_depth,
-                    StretchCameras.cam_d435i_depth,
-                ],
+                cameras_to_use=cameras_to_use,
                 camera_hz=camera_hz,
             )
         # Get the intrinsic parameters of the d435i rgb camera
@@ -842,6 +841,13 @@ class MujocoZmqServer(BaseZmqServer):
     is_flag=True,
 )
 @click.option("--headless", default=False, help="Run the simulation headless", is_flag=True)
+@click.option(
+    "--no-cameras",
+    "--no_cameras",
+    default=False,
+    is_flag=True,
+    help="Disable camera rendering (use on WSL/headless when EGL camera init hangs)",
+)
 @click.option("--seed", default=0, help="Seed for the simulation")
 @click.option(
     "--robocasa-write-to-xml",
@@ -868,6 +874,7 @@ def main(
     robocasa_write_to_xml: bool,
     show_viewer_ui: bool,
     headless: bool = False,
+    no_cameras: bool = False,
     seed: int = 0,
 ):
 
@@ -934,6 +941,7 @@ def main(
             scene_path=scene_path,
             scene_model=scene_model,
             objects_info=objects_info,
+            no_cameras=no_cameras,
         )
     except zmq.error.ZMQError as e:
         if "Address already in use" in str(e):

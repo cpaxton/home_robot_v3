@@ -120,7 +120,7 @@ def load_config(visualize: bool = False, print_images: bool = True, config_path=
 
 def get_control_config(cfg_name):
     """Simpler version of the config utility for opening config"""
-    with hydra.initialize_config_dir(CONTROL_CONFIG_DIR):
+    with hydra.initialize_config_dir(CONTROL_CONFIG_DIR, version_base="1.1"):
         cfg = hydra.compose(config_name=cfg_name)
 
     return cfg

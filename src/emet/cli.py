@@ -92,6 +92,11 @@ def main() -> None:
 @click.argument("backend", type=click.Choice(["mujoco"]), default="mujoco")
 @click.option("--use-robocasa", is_flag=True, help="Use Robocasa for scene generation")
 @click.option("--headless", is_flag=True, help="Run without native viewer")
+@click.option(
+    "--no-cameras",
+    is_flag=True,
+    help="Disable camera rendering (use on WSL when EGL camera init hangs)",
+)
 @click.option("--scene-path", type=click.Path(exists=True), help="Path to MuJoCo scene XML")
 @click.option("--seed", default=0, type=int, help="Random seed")
 @click.option(
@@ -105,6 +110,7 @@ def serve(
     backend: str,
     use_robocasa: bool,
     headless: bool,
+    no_cameras: bool,
     scene_path: str | None,
     seed: int,
     port_offset: int,
@@ -124,6 +130,8 @@ def serve(
             args.append("--use-robocasa")
         if headless:
             args.append("--headless")
+        if no_cameras:
+            args.append("--no-cameras")
         if scene_path:
             args.extend(["--scene_path", scene_path])
         args.extend(["--seed", str(seed)])
