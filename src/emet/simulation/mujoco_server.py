@@ -885,7 +885,7 @@ def main(
 
     if use_robocasa:
         if model_generation_wizard is None:
-            print(
+            logger.error(
                 "\n" + "=" * 60 + "\n"
                 "  Robocasa scene generation is not installed.\n"
                 "  You passed --use-robocasa but robosuite/robocasa are missing.\n\n"
@@ -894,7 +894,6 @@ def main(
                 "    2. emet sync -e sim\n"
                 "  Then run: emet serve mujoco --use-robocasa\n"
                 + "=" * 60,
-                file=sys.stderr,
             )
             sys.exit(1)
         scene_model, scene_xml, objects_info = model_generation_wizard(
@@ -909,11 +908,9 @@ def main(
         scene_path = default_scene_xml_path
 
     if _ROBOCASA_IMPORT_FAILED:
-        print(
-            "\n  [emet] Robocasa scene generation (--use-robocasa) is not available.\n"
-            "         This server will use the default scene. To enable Robocasa:\n"
-            "         emet install sim   then   emet sync -e sim\n",
-            file=sys.stderr,
+        logger.warning(
+            "Robocasa scene generation (--use-robocasa) is not available. "
+            "Using default scene. To enable: emet install sim  then  emet sync -e sim",
         )
 
     try:
@@ -933,7 +930,7 @@ def main(
         )
     except zmq.error.ZMQError as e:
         if "Address already in use" in str(e):
-            print(
+            logger.error(
                 f"\nPort {send_port} (or another server port) is already in use.\n\n"
                 f"Option 1 – free the port:\n"
                 f"  kill $(lsof -t -i:{send_port})\n"
@@ -942,7 +939,6 @@ def main(
                 f"  emet serve mujoco --port-offset 100\n\n"
                 f"Option 3 – stop the server then retry:\n"
                 f"  emet kill-mujoco-server\n",
-                file=sys.stderr,
             )
         raise
 
