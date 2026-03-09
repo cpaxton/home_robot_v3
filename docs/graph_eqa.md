@@ -1,12 +1,20 @@
 # GraphEQA: Graph-Based Memory for Embodied Question Answering
 
-GraphEQA is an **alternative memory model** for Embodied Question Answering (EQA) in Stretch AI. Both memory models live under **`emet.memory`**: **DynaMem** (voxel-based) in `emet.memory.dynamem` and **GraphEQA** (graph-based) in `emet.memory.graph_eqa`. The default EQA pipeline uses DynaMem (see [EQA](eqa.md)). GraphEQA maintains an **object-centric semantic scene graph**: nodes are objects or regions with labels and 3D positions; edges are spatial relations (e.g. *near*, *on*). The same mLLM (e.g. Gemini) is used to answer questions and to suggest where to explore when not confident.
+Stretch AI has **three memory models**: **sparse voxel map** (base voxel map in `emet.mapping.voxel`), **DynaMem** (voxel + VL features + EQA in `emet.memory.dynamem` / `emet.mapping.voxel`), and **Graph EQA** (graph-based in `emet.memory.graph_eqa`). GraphEQA is the graph-based option for Embodied Question Answering (EQA): it maintains an **object-centric semantic scene graph** (nodes = objects/regions with labels and 3D positions; edges = spatial relations like *near*, *on*) and uses the same mLLM (e.g. Gemini) to answer questions and suggest where to explore. The default EQA pipeline uses DynaMem (see [EQA](eqa.md)).
 
 This implementation is a **re-implementation** inspired by the [GraphEQA paper](https://arxiv.org/abs/2412.14480) (Saxena et al.). The [original repository](https://github.com/SaumyaSaxena/graph_eqa) is not open source; no code was copied from it.
 
+## The three memory models
+
+| Model | Description | Typical use |
+|-------|-------------|-------------|
+| **Sparse voxel map** | Base 2D/3D voxel map + optional instance memory. | Default agent (InstanceMemoryController), mapping, navigation. |
+| **DynaMem** | Voxel map + VL features + EQA, pick-and-place. | `emet run dynamem`; EQA with voxel-based memory. |
+| **Graph EQA** | Scene graph (nodes + edges) + task-relevant images. | `emet run graph-eqa`; EQA with graph-based memory. |
+
 ## When to use GraphEQA vs DynaMem EQA
 
-| | **EQA (DynaMem)** | **GraphEQA** |
+| | **EQA (DynaMem)** | **Graph EQA** |
 |---|-------------------|----------------|
 | Memory | Voxel map + VL features + task-relevant images | Scene graph (nodes + edges) + task-relevant images |
 | Representation | Dense 2D/3D voxels, instance segments | Explicit objects and relations (e.g. “table near cup”) |
@@ -56,12 +64,13 @@ Then type questions at the prompt; the agent will explore and answer using the g
 
 ## Code layout
 
-Both memory models live under **`emet.memory`**:
+All three memory models:
 
 | Memory model | Package | Notes |
 |--------------|---------|--------|
-| **DynaMem** | `emet.memory.dynamem` | Re-exports voxel map from `emet.mapping.voxel` (implementation stays there for mapping/navigation). |
-| **GraphEQA** | `emet.memory.graph_eqa` | `GraphEQAMemory` in `graph_memory.py`. |
+| **Sparse voxel map** | `emet.mapping.voxel` | `SparseVoxelMap`; base voxel map used by default agent. |
+| **DynaMem** | `emet.memory.dynamem` / `emet.mapping.voxel` | Re-exports `SparseVoxelMapDynamem`; VL + EQA voxel memory. |
+| **Graph EQA** | `emet.memory.graph_eqa` | `GraphEQAMemory` in `graph_memory.py`. |
 
 Other components:
 

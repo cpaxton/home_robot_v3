@@ -7,4 +7,4 @@ Spatial representation for the robot: grid, instances, scene graph, and voxel ma
 - **scene_graph** – Nodes = instances; edges = spatial relations (near, on). Built from instances.
 - **voxel** – 2D/3D voxel maps (base + Dynamem variant). Optionally use instance memory.
 
-Semantic / EQA **memory** models live under `emet.memory` (DynaMem re-export, GraphEQA). See [docs/plans/MAPPING_REFACTOR.md](../../../docs/plans/MAPPING_REFACTOR.md) for layout and imports.
+There are **three memory models**: **sparse voxel map** (this package, base map), **DynaMem** (voxel + VL + EQA, re-exported in `emet.memory.dynamem`), and **Graph EQA** (`emet.memory.graph_eqa`). See [docs/plans/MAPPING_REFACTOR.md](../../../docs/plans/MAPPING_REFACTOR.md) for layout and imports.
