@@ -18,11 +18,13 @@ class MockEncoder:
 
     def __init__(self, feature_dim: int = 8):
         self.feature_dim = feature_dim
-        # Map text -> feature vector (normalized)
+        # Map text -> feature vector (normalized); includes default MuJoCo scene objects
         self._text_to_feature = {
             "apple": torch.tensor([1.0, 0, 0, 0, 0, 0, 0, 0], dtype=torch.float32),
             "bottle": torch.tensor([0, 1.0, 0, 0, 0, 0, 0, 0], dtype=torch.float32),
             "cup": torch.tensor([0, 0, 1.0, 0, 0, 0, 0, 0], dtype=torch.float32),
+            "red cylinder": torch.tensor([0, 0, 0, 1.0, 0, 0, 0, 0], dtype=torch.float32),
+            "blue cube": torch.tensor([0, 0, 0, 0, 1.0, 0, 0, 0], dtype=torch.float32),
         }
         # Pad or truncate to feature_dim
         for k, v in list(self._text_to_feature.items()):
@@ -161,3 +163,58 @@ def test_add_to_semantic_memory():
     assert points.shape[0] >= 1  # May be voxelized/reduced
     assert features is not None
     assert features.shape[1] == 8
+
+
+def _make_red_cylinder_map() -> SparseVoxelMap:
+    """Map with 'red cylinder' in semantic memory (default MuJoCo scene object)."""
+    feature_dim = 8
+    encoder = MockEncoder(feature_dim=feature_dim)
+
+    voxel_map = SparseVoxelMap(
+        resolution=0.05,
+        semantic_memory_resolution=0.05,
+        feature_dim=feature_dim,
+        use_instance_memory=False,
+        encoder=encoder,
+        device="cpu",
+        map_2d_device="cpu",
+        log="test",  # avoid writing to missing dir if code path touches it
+    )
+
+    # Red cylinder at table height (default scene: object2 at ~(.08, -0.55, .6))
+    red_cylinder_feat = encoder.encode_text("red cylinder").squeeze(0)
+    points = torch.tensor([[0.08, -0.55, 0.6]], dtype=torch.float32)
+    features = red_cylinder_feat.unsqueeze(0)
+    rgb = torch.tensor([[255, 0, 0]], dtype=torch.float32) / 255.0
+
+    voxel_map.semantic_memory.add(
+        points=points,
+        features=features,
+        rgb=rgb,
+        obs_count=0,
+    )
+    voxel_map.obs_count = 1
+    return voxel_map
+
+
+def test_localize_red_cylinder():
+    """Dynamem/SVM can find 'red cylinder' when it is in semantic memory (default MuJoCo scene)."""
+    voxel_map = _make_red_cylinder_map()
+
+    result = voxel_map.localize_text("red cylinder", debug=True, return_debug=True)
+    target_point, debug_text = result[0], result[1]
+
+    assert target_point is not None, "localize_text('red cylinder') should return a target point"
+    target = target_point.squeeze()
+    assert target.shape == (3,), "target should be 3D (x, y, z)"
+
+    # Should be near the red cylinder we placed at (0.08, -0.55, 0.6)
+    np.testing.assert_allclose(
+        target.numpy(),
+        [0.08, -0.55, 0.6],
+        atol=0.15,
+        err_msg="Target point should be near red cylinder position",
+    )
+    assert "😃" in debug_text or "identified" in debug_text.lower(), (
+        "Debug text should indicate successful localization"
+    )
