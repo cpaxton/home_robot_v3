@@ -120,7 +120,12 @@ class StretchMujocoSimulator:
         # (e.g. "GLX: Failed to create context: BadValue", gladLoadGL error after driver issues).
         # Must be set before the child process starts so it inherits the env.
         if platform.system() == "Linux" and cameras_for_server:
-            os.environ.setdefault("MUJOCO_GL", "egl")
+            if "MUJOCO_GL" not in os.environ:
+                print(
+                    "Warning: Setting MUJOCO_GL=egl for camera rendering (avoids GLX/gladLoadGL errors). "
+                    "Use --headless to run without a viewer, or unset MUJOCO_GL to try the default backend."
+                )
+                os.environ["MUJOCO_GL"] = "egl"
 
         self._server_process = Process(
             target=mujoco_server.launch_server,
@@ -208,29 +213,52 @@ class StretchMujocoSimulator:
         )
 
     def stop_mujoco_process(self):
+        """Stop the MuJoCo server process gracefully: request stop, join with timeout, then SIGTERM, then SIGKILL if needed."""
+        if not self._server_process:
+            return
 
-        if self._server_process and not self._server_process.is_alive():
+        if not self._server_process.is_alive():
             click.secho(
-                f"The Mujoco process has already terminated.",
-                fg="red",
+                "The Mujoco process has already terminated. Cleaning up.",
+                fg="yellow",
             )
+            self._server_process.join(timeout=2.0)  # Reap the dead process
+            self._server_process = None
             return
 
         click.secho(
-            f"Sending signal to stop the Mujoco process...",
+            "Stopping the Mujoco process (sending stop request)...",
             fg="red",
         )
-
-        # Wait until the main control loop ends before sending this stop event.
         self._stop_mujoco_process_event.set()
-        if self._server_process:
-            # self._server_process.terminate() # ask it nicely.
-            self._server_process.join()
+
+        join_timeout = 10.0
+        self._server_process.join(timeout=join_timeout)
+        if not self._server_process.is_alive():
+            click.secho("The Mujoco process has ended.", fg="red")
+            self._server_process = None
+            return
 
         click.secho(
-            f"The Mujoco process has ended.",
+            f"Mujoco process did not exit after {join_timeout}s. Sending SIGTERM.",
+            fg="yellow",
+        )
+        self._server_process.terminate()
+        term_timeout = 5.0
+        self._server_process.join(timeout=term_timeout)
+        if not self._server_process.is_alive():
+            click.secho("The Mujoco process has ended.", fg="red")
+            self._server_process = None
+            return
+
+        click.secho(
+            "Mujoco process did not exit after SIGTERM. Sending SIGKILL.",
             fg="red",
         )
+        self._server_process.kill()
+        self._server_process.join(timeout=2.0)
+        self._server_process = None
+        click.secho("The Mujoco process has ended.", fg="red")
 
     @require_connection
     def home(self) -> None:
