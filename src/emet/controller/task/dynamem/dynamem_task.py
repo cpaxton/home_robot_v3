@@ -105,6 +105,7 @@ class DynamemTaskExecutor:
             mllm=mllm,
             manipulation_only=manipulation_only,
             cpu_only=self.cpu_only,
+            use_instance_memory=self.parameters.get("use_instance_memory", True),
         )
         self.agent.start()
 

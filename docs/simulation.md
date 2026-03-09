@@ -75,7 +75,7 @@ emet serve mujoco
 emet run grasp --robot-ip 127.0.0.1 --target-object "red cylinder" --parameter-file sim_planner.yaml
 ```
 
-The default scene has a red and blue cylinder. Use `sim_planner.yaml` for simulation (lower thresholds, tuned detection).
+The **default MuJoCo scene** has a **red cylinder** and **blue cube** on the table (see `src/emet/assets/robot/scene.xml`). Use `sim_planner.yaml` for simulation (lower thresholds, tuned detection).
 
 ### DynaMem (open-vocabulary mobile manipulation)
 
@@ -93,6 +93,8 @@ emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo --
 - `--visual-servo` / `-V`: use visual servoing (required in sim; AnyGrasp needs real robot)
 - `--match-method class`: class-based matching (works well in sim)
 
+**Instance display in Rerun:** With default config (`use_instance_memory: true`, `use_scene_graph: true` in `dynav_config.yaml`), DynaMem runs YoloE to segment objects and shows 3D instance boxes/icons in the Rerun UI. The default scene’s red cylinder and blue cube should appear as detected objects once the robot has looked at the table.
+
 For CPU-only:
 
 ```bash
@@ -100,6 +102,14 @@ emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --cpu --match-met
 ```
 
 See [DynaMem docs](dynamem.md) for full options.
+
+**First-run model downloads (DynaMem):** The first time you run DynaMem with instance memory (default), it will download:
+
+- **yoloe-v8l-seg.pt** (~102 MB) – Ultralytics YOLOE segmentation model for object/instance detection.
+- **mobileclip_blt.ts** (~572 MB) – Text-encoder used by YOLOE to embed the class names (e.g. ScanNet 200). Downloaded by the Ultralytics package to the current working directory (or their cache) on first use.
+- **CLIP ViT-B-16** – Dynamem’s encoder (from Hugging Face cache) when using `--cpu` or CPU-only mode.
+
+The message *"Ultralytics requirement ... not found, attempting AutoUpdate"* and *"Restart runtime for updates to take effect"* are from Ultralytics and can be ignored (or restart the process if you want the updated dependency). *"Using default SimpleTokenizer"* is from the text tokenizer used by CLIP/MobileCLIP. After the first run, these assets are cached and startup is faster.
 
 ### Mapping
 
@@ -227,8 +237,8 @@ emet serve mujoco --scene-path /path/to/your/scene.xml
 **"DISPLAY environment variable is missing"**
 On Linux, `--headless` uses EGL automatically (no display needed). On Mac/Windows, use Xvfb: `Xvfb :99 &` then `DISPLAY=:99 emet serve mujoco --headless`.
 
-**"gladLoadGL error" in headless**
-Ensure EGL libraries are installed (Linux): `sudo apt install libegl1-mesa libgles2-mesa`. Or use Xvfb: `Xvfb :99 &` then `DISPLAY=:99`.
+**"GLX: Failed to create context" / "gladLoadGL error"**
+On Linux, the sim now sets `MUJOCO_GL=egl` when using cameras so MuJoCo uses EGL instead of GLX for rendering (avoids failures after GPU/driver issues). If you still see this, run headless: `emet serve mujoco --headless`. Ensure EGL is installed: `sudo apt install libegl1-mesa libgles2-mesa`. On Mac/Windows without a display, use Xvfb then `DISPLAY=:99 emet serve mujoco --headless`.
 
 **"mesh volume is too small"**
 MuJoCo is pinned to 3.2.6 for compatibility. Ensure `uv sync --extra sim` or `pip install -e ".[sim]"` is used.
