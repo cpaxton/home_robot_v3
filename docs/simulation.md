@@ -9,10 +9,12 @@ Stretch AI includes a MuJoCo-based simulation that lets you run AI apps without 
 ### 1. Install simulation support
 
 ```bash
-# From project root
-uv sync --extra sim
-# or: pip install -e ".[sim]"
+# From project root (base sim: MuJoCo, no Robocasa)
+emet sync -e sim
+# or: uv sync --extra sim
 ```
+
+For **Robocasa** kitchen scenes, install it first then sync: `emet install robocasa` then `emet sync -e sim`. See [Robocasa](#robocasa-rich-kitchen-scenes) below.
 
 ### 2. Test the setup
 
@@ -124,22 +126,39 @@ python -m emet.app.keyboard_teleop --robot_ip 127.0.0.1
 
 ## Robocasa (rich kitchen scenes)
 
-The default scene has a robot and docking station. [Robocasa](https://robocasa.ai/) adds kitchen scenes with objects for pick-and-place.
+The default scene has a robot and docking station. [Robocasa](https://github.com/robocasa/robocasa) adds kitchen scenes with objects for pick-and-place.
+
+We **pin Robocasa to v0.2** so its dependencies match our stack (MuJoCo 3.2.6, numpy &lt; 2). Newer Robocasa (main / v1.0) uses MuJoCo 3.3.1 and numpy 2.x and can pull in conflicting or heavy dependencies (e.g. a different torch). Use the install script or the v0.2 clone steps below.
 
 ### Install Robocasa
 
+From the project root:
+
 ```bash
-./scripts/install_simulation.sh
+emet install robocasa
+# or: emet install sim
 ```
 
-Or manually:
+Then sync the sim extra so the rest of the stack is installed:
+
+```bash
+emet sync -e sim
+```
+
+Optional: download kitchen assets and run setup macros:
+
+```bash
+emet install robocasa -d -a
+```
+
+**Manual install** (same as the script, for reference):
 
 ```bash
 cd third_party
 git clone https://github.com/ARISE-Initiative/robosuite -b robocasa_v0.1
 cd robosuite && pip install -e . && cd ..
-git clone https://github.com/robocasa/robocasa
-cd robocasa && pip install -e .
+git clone https://github.com/robocasa/robocasa --branch v0.2 --single-branch
+cd robocasa && pip install -e . && cd ..
 python robocasa/scripts/setup_macros.py
 python robocasa/scripts/download_kitchen_assets.py  # optional, for assets
 ```
@@ -217,8 +236,8 @@ MuJoCo is pinned to 3.2.6 for compatibility. Ensure `uv sync --extra sim` or `pi
 **Grasp/detection fails in sim**
 Use `sim_planner.yaml` and `--parameter_file sim_planner.yaml` for grasp_object.
 
-**Robocasa import errors**
-Install Robocasa and dependencies with `./scripts/install_simulation.sh`.
+**Robocasa import errors or pip conflicts**
+Install the pinned version with `emet install robocasa` (or `emet install sim`). Do not clone Robocasa from `main` and install—v1.0 uses different MuJoCo/numpy and can pull torch 2.7 and other conflicting deps. If you already cloned main, run `cd third_party/robocasa && git fetch --tags && git checkout v0.2` then `pip install -e .` from that directory.
 
 **DynaMem / Rerun headless**
 When running DynaMem without a display, the Rerun web server starts automatically. Connect from a laptop at `http://<server-ip>:9090?url=ws://<server-ip>:9877`. See [Debug: Headless and Rerun](debug.md#headless-and-rerun).

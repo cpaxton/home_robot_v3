@@ -262,6 +262,7 @@ def sync(
     """Sync dependencies (uv sync or pip install -e .).
 
     Use --all for sim + dynamem + dev, or pick extras with -e or individual flags.
+    Sync does not install Robocasa/robosuite; run emet install sim (or install robocasa) first.
 
     Examples:
 
@@ -415,32 +416,61 @@ def install_submodules(recursive: bool) -> None:
     sys.exit(result)
 
 
+def _run_install_simulation(
+    root: Path,
+    download_assets: bool = False,
+    setup_macros: bool = False,
+) -> int:
+    """Run scripts/install_simulation.sh (robosuite + robocasa). Returns exit code."""
+    script = root / "scripts" / "install_simulation.sh"
+    if not script.exists():
+        click.echo(f"Script not found: {script}", err=True)
+        return 1
+    args = []
+    if download_assets:
+        args.append("-d")
+    if setup_macros:
+        args.append("-a")
+    return subprocess.call(["bash", str(script)] + args)
+
+
 @install.command("sim", short_help="Install Robocasa, robosuite")
 @click.option("-d", "--download-assets", is_flag=True, help="Download Robocasa kitchen assets")
 @click.option("-a", "--setup-macros", is_flag=True, help="Run Robocasa setup_macros.py")
 def install_sim(download_assets: bool, setup_macros: bool) -> None:
-    """Install simulation extras (Robocasa, robosuite).
+    """Install simulation third-party deps (Robocasa + robosuite).
 
-    Clones robosuite and robocasa into third_party, installs them.
-    Run from project root.
+    Clones robosuite and robocasa into third_party and installs them.
+    Not covered by sync: run this first, then emet sync -e sim.
 
     Examples:
       emet install sim
       emet install sim -d -a
     """
     root = _project_root()
-    script = root / "scripts" / "install_simulation.sh"
-    if not script.exists():
-        click.echo(f"Script not found: {script}", err=True)
-        sys.exit(1)
-    args = []
-    if download_assets:
-        args.append("-d")
-    if setup_macros:
-        args.append("-a")
-    result = subprocess.call(["bash", str(script)] + args)
+    result = _run_install_simulation(root, download_assets, setup_macros)
     if result == 0:
         click.echo("Simulation install complete. Run: emet sync -e sim")
+    sys.exit(result)
+
+
+@install.command("robocasa", short_help="Install Robocasa (same as install sim)")
+@click.option("-d", "--download-assets", is_flag=True, help="Download Robocasa kitchen assets")
+@click.option("-a", "--setup-macros", is_flag=True, help="Run Robocasa setup_macros.py")
+def install_robocasa(download_assets: bool, setup_macros: bool) -> None:
+    """Install Robocasa and robosuite (same as emet install sim).
+
+    Clones robosuite and robocasa into third_party and installs them.
+    Then run: emet sync -e sim
+
+    Examples:
+      emet install robocasa
+      emet install robocasa -d -a
+    """
+    root = _project_root()
+    result = _run_install_simulation(root, download_assets, setup_macros)
+    if result == 0:
+        click.echo("Robocasa install complete. Run: emet sync -e sim")
     sys.exit(result)
 
 
