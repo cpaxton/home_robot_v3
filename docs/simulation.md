@@ -103,6 +103,14 @@ emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --cpu --match-met
 
 See [DynaMem docs](dynamem.md) for full options.
 
+**Verifying red cylinder detection in sim:** An integration test starts the MuJoCo server (headless), runs Dynamem’s rotate-in-place to build the map, then asserts that `localize_text("red cylinder")` returns a point near the default scene’s red cylinder. Run it with full env (e.g. after `emet sync -e sim`):
+
+```bash
+RUN_SIM_TESTS=1 pytest src/test/mapping/test_red_cylinder_in_sim.py -v
+```
+
+This confirms the full stack (sim → camera → encoder/detection → semantic memory → localization) works for the default scene.
+
 **First-run model downloads (DynaMem):** The first time you run DynaMem with instance memory (default), it will download:
 
 - **yoloe-v8l-seg.pt** (~102 MB) – Ultralytics YOLOE segmentation model for object/instance detection.
