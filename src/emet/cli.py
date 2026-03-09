@@ -464,17 +464,19 @@ def install_submodules(recursive: bool) -> None:
 
 def _run_install_simulation(
     root: Path,
-    download_assets: bool = False,
+    skip_download_assets: bool = False,
     setup_macros: bool = False,
 ) -> int:
-    """Run scripts/install_simulation.sh (robosuite + robocasa). Returns exit code."""
+    """Run scripts/install_simulation.sh (robosuite + robocasa). Returns exit code.
+    Asset download is part of installation by default; pass skip_download_assets to omit.
+    """
     script = root / "scripts" / "install_simulation.sh"
     if not script.exists():
         click.echo(f"Script not found: {script}", err=True)
         return 1
     args = []
-    if download_assets:
-        args.append("-d")
+    if skip_download_assets:
+        args.append("-n")
     if setup_macros:
         args.append("-a")
     env = os.environ.copy()
@@ -485,24 +487,30 @@ def _run_install_simulation(
 
 
 @install.command("sim", short_help="Install Robocasa, robosuite")
-@click.option("-d", "--download-assets", is_flag=True, help="Download Robocasa kitchen assets")
+@click.option(
+    "-n",
+    "--no-download-assets",
+    "skip_download_assets",
+    is_flag=True,
+    help="Skip downloading Robocasa kitchen assets (~5GB)",
+)
 @click.option("-a", "--setup-macros", is_flag=True, help="Run Robocasa setup_macros.py")
 @click.option("--no-sync", is_flag=True, help="Skip running emet sync -e sim after clone/install")
 def install_sim(
-    download_assets: bool, setup_macros: bool, no_sync: bool
+    skip_download_assets: bool, setup_macros: bool, no_sync: bool
 ) -> None:
     """Install simulation third-party deps (Robocasa + robosuite).
 
-    Clones robosuite and robocasa into third_party, installs them, then runs
-    emet sync -e sim so the project env has them (e.g. for emet serve mujoco --use-robocasa).
+    Clones robosuite and robocasa, downloads kitchen assets (~5GB), then runs
+    emet sync -e sim. Use -n to skip the asset download (e.g. CI).
 
     Examples:
       emet install sim
-      emet install sim -d -a
-      emet install sim --no-sync   (clone/install only, no sync)
+      emet install sim -a
+      emet install sim --no-download-assets --no-sync
     """
     root = _project_root()
-    result = _run_install_simulation(root, download_assets, setup_macros)
+    result = _run_install_simulation(root, skip_download_assets, setup_macros)
     if result != 0:
         sys.exit(result)
     if no_sync:
@@ -523,23 +531,30 @@ def install_sim(
 
 
 @install.command("robocasa", short_help="Install Robocasa (same as install sim)")
-@click.option("-d", "--download-assets", is_flag=True, help="Download Robocasa kitchen assets")
+@click.option(
+    "-n",
+    "--no-download-assets",
+    "skip_download_assets",
+    is_flag=True,
+    help="Skip downloading Robocasa kitchen assets (~5GB)",
+)
 @click.option("-a", "--setup-macros", is_flag=True, help="Run Robocasa setup_macros.py")
 @click.option("--no-sync", is_flag=True, help="Skip running emet sync -e sim after clone/install")
 def install_robocasa(
-    download_assets: bool, setup_macros: bool, no_sync: bool
+    skip_download_assets: bool, setup_macros: bool, no_sync: bool
 ) -> None:
     """Install Robocasa and robosuite (same as emet install sim).
 
-    Clones robosuite and robocasa into third_party, installs them, then runs
-    emet sync -e sim. Use --no-sync to skip the sync step.
+    Clones robosuite and robocasa, downloads kitchen assets (~5GB), then runs
+    emet sync -e sim. Use -n to skip the asset download.
 
     Examples:
       emet install robocasa
-      emet install robocasa -d -a
+      emet install robocasa -a
+      emet install robocasa --no-download-assets
     """
     root = _project_root()
-    result = _run_install_simulation(root, download_assets, setup_macros)
+    result = _run_install_simulation(root, skip_download_assets, setup_macros)
     if result != 0:
         sys.exit(result)
     if no_sync:

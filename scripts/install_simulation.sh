@@ -6,22 +6,26 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 # Go up one level to the root directory (assuming scripts is in the root)
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
-# Initialize flags
-DOWNLOAD_ASSETS=false
+# Initialize flags (download is part of installation by default)
+DOWNLOAD_ASSETS=true
 SETUP_MACROS=false
 
 # Parse command line options
-while getopts "da" opt; do
+while getopts "dan" opt; do
     case ${opt} in
         d )
             DOWNLOAD_ASSETS=true
+            ;;
+        n )
+            DOWNLOAD_ASSETS=false
             ;;
         a )
             SETUP_MACROS=true
             ;;
         \? )
-            echo "Usage: $0 [-d] [-a]"
-            echo "  -d: Download kitchen assets"
+            echo "Usage: $0 [-d] [-n] [-a]"
+            echo "  -d: Download kitchen assets (default: yes)"
+            echo "  -n: Skip downloading kitchen assets (~5GB)"
             echo "  -a: Setup macros"
             exit 1
             ;;
@@ -57,11 +61,15 @@ pip_install_editable() {
     fi
 }
 
-# Clone robosuite (required by robocasa)
+# Robocasa v0.2 requires RoboSuite v1.5 (see robocasa README: "using RoboSuite v1.5 as the backend").
+# robocasa_v0.1 is for older robocasa v0.1 and lacks load_composite_controller_config, PandaOmron, etc.
 if [ ! -d "robosuite" ]; then
-    git clone https://github.com/ARISE-Initiative/robosuite -b robocasa_v0.1
+    git clone https://github.com/ARISE-Initiative/robosuite --branch v1.5.0 --single-branch --depth 1
 fi
 cd robosuite || exit 1
+# Ensure correct version for existing clones (robocasa v0.2 needs robosuite v1.5.0)
+git fetch origin --tags 2>/dev/null || true
+git checkout v1.5.0 2>/dev/null || true
 pip_install_editable || { echo "robosuite install failed." >&2; exit 1; }
 cd ..
 
@@ -75,15 +83,41 @@ git checkout v0.2 2>/dev/null || true
 pip_install_editable || { echo "robocasa install failed." >&2; exit 1; }
 cd ..
 
-# Run robocasa scripts from third_party (robocasa/scripts/ in the cloned repo)
+# Run robocasa scripts from third_party (scripts live in robocasa/robocasa/scripts/)
+# Asset download is part of installation by default (~5GB); use -n to skip.
+# Robocasa's download script imports robocasa, which asserts numpy 1.23.x. This project
+# often uses numpy 1.24+ (e.g. uv override for dynamem). Run the download in a temp venv
+# with numpy 1.23.3 so we don't patch third_party or change the project venv.
 if [ "$DOWNLOAD_ASSETS" = true ]; then
-    echo "Downloading kitchen assets..."
-    "$PYTHON" robocasa/scripts/download_kitchen_assets.py || { echo "download_kitchen_assets failed." >&2; exit 1; }
+    echo "Downloading Robocasa kitchen assets (~5GB)..."
+    DL_VENV="$ROOT_DIR/third_party/.robocasa_download_venv"
+    rm -rf "$DL_VENV"
+    # Prefer uv venv (no ensurepip needed on Debian/Ubuntu); fallback to python -m venv
+    if command -v uv >/dev/null 2>&1; then
+        uv venv "$DL_VENV" || { echo "Failed to create download venv with uv." >&2; exit 1; }
+    else
+        "$PYTHON" -m venv "$DL_VENV" || {
+            echo "Failed to create download venv. On Debian/Ubuntu install: sudo apt install python3.10-venv" >&2
+            echo "Or skip the download now with: emet install robocasa --no-download-assets" >&2
+            exit 1
+        }
+    fi
+    # Robocasa's install_requires includes numpy==1.23.3; use this venv so its import assert passes
+    "$DL_VENV/bin/python" -m pip install -q -e robosuite -e robocasa 2>/dev/null || \
+        "$DL_VENV/bin/pip" install -q -e robosuite -e robocasa 2>/dev/null || \
+        { echo "Failed to install robosuite/robocasa in download venv." >&2; rm -rf "$DL_VENV"; exit 1; }
+    if echo "y" | "$DL_VENV/bin/python" robocasa/robocasa/scripts/download_kitchen_assets.py; then
+        rm -rf "$DL_VENV"
+    else
+        echo "download_kitchen_assets failed." >&2
+        rm -rf "$DL_VENV"
+        exit 1
+    fi
 fi
 
 if [ "$SETUP_MACROS" = true ]; then
     echo "Setting up macros..."
-    "$PYTHON" robocasa/scripts/setup_macros.py || { echo "setup_macros failed." >&2; exit 1; }
+    "$PYTHON" robocasa/robocasa/scripts/setup_macros.py || { echo "setup_macros failed." >&2; exit 1; }
 fi
 
 # Return to root directory
