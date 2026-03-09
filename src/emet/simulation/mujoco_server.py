@@ -27,9 +27,10 @@ from emet.motion.constants import STRETCH_CAMERA_FRAME
 try:
     from emet.simulation.stretch_mujoco.robocasa_gen import model_generation_wizard
 except ImportError:
-    print(
-        "Not installing mujoco yet! Please install robosuite, robocasa and stretch_mujoco in order to use model generation wizard."
-    )
+    model_generation_wizard = None
+    _ROBOCASA_IMPORT_FAILED = True
+else:
+    _ROBOCASA_IMPORT_FAILED = False
 
 import emet.motion.constants as constants
 import emet.utils.compression as compression
@@ -883,6 +884,19 @@ def main(
         random.seed(seed)
 
     if use_robocasa:
+        if model_generation_wizard is None:
+            print(
+                "\n" + "=" * 60 + "\n"
+                "  Robocasa scene generation is not installed.\n"
+                "  You passed --use-robocasa but robosuite/robocasa are missing.\n\n"
+                "  To enable Robocasa scenes:\n"
+                "    1. emet install sim\n"
+                "    2. emet sync -e sim\n"
+                "  Then run: emet serve mujoco --use-robocasa\n"
+                + "=" * 60,
+                file=sys.stderr,
+            )
+            sys.exit(1)
         scene_model, scene_xml, objects_info = model_generation_wizard(
             task=robocasa_task,
             style=robocasa_style,
@@ -893,6 +907,14 @@ def main(
     # If no scene path
     if scene_path is None or len(scene_path) == 0:
         scene_path = default_scene_xml_path
+
+    if _ROBOCASA_IMPORT_FAILED:
+        print(
+            "\n  [emet] Robocasa scene generation (--use-robocasa) is not available.\n"
+            "         This server will use the default scene. To enable Robocasa:\n"
+            "         emet install sim   then   emet sync -e sim\n",
+            file=sys.stderr,
+        )
 
     try:
         server = MujocoZmqServer(

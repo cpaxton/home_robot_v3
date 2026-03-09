@@ -8,10 +8,6 @@
 # for consistency; Dynamem implementation remains in emet.mapping.voxel and is re-exported from
 # emet.memory.dynamem.
 
-from emet.memory.dynamem import (
-    SparseVoxelMapDynamem,
-    SparseVoxelMapNavigationSpaceDynamem,
-)
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 
 __all__ = [
@@ -19,3 +15,14 @@ __all__ = [
     "SparseVoxelMapDynamem",
     "SparseVoxelMapNavigationSpaceDynamem",
 ]
+
+
+def __getattr__(name: str):
+    """Lazy re-export of Dynamem types so GraphEQA can be used without mapping.voxel."""
+    if name in ("SparseVoxelMapDynamem", "SparseVoxelMapNavigationSpaceDynamem"):
+        from emet.memory.dynamem import (
+            SparseVoxelMapDynamem,
+            SparseVoxelMapNavigationSpaceDynamem,
+        )
+        return SparseVoxelMapDynamem if name == "SparseVoxelMapDynamem" else SparseVoxelMapNavigationSpaceDynamem
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

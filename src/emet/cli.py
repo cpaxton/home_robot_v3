@@ -30,7 +30,16 @@ def _run_module(module: str, args: list[str], env: dict | None = None) -> int:
     return subprocess.call(cmd, env=env)
 
 
-@click.group(context_settings=_CONTEXT_SETTINGS)
+_MAIN_EPILOG = (
+    "Tab completion: eval \"$(emet install-completion --shell bash)\" (bash), "
+    "or use --shell zsh / --shell fish. See: emet install-completion --help"
+)
+
+
+@click.group(
+    context_settings=_CONTEXT_SETTINGS,
+    epilog=_MAIN_EPILOG,
+)
 @click.version_option(version="0.3.3", prog_name="emet")
 def main() -> None:
     """Emet — Embodied Multi-robot Environment Toolkit.
@@ -40,7 +49,7 @@ def main() -> None:
     pass
 
 
-@main.command()
+@main.command(short_help="Start MuJoCo simulation server")
 @click.argument("backend", type=click.Choice(["mujoco"]), default="mujoco")
 @click.option("--use-robocasa", is_flag=True, help="Use Robocasa for scene generation")
 @click.option("--headless", is_flag=True, help="Run without native viewer")
@@ -111,7 +120,7 @@ def _kill_processes_on_port(port: int) -> bool:
     return True
 
 
-@main.command("kill-mujoco-server")
+@main.command("kill-mujoco-server", short_help="Stop MuJoCo server (free ports)")
 @click.option(
     "--port",
     default=4401,
@@ -157,8 +166,17 @@ def kill_mujoco_server(port: int, kill_all: bool) -> None:
     sys.exit(0 if killed_any else 1)
 
 
+<<<<<<< HEAD
 @main.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 @click.argument("app", type=click.Choice(["dynamem", "graph-eqa", "mapping", "grasp", "chat", "ai_pickup", "timing"]))
+=======
+@main.command(
+    "run",
+    short_help="Run an app (dynamem, mapping, grasp, chat, ai_pickup, timing)",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
+@click.argument("app", type=click.Choice(["dynamem", "mapping", "grasp", "chat", "ai_pickup", "timing"]))
+>>>>>>> ccef1ced31befc7752fc22cc695e55ff3c5d5b3f
 @click.option("--robot-ip", "--robot_ip", default="127.0.0.1", help="Robot or simulator IP")
 @click.option("--server-ip", "--server_ip", default="127.0.0.1", help="Server IP (e.g. for AnyGrasp)")
 @click.option("-S", "--skip", "skip_confirmations", is_flag=True, help="Skip confirmations")
@@ -229,7 +247,7 @@ def run(
 _SYNC_ALL_EXTRAS = ("sim", "dynamem", "dev")  # MuJoCo, SAM-2, pytest, etc.
 
 
-@main.command()
+@main.command(short_help="Sync dependencies (uv or pip)")
 @click.option("--extra", "-e", "extra_list", multiple=True, help="Extra to install (sim, dynamem, dev, etc.)")
 @click.option("--all", "sync_all", is_flag=True, help="Install all common extras (sim, dynamem, dev)")
 @click.option("--sim", is_flag=True, help="Include sim (MuJoCo, robocasa)")
@@ -304,7 +322,7 @@ def _has_uv() -> bool:
         return False
 
 
-@main.command()
+@main.command(short_help="View Rerun logs (.rrd)")
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--web", is_flag=True, help="Open in web viewer (default: native)")
 def show(path: str, web: bool) -> None:
@@ -335,7 +353,7 @@ def show(path: str, web: bool) -> None:
         sys.exit(1)
 
 
-@main.command()
+@main.command(short_help="Run pytest")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.option("--no-cov", "no_cov", is_flag=True, help="Disable coverage")
 @click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
@@ -378,13 +396,13 @@ def test(verbose: bool, no_cov: bool, pytest_args: tuple[str, ...]) -> None:
     sys.exit(subprocess.call(cmd, env=env))
 
 
-@main.group()
+@main.group(short_help="Install submodules, sim, full setup, pre-commit")
 def install() -> None:
     """Install submodules, simulation extras, or full setup."""
     pass
 
 
-@install.command("submodules")
+@install.command("submodules", short_help="Init and update git submodules")
 @click.option("--recursive/--no-recursive", default=True, help="Recursively init submodules")
 def install_submodules(recursive: bool) -> None:
     """Init and update git submodules (segment-anything-2, ok-robot, etc.).
@@ -404,7 +422,7 @@ def install_submodules(recursive: bool) -> None:
     sys.exit(result)
 
 
-@install.command("sim")
+@install.command("sim", short_help="Install Robocasa, robosuite")
 @click.option("-d", "--download-assets", is_flag=True, help="Download Robocasa kitchen assets")
 @click.option("-a", "--setup-macros", is_flag=True, help="Run Robocasa setup_macros.py")
 def install_sim(download_assets: bool, setup_macros: bool) -> None:
@@ -433,7 +451,7 @@ def install_sim(download_assets: bool, setup_macros: bool) -> None:
     sys.exit(result)
 
 
-@install.command("full")
+@install.command("full", short_help="Run full install (install.sh)")
 @click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompts")
 @click.option("--sim", is_flag=True, help="Include simulation extras")
 @click.option("--cpu", is_flag=True, help="CPU-only (skip SAM2)")
@@ -466,7 +484,7 @@ def install_full(yes: bool, sim: bool, cpu: bool, no_sam2: bool) -> None:
     sys.exit(result)
 
 
-@install.command("pre-commit")
+@install.command("pre-commit", short_help="Install pre-commit hooks")
 @click.option("--install-hooks", is_flag=True, default=True, help="Install git hook scripts")
 @click.option("--run/--no-run", "run_hooks", default=False, help="Run hooks on all files after install")
 def install_pre_commit(install_hooks: bool, run_hooks: bool) -> None:
@@ -498,22 +516,37 @@ def install_pre_commit(install_hooks: bool, run_hooks: bool) -> None:
     sys.exit(0)
 
 
-@main.command("install-completion")
-@click.option("--shell", "-s", type=click.Choice(["bash", "zsh"]), default=None)
+@main.command("install-completion", short_help="Print shell completion script")
+@click.option(
+    "--shell", "-s",
+    type=click.Choice(["bash", "zsh", "fish"], case_sensitive=False),
+    default=None,
+    help="Shell (default: auto-detect from SHELL).",
+)
 def install_completion(shell: str | None) -> None:
-    """Print shell completion script for bash or zsh.
+    """Print shell completion script for bash, zsh, or fish.
 
-    Add to your shell config:
+    Add to your shell config so that 'emet' and subcommands tab-complete:
 
       # Bash: add to ~/.bashrc
       eval \"$(emet install-completion --shell bash)\"
 
       # Zsh: add to ~/.zshrc
       eval \"$(emet install-completion --shell zsh)\"
+
+      # Fish: add to ~/.config/fish/config.fish
+      emet install-completion --shell fish | source
     """
     from click.shell_completion import get_completion_class
 
-    shell = shell or (os.environ.get("SHELL", "").endswith("zsh") and "zsh" or "bash")
+    if shell is None:
+        shell_env = os.environ.get("SHELL", "")
+        if "fish" in shell_env:
+            shell = "fish"
+        elif "zsh" in shell_env:
+            shell = "zsh"
+        else:
+            shell = "bash"
     comp_cls = get_completion_class(shell)
     if comp_cls is None:
         click.echo(f"Completion not supported for {shell}", err=True)

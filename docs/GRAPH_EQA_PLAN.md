@@ -30,9 +30,12 @@ This document outlines the plan to add **GraphEQA** as a separate memory model f
 
 ## Components
 
+Both memory models live under **`emet.memory`**: DynaMem (voxel) in `emet.memory.dynamem` (re-exports from `emet.mapping.voxel`), GraphEQA in `emet.memory.graph_eqa`.
+
 | Component | Purpose |
 |-----------|--------|
-| `emet.memory.graph_eqa` (or `emet.mapping.graph_eqa`) | Graph-based EQA memory: graph construction, serialization, `query_answer`, and (if needed) target point from “explore this node”. |
+| `emet.memory.dynamem` | Re-exports DynaMem (voxel) memory types from `emet.mapping.voxel`. |
+| `emet.memory.graph_eqa` | Graph-based EQA memory: graph construction, serialization, `query_answer`, and (if needed) target point from “explore this node”. |
 | Graph data structure | Nodes (id, label, position_3d, obs_id), edges (id1, id2, relation). Build from instances/observations; update on new observations. |
 | `GraphEQAExecuter` | Task executor that takes (question) and calls agent’s EQA API (which uses graph memory). Same interface as `EQAExecuter`. |
 | `RobotAgentGraphEQA` (or agent with `memory_type="graph_eqa"`) | Agent that uses graph memory for `run_eqa` instead of voxel map. Same exploration/navigation as DynaMem agent. |
