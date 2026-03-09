@@ -41,12 +41,15 @@ cd "$ROOT_DIR/third_party" || exit 1
 # Robocasa main/v1.0 uses mujoco 3.3.1 and numpy 2.x and pulls heavier deps (e.g. torch 2.7).
 # See https://github.com/robocasa/robocasa and docs/simulation.md.
 
+# Use the same Python as the emet CLI (e.g. venv) so we don't install into system site-packages.
+PYTHON="${EMET_PYTHON:-python}"
+
 # Clone robosuite (required by robocasa)
 if [ ! -d "robosuite" ]; then
     git clone https://github.com/ARISE-Initiative/robosuite -b robocasa_v0.1
 fi
 cd robosuite || exit 1
-pip install -e . || { echo "robosuite install failed." >&2; exit 1; }
+"$PYTHON" -m pip install -e . || { echo "robosuite install failed." >&2; exit 1; }
 cd ..
 
 # Clone robocasa at v0.2 (compatible mujoco/numpy)
@@ -56,18 +59,18 @@ fi
 cd robocasa || exit 1
 git fetch --tags origin 2>/dev/null || true
 git checkout v0.2 2>/dev/null || true
-pip install -e . || { echo "robocasa install failed." >&2; exit 1; }
+"$PYTHON" -m pip install -e . || { echo "robocasa install failed." >&2; exit 1; }
 cd ..
 
 # Run robocasa scripts from third_party (robocasa/scripts/ in the cloned repo)
 if [ "$DOWNLOAD_ASSETS" = true ]; then
     echo "Downloading kitchen assets..."
-    python robocasa/scripts/download_kitchen_assets.py || { echo "download_kitchen_assets failed." >&2; exit 1; }
+    "$PYTHON" robocasa/scripts/download_kitchen_assets.py || { echo "download_kitchen_assets failed." >&2; exit 1; }
 fi
 
 if [ "$SETUP_MACROS" = true ]; then
     echo "Setting up macros..."
-    python robocasa/scripts/setup_macros.py || { echo "setup_macros failed." >&2; exit 1; }
+    "$PYTHON" robocasa/scripts/setup_macros.py || { echo "setup_macros failed." >&2; exit 1; }
 fi
 
 # Return to root directory

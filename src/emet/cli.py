@@ -420,7 +420,9 @@ def _run_install_simulation(
         args.append("-d")
     if setup_macros:
         args.append("-a")
-    return subprocess.call(["bash", str(script)] + args)
+    env = os.environ.copy()
+    env["EMET_PYTHON"] = sys.executable
+    return subprocess.call(["bash", str(script)] + args, env=env)
 
 
 @install.command("sim", short_help="Install Robocasa, robosuite")
