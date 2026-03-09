@@ -95,17 +95,20 @@ if [ "$DOWNLOAD_ASSETS" = true ]; then
     # Prefer uv venv (no ensurepip needed on Debian/Ubuntu); fallback to python -m venv
     if command -v uv >/dev/null 2>&1; then
         uv venv "$DL_VENV" || { echo "Failed to create download venv with uv." >&2; exit 1; }
+        # uv venv has no pip; use uv pip with that Python
+        uv pip install --python "$DL_VENV/bin/python" -e robosuite -e robocasa || \
+            { echo "Failed to install robosuite/robocasa in download venv." >&2; rm -rf "$DL_VENV"; exit 1; }
     else
         "$PYTHON" -m venv "$DL_VENV" || {
             echo "Failed to create download venv. On Debian/Ubuntu install: sudo apt install python3.10-venv" >&2
             echo "Or skip the download now with: emet install robocasa --no-download-assets" >&2
             exit 1
         }
+        # Robocasa's install_requires includes numpy==1.23.3; use this venv so its import assert passes
+        "$DL_VENV/bin/python" -m pip install -q -e robosuite -e robocasa 2>/dev/null || \
+            "$DL_VENV/bin/pip" install -q -e robosuite -e robocasa 2>/dev/null || \
+            { echo "Failed to install robosuite/robocasa in download venv." >&2; rm -rf "$DL_VENV"; exit 1; }
     fi
-    # Robocasa's install_requires includes numpy==1.23.3; use this venv so its import assert passes
-    "$DL_VENV/bin/python" -m pip install -q -e robosuite -e robocasa 2>/dev/null || \
-        "$DL_VENV/bin/pip" install -q -e robosuite -e robocasa 2>/dev/null || \
-        { echo "Failed to install robosuite/robocasa in download venv." >&2; rm -rf "$DL_VENV"; exit 1; }
     if echo "y" | "$DL_VENV/bin/python" robocasa/robocasa/scripts/download_kitchen_assets.py; then
         rm -rf "$DL_VENV"
     else
