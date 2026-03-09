@@ -23,6 +23,43 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
+def _has_uv() -> bool:
+    """Return True if uv is available on PATH."""
+    try:
+        subprocess.run(
+            ["uv", "--version"],
+            capture_output=True,
+            check=True,
+            timeout=5,
+        )
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _ensure_uv_project() -> None:
+    """If we're in the project and uv is available, re-exec under uv run so the rest uses the project env."""
+    if os.environ.get("EMET_UV_RUN"):
+        return
+    if not _has_uv():
+        return
+    root = _project_root()
+    try:
+        cwd = Path.cwd().resolve()
+    except OSError:
+        return
+    if cwd != root and not str(cwd).startswith(str(root) + os.sep):
+        return
+    if not (root / "pyproject.toml").exists():
+        return
+    env = os.environ.copy()
+    env["EMET_UV_RUN"] = "1"
+    try:
+        os.execvpe("uv", ["uv", "run", "emet"] + sys.argv[1:], env)
+    except Exception:
+        pass
+
+
 def _run_module(module: str, args: list[str], env: dict | None = None) -> int:
     """Run a Python module. Returns exit code."""
     cmd = [sys.executable, "-m", module] + args
@@ -45,8 +82,10 @@ def main() -> None:
     """Emet — Embodied Multi-robot Environment Toolkit.
 
     Start simulations, run robot agents, sync dependencies, view logs, and run tests.
+    When run from inside the project directory and uv is installed, emet automatically
+    uses the project environment (as if you had run uv run emet ...).
     """
-    pass
+    _ensure_uv_project()
 
 
 @main.command(short_help="Start MuJoCo simulation server")
@@ -295,14 +334,6 @@ def sync(
         sys.exit(result)
 
 
-def _has_uv() -> bool:
-    try:
-        subprocess.run(["uv", "--version"], capture_output=True, check=True)
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return False
-
-
 @main.command(short_help="View Rerun logs (.rrd)")
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--web", is_flag=True, help="Open in web viewer (default: native)")
@@ -418,7 +449,11 @@ def _run_install_simulation(
         args.append("-d")
     if setup_macros:
         args.append("-a")
-    return subprocess.call(["bash", str(script)] + args)
+    env = os.environ.copy()
+    env["EMET_PYTHON"] = sys.executable
+    if _has_uv():
+        env["EMET_USE_UV"] = "1"
+    return subprocess.call(["bash", str(script)] + args, env=env)
 
 
 @install.command("sim", short_help="Install Robocasa, robosuite")
@@ -429,6 +464,10 @@ def install_sim(download_assets: bool, setup_macros: bool) -> None:
 
     Clones robosuite and robocasa into third_party and installs them.
     Not covered by sync: run this first, then emet sync -e sim.
+
+    Run from your project venv so packages install there (e.g. source .venv/bin/activate
+    then emet install sim, or uv run emet install sim). Otherwise you may get permission
+    errors installing into system Python.
 
     Examples:
       emet install sim
