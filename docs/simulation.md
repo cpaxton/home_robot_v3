@@ -75,7 +75,7 @@ emet serve mujoco
 emet run grasp --robot-ip 127.0.0.1 --target-object "red cylinder" --parameter-file sim_planner.yaml
 ```
 
-The default scene has a red and blue cylinder. Use `sim_planner.yaml` for simulation (lower thresholds, tuned detection).
+The **default MuJoCo scene** has a **red cylinder** and **blue cube** on the table (see `src/emet/assets/robot/scene.xml`). Use `sim_planner.yaml` for simulation (lower thresholds, tuned detection).
 
 ### DynaMem (open-vocabulary mobile manipulation)
 
@@ -92,6 +92,8 @@ emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo --
 - `-S` / `--skip`: skip confirmations for autonomous runs
 - `--visual-servo` / `-V`: use visual servoing (required in sim; AnyGrasp needs real robot)
 - `--match-method class`: class-based matching (works well in sim)
+
+**Instance display in Rerun:** With default config (`use_instance_memory: true`, `use_scene_graph: true` in `dynav_config.yaml`), DynaMem runs YoloE to segment objects and shows 3D instance boxes/icons in the Rerun UI. The default scene’s red cylinder and blue cube should appear as detected objects once the robot has looked at the table.
 
 For CPU-only:
 

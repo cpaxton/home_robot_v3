@@ -344,11 +344,33 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self.voxel_pcd.clear_points(
             torch.from_numpy(depth), torch.from_numpy(intrinsics), torch.from_numpy(pose)
         )
+
+        instance_image = None
+        instance_classes = None
+        instance_scores = None
+        if self.use_instance_memory and self.detection_model is not None:
+            try:
+                sem, instance, task_obs = self.detection_model.predict(
+                    rgb, depth=depth, draw_instance_predictions=False
+                )
+                instance_image = torch.from_numpy(instance.astype(np.int64))
+                instance_classes = torch.from_numpy(
+                    task_obs["instance_classes"].astype(np.int64)
+                )
+                instance_scores = torch.from_numpy(
+                    task_obs["instance_scores"].astype(np.float32)
+                )
+            except Exception as e:
+                logger.warning("Instance detection failed in process_rgbd_images: %s", e)
+
         self.add(
             camera_pose=torch.Tensor(pose),
             rgb=torch.Tensor(rgb),
             depth=torch.Tensor(depth),
             camera_K=torch.Tensor(intrinsics),
+            instance_image=instance_image,
+            instance_classes=instance_classes,
+            instance_scores=instance_scores,
         )
 
         # Add image descriptions if we want to explore intelligently
@@ -721,6 +743,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
         depth: Optional[Tensor] = None,
         base_pose: Optional[Tensor] = None,
         xyz_frame: str = "camera",
+        instance_image: Optional[Tensor] = None,
+        instance_classes: Optional[Tensor] = None,
+        instance_scores: Optional[Tensor] = None,
         **info,
     ):
         """Add this to our history of observations. Also update the current running map.
@@ -732,6 +757,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
             xyz(Tensor): N x 3 point cloud points in camera coordinates
             feats(Tensor): N x D point cloud features; D == 3 for RGB is most common
             base_pose(Tensor): optional location of robot base
+            instance_image(Tensor): [H,W] instance ids (e.g. -1 or 0 = background)
+            instance_classes(Tensor): class id per instance
+            instance_scores(Tensor): confidence per instance
         """
         # TODO: we should remove the xyz/feats maybe? just use observations as input?
         # TODO: switch to using just Obs struct?
@@ -803,9 +831,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 rgb,
                 feats,
                 depth,
-                instance=None,
-                instance_classes=None,
-                instance_scores=None,
+                instance=instance_image,
+                instance_classes=instance_classes,
+                instance_scores=instance_scores,
                 base_pose=base_pose,
                 info=info,
                 obs=None,
@@ -826,6 +854,39 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 valid_depth = (
                     valid_depth & (median_filter_error < self.median_filter_max_error).bool()
                 )
+
+        # Add instance views to memory (for UI icons / scene graph)
+        if self.use_instance_memory and instance_image is not None:
+            H, W = rgb.shape[0], rgb.shape[1]
+            numel = full_world_xyz.numel()
+            if numel == H * W * 3:
+                pc = full_world_xyz.reshape(H, W, 3)
+            else:
+                logger.warning(
+                    "full_world_xyz shape %s does not match H*W*3=%d; skipping instance update",
+                    full_world_xyz.shape,
+                    H * W * 3,
+                )
+                pc = None
+            if pc is not None:
+                img_chw = rgb.permute(2, 0, 1) if rgb.ndim == 3 else rgb.unsqueeze(0)
+                seg = instance_image.clone()
+                if seg.dtype != torch.long and seg.dtype != torch.int:
+                    seg = seg.long()
+                # Detection overlay_masks uses -1 for background
+                self.instances.process_instances_for_env(
+                env_id=0,
+                instance_seg=seg,
+                point_cloud=pc,
+                image=img_chw,
+                cam_to_world=camera_pose,
+                instance_classes=instance_classes,
+                instance_scores=instance_scores,
+                background_instance_labels=[-1],
+                valid_points=valid_depth,
+                pose=base_pose,
+                )
+                self.instances.associate_instances_to_memory()
 
         # Add to voxel grid
         if feats is not None:

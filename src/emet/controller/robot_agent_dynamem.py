@@ -169,6 +169,9 @@ class DynamemController(BaseRobotAgent):
         # You can see a clear difference in hyperparameter selection in different querying strategies
         # Running gpt4o is time consuming, so we don't want to waste more time on object detection or Siglip or voxelization
         # On the other hand querying by feature similarity is fast and we want more fine grained details in semantic memory
+        # When use_instance_memory is True we need a detector that returns instance segmentation (YoloE)
+        # so that object icons show in the UI (default MuJoCo scene: red cylinder, blue cube on table).
+        det_conf = parameters.get("detection", {}).get("confidence_threshold", 0.05)
         if self.manipulation_only or self.eqa:
             # No object detection, just need to test manipulation
             self.detection_model = None
@@ -181,10 +184,13 @@ class DynamemController(BaseRobotAgent):
             )
             semantic_memory_resolution = 0.1
             image_shape = (360, 270)
-        elif self.cpu_only:
-            # Assume we only have CPU, we will use YOLOE-L for fast inference
+        elif self._use_instance_memory or self.cpu_only:
+            # YoloE returns instance segmentation so instance memory and UI icons work (sim + real).
+            # Lower confidence (e.g. from config) helps detect small default-sim objects (red cylinder, blue cube).
             self.detection_model = YoloEPerception(
-                confidence_threshold=0.05, device=self.device, size="l"
+                confidence_threshold=det_conf,
+                device=self.device,
+                size="l",
             )
             semantic_memory_resolution = 0.05
             image_shape = (360, 270)
@@ -221,6 +227,7 @@ class DynamemController(BaseRobotAgent):
             log=self.log,
             mllm=self.mllm,
             run_eqa=self.eqa,
+            use_instance_memory=self._use_instance_memory,
         )
         self.space = SparseVoxelMapNavigationSpace(
             self.voxel_map,
@@ -269,6 +276,13 @@ class DynamemController(BaseRobotAgent):
                 self.voxel_map.semantic_memory._rgb.detach().cpu() / 255.0,
                 0.03,
             )
+        if self.use_scene_graph and self.voxel_map.use_instance_memory:
+            instances = self.get_voxel_map().get_instances()
+            if instances:
+                self._update_scene_graph()
+                self.rerun_visualizer.update_scene_graph(
+                    self.scene_graph, self.semantic_sensor
+                )
 
     def look_around(self):
         """

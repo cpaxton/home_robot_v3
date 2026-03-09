@@ -23,8 +23,8 @@ remove_visited_from_obstacles: False
 min_depth: 0.25
 max_depth: 2.5
 
-# Object detection parameters
-# We don't use these parameters for now as we use whether we use CUP or GPU to decide which model to use, but we keep them here for future reference.
+# Object detection parameters (used when use_instance_memory is True; YoloE runs for instance segmentation)
+# Lower confidence_threshold helps detect small objects in the default MuJoCo scene (red cylinder, blue cube on table).
 detection:
   module: "owlsam"
   category_map_file: example_cat_map.json
@@ -81,7 +81,9 @@ instance_memory:
 
 # TAMP parameters
 guarantee_instance_is_reachable: True
-use_scene_graph: False
+# Show detected object instances as 3D boxes/icons in Rerun (sim and real)
+use_instance_memory: True
+use_scene_graph: True
 scene_graph:
   max_near_distance: 0.3
   min_on_height: 0.05
