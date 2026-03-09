@@ -2,6 +2,7 @@ import contextlib
 from dataclasses import dataclass
 from multiprocessing.managers import DictProxy, SyncManager
 import os
+import platform
 import signal
 import threading
 import time
@@ -199,6 +200,9 @@ class MujocoServer:
         start_translation: list|None,
         start_rotation_quat: list|None
     ):
+        # Use EGL on Linux for MuJoCo Renderer so cameras work when GLX is broken (e.g. after driver issues).
+        if platform.system() == "Linux" and cameras_to_use:
+            os.environ.setdefault("MUJOCO_GL", "egl")
         server = cls(scene_xml_path, model, stop_mujoco_process_event, data_proxies,start_translation , start_rotation_quat)
         server.run(
             show_viewer_ui=show_viewer_ui,

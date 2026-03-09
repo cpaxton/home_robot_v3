@@ -116,6 +116,12 @@ class StretchMujocoSimulator:
         else:
             cameras_for_server = self._cameras_to_use
 
+        # On Linux, use EGL for MuJoCo Renderer so camera rendering works when GLX is broken
+        # (e.g. "GLX: Failed to create context: BadValue", gladLoadGL error after driver issues).
+        # Must be set before the child process starts so it inherits the env.
+        if platform.system() == "Linux" and cameras_for_server:
+            os.environ.setdefault("MUJOCO_GL", "egl")
+
         self._server_process = Process(
             target=mujoco_server.launch_server,
             name="MujocoProcess",
