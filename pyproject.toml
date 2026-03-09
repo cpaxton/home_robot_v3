@@ -111,7 +111,8 @@ dynamem = [
 [tool.uv]
 # Robocasa 0.2 pins numpy==1.23.3 and numba==0.56.4; dynamem/SAM-2 need numpy>=1.24.4.
 # Override so both sim and dynamem resolve; numba>=0.58.1 works with numpy 1.24+ and avoids "initialization of _internal failed".
-override-dependencies = ["numpy>=1.24.4,<2", "numba>=0.58.1"]
+# mujoco>=3.3.0 forces use of third_party/robocasa (which has mujoco>=3.3.0); PyPI robocasa pins mujoco==3.2.6 and would conflict.
+override-dependencies = ["numpy>=1.24.4,<2", "numba>=0.58.1", "mujoco>=3.3.0"]
 
 [tool.uv.sources]
 "SAM-2" = { path = "third_party/segment-anything-2", editable = true }

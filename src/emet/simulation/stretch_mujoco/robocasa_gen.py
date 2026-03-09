@@ -184,6 +184,8 @@ def model_generation_wizard(
         use_camera_obs=False,
         control_freq=20,
     )
+    # Sim is created on first reset(); without this, env.sim is None.
+    env.reset()
     print(
         colored(
             f"Showing configuration:\n    Layout: {layouts[layout]}\n    Style: {styles[style]}",

@@ -21,6 +21,7 @@ resolution-markers = [
 
 [manifest]
 overrides = [
+    { name = "mujoco", specifier = ">=3.3.0" },
     { name = "numba", specifier = ">=0.58.1" },
     { name = "numpy", specifier = ">=1.24.4,<2" },
 ]
