@@ -160,7 +160,8 @@ def kill_mujoco_server(port: int, kill_all: bool) -> None:
 @click.option("-S", "--skip", "skip_confirmations", is_flag=True, help="Skip confirmations")
 @click.option("--headless", is_flag=True, help="Run without display")
 @click.option("--visual-servo", "-V", "--visual_servo", is_flag=True, help="Use visual servoing (dynamem)")
-@click.option("--target-object", "--target_object", help="Target object to grasp")
+@click.option("--target-object", "--target_object", help="Target object to grasp (grasp) or pick (dynamem)")
+@click.option("--target-receptacle", "--target_receptacle", help="Target receptacle to place on (dynamem)")
 @click.option("--parameter-file", "--parameter_file", help="Planner config (e.g. sim_planner.yaml)")
 @click.pass_context
 def run(
@@ -172,6 +173,7 @@ def run(
     headless: bool,
     visual_servo: bool,
     target_object: str | None,
+    target_receptacle: str | None,
     parameter_file: str | None,
 ) -> None:
     """Run a robot agent or app.
@@ -180,7 +182,7 @@ def run(
 
     Examples:
       emet run dynamem --robot-ip 127.0.0.1 -S
-      emet run dynamem -S --visual-servo --match-method class --rerun-debug
+      emet run dynamem -S --visual-servo --match-method class --target-object apple --target-receptacle plate
       emet run mapping --robot-ip 127.0.0.1
       emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
     """
@@ -194,6 +196,10 @@ def run(
             args.append("--headless")
         if visual_servo:
             args.append("--visual-servo")
+        if target_object:
+            args.extend(["--target_object", target_object])
+        if target_receptacle:
+            args.extend(["--target_receptacle", target_receptacle])
         sys.exit(_run_module("emet.app.run_dynamem", args))
     elif app == "mapping":
         sys.exit(_run_module("emet.app.mapping", args))
