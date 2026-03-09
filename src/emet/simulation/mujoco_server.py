@@ -35,6 +35,7 @@ else:
 import emet.motion.constants as constants
 import emet.utils.compression as compression
 import emet.utils.logger as logger
+from emet.utils.port_utils import kill_processes_on_port
 from emet.core.server import BaseZmqServer
 from emet.motion import HelloStretchIdx
 from emet.motion.control.goto_controller import GotoVelocityController
@@ -912,6 +913,12 @@ def main(
             "Robocasa scene generation (--use-robocasa) is not available. "
             "Using default scene. To enable: emet install sim  then  emet sync -e sim",
         )
+
+    # Free server ports so we can bind (e.g. kill previous mujoco_server).
+    for p in (send_port, recv_port, send_state_port, send_servo_port):
+        if kill_processes_on_port(p):
+            logger.warning(f"Freed port {p} (killed previous process).")
+    time.sleep(0.5)
 
     try:
         server = MujocoZmqServer(
