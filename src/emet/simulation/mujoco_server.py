@@ -24,13 +24,10 @@ from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 
 from emet.motion.constants import STRETCH_CAMERA_FRAME
 
-try:
-    from emet.simulation.stretch_mujoco.robocasa_gen import model_generation_wizard
-except ImportError:
-    model_generation_wizard = None
-    _ROBOCASA_IMPORT_FAILED = True
-else:
-    _ROBOCASA_IMPORT_FAILED = False
+# Robocasa is imported lazily when --use-robocasa is used, to avoid loading robosuite/numba
+# on every server start (and to avoid numba init failures when not using Robocasa).
+model_generation_wizard = None
+_ROBOCASA_IMPORT_FAILED = True
 
 import emet.motion.constants as constants
 import emet.utils.compression as compression
@@ -885,19 +882,50 @@ def main(
         random.seed(seed)
 
     if use_robocasa:
-        if model_generation_wizard is None:
+        # Lazy import so we only load robosuite/numba when actually using Robocasa.
+        wizard = model_generation_wizard
+        if wizard is None:
+            try:
+                from emet.simulation.stretch_mujoco.robocasa_gen import (
+                    model_generation_wizard as _wizard,
+                )
+                wizard = _wizard
+                globals()["model_generation_wizard"] = _wizard
+                globals()["_ROBOCASA_IMPORT_FAILED"] = False
+            except Exception as e:
+                wizard = None
+                err_type = type(e).__name__
+                err_msg = str(e) if e else "unknown"
+                logger.error(
+                    "\n" + "=" * 60 + "\n"
+                    "  Robocasa scene generation could not be loaded.\n"
+                    "  You passed --use-robocasa but robosuite/robocasa failed to import.\n\n"
+                    f"  {err_type}: {err_msg}\n\n"
+                    f"  (Python: {sys.executable})\n\n"
+                    "  If you see 'initialization of _internal failed' (numba), run:\n"
+                    "    uv sync --extra sim --extra dynamem   (or emet sync -e sim -e dynamem)\n"
+                    "  to install a numba version compatible with numpy in this project.\n\n"
+                    "  Otherwise ensure Robocasa is installed:\n"
+                    "    1. emet install sim   (clones third_party/robosuite and robocasa)\n"
+                    "    2. emet sync --extra sim   (installs into the project env)\n"
+                    "  Then run: emet serve mujoco --use-robocasa\n"
+                    + "=" * 60,
+                )
+                sys.exit(1)
+        if wizard is None:
             logger.error(
                 "\n" + "=" * 60 + "\n"
                 "  Robocasa scene generation is not installed.\n"
-                "  You passed --use-robocasa but robosuite/robocasa are missing.\n\n"
-                "  To enable Robocasa scenes:\n"
-                "    1. emet install sim\n"
-                "    2. emet sync -e sim\n"
-                "  Then run: emet serve mujoco --use-robocasa\n"
+                "  You passed --use-robocasa but robocasa is missing or failed to load in this env.\n\n"
+                "  From the project root, run:\n"
+                "    1. emet install sim        (clones third_party/robosuite and robocasa)\n"
+                "    2. emet sync --extra sim   (installs into the project env; use same env as 'emet serve')\n"
+                "  Then run: emet serve mujoco --use-robocasa\n\n"
+                "  Run 'emet' from the project directory so it uses the project .venv (or activate that venv first).\n"
                 + "=" * 60,
             )
             sys.exit(1)
-        scene_model, scene_xml, objects_info = model_generation_wizard(
+        scene_model, scene_xml, objects_info = wizard(
             task=robocasa_task,
             style=robocasa_style,
             layout=robocasa_layout,

@@ -257,5 +257,8 @@ Use `sim_planner.yaml` and `--parameter_file sim_planner.yaml` for grasp_object.
 **Robocasa import errors or pip conflicts**
 Install the pinned version with `emet install robocasa` (or `emet install sim`). Do not clone Robocasa from `main` and install—v1.0 uses different MuJoCo/numpy and can pull torch 2.7 and other conflicting deps. If you already cloned main, run `cd third_party/robocasa && git fetch --tags && git checkout v0.2` then `pip install -e .` from that directory.
 
+**Using sim and dynamem together (uv)**  
+Robocasa 0.2 pins `numpy==1.23.3` while dynamem/SAM-2 need `numpy>=1.24.4`. The project uses a **uv override** in `pyproject.toml` (`[tool.uv] override-dependencies = ["numpy>=1.24.4,<2"]`) so that `emet sync -e sim -e dynamem` (or `--all`) resolves to a single numpy version. You can install and use both extras in one environment.
+
 **DynaMem / Rerun headless**
 When running DynaMem without a display, the Rerun web server starts automatically. Connect from a laptop at `http://<server-ip>:9090?url=ws://<server-ip>:9877`. See [Debug: Headless and Rerun](debug.md#headless-and-rerun).

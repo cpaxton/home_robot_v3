@@ -109,6 +109,8 @@ emet sync --all --hand-tracker
 emet sync --no-install
 ```
 
+When using both `sim` and `dynamem`, uv applies a numpy override (see `[tool.uv] override-dependencies` in `pyproject.toml`) so Robocasa’s pin and SAM-2’s requirement resolve together.
+
 ---
 
 ### `emet show <path> [options]`
@@ -183,7 +185,7 @@ emet install pre-commit             # Install git hooks (requires emet sync --de
 emet install pre-commit --run       # Install and run on all files
 ```
 
-After `emet install sim`, run `emet sync -e sim` to install emet with sim extras.
+`emet install sim` runs `emet sync -e sim` afterward by default (use `--no-sync` to skip). The project’s `pyproject.toml` uses a uv override for numpy so that `sync -e sim -e dynamem` works; see [Simulation](simulation.md#troubleshooting).
 
 ---
 

@@ -60,10 +60,25 @@ def _ensure_uv_project() -> None:
         pass
 
 
+def _project_venv_python() -> Path | None:
+    """Return the project .venv Python path if it exists."""
+    root = _project_root()
+    for name in ("python", "python3"):
+        p = root / ".venv" / "bin" / name
+        if p.exists():
+            return p
+    return None
+
+
 def _run_module(module: str, args: list[str], env: dict | None = None) -> int:
     """Run a Python module. Returns exit code."""
-    cmd = [sys.executable, "-m", module] + args
     env = env or os.environ.copy()
+    # Prefer project .venv so the subprocess has the same deps (e.g. robocasa for mujoco server).
+    venv_py = _project_venv_python()
+    if venv_py is not None:
+        cmd = [str(venv_py), "-m", module] + args
+    else:
+        cmd = [sys.executable, "-m", module] + args
     return subprocess.call(cmd, env=env)
 
 
@@ -320,6 +335,17 @@ def sync(
     root = _project_root()
     os.chdir(root)
 
+    # Sim extra needs third_party/robosuite and robocasa (from emet install sim).
+    if "sim" in extras:
+        for name in ("robosuite", "robocasa"):
+            path = root / "third_party" / name
+            if not path.is_dir():
+                click.echo(
+                    f"Error: third_party/{name} not found. Run 'emet install sim' first to clone and install it.",
+                    err=True,
+                )
+                sys.exit(1)
+
     if _has_uv():
         cmd = ["uv", "sync"]
         for e in extras:
@@ -461,35 +487,52 @@ def _run_install_simulation(
 @install.command("sim", short_help="Install Robocasa, robosuite")
 @click.option("-d", "--download-assets", is_flag=True, help="Download Robocasa kitchen assets")
 @click.option("-a", "--setup-macros", is_flag=True, help="Run Robocasa setup_macros.py")
-def install_sim(download_assets: bool, setup_macros: bool) -> None:
+@click.option("--no-sync", is_flag=True, help="Skip running emet sync -e sim after clone/install")
+def install_sim(
+    download_assets: bool, setup_macros: bool, no_sync: bool
+) -> None:
     """Install simulation third-party deps (Robocasa + robosuite).
 
-    Clones robosuite and robocasa into third_party and installs them.
-    Not covered by sync: run this first, then emet sync -e sim.
-
-    Run from your project venv so packages install there (e.g. source .venv/bin/activate
-    then emet install sim, or uv run emet install sim). Otherwise you may get permission
-    errors installing into system Python.
+    Clones robosuite and robocasa into third_party, installs them, then runs
+    emet sync -e sim so the project env has them (e.g. for emet serve mujoco --use-robocasa).
 
     Examples:
       emet install sim
       emet install sim -d -a
+      emet install sim --no-sync   (clone/install only, no sync)
     """
     root = _project_root()
     result = _run_install_simulation(root, download_assets, setup_macros)
-    if result == 0:
+    if result != 0:
+        sys.exit(result)
+    if no_sync:
         click.echo("Simulation install complete. Run: emet sync -e sim")
+        return
+    click.echo("Syncing sim extra into project env...")
+    os.chdir(root)
+    if _has_uv():
+        result = subprocess.call(["uv", "sync", "--extra", "sim"])
+    else:
+        result = subprocess.call(
+            [sys.executable, "-m", "pip", "install", "-e", ".[sim]"]
+        )
+    if result == 0:
+        click.echo("Simulation install complete.")
+        click.echo("Verify: uv run python -c \"import robocasa; print('robocasa OK')\"")
     sys.exit(result)
 
 
 @install.command("robocasa", short_help="Install Robocasa (same as install sim)")
 @click.option("-d", "--download-assets", is_flag=True, help="Download Robocasa kitchen assets")
 @click.option("-a", "--setup-macros", is_flag=True, help="Run Robocasa setup_macros.py")
-def install_robocasa(download_assets: bool, setup_macros: bool) -> None:
+@click.option("--no-sync", is_flag=True, help="Skip running emet sync -e sim after clone/install")
+def install_robocasa(
+    download_assets: bool, setup_macros: bool, no_sync: bool
+) -> None:
     """Install Robocasa and robosuite (same as emet install sim).
 
-    Clones robosuite and robocasa into third_party and installs them.
-    Then run: emet sync -e sim
+    Clones robosuite and robocasa into third_party, installs them, then runs
+    emet sync -e sim. Use --no-sync to skip the sync step.
 
     Examples:
       emet install robocasa
@@ -497,8 +540,22 @@ def install_robocasa(download_assets: bool, setup_macros: bool) -> None:
     """
     root = _project_root()
     result = _run_install_simulation(root, download_assets, setup_macros)
-    if result == 0:
+    if result != 0:
+        sys.exit(result)
+    if no_sync:
         click.echo("Robocasa install complete. Run: emet sync -e sim")
+        return
+    click.echo("Syncing sim extra into project env...")
+    os.chdir(root)
+    if _has_uv():
+        result = subprocess.call(["uv", "sync", "--extra", "sim"])
+    else:
+        result = subprocess.call(
+            [sys.executable, "-m", "pip", "install", "-e", ".[sim]"]
+        )
+    if result == 0:
+        click.echo("Robocasa install complete.")
+        click.echo("Verify: uv run python -c \"import robocasa; print('robocasa OK')\"")
     sys.exit(result)
 
 
