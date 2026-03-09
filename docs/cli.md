@@ -36,7 +36,8 @@ Start a simulation server.
 | `mujoco` | MuJoCo simulation (default) |
 
 **Options:**
-- `--use-robocasa` — Use Robocasa for scene generation
+- `--use-robocasa` — Use Robocasa for scene generation (default task: PickPlaceCounterToCabinet)
+- `--list-robocasa-tasks` — Print all Robocasa task names and exit (for use with `--robocasa-task`)
 - `--headless` — Run without native viewer (use web at http://localhost:9090?url=ws://localhost:9877)
 - `--scene-path PATH` — Path to MuJoCo scene XML
 - `--seed N` — Random seed (default: 0)
@@ -162,9 +163,9 @@ Install submodules, simulation extras, or full setup.
 - `--recursive` / `--no-recursive` — Recursively init nested submodules (default: recursive)
 
 **`emet install sim`** / **`emet install robocasa`** (same)
-- Clones robosuite and **Robocasa v0.2** (pinned for MuJoCo 3.2.6 / numpy compatibility; main/v1.0 can conflict).
+- Clones robosuite and **Robocasa v0.2** (pinned for MuJoCo 3.3+ / numpy compatibility; main/v1.0 can conflict).
 - `-d, --download-assets` — Download Robocasa kitchen assets
-- `-a, --setup-macros` — Run Robocasa setup_macros.py
+- `-a, --setup-macros` — Force run macro setup (overwrite existing); by default macros are set up only when missing
 
 **`emet install full`**
 - `-y, --yes` — Skip confirmation prompts
@@ -177,7 +178,7 @@ Install submodules, simulation extras, or full setup.
 emet install submodules              # Init and update submodules
 emet install sim                    # Install Robocasa, robosuite (third_party)
 emet install robocasa               # Same as install sim
-emet install sim -d -a              # With assets and macros
+emet install sim -d -a              # With assets and force-overwrite macros
 emet install full                   # Full install (uv, deps, sync)
 emet install full -y --sim          # Non-interactive with sim extras
 emet install full --cpu             # CPU-only (no SAM2)

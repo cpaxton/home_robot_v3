@@ -48,7 +48,7 @@ dependencies = [
     "hello-robot-stretch-urdf",
     "pyrealsense2",
     "urchin",
-    "rerun-sdk==0.18.0",
+    "rerun-sdk>=0.21.0,<0.23.0",
     "sentencepiece",
     "gitpython",
     "hydra-core",
@@ -92,7 +92,7 @@ discord = [
     "python-dotenv",
 ]
 sim = [
-    "mujoco==3.2.6",  # Pinned for Stretch model compatibility
+    "mujoco>=3.3.0",  # Align with upstream robosuite; 3.2.6 was for older Stretch compat
     "hello-robot-stretch-urdf",
     "grpcio",
     "click>=8.1.8",

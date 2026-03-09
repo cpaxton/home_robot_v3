@@ -6,6 +6,9 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 import robosuite
+# Import robocasa so its environments register with robosuite.make(); otherwise
+# robosuite.make("PickPlaceCounterToCabinet") raises "Environment ... not found".
+import robocasa  # noqa: F401
 from robocasa.models.scenes.scene_registry import LayoutType, StyleType
 from robosuite import load_part_controller_config
 from termcolor import colored
@@ -127,7 +130,7 @@ def style_from_str(style:str) -> int:
     return list(get_styles().values()).index(style)
 
 def model_generation_wizard(
-    task: str = "PnPCounterToCab",
+    task: str = "PickPlaceCounterToCabinet",
     layout: int = None,
     style: int = None,
     write_to_file: str = None,

@@ -115,6 +115,12 @@ def main() -> None:
     type=int,
     help="Add to default ports when 4401 etc. are in use (e.g. 100 → 4501–4504)",
 )
+@click.option(
+    "--list-robocasa-tasks",
+    "list_robocasa_tasks",
+    is_flag=True,
+    help="Print available Robocasa task names and exit.",
+)
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
 def serve(
     backend: str,
@@ -123,6 +129,7 @@ def serve(
     scene_path: str | None,
     seed: int,
     port_offset: int,
+    list_robocasa_tasks: bool,
     extra: tuple[str, ...],
 ) -> None:
     """Start a simulation server.
@@ -137,6 +144,8 @@ def serve(
         args = list(extra)
         if use_robocasa:
             args.append("--use-robocasa")
+        if list_robocasa_tasks:
+            args.append("--list-robocasa-tasks")
         if headless:
             args.append("--headless")
         if scene_path:
@@ -494,15 +503,16 @@ def _run_install_simulation(
     is_flag=True,
     help="Skip downloading Robocasa kitchen assets (~5GB)",
 )
-@click.option("-a", "--setup-macros", is_flag=True, help="Run Robocasa setup_macros.py")
+@click.option("-a", "--setup-macros", is_flag=True, help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing")
 @click.option("--no-sync", is_flag=True, help="Skip running emet sync -e sim after clone/install")
 def install_sim(
     skip_download_assets: bool, setup_macros: bool, no_sync: bool
 ) -> None:
     """Install simulation third-party deps (Robocasa + robosuite).
 
-    Clones robosuite and robocasa, downloads kitchen assets (~5GB), then runs
-    emet sync -e sim. Use -n to skip the asset download (e.g. CI).
+    Clones robosuite and robocasa, runs macro setup when missing (silences
+    "No private macro file" warnings), downloads kitchen assets (~5GB), then
+    runs emet sync -e sim. Use -n to skip the asset download (e.g. CI).
 
     Examples:
       emet install sim
@@ -538,15 +548,15 @@ def install_sim(
     is_flag=True,
     help="Skip downloading Robocasa kitchen assets (~5GB)",
 )
-@click.option("-a", "--setup-macros", is_flag=True, help="Run Robocasa setup_macros.py")
+@click.option("-a", "--setup-macros", is_flag=True, help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing")
 @click.option("--no-sync", is_flag=True, help="Skip running emet sync -e sim after clone/install")
 def install_robocasa(
     skip_download_assets: bool, setup_macros: bool, no_sync: bool
 ) -> None:
     """Install Robocasa and robosuite (same as emet install sim).
 
-    Clones robosuite and robocasa, downloads kitchen assets (~5GB), then runs
-    emet sync -e sim. Use -n to skip the asset download.
+    Clones robosuite and robocasa, runs macro setup when missing, downloads
+    kitchen assets (~5GB), then runs emet sync -e sim. Use -n to skip the asset download.
 
     Examples:
       emet install robocasa
