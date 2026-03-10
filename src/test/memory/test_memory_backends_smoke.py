@@ -179,18 +179,13 @@ def test_unified_backend_dynamem():
     # Unknown object
     check_unknown = backend.check_memory_for_object("purple sphere")
     assert check_unknown.confidence >= 0  # may be 0 or low from default encoder fallback
-    # save/load: DynaMem backend supports save; round-trip tested in integration test
+    # save/load: DynaMem backend supports save (directory format only)
     assert backend.supports_save_load()
-    import os
     import tempfile
-    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
-        path = f.name
-    try:
-        backend.save(path)
-        assert os.path.exists(path) and os.path.getsize(path) > 0
-    finally:
-        if os.path.exists(path):
-            os.unlink(path)
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as d:
+        backend.save(d)
+        assert (Path(d) / "manifest.json").exists(), "Expected manifest.json in memory directory"
 
 
 def test_unified_backend_graph_eqa():
