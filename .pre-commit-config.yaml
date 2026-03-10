@@ -75,12 +75,13 @@ repos:
     hooks:
       - id: nbstripout
 
-  # Format shell scripts (project only)
+  # Format shell scripts (project only). setuptools<74 required for pkg_resources used by beautysh
   - repo: https://github.com/lovesegfault/beautysh
     rev: v6.2.1
     hooks:
       - id: beautysh
         exclude: ^third_party/
+        additional_dependencies: ["setuptools>=61,<74"]
 
   # Spell check (project only)
   - repo: https://github.com/codespell-project/codespell
