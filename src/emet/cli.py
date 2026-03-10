@@ -421,34 +421,37 @@ def show(path: str, web: bool) -> None:
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.option("--no-cov", "no_cov", is_flag=True, help="Disable coverage")
 @click.option(
-    "--sim",
-    "run_sim_tests",
+    "--no-sim",
+    "no_sim_tests",
     is_flag=True,
-    help="Enable sim tests (RUN_SIM_TESTS=1); e.g. test_red_cylinder_in_sim",
+    help="Disable sim tests (RUN_SIM_TESTS=0); sim tests run by default",
 )
 @click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
 def test(
     verbose: bool,
     no_cov: bool,
-    run_sim_tests: bool,
+    no_sim_tests: bool,
     pytest_args: tuple[str, ...],
 ) -> None:
     """Run tests with pytest.
 
     Uses the project environment: run from repo root with uv so dev deps (pytest,
-    pytest-timeout) are available:
+    pytest-timeout) are available. Sim tests (e.g. red cylinder in MuJoCo) run by default;
+    use --no-sim to skip them for a faster run.
 
       uv sync --extra dev
       uv run emet test
       uv run emet test -v
-      uv run emet test --sim              # include sim tests (e.g. red cylinder in MuJoCo)
+      uv run emet test --no-sim           # skip sim tests (faster)
       uv run emet test -v src/test/memory/test_memory_backends_smoke.py
       uv run emet test -k test_red_cylinder
     """
     root = _project_root()
     os.chdir(root)
     env = os.environ.copy()
-    if run_sim_tests:
+    if no_sim_tests:
+        env["RUN_SIM_TESTS"] = "0"
+    else:
         env["RUN_SIM_TESTS"] = "1"
     # Prefer project .venv so pytest and deps match the project (e.g. pytest-timeout)
     venv_py = _project_venv_python()

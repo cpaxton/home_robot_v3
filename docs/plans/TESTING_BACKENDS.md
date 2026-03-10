@@ -13,9 +13,11 @@ The refactor is consistent: mapping = spatial representation; memory = semantic/
 
 | Backend   | What it is                    | Unit / smoke tests                    | Integration (sim) test                    |
 |-----------|--------------------------------|---------------------------------------|--------------------------------------------|
-| **SVM**   | Instance memory (RobotAgent)   | `test_svm.py`, `test_memory_backends_smoke::test_svm_backend_smoke` | — (SVM uses pkl or real robot)             |
-| **DynaMem** | Voxel + VL features          | `test_semantic_memory.py`, `test_memory_backends_smoke::test_dynamem_backend_smoke` | `test_red_cylinder_in_sim.py`              |
-| **GraphEQA** | Graph-based EQA memory     | `test_graph_eqa_memory.py`, `test_memory_backends_smoke::test_graph_eqa_backend_smoke` | — (same sim as DynaMem for nav; EQA is graph) |
+| **SVM**   | Instance memory (RobotAgent)   | `test_svm.py`, `test_memory_backends_smoke::test_svm_backend_smoke`, `test_unified_backend_svm_empty` | — (SVM uses pkl or real robot)             |
+| **DynaMem** | Voxel + VL features          | `test_semantic_memory.py`, `test_memory_backends_smoke::test_dynamem_backend_smoke`, `test_unified_backend_dynamem` | `test_red_cylinder_in_sim.py` (default scene), `test_robocasa_memory_after_spin.py` (Robocasa) |
+| **GraphEQA** | Graph-based EQA memory     | `test_graph_eqa_memory.py`, `test_memory_backends_smoke::test_graph_eqa_backend_smoke`, `test_unified_backend_graph_eqa` | — (same sim as DynaMem for nav; EQA is graph) |
+
+Default MuJoCo scene (`scene.xml`): **red cylinder** (object2) at (0.08, -0.55, 0.6) and **blue cube** (object1) at (-0.02, -0.55, 0.6). After a single **rotate_in_place**, both should be visible and in memory for any method (DynaMem integration test asserts red cylinder; blue cube asserted when detected).
 
 ## How to run tests
 
@@ -26,7 +28,7 @@ uv sync --extra dev
 uv run emet test -v
 ```
 
-Smoke and unit tests require the main project dependencies. The integration test additionally needs the sim extra and `--sim` (or `RUN_SIM_TESTS=1`).
+Smoke and unit tests require the main project dependencies. Sim integration tests run by default when you run `emet test`; they need the sim extra. Use `emet test --no-sim` or `RUN_SIM_TESTS=0` to skip sim tests for a faster run.
 
 ### All three backends (smoke, no sim)
 
@@ -54,15 +56,23 @@ uv run emet test -v src/test/memory/test_graph_eqa_memory.py
 uv run emet test -v src/test/controller/test_controller_smoke.py
 ```
 
-### Integration test: robot moves in scene and finds red cylinder (DynaMem, with timeout)
+### Integration test: default MuJoCo scene — red cylinder and blue cube after one spin (DynaMem, 120s timeout)
 
-This test starts the default MuJoCo scene (red cylinder + blue cube), runs the robot’s **rotate_in_place** to build the map, then asserts **localize_text("red cylinder")** returns a point near the table. The test is skipped unless `--sim` or `RUN_SIM_TESTS=1`, and has a **120s timeout** (pytest-timeout, in dev deps).
+This test starts the default MuJoCo scene (red cylinder + blue cube), runs the robot’s **rotate_in_place** to build the map, then: asserts **localize_text("red cylinder")** returns a point near (0.08, -0.55, 0.6); if **localize_text("blue cube")** returns a point, asserts it is near (-0.02, -0.55, 0.6); uses the **unified MemoryBackend** and asserts **check_memory_for_object("red cylinder")** has confidence > 0 (and blue cube when detected). Runs by default with `emet test`; skip with `emet test --no-sim` or `RUN_SIM_TESTS=0`. Has a 120s timeout (pytest-timeout, in dev deps).
 
 ```bash
 uv run emet test --sim -v src/test/mapping/test_red_cylinder_in_sim.py
 ```
 
 On Linux, MuJoCo runs headless (EGL). Requires full env (e.g. `pip install -e ".[sim]"` or `emet sync -e sim`).
+
+### Integration test: Robocasa scene — at least one object in memory after one spin (180s timeout)
+
+Starts MuJoCo server with **--use-robocasa** (default kitchen task), connects, runs **rotate_in_place** once, then uses the unified backend to try common object names and asserts at least one has confidence > 0. Runs by default with `emet test`; skip with `emet test --no-sim` or `RUN_SIM_TESTS=0`. Requires robocasa assets.
+
+```bash
+uv run emet test -v src/test/simulation/test_robocasa_memory_after_spin.py
+```
 
 ## Summary
 

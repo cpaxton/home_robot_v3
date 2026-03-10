@@ -121,8 +121,10 @@ See [DynaMem docs](dynamem.md) for full options.
 **Verifying red cylinder detection in sim:** An integration test starts the MuJoCo server (headless), runs Dynamem’s rotate-in-place to build the map, then asserts that `localize_text("red cylinder")` returns a point near the default scene’s red cylinder. Run it with full env (e.g. after `emet sync -e sim`):
 
 ```bash
-RUN_SIM_TESTS=1 pytest src/test/mapping/test_red_cylinder_in_sim.py -v
+uv run emet test -v src/test/mapping/test_red_cylinder_in_sim.py
 ```
+
+(Sim tests run by default; use `emet test --no-sim` to skip.)
 
 This confirms the full stack (sim → camera → encoder/detection → semantic memory → localization) works for the default scene.
 
