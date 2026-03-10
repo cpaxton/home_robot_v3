@@ -56,6 +56,8 @@ uv sync --extra dev --extra sim --extra dynamem   # + DynaMem (SAM-2)
 
 The script installs system deps (e.g. `portaudio`, `espeak`, `ffmpeg`) and runs `uv sync` for you. For reproducible installs, a `uv.lock` is included; `uv sync` uses it automatically.
 
+**Robot or simulator only (lightweight):** To run only the ZMQ bridge on the robot (or a simulator backend) without torch/LLM/simulation stacks, install **emet-core** and the bridge for your robot: **Stretch** → `stretch_ros2_bridge`, **Innate Mars** → `innate_mars_bridge`. From the repo: `pip install -e packages/emet_core` then build/install the bridge with colcon. See `packages/emet_core/README.md` and `packages/emet_core/BRIDGE_CONTRACT.md`.
+
 **3. Use the environment:**
 
 ```bash
