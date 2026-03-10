@@ -12,6 +12,7 @@ cd "$ROOT_DIR"
 CPU_ONLY="false"
 SKIP_ASKING="false"
 NO_SAM2="false"
+INSTALL_SIM="true"   # default: clone third_party/robocasa+robosuite and include sim extra
 EXTRAS="dev"
 
 for arg in "$@"; do
@@ -26,18 +27,23 @@ for arg in "$@"; do
         --no-sam2)
             NO_SAM2="true"
             ;;
+        --no-sim)
+            INSTALL_SIM="false"
+            ;;
         --sim)
-            EXTRAS="$EXTRAS,sim"
+            INSTALL_SIM="true"
             ;;
         *)
             ;;
     esac
 done
 
+[[ "$INSTALL_SIM" == "true" ]] && EXTRAS="$EXTRAS,sim"
+
 echo "=============================================="
 echo "         INSTALLING STRETCH AI (uv)"
 echo "=============================================="
-echo "Options: CPU_ONLY=$CPU_ONLY, NO_SAM2=$NO_SAM2, EXTRAS=$EXTRAS"
+echo "Options: CPU_ONLY=$CPU_ONLY, NO_SAM2=$NO_SAM2, INSTALL_SIM=$INSTALL_SIM, EXTRAS=$EXTRAS"
 echo "---------------------------------------------"
 
 # Ensure uv is installed
@@ -81,6 +87,19 @@ uv sync $EXTRA_ARGS
 # Uninstall av to avoid conflict (from old install.sh)
 source .venv/bin/activate
 uv pip uninstall av -y 2>/dev/null || true
+
+# Sim: clone third_party/robosuite and robocasa, install editable, run macros and (optionally) download assets
+if [ "$INSTALL_SIM" = "true" ]; then
+    echo ""
+    echo "Installing simulation (Robocasa + robosuite)..."
+    export EMET_USE_UV=1
+    SIM_SCRIPT="$ROOT_DIR/scripts/install_simulation.sh"
+    if [ "$SKIP_ASKING" = "true" ]; then
+        bash "$SIM_SCRIPT" -n
+    else
+        bash "$SIM_SCRIPT"
+    fi
+fi
 
 echo ""
 echo "=============================================="
