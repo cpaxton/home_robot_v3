@@ -1,8 +1,8 @@
 # Copyright (c) Hello Robot, Inc.
 #
-# Integration test: start MuJoCo server with Robocasa scene (--use-robocasa),
+# Integration test: start MuJoCo server with Robocasa scene (PickPlaceCounterToSink),
 # connect, run one rotate_in_place to build memory, then assert that the unified
-# memory backend finds at least one object (scene-dependent). Run with:
+# memory backend finds at least one object (placed/counter/sink objects). Run with:
 #   uv run emet test -v src/test/simulation/test_robocasa_memory_after_spin.py
 # Sim tests run by default; use RUN_SIM_TESTS=0 or emet test --no-sim to skip.
 # Requires sim extra and robocasa assets (emet install sim, download_robocasa_assets).

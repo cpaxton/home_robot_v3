@@ -106,7 +106,11 @@ def main() -> None:
 
 @main.command(short_help="Start MuJoCo simulation server")
 @click.argument("backend", type=click.Choice(["mujoco"]), default="mujoco")
-@click.option("--use-robocasa", is_flag=True, help="Use Robocasa for scene generation")
+@click.option(
+    "--use-robocasa",
+    is_flag=True,
+    help="Use Robocasa for scene generation. List envs: emet serve mujoco --list-robocasa-tasks",
+)
 @click.option("--headless", is_flag=True, help="Run without native viewer")
 @click.option(
     "--no-cameras",
@@ -130,7 +134,7 @@ def main() -> None:
     "--list-robocasa-tasks",
     "list_robocasa_tasks",
     is_flag=True,
-    help="Print available Robocasa task names and exit.",
+    help="List all supported Robocasa env names and exit (use with --robocasa-task when serving).",
 )
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
 def serve(
@@ -151,6 +155,7 @@ def serve(
       emet serve
       emet serve mujoco --headless
       emet serve mujoco --use-robocasa
+      emet serve mujoco --list-robocasa-tasks   # list all Robocasa env names
       emet serve mujoco --port-offset 100   # use ports 4501–4504 if default in use
     """
     if backend == "mujoco":

@@ -207,9 +207,15 @@ python -m robocasa.scripts.download_kitchen_assets
 emet serve mujoco --use-robocasa
 ```
 
-Options:
+List all supported env names:
 
-- `--robocasa-task`: task name (default: PickPlaceCounterToCabinet). Run `emet serve mujoco --use-robocasa --list-robocasa-tasks` to list all.
+```bash
+emet serve mujoco --list-robocasa-tasks
+```
+
+Options when serving with `--use-robocasa`:
+
+- `--robocasa-task`: task name (default: PickPlaceCounterToCabinet). Good for “find an object” tests: **PickPlaceCounterToCabinet**, **PickPlaceCabinetToCounter**, **OpenCabinet**, **CloseCabinet**, and other `PickPlace*` envs (e.g. PickPlaceCounterToDrawer, PickPlaceCounterToSink).
 - `--robocasa-style`: style index
 - `--robocasa-layout`: layout index
 
