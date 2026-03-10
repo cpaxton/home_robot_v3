@@ -14,7 +14,7 @@ import numpy as np
 import torch
 from PIL import Image
 from termcolor import colored
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig, pipeline
 
 from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder
 
@@ -89,7 +89,7 @@ class Qwen25Client(AbstractLLMClient):
                 model_name = f"Qwen/Qwen2.5-{model_type}-{model_size}-{fine_tuning}"
 
         print(f"Loading model: {model_name}")
-        model_kwargs = {"torch_dtype": "auto"}
+        model_kwargs = {"dtype": "auto"}
 
         quantization_config = None
         if quantization is not None:
@@ -99,7 +99,7 @@ class Qwen25Client(AbstractLLMClient):
                 quantization = "int4"
             # Note: there were supposed to be other options but this is the only one that worked this way
             if quantization == "awq":
-                model_kwargs["torch_dtype"] = torch.float16
+                model_kwargs["dtype"] = torch.float16
                 model_name += "-AWQ"
             elif quantization in ["int8", "int4"]:
                 try:
@@ -128,6 +128,7 @@ class Qwen25Client(AbstractLLMClient):
         # When using quantization, omit torch_dtype and use device_map so bitsandbytes loads correctly
         load_kwargs = dict(model_kwargs)
         if quantization_config is not None:
+            load_kwargs.pop("dtype", None)
             load_kwargs.pop("torch_dtype", None)
             if device != "cpu":
                 load_kwargs["device_map"] = "auto"
@@ -163,7 +164,8 @@ class Qwen25Client(AbstractLLMClient):
         )
 
         t0 = timeit.default_timer()
-        outputs = self.pipe(text, max_new_tokens=self.max_tokens)
+        gen_config = GenerationConfig(max_new_tokens=self.max_tokens)
+        outputs = self.pipe(text, generation_config=gen_config)
         t1 = timeit.default_timer()
 
         assistant_response = outputs[0]["generated_text"].split("assistant")[-1].strip()
@@ -224,7 +226,7 @@ class Qwen25VLClient:
             model_name = f"Qwen/Qwen2.5-VL-{model_size}-{fine_tuning}"
 
         print(f"Loading model: {model_name}")
-        model_kwargs = {"torch_dtype": "auto"}
+        model_kwargs = {"dtype": "auto"}
 
         quantization_config = None
         if quantization is not None:

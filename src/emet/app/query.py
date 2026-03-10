@@ -105,7 +105,7 @@ def main(
         real_robot = True
         current_datetime = datetime.datetime.now()
         formatted_datetime = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
-        output_pkl_filename = output_filename + "_" + formatted_datetime + ".pkl"
+        output_dir = output_filename + "_" + formatted_datetime
 
         robot = HomeRobotZmqClient(
             robot_ip=robot_ip,
@@ -129,21 +129,32 @@ def main(
             # Just capture a single frame
             agent.update()
 
-        # Load the input file
+        # Load memory from directory (common format)
         if input_path is not None and len(input_path) > 0:
-            agent.load_map(input_path)
+            from emet.memory.backend import get_memory_backend
+
+            backend = get_memory_backend("dynamem", voxel_map=agent.get_voxel_map())
+            backend.load(input_path)
 
         if explore_iter > 0:
             raise NotImplementedError("Exploration not implemented yet")
 
-        # Save out file
-        if len(output_pkl_filename) > 0:
-            agent.get_voxel_map().write_to_pickle(output_pkl_filename)
+        # Save memory to directory (common format)
+        if len(output_dir) > 0:
+            from emet.memory.backend import get_memory_backend
+            from emet.memory.utils import print_memory_saved_help
+
+            backend = get_memory_backend("dynamem", voxel_map=agent.get_voxel_map())
+            backend.save(output_dir)
+            print_memory_saved_help(output_dir)
     else:
         real_robot = False
         dummy_robot = DummyStretchClient()
         agent = RobotAgent(dummy_robot, parameters, semantic_sensor)
-        agent.get_voxel_map().read_from_pickle(input_path, num_frames=frame)
+        from emet.memory.backend import get_memory_backend
+
+        backend = get_memory_backend("dynamem", voxel_map=agent.get_voxel_map())
+        backend.load(input_path)
 
     if show_svm:
         agent.get_voxel_map().show()

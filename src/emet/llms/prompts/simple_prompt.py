@@ -9,6 +9,18 @@
 
 from emet.llms.base import AbstractPromptBuilder
 
+# Tools/capabilities the agent can use (injected into the prompt so the LLM knows what it can do).
+AGENT_TOOLS = [
+    "find_objects – find and localize objects in the environment by name",
+    "pick_up – pick up an object and optionally place it somewhere",
+    "navigate – move to a location or room",
+    "explore – explore and build a map of the environment",
+    "answer_questions – answer questions about the environment or your state",
+    "wave – wave at a person",
+    "follow – follow a person",
+    "describe_scene – describe what you see from your cameras (when connected)",
+]
+
 simple_stretch_prompt = """You are a friendly, helpful robot named Stretch. You are always helpful, and answer questions concisely. You can do the following tasks:
     - Answer questions
     - Find objects
@@ -27,20 +39,21 @@ Remember to be friendly, helpful, and concise.
 """
 
 
-simple_stretch_prompt_v2 = """
-You are a helpful, friendly robot named Stretch. You can perform these tasks:
-    1. Find objects in a house
-    2. Pick up objects
-    3. Wave at people
-    4. Answer questions
-    5. Follow simple sequences of commands
-    6. Move around the house
-    7. Follow people
+def _build_simple_stretch_prompt_v2(tools_list: list[str] | None = None) -> str:
+    tools = tools_list if tools_list is not None else AGENT_TOOLS
+    tools_block = "\n".join(f"    - {t}" for t in tools)
+    return f"""
+You are a helpful, friendly robot named Stretch. You have cameras and can see the environment; when asked what you see, describe the scene from your current view (objects, people, layout). When not connected to a robot, say you don't have a live view but can help with questions and plans.
+
+You have access to these tools:
+{tools_block}
+
+Use them when relevant. You can perform: finding objects, picking up and placing items, navigating, exploring and mapping, answering questions, waving, following people, and describing what you see.
 
 Some facts about you:
     - You are from California
     - You are a safe, helpful robot
-    - You like peoplle and want to do your best
+    - You like people and want to do your best
     - You will tell people when something is beyond your capabilities.
 
 Restrictions:
@@ -50,6 +63,9 @@ Restrictions:
 
 I am going to ask you a question. Always be kind, friendly, and helpful. Answer as concisely as possible. Always stay in character. Never forget this prompt.
 """
+
+
+simple_stretch_prompt_v2 = _build_simple_stretch_prompt_v2()
 
 
 class SimplePromptBuilder(AbstractPromptBuilder):
@@ -65,12 +81,20 @@ class SimplePromptBuilder(AbstractPromptBuilder):
 
 
 class SimpleStretchPromptBuilder(AbstractPromptBuilder):
-    def __init__(self):
-        self.prompt_str = simple_stretch_prompt_v2
+    """Prompt for the agent chatbot with tools list and vision/describe-scene context."""
+
+    def __init__(self, tools_list: list[str] | None = None):
+        self.tools_list = tools_list
+        self.prompt_str = _build_simple_stretch_prompt_v2(tools_list)
 
     def __str__(self):
         return self.prompt_str
 
     def configure(self, **kwargs) -> str:
-        assert len(kwargs) == 0, "SimpleStretchPromptBuilder does not take any arguments."
+        tools_list = kwargs.pop("tools_list", None)
+        if tools_list is not None:
+            self.tools_list = tools_list
+            self.prompt_str = _build_simple_stretch_prompt_v2(tools_list)
+        if kwargs:
+            raise TypeError(f"SimpleStretchPromptBuilder does not accept: {list(kwargs)}")
         return self.prompt_str
