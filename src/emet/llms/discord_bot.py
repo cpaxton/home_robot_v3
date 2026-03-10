@@ -45,12 +45,14 @@ class EmetDiscordBot(DiscordBot):
         manipulation_only: bool = False,
         kwargs: Dict[str, Any] = None,
         home_channel: str = "talk-to-robot",
+        executor: Any = None,
     ) -> None:
         """
         Create a new Discord bot that can interact with the robot.
 
         Args:
             agent: The robot agent that will be used to control the robot.
+            executor: Optional existing executor (e.g. DynamemTaskExecutor). If provided for task dynamem, it is reused and its discord_bot is set to self.
             token: The token for the discord bot. Will be read from env if not available.
             llm: The language model to use.
             task: The task to perform. Currently only "pickup" is supported.
@@ -104,19 +106,23 @@ class EmetDiscordBot(DiscordBot):
                 discord_bot=self,
             )  # type: ignore
         elif self.task == "dynamem":
-            self.executor = DynamemTaskExecutor(
-                robot,
-                agent.parameters,
-                visual_servo=visual_servo,
-                match_method=kwargs["match_method"],
-                device_id=device_id,
-                output_path=output_path,
-                server_ip=server_ip,
-                skip_confirmations=skip_confirmations,
-                mllm=kwargs["mllm_for_visual_grounding"],
-                manipulation_only=manipulation_only,
-                discord_bot=self,
-            )  # type: ignore
+            if executor is not None:
+                self.executor = executor
+                self.executor.discord_bot = self  # type: ignore
+            else:
+                self.executor = DynamemTaskExecutor(
+                    robot,
+                    agent.parameters,
+                    visual_servo=visual_servo,
+                    match_method=kwargs["match_method"],
+                    device_id=device_id,
+                    output_path=output_path,
+                    server_ip=server_ip,
+                    skip_confirmations=skip_confirmations,
+                    mllm=kwargs["mllm_for_visual_grounding"],
+                    manipulation_only=manipulation_only,
+                    discord_bot=self,
+                )  # type: ignore
         elif self.task == "eqa":
             self.executor = EQAExecuter(agent, discord_bot=self)  # type: ignore
         elif self.task == "graph_eqa":

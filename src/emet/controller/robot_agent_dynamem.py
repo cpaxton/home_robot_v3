@@ -110,14 +110,15 @@ class DynamemController(BaseRobotAgent):
         else:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        if not os.path.exists("dynamem_log"):
-            os.makedirs("dynamem_log")
+        logs_dir = "logs"
+        if not os.path.exists(logs_dir):
+            os.makedirs(logs_dir)
 
         if log is None:
             current_datetime = datetime.now()
-            self.log = "dynamem_log/debug_" + current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
+            self.log = os.path.join(logs_dir, "memory_" + current_datetime.strftime("%Y-%m-%d_%H-%M-%S"))
         else:
-            self.log = "dynamem_log/" + log
+            self.log = os.path.join(logs_dir, log) if not os.path.isabs(log) else log
 
         self.create_obstacle_map(parameters)
 

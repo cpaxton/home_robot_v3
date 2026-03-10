@@ -2,7 +2,7 @@
 #
 # Agent chatbot: lightweight LLM (default Qwen 2.5 Coder) for local testing.
 # Run with: emet run agent
-# Optional: --llm, --device cpu, --voice. Tool-calling and robot integration can be added later.
+# With --robot-ip: start robot with logging, optional --input-path and --discord; tool loop.
 
 import os
 import timeit
@@ -38,7 +38,29 @@ DEFAULT_AGENT_LLM = "qwen25-Coder-1.5B-Instruct-Int4"
 )
 @click.option("--voice", is_flag=True, help="Use voice input (Whisper).")
 @click.option("--max-tokens", default=1024, type=int, help="Max new tokens per reply.")
-@click.option("--robot-ip", "--robot_ip", default="", help="Robot IP (for future robot integration; ignored in chat-only mode).")
+@click.option(
+    "--robot-ip",
+    "--robot_ip",
+    default="",
+    help="Robot IP. If set, start robot with logging and run agent loop (explore, pick/place, query memory, optional Discord).",
+)
+@click.option(
+    "--input-path",
+    type=click.Path(),
+    default=None,
+    help="Memory directory to load when using --robot-ip.",
+)
+@click.option(
+    "--discord",
+    is_flag=True,
+    help="Start Discord bot when using --robot-ip (requires DISCORD_TOKEN in env).",
+)
+@click.option(
+    "--use-llm",
+    "--use_llm",
+    is_flag=True,
+    help="Use LLM to parse natural language when running with --robot-ip.",
+)
 def main(
     llm: str,
     prompt: str,
@@ -46,14 +68,33 @@ def main(
     voice: bool,
     max_tokens: int,
     robot_ip: str,
+    input_path: str | None,
+    discord: bool,
+    use_llm: bool,
 ) -> None:
     """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
+
+    With --robot-ip: start robot, optional memory load and Discord, then run task loop (E=explore, M=pick/place, Q=question, P=send picture).
 
     Examples:
       emet run agent
       emet run agent --device cpu
       emet run agent --llm qwen25-Coder-3B-Instruct-Int4
+      emet run agent --robot-ip 127.0.0.1 --input-path logs/memory_xxx --discord
     """
+    if robot_ip:
+        from emet.agent import run_agent_with_robot
+
+        run_agent_with_robot(
+            robot_ip=robot_ip,
+            input_path=input_path,
+            discord=discord,
+            use_llm=use_llm,
+            llm=llm,
+            skip_confirmations=True,
+        )
+        return
+
     prompt_builder = get_prompt_builder(prompt)
     client = get_llm_client(llm, prompt_builder, device=device)
     if hasattr(client, "max_tokens"):

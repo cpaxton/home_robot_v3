@@ -46,6 +46,7 @@ logger = Logger(__name__)
 #   world/frames/<i>       Transform3D
 #   world/frames/<i>/rgb   Image
 #   world/frames/<i>/depth DepthImage
+#   world/frames/current   (at each frame time) Transform3D, rgb, depth — scrub "frame" timeline for playback
 #   world/graph/nodes      Points3D (graph nodes)
 #   world/memory/text      TextDocument
 #   world/head_camera      Transform3D (optional); world/head_camera/rgb Image, world/head_camera/depth
@@ -329,9 +330,11 @@ class RerunVisualizer:
             self.setup_blueprint(collapse_panels)
 
     def setup_memory_blueprint(self, collapse_panels: bool, num_frames: int) -> None:
-        """Blueprint for viewing saved memory: 3D, one 2D per frame (rgb), and text panel."""
-        # Spatial2DView shows 2D content under origin (rgb/depth under world/frames/i).
+        """Blueprint for viewing saved memory: 3D, current-frame video (scrub timeline), frame strip, text."""
+        # "Current frame" shows world/frames/current — log at each frame time for video-like scrub.
         frame_views = [
+            rrb.Spatial2DView(name="current_frame", origin="world/frames/current"),
+        ] + [
             rrb.Spatial2DView(name=f"frame_{i}", origin=f"world/frames/{i}")
             for i in range(min(num_frames, 16))  # cap at 16 panels
         ]
@@ -751,6 +754,22 @@ class RerunVisualizer:
                 head = " | ".join(meta) if meta else ""
                 lines.append(f"- {head}\n  {m.text}" if head else f"- {m.text}")
             parts.append("\n".join(lines))
+        # Robot state over time (base pose per frame); scrub the 'frame' timeline in the viewer to see it.
+        if state.frames:
+            state_lines = ["## Robot state over time", "Scrub the **frame** timeline to see the robot move and the current-frame image.", ""]
+            for i, fr in enumerate(state.frames):
+                xyt = fr.base_pose
+                if xyt is not None:
+                    xyt = np.asarray(xyt).ravel()
+                    if len(xyt) >= 3:
+                        state_lines.append(f"- **Frame {i}**: base (x={xyt[0]:.2f}, y={xyt[1]:.2f}, θ={xyt[2]:.2f})")
+                    elif len(xyt) >= 2:
+                        state_lines.append(f"- **Frame {i}**: base (x={xyt[0]:.2f}, y={xyt[1]:.2f})")
+                else:
+                    trans = fr.camera_pose[:3, 3] if fr.camera_pose is not None else None
+                    if trans is not None:
+                        state_lines.append(f"- **Frame {i}**: camera at (x={trans[0]:.2f}, y={trans[1]:.2f}, z={trans[2]:.2f})")
+            parts.append("\n".join(state_lines))
         if parts:
             rr.log(
                 "world/memory/text",
@@ -768,6 +787,42 @@ class RerunVisualizer:
                 ),
                 **log_kw,
             )
+
+        # Frame timeline: log robot pose and current-frame image at each time for scrub playback.
+        if static and state.frames:
+            for i, frame in enumerate(state.frames):
+                rr.set_time_sequence("frame", i)
+                x, y, theta = 0.0, 0.0, 0.0
+                if frame.base_pose is not None:
+                    xyt = np.asarray(frame.base_pose).ravel()
+                    if len(xyt) >= 3:
+                        x, y, theta = float(xyt[0]), float(xyt[1]), float(xyt[2])
+                    elif len(xyt) >= 2:
+                        x, y = float(xyt[0]), float(xyt[1])
+                elif frame.camera_pose is not None:
+                    trans = frame.camera_pose[:3, 3]
+                    x, y = float(trans[0]), float(trans[1])
+                rr.log(
+                    "world/robot",
+                    rr.Transform3D(
+                        translation=[x, y, 0],
+                        rotation=rr.RotationAxisAngle(axis=[0, 0, 1], radians=theta),
+                        axis_length=0.5,
+                    ),
+                )
+                rr.log(
+                    "world/frames/current",
+                    rr.Transform3D(translation=[0, 0, 0], mat3x3=np.eye(3)),
+                )
+                if frame.rgb is not None:
+                    rgb = np.asarray(frame.rgb)
+                    if rgb.ndim == 3 and rgb.shape[2] == 3:
+                        rgb = _rgb_to_uint8(rgb)
+                    rr.log("world/frames/current/rgb", rr.Image(rgb))
+                if frame.depth is not None:
+                    depth = np.asarray(frame.depth)
+                    if depth.ndim == 2:
+                        rr.log("world/frames/current/depth", rr.DepthImage(depth))
 
     def update_voxel_map(
         self,

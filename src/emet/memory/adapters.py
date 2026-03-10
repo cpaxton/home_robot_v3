@@ -130,6 +130,21 @@ class DynaMemBackend(MemoryBackend):
             extra_info={"debug_text": debug_text},
         )
 
+    def query_answer(
+        self,
+        question: str,
+        xyt: Optional[Union[Any, np.ndarray, list]] = None,
+        planner: Any = None,
+    ) -> Tuple[str, str, bool, str, Optional[np.ndarray], Any]:
+        """EQA-style query delegating to the underlying voxel map.
+
+        Returns:
+            reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
+        """
+        if not hasattr(self._voxel_map, "query_answer"):
+            raise NotImplementedError("This voxel map does not support query_answer")
+        return self._voxel_map.query_answer(question, xyt, planner)
+
     def save(self, path: str) -> None:
         """Save to common directory format. Path must be a directory."""
         dir_path = Path(path)
