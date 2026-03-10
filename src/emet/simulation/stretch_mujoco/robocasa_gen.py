@@ -6,11 +6,16 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 import robosuite
+# Import robocasa so its environments register with robosuite.make(); otherwise
+# robosuite.make("PickPlaceCounterToCabinet") raises "Environment ... not found".
+import robocasa  # noqa: F401
 from robocasa.models.scenes.scene_registry import LayoutType, StyleType
 from robosuite import load_part_controller_config
+from robosuite.utils.transform_utils import euler2mat, mat2quat
 from termcolor import colored
 
 from emet.simulation.stretch_mujoco.utils import (
+    ensure_mesh_inertia,
     get_absolute_path_stretch_xml,
     insert_line_after_mujoco_tag,
     replace_xml_tag_value,
@@ -127,7 +132,7 @@ def style_from_str(style:str) -> int:
     return list(get_styles().values()).index(style)
 
 def model_generation_wizard(
-    task: str = "PnPCounterToCab",
+    task: str = "PickPlaceCounterToCabinet",
     layout: int = None,
     style: int = None,
     write_to_file: str = None,
@@ -181,6 +186,8 @@ def model_generation_wizard(
         use_camera_obs=False,
         control_freq=20,
     )
+    # Sim is created on first reset(); without this, env.sim is None.
+    env.reset()
     print(
         colored(
             f"Showing configuration:\n    Layout: {layouts[layout]}\n    Style: {styles[style]}",
@@ -221,10 +228,33 @@ def model_generation_wizard(
             "quat": object_placements[obj_name][1],
         }
 
-    xml, robot_base_fixture_pose = custom_cleanups(xml)
+    xml, remove_robot_attrib = custom_cleanups(xml)
+
+    # Use the env's actual robot spawn pose (set on reset()), not the removed body's
+    # attrib (which is the placeholder 10, 10, 0). Otherwise Stretch spawns off-scene.
+    if hasattr(env, "init_robot_base_pos") and hasattr(env, "init_robot_base_ori"):
+        pos = np.asarray(env.init_robot_base_pos)
+        ori_euler = np.asarray(env.init_robot_base_ori)
+        quat_xyzw = mat2quat(euler2mat(ori_euler))
+        quat_wxyz = quat_xyzw[[3, 0, 1, 2]]  # MuJoCo body quat is w x y z
+        robot_base_fixture_pose = {
+            "pos": " ".join(map(str, pos)),
+            "quat": " ".join(map(str, quat_wxyz)),
+        }
+    elif remove_robot_attrib is not None and "pos" in remove_robot_attrib and "quat" in remove_robot_attrib:
+        robot_base_fixture_pose = remove_robot_attrib
+    else:
+        # Fallback: spawn near origin so the robot is visible in the scene
+        robot_base_fixture_pose = {
+            "pos": "0 0 0",
+            "quat": "1 0 0 0",
+        }
 
     if robot_spawn_pose is not None:
         robot_base_fixture_pose = robot_spawn_pose
+
+    # MuJoCo 2.x: ensure every <mesh> in the kitchen XML has inertia="shell" (get_xml() may omit it)
+    xml = ensure_mesh_inertia(xml)
 
     # add stretch to kitchen
     click.secho("\nMaking Robot Placement...\n", fg="yellow")

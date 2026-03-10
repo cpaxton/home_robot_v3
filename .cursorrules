@@ -1,0 +1,27 @@
+# Home Robot v2 / Emet – Cursor code rules
+
+## Testing
+- Tests live in `src/test/`. Run the full suite with dev deps:
+  - `uv sync --extra dev` then `uv run python -m pytest src/test -v`
+- Sim-heavy tests (e.g. `test_red_cylinder_in_sim.py`) are skipped unless `RUN_SIM_TESTS=1`.
+- When changing behavior, run the relevant tests and fix any failures before committing.
+
+## Dependencies
+- **rerun-sdk**: Use `>=0.21.0,<0.23.0` (compatible with lerobot). Do not pin to 0.18.x.
+- **third_party/robocasa**: This repo uses a fork. Keep `lerobot==0.3.3` and `mujoco>=3.3.0` in `install_requires` in `third_party/robocasa/setup.py`. Keep `mujoco>=3.3.0` in pyproject.toml `[tool.uv]` override-dependencies so the resolver uses the local robocasa (PyPI robocasa pins mujoco==3.2.6 and would otherwise be selected when the path is not considered).
+- **pyproject.toml** and **src/setup.py**: Keep dependency versions in sync where both exist.
+- **third_party/robosuite**: Keep `mujoco` requirement aligned with `pyproject.toml` sim extra (e.g. `mujoco>=3.3.0`). Robocasa imports `get_elements` from robosuite's `mjcf_utils`; use the local fork so that API is available.
+
+## Package layout
+- Main package is `emet` under `src/`. CLI entrypoint: `emet` (see `emet.cli:main`).
+- Apps and visualization: `src/emet/app/`, `src/emet/visualization/` (e.g. rerun in `src/emet/visualization/rerun.py`).
+- Rerun usage appears in dynamem, mapping, and logging; keep usage compatible with rerun-sdk 0.21+.
+
+## Code quality
+- Use **ruff** for linting (see `[tool.ruff]` in pyproject.toml). Pre-commit is enabled for this repo.
+- Prefer project style (ruff/black/isort as configured); avoid ad-hoc formatting.
+
+## Simulation
+- MuJoCo sim: `emet serve mujoco --use-robocasa` (or `python -m emet.simulation.mujoco_server --use-robocasa`).
+- DynaMem: `emet run dynamem ...`. Rerun viewer: `http://localhost:9090?url=ws://localhost:9877`.
+- Simulation install: `./install.sh --sim -y`; robocasa/robosuite come from `third_party/` (see install scripts).

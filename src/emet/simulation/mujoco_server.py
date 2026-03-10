@@ -825,8 +825,8 @@ class MujocoZmqServer(BaseZmqServer):
 @click.option(
     "--robocasa-task",
     "--robocasa_task",
-    default="PnPCounterToCab",
-    help="Robocasa task to generate",
+    default="PickPlaceCounterToCabinet",
+    help="Robocasa task name (e.g. PickPlaceCounterToCabinet, OpenCabinet). Use --list-robocasa-tasks to show all.",
 )
 @click.option(
     "--robocasa-style", "--robocasa_style", type=int, default=1, help="Robocasa style to generate"
@@ -867,6 +867,12 @@ class MujocoZmqServer(BaseZmqServer):
     help="Write the generated scene to an xml file",
     is_flag=True,
 )
+@click.option(
+    "--list-robocasa-tasks",
+    "list_robocasa_tasks",
+    is_flag=True,
+    help="Print registered Robocasa task names and exit (use with --use-robocasa env).",
+)
 def main(
     port_offset: int,
     send_port: Optional[int],
@@ -889,7 +895,21 @@ def main(
     no_cameras: bool = False,
     use_glx: bool = False,
     seed: int = 0,
+    list_robocasa_tasks: bool = False,
 ):
+
+    if list_robocasa_tasks:
+        try:
+            import robocasa
+            from robocasa.environments import ALL_KITCHEN_ENVIRONMENTS
+            tasks = sorted(ALL_KITCHEN_ENVIRONMENTS)
+            print("Robocasa tasks (use with --robocasa-task <name>):")
+            for t in tasks:
+                print(f"  {t}")
+            sys.exit(0)
+        except Exception as e:
+            logger.error("Could not list Robocasa tasks: %s", e)
+            sys.exit(1)
 
     scene_model = None
     objects_info = None

@@ -162,13 +162,18 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
     def find_alignment_for_text(self, text: str):
         points, features, _, _ = self.semantic_memory.get_pointcloud()
-        alignments = self.find_alignment_over_model(text).cpu()
+        alignments = self.find_alignment_over_model(text)
+        if alignments is None or points is None:
+            return None
+        alignments = alignments.cpu()
         return points[alignments.argmax(dim=-1)].detach().cpu()
 
     def find_obs_id_for_text(self, text: str):
+        alignments = self.find_alignment_over_model(text)
+        if alignments is None:
+            return None
         obs_counts = self.semantic_memory._obs_counts
-        alignments = self.find_alignment_over_model(text).cpu()
-        return obs_counts[alignments.argmax(dim=-1)].detach().cpu()
+        return obs_counts[alignments.cpu().argmax(dim=-1)].detach().cpu()
 
     def verify_point(
         self,
@@ -185,11 +190,16 @@ class SparseVoxelMap(SparseVoxelMapBase):
         if isinstance(point, np.ndarray):
             point = torch.from_numpy(point)
         points, _, _, _ = self.semantic_memory.get_pointcloud()
+        if points is None:
+            return False
         distances = torch.linalg.norm(point - points.detach().cpu(), dim=-1)
         if torch.min(distances) > distance_threshold:
             print("Points are so far from other points!")
             return False
-        alignments = self.find_alignment_over_model(text).detach().cpu()[0]
+        alignments = self.find_alignment_over_model(text)
+        if alignments is None:
+            return False
+        alignments = alignments.detach().cpu()[0]
         if torch.max(alignments[distances <= distance_threshold]) < similarity_threshold:
             print("Points close the the point are not similar to the text!")
         return torch.max(alignments[distances < distance_threshold]) >= similarity_threshold
@@ -485,8 +495,15 @@ class SparseVoxelMap(SparseVoxelMapBase):
             max_img_num: The maximum number of images we want to identify as relevant objects.
         """
         points, _, _, _ = self.semantic_memory.get_pointcloud()
+        alignments = self.find_alignment_over_model(text)
+        if points is None or alignments is None:
+            return (
+                torch.tensor([], dtype=torch.long),
+                torch.zeros(0, 3),
+                torch.tensor([]),
+            )
         points = points.cpu()
-        alignments = self.find_alignment_over_model(text).cpu().squeeze()
+        alignments = alignments.cpu().squeeze()
         obs_counts = self.semantic_memory._obs_counts.cpu()
 
         num_points = alignments.numel()
@@ -620,7 +637,15 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
     def localize_with_mllm(self, text: str, debug=True, return_debug=False):
         points, _, _, _ = self.semantic_memory.get_pointcloud()
-        alignments = self.find_alignment_over_model(text).cpu()
+        alignments = self.find_alignment_over_model(text)
+        if alignments is None or points is None:
+            msg = "Map has no points yet; run exploration first."
+            if not debug:
+                return None
+            if not return_debug:
+                return None, msg
+            return None, msg, None, None
+        alignments = alignments.cpu()
         point = points[alignments.argmax(dim=-1)].detach().cpu().squeeze()
         obs_counts = self.semantic_memory._obs_counts
         image_id = obs_counts[alignments.argmax(dim=-1)].detach().cpu()
@@ -689,7 +714,15 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self, text, similarity_threshold: float = 0.14, debug=True, return_debug=False
     ):
         points, _, _, _ = self.semantic_memory.get_pointcloud()
-        alignments = self.find_alignment_over_model(text).cpu()
+        alignments = self.find_alignment_over_model(text)
+        if alignments is None or points is None:
+            msg = "Map has no points yet; run exploration first."
+            if not debug:
+                return None
+            if not return_debug:
+                return None, msg
+            return None, msg, None, None
+        alignments = alignments.cpu()
         point = points[alignments.argmax(dim=-1)].detach().cpu().squeeze()
         obs_counts = self.semantic_memory._obs_counts
         obs_id = obs_counts[alignments.argmax(dim=-1)].detach().cpu()
