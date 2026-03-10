@@ -241,7 +241,7 @@ class YORBackend(RobotBackend):
 
 ## Implementation Order
 
-1. ~~Create `docs/ARCHITECTURE_PLAN.md` (this file)~~
+1. ~~Create `docs/plans/ARCHITECTURE_PLAN.md` (this file)~~
 2. ~~Create `src/emet/` skeleton with `core/`, `robots/base.py`, `simulators/base.py`~~
 3. ~~Add robot stubs: `stretch` (real), `mobile_aloha`, `galaxea_r1`, `innate_mars`, `yor`~~
 4. ~~Add simulator stubs: `mujoco` (real), `behavior1k`, `molmo_spaces`~~

@@ -79,7 +79,11 @@ class StretchMujocoSimulator:
         self._command_lock = Lock()
 
     def start(
-        self, show_viewer_ui: bool = False, headless: bool = False, use_passive_viewer: bool = True
+        self,
+        show_viewer_ui: bool = False,
+        headless: bool = False,
+        use_passive_viewer: bool = True,
+        use_glx: bool = False,
     ) -> None:
         """
         Start the simulator
@@ -88,6 +92,7 @@ class StretchMujocoSimulator:
             show_viewer_ui: bool, whether to show the Mujoco viewer UI
             headless: bool, whether to run the simulation in headless mode
             use_passive_viewer: bool, to use the passive or managed mujoco UI viewer.
+            use_glx: bool, if True use default/GLX instead of EGL (for Xvfb on WSL).
         """
         self.is_stop_called = False
 
@@ -110,7 +115,8 @@ class StretchMujocoSimulator:
         # Only disable cameras when headless + no display + not Linux (Mac/Windows have no headless GL).
         if headless and not os.environ.get("DISPLAY"):
             if platform.system() == "Linux":
-                os.environ.setdefault("MUJOCO_GL", "egl")  # GPU headless rendering
+                if not use_glx:
+                    os.environ.setdefault("MUJOCO_GL", "egl")  # GPU headless rendering
                 cameras_for_server = self._cameras_to_use
             else:
                 cameras_for_server = []  # Mac/Windows: no EGL, disable cameras
@@ -119,17 +125,16 @@ class StretchMujocoSimulator:
         else:
             cameras_for_server = self._cameras_to_use
 
-        # On Linux, use EGL for MuJoCo Renderer so camera rendering works when GLX is broken
-        # (e.g. "GLX: Failed to create context: BadValue", gladLoadGL error after driver issues).
-        # Must be set before the child process starts so it inherits the env.
-        if platform.system() == "Linux" and cameras_for_server:
+        # On Linux, use EGL unless --use-glx (e.g. for Xvfb on WSL to get camera images).
+        if platform.system() == "Linux" and cameras_for_server and not use_glx:
             if "MUJOCO_GL" not in os.environ:
                 print(
                     "Warning: Setting MUJOCO_GL=egl for camera rendering (avoids GLX/gladLoadGL errors). "
-                    "Use --headless to run without a viewer, or unset MUJOCO_GL to try the default backend."
+                    "Use --use-glx with Xvfb on WSL if EGL hangs."
                 )
                 os.environ["MUJOCO_GL"] = "egl"
 
+        self._cameras_passed = cameras_for_server  # used so parent only waits for camera data when cameras are enabled
         self._server_process = Process(
             target=mujoco_server.launch_server,
             name="MujocoProcess",
@@ -143,6 +148,7 @@ class StretchMujocoSimulator:
                 cameras_for_server,
                 self._start_translation,
                 self._start_rotation_quat,
+                use_glx,
             ),
             daemon=False,  # We're gonna handle terminating this in stop_mujoco_process()
         )
@@ -154,13 +160,21 @@ class StretchMujocoSimulator:
         atexit.register(self.stop)
 
         logger.alert("Starting Stretch MuJoCo Simulator...")
-        while self.pull_status().time == 0 or self.pull_camera_data().time == 0:
+        need_camera = len(self._cameras_passed) > 0
+        while self.pull_status().time == 0 or (
+            need_camera and self.pull_camera_data().time == 0
+        ):
             time.sleep(1)
             logger.warning("Still waiting to connect to the MuJoCo Simulator.")
 
             if not self.is_running():
-                logger.warning("The simulator is not running anymore, quitting..")
-                return
+                self._server_process.join(timeout=2.0)
+                raise RuntimeError(
+                    "The MuJoCo simulator process exited before connecting. "
+                    "On WSL, try: Xvfb :99 -screen 0 1024x768x24 & then DISPLAY=:99 emet serve mujoco --headless --use-glx. "
+                    "Or use --no-cameras if you do not need camera images. "
+                    "Check the process output above for OpenGL/EGL/GLX errors."
+                )
 
         logger.alert("The MuJoCo Simulator is connected.")
 

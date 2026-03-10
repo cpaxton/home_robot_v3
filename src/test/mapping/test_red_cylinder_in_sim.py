@@ -1,12 +1,14 @@
 # Copyright (c) Hello Robot, Inc.
 #
-# Tests that Dynamem positively detects the red cylinder in MuJoCo simulation
-# (default scene).
+# Integration test: robot moves around in the default MuJoCo scene (rotate_in_place),
+# then we assert that the memory backend can find the red cylinder. Ensures the full
+# stack (sim → camera → encoder → semantic memory → localize_text) works.
 #
 # Run from project root with full env (e.g. after `pip install -e .` or `emet sync -e sim`):
-#   RUN_SIM_TESTS=1 pytest src/test/mapping/test_red_cylinder_in_sim.py -v
-# On Linux, MuJoCo uses EGL (headless). Test starts the sim, runs rotate_in_place,
-# then asserts localize_text("red cylinder") returns a point near the table object.
+#   uv run emet test -v src/test/mapping/test_red_cylinder_in_sim.py
+# Sim tests run by default; use RUN_SIM_TESTS=0 or emet test --no-sim to skip.
+# With timeout (requires pytest-timeout): same command; test is marked with 120s timeout.
+# On Linux, MuJoCo uses EGL (headless).
 
 import os
 import socket
@@ -21,8 +23,9 @@ import pytest
 # Ensure subprocess can import emet (pytest adds src to path; subprocess does not)
 _SRC_ROOT = Path(__file__).resolve().parent.parent.parent
 
-# Skip unless explicitly requested (sim is slow and needs display/EGL)
-RUN_SIM_TESTS = os.environ.get("RUN_SIM_TESTS", "").strip() in ("1", "true", "yes")
+# Run sim tests by default; skip only when explicitly disabled (e.g. RUN_SIM_TESTS=0)
+_run_sim = os.environ.get("RUN_SIM_TESTS", "1").strip().lower()
+RUN_SIM_TESTS = _run_sim not in ("0", "false", "no", "off")
 
 
 def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
@@ -39,13 +42,13 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
 
 @pytest.mark.skipif(
     not RUN_SIM_TESTS,
-    reason="Set RUN_SIM_TESTS=1 to run (starts MuJoCo sim and Dynamem)",
+    reason="Set RUN_SIM_TESTS=0 to skip (sim tests run by default)",
 )
+@pytest.mark.timeout(120)
 def test_red_cylinder_detected_in_sim():
     """
-    Start MuJoCo with default scene (red cylinder + blue cube), run Dynamem
-    (rotate_in_place to build map), then assert localize_text('red cylinder')
-    returns a point near the expected table position.
+    Robot moves around in the default MuJoCo scene (rotate_in_place to build map),
+    then we find the red cylinder via localize_text. Fails if not found within 120s.
     """
     proc = None
     robot = None
@@ -105,14 +108,54 @@ def test_red_cylinder_detected_in_sim():
         target = point.squeeze()
         assert target.shape == (3,), "target should be 3D (x, y, z)"
 
-        # Default scene: red cylinder (object2) at roughly (0.08, -0.55, 0.6)
-        expected = np.array([0.08, -0.55, 0.6], dtype=np.float64)
+        # Default scene: red cylinder (object2) at (0.08, -0.55, 0.6), blue cube (object1) at (-0.02, -0.55, 0.6)
+        expected_red = np.array([0.08, -0.55, 0.6], dtype=np.float64)
+        expected_blue = np.array([-0.02, -0.55, 0.6], dtype=np.float64)
         np.testing.assert_allclose(
             target.cpu().numpy() if hasattr(target, "cpu") else target,
-            expected,
+            expected_red,
             atol=0.25,
             err_msg="Target point should be near red cylinder in default scene",
         )
+
+        # Blue cube (object1) at roughly (-0.02, -0.55, 0.6) should be in memory after one spin
+        result_blue = voxel_map.localize_text("blue cube", return_debug=True)
+        point_blue = result_blue[0] if isinstance(result_blue, (list, tuple)) else result_blue
+        if point_blue is not None:
+            target_blue = point_blue.squeeze()
+            np.testing.assert_allclose(
+                target_blue.cpu().numpy() if hasattr(target_blue, "cpu") else target_blue,
+                expected_blue,
+                atol=0.25,
+                err_msg="Target point should be near blue cube in default scene",
+            )
+
+        # Unified MemoryBackend: same scene must yield red cylinder (and blue cube if detected) via interface
+        from emet.memory.backend import get_memory_backend
+
+        backend = get_memory_backend("dynamem", voxel_map=voxel_map)
+        check_red = backend.check_memory_for_object("red cylinder")
+        assert check_red.confidence > 0, (
+            "Unified backend check_memory_for_object('red cylinder') should have confidence > 0 after spin."
+        )
+        assert check_red.location_xyz is not None
+        np.testing.assert_allclose(
+            np.asarray(check_red.location_xyz).flat[:3],
+            expected_red,
+            atol=0.25,
+            err_msg="Unified backend red cylinder location",
+        )
+        loc_red = backend.localize_text("red cylinder")
+        assert loc_red.success and loc_red.point_xyz is not None
+
+        check_blue = backend.check_memory_for_object("blue cube")
+        if check_blue.confidence > 0 and check_blue.location_xyz is not None:
+            np.testing.assert_allclose(
+                np.asarray(check_blue.location_xyz).flat[:3],
+                expected_blue,
+                atol=0.25,
+                err_msg="Unified backend blue cube location",
+            )
     finally:
         if robot is not None:
             try:
