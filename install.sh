@@ -5,7 +5,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+ROOT_DIR="$SCRIPT_DIR"
 cd "$ROOT_DIR"
 
 # Parse options
@@ -70,7 +70,7 @@ echo ""
 echo "Setting up git-lfs..."
 git lfs install || { echo "Install git-lfs: sudo apt-get install git-lfs"; exit 1; }
 
-# Create venv and install with uv (uv sync creates .venv automatically)
+# Create venv and install with uv (uv sync creates .venv automatically; uses uv.lock if present)
 echo ""
 echo "Creating virtual environment and installing dependencies..."
 EXTRA_ARGS="--extra dev"
