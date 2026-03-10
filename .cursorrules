@@ -25,6 +25,7 @@
 ## Code quality
 - Use **ruff** for linting (see `[tool.ruff]` in pyproject.toml). Pre-commit is enabled for this repo.
 - Prefer project style (ruff/black/isort as configured); avoid ad-hoc formatting.
+- **Imports**: Place all imports at the top of the file. Use inline imports only when necessary (e.g. to avoid circular imports or to defer loading a heavy optional dependency).
 
 ## Simulation
 - MuJoCo sim: `emet serve mujoco --use-robocasa` (or `python -m emet.simulation.mujoco_server --use-robocasa`).
