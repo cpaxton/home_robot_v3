@@ -26,8 +26,8 @@ from emet.utils.logger import Logger
 logger = Logger(__name__)
 
 
-class StretchDiscordBot(DiscordBot):
-    """Simple stretch discord bot. Connects to Discord via the API."""
+class EmetDiscordBot(DiscordBot):
+    """Discord bot that connects to a robot agent (pickup, dynamem, eqa, graph_eqa)."""
 
     def __init__(
         self,
@@ -44,7 +44,7 @@ class StretchDiscordBot(DiscordBot):
         debug_llm: bool = False,
         manipulation_only: bool = False,
         kwargs: Dict[str, Any] = None,
-        home_channel: str = "talk-to-stretch",
+        home_channel: str = "talk-to-robot",
     ) -> None:
         """
         Create a new Discord bot that can interact with the robot.
@@ -246,9 +246,18 @@ class StretchDiscordBot(DiscordBot):
                 print("This task was explicitly triggered.")
                 await task.channel.send(task.message)
                 if task.content is not None:
-                    # Filename is computed from date and time
+                    # Content may be numpy (from obs.rgb) or PIL
+                    import io
+                    import numpy as np
+                    from PIL import Image as PILImage
+                    buf = io.BytesIO()
+                    img = task.content
+                    if isinstance(img, np.ndarray):
+                        img = PILImage.fromarray(img.astype(np.uint8))
+                    img.save(buf, format="PNG")
+                    buf.seek(0)
                     filename = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".png"
-                    await task.channel.send(file=discord.File(task.content, filename=filename))
+                    await task.channel.send(file=discord.File(buf, filename=filename))
                 return
         except Exception as e:
             print(colored("Error in handling task: " + str(e), "red"))
@@ -276,9 +285,12 @@ class StretchDiscordBot(DiscordBot):
                 with self._plan_lock:
                     response, channel = self.next_plan
                     self.next_plan = None
-                # response is in the form of "User: ******"
-                response = response.split(":", 1)[1]
-                self.executor(response, channel=channel)
+                # For eqa/graph_eqa, response is the raw message string (optionally "User: question"); for pickup/dynamem it's List[Tuple[str, str]]
+                if self.task in ("eqa", "graph_eqa") and isinstance(response, str):
+                    question = response.split(":", 1)[-1].strip() if ":" in response else response
+                    self.executor(question, channel=channel)
+                else:
+                    self.executor(response, channel=channel)
             else:
                 time.sleep(0.01)
 

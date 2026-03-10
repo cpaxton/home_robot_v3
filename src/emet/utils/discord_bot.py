@@ -32,7 +32,7 @@ import threading
 import timeit
 from dataclasses import dataclass
 from itertools import chain
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import discord
 from discord.ext import commands, tasks
@@ -53,11 +53,13 @@ def read_discord_token_from_env():
 
 @dataclass
 class Task:
-    message: discord.Message
+    """One item in the bot's task queue. message is text; content is optional image (PIL, numpy, or file-like)."""
+
+    message: Optional[str]
     channel: discord.TextChannel
-    content: str
+    content: Optional[Any] = None
     explicit: bool = False
-    t: float = None
+    t: Optional[float] = None
 
 
 class ChannelList:
@@ -96,7 +98,7 @@ class ChannelList:
         return self.is_valid(channel)
 
     def __iter__(self):
-        return chain(self.home_channels, (vc.channel for vc in self.visiting_channels.values()))
+        return chain(self.home_channels, self.visiting_channels.keys())
 
     def __len__(self):
         return len(self.home_channels) + len(self.visiting_channels)
@@ -177,20 +179,24 @@ class DiscordBot:
             print(" - Sending message:", task.message)
             await task.channel.send(task.message)
         if task.content is not None:
-            # Send an image
-            print(" - Sending content:", task.content)
-            # This should be a Discord file
-            # Create a BytesIO object
-            byte_arr = io.BytesIO()
-
-            image = task.content
-            # Save the image to the BytesIO object
-            image.save(byte_arr, format="PNG")  # Save as PNG
-            print(" - Image saved to byte array, format: ", image.format)
-
-            # Move the cursor to the beginning of the BytesIO object
-            byte_arr.seek(0)
-
+            # Send an image (PIL Image, numpy array, or file-like BytesIO)
+            print(" - Sending content (image)")
+            content = task.content
+            if hasattr(content, "read"):
+                byte_arr = content
+                if hasattr(byte_arr, "seek"):
+                    byte_arr.seek(0)
+            else:
+                byte_arr = io.BytesIO()
+                try:
+                    import numpy as np
+                    from PIL import Image as PILImage
+                    if isinstance(content, np.ndarray):
+                        content = PILImage.fromarray(content.astype(np.uint8))
+                except ImportError:
+                    pass
+                content.save(byte_arr, format="PNG")
+                byte_arr.seek(0)
             file = discord.File(byte_arr, filename="image.png")
             await task.channel.send(file=file)
 
@@ -267,8 +273,7 @@ class DiscordBot:
 
         @client.event
         async def on_message(message: discord.Message):
-            # This line is important to allow commands to work
-            # await bot.process_commands(message)
+            await self.client.process_commands(message)
 
             # Check if the bot was mentioned
             # print()

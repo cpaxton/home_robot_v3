@@ -234,10 +234,37 @@ def kill_mujoco_server(port: int, kill_all: bool) -> None:
     sys.exit(0 if killed_any else 1)
 
 
+@main.command("show-memory", short_help="Open a saved memory in Rerun")
+@click.argument(
+    "path",
+    type=click.Path(path_type=Path),
+    default="saved_memory",
+    required=False,
+)
+@click.option("--open-browser", is_flag=True, help="Open browser to Rerun web viewer")
+def show_memory(path: str, open_browser: bool) -> None:
+    """Load a memory directory and display it in Rerun.
+
+    PATH defaults to saved_memory. Must be a directory with manifest.json
+    (common memory format from create-and-print-memory or backend save).
+
+    Examples:
+      emet show-memory
+      emet show-memory ./my_memory --open-browser
+    """
+    args = [str(path)]
+    if open_browser:
+        args.append("--open-browser")
+    sys.exit(_run_module("emet.app.show_memory", args))
+
+
 @main.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 @click.argument(
     "app",
-    type=click.Choice(["dynamem", "graph-eqa", "mapping", "grasp", "chat", "agent", "ai_pickup", "timing"]),
+    type=click.Choice([
+        "dynamem", "graph-eqa", "mapping", "grasp", "chat", "agent", "ai_pickup",
+        "timing", "discord", "create-and-print-memory",
+    ]),
 )
 @click.option("--robot-ip", "--robot_ip", default="127.0.0.1", help="Robot or simulator IP")
 @click.option("--server-ip", "--server_ip", default="127.0.0.1", help="Server IP (e.g. for AnyGrasp)")
@@ -269,6 +296,7 @@ def run(
       emet run dynamem -S --visual-servo --match-method class --target-object apple --target-receptacle plate
       emet run mapping --robot-ip 127.0.0.1
       emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
+      emet run discord --robot-ip 192.168.1.15 --task pickup   # requires DISCORD_TOKEN in env
     """
     args = list(ctx.args)
     args.extend(["--robot_ip", robot_ip])
@@ -309,6 +337,16 @@ def run(
         if headless:
             args.append("--headless")
         sys.exit(_run_module("emet.app.timing", args))
+    elif app == "discord":
+        args.extend(["--robot_ip", robot_ip])
+        if server_ip:
+            args.extend(["--server_ip", server_ip])
+        if parameter_file:
+            args.extend(["--parameter_file", parameter_file])
+        sys.exit(_run_module("emet.app.run_discord", args))
+    elif app == "create-and-print-memory":
+        args.extend(["--robot-ip", robot_ip])
+        sys.exit(_run_module("emet.app.create_and_print_memory", args))
     else:
         click.echo(f"Unknown app: {app}", err=True)
         sys.exit(1)
