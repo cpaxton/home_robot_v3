@@ -4,6 +4,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Emet CLI — start simulations, run agents, sync deps, view logs, run tests."""
 
@@ -84,7 +93,7 @@ def _run_module(module: str, args: list[str], env: dict | None = None) -> int:
 
 
 _MAIN_EPILOG = (
-    "Tab completion: eval \"$(emet install-completion --shell bash)\" (bash), "
+    'Tab completion: eval "$(emet install-completion --shell bash)" (bash), '
     "or use --shell zsh / --shell fish. See: emet install-completion --help"
 )
 
@@ -334,7 +343,7 @@ def sync(
     """Sync dependencies (uv sync or pip install -e .).
 
     Use --all for sim + dynamem + dev, or pick extras with -e or individual flags.
-    Sync does not install Robocasa/robosuite; run emet install sim (or install robocasa) first.
+    Sim requires third_party/robocasa and robosuite (./scripts/install_simulation.sh) and scripts/enable_sim_pyproject.py; if missing, sim is skipped with a message.
 
     Examples:
 
@@ -358,22 +367,21 @@ def sync(
     if discord:
         extras.append("discord")
     # Deduplicate, preserve order
-    seen: set[str] = set()
-    extras = [e for e in extras if e not in seen and not seen.add(e)]
+    extras = list(dict.fromkeys(extras))
 
     root = _project_root()
     os.chdir(root)
 
-    # Sim extra needs third_party/robosuite and robocasa (from emet install sim).
+    # Sim extra needs third_party/robosuite and robocasa. Skip sim if missing and warn.
     if "sim" in extras:
-        for name in ("robosuite", "robocasa"):
-            path = root / "third_party" / name
-            if not path.is_dir():
-                click.echo(
-                    f"Error: third_party/{name} not found. Run 'emet install sim' first to clone and install it.",
-                    err=True,
-                )
-                sys.exit(1)
+        missing = [name for name in ("robosuite", "robocasa") if not (root / "third_party" / name).is_dir()]
+        if missing:
+            click.echo(
+                f"Skipping sim (missing: {', '.join('third_party/' + n for n in missing)}). "
+                "Run: ./scripts/install_simulation.sh  then  python scripts/enable_sim_pyproject.py  then  uv lock && uv sync -e sim",
+                err=True,
+            )
+            extras = [e for e in extras if e != "sim"]
 
     if _has_uv():
         cmd = ["uv", "sync"]
@@ -471,6 +479,7 @@ def test(
     if not no_cov and (root / "pyproject.toml").exists():
         try:
             import pytest_cov  # noqa: F401
+
             cmd.extend(["--cov=emet", "--cov-report=term-missing"])
         except ImportError:
             pass
@@ -580,11 +589,14 @@ def _run_install_simulation(
     is_flag=True,
     help="Skip downloading Robocasa kitchen assets (~10GB)",
 )
-@click.option("-a", "--setup-macros", is_flag=True, help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing")
+@click.option(
+    "-a",
+    "--setup-macros",
+    is_flag=True,
+    help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing",
+)
 @click.option("--no-sync", is_flag=True, help="Skip running emet sync -e sim after clone/install")
-def install_sim(
-    skip_download_assets: bool, setup_macros: bool, no_sync: bool
-) -> None:
+def install_sim(skip_download_assets: bool, setup_macros: bool, no_sync: bool) -> None:
     """Install simulation third-party deps (Robocasa + robosuite).
 
     Clones robosuite and robocasa, runs macro setup when missing (silences
@@ -601,16 +613,25 @@ def install_sim(
     if result != 0:
         sys.exit(result)
     if no_sync:
-        click.echo("Simulation install complete. Run: emet sync -e sim")
+        click.echo(
+            "Simulation install complete. Run: python scripts/enable_sim_pyproject.py  then  uv lock && uv sync -e sim"
+        )
         return
-    click.echo("Syncing sim extra into project env...")
+    # Enable sim in pyproject.toml so uv can resolve and sync
+    enable_script = root / "scripts" / "enable_sim_pyproject.py"
+    if enable_script.exists():
+        click.echo("Enabling sim in pyproject.toml...")
+        result = subprocess.call([sys.executable, str(enable_script)], cwd=root)
+        if result != 0:
+            sys.exit(result)
+    click.echo("Updating lock and syncing sim extra...")
     os.chdir(root)
     if _has_uv():
-        result = subprocess.call(["uv", "sync", "--extra", "sim"])
+        if subprocess.call(["uv", "lock"], cwd=root) != 0:
+            sys.exit(1)
+        result = subprocess.call(["uv", "sync", "--extra", "sim"], cwd=root)
     else:
-        result = subprocess.call(
-            [sys.executable, "-m", "pip", "install", "-e", ".[sim]"]
-        )
+        result = subprocess.call([sys.executable, "-m", "pip", "install", "-e", ".[sim]"])
     if result == 0:
         click.echo("Simulation install complete.")
         click.echo("Verify: uv run python -c \"import robocasa; print('robocasa OK')\"")
@@ -625,11 +646,14 @@ def install_sim(
     is_flag=True,
     help="Skip downloading Robocasa kitchen assets (~10GB)",
 )
-@click.option("-a", "--setup-macros", is_flag=True, help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing")
+@click.option(
+    "-a",
+    "--setup-macros",
+    is_flag=True,
+    help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing",
+)
 @click.option("--no-sync", is_flag=True, help="Skip running emet sync -e sim after clone/install")
-def install_robocasa(
-    skip_download_assets: bool, setup_macros: bool, no_sync: bool
-) -> None:
+def install_robocasa(skip_download_assets: bool, setup_macros: bool, no_sync: bool) -> None:
     """Install Robocasa and robosuite (same as emet install sim).
 
     Clones robosuite and robocasa, runs macro setup when missing, downloads
@@ -645,16 +669,23 @@ def install_robocasa(
     if result != 0:
         sys.exit(result)
     if no_sync:
-        click.echo("Robocasa install complete. Run: emet sync -e sim")
+        click.echo(
+            "Robocasa install complete. Run: python scripts/enable_sim_pyproject.py  then  uv lock && uv sync -e sim"
+        )
         return
-    click.echo("Syncing sim extra into project env...")
+    enable_script = root / "scripts" / "enable_sim_pyproject.py"
+    if enable_script.exists():
+        click.echo("Enabling sim in pyproject.toml...")
+        if subprocess.call([sys.executable, str(enable_script)], cwd=root) != 0:
+            sys.exit(1)
+    click.echo("Updating lock and syncing sim extra...")
     os.chdir(root)
     if _has_uv():
-        result = subprocess.call(["uv", "sync", "--extra", "sim"])
+        if subprocess.call(["uv", "lock"], cwd=root) != 0:
+            sys.exit(1)
+        result = subprocess.call(["uv", "sync", "--extra", "sim"], cwd=root)
     else:
-        result = subprocess.call(
-            [sys.executable, "-m", "pip", "install", "-e", ".[sim]"]
-        )
+        result = subprocess.call([sys.executable, "-m", "pip", "install", "-e", ".[sim]"])
     if result == 0:
         click.echo("Robocasa install complete.")
         click.echo("Verify: uv run python -c \"import robocasa; print('robocasa OK')\"")
@@ -719,16 +750,15 @@ def install_pre_commit(install_hooks: bool, run_hooks: bool) -> None:
             sys.exit(result)
         click.echo("Pre-commit hooks installed.")
     if run_hooks:
-        result = subprocess.call(
-            [sys.executable, "-m", "pre_commit", "run", "--all-files"]
-        )
+        result = subprocess.call([sys.executable, "-m", "pre_commit", "run", "--all-files"])
         sys.exit(result)
     sys.exit(0)
 
 
 @main.command("install-completion", short_help="Print shell completion script")
 @click.option(
-    "--shell", "-s",
+    "--shell",
+    "-s",
     type=click.Choice(["bash", "zsh", "fish"], case_sensitive=False),
     default=None,
     help="Shell (default: auto-detect from SHELL).",

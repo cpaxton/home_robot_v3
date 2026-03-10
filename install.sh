@@ -102,71 +102,24 @@ echo ""
 echo "[4/5] Setting up git-lfs..."
 git lfs install || { echo "Install git-lfs: sudo apt-get install git-lfs"; exit 1; }
 
-# Create venv and install with uv (uv sync creates .venv automatically; uses uv.lock if present)
-# Sim extra requires third_party/robocasa and third_party/robosuite (from: emet install sim).
-# uv.lock is committed without sim so default install works; when sim dirs are missing we temporarily
-# patch pyproject so uv uses the lock instead of re-resolving (which would require those paths).
+# Create venv and install with uv (pyproject has sim=[] by default so sync works without third_party/robocasa)
 echo ""
 echo "[5/5] Creating virtual environment and installing dependencies..."
 EXTRA_ARGS="--extra dev"
-NEED_SIM_PATCH="false"
 if [[ "$EXTRAS" == *"sim"* ]]; then
-    if [ -d "third_party/robocasa" ] && [ -d "third_party/robosuite" ]; then
-        EXTRA_ARGS="$EXTRA_ARGS --extra sim"
+    if [ ! -d "third_party/robocasa" ] || [ ! -d "third_party/robosuite" ]; then
+        echo "Skipping sim (third_party/robocasa or robosuite missing). Run: ./scripts/install_simulation.sh  then  python scripts/enable_sim_pyproject.py  then  uv sync -e sim"
+    elif ! grep -q '^robocasa = {' pyproject.toml 2>/dev/null; then
+        echo "Skipping sim (not enabled in pyproject). Run: python scripts/enable_sim_pyproject.py  then  uv lock && uv sync -e sim"
     else
-        echo "  -> Skipping sim extra (third_party/robocasa or third_party/robosuite missing)."
-        echo "     After install, run: emet install sim   then  uv sync -e sim"
-        NEED_SIM_PATCH="true"
+        EXTRA_ARGS="$EXTRA_ARGS --extra sim"
     fi
-else
-    [ ! -d "third_party/robocasa" ] || [ ! -d "third_party/robosuite" ] && NEED_SIM_PATCH="true"
 fi
 [[ "$NO_SAM2" == "false" ]] && [ -d "third_party/segment-anything-2" ] && EXTRA_ARGS="$EXTRA_ARGS --extra dynamem"
-
-if [ "$NEED_SIM_PATCH" = "true" ]; then
-    echo "  -> Patching pyproject.toml so uv uses lock (sim third_party missing)..."
-    cp pyproject.toml pyproject.toml.bak.install
-    python3 << 'PYPATCH'
-with open("pyproject.toml") as f:
-    c = f.read()
-old_sim = '''sim = [
-    "mujoco>=3.3.0",  # Align with upstream robosuite; 3.2.6 was for older Stretch compat
-    "hello-robot-stretch-urdf",
-    "grpcio",
-    "click>=8.1.8",
-    "inputs>=0.5",
-    "robosuite",   # From third_party (clone with: emet install sim)
-    "robocasa",    # From third_party (clone with: emet install sim)
-]'''
-new_sim = "sim = []  # patched for install without sim dirs"
-if old_sim in c:
-    c = c.replace(old_sim, new_sim, 1)
-else:
-    raise SystemExit("patch: sim block not found")
-c = c.replace("robosuite = { path = \"third_party/robosuite\", editable = true }",
-              "# robosuite = { path = \"third_party/robosuite\", editable = true }  # patched")
-c = c.replace("robocasa = { path = \"third_party/robocasa\", editable = true }",
-              "# robocasa = { path = \"third_party/robocasa\", editable = true }  # patched")
-with open("pyproject.toml", "w") as f:
-    f.write(c)
-PYPATCH
-    trap 'mv -f pyproject.toml.bak.install pyproject.toml' EXIT
-    # Force full install: remove existing .venv so uv sync installs all lock deps (avoids reusing a broken/partial venv)
-    if [ -d ".venv" ]; then
-        echo "  -> Removing existing .venv for full install from lock..."
-        rm -rf .venv
-    fi
-fi
 
 echo "  -> Running: uv sync $EXTRA_ARGS"
 uv sync $EXTRA_ARGS
 echo "  -> uv sync completed."
-
-if [ "$NEED_SIM_PATCH" = "true" ]; then
-    trap - EXIT
-    mv -f pyproject.toml.bak.install pyproject.toml
-    echo "  -> Restored pyproject.toml"
-fi
 
 # Uninstall av to avoid conflict (from old install.sh)
 source .venv/bin/activate
