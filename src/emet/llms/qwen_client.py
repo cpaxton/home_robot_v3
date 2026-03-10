@@ -61,7 +61,14 @@ class Qwen25Client(AbstractLLMClient):
         quantization: Optional[str] = "int4",
     ):
         super().__init__(prompt, prompt_kwargs)
-        assert device in ["cuda", "mps"], f"Invalid device: {device}"
+        assert device in ["cuda", "mps", "cpu"], f"Invalid device: {device}"
+        if device == "cpu":
+            import warnings
+            warnings.warn(
+                "Qwen client on CPU: inference will be slow; use a small model (e.g. 1.5B) and Int4 for local testing.",
+                UserWarning,
+                stacklevel=2,
+            )
         assert model_type in qwen_typing_options, f"Invalid model type: {model_type}"
         assert model_size in qwen_sizes[model_type], f"Invalid model size: {model_size}"
         assert fine_tuning in [None, "Instruct"], f"Invalid fine-tuning: {fine_tuning}"
@@ -118,12 +125,17 @@ class Qwen25Client(AbstractLLMClient):
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype="auto",
+            **model_kwargs,
         )
+        if device == "cpu":
+            self.model = self.model.to("cpu")
+        # Pipeline device: 0 or "cuda" for GPU, -1 for CPU
+        pipe_device = -1 if device == "cpu" else (0 if device == "cuda" else device)
         self.pipe = pipeline(
             "text-generation",
             model=self.model,
             tokenizer=self.tokenizer,
-            device=device,
+            device=pipe_device,
             model_kwargs=model_kwargs,
         )
 
