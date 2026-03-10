@@ -14,6 +14,7 @@ from robosuite import load_part_controller_config
 from termcolor import colored
 
 from emet.simulation.stretch_mujoco.utils import (
+    ensure_mesh_inertia,
     get_absolute_path_stretch_xml,
     insert_line_after_mujoco_tag,
     replace_xml_tag_value,
@@ -230,6 +231,9 @@ def model_generation_wizard(
 
     if robot_spawn_pose is not None:
         robot_base_fixture_pose = robot_spawn_pose
+
+    # MuJoCo 2.x: ensure every <mesh> in the kitchen XML has inertia="shell" (get_xml() may omit it)
+    xml = ensure_mesh_inertia(xml)
 
     # add stretch to kitchen
     click.secho("\nMaking Robot Placement...\n", fg="yellow")

@@ -314,8 +314,8 @@ def insert_line_after_mujoco_tag(xml_string: str, line_to_insert: str) -> str:
     return modified_xml
 
 
-def _ensure_mesh_inertia(xml_str: str) -> str:
-    """Add inertia=\"shell\" to every <mesh> tag that lacks it (MuJoCo 2.x requirement for thin meshes)."""
+def ensure_mesh_inertia(xml_str: str) -> str:
+    """Add inertia=\"shell\" to every <mesh> tag that lacks it (MuJoCo 2.x/3.x requirement for thin meshes)."""
     return re.sub(
         r"<mesh\s+([^>]*?)>",
         lambda m: m.group(0)
@@ -323,6 +323,16 @@ def _ensure_mesh_inertia(xml_str: str) -> str:
         else "<mesh inertia=\"shell\" " + m.group(1) + ">",
         xml_str,
     )
+
+
+def _strip_geom_shellinertia(xml_str: str) -> str:
+    """Remove shellinertia from <geom> tags so inertia comes only from the mesh asset (MuJoCo 3.x)."""
+    def repl(m):
+        tag = m.group(0)
+        # Remove shellinertia="true" or shellinertia="false"
+        tag = re.sub(r'\sshellinertia="[^"]*"', "", tag)
+        return tag
+    return re.sub(r"<geom\s+[^>]*?>", repl, xml_str)
 
 
 def get_absolute_path_stretch_xml(robot_pose_attrib: dict | None = None) -> str:
@@ -351,8 +361,9 @@ def get_absolute_path_stretch_xml(robot_pose_attrib: dict | None = None) -> str:
             file_path, models_path + "/assets/" + file_path
         )
 
-    # MuJoCo 2.x: mesh assets need inertia (e.g. shell) when volume is very small
-    default_robot_xml = _ensure_mesh_inertia(default_robot_xml)
+    # MuJoCo 2.x/3.x: mesh assets need inertia (e.g. shell); geom shellinertia can conflict
+    default_robot_xml = ensure_mesh_inertia(default_robot_xml)
+    default_robot_xml = _strip_geom_shellinertia(default_robot_xml)
 
     if robot_pose_attrib is not None:
         pos = f'pos="{robot_pose_attrib["pos"]}" quat="{robot_pose_attrib["quat"]}"'
