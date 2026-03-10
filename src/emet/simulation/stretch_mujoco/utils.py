@@ -314,6 +314,17 @@ def insert_line_after_mujoco_tag(xml_string: str, line_to_insert: str) -> str:
     return modified_xml
 
 
+def _ensure_mesh_inertia(xml_str: str) -> str:
+    """Add inertia=\"shell\" to every <mesh> tag that lacks it (MuJoCo 2.x requirement for thin meshes)."""
+    return re.sub(
+        r"<mesh\s+([^>]*?)>",
+        lambda m: m.group(0)
+        if "inertia=" in m.group(0)
+        else "<mesh inertia=\"shell\" " + m.group(1) + ">",
+        xml_str,
+    )
+
+
 def get_absolute_path_stretch_xml(robot_pose_attrib: dict | None = None) -> str:
     """
     Generates Robot XML with absolute path to mesh files
@@ -339,6 +350,9 @@ def get_absolute_path_stretch_xml(robot_pose_attrib: dict | None = None) -> str:
         default_robot_xml = default_robot_xml.replace(
             file_path, models_path + "/assets/" + file_path
         )
+
+    # MuJoCo 2.x: mesh assets need inertia (e.g. shell) when volume is very small
+    default_robot_xml = _ensure_mesh_inertia(default_robot_xml)
 
     if robot_pose_attrib is not None:
         pos = f'pos="{robot_pose_attrib["pos"]}" quat="{robot_pose_attrib["quat"]}"'

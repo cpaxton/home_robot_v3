@@ -8,6 +8,7 @@
 """Emet CLI — start simulations, run agents, sync deps, view logs, run tests."""
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -445,6 +446,47 @@ def test(verbose: bool, no_cov: bool, pytest_args: tuple[str, ...]) -> None:
     sys.exit(subprocess.call(cmd, env=env))
 
 
+_SIM_THIRD_PARTY_DIRS = ("robosuite", "robosuite_models", "robocasa")
+
+
+@main.command("clean", short_help="Remove third-party sim clones (robosuite, robocasa, etc.)")
+@click.option(
+    "-y",
+    "--yes",
+    "skip_confirm",
+    is_flag=True,
+    help="Skip confirmation; remove without prompting",
+)
+def clean(skip_confirm: bool) -> None:
+    """Remove third-party directories created by emet install sim / install robocasa.
+
+    Deletes third_party/robosuite, third_party/robosuite_models, and third_party/robocasa.
+    Re-run emet install sim (or install robocasa) to clone and install them again.
+
+    Examples:
+      emet clean
+      emet clean -y
+    """
+    root = _project_root()
+    third_party = root / "third_party"
+    if not third_party.exists():
+        click.echo("Nothing to clean: third_party/ does not exist.")
+        return
+    to_remove = [third_party / name for name in _SIM_THIRD_PARTY_DIRS if (third_party / name).exists()]
+    if not to_remove:
+        click.echo("Nothing to clean: none of third_party/robosuite, robosuite_models, robocasa exist.")
+        return
+    if not skip_confirm:
+        click.echo("The following directories will be removed:")
+        for p in to_remove:
+            click.echo(f"  {p}")
+        click.confirm("Continue?", default=False, abort=True)
+    for p in to_remove:
+        click.echo(f"Removing {p}...")
+        shutil.rmtree(p)
+    click.echo("Done. Re-run emet install sim to reinstall.")
+
+
 @main.group(short_help="Install submodules, sim, full setup, pre-commit")
 def install() -> None:
     """Install submodules, simulation extras, or full setup."""
@@ -501,7 +543,7 @@ def _run_install_simulation(
     "--no-download-assets",
     "skip_download_assets",
     is_flag=True,
-    help="Skip downloading Robocasa kitchen assets (~5GB)",
+    help="Skip downloading Robocasa kitchen assets (~10GB)",
 )
 @click.option("-a", "--setup-macros", is_flag=True, help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing")
 @click.option("--no-sync", is_flag=True, help="Skip running emet sync -e sim after clone/install")
@@ -511,7 +553,7 @@ def install_sim(
     """Install simulation third-party deps (Robocasa + robosuite).
 
     Clones robosuite and robocasa, runs macro setup when missing (silences
-    "No private macro file" warnings), downloads kitchen assets (~5GB), then
+    "No private macro file" warnings), downloads kitchen assets (~10GB), then
     runs emet sync -e sim. Use -n to skip the asset download (e.g. CI).
 
     Examples:
@@ -546,7 +588,7 @@ def install_sim(
     "--no-download-assets",
     "skip_download_assets",
     is_flag=True,
-    help="Skip downloading Robocasa kitchen assets (~5GB)",
+    help="Skip downloading Robocasa kitchen assets (~10GB)",
 )
 @click.option("-a", "--setup-macros", is_flag=True, help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing")
 @click.option("--no-sync", is_flag=True, help="Skip running emet sync -e sim after clone/install")
@@ -556,7 +598,7 @@ def install_robocasa(
     """Install Robocasa and robosuite (same as emet install sim).
 
     Clones robosuite and robocasa, runs macro setup when missing, downloads
-    kitchen assets (~5GB), then runs emet sync -e sim. Use -n to skip the asset download.
+    kitchen assets (~10GB), then runs emet sync -e sim. Use -n to skip the asset download.
 
     Examples:
       emet install robocasa

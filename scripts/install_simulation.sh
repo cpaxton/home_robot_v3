@@ -26,7 +26,7 @@ while getopts "dan" opt; do
         \? )
             echo "Usage: $0 [-d] [-n] [-a]"
             echo "  -d: Download kitchen assets (default: yes)"
-            echo "  -n: Skip downloading kitchen assets (~5GB)"
+            echo "  -n: Skip downloading kitchen assets (~10GB)"
             echo "  -a: Force setup macros (overwrite existing macros_private.py)"
             exit 1
             ;;
@@ -82,6 +82,17 @@ if [ "$SETUP_MACROS_FORCE" = true ] || [ ! -f "robosuite/robosuite/macros_privat
 fi
 cd ..
 
+# Optional extra robot models for robosuite (GR1, etc.). Clone from cpaxton fork.
+if [ ! -d "robosuite_models" ]; then
+    git clone git@github.com:cpaxton/robosuite_models.git
+fi
+if [ -d "robosuite_models" ]; then
+    cd robosuite_models || exit 1
+    git fetch origin 2>/dev/null || true
+    pip_install_editable || { echo "robosuite_models install failed." >&2; exit 1; }
+    cd ..
+fi
+
 # Clone robocasa from fork with numpy 1.24+ compat (same env as dynamem). Uses default branch.
 if [ ! -d "robocasa" ]; then
     git clone git@github.com:cpaxton/robocasa.git
@@ -89,24 +100,27 @@ fi
 cd robocasa || exit 1
 git fetch origin 2>/dev/null || true
 pip_install_editable || { echo "robocasa install failed." >&2; exit 1; }
-# Create macros_private.py from macros.py if missing (silences "No private macro file" warnings).
-if [ "$SETUP_MACROS_FORCE" = true ] || [ ! -f "robocasa/macros_private.py" ]; then
-    if [ "$SETUP_MACROS_FORCE" = true ]; then
-        echo "y" | "$PYTHON" robocasa/robocasa/scripts/setup_macros.py || true
-    else
-        "$PYTHON" robocasa/robocasa/scripts/setup_macros.py || { echo "robocasa setup_macros failed." >&2; exit 1; }
-    fi
-fi
 cd ..
 
-# Asset download is part of installation by default (~5GB); use -n to skip.
-# We use the project's scripts/download_robocasa_assets.py (no robocasa import) so it
-# runs with the project Python regardless of numpy version.
-if [ "$DOWNLOAD_ASSETS" = true ]; then
-    echo "Downloading Robocasa kitchen assets (~5GB)..."
+# Run robocasa setup using the installed package (python -m robocasa.scripts.setup_macros).
+# macros_private.py is created at third_party/robocasa/robocasa/macros_private.py.
+if [ "$SETUP_MACROS_FORCE" = true ] || [ ! -f "$ROOT_DIR/third_party/robocasa/robocasa/macros_private.py" ]; then
     cd "$ROOT_DIR" || exit 1
-    "$PYTHON" "$ROOT_DIR/scripts/download_robocasa_assets.py" --yes || \
-        { echo "download_robocasa_assets failed." >&2; exit 1; }
+    if [ "$SETUP_MACROS_FORCE" = true ]; then
+        echo "y" | "$PYTHON" -m robocasa.scripts.setup_macros || true
+    else
+        "$PYTHON" -m robocasa.scripts.setup_macros || { echo "robocasa setup_macros failed." >&2; exit 1; }
+    fi
+    cd "$ROOT_DIR/third_party" || exit 1
+fi
+
+# Asset download is part of installation by default (~10GB); use -n to skip.
+# Use official robocasa entry point: python -m robocasa.scripts.download_kitchen_assets
+if [ "$DOWNLOAD_ASSETS" = true ]; then
+    echo "Downloading Robocasa kitchen assets (~10GB)..."
+    cd "$ROOT_DIR" || exit 1
+    echo "y" | "$PYTHON" -m robocasa.scripts.download_kitchen_assets || \
+        { echo "download_kitchen_assets failed." >&2; exit 1; }
     cd "$ROOT_DIR/third_party" || exit 1
 fi
 

@@ -188,6 +188,13 @@ emet install pre-commit --run       # Install and run on all files
 
 `emet install sim` runs `emet sync -e sim` afterward by default (use `--no-sync` to skip). The project’s `pyproject.toml` uses a uv override for numpy so that `sync -e sim -e dynamem` works; see [Simulation](simulation.md#troubleshooting).
 
+**`emet clean`** — Remove third-party sim clones (robosuite, robosuite_models, robocasa) from `third_party/`. Use `-y` to skip the confirmation prompt. Re-run `emet install sim` to reinstall.
+
+```bash
+emet clean        # Remove sim third_party dirs (prompts to confirm)
+emet clean -y     # Remove without prompting
+```
+
 ---
 
 ### `emet kill-mujoco-server [options]`

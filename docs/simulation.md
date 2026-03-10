@@ -157,7 +157,7 @@ emet install robocasa
 # or: emet install sim
 ```
 
-This clones robosuite and robocasa, **downloads kitchen assets (~5GB)**, and runs the install script. Then sync the sim extra:
+This clones robosuite and robocasa, **downloads kitchen assets (~10GB)** via `python -m robocasa.scripts.download_kitchen_assets`, and runs macro setup via `python -m robocasa.scripts.setup_macros` when missing. Then sync the sim extra:
 
 ```bash
 emet sync -e sim
@@ -165,18 +165,23 @@ emet sync -e sim
 
 Macro setup (robosuite + robocasa `macros_private.py`) runs automatically during install when missing; use `emet install robocasa -a` to force overwrite. To skip the asset download (e.g. CI): `emet install sim --no-download-assets`.
 
-**Version pairing:** Robocasa (and our fork) require **RoboSuite v1.5.0**. The install script clones robosuite v1.5.0 and the [cpaxton/robocasa](https://github.com/cpaxton/robocasa) fork (numpy 1.24+ compat). Both live in `third_party/` and are gitignored.
+**Version pairing:** Robocasa (and our fork) require **RoboSuite v1.5.0**. The install script clones robosuite v1.5.0, [cpaxton/robosuite_models](https://github.com/cpaxton/robosuite_models) (optional extra robot models), and the [cpaxton/robocasa](https://github.com/cpaxton/robocasa) fork (numpy 1.24+ compat). All live in `third_party/` and are gitignored.
 
-**Manual install** (same as the script, for reference):
+**Manual install** (same as the script, for reference). From project root after cloning and `pip install -e .` for robosuite, robosuite_models, and robocasa:
 
 ```bash
 cd third_party
 git clone https://github.com/ARISE-Initiative/robosuite --branch v1.5.0 --single-branch
 cd robosuite && pip install -e . && cd ..
+git clone git@github.com:cpaxton/robosuite_models.git
+cd robosuite_models && pip install -e . && cd ..
 git clone git@github.com:cpaxton/robocasa.git
 cd robocasa && pip install -e . && cd ..
-# Assets: from project root, python scripts/download_robocasa_assets.py --yes
-# Macro setup runs automatically during emet install sim; -a forces overwrite
+cd ../..
+# Set up system variables (creates robocasa/macros_private.py)
+python -m robocasa.scripts.setup_macros
+# Download kitchen assets (~10GB)
+python -m robocasa.scripts.download_kitchen_assets
 ```
 
 ### Run with Robocasa
