@@ -125,115 +125,115 @@
     <material name="Aruco_left_finger_Sticker" texture="left_finger_aruco"/>
     <material name="Aruco_gripper_cam_Sticker" texture="gripper_cam_aruco_sticker"/>
 
-    <mesh file="base_link_0.obj"/>
-    <mesh file="base_link_2.obj"/>
-    <mesh file="base_link_3.obj"/>
-    <mesh file="base_link_4.obj"/>
-    <mesh file="base_link_5.obj"/>
-    <mesh file="base_link_6.obj"/>
-    <mesh file="base_link_7.obj"/>
-    <mesh file="base_link_8.obj"/>
-    <mesh name="base_link_collision" file="base_link_casterless.stl"/>
-    <mesh file="link_aruco_right_base.obj"/>
-    <mesh file="link_aruco_left_base.obj"/>
-    <mesh file="respeaker_base.obj"/>
-    <mesh file="link_mast.obj"/>
-    <mesh file="link_head_0.obj"/>
-    <mesh file="link_head_1.obj"/>
-    <mesh file="link_head_2.obj"/>
-    <mesh file="link_head_3.obj"/>
-    <mesh file="link_head_4.obj"/>
-    <mesh file="link_head_5.obj"/>
-    <mesh file="link_head_6.obj"/>
-    <mesh file="link_head_7.obj"/>
-    <mesh file="link_head_8.obj"/>
-    <mesh file="link_head_9.obj"/>
-    <mesh file="link_head_10.obj"/>
-    <mesh file="link_head_11.obj"/>
-    <mesh file="link_head_pan_0.obj"/>
-    <mesh file="link_head_pan_1.obj"/>
-    <mesh file="link_head_tilt_0.obj"/>
-    <mesh file="link_head_tilt_1.obj"/>
-    <mesh file="link_right_wheel_0.obj"/>
-    <mesh file="link_right_wheel_1.obj"/>
-    <mesh file="link_left_wheel_0.obj"/>
-    <mesh file="link_left_wheel_1.obj"/>
-    <mesh file="link_lift_0.obj"/>
-    <mesh file="link_lift_1.obj"/>
-    <mesh file="link_lift_2.obj"/>
-    <mesh file="link_lift_3.obj"/>
-    <mesh file="link_lift_4.obj"/>
-    <mesh file="link_lift_5.obj"/>
-    <mesh file="link_lift_6.obj"/>
-    <mesh file="link_lift_7.obj"/>
-    <mesh file="link_lift_8.obj"/>
-    <mesh file="link_lift_9.obj"/>
-    <mesh file="link_aruco_shoulder.obj"/>
-    <mesh file="link_arm_l4_0.obj"/>
-    <mesh file="link_arm_l4_1.obj"/>
-    <mesh file="link_arm_l3_0.obj"/>
-    <mesh file="link_arm_l3_1.obj"/>
-    <mesh file="link_arm_l2_0.obj"/>
-    <mesh file="link_arm_l2_1.obj"/>
-    <mesh file="link_arm_l1_0.obj"/>
-    <mesh file="link_arm_l1_1.obj"/>
-    <mesh file="link_arm_l0_0.obj"/>
-    <mesh file="link_arm_l0_1.obj"/>
-    <mesh file="link_arm_l0_2.obj"/>
-    <mesh file="link_aruco_inner_wrist.obj"/>
-    <mesh file="link_aruco_top_wrist.obj"/>
-    <mesh file="laser.obj"/>
-    <mesh file="link_gripper_fingertip_left.stl"/>
-    <mesh file="link_gripper_fingertip_right.stl"/>
-    <mesh file="link_gripper_finger_left_0.obj" scale="0.9 1 1"/>
-    <mesh file="link_gripper_finger_left_1.obj" scale="0.9 1 1"/>
-    <mesh file="link_gripper_finger_right_0.obj" scale="0.9 1 1"/>
-    <mesh file="link_gripper_finger_right_1.obj" scale="0.9 1 1"/>
-    <mesh file="link_gripper_0.obj"/>
-    <mesh file="link_gripper_1.obj"/>
-    <mesh file="link_wrist_yaw.obj"/>
+    <mesh inertia="shell" file="base_link_0.obj"/>
+    <mesh inertia="shell" file="base_link_2.obj"/>
+    <mesh inertia="shell" file="base_link_3.obj"/>
+    <mesh inertia="shell" file="base_link_4.obj"/>
+    <mesh inertia="shell" file="base_link_5.obj"/>
+    <mesh inertia="shell" file="base_link_6.obj"/>
+    <mesh inertia="shell" file="base_link_7.obj"/>
+    <mesh inertia="shell" file="base_link_8.obj"/>
+    <mesh inertia="shell" name="base_link_collision" file="base_link_casterless.stl"/>
+    <mesh inertia="shell" file="link_aruco_right_base.obj"/>
+    <mesh inertia="shell" file="link_aruco_left_base.obj"/>
+    <mesh inertia="shell" file="respeaker_base.obj"/>
+    <mesh inertia="shell" file="link_mast.obj"/>
+    <mesh inertia="shell" file="link_head_0.obj"/>
+    <mesh inertia="shell" file="link_head_1.obj"/>
+    <mesh inertia="shell" file="link_head_2.obj"/>
+    <mesh inertia="shell" file="link_head_3.obj"/>
+    <mesh inertia="shell" file="link_head_4.obj"/>
+    <mesh inertia="shell" file="link_head_5.obj"/>
+    <mesh inertia="shell" file="link_head_6.obj"/>
+    <mesh inertia="shell" file="link_head_7.obj"/>
+    <mesh inertia="shell" file="link_head_8.obj"/>
+    <mesh inertia="shell" file="link_head_9.obj"/>
+    <mesh inertia="shell" file="link_head_10.obj"/>
+    <mesh inertia="shell" file="link_head_11.obj"/>
+    <mesh inertia="shell" file="link_head_pan_0.obj"/>
+    <mesh inertia="shell" file="link_head_pan_1.obj"/>
+    <mesh inertia="shell" file="link_head_tilt_0.obj"/>
+    <mesh inertia="shell" file="link_head_tilt_1.obj"/>
+    <mesh inertia="shell" file="link_right_wheel_0.obj"/>
+    <mesh inertia="shell" file="link_right_wheel_1.obj"/>
+    <mesh inertia="shell" file="link_left_wheel_0.obj"/>
+    <mesh inertia="shell" file="link_left_wheel_1.obj"/>
+    <mesh inertia="shell" file="link_lift_0.obj"/>
+    <mesh inertia="shell" file="link_lift_1.obj"/>
+    <mesh inertia="shell" file="link_lift_2.obj"/>
+    <mesh inertia="shell" file="link_lift_3.obj"/>
+    <mesh inertia="shell" file="link_lift_4.obj"/>
+    <mesh inertia="shell" file="link_lift_5.obj"/>
+    <mesh inertia="shell" file="link_lift_6.obj"/>
+    <mesh inertia="shell" file="link_lift_7.obj"/>
+    <mesh inertia="shell" file="link_lift_8.obj"/>
+    <mesh inertia="shell" file="link_lift_9.obj"/>
+    <mesh inertia="shell" file="link_aruco_shoulder.obj"/>
+    <mesh inertia="shell" file="link_arm_l4_0.obj"/>
+    <mesh inertia="shell" file="link_arm_l4_1.obj"/>
+    <mesh inertia="shell" file="link_arm_l3_0.obj"/>
+    <mesh inertia="shell" file="link_arm_l3_1.obj"/>
+    <mesh inertia="shell" file="link_arm_l2_0.obj"/>
+    <mesh inertia="shell" file="link_arm_l2_1.obj"/>
+    <mesh inertia="shell" file="link_arm_l1_0.obj"/>
+    <mesh inertia="shell" file="link_arm_l1_1.obj"/>
+    <mesh inertia="shell" file="link_arm_l0_0.obj"/>
+    <mesh inertia="shell" file="link_arm_l0_1.obj"/>
+    <mesh inertia="shell" file="link_arm_l0_2.obj"/>
+    <mesh inertia="shell" file="link_aruco_inner_wrist.obj"/>
+    <mesh inertia="shell" file="link_aruco_top_wrist.obj"/>
+    <mesh inertia="shell" file="laser.obj"/>
+    <mesh inertia="shell" file="link_gripper_fingertip_left.stl"/>
+    <mesh inertia="shell" file="link_gripper_fingertip_right.stl"/>
+    <mesh inertia="shell" file="link_gripper_finger_left_0.obj" scale="0.9 1 1"/>
+    <mesh inertia="shell" file="link_gripper_finger_left_1.obj" scale="0.9 1 1"/>
+    <mesh inertia="shell" file="link_gripper_finger_right_0.obj" scale="0.9 1 1"/>
+    <mesh inertia="shell" file="link_gripper_finger_right_1.obj" scale="0.9 1 1"/>
+    <mesh inertia="shell" file="link_gripper_0.obj"/>
+    <mesh inertia="shell" file="link_gripper_1.obj"/>
+    <mesh inertia="shell" file="link_wrist_yaw.obj"/>
 
-    <mesh file="link_DW3_tablet_12in.stl"/>
-    <mesh file="link_DW3_wrist_pitch.stl"/>
-    <mesh file="link_DW3_wrist_quick_connect.stl"/>
-    <mesh file="link_DW3_wrist_yaw_bottom.stl"/>
-    <mesh file="link_SE3_head_nav_cam.stl"/>
-    <mesh file="link_SG3_aruco_d405.obj"/>
-    <mesh file="link_SG3_gripper_body.stl"/>
+    <mesh inertia="shell" file="link_DW3_tablet_12in.stl"/>
+    <mesh inertia="shell" file="link_DW3_wrist_pitch.stl"/>
+    <mesh inertia="shell" file="link_DW3_wrist_quick_connect.stl"/>
+    <mesh inertia="shell" file="link_DW3_wrist_yaw_bottom.stl"/>
+    <mesh inertia="shell" file="link_SE3_head_nav_cam.stl"/>
+    <mesh inertia="shell" file="link_SG3_aruco_d405.obj"/>
+    <mesh inertia="shell" file="link_SG3_gripper_body.stl"/>
 
-    <mesh file="link_d405.stl"/>
-    <mesh file="link_d405_lens.stl"/>
-    <mesh file="link_d405_front_plate.stl"/>
+    <mesh inertia="shell" file="link_d405.stl"/>
+    <mesh inertia="shell" file="link_d405_lens.stl"/>
+    <mesh inertia="shell" file="link_d405_front_plate.stl"/>
 
-    <mesh file="link_SG3_gripper_left_finger.stl"/>
-    <mesh file="link_SG3_gripper_right_finger.stl"/>
+    <mesh inertia="shell" file="link_SG3_gripper_left_finger.stl"/>
+    <mesh inertia="shell" file="link_SG3_gripper_right_finger.stl"/>
 
-    <mesh file="link_SG3_gripper_left_finger_0.obj"/>
-    <mesh file="link_SG3_gripper_right_finger_0.obj"/>
-    <mesh file="link_SG3_gripper_left_finger_1.obj"/>
-    <mesh file="link_SG3_gripper_right_finger_1.obj"/>
+    <mesh inertia="shell" file="link_SG3_gripper_left_finger_0.obj"/>
+    <mesh inertia="shell" file="link_SG3_gripper_right_finger_0.obj"/>
+    <mesh inertia="shell" file="link_SG3_gripper_left_finger_1.obj"/>
+    <mesh inertia="shell" file="link_SG3_gripper_right_finger_1.obj"/>
 
-    <mesh file="link_SG3_gripper_left_inner_finger.stl"/>
-    <mesh file="link_SG3_gripper_right_inner_finger.stl"/>
+    <mesh inertia="shell" file="link_SG3_gripper_left_inner_finger.stl"/>
+    <mesh inertia="shell" file="link_SG3_gripper_right_inner_finger.stl"/>
 
-    <mesh file="link_SG3_gripper_inner_finger.stl"/>
+    <mesh inertia="shell" file="link_SG3_gripper_inner_finger.stl"/>
 
-    <mesh file="link_SG3_gripper_left_finger_aruco.obj"/>
-    <mesh file="link_SG3_gripper_right_finger_aruco.obj"/>
+    <mesh inertia="shell" file="link_SG3_gripper_left_finger_aruco.obj"/>
+    <mesh inertia="shell" file="link_SG3_gripper_right_finger_aruco.obj"/>
 
-    <mesh file="link_SG3_gripper_right_fingertip.stl"/>
-    <mesh file="link_SG3_gripper_left_fingertip.stl"/>
+    <mesh inertia="shell" file="link_SG3_gripper_right_fingertip.stl"/>
+    <mesh inertia="shell" file="link_SG3_gripper_left_fingertip.stl"/>
   </asset>
 
   <worldbody>
     <body name="base_link" childclass="stretch">
       <freejoint/>
       <geom mesh="base_link_0" material="Caster_Rollers_Red" density="100" class="visual"/>
-      <geom mesh="base_link_2" material="Lightbar_Green" density="100" class="visual" shellinertia="true"/>
+      <geom mesh="base_link_2" material="Lightbar_Green" density="100" class="visual"/>
       <geom mesh="base_link_3" material="Power_Button_Green" density="100" class="visual"/>
       <geom mesh="base_link_4" material="USB_Blue" density="100" class="visual"/>
       <geom mesh="base_link_5" material="Generic_Black" density="100" class="visual"/>
-      <geom mesh="base_link_6" material="Hand_Crush_Sticker" density="100" class="visual" shellinertia="true"/>
+      <geom mesh="base_link_6" material="Hand_Crush_Sticker" density="100" class="visual"/>
       <geom mesh="base_link_7" material="Pantone_705_U" density="100" class="visual"/>
       <geom mesh="base_link_8" material="Pantone_Cool_Gray_4_U" density="100" class="visual"/>
       <geom class="collision" mesh="base_link_collision" mass="25.0"/>
@@ -263,12 +263,12 @@
       </body>
       <body name="link_aruco_right_base" pos="-0.0015028 -0.130497 0.159748" quat="1 0 0 -1">
         <geom material="Aruco_Right_Base_Sticker" mesh="link_aruco_right_base" class="visual" mass="3.6E-06"
-          shellinertia="true"/>
+/>
         <geom mesh="link_aruco_right_base" class="collision"/>
       </body>
       <body name="link_aruco_left_base" pos="-0.0015028 0.130497 0.159748" quat="1 0 0 -1">
         <geom material="Aruco_Left_Base_Sticker" mesh="link_aruco_left_base" class="visual" mass="3.6E-06"
-          shellinertia="true"/>
+/>
         <geom mesh="link_aruco_left_base" class="collision"/>
       </body>
       <body name="laser" pos="0.004 0 0.1664" quat="0 0 0 1">
@@ -345,12 +345,12 @@
                   <geom mesh="link_arm_l0_2" class="collision"/>
                   <body name="link_aruco_top_wrist" pos="0.04725 0.029285 0" quat="0 0 1 1">
                     <geom material="Aruco_Top_Wrist_Sticker" mesh="link_aruco_top_wrist" class="visual" mass="3.6E-06"
-                      shellinertia="true"/>
+/>
                     <geom mesh="link_aruco_top_wrist" class="collision"/>
                   </body>
                   <body name="link_aruco_inner_wrist" pos="0.04725 -0.0119 -0.02725" quat="0 0 1 0">
                     <geom material="Aruco_Inner_Wrist_Sticker" mesh="link_aruco_inner_wrist" class="visual"
-                      mass="3.6E-06" shellinertia="true"/>
+                      mass="3.6E-06"/>
                     <geom mesh="link_aruco_inner_wrist" class="collision"/>
                   </body>
                   <!-- Dex Wrist 3 Tree -->
@@ -372,7 +372,7 @@
                           <geom mesh="link_SG3_gripper_body" class="collision"/>
                           <body name="link_SG3_aruco_d405" pos="0 0.0671264013906604 0.0297716109784749" euler="-1.397059993 3.139694278 -0.001741181" gravcomp="1">
                             <geom material="Aruco_gripper_cam_Sticker" mesh="link_SG3_aruco_d405" class="visual" mass="3.6E-06"
-                            shellinertia="true"/>
+/>
                             <geom mesh="link_SG3_aruco_d405" class="collision"/>
                             <body name="link_d405" pos="0 -0.03068 0" euler="1.57 0 0">
                               <geom material="Reflective_Metal" mesh="link_d405" mass="0.29" class="visual"/>
@@ -406,7 +406,7 @@
                                   <geom type="box"  size="0.02 0.02 0.01" pos="0 0 0.01" class="rubber"/>
                                 </body>
                                 <body name="link_SG3_gripper_left_finger_aruco" pos="-0.14425 0.0014877 -0.005189" euler="0.19199 0.95993 3.1312">
-                                  <geom material="Aruco_left_finger_Sticker" mesh="link_SG3_gripper_left_finger_aruco" class="visual" mass="3.6E-06" shellinertia="true"/>
+                                  <geom material="Aruco_left_finger_Sticker" mesh="link_SG3_gripper_left_finger_aruco" class="visual" mass="3.6E-06"/>
                                   <geom mesh="link_SG3_gripper_left_finger_aruco" class="collision"/>
                                 </body>
                               </body>
@@ -426,7 +426,7 @@
                                   <geom type="box"   size="0.02 0.02 0.01" pos="0 0 0.01" class="rubber"/>
                                 </body>
                                 <body name="link_SG3_gripper_right_finger_aruco" pos="0.14426 0 0.005189" euler="-2.9496 -0.95993 3.1416">
-                                  <geom material="Aruco_right_finger_Sticker" mesh="link_SG3_gripper_right_finger_aruco" class="visual" mass="3.6E-06" shellinertia="true"/>
+                                  <geom material="Aruco_right_finger_Sticker" mesh="link_SG3_gripper_right_finger_aruco" class="visual" mass="3.6E-06"/>
                                   <geom mesh="link_SG3_gripper_right_finger_aruco" class="collision"/>
                                 </body>
                               </body>
@@ -441,7 +441,7 @@
         </body>
         <body name="link_aruco_shoulder" pos="-0.0133769 0.0558541 0.0865" quat="1 0 0 0">
           <geom material="Aruco_Shoulder_Sticker" mesh="link_aruco_shoulder" class="visual" mass="3.6E-06"
-          shellinertia="true"/>
+/>
           <geom mesh="link_aruco_shoulder" class="collision"/>
         </body>
       </body>
