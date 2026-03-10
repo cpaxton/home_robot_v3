@@ -441,8 +441,14 @@ class DynamemController(BaseRobotAgent):
 
         if obs is not None and mode == "navigation":
             obs = self.voxel_map.find_obs_id_for_text(text)
-            rgb = self.voxel_map.observations[obs - 1].rgb
-            self.rerun_visualizer.log_custom_2d_image("/observation_similar_to_text", rgb)
+            if obs is not None:
+                try:
+                    idx = int(obs.item()) if hasattr(obs, "item") else int(obs)
+                    if 0 < idx <= len(self.voxel_map.observations):
+                        rgb = self.voxel_map.observations[idx - 1].rgb
+                        self.rerun_visualizer.log_custom_2d_image("/observation_similar_to_text", rgb)
+                except (TypeError, ValueError, IndexError):
+                    pass
 
         if localized_point is None:
             return []
