@@ -27,14 +27,14 @@ Both run against the same MuJoCo server. Use **Robocasa** for richer kitchen sce
 emet serve mujoco --use-robocasa
 ```
 
-Default task is `PnPCounterToCab`; default style and layout are 1.
+Default task is `PickPlaceCounterToCabinet`; default style and layout are 1.
 
 ### Robocasa with task / style / layout
 
 Pass through to the underlying mujoco_server (use `--` before extra options if your shell needs it):
 
 ```bash
-emet serve mujoco --use-robocasa --robocasa-task PnPCounterToCab --robocasa-style 1 --robocasa-layout 1
+emet serve mujoco --use-robocasa --robocasa-task PickPlaceCounterToCabinet --robocasa-style 1 --robocasa-layout 1
 ```
 
 ### Headless (no display / EGL)

@@ -68,7 +68,7 @@ setuptools.setup(
         "pyrealsense2",
         "urchin",
         # Visualization
-        "rerun-sdk==0.18.0",
+        "rerun-sdk>=0.21.0,<0.23.0",
         # For siglip encoder
         "sentencepiece",
         # For git tools
@@ -118,7 +118,7 @@ setuptools.setup(
             "python-dotenv",
         ],
         "sim": [
-            "mujoco>=3.2.6",
+            "mujoco>=3.3.0",
             "hello-robot-stretch-urdf",
             "grpcio",
             "click>=8.1.8",

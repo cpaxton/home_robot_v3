@@ -145,9 +145,17 @@ dynamem_log/
 # Third-party sim (cloned by emet install sim / emet install robocasa)
 third_party/robocasa/
 third_party/robosuite/
+third_party/robosuite_models/
 
 # install folder
 install/
+
+# MuJoCo / sim runtime artifacts
+MUJOCO_LOG.TXT
+**/stretch_temp_abs.xml
+
+# Partial downloads / caches
+*.partial
 
 debug*/
 

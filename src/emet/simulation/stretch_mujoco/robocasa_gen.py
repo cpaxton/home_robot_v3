@@ -6,11 +6,15 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 import robosuite
+# Import robocasa so its environments register with robosuite.make(); otherwise
+# robosuite.make("PickPlaceCounterToCabinet") raises "Environment ... not found".
+import robocasa  # noqa: F401
 from robocasa.models.scenes.scene_registry import LayoutType, StyleType
 from robosuite import load_part_controller_config
 from termcolor import colored
 
 from emet.simulation.stretch_mujoco.utils import (
+    ensure_mesh_inertia,
     get_absolute_path_stretch_xml,
     insert_line_after_mujoco_tag,
     replace_xml_tag_value,
@@ -127,7 +131,7 @@ def style_from_str(style:str) -> int:
     return list(get_styles().values()).index(style)
 
 def model_generation_wizard(
-    task: str = "PnPCounterToCab",
+    task: str = "PickPlaceCounterToCabinet",
     layout: int = None,
     style: int = None,
     write_to_file: str = None,
@@ -181,6 +185,8 @@ def model_generation_wizard(
         use_camera_obs=False,
         control_freq=20,
     )
+    # Sim is created on first reset(); without this, env.sim is None.
+    env.reset()
     print(
         colored(
             f"Showing configuration:\n    Layout: {layouts[layout]}\n    Style: {styles[style]}",
@@ -225,6 +231,9 @@ def model_generation_wizard(
 
     if robot_spawn_pose is not None:
         robot_base_fixture_pose = robot_spawn_pose
+
+    # MuJoCo 2.x: ensure every <mesh> in the kitchen XML has inertia="shell" (get_xml() may omit it)
+    xml = ensure_mesh_inertia(xml)
 
     # add stretch to kitchen
     click.secho("\nMaking Robot Placement...\n", fg="yellow")
