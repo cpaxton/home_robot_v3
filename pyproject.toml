@@ -74,6 +74,7 @@ dependencies = [
     "scikit-fmm",
     "open3d",
     "click>=8.1.8",
+    "paramiko>=3.0.0",
 ]
 
 [project.scripts]
@@ -83,6 +84,7 @@ emet = "emet.cli:main"
 dev = [
     "pre-commit",
     "pytest",
+    "pytest-timeout",
     "ruff>=0.8.0",
     "mypy",
     "lark",
@@ -132,12 +134,14 @@ emet = [
 ]
 
 [tool.black]
-line-length = 100
+line-length = 120
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py310"
 src = ["src"]
+# Exclude third_party from lint/format (vendored and forks)
+exclude = ["third_party"]
 
 [tool.ruff.lint]
 select = [
@@ -159,3 +163,6 @@ ignore = [
 [tool.pytest.ini_options]
 testpaths = ["src/test"]
 addopts = "-ra -q"
+markers = [
+    "timeout: timeout for test in seconds (pytest-timeout)",
+]

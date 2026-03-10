@@ -4,6 +4,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Emet CLI — start simulations, run agents, sync deps, view logs, run tests."""
 
@@ -84,7 +93,7 @@ def _run_module(module: str, args: list[str], env: dict | None = None) -> int:
 
 
 _MAIN_EPILOG = (
-    "Tab completion: eval \"$(emet install-completion --shell bash)\" (bash), "
+    'Tab completion: eval "$(emet install-completion --shell bash)" (bash), '
     "or use --shell zsh / --shell fish. See: emet install-completion --help"
 )
 
@@ -106,8 +115,22 @@ def main() -> None:
 
 @main.command(short_help="Start MuJoCo simulation server")
 @click.argument("backend", type=click.Choice(["mujoco"]), default="mujoco")
-@click.option("--use-robocasa", is_flag=True, help="Use Robocasa for scene generation")
+@click.option(
+    "--use-robocasa",
+    is_flag=True,
+    help="Use Robocasa for scene generation. List envs: emet serve mujoco --list-robocasa-tasks",
+)
 @click.option("--headless", is_flag=True, help="Run without native viewer")
+@click.option(
+    "--no-cameras",
+    is_flag=True,
+    help="Disable camera rendering (use on WSL when EGL camera init hangs)",
+)
+@click.option(
+    "--use-glx",
+    is_flag=True,
+    help="Use GLX instead of EGL (use with Xvfb on WSL to get camera images)",
+)
 @click.option("--scene-path", type=click.Path(exists=True), help="Path to MuJoCo scene XML")
 @click.option("--seed", default=0, type=int, help="Random seed")
 @click.option(
@@ -120,13 +143,15 @@ def main() -> None:
     "--list-robocasa-tasks",
     "list_robocasa_tasks",
     is_flag=True,
-    help="Print available Robocasa task names and exit.",
+    help="List all supported Robocasa env names and exit (use with --robocasa-task when serving).",
 )
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
 def serve(
     backend: str,
     use_robocasa: bool,
     headless: bool,
+    no_cameras: bool,
+    use_glx: bool,
     scene_path: str | None,
     seed: int,
     port_offset: int,
@@ -139,6 +164,7 @@ def serve(
       emet serve
       emet serve mujoco --headless
       emet serve mujoco --use-robocasa
+      emet serve mujoco --list-robocasa-tasks   # list all Robocasa env names
       emet serve mujoco --port-offset 100   # use ports 4501–4504 if default in use
     """
     if backend == "mujoco":
@@ -149,6 +175,10 @@ def serve(
             args.append("--list-robocasa-tasks")
         if headless:
             args.append("--headless")
+        if no_cameras:
+            args.append("--no-cameras")
+        if use_glx:
+            args.append("--use-glx")
         if scene_path:
             args.extend(["--scene_path", scene_path])
         args.extend(["--seed", str(seed)])
@@ -213,12 +243,117 @@ def kill_mujoco_server(port: int, kill_all: bool) -> None:
     sys.exit(0 if killed_any else 1)
 
 
-@main.command(
-    "run",
-    short_help="Run an app (dynamem, mapping, grasp, chat, ai_pickup, timing)",
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-)
-@click.argument("app", type=click.Choice(["dynamem", "mapping", "grasp", "chat", "ai_pickup", "timing"]))
+@main.group(short_help="Save or show robot connection (host, user) for deploy/view")
+def connect_cmd() -> None:
+    """Save and reuse connection details so deploy and view-bridge default to the right robot."""
+    pass
+
+
+@connect_cmd.command("save", short_help="Save a connection as active (or named)")
+@click.argument("host")
+@click.option("--user", "-u", default="root", help="SSH user")
+@click.option("--password", "-p", default=None, help="Password (or set EMET_ROBOT_PASSWORD); omit to use SSH key")
+@click.option("--name", "-n", default=None, help="Profile name (default: host)")
+@click.option("--no-active", is_flag=True, help="Do not set as active connection")
+def connect_save(host: str, user: str, password: str | None, name: str | None, no_active: bool) -> None:
+    """Save host and user; optional password. Updates ~/.stretch/robot_ip.txt for legacy tools."""
+    pwd = password or os.environ.get("EMET_ROBOT_PASSWORD")
+    from emet.utils.connection import save_connection
+
+    conn_name = save_connection(
+        host=host,
+        user=user,
+        password=pwd,
+        name=name,
+        set_active=not no_active,
+    )
+    click.echo(f"Saved connection '{conn_name}' (host={host}, user={user}).")
+    if not no_active:
+        click.echo("Set as active. Use: emet deploy, emet view-bridge (omit --robot-ip to use this).")
+
+
+@connect_cmd.command("list", short_help="List saved connections")
+def connect_list() -> None:
+    """List all saved connections and which is active."""
+    from emet.utils.connection import list_connections
+
+    items = list_connections()
+    if not items:
+        click.echo("No connections saved. Use: emet connect save <host> [--user USER]")
+        return
+    for name, is_active in items:
+        mark = " (active)" if is_active else ""
+        click.echo(f"  {name}{mark}")
+
+
+@connect_cmd.command("show", short_help="Show active connection")
+def connect_show() -> None:
+    """Show the active connection used by deploy and view-bridge when --robot-ip is omitted."""
+    from emet.utils.connection import get_active_connection
+
+    conn = get_active_connection()
+    if conn is None:
+        click.echo("No active connection. Use: emet connect save <host> [--user USER]")
+        sys.exit(1)
+    click.echo(f"host: {conn.get('host', '')}")
+    click.echo(f"user: {conn.get('user', '')}")
+    if "password" in conn:
+        click.echo("password: (set)")
+
+
+@main.command("view-bridge", short_help="View images and state from robot bridge")
+@click.option("--robot-ip", "--robot_ip", default="", help="Robot IP (default: active connection)")
+def view_bridge(robot_ip: str) -> None:
+    """Connect to the robot's ZMQ bridge and display head/EE camera images and state.
+    Use after starting the bridge on the robot (e.g. ros2 launch innate_mars_bridge server.launch.py).
+    """
+    sys.exit(_run_module("emet.app.view_bridge", ["--robot-ip", robot_ip] if robot_ip else []))
+
+
+@main.command(short_help="Deploy emet_core and innate_mars_bridge to robot")
+@click.option("--host", "-H", default=None, help="Robot host (default: active connection)")
+@click.option("--user", "-u", default=None, help="SSH user (default: from connection or root)")
+@click.option("--password", "-p", default=None, help="SSH password (or EMET_ROBOT_PASSWORD)")
+@click.option("--connection", "-c", "connection_name", default=None, help="Use saved connection by name")
+@click.option("--workspace", "-w", default="~/ament_ws", help="Remote ROS2 workspace path")
+@click.option("--emet-dir", default="~/emet", help="Remote dir for emet_core (e.g. ~/emet)")
+@click.option("--start-bridge", is_flag=True, help="Start bridge on robot after deploy (nohup in background)")
+def deploy(
+    host: str | None,
+    user: str | None,
+    password: str | None,
+    connection_name: str | None,
+    workspace: str,
+    emet_dir: str,
+    start_bridge: bool,
+) -> None:
+    """Deploy emet_core and innate_mars_bridge to the robot via rsync and SSH.
+
+    Syncs src/emet_core and src/innate_mars_bridge to the robot, runs pip install -e
+    for emet_core, and colcon build for the bridge. Use emet connect save <host> first
+    to set default host/user, or pass --host and --user.
+
+    Examples:
+      emet connect save 192.168.1.43 --user jetson1
+      emet deploy
+      emet deploy --host 192.168.1.43 --user jetson1 --start-bridge
+    """
+    from emet.deploy import deploy as deploy_impl
+
+    deploy_impl(
+        host=host,
+        user=user,
+        password=password,
+        connection_name=connection_name,
+        workspace=workspace,
+        emet_dir=emet_dir,
+        start_bridge=start_bridge,
+        root=_project_root(),
+    )
+
+
+@main.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+@click.argument("app", type=click.Choice(["dynamem", "graph-eqa", "mapping", "grasp", "chat", "ai_pickup", "timing"]))
 @click.option("--robot-ip", "--robot_ip", default="127.0.0.1", help="Robot or simulator IP")
 @click.option("--server-ip", "--server_ip", default="127.0.0.1", help="Server IP (e.g. for AnyGrasp)")
 @click.option("-S", "--skip", "skip_confirmations", is_flag=True, help="Skip confirmations")
@@ -265,6 +400,8 @@ def run(
         if target_receptacle:
             args.extend(["--target_receptacle", target_receptacle])
         sys.exit(_run_module("emet.app.run_dynamem", args))
+    elif app == "graph-eqa":
+        sys.exit(_run_module("emet.app.run_graph_eqa", args))
     elif app == "mapping":
         sys.exit(_run_module("emet.app.mapping", args))
     elif app == "grasp":
@@ -315,7 +452,7 @@ def sync(
     """Sync dependencies (uv sync or pip install -e .).
 
     Use --all for sim + dynamem + dev, or pick extras with -e or individual flags.
-    Sync does not install Robocasa/robosuite; run emet install sim (or install robocasa) first.
+    Sim requires third_party/robocasa and robosuite (./scripts/install_simulation.sh) and scripts/enable_sim_pyproject.py; if missing, sim is skipped with a message.
 
     Examples:
 
@@ -339,22 +476,21 @@ def sync(
     if discord:
         extras.append("discord")
     # Deduplicate, preserve order
-    seen: set[str] = set()
-    extras = [e for e in extras if e not in seen and not seen.add(e)]
+    extras = list(dict.fromkeys(extras))
 
     root = _project_root()
     os.chdir(root)
 
-    # Sim extra needs third_party/robosuite and robocasa (from emet install sim).
+    # Sim extra needs third_party/robosuite and robocasa. Skip sim if missing and warn.
     if "sim" in extras:
-        for name in ("robosuite", "robocasa"):
-            path = root / "third_party" / name
-            if not path.is_dir():
-                click.echo(
-                    f"Error: third_party/{name} not found. Run 'emet install sim' first to clone and install it.",
-                    err=True,
-                )
-                sys.exit(1)
+        missing = [name for name in ("robosuite", "robocasa") if not (root / "third_party" / name).is_dir()]
+        if missing:
+            click.echo(
+                f"Skipping sim (missing: {', '.join('third_party/' + n for n in missing)}). "
+                "Run: ./scripts/install_simulation.sh  then  python scripts/enable_sim_pyproject.py  then  uv lock && uv sync -e sim",
+                err=True,
+            )
+            extras = [e for e in extras if e != "sim"]
 
     if _has_uv():
         cmd = ["uv", "sync"]
@@ -403,47 +539,64 @@ def show(path: str, web: bool) -> None:
         sys.exit(1)
 
 
-@main.command(short_help="Run pytest")
+@main.command(short_help="Run pytest (use uv: uv run emet test)")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.option("--no-cov", "no_cov", is_flag=True, help="Disable coverage")
+@click.option(
+    "--no-sim",
+    "no_sim_tests",
+    is_flag=True,
+    help="Disable sim tests (RUN_SIM_TESTS=0); sim tests run by default",
+)
 @click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
-def test(verbose: bool, no_cov: bool, pytest_args: tuple[str, ...]) -> None:
+def test(
+    verbose: bool,
+    no_cov: bool,
+    no_sim_tests: bool,
+    pytest_args: tuple[str, ...],
+) -> None:
     """Run tests with pytest.
 
-    Examples:
+    Uses the project environment: run from repo root with uv so dev deps (pytest,
+    pytest-timeout) are available. Sim tests (e.g. red cylinder in MuJoCo) run by default;
+    use --no-sim to skip them for a faster run.
 
-      emet test
-      emet test -v
-      emet test tests/test_cli.py
-      emet test -k test_serve
+      uv sync --extra dev
+      uv run emet test
+      uv run emet test -v
+      uv run emet test --no-sim           # skip sim tests (faster)
+      uv run emet test -v src/test/memory/test_memory_backends_smoke.py
+      uv run emet test -k test_red_cylinder
     """
     root = _project_root()
     os.chdir(root)
     env = os.environ.copy()
+    if no_sim_tests:
+        env["RUN_SIM_TESTS"] = "0"
+    else:
+        env["RUN_SIM_TESTS"] = "1"
+    # Prefer project .venv so pytest and deps match the project (e.g. pytest-timeout)
+    venv_py = _project_venv_python()
+    python = str(venv_py) if venv_py is not None else sys.executable
     src = root / "src"
-    if src.exists():
+    if src.exists() and "PYTHONPATH" not in env:
         env["PYTHONPATH"] = str(src) + os.pathsep + env.get("PYTHONPATH", "")
 
-    cmd = [sys.executable, "-m", "pytest"]
+    cmd = [python, "-m", "pytest"]
     if verbose:
         cmd.append("-v")
-    if not no_cov and Path("pyproject.toml").exists():
-        # Only add coverage if pytest-cov is likely available
+    if not no_cov and (root / "pyproject.toml").exists():
         try:
             import pytest_cov  # noqa: F401
+
             cmd.extend(["--cov=emet", "--cov-report=term-missing"])
         except ImportError:
             pass
     cmd.extend(list(pytest_args))
     if not pytest_args:
-        # Prefer src/test (project convention), then tests/
-        for test_dir in (root / "src" / "test", root / "tests"):
-            if test_dir.exists():
-                cmd.append(str(test_dir))
-                break
-        else:
-            cmd.append("src/emet")
-    sys.exit(subprocess.call(cmd, env=env))
+        # pytest uses testpaths from pyproject.toml ([tool.pytest.ini_options] testpaths = ["src/test"])
+        pass
+    sys.exit(subprocess.call(cmd, env=env, cwd=root))
 
 
 _SIM_THIRD_PARTY_DIRS = ("robosuite", "robosuite_models", "robocasa")
@@ -545,11 +698,14 @@ def _run_install_simulation(
     is_flag=True,
     help="Skip downloading Robocasa kitchen assets (~10GB)",
 )
-@click.option("-a", "--setup-macros", is_flag=True, help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing")
+@click.option(
+    "-a",
+    "--setup-macros",
+    is_flag=True,
+    help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing",
+)
 @click.option("--no-sync", is_flag=True, help="Skip running emet sync -e sim after clone/install")
-def install_sim(
-    skip_download_assets: bool, setup_macros: bool, no_sync: bool
-) -> None:
+def install_sim(skip_download_assets: bool, setup_macros: bool, no_sync: bool) -> None:
     """Install simulation third-party deps (Robocasa + robosuite).
 
     Clones robosuite and robocasa, runs macro setup when missing (silences
@@ -566,16 +722,25 @@ def install_sim(
     if result != 0:
         sys.exit(result)
     if no_sync:
-        click.echo("Simulation install complete. Run: emet sync -e sim")
+        click.echo(
+            "Simulation install complete. Run: python scripts/enable_sim_pyproject.py  then  uv lock && uv sync -e sim"
+        )
         return
-    click.echo("Syncing sim extra into project env...")
+    # Enable sim in pyproject.toml so uv can resolve and sync
+    enable_script = root / "scripts" / "enable_sim_pyproject.py"
+    if enable_script.exists():
+        click.echo("Enabling sim in pyproject.toml...")
+        result = subprocess.call([sys.executable, str(enable_script)], cwd=root)
+        if result != 0:
+            sys.exit(result)
+    click.echo("Updating lock and syncing sim extra...")
     os.chdir(root)
     if _has_uv():
-        result = subprocess.call(["uv", "sync", "--extra", "sim"])
+        if subprocess.call(["uv", "lock"], cwd=root) != 0:
+            sys.exit(1)
+        result = subprocess.call(["uv", "sync", "--extra", "sim"], cwd=root)
     else:
-        result = subprocess.call(
-            [sys.executable, "-m", "pip", "install", "-e", ".[sim]"]
-        )
+        result = subprocess.call([sys.executable, "-m", "pip", "install", "-e", ".[sim]"])
     if result == 0:
         click.echo("Simulation install complete.")
         click.echo("Verify: uv run python -c \"import robocasa; print('robocasa OK')\"")
@@ -590,11 +755,14 @@ def install_sim(
     is_flag=True,
     help="Skip downloading Robocasa kitchen assets (~10GB)",
 )
-@click.option("-a", "--setup-macros", is_flag=True, help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing")
+@click.option(
+    "-a",
+    "--setup-macros",
+    is_flag=True,
+    help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing",
+)
 @click.option("--no-sync", is_flag=True, help="Skip running emet sync -e sim after clone/install")
-def install_robocasa(
-    skip_download_assets: bool, setup_macros: bool, no_sync: bool
-) -> None:
+def install_robocasa(skip_download_assets: bool, setup_macros: bool, no_sync: bool) -> None:
     """Install Robocasa and robosuite (same as emet install sim).
 
     Clones robosuite and robocasa, runs macro setup when missing, downloads
@@ -610,16 +778,23 @@ def install_robocasa(
     if result != 0:
         sys.exit(result)
     if no_sync:
-        click.echo("Robocasa install complete. Run: emet sync -e sim")
+        click.echo(
+            "Robocasa install complete. Run: python scripts/enable_sim_pyproject.py  then  uv lock && uv sync -e sim"
+        )
         return
-    click.echo("Syncing sim extra into project env...")
+    enable_script = root / "scripts" / "enable_sim_pyproject.py"
+    if enable_script.exists():
+        click.echo("Enabling sim in pyproject.toml...")
+        if subprocess.call([sys.executable, str(enable_script)], cwd=root) != 0:
+            sys.exit(1)
+    click.echo("Updating lock and syncing sim extra...")
     os.chdir(root)
     if _has_uv():
-        result = subprocess.call(["uv", "sync", "--extra", "sim"])
+        if subprocess.call(["uv", "lock"], cwd=root) != 0:
+            sys.exit(1)
+        result = subprocess.call(["uv", "sync", "--extra", "sim"], cwd=root)
     else:
-        result = subprocess.call(
-            [sys.executable, "-m", "pip", "install", "-e", ".[sim]"]
-        )
+        result = subprocess.call([sys.executable, "-m", "pip", "install", "-e", ".[sim]"])
     if result == 0:
         click.echo("Robocasa install complete.")
         click.echo("Verify: uv run python -c \"import robocasa; print('robocasa OK')\"")
@@ -684,16 +859,15 @@ def install_pre_commit(install_hooks: bool, run_hooks: bool) -> None:
             sys.exit(result)
         click.echo("Pre-commit hooks installed.")
     if run_hooks:
-        result = subprocess.call(
-            [sys.executable, "-m", "pre_commit", "run", "--all-files"]
-        )
+        result = subprocess.call([sys.executable, "-m", "pre_commit", "run", "--all-files"])
         sys.exit(result)
     sys.exit(0)
 
 
 @main.command("install-completion", short_help="Print shell completion script")
 @click.option(
-    "--shell", "-s",
+    "--shell",
+    "-s",
     type=click.Choice(["bash", "zsh", "fish"], case_sensitive=False),
     default=None,
     help="Shell (default: auto-detect from SHELL).",

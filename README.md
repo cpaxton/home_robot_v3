@@ -211,7 +211,7 @@ Check out additional documentation for ways to use Stretch AI:
 - [Add a New LLM Task](docs/adding_a_new_task.md) -- How to add a new task that can be called by an LLM
 - [DynaMem](docs/dynamem.md) -- Open-vocabulary mobile manipulation; works in simulation and headless (connect Rerun at `http://<server>:9090?url=ws://<server>:9877`)
 - [Data Collection for Learning from Demonstration](docs/data_collection.md) -- How to collect data for learning from demonstration
-- [Embodied Question Answering](docs/eqa.md) -- Allow the robot to explore the environment and answer questions from the users about the environment.
+- [Embodied Question Answering](docs/eqa.md) -- Allow the robot to explore the environment and answer questions from the users about the environment. For a graph-based memory alternative, see [GraphEQA](docs/graph_eqa.md).
 - [Learning from Demonstration](docs/learning_from_demonstration.md)  -- How to train and evaluate policies with LfD
 - [Open-Vocabulary Mobile Manipulation](docs/ovmm.md) -- Experimental code which can handle more complex language commands
 - [Apps](docs/apps.md) -- List of many different apps that you can run

@@ -119,12 +119,14 @@ class StretchDiscordBot(DiscordBot):
             )  # type: ignore
         elif self.task == "eqa":
             self.executor = EQAExecuter(agent, discord_bot=self)  # type: ignore
+        elif self.task == "graph_eqa":
+            self.executor = EQAExecuter(agent, discord_bot=self)  # type: ignore
         else:
             raise NotImplementedError(f"Task {task} is not implemented.")
 
         # Get the LLM client
-        # if task is eqa, all llms will be created within self.agent, llm_client will not be used.
-        if self.task != "eqa":
+        # if task is eqa or graph_eqa, all llms will be created within self.agent, llm_client will not be used.
+        if self.task not in ("eqa", "graph_eqa"):
             self.llm_client = get_llm_client(llm, prompt=prompt)
         else:
             self.llm_client = None
