@@ -20,10 +20,10 @@ from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder
 
 qwen_typing_options = ["Math", "Coder", "Deepseek", None]
 qwen_quantization_options = {
-    None: [None, "Int4", "Int8", "Instruct", "Instruct-Int4", "Instruct-Int8"],
-    "Coder": [None, "Int4", "Int8", "Instruct", "Instruct-Int4", "Instruct-Int8"],
-    "Math": [None, "Int4", "Int8", "Instruct", "Instruct-Int4", "Instruct-Int8"],
-    "Deepseek": [None, "Int4", "Int8"],
+    None: [None, "Int4", "Int8", "Int", "Instruct", "Instruct-Int4", "Instruct-Int8", "Instruct-Int"],
+    "Coder": [None, "Int4", "Int8", "Int", "Instruct", "Instruct-Int4", "Instruct-Int8", "Instruct-Int"],
+    "Math": [None, "Int4", "Int8", "Int", "Instruct", "Instruct-Int4", "Instruct-Int8", "Instruct-Int"],
+    "Deepseek": [None, "Int4", "Int8", "Int"],
 }
 qwen_sizes = {
     None: ["0.5B", "1.5B", "3B", "7B", "14B", "32B", "72B"],
@@ -94,6 +94,9 @@ class Qwen25Client(AbstractLLMClient):
         quantization_config = None
         if quantization is not None:
             quantization = quantization.lower()
+            # "int" is alias for int4 (e.g. --llm qwen25-Coder-3B-Instruct-Int)
+            if quantization == "int":
+                quantization = "int4"
             # Note: there were supposed to be other options but this is the only one that worked this way
             if quantization == "awq":
                 model_kwargs["torch_dtype"] = torch.float16
@@ -122,10 +125,15 @@ class Qwen25Client(AbstractLLMClient):
             model_kwargs["quantization_config"] = quantization_config
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        # When using quantization, omit torch_dtype and use device_map so bitsandbytes loads correctly
+        load_kwargs = dict(model_kwargs)
+        if quantization_config is not None:
+            load_kwargs.pop("torch_dtype", None)
+            if device != "cpu":
+                load_kwargs["device_map"] = "auto"
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            torch_dtype="auto",
-            **model_kwargs,
+            **load_kwargs,
         )
         if device == "cpu":
             self.model = self.model.to("cpu")

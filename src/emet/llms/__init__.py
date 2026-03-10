@@ -51,7 +51,6 @@ llms.update({variant: GemmaClient for variant in ["gemma4b", "gemma1b"]})
 
 def process_incoming_qwen_types(qwen_type: str):
     terms = qwen_type.split("-")
-    print(terms)
     if len(terms) == 1:
         # default configuration
         model_size, typing_option, finetuning_option, quantization_option = (
@@ -72,9 +71,10 @@ def process_incoming_qwen_types(qwen_type: str):
         # if the quantization is None, meaning no quantization shall be applied
         if len(terms) < 3:
             finetuning_option, quantization_option = "Instruct", None
-        # This means finetune with Instruct and using quantization "Instruct-Int4"
+        # This means finetune with Instruct and using quantization "Instruct-Int4" or "Instruct-Int" (alias for Int4)
         elif len(terms) >= 4:
-            finetuning_option, quantization_option = terms[2], terms[3].lower()
+            q = terms[3].lower()
+            finetuning_option, quantization_option = terms[2], "int4" if q == "int" else q
         # "AWQ"
         elif "awq" in terms[2].lower():
             finetuning_option, quantization_option = "Instruct", "awq"
