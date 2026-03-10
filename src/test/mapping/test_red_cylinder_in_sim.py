@@ -1,12 +1,13 @@
 # Copyright (c) Hello Robot, Inc.
 #
-# Tests that Dynamem positively detects the red cylinder in MuJoCo simulation
-# (default scene).
+# Integration test: robot moves around in the default MuJoCo scene (rotate_in_place),
+# then we assert that the memory backend can find the red cylinder. Ensures the full
+# stack (sim → camera → encoder → semantic memory → localize_text) works.
 #
 # Run from project root with full env (e.g. after `pip install -e .` or `emet sync -e sim`):
 #   RUN_SIM_TESTS=1 pytest src/test/mapping/test_red_cylinder_in_sim.py -v
-# On Linux, MuJoCo uses EGL (headless). Test starts the sim, runs rotate_in_place,
-# then asserts localize_text("red cylinder") returns a point near the table object.
+# With timeout (requires pytest-timeout): same command; test is marked with 120s timeout.
+# On Linux, MuJoCo uses EGL (headless).
 
 import os
 import socket
@@ -41,11 +42,11 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
     not RUN_SIM_TESTS,
     reason="Set RUN_SIM_TESTS=1 to run (starts MuJoCo sim and Dynamem)",
 )
+@pytest.mark.timeout(120)
 def test_red_cylinder_detected_in_sim():
     """
-    Start MuJoCo with default scene (red cylinder + blue cube), run Dynamem
-    (rotate_in_place to build map), then assert localize_text('red cylinder')
-    returns a point near the expected table position.
+    Robot moves around in the default MuJoCo scene (rotate_in_place to build map),
+    then we find the red cylinder via localize_text. Fails if not found within 120s.
     """
     proc = None
     robot = None

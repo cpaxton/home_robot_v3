@@ -1,10 +1,15 @@
 # Home Robot v2 / Emet – Cursor code rules
 
-## Testing
-- Tests live in `src/test/`. Run the full suite with dev deps:
-  - `uv sync --extra dev` then `uv run python -m pytest src/test -v`
-- Sim-heavy tests (e.g. `test_red_cylinder_in_sim.py`) are skipped unless `RUN_SIM_TESTS=1`.
-- When changing behavior, run the relevant tests and fix any failures before committing.
+## Testing (uv)
+- **Setup**: Use **uv**. Install deps including dev (pytest, pytest-timeout): `uv sync --extra dev`.
+- **Canonical run**: From repo root, run **`uv run emet test`** (or just `emet test` — emet re-execs under `uv run` when in project). This uses `[tool.pytest.ini_options]` in pyproject.toml (testpaths = `src/test`).
+- **Useful variants**:
+  - `uv run emet test -v` — verbose
+  - `uv run emet test --sim` — include sim tests (e.g. `test_red_cylinder_in_sim.py`; sets RUN_SIM_TESTS=1)
+  - `uv run emet test -v src/test/memory/test_memory_backends_smoke.py` — smoke tests for SVM, DynaMem, GraphEQA
+  - `uv run emet test -k test_red_cylinder` — only red-cylinder tests
+- **Three memory backends**: SVM (instance memory), DynaMem (voxel semantic), GraphEQA (graph EQA). Smoke tests in `src/test/memory/test_memory_backends_smoke.py`. See `docs/plans/TESTING_BACKENDS.md`.
+- When changing behavior, run the relevant tests and fix any failures before committing. Prefer invoking tests via **`emet test`** so the project env (uv) is used.
 
 ## Dependencies
 - **rerun-sdk**: Use `>=0.21.0,<0.23.0` (compatible with lerobot). Do not pin to 0.18.x.

@@ -417,32 +417,50 @@ def show(path: str, web: bool) -> None:
         sys.exit(1)
 
 
-@main.command(short_help="Run pytest")
+@main.command(short_help="Run pytest (use uv: uv run emet test)")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.option("--no-cov", "no_cov", is_flag=True, help="Disable coverage")
+@click.option(
+    "--sim",
+    "run_sim_tests",
+    is_flag=True,
+    help="Enable sim tests (RUN_SIM_TESTS=1); e.g. test_red_cylinder_in_sim",
+)
 @click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
-def test(verbose: bool, no_cov: bool, pytest_args: tuple[str, ...]) -> None:
+def test(
+    verbose: bool,
+    no_cov: bool,
+    run_sim_tests: bool,
+    pytest_args: tuple[str, ...],
+) -> None:
     """Run tests with pytest.
 
-    Examples:
+    Uses the project environment: run from repo root with uv so dev deps (pytest,
+    pytest-timeout) are available:
 
-      emet test
-      emet test -v
-      emet test tests/test_cli.py
-      emet test -k test_serve
+      uv sync --extra dev
+      uv run emet test
+      uv run emet test -v
+      uv run emet test --sim              # include sim tests (e.g. red cylinder in MuJoCo)
+      uv run emet test -v src/test/memory/test_memory_backends_smoke.py
+      uv run emet test -k test_red_cylinder
     """
     root = _project_root()
     os.chdir(root)
     env = os.environ.copy()
+    if run_sim_tests:
+        env["RUN_SIM_TESTS"] = "1"
+    # Prefer project .venv so pytest and deps match the project (e.g. pytest-timeout)
+    venv_py = _project_venv_python()
+    python = str(venv_py) if venv_py is not None else sys.executable
     src = root / "src"
-    if src.exists():
+    if src.exists() and "PYTHONPATH" not in env:
         env["PYTHONPATH"] = str(src) + os.pathsep + env.get("PYTHONPATH", "")
 
-    cmd = [sys.executable, "-m", "pytest"]
+    cmd = [python, "-m", "pytest"]
     if verbose:
         cmd.append("-v")
-    if not no_cov and Path("pyproject.toml").exists():
-        # Only add coverage if pytest-cov is likely available
+    if not no_cov and (root / "pyproject.toml").exists():
         try:
             import pytest_cov  # noqa: F401
             cmd.extend(["--cov=emet", "--cov-report=term-missing"])
@@ -450,14 +468,9 @@ def test(verbose: bool, no_cov: bool, pytest_args: tuple[str, ...]) -> None:
             pass
     cmd.extend(list(pytest_args))
     if not pytest_args:
-        # Prefer src/test (project convention), then tests/
-        for test_dir in (root / "src" / "test", root / "tests"):
-            if test_dir.exists():
-                cmd.append(str(test_dir))
-                break
-        else:
-            cmd.append("src/emet")
-    sys.exit(subprocess.call(cmd, env=env))
+        # pytest uses testpaths from pyproject.toml ([tool.pytest.ini_options] testpaths = ["src/test"])
+        pass
+    sys.exit(subprocess.call(cmd, env=env, cwd=root))
 
 
 _SIM_THIRD_PARTY_DIRS = ("robosuite", "robosuite_models", "robocasa")
