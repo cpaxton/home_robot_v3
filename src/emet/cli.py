@@ -106,8 +106,22 @@ def main() -> None:
 
 @main.command(short_help="Start MuJoCo simulation server")
 @click.argument("backend", type=click.Choice(["mujoco"]), default="mujoco")
-@click.option("--use-robocasa", is_flag=True, help="Use Robocasa for scene generation")
+@click.option(
+    "--use-robocasa",
+    is_flag=True,
+    help="Use Robocasa for scene generation. List envs: emet serve mujoco --list-robocasa-tasks",
+)
 @click.option("--headless", is_flag=True, help="Run without native viewer")
+@click.option(
+    "--no-cameras",
+    is_flag=True,
+    help="Disable camera rendering (use on WSL when EGL camera init hangs)",
+)
+@click.option(
+    "--use-glx",
+    is_flag=True,
+    help="Use GLX instead of EGL (use with Xvfb on WSL to get camera images)",
+)
 @click.option("--scene-path", type=click.Path(exists=True), help="Path to MuJoCo scene XML")
 @click.option("--seed", default=0, type=int, help="Random seed")
 @click.option(
@@ -120,13 +134,15 @@ def main() -> None:
     "--list-robocasa-tasks",
     "list_robocasa_tasks",
     is_flag=True,
-    help="Print available Robocasa task names and exit.",
+    help="List all supported Robocasa env names and exit (use with --robocasa-task when serving).",
 )
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
 def serve(
     backend: str,
     use_robocasa: bool,
     headless: bool,
+    no_cameras: bool,
+    use_glx: bool,
     scene_path: str | None,
     seed: int,
     port_offset: int,
@@ -139,6 +155,7 @@ def serve(
       emet serve
       emet serve mujoco --headless
       emet serve mujoco --use-robocasa
+      emet serve mujoco --list-robocasa-tasks   # list all Robocasa env names
       emet serve mujoco --port-offset 100   # use ports 4501–4504 if default in use
     """
     if backend == "mujoco":
@@ -149,6 +166,10 @@ def serve(
             args.append("--list-robocasa-tasks")
         if headless:
             args.append("--headless")
+        if no_cameras:
+            args.append("--no-cameras")
+        if use_glx:
+            args.append("--use-glx")
         if scene_path:
             args.extend(["--scene_path", scene_path])
         args.extend(["--seed", str(seed)])
@@ -213,12 +234,8 @@ def kill_mujoco_server(port: int, kill_all: bool) -> None:
     sys.exit(0 if killed_any else 1)
 
 
-@main.command(
-    "run",
-    short_help="Run an app (dynamem, mapping, grasp, chat, ai_pickup, timing)",
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-)
-@click.argument("app", type=click.Choice(["dynamem", "mapping", "grasp", "chat", "ai_pickup", "timing"]))
+@main.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+@click.argument("app", type=click.Choice(["dynamem", "graph-eqa", "mapping", "grasp", "chat", "ai_pickup", "timing"]))
 @click.option("--robot-ip", "--robot_ip", default="127.0.0.1", help="Robot or simulator IP")
 @click.option("--server-ip", "--server_ip", default="127.0.0.1", help="Server IP (e.g. for AnyGrasp)")
 @click.option("-S", "--skip", "skip_confirmations", is_flag=True, help="Skip confirmations")
@@ -265,6 +282,8 @@ def run(
         if target_receptacle:
             args.extend(["--target_receptacle", target_receptacle])
         sys.exit(_run_module("emet.app.run_dynamem", args))
+    elif app == "graph-eqa":
+        sys.exit(_run_module("emet.app.run_graph_eqa", args))
     elif app == "mapping":
         sys.exit(_run_module("emet.app.mapping", args))
     elif app == "grasp":
@@ -403,32 +422,53 @@ def show(path: str, web: bool) -> None:
         sys.exit(1)
 
 
-@main.command(short_help="Run pytest")
+@main.command(short_help="Run pytest (use uv: uv run emet test)")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.option("--no-cov", "no_cov", is_flag=True, help="Disable coverage")
+@click.option(
+    "--no-sim",
+    "no_sim_tests",
+    is_flag=True,
+    help="Disable sim tests (RUN_SIM_TESTS=0); sim tests run by default",
+)
 @click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
-def test(verbose: bool, no_cov: bool, pytest_args: tuple[str, ...]) -> None:
+def test(
+    verbose: bool,
+    no_cov: bool,
+    no_sim_tests: bool,
+    pytest_args: tuple[str, ...],
+) -> None:
     """Run tests with pytest.
 
-    Examples:
+    Uses the project environment: run from repo root with uv so dev deps (pytest,
+    pytest-timeout) are available. Sim tests (e.g. red cylinder in MuJoCo) run by default;
+    use --no-sim to skip them for a faster run.
 
-      emet test
-      emet test -v
-      emet test tests/test_cli.py
-      emet test -k test_serve
+      uv sync --extra dev
+      uv run emet test
+      uv run emet test -v
+      uv run emet test --no-sim           # skip sim tests (faster)
+      uv run emet test -v src/test/memory/test_memory_backends_smoke.py
+      uv run emet test -k test_red_cylinder
     """
     root = _project_root()
     os.chdir(root)
     env = os.environ.copy()
+    if no_sim_tests:
+        env["RUN_SIM_TESTS"] = "0"
+    else:
+        env["RUN_SIM_TESTS"] = "1"
+    # Prefer project .venv so pytest and deps match the project (e.g. pytest-timeout)
+    venv_py = _project_venv_python()
+    python = str(venv_py) if venv_py is not None else sys.executable
     src = root / "src"
-    if src.exists():
+    if src.exists() and "PYTHONPATH" not in env:
         env["PYTHONPATH"] = str(src) + os.pathsep + env.get("PYTHONPATH", "")
 
-    cmd = [sys.executable, "-m", "pytest"]
+    cmd = [python, "-m", "pytest"]
     if verbose:
         cmd.append("-v")
-    if not no_cov and Path("pyproject.toml").exists():
-        # Only add coverage if pytest-cov is likely available
+    if not no_cov and (root / "pyproject.toml").exists():
         try:
             import pytest_cov  # noqa: F401
             cmd.extend(["--cov=emet", "--cov-report=term-missing"])
@@ -436,14 +476,9 @@ def test(verbose: bool, no_cov: bool, pytest_args: tuple[str, ...]) -> None:
             pass
     cmd.extend(list(pytest_args))
     if not pytest_args:
-        # Prefer src/test (project convention), then tests/
-        for test_dir in (root / "src" / "test", root / "tests"):
-            if test_dir.exists():
-                cmd.append(str(test_dir))
-                break
-        else:
-            cmd.append("src/emet")
-    sys.exit(subprocess.call(cmd, env=env))
+        # pytest uses testpaths from pyproject.toml ([tool.pytest.ini_options] testpaths = ["src/test"])
+        pass
+    sys.exit(subprocess.call(cmd, env=env, cwd=root))
 
 
 _SIM_THIRD_PARTY_DIRS = ("robosuite", "robosuite_models", "robocasa")

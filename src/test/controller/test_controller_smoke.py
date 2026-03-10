@@ -19,6 +19,7 @@ from emet.controller import (
 from emet.controller.base_robot_agent import BaseRobotAgent as BaseClass
 from emet.controller.robot_agent import InstanceMemoryController as IMC, RobotAgent as IMC_alias
 from emet.controller.robot_agent_dynamem import DynamemController as DC, RobotAgent as DC_alias
+from emet.controller.robot_agent_graph_eqa import GraphEQAController, RobotAgentGraphEQA
 
 
 def test_controller_exports():
@@ -57,3 +58,16 @@ def test_instance_memory_controller_is_base_subclass():
 def test_dynamem_controller_is_base_subclass():
     """DynamemController subclasses BaseRobotAgent."""
     assert issubclass(DynamemController, BaseRobotAgent)
+
+
+def test_graph_eqa_controller_import():
+    """GraphEQAController can be imported and has run_eqa and update (overrides)."""
+    assert hasattr(GraphEQAController, "run_eqa")
+    assert hasattr(GraphEQAController, "run_eqa_one_iter")
+    assert hasattr(GraphEQAController, "update")
+
+
+def test_graph_eqa_controller_is_dynamem_subclass():
+    """GraphEQAController subclasses DynamemController."""
+    assert issubclass(GraphEQAController, DynamemController)
+    assert GraphEQAController is RobotAgentGraphEQA

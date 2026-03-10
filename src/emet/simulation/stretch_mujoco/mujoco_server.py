@@ -198,10 +198,11 @@ class MujocoServer:
         data_proxies: MujocoServerProxies,
         cameras_to_use: list[StretchCameras],
         start_translation: list|None,
-        start_rotation_quat: list|None
+        start_rotation_quat: list|None,
+        use_glx: bool = False,
     ):
-        # Use EGL on Linux for MuJoCo Renderer so cameras work when GLX is broken (e.g. after driver issues).
-        if platform.system() == "Linux" and cameras_to_use:
+        # Use EGL on Linux unless use_glx (e.g. Xvfb on WSL).
+        if platform.system() == "Linux" and cameras_to_use and not use_glx:
             os.environ.setdefault("MUJOCO_GL", "egl")
         server = cls(scene_xml_path, model, stop_mujoco_process_event, data_proxies,start_translation , start_rotation_quat)
         server.run(

@@ -49,6 +49,21 @@ emet serve mujoco --headless
 
 On **Linux**, headless mode automatically uses EGL for GPU-accelerated camera rendering (no display needed). AI apps like grasp and DynaMem work with cameras.
 
+**"Still waiting to connect to the MuJoCo Simulator" for a long time?** Without `--headless`, the server opens a viewer window. If there is no display (SSH, WSL, or headless machine), the child process can block there and never signal ready. **Use `emet serve mujoco --headless`** so it skips the viewer and uses EGL for cameras only; startup should then finish within a few seconds.
+
+**WSL: still hanging with `--headless`?** On WSL, EGL camera rendering can hang when creating the first offscreen renderer. You have two options:
+
+1. **Cameras needed (Graph EQA, DynaMem, etc.):** Use a virtual display and GLX so the renderer uses the display instead of EGL. In one terminal start Xvfb, then in another run the server with `DISPLAY` set and **`--use-glx`**:
+   ```bash
+   # Terminal 1
+   Xvfb :99 -screen 0 1024x768x24 &
+   # Terminal 2
+   DISPLAY=:99 emet serve mujoco --headless --use-glx
+   ```
+   Install Xvfb if needed: `sudo apt-get install xvfb`. The server will use GLX against the virtual display and should produce camera images.
+
+2. **No cameras needed:** Use **`--no-cameras`** so the server runs without camera rendering (physics only). Example: `emet serve mujoco --headless --no-cameras`. Vision-based apps will get no camera images.
+
 On **Mac/Windows** without a display, cameras are disabled. Use **Xvfb** for a virtual display:
 
 ```bash
@@ -106,8 +121,10 @@ See [DynaMem docs](dynamem.md) for full options.
 **Verifying red cylinder detection in sim:** An integration test starts the MuJoCo server (headless), runs Dynamem’s rotate-in-place to build the map, then asserts that `localize_text("red cylinder")` returns a point near the default scene’s red cylinder. Run it with full env (e.g. after `emet sync -e sim`):
 
 ```bash
-RUN_SIM_TESTS=1 pytest src/test/mapping/test_red_cylinder_in_sim.py -v
+uv run emet test -v src/test/mapping/test_red_cylinder_in_sim.py
 ```
+
+(Sim tests run by default; use `emet test --no-sim` to skip.)
 
 This confirms the full stack (sim → camera → encoder/detection → semantic memory → localization) works for the default scene.
 
@@ -190,9 +207,15 @@ python -m robocasa.scripts.download_kitchen_assets
 emet serve mujoco --use-robocasa
 ```
 
-Options:
+List all supported env names:
 
-- `--robocasa-task`: task name (default: PickPlaceCounterToCabinet). Run `emet serve mujoco --use-robocasa --list-robocasa-tasks` to list all.
+```bash
+emet serve mujoco --list-robocasa-tasks
+```
+
+Options when serving with `--use-robocasa`:
+
+- `--robocasa-task`: task name (default: PickPlaceCounterToCabinet). Good for “find an object” tests: **PickPlaceCounterToCabinet**, **PickPlaceCabinetToCounter**, **OpenCabinet**, **CloseCabinet**, and other `PickPlace*` envs (e.g. PickPlaceCounterToDrawer, PickPlaceCounterToSink).
 - `--robocasa-style`: style index
 - `--robocasa-layout`: layout index
 
