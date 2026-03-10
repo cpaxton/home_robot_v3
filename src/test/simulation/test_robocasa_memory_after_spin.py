@@ -1,8 +1,9 @@
 # Copyright (c) Hello Robot, Inc.
 #
-# Integration test: start MuJoCo server with Robocasa scene (PickPlaceCounterToSink),
-# connect, run one rotate_in_place to build memory, then assert that the unified
-# memory backend finds at least one object (placed/counter/sink objects). Run with:
+# Integration test: start MuJoCo server with Robocasa scene (PickPlaceCounterToCabinet;
+# PickPlaceCounterToSink preferred but often fails placement in this setup), connect,
+# run one rotate_in_place to build memory, then assert the unified memory backend
+# finds at least one object. Run with:
 #   uv run emet test -v src/test/simulation/test_robocasa_memory_after_spin.py
 # Sim tests run by default; use RUN_SIM_TESTS=0 or emet test --no-sim to skip.
 # Requires sim extra and robocasa assets (emet install sim, download_robocasa_assets).
@@ -40,9 +41,9 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 60) -> bool:
 @pytest.mark.timeout(180)
 def test_robocasa_memory_after_spin():
     """
-    Start MuJoCo server with Robocasa kitchen scene, run rotate_in_place once,
-    then assert the unified memory backend finds at least one object. Objects
-    depend on the default task (e.g. PickPlaceCounterToCabinet).
+    Start MuJoCo server with Robocasa kitchen scene (default: PickPlaceCounterToCabinet),
+    run rotate_in_place once, then assert the unified memory backend finds at least
+    one object (placed/counter objects get added to memory).
     """
     proc = None
     robot = None
@@ -95,14 +96,17 @@ def test_robocasa_memory_after_spin():
         executor([("rotate_in_place", "")])
 
         backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
-        # Try common object names that may appear in a kitchen task
+        # Default task PickPlaceCounterToCabinet (and e.g. CounterToSink): counter/cabinet objects
         candidates = [
-            "apple",
+            "bowl",
             "cup",
             "bottle",
-            "bowl",
+            "plate",
             "can",
             "box",
+            "apple",
+            "pot",
+            "pan",
             "red cylinder",
             "blue cube",
         ]
@@ -113,8 +117,8 @@ def test_robocasa_memory_after_spin():
                 found_any = True
                 break
         assert found_any, (
-            f"After one spin in Robocasa scene, at least one of {candidates} should be in memory. "
-            "Try running with a different task or check detector/encoder."
+            f"After one spin in Robocasa scene, at least one of {candidates} "
+            "should be in memory (placed object). Check detector/encoder."
         )
     finally:
         if robot is not None:
