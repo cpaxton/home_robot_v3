@@ -240,13 +240,13 @@ You can also pull the latest docker image on the robot with the following comman
 
 ### Building Docker Images
 
-Docker build and other instructions are located in the [docker guide](docs/docker.md). Generally speaking, from the root of the project, you can run the docker build process with:
+Docker build and other instructions are in the [docker guide](docs/docker.md). From the project root (ensure submodules are inited, e.g. `git submodule update --init --recursive third_party/segment-anything-2`):
 
 ```
-docker build -t stretch-ai_cuda-11.8:latest .
+docker build -t stretch-ai_cuda-11.8:latest . -f docker/Dockerfile.cuda-11.8
 ```
 
-See the [docker guide](docs/docker.md) for more information and troubleshooting advice.
+Or use the helper: `./docker/build-docker.sh`. See the [docker guide](docs/docker.md) for more.
 
 ## Acknowledgements
 
