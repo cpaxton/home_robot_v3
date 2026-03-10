@@ -151,6 +151,11 @@ with open("pyproject.toml", "w") as f:
     f.write(c)
 PYPATCH
     trap 'mv -f pyproject.toml.bak.install pyproject.toml' EXIT
+    # Force full install: remove existing .venv so uv sync installs all lock deps (avoids reusing a broken/partial venv)
+    if [ -d ".venv" ]; then
+        echo "  -> Removing existing .venv for full install from lock..."
+        rm -rf .venv
+    fi
 fi
 
 echo "  -> Running: uv sync $EXTRA_ARGS"
