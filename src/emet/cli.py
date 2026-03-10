@@ -97,6 +97,11 @@ def main() -> None:
     is_flag=True,
     help="Disable camera rendering (use on WSL when EGL camera init hangs)",
 )
+@click.option(
+    "--use-glx",
+    is_flag=True,
+    help="Use GLX instead of EGL (use with Xvfb on WSL to get camera images)",
+)
 @click.option("--scene-path", type=click.Path(exists=True), help="Path to MuJoCo scene XML")
 @click.option("--seed", default=0, type=int, help="Random seed")
 @click.option(
@@ -111,6 +116,7 @@ def serve(
     use_robocasa: bool,
     headless: bool,
     no_cameras: bool,
+    use_glx: bool,
     scene_path: str | None,
     seed: int,
     port_offset: int,
@@ -132,6 +138,8 @@ def serve(
             args.append("--headless")
         if no_cameras:
             args.append("--no-cameras")
+        if use_glx:
+            args.append("--use-glx")
         if scene_path:
             args.extend(["--scene_path", scene_path])
         args.extend(["--seed", str(seed)])

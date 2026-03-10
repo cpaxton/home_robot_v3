@@ -51,7 +51,18 @@ On **Linux**, headless mode automatically uses EGL for GPU-accelerated camera re
 
 **"Still waiting to connect to the MuJoCo Simulator" for a long time?** Without `--headless`, the server opens a viewer window. If there is no display (SSH, WSL, or headless machine), the child process can block there and never signal ready. **Use `emet serve mujoco --headless`** so it skips the viewer and uses EGL for cameras only; startup should then finish within a few seconds.
 
-**WSL: still hanging with `--headless`?** On WSL, EGL camera rendering can hang when creating the first offscreen renderer. Use **`--no-cameras`** so the server runs without camera rendering (physics and control only). The sim will connect quickly; vision-based apps will get no camera images. Example: `emet serve mujoco --headless --no-cameras`.
+**WSL: still hanging with `--headless`?** On WSL, EGL camera rendering can hang when creating the first offscreen renderer. You have two options:
+
+1. **Cameras needed (Graph EQA, DynaMem, etc.):** Use a virtual display and GLX so the renderer uses the display instead of EGL. In one terminal start Xvfb, then in another run the server with `DISPLAY` set and **`--use-glx`**:
+   ```bash
+   # Terminal 1
+   Xvfb :99 -screen 0 1024x768x24 &
+   # Terminal 2
+   DISPLAY=:99 emet serve mujoco --headless --use-glx
+   ```
+   Install Xvfb if needed: `sudo apt-get install xvfb`. The server will use GLX against the virtual display and should produce camera images.
+
+2. **No cameras needed:** Use **`--no-cameras`** so the server runs without camera rendering (physics only). Example: `emet serve mujoco --headless --no-cameras`. Vision-based apps will get no camera images.
 
 On **Mac/Windows** without a display, cameras are disabled. Use **Xvfb** for a virtual display:
 

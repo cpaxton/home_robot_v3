@@ -555,11 +555,19 @@ class MujocoZmqServer(BaseZmqServer):
 
     @override
     def start(
-        self, show_viewer_ui: bool = False, robocasa: bool = False, headless: bool = False
+        self,
+        show_viewer_ui: bool = False,
+        robocasa: bool = False,
+        headless: bool = False,
+        use_glx: bool = False,
     ) -> None:
         self.robot_sim.start(
-            show_viewer_ui=show_viewer_ui, headless=headless
+            show_viewer_ui=show_viewer_ui, headless=headless, use_glx=use_glx
         )  # This will start the simulation and open Mujoco-Viewer window
+        if not self.robot_sim.is_running():
+            raise RuntimeError(
+                "MuJoCo simulator did not start. See above for errors; on WSL try DISPLAY=:99 and --use-glx, or --no-cameras."
+            )
         super().start()
 
         # Create a thread for the control loop
@@ -848,6 +856,13 @@ class MujocoZmqServer(BaseZmqServer):
     is_flag=True,
     help="Disable camera rendering (use on WSL/headless when EGL camera init hangs)",
 )
+@click.option(
+    "--use-glx",
+    "--use_glx",
+    default=False,
+    is_flag=True,
+    help="Use GLX instead of EGL for rendering (use with Xvfb on WSL to get camera images)",
+)
 @click.option("--seed", default=0, help="Seed for the simulation")
 @click.option(
     "--robocasa-write-to-xml",
@@ -875,6 +890,7 @@ def main(
     show_viewer_ui: bool,
     headless: bool = False,
     no_cameras: bool = False,
+    use_glx: bool = False,
     seed: int = 0,
 ):
 
@@ -962,6 +978,7 @@ def main(
             show_viewer_ui=show_viewer_ui,
             robocasa=use_robocasa,
             headless=headless,
+            use_glx=use_glx,
         )
 
     except KeyboardInterrupt:
