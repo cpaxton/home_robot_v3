@@ -17,6 +17,8 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 import rerun as rr
 
+from emet.memory.format import MemoryState, PointCloudBlob
+
 # Rerun's native viewer requires a display; use spawn=False when headless
 def has_display() -> bool:
     return bool(
@@ -36,6 +38,22 @@ from emet.utils.logger import Logger
 from emet.visualization import urdf_visualizer
 
 logger = Logger(__name__)
+
+# Canonical Rerun entity paths (use these for consistent logging across live and memory view):
+#   world/point_cloud       Points3D
+#   world/obstacles        Points3D (2D map obstacles)
+#   world/explored         Points3D (2D map explored)
+#   world/frames/<i>       Transform3D
+#   world/frames/<i>/rgb   Image
+#   world/frames/<i>/depth DepthImage
+#   world/graph/nodes      Points3D (graph nodes)
+#   world/memory/text      TextDocument
+#   world/head_camera      Transform3D (optional); world/head_camera/rgb Image, world/head_camera/depth
+#   world/ee_camera        same for end-effector camera
+#   world/robot            Transform3D (base pose)
+#   world/ee               Transform3D (end-effector pose)
+#   world/xyz              Arrows3D (axes, static)
+#   world/map_box          Boxes3D (static)
 
 
 def decompose_homogeneous_matrix(homogeneous_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -109,6 +127,21 @@ def occupancy_map_to_3d_points(
     indices = occupancy_map_to_indices(occupancy_map)
     points = (indices - grid_center) * grid_resolution + offset
     return points
+
+
+def _rgb_to_uint8(rgb: np.ndarray) -> np.ndarray:
+    """Convert RGB to uint8 for Rerun; accept float [0,1] or [0,255] or int."""
+    if rgb is None:
+        return None
+    arr = np.asarray(rgb)
+    if arr.dtype == np.uint8:
+        return arr
+    if np.issubdtype(arr.dtype, np.floating):
+        if arr.size > 0 and np.nanmax(arr) <= 1.0:
+            arr = (arr * 255).clip(0, 255)
+        else:
+            arr = arr.clip(0, 255)
+    return arr.astype(np.uint8)
 
 
 def log_to_rerun(topic_name, data, **kwargs):
@@ -213,6 +246,9 @@ class RerunVisualizer:
         show_cameras_in_3d_view: bool = False,
         show_camera_point_clouds: bool = True,
         output_path=None,
+        *,
+        memory_view: bool = False,
+        num_frames: int = 0,
     ):
         """Rerun visualizer class
         Args:
@@ -279,14 +315,50 @@ class RerunVisualizer:
             ),
             static=True,
         )
+        # Seed realtime timeline so the viewer has a valid time when it opens (live SVM/Dynamem).
+        if not memory_view:
+            rr.set_time_seconds("realtime", time.time())
 
         self.bbox_colors_memory = {}
         self.step_delay_s = 0.3
         self.collapse_panels = collapse_panels
-        self.setup_blueprint(collapse_panels)
+        self._memory_view = memory_view
+        if memory_view:
+            self.setup_memory_blueprint(collapse_panels, num_frames)
+        else:
+            self.setup_blueprint(collapse_panels)
+
+    def setup_memory_blueprint(self, collapse_panels: bool, num_frames: int) -> None:
+        """Blueprint for viewing saved memory: 3D, one 2D per frame (rgb), and text panel."""
+        # Spatial2DView shows 2D content under origin (rgb/depth under world/frames/i).
+        frame_views = [
+            rrb.Spatial2DView(name=f"frame_{i}", origin=f"world/frames/{i}")
+            for i in range(min(num_frames, 16))  # cap at 16 panels
+        ]
+        main = rrb.Horizontal(
+            rrb.Spatial3DView(name="3D View", origin="world"),
+            rrb.Vertical(
+                *frame_views,
+                rrb.TextDocumentView(name="memory/text", origin="world/memory/text"),
+            ),
+            column_shares=[3, 1],
+        )
+        my_blueprint = rrb.Blueprint(
+            rrb.Vertical(main, rrb.TimePanel(state=True)),
+            collapse_panels=collapse_panels,
+        )
+        self._memory_blueprint = my_blueprint
+        # Defer sending so show_memory can log data first, then call send_memory_blueprint().
+        if not self._memory_view:
+            rr.send_blueprint(my_blueprint)
+
+    def send_memory_blueprint(self) -> None:
+        """Send the memory layout blueprint. Call after log_memory_state() when using memory_view."""
+        if getattr(self, "_memory_blueprint", None) is not None:
+            rr.send_blueprint(self._memory_blueprint)
 
     def setup_blueprint(self, collapse_panels: bool):
-        """Setup the blueprint for the visualizer
+        """Setup the blueprint for the visualizer (memory view: 3D, 2D images, optional text).
         Args:
             collapse_panels (bool): fully hides the blueprint/selection panels,
                                     and shows the simplified time panel
@@ -296,6 +368,7 @@ class RerunVisualizer:
             rrb.Vertical(
                 rrb.Spatial2DView(name="head_rgb", origin="world/head_camera"),
                 rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera"),
+                rrb.TextDocumentView(name="memory/text", origin="world/memory/text"),
             ),
             column_shares=[3, 1],
         )
@@ -388,7 +461,8 @@ class RerunVisualizer:
         Args:
             obs (Observations): Observation dataclass
         """
-        # rr.init("Stretch_robot", spawn=(not self.open_browser))
+        if obs is None or getattr(obs, "rgb", None) is None:
+            return
         rr.set_time_seconds("realtime", time.time())
         log_to_rerun("world/head_camera/rgb", rr.Image(obs.rgb))
 
@@ -406,9 +480,10 @@ class RerunVisualizer:
                     ),
                 )
         else:
-            log_to_rerun("world/head_camera/depth", rr.depthimage(obs.depth))
+            if obs.depth is not None:
+                log_to_rerun("world/head_camera/depth", rr.depthimage(obs.depth))
 
-        if self.show_cameras_in_3d_view:
+        if self.show_cameras_in_3d_view and getattr(obs, "camera_pose", None) is not None:
             rot, trans = decompose_homogeneous_matrix(obs.camera_pose)
             log_to_rerun(
                 "world/head_camera", rr.Transform3D(translation=trans, mat3x3=rot, axis_length=0.3)
@@ -472,10 +547,11 @@ class RerunVisualizer:
         Args:
             servo (Servo): Servo observation dataclass
         """
-        rr.set_time_seconds("realtime", time.time())
-
-        if servo.ee_rgb is None or servo.ee_depth is None or servo.ee_camera_pose is None:
+        if servo is None:
             return
+        if getattr(servo, "ee_rgb", None) is None or getattr(servo, "ee_depth", None) is None:
+            return
+        rr.set_time_seconds("realtime", time.time())
 
         # EE Camera
         log_to_rerun("world/ee_camera/rgb", rr.Image(servo.ee_rgb))
@@ -536,6 +612,163 @@ class RerunVisualizer:
         Log robot mesh transforms using urdf visualizer"""
         self.urdf_logger.log_transforms(obs)
 
+    def log_memory_state(
+        self,
+        state: MemoryState,
+        *,
+        explored_radius: float = 0.025,
+        obstacle_radius: float = 0.05,
+        world_radius: float = 0.03,
+        static: bool = False,
+    ) -> None:
+        """Log a MemoryState to Rerun (point cloud, 2D maps, frames, graph, text).
+
+        Single representation for both live agents and read_map loaded memory.
+        Use static=True when viewing a saved memory so data shows regardless of timeline.
+        """
+        if not static:
+            rr.set_time_seconds("realtime", time.time())
+        log_kw = {"static": True} if static else {}
+
+        # Clear 2D map entities if we won't log them, so loaded state without 2D doesn't show stale data
+        if state.grid_origin is None or state.obstacles_2d is None:
+            self.clear_identity("world/obstacles")
+        if state.grid_origin is None or state.explored_2d is None:
+            self.clear_identity("world/explored")
+
+        if state.point_cloud is not None:
+            pc = state.point_cloud
+            xyz = pc.xyz
+            if hasattr(xyz, "cpu"):
+                xyz = xyz.cpu().numpy()
+            xyz = np.asarray(xyz, dtype=np.float64)
+            rgb = pc.rgb
+            if rgb is not None and hasattr(rgb, "cpu"):
+                rgb = rgb.cpu().numpy()
+            if rgb is None:
+                rgb = np.ones((xyz.shape[0], 3), dtype=np.uint8) * 128
+            else:
+                rgb = _rgb_to_uint8(rgb)
+            n = xyz.shape[0]
+            log_to_rerun(
+                "world/point_cloud",
+                rr.Points3D(
+                    positions=xyz,
+                    radii=np.ones(n) * world_radius,
+                    colors=rgb,
+                ),
+                **log_kw,
+            )
+
+        grid_origin = state.grid_origin
+        grid_resolution = state.grid_resolution
+        obstacles_2d = state.obstacles_2d
+        explored_2d = state.explored_2d
+        if grid_origin is not None and obstacles_2d is not None:
+            if hasattr(grid_origin, "cpu"):
+                grid_origin = grid_origin.cpu().numpy()
+            obs_points = np.array(
+                occupancy_map_to_3d_points(obstacles_2d, grid_origin, grid_resolution)
+            )
+            obs_points[:, 2] += 0.01
+            n_obs = obs_points.shape[0]
+            rr.log(
+                "world/obstacles",
+                rr.Points3D(
+                    positions=obs_points,
+                    radii=np.ones(n_obs) * obstacle_radius,
+                    colors=[255, 0, 0],
+                ),
+                **log_kw,
+            )
+        if grid_origin is not None and explored_2d is not None:
+            if hasattr(grid_origin, "cpu"):
+                grid_origin = grid_origin.cpu().numpy()
+            explored_points = np.array(
+                occupancy_map_to_3d_points(explored_2d, grid_origin, grid_resolution)
+            )
+            explored_points[:, 2] -= 0.01
+            n_exp = explored_points.shape[0]
+            rr.log(
+                "world/explored",
+                rr.Points3D(
+                    positions=explored_points,
+                    radii=np.ones(n_exp) * explored_radius,
+                    colors=[255, 255, 255],
+                ),
+                **log_kw,
+            )
+
+        for i, frame in enumerate(state.frames):
+            rot, trans = decompose_homogeneous_matrix(frame.camera_pose)
+            log_to_rerun(
+                f"world/frames/{i}",
+                rr.Transform3D(translation=trans, mat3x3=rot, axis_length=0.2),
+                **log_kw,
+            )
+            if frame.rgb is not None:
+                rgb = np.asarray(frame.rgb)
+                if rgb.ndim == 3 and rgb.shape[2] == 3:
+                    rgb = _rgb_to_uint8(rgb)
+                log_to_rerun(f"world/frames/{i}/rgb", rr.Image(rgb), **log_kw)
+            if frame.depth is not None:
+                depth = np.asarray(frame.depth)
+                if depth.ndim == 2:
+                    log_to_rerun(f"world/frames/{i}/depth", rr.DepthImage(depth), **log_kw)
+
+        if state.graph is not None and state.graph.nodes:
+            nodes = state.graph.nodes
+            xyz = np.array([n.xyz for n in nodes], dtype=np.float64)
+            labels = [", ".join(n.labels) if n.labels else str(n.node_id) for n in nodes]
+            rr.log(
+                "world/graph/nodes",
+                rr.Points3D(positions=xyz, radii=0.05, labels=labels),
+                **log_kw,
+            )
+
+        parts = []
+        if state.text_descriptions:
+            parts.append("\n\n".join(state.text_descriptions))
+        if state.user_messages:
+            from emet.memory.format import UserMessageBlob
+
+            lines = ["## User messages"]
+            for m in state.user_messages:
+                if not isinstance(m, UserMessageBlob):
+                    lines.append(f"- {m}")
+                    continue
+                meta = []
+                if m.timestamp:
+                    meta.append(m.timestamp)
+                if m.user_identity:
+                    meta.append(f"**{m.user_identity}**")
+                if m.robot_location:
+                    loc = m.robot_location
+                    if len(loc) >= 3:
+                        meta.append(f"robot (x={loc[0]:.2f}, y={loc[1]:.2f}, θ={loc[2]:.2f})")
+                    elif len(loc) >= 2:
+                        meta.append(f"robot (x={loc[0]:.2f}, y={loc[1]:.2f})")
+                head = " | ".join(meta) if meta else ""
+                lines.append(f"- {head}\n  {m.text}" if head else f"- {m.text}")
+            parts.append("\n".join(lines))
+        if parts:
+            rr.log(
+                "world/memory/text",
+                rr.TextDocument("\n\n---\n\n".join(parts), media_type=rr.MediaType.MARKDOWN),
+                **log_kw,
+            )
+        else:
+            rr.log(
+                "world/memory/text",
+                rr.TextDocument(
+                    "*No text or commands recorded for this memory.*\n\n"
+                    "To see commands and monologue here, save memory with `user_messages` and "
+                    "`text_descriptions` populated (e.g. from the dynamem/agent run).",
+                    media_type=rr.MediaType.MARKDOWN,
+                ),
+                **log_kw,
+            )
+
     def update_voxel_map(
         self,
         space: SparseVoxelMapNavigationSpace,
@@ -544,10 +777,9 @@ class RerunVisualizer:
         obstacle_radius=0.05,
         world_radius=0.03,
     ):
-        """Log voxel map and send it to Rerun visualizer
+        """Log voxel map and send it to Rerun visualizer.
 
-        Args:
-            space (SparseVoxelMapNavigationSpace): Voxel map object
+        Builds a minimal MemoryState from space and calls log_memory_state.
         """
         rr.set_time_seconds("realtime", time.time())
 
@@ -556,61 +788,60 @@ class RerunVisualizer:
         if rgb is None:
             return
 
-        log_to_rerun(
-            "world/point_cloud",
-            rr.Points3D(
-                positions=points, radii=np.ones(rgb.shape[0]) * world_radius, colors=np.int64(rgb)
-            ),
-        )
-
-        t1 = timeit.default_timer()
         grid_origin = space.voxel_map.grid_origin
-        t2 = timeit.default_timer()
+        if hasattr(grid_origin, "cpu"):
+            grid_origin = grid_origin.cpu().numpy()
+        grid_resolution = float(space.voxel_map.grid_resolution)
         obstacles, explored = space.voxel_map.get_2d_map()
-        t3 = timeit.default_timer()
+        if hasattr(obstacles, "cpu"):
+            obstacles = obstacles.cpu().numpy()
+        if hasattr(explored, "cpu"):
+            explored = explored.cpu().numpy()
+        if hasattr(points, "cpu"):
+            points = points.cpu().numpy()
+        if hasattr(rgb, "cpu"):
+            rgb = rgb.cpu().numpy()
 
-        # Get obstacles and explored points
-        grid_resolution = space.voxel_map.grid_resolution
-        obs_points = np.array(occupancy_map_to_3d_points(obstacles, grid_origin, grid_resolution))
-
-        # Move obs_points z up slightly to avoid z-fighting
-        obs_points[:, 2] += 0.01
-        t4 = timeit.default_timer()
-
-        # Get explored points
-        explored_points = np.array(
-            occupancy_map_to_3d_points(explored, grid_origin, grid_resolution)
+        state = MemoryState(
+            point_cloud=PointCloudBlob(xyz=points, rgb=rgb),
+            grid_origin=grid_origin,
+            grid_resolution=grid_resolution,
+            obstacles_2d=obstacles,
+            explored_2d=explored,
         )
-        # Move explored z points down slightly to avoid z-fighting
-        explored_points[:, 2] -= 0.01
-        t5 = timeit.default_timer()
-
-        # Log points
-        rr.log(
-            "world/obstacles",
-            rr.Points3D(
-                positions=obs_points,
-                radii=np.ones(points.shape[0]) * obstacle_radius,
-                colors=[255, 0, 0],
-            ),
+        t1 = timeit.default_timer()
+        self.log_memory_state(
+            state,
+            explored_radius=explored_radius,
+            obstacle_radius=obstacle_radius,
+            world_radius=world_radius,
         )
-        rr.log(
-            "world/explored",
-            rr.Points3D(
-                positions=explored_points,
-                radii=np.ones(points.shape[0]) * explored_radius,
-                colors=[255, 255, 255],
-            ),
-        )
-        t6 = timeit.default_timer()
+        t2 = timeit.default_timer()
 
         if debug:
-            print("Time to get point cloud: ", t1 - t0, "% = ", (t1 - t0) / (t6 - t0))
-            print("Time to get grid origin: ", t2 - t1, "% = ", (t2 - t1) / (t6 - t0))
-            print("Time to get 2D map: ", t3 - t2, "% = ", (t3 - t2) / (t6 - t0))
-            print("Time to get obstacles points: ", t4 - t3, "% = ", (t4 - t3) / (t6 - t0))
-            print("Time to get explored points: ", t5 - t4, "% = ", (t5 - t4) / (t6 - t0))
-            print("Time to log points: ", t6 - t5, "% = ", (t6 - t5) / (t6 - t0))
+            print("Time to get voxel data: ", t1 - t0)
+            print("Time to log memory state: ", t2 - t1)
+
+    def _log_instance_boxes(
+        self,
+        centers: List,
+        half_sizes: List[List[float]],
+        labels: List[str],
+        colors: List[np.ndarray],
+        entity: str = "world/objects",
+    ) -> None:
+        """Log 3D boxes with labels (shared by update_scene_graph and optional MemoryState)."""
+        log_to_rerun(
+            entity,
+            rr.Boxes3D(
+                half_sizes=half_sizes,
+                centers=centers,
+                labels=labels,
+                radii=0.01,
+                colors=colors,
+            ),
+            static=True,
+        )
 
     def update_scene_graph(
         self,
@@ -618,10 +849,8 @@ class RerunVisualizer:
         semantic_sensor: Optional[OvmmPerception] = None,
         verbose: bool = False,
     ):
-        """Log objects bounding boxes and relationships
-        Args:
-            scene_graph (SceneGraph): Scene graph object
-            semantic_sensor (OvmmPerception): Semantic sensor object (optional; if None, labels use instance id)
+        """Log objects bounding boxes and relationships.
+        Uses shared _log_instance_boxes so loaded memory with instance boxes could use the same path.
         """
         if not scene_graph.instances:
             return
@@ -661,17 +890,7 @@ class RerunVisualizer:
             centers.append(rr.components.PoseTranslation3D(pose))
             labels.append(f"{name} {confidence:.2f}")
             colors.append(self.bbox_colors_memory[name])
-        log_to_rerun(
-            "world/objects",
-            rr.Boxes3D(
-                half_sizes=bounds,
-                centers=centers,
-                labels=labels,
-                radii=0.01,
-                colors=colors,
-            ),
-            static=True,
-        )
+        self._log_instance_boxes(centers, bounds, labels, colors, entity="world/objects")
         t1 = timeit.default_timer()
         if verbose:
             print("Time to log scene graph objects: ", t1 - t0)
