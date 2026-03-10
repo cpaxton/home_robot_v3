@@ -21,7 +21,7 @@ import emet.motion.constants as constants
 import emet.motion.simple_ik as si
 import emet.utils.logger as logger
 import emet.utils.loop_stats as lt
-from emet.agent.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import HomeRobotZmqClient
 
 try:
     from emet.app.dex_teleop.hand_tracker import HandTracker

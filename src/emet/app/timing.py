@@ -14,7 +14,7 @@ import click
 import cv2
 import numpy as np
 
-from emet.agent.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.utils import LoopStats
 
 

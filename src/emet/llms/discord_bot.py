@@ -16,9 +16,9 @@ import discord
 from termcolor import colored
 
 # import emet.utils.logger as logger
-from emet.agent.robot_agent import RobotAgent
-from emet.agent.task.dynamem import DynamemTaskExecutor, EQAExecuter
-from emet.agent.task.pickup import PickupExecutor
+from emet.controller.robot_agent import RobotAgent
+from emet.controller.task.dynamem import DynamemTaskExecutor, EQAExecuter
+from emet.controller.task.pickup import PickupExecutor
 from emet.llms import PickupPromptBuilder, get_llm_client
 from emet.utils.discord_bot import DiscordBot, Task
 from emet.utils.logger import Logger

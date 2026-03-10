@@ -7,14 +7,43 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+"""Central logger for emet: red errors, yellow warnings, optional name prefix.
+
+Use this instead of print() for errors and warnings so output is colored and
+errors/warnings go to stderr (safe for piping stdout).
+
+  from emet.utils.logger import Logger
+  log = Logger(__name__)
+  log.error("Something failed")
+  log.warning("Optional feature unavailable")
+
+  # Or use module-level functions (no name prefix):
+  from emet.utils.logger import error, warning
+  error("Failed to load config")
+  warning("Using default port")
+"""
+
+import sys
+from typing import Optional, TextIO
+
 from termcolor import colored
 
 
 class Logger:
-    def __init__(self, name: str, hide_info: bool = False, hide_debug: bool = True) -> None:
+    """Logger with colored error (red) and warning (yellow); errors/warnings go to stderr."""
+
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        hide_info: bool = False,
+        hide_debug: bool = True,
+        *,
+        stderr_for_errors: bool = True,
+    ) -> None:
         self.name = name
         self._hide_info = hide_info
         self._hide_debug = hide_debug
+        self._stderr_for_errors = stderr_for_errors
 
     def hide_info(self) -> None:
         self._hide_info = True
@@ -42,30 +71,44 @@ class Logger:
             text = f"[{self.name}] {text}"
         return text
 
+    def _out(self, text: str, color: str, stream: TextIO) -> None:
+        print(colored(text, color), file=stream)
+
     def error(self, *args) -> None:
         text = self._flatten(args)
-        print(colored(text, "red"))
+        stream = sys.stderr if self._stderr_for_errors else sys.stdout
+        self._out(text, "red", stream)
 
     def info(self, *args) -> None:
         if not self._hide_info:
             text = self._flatten(args)
-            print(colored(text, "white"))
+            self._out(text, "white", sys.stdout)
 
     def debug(self, *args) -> None:
         if not self._hide_debug:
             text = self._flatten(args)
-            print(colored(text, "white"))
+            self._out(text, "white", sys.stdout)
 
     def warning(self, *args) -> None:
         text = self._flatten(args)
-        print(colored(text, "yellow"))
+        stream = sys.stderr if self._stderr_for_errors else sys.stdout
+        self._out(text, "yellow", stream)
+
+    def warn(self, *args) -> None:
+        """Alias for warning()."""
+        self.warning(*args)
 
     def alert(self, *args) -> None:
         text = self._flatten(args)
-        print(colored(text, "green"))
+        self._out(text, "green", sys.stdout)
 
 
 _default_logger = Logger(None)
+
+
+def get_logger(name: str, **kwargs: bool) -> Logger:
+    """Return a Logger with the given name prefix (e.g. __name__)."""
+    return Logger(name, **kwargs)
 
 
 def error(*args) -> None:
@@ -77,6 +120,11 @@ def info(*args) -> None:
 
 
 def warning(*args) -> None:
+    _default_logger.warning(*args)
+
+
+def warn(*args) -> None:
+    """Alias for warning()."""
     _default_logger.warning(*args)
 
 

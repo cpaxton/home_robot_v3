@@ -344,11 +344,33 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self.voxel_pcd.clear_points(
             torch.from_numpy(depth), torch.from_numpy(intrinsics), torch.from_numpy(pose)
         )
+
+        instance_image = None
+        instance_classes = None
+        instance_scores = None
+        if self.use_instance_memory and self.detection_model is not None:
+            try:
+                sem, instance, task_obs = self.detection_model.predict(
+                    rgb, depth=depth, draw_instance_predictions=False
+                )
+                instance_image = torch.from_numpy(instance.astype(np.int64))
+                instance_classes = torch.from_numpy(
+                    task_obs["instance_classes"].astype(np.int64)
+                )
+                instance_scores = torch.from_numpy(
+                    task_obs["instance_scores"].astype(np.float32)
+                )
+            except Exception as e:
+                logger.warning("Instance detection failed in process_rgbd_images: %s", e)
+
         self.add(
             camera_pose=torch.Tensor(pose),
             rgb=torch.Tensor(rgb),
             depth=torch.Tensor(depth),
             camera_K=torch.Tensor(intrinsics),
+            instance_image=instance_image,
+            instance_classes=instance_classes,
+            instance_scores=instance_scores,
         )
 
         # Add image descriptions if we want to explore intelligently
@@ -467,10 +489,18 @@ class SparseVoxelMap(SparseVoxelMapBase):
         alignments = self.find_alignment_over_model(text).cpu().squeeze()
         obs_counts = self.semantic_memory._obs_counts.cpu()
 
+        num_points = alignments.numel()
+        if num_points == 0:
+            return (
+                torch.tensor([], dtype=obs_counts.dtype, device=obs_counts.device),
+                torch.zeros(0, points.size(1), device=points.device),
+                torch.tensor([], dtype=alignments.dtype, device=alignments.device),
+            )
+        idx = min(min_point_num, num_points)
         turning_point = (
-            min(min_similarity_threshold, alignments[torch.argsort(alignments)[-min_point_num]])
+            min(min_similarity_threshold, alignments[torch.argsort(alignments)[-idx]].item())
             if min_similarity_threshold is not None
-            else alignments[torch.argsort(alignments)[-min_point_num]]
+            else alignments[torch.argsort(alignments)[-idx]].item()
         )
         mask = alignments >= turning_point
         obs_counts = obs_counts[mask]
@@ -500,15 +530,27 @@ class SparseVoxelMap(SparseVoxelMapBase):
             points_with_max_alignment[i] = point_with_max_alignment
             max_alignments[i] = cluster_alignments.max()
 
+        # Only use clusters we actually filled (skip zero-alignment clusters from skipped small clusters)
+        valid = max_alignments > 0
+        if not valid.any():
+            return (
+                torch.tensor([], dtype=obs_counts.dtype, device=obs_counts.device),
+                torch.zeros(0, points.size(1), device=points.device),
+                torch.tensor([], dtype=alignments.dtype, device=alignments.device),
+            )
+        valid_obs = unique_obs_counts[valid]
+        valid_points = points_with_max_alignment[valid]
+        valid_alignments = max_alignments[valid]
+
         if max_img_num is not None:
-            top_k = min(max_img_num, len(max_alignments))
+            top_k = min(max_img_num, len(valid_alignments))
         else:
-            top_k = len(max_alignments)
+            top_k = len(valid_alignments)
         top_alignments, top_indices = torch.topk(
-            max_alignments, k=top_k, dim=0, largest=True, sorted=True
+            valid_alignments, k=top_k, dim=0, largest=True, sorted=True
         )
-        top_points = points_with_max_alignment[top_indices]
-        top_obs_counts = unique_obs_counts[top_indices]
+        top_points = valid_points[top_indices]
+        top_obs_counts = valid_obs[top_indices]
 
         sorted_obs_counts, sorted_indices = torch.sort(top_obs_counts, descending=False)
         sorted_points = top_points[sorted_indices]
@@ -590,14 +632,35 @@ class SparseVoxelMap(SparseVoxelMapBase):
             text,
             max_img_num=3,
         )
-        target_id = self.llm_locator(image_ids, text)
+        n_candidates = len(image_ids) if hasattr(image_ids, "__len__") else image_ids.numel()
+        if n_candidates == 0:
+            target_id = None
+        else:
+            target_id = self.llm_locator(image_ids, text)
+            # LLM returns 1-based index; validate before converting to 0-based
+            if target_id is not None and (target_id < 1 or target_id > n_candidates):
+                logger.warning(
+                    "llm_locator returned out-of-range image id %s (have %d candidates); ignoring.",
+                    target_id,
+                    n_candidates,
+                )
+                target_id = None
 
         if target_id is None:
-            debug_text += "#### - Cannot verify whether this instance is the target. **😞** \n"
-            image_id = None
-            point = None
+            # Single candidate: treat as identified (LLM may have said "None" due to format)
+            if n_candidates == 1:
+                target_id = 1
+                target_id -= 1  # 0-based
+                target_point = points[target_id]
+                image_id = image_ids[target_id]
+                point = points[target_id]
+                debug_text += "#### - An image is identified (single candidate)\n"
+            else:
+                debug_text += "#### - Cannot verify whether this instance is the target. **😞** \n"
+                image_id = None
+                point = None
         else:
-            target_id -= 1
+            target_id -= 1  # 1-based -> 0-based index into candidates
             target_point = points[target_id]
             image_id = image_ids[target_id]
             point = points[target_id]
@@ -680,6 +743,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
         depth: Optional[Tensor] = None,
         base_pose: Optional[Tensor] = None,
         xyz_frame: str = "camera",
+        instance_image: Optional[Tensor] = None,
+        instance_classes: Optional[Tensor] = None,
+        instance_scores: Optional[Tensor] = None,
         **info,
     ):
         """Add this to our history of observations. Also update the current running map.
@@ -691,6 +757,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
             xyz(Tensor): N x 3 point cloud points in camera coordinates
             feats(Tensor): N x D point cloud features; D == 3 for RGB is most common
             base_pose(Tensor): optional location of robot base
+            instance_image(Tensor): [H,W] instance ids (e.g. -1 or 0 = background)
+            instance_classes(Tensor): class id per instance
+            instance_scores(Tensor): confidence per instance
         """
         # TODO: we should remove the xyz/feats maybe? just use observations as input?
         # TODO: switch to using just Obs struct?
@@ -762,9 +831,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 rgb,
                 feats,
                 depth,
-                instance=None,
-                instance_classes=None,
-                instance_scores=None,
+                instance=instance_image,
+                instance_classes=instance_classes,
+                instance_scores=instance_scores,
                 base_pose=base_pose,
                 info=info,
                 obs=None,
@@ -785,6 +854,39 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 valid_depth = (
                     valid_depth & (median_filter_error < self.median_filter_max_error).bool()
                 )
+
+        # Add instance views to memory (for UI icons / scene graph)
+        if self.use_instance_memory and instance_image is not None:
+            H, W = rgb.shape[0], rgb.shape[1]
+            numel = full_world_xyz.numel()
+            if numel == H * W * 3:
+                pc = full_world_xyz.reshape(H, W, 3)
+            else:
+                logger.warning(
+                    "full_world_xyz shape %s does not match H*W*3=%d; skipping instance update",
+                    full_world_xyz.shape,
+                    H * W * 3,
+                )
+                pc = None
+            if pc is not None:
+                img_chw = rgb.permute(2, 0, 1) if rgb.ndim == 3 else rgb.unsqueeze(0)
+                seg = instance_image.clone()
+                if seg.dtype != torch.long and seg.dtype != torch.int:
+                    seg = seg.long()
+                # Detection overlay_masks uses -1 for background
+                self.instances.process_instances_for_env(
+                env_id=0,
+                instance_seg=seg,
+                point_cloud=pc,
+                image=img_chw,
+                cam_to_world=camera_pose,
+                instance_classes=instance_classes,
+                instance_scores=instance_scores,
+                background_instance_labels=[-1],
+                valid_points=valid_depth,
+                pose=base_pose,
+                )
+                self.instances.associate_instances_to_memory()
 
         # Add to voxel grid
         if feats is not None:

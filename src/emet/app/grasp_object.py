@@ -11,9 +11,9 @@
 
 import click
 
-from emet.agent.operations import GraspObjectOperation, UpdateOperation
-from emet.agent.robot_agent import RobotAgent
-from emet.agent.zmq_client import HomeRobotZmqClient
+from emet.controller.operations import GraspObjectOperation, UpdateOperation
+from emet.controller.robot_agent import RobotAgent
+from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.core import get_parameters
 from emet.core.task import Task
 from emet.perception import create_semantic_sensor

@@ -126,6 +126,13 @@ webcam_calibration_images/
 *.png
 *.jpg
 *.jpeg
+# Allow images in docs and robot assets (repo content)
+!docs/**/*.png
+!docs/**/*.jpg
+!docs/**/*.jpeg
+!src/emet/assets/**/*.png
+!src/emet/assets/**/*.jpg
+!src/emet/assets/**/*.jpeg
 
 # Policy weights and configs
 policy/
@@ -133,6 +140,11 @@ policy/
 # Data collection folder
 data/
 log/
+dynamem_log/
+
+# Third-party sim (cloned by emet install sim / emet install robocasa)
+third_party/robocasa/
+third_party/robosuite/
 
 # install folder
 install/

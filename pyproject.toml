@@ -97,6 +97,8 @@ sim = [
     "grpcio",
     "click>=8.1.8",
     "inputs>=0.5",
+    "robosuite",   # From third_party (clone with: emet install sim)
+    "robocasa",    # From third_party (clone with: emet install sim)
 ]
 hand_tracker = [
     "mediapipe",
@@ -107,11 +109,14 @@ dynamem = [
 ]
 
 [tool.uv]
-# Install the whole project with: uv sync [--extra dev] [--extra sim] [--extra dynamem]
-# Or from repo root: ./install.sh [--sim] [-y]
+# Robocasa 0.2 pins numpy==1.23.3 and numba==0.56.4; dynamem/SAM-2 need numpy>=1.24.4.
+# Override so both sim and dynamem resolve; numba>=0.58.1 works with numpy 1.24+ and avoids "initialization of _internal failed".
+override-dependencies = ["numpy>=1.24.4,<2", "numba>=0.58.1"]
 
 [tool.uv.sources]
 "SAM-2" = { path = "third_party/segment-anything-2", editable = true }
+robosuite = { path = "third_party/robosuite", editable = true }
+robocasa = { path = "third_party/robocasa", editable = true }
 
 [project.urls]
 Homepage = "https://github.com/hello-robot/stretchpy"
@@ -151,3 +156,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+
+[tool.pytest.ini_options]
+testpaths = ["src/test"]
+addopts = "-ra -q"

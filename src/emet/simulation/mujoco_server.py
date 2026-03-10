@@ -24,16 +24,15 @@ from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 
 from emet.motion.constants import STRETCH_CAMERA_FRAME
 
-try:
-    from emet.simulation.stretch_mujoco.robocasa_gen import model_generation_wizard
-except ImportError:
-    print(
-        "Not installing mujoco yet! Please install robosuite, robocasa and stretch_mujoco in order to use model generation wizard."
-    )
+# Robocasa is imported lazily when --use-robocasa is used, to avoid loading robosuite/numba
+# on every server start (and to avoid numba init failures when not using Robocasa).
+model_generation_wizard = None
+_ROBOCASA_IMPORT_FAILED = True
 
 import emet.motion.constants as constants
 import emet.utils.compression as compression
 import emet.utils.logger as logger
+from emet.utils.port_utils import kill_processes_on_port
 from emet.core.server import BaseZmqServer
 from emet.motion import HelloStretchIdx
 from emet.motion.control.goto_controller import GotoVelocityController
@@ -791,10 +790,16 @@ class MujocoZmqServer(BaseZmqServer):
 
 
 @click.command()
-@click.option("--send_port", default=4401, help="Port to send messages to clients")
-@click.option("--recv_port", default=4402, help="Port to receive messages from clients")
-@click.option("--send_state_port", default=4403, help="Port to send state-only messages to clients")
-@click.option("--send_servo_port", default=4404, help="Port to send images for visual servoing")
+@click.option(
+    "--port-offset",
+    default=0,
+    type=int,
+    help="Add this to all port numbers (e.g. 100 → 4501,4502,4503,4504). Use when default ports are in use.",
+)
+@click.option("--send_port", default=None, help="Port to send messages to clients (default 4401 + port-offset)")
+@click.option("--recv_port", default=None, help="Port to receive messages from clients (default 4402 + port-offset)")
+@click.option("--send_state_port", default=None, help="Port for state-only messages (default 4403 + port-offset)")
+@click.option("--send_servo_port", default=None, help="Port for visual servoing images (default 4404 + port-offset)")
 @click.option("--use_remote_computer", default=True, help="Whether to use a remote computer")
 @click.option("--verbose", default=False, help="Whether to print verbose messages", is_flag=True)
 @click.option("--image_scaling", default=1.0, help="Scaling factor for images")
@@ -842,10 +847,11 @@ class MujocoZmqServer(BaseZmqServer):
     is_flag=True,
 )
 def main(
-    send_port: int,
-    recv_port: int,
-    send_state_port: int,
-    send_servo_port: int,
+    port_offset: int,
+    send_port: Optional[int],
+    recv_port: Optional[int],
+    send_state_port: Optional[int],
+    send_servo_port: Optional[int],
     use_remote_computer: bool,
     verbose: bool,
     image_scaling: float,
@@ -865,12 +871,61 @@ def main(
     scene_model = None
     objects_info = None
 
+    base_ports = (4401, 4402, 4403, 4404)
+    send_port = send_port if send_port is not None else base_ports[0] + port_offset
+    recv_port = recv_port if recv_port is not None else base_ports[1] + port_offset
+    send_state_port = send_state_port if send_state_port is not None else base_ports[2] + port_offset
+    send_servo_port = send_servo_port if send_servo_port is not None else base_ports[3] + port_offset
+
     if seed is not None:
         np.random.seed(seed)
         random.seed(seed)
 
     if use_robocasa:
-        scene_model, scene_xml, objects_info = model_generation_wizard(
+        # Lazy import so we only load robosuite/numba when actually using Robocasa.
+        wizard = model_generation_wizard
+        if wizard is None:
+            try:
+                from emet.simulation.stretch_mujoco.robocasa_gen import (
+                    model_generation_wizard as _wizard,
+                )
+                wizard = _wizard
+                globals()["model_generation_wizard"] = _wizard
+                globals()["_ROBOCASA_IMPORT_FAILED"] = False
+            except Exception as e:
+                wizard = None
+                err_type = type(e).__name__
+                err_msg = str(e) if e else "unknown"
+                logger.error(
+                    "\n" + "=" * 60 + "\n"
+                    "  Robocasa scene generation could not be loaded.\n"
+                    "  You passed --use-robocasa but robosuite/robocasa failed to import.\n\n"
+                    f"  {err_type}: {err_msg}\n\n"
+                    f"  (Python: {sys.executable})\n\n"
+                    "  If you see 'initialization of _internal failed' (numba), run:\n"
+                    "    uv sync --extra sim --extra dynamem   (or emet sync -e sim -e dynamem)\n"
+                    "  to install a numba version compatible with numpy in this project.\n\n"
+                    "  Otherwise ensure Robocasa is installed:\n"
+                    "    1. emet install sim   (clones third_party/robosuite and robocasa)\n"
+                    "    2. emet sync --extra sim   (installs into the project env)\n"
+                    "  Then run: emet serve mujoco --use-robocasa\n"
+                    + "=" * 60,
+                )
+                sys.exit(1)
+        if wizard is None:
+            logger.error(
+                "\n" + "=" * 60 + "\n"
+                "  Robocasa scene generation is not installed.\n"
+                "  You passed --use-robocasa but robocasa is missing or failed to load in this env.\n\n"
+                "  From the project root, run:\n"
+                "    1. emet install sim        (clones third_party/robosuite and robocasa)\n"
+                "    2. emet sync --extra sim   (installs into the project env; use same env as 'emet serve')\n"
+                "  Then run: emet serve mujoco --use-robocasa\n\n"
+                "  Run 'emet' from the project directory so it uses the project .venv (or activate that venv first).\n"
+                + "=" * 60,
+            )
+            sys.exit(1)
+        scene_model, scene_xml, objects_info = wizard(
             task=robocasa_task,
             style=robocasa_style,
             layout=robocasa_layout,
@@ -880,6 +935,18 @@ def main(
     # If no scene path
     if scene_path is None or len(scene_path) == 0:
         scene_path = default_scene_xml_path
+
+    if _ROBOCASA_IMPORT_FAILED:
+        logger.warning(
+            "Robocasa scene generation (--use-robocasa) is not available. "
+            "Using default scene. To enable: emet install sim  then  emet sync -e sim",
+        )
+
+    # Free server ports so we can bind (e.g. kill previous mujoco_server).
+    for p in (send_port, recv_port, send_state_port, send_servo_port):
+        if kill_processes_on_port(p):
+            logger.warning(f"Freed port {p} (killed previous process).")
+    time.sleep(0.5)
 
     try:
         server = MujocoZmqServer(
@@ -898,10 +965,15 @@ def main(
         )
     except zmq.error.ZMQError as e:
         if "Address already in use" in str(e):
-            print(
-                f"\nPort already in use. Kill the existing process with:\n"
-                f"  kill $(lsof -t -i:{send_port})  # or: pkill -f mujoco_server\n",
-                file=sys.stderr,
+            logger.error(
+                f"\nPort {send_port} (or another server port) is already in use.\n\n"
+                f"Option 1 – free the port:\n"
+                f"  kill $(lsof -t -i:{send_port})\n"
+                f"  # or: pkill -f mujoco_server\n\n"
+                f"Option 2 – use different ports (e.g. 4501–4504):\n"
+                f"  emet serve mujoco --port-offset 100\n\n"
+                f"Option 3 – stop the server then retry:\n"
+                f"  emet kill-mujoco-server\n",
             )
         raise
 

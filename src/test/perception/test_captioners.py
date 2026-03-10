@@ -7,6 +7,8 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+from pathlib import Path
+
 import pytest
 from PIL import Image
 
@@ -14,8 +16,9 @@ from emet.perception.captioners import get_captioner
 
 captioners = ["qwen", "blip"]
 
-# With these two images from docs:
-images = ["../docs/object.png", "../docs/receptacle.png"]
+# Paths relative to project root
+_DOCS = Path(__file__).resolve().parent.parent.parent.parent / "docs"
+images = [str(_DOCS / "object.png"), str(_DOCS / "receptacle.png")]
 
 
 def test_get_captioner():
@@ -42,6 +45,8 @@ def test_get_captioner_all(captioner_name):
 
     # Test captioning on the two images
     for image_path in images:
+        if not Path(image_path).exists():
+            pytest.skip(f"Test image not found: {image_path}")
         captioner = get_captioner(captioner_name, {})
         assert captioner is not None
 

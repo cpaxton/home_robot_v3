@@ -79,8 +79,14 @@ We use [pytest](https://docs.pytest.org/en/7.0.1/) for testing. Please make sure
 
 ```
 emet test
-# or: pytest src/test
+# or: uv run python -m pytest src/test
+# or: pytest src/test   (with PYTHONPATH=src or from a venv that has emet installed)
 ```
+
+- **Core capabilities:** `src/test/core/`, `src/test/motion/`, `src/test/controller/` (controller smoke tests and base class).
+- **Mapping and instance memory:** `src/test/mapping/test_svm.py` (InstanceMemoryController with dummy robot; requires test data `hq_small.pkl` / `hq_large.pkl`).
+- **Dynamem-related:** `src/test/mapping/test_semantic_memory.py` (Dynamem voxel map utilities).
+- **Simulation:** Install with `emet install sim`, then run the simulation apps (see [CLI docs](docs/cli.md)).
 
 ### File Structure
 
@@ -93,10 +99,10 @@ The code is organized as follows. Inside the core package `src/emet`:
 - [perception](src/emet/perception) contains tools for perception, such as object detection and pose estimation.
   - [perception/encoders](src/emet/perception/encoders) contains tools for encoding vision and language features, such as the [SiglipEncoder](src/emet/perception/encoders/siglip_encoder.py) class.
   - [perception/captioners](src/emet/perception/captioners) contains tools for generating captions from images, such as the [MoonbeamCaptioner](src/emet/perception/captioners/moonbeam_captioner.py) class.
-- [agent](src/emet/agent) is aggregate functionality, particularly robot_agent which includes lots of common tools including motion planning algorithms.
-  - In particular, `agent/zmq_client.py` is specifically the robot control API, an implementation of the client in core/interfaces.py. there's another ROS client in `stretch_ros2_bridge`.
-  - [agent/robot_agent.py](src/emet/agent/robot_agent.py) is the main robot agent, which is a high-level interface to the robot. It is used in the `app` scripts.
-  - [agent/base](src/emet/agent/base) contains base classes for creating common and sequentially executed robot operations through the [ManagedOperation](src/emet/agent/base/managed_operation.py) class.
+- [controller](src/emet/controller) is the robot capabilities layer: mapping, manipulation, navigation, and task execution.
+  - In particular, `controller/zmq_client.py` is the robot control API (implementation of the client in core/interfaces.py). There is also a ROS client in `stretch_ros2_bridge`.
+  - [controller/robot_agent.py](src/emet/controller/robot_agent.py) defines the InstanceMemoryController (and RobotAgent alias), a high-level interface used by the `app` scripts.
+  - [controller/base](src/emet/controller/base) contains base classes for operations, including [ManagedOperation](src/emet/controller/base/managed_operation.py).
   - [agent/task](src/emet/agent/task) contains task-specific code, such as for the `pickup` task. This is divided between "Managers" like [pickup_manager.py](src/emet/agent/task/pickup_manager.py) which are composed of "Operations." Each operation is a composable state machine node with pre- and post-conditions.
   - [agent/operations](src/emet/agent/operations) contains the individual operations, such as `move_to_pose.py` which moves the robot to a given pose.
 

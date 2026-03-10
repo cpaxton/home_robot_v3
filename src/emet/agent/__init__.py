@@ -1,12 +1,26 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
-#
-# Some code may be adapted from other open-source works with their respective licenses. Original
-# license information maybe found below, if so.
+# Backward compatibility: re-export from emet.controller.
+# The agent package has been renamed to controller.
+# Use: from emet.controller import RobotAgent, RobotClient
 
-from .robot_agent import RobotAgent
-from .zmq_client import HomeRobotZmqClient
-from .zmq_client import HomeRobotZmqClient as RobotClient
+from emet.controller import (
+    BaseRobotAgent,
+    DynamemController,
+    DynamemRobotAgent,
+    HomeRobotZmqClient,
+    InstanceMemoryController,
+    RobotAgent,
+    RobotClient,
+)
+
+__all__ = [
+    "BaseRobotAgent",
+    "DynamemController",
+    "DynamemRobotAgent",
+    "HomeRobotZmqClient",
+    "InstanceMemoryController",
+    "RobotAgent",
+    "RobotClient",
+]

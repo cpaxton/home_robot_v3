@@ -17,8 +17,8 @@ import click
 for _name in ("httpx", "httpcore", "huggingface_hub", "transformers"):
     logging.getLogger(_name).setLevel(logging.WARNING)
 
-from emet.agent.task.dynamem import DynamemTaskExecutor
-from emet.agent.zmq_client import HomeRobotZmqClient
+from emet.controller.task.dynamem import DynamemTaskExecutor
+from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.core.parameters import get_parameters
 from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_llm_client
 

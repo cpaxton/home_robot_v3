@@ -7,16 +7,19 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+from pathlib import Path
+
 import numpy as np
 
-from emet.agent import RobotAgent
+from emet.controller import RobotAgent
 from emet.core import Parameters
 from emet.utils.config import Config
 from emet.utils.dummy_stretch_client import DummyStretchClient
 
-SMALL_DATA_FILE = "test/mapping/hq_small.pkl"
-LARGE_DATA_FILE = "test/mapping/hq_large.pkl"
-TEST_PLANNER_FILENAME = "test/mapping/planner.yaml"
+_TEST_DIR = Path(__file__).resolve().parent
+SMALL_DATA_FILE = _TEST_DIR / "hq_small.pkl"
+LARGE_DATA_FILE = _TEST_DIR / "hq_large.pkl"
+TEST_PLANNER_FILENAME = _TEST_DIR / "planner.yaml"
 
 SMALL_DATA_START = np.array([4.5, 1.4, 0.0])
 LARGE_DATA_START = np.array([4.5, 1.4, 0.0])
@@ -32,12 +35,12 @@ similarity_threshold = 0.05
 debug = False
 
 
-def _eval_svm(filename: str, start_pos: np.ndarray, possible: bool = False) -> None:
+def _eval_svm(filename: Path, start_pos: np.ndarray, possible: bool = False) -> None:
 
     print("==== SVM Evaluation ====")
     print(f"Loading voxel map from {filename}...")
     config = Config()
-    config.merge_from_file(TEST_PLANNER_FILENAME)
+    config.merge_from_file(str(TEST_PLANNER_FILENAME))
     config.freeze()
     parameters = Parameters(**config)
 
@@ -56,7 +59,7 @@ def _eval_svm(filename: str, start_pos: np.ndarray, possible: bool = False) -> N
     print("Reading from pkl file of raw observations...")
     frame = -1
     semantic_sensor = None
-    ok = voxel_map.read_from_pickle(filename, num_frames=frame, perception=semantic_sensor)
+    ok = voxel_map.read_from_pickle(str(filename), num_frames=frame, perception=semantic_sensor)
 
     print(f"Reading from pkl file of raw observations... {ok=}")
     assert ok, "Failed to read from pkl file of raw observations"
@@ -139,10 +142,16 @@ def _eval_svm(filename: str, start_pos: np.ndarray, possible: bool = False) -> N
 
 
 def test_svm_small():
+    if not SMALL_DATA_FILE.exists():
+        import pytest
+        pytest.skip(f"Mapping test data not found: {SMALL_DATA_FILE}")
     _eval_svm(SMALL_DATA_FILE, SMALL_DATA_START, possible=False)
 
 
 def test_svm_large():
+    if not LARGE_DATA_FILE.exists():
+        import pytest
+        pytest.skip(f"Mapping test data not found: {LARGE_DATA_FILE}")
     _eval_svm(LARGE_DATA_FILE, LARGE_DATA_START, possible=True)
 
 

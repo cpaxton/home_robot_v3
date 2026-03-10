@@ -17,7 +17,7 @@ from lerobot.common.datasets.push_dataset_to_hub import dobbe_format
 import emet.app.dex_teleop.dex_teleop_utils as dt_utils
 import emet.utils.logger as logger
 import emet.utils.loop_stats as lt
-from emet.agent.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.app.lfd.policy_utils import load_policy, prepare_image, prepare_state
 from emet.core import get_parameters
 from emet.motion.kinematics import HelloStretchIdx

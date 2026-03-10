@@ -9,8 +9,11 @@ import sys
 import threading
 import time
 
-import click
 import numpy as np
+
+from emet.utils.logger import Logger
+
+logger = Logger(__name__)
 try:
     from mujoco import MjModel
 except ImportError:
@@ -116,6 +119,17 @@ class StretchMujocoSimulator:
         else:
             cameras_for_server = self._cameras_to_use
 
+        # On Linux, use EGL for MuJoCo Renderer so camera rendering works when GLX is broken
+        # (e.g. "GLX: Failed to create context: BadValue", gladLoadGL error after driver issues).
+        # Must be set before the child process starts so it inherits the env.
+        if platform.system() == "Linux" and cameras_for_server:
+            if "MUJOCO_GL" not in os.environ:
+                print(
+                    "Warning: Setting MUJOCO_GL=egl for camera rendering (avoids GLX/gladLoadGL errors). "
+                    "Use --headless to run without a viewer, or unset MUJOCO_GL to try the default backend."
+                )
+                os.environ["MUJOCO_GL"] = "egl"
+
         self._server_process = Process(
             target=mujoco_server.launch_server,
             name="MujocoProcess",
@@ -139,16 +153,16 @@ class StretchMujocoSimulator:
         signal.signal(signal.SIGINT, lambda num, sig: self.stop())
         atexit.register(self.stop)
 
-        click.secho("Starting Stretch Mujoco Simulator...", fg="green")
+        logger.alert("Starting Stretch MuJoCo Simulator...")
         while self.pull_status().time == 0 or self.pull_camera_data().time == 0:
             time.sleep(1)
-            click.secho("Still waiting to connect to the Mujoco Simulatior.", fg="yellow")
+            logger.warning("Still waiting to connect to the MuJoCo Simulator.")
 
             if not self.is_running():
-                click.secho("The simulator is not running anymore, quitting..", fg="yellow")
+                logger.warning("The simulator is not running anymore, quitting..")
                 return
 
-        click.secho("The Mujoco Simulatior is connected.", fg="green")
+        logger.alert("The MuJoCo Simulator is connected.")
 
         self.home()
 
@@ -169,9 +183,8 @@ class StretchMujocoSimulator:
         except:
             simulation_time_message = ""
 
-        click.secho(
-            f"Stopping Stretch Mujoco Simulator...{simulation_time_message}",
-            fg="red",
+        logger.error(
+            f"Stopping Stretch MuJoCo Simulator...{simulation_time_message}",
         )
 
         self.stop_mujoco_process()
@@ -185,46 +198,62 @@ class StretchMujocoSimulator:
                 and thread != threading.main_thread()
                 and not isinstance(thread, threading._DummyThread)
             ):
-                click.secho(
+                logger.warning(
                     f"Stopping thread {index}/{len(active_threads)-1}.",
-                    fg="yellow",
                 )
                 thread.join(timeout=10.0)
                 if thread.is_alive():
-                    click.secho(
+                    logger.error(
                         f"{thread.name} is not terminating. Make sure to check 'sim.is_running()' in threading loops.",
-                        fg="red",
                     )
 
-        click.secho(
-            f"The Stretch Mujoco Simulator has ended. Good-bye!",
-            fg="red",
+        logger.error(
+            "The Stretch MuJoCo Simulator has ended. Good-bye!",
         )
 
     def stop_mujoco_process(self):
-
-        if self._server_process and not self._server_process.is_alive():
-            click.secho(
-                f"The Mujoco process has already terminated.",
-                fg="red",
-            )
+        """Stop the MuJoCo server process gracefully: request stop, join with timeout, then SIGTERM, then SIGKILL if needed."""
+        if not self._server_process:
             return
 
-        click.secho(
-            f"Sending signal to stop the Mujoco process...",
-            fg="red",
-        )
+        if not self._server_process.is_alive():
+            logger.warning(
+                "The MuJoCo process has already terminated. Cleaning up.",
+            )
+            self._server_process.join(timeout=2.0)  # Reap the dead process
+            self._server_process = None
+            return
 
-        # Wait until the main control loop ends before sending this stop event.
+        logger.error(
+            "Stopping the MuJoCo process (sending stop request)...",
+        )
         self._stop_mujoco_process_event.set()
-        if self._server_process:
-            # self._server_process.terminate() # ask it nicely.
-            self._server_process.join()
 
-        click.secho(
-            f"The Mujoco process has ended.",
-            fg="red",
+        join_timeout = 10.0
+        self._server_process.join(timeout=join_timeout)
+        if not self._server_process.is_alive():
+            logger.error("The MuJoCo process has ended.")
+            self._server_process = None
+            return
+
+        logger.warning(
+            f"MuJoCo process did not exit after {join_timeout}s. Sending SIGTERM.",
         )
+        self._server_process.terminate()
+        term_timeout = 5.0
+        self._server_process.join(timeout=term_timeout)
+        if not self._server_process.is_alive():
+            logger.error("The MuJoCo process has ended.")
+            self._server_process = None
+            return
+
+        logger.error(
+            "MuJoCo process did not exit after SIGTERM. Sending SIGKILL.",
+        )
+        self._server_process.kill()
+        self._server_process.join(timeout=2.0)
+        self._server_process = None
+        logger.error("The MuJoCo process has ended.")
 
     @require_connection
     def home(self) -> None:
@@ -269,9 +298,8 @@ class StretchMujocoSimulator:
         move_command = self.data_proxies.get_command().move_to.get(actuator.name)
 
         if not move_command:
-            click.secho(
-                "Warning: Position check requested, but the joint was not commanded to move.",
-                fg="yellow",
+            logger.warning(
+                "Position check requested, but the joint was not commanded to move.",
             )
             return True
 
@@ -304,9 +332,8 @@ class StretchMujocoSimulator:
             pos = move_command.pos
             actual = actuator.get_position(self.pull_status())
             error = pos - actual
-            click.secho(
+            logger.error(
                 f"Timeout: Joint {actuator.name} did not reach {pos}. Actual: {actual:.4f} Diff: {error*100:.4f}cm",
-                fg="red",
             )
             return False
         return True
@@ -367,9 +394,8 @@ class StretchMujocoSimulator:
             is_alive=self.is_running,
         ):
             if timeout is not None:
-                click.secho(
+                logger.error(
                     f"Timeout: Joint {actuator.name} is still moving after {timeout}.",
-                    fg="red",
                 )
             return False
         return True
@@ -417,9 +443,8 @@ class StretchMujocoSimulator:
             actuator = Actuators[actuator]
 
         if actuator in [Actuators.left_wheel_vel, Actuators.right_wheel_vel]:
-            click.secho(
+            logger.error(
                 f"Cannot set a position for a velocity joint {actuator.name}",
-                fg="red",
             )
             raise Exception(
                 f"Cannot set an absolute position for a continuous joint {actuator.name}"

@@ -1,6 +1,6 @@
 # Emet CLI Tool
 
-The `emet` CLI makes it easy to start simulations, run robot agents, sync dependencies, view logs, and run tests. It supports bash and zsh tab completion.
+The `emet` CLI makes it easy to start simulations, run robot agents, sync dependencies, view logs, and run tests. It supports **tab completion** for bash, zsh, and fish (see [Tab completion](#tab-completion) below).
 
 ## Installation
 
@@ -22,6 +22,8 @@ emet run dynamem --robot-ip 127.0.0.1 -S --visual-servo
 # 3. Or run mapping
 emet run mapping --robot-ip 127.0.0.1
 ```
+
+If port 4401 is already in use: `emet kill-mujoco-server` then retry, or `emet serve mujoco --port-offset 100`.
 
 ## Commands
 
@@ -107,6 +109,8 @@ emet sync --all --hand-tracker
 emet sync --no-install
 ```
 
+When using both `sim` and `dynamem`, uv applies a numpy override (see `[tool.uv] override-dependencies` in `pyproject.toml`) so Robocasa’s pin and SAM-2’s requirement resolve together.
+
 ---
 
 ### `emet show <path> [options]`
@@ -150,13 +154,15 @@ Install submodules, simulation extras, or full setup.
 |------------|-------------|
 | `submodules` | Init and update git submodules (segment-anything-2, ok-robot) |
 | `sim` | Install Robocasa and robosuite (clones into third_party) |
+| `robocasa` | Same as `sim` |
 | `full` | Run full install (./install.sh) |
 | `pre-commit` | Install pre-commit hooks (ruff, mypy, etc.) |
 
 **`emet install submodules`**
 - `--recursive` / `--no-recursive` — Recursively init nested submodules (default: recursive)
 
-**`emet install sim`**
+**`emet install sim`** / **`emet install robocasa`** (same)
+- Clones robosuite and **Robocasa v0.2** (pinned for MuJoCo 3.2.6 / numpy compatibility; main/v1.0 can conflict).
 - `-d, --download-assets` — Download Robocasa kitchen assets
 - `-a, --setup-macros` — Run Robocasa setup_macros.py
 
@@ -169,7 +175,8 @@ Install submodules, simulation extras, or full setup.
 **Examples:**
 ```bash
 emet install submodules              # Init and update submodules
-emet install sim                    # Install Robocasa, robosuite
+emet install sim                    # Install Robocasa, robosuite (third_party)
+emet install robocasa               # Same as install sim
 emet install sim -d -a              # With assets and macros
 emet install full                   # Full install (uv, deps, sync)
 emet install full -y --sim          # Non-interactive with sim extras
@@ -178,16 +185,35 @@ emet install pre-commit             # Install git hooks (requires emet sync --de
 emet install pre-commit --run       # Install and run on all files
 ```
 
-After `emet install sim`, run `emet sync -e sim` to install emet with sim extras.
+`emet install sim` runs `emet sync -e sim` afterward by default (use `--no-sync` to skip). The project’s `pyproject.toml` uses a uv override for numpy so that `sync -e sim -e dynamem` works; see [Simulation](simulation.md#troubleshooting).
 
 ---
 
-### `emet install-completion [options]`
+### `emet kill-mujoco-server [options]`
 
-Print shell completion script for bash or zsh.
+Stop MuJoCo simulation server(s) so ports 4401–4404 are free.
 
 **Options:**
-- `-s, --shell {bash,zsh}` — Shell type (auto-detected from $SHELL if omitted)
+- `--port N` — Kill process on port N (default: 4401)
+- `--all` — Kill all mujoco_server processes, then free ports 4401–4404
+
+**Examples:**
+```bash
+emet kill-mujoco-server              # free port 4401
+emet kill-mujoco-server --all       # stop all mujoco servers and free 4401–4404
+emet kill-mujoco-server --port 4501 # if you used --port-offset 100
+```
+
+---
+
+### Tab completion {#tab-completion}
+
+#### `emet install-completion [options]`
+
+Print shell completion script so that `emet`, subcommands, and options tab-complete.
+
+**Options:**
+- `-s, --shell {bash,zsh,fish}` — Shell (auto-detected from $SHELL if omitted)
 
 **Setup:**
 ```bash
@@ -196,9 +222,12 @@ eval "$(emet install-completion --shell bash)"
 
 # Zsh: add to ~/.zshrc
 eval "$(emet install-completion --shell zsh)"
+
+# Fish: add to ~/.config/fish/config.fish
+emet install-completion --shell fish | source
 ```
 
-Then restart your shell or `source ~/.bashrc` / `source ~/.zshrc`.
+Then restart your shell or `source` your config file. After that, `emet <TAB>` completes to `serve`, `kill-mujoco-server`, `run`, etc.
 
 ---
 
