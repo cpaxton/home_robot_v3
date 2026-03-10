@@ -172,28 +172,26 @@ emet install robocasa
 # or: emet install sim
 ```
 
-Then sync the sim extra so the rest of the stack is installed:
+This clones robosuite and robocasa, **downloads kitchen assets (~5GB)**, and runs the install script. Then sync the sim extra:
 
 ```bash
 emet sync -e sim
 ```
 
-Optional: download kitchen assets and run setup macros:
+Optional: run setup macros (e.g. for teleop): `emet install robocasa -a`. To skip the asset download (e.g. CI): `emet install sim --no-download-assets`.
 
-```bash
-emet install robocasa -d -a
-```
+**Version pairing:** Robocasa v0.2 requires **RoboSuite v1.5.0** (robocasa’s README: “using RoboSuite v1.5 as the backend”). The older branch `robocasa_v0.1` is for robocasa v0.1 and is missing APIs robocasa v0.2 needs; that mismatch causes the import errors. We do **not** patch third_party—use the correct versions. The install script uses robosuite v1.5.0. If you installed earlier when the script used `robocasa_v0.1`, re-run `emet install sim` so robosuite is checked out at v1.5.0.
 
 **Manual install** (same as the script, for reference):
 
 ```bash
 cd third_party
-git clone https://github.com/ARISE-Initiative/robosuite -b robocasa_v0.1
+git clone https://github.com/ARISE-Initiative/robosuite --branch v1.5.0 --single-branch
 cd robosuite && pip install -e . && cd ..
 git clone https://github.com/robocasa/robocasa --branch v0.2 --single-branch
 cd robocasa && pip install -e . && cd ..
-python robocasa/scripts/setup_macros.py
-python robocasa/scripts/download_kitchen_assets.py  # optional, for assets
+python robocasa/robocasa/scripts/download_kitchen_assets.py   # part of install; ~5GB
+python robocasa/robocasa/scripts/setup_macros.py             # optional
 ```
 
 ### Run with Robocasa
@@ -270,7 +268,10 @@ MuJoCo is pinned to 3.2.6 for compatibility. Ensure `uv sync --extra sim` or `pi
 Use `sim_planner.yaml` and `--parameter_file sim_planner.yaml` for grasp_object.
 
 **Robocasa import errors or pip conflicts**
-Install the pinned version with `emet install robocasa` (or `emet install sim`). Do not clone Robocasa from `main` and install—v1.0 uses different MuJoCo/numpy and can pull torch 2.7 and other conflicting deps. If you already cloned main, run `cd third_party/robocasa && git fetch --tags && git checkout v0.2` then `pip install -e .` from that directory.
+Install the pinned version with `emet install robocasa` (or `emet install sim`). Do not clone Robocasa from `main` and install—v1.0 uses different MuJoCo/numpy and can pull torch 2.7 and other conflicting deps. If you already cloned main, run `cd third_party/robocasa && git fetch --tags && git checkout v0.2` then `pip install -e .` from that directory. If you see `ImportError: cannot import name 'load_composite_controller_config'` (or `PandaOmron`, `load_part_controller_config`), you likely have the wrong robosuite version: robocasa v0.2 needs **robosuite v1.5.0**. Run `emet install sim` again, or `cd third_party/robosuite && git fetch origin --tags && git checkout v1.5.0 && pip install -e .`.
+
+**Using sim and dynamem together (uv)**  
+Robocasa v0.2 asserts `numpy` is one of 1.23.{2,3,5}; dynamem/SAM-2 need `numpy>=1.24.4`. The project uses a **uv override** in `pyproject.toml` (`[tool.uv] override-dependencies = ["numpy>=1.24.4,<2"]`) so that `emet sync -e sim -e dynamem` resolves to one numpy. With that override, robocasa's numpy check will fail (we do not patch third_party). Options: use a separate env for `emet serve mujoco --use-robocasa` with numpy 1.23.x and no dynamem; or use the override and run without `--use-robocasa` (default scene only).
 
 **DynaMem / Rerun headless**
 When running DynaMem without a display, the Rerun web server starts automatically. Connect from a laptop at `http://<server-ip>:9090?url=ws://<server-ip>:9877`. See [Debug: Headless and Rerun](debug.md#headless-and-rerun).
