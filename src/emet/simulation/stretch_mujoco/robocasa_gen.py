@@ -11,6 +11,7 @@ import robosuite
 import robocasa  # noqa: F401
 from robocasa.models.scenes.scene_registry import LayoutType, StyleType
 from robosuite import load_part_controller_config
+from robosuite.utils.transform_utils import euler2mat, mat2quat
 from termcolor import colored
 
 from emet.simulation.stretch_mujoco.utils import (
@@ -227,7 +228,27 @@ def model_generation_wizard(
             "quat": object_placements[obj_name][1],
         }
 
-    xml, robot_base_fixture_pose = custom_cleanups(xml)
+    xml, remove_robot_attrib = custom_cleanups(xml)
+
+    # Use the env's actual robot spawn pose (set on reset()), not the removed body's
+    # attrib (which is the placeholder 10, 10, 0). Otherwise Stretch spawns off-scene.
+    if hasattr(env, "init_robot_base_pos") and hasattr(env, "init_robot_base_ori"):
+        pos = np.asarray(env.init_robot_base_pos)
+        ori_euler = np.asarray(env.init_robot_base_ori)
+        quat_xyzw = mat2quat(euler2mat(ori_euler))
+        quat_wxyz = quat_xyzw[[3, 0, 1, 2]]  # MuJoCo body quat is w x y z
+        robot_base_fixture_pose = {
+            "pos": " ".join(map(str, pos)),
+            "quat": " ".join(map(str, quat_wxyz)),
+        }
+    elif remove_robot_attrib is not None and "pos" in remove_robot_attrib and "quat" in remove_robot_attrib:
+        robot_base_fixture_pose = remove_robot_attrib
+    else:
+        # Fallback: spawn near origin so the robot is visible in the scene
+        robot_base_fixture_pose = {
+            "pos": "0 0 0",
+            "quat": "1 0 0 0",
+        }
 
     if robot_spawn_pose is not None:
         robot_base_fixture_pose = robot_spawn_pose
