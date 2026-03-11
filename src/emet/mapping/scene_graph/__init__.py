@@ -8,3 +8,4 @@
 # license information maybe found below, if so.
 
 from .scene_graph import SceneGraph
+from .open_vocab_scene_graph import OpenVocabSceneGraph, SceneGraphNode, SceneGraphEdge, ObjectObservation

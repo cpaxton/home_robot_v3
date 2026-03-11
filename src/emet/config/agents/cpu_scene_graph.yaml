@@ -1,0 +1,41 @@
+# CPU-only agent configuration for open-vocabulary scene graph.
+# Uses lighter models suitable for CPU inference.
+
+segmentation:
+  primary: "owlsam"
+  fallback: "sam2"
+  owlsam:
+    owl_version: "owlv2-B-p16"
+    owl_confidence: 0.05
+    sam2_configuration: "t"
+  sam2:
+    configuration: "t"
+    min_area: 300
+
+embeddings:
+  text_encoder:
+    name: "clip"
+    version: "ViT-B/16"
+    feature_matching_threshold: 0.35
+  visual_encoder:
+    name: "dinov3"
+    version: "vits16"
+
+scene_graph:
+  dedup_visual_threshold: 0.80
+  dedup_iou_threshold: 0.3
+  max_near_distance: 1.5
+  min_on_height: 0.02
+  max_on_height: 0.3
+  floor_z_threshold: 0.05
+  staleness_horizon: 0
+  min_observations_stable: 2
+  min_points_per_object: 10
+
+voxel:
+  resolution: 0.05
+  semantic_memory_resolution: 0.1
+  min_depth: 0.25
+  max_depth: 2.5
+
+vocabulary: []

@@ -126,6 +126,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self.detection_model = detection
         self.log = log
         self.mllm = mllm
+
+        # Open-vocabulary scene graph (optional, enabled via config or set_scene_graph_processor)
+        self._scene_graph_processor = None
         if self.mllm:
             # Used to do visual grounding task
             self.gpt_client = OpenaiClient(
@@ -151,6 +154,16 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self.relevant_objects: Optional[list] = None
 
         self.history_outputs: List[str] = []
+
+    def set_scene_graph_processor(self, processor) -> None:
+        """Attach a SceneGraphProcessor to update an open-vocab scene graph on each frame."""
+        self._scene_graph_processor = processor
+
+    def get_scene_graph(self):
+        """Return the OpenVocabSceneGraph if a processor is attached, else None."""
+        if self._scene_graph_processor is not None:
+            return self._scene_graph_processor.scene_graph
+        return None
 
     def find_alignment_over_model(self, queries: str):
         clip_text_tokens = self.encoder.encode_text(queries).cpu()
@@ -342,6 +355,12 @@ class SparseVoxelMap(SparseVoxelMapBase):
         """
         Process rgbd images for Dynamem
         """
+        # Keep originals for scene graph processor (before any resizing/filtering)
+        original_rgb = rgb.copy()
+        original_depth = depth.copy()
+        original_intrinsics = intrinsics.copy()
+        original_pose = pose.copy()
+
         # Log input data to debug subdir so memory root stays canonical for save_memory().
         if not os.path.exists(self.log):
             os.mkdir(self.log)
@@ -436,6 +455,19 @@ class SparseVoxelMap(SparseVoxelMapBase):
         valid_rgb = rgb.permute(1, 2, 0)[~mask]
         if len(valid_xyz) != 0:
             self.add_to_semantic_memory(valid_xyz, features, valid_rgb)
+
+        # Update open-vocab scene graph if attached
+        if self._scene_graph_processor is not None:
+            try:
+                self._scene_graph_processor.process_frame(
+                    rgb=original_rgb,
+                    depth=original_depth,
+                    intrinsics=original_intrinsics,
+                    camera_pose=original_pose,
+                    world_xyz=world_xyz,
+                )
+            except Exception as e:
+                logger.warning("Scene graph update failed: %s", e)
 
     def add_to_semantic_memory(
         self,

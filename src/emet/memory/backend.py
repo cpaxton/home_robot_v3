@@ -91,15 +91,19 @@ def get_memory_backend(
     *,
     voxel_map: Any = None,
     graph_memory: Any = None,
+    scene_graph: Any = None,
+    text_encoder: Any = None,
     agent: Any = None,
     confidence_threshold: float = 0.14,
 ) -> MemoryBackend:
     """Factory: return a MemoryBackend for the given name and dependencies.
 
     Args:
-        name: "dynamem" | "graph_eqa" | "svm"
+        name: "dynamem" | "graph_eqa" | "svm" | "scene_graph"
         voxel_map: For dynamem: the SparseVoxelMapDynamem. For graph_eqa: optional voxel for localize.
         graph_memory: For graph_eqa: the GraphEQAMemory instance.
+        scene_graph: For scene_graph: the OpenVocabSceneGraph instance.
+        text_encoder: For scene_graph: encoder with encode_text().
         agent: For svm: the agent with get_found_instances_by_class (InstanceMemoryController).
         confidence_threshold: For dynamem: minimum similarity for confidence.
 
@@ -121,4 +125,12 @@ def get_memory_backend(
             raise ValueError("get_memory_backend(name='svm') requires agent")
         from emet.memory.adapters import SVMBackend
         return SVMBackend(agent)
-    raise ValueError(f"Unknown memory backend: {name!r}. Use 'dynamem', 'graph_eqa', or 'svm'.")
+    if name == "scene_graph":
+        if scene_graph is None:
+            raise ValueError("get_memory_backend(name='scene_graph') requires scene_graph")
+        from emet.memory.adapters import SceneGraphBackend
+        return SceneGraphBackend(scene_graph, text_encoder=text_encoder)
+    raise ValueError(
+        f"Unknown memory backend: {name!r}. "
+        "Use 'dynamem', 'graph_eqa', 'svm', or 'scene_graph'."
+    )
