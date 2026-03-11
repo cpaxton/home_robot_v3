@@ -62,14 +62,13 @@ pip_install_editable() {
     fi
 }
 
-# Robocasa needs RoboSuite master (get_elements in mjcf_utils; v1.5.0 lacks it).
-if [ ! -d "robosuite" ]; then
-    git clone https://github.com/ARISE-Initiative/robosuite --branch master --single-branch --depth 1
+# Robocasa needs robosuite from master (get_elements in mjcf_utils; v1.5.0 lacks it).
+# Remove existing clones so we always get the correct branch (shallow clone).
+if [ -d "robosuite" ]; then
+    rm -rf robosuite
 fi
+git clone https://github.com/ARISE-Initiative/robosuite --branch master --single-branch --depth 1
 cd robosuite || exit 1
-# Ensure master for existing clones (robocasa imports get_elements from mjcf_utils).
-git fetch origin master 2>/dev/null || true
-git checkout master 2>/dev/null || true
 pip_install_editable || { echo "robosuite install failed." >&2; exit 1; }
 # Create macros_private.py from macros.py if missing (silences "No private macro file" warnings).
 if [ "$SETUP_MACROS_FORCE" = true ] || [ ! -f "robosuite/robosuite/macros_private.py" ]; then
@@ -92,12 +91,13 @@ if [ -d "robosuite_models" ]; then
     cd ..
 fi
 
-# Clone robocasa from fork with numpy 1.24+ compat (same env as dynamem). Uses default branch.
-if [ ! -d "robocasa" ]; then
-    git clone git@github.com:cpaxton/robocasa.git
+# Clone robocasa from fork (branch feature/v1.24; numpy 1.24+ compat, same env as dynamem).
+# Remove existing clone so we always get a fresh clone.
+if [ -d "robocasa" ]; then
+    rm -rf robocasa
 fi
+git clone git@github.com:cpaxton/robocasa.git --branch feature/v1.24 --single-branch --depth 1
 cd robocasa || exit 1
-git fetch origin 2>/dev/null || true
 pip_install_editable || { echo "robocasa install failed." >&2; exit 1; }
 cd ..
 

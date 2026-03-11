@@ -12,6 +12,7 @@ cd "$ROOT_DIR"
 CPU_ONLY="false"
 SKIP_ASKING="false"
 NO_SAM2="false"
+INSTALL_SIM="true"   # default: clone third_party/robocasa+robosuite and include sim extra
 EXTRAS="dev"
 CLEAN_SIM="false"
 
@@ -27,8 +28,11 @@ for arg in "$@"; do
         --no-sam2)
             NO_SAM2="true"
             ;;
+        --no-sim)
+            INSTALL_SIM="false"
+            ;;
         --sim)
-            EXTRAS="$EXTRAS,sim"
+            INSTALL_SIM="true"
             ;;
         --clean)
             CLEAN_SIM="true"
@@ -38,13 +42,19 @@ for arg in "$@"; do
     esac
 done
 
+[[ "$INSTALL_SIM" == "true" ]] && EXTRAS="$EXTRAS,sim"
+
 echo "=============================================="
 echo "         INSTALLING STRETCH AI (uv)"
 echo "=============================================="
+<<<<<<< HEAD
+echo "Options: CPU_ONLY=$CPU_ONLY, NO_SAM2=$NO_SAM2, INSTALL_SIM=$INSTALL_SIM, EXTRAS=$EXTRAS"
+=======
 echo "Options: CPU_ONLY=$CPU_ONLY, NO_SAM2=$NO_SAM2, EXTRAS=$EXTRAS"
 echo "         -y/--yes = non-interactive (install deps, link emet to ~/.local/bin)"
 echo "         --clean  = remove third_party/robosuite, robosuite_models, robocasa (then install)"
 echo "Root: $ROOT_DIR"
+>>>>>>> 9cc691a8aa27793ef4999c8439b8dbecad532b57
 echo "---------------------------------------------"
 
 # Optional: remove sim third_party dirs so install works without sim (uv.lock has no sim by default)
@@ -125,6 +135,18 @@ echo "  -> uv sync completed."
 source .venv/bin/activate
 uv pip uninstall av -y 2>/dev/null || true
 
+<<<<<<< HEAD
+# Sim: clone third_party/robosuite and robocasa, install editable, run macros and (optionally) download assets
+if [ "$INSTALL_SIM" = "true" ]; then
+    echo ""
+    echo "Installing simulation (Robocasa + robosuite)..."
+    export EMET_USE_UV=1
+    SIM_SCRIPT="$ROOT_DIR/scripts/install_simulation.sh"
+    if [ "$SKIP_ASKING" = "true" ]; then
+        bash "$SIM_SCRIPT" -n
+    else
+        bash "$SIM_SCRIPT"
+=======
 # Quick sanity check
 if ! uv run python -c "import emet; print('emet:', emet.__file__)" 2>/dev/null; then
     echo "WARNING: emet import check failed. You may need to run: uv sync $EXTRA_ARGS"
@@ -148,6 +170,7 @@ if [ "$LINK_EMET" = "true" ]; then
     echo "  -> emet linked to $HOME/.local/bin/emet"
     if ! echo ":$PATH:" | grep -q ":${HOME}/.local/bin:"; then
         echo "  -> Add to your PATH: export PATH=\"\$HOME/.local/bin:\$PATH\""
+>>>>>>> 9cc691a8aa27793ef4999c8439b8dbecad532b57
     fi
 fi
 

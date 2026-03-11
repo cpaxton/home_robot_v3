@@ -26,6 +26,7 @@ def lookup_address(
     robot_ip: str, use_remote_computer: bool = False, update: bool = True
 ) -> Optional[str]:
     """Return the address of the robot. Will also create and update ~/.stretch/robot_ip.txt file to manage robot IP address.
+    When robot_ip is empty and use_remote_computer is True, falls back to active connection (emet connect) host if set.
 
     Args
         robot_ip: IP address of the robot
@@ -41,10 +42,18 @@ def lookup_address(
                 with open(os.path.expanduser("~/.stretch/robot_ip.txt"), "w") as f:
                     f.write(robot_ip)
         else:
-            # Look up the robot computer in config directory
-            if not os.path.exists(os.path.expanduser("~/.stretch/robot_ip.txt")):
+            # Look up the robot computer: robot_ip.txt first, then active connection
+            robot_ip_file = os.path.expanduser("~/.stretch/robot_ip.txt")
+            if os.path.exists(robot_ip_file):
+                robot_ip = open(robot_ip_file).read().strip()
+            else:
+                try:
+                    from emet.utils.connection import get_host_from_connection
+                    robot_ip = get_host_from_connection() or ""
+                except Exception:
+                    robot_ip = ""
+            if not robot_ip:
                 return None
-            robot_ip = open(os.path.expanduser("~/.stretch/robot_ip.txt")).read().strip()
         recv_address = "tcp://" + robot_ip
     else:
         recv_address = "tcp://127.0.0.1"

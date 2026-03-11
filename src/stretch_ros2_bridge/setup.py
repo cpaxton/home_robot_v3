@@ -30,7 +30,7 @@ setup(
             glob(os.path.join("config", "*")),
         ),
     ],
-    install_requires=["setuptools", "emet"],
+    install_requires=["setuptools", "emet-core"],
     zip_safe=True,
     maintainer="hello-robot",
     maintainer_email="hello-robot@todo.todo",

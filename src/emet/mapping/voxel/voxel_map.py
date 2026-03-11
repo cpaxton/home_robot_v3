@@ -133,8 +133,15 @@ class SparseVoxelMapNavigationSpace(XYT):
             if show_all:
                 plt.subplot(8, 8, i + 1)
                 plt.axis("off")
-                plt.imshow(mask.cpu().numpy())
-            self._oriented_masks.append(mask)
+                mask_np = mask.cpu().numpy() if hasattr(mask, "cpu") else np.asarray(mask)
+                plt.imshow(mask_np)
+            # Store as tensor for collision checks (Footprint returns numpy)
+            mask_t = (
+                torch.from_numpy(np.asarray(mask)).bool()
+                if not hasattr(mask, "cuda")
+                else mask
+            )
+            self._oriented_masks.append(mask_t)
         if show_all:
             plt.show()
 

@@ -69,7 +69,13 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             mask = self._footprint.get_rotated_mask(
                 self.voxel_map.grid_resolution, angle_radians=theta
             )
-            self._oriented_masks.append(mask)
+            # Footprint returns numpy; store as tensor for get_oriented_mask / collision checks
+            mask_t = (
+                torch.from_numpy(np.asarray(mask)).bool()
+                if not hasattr(mask, "cuda")
+                else mask
+            )
+            self._oriented_masks.append(mask_t)
 
     def compute_theta(self, cur_x, cur_y, end_x, end_y):
         theta = 0
