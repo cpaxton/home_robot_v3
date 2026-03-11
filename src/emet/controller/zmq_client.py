@@ -83,7 +83,7 @@ class HomeRobotZmqClient(AbstractRobotClient):
             print()
             sys.exit(1)
         recv_address = ip_address + ":" + str(port)
-        print(f"Connecting to {recv_address} to receive {message_type}...")
+        logger.debug(f"Connecting to {recv_address} to receive {message_type}...")
         recv_socket.connect(recv_address)
 
         return recv_socket
@@ -193,7 +193,7 @@ class HomeRobotZmqClient(AbstractRobotClient):
         # Create ZMQ sockets
         self.context = zmq.Context()
 
-        print("-------- HOME-ROBOT ROS2 ZMQ CLIENT --------")
+        logger.debug("-------- HOME-ROBOT ROS2 ZMQ CLIENT --------")
         self.recv_socket = self._create_recv_socket(
             self.recv_port, robot_ip, use_remote_computer, message_type="observations"
         )
@@ -213,9 +213,9 @@ class HomeRobotZmqClient(AbstractRobotClient):
             lookup_address(robot_ip, use_remote_computer) + ":" + str(self.send_port)
         )
 
-        print(f"Connecting to {self.send_address} to send action messages...")
+        logger.debug(f"Connecting to {self.send_address} to send action messages...")
         self.send_socket.connect(self.send_address)
-        print("...connected.")
+        logger.debug("...connected.")
 
         self._obs_lock = Lock()
         self._act_lock = Lock()
@@ -813,7 +813,7 @@ class HomeRobotZmqClient(AbstractRobotClient):
     ) -> bool:
         """Open the gripper based on hard-coded presets."""
         gripper_target = self._robot_model.GRIPPER_OPEN
-        print("[ZMQ CLIENT] Opening gripper to", gripper_target)
+        logger.debug("[ZMQ CLIENT] Opening gripper to", gripper_target)
         self.gripper_to(gripper_target, blocking=False)
         if blocking:
             t0 = timeit.default_timer()

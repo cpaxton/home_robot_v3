@@ -17,6 +17,10 @@ import numpy as np
 import urchin as urdf_loader
 from trimesh import Trimesh
 
+from emet.utils.logger import Logger
+
+logger = Logger(__name__)
+
 from emet.motion import HelloStretchIdx
 
 model_name = "SE3"  # RE1V0, RE2V0, SE3
@@ -62,7 +66,7 @@ def get_absolute_path_stretch_urdf(urdf_file_path, mesh_files_directory_path) ->
     temp_abs_urdf = "stretch_temp_abs.urdf"
     with open(urdf_dir + temp_abs_urdf, "w") as f:
         f.write(_urdf_file)
-    print("Saving temp abs path stretch urdf: {}".format(urdf_dir + f"{temp_abs_urdf}"))
+    logger.debug("Saving temp abs path stretch urdf:", urdf_dir + temp_abs_urdf)
     return urdf_dir + temp_abs_urdf
 
 

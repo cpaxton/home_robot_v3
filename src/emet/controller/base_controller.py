@@ -17,6 +17,9 @@ from emet.core.parameters import Parameters
 from emet.core.robot import AbstractRobotClient
 from emet.mapping.instance import Instance
 from emet.motion import PlanResult
+from emet.utils.logger import Logger
+
+logger = Logger(__name__)
 
 
 def _parse_parameters(
@@ -131,15 +134,15 @@ class BaseController(ABC):
         if not started:
             raise RuntimeError("Robot failed to start!")
         if verbose:
-            print("ZMQ connection to robot started.")
+            logger.debug("ZMQ connection to robot started.")
         if can_move:
             self.robot.switch_to_manipulation_mode()
             self.robot.open_gripper()
             if verbose:
-                print("Sending arm to home...")
+                logger.debug("Sending arm to home...")
             self.robot.move_to_nav_posture()
             if verbose:
-                print("... done.")
+                logger.debug("... done.")
         self.robot.switch_to_navigation_mode()
         if verbose:
             print("- Update map after switching to navigation posture")

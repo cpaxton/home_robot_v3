@@ -9,9 +9,11 @@
 
 import numpy as np
 import pinocchio as pin
-
-# from urdf_parser_py.urdf import URDF
 from scipy.spatial.transform import Rotation as R
+
+from emet.utils.logger import Logger
+
+logger = Logger(__name__)
 
 from emet.motion.kinematics import HelloStretchIdx
 
@@ -46,7 +48,7 @@ class DynamemManipulationWrapper:
 
         self.GRIPPER_THRESHOLD = gripper_threshold
 
-        print("hello robot starting")
+        logger.debug("hello robot starting")
         self.head_joint_list = ["joint_fake", "joint_head_pan", "joint_head_tilt"]
         self.init_joint_list = [
             "joint_fake",
