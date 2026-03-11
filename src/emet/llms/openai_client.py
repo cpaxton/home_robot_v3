@@ -95,11 +95,16 @@ class OpenaiClient(AbstractLLMClient):
                         print(idx, ".", user_command["type"], user_command["text"])
         return user_commands
 
-    def __call__(self, command: Union[str, list], verbose: bool = False):
+    def __call__(self, command: Union[str, list], verbose: bool = False, tools: Optional[list] = None):
         if verbose:
             print(f"{self.system_prompt=}")
 
         command = self._process_input(command, verbose=verbose)  # type:ignore
+
+        kwargs: Dict[str, Any] = {}
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
 
         completion = self._openai.chat.completions.create(
             model=self.model,
@@ -107,8 +112,23 @@ class OpenaiClient(AbstractLLMClient):
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": command},
             ],
+            **kwargs,
         )
-        output_text = completion.choices[0].message.content
+        msg = completion.choices[0].message
+
+        # If the model made tool calls via native API, return structured data
+        if tools and msg.tool_calls:
+            import json as _json
+            result_calls = []
+            for tc in msg.tool_calls:
+                try:
+                    args = _json.loads(tc.function.arguments)
+                except (ValueError, TypeError):
+                    args = {}
+                result_calls.append({"name": tc.function.name, "arguments": args})
+            return _json.dumps({"tool_calls": result_calls, "message": msg.content or ""})
+
+        output_text = msg.content
         if verbose:
             print(f"output_text={output_text}")
         return output_text

@@ -78,6 +78,12 @@ DEFAULT_AGENT_LLM = "qwen35-4B"
     is_flag=True,
     help="Print full prompt, user input, raw LLM response, and parsed response.",
 )
+@click.option(
+    "--name",
+    "agent_name",
+    default="Emet",
+    help="Agent name used in the system prompt (default: Emet).",
+)
 def main(
     llm: str,
     prompt: str,
@@ -89,6 +95,7 @@ def main(
     discord: bool,
     no_llm: bool,
     debug_llm: bool,
+    agent_name: str,
 ) -> None:
     """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
 
@@ -98,6 +105,7 @@ def main(
       emet run agent
       emet run agent --device cpu
       emet run agent --llm qwen35-9B
+      emet run agent --name Stretch
       emet run agent --robot-ip 127.0.0.1 --input-path logs/memory_xxx --discord
       emet run agent --robot-ip 127.0.0.1 --no-llm   # letter commands only (E/M/Q/P)
     """
@@ -110,6 +118,7 @@ def main(
             llm=llm,
             skip_confirmations=True,
             debug_llm=debug_llm,
+            agent_name=agent_name,
         )
         return
 

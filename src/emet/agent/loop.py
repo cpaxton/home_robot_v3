@@ -4,25 +4,66 @@
 
 from __future__ import annotations
 
+import json
 import os
 import threading
+import timeit
 from typing import Any, Dict, Optional
 
 import click
 from termcolor import colored
 
-from emet.agent.prompt import AgentPromptBuilder
-from emet.agent.tools import get_tools, tool_call_to_executor_commands
+from emet.agent.prompt import AgentPromptBuilder, parse_tool_calls_response
+from emet.agent.tools import Tool, get_tools
 from emet.core import get_parameters
 from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.controller.zmq_client import HomeRobotZmqClient
-from emet.llms import LLMChatWrapper, get_llm_client
+from emet.llms import get_llm_client
 from emet.llms.discord_bot import EmetDiscordBot
 from emet.memory.backend import get_memory_backend
 from emet.memory.utils import print_memory_view_help_on_quit
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
+
+
+def _dispatch_tool_calls(
+    tool_calls: list[dict],
+    tools_by_name: dict[str, Tool],
+    executor: DynamemTaskExecutor,
+    debug: bool = False,
+) -> bool:
+    """Execute a list of parsed tool_calls. Returns False if quit was requested."""
+    executor_cmds: list[tuple[str, str]] = []
+
+    for tc in tool_calls:
+        name = tc.get("name", "")
+        args = tc.get("arguments") or {}
+        tool = tools_by_name.get(name)
+        if tool is None:
+            logger.warning("Unknown tool: %s", name)
+            continue
+
+        cmds = tool.to_executor(args)
+        if cmds:
+            executor_cmds.extend(cmds)
+        else:
+            # No executor mapping: call the tool func directly (e.g. query_memory, send_image)
+            try:
+                result = tool.func(**args) if args else tool.func()
+                if result is not None and result != "":
+                    print(colored(f"[{name}]", "cyan"), result)
+            except Exception as e:
+                logger.warning("Tool %s failed: %s", name, e)
+                print(colored(f"Tool {name} failed: {e}", "red"))
+
+    if not executor_cmds:
+        return True
+
+    if any(c[0] == "quit" for c in executor_cmds):
+        return False
+
+    return executor(executor_cmds)
 
 
 def run_agent_with_robot(
@@ -35,6 +76,7 @@ def run_agent_with_robot(
     skip_confirmations: bool = True,
     explore_iter: int = 3,
     debug_llm: bool = False,
+    agent_name: str = "Emet",
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools."""
@@ -61,7 +103,7 @@ def run_agent_with_robot(
         executor._last_memory_save_path = input_path
 
     memory_backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
-    context = {
+    context: Dict[str, Any] = {
         "executor": executor,
         "robot": robot,
         "memory_backend": memory_backend,
@@ -99,80 +141,87 @@ def run_agent_with_robot(
     if not getattr(executor, "manipulation_only", True):
         if input_path is None:
             executor([("rotate_in_place", "")])
-        # else memory already loaded above
 
+    # Build tools from context
+    tools = get_tools(context)
+    tools_by_name = {t.name: t for t in tools}
+    print(colored("Agent tools: " + ", ".join(t.name for t in tools), "yellow"))
+
+    # Build prompt and LLM client
     llm_client = None
-    chat_wrapper = None
+    prompt_builder = None
+    openai_tools_param = None  # native tool schemas for OpenAI API
     if use_llm:
         try:
-            prompt = AgentPromptBuilder()
-            llm_client = get_llm_client(llm, prompt=prompt)
-            chat_wrapper = LLMChatWrapper(llm_client, prompt=prompt)
+            prompt_builder = AgentPromptBuilder(tools=tools, name=agent_name, context=context)
+            llm_client = get_llm_client(llm, prompt=prompt_builder)
+            # For OpenAI clients, prepare native tools param
+            from emet.llms.openai_client import OpenaiClient
+            if isinstance(llm_client, OpenaiClient):
+                openai_tools_param = [t.schema() for t in tools]
         except Exception as e:
             logger.warning("LLM failed to load (%s): %s", llm, e)
             print(colored("Agent mode requires an LLM; it failed to load.", "red"))
             print(colored("Fix the LLM (e.g. --llm, device) or run with --no-llm for letter commands only.", "yellow"))
             robot.stop()
             return
-    tools = get_tools(context)
-    print(colored("Agent tools: " + ", ".join(t["name"] for t in tools), "yellow"))
-    if use_llm and chat_wrapper is not None:
+
+    if use_llm and llm_client is not None:
         print(colored(f"LLM enabled ({llm}). Say what you want the robot to do.", "green"))
     else:
-        print(colored("Enter mode [E=explore / M=pick+place / Q=question / P=send picture / Q quit]:", "green"))
+        print(colored("Enter mode [E=explore / M=pick+place / Q=question / P=send picture / QUIT]:", "green"))
     if debug_llm:
         print(colored("Debug: full prompt, raw and parsed LLM response will be printed.", "yellow"))
 
     ok = True
     while ok:
         update_xyt()
-        if use_llm and chat_wrapper is not None:
-            llm_response = chat_wrapper.query(verbose=debug_llm)
-            if llm_response is None:
+
+        # --- LLM path ---
+        if use_llm and llm_client is not None:
+            print("-" * 60)
+            user_text = input(colored("You: ", "green")).strip()
+            if not user_text:
                 continue
-            # New agent prompt returns {tool_calls: [...], message: str}
-            if isinstance(llm_response, dict):
-                tool_calls = llm_response.get("tool_calls") or []
-                message = llm_response.get("message") or ""
-                if message:
-                    print(colored("Stretch:", "blue"), message)
-                # Run tool-only calls (query_memory, send_image, describe_scene) via tool funcs
-                tools_by_name = {t["name"]: t for t in tools}
-                executor_cmds = []
-                for tc in tool_calls:
-                    name = tc.get("name", "")
-                    args = tc.get("arguments") or {}
-                    cmds = tool_call_to_executor_commands(name, args)
-                    if cmds:
-                        executor_cmds.extend(cmds)
-                    else:
-                        # Tool has no executor mapping; run the tool func
-                        if name in tools_by_name:
-                            func = tools_by_name[name]["func"]
-                            try:
-                                if args:
-                                    result = func(**args)
-                                else:
-                                    result = func()
-                                if result is not None and result != "":
-                                    print(colored("Tool result:", "cyan"), result)
-                            except Exception as e:
-                                logger.warning("Tool %s failed: %s", name, e)
-                                print(colored(f"Tool {name} failed: {e}", "red"))
-                if executor_cmds:
-                    # Check for quit
-                    if any(c[0] == "quit" for c in executor_cmds):
-                        ok = False
-                        break
-                    ok = executor(executor_cmds)
-            else:
-                # Legacy: list of (command, args)
-                if isinstance(llm_response, list) and len(llm_response) == 1 and llm_response[0][0] == "quit":
-                    ok = False
-                    break
-                ok = executor(llm_response)
+            if user_text.upper() in ("Q", "QUIT"):
+                ok = False
+                break
+
+            if debug_llm:
+                print(colored("[DEBUG] System prompt:", "yellow"))
+                sp = str(prompt_builder) if prompt_builder else ""
+                print(sp[:2000] + ("..." if len(sp) > 2000 else ""))
+                print(colored("[DEBUG] User input:", "yellow"), repr(user_text))
+
+            t0 = timeit.default_timer()
+            try:
+                if openai_tools_param is not None:
+                    raw_response = llm_client(user_text, verbose=debug_llm, tools=openai_tools_param)
+                else:
+                    raw_response = llm_client(user_text, verbose=debug_llm)
+            except TypeError:
+                raw_response = llm_client(user_text)
+            t1 = timeit.default_timer()
+
+            if debug_llm:
+                print(colored("[DEBUG] Raw LLM response:", "yellow"), repr(raw_response))
+
+            parsed = parse_tool_calls_response(raw_response)
+            tool_calls = parsed.get("tool_calls") or []
+            message = parsed.get("message") or ""
+
+            if debug_llm:
+                print(colored("[DEBUG] Parsed:", "blue"), json.dumps(parsed, indent=2))
+                print(colored(f"[DEBUG] Time: {t1 - t0:.2f}s", "yellow"))
+
+            if message:
+                print(colored(f"{agent_name}:", "blue"), message)
+
+            if tool_calls:
+                ok = _dispatch_tool_calls(tool_calls, tools_by_name, executor, debug=debug_llm)
             continue
 
+        # --- Manual (no-LLM) path ---
         line = input(colored("You: ", "green")).strip()
         if not line:
             continue
@@ -183,20 +232,18 @@ def run_agent_with_robot(
             ok = executor([("explore", None)])
             continue
         if line.upper() == "P":
-            send_image = next((t["func"] for t in tools if t["name"] == "send_image"), None)
-            if send_image:
-                print(send_image())
+            tool = tools_by_name.get("send_image")
+            if tool:
+                print(tool.func())
             else:
                 print("send_image tool not available.")
             continue
         if line.upper().startswith("Q "):
             question = line[2:].strip()
-            query_memory = next((t["func"] for t in tools if t["name"] == "query_memory"), None)
-            if query_memory:
-                answer, imgs = query_memory(question)
+            tool = tools_by_name.get("query_memory")
+            if tool:
+                answer = tool.func(question=question)
                 print(colored("Answer:", "blue"), answer)
-                if imgs and context.get("discord_bot"):
-                    context["discord_bot"].push_task_to_all_channels(message=answer, content=imgs[0] if hasattr(imgs[0], "__array__") else None)
             else:
                 print("query_memory not available.")
             continue
@@ -211,14 +258,8 @@ def run_agent_with_robot(
             ok = executor([("find", text)])
             continue
 
-        # When LLM is enabled, all natural language goes through the LLM path above; we should
-        # not reach here for free-form input. If we do (e.g. chat_wrapper failed to load), don't
-        # treat unknown input as pickup.
         if use_llm:
-            if chat_wrapper is None:
-                print(colored("LLM did not load; use letter commands only: E / M / Q / P / FIND.", "yellow"))
-            else:
-                print(colored("Unexpected input. Use E, M, Q, P, or natural language.", "yellow"))
+            print(colored("LLM did not load; use letter commands: E / M / Q / P / FIND.", "yellow"))
             continue
         ok = executor([("pickup", line), ("place", "")]) if line else True
 

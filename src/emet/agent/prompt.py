@@ -1,7 +1,8 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
-# Agent system prompt builder: identity + tool list (from registry) + JSON tool_calls response format.
+# Agent system prompt builder: identity + tool list (derived from registry) + response format.
+# Tools registered in tools.py are automatically included in the prompt.
 
 from __future__ import annotations
 
@@ -9,147 +10,146 @@ import json
 import re
 from typing import Any, Dict, List, Optional
 
-from emet.agent.tools import get_tool_schemas_for_llm
+from emet.agent.tools import Tool, get_tool_descriptions_for_prompt, get_tools
+
+DEFAULT_AGENT_NAME = "Emet"
 
 
-AGENT_IDENTITY = """You are Stretch, a friendly, helpful robot. You have a body (arm, gripper, head, base) and cameras. You can move, pick up and place objects, explore and build a map, answer questions about what you've seen, and use social gestures (wave, nod, etc.).
+def _build_identity(name: str = DEFAULT_AGENT_NAME) -> str:
+    return f"""You are {name}, a friendly and helpful mobile robot assistant made by Hello Robot. You have a wheeled base, a telescoping arm with a gripper, a head with pan/tilt cameras, and depth sensors. You can move around, pick up and place objects, explore and map your environment, answer questions about things you've seen, and express yourself with social gestures.
+
+Key facts:
+- You are safe and will never harm a person or suggest harm.
+- You cannot go up or down stairs.
+- You live in indoor environments (homes, offices, labs).
+- When you are unsure about an object or location, ask for clarification rather than guessing.
+- You should announce what you are about to do before executing actions (use the say tool).
+- If a request is ambiguous (e.g. "put that away" without specifying object or destination), ask the user to clarify."""
+
+
+RESPONSE_FORMAT_JSON = """
+Response format:
+You must respond with ONLY a valid JSON object, no other text before or after:
+{{"tool_calls": [{{"name": "<tool_name>", "arguments": {{...}}}}], "message": "<short reply to user>"}}
 
 Rules:
-- You will never harm a person or suggest harm.
-- You cannot go up or down stairs.
-- Use tools to accomplish the user's request. Respond with a JSON object containing your tool calls.
-- If the user's request is ambiguous (e.g. "put that away" without a clear object or location), ask for clarification or say you need more information.
-- Do not make up object or location names; use what the user said or ask."""
-
-
-RESPONSE_FORMAT = """
-You must respond with a valid JSON object. Use this exact format (no other text before or after the JSON):
-{"tool_calls": [{"name": "<tool_name>", "arguments": {<key-value pairs>}}, ...], "message": "<optional short reply to the user>"}
+- "tool_calls" is a list of tool invocations to execute in order.
+- "message" is what you want to say to the user (shown as text). Use it for conversational replies, confirmations, or clarification questions.
+- If you just want to chat (no action needed), use an empty tool_calls list.
+- Always announce actions in "message" before executing them (e.g. "I'll go find the cup for you.").
+- For pick-and-place, use a single pick_place tool call with both object_name and receptacle_name.
+- Never invent object or location names. Use exactly what the user said, or ask for clarification.
 
 Examples:
-- User: "Explore the room."
-  {"tool_calls": [{"name": "explore", "arguments": {}}], "message": "I'll explore and build a map."}
+User: "Go explore."
+{{"tool_calls": [{{"name": "explore", "arguments": {{}}}}], "message": "I'll start exploring and mapping the area."}}
 
-- User: "Where is the red cup?"
-  {"tool_calls": [{"name": "query_memory", "arguments": {"question": "Where is the red cup?"}}], "message": ""}
+User: "Where is the red cup?"
+{{"tool_calls": [{{"name": "query_memory", "arguments": {{"question": "Where is the red cup?"}}}}], "message": "Let me check my memory."}}
 
-- User: "Pick up the apple and put it on the table."
-  {"tool_calls": [{"name": "pick_place", "arguments": {"object_name": "apple", "receptacle_name": "table"}}], "message": "Picking up the apple and placing it on the table."}
+User: "Pick up the apple and put it on the table."
+{{"tool_calls": [{{"name": "say", "arguments": {{"text": "Picking up the apple and placing it on the table."}}}}, {{"name": "pick_place", "arguments": {{"object_name": "apple", "receptacle_name": "table"}}}}], "message": "On it!"}}
 
-- User: "Wave at me."
-  {"tool_calls": [{"name": "wave", "arguments": {}}], "message": "Hello!"}
+User: "Hi there!"
+{{"tool_calls": [{{"name": "wave", "arguments": {{}}}}], "message": "Hello! How can I help you today?"}}
 
-- User: "Take a picture."
-  {"tool_calls": [{"name": "take_picture", "arguments": {}}], "message": "Taking a picture now."}
+User: "Can you put the shoe away?"
+{{"tool_calls": [], "message": "Sure! Where would you like me to put the shoe?"}}
 
-If you cannot fulfill the request, respond with a JSON object that has an empty tool_calls list and a message explaining why:
-{"tool_calls": [], "message": "I need to know which object you mean."}
+User: "Goodbye!"
+{{"tool_calls": [{{"name": "say", "arguments": {{"text": "Goodbye!"}}}}, {{"name": "wave", "arguments": {{}}}}, {{"name": "quit", "arguments": {{}}}}], "message": "Bye! Shutting down."}}
 """
 
 
-def build_tools_block(schemas: Optional[List[Dict[str, Any]]] = None) -> str:
-    """Build the tools section of the system prompt from tool schemas."""
-    if schemas is None:
-        schemas = get_tool_schemas_for_llm()
-    lines = ["Available tools (use these exact names and pass the required arguments):"]
-    for s in schemas:
-        name = s.get("name", "")
-        desc = s.get("description", "")
-        params = s.get("parameters", {})
-        props = params.get("properties", {})
-        required = params.get("required", [])
-        if props:
-            args_desc = ", ".join(
-                f"{k}" + (" (required)" if k in required else " (optional)")
-                for k in props
-            )
-            lines.append(f"  - {name}: {desc} Arguments: {args_desc}")
-        else:
-            lines.append(f"  - {name}: {desc}")
-    return "\n".join(lines)
+def build_agent_system_prompt(
+    tools: Optional[List[Tool]] = None,
+    name: str = DEFAULT_AGENT_NAME,
+    context: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Build the full system prompt (identity + tools + response format).
+
+    If tools is None, derives from get_tools(context or {}).
+    """
+    if tools is None:
+        tools = get_tools(context or {})
+    identity = _build_identity(name)
+    tools_block = get_tool_descriptions_for_prompt(tools)
+    return f"{identity}\n\n{tools_block}\n{RESPONSE_FORMAT_JSON}"
 
 
-def build_agent_system_prompt(schemas: Optional[List[Dict[str, Any]]] = None) -> str:
-    """Build the full system prompt for the agent (identity + tools + response format)."""
-    tools_block = build_tools_block(schemas)
-    return f"{AGENT_IDENTITY}\n\n{tools_block}\n{RESPONSE_FORMAT}"
+def parse_tool_calls_response(response: str) -> Dict[str, Any]:
+    """Parse LLM response into {tool_calls: [{name, arguments}], message: str}.
 
-
-def parse_tool_calls_response(response: str) -> List[Dict[str, Any]]:
-    """Parse LLM response into a list of tool_calls (name, arguments). Returns [] on parse failure."""
+    Handles JSON embedded in markdown code fences or surrounded by text.
+    Returns {"tool_calls": [], "message": ""} on parse failure.
+    """
     response = response.strip()
-    # Try to extract JSON (allow surrounding markdown or text)
-    json_match = re.search(r"\{[\s\S]*\}", response)
-    if not json_match:
-        return []
-    try:
-        data = json.loads(json_match.group())
-    except json.JSONDecodeError:
-        return []
-    raw = data.get("tool_calls", [])
-    if not isinstance(raw, list):
-        return []
-    out = []
-    for item in raw:
-        if isinstance(item, dict) and "name" in item:
-            name = item["name"]
-            args = item.get("arguments")
-            if not isinstance(args, dict):
-                args = {}
-            out.append({"name": name, "arguments": args})
-    return out
+    # Strip markdown code fences
+    fenced = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", response)
+    if fenced:
+        candidate = fenced.group(1)
+    else:
+        candidate_match = re.search(r"\{[\s\S]*\}", response)
+        candidate = candidate_match.group() if candidate_match else ""
 
+    tool_calls: List[Dict[str, Any]] = []
+    message = ""
+    if candidate:
+        try:
+            data = json.loads(candidate)
+            raw = data.get("tool_calls", [])
+            if isinstance(raw, list):
+                for item in raw:
+                    if isinstance(item, dict) and "name" in item:
+                        args = item.get("arguments")
+                        if not isinstance(args, dict):
+                            args = {}
+                        tool_calls.append({"name": item["name"], "arguments": args})
+            message = data.get("message", "") or ""
+        except json.JSONDecodeError:
+            pass
 
-def tool_calls_to_executor_format(
-    tool_calls: List[Dict[str, Any]],
-    tool_call_to_commands,  # tools.tool_call_to_executor_commands
-) -> List[tuple]:
-    """Convert parsed tool_calls to list of (command, args) for executor."""
-    result = []
-    for tc in tool_calls:
-        name = tc.get("name", "")
-        args = tc.get("arguments") or {}
-        result.extend(tool_call_to_commands(name, args))
-    return result
+    # If no JSON was found, treat the whole response as a message (LLM didn't follow format)
+    if not tool_calls and not message:
+        message = response
+
+    return {"tool_calls": tool_calls, "message": message}
 
 
 class AgentPromptBuilder:
     """Prompt builder for the agent: system prompt with tools + JSON tool_calls response format.
 
-    Compatible with LLMChatWrapper and get_llm_client (prompt can be str or has __str__, parse_response).
+    Compatible with LLMChatWrapper and get_llm_client.
     """
 
-    def __init__(self, schemas: Optional[List[Dict[str, Any]]] = None):
-        self.schemas = schemas
-        self.prompt_str = build_agent_system_prompt(schemas)
+    def __init__(
+        self,
+        tools: Optional[List[Tool]] = None,
+        name: str = DEFAULT_AGENT_NAME,
+        context: Optional[Dict[str, Any]] = None,
+    ):
+        self.name = name
+        self._tools = tools
+        self._context = context
+        self.prompt_str = build_agent_system_prompt(tools, name=name, context=context)
 
     def __str__(self) -> str:
         return self.prompt_str
 
-    def configure(self, **kwargs: Any) -> str:
-        self.schemas = kwargs.get("schemas", self.schemas)
-        self.prompt_str = build_agent_system_prompt(self.schemas)
-        return self.prompt_str
-
     def __call__(self, kwargs: Optional[Dict[str, Any]] = None, **kw: Any) -> str:
-        """Return the system prompt string (for LLM client)."""
-        if kwargs is not None:
+        if kwargs:
             self.configure(**kwargs)
         if kw:
             self.configure(**kw)
         return self.prompt_str
 
+    def configure(self, **kwargs: Any) -> str:
+        self._tools = kwargs.get("tools", self._tools)
+        self.name = kwargs.get("name", self.name)
+        self._context = kwargs.get("context", self._context)
+        self.prompt_str = build_agent_system_prompt(self._tools, name=self.name, context=self._context)
+        return self.prompt_str
+
     def parse_response(self, response: str) -> Dict[str, Any]:
         """Parse LLM response to {tool_calls: [...], message: str}."""
-        tool_calls = parse_tool_calls_response(response)
-        # Try to get optional message from JSON
-        response = response.strip()
-        json_match = re.search(r"\{[\s\S]*\}", response)
-        message = ""
-        if json_match:
-            try:
-                data = json.loads(json_match.group())
-                message = data.get("message", "") or ""
-            except json.JSONDecodeError:
-                pass
-        return {"tool_calls": tool_calls, "message": message}
+        return parse_tool_calls_response(response)
