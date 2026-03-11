@@ -46,30 +46,30 @@ class PiperTextToSpeech(AbstractTextToSpeech):
         archive_url = "https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_amd64.tar.gz"
 
         if not os.path.exists(archive_path):
-            self.logger.info(f"Downloading {archive_name}...")
+            self._logger.info(f"Downloading {archive_name}...")
             wget.download(archive_url, out=archive_path)
-            self.logger.info("Download complete.")
+            self._logger.info("Download complete.")
         else:
-            self.logger.debug(f"{archive_name} already exists; skipping download.")
+            self._logger.debug(f"{archive_name} already exists; skipping download.")
 
         # 2) Extract if needed
         piper_dir = os.path.join(base_dir, "piper")
         if not os.path.isdir(piper_dir):
-            self.logger.info(f"Extracting {archive_name} into {base_dir}/ …")
+            self._logger.info(f"Extracting {archive_name} into {base_dir}/ …")
             with tarfile.open(archive_path, "r:gz") as tf:
                 tf.extractall(path=base_dir)
-            self.logger.info("Extraction complete.")
+            self._logger.info("Extraction complete.")
         else:
-            self.logger.debug("piper directory already exists; skipping extraction.")
+            self._logger.debug("piper directory already exists; skipping extraction.")
 
         # 3) Make piper executable
         piper_bin = os.path.join(piper_dir, "piper")
         if os.path.exists(piper_bin):
             st = os.stat(piper_bin).st_mode
             os.chmod(piper_bin, st | stat.S_IXUSR)
-            self.logger.debug(f"Set executable bit on {piper_bin}.")
+            self._logger.debug(f"Set executable bit on {piper_bin}.")
         else:
-            self.logger.warning(f"{piper_bin} not found!")
+            self._logger.warning(f"{piper_bin} not found!")
 
         self._piper_bin = piper_bin
 
@@ -83,10 +83,10 @@ class PiperTextToSpeech(AbstractTextToSpeech):
         for fname, url in files.items():
             dest = os.path.join(base_dir, fname)
             if not os.path.exists(dest):
-                self.logger.info(f"Downloading {fname}...")
+                self._logger.info(f"Downloading {fname}...")
                 wget.download(url, out=dest)
             else:
-                self.logger.debug(f"{fname} already exists; skipping download.")
+                self._logger.debug(f"{fname} already exists; skipping download.")
 
         self._model_path = os.path.join(base_dir, "en_US-amy-medium.onnx")
         self.play_obj = None

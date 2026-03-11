@@ -21,9 +21,9 @@ MANIFEST_FILENAME = "manifest.json"
 POINT_CLOUD_FILENAME = "point_cloud.npz"
 FRAMES_FILENAME = "frames.pkl"
 FRAMES_DIR = "frames"
-FRAME_RGB_FILENAME = "rgb.png"
-FRAME_DEPTH_FILENAME = "depth.npy"
-FRAME_POSE_FILENAME = "pose.npz"
+FRAME_RGB_FILENAME = "rgb.png"  # legacy per-subdirectory name
+FRAME_DEPTH_FILENAME = "depth.npy"  # legacy per-subdirectory name
+FRAME_POSE_FILENAME = "pose.npz"  # legacy per-subdirectory name
 GRAPH_FILENAME = "graph.json"
 DESCRIPTIONS_FILENAME = "descriptions.json"
 USER_MESSAGES_FILENAME = "user_messages.json"
@@ -118,12 +118,14 @@ class MemoryState:
 
     Directory layout (on disk):
       <path>/
-        manifest.json       -- version, backend, which blobs exist
-        point_cloud.npz     -- combined_xyz, combined_rgb, optional feats/weights/obs_id
-        frames/<i>/         -- rgb.png, depth.npy, pose.npz (canonical); or legacy frames.pkl
-        graph.json          -- optional; nodes + edges
-        descriptions.json   -- optional; text per observation
-        user_messages.json  -- optional; user text messages (identity, location, timestamp)
+        manifest.json           -- version, backend, which blobs exist
+        point_cloud.npz         -- combined_xyz, combined_rgb, optional feats/weights/obs_id
+        frames/rgb_0001.png     -- RGB image per frame (zero-padded index)
+        frames/depth_0001.npy   -- depth per frame
+        frames/pose_0001.npz    -- camera_pose, base_pose, camera_K per frame
+        graph.json              -- optional; nodes + edges
+        descriptions.json       -- optional; text per observation
+        user_messages.json      -- optional; user text messages (identity, location, timestamp)
     """
 
     point_cloud: Optional[PointCloudBlob] = None
@@ -154,11 +156,67 @@ def _to_native(obj: Any) -> Any:
     return obj
 
 
+def _load_frame(rgb_file: Optional[Path], depth_file: Optional[Path], pose_file: Path) -> FrameBlob:
+    """Load a single frame from its component files."""
+    pose_npz = np.load(pose_file, allow_pickle=True)
+    camera_pose = pose_npz["camera_pose"]
+    base_pose = pose_npz["base_pose"] if "base_pose" in pose_npz.files else None
+    camera_K = pose_npz["camera_K"] if "camera_K" in pose_npz.files else None
+    rgb = None
+    if rgb_file is not None and rgb_file.exists():
+        bgr = cv2.imread(str(rgb_file))
+        rgb = bgr[:, :, ::-1].copy() if bgr is not None else None
+    depth = None
+    if depth_file is not None and depth_file.exists():
+        depth = np.load(depth_file)
+    return FrameBlob(
+        camera_pose=camera_pose,
+        base_pose=base_pose,
+        camera_K=camera_K,
+        rgb=rgb,
+        depth=depth,
+    )
+
+
+def _load_frames_dir(frames_path: Path) -> List[FrameBlob]:
+    """Load frames from frames/ directory. Supports two layouts:
+
+    Flat (current):  frames/rgb_0001.png, frames/depth_0001.npy, frames/pose_0001.npz
+    Legacy:          frames/0/rgb.png,    frames/0/depth.npy,    frames/0/pose.npz
+    """
+    frames: List[FrameBlob] = []
+
+    # Detect flat layout: look for pose_NNNN.npz files
+    flat_poses = sorted(frames_path.glob("pose_*.npz"))
+    if flat_poses:
+        for pose_file in flat_poses:
+            tag = pose_file.stem.replace("pose_", "")  # e.g. "0001"
+            rgb_file = frames_path / f"rgb_{tag}.png"
+            depth_file = frames_path / f"depth_{tag}.npy"
+            frames.append(_load_frame(rgb_file, depth_file, pose_file))
+        return frames
+
+    # Legacy layout: numbered subdirectories
+    frame_dirs = sorted(
+        [d for d in frames_path.iterdir() if d.is_dir() and d.name.isdigit()],
+        key=lambda d: int(d.name),
+    )
+    for frame_dir in frame_dirs:
+        pose_file = frame_dir / FRAME_POSE_FILENAME
+        if not pose_file.exists():
+            continue
+        rgb_file = frame_dir / FRAME_RGB_FILENAME
+        depth_file = frame_dir / FRAME_DEPTH_FILENAME
+        frames.append(_load_frame(rgb_file, depth_file, pose_file))
+
+    return frames
+
+
 def save_memory(state: MemoryState, path: str) -> None:
     """Write MemoryState to a directory. Creates path if needed.
 
-    Layout: manifest.json, point_cloud.npz, frames/<i>/rgb.png + depth.npy + pose.npz,
-    optional graph.json, optional descriptions.json. Legacy frames.pkl is no longer written.
+    Layout: manifest.json, point_cloud.npz, frames/rgb_NNNN.png + depth_NNNN.npy + pose_NNNN.npz,
+    optional graph.json, optional descriptions.json.
     """
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
@@ -197,22 +255,21 @@ def save_memory(state: MemoryState, path: str) -> None:
         frames_path = path / FRAMES_DIR
         frames_path.mkdir(exist_ok=True)
         for i, fr in enumerate(state.frames):
-            frame_dir = frames_path / str(i)
-            frame_dir.mkdir(exist_ok=True)
+            tag = f"{i:04d}"
             if fr.rgb is not None:
                 rgb = np.asarray(fr.rgb)
                 if rgb.dtype != np.uint8:
                     rgb = (np.clip(rgb, 0, 1) * 255).astype(np.uint8) if rgb.max() <= 1.0 else np.clip(rgb, 0, 255).astype(np.uint8)
                 bgr = rgb[:, :, ::-1].copy()
-                cv2.imwrite(str(frame_dir / FRAME_RGB_FILENAME), bgr)
+                cv2.imwrite(str(frames_path / f"rgb_{tag}.png"), bgr)
             if fr.depth is not None:
-                np.save(frame_dir / FRAME_DEPTH_FILENAME, np.asarray(fr.depth))
+                np.save(frames_path / f"depth_{tag}.npy", np.asarray(fr.depth))
             pose_dict = {"camera_pose": fr.camera_pose}
             if fr.base_pose is not None:
                 pose_dict["base_pose"] = fr.base_pose
             if fr.camera_K is not None:
                 pose_dict["camera_K"] = fr.camera_K
-            np.savez(frame_dir / FRAME_POSE_FILENAME, **pose_dict)
+            np.savez(frames_path / f"pose_{tag}.npz", **pose_dict)
 
     if state.graph is not None and (
         len(state.graph.nodes) > 0 or len(state.graph.edges) > 0
@@ -287,44 +344,8 @@ def load_memory(path: str) -> MemoryState:
 
     if manifest.has_frames:
         frames_path = path / FRAMES_DIR
-        # Prefer frames/<i>/ layout (rgb.png, depth.npy, pose.npz)
         if frames_path.is_dir():
-            frame_dirs = sorted(
-                [d for d in frames_path.iterdir() if d.is_dir() and d.name.isdigit()],
-                key=lambda d: int(d.name),
-            )
-            for frame_dir in frame_dirs:
-                pose_file = frame_dir / FRAME_POSE_FILENAME
-                if not pose_file.exists():
-                    continue
-                pose_npz = np.load(pose_file, allow_pickle=True)
-                camera_pose = pose_npz["camera_pose"]
-                base_pose = pose_npz["base_pose"] if "base_pose" in pose_npz.files else None
-                camera_K = pose_npz["camera_K"] if "camera_K" in pose_npz.files else None
-                rgb = None
-                rgb_file = frame_dir / FRAME_RGB_FILENAME
-                if rgb_file.exists():
-                    bgr = cv2.imread(str(rgb_file))
-                    rgb = bgr[:, :, ::-1].copy() if bgr is not None else None
-                depth = None
-                depth_file = frame_dir / FRAME_DEPTH_FILENAME
-                if depth_file.exists():
-                    depth = np.load(depth_file)
-                state.frames.append(
-                    FrameBlob(
-                        camera_pose=camera_pose,
-                        base_pose=base_pose,
-                        camera_K=camera_K,
-                        rgb=rgb,
-                        depth=depth,
-                        feats=None,
-                        world_xyz=None,
-                        instance=None,
-                        instance_classes=None,
-                        instance_scores=None,
-                        info=None,
-                    )
-                )
+            state.frames = _load_frames_dir(frames_path)
         elif (path / FRAMES_FILENAME).exists():
             with open(path / FRAMES_FILENAME, "rb") as f:
                 frames_data = pickle.load(f)
