@@ -284,6 +284,9 @@ def run_agent_with_robot(
 
             if message:
                 print(colored(f"{agent_name}:", "blue"), message)
+                # Relay text reply to Discord so remote users see it
+                if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
+                    discord_bot.push_task_to_all_channels(message=f"**{agent_name}:** {message}")
 
             if tool_calls:
                 ok, results = _dispatch_tool_calls(

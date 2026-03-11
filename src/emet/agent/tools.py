@@ -105,7 +105,9 @@ def get_tools(context: Dict[str, Any]) -> List[Tool]:
                 image = np.asarray(obs.rgb)
         if discord_bot is not None and image is not None:
             if hasattr(discord_bot, "push_task_to_all_channels"):
-                discord_bot.push_task_to_all_channels(content=image)
+                discord_bot.push_task_to_all_channels(
+                    message="Here's what I see:", content=image,
+                )
                 return "Image sent to Discord."
         if image is not None:
             return "Image captured (no Discord to send to)."

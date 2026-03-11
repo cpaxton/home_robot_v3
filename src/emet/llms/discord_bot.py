@@ -247,15 +247,15 @@ class EmetDiscordBot(DiscordBot):
         print()
         print("-" * 40)
         print("Handling task from channel:", task.channel.name)
-        print("Handling task: message = \n", task.message)
+        print("Handling task: message =", task.message)
 
         text = task.message
         try:
             if task.explicit:
                 print("This task was explicitly triggered.")
-                await task.channel.send(task.message)
+                if task.message:
+                    await task.channel.send(task.message)
                 if task.content is not None:
-                    # Content may be numpy (from obs.rgb) or PIL
                     import io
                     import numpy as np
                     from PIL import Image as PILImage
@@ -272,6 +272,10 @@ class EmetDiscordBot(DiscordBot):
             print(colored("Error in handling task: " + str(e), "red"))
 
         with self._llm_lock:
+            if self.llm_client is None:
+                # Agent mode: no local LLM; just log the incoming message
+                print(colored(f"[Discord] {text}", "cyan"))
+                return
             if self.task != "eqa":
                 response = self.llm_client(text, verbose=True)
                 print("Response:", response)

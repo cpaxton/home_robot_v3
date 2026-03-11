@@ -241,7 +241,10 @@ class DiscordBot:
                 print("Popped task:", extra_task.message, extra_task.channel.name)
 
                 # Add this message to the current task message
-                task.message += "\n" + extra_task.message
+                if task.message is not None and extra_task.message is not None:
+                    task.message += "\n" + extra_task.message
+                elif extra_task.message is not None:
+                    task.message = extra_task.message
 
             if task.t + self.timeout < timeit.default_timer():
                 print("Dropping task due to timeout: ", task.message, task.channel.name)
