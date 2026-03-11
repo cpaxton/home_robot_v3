@@ -16,6 +16,7 @@ from emet.core import get_parameters
 from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_client
+from emet.llms.discord_bot import EmetDiscordBot
 from emet.memory.backend import get_memory_backend
 from emet.memory.utils import print_memory_view_help_on_quit
 from emet.utils.logger import Logger
@@ -74,13 +75,6 @@ def run_agent_with_robot(
 
     discord_bot = None
     if discord and os.environ.get("DISCORD_TOKEN"):
-        try:
-            from emet.llms.discord_bot import EmetDiscordBot
-        except ImportError as e:
-            print(colored("Discord support requires the discord extra. Install with: uv sync -e discord", "red"))
-            print(colored("(Or: pip install discord.py)", "yellow"))
-            raise SystemExit(1) from e
-
         class AgentPlaceholder:
             def __init__(self, exec_obj):
                 self.robot = exec_obj.robot

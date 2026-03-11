@@ -36,14 +36,12 @@ from typing import Any, Dict, List, Optional
 
 import discord
 from discord.ext import commands, tasks
+from dotenv import load_dotenv
 from termcolor import colored
 
 
 def read_discord_token_from_env():
-    """Helpful tool to get a discord token from the command line, e.g. for a bot."""
-    from dotenv import load_dotenv
-
-    # Load environment variables from .env file
+    """Read DISCORD_TOKEN from environment. Requires discord extra (python-dotenv): uv sync -e discord."""
     load_dotenv()
     TOKEN = os.getenv("DISCORD_TOKEN")
     if not TOKEN:

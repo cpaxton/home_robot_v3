@@ -62,15 +62,14 @@ pip_install_editable() {
     fi
 }
 
-# Robocasa v0.2 requires RoboSuite v1.5 (see robocasa README: "using RoboSuite v1.5 as the backend").
-# robocasa_v0.1 is for older robocasa v0.1 and lacks load_composite_controller_config, PandaOmron, etc.
+# Robocasa needs RoboSuite master (get_elements in mjcf_utils; v1.5.0 lacks it).
 if [ ! -d "robosuite" ]; then
-    git clone https://github.com/ARISE-Initiative/robosuite --branch v1.5.0 --single-branch --depth 1
+    git clone https://github.com/ARISE-Initiative/robosuite --branch master --single-branch --depth 1
 fi
 cd robosuite || exit 1
-# Ensure correct version for existing clones (robocasa v0.2 needs robosuite v1.5.0)
-git fetch origin --tags 2>/dev/null || true
-git checkout v1.5.0 2>/dev/null || true
+# Ensure master for existing clones (robocasa imports get_elements from mjcf_utils).
+git fetch origin master 2>/dev/null || true
+git checkout master 2>/dev/null || true
 pip_install_editable || { echo "robosuite install failed." >&2; exit 1; }
 # Create macros_private.py from macros.py if missing (silences "No private macro file" warnings).
 if [ "$SETUP_MACROS_FORCE" = true ] || [ ! -f "robosuite/robosuite/macros_private.py" ]; then

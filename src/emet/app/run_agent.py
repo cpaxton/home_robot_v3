@@ -6,6 +6,7 @@
 
 import logging
 import os
+import tempfile
 import timeit
 
 # Suppress HuggingFace/transformers/httpx INFO spam when loading models (e.g. SigLIP)
@@ -15,6 +16,9 @@ for _name in ("httpx", "httpcore", "huggingface_hub", "transformers"):
 import click
 from termcolor import colored
 
+from emet.agent import run_agent_with_robot
+from emet.audio import AudioRecorder
+from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
 
 
@@ -58,7 +62,7 @@ DEFAULT_AGENT_LLM = "qwen35-4B"
 @click.option(
     "--discord",
     is_flag=True,
-    help="Start Discord bot when using --robot-ip (requires DISCORD_TOKEN in env).",
+    help="Start Discord bot when using --robot-ip (DISCORD_TOKEN in env; install deps: uv sync -e discord).",
 )
 @click.option(
     "--no-llm",
@@ -98,8 +102,6 @@ def main(
       emet run agent --robot-ip 127.0.0.1 --no-llm   # letter commands only (E/M/Q/P)
     """
     if robot_ip:
-        from emet.agent import run_agent_with_robot
-
         run_agent_with_robot(
             robot_ip=robot_ip,
             input_path=input_path,
@@ -117,9 +119,6 @@ def main(
         client.max_tokens = max_tokens
 
     if voice:
-        import tempfile
-        from emet.audio import AudioRecorder
-        from emet.audio.speech_to_text import WhisperSpeechToText
         audio_recorder = AudioRecorder()
         whisper = WhisperSpeechToText()
     else:

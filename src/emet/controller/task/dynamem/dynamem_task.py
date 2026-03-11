@@ -20,11 +20,12 @@ from emet.controller.robot_agent_dynamem import RobotAgent
 from emet.controller.task.emote import EmoteTask
 from emet.controller.task.pickup.hand_over_task import HandOverTask
 from emet.core import AbstractRobotClient, Parameters
+from emet.memory.backend import get_memory_backend
+from emet.memory.utils import print_memory_saved_help
 from emet.perception import create_semantic_sensor
 from emet.utils.image import numpy_image_to_bytes
-
-# Mapping and perception
 from emet.utils.logger import Logger
+from termcolor import colored
 
 logger = Logger(__name__)
 
@@ -268,7 +269,6 @@ class DynamemTaskExecutor:
             logger.error("No commands to execute!")
             said = self.agent.robot_say("I'm sorry, I didn't understand that.")
             if said:
-                from termcolor import colored
                 print(colored("Robot:", "blue"), said)
             return True
 
@@ -377,9 +377,6 @@ class DynamemTaskExecutor:
             elif command == "rotate_in_place":
                 logger.info("Rotate in place to scan environments.")
                 self.agent.rotate_in_place()
-                from emet.memory.backend import get_memory_backend
-                from emet.memory.utils import print_memory_saved_help
-
                 backend = get_memory_backend("dynamem", voxel_map=self.agent.get_voxel_map())
                 save_dir = getattr(self.agent.voxel_map, "log", "saved_memory")
                 backend.save(save_dir)

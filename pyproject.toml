@@ -45,6 +45,7 @@ dependencies = [
     "openai>=1.88.0",
     "google-genai",
     "ultralytics==8.3.161",
+    "clip @ git+https://github.com/ultralytics/CLIP.git",  # Ultralytics YOLO World/FastSAM text model; avoids runtime AutoUpdate
     "hello-robot-stretch-urdf",
     "pyrealsense2",
     "urchin",
@@ -96,7 +97,15 @@ discord = [
 #   emet install sim   (clones third_party/robosuite, robocasa)
 #   python scripts/enable_sim_pyproject.py
 #   uv sync -e sim
-sim = []
+sim = [
+    "mujoco>=3.3.0",  # Align with upstream robosuite; 3.2.6 was for older Stretch compat
+    "hello-robot-stretch-urdf",
+    "grpcio",
+    "click>=8.1.8",
+    "inputs>=0.5",
+    "robosuite",   # From third_party (clone with: emet install sim)
+    "robocasa",    # From third_party (clone with: emet install sim)
+]
 hand_tracker = [
     "mediapipe",
     "webcam",
@@ -114,8 +123,8 @@ override-dependencies = ["numpy>=1.24.4,<2", "numba>=0.58.1", "mujoco>=3.3.0"]
 [tool.uv.sources]
 "SAM-2" = { path = "third_party/segment-anything-2", editable = true }
 # Uncomment after running scripts/install_simulation.sh, then run scripts/enable_sim_pyproject.py
-# robosuite = { path = "third_party/robosuite", editable = true }
-# robocasa = { path = "third_party/robocasa", editable = true }
+robosuite = { path = "third_party/robosuite", editable = true }
+robocasa = { path = "third_party/robocasa", editable = true }
 
 [project.urls]
 Homepage = "https://github.com/hello-robot/stretchpy"
