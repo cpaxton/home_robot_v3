@@ -153,41 +153,32 @@ class EmetDiscordBot(DiscordBot):
 
     def on_ready(self):
         """Event listener called when the bot has switched from offline to online."""
-        print(f"{self.client.user} has connected to Discord!")
+        logger.debug(f"{self.client.user} has connected to Discord!")
         guild_count = 0
 
-        print("Bot User name:", self.client.user.name)
-        print("Bot Global name:", self.client.user.global_name)
-        print("Bot User IDL", self.client.user.id)
+        logger.debug("Bot User name:", self.client.user.name)
+        logger.debug("Bot Global name:", self.client.user.global_name)
+        logger.debug("Bot User ID:", self.client.user.id)
         self._user_name = self.client.user.name
         self._user_id = self.client.user.id
 
-        # This is from https://builtin.com/software-engineering-perspectives/discord-bot-python
-        # LOOPS THROUGH ALL THE GUILD / SERVERS THAT THE BOT IS ASSOCIATED WITH.
         for guild in self.client.guilds:
-            # PRINT THE SERVER'S ID AND NAME.
-            print(f"Joining Server {guild.id} (name: {guild.name})")
-
-            # INCREMENTS THE GUILD COUNTER.
+            logger.debug(f"Joining Server {guild.id} (name: {guild.name})")
             guild_count = guild_count + 1
 
             for channel in guild.text_channels:
                 if channel.name == self.home_channel:
-                    print(f"Adding home channel {channel} to the allowed channels.")
+                    logger.debug(f"Adding home channel {channel} to the allowed channels.")
                     self.allowed_channels.add_home(channel)
                     break
 
-        # Plans list
         self.next_plan = None
         self._plan_lock = threading.Lock()
         self._plan_thread = None
 
-        print(self.allowed_channels)
+        logger.debug("Allowed channels:", self.allowed_channels)
+        logger.debug("This bot is in", guild_count, "guild(s).")
 
-        # PRINTS HOW MANY GUILDS / SERVERS THE BOT IS IN.
-        print("This bot is in " + str(guild_count) + " guild(s).")
-
-        print("Starting the message processing queue.")
         self.process_queue.start()
 
         # Start the plan thread

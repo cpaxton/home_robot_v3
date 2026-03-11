@@ -232,10 +232,6 @@ def run_agent_with_robot(
         bot_thread.start()
         print(colored("Discord bot started (DISCORD_TOKEN). Messages will be handled.", "green"))
 
-    if not getattr(executor, "manipulation_only", True):
-        if input_path is None:
-            executor([("rotate_in_place", "")])
-
     # Build tools from context
     tools = get_tools(context)
     tools_by_name = {t.name: t for t in tools}

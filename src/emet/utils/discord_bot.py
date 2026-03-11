@@ -43,6 +43,10 @@ from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from termcolor import colored
 
+from emet.utils.logger import Logger
+
+_logger = Logger(__name__)
+
 
 def read_discord_token_from_env():
     """Read DISCORD_TOKEN from environment. Requires discord extra (python-dotenv): uv sync -e discord."""
@@ -168,21 +172,16 @@ class DiscordBot:
 
     async def handle_task(self, task: Task):
         """Handle a task by sending the message to the channel. This will make the necessary calls in its thread to the different child functions that send messages, for example."""
-        print()
-        print(
-            "Handling task: message = ",
-            task.message,
-            " channel = ",
-            task.channel.name,
-            " content = ",
-            task.content,
+        _logger.debug(
+            "Handling task: message=", task.message,
+            "channel=", task.channel.name,
+            "content=", "image" if task.content is not None else "None",
         )
         if task.message is not None:
-            print(" - Sending message:", task.message)
+            _logger.debug(" - Sending message:", task.message)
             await task.channel.send(task.message)
         if task.content is not None:
-            # Send an image (PIL Image, numpy array, or file-like BytesIO)
-            print(" - Sending content (image)")
+            _logger.debug(" - Sending content (image)")
             content = task.content
             if hasattr(content, "read"):
                 byte_arr = content

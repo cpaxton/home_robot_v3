@@ -145,7 +145,7 @@ class BaseController(ABC):
                 logger.debug("... done.")
         self.robot.switch_to_navigation_mode()
         if verbose:
-            print("- Update map after switching to navigation posture")
+            logger.debug("- Update map after switching to navigation posture")
 
     @abstractmethod
     def get_voxel_map(self):
