@@ -253,7 +253,10 @@ class DynamemController(BaseController):
                 rrb.Spatial2DView(name="head_rgb", origin="world/head_camera"),
                 rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera"),
             ),
-            column_shares=[2, 1, 1],
+            rrb.Vertical(
+                rrb.TextDocumentView(name="Scene Graph", origin="world/scene_graph/summary"),
+            ),
+            column_shares=[3, 1, 1, 1],
         )
         collapse = getattr(self.rerun_visualizer, "collapse_panels", True)
         my_blueprint = rrb.Blueprint(
@@ -285,6 +288,11 @@ class DynamemController(BaseController):
                 self.rerun_visualizer.update_scene_graph(
                     self.scene_graph, self.semantic_sensor
                 )
+
+        # Visualize open-vocab scene graph if attached
+        ovsg = self.voxel_map.get_scene_graph()
+        if ovsg is not None and ovsg.num_objects > 0:
+            self.rerun_visualizer.update_open_vocab_scene_graph(ovsg)
 
     def _update_scene_graph(self) -> None:
         """Update the scene graph with the latest instances from the voxel map."""

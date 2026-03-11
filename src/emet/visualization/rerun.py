@@ -950,6 +950,176 @@ class RerunVisualizer:
         if verbose:
             print("Time to log scene graph objects: ", t1 - t0)
 
+    def update_open_vocab_scene_graph(
+        self,
+        scene_graph,
+        verbose: bool = False,
+    ) -> None:
+        """Log an OpenVocabSceneGraph to Rerun.
+
+        Visualizes:
+        - Per-object colored point clouds at world/scene_graph/<id>_<label>
+        - 3D bounding boxes at world/scene_graph/objects
+        - Spatial edges as line segments at world/scene_graph/edges
+        - Node labels + observation counts at world/scene_graph/labels
+        - Best crop images at world/scene_graph/crops/<id>
+        - Text summary at world/scene_graph/summary
+        """
+        rr.set_time_seconds("realtime", time.time())
+
+        if not scene_graph.nodes:
+            return
+
+        t0 = timeit.default_timer()
+
+        centers = []
+        half_sizes_list = []
+        labels = []
+        colors = []
+
+        for nid, node in scene_graph.nodes.items():
+            label = node.primary_label
+            safe_label = label.replace(" ", "_")
+
+            # Consistent color per label
+            if safe_label not in self.bbox_colors_memory:
+                self.bbox_colors_memory[safe_label] = np.random.randint(0, 255, 3)
+            color = self.bbox_colors_memory[safe_label]
+
+            # Per-object point cloud
+            if node.point_cloud is not None and node.point_cloud.shape[0] > 0:
+                pts = node.point_cloud.detach().cpu().numpy()
+                if node.point_cloud_rgb is not None:
+                    pcd_rgb = node.point_cloud_rgb.detach().cpu().numpy()
+                    pcd_rgb = _rgb_to_uint8(pcd_rgb)
+                else:
+                    pcd_rgb = np.tile(color, (pts.shape[0], 1))
+                log_to_rerun(
+                    f"world/scene_graph/{nid}_{safe_label}",
+                    rr.Points3D(positions=pts, colors=pcd_rgb, radii=0.01),
+                )
+
+            # Bounding box
+            if node.bounds is not None and node.center is not None:
+                mins = node.bounds[:, 0].cpu().numpy()
+                maxs = node.bounds[:, 1].cpu().numpy()
+                half_sizes = ((maxs - mins) / 2).tolist()
+                center = node.center.tolist()
+                obs_tag = f"x{node.observation_count}" if node.observation_count > 1 else ""
+                stable_tag = " [stable]" if node.is_stable else ""
+                box_label = f"{label} {obs_tag}{stable_tag}"
+
+                centers.append(center)
+                half_sizes_list.append(half_sizes)
+                labels.append(box_label)
+                colors.append(color.tolist())
+
+            # Best crop image
+            if node.best_crop is not None:
+                try:
+                    crop = node.best_crop
+                    if crop.dtype != np.uint8:
+                        crop = np.clip(crop, 0, 255).astype(np.uint8)
+                    log_to_rerun(
+                        f"world/scene_graph/crops/{nid}_{safe_label}",
+                        rr.Image(crop),
+                    )
+                except Exception:
+                    pass
+
+        # Log all bounding boxes together
+        if centers:
+            log_to_rerun(
+                "world/scene_graph/objects",
+                rr.Boxes3D(
+                    half_sizes=half_sizes_list,
+                    centers=centers,
+                    labels=labels,
+                    radii=0.01,
+                    colors=colors,
+                ),
+            )
+
+        # Log edges as line segments
+        scene_graph.update_edges()
+        if scene_graph.edges:
+            line_strips = []
+            edge_colors = []
+            edge_labels = []
+            relation_colors = {
+                "near": [200, 200, 200],
+                "on": [0, 200, 100],
+                "on_floor": [100, 100, 255],
+            }
+            for edge in scene_graph.edges:
+                src_node = scene_graph.nodes.get(edge.source_id)
+                tgt_node = scene_graph.nodes.get(edge.target_id)
+                if src_node is None or src_node.center is None:
+                    continue
+                src_pos = src_node.center.tolist()
+                if tgt_node is not None and tgt_node.center is not None:
+                    tgt_pos = tgt_node.center.tolist()
+                elif edge.target_id == -1:
+                    # on_floor: draw line down to z=0
+                    tgt_pos = [src_pos[0], src_pos[1], 0.0]
+                else:
+                    continue
+                line_strips.append([src_pos, tgt_pos])
+                edge_colors.append(relation_colors.get(edge.relation, [180, 180, 180]))
+                src_lbl = src_node.primary_label if src_node else "?"
+                tgt_lbl = tgt_node.primary_label if tgt_node else "floor"
+                edge_labels.append(f"{src_lbl} --{edge.relation}--> {tgt_lbl}")
+
+            if line_strips:
+                log_to_rerun(
+                    "world/scene_graph/edges",
+                    rr.LineStrips3D(
+                        line_strips,
+                        colors=edge_colors,
+                        radii=0.005,
+                        labels=edge_labels,
+                    ),
+                )
+
+        # Text summary
+        summary = scene_graph.to_string()
+        stable_count = len(scene_graph.stable_objects)
+        header = (
+            f"## Scene Graph\n\n"
+            f"**{scene_graph.num_objects}** objects "
+            f"({stable_count} stable)\n\n"
+        )
+        # Object table
+        table_lines = ["| ID | Label | Seen | Stable |", "|---|---|---|---|"]
+        for node in scene_graph.nodes.values():
+            table_lines.append(
+                f"| {node.node_id} | {node.primary_label} | "
+                f"{node.observation_count}x | "
+                f"{'yes' if node.is_stable else 'no'} |"
+            )
+        table = "\n".join(table_lines)
+        # Edge list
+        edge_text = ""
+        if scene_graph.edges:
+            edge_lines = ["### Spatial Relations"]
+            for edge in scene_graph.edges:
+                src = scene_graph.nodes.get(edge.source_id)
+                tgt = scene_graph.nodes.get(edge.target_id)
+                src_lbl = src.primary_label if src else "?"
+                tgt_lbl = tgt.primary_label if tgt else "floor"
+                edge_lines.append(f"- {src_lbl} **{edge.relation}** {tgt_lbl}")
+            edge_text = "\n".join(edge_lines)
+
+        full_text = header + table + "\n\n" + edge_text
+        log_to_rerun(
+            "world/scene_graph/summary",
+            rr.TextDocument(full_text, media_type=rr.MediaType.MARKDOWN),
+        )
+
+        t1 = timeit.default_timer()
+        if verbose:
+            print(f"Scene graph visualization: {t1 - t0:.3f}s")
+
     def update_nav_goal(self, goal, timeout=10):
         """Log navigation goal
         Args:
