@@ -11,11 +11,12 @@ from typing import Any, Dict, Optional
 import click
 from termcolor import colored
 
-from emet.agent.tools import get_tools
+from emet.agent.prompt import AgentPromptBuilder
+from emet.agent.tools import get_tools, tool_call_to_executor_commands
 from emet.core import get_parameters
 from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.controller.zmq_client import HomeRobotZmqClient
-from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_client
+from emet.llms import LLMChatWrapper, get_llm_client
 from emet.llms.discord_bot import EmetDiscordBot
 from emet.memory.backend import get_memory_backend
 from emet.memory.utils import print_memory_view_help_on_quit
@@ -104,7 +105,7 @@ def run_agent_with_robot(
     chat_wrapper = None
     if use_llm:
         try:
-            prompt = PickupPromptBuilder()
+            prompt = AgentPromptBuilder()
             llm_client = get_llm_client(llm, prompt=prompt)
             chat_wrapper = LLMChatWrapper(llm_client, prompt=prompt)
         except Exception as e:
@@ -129,10 +130,47 @@ def run_agent_with_robot(
             llm_response = chat_wrapper.query(verbose=debug_llm)
             if llm_response is None:
                 continue
-            if isinstance(llm_response, list) and len(llm_response) == 1 and llm_response[0][0] == "quit":
-                ok = False
-                break
-            ok = executor(llm_response)
+            # New agent prompt returns {tool_calls: [...], message: str}
+            if isinstance(llm_response, dict):
+                tool_calls = llm_response.get("tool_calls") or []
+                message = llm_response.get("message") or ""
+                if message:
+                    print(colored("Stretch:", "blue"), message)
+                # Run tool-only calls (query_memory, send_image, describe_scene) via tool funcs
+                tools_by_name = {t["name"]: t for t in tools}
+                executor_cmds = []
+                for tc in tool_calls:
+                    name = tc.get("name", "")
+                    args = tc.get("arguments") or {}
+                    cmds = tool_call_to_executor_commands(name, args)
+                    if cmds:
+                        executor_cmds.extend(cmds)
+                    else:
+                        # Tool has no executor mapping; run the tool func
+                        if name in tools_by_name:
+                            func = tools_by_name[name]["func"]
+                            try:
+                                if args:
+                                    result = func(**args)
+                                else:
+                                    result = func()
+                                if result is not None and result != "":
+                                    print(colored("Tool result:", "cyan"), result)
+                            except Exception as e:
+                                logger.warning("Tool %s failed: %s", name, e)
+                                print(colored(f"Tool {name} failed: {e}", "red"))
+                if executor_cmds:
+                    # Check for quit
+                    if any(c[0] == "quit" for c in executor_cmds):
+                        ok = False
+                        break
+                    ok = executor(executor_cmds)
+            else:
+                # Legacy: list of (command, args)
+                if isinstance(llm_response, list) and len(llm_response) == 1 and llm_response[0][0] == "quit":
+                    ok = False
+                    break
+                ok = executor(llm_response)
             continue
 
         line = input(colored("You: ", "green")).strip()
