@@ -164,9 +164,15 @@ def run_agent_with_robot(
     explore_iter: int = 3,
     debug_llm: bool = False,
     agent_name: str = "Emet",
+    commands: Optional[List[str]] = None,
     **kwargs: Any,
 ) -> None:
-    """Start robot, optional memory load, optional Discord; run command loop with tools."""
+    """Start robot, optional memory load, optional Discord; run command loop with tools.
+
+    If *commands* is a non-empty list, each entry is fed as a user turn
+    (LLM mode) or manual command (no-LLM mode) instead of reading stdin.
+    The agent exits after all commands are consumed.
+    """
     parameters = get_parameters("dynav_config.yaml")
 
     robot = HomeRobotZmqClient(
@@ -276,6 +282,23 @@ def run_agent_with_robot(
         if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
             discord_bot.push_task_to_all_channels(message=f"**{agent_name}:** {text}")
 
+    # Command queue for non-interactive / scripted mode
+    cmd_queue: List[str] = list(commands) if commands else []
+    scripted = bool(cmd_queue)
+
+    def _get_input(prompt_text: str) -> Optional[str]:
+        """Read next input from queue (scripted) or stdin (interactive). None = done."""
+        if cmd_queue:
+            text = cmd_queue.pop(0)
+            print(colored(prompt_text, "green") + text)
+            return text
+        if scripted:
+            return None  # queue exhausted
+        try:
+            return input(colored(prompt_text, "green")).strip()
+        except (EOFError, KeyboardInterrupt):
+            return None
+
     ok = True
     while ok:
         update_xyt()
@@ -283,7 +306,9 @@ def run_agent_with_robot(
         # --- LLM path ---
         if use_llm and llm_client is not None:
             print("-" * 60)
-            user_text = input(colored("You: ", "green")).strip()
+            user_text = _get_input("You: ")
+            if user_text is None:
+                break
             if not user_text:
                 continue
             if user_text.upper() in ("Q", "QUIT"):
@@ -356,7 +381,9 @@ def run_agent_with_robot(
             continue
 
         # --- Manual (no-LLM) path ---
-        line = input(colored("You: ", "green")).strip()
+        line = _get_input("You: ")
+        if line is None:
+            break
         if not line:
             continue
         chat_log.log("user", line)

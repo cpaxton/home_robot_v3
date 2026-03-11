@@ -84,6 +84,13 @@ DEFAULT_AGENT_LLM = "qwen35-4B"
     default="Emet",
     help="Agent name used in the system prompt (default: Emet).",
 )
+@click.option(
+    "-c",
+    "--command",
+    "commands",
+    multiple=True,
+    help="Run command(s) non-interactively then exit. Repeatable: -c 'explore' -c 'find red cylinder'.",
+)
 def main(
     llm: str,
     prompt: str,
@@ -96,6 +103,7 @@ def main(
     no_llm: bool,
     debug_llm: bool,
     agent_name: str,
+    commands: tuple[str, ...],
 ) -> None:
     """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
 
@@ -108,7 +116,10 @@ def main(
       emet run agent --name Stretch
       emet run agent --robot-ip 127.0.0.1 --input-path logs/memory_xxx --discord
       emet run agent --robot-ip 127.0.0.1 --no-llm   # letter commands only (E/M/Q/P)
+      emet run agent --robot-ip 127.0.0.1 --no-llm -c 'FIND red cylinder'
+      emet run agent --robot-ip 127.0.0.1 -c 'find the red cylinder' -c 'what objects do you see?'
     """
+    cmd_list = list(commands) if commands else None
     if robot_ip:
         run_agent_with_robot(
             robot_ip=robot_ip,
@@ -119,6 +130,7 @@ def main(
             skip_confirmations=True,
             debug_llm=debug_llm,
             agent_name=agent_name,
+            commands=cmd_list,
         )
         return
 
