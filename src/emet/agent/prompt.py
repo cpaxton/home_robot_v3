@@ -21,43 +21,41 @@ You help people by navigating, picking up objects, answering questions, and more
 If a request is ambiguous, ask the user to clarify before acting."""
 
 # Response format: the critical section for getting structured JSON back.
-# Designed for both large API models (OpenAI) and small local models (Qwen 3.5 4B).
+# NOTE: This is a plain string, NOT an f-string. Use single braces for JSON.
 _FORMAT_BLOCK = """\
 # Response format
 Respond with ONLY a JSON object. No other text before or after.
 
-```
-{{"tool_calls": [<list of tool invocations>], "message": "<short reply to user>"}}
-```
+{"tool_calls": [<list of tool invocations>], "message": "<short reply to user>"}
 
-Each tool invocation: {{"name": "<tool_name>", "arguments": {{<key>: <value>, ...}}}}
+Each tool invocation: {"name": "<tool_name>", "arguments": {<key>: <value>, ...}}
 If no action is needed, set "tool_calls" to [].
 
 # Examples
 
 User: "Explore the room."
-{{"tool_calls": [{{"name": "explore", "arguments": {{}}}}], "message": "Exploring now."}}
+{"tool_calls": [{"name": "explore", "arguments": {}}], "message": "Exploring now."}
 
 User: "Where is the red cup?"
-{{"tool_calls": [{{"name": "query_memory", "arguments": {{"question": "Where is the red cup?"}}}}], "message": "Checking my memory."}}
+{"tool_calls": [{"name": "query_memory", "arguments": {"question": "Where is the red cup?"}}], "message": "Checking my memory."}
 
 User: "Put the apple on the table."
-{{"tool_calls": [{{"name": "pick_place", "arguments": {{"object_name": "apple", "receptacle_name": "table"}}}}], "message": "On it."}}
+{"tool_calls": [{"name": "pick_place", "arguments": {"object_name": "apple", "receptacle_name": "table"}}], "message": "On it."}
 
 User: "Take a picture and send it to me."
-{{"tool_calls": [{{"name": "take_picture", "arguments": {{}}}}, {{"name": "send_image", "arguments": {{}}}}], "message": "Here you go."}}
+{"tool_calls": [{"name": "take_picture", "arguments": {}}, {"name": "send_image", "arguments": {}}], "message": "Here you go."}
 
 User: "What objects can you see?"
-{{"tool_calls": [{{"name": "query_memory", "arguments": {{"question": "What objects are visible?"}}}}], "message": "Let me check."}}
+{"tool_calls": [{"name": "query_memory", "arguments": {"question": "What objects are visible?"}}], "message": "Let me check."}
 
 User: "Wave hello!"
-{{"tool_calls": [{{"name": "wave", "arguments": {{}}}}], "message": "Hi!"}}
+{"tool_calls": [{"name": "wave", "arguments": {}}], "message": "Hi!"}
 
 User: "Can you put that away?"
-{{"tool_calls": [], "message": "Which object, and where should I put it?"}}
+{"tool_calls": [], "message": "Which object, and where should I put it?"}
 
 User: "Goodbye"
-{{"tool_calls": [{{"name": "quit", "arguments": {{}}}}], "message": "Bye!"}}"""
+{"tool_calls": [{"name": "quit", "arguments": {}}], "message": "Bye!"}"""
 
 
 def build_agent_system_prompt(
@@ -85,6 +83,9 @@ def parse_tool_calls_response(response: str) -> Dict[str, Any]:
     response = response.strip()
     # Strip <think>...</think> reasoning blocks (Qwen 3.5, DeepSeek, etc.)
     response = re.sub(r"<think>[\s\S]*?</think>", "", response).strip()
+    # Handle partial think blocks: opening tag stripped by tokenizer but </think> remains
+    if "</think>" in response:
+        response = response.split("</think>")[-1].strip()
     # Strip markdown code fences
     fenced = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", response)
     if fenced:

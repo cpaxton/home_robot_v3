@@ -183,7 +183,16 @@ class Qwen25Client(AbstractLLMClient):
         outputs = self.pipe(text, generation_config=gen_config)
         t1 = timeit.default_timer()
 
-        assistant_response = outputs[0]["generated_text"].split("assistant")[-1].strip()
+        generated = outputs[0]["generated_text"]
+        # Extract the last assistant turn. Qwen uses <|im_start|>assistant\n as delimiter.
+        if "<|im_start|>assistant" in generated:
+            assistant_response = generated.rsplit("<|im_start|>assistant", 1)[-1]
+            # Strip the role marker and any trailing end tokens
+            assistant_response = assistant_response.lstrip("\n").rstrip()
+            if assistant_response.endswith("<|im_end|>"):
+                assistant_response = assistant_response[:-len("<|im_end|>")].rstrip()
+        else:
+            assistant_response = generated.split("assistant")[-1].strip()
 
         self.add_history({"role": "assistant", "content": assistant_response})
         if verbose:

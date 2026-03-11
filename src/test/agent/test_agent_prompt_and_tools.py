@@ -23,6 +23,20 @@ def test_parse_strips_think_block():
     assert result["message"] == "Taking a picture."
 
 
+def test_parse_partial_think_block():
+    """Parser handles partial think block where opening <think> was stripped by tokenizer."""
+    from emet.agent.prompt import parse_tool_calls_response
+
+    raw = (
+        ', I should greet them. The tool for that is wave().\n'
+        '</think>\n\n'
+        '{"tool_calls": [{"name": "wave", "arguments": {}}], "message": "Hello!"}'
+    )
+    result = parse_tool_calls_response(raw)
+    assert result["tool_calls"] == [{"name": "wave", "arguments": {}}]
+    assert result["message"] == "Hello!"
+
+
 def test_parse_plain_json():
     from emet.agent.prompt import parse_tool_calls_response
 
@@ -79,6 +93,14 @@ def test_prompt_includes_all_tool_names():
     prompt = build_agent_system_prompt(tools)
     for t in tools:
         assert t.name in prompt, f"Tool '{t.name}' not found in system prompt"
+
+
+def test_prompt_has_no_double_braces():
+    """Prompt examples must use single braces so the LLM doesn't copy {{ in output."""
+    from emet.agent.prompt import build_agent_system_prompt
+
+    prompt = build_agent_system_prompt()
+    assert "{{" not in prompt, "Prompt contains literal {{ — model will copy double braces"
 
 
 def test_prompt_builder_configurable_name():
