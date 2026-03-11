@@ -8,7 +8,9 @@ import json
 import os
 import threading
 import timeit
-from typing import Any, Dict, Optional
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import click
 from termcolor import colored
@@ -27,44 +29,97 @@ from emet.utils.logger import Logger
 logger = Logger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Chat log
+# ---------------------------------------------------------------------------
+
+class ChatLog:
+    """Append-only JSONL log of the conversation for debugging and training."""
+
+    def __init__(self, log_dir: Optional[str] = None):
+        if log_dir is None:
+            log_dir = os.path.join("logs", "chat")
+        os.makedirs(log_dir, exist_ok=True)
+        stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.path = os.path.join(log_dir, f"chat_{stamp}.jsonl")
+        self._fh = open(self.path, "a")
+        logger.info("Chat log: %s", self.path)
+
+    def log(self, role: str, content: str, **extra: Any) -> None:
+        record = {"ts": datetime.now().isoformat(), "role": role, "content": content}
+        record.update(extra)
+        self._fh.write(json.dumps(record, default=str) + "\n")
+        self._fh.flush()
+
+    def close(self) -> None:
+        self._fh.close()
+
+
+# ---------------------------------------------------------------------------
+# Tool dispatch
+# ---------------------------------------------------------------------------
+
 def _dispatch_tool_calls(
-    tool_calls: list[dict],
+    tool_calls: List[dict],
     tools_by_name: dict[str, Tool],
     executor: DynamemTaskExecutor,
+    chat_log: Optional[ChatLog] = None,
     debug: bool = False,
-) -> bool:
-    """Execute a list of parsed tool_calls. Returns False if quit was requested."""
-    executor_cmds: list[tuple[str, str]] = []
+) -> Tuple[bool, List[str]]:
+    """Execute a list of parsed tool_calls.
+
+    Returns (continue_running, list_of_result_strings).
+    continue_running is False if quit was requested.
+    """
+    executor_cmds: List[Tuple[str, str]] = []
+    results: List[str] = []
 
     for tc in tool_calls:
         name = tc.get("name", "")
         args = tc.get("arguments") or {}
         tool = tools_by_name.get(name)
         if tool is None:
-            logger.warning("Unknown tool: %s", name)
+            msg = f"Unknown tool: {name}"
+            logger.warning(msg)
+            results.append(msg)
             continue
 
         cmds = tool.to_executor(args)
         if cmds:
             executor_cmds.extend(cmds)
         else:
-            # No executor mapping: call the tool func directly (e.g. query_memory, send_image)
             try:
                 result = tool.func(**args) if args else tool.func()
+                result_str = str(result) if result is not None else "ok"
+                results.append(f"[{name}] {result_str}")
                 if result is not None and result != "":
-                    print(colored(f"[{name}]", "cyan"), result)
+                    print(colored(f"[{name}]", "cyan"), result_str)
             except Exception as e:
-                logger.warning("Tool %s failed: %s", name, e)
-                print(colored(f"Tool {name} failed: {e}", "red"))
+                err = f"Tool {name} failed: {e}"
+                logger.warning(err)
+                print(colored(err, "red"))
+                results.append(err)
 
     if not executor_cmds:
-        return True
+        return True, results
 
     if any(c[0] == "quit" for c in executor_cmds):
-        return False
+        return False, results
 
-    return executor(executor_cmds)
+    ok = executor(executor_cmds)
+    cmd_names = [c[0] for c in executor_cmds]
+    results.append(f"Executor ran: {', '.join(cmd_names)} -> {'ok' if ok else 'failed/interrupted'}")
 
+    if chat_log:
+        for r in results:
+            chat_log.log("tool", r)
+
+    return ok, results
+
+
+# ---------------------------------------------------------------------------
+# Main agent loop
+# ---------------------------------------------------------------------------
 
 def run_agent_with_robot(
     robot_ip: str = "127.0.0.1",
@@ -147,15 +202,18 @@ def run_agent_with_robot(
     tools_by_name = {t.name: t for t in tools}
     print(colored("Agent tools: " + ", ".join(t.name for t in tools), "yellow"))
 
+    # Chat log
+    chat_log = ChatLog()
+    print(colored(f"Chat log: {chat_log.path}", "yellow"))
+
     # Build prompt and LLM client
     llm_client = None
     prompt_builder = None
-    openai_tools_param = None  # native tool schemas for OpenAI API
+    openai_tools_param = None
     if use_llm:
         try:
             prompt_builder = AgentPromptBuilder(tools=tools, name=agent_name, context=context)
             llm_client = get_llm_client(llm, prompt=prompt_builder)
-            # For OpenAI clients, prepare native tools param
             from emet.llms.openai_client import OpenaiClient
             if isinstance(llm_client, OpenaiClient):
                 openai_tools_param = [t.schema() for t in tools]
@@ -164,14 +222,22 @@ def run_agent_with_robot(
             print(colored("Agent mode requires an LLM; it failed to load.", "red"))
             print(colored("Fix the LLM (e.g. --llm, device) or run with --no-llm for letter commands only.", "yellow"))
             robot.stop()
+            chat_log.close()
             return
 
     if use_llm and llm_client is not None:
         print(colored(f"LLM enabled ({llm}). Say what you want the robot to do.", "green"))
     else:
         print(colored("Enter mode [E=explore / M=pick+place / Q=question / P=send picture / QUIT]:", "green"))
-    if debug_llm:
-        print(colored("Debug: full prompt, raw and parsed LLM response will be printed.", "yellow"))
+
+    # Print system prompt once at startup when debug is on
+    if debug_llm and prompt_builder is not None:
+        print(colored("=" * 60, "yellow"))
+        print(colored("[DEBUG] System prompt (printed once):", "yellow"))
+        print(str(prompt_builder))
+        print(colored("=" * 60, "yellow"))
+
+    chat_log.log("system", str(prompt_builder) if prompt_builder else "(no LLM)")
 
     ok = True
     while ok:
@@ -187,11 +253,10 @@ def run_agent_with_robot(
                 ok = False
                 break
 
+            chat_log.log("user", user_text)
+
             if debug_llm:
-                print(colored("[DEBUG] System prompt:", "yellow"))
-                sp = str(prompt_builder) if prompt_builder else ""
-                print(sp[:2000] + ("..." if len(sp) > 2000 else ""))
-                print(colored("[DEBUG] User input:", "yellow"), repr(user_text))
+                print(colored(f"[DEBUG] User: {user_text!r}", "yellow"))
 
             t0 = timeit.default_timer()
             try:
@@ -202,9 +267,10 @@ def run_agent_with_robot(
             except TypeError:
                 raw_response = llm_client(user_text)
             t1 = timeit.default_timer()
+            elapsed = t1 - t0
 
             if debug_llm:
-                print(colored("[DEBUG] Raw LLM response:", "yellow"), repr(raw_response))
+                print(colored(f"[DEBUG] Raw response ({elapsed:.2f}s):", "yellow"), raw_response[:500])
 
             parsed = parse_tool_calls_response(raw_response)
             tool_calls = parsed.get("tool_calls") or []
@@ -212,19 +278,27 @@ def run_agent_with_robot(
 
             if debug_llm:
                 print(colored("[DEBUG] Parsed:", "blue"), json.dumps(parsed, indent=2))
-                print(colored(f"[DEBUG] Time: {t1 - t0:.2f}s", "yellow"))
+
+            chat_log.log("assistant", message, tool_calls=tool_calls, raw=raw_response, time_s=elapsed)
 
             if message:
                 print(colored(f"{agent_name}:", "blue"), message)
 
             if tool_calls:
-                ok = _dispatch_tool_calls(tool_calls, tools_by_name, executor, debug=debug_llm)
+                ok, results = _dispatch_tool_calls(
+                    tool_calls, tools_by_name, executor, chat_log=chat_log, debug=debug_llm,
+                )
+                # Feed tool results back to the LLM conversation history so it has context
+                if results and hasattr(llm_client, "add_history"):
+                    result_summary = "; ".join(results)
+                    llm_client.add_history({"role": "user", "content": f"[Tool results: {result_summary}]"})
             continue
 
         # --- Manual (no-LLM) path ---
         line = input(colored("You: ", "green")).strip()
         if not line:
             continue
+        chat_log.log("user", line)
         if line.upper() in ("Q", "QUIT"):
             ok = False
             break
@@ -263,5 +337,8 @@ def run_agent_with_robot(
             continue
         ok = executor([("pickup", line), ("place", "")]) if line else True
 
+    chat_log.log("system", "session ended")
+    chat_log.close()
+    print(colored(f"Chat log saved: {chat_log.path}", "green"))
     print_memory_view_help_on_quit(getattr(executor, "_last_memory_save_path", None))
     robot.stop()

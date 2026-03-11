@@ -235,7 +235,7 @@ def get_tools(context: Dict[str, Any]) -> List[Tool]:
     # -- camera --------------------------------------------------------------
     tools.append(Tool(
         name="take_picture",
-        description="Take a picture with the robot's main camera and optionally send it to the user.",
+        description="Take a picture with the main camera. Does NOT send it — use send_image after to send.",
         parameters=_NO_PARAMS,
         func=lambda: _exec("take_picture", ""),
         executor_commands=_simple_exec_mapping("take_picture"),
@@ -286,19 +286,13 @@ def get_tool_schemas_for_llm(context: Optional[Dict[str, Any]] = None) -> List[D
 
 
 def get_tool_descriptions_for_prompt(tools: List[Tool]) -> str:
-    """Build a human-readable tools block for the system prompt from Tool objects."""
-    lines = ["Available tools:"]
+    """Build a compact tools block for the system prompt from Tool objects."""
+    lines = ["TOOLS (use these names in tool_calls):"]
     for t in tools:
         props = t.parameters.get("properties", {})
-        required = t.parameters.get("required", [])
         if props:
-            args_parts = []
-            for k, v in props.items():
-                desc = v.get("description", "")
-                req = " (required)" if k in required else ""
-                args_parts.append(f"{k}: {desc}{req}")
-            args_str = "; ".join(args_parts)
-            lines.append(f"  {t.name}({', '.join(props.keys())}): {t.description} Args: {args_str}")
+            arg_names = ", ".join(props.keys())
+            lines.append(f"- {t.name}({arg_names}): {t.description}")
         else:
-            lines.append(f"  {t.name}(): {t.description}")
+            lines.append(f"- {t.name}(): {t.description}")
     return "\n".join(lines)

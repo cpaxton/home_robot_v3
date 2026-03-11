@@ -89,11 +89,17 @@ def process_incoming_qwen_types(qwen_type: str):
     return model_size, typing_option, finetuning_option, quantization_option
 
 
+def _agent_prompt_builder() -> "AbstractPromptBuilder":
+    from emet.agent.prompt import AgentPromptBuilder
+    return AgentPromptBuilder()
+
+
 prompts = {
     "simple": SimpleStretchPromptBuilder,
     "object_manip_nav": ObjectManipNavPromptBuilder,
     "ok_robot": OkRobotPromptBuilder,
     "pickup": PickupPromptBuilder,
+    "agent": _agent_prompt_builder,
 }
 
 
