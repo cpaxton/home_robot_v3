@@ -306,8 +306,8 @@ def show_memory(path: str, open_browser: bool) -> None:
 @click.argument(
     "app",
     type=click.Choice([
-        "dynamem", "graph-eqa", "mapping", "grasp", "chat", "agent", "ai_pickup",
-        "timing", "discord", "create-and-print-memory",
+        "dynamem", "graph-eqa", "mapping", "grasp", "chat", "agent", "web-chat",
+        "ai_pickup", "timing", "discord", "create-and-print-memory",
     ]),
 )
 @click.option("--robot-ip", "--robot_ip", default="127.0.0.1", help="Robot or simulator IP")
@@ -372,6 +372,8 @@ def run(
         sys.exit(_run_module("emet.app.chat", args))
     elif app == "agent":
         sys.exit(_run_module("emet.app.run_agent", args))
+    elif app == "web-chat":
+        sys.exit(_run_module("emet.app.web_chat", args))
     elif app == "ai_pickup":
         if skip_confirmations:
             args.append("-S")
