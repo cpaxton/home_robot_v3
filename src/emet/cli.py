@@ -532,7 +532,8 @@ def sync(
     """Sync dependencies (uv sync or pip install -e .).
 
     Use --all for sim + dynamem + dev + discord, or pick extras with -e or individual flags.
-    When sim is requested and third_party/robocasa and robosuite exist, sync runs enable_sim_pyproject.py and uv lock so sim deps are installed; if those dirs are missing, sim is skipped with a message.
+    Sim pip deps (mujoco, etc.) are always in pyproject.toml. robosuite/robocasa are
+    installed editable by: emet install sim (scripts/install_simulation.sh).
 
     Examples:
 
@@ -561,48 +562,19 @@ def sync(
     root = _project_root()
     os.chdir(root)
 
-    # Sim extra: when third_party/robocasa and third_party/robosuite exist, we run enable_sim + uv lock.
-    # If those dirs are missing, warn but only skip sim when the user did not pass --all (so "emet sync --all" always includes sim).
-    sim_skipped = False
+    # Sim extra: pip-installable deps (mujoco, stretch-urdf, etc.) are always in pyproject.toml.
+    # robosuite/robocasa are installed editable by: emet install sim (scripts/install_simulation.sh).
     if "sim" in extras:
         missing = [name for name in ("robosuite", "robocasa") if not (root / "third_party" / name).is_dir()]
         if missing:
-            if not sync_all:
-                sim_skipped = True
-                click.echo(
-                    f"Skipping sim (missing: {', '.join('third_party/' + n for n in missing)}). "
-                    "Run: ./scripts/install_simulation.sh  then  python scripts/enable_sim_pyproject.py  then  uv lock && uv sync -e sim",
-                    err=True,
-                )
-                click.echo(
-                    "Syncing without sim will uninstall sim-related packages (mujoco, robocasa, robosuite, etc.). "
-                    "To restore them later: emet install sim  then  emet sync -e sim",
-                    err=True,
-                )
-                extras = [e for e in extras if e != "sim"]
-            else:
-                click.echo(
-                    f"Warning: third_party missing ({', '.join(missing)}). Sim extra will be synced but sim packages need: emet install sim  then  emet sync --all",
-                    err=True,
-                )
+            click.echo(
+                f"Note: third_party missing ({', '.join(missing)}). "
+                "Sim pip deps (mujoco, etc.) will install, but robosuite/robocasa need: emet install sim",
+                err=True,
+            )
 
     if extras:
         click.echo("Syncing extras: " + ", ".join(extras))
-    elif sync_all and sim_skipped:
-        click.echo("Syncing without sim (sim was skipped).", err=True)
-
-    # When sim is requested and third_party exists, ensure pyproject has sim deps and path sources, then refresh lockfile.
-    sim_third_party_ready = (root / "third_party" / "robocasa").is_dir() and (root / "third_party" / "robosuite").is_dir()
-    if "sim" in extras and sim_third_party_ready and _has_uv():
-        enable_script = root / "scripts" / "enable_sim_pyproject.py"
-        if enable_script.is_file():
-            rc = subprocess.call([sys.executable, str(enable_script)])
-            if rc != 0:
-                sys.exit(rc)
-            # uv lock resolves all extras from pyproject; no --extra flag.
-            rc = subprocess.call(["uv", "lock"])
-            if rc != 0:
-                sys.exit(rc)
 
     if _has_uv():
         cmd = ["uv", "sync"]
@@ -834,22 +806,11 @@ def install_sim(skip_download_assets: bool, setup_macros: bool, no_sync: bool) -
     if result != 0:
         sys.exit(result)
     if no_sync:
-        click.echo(
-            "Simulation install complete. Run: python scripts/enable_sim_pyproject.py  then  uv lock && uv sync -e sim"
-        )
+        click.echo("Simulation install complete. Run: uv sync --extra sim")
         return
-    # Enable sim in pyproject.toml so uv can resolve and sync
-    enable_script = root / "scripts" / "enable_sim_pyproject.py"
-    if enable_script.exists():
-        click.echo("Enabling sim in pyproject.toml...")
-        result = subprocess.call([sys.executable, str(enable_script)], cwd=root)
-        if result != 0:
-            sys.exit(result)
-    click.echo("Updating lock and syncing sim extra...")
+    click.echo("Syncing sim extra...")
     os.chdir(root)
     if _has_uv():
-        if subprocess.call(["uv", "lock"], cwd=root) != 0:
-            sys.exit(1)
         result = subprocess.call(["uv", "sync", "--extra", "sim"], cwd=root)
     else:
         result = subprocess.call([sys.executable, "-m", "pip", "install", "-e", ".[sim]"])
@@ -890,20 +851,11 @@ def install_robocasa(skip_download_assets: bool, setup_macros: bool, no_sync: bo
     if result != 0:
         sys.exit(result)
     if no_sync:
-        click.echo(
-            "Robocasa install complete. Run: python scripts/enable_sim_pyproject.py  then  uv lock && uv sync -e sim"
-        )
+        click.echo("Robocasa install complete. Run: uv sync --extra sim")
         return
-    enable_script = root / "scripts" / "enable_sim_pyproject.py"
-    if enable_script.exists():
-        click.echo("Enabling sim in pyproject.toml...")
-        if subprocess.call([sys.executable, str(enable_script)], cwd=root) != 0:
-            sys.exit(1)
-    click.echo("Updating lock and syncing sim extra...")
+    click.echo("Syncing sim extra...")
     os.chdir(root)
     if _has_uv():
-        if subprocess.call(["uv", "lock"], cwd=root) != 0:
-            sys.exit(1)
         result = subprocess.call(["uv", "sync", "--extra", "sim"], cwd=root)
     else:
         result = subprocess.call([sys.executable, "-m", "pip", "install", "-e", ".[sim]"])
