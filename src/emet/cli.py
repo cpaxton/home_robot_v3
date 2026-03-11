@@ -563,7 +563,8 @@ def sync(
     os.chdir(root)
 
     # Sim extra: pip-installable deps (mujoco, stretch-urdf, etc.) are always in pyproject.toml.
-    # robosuite/robocasa are installed editable by: emet install sim (scripts/install_simulation.sh).
+    # robosuite/robocasa are installed editable from third_party/ when present.
+    sim_editable_pkgs: List[str] = []
     if "sim" in extras:
         missing = [name for name in ("robosuite", "robocasa") if not (root / "third_party" / name).is_dir()]
         if missing:
@@ -572,6 +573,10 @@ def sync(
                 "Sim pip deps (mujoco, etc.) will install, but robosuite/robocasa need: emet install sim",
                 err=True,
             )
+        else:
+            sim_editable_pkgs = [
+                str(root / "third_party" / name) for name in ("robosuite", "robocasa")
+            ]
 
     if extras:
         click.echo("Syncing extras: " + ", ".join(extras))
@@ -583,6 +588,14 @@ def sync(
         if no_install:
             cmd.append("--no-install-project")
         result = subprocess.call(cmd)
+        if result != 0:
+            sys.exit(result)
+        # Install robosuite/robocasa editable from third_party (not in lockfile)
+        if sim_editable_pkgs:
+            click.echo("Installing robosuite/robocasa from third_party...")
+            result = subprocess.call(["uv", "pip", "install"] + [
+                arg for p in sim_editable_pkgs for arg in ["-e", p]
+            ])
         sys.exit(result)
     else:
         # Fallback to pip
