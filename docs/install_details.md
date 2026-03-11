@@ -41,9 +41,9 @@ cd stretch_ai
 ```
 
 Options:
-- `-y` / `--yes`: Skip confirmation prompts
+- `-y` / `--yes`: Skip confirmation prompts (and skip sim asset download ~10GB)
 - `--cpu`: CPU-only (skips Segment Anything 2)
-- `--sim`: Include simulation extras (MuJoCo)
+- `--no-sim`: Skip simulation (no clone of third_party/robocasa, robosuite; sim is included by default)
 - `--no-sam2`: Skip Segment Anything 2 (required for DynaMem OWL+SAM segmentation)
 
 To add SAM2 after install: `emet sync -e dynamem` or `uv sync --extra dynamem`

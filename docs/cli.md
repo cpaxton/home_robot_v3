@@ -93,7 +93,7 @@ Sync dependencies. Uses `uv sync` if available, otherwise `pip install -e .`.
 **Options:**
 - `--all` — Install all common extras (sim, dynamem, dev) — MuJoCo, SAM-2, pytest, etc.
 - `-e, --extra EXTRA` — Install extra (repeat for multiple)
-- `--sim` — Include sim (MuJoCo, robocasa)
+- `--sim` — Include sim (MuJoCo, robocasa); sim is default for `./install.sh`, use `--no-sim` to skip
 - `--dynamem` — Include dynamem (SAM-2)
 - `--dev` — Include dev (pytest, black, mypy)
 - `--hand-tracker` — Include hand_tracker (mediapipe)
@@ -105,7 +105,7 @@ Sync dependencies. Uses `uv sync` if available, otherwise `pip install -e .`.
 emet sync
 emet sync --all
 emet sync -e sim -e dynamem
-emet sync --sim --dynamem
+emet sync -e sim -e dynamem
 emet sync --all --hand-tracker
 emet sync --no-install
 ```
@@ -180,7 +180,7 @@ emet install sim                    # Install Robocasa, robosuite (third_party)
 emet install robocasa               # Same as install sim
 emet install sim -d -a              # With assets and force-overwrite macros
 emet install full                   # Full install (uv, deps, sync)
-emet install full -y --sim          # Non-interactive with sim extras
+emet install full -y                # Non-interactive (sim included by default)
 emet install full --cpu             # CPU-only (no SAM2)
 emet install pre-commit             # Install git hooks (requires emet sync --dev)
 emet install pre-commit --run       # Install and run on all files

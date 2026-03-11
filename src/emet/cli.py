@@ -243,6 +243,115 @@ def kill_mujoco_server(port: int, kill_all: bool) -> None:
     sys.exit(0 if killed_any else 1)
 
 
+@main.group(short_help="Save or show robot connection (host, user) for deploy/view")
+def connect_cmd() -> None:
+    """Save and reuse connection details so deploy and view-bridge default to the right robot."""
+    pass
+
+
+@connect_cmd.command("save", short_help="Save a connection as active (or named)")
+@click.argument("host")
+@click.option("--user", "-u", default="root", help="SSH user")
+@click.option("--password", "-p", default=None, help="Password (or set EMET_ROBOT_PASSWORD); omit to use SSH key")
+@click.option("--name", "-n", default=None, help="Profile name (default: host)")
+@click.option("--no-active", is_flag=True, help="Do not set as active connection")
+def connect_save(host: str, user: str, password: str | None, name: str | None, no_active: bool) -> None:
+    """Save host and user; optional password. Updates ~/.stretch/robot_ip.txt for legacy tools."""
+    pwd = password or os.environ.get("EMET_ROBOT_PASSWORD")
+    from emet.utils.connection import save_connection
+
+    conn_name = save_connection(
+        host=host,
+        user=user,
+        password=pwd,
+        name=name,
+        set_active=not no_active,
+    )
+    click.echo(f"Saved connection '{conn_name}' (host={host}, user={user}).")
+    if not no_active:
+        click.echo("Set as active. Use: emet deploy, emet view-bridge (omit --robot-ip to use this).")
+
+
+@connect_cmd.command("list", short_help="List saved connections")
+def connect_list() -> None:
+    """List all saved connections and which is active."""
+    from emet.utils.connection import list_connections
+
+    items = list_connections()
+    if not items:
+        click.echo("No connections saved. Use: emet connect save <host> [--user USER]")
+        return
+    for name, is_active in items:
+        mark = " (active)" if is_active else ""
+        click.echo(f"  {name}{mark}")
+
+
+@connect_cmd.command("show", short_help="Show active connection")
+def connect_show() -> None:
+    """Show the active connection used by deploy and view-bridge when --robot-ip is omitted."""
+    from emet.utils.connection import get_active_connection
+
+    conn = get_active_connection()
+    if conn is None:
+        click.echo("No active connection. Use: emet connect save <host> [--user USER]")
+        sys.exit(1)
+    click.echo(f"host: {conn.get('host', '')}")
+    click.echo(f"user: {conn.get('user', '')}")
+    if "password" in conn:
+        click.echo("password: (set)")
+
+
+@main.command("view-bridge", short_help="View images and state from robot bridge")
+@click.option("--robot-ip", "--robot_ip", default="", help="Robot IP (default: active connection)")
+def view_bridge(robot_ip: str) -> None:
+    """Connect to the robot's ZMQ bridge and display head/EE camera images and state.
+    Use after starting the bridge on the robot (e.g. ros2 launch innate_mars_bridge server.launch.py).
+    """
+    sys.exit(_run_module("emet.app.view_bridge", ["--robot-ip", robot_ip] if robot_ip else []))
+
+
+@main.command(short_help="Deploy emet_core and innate_mars_bridge to robot")
+@click.option("--host", "-H", default=None, help="Robot host (default: active connection)")
+@click.option("--user", "-u", default=None, help="SSH user (default: from connection or root)")
+@click.option("--password", "-p", default=None, help="SSH password (or EMET_ROBOT_PASSWORD)")
+@click.option("--connection", "-c", "connection_name", default=None, help="Use saved connection by name")
+@click.option("--workspace", "-w", default="~/ament_ws", help="Remote ROS2 workspace path")
+@click.option("--emet-dir", default="~/emet", help="Remote dir for emet_core (e.g. ~/emet)")
+@click.option("--start-bridge", is_flag=True, help="Start bridge on robot after deploy (nohup in background)")
+def deploy(
+    host: str | None,
+    user: str | None,
+    password: str | None,
+    connection_name: str | None,
+    workspace: str,
+    emet_dir: str,
+    start_bridge: bool,
+) -> None:
+    """Deploy emet_core and innate_mars_bridge to the robot via rsync and SSH.
+
+    Syncs src/emet_core and src/innate_mars_bridge to the robot, runs pip install -e
+    for emet_core, and colcon build for the bridge. Use emet connect save <host> first
+    to set default host/user, or pass --host and --user.
+
+    Examples:
+      emet connect save 192.168.1.43 --user jetson1
+      emet deploy
+      emet deploy --host 192.168.1.43 --user jetson1 --start-bridge
+    """
+    from emet.deploy import deploy as deploy_impl
+
+    deploy_impl(
+        host=host,
+        user=user,
+        password=password,
+        connection_name=connection_name,
+        workspace=workspace,
+        emet_dir=emet_dir,
+        start_bridge=start_bridge,
+        root=_project_root(),
+    )
+
+
 @main.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 @click.argument("app", type=click.Choice(["dynamem", "graph-eqa", "mapping", "grasp", "chat", "ai_pickup", "timing"]))
 @click.option("--robot-ip", "--robot_ip", default="127.0.0.1", help="Robot or simulator IP")

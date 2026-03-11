@@ -41,8 +41,9 @@ cd home_robot_v3   # or your clone directory
 **Option A — one-shot script (recommended):**
 
 ```bash
-./install.sh              # dev extras, prompts for system deps
-./install.sh --sim -y     # + simulation, non-interactive
+./install.sh              # dev + sim (Robocasa/robosuite), prompts for system deps
+./install.sh -y           # non-interactive; sim install included by default
+./install.sh --no-sim     # skip simulation (no third_party clone)
 ./install.sh --no-sam2    # skip DynaMem/SAM2
 ```
 
@@ -55,6 +56,8 @@ uv sync --extra dev --extra sim --extra dynamem   # + DynaMem (SAM-2)
 ```
 
 The script installs system deps (e.g. `portaudio`, `espeak`, `ffmpeg`) and runs `uv sync` for you. For reproducible installs, a `uv.lock` is included; `uv sync` uses it automatically.
+
+**Robot or simulator only (lightweight):** To run only the ZMQ bridge on the robot (or a simulator backend) without torch/LLM/simulation stacks, install **emet-core** and the bridge for your robot: **Stretch** → `stretch_ros2_bridge`, **Innate Mars** → `innate_mars_bridge`. From the repo: `pip install -e src/emet_core` then build/install the bridge with colcon. See `src/emet_core/README.md` and `src/emet_core/BRIDGE_CONTRACT.md`.
 
 **3. Use the environment:**
 
@@ -70,8 +73,8 @@ uv run python -m emet.app.ai_pickup
 Run DynaMem in MuJoCo simulation in a few steps:
 
 ```bash
-# 1. Install (includes simulation + DynaMem/SAM2)
-./install.sh --sim -y
+# 1. Install (includes simulation + DynaMem/SAM2 by default)
+./install.sh -y
 
 # 2. Terminal 1 — start simulation server
 emet serve mujoco --use-robocasa
@@ -224,7 +227,7 @@ Clone the repo, then install with [Astral uv](https://docs.astral.sh/uv/) as in 
 pre-commit install
 ```
 
-For simulation: `uv sync --extra sim` (or `./install.sh --sim -y`). For DynaMem (SAM2): `uv sync --extra dynamem`.
+A plain `uv sync` works without cloning simulation repos. The full install script (`./install.sh`) includes simulation by default (clones third_party/robocasa+robosuite); use `--no-sim` to skip. Or run `emet install sim` after `uv sync`. For DynaMem (SAM2): `uv sync --extra dynamem`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for more information, and [debug](docs/debug.md) / [update](docs/update.md) for troubleshooting. You can test most code in [simulation](docs/simulation.md) without a physical robot.
 

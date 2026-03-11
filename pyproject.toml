@@ -74,6 +74,7 @@ dependencies = [
     "scikit-fmm",
     "open3d",
     "click>=8.1.8",
+    "paramiko>=3.0.0",
 ]
 
 [project.scripts]
@@ -92,8 +93,14 @@ discord = [
     "discord.py",
     "python-dotenv",
 ]
-# sim: empty by default so uv sync works without third_party/robocasa. Run: scripts/enable_sim_pyproject.py after install_simulation.sh
-sim = []
+sim = [
+    "mujoco>=3.3.0",  # Align with upstream robosuite; 3.2.6 was for older Stretch compat
+    "hello-robot-stretch-urdf",
+    "grpcio",
+    "click>=8.1.8",
+    "inputs>=0.5",
+    # robosuite and robocasa are installed editable from third_party by: emet install sim (or scripts/install_simulation.sh)
+]
 hand_tracker = [
     "mediapipe",
     "webcam",
@@ -110,9 +117,7 @@ override-dependencies = ["numpy>=1.24.4,<2", "numba>=0.58.1", "mujoco>=3.3.0"]
 
 [tool.uv.sources]
 "SAM-2" = { path = "third_party/segment-anything-2", editable = true }
-# Uncomment after running scripts/install_simulation.sh, then run scripts/enable_sim_pyproject.py
-# robosuite = { path = "third_party/robosuite", editable = true }
-# robocasa = { path = "third_party/robocasa", editable = true }
+# robosuite and robocasa: not in lockfile; install via emet install sim (clones third_party then uv pip install -e)
 
 [project.urls]
 Homepage = "https://github.com/hello-robot/stretchpy"
