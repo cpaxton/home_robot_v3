@@ -211,13 +211,13 @@ class DiscordBot:
             for channel in self.client.get_all_channels():
                 if channel.type == discord.ChannelType.text:
                     if channel in self.allowed_channels:
-                        print(f"Introducing myself to channel {channel.name}")
+                        _logger.debug(f"Introducing myself to channel {channel.name}")
                         try:
                             self.push_task(
                                 channel, message=self.greeting(), content=None, explicit=True
                             )
                         except Exception as e:
-                            print(colored("Error in introducing myself: " + str(e), "red"))
+                            _logger.error("Error in introducing myself:", str(e))
             self._started = True
 
         # Print queue length
@@ -225,40 +225,27 @@ class DiscordBot:
         try:
             task = self.task_queue.get_nowait()
 
-            # Peak at the next task
-            if self.task_queue.qsize() > 0:
-                print(
-                    "Next task:",
-                    self.task_queue.queue[0].message,
-                    self.task_queue.queue[0].channel.name,
-                )
-
-            # While the channel is the same and content is None...
+            # Merge consecutive same-channel text-only tasks
             while (
                 self.task_queue.qsize() > 0
                 and self.task_queue.queue[0].channel == task.channel
                 and self.task_queue.queue[0].content is None
             ):
-                # Pop the next task
                 extra_task = self.task_queue.get_nowait()
-                print("Popped task:", extra_task.message, extra_task.channel.name)
-
-                # Add this message to the current task message
                 if task.message is not None and extra_task.message is not None:
                     task.message += "\n" + extra_task.message
                 elif extra_task.message is not None:
                     task.message = extra_task.message
 
             if task.t + self.timeout < timeit.default_timer():
-                print("Dropping task due to timeout: ", task.message, task.channel.name)
+                _logger.debug("Dropping task due to timeout:", task.message)
                 return
 
-            print("Handling task from queue:", task)
             await self.handle_task(task)
         except queue.Empty:
-            await asyncio.sleep(0.1)  # Wait a bit before checking again
+            await asyncio.sleep(0.1)
         except Exception as e:
-            print(colored("Error in processing queue: " + str(e), "red"))
+            _logger.error("Error in processing queue:", str(e))
             raise e
 
     def greeting(self) -> str:
@@ -296,37 +283,21 @@ class DiscordBot:
                 if message.channel not in self.allowed_channels:
                     self.allowed_channels.visit(message.channel)
 
-            print("Message content:", message.content)
+            _logger.debug("Message content:", message.content)
             response = self.on_message(message)
 
             if response is not None:
-                print("Sending response:", response)
+                _logger.debug("Sending response:", response)
                 await message.channel.send(response)
-                print("Done")
-
-            print("-------------")
 
     def on_ready(self):
         """Event listener called when the bot has switched from offline to online."""
-        print(f"{self.client.user} has connected to Discord!")
+        _logger.debug(f"{self.client.user} has connected to Discord!")
         guild_count = 0
-
-        print("Bot User name:", self.client.user.name)
-        print("Bot Global name:", self.client.user.global_name)
-
-        # This is from https://builtin.com/software-engineering-perspectives/discord-bot-python
-        # LOOPS THROUGH ALL THE GUILD / SERVERS THAT THE BOT IS ASSOCIATED WITH.
         for guild in self.client.guilds:
-            # PRINT THE SERVER'S ID AND NAME.
-            print(f"- {guild.id} (name: {guild.name})")
-
-            # INCREMENTS THE GUILD COUNTER.
+            _logger.debug(f"- {guild.id} (name: {guild.name})")
             guild_count = guild_count + 1
-
-        # PRINTS HOW MANY GUILDS / SERVERS THE BOT IS IN.
-        print("This bot is in " + str(guild_count) + " guilds.")
-
-        print("Starting the message processing queue.")
+        _logger.debug("This bot is in", guild_count, "guilds.")
         self.process_queue.start()
 
     def on_message(self, message, verbose: bool = False):

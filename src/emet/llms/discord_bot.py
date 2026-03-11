@@ -8,6 +8,7 @@
 # license information maybe found below, if so.
 
 import datetime
+import os
 import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -84,8 +85,7 @@ class EmetDiscordBot(DiscordBot):
         self.kwargs = kwargs
         self.prompt = prompt
 
-        # LLM info
-        self.home_channel = home_channel
+        self.home_channel = os.environ.get("EMET_DISCORD_CHANNEL", home_channel)
         self.sent_prompt = False
 
         if kwargs is None:
@@ -166,18 +166,34 @@ class EmetDiscordBot(DiscordBot):
             logger.debug(f"Joining Server {guild.id} (name: {guild.name})")
             guild_count = guild_count + 1
 
+            found_home = False
+            first_text_channel = None
             for channel in guild.text_channels:
+                if first_text_channel is None:
+                    first_text_channel = channel
                 if channel.name == self.home_channel:
-                    logger.debug(f"Adding home channel {channel} to the allowed channels.")
+                    logger.info(f"Found home channel: #{channel.name}")
                     self.allowed_channels.add_home(channel)
+                    found_home = True
                     break
+
+            if not found_home and first_text_channel is not None:
+                logger.warning(
+                    f"Home channel '{self.home_channel}' not found in {guild.name}. "
+                    f"Using #{first_text_channel.name} instead. "
+                    f"Set EMET_DISCORD_CHANNEL or create a #{self.home_channel} channel."
+                )
+                self.allowed_channels.add_home(first_text_channel)
 
         self.next_plan = None
         self._plan_lock = threading.Lock()
         self._plan_thread = None
 
-        logger.debug("Allowed channels:", self.allowed_channels)
-        logger.debug("This bot is in", guild_count, "guild(s).")
+        if len(self.allowed_channels) == 0:
+            logger.error("No Discord channels found! Messages will not be sent.")
+            logger.error("Create a #talk-to-robot channel or set EMET_DISCORD_CHANNEL=<channel-name>.")
+        else:
+            logger.info("Discord channels:", len(self.allowed_channels), "in", guild_count, "guild(s).")
 
         self.process_queue.start()
 
