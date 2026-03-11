@@ -11,9 +11,14 @@ import numpy as np
 
 
 class Tool:
-    """A single agent tool: name, description, JSON Schema parameters, callable, and executor mapping."""
+    """A single agent tool: name, description, JSON Schema parameters, callable, and executor mapping.
 
-    __slots__ = ("name", "description", "parameters", "func", "executor_commands")
+    If returns_info is True, the tool returns text that the LLM should see and
+    summarize for the user (e.g. query_memory, describe_scene).  The agent loop
+    will feed the result back to the LLM for a follow-up response.
+    """
+
+    __slots__ = ("name", "description", "parameters", "func", "executor_commands", "returns_info")
 
     def __init__(
         self,
@@ -22,12 +27,14 @@ class Tool:
         parameters: Dict[str, Any],
         func: Callable[..., Any],
         executor_commands: Optional[Callable[[Dict[str, Any]], List[Tuple[str, str]]]] = None,
+        returns_info: bool = False,
     ):
         self.name = name
         self.description = description
         self.parameters = parameters
         self.func = func
         self.executor_commands = executor_commands
+        self.returns_info = returns_info
 
     def schema(self) -> Dict[str, Any]:
         """Return OpenAI-style tool schema (for tools param or prompt generation)."""
@@ -92,6 +99,7 @@ def get_tools(context: Dict[str, Any]) -> List[Tool]:
             "required": ["question"],
         },
         func=query_memory,
+        returns_info=True,
     ))
 
     # -- send_image ----------------------------------------------------------
@@ -187,6 +195,7 @@ def get_tools(context: Dict[str, Any]) -> List[Tool]:
         description="Describe what you see from the robot's cameras.",
         parameters=_NO_PARAMS,
         func=describe_scene,
+        returns_info=True,
     ))
 
     # -- say -----------------------------------------------------------------

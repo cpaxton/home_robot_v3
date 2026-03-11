@@ -31,6 +31,9 @@ Respond with ONLY a JSON object. No other text before or after.
 Each tool invocation: {"name": "<tool_name>", "arguments": {<key>: <value>, ...}}
 If no action is needed, set "tool_calls" to [].
 
+When you call query_memory or describe_scene, the results will be provided back to you.
+You must then summarize them for the user in a follow-up response (no more tool calls).
+
 # Examples
 
 User: "Explore the room."
@@ -47,6 +50,12 @@ User: "Take a picture and send it to me."
 
 User: "What objects can you see?"
 {"tool_calls": [{"name": "query_memory", "arguments": {"question": "What objects are visible?"}}], "message": "Let me check."}
+
+[Tool results]
+[query_memory] Yes, I can see a blue cube and a red cylinder. (Confidence: True)
+
+Summarize these results for the user in your message. Do not call any more tools.
+{"tool_calls": [], "message": "I can see a blue cube and a red cylinder in the scene."}
 
 User: "Wave hello!"
 {"tool_calls": [{"name": "wave", "arguments": {}}], "message": "Hi!"}

@@ -28,6 +28,9 @@ from emet.utils.logger import Logger
 
 logger = Logger(__name__)
 
+# Maximum follow-up LLM calls per user turn (prevents infinite loops)
+_MAX_TOOL_ROUNDS = 3
+
 
 # ---------------------------------------------------------------------------
 # Chat log
@@ -65,14 +68,16 @@ def _dispatch_tool_calls(
     executor: DynamemTaskExecutor,
     chat_log: Optional[ChatLog] = None,
     debug: bool = False,
-) -> Tuple[bool, List[str]]:
+) -> Tuple[bool, List[str], bool]:
     """Execute a list of parsed tool_calls.
 
-    Returns (continue_running, list_of_result_strings).
+    Returns (continue_running, list_of_result_strings, has_info_results).
     continue_running is False if quit was requested.
+    has_info_results is True if any tool with returns_info=True produced output.
     """
     executor_cmds: List[Tuple[str, str]] = []
     results: List[str] = []
+    has_info = False
 
     for tc in tool_calls:
         name = tc.get("name", "")
@@ -92,6 +97,8 @@ def _dispatch_tool_calls(
                 result = tool.func(**args) if args else tool.func()
                 result_str = str(result) if result is not None else "ok"
                 results.append(f"[{name}] {result_str}")
+                if tool.returns_info and result is not None and result != "":
+                    has_info = True
                 if result is not None and result != "":
                     print(colored(f"[{name}]", "cyan"), result_str)
             except Exception as e:
@@ -101,10 +108,13 @@ def _dispatch_tool_calls(
                 results.append(err)
 
     if not executor_cmds:
-        return True, results
+        if chat_log:
+            for r in results:
+                chat_log.log("tool", r)
+        return True, results, has_info
 
     if any(c[0] == "quit" for c in executor_cmds):
-        return False, results
+        return False, results, has_info
 
     ok = executor(executor_cmds)
     cmd_names = [c[0] for c in executor_cmds]
@@ -114,7 +124,29 @@ def _dispatch_tool_calls(
         for r in results:
             chat_log.log("tool", r)
 
-    return ok, results
+    return ok, results, has_info
+
+
+# ---------------------------------------------------------------------------
+# LLM call helper
+# ---------------------------------------------------------------------------
+
+def _call_llm(
+    llm_client: Any,
+    text: str,
+    openai_tools_param: Optional[list],
+    debug: bool,
+) -> Tuple[str, float]:
+    """Call the LLM and return (raw_response, elapsed_seconds)."""
+    t0 = timeit.default_timer()
+    try:
+        if openai_tools_param is not None:
+            raw = llm_client(text, verbose=debug, tools=openai_tools_param)
+        else:
+            raw = llm_client(text, verbose=debug)
+    except TypeError:
+        raw = llm_client(text)
+    return raw, timeit.default_timer() - t0
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +251,7 @@ def run_agent_with_robot(
             if isinstance(llm_client, OpenaiClient):
                 openai_tools_param = [t.schema() for t in tools]
         except Exception as e:
-            logger.warning("LLM failed to load (%s): %s", llm, e)
+            logger.warning("LLM failed to load (%s):", llm, e)
             print(colored("Agent mode requires an LLM; it failed to load.", "red"))
             print(colored("Fix the LLM (e.g. --llm, device) or run with --no-llm for letter commands only.", "yellow"))
             robot.stop()
@@ -240,6 +272,10 @@ def run_agent_with_robot(
 
     chat_log.log("system", str(prompt_builder) if prompt_builder else "(no LLM)")
 
+    def _send_to_discord(text: str) -> None:
+        if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
+            discord_bot.push_task_to_all_channels(message=f"**{agent_name}:** {text}")
+
     ok = True
     while ok:
         update_xyt()
@@ -255,47 +291,68 @@ def run_agent_with_robot(
                 break
 
             chat_log.log("user", user_text)
-
             if debug_llm:
                 print(colored(f"[DEBUG] User: {user_text!r}", "yellow"))
 
-            t0 = timeit.default_timer()
-            try:
-                if openai_tools_param is not None:
-                    raw_response = llm_client(user_text, verbose=debug_llm, tools=openai_tools_param)
-                else:
-                    raw_response = llm_client(user_text, verbose=debug_llm)
-            except TypeError:
-                raw_response = llm_client(user_text)
-            t1 = timeit.default_timer()
-            elapsed = t1 - t0
+            # --- Multi-turn tool-use loop ---
+            # The LLM may call tools that return information (e.g. query_memory).
+            # When that happens we feed the results back and let the LLM summarize.
+            current_input = user_text
+            for _round in range(_MAX_TOOL_ROUNDS):
+                raw_response, elapsed = _call_llm(
+                    llm_client, current_input, openai_tools_param, debug_llm,
+                )
 
-            if debug_llm:
-                print(colored(f"[DEBUG] Raw response ({elapsed:.2f}s):", "yellow"), raw_response[:500])
+                if debug_llm:
+                    print(colored(f"[DEBUG] Raw response ({elapsed:.2f}s):", "yellow"), raw_response[:500])
 
-            parsed = parse_tool_calls_response(raw_response)
-            tool_calls = parsed.get("tool_calls") or []
-            message = parsed.get("message") or ""
+                parsed = parse_tool_calls_response(raw_response)
+                tool_calls = parsed.get("tool_calls") or []
+                message = parsed.get("message") or ""
 
-            if debug_llm:
-                print(colored("[DEBUG] Parsed:", "blue"), json.dumps(parsed, indent=2))
+                if debug_llm:
+                    print(colored("[DEBUG] Parsed:", "blue"), json.dumps(parsed, indent=2))
 
-            chat_log.log("assistant", message, tool_calls=tool_calls, raw=raw_response, time_s=elapsed)
+                chat_log.log("assistant", message, tool_calls=tool_calls, raw=raw_response, time_s=elapsed)
 
-            if message:
-                print(colored(f"{agent_name}:", "blue"), message)
-                # Relay text reply to Discord so remote users see it
-                if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
-                    discord_bot.push_task_to_all_channels(message=f"**{agent_name}:** {message}")
+                # No tool calls — this is the final answer
+                if not tool_calls:
+                    if message:
+                        print(colored(f"{agent_name}:", "blue"), message)
+                        _send_to_discord(message)
+                    break
 
-            if tool_calls:
-                ok, results = _dispatch_tool_calls(
+                # Print the intermediate message (e.g. "Let me check my memory.")
+                if message:
+                    print(colored(f"{agent_name}:", "blue"), message)
+
+                # Execute tool calls
+                ok, results, has_info = _dispatch_tool_calls(
                     tool_calls, tools_by_name, executor, chat_log=chat_log, debug=debug_llm,
                 )
-                # Feed tool results back to the LLM conversation history so it has context
-                if results and hasattr(llm_client, "add_history"):
-                    result_summary = "; ".join(results)
-                    llm_client.add_history({"role": "user", "content": f"[Tool results: {result_summary}]"})
+                if not ok:
+                    break
+
+                result_text = "\n".join(results)
+
+                if has_info:
+                    # Feed tool results back to LLM for summarization
+                    followup = f"[Tool results]\n{result_text}\n\nSummarize these results for the user in your message. Do not call any more tools."
+                    if hasattr(llm_client, "add_history"):
+                        llm_client.add_history({"role": "assistant", "content": raw_response})
+                        llm_client.add_history({"role": "user", "content": followup})
+                    current_input = followup
+                    if debug_llm:
+                        print(colored("[DEBUG] Info tools returned results; requesting LLM follow-up", "yellow"))
+                    continue
+                else:
+                    # Action-only tools: send the initial message and we're done
+                    if message:
+                        _send_to_discord(message)
+                    if results and hasattr(llm_client, "add_history"):
+                        llm_client.add_history({"role": "assistant", "content": raw_response})
+                        llm_client.add_history({"role": "user", "content": f"[Tool results]\n{result_text}"})
+                    break
             continue
 
         # --- Manual (no-LLM) path ---
