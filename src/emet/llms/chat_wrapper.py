@@ -74,16 +74,31 @@ class LLMChatWrapper:
         if len(input_text) == 0:
             return None
 
-        # Get the response and time it
+        if verbose:
+            # Show what goes into the LLM
+            system_prompt = getattr(self.llm_client, "system_prompt", None) or getattr(
+                self.llm_client, "_prompt", ""
+            )
+            print(colored("[DEBUG] System prompt:", "yellow"))
+            print("-" * 40)
+            print(system_prompt[:2000] + ("..." if len(system_prompt) > 2000 else ""))
+            print("-" * 40)
+            print(colored("[DEBUG] User input:", "yellow"), repr(input_text))
+            print("-" * 40)
+
+        # Get the response and time it (pass verbose so client can print messages/raw too)
         t0 = timeit.default_timer()
-        assistant_response = self.llm_client(input_text)
+        try:
+            assistant_response = self.llm_client(input_text, verbose=verbose)
+        except TypeError:
+            assistant_response = self.llm_client(input_text)
         t1 = timeit.default_timer()
 
         response = self.prompt.parse_response(assistant_response)
 
         if verbose:
-            # Decode and print the result
-            print(colored("Response:", "blue"), response)
+            print(colored("[DEBUG] Raw LLM response:", "yellow"), repr(assistant_response))
+            print(colored("[DEBUG] Parsed response:", "blue"), response)
             print("-" * 80)
             print("Time taken:", t1 - t0)
             print("-" * 80)

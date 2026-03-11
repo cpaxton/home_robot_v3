@@ -113,12 +113,16 @@ def main() -> None:
     _ensure_uv_project()
 
 
-@main.command(short_help="Start MuJoCo simulation server")
-@click.argument("backend", type=click.Choice(["mujoco"]), default="mujoco")
+@main.command(short_help="Start simulation server (mujoco or robocasa)")
+@click.argument(
+    "backend",
+    type=click.Choice(["mujoco", "robocasa"]),
+    default="mujoco",
+)
 @click.option(
     "--use-robocasa",
     is_flag=True,
-    help="Use Robocasa for scene generation. List envs: emet serve mujoco --list-robocasa-tasks",
+    help="Use Robocasa for scene generation (ignored if backend is robocasa).",
 )
 @click.option("--headless", is_flag=True, help="Run without native viewer")
 @click.option(
@@ -143,7 +147,14 @@ def main() -> None:
     "--list-robocasa-tasks",
     "list_robocasa_tasks",
     is_flag=True,
-    help="List all supported Robocasa env names and exit (use with --robocasa-task when serving).",
+    help="List all Robocasa environment names and exit. Use: emet serve robocasa --list-robocasa-tasks or emet robocasa list.",
+)
+@click.option(
+    "--robocasa-task",
+    "--robocasa_task",
+    "robocasa_task",
+    default="",
+    help="Robocasa task name (e.g. PickPlaceCounterToCabinet). Use --list-robocasa-tasks to see all.",
 )
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
 def serve(
@@ -156,23 +167,36 @@ def serve(
     seed: int,
     port_offset: int,
     list_robocasa_tasks: bool,
+    robocasa_task: str,
     extra: tuple[str, ...],
 ) -> None:
     """Start a simulation server.
 
+    Backends:
+      mujoco   MuJoCo server (default). Add --use-robocasa for Robocasa scenes.
+      robocasa Shortcut for mujoco with Robocasa (same as emet serve mujoco --use-robocasa).
+
+    List Robocasa environments (requires sim extra: uv sync -e sim after emet install sim):
+      emet robocasa list
+      emet serve robocasa --list-robocasa-tasks
+
     Examples:
       emet serve
       emet serve mujoco --headless
-      emet serve mujoco --use-robocasa
-      emet serve mujoco --list-robocasa-tasks   # list all Robocasa env names
-      emet serve mujoco --port-offset 100   # use ports 4501–4504 if default in use
+      emet serve robocasa
+      emet serve robocasa --robocasa-task PickPlaceCounterToCabinet
+      emet serve robocasa --list-robocasa-tasks
+      emet serve mujoco --use-robocasa --port-offset 100
     """
-    if backend == "mujoco":
+    use_robocasa_flag = use_robocasa or (backend == "robocasa")
+    if backend == "mujoco" or backend == "robocasa":
         args = list(extra)
-        if use_robocasa:
+        if use_robocasa_flag:
             args.append("--use-robocasa")
         if list_robocasa_tasks:
             args.append("--list-robocasa-tasks")
+        if robocasa_task:
+            args.extend(["--robocasa-task", robocasa_task])
         if headless:
             args.append("--headless")
         if no_cameras:
@@ -188,6 +212,17 @@ def serve(
     else:
         click.echo(f"Unknown backend: {backend}", err=True)
         sys.exit(1)
+
+
+@main.group("robocasa", short_help="Robocasa simulation helpers (requires sim extra)")
+def robocasa_cmd() -> None:
+    """List Robocasa environments or run the server. Requires: emet install sim, then uv sync -e sim."""
+
+
+@robocasa_cmd.command("list", short_help="List all Robocasa environment names")
+def robocasa_list() -> None:
+    """Print registered Robocasa task names. Use with: emet serve robocasa --robocasa-task <name>."""
+    sys.exit(_run_module("emet.simulation.mujoco_server", ["--use-robocasa", "--list-robocasa-tasks"]))
 
 
 def _kill_processes_on_port(port: int) -> bool:

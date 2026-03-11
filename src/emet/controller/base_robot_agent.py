@@ -148,3 +148,17 @@ class BaseRobotAgent(ABC):
     def get_voxel_map(self):
         """Return the voxel map in use by this controller. Subclasses implement."""
         pass
+
+    def robot_say(self, msg: str) -> str:
+        """Say a message: optional TTS on robot, send to Discord if bot is set, return for chatbot.
+
+        Subclasses can override. Base implementation: strip quotes, call robot.say if available,
+        push to Discord via self.discord_bot if set, and return the message string.
+        """
+        msg = msg.strip("'\"").strip()
+        if hasattr(self.robot, "say") and callable(self.robot.say):
+            self.robot.say(msg)
+        discord_bot = getattr(self, "discord_bot", None)
+        if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
+            discord_bot.push_task_to_all_channels(message=msg)
+        return msg

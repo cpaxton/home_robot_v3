@@ -84,7 +84,7 @@ class DynamemTaskExecutor:
             raise TypeError(f"Expected AbstractRobotClient, got {type(self.robot)}")
 
         # Create semantic sensor if visual servoing is enabled
-        print("- Create semantic sensor if visual servoing is enabled")
+        logger.debug("- Create semantic sensor if visual servoing is enabled")
         if self.visual_servo:
             self.parameters["detection"]["module"] = "yoloe" if self.cpu_only else "owlsam"
             self.semantic_sensor = create_semantic_sensor(
@@ -96,7 +96,7 @@ class DynamemTaskExecutor:
             self.parameters["encoder"] = None
             self.semantic_sensor = None
 
-        print("- Start robot agent with data collection")
+        logger.debug("- Start robot agent with data collection")
         self.agent = RobotAgent(
             self.robot,
             self.parameters,
@@ -266,7 +266,10 @@ class DynamemTaskExecutor:
 
         if response is None or len(response) == 0:
             logger.error("No commands to execute!")
-            self.agent.robot_say("I'm sorry, I didn't understand that.")
+            said = self.agent.robot_say("I'm sorry, I didn't understand that.")
+            if said:
+                from termcolor import colored
+                print(colored("Robot:", "blue"), said)
             return True
 
         # Dynamem aims to life long robot, we should not reset the robot's memory.

@@ -109,6 +109,7 @@ class EmetDiscordBot(DiscordBot):
             if executor is not None:
                 self.executor = executor
                 self.executor.discord_bot = self  # type: ignore
+                self.executor.agent.discord_bot = self  # type: ignore
             else:
                 self.executor = DynamemTaskExecutor(
                     robot,
@@ -123,6 +124,7 @@ class EmetDiscordBot(DiscordBot):
                     manipulation_only=manipulation_only,
                     discord_bot=self,
                 )  # type: ignore
+                self.executor.agent.discord_bot = self  # type: ignore
         elif self.task == "eqa":
             self.executor = EQAExecuter(agent, discord_bot=self)  # type: ignore
         elif self.task == "graph_eqa":

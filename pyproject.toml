@@ -92,7 +92,10 @@ discord = [
     "discord.py",
     "python-dotenv",
 ]
-# sim: empty by default so uv sync works without third_party/robocasa. Run: scripts/enable_sim_pyproject.py after install_simulation.sh
+# sim: empty by default so uv sync works without third_party. For emet serve robocasa / robocasa list:
+#   emet install sim   (clones third_party/robosuite, robocasa)
+#   python scripts/enable_sim_pyproject.py
+#   uv sync -e sim
 sim = []
 hand_tracker = [
     "mediapipe",

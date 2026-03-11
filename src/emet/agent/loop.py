@@ -28,10 +28,11 @@ def run_agent_with_robot(
     input_path: Optional[str] = None,
     discord: bool = False,
     use_llm: bool = False,
-    llm: str = "qwen25-3B-Instruct",
+    llm: str = "qwen35-4B",
     server_ip: str = "127.0.0.1",
     skip_confirmations: bool = True,
     explore_iter: int = 3,
+    debug_llm: bool = False,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools."""
@@ -73,7 +74,12 @@ def run_agent_with_robot(
 
     discord_bot = None
     if discord and os.environ.get("DISCORD_TOKEN"):
-        from emet.llms.discord_bot import EmetDiscordBot
+        try:
+            from emet.llms.discord_bot import EmetDiscordBot
+        except ImportError as e:
+            print(colored("Discord support requires the discord extra. Install with: uv sync -e discord", "red"))
+            print(colored("(Or: pip install discord.py)", "yellow"))
+            raise SystemExit(1) from e
 
         class AgentPlaceholder:
             def __init__(self, exec_obj):
@@ -90,6 +96,7 @@ def run_agent_with_robot(
         )
         context["discord_bot"] = discord_bot
         executor.discord_bot = discord_bot
+        executor.agent.discord_bot = discord_bot
         bot_thread = threading.Thread(target=discord_bot.run, daemon=True)
         bot_thread.start()
         print(colored("Discord bot started (DISCORD_TOKEN). Messages will be handled.", "green"))
@@ -102,19 +109,30 @@ def run_agent_with_robot(
     llm_client = None
     chat_wrapper = None
     if use_llm:
-        prompt = PickupPromptBuilder()
-        llm_client = get_llm_client(llm, prompt=prompt)
-        chat_wrapper = LLMChatWrapper(llm_client, prompt=prompt)
-
+        try:
+            prompt = PickupPromptBuilder()
+            llm_client = get_llm_client(llm, prompt=prompt)
+            chat_wrapper = LLMChatWrapper(llm_client, prompt=prompt)
+        except Exception as e:
+            logger.warning("LLM failed to load (%s): %s", llm, e)
+            print(colored("Agent mode requires an LLM; it failed to load.", "red"))
+            print(colored("Fix the LLM (e.g. --llm, device) or run with --no-llm for letter commands only.", "yellow"))
+            robot.stop()
+            return
     tools = get_tools(context)
     print(colored("Agent tools: " + ", ".join(t["name"] for t in tools), "yellow"))
-    print(colored("Enter mode [E=explore / M=pick+place / Q=question / P=send picture / Q quit]: or use natural language if LLM enabled.", "green"))
+    if use_llm and chat_wrapper is not None:
+        print(colored(f"LLM enabled ({llm}). Say what you want the robot to do.", "green"))
+    else:
+        print(colored("Enter mode [E=explore / M=pick+place / Q=question / P=send picture / Q quit]:", "green"))
+    if debug_llm:
+        print(colored("Debug: full prompt, raw and parsed LLM response will be printed.", "yellow"))
 
     ok = True
     while ok:
         update_xyt()
         if use_llm and chat_wrapper is not None:
-            llm_response = chat_wrapper.query(verbose=False)
+            llm_response = chat_wrapper.query(verbose=debug_llm)
             if llm_response is None:
                 continue
             if isinstance(llm_response, list) and len(llm_response) == 1 and llm_response[0][0] == "quit":
@@ -161,6 +179,15 @@ def run_agent_with_robot(
             ok = executor([("find", text)])
             continue
 
+        # When LLM is enabled, all natural language goes through the LLM path above; we should
+        # not reach here for free-form input. If we do (e.g. chat_wrapper failed to load), don't
+        # treat unknown input as pickup.
+        if use_llm:
+            if chat_wrapper is None:
+                print(colored("LLM did not load; use letter commands only: E / M / Q / P / FIND.", "yellow"))
+            else:
+                print(colored("Unexpected input. Use E, M, Q, P, or natural language.", "yellow"))
+            continue
         ok = executor([("pickup", line), ("place", "")]) if line else True
 
     print_memory_view_help_on_quit(getattr(executor, "_last_memory_save_path", None))

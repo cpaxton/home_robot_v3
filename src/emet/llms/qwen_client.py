@@ -48,6 +48,15 @@ def get_qwen_variants():
     return qwen_variants
 
 
+def get_qwen35_variants():
+    """Return Qwen 3.5 model variant names (e.g. qwen35-4B, qwen35-9B)."""
+    return [f"qwen35-{s}" for s in qwen35_sizes]
+
+
+# Qwen 3.5 sizes on HuggingFace (Qwen/Qwen3.5-*)
+qwen35_sizes = ["0.8B", "2B", "4B", "9B"]
+
+
 class Qwen25Client(AbstractLLMClient):
     def __init__(
         self,
@@ -59,6 +68,7 @@ class Qwen25Client(AbstractLLMClient):
         max_tokens: int = 4096,
         device: str = "cuda",
         quantization: Optional[str] = "int4",
+        version: Optional[str] = None,
     ):
         super().__init__(prompt, prompt_kwargs)
         assert device in ["cuda", "mps", "cpu"], f"Invalid device: {device}"
@@ -69,13 +79,18 @@ class Qwen25Client(AbstractLLMClient):
                 UserWarning,
                 stacklevel=2,
             )
-        assert model_type in qwen_typing_options, f"Invalid model type: {model_type}"
-        assert model_size in qwen_sizes[model_type], f"Invalid model size: {model_size}"
-        assert fine_tuning in [None, "Instruct"], f"Invalid fine-tuning: {fine_tuning}"
+        if version == "3.5":
+            assert model_size in qwen35_sizes, f"Invalid Qwen 3.5 size: {model_size}, use one of {qwen35_sizes}"
+        else:
+            assert model_type in qwen_typing_options, f"Invalid model type: {model_type}"
+            assert model_size in qwen_sizes[model_type], f"Invalid model size: {model_size}"
+            assert fine_tuning in [None, "Instruct"], f"Invalid fine-tuning: {fine_tuning}"
 
         self.max_tokens = max_tokens
 
-        if model_type == "Deepseek":
+        if version == "3.5":
+            model_name = f"Qwen/Qwen3.5-{model_size}"
+        elif model_type == "Deepseek":
             model_name = f"deepseek-ai/DeepSeek-R1-Distill-Qwen-{model_size}"
         elif model_type is None:
             if fine_tuning is None:

@@ -17,7 +17,7 @@ from .prompts.object_manip_nav_prompt import ObjectManipNavPromptBuilder
 from .prompts.ok_robot_prompt import OkRobotPromptBuilder
 from .prompts.pickup_prompt import PickupPromptBuilder
 from .prompts.simple_prompt import SimpleStretchPromptBuilder
-from .qwen_client import Qwen25Client, get_qwen_variants
+from .qwen_client import Qwen25Client, get_qwen_variants, get_qwen35_variants
 
 # This is a list of all the modules that are imported when you use the import * syntax.
 # The __all__ variable is used to define what symbols get exported when from a module when you use the import * syntax.
@@ -43,9 +43,11 @@ llms = {
 }
 
 
-# Add all the various Qwen25 variants
+# Add all the various Qwen 2.5 and Qwen 3.5 variants
 qwen_variants = get_qwen_variants()
 llms.update({variant: Qwen25Client for variant in qwen_variants})
+for variant in get_qwen35_variants():
+    llms[variant] = Qwen25Client
 llms.update({variant: GemmaClient for variant in ["gemma4b", "gemma1b"]})
 
 
@@ -151,12 +153,14 @@ def get_llm_client(
         model_size, typing_option, fine_tuning, quantization_option = process_incoming_qwen_types(
             client_type
         )
+        version = "3.5" if client_type.startswith("qwen35") else None
         return Qwen25Client(
             prompt,
             model_size=model_size,
             fine_tuning=fine_tuning,
             model_type=typing_option,
             quantization=quantization_option,
+            version=version,
             **kwargs,
         )
     else:
