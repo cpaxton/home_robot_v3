@@ -72,23 +72,28 @@ def get_tools(context: Dict[str, Any]) -> List[Tool]:
 
     # -- query_memory --------------------------------------------------------
     def query_memory(question: str) -> str:
-        executor = context.get("executor")
         memory_backend = context.get("memory_backend")
-        if executor is not None and hasattr(executor, "agent"):
-            agent = executor.agent
-            if hasattr(agent, "run_eqa"):
-                discord_text, relevant_images = agent.run_eqa(question)
-                return discord_text or "No answer."
         if memory_backend is not None and hasattr(memory_backend, "query_answer"):
             try:
                 xyt = context.get("xyt_for_query")
                 planner = context.get("planner")
                 out = memory_backend.query_answer(question, xyt, planner)
                 reasoning, answer, confidence, _, _, relevant_images = out[:6]
-                return f"{answer}. (Confidence: {confidence})"
+                return f"{answer} (Confidence: {confidence})"
             except NotImplementedError:
                 pass
-        return "Memory or EQA not available."
+        # Fallback: check if the object is in the voxel map via localize_text
+        executor = context.get("executor")
+        if executor is not None and hasattr(executor, "agent"):
+            voxel_map = executor.agent.get_voxel_map()
+            if voxel_map is not None and hasattr(voxel_map, "localize_text"):
+                result = voxel_map.localize_text(question, return_debug=True)
+                point = result[0] if isinstance(result, (list, tuple)) else result
+                if point is not None:
+                    coords = point.squeeze()
+                    return f"Yes, found at approximately ({coords[0]:.2f}, {coords[1]:.2f}, {coords[2]:.2f})."
+                return "I haven't seen that in my memory."
+        return "Memory not available."
 
     tools.append(Tool(
         name="query_memory",

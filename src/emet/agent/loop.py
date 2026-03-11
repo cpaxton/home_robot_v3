@@ -158,7 +158,7 @@ def run_agent_with_robot(
     input_path: Optional[str] = None,
     discord: bool = False,
     use_llm: bool = False,
-    llm: str = "qwen35-4B",
+    llm: str = "qwen35-9B",
     server_ip: str = "127.0.0.1",
     skip_confirmations: bool = True,
     explore_iter: int = 3,
@@ -281,6 +281,12 @@ def run_agent_with_robot(
     def _send_to_discord(text: str) -> None:
         if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
             discord_bot.push_task_to_all_channels(message=f"**{agent_name}:** {text}")
+
+    # Startup greeting
+    greeting = f"Hello! I'm {agent_name}. I'm online and ready to help."
+    print(colored(f"{agent_name}:", "blue"), greeting)
+    _send_to_discord(greeting)
+    chat_log.log("assistant", greeting)
 
     # Command queue for non-interactive / scripted mode
     cmd_queue: List[str] = list(commands) if commands else []

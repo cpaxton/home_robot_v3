@@ -22,8 +22,8 @@ from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
 
 
-# Default: Qwen 3.5 4B (good balance of quality and speed for agent)
-DEFAULT_AGENT_LLM = "qwen35-4B"
+# Default: Qwen 3.5 9B (good quality on 24GB GPU; use qwen35-4B if VRAM is tight)
+DEFAULT_AGENT_LLM = "qwen35-9B"
 
 
 @click.command()
