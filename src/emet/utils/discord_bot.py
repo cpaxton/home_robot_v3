@@ -26,6 +26,7 @@
 
 import asyncio
 import io
+import logging
 import os
 import queue
 import threading
@@ -33,6 +34,9 @@ import timeit
 from dataclasses import dataclass
 from itertools import chain
 from typing import Any, Dict, List, Optional
+
+# Suppress "PyNaCl/davey not installed, voice will NOT be supported" — we don't use voice.
+logging.getLogger("discord.client").setLevel(logging.ERROR)
 
 import discord
 from discord.ext import commands, tasks
