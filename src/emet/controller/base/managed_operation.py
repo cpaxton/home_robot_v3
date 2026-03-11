@@ -12,7 +12,7 @@ from typing import Optional
 
 from termcolor import colored
 
-from emet.controller.robot_agent import RobotAgent
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.core.robot import AbstractRobotClient
 from emet.core.task import Operation
 from emet.mapping.instance import Instance

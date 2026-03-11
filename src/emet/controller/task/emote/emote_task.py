@@ -15,7 +15,7 @@ from emet.controller.operations import (
     ShakeHeadOperation,
     WaveOperation,
 )
-from emet.controller.robot_agent import RobotAgent
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.core.task import Operation, Task
 
 

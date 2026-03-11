@@ -12,7 +12,7 @@
 import click
 
 # import emet.utils.logger as logger
-from emet.controller.robot_agent import RobotAgent
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.task.pickup import PickupExecutor
 from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.core import get_parameters

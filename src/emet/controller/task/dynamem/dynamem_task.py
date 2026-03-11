@@ -16,7 +16,7 @@ import torch
 from PIL import Image
 
 from emet.controller.operations import GraspObjectOperation
-from emet.controller.robot_agent_dynamem import RobotAgent
+from emet.controller.controller_dynamem import RobotAgent
 from emet.controller.task.emote import EmoteTask
 from emet.controller.task.pickup.hand_over_task import HandOverTask
 from emet.core import AbstractRobotClient, Parameters

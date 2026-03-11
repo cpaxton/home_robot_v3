@@ -14,7 +14,7 @@ import time
 import click
 import numpy as np
 
-from emet.controller.robot_agent import RobotAgent
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.core import get_parameters
 from emet.utils.point_cloud import show_point_cloud

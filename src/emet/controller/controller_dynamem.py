@@ -35,7 +35,7 @@ from emet.controller.manipulation.dynamem_manipulation.grasper_utils import (
     pickup,
     process_image_for_placing,
 )
-from emet.controller.base_robot_agent import BaseRobotAgent
+from emet.controller.base_controller import BaseController
 from emet.audio.text_to_speech import PiperTextToSpeech
 from emet.core.interfaces import Observations
 from emet.core.parameters import Parameters
@@ -65,7 +65,7 @@ INIT_HEAD_PAN = -1.57
 INIT_HEAD_TILT = -0.65
 
 
-class DynamemController(BaseRobotAgent):
+class DynamemController(BaseController):
     """
     DynaMem robot controller. Extends base with DynaMem-specific mapping and manipulation.
     https://dynamem.github.io

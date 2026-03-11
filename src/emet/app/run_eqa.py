@@ -9,7 +9,7 @@
 
 import click
 
-from emet.controller.robot_agent_dynamem import RobotAgent
+from emet.controller.controller_dynamem import RobotAgent
 from emet.controller.task.dynamem import EQAExecuter
 from emet.controller.zmq_client import HomeRobotZmqClient
 

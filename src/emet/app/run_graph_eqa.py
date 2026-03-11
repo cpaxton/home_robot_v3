@@ -9,7 +9,7 @@
 
 import click
 
-from emet.controller.robot_agent_graph_eqa import GraphEQAController
+from emet.controller.controller_graph_eqa import GraphEQAController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.core.parameters import get_parameters

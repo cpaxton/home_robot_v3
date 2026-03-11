@@ -16,7 +16,7 @@ from emet.controller.operations import (
     SpeakOperation,
     UpdateOperation,
 )
-from emet.controller.robot_agent import RobotAgent
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.core.task import Task
 
 
@@ -158,7 +158,7 @@ class HandOverTask:
 
 
 if __name__ == "__main__":
-    from emet.controller.robot_agent import RobotAgent
+    from emet.controller.controller_instance_memory import RobotAgent
     from emet.controller.zmq_client import HomeRobotZmqClient
 
     robot = HomeRobotZmqClient()

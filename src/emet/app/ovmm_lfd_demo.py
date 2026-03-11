@@ -18,7 +18,7 @@ import click
 import numpy as np
 
 # Mapping and perception
-from emet.controller.robot_agent import RobotAgent
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.app.lfd.ros2_lfd_leader import ROS2LfdLeader
 from emet.core import get_parameters

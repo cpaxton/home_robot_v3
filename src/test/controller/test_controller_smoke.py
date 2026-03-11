@@ -16,10 +16,10 @@ from emet.controller import (
     RobotAgent,
     RobotClient,
 )
-from emet.controller.base_robot_agent import BaseRobotAgent as BaseClass
-from emet.controller.robot_agent import InstanceMemoryController as IMC, RobotAgent as IMC_alias
-from emet.controller.robot_agent_dynamem import DynamemController as DC, RobotAgent as DC_alias
-from emet.controller.robot_agent_graph_eqa import GraphEQAController, RobotAgentGraphEQA
+from emet.controller.base_controller import BaseController as BaseClass
+from emet.controller.controller_instance_memory import InstanceMemoryController as IMC, RobotAgent as IMC_alias
+from emet.controller.controller_dynamem import DynamemController as DC, RobotAgent as DC_alias
+from emet.controller.controller_graph_eqa import GraphEQAController, RobotAgentGraphEQA
 
 
 def test_controller_exports():

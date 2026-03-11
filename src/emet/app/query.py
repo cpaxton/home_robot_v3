@@ -18,7 +18,7 @@ import click
 
 # Mapping and perception
 import emet.utils.logger as logger
-from emet.controller.robot_agent import RobotAgent
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.core import get_parameters
 from emet.perception import create_semantic_sensor
