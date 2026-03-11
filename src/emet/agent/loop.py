@@ -282,6 +282,14 @@ def run_agent_with_robot(
         if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
             discord_bot.push_task_to_all_channels(message=f"**{agent_name}:** {text}")
 
+    # Wait for Discord to connect before sending the greeting
+    if discord_bot is not None and hasattr(discord_bot, "wait_until_ready"):
+        print(colored("Waiting for Discord connection...", "yellow"), end=" ", flush=True)
+        if discord_bot.wait_until_ready(timeout=30.0):
+            print(colored("connected.", "green"))
+        else:
+            print(colored("timeout (continuing without Discord).", "red"))
+
     # Startup greeting
     greeting = f"Hello! I'm {agent_name}. I'm online and ready to help."
     print(colored(f"{agent_name}:", "blue"), greeting)
@@ -353,9 +361,10 @@ def run_agent_with_robot(
                         _send_to_discord(message)
                     break
 
-                # Print the intermediate message (e.g. "Let me check my memory.")
+                # Print and relay the intermediate message (e.g. "Let me check my memory.")
                 if message:
                     print(colored(f"{agent_name}:", "blue"), message)
+                    _send_to_discord(message)
 
                 # Execute tool calls
                 ok, results, has_info = _dispatch_tool_calls(

@@ -141,6 +141,15 @@ class EmetDiscordBot(DiscordBot):
             self.llm_client = None
 
         self._llm_lock = threading.Lock()
+        self._ready_event = threading.Event()
+
+    @property
+    def is_ready(self) -> bool:
+        return self._ready_event.is_set()
+
+    def wait_until_ready(self, timeout: float = 30.0) -> bool:
+        """Block until Discord connection is ready, or timeout. Returns True if ready."""
+        return self._ready_event.wait(timeout=timeout)
 
     def on_ready(self):
         """Event listener called when the bot has switched from offline to online."""
@@ -183,6 +192,9 @@ class EmetDiscordBot(DiscordBot):
 
         # Start the plan thread
         self.start_plan_thread()
+
+        # Signal that the bot is ready
+        self._ready_event.set()
 
     def push_task_to_all_channels(
         self, message: Optional[str] = None, content: Optional[str] = None

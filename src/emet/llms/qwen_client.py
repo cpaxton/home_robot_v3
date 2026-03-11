@@ -86,6 +86,7 @@ class Qwen25Client(AbstractLLMClient):
             assert model_size in qwen_sizes[model_type], f"Invalid model size: {model_size}"
             assert fine_tuning in [None, "Instruct"], f"Invalid fine-tuning: {fine_tuning}"
 
+        self._version = version
         self.max_tokens = max_tokens
 
         if version == "3.5":
@@ -174,8 +175,11 @@ class Qwen25Client(AbstractLLMClient):
         self.add_history(new_message)
         messages = self.get_history()
 
+        template_kwargs: dict = {}
+        if self._version == "3.5":
+            template_kwargs["enable_thinking"] = False
         text = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+            messages, tokenize=False, add_generation_prompt=True, **template_kwargs
         )
 
         t0 = timeit.default_timer()
