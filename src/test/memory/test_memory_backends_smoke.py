@@ -179,18 +179,13 @@ def test_unified_backend_dynamem():
     # Unknown object
     check_unknown = backend.check_memory_for_object("purple sphere")
     assert check_unknown.confidence >= 0  # may be 0 or low from default encoder fallback
-    # save/load: DynaMem backend supports save; round-trip tested in integration test
+    # save/load: DynaMem backend supports save (directory format only)
     assert backend.supports_save_load()
-    import os
     import tempfile
-    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
-        path = f.name
-    try:
-        backend.save(path)
-        assert os.path.exists(path) and os.path.getsize(path) > 0
-    finally:
-        if os.path.exists(path):
-            os.unlink(path)
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as d:
+        backend.save(d)
+        assert (Path(d) / "manifest.json").exists(), "Expected manifest.json in memory directory"
 
 
 def test_unified_backend_graph_eqa():
@@ -262,3 +257,64 @@ def test_unified_backend_svm_empty():
     loc = backend.localize_text("red cylinder")
     assert not loc.success
     assert loc.point_xyz is None
+
+
+def test_frame_save_load_flat_layout():
+    """Frames saved in flat layout (rgb_0001.png, pose_0001.npz) round-trip correctly."""
+    import tempfile
+    from pathlib import Path
+
+    import numpy as np
+
+    from emet.memory.format import (
+        FrameBlob,
+        MemoryManifest,
+        MemoryState,
+        PointCloudBlob,
+        load_memory,
+        save_memory,
+    )
+
+    rgb1 = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
+    rgb2 = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
+    depth1 = np.random.rand(64, 64).astype(np.float32)
+    pose1 = np.eye(4)
+    pose2 = np.eye(4)
+    pose2[0, 3] = 1.0
+
+    state = MemoryState(
+        point_cloud=PointCloudBlob(xyz=np.zeros((10, 3))),
+        frames=[
+            FrameBlob(camera_pose=pose1, rgb=rgb1, depth=depth1, base_pose=np.array([0.0, 0.0, 0.0])),
+            FrameBlob(camera_pose=pose2, rgb=rgb2, depth=None, camera_K=np.eye(3)),
+        ],
+        manifest=MemoryManifest(backend="dynamem"),
+    )
+
+    with tempfile.TemporaryDirectory() as d:
+        save_memory(state, d)
+
+        # Verify flat file layout
+        frames_dir = Path(d) / "frames"
+        assert (frames_dir / "rgb_0000.png").exists()
+        assert (frames_dir / "rgb_0001.png").exists()
+        assert (frames_dir / "depth_0000.npy").exists()
+        assert not (frames_dir / "depth_0001.npy").exists()
+        assert (frames_dir / "pose_0000.npz").exists()
+        assert (frames_dir / "pose_0001.npz").exists()
+        # No subdirectories
+        subdirs = [p for p in frames_dir.iterdir() if p.is_dir()]
+        assert len(subdirs) == 0, f"Expected no subdirectories, got {subdirs}"
+
+        # Round-trip load
+        loaded = load_memory(d)
+        assert len(loaded.frames) == 2
+        assert loaded.frames[0].rgb is not None
+        assert np.allclose(loaded.frames[0].camera_pose, pose1)
+        assert np.allclose(loaded.frames[1].camera_pose, pose2)
+        assert loaded.frames[0].depth is not None
+        assert loaded.frames[1].depth is None
+        assert loaded.frames[0].base_pose is not None
+        assert np.allclose(loaded.frames[0].base_pose, [0.0, 0.0, 0.0])
+        assert loaded.frames[1].camera_K is not None
+        assert np.allclose(loaded.frames[1].camera_K, np.eye(3))

@@ -113,12 +113,16 @@ def main() -> None:
     _ensure_uv_project()
 
 
-@main.command(short_help="Start MuJoCo simulation server")
-@click.argument("backend", type=click.Choice(["mujoco"]), default="mujoco")
+@main.command(short_help="Start simulation server (mujoco or robocasa)")
+@click.argument(
+    "backend",
+    type=click.Choice(["mujoco", "robocasa"]),
+    default="mujoco",
+)
 @click.option(
     "--use-robocasa",
     is_flag=True,
-    help="Use Robocasa for scene generation. List envs: emet serve mujoco --list-robocasa-tasks",
+    help="Use Robocasa for scene generation (ignored if backend is robocasa).",
 )
 @click.option("--headless", is_flag=True, help="Run without native viewer")
 @click.option(
@@ -143,7 +147,14 @@ def main() -> None:
     "--list-robocasa-tasks",
     "list_robocasa_tasks",
     is_flag=True,
-    help="List all supported Robocasa env names and exit (use with --robocasa-task when serving).",
+    help="List all Robocasa environment names and exit. Use: emet serve robocasa --list-robocasa-tasks or emet robocasa list.",
+)
+@click.option(
+    "--robocasa-task",
+    "--robocasa_task",
+    "robocasa_task",
+    default="",
+    help="Robocasa task name (e.g. PickPlaceCounterToCabinet). Use --list-robocasa-tasks to see all.",
 )
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
 def serve(
@@ -156,23 +167,36 @@ def serve(
     seed: int,
     port_offset: int,
     list_robocasa_tasks: bool,
+    robocasa_task: str,
     extra: tuple[str, ...],
 ) -> None:
     """Start a simulation server.
 
+    Backends:
+      mujoco   MuJoCo server (default). Add --use-robocasa for Robocasa scenes.
+      robocasa Shortcut for mujoco with Robocasa (same as emet serve mujoco --use-robocasa).
+
+    List Robocasa environments (requires sim extra: uv sync -e sim after emet install sim):
+      emet robocasa list
+      emet serve robocasa --list-robocasa-tasks
+
     Examples:
       emet serve
       emet serve mujoco --headless
-      emet serve mujoco --use-robocasa
-      emet serve mujoco --list-robocasa-tasks   # list all Robocasa env names
-      emet serve mujoco --port-offset 100   # use ports 4501–4504 if default in use
+      emet serve robocasa
+      emet serve robocasa --robocasa-task PickPlaceCounterToCabinet
+      emet serve robocasa --list-robocasa-tasks
+      emet serve mujoco --use-robocasa --port-offset 100
     """
-    if backend == "mujoco":
+    use_robocasa_flag = use_robocasa or (backend == "robocasa")
+    if backend == "mujoco" or backend == "robocasa":
         args = list(extra)
-        if use_robocasa:
+        if use_robocasa_flag:
             args.append("--use-robocasa")
         if list_robocasa_tasks:
             args.append("--list-robocasa-tasks")
+        if robocasa_task:
+            args.extend(["--robocasa-task", robocasa_task])
         if headless:
             args.append("--headless")
         if no_cameras:
@@ -188,6 +212,17 @@ def serve(
     else:
         click.echo(f"Unknown backend: {backend}", err=True)
         sys.exit(1)
+
+
+@main.group("robocasa", short_help="Robocasa simulation helpers (requires sim extra)")
+def robocasa_cmd() -> None:
+    """List Robocasa environments or run the server. Requires: emet install sim, then uv sync -e sim."""
+
+
+@robocasa_cmd.command("list", short_help="List all Robocasa environment names")
+def robocasa_list() -> None:
+    """Print registered Robocasa task names. Use with: emet serve robocasa --robocasa-task <name>."""
+    sys.exit(_run_module("emet.simulation.mujoco_server", ["--use-robocasa", "--list-robocasa-tasks"]))
 
 
 def _kill_processes_on_port(port: int) -> bool:
@@ -243,7 +278,31 @@ def kill_mujoco_server(port: int, kill_all: bool) -> None:
     sys.exit(0 if killed_any else 1)
 
 
-@main.group(short_help="Save or show robot connection (host, user) for deploy/view")
+@main.command("show-memory", short_help="Open a saved memory in Rerun")
+@click.argument(
+    "path",
+    type=click.Path(path_type=Path),
+    default="saved_memory",
+    required=False,
+)
+@click.option("--open-browser", is_flag=True, help="Open browser to Rerun web viewer")
+def show_memory(path: str, open_browser: bool) -> None:
+    """Load a memory directory and display it in Rerun.
+
+    PATH defaults to saved_memory. Must be a directory with manifest.json
+    (common memory format from create-and-print-memory or backend save).
+
+    Examples:
+      emet show-memory
+      emet show-memory ./my_memory --open-browser
+    """
+    args = [str(path)]
+    if open_browser:
+        args.append("--open-browser")
+    sys.exit(_run_module("emet.app.show_memory", args))
+
+
+@main.group("connect", short_help="Save or show robot connection (host, user) for deploy/view")
 def connect_cmd() -> None:
     """Save and reuse connection details so deploy and view-bridge default to the right robot."""
     pass
@@ -353,7 +412,13 @@ def deploy(
 
 
 @main.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
-@click.argument("app", type=click.Choice(["dynamem", "graph-eqa", "mapping", "grasp", "chat", "ai_pickup", "timing"]))
+@click.argument(
+    "app",
+    type=click.Choice([
+        "dynamem", "graph-eqa", "mapping", "grasp", "chat", "agent", "web-chat",
+        "ai_pickup", "timing", "discord", "create-and-print-memory",
+    ]),
+)
 @click.option("--robot-ip", "--robot_ip", default="127.0.0.1", help="Robot or simulator IP")
 @click.option("--server-ip", "--server_ip", default="127.0.0.1", help="Server IP (e.g. for AnyGrasp)")
 @click.option("-S", "--skip", "skip_confirmations", is_flag=True, help="Skip confirmations")
@@ -384,6 +449,7 @@ def run(
       emet run dynamem -S --visual-servo --match-method class --target-object apple --target-receptacle plate
       emet run mapping --robot-ip 127.0.0.1
       emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
+      emet run discord --robot-ip 192.168.1.15 --task pickup   # requires DISCORD_TOKEN in env
     """
     args = list(ctx.args)
     args.extend(["--robot_ip", robot_ip])
@@ -413,6 +479,10 @@ def run(
         sys.exit(_run_module("emet.app.grasp_object", args))
     elif app == "chat":
         sys.exit(_run_module("emet.app.chat", args))
+    elif app == "agent":
+        sys.exit(_run_module("emet.app.run_agent", args))
+    elif app == "web-chat":
+        sys.exit(_run_module("emet.app.web_chat", args))
     elif app == "ai_pickup":
         if skip_confirmations:
             args.append("-S")
@@ -422,17 +492,27 @@ def run(
         if headless:
             args.append("--headless")
         sys.exit(_run_module("emet.app.timing", args))
+    elif app == "discord":
+        args.extend(["--robot_ip", robot_ip])
+        if server_ip:
+            args.extend(["--server_ip", server_ip])
+        if parameter_file:
+            args.extend(["--parameter_file", parameter_file])
+        sys.exit(_run_module("emet.app.run_discord", args))
+    elif app == "create-and-print-memory":
+        args.extend(["--robot-ip", robot_ip])
+        sys.exit(_run_module("emet.app.create_and_print_memory", args))
     else:
         click.echo(f"Unknown app: {app}", err=True)
         sys.exit(1)
 
 
-_SYNC_ALL_EXTRAS = ("sim", "dynamem", "dev")  # MuJoCo, SAM-2, pytest, etc.
+_SYNC_ALL_EXTRAS = ("sim", "dynamem", "dev", "discord")  # MuJoCo, SAM-2, pytest, discord bot, etc.
 
 
 @main.command(short_help="Sync dependencies (uv or pip)")
 @click.option("--extra", "-e", "extra_list", multiple=True, help="Extra to install (sim, dynamem, dev, etc.)")
-@click.option("--all", "sync_all", is_flag=True, help="Install all common extras (sim, dynamem, dev)")
+@click.option("--all", "sync_all", is_flag=True, help="Install all common extras (sim, dynamem, dev, discord)")
 @click.option("--sim", is_flag=True, help="Include sim (MuJoCo, robocasa)")
 @click.option("--dynamem", "dynamem_flag", is_flag=True, help="Include dynamem (SAM-2)")
 @click.option("--dev", "dev_flag", is_flag=True, help="Include dev (pytest, black, mypy)")
@@ -451,8 +531,9 @@ def sync(
 ) -> None:
     """Sync dependencies (uv sync or pip install -e .).
 
-    Use --all for sim + dynamem + dev, or pick extras with -e or individual flags.
-    Sim requires third_party/robocasa and robosuite (./scripts/install_simulation.sh) and scripts/enable_sim_pyproject.py; if missing, sim is skipped with a message.
+    Use --all for sim + dynamem + dev + discord, or pick extras with -e or individual flags.
+    Sim pip deps (mujoco, etc.) are always in pyproject.toml. robosuite/robocasa are
+    installed editable by: emet install sim (scripts/install_simulation.sh).
 
     Examples:
 
@@ -481,16 +562,24 @@ def sync(
     root = _project_root()
     os.chdir(root)
 
-    # Sim extra needs third_party/robosuite and robocasa. Skip sim if missing and warn.
+    # Sim extra: pip-installable deps (mujoco, stretch-urdf, etc.) are always in pyproject.toml.
+    # robosuite/robocasa are installed editable from third_party/ when present.
+    sim_editable_pkgs: List[str] = []
     if "sim" in extras:
         missing = [name for name in ("robosuite", "robocasa") if not (root / "third_party" / name).is_dir()]
         if missing:
             click.echo(
-                f"Skipping sim (missing: {', '.join('third_party/' + n for n in missing)}). "
-                "Run: ./scripts/install_simulation.sh  then  python scripts/enable_sim_pyproject.py  then  uv lock && uv sync -e sim",
+                f"Note: third_party missing ({', '.join(missing)}). "
+                "Sim pip deps (mujoco, etc.) will install, but robosuite/robocasa need: emet install sim",
                 err=True,
             )
-            extras = [e for e in extras if e != "sim"]
+        else:
+            sim_editable_pkgs = [
+                str(root / "third_party" / name) for name in ("robosuite", "robocasa")
+            ]
+
+    if extras:
+        click.echo("Syncing extras: " + ", ".join(extras))
 
     if _has_uv():
         cmd = ["uv", "sync"]
@@ -499,6 +588,14 @@ def sync(
         if no_install:
             cmd.append("--no-install-project")
         result = subprocess.call(cmd)
+        if result != 0:
+            sys.exit(result)
+        # Install robosuite/robocasa editable from third_party (not in lockfile)
+        if sim_editable_pkgs:
+            click.echo("Installing robosuite/robocasa from third_party...")
+            result = subprocess.call(["uv", "pip", "install"] + [
+                arg for p in sim_editable_pkgs for arg in ["-e", p]
+            ])
         sys.exit(result)
     else:
         # Fallback to pip
@@ -722,22 +819,11 @@ def install_sim(skip_download_assets: bool, setup_macros: bool, no_sync: bool) -
     if result != 0:
         sys.exit(result)
     if no_sync:
-        click.echo(
-            "Simulation install complete. Run: python scripts/enable_sim_pyproject.py  then  uv lock && uv sync -e sim"
-        )
+        click.echo("Simulation install complete. Run: uv sync --extra sim")
         return
-    # Enable sim in pyproject.toml so uv can resolve and sync
-    enable_script = root / "scripts" / "enable_sim_pyproject.py"
-    if enable_script.exists():
-        click.echo("Enabling sim in pyproject.toml...")
-        result = subprocess.call([sys.executable, str(enable_script)], cwd=root)
-        if result != 0:
-            sys.exit(result)
-    click.echo("Updating lock and syncing sim extra...")
+    click.echo("Syncing sim extra...")
     os.chdir(root)
     if _has_uv():
-        if subprocess.call(["uv", "lock"], cwd=root) != 0:
-            sys.exit(1)
         result = subprocess.call(["uv", "sync", "--extra", "sim"], cwd=root)
     else:
         result = subprocess.call([sys.executable, "-m", "pip", "install", "-e", ".[sim]"])
@@ -778,20 +864,11 @@ def install_robocasa(skip_download_assets: bool, setup_macros: bool, no_sync: bo
     if result != 0:
         sys.exit(result)
     if no_sync:
-        click.echo(
-            "Robocasa install complete. Run: python scripts/enable_sim_pyproject.py  then  uv lock && uv sync -e sim"
-        )
+        click.echo("Robocasa install complete. Run: uv sync --extra sim")
         return
-    enable_script = root / "scripts" / "enable_sim_pyproject.py"
-    if enable_script.exists():
-        click.echo("Enabling sim in pyproject.toml...")
-        if subprocess.call([sys.executable, str(enable_script)], cwd=root) != 0:
-            sys.exit(1)
-    click.echo("Updating lock and syncing sim extra...")
+    click.echo("Syncing sim extra...")
     os.chdir(root)
     if _has_uv():
-        if subprocess.call(["uv", "lock"], cwd=root) != 0:
-            sys.exit(1)
         result = subprocess.call(["uv", "sync", "--extra", "sim"], cwd=root)
     else:
         result = subprocess.call([sys.executable, "-m", "pip", "install", "-e", ".[sim]"])

@@ -9,10 +9,26 @@
 
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 
+from emet.memory.format import (
+    MemoryState,
+    UserMessageBlob,
+    load_memory,
+    save_memory,
+    is_memory_directory,
+)
+from emet.memory.backend import MemoryBackend, get_memory_backend
+
 __all__ = [
     "GraphEQAMemory",
     "SparseVoxelMapDynamem",
     "SparseVoxelMapNavigationSpaceDynamem",
+    "MemoryState",
+    "UserMessageBlob",
+    "save_memory",
+    "load_memory",
+    "is_memory_directory",
+    "MemoryBackend",
+    "get_memory_backend",
 ]
 
 

@@ -1,14 +1,60 @@
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Memory backend adapters: DynaMem, GraphEQA, SVM.
+# Save/load use the common directory format (memory/format.py) only.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import torch
 
 from emet.memory.backend import CheckMemoryResult, LocalizeResult, MemoryBackend
+from emet.memory.format import (
+    FrameBlob,
+    GraphBlob,
+    GraphEdgeView,
+    GraphNodeView,
+    MemoryManifest,
+    MemoryState,
+    PointCloudBlob,
+    is_memory_directory,
+    load_memory,
+    save_memory,
+)
+
+
+def _restore_dynamem_from_state(voxel_map: Any, state: MemoryState) -> None:
+    """Repopulate DynaMem voxel_map from MemoryState (semantic_memory from point_cloud)."""
+    if state.point_cloud is None:
+        return
+    pc = state.point_cloud
+    sm = voxel_map.semantic_memory
+    sm._points = torch.from_numpy(np.asarray(pc.xyz, dtype=np.float32))
+    if pc.rgb is not None:
+        sm._rgb = torch.from_numpy(np.asarray(pc.rgb, dtype=np.float32))
+    else:
+        sm._rgb = torch.ones_like(sm._points)
+    sm._weights = (
+        torch.from_numpy(np.asarray(pc.weights, dtype=np.float32))
+        if pc.weights is not None
+        else torch.ones(sm._points.shape[0], 1, dtype=torch.float32)
+    )
+    sm._features = (
+        torch.from_numpy(np.asarray(pc.feats, dtype=np.float32))
+        if pc.feats is not None
+        else sm._rgb
+    )
+    sm._obs_counts = (
+        torch.from_numpy(np.asarray(pc.obs_id, dtype=np.int64).ravel())
+        if pc.obs_id is not None
+        else torch.ones(sm._points.shape[0], dtype=torch.long)
+    )
+    sm._mins = sm._points.min(dim=0).values
+    sm._maxs = sm._points.max(dim=0).values
+    sm.obs_count = int(sm._obs_counts.max().item()) if sm._obs_counts.numel() else 0
 
 
 class DynaMemBackend(MemoryBackend):
@@ -84,11 +130,108 @@ class DynaMemBackend(MemoryBackend):
             extra_info={"debug_text": debug_text},
         )
 
+    def query_answer(
+        self,
+        question: str,
+        xyt: Optional[Union[Any, np.ndarray, list]] = None,
+        planner: Any = None,
+    ) -> Tuple[str, str, bool, str, Optional[np.ndarray], Any]:
+        """EQA-style query delegating to the underlying voxel map.
+
+        Returns:
+            reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
+        """
+        if not hasattr(self._voxel_map, "query_answer"):
+            raise NotImplementedError("This voxel map does not support query_answer")
+        return self._voxel_map.query_answer(question, xyt, planner)
+
     def save(self, path: str) -> None:
-        self._voxel_map.write_to_pickle(path)
+        """Save to common directory format. Path must be a directory."""
+        dir_path = Path(path)
+        dir_path.mkdir(parents=True, exist_ok=True)
+
+        vm = self._voxel_map
+        point_cloud = None
+        if hasattr(vm, "semantic_memory") and vm.semantic_memory is not None:
+            pts, feats, weights, rgb = vm.semantic_memory.get_pointcloud()
+            if pts is not None and pts.numel() > 0:
+                obs_id = getattr(vm.semantic_memory, "_obs_counts", None)
+                point_cloud = PointCloudBlob(
+                    xyz=pts.cpu().numpy() if hasattr(pts, "cpu") else pts,
+                    rgb=rgb.cpu().numpy() if rgb is not None and hasattr(rgb, "cpu") else rgb,
+                    feats=feats.cpu().numpy() if feats is not None and hasattr(feats, "cpu") else feats,
+                    weights=weights.cpu().numpy() if weights is not None and hasattr(weights, "cpu") else weights,
+                    obs_id=obs_id.cpu().numpy() if obs_id is not None and hasattr(obs_id, "cpu") else obs_id,
+                )
+
+        frames: List[FrameBlob] = []
+        for obs in getattr(vm, "observations", []) or []:
+            cp = getattr(obs, "camera_pose", None)
+            if cp is None:
+                continue
+            cp = cp.cpu().numpy() if hasattr(cp, "cpu") else cp
+            rgb = getattr(obs, "rgb", None)
+            rgb = rgb.cpu().numpy() if rgb is not None and hasattr(rgb, "cpu") else rgb
+            depth = getattr(obs, "depth", None)
+            depth = depth.cpu().numpy() if depth is not None and hasattr(depth, "cpu") else depth
+            camera_K = getattr(obs, "camera_K", None)
+            camera_K = camera_K.cpu().numpy() if camera_K is not None and hasattr(camera_K, "cpu") else camera_K
+            base_pose = getattr(obs, "base_pose", None)
+            base_pose = base_pose.cpu().numpy() if base_pose is not None and hasattr(base_pose, "cpu") else base_pose
+            feats = getattr(obs, "feats", None)
+            feats = feats.cpu().numpy() if feats is not None and hasattr(feats, "cpu") else feats
+            world_xyz = getattr(obs, "full_world_xyz", None)
+            world_xyz = world_xyz.cpu().numpy() if world_xyz is not None and hasattr(world_xyz, "cpu") else world_xyz
+            frames.append(
+                FrameBlob(
+                    camera_pose=cp,
+                    base_pose=base_pose,
+                    camera_K=camera_K,
+                    rgb=rgb,
+                    depth=depth,
+                    feats=feats,
+                    world_xyz=world_xyz,
+                    instance=getattr(obs, "instance", None),
+                    instance_classes=getattr(obs, "instance_classes", None),
+                    instance_scores=getattr(obs, "instance_scores", None),
+                    info=getattr(obs, "info", None),
+                )
+            )
+
+        grid_origin = getattr(vm, "grid_origin", None)
+        if grid_origin is not None and hasattr(grid_origin, "cpu"):
+            grid_origin = grid_origin.cpu().numpy()
+        grid_resolution = float(getattr(vm, "grid_resolution", 0.05))
+        obstacles_2d = None
+        explored_2d = None
+        if hasattr(vm, "get_2d_map"):
+            try:
+                obstacles_2d, explored_2d = vm.get_2d_map()
+                if hasattr(obstacles_2d, "cpu"):
+                    obstacles_2d = obstacles_2d.cpu().numpy()
+                if hasattr(explored_2d, "cpu"):
+                    explored_2d = explored_2d.cpu().numpy()
+            except Exception:
+                pass
+
+        state = MemoryState(
+            point_cloud=point_cloud,
+            frames=frames,
+            grid_origin=grid_origin,
+            grid_resolution=grid_resolution,
+            obstacles_2d=obstacles_2d,
+            explored_2d=explored_2d,
+            manifest=MemoryManifest(backend="dynamem"),
+        )
+        save_memory(state, str(dir_path))
 
     def load(self, path: str) -> None:
-        self._voxel_map.read_from_pickle(path)
+        """Load from common directory format."""
+        path_obj = Path(path)
+        if not path_obj.is_dir() or not is_memory_directory(path):
+            raise FileNotFoundError(f"Not a memory directory: {path}")
+        state = load_memory(path)
+        _restore_dynamem_from_state(self._voxel_map, state)
 
     def supports_save_load(self) -> bool:
         return True
@@ -170,8 +313,91 @@ class GraphEQABackend(MemoryBackend):
     ) -> Tuple[str, str, bool, str, Optional[np.ndarray], Any]:
         return self._graph.query_answer(question, xyt, planner)
 
+    def save(self, path: str) -> None:
+        """Save to common directory format (graph + optional frames from observations)."""
+        from emet.memory.graph_eqa.graph_memory import GraphNode, GraphObservation
+
+        dir_path = Path(path)
+        dir_path.mkdir(parents=True, exist_ok=True)
+
+        nodes = self._graph.get_nodes()
+        edges = self._graph.get_edges()
+        graph_blob = GraphBlob(
+            nodes=[
+                GraphNodeView(
+                    node_id=n.node_id,
+                    labels=list(n.labels),
+                    xyz=list(np.ravel(n.xyz).tolist()),
+                    obs_id=n.obs_id,
+                )
+                for n in nodes
+            ],
+            edges=[
+                GraphEdgeView(id1=e[0], id2=e[1], relation=e[2])
+                for e in edges
+            ],
+        )
+        frames: List[FrameBlob] = []
+        for obs in self._graph.get_observations():
+            xyz = np.ravel(obs.xyz)
+            if xyz.size < 3:
+                xyz = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+            pose = np.eye(4, dtype=np.float64)
+            pose[:3, 3] = xyz[:3]
+            frames.append(
+                FrameBlob(
+                    camera_pose=pose,
+                    base_pose=xyz[:3].tolist() if xyz.size >= 3 else None,
+                    rgb=obs.rgb,
+                    world_xyz=xyz.reshape(-1, 3)[0:1],
+                    info={"labels": list(obs.labels)} if obs.labels else None,
+                )
+            )
+
+        state = MemoryState(
+            point_cloud=None,
+            frames=frames,
+            graph=graph_blob,
+            manifest=MemoryManifest(backend="graph_eqa", has_point_cloud=False),
+        )
+        save_memory(state, str(dir_path))
+
+    def load(self, path: str) -> None:
+        """Load from common directory format."""
+        from emet.memory.graph_eqa.graph_memory import GraphNode, GraphObservation
+
+        path_obj = Path(path)
+        if not path_obj.is_dir() or not is_memory_directory(str(path)):
+            raise FileNotFoundError(f"Not a memory directory: {path}")
+        state = load_memory(path)
+        if state.graph is None:
+            return
+        self._graph._nodes = [
+            GraphNode(
+                node_id=n.node_id,
+                labels=list(n.labels),
+                xyz=np.array(n.xyz, dtype=np.float64),
+                obs_id=n.obs_id,
+            )
+            for n in state.graph.nodes
+        ]
+        self._graph._edges = [(e.id1, e.id2, e.relation) for e in state.graph.edges]
+        self._graph._observations = []
+        for i, fr in enumerate(state.frames):
+            xyz = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+            if fr.world_xyz is not None and fr.world_xyz.size >= 3:
+                xyz = np.ravel(fr.world_xyz)[:3]
+            labels = (fr.info or {}).get("labels", [])
+            rgb = fr.rgb if fr.rgb is not None else np.zeros((1, 1, 3), dtype=np.uint8)
+            self._graph._observations.append(
+                GraphObservation(obs_id=i + 1, rgb=rgb, xyz=xyz, labels=labels)
+            )
+        self._graph._next_obs_id = max(
+            (n.obs_id for n in self._graph._nodes), default=0
+        ) + 1
+
     def supports_save_load(self) -> bool:
-        return False
+        return True
 
 
 class SVMBackend(MemoryBackend):
@@ -236,3 +462,62 @@ class SVMBackend(MemoryBackend):
             name = self._agent.semantic_sensor.get_class_name_for_id(oid)
             names.append(name)
         return list(dict.fromkeys(names))
+
+    def save(self, path: str) -> None:
+        """Save to common directory format (point cloud from voxel_map, optional frames)."""
+        vm = self._agent.get_voxel_map()
+        dir_path = Path(path)
+        dir_path.mkdir(parents=True, exist_ok=True)
+
+        point_cloud = None
+        if hasattr(vm, "voxel_pcd") and vm.voxel_pcd is not None:
+            try:
+                points, _, _, rgb = vm.voxel_pcd.get_pointcloud()
+                if points is not None and (hasattr(points, "numel") and points.numel() > 0 or getattr(points, "size", lambda: 0) and points.size > 0):
+                    point_cloud = PointCloudBlob(
+                        xyz=points.cpu().numpy() if hasattr(points, "cpu") else np.asarray(points),
+                        rgb=rgb.cpu().numpy() if rgb is not None and hasattr(rgb, "cpu") else np.asarray(rgb) if rgb is not None else None,
+                    )
+            except Exception:
+                pass
+
+        grid_origin = getattr(vm, "grid_origin", None)
+        if grid_origin is not None and hasattr(grid_origin, "cpu"):
+            grid_origin = grid_origin.cpu().numpy()
+        grid_resolution = float(getattr(vm, "grid_resolution", 0.05))
+        obstacles_2d, explored_2d = None, None
+        if hasattr(vm, "get_2d_map"):
+            try:
+                obstacles_2d, explored_2d = vm.get_2d_map()
+                if hasattr(obstacles_2d, "cpu"):
+                    obstacles_2d = obstacles_2d.cpu().numpy()
+                if hasattr(explored_2d, "cpu"):
+                    explored_2d = explored_2d.cpu().numpy()
+            except Exception:
+                pass
+
+        state = MemoryState(
+            point_cloud=point_cloud,
+            frames=[],
+            grid_origin=grid_origin,
+            grid_resolution=grid_resolution,
+            obstacles_2d=obstacles_2d,
+            explored_2d=explored_2d,
+            manifest=MemoryManifest(backend="svm"),
+        )
+        save_memory(state, str(dir_path))
+
+    def load(self, path: str) -> None:
+        """Load from common directory format. Restores point cloud if voxel_map has semantic_memory (DynaMem)."""
+        path_obj = Path(path)
+        if not path_obj.is_dir() or not is_memory_directory(path):
+            raise FileNotFoundError(f"Not a memory directory: {path}")
+        state = load_memory(path)
+        real_vm = getattr(
+            self._agent.get_voxel_map(), "_voxel_map", self._agent.get_voxel_map()
+        )
+        if getattr(real_vm, "semantic_memory", None) is not None:
+            _restore_dynamem_from_state(real_vm, state)
+
+    def supports_save_load(self) -> bool:
+        return True

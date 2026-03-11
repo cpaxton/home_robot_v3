@@ -12,7 +12,7 @@ from typing import List, Tuple
 
 from PIL import Image
 
-from emet.controller.robot_agent import RobotAgent
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.task.emote import EmoteTask
 from emet.controller.task.pickup.find_task import FindObjectTask
 from emet.controller.task.pickup.hand_over_task import HandOverTask

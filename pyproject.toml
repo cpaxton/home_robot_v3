@@ -45,6 +45,7 @@ dependencies = [
     "openai>=1.88.0",
     "google-genai",
     "ultralytics==8.3.161",
+    "clip @ git+https://github.com/ultralytics/CLIP.git",  # Ultralytics YOLO World/FastSAM text model; avoids runtime AutoUpdate
     "hello-robot-stretch-urdf",
     "pyrealsense2",
     "urchin",

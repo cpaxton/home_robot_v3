@@ -23,10 +23,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
 
-SIM_BLOCK = """# sim: empty by default so uv sync works without third_party/robocasa. Run: scripts/enable_sim_pyproject.py after install_simulation.sh
-sim = []"""
-
-SIM_BLOCK_FULL = """sim = [
+SIM_EMPTY = "sim = []"
+SIM_FULL = """sim = [
     "mujoco>=3.3.0",  # Align with upstream robosuite; 3.2.6 was for older Stretch compat
     "hello-robot-stretch-urdf",
     "grpcio",
@@ -36,10 +34,11 @@ SIM_BLOCK_FULL = """sim = [
     "robocasa",    # From third_party (clone with: emet install sim)
 ]"""
 
-SOURCES_COMMENTED = """# Uncomment after running scripts/install_simulation.sh, then run scripts/enable_sim_pyproject.py
-# robosuite = { path = "third_party/robosuite", editable = true }
-# robocasa = { path = "third_party/robocasa", editable = true }"""
-
+# Commented source lines to uncomment (match with or without leading # and space)
+SOURCES_COMMENTED_PATTERN = (
+    "# robosuite = { path = \"third_party/robosuite\", editable = true }\n"
+    "# robocasa = { path = \"third_party/robocasa\", editable = true }"
+)
 SOURCES_ACTIVE = """robosuite = { path = "third_party/robosuite", editable = true }
 robocasa = { path = "third_party/robocasa", editable = true }"""
 
@@ -52,14 +51,17 @@ def main() -> None:
 
     text = PYPROJECT.read_text()
 
-    if SIM_BLOCK not in text:
-        if "robocasa" in text and "robosuite" in text and "sim = [" in text:
-            print("pyproject.toml already has sim enabled.")
-            return
-        raise SystemExit("pyproject.toml format changed; cannot apply enable_sim.")
+    # Already enabled: path sources active and sim has real deps
+    if "sim = [" in text and SOURCES_ACTIVE in text:
+        print("pyproject.toml already has sim enabled.")
+        return
 
-    text = text.replace(SIM_BLOCK, SIM_BLOCK_FULL, 1)
-    text = text.replace(SOURCES_COMMENTED, SOURCES_ACTIVE, 1)
+    if SIM_EMPTY not in text:
+        raise SystemExit("pyproject.toml format changed (no 'sim = []'); cannot apply enable_sim.")
+
+    text = text.replace(SIM_EMPTY, SIM_FULL, 1)
+    if SOURCES_COMMENTED_PATTERN in text:
+        text = text.replace(SOURCES_COMMENTED_PATTERN, SOURCES_ACTIVE, 1)
     PYPROJECT.write_text(text)
     print("Enabled sim in pyproject.toml. Run: uv lock && uv sync -e sim")
 

@@ -31,7 +31,7 @@ from emet.mapping.scene_graph import SceneGraph
 from emet.mapping.voxel import SparseVoxelMap, SparseVoxelMapNavigationSpace, SparseVoxelMapProxy
 from emet.motion import ConfigurationSpace, Planner, PlanResult
 
-from emet.controller.base_robot_agent import BaseRobotAgent
+from emet.controller.base_controller import BaseController
 from emet.motion.algo import Shortcut, SimplifyXYT, get_planner
 from emet.motion.kinematics import HelloStretchIdx
 from emet.perception.encoders import BaseImageTextEncoder, get_encoder
@@ -56,7 +56,7 @@ except ImportError as e:
     logger.error("Will continue without text to speech capabilities in the robot agent.")
 
 
-class InstanceMemoryController(BaseRobotAgent):
+class InstanceMemoryController(BaseController):
     """Instance-memory robot controller. Collects everything needed for OVMM-style tasks."""
 
     _retry_on_fail: bool = False

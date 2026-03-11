@@ -72,11 +72,13 @@ class MemoryBackend(ABC):
         raise NotImplementedError("This backend does not support query_answer")
 
     def save(self, path: str) -> None:
-        """Optional: persist memory to path (e.g. pickle file or directory)."""
+        """Optional: persist memory to path. Path must be a directory (common format:
+        manifest.json, point_cloud.npz, frames, etc.).
+        """
         raise NotImplementedError("This backend does not support save")
 
     def load(self, path: str) -> None:
-        """Optional: load memory from path."""
+        """Optional: load memory from path. Path must be a directory (common format)."""
         raise NotImplementedError("This backend does not support load")
 
     def supports_save_load(self) -> bool:

@@ -9,7 +9,7 @@
 
 import click
 
-from emet.controller.robot_agent_graph_eqa import GraphEQAController
+from emet.controller.controller_graph_eqa import GraphEQAController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.core.parameters import get_parameters
@@ -64,9 +64,9 @@ def main(
     agent.start()
 
     if discord:
-        from emet.llms.discord_bot import StretchDiscordBot
+        from emet.llms.discord_bot import EmetDiscordBot
 
-        bot = StretchDiscordBot(agent, task="graph_eqa")
+        bot = EmetDiscordBot(agent, task="graph_eqa")
         if not not_rotate_in_place:
             bot.executor.rotate_in_place()
 

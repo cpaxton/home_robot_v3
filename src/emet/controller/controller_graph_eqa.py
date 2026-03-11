@@ -14,7 +14,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from emet.controller.robot_agent_dynamem import DynamemController
+from emet.controller.controller_dynamem import DynamemController
 from emet.core.robot import AbstractRobotClient
 from emet.memory.graph_eqa import GraphEQAMemory
 from emet.core.parameters import Parameters

@@ -14,11 +14,11 @@ from typing import Optional
 import click
 
 # import emet.utils.logger as logger
-from emet.controller.robot_agent import RobotAgent
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.core import get_parameters
 from emet.llms import get_llm_choices
-from emet.llms.discord_bot import StretchDiscordBot
+from emet.llms.discord_bot import EmetDiscordBot
 from emet.perception import create_semantic_sensor
 from emet.utils.logger import Logger
 
@@ -179,7 +179,7 @@ def main(
         agent.load_map(input_path)
 
     # Pass in the information we need to create the task
-    bot = StretchDiscordBot(
+    bot = EmetDiscordBot(
         agent,
         token,
         llm=llm,

@@ -18,7 +18,7 @@ import click
 import numpy as np
 
 # Mapping and perception
-from emet.controller.robot_agent import RobotAgent
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.app.lfd.ros2_lfd_leader import ROS2LfdLeader
 from emet.core import get_parameters
@@ -122,13 +122,13 @@ def main(
         enable_realtime_updates=enable_realtime_updates,
     )
 
-    input_path = "kitchen_2024-08-13_17-03-52.pkl"
-    # Load map
+    input_path = "saved_memory"  # or path to a memory directory (common format)
     input_path = Path(input_path)
     print("Loading:", input_path)
+    from emet.memory.backend import get_memory_backend
 
-    print("Reading from pkl file of raw observations...")
-    agent.get_voxel_map().read_from_pickle(input_path, num_frames=-1)
+    backend = get_memory_backend("dynamem", voxel_map=agent.get_voxel_map())
+    backend.load(str(input_path))
 
     prompt = ObjectManipNavPromptBuilder()
     client = GemmaClient(prompt)

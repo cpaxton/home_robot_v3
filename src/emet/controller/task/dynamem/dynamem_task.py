@@ -16,15 +16,16 @@ import torch
 from PIL import Image
 
 from emet.controller.operations import GraspObjectOperation
-from emet.controller.robot_agent_dynamem import RobotAgent
+from emet.controller.controller_dynamem import RobotAgent
 from emet.controller.task.emote import EmoteTask
 from emet.controller.task.pickup.hand_over_task import HandOverTask
 from emet.core import AbstractRobotClient, Parameters
+from emet.memory.backend import get_memory_backend
+from emet.memory.utils import print_memory_saved_help
 from emet.perception import create_semantic_sensor
 from emet.utils.image import numpy_image_to_bytes
-
-# Mapping and perception
 from emet.utils.logger import Logger
+from termcolor import colored
 
 logger = Logger(__name__)
 
@@ -65,6 +66,7 @@ class DynamemTaskExecutor:
         self.parameters = parameters
         self.discord_bot = discord_bot
         self.cpu_only = cpu_only
+        self._last_memory_save_path = None  # set when memory is saved (e.g. after rotate_in_place)
         # If there is no GPU, we have to use CPU
         if not torch.cuda.is_available():
             print("Setting up to use CPU as there is no GPU!")
@@ -83,7 +85,7 @@ class DynamemTaskExecutor:
             raise TypeError(f"Expected AbstractRobotClient, got {type(self.robot)}")
 
         # Create semantic sensor if visual servoing is enabled
-        print("- Create semantic sensor if visual servoing is enabled")
+        logger.debug("- Create semantic sensor if visual servoing is enabled")
         if self.visual_servo:
             self.parameters["detection"]["module"] = "yoloe" if self.cpu_only else "owlsam"
             self.semantic_sensor = create_semantic_sensor(
@@ -95,7 +97,7 @@ class DynamemTaskExecutor:
             self.parameters["encoder"] = None
             self.semantic_sensor = None
 
-        print("- Start robot agent with data collection")
+        logger.debug("- Start robot agent with data collection")
         self.agent = RobotAgent(
             self.robot,
             self.parameters,
@@ -265,7 +267,9 @@ class DynamemTaskExecutor:
 
         if response is None or len(response) == 0:
             logger.error("No commands to execute!")
-            self.agent.robot_say("I'm sorry, I didn't understand that.")
+            said = self.agent.robot_say("I'm sorry, I didn't understand that.")
+            if said:
+                print(colored("Robot:", "blue"), said)
             return True
 
         # Dynamem aims to life long robot, we should not reset the robot's memory.
@@ -373,11 +377,11 @@ class DynamemTaskExecutor:
             elif command == "rotate_in_place":
                 logger.info("Rotate in place to scan environments.")
                 self.agent.rotate_in_place()
-                # `filename` = None means write to default log path (the datetime you started to run the process)
-                self.agent.voxel_map.write_to_pickle(filename=None)
-            elif command == "read_from_pickle":
-                logger.info(f"Load the semantic memory from past runs, pickle file name: {args}.")
-                self.agent.voxel_map.read_from_pickle(args)
+                backend = get_memory_backend("dynamem", voxel_map=self.agent.get_voxel_map())
+                save_dir = getattr(self.agent.voxel_map, "log", "saved_memory")
+                backend.save(save_dir)
+                self._last_memory_save_path = save_dir
+                print_memory_saved_help(save_dir)
             elif command == "go_home":
                 logger.info("[Pickup task] Going home.")
                 if self.agent.get_voxel_map().is_empty():

@@ -17,7 +17,7 @@ from typing import Callable, Optional, Tuple
 import numpy as np
 from omegaconf import DictConfig
 
-from emet.motion.utils.config import get_control_config
+from emet.utils.config import get_control_config
 from emet.motion.utils.geometry import xyt_global_to_base
 
 DEFAULT_CFG_NAME = "traj_follower"

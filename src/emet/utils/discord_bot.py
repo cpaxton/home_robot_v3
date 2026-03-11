@@ -26,24 +26,30 @@
 
 import asyncio
 import io
+import logging
 import os
 import queue
 import threading
 import timeit
 from dataclasses import dataclass
 from itertools import chain
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+
+# Suppress "PyNaCl/davey not installed, voice will NOT be supported" — we don't use voice.
+logging.getLogger("discord.client").setLevel(logging.ERROR)
 
 import discord
 from discord.ext import commands, tasks
+from dotenv import load_dotenv
 from termcolor import colored
+
+from emet.utils.logger import Logger
+
+_logger = Logger(__name__)
 
 
 def read_discord_token_from_env():
-    """Helpful tool to get a discord token from the command line, e.g. for a bot."""
-    from dotenv import load_dotenv
-
-    # Load environment variables from .env file
+    """Read DISCORD_TOKEN from environment. Requires discord extra (python-dotenv): uv sync -e discord."""
     load_dotenv()
     TOKEN = os.getenv("DISCORD_TOKEN")
     if not TOKEN:
@@ -53,11 +59,13 @@ def read_discord_token_from_env():
 
 @dataclass
 class Task:
-    message: discord.Message
+    """One item in the bot's task queue. message is text; content is optional image (PIL, numpy, or file-like)."""
+
+    message: Optional[str]
     channel: discord.TextChannel
-    content: str
+    content: Optional[Any] = None
     explicit: bool = False
-    t: float = None
+    t: Optional[float] = None
 
 
 class ChannelList:
@@ -96,7 +104,7 @@ class ChannelList:
         return self.is_valid(channel)
 
     def __iter__(self):
-        return chain(self.home_channels, (vc.channel for vc in self.visiting_channels.values()))
+        return chain(self.home_channels, self.visiting_channels.keys())
 
     def __len__(self):
         return len(self.home_channels) + len(self.visiting_channels)
@@ -164,33 +172,32 @@ class DiscordBot:
 
     async def handle_task(self, task: Task):
         """Handle a task by sending the message to the channel. This will make the necessary calls in its thread to the different child functions that send messages, for example."""
-        print()
-        print(
-            "Handling task: message = ",
-            task.message,
-            " channel = ",
-            task.channel.name,
-            " content = ",
-            task.content,
+        _logger.debug(
+            "Handling task: message=", task.message,
+            "channel=", task.channel.name,
+            "content=", "image" if task.content is not None else "None",
         )
         if task.message is not None:
-            print(" - Sending message:", task.message)
+            _logger.debug(" - Sending message:", task.message)
             await task.channel.send(task.message)
         if task.content is not None:
-            # Send an image
-            print(" - Sending content:", task.content)
-            # This should be a Discord file
-            # Create a BytesIO object
-            byte_arr = io.BytesIO()
-
-            image = task.content
-            # Save the image to the BytesIO object
-            image.save(byte_arr, format="PNG")  # Save as PNG
-            print(" - Image saved to byte array, format: ", image.format)
-
-            # Move the cursor to the beginning of the BytesIO object
-            byte_arr.seek(0)
-
+            _logger.debug(" - Sending content (image)")
+            content = task.content
+            if hasattr(content, "read"):
+                byte_arr = content
+                if hasattr(byte_arr, "seek"):
+                    byte_arr.seek(0)
+            else:
+                byte_arr = io.BytesIO()
+                try:
+                    import numpy as np
+                    from PIL import Image as PILImage
+                    if isinstance(content, np.ndarray):
+                        content = PILImage.fromarray(content.astype(np.uint8))
+                except ImportError:
+                    pass
+                content.save(byte_arr, format="PNG")
+                byte_arr.seek(0)
             file = discord.File(byte_arr, filename="image.png")
             await task.channel.send(file=file)
 
@@ -204,13 +211,13 @@ class DiscordBot:
             for channel in self.client.get_all_channels():
                 if channel.type == discord.ChannelType.text:
                     if channel in self.allowed_channels:
-                        print(f"Introducing myself to channel {channel.name}")
+                        _logger.debug(f"Introducing myself to channel {channel.name}")
                         try:
                             self.push_task(
                                 channel, message=self.greeting(), content=None, explicit=True
                             )
                         except Exception as e:
-                            print(colored("Error in introducing myself: " + str(e), "red"))
+                            _logger.error("Error in introducing myself:", str(e))
             self._started = True
 
         # Print queue length
@@ -218,37 +225,27 @@ class DiscordBot:
         try:
             task = self.task_queue.get_nowait()
 
-            # Peak at the next task
-            if self.task_queue.qsize() > 0:
-                print(
-                    "Next task:",
-                    self.task_queue.queue[0].message,
-                    self.task_queue.queue[0].channel.name,
-                )
-
-            # While the channel is the same and content is None...
+            # Merge consecutive same-channel text-only tasks
             while (
                 self.task_queue.qsize() > 0
                 and self.task_queue.queue[0].channel == task.channel
                 and self.task_queue.queue[0].content is None
             ):
-                # Pop the next task
                 extra_task = self.task_queue.get_nowait()
-                print("Popped task:", extra_task.message, extra_task.channel.name)
-
-                # Add this message to the current task message
-                task.message += "\n" + extra_task.message
+                if task.message is not None and extra_task.message is not None:
+                    task.message += "\n" + extra_task.message
+                elif extra_task.message is not None:
+                    task.message = extra_task.message
 
             if task.t + self.timeout < timeit.default_timer():
-                print("Dropping task due to timeout: ", task.message, task.channel.name)
+                _logger.debug("Dropping task due to timeout:", task.message)
                 return
 
-            print("Handling task from queue:", task)
             await self.handle_task(task)
         except queue.Empty:
-            await asyncio.sleep(0.1)  # Wait a bit before checking again
+            await asyncio.sleep(0.1)
         except Exception as e:
-            print(colored("Error in processing queue: " + str(e), "red"))
+            _logger.error("Error in processing queue:", str(e))
             raise e
 
     def greeting(self) -> str:
@@ -267,8 +264,7 @@ class DiscordBot:
 
         @client.event
         async def on_message(message: discord.Message):
-            # This line is important to allow commands to work
-            # await bot.process_commands(message)
+            await self.client.process_commands(message)
 
             # Check if the bot was mentioned
             # print()
@@ -287,37 +283,21 @@ class DiscordBot:
                 if message.channel not in self.allowed_channels:
                     self.allowed_channels.visit(message.channel)
 
-            print("Message content:", message.content)
+            _logger.debug("Message content:", message.content)
             response = self.on_message(message)
 
             if response is not None:
-                print("Sending response:", response)
+                _logger.debug("Sending response:", response)
                 await message.channel.send(response)
-                print("Done")
-
-            print("-------------")
 
     def on_ready(self):
         """Event listener called when the bot has switched from offline to online."""
-        print(f"{self.client.user} has connected to Discord!")
+        _logger.debug(f"{self.client.user} has connected to Discord!")
         guild_count = 0
-
-        print("Bot User name:", self.client.user.name)
-        print("Bot Global name:", self.client.user.global_name)
-
-        # This is from https://builtin.com/software-engineering-perspectives/discord-bot-python
-        # LOOPS THROUGH ALL THE GUILD / SERVERS THAT THE BOT IS ASSOCIATED WITH.
         for guild in self.client.guilds:
-            # PRINT THE SERVER'S ID AND NAME.
-            print(f"- {guild.id} (name: {guild.name})")
-
-            # INCREMENTS THE GUILD COUNTER.
+            _logger.debug(f"- {guild.id} (name: {guild.name})")
             guild_count = guild_count + 1
-
-        # PRINTS HOW MANY GUILDS / SERVERS THE BOT IS IN.
-        print("This bot is in " + str(guild_count) + " guilds.")
-
-        print("Starting the message processing queue.")
+        _logger.debug("This bot is in", guild_count, "guilds.")
         self.process_queue.start()
 
     def on_message(self, message, verbose: bool = False):

@@ -17,7 +17,7 @@ from typing import Optional
 import click
 
 # Mapping and perception
-from emet.controller.robot_agent import RobotAgent
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.core import AbstractRobotClient, Parameters, get_parameters
 from emet.perception import create_semantic_sensor
@@ -168,7 +168,7 @@ def demo_main(
 
     current_datetime = datetime.datetime.now()
     formatted_datetime = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
-    output_pkl_filename = output_filename + "_" + formatted_datetime + ".pkl"
+    output_dir = output_filename + "_" + formatted_datetime
 
     if parameters is None:
         print("- Load parameters")
@@ -252,10 +252,14 @@ def demo_main(
         if pc_rgb is None:
             return
 
-        # Create pointcloud and write it out
-        if len(output_pkl_filename) > 0:
-            print(f"Write pkl to {output_pkl_filename}...")
-            agent.get_voxel_map().write_to_pickle(output_pkl_filename)
+        # Save memory to directory (common format)
+        if len(output_dir) > 0:
+            from emet.memory.backend import get_memory_backend
+            from emet.memory.utils import print_memory_saved_help
+
+            backend = get_memory_backend("dynamem", voxel_map=agent.get_voxel_map())
+            backend.save(output_dir)
+            print_memory_saved_help(output_dir)
 
         if save:
             agent.save_map()

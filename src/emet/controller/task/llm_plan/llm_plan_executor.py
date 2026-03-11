@@ -9,7 +9,7 @@
 
 from typing import Optional
 
-from emet.controller.robot_agent import RobotAgent
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.core.task import Task
 from emet.utils.llm_plan_wrapper import LLMPlanWrapper
 

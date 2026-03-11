@@ -35,6 +35,9 @@ from .voxel import SparseVoxelMap as SparseVoxelMapBase
 
 logger = logging.getLogger(__name__)
 
+# Subdir under self.log for debug files (rgb, depth, descriptions) so memory root stays canonical.
+DEBUG_SUBDIR = "debug"
+
 
 class SparseVoxelMap(SparseVoxelMapBase):
     def __init__(
@@ -339,16 +342,18 @@ class SparseVoxelMap(SparseVoxelMapBase):
         """
         Process rgbd images for Dynamem
         """
-        # Log input data
+        # Log input data to debug subdir so memory root stays canonical for save_memory().
         if not os.path.exists(self.log):
             os.mkdir(self.log)
+        debug_dir = os.path.join(self.log, DEBUG_SUBDIR)
+        os.makedirs(debug_dir, exist_ok=True)
         self.obs_count += 1
 
-        cv2.imwrite(self.log + "/rgb" + str(self.obs_count) + ".jpg", rgb[:, :, [2, 1, 0]])
-        np.save(self.log + "/rgb" + str(self.obs_count) + ".npy", rgb)
-        np.save(self.log + "/depth" + str(self.obs_count) + ".npy", depth)
-        np.save(self.log + "/intrinsics" + str(self.obs_count) + ".npy", intrinsics)
-        np.save(self.log + "/pose" + str(self.obs_count) + ".npy", pose)
+        cv2.imwrite(os.path.join(debug_dir, "rgb" + str(self.obs_count) + ".jpg"), rgb[:, :, [2, 1, 0]])
+        np.save(os.path.join(debug_dir, "rgb" + str(self.obs_count) + ".npy"), rgb)
+        np.save(os.path.join(debug_dir, "depth" + str(self.obs_count) + ".npy"), depth)
+        np.save(os.path.join(debug_dir, "intrinsics" + str(self.obs_count) + ".npy"), intrinsics)
+        np.save(os.path.join(debug_dir, "pose" + str(self.obs_count) + ".npy"), pose)
 
         # Update obstacle map
         self.voxel_pcd.clear_points(
@@ -738,7 +743,12 @@ class SparseVoxelMap(SparseVoxelMapBase):
             K = self.observations[obs_id - 1].camera_K
 
             rgb = cv2.cvtColor(rgb.numpy(), cv2.COLOR_RGB2BGR)
-            cv2.imwrite(self.log + "/rgb" + text + "_" + str(obs_id.item() - 1) + ".png", rgb)
+            debug_dir = os.path.join(self.log, DEBUG_SUBDIR)
+            os.makedirs(debug_dir, exist_ok=True)
+            cv2.imwrite(
+                os.path.join(debug_dir, "rgb" + text + "_" + str(obs_id.item() - 1) + ".png"),
+                rgb,
+            )
 
             res = self.detection_model.compute_obj_coord(text, rgb, depth, K, pose)
 
@@ -1136,14 +1146,13 @@ class SparseVoxelMap(SparseVoxelMapBase):
         """
         Log the text input and image input into some files for debugging and visualization
         """
-        if not os.path.exists(self.log + "/" + str(len(self.image_descriptions))):
-            os.makedirs(self.log + "/" + str(len(self.image_descriptions)))
+        desc_dir = os.path.join(self.log, DEBUG_SUBDIR, str(len(self.image_descriptions)))
+        if not os.path.exists(desc_dir):
+            os.makedirs(desc_dir)
             input_texts = ""
             for command in commands:
                 input_texts += command + "\n"
-            with open(
-                self.log + "/" + str(len(self.image_descriptions)) + "/input.txt", "w"
-            ) as file:
+            with open(os.path.join(desc_dir, "input.txt"), "w") as file:
                 file.write(input_texts)
 
     def parse_answer(self, answer_outputs: str):
@@ -1153,7 +1162,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
         """
 
         # Log LLM output
-        with open(self.log + "/" + str(len(self.image_descriptions)) + "/output.txt", "w") as file:
+        desc_dir = os.path.join(self.log, DEBUG_SUBDIR, str(len(self.image_descriptions)))
+        os.makedirs(desc_dir, exist_ok=True)
+        with open(os.path.join(desc_dir, "output.txt"), "w") as file:
             file.write(answer_outputs)
 
         # Answer outputs in the format "Caption: Reasoning: Answer: Confidence: Action: Confidence_reasoning:"
@@ -1230,9 +1241,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
             image = Image.fromarray(rgb.astype(np.uint8), mode="RGB")
 
             # Log the input images
-            image.save(
-                self.log + "/" + str(len(self.image_descriptions)) + "/" + str(img_idx) + ".jpg"
-            )
+            desc_dir = os.path.join(self.log, DEBUG_SUBDIR, str(len(self.image_descriptions)))
+            os.makedirs(desc_dir, exist_ok=True)
+            image.save(os.path.join(desc_dir, str(img_idx) + ".jpg"))
             img_idx += 1
 
             commands.append(image)

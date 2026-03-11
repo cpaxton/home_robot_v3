@@ -140,6 +140,7 @@ policy/
 # Data collection folder
 data/
 log/
+logs/
 dynamem_log/
 
 # Third-party sim (cloned by emet install sim / emet install robocasa)

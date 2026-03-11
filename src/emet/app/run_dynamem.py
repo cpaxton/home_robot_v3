@@ -79,7 +79,7 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
     "--input-path",
     type=click.Path(),
     default=None,
-    help="Input path with default value None",
+    help="Memory directory to load (common format). If not set, run rotate_in_place first.",
 )
 @click.option(
     "--output-path",
@@ -203,10 +203,13 @@ def main(
 
     if not manipulation_only:
         if input_path is None:
-            start_command = [("rotate_in_place", "")]
+            executor([("rotate_in_place", "")])
         else:
-            start_command = [("read_from_pickle", input_path)]
-        executor(start_command)
+            from emet.memory.backend import get_memory_backend
+
+            backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
+            backend.load(input_path)
+            executor._last_memory_save_path = input_path  # show view help on quit
 
     # Create the prompt we will use to control the robot
     prompt = PickupPromptBuilder()
@@ -247,6 +250,9 @@ def main(
         target_receptacle = None
 
     # At the end, disable everything
+    from emet.memory.utils import print_memory_view_help_on_quit
+
+    print_memory_view_help_on_quit(getattr(executor, "_last_memory_save_path", None))
     robot.stop()
 
 

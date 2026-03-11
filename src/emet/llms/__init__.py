@@ -17,7 +17,7 @@ from .prompts.object_manip_nav_prompt import ObjectManipNavPromptBuilder
 from .prompts.ok_robot_prompt import OkRobotPromptBuilder
 from .prompts.pickup_prompt import PickupPromptBuilder
 from .prompts.simple_prompt import SimpleStretchPromptBuilder
-from .qwen_client import Qwen25Client, get_qwen_variants
+from .qwen_client import Qwen25Client, get_qwen_variants, get_qwen35_variants
 
 # This is a list of all the modules that are imported when you use the import * syntax.
 # The __all__ variable is used to define what symbols get exported when from a module when you use the import * syntax.
@@ -43,15 +43,16 @@ llms = {
 }
 
 
-# Add all the various Qwen25 variants
+# Add all the various Qwen 2.5 and Qwen 3.5 variants
 qwen_variants = get_qwen_variants()
 llms.update({variant: Qwen25Client for variant in qwen_variants})
+for variant in get_qwen35_variants():
+    llms[variant] = Qwen25Client
 llms.update({variant: GemmaClient for variant in ["gemma4b", "gemma1b"]})
 
 
 def process_incoming_qwen_types(qwen_type: str):
     terms = qwen_type.split("-")
-    print(terms)
     if len(terms) == 1:
         # default configuration
         model_size, typing_option, finetuning_option, quantization_option = (
@@ -72,9 +73,10 @@ def process_incoming_qwen_types(qwen_type: str):
         # if the quantization is None, meaning no quantization shall be applied
         if len(terms) < 3:
             finetuning_option, quantization_option = "Instruct", None
-        # This means finetune with Instruct and using quantization "Instruct-Int4"
+        # This means finetune with Instruct and using quantization "Instruct-Int4" or "Instruct-Int" (alias for Int4)
         elif len(terms) >= 4:
-            finetuning_option, quantization_option = terms[2], terms[3].lower()
+            q = terms[3].lower()
+            finetuning_option, quantization_option = terms[2], "int4" if q == "int" else q
         # "AWQ"
         elif "awq" in terms[2].lower():
             finetuning_option, quantization_option = "Instruct", "awq"
@@ -87,11 +89,17 @@ def process_incoming_qwen_types(qwen_type: str):
     return model_size, typing_option, finetuning_option, quantization_option
 
 
+def _agent_prompt_builder() -> "AbstractPromptBuilder":
+    from emet.agent.prompt import AgentPromptBuilder
+    return AgentPromptBuilder()
+
+
 prompts = {
     "simple": SimpleStretchPromptBuilder,
     "object_manip_nav": ObjectManipNavPromptBuilder,
     "ok_robot": OkRobotPromptBuilder,
     "pickup": PickupPromptBuilder,
+    "agent": _agent_prompt_builder,
 }
 
 
@@ -151,12 +159,14 @@ def get_llm_client(
         model_size, typing_option, fine_tuning, quantization_option = process_incoming_qwen_types(
             client_type
         )
+        version = "3.5" if client_type.startswith("qwen35") else None
         return Qwen25Client(
             prompt,
             model_size=model_size,
             fine_tuning=fine_tuning,
             model_type=typing_option,
             quantization=quantization_option,
+            version=version,
             **kwargs,
         )
     else:

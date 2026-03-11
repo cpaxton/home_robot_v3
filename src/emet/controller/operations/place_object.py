@@ -14,7 +14,7 @@ from typing import Optional
 import numpy as np
 
 from emet.controller.base import ManagedOperation
-from emet.controller.robot_agent import RobotAgent
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.mapping.instance import Instance
 from emet.motion import HelloStretchIdx
 from emet.utils.geometry import point_global_to_base

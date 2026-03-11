@@ -8,6 +8,7 @@
 # license information maybe found below, if so.
 
 import datetime
+import os
 import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -16,7 +17,7 @@ import discord
 from termcolor import colored
 
 # import emet.utils.logger as logger
-from emet.controller.robot_agent import RobotAgent
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.task.dynamem import DynamemTaskExecutor, EQAExecuter
 from emet.controller.task.pickup import PickupExecutor
 from emet.llms import PickupPromptBuilder, get_llm_client
@@ -26,8 +27,8 @@ from emet.utils.logger import Logger
 logger = Logger(__name__)
 
 
-class StretchDiscordBot(DiscordBot):
-    """Simple stretch discord bot. Connects to Discord via the API."""
+class EmetDiscordBot(DiscordBot):
+    """Discord bot that connects to a robot agent (pickup, dynamem, eqa, graph_eqa)."""
 
     def __init__(
         self,
@@ -45,12 +46,14 @@ class StretchDiscordBot(DiscordBot):
         manipulation_only: bool = False,
         kwargs: Dict[str, Any] = None,
         home_channel: str = "talk-to-stretch",
+        executor: Any = None,
     ) -> None:
         """
         Create a new Discord bot that can interact with the robot.
 
         Args:
             agent: The robot agent that will be used to control the robot.
+            executor: Optional existing executor (e.g. DynamemTaskExecutor). If provided for task dynamem, it is reused and its discord_bot is set to self.
             token: The token for the discord bot. Will be read from env if not available.
             llm: The language model to use.
             task: The task to perform. Currently only "pickup" is supported.
@@ -82,8 +85,7 @@ class StretchDiscordBot(DiscordBot):
         self.kwargs = kwargs
         self.prompt = prompt
 
-        # LLM info
-        self.home_channel = home_channel
+        self.home_channel = os.environ.get("EMET_DISCORD_CHANNEL", home_channel)
         self.sent_prompt = False
 
         if kwargs is None:
@@ -104,19 +106,25 @@ class StretchDiscordBot(DiscordBot):
                 discord_bot=self,
             )  # type: ignore
         elif self.task == "dynamem":
-            self.executor = DynamemTaskExecutor(
-                robot,
-                agent.parameters,
-                visual_servo=visual_servo,
-                match_method=kwargs["match_method"],
-                device_id=device_id,
-                output_path=output_path,
-                server_ip=server_ip,
-                skip_confirmations=skip_confirmations,
-                mllm=kwargs["mllm_for_visual_grounding"],
-                manipulation_only=manipulation_only,
-                discord_bot=self,
-            )  # type: ignore
+            if executor is not None:
+                self.executor = executor
+                self.executor.discord_bot = self  # type: ignore
+                self.executor.agent.discord_bot = self  # type: ignore
+            else:
+                self.executor = DynamemTaskExecutor(
+                    robot,
+                    agent.parameters,
+                    visual_servo=visual_servo,
+                    match_method=kwargs["match_method"],
+                    device_id=device_id,
+                    output_path=output_path,
+                    server_ip=server_ip,
+                    skip_confirmations=skip_confirmations,
+                    mllm=kwargs["mllm_for_visual_grounding"],
+                    manipulation_only=manipulation_only,
+                    discord_bot=self,
+                )  # type: ignore
+                self.executor.agent.discord_bot = self  # type: ignore
         elif self.task == "eqa":
             self.executor = EQAExecuter(agent, discord_bot=self)  # type: ignore
         elif self.task == "graph_eqa":
@@ -125,55 +133,75 @@ class StretchDiscordBot(DiscordBot):
             raise NotImplementedError(f"Task {task} is not implemented.")
 
         # Get the LLM client
-        # if task is eqa or graph_eqa, all llms will be created within self.agent, llm_client will not be used.
-        if self.task not in ("eqa", "graph_eqa"):
+        # When llm is None (e.g. agent loop manages its own LLM), skip model loading.
+        # When task is eqa/graph_eqa, all llms are created within self.agent.
+        if llm is not None and self.task not in ("eqa", "graph_eqa"):
             self.llm_client = get_llm_client(llm, prompt=prompt)
         else:
             self.llm_client = None
 
         self._llm_lock = threading.Lock()
+        self._ready_event = threading.Event()
+
+    @property
+    def is_ready(self) -> bool:
+        return self._ready_event.is_set()
+
+    def wait_until_ready(self, timeout: float = 30.0) -> bool:
+        """Block until Discord connection is ready, or timeout. Returns True if ready."""
+        return self._ready_event.wait(timeout=timeout)
 
     def on_ready(self):
         """Event listener called when the bot has switched from offline to online."""
-        print(f"{self.client.user} has connected to Discord!")
+        logger.debug(f"{self.client.user} has connected to Discord!")
         guild_count = 0
 
-        print("Bot User name:", self.client.user.name)
-        print("Bot Global name:", self.client.user.global_name)
-        print("Bot User IDL", self.client.user.id)
+        logger.debug("Bot User name:", self.client.user.name)
+        logger.debug("Bot Global name:", self.client.user.global_name)
+        logger.debug("Bot User ID:", self.client.user.id)
         self._user_name = self.client.user.name
         self._user_id = self.client.user.id
 
-        # This is from https://builtin.com/software-engineering-perspectives/discord-bot-python
-        # LOOPS THROUGH ALL THE GUILD / SERVERS THAT THE BOT IS ASSOCIATED WITH.
         for guild in self.client.guilds:
-            # PRINT THE SERVER'S ID AND NAME.
-            print(f"Joining Server {guild.id} (name: {guild.name})")
-
-            # INCREMENTS THE GUILD COUNTER.
+            logger.debug(f"Joining Server {guild.id} (name: {guild.name})")
             guild_count = guild_count + 1
 
+            found_home = False
+            first_text_channel = None
             for channel in guild.text_channels:
+                if first_text_channel is None:
+                    first_text_channel = channel
                 if channel.name == self.home_channel:
-                    print(f"Adding home channel {channel} to the allowed channels.")
+                    logger.info(f"Found home channel: #{channel.name}")
                     self.allowed_channels.add_home(channel)
+                    found_home = True
                     break
 
-        # Plans list
+            if not found_home and first_text_channel is not None:
+                logger.warning(
+                    f"Home channel '{self.home_channel}' not found in {guild.name}. "
+                    f"Using #{first_text_channel.name} instead. "
+                    f"Set EMET_DISCORD_CHANNEL or create a #{self.home_channel} channel."
+                )
+                self.allowed_channels.add_home(first_text_channel)
+
         self.next_plan = None
         self._plan_lock = threading.Lock()
         self._plan_thread = None
 
-        print(self.allowed_channels)
+        if len(self.allowed_channels) == 0:
+            logger.error("No Discord channels found! Messages will not be sent.")
+            logger.error("Create a #talk-to-stretch channel or set EMET_DISCORD_CHANNEL=<channel-name>.")
+        else:
+            logger.info("Discord channels:", len(self.allowed_channels), "in", guild_count, "guild(s).")
 
-        # PRINTS HOW MANY GUILDS / SERVERS THE BOT IS IN.
-        print("This bot is in " + str(guild_count) + " guild(s).")
-
-        print("Starting the message processing queue.")
         self.process_queue.start()
 
         # Start the plan thread
         self.start_plan_thread()
+
+        # Signal that the bot is ready
+        self._ready_event.set()
 
     def push_task_to_all_channels(
         self, message: Optional[str] = None, content: Optional[str] = None
@@ -238,22 +266,35 @@ class StretchDiscordBot(DiscordBot):
         print()
         print("-" * 40)
         print("Handling task from channel:", task.channel.name)
-        print("Handling task: message = \n", task.message)
+        print("Handling task: message =", task.message)
 
         text = task.message
         try:
             if task.explicit:
                 print("This task was explicitly triggered.")
-                await task.channel.send(task.message)
+                if task.message:
+                    await task.channel.send(task.message)
                 if task.content is not None:
-                    # Filename is computed from date and time
+                    import io
+                    import numpy as np
+                    from PIL import Image as PILImage
+                    buf = io.BytesIO()
+                    img = task.content
+                    if isinstance(img, np.ndarray):
+                        img = PILImage.fromarray(img.astype(np.uint8))
+                    img.save(buf, format="PNG")
+                    buf.seek(0)
                     filename = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".png"
-                    await task.channel.send(file=discord.File(task.content, filename=filename))
+                    await task.channel.send(file=discord.File(buf, filename=filename))
                 return
         except Exception as e:
             print(colored("Error in handling task: " + str(e), "red"))
 
         with self._llm_lock:
+            if self.llm_client is None:
+                # Agent mode: no local LLM; just log the incoming message
+                print(colored(f"[Discord] {text}", "cyan"))
+                return
             if self.task != "eqa":
                 response = self.llm_client(text, verbose=True)
                 print("Response:", response)
@@ -276,9 +317,12 @@ class StretchDiscordBot(DiscordBot):
                 with self._plan_lock:
                     response, channel = self.next_plan
                     self.next_plan = None
-                # response is in the form of "User: ******"
-                response = response.split(":", 1)[1]
-                self.executor(response, channel=channel)
+                # For eqa/graph_eqa, response is the raw message string (optionally "User: question"); for pickup/dynamem it's List[Tuple[str, str]]
+                if self.task in ("eqa", "graph_eqa") and isinstance(response, str):
+                    question = response.split(":", 1)[-1].strip() if ":" in response else response
+                    self.executor(question, channel=channel)
+                else:
+                    self.executor(response, channel=channel)
             else:
                 time.sleep(0.01)
 

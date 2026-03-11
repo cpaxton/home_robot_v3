@@ -14,16 +14,16 @@ import numpy as np
 import torch
 from PIL import Image
 from termcolor import colored
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig, pipeline
 
 from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder
 
 qwen_typing_options = ["Math", "Coder", "Deepseek", None]
 qwen_quantization_options = {
-    None: [None, "Int4", "Int8", "Instruct", "Instruct-Int4", "Instruct-Int8"],
-    "Coder": [None, "Int4", "Int8", "Instruct", "Instruct-Int4", "Instruct-Int8"],
-    "Math": [None, "Int4", "Int8", "Instruct", "Instruct-Int4", "Instruct-Int8"],
-    "Deepseek": [None, "Int4", "Int8"],
+    None: [None, "Int4", "Int8", "Int", "Instruct", "Instruct-Int4", "Instruct-Int8", "Instruct-Int"],
+    "Coder": [None, "Int4", "Int8", "Int", "Instruct", "Instruct-Int4", "Instruct-Int8", "Instruct-Int"],
+    "Math": [None, "Int4", "Int8", "Int", "Instruct", "Instruct-Int4", "Instruct-Int8", "Instruct-Int"],
+    "Deepseek": [None, "Int4", "Int8", "Int"],
 }
 qwen_sizes = {
     None: ["0.5B", "1.5B", "3B", "7B", "14B", "32B", "72B"],
@@ -48,6 +48,15 @@ def get_qwen_variants():
     return qwen_variants
 
 
+def get_qwen35_variants():
+    """Return Qwen 3.5 model variant names (e.g. qwen35-4B, qwen35-9B)."""
+    return [f"qwen35-{s}" for s in qwen35_sizes]
+
+
+# Qwen 3.5 sizes on HuggingFace (Qwen/Qwen3.5-*)
+qwen35_sizes = ["0.8B", "2B", "4B", "9B"]
+
+
 class Qwen25Client(AbstractLLMClient):
     def __init__(
         self,
@@ -59,16 +68,30 @@ class Qwen25Client(AbstractLLMClient):
         max_tokens: int = 4096,
         device: str = "cuda",
         quantization: Optional[str] = "int4",
+        version: Optional[str] = None,
     ):
         super().__init__(prompt, prompt_kwargs)
-        assert device in ["cuda", "mps"], f"Invalid device: {device}"
-        assert model_type in qwen_typing_options, f"Invalid model type: {model_type}"
-        assert model_size in qwen_sizes[model_type], f"Invalid model size: {model_size}"
-        assert fine_tuning in [None, "Instruct"], f"Invalid fine-tuning: {fine_tuning}"
+        assert device in ["cuda", "mps", "cpu"], f"Invalid device: {device}"
+        if device == "cpu":
+            import warnings
+            warnings.warn(
+                "Qwen client on CPU: inference will be slow; use a small model (e.g. 1.5B) and Int4 for local testing.",
+                UserWarning,
+                stacklevel=2,
+            )
+        if version == "3.5":
+            assert model_size in qwen35_sizes, f"Invalid Qwen 3.5 size: {model_size}, use one of {qwen35_sizes}"
+        else:
+            assert model_type in qwen_typing_options, f"Invalid model type: {model_type}"
+            assert model_size in qwen_sizes[model_type], f"Invalid model size: {model_size}"
+            assert fine_tuning in [None, "Instruct"], f"Invalid fine-tuning: {fine_tuning}"
 
+        self._version = version
         self.max_tokens = max_tokens
 
-        if model_type == "Deepseek":
+        if version == "3.5":
+            model_name = f"Qwen/Qwen3.5-{model_size}"
+        elif model_type == "Deepseek":
             model_name = f"deepseek-ai/DeepSeek-R1-Distill-Qwen-{model_size}"
         elif model_type is None:
             if fine_tuning is None:
@@ -82,14 +105,17 @@ class Qwen25Client(AbstractLLMClient):
                 model_name = f"Qwen/Qwen2.5-{model_type}-{model_size}-{fine_tuning}"
 
         print(f"Loading model: {model_name}")
-        model_kwargs = {"torch_dtype": "auto"}
+        model_kwargs = {"dtype": "auto"}
 
         quantization_config = None
         if quantization is not None:
             quantization = quantization.lower()
+            # "int" is alias for int4 (e.g. --llm qwen25-Coder-3B-Instruct-Int)
+            if quantization == "int":
+                quantization = "int4"
             # Note: there were supposed to be other options but this is the only one that worked this way
             if quantization == "awq":
-                model_kwargs["torch_dtype"] = torch.float16
+                model_kwargs["dtype"] = torch.float16
                 model_name += "-AWQ"
             elif quantization in ["int8", "int4"]:
                 try:
@@ -115,15 +141,26 @@ class Qwen25Client(AbstractLLMClient):
             model_kwargs["quantization_config"] = quantization_config
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        # When using quantization, omit torch_dtype and use device_map so bitsandbytes loads correctly
+        load_kwargs = dict(model_kwargs)
+        if quantization_config is not None:
+            load_kwargs.pop("dtype", None)
+            load_kwargs.pop("torch_dtype", None)
+            if device != "cpu":
+                load_kwargs["device_map"] = "auto"
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            torch_dtype="auto",
+            **load_kwargs,
         )
+        if device == "cpu":
+            self.model = self.model.to("cpu")
+        # Pipeline device: 0 or "cuda" for GPU, -1 for CPU
+        pipe_device = -1 if device == "cpu" else (0 if device == "cuda" else device)
         self.pipe = pipeline(
             "text-generation",
             model=self.model,
             tokenizer=self.tokenizer,
-            device=device,
+            device=pipe_device,
             model_kwargs=model_kwargs,
         )
 
@@ -138,15 +175,28 @@ class Qwen25Client(AbstractLLMClient):
         self.add_history(new_message)
         messages = self.get_history()
 
+        template_kwargs: dict = {}
+        if self._version == "3.5":
+            template_kwargs["enable_thinking"] = False
         text = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+            messages, tokenize=False, add_generation_prompt=True, **template_kwargs
         )
 
         t0 = timeit.default_timer()
-        outputs = self.pipe(text, max_new_tokens=self.max_tokens)
+        gen_config = GenerationConfig(max_new_tokens=self.max_tokens)
+        outputs = self.pipe(text, generation_config=gen_config)
         t1 = timeit.default_timer()
 
-        assistant_response = outputs[0]["generated_text"].split("assistant")[-1].strip()
+        generated = outputs[0]["generated_text"]
+        # Extract the last assistant turn. Qwen uses <|im_start|>assistant\n as delimiter.
+        if "<|im_start|>assistant" in generated:
+            assistant_response = generated.rsplit("<|im_start|>assistant", 1)[-1]
+            # Strip the role marker and any trailing end tokens
+            assistant_response = assistant_response.lstrip("\n").rstrip()
+            if assistant_response.endswith("<|im_end|>"):
+                assistant_response = assistant_response[:-len("<|im_end|>")].rstrip()
+        else:
+            assistant_response = generated.split("assistant")[-1].strip()
 
         self.add_history({"role": "assistant", "content": assistant_response})
         if verbose:
@@ -204,7 +254,7 @@ class Qwen25VLClient:
             model_name = f"Qwen/Qwen2.5-VL-{model_size}-{fine_tuning}"
 
         print(f"Loading model: {model_name}")
-        model_kwargs = {"torch_dtype": "auto"}
+        model_kwargs = {"dtype": "auto"}
 
         quantization_config = None
         if quantization is not None:

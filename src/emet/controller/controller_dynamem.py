@@ -35,7 +35,7 @@ from emet.controller.manipulation.dynamem_manipulation.grasper_utils import (
     pickup,
     process_image_for_placing,
 )
-from emet.controller.base_robot_agent import BaseRobotAgent
+from emet.controller.base_controller import BaseController
 from emet.audio.text_to_speech import PiperTextToSpeech
 from emet.core.interfaces import Observations
 from emet.core.parameters import Parameters
@@ -65,7 +65,7 @@ INIT_HEAD_PAN = -1.57
 INIT_HEAD_TILT = -0.65
 
 
-class DynamemController(BaseRobotAgent):
+class DynamemController(BaseController):
     """
     DynaMem robot controller. Extends base with DynaMem-specific mapping and manipulation.
     https://dynamem.github.io
@@ -110,14 +110,15 @@ class DynamemController(BaseRobotAgent):
         else:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        if not os.path.exists("dynamem_log"):
-            os.makedirs("dynamem_log")
+        logs_dir = "logs"
+        if not os.path.exists(logs_dir):
+            os.makedirs(logs_dir)
 
         if log is None:
             current_datetime = datetime.now()
-            self.log = "dynamem_log/debug_" + current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
+            self.log = os.path.join(logs_dir, "memory_" + current_datetime.strftime("%Y-%m-%d_%H-%M-%S"))
         else:
-            self.log = "dynamem_log/" + log
+            self.log = os.path.join(logs_dir, log) if not os.path.isabs(log) else log
 
         self.create_obstacle_map(parameters)
 
