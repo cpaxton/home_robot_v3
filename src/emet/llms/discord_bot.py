@@ -133,8 +133,9 @@ class EmetDiscordBot(DiscordBot):
             raise NotImplementedError(f"Task {task} is not implemented.")
 
         # Get the LLM client
-        # if task is eqa or graph_eqa, all llms will be created within self.agent, llm_client will not be used.
-        if self.task not in ("eqa", "graph_eqa"):
+        # When llm is None (e.g. agent loop manages its own LLM), skip model loading.
+        # When task is eqa/graph_eqa, all llms are created within self.agent.
+        if llm is not None and self.task not in ("eqa", "graph_eqa"):
             self.llm_client = get_llm_client(llm, prompt=prompt)
         else:
             self.llm_client = None

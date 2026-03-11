@@ -43,7 +43,7 @@ class ChatLog:
         stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         self.path = os.path.join(log_dir, f"chat_{stamp}.jsonl")
         self._fh = open(self.path, "a")
-        logger.info("Chat log: %s", self.path)
+        logger.info("Chat log:", self.path)
 
     def log(self, role: str, content: str, **extra: Any) -> None:
         record = {"ts": datetime.now().isoformat(), "role": role, "content": content}
@@ -180,6 +180,7 @@ def run_agent_with_robot(
 
         discord_bot = EmetDiscordBot(
             AgentPlaceholder(executor),
+            llm=None,
             task="dynamem",
             executor=executor,
             skip_confirmations=skip_confirmations,
