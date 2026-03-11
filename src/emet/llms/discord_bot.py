@@ -45,7 +45,7 @@ class EmetDiscordBot(DiscordBot):
         debug_llm: bool = False,
         manipulation_only: bool = False,
         kwargs: Dict[str, Any] = None,
-        home_channel: str = "talk-to-robot",
+        home_channel: str = "talk-to-stretch",
         executor: Any = None,
     ) -> None:
         """
@@ -191,7 +191,7 @@ class EmetDiscordBot(DiscordBot):
 
         if len(self.allowed_channels) == 0:
             logger.error("No Discord channels found! Messages will not be sent.")
-            logger.error("Create a #talk-to-robot channel or set EMET_DISCORD_CHANNEL=<channel-name>.")
+            logger.error("Create a #talk-to-stretch channel or set EMET_DISCORD_CHANNEL=<channel-name>.")
         else:
             logger.info("Discord channels:", len(self.allowed_channels), "in", guild_count, "guild(s).")
 
