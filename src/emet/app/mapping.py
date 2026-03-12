@@ -65,6 +65,7 @@ from emet.perception import create_semantic_sensor
 )
 @click.option("--silent", is_flag=True, help="Disable audio feedback")
 @click.option("--save", is_flag=True, help="Save the map to memory")
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     visualize,
     manual_wait,
@@ -88,6 +89,7 @@ def main(
     silent: bool = False,
     save: bool = True,
     radius: float = -1.0,
+    port_offset: int = 0,
     **kwargs,
 ):
 
@@ -102,6 +104,7 @@ def main(
         parameters=parameters,
         enable_rerun_server=True,
         publish_observations=enable_realtime_updates,
+        port_offset=port_offset,
     )
     # Call demo_main with all the arguments
     demo_main(

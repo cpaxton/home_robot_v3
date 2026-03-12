@@ -71,12 +71,14 @@ def getch():
     help="Set if we are executing on the robot and not on a remote computer",
 )
 @click.option("--headless", is_flag=True, help="Do not show camera feeds")
-def main(robot_ip: str = "192.168.1.15", local: bool = False, headless: bool = False):
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
+def main(robot_ip: str = "192.168.1.15", local: bool = False, headless: bool = False, port_offset: int = 0):
 
     # Create robot
     robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
+        port_offset=port_offset,
     )
     if not robot.in_navigation_mode():
         robot.move_to_nav_posture()

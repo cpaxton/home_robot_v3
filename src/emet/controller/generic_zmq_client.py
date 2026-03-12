@@ -55,11 +55,17 @@ class GenericZmqClient(AbstractRobotClient):
         send_port: int = 4402,
         recv_state_port: int = 4403,
         recv_servo_port: int = 4404,
+        port_offset: int = 0,
         parameters: Optional[Parameters] = None,
         use_remote_computer: bool = True,
         start_immediately: bool = True,
     ):
         super().__init__()
+        if port_offset:
+            recv_port += port_offset
+            send_port += port_offset
+            recv_state_port += port_offset
+            recv_servo_port += port_offset
         self._spec = robot_spec
         self.recv_port = recv_port
         self.send_port = send_port

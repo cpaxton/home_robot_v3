@@ -165,6 +165,7 @@ def run_agent_with_robot(
     debug_llm: bool = False,
     agent_name: str = "Emet",
     commands: Optional[List[str]] = None,
+    port_offset: int = 0,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -178,6 +179,7 @@ def run_agent_with_robot(
     robot = StretchZmqClient(
         robot_ip=robot_ip,
         enable_rerun_server=True,
+        port_offset=port_offset,
     )
 
     executor = DynamemTaskExecutor(

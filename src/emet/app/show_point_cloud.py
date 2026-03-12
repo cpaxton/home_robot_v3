@@ -26,11 +26,13 @@ from emet.utils.point_cloud import show_point_cloud
 )
 @click.option("--parameter_file", default="default_planner.yaml", help="Path to parameter file")
 @click.option("--reset", is_flag=True, help="Reset the robot to origin before starting")
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip: str = "192.168.1.69",
     local: bool = False,
     parameter_file: str = "config/default_planner.yaml",
     reset: bool = False,
+    port_offset: int = 0,
 ):
     """Set up the robot and send it to home (0, 0, 0)."""
     parameters = get_parameters(parameter_file)
@@ -39,6 +41,7 @@ def main(
         use_remote_computer=(not local),
         parameters=parameters,
         enable_rerun_server=False,
+        port_offset=port_offset,
     )
     if reset:
         demo = RobotAgent(robot, parameters, None)

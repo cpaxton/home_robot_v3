@@ -33,6 +33,7 @@ from emet.perception import create_semantic_sensor
 @click.option(
     "--repeat_count", type=int, default=1, help="Number of times to repeat the grasp - for testing"
 )
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip: str = "",
     local: bool = False,
@@ -43,6 +44,7 @@ def main(
     reset: bool = False,
     target_object: str = "person",  # "face"
     repeat_count: int = 1,
+    port_offset: int = 0,
 ):
     # Create robot
     parameters = get_parameters(parameter_file)
@@ -50,6 +52,7 @@ def main(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
         parameters=parameters,
+        port_offset=port_offset,
     )
     semantic_sensor = create_semantic_sensor(
         parameters,

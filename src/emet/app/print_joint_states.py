@@ -25,17 +25,20 @@ from emet.motion import HelloStretchIdx
     help="Set if we are executing on the robot and not on a remote computer",
 )
 @click.option("-j", "--joint", default="", help="Joint to print")
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip: str = "",
     local: bool = False,
     parameter_file: str = "config/default_planner.yaml",
     joint: str = "",
+    port_offset: int = 0,
 ):
     # Create robot
     robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
         enable_rerun_server=False,
+        port_offset=port_offset,
     )
     robot.start()
     # Check robot status first

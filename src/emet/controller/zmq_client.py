@@ -104,6 +104,7 @@ class StretchZmqClient(AbstractRobotClient):
         recv_state_port: int = 4403,
         recv_servo_port: int = 4404,
         pub_obs_port: int = 4450,
+        port_offset: int = 0,
         output_path: Path = None,
         parameters: Parameters = None,
         use_remote_computer: bool = True,
@@ -135,7 +136,14 @@ class StretchZmqClient(AbstractRobotClient):
             grasp_frame: The frame to use for grasping
             ee_link_name: The name of the end effector link
             manip_mode_controlled_joints: The joints to control in manipulation mode
+            port_offset: Added to all default port numbers (e.g. 100 → 4501-4504)
         """
+        if port_offset:
+            recv_port += port_offset
+            send_port += port_offset
+            recv_state_port += port_offset
+            recv_servo_port += port_offset
+            pub_obs_port += port_offset
         self.recv_port = recv_port
         self.send_port = send_port
         self.reset()

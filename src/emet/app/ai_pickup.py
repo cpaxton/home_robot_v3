@@ -117,6 +117,7 @@ logger = Logger(__name__)
     is_flag=True,
     help="Set to print LLM responses to the console, to debug issues when parsing them when trying new LLMs.",
 )
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip: str = "192.168.1.15",
     local: bool = False,
@@ -136,6 +137,7 @@ def main(
     realtime: bool = False,
     radius: float = 3.0,
     input_path: str = "",
+    port_offset: int = 0,
 ):
     """Set up the robot, create a task plan, and execute it."""
     # Create robot
@@ -144,6 +146,7 @@ def main(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
         parameters=parameters,
+        port_offset=port_offset,
     )
     semantic_sensor = create_semantic_sensor(
         parameters=parameters,

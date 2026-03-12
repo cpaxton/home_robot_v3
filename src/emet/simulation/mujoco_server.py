@@ -924,11 +924,13 @@ def main(
     scene_model = None
     objects_info = None
 
-    base_ports = (4401, 4402, 4403, 4404)
-    send_port = send_port if send_port is not None else base_ports[0] + port_offset
-    recv_port = recv_port if recv_port is not None else base_ports[1] + port_offset
-    send_state_port = send_state_port if send_state_port is not None else base_ports[2] + port_offset
-    send_servo_port = send_servo_port if send_servo_port is not None else base_ports[3] + port_offset
+    from emet.utils.port_utils import get_ports
+
+    ports = get_ports(port_offset)
+    send_port = send_port if send_port is not None else ports.send
+    recv_port = recv_port if recv_port is not None else ports.recv
+    send_state_port = send_state_port if send_state_port is not None else ports.state
+    send_servo_port = send_servo_port if send_servo_port is not None else ports.servo
 
     if seed is not None:
         np.random.seed(seed)

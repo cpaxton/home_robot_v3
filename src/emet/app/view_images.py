@@ -46,6 +46,7 @@ from emet.utils.image import adjust_gamma
 @click.option("--segment_ee", is_flag=True, help="Run semantic segmentation on EE rgb images")
 @click.option("--start-rerun", "--start_rerun", is_flag=True, help="Start the rerun server")
 @click.option("--aruco", is_flag=True, help="Run aruco detection on EE rgb images")
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip: str = "192.168.1.15",
     local: bool = False,
@@ -60,6 +61,7 @@ def main(
     segment_ee: bool = False,
     aruco: bool = False,
     start_rerun: bool = False,
+    port_offset: int = 0,
 ):
     # Create robot
     parameters = get_parameters(parameter_file)
@@ -68,6 +70,7 @@ def main(
         use_remote_computer=(not local),
         parameters=parameters,
         enable_rerun_server=start_rerun,
+        port_offset=port_offset,
     )
     if segment_ee:
         run_semantic_segmentation = True

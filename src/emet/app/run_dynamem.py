@@ -137,6 +137,7 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
     help="Bind Rerun to 0.0.0.0 for remote viewing (Tailscale, etc.). "
     "If direct connection fails, use SSH port forwarding instead.",
 )
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     server_ip,
     manual_wait,
@@ -162,6 +163,7 @@ def main(
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
     rerun_bind: bool = False,
+    port_offset: int = 0,
     **kwargs,
 ):
     """
@@ -184,6 +186,7 @@ def main(
         rerun_headless=headless,
         rerun_show_panels=rerun_show_panels,
         rerun_debug=rerun_debug,
+        port_offset=port_offset,
     )
 
     print("- Create task executor")

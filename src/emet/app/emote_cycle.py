@@ -10,16 +10,24 @@
 # license information maybe found below, if so.
 
 
+import click
+
 from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.task.emote import EmoteTask
 from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
 
 
+@click.command()
+@click.option("--robot_ip", default="", help="IP address of the robot")
+@click.option("--local", is_flag=True, help="Set if we are executing on the robot and not on a remote computer")
+@click.option("--parameter_file", default="default_planner.yaml", help="Path to parameter file")
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip: str = "",
     local: bool = False,
     parameter_file: str = "default_planner.yaml",
+    port_offset: int = 0,
 ):
     # Create robot client
     parameters = get_parameters(parameter_file)
@@ -27,6 +35,7 @@ def main(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
         parameters=parameters,
+        port_offset=port_offset,
     )
 
     robot.move_to_nav_posture()
