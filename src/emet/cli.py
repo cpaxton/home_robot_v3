@@ -225,6 +225,103 @@ def robocasa_list() -> None:
     sys.exit(_run_module("emet.simulation.mujoco_server", ["--use-robocasa", "--list-robocasa-tasks"]))
 
 
+def _molmospaces_runner_python() -> Path | None:
+    """Return Python for MolmoSpaces runner venv, or None if not set up."""
+    from emet.simulation.molmospaces_config import get_molmospaces_runner_python
+
+    return get_molmospaces_runner_python()
+
+
+def _run_molmospaces_runner(args: list[str]) -> int:
+    """Run the MolmoSpaces runner in its venv. Returns exit code."""
+    py = _molmospaces_runner_python()
+    if py is None:
+        click.echo(
+            "MolmoSpaces runner venv not found. Create it with: install.sh --molmospaces\n"
+            "Or set MOLMOSPACES_PYTHON to the Python executable of a venv with molmo-spaces installed.",
+            err=True,
+        )
+        return 1
+    root = _project_root()
+    cmd = [str(py), "-m", "emet.simulation.molmospaces_runner"] + args
+    env = os.environ.copy()
+    return subprocess.call(cmd, cwd=root, env=env)
+
+
+@main.group("molmospaces", short_help="MolmoSpaces scenes and robots (requires separate venv)")
+def molmospaces_cmd() -> None:
+    """Set up MolmoSpaces scenes, list robots (e.g. rby1 / Galaxea R1), and run simulation.
+
+    Requires a separate venv with molmo-spaces installed (see docs/molmospaces.md):
+      install.sh --molmospaces
+    Or set MOLMOSPACES_PYTHON to your molmo-spaces venv Python.
+    """
+
+
+@molmospaces_cmd.command("list-robots", short_help="List supported robot IDs")
+def molmospaces_list_robots() -> None:
+    """Print MolmoSpaces robot IDs (rby1, rby1m, franka_*, etc.). Default robot is rby1 (Galaxea R1 family)."""
+    from emet.simulation.molmospaces_config import DEFAULT_MOLMOSPACES_ROBOT, MOLMOSPACES_ROBOT_IDS
+
+    click.echo("Robots: " + ", ".join(MOLMOSPACES_ROBOT_IDS))
+    click.echo(f"Default: {DEFAULT_MOLMOSPACES_ROBOT}")
+
+
+@molmospaces_cmd.command("list-scenes", short_help="List scene names and split sizes")
+def molmospaces_list_scenes() -> None:
+    """Print available MolmoSpaces scene names and split counts. Uses runner venv."""
+    sys.exit(_run_molmospaces_runner(["list-scenes"]))
+
+
+@molmospaces_cmd.command("install-scene", short_help="Install a scene and optionally write XML path")
+@click.option("--scene", default="ithor", help="Scene name (e.g. ithor, procthor-10k)")
+@click.option("--split", default="train", type=click.Choice(["train", "val", "test"]))
+@click.option("--index", default=0, type=int, help="Scene index within split")
+@click.option(
+    "--scene-path", type=click.Path(path_type=Path), default=None, help="Write installed scene XML to this path"
+)
+def molmospaces_install_scene(scene: str, split: str, index: int, scene_path: Path | None) -> None:
+    """Download and install a MolmoSpaces scene; optionally copy the scene XML to a path."""
+    args = ["install-scene", "--scene", scene, "--split", split, "--index", str(index)]
+    if scene_path is not None:
+        args.extend(["--scene-path", str(scene_path)])
+    sys.exit(_run_molmospaces_runner(args))
+
+
+@molmospaces_cmd.command("serve", short_help="Run MolmoSpaces simulation (scene + robot)")
+@click.option("--scene", default="ithor", help="Scene name")
+@click.option("--split", default="train", type=click.Choice(["train", "val", "test"]))
+@click.option("--index", default=0, type=int, help="Scene index")
+@click.option("--robot", default="rby1", help="Robot ID (default: rby1, Galaxea R1 family)")
+@click.option("--headless", is_flag=True, help="Run without viewer")
+@click.option("--viewer", is_flag=True, help="Open MuJoCo viewer")
+@click.option("--rerun", type=str, default="", metavar="PORT_OR_PATH", help="Log to rerun (port or RRD path)")
+@click.option(
+    "--scene-path", type=click.Path(path_type=Path), default=None, help="Write installed scene XML path to this file"
+)
+def molmospaces_serve(
+    scene: str,
+    split: str,
+    index: int,
+    robot: str,
+    headless: bool,
+    viewer: bool,
+    rerun: str,
+    scene_path: Path | None,
+) -> None:
+    """Run MuJoCo simulation with a MolmoSpaces scene and robot. Use --viewer to see the sim."""
+    args = ["serve", "--scene", scene, "--split", split, "--index", str(index), "--robot", robot]
+    if headless:
+        args.append("--headless")
+    if viewer:
+        args.append("--viewer")
+    if rerun:
+        args.extend(["--rerun", rerun])
+    if scene_path is not None:
+        args.extend(["--scene-path", str(scene_path)])
+    sys.exit(_run_molmospaces_runner(args))
+
+
 def _kill_processes_on_port(port: int) -> bool:
     """Thin wrapper for emet.utils.port_utils.kill_processes_on_port."""
     from emet.utils.port_utils import kill_processes_on_port
@@ -414,10 +511,21 @@ def deploy(
 @main.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 @click.argument(
     "app",
-    type=click.Choice([
-        "dynamem", "graph-eqa", "mapping", "grasp", "chat", "agent", "web-chat",
-        "ai_pickup", "timing", "discord", "create-and-print-memory",
-    ]),
+    type=click.Choice(
+        [
+            "dynamem",
+            "graph-eqa",
+            "mapping",
+            "grasp",
+            "chat",
+            "agent",
+            "web-chat",
+            "ai_pickup",
+            "timing",
+            "discord",
+            "create-and-print-memory",
+        ]
+    ),
 )
 @click.option("--robot-ip", "--robot_ip", default="127.0.0.1", help="Robot or simulator IP")
 @click.option("--server-ip", "--server_ip", default="127.0.0.1", help="Server IP (e.g. for AnyGrasp)")
@@ -564,7 +672,7 @@ def sync(
 
     # Sim extra: pip-installable deps (mujoco, stretch-urdf, etc.) are always in pyproject.toml.
     # robosuite/robocasa are installed editable from third_party/ when present.
-    sim_editable_pkgs: List[str] = []
+    sim_editable_pkgs: list[str] = []
     if "sim" in extras:
         missing = [name for name in ("robosuite", "robocasa") if not (root / "third_party" / name).is_dir()]
         if missing:
@@ -574,9 +682,7 @@ def sync(
                 err=True,
             )
         else:
-            sim_editable_pkgs = [
-                str(root / "third_party" / name) for name in ("robosuite", "robocasa")
-            ]
+            sim_editable_pkgs = [str(root / "third_party" / name) for name in ("robosuite", "robocasa")]
 
     if extras:
         click.echo("Syncing extras: " + ", ".join(extras))
@@ -593,9 +699,7 @@ def sync(
         # Install robosuite/robocasa editable from third_party (not in lockfile)
         if sim_editable_pkgs:
             click.echo("Installing robosuite/robocasa from third_party...")
-            result = subprocess.call(["uv", "pip", "install"] + [
-                arg for p in sim_editable_pkgs for arg in ["-e", p]
-            ])
+            result = subprocess.call(["uv", "pip", "install"] + [arg for p in sim_editable_pkgs for arg in ["-e", p]])
         sys.exit(result)
     else:
         # Fallback to pip

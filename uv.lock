@@ -1130,7 +1130,7 @@ requires-dist = [
     { name = "wget" },
     { name = "yacs" },
 ]
-provides-extras = ["dev", "discord", "sim", "hand-tracker", "dynamem"]
+provides-extras = ["dev", "discord", "sim", "hand-tracker", "dynamem", "molmospaces"]
 
 [[package]]
 name = "etils"

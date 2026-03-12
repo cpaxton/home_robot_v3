@@ -15,6 +15,7 @@ NO_SAM2="false"
 INSTALL_SIM="true"   # default: clone third_party/robocasa+robosuite and include sim extra
 EXTRAS="dev"
 CLEAN_SIM="false"
+INSTALL_MOLMOSPACES="false"
 
 for arg in "$@"; do
     case $arg in
@@ -37,6 +38,9 @@ for arg in "$@"; do
         --clean)
             CLEAN_SIM="true"
             ;;
+        --molmospaces)
+            INSTALL_MOLMOSPACES="true"
+            ;;
         *)
             ;;
     esac
@@ -47,14 +51,11 @@ done
 echo "=============================================="
 echo "         INSTALLING STRETCH AI (uv)"
 echo "=============================================="
-<<<<<<< HEAD
 echo "Options: CPU_ONLY=$CPU_ONLY, NO_SAM2=$NO_SAM2, INSTALL_SIM=$INSTALL_SIM, EXTRAS=$EXTRAS"
-=======
-echo "Options: CPU_ONLY=$CPU_ONLY, NO_SAM2=$NO_SAM2, EXTRAS=$EXTRAS"
 echo "         -y/--yes = non-interactive (install deps, link emet to ~/.local/bin)"
 echo "         --clean  = remove third_party/robosuite, robosuite_models, robocasa (then install)"
+echo "         --molmospaces = create .venv-molmospaces for MolmoSpaces (scenes + rby1 robot)"
 echo "Root: $ROOT_DIR"
->>>>>>> 9cc691a8aa27793ef4999c8439b8dbecad532b57
 echo "---------------------------------------------"
 
 # Optional: remove sim third_party dirs so install works without sim (uv.lock has no sim by default)
@@ -135,7 +136,6 @@ echo "  -> uv sync completed."
 source .venv/bin/activate
 uv pip uninstall av -y 2>/dev/null || true
 
-<<<<<<< HEAD
 # Sim: clone third_party/robosuite and robocasa, install editable, run macros and (optionally) download assets
 if [ "$INSTALL_SIM" = "true" ]; then
     echo ""
@@ -146,7 +146,30 @@ if [ "$INSTALL_SIM" = "true" ]; then
         bash "$SIM_SCRIPT" -n
     else
         bash "$SIM_SCRIPT"
-=======
+    fi
+fi
+
+# MolmoSpaces: separate venv (molmo-spaces needs mujoco 3.4 + numpy>=2.2; main emet uses numpy<2)
+if [ "$INSTALL_MOLMOSPACES" = "true" ]; then
+    echo ""
+    echo "Setting up MolmoSpaces runner venv (.venv-molmospaces)..."
+    MLSPACES_CACHE="${MLSPACES_ASSETS_DIR:-$HOME/.cache/molmospaces/assets}"
+    export MLSPACES_ASSETS_DIR="$MLSPACES_CACHE"
+    mkdir -p "$MLSPACES_ASSETS_DIR"
+    if [ ! -d ".venv-molmospaces" ]; then
+        uv venv .venv-molmospaces
+        .venv-molmospaces/bin/pip install --upgrade pip
+        # Emet without deps so the runner module is importable; then molmo-spaces stack (mujoco 3.4, numpy>=2.2)
+        .venv-molmospaces/bin/pip install --no-deps -e .
+        .venv-molmospaces/bin/pip install "molmo-spaces" "mujoco>=3.4" "numpy>=2.2"
+        echo "  -> Created .venv-molmospaces with emet (no-deps) and molmo-spaces + mujoco>=3.4"
+    else
+        echo "  -> .venv-molmospaces already exists"
+    fi
+    echo "  -> MLSPACES_ASSETS_DIR=$MLSPACES_ASSETS_DIR (set this in your shell or .env for emet molmospaces)"
+    echo "  -> Run: emet molmospaces list-robots  &&  emet molmospaces serve --viewer"
+fi
+
 # Quick sanity check
 if ! uv run python -c "import emet; print('emet:', emet.__file__)" 2>/dev/null; then
     echo "WARNING: emet import check failed. You may need to run: uv sync $EXTRA_ARGS"
@@ -170,7 +193,6 @@ if [ "$LINK_EMET" = "true" ]; then
     echo "  -> emet linked to $HOME/.local/bin/emet"
     if ! echo ":$PATH:" | grep -q ":${HOME}/.local/bin:"; then
         echo "  -> Add to your PATH: export PATH=\"\$HOME/.local/bin:\$PATH\""
->>>>>>> 9cc691a8aa27793ef4999c8439b8dbecad532b57
     fi
 fi
 

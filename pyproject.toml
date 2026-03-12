@@ -109,6 +109,9 @@ hand_tracker = [
 dynamem = [
     "SAM-2",
 ]
+# MolmoSpaces: optional extra does NOT add molmo-spaces to main env (version conflict with numpy<2).
+# Use a separate venv for the runner; see docs/molmospaces.md and install.sh --molmospaces.
+molmospaces = []
 
 [tool.uv]
 # Robocasa 0.2 pins numpy==1.23.3 and numba==0.56.4; dynamem/SAM-2 need numpy>=1.24.4.
