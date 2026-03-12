@@ -11,7 +11,7 @@ import click
 
 from emet.controller.controller_graph_eqa import GraphEQAController
 from emet.controller.task.dynamem import EQAExecuter
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.core.parameters import get_parameters
 
 
@@ -50,7 +50,7 @@ def main(
 ) -> None:
     """Run GraphEQA: EQA using graph-based semantic memory (see docs/graph_eqa.md)."""
     click.echo("GraphEQA: connecting to robot and starting graph-based EQA.")
-    robot = HomeRobotZmqClient(robot_ip=robot_ip)
+    robot = StretchZmqClient(robot_ip=robot_ip)
 
     print("- Load parameters")
     parameters = get_parameters("dynav_config.yaml")

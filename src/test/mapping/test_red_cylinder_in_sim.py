@@ -80,10 +80,10 @@ def test_red_cylinder_detected_in_sim():
             )
 
         from emet.controller.task.dynamem import DynamemTaskExecutor
-        from emet.controller.zmq_client import HomeRobotZmqClient
+        from emet.controller.zmq_client import StretchZmqClient
         from emet.core.parameters import get_parameters
 
-        robot = HomeRobotZmqClient(
+        robot = StretchZmqClient(
             robot_ip="127.0.0.1",
             enable_rerun_server=False,
             start_immediately=True,

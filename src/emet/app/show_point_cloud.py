@@ -15,7 +15,7 @@ import click
 import numpy as np
 
 from emet.controller.controller_instance_memory import RobotAgent
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
 from emet.utils.point_cloud import show_point_cloud
 
@@ -34,7 +34,7 @@ def main(
 ):
     """Set up the robot and send it to home (0, 0, 0)."""
     parameters = get_parameters(parameter_file)
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
         parameters=parameters,

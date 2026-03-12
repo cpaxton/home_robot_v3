@@ -16,7 +16,7 @@ import click
 # Mapping and perception
 from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.task.llm_plan import LLMPlanExecutor
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
 from emet.llms import get_llm_client
 from emet.llms.prompts import ObjectManipNavPromptBuilder
@@ -65,7 +65,7 @@ def main(
     input_path: str = "",
 ):
     parameters = get_parameters(parameter_file)
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
         parameters=parameters,

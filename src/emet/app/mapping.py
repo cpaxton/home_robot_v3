@@ -18,7 +18,7 @@ import click
 
 # Mapping and perception
 from emet.controller.controller_instance_memory import RobotAgent
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.core import AbstractRobotClient, Parameters, get_parameters
 from emet.perception import create_semantic_sensor
 
@@ -96,7 +96,7 @@ def main(
     print("- Load parameters")
     parameters = get_parameters(parameter_file)
 
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
         parameters=parameters,

@@ -13,7 +13,7 @@ import time
 
 import click
 
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.motion import HelloStretchIdx
 
 
@@ -32,7 +32,7 @@ def main(
     joint: str = "",
 ):
     # Create robot
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
         enable_rerun_server=False,

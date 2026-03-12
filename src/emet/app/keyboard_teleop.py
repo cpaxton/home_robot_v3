@@ -16,7 +16,7 @@ import click
 import cv2
 import numpy as np
 
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 
 # For Windows
 if os.name == "nt":
@@ -28,11 +28,11 @@ else:
     import tty
 
 
-def key_pressed(robot: HomeRobotZmqClient, key):
+def key_pressed(robot: StretchZmqClient, key):
     """Handle a key press event. Will just move the base for now.
 
     Args:
-        robot (HomeRobotZmqClient): The robot client object.
+        robot (StretchZmqClient): The robot client object.
         key (str): The key that was pressed.
     """
     xyt = robot.get_base_pose()
@@ -74,7 +74,7 @@ def getch():
 def main(robot_ip: str = "192.168.1.15", local: bool = False, headless: bool = False):
 
     # Create robot
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
     )

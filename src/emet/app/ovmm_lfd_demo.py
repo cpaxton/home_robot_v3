@@ -19,7 +19,7 @@ import numpy as np
 
 # Mapping and perception
 from emet.controller.controller_instance_memory import RobotAgent
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.app.lfd.ros2_lfd_leader import ROS2LfdLeader
 from emet.core import get_parameters
 from emet.llms.gemma_client import GemmaClient
@@ -106,7 +106,7 @@ def main(
     formatted_datetime = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
     output_pkl_filename = output_filename + "_" + formatted_datetime + ".pkl"
 
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         recv_port=recv_port,
         send_port=send_port,

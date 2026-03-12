@@ -19,7 +19,7 @@ from emet.agent.prompt import AgentPromptBuilder, parse_tool_calls_response
 from emet.agent.tools import Tool, get_tools
 from emet.core import get_parameters
 from emet.controller.task.dynamem import DynamemTaskExecutor
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.llms import get_llm_client
 from emet.llms.discord_bot import EmetDiscordBot
 from emet.memory.backend import get_memory_backend
@@ -175,7 +175,7 @@ def run_agent_with_robot(
     """
     parameters = get_parameters("dynav_config.yaml")
 
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         enable_rerun_server=True,
     )

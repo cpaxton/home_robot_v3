@@ -14,7 +14,7 @@ import click
 import cv2
 import numpy as np
 
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.utils import LoopStats
 
 
@@ -37,7 +37,7 @@ def main(
 ):
 
     # Create robot
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
     )

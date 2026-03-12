@@ -62,12 +62,12 @@ def test_agent_query_memory_finds_objects_in_sim():
             pytest.fail("MuJoCo server did not start. stderr:\n" + stderr)
 
         from emet.controller.task.dynamem import DynamemTaskExecutor
-        from emet.controller.zmq_client import HomeRobotZmqClient
+        from emet.controller.zmq_client import StretchZmqClient
         from emet.core.parameters import get_parameters
         from emet.memory.backend import get_memory_backend
         from emet.agent.tools import get_tools
 
-        robot = HomeRobotZmqClient(
+        robot = StretchZmqClient(
             robot_ip="127.0.0.1",
             enable_rerun_server=False,
             start_immediately=True,

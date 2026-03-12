@@ -138,13 +138,13 @@ def main(path: str, no_server: bool, robot_ip: str):
 
     try:
         from emet.controller.task.dynamem import DynamemTaskExecutor
-        from emet.controller.zmq_client import HomeRobotZmqClient
+        from emet.controller.zmq_client import StretchZmqClient
         from emet.core.parameters import get_parameters
         from emet.memory.backend import get_memory_backend
         from emet.memory.format import load_memory
 
         print("Connecting to robot/sim and running rotate_in_place...")
-        robot = HomeRobotZmqClient(
+        robot = StretchZmqClient(
             robot_ip=robot_ip,
             enable_rerun_server=False,
             start_immediately=True,

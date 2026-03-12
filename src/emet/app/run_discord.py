@@ -15,7 +15,7 @@ import click
 
 # import emet.utils.logger as logger
 from emet.controller.controller_instance_memory import RobotAgent
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
 from emet.llms import get_llm_choices
 from emet.llms.discord_bot import EmetDiscordBot
@@ -148,7 +148,7 @@ def main(
     """Set up the robot, create a task plan, and execute it."""
     # Create robot
     parameters = get_parameters(parameter_file)
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
         parameters=parameters,

@@ -12,7 +12,7 @@
 
 from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.task.emote import EmoteTask
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
 
 
@@ -23,7 +23,7 @@ def main(
 ):
     # Create robot client
     parameters = get_parameters(parameter_file)
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
         parameters=parameters,

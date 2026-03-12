@@ -11,7 +11,7 @@ import click
 
 from emet.controller.controller_dynamem import RobotAgent
 from emet.controller.task.dynamem import EQAExecuter
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 
 # Mapping and perception
 from emet.core.parameters import get_parameters
@@ -55,7 +55,7 @@ def main(
     Including only some selected arguments here.
     """
     click.echo("Will connect to a Stretch robot and collect a short trajectory.")
-    robot = HomeRobotZmqClient(robot_ip=robot_ip)
+    robot = StretchZmqClient(robot_ip=robot_ip)
 
     print("- Load parameters")
     parameters = get_parameters("dynav_config.yaml")

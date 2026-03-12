@@ -15,7 +15,7 @@ import timeit
 import click
 from termcolor import colored
 
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
@@ -53,7 +53,7 @@ def main(
     client = get_llm_client(llm, prompt)
 
     if talk:
-        robot = HomeRobotZmqClient(robot_ip)
+        robot = StretchZmqClient(robot_ip)
     else:
         robot = None
 
