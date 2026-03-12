@@ -415,7 +415,7 @@ def deploy(
 @click.argument(
     "app",
     type=click.Choice([
-        "dynamem", "graph-eqa", "mapping", "grasp", "chat", "agent", "web-chat",
+        "dynamem", "scene-graph", "graph-eqa", "mapping", "grasp", "chat", "agent", "web-chat",
         "ai_pickup", "timing", "discord", "create-and-print-memory",
     ]),
 )
@@ -466,6 +466,19 @@ def run(
         if target_receptacle:
             args.extend(["--target_receptacle", target_receptacle])
         sys.exit(_run_module("emet.app.run_dynamem", args))
+    elif app == "scene-graph":
+        args.extend(["--server_ip", server_ip])
+        if skip_confirmations:
+            args.append("-S")
+        if headless:
+            args.append("--headless")
+        if visual_servo:
+            args.append("--visual-servo")
+        if target_object:
+            args.extend(["--target_object", target_object])
+        if target_receptacle:
+            args.extend(["--target_receptacle", target_receptacle])
+        sys.exit(_run_module("emet.app.run_scene_graph", args))
     elif app == "graph-eqa":
         sys.exit(_run_module("emet.app.run_graph_eqa", args))
     elif app == "mapping":

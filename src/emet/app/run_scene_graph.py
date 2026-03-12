@@ -1,0 +1,258 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Entry point for the open-vocabulary scene graph: builds a 3D object-centric
+# memory (nodes + edges) as the robot explores, using dual SigLIP/DINOv3
+# embeddings and SAM3 segmentation.  Navigation and manipulation reuse the
+# DynaMem task executor; the scene graph replaces the voxel-only memory for
+# object queries.
+
+import logging
+import os
+from typing import Optional
+
+import click
+
+for _name in ("httpx", "httpcore", "huggingface_hub", "transformers"):
+    logging.getLogger(_name).setLevel(logging.WARNING)
+
+from emet.controller.task.dynamem import DynamemTaskExecutor
+from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.core.parameters import get_parameters
+from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_llm_client
+
+
+@click.command()
+@click.option("--server_ip", "--server-ip", default="127.0.0.1", type=str)
+@click.option("--manual-wait", default=False, is_flag=True)
+@click.option("--explore-iter", default=3)
+@click.option(
+    "--use_llm",
+    "--use-llm",
+    is_flag=True,
+    help="Set to use the language model",
+)
+@click.option(
+    "--llm",
+    default="qwen25-3B-Instruct",
+    help="Client to use for language model.",
+    type=click.Choice(get_llm_choices()),
+)
+@click.option("--debug_llm", "--debug-llm", is_flag=True, help="Debug the language model")
+@click.option(
+    "--use_voice",
+    "--use-voice",
+    is_flag=True,
+    help="Set to use voice input",
+)
+@click.option(
+    "--visual_servo",
+    "--vs",
+    "-V",
+    "--visual-servo",
+    default=False,
+    is_flag=True,
+    help="Use visual servoing grasp",
+)
+@click.option(
+    "--robot_ip", type=str, default="", help="Robot IP address (leave empty for saved default)"
+)
+@click.option("--target_object", type=str, default=None, help="Target object to grasp")
+@click.option(
+    "--target_receptacle", "--receptacle", type=str, default=None, help="Target receptacle to place"
+)
+@click.option(
+    "--skip_confirmations",
+    "--skip",
+    "-S",
+    "-y",
+    "--yes",
+    is_flag=True,
+    help="Skip many confirmations",
+)
+@click.option(
+    "--input-path",
+    type=click.Path(),
+    default=None,
+    help="Memory directory to load (common format). If not set, run rotate_in_place first.",
+)
+@click.option(
+    "--output-path",
+    type=click.Path(),
+    default=None,
+    help="Output path for saving memory",
+)
+@click.option(
+    "--match-method",
+    "--match_method",
+    type=click.Choice(["class", "feature"]),
+    default="class",
+    help="Match method for visual servoing",
+)
+@click.option("--device_id", default=0, type=int, help="Device ID for semantic sensor")
+@click.option(
+    "--cpu-only",
+    "--cpu",
+    is_flag=True,
+    help="Run everything on CPU (uses lighter models)",
+)
+@click.option(
+    "--headless",
+    is_flag=True,
+    help="Run without native Rerun viewer; connect at http://<server-ip>:9090",
+)
+@click.option(
+    "--no-rerun",
+    is_flag=True,
+    help="Disable Rerun visualization entirely",
+)
+@click.option(
+    "--rerun-show-panels",
+    is_flag=True,
+    help="Show Rerun blueprint/selection panel (useful for debugging)",
+)
+@click.option(
+    "--rerun-debug",
+    is_flag=True,
+    help="Print Rerun logging status",
+)
+@click.option(
+    "--rerun-bind",
+    is_flag=True,
+    help="Bind Rerun to 0.0.0.0 for remote viewing",
+)
+def main(
+    server_ip,
+    manual_wait,
+    explore_iter: int = 3,
+    match_method: str = "class",
+    input_path: Optional[str] = None,
+    output_path: Optional[str] = None,
+    robot_ip: str = "",
+    visual_servo: bool = False,
+    skip_confirmations: bool = True,
+    device_id: int = 0,
+    target_object: str = None,
+    target_receptacle: str = None,
+    use_llm: bool = False,
+    use_voice: bool = False,
+    debug_llm: bool = False,
+    llm: str = "qwen25-3B-Instruct",
+    cpu_only: bool = False,
+    headless: bool = False,
+    no_rerun: bool = False,
+    rerun_show_panels: bool = False,
+    rerun_debug: bool = False,
+    rerun_bind: bool = False,
+    **kwargs,
+):
+    """Run open-vocabulary scene graph exploration.
+
+    Builds a 3D scene graph of discrete objects as the robot explores, using
+    dual SigLIP + DINOv3 embeddings for open-vocabulary retrieval and
+    deduplication.  Uses DynaMem's voxel map for navigation/obstacle avoidance
+    underneath, but the scene graph is the primary memory for object queries.
+
+    Examples:
+
+      emet run scene-graph --robot-ip 127.0.0.1 -S --headless
+
+      emet run scene-graph -S --visual-servo --cpu --headless
+    """
+    from emet.mapping.scene_graph.processor import SceneGraphProcessor
+
+    print("- Load parameters")
+    parameters = get_parameters("dynav_config.yaml")
+
+    if rerun_bind:
+        os.environ["RERUN_BIND_ALL"] = "1"
+
+    print("- Create robot client")
+    robot = HomeRobotZmqClient(
+        robot_ip=robot_ip,
+        enable_rerun_server=not no_rerun,
+        rerun_headless=headless,
+        rerun_show_panels=rerun_show_panels,
+        rerun_debug=rerun_debug,
+    )
+
+    print("- Create task executor")
+    executor = DynamemTaskExecutor(
+        robot,
+        parameters,
+        visual_servo=visual_servo,
+        match_method=match_method,
+        device_id=device_id,
+        output_path=output_path,
+        server_ip=server_ip,
+        skip_confirmations=skip_confirmations,
+        cpu_only=cpu_only,
+    )
+
+    sg_config_name = "cpu_scene_graph" if cpu_only else "default_scene_graph"
+    sg_device = "cpu" if cpu_only else None
+    print(f"- Attaching scene graph processor (config={sg_config_name})")
+    sg_processor = SceneGraphProcessor(config_name=sg_config_name, device=sg_device)
+    executor.agent.get_voxel_map().set_scene_graph_processor(sg_processor)
+
+    if input_path is None:
+        executor([("rotate_in_place", "")])
+    else:
+        from emet.memory.backend import get_memory_backend
+
+        backend = get_memory_backend(
+            "scene_graph",
+            scene_graph=sg_processor.scene_graph,
+            text_encoder=sg_processor.text_encoder,
+        )
+        backend.load(input_path)
+        executor._last_memory_save_path = input_path
+
+    prompt = PickupPromptBuilder()
+
+    llm_client = None
+    if use_llm:
+        llm_client = get_llm_client(llm, prompt=prompt)
+        chat_wrapper = LLMChatWrapper(llm_client, prompt=prompt, voice=use_voice)
+
+    ok = True
+    while ok:
+        if llm_client is None:
+            explore = input(
+                "Enter desired mode "
+                "[E (explore) / L (list objects) / M (pick and place) / Q (quit)]: "
+            ).strip()
+            if explore.upper() in ("Q", "QUIT"):
+                llm_response = [("quit", "")]
+            elif explore.upper() == "E":
+                llm_response = [("explore", None)]
+            elif explore.upper() == "L":
+                objects = sg_processor.scene_graph.list_objects()
+                print(f"Scene graph objects ({len(objects)}): {objects}")
+                continue
+            else:
+                if target_object is None or len(target_object) == 0:
+                    target_object = input("Enter the target object: ")
+                if target_receptacle is None or len(target_receptacle) == 0:
+                    target_receptacle = input("Enter the target receptacle: ")
+                llm_response = [("pickup", target_object), ("place", target_receptacle)]
+        else:
+            llm_response = chat_wrapper.query(verbose=debug_llm)
+            if debug_llm:
+                print("Parsed LLM Response:", llm_response)
+
+        ok = executor(llm_response)
+        target_object = None
+        target_receptacle = None
+
+    from emet.memory.utils import print_memory_view_help_on_quit
+
+    print_memory_view_help_on_quit(getattr(executor, "_last_memory_save_path", None))
+    robot.stop()
+
+
+if __name__ == "__main__":
+    main()

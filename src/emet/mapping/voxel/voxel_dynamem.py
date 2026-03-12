@@ -467,7 +467,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
                     world_xyz=world_xyz,
                 )
             except Exception as e:
-                logger.warning("Scene graph update failed: %s", e)
+                from emet.utils.logger import warning as _warn_colored
+
+                _warn_colored(f"Scene graph update failed: {e}")
 
     def add_to_semantic_memory(
         self,
