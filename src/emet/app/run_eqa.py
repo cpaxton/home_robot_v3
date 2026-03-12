@@ -11,7 +11,7 @@ import click
 
 from emet.controller.controller_dynamem import RobotAgent
 from emet.controller.task.dynamem import EQAExecuter
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 
 # Mapping and perception
 from emet.core.parameters import get_parameters
@@ -44,18 +44,20 @@ from emet.core.parameters import get_parameters
     is_flag=True,
     help="Whether we should save rerun rrd",
 )
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip,
     discord: bool = False,
     not_rotate_in_place: bool = False,
     save_rerun: bool = False,
+    port_offset: int = 0,
     **kwargs,
 ):
     """
     Including only some selected arguments here.
     """
     click.echo("Will connect to a Stretch robot and collect a short trajectory.")
-    robot = HomeRobotZmqClient(robot_ip=robot_ip)
+    robot = StretchZmqClient(robot_ip=robot_ip, port_offset=port_offset)
 
     print("- Load parameters")
     parameters = get_parameters("dynav_config.yaml")

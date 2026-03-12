@@ -2,7 +2,7 @@
 
 This is a guide to setting up a Docker container for running the Stretch software. This is useful for running the software on a computer that doesn't have the correct dependencies installed, or for running the software in a controlled environment.
 
-Hello Robot has a set of scripts for [building robot-side docker images](https://github.com/hello-robot/stretch_docker), which can be conconsidered separately. Here, we will go through what docker is, why we use it, and how to set it up on your client side to run AI code.
+Hello Robot has a set of scripts for [building robot-side docker images](https://github.com/hello-robot/stretch_docker), which can be considered separately. Here, we go through what Docker is, why we use it, and how to build and run the **uv-based** Stretch AI image (no conda).
 
 ## What is Docker and Why Would I Use It?
 
@@ -41,27 +41,30 @@ newgrp docker
 
 ## Building the Docker Image
 
-To build the Docker image, clone this repository and you can run the following command in the root directory of the repository:
+The image uses **uv** and runs `install.sh -y` (no conda). Ensure the segment-anything-2 submodule is present before building (the build script does this for you).
+
+From the **root** of the repository:
 
 ```bash
+# Optional: init submodule if not already done
+git submodule update --init --recursive third_party/segment-anything-2
+
 docker build -t stretch-ai_cuda-11.8:latest . -f docker/Dockerfile.cuda-11.8
 ```
 
-A helper script is also provided.
+### Use the Docker Build Script
 
-### Use The Docker Build Script
-
-There is a [docker build script](scripts/build-docker.sh) that can be used to build the Docker image. This script will build the Docker image with the correct CUDA version and tag it with the correct name. To use the script, run:
+The build script inits the submodule, reads the version from the repo, and tags the image:
 
 ```bash
 ./docker/build-docker.sh
+# or non-interactive:
+./docker/build-docker.sh -y
 ```
 
-from the root directory of the repository.
+Then push to Docker Hub (see below).
 
-For more details on the build script, see the [Docker Build Script](scripts/build-docker.md) documentation. You can also continue on into the next section.
-
-### Building and Pushing to Dockerhub
+### Building and Pushing to Docker Hub
 
 This will use the Hello Robot account as an example (username: `hellorobotinc`). Login with:
 
@@ -99,59 +102,32 @@ Again, it's preferable to build using the script.
 
 ## Running the Docker Image
 
-To run the docker image, we need to:
-
-1. Run a container and attach to the shell
-1. Initialize conda and exit the container
-1. Start the container again and reconnect to the container shell
-1. Activate the conda environment
+The image has the project's virtualenv at `/app/.venv` and **PATH is set** so `emet` and `python` work without activating. No conda.
 
 ### 1. Run a container and attach to the shell
 
-The network=host argument makes the container to use your LAN, so it can see your robot
-And to have GUI visualization through X server grant root permission to `xhost` and provide `DISPLAY` environment.
+Use `--network host` so the container can see your robot on the LAN. For GUI (e.g. rerun), allow X and set DISPLAY:
 
 ```bash
 xhost si:localuser:root
-docker run \
-    -it \
-    --gpus all \
-    --network host \
-    --env DISPLAY "$DISPLAY" \
-    hellorobotinc/stretch-ai_cuda-11.8:latest
+docker run -it --gpus all --network host --env DISPLAY="$DISPLAY" \
+    stretch-ai_cuda-11.8:latest
 ```
 
-### 2. Initialize conda and exit the container
+(or use `hellorobotinc/stretch-ai_cuda-11.8:latest` if you pulled from Docker Hub)
+
+### 2. Verify container functionality
 
 ```bash
-conda init # inside the container
-exit
-```
+# Emet CLI
+emet --help
 
-### 3. Start the container again and reconnect to the container shell
-
-```bash
-docker ps -a # get container ID or name of the container just launched, but is now exited
-docker start <container-id> # or <container-name>
-docker attach <container-id>
-```
-
-### 4. Activate the conda environment
-
-```bash
-conda activate stretch_ai
-```
-
-### 5. Verify container functionality
-
-```bash
 # Torch can use GPU
-python3
-import torch
-torch.cuda.is_available() # should return True
+python3 -c "import torch; print('cuda:', torch.cuda.is_available())"
 
 # Run view-images demo (make sure server is running on robot)
-python3 -m emet.app.view_images --robot_ip $ROBOT_IP
+emet app view_images --robot-ip $ROBOT_IP
+# or: python3 -m emet.app.view_images --robot_ip $ROBOT_IP
 ```
 
 ### Tips for Windows 11

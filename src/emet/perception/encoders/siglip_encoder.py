@@ -7,7 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-import warnings
+
 from typing import List, Optional, Union
 
 import numpy as np
@@ -57,9 +57,7 @@ class SiglipEncoder(BaseImageTextEncoder):
         else:
             raise ValueError(f"Invalid version {version}: must be one of 'base', 'so400m'")
 
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message=".*SiglipImageProcessor.*fast processor.*")
-            self.processor = AutoProcessor.from_pretrained(model_name)
+        self.processor = AutoProcessor.from_pretrained(model_name, use_fast=False)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModel.from_pretrained(model_name).to(self.device)
 

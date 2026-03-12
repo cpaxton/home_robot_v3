@@ -11,7 +11,7 @@ import click
 
 from emet.controller.controller_graph_eqa import GraphEQAController
 from emet.controller.task.dynamem import EQAExecuter
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.core.parameters import get_parameters
 
 
@@ -41,16 +41,18 @@ from emet.core.parameters import get_parameters
     is_flag=True,
     help="Whether to save Rerun rrd",
 )
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip: str,
     discord: bool = False,
     not_rotate_in_place: bool = False,
     save_rerun: bool = False,
+    port_offset: int = 0,
     **kwargs,
 ) -> None:
     """Run GraphEQA: EQA using graph-based semantic memory (see docs/graph_eqa.md)."""
     click.echo("GraphEQA: connecting to robot and starting graph-based EQA.")
-    robot = HomeRobotZmqClient(robot_ip=robot_ip)
+    robot = StretchZmqClient(robot_ip=robot_ip, port_offset=port_offset)
 
     print("- Load parameters")
     parameters = get_parameters("dynav_config.yaml")

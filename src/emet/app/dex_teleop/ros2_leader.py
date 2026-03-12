@@ -21,7 +21,7 @@ import emet.motion.constants as constants
 import emet.motion.simple_ik as si
 import emet.utils.logger as logger
 import emet.utils.loop_stats as lt
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 
 try:
     from emet.app.dex_teleop.hand_tracker import HandTracker
@@ -40,7 +40,7 @@ class ZmqRos2Leader:
 
     def __init__(
         self,
-        robot: HomeRobotZmqClient,
+        robot: StretchZmqClient,
         verbose: bool = False,
         left_handed: bool = False,
         data_dir: str = "./data",
@@ -676,7 +676,7 @@ if __name__ == "__main__":
     parameters = get_parameters("default_planner.yaml")
 
     # Zmq client
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=args.robot_ip,
         send_port=args.send_port,
         parameters=parameters,
