@@ -131,46 +131,72 @@ def style_from_str(style:str) -> int:
     """Returns the index of the style in the orderedDict"""
     return list(get_styles().values()).index(style)
 
+ROBOSUITE_ROBOTS = [
+    "PandaOmron",
+    "Tiago",
+    "GR1",
+    "GR1FixedLowerBody",
+    "SpotWithArm",
+]
+
+
+def _robosuite_robot_for(robot_name: str) -> str:
+    """Map an emet robot name to the robosuite robot class used as the scene placeholder.
+
+    For Stretch we use PandaMobile as a placeholder (then strip-and-replace).
+    For robosuite-native robots we use the robot directly.
+    """
+    if robot_name in ("stretch", None):
+        return "PandaMobile"
+    mapping = {r.lower(): r for r in ROBOSUITE_ROBOTS}
+    mapping["pandaomron"] = "PandaOmron"
+    mapping["panda_omron"] = "PandaOmron"
+    key = robot_name.lower().replace("-", "").replace("_", "")
+    if key in mapping:
+        return mapping[key]
+    for rs_name in ROBOSUITE_ROBOTS:
+        if key == rs_name.lower():
+            return rs_name
+    return robot_name
+
+
 def model_generation_wizard(
     task: str = "PickPlaceCounterToCabinet",
     layout: int = None,
     style: int = None,
     write_to_file: str = None,
     robot_spawn_pose: dict = None,
+    robot: str = "stretch",
 ) -> Tuple[mujoco.MjModel, str, dict]:
     """
     Wizard/API to generate a kitchen model for a given task, layout, and style.
-    If layout and style are not provided, it will take you through a wizard to choose them in the terminal.
-    If robot_spawn_pose is not provided, it will spawn the robot to the default pose from robocasa fixtures.
-    You can also write the generated xml model with absolutepaths to a file.
-    The Object placements are made based on the robocasa defined Kitchen task and uses the default randomized
-    placement distribution
+
     Args:
-        task (str): task name
-        layout (int): layout id
-        style (int): style id
-        write_to_file (str): write to file
-        robot_spawn_pose (dict): robot spawn pose {pos: "x y z", quat: "x y z w"}
+        task: Robocasa task name.
+        layout: Layout id (None = interactive choice).
+        style: Style id (None = interactive choice).
+        write_to_file: Optional path to save the generated XML.
+        robot_spawn_pose: Override spawn pose ``{pos: "x y z", quat: "w x y z"}``.
+        robot: Robot name. ``"stretch"`` uses the strip-and-replace flow.
+            Any robosuite-native name (e.g. ``"PandaOmron"``, ``"Tiago"``,
+            ``"GR1"``) keeps the robosuite robot in the scene.
     Returns:
-        Tuple[mujoco.MjModel, str, Dict]: model, xml string and Object placements info
+        Tuple of (MjModel, xml_string, object_placements_info).
     """
 
     if layout is None:
         layout = choose_layout()
-    else:
-        layout = layout
 
     styles = get_styles()
     if style is None:
         style = choose_style()
-    else:
-        style = style
 
-    # Create argument configuration
-    # TODO: Figure how to get an env without robot arg
+    use_stretch = robot.lower() in ("stretch", "hello_stretch", "hellostretch")
+    rs_robot = _robosuite_robot_for(robot)
+
     config = {
         "env_name": task,
-        "robots": "PandaMobile",
+        "robots": rs_robot if not use_stretch else "PandaMobile",
         "controller_configs": load_part_controller_config(default_controller="OSC_POSE"),
         "translucent_robot": False,
         "layout_and_style_ids": [[layout, style]],
@@ -186,7 +212,6 @@ def model_generation_wizard(
         use_camera_obs=False,
         control_freq=20,
     )
-    # Sim is created on first reset(); without this, env.sim is None.
     env.reset()
     print(
         colored(
@@ -194,17 +219,11 @@ def model_generation_wizard(
             "green",
         )
     )
-    print()
-    print(
-        colored(
-            "Spawning environment...\n",
-            "yellow",
-        )
-    )
+    print(colored("Spawning environment...\n", "yellow"))
+
     model = env.sim.model._model
     xml = env.sim.model.get_xml()
 
-    # Add the object placements to the xml
     click.secho(f"\nMaking Object Placements for task [{task}]...\n", fg="yellow")
     object_placements_info = {}
     for i in range(len(env.object_cfgs)):
@@ -218,7 +237,7 @@ def model_generation_wizard(
         xml = xml_modify_body_pos(
             xml,
             "body",
-            obj_name + "_main",  # Object name ref in the xml
+            obj_name + "_main",
             pos=object_placements[obj_name][0],
             quat=object_placements[obj_name][1],
         )
@@ -228,37 +247,39 @@ def model_generation_wizard(
             "quat": object_placements[obj_name][1],
         }
 
-    xml, remove_robot_attrib = custom_cleanups(xml)
+    if use_stretch:
+        xml, remove_robot_attrib = custom_cleanups(xml)
 
-    # Use the env's actual robot spawn pose (set on reset()), not the removed body's
-    # attrib (which is the placeholder 10, 10, 0). Otherwise Stretch spawns off-scene.
-    if hasattr(env, "init_robot_base_pos") and hasattr(env, "init_robot_base_ori"):
-        pos = np.asarray(env.init_robot_base_pos)
-        ori_euler = np.asarray(env.init_robot_base_ori)
-        quat_xyzw = mat2quat(euler2mat(ori_euler))
-        quat_wxyz = quat_xyzw[[3, 0, 1, 2]]  # MuJoCo body quat is w x y z
-        robot_base_fixture_pose = {
-            "pos": " ".join(map(str, pos)),
-            "quat": " ".join(map(str, quat_wxyz)),
-        }
-    elif remove_robot_attrib is not None and "pos" in remove_robot_attrib and "quat" in remove_robot_attrib:
-        robot_base_fixture_pose = remove_robot_attrib
+        if hasattr(env, "init_robot_base_pos") and hasattr(env, "init_robot_base_ori"):
+            pos = np.asarray(env.init_robot_base_pos)
+            ori_euler = np.asarray(env.init_robot_base_ori)
+            quat_xyzw = mat2quat(euler2mat(ori_euler))
+            quat_wxyz = quat_xyzw[[3, 0, 1, 2]]
+            robot_base_fixture_pose = {
+                "pos": " ".join(map(str, pos)),
+                "quat": " ".join(map(str, quat_wxyz)),
+            }
+        elif (
+            remove_robot_attrib is not None
+            and "pos" in remove_robot_attrib
+            and "quat" in remove_robot_attrib
+        ):
+            robot_base_fixture_pose = remove_robot_attrib
+        else:
+            robot_base_fixture_pose = {"pos": "0 0 0", "quat": "1 0 0 0"}
+
+        if robot_spawn_pose is not None:
+            robot_base_fixture_pose = robot_spawn_pose
+
+        xml = ensure_mesh_inertia(xml)
+
+        click.secho("\nMaking Robot Placement...\n", fg="yellow")
+        xml = add_stretch_to_kitchen(xml, robot_base_fixture_pose)
     else:
-        # Fallback: spawn near origin so the robot is visible in the scene
-        robot_base_fixture_pose = {
-            "pos": "0 0 0",
-            "quat": "1 0 0 0",
-        }
+        xml = _cleanup_for_native_robot(xml)
+        xml = ensure_mesh_inertia(xml)
+        click.secho(f"\nKeeping robosuite robot '{rs_robot}' in scene.\n", fg="yellow")
 
-    if robot_spawn_pose is not None:
-        robot_base_fixture_pose = robot_spawn_pose
-
-    # MuJoCo 2.x: ensure every <mesh> in the kitchen XML has inertia="shell" (get_xml() may omit it)
-    xml = ensure_mesh_inertia(xml)
-
-    # add stretch to kitchen
-    click.secho("\nMaking Robot Placement...\n", fg="yellow")
-    xml = add_stretch_to_kitchen(xml, robot_base_fixture_pose)
     model = mujoco.MjModel.from_xml_string(xml)
 
     if write_to_file is not None:
@@ -267,6 +288,19 @@ def model_generation_wizard(
         print(colored(f"Model saved to {write_to_file}", "green"))
 
     return model, xml, object_placements_info
+
+
+def _cleanup_for_native_robot(xml: str) -> str:
+    """Minimal cleanup for scenes where we keep the robosuite robot.
+
+    We hide the debug markers but do NOT remove actuators/sensors/option
+    since the robosuite robot needs them.
+    """
+    xml = replace_xml_tag_value(xml, "geom", "rgba", "0.5 0 0 0.5", "0.5 0 0 0")
+    xml = replace_xml_tag_value(xml, "geom", "rgba", "0.5 0 0 1", "0.5 0 0 0")
+    xml = replace_xml_tag_value(xml, "site", "rgba", "0.5 0 0 1", "0.5 0 0 0")
+    xml = replace_xml_tag_value(xml, "site", "actuator", "0.3 0.4 1 0.5", "0.3 0.4 1 0")
+    return xml
 
 
 def custom_cleanups(xml: str) -> Tuple[str, dict]:

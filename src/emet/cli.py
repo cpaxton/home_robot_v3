@@ -156,6 +156,15 @@ def main() -> None:
     default="",
     help="Robocasa task name (e.g. PickPlaceCounterToCabinet). Use --list-robocasa-tasks to see all.",
 )
+@click.option(
+    "--robot",
+    default="stretch",
+    help=(
+        "Robot to simulate. 'stretch' (default) uses the Stretch-MuJoCo path. "
+        "Robosuite-native names (PandaOmron, Tiago, GR1, etc.) keep the "
+        "robosuite robot in the scene. 'galaxea_r1' uses the Galaxea R1 MJCF."
+    ),
+)
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
 def serve(
     backend: str,
@@ -168,6 +177,7 @@ def serve(
     port_offset: int,
     list_robocasa_tasks: bool,
     robocasa_task: str,
+    robot: str,
     extra: tuple[str, ...],
 ) -> None:
     """Start a simulation server.
@@ -184,6 +194,8 @@ def serve(
       emet serve
       emet serve mujoco --headless
       emet serve robocasa
+      emet serve robocasa --robot PandaOmron
+      emet serve robocasa --robot galaxea_r1
       emet serve robocasa --robocasa-task PickPlaceCounterToCabinet
       emet serve robocasa --list-robocasa-tasks
       emet serve mujoco --use-robocasa --port-offset 100
@@ -208,6 +220,8 @@ def serve(
         args.extend(["--seed", str(seed)])
         if port_offset:
             args.extend(["--port-offset", str(port_offset)])
+        if robot and robot != "stretch":
+            args.extend(["--robot", robot])
         sys.exit(_run_module("emet.simulation.mujoco_server", args))
     else:
         click.echo(f"Unknown backend: {backend}", err=True)
