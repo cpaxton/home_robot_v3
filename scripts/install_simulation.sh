@@ -10,9 +10,11 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 DOWNLOAD_ASSETS=true
 # -a = force run macro setup (overwrite if exists); otherwise we run only when macros_private is missing
 SETUP_MACROS_FORCE=false
+# -y = non-interactive: if assets exist, skip re-download (no prompt)
+NONINTERACTIVE_ASSETS="false"
 
 # Parse command line options
-while getopts "dan" opt; do
+while getopts "dany" opt; do
     case ${opt} in
         d )
             DOWNLOAD_ASSETS=true
@@ -23,11 +25,15 @@ while getopts "dan" opt; do
         a )
             SETUP_MACROS_FORCE=true
             ;;
+        y )
+            NONINTERACTIVE_ASSETS="true"
+            ;;
         \? )
-            echo "Usage: $0 [-d] [-n] [-a]"
+            echo "Usage: $0 [-d] [-n] [-a] [-y]"
             echo "  -d: Download kitchen assets (default: yes)"
             echo "  -n: Skip downloading kitchen assets (~10GB)"
             echo "  -a: Force setup macros (overwrite existing macros_private.py)"
+            echo "  -y: Non-interactive: if assets already exist, skip re-download without prompting"
             exit 1
             ;;
     esac
@@ -63,11 +69,18 @@ pip_install_editable() {
 }
 
 # Robocasa needs robosuite from master (get_elements in mjcf_utils; v1.5.0 lacks it).
-# Remove existing clones so we always get the correct branch (shallow clone).
+# If already cloned, update in place (fetch + reset). Otherwise clone.
+ROBOSUITE_BRANCH="master"
 if [ -d "robosuite" ]; then
-    rm -rf robosuite
+    echo "Updating existing third_party/robosuite (fetch + checkout $ROBOSUITE_BRANCH)..."
+    cd robosuite || exit 1
+    git fetch origin "$ROBOSUITE_BRANCH" 2>/dev/null || true
+    git checkout "$ROBOSUITE_BRANCH" 2>/dev/null || true
+    git pull --ff-only origin "$ROBOSUITE_BRANCH" 2>/dev/null || git reset --hard "origin/$ROBOSUITE_BRANCH" 2>/dev/null || true
+    cd .. || exit 1
+else
+    git clone https://github.com/ARISE-Initiative/robosuite --branch "$ROBOSUITE_BRANCH" --single-branch --depth 1
 fi
-git clone https://github.com/ARISE-Initiative/robosuite --branch master --single-branch --depth 1
 cd robosuite || exit 1
 pip_install_editable || { echo "robosuite install failed." >&2; exit 1; }
 # Create macros_private.py from macros.py if missing (silences "No private macro file" warnings).
@@ -80,26 +93,33 @@ if [ "$SETUP_MACROS_FORCE" = true ] || [ ! -f "robosuite/robosuite/macros_privat
 fi
 cd ..
 
-# Optional extra robot models for robosuite (GR1, etc.). Clone from cpaxton fork.
+# Optional extra robot models for robosuite (GR1, etc.). Clone from cpaxton fork; if present, update (fetch/pull).
 if [ ! -d "robosuite_models" ]; then
     git clone git@github.com:cpaxton/robosuite_models.git
 fi
 if [ -d "robosuite_models" ]; then
     cd robosuite_models || exit 1
     git fetch origin 2>/dev/null || true
+    git pull --ff-only origin 2>/dev/null || true
     pip_install_editable || { echo "robosuite_models install failed." >&2; exit 1; }
-    cd ..
+    cd .. || exit 1
 fi
 
-# Clone robocasa from fork (branch feature/v1.24; numpy 1.24+ compat, same env as dynamem).
-# Remove existing clone so we always get a fresh clone.
+# Robocasa from fork (branch feature/v1.24; numpy 1.24+ compat). If already cloned, update in place; else clone.
+ROBOCASA_BRANCH="feature/v1.24"
 if [ -d "robocasa" ]; then
-    rm -rf robocasa
+    echo "Updating existing third_party/robocasa (fetch + checkout $ROBOCASA_BRANCH)..."
+    cd robocasa || exit 1
+    git fetch origin "$ROBOCASA_BRANCH" 2>/dev/null || true
+    git checkout "$ROBOCASA_BRANCH" 2>/dev/null || true
+    git pull --ff-only origin "$ROBOCASA_BRANCH" 2>/dev/null || git reset --hard "origin/$ROBOCASA_BRANCH" 2>/dev/null || true
+    cd .. || exit 1
+else
+    git clone git@github.com:cpaxton/robocasa.git --branch "$ROBOCASA_BRANCH" --single-branch --depth 1
 fi
-git clone git@github.com:cpaxton/robocasa.git --branch feature/v1.24 --single-branch --depth 1
 cd robocasa || exit 1
 pip_install_editable || { echo "robocasa install failed." >&2; exit 1; }
-cd ..
+cd .. || exit 1
 
 # Run robocasa setup using the installed package (python -m robocasa.scripts.setup_macros).
 # macros_private.py is created at third_party/robocasa/robocasa/macros_private.py.
@@ -113,8 +133,23 @@ if [ "$SETUP_MACROS_FORCE" = true ] || [ ! -f "$ROOT_DIR/third_party/robocasa/ro
     cd "$ROOT_DIR/third_party" || exit 1
 fi
 
-# Asset download is part of installation by default (~10GB); use -n to skip.
-# Use official robocasa entry point: python -m robocasa.scripts.download_kitchen_assets
+# Asset download: if assets already exist, ask to re-download (default N). Use -n to skip entirely, -y to skip prompt when present.
+ASSETS_DIR="$ROOT_DIR/third_party/robocasa/robocasa/models/assets"
+if [ "$DOWNLOAD_ASSETS" = true ]; then
+    if [ -d "$ASSETS_DIR/textures" ] && [ -n "$(ls -A "$ASSETS_DIR/textures" 2>/dev/null)" ]; then
+        if [ "$NONINTERACTIVE_ASSETS" = "true" ]; then
+            echo "Robocasa kitchen assets already present; skipping re-download (non-interactive)."
+            DOWNLOAD_ASSETS=false
+        else
+            echo ""
+            read -p "Robocasa kitchen assets appear to be present. Re-download? (y/N) " yn
+            case "${yn:-n}" in
+                y|Y) ;;
+                *) echo "Skipping asset download."; DOWNLOAD_ASSETS=false ;;
+            esac
+        fi
+    fi
+fi
 if [ "$DOWNLOAD_ASSETS" = true ]; then
     echo "Downloading Robocasa kitchen assets (~10GB)..."
     cd "$ROOT_DIR" || exit 1

@@ -11,7 +11,8 @@
 # All rights reserved.
 #
 # Tests for emet molmospaces CLI. list-robots uses static config; list-scenes/serve
-# require the MolmoSpaces runner venv (skipped unless RUN_MOLMOSPACES_TESTS=1).
+# delegate to emet-molmospaces wrapper (subprocess). Without wrapper, those commands
+# exit non-zero with an "install wrapper" message. RUN_MOLMOSPACES_TESTS=1 runs list-scenes.
 
 import os
 import subprocess
@@ -82,19 +83,36 @@ def test_molmospaces_serve_help():
     assert "viewer" in result.stdout or "headless" in result.stdout
 
 
-@pytest.mark.skipif(
-    os.environ.get("RUN_MOLMOSPACES_TESTS", "") != "1",
-    reason="RUN_MOLMOSPACES_TESTS=1 required (needs MolmoSpaces venv)",
-)
-def test_molmospaces_list_scenes():
-    """emet molmospaces list-scenes runs runner (requires .venv-molmospaces)."""
+def test_molmospaces_list_scenes_without_wrapper():
+    """Without emet-molmospaces wrapper, list-scenes exits non-zero with install message."""
     result = subprocess.run(
         [sys.executable, "-m", "emet.cli", "molmospaces", "list-scenes"],
         capture_output=True,
         text=True,
     )
-    # If venv missing, CLI returns 1 and prints message
+    # Wrapper not installed in this env: expect exit 1 and message to install wrapper
+    if result.returncode == 0:
+        # Wrapper is installed (e.g. in .venv-molmospaces and MOLMOSPACES_PYTHON set)
+        assert "Scenes" in result.stdout or "ithor" in result.stdout.lower()
+        return
+    err = (result.stderr or result.stdout or "").lower()
+    assert "install" in err or "wrapper" in err or "emet-molmospaces" in err
+
+
+@pytest.mark.skipif(
+    os.environ.get("RUN_MOLMOSPACES_TESTS", "") != "1",
+    reason="RUN_MOLMOSPACES_TESTS=1 required (wrapper installed in .venv-molmospaces)",
+)
+def test_molmospaces_list_scenes_with_wrapper():
+    """With wrapper installed, emet molmospaces list-scenes runs and prints scenes."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "molmospaces", "list-scenes"],
+        capture_output=True,
+        text=True,
+    )
     if result.returncode != 0:
-        assert "venv" in result.stderr.lower() or "MOLMOSPACES" in result.stderr
+        # Network/API failure is acceptable; ensure we got wrapper output not "install wrapper"
+        err = (result.stderr or "").lower()
+        assert "install" not in err or "wrapper" not in err or "emet-molmospaces" not in err
         return
     assert "Scenes" in result.stdout or "ithor" in result.stdout.lower()

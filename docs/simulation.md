@@ -186,7 +186,7 @@ This clones robosuite and robocasa, **downloads kitchen assets (~10GB)** via `py
 emet sync -e sim
 ```
 
-Macro setup (robosuite + robocasa `macros_private.py`) runs automatically during install when missing; use `emet install robocasa -a` to force overwrite. To skip the asset download (e.g. CI): `emet install sim --no-download-assets`.
+Macro setup (robosuite + robocasa `macros_private.py`) runs automatically during install when missing; use `emet install robocasa -a` to force overwrite. To skip the asset download (e.g. CI): `emet install sim --no-download-assets`. If kitchen assets (textures, fixtures, etc.) are already present, the install script prompts **Re-download? (y/N)** (default N); with `./install.sh -y` we skip the prompt and do not re-download when assets exist.
 
 **Version pairing:** Robocasa (and our fork) require **RoboSuite v1.5.0**. The install script clones robosuite v1.5.0, [cpaxton/robosuite_models](https://github.com/cpaxton/robosuite_models) (optional extra robot models), and the [cpaxton/robocasa](https://github.com/cpaxton/robocasa) fork (numpy 1.24+ compat). All live in `third_party/` and are gitignored.
 

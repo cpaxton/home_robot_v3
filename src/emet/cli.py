@@ -225,36 +225,35 @@ def robocasa_list() -> None:
     sys.exit(_run_module("emet.simulation.mujoco_server", ["--use-robocasa", "--list-robocasa-tasks"]))
 
 
-def _molmospaces_runner_python() -> Path | None:
-    """Return Python for MolmoSpaces runner venv, or None if not set up."""
-    from emet.simulation.molmospaces_config import get_molmospaces_runner_python
+def _molmospaces_wrapper_exe() -> Path | None:
+    """Return path to emet-molmospaces wrapper executable, or None if not installed."""
+    from emet.simulation.molmospaces_config import get_molmospaces_wrapper_exe
 
-    return get_molmospaces_runner_python()
+    return get_molmospaces_wrapper_exe()
 
 
-def _run_molmospaces_runner(args: list[str]) -> int:
-    """Run the MolmoSpaces runner in its venv. Returns exit code."""
-    py = _molmospaces_runner_python()
-    if py is None:
+def _run_molmospaces_wrapper(args: list[str]) -> int:
+    """Run the emet-molmospaces wrapper (list-scenes, install-scene, serve). Returns exit code."""
+    exe = _molmospaces_wrapper_exe()
+    if exe is None:
         click.echo(
-            "MolmoSpaces runner venv not found. Create it with: install.sh --molmospaces\n"
-            "Or set MOLMOSPACES_PYTHON to the Python executable of a venv with molmo-spaces installed.",
+            "MolmoSpaces wrapper not found. Install it: pip install emet-molmospaces (in a venv with molmo-spaces)\n"
+            "Or run: install.sh --molmospaces",
             err=True,
         )
         return 1
     root = _project_root()
-    cmd = [str(py), "-m", "emet.simulation.molmospaces_runner"] + args
-    env = os.environ.copy()
-    return subprocess.call(cmd, cwd=root, env=env)
+    cmd = [str(exe)] + args
+    return subprocess.call(cmd, cwd=root, env=os.environ.copy())
 
 
-@main.group("molmospaces", short_help="MolmoSpaces scenes and robots (requires separate venv)")
+@main.group("molmospaces", short_help="MolmoSpaces scenes and robots (requires emet-molmospaces wrapper)")
 def molmospaces_cmd() -> None:
     """Set up MolmoSpaces scenes, list robots (e.g. rby1 / Galaxea R1), and run simulation.
 
-    Requires a separate venv with molmo-spaces installed (see docs/molmospaces.md):
-      install.sh --molmospaces
-    Or set MOLMOSPACES_PYTHON to your molmo-spaces venv Python.
+    list-robots works without the wrapper. list-scenes, install-scene, and serve
+    require the emet-molmospaces package (see docs/molmospaces.md):
+      install.sh --molmospaces   or   pip install emet-molmospaces (in a venv)
     """
 
 
@@ -269,8 +268,8 @@ def molmospaces_list_robots() -> None:
 
 @molmospaces_cmd.command("list-scenes", short_help="List scene names and split sizes")
 def molmospaces_list_scenes() -> None:
-    """Print available MolmoSpaces scene names and split counts. Uses runner venv."""
-    sys.exit(_run_molmospaces_runner(["list-scenes"]))
+    """Print available MolmoSpaces scene names and split counts. Requires emet-molmospaces wrapper."""
+    sys.exit(_run_molmospaces_wrapper(["list-scenes"]))
 
 
 @molmospaces_cmd.command("install-scene", short_help="Install a scene and optionally write XML path")
@@ -285,7 +284,7 @@ def molmospaces_install_scene(scene: str, split: str, index: int, scene_path: Pa
     args = ["install-scene", "--scene", scene, "--split", split, "--index", str(index)]
     if scene_path is not None:
         args.extend(["--scene-path", str(scene_path)])
-    sys.exit(_run_molmospaces_runner(args))
+    sys.exit(_run_molmospaces_wrapper(args))
 
 
 @molmospaces_cmd.command("serve", short_help="Run MolmoSpaces simulation (scene + robot)")
@@ -319,7 +318,7 @@ def molmospaces_serve(
         args.extend(["--rerun", rerun])
     if scene_path is not None:
         args.extend(["--scene-path", str(scene_path)])
-    sys.exit(_run_molmospaces_runner(args))
+    sys.exit(_run_molmospaces_wrapper(args))
 
 
 def _kill_processes_on_port(port: int) -> bool:
@@ -841,10 +840,22 @@ def clean(skip_confirm: bool) -> None:
     click.echo("Done. Re-run emet install sim to reinstall.")
 
 
-@main.group(short_help="Install submodules, sim, full setup, pre-commit")
-def install() -> None:
-    """Install submodules, simulation extras, or full setup."""
-    pass
+@main.group(
+    short_help="Install submodules, sim, full setup, pre-commit",
+    invoke_without_command=True,
+)
+@click.pass_context
+def install(ctx: click.Context) -> None:
+    """Install submodules, simulation extras, or full setup.
+
+    With no subcommand, opens the interactive install menu (manage sub-assets and sync).
+    Use a subcommand for direct install: emet install sim, emet install full, etc.
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+    from emet.install_ui import run_install_menu
+
+    sys.exit(run_install_menu())
 
 
 @install.command("submodules", short_help="Init and update git submodules")
@@ -980,6 +991,22 @@ def install_robocasa(skip_download_assets: bool, setup_macros: bool, no_sync: bo
         click.echo("Robocasa install complete.")
         click.echo("Verify: uv run python -c \"import robocasa; print('robocasa OK')\"")
     sys.exit(result)
+
+
+@install.command("menu", short_help="Interactive menu to manage sub-assets")
+def install_menu() -> None:
+    """Open a text-based menu to install or update sub-assets.
+
+    Shows status of: submodules (SAM-2), simulation (robosuite + robocasa),
+    kitchen assets (textures, fixtures), and MolmoSpaces venv. Choose an
+    item to run its installer, or run all with prompts.
+
+    Examples:
+      emet install menu
+    """
+    from emet.install_ui import run_install_menu
+
+    sys.exit(run_install_menu())
 
 
 @install.command("full", short_help="Run full install (install.sh)")

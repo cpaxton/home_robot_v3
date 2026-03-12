@@ -22,6 +22,11 @@ for arg in "$@"; do
         -y|--yes)
             SKIP_ASKING="true"
             ;;
+        --all)
+            INSTALL_SIM="true"
+            INSTALL_MOLMOSPACES="true"
+            NO_SAM2="false"
+            ;;
         --cpu)
             CPU_ONLY="true"
             NO_SAM2="true"
@@ -51,17 +56,19 @@ done
 echo "=============================================="
 echo "         INSTALLING STRETCH AI (uv)"
 echo "=============================================="
-echo "Options: CPU_ONLY=$CPU_ONLY, NO_SAM2=$NO_SAM2, INSTALL_SIM=$INSTALL_SIM, EXTRAS=$EXTRAS"
-echo "         -y/--yes = non-interactive (install deps, link emet to ~/.local/bin)"
-echo "         --clean  = remove third_party/robosuite, robosuite_models, robocasa (then install)"
+echo "Options: CPU_ONLY=$CPU_ONLY, NO_SAM2=$NO_SAM2, INSTALL_SIM=$INSTALL_SIM, EXTRAS=$EXTRAS, MOLMOSPACES=$INSTALL_MOLMOSPACES"
+echo "         -y/--yes    = non-interactive (install deps, link emet to ~/.local/bin)"
+echo "         --all       = install everything (sim + molmospaces + dynamem); overridable by --no-sim etc."
+echo "         --sim       = install sim (Robocasa + robosuite; default). Use --no-sim to skip."
 echo "         --molmospaces = create .venv-molmospaces for MolmoSpaces (scenes + rby1 robot)"
+echo "         --clean     = remove and re-clone third_party/robosuite, robosuite_models, robocasa (only if needed; normally we update in place)"
 echo "Root: $ROOT_DIR"
 echo "---------------------------------------------"
 
-# Optional: remove sim third_party dirs so install works without sim (uv.lock has no sim by default)
+# Optional: remove sim third_party dirs only when explicitly requested (--clean). Normally install_simulation.sh updates in place (fetch/pull).
 if [ "$CLEAN_SIM" = "true" ]; then
     echo ""
-    echo "Cleaning sim third_party (robosuite, robosuite_models, robocasa)..."
+    echo "Cleaning sim third_party (robosuite, robosuite_models, robocasa) before re-install..."
     for d in third_party/robosuite third_party/robosuite_models third_party/robocasa; do
         if [ -d "$d" ]; then
             rm -rf "$d"
@@ -143,28 +150,39 @@ if [ "$INSTALL_SIM" = "true" ]; then
     export EMET_USE_UV=1
     SIM_SCRIPT="$ROOT_DIR/scripts/install_simulation.sh"
     if [ "$SKIP_ASKING" = "true" ]; then
-        bash "$SIM_SCRIPT" -n
+        bash "$SIM_SCRIPT" -y
     else
         bash "$SIM_SCRIPT"
     fi
 fi
 
-# MolmoSpaces: separate venv (molmo-spaces needs mujoco 3.4 + numpy>=2.2; main emet uses numpy<2)
+# MolmoSpaces: separate venv with emet-molmospaces wrapper (molmo-spaces needs mujoco 3.4 + numpy>=2.2)
+# Use venv's python -m pip so we don't rely on bin/pip existing (e.g. some uv venvs).
 if [ "$INSTALL_MOLMOSPACES" = "true" ]; then
     echo ""
-    echo "Setting up MolmoSpaces runner venv (.venv-molmospaces)..."
+    echo "Setting up MolmoSpaces wrapper venv (.venv-molmospaces)..."
     MLSPACES_CACHE="${MLSPACES_ASSETS_DIR:-$HOME/.cache/molmospaces/assets}"
     export MLSPACES_ASSETS_DIR="$MLSPACES_CACHE"
     mkdir -p "$MLSPACES_ASSETS_DIR"
+    PY_MOLMO=".venv-molmospaces/bin/python"
     if [ ! -d ".venv-molmospaces" ]; then
         uv venv .venv-molmospaces
-        .venv-molmospaces/bin/pip install --upgrade pip
-        # Emet without deps so the runner module is importable; then molmo-spaces stack (mujoco 3.4, numpy>=2.2)
-        .venv-molmospaces/bin/pip install --no-deps -e .
-        .venv-molmospaces/bin/pip install "molmo-spaces" "mujoco>=3.4" "numpy>=2.2"
-        echo "  -> Created .venv-molmospaces with emet (no-deps) and molmo-spaces + mujoco>=3.4"
+        "$PY_MOLMO" -m pip install --upgrade pip
+        # Emet (no-deps) then emet-molmospaces wrapper (pulls molmo-spaces, mujoco 3.4, numpy>=2.2)
+        "$PY_MOLMO" -m pip install --no-deps -e .
+        if [ -d "packages/emet_molmospaces" ]; then
+            "$PY_MOLMO" -m pip install -e packages/emet_molmospaces
+        else
+            "$PY_MOLMO" -m pip install "molmo-spaces" "mujoco>=3.4" "numpy>=2.2"
+        fi
+        echo "  -> Created .venv-molmospaces with emet and emet-molmospaces wrapper"
     else
         echo "  -> .venv-molmospaces already exists"
+        # Ensure wrapper is installed when package lives in repo (packages/ is not under src)
+        if [ -d "packages/emet_molmospaces" ] && [ ! -x ".venv-molmospaces/bin/emet-molmospaces" ]; then
+            "$PY_MOLMO" -m pip install -e packages/emet_molmospaces
+            echo "  -> Installed emet-molmospaces wrapper into existing venv"
+        fi
     fi
     echo "  -> MLSPACES_ASSETS_DIR=$MLSPACES_ASSETS_DIR (set this in your shell or .env for emet molmospaces)"
     echo "  -> Run: emet molmospaces list-robots  &&  emet molmospaces serve --viewer"

@@ -45,18 +45,27 @@ MOLMOSPACES_SCENE_NAMES = [
 MOLMOSPACES_SPLITS = ("train", "val", "test")
 
 
-def get_molmospaces_runner_python() -> Path | None:
-    """Return Python executable for the MolmoSpaces runner (separate venv).
-    Prefer MOLMOSPACES_PYTHON env, then .venv-molmospaces in project root.
+def get_molmospaces_wrapper_exe() -> Path | None:
+    """Return path to the emet-molmospaces wrapper executable (script or venv bin).
+    Used by core CLI to delegate list-scenes, install-scene, serve. Prefer
+    MOLMOSPACES_PYTHON's bin dir, then .venv-molmospaces/bin/emet-molmospaces, then PATH.
     """
+    import shutil
+
     env_py = os.environ.get("MOLMOSPACES_PYTHON")
     if env_py:
         p = Path(env_py).resolve()
         if p.exists():
-            return p
+            # Same venv's bin/emet-molmospaces
+            exe = p.parent / "emet-molmospaces"
+            if exe.exists():
+                return exe
+            # Fallback: run python -m emet_molmospaces (handled by caller if needed)
     root = Path(__file__).resolve().parent.parent.parent.parent
-    for name in ("python", "python3"):
-        candidate = root / ".venv-molmospaces" / "bin" / name
-        if candidate.exists():
-            return candidate
+    candidate = root / ".venv-molmospaces" / "bin" / "emet-molmospaces"
+    if candidate.exists():
+        return candidate
+    which = shutil.which("emet-molmospaces")
+    if which:
+        return Path(which)
     return None
