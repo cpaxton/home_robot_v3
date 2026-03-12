@@ -18,7 +18,6 @@ segmentation:
   owlsam:
     owl_version: "owlv2-L-p14-ensemble"
     owl_confidence: 0.15
-    sam2_configuration: "l"
 
 # --- Embeddings ---
 embeddings:

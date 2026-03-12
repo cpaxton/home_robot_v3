@@ -7,7 +7,6 @@ segmentation:
   owlsam:
     owl_version: "owlv2-B-p16"
     owl_confidence: 0.05
-    sam2_configuration: "t"
   sam2:
     configuration: "t"
     min_area: 300

@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -23,8 +22,9 @@ from emet.mapping.scene_graph.open_vocab_scene_graph import (
     ObjectObservation,
     OpenVocabSceneGraph,
 )
+from emet.utils.logger import Logger
 
-logger = logging.getLogger(__name__)
+logger = Logger(__name__)
 
 
 class SceneGraphProcessor:
@@ -128,7 +128,7 @@ class SceneGraphProcessor:
                     return seg
                 logger.warning("SAM3 not available, falling back")
             except Exception as e:
-                logger.warning("SAM3 import failed (%s), falling back", e)
+                logger.warning(f"SAM3 import failed ({e}), falling back")
 
         # Fallback
         fallback = seg_cfg.get("fallback", "owlsam")
@@ -143,7 +143,6 @@ class SceneGraphProcessor:
                 version=owl_cfg.get("owl_version", "owlv2-L-p14-ensemble"),
                 device=self.device,
                 confidence_threshold=owl_cfg.get("owl_confidence", 0.15),
-                sam2_configuration=owl_cfg.get("sam2_configuration", "l"),
             )
         elif name == "sam2":
             from emet.perception.detection.sam2 import SAM2Perception
@@ -272,7 +271,7 @@ class SceneGraphProcessor:
                 seg.reset_vocab(vocabulary)
             sem, inst, task_obs = seg.predict(rgb, depth=depth)
         except Exception as e:
-            logger.warning("Segmentation failed: %s", e)
+            logger.warning(f"Segmentation failed: {e}")
             return []
 
         # Convert to detection list
@@ -312,7 +311,7 @@ class SceneGraphProcessor:
                 feat = feat.squeeze(0)
             return F.normalize(feat.unsqueeze(0), dim=-1).squeeze(0).cpu()
         except Exception as e:
-            logger.debug("SigLIP encoding failed: %s", e)
+            logger.debug(f"SigLIP encoding failed: {e}")
             return None
 
     @torch.no_grad()
@@ -324,5 +323,5 @@ class SceneGraphProcessor:
                 feat = feat.squeeze(0)
             return F.normalize(feat.unsqueeze(0), dim=-1).squeeze(0).cpu()
         except Exception as e:
-            logger.debug("DINOv3 encoding failed: %s", e)
+            logger.debug(f"DINOv3 encoding failed: {e}")
             return None

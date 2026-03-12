@@ -8,7 +8,6 @@
 # Uses HuggingFace transformers API for text-prompted concept segmentation.
 # Falls back to SAM2 + OWL if SAM3 is unavailable.
 
-import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -16,8 +15,9 @@ import torch
 
 from emet.core.abstract_perception import PerceptionModule
 from emet.perception.detection.utils import filter_depth, overlay_masks
+from emet.utils.logger import Logger
 
-logger = logging.getLogger(__name__)
+logger = Logger(__name__)
 
 SAM3_MODEL_ID = "facebook/sam3"
 
@@ -53,9 +53,9 @@ class SAM3Perception(PerceptionModule):
             self.processor = Sam3Processor.from_pretrained(model_id)
             self.model = Sam3Model.from_pretrained(model_id).to(self.device).eval()
             self._available = True
-            logger.info("SAM3 loaded from %s on %s", model_id, device)
+            logger.info(f"SAM3 loaded from {model_id} on {device}")
         except Exception as e:
-            logger.warning("SAM3 not available (%s); will fall back to SAM2+OWL", e)
+            logger.warning(f"SAM3 not available ({e}); will fall back to SAM2+OWL")
             self._available = False
             self.processor = None
             self.model = None

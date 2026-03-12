@@ -85,7 +85,7 @@ class OWLSAMProcessor(OwlPerception):
 
         # Post-process detections
         target_sizes = torch.Tensor([image.size[::-1]]).to(self.device)
-        results = self.processor.post_process_object_detection(
+        results = self.processor.image_processor.post_process_object_detection(
             outputs, threshold=confidence_threshold, target_sizes=target_sizes
         )[0]
 
