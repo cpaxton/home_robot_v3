@@ -16,7 +16,7 @@ import click
 import cv2
 import numpy as np
 
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 
 # For Windows
 if os.name == "nt":
@@ -28,11 +28,11 @@ else:
     import tty
 
 
-def key_pressed(robot: HomeRobotZmqClient, key):
+def key_pressed(robot: StretchZmqClient, key):
     """Handle a key press event. Will just move the base for now.
 
     Args:
-        robot (HomeRobotZmqClient): The robot client object.
+        robot (StretchZmqClient): The robot client object.
         key (str): The key that was pressed.
     """
     xyt = robot.get_base_pose()
@@ -71,12 +71,14 @@ def getch():
     help="Set if we are executing on the robot and not on a remote computer",
 )
 @click.option("--headless", is_flag=True, help="Do not show camera feeds")
-def main(robot_ip: str = "192.168.1.15", local: bool = False, headless: bool = False):
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
+def main(robot_ip: str = "192.168.1.15", local: bool = False, headless: bool = False, port_offset: int = 0):
 
     # Create robot
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
+        port_offset=port_offset,
     )
     if not robot.in_navigation_mode():
         robot.move_to_nav_posture()

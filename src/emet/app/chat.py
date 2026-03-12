@@ -15,7 +15,7 @@ import timeit
 import click
 from termcolor import colored
 
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
@@ -40,6 +40,7 @@ from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_p
 @click.option("--robot_ip", default="", help="IP address of the robot")
 @click.option("--voice", default=False, help="Enable voice chat", is_flag=True)
 @click.option("--talk", default=False, help="Robot will speak its responses out load", is_flag=True)
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     llm="gemma",
     max_audio_duration: float = 10.0,
@@ -48,12 +49,13 @@ def main(
     prompt="simple",
     robot_ip="",
     talk=False,
+    port_offset: int = 0,
 ):
     prompt = get_prompt_builder(prompt)
     client = get_llm_client(llm, prompt)
 
     if talk:
-        robot = HomeRobotZmqClient(robot_ip)
+        robot = StretchZmqClient(robot_ip, port_offset=port_offset)
     else:
         robot = None
 

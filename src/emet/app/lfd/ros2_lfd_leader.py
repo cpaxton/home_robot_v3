@@ -17,7 +17,7 @@ from lerobot.common.datasets.push_dataset_to_hub import dobbe_format
 import emet.app.dex_teleop.dex_teleop_utils as dt_utils
 import emet.utils.logger as logger
 import emet.utils.loop_stats as lt
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.app.lfd.policy_utils import load_policy, prepare_image, prepare_state
 from emet.core import get_parameters
 from emet.motion.kinematics import HelloStretchIdx
@@ -29,7 +29,7 @@ class ROS2LfdLeader:
 
     def __init__(
         self,
-        robot: HomeRobotZmqClient,
+        robot: StretchZmqClient,
         verbose: bool = False,
         data_dir: str = "./data",
         task_name: str = "task",
@@ -343,7 +343,7 @@ if __name__ == "__main__":
     parameters = get_parameters("default_planner.yaml")
 
     # Zmq client
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=args.robot_ip,
         send_port=args.send_port,
         parameters=parameters,

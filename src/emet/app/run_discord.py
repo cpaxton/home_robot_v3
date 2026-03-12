@@ -15,7 +15,7 @@ import click
 
 # import emet.utils.logger as logger
 from emet.controller.controller_instance_memory import RobotAgent
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
 from emet.llms import get_llm_choices
 from emet.llms.discord_bot import EmetDiscordBot
@@ -123,6 +123,7 @@ logger = Logger(__name__)
     default=None,
     help="The token for the discord bot. Will be read from env if not available.",
 )
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip: str = "192.168.1.15",
     token: Optional[str] = None,
@@ -144,14 +145,16 @@ def main(
     radius: float = 3.0,
     server_ip: str = "127.0.0.1",
     input_path: str = "",
+    port_offset: int = 0,
 ):
     """Set up the robot, create a task plan, and execute it."""
     # Create robot
     parameters = get_parameters(parameter_file)
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
         parameters=parameters,
+        port_offset=port_offset,
     )
     semantic_sensor = create_semantic_sensor(
         parameters=parameters,

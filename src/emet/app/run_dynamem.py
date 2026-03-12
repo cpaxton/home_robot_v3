@@ -18,7 +18,7 @@ for _name in ("httpx", "httpcore", "huggingface_hub", "transformers"):
     logging.getLogger(_name).setLevel(logging.WARNING)
 
 from emet.controller.task.dynamem import DynamemTaskExecutor
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.core.parameters import get_parameters
 from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_llm_client
 
@@ -137,6 +137,7 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
     help="Bind Rerun to 0.0.0.0 for remote viewing (Tailscale, etc.). "
     "If direct connection fails, use SSH port forwarding instead.",
 )
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     server_ip,
     manual_wait,
@@ -162,6 +163,7 @@ def main(
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
     rerun_bind: bool = False,
+    port_offset: int = 0,
     **kwargs,
 ):
     """
@@ -178,12 +180,13 @@ def main(
         os.environ["RERUN_BIND_ALL"] = "1"
 
     print("- Create robot client")
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         enable_rerun_server=not no_rerun,
         rerun_headless=headless,
         rerun_show_panels=rerun_show_panels,
         rerun_debug=rerun_debug,
+        port_offset=port_offset,
     )
 
     print("- Create task executor")

@@ -137,9 +137,9 @@ class FindObjectTask:
 
 if __name__ == "__main__":
     from emet.controller.controller_instance_memory import RobotAgent
-    from emet.controller.zmq_client import HomeRobotZmqClient
+    from emet.controller.zmq_client import StretchZmqClient
 
-    robot = HomeRobotZmqClient()
+    robot = StretchZmqClient()
     # Create a robot agent with instance memory
     agent = RobotAgent(robot, create_semantic_sensor=True)
 
