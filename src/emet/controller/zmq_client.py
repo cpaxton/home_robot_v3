@@ -1119,11 +1119,16 @@ class StretchZmqClient(AbstractRobotClient):
         if min_steps_not_moving is None:
             min_steps_not_moving = self._min_steps_not_moving
         t0 = timeit.default_timer()
+        deadline = timeit.default_timer() + timeout  # wall-clock: always exit after timeout
         close_to_goal = False
 
         while not self._finish:
             # Minor delay at the end - give it time to get new messages
             time.sleep(0.01)
+
+            if timeit.default_timer() > deadline:
+                print(f"Timeout ({timeout}s) waiting for block with step id = {block_id}")
+                break
 
             if not self.is_up_to_date():
                 if verbose:
