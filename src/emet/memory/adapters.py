@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Memory backend adapters: DynaMem, GraphEQA, SVM.
@@ -6,7 +15,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 import torch
@@ -42,11 +51,7 @@ def _restore_dynamem_from_state(voxel_map: Any, state: MemoryState) -> None:
         if pc.weights is not None
         else torch.ones(sm._points.shape[0], 1, dtype=torch.float32)
     )
-    sm._features = (
-        torch.from_numpy(np.asarray(pc.feats, dtype=np.float32))
-        if pc.feats is not None
-        else sm._rgb
-    )
+    sm._features = torch.from_numpy(np.asarray(pc.feats, dtype=np.float32)) if pc.feats is not None else sm._rgb
     sm._obs_counts = (
         torch.from_numpy(np.asarray(pc.obs_id, dtype=np.int64).ravel())
         if pc.obs_id is not None
@@ -70,9 +75,7 @@ class DynaMemBackend(MemoryBackend):
         self._confidence_threshold = confidence_threshold
 
     def check_memory_for_object(self, text: str) -> CheckMemoryResult:
-        result = self._voxel_map.localize_text(
-            text, debug=False, return_debug=True
-        )
+        result = self._voxel_map.localize_text(text, debug=False, return_debug=True)
         # localize_text returns (target_point, debug_text) or (target_point, debug_text, obs_id, point)
         target_point = result[0] if isinstance(result, (list, tuple)) else result
         debug_text = result[1] if len(result) > 1 else ""
@@ -89,7 +92,9 @@ class DynaMemBackend(MemoryBackend):
             alignments = self._voxel_map.find_alignment_over_model(text)
         if alignments is not None:
             max_align = float(alignments.max().item())
-            confidence = min(1.0, max(0.0, (max_align - self._confidence_threshold) / (1.0 - self._confidence_threshold)))
+            confidence = min(
+                1.0, max(0.0, (max_align - self._confidence_threshold) / (1.0 - self._confidence_threshold))
+            )
         else:
             confidence = 0.8 if target_point is not None else 0.0
         if hasattr(target_point, "cpu"):
@@ -133,9 +138,9 @@ class DynaMemBackend(MemoryBackend):
     def query_answer(
         self,
         question: str,
-        xyt: Optional[Union[Any, np.ndarray, list]] = None,
+        xyt: Any | np.ndarray | list | None = None,
         planner: Any = None,
-    ) -> Tuple[str, str, bool, str, Optional[np.ndarray], Any]:
+    ) -> tuple[str, str, bool, str, np.ndarray | None, Any]:
         """EQA-style query delegating to the underlying voxel map.
 
         Returns:
@@ -164,7 +169,7 @@ class DynaMemBackend(MemoryBackend):
                     obs_id=obs_id.cpu().numpy() if obs_id is not None and hasattr(obs_id, "cpu") else obs_id,
                 )
 
-        frames: List[FrameBlob] = []
+        frames: list[FrameBlob] = []
         for obs in getattr(vm, "observations", []) or []:
             cp = getattr(obs, "camera_pose", None)
             if cp is None:
@@ -243,7 +248,7 @@ class GraphEQABackend(MemoryBackend):
     def __init__(
         self,
         graph_memory: Any,
-        voxel_map: Optional[Any] = None,
+        voxel_map: Any | None = None,
     ):
         """Wrap GraphEQAMemory. Optionally provide voxel_map for richer localize (e.g. DynaMem voxel)."""
         self._graph = graph_memory
@@ -299,7 +304,7 @@ class GraphEQABackend(MemoryBackend):
                     return LocalizeResult(point_xyz=xyz, success=True, extra_info={})
         return LocalizeResult(point_xyz=None, success=False, extra_info={})
 
-    def list_objects(self) -> List[str]:
+    def list_objects(self) -> list[str]:
         labels = []
         for node in self._graph.get_nodes():
             labels.extend(node.labels)
@@ -308,14 +313,13 @@ class GraphEQABackend(MemoryBackend):
     def query_answer(
         self,
         question: str,
-        xyt: Optional[Union[Any, np.ndarray, list]] = None,
+        xyt: Any | np.ndarray | list | None = None,
         planner: Any = None,
-    ) -> Tuple[str, str, bool, str, Optional[np.ndarray], Any]:
+    ) -> tuple[str, str, bool, str, np.ndarray | None, Any]:
         return self._graph.query_answer(question, xyt, planner)
 
     def save(self, path: str) -> None:
         """Save to common directory format (graph + optional frames from observations)."""
-        from emet.memory.graph_eqa.graph_memory import GraphNode, GraphObservation
 
         dir_path = Path(path)
         dir_path.mkdir(parents=True, exist_ok=True)
@@ -329,28 +333,31 @@ class GraphEQABackend(MemoryBackend):
                     labels=list(n.labels),
                     xyz=list(np.ravel(n.xyz).tolist()),
                     obs_id=n.obs_id,
+                    description=getattr(n, "description", None),
                 )
                 for n in nodes
             ],
-            edges=[
-                GraphEdgeView(id1=e[0], id2=e[1], relation=e[2])
-                for e in edges
-            ],
+            edges=[GraphEdgeView(id1=e[0], id2=e[1], relation=e[2]) for e in edges],
         )
-        frames: List[FrameBlob] = []
+        frames: list[FrameBlob] = []
         for obs in self._graph.get_observations():
             xyz = np.ravel(obs.xyz)
             if xyz.size < 3:
                 xyz = np.array([0.0, 0.0, 0.0], dtype=np.float64)
             pose = np.eye(4, dtype=np.float64)
             pose[:3, 3] = xyz[:3]
+            info = None
+            if obs.labels or getattr(obs, "description", None):
+                info = {"labels": list(obs.labels) if obs.labels else []}
+                if getattr(obs, "description", None):
+                    info["description"] = obs.description
             frames.append(
                 FrameBlob(
                     camera_pose=pose,
                     base_pose=xyz[:3].tolist() if xyz.size >= 3 else None,
                     rgb=obs.rgb,
                     world_xyz=xyz.reshape(-1, 3)[0:1],
-                    info={"labels": list(obs.labels)} if obs.labels else None,
+                    info=info,
                 )
             )
 
@@ -378,6 +385,7 @@ class GraphEQABackend(MemoryBackend):
                 labels=list(n.labels),
                 xyz=np.array(n.xyz, dtype=np.float64),
                 obs_id=n.obs_id,
+                description=getattr(n, "description", None),
             )
             for n in state.graph.nodes
         ]
@@ -388,16 +396,19 @@ class GraphEQABackend(MemoryBackend):
             if fr.world_xyz is not None and fr.world_xyz.size >= 3:
                 xyz = np.ravel(fr.world_xyz)[:3]
             labels = (fr.info or {}).get("labels", [])
+            description = (fr.info or {}).get("description") if fr.info else None
             rgb = fr.rgb if fr.rgb is not None else np.zeros((1, 1, 3), dtype=np.uint8)
             self._graph._observations.append(
-                GraphObservation(obs_id=i + 1, rgb=rgb, xyz=xyz, labels=labels)
+                GraphObservation(obs_id=i + 1, rgb=rgb, xyz=xyz, labels=labels, description=description)
             )
-        self._graph._next_obs_id = max(
-            (n.obs_id for n in self._graph._nodes), default=0
-        ) + 1
+        self._graph._next_obs_id = max((n.obs_id for n in self._graph._nodes), default=0) + 1
 
     def supports_save_load(self) -> bool:
         return True
+
+    def print_memory(self) -> str:
+        """Return the 3D scene graph as an indented tree with objects and descriptions."""
+        return self._graph.print_memory()
 
 
 class SVMBackend(MemoryBackend):
@@ -448,7 +459,7 @@ class SVMBackend(MemoryBackend):
             extra_info={},
         )
 
-    def list_objects(self) -> List[str]:
+    def list_objects(self) -> list[str]:
         instances = getattr(self._agent.get_voxel_map(), "get_instances", lambda: [])()
         if not instances:
             return []
@@ -473,10 +484,19 @@ class SVMBackend(MemoryBackend):
         if hasattr(vm, "voxel_pcd") and vm.voxel_pcd is not None:
             try:
                 points, _, _, rgb = vm.voxel_pcd.get_pointcloud()
-                if points is not None and (hasattr(points, "numel") and points.numel() > 0 or getattr(points, "size", lambda: 0) and points.size > 0):
+                if points is not None and (
+                    hasattr(points, "numel")
+                    and points.numel() > 0
+                    or getattr(points, "size", lambda: 0)
+                    and points.size > 0
+                ):
                     point_cloud = PointCloudBlob(
                         xyz=points.cpu().numpy() if hasattr(points, "cpu") else np.asarray(points),
-                        rgb=rgb.cpu().numpy() if rgb is not None and hasattr(rgb, "cpu") else np.asarray(rgb) if rgb is not None else None,
+                        rgb=rgb.cpu().numpy()
+                        if rgb is not None and hasattr(rgb, "cpu")
+                        else np.asarray(rgb)
+                        if rgb is not None
+                        else None,
                     )
             except Exception:
                 pass
@@ -513,9 +533,7 @@ class SVMBackend(MemoryBackend):
         if not path_obj.is_dir() or not is_memory_directory(path):
             raise FileNotFoundError(f"Not a memory directory: {path}")
         state = load_memory(path)
-        real_vm = getattr(
-            self._agent.get_voxel_map(), "_voxel_map", self._agent.get_voxel_map()
-        )
+        real_vm = getattr(self._agent.get_voxel_map(), "_voxel_map", self._agent.get_voxel_map())
         if getattr(real_vm, "semantic_memory", None) is not None:
             _restore_dynamem_from_state(real_vm, state)
 
