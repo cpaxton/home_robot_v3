@@ -11,7 +11,7 @@ from emet.controller import (
     BaseRobotAgent,
     DynamemController,
     DynamemRobotAgent,
-    HomeRobotZmqClient,
+    StretchZmqClient,
     InstanceMemoryController,
     RobotAgent,
     RobotClient,
@@ -29,7 +29,7 @@ def test_controller_exports():
     assert InstanceMemoryController is IMC
     assert DynamemController is DC
     assert DynamemRobotAgent is DC_alias
-    assert RobotClient is HomeRobotZmqClient
+    assert RobotClient is StretchZmqClient
 
 
 def test_base_robot_agent_abstract():

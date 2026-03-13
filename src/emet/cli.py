@@ -156,6 +156,15 @@ def main() -> None:
     default="",
     help="Robocasa task name (e.g. PickPlaceCounterToCabinet). Use --list-robocasa-tasks to see all.",
 )
+@click.option(
+    "--robot",
+    default="stretch",
+    help=(
+        "Robot to simulate. 'stretch' (default) uses the Stretch-MuJoCo path. "
+        "Robosuite-native names (PandaOmron, Tiago, GR1, etc.) keep the "
+        "robosuite robot in the scene. 'galaxea_r1' uses the Galaxea R1 MJCF."
+    ),
+)
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
 def serve(
     backend: str,
@@ -168,6 +177,7 @@ def serve(
     port_offset: int,
     list_robocasa_tasks: bool,
     robocasa_task: str,
+    robot: str,
     extra: tuple[str, ...],
 ) -> None:
     """Start a simulation server.
@@ -184,6 +194,8 @@ def serve(
       emet serve
       emet serve mujoco --headless
       emet serve robocasa
+      emet serve robocasa --robot PandaOmron
+      emet serve robocasa --robot galaxea_r1
       emet serve robocasa --robocasa-task PickPlaceCounterToCabinet
       emet serve robocasa --list-robocasa-tasks
       emet serve mujoco --use-robocasa --port-offset 100
@@ -208,6 +220,8 @@ def serve(
         args.extend(["--seed", str(seed)])
         if port_offset:
             args.extend(["--port-offset", str(port_offset)])
+        if robot and robot != "stretch":
+            args.extend(["--robot", robot])
         sys.exit(_run_module("emet.simulation.mujoco_server", args))
     else:
         click.echo(f"Unknown backend: {backend}", err=True)
@@ -427,6 +441,12 @@ def deploy(
 @click.option("--target-object", "--target_object", help="Target object to grasp (grasp) or pick (dynamem)")
 @click.option("--target-receptacle", "--target_receptacle", help="Target receptacle to place on (dynamem)")
 @click.option("--parameter-file", "--parameter_file", help="Planner config (e.g. sim_planner.yaml)")
+@click.option(
+    "--port-offset",
+    default=0,
+    type=int,
+    help="Add to default ZMQ ports (e.g. 100 → 4501-4504). Must match the server.",
+)
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -439,6 +459,7 @@ def run(
     target_object: str | None,
     target_receptacle: str | None,
     parameter_file: str | None,
+    port_offset: int,
 ) -> None:
     """Run a robot agent or app.
 
@@ -446,6 +467,7 @@ def run(
 
     Examples:
       emet run dynamem --robot-ip 127.0.0.1 -S
+      emet run dynamem -S --port-offset 100
       emet run dynamem -S --visual-servo --match-method class --target-object apple --target-receptacle plate
       emet run mapping --robot-ip 127.0.0.1
       emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
@@ -453,6 +475,8 @@ def run(
     """
     args = list(ctx.args)
     args.extend(["--robot_ip", robot_ip])
+    if port_offset:
+        args.extend(["--port-offset", str(port_offset)])
     if app == "dynamem":
         args.extend(["--server_ip", server_ip])
         if skip_confirmations:

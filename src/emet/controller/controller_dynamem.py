@@ -243,6 +243,8 @@ class DynamemController(BaseController):
         """
         This function define rerun blueprint of DynaMem module.
         """
+        if getattr(self.rerun_visualizer, "enabled", True) is False:
+            return
         main = rrb.Horizontal(
             rrb.Spatial3DView(name="3D View", origin="world"),
             rrb.Vertical(

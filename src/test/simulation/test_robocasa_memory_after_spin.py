@@ -77,11 +77,11 @@ def test_robocasa_memory_after_spin():
             )
 
         from emet.controller.task.dynamem import DynamemTaskExecutor
-        from emet.controller.zmq_client import HomeRobotZmqClient
+        from emet.controller.zmq_client import StretchZmqClient
         from emet.core.parameters import get_parameters
         from emet.memory.backend import get_memory_backend
 
-        robot = HomeRobotZmqClient(
+        robot = StretchZmqClient(
             robot_ip="127.0.0.1",
             enable_rerun_server=False,
             start_immediately=True,

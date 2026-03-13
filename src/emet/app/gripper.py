@@ -11,7 +11,7 @@
 
 import click
 
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
 
 
@@ -27,6 +27,7 @@ from emet.core import get_parameters
 @click.option("--value", default=0.0, help="Value to set the gripper to")
 @click.option("--blocking", is_flag=True, help="Block until the gripper is done")
 @click.option("--parameter_file", default="default_planner.yaml", help="Path to parameter file")
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip: str = "",
     local: bool = False,
@@ -35,13 +36,15 @@ def main(
     close: bool = False,
     blocking: bool = False,
     value: float = 0.0,
+    port_offset: int = 0,
 ):
     # Create robot
     parameters = get_parameters(parameter_file)
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
         parameters=parameters,
+        port_offset=port_offset,
     )
     print("Starting")
     robot.start()

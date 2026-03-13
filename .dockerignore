@@ -1,0 +1,10 @@
+# Avoid copying host venv and caches into build context (image builds its own)
+.venv
+*.egg-info
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+# Keep .git so install.sh can run git submodule update if needed
+# Keep third_party/segment-anything-2 (or ensure CI checks out with submodules)

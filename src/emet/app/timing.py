@@ -14,7 +14,7 @@ import click
 import cv2
 import numpy as np
 
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.utils import LoopStats
 
 
@@ -29,17 +29,20 @@ from emet.utils import LoopStats
 @click.option(
     "--iterations", default=100, help="Number of iterations between rate histogram updates"
 )
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip: str = "",
     local: bool = False,
     headless: bool = False,
     iterations: int = 500,
+    port_offset: int = 0,
 ):
 
     # Create robot
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
+        port_offset=port_offset,
     )
 
     if not headless:

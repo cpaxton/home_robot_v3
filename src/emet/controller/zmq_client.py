@@ -48,7 +48,7 @@ logger = Logger(__name__)
 # faulthandler.enable()
 
 
-class HomeRobotZmqClient(AbstractRobotClient):
+class StretchZmqClient(AbstractRobotClient):
 
     update_base_pose_from_full_obs: bool = False
     num_state_report_steps: int = 10000
@@ -104,6 +104,7 @@ class HomeRobotZmqClient(AbstractRobotClient):
         recv_state_port: int = 4403,
         recv_servo_port: int = 4404,
         pub_obs_port: int = 4450,
+        port_offset: int = 0,
         output_path: Path = None,
         parameters: Parameters = None,
         use_remote_computer: bool = True,
@@ -135,7 +136,14 @@ class HomeRobotZmqClient(AbstractRobotClient):
             grasp_frame: The frame to use for grasping
             ee_link_name: The name of the end effector link
             manip_mode_controlled_joints: The joints to control in manipulation mode
+            port_offset: Added to all default port numbers (e.g. 100 → 4501-4504)
         """
+        if port_offset:
+            recv_port += port_offset
+            send_port += port_offset
+            recv_state_port += port_offset
+            recv_servo_port += port_offset
+            pub_obs_port += port_offset
         self.recv_port = recv_port
         self.send_port = send_port
         self.reset()
@@ -235,7 +243,9 @@ class HomeRobotZmqClient(AbstractRobotClient):
                 collapse_panels=not rerun_show_panels,
             )
         else:
-            self._rerun = None
+            from emet.visualization.rerun import NullVisualizer
+
+            self._rerun = NullVisualizer()
             self._rerun_thread = None
         self._rerun_debug = rerun_debug if enable_rerun_server else False
 
@@ -901,7 +911,7 @@ class HomeRobotZmqClient(AbstractRobotClient):
         next_action = self.send_action(next_action)
         self._wait_for_head(constants.STRETCH_NAVIGATION_Q, resend_action=next_action)
         self._wait_for_mode("navigation")
-        self._wait_for_arm(constants.STRETCH_NAVIGATION_Q)
+        self._wait_for_arm(constants.STRETCH_NAVIGATION_Q, timeout=30.0)
         assert self.in_navigation_mode()
 
     def move_to_manip_posture(self):
@@ -1021,6 +1031,7 @@ class HomeRobotZmqClient(AbstractRobotClient):
             bool: Whether the arm successfully moved to the target configuration
         """
         t0 = timeit.default_timer()
+        min_time = 2.5
         while not self._finish:
             joint_positions, joint_velocities, _ = self.get_joint_state()
             if joint_positions is None:
@@ -1036,13 +1047,26 @@ class HomeRobotZmqClient(AbstractRobotClient):
                 self.send_message(resend_action)
 
             t1 = timeit.default_timer()
-            if t1 - t0 > timeout:
-                logger.error(
-                    f"Timeout waiting for arm to move to arm={q[HelloStretchIdx.ARM]}, lift={q[HelloStretchIdx.LIFT]}: {t1 - t0} seconds, arm_diff={arm_diff}, lift_diff={lift_diff}"
+            elapsed = t1 - t0
+            if elapsed > min_time and joint_velocities is not None:
+                arm_vel = abs(joint_velocities[HelloStretchIdx.ARM])
+                lift_vel = abs(joint_velocities[HelloStretchIdx.LIFT])
+                if arm_vel < 0.005 and lift_vel < 0.005:
+                    logger.warning(
+                        f"Arm/lift stopped moving before reaching target: "
+                        f"arm_diff={arm_diff:.4f}, lift_diff={lift_diff:.4f}"
+                    )
+                    return False
+            if elapsed > timeout:
+                logger.warning(
+                    f"Timeout waiting for arm to move to arm={q[HelloStretchIdx.ARM]}, "
+                    f"lift={q[HelloStretchIdx.LIFT]}: {elapsed:.1f}s, "
+                    f"arm_diff={arm_diff:.4f}, lift_diff={lift_diff:.4f}"
                 )
                 return False
 
-        # This should never happen
+            time.sleep(0.01)
+
         return False
 
     def _wait_for_mode(
@@ -1854,6 +1878,10 @@ def main(
         use_remote_computer=(not local),
     )
     client.blocking_spin(verbose=True, visualize=False)
+
+
+# Backward-compatible alias
+HomeRobotZmqClient = StretchZmqClient
 
 
 if __name__ == "__main__":

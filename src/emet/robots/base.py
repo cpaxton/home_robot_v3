@@ -7,8 +7,8 @@
 """Base abstractions for robot backends."""
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, List, Optional
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from emet.core.robot import AbstractRobotClient
@@ -27,6 +27,9 @@ class RobotSpec:
     camera_names: List[str]
     urdf_path: Optional[str]
     footprint: Footprint
+    mjcf_path: Optional[str] = None
+    actuator_names: List[str] = field(default_factory=list)
+    base_link_name: str = "base_link"
 
 
 class RobotBackend(ABC):

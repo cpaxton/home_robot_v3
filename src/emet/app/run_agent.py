@@ -91,6 +91,7 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     multiple=True,
     help="Run command(s) non-interactively then exit. Repeatable: -c 'explore' -c 'find red cylinder'.",
 )
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     llm: str,
     prompt: str,
@@ -104,6 +105,7 @@ def main(
     debug_llm: bool,
     agent_name: str,
     commands: tuple[str, ...],
+    port_offset: int = 0,
 ) -> None:
     """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
 
@@ -131,6 +133,7 @@ def main(
             debug_llm=debug_llm,
             agent_name=agent_name,
             commands=cmd_list,
+            port_offset=port_offset,
         )
         return
 

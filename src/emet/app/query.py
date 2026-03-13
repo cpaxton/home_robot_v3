@@ -19,7 +19,7 @@ import click
 # Mapping and perception
 import emet.utils.logger as logger
 from emet.controller.controller_instance_memory import RobotAgent
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
 from emet.perception import create_semantic_sensor
 from emet.utils.dummy_stretch_client import DummyStretchClient
@@ -107,7 +107,7 @@ def main(
         formatted_datetime = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
         output_dir = output_filename + "_" + formatted_datetime
 
-        robot = HomeRobotZmqClient(
+        robot = StretchZmqClient(
             robot_ip=robot_ip,
             recv_port=recv_port,
             send_port=send_port,

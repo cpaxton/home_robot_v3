@@ -873,6 +873,15 @@ class MujocoZmqServer(BaseZmqServer):
     is_flag=True,
     help="Print registered Robocasa task names and exit (use with --use-robocasa env).",
 )
+@click.option(
+    "--robot",
+    default="stretch",
+    help=(
+        "Robot to simulate. 'stretch' (default) uses Stretch-MuJoCo. "
+        "Robosuite names (PandaOmron, Tiago, GR1) keep the robosuite robot. "
+        "'galaxea_r1' uses the Galaxea R1 MJCF."
+    ),
+)
 def main(
     port_offset: int,
     send_port: Optional[int],
@@ -896,6 +905,7 @@ def main(
     use_glx: bool = False,
     seed: int = 0,
     list_robocasa_tasks: bool = False,
+    robot: str = "stretch",
 ):
 
     if list_robocasa_tasks:
@@ -914,15 +924,19 @@ def main(
     scene_model = None
     objects_info = None
 
-    base_ports = (4401, 4402, 4403, 4404)
-    send_port = send_port if send_port is not None else base_ports[0] + port_offset
-    recv_port = recv_port if recv_port is not None else base_ports[1] + port_offset
-    send_state_port = send_state_port if send_state_port is not None else base_ports[2] + port_offset
-    send_servo_port = send_servo_port if send_servo_port is not None else base_ports[3] + port_offset
+    from emet.utils.port_utils import get_ports
+
+    ports = get_ports(port_offset)
+    send_port = send_port if send_port is not None else ports.send
+    recv_port = recv_port if recv_port is not None else ports.recv
+    send_state_port = send_state_port if send_state_port is not None else ports.state
+    send_servo_port = send_servo_port if send_servo_port is not None else ports.servo
 
     if seed is not None:
         np.random.seed(seed)
         random.seed(seed)
+
+    use_stretch = robot.lower() in ("stretch", "hello_stretch", "hellostretch")
 
     if use_robocasa:
         # Lazy import so we only load robosuite/numba when actually using Robocasa.
@@ -973,6 +987,7 @@ def main(
             style=robocasa_style,
             layout=robocasa_layout,
             write_to_file=scene_path,
+            robot=robot,
         )
 
     # If no scene path
@@ -991,47 +1006,94 @@ def main(
             logger.warning(f"Freed port {p} (killed previous process).")
     time.sleep(0.5)
 
-    try:
-        server = MujocoZmqServer(
-            send_port,
-            recv_port,
-            send_state_port,
-            send_servo_port,
-            use_remote_computer=use_remote_computer,
-            verbose=verbose,
-            image_scaling=image_scaling,
-            ee_image_scaling=ee_image_scaling,
-            depth_scaling=depth_scaling,
-            scene_path=scene_path,
-            scene_model=scene_model,
-            objects_info=objects_info,
-            no_cameras=no_cameras,
-        )
-    except zmq.error.ZMQError as e:
-        if "Address already in use" in str(e):
-            logger.error(
-                f"\nPort {send_port} (or another server port) is already in use.\n\n"
-                f"Option 1 – free the port:\n"
-                f"  kill $(lsof -t -i:{send_port})\n"
-                f"  # or: pkill -f mujoco_server\n\n"
-                f"Option 2 – use different ports (e.g. 4501–4504):\n"
-                f"  emet serve mujoco --port-offset 100\n\n"
-                f"Option 3 – stop the server then retry:\n"
-                f"  emet kill-mujoco-server\n",
+    if use_stretch:
+        try:
+            server = MujocoZmqServer(
+                send_port,
+                recv_port,
+                send_state_port,
+                send_servo_port,
+                use_remote_computer=use_remote_computer,
+                verbose=verbose,
+                image_scaling=image_scaling,
+                ee_image_scaling=ee_image_scaling,
+                depth_scaling=depth_scaling,
+                scene_path=scene_path,
+                scene_model=scene_model,
+                objects_info=objects_info,
+                no_cameras=no_cameras,
             )
-        raise
+        except zmq.error.ZMQError as e:
+            if "Address already in use" in str(e):
+                logger.error(
+                    f"\nPort {send_port} (or another server port) is already in use.\n\n"
+                    f"Option 1 – free the port:\n"
+                    f"  kill $(lsof -t -i:{send_port})\n"
+                    f"  # or: pkill -f mujoco_server\n\n"
+                    f"Option 2 – use different ports (e.g. 4501–4504):\n"
+                    f"  emet serve mujoco --port-offset 100\n\n"
+                    f"Option 3 – stop the server then retry:\n"
+                    f"  emet kill-mujoco-server\n",
+                )
+            raise
 
-    try:
-        server.start(
-            show_viewer_ui=show_viewer_ui,
-            robocasa=use_robocasa,
-            headless=headless,
-            use_glx=use_glx,
-        )
+        try:
+            server.start(
+                show_viewer_ui=show_viewer_ui,
+                robocasa=use_robocasa,
+                headless=headless,
+                use_glx=use_glx,
+            )
+        except KeyboardInterrupt:
+            if hasattr(server, "robot_sim") and server.robot_sim is not None:
+                server.robot_sim.stop()
+    else:
+        # Non-stretch robot: use RobosuiteZmqServer
+        from emet.simulation.robosuite_server import RobosuiteZmqServer
+        from emet.robots import ROBOT_REGISTRY
 
-    except KeyboardInterrupt:
-        if hasattr(server, "robot_sim") and server.robot_sim is not None:
-            server.robot_sim.stop()
+        robot_key = robot.lower().replace("-", "_")
+        if robot_key in ROBOT_REGISTRY:
+            import importlib
+            mod = importlib.import_module(ROBOT_REGISTRY[robot_key])
+            backend_cls = None
+            for attr_name in dir(mod):
+                attr = getattr(mod, attr_name)
+                if isinstance(attr, type) and hasattr(attr, "get_spec") and attr_name != "RobotBackend":
+                    backend_cls = attr
+                    break
+            if backend_cls is None:
+                logger.error(f"No RobotBackend found in {ROBOT_REGISTRY[robot_key]}")
+                sys.exit(1)
+            robot_spec = backend_cls().get_spec()
+        else:
+            logger.error(
+                f"Unknown robot '{robot}'. Known robots: {list(ROBOT_REGISTRY.keys())}.\n"
+                f"Robosuite-native robots can also be used directly."
+            )
+            sys.exit(1)
+
+        try:
+            server = RobosuiteZmqServer(
+                robot_spec=robot_spec,
+                send_port=send_port,
+                recv_port=recv_port,
+                send_state_port=send_state_port,
+                send_servo_port=send_servo_port,
+                use_remote_computer=use_remote_computer,
+                verbose=verbose,
+                scene_xml=scene_xml if use_robocasa else None,
+                scene_model=scene_model if not use_robocasa else None,
+            )
+        except zmq.error.ZMQError as e:
+            if "Address already in use" in str(e):
+                logger.error(f"\nPort {send_port} is already in use. Use --port-offset or emet kill-mujoco-server.\n")
+            raise
+
+        try:
+            server.start(robocasa=use_robocasa, headless=headless)
+        except KeyboardInterrupt:
+            server.stop()
 
 
 if __name__ == "__main__":

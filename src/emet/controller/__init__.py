@@ -12,8 +12,8 @@ from .base_robot_agent import BaseRobotAgent
 from .controller_dynamem import DynamemController, RobotAgent as DynamemRobotAgent
 from .controller_graph_eqa import GraphEQAController, RobotAgentGraphEQA
 from .controller_instance_memory import InstanceMemoryController, RobotAgent
-from .zmq_client import HomeRobotZmqClient
-from .zmq_client import HomeRobotZmqClient as RobotClient
+from .zmq_client import HomeRobotZmqClient, StretchZmqClient
+from .zmq_client import StretchZmqClient as RobotClient
 
 __all__ = [
     "BaseController",
@@ -24,6 +24,7 @@ __all__ = [
     "RobotAgentGraphEQA",
     "InstanceMemoryController",
     "RobotAgent",
+    "StretchZmqClient",
     "HomeRobotZmqClient",
     "RobotClient",
 ]

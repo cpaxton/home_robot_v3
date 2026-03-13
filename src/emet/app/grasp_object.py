@@ -13,7 +13,7 @@ import click
 
 from emet.controller.operations import GraspObjectOperation, UpdateOperation
 from emet.controller.controller_instance_memory import RobotAgent
-from emet.controller.zmq_client import HomeRobotZmqClient
+from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
 from emet.core.task import Task
 from emet.perception import create_semantic_sensor
@@ -83,6 +83,7 @@ def get_task(robot, demo, target_object, verbose: bool = False, show_gui: bool =
     "--show_gui", "--show-gui", is_flag=True, help="Show the visual servoing GUI while grasping"
 )
 @click.option("--verbose", is_flag=True, help="Print debug information")
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip: str = "",
     local: bool = False,
@@ -94,13 +95,15 @@ def main(
     repeat_count: int = 1,
     enable_realtime_updates: bool = False,
     show_gui: bool = False,
+    port_offset: int = 0,
 ):
     # Create robot
     parameters = get_parameters(parameter_file)
-    robot = HomeRobotZmqClient(
+    robot = StretchZmqClient(
         robot_ip=robot_ip,
         use_remote_computer=(not local),
         parameters=parameters,
+        port_offset=port_offset,
     )
     semantic_sensor = create_semantic_sensor(
         parameters,

@@ -92,9 +92,12 @@ fi
 echo "Using uv: $(uv --version)"
 
 # System dependencies (apt-get update may warn about other repos e.g. ROS2 keys; we continue)
+# Skip when DOCKER=1 (image already has deps; container often has no sudo)
 echo ""
 echo "[3/5] Checking system dependencies..."
-if [ "$SKIP_ASKING" = "true" ]; then
+if [ -n "${DOCKER:-}" ]; then
+    echo "  -> Skipping apt (DOCKER=1); image has deps."
+elif [ "$SKIP_ASKING" = "true" ]; then
     sudo apt-get update || true
     sudo apt-get install -y libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 espeak ffmpeg build-essential wget unzip libsndfile1
 else
@@ -153,9 +156,12 @@ if ! uv run python -c "import emet; print('emet:', emet.__file__)" 2>/dev/null; 
 fi
 
 # Put emet CLI in a reasonable place (~/.local/bin so it's on PATH when present)
+# Skip when running inside Docker (PATH is set via Dockerfile instead)
 echo ""
 LINK_EMET="false"
-if [ "$SKIP_ASKING" = "true" ]; then
+if [ -n "${DOCKER:-}" ]; then
+    echo "  -> Skipping link (DOCKER=1); use PATH=/app/.venv/bin or uv run emet"
+elif [ "$SKIP_ASKING" = "true" ]; then
     LINK_EMET="true"
 else
     read -p "Link 'emet' to ~/.local/bin so you can run it from anywhere? (y/n) " yn

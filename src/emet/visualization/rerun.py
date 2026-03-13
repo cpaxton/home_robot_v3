@@ -231,6 +231,23 @@ class StretchURDFLogger(urdf_visualizer.URDFVisualizer):
             print("Total time to log robot transforms (ms): ", 1000 * (t2 - t0))
 
 
+class NullVisualizer:
+    """Drop-in replacement for RerunVisualizer that silently ignores all calls.
+
+    Used when rerun is disabled (no display, headless without server, etc.) so
+    that callers don't need null-checks at every call site.
+    """
+
+    enabled = False
+
+    def __getattr__(self, name):
+        return _null_noop
+
+
+def _null_noop(*args, **kwargs):
+    return None
+
+
 class RerunVisualizer:
 
     camera_point_radius = 0.01
