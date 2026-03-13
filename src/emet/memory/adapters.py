@@ -150,8 +150,11 @@ class DynaMemBackend(MemoryBackend):
             raise NotImplementedError("This voxel map does not support query_answer")
         return self._voxel_map.query_answer(question, xyt, planner)
 
-    def save(self, path: str) -> None:
-        """Save to common directory format. Path must be a directory."""
+    def save(self, path: str, extra_graph: GraphBlob | None = None) -> None:
+        """Save to common directory format. Path must be a directory.
+
+        If extra_graph is provided (e.g. from mapping scene graph), it is included in the saved state.
+        """
         dir_path = Path(path)
         dir_path.mkdir(parents=True, exist_ok=True)
 
@@ -226,6 +229,7 @@ class DynaMemBackend(MemoryBackend):
             grid_resolution=grid_resolution,
             obstacles_2d=obstacles_2d,
             explored_2d=explored_2d,
+            graph=extra_graph,
             manifest=MemoryManifest(backend="dynamem"),
         )
         save_memory(state, str(dir_path))

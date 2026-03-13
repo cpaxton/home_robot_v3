@@ -412,6 +412,23 @@ def show_memory(path: str, open_browser: bool) -> None:
     sys.exit(_run_module("emet.app.show_memory", args))
 
 
+@main.command("print", short_help="Print summary of a saved memory directory")
+@click.argument(
+    "path",
+    type=click.Path(path_type=Path, exists=True),
+    required=True,
+)
+def print_memory(path: Path) -> None:
+    """Load and print a summary of a saved memory directory.
+
+    Use this with memory saved by emet run dynamem, emet run create-and-print-memory,
+    or other runs that write the common memory format (manifest.json, point_cloud.npz, etc.).
+    """
+    from emet.memory.utils import print_memory_from_path
+
+    print_memory_from_path(str(path))
+
+
 @main.group("connect", short_help="Save or show robot connection (host, user) for deploy/view")
 def connect_cmd() -> None:
     """Save and reuse connection details so deploy and view-bridge default to the right robot."""
@@ -588,7 +605,8 @@ def run(
     """
     args = list(ctx.args)
     args.extend(["--robot_ip", robot_ip])
-    args.extend(["--robot", robot])
+    if app != "create-and-print-memory":
+        args.extend(["--robot", robot])
     if port_offset:
         args.extend(["--port-offset", str(port_offset)])
     if app == "dynamem":

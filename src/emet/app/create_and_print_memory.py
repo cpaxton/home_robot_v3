@@ -38,50 +38,49 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
     return False
 
 
-def _print_memory_state(state):
-    """Print a readable summary of a loaded MemoryState."""
-    from emet.memory.format import MemoryState
+def _scene_graph_to_graph_blob(scene_graph, semantic_sensor=None):
+    """Convert mapping SceneGraph to memory format GraphBlob for save/print."""
+    from emet.memory.format import GraphBlob, GraphEdgeView, GraphNodeView
 
-    assert isinstance(state, MemoryState)
-    print("\n" + "=" * 60)
-    print("MEMORY STATE SUMMARY")
-    print("=" * 60)
-    if state.manifest:
-        m = state.manifest
-        print(f"  Backend:     {m.backend}")
-        print(f"  Created:     {m.created_at or 'N/A'}")
-        print(f"  Version:     {m.version}")
-    print()
-    if state.point_cloud is not None:
-        pc = state.point_cloud
-        n = pc.xyz.shape[0]
-        print(f"  Point cloud: {n} points")
-        if pc.xyz.size > 0:
-            print(f"    XYZ range: x=[{pc.xyz[:, 0].min():.3f}, {pc.xyz[:, 0].max():.3f}] "
-                  f"y=[{pc.xyz[:, 1].min():.3f}, {pc.xyz[:, 1].max():.3f}] "
-                  f"z=[{pc.xyz[:, 2].min():.3f}, {pc.xyz[:, 2].max():.3f}]")
-        if pc.rgb is not None:
-            print(f"    RGB: present ({pc.rgb.shape})")
-    else:
-        print("  Point cloud: (none)")
-    print(f"  Frames:      {len(state.frames)}")
-    if state.graph is not None:
-        g = state.graph
-        print(f"  Graph:       {len(g.nodes)} nodes, {len(g.edges)} edges")
-        for i, node in enumerate(g.nodes[:5]):
-            labels = ", ".join(node.labels) if node.labels else "(no labels)"
-            print(f"    Node {node.node_id}: xyz={node.xyz} labels=[{labels}]")
-        if len(g.nodes) > 5:
-            print(f"    ... and {len(g.nodes) - 5} more nodes")
-    else:
-        print("  Graph:       (none)")
-    if state.obstacles_2d is not None:
-        print(f"  2D obstacles: grid shape {state.obstacles_2d.shape}")
-    if state.explored_2d is not None:
-        print(f"  2D explored:  grid shape {state.explored_2d.shape}")
-    if state.text_descriptions:
-        print(f"  Text descriptions: {len(state.text_descriptions)} items")
-    print("=" * 60 + "\n")
+    FLOOR_NODE_ID = 0
+    nodes = [
+        GraphNodeView(
+            node_id=FLOOR_NODE_ID,
+            labels=["floor"],
+            xyz=[0.0, 0.0, 0.0],
+            obs_id=0,
+            description=None,
+        )
+    ]
+    for idx, inst in enumerate(scene_graph.instances):
+        gid = inst.global_id if inst.global_id is not None else idx
+        label = f"id_{gid}"
+        if semantic_sensor is not None and hasattr(semantic_sensor, "get_class_name_for_id"):
+            cid = inst.get_category_id()
+            if cid is not None:
+                name = semantic_sensor.get_class_name_for_id(cid)
+                if name:
+                    label = name
+        pos = scene_graph.get_ins_center_pos(idx)
+        if hasattr(pos, "cpu"):
+            pos = pos.detach().cpu().numpy()
+        xyz = [float(pos.flat[0]), float(pos.flat[1]), float(pos.flat[2])]
+        nodes.append(
+            GraphNodeView(
+                node_id=gid + 1,
+                labels=[label],
+                xyz=xyz,
+                obs_id=gid,
+                description=None,
+            )
+        )
+    id_offset = 1
+    edges = []
+    for (a, b, rel) in scene_graph.relationships:
+        id1 = a + id_offset if isinstance(a, int) else a
+        id2 = FLOOR_NODE_ID if b == "floor" else (b + id_offset if isinstance(b, int) else b)
+        edges.append(GraphEdgeView(id1=id1, id2=id2, relation=rel))
+    return GraphBlob(nodes=nodes, edges=edges)
 
 
 @click.command()
@@ -158,16 +157,25 @@ def main(path: str, no_server: bool, robot_ip: str):
         )
         executor([("rotate_in_place", "")])
 
-        voxel_map = executor.agent.get_voxel_map()
+        agent = executor.agent
+        voxel_map = agent.get_voxel_map()
         backend = get_memory_backend("dynamem", voxel_map=voxel_map)
-        backend.save(path)
+        extra_graph = None
+        if getattr(agent, "use_scene_graph", False) and getattr(agent, "scene_graph", None) is not None:
+            extra_graph = _scene_graph_to_graph_blob(
+                agent.scene_graph,
+                getattr(agent, "semantic_sensor", None),
+            )
+        backend.save(path, extra_graph=extra_graph)
         from emet.memory.utils import print_memory_saved_help
 
         print_memory_saved_help(path)
 
         print("Loading memory and printing summary...")
+        from emet.memory.utils import print_memory_state
+
         state = load_memory(path)
-        _print_memory_state(state)
+        print_memory_state(state)
     finally:
         if robot is not None:
             try:
