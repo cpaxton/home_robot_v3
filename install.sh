@@ -160,7 +160,7 @@ if [ "$INSTALL_SIM" = "true" ]; then
 fi
 
 # MolmoSpaces: separate venv with emet-molmospaces wrapper (molmo-spaces needs mujoco 3.4 + numpy>=2.2)
-# Use venv's python -m pip so we don't rely on bin/pip existing (e.g. some uv venvs).
+# Prefer uv pip install --python .venv-molmospaces/bin/python (uv venvs often have no pip module).
 if [ "$INSTALL_MOLMOSPACES" = "true" ]; then
     echo ""
     echo "Setting up MolmoSpaces wrapper venv (.venv-molmospaces)..."
@@ -168,22 +168,27 @@ if [ "$INSTALL_MOLMOSPACES" = "true" ]; then
     export MLSPACES_ASSETS_DIR="$MLSPACES_CACHE"
     mkdir -p "$MLSPACES_ASSETS_DIR"
     PY_MOLMO=".venv-molmospaces/bin/python"
+    molmo_pip_install() {
+        if command -v uv >/dev/null 2>&1; then
+            uv pip install --python "$PY_MOLMO" "$@"
+        else
+            "$PY_MOLMO" -m pip install "$@"
+        fi
+    }
     if [ ! -d ".venv-molmospaces" ]; then
         uv venv .venv-molmospaces
-        "$PY_MOLMO" -m pip install --upgrade pip
-        # Emet (no-deps) then emet-molmospaces wrapper (pulls molmo-spaces, mujoco 3.4, numpy>=2.2)
-        "$PY_MOLMO" -m pip install --no-deps -e .
+        molmo_pip_install --upgrade pip 2>/dev/null || true
+        molmo_pip_install --no-deps -e .
         if [ -d "packages/emet_molmospaces" ]; then
-            "$PY_MOLMO" -m pip install -e packages/emet_molmospaces
+            molmo_pip_install -e packages/emet_molmospaces
         else
-            "$PY_MOLMO" -m pip install "molmo-spaces" "mujoco>=3.4" "numpy>=2.2"
+            molmo_pip_install "molmo-spaces" "mujoco>=3.4" "numpy>=2.2"
         fi
         echo "  -> Created .venv-molmospaces with emet and emet-molmospaces wrapper"
     else
         echo "  -> .venv-molmospaces already exists"
-        # Ensure wrapper is installed when package lives in repo (packages/ is not under src)
         if [ -d "packages/emet_molmospaces" ] && [ ! -x ".venv-molmospaces/bin/emet-molmospaces" ]; then
-            "$PY_MOLMO" -m pip install -e packages/emet_molmospaces
+            molmo_pip_install -e packages/emet_molmospaces
             echo "  -> Installed emet-molmospaces wrapper into existing venv"
         fi
     fi

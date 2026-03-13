@@ -541,6 +541,11 @@ def deploy(
     ),
 )
 @click.option("--robot-ip", "--robot_ip", default="127.0.0.1", help="Robot or simulator IP")
+@click.option(
+    "--robot",
+    default="stretch",
+    help="Robot backend (stretch, rby1, galaxea_r1). Must match emet serve mujoco --robot.",
+)
 @click.option("--server-ip", "--server_ip", default="127.0.0.1", help="Server IP (e.g. for AnyGrasp)")
 @click.option("-S", "--skip", "skip_confirmations", is_flag=True, help="Skip confirmations")
 @click.option("--headless", is_flag=True, help="Run without display")
@@ -559,6 +564,7 @@ def run(
     ctx: click.Context,
     app: str,
     robot_ip: str,
+    robot: str,
     server_ip: str,
     skip_confirmations: bool,
     headless: bool,
@@ -582,6 +588,7 @@ def run(
     """
     args = list(ctx.args)
     args.extend(["--robot_ip", robot_ip])
+    args.extend(["--robot", robot])
     if port_offset:
         args.extend(["--port-offset", str(port_offset)])
     if app == "dynamem":

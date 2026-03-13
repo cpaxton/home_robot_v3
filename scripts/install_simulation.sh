@@ -162,3 +162,4 @@ fi
 cd "$ROOT_DIR" || exit 1
 
 echo "Installation complete."
+echo "For 'emet serve mujoco --use-robocasa', ensure kitchen assets were downloaded (run this script without -n if you skipped earlier)."
