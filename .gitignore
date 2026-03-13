@@ -64,6 +64,9 @@ local_settings.py
 
 # Flask stuff:
 instance/
+# Exception: emet mapping instance package (do not ignore)
+!src/emet/mapping/instance/
+!src/emet/mapping/instance/**
 .webassets-cache
 
 # Scrapy stuff:
