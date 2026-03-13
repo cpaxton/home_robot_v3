@@ -24,7 +24,7 @@ import logging
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any
 
 import numpy as np
 import torch
@@ -51,26 +51,26 @@ class InstanceView:
     """Timestep at which this view was recorded"""
 
     # Optional view/description
-    text_description: Optional[str] = None
-    cropped_image: Optional[Tensor] = None
+    text_description: str | None = None
+    cropped_image: Tensor | None = None
     """Cropped image of instance (can be [C,H,W] or [H,W,C])"""
-    embedding: Optional[Tensor] = None
-    mask: Optional[Tensor] = None
-    image_instance_id: Optional[int] = None
-    visual_feat: Optional[Tensor] = None
+    embedding: Tensor | None = None
+    mask: Tensor | None = None
+    image_instance_id: int | None = None
+    visual_feat: Tensor | None = None
 
     # Detection
-    global_instance_id: Optional[int] = None
-    category_id: Optional[int] = None
-    score: Optional[float] = None
+    global_instance_id: int | None = None
+    category_id: int | None = None
+    score: float | None = None
 
     # 3D
-    point_cloud: Optional[Tensor] = None
-    point_cloud_rgb: Optional[Tensor] = None
-    point_cloud_features: Optional[Tensor] = None
-    cam_to_world: Optional[Tensor] = None
+    point_cloud: Tensor | None = None
+    point_cloud_rgb: Tensor | None = None
+    point_cloud_features: Tensor | None = None
+    cam_to_world: Tensor | None = None
     """[4,4] camera space to world space"""
-    pose: Optional[Tensor] = None
+    pose: Tensor | None = None
     """Base pose of the robot when this view was collected"""
 
     def __repr__(self) -> str:
@@ -80,7 +80,7 @@ class InstanceView:
             f"bounds={getattr(self.bounds, 'shape', None)}, cam_to_world={cam})"
         )
 
-    def get_pose(self) -> Optional[Tensor]:
+    def get_pose(self) -> Tensor | None:
         """Returns the position from which we captured this instance view."""
         return self.pose
 
@@ -94,7 +94,7 @@ class InstanceView:
         assert backend in ["folder"], backend
         self._show_folder(**backend_kwargs)
 
-    def _show_folder(self, folder_path: Optional[Union[Path, str]] = None) -> None:
+    def _show_folder(self, folder_path: Path | str | None = None) -> None:
         import os
 
         import cv2
@@ -144,6 +144,37 @@ def _dummy_instance_view() -> InstanceView:
     )
 
 
+def instances_to_text(
+    instances: list[Instance],
+    class_names: dict[int, str] | None = None,
+    include_bounds: bool = True,
+) -> str:
+    """Format instance memory as human-readable text for logging or dumping.
+
+    Args:
+        instances: List of Instance from e.g. voxel_map.get_instances().
+        class_names: Optional mapping category_id -> name (e.g. from semantic sensor).
+        include_bounds: If True, append xyz min/max per instance.
+
+    Returns:
+        Multi-line string suitable for print or log.
+    """
+    if not instances:
+        return "No instances in memory."
+    lines = [f"Instance memory ({len(instances)} objects):"]
+    for inst in instances:
+        cid = inst.get_category_id()
+        name = (class_names or {}).get(cid, None) if cid is not None else None
+        label = name if name else f"id_{inst.id}"
+        score_str = f" score={inst.score:.2f}" if inst.score is not None else ""
+        line = f"  {inst.id}: {label}{score_str}"
+        if include_bounds and inst.bounds is not None:
+            b = inst.bounds.cpu().numpy() if isinstance(inst.bounds, Tensor) else inst.bounds
+            line += f"  x=[{b[0, 0]:.2f},{b[0, 1]:.2f}] y=[{b[1, 0]:.2f},{b[1, 1]:.2f}] z=[{b[2, 0]:.2f},{b[2, 1]:.2f}]"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 @dataclass
 class Instance:
     """
@@ -151,15 +182,15 @@ class Instance:
     Restored from home_robot_v2 mapping/instance/core.py.
     """
 
-    name: Optional[str] = None
-    global_id: Optional[int] = None
-    category_id: Optional[int] = None
-    point_cloud: Optional[Tensor] = None
-    point_cloud_rgb: Optional[Tensor] = None
-    point_cloud_features: Optional[Tensor] = None
-    bounds: Optional[Tensor] = None
-    instance_views: List[InstanceView] = field(default_factory=list)
-    score: Optional[float] = None
+    name: str | None = None
+    global_id: int | None = None
+    category_id: int | None = None
+    point_cloud: Tensor | None = None
+    point_cloud_rgb: Tensor | None = None
+    point_cloud_features: Tensor | None = None
+    bounds: Tensor | None = None
+    instance_views: list[InstanceView] = field(default_factory=list)
+    score: float | None = None
     score_aggregation_method: str = "max"
 
     def __repr__(self) -> str:
@@ -174,7 +205,7 @@ class Instance:
         """Unique global id of the instance."""
         return self.global_id if self.global_id is not None else -1
 
-    def get_category_id(self) -> Optional[int]:
+    def get_category_id(self) -> int | None:
         if self.category_id is None:
             return None
         if isinstance(self.category_id, torch.Tensor):
@@ -203,9 +234,7 @@ class Instance:
         elif aggregation_method == "mean":
             emb = view_embeddings_t.mean(dim=0)
         else:
-            raise RuntimeError(
-                f"Unsupported aggregation method {aggregation_method}. Options: max, mean."
-            )
+            raise RuntimeError(f"Unsupported aggregation method {aggregation_method}. Options: max, mean.")
         if normalize and emb is not None:
             emb = emb / (emb.norm(dim=-1, keepdim=True).clamp(min=1e-8))
         return emb
@@ -215,16 +244,13 @@ class Instance:
         if not self.instance_views:
             logger.debug("Instance.get_best_view: no instance_views for global_id=%s", self.global_id)
             return _dummy_instance_view()
-        best_view: Optional[InstanceView] = None
+        best_view: InstanceView | None = None
         if metric == "area":
             best_area = 0.0
             for view in self.instance_views:
                 if view.bbox is not None and view.bbox.numel() >= 4:
                     if view.bbox.dim() == 2:
-                        area = float(
-                            (view.bbox[1, 1] - view.bbox[0, 1])
-                            * (view.bbox[1, 0] - view.bbox[0, 0])
-                        )
+                        area = float((view.bbox[1, 1] - view.bbox[0, 1]) * (view.bbox[1, 0] - view.bbox[0, 0]))
                     else:
                         area = 0.0
                 elif view.cropped_image is not None:
@@ -241,10 +267,10 @@ class Instance:
             raise NotImplementedError(f"metric {metric!r} not supported")
         return best_view if best_view is not None else _dummy_instance_view()
 
-    def get_instance_id(self) -> Optional[int]:
+    def get_instance_id(self) -> int | None:
         return self.global_id
 
-    def get_center(self) -> Optional[Tensor]:
+    def get_center(self) -> Tensor | None:
         """Center of the instance in 3D (mean xy, actual mean z)."""
         if self.point_cloud is None or self.point_cloud.numel() == 0:
             return None
@@ -256,12 +282,12 @@ class Instance:
         center[2] = xyz[2]
         return center
 
-    def get_median(self) -> Optional[Tensor]:
+    def get_median(self) -> Tensor | None:
         if self.point_cloud is None or self.point_cloud.numel() == 0:
             return None
         return self.point_cloud.median(dim=0).values
 
-    def get_closest_point(self, xyz: Union[Tensor, np.ndarray]) -> Optional[Tensor]:
+    def get_closest_point(self, xyz: Tensor | np.ndarray) -> Tensor | None:
         if self.point_cloud is None or self.point_cloud.numel() == 0:
             return None
         if isinstance(xyz, np.ndarray):
@@ -272,7 +298,7 @@ class Instance:
     def show_best_view(
         self,
         metric: str = "area",
-        title: Optional[str] = None,
+        title: str | None = None,
     ) -> None:
         """Show the best view (cv2.imshow). No-op if no views or headless."""
         best_view = self.get_best_view(metric=metric)
@@ -304,13 +330,8 @@ class Instance:
             if instance_view.point_cloud is not None and self.point_cloud is not None:
                 self.point_cloud = torch.cat([self.point_cloud, instance_view.point_cloud], dim=0)
             if instance_view.point_cloud_rgb is not None and self.point_cloud_rgb is not None:
-                self.point_cloud_rgb = torch.cat(
-                    [self.point_cloud_rgb, instance_view.point_cloud_rgb], dim=0
-                )
-            if (
-                instance_view.point_cloud_features is not None
-                and self.point_cloud_features is not None
-            ):
+                self.point_cloud_rgb = torch.cat([self.point_cloud_rgb, instance_view.point_cloud_rgb], dim=0)
+            if instance_view.point_cloud_features is not None and self.point_cloud_features is not None:
                 self.point_cloud_features = torch.cat(
                     [self.point_cloud_features, instance_view.point_cloud_features], dim=0
                 )
@@ -326,17 +347,119 @@ class Instance:
                 self.bounds = get_bounds(self.point_cloud)
 
 
+def _process_instances_single_frame(
+    env_instances: dict[int, Instance],
+    instance_seg: Tensor,
+    point_cloud: Tensor,
+    image: Tensor | None,
+    cam_to_world: Tensor | None,
+    instance_classes: Tensor | None,
+    instance_scores: Tensor | None,
+    background_instance_labels: list[int],
+    valid_points: Tensor | None,
+    pose: Any,
+    timestep: int,
+    min_points: int = 3,
+) -> None:
+    """Build Instance + InstanceView per detection and store in env_instances (replaces content)."""
+    H, W = instance_seg.shape
+    if point_cloud.shape[0] != H or point_cloud.shape[1] != W:
+        logger.warning(
+            "process_instances: point_cloud shape %s does not match seg %s",
+            point_cloud.shape,
+            (H, W),
+        )
+        return
+    bg = set(background_instance_labels or [-1])
+    unique_ids = [x for x in instance_seg.unique().cpu().tolist() if x not in bg]
+    env_instances.clear()
+    pc_flat = point_cloud.reshape(-1, 3)
+    img_chw = image  # (C, H, W)
+    valid_2d = (
+        valid_points
+        if valid_points is not None
+        else torch.ones_like(instance_seg, dtype=torch.bool, device=instance_seg.device)
+    )
+    for global_id, instance_id in enumerate(sorted(unique_ids)):
+        mask_2d = (instance_seg == instance_id) & valid_2d
+        mask_flat = mask_2d.flatten()
+        pts = pc_flat[mask_flat]
+        if pts.shape[0] < min_points:
+            continue
+        if pts.shape[0] < 2:
+            continue
+        bounds = get_bounds(pts)
+        ys, xs = torch.where(mask_2d)
+        x_min, x_max = xs.min().item(), xs.max().item()
+        y_min, y_max = ys.min().item(), ys.max().item()
+        bbox = torch.tensor(
+            [[float(x_min), float(y_min)], [float(x_max), float(y_max)]],
+            device=instance_seg.device,
+            dtype=torch.float32,
+        )
+        category_id: int | None = None
+        if instance_classes is not None and instance_id < instance_classes.shape[0]:
+            category_id = int(instance_classes[instance_id].item())
+        score: float | None = None
+        if instance_scores is not None and instance_id < instance_scores.shape[0]:
+            score = float(instance_scores[instance_id].item())
+        point_cloud_rgb: Tensor | None = None
+        if img_chw is not None and img_chw.shape[0] >= 3:
+            rgb_hw3 = img_chw[:3].permute(1, 2, 0)
+            point_cloud_rgb = rgb_hw3.reshape(-1, 3)[mask_flat].to(pts.dtype)
+            if point_cloud_rgb.shape[0] != pts.shape[0]:
+                point_cloud_rgb = None
+        cropped_image: Tensor | None = None
+        mask_1hw: Tensor | None = None
+        if img_chw is not None:
+            y0, y1 = max(0, y_min), min(H, y_max + 1)
+            x0, x1 = max(0, x_min), min(W, x_max + 1)
+            cropped_image = img_chw[:, y0:y1, x0:x1].clone()
+            mask_crop = mask_2d[y0:y1, x0:x1].unsqueeze(0).float()
+            mask_1hw = mask_crop
+        if mask_1hw is None:
+            mask_1hw = mask_2d.unsqueeze(0).float()
+        view = InstanceView(
+            bbox=bbox,
+            bounds=bounds,
+            timestep=timestep,
+            cropped_image=cropped_image,
+            mask=mask_1hw,
+            point_cloud=pts,
+            point_cloud_rgb=point_cloud_rgb,
+            category_id=category_id,
+            score=score,
+            cam_to_world=cam_to_world,
+            pose=pose
+            if isinstance(pose, Tensor)
+            else (torch.tensor(pose, dtype=torch.float32) if pose is not None else None),
+            image_instance_id=int(instance_id),
+            global_instance_id=global_id,
+        )
+        inst = Instance(
+            global_id=global_id,
+            category_id=category_id,
+            bounds=bounds,
+            point_cloud=pts,
+            point_cloud_rgb=point_cloud_rgb,
+            instance_views=[view],
+            score=score,
+        )
+        env_instances[global_id] = inst
+
+
 class InstanceMemory:
     """
-    Minimal instance memory stub: per-env dict of instances.
-    process_instances_for_env / associate_instances_to_memory are no-ops so controller
-    and stretch imports work without full instance_map (InstanceMemory) dependencies.
+    Instance memory: per-env dict of instances.
+    process_instances_for_env builds Instance + InstanceView from segmentation and
+    point cloud; associate_instances_to_memory is a no-op (no cross-frame association).
     """
 
     def __init__(self, num_envs: int = 1, encoder: Any = None, **kwargs: Any) -> None:
         self.num_envs = num_envs
         self.encoder = encoder
         self.instances: dict[int, dict[int, Instance]] = {i: {} for i in range(num_envs)}
+        self._timestep = 0
 
     def __len__(self) -> int:
         """Total number of instances across all envs (for len(self) / voxel_map compatibility)."""
@@ -345,26 +468,43 @@ class InstanceMemory:
     def reset(self) -> None:
         for i in range(self.num_envs):
             self.instances[i] = {}
+        self._timestep = 0
 
     def process_instances_for_env(
         self,
         env_id: int = 0,
-        instance_seg: Optional[Tensor] = None,
-        point_cloud: Optional[Tensor] = None,
-        image: Optional[Tensor] = None,
-        cam_to_world: Optional[Tensor] = None,
-        instance_classes: Optional[Tensor] = None,
-        instance_scores: Optional[Tensor] = None,
-        background_instance_labels: Optional[List[int]] = None,
-        valid_points: Optional[Tensor] = None,
+        instance_seg: Tensor | None = None,
+        point_cloud: Tensor | None = None,
+        image: Tensor | None = None,
+        cam_to_world: Tensor | None = None,
+        instance_classes: Tensor | None = None,
+        instance_scores: Tensor | None = None,
+        background_instance_labels: list[int] | None = None,
+        valid_points: Tensor | None = None,
         pose: Any = None,
         **kwargs: Any,
     ) -> None:
-        """No-op: minimal impl so voxel/mapping code paths run."""
-        pass
+        """Build instances from current frame segmentation and point cloud; replace env's instances."""
+        if instance_seg is None or point_cloud is None:
+            return
+        env_instances = self.instances[env_id]
+        _process_instances_single_frame(
+            env_instances=env_instances,
+            instance_seg=instance_seg,
+            point_cloud=point_cloud,
+            image=image,
+            cam_to_world=cam_to_world,
+            instance_classes=instance_classes,
+            instance_scores=instance_scores,
+            background_instance_labels=background_instance_labels or [-1],
+            valid_points=valid_points,
+            pose=pose,
+            timestep=self._timestep,
+        )
+        self._timestep += 1
 
     def associate_instances_to_memory(self) -> None:
-        """No-op."""
+        """No-op: no cross-frame association (each frame replaces env instances)."""
         pass
 
     def global_box_compression_and_nms(self, env_id: int = 0, **kwargs: Any) -> Any:
@@ -376,6 +516,6 @@ class InstanceMemory:
         env_id: int = 0,
         global_instance_id: int = 0,
         skip_reindex: bool = False,
-    ) -> Optional[Instance]:
+    ) -> Instance | None:
         """Remove and return one instance from the env dict."""
         return self.instances[env_id].pop(global_instance_id, None)

@@ -18,8 +18,6 @@ This file contains versions of the helpers in point_cloud.py that use pytorch di
 to allow operations to be done on the GPU for speed.
 """
 
-from typing import List, Optional, Union
-
 import cv2
 import numpy as np
 import torch
@@ -56,7 +54,7 @@ def unproject_masked_depth_to_xyz_coordinates(
     depth: torch.Tensor,
     pose: torch.Tensor,
     inv_intrinsics: torch.Tensor,
-    mask: Optional[torch.Tensor] = None,
+    mask: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Returns the XYZ coordinates for a batch posed RGBD image.
 
@@ -91,9 +89,7 @@ def unproject_masked_depth_to_xyz_coordinates(
     inv_intrinsics = inv_intrinsics[:, None, None, :, :].expand(batch_size, height, width, 3, 3)[
         flipped_mask.squeeze(1)
     ]
-    pose = pose[:, None, None, :, :].expand(batch_size, height, width, 4, 4)[
-        flipped_mask.squeeze(1)
-    ]
+    pose = pose[:, None, None, :, :].expand(batch_size, height, width, 4, 4)[flipped_mask.squeeze(1)]
     depth = depth[flipped_mask]
 
     # Applies intrinsics and extrinsics.
@@ -107,15 +103,19 @@ def unproject_masked_depth_to_xyz_coordinates(
 
 def add_additive_noise_to_xyz(
     xyz_img: torch.Tensor,
-    gp_rescale_factor_range: Optional[List[int]] = [12, 20],
-    gaussian_scale_range: Optional[List[float]] = [0.0, 0.003],
-    valid_mask: Optional[torch.Tensor] = None,
-    inplace: Optional[bool] = False,
+    gp_rescale_factor_range: list[int] | None = None,
+    gaussian_scale_range: list[float] | None = None,
+    valid_mask: torch.Tensor | None = None,
+    inplace: bool | None = False,
 ):
     """
     Add (approximate) Gaussian Process noise to ordered point cloud
     @param xyz_img: a [H x W x 3] ordered point cloud
     """
+    if gaussian_scale_range is None:
+        gaussian_scale_range = [0.0, 0.003]
+    if gp_rescale_factor_range is None:
+        gp_rescale_factor_range = [12, 20]
     if not inplace:
         xyz_img = xyz_img.clone()
 
@@ -141,9 +141,9 @@ def add_additive_noise_to_xyz(
 def dropout_random_ellipses(
     depth_img: torch.Tensor,
     dropout_mean: float,
-    gamma_shape: Optional[float] = 10000,
-    gamma_scale: Optional[float] = 0.0001,
-    inplace: Optional[bool] = False,
+    gamma_shape: float | None = 10000,
+    gamma_scale: float | None = 0.0001,
+    inplace: bool | None = False,
 ):
     """Randomly drop a few ellipses in the image for robustness.
     This is adapted from the DexNet 2.0 code.
@@ -157,15 +157,9 @@ def dropout_random_ellipses(
     num_ellipses_to_dropout = np.random.poisson(dropout_mean)
 
     # Sample ellipse centers
-    nonzero_pixel_indices = torch.stack(
-        torch.where(depth_img > 0)
-    ).T  # Shape: [#nonzero_pixels x 2]
-    dropout_centers_indices = np.random.choice(
-        nonzero_pixel_indices.shape[0], size=num_ellipses_to_dropout
-    )
-    dropout_centers = nonzero_pixel_indices[
-        dropout_centers_indices, :
-    ]  # Shape: [num_ellipses_to_dropout x 2]
+    nonzero_pixel_indices = torch.stack(torch.where(depth_img > 0)).T  # Shape: [#nonzero_pixels x 2]
+    dropout_centers_indices = np.random.choice(nonzero_pixel_indices.shape[0], size=num_ellipses_to_dropout)
+    dropout_centers = nonzero_pixel_indices[dropout_centers_indices, :]  # Shape: [num_ellipses_to_dropout x 2]
 
     # Sample ellipse radii and angles
     x_radii = np.random.gamma(gamma_shape, gamma_scale, size=num_ellipses_to_dropout)
@@ -200,8 +194,8 @@ def dropout_random_ellipses(
 def get_one_point_per_voxel_from_pointcloud(
     unbatched_xyz: torch.Tensor,
     unbatched_batch_ids: torch.Tensor,
-    voxel_size: Union[float, List[float], torch.Tensor],
-    use_random_centers: Optional[bool] = True,
+    voxel_size: float | list[float] | torch.Tensor,
+    use_random_centers: bool | None = True,
 ) -> torch.Tensor:
     """
     Overlays a grid, and selects one point in each grid cell (if one exists). If use_random_centers is True,
@@ -221,9 +215,7 @@ def get_one_point_per_voxel_from_pointcloud(
     _, xyz_to_grid_id_sort_mapping = torch.sort(xyz_to_grid_id, stable=True)
 
     if use_random_centers:
-        random_offsets = (
-            torch.rand(grid_cell_counts.shape[0]).to(grid_cell_counts.device) * grid_cell_counts
-        ).int()
+        random_offsets = (torch.rand(grid_cell_counts.shape[0]).to(grid_cell_counts.device) * grid_cell_counts).int()
     else:
         random_offsets = 0
 

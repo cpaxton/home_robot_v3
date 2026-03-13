@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 """Tests for RB-Y1 robot backend (same MJCF as Galaxea R1). Run without simulation conftest."""
 
 import pytest
@@ -60,11 +69,11 @@ def test_default_scene_with_rby1_loads_and_robot_can_be_commanded():
     import pytest
 
     pytest.importorskip("mujoco")
+    import mujoco
+
     from emet.robots.rby1 import Rby1Backend
     from emet.simulation.mujoco_server import _load_default_scene_with_robot
     from emet.simulation.robosuite_server import RobosuiteZmqServer
-
-    import mujoco
 
     model = _load_default_scene_with_robot("rby1")
     if model is None:
@@ -105,6 +114,6 @@ def test_default_scene_with_rby1_loads_and_robot_can_be_commanded():
     base_changed = np.linalg.norm(xyt1[:2] - xyt0[:2]) > 1e-5
     assert q_changed or base_changed, (
         "Commanding joints and stepping should change state; "
-        f"|q1-q0|={np.linalg.norm(np.array(q1)-np.array(q0)):.4f}, "
-        f"base_xy_delta={np.linalg.norm(xyt1[:2]-xyt0[:2]):.4f}"
+        f"|q1-q0|={np.linalg.norm(np.array(q1) - np.array(q0)):.4f}, "
+        f"base_xy_delta={np.linalg.norm(xyt1[:2] - xyt0[:2]):.4f}"
     )

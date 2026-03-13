@@ -8,7 +8,6 @@
 # license information maybe found below, if so.
 
 from pathlib import Path
-from typing import Optional, Union
 
 import click
 import torch
@@ -21,7 +20,7 @@ from transformers import BlipForConditionalGeneration, BlipProcessor
 class BlipCaptioner:
     """Image captioner using BLIP (Bootstrapping Language-Image Pre-training) model."""
 
-    def __init__(self, max_length: int = 30, num_beams: int = 4, device: Optional[str] = None):
+    def __init__(self, max_length: int = 30, num_beams: int = 4, device: str | None = None):
         """Initialize the BLIP image captioner.
 
         Args:
@@ -29,7 +28,7 @@ class BlipCaptioner:
             num_beams (int, optional): Number of beams for beam search. Defaults to 4.
             device (str, optional): Device to run the model on. Defaults to None (auto-detect).
         """
-        super(BlipCaptioner, self).__init__()
+        super().__init__()
         self.max_length = max_length
         self.num_beams = num_beams
         if device is None:
@@ -39,11 +38,11 @@ class BlipCaptioner:
 
         # Create models
         self.processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-large")
-        self.model = BlipForConditionalGeneration.from_pretrained(
-            "Salesforce/blip-image-captioning-large"
-        ).to(self._device)
+        self.model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-large").to(
+            self._device
+        )
 
-    def caption_image(self, image: Union[ndarray, Tensor, Image.Image]) -> str:
+    def caption_image(self, image: ndarray | Tensor | Image.Image) -> str:
         """Generate a caption for the given image.
 
         Args:
@@ -72,7 +71,7 @@ class BlipCaptioner:
             do_sample=False,
             output_attentions=False,
             output_hidden_states=False,
-            return_dict_in_generate=False
+            return_dict_in_generate=False,
         )
 
         # Decode the output ids to text

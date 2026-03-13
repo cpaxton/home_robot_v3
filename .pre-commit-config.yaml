@@ -56,12 +56,12 @@ repos:
         additional_dependencies: [types-PyYAML]
         exclude: >
           (?x)^(
-            src/emet/app/|
+            src/emet/|
+            src/emet_core/|
             src/stretch_ros2_bridge/|
+            src/innate_mars_bridge/|
             third_party/|
-            src/emet/agent/|
-            src/emet/perception/|
-            src/emet/visualization/
+            .*setup\.py$
           )
         args:
           - --ignore-missing-imports

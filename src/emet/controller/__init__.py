@@ -9,7 +9,8 @@
 
 from .base_controller import BaseController
 from .base_robot_agent import BaseRobotAgent
-from .controller_dynamem import DynamemController, RobotAgent as DynamemRobotAgent
+from .controller_dynamem import DynamemController
+from .controller_dynamem import RobotAgent as DynamemRobotAgent
 from .controller_graph_eqa import GraphEQAController, RobotAgentGraphEQA
 from .controller_instance_memory import InstanceMemoryController, RobotAgent
 from .zmq_client import HomeRobotZmqClient, StretchZmqClient

@@ -162,6 +162,17 @@ ignore = [
     "E501",   # line too long (handled by formatter)
     "B008",   # do not perform function calls in argument defaults
 ]
+# Allow deferred/conditional imports and other patterns used in this codebase
+extend-ignore = [
+    "E402",   # module level import not at top (deferred imports for optional deps)
+    "E722",   # bare except (legacy; prefer except Exception where appropriate)
+    "E741",   # ambiguous variable name (e.g. l); many in vendored-style code
+    "B012",   # return in finally (existing pattern in mapping.py)
+    "B023",   # function does not bind loop variable (false positives in closures)
+    "B024",   # abstract base class with no abstract methods
+    "B027",   # empty method in ABC without abstract decorator
+    "F811",   # redefinition of unused name (stretch_ros2_bridge ros.py)
+]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]

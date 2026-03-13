@@ -11,7 +11,7 @@ import datetime
 import os
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import discord
 from termcolor import colored
@@ -33,7 +33,7 @@ class EmetDiscordBot(DiscordBot):
     def __init__(
         self,
         agent: RobotAgent,
-        token: Optional[str] = None,
+        token: str | None = None,
         llm: str = "qwen25",
         task: str = "pickup",
         skip_confirmations: bool = False,
@@ -44,7 +44,7 @@ class EmetDiscordBot(DiscordBot):
         use_voice: bool = False,
         debug_llm: bool = False,
         manipulation_only: bool = False,
-        kwargs: Dict[str, Any] = None,
+        kwargs: dict[str, Any] = None,
         home_channel: str = "talk-to-stretch",
         executor: Any = None,
     ) -> None:
@@ -203,9 +203,7 @@ class EmetDiscordBot(DiscordBot):
         # Signal that the bot is ready
         self._ready_event.set()
 
-    def push_task_to_all_channels(
-        self, message: Optional[str] = None, content: Optional[str] = None
-    ):
+    def push_task_to_all_channels(self, message: str | None = None, content: str | None = None):
         """Push a task to all channels. Message will be "as-is" with no processing.
 
         Args:
@@ -247,7 +245,7 @@ class EmetDiscordBot(DiscordBot):
         print("Timestamp:", timestamp)
 
         print(self.allowed_channels)
-        if not message.channel in self.allowed_channels:
+        if message.channel not in self.allowed_channels:
             print(" -> Not in allowed channels. Skipping.")
             return None
 
@@ -276,8 +274,10 @@ class EmetDiscordBot(DiscordBot):
                     await task.channel.send(task.message)
                 if task.content is not None:
                     import io
+
                     import numpy as np
                     from PIL import Image as PILImage
+
                     buf = io.BytesIO()
                     img = task.content
                     if isinstance(img, np.ndarray):
@@ -304,7 +304,7 @@ class EmetDiscordBot(DiscordBot):
             else:
                 self.add_robot_plan(text, channel=task.channel)
 
-    def add_robot_plan(self, response: List[Tuple[str, str]], channel: discord.TextChannel):
+    def add_robot_plan(self, response: list[tuple[str, str]], channel: discord.TextChannel):
         """Add a task to the task queue."""
         with self._plan_lock:
             self.next_plan = response, channel

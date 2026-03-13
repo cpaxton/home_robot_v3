@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 # Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
 #
 # Run one rotate-in-place in the default MuJoCo scene (DynaMem), save memory to the
 # common directory format, then load and print a summary.
@@ -33,7 +42,7 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
         try:
             with socket.create_connection((host, port), timeout=2) as _:
                 return True
-        except (OSError, socket.timeout):
+        except (TimeoutError, OSError):
             time.sleep(0.5)
     return False
 
@@ -76,7 +85,7 @@ def _scene_graph_to_graph_blob(scene_graph, semantic_sensor=None):
         )
     id_offset = 1
     edges = []
-    for (a, b, rel) in scene_graph.relationships:
+    for a, b, rel in scene_graph.relationships:
         id1 = a + id_offset if isinstance(a, int) else a
         id2 = FLOOR_NODE_ID if b == "floor" else (b + id_offset if isinstance(b, int) else b)
         edges.append(GraphEdgeView(id1=id1, id2=id2, relation=rel))
@@ -108,9 +117,7 @@ def main(path: str, no_server: bool, robot_ip: str):
     proc = None
     robot = None
     env = dict(os.environ)
-    env["PYTHONPATH"] = os.pathsep.join(
-        [str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep)
-    )
+    env["PYTHONPATH"] = os.pathsep.join([str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep))
     if sys.platform == "linux":
         env["MUJOCO_GL"] = "egl"
 

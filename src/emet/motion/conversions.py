@@ -7,13 +7,12 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import Dict, List, Tuple
 
 import numpy as np
 
 from emet.motion import HelloStretchIdx
 
-HelloStretchManipIdx: Dict[str, int] = {
+HelloStretchManipIdx: dict[str, int] = {
     "BASE_X": 0,
     "LIFT": 1,
     "ARM": 2,
@@ -23,7 +22,7 @@ HelloStretchManipIdx: Dict[str, int] = {
 }
 
 
-def delta_hab_to_position_command(cmd, pan, tilt, deltas) -> Tuple[List[float], float, float]:
+def delta_hab_to_position_command(cmd, pan, tilt, deltas) -> tuple[list[float], float, float]:
     """Compute deltas"""
     assert len(deltas) == 10
     arm = deltas[0] + deltas[1] + deltas[2] + deltas[3]
@@ -69,7 +68,7 @@ def config_to_hab(q: np.ndarray) -> np.ndarray:
     return hab
 
 
-def hab_to_position_command(hab_positions) -> Tuple[List[float], float, float]:
+def hab_to_position_command(hab_positions) -> tuple[list[float], float, float]:
     """Compute hab_positions"""
     assert len(hab_positions) == 10
     arm = hab_positions[0] + hab_positions[1] + hab_positions[2] + hab_positions[3]

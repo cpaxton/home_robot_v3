@@ -11,7 +11,6 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Optional, Union
 
 import numpy as np
 import open_clip
@@ -37,7 +36,7 @@ class ClipEncoder(BaseImageTextEncoder):
     def __init__(
         self,
         version="ViT-B/32",
-        device: Optional[str] = None,
+        device: str | None = None,
         feature_matching_threshold: float = 0.3,
     ):
         if device is None:
@@ -52,7 +51,7 @@ class ClipEncoder(BaseImageTextEncoder):
         self.model.eval()
         self.feature_matching_threshold = feature_matching_threshold
 
-    def encode_image(self, image: Union[torch.tensor, np.ndarray]) -> torch.Tensor:
+    def encode_image(self, image: torch.tensor | np.ndarray) -> torch.Tensor:
         """Encode this input image to a CLIP vector"""
         if isinstance(image, torch.Tensor):
             image = image.cpu().numpy() * 255
@@ -78,7 +77,7 @@ class ClipEncoder(BaseImageTextEncoder):
 class NormalizedClipEncoder(ClipEncoder):
     """Simple wrapper for encoding different things as text. Normalizes the results."""
 
-    def encode_image(self, image: Union[torch.tensor, np.ndarray]) -> torch.Tensor:
+    def encode_image(self, image: torch.tensor | np.ndarray) -> torch.Tensor:
         """Encode this input image to a CLIP vector"""
         image_features = super().encode_image(image)
         return image_features / image_features.norm(dim=-1, keepdim=True)
@@ -97,7 +96,7 @@ class MaskClipEncoder(NormalizedClipEncoder):
     def __init__(
         self,
         version="ViT-B/16",
-        device: Optional[str] = None,
+        device: str | None = None,
         feature_matching_threshold: float = 0.3,
     ) -> None:
         super().__init__(
@@ -158,22 +157,13 @@ class MaskClipEncoder(NormalizedClipEncoder):
             image: RGB image, shape [3, H, W]
         """
         if self.device == "cpu":
-            input = (
-                self.clip_preprocess(transforms.ToPILImage()(image)).unsqueeze(0).to(self.device)
-            )
+            input = self.clip_preprocess(transforms.ToPILImage()(image)).unsqueeze(0).to(self.device)
         else:
-            input = (
-                self.clip_preprocess(transforms.ToPILImage()(image))
-                .unsqueeze(0)
-                .to(self.device)
-                .half()
-            )
+            input = self.clip_preprocess(transforms.ToPILImage()(image)).unsqueeze(0).to(self.device).half()
         if image_shape is not None:
             if image.ndim == 3:
                 image = image.unsqueeze(0)
-            image = F.interpolate(
-                image, size=image_shape, mode="bilinear", align_corners=False
-            ).squeeze()
+            image = F.interpolate(image, size=image_shape, mode="bilinear", align_corners=False).squeeze()
         features = self.extract_mask_siglip_features(input, image.shape[-2:]).cpu()
 
         return image, features

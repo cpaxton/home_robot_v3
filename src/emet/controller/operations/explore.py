@@ -19,10 +19,10 @@ class ExploreOperation(ManagedOperation):
         return self.agent is not None
 
     def run(self) -> None:
-        self.intro(f"Attempting to go home")
+        self.intro("Attempting to go home")
         self.agent.run_exploration()
         self._successful = True
-        self.cheer(f"Done going home")
+        self.cheer("Done going home")
 
     def was_successful(self) -> bool:
         return self._successful

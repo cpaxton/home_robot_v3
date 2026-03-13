@@ -17,7 +17,7 @@ from .prompts.object_manip_nav_prompt import ObjectManipNavPromptBuilder
 from .prompts.ok_robot_prompt import OkRobotPromptBuilder
 from .prompts.pickup_prompt import PickupPromptBuilder
 from .prompts.simple_prompt import SimpleStretchPromptBuilder
-from .qwen_client import Qwen25Client, get_qwen_variants, get_qwen35_variants
+from .qwen_client import Qwen25Client, get_qwen35_variants, get_qwen_variants
 
 # This is a list of all the modules that are imported when you use the import * syntax.
 # The __all__ variable is used to define what symbols get exported when from a module when you use the import * syntax.
@@ -45,10 +45,10 @@ llms = {
 
 # Add all the various Qwen 2.5 and Qwen 3.5 variants
 qwen_variants = get_qwen_variants()
-llms.update({variant: Qwen25Client for variant in qwen_variants})
+llms.update(dict.fromkeys(qwen_variants, Qwen25Client))
 for variant in get_qwen35_variants():
     llms[variant] = Qwen25Client
-llms.update({variant: GemmaClient for variant in ["gemma4b", "gemma1b"]})
+llms.update(dict.fromkeys(["gemma4b", "gemma1b"], GemmaClient))
 
 
 def process_incoming_qwen_types(qwen_type: str):
@@ -91,6 +91,7 @@ def process_incoming_qwen_types(qwen_type: str):
 
 def _agent_prompt_builder() -> "AbstractPromptBuilder":
     from emet.agent.prompt import AgentPromptBuilder
+
     return AgentPromptBuilder()
 
 
@@ -127,9 +128,7 @@ def get_llm_choices():
     return llms.keys()
 
 
-def get_llm_client(
-    client_type: str, prompt: Union[str, AbstractPromptBuilder], **kwargs
-) -> AbstractLLMClient:
+def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwargs) -> AbstractLLMClient:
     """Return an LLM client of the specified type.
 
     Args:
@@ -142,9 +141,7 @@ def get_llm_client(
     if "gemma" in client_type:
         # We assume the user enter gemma, gemma4b, or gemma1b
         if client_type not in ["gemma", "gemma4b", "gemma1b"]:
-            raise ValueError(
-                f"Invalid model size: {client_type}, we only support gemma, gemma4b, and gemma1b"
-            )
+            raise ValueError(f"Invalid model size: {client_type}, we only support gemma, gemma4b, and gemma1b")
         elif client_type == "gemma":
             model_size = "1b"
         else:
@@ -156,9 +153,7 @@ def get_llm_client(
         return OpenaiClient(prompt, **kwargs)
     elif "qwen" in client_type:
         # Parse model size and fine-tuning from client_type
-        model_size, typing_option, fine_tuning, quantization_option = process_incoming_qwen_types(
-            client_type
-        )
+        model_size, typing_option, fine_tuning, quantization_option = process_incoming_qwen_types(client_type)
         version = "3.5" if client_type.startswith("qwen35") else None
         return Qwen25Client(
             prompt,

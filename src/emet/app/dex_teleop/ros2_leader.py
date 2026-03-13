@@ -25,7 +25,7 @@ from emet.controller.zmq_client import StretchZmqClient
 
 try:
     from emet.app.dex_teleop.hand_tracker import HandTracker
-except ImportError as e:
+except ImportError:
     print("Hand tracker not available. Please install its dependencies if you want to use it.")
     print()
     print("\tpython -m pip install .[hand_tracker]")
@@ -180,9 +180,7 @@ class ZmqRos2Leader:
         self._force = force_record
         self._recording = False or self._force
         self._need_to_write = False
-        self._recorder = FileDataRecorder(
-            data_dir, task_name, user_name, env_name, save_images, self.metadata, fps=6
-        )
+        self._recorder = FileDataRecorder(data_dir, task_name, user_name, env_name, save_images, self.metadata, fps=6)
         self.prev_goal_dict = None
 
     def ask_for_success(self) -> bool:
@@ -232,9 +230,7 @@ class ZmqRos2Leader:
             )
 
             # Arm scaling
-            new_wrist_position_configuration[2] = (
-                new_wrist_position_configuration[2] * dt.ros2_arm_scaling_factor
-            )
+            new_wrist_position_configuration[2] = new_wrist_position_configuration[2] * dt.ros2_arm_scaling_factor
 
             # Use exponential smoothing to filter the wrist
             # position configuration used to command the
@@ -250,9 +246,7 @@ class ZmqRos2Leader:
                 new_goal_configuration["joint_mobile_base_rotate_by"] = 0.0
                 new_goal_configuration["joint_mobile_base_translate_by"] = 0.0
             elif self.teleop_mode == "rotary_base":
-                new_goal_configuration[
-                    "joint_mobile_base_rotate_by"
-                ] = self.filtered_wrist_position_configuration[0]
+                new_goal_configuration["joint_mobile_base_rotate_by"] = self.filtered_wrist_position_configuration[0]
                 new_goal_configuration["base_x_joint"] = 0.0
                 new_goal_configuration["joint_mobile_base_translate_by"] = 0.0
             else:
@@ -270,11 +264,8 @@ class ZmqRos2Leader:
 
             if (grip_width is not None) and (grip_width > -1000.0):
                 # Use width to interpolate between open and closed
-                new_goal_configuration["stretch_gripper"] = (
-                    self.robot._robot_model.GRIPPER_CLOSED
-                ) + grip_width * (
-                    abs(self.robot._robot_model.GRIPPER_OPEN)
-                    + abs(self.robot._robot_model.GRIPPER_CLOSED)
+                new_goal_configuration["stretch_gripper"] = (self.robot._robot_model.GRIPPER_CLOSED) + grip_width * (
+                    abs(self.robot._robot_model.GRIPPER_OPEN) + abs(self.robot._robot_model.GRIPPER_CLOSED)
                 )
 
             ##################################################
@@ -287,11 +278,7 @@ class ZmqRos2Leader:
             if self.debug_wrist_orientation:
                 print("___________")
                 print(
-                    "wrist_yaw, wrist_pitch, wrist_roll = {:.2f}, {:.2f}, {:.2f} deg".format(
-                        (180.0 * (wrist_yaw / np.pi)),
-                        (180.0 * (wrist_pitch / np.pi)),
-                        (180.0 * (wrist_roll / np.pi)),
-                    )
+                    f"wrist_yaw, wrist_pitch, wrist_roll = {180.0 * (wrist_yaw / np.pi):.2f}, {180.0 * (wrist_pitch / np.pi):.2f}, {180.0 * (wrist_roll / np.pi):.2f} deg"
                 )
 
             limits_violated = False
@@ -333,21 +320,13 @@ class ZmqRos2Leader:
                 if prev_wrist_yaw is not None:
                     diff = abs(wrist_yaw - prev_wrist_yaw)
                     if diff > self.max_allowed_wrist_yaw_change:
-                        print(
-                            "extreme wrist_yaw change of {:.2f} deg".format(
-                                (180.0 * (diff / np.pi))
-                            )
-                        )
+                        print(f"extreme wrist_yaw change of {180.0 * (diff / np.pi):.2f} deg")
                         extreme_difference_violated = True
                 prev_wrist_roll = self.prev_commanded_wrist_orientation["joint_wrist_roll"]
                 if prev_wrist_roll is not None:
                     diff = abs(wrist_roll - prev_wrist_roll)
                     if diff > self.max_allowed_wrist_roll_change:
-                        print(
-                            "extreme wrist_roll change of {:.2f} deg".format(
-                                (180.0 * (diff / np.pi))
-                            )
-                        )
+                        print(f"extreme wrist_roll change of {180.0 * (diff / np.pi):.2f} deg")
                         extreme_difference_violated = True
             #
             ################################################################
@@ -431,9 +410,7 @@ class ZmqRos2Leader:
 
                 # Process images
                 gripper_color_image = cv2.cvtColor(observation.ee_rgb, cv2.COLOR_RGB2BGR)
-                gripper_depth_image = (
-                    observation.ee_depth.astype(np.float32) * observation.ee_depth_scaling
-                )
+                gripper_depth_image = observation.ee_depth.astype(np.float32) * observation.ee_depth_scaling
 
                 head_color_image = cv2.cvtColor(observation.rgb, cv2.COLOR_RGB2BGR)
                 head_depth_image = observation.depth.astype(np.float32) * observation.depth_scaling
@@ -457,9 +434,7 @@ class ZmqRos2Leader:
                     # Calculate the new height based on the aspect ratio
                     new_height = int(width / aspect_ratio)
 
-                    head_combined = cv2.resize(
-                        head_combined, (width, new_height), interpolation=cv2.INTER_LINEAR
-                    )
+                    head_combined = cv2.resize(head_combined, (width, new_height), interpolation=cv2.INTER_LINEAR)
 
                     # Combine both images from ee and head
                     combined = np.vstack((combined, head_combined))
@@ -535,9 +510,7 @@ class ZmqRos2Leader:
 
                 if goal_dict is not None:
                     # Convert goal dict into a quaternion
-                    goal_dict = dt_utils.process_goal_dict(
-                        goal_dict, self.prev_goal_dict, self.use_gripper_center
-                    )
+                    goal_dict = dt_utils.process_goal_dict(goal_dict, self.prev_goal_dict, self.use_gripper_center)
                 else:
                     # Goal dict that is not worth processing
                     goal_dict = {"valid": False}
@@ -581,9 +554,7 @@ class ZmqRos2Leader:
                         )
 
                         # Prep joint states as dict
-                        joint_states = {
-                            k: observation.joint[v] for k, v in HelloStretchIdx.name_to_idx.items()
-                        }
+                        joint_states = {k: observation.joint[v] for k, v in HelloStretchIdx.name_to_idx.items()}
                         if self._recording and self.prev_goal_dict is not None:
                             self._recorder.add(
                                 ee_rgb=gripper_color_image,
@@ -609,9 +580,7 @@ class ZmqRos2Leader:
                                     goal_configuration["stretch_gripper"],
                                 )
                                 if not ok:
-                                    logger.warning(
-                                        f"[LEADER] WARNING: overwriting previous waypoint {waypoint_key}."
-                                    )
+                                    logger.warning(f"[LEADER] WARNING: overwriting previous waypoint {waypoint_key}.")
                     else:
                         offset_pose = last_robot_pose - robot_pose
                 elif waypoint_key is not None:
@@ -662,9 +631,7 @@ if __name__ == "__main__":
         default="base_x",
         choices=["stationary_base", "rotary_base", "base_x"],
     )
-    parser.add_argument(
-        "--skip-success", action="store_true", help="Do not record success of episode."
-    )
+    parser.add_argument("--skip-success", action="store_true", help="Do not record success of episode.")
     parser.add_argument("--show-aruco", action="store_true", help="Show aruco debug information.")
     parser.add_argument("--platform", type=str, default="linux", choices=["linux", "not_linux"])
     parser.add_argument("-c", "--clutch", action="store_true")

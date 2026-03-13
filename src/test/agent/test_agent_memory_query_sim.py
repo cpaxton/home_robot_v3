@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Integration test: start MuJoCo sim, scan scene, then use the agent's query_memory
@@ -13,7 +22,6 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 _SRC_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -28,7 +36,7 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
         try:
             with socket.create_connection((host, port), timeout=2):
                 return True
-        except (OSError, socket.timeout):
+        except (TimeoutError, OSError):
             time.sleep(0.5)
     return False
 
@@ -42,9 +50,7 @@ def test_agent_query_memory_finds_objects_in_sim():
     proc = None
     robot = None
     env = dict(os.environ)
-    env["PYTHONPATH"] = os.pathsep.join(
-        [str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep)
-    )
+    env["PYTHONPATH"] = os.pathsep.join([str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep))
     if sys.platform == "linux":
         env["MUJOCO_GL"] = "egl"
 
@@ -61,11 +67,11 @@ def test_agent_query_memory_finds_objects_in_sim():
             proc.wait(timeout=5)
             pytest.fail("MuJoCo server did not start. stderr:\n" + stderr)
 
+        from emet.agent.tools import get_tools
         from emet.controller.task.dynamem import DynamemTaskExecutor
         from emet.controller.zmq_client import StretchZmqClient
         from emet.core.parameters import get_parameters
         from emet.memory.backend import get_memory_backend
-        from emet.agent.tools import get_tools
 
         robot = StretchZmqClient(
             robot_ip="127.0.0.1",
@@ -74,7 +80,10 @@ def test_agent_query_memory_finds_objects_in_sim():
         )
         parameters = get_parameters("dynav_config.yaml")
         executor = DynamemTaskExecutor(
-            robot, parameters, skip_confirmations=True, cpu_only=True,
+            robot,
+            parameters,
+            skip_confirmations=True,
+            cpu_only=True,
         )
         executor([("rotate_in_place", "")])
 

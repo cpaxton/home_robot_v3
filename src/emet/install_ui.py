@@ -1,6 +1,15 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
 # Text-based UI for managing installation of sub-assets (sim, kitchen assets,
 # MolmoSpaces, SAM-2, etc.). Used by `emet install menu`.
 
@@ -250,7 +259,9 @@ def run_install_menu() -> int:
         if choice == "A":
             # Run all: submodules, then sim (with assets), then molmospaces
             print("\n--- Submodules ---")
-            subprocess.call(["git", "submodule", "update", "--init", "--recursive", "third_party/segment-anything-2"], cwd=root)
+            subprocess.call(
+                ["git", "submodule", "update", "--init", "--recursive", "third_party/segment-anything-2"], cwd=root
+            )
             print("\n--- Simulation (robosuite + robocasa + assets) ---")
             script_sim = root / "scripts" / "install_simulation.sh"
             if script_sim.exists():
@@ -305,7 +316,9 @@ def run_install_menu() -> int:
 
         if s.id == "submodules":
             print("\nRunning: git submodule update --init --recursive third_party/segment-anything-2")
-            subprocess.call(["git", "submodule", "update", "--init", "--recursive", "third_party/segment-anything-2"], cwd=root)
+            subprocess.call(
+                ["git", "submodule", "update", "--init", "--recursive", "third_party/segment-anything-2"], cwd=root
+            )
         elif s.id == "sim":
             script = root / "scripts" / "install_simulation.sh"
             if not script.exists():
@@ -345,7 +358,9 @@ def run_install_menu() -> int:
                     _molmo_pip("-e", str(wrapper_dir))
                 else:
                     _molmo_pip("molmo-spaces", "mujoco>=3.4", "numpy>=2.2")
-                print("Set MLSPACES_ASSETS_DIR for scene data (e.g. export MLSPACES_ASSETS_DIR=~/.cache/molmospaces/assets)")
+                print(
+                    "Set MLSPACES_ASSETS_DIR for scene data (e.g. export MLSPACES_ASSETS_DIR=~/.cache/molmospaces/assets)"
+                )
 
         print()
         input("Press Enter to return to menu...")

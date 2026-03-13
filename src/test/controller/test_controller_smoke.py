@@ -1,6 +1,15 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
 # Smoke tests for the controller package: imports and basic instantiation
 # (with dummy/mock robot where needed).
 """Smoke tests for emet.controller and DynamemController/InstanceMemoryController."""
@@ -11,15 +20,17 @@ from emet.controller import (
     BaseRobotAgent,
     DynamemController,
     DynamemRobotAgent,
-    StretchZmqClient,
     InstanceMemoryController,
     RobotAgent,
     RobotClient,
+    StretchZmqClient,
 )
 from emet.controller.base_controller import BaseController as BaseClass
-from emet.controller.controller_instance_memory import InstanceMemoryController as IMC, RobotAgent as IMC_alias
-from emet.controller.controller_dynamem import DynamemController as DC, RobotAgent as DC_alias
+from emet.controller.controller_dynamem import DynamemController as DC
+from emet.controller.controller_dynamem import RobotAgent as DC_alias
 from emet.controller.controller_graph_eqa import GraphEQAController, RobotAgentGraphEQA
+from emet.controller.controller_instance_memory import InstanceMemoryController as IMC
+from emet.controller.controller_instance_memory import RobotAgent as IMC_alias
 
 
 def test_controller_exports():

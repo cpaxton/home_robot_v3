@@ -12,7 +12,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import time
-from typing import List
 
 import numpy as np
 import rclpy
@@ -70,8 +69,7 @@ class StretchNavigationClient(AbstractControlModule):
         # self._ros_client.get_logger().info(f"goal rewset time now {self._ros_client._goal_reset_t}")
         if (
             self._ros_client._goal_reset_t is not None
-            and (self._ros_client.get_clock().now() - self._ros_client._goal_reset_t).nanoseconds
-            * 1e-9
+            and (self._ros_client.get_clock().now() - self._ros_client._goal_reset_t).nanoseconds * 1e-9
             > self._ros_client.msg_delay_t
         ):
             return self._ros_client.at_goal
@@ -124,7 +122,7 @@ class StretchNavigationClient(AbstractControlModule):
     @enforce_enabled
     def execute_trajectory(
         self,
-        trajectory: List[np.ndarray],
+        trajectory: list[np.ndarray],
         pos_err_threshold: float = 0.2,
         rot_err_threshold: float = 0.75,
         spin_rate: int = 10,
@@ -133,10 +131,10 @@ class StretchNavigationClient(AbstractControlModule):
         relative: bool = False,
     ):
         """Execute a multi-step trajectory; this is always blocking since it waits to reach each one in turn."""
-        for i, pt in enumerate(trajectory):
-            assert (
-                len(pt) == 3 or len(pt) == 2
-            ), "base trajectory needs to be 2-3 dimensions: x, y, and (optionally) theta"
+        for _i, pt in enumerate(trajectory):
+            assert len(pt) == 3 or len(pt) == 2, (
+                "base trajectory needs to be 2-3 dimensions: x, y, and (optionally) theta"
+            )
             just_xy = len(pt) == 2
             self.move_base_to(pt, relative, position_only=just_xy, blocking=False)
             self.wait_for_waypoint(
@@ -164,7 +162,7 @@ class StretchNavigationClient(AbstractControlModule):
     @enforce_enabled
     def move_base_to(
         self,
-        xyt: List[float],
+        xyt: list[float],
         relative: bool = False,
         position_only: bool = False,
         avoid_obstacles: bool = False,

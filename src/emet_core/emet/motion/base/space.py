@@ -12,7 +12,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 from abc import ABC
-from typing import List
 
 import numpy as np
 
@@ -58,7 +57,7 @@ class ConfigurationSpace(ABC):
                 yield qi
         yield q1
 
-    def closest_node_to_state(self, state, nodes: List[Node]):
+    def closest_node_to_state(self, state, nodes: list[Node]):
         """returns closest node to a given state"""
         min_dist = float("Inf")
         min_node = None
@@ -81,7 +80,7 @@ class XYT(ConfigurationSpace):
             mins = np.array([-10, -10, -np.pi])
         if maxs is None:
             maxs = np.array([10, 10, np.pi])
-        super(XYT, self).__init__(3, mins, maxs)
+        super().__init__(3, mins, maxs)
 
     def update_bounds(self, mins, maxs):
         """Update bounds for just x and y sometimes, since that's all that will be changing"""

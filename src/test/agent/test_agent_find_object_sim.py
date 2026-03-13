@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Integration test: start MuJoCo sim, run the agent in scripted (no-LLM) mode
@@ -29,7 +38,7 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
         try:
             with socket.create_connection((host, port), timeout=2):
                 return True
-        except (OSError, socket.timeout):
+        except (TimeoutError, OSError):
             time.sleep(0.5)
     return False
 
@@ -43,9 +52,7 @@ def test_agent_find_red_cylinder_no_llm():
     """
     proc = None
     env = dict(os.environ)
-    env["PYTHONPATH"] = os.pathsep.join(
-        [str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep)
-    )
+    env["PYTHONPATH"] = os.pathsep.join([str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep))
     if sys.platform == "linux":
         env["MUJOCO_GL"] = "egl"
 
@@ -68,10 +75,14 @@ def test_agent_find_red_cylinder_no_llm():
         # then we send "FIND red cylinder" as a manual command.
         result = subprocess.run(
             [
-                sys.executable, "-m", "emet.app.run_agent",
-                "--robot-ip", "127.0.0.1",
+                sys.executable,
+                "-m",
+                "emet.app.run_agent",
+                "--robot-ip",
+                "127.0.0.1",
                 "--no-llm",
-                "-c", "FIND red cylinder",
+                "-c",
+                "FIND red cylinder",
             ],
             env=env,
             capture_output=True,
@@ -88,13 +99,9 @@ def test_agent_find_red_cylinder_no_llm():
 
         # The agent should have executed the find command.
         # We check that it didn't crash and the executor processed the find.
-        assert result.returncode == 0 or result.returncode is None, (
-            f"Agent exited with code {result.returncode}"
-        )
+        assert result.returncode == 0 or result.returncode is None, f"Agent exited with code {result.returncode}"
         # Check that the find command was dispatched
-        assert "find" in stdout.lower() or "FIND" in stdout, (
-            "Expected 'find' in agent output"
-        )
+        assert "find" in stdout.lower() or "FIND" in stdout, "Expected 'find' in agent output"
 
     finally:
         if proc is not None and proc.poll() is None:
@@ -114,9 +121,7 @@ def test_agent_multi_command_no_llm():
     """
     proc = None
     env = dict(os.environ)
-    env["PYTHONPATH"] = os.pathsep.join(
-        [str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep)
-    )
+    env["PYTHONPATH"] = os.pathsep.join([str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep))
     if sys.platform == "linux":
         env["MUJOCO_GL"] = "egl"
 
@@ -136,12 +141,18 @@ def test_agent_multi_command_no_llm():
         # Commands: E (explore), Q followed by question, QUIT
         result = subprocess.run(
             [
-                sys.executable, "-m", "emet.app.run_agent",
-                "--robot-ip", "127.0.0.1",
+                sys.executable,
+                "-m",
+                "emet.app.run_agent",
+                "--robot-ip",
+                "127.0.0.1",
                 "--no-llm",
-                "-c", "E",
-                "-c", "Q Is there a red cylinder?",
-                "-c", "FIND red cylinder",
+                "-c",
+                "E",
+                "-c",
+                "Q Is there a red cylinder?",
+                "-c",
+                "FIND red cylinder",
             ],
             env=env,
             capture_output=True,
@@ -153,9 +164,7 @@ def test_agent_multi_command_no_llm():
         print("--- STDOUT ---")
         print(stdout[-3000:] if len(stdout) > 3000 else stdout)
 
-        assert result.returncode == 0 or result.returncode is None, (
-            f"Agent exited with code {result.returncode}"
-        )
+        assert result.returncode == 0 or result.returncode is None, f"Agent exited with code {result.returncode}"
 
     finally:
         if proc is not None and proc.poll() is None:

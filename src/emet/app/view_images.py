@@ -32,9 +32,7 @@ from emet.utils.image import adjust_gamma
     help="Set if we are executing on the robot and not on a remote computer",
 )
 @click.option("--parameter_file", default="default_planner.yaml", help="Path to parameter file")
-@click.option(
-    "--target_object", type=str, default="shoe", help="Type of object to pick up and move"
-)
+@click.option("--target_object", type=str, default="shoe", help="Type of object to pick up and move")
 @click.option("--gamma", type=float, default=1.0, help="Gamma correction factor for EE rgb images")
 @click.option(
     "--run_semantic_segmentation",
@@ -154,9 +152,7 @@ def main(
             else:
                 _obs = servo
             _obs = semantic_sensor.predict(_obs, ee=use_ee)
-            semantic_segmentation = np.zeros(
-                (_obs.semantic.shape[0], _obs.semantic.shape[1], 3)
-            ).astype(np.uint8)
+            semantic_segmentation = np.zeros((_obs.semantic.shape[0], _obs.semantic.shape[1], 3)).astype(np.uint8)
             if semantic_sensor.is_semantic():
                 segmentation = _obs.semantic
             elif semantic_sensor.is_instance():
@@ -173,9 +169,7 @@ def main(
             # Compose the two images
             alpha = 0.5
             img = _obs.ee_rgb if use_ee else _obs.rgb
-            semantic_segmentation = cv2.addWeighted(
-                img.copy(), alpha, semantic_segmentation, 1 - alpha, 0
-            )
+            semantic_segmentation = cv2.addWeighted(img.copy(), alpha, semantic_segmentation, 1 - alpha, 0)
 
         # Visualize depth
         viz_depth = cv2.normalize(servo.depth, None, 0, 255, cv2.NORM_MINMAX)

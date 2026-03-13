@@ -27,9 +27,7 @@ def test_temporal_filter(debug_print: bool = False):
     start_time = time.time()
     for i in range(n_observations):
         timestamp = start_time + (i * 0.1)
-        temporal_filter.push_to_observation_history(
-            observation=[i], timestamp=timestamp, acquire_lock=False
-        )
+        temporal_filter.push_to_observation_history(observation=[i], timestamp=timestamp, acquire_lock=False)
 
     assert len(temporal_filter.get_observations_from_history()) == n_observations
 
@@ -56,9 +54,7 @@ def test_mask_temporal_filter():
 
     for _ in range(n_observations):
         obs = np.random.rand(*obs_shape)
-        mask_temporal_filter.push_to_observation_history(
-            obs, timestamp=time.time(), acquire_lock=False
-        )
+        mask_temporal_filter.push_to_observation_history(obs, timestamp=time.time(), acquire_lock=False)
 
     assert len(mask_temporal_filter.get_observations_from_history()) == n_observations
 
@@ -75,9 +71,7 @@ def test_mask_temporal_filter_static():
     )
 
     for _ in range(10):
-        mask_temporal_filter.push_to_observation_history(
-            test_mask, timestamp=time.time(), acquire_lock=False
-        )
+        mask_temporal_filter.push_to_observation_history(test_mask, timestamp=time.time(), acquire_lock=False)
 
     centroid = mask_temporal_filter.get_latest_centroid()
 

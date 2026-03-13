@@ -8,7 +8,6 @@
 # license information maybe found below, if so.
 
 import datetime
-from typing import List, Tuple
 
 from PIL import Image
 
@@ -40,7 +39,7 @@ class PickupExecutor:
         match_method: str = "feature",
         open_loop: bool = False,
         dry_run: bool = False,
-        available_actions: List[str] = None,
+        available_actions: list[str] = None,
         discord_bot=None,
     ) -> None:
         """Initialize the executor.
@@ -210,7 +209,7 @@ class PickupExecutor:
 
     def _hand_over(self) -> None:
         """Create a task to find a person, navigate to them, and extend the arm toward them"""
-        logger.alert(f"[Pickup task] Hand Over")
+        logger.alert("[Pickup task] Hand Over")
 
         # After the robot has started...
         try:
@@ -224,7 +223,7 @@ class PickupExecutor:
         # Execute the task
         task.run()
 
-    def __call__(self, response: List[Tuple[str, str]], channel=None) -> bool:
+    def __call__(self, response: list[tuple[str, str]], channel=None) -> bool:
         """Execute the list of commands given by the LLM bot.
 
         Args:
@@ -266,17 +265,13 @@ class PickupExecutor:
                 target_object = args
                 i += 1
                 if i >= len(response):
-                    logger.warning(
-                        "Pickup without place! Try giving a full pick-and-place instruction."
-                    )
+                    logger.warning("Pickup without place! Try giving a full pick-and-place instruction.")
                     self._pickup(target_object, None)
                     # Continue works here because we've already incremented i
                     continue
                 next_command, next_args = response[i]
                 if next_command != "place":
-                    logger.warning(
-                        "Pickup without place! Try giving a full pick-and-place instruction."
-                    )
+                    logger.warning("Pickup without place! Try giving a full pick-and-place instruction.")
                     self._pickup(target_object, None)
                     # Continue works here because we've already incremented i
                     continue
@@ -286,9 +281,7 @@ class PickupExecutor:
                 target_receptacle = next_args
                 self._pickup(target_object, target_receptacle)
             elif command == "place":
-                logger.warning(
-                    "Place without pickup! Try giving a full pick-and-place instruction."
-                )
+                logger.warning("Place without pickup! Try giving a full pick-and-place instruction.")
                 self._place(args)
             elif command == "hand_over":
                 self._hand_over()

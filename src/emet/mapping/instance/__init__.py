@@ -11,6 +11,6 @@
 # Minimal instance types so mapping/controller/voxel imports run.
 # See docs/plans/MAPPING_REFACTOR.md. Full implementation can be extended later.
 
-from .instance import Instance, InstanceMemory, InstanceView
+from .instance import Instance, InstanceMemory, InstanceView, instances_to_text
 
-__all__ = ["Instance", "InstanceMemory", "InstanceView"]
+__all__ = ["Instance", "InstanceMemory", "InstanceView", "instances_to_text"]

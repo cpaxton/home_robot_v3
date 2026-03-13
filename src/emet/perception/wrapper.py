@@ -13,7 +13,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import json
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import torch
 
@@ -36,14 +36,16 @@ class OvmmPerception:
         parameters: Parameters,
         gpu_device_id: int = 0,
         verbose: bool = False,
-        module_kwargs: Dict[str, Any] = {},
-        category_map_file: Optional[str] = None,
+        module_kwargs: dict[str, Any] = None,
+        category_map_file: str | None = None,
     ):
+        if module_kwargs is None:
+            module_kwargs = {}
         self.parameters = parameters
         self._use_detic_viz = self.parameters.get("detection/use_detic_viz", False)
         self._detection_module = self.parameters.get("detection/module", "detic")
         self._confidence_threshold = self.parameters.get("detection/confidence_threshold", 0.5)
-        self._vocabularies: Dict[int, RearrangeCategories] = {}
+        self._vocabularies: dict[int, RearrangeCategories] = {}
         self._current_vocabulary: RearrangeCategories = None
         self._current_vocabulary_id: int = None
         self.verbose = verbose
@@ -67,9 +69,7 @@ class OvmmPerception:
         elif self._detection_module == "owlsam":
             from emet.perception.detection.owl import OWLSAMProcessor
 
-            self._segmentation = OWLSAMProcessor(
-                version="owlv2-L-p14-ensemble", confidence_threshold=0.1
-            )
+            self._segmentation = OWLSAMProcessor(version="owlv2-L-p14-ensemble", confidence_threshold=0.1)
         else:
             raise NotImplementedError(f"Detection module {self._detection_module} not supported.")
 
@@ -104,9 +104,7 @@ class OvmmPerception:
     def current_vocabulary(self) -> RearrangeCategories:
         return self._current_vocabulary
 
-    def update_vocabulary_list(
-        self, vocabulary: Union[RearrangeCategories, List[str]], vocabulary_id: int
-    ):
+    def update_vocabulary_list(self, vocabulary: RearrangeCategories | list[str], vocabulary_id: int):
         """
         Update/insert a given vocabulary for the given ID.
         """
@@ -124,9 +122,7 @@ class OvmmPerception:
         self.segmenter_classes = ["."] + list(vocabulary.goal_id_to_goal_name.values()) + ["other"]
         self._segmentation.reset_vocab(self.segmenter_classes)
 
-        self.vocabulary_name_to_id = {
-            name: id for id, name in vocabulary.goal_id_to_goal_name.items()
-        }
+        self.vocabulary_name_to_id = {name: id for id, name in vocabulary.goal_id_to_goal_name.items()}
         self.vocabulary_id_to_name = vocabulary.goal_id_to_goal_name
         self.seg_id_to_name = dict(enumerate(self.segmenter_classes))
         self.name_to_seg_id = {v: k for k, v in self.seg_id_to_name.items()}
@@ -134,7 +130,7 @@ class OvmmPerception:
         self._current_vocabulary = vocabulary
         self._current_vocabulary_id = vocabulary_id
 
-    def get_class_name_for_id(self, oid: int) -> Optional[str]:
+    def get_class_name_for_id(self, oid: int) -> str | None:
         """return name of a class from a detection"""
         if isinstance(oid, torch.Tensor):
             oid = int(oid.item())
@@ -144,7 +140,7 @@ class OvmmPerception:
             return None
         return self._current_vocabulary.goal_id_to_goal_name[oid]
 
-    def get_class_id_for_name(self, name: str) -> Optional[int]:
+    def get_class_id_for_name(self, name: str) -> int | None:
         """return the id associated with a class"""
         if name in self._current_vocabulary.goal_name_to_goal_id:
             return self._current_vocabulary.goal_name_to_goal_id[name]
@@ -170,9 +166,7 @@ class OvmmPerception:
         else:
             obs.task_observations["end_recep_name"] = None
         if obs.task_observations["object_name"] is not None:
-            obs.task_observations["object_goal"] = self.vocabulary_name_to_id[
-                obs.task_observations["object_name"]
-            ]
+            obs.task_observations["object_goal"] = self.vocabulary_name_to_id[obs.task_observations["object_name"]]
         else:
             obs.task_observations["object_goal"] = None
 
@@ -183,8 +177,8 @@ class OvmmPerception:
         self,
         rgb: torch.Tensor,
         depth: torch.Tensor,
-        base_pose: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, Any]]:
+        base_pose: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, dict[str, Any]]:
         """Predict segmentation masks from RGB and depth images.
 
         Args:
@@ -203,7 +197,7 @@ class OvmmPerception:
     def predict(
         self,
         obs: Observations,
-        depth_threshold: Optional[float] = None,
+        depth_threshold: float | None = None,
         ee: bool = False,
         confidence_threshold=None,
     ) -> Observations:
@@ -234,7 +228,7 @@ class OvmmPerception:
 
 def read_category_map_file(
     category_map_file: str,
-) -> Tuple[Dict[int, str], Dict[int, str]]:
+) -> tuple[dict[int, str], dict[int, str]]:
     """
     Reads a category map file in JSON and extracts mappings between category names and category IDs.
     These mappings are also present in the episodes file but are extracted to use in a stand-alone manner.
@@ -254,7 +248,7 @@ def read_category_map_file(
 
 
 def build_vocab_from_category_map(
-    obj_id_to_name_mapping: Dict[int, str], rec_id_to_name_mapping: Dict[int, str]
+    obj_id_to_name_mapping: dict[int, str], rec_id_to_name_mapping: dict[int, str]
 ) -> RearrangeCategories:
     """
     Build vocabulary from category maps that can be used for semantic sensor and visualizations.
@@ -271,18 +265,16 @@ def build_vocab_from_category_map(
         if i < len(obj_id_to_name_mapping):
             obj_rec_combined_mapping[i + 1] = obj_id_to_name_mapping[i]
         else:
-            obj_rec_combined_mapping[i + 1] = rec_id_to_name_mapping[
-                i - len(obj_id_to_name_mapping)
-            ]
+            obj_rec_combined_mapping[i + 1] = rec_id_to_name_mapping[i - len(obj_id_to_name_mapping)]
     vocabulary = RearrangeCategories(obj_rec_combined_mapping, len(obj_id_to_name_mapping))
     return vocabulary
 
 
 def create_semantic_sensor(
-    parameters: Optional[Parameters] = None,
+    parameters: Parameters | None = None,
     device_id: int = 0,
     verbose: bool = True,
-    module_kwargs: Dict[str, Any] = {},
+    module_kwargs: dict[str, Any] = None,
     config_path="default_planner.yaml",
     **kwargs,
 ):
@@ -300,6 +292,8 @@ def create_semantic_sensor(
     Returns:
         OvmmPerception: segmentation sensor
     """
+    if module_kwargs is None:
+        module_kwargs = {}
     if verbose:
         print("[PERCEPTION] Loading configuration")
     if parameters is None:

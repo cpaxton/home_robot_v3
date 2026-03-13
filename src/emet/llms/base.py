@@ -8,7 +8,7 @@
 # license information maybe found below, if so.
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 from PIL import Image
 
@@ -28,7 +28,7 @@ class AbstractPromptBuilder(ABC):
         """Return the system prompt string for an LLM."""
         return self.prompt_str
 
-    def __call__(self, kwargs: Optional[Dict[str, Any]] = None) -> str:
+    def __call__(self, kwargs: dict[str, Any] | None = None) -> str:
         """Return the system prompt string for an LLM."""
         if kwargs is not None:
             self.prompt_str = self.configure(**kwargs)
@@ -38,7 +38,7 @@ class AbstractPromptBuilder(ABC):
         """Parse the response from the LLM. Usually does nothing."""
         return response
 
-    def get_available_actions(self) -> List[str]:
+    def get_available_actions(self) -> list[str]:
         """Return a list of available actions."""
         return []
 
@@ -48,8 +48,8 @@ class AbstractLLMClient(ABC):
 
     def __init__(
         self,
-        prompt: Union[str, AbstractPromptBuilder],
-        prompt_kwargs: Optional[Dict[str, Any]] = None,
+        prompt: str | AbstractPromptBuilder,
+        prompt_kwargs: dict[str, Any] | None = None,
     ):
         self.prompt_kwargs = prompt_kwargs
         self.reset()
@@ -71,7 +71,7 @@ class AbstractLLMClient(ABC):
 
     def reset(self) -> None:
         """Reset the client state."""
-        self.conversation_history: List[Union[str, Dict[str, str]]] = []
+        self.conversation_history: list[str | dict[str, str]] = []
         self._iterations = 0
 
     def is_first_message(self) -> bool:
@@ -87,7 +87,7 @@ class AbstractLLMClient(ABC):
         """Add a message to the conversation history."""
         self.conversation_history.append(message)
 
-    def get_history(self) -> List[Any]:
+    def get_history(self) -> list[Any]:
         """Get the conversation history."""
         return self.conversation_history.copy()
 
@@ -103,10 +103,10 @@ class AbstractLLMClient(ABC):
         return history_str
 
     @abstractmethod
-    def __call__(self, command: str, image: Optional[Image.Image] = None, verbose: bool = False):
+    def __call__(self, command: str, image: Image.Image | None = None, verbose: bool = False):
         """Interact with the language model to generate a plan."""
 
-    def parse(self, content: str) -> List[Tuple[str, str]]:
+    def parse(self, content: str) -> list[tuple[str, str]]:
         """parse into list"""
         plan = []
         for command in content.split("\n"):

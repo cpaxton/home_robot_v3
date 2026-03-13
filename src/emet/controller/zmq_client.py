@@ -867,7 +867,7 @@ class StretchZmqClient(AbstractRobotClient):
     def switch_to_navigation_mode(self):
         """Velocity control of the robot base."""
         next_action = {"control_mode": "navigation", "step": self._iter}
-        action = self.send_action(next_action)
+        self.send_action(next_action)
         self._wait_for_mode("navigation")
         assert self.in_navigation_mode()
 
@@ -878,7 +878,7 @@ class StretchZmqClient(AbstractRobotClient):
             verbose: Whether to print out debug information
         """
         next_action = {"control_mode": "manipulation", "step": self._iter}
-        action = self.send_action(next_action)
+        self.send_action(next_action)
         if verbose:
             logger.info("Waiting for manipulation mode")
         self._wait_for_mode("manipulation", verbose=verbose)
@@ -1482,7 +1482,6 @@ class StretchZmqClient(AbstractRobotClient):
             print(" - yaw: ", cur_joints[3])
             print(" - pitch: ", cur_joints[4])
             print(" - roll: ", cur_joints[5])
-        blocking = False
         block_id = None
         with self._act_lock:
             # Send it
@@ -1499,9 +1498,9 @@ class StretchZmqClient(AbstractRobotClient):
 
             # For tracking goal
             if "xyt" in next_action:
-                goal_angle = next_action["xyt"][2]
+                next_action["xyt"][2]
             else:
-                goal_angle = None
+                pass
 
             # Empty it out for the next one
             current_action = next_action
@@ -1546,7 +1545,7 @@ class StretchZmqClient(AbstractRobotClient):
             steps += 1
             if verbose:
                 print("Control mode:", self._control_mode)
-                print(f"time taken = {dt} avg = {sum_time / steps} keys={[k for k in output.keys()]}")
+                print(f"time taken = {dt} avg = {sum_time / steps} keys={list(output.keys())}")
             t0 = timeit.default_timer()
 
     def update_servo(self, message):
@@ -1562,12 +1561,11 @@ class StretchZmqClient(AbstractRobotClient):
         else:
             color_image = None
             depth_image = None
-            image_scaling = None
 
         # Get head information from the message as well
         head_color_image = compression.from_jpg(message["head_cam/color_image"])
         head_depth_image = compression.from_jp2(message["head_cam/depth_image"]) / 1000
-        head_image_scaling = message["head_cam/image_scaling"]
+        message["head_cam/image_scaling"]
         joint = message["robot/config"]
         with self._servo_lock and self._state_lock:
             observation = Observations(
@@ -1625,7 +1623,7 @@ class StretchZmqClient(AbstractRobotClient):
             sum_time += dt
             steps += 1
             if verbose and steps % self.num_state_report_steps == 1:
-                print(f"[SERVO] time taken = {dt} avg = {sum_time / steps} keys={[k for k in output.keys()]}")
+                print(f"[SERVO] time taken = {dt} avg = {sum_time / steps} keys={list(output.keys())}")
             t0 = timeit.default_timer()
 
     @property
@@ -1672,7 +1670,7 @@ class StretchZmqClient(AbstractRobotClient):
             steps += 1
             if verbose and steps % self.num_state_report_steps == 1:
                 print("[STATE] Control mode:", self._control_mode)
-                print(f"[STATE] time taken = {dt} avg = {sum_time / steps} keys={[k for k in output.keys()]}")
+                print(f"[STATE] time taken = {dt} avg = {sum_time / steps} keys={list(output.keys())}")
             t0 = timeit.default_timer()
 
     def blocking_spin_rerun(self) -> None:

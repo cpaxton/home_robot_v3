@@ -13,12 +13,10 @@
 # LICENSE file in the root directory of this source tree.
 
 
-from typing import List, Optional, Tuple, Union
-
 import numpy as np
 
 
-class IKSolverBase(object):
+class IKSolverBase:
     """
     Base class for all IK solvers.
     """
@@ -31,15 +29,11 @@ class IKSolverBase(object):
         """returns number of controllable joints under this solver's purview"""
         raise NotImplementedError()
 
-    def compute_fk(
-        self, q, link_name=None, ignore_missing_joints=False
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def compute_fk(self, q, link_name=None, ignore_missing_joints=False) -> tuple[np.ndarray, np.ndarray]:
         """given joint values return end-effector position and quaternion associated with it"""
         raise NotImplementedError()
 
-    def get_frame_pose(
-        self, q: Union[np.ndarray, List[float], dict], node_a: str, node_b: str
-    ) -> np.ndarray:
+    def get_frame_pose(self, q: np.ndarray | list[float] | dict, node_a: str, node_b: str) -> np.ndarray:
         """Given joint values, return the pose of the frame attached to node_a in the frame of node_b.
 
         Args:
@@ -61,9 +55,8 @@ class IKSolverBase(object):
         num_attempts: int = 1,
         verbose: bool = False,
         ignore_missing_joints: bool = False,
-        custom_ee_frame: Optional[str] = None,
-    ) -> Tuple[np.ndarray, bool, dict]:
-
+        custom_ee_frame: str | None = None,
+    ) -> tuple[np.ndarray, bool, dict]:
         """
         Given an end-effector position and quaternion, return the joint states and a success flag.
         Some solvers (e.g. the PositionIKOptimizer solver) will return a result regardless; the success flag indicates

@@ -8,7 +8,7 @@
 # license information maybe found below, if so.
 
 import abc
-from typing import Dict, List, Optional
+from typing import Optional
 
 from termcolor import colored
 
@@ -47,9 +47,7 @@ class Operation(abc.ABC):
         # Overload failure to just retry this one
         if self.retry_on_failure:
             if self.on_failure is not None:
-                raise RuntimeError(
-                    f"Cannot have on_failure set for {self.name} - it will just retry itself."
-                )
+                raise RuntimeError(f"Cannot have on_failure set for {self.name} - it will just retry itself.")
             self.on_failure = self
 
         self.status = "idle"
@@ -118,9 +116,9 @@ class Task:
     def __init__(self, max_failures: int = 5) -> None:
         self.current_operation = None
         self.initial_operation = None
-        self._all_operations: List[Operation] = []
-        self._terminal_operations: List[Operation] = []
-        self._operations: Dict[str, Operation] = dict()
+        self._all_operations: list[Operation] = []
+        self._terminal_operations: list[Operation] = []
+        self._operations: dict[str, Operation] = {}
         self.max_failures = max_failures
 
     def add_operation(self, operation, terminal: bool = False):
@@ -232,9 +230,7 @@ class Task:
                         logger.error("Task failed.")
                         return False
                     elif failures >= self.current_operation.max_failures:
-                        logger.error(
-                            f"Operation {self.current_operation.name} failed too many times!"
-                        )
+                        logger.error(f"Operation {self.current_operation.name} failed too many times!")
                         self.error(f"Task failed after {failures} operation failures.")
                         return False
             else:

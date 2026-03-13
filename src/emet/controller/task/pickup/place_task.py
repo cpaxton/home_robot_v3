@@ -7,8 +7,8 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import Optional
 
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.operations import (
     GoToNavOperation,
     NavigateToObjectOperation,
@@ -16,7 +16,6 @@ from emet.controller.operations import (
     RotateInPlaceOperation,
     SearchForReceptacleOperation,
 )
-from emet.controller.controller_instance_memory import RobotAgent
 from emet.core.task import Task
 
 
@@ -26,7 +25,7 @@ class PlaceOnReceptacleTask:
     def __init__(
         self,
         agent: RobotAgent,
-        target_receptacle: Optional[str] = None,
+        target_receptacle: str | None = None,
         use_visual_servoing_for_grasp: bool = True,
         matching: str = "feature",
     ) -> None:
@@ -47,9 +46,9 @@ class PlaceOnReceptacleTask:
         self.semantic_sensor = self.agent.semantic_sensor
         self.parameters = self.agent.parameters
         self.instance_memory = self.agent.get_voxel_map().instances
-        assert (
-            self.instance_memory is not None
-        ), "Make sure instance memory was created! This is configured in parameters file."
+        assert self.instance_memory is not None, (
+            "Make sure instance memory was created! This is configured in parameters file."
+        )
 
         self.current_receptacle = None
         self.agent.reset_object_plans()
@@ -71,15 +70,11 @@ class PlaceOnReceptacleTask:
         """Create a task plan that will pick up a single object in the environment. It will explore until it finds a single object, and will then pick it up and place it in a receptacle."""
 
         # Put the robot into navigation mode
-        go_to_navigation_mode = GoToNavOperation(
-            "go to navigation mode", self.agent, retry_on_failure=True
-        )
+        go_to_navigation_mode = GoToNavOperation("go to navigation mode", self.agent, retry_on_failure=True)
 
         if add_rotate:
             # Spin in place to find objects.
-            rotate_in_place = RotateInPlaceOperation(
-                "rotate_in_place", self.agent, parent=go_to_navigation_mode
-            )
+            rotate_in_place = RotateInPlaceOperation("rotate_in_place", self.agent, parent=go_to_navigation_mode)
 
         # Look for the target receptacle
         search_for_receptacle = SearchForReceptacleOperation(
@@ -133,7 +128,5 @@ if __name__ == "__main__":
     # Create a robot agent with instance memory
     agent = RobotAgent(robot, create_semantic_sensor=True)
 
-    task = PlaceOnReceptacleTask(agent, target_receptacle="cardboard box").get_task(
-        add_rotate=False
-    )
+    task = PlaceOnReceptacleTask(agent, target_receptacle="cardboard box").get_task(add_rotate=False)
     task.run()

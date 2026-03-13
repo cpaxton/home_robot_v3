@@ -11,7 +11,6 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Optional
 
 import torch
 import torch.nn.functional as F
@@ -61,7 +60,7 @@ def binary_denoising(binary_image, kernel):
     return binary_opening(binary_closing(binary_image, kernel), kernel)
 
 
-def get_edges(mask: torch.Tensor, threshold: Optional[float] = 0.5) -> torch.Tensor:
+def get_edges(mask: torch.Tensor, threshold: float | None = 0.5) -> torch.Tensor:
     """Extract edges from a torch tensor.
 
     Args:
@@ -70,12 +69,8 @@ def get_edges(mask: torch.Tensor, threshold: Optional[float] = 0.5) -> torch.Ten
     mask = mask.float()
 
     # Define the Sobel filter kernels
-    sobel_x = torch.tensor(
-        [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32, device=mask.device
-    )
-    sobel_y = torch.tensor(
-        [[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32, device=mask.device
-    )
+    sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32, device=mask.device)
+    sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32, device=mask.device)
 
     # Calculate padding for convolution to preserve the original size
     # Sobel x and y operators are the same size
@@ -99,9 +94,7 @@ def get_edges(mask: torch.Tensor, threshold: Optional[float] = 0.5) -> torch.Ten
     edges = edges[0, 0]
     if threshold is not None:
         edges = edges > threshold
-    assert (
-        edges.shape == mask.shape
-    ), "something went wrong when computing padding, most likely - shape not preserved"
+    assert edges.shape == mask.shape, "something went wrong when computing padding, most likely - shape not preserved"
     return edges
 
 
@@ -133,9 +126,9 @@ def expand_mask(mask: torch.Tensor, radius: int, threshold: float = 0.5):
     # Binarize the expanded mask (optional)
     expanded_mask = (expanded_mask > 0).to(torch.float32)
     expanded_mask = expanded_mask[0, 0] > threshold
-    assert (
-        expanded_mask.shape == mask.shape
-    ), "something went wrong when computing padding, most likely - shape not preserved"
+    assert expanded_mask.shape == mask.shape, (
+        "something went wrong when computing padding, most likely - shape not preserved"
+    )
     return expanded_mask
 
 

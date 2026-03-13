@@ -7,7 +7,6 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import List, Tuple
 
 import numpy as np
 import torch
@@ -43,11 +42,7 @@ def get_r_matrix(ax_, angle) -> np.ndarray:
             [[0.0, -ax[2], ax[1]], [ax[2], 0.0, -ax[0]], [-ax[1], ax[0], 0.0]],
             dtype=np.float32,
         )
-        R = (
-            np.eye(3)
-            + np.sin(angle) * S_hat
-            + (1 - np.cos(angle)) * (np.linalg.matrix_power(S_hat, 2))
-        )
+        R = np.eye(3) + np.sin(angle) * S_hat + (1 - np.cos(angle)) * (np.linalg.matrix_power(S_hat, 2))
     else:
         R = np.eye(3)
     return R
@@ -68,7 +63,7 @@ def rotate_camera_to_point_at(up_from, lookat_from, up_to, lookat_to):
     up_from, lookat_from, up_to, lookat_to = inputs
     r1 = r_between(lookat_from, lookat_to)
 
-    new_x = np.dot(r1, np.array([1, 0, 0]).reshape((-1, 1))).reshape((-1))
+    new_x = np.dot(r1, np.array([1, 0, 0]).reshape((-1, 1))).reshape(-1)
     to_x = normalize(np.cross(lookat_to, up_to))
     angle = np.arccos(np.dot(new_x, to_x))
     if angle > ANGLE_EPS:
@@ -88,7 +83,7 @@ def rotate_camera_to_point_at(up_from, lookat_from, up_to, lookat_to):
     return np.dot(r2, r1)
 
 
-def get_grid(pose: Tensor, grid_size: List[int], precision: torch.dtype) -> Tuple[Tensor, Tensor]:
+def get_grid(pose: Tensor, grid_size: list[int], precision: torch.dtype) -> tuple[Tensor, Tensor]:
     """
     Input:
         `pose` FloatTensor(bs, 3)

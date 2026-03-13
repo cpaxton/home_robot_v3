@@ -33,7 +33,7 @@ import threading
 import timeit
 from dataclasses import dataclass
 from itertools import chain
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Suppress "PyNaCl/davey not installed, voice will NOT be supported" — we don't use voice.
 logging.getLogger("discord.client").setLevel(logging.ERROR)
@@ -41,7 +41,6 @@ logging.getLogger("discord.client").setLevel(logging.ERROR)
 import discord
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
-from termcolor import colored
 
 from emet.utils.logger import Logger
 
@@ -61,21 +60,19 @@ def read_discord_token_from_env():
 class Task:
     """One item in the bot's task queue. message is text; content is optional image (PIL, numpy, or file-like)."""
 
-    message: Optional[str]
+    message: str | None
     channel: discord.TextChannel
-    content: Optional[Any] = None
+    content: Any | None = None
     explicit: bool = False
-    t: Optional[float] = None
+    t: float | None = None
 
 
 class ChannelList:
     """Tracks the channels that the bot is allowed to post in."""
 
     def __init__(self):
-        self.home_channels: List[discord.TextChannel] = []
-        self.visiting_channels: Dict[
-            discord.TextChannel, float
-        ] = {}  # Maps channel to expiration time
+        self.home_channels: list[discord.TextChannel] = []
+        self.visiting_channels: dict[discord.TextChannel, float] = {}  # Maps channel to expiration time
 
     def add_home(self, channel: discord.TextChannel):
         """Add a channel to the home list."""
@@ -114,7 +111,7 @@ class ChannelList:
 
 
 class DiscordBot:
-    def __init__(self, token: Optional[str] = None, timeout: float = 180):
+    def __init__(self, token: str | None = None, timeout: float = 180):
         """Create the bot, using an authorization token from Discord."""
         # Create intents
         intents = discord.Intents.default()
@@ -149,18 +146,16 @@ class DiscordBot:
     def push_task(
         self,
         channel,
-        message: Optional[str] = None,
-        content: Optional[str] = None,
+        message: str | None = None,
+        content: str | None = None,
         explicit: bool = False,
     ):
         """Add a message to the queue to send."""
         # print("Adding task to queue:", message, channel.name, content)
-        self.task_queue.put(
-            Task(message, channel, content, explicit=explicit, t=timeit.default_timer())
-        )
+        self.task_queue.put(Task(message, channel, content, explicit=explicit, t=timeit.default_timer()))
         # print( "Queue length after push:", self.task_queue.qsize())
 
-    def send_message(self, channel, message: Optional[str] = None, content: Optional[str] = None):
+    def send_message(self, channel, message: str | None = None, content: str | None = None):
         """Send a message to a channel.
 
         Args:
@@ -173,9 +168,12 @@ class DiscordBot:
     async def handle_task(self, task: Task):
         """Handle a task by sending the message to the channel. This will make the necessary calls in its thread to the different child functions that send messages, for example."""
         _logger.debug(
-            "Handling task: message=", task.message,
-            "channel=", task.channel.name,
-            "content=", "image" if task.content is not None else "None",
+            "Handling task: message=",
+            task.message,
+            "channel=",
+            task.channel.name,
+            "content=",
+            "image" if task.content is not None else "None",
         )
         if task.message is not None:
             _logger.debug(" - Sending message:", task.message)
@@ -192,6 +190,7 @@ class DiscordBot:
                 try:
                     import numpy as np
                     from PIL import Image as PILImage
+
                     if isinstance(content, np.ndarray):
                         content = PILImage.fromarray(content.astype(np.uint8))
                 except ImportError:
@@ -213,9 +212,7 @@ class DiscordBot:
                     if channel in self.allowed_channels:
                         _logger.debug(f"Introducing myself to channel {channel.name}")
                         try:
-                            self.push_task(
-                                channel, message=self.greeting(), content=None, explicit=True
-                            )
+                            self.push_task(channel, message=self.greeting(), content=None, explicit=True)
                         except Exception as e:
                             _logger.error("Error in introducing myself:", str(e))
             self._started = True

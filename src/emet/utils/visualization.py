@@ -11,7 +11,6 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import List, Tuple
 
 import cv2
 import matplotlib.pyplot as plt
@@ -42,8 +41,8 @@ def show_image_with_mask(rgb, mask):
 
 
 def get_contour_points(
-    pos: Tuple[float, float, float],
-    origin: Tuple[float, float],
+    pos: tuple[float, float, float],
+    origin: tuple[float, float],
     size: int = 20,
 ) -> np.ndarray:
     x, y, o = pos
@@ -62,8 +61,8 @@ def get_contour_points(
 
 
 def draw_line(
-    start: Tuple[int, int],
-    end: Tuple[int, int],
+    start: tuple[int, int],
+    end: tuple[int, int],
     mat: np.ndarray,
     steps: int = 25,
     w: int = 1,
@@ -92,12 +91,9 @@ def create_disk(radius: float, size: int):
     return disk
 
 
-def get_x_and_y_from_path(path: List[torch.Tensor]) -> Tuple[List[float], List[float]]:
+def get_x_and_y_from_path(path: list[torch.Tensor]) -> tuple[list[float], list[float]]:
     x_list, y_list = zip(
-        *[
-            (t[0].item(), t[1].item()) if t.dim() == 1 else (t[0, 0].item(), t[0, 1].item())
-            for t in path
-        ]
+        *[(t[0].item(), t[1].item()) if t.dim() == 1 else (t[0, 0].item(), t[0, 1].item()) for t in path], strict=False
     )
     assert len(x_list) == len(y_list), "problem parsing tensors"
     # Mypy note: the return type is a tuple of two lists of floats. this is fine.
@@ -148,9 +144,7 @@ def resize_image_to_fit(img, target_width, target_height):
 
     # If you want to ensure the resulting image is exactly the target size,
     # create a blank canvas and paste the resized image onto it.
-    canvas = (
-        np.ones((target_height, target_width, 3), dtype=np.uint8) * 255
-    )  # Assuming white canvas
+    canvas = np.ones((target_height, target_width, 3), dtype=np.uint8) * 255  # Assuming white canvas
     y_offset = (target_height - new_height) // 2
     x_offset = (target_width - new_width) // 2
     canvas[y_offset : y_offset + new_height, x_offset : x_offset + new_width] = resized_img
@@ -161,7 +155,7 @@ def resize_image_to_fit(img, target_width, target_height):
 def generate_legend(
     vis_image: np.ndarray,
     colors: np.ndarray,
-    texts: List[str],
+    texts: list[str],
     start_x: int,
     start_y: int,
     total_w: int,
@@ -187,9 +181,7 @@ def generate_legend(
             rect_end_x = rect_start_x + int(int_h * 0.2) + 20
             rect_end_y = rect_start_y + int(int_h * 0.2) + 10
             rect_end = [rect_end_x, rect_end_y]
-            vis_image = cv2.rectangle(
-                vis_image, rect_start, rect_end, colors[ctr].tolist(), thickness=-1
-            )
+            vis_image = cv2.rectangle(vis_image, rect_start, rect_end, colors[ctr].tolist(), thickness=-1)
             vis_image = cv2.putText(
                 vis_image,
                 texts[ctr],
@@ -211,9 +203,7 @@ def text_to_image(
     font_path="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
 ):
     # Create a blank image with the specified dimensions
-    image = Image.new(
-        "RGB", (width, height), color=(73, 109, 137)
-    )  # RGB color can be any combination you like
+    image = Image.new("RGB", (width, height), color=(73, 109, 137))  # RGB color can be any combination you like
     # Set up the drawing context
     d = ImageDraw.Draw(image)
     # Set the font and size. Font path might be different in your system. Install a font if necessary.

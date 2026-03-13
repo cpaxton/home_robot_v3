@@ -1,6 +1,15 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
 # Rainbow RB-Y1 robot backend — same hardware as Galaxea R1 (two-armed mobile manipulator).
 # MolmoSpaces uses the id "rby1". This module provides a first-class robot backend so that
 # emet serve mujoco --robot rby1 and emet run dynamem --robot rby1 use GenericZmqClient
@@ -8,12 +17,11 @@
 
 from __future__ import annotations
 
-from emet.robots.footprint import Footprint
-from emet.robots.base import RobotBackend, RobotSpec
-
 # Reuse Galaxea R1 spec (same hardware); only the backend name differs for MolmoSpaces/CLI.
 from pathlib import Path
 
+from emet.robots.base import RobotBackend, RobotSpec
+from emet.robots.footprint import Footprint
 from emet.robots.galaxea_r1 import (
     R1_ACTUATOR_NAMES,
     R1_CAMERA_NAMES,
@@ -48,8 +56,7 @@ class Rby1Backend(RobotBackend):
 
     def create_model(self, **kwargs):
         raise NotImplementedError(
-            "RB-Y1 kinematic model not yet implemented. "
-            "Use MuJoCo-based IK or a third-party IK solver."
+            "RB-Y1 kinematic model not yet implemented. Use MuJoCo-based IK or a third-party IK solver."
         )
 
 

@@ -11,7 +11,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Iterable, Tuple
+from collections.abc import Iterable
 
 import numpy as np
 import sophuspy as sp
@@ -152,7 +152,7 @@ def posquat2sophus(pos: Iterable[float], quat: Iterable[float]) -> sp.SE3:
     return sp.SE3(r_mat, pos)
 
 
-def sophus2posquat(se3: sp.SE3) -> Tuple[Iterable[float], Iterable[float]]:
+def sophus2posquat(se3: sp.SE3) -> tuple[Iterable[float], Iterable[float]]:
     pos = se3.translation()
     quat = Rotation.from_matrix(se3.so3().matrix()).as_quat()
     return pos, quat

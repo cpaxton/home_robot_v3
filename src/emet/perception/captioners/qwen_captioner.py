@@ -8,7 +8,6 @@
 # license information maybe found below, if so.
 
 import os
-from typing import Optional, Union
 
 import torch
 from numpy import ndarray
@@ -28,7 +27,7 @@ class QwenCaptioner:
         model_size: str = "3B",
         max_length: int = 200,
         num_beams: int = 1,
-        device: Optional[str] = None,
+        device: str | None = None,
         image_shape=None,
         draw_on_image=True,
     ):
@@ -47,16 +46,14 @@ class QwenCaptioner:
         else:
             self._device = torch.device(device)
 
-        self.client = Qwen25VLClient(
-            model_size=model_size, max_tokens=self.max_length, num_beams=self.num_beams
-        )
+        self.client = Qwen25VLClient(model_size=model_size, max_tokens=self.max_length, num_beams=self.num_beams)
 
         self.draw_on_image = draw_on_image
 
     def caption_image(
         self,
-        image: Union[ndarray, Tensor, Image.Image],
-        bbox: Optional[Union[list, Tensor, ndarray]] = None,
+        image: ndarray | Tensor | Image.Image,
+        bbox: list | Tensor | ndarray | None = None,
         verbose: bool = False,
     ) -> str:
         """Generate a caption for the given image.

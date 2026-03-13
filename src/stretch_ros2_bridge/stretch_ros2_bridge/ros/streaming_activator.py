@@ -7,7 +7,6 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import Optional
 
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -20,15 +19,13 @@ from std_srvs.srv import Trigger
 class StreamingActivator:
     """Activate streaming node."""
 
-    def __init__(self, node: Optional[Node] = None):
+    def __init__(self, node: Node | None = None):
         if node is None:
             self._node = Node("streaming_activator")
         else:
             self._node = node
         self.cb_group = ReentrantCallbackGroup()
-        self.client = self._node.create_client(
-            Trigger, "/activate_streaming_position", callback_group=self.cb_group
-        )
+        self.client = self._node.create_client(Trigger, "/activate_streaming_position", callback_group=self.cb_group)
 
     def activate_streaming(self) -> bool:
         print("Activating streaming mode in the ROS2 driver...")
@@ -47,7 +44,7 @@ class StreamingActivator:
 class StreamingController:
     """Version of the activator class designed to both activate and deactivate."""
 
-    def __init__(self, node: Optional[Node] = None):
+    def __init__(self, node: Node | None = None):
         if node is None:
             self._node = Node("streaming_controller")
         else:
@@ -90,7 +87,7 @@ class StreamingController:
 def main(args=None):
     rclpy.init(args=args)
     activator = StreamingActivator()
-    executor = MultiThreadedExecutor()
+    MultiThreadedExecutor()
 
     result = activator.activate_streaming()
     if result:

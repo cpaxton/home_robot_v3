@@ -1,4 +1,13 @@
 # Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
 #
 # Integration test: start MuJoCo server with Robocasa scene (PickPlaceCounterToCabinet;
 # PickPlaceCounterToSink preferred but often fails placement in this setup), connect,
@@ -29,7 +38,7 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 60) -> bool:
         try:
             with socket.create_connection((host, port), timeout=2) as _:
                 return True
-        except (OSError, socket.timeout):
+        except (TimeoutError, OSError):
             time.sleep(0.5)
     return False
 
@@ -48,9 +57,7 @@ def test_robocasa_memory_after_spin():
     proc = None
     robot = None
     env = dict(os.environ)
-    env["PYTHONPATH"] = os.pathsep.join(
-        [str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep)
-    )
+    env["PYTHONPATH"] = os.pathsep.join([str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep))
     if sys.platform == "linux":
         env["MUJOCO_GL"] = "egl"
 
@@ -71,10 +78,7 @@ def test_robocasa_memory_after_spin():
             stderr = proc.stderr.read().decode() if proc.stderr else ""
             proc.terminate()
             proc.wait(timeout=5)
-            pytest.fail(
-                "MuJoCo server (robocasa) did not bind to 4401 within 90s. stderr:\n"
-                + stderr
-            )
+            pytest.fail("MuJoCo server (robocasa) did not bind to 4401 within 90s. stderr:\n" + stderr)
 
         from emet.controller.task.dynamem import DynamemTaskExecutor
         from emet.controller.zmq_client import StretchZmqClient

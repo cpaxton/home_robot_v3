@@ -1,19 +1,27 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 import threading
 import time
-from emet.simulation.stretch_mujoco.datamodels.status_command import StatusCommand
-from emet.simulation.stretch_mujoco.utils import Rx, Ry, Rz, override
-import numpy as np
 
 import click
 import mujoco
+import mujoco._enums
 import mujoco._functions
 import mujoco.viewer
+import numpy as np
 from mujoco._enums import mjtGeom
+
+from emet.simulation.stretch_mujoco.datamodels.status_command import StatusCommand
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 from emet.simulation.stretch_mujoco.mujoco_server import MujocoServer
-from emet.simulation.stretch_mujoco.utils import FpsCounter
-
-import mujoco._enums
+from emet.simulation.stretch_mujoco.utils import FpsCounter, Rx, Ry, Rz, override
 
 
 class MujocoServerPassive(MujocoServer):
@@ -55,11 +63,11 @@ class MujocoServerPassive(MujocoServer):
 
         https://mujoco.readthedocs.io/en/stable/python.html#passive-viewer
         """
-        self.viewer =  mujoco.viewer.launch_passive(
+        self.viewer = mujoco.viewer.launch_passive(
             model=self.mjmodel, data=self.mjdata, show_left_ui=show_viewer_ui, show_right_ui=show_viewer_ui
         )
 
-        self.viewer._opt.flags[mujoco._enums.mjtVisFlag.mjVIS_RANGEFINDER] = False # Disables the lidar yellow lines.
+        self.viewer._opt.flags[mujoco._enums.mjtVisFlag.mjVIS_RANGEFINDER] = False  # Disables the lidar yellow lines.
 
         with self.viewer as viewer:
             physics_thread = threading.Thread(
@@ -72,17 +80,15 @@ class MujocoServerPassive(MujocoServer):
 
             fps = FpsCounter()
 
-            UI_FPS_CAP_RATE = (
-                self.camera_manager.camera_rate
-            )  # 1/Hz.Put the UI thread to sleep so that the physics thread can do work, to mitigate `viewer.lock()` locking physics thread.
+            UI_FPS_CAP_RATE = self.camera_manager.camera_rate  # 1/Hz.Put the UI thread to sleep so that the physics thread can do work, to mitigate `viewer.lock()` locking physics thread.
 
             click.secho(
-                f"Using the Mujoco Passive Viewer. Note: UI thread and camera rendering is capped to {1/UI_FPS_CAP_RATE}Hz to increase performance. You can set this rate using the `camera_rate` arugment.",
+                f"Using the Mujoco Passive Viewer. Note: UI thread and camera rendering is capped to {1 / UI_FPS_CAP_RATE}Hz to increase performance. You can set this rate using the `camera_rate` argument.",
                 fg="green",
             )
 
             # Replace the camera_lock with the viewer lock so that we're not accessing mjdata at the same time as the physics thread.
-            self.camera_manager.camera_lock = viewer.lock() #type: ignore
+            self.camera_manager.camera_lock = viewer.lock()  # type: ignore
 
             while viewer.is_running() and not self._is_requested_to_stop():
                 fps.tick()
@@ -99,7 +105,7 @@ class MujocoServerPassive(MujocoServer):
                     time.sleep(time_until_next_ui_update)
                 else:
                     click.secho(
-                        f"WARNING: Passive viewer and camera rendering is below the requested {1/self.camera_manager.camera_rate}FPS on the last render.",
+                        f"WARNING: Passive viewer and camera rendering is below the requested {1 / self.camera_manager.camera_rate}FPS on the last render.",
                         fg="yellow",
                     )
 
@@ -108,37 +114,36 @@ class MujocoServerPassive(MujocoServer):
             # Wait for any active threads to close, otherwise the mujoco window gets stuck:
             active_threads = threading.enumerate()
             for index, thread in enumerate(active_threads):
-                if thread != threading.main_thread() and not isinstance(
-                    thread, threading._DummyThread
-                ):
+                if thread != threading.main_thread() and not isinstance(thread, threading._DummyThread):
                     click.secho(
-                        f"Stopping thread {index}/{len(active_threads)-1} on the Mujoco Process.",
+                        f"Stopping thread {index}/{len(active_threads) - 1} on the Mujoco Process.",
                         fg="blue",
                     )
                     thread.join(timeout=5.0)
 
             click.secho("Mujoco viewer has terminated.", fg="blue")
 
-    def push_command(self, command_status:StatusCommand):
+    def push_command(self, command_status: StatusCommand):
 
         command_arrows = command_status.coordinate_frame_arrows_viz.copy()
 
         for arrows in command_arrows:
             if arrows.trigger:
-                self._add_axes_to_user_scn(self.viewer.user_scn, np.array(arrows.position) , arrows.rotation)
+                self._add_axes_to_user_scn(self.viewer.user_scn, np.array(arrows.position), arrows.rotation)
 
                 command_status.coordinate_frame_arrows_viz.remove(arrows)
 
         super().push_command(command_status)
 
-
     @override
-    def _add_axes_to_user_scn(self,
-                            user_scn,
-                            origin: np.ndarray,
-                            rotation: tuple[float,float,float],
-                            length: float = 0.2,
-                            radius: float = 0.006):
+    def _add_axes_to_user_scn(
+        self,
+        user_scn,
+        origin: np.ndarray,
+        rotation: tuple[float, float, float],
+        length: float = 0.2,
+        radius: float = 0.006,
+    ):
         """
         Draw a right-handed RGB frame in `user_scn` using mjv_initGeom.
 
@@ -146,27 +151,23 @@ class MujocoServerPassive(MujocoServer):
         * `origin` 3-vector in world frame
         * `R`      3×3 rotation matrix, columns are local x,y,z in world frame
         """
-        colors = np.array([[1, 0, 0, 1],   # +X
-                        [0, 1, 0, 1],      # +Y
-                        [0, 0, 1, 1]])     # +Z
+        colors = np.array(
+            [
+                [1, 0, 0, 1],  # +X
+                [0, 1, 0, 1],  # +Y
+                [0, 0, 1, 1],
+            ]
+        )  # +Z
 
         rot_matrix = Rx(rotation[0]) @ Ry(rotation[1]) @ Rz(rotation[2])
         for axis in range(3):
             if axis == 0:
                 # Rotate +Z to +X: -90° about Y-axis
-                R = np.array([
-                    [0, 0, 1],
-                    [0, 1, 0],
-                    [-1, 0, 0]
-                ])
-            elif axis ==1:
+                R = np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]])
+            elif axis == 1:
                 # Rotate +Z to +Y: -90° about X-axis
-                R = np.array([
-                    [-1, 0, 0],
-                    [0, 0, 1],
-                    [0, 1, 0]
-                ])
-            elif axis ==2:
+                R = np.array([[-1, 0, 0], [0, 0, 1], [0, 1, 0]])
+            elif axis == 2:
                 # No rotation needed
                 R = np.eye(3)
 
@@ -177,7 +178,7 @@ class MujocoServerPassive(MujocoServer):
             geom = user_scn.geoms[user_scn.ngeom]
             mujoco._functions.mjv_initGeom(
                 geom,
-                type= mjtGeom.mjGEOM_ARROW,
+                type=mjtGeom.mjGEOM_ARROW,
                 size=size,
                 pos=origin,
                 mat=np.array(R).flatten(),

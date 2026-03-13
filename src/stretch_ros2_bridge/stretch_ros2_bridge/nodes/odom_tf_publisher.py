@@ -24,7 +24,6 @@ class OdometryTFPublisher(Node):
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
         self.odom_subscriber = self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
-        self.odom_subscriber
 
     def odom_callback(self, msg):
         transform = TransformStamped()

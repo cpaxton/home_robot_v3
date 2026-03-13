@@ -31,13 +31,13 @@ def test_loop_rate_avg():
     target_freq = 75.0
     test_stats = LoopStats(loop_name=test_loop_name, target_loop_rate=target_freq)
     iterations = 50  # Number of iterations to check average loop rate
-    for i in range(iterations):
+    for _i in range(iterations):
         test_stats.mark_start()
         time.sleep(1 / target_freq)
         test_stats.mark_end()
 
     # Average calculated over the last 100 runs, so a few dry runs to ensure fair checking
-    for i in range(iterations):
+    for _i in range(iterations):
         test_stats.mark_start()
         time.sleep(1 / target_freq)
         test_stats.mark_end()

@@ -8,8 +8,6 @@
 # license information maybe found below, if so.
 
 
-from typing import List, Optional, Union
-
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -36,8 +34,8 @@ class SiglipEncoder(BaseImageTextEncoder):
     def __init__(
         self,
         normalize: bool = True,
-        device: Optional[str] = None,
-        version: Optional[str] = None,
+        device: str | None = None,
+        version: str | None = None,
         feature_matching_threshold: float = 0.05,
         **kwargs,
     ) -> None:
@@ -63,7 +61,7 @@ class SiglipEncoder(BaseImageTextEncoder):
 
     def encode_image(
         self,
-        image: Union[torch.tensor, np.ndarray],
+        image: torch.tensor | np.ndarray,
         image_shape=(360, 270),
         verbose: bool = False,
     ) -> torch.Tensor:
@@ -83,11 +81,7 @@ class SiglipEncoder(BaseImageTextEncoder):
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         with torch.no_grad():
             out = self.model.get_image_features(**inputs)
-        image_features = (
-            out.pooler_output
-            if hasattr(out, "pooler_output") and out.pooler_output is not None
-            else out
-        )
+        image_features = out.pooler_output if hasattr(out, "pooler_output") and out.pooler_output is not None else out
         if not isinstance(image_features, torch.Tensor):
             image_features = out.last_hidden_state[:, 0]
         if self.normalize:
@@ -108,7 +102,7 @@ class SiglipEncoder(BaseImageTextEncoder):
             text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         return text_features.float()
 
-    def classify(self, image: Union[np.ndarray, torch.Tensor], text: str) -> torch.Tensor:
+    def classify(self, image: np.ndarray | torch.Tensor, text: str) -> torch.Tensor:
         """Classify image and text"""
 
         # Convert image to PIL
@@ -118,9 +112,7 @@ class SiglipEncoder(BaseImageTextEncoder):
         pil_image = Image.fromarray(image)
 
         # Process image and text
-        inputs = self.processor(
-            images=pil_image, text=text, return_tensors="pt", padding="max_length"
-        )
+        inputs = self.processor(images=pil_image, text=text, return_tensors="pt", padding="max_length")
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
         # Evaluate model
@@ -131,7 +123,7 @@ class SiglipEncoder(BaseImageTextEncoder):
         probs = torch.sigmoid(logits)
         return probs
 
-    def encode_batch_text(self, texts: List[str]) -> torch.Tensor:
+    def encode_batch_text(self, texts: list[str]) -> torch.Tensor:
         """Return feature vector for text"""
         # inputs = self.processor(text, return_tensors="pt")
         inputs = self.tokenizer(texts, padding="max_length", return_tensors="pt")
@@ -152,8 +144,8 @@ class SiglipEncoder(BaseImageTextEncoder):
 class MaskSiglipEncoder(SiglipEncoder):
     def __init__(
         self,
-        device: Optional[str] = None,
-        version: Optional[str] = None,
+        device: str | None = None,
+        version: str | None = None,
         feature_matching_threshold: float = 0.12,
     ) -> None:
         """
@@ -206,9 +198,7 @@ class MaskSiglipEncoder(SiglipEncoder):
         if image_shape is not None:
             if image.ndim == 3:
                 image = image.unsqueeze(0)
-            image = F.interpolate(
-                image, size=image_shape, mode="bilinear", align_corners=False
-            ).squeeze()
+            image = F.interpolate(image, size=image_shape, mode="bilinear", align_corners=False).squeeze()
         features = self.extract_mask_siglip_features(input, image.shape[-2:]).cpu()
 
         return image, features
@@ -227,7 +217,7 @@ class MaskSiglipEncoder(SiglipEncoder):
             N, L, H, W = self.model.vision_model.embeddings.patch_embedding(x["pixel_values"]).shape
             feat = feat.reshape(N, H, W, L).permute(0, 3, 1, 2)
         features = []
-        for f, size in zip(feat, image_shape):
+        for f, size in zip(feat, image_shape, strict=False):
             f = F.interpolate(f.unsqueeze(0), size, mode="bilinear", align_corners=True)[0]
             f = F.normalize(f, dim=0).permute(1, 2, 0)
             features.append(f.detach().cpu())

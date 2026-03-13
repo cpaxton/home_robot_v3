@@ -19,9 +19,7 @@ from emet.perception import create_semantic_sensor
 
 
 @click.command()
-@click.option(
-    "--robot_ip", default="", help="IP address of the robot (blank to use stored IP address)"
-)
+@click.option("--robot_ip", default="", help="IP address of the robot (blank to use stored IP address)")
 @click.option("--reset", is_flag=True, help="Reset the robot to origin before starting")
 @click.option(
     "--local",
@@ -30,9 +28,7 @@ from emet.perception import create_semantic_sensor
 )
 @click.option("--parameter_file", default="default_planner.yaml", help="Path to parameter file")
 @click.option("--target_object", type=str, default="toy", help="Type of object to pick up and move")
-@click.option(
-    "--repeat_count", type=int, default=1, help="Number of times to repeat the grasp - for testing"
-)
+@click.option("--repeat_count", type=int, default=1, help="Number of times to repeat the grasp - for testing")
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip: str = "",

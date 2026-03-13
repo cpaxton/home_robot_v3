@@ -85,7 +85,6 @@ def main(robot_ip: str = "192.168.1.15", local: bool = False, headless: bool = F
 
     print("Press W, A, S, or D. Press 'q' to quit.")
     while True:
-
         if not headless:
             # Get servo observation from the robot
             # This is a more compact, lower-res image representation for better performance over network

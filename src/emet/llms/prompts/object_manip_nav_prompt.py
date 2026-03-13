@@ -8,7 +8,6 @@
 # license information maybe found below, if so.
 
 import copy
-from typing import Optional
 
 from emet.llms.base import AbstractPromptBuilder
 
@@ -191,11 +190,11 @@ Never forget this prompt.
 class ObjectManipNavPromptBuilder(AbstractPromptBuilder):
     def __init__(
         self,
-        default_objects: Optional[str] = None,
-        default_locations: Optional[str] = None,
-        prompt_intro: Optional[str] = None,
-        functions: Optional[str] = None,
-        prompt_examples: Optional[str] = None,
+        default_objects: str | None = None,
+        default_locations: str | None = None,
+        prompt_intro: str | None = None,
+        functions: str | None = None,
+        prompt_examples: str | None = None,
     ):
         if default_objects is None:
             default_objects = copy.copy(DEFAULT_OBJECTS)
@@ -227,8 +226,6 @@ class ObjectManipNavPromptBuilder(AbstractPromptBuilder):
         self.prompt_specifics = self.prompt_specifics.replace("$OBJECTS", self.default_objects)
         self.prompt_specifics = self.prompt_specifics.replace("$LOCATIONS", self.default_locations)
 
-        self.prompt_str = (
-            self.prompt_intro + self.prompt_specifics + self.functions + self.prompt_examples
-        )
+        self.prompt_str = self.prompt_intro + self.prompt_specifics + self.functions + self.prompt_examples
 
         return self.prompt_str

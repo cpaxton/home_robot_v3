@@ -7,15 +7,14 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import Union
 
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.operations import (
     AvertGazeOperation,
     NodHeadOperation,
     ShakeHeadOperation,
     WaveOperation,
 )
-from emet.controller.controller_instance_memory import RobotAgent
 from emet.core.task import Operation, Task
 
 
@@ -33,7 +32,7 @@ class EmoteTask:
         self.parameters = agent.parameters
         self.robot = agent.robot
 
-    def get_task(self, emote_operation: Union[Operation, str]) -> Task:
+    def get_task(self, emote_operation: Operation | str) -> Task:
         task = Task()
         if isinstance(emote_operation, Operation):
             task.add_operation(emote_operation)

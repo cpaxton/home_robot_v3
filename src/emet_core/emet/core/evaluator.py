@@ -7,7 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import Any, Dict
+from typing import Any
 
 from .comms import ClientCommsNode
 
@@ -16,7 +16,7 @@ class Evaluator(ClientCommsNode):
     """A basic class holding some overridable logic for evaluating input on sensors."""
 
     def __init__(self):
-        super(Evaluator, self).__init__()
+        super().__init__()
         self.camera_info = None
         self.depth_scale = None
         self._done = False
@@ -36,9 +36,9 @@ class Evaluator(ClientCommsNode):
 
     def apply(
         self,
-        message: Dict[str, Any],
+        message: dict[str, Any],
         display_received_images: bool = True,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Overwrite this to implement a simple loop operating on camera logic. Designed to decrease the amount of boilerplate code needed to implement a perception loop. Returns a results dict, which can be basically anything."""
         raise NotImplementedError

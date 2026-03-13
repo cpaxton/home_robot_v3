@@ -29,7 +29,7 @@ class RRTConnect(RRT):
         **kwargs,
     ):
         """Create RRT planner with configuration"""
-        super(RRTConnect, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.reset()
 
     def reset(self):

@@ -136,8 +136,7 @@ def test_text_to_speech(
 
                 # Assert the similarity
                 assert similarity > similarity_threshold, (
-                    f"Similarity for {full_filename} was {similarity}, "
-                    f"below the threshold of {similarity_threshold}"
+                    f"Similarity for {full_filename} was {similarity}, below the threshold of {similarity_threshold}"
                 )
 
     if save:

@@ -1,6 +1,15 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
 # MolmoSpaces runner logic: list-scenes, install-scene, serve.
 # Imports molmo_spaces and mujoco here (wrapper-only deps).
 
@@ -29,9 +38,7 @@ def _get_molmo_api():
         try:
             from molmo_spaces.utils.lazy_loading_utils import install_scene_with_objects_and_grasps_from_path
         except ImportError as err:
-            raise ImportError(
-                "install_scene_with_objects_and_grasps_from_path not found in molmo_spaces"
-            ) from err
+            raise ImportError("install_scene_with_objects_and_grasps_from_path not found in molmo_spaces") from err
     return get_scenes, install_scene_with_objects_and_grasps_from_path
 
 

@@ -7,7 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import Optional, Sequence, Tuple
+from collections.abc import Sequence
 
 import cv2
 import numpy as np
@@ -24,7 +24,7 @@ def get_gripper_aruco_detector() -> cv2.aruco.ArucoDetector:
 
 def detect_aruco_markers(
     image: np.ndarray, aruco_detector: cv2.aruco.ArucoDetector
-) -> Tuple[Sequence[np.ndarray], np.ndarray]:
+) -> tuple[Sequence[np.ndarray], np.ndarray]:
     """Detect AR markers in an image."""
     corners, ids, _ = aruco_detector.detectMarkers(image)
     return corners, ids
@@ -34,7 +34,7 @@ class GripperArucoDetector:
     def __init__(self):
         self.aruco_detector = get_gripper_aruco_detector()
 
-    def detect_aruco_markers(self, image: np.ndarray) -> Tuple[Sequence[np.ndarray], np.ndarray]:
+    def detect_aruco_markers(self, image: np.ndarray) -> tuple[Sequence[np.ndarray], np.ndarray]:
         """Detect AR markers in an image.
 
         Args:
@@ -46,9 +46,7 @@ class GripperArucoDetector:
         """
         return detect_aruco_markers(image, self.aruco_detector)
 
-    def detect_and_draw_aruco_markers(
-        self, image: np.ndarray
-    ) -> Tuple[Sequence[np.ndarray], np.ndarray, np.ndarray]:
+    def detect_and_draw_aruco_markers(self, image: np.ndarray) -> tuple[Sequence[np.ndarray], np.ndarray, np.ndarray]:
         """Detect AR markers in an image and draw them.
 
         Args:
@@ -62,7 +60,7 @@ class GripperArucoDetector:
         image = cv2.aruco.drawDetectedMarkers(image, corners, ids)
         return corners, ids, image
 
-    def detect_aruco_centers(self, image: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def detect_aruco_centers(self, image: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Detect AR markers in an image and return their centers.
 
         Args:
@@ -76,7 +74,7 @@ class GripperArucoDetector:
         centers = np.array([np.mean(c, axis=1) for c in corners])
         return centers, ids
 
-    def detect_center(self, image: np.ndarray) -> Optional[np.ndarray]:
+    def detect_center(self, image: np.ndarray) -> np.ndarray | None:
         """Get the center of the first detected AR marker in an image.
 
         Args:

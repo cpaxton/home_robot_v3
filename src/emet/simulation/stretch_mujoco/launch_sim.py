@@ -1,7 +1,16 @@
-import emet.simulation.stretch_mujoco as stretch_mujoco
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 import click
 import cv2
 
+import emet.simulation.stretch_mujoco as stretch_mujoco
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 
 
@@ -9,13 +18,9 @@ from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 @click.option("--scene-xml-path", help="Path to a scene xml file")
 @click.option("--headless", is_flag=True, help="Run the simulation headless")
 @click.option("--imagery", is_flag=True, help="Show the cameras' imagery")
-def main(
-    scene_xml_path: str,
-    headless: bool,
-    imagery: bool
-) -> None:
+def main(scene_xml_path: str, headless: bool, imagery: bool) -> None:
     cameras_to_use = StretchCameras.all() if imagery else []
-    sim = stretch_mujoco.StretchMujocoSimulator(scene_xml_path,cameras_to_use=cameras_to_use)
+    sim = stretch_mujoco.StretchMujocoSimulator(scene_xml_path, cameras_to_use=cameras_to_use)
     sim.start(headless=headless)
     try:
         while sim.is_running():

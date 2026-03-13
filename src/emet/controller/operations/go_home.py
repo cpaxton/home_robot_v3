@@ -19,10 +19,10 @@ class GoHomeOperation(ManagedOperation):
         return self.agent is not None
 
     def run(self) -> None:
-        self.intro(f"Attempting to go home")
+        self.intro("Attempting to go home")
         self.agent.go_home()
         self._successful = True
-        self.cheer(f"Done going home")
+        self.cheer("Done going home")
 
     def was_successful(self) -> bool:
         return self._successful

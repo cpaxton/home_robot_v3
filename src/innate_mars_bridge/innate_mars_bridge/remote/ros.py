@@ -3,16 +3,23 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """ROS2 interface for Innate Mars: joint state, odometry, TF, and cameras."""
 
 from __future__ import annotations
 
 import threading
-from typing import Optional
 
 import numpy as np
-import rclpy
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
@@ -27,9 +34,7 @@ from innate_mars_bridge.constants import (
     HEAD_LEFT_IMAGE_TOPIC,
     HEAD_RIGHT_CAMERA_INFO_TOPIC,
     HEAD_RIGHT_IMAGE_TOPIC,
-    MAP_FRAME,
     ODOM_FRAME,
-    BASE_FOOTPRINT_FRAME,
     ODOM_TOPIC,
 )
 from innate_mars_bridge.ros.camera import RosCamera, RosCameraNoInfo
@@ -55,12 +60,8 @@ class InnateMarsRosInterface(Node):
         self.tf2_listener = TransformListener(self.tf2_buffer, self)
 
         # Subscribers
-        self._joint_sub = self.create_subscription(
-            JointState, ARM_STATE_TOPIC, self._joint_callback, 10
-        )
-        self._odom_sub = self.create_subscription(
-            Odometry, ODOM_TOPIC, self._odom_callback, 10
-        )
+        self._joint_sub = self.create_subscription(JointState, ARM_STATE_TOPIC, self._joint_callback, 10)
+        self._odom_sub = self.create_subscription(Odometry, ODOM_TOPIC, self._odom_callback, 10)
 
         # Cameras: head left, head right (with camera_info), EE (no camera_info on hardware)
         self.head_left_cam = RosCamera(
@@ -93,8 +94,8 @@ class InnateMarsRosInterface(Node):
 
     def _joint_callback(self, msg: JointState):
         with self._js_lock:
-            name_to_pos = dict(zip(msg.name, msg.position))
-            name_to_vel = dict(zip(msg.name, msg.velocity)) if msg.velocity else {}
+            name_to_pos = dict(zip(msg.name, msg.position, strict=False))
+            name_to_vel = dict(zip(msg.name, msg.velocity, strict=False)) if msg.velocity else {}
             for i, name in enumerate(self._joint_names):
                 if name in name_to_pos:
                     self._joint_positions[i] = name_to_pos[name]
@@ -125,7 +126,7 @@ class InnateMarsRosInterface(Node):
         theta = np.arctan2(mat[1, 0], mat[0, 0])
         return np.array([x, y, theta], dtype=np.float64)
 
-    def get_frame_pose(self, frame: str, base_frame: Optional[str] = None, timeout_s: float = 1.0):
+    def get_frame_pose(self, frame: str, base_frame: str | None = None, timeout_s: float = 1.0):
         """Look up frame pose in base_frame. Returns 4x4 matrix or None."""
         from rclpy.duration import Duration
         from rclpy.time import Time
@@ -133,9 +134,7 @@ class InnateMarsRosInterface(Node):
         if base_frame is None:
             base_frame = ODOM_FRAME
         try:
-            stamped = self.tf2_buffer.lookup_transform(
-                base_frame, frame, Time(), Duration(seconds=timeout_s)
-            )
+            stamped = self.tf2_buffer.lookup_transform(base_frame, frame, Time(), Duration(seconds=timeout_s))
             trans, rot = transform_to_list(stamped)
             return to_matrix(trans, rot)
         except TransformException:

@@ -15,9 +15,9 @@ import timeit
 import click
 from termcolor import colored
 
-from emet.controller.zmq_client import StretchZmqClient
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
+from emet.controller.zmq_client import StretchZmqClient
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
 
 
@@ -28,15 +28,9 @@ from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_p
     help="The model to use (gemma or llama)",
     type=click.Choice(get_llm_choices()),
 )
-@click.option(
-    "--prompt", default="simple", help="The prompt to use", type=click.Choice(get_prompt_choices())
-)
-@click.option(
-    "--max_audio_duration", default=10.0, help="The maximum duration of the audio recording"
-)
-@click.option(
-    "--silence_limit", default=2.0, help="The amount of silence before stopping the recording"
-)
+@click.option("--prompt", default="simple", help="The prompt to use", type=click.Choice(get_prompt_choices()))
+@click.option("--max_audio_duration", default=10.0, help="The maximum duration of the audio recording")
+@click.option("--silence_limit", default=2.0, help="The amount of silence before stopping the recording")
 @click.option("--robot_ip", default="", help="IP address of the robot")
 @click.option("--voice", default=False, help="Enable voice chat", is_flag=True)
 @click.option("--talk", default=False, help="Robot will speak its responses out load", is_flag=True)
@@ -69,7 +63,7 @@ def main(
 
     if voice:
         print("Talk to me, Stretch! If you don't say anything, I will give up.")
-    for i in range(50):
+    for _i in range(50):
         if voice:
             # Record audio
             input(colored("Press enter to speak or ctrl+c to exit.", "yellow"))
@@ -77,9 +71,7 @@ def main(
             # Create a temporary file
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_audio_file:
                 temp_filename = temp_audio_file.name
-                audio_recorder.record(
-                    temp_filename, duration=max_audio_duration, silence_limit=silence_limit
-                )
+                audio_recorder.record(temp_filename, duration=max_audio_duration, silence_limit=silence_limit)
 
                 # Transcribe the audio file
                 input_text = whisper.transcribe_file(temp_filename)

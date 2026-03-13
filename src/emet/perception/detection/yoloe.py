@@ -14,7 +14,6 @@
 
 
 import argparse
-from typing import List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -55,6 +54,7 @@ def merge_masks(masks, height, width) -> np.ndarray:
 
     return merged_mask
 
+
 def draw_masks(masks, height, width):
     panoptic_masks = []
     for mask in masks:
@@ -75,10 +75,10 @@ class YoloEPerception(PerceptionModule):
         self,
         config_file=None,
         vocabulary="coco",
-        class_list: Optional[Union[List[str], Tuple[str]]] = None,
+        class_list: list[str] | tuple[str] | None = None,
         verbose: bool = False,
         size: str = "l",
-        confidence_threshold: Optional[float] = None,
+        confidence_threshold: float | None = None,
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
     ):
         """Load trained YOLO model for inference.
@@ -110,16 +110,16 @@ class YoloEPerception(PerceptionModule):
 
         self.num_sem_categories = 80
 
-    def reset_vocab(self, new_vocab: List[str], vocab_type="custom"):
+    def reset_vocab(self, new_vocab: list[str], vocab_type="custom"):
         self.class_list = new_vocab
 
     def predict(
         self,
         rgb: np.ndarray,
-        depth: Optional[np.ndarray] = None,
-        depth_threshold: Optional[float] = None,
+        depth: np.ndarray | None = None,
+        depth_threshold: float | None = None,
         draw_instance_predictions: bool = True,
-        confidence_threshold: Optional[float] = None,
+        confidence_threshold: float | None = None,
     ) -> Observations:
         """
         Arguments:
@@ -150,7 +150,7 @@ class YoloEPerception(PerceptionModule):
             pred = self.model(image, verbose=self.verbose, conf=self.confidence)
         else:
             pred = self.model(image, verbose=self.verbose, conf=confidence_threshold)
-        task_observations = dict()
+        task_observations = {}
 
         if pred[0].boxes is None:
             task_observations["semantic_frame"] = None
@@ -197,13 +197,13 @@ class YoloEPerception(PerceptionModule):
 
     def detect_object(
         self,
-        rgb: Union[np.ndarray, torch.Tensor, Image.Image],
-        text: Union[str, List[str]],
-        confidence_threshold: Optional[float] = None,
-        output_mask: Optional[bool] = True,
+        rgb: np.ndarray | torch.Tensor | Image.Image,
+        text: str | list[str],
+        confidence_threshold: float | None = None,
+        output_mask: bool | None = True,
         visualize_mask: bool = False,
-        mask_filename: Optional[str] = None,
-        box_filename: Optional[str] = None,
+        mask_filename: str | None = None,
+        box_filename: str | None = None,
     ):
         """Try to find target objects given one or many text queries.
         Arguments:
@@ -240,7 +240,7 @@ class YoloEPerception(PerceptionModule):
         depth: torch.Tensor,
         camera_K: torch.Tensor,
         camera_pose: torch.Tensor,
-        confidence_threshold: Optional[float] = None,
+        confidence_threshold: float | None = None,
         depth_threshold: float = 3.0,
     ):
         height, width = depth.squeeze().shape
@@ -251,10 +251,9 @@ class YoloEPerception(PerceptionModule):
         scores, boxes = self.detect_object(
             rgb=rgb, text=text, confidence_threshold=confidence_threshold, output_mask=False
         )
-        for idx, (score, bbox) in enumerate(
-            sorted(zip(scores, boxes), key=lambda x: x[0], reverse=True)
+        for _idx, (_score, bbox) in enumerate(
+            sorted(zip(scores, boxes, strict=False), key=lambda x: x[0], reverse=True)
         ):
-
             tl_x, tl_y, br_x, br_y = bbox
             w, h = depth.shape
             tl_x, tl_y, br_x, br_y = (
@@ -283,13 +282,11 @@ def get_parser():
     parser.add_argument(
         "--input",
         nargs="+",
-        help="A list of space separated input images; "
-        "or a single glob pattern such as 'directory/*.jpg'",
+        help="A list of space separated input images; or a single glob pattern such as 'directory/*.jpg'",
     )
     parser.add_argument(
         "--output",
-        help="A file or directory to save output visualizations. "
-        "If not given, will show output in an OpenCV window.",
+        help="A file or directory to save output visualizations. If not given, will show output in an OpenCV window.",
     )
     parser.add_argument(
         "--vocabulary",

@@ -1,25 +1,32 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 import dataclasses
+import importlib.resources
 import math
 import re
 import time
 import xml.etree.ElementTree as ET
-from typing import TYPE_CHECKING, Callable, Tuple
+from collections.abc import Callable
+from functools import wraps
+from typing import TYPE_CHECKING
 
 import cv2
-import numpy as np
-import importlib.resources
-import urchin as urdf_loader
-
-
-from functools import wraps
-
 import mujoco
-import mujoco._functions
 import mujoco._callbacks
-import mujoco._render
 import mujoco._enums
+import mujoco._functions
+import mujoco._render
 import mujoco.viewer
 import numpy as np
+import urchin as urdf_loader
+
 try:
     from mujoco import MjModel
 except ImportError:
@@ -49,11 +56,9 @@ mesh_files_directory_path = pkg_path + f"/{model_name}/meshes"
 def require_connection(function):
     """Wraps class methods that need self"""
 
-    def wrapper_function(self:"StretchMujocoSimulator", *args, **kwargs):
+    def wrapper_function(self: "StretchMujocoSimulator", *args, **kwargs):
         if not self.is_running():
-            raise ConnectionError(
-                "The Stretch Mujoco Simulator is not running. Use the start() method to start it."
-            )
+            raise ConnectionError("The Stretch Mujoco Simulator is not running. Use the start() method to start it.")
         return function(self, *args, **kwargs)
 
     return wrapper_function
@@ -72,22 +77,32 @@ def Rx(theta):
     Rotation matrix about x-axis
     """
     return np.matrix(
-        [[1,0,0], [0, math.cos(theta), -math.sin(theta)], [0, math.sin(theta), math.cos(theta)], ]
+        [
+            [1, 0, 0],
+            [0, math.cos(theta), -math.sin(theta)],
+            [0, math.sin(theta), math.cos(theta)],
+        ]
     )
+
+
 def Ry(theta):
     """
     Rotation matrix about y-axis
     """
     return np.matrix(
-        [[math.cos(theta), 0, math.sin(theta)],  [0, 1, 0],[-math.sin(theta), 0, math.cos(theta)],]
+        [
+            [math.cos(theta), 0, math.sin(theta)],
+            [0, 1, 0],
+            [-math.sin(theta), 0, math.cos(theta)],
+        ]
     )
+
+
 def Rz(theta):
     """
     Rotation matrix about z-axis
     """
-    return np.matrix(
-        [[math.cos(theta), -math.sin(theta), 0], [math.sin(theta), math.cos(theta), 0], [0, 0, 1]]
-    )
+    return np.matrix([[math.cos(theta), -math.sin(theta), 0], [math.sin(theta), math.cos(theta), 0], [0, 0, 1]])
 
 
 def limit_depth_distance(depth_image_meters: np.ndarray, max_depth: float) -> np.ndarray:
@@ -149,13 +164,12 @@ class FpsCounter:
         self.fps = 0
         """The actual fps count"""
 
-        self.sim_to_real_ratio:float|None = None
+        self.sim_to_real_ratio: float | None = None
         """Sim time compared with real time"""
 
         self._last_sim_time = 0
 
-
-    def tick(self, sim_time:float|None = None):
+    def tick(self, sim_time: float | None = None):
         """
         Call this during step() to update the fps counter.
 
@@ -169,19 +183,19 @@ class FpsCounter:
             new_wall_time = time.perf_counter()
 
             if sim_time:
-                self.sim_to_real_ratio = (sim_time - self._last_sim_time)/(new_wall_time - self._wall_time)
+                self.sim_to_real_ratio = (sim_time - self._last_sim_time) / (new_wall_time - self._wall_time)
                 self._last_sim_time = sim_time
 
             self.fps = self._fps_counter / elapsed
             self._wall_time = new_wall_time
             self._fps_counter = 0
 
-
     @property
     def sim_to_real_time_ratio_msg(self):
         if self.sim_to_real_ratio is None:
             return "sim_to_real_ratio is not set. Call `tick(sim_time=)` with the sim_time to calculate it."
         return f"Sim is running {self.sim_to_real_ratio:.3f}x as fast as realtime"
+
 
 class URDFmodel:
     def __init__(self) -> None:
@@ -261,7 +275,7 @@ def xml_remove_subelement(xml_str: str, subelement: str) -> str:
     return ET.tostring(root, encoding="unicode")
 
 
-def xml_remove_tag_by_name(xml_string: str, tag: str, name: str) -> Tuple[str, dict | None]:
+def xml_remove_tag_by_name(xml_string: str, tag: str, name: str) -> tuple[str, dict | None]:
     """
     Remove a subelement from an XML string with a specified tag and name attribute
     """
@@ -285,9 +299,7 @@ def xml_remove_tag_by_name(xml_string: str, tag: str, name: str) -> Tuple[str, d
     return ET.tostring(root, encoding="unicode"), removed_body_attrib
 
 
-def xml_modify_body_pos(
-    xml_string: str, tag: str, name: str, pos: np.ndarray, quat: np.ndarray
-) -> str:
+def xml_modify_body_pos(xml_string: str, tag: str, name: str, pos: np.ndarray, quat: np.ndarray) -> str:
     """
     Modify the position attribute of a tag with a specified name
     """
@@ -318,20 +330,20 @@ def ensure_mesh_inertia(xml_str: str) -> str:
     """Add inertia=\"shell\" to every <mesh> tag that lacks it (MuJoCo 2.x/3.x requirement for thin meshes)."""
     return re.sub(
         r"<mesh\s+([^>]*?)>",
-        lambda m: m.group(0)
-        if "inertia=" in m.group(0)
-        else "<mesh inertia=\"shell\" " + m.group(1) + ">",
+        lambda m: m.group(0) if "inertia=" in m.group(0) else '<mesh inertia="shell" ' + m.group(1) + ">",
         xml_str,
     )
 
 
 def _strip_geom_shellinertia(xml_str: str) -> str:
     """Remove shellinertia from <geom> tags so inertia comes only from the mesh asset (MuJoCo 3.x)."""
+
     def repl(m):
         tag = m.group(0)
         # Remove shellinertia="true" or shellinertia="false"
         tag = re.sub(r'\sshellinertia="[^"]*"', "", tag)
         return tag
+
     return re.sub(r"<geom\s+[^>]*?>", repl, xml_str)
 
 
@@ -343,23 +355,19 @@ def get_absolute_path_stretch_xml(robot_pose_attrib: dict | None = None) -> str:
     Returns:
         str: Path to the generated XML file
     """
-    print("DEFAULT XML: {}".format(default_robot_xml_path))
+    print(f"DEFAULT XML: {default_robot_xml_path}")
 
-    with open(default_robot_xml_path, "r") as f:
+    with open(default_robot_xml_path) as f:
         default_robot_xml = f.read()
 
-    default_robot_xml = re.sub(
-        'assetdir="assets"', f'assetdir="{models_path + "/assets"}"', default_robot_xml
-    )
+    default_robot_xml = re.sub('assetdir="assets"', f'assetdir="{models_path + "/assets"}"', default_robot_xml)
 
     # find all the line which has the pattrn {file="something.type"}
     # and replace the file path with the absolute path
     pattern = r'file="(.+?)"'
     for match in re.finditer(pattern, default_robot_xml):
         file_path = match.group(1)
-        default_robot_xml = default_robot_xml.replace(
-            file_path, models_path + "/assets/" + file_path
-        )
+        default_robot_xml = default_robot_xml.replace(file_path, models_path + "/assets/" + file_path)
 
     # MuJoCo 2.x/3.x: mesh assets need inertia (e.g. shell); geom shellinertia can conflict
     default_robot_xml = ensure_mesh_inertia(default_robot_xml)
@@ -380,9 +388,7 @@ def get_absolute_path_stretch_xml(robot_pose_attrib: dict | None = None) -> str:
     return models_path + "/stretch_temp_abs.xml"
 
 
-def map_between_ranges(
-    value: float, from_min_max: Tuple[float, float], to_min_max: Tuple[float, float]
-) -> float:
+def map_between_ranges(value: float, from_min_max: tuple[float, float], to_min_max: tuple[float, float]) -> float:
     """
     Map a value from one range to another
     """
@@ -418,7 +424,7 @@ def dataclass_from_dict(klass, dict_data: dict):
 
 
 def block_until_check_succeeds(
-    wait_timeout: float|None, check: Callable[[], bool], is_alive: Callable[[], bool]
+    wait_timeout: float | None, check: Callable[[], bool], is_alive: Callable[[], bool]
 ) -> bool:
     """Blocks until the check callback succeeds"""
 
@@ -454,12 +460,8 @@ def switch_to_glfw_renderer(mjmodel: MjModel, renderer: mujoco.Renderer):
 
     renderer._gl_context.make_current()
 
-    renderer._mjr_context = mujoco._render.MjrContext(
-        mjmodel, mujoco._enums.mjtFontScale.mjFONTSCALE_150.value
-    )
-    mujoco._render.mjr_setBuffer(
-        mujoco._enums.mjtFramebuffer.mjFB_OFFSCREEN.value, renderer._mjr_context
-    )
+    renderer._mjr_context = mujoco._render.MjrContext(mjmodel, mujoco._enums.mjtFontScale.mjFONTSCALE_150.value)
+    mujoco._render.mjr_setBuffer(mujoco._enums.mjtFramebuffer.mjFB_OFFSCREEN.value, renderer._mjr_context)
     renderer._mjr_context.readDepthMap = mujoco._enums.mjtDepthMap.mjDEPTH_ZEROFAR
 
 
@@ -467,6 +469,7 @@ try:
     # Only Python >12 has override.
     override = __import__("typing").override
 except:  # noqa
+
     def override(func):
         @wraps(func)
         def wrapper(*args, **kwargs):

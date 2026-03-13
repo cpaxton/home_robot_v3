@@ -1,18 +1,31 @@
 #!/usr/bin/env python3
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 """
 Create minimal MuJoCo placeholder model.xml for any fixtures/accessories path
 that is referenced in the registry but missing on disk. Lets emet serve mujoco
 --use-robocasa work when the full lightwheel fixture pack was not extracted
 (e.g. zip had a different structure or some assets are missing).
 """
+
 import os
 import sys
 
 try:
     import robocasa
     import yaml
-except ImportError as e:
-    print("Need robocasa and pyyaml. Run from project env: uv run python scripts/ensure_robocasa_placeholders.py", file=sys.stderr)
+except ImportError:
+    print(
+        "Need robocasa and pyyaml. Run from project env: uv run python scripts/ensure_robocasa_placeholders.py",
+        file=sys.stderr,
+    )
     sys.exit(1)
 
 PLACEHOLDER_XML = """<mujoco model="placeholder">
@@ -61,7 +74,7 @@ def main():
             data = yaml.safe_load(f)
         if not data:
             continue
-        for key, val in data.items():
+        for _key, val in data.items():
             if isinstance(val, dict) and "xml" in val:
                 xml = val["xml"].strip()
                 if xml.startswith("fixtures/"):

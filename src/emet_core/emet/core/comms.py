@@ -7,7 +7,6 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import Tuple
 
 import zmq
 from zmq import Socket
@@ -52,9 +51,7 @@ class CommsNode(BaseCommsNode):
             recv_address = f"tcp://{desktop_ip}:" + str(port)
         return recv_address
 
-    def _make_sub_socket(
-        self, recv_port: int, use_remote_computer: bool = True
-    ) -> Tuple[Socket, str]:
+    def _make_sub_socket(self, recv_port: int, use_remote_computer: bool = True) -> tuple[Socket, str]:
 
         # Set up the receiver/subscriber using ZMQ
         recv_socket = self._new_sub_socket()
@@ -76,18 +73,14 @@ class ClientCommsNode(BaseCommsNode):
             address = "tcp://" + "127.0.0.1" + ":" + str(port)
         return address
 
-    def _make_pub_socket(
-        self, send_port: int, robot_ip: str, use_remote_computer: bool = True
-    ) -> Socket:
+    def _make_pub_socket(self, send_port: int, robot_ip: str, use_remote_computer: bool = True) -> Socket:
         socket = self._new_pub_socket()
         addr = self._get_ip_address(send_port, robot_ip, use_remote_computer)
         print(f"Publishing on {addr}...")
         socket.connect(addr)
         return socket
 
-    def _make_sub_socket(
-        self, recv_port: int, robot_ip: str, use_remote_computer: bool = True
-    ) -> Tuple[Socket, str]:
+    def _make_sub_socket(self, recv_port: int, robot_ip: str, use_remote_computer: bool = True) -> tuple[Socket, str]:
         recv_socket = self._new_sub_socket()
         addr = self._get_ip_address(recv_port, robot_ip, use_remote_computer)
         print(f"Listening on {addr}...")

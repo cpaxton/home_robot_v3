@@ -251,7 +251,6 @@ def main(
     # Parse things and listen to the user
     ok = True
     while ok:
-        say_this = None
         if llm_client is None:
             # Call the LLM client and parse
             explore = input(

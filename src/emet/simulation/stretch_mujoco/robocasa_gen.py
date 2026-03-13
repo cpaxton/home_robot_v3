@@ -6,6 +6,7 @@
 #
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
+"""Modified version of robocasa's kitchen scene generation script."""
 
 from collections import OrderedDict
 
@@ -35,7 +36,7 @@ from emet.simulation.stretch_mujoco.utils import (
 
 
 def get_styles() -> OrderedDict:
-    raw_styles = dict(map(lambda item: (item.value, item.name.lower().capitalize()), StyleType))
+    raw_styles = {item.value: item.name.lower().capitalize() for item in StyleType}
     styles = OrderedDict()
     for k in sorted(raw_styles.keys()):
         if k < 0:
@@ -58,11 +59,6 @@ layouts = OrderedDict(
         (9, "Wraparound"),
     ]
 )
-
-"""
-Modified version of robocasa's kitchen scene generation script
-https://github.com/robocasa/robocasa/blob/main/robocasa/demos/demo_kitchen_scenes.py
-"""
 
 
 def choose_option(options, option_name, show_keys=False, default=None, default_message=None):

@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Helpers for memory save/load UX (print messages, view instructions).
@@ -17,7 +26,7 @@ if TYPE_CHECKING:
 logger = Logger("memory")
 
 
-def print_memory_state(state: "MemoryState") -> None:
+def print_memory_state(state: MemoryState) -> None:
     """Print a readable summary of a loaded MemoryState (backend, point cloud, frames, scene graph)."""
     from emet.memory.format import MemoryState
 
@@ -49,7 +58,7 @@ def print_memory_state(state: "MemoryState") -> None:
     if state.graph is not None:
         g = state.graph
         print(f"  Scene graph: {len(g.nodes)} nodes, {len(g.edges)} edges")
-        for i, node in enumerate(g.nodes[:10]):
+        for _i, node in enumerate(g.nodes[:10]):
             labels = ", ".join(node.labels) if node.labels else "(no labels)"
             print(f"    Node {node.node_id}: xyz={node.xyz} labels=[{labels}]")
         if len(g.nodes) > 10:
@@ -106,7 +115,4 @@ def print_memory_view_help_on_quit(path: str | None) -> None:
         return
     path_abs = os.path.abspath(path)
     print()
-    print(
-        colored("To view this memory: ", "yellow")
-        + colored(f"emet show-memory {path_abs}", "cyan")
-    )
+    print(colored("To view this memory: ", "yellow") + colored(f"emet show-memory {path_abs}", "cyan"))

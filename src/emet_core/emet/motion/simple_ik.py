@@ -81,7 +81,7 @@ def angle_diff_rad(target_rad, current_rad):
 
 
 def nan_in_configuration(configuration):
-    for k, v in configuration.items():
+    for _k, v in configuration.items():
         if math.isnan(v) or np.isnan(v):
             return True
     return False
@@ -146,19 +146,15 @@ class SimpleIK:
         self.rotary_end_effector_link = self.rotary_urdf.link_map[self.end_effector_name]
         self.prismatic_end_effector_link = self.prismatic_urdf.link_map[self.end_effector_name]
 
-        zero_cfg = {k: 0.0 for k in self.rotary_base_joints}
+        zero_cfg = dict.fromkeys(self.rotary_base_joints, 0.0)
         zero_fk = self.rotary_urdf.link_fk(cfg=zero_cfg, links=[self.end_effector_name])
-        zero_wrist_position = zero_fk[self.rotary_end_effector_link].dot(
-            np.array([0.0, 0.0, 0.0, 1.0])
-        )[:3]
+        zero_wrist_position = zero_fk[self.rotary_end_effector_link].dot(np.array([0.0, 0.0, 0.0, 1.0]))[:3]
 
         # find arm unit vector
         arm_cfg = zero_cfg.copy()
         arm_cfg["joint_arm_l0"] = 1.0
         arm_fk = self.rotary_urdf.link_fk(cfg=arm_cfg, links=[self.end_effector_name])
-        arm_wrist_position = arm_fk[self.rotary_end_effector_link].dot(
-            np.array([0.0, 0.0, 0.0, 1.0])
-        )[:3]
+        arm_wrist_position = arm_fk[self.rotary_end_effector_link].dot(np.array([0.0, 0.0, 0.0, 1.0]))[:3]
         self.a_vec = arm_wrist_position - zero_wrist_position
         self.a_vec = self.a_vec / np.linalg.norm(self.a_vec)
 
@@ -166,9 +162,7 @@ class SimpleIK:
         lift_cfg = zero_cfg.copy()
         lift_cfg["joint_lift"] = 1.0
         lift_fk = self.rotary_urdf.link_fk(cfg=lift_cfg, links=[self.end_effector_name])
-        lift_wrist_position = lift_fk[self.rotary_end_effector_link].dot(
-            np.array([0.0, 0.0, 0.0, 1.0])
-        )[:3]
+        lift_wrist_position = lift_fk[self.rotary_end_effector_link].dot(np.array([0.0, 0.0, 0.0, 1.0]))[:3]
         self.l_vec = lift_wrist_position - zero_wrist_position
         self.l_vec = self.l_vec / np.linalg.norm(self.l_vec)
 
@@ -225,9 +219,7 @@ class SimpleIK:
 
         if use_urdf:
             urdf_fk = self.rotary_urdf.link_fk(cfg=cfg, links=[self.end_effector_name])
-            wrist_position = urdf_fk[self.rotary_end_effector_link].dot(
-                np.array([0.0, 0.0, 0.0, 1.0])
-            )[:3]
+            wrist_position = urdf_fk[self.rotary_end_effector_link].dot(np.array([0.0, 0.0, 0.0, 1.0]))[:3]
         else:
             base_angle = cfg["joint_mobile_base_rotation"]
             lift_distance = cfg["joint_lift"] + self.l_offset
@@ -244,9 +236,7 @@ class SimpleIK:
 
     def ik_rotary_base(self, wrist_position):
         goal = np.array(wrist_position)
-        T, L, A = ie.calibrated_ik_with_rotary_base(
-            goal, b1=self.b1, l_vector=self.l_vec, a_vector=self.a_vec
-        )
+        T, L, A = ie.calibrated_ik_with_rotary_base(goal, b1=self.b1, l_vector=self.l_vec, a_vector=self.a_vec)
         cfg = {}
         cfg["joint_mobile_base_rotation"] = T
         cfg["joint_lift"] = L - self.l_offset
@@ -276,9 +266,7 @@ class SimpleIK:
 
         if use_urdf:
             urdf_fk = self.prismatic_urdf.link_fk(cfg=cfg, links=[self.end_effector_name])
-            wrist_position = urdf_fk[self.prismatic_end_effector_link].dot(
-                np.array([0.0, 0.0, 0.0, 1.0])
-            )[:3]
+            wrist_position = urdf_fk[self.prismatic_end_effector_link].dot(np.array([0.0, 0.0, 0.0, 1.0]))[:3]
         else:
             base_distance = cfg["joint_mobile_base_translation"]
             lift_distance = cfg["joint_lift"] + self.l_offset
@@ -295,9 +283,7 @@ class SimpleIK:
 
     def ik_prismatic_base(self, wrist_position):
         goal = np.array(wrist_position)
-        M, L, A = ie.calibrated_ik_with_prismatic_base(
-            goal, b1=self.b1, l_vector=self.l_vec, a_vector=self.a_vec
-        )
+        M, L, A = ie.calibrated_ik_with_prismatic_base(goal, b1=self.b1, l_vector=self.l_vec, a_vector=self.a_vec)
         cfg = {}
         cfg["joint_mobile_base_translation"] = M
         cfg["joint_lift"] = L - self.l_offset
@@ -307,7 +293,6 @@ class SimpleIK:
 
 
 if __name__ == "__main__":
-
     compare_with_optas_ik = False
 
     if compare_with_optas_ik:
@@ -375,9 +360,9 @@ if __name__ == "__main__":
         print("joint configuration =", cfg)
         print("wrist_position_simple =", wrist_position_simple)
         print("wrist_position_urdf =", wrist_position_urdf)
-        print("time for Simple FK =", "{:.4f}".format(duration * 1000.0), "milliseconds")
+        print("time for Simple FK =", f"{duration * 1000.0:.4f}", "milliseconds")
         speedup = old_duration / duration
-        print("speedup over urchin FK =", "{:.4f}".format(speedup))
+        print("speedup over urchin FK =", f"{speedup:.4f}")
         if wrist_position_simple is not None:
             error = np.linalg.norm(wrist_position_urdf - wrist_position_simple)
             print("ERROR =", error)
@@ -422,13 +407,13 @@ if __name__ == "__main__":
             error = np.linalg.norm(np.array(wrist_position_goal) - wrist_position_simple)
             print(
                 "time for Simple IK =",
-                "{:.4f}".format(duration * 1000.0),
+                f"{duration * 1000.0:.4f}",
                 "milliseconds",
             )
             print("ERROR =", error)
             if compare_with_optas_ik:
                 speedup = old_duration / duration
-                print("speedup over Optas IK =", "{:.4f}".format(speedup))
+                print("speedup over Optas IK =", f"{speedup:.4f}")
 
     print()
     print("--- TEST SIMPLE FK FOR PRISMATIC BASE ---")
@@ -469,9 +454,9 @@ if __name__ == "__main__":
         print("joint configuration =", cfg)
         print("wrist_position_simple =", wrist_position_simple)
         print("wrist_position_urdf =", wrist_position_urdf)
-        print("time for Simple FK =", "{:.4f}".format(duration * 1000.0), "milliseconds")
+        print("time for Simple FK =", f"{duration * 1000.0:.4f}", "milliseconds")
         speedup = old_duration / duration
-        print("speedup over urchin FK =", "{:.4f}".format(speedup))
+        print("speedup over urchin FK =", f"{speedup:.4f}")
         if wrist_position_simple is not None:
             error = np.linalg.norm(wrist_position_urdf - wrist_position_simple)
             print("ERROR =", error)
@@ -501,7 +486,7 @@ if __name__ == "__main__":
             error = np.linalg.norm(np.array(wrist_position_goal) - wrist_position_simple)
             print(
                 "time for Simple IK =",
-                "{:.4f}".format(duration * 1000.0),
+                f"{duration * 1000.0:.4f}",
                 "milliseconds",
             )
             print("ERROR =", error)

@@ -1,19 +1,27 @@
 #!/usr/bin/env python
 # Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
 # Stretch-only MuJoCo ZMQ server. Imported only when --robot stretch to avoid loading pinocchio/hppfcl for rby1/galaxea_r1.
 
-import time
 import threading
+import time
 import timeit
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 from overrides import override
 
+from emet.motion.constants import STRETCH_CAMERA_FRAME
 from emet.simulation.stretch_mujoco import StretchMujocoSimulator
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
-
-from emet.motion.constants import STRETCH_CAMERA_FRAME
 
 # Robocasa is imported lazily when --use-robocasa is used, to avoid loading robosuite/numba
 # on every server start (and to avoid numba init failures when not using Robocasa).
@@ -23,17 +31,15 @@ _ROBOCASA_IMPORT_FAILED = True
 import emet.motion.constants as constants
 import emet.utils.compression as compression
 import emet.utils.logger as logger
-from emet.utils.port_utils import kill_processes_on_port
 from emet.core.server import BaseZmqServer
 from emet.motion import HelloStretchIdx
 from emet.motion.control.goto_controller import GotoVelocityController
+from emet.robots.base import RobotSpec
+from emet.robots.stretch import StretchBackend
+from emet.utils.assets import get_mujoco_models_path
 from emet.utils.config import get_control_config
 from emet.utils.geometry import pose_global_to_base, xyt_base_to_global, xyt_global_to_base
 from emet.utils.image import scale_camera_matrix
-
-from emet.robots.stretch import StretchBackend
-from emet.robots.base import RobotSpec
-from emet.utils.assets import get_mujoco_models_path
 
 default_scene_xml_path = str(get_mujoco_models_path() / "scene.xml")
 
@@ -98,7 +104,6 @@ class MujocoZmqServer(BaseZmqServer):
 
         # Get mjdata and mjmodel from simulator
         mjdata = self.robot_sim.mjdata
-        mjmodel = self.robot_sim.mjmodel
 
         xyz = mjdata.body(body_name).xpos
         rotation = mjdata.body("base_link").xmat.reshape(3, 3)
@@ -140,7 +145,6 @@ class MujocoZmqServer(BaseZmqServer):
 
         # Get mjdata and mjmodel from simulator
         mjdata = self.robot_sim.mjdata
-        mjmodel = self.robot_sim.mjmodel
 
         # Compute absolute goal
         if relative:
@@ -182,16 +186,16 @@ class MujocoZmqServer(BaseZmqServer):
     def __init__(
         self,
         *args,
-        scene_path: Optional[str] = None,
-        scene_model: Optional[str] = None,
+        scene_path: str | None = None,
+        scene_model: str | None = None,
         simulation_rate: int = 80,
         camera_hz: int = 15,
         config_name: str = "noplan_velocity_sim",
-        objects_info: Optional[Dict[str, Any]] = None,
+        objects_info: dict[str, Any] | None = None,
         no_cameras: bool = False,
         **kwargs,
     ):
-        super(MujocoZmqServer, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         cameras_to_use = [] if no_cameras else self._default_cameras
         # TODO: decide how we want to save scenes, if they should be here in stretch_ai or in stretch_mujoco
         # They should probably stay in stretch mujoco
@@ -261,8 +265,8 @@ class MujocoZmqServer(BaseZmqServer):
         # Is it done?
         self.is_done = False
         # Goal set time
-        self.goal_set_t: Optional[float] = None
-        self.xyt_goal: Optional[np.ndarray] = None
+        self.goal_set_t: float | None = None
+        self.xyt_goal: np.ndarray | None = None
         self._base_controller_at_goal = False
         self.control_mode = "navigation"
         self.controller_finished = True
@@ -355,10 +359,7 @@ class MujocoZmqServer(BaseZmqServer):
                     if not self.controller_finished:
                         self.controller_finished = True
                         self.done_since = timeit.default_timer()
-                    elif (
-                        self.controller_finished
-                        and (timeit.default_timer() - self.done_since) > self.done_t
-                    ):
+                    elif self.controller_finished and (timeit.default_timer() - self.done_since) > self.done_t:
                         self.is_done = True
                 else:
                     self.controller_finished = False
@@ -466,9 +467,7 @@ class MujocoZmqServer(BaseZmqServer):
 
         # Assert posture in ["manipulation", "navigation"]
         if posture not in ["manipulation", "navigation"]:
-            logger.error(
-                f"Posture {posture} not supported. Must be in ['manipulation', 'navigation']"
-            )
+            logger.error(f"Posture {posture} not supported. Must be in ['manipulation', 'navigation']")
             return False
 
         # Set the posture
@@ -577,7 +576,7 @@ class MujocoZmqServer(BaseZmqServer):
             time.sleep(1 / self.simulation_rate)
 
     @override
-    def handle_action(self, action: Dict[str, Any]):
+    def handle_action(self, action: dict[str, Any]):
         """Handle the action received from the client."""
         if "control_mode" in action:
             new_control_mode = action["control_mode"]
@@ -627,7 +626,7 @@ class MujocoZmqServer(BaseZmqServer):
                         logger.error("Gripper move took too long")
                         break
         elif "say" in action:
-            do_nothing = True
+            pass
         if "joint" in action:
             # Move the robot to the given joint configuration
             # Only send the manipulator joints, not gripper or head
@@ -637,9 +636,7 @@ class MujocoZmqServer(BaseZmqServer):
             self.robot_sim.move_to("head_pan", action["head_to"][0])
             self.robot_sim.move_to("head_tilt", action["head_to"][1])
         if "base_velocity" in action:
-            self.robot_sim.set_base_velocity(
-                v_linear=action["base_velocity"]["v"], omega=action["base_velocity"]["w"]
-            )
+            self.robot_sim.set_base_velocity(v_linear=action["base_velocity"]["v"], omega=action["base_velocity"]["w"])
         elif "xyt" in action:
             # Set the goal pose for the simulated velocity controller
             # If relative motion is set, the goal is relative to the current pose
@@ -648,7 +645,7 @@ class MujocoZmqServer(BaseZmqServer):
             self.set_goal_pose(action["xyt"], relative=relative_motion)
 
     @override
-    def get_full_observation_message(self) -> Dict[str, Any]:
+    def get_full_observation_message(self) -> dict[str, Any]:
         """Get the full observation message for the robot. This includes the full state of the robot, including images and depth images."""
         cam_data = self._camera_data
         if cam_data is None:
@@ -697,7 +694,7 @@ class MujocoZmqServer(BaseZmqServer):
         return message
 
     @override
-    def get_state_message(self) -> Dict[str, Any]:
+    def get_state_message(self) -> dict[str, Any]:
         """Get the state message for the robot. This is a smalll message that includes floating point information and booleans like if the robot is homed."""
         q, dq, eff = self.get_joint_state()
         message = {
@@ -715,7 +712,7 @@ class MujocoZmqServer(BaseZmqServer):
         return message
 
     @override
-    def get_servo_message(self) -> Dict[str, Any]:
+    def get_servo_message(self) -> dict[str, Any]:
         """Get messages for e2e policy learning and visual servoing. These are images and depth images, but lower resolution than the large full state observations, and they include the end effector camera."""
 
         cam_data = self._camera_data
@@ -785,4 +782,3 @@ class MujocoZmqServer(BaseZmqServer):
         Returns:
             bool: True if the server is running, False otherwise."""
         return self.running and self.robot_sim.is_running()
-

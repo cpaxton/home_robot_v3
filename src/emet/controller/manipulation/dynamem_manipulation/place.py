@@ -9,7 +9,6 @@
 
 import math
 import os
-from typing import Tuple
 
 import numpy as np
 import open3d as o3d
@@ -18,7 +17,7 @@ from PIL import Image
 
 from .image_publisher import DynamemCamera
 
-Bbox = Tuple[int, int, int, int]
+Bbox = tuple[int, int, int, int]
 
 
 class Placing:
@@ -68,9 +67,7 @@ class Placing:
             int((bbox_y_min + bbox_y_max) / 2),
         ]
         depth_obj = self.depth[bbox_center[1], bbox_center[0]]
-        print(
-            f"{self.query} height and depth: {((bbox_y_max - bbox_y_min) * depth_obj)/self.fy}, {depth_obj}"
-        )
+        print(f"{self.query} height and depth: {((bbox_y_max - bbox_y_min) * depth_obj) / self.fy}, {depth_obj}")
 
         # base movement
         dis = (bbox_center[0] - self.cx) / self.fx * depth_obj
@@ -91,13 +88,7 @@ class Placing:
         )
 
         # Removing all points whose depth is zero(undetermined)
-        zero_depth_seg_mask = (
-            (flat_x != 0)
-            * (flat_y != 0)
-            * (flat_z != 0)
-            * (~np.isnan(flat_z))
-            * seg_mask.reshape(-1)
-        )
+        zero_depth_seg_mask = (flat_x != 0) * (flat_y != 0) * (flat_z != 0) * (~np.isnan(flat_z)) * seg_mask.reshape(-1)
         flat_x = flat_x[zero_depth_seg_mask]
         flat_y = flat_y[zero_depth_seg_mask]
         flat_z = flat_z[zero_depth_seg_mask]
@@ -242,9 +233,7 @@ def visualize_cloud_geometries(
 
     coordinate_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2, origin=[0, 0, 0])
     if translation is not None:
-        coordinate_frame1 = o3d.geometry.TriangleMesh.create_coordinate_frame(
-            size=0.2, origin=[0, 0, 0]
-        )
+        coordinate_frame1 = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2, origin=[0, 0, 0])
         translation[2] = -translation[2]
         coordinate_frame1.translate(translation)
         coordinate_frame1.rotate(rotation)

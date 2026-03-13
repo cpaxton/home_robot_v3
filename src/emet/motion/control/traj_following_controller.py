@@ -12,13 +12,14 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import threading
-from typing import Callable, Optional, Tuple
+from collections.abc import Callable
+from typing import Optional
 
 import numpy as np
 from omegaconf import DictConfig
 
-from emet.utils.config import get_control_config
 from emet.motion.utils.geometry import xyt_global_to_base
+from emet.utils.config import get_control_config
 
 DEFAULT_CFG_NAME = "traj_follower"
 
@@ -39,19 +40,19 @@ class TrajFollower:
 
         self._is_done = True
         self.traj = None
-        self.traj_buffer: Optional[Callable[[float], Tuple[np.ndarray, np.ndarray, bool]]] = None
+        self.traj_buffer: Callable[[float], tuple[np.ndarray, np.ndarray, bool]] | None = None
 
         self.e_int = np.zeros(3)
         self._t_prev = 0
 
-    def update_trajectory(self, traj: Callable[[float], Tuple[np.ndarray, np.ndarray, bool]]):
+    def update_trajectory(self, traj: Callable[[float], tuple[np.ndarray, np.ndarray, bool]]):
         with self._traj_update_lock:
             self.traj_buffer = traj
 
     def is_done(self) -> bool:
         return self._is_done
 
-    def forward(self, xyt: np.ndarray, t: float) -> Tuple[float, float]:
+    def forward(self, xyt: np.ndarray, t: float) -> tuple[float, float]:
         """Returns velocity control command (v, w)"""
         # Check for trajectory updates
         if self.traj_buffer is not None:
@@ -82,7 +83,7 @@ class TrajFollower:
 
     def _feedback_controller(
         self, xyt_des: np.ndarray, dxyt_des: np.ndarray, xyt_curr: np.ndarray, dt: float
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         # Compute reference input
         u_ref = np.array([np.linalg.norm(dxyt_des[:2]), dxyt_des[2]])
 

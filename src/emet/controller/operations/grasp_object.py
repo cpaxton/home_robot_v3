@@ -20,7 +20,6 @@ import random
 import time
 import timeit
 from datetime import datetime
-from typing import Optional, Tuple
 
 import cv2
 import numpy as np
@@ -54,8 +53,8 @@ class GraspObjectOperation(ManagedOperation):
 
     # Task information
     match_method: str = "class"
-    target_object: Optional[str] = None
-    _object_xyz: Optional[np.ndarray] = None
+    target_object: str | None = None
+    _object_xyz: np.ndarray | None = None
 
     # Should we use the previous mask at all?
     use_prev_mask: bool = False
@@ -104,7 +103,7 @@ class GraspObjectOperation(ManagedOperation):
     # ------------------------
 
     # Tracked object features for making sure we are grabbing the right thing
-    tracked_object_features: Optional[torch.Tensor] = None
+    tracked_object_features: torch.Tensor | None = None
 
     # Parameters about how to grasp - less important
     grasp_loose: bool = False
@@ -131,14 +130,12 @@ class GraspObjectOperation(ManagedOperation):
     open_loop: bool = False
 
     # Observation memory
-    observations = MaskTemporalFilter(
-        observation_history_window_size_secs=5.0, observation_history_window_size_n=3
-    )
+    observations = MaskTemporalFilter(observation_history_window_size_secs=5.0, observation_history_window_size_n=3)
 
     def configure(
         self,
-        target_object: Optional[str] = None,
-        object_xyz: Optional[np.ndarray] = None,
+        target_object: str | None = None,
+        object_xyz: np.ndarray | None = None,
         show_object_to_grasp: bool = False,
         servo_to_grasp: bool = True,
         show_servo_gui: bool = True,
@@ -180,9 +177,7 @@ class GraspObjectOperation(ManagedOperation):
         self.match_method = match_method
         self._try_open_loop = try_open_loop
         if self.match_method not in ["class", "feature"]:
-            raise ValueError(
-                f"Unknown match method {self.match_method}. Should be 'class', 'feature'."
-            )
+            raise ValueError(f"Unknown match method {self.match_method}. Should be 'class', 'feature'.")
 
     def _debug_show_point_cloud(self, servo: Observations, current_xyz: np.ndarray) -> None:
         """Show the point cloud for debugging purposes.
@@ -265,7 +260,6 @@ class GraspObjectOperation(ManagedOperation):
         if self.verbose:
             print("[GRASP OBJECT] match method =", self.match_method)
         if self.match_method == "class":
-
             # Get the target class
             target_class = self.target_object
 
@@ -279,9 +273,7 @@ class GraspObjectOperation(ManagedOperation):
                     mask = np.bitwise_or(mask, servo.semantic == iid)
         elif self.match_method == "feature":
             if self.target_object is None:
-                raise ValueError(
-                    f"Target object must be set before running match method {self.match_method}."
-                )
+                raise ValueError(f"Target object must be set before running match method {self.match_method}.")
 
             if self.verbose:
                 print("[GRASP OBJECT] Detecting objects described as", self.target_object)
@@ -293,7 +285,6 @@ class GraspObjectOperation(ManagedOperation):
 
             # Loop over all detected instances
             for iid in np.unique(servo.instance):
-
                 # Ignore the background
                 if iid < 0:
                     continue
@@ -304,9 +295,7 @@ class GraspObjectOperation(ManagedOperation):
                 score = self.agent.compare_features(text_features, features).item()
 
                 # if self.verbose:
-                print(
-                    f" - Score for {iid} is {score} / {self.agent.grasp_feature_match_threshold}."
-                )
+                print(f" - Score for {iid} is {score} / {self.agent.grasp_feature_match_threshold}.")
 
                 # Score is determined based on the feature comparison
                 if score > best_score:
@@ -316,7 +305,7 @@ class GraspObjectOperation(ManagedOperation):
                     all_matches.append((score, iid, features))
             if len(all_matches) > 0:
                 print("[MASK SELECTION] All matches:")
-                for score, iid, features in all_matches:
+                for score, iid, _features in all_matches:
                     print(f" - Matched {iid} with score {score}.")
             if len(all_matches) == 0:
                 print("[MASK SELECTION] No matches found.")
@@ -371,8 +360,8 @@ class GraspObjectOperation(ManagedOperation):
     def get_target_mask(
         self,
         servo: Observations,
-        center: Tuple[int, int],
-    ) -> Optional[np.ndarray]:
+        center: tuple[int, int],
+    ) -> np.ndarray | None:
         """Get target mask to move to. If we do not provide the mask from the previous step, we will simply find the mask with the most points of the correct class. Otherwise, we will try to find the mask that most overlaps with the previous mask. There are two options here: one where we simply find the mask with the most points, and another where we try to find the mask that most overlaps with the previous mask. This is in case we are losing track of particular objects and getting classes mixed up.
 
         Args:
@@ -428,7 +417,7 @@ class GraspObjectOperation(ManagedOperation):
         # Replace underscores, etc
         return self.target_object.replace("_", " ")
 
-    def _grasp(self, distance: Optional[float] = None) -> bool:
+    def _grasp(self, distance: float | None = None) -> bool:
         """Helper function to close gripper around object.
 
         Returns:
@@ -513,9 +502,7 @@ class GraspObjectOperation(ManagedOperation):
         """Use visual servoing to grasp the object."""
 
         if instance is not None:
-            self.intro(
-                f"Visual servoing to grasp object {instance.global_id} {instance.category_id=}."
-            )
+            self.intro(f"Visual servoing to grasp object {instance.global_id} {instance.category_id=}.")
         else:
             self.intro("Visual servoing to grasp {self.target_object} at {self._object_xyz}.")
 
@@ -523,7 +510,6 @@ class GraspObjectOperation(ManagedOperation):
             self.warn("If you want to stop the visual servoing with the GUI up, press 'q'.")
 
         t0 = timeit.default_timer()
-        aligned_once = False
         success = False
         prev_lift = float("Inf")
 
@@ -543,9 +529,7 @@ class GraspObjectOperation(ManagedOperation):
         prev_center_depth = None
 
         # Move to pregrasp position
-        self.pregrasp_open_loop(
-            self.get_object_xyz(), distance_from_object=self.pregrasp_distance_from_object
-        )
+        self.pregrasp_open_loop(self.get_object_xyz(), distance_from_object=self.pregrasp_distance_from_object)
 
         # Give a short pause here to make sure ee image is up to date
         time.sleep(0.25)
@@ -563,7 +547,6 @@ class GraspObjectOperation(ManagedOperation):
 
         # Main loop - run unless we time out, blocking.
         while timeit.default_timer() - t0 < max_duration:
-
             # Get servo observation
             servo = self.robot.get_servo_observation()
             joint_state = self.robot.get_joint_positions()
@@ -631,9 +614,7 @@ class GraspObjectOperation(ManagedOperation):
                 debug_viz[:, 320:, 0] = mask
                 debug_viz[:, 320:, 1] = mask
                 debug_viz[:, 320:, 2] = mask
-                Image.fromarray(debug_viz.astype("uint8")).save(
-                    f"{debug_dir_name}/img_{iter_:03d}.png"
-                )
+                Image.fromarray(debug_viz.astype("uint8")).save(f"{debug_dir_name}/img_{iter_:03d}.png")
             iter_ += 1
 
             # Compute the center of the mask in image coords
@@ -662,8 +643,7 @@ class GraspObjectOperation(ManagedOperation):
                 failed_counter = 0
                 mask_center = mask_center.astype(int)
                 assert (
-                    world_xyz.shape[0] == servo.semantic.shape[0]
-                    and world_xyz.shape[1] == servo.semantic.shape[1]
+                    world_xyz.shape[0] == servo.semantic.shape[0] and world_xyz.shape[1] == servo.semantic.shape[1]
                 ), "World xyz shape does not match semantic shape."
                 current_xyz = world_xyz[int(mask_center[0]), int(mask_center[1])]
                 if self.show_point_cloud:
@@ -682,18 +662,14 @@ class GraspObjectOperation(ManagedOperation):
                 # Draw the center of the image
                 servo_ee_rgb = cv2.circle(servo_ee_rgb, (center_x, center_y), 5, (255, 0, 0), -1)
                 # Draw the center of the mask
-                servo_ee_rgb = cv2.circle(
-                    servo_ee_rgb, (int(mask_center[1]), int(mask_center[0])), 5, (0, 255, 0), -1
-                )
+                servo_ee_rgb = cv2.circle(servo_ee_rgb, (int(mask_center[1]), int(mask_center[0])), 5, (0, 255, 0), -1)
 
                 # Create a depth image with the center of the mask
                 # First convert to 32-bit float
                 viz_ee_depth = cv2.normalize(servo.ee_depth, None, 0, 255, cv2.NORM_MINMAX)
                 viz_ee_depth = viz_ee_depth.astype(np.uint8)
                 viz_ee_depth = cv2.applyColorMap(viz_ee_depth, cv2.COLORMAP_JET)
-                viz_ee_depth = cv2.circle(
-                    viz_ee_depth, (int(mask_center[1]), int(mask_center[0])), 5, (0, 255, 0), -1
-                )
+                viz_ee_depth = cv2.circle(viz_ee_depth, (int(mask_center[1]), int(mask_center[0])), 5, (0, 255, 0), -1)
 
                 # Concatenate the two images side by side
                 viz_image = np.concatenate([servo_ee_rgb, viz_ee_depth], axis=1)
@@ -707,9 +683,7 @@ class GraspObjectOperation(ManagedOperation):
             if self.debug_grasping:
                 # show all four images
                 concatenated_image = np.concatenate((debug_viz.astype("uint8"), viz_image), axis=1)
-                Image.fromarray(concatenated_image).save(
-                    f"{debug_dir_name}/img_point_{iter_:03d}.png"
-                )
+                Image.fromarray(concatenated_image).save(f"{debug_dir_name}/img_point_{iter_:03d}.png")
 
             # check not moving threshold
             if not_moving_count > max_not_moving_count:
@@ -720,7 +694,7 @@ class GraspObjectOperation(ManagedOperation):
             # If we have a target mask, compute the median depth of the object
             # Otherwise we will just try to grasp if we are close enough - assume we lost track!
             if target_mask is not None:
-                object_depth = servo.ee_depth[target_mask]
+                servo.ee_depth[target_mask]
                 median_object_depth = np.median(servo.ee_depth[target_mask])  # / 1000
             else:
                 # print("detected classes:", np.unique(servo.ee_semantic))
@@ -788,14 +762,13 @@ class GraspObjectOperation(ManagedOperation):
                         debug_viz[:, :320, :] = servo.ee_rgb
                         debug_viz[:, 320:, :] = servo.rgb
                         Image.fromarray(debug_viz.astype("uint8")).save(
-                            f"{debug_dir_name}/img_point_{iter_+1:03d}.png"
+                            f"{debug_dir_name}/img_point_{iter_ + 1:03d}.png"
                         )
 
                     break
 
                 # If we are aligned, step the whole thing closer by some amount
                 # This is based on the pitch - basically
-                aligned_once = True
                 arm_component = np.cos(wrist_pitch) * self.lift_arm_ratio
                 lift_component = np.sin(wrist_pitch) * self.lift_arm_ratio
 
@@ -1011,7 +984,6 @@ class GraspObjectOperation(ManagedOperation):
         print("Rotation", rotation)
         if rotation[1] > np.pi / 4:
             rotation[1] = np.pi / 4
-        old_ee_rot = ee_rot
         ee_rot = R.from_euler("xyz", rotation).as_quat()
 
         vector_to_object = relative_object_xyz - ee_pos
@@ -1043,8 +1015,7 @@ class GraspObjectOperation(ManagedOperation):
             self._success = False
             return
         elif (
-            target_joint_positions[HelloStretchIdx.ARM] < -0.05
-            or target_joint_positions[HelloStretchIdx.LIFT] < -0.05
+            target_joint_positions[HelloStretchIdx.ARM] < -0.05 or target_joint_positions[HelloStretchIdx.LIFT] < -0.05
         ):
             print(
                 f"{self.name}: Target joint state is invalid: {target_joint_positions}. Positions for arm and lift must be positive."
@@ -1053,12 +1024,8 @@ class GraspObjectOperation(ManagedOperation):
             return
 
         # Make sure arm and lift are positive
-        target_joint_positions[HelloStretchIdx.ARM] = max(
-            target_joint_positions[HelloStretchIdx.ARM], 0
-        )
-        target_joint_positions[HelloStretchIdx.LIFT] = max(
-            target_joint_positions[HelloStretchIdx.LIFT], 0
-        )
+        target_joint_positions[HelloStretchIdx.ARM] = max(target_joint_positions[HelloStretchIdx.ARM], 0)
+        target_joint_positions[HelloStretchIdx.LIFT] = max(target_joint_positions[HelloStretchIdx.LIFT], 0)
 
         # Zero out roll and yaw
         target_joint_positions[HelloStretchIdx.WRIST_YAW] = 0
@@ -1099,10 +1066,7 @@ class GraspObjectOperation(ManagedOperation):
             print("Failed to find a valid IK solution.")
             self._success = False
             return
-        elif (
-            target_joint_positions[HelloStretchIdx.ARM] < 0
-            or target_joint_positions[HelloStretchIdx.LIFT] < 0
-        ):
+        elif target_joint_positions[HelloStretchIdx.ARM] < 0 or target_joint_positions[HelloStretchIdx.LIFT] < 0:
             print(
                 f"{self.name}: Target joint state is invalid: {target_joint_positions}. Positions for arm and lift must be positive."
             )

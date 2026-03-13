@@ -12,7 +12,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import abc
-from typing import Optional
 
 import numpy as np
 from scipy.ndimage import rotate as scipy_rotate
@@ -37,14 +36,11 @@ class Footprint:
         """Get a 3d footprint box for visuals"""
         return np.array([self.length, self.width, 0.2])
 
-    def get_mask(self, resolution: float, device: Optional[object] = None) -> np.ndarray:
+    def get_mask(self, resolution: float, device: object | None = None) -> np.ndarray:
         """Get a single mask for this robot as a boolean numpy array."""
         size = int(
             np.ceil(
-                np.sqrt(
-                    (self.width + abs(self.width_offset)) ** 2
-                    + (self.length + abs(self.length_offset)) ** 2
-                )
+                np.sqrt((self.width + abs(self.width_offset)) ** 2 + (self.length + abs(self.length_offset)) ** 2)
                 / resolution
             )
         )
@@ -72,7 +68,7 @@ class Footprint:
         self,
         resolution: float,
         angle_radians: float,
-        device: Optional[object] = None,
+        device: object | None = None,
     ) -> np.ndarray:
         """Get a rotated footprint mask for collision checking (numpy, order=0 for nearest)."""
         mask = self.get_mask(resolution, device).astype(np.float64)
@@ -87,7 +83,7 @@ class RobotModel(abc.ABC):
     def __init__(
         self,
         name="robot",
-        urdf_path: Optional[str] = None,
+        urdf_path: str | None = None,
         visualize=False,
         assets_path=None,
     ):

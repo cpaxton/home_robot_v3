@@ -51,9 +51,7 @@ def _generate_dynamem_stretch_urdf(package_urdf_path: str, out_path: str) -> Non
             mesh.set("filename", os.path.normpath(os.path.join(pkg_dir, fn)))
 
     # Add joint_fake if not present (same logic as config/dynamem_urdf.py)
-    has_fake = any(
-        j.get("name") == "joint_fake" for j in root.findall("joint")
-    )
+    has_fake = any(j.get("name") == "joint_fake" for j in root.findall("joint"))
     if not has_fake:
         snippet_root = ET.fromstring(f"<root>{_JOINT_FAKE_SNIPPET}</root>")
         for el in snippet_root:
@@ -91,9 +89,7 @@ def get_stretch_urdf_path() -> str:
         if os.path.isdir(re1):
             for name in sorted(os.listdir(re1)):
                 if name.endswith(".urdf"):
-                    _generate_dynamem_stretch_urdf(
-                        os.path.join(re1, name), _CONFIG_STRETCH_URDF
-                    )
+                    _generate_dynamem_stretch_urdf(os.path.join(re1, name), _CONFIG_STRETCH_URDF)
                     return _CONFIG_STRETCH_URDF
     except Exception:
         pass

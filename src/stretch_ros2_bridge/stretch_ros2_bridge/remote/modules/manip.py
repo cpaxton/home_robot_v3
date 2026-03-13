@@ -11,7 +11,6 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import List, Optional
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -116,8 +115,8 @@ class StretchManipulationClient(AbstractControlModule):
     def goto(
         self,
         q,
-        dq: List = None,
-        ddq: List = None,
+        dq: list = None,
+        ddq: list = None,
         move_base=False,
         wait=True,
         max_wait_t=10.0,
@@ -142,7 +141,7 @@ class StretchManipulationClient(AbstractControlModule):
     @enforce_enabled
     def goto_joint_positions(
         self,
-        joint_positions: List[float],
+        joint_positions: list[float],
         relative: bool = False,
         blocking: bool = True,
         debug: bool = False,
@@ -185,9 +184,7 @@ class StretchManipulationClient(AbstractControlModule):
             self._ros_client.WRIST_ROLL: joint_pos_goal[5],
         }
         if move_base:
-            joint_goals[self._ros_client.BASE_TRANSLATION_JOINT] = (
-                joint_pos_goal[0] - self.get_base_x()
-            )
+            joint_goals[self._ros_client.BASE_TRANSLATION_JOINT] = joint_pos_goal[0] - self.get_base_x()
         # TODO: hopefully this updates correctly
         # self.base_x = joint_pos_goal[0]
 
@@ -241,13 +238,13 @@ class StretchManipulationClient(AbstractControlModule):
 
     def solve_ik(
         self,
-        pos: List[float],
-        quat: Optional[List[float]] = None,
+        pos: list[float],
+        quat: list[float] | None = None,
         relative: bool = False,
         world_frame: bool = False,
         initial_cfg: np.ndarray = None,
         debug: bool = False,
-    ) -> Optional[np.ndarray]:
+    ) -> np.ndarray | None:
         """Solve inverse kinematics appropriately (or at least try to) and get the joint position
         that we will be moving to.
 
@@ -305,8 +302,8 @@ class StretchManipulationClient(AbstractControlModule):
     @enforce_enabled
     def goto_ee_pose(
         self,
-        pos: List[float],
-        quat: Optional[List[float]] = None,
+        pos: list[float],
+        quat: list[float] | None = None,
         relative: bool = False,
         world_frame: bool = False,
         blocking: bool = True,

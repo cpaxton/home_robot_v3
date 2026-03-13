@@ -85,7 +85,6 @@ class SimplifyXYT(Planner):
         is_2d = len(start) == 2
 
         for step in np.linspace(self.max_step, self.min_step, self.num_steps):
-
             # The last node we explored
             prev_node = None
             # The last node in simplified sequence
@@ -166,9 +165,7 @@ class SimplifyXYT(Planner):
                                 np.abs(anchor_node.state[0] - node.state[0]) < self.dist_tol
                                 and np.abs(anchor_node.state[1] - node.state[1]) < self.dist_tol
                             ):
-                                raise RuntimeError(
-                                    f"Trajectory inconsistent: {anchor_node.state} vs {node.state}"
-                                )
+                                raise RuntimeError(f"Trajectory inconsistent: {anchor_node.state} vs {node.state}")
                         added = True
                         anchor_node = new_nodes[-1]
                         # rotated, so there should be no cumulative distance

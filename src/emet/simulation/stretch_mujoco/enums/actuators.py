@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 from enum import Enum
 from functools import cache
 
@@ -23,7 +32,6 @@ class Actuators(Enum):
     right_wheel_vel = 11
     gripper_left_finger = 12
     gripper_right_finger = 13
-
 
     def get_joint_names_in_mjcf(self) -> list[str]:
         """
@@ -91,9 +99,9 @@ class Actuators(Enum):
             return Actuators.left_wheel_vel
         if joint_name == "joint_right_wheel":
             return Actuators.right_wheel_vel
-        if joint_name == 'translate_mobile_base' or joint_name == 'position':
+        if joint_name == "translate_mobile_base" or joint_name == "position":
             return Actuators.base_translate
-        if joint_name == 'rotate_mobile_base':
+        if joint_name == "rotate_mobile_base":
             return Actuators.base_rotate
 
         if joint_name == "joint_lift":
@@ -119,8 +127,6 @@ class Actuators(Enum):
 
         raise NotImplementedError(f"Actuator for {joint_name} is not defined.")
 
-
-
     def _get_status_attribute(self, is_position: bool, status: StatusStretchJoints) -> float:
         attribute_name = "pos" if is_position else "vel"
         if self == Actuators.arm:
@@ -144,9 +150,7 @@ class Actuators(Enum):
             f"Get {'Position' if is_position else 'Velocity'} for {self.name} is not implemented."
         )
 
-    def _get_base_status_attribute(
-        self, is_position: bool, status: StatusStretchJoints
-    ) -> tuple[float, float, float]:
+    def _get_base_status_attribute(self, is_position: bool, status: StatusStretchJoints) -> tuple[float, float, float]:
         x = "x" if is_position else "x_vel"
         y = "y" if is_position else "y_vel"
         theta = "theta" if is_position else "theta_vel"

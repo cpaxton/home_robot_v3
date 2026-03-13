@@ -9,7 +9,7 @@
 
 import time
 from threading import Lock
-from typing import Any, List, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -20,7 +20,7 @@ class TemporalFilter:
         observation_history_window_size_secs: float = 10.0,
         observation_history_window_size_n: int = 10,
     ):
-        self._observation_history: List[Tuple[Any, float]] = []
+        self._observation_history: list[tuple[Any, float]] = []
         self._observation_history_lock = Lock()
         self.observation_history_window_size_secs = observation_history_window_size_secs
         self.observation_history_window_size_n = observation_history_window_size_n
@@ -44,8 +44,7 @@ class TemporalFilter:
             self._observation_history.pop(0)
         while (
             len(self._observation_history) > 0
-            and (time.time() - self._observation_history[0][1])
-            > self.observation_history_window_size_secs
+            and (time.time() - self._observation_history[0][1]) > self.observation_history_window_size_secs
         ):
             self._observation_history.pop(0)
         if acquire_lock:
@@ -77,7 +76,7 @@ class TemporalFilter:
         if acquire_lock:
             self._observation_history_lock.release()
 
-    def get_observations_from_history(self, acquire_lock: bool = True) -> List[Any]:
+    def get_observations_from_history(self, acquire_lock: bool = True) -> list[Any]:
         """
         Get the observations from the observation history. Note: the observation history lock must be
         acquired before calling this function.
@@ -147,9 +146,7 @@ class MaskTemporalFilter(TemporalFilter):
     ) -> None:
         mask_size = self.count_mask_pixels(observation)
         if mask_size > mask_size_threshold:
-            self.push_to_observation_history(
-                observation=observation, timestamp=timestamp, acquire_lock=acquire_lock
-            )
+            self.push_to_observation_history(observation=observation, timestamp=timestamp, acquire_lock=acquire_lock)
 
     def get_average_centroid(self) -> np.ndarray:
         observations = self.get_observations_from_history()

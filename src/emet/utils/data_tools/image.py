@@ -62,7 +62,7 @@ def png_to_gif(group: h5py.Group, key: str, name: str, save=True, height=None, w
     print("Writing gif to file:", name)
     img_stream = group[key]
     # for i,aimg in enumerate(tqdm(group[key], ncols=50)):
-    for ki, k in tqdm(
+    for _ki, k in tqdm(
         sorted([(int(j), j) for j in img_stream.keys()], key=lambda pair: pair[0]),
         ncols=50,
     ):
@@ -120,11 +120,10 @@ def png_to_mp4(group: h5py.Group, key: str, name: str, fps=10):
     writer = None
 
     # for i,aimg in enumerate(tqdm(group[key], ncols=50)):
-    for ki, k in tqdm(
+    for _ki, k in tqdm(
         sorted([(int(j), j) for j in img_stream.keys()], key=lambda pair: pair[0]),
         ncols=50,
     ):
-
         bindata = img_stream[k][()]
         _img = img_from_bytes(bindata)
         w, h = _img.shape[:2]

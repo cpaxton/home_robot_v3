@@ -81,9 +81,7 @@ class DynamemManipulationWrapper:
         Returns all the joint names and values involved in forward kinematics of head and gripper
         """
         ## Names of all 13 joints
-        joint_names = (
-            self.init_joint_list + ["joint_gripper_finger_right"] + self.head_joint_list[1:]
-        )
+        joint_names = self.init_joint_list + ["joint_gripper_finger_right"] + self.head_joint_list[1:]
         self.updateJoints()
         joint_values = list(self.joints.values()) + [0] + list(self.head_joints.values())[1:]
 
@@ -112,31 +110,28 @@ class DynamemManipulationWrapper:
 
         # Base, arm and lift state update
         target_state = self.robot.get_six_joints()
-        if not gripper_pos is None:
+        if gripper_pos is not None:
             self.CURRENT_STATE = (
-                gripper_pos * (self.STRETCH_GRIPPER_MAX - self.STRETCH_GRIPPER_MIN)
-                + self.STRETCH_GRIPPER_MIN
+                gripper_pos * (self.STRETCH_GRIPPER_MAX - self.STRETCH_GRIPPER_MIN) + self.STRETCH_GRIPPER_MIN
             )
             self.robot.gripper_to(self.CURRENT_STATE, blocking=blocking)
-        if not arm_pos is None:
+        if arm_pos is not None:
             target_state[2] = arm_pos
-        if not lift_pos is None:
+        if lift_pos is not None:
             target_state[1] = lift_pos
         if base_trans is None:
             base_trans = 0
         target_state[0] = base_trans + target_state[0]
 
         # Wrist state update
-        if not wrist_yaw is None:
+        if wrist_yaw is not None:
             target_state[3] = wrist_yaw
-        if not wrist_pitch is None:
+        if wrist_pitch is not None:
             target_state[4] = min(wrist_pitch, 0.1)
-        if not wrist_roll is None:
+        if wrist_roll is not None:
             target_state[5] = wrist_roll
 
-        self.robot.arm_to(
-            target_state, blocking=blocking, head=np.array([self.pan, self.tilt]), reliable=False
-        )
+        self.robot.arm_to(target_state, blocking=blocking, head=np.array([self.pan, self.tilt]), reliable=False)
 
         # It is very important to remember head pan and head tilt for inverse kinematics
         # As we need to transform the gripper pose in robot head coordinate to robot gripper coordinate
@@ -161,10 +156,8 @@ class DynamemManipulationWrapper:
         """
         next_gripper_pos = width
         while True:
-            self.robot.gripper_to(
-                max(next_gripper_pos * self.STRETCH_GRIPPER_MAX, -0.2), blocking=True
-            )
-            curr_gripper_pose = self.robot.get_gripper_position()
+            self.robot.gripper_to(max(next_gripper_pos * self.STRETCH_GRIPPER_MAX, -0.2), blocking=True)
+            self.robot.get_gripper_position()
             # print('Robot means to move gripper to', next_gripper_pos * self.STRETCH_GRIPPER_MAX)
             # print('Robot actually moves gripper to', curr_gripper_pose)
             if next_gripper_pos == -1:
@@ -226,9 +219,7 @@ class DynamemManipulationWrapper:
             target1 = state
             target1[0] = target_state[0]
             target1[1] = min(1.1, target_state[1] + 0.2)
-            self.robot.arm_to(
-                target1, blocking=True, head=np.array([self.pan, self.tilt]), reliable=False
-            )
+            self.robot.arm_to(target1, blocking=True, head=np.array([self.pan, self.tilt]), reliable=False)
 
         self.robot.arm_to(target_state, blocking=True)
         self.robot.head_to(head_tilt=self.tilt, head_pan=self.pan, blocking=True, reliable=False)
@@ -264,9 +255,7 @@ class DynamemManipulationWrapper:
         self.updateJoints()
 
         q = self.robot.get_joint_positions()
-        q[HelloStretchIdx.WRIST_PITCH] = OVERRIDE_STATES.get(
-            "wrist_pitch", q[HelloStretchIdx.WRIST_PITCH]
-        )
+        q[HelloStretchIdx.WRIST_PITCH] = OVERRIDE_STATES.get("wrist_pitch", q[HelloStretchIdx.WRIST_PITCH])
         pin_pose = self.robot.get_ee_pose(matrix=True, link_name=self.end_link, q=q)
         pin_rotation, pin_translation = pin_pose[:3, :3], pin_pose[:3, 3]
         pin_curr_pose = pin.SE3(pin_rotation, pin_translation)
@@ -280,9 +269,7 @@ class DynamemManipulationWrapper:
         final_quat = pin.Quaternion(pin_goal_pose_new.rotation).coeffs().tolist()
         # print(f"final pos and quat {final_pos}\n {final_quat}")
 
-        full_body_cfg = self.robot.solve_ik(
-            final_pos, final_quat, None, False, custom_ee_frame=self.end_link
-        )
+        full_body_cfg = self.robot.solve_ik(final_pos, final_quat, None, False, custom_ee_frame=self.end_link)
         if full_body_cfg is None:
             print("Warning: Cannot find an IK solution for desired EE pose!")
             return False

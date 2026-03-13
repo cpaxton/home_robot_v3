@@ -15,7 +15,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 
@@ -78,9 +78,7 @@ class ContinuousEndEffectorAction:
             and g is not None
             and not (pos.shape[1] + ori.shape[1] + g.shape[1]) == 8
         ):
-            raise RuntimeError(
-                "continuous end-effector action space has 8 dimensions: pos=3, ori=4, gripper=1"
-            )
+            raise RuntimeError("continuous end-effector action space has 8 dimensions: pos=3, ori=4, gripper=1")
         self.pos = pos
         self.ori = ori
         self.g = g
@@ -123,54 +121,50 @@ class Observations:
     # Camera
     rgb: np.ndarray  # (camera_height, camera_width, 3) in [0, 255]
     depth: np.ndarray  # (camera_height, camera_width) in meters
-    xyz: Optional[np.ndarray] = None  # (camera_height, camera_width, 3) in camera coordinates
-    semantic: Optional[
-        np.ndarray
-    ] = None  # (camera_height, camera_width) in [0, num_sem_categories - 1]
-    camera_K: Optional[np.ndarray] = None  # (3, 3) camera intrinsics matrix
+    xyz: np.ndarray | None = None  # (camera_height, camera_width, 3) in camera coordinates
+    semantic: np.ndarray | None = None  # (camera_height, camera_width) in [0, num_sem_categories - 1]
+    camera_K: np.ndarray | None = None  # (3, 3) camera intrinsics matrix
 
     # Pose of the camera in world coordinates
-    camera_pose: Optional[np.ndarray] = None
+    camera_pose: np.ndarray | None = None
 
     # End effector camera
-    ee_rgb: Optional[np.ndarray] = None  # (camera_height, camera_width, 3) in [0, 255]
-    ee_depth: Optional[np.ndarray] = None  # (camera_height, camera_width) in meters
-    ee_xyz: Optional[np.ndarray] = None  # (camera_height, camera_width, 3) in camera coordinates
-    ee_semantic: Optional[
-        np.ndarray
-    ] = None  # (camera_height, camera_width) in [0, num_sem_categories - 1]
-    ee_camera_K: Optional[np.ndarray] = None  # (3, 3) camera intrinsics matrix
+    ee_rgb: np.ndarray | None = None  # (camera_height, camera_width, 3) in [0, 255]
+    ee_depth: np.ndarray | None = None  # (camera_height, camera_width) in meters
+    ee_xyz: np.ndarray | None = None  # (camera_height, camera_width, 3) in camera coordinates
+    ee_semantic: np.ndarray | None = None  # (camera_height, camera_width) in [0, num_sem_categories - 1]
+    ee_camera_K: np.ndarray | None = None  # (3, 3) camera intrinsics matrix
 
     # Pose of the end effector camera in world coordinates
-    ee_camera_pose: Optional[np.ndarray] = None
+    ee_camera_pose: np.ndarray | None = None
 
     # Pose of the end effector grasp center in world coordinates
-    ee_pose: Optional[np.ndarray] = None
+    ee_pose: np.ndarray | None = None
 
     # Instance IDs per observation frame
     # Size: (camera_height, camera_width)
     # Range: 0 to max int
-    instance: Optional[np.ndarray] = None
+    instance: np.ndarray | None = None
 
     # Optional third-person view from simulation
-    third_person_image: Optional[np.ndarray] = None
+    third_person_image: np.ndarray | None = None
 
     # lidar
-    lidar_points: Optional[np.ndarray] = None
-    lidar_timestamp: Optional[int] = None
+    lidar_points: np.ndarray | None = None
+    lidar_timestamp: int | None = None
 
     # Proprioreception
-    joint: Optional[np.ndarray] = None  # joint positions of the robot
-    joint_velocities: Optional[np.ndarray] = None  # joint velocities of the robot
-    relative_resting_position: Optional[
-        np.ndarray
-    ] = None  # end-effector position relative to the desired resting position
-    is_holding: Optional[np.ndarray] = None  # whether the agent is holding the object
+    joint: np.ndarray | None = None  # joint positions of the robot
+    joint_velocities: np.ndarray | None = None  # joint velocities of the robot
+    relative_resting_position: np.ndarray | None = (
+        None  # end-effector position relative to the desired resting position
+    )
+    is_holding: np.ndarray | None = None  # whether the agent is holding the object
     # --------------------------------------------------------
     # Untyped task-specific observations
     # --------------------------------------------------------
 
-    task_observations: Optional[Dict[str, Any]] = None
+    task_observations: dict[str, Any] | None = None
 
     # Sequence number - which message was this?
     seq_id: int = -1
@@ -182,19 +176,19 @@ class Observations:
     is_pose_graph_node: bool = False
 
     # Timestamp of matched pose graph node
-    pose_graph_timestamp: Optional[int] = None
+    pose_graph_timestamp: int | None = None
 
     # Initial pose graph pose. GPS and compass.
-    initial_pose_graph_gps: Optional[np.ndarray] = None
-    initial_pose_graph_compass: Optional[np.ndarray] = None
+    initial_pose_graph_gps: np.ndarray | None = None
+    initial_pose_graph_compass: np.ndarray | None = None
 
-    def compute_xyz(self, scaling: float = 1e-3) -> Optional[np.ndarray]:
+    def compute_xyz(self, scaling: float = 1e-3) -> np.ndarray | None:
         """Compute xyz from depth and camera intrinsics."""
         if self.depth is not None and self.camera_K is not None:
             self.xyz = self.depth_to_xyz(self.depth * scaling, self.camera_K)
         return self.xyz
 
-    def compute_ee_xyz(self, scaling: float = 1e-3) -> Optional[np.ndarray]:
+    def compute_ee_xyz(self, scaling: float = 1e-3) -> np.ndarray | None:
         """Compute xyz from depth and camera intrinsics."""
         if self.ee_depth is not None and self.ee_camera_K is not None:
             self.ee_xyz = self.depth_to_xyz(self.ee_depth * scaling, self.ee_camera_K)
@@ -214,7 +208,7 @@ class Observations:
         y = (y - cy) * depth / fy
         return np.stack([x, y, depth], axis=-1)
 
-    def get_ee_xyz_in_world_frame(self, scaling: float = 1.0) -> Optional[np.ndarray]:
+    def get_ee_xyz_in_world_frame(self, scaling: float = 1.0) -> np.ndarray | None:
         """Get the end effector xyz in world frame."""
         if self.ee_xyz is None:
             self.compute_ee_xyz(scaling=scaling)
@@ -222,7 +216,7 @@ class Observations:
             return self.transform_points(self.ee_xyz, self.ee_camera_pose)
         return None
 
-    def get_xyz_in_world_frame(self, scaling: float = 1.0) -> Optional[np.ndarray]:
+    def get_xyz_in_world_frame(self, scaling: float = 1.0) -> np.ndarray | None:
         """Get the xyz in world frame.
 
         Args:
@@ -244,7 +238,7 @@ class Observations:
         return np.dot(points, pose[:3, :3].T) + pose[:3, 3]
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Observations":
+    def from_dict(cls, data: dict[str, Any]) -> "Observations":
         """Create observations from dictionary."""
         return cls(
             gps=data.get("gps"),

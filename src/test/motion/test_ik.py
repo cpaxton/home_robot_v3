@@ -13,7 +13,6 @@
 # LICENSE file in the root directory of this source tree.
 import os
 import timeit
-from typing import List
 
 import numpy as np
 
@@ -21,7 +20,7 @@ from emet.motion.pinocchio_ik_solver import PinocchioIKSolver
 
 EPS_IK_CORRECT = 0.05  # max IK error
 
-true_all_joints_revolute: List[str] = [
+true_all_joints_revolute: list[str] = [
     "joint_mobile_base_rotation",
     "joint_lift",
     "joint_arm_l0",
@@ -30,7 +29,7 @@ true_all_joints_revolute: List[str] = [
     "joint_wrist_roll",
 ]
 
-true_all_joints_translation: List[str] = [
+true_all_joints_translation: list[str] = [
     "joint_mobile_base_translation",
     "joint_lift",
     "joint_arm_l0",
@@ -69,7 +68,7 @@ def _test_fk_ik(urdf_file, true_joint_names, initial_joint_state):
         urdf_path = os.path.join(os.path.dirname(__file__), urdf_file)
     except FileNotFoundError as e:
         print(e)
-        assert False, "URDF file not found!"
+        raise AssertionError("URDF file not found!") from e
 
     print("URDF path =", urdf_path)
     ik_joints_allowed_to_move = initial_joint_state.keys()
@@ -81,7 +80,7 @@ def _test_fk_ik(urdf_file, true_joint_names, initial_joint_state):
     )
 
     all_joints = manip_ik_solver.get_all_joint_names()
-    for i, j in zip(all_joints, true_joint_names):
+    for i, j in zip(all_joints, true_joint_names, strict=False):
         assert i == j, f"Joint name mismatch: {i} != {j}"
 
     # Test Forward Kinematics
@@ -110,7 +109,7 @@ def _test_fk_ik(urdf_file, true_joint_names, initial_joint_state):
 
     dt_sum = 0
     # Speed test
-    for i in range(1000):
+    for _i in range(1000):
         # Test Inverse Kinematics
         t0 = timeit.default_timer()
         ee_position = np.random.rand(3) * 2 - 1
@@ -271,7 +270,7 @@ def test_ik_restricted():
     }
 
     all_joints = manip_ik_solver.get_all_joint_names()
-    for i, j in zip(all_joints, true_all_joints_revolute):
+    for i, j in zip(all_joints, true_all_joints_revolute, strict=False):
         assert i == j, f"Joint name mismatch: {i} != {j}"
 
     # Test Forward Kinematics

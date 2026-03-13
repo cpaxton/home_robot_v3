@@ -8,7 +8,7 @@
 # license information maybe found below, if so.
 
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from google import genai
 
@@ -23,8 +23,8 @@ class GeminiClient(AbstractLLMClient):
 
     def __init__(
         self,
-        prompt: Union[str, AbstractPromptBuilder],
-        prompt_kwargs: Optional[Dict[str, Any]] = None,
+        prompt: str | AbstractPromptBuilder,
+        prompt_kwargs: dict[str, Any] | None = None,
         model: str = "gemini-2.0-flash",
     ):
         super().__init__(prompt, prompt_kwargs)
@@ -35,9 +35,7 @@ class GeminiClient(AbstractLLMClient):
         else:
             raise Exception("Gemini token has not been set up yet!")
 
-    def __call__(
-        self, command: Union[str, list], model: Optional[str] = None, verbose: bool = False
-    ):
+    def __call__(self, command: str | list, model: str | None = None, verbose: bool = False):
         if verbose:
             print(f"{self.system_prompt=}")
         if model is None:
@@ -54,8 +52,8 @@ class GeminiClient(AbstractLLMClient):
 
     def sample(
         self,
-        command: Union[str, list],
-        model: Optional[str] = None,
+        command: str | list,
+        model: str | None = None,
         n_samples: int = 4,
         verbose: bool = False,
     ):

@@ -7,6 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.operations import (
     GoToNavOperation,
     GraspObjectOperation,
@@ -19,7 +20,6 @@ from emet.controller.operations import (
     SpeakOperation,
     WaveOperation,
 )
-from emet.controller.controller_instance_memory import RobotAgent
 from emet.core.task import Task
 
 
@@ -113,9 +113,7 @@ class LLMPlanWrapper:
             on_failure=pregrasp_object,
         )
         self._operation_naming_counter += 1
-        grasp_object.configure(
-            target_object=object_name, show_object_to_grasp=False, show_servo_gui=False
-        )
+        grasp_object.configure(target_object=object_name, show_object_to_grasp=False, show_servo_gui=False)
         grasp_object.set_target_object_class(object_name)
         grasp_object.servo_to_grasp = True
         grasp_object.match_method = "feature"

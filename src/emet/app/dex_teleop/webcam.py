@@ -21,13 +21,7 @@ from yaml.loader import SafeLoader
 
 def get_calibration_directory(camera_name, image_width, image_height):
     calibration_directory = (
-        "./webcam_calibration_images/"
-        + camera_name
-        + "/"
-        + str(image_width)
-        + "x"
-        + str(image_height)
-        + "/"
+        "./webcam_calibration_images/" + camera_name + "/" + str(image_width) + "x" + str(image_height) + "/"
     )
     return calibration_directory
 
@@ -38,7 +32,7 @@ def get_video_devices():
     lines = subprocess.getoutput(command).split("\n")
     # Sometimes it will say "Cannot open /dev/video0"
     lines = [line.strip() for line in lines if line != "" and "Cannot" not in line]
-    cameras = [line for line in lines if not ("/dev/" in line)]
+    cameras = [line for line in lines if "/dev/" not in line]
     devices = [line for line in lines if "/dev/" in line]
 
     all_camera_devices = {}
@@ -107,9 +101,7 @@ class Webcam:
         self.color_camera_info = {}
 
         if use_calibration:
-            calibration_directory = get_calibration_directory(
-                self.camera_name, image_width, image_height
-            )
+            calibration_directory = get_calibration_directory(self.camera_name, image_width, image_height)
             file_name_pattern = calibration_directory + "camera_calibration_results_*.yaml"
             file_names = glob.glob(file_name_pattern)
             file_names.sort()
@@ -118,22 +110,14 @@ class Webcam:
                 with open(file_name) as f:
                     camera_calibration = yaml.load(f, Loader=SafeLoader)
             else:
-                print(
-                    "Webcam: No camera calibration files with pattern "
-                    + file_name_pattern
-                    + " found."
-                )
+                print("Webcam: No camera calibration files with pattern " + file_name_pattern + " found.")
 
-            assert (
-                camera_calibration
-            ), "Webcam: Failed to successfully load camera calibration results."
+            assert camera_calibration, "Webcam: Failed to successfully load camera calibration results."
 
             print("Webcam: Loaded camera calibration results from file =", file_name)
             print("Webcam: Loaded camera calibration results =", camera_calibration)
             self.color_camera_info["camera_matrix"] = np.array(camera_calibration["camera_matrix"])
-            self.color_camera_info["distortion_coefficients"] = np.array(
-                camera_calibration["distortion_coefficients"]
-            )
+            self.color_camera_info["distortion_coefficients"] = np.array(camera_calibration["distortion_coefficients"])
 
         if self.use_logitech_c930 and platform == "linux":
             # Reset the Logitech Webcam C930e to avoid a bug that
@@ -191,7 +175,6 @@ class Webcam:
         self.webcam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         if self.use_logitech_c930:
-
             # Maximum resolutions and framerates for TWO Logitech
             # C930e cameras plugged into the Stretch 3 trunk
             #
@@ -280,6 +263,6 @@ if __name__ == "__main__":
         print()
         print("--- Webcam Timing ---")
         print("number of frames =", iterations)
-        print("average period =", "{:.2f}".format(average_period * 1000.0), "ms")
-        print("average frequency =", "{:.2f}".format(average_frequency), "Hz")
+        print("average period =", f"{average_period * 1000.0:.2f}", "ms")
+        print("average frequency =", f"{average_frequency:.2f}", "Hz")
         print("-----------------------------------------------")

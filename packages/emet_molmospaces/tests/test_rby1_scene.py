@@ -1,4 +1,13 @@
 # Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
 # Tests for RB-Y1 (rby1) in MolmoSpaces-style scene: merge robot into scene, step, verify objects.
 
 from __future__ import annotations
@@ -8,7 +17,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 
 # Minimal MJCF scene (floor + one object) for testing scene+robot composition without molmo_spaces API.
 MINIMAL_SCENE_XML = """<?xml version="1.0"?>
@@ -41,7 +49,6 @@ def test_rby1_robot_mjcf_path():
 def test_merge_robot_into_scene_and_step():
     """Merge rby1 into a minimal scene, load in MuJoCo, step, and verify scene has robot + objects."""
     import mujoco
-
     from emet_molmospaces.runner import _get_robot_mjcf_path, _merge_robot_into_scene
 
     robot_path = _get_robot_mjcf_path("rby1")
@@ -94,10 +101,14 @@ def test_rby1_molmospaces_serve_headless_brief():
         result[0] = main_runner(
             [
                 "serve",
-                "--scene", "ithor",
-                "--split", "train",
-                "--index", "0",
-                "--robot", "rby1",
+                "--scene",
+                "ithor",
+                "--split",
+                "train",
+                "--index",
+                "0",
+                "--robot",
+                "rby1",
                 "--headless",
             ]
         )

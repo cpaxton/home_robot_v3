@@ -10,7 +10,6 @@
 
 """Sweep the head around and create a 3d map, then visualize it."""
 
-
 import click
 import numpy as np
 
@@ -25,9 +24,7 @@ from emet.perception import create_semantic_sensor
     is_flag=True,
     help="Set if we are executing on the robot and not on a remote computer",
 )
-@click.option(
-    "--run_semantic_segmentation", is_flag=True, help="Run semantic segmentation on EE rgb images"
-)
+@click.option("--run_semantic_segmentation", is_flag=True, help="Run semantic segmentation on EE rgb images")
 @click.option("--show-open3d", is_flag=True, help="Show the open3d visualization")
 @click.option("--device_id", type=int, default=0, help="Device ID for camera")
 @click.option("--verbose", is_flag=True, help="Print debug information from perception")
@@ -53,7 +50,7 @@ def main(
         semantic_sensor = None
     agent = RobotAgent(robot, robot.parameters, semantic_sensor, enable_realtime_updates=False)
 
-    observation = robot.get_observation()
+    robot.get_observation()
     robot.move_to_nav_posture()
 
     if robot.parameters["agent"]["sweep_head_on_update"]:

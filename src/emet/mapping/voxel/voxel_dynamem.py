@@ -12,7 +12,7 @@ import os
 import pickle
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import cv2
 import numpy as np
@@ -45,7 +45,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         resolution: float = 0.01,
         semantic_memory_resolution: float = 0.05,
         feature_dim: int = 3,
-        grid_size: Tuple[int, int] = None,
+        grid_size: tuple[int, int] = None,
         grid_resolution: float = 0.05,
         obs_min_height: float = 0.1,
         obs_max_height: float = 1.8,
@@ -59,11 +59,11 @@ class SparseVoxelMap(SparseVoxelMapBase):
         max_depth: float = 2.5,
         pad_obstacles: int = 0,
         background_instance_label: int = -1,
-        instance_memory_kwargs: Dict[str, Any] = {},
-        voxel_kwargs: Dict[str, Any] = {},
+        instance_memory_kwargs: dict[str, Any] = None,
+        voxel_kwargs: dict[str, Any] = None,
         encoder=None,
         map_2d_device: str = "cpu",
-        device: Optional[str] = None,
+        device: str | None = None,
         use_instance_memory: bool = False,
         use_median_filter: bool = False,
         median_filter_size: int = 5,
@@ -81,6 +81,10 @@ class SparseVoxelMap(SparseVoxelMapBase):
         mllm=False,
         run_eqa=False,
     ):
+        if voxel_kwargs is None:
+            voxel_kwargs = {}
+        if instance_memory_kwargs is None:
+            instance_memory_kwargs = {}
         super().__init__(
             resolution=resolution,
             feature_dim=feature_dim,
@@ -116,10 +120,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
         )
 
         self.point_update_threshold = point_update_threshold
-        self._history_soft: Optional[Tensor] = None
-        self.semantic_memory = VoxelizedPointcloud(voxel_size=semantic_memory_resolution).to(
-            self.device
-        )
+        self._history_soft: Tensor | None = None
+        self.semantic_memory = VoxelizedPointcloud(voxel_size=semantic_memory_resolution).to(self.device)
         self.encoder = encoder
         self.image_shape = image_shape
         self.obs_count = 0
@@ -128,18 +130,14 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self.mllm = mllm
         if self.mllm:
             # Used to do visual grounding task
-            self.gpt_client = OpenaiClient(
-                DYNAMEM_VISUAL_GROUNDING_PROMPT, model="gpt-4o-2024-05-13"
-            )
+            self.gpt_client = OpenaiClient(DYNAMEM_VISUAL_GROUNDING_PROMPT, model="gpt-4o-2024-05-13")
 
         self.run_eqa = run_eqa
         if self.run_eqa:
             # To avoid using too much closed source VLMs, we use Qwen2.5-3b-vl-instruct for image description.
-            self.image_description_client = Qwen25VLClient(
-                model_size="3B", quantization="int4", max_tokens=20
-            )
+            self.image_description_client = Qwen25VLClient(model_size="3B", quantization="int4", max_tokens=20)
 
-            self.image_descriptions: List[Tuple[List[str], List[int]]] = []
+            self.image_descriptions: list[tuple[list[str], list[int]]] = []
 
             from emet.llms.gemini_client import GeminiClient
             from emet.llms.prompts.eqa_prompt import EQA_PROMPT
@@ -147,10 +145,10 @@ class SparseVoxelMap(SparseVoxelMapBase):
             self.eqa_client = GeminiClient(EQA_PROMPT, model="gemini-2.5-flash")
 
         # Attributes for EQA, If you are not running EQA module, this will stay the same.
-        self._question: Optional[str] = None
-        self.relevant_objects: Optional[list] = None
+        self._question: str | None = None
+        self.relevant_objects: list | None = None
 
-        self.history_outputs: List[str] = []
+        self.history_outputs: list[str] = []
 
     def find_alignment_over_model(self, queries: str):
         clip_text_tokens = self.encoder.encode_text(queries).cpu()
@@ -181,7 +179,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
     def verify_point(
         self,
         text: str,
-        point: Union[torch.Tensor, np.ndarray],
+        point: torch.Tensor | np.ndarray,
         distance_threshold: float = 0.1,
         similarity_threshold: float = 0.21,
     ):
@@ -207,20 +205,14 @@ class SparseVoxelMap(SparseVoxelMapBase):
             print("Points close the the point are not similar to the text!")
         return torch.max(alignments[distances < distance_threshold]) >= similarity_threshold
 
-    def get_2d_map(
-        self, debug: bool = False, return_history_id: bool = False, kernel: int = 7
-    ) -> Tuple[Tensor, ...]:
+    def get_2d_map(self, debug: bool = False, return_history_id: bool = False, kernel: int = 7) -> tuple[Tensor, ...]:
         """
         Get 2d map with explored area and frontiers.
         return_history_id: if True, return when each voxel was recently updated
         """
 
         # Is this already cached? If so we don't need to go to all this work
-        if (
-            self._map2d is not None
-            and self._history_soft is not None
-            and self._seq == self._2d_last_updated
-        ):
+        if self._map2d is not None and self._history_soft is not None and self._seq == self._2d_last_updated:
             return self._map2d if not return_history_id else (*self._map2d, self._history_soft)
 
         # Convert metric measurements to discrete
@@ -232,8 +224,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
         obs_ids = self.voxel_pcd._obs_counts
         if xyz is None:
             xyz = torch.zeros((0, 3))
-            counts = torch.zeros((0))
-            obs_ids = torch.zeros((0))
+            counts = torch.zeros(0)
+            obs_ids = torch.zeros(0)
 
         device = xyz.device
         xyz = ((xyz / self.grid_resolution) + self.grid_origin + 0.5).long()
@@ -336,9 +328,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         else:
             return obstacles, explored, history_soft
 
-    def process_rgbd_images(
-        self, rgb: np.ndarray, depth: np.ndarray, intrinsics: np.ndarray, pose: np.ndarray
-    ):
+    def process_rgbd_images(self, rgb: np.ndarray, depth: np.ndarray, intrinsics: np.ndarray, pose: np.ndarray):
         """
         Process rgbd images for Dynamem
         """
@@ -356,9 +346,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         np.save(os.path.join(debug_dir, "pose" + str(self.obs_count) + ".npy"), pose)
 
         # Update obstacle map
-        self.voxel_pcd.clear_points(
-            torch.from_numpy(depth), torch.from_numpy(intrinsics), torch.from_numpy(pose)
-        )
+        self.voxel_pcd.clear_points(torch.from_numpy(depth), torch.from_numpy(intrinsics), torch.from_numpy(pose))
 
         instance_image = None
         instance_classes = None
@@ -369,12 +357,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
                     rgb, depth=depth, draw_instance_predictions=False
                 )
                 instance_image = torch.from_numpy(instance.astype(np.int64))
-                instance_classes = torch.from_numpy(
-                    task_obs["instance_classes"].astype(np.int64)
-                )
-                instance_scores = torch.from_numpy(
-                    task_obs["instance_scores"].astype(np.float32)
-                )
+                instance_classes = torch.from_numpy(task_obs["instance_classes"].astype(np.int64))
+                instance_scores = torch.from_numpy(task_obs["instance_scores"].astype(np.float32))
             except Exception as e:
                 logger.warning("Instance detection failed in process_rgbd_images: %s", e)
 
@@ -439,10 +423,10 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
     def add_to_semantic_memory(
         self,
-        valid_xyz: Optional[torch.Tensor],
-        feature: Optional[torch.Tensor],
-        valid_rgb: Optional[torch.Tensor],
-        weights: Optional[torch.Tensor] = None,
+        valid_xyz: torch.Tensor | None,
+        feature: torch.Tensor | None,
+        valid_rgb: torch.Tensor | None,
+        weights: torch.Tensor | None = None,
         threshold: float = 0.95,
     ):
         """
@@ -480,16 +464,14 @@ class SparseVoxelMap(SparseVoxelMapBase):
         if self.mllm:
             return self.localize_with_mllm(text, debug=debug, return_debug=return_debug)
         else:
-            return self.localize_with_feature_similarity(
-                text, debug=debug, return_debug=return_debug
-            )
+            return self.localize_with_feature_similarity(text, debug=debug, return_debug=return_debug)
 
     def find_all_images(
         self,
         text: str,
-        min_similarity_threshold: Optional[float] = None,
+        min_similarity_threshold: float | None = None,
         min_point_num: int = 100,
-        max_img_num: Optional[int] = 3,
+        max_img_num: int | None = 3,
     ):
         """
         Select all images with high pixel similarity with text (by identifying whether points in this image are relevant objects)
@@ -568,9 +550,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
             top_k = min(max_img_num, len(valid_alignments))
         else:
             top_k = len(valid_alignments)
-        top_alignments, top_indices = torch.topk(
-            valid_alignments, k=top_k, dim=0, largest=True, sorted=True
-        )
+        top_alignments, top_indices = torch.topk(valid_alignments, k=top_k, dim=0, largest=True, sorted=True)
         top_points = valid_points[top_indices]
         top_obs_counts = valid_obs[top_indices]
 
@@ -580,7 +560,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
         return sorted_obs_counts, sorted_points, top_alignments
 
-    def llm_locator(self, image_ids: Union[torch.Tensor, np.ndarray, list], text: str):
+    def llm_locator(self, image_ids: torch.Tensor | np.ndarray | list, text: str):
         """
         Prompting the mLLM to select the images containing objects of interest.
 
@@ -754,17 +734,13 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
         if res is not None:
             target_point = res
-            debug_text += (
-                "#### - Object is detected in observations . **😃** Directly navigate to it.\n"
-            )
+            debug_text += "#### - Object is detected in observations . **😃** Directly navigate to it.\n"
         else:
             cosine_similarity_check = alignments.max().item() > 0.21
             if cosine_similarity_check:
                 target_point = point
 
-                debug_text += (
-                    "#### - The point has high cosine similarity. **😃** Directly navigate to it.\n"
-                )
+                debug_text += "#### - The point has high cosine similarity. **😃** Directly navigate to it.\n"
             else:
                 debug_text += "#### - Cannot verify whether this instance is the target. **😞** \n"
         print("--------------------------------")
@@ -780,15 +756,15 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self,
         camera_pose: Tensor,
         rgb: Tensor,
-        xyz: Optional[Tensor] = None,
-        camera_K: Optional[Tensor] = None,
-        feats: Optional[Tensor] = None,
-        depth: Optional[Tensor] = None,
-        base_pose: Optional[Tensor] = None,
+        xyz: Tensor | None = None,
+        camera_K: Tensor | None = None,
+        feats: Tensor | None = None,
+        depth: Tensor | None = None,
+        base_pose: Tensor | None = None,
         xyz_frame: str = "camera",
-        instance_image: Optional[Tensor] = None,
-        instance_classes: Optional[Tensor] = None,
-        instance_scores: Optional[Tensor] = None,
+        instance_image: Tensor | None = None,
+        instance_classes: Tensor | None = None,
+        instance_scores: Tensor | None = None,
         **info,
     ):
         """Add this to our history of observations. Also update the current running map.
@@ -813,20 +789,18 @@ class SparseVoxelMap(SparseVoxelMapBase):
         if isinstance(camera_pose, np.ndarray):
             camera_pose = torch.from_numpy(camera_pose)
         if depth is not None:
-            assert (
-                rgb.shape[:-1] == depth.shape
-            ), f"depth and rgb image sizes must match; got {rgb.shape=} {depth.shape=}"
+            assert rgb.shape[:-1] == depth.shape, (
+                f"depth and rgb image sizes must match; got {rgb.shape=} {depth.shape=}"
+            )
         assert xyz is not None or (camera_K is not None and depth is not None)
         if xyz is not None:
-            assert (
-                xyz.shape[-1] == 3
-            ), "xyz must have last dimension = 3 for x, y, z position of points"
+            assert xyz.shape[-1] == 3, "xyz must have last dimension = 3 for x, y, z position of points"
             assert rgb.shape == xyz.shape, "rgb shape must match xyz"
             # Make sure shape is correct here for xyz and any passed-in features
             if feats is not None:
-                assert (
-                    feats.shape[-1] == self.feature_dim
-                ), f"features must match voxel feature dimenstionality of {self.feature_dim}"
+                assert feats.shape[-1] == self.feature_dim, (
+                    f"features must match voxel feature dimenstionality of {self.feature_dim}"
+                )
                 assert xyz.shape[0] == feats.shape[0], "features must be available for each point"
             else:
                 pass
@@ -836,12 +810,10 @@ class SparseVoxelMap(SparseVoxelMapBase):
             assert depth.ndim == 2 or xyz_frame == "world"
         if camera_K is not None:
             assert camera_K.ndim == 2, "camera intrinsics K must be a 3x3 matrix"
-        assert (
-            camera_pose.ndim == 2 and camera_pose.shape[0] == 4 and camera_pose.shape[1] == 4
-        ), "Camera pose must be a 4x4 matrix representing a pose in SE(3)"
-        assert (
-            xyz_frame in VALID_FRAMES
-        ), f"frame {xyz_frame} was not valid; should one one of {VALID_FRAMES}"
+        assert camera_pose.ndim == 2 and camera_pose.shape[0] == 4 and camera_pose.shape[1] == 4, (
+            "Camera pose must be a 4x4 matrix representing a pose in SE(3)"
+        )
+        assert xyz_frame in VALID_FRAMES, f"frame {xyz_frame} was not valid; should one one of {VALID_FRAMES}"
 
         # Apply a median filter to remove bad depth values when mapping and exploring
         # This is not strictly necessary but the idea is to clean up bad pixels
@@ -852,9 +824,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         # Get full_world_xyz
         if xyz is not None:
             if xyz_frame == "camera":
-                full_world_xyz = (
-                    torch.cat([xyz, torch.ones_like(xyz[..., [0]])], dim=-1) @ camera_pose.T
-                )[..., :3]
+                full_world_xyz = (torch.cat([xyz, torch.ones_like(xyz[..., [0]])], dim=-1) @ camera_pose.T)[..., :3]
             elif xyz_frame == "world":
                 full_world_xyz = xyz
             else:
@@ -894,9 +864,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 valid_depth = valid_depth & ~edges
 
             if self.use_median_filter:
-                valid_depth = (
-                    valid_depth & (median_filter_error < self.median_filter_max_error).bool()
-                )
+                valid_depth = valid_depth & (median_filter_error < self.median_filter_max_error).bool()
 
         # Add instance views to memory (for UI icons / scene graph)
         if self.use_instance_memory and instance_image is not None:
@@ -918,16 +886,16 @@ class SparseVoxelMap(SparseVoxelMapBase):
                     seg = seg.long()
                 # Detection overlay_masks uses -1 for background
                 self.instances.process_instances_for_env(
-                env_id=0,
-                instance_seg=seg,
-                point_cloud=pc,
-                image=img_chw,
-                cam_to_world=camera_pose,
-                instance_classes=instance_classes,
-                instance_scores=instance_scores,
-                background_instance_labels=[-1],
-                valid_points=valid_depth,
-                pose=base_pose,
+                    env_id=0,
+                    instance_seg=seg,
+                    point_cloud=pc,
+                    image=img_chw,
+                    cam_to_world=camera_pose,
+                    instance_classes=instance_classes,
+                    instance_scores=instance_scores,
+                    background_instance_labels=[-1],
+                    valid_points=valid_depth,
+                    pose=base_pose,
                 )
                 self.instances.associate_instances_to_memory()
 
@@ -939,9 +907,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
         # TODO: weights could also be confidence, inv distance from camera, etc
         if world_xyz.nelement() > 0:
-            selected_indices = torch.randperm(len(world_xyz))[
-                : int((1 - self.point_update_threshold) * len(world_xyz))
-            ]
+            selected_indices = torch.randperm(len(world_xyz))[: int((1 - self.point_update_threshold) * len(world_xyz))]
             if len(selected_indices) == 0:
                 return
             if world_xyz is not None:
@@ -961,7 +927,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         # Increment sequence counter
         self._seq += 1
 
-    def xy_to_grid_coords(self, xy: np.ndarray) -> Optional[np.ndarray]:
+    def xy_to_grid_coords(self, xy: np.ndarray) -> np.ndarray | None:
         if not isinstance(xy, np.ndarray):
             xy = np.array(xy)
         return self.grid.xy_to_grid_coords(torch.Tensor(xy))
@@ -983,7 +949,16 @@ class SparseVoxelMap(SparseVoxelMapBase):
         assert pickle_file_name.exists(), f"No file found at {pickle_file_name}"
         with pickle_file_name.open("rb") as f:
             data = pickle.load(f)
-        for i, (camera_pose, xyz, rgb, feats, depth, base_pose, K, world_xyz,) in enumerate(
+        for i, (
+            camera_pose,
+            xyz,
+            rgb,
+            feats,
+            depth,
+            base_pose,
+            K,
+            _world_xyz,
+        ) in enumerate(
             zip(
                 data["camera_poses"],
                 data["xyz"],
@@ -993,6 +968,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 data["base_poses"],
                 data["camera_K"],
                 data["world_xyz"],
+                strict=False,
             )
         ):
             # Handle the case where we dont actually want to load everything
@@ -1029,7 +1005,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self.semantic_memory.obs_count = max(self.semantic_memory._obs_counts).item()
         self.semantic_memory.obs_count = max(self.semantic_memory._obs_counts).item()
 
-    def write_to_pickle(self, filename: Optional[str] = None) -> None:
+    def write_to_pickle(self, filename: str | None = None) -> None:
         """Write out to a pickle file. This is a rough, quick-and-easy output for debugging, not intended to replace the scalable data writer in data_tools for bigger efforts.
 
         Args:
@@ -1039,7 +1015,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
             os.mkdir("debug")
         if filename is None:
             filename = self.log + ".pkl"
-        data: Dict[str, Any] = {}
+        data: dict[str, Any] = {}
         data["camera_poses"] = []
         data["camera_K"] = []
         data["base_poses"] = []
@@ -1113,10 +1089,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         return (
             history,
             selected_images,
-            [
-                self.image_descriptions[selected_image.item() - 1]
-                for selected_image in selected_images
-            ],
+            [self.image_descriptions[selected_image.item() - 1] for selected_image in selected_images],
         )
 
     def extract_relevant_objects(self, question: str):
@@ -1156,7 +1129,6 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 file.write(input_texts)
 
     def parse_answer(self, answer_outputs: str):
-
         """
         Parse the output of LLM text into reasoning, answer, confidence, action, confidence_reasoning
         """
@@ -1170,13 +1142,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         # Answer outputs in the format "Caption: Reasoning: Answer: Confidence: Action: Confidence_reasoning:"
         def extract_between(text, start, end):
             try:
-                return (
-                    text.split(start, 1)[1]
-                    .split(end, 1)[0]
-                    .strip()
-                    .replace("\n", "")
-                    .replace("\t", "")
-                )
+                return text.split(start, 1)[1].split(end, 1)[0].strip().replace("\n", "").replace("\t", "")
             except IndexError:
                 return ""
 
@@ -1204,10 +1170,10 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self.extract_relevant_objects(question)
 
         # messages = [{"type": "text", "text": "Question: " + question}]
-        commands: List[Any] = ["Question: " + question]
+        commands: list[Any] = ["Question: " + question]
         # messages.append({"type": "text", "text": "HISTORY: "})
         commands.append("HISTORY: ")
-        for (i, history_output) in enumerate(self.history_outputs):
+        for i, history_output in enumerate(self.history_outputs):
             # messages.append({"type": "text", "text": "Iteration_" + str(i) + ":" + history_output})
             commands.append("Iteration_" + str(i) + ":" + history_output)
         # messages.append({"role": "user", "content": [{"type": "input_text", "text": question}]})
@@ -1250,9 +1216,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
             relevant_images.append(image)
 
         # Extract answers
-        answer_outputs = (
-            self.eqa_client(commands).replace("*", "").replace("/", "").replace("#", "").lower()
-        )
+        answer_outputs = self.eqa_client(commands).replace("*", "").replace("/", "").replace("#", "").lower()
 
         print(commands)
         print(answer_outputs)
@@ -1295,9 +1259,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
             answer,
             confidence,
             confidence_reasoning,
-            self.get_target_point_from_image_id(action, xyt, planner)
-            if action is not None
-            else None,
+            self.get_target_point_from_image_id(action, xyt, planner) if action is not None else None,
             relevant_images,
         )
 
@@ -1324,16 +1286,12 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 # If we have already send the raw image observation to LLM.
                 if index in obs_ids:
                     cluster_string += (
-                        " This observation description is associated with Image "
-                        + str(obs_ids.index(index) + 1)
-                        + ";"
+                        " This observation description is associated with Image " + str(obs_ids.index(index) + 1) + ";"
                     )
                 # If this image corresponds to an unexplored frontier
                 if index in frontier_ids:
-                    cluster_string += (
-                        " This observation description corresponds to unexplored space;"
-                    )
-                options += f"{i+1}. {cluster_string}\n"
+                    cluster_string += " This observation description corresponds to unexplored space;"
+                options += f"{i + 1}. {cluster_string}\n"
         return selected_images, "IMAGE_DESCRIPTIONS: " + options
 
     def get_target_point_from_image_id(self, image_id: int, xyt, planner):
@@ -1357,19 +1315,11 @@ class SparseVoxelMap(SparseVoxelMapBase):
         if torch.sum((history == image_id) & unexplored_frontier) > 0:
             print("unexplored frontier")
             image_coord = (
-                ((history == image_id) & unexplored_frontier)
-                .nonzero(as_tuple=False)
-                .median(dim=0)
-                .values.int()
+                ((history == image_id) & unexplored_frontier).nonzero(as_tuple=False).median(dim=0).values.int()
             )
         elif torch.sum((history == image_id) & obstacles) > 0:
             print("obstacles")
-            image_coord = (
-                ((history == image_id) & obstacles)
-                .nonzero(as_tuple=False)
-                .median(dim=0)
-                .values.int()
-            )
+            image_coord = ((history == image_id) & obstacles).nonzero(as_tuple=False).median(dim=0).values.int()
         else:
             print("others")
             image_coord = (history == image_id).nonzero(as_tuple=False).median(dim=0).values.int()
@@ -1391,9 +1341,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         history = np.ma.masked_array(history, ~unexplored_frontier)
         return np.unique(history)
 
-    def list_objects_in_an_image(
-        self, image: Union[torch.Tensor, Image.Image, np.ndarray], max_tries: int = 3
-    ):
+    def list_objects_in_an_image(self, image: torch.Tensor | Image.Image | np.ndarray, max_tries: int = 3):
         """
         Extract visual clues (a list of featured objects) from the image observation and add the clues to a list
         """
@@ -1424,9 +1372,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         obs_ids = self.voxel_pcd._obs_counts
         xyz, _, _, _ = self.voxel_pcd.get_pointcloud()
         grid_coord = list(
-            self.xy_to_grid_coords(
-                torch.mean(xyz[obs_ids == obs_ids.max()], dim=0)[:2].int().cpu().numpy()
-            )
+            self.xy_to_grid_coords(torch.mean(xyz[obs_ids == obs_ids.max()], dim=0)[:2].int().cpu().numpy())
         )
         for i in range(len(grid_coord)):
             grid_coord[i] = int(grid_coord[i])
@@ -1446,7 +1392,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         if len(xyt) == 3:
             xyt = xyt[:2]
         reachable_points = planner.get_reachable_points(planner.to_pt(xyt))
-        reachable_xs, reachable_ys = zip(*reachable_points)
+        reachable_xs, reachable_ys = zip(*reachable_points, strict=False)
         reachable_xs = torch.tensor(reachable_xs)
         reachable_ys = torch.tensor(reachable_ys)
 
