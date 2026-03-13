@@ -189,12 +189,15 @@ class HelloStretchKinematics:
 
         self.joint_tol = joint_tolerance
 
-        # urdf
+        # urdf: use MANIP_STRETCH_URDF (config or stretch_urdf fallback) or path/stretch.urdf
         if not urdf_path:
             manip_urdf = MANIP_STRETCH_URDF
         else:
             manip_urdf = os.path.join(urdf_path, "stretch.urdf")
-        self.manip_mode_urdf_path = os.path.join(root, manip_urdf)
+        # Avoid joining root when manip_urdf is already absolute
+        self.manip_mode_urdf_path = (
+            os.path.join(root, manip_urdf) if not os.path.isabs(manip_urdf) else manip_urdf
+        )
         self.name = name
         self.visualize = visualize
 
