@@ -8,13 +8,99 @@
 # license information maybe found below, if so.
 
 import math
+import os
 
 import numpy as np
 
 from emet.utils.config import get_full_config_path
 
-# Stretch stuff
-MANIP_STRETCH_URDF = get_full_config_path("urdf/stretch.urdf")
+# Stretch stuff: use config urdf if present, else generate from hello-robot-stretch-urdf package
+_CONFIG_STRETCH_URDF = get_full_config_path("urdf/stretch.urdf")
+
+# XML snippet added by dynamem (OK-Robot manipulation stack): joint_fake so joint_mast is child
+_JOINT_FAKE_SNIPPET = """
+    <link name="fake_link_x">
+        <inertial>
+            <origin rpy="0.0 0.0 0." xyz="0. 0. 0."/>
+            <mass value="0.749143203376"/>
+            <inertia ixx="0.0709854511955" ixy="-0.00433428742758" ixz="-0.000186110788698" iyy="0.000437922053343" iyz="-0.00288788257713" izz="0.0711048085017"/>
+        </inertial>
+    </link>
+    <joint name="joint_fake" type="prismatic">
+        <origin rpy="0. 0. 0." xyz="0. 0. 0."/>
+        <axis xyz="1.0 0.0 0.0"/>
+        <parent link="base_link"/>
+        <child link="fake_link_x"/>
+        <limit effort="100.0" lower="-1.0" upper="1.1" velocity="1.0"/>
+    </joint>
+"""
+
+
+def _generate_dynamem_stretch_urdf(package_urdf_path: str, out_path: str) -> None:
+    """Write a Dynamem-modified Stretch URDF (joint_fake + mesh paths) to out_path."""
+    import xml.etree.ElementTree as ET
+
+    tree = ET.parse(package_urdf_path)
+    root = tree.getroot()
+    pkg_dir = os.path.dirname(os.path.abspath(package_urdf_path))
+
+    # Resolve mesh paths relative to package so the generated file works from any cwd
+    for mesh in root.iter("mesh"):
+        fn = mesh.get("filename")
+        if fn and not os.path.isabs(fn):
+            mesh.set("filename", os.path.normpath(os.path.join(pkg_dir, fn)))
+
+    # Add joint_fake if not present (same logic as config/dynamem_urdf.py)
+    has_fake = any(
+        j.get("name") == "joint_fake" for j in root.findall("joint")
+    )
+    if not has_fake:
+        snippet_root = ET.fromstring(f"<root>{_JOINT_FAKE_SNIPPET}</root>")
+        for el in snippet_root:
+            root.append(el)
+        for joint in root.findall("joint"):
+            if joint.get("name") == "joint_mast":
+                parent = joint.find("parent")
+                if parent is not None:
+                    parent.set("link", "fake_link_x")
+                break
+
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    tree.write(out_path, xml_declaration=True, encoding="utf-8", default_namespace="")
+
+
+def get_stretch_urdf_path() -> str:
+    """Path to a valid Stretch URDF for kinematics (config or generated with joint_fake)."""
+    if os.path.isfile(_CONFIG_STRETCH_URDF):
+        return _CONFIG_STRETCH_URDF
+    try:
+        import stretch_urdf
+
+        pkg_dir = os.path.dirname(stretch_urdf.__file__)
+        # Prefer dex_wrist URDF so joint_wrist_pitch and joint_wrist_roll exist (Dynamem default_manip_mode_controlled_joints)
+        for rel in (
+            "RE1V0/stretch_description_RE1V0_tool_stretch_dex_wrist.urdf",
+            "RE2V0/stretch_description_RE2V0_tool_stretch_dex_wrist.urdf",
+            "RE1V0/stretch_description_RE1V0_tool_stretch_gripper.urdf",
+        ):
+            fallback = os.path.join(pkg_dir, rel)
+            if os.path.isfile(fallback):
+                _generate_dynamem_stretch_urdf(fallback, _CONFIG_STRETCH_URDF)
+                return _CONFIG_STRETCH_URDF
+        re1 = os.path.join(pkg_dir, "RE1V0")
+        if os.path.isdir(re1):
+            for name in sorted(os.listdir(re1)):
+                if name.endswith(".urdf"):
+                    _generate_dynamem_stretch_urdf(
+                        os.path.join(re1, name), _CONFIG_STRETCH_URDF
+                    )
+                    return _CONFIG_STRETCH_URDF
+    except Exception:
+        pass
+    return _CONFIG_STRETCH_URDF
+
+
+MANIP_STRETCH_URDF = get_stretch_urdf_path()
 
 # This is the gripper, and the distance in the gripper frame to where the fingers will roughly meet
 STRETCH_GRASP_FRAME = "link_grasp_center"
