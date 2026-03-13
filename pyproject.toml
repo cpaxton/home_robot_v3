@@ -76,6 +76,8 @@ dependencies = [
     "open3d",
     "click>=8.1.8",
     "paramiko>=3.0.0",
+    # Required by pinocchio (pin) at import time when built with collision support; do not remove.
+    "hpp-fcl",
 ]
 
 [project.scripts]

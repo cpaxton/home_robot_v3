@@ -391,7 +391,11 @@ def map_between_ranges(
     ) + to_min_max[0]
 
 
-def get_depth_color_map(depth_image, clor_map=cv2.COLORMAP_JET):
+# COLORMAP_JET = 2; some opencv builds (e.g. headless) may not expose the name
+_COLORMAP_JET = getattr(cv2, "COLORMAP_JET", 2)
+
+
+def get_depth_color_map(depth_image, color_map=_COLORMAP_JET):
     """
     Get depth color map
     """
@@ -400,7 +404,7 @@ def get_depth_color_map(depth_image, clor_map=cv2.COLORMAP_JET):
 
     normalized_depth = (depth_image - depth_min) / (depth_max - depth_min)
     depth_8bit = ((1 - normalized_depth) * 255).astype(np.uint8)
-    depth_8bit = cv2.applyColorMap(depth_8bit, clor_map)
+    depth_8bit = cv2.applyColorMap(depth_8bit, color_map)
     return depth_8bit
 
 
