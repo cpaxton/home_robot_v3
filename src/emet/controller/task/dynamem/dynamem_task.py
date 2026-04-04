@@ -436,15 +436,10 @@ class EQAExecuter:
     def rotate_in_place(self):
         self.agent.rotate_in_place()
 
-    def __call__(self, response: List[Tuple[str, str]], channel=None):
-        """Answer the question given by the LLM bot.
-
-        Args:
-            response: A question
-
-        Returns:
-            Answer
-        """
+    def __call__(
+        self, response: str | list[tuple[str, str]], channel=None
+    ) -> tuple[str, list[Image.Image]]:
+        """Run EQA for one user question (string) or Discord-style payload (list of tuples)."""
         discord_text, relevant_images = self.agent.run_eqa(response)
         if channel is not None:
             self.discord_bot.send_message(
@@ -452,3 +447,4 @@ class EQAExecuter:
                 message=discord_text,
                 content=numpy_image_to_bytes(relevant_images),
             )
+        return discord_text, relevant_images

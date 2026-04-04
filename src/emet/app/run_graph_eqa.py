@@ -55,7 +55,7 @@ from emet.memory.graph_eqa import format_scene_graph_pretty
 @click.option(
     "--cpu-only",
     is_flag=True,
-    help="CPU-only: skip loading Qwen2.5-VL for scene labels; use voxel fallback",
+    help="CPU-only: skip loading Qwen3.5 multimodal for scene labels; use voxel fallback",
 )
 @click.option(
     "--no-sensor-perception",
@@ -84,6 +84,17 @@ def main(
     robot.set_velocity(v=30.0, w=15.0)
 
     parameters["encoder"] = None
+
+    ev = parameters.get("eqa_vl", {}) or {}
+    ms = ev.get("model_size")
+    qn = ev.get("quantization", "int4")
+    if ms is None or str(ms).lower() == "null":
+        print(
+            "- EQA VL: one Qwen3.5 load sized by VRAM tiers (see eqa_vl/vram_mib_tier_* in dynav_config.yaml),",
+            f"quantization={qn}",
+        )
+    else:
+        print(f"- EQA VL: single shared Qwen3.5-{ms} ({qn}) for labels + EQA")
 
     print("- Start GraphEQA agent (graph memory + voxel map for navigation)")
     agent = GraphEQAController(
@@ -141,7 +152,10 @@ def main(
                 robot.move_to_nav_posture()
                 robot.switch_to_navigation_mode()
                 robot.say("Answering the question " + question)
-                executor(question)
+                discord_text, _imgs = executor(question)
+                # run_eqa / GraphEQAController also prints; keep a one-line confirmation for piping/logs
+                if not discord_text.strip():
+                    print("(Empty EQA reply — check graph memory / observations.)")
     finally:
         _save_dump()
 

@@ -127,3 +127,39 @@ def test_query_answer_returns_tuple_with_mock_client():
     assert isinstance(confidence_reasoning, str)
     assert target_point is None  # confident, so no exploration
     assert isinstance(relevant_images, list)
+
+
+def test_color_question_answer_contains_red_and_blue():
+    """
+    Default MuJoCo scene has a red cylinder and blue cube; GraphEQA answer should name both colors.
+
+    Uses mocks (no GPU LLM). Sim coverage: test_graph_eqa_color_question_default_mujoco_scene.
+    """
+    def mock_eqa(commands):
+        return (
+            "reasoning: the scene graph lists a red cylinder and a blue cube on the table.\n"
+            "answer: red and blue (red cylinder, blue cube).\n"
+            "confidence: true\n"
+            "action: \n"
+            "confidence_reasoning: both objects are in the graph labels.\n"
+        )
+
+    mem = GraphEQAMemory(
+        eqa_client=mock_eqa,
+        image_description_client=lambda cmd: "red cylinder, blue cube",
+    )
+    rgb = np.zeros((60, 80, 3), dtype=np.uint8)
+    # Same layout as default scene: object2 / object1 positions (see test_red_cylinder_in_sim)
+    mem.add_observation(rgb, np.array([0.08, -0.55, 0.6]), ["red cylinder"])
+    mem.add_observation(rgb, np.array([-0.02, -0.55, 0.6]), ["blue cube"])
+    graph_str = mem.to_string().lower()
+    assert "red" in graph_str
+    assert "blue" in graph_str
+
+    _reasoning, answer, confidence, _cr, _tp, _imgs = mem.query_answer(
+        "Which color objects can you see?", None, None
+    )
+    assert confidence is True
+    al = answer.lower()
+    assert "red" in al, f"expected 'red' in answer, got: {answer!r}"
+    assert "blue" in al, f"expected 'blue' in answer, got: {answer!r}"

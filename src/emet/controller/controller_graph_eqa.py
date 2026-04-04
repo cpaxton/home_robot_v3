@@ -207,6 +207,10 @@ class GraphEQAController(DynamemController):
         self, question: str, max_planning_steps: int = 5
     ) -> tuple[str, list[Image.Image]]:
         """Run EQA until confident or max steps, using graph memory."""
+        answer = ""
+        confidence = False
+        discord_text = ""
+        relevant_images: list[Image.Image] = []
         for _ in range(max_planning_steps):
             answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(
                 question
@@ -215,6 +219,13 @@ class GraphEQAController(DynamemController):
                 break
         if not relevant_images:
             relevant_images = []
+        # Terminal + TTS feedback (CLI users otherwise see no reply; parent DynamemController.run_eqa does this for voxel EQA).
+        print("\n--- GraphEQA answer ---\n" + discord_text.strip() + "\n---\n")
+        if confidence:
+            try:
+                self.robot.say("The answer to " + question + " is " + answer)
+            except Exception:
+                pass
         return discord_text, relevant_images
 
 
