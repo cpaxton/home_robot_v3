@@ -20,26 +20,214 @@ import shutil
 import sys
 from pathlib import Path
 
+from emet.simulation.molmospaces_config import (
+    ensure_molmo_asset_layout_symlinks,
+    ensure_molmospaces_assets_dir_env,
+)
+
+# Before any ``import molmo_spaces...`` (ASSETS_DIR is fixed at import time).
+ensure_molmospaces_assets_dir_env()
+
+_MOLMO_VENV_HELP = (
+    "Recreate the MolmoSpaces venv: rm -rf .venv-molmospaces && ./install.sh --molmospaces -y "
+    "(Python 3.11+; install emet with --no-deps, then packages/emet_molmospaces; "
+    "do not pip install emet-molmospaces in the main 3.10 .venv)."
+)
+
+
+def _xml_path_for_scene_index(scene: str, scene_map: object, split: str, index: int) -> str | Path | None:
+    """Resolve a concrete scene XML path from ``get_scenes(...)`` (current or legacy return shape).
+
+    For **ithor**, MolmoSpaces index keys follow **FloorPlan{N}** numbering (N >= 1). Emet uses a
+    **0-based scene index** that matches ``FloorPlan{index+1}_physics.xml`` and ``--molmospaces-index``,
+    so we look up key ``index + 1`` in the per-split map (slot 0 is unused in upstream maps).
+    """
+    map_key = index
+    if scene == "ithor":
+        map_key = index + 1
+
+    if isinstance(scene_map, (list, tuple)):
+        if index < 0 or index >= len(scene_map):
+            return None
+        return scene_map[index]
+    if not isinstance(scene_map, dict):
+        return None
+    per_split = scene_map.get(split)
+    if per_split is None:
+        return None
+    if isinstance(per_split, (list, tuple)):
+        if index < 0 or index >= len(per_split):
+            return None
+        return per_split[index]
+    if isinstance(per_split, dict):
+        entry = per_split.get(map_key)
+        if entry is None:
+            return None
+        if isinstance(entry, dict):
+            for key in ("base", "ceiling", "map"):
+                v = entry.get(key)
+                if v is not None:
+                    return v
+            for v in entry.values():
+                if v is not None:
+                    return v
+            return None
+        return entry
+    return None
+
+
+def _split_scene_count(scene_map: object, split: str) -> int:
+    """Number of scene indices available for *split* (for error messages and guards)."""
+    if isinstance(scene_map, (list, tuple)):
+        return len(scene_map)
+    if not isinstance(scene_map, dict):
+        return 0
+    per_split = scene_map.get(split)
+    if per_split is None:
+        return 0
+    if isinstance(per_split, (list, tuple, dict)):
+        return len(per_split)
+    return 0
+
+
+def _resource_manager_scene_source(scene: str, split: str) -> str:
+    """MolmoSpaces ResourceManager ``source`` name for ``scenes`` (see molmo_spaces_constants)."""
+    if scene == "ithor":
+        return "ithor"
+    if scene == "procthor-10k":
+        return f"procthor-10k-{split}"
+    if scene == "procthor-objaverse":
+        return f"procthor-objaverse-{split}"
+    if scene == "holodeck-objaverse":
+        return f"holodeck-objaverse-{split}"
+    if scene == "procthor-objaverse-debug":
+        return "procthor-objaverse-debug"
+    return scene
+
+
+def _install_lookup_token(scene: str, index: int) -> str:
+    """Token passed to ``install_scene_from_source_index`` / archive index (ithor uses FloorPlan numbering)."""
+    if scene == "ithor":
+        return str(index + 1)
+    return str(index)
+
+
+def _print_scene_missing_help(scene: str, split: str, index: int, n: int) -> None:
+    assets = os.environ.get("MLSPACES_ASSETS_DIR", "") or "(default ~/.cache/molmospaces/assets or venv assets)"
+    print(
+        f"No scene XML available for {scene} {split}[{index}] (split lists {n} index slots; "
+        "some may be empty until packages are downloaded).\n"
+        f"  Set MLSPACES_ASSETS_DIR if scenes should live outside the default cache (currently: {assets}).\n"
+        "  Or install this scene explicitly, then retry:\n"
+        f"    emet molmospaces install-scene --scene {scene} --split {split} --index {index}\n"
+        "  For iTHOR, index 0 is the first house (FloorPlan1); MolmoSpaces prints “Using SCENES_ROOT: …” "
+        "when the API initializes — that directory must receive the downloaded scene package.",
+        file=sys.stderr,
+    )
+
+
+def _try_download_scene_package(scene: str, split: str, index: int, *, install_if_missing: bool) -> bool:
+    """Prompt or auto-run MolmoSpaces on-demand scene archive install. Returns True if a install was attempted."""
+    env = os.environ.get("EMET_MOLMOSPACES_AUTO_INSTALL", "").strip().lower()
+    if env in ("0", "no", "n", "false"):
+        return False
+    auto = install_if_missing or env in ("1", "yes", "y", "true")
+    if not auto:
+        if not sys.stdin.isatty():
+            return False
+        try:
+            reply = input("Install scene package now? (Y/n) ")
+        except EOFError:
+            return False
+        if reply.strip().lower() in ("n", "no"):
+            return False
+
+    try:
+        from molmo_spaces.utils.lazy_loading_utils import install_scene_from_source_index
+    except ImportError as e:
+        print(f"Could not import install_scene_from_source_index: {e}", file=sys.stderr)
+        return False
+
+    src = _resource_manager_scene_source(scene, split)
+    token = _install_lookup_token(scene, index)
+    try:
+        install_scene_from_source_index(src, token)
+        return True
+    except Exception as e:
+        print(f"Scene package install failed ({src!r}, token={token!r}): {e}", file=sys.stderr)
+        return False
+
+
+def _resolve_scene_xml_path(
+    scene: str,
+    split: str,
+    index: int,
+    get_scenes,
+    *,
+    install_if_missing: bool,
+) -> str | Path | None:
+    """Return a concrete scene XML path, optionally downloading the scene archive first."""
+    scenes = get_scenes(scene, split)
+    path = _xml_path_for_scene_index(scene, scenes, split, index)
+    if path is not None:
+        return path
+    n = _split_scene_count(scenes, split)
+    _print_scene_missing_help(scene, split, index, n)
+    if _try_download_scene_package(scene, split, index, install_if_missing=install_if_missing):
+        scenes = get_scenes(scene, split)
+        path = _xml_path_for_scene_index(scene, scenes, split, index)
+    return path
+
 
 def _get_molmo_api():
-    """Import get_scenes and install_scene from molmo_spaces."""
+    """Import get_scenes and install_scene_with_objects_and_grasps_from_path from molmo_spaces."""
     try:
-        from molmo_spaces.scenes import get_scenes
+        from molmo_spaces.molmo_spaces_constants import get_scenes
     except ImportError:
         try:
-            from molmo_spaces import get_scenes
+            from molmo_spaces.scenes import get_scenes
+        except ImportError:
+            try:
+                from molmo_spaces import get_scenes
+            except ImportError as err:
+                raise ImportError(
+                    "Could not import get_scenes from molmo_spaces (tried molmo_spaces_constants, "
+                    f"scenes, top-level). {_MOLMO_VENV_HELP}"
+                ) from err
+
+    try:
+        from molmo_spaces.utils.lazy_loading_utils import (
+            install_scene_with_objects_and_grasps_from_path,
+        )
+    except ImportError:
+        try:
+            from molmo_spaces.resource_manager import (
+                install_scene_with_objects_and_grasps_from_path,
+            )
         except ImportError as err:
             raise ImportError(
-                "molmo_spaces not found. Install: pip install emet-molmospaces (or install.sh --molmospaces)"
+                "Could not import install_scene_with_objects_and_grasps_from_path "
+                f"(tried lazy_loading_utils, resource_manager). {_MOLMO_VENV_HELP}"
             ) from err
-    try:
-        from molmo_spaces.resource_manager import install_scene_with_objects_and_grasps_from_path
-    except ImportError:
-        try:
-            from molmo_spaces.utils.lazy_loading_utils import install_scene_with_objects_and_grasps_from_path
-        except ImportError as err:
-            raise ImportError("install_scene_with_objects_and_grasps_from_path not found in molmo_spaces") from err
+
     return get_scenes, install_scene_with_objects_and_grasps_from_path
+
+
+# MolmoSpaces ``install_scene_with_objects_and_grasps_from_path(..., exclude_thor=True)`` skips
+# ``../objects/thor/`` references in scene XML; iTHOR houses require those AI2-THOR assets.
+_SCENES_NEEDING_THOR_OBJECT_INSTALL = frozenset({"ithor"})
+
+
+def _install_scene_with_deps(path: str | Path, scene: str) -> None:
+    """Install scene package plus object/grasp archives. iTHOR must not exclude THOR object meshes."""
+    _, install_fn = _get_molmo_api()
+    install_fn(
+        path,
+        exclude_thor=(scene not in _SCENES_NEEDING_THOR_OBJECT_INSTALL),
+    )
+    # Molmo scene XML resolves ``../objects`` from ``scenes/<dataset>/`` to ``scenes/objects``, not
+    # the real ``objects/`` tree; link so MuJoCo finds meshes (see molmospaces_config).
+    ensure_molmo_asset_layout_symlinks()
 
 
 def run_list_scenes() -> int:
@@ -68,44 +256,83 @@ def run_list_scenes() -> int:
     return 0
 
 
+def _scene_xml_search_roots(scene: str) -> list[Path]:
+    """Directory(ies) containing scene XMLs for *scene* (match molmo_spaces_constants layout)."""
+    roots: list[Path] = []
+    env = os.environ.get("MLSPACES_ASSETS_DIR", "").strip()
+    if env:
+        roots.append(Path(env) / "scenes" / scene)
+    try:
+        from molmo_spaces.molmo_spaces_constants import get_scenes_root
+
+        roots.append(get_scenes_root() / scene)
+    except ImportError:
+        pass
+    try:
+        from molmo_spaces.molmo_spaces_constants import ASSETS_DIR
+
+        roots.append(Path(ASSETS_DIR) / "scenes" / scene)
+    except ImportError:
+        pass
+    roots.append(Path.home() / ".cache" / "molmospaces" / "assets" / "scenes" / scene)
+
+    seen: set[str] = set()
+    out: list[Path] = []
+    for r in roots:
+        try:
+            key = str(r.resolve())
+        except (OSError, RuntimeError):
+            key = str(r)
+        if key not in seen:
+            seen.add(key)
+            out.append(r)
+    return out
+
+
 def _find_installed_scene_xml(scene: str, index: int) -> Path | None:
-    assets_dir = os.environ.get("MLSPACES_ASSETS_DIR", "")
-    ad = Path(assets_dir) if assets_dir else Path.home() / ".cache" / "molmospaces" / "assets"
-    candidate = ad / "scenes" / scene / f"FloorPlan{index + 1}_physics.xml"
-    if candidate.exists():
-        return candidate
-    scene_dir = ad / "scenes" / scene
-    if scene_dir.exists():
-        xmls = sorted(scene_dir.rglob("*_physics.xml"))
-        if xmls:
-            return xmls[min(index, len(xmls) - 1)]
-        xmls = sorted(scene_dir.rglob("*.xml"))
-        if xmls:
-            return xmls[min(index, len(xmls) - 1)]
+    """Locate installed scene MJCF under the same roots MolmoSpaces uses (not only ~/.cache)."""
+    for scene_dir in _scene_xml_search_roots(scene):
+        candidate = scene_dir / f"FloorPlan{index + 1}_physics.xml"
+        if candidate.is_file():
+            return candidate
+        if scene_dir.is_dir():
+            xmls = sorted(scene_dir.rglob("*_physics.xml"))
+            if xmls:
+                return xmls[min(index, len(xmls) - 1)]
+            xmls = sorted(scene_dir.rglob("*.xml"))
+            if xmls:
+                return xmls[min(index, len(xmls) - 1)]
     return None
 
 
-def run_install_scene(scene: str, split: str, index: int, scene_path_out: str) -> int:
+def _scene_xml_after_install(path_from_index: str | Path, scene: str, index: int) -> Path | None:
+    """Prefer the path from ``get_scenes`` after linking (often under ASSETS_DIR); else search by index."""
+    p = Path(path_from_index)
     try:
-        get_scenes, install_scene_with_objects_and_grasps_from_path = _get_molmo_api()
+        if p.is_file():
+            return p.resolve()
+    except OSError:
+        pass
+    return _find_installed_scene_xml(scene, index)
+
+
+def run_install_scene(
+    scene: str, split: str, index: int, scene_path_out: str, *, install_if_missing: bool = False
+) -> int:
+    try:
+        get_scenes, _ = _get_molmo_api()
     except ImportError as e:
         print(str(e), file=sys.stderr)
         return 1
 
-    scenes = get_scenes(scene, split)
-    if isinstance(scenes, dict):
-        paths = scenes.get(split, [])
-    else:
-        paths = list(scenes) if scenes else []
-    if not paths or index >= len(paths):
-        print(f"No scene at {scene} {split}[{index}]. Split has {len(paths)} scenes.", file=sys.stderr)
+    path = _resolve_scene_xml_path(scene, split, index, get_scenes, install_if_missing=install_if_missing)
+    if path is None:
         return 1
-    path = paths[index]
-    install_scene_with_objects_and_grasps_from_path(path)
+    _install_scene_with_deps(path, scene)
     if not os.environ.get("MLSPACES_ASSETS_DIR"):
         print("MLSPACES_ASSETS_DIR not set; scene installed to default location.", file=sys.stderr)
     if scene_path_out:
-        candidate = _find_installed_scene_xml(scene, index)
+        candidate = _scene_xml_after_install(path, scene, index)
         if candidate and candidate.exists():
             out = Path(scene_path_out)
             shutil.copy(candidate, out)
@@ -160,6 +387,65 @@ def _merge_robot_into_scene(scene_xml_path: Path, robot_mjcf_path: Path) -> Path
     return Path(path)
 
 
+def run_merge_scene(
+    scene: str,
+    split: str,
+    index: int,
+    robot: str,
+    output: str,
+    *,
+    install_if_missing: bool = False,
+) -> int:
+    """Install scene (if needed), merge robot MJCF, write persistent merged XML for emet serve mujoco --scene_path."""
+    try:
+        get_scenes, _ = _get_molmo_api()
+    except ImportError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+
+    path = _resolve_scene_xml_path(scene, split, index, get_scenes, install_if_missing=install_if_missing)
+    if path is None:
+        return 1
+    _install_scene_with_deps(path, scene)
+    candidate = _scene_xml_after_install(path, scene, index)
+    if not candidate or not candidate.exists():
+        print(
+            "No MJCF found after install. Scene XML is usually under MolmoSpaces ASSETS_DIR "
+            "(same tree as ‘Using SCENES_ROOT: …’). Set MLSPACES_ASSETS_DIR to that assets root "
+            "if installs are not found under the default package path.",
+            file=sys.stderr,
+        )
+        return 1
+    robot_mjcf = _get_robot_mjcf_path(robot)
+    if robot_mjcf is None:
+        print(
+            f"No bundled MJCF merge for robot '{robot}'. Use rby1 / galaxea_r1, or merge manually.",
+            file=sys.stderr,
+        )
+        return 1
+    merged_path: Path | None = None
+    try:
+        merged_path = _merge_robot_into_scene(candidate, robot_mjcf)
+        out = Path(output).expanduser().resolve()
+        out.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(merged_path, out)
+    except Exception as e:
+        print(f"merge-scene failed: {e}", file=sys.stderr)
+        return 1
+    finally:
+        if merged_path is not None and merged_path.exists():
+            try:
+                merged_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+    print(f"Merged MJCF: {out}")
+    print(
+        f"Run server: emet serve mujoco --robot {robot} --scene_path {out} [--headless]\n"
+        f"Run agent:  emet run agent --robot-ip 127.0.0.1 --robot {robot}",
+    )
+    return 0
+
+
 def run_serve(
     scene: str,
     split: str,
@@ -169,27 +455,29 @@ def run_serve(
     viewer: bool,
     rerun: str,
     scene_path_out: str,
+    *,
+    install_if_missing: bool = False,
 ) -> int:
     try:
         import mujoco
 
-        get_scenes, install_scene_with_objects_and_grasps_from_path = _get_molmo_api()
+        get_scenes, _ = _get_molmo_api()
     except ImportError as e:
         print(str(e), file=sys.stderr)
         return 1
 
-    scenes = get_scenes(scene, split)
-    if isinstance(scenes, dict):
-        paths = scenes.get(split, [])
-    else:
-        paths = list(scenes) if scenes else []
-    if not paths or index >= len(paths):
-        print(f"No scene at {scene} {split}[{index}]. Run install-scene first or check list-scenes.", file=sys.stderr)
+    path = _resolve_scene_xml_path(scene, split, index, get_scenes, install_if_missing=install_if_missing)
+    if path is None:
         return 1
-    install_scene_with_objects_and_grasps_from_path(paths[index])
-    candidate = _find_installed_scene_xml(scene, index)
+    _install_scene_with_deps(path, scene)
+    candidate = _scene_xml_after_install(path, scene, index)
     if not candidate or not candidate.exists():
-        print("No MJCF found after install. Set MLSPACES_ASSETS_DIR.", file=sys.stderr)
+        print(
+            "No MJCF found after install. Scene XML is usually under MolmoSpaces ASSETS_DIR "
+            "(same tree as ‘Using SCENES_ROOT: …’). Set MLSPACES_ASSETS_DIR to that assets root "
+            "if installs are not found under the default package path.",
+            file=sys.stderr,
+        )
         return 1
     scene_path = candidate
     model_path = str(scene_path)
@@ -256,11 +544,11 @@ def run_serve(
 
 
 def main_runner(argv: list[str] | None = None) -> int:
-    """Dispatch to list-scenes, install-scene, or serve. argv defaults to sys.argv[1:]."""
+    """Dispatch to list-scenes, install-scene, merge-scene, or serve. argv defaults to sys.argv[1:]."""
     import argparse
 
-    p = argparse.ArgumentParser(description="MolmoSpaces wrapper (list-scenes, install-scene, serve)")
-    p.add_argument("command", choices=["list-scenes", "install-scene", "serve"])
+    p = argparse.ArgumentParser(description="MolmoSpaces wrapper (list-scenes, install-scene, merge-scene, serve)")
+    p.add_argument("command", choices=["list-scenes", "install-scene", "merge-scene", "serve"])
     p.add_argument("--scene", default="ithor")
     p.add_argument("--split", default="train", choices=["train", "val", "test"])
     p.add_argument("--index", type=int, default=0)
@@ -269,12 +557,36 @@ def main_runner(argv: list[str] | None = None) -> int:
     p.add_argument("--viewer", action="store_true")
     p.add_argument("--rerun", type=str, default="")
     p.add_argument("--scene-path", type=str, default="")
+    p.add_argument("--output", "-o", type=str, default="", help="Output MJCF path (required for merge-scene)")
+    p.add_argument(
+        "--install-if-missing",
+        action="store_true",
+        help="Download/link the scene archive without prompting (for install-scene, merge-scene, serve).",
+    )
     args = p.parse_args(argv)
 
     if args.command == "list-scenes":
         return run_list_scenes()
     if args.command == "install-scene":
-        return run_install_scene(args.scene, args.split, args.index, args.scene_path or "")
+        return run_install_scene(
+            args.scene,
+            args.split,
+            args.index,
+            args.scene_path or "",
+            install_if_missing=args.install_if_missing,
+        )
+    if args.command == "merge-scene":
+        if not (args.output or "").strip():
+            print("--output / -o is required for merge-scene", file=sys.stderr)
+            return 1
+        return run_merge_scene(
+            args.scene,
+            args.split,
+            args.index,
+            args.robot,
+            args.output.strip(),
+            install_if_missing=args.install_if_missing,
+        )
     if args.command == "serve":
         return run_serve(
             args.scene,
@@ -285,5 +597,6 @@ def main_runner(argv: list[str] | None = None) -> int:
             args.viewer,
             args.rerun or "",
             args.scene_path or "",
+            install_if_missing=args.install_if_missing,
         )
     return 1
