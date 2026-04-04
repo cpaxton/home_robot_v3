@@ -78,6 +78,13 @@ instance_memory:
   # What doe this mean? If you have a view of a bottle on a table, should we remove the table?
   # It will have an effect on performance.
   mask_cropped_instances: False  # Should we remove the background from the instance views?
+  # Optional: caption each instance view with a VLM (blip / qwen). Off by default (extra compute).
+  use_captioning: False
+  captioner: null  # set to "blip" or "qwen" to enable
+  # Cross-frame association: match new detections to existing instances by 3D distance (de-duplication).
+  use_association: False
+  association_distance_m: 0.15
+  move_threshold_m: 0.05
 
 # TAMP parameters
 guarantee_instance_is_reachable: True

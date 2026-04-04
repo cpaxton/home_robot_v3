@@ -51,7 +51,7 @@ class ClipEncoder(BaseImageTextEncoder):
         self.model.eval()
         self.feature_matching_threshold = feature_matching_threshold
 
-    def encode_image(self, image: torch.tensor | np.ndarray) -> torch.Tensor:
+    def encode_image(self, image: torch.Tensor | np.ndarray) -> torch.Tensor:
         """Encode this input image to a CLIP vector"""
         if isinstance(image, torch.Tensor):
             image = image.cpu().numpy() * 255
@@ -77,7 +77,7 @@ class ClipEncoder(BaseImageTextEncoder):
 class NormalizedClipEncoder(ClipEncoder):
     """Simple wrapper for encoding different things as text. Normalizes the results."""
 
-    def encode_image(self, image: torch.tensor | np.ndarray) -> torch.Tensor:
+    def encode_image(self, image: torch.Tensor | np.ndarray) -> torch.Tensor:
         """Encode this input image to a CLIP vector"""
         image_features = super().encode_image(image)
         return image_features / image_features.norm(dim=-1, keepdim=True)

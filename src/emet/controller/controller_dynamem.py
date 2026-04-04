@@ -44,6 +44,7 @@ from emet.mapping.voxel import SparseVoxelMapDynamem as SparseVoxelMap
 from emet.mapping.voxel import (
     SparseVoxelMapNavigationSpaceDynamem as SparseVoxelMapNavigationSpace,
 )
+from emet.mapping.voxel.voxel import _instance_memory_kwargs_from_params
 from emet.motion.algo.a_star import AStar
 from emet.perception.detection.owl import OwlPerception
 from emet.perception.detection.yoloe import YoloEPerception
@@ -205,8 +206,8 @@ class DynamemController(BaseController):
             min_depth=parameters["min_depth"],
             max_depth=parameters["max_depth"],
             pad_obstacles=parameters["pad_obstacles"],
-            add_local_radius_points=parameters.get("add_local_radius_points", default=True),
-            remove_visited_from_obstacles=parameters.get("remove_visited_from_obstacles", default=False),
+            add_local_radius_points=parameters.get("add_local_radius_points", True),
+            remove_visited_from_obstacles=parameters.get("remove_visited_from_obstacles", False),
             smooth_kernel_size=parameters.get("filters/smooth_kernel_size", -1),
             use_median_filter=parameters.get("filters/use_median_filter", False),
             median_filter_size=parameters.get("filters/median_filter_size", 5),
@@ -219,6 +220,7 @@ class DynamemController(BaseController):
             mllm=self.mllm,
             run_eqa=self.eqa,
             use_instance_memory=self._use_instance_memory,
+            instance_memory_kwargs=_instance_memory_kwargs_from_params(parameters),
         )
         self.space = SparseVoxelMapNavigationSpace(
             self.voxel_map,

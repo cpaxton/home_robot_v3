@@ -148,6 +148,8 @@ def instances_to_text(
     instances: list[Instance],
     class_names: dict[int, str] | None = None,
     include_bounds: bool = True,
+    include_caption: bool = True,
+    include_moved: bool = True,
 ) -> str:
     """Format instance memory as human-readable text for logging or dumping.
 
@@ -155,6 +157,8 @@ def instances_to_text(
         instances: List of Instance from e.g. voxel_map.get_instances().
         class_names: Optional mapping category_id -> name (e.g. from semantic sensor).
         include_bounds: If True, append xyz min/max per instance.
+        include_caption: If True, append best view caption when present.
+        include_moved: If True, append moved_since_last when association is used.
 
     Returns:
         Multi-line string suitable for print or log.
@@ -171,6 +175,13 @@ def instances_to_text(
         if include_bounds and inst.bounds is not None:
             b = inst.bounds.cpu().numpy() if isinstance(inst.bounds, Tensor) else inst.bounds
             line += f"  x=[{b[0, 0]:.2f},{b[0, 1]:.2f}] y=[{b[1, 0]:.2f},{b[1, 1]:.2f}] z=[{b[2, 0]:.2f},{b[2, 1]:.2f}]"
+        if include_caption:
+            best = inst.get_best_view()
+            if getattr(best, "text_description", None):
+                cap = best.text_description
+                line += f"  caption={cap[:60]!r}..." if len(cap) > 60 else f"  caption={cap!r}"
+        if include_moved and getattr(inst, "moved_since_last", False):
+            line += "  moved"
         lines.append(line)
     return "\n".join(lines)
 
@@ -192,6 +203,12 @@ class Instance:
     instance_views: list[InstanceView] = field(default_factory=list)
     score: float | None = None
     score_aggregation_method: str = "max"
+
+    # Movement tracking (updated when association adds views)
+    last_center: Tensor | None = None
+    """Center of instance at last update; used to set moved_since_last."""
+    moved_since_last: bool = False
+    """True if center moved beyond threshold since last association."""
 
     def __repr__(self) -> str:
         n_views = len(self.instance_views)
@@ -345,6 +362,27 @@ class Instance:
             self.instance_views.append(instance_view)
             if self.point_cloud is not None and self.point_cloud.numel() > 0:
                 self.bounds = get_bounds(self.point_cloud)
+        # Update last_center for movement tracking (moved_since_last set by caller when merging)
+        if self.point_cloud is not None and self.point_cloud.numel() > 0:
+            new_center = self.get_center()
+            if new_center is not None:
+                self.last_center = new_center.clone()
+
+
+def _cropped_image_to_caption_input(cropped_image: Tensor) -> np.ndarray:
+    """Convert InstanceView.cropped_image (C,H,W or H,W,C; 0-1 or 0-255) to numpy [H,W,3] uint8 for captioners."""
+    img = cropped_image.cpu().numpy()
+    if img.shape[0] == 3:
+        img = np.transpose(img, (1, 2, 0))
+    if img.size == 0:
+        return np.zeros((1, 1, 3), dtype=np.uint8)
+    if img.dtype == np.float32 or img.dtype == np.float64 or img.max() <= 1.0:
+        img = (np.clip(img, 0, 1) * 255).astype(np.uint8)
+    else:
+        img = np.clip(img, 0, 255).astype(np.uint8)
+    if img.shape[-1] != 3:
+        img = np.broadcast_to(img[..., None], (*img.shape[:2], 3))
+    return img
 
 
 def _process_instances_single_frame(
@@ -452,7 +490,8 @@ class InstanceMemory:
     """
     Instance memory: per-env dict of instances.
     process_instances_for_env builds Instance + InstanceView from segmentation and
-    point cloud; associate_instances_to_memory is a no-op (no cross-frame association).
+    point cloud; optionally runs captioning on new views and associates across frames
+    (de-duplication) when use_association is True.
     """
 
     def __init__(self, num_envs: int = 1, encoder: Any = None, **kwargs: Any) -> None:
@@ -460,6 +499,11 @@ class InstanceMemory:
         self.encoder = encoder
         self.instances: dict[int, dict[int, Instance]] = {i: {} for i in range(num_envs)}
         self._timestep = 0
+        self._next_global_id = 0
+        self.captioner: Any = kwargs.get("captioner")
+        self.use_association: bool = bool(kwargs.get("use_association", False))
+        self.association_distance_m: float = float(kwargs.get("association_distance_m", 0.15))
+        self.move_threshold_m: float = float(kwargs.get("move_threshold_m", 0.05))
 
     def __len__(self) -> int:
         """Total number of instances across all envs (for len(self) / voxel_map compatibility)."""
@@ -469,6 +513,21 @@ class InstanceMemory:
         for i in range(self.num_envs):
             self.instances[i] = {}
         self._timestep = 0
+        self._next_global_id = 0
+
+    def _caption_views(self, instances_dict: dict[int, Instance]) -> None:
+        """Run captioner on views that have cropped_image and no text_description."""
+        if not self.captioner or not hasattr(self.captioner, "caption_image"):
+            return
+        for inst in instances_dict.values():
+            for view in inst.instance_views:
+                if view.text_description or view.cropped_image is None:
+                    continue
+                try:
+                    arr = _cropped_image_to_caption_input(view.cropped_image)
+                    view.text_description = self.captioner.caption_image(arr)
+                except Exception as e:
+                    logger.debug("Caption failed for instance view: %s", e)
 
     def process_instances_for_env(
         self,
@@ -484,27 +543,79 @@ class InstanceMemory:
         pose: Any = None,
         **kwargs: Any,
     ) -> None:
-        """Build instances from current frame segmentation and point cloud; replace env's instances."""
+        """Build instances from current frame; optionally caption and associate (de-duplicate)."""
         if instance_seg is None or point_cloud is None:
             return
         env_instances = self.instances[env_id]
-        _process_instances_single_frame(
-            env_instances=env_instances,
-            instance_seg=instance_seg,
-            point_cloud=point_cloud,
-            image=image,
-            cam_to_world=cam_to_world,
-            instance_classes=instance_classes,
-            instance_scores=instance_scores,
-            background_instance_labels=background_instance_labels or [-1],
-            valid_points=valid_points,
-            pose=pose,
-            timestep=self._timestep,
-        )
+        if self.use_association:
+            candidates: dict[int, Instance] = {}
+            _process_instances_single_frame(
+                env_instances=candidates,
+                instance_seg=instance_seg,
+                point_cloud=point_cloud,
+                image=image,
+                cam_to_world=cam_to_world,
+                instance_classes=instance_classes,
+                instance_scores=instance_scores,
+                background_instance_labels=background_instance_labels or [-1],
+                valid_points=valid_points,
+                pose=pose,
+                timestep=self._timestep,
+            )
+            self._caption_views(candidates)
+            self._associate_candidates(env_id, candidates)
+        else:
+            _process_instances_single_frame(
+                env_instances=env_instances,
+                instance_seg=instance_seg,
+                point_cloud=point_cloud,
+                image=image,
+                cam_to_world=cam_to_world,
+                instance_classes=instance_classes,
+                instance_scores=instance_scores,
+                background_instance_labels=background_instance_labels or [-1],
+                valid_points=valid_points,
+                pose=pose,
+                timestep=self._timestep,
+            )
+            self._caption_views(env_instances)
         self._timestep += 1
 
-    def associate_instances_to_memory(self) -> None:
-        """No-op: no cross-frame association (each frame replaces env instances)."""
+    def _associate_candidates(self, env_id: int, candidates: dict[int, Instance]) -> None:
+        """Match candidates to existing instances by 3D center distance; merge or add new."""
+        env = self.instances[env_id]
+        for _frame_id, cand in list(candidates.items()):
+            if not cand.instance_views:
+                continue
+            cand_center = cand.get_center()
+            if cand_center is None:
+                env[self._next_global_id] = cand
+                cand.global_id = self._next_global_id
+                self._next_global_id += 1
+                continue
+            best_id: int | None = None
+            best_dist: float = float("inf")
+            for existing_id, existing in env.items():
+                ec = existing.get_center()
+                if ec is None:
+                    continue
+                d = float(torch.norm(cand_center - ec).item())
+                if d < best_dist and d < self.association_distance_m:
+                    best_dist = d
+                    best_id = existing_id
+            if best_id is not None:
+                existing = env[best_id]
+                existing.moved_since_last = best_dist > self.move_threshold_m
+                existing.add_instance_view(cand.instance_views[0])
+            else:
+                env[self._next_global_id] = cand
+                cand.global_id = self._next_global_id
+                self._next_global_id += 1
+                if cand.last_center is None and cand.point_cloud is not None and cand.point_cloud.numel() > 0:
+                    cand.last_center = cand.get_center().clone()
+
+    def associate_instances_to_memory(self, candidates: dict[int, Instance] | None = None) -> None:
+        """If candidates provided (by process_instances_for_env when use_association), already merged. No-op otherwise."""
         pass
 
     def global_box_compression_and_nms(self, env_id: int = 0, **kwargs: Any) -> Any:

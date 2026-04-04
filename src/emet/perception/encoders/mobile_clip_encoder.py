@@ -55,7 +55,7 @@ class MobileClipEncoder(BaseImageTextEncoder):
 
         self.feature_matching_threshold = feature_matching_threshold
 
-    def encode_image(self, image: torch.tensor | np.ndarray) -> torch.Tensor:
+    def encode_image(self, image: torch.Tensor | np.ndarray) -> torch.Tensor:
         """Encode this input image to a CLIP vector"""
         if isinstance(image, torch.Tensor):
             image = image.cpu().numpy() * 255
@@ -107,7 +107,7 @@ class MaskMobileClipEncoder(MobileClipEncoder):
         feat = F.normalize(feat, dim=1)
         return feat.permute(0, 2, 3, 1)
 
-    def encode_image(self, image: torch.tensor | np.ndarray) -> torch.Tensor:
+    def encode_image(self, image: torch.Tensor | np.ndarray) -> torch.Tensor:
         """Encode this input image to a CLIP vector"""
         if isinstance(image, torch.Tensor):
             image = image.cpu().numpy() * 255

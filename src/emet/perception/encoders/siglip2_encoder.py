@@ -68,7 +68,7 @@ class Siglip2Encoder(BaseImageTextEncoder):
 
     def encode_image(
         self,
-        image: torch.tensor | np.ndarray,
+        image: torch.Tensor | np.ndarray,
         image_shape=(360, 270),
         verbose: bool = False,
     ) -> torch.Tensor:

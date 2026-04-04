@@ -1365,8 +1365,8 @@ class SparseVoxelMap:
             add_local_radius_every_step=parameters["add_local_every_step"],
             min_points_per_voxel=parameters["min_points_per_voxel"],
             pad_obstacles=parameters["pad_obstacles"],
-            add_local_radius_points=parameters.get("add_local_radius_points", default=True),
-            remove_visited_from_obstacles=parameters.get("remove_visited_from_obstacles", default=False),
+            add_local_radius_points=parameters.get("add_local_radius_points", True),
+            remove_visited_from_obstacles=parameters.get("remove_visited_from_obstacles", False),
             obs_min_density=parameters["obs_min_density"],
             encoder=encoder,
             smooth_kernel_size=parameters.get("filters/smooth_kernel_size", -1),
@@ -1378,20 +1378,36 @@ class SparseVoxelMap:
             use_negative_obstacles=parameters.get("use_negative_obstacles", False),
             neg_obs_height=parameters.get("neg_obs_height", -0.10),
             use_instance_memory=use_instance_memory,
-            instance_memory_kwargs={
-                "min_instance_thickness": parameters.get("instance_memory/min_instance_thickness", 0.01),
-                "min_instance_vol": parameters.get("instance_memory/min_instance_vol", 1e-6),
-                "max_instance_vol": parameters.get("instance_memory/max_instance_vol", 10.0),
-                "min_instance_height": parameters.get("instance_memory/min_instance_height", 0.1),
-                "max_instance_height": parameters.get("instance_memory/max_instance_height", 1.8),
-                "min_pixels_for_instance_view": parameters.get("instance_memory/min_pixels_for_instance_view", 100),
-                "min_percent_for_instance_view": parameters.get("instance_memory/min_percent_for_instance_view", 0.2),
-                "mask_cropped_instances": parameters.get("instance_memory/mask_cropped_instances", False),
-                "open_vocab_cat_map_file": parameters.get("open_vocab_category_map_file", None),
-                "use_visual_feat": parameters.get("use_visual_feat", False),
-            },
+            instance_memory_kwargs=_instance_memory_kwargs_from_params(parameters),
             prune_detected_objects=parameters.get("prune_detected_objects", False),
         )
+
+
+def _instance_memory_kwargs_from_params(parameters: Parameters) -> dict[str, Any]:
+    """Build instance_memory_kwargs from config; optionally instantiate captioner."""
+    kwargs: dict[str, Any] = {
+        "min_instance_thickness": parameters.get("instance_memory/min_instance_thickness", 0.01),
+        "min_instance_vol": parameters.get("instance_memory/min_instance_vol", 1e-6),
+        "max_instance_vol": parameters.get("instance_memory/max_instance_vol", 10.0),
+        "min_instance_height": parameters.get("instance_memory/min_instance_height", 0.1),
+        "max_instance_height": parameters.get("instance_memory/max_instance_height", 1.8),
+        "min_pixels_for_instance_view": parameters.get("instance_memory/min_pixels_for_instance_view", 100),
+        "min_percent_for_instance_view": parameters.get("instance_memory/min_percent_for_instance_view", 0.2),
+        "mask_cropped_instances": parameters.get("instance_memory/mask_cropped_instances", False),
+        "open_vocab_cat_map_file": parameters.get("open_vocab_category_map_file", None),
+        "use_visual_feat": parameters.get("use_visual_feat", False),
+        "use_association": parameters.get("instance_memory/use_association", False),
+        "association_distance_m": parameters.get("instance_memory/association_distance_m", 0.15),
+        "move_threshold_m": parameters.get("instance_memory/move_threshold_m", 0.05),
+    }
+    if parameters.get("instance_memory/use_captioning", False):
+        captioner_name = parameters.get("instance_memory/captioner")
+        if captioner_name:
+            from emet.perception.captioners import get_captioner
+
+            captioner_args = parameters.get("instance_memory/captioner_args") or {}
+            kwargs["captioner"] = get_captioner(captioner_name, captioner_args)
+    return kwargs
 
 
 class SparseVoxelMapProxy:
