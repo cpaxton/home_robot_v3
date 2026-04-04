@@ -8,16 +8,14 @@
 # voxel map for navigation and exploration. Re-implementation inspired by GraphEQA
 # (https://arxiv.org/abs/2412.14480).
 
-from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
-import torch
 from PIL import Image
 
 from emet.controller.controller_dynamem import DynamemController
-from emet.core.robot import AbstractRobotClient
-from emet.memory.graph_eqa import GraphEQAMemory
 from emet.core.parameters import Parameters
+from emet.core.robot import AbstractRobotClient
+from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
 
 
 class GraphEQAController(DynamemController):
@@ -30,19 +28,22 @@ class GraphEQAController(DynamemController):
     def __init__(
         self,
         robot: AbstractRobotClient,
-        parameters: Union[Parameters, dict],
+        parameters: Parameters | dict,
         semantic_sensor=None,
         save_rerun: bool = False,
         use_instance_memory: bool = False,
         realtime_updates: bool = False,
         re: int = 3,
         manip_port: int = 5557,
-        log: Optional[str] = None,
-        server_ip: Optional[str] = "127.0.0.1",
+        log: str | None = None,
+        server_ip: str | None = "127.0.0.1",
         mllm: bool = False,
         manipulation_only: bool = False,
         cpu_only: bool = False,
         eqa: bool = True,  # force True for GraphEQA
+        graph_memory_input_path: str | None = None,
+        use_sensor_perception: bool = True,
+        perception_client=None,
         **kwargs,
     ):
         super().__init__(
@@ -65,6 +66,25 @@ class GraphEQAController(DynamemController):
         self.graph_memory = GraphEQAMemory(
             parameters=parameters,
             log_dir="graph_eqa_log",
+            defer_llm_clients=True,
+        )
+        if graph_memory_input_path:
+            from emet.memory.backend import get_memory_backend
+
+            backend = get_memory_backend(
+                "graph_eqa",
+                graph_memory=self.graph_memory,
+                voxel_map=getattr(self, "voxel_map", None),
+            )
+            backend.load(graph_memory_input_path)
+
+        self.use_sensor_perception = use_sensor_perception
+        dev = self.device if self.device in ("cuda", "mps") else "cuda"
+        self.sensor_builder = SensorGraphBuilder(
+            perception_client=perception_client,
+            use_voxel_fallback=True,
+            device=dev,
+            cpu_only=self.cpu_only,
         )
 
     def update(self) -> None:
@@ -74,15 +94,22 @@ class GraphEQAController(DynamemController):
         rgb = obs.rgb
         if obs.camera_pose is None:
             return
-        camera_xyz = np.array(obs.camera_pose[:3, 3], dtype=float)
-        labels = ["object"]
+        voxel_labels = None
         if getattr(self.voxel_map, "image_descriptions", None) and len(self.voxel_map.image_descriptions) > 0:
-            labels = self.voxel_map.image_descriptions[-1][0]
-        self.graph_memory.add_observation(rgb, camera_xyz, labels)
+            voxel_labels = self.voxel_map.image_descriptions[-1][0]
+
+        if self.use_sensor_perception:
+            labels = self.sensor_builder.labels_from_observation(obs, voxel_labels=voxel_labels)
+            xyz = self.sensor_builder.world_xyz_for_observation(obs)
+        else:
+            labels = list(voxel_labels) if voxel_labels else ["object"]
+            xyz = np.array(obs.camera_pose[:3, 3], dtype=float)
+
+        self.graph_memory.add_observation(rgb, xyz, labels)
 
     def run_eqa_one_iter(
         self, question: str, max_movement_step: int = 5
-    ) -> Tuple[str, str, List[Image.Image], bool]:
+    ) -> tuple[str, str, list[Image.Image], bool]:
         """One EQA iteration using graph memory instead of voxel map."""
         answer_output = None
         if not self._realtime_updates:
@@ -177,7 +204,7 @@ class GraphEQAController(DynamemController):
 
     def run_eqa(
         self, question: str, max_planning_steps: int = 5
-    ) -> Tuple[str, List[Image.Image]]:
+    ) -> tuple[str, list[Image.Image]]:
         """Run EQA until confident or max steps, using graph memory."""
         for _ in range(max_planning_steps):
             answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(

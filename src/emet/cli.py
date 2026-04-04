@@ -316,6 +316,21 @@ def show_memory(path: str, open_browser: bool) -> None:
     sys.exit(_run_module("emet.app.show_memory", args))
 
 
+@main.command("graph-memory-show", short_help="Print formatted scene graph from saved memory directory")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+)
+@click.option("--max-nodes", type=int, default=None, help="Truncate long node lists")
+def graph_memory_show(path: Path, max_nodes: int | None) -> None:
+    """Load common memory format (graph_eqa) and print nodes/edges to stdout."""
+
+    args = [str(path)]
+    if max_nodes is not None:
+        args.extend(["--max-nodes", str(max_nodes)])
+    sys.exit(_run_module("emet.app.graph_memory_show", args))
+
+
 @main.group("connect", short_help="Save or show robot connection (host, user) for deploy/view")
 def connect_cmd() -> None:
     """Save and reuse connection details so deploy and view-bridge default to the right robot."""
@@ -601,7 +616,7 @@ def sync(
 
     # Sim extra: pip-installable deps (mujoco, stretch-urdf, etc.) are always in pyproject.toml.
     # robosuite/robocasa are installed editable from third_party/ when present.
-    sim_editable_pkgs: List[str] = []
+    sim_editable_pkgs: list[str] = []
     if "sim" in extras:
         missing = [name for name in ("robosuite", "robocasa") if not (root / "third_party" / name).is_dir()]
         if missing:

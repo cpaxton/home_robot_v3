@@ -75,6 +75,7 @@ class GraphEQAMemory:
         eqa_client: Optional[Callable[..., str]] = None,
         image_description_client: Optional[Callable[..., str]] = None,
         log_dir: str = "graph_eqa_log",
+        defer_llm_clients: bool = False,
     ):
         self.parameters = parameters or {}
         self.max_near_distance = max_near_distance
@@ -89,9 +90,18 @@ class GraphEQAMemory:
         self.log_dir = log_dir
         self.eqa_client = eqa_client
         self.image_description_client = image_description_client
+        self._defer_llm_clients = defer_llm_clients
 
-        if self.eqa_client is None or self.image_description_client is None:
+        if not defer_llm_clients and (
+            self.eqa_client is None or self.image_description_client is None
+        ):
             self._init_clients()
+
+    def _ensure_llm_clients(self) -> None:
+        """Load Gemini + Qwen VL on first use when defer_llm_clients=True."""
+        if self.eqa_client is not None and self.image_description_client is not None:
+            return
+        self._init_clients()
 
     def _init_clients(self) -> None:
         """Initialize EQA and image-description clients (same pattern as voxel_dynamem)."""
@@ -270,6 +280,7 @@ class GraphEQAMemory:
         Returns:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
         """
+        self._ensure_llm_clients()
         self.extract_relevant_objects(question)
         obs_ids = self._select_relevant_obs_ids(max_images=6)
         graph_str = self.to_string()
