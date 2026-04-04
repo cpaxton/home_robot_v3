@@ -10,14 +10,10 @@
 # DynaMem task executor; the scene graph replaces the voxel-only memory for
 # object queries.
 
-import logging
 import os
 from typing import Optional
 
 import click
-
-for _name in ("httpx", "httpcore", "huggingface_hub", "transformers"):
-    logging.getLogger(_name).setLevel(logging.WARNING)
 
 from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.controller.zmq_client import HomeRobotZmqClient

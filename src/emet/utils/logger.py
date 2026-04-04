@@ -23,6 +23,8 @@ errors/warnings go to stderr (safe for piping stdout).
   warning("Using default port")
 """
 
+import logging
+import os
 import sys
 from typing import Optional, TextIO
 
@@ -134,3 +136,42 @@ def alert(*args) -> None:
 
 def debug(*args) -> None:
     _default_logger.debug(*args)
+
+
+def suppress_hf_hub_http_logging() -> None:
+    """Silence INFO-level HTTP chatter from Hugging Face Hub / httpx when loading models.
+
+    Does nothing if ``EMET_VERBOSE_HF`` is set to 1/true/yes (useful for debugging Hub traffic).
+    ``emet`` package ``__init__`` also sets ``HF_HUB_VERBOSITY`` / ``TRANSFORMERS_VERBOSITY`` early;
+    call this again before Hub traffic if another library reset log levels.
+    """
+    val = os.environ.get("EMET_VERBOSE_HF", "").strip().lower()
+    if val in ("1", "true", "yes"):
+        return
+    os.environ.setdefault("HF_HUB_VERBOSITY", "error")
+    os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+    for name in (
+        "httpx",
+        "httpcore",
+        "httpcore.http11",
+        "httpcore.connection",
+        "huggingface_hub",
+        "transformers",
+        "urllib3",
+    ):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+    if "huggingface_hub" in sys.modules:
+        try:
+            from huggingface_hub.utils import logging as hub_logging
+
+            hub_logging.set_verbosity_error()
+        except Exception:
+            pass
+    if "transformers" in sys.modules:
+        try:
+            from transformers.utils import logging as tf_logging
+
+            tf_logging.set_verbosity_error()
+        except Exception:
+            pass

@@ -4,14 +4,9 @@
 # Run with: emet run agent
 # With --robot-ip: start robot with logging, optional --input-path and --discord; tool loop.
 
-import logging
 import os
 import tempfile
 import timeit
-
-# Suppress HuggingFace/transformers/httpx INFO spam when loading models (e.g. SigLIP)
-for _name in ("httpx", "httpcore", "huggingface_hub", "transformers"):
-    logging.getLogger(_name).setLevel(logging.WARNING)
 
 import click
 from termcolor import colored

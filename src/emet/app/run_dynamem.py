@@ -7,15 +7,10 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-import logging
 import os
 from typing import Optional
 
 import click
-
-# Suppress HuggingFace/transformers/httpx INFO spam when loading SigLIP
-for _name in ("httpx", "httpcore", "huggingface_hub", "transformers"):
-    logging.getLogger(_name).setLevel(logging.WARNING)
 
 from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.controller.zmq_client import StretchZmqClient
