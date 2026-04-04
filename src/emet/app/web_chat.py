@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Simple web chat UI for the Emet agent.
@@ -14,8 +23,8 @@ import logging
 import threading
 import timeit
 from functools import partial
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Any, Dict, List, Optional
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Any
 
 import click
 
@@ -105,18 +114,19 @@ inp.focus();
 
 class _ChatState:
     """Shared mutable state for the chat handler."""
+
     def __init__(self):
         self.llm_client = None
         self.prompt_builder = None
         self.tools = None
         self.tools_by_name = None
-        self.context: Dict[str, Any] = {}
+        self.context: dict[str, Any] = {}
         self.debug = False
         self.agent_name = "Emet"
         self.chat_log = None
         self.lock = threading.Lock()
 
-    def process_message(self, user_text: str) -> Dict[str, Any]:
+    def process_message(self, user_text: str) -> dict[str, Any]:
         with self.lock:
             if self.chat_log:
                 self.chat_log.log("user", user_text)
@@ -133,6 +143,7 @@ class _ChatState:
                 print(f"[DEBUG] Raw LLM response ({elapsed:.2f}s): {raw[:500]}")
 
             from emet.agent.prompt import parse_tool_calls_response
+
             parsed = parse_tool_calls_response(raw)
 
             if self.debug:
@@ -146,8 +157,7 @@ class _ChatState:
             }
 
             if self.chat_log:
-                self.chat_log.log("assistant", result["message"],
-                                  tool_calls=result["tool_calls"], time_s=elapsed)
+                self.chat_log.log("assistant", result["message"], tool_calls=result["tool_calls"], time_s=elapsed)
 
             return result
 
@@ -235,7 +245,7 @@ def main(llm: str, port: int, host: str, agent_name: str, debug: bool, device: s
         _ = state.llm_client("hello")
     except Exception:
         pass
-    print(f"LLM ready.")
+    print("LLM ready.")
     print(f"Chat log: {state.chat_log.path}")
 
     handler = partial(_Handler)
@@ -245,7 +255,7 @@ def main(llm: str, port: int, host: str, agent_name: str, debug: bool, device: s
     url = f"http://{'localhost' if host == '0.0.0.0' else host}:{port}"
     print(f"\n  Emet Web Chat: {url}\n")
     print(f"  Agent: {agent_name} | LLM: {llm} | device: {device}")
-    print(f"  Press Ctrl+C to stop.\n")
+    print("  Press Ctrl+C to stop.\n")
 
     try:
         server.serve_forever()

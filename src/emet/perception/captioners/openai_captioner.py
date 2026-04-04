@@ -7,7 +7,6 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import Optional, Union
 
 import torch
 from numpy import ndarray
@@ -22,9 +21,9 @@ class OpenaiCaptioner:
 
     def __init__(
         self,
-        device: Optional[str] = None,
+        device: str | None = None,
         image_shape=None,
-        model_type: Optional[str] = "gpt-4o-mini",
+        model_type: str | None = "gpt-4o-mini",
     ):
         """Initialize the GPT image captioner.
 
@@ -47,8 +46,8 @@ class OpenaiCaptioner:
 
     def caption_image(
         self,
-        image: Union[ndarray, Tensor, Image.Image],
-        bbox: Optional[Union[list, Tensor, ndarray]] = None,
+        image: ndarray | Tensor | Image.Image,
+        bbox: list | Tensor | ndarray | None = None,
         verbose: bool = False,
     ) -> str:
         """Generate a caption for the given image.

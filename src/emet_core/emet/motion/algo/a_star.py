@@ -15,20 +15,17 @@
 import heapq
 import math
 import time
-from typing import Callable, List, Set, Tuple
+from collections.abc import Callable
 
 import numpy as np
 
-from emet.motion import ConfigurationSpace
+from emet.motion import ConfigurationSpace, Planner, PlanResult
 from emet.motion import Node as BaseNode
-from emet.motion import Planner, PlanResult
 from emet.motion.algo.node import TreeNode as Node
 
 
-def neighbors(pt: Tuple[int, int]) -> List[Tuple[int, int]]:
-    return [
-        (pt[0] + dx, pt[1] + dy) for dx in range(-1, 2) for dy in range(-1, 2) if (dx, dy) != (0, 0)
-    ]
+def neighbors(pt: tuple[int, int]) -> list[tuple[int, int]]:
+    return [(pt[0] + dx, pt[1] + dy) for dx in range(-1, 2) for dy in range(-1, 2) if (dx, dy) != (0, 0)]
 
 
 class AStar(Planner):
@@ -42,7 +39,7 @@ class AStar(Planner):
         """Create A* planner with configuration"""
         if validate_fn is None:
             validate_fn = space.is_valid
-        super(AStar, self).__init__(space, validate_fn)
+        super().__init__(space, validate_fn)
         self.reset()
         if validate_fn is not None:
             self.validate = validate_fn  # type:ignore
@@ -84,7 +81,7 @@ class AStar(Planner):
         """
         return not bool(self._navigable[x][y])
 
-    def to_pt(self, xy: Tuple[float, float]) -> Tuple[int, int]:
+    def to_pt(self, xy: tuple[float, float]) -> tuple[int, int]:
         """Converts a point from continuous, world xy coordinates to grid coordinates.
 
         Args:
@@ -96,7 +93,7 @@ class AStar(Planner):
         # # type: ignore to bypass mypy checking
         return self.space.to_pt(xy)
 
-    def to_xy(self, pt: Tuple[int, int]) -> Tuple[float, float]:
+    def to_xy(self, pt: tuple[int, int]) -> tuple[float, float]:
         """Converts a point from grid coordinates to continuous, world xy coordinates.
 
         Args:
@@ -108,7 +105,7 @@ class AStar(Planner):
         # # type: ignore to bypass mypy checking
         return self.space.to_xy(pt)
 
-    def compute_dis(self, a: Tuple[int, int], b: Tuple[int, int]) -> float:
+    def compute_dis(self, a: tuple[int, int], b: tuple[int, int]) -> float:
         """Compute distance between two points a and b.
 
         Args:
@@ -120,7 +117,7 @@ class AStar(Planner):
         """
         return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
 
-    def compute_obstacle_punishment(self, a: Tuple[int, int], weight: int, avoid: int) -> float:
+    def compute_obstacle_punishment(self, a: tuple[int, int], weight: int, avoid: int) -> float:
         obstacle_punishment = 0
         # it is a trick, if we compute euclidean dis between a and every obstacle,
         # this single compute_obstacle_punishment will be O(n) complexity
@@ -135,14 +132,14 @@ class AStar(Planner):
         return obstacle_punishment
 
     # A* heuristic
-    def compute_heuristic(self, a: Tuple[int, int], b: Tuple[int, int], weight=6, avoid=3) -> float:
+    def compute_heuristic(self, a: tuple[int, int], b: tuple[int, int], weight=6, avoid=3) -> float:
         return (
             self.compute_dis(a, b)
             + weight * self.compute_obstacle_punishment(a, weight, avoid)
             + self.compute_obstacle_punishment(b, weight, avoid)
         )
 
-    def is_in_line_of_sight(self, start_pt: Tuple[int, int], end_pt: Tuple[int, int]) -> bool:
+    def is_in_line_of_sight(self, start_pt: tuple[int, int], end_pt: tuple[int, int]) -> bool:
         """Checks if there is a line-of-sight between two points.
 
         Implements using Bresenham's line algorithm.
@@ -192,14 +189,12 @@ class AStar(Planner):
         waypoints = [self.to_xy(waypt) for waypt in waypts]
         traj = []
         for i in range(len(waypoints) - 1):
-            theta = self.compute_theta(
-                waypoints[i][0], waypoints[i][1], waypoints[i + 1][0], waypoints[i + 1][1]
-            )
+            theta = self.compute_theta(waypoints[i][0], waypoints[i][1], waypoints[i + 1][0], waypoints[i + 1][1])
             traj.append([waypoints[i][0], waypoints[i][1], float(theta)])
         traj.append([waypoints[-1][0], waypoints[-1][1], goal[-1]])
         return traj
 
-    def clean_path(self, path) -> List[Tuple[int, int]]:
+    def clean_path(self, path) -> list[tuple[int, int]]:
         """Cleans up the final path.
 
         This implements a simple algorithm where, given some current position,
@@ -223,15 +218,13 @@ class AStar(Planner):
             else:
                 j = i + 1
             # Include the mid waypoint to avoid the collision
-            if j - i >= 2 and self.point_is_occupied(
-                (path[i][0] + path[j][0]) // 2, (path[i][1] + path[j][1]) // 2
-            ):
+            if j - i >= 2 and self.point_is_occupied((path[i][0] + path[j][0]) // 2, (path[i][1] + path[j][1]) // 2):
                 cleaned_path.append(path[(i + j) // 2])
             cleaned_path.append(path[j])
             i = j
         return cleaned_path
 
-    def get_unoccupied_neighbor(self, pt: Tuple[int, int], goal_pt=None) -> Tuple[int, int]:
+    def get_unoccupied_neighbor(self, pt: tuple[int, int], goal_pt=None) -> tuple[int, int]:
         if not self.point_is_occupied(*pt):
             return pt
 
@@ -245,13 +238,11 @@ class AStar(Planner):
         for neighbor_pt in neighbor_pts:
             if not self.point_is_occupied(*neighbor_pt):
                 return neighbor_pt
-        print(
-            "The robot might stand on a non navigable point, so check obstacle map and restart roslaunch"
-        )
+        print("The robot might stand on a non navigable point, so check obstacle map and restart roslaunch")
         return None
         # raise ValueError("The robot might stand on a non navigable point, so check obstacle map and restart roslaunch")
 
-    def get_reachable_points(self, start_pt: Tuple[int, int]) -> Set[Tuple[int, int]]:
+    def get_reachable_points(self, start_pt: tuple[int, int]) -> set[tuple[int, int]]:
         """Gets all reachable points from a given starting point.
 
         Args:
@@ -266,7 +257,7 @@ class AStar(Planner):
         if start_pt is None:
             return set()
 
-        reachable_points: set[Tuple[int, int]] = set()
+        reachable_points: set[tuple[int, int]] = set()
         to_visit = [start_pt]
         while to_visit:
             pt = to_visit.pop()
@@ -283,10 +274,10 @@ class AStar(Planner):
 
     def run_astar(
         self,
-        start_xy: Tuple[float, float],
-        end_xy: Tuple[float, float],
+        start_xy: tuple[float, float],
+        end_xy: tuple[float, float],
         remove_line_of_sight_points: bool = False,
-    ) -> List[Tuple[float, float]]:
+    ) -> list[tuple[float, float]]:
 
         start_pt, end_pt = self.to_pt(start_xy), self.to_pt(end_xy)
 
@@ -300,7 +291,7 @@ class AStar(Planner):
         # Implements A* search.
         q = [(0, start_pt)]
         came_from: dict = {start_pt: None}
-        cost_so_far: dict[Tuple[int, int], float] = {start_pt: 0.0}
+        cost_so_far: dict[tuple[int, int], float] = {start_pt: 0.0}
         while q:
             _, current = heapq.heappop(q)
 
@@ -362,25 +353,19 @@ class AStar(Planner):
             if verbose:
                 print("A* fails, check obstacle map")
             return PlanResult(False, reason="A* fails, check obstacle map")
-        trajectory: List[BaseNode] = []
+        trajectory: list[BaseNode] = []
         for i in range(len(waypoints) - 1):
-            theta = self.compute_theta(
-                waypoints[i][0], waypoints[i][1], waypoints[i + 1][0], waypoints[i + 1][1]
-            )
+            theta = self.compute_theta(waypoints[i][0], waypoints[i][1], waypoints[i + 1][0], waypoints[i + 1][1])
             if i > 0:
                 parent = trajectory[-1]
             else:
                 parent = None
-            trajectory.append(
-                Node(np.array([waypoints[i][0], waypoints[i][1], float(theta)]), parent=parent)
-            )
+            trajectory.append(Node(np.array([waypoints[i][0], waypoints[i][1], float(theta)]), parent=parent))
         if len(trajectory) <= 0:
             parent = None
         else:
             parent = trajectory[-1]
-        trajectory.append(
-            Node(np.array([waypoints[-1][0], waypoints[-1][1], goal[-1]]), parent=parent)
-        )
+        trajectory.append(Node(np.array([waypoints[-1][0], waypoints[-1][1], goal[-1]]), parent=parent))
 
         # Save the nodes for this planner
         self.nodes = trajectory

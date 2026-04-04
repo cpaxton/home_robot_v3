@@ -12,7 +12,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the parent directory of this file.
 
-from typing import Optional
 
 import torch
 
@@ -20,8 +19,8 @@ import torch
 def grid_cluster(
     pos: torch.Tensor,
     size: torch.Tensor,
-    start: Optional[torch.Tensor] = None,
-    end: Optional[torch.Tensor] = None,
+    start: torch.Tensor | None = None,
+    end: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """
     NOTE: modified by Hello Robot, Inc., to replace a call to torch.ops

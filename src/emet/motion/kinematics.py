@@ -13,7 +13,6 @@
 # LICENSE file in the root directory of this source tree.
 import math
 import os
-from typing import List, Optional, Tuple
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -163,7 +162,7 @@ class HelloStretchKinematics:
             self._ee_link_name,
             self._manip_mode_controlled_joints,
         )
-        self.manip_ik_solver: Optional[IKSolverBase] = None
+        self.manip_ik_solver: IKSolverBase | None = None
         if "optimize" in ik_type:
             self.manip_ik_solver = PositionIKOptimizer(
                 ik_solver=_manip_ik_solver,
@@ -180,21 +179,22 @@ class HelloStretchKinematics:
         visualize: bool = False,
         root: str = ".",
         ik_type: str = "pinocchio",
-        ee_link_name: Optional[str] = None,
-        grasp_frame: Optional[str] = None,
+        ee_link_name: str | None = None,
+        grasp_frame: str | None = None,
         joint_tolerance: float = 0.01,
-        manip_mode_controlled_joints: Optional[List[str]] = None,
+        manip_mode_controlled_joints: list[str] | None = None,
     ):
         """Create the robot in bullet for things like kinematics; extract information"""
 
         self.joint_tol = joint_tolerance
 
-        # urdf
+        # urdf: use MANIP_STRETCH_URDF (config or stretch_urdf fallback) or path/stretch.urdf
         if not urdf_path:
             manip_urdf = MANIP_STRETCH_URDF
         else:
             manip_urdf = os.path.join(urdf_path, "stretch.urdf")
-        self.manip_mode_urdf_path = os.path.join(root, manip_urdf)
+        # Avoid joining root when manip_urdf is already absolute
+        self.manip_mode_urdf_path = os.path.join(root, manip_urdf) if not os.path.isabs(manip_urdf) else manip_urdf
         self.name = name
         self.visualize = visualize
 
@@ -260,7 +260,7 @@ class HelloStretchKinematics:
     def get_backend(self):
         return self.backend
 
-    def manip_fk(self, q: np.ndarray = None, node: str = None) -> Tuple[np.ndarray, np.ndarray]:
+    def manip_fk(self, q: np.ndarray = None, node: str = None) -> tuple[np.ndarray, np.ndarray]:
         """manipulator specific forward kinematics; uses separate URDF than the full-body fk() method"""
         assert q.shape == (self.dof,)
 
@@ -355,9 +355,9 @@ class HelloStretchKinematics:
         pin_compatible_joints = np.zeros(9)
         pin_compatible_joints[0] = joint_angles[HelloStretchIdx.BASE_X]
         pin_compatible_joints[1] = joint_angles[HelloStretchIdx.LIFT]
-        pin_compatible_joints[2] = pin_compatible_joints[3] = pin_compatible_joints[
-            4
-        ] = pin_compatible_joints[5] = (joint_angles[HelloStretchIdx.ARM] / 4)
+        pin_compatible_joints[2] = pin_compatible_joints[3] = pin_compatible_joints[4] = pin_compatible_joints[5] = (
+            joint_angles[HelloStretchIdx.ARM] / 4
+        )
         pin_compatible_joints[6] = joint_angles[HelloStretchIdx.WRIST_YAW]
         pin_compatible_joints[7] = joint_angles[HelloStretchIdx.WRIST_PITCH]
         pin_compatible_joints[8] = joint_angles[HelloStretchIdx.WRIST_ROLL]
@@ -384,7 +384,7 @@ class HelloStretchKinematics:
         update_pb: bool = True,
         num_attempts: int = 1,
         verbose: bool = False,
-        custom_ee_frame: Optional[str] = None,
+        custom_ee_frame: str | None = None,
     ):
         """IK in manipulation mode. Takes in a 4x4 pose_query matrix in se(3) and initial
         configuration of the robot.
@@ -445,7 +445,7 @@ class HelloStretchKinematics:
         q[HelloStretchIdx.BASE_Y] += dy
         return q
 
-    def manip_ik_for_grasp_frame(self, ee_pos, ee_rot, q0: Optional[np.ndarray] = None) -> Tuple:
+    def manip_ik_for_grasp_frame(self, ee_pos, ee_rot, q0: np.ndarray | None = None) -> tuple:
         # Construct the final end effector pose
         if ee_pos[1] > 0:
             raise RuntimeError(
@@ -457,9 +457,9 @@ class HelloStretchKinematics:
             )
 
         if len(q0) != self._manip_dof:
-            assert (
-                len(q0) == self.dof
-            ), f"Joint states size must be either full = {self.dof} or manipulator = {self._manip_dof} dof"
+            assert len(q0) == self.dof, (
+                f"Joint states size must be either full = {self.dof} or manipulator = {self._manip_dof} dof"
+            )
             q0 = self._to_manip_format(q0)
 
         target_joint_state, success, info = self.manip_ik((ee_pos, ee_rot), q0=q0)
@@ -472,5 +472,5 @@ if __name__ == "__main__":
     q1 = STRETCH_HOME_Q.copy()
     q0[2] = -1.18
     q1[2] = -1.1
-    for state, action in robot.interpolate_angle(q0, q0[2], q1[2]):
+    for _state, action in robot.interpolate_angle(q0, q0[2], q1[2]):
         print(action)

@@ -9,7 +9,7 @@
 
 import base64
 from io import BytesIO
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 import numpy as np
 from openai import OpenAI
@@ -31,8 +31,8 @@ class OpenaiClient(AbstractLLMClient):
 
     def __init__(
         self,
-        prompt: Union[str, AbstractPromptBuilder],
-        prompt_kwargs: Optional[Dict[str, Any]] = None,
+        prompt: str | AbstractPromptBuilder,
+        prompt_kwargs: dict[str, Any] | None = None,
         model: str = "gpt-4o",
     ):
         super().__init__(prompt, prompt_kwargs)
@@ -69,7 +69,7 @@ class OpenaiClient(AbstractLLMClient):
                         image = c
 
                     buffered = BytesIO()
-                    image.save(buffered, format="PNG"),
+                    (image.save(buffered, format="PNG"),)
                     img_bytes = buffered.getvalue()
                     base64_encoded = base64.b64encode(img_bytes).decode("utf-8")
                     user_commands.append(
@@ -88,20 +88,20 @@ class OpenaiClient(AbstractLLMClient):
             if isinstance(user_commands, str):
                 print(user_commands)
             else:
-                for (idx, user_command) in enumerate(user_commands):
+                for idx, user_command in enumerate(user_commands):
                     if "image_url" in user_command:
                         print(idx, ".", user_command["type"])
                     else:
                         print(idx, ".", user_command["type"], user_command["text"])
         return user_commands
 
-    def __call__(self, command: Union[str, list], verbose: bool = False, tools: Optional[list] = None):
+    def __call__(self, command: str | list, verbose: bool = False, tools: list | None = None):
         if verbose:
             print(f"{self.system_prompt=}")
 
         command = self._process_input(command, verbose=verbose)  # type:ignore
 
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
@@ -119,6 +119,7 @@ class OpenaiClient(AbstractLLMClient):
         # If the model made tool calls via native API, return structured data
         if tools and msg.tool_calls:
             import json as _json
+
             result_calls = []
             for tc in msg.tool_calls:
                 try:
@@ -133,7 +134,7 @@ class OpenaiClient(AbstractLLMClient):
             print(f"output_text={output_text}")
         return output_text
 
-    def sample(self, command: Union[str, list], n_samples: int, verbose: bool = False):
+    def sample(self, command: str | list, n_samples: int, verbose: bool = False):
         if verbose:
             print(f"{self.system_prompt=}")
 
@@ -163,6 +164,4 @@ if __name__ == "__main__":
     print("\n\n")
     print("OpenAI client returned this plan:", plan)
 
-    choices = client.sample(
-        "this room is a mess, could you put away the dirty towel?", n_samples=2, verbose=True
-    )
+    choices = client.sample("this room is a mess, could you put away the dirty towel?", n_samples=2, verbose=True)

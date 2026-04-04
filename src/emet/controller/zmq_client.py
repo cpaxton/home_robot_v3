@@ -15,7 +15,7 @@ import time
 import timeit
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import click
 import numpy as np
@@ -49,7 +49,6 @@ logger = Logger(__name__)
 
 
 class StretchZmqClient(AbstractRobotClient):
-
     update_base_pose_from_full_obs: bool = False
     num_state_report_steps: int = 10000
 
@@ -63,7 +62,7 @@ class StretchZmqClient(AbstractRobotClient):
         port: int,
         robot_ip: str,
         use_remote_computer: bool,
-        message_type: Optional[str] = "observations",
+        message_type: str | None = "observations",
     ):
         # Receive state information
         recv_socket = self.context.socket(zmq.SUB)
@@ -111,9 +110,9 @@ class StretchZmqClient(AbstractRobotClient):
         urdf_path: str = "",
         ik_type: str = "pinocchio",
         visualize_ik: bool = False,
-        grasp_frame: Optional[str] = None,
-        ee_link_name: Optional[str] = None,
-        manip_mode_controlled_joints: Optional[List[str]] = None,
+        grasp_frame: str | None = None,
+        ee_link_name: str | None = None,
+        manip_mode_controlled_joints: list[str] | None = None,
         start_immediately: bool = True,
         enable_rerun_server: bool = True,
         rerun_headless: bool = False,
@@ -160,9 +159,7 @@ class StretchZmqClient(AbstractRobotClient):
 
         # Resend all actions immediately - helps if we are losing packets or something?
         self._resend_all_actions = resend_all_actions
-        self._publish_observations = (
-            publish_observations or self.parameters["agent"]["use_realtime_updates"]
-        )
+        self._publish_observations = publish_observations or self.parameters["agent"]["use_realtime_updates"]
         self._warning_on_out_of_date_state = -1
 
         self._moving_threshold = parameters["motion"]["moving_threshold"]
@@ -172,21 +169,13 @@ class StretchZmqClient(AbstractRobotClient):
         # Read in joint tolerances from config file
         self._head_pan_tolerance = float(parameters["motion"]["joint_tolerance"]["head_pan"])
         self._head_tilt_tolerance = float(parameters["motion"]["joint_tolerance"]["head_tilt"])
-        self._head_not_moving_tolerance = float(
-            parameters["motion"]["joint_thresholds"]["head_not_moving_tolerance"]
-        )
+        self._head_not_moving_tolerance = float(parameters["motion"]["joint_thresholds"]["head_not_moving_tolerance"])
         self._arm_joint_tolerance = float(parameters["motion"]["joint_tolerance"]["arm"])
         self._lift_joint_tolerance = float(parameters["motion"]["joint_tolerance"]["lift"])
         self._base_x_joint_tolerance = float(parameters["motion"]["joint_tolerance"]["base_x"])
-        self._wrist_roll_joint_tolerance = float(
-            parameters["motion"]["joint_tolerance"]["wrist_roll"]
-        )
-        self._wrist_pitch_joint_tolerance = float(
-            parameters["motion"]["joint_tolerance"]["wrist_pitch"]
-        )
-        self._wrist_yaw_joint_tolerance = float(
-            parameters["motion"]["joint_tolerance"]["wrist_yaw"]
-        )
+        self._wrist_roll_joint_tolerance = float(parameters["motion"]["joint_tolerance"]["wrist_roll"])
+        self._wrist_pitch_joint_tolerance = float(parameters["motion"]["joint_tolerance"]["wrist_pitch"])
+        self._wrist_yaw_joint_tolerance = float(parameters["motion"]["joint_tolerance"]["wrist_yaw"])
 
         # Robot model
         self._robot_model = HelloStretchKinematics(
@@ -217,9 +206,7 @@ class StretchZmqClient(AbstractRobotClient):
         self.send_socket.setsockopt(zmq.SNDHWM, 1)
         self.send_socket.setsockopt(zmq.RCVHWM, 1)
 
-        self.send_address = (
-            lookup_address(robot_ip, use_remote_computer) + ":" + str(self.send_port)
-        )
+        self.send_address = lookup_address(robot_ip, use_remote_computer) + ":" + str(self.send_port)
 
         logger.debug(f"Connecting to {self.send_address} to send action messages...")
         self.send_socket.connect(self.send_address)
@@ -256,7 +243,7 @@ class StretchZmqClient(AbstractRobotClient):
     def parameters(self) -> Parameters:
         return self._parameters
 
-    def get_ee_rgbd(self) -> Tuple[np.ndarray, np.ndarray]:
+    def get_ee_rgbd(self) -> tuple[np.ndarray, np.ndarray]:
         """Get the RGB and depth images from the end effector camera.
 
         Returns:
@@ -269,7 +256,7 @@ class StretchZmqClient(AbstractRobotClient):
             depth = self._servo_obs["ee_depth"]
         return rgb, depth
 
-    def get_head_rgbd(self) -> Tuple[np.ndarray, np.ndarray]:
+    def get_head_rgbd(self) -> tuple[np.ndarray, np.ndarray]:
         """Get the RGB and depth images from the head camera.
 
         Returns:
@@ -282,7 +269,7 @@ class StretchZmqClient(AbstractRobotClient):
             depth = self._servo["head_depth"]
         return rgb, depth
 
-    def get_joint_state(self, timeout: float = 5.0) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def get_joint_state(self, timeout: float = 5.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Get the current joint positions, velocities, and efforts"""
         t0 = timeit.default_timer()
         with self._state_lock:
@@ -449,7 +436,7 @@ class StretchZmqClient(AbstractRobotClient):
         else:
             return pos, quat
 
-    def get_frame_pose(self, q: Union[np.ndarray, dict], node_a: str, node_b: str) -> np.ndarray:
+    def get_frame_pose(self, q: np.ndarray | dict, node_a: str, node_b: str) -> np.ndarray:
         """Get the pose of frame b relative to frame a.
 
         Args:
@@ -465,12 +452,12 @@ class StretchZmqClient(AbstractRobotClient):
 
     def solve_ik(
         self,
-        pos: List[float],
-        quat: Optional[List[float]] = None,
+        pos: list[float],
+        quat: list[float] | None = None,
         initial_cfg: np.ndarray = None,
         debug: bool = False,
-        custom_ee_frame: Optional[str] = None,
-    ) -> Optional[np.ndarray]:
+        custom_ee_frame: str | None = None,
+    ) -> np.ndarray | None:
         """Solve inverse kinematics appropriately (or at least try to) and get the joint position
         that we will be moving to.
 
@@ -596,9 +583,9 @@ class StretchZmqClient(AbstractRobotClient):
 
     def arm_to(
         self,
-        joint_angles: Optional[np.ndarray] = None,
+        joint_angles: np.ndarray | None = None,
         gripper: float = None,
-        head: Optional[np.ndarray] = None,
+        head: np.ndarray | None = None,
         blocking: bool = True,
         timeout: float = 10.0,
         verbose: bool = False,
@@ -625,9 +612,9 @@ class StretchZmqClient(AbstractRobotClient):
         if isinstance(joint_angles, list):
             joint_angles = np.array(joint_angles)
         if joint_angles is None:
-            assert (
-                config is not None and len(config.keys()) > 0
-            ), "Must provide joint angles array or specific joint values as params"
+            assert config is not None and len(config.keys()) > 0, (
+                "Must provide joint angles array or specific joint values as params"
+            )
             joint_positions = self.get_joint_positions()
             joint_angles = conversions.config_to_manip_command(joint_positions)
         elif len(joint_angles) > 6:
@@ -646,9 +633,9 @@ class StretchZmqClient(AbstractRobotClient):
             for joint, value in config.items():
                 joint_angles[conversions.get_manip_joint_idx(joint)] = value
         # Make sure it's all the right size
-        assert (
-            len(joint_angles) == 6
-        ), "joint angles must be 6 dimensional: base_x, lift, arm, wrist roll, wrist pitch, wrist yaw"
+        assert len(joint_angles) == 6, (
+            "joint angles must be 6 dimensional: base_x, lift, arm, wrist roll, wrist pitch, wrist yaw"
+        )
 
         # Create and send the action dictionary
         _next_action = {"joint": joint_angles}
@@ -669,7 +656,6 @@ class StretchZmqClient(AbstractRobotClient):
         if blocking:
             t0 = timeit.default_timer()
             while not self._finish:
-
                 if steps % 40 == 39:
                     # Resend the action until we get there
                     self.send_action(_next_action, reliable=reliable)
@@ -684,15 +670,9 @@ class StretchZmqClient(AbstractRobotClient):
                 arm_diff = np.abs(joint_state[HelloStretchIdx.ARM] - joint_angles[2])
                 lift_diff = np.abs(joint_state[HelloStretchIdx.LIFT] - joint_angles[1])
                 base_x_diff = np.abs(joint_state[HelloStretchIdx.BASE_X] - joint_angles[0])
-                wrist_roll_diff = np.abs(
-                    angle_difference(joint_state[HelloStretchIdx.WRIST_ROLL], joint_angles[3])
-                )
-                wrist_pitch_diff = np.abs(
-                    angle_difference(joint_state[HelloStretchIdx.WRIST_PITCH], joint_angles[4])
-                )
-                wrist_yaw_diff = np.abs(
-                    angle_difference(joint_state[HelloStretchIdx.WRIST_YAW], joint_angles[5])
-                )
+                wrist_roll_diff = np.abs(angle_difference(joint_state[HelloStretchIdx.WRIST_ROLL], joint_angles[3]))
+                wrist_pitch_diff = np.abs(angle_difference(joint_state[HelloStretchIdx.WRIST_PITCH], joint_angles[4]))
+                wrist_yaw_diff = np.abs(angle_difference(joint_state[HelloStretchIdx.WRIST_YAW], joint_angles[5]))
                 if verbose:
                     print(
                         f"{arm_diff=}, {lift_diff=}, {base_x_diff=}, {wrist_roll_diff=}, {wrist_pitch_diff=}, {wrist_yaw_diff=}"
@@ -736,7 +716,7 @@ class StretchZmqClient(AbstractRobotClient):
 
     def move_base_to(
         self,
-        xyt: Union[ContinuousNavigationAction, np.ndarray],
+        xyt: ContinuousNavigationAction | np.ndarray,
         relative: bool = False,
         blocking: bool = True,
         timeout: float = 10.0,
@@ -815,12 +795,12 @@ class StretchZmqClient(AbstractRobotClient):
         self._servo = None  # Visual servoing state includes smaller images
         self._thread = None
         self._state_thread = None
+        self._servo_thread = None
+        self._rerun_thread = None
         self._finish = False
         self._last_step = -1
 
-    def open_gripper(
-        self, blocking: bool = True, timeout: float = 10.0, verbose: bool = False
-    ) -> bool:
+    def open_gripper(self, blocking: bool = True, timeout: float = 10.0, verbose: bool = False) -> bool:
         """Open the gripper based on hard-coded presets."""
         gripper_target = self._robot_model.GRIPPER_OPEN
         logger.debug("[ZMQ CLIENT] Opening gripper to", gripper_target)
@@ -854,9 +834,7 @@ class StretchZmqClient(AbstractRobotClient):
         verbose: bool = False,
     ) -> bool:
         """Close the gripper based on hard-coded presets."""
-        gripper_target = (
-            self._robot_model.GRIPPER_CLOSED_LOOSE if loose else self._robot_model.GRIPPER_CLOSED
-        )
+        gripper_target = self._robot_model.GRIPPER_CLOSED_LOOSE if loose else self._robot_model.GRIPPER_CLOSED
         print("[ZMQ CLIENT] Closing gripper to", gripper_target)
         self.gripper_to(gripper_target, blocking=False)
         if blocking:
@@ -889,7 +867,7 @@ class StretchZmqClient(AbstractRobotClient):
     def switch_to_navigation_mode(self):
         """Velocity control of the robot base."""
         next_action = {"control_mode": "navigation", "step": self._iter}
-        action = self.send_action(next_action)
+        self.send_action(next_action)
         self._wait_for_mode("navigation")
         assert self.in_navigation_mode()
 
@@ -900,7 +878,7 @@ class StretchZmqClient(AbstractRobotClient):
             verbose: Whether to print out debug information
         """
         next_action = {"control_mode": "manipulation", "step": self._iter}
-        action = self.send_action(next_action)
+        self.send_action(next_action)
         if verbose:
             logger.info("Waiting for manipulation mode")
         self._wait_for_mode("manipulation", verbose=verbose)
@@ -929,7 +907,7 @@ class StretchZmqClient(AbstractRobotClient):
         q: np.ndarray,
         timeout: float = 3.0,
         min_wait_time: float = 0.5,
-        resend_action: Optional[dict] = None,
+        resend_action: dict | None = None,
         block_id: int = -1,
         verbose: bool = False,
     ) -> None:
@@ -943,7 +921,6 @@ class StretchZmqClient(AbstractRobotClient):
         prev_joint_positions = None
         prev_t = None
         while not self._finish:
-
             # Check to make sure message was sent and received
             if self.out_of_date():
                 time.sleep(0.01)
@@ -961,15 +938,9 @@ class StretchZmqClient(AbstractRobotClient):
             #     time.sleep(0.05)
             #     continue
 
-            pan_err = np.abs(
-                joint_positions[HelloStretchIdx.HEAD_PAN] - q[HelloStretchIdx.HEAD_PAN]
-            )
-            tilt_err = np.abs(
-                joint_positions[HelloStretchIdx.HEAD_TILT] - q[HelloStretchIdx.HEAD_TILT]
-            )
-            head_speed = np.linalg.norm(
-                joint_velocities[HelloStretchIdx.HEAD_PAN : HelloStretchIdx.HEAD_TILT]
-            )
+            pan_err = np.abs(joint_positions[HelloStretchIdx.HEAD_PAN] - q[HelloStretchIdx.HEAD_PAN])
+            tilt_err = np.abs(joint_positions[HelloStretchIdx.HEAD_TILT] - q[HelloStretchIdx.HEAD_TILT])
+            head_speed = np.linalg.norm(joint_velocities[HelloStretchIdx.HEAD_PAN : HelloStretchIdx.HEAD_TILT])
 
             if prev_joint_positions is not None:
                 head_speed_v2 = np.linalg.norm(
@@ -1017,9 +988,7 @@ class StretchZmqClient(AbstractRobotClient):
                 break
             time.sleep(0.01)
 
-    def _wait_for_arm(
-        self, q: np.ndarray, timeout: float = 10.0, resend_action: Optional[dict] = None
-    ) -> bool:
+    def _wait_for_arm(self, q: np.ndarray, timeout: float = 10.0, resend_action: dict | None = None) -> bool:
         """Wait for the arm to move to a particular configuration. Will throw an exception if the arm is not moving; probably means a packet was dropped. Arm configuration is in full-body joint space, as defined by the HelloStretchIdx enum.
 
         Args:
@@ -1072,7 +1041,7 @@ class StretchZmqClient(AbstractRobotClient):
     def _wait_for_mode(
         self,
         mode,
-        resend_action: Optional[Dict[str, Any]] = None,
+        resend_action: dict[str, Any] | None = None,
         verbose: bool = False,
         timeout: float = 20.0,
         time_required: float = 0.05,
@@ -1118,12 +1087,12 @@ class StretchZmqClient(AbstractRobotClient):
         block_id: int,
         verbose: bool = False,
         timeout: float = 10.0,
-        moving_threshold: Optional[float] = None,
-        angle_threshold: Optional[float] = None,
-        min_steps_not_moving: Optional[int] = None,
-        goal_angle: Optional[float] = None,
-        goal_angle_threshold: Optional[float] = 0.15,
-        resend_action: Optional[dict] = None,
+        moving_threshold: float | None = None,
+        angle_threshold: float | None = None,
+        min_steps_not_moving: int | None = None,
+        goal_angle: float | None = None,
+        goal_angle_threshold: float | None = 0.15,
+        resend_action: dict | None = None,
     ) -> None:
         """Wait for the navigation action to finish.
 
@@ -1150,12 +1119,16 @@ class StretchZmqClient(AbstractRobotClient):
         if min_steps_not_moving is None:
             min_steps_not_moving = self._min_steps_not_moving
         t0 = timeit.default_timer()
+        deadline = timeit.default_timer() + timeout  # wall-clock: always exit after timeout
         close_to_goal = False
 
         while not self._finish:
-
             # Minor delay at the end - give it time to get new messages
             time.sleep(0.01)
+
+            if timeit.default_timer() > deadline:
+                print(f"Timeout ({timeout}s) waiting for block with step id = {block_id}")
+                break
 
             if not self.is_up_to_date():
                 if verbose:
@@ -1189,18 +1162,10 @@ class StretchZmqClient(AbstractRobotClient):
             else:
                 at_goal = True
 
-            moved_speed = (
-                moved_dist / (obs_t - last_obs_t) if last_obs_t is not None else float("inf")
-            )
-            angle_speed = (
-                angle_dist / (obs_t - last_obs_t) if last_obs_t is not None else float("inf")
-            )
+            moved_speed = moved_dist / (obs_t - last_obs_t) if last_obs_t is not None else float("inf")
+            angle_speed = angle_dist / (obs_t - last_obs_t) if last_obs_t is not None else float("inf")
 
-            not_moving = (
-                last_pos is not None
-                and moved_speed < moving_threshold
-                and angle_speed < angle_threshold
-            )
+            not_moving = last_pos is not None and moved_speed < moving_threshold and angle_speed < angle_threshold
             if not_moving:
                 not_moving_count += 1
             else:
@@ -1302,9 +1267,7 @@ class StretchZmqClient(AbstractRobotClient):
                 self._last_step = max(self._last_step, state["step"])
                 if state["step"] < self._last_step:
                     if self._warning_on_out_of_date_state < state["step"]:
-                        logger.warning(
-                            f"Dropping out-of-date state message: {state['step']} < {self._last_step}"
-                        )
+                        logger.warning(f"Dropping out-of-date state message: {state['step']} < {self._last_step}")
                         self._warning_on_out_of_date_state = state["step"]
             self._state = state
             self._control_mode = state["control_mode"]
@@ -1388,7 +1351,7 @@ class StretchZmqClient(AbstractRobotClient):
 
     def execute_trajectory(
         self,
-        trajectory: List[np.ndarray],
+        trajectory: list[np.ndarray],
         pos_err_threshold: float = 0.2,
         rot_err_threshold: float = 0.1,
         spin_rate: int = 10,
@@ -1407,9 +1370,9 @@ class StretchZmqClient(AbstractRobotClient):
             raise NotImplementedError("Relative trajectories not yet supported")
 
         for i, pt in enumerate(trajectory):
-            assert (
-                len(pt) == 3 or len(pt) == 2
-            ), "base trajectory needs to be 2-3 dimensions: x, y, and (optionally) theta"
+            assert len(pt) == 3 or len(pt) == 2, (
+                "base trajectory needs to be 2-3 dimensions: x, y, and (optionally) theta"
+            )
             self.move_base_to(pt, relative, blocking=False, reliable=False)
             print("Moving to", pt)
             last_waypoint = i == len(trajectory) - 1
@@ -1475,10 +1438,7 @@ class StretchZmqClient(AbstractRobotClient):
             dt = t2 - t1
             if t2 - t0 > timeout:
                 logger.warning(
-                    "[WAIT FOR WAYPOINT] WARNING! Could not reach goal in time: "
-                    + str(xyt)
-                    + " "
-                    + str(curr)
+                    "[WAIT FOR WAYPOINT] WARNING! Could not reach goal in time: " + str(xyt) + " " + str(curr)
                 )
                 return False
             time.sleep(max(0, _delay - (dt)))
@@ -1496,11 +1456,11 @@ class StretchZmqClient(AbstractRobotClient):
 
     def send_action(
         self,
-        next_action: Dict[str, Any],
+        next_action: dict[str, Any],
         timeout: float = 5.0,
         verbose: bool = False,
         reliable: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Send the next action to the robot. Increment the step counter and wait for the action to finish if it is blocking.
 
         Args:
@@ -1522,10 +1482,8 @@ class StretchZmqClient(AbstractRobotClient):
             print(" - yaw: ", cur_joints[3])
             print(" - pitch: ", cur_joints[4])
             print(" - roll: ", cur_joints[5])
-        blocking = False
         block_id = None
         with self._act_lock:
-
             # Send it
             block_id = max(self._iter, self._last_step + 1)
             next_action["step"] = block_id
@@ -1540,9 +1498,9 @@ class StretchZmqClient(AbstractRobotClient):
 
             # For tracking goal
             if "xyt" in next_action:
-                goal_angle = next_action["xyt"][2]
+                next_action["xyt"][2]
             else:
-                goal_angle = None
+                pass
 
             # Empty it out for the next one
             current_action = next_action
@@ -1559,7 +1517,6 @@ class StretchZmqClient(AbstractRobotClient):
         shown_point_cloud = visualize
 
         while not self._finish:
-
             output = self.recv_socket.recv_pyobj()
             if output is None:
                 continue
@@ -1571,9 +1528,7 @@ class StretchZmqClient(AbstractRobotClient):
             output["depth"] = depth
 
             if camera is None:
-                camera = Camera.from_K(
-                    output["camera_K"], output["rgb_height"], output["rgb_width"]
-                )
+                camera = Camera.from_K(output["camera_K"], output["rgb_height"], output["rgb_width"])
 
             output["xyz"] = camera.depth_to_xyz(output["depth"])
 
@@ -1590,7 +1545,7 @@ class StretchZmqClient(AbstractRobotClient):
             steps += 1
             if verbose:
                 print("Control mode:", self._control_mode)
-                print(f"time taken = {dt} avg = {sum_time/steps} keys={[k for k in output.keys()]}")
+                print(f"time taken = {dt} avg = {sum_time / steps} keys={list(output.keys())}")
             t0 = timeit.default_timer()
 
     def update_servo(self, message):
@@ -1606,12 +1561,11 @@ class StretchZmqClient(AbstractRobotClient):
         else:
             color_image = None
             depth_image = None
-            image_scaling = None
 
         # Get head information from the message as well
         head_color_image = compression.from_jpg(message["head_cam/color_image"])
         head_depth_image = compression.from_jp2(message["head_cam/depth_image"]) / 1000
-        head_image_scaling = message["head_cam/image_scaling"]
+        message["head_cam/image_scaling"]
         joint = message["robot/config"]
         with self._servo_lock and self._state_lock:
             observation = Observations(
@@ -1669,9 +1623,7 @@ class StretchZmqClient(AbstractRobotClient):
             sum_time += dt
             steps += 1
             if verbose and steps % self.num_state_report_steps == 1:
-                print(
-                    f"[SERVO] time taken = {dt} avg = {sum_time/steps} keys={[k for k in output.keys()]}"
-                )
+                print(f"[SERVO] time taken = {dt} avg = {sum_time / steps} keys={list(output.keys())}")
             t0 = timeit.default_timer()
 
     @property
@@ -1718,9 +1670,7 @@ class StretchZmqClient(AbstractRobotClient):
             steps += 1
             if verbose and steps % self.num_state_report_steps == 1:
                 print("[STATE] Control mode:", self._control_mode)
-                print(
-                    f"[STATE] time taken = {dt} avg = {sum_time/steps} keys={[k for k in output.keys()]}"
-                )
+                print(f"[STATE] time taken = {dt} avg = {sum_time / steps} keys={list(output.keys())}")
             t0 = timeit.default_timer()
 
     def blocking_spin_rerun(self) -> None:
@@ -1841,23 +1791,26 @@ class StretchZmqClient(AbstractRobotClient):
         self.stop()
 
     def stop(self):
-        """Stop the client and close all sockets"""
+        """Stop the client and close all sockets. Safe to call even if __init__ failed partway."""
         self._finish = True
-        if self._thread is not None:
-            self._thread.join()
-        if self._state_thread is not None:
-            self._state_thread.join()
-        if self._servo_thread is not None:
-            self._servo_thread.join()
-        if self._rerun_thread is not None:
-            self._rerun_thread.join()
-
-        # Close the sockets and context
-        self.recv_socket.close()
-        self.recv_state_socket.close()
-        self.recv_servo_socket.close()
-        self.send_socket.close()
-        self.context.term()
+        for attr in ("_thread", "_state_thread", "_servo_thread", "_rerun_thread"):
+            t = getattr(self, attr, None)
+            if t is not None:
+                t.join()
+        # Close sockets and context only if they exist (__init__ may have failed before creating them)
+        for attr in ("recv_socket", "recv_state_socket", "recv_servo_socket", "send_socket"):
+            s = getattr(self, attr, None)
+            if s is not None:
+                try:
+                    s.close()
+                except Exception:
+                    pass
+        ctx = getattr(self, "context", None)
+        if ctx is not None:
+            try:
+                ctx.term()
+            except Exception:
+                pass
 
 
 @click.command()

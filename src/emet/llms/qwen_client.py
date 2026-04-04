@@ -8,7 +8,7 @@
 # license information maybe found below, if so.
 
 import timeit
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import numpy as np
 import torch
@@ -60,20 +60,21 @@ qwen35_sizes = ["0.8B", "2B", "4B", "9B"]
 class Qwen25Client(AbstractLLMClient):
     def __init__(
         self,
-        prompt: Union[str, AbstractPromptBuilder],
-        prompt_kwargs: Optional[Dict[str, Any]] = None,
+        prompt: str | AbstractPromptBuilder,
+        prompt_kwargs: dict[str, Any] | None = None,
         model_size: str = "3B",
-        fine_tuning: Optional[str] = "Instruct",
-        model_type: Optional[str] = None,
+        fine_tuning: str | None = "Instruct",
+        model_type: str | None = None,
         max_tokens: int = 4096,
         device: str = "cuda",
-        quantization: Optional[str] = "int4",
-        version: Optional[str] = None,
+        quantization: str | None = "int4",
+        version: str | None = None,
     ):
         super().__init__(prompt, prompt_kwargs)
         assert device in ["cuda", "mps", "cpu"], f"Invalid device: {device}"
         if device == "cpu":
             import warnings
+
             warnings.warn(
                 "Qwen client on CPU: inference will be slow; use a small model (e.g. 1.5B) and Int4 for local testing.",
                 UserWarning,
@@ -121,10 +122,10 @@ class Qwen25Client(AbstractLLMClient):
                 try:
                     import bitsandbytes  # noqa: F401
                     from transformers import BitsAndBytesConfig
-                except ImportError:
+                except ImportError as e:
                     raise ImportError(
                         "bitsandbytes required for int4/int8 quantization: pip install bitsandbytes"
-                    )
+                    ) from e
 
                 quantization_config = BitsAndBytesConfig(
                     load_in_4bit=(quantization == "int4"),
@@ -194,7 +195,7 @@ class Qwen25Client(AbstractLLMClient):
             # Strip the role marker and any trailing end tokens
             assistant_response = assistant_response.lstrip("\n").rstrip()
             if assistant_response.endswith("<|im_end|>"):
-                assistant_response = assistant_response[:-len("<|im_end|>")].rstrip()
+                assistant_response = assistant_response[: -len("<|im_end|>")].rstrip()
         else:
             assistant_response = generated.split("assistant")[-1].strip()
 
@@ -208,7 +209,7 @@ class Qwen25Client(AbstractLLMClient):
         if verbose:
             print(f"{self.system_prompt=}")
         plan = []
-        for i in range(n_samples):
+        for _i in range(n_samples):
             self.reset()
             plan.append(self.__call__(command, verbose))
         if verbose:
@@ -223,13 +224,13 @@ from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 class Qwen25VLClient:
     def __init__(
         self,
-        prompt: Optional[str] = None,
+        prompt: str | None = None,
         model_size: str = "3B",
-        fine_tuning: Optional[str] = "Instruct",
+        fine_tuning: str | None = "Instruct",
         max_tokens: int = 4096,
         num_beams: int = 1,
         device: str = "cuda",
-        quantization: Optional[str] = "int4",
+        quantization: str | None = "int4",
         use_fast_attn: bool = False,
     ):
         """
@@ -263,10 +264,10 @@ class Qwen25VLClient:
                 try:
                     import bitsandbytes  # noqa: F401
                     from transformers import BitsAndBytesConfig
-                except ImportError:
+                except ImportError as e:
                     raise ImportError(
                         "bitsandbytes required for int4/int8 quantization: pip install bitsandbytes"
-                    )
+                    ) from e
 
                 quantization_config = BitsAndBytesConfig(
                     load_in_4bit=(quantization == "int4"),
@@ -326,9 +327,7 @@ class Qwen25VLClient:
 
         return user_commands
 
-    def __call__(
-        self, command: Union[str, List[Dict[str, Any]], Image.Image], verbose: bool = False
-    ):
+    def __call__(self, command: str | list[dict[str, Any]] | Image.Image, verbose: bool = False):
         if self.system_prompt is not None:
             messages = [{"role": "system", "content": self.system_prompt}]
         else:
@@ -347,9 +346,7 @@ class Qwen25VLClient:
 
         t0 = timeit.default_timer()
 
-        text = self.processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
+        text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         image_inputs, video_inputs = process_vision_info(messages)
         inputs = self.processor(
             text=[text],
@@ -360,11 +357,9 @@ class Qwen25VLClient:
         )
         inputs = inputs.to(self._device)
 
-        generated_ids = self.model.generate(
-            **inputs, max_new_tokens=self.max_tokens, num_beams=self.num_beams
-        )
+        generated_ids = self.model.generate(**inputs, max_new_tokens=self.max_tokens, num_beams=self.num_beams)
         generated_ids_trimmed = [
-            out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+            out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids, strict=False)
         ]
         output_text = self.processor.batch_decode(
             generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False

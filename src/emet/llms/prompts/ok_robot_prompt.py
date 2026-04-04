@@ -8,7 +8,6 @@
 # license information maybe found below, if so.
 
 import copy
-from typing import Optional
 
 from typing_extensions import override
 
@@ -75,8 +74,8 @@ class OkRobotPromptBuilder(AbstractPromptBuilder):
     @override
     def configure(
         self,
-        objects: Optional[str] = None,
-        locations: Optional[str] = None,
+        objects: str | None = None,
+        locations: str | None = None,
         use_specific_objects: bool = True,
     ):
 

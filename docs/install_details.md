@@ -41,12 +41,20 @@ cd stretch_ai
 ```
 
 Options:
-- `-y` / `--yes`: Skip confirmation prompts (and skip sim asset download ~10GB)
-- `--cpu`: CPU-only (skips Segment Anything 2)
-- `--no-sim`: Skip simulation (no clone of third_party/robocasa, robosuite; sim is included by default)
-- `--no-sam2`: Skip Segment Anything 2 (required for DynaMem OWL+SAM segmentation)
+- `-y` / `--yes`: Non-interactive (skip confirmation prompts; link emet to ~/.local/bin when offered).
+- `--all`: Install everything: sim (Robocasa + robosuite), MolmoSpaces runner venv, and dynamem (SAM-2). Overridable by `--no-sim` or `--no-sam2`.
+- `--sim` / `--no-sim`: Include or skip simulation (third_party/robocasa, robosuite). Sim is on by default.
+- `--molmospaces`: Create `.venv-molmospaces` for [MolmoSpaces](molmospaces.md) (scenes + rby1 robot). Requires separate venv due to numpy/mujoco version mismatch with main env.
+- `--no-sam2`: Skip Segment Anything 2 (dynamem extra). Use `--cpu` for CPU-only (also skips SAM-2).
+- `--clean`: Remove and re-clone third_party/robosuite, robosuite_models, robocasa before installing. Only use if repos are in a bad state; **by default we update in place** (git fetch/pull).
 
-To add SAM2 after install: `emet sync -e dynamem` or `uv sync --extra dynamem`
+When sim is installed, `scripts/install_simulation.sh` updates existing robosuite/robocasa clones (fetch + pull) instead of deleting them. Use `./install.sh --clean` only when you need a fresh clone.
+
+**Dependencies:** Main env uses `numpy<2` and `mujoco>=3.3.0` (pyproject.toml and override-dependencies). Robocasa/robosuite are installed editable from third_party. MolmoSpaces uses a separate venv (`.venv-molmospaces`) with `molmo-spaces` and `mujoco>=3.4`, `numpy>=2.2`, because it cannot share the main lockfile.
+
+To add SAM2 after install: `emet sync -e dynamem` or `uv sync --extra dynamem`.
+
+**Interactive menu:** Run `emet install menu` for a text-based UI that shows the status of each sub-asset (submodules, simulation, kitchen assets, MolmoSpaces) and lets you install or update them one by one, or run all with prompts.
 
 #### Install On the Robot
 

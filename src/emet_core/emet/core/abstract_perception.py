@@ -14,7 +14,7 @@
 
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -51,9 +51,9 @@ class PerceptionModule(ABC):
         self,
         rgb=None,
         depth=None,
-        depth_threshold: Optional[float] = None,
+        depth_threshold: float | None = None,
         draw_instance_predictions: bool = False,
-    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
+    ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
         """
         Run the perception model on the input images. Return semantic and instance labels for each point in the input image. Optionally filter out objects based on depth.
 

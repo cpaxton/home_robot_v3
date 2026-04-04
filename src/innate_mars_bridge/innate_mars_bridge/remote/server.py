@@ -3,13 +3,22 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """ZMQ server for Innate Mars: exposes pose, proprioception, and all cameras (head left/right, EE)."""
 
-from typing import Any, Dict
+from typing import Any
 
-import cv2
 import click
+import cv2
 import numpy as np
 import rclpy
 from overrides import override
@@ -17,7 +26,6 @@ from overrides import override
 import emet.utils.compression as compression
 from emet.core.server import BaseZmqServer
 from emet.utils.image import scale_camera_matrix
-
 from innate_mars_bridge.remote import InnateMarsClient
 
 
@@ -41,7 +49,7 @@ class ZmqServer(BaseZmqServer):
         return "manipulation"
 
     @override
-    def get_full_observation_message(self) -> Dict[str, Any]:
+    def get_full_observation_message(self) -> dict[str, Any]:
         q, dq = self.client.get_joint_state()
         base_pose = self.client.base_pose_xyt
         head_left = self.client.head_left_cam.get()
@@ -66,7 +74,7 @@ class ZmqServer(BaseZmqServer):
         }
 
     @override
-    def get_state_message(self) -> Dict[str, Any]:
+    def get_state_message(self) -> dict[str, Any]:
         q, dq = self.client.get_joint_state()
         base_pose = self.client.base_pose_xyt
         ee_pose = self.client.ee_pose
@@ -80,19 +88,17 @@ class ZmqServer(BaseZmqServer):
         }
 
     @override
-    def handle_action(self, action: Dict[str, Any]):
+    def handle_action(self, action: dict[str, Any]):
         # Optional: forward actions to /mars/arm/commands or other topics
         pass
 
     def _rescale_color(self, color_image: np.ndarray, scale: float) -> np.ndarray:
         if scale == 1.0:
             return color_image
-        return cv2.resize(
-            color_image, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_AREA
-        )
+        return cv2.resize(color_image, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
 
     @override
-    def get_servo_message(self) -> Dict[str, Any]:
+    def get_servo_message(self) -> dict[str, Any]:
         q, _ = self.client.get_joint_state()
 
         # Head left
@@ -121,9 +127,7 @@ class ZmqServer(BaseZmqServer):
             "robot/config": q,
             "step": self._last_step,
             # Head left
-            "head_cam_left/color_camera_K": scale_camera_matrix(
-                self.client.head_left_cam.get_K(), self.image_scaling
-            ),
+            "head_cam_left/color_camera_K": scale_camera_matrix(self.client.head_left_cam.get_K(), self.image_scaling),
             "head_cam_left/color_image": head_left_compressed,
             "head_cam_left/color_image/shape": head_left_img.shape,
             "head_cam_left/image_scaling": self.image_scaling,
@@ -137,9 +141,7 @@ class ZmqServer(BaseZmqServer):
             "head_cam_right/image_scaling": self.image_scaling,
             "head_cam_right/pose": self.client.head_right_camera_pose,
             # EE cam
-            "ee_cam/color_camera_K": scale_camera_matrix(
-                self.client.ee_cam.get_K(), self.ee_image_scaling
-            ),
+            "ee_cam/color_camera_K": scale_camera_matrix(self.client.ee_cam.get_K(), self.ee_image_scaling),
             "ee_cam/color_image": ee_compressed,
             "ee_cam/color_image/shape": ee_img.shape,
             "ee_cam/image_scaling": self.ee_image_scaling,

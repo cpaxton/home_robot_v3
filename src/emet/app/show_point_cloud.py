@@ -21,9 +21,7 @@ from emet.utils.point_cloud import show_point_cloud
 
 
 @click.command()
-@click.option(
-    "--robot_ip", default="", help="IP address of the robot (blank to use stored IP address)"
-)
+@click.option("--robot_ip", default="", help="IP address of the robot (blank to use stored IP address)")
 @click.option("--parameter_file", default="default_planner.yaml", help="Path to parameter file")
 @click.option("--reset", is_flag=True, help="Reset the robot to origin before starting")
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
@@ -63,10 +61,7 @@ def main(
             ee_xyz = servo.get_ee_xyz_in_world_frame().reshape(-1, 3)
 
             xyz = np.concatenate([head_xyz, ee_xyz], axis=0)
-            rgb = (
-                np.concatenate([servo.rgb.reshape(-1, 3), servo.ee_rgb.reshape(-1, 3)], axis=0)
-                / 255
-            )
+            rgb = np.concatenate([servo.rgb.reshape(-1, 3), servo.ee_rgb.reshape(-1, 3)], axis=0) / 255
             show_point_cloud(xyz, rgb, orig=np.zeros(3))
             break
 

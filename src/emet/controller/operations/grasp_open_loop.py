@@ -22,7 +22,6 @@ from emet.utils.point_cloud import show_point_cloud
 
 
 class OpenLoopGraspObjectOperation(ManagedOperation):
-
     debug_show_point_cloud: bool = False
     match_method: str = "feature"
     target_object: str = None
@@ -79,7 +78,6 @@ class OpenLoopGraspObjectOperation(ManagedOperation):
 
         print("[GRASP OBJECT] match method =", self.match_method)
         if self.match_method == "class":
-
             # Get the target class
             if self.agent.current_object is not None:
                 target_class_id = self.agent.current_object.category_id
@@ -96,16 +94,12 @@ class OpenLoopGraspObjectOperation(ManagedOperation):
                     mask = np.bitwise_or(mask, servo.semantic == iid)
         elif self.match_method == "feature":
             if self.target_object is None:
-                raise ValueError(
-                    f"Target object must be set before running match method {self.match_method}."
-                )
+                raise ValueError(f"Target object must be set before running match method {self.match_method}.")
             print("[GRASP OBJECT] Detecting objects described as", self.target_object)
             text_features = self.agent.encode_text(self.target_object)
             best_score = float("-inf")
-            best_iid = None
 
             for iid in np.unique(servo.instance):
-
                 # Ignore the background
                 if iid < 0:
                     continue
@@ -122,7 +116,6 @@ class OpenLoopGraspObjectOperation(ManagedOperation):
                 print(f" - Score for {iid} is {score}")
                 if score > best_score:
                     best_score = score
-                    best_iid = iid
                     mask = servo.instance == iid
         else:
             raise ValueError(f"Invalid matching method {self.match_method}.")
@@ -136,7 +129,7 @@ class OpenLoopGraspObjectOperation(ManagedOperation):
         # Get the arm out of the way so we can look for the object
         q = self.robot.get_joint_positions()
         base_x = q[HelloStretchIdx.BASE_X]
-        lift = q[HelloStretchIdx.LIFT]
+        q[HelloStretchIdx.LIFT]
         arm = q[HelloStretchIdx.ARM]
         wrist_pitch = q[HelloStretchIdx.WRIST_PITCH]
         wrist_yaw = q[HelloStretchIdx.WRIST_YAW]
@@ -204,10 +197,7 @@ class OpenLoopGraspObjectOperation(ManagedOperation):
             print("Failed to find a valid IK solution.")
             self._success = False
             return
-        elif (
-            target_joint_positions[HelloStretchIdx.ARM] < 0
-            or target_joint_positions[HelloStretchIdx.LIFT] < 0
-        ):
+        elif target_joint_positions[HelloStretchIdx.ARM] < 0 or target_joint_positions[HelloStretchIdx.LIFT] < 0:
             print(
                 f"{self.name}: Target joint state is invalid: {target_joint_positions}. Positions for arm and lift must be positive."
             )

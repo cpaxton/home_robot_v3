@@ -20,6 +20,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import click
@@ -136,6 +137,38 @@ def main() -> None:
     help="Use GLX instead of EGL (use with Xvfb on WSL to get camera images)",
 )
 @click.option("--scene-path", type=click.Path(exists=True), help="Path to MuJoCo scene XML")
+@click.option(
+    "--molmospaces-scene",
+    default=None,
+    metavar="NAME",
+    help=(
+        "MolmoSpaces scene (e.g. ithor). Runs merge via emet-molmospaces into a temp MJCF, "
+        "then starts the ZMQ server (same as merge-scene + emet serve mujoco). Requires wrapper: "
+        "install.sh --molmospaces. First-time use may need scene packages under MLSPACES_ASSETS_DIR "
+        "(you will be prompted to download unless --molmospaces-install). "
+        "Incompatible with --scene-path and --use-robocasa."
+    ),
+)
+@click.option(
+    "--molmospaces-split",
+    default="train",
+    type=click.Choice(["train", "val", "test"]),
+    help="Split when using --molmospaces-scene.",
+)
+@click.option(
+    "--molmospaces-index",
+    default=0,
+    type=int,
+    help="Scene index when using --molmospaces-scene.",
+)
+@click.option(
+    "--molmospaces-install",
+    is_flag=True,
+    help=(
+        "If the MolmoSpaces scene archive is not on disk yet, download/link it without prompting "
+        "(non-interactive; same as emet-molmospaces merge-scene --install-if-missing)."
+    ),
+)
 @click.option("--seed", default=0, type=int, help="Random seed")
 @click.option(
     "--port-offset",
@@ -173,6 +206,10 @@ def serve(
     no_cameras: bool,
     use_glx: bool,
     scene_path: str | None,
+    molmospaces_scene: str | None,
+    molmospaces_split: str,
+    molmospaces_index: int,
+    molmospaces_install: bool,
     seed: int,
     port_offset: int,
     list_robocasa_tasks: bool,
@@ -199,8 +236,56 @@ def serve(
       emet serve robocasa --robocasa-task PickPlaceCounterToCabinet
       emet serve robocasa --list-robocasa-tasks
       emet serve mujoco --use-robocasa --port-offset 100
+      emet serve mujoco --molmospaces-scene ithor --headless   # MolmoSpaces + rby1 ZMQ (needs wrapper)
     """
     use_robocasa_flag = use_robocasa or (backend == "robocasa")
+    if molmospaces_scene and scene_path:
+        click.echo("Use either --scene-path or --molmospaces-scene, not both.", err=True)
+        sys.exit(1)
+    if molmospaces_scene and use_robocasa_flag:
+        click.echo("Cannot combine --molmospaces-scene with --use-robocasa / robocasa backend.", err=True)
+        sys.exit(1)
+    if molmospaces_scene:
+        from emet.simulation.molmospaces_config import (
+            ensure_molmospaces_assets_dir_env,
+            galaxea_r1_assets_directory,
+        )
+
+        # Defaults for MLSPACES_ASSETS_DIR / MLSPACES_CACHE_DIR (sibling dirs); merge + mujoco_server inherit.
+        ensure_molmospaces_assets_dir_env()
+        # Merge output must sit next to galaxea_r1.xml so robot mesh paths (assetdir=meshes) resolve.
+        fd, merged_path = tempfile.mkstemp(
+            suffix=".xml", prefix="molmospaces_merged_", dir=str(galaxea_r1_assets_directory())
+        )
+        os.close(fd)
+        merge_robot = robot.lower().replace("-", "_")
+        if merge_robot in ("stretch", "hello_stretch", "hellostretch"):
+            merge_robot = "rby1"
+        merge_argv = [
+            "merge-scene",
+            "--scene",
+            molmospaces_scene,
+            "--split",
+            molmospaces_split,
+            "--index",
+            str(molmospaces_index),
+            "--robot",
+            merge_robot,
+            "--output",
+            merged_path,
+        ]
+        if molmospaces_install:
+            merge_argv.append("--install-if-missing")
+        code = _run_molmospaces_wrapper(merge_argv)
+        if code != 0:
+            try:
+                os.unlink(merged_path)
+            except OSError:
+                pass
+            sys.exit(code)
+        scene_path = merged_path
+        if robot.lower() in ("stretch", "hello_stretch", "hellostretch"):
+            robot = "rby1"
     if backend == "mujoco" or backend == "robocasa":
         args = list(extra)
         if use_robocasa_flag:
@@ -237,6 +322,165 @@ def robocasa_cmd() -> None:
 def robocasa_list() -> None:
     """Print registered Robocasa task names. Use with: emet serve robocasa --robocasa-task <name>."""
     sys.exit(_run_module("emet.simulation.mujoco_server", ["--use-robocasa", "--list-robocasa-tasks"]))
+
+
+def _run_molmospaces_wrapper(args: list[str]) -> int:
+    """Run the emet-molmospaces wrapper (list-scenes, install-scene, merge-scene, serve). Returns exit code."""
+    from emet.simulation.molmospaces_config import (
+        build_molmospaces_wrapper_command,
+        ensure_molmospaces_assets_dir_env,
+    )
+
+    cmd = build_molmospaces_wrapper_command(args)
+    if cmd is None:
+        click.echo(
+            "MolmoSpaces wrapper not found. The package `emet-molmospaces` is part of this repo and is not "
+            "published on PyPI, so `pip install emet-molmospaces` will not work.\n\n"
+            "From the project root, run:\n"
+            "  ./install.sh --molmospaces -y\n\n"
+            "Or create the venv and install the local packages:\n"
+            "  uv venv .venv-molmospaces\n"
+            "  uv pip install --python .venv-molmospaces/bin/python --no-deps -e .\n"
+            "  uv pip install --python .venv-molmospaces/bin/python -e packages/emet_molmospaces\n\n"
+            "Optional: set MLSPACES_ASSETS_DIR (defaults to ~/.cache/molmospaces/assets) and "
+            "MLSPACES_CACHE_DIR (defaults to ~/.cache/molmospaces/resource_cache; must differ from assets; "
+            "see docs/molmospaces.md).",
+            err=True,
+        )
+        return 1
+    env = os.environ.copy()
+    ensure_molmospaces_assets_dir_env(env)
+    return subprocess.call(cmd, cwd=_project_root(), env=env)
+
+
+@main.group("molmospaces", short_help="MolmoSpaces scenes and robots (requires emet-molmospaces wrapper)")
+def molmospaces_cmd() -> None:
+    """Set up MolmoSpaces scenes, list robots (e.g. rby1 / Galaxea R1), and run simulation.
+
+    list-robots works without the wrapper. list-scenes, install-scene, merge-scene, and serve
+    require the local emet-molmospaces package (see docs/molmospaces.md):
+      ./install.sh --molmospaces -y   or   editable install of packages/emet_molmospaces
+    """
+
+
+@molmospaces_cmd.command("list-robots", short_help="List supported robot IDs")
+def molmospaces_list_robots() -> None:
+    """Print MolmoSpaces robot IDs (rby1, rby1m, franka_*, etc.). Default robot is rby1 (Galaxea R1 family)."""
+    from emet.simulation.molmospaces_config import DEFAULT_MOLMOSPACES_ROBOT, MOLMOSPACES_ROBOT_IDS
+
+    click.echo("Robots: " + ", ".join(MOLMOSPACES_ROBOT_IDS))
+    click.echo(f"Default: {DEFAULT_MOLMOSPACES_ROBOT}")
+
+
+@molmospaces_cmd.command("list-scenes", short_help="List scene names and split sizes")
+def molmospaces_list_scenes() -> None:
+    """Print available MolmoSpaces scene names and split counts. Requires emet-molmospaces wrapper."""
+    sys.exit(_run_molmospaces_wrapper(["list-scenes"]))
+
+
+@molmospaces_cmd.command("install-scene", short_help="Install a scene and optionally write XML path")
+@click.option("--scene", default="ithor", help="Scene name (e.g. ithor, procthor-10k)")
+@click.option("--split", default="train", type=click.Choice(["train", "val", "test"]))
+@click.option("--index", default=0, type=int, help="Scene index within split")
+@click.option(
+    "--scene-path", type=click.Path(path_type=Path), default=None, help="Write installed scene XML to this path"
+)
+@click.option(
+    "--install-if-missing",
+    is_flag=True,
+    help="Download/link the scene archive without prompting if it is not on disk yet.",
+)
+def molmospaces_install_scene(
+    scene: str, split: str, index: int, scene_path: Path | None, install_if_missing: bool
+) -> None:
+    """Download and install a MolmoSpaces scene; optionally copy the scene XML to a path."""
+    args = ["install-scene", "--scene", scene, "--split", split, "--index", str(index)]
+    if scene_path is not None:
+        args.extend(["--scene-path", str(scene_path)])
+    if install_if_missing:
+        args.append("--install-if-missing")
+    sys.exit(_run_molmospaces_wrapper(args))
+
+
+@molmospaces_cmd.command("merge-scene", short_help="Write merged scene+robot MJCF for emet serve mujoco")
+@click.option("--scene", default="ithor", help="Scene name")
+@click.option("--split", default="train", type=click.Choice(["train", "val", "test"]))
+@click.option("--index", default=0, type=int, help="Scene index within split")
+@click.option("--robot", default="rby1", help="Robot ID (default: rby1)")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    required=True,
+    help="Where to write the merged MJCF (for emet serve mujoco --scene_path)",
+)
+@click.option(
+    "--install-if-missing",
+    is_flag=True,
+    help="Download/link the scene archive without prompting if it is not on disk yet.",
+)
+def molmospaces_merge_scene(
+    scene: str, split: str, index: int, robot: str, output: Path, install_if_missing: bool
+) -> None:
+    """Install scene if needed, merge rby1 MJCF, write XML for ZMQ server + emet run agent."""
+    args = [
+        "merge-scene",
+        "--scene",
+        scene,
+        "--split",
+        split,
+        "--index",
+        str(index),
+        "--robot",
+        robot,
+        "--output",
+        str(output),
+    ]
+    if install_if_missing:
+        args.append("--install-if-missing")
+    sys.exit(_run_molmospaces_wrapper(args))
+
+
+@molmospaces_cmd.command("serve", short_help="Run MolmoSpaces simulation (scene + robot)")
+@click.option("--scene", default="ithor", help="Scene name")
+@click.option("--split", default="train", type=click.Choice(["train", "val", "test"]))
+@click.option("--index", default=0, type=int, help="Scene index")
+@click.option("--robot", default="rby1", help="Robot ID (default: rby1, Galaxea R1 family)")
+@click.option("--headless", is_flag=True, help="Run without viewer")
+@click.option("--viewer", is_flag=True, help="Open MuJoCo viewer")
+@click.option("--rerun", type=str, default="", metavar="PORT_OR_PATH", help="Log to rerun (port or RRD path)")
+@click.option(
+    "--scene-path", type=click.Path(path_type=Path), default=None, help="Write installed scene XML path to this file"
+)
+@click.option(
+    "--install-if-missing",
+    is_flag=True,
+    help="Download/link the scene archive without prompting if it is not on disk yet.",
+)
+def molmospaces_serve(
+    scene: str,
+    split: str,
+    index: int,
+    robot: str,
+    headless: bool,
+    viewer: bool,
+    rerun: str,
+    scene_path: Path | None,
+    install_if_missing: bool,
+) -> None:
+    """Run MuJoCo simulation with a MolmoSpaces scene and robot. Use --viewer to see the sim."""
+    args = ["serve", "--scene", scene, "--split", split, "--index", str(index), "--robot", robot]
+    if headless:
+        args.append("--headless")
+    if viewer:
+        args.append("--viewer")
+    if rerun:
+        args.extend(["--rerun", rerun])
+    if scene_path is not None:
+        args.extend(["--scene-path", str(scene_path)])
+    if install_if_missing:
+        args.append("--install-if-missing")
+    sys.exit(_run_molmospaces_wrapper(args))
 
 
 def _kill_processes_on_port(port: int) -> bool:
@@ -314,6 +558,23 @@ def show_memory(path: str, open_browser: bool) -> None:
     if open_browser:
         args.append("--open-browser")
     sys.exit(_run_module("emet.app.show_memory", args))
+
+
+@main.command("print", short_help="Print summary of a saved memory directory")
+@click.argument(
+    "path",
+    type=click.Path(path_type=Path, exists=True),
+    required=True,
+)
+def print_memory(path: Path) -> None:
+    """Load and print a summary of a saved memory directory.
+
+    Use this with memory saved by emet run dynamem, emet run create-and-print-memory,
+    or other runs that write the common memory format (manifest.json, point_cloud.npz, etc.).
+    """
+    from emet.memory.utils import print_memory_from_path
+
+    print_memory_from_path(str(path))
 
 
 @main.group("connect", short_help="Save or show robot connection (host, user) for deploy/view")
@@ -428,12 +689,28 @@ def deploy(
 @main.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 @click.argument(
     "app",
-    type=click.Choice([
-        "dynamem", "graph-eqa", "mapping", "grasp", "chat", "agent", "web-chat",
-        "ai_pickup", "timing", "discord", "create-and-print-memory",
-    ]),
+    type=click.Choice(
+        [
+            "dynamem",
+            "graph-eqa",
+            "mapping",
+            "grasp",
+            "chat",
+            "agent",
+            "web-chat",
+            "ai_pickup",
+            "timing",
+            "discord",
+            "create-and-print-memory",
+        ]
+    ),
 )
 @click.option("--robot-ip", "--robot_ip", default="127.0.0.1", help="Robot or simulator IP")
+@click.option(
+    "--robot",
+    default="stretch",
+    help="Robot backend (stretch, rby1, galaxea_r1). Must match emet serve mujoco --robot.",
+)
 @click.option("--server-ip", "--server_ip", default="127.0.0.1", help="Server IP (e.g. for AnyGrasp)")
 @click.option("-S", "--skip", "skip_confirmations", is_flag=True, help="Skip confirmations")
 @click.option("--headless", is_flag=True, help="Run without display")
@@ -452,6 +729,7 @@ def run(
     ctx: click.Context,
     app: str,
     robot_ip: str,
+    robot: str,
     server_ip: str,
     skip_confirmations: bool,
     headless: bool,
@@ -475,6 +753,8 @@ def run(
     """
     args = list(ctx.args)
     args.extend(["--robot_ip", robot_ip])
+    if app != "create-and-print-memory":
+        args.extend(["--robot", robot])
     if port_offset:
         args.extend(["--port-offset", str(port_offset)])
     if app == "dynamem":
@@ -588,7 +868,7 @@ def sync(
 
     # Sim extra: pip-installable deps (mujoco, stretch-urdf, etc.) are always in pyproject.toml.
     # robosuite/robocasa are installed editable from third_party/ when present.
-    sim_editable_pkgs: List[str] = []
+    sim_editable_pkgs: list[str] = []
     if "sim" in extras:
         missing = [name for name in ("robosuite", "robocasa") if not (root / "third_party" / name).is_dir()]
         if missing:
@@ -598,9 +878,7 @@ def sync(
                 err=True,
             )
         else:
-            sim_editable_pkgs = [
-                str(root / "third_party" / name) for name in ("robosuite", "robocasa")
-            ]
+            sim_editable_pkgs = [str(root / "third_party" / name) for name in ("robosuite", "robocasa")]
 
     if extras:
         click.echo("Syncing extras: " + ", ".join(extras))
@@ -617,9 +895,7 @@ def sync(
         # Install robosuite/robocasa editable from third_party (not in lockfile)
         if sim_editable_pkgs:
             click.echo("Installing robosuite/robocasa from third_party...")
-            result = subprocess.call(["uv", "pip", "install"] + [
-                arg for p in sim_editable_pkgs for arg in ["-e", p]
-            ])
+            result = subprocess.call(["uv", "pip", "install"] + [arg for p in sim_editable_pkgs for arg in ["-e", p]])
         sys.exit(result)
     else:
         # Fallback to pip
@@ -761,10 +1037,22 @@ def clean(skip_confirm: bool) -> None:
     click.echo("Done. Re-run emet install sim to reinstall.")
 
 
-@main.group(short_help="Install submodules, sim, full setup, pre-commit")
-def install() -> None:
-    """Install submodules, simulation extras, or full setup."""
-    pass
+@main.group(
+    short_help="Install submodules, sim, full setup, pre-commit",
+    invoke_without_command=True,
+)
+@click.pass_context
+def install(ctx: click.Context) -> None:
+    """Install submodules, simulation extras, or full setup.
+
+    With no subcommand, opens the interactive install menu (manage sub-assets and sync).
+    Use a subcommand for direct install: emet install sim, emet install full, etc.
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+    from emet.install_ui import run_install_menu
+
+    sys.exit(run_install_menu())
 
 
 @install.command("submodules", short_help="Init and update git submodules")
@@ -902,19 +1190,51 @@ def install_robocasa(skip_download_assets: bool, setup_macros: bool, no_sync: bo
     sys.exit(result)
 
 
+@install.command("menu", short_help="Interactive menu to manage sub-assets")
+def install_menu() -> None:
+    """Open a text-based menu to install or update sub-assets.
+
+    Shows status of: submodules (SAM-2), simulation (robosuite + robocasa),
+    kitchen assets (textures, fixtures), and MolmoSpaces venv. Choose an
+    item to run its installer, or run all with prompts.
+
+    Examples:
+      emet install menu
+    """
+    from emet.install_ui import run_install_menu
+
+    sys.exit(run_install_menu())
+
+
 @install.command("full", short_help="Run full install (install.sh)")
-@click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompts")
+@click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompts (non-interactive apt, link emet)")
 @click.option("--sim", is_flag=True, help="Include simulation extras")
 @click.option("--cpu", is_flag=True, help="CPU-only (skip SAM2)")
 @click.option("--no-sam2", is_flag=True, help="Skip Segment Anything 2")
-def install_full(yes: bool, sim: bool, cpu: bool, no_sam2: bool) -> None:
+@click.option(
+    "--molmospaces",
+    is_flag=True,
+    help="Create .venv-molmospaces (MolmoSpaces; Python 3.11+). Forwards to install.sh --molmospaces",
+)
+@click.option(
+    "--all",
+    "install_all",
+    is_flag=True,
+    help="Same as install.sh --all (includes MolmoSpaces among other bundles)",
+)
+def install_full(yes: bool, sim: bool, cpu: bool, no_sam2: bool, molmospaces: bool, install_all: bool) -> None:
     """Run full install (./install.sh).
 
     Installs uv, system deps, git-lfs, and syncs dependencies.
 
+    ``-y`` does not enable MolmoSpaces by itself — pass ``--molmospaces`` or ``--all``, or run
+    ``./install.sh --molmospaces -y``.
+
     Examples:
       emet install full
       emet install full -y --sim
+      emet install full -y --molmospaces
+      emet install full -y --all
       emet install full --cpu
     """
     root = _project_root()
@@ -931,6 +1251,10 @@ def install_full(yes: bool, sim: bool, cpu: bool, no_sam2: bool) -> None:
         args.append("--cpu")
     if no_sam2:
         args.append("--no-sam2")
+    if install_all:
+        args.append("--all")
+    if molmospaces:
+        args.append("--molmospaces")
     result = subprocess.call(["bash", str(script)] + args)
     sys.exit(result)
 

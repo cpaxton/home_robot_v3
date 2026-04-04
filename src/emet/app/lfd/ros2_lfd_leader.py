@@ -17,8 +17,8 @@ from lerobot.common.datasets.push_dataset_to_hub import dobbe_format
 import emet.app.dex_teleop.dex_teleop_utils as dt_utils
 import emet.utils.logger as logger
 import emet.utils.loop_stats as lt
-from emet.controller.zmq_client import StretchZmqClient
 from emet.app.lfd.policy_utils import load_policy, prepare_image, prepare_state
+from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
 from emet.motion.kinematics import HelloStretchIdx
 from emet.utils.data_tools.record import FileDataRecorder
@@ -71,9 +71,7 @@ class ROS2LfdLeader:
         self._disable_recording = disable_recording
         self._recording = False or not self._disable_recording
         self._need_to_write = False
-        self._recorder = FileDataRecorder(
-            data_dir, task_name, user_name, env_name, save_images, self.metadata
-        )
+        self._recorder = FileDataRecorder(data_dir, task_name, user_name, env_name, save_images, self.metadata)
         self._run_policy = False or self._force
 
         self.policy = load_policy(policy_name, policy_path, device)
@@ -100,28 +98,19 @@ class ROS2LfdLeader:
                 observation = self.robot.get_servo_observation()
 
                 # Label joint states with appropriate format
-                joint_states = {
-                    k: observation.joint[v] for k, v in HelloStretchIdx.name_to_idx.items()
-                }
+                joint_states = {k: observation.joint[v] for k, v in HelloStretchIdx.name_to_idx.items()}
 
                 # Process images
                 gripper_color_image = cv2.cvtColor(observation.ee_rgb, cv2.COLOR_RGB2BGR)
-                gripper_depth_image = (
-                    observation.ee_depth.astype(np.float32) * observation.ee_depth_scaling
-                )
+                gripper_depth_image = observation.ee_depth.astype(np.float32) * observation.ee_depth_scaling
                 head_color_image = cv2.cvtColor(observation.rgb, cv2.COLOR_RGB2BGR)
                 head_depth_image = observation.depth.astype(np.float32) * observation.depth_scaling
 
                 # Clip and normalize depth
-                gripper_depth_image = dobbe_format.clip_and_normalize_depth(
-                    gripper_depth_image, self.depth_filter_k
-                )
-                head_depth_image = dobbe_format.clip_and_normalize_depth(
-                    head_depth_image, self.depth_filter_k
-                )
+                gripper_depth_image = dobbe_format.clip_and_normalize_depth(gripper_depth_image, self.depth_filter_k)
+                head_depth_image = dobbe_format.clip_and_normalize_depth(head_depth_image, self.depth_filter_k)
 
                 if display_received_images:
-
                     # change depth to be h x w x 3
                     combined = np.hstack((gripper_color_image / 255, gripper_depth_image / 4))
 
@@ -138,9 +127,7 @@ class ROS2LfdLeader:
                     # Calculate the new height based on the aspect ratio
                     new_height = int(width / aspect_ratio)
 
-                    head_combined = cv2.resize(
-                        head_combined, (width, new_height), interpolation=cv2.INTER_LINEAR
-                    )
+                    head_combined = cv2.resize(head_combined, (width, new_height), interpolation=cv2.INTER_LINEAR)
 
                     # Combine both images from ee and head
                     combined = np.vstack((combined, head_combined))
@@ -202,12 +189,8 @@ class ROS2LfdLeader:
                 if self._run_policy:
                     # Build state observations in correct format
                     observations = {
-                        "observation.state": prepare_state(
-                            joint_states, self.teleop_mode, self.device
-                        ),
-                        "observation.images.gripper": prepare_image(
-                            gripper_color_image, self.device
-                        ),
+                        "observation.state": prepare_state(joint_states, self.teleop_mode, self.device),
+                        "observation.images.gripper": prepare_image(gripper_color_image, self.device),
                         "observation.images.head": prepare_image(head_color_image, self.device),
                         "observation.images.gripper_depth": gripper_depth_image,
                         "observation.images.head_depth": head_depth_image,
@@ -237,9 +220,7 @@ class ROS2LfdLeader:
                     )
 
                     # Label actions for saving
-                    joint_actions = {
-                        name: action[idx] for idx, name in enumerate(dobbe_format.ACTION_ORDER)
-                    }
+                    joint_actions = {name: action[idx] for idx, name in enumerate(dobbe_format.ACTION_ORDER)}
                 else:
                     # If we aren't running the policy, what do we even need to do?
                     continue  # Skip the rest of the loop
@@ -278,7 +259,7 @@ class ROS2LfdLeader:
                     stop = joint_actions["joint_wrist_pitch"] < PITCH_STOP_THRESHOLD
 
                 if self._force and stop:
-                    print(f"[LEADER] Stopping policy execution")
+                    print("[LEADER] Stopping policy execution")
                     self._need_to_write = True
 
                     if self._disable_recording:
@@ -310,13 +291,9 @@ if __name__ == "__main__":
     parser.add_argument("-u", "--user-name", type=str, default="default_user")
     parser.add_argument("-t", "--task-name", type=str, default="default_task")
     parser.add_argument("-e", "--env-name", type=str, default="default_env")
-    parser.add_argument(
-        "-f", "--force", action="store_true", help="Force execute policy right away."
-    )
+    parser.add_argument("-f", "--force", action="store_true", help="Force execute policy right away.")
     parser.add_argument("-d", "--data-dir", type=str, default="./data")
-    parser.add_argument(
-        "-s", "--save-images", action="store_true", help="Save raw images in addition to videos"
-    )
+    parser.add_argument("-s", "--save-images", action="store_true", help="Save raw images in addition to videos")
     parser.add_argument("-P", "--send_port", type=int, default=4402, help="Port to send goals to.")
     parser.add_argument(
         "--teleop-mode",
@@ -326,15 +303,11 @@ if __name__ == "__main__":
         choices=["stationary_base", "rotary_base", "base_x"],
     )
     parser.add_argument("--record-success", action="store_true", help="Record success of episode.")
-    parser.add_argument(
-        "--policy_path", type=str, required=True, help="Path to folder storing model weights"
-    )
+    parser.add_argument("--policy_path", type=str, required=True, help="Path to folder storing model weights")
     parser.add_argument("--policy_name", type=str, required=True)
     parser.add_argument("--depth-filter-k", type=int, default=None)
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument(
-        "--rerun", action="store_true", help="Enable rerun server for visualization."
-    )
+    parser.add_argument("--rerun", action="store_true", help="Enable rerun server for visualization.")
     parser.add_argument("--show-images", action="store_true", help="Show images received by robot.")
     args = parser.parse_args()
 

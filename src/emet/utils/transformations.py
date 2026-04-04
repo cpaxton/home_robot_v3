@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
@@ -174,8 +173,6 @@ True
 True
 
 """
-
-from __future__ import division
 
 import math
 import warnings
@@ -689,7 +686,7 @@ def shear_from_matrix(matrix):
     l, V = numpy.linalg.eig(M33)
     i = numpy.where(abs(numpy.real(l) - 1.0) < 1e-4)[0]
     if len(i) < 2:
-        raise ValueError("No two linear independent eigenvectors found %s" % l)
+        raise ValueError(f"No two linear independent eigenvectors found {l}")
     V = numpy.real(V[:, i]).squeeze().T
     lenorm = -1.0
     for i0, i1 in ((0, 1), (0, 2), (1, 2)):
@@ -1279,9 +1276,7 @@ def quaternion_conjugate(quaternion):
     True
 
     """
-    return numpy.array(
-        (-quaternion[0], -quaternion[1], -quaternion[2], quaternion[3]), dtype=numpy.float64
-    )
+    return numpy.array((-quaternion[0], -quaternion[1], -quaternion[2], quaternion[3]), dtype=numpy.float64)
 
 
 def quaternion_inverse(quaternion):
@@ -1382,7 +1377,7 @@ def random_rotation_matrix(rand=None):
     return quaternion_matrix(random_quaternion(rand))
 
 
-class Arcball(object):
+class Arcball:
     """Virtual Trackball Control.
 
     >>> ball = Arcball()
@@ -1455,7 +1450,7 @@ class Arcball(object):
 
     def setconstrain(self, constrain):
         """Set state of constrain to axis mode."""
-        self._constrain = constrain == True
+        self._constrain = constrain
 
     def getconstrain(self):
         """Return state of constrain to axis mode."""
@@ -1500,9 +1495,7 @@ class Arcball(object):
 
 def arcball_map_to_sphere(point, center, radius):
     """Return unit sphere coordinates from window coordinates."""
-    v = numpy.array(
-        ((point[0] - center[0]) / radius, (center[1] - point[1]) / radius, 0.0), dtype=numpy.float64
-    )
+    v = numpy.array(((point[0] - center[0]) / radius, (center[1] - point[1]) / radius, 0.0), dtype=numpy.float64)
     n = v[0] * v[0] + v[1] * v[1]
     if n > 1.0:
         v /= math.sqrt(n)  # position outside of sphere
@@ -1574,7 +1567,7 @@ _AXES2TUPLE = {
     "rzyz": (2, 1, 1, 1),
 }
 
-_TUPLE2AXES = dict((v, k) for k, v in _AXES2TUPLE.items())
+_TUPLE2AXES = {v: k for k, v in _AXES2TUPLE.items()}
 
 # helper functions
 
@@ -1738,7 +1731,7 @@ def _import_module(module_name, warn=True, prefix="_py_", ignore="_"):
         module = __import__(module_name)
     except ImportError:
         if warn:
-            warnings.warn("Failed to import module " + module_name)
+            warnings.warn("Failed to import module " + module_name, stacklevel=2)
     else:
         for attr in dir(module):
             if ignore and attr.startswith(ignore):
@@ -1747,6 +1740,6 @@ def _import_module(module_name, warn=True, prefix="_py_", ignore="_"):
                 if attr in globals():
                     globals()[prefix + attr] = globals()[attr]
                 elif warn:
-                    warnings.warn("No Python implementation of " + attr)
+                    warnings.warn("No Python implementation of " + attr, stacklevel=2)
             globals()[attr] = getattr(module, attr)
         return True

@@ -14,7 +14,6 @@
 # LICENSE file in the root directory of this source tree.
 import logging
 import threading
-from typing import Optional
 
 import numpy as np
 import rclpy
@@ -63,7 +62,7 @@ class NavStateEstimator(Node):
         self._filtered_pose = sp.SE3()
         self._slam_pose_sp = sp.SE3()
         self._slam_pose_prev = sp.SE3()
-        self._t_odom_prev: Optional[Duration] = None
+        self._t_odom_prev: Duration | None = None
         self._pose_odom_prev = sp.SE3()
 
     def publish_kf_state(self):
@@ -121,9 +120,7 @@ class NavStateEstimator(Node):
 
         self._tf_broadcaster.sendTransform(t)
 
-    def _filter_signals(
-        self, slam_update: sp.SE3, odom_update: sp.SE3, t_interval: float
-    ) -> sp.SE3:
+    def _filter_signals(self, slam_update: sp.SE3, odom_update: sp.SE3, t_interval: float) -> sp.SE3:
         """
         The discrete high pass filter can be written as:
         ```
@@ -239,9 +236,7 @@ class NavStateEstimator(Node):
         Create publishers and subscribers.
         """
         # Create publishers and subscribers
-        self._estimator_pub = self.create_publisher(
-            PoseStamped, "/state_estimator/pose_filtered", 1
-        )
+        self._estimator_pub = self.create_publisher(PoseStamped, "/state_estimator/pose_filtered", 1)
         self._world_frame_id = "map"
         # TODO: if we need to debug this vs. the scan matcher
         self._base_frame_id = "base_link_estimator"
@@ -265,9 +260,7 @@ class NavStateEstimator(Node):
         self.create_timer(1 / 10, self.get_pose)
 
         # This pose update comes from wheel odometry
-        self.wheel_odom_subcriber = self.create_subscription(
-            Odometry, "/odom", self._wheel_odom_callback, 1
-        )
+        self.wheel_odom_subcriber = self.create_subscription(Odometry, "/odom", self._wheel_odom_callback, 1)
 
         # Run
         log.info("State Estimator launched.")

@@ -12,8 +12,9 @@
 #
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in this directory.
+"""Util functions for points/verts/faces/volumes."""
 
-from typing import List, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
 
 import torch
 
@@ -21,14 +22,10 @@ import torch
 # structures.utils
 ######################################################
 
-"""
-Util functions for points/verts/faces/volumes.
-"""
-
 
 def list_to_padded(
-    x: Union[List[torch.Tensor], Tuple[torch.Tensor]],
-    pad_size: Union[List[int], None] = None,
+    x: list[torch.Tensor] | tuple[torch.Tensor],
+    pad_size: list[int] | None = None,
     pad_value: float = 0.0,
     equisized: bool = False,
 ) -> torch.Tensor:
@@ -69,7 +66,7 @@ def list_to_padded(
         raise ValueError("All items have to have the same number of dimensions!")
 
     if pad_size is None:
-        pad_dims = list(max(y.shape[dim] for y in x if len(y) > 0) for dim in range(x[0].ndim))
+        pad_dims = [max(y.shape[dim] for y in x if len(y) > 0) for dim in range(x[0].ndim)]
     else:
         if any(len(pad_size) != y.ndim for y in x):
             raise ValueError("Pad size must contain target size for all dimensions.")
@@ -88,7 +85,7 @@ def list_to_padded(
 
 def padded_to_list(
     x: torch.Tensor,
-    split_size: Optional[Union[Sequence[int], Sequence[Sequence[int]]]] = None,
+    split_size: Sequence[int] | Sequence[Sequence[int]] | None = None,
 ):
     r"""
     Transforms a padded tensor of shape (N, S_1, S_2, ..., S_D) into a list
@@ -123,7 +120,7 @@ def padded_to_list(
     return x_list
 
 
-def list_to_packed(x: List[torch.Tensor]):
+def list_to_packed(x: list[torch.Tensor]):
     r"""
     Transforms a list of N tensors each of shape (Mi, K, ...) into a single
     tensor of shape (sum(Mi), K, ...).
@@ -151,15 +148,13 @@ def list_to_packed(x: List[torch.Tensor]):
     item_packed_first_idx = torch.zeros_like(num_items)
     item_packed_first_idx[1:] = torch.cumsum(num_items[:-1], dim=0)
     item_packed_to_list_idx = torch.arange(sizes_total, dtype=torch.int64, device=device)
-    item_packed_to_list_idx = (
-        torch.bucketize(item_packed_to_list_idx, item_packed_first_idx, right=True) - 1
-    )
+    item_packed_to_list_idx = torch.bucketize(item_packed_to_list_idx, item_packed_first_idx, right=True) - 1
     x_packed = torch.cat(x, dim=0)
 
     return x_packed, num_items, item_packed_first_idx, item_packed_to_list_idx
 
 
-def packed_to_list(x: torch.Tensor, split_size: Union[list, int]):
+def packed_to_list(x: torch.Tensor, split_size: list | int):
     r"""
     Transforms a tensor of shape (sum(Mi), K, L, ...) to N set of tensors of
     shape (Mi, K, L, ...) where Mi's are defined in split_size
@@ -177,8 +172,8 @@ def packed_to_list(x: torch.Tensor, split_size: Union[list, int]):
 
 def padded_to_packed(
     x: torch.Tensor,
-    split_size: Union[list, tuple, None] = None,
-    pad_value: Union[float, int, None] = None,
+    split_size: list | tuple | None = None,
+    pad_value: float | int | None = None,
 ):
     r"""
     Transforms a padded tensor of shape (N, M, K) into a packed tensor

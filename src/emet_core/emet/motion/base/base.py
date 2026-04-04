@@ -11,24 +11,23 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+"""Standard interface for a motion planner."""
+
 from abc import ABC, abstractmethod
-from typing import Callable, List, Optional
+from collections.abc import Callable
+from typing import Optional
 
 from .space import ConfigurationSpace, Node
 
-"""
-This just defines the standard interface for a motion planner
-"""
 
-
-class PlanResult(object):
+class PlanResult:
     """Stores motion plan. Can be extended."""
 
     def __init__(
         self,
         success,
-        trajectory: Optional[List] = None,
-        reason: Optional[str] = None,
+        trajectory: list | None = None,
+        reason: str | None = None,
         planner: Optional["Planner"] = None,
     ):
         self.success = success
@@ -40,7 +39,7 @@ class PlanResult(object):
         """Was the trajectory planning successful?"""
         return self.success
 
-    def get_trajectory(self, *args, **kwargs) -> Optional[List]:
+    def get_trajectory(self, *args, **kwargs) -> list | None:
         """Return the trajectory"""
         return self.trajectory
 
@@ -57,18 +56,18 @@ class Planner(ABC):
     def __init__(self, space: ConfigurationSpace, validate_fn: Callable):
         self._space = space
         self._validate = validate_fn
-        self._nodes: Optional[List[Node]] = None
+        self._nodes: list[Node] | None = None
 
     @property
     def space(self) -> ConfigurationSpace:
         return self._space
 
     @property
-    def nodes(self) -> List[Node]:
+    def nodes(self) -> list[Node]:
         return self._nodes
 
     @nodes.setter
-    def nodes(self, nodes: List[Node]):
+    def nodes(self, nodes: list[Node]):
         self._nodes = nodes
 
     @abstractmethod

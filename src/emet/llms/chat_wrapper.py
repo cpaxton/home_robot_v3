@@ -41,8 +41,7 @@ class LLMChatWrapper:
             self.audio_recorder = AudioRecorder()
             self.whisper = WhisperSpeechToText()
         else:
-            audio_recorder = None
-            whisper = None
+            pass
 
     def query(self, verbose: bool = False) -> Any:
         if self.voice:
@@ -76,9 +75,7 @@ class LLMChatWrapper:
 
         if verbose:
             # Show what goes into the LLM
-            system_prompt = getattr(self.llm_client, "system_prompt", None) or getattr(
-                self.llm_client, "_prompt", ""
-            )
+            system_prompt = getattr(self.llm_client, "system_prompt", None) or getattr(self.llm_client, "_prompt", "")
             print(colored("[DEBUG] System prompt:", "yellow"))
             print("-" * 40)
             print(system_prompt[:2000] + ("..." if len(system_prompt) > 2000 else ""))

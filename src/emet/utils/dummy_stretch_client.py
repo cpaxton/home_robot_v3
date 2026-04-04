@@ -11,7 +11,6 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -30,9 +29,9 @@ class DummyStretchClient(AbstractRobotClient, RobotModel):
         urdf_path: str = "",
         ik_type: str = "pinocchio",
         visualize_ik: bool = False,
-        grasp_frame: Optional[str] = None,
-        ee_link_name: Optional[str] = None,
-        manip_mode_controlled_joints: Optional[List[str]] = None,
+        grasp_frame: str | None = None,
+        ee_link_name: str | None = None,
+        manip_mode_controlled_joints: list[str] | None = None,
     ):
         """Create an interface into ROS execution here. This one needs to connect to:
             - joint_states to read current position
@@ -97,7 +96,7 @@ class DummyStretchClient(AbstractRobotClient, RobotModel):
     def move_to_nav_posture(self):
         return True
 
-    def set_config(self, config: Dict[str, float]):
+    def set_config(self, config: dict[str, float]):
         """Set the configuration of the robot."""
         return True
 
@@ -110,7 +109,7 @@ class DummyStretchClient(AbstractRobotClient, RobotModel):
 
     def execute_trajectory(
         self,
-        trajectory: List[np.ndarray],
+        trajectory: list[np.ndarray],
         pos_err_threshold: float = 0.2,
         rot_err_threshold: float = 0.75,
         spin_rate: int = 10,

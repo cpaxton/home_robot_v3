@@ -8,23 +8,22 @@
 # license information maybe found below, if so.
 
 from dataclasses import dataclass
-from typing import List, Text
 
 from torch import Tensor
 
 
 @dataclass
 class ObjectCentricObservations:
-    low_level_output_messages: List[str] = None
-    scene_images: List = None
-    object_images: List = None
-    scene_graph: List = None
+    low_level_output_messages: list[str] = None
+    scene_images: list = None
+    object_images: list = None
+    scene_graph: list = None
 
 
 @dataclass
 class ObjectImage:
     image: Tensor = None
-    position: List[float] = None
+    position: list[float] = None
     crop_id: int = None
-    object_class: Text = None
+    object_class: str = None
     instance_id: int = None

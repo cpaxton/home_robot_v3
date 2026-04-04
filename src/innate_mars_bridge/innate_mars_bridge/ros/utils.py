@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 import logging
 
@@ -14,9 +23,7 @@ log = logging.getLogger(__name__)
 
 
 def matrix_from_pose_msg(msg):
-    T = tra.quaternion_matrix(
-        [msg.orientation.w, msg.orientation.x, msg.orientation.y, msg.orientation.z]
-    )
+    T = tra.quaternion_matrix([msg.orientation.w, msg.orientation.x, msg.orientation.y, msg.orientation.z])
     T[:3, 3] = np.array([msg.position.x, msg.position.y, msg.position.z])
     return T
 

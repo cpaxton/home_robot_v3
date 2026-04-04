@@ -119,8 +119,7 @@ class PiperTextToSpeech(AbstractTextToSpeech):
         proc = subprocess.run(
             [self._piper_bin, "--model", self._model_path, "--output-raw"],
             input=text.encode("utf-8"),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             check=True,
         )
         return proc.stdout
@@ -156,12 +155,7 @@ class PiperTextToSpeech(AbstractTextToSpeech):
     @override  # inherit the docstring from the parent class
     def save_to_file(self, text: str, filepath: str, **kwargs: Any) -> None:
         subprocess.call(
-            f'echo "{text}" | '
-            + self._piper_bin
-            + " --model "
-            + self._model_path
-            + " --output_file "
-            + filepath,
+            f'echo "{text}" | ' + self._piper_bin + " --model " + self._model_path + " --output_file " + filepath,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

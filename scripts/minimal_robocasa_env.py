@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 """Minimal example: create Robocasa kitchen env and call reset().
 
 Run: uv run python scripts/minimal_robocasa_env.py
@@ -6,12 +15,14 @@ Run: uv run python scripts/minimal_robocasa_env.py
 Success: env is created and reset() completes; sim model XML is available.
 If placement fails after many retries (RuntimeError), exits with a clear message.
 """
+
 import sys
+
 
 def main():
     import robocasa  # noqa: F401
-    from robosuite import load_part_controller_config
     import robosuite
+    from robosuite import load_part_controller_config
 
     config = {
         "env_name": "PickPlaceCounterToCabinet",
@@ -49,6 +60,7 @@ def main():
     env.close()
     print("Done.")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

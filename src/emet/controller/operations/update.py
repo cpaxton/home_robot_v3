@@ -10,7 +10,6 @@
 # This file contains the UpdateOperation class, which is responsible for updating the world model
 # and finding objects in the environment. It is a subclass of ManagedOperation.
 import time
-from typing import Optional
 
 import numpy as np
 
@@ -18,11 +17,10 @@ from emet.controller.base import ManagedOperation
 
 
 class UpdateOperation(ManagedOperation):
-
     show_instances_detected: bool = False
     show_map_so_far: bool = False
     clear_voxel_map: bool = False
-    move_head: Optional[bool] = None
+    move_head: bool | None = None
     target_object: str = "cup"
     match_method: str = "feature"
     arm_height: float = 0.4
@@ -126,7 +124,6 @@ class UpdateOperation(ManagedOperation):
         # Get the current location of the robot
         start = self.robot.get_base_pose()
         instances = self.agent.get_voxel_map().instances.get_instances()
-        receptacle_options = []
         object_options = []
         dist_to_object = float("inf")
 
@@ -146,9 +143,7 @@ class UpdateOperation(ManagedOperation):
             scores = np.ones(len(matching_instances))
             instances = matching_instances
         elif self.match_method == "class":
-            instances = self.agent.get_voxel_map().instances.get_instances_by_class(
-                self.target_object
-            )
+            instances = self.agent.get_voxel_map().instances.get_instances_by_class(self.target_object)
             scores = np.ones(len(instances))
         elif self.match_method == "feature":
             scores, instances = self.agent.get_instances_from_text(self.target_object)
@@ -160,12 +155,10 @@ class UpdateOperation(ManagedOperation):
             self.warn(f"Could not find any instances of {self.target_object}.")
 
         print("Check explored instances for reachable target objects:")
-        for i, (score, instance) in enumerate(zip(scores, instances)):
+        for i, (score, instance) in enumerate(zip(scores, instances, strict=False)):
             name = self.agent.semantic_sensor.get_class_name_for_id(instance.category_id)
 
-            print(
-                f" - Found instance {i} with name {name} and global id {instance.global_id}: score = {score}."
-            )
+            print(f" - Found instance {i} with name {name} and global id {instance.global_id}: score = {score}.")
 
             if self.show_instances_detected:
                 self.show_instance(instance)
@@ -186,9 +179,7 @@ class UpdateOperation(ManagedOperation):
             if plan.success:
                 print(f" - Found a reachable object at {instance.get_best_view().get_pose()}.")
                 if dist < dist_to_object:
-                    print(
-                        f" - This object is closer than the previous one: {dist} < {dist_to_object}."
-                    )
+                    print(f" - This object is closer than the previous one: {dist} < {dist_to_object}.")
                     self.agent.current_object = instance
                     dist_to_object = dist
             else:

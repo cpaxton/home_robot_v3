@@ -1,4 +1,13 @@
 # Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
 #
 # Robocasa tests: lightweight import/task list (always runs), full env test,
 # and emet-serve-matching wizard test (same entry point as emet serve mujoco --use-robocasa).
@@ -32,6 +41,7 @@ def test_stretch_model_loads():
     path = get_absolute_path_stretch_xml(robot_pose_attrib=None)
     assert path is not None
     import mujoco
+
     model = mujoco.MjModel.from_xml_path(path)
     assert model is not None
     assert model.nq >= 0
@@ -51,9 +61,9 @@ def test_robocasa_import_and_tasks():
 def test_robocasa_env_sim_after_reset():
     """After robosuite.make() and reset(), env.sim must be set and yield model XML."""
     import robocasa  # noqa: F401  # register envs
+    import robosuite
     from robocasa.utils.errors import PlacementError
     from robosuite import load_part_controller_config
-    import robosuite
 
     config = {
         "env_name": "PickPlaceCounterToCabinet",
@@ -79,8 +89,7 @@ def test_robocasa_env_sim_after_reset():
         )
     except PlacementError as e:
         pytest.skip(
-            f"Kitchen placement failed (layout/object mismatch): {e}. "
-            "Full compatible Robocasa assets may be required."
+            f"Kitchen placement failed (layout/object mismatch): {e}. Full compatible Robocasa assets may be required."
         )
     except RuntimeError as e:
         if "50 times" in str(e) and "could not initialize" in str(e).lower():
@@ -126,6 +135,7 @@ def test_robocasa_wizard_matches_emet_serve():
         )
     except Exception as e:
         from robocasa.utils.errors import PlacementError
+
         if isinstance(e, PlacementError):
             pytest.skip(
                 f"Wizard placement failed (layout/object mismatch): {e}. "
@@ -140,6 +150,7 @@ def test_robocasa_wizard_matches_emet_serve():
 
     # Same contract as mujoco_server: server uses scene_model, scene_xml, objects_info
     import mujoco
+
     assert scene_model is not None
     assert isinstance(scene_model, mujoco.MjModel)
     assert isinstance(scene_xml, str)

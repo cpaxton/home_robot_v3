@@ -18,9 +18,7 @@ from torchvision.transforms import v2
 SUPPORTED_POLICIES = ["act", "diffusion", "diffusion_depth", "vqbet"]
 
 
-def load_policy(
-    policy_name: str | None = None, policy_path: str | None = None, device: str | None = "cuda"
-):
+def load_policy(policy_name: str | None = None, policy_path: str | None = None, device: str | None = "cuda"):
     """Loads specified policy with name and path. Current supported policies include 'act', 'diffusion'"""
     policy = None
     if policy_name == "act":
@@ -32,18 +30,14 @@ def load_policy(
     elif policy_name == "vqbet":
         policy = VQBeTPolicy.from_pretrained(policy_path)
     else:
-        raise NotImplementedError(
-            f"{policy_name} is not a supported policy. Supported policies: {SUPPORTED_POLICIES}"
-        )
+        raise NotImplementedError(f"{policy_name} is not a supported policy. Supported policies: {SUPPORTED_POLICIES}")
     policy.to(device)
     policy.eval()
 
     return policy
 
 
-def prepare_state(
-    raw_state: dict | None = None, teleop_mode: str | None = None, device: str | None = "cuda"
-):
+def prepare_state(raw_state: dict | None = None, teleop_mode: str | None = None, device: str | None = "cuda"):
 
     # Format based on teleop mode
     # state = dt.format_state(raw_state, teleop_mode)
@@ -141,9 +135,7 @@ def prepare_observations(
     return observations
 
 
-def prepare_action_dict(
-    raw_actions: list | None, teleop_mode: str | None, current_base_x, action_origin
-):
+def prepare_action_dict(raw_actions: list | None, teleop_mode: str | None, current_base_x, action_origin):
     """Formats actions predicted by the model into correctly labeled action_dict based on teleop mode"""
     action_dict = {}
 
@@ -161,9 +153,7 @@ def prepare_action_dict(
         action_dict["joint_mobile_base_translation"] = raw_actions[0] - action_origin
         # Translate by is difference between predicted base_x and current base_x
         # self.current_base_x = raw_state["base_x"]
-        action_dict["joint_mobile_base_translate_by"] = (
-            action_dict["joint_mobile_base_translation"] - current_base_x
-        )
+        action_dict["joint_mobile_base_translate_by"] = action_dict["joint_mobile_base_translation"] - current_base_x
         # action_dict["joint_mobile_base_translate_by"] = action[1]
         action_dict["joint_mobile_base_rotate_by"] = raw_actions[2]
         action_dict["joint_lift"] = raw_actions[3]

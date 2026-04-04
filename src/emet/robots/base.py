@@ -3,18 +3,27 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Base abstractions for robot backends."""
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from emet.core.robot import AbstractRobotClient
     from emet.motion.robot import RobotModel
 
-from emet.motion.robot import Footprint
+from emet.robots.footprint import Footprint
 
 
 @dataclass
@@ -23,12 +32,12 @@ class RobotSpec:
 
     name: str
     dof: int
-    joint_names: List[str]
-    camera_names: List[str]
-    urdf_path: Optional[str]
+    joint_names: list[str]
+    camera_names: list[str]
+    urdf_path: str | None
     footprint: Footprint
-    mjcf_path: Optional[str] = None
-    actuator_names: List[str] = field(default_factory=list)
+    mjcf_path: str | None = None
+    actuator_names: list[str] = field(default_factory=list)
     base_link_name: str = "base_link"
 
 

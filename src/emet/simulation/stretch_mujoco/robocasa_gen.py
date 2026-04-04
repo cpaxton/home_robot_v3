@@ -1,15 +1,25 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+"""Modified version of robocasa's kitchen scene generation script."""
+
 from collections import OrderedDict
-from typing import Tuple
 
 import click
 import mujoco
 import mujoco.viewer
 import numpy as np
-import robosuite
+
 # Import robocasa so its environments register with robosuite.make(); otherwise
 # robosuite.make("PickPlaceCounterToCabinet") raises "Environment ... not found".
 import robocasa  # noqa: F401
-from robocasa.models.scenes.scene_registry import LayoutType, StyleType
+import robosuite
+from robocasa.models.scenes.scene_registry import StyleType
 from robosuite import load_part_controller_config
 from robosuite.utils.transform_utils import euler2mat, mat2quat
 from termcolor import colored
@@ -26,9 +36,7 @@ from emet.simulation.stretch_mujoco.utils import (
 
 
 def get_styles() -> OrderedDict:
-    raw_styles = dict(
-        map(lambda item: (item.value, item.name.lower().capitalize()), StyleType)
-    )
+    raw_styles = {item.value: item.name.lower().capitalize() for item in StyleType}
     styles = OrderedDict()
     for k in sorted(raw_styles.keys()):
         if k < 0:
@@ -52,11 +60,6 @@ layouts = OrderedDict(
     ]
 )
 
-"""
-Modified version of robocasa's kitchen scene generation script
-https://github.com/robocasa/robocasa/blob/main/robocasa/demos/demo_kitchen_scenes.py
-"""
-
 
 def choose_option(options, option_name, show_keys=False, default=None, default_message=None):
     """
@@ -74,21 +77,16 @@ def choose_option(options, option_name, show_keys=False, default=None, default_m
         default_message = default
 
     # Select environment to run
-    print("{}s:".format(option_name.capitalize()))
+    print(f"{option_name.capitalize()}s:")
 
     for i, (k, v) in enumerate(options.items()):
         if show_keys:
-            print("[{}] {}: {}".format(i, k, v))
+            print(f"[{i}] {k}: {v}")
         else:
-            print("[{}] {}".format(i, v))
+            print(f"[{i}] {v}")
     print()
     try:
-        s = input(
-            "Choose an option 0 to {}, or any other key for default ({}): ".format(
-                len(options) - 1,
-                default_message,
-            )
-        )
+        s = input(f"Choose an option 0 to {len(options) - 1}, or any other key for default ({default_message}): ")
         # parse input into a number within range
         k = min(max(int(s), 0), len(options) - 1)
         choice = list(options.keys())[k]
@@ -97,21 +95,21 @@ def choose_option(options, option_name, show_keys=False, default=None, default_m
             choice = options[0]
         else:
             choice = default
-        print("Use {} by default.\n".format(choice))
+        print(f"Use {choice} by default.\n")
 
     # Return the chosen environment name
     return choice
 
+
 def choose_layout():
-    layout = choose_option(
-            layouts, "kitchen layout", default=-1, default_message="random layouts"
-        )
+    layout = choose_option(layouts, "kitchen layout", default=-1, default_message="random layouts")
 
     if layout == -1:
         layout = np.random.choice(range(10))
         print(colored(f"Randomly choosing layout... id: {layout}", "yellow"))
 
     return layout
+
 
 def choose_style():
     styles = get_styles()
@@ -123,13 +121,16 @@ def choose_style():
 
     return style
 
-def layout_from_str(layout:str) -> int:
+
+def layout_from_str(layout: str) -> int:
     """Returns the index of the layout in the orderedDict"""
     return list(layouts.values()).index(layout)
 
-def style_from_str(style:str) -> int:
+
+def style_from_str(style: str) -> int:
     """Returns the index of the style in the orderedDict"""
     return list(get_styles().values()).index(style)
+
 
 ROBOSUITE_ROBOTS = [
     "PandaOmron",
@@ -151,6 +152,10 @@ def _robosuite_robot_for(robot_name: str) -> str:
     mapping = {r.lower(): r for r in ROBOSUITE_ROBOTS}
     mapping["pandaomron"] = "PandaOmron"
     mapping["panda_omron"] = "PandaOmron"
+    # RB-Y1 / Galaxea R1 use GR1 as the robocasa placeholder for scene generation
+    mapping["rby1"] = "GR1"
+    mapping["galaxear1"] = "GR1"
+    mapping["galaxea_r1"] = "GR1"
     key = robot_name.lower().replace("-", "").replace("_", "")
     if key in mapping:
         return mapping[key]
@@ -167,7 +172,7 @@ def model_generation_wizard(
     write_to_file: str = None,
     robot_spawn_pose: dict = None,
     robot: str = "stretch",
-) -> Tuple[mujoco.MjModel, str, dict]:
+) -> tuple[mujoco.MjModel, str, dict]:
     """
     Wizard/API to generate a kitchen model for a given task, layout, and style.
 
@@ -232,7 +237,7 @@ def model_generation_wizard(
         object_placements = env.object_placements
         print(
             f"Placing [Object {i}] (category: {category}, body_name: {obj_name}_main) at "
-            f"pos: {np.round(object_placements[obj_name][0],2)} quat: {np.round(object_placements[obj_name][1],2)}"
+            f"pos: {np.round(object_placements[obj_name][0], 2)} quat: {np.round(object_placements[obj_name][1], 2)}"
         )
         xml = xml_modify_body_pos(
             xml,
@@ -259,11 +264,7 @@ def model_generation_wizard(
                 "pos": " ".join(map(str, pos)),
                 "quat": " ".join(map(str, quat_wxyz)),
             }
-        elif (
-            remove_robot_attrib is not None
-            and "pos" in remove_robot_attrib
-            and "quat" in remove_robot_attrib
-        ):
+        elif remove_robot_attrib is not None and "pos" in remove_robot_attrib and "quat" in remove_robot_attrib:
             robot_base_fixture_pose = remove_robot_attrib
         else:
             robot_base_fixture_pose = {"pos": "0 0 0", "quat": "1 0 0 0"}
@@ -303,7 +304,7 @@ def _cleanup_for_native_robot(xml: str) -> str:
     return xml
 
 
-def custom_cleanups(xml: str) -> Tuple[str, dict]:
+def custom_cleanups(xml: str) -> tuple[str, dict]:
     """
     Custom cleanups to models from robocasa envs to support
     use with stretch_mujoco package.
@@ -332,9 +333,7 @@ def add_stretch_to_kitchen(xml: str, robot_pose_attrib: dict) -> str:
     """
     Add stretch robot to kitchen xml
     """
-    print(
-        f"Adding stretch to kitchen at pos: {robot_pose_attrib['pos']} quat: {robot_pose_attrib['quat']}"
-    )
+    print(f"Adding stretch to kitchen at pos: {robot_pose_attrib['pos']} quat: {robot_pose_attrib['quat']}")
     stretch_xml_absolute = get_absolute_path_stretch_xml(robot_pose_attrib)
     # add Stretch xml
     xml = insert_line_after_mujoco_tag(

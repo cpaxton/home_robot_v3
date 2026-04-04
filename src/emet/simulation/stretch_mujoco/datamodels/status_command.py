@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 """
 Dataclasses that communicate movement commands to Mujoco.
 """
@@ -44,11 +53,9 @@ class StatusCommand:
 
     move_to: dict[str, CommandMove] = field(default_factory=dict)
     move_by: dict[str, CommandMove] = field(default_factory=dict)
-    base_velocity: CommandBaseVelocity = field(default_factory=lambda:CommandBaseVelocity(0, 0, False))
-    keyframe: CommandKeyframe = field(default_factory=lambda:CommandKeyframe("", False))
+    base_velocity: CommandBaseVelocity = field(default_factory=lambda: CommandBaseVelocity(0, 0, False))
+    keyframe: CommandKeyframe = field(default_factory=lambda: CommandKeyframe("", False))
     coordinate_frame_arrows_viz: list[CommandCoordinateFrameArrowsViz] = field(default_factory=list)
-
-
 
     def set_move_to(self, command: CommandMove):
         """Sends a move_to command and removes the move_by command."""
@@ -86,10 +93,12 @@ class StatusCommand:
         command: StatusCommand = dataclass_from_dict(StatusCommand, dict_data)  # type: ignore
 
         command.move_to = {
-            key: dataclass_from_dict(CommandMove, val) for key, val in command.move_to.items()  # type: ignore
+            key: dataclass_from_dict(CommandMove, val)
+            for key, val in command.move_to.items()  # type: ignore
         }
         command.move_by = {
-            key: dataclass_from_dict(CommandMove, val) for key, val in command.move_by.items()  # type: ignore
+            key: dataclass_from_dict(CommandMove, val)
+            for key, val in command.move_by.items()  # type: ignore
         }
         return command
 

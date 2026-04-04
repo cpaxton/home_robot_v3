@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Unified memory backend interface for SVM, DynaMem, and GraphEQA.
@@ -7,7 +16,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 
@@ -17,17 +26,17 @@ class CheckMemoryResult:
     """Result of check_memory_for_object(text)."""
 
     confidence: float  # 0.0 to 1.0
-    location_xyz: Optional[np.ndarray]  # (3,) world position if known
-    extra_info: Dict[str, Any]  # backend-specific (e.g. debug_text, obs_id)
+    location_xyz: np.ndarray | None  # (3,) world position if known
+    extra_info: dict[str, Any]  # backend-specific (e.g. debug_text, obs_id)
 
 
 @dataclass
 class LocalizeResult:
     """Result of localize_text(text) for navigation."""
 
-    point_xyz: Optional[np.ndarray]  # (3,) or (2,) world position
+    point_xyz: np.ndarray | None  # (3,) or (2,) world position
     success: bool
-    extra_info: Dict[str, Any]
+    extra_info: dict[str, Any]
 
 
 class MemoryBackend(ABC):
@@ -54,16 +63,16 @@ class MemoryBackend(ABC):
         """
         pass
 
-    def list_objects(self) -> List[str]:
+    def list_objects(self) -> list[str]:
         """Optional: list known object/location labels. Default returns empty list."""
         return []
 
     def query_answer(
         self,
         question: str,
-        xyt: Optional[Union[Any, np.ndarray, list]] = None,
+        xyt: Any | np.ndarray | list | None = None,
         planner: Any = None,
-    ) -> Tuple[str, str, bool, str, Optional[np.ndarray], Any]:
+    ) -> tuple[str, str, bool, str, np.ndarray | None, Any]:
         """Optional: EQA-style query. Only backends that support EQA implement this.
 
         Returns:
@@ -84,6 +93,10 @@ class MemoryBackend(ABC):
     def supports_save_load(self) -> bool:
         """Whether save/load are implemented."""
         return False
+
+    def print_memory(self) -> str:
+        """Optional: return memory as human-readable text (e.g. scene graph as tree)."""
+        raise NotImplementedError("This backend does not support print_memory")
 
 
 def get_memory_backend(
@@ -110,15 +123,18 @@ def get_memory_backend(
         if voxel_map is None:
             raise ValueError("get_memory_backend(name='dynamem') requires voxel_map")
         from emet.memory.adapters import DynaMemBackend
+
         return DynaMemBackend(voxel_map, confidence_threshold=confidence_threshold)
     if name == "graph_eqa":
         if graph_memory is None:
             raise ValueError("get_memory_backend(name='graph_eqa') requires graph_memory")
         from emet.memory.adapters import GraphEQABackend
+
         return GraphEQABackend(graph_memory, voxel_map=voxel_map)
     if name == "svm":
         if agent is None:
             raise ValueError("get_memory_backend(name='svm') requires agent")
         from emet.memory.adapters import SVMBackend
+
         return SVMBackend(agent)
     raise ValueError(f"Unknown memory backend: {name!r}. Use 'dynamem', 'graph_eqa', or 'svm'.")

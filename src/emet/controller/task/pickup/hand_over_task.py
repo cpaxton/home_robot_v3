@@ -9,6 +9,7 @@
 
 import numpy as np
 
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.operations import (
     ExtendArm,
     NavigateToObjectOperation,
@@ -16,7 +17,6 @@ from emet.controller.operations import (
     SpeakOperation,
     UpdateOperation,
 )
-from emet.controller.controller_instance_memory import RobotAgent
 from emet.core.task import Task
 
 
@@ -36,9 +36,9 @@ class HandOverTask:
         self.semantic_sensor = self.agent.semantic_sensor
         self.parameters = self.agent.parameters
         self.instance_memory = self.agent.get_voxel_map().instances
-        assert (
-            self.instance_memory is not None
-        ), "Make sure instance memory was created! This is configured in parameters file."
+        assert self.instance_memory is not None, (
+            "Make sure instance memory was created! This is configured in parameters file."
+        )
 
         self.current_receptacle = None
         self.agent.reset_object_plans()
@@ -73,12 +73,8 @@ class HandOverTask:
             tilt=-1.0 * np.pi / 8.0,
         )
 
-        found_a_person = SpeakOperation(
-            name="found_a_person", agent=self.agent, parent=update, on_cannot_start=update
-        )
-        found_a_person.configure(
-            message="I found a person! I am going to navigate to them.", sleep_time=2.0
-        )
+        found_a_person = SpeakOperation(name="found_a_person", agent=self.agent, parent=update, on_cannot_start=update)
+        found_a_person.configure(message="I found a person! I am going to navigate to them.", sleep_time=2.0)
 
         # After searching for object, we should go to an instance that we've found. If we cannot do that, keep searching.
         go_to_object = NavigateToObjectOperation(
@@ -128,9 +124,7 @@ class HandOverTask:
         finished_handover = SpeakOperation(
             name="finished_handover", agent=self.agent, parent=open_gripper, on_cannot_start=update
         )
-        finished_handover.configure(
-            message="I have finished handing over the object.", sleep_time=5.0
-        )
+        finished_handover.configure(message="I have finished handing over the object.", sleep_time=5.0)
 
         retract_arm = ExtendArm(
             name="retract_arm",

@@ -10,7 +10,6 @@
 import os
 import shutil
 from datetime import datetime
-from typing import Optional
 
 path = os.path.expanduser("~/.stretch")
 
@@ -22,9 +21,7 @@ def _ensure_path_exists() -> None:
         os.makedirs(path)
 
 
-def lookup_address(
-    robot_ip: str, use_remote_computer: bool = False, update: bool = True
-) -> Optional[str]:
+def lookup_address(robot_ip: str, use_remote_computer: bool = False, update: bool = True) -> str | None:
     """Return the address of the robot. Will also create and update ~/.stretch/robot_ip.txt file to manage robot IP address.
     When robot_ip is empty and use_remote_computer is True, falls back to active connection (emet connect) host if set.
 
@@ -49,6 +46,7 @@ def lookup_address(
             else:
                 try:
                     from emet.utils.connection import get_host_from_connection
+
                     robot_ip = get_host_from_connection() or ""
                 except Exception:
                     robot_ip = ""

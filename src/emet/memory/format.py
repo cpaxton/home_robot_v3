@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Common memory save/load format: directory layout, MemoryState schema,
@@ -6,12 +15,11 @@
 from __future__ import annotations
 
 import json
-import os
 import pickle
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import cv2
 import numpy as np
@@ -34,10 +42,10 @@ class PointCloudBlob:
     """Point cloud data: xyz, rgb; optional feats, weights, obs_id (DynaMem)."""
 
     xyz: np.ndarray  # (N, 3)
-    rgb: Optional[np.ndarray] = None  # (N, 3) or (N,) for scalar
-    feats: Optional[np.ndarray] = None
-    weights: Optional[np.ndarray] = None
-    obs_id: Optional[np.ndarray] = None  # per-point observation id (DynaMem)
+    rgb: np.ndarray | None = None  # (N, 3) or (N,) for scalar
+    feats: np.ndarray | None = None
+    weights: np.ndarray | None = None
+    obs_id: np.ndarray | None = None  # per-point observation id (DynaMem)
 
 
 @dataclass
@@ -45,26 +53,27 @@ class FrameBlob:
     """One observation frame: pose, image, optional depth/feats/instance."""
 
     camera_pose: np.ndarray  # (4, 4)
-    base_pose: Optional[np.ndarray] = None  # (3,) xyt
-    camera_K: Optional[np.ndarray] = None  # (3, 3)
-    rgb: Optional[np.ndarray] = None
-    depth: Optional[np.ndarray] = None
-    feats: Optional[np.ndarray] = None
-    world_xyz: Optional[np.ndarray] = None
-    instance: Optional[np.ndarray] = None
-    instance_classes: Optional[np.ndarray] = None
-    instance_scores: Optional[np.ndarray] = None
-    info: Optional[Dict[str, Any]] = None
+    base_pose: np.ndarray | None = None  # (3,) xyt
+    camera_K: np.ndarray | None = None  # (3, 3)
+    rgb: np.ndarray | None = None
+    depth: np.ndarray | None = None
+    feats: np.ndarray | None = None
+    world_xyz: np.ndarray | None = None
+    instance: np.ndarray | None = None
+    instance_classes: np.ndarray | None = None
+    instance_scores: np.ndarray | None = None
+    info: dict[str, Any] | None = None
 
 
 @dataclass
 class GraphNodeView:
-    """Serializable graph node (labels, xyz, obs_id)."""
+    """Serializable graph node (labels, xyz, obs_id, optional description)."""
 
     node_id: int
-    labels: List[str]
-    xyz: List[float]  # [x, y, z]
+    labels: list[str]
+    xyz: list[float]  # [x, y, z]
     obs_id: int
+    description: str | None = None
 
 
 @dataclass
@@ -80,8 +89,8 @@ class GraphEdgeView:
 class GraphBlob:
     """Graph: nodes and edges (GraphEQA)."""
 
-    nodes: List[GraphNodeView]
-    edges: List[GraphEdgeView]
+    nodes: list[GraphNodeView]
+    edges: list[GraphEdgeView]
 
 
 @dataclass
@@ -89,10 +98,10 @@ class UserMessageBlob:
     """One user text message with context (identity, robot location, timestamp)."""
 
     text: str
-    user_identity: Optional[str] = None  # e.g. "user", "operator", user id
-    robot_location: Optional[List[float]] = None  # (x, y) or (x, y, theta) when received
-    timestamp: Optional[str] = None  # ISO8601 or unix time string
-    extra: Optional[Dict[str, Any]] = None
+    user_identity: str | None = None  # e.g. "user", "operator", user id
+    robot_location: list[float] | None = None  # (x, y) or (x, y, theta) when received
+    timestamp: str | None = None  # ISO8601 or unix time string
+    extra: dict[str, Any] | None = None
 
 
 @dataclass
@@ -101,8 +110,8 @@ class MemoryManifest:
 
     version: int = MEMORY_FORMAT_VERSION
     backend: str = "unified"  # dynamem | svm | graph_eqa | unified
-    created_at: Optional[str] = None
-    description: Optional[str] = None
+    created_at: str | None = None
+    description: str | None = None
     has_point_cloud: bool = True
     has_frames: bool = True
     has_graph: bool = False
@@ -128,19 +137,19 @@ class MemoryState:
         user_messages.json      -- optional; user text messages (identity, location, timestamp)
     """
 
-    point_cloud: Optional[PointCloudBlob] = None
-    frames: List[FrameBlob] = field(default_factory=list)
-    graph: Optional[GraphBlob] = None
-    text_descriptions: Optional[List[str]] = None
-    user_messages: List[UserMessageBlob] = field(default_factory=list)
+    point_cloud: PointCloudBlob | None = None
+    frames: list[FrameBlob] = field(default_factory=list)
+    graph: GraphBlob | None = None
+    text_descriptions: list[str] | None = None
+    user_messages: list[UserMessageBlob] = field(default_factory=list)
     # For 2D map derivation (obstacles, explored) when loading for display
-    grid_origin: Optional[np.ndarray] = None  # (3,) or (2,)
+    grid_origin: np.ndarray | None = None  # (3,) or (2,)
     grid_resolution: float = 0.05
-    grid_size: Optional[Tuple[int, int]] = None
+    grid_size: tuple[int, int] | None = None
     # Precomputed 2D maps if available (from voxel_map.get_2d_map())
-    obstacles_2d: Optional[np.ndarray] = None
-    explored_2d: Optional[np.ndarray] = None
-    manifest: Optional[MemoryManifest] = None
+    obstacles_2d: np.ndarray | None = None
+    explored_2d: np.ndarray | None = None
+    manifest: MemoryManifest | None = None
 
 
 def _to_native(obj: Any) -> Any:
@@ -156,12 +165,21 @@ def _to_native(obj: Any) -> Any:
     return obj
 
 
-def _load_frame(rgb_file: Optional[Path], depth_file: Optional[Path], pose_file: Path) -> FrameBlob:
+def _load_frame(rgb_file: Path | None, depth_file: Path | None, pose_file: Path) -> FrameBlob:
     """Load a single frame from its component files."""
     pose_npz = np.load(pose_file, allow_pickle=True)
     camera_pose = pose_npz["camera_pose"]
     base_pose = pose_npz["base_pose"] if "base_pose" in pose_npz.files else None
     camera_K = pose_npz["camera_K"] if "camera_K" in pose_npz.files else None
+    world_xyz = pose_npz["world_xyz"] if "world_xyz" in pose_npz.files else None
+    info = None
+    if "labels" in pose_npz.files:
+        labels_arr = pose_npz["labels"]
+        info = {"labels": list(labels_arr.flat)} if labels_arr.size else {"labels": []}
+        if "description" in pose_npz.files:
+            desc_arr = pose_npz["description"]
+            if desc_arr.size and desc_arr.flat[0] is not None:
+                info["description"] = str(desc_arr.flat[0])
     rgb = None
     if rgb_file is not None and rgb_file.exists():
         bgr = cv2.imread(str(rgb_file))
@@ -175,16 +193,18 @@ def _load_frame(rgb_file: Optional[Path], depth_file: Optional[Path], pose_file:
         camera_K=camera_K,
         rgb=rgb,
         depth=depth,
+        world_xyz=world_xyz,
+        info=info,
     )
 
 
-def _load_frames_dir(frames_path: Path) -> List[FrameBlob]:
+def _load_frames_dir(frames_path: Path) -> list[FrameBlob]:
     """Load frames from frames/ directory. Supports two layouts:
 
     Flat (current):  frames/rgb_0001.png, frames/depth_0001.npy, frames/pose_0001.npz
     Legacy:          frames/0/rgb.png,    frames/0/depth.npy,    frames/0/pose.npz
     """
-    frames: List[FrameBlob] = []
+    frames: list[FrameBlob] = []
 
     # Detect flat layout: look for pose_NNNN.npz files
     flat_poses = sorted(frames_path.glob("pose_*.npz"))
@@ -226,12 +246,8 @@ def save_memory(state: MemoryState, path: str) -> None:
         manifest.created_at = datetime.utcnow().isoformat() + "Z"
     manifest.has_point_cloud = state.point_cloud is not None
     manifest.has_frames = len(state.frames) > 0
-    manifest.has_graph = state.graph is not None and (
-        len(state.graph.nodes) > 0 or len(state.graph.edges) > 0
-    )
-    manifest.has_text_descriptions = (
-        state.text_descriptions is not None and len(state.text_descriptions) > 0
-    )
+    manifest.has_graph = state.graph is not None and (len(state.graph.nodes) > 0 or len(state.graph.edges) > 0)
+    manifest.has_text_descriptions = state.text_descriptions is not None and len(state.text_descriptions) > 0
     manifest.has_user_messages = len(state.user_messages) > 0
     manifest.frames_inline = False  # we use frames/<i>/ layout with PNG
 
@@ -259,7 +275,11 @@ def save_memory(state: MemoryState, path: str) -> None:
             if fr.rgb is not None:
                 rgb = np.asarray(fr.rgb)
                 if rgb.dtype != np.uint8:
-                    rgb = (np.clip(rgb, 0, 1) * 255).astype(np.uint8) if rgb.max() <= 1.0 else np.clip(rgb, 0, 255).astype(np.uint8)
+                    rgb = (
+                        (np.clip(rgb, 0, 1) * 255).astype(np.uint8)
+                        if rgb.max() <= 1.0
+                        else np.clip(rgb, 0, 255).astype(np.uint8)
+                    )
                 bgr = rgb[:, :, ::-1].copy()
                 cv2.imwrite(str(frames_path / f"rgb_{tag}.png"), bgr)
             if fr.depth is not None:
@@ -269,11 +289,15 @@ def save_memory(state: MemoryState, path: str) -> None:
                 pose_dict["base_pose"] = fr.base_pose
             if fr.camera_K is not None:
                 pose_dict["camera_K"] = fr.camera_K
+            if fr.world_xyz is not None and fr.world_xyz.size >= 3:
+                pose_dict["world_xyz"] = np.asarray(fr.world_xyz).reshape(-1, 3)[:1]
+            if fr.info is not None and "labels" in fr.info:
+                pose_dict["labels"] = np.array(fr.info["labels"], dtype=object)
+            if fr.info is not None and fr.info.get("description"):
+                pose_dict["description"] = np.array(fr.info["description"], dtype=object)
             np.savez(frames_path / f"pose_{tag}.npz", **pose_dict)
 
-    if state.graph is not None and (
-        len(state.graph.nodes) > 0 or len(state.graph.edges) > 0
-    ):
+    if state.graph is not None and (len(state.graph.nodes) > 0 or len(state.graph.edges) > 0):
         graph_data = {
             "nodes": [
                 {
@@ -281,13 +305,11 @@ def save_memory(state: MemoryState, path: str) -> None:
                     "labels": n.labels,
                     "xyz": n.xyz,
                     "obs_id": n.obs_id,
+                    **({"description": n.description} if getattr(n, "description", None) else {}),
                 }
                 for n in state.graph.nodes
             ],
-            "edges": [
-                {"id1": e.id1, "id2": e.id2, "relation": e.relation}
-                for e in state.graph.edges
-            ],
+            "edges": [{"id1": e.id1, "id2": e.id2, "relation": e.relation} for e in state.graph.edges],
         }
         with open(path / GRAPH_FILENAME, "w") as f:
             json.dump(graph_data, f, indent=2)

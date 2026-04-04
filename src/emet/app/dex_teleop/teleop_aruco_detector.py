@@ -173,16 +173,14 @@ class ArucoMarkerCollection:
             num_detected = len(self.aruco_ids)
 
         if self.aruco_ids is not None:
-            for corners, aruco_id in zip(self.aruco_corners, self.aruco_ids):
+            for corners, aruco_id in zip(self.aruco_corners, self.aruco_ids, strict=False):
                 aruco_id = int(aruco_id)
                 marker = self.collection.get(aruco_id, None)
                 if marker is None:
                     new_marker = ArucoMarker(aruco_id, self.marker_info, self.show_debug_images)
                     self.collection[aruco_id] = new_marker
 
-                self.collection[aruco_id].update(
-                    corners[0], self.frame_number, self.rgb_camera_info
-                )
+                self.collection[aruco_id].update(corners[0], self.frame_number, self.rgb_camera_info)
 
         if verbose:
             print("Detected", num_detected, "markers")
@@ -200,9 +198,7 @@ class ArucoDetector:
         if self.marker_info is None:
             self.marker_info = {}
 
-        self.aruco_marker_collection = ArucoMarkerCollection(
-            self.marker_info, self.show_debug_images
-        )
+        self.aruco_marker_collection = ArucoMarkerCollection(self.marker_info, self.show_debug_images)
 
     def update(self, rgb_image, rgb_camera_info):
         self.rgb_image = rgb_image
@@ -266,12 +262,7 @@ def get_special_frames(marker_dict):
             t = frames[k]["trans"]
             # TODO: do we want to save rpy?
             # rpy = frames[k]["rpy"]
-            frame_pos = (
-                marker_pos
-                + (t[0] * marker_x_axis)
-                + (t[1] * marker_y_axis)
-                + (t[2] * marker_z_axis)
-            )
+            frame_pos = marker_pos + (t[0] * marker_x_axis) + (t[1] * marker_y_axis) + (t[2] * marker_z_axis)
             frame_x_axis = np.copy(marker_x_axis)
             frame_y_axis = np.copy(marker_y_axis)
             frame_z_axis = np.copy(marker_z_axis)

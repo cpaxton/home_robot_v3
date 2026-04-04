@@ -9,7 +9,6 @@
 
 import logging
 import os
-from typing import Optional
 
 import click
 
@@ -21,6 +20,7 @@ from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.controller.zmq_client import StretchZmqClient
 from emet.core.parameters import get_parameters
 from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_llm_client
+from emet.robots import ROBOT_REGISTRY
 
 
 @click.command()
@@ -59,13 +59,15 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
     is_flag=True,
     help="Use visual servoing grasp",
 )
+@click.option("--robot_ip", type=str, default="", help="Robot IP address (leave empty for saved default)")
 @click.option(
-    "--robot_ip", type=str, default="", help="Robot IP address (leave empty for saved default)"
+    "--robot",
+    type=str,
+    default="stretch",
+    help="Robot backend (stretch, rby1, galaxea_r1, etc.). Must match the server started with emet serve mujoco --robot <name>.",
 )
 @click.option("--target_object", type=str, default=None, help="Target object to grasp")
-@click.option(
-    "--target_receptacle", "--receptacle", type=str, default=None, help="Target receptacle to place"
-)
+@click.option("--target_receptacle", "--receptacle", type=str, default=None, help="Target receptacle to place")
 @click.option(
     "--skip_confirmations",
     "--skip",
@@ -102,9 +104,7 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
     help="Use GPT4o for visual grounding",
 )
 @click.option("--device_id", default=0, type=int, help="Device ID for semantic sensor")
-@click.option(
-    "--manipulation-only", "--manipulation", is_flag=True, help="For debugging manipulation"
-)
+@click.option("--manipulation-only", "--manipulation", is_flag=True, help="For debugging manipulation")
 @click.option(
     "--cpu-only",
     "--cpu",
@@ -144,9 +144,10 @@ def main(
     explore_iter: int = 3,
     mode: str = "navigation",
     match_method: str = "class",
-    input_path: Optional[str] = None,
-    output_path: Optional[str] = None,
+    input_path: str | None = None,
+    output_path: str | None = None,
     robot_ip: str = "",
+    robot: str = "stretch",
     visual_servo: bool = False,
     skip_confirmations: bool = True,
     device_id: int = 0,
@@ -180,18 +181,42 @@ def main(
         os.environ["RERUN_BIND_ALL"] = "1"
 
     print("- Create robot client")
-    robot = StretchZmqClient(
-        robot_ip=robot_ip,
-        enable_rerun_server=not no_rerun,
-        rerun_headless=headless,
-        rerun_show_panels=rerun_show_panels,
-        rerun_debug=rerun_debug,
-        port_offset=port_offset,
-    )
+    robot_key = robot.lower().replace("-", "_")
+    if robot_key == "stretch":
+        robot_client = StretchZmqClient(
+            robot_ip=robot_ip,
+            enable_rerun_server=not no_rerun,
+            rerun_headless=headless,
+            rerun_show_panels=rerun_show_panels,
+            rerun_debug=rerun_debug,
+            port_offset=port_offset,
+        )
+    elif robot_key in ROBOT_REGISTRY:
+        import importlib
+
+        mod = importlib.import_module(ROBOT_REGISTRY[robot_key])
+        backend_cls = None
+        for attr_name in dir(mod):
+            attr = getattr(mod, attr_name)
+            if isinstance(attr, type) and hasattr(attr, "get_spec") and attr_name != "RobotBackend":
+                backend_cls = attr
+                break
+        if backend_cls is None:
+            raise RuntimeError(f"No RobotBackend found in {ROBOT_REGISTRY[robot_key]}")
+        backend = backend_cls()
+        robot_client = backend.create_client(
+            robot_ip=robot_ip,
+            port_offset=port_offset,
+        )
+    else:
+        raise click.UsageError(
+            f"Unknown robot '{robot}'. Known: {list(ROBOT_REGISTRY.keys())}. "
+            "Start the server with the same robot: emet serve mujoco --robot <name>"
+        )
 
     print("- Create task executor")
     executor = DynamemTaskExecutor(
-        robot,
+        robot_client,
         parameters,
         visual_servo=visual_servo,
         match_method=match_method,
@@ -226,7 +251,6 @@ def main(
     # Parse things and listen to the user
     ok = True
     while ok:
-        say_this = None
         if llm_client is None:
             # Call the LLM client and parse
             explore = input(

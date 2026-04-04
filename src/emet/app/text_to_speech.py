@@ -16,6 +16,7 @@ This script adds a command-line interface (CLI) for text-to-speech. The CLI supp
 - Passing in a custom file to load the history (including pre-seeded text) from
   and save it to.
 """
+
 # Standard imports
 import argparse
 
@@ -125,9 +126,7 @@ def main():
     args = get_args()
 
     # Initialize the text-to-speech command line interface
-    cli = TextToSpeechComandLineInterface(
-        engine=args.engine, voice_id=args.voice_id, is_slow=args.slow
-    )
+    cli = TextToSpeechComandLineInterface(engine=args.engine, voice_id=args.voice_id, is_slow=args.slow)
 
     # Run the text-to-speech command line interface
     try:

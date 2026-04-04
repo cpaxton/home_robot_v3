@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emet-molmospaces"
+version = "0.1.0"
+description = "Thin wrapper for MolmoSpaces (scenes + rby1 robot); requires local emet + molmo-spaces."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+# MolmoSpaces is not published on PyPI; install from GitHub. Upstream requires Python >=3.11.
+requires-python = ">=3.11,<3.13"
+# emet is not on PyPI — install scripts use `uv pip install --no-deps -e .` first, then this package.
+dependencies = [
+    "molmo-spaces @ git+https://github.com/allenai/molmospaces.git@62b416089b2eddff339e52a32106a6bc08ed92b1",
+    "mujoco>=3.4",
+    "numpy>=2.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+emet-molmospaces = "emet_molmospaces.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]

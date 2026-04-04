@@ -58,9 +58,7 @@ class WebcamArucoDetector:
     ):
 
         # self.webcam = wc.Webcam(fps=30, image_width=800, image_height=448, use_calibration=True)
-        self.webcam = wc.Webcam(
-            fps=30, image_width=1920, image_height=1080, use_calibration=True, platform=platform
-        )
+        self.webcam = wc.Webcam(fps=30, image_width=1920, image_height=1080, use_calibration=True, platform=platform)
         # self.webcam = wc.Webcam(fps=15, image_width=1920, image_height=1080, use_calibration=True)
 
         self.first_frame = True
@@ -80,9 +78,7 @@ class WebcamArucoDetector:
                 + ", was not found, so no ArUco markers will be detected."
             )
 
-        self.aruco_detector = ad.ArucoDetector(
-            marker_info=self.marker_info, show_debug_images=show_debug_images
-        )
+        self.aruco_detector = ad.ArucoDetector(marker_info=self.marker_info, show_debug_images=show_debug_images)
         self.tongs_prefix = tongs_prefix
 
         # define marker names
@@ -144,19 +140,14 @@ class WebcamArucoDetector:
         tongs_right_side_marker = markers.get(self.right_side_name, None)
 
         top_visible = (tongs_left_top_marker is not None) and (tongs_right_top_marker is not None)
-        bottom_visible = (tongs_left_bottom_marker is not None) and (
-            tongs_right_bottom_marker is not None
-        )
-        front_visible = (tongs_left_front_marker is not None) and (
-            tongs_right_front_marker is not None
-        )
+        bottom_visible = (tongs_left_bottom_marker is not None) and (tongs_right_bottom_marker is not None)
+        front_visible = (tongs_left_front_marker is not None) and (tongs_right_front_marker is not None)
         left_side_visible = tongs_left_side_marker is not None
         right_side_visible = tongs_right_side_marker is not None
 
         main_markers_visible = bottom_visible or front_visible or top_visible
 
         if not main_markers_visible:
-
             if left_side_visible or right_side_visible:
                 # this is an approximation
                 if self.previous_grip_width is not None:
@@ -174,18 +165,10 @@ class WebcamArucoDetector:
                     print("----------------------------------------")
                     print("Only side marker visible.")
                     print()
-                    print("grip_width = {:.2f} cm".format(grip_width * 100.0))
-                    print(
-                        "marker_center_to_tong_tip = {:.2f} cm".format(
-                            marker_center_to_tong_tip * 100.0
-                        )
-                    )
-                    print(
-                        "tongs_pin_joint_to_tong_tip = {:.2f} cm".format(
-                            self.tongs_pin_joint_to_tong_tip * 100.0
-                        )
-                    )
-                    print("constant_angle = {:.2f} deg".format(180.0 * (constant_angle / np.pi)))
+                    print(f"grip_width = {grip_width * 100.0:.2f} cm")
+                    print(f"marker_center_to_tong_tip = {marker_center_to_tong_tip * 100.0:.2f} cm")
+                    print(f"tongs_pin_joint_to_tong_tip = {self.tongs_pin_joint_to_tong_tip * 100.0:.2f} cm")
+                    print(f"constant_angle = {180.0 * (constant_angle / np.pi):.2f} deg")
                     print()
 
                 # Variable angle from the isosceles triangle formed by the centers of the bottom ArUco markers and the tongs pin joint.
@@ -194,25 +177,15 @@ class WebcamArucoDetector:
                 opposite_side = distance_between_markers / 2.0
                 variable_angle = math.asin(opposite_side / hypotenuse)
                 if self.debug_side_marker:
-                    print(
-                        "tongs_pin_joint_to_marker_cecnter = {:.2f} cm".format(
-                            self.tongs_pin_joint_to_marker_center * 100.0
-                        )
-                    )
-                    print(
-                        "distance_between_markers = {:.2f} cm".format(
-                            distance_between_markers * 100.0
-                        )
-                    )
-                    print("variable_angle = {:.2f} deg".format(180.0 * (variable_angle / np.pi)))
+                    print(f"tongs_pin_joint_to_marker_cecnter = {self.tongs_pin_joint_to_marker_center * 100.0:.2f} cm")
+                    print(f"distance_between_markers = {distance_between_markers * 100.0:.2f} cm")
+                    print(f"variable_angle = {180.0 * (variable_angle / np.pi):.2f} deg")
                     print()
 
                 # Find angular correction to find tongs marker orientation from a single side
                 angle_correction = variable_angle - constant_angle
                 if self.debug_side_marker:
-                    print(
-                        "angle_correction = {:.2f} deg".format(180.0 * (angle_correction / np.pi))
-                    )
+                    print(f"angle_correction = {180.0 * (angle_correction / np.pi):.2f} deg")
 
                 if left_side_visible:
                     grip_pos = tongs_left_side_marker["pos"].copy()
@@ -347,12 +320,8 @@ class WebcamArucoDetector:
 
                 # Adjust positions to match bottom marker positions
                 half_cube_side = self.cube_side / 2.0
-                bottom_left_pos = (
-                    left_pos - (half_cube_side * left_z_axis) - (half_cube_side * left_y_axis)
-                )
-                bottom_right_pos = (
-                    right_pos - (half_cube_side * right_z_axis) - (half_cube_side * right_y_axis)
-                )
+                bottom_left_pos = left_pos - (half_cube_side * left_z_axis) - (half_cube_side * left_y_axis)
+                bottom_right_pos = right_pos - (half_cube_side * right_z_axis) - (half_cube_side * right_y_axis)
 
                 grip_width = np.linalg.norm(bottom_right_pos - bottom_left_pos)
 
@@ -465,9 +434,7 @@ class WebcamArucoDetector:
             hypotenuse = self.tongs_pin_joint_to_marker_center
             opposite_side = distance_between_markers / 2.0
             try:
-                adjacent_side = math.sqrt(
-                    (hypotenuse * hypotenuse) - (opposite_side * opposite_side)
-                )
+                adjacent_side = math.sqrt((hypotenuse * hypotenuse) - (opposite_side * opposite_side))
             except ValueError:
                 print(
                     "WebcamArucoDetector.process_tongs: ValueError: hypotenuse =",
@@ -536,6 +503,6 @@ if __name__ == "__main__":
         print()
         print("--- TIMING FOR ITERATIONS WITH ROBOT MOTION ---")
         print("number of iterations with robot motion =", iterations)
-        print("average period =", "{:.2f}".format(average_period * 1000.0), "ms")
-        print("average frequency =", "{:.2f}".format(average_frequency), "Hz")
+        print("average period =", f"{average_period * 1000.0:.2f}", "ms")
+        print("average frequency =", f"{average_frequency:.2f}", "Hz")
         print("-----------------------------------------------")

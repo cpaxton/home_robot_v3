@@ -8,12 +8,11 @@
 # license information maybe found below, if so.
 
 from pathlib import Path
-from typing import Optional
 
 import git
 
 
-def get_git_repo() -> Optional[git.Repo]:
+def get_git_repo() -> git.Repo | None:
     path = str(Path(__file__).resolve().parent)
 
     repo_names = ["stretch_ai", "stretchpy", "app"]
@@ -32,21 +31,21 @@ def get_git_repo() -> Optional[git.Repo]:
         return None
 
 
-def get_git_branch() -> Optional[str]:
+def get_git_branch() -> str | None:
     repo = get_git_repo()
     if repo is None:
         return None
     return str(repo.active_branch)
 
 
-def get_git_commit() -> Optional[str]:
+def get_git_commit() -> str | None:
     repo = get_git_repo()
     if repo is None:
         return None
     return str(repo.head.commit.hexsha)
 
 
-def get_git_commit_message() -> Optional[str]:
+def get_git_commit_message() -> str | None:
     repo = get_git_repo()
     if repo is None:
         return None

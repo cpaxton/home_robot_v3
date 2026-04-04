@@ -50,7 +50,7 @@ def get_absolute_path_stretch_urdf(urdf_file_path, mesh_files_directory_path) ->
     Generates Robot URDF with absolute path to mesh files
     """
 
-    with open(urdf_file_path, "r") as f:
+    with open(urdf_file_path) as f:
         _urdf_file = f.read()
 
     # find all the line which has the pattrn {file="something.type"}
@@ -81,9 +81,7 @@ class URDFVisualizer:
     def __init__(self, urdf_file: str = abs_urdf_file_path):
         self.urdf = urdf_loader.URDF.load(urdf_file)
 
-    def get_tri_meshes(
-        self, cfg: dict = None, use_collision: bool = True, debug: bool = False
-    ) -> list:
+    def get_tri_meshes(self, cfg: dict = None, use_collision: bool = True, debug: bool = False) -> list:
         """
         Get list of trimesh objects, pose and link names of the robot with the given configuration
         Args:
@@ -105,9 +103,7 @@ class URDFVisualizer:
             t_meshes["mesh"].append(t_mesh)
             t_meshes["pose"].append(pose)
             # [:-4] to remove the .STL extension
-            t_meshes["link"].append(
-                tm.metadata["file_name"][:-4] if "file_name" in tm.metadata.keys() else None
-            )
+            t_meshes["link"].append(tm.metadata["file_name"][:-4] if "file_name" in tm.metadata.keys() else None)
         t2 = timeit.default_timer()
         if debug:
             print(f"[get_trimeshes method] Time to compute FK (ms): {1000 * (t1 - t0)}")
@@ -126,7 +122,7 @@ class URDFVisualizer:
         tm = self.get_tri_meshes(cfg, use_collision)
         mesh_list = tm["mesh"]
         pose_list = np.array(tm["pose"])
-        for m, p in zip(mesh_list, pose_list):
+        for m, p in zip(mesh_list, pose_list, strict=False):
             m.apply_transform(p)
         combined_mesh = np.sum(mesh_list)
         combined_mesh.remove_duplicate_faces()

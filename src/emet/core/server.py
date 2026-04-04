@@ -11,7 +11,7 @@ import threading
 import time
 import timeit
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import cv2
 import numpy as np
@@ -32,7 +32,6 @@ except ImportError:
 
 
 class BaseZmqServer(CommsNode, ABC):
-
     # How often should we print out info about our performance
     report_steps = 1000
     fast_report_steps = 10000
@@ -96,9 +95,7 @@ class BaseZmqServer(CommsNode, ABC):
         """Check if the server is running."""
         return not self.done
 
-    def _rescale_color_and_depth(
-        self, color_image, depth_image, scaling: float = 0.5
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def _rescale_color_and_depth(self, color_image, depth_image, scaling: float = 0.5) -> tuple[np.ndarray, np.ndarray]:
         """Rescale the color and depth images by a given scaling factor."""
         color_image = cv2.resize(
             color_image,
@@ -154,22 +151,22 @@ class BaseZmqServer(CommsNode, ABC):
         pass
 
     @abstractmethod
-    def handle_action(self, action: Dict[str, Any]):
+    def handle_action(self, action: dict[str, Any]):
         """Handle the action received from the client."""
         pass
 
     @abstractmethod
-    def get_full_observation_message(self) -> Dict[str, Any]:
+    def get_full_observation_message(self) -> dict[str, Any]:
         """Get the full observation message for the robot. This includes the full state of the robot, including images and depth images."""
         pass
 
     @abstractmethod
-    def get_state_message(self) -> Dict[str, Any]:
+    def get_state_message(self) -> dict[str, Any]:
         """Get the state message for the robot. This is a smalll message that includes floating point information and booleans like if the robot is homed."""
         pass
 
     @abstractmethod
-    def get_servo_message(self) -> Dict[str, Any]:
+    def get_servo_message(self) -> dict[str, Any]:
         """Get messages for e2e policy learning and visual servoing. These are images and depth images, but lower resolution than the large full state observations, and they include the end effector camera."""
         pass
 
@@ -211,7 +208,7 @@ class BaseZmqServer(CommsNode, ABC):
             steps += 1
             t0 = t1
             if self.verbose or steps % self.report_steps == 0:
-                print(f"[SEND FULL STATE] time taken = {dt} avg = {sum_time/steps}")
+                print(f"[SEND FULL STATE] time taken = {dt} avg = {sum_time / steps}")
 
             time.sleep(1e-4)
             t0 = timeit.default_timer()
@@ -237,9 +234,7 @@ class BaseZmqServer(CommsNode, ABC):
                 # Tracking step number -- should never go backwards
                 action_step = action.get("step", -1)
                 if self.skip_duplicate_steps and action_step <= self._last_step:
-                    logger.warning(
-                        f"Skipping duplicate action {action_step}, last step = {self._last_step}"
-                    )
+                    logger.warning(f"Skipping duplicate action {action_step}, last step = {self._last_step}")
                     continue
                 self.handle_action(action)
                 self._last_step = max(action_step, self._last_step)
@@ -256,7 +251,7 @@ class BaseZmqServer(CommsNode, ABC):
             steps += 1
             t0 = t1
             if self.verbose or steps % self.fast_report_steps == 0:
-                logger.info(f"[RECV] time taken = {dt} avg = {sum_time/steps}")
+                logger.info(f"[RECV] time taken = {dt} avg = {sum_time / steps}")
 
             time.sleep(1e-4)
             t0 = timeit.default_timer()
@@ -286,7 +281,7 @@ class BaseZmqServer(CommsNode, ABC):
             steps += 1
             t0 = t1
             if self.verbose or steps % self.fast_report_steps == 0:
-                logger.info(f"[SEND FAST STATE] time taken = {dt} avg = {sum_time/steps}")
+                logger.info(f"[SEND FAST STATE] time taken = {dt} avg = {sum_time / steps}")
 
             time.sleep(1e-4)
             t0 = timeit.default_timer()
@@ -317,7 +312,7 @@ class BaseZmqServer(CommsNode, ABC):
             t0 = t1
             if self.verbose or steps % self.servo_report_steps == 1:
                 logger.info(
-                    f"[SEND SERVO STATE] time taken = {dt} avg = {sum_time/steps} rate={1/(sum_time/steps)}"
+                    f"[SEND SERVO STATE] time taken = {dt} avg = {sum_time / steps} rate={1 / (sum_time / steps)}"
                 )
 
             time.sleep(1e-5)

@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 """
 Load the Stretch MuJoCo model and optionally start the simulation.
 
@@ -18,7 +27,7 @@ def test_load_model():
     try:
         import mujoco
     except ImportError:
-        print("Error: mujoco not installed. Run: pip install -e \".[sim]\"")
+        print('Error: mujoco not installed. Run: pip install -e ".[sim]"')
         return False
 
     from emet.utils.assets import get_mujoco_models_path
@@ -32,7 +41,7 @@ def test_load_model():
 
     print(f"Loading MuJoCo model from {scene_xml}")
     model = mujoco.MjModel.from_xml_path(str(scene_xml))
-    data = mujoco.MjData(model)
+    _ = mujoco.MjData(model)
 
     print(f"  Bodies: {model.nbody}")
     print(f"  Joints: {model.njnt}")
@@ -47,7 +56,7 @@ def run_simulation(headless: bool = False):
         from emet.simulation.stretch_mujoco import StretchMujocoSimulator
         from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
     except ImportError as e:
-        print(f"Error: Could not import simulation. Run: pip install -e \".[sim]\"\n  {e}")
+        print(f'Error: Could not import simulation. Run: pip install -e ".[sim]"\n  {e}')
         return
 
     print("Starting Stretch MuJoCo simulation...")
@@ -69,6 +78,7 @@ def run_simulation(headless: bool = False):
                 b = status.base
                 print(f"\rBase: x={b.x:.2f} y={b.y:.2f} θ={b.theta:.2f} rad", end="")
             import time
+
             time.sleep(0.1)
     except KeyboardInterrupt:
         print("\nStopping...")

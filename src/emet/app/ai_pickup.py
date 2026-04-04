@@ -156,9 +156,7 @@ def main(
 
     if use_voice and not use_llm:
         logger.warning("Voice input is only supported with a language model.")
-        logger.warning(
-            "Please set --use-llm to use voice input. For now, we will disable voice input."
-        )
+        logger.warning("Please set --use-llm to use voice input. For now, we will disable voice input.")
         use_voice = False
 
     # Agents wrap the robot high level planning interface for now
@@ -203,7 +201,6 @@ def main(
     while robot.running and ok:
         # agent.reset()
 
-        say_this = None
         if llm_client is None:
             # Call the LLM client and parse
             if len(target_object) == 0:

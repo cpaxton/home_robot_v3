@@ -44,9 +44,7 @@ def process_image_for_placing(obj, hello_robot, detection_model, save_dir=None):
         actions = placing.process(obj, 1, head_tilt=head_tilt + delta_tilt)
         if actions is not None:
             base_trans, head_tilt = actions
-            hello_robot.move_to_position(
-                base_trans=base_trans, head_tilt=head_tilt, head_pan=head_pan
-            )
+            hello_robot.move_to_position(base_trans=base_trans, head_tilt=head_tilt, head_pan=head_pan)
             success = True
             break
 
@@ -104,23 +102,18 @@ def capture_and_process_image(mode, obj, socket, hello_robot):
     head_pan = hello_robot.pan
 
     while retry_flag:
-
         print("Capturing image: ")
         print(f"retry flag : {retry_flag}")
         print(f"side retries : {side_retries}")
         print(f"tilt retries : {tilt_retries}")
 
-        translation, rotation, depth, width, retry_flag = image_publisher.publish_image(
-            obj, mode, head_tilt=head_tilt
-        )
+        translation, rotation, depth, width, retry_flag = image_publisher.publish_image(obj, mode, head_tilt=head_tilt)
 
         if retry_flag == 1:
             base_trans = translation[0]
             head_tilt += rotation[0]
 
-            hello_robot.move_to_position(
-                base_trans=base_trans, head_pan=head_pan, head_tilt=head_tilt
-            )
+            hello_robot.move_to_position(base_trans=base_trans, head_pan=head_pan, head_tilt=head_tilt)
 
         elif retry_flag != 0 and side_retries == 3:
             print("Tried in all angles but couldn't succeed")
@@ -144,9 +137,7 @@ def capture_and_process_image(mode, obj, socket, hello_robot):
                 tilt_retries = 1
             else:
                 print(f"retrying with head tilt : {head_tilt + head_tilt_angles[tilt_retries]}")
-                hello_robot.move_to_position(
-                    head_pan=head_pan, head_tilt=head_tilt + head_tilt_angles[tilt_retries]
-                )
+                hello_robot.move_to_position(head_pan=head_pan, head_tilt=head_tilt + head_tilt_angles[tilt_retries])
                 tilt_retries += 1
 
     if mode == "place":

@@ -11,17 +11,16 @@
 This is a tool to add license headers to all files in the repo.
 """
 
-
 import os
 
 
 def read_license_header(file_path):
-    with open(file_path, "r") as file:
+    with open(file_path) as file:
         return file.read()
 
 
 def check_and_add_license_header(file_path, license_header):
-    with open(file_path, "r") as file:
+    with open(file_path) as file:
         content = file.read()
 
     if not content.startswith(license_header):

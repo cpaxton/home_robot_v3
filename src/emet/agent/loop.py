@@ -1,29 +1,39 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Agent main loop: start robot with logging, load memory, optional Discord, dispatch to tools.
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import threading
 import timeit
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import click
 from termcolor import colored
 
 from emet.agent.prompt import AgentPromptBuilder, parse_tool_calls_response
 from emet.agent.tools import Tool, get_tools
-from emet.core import get_parameters
 from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.controller.zmq_client import StretchZmqClient
+from emet.core import get_parameters
 from emet.llms import get_llm_client
 from emet.llms.discord_bot import EmetDiscordBot
 from emet.memory.backend import get_memory_backend
 from emet.memory.utils import print_memory_view_help_on_quit
+from emet.robots import ROBOT_REGISTRY
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -36,10 +46,11 @@ _MAX_TOOL_ROUNDS = 3
 # Chat log
 # ---------------------------------------------------------------------------
 
+
 class ChatLog:
     """Append-only JSONL log of the conversation for debugging and training."""
 
-    def __init__(self, log_dir: Optional[str] = None):
+    def __init__(self, log_dir: str | None = None):
         if log_dir is None:
             log_dir = os.path.join("logs", "chat")
         os.makedirs(log_dir, exist_ok=True)
@@ -62,21 +73,22 @@ class ChatLog:
 # Tool dispatch
 # ---------------------------------------------------------------------------
 
+
 def _dispatch_tool_calls(
-    tool_calls: List[dict],
+    tool_calls: list[dict],
     tools_by_name: dict[str, Tool],
     executor: DynamemTaskExecutor,
-    chat_log: Optional[ChatLog] = None,
+    chat_log: ChatLog | None = None,
     debug: bool = False,
-) -> Tuple[bool, List[str], bool]:
+) -> tuple[bool, list[str], bool]:
     """Execute a list of parsed tool_calls.
 
     Returns (continue_running, list_of_result_strings, has_info_results).
     continue_running is False if quit was requested.
     has_info_results is True if any tool with returns_info=True produced output.
     """
-    executor_cmds: List[Tuple[str, str]] = []
-    results: List[str] = []
+    executor_cmds: list[tuple[str, str]] = []
+    results: list[str] = []
     has_info = False
 
     for tc in tool_calls:
@@ -131,12 +143,13 @@ def _dispatch_tool_calls(
 # LLM call helper
 # ---------------------------------------------------------------------------
 
+
 def _call_llm(
     llm_client: Any,
     text: str,
-    openai_tools_param: Optional[list],
+    openai_tools_param: list | None,
     debug: bool,
-) -> Tuple[str, float]:
+) -> tuple[str, float]:
     """Call the LLM and return (raw_response, elapsed_seconds)."""
     t0 = timeit.default_timer()
     try:
@@ -153,9 +166,11 @@ def _call_llm(
 # Main agent loop
 # ---------------------------------------------------------------------------
 
+
 def run_agent_with_robot(
     robot_ip: str = "127.0.0.1",
-    input_path: Optional[str] = None,
+    robot: str = "stretch",
+    input_path: str | None = None,
     discord: bool = False,
     use_llm: bool = False,
     llm: str = "qwen35-9B",
@@ -164,7 +179,7 @@ def run_agent_with_robot(
     explore_iter: int = 3,
     debug_llm: bool = False,
     agent_name: str = "Emet",
-    commands: Optional[List[str]] = None,
+    commands: list[str] | None = None,
     port_offset: int = 0,
     **kwargs: Any,
 ) -> None:
@@ -176,14 +191,36 @@ def run_agent_with_robot(
     """
     parameters = get_parameters("dynav_config.yaml")
 
-    robot = StretchZmqClient(
-        robot_ip=robot_ip,
-        enable_rerun_server=True,
-        port_offset=port_offset,
-    )
+    robot_key = robot.lower().replace("-", "_")
+    if robot_key == "stretch":
+        robot_client = StretchZmqClient(
+            robot_ip=robot_ip,
+            enable_rerun_server=True,
+            port_offset=port_offset,
+        )
+    elif robot_key in ROBOT_REGISTRY:
+        mod = importlib.import_module(ROBOT_REGISTRY[robot_key])
+        backend_cls = None
+        for attr_name in dir(mod):
+            attr = getattr(mod, attr_name)
+            if isinstance(attr, type) and hasattr(attr, "get_spec") and attr_name != "RobotBackend":
+                backend_cls = attr
+                break
+        if backend_cls is None:
+            raise RuntimeError(f"No RobotBackend found in {ROBOT_REGISTRY[robot_key]}")
+        backend = backend_cls()
+        robot_client = backend.create_client(
+            robot_ip=robot_ip,
+            port_offset=port_offset,
+        )
+    else:
+        raise click.UsageError(
+            f"Unknown robot '{robot}'. Known: stretch, {list(ROBOT_REGISTRY.keys())}. "
+            "Start the server with the same robot: emet serve mujoco --robot <name>"
+        )
 
     executor = DynamemTaskExecutor(
-        robot,
+        robot_client,
         parameters,
         server_ip=server_ip,
         skip_confirmations=skip_confirmations,
@@ -198,9 +235,9 @@ def run_agent_with_robot(
         executor._last_memory_save_path = input_path
 
     memory_backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
-    context: Dict[str, Any] = {
+    context: dict[str, Any] = {
         "executor": executor,
-        "robot": robot,
+        "robot": robot_client,
         "memory_backend": memory_backend,
         "discord_bot": None,
         "xyt_for_query": None,
@@ -213,6 +250,7 @@ def run_agent_with_robot(
 
     discord_bot = None
     if discord and os.environ.get("DISCORD_TOKEN"):
+
         class AgentPlaceholder:
             def __init__(self, exec_obj):
                 self.robot = exec_obj.robot
@@ -252,13 +290,14 @@ def run_agent_with_robot(
             prompt_builder = AgentPromptBuilder(tools=tools, name=agent_name, context=context)
             llm_client = get_llm_client(llm, prompt=prompt_builder)
             from emet.llms.openai_client import OpenaiClient
+
             if isinstance(llm_client, OpenaiClient):
                 openai_tools_param = [t.schema() for t in tools]
         except Exception as e:
             logger.warning("LLM failed to load (%s):", llm, e)
             print(colored("Agent mode requires an LLM; it failed to load.", "red"))
             print(colored("Fix the LLM (e.g. --llm, device) or run with --no-llm for letter commands only.", "yellow"))
-            robot.stop()
+            robot_client.stop()
             chat_log.close()
             return
 
@@ -295,10 +334,10 @@ def run_agent_with_robot(
     chat_log.log("assistant", greeting)
 
     # Command queue for non-interactive / scripted mode
-    cmd_queue: List[str] = list(commands) if commands else []
+    cmd_queue: list[str] = list(commands) if commands else []
     scripted = bool(cmd_queue)
 
-    def _get_input(prompt_text: str) -> Optional[str]:
+    def _get_input(prompt_text: str) -> str | None:
         """Read next input from queue (scripted) or stdin (interactive). None = done."""
         if cmd_queue:
             text = cmd_queue.pop(0)
@@ -337,7 +376,10 @@ def run_agent_with_robot(
             current_input = user_text
             for _round in range(_MAX_TOOL_ROUNDS):
                 raw_response, elapsed = _call_llm(
-                    llm_client, current_input, openai_tools_param, debug_llm,
+                    llm_client,
+                    current_input,
+                    openai_tools_param,
+                    debug_llm,
                 )
 
                 if debug_llm:
@@ -366,7 +408,11 @@ def run_agent_with_robot(
 
                 # Execute tool calls
                 ok, results, has_info = _dispatch_tool_calls(
-                    tool_calls, tools_by_name, executor, chat_log=chat_log, debug=debug_llm,
+                    tool_calls,
+                    tools_by_name,
+                    executor,
+                    chat_log=chat_log,
+                    debug=debug_llm,
                 )
                 if not ok:
                     break
@@ -442,4 +488,4 @@ def run_agent_with_robot(
     chat_log.close()
     print(colored(f"Chat log saved: {chat_log.path}", "green"))
     print_memory_view_help_on_quit(getattr(executor, "_last_memory_save_path", None))
-    robot.stop()
+    robot_client.stop()

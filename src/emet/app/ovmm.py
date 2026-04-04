@@ -90,7 +90,6 @@ def main(
     client = get_llm_client(llm, prompt=prompt)
 
     while robot.running:
-
         # Get a plan from the language model
         if task:
             text = task

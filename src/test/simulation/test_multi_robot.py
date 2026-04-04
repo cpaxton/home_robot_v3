@@ -1,9 +1,13 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 """Tests for multi-robot support: RobotSpec, GenericZmqClient, RobosuiteZmqServer."""
-
-import os
-
-import numpy as np
-import pytest
 
 
 def test_galaxea_r1_spec():
@@ -40,6 +44,8 @@ def test_robot_registry():
 
     assert "stretch" in ROBOT_REGISTRY
     assert "galaxea_r1" in ROBOT_REGISTRY
+    assert "rby1" in ROBOT_REGISTRY  # Rainbow RB-Y1 (Galaxea R1 family), MolmoSpaces id
+    assert "rb_y1" in ROBOT_REGISTRY
 
 
 def test_galaxea_r1_mjcf_loads():
@@ -49,6 +55,43 @@ def test_galaxea_r1_mjcf_loads():
     from emet.robots.galaxea_r1 import GalaxeaR1Backend
 
     spec = GalaxeaR1Backend().get_spec()
+    model = mujoco.MjModel.from_xml_path(spec.mjcf_path)
+
+    assert model.nq == 33  # 7 (freejoint) + 26 joints
+    assert model.nu == 26
+
+    for aname in spec.actuator_names:
+        aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
+        assert aid >= 0, f"Actuator '{aname}' not found in MJCF"
+
+    data = mujoco.MjData(model)
+    mujoco.mj_step(model, data)
+    assert data.time > 0
+
+
+def test_rby1_spec():
+    """Rby1Backend.get_spec() returns a valid RobotSpec (same structure as Galaxea R1)."""
+    from emet.robots.rby1 import Rby1Backend
+
+    backend = Rby1Backend()
+    spec = backend.get_spec()
+    assert spec.name == "rby1"
+    assert spec.dof == 26
+    assert len(spec.joint_names) == 26
+    assert len(spec.actuator_names) == 26
+    assert len(spec.camera_names) == 3
+    assert spec.mjcf_path is not None
+    assert spec.base_link_name == "base_link"
+    assert spec.footprint.width > 0
+
+
+def test_rby1_mjcf_loads():
+    """The RB-Y1 MJCF loads in MuJoCo (same file as Galaxea R1)."""
+    import mujoco
+
+    from emet.robots.rby1 import Rby1Backend
+
+    spec = Rby1Backend().get_spec()
     model = mujoco.MjModel.from_xml_path(spec.mjcf_path)
 
     assert model.nq == 33  # 7 (freejoint) + 26 joints
@@ -97,7 +140,7 @@ def test_robocasa_gen_robot_param():
 def test_robot_spec_new_fields():
     """RobotSpec has mjcf_path, actuator_names, base_link_name fields."""
     from emet.robots.base import RobotSpec
-    from emet.motion.robot import Footprint
+    from emet.robots.footprint import Footprint
 
     spec = RobotSpec(
         name="test",

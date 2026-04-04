@@ -75,7 +75,7 @@ class ImagePublisher:
 
         rotated_image = np.rot90(image, k=-1)
         rotated_depth = np.rot90(depth, k=-1)
-        rotated_point = np.rot90(points, k=-1)
+        np.rot90(points, k=-1)
 
         ## Send RGB, depth and camera intrinsics data
         send_rgb_img(self.socket, rotated_image)
@@ -109,7 +109,7 @@ class ImagePublisher:
         rotation = recv_array(self.socket)
         self.socket.send_string("rotation received by robot")
         add_data = recv_array(self.socket)
-        self.socket.send_string(f"Additional data received robot")
+        self.socket.send_string("Additional data received robot")
 
         depth = add_data[0]
         width = add_data[1]

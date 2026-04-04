@@ -1,11 +1,23 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 import os
-from emet.simulation.stretch_mujoco.utils import override
+
 import mujoco
-import mujoco._functions
 import mujoco._callbacks
-import mujoco._render
 import mujoco._enums
+import mujoco._functions
+import mujoco._render
 import mujoco.viewer
+
+from emet.simulation.stretch_mujoco.utils import override
+
 try:
     from mujoco import MjData, MjModel
 except ImportError:
@@ -13,7 +25,6 @@ except ImportError:
 
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 from emet.simulation.stretch_mujoco.mujoco_server import MujocoServer
-from emet.simulation.stretch_mujoco.mujoco_server_camera_manager import MujocoServerCameraManagerThreaded
 
 
 class MujocoServerManaged(MujocoServer):

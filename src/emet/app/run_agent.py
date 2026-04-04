@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Agent chatbot: lightweight LLM (default Qwen 3.5) for local testing.
@@ -20,7 +29,6 @@ from emet.agent import run_agent_with_robot
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
-
 
 # Default: Qwen 3.5 9B (good quality on 24GB GPU; use qwen35-4B if VRAM is tight)
 DEFAULT_AGENT_LLM = "qwen35-9B"
@@ -92,6 +100,11 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     help="Run command(s) non-interactively then exit. Repeatable: -c 'explore' -c 'find red cylinder'.",
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
+@click.option(
+    "--robot",
+    default="stretch",
+    help="Robot backend (stretch, rby1, galaxea_r1). Must match emet serve mujoco --robot.",
+)
 def main(
     llm: str,
     prompt: str,
@@ -106,6 +119,7 @@ def main(
     agent_name: str,
     commands: tuple[str, ...],
     port_offset: int = 0,
+    robot: str = "stretch",
 ) -> None:
     """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
 
@@ -120,11 +134,13 @@ def main(
       emet run agent --robot-ip 127.0.0.1 --no-llm   # letter commands only (E/M/Q/P)
       emet run agent --robot-ip 127.0.0.1 --no-llm -c 'FIND red cylinder'
       emet run agent --robot-ip 127.0.0.1 -c 'find the red cylinder' -c 'what objects do you see?'
+      emet run agent --robot-ip 127.0.0.1 --robot rby1   # with emet serve mujoco --robot rby1
     """
     cmd_list = list(commands) if commands else None
     if robot_ip:
         run_agent_with_robot(
             robot_ip=robot_ip,
+            robot=robot,
             input_path=input_path,
             discord=discord,
             use_llm=not no_llm,

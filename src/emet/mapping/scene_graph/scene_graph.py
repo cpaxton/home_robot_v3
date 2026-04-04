@@ -7,7 +7,6 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -20,47 +19,35 @@ from emet.utils.memory import get_path_to_debug
 class SceneGraph:
     """Compute a very simple scene graph. Use it to extract relationships between instances."""
 
-    def __init__(self, parameters: Parameters, instances: List[Instance]):
+    def __init__(self, parameters: Parameters, instances: list[Instance]):
         self.parameters = parameters
         self.instances = instances
-        self.relationships: List[Tuple[int, int, str]] = []
+        self.relationships: list[tuple[int, int, str]] = []
         self.update(instances)
 
     def update(self, instances):
         """Extract pairwise symbolic spatial relationship between instances using heurisitcs"""
-        self.relationships: List[Tuple[int, int, str]] = []
+        self.relationships: list[tuple[int, int, str]] = []
         self.instances = instances
         for idx_a, ins_a in enumerate(instances):
             for idx_b, ins_b in enumerate(instances):
                 if idx_a == idx_b:
                     continue
-                if ins_a.global_id > len(self.instances) or ins_b.global_id > len(self.instances):
-                    continue
-                # TODO: add "on", "in" ... relationships
-                # Add "near" relationship for if something is near something else - aka just within some distance threshold
-                if (
-                    self.near(ins_a.global_id, ins_b.global_id)
-                    and (ins_b.global_id, ins_a.global_id, "near") not in self.relationships
-                ):
+                # Use list indices for position lookups; relationships store global_id for API
+                if self.near(idx_a, idx_b) and (ins_b.global_id, ins_a.global_id, "near") not in self.relationships:
                     self.relationships.append((ins_a.global_id, ins_b.global_id, "near"))
 
-                # Add "on" relationship for if something is on top of something else
-                if (self.on(ins_a.global_id, ins_b.global_id)) and (
-                    ins_b.global_id,
-                    ins_a.global_id,
-                    "on",
-                ) not in self.relationships:
+                if (self.on(idx_a, idx_b)) and ((ins_b.global_id, ins_a.global_id, "on") not in self.relationships):
                     self.relationships.append((ins_a.global_id, ins_b.global_id, "on"))
-            # Add "on floor" relationship for if something is on the floor
-            if self.on_floor(ins_a.global_id):
+            if self.on_floor(idx_a):
                 self.relationships.append((ins_a.global_id, "floor", "on"))
 
     def get_matching_relations(
         self,
-        id0: Optional[Union[int, str]],
-        id1: Optional[Union[int, str]],
-        relation: Optional[str],
-    ) -> List[Tuple[int, int, str]]:
+        id0: int | str | None,
+        id1: int | str | None,
+        relation: str | None,
+    ) -> list[tuple[int, int, str]]:
         """Get all relationships between two instances.
 
         Args:
@@ -83,24 +70,29 @@ class SceneGraph:
             and (rel[2] == relation or relation is None)
         ]
 
+    def _index_for_global_id(self, gid: int | str) -> int | None:
+        """Return list index for an instance with the given global_id, or None."""
+        if gid == "floor":
+            return None
+        for i, inst in enumerate(self.instances):
+            if getattr(inst, "global_id", None) == gid:
+                return i
+        return None
+
     def get_ins_center_pos(self, idx: int):
-        """Get the center of an instance based on point cloud"""
+        """Get the center of an instance by list index (not global_id)."""
         return torch.mean(self.instances[idx].point_cloud, axis=0)
 
     def get_instance_image(self, idx: int) -> np.ndarray:
         """Get a viewable image from tensorized instances"""
         return (
-            (
-                self.instances[idx].get_best_view().cropped_image
-                * self.instances[idx].get_best_view().mask
-                / 255.0
-            )
+            (self.instances[idx].get_best_view().cropped_image * self.instances[idx].get_best_view().mask / 255.0)
             .detach()
             .cpu()
             .numpy()
         )
 
-    def get_relationships(self, debug: bool = False) -> List[Tuple[int, int, str]]:
+    def get_relationships(self, debug: bool = False) -> list[tuple[int, int, str]]:
         """Return the relationships between instances.
 
         Args:
@@ -111,15 +103,14 @@ class SceneGraph:
         """
         # show symbolic relationships
         if debug:
-            for idx_a, idx_b, rel in self.relationships:
-                print(idx_a, idx_b, rel)
-
-                if idx_b == "floor":
-                    img_a = self.get_instance_image(idx_a)
-                    img_b = np.zeros_like(img_a)
-                else:
-                    img_a = self.get_instance_image(idx_a)
-                    img_b = self.get_instance_image(idx_b)
+            for id_a, id_b, rel in self.relationships:
+                print(id_a, id_b, rel)
+                i_a = self._index_for_global_id(id_a)
+                i_b = self._index_for_global_id(id_b) if id_b != "floor" else None
+                if i_a is None:
+                    continue
+                img_a = self.get_instance_image(i_a)
+                img_b = np.zeros_like(img_a) if i_b is None else self.get_instance_image(i_b)
 
                 import matplotlib
 
@@ -135,15 +126,13 @@ class SceneGraph:
                 plt.title("Instance B")
                 plt.axis("off")
                 # plt.show()
-                plt.savefig(get_path_to_debug(f"scene_graph_{idx_a}_{idx_b}_{rel}.png"))
+                plt.savefig(get_path_to_debug(f"scene_graph_{id_a}_{id_b}_{rel}.png"))
 
         # Return the detected relationships in list form
         return self.relationships
 
     def near(self, ins_a, ins_b):
-        dist = torch.pairwise_distance(
-            self.get_ins_center_pos(ins_a), self.get_ins_center_pos(ins_b)
-        ).item()
+        dist = torch.pairwise_distance(self.get_ins_center_pos(ins_a), self.get_ins_center_pos(ins_b)).item()
         if dist < self.parameters["scene_graph"]["max_near_distance"]:
             return True
         return False

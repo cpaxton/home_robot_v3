@@ -32,7 +32,7 @@ https://github.com/hello-robot/lerobot/blob/stretch-act/lerobot/common/datasets/
 import json
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import liblzfse
 import numpy as np
@@ -110,7 +110,7 @@ STATE_ORDER = [
 # ]
 
 
-def concatenate_episodes(ep_dicts: list[Dict[str, Any]]) -> Dict[str, Any]:
+def concatenate_episodes(ep_dicts: list[dict[str, Any]]) -> dict[str, Any]:
     """Concatenate episodes into a single dictionary.
 
     Args:
@@ -119,7 +119,7 @@ def concatenate_episodes(ep_dicts: list[Dict[str, Any]]) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: Concatenated episode dictionary.
     """
-    data_dict: Dict[str, torch.Tensor | List[torch.Tensor]] = {}
+    data_dict: dict[str, torch.Tensor | list[torch.Tensor]] = {}
 
     keys = ep_dicts[0].keys()
     for key in keys:
@@ -150,19 +150,15 @@ def check_format(raw_dir: Path) -> None:
     assert len(episode_dirs) != 0
 
     for episode_dir in episode_dirs:
-
         # States and actions json file
         labels = episode_dir / "labels.json"
         assert labels.exists()
 
         for camera in ["gripper", "head"]:
-
             # Check for image folders
             compressed_imgs = episode_dir / f"compressed_{camera}_images"
             if not compressed_imgs.exists():
-                print(
-                    f"Image folder {compressed_imgs} wasn't found. Only video mode will be supported"
-                )
+                print(f"Image folder {compressed_imgs} wasn't found. Only video mode will be supported")
 
             # Video files
             compressed_video = episode_dir / f"{camera}_compressed_video_h264.mp4"
@@ -197,11 +193,11 @@ def clip_and_normalize_depth(depths, median_filter_k=None):
 
 def load_from_raw(
     raw_dir: str | Path,
-    out_dir: Optional[str | Path],
-    fps: Optional[int] = 15,
+    out_dir: str | Path | None,
+    fps: int | None = 15,
     video: bool = False,
     debug: bool = False,
-    max_episodes: Optional[int] = None,
+    max_episodes: int | None = None,
 ):
     episode_dirs = [path for path in Path(raw_dir).iterdir() if path.is_dir()]
 
@@ -219,26 +215,23 @@ def load_from_raw(
         fps = 15
 
     if max_episodes is not None and (max_episodes < 0 or max_episodes > len(episode_dirs)):
-        logger.warning(
-            f"Invalid max_episodes: {max_episodes}. Had only {len(episode_dirs)} examples. Setting to None."
-        )
+        logger.warning(f"Invalid max_episodes: {max_episodes}. Had only {len(episode_dirs)} examples. Setting to None.")
         max_episodes = None
 
     ep_dicts = []
     ep_metadata = []
-    episode_data_index: Dict[str, Any] = {"from": [], "to": []}
+    episode_data_index: dict[str, Any] = {"from": [], "to": []}
 
     # Go through all the episodes
     id_from = 0
     for ep_idx, ep_path in tqdm.tqdm(enumerate(episode_dirs), total=len(episode_dirs)):
-
         # Dictionary for episode data
-        ep_dict: Dict[str, Any] = {}
+        ep_dict: dict[str, Any] = {}
         num_frames = 0
 
         # Parse observation state and action
         labels = ep_path / "labels.json"
-        with open(labels, "r") as f:
+        with open(labels) as f:
             labels_dict = json.load(f)
             num_frames = len(labels_dict)
 
@@ -249,9 +242,7 @@ def load_from_raw(
                 for frame_idx, data in labels_dict.items()
             ]
 
-            state = [
-                [data["observations"][x] for x in STATE_ORDER] for _, data in labels_dict.items()
-            ]
+            state = [[data["observations"][x] for x in STATE_ORDER] for _, data in labels_dict.items()]
 
             ep_dict["observation.state"] = torch.tensor(state)
             ep_dict["action"] = torch.tensor(actions)
@@ -269,15 +260,13 @@ def load_from_raw(
                 video_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copy(video_path, video_dir / fname)
 
-                ep_dict[img_key] = [
-                    {"path": f"videos/{fname}", "timestamp": i / fps} for i in range(num_frames)
-                ]
+                ep_dict[img_key] = [{"path": f"videos/{fname}", "timestamp": i / fps} for i in range(num_frames)]
             else:
                 # Parse RGB images
                 compressed_imgs = ep_path / f"compressed_{camera}_images"
-                assert (
-                    compressed_imgs.exists()
-                ), f"Image folder {compressed_imgs} wasn't found. Only video mode is supported."
+                assert compressed_imgs.exists(), (
+                    f"Image folder {compressed_imgs} wasn't found. Only video mode is supported."
+                )
 
                 rgb_png = list(compressed_imgs.glob("*.png"))
                 rgb_png.sort()
@@ -298,7 +287,7 @@ def load_from_raw(
 
         # Append episode metadata
         metadata = ep_path / "configs.json"
-        with open(metadata, "r") as f:
+        with open(metadata) as f:
             metadata_dict = json.load(f)
             ep_metadata.append(metadata_dict)
 
@@ -329,7 +318,7 @@ def load_from_raw(
     data_dict = {}
     data_dict = concatenate_episodes(ep_dicts)
 
-    info: Dict[str, Any] = {}
+    info: dict[str, Any] = {}
     info["episode_metadata"] = ep_metadata
     info["action_order"] = ACTION_ORDER
     info["state_order"] = STATE_ORDER
@@ -353,9 +342,7 @@ def to_hf_dataset(data_dict, video=False) -> "Dataset":
         else:
             features[key] = Image()
 
-    features["action"] = Sequence(
-        length=data_dict["action"].shape[1], feature=Value(dtype="float32", id=None)
-    )
+    features["action"] = Sequence(length=data_dict["action"].shape[1], feature=Value(dtype="float32", id=None))
     features["observation.state"] = Sequence(
         length=data_dict["observation.state"].shape[1],
         feature=Value(dtype="float32", id=None),
@@ -373,8 +360,8 @@ def to_hf_dataset(data_dict, video=False) -> "Dataset":
 
 def from_raw_to_lerobot_format(
     raw_dir: Path | str,
-    out_dir: Optional[Path | str] = None,
-    fps: Optional[int] = None,
+    out_dir: Path | str | None = None,
+    fps: int | None = None,
     video: bool = False,
     debug: bool = False,
 ):

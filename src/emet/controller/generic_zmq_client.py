@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Robot-agnostic ZMQ client driven by RobotSpec.
 
@@ -15,9 +24,8 @@ import sys
 import threading
 import time
 import timeit
-from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 import zmq
@@ -27,11 +35,6 @@ from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient, ControlMode
 from emet.robots.base import RobotSpec
-from emet.utils.geometry import (
-    angle_difference,
-    xyt_base_to_global,
-)
-from emet.utils.image import Camera
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
 
@@ -56,7 +59,7 @@ class GenericZmqClient(AbstractRobotClient):
         recv_state_port: int = 4403,
         recv_servo_port: int = 4404,
         port_offset: int = 0,
-        parameters: Optional[Parameters] = None,
+        parameters: Parameters | None = None,
         use_remote_computer: bool = True,
         start_immediately: bool = True,
     ):
@@ -70,9 +73,7 @@ class GenericZmqClient(AbstractRobotClient):
         self.recv_port = recv_port
         self.send_port = send_port
 
-        self._joint_index: Dict[str, int] = {
-            name: i for i, name in enumerate(robot_spec.joint_names)
-        }
+        self._joint_index: dict[str, int] = {name: i for i, name in enumerate(robot_spec.joint_names)}
 
         if parameters is None:
             parameters = get_parameters("default_planner.yaml")
@@ -83,9 +84,9 @@ class GenericZmqClient(AbstractRobotClient):
         self._started = False
         self._finish = False
 
-        self._obs: Optional[Dict[str, Any]] = None
-        self._state: Optional[Dict[str, Any]] = None
-        self._servo: Optional[Dict[str, Any]] = None
+        self._obs: dict[str, Any] | None = None
+        self._state: dict[str, Any] | None = None
+        self._servo: dict[str, Any] | None = None
         self._last_step = -1
 
         self._obs_lock = Lock()
@@ -95,9 +96,7 @@ class GenericZmqClient(AbstractRobotClient):
 
         # ZMQ sockets
         self.context = zmq.Context()
-        self.recv_socket = self._create_recv_socket(
-            recv_port, robot_ip, use_remote_computer, "observations"
-        )
+        self.recv_socket = self._create_recv_socket(recv_port, robot_ip, use_remote_computer, "observations")
         self.recv_state_socket = self._create_recv_socket(
             recv_state_port, robot_ip, use_remote_computer, "low level state"
         )
@@ -127,9 +126,7 @@ class GenericZmqClient(AbstractRobotClient):
 
     # -- Socket helpers -------------------------------------------------------
 
-    def _create_recv_socket(
-        self, port: int, robot_ip: str, use_remote: bool, message_type: str = ""
-    ) -> zmq.Socket:
+    def _create_recv_socket(self, port: int, robot_ip: str, use_remote: bool, message_type: str = "") -> zmq.Socket:
         sock = self.context.socket(zmq.SUB)
         sock.setsockopt(zmq.SUBSCRIBE, b"")
         sock.setsockopt(zmq.SNDHWM, 1)
@@ -145,7 +142,7 @@ class GenericZmqClient(AbstractRobotClient):
         sock.connect(addr)
         return sock
 
-    def send_message(self, message: Dict[str, Any]) -> None:
+    def send_message(self, message: dict[str, Any]) -> None:
         self.send_socket.send_pyobj(message)
 
     # -- Lifecycle ------------------------------------------------------------
@@ -193,9 +190,7 @@ class GenericZmqClient(AbstractRobotClient):
                 if "step" in output:
                     self._last_step = output["step"]
                 if "gps" in output and "compass" in output:
-                    self._base_xyt = np.array(
-                        [output["gps"][0], output["gps"][1], output["compass"][0]]
-                    )
+                    self._base_xyt = np.array([output["gps"][0], output["gps"][1], output["compass"][0]])
 
     def _state_loop(self) -> None:
         while not self._finish:
@@ -234,7 +229,7 @@ class GenericZmqClient(AbstractRobotClient):
                 return False
         return True
 
-    def get_joint_positions(self, timeout: float = 5.0) -> Optional[np.ndarray]:
+    def get_joint_positions(self, timeout: float = 5.0) -> np.ndarray | None:
         state = self._state
         if state is not None and "joint_positions" in state:
             return np.array(state["joint_positions"])
@@ -243,7 +238,7 @@ class GenericZmqClient(AbstractRobotClient):
             return np.array(obs["joint"])
         return None
 
-    def get_joint_velocities(self, timeout: float = 5.0) -> Optional[np.ndarray]:
+    def get_joint_velocities(self, timeout: float = 5.0) -> np.ndarray | None:
         state = self._state
         if state is not None and "joint_velocities" in state:
             return np.array(state["joint_velocities"])
@@ -266,7 +261,7 @@ class GenericZmqClient(AbstractRobotClient):
             return obs.get("at_goal", False)
         return False
 
-    def get_observation(self, max_iter: int = 5) -> Optional[Observations]:
+    def get_observation(self, max_iter: int = 5) -> Observations | None:
         """Get the latest observation from the server."""
         with self._obs_lock:
             obs = self._obs
@@ -300,10 +295,10 @@ class GenericZmqClient(AbstractRobotClient):
 
     def send_action(
         self,
-        action: Dict[str, Any],
+        action: dict[str, Any],
         timeout: float = 5.0,
         reliable: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         with self._act_lock:
             block_id = max(self._iter, self._last_step + 1)
             action["step"] = block_id
@@ -320,7 +315,7 @@ class GenericZmqClient(AbstractRobotClient):
         relative=False,
         blocking=False,
         verbose: bool = False,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> bool:
         if isinstance(xyt, ContinuousNavigationAction):
             xyt = xyt.xyt
@@ -340,7 +335,7 @@ class GenericZmqClient(AbstractRobotClient):
                 return False
         return True
 
-    def set_joint_positions(self, positions: Dict[str, float]) -> None:
+    def set_joint_positions(self, positions: dict[str, float]) -> None:
         """Send a joint position command using actuator names."""
         action = {"joint": list(positions.values())}
         self.send_action(action)

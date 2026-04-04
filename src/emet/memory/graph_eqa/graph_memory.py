@@ -4,6 +4,15 @@
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 #
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
 # Graph-based EQA memory: re-implementation inspired by GraphEQA
 # (https://arxiv.org/abs/2412.14480). Object-centric scene graph + task-relevant
 # images for embodied question answering. No code copied from closed-source repos.
@@ -11,8 +20,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -25,9 +35,10 @@ class GraphNode:
     """Single node in the scene graph: an object or region with label and position."""
 
     node_id: int
-    labels: List[str]
+    labels: list[str]
     xyz: np.ndarray  # (3,) world position
     obs_id: int  # 1-based index into observations list
+    description: str | None = None  # optional VLM-generated description
 
 
 @dataclass
@@ -37,7 +48,8 @@ class GraphObservation:
     obs_id: int  # 1-based
     rgb: np.ndarray  # (H, W, 3)
     xyz: np.ndarray  # (3,) e.g. mean of visible points or camera position
-    labels: List[str]
+    labels: list[str]
+    description: str | None = None  # optional VLM-generated description
 
 
 def _near(p1: np.ndarray, p2: np.ndarray, max_dist: float = 1.5) -> bool:
@@ -48,10 +60,7 @@ def _on(p_lower: np.ndarray, p_upper: np.ndarray, z_thresh: float = 0.15) -> boo
     """Heuristic: lower object is 'on' upper if roughly below and close in xy."""
     if p_lower[2] >= p_upper[2]:
         return False
-    return (
-        abs(p_lower[2] - p_upper[2]) <= z_thresh + 0.2
-        and float(np.linalg.norm(p_lower[:2] - p_upper[:2])) < 0.5
-    )
+    return abs(p_lower[2] - p_upper[2]) <= z_thresh + 0.2 and float(np.linalg.norm(p_lower[:2] - p_upper[:2])) < 0.5
 
 
 def _on_floor(p: np.ndarray, floor_z: float = 0.05) -> bool:
@@ -70,21 +79,21 @@ class GraphEQAMemory:
 
     def __init__(
         self,
-        parameters: Optional[Parameters] = None,
+        parameters: Parameters | None = None,
         max_near_distance: float = 1.5,
-        eqa_client: Optional[Callable[..., str]] = None,
-        image_description_client: Optional[Callable[..., str]] = None,
+        eqa_client: Callable[..., str] | None = None,
+        image_description_client: Callable[..., str] | None = None,
         log_dir: str = "graph_eqa_log",
     ):
         self.parameters = parameters or {}
         self.max_near_distance = max_near_distance
-        self._nodes: List[GraphNode] = []
-        self._edges: List[Tuple[int, int, str]] = []  # (id1, id2, relation)
-        self._observations: List[GraphObservation] = []
+        self._nodes: list[GraphNode] = []
+        self._edges: list[tuple[int, int, str]] = []  # (id1, id2, relation)
+        self._observations: list[GraphObservation] = []
         self._next_obs_id = 1
-        self._question: Optional[str] = None
-        self._relevant_objects: Optional[List[str]] = None
-        self._history_outputs: List[str] = []
+        self._question: str | None = None
+        self._relevant_objects: list[str] | None = None
+        self._history_outputs: list[str] = []
 
         self.log_dir = log_dir
         self.eqa_client = eqa_client
@@ -103,16 +112,15 @@ class GraphEQAMemory:
             raise ImportError(
                 "GraphEQA memory requires emet.llms (Gemini, Qwen) for EQA. Install extras and set GOOGLE_API_KEY."
             ) from e
-        self.image_description_client = Qwen25VLClient(
-            model_size="3B", quantization="int4", max_tokens=20
-        )
+        self.image_description_client = Qwen25VLClient(model_size="3B", quantization="int4", max_tokens=20)
         self.eqa_client = GeminiClient(EQA_PROMPT, model="gemini-2.5-flash")
 
     def add_observation(
         self,
-        rgb: Union[np.ndarray, Image.Image],
+        rgb: np.ndarray | Image.Image,
         xyz: np.ndarray,
-        labels: List[str],
+        labels: list[str],
+        description: str | None = None,
     ) -> int:
         """
         Add one observation to the graph: create a node and update edges.
@@ -121,6 +129,7 @@ class GraphEQAMemory:
             rgb: RGB image (H, W, 3) or PIL Image
             xyz: (3,) world position for this observation (e.g. camera or centroid)
             labels: list of object/region labels (e.g. from a VLM)
+            description: optional text description of the scene (e.g. from VLM)
 
         Returns:
             obs_id: 1-based observation id (used as image id in EQA).
@@ -130,10 +139,16 @@ class GraphEQAMemory:
         obs_id = self._next_obs_id
         self._next_obs_id += 1
         node_id = len(self._nodes) + 1
-        node = GraphNode(node_id=node_id, labels=labels, xyz=np.asarray(xyz, dtype=float), obs_id=obs_id)
+        node = GraphNode(
+            node_id=node_id,
+            labels=labels,
+            xyz=np.asarray(xyz, dtype=float),
+            obs_id=obs_id,
+            description=description,
+        )
         self._nodes.append(node)
         self._observations.append(
-            GraphObservation(obs_id=obs_id, rgb=rgb, xyz=xyz, labels=labels)
+            GraphObservation(obs_id=obs_id, rgb=rgb, xyz=xyz, labels=labels, description=description)
         )
         self._update_edges()
         return obs_id
@@ -160,11 +175,77 @@ class GraphEQAMemory:
         lines = []
         for n in self._nodes:
             lbl = ", ".join(n.labels) if n.labels else "object"
-            lines.append(f"Node {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]")
+            lines.append(
+                f"Node {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]"
+            )
         for a, b, rel in self._edges:
             b_str = "floor" if b == -1 else str(b)
             lines.append(f"  {rel}({a}, {b_str})")
         return "SCENE_GRAPH:\n" + "\n".join(lines) if lines else "SCENE_GRAPH: (empty)"
+
+    def to_tree_string(self, indent: str = "  ") -> str:
+        """
+        Format the 3D spatial scene graph as an indented tree (text).
+
+        Root = Scene; Floor is a virtual node; objects on floor are children of Floor;
+        objects on other objects are nested. "Near" relations are listed at the end.
+        Includes object labels, (x,y,z), and optional descriptions.
+        """
+        edge_set = set(self._edges)
+        node_by_id = {n.node_id: n for n in self._nodes}
+
+        def on_floor(nid: int) -> bool:
+            return (nid, -1, "on") in edge_set
+
+        def has_on_parent(nid: int) -> int | None:
+            """Return node_id that this node is 'on', or None if on floor or no 'on' edge."""
+            for a, b, rel in edge_set:
+                if rel == "on" and a == nid and b != -1:
+                    return b
+            return None
+
+        def children_of(nid: int | None) -> list[GraphNode]:
+            if nid is None:
+                # Floor children: explicitly on floor, or no "on" relation (in-scene)
+                out = [
+                    node_by_id[n.node_id]
+                    for n in self._nodes
+                    if on_floor(n.node_id) or has_on_parent(n.node_id) is None
+                ]
+            else:
+                out = [node_by_id[a] for a, b, rel in edge_set if rel == "on" and b == nid and a in node_by_id]
+            return sorted(out, key=lambda n: n.node_id)
+
+        near_pairs = [(a, b) for a, b, rel in self._edges if rel == "near" and a < b]
+
+        lines: list[str] = []
+        lines.append("Scene (3D spatial graph)")
+        lines.append(f"{indent}Floor")
+
+        def visit(node: GraphNode, depth: int) -> None:
+            pref = indent * (depth + 1)
+            x, y, z = float(node.xyz[0]), float(node.xyz[1]), float(node.xyz[2])
+            lbl = ", ".join(node.labels) if node.labels else "object"
+            line = f"{pref}[{node.node_id}] {lbl}  at ({x:.2f}, {y:.2f}, {z:.2f})"
+            if node.description:
+                line += f"  — {node.description}"
+            lines.append(line)
+            for c in children_of(node.node_id):
+                visit(c, depth + 1)
+
+        for node in children_of(None):
+            visit(node, 1)
+
+        if near_pairs:
+            lines.append("")
+            lines.append("Near relations:")
+            for a, b in near_pairs:
+                na, nb = node_by_id.get(a), node_by_id.get(b)
+                la = ", ".join(na.labels) if na and na.labels else str(a)
+                lb = ", ".join(nb.labels) if nb and nb.labels else str(b)
+                lines.append(f"{indent}{la} — {lb}")
+
+        return "\n".join(lines) if lines else "Scene (3D spatial graph): (empty)"
 
     def extract_relevant_objects(self, question: str) -> None:
         """Extract keywords from the question for image selection (same idea as DynaMem)."""
@@ -179,14 +260,12 @@ class GraphEQAMemory:
         out = self.image_description_client([prompt, question])
         self._relevant_objects = [s.strip() for s in out.split(",") if s.strip()]
 
-    def _select_relevant_obs_ids(
-        self, max_images: int = 6
-    ) -> List[int]:
+    def _select_relevant_obs_ids(self, max_images: int = 6) -> list[int]:
         """Select observation IDs whose labels match relevant_objects (1-based)."""
         if not self._relevant_objects or not self._observations:
             return [o.obs_id for o in self._observations[:max_images]]
         seen: set = set()
-        out: List[int] = []
+        out: list[int] = []
         for obj in self._relevant_objects:
             obj_lower = obj.lower()
             for o in self._observations:
@@ -206,9 +285,7 @@ class GraphEQAMemory:
                     break
         return out
 
-    def _get_image_descriptions_str(
-        self, obs_ids: List[int]
-    ) -> str:
+    def _get_image_descriptions_str(self, obs_ids: list[int]) -> str:
         """Build IMAGE_DESCRIPTIONS string for the prompt (1-indexed image ids)."""
         options = []
         for i, obs in enumerate(self._observations, start=1):
@@ -220,17 +297,12 @@ class GraphEQAMemory:
             options.append(line)
         return "IMAGE_DESCRIPTIONS: " + "\n".join(options) if options else "IMAGE_DESCRIPTIONS: (none)"
 
-    def parse_answer(self, answer_outputs: str) -> Tuple[str, str, bool, str, str]:
+    def parse_answer(self, answer_outputs: str) -> tuple[str, str, bool, str, str]:
         """Parse mLLM output into reasoning, answer, confidence, action, confidence_reasoning."""
+
         def extract_between(text: str, start: str, end: str) -> str:
             try:
-                return (
-                    text.split(start, 1)[1]
-                    .split(end, 1)[0]
-                    .strip()
-                    .replace("\n", "")
-                    .replace("\t", "")
-                )
+                return text.split(start, 1)[1].split(end, 1)[0].strip().replace("\n", "").replace("\t", "")
             except IndexError:
                 return ""
 
@@ -248,7 +320,7 @@ class GraphEQAMemory:
         confidence_reasoning = extract_after(answer_outputs, "confidence_reasoning:")
         return reasoning, answer, confidence, action, confidence_reasoning
 
-    def _target_point_from_image_id(self, image_id: int) -> Optional[np.ndarray]:
+    def _target_point_from_image_id(self, image_id: int) -> np.ndarray | None:
         """Return (x, y, 1) for the observation's position when mLLM suggests navigating to that image."""
         for obs in self._observations:
             if obs.obs_id == image_id:
@@ -258,11 +330,9 @@ class GraphEQAMemory:
     def query_answer(
         self,
         question: str,
-        xyt: Optional[Union[Any, np.ndarray, list]] = None,
+        xyt: Any | np.ndarray | list | None = None,
         planner: Any = None,
-    ) -> Tuple[
-        str, str, bool, str, Optional[np.ndarray], List[Image.Image]
-    ]:
+    ) -> tuple[str, str, bool, str, np.ndarray | None, list[Image.Image]]:
         """
         Answer the question using the scene graph and task-relevant images.
         Same return contract as voxel_dynamem.SparseVoxelMap.query_answer.
@@ -275,14 +345,14 @@ class GraphEQAMemory:
         graph_str = self.to_string()
         img_desc_str = self._get_image_descriptions_str(obs_ids)
 
-        commands: List[Any] = ["Question: " + question]
+        commands: list[Any] = ["Question: " + question]
         commands.append("HISTORY: ")
         for i, h in enumerate(self._history_outputs):
             commands.append("Iteration_" + str(i) + ":" + h)
         commands.append(graph_str)
         commands.append(img_desc_str)
 
-        relevant_images: List[Image.Image] = []
+        relevant_images: list[Image.Image] = []
         for obs in self._observations:
             if obs.obs_id in obs_ids:
                 relevant_images.append(Image.fromarray(obs.rgb.astype(np.uint8), mode="RGB"))
@@ -291,9 +361,7 @@ class GraphEQAMemory:
         raw = self.eqa_client(commands)
         answer_outputs = raw.replace("*", "").replace("/", "").replace("#", "").lower()
 
-        reasoning, answer, confidence, action, confidence_reasoning = self.parse_answer(
-            answer_outputs
-        )
+        reasoning, answer, confidence, action, confidence_reasoning = self.parse_answer(answer_outputs)
 
         target_point = None
         if not confidence and action.strip():
@@ -308,14 +376,27 @@ class GraphEQAMemory:
                 else:
                     target_point = self._target_point_from_image_id(image_id)
             self._history_outputs.append(
-                "Answer:" + answer + "\nReasoning:" + reasoning
-                + "\nConfidence:" + str(confidence) + "\nAction: Navigate to Image " + action.strip()
-                + "\nConfidence_reasoning:" + confidence_reasoning
+                "Answer:"
+                + answer
+                + "\nReasoning:"
+                + reasoning
+                + "\nConfidence:"
+                + str(confidence)
+                + "\nAction: Navigate to Image "
+                + action.strip()
+                + "\nConfidence_reasoning:"
+                + confidence_reasoning
             )
         else:
             self._history_outputs.append(
-                "Answer:" + answer + "\nReasoning:" + reasoning
-                + "\nConfidence:" + str(confidence) + "\nAction:\nConfidence_reasoning: " + confidence_reasoning
+                "Answer:"
+                + answer
+                + "\nReasoning:"
+                + reasoning
+                + "\nConfidence:"
+                + str(confidence)
+                + "\nAction:\nConfidence_reasoning: "
+                + confidence_reasoning
             )
 
         return (
@@ -327,11 +408,56 @@ class GraphEQAMemory:
             relevant_images,
         )
 
-    def get_observations(self) -> List[GraphObservation]:
+    def fill_descriptions_from_vlm(
+        self,
+        prompt: str | None = None,
+        max_tokens: int = 80,
+    ) -> None:
+        """
+        Fill missing node/observation descriptions using the VLM (e.g. Qwen 2.5-VL / 3.5).
+        Skips observations that already have a description. Can be slow for many images.
+        """
+        if self.image_description_client is None:
+            self._init_clients()
+        default_prompt = (
+            "In one short sentence, describe what is visible in this image: "
+            "main objects, their arrangement, and any notable spatial relationships. "
+            "Be concise."
+        )
+        prompt = prompt or default_prompt
+        for obs in self._observations:
+            if obs.description:
+                continue
+            try:
+                # VLM accepts list of text + image(s)
+                out = self.image_description_client(
+                    [prompt, Image.fromarray(obs.rgb.astype(np.uint8), mode="RGB")],
+                    verbose=False,
+                )
+                if isinstance(out, str) and out.strip():
+                    desc = out.strip()
+                    # Update observation (same object as stored)
+                    obs.description = desc
+                    # Update corresponding node
+                    for n in self._nodes:
+                        if n.obs_id == obs.obs_id:
+                            n.description = desc
+                            break
+            except Exception:
+                continue
+
+    def get_observations(self) -> list[GraphObservation]:
         return list(self._observations)
 
-    def get_nodes(self) -> List[GraphNode]:
+    def get_nodes(self) -> list[GraphNode]:
         return list(self._nodes)
 
-    def get_edges(self) -> List[Tuple[int, int, str]]:
+    def get_edges(self) -> list[tuple[int, int, str]]:
         return list(self._edges)
+
+    def print_memory(self) -> str:
+        """
+        Return the 3D scene graph as a human-readable tree (same as to_tree_string).
+        Use this as the canonical "print" output for the graph memory.
+        """
+        return self.to_tree_string()

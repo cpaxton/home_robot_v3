@@ -1,10 +1,20 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 import threading
 import time
 from typing import TYPE_CHECKING
+
 import numpy as np
 
-from emet.simulation.stretch_mujoco.enums.stretch_sensors import StretchSensors
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_sensors import StatusStretchSensors
+from emet.simulation.stretch_mujoco.enums.stretch_sensors import StretchSensors
 from emet.simulation.stretch_mujoco.utils import FpsCounter
 
 if TYPE_CHECKING:
@@ -18,9 +28,7 @@ class MujocoServerSensorManagerSync:
     Call `pull_sensor_data_at_sensor_rate()` from the UI thread and the sensors will be rendered at the specified `sensor_hz`.
     """
 
-    def __init__(
-        self, sensor_hz: float, sensors_to_use: list[StretchSensors], mujoco_server: "MujocoServer"
-    ) -> None:
+    def __init__(self, sensor_hz: float, sensors_to_use: list[StretchSensors], mujoco_server: "MujocoServer") -> None:
 
         self.mujoco_server = mujoco_server
 
@@ -123,7 +131,6 @@ class MujocoServerSensorManagerThreaded(MujocoServerSensorManagerSync):
             time.sleep(0.1)
 
         while not self.mujoco_server._is_requested_to_stop():
-
             if not self.is_ready_to_pull_sensor_data(is_sleep_until_ready=True):
                 return
 

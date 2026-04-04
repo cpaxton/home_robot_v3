@@ -14,7 +14,6 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict, Optional, Union
 
 import cv2
 import liblzfse
@@ -46,7 +45,7 @@ class FileDataRecorder:
 
     def __init__(
         self,
-        datadir: Union[str, Path] = "./data",
+        datadir: str | Path = "./data",
         task: str = "default_task",
         user: str = "default_user",
         env: str = "default_env",
@@ -97,11 +96,11 @@ class FileDataRecorder:
         quaternion: np.ndarray,
         gripper: float,
         ee_pose: np.ndarray,
-        observations: Dict[str, float],
-        actions: Dict[str, float],
-        head_rgb: Optional[np.ndarray] = None,
-        head_depth: Optional[np.ndarray] = None,
-        head_cam_pose: Optional[np.ndarray] = None,
+        observations: dict[str, float],
+        actions: dict[str, float],
+        head_rgb: np.ndarray | None = None,
+        head_depth: np.ndarray | None = None,
+        head_cam_pose: np.ndarray | None = None,
     ):
         """Add data to the recorder."""
         self.rgbs.append(ee_rgb)
@@ -122,7 +121,7 @@ class FileDataRecorder:
         }
         self.step += 1
 
-    def write(self, success: Optional[bool] = None):
+    def write(self, success: bool | None = None):
         """Write out the data to a file."""
 
         now = datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
@@ -133,11 +132,11 @@ class FileDataRecorder:
 
         # Write the images
         print("Write end effector camera feed...")
-        for i, (rgb, depth) in tqdm(enumerate(zip(self.rgbs, self.depths)), ncols=80):
+        for i, (rgb, depth) in tqdm(enumerate(zip(self.rgbs, self.depths, strict=False)), ncols=80):
             self.write_image(rgb, depth, episode_dir, i)
 
         print("Write head camera feed...")
-        for i, (rgb, depth) in tqdm(enumerate(zip(self.head_rgbs, self.head_depths)), ncols=80):
+        for i, (rgb, depth) in tqdm(enumerate(zip(self.head_rgbs, self.head_depths, strict=False)), ncols=80):
             if rgb is None or depth is None:
                 continue
             self.write_image(rgb, depth, episode_dir, i, head=True)
@@ -254,7 +253,7 @@ class FileDataRecorder:
         # Additional codecs can be output by adding to the list and providing corresponding video paths
         crfs = [30]
         video_codecs = ["h264"]
-        for enc_lib, crf, final_video_path in zip(video_codecs, crfs, [h264_video_path]):
+        for enc_lib, crf, final_video_path in zip(video_codecs, crfs, [h264_video_path], strict=False):
             command = [
                 "ffmpeg",
                 "-y",

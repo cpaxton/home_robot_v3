@@ -12,7 +12,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Union
 
 import numpy as np
 import torch
@@ -25,8 +24,8 @@ class OwlPerception:
     def __init__(
         self,
         version="owlv2-L-p14-ensemble",
-        device: Optional[str] = None,
-        confidence_threshold: Optional[float] = 0.2,
+        device: str | None = None,
+        confidence_threshold: float | None = 0.2,
     ):
         """Load trained OWL model for inference.
 
@@ -55,9 +54,9 @@ class OwlPerception:
 
     def predict(
         self,
-        rgb: Union[np.ndarray, torch.Tensor],
-        text: Union[str, List[str]],
-        confidence_threshold: Optional[float] = None,
+        rgb: np.ndarray | torch.Tensor,
+        text: str | list[str],
+        confidence_threshold: float | None = None,
     ):
         if not isinstance(rgb, torch.Tensor):
             rgb = torch.Tensor(rgb).to(torch.uint8)
@@ -85,9 +84,9 @@ class OwlPerception:
 
     def detect_object(
         self,
-        rgb: Union[np.ndarray, torch.Tensor],
-        text: Union[str, List[str]],
-        confidence_threshold: Optional[float] = None,
+        rgb: np.ndarray | torch.Tensor,
+        text: str | list[str],
+        confidence_threshold: float | None = None,
     ):
         """Try to find target objects given one or many text queries.
         Arguments:
@@ -104,7 +103,7 @@ class OwlPerception:
         depth: torch.Tensor,
         camera_K: torch.Tensor,
         camera_pose: torch.Tensor,
-        confidence_threshold: Optional[float] = None,
+        confidence_threshold: float | None = None,
         depth_threshold: float = 3.0,
     ):
         height, width = depth.squeeze().shape
@@ -112,13 +111,10 @@ class OwlPerception:
         camera_xyz = camera.depth_to_xyz(np.array(depth))
         xyz = torch.Tensor(camera_xyz_to_global_xyz(camera_xyz, np.array(camera_pose)))
 
-        scores, boxes = self.detect_object(
-            rgb=rgb, text=text, confidence_threshold=confidence_threshold
-        )
-        for idx, (score, bbox) in enumerate(
-            sorted(zip(scores, boxes), key=lambda x: x[0], reverse=True)
+        scores, boxes = self.detect_object(rgb=rgb, text=text, confidence_threshold=confidence_threshold)
+        for _idx, (_score, bbox) in enumerate(
+            sorted(zip(scores, boxes, strict=False), key=lambda x: x[0], reverse=True)
         ):
-
             tl_x, tl_y, br_x, br_y = bbox
             w, h = depth.shape
             tl_x, tl_y, br_x, br_y = (

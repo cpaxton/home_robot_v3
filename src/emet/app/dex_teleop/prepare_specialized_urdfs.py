@@ -73,7 +73,6 @@ if use_original_limits:
     #'joint_wrist_pitch' : (None, None), # default lowest pitch is -1.57 rad on the default URDF (-89.954373836 deg)~
 
 else:
-
     ik_joint_limits = {
         "joint_mobile_base_translation": (-0.25, 0.25),
         "joint_mobile_base_rotation": (-(np.pi / 2.0), np.pi / 2.0),
@@ -152,9 +151,7 @@ robot_prismatic = deepcopy(robot)
 # ADD VIRTUAL ROTARY JOINT FOR MOBILE BASE
 
 # Add a virtual base link
-link_virtual_base_rotary = ud.Link(
-    name="virtual_base", visual=None, inertial=None, collision=None, origin=None
-)
+link_virtual_base_rotary = ud.Link(name="virtual_base", visual=None, inertial=None, collision=None, origin=None)
 
 # Add rotary joint for the mobile base
 origin_rotary = ud.Pose(xyz=[0, 0, 0], rpy=[0, 0, 0])
@@ -184,9 +181,7 @@ robot_rotary.add_joint(joint_mobile_base_rotation)
 # ADD VIRTUAL PRISMATIC JOINT FOR MOBILE BASE
 
 # Add a virtual base link
-link_virtual_base_prismatic = ud.Link(
-    name="virtual_base", visual=None, inertial=None, collision=None, origin=None
-)
+link_virtual_base_prismatic = ud.Link(name="virtual_base", visual=None, inertial=None, collision=None, origin=None)
 
 # Add rotary joint for the mobile base
 origin_prismatic = ud.Pose(xyz=[0, 0, 0], rpy=[0, 0, 0])
@@ -220,7 +215,6 @@ for robot in [robot_rotary, robot_prismatic]:
     for j in ik_joint_limits:
         joint = robot.joint_map.get(j, None)
         if joint is not None:
-
             original_upper = joint.limit.upper
             requested_upper = ik_joint_limits[j][1]
             # print()

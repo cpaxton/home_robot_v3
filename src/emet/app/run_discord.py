@@ -9,7 +9,6 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import Optional
 
 import click
 
@@ -115,9 +114,7 @@ logger = Logger(__name__)
     is_flag=True,
     help="Set to print LLM responses to the console, to debug issues when parsing them when trying new LLMs.",
 )
-@click.option(
-    "--task", default="pickup", help="Task to perform", type=click.Choice(["pickup", "dynamem"])
-)
+@click.option("--task", default="pickup", help="Task to perform", type=click.Choice(["pickup", "dynamem"]))
 @click.option(
     "--token",
     default=None,
@@ -126,7 +123,7 @@ logger = Logger(__name__)
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip: str = "192.168.1.15",
-    token: Optional[str] = None,
+    token: str | None = None,
     local: bool = False,
     parameter_file: str = "config/default_planner.yaml",
     device_id: int = 0,

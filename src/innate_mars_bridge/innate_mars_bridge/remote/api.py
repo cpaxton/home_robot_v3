@@ -3,10 +3,17 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Client API for Innate Mars: observations (pose, proprioception, cameras)."""
-
-from typing import Optional
 
 import numpy as np
 
@@ -14,7 +21,6 @@ from innate_mars_bridge.constants import (
     EE_CAMERA_FRAME_ID,
     HEAD_LEFT_FRAME_ID,
     HEAD_RIGHT_FRAME_ID,
-    MAP_FRAME,
     ODOM_FRAME,
 )
 from innate_mars_bridge.remote.ros import InnateMarsRosInterface
@@ -26,10 +32,10 @@ class InnateMarsClient:
     def __init__(
         self,
         init_node: bool = True,
-        ee_frame: Optional[str] = None,
-        head_left_frame: Optional[str] = None,
-        head_right_frame: Optional[str] = None,
-        ee_camera_frame: Optional[str] = None,
+        ee_frame: str | None = None,
+        head_left_frame: str | None = None,
+        head_right_frame: str | None = None,
+        ee_camera_frame: str | None = None,
         base_frame: str = ODOM_FRAME,
         verbose: bool = False,
     ):
@@ -51,7 +57,7 @@ class InnateMarsClient:
         return self._ros.get_base_pose_xyt()
 
     @property
-    def base_pose_matrix(self) -> Optional[np.ndarray]:
+    def base_pose_matrix(self) -> np.ndarray | None:
         """Base pose as 4x4 in odom frame."""
         return self._ros.get_base_pose_matrix()
 
@@ -60,22 +66,22 @@ class InnateMarsClient:
         return self._ros.get_joint_state()
 
     @property
-    def ee_pose(self) -> Optional[np.ndarray]:
+    def ee_pose(self) -> np.ndarray | None:
         """End-effector pose as 4x4 in base_frame (odom or map)."""
         return self._ros.get_frame_pose(self._ee_frame, base_frame=self._base_frame)
 
     @property
-    def head_left_camera_pose(self) -> Optional[np.ndarray]:
+    def head_left_camera_pose(self) -> np.ndarray | None:
         """Head left camera pose as 4x4 in base_frame."""
         return self._ros.get_frame_pose(self._head_left_frame, base_frame=self._base_frame)
 
     @property
-    def head_right_camera_pose(self) -> Optional[np.ndarray]:
+    def head_right_camera_pose(self) -> np.ndarray | None:
         """Head right camera pose as 4x4 in base_frame."""
         return self._ros.get_frame_pose(self._head_right_frame, base_frame=self._base_frame)
 
     @property
-    def ee_camera_pose(self) -> Optional[np.ndarray]:
+    def ee_camera_pose(self) -> np.ndarray | None:
         """EE camera pose as 4x4 in base_frame."""
         return self._ros.get_frame_pose(self._ee_camera_frame, base_frame=self._base_frame)
 

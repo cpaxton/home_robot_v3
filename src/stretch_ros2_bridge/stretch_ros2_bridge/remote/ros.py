@@ -15,7 +15,6 @@ import os
 # LICENSE file in the root directory of this source tree.
 import sys
 import threading
-from typing import Dict, Optional
 
 import numpy as np
 
@@ -103,31 +102,31 @@ class StretchRosInterface(Node):
     def __init__(
         self,
         init_cameras: bool = True,
-        color_topic: Optional[str] = None,
-        depth_topic: Optional[str] = None,
-        depth_buffer_size: Optional[int] = None,
+        color_topic: str | None = None,
+        depth_topic: str | None = None,
+        depth_buffer_size: int | None = None,
         init_lidar: bool = True,
-        lidar_topic: Optional[str] = None,
+        lidar_topic: str | None = None,
         verbose: bool = False,
         d405: bool = True,
-        ee_color_topic: Optional[str] = None,
-        ee_depth_topic: Optional[str] = None,
+        ee_color_topic: str | None = None,
+        ee_depth_topic: str | None = None,
     ):
         super().__init__("stretch_user_client")
         # Verbosity for the ROS client
         self.verbose = verbose
 
         # Initialize caches
-        self.current_mode: Optional[str] = None
+        self.current_mode: str | None = None
 
         self.pos = np.zeros(self.dof)
         self.vel = np.zeros(self.dof)
         self.frc = np.zeros(self.dof)
-        self.joint_status: Dict[str, float] = {}
+        self.joint_status: dict[str, float] = {}
 
-        self.se3_base_filtered: Optional[sp.SE3] = None
-        self.se3_base_odom: Optional[sp.SE3] = None
-        self.se3_camera_pose: Optional[sp.SE3] = None
+        self.se3_base_filtered: sp.SE3 | None = None
+        self.se3_base_odom: sp.SE3 | None = None
+        self.se3_camera_pose: sp.SE3 | None = None
         self.at_goal: bool = False
 
         self.last_odom_update_timestamp = Time(clock_type=ClockType.ROS_TIME)
@@ -247,9 +246,7 @@ class StretchRosInterface(Node):
         print("Done waiting for joint status...", self.joint_status.keys())
         return ROS_WRIST_ROLL in self.joint_status
 
-    def send_joint_goals(
-        self, joint_goals: Dict[str, float], velocities: Optional[Dict[str, float]] = None
-    ):
+    def send_joint_goals(self, joint_goals: dict[str, float], velocities: dict[str, float] | None = None):
         """Send joint goals to the robot. Goals are a dictionary of joint names and strings. Can optionally provide velicities as well."""
 
         with self._js_lock:
@@ -282,11 +279,9 @@ class StretchRosInterface(Node):
         msg = Float64MultiArray()
         msg.data = list(joint_pose)
         self._joint_goal_publisher.publish(msg)
-        self.get_logger().info('Publishing: "%s"' % msg.data)
+        self.get_logger().info(f'Publishing: "{msg.data}"')
 
-    def send_trajectory_goals(
-        self, joint_goals: Dict[str, float], velocities: Optional[Dict[str, float]] = None
-    ):
+    def send_trajectory_goals(self, joint_goals: dict[str, float], velocities: dict[str, float] | None = None):
         """Send trajectory goals to the robot. Goals are a dictionary of joint names and strings. Can optionally provide velicities as well."""
 
         # Preprocess arm joints (arm joints are actually 4 joints in one)
@@ -421,18 +416,14 @@ class StretchRosInterface(Node):
             Empty, "grasp_point/ready", self._grasp_ready_callback, 10
         )  # Had to check qos_profile
         self.grasp_disable_pub = self.create_publisher(Empty, "grasp_point/disable", 1)
-        self.grasp_trigger_pub = self.create_publisher(
-            PointStamped, "grasp_point/trigger_grasp_point", 1
-        )
+        self.grasp_trigger_pub = self.create_publisher(PointStamped, "grasp_point/trigger_grasp_point", 1)
         self.grasp_result_sub = self.create_subscription(
             Float32, "grasp_point/result", self._grasp_result_callback, 10
         )  # Had to check qos_profile
 
         # Check if robot is homed and runstopped
         self._is_homed_sub = self.create_subscription(Bool, "/is_homed", self._is_homed_cb, 1)
-        self._is_runstopped_sub = self.create_subscription(
-            Bool, "/is_runstopped", self._is_runstopped_cb, 1
-        )
+        self._is_runstopped_sub = self.create_subscription(Bool, "/is_runstopped", self._is_runstopped_cb, 1)
 
         self.place_ready = None
         self.place_complete = None
@@ -442,9 +433,7 @@ class StretchRosInterface(Node):
             Empty, "place_point/ready", self._place_ready_callback, 10
         )  # Had to check qos_profile
         self.place_disable_pub = self.create_publisher(Empty, "place_point/disable", 1)
-        self.place_trigger_pub = self.create_publisher(
-            PointStamped, "place_point/trigger_place_point", 1
-        )
+        self.place_trigger_pub = self.create_publisher(PointStamped, "place_point/trigger_place_point", 1)
         self.place_result_sub = self.create_subscription(
             Empty, "place_point/result", self._place_result_callback, 10
         )  # Had to check qos_profile
@@ -454,16 +443,10 @@ class StretchRosInterface(Node):
         self._base_state_sub = self.create_subscription(
             PoseStamped, "state_estimator/pose_filtered", self._base_state_callback, 1
         )
-        self._camera_pose_sub = self.create_subscription(
-            PoseStamped, "camera_pose", self._camera_pose_callback, 1
-        )
-        self._at_goal_sub = self.create_subscription(
-            Bool, "goto_controller/at_goal", self._at_goal_callback, 1
-        )
+        self._camera_pose_sub = self.create_subscription(PoseStamped, "camera_pose", self._camera_pose_callback, 1)
+        self._at_goal_sub = self.create_subscription(Bool, "goto_controller/at_goal", self._at_goal_callback, 1)
         self._mode_sub = self.create_subscription(String, "mode", self._mode_callback, 1)
-        self._pose_graph_sub = self.create_subscription(
-            Path, "slam_toolbox/pose_graph", self._pose_graph_callback, 1
-        )
+        self._pose_graph_sub = self.create_subscription(Path, "slam_toolbox/pose_graph", self._pose_graph_callback, 1)
 
         # Create trajectory client with which we can control the robot
         self.trajectory_client = ActionClient(
@@ -627,7 +610,7 @@ class StretchRosInterface(Node):
         # loop over all joint state info
         pos, vel, trq = np.zeros(self.dof), np.zeros(self.dof), np.zeros(self.dof)
         joint_status = {}
-        for name, p, v, e in zip(msg.name, msg.position, msg.velocity, msg.effort):
+        for name, p, v, e in zip(msg.name, msg.position, msg.velocity, msg.effort, strict=False):
             # Update joint status dictionary with name and postiion only
             joint_status[name] = p
             # Check name etc
@@ -656,9 +639,7 @@ class StretchRosInterface(Node):
         if base_frame is None:
             base_frame = self.base_link
         try:
-            stamped_transform = self.tf2_buffer.lookup_transform(
-                base_frame, frame, lookup_time, timeout_ros
-            )
+            stamped_transform = self.tf2_buffer.lookup_transform(base_frame, frame, lookup_time, timeout_ros)
             trans, rot = transform_to_list(stamped_transform)
             pose_mat = to_matrix(trans, rot)
         except TransformException:

@@ -55,9 +55,7 @@ def main():
     # )
 
     charuco_parameters = aruco.CharucoParameters()
-    charuco_detector = aruco.CharucoDetector(
-        aruco_board, charuco_parameters, detector_parameters, refine_parameters
-    )
+    charuco_detector = aruco.CharucoDetector(aruco_board, charuco_parameters, detector_parameters, refine_parameters)
 
     for f in file_names:
         color_image = cv2.imread(f)
@@ -90,9 +88,7 @@ def main():
             print("len(charuco_ids) =", len(charuco_ids))
 
             if len(charuco_ids) > 0:
-                object_points, image_points = aruco_board.matchImagePoints(
-                    charuco_corners, charuco_ids
-                )
+                object_points, image_points = aruco_board.matchImagePoints(charuco_corners, charuco_ids)
 
                 if True:
                     print()
@@ -161,14 +157,10 @@ def main():
     print()
 
     # Convert from Numpy arrays to human-readable lists
-    calibration_results = {
-        (k): (v.tolist() if "tolist" in dir(v) else v) for k, v in calibration_results.items()
-    }
+    calibration_results = {(k): (v.tolist() if "tolist" in dir(v) else v) for k, v in calibration_results.items()}
 
     results_file_time = time.strftime("%Y%m%d%H%M%S")
-    results_file_name = (
-        image_directory + "camera_calibration_results_" + results_file_time + ".yaml"
-    )
+    results_file_name = image_directory + "camera_calibration_results_" + results_file_time + ".yaml"
     with open(results_file_name, "w") as file:
         yaml.dump(calibration_results, file, sort_keys=True)
     print("saved calibration results to", results_file_name)

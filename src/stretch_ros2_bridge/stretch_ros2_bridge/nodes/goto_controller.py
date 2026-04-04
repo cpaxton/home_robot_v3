@@ -13,7 +13,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import logging
-from typing import Optional
 
 import numpy as np
 import rclpy
@@ -73,9 +72,9 @@ class GotoVelocityControllerNode(Node):
         )
 
         # Initialize
-        self.vel_odom: Optional[np.ndarray] = None
-        self.xyt_filtered: Optional[np.ndarray] = None
-        self.xyt_goal: Optional[np.ndarray] = None
+        self.vel_odom: np.ndarray | None = None
+        self.xyt_filtered: np.ndarray | None = None
+        self.xyt_goal: np.ndarray | None = None
 
         self.active = False
         self.is_done = True
@@ -200,10 +199,7 @@ class GotoVelocityControllerNode(Node):
                     if not self.controller_finished:
                         self.controller_finished = True
                         self.done_since = self.get_clock().now()
-                    elif (
-                        self.controller_finished
-                        and (self.get_clock().now() - self.done_since) > self.done_t
-                    ):
+                    elif self.controller_finished and (self.get_clock().now() - self.done_since) > self.done_t:
                         self.is_done = True
                 else:
                     self.controller_finished = False
@@ -226,9 +222,7 @@ class GotoVelocityControllerNode(Node):
         self.vel_command_pub = self.create_publisher(Twist, "stretch/cmd_vel", 1)
         self.at_goal_pub = self.create_publisher(Bool, "goto_controller/at_goal", 1)
 
-        self.create_subscription(
-            PoseStamped, "state_estimator/pose_filtered", self._pose_update_callback, 1
-        )
+        self.create_subscription(PoseStamped, "state_estimator/pose_filtered", self._pose_update_callback, 1)
         self.create_subscription(Odometry, "odom", self._odom_update_callback, 1)
         self.create_subscription(Pose, "goto_controller/goal", self._goal_update_callback, 1)
 
@@ -240,9 +234,7 @@ class GotoVelocityControllerNode(Node):
 
         self.create_service(Trigger, "goto_controller/enable", self._enable_service)
         self.create_service(Trigger, "goto_controller/disable", self._disable_service)
-        self.create_service(
-            SetBool, "goto_controller/set_yaw_tracking", self._set_yaw_tracking_service
-        )
+        self.create_service(SetBool, "goto_controller/set_yaw_tracking", self._set_yaw_tracking_service)
 
         # Run controller
         self.create_timer(1 / self.hz, self.control_loop_callback)

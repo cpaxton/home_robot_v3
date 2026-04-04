@@ -73,9 +73,7 @@ def test_task():
     data.num = 1
     task.run()
 
-    assert (
-        data.num == 8
-    ), "From 1, data should get transmuted into 8 - loops through + 1 an extra time"
+    assert data.num == 8, "From 1, data should get transmuted into 8 - loops through + 1 an extra time"
 
 
 if __name__ == "__main__":

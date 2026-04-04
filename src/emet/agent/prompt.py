@@ -1,6 +1,15 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
 # Agent system prompt builder: identity + tool list (derived from registry) + response format.
 # Tools registered in tools.py are automatically included in the prompt.
 
@@ -8,7 +17,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from emet.agent.tools import Tool, get_tool_descriptions_for_prompt, get_tools
 
@@ -69,9 +78,9 @@ User: "Goodbye"
 
 
 def build_agent_system_prompt(
-    tools: Optional[List[Tool]] = None,
+    tools: list[Tool] | None = None,
     name: str = DEFAULT_AGENT_NAME,
-    context: Optional[Dict[str, Any]] = None,
+    context: dict[str, Any] | None = None,
 ) -> str:
     """Build the full system prompt: identity + tools + response format.
 
@@ -84,7 +93,7 @@ def build_agent_system_prompt(
     return f"{identity}\n\n{tools_block}\n\n{_FORMAT_BLOCK}"
 
 
-def parse_tool_calls_response(response: str) -> Dict[str, Any]:
+def parse_tool_calls_response(response: str) -> dict[str, Any]:
     """Parse LLM response into {tool_calls: [{name, arguments}], message: str}.
 
     Handles <think> blocks, markdown code fences, and text around JSON.
@@ -104,7 +113,7 @@ def parse_tool_calls_response(response: str) -> Dict[str, Any]:
         candidate_match = re.search(r"\{[\s\S]*\}", response)
         candidate = candidate_match.group() if candidate_match else ""
 
-    tool_calls: List[Dict[str, Any]] = []
+    tool_calls: list[dict[str, Any]] = []
     message = ""
     if candidate:
         try:
@@ -136,9 +145,9 @@ class AgentPromptBuilder:
 
     def __init__(
         self,
-        tools: Optional[List[Tool]] = None,
+        tools: list[Tool] | None = None,
         name: str = DEFAULT_AGENT_NAME,
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
         **kwargs: Any,
     ):
         self.name = name
@@ -149,7 +158,7 @@ class AgentPromptBuilder:
     def __str__(self) -> str:
         return self.prompt_str
 
-    def __call__(self, kwargs: Optional[Dict[str, Any]] = None, **kw: Any) -> str:
+    def __call__(self, kwargs: dict[str, Any] | None = None, **kw: Any) -> str:
         if kwargs:
             self.configure(**kwargs)
         if kw:
@@ -163,6 +172,6 @@ class AgentPromptBuilder:
         self.prompt_str = build_agent_system_prompt(self._tools, name=self.name, context=self._context)
         return self.prompt_str
 
-    def parse_response(self, response: str) -> Dict[str, Any]:
+    def parse_response(self, response: str) -> dict[str, Any]:
         """Parse LLM response to {tool_calls: [...], message: str}."""
         return parse_tool_calls_response(response)

@@ -15,7 +15,6 @@ A simple audio recorder using PyAudio.
 
 import audioop
 import wave
-from typing import List
 
 import numpy as np
 import pyaudio
@@ -60,7 +59,7 @@ class AudioRecorder:
         self.start()
 
     def reset(self) -> None:
-        self.frames: List[bytes] = []
+        self.frames: list[bytes] = []
         # if self.stream is not None:
         #    self.stream.stop_stream()
         #    self.stream.close()
@@ -72,9 +71,7 @@ class AudioRecorder:
         self.stream = self.get_stream()
         self.stream.stop_stream()
 
-    def record(
-        self, filename: str = "recording.wav", duration: float = 10.0, silence_limit: float = 1.0
-    ) -> None:
+    def record(self, filename: str = "recording.wav", duration: float = 10.0, silence_limit: float = 1.0) -> None:
         """
         Record audio from the microphone for a specified duration.
 
@@ -93,7 +90,6 @@ class AudioRecorder:
         self.stream.start_stream()
 
         for _ in tqdm(range(0, int(self.sample_rate / self.chunk * duration))):
-
             data: bytes = self.stream.read(self.chunk)
             self.frames.append(data)
 

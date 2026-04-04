@@ -7,9 +7,9 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import Optional
 
 import emet.utils.logger as logger
+from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.operations import (
     GoToNavOperation,
     GraspObjectOperation,
@@ -21,7 +21,6 @@ from emet.controller.operations import (
     SearchForObjectOnFloorOperation,
     SearchForReceptacleOperation,
 )
-from emet.controller.controller_instance_memory import RobotAgent
 from emet.core.task import Operation, Task
 
 
@@ -31,8 +30,8 @@ class PickupTask:
     def __init__(
         self,
         agent: RobotAgent,
-        target_object: Optional[str] = None,
-        target_receptacle: Optional[str] = None,
+        target_object: str | None = None,
+        target_receptacle: str | None = None,
         use_visual_servoing_for_grasp: bool = True,
         matching: str = "feature",
     ) -> None:
@@ -56,9 +55,9 @@ class PickupTask:
         self.semantic_sensor = self.agent.semantic_sensor
         self.parameters = self.agent.parameters
         self.instance_memory = self.agent.get_voxel_map().instances
-        assert (
-            self.instance_memory is not None
-        ), "Make sure instance memory was created! This is configured in parameters file."
+        assert self.instance_memory is not None, (
+            "Make sure instance memory was created! This is configured in parameters file."
+        )
 
         self.current_object = None
         self.current_receptacle = None
@@ -101,9 +100,7 @@ class PickupTask:
         """Create a task plan that will pick up a single object in the environment. It will explore until it finds a single object, and will then pick it up and place it in a receptacle."""
 
         # Put the robot into navigation mode
-        go_to_navigation_mode = GoToNavOperation(
-            "go to navigation mode", self.agent, retry_on_failure=True
-        )
+        go_to_navigation_mode = GoToNavOperation("go to navigation mode", self.agent, retry_on_failure=True)
 
         if add_rotate:
             # Spin in place to find objects.

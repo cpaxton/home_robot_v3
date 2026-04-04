@@ -3,11 +3,19 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Tests for Dynamem semantic memory (feature-based voxel memory)."""
 
 import numpy as np
-import pytest
 import torch
 
 from emet.mapping.voxel.voxel_dynamem import SparseVoxelMap
@@ -64,13 +72,9 @@ def _make_semantic_memory_map() -> SparseVoxelMap:
     bottle_feat = encoder.encode_text("bottle").squeeze(0)
     cup_feat = encoder.encode_text("cup").squeeze(0)
 
-    points = torch.tensor(
-        [[1.0, 0.0, 0.5], [2.0, 0.0, 0.5], [3.0, 0.0, 0.5]], dtype=torch.float32
-    )
+    points = torch.tensor([[1.0, 0.0, 0.5], [2.0, 0.0, 0.5], [3.0, 0.0, 0.5]], dtype=torch.float32)
     features = torch.stack([apple_feat, bottle_feat, cup_feat])
-    rgb = torch.tensor(
-        [[255, 0, 0], [0, 255, 0], [0, 0, 255]], dtype=torch.float32
-    ) / 255.0
+    rgb = torch.tensor([[255, 0, 0], [0, 255, 0], [0, 0, 255]], dtype=torch.float32) / 255.0
 
     voxel_map.semantic_memory.add(
         points=points,

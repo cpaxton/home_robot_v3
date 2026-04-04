@@ -11,8 +11,8 @@
 
 import click
 
-from emet.controller.operations import GraspObjectOperation, UpdateOperation
 from emet.controller.controller_instance_memory import RobotAgent
+from emet.controller.operations import GraspObjectOperation, UpdateOperation
 from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
 from emet.core.task import Task
@@ -59,9 +59,7 @@ def get_task(robot, demo, target_object, verbose: bool = False, show_gui: bool =
 
 
 @click.command()
-@click.option(
-    "--robot_ip", default="", help="IP address of the robot (blank to use stored IP address)"
-)
+@click.option("--robot_ip", default="", help="IP address of the robot (blank to use stored IP address)")
 @click.option("--reset", is_flag=True, help="Reset the robot to origin before starting")
 @click.option(
     "--local",
@@ -70,18 +68,14 @@ def get_task(robot, demo, target_object, verbose: bool = False, show_gui: bool =
 )
 @click.option("--parameter_file", default="default_planner.yaml", help="Path to parameter file")
 @click.option("--target_object", type=str, default="toy", help="Type of object to pick up and move")
-@click.option(
-    "--repeat_count", type=int, default=1, help="Number of times to repeat the grasp - for testing"
-)
+@click.option("--repeat_count", type=int, default=1, help="Number of times to repeat the grasp - for testing")
 @click.option(
     "--enable-realtime-updates",
     "--enable_realtime_updates",
     is_flag=True,
     help="Enable real-time updates so that the robot will dynamically update the map as it moves",
 )
-@click.option(
-    "--show_gui", "--show-gui", is_flag=True, help="Show the visual servoing GUI while grasping"
-)
+@click.option("--show_gui", "--show-gui", is_flag=True, help="Show the visual servoing GUI while grasping")
 @click.option("--verbose", is_flag=True, help="Print debug information")
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
@@ -113,9 +107,7 @@ def main(
     )
 
     # Agents wrap the robot high level planning interface for now
-    demo = RobotAgent(
-        robot, parameters, semantic_sensor, enable_realtime_updates=enable_realtime_updates
-    )
+    demo = RobotAgent(robot, parameters, semantic_sensor, enable_realtime_updates=enable_realtime_updates)
     print("Start robot agent...")
     demo.start(visualize_map_at_start=False)
 

@@ -16,13 +16,14 @@ import time
 import timeit
 from pathlib import Path
 from threading import Lock, Thread
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 import torch
 from PIL import Image
 
 import emet.utils.memory as memory
+from emet.controller.base_controller import BaseController
 from emet.core.interfaces import Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient
@@ -30,8 +31,6 @@ from emet.mapping.instance import Instance
 from emet.mapping.scene_graph import SceneGraph
 from emet.mapping.voxel import SparseVoxelMap, SparseVoxelMapNavigationSpace, SparseVoxelMapProxy
 from emet.motion import ConfigurationSpace, Planner, PlanResult
-
-from emet.controller.base_controller import BaseController
 from emet.motion.algo import Shortcut, SimplifyXYT, get_planner
 from emet.motion.kinematics import HelloStretchIdx
 from emet.perception.encoders import BaseImageTextEncoder, get_encoder
@@ -72,9 +71,9 @@ class InstanceMemoryController(BaseController):
     def __init__(
         self,
         robot: AbstractRobotClient,
-        parameters: Optional[Union[Parameters, Dict[str, Any]]] = None,
-        semantic_sensor: Optional[OvmmPerception] = None,
-        voxel_map: Optional[SparseVoxelMap] = None,
+        parameters: Parameters | dict[str, Any] | None = None,
+        semantic_sensor: OvmmPerception | None = None,
+        voxel_map: SparseVoxelMap | None = None,
         show_instances_detected: bool = False,
         use_instance_memory: bool = False,
         enable_realtime_updates: bool = False,
@@ -84,11 +83,9 @@ class InstanceMemoryController(BaseController):
         _params = (
             get_parameters(self.default_config_path)
             if parameters is None
-            else (Parameters(**parameters) if isinstance(parameters, Dict) else parameters)
+            else (Parameters(**parameters) if isinstance(parameters, dict) else parameters)
         )
-        realtime_updates = enable_realtime_updates or _params.get(
-            "agent/use_realtime_updates", False
-        )
+        realtime_updates = enable_realtime_updates or _params.get("agent/use_realtime_updates", False)
         super().__init__(
             robot=robot,
             parameters=parameters,
@@ -113,17 +110,11 @@ class InstanceMemoryController(BaseController):
             self.semantic_sensor = self.create_semantic_sensor()
 
         self.current_state = "WAITING"
-        self.encoder = get_encoder(
-            self.parameters["encoder"], self.parameters.get("encoder_args", {})
-        )
-        self._matched_vertices_obs_count: Dict[float, int] = dict()
-        self._matched_observations_poses: List[np.ndarray] = []
-        self._maximum_matched_observations = self.parameters.get(
-            "agent/realtime/maximum_matched_observations", 50
-        )
-        self._camera_pose_match_threshold = self.parameters.get(
-            "agent/realtime/camera_pose_match_threshold", 0.05
-        )
+        self.encoder = get_encoder(self.parameters["encoder"], self.parameters.get("encoder_args", {}))
+        self._matched_vertices_obs_count: dict[float, int] = {}
+        self._matched_observations_poses: list[np.ndarray] = []
+        self._maximum_matched_observations = self.parameters.get("agent/realtime/maximum_matched_observations", 50)
+        self._camera_pose_match_threshold = self.parameters.get("agent/realtime/camera_pose_match_threshold", 0.05)
         self._head_not_moving_tolerance = float(
             self.parameters.get("motion/joint_thresholds/head_not_moving_tolerance", 1.0e-4)
         )
@@ -133,12 +124,8 @@ class InstanceMemoryController(BaseController):
         else:
             self.tts = None
 
-        self._realtime_matching_distance = self.parameters.get(
-            "agent/realtime/matching_distance", 0.5
-        )
-        self._realtime_temporal_threshold = self.parameters.get(
-            "agent/realtime/temporal_threshold", 0.1
-        )
+        self._realtime_matching_distance = self.parameters.get("agent/realtime/matching_distance", 0.5)
+        self._realtime_temporal_threshold = self.parameters.get("agent/realtime/temporal_threshold", 0.1)
 
         if voxel_map is not None:
             self.voxel_map = voxel_map
@@ -154,12 +141,8 @@ class InstanceMemoryController(BaseController):
             self.robot.get_robot_model(),
             step_size=self.parameters["motion_planner"]["step_size"],
             rotation_step_size=self.parameters["motion_planner"]["rotation_step_size"],
-            dilate_frontier_size=self.parameters["motion_planner"]["frontier"][
-                "dilate_frontier_size"
-            ],
-            dilate_obstacle_size=self.parameters["motion_planner"]["frontier"][
-                "dilate_obstacle_size"
-            ],
+            dilate_frontier_size=self.parameters["motion_planner"]["frontier"]["dilate_frontier_size"],
+            dilate_obstacle_size=self.parameters["motion_planner"]["frontier"]["dilate_obstacle_size"],
             grid=self.get_voxel_map().grid,
         )
 
@@ -171,9 +154,7 @@ class InstanceMemoryController(BaseController):
         )
         # Add shotcutting to the planner
         if self.parameters.get("motion_planner/shortcut_plans", False):
-            self.planner = Shortcut(
-                self.planner, self.parameters.get("motion_planner/shortcut_iter", 100)
-            )
+            self.planner = Shortcut(self.planner, self.parameters.get("motion_planner/shortcut_iter", 100))
         # Add motion planner simplification
         if self.parameters.get("motion_planner/simplify_plans", False):
             self.planner = SimplifyXYT(
@@ -245,7 +226,7 @@ class InstanceMemoryController(BaseController):
             use_instance_memory=self._use_instance_memory or self.semantic_sensor is not None,
         )
 
-    def set_instance_as_unreachable(self, instance: Union[int, Instance]) -> None:
+    def set_instance_as_unreachable(self, instance: int | Instance) -> None:
         """Mark an instance as unreachable.
 
         Args:
@@ -259,7 +240,7 @@ class InstanceMemoryController(BaseController):
             raise ValueError("Instance must be an Instance object or an int")
         self.unreachable_instances.add(instance_id)
 
-    def is_instance_unreachable(self, instance: Union[int, Instance]) -> bool:
+    def is_instance_unreachable(self, instance: int | Instance) -> bool:
         """Check if an instance is unreachable.
 
         Args:
@@ -281,7 +262,7 @@ class InstanceMemoryController(BaseController):
         """Encode text using the encoder"""
         return self.encoder.encode_text(text)
 
-    def encode_image(self, image: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
+    def encode_image(self, image: np.ndarray | torch.Tensor) -> torch.Tensor:
         """Encode image using the encoder"""
         return self.encoder.encode_image(image)
 
@@ -295,7 +276,7 @@ class InstanceMemoryController(BaseController):
         aggregation_method: str = "mean",
         normalize: bool = False,
         verbose: bool = True,
-    ) -> Optional[tuple]:
+    ) -> tuple | None:
         """Get the instance that best matches the text query.
 
         Args:
@@ -320,22 +301,18 @@ class InstanceMemoryController(BaseController):
         print("--- Searching for instance ---")
         for instance in self.get_voxel_map().get_instances():
             ins = instance.get_instance_id()
-            emb = instance.get_image_embedding(
-                aggregation_method=aggregation_method, normalize=normalize
-            )
+            emb = instance.get_image_embedding(aggregation_method=aggregation_method, normalize=normalize)
             activation = self.encoder.compute_score(emb, encoded_text)
             if activation.item() > best_activation:
                 best_activation = activation.item()
                 best_instance = instance
                 if verbose:
-                    print(
-                        f" - Instance {ins} has activation {activation.item()} > {best_activation}"
-                    )
+                    print(f" - Instance {ins} has activation {activation.item()} > {best_activation}")
             elif verbose:
                 print(f" - Instance {ins} has activation {activation.item()}")
         return best_activation, best_instance
 
-    def get_instances(self) -> List[Instance]:
+    def get_instances(self) -> list[Instance]:
         """Return all instances in the voxel map."""
         return self.get_voxel_map().get_instances()
 
@@ -346,7 +323,7 @@ class InstanceMemoryController(BaseController):
         normalize: bool = False,
         verbose: bool = True,
         threshold: float = 0.05,
-    ) -> Optional[Tuple[List[float], List[Instance]]]:
+    ) -> tuple[list[float], list[Instance]] | None:
         """Get all instances that match the text query.
 
         Args:
@@ -374,9 +351,7 @@ class InstanceMemoryController(BaseController):
         # Compute the cosine similarity between the text query and each instance embedding
         for instance in self.get_voxel_map().get_instances():
             ins = instance.get_instance_id()
-            emb = instance.get_image_embedding(
-                aggregation_method=aggregation_method, normalize=normalize
-            )
+            emb = instance.get_image_embedding(aggregation_method=aggregation_method, normalize=normalize)
 
             # TODO: this is hacky - should probably just not support other encoders this way
             # if hasattr(self.encoder, "classify"):
@@ -392,9 +367,7 @@ class InstanceMemoryController(BaseController):
                 if verbose:
                     print(f" - Instance {ins} has activation {activation.item()} > {threshold}")
             elif verbose:
-                print(
-                    f" - Skipped instance {ins} with activation {activation.item()} < {threshold}"
-                )
+                print(f" - Skipped instance {ins} with activation {activation.item()} < {threshold}")
         return activations, matches
 
     def get_navigation_space(self) -> ConfigurationSpace:
@@ -408,7 +381,7 @@ class InstanceMemoryController(BaseController):
 
     def rotate_in_place(
         self,
-        steps: Optional[int] = -1,
+        steps: int | None = -1,
         visualize: bool = False,
         verbose: bool = False,
         full_sweep: bool = True,
@@ -460,7 +433,7 @@ class InstanceMemoryController(BaseController):
             # Add an observation after the move
             if verbose:
                 print(" - Navigation took", t1 - t0, "seconds")
-                print(f"---- UPDATE {i+1} at {x}, {y}----")
+                print(f"---- UPDATE {i + 1} at {x}, {y}----")
             t0 = timeit.default_timer()
             if not self._realtime_updates:
                 self.update()
@@ -508,9 +481,7 @@ class InstanceMemoryController(BaseController):
 
                 # obs = Observations.from_dict(obs)
 
-                if (len(self.obs_history) > 0) and (
-                    obs.lidar_timestamp == self.obs_history[-1].lidar_timestamp
-                ):
+                if (len(self.obs_history) > 0) and (obs.lidar_timestamp == self.obs_history[-1].lidar_timestamp):
                     obs = None
                 t1 = timeit.default_timer()
                 if t1 - t0 > 10:
@@ -536,10 +507,7 @@ class InstanceMemoryController(BaseController):
     def should_drop_observation(self, obs: Observations, pose_graph_timestamp: int) -> bool:
         """Check if we should drop an observation."""
         if pose_graph_timestamp in self._matched_vertices_obs_count:
-            if (
-                self._matched_vertices_obs_count[pose_graph_timestamp]
-                > self._maximum_matched_observations
-            ):
+            if self._matched_vertices_obs_count[pose_graph_timestamp] > self._maximum_matched_observations:
                 return True
 
         # Check if there are any observations with camera poses that are too close
@@ -549,9 +517,7 @@ class InstanceMemoryController(BaseController):
                     return True
 
         if obs.joint_velocities is not None:
-            head_speed = np.linalg.norm(
-                obs.joint_velocities[HelloStretchIdx.HEAD_PAN : HelloStretchIdx.HEAD_TILT]
-            )
+            head_speed = np.linalg.norm(obs.joint_velocities[HelloStretchIdx.HEAD_PAN : HelloStretchIdx.HEAD_TILT])
 
             if head_speed > self._head_not_moving_tolerance:
                 return True
@@ -604,9 +570,7 @@ class InstanceMemoryController(BaseController):
                 # Remove 50 oldest observations that are not pose graph nodes
                 del_count = 0
                 del_idx = 0
-                while (
-                    del_count < 50 and len(self.obs_history) > 0 and del_idx < len(self.obs_history)
-                ):
+                while del_count < 50 and len(self.obs_history) > 0 and del_idx < len(self.obs_history):
                     # If obs is too recent, skip it
                     if self.obs_history[del_idx].lidar_timestamp - time.time() < 10:
                         del_idx += 1
@@ -618,20 +582,14 @@ class InstanceMemoryController(BaseController):
 
                     if not self.obs_history[del_idx].is_pose_graph_node:
                         # Remove corresponding matched observation
-                        if (
-                            self.obs_history[del_idx].lidar_timestamp
-                            in self._matched_vertices_obs_count
-                        ):
-                            self._matched_vertices_obs_count[
-                                self.obs_history[del_idx].lidar_timestamp
-                            ] -= 1
+                        if self.obs_history[del_idx].lidar_timestamp in self._matched_vertices_obs_count:
+                            self._matched_vertices_obs_count[self.obs_history[del_idx].lidar_timestamp] -= 1
 
                         # Remove caemra pose from matched observations
                         for idx in range(len(self._matched_observations_poses)):
                             if (
                                 np.linalg.norm(
-                                    self._matched_observations_poses[idx]
-                                    - self.obs_history[del_idx].camera_pose
+                                    self._matched_observations_poses[idx] - self.obs_history[del_idx].camera_pose
                                 )
                                 < 0.1
                             ):
@@ -666,7 +624,6 @@ class InstanceMemoryController(BaseController):
                 gps_past = self.obs_history[idx].gps
 
                 for vertex in self.pose_graph:
-
                     if self.should_drop_observation(self.obs_history[idx], vertex[0]):
                         break
 
@@ -679,13 +636,8 @@ class InstanceMemoryController(BaseController):
                             ]
                         )
 
-                        if (
-                            self.obs_history[idx].task_observations is None
-                            and self.semantic_sensor is not None
-                        ):
-                            self.obs_history[idx] = self.semantic_sensor.predict(
-                                self.obs_history[idx]
-                            )
+                        if self.obs_history[idx].task_observations is None and self.semantic_sensor is not None:
+                            self.obs_history[idx] = self.semantic_sensor.predict(self.obs_history[idx])
 
                         if vertex[0] not in self._matched_vertices_obs_count:
                             self._matched_vertices_obs_count[vertex[0]] = 0
@@ -694,28 +646,20 @@ class InstanceMemoryController(BaseController):
                         self._matched_vertices_obs_count[vertex[0]] += 1
                     # check if the gps is close to the gps of the pose graph node
                     elif (
-                        np.linalg.norm(gps_past - np.array([vertex[1], vertex[2]]))
-                        < self._realtime_matching_distance
+                        np.linalg.norm(gps_past - np.array([vertex[1], vertex[2]])) < self._realtime_matching_distance
                         and self.obs_history[idx].pose_graph_timestamp is None
                     ):
                         self.obs_history[idx].is_pose_graph_node = True
                         self.obs_history[idx].pose_graph_timestamp = vertex[0]
-                        self.obs_history[idx].initial_pose_graph_gps = np.array(
-                            [vertex[1], vertex[2]]
-                        )
+                        self.obs_history[idx].initial_pose_graph_gps = np.array([vertex[1], vertex[2]])
                         self.obs_history[idx].initial_pose_graph_compass = np.array(
                             [
                                 vertex[3],
                             ]
                         )
 
-                        if (
-                            self.obs_history[idx].task_observations is None
-                            and self.semantic_sensor is not None
-                        ):
-                            self.obs_history[idx] = self.semantic_sensor.predict(
-                                self.obs_history[idx]
-                            )
+                        if self.obs_history[idx].task_observations is None and self.semantic_sensor is not None:
+                            self.obs_history[idx] = self.semantic_sensor.predict(self.obs_history[idx])
 
                         if vertex[0] not in self._matched_vertices_obs_count:
                             self._matched_vertices_obs_count[vertex[0]] = 0
@@ -755,7 +699,7 @@ class InstanceMemoryController(BaseController):
         self,
         visualize_map: bool = False,
         debug_instances: bool = False,
-        move_head: Optional[bool] = None,
+        move_head: bool | None = None,
         tilt: float = -1 * np.pi / 4,
     ):
         if self._realtime_updates:
@@ -764,7 +708,6 @@ class InstanceMemoryController(BaseController):
         obs = None
         t0 = timeit.default_timer()
 
-        steps = 0
         move_head = (move_head is None and self._sweep_head_on_update) or move_head is True
         if move_head:
             self.robot.move_to_nav_posture()
@@ -890,7 +833,7 @@ class InstanceMemoryController(BaseController):
 
     def plan_to_instance_for_manipulation(
         self,
-        instance: Union[Instance, int],
+        instance: Instance | int,
         start: np.ndarray,
         max_tries: int = 100,
         verbose: bool = True,
@@ -924,9 +867,7 @@ class InstanceMemoryController(BaseController):
             use_cache=use_cache,
         )
 
-    def within_reach_of(
-        self, instance: Instance, start: Optional[np.ndarray] = None, verbose: bool = False
-    ) -> bool:
+    def within_reach_of(self, instance: Instance, start: np.ndarray | None = None, verbose: bool = False) -> bool:
         """Check if the instance is within manipulation range.
 
         Args:
@@ -944,11 +885,7 @@ class InstanceMemoryController(BaseController):
         object_xyz = instance.get_center()
         if np.linalg.norm(start[:2] - object_xyz[:2]) < self._manipulation_radius:
             return True
-        if (
-            ((instance.point_cloud[:, :2] - start[:2]).norm(dim=-1) < self._manipulation_radius)
-            .any()
-            .item()
-        ):
+        if ((instance.point_cloud[:, :2] - start[:2]).norm(dim=-1) < self._manipulation_radius).any().item():
             return True
         return False
 
@@ -1181,7 +1118,7 @@ class InstanceMemoryController(BaseController):
         return start_is_valid
 
     def move_to_any_instance(
-        self, matches: List[Tuple[int, Instance]], max_try_per_instance=10, verbose: bool = False
+        self, matches: list[tuple[int, Instance]], max_try_per_instance=10, verbose: bool = False
     ) -> bool:
         """Check instances and find one we can move to"""
         self.current_state = "NAV_TO_INSTANCE"
@@ -1270,7 +1207,7 @@ class InstanceMemoryController(BaseController):
             print(f" - Found instance {instance.global_id} with similarity {activation} to {goal}.")
         return activation > self.feature_match_threshold
 
-    def print_found_classes(self, goal: Optional[str] = None, verbose: bool = False):
+    def print_found_classes(self, goal: str | None = None, verbose: bool = False):
         """Helper. print out what we have found according to the object detection model."""
         if self.semantic_sensor is None:
             logger.warning("Tried to print classes without semantic sensor!")
@@ -1294,7 +1231,7 @@ class InstanceMemoryController(BaseController):
 
     def start(
         self,
-        goal: Optional[str] = None,
+        goal: str | None = None,
         visualize_map_at_start: bool = False,
         can_move: bool = True,
         verbose: bool = True,
@@ -1315,8 +1252,8 @@ class InstanceMemoryController(BaseController):
             self.print_found_classes(goal)
 
     def get_found_instances_by_class(
-        self, goal: Optional[str], threshold: int = 0, debug: bool = False
-    ) -> List[Tuple[int, Instance]]:
+        self, goal: str | None, threshold: int = 0, debug: bool = False
+    ) -> list[tuple[int, Instance]]:
         """Check to see if goal is in our instance memory or not. Return a list of everything with the correct class.
 
         Parameters:
@@ -1340,12 +1277,12 @@ class InstanceMemoryController(BaseController):
                 matching_instances.append((i, instance))
         return self.filter_matches(matching_instances, threshold=threshold)
 
-    def extract_symbolic_spatial_info(self, instances: List[Instance], debug=False):
+    def extract_symbolic_spatial_info(self, instances: list[Instance], debug=False):
         """Extract pairwise symbolic spatial relationship between instances using heurisitcs"""
         scene_graph = SceneGraph(parameters=self.parameters, instances=instances)
         return scene_graph.get_relationships()
 
-    def get_all_reachable_instances(self, current_pose=None) -> List[Instance]:
+    def get_all_reachable_instances(self, current_pose=None) -> list[Instance]:
         """get all reachable instances with their ids and cache the motion plans.
 
         Parameters:
@@ -1368,7 +1305,7 @@ class InstanceMemoryController(BaseController):
 
     def get_ranked_instances(
         self, goal: str, threshold: int = 0, debug: bool = False
-    ) -> List[Tuple[float, int, Instance]]:
+    ) -> list[tuple[float, int, Instance]]:
         """Get instances and rank them by similarity to the goal, using our encoder, whatever that is.
 
         Parameters:
@@ -1386,17 +1323,17 @@ class InstanceMemoryController(BaseController):
         goal_emb = self.encode_text(goal)
         ranked_matches = []
         for i, instance in enumerate(instances):
-            img_emb = instance.get_image_embedding(
-                aggregation_method="mean", normalize=self.normalize_embeddings
-            ).to(goal_emb.device)
+            img_emb = instance.get_image_embedding(aggregation_method="mean", normalize=self.normalize_embeddings).to(
+                goal_emb.device
+            )
             score = torch.matmul(goal_emb, img_emb.T).item()
             ranked_matches.append((score, i, instance))
         ranked_matches.sort(reverse=True)
         return ranked_matches
 
     def get_reachable_instances_by_class(
-        self, goal: Optional[str], threshold: int = 0, debug: bool = False
-    ) -> List[Instance]:
+        self, goal: str | None, threshold: int = 0, debug: bool = False
+    ) -> list[Instance]:
         """See if we can reach dilated object masks for different objects.
 
         Parameters:
@@ -1424,9 +1361,7 @@ class InstanceMemoryController(BaseController):
                 reachable_matches.append(instance)
         return reachable_matches
 
-    def filter_matches(
-        self, matches: List[Tuple[int, Instance]], threshold: int = 1
-    ) -> List[Tuple[int, Instance]]:
+    def filter_matches(self, matches: list[tuple[int, Instance]], threshold: int = 1) -> list[tuple[int, Instance]]:
         """return only things we have not tried {threshold} times.
 
         Parameters:
@@ -1540,7 +1475,7 @@ class InstanceMemoryController(BaseController):
                 min_dist=self._frontier_min_dist,
                 step_dist=self._frontier_step_dist,
             )
-            for i, goal in enumerate(sampler):
+            for _i, goal in enumerate(sampler):
                 if goal is None:
                     # No more positions to sample
                     if verbose:
@@ -1584,7 +1519,7 @@ class InstanceMemoryController(BaseController):
                         print("Plan failed. Reason:", res.reason)
         return PlanResult(False, reason="no valid plans found")
 
-    def get_history(self, reversed: bool = False) -> List[np.ndarray]:
+    def get_history(self, reversed: bool = False) -> list[np.ndarray]:
         """Get the history of the robot's positions."""
         history = []
         for obs in self.get_voxel_map().observations:
@@ -1605,7 +1540,7 @@ class InstanceMemoryController(BaseController):
         go_home_at_end: bool = False,
         show_goal: bool = False,
         audio_feedback: bool = False,
-    ) -> Optional[List[Instance]]:
+    ) -> list[Instance] | None:
         """Go through exploration. We use the voxel_grid map created by our collector to sample free space, and then use our motion planner (RRT for now) to get there. At the end, we plan back to (0,0,0).
 
         Args:
@@ -1613,7 +1548,7 @@ class InstanceMemoryController(BaseController):
         self.current_state = "EXPLORE"
         self.robot.move_to_nav_posture()
         all_starts = []
-        all_goals: List[List] = []
+        all_goals: list[list] = []
 
         if audio_feedback:
             self.robot.say("Starting exploration!")
@@ -1621,7 +1556,6 @@ class InstanceMemoryController(BaseController):
 
         # Explore some number of times
         matches = []
-        no_success_explore = True
         rotated = False
         for i in range(explore_iter):
             if audio_feedback:
@@ -1661,21 +1595,18 @@ class InstanceMemoryController(BaseController):
                         f"So far, I have found {len(all_goals)} object{'s' if len(all_goals) > 2 else ''}"
                     )
                 else:
-                    self.robot.say_sync(f"My map is currently empty")
+                    self.robot.say_sync("My map is currently empty")
                 time.sleep(1.0)
 
             if audio_feedback:
                 self.robot.say_sync("Looking for frontiers nearby...")
                 time.sleep(1.0)
 
-            res = self.plan_to_frontier(
-                start=start, random_goals=random_goals, try_to_plan_iter=try_to_plan_iter
-            )
+            res = self.plan_to_frontier(start=start, random_goals=random_goals, try_to_plan_iter=try_to_plan_iter)
 
             # if it succeeds, execute a trajectory to this position
             if res.success:
                 rotated = False
-                no_success_explore = False
                 print("Exploration plan to frontier successful!")
 
                 if audio_feedback:
@@ -1697,7 +1628,6 @@ class InstanceMemoryController(BaseController):
                         instances=self.semantic_sensor is not None,
                     )
                 if not dry_run:
-
                     if audio_feedback:
                         self.robot.say_sync("Attempting to move to this goal.")
                         time.sleep(4.0)
@@ -1849,9 +1779,7 @@ class InstanceMemoryController(BaseController):
             verbose(bool): print out a message to the user making sure this does not go unnoticed. Defaults to True.
         """
         if verbose:
-            print(
-                "[WARNING] Resetting the robot's spatial memory. Everything it knows will go away!"
-            )
+            print("[WARNING] Resetting the robot's spatial memory. Everything it knows will go away!")
         with self._voxel_map_lock:
             self.voxel_map.reset()
         self.reset_object_plans()
@@ -1864,7 +1792,7 @@ class InstanceMemoryController(BaseController):
                 self._matched_observations_poses.clear()
                 self._matched_vertices_obs_count.clear()
 
-    def save_instance_images(self, root: Union[Path, str] = ".", verbose: bool = False) -> None:
+    def save_instance_images(self, root: Path | str = ".", verbose: bool = False) -> None:
         """Save out instance images from the voxel map that we have collected while exploring."""
 
         if isinstance(root, str):
@@ -1986,9 +1914,7 @@ class InstanceMemoryController(BaseController):
 
         # Add the loaded map to the current map
         print("Reprocessing map with new pose transform...")
-        self.get_voxel_map().read_from_pickle(
-            filename, perception=self.semantic_sensor, transform_pose=tform
-        )
+        self.get_voxel_map().read_from_pickle(filename, perception=self.semantic_sensor, transform_pose=tform)
         self.get_voxel_map().show()
 
     def execute(self, plan: str) -> bool:
@@ -2057,18 +1983,14 @@ class InstanceMemoryController(BaseController):
             else:
                 raise NotImplementedError
 
-        for crop_id, obj in enumerate(
-            candidate_objects[: min(max_context_length, len(candidate_objects))]
-        ):
-            obs.object_images.append(
-                ObjectImage(crop_id=crop_id, image=obj[0].contiguous(), instance_id=obj[1])
-            )
+        for crop_id, obj in enumerate(candidate_objects[: min(max_context_length, len(candidate_objects))]):
+            obs.object_images.append(ObjectImage(crop_id=crop_id, image=obj[0].contiguous(), instance_id=obj[1]))
         return obs
 
     def get_object_centric_observations(
         self,
         show_prompts: bool = False,
-        task: Optional[str] = None,
+        task: str | None = None,
         current_pose=None,
         plan_with_reachable_instances=False,
         plan_with_scene_graph=False,
@@ -2112,7 +2034,7 @@ class InstanceMemoryController(BaseController):
 
         return create_semantic_sensor(self.parameters)
 
-    def save_map(self, filename: Optional[str] = None) -> None:
+    def save_map(self, filename: str | None = None) -> None:
         """Save the current map to a file.
 
         Args:

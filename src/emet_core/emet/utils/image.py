@@ -1,13 +1,18 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 # Slim image utils for emet-core (no torch): Camera, scale_camera_matrix, adjust_gamma.
 
-import io
-from typing import List
 
 import cv2
 import numpy as np
-import trimesh.transformations as tra
-from PIL import Image
 
 
 def compute_pinhole_K(width, height, fov_degrees) -> np.ndarray:
@@ -17,13 +22,11 @@ def compute_pinhole_K(width, height, fov_degrees) -> np.ndarray:
     v_focal_length = width / (2 * np.tan(horizontal_fov_rad / 2) * float(height) / width)
     principal_point_x = (width - 1.0) / 2
     principal_point_y = (height - 1.0) / 2
-    K = np.array(
-        [[v_focal_length, 0, principal_point_x], [0, h_focal_length, principal_point_y], [0, 0, 1]]
-    )
+    K = np.array([[v_focal_length, 0, principal_point_x], [0, h_focal_length, principal_point_y], [0, 0, 1]])
     return K
 
 
-class Camera(object):
+class Camera:
     """Simple pinhole camera model (numpy/cv2 only)."""
 
     @staticmethod

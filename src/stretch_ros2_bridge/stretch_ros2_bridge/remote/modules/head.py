@@ -11,7 +11,6 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Optional, Tuple
 
 import numpy as np
 import trimesh.transformations as tra
@@ -64,7 +63,7 @@ class StretchHeadClient(AbstractControlModule):
         else:
             return pose
 
-    def get_pan_tilt(self) -> Tuple[float, float]:
+    def get_pan_tilt(self) -> tuple[float, float]:
         q, _, _ = self._ros_client.get_joint_state()
         return q[HelloStretchIdx.HEAD_PAN], q[HelloStretchIdx.HEAD_TILT]
 
@@ -74,16 +73,16 @@ class StretchHeadClient(AbstractControlModule):
 
     def goto_joint_positions(
         self,
-        pan: Optional[float] = None,
-        tilt: Optional[float] = None,
+        pan: float | None = None,
+        tilt: float | None = None,
         blocking: bool = True,
     ):
         return self.set_pan_tilt(pan=pan, tilt=tilt, blocking=blocking)
 
     def set_pan_tilt(
         self,
-        pan: Optional[float] = None,
-        tilt: Optional[float] = None,
+        pan: float | None = None,
+        tilt: float | None = None,
         blocking: bool = True,
     ):
         joint_goals = {}

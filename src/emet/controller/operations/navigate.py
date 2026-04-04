@@ -16,7 +16,6 @@ from emet.controller.base import ManagedOperation
 
 
 class NavigateToObjectOperation(ManagedOperation):
-
     plan = None
     for_manipulation: bool = True
     be_precise: bool = False
@@ -33,9 +32,7 @@ class NavigateToObjectOperation(ManagedOperation):
             return self.agent.current_object
 
     def can_start(self):
-        print(
-            f"{self.name}: check to see if object is reachable (receptacle={self.to_receptacle})."
-        )
+        print(f"{self.name}: check to see if object is reachable (receptacle={self.to_receptacle}).")
         self.plan = None
         if self.get_target() is None:
             self.error("no target!")
@@ -79,9 +76,7 @@ class NavigateToObjectOperation(ManagedOperation):
             self.warn("Already within reach of object!")
             xyz = self.get_target().get_center()
             start_xyz = self.robot.get_base_pose()[:2]
-            theta = math.atan2(
-                xyz[1] - self.robot.get_base_pose()[1], xyz[0] - self.robot.get_base_pose()[0]
-            )
+            theta = math.atan2(xyz[1] - self.robot.get_base_pose()[1], xyz[0] - self.robot.get_base_pose()[0])
             self.robot.move_base_to(
                 np.array([start_xyz[0], start_xyz[1], theta + np.pi / 2]),
                 blocking=True,
@@ -90,9 +85,7 @@ class NavigateToObjectOperation(ManagedOperation):
             return
 
         # Execute the trajectory
-        assert (
-            self.plan is not None
-        ), "Did you make sure that we had a plan? You should call can_start() before run()."
+        assert self.plan is not None, "Did you make sure that we had a plan? You should call can_start() before run()."
         self.robot.execute_trajectory(self.plan, final_timeout=10.0)
 
         # Orient the robot towards the object and use the end effector camera to pick it up

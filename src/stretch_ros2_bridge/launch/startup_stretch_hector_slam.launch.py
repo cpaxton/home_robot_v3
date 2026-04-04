@@ -19,7 +19,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    stretch_navigation_path = get_package_share_directory("stretch_nav2")
+    get_package_share_directory("stretch_nav2")
     # start_robot_arg = DeclareLaunchArgument("start_robot", default_value="false")
     # rviz_arg = DeclareLaunchArgument("rviz", default_value="false")
     declare_use_sim_time_argument = DeclareLaunchArgument(

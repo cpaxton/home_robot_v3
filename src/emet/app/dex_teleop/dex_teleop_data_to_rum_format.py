@@ -100,7 +100,7 @@ def process_folder(src: Path, dst: Path, mode: str, use_depth: bool):
         cap2.release()
         out.release()
 
-    print(f"  ✅ Done.")
+    print("  ✅ Done.")
 
 
 # process_folder(Path('/home/hello-robot/peiqi/stretch_dex_teleop/data/hat_pick/default_user/default_env/2025-07-30--12-14-45'), Path('/home/hello-robot/peiqi/stretch_dex_teleop/data/test/processed'))
@@ -110,9 +110,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Resample & concatenate fixed robot camera videos (256×256), drop failures."
     )
-    parser.add_argument(
-        "--input_root", type=Path, help="Root folder containing raw '*/*/*/date/' data"
-    )
+    parser.add_argument("--input_root", type=Path, help="Root folder containing raw '*/*/*/date/' data")
     parser.add_argument("--task_name", type=str, default="default_task", help="Task name")
     parser.add_argument(
         "--mode",

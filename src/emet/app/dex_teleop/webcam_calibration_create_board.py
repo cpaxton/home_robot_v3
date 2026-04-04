@@ -35,8 +35,6 @@ image_size = (5100, 6600)
 margin_size = int(image_size[1] / 20)
 border_bits = 1
 
-board_image = board.generateImage(
-    outSize=image_size, marginSize=margin_size, borderBits=border_bits
-)
+board_image = board.generateImage(outSize=image_size, marginSize=margin_size, borderBits=border_bits)
 
 cv2.imwrite("webcam_aruco_calibration_board.png", board_image)

@@ -3,12 +3,21 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Load/save robot connection profiles (host, user, optional password) for deploy and viewer."""
 
 import json
 import os
-from typing import Any, Optional
+from typing import Any
 
 # Reuse ~/.stretch from memory so connection and robot_ip live together
 _STRETCH_DIR = os.path.expanduser("~/.stretch")
@@ -37,7 +46,7 @@ def _save_config(config: dict[str, Any]) -> None:
         json.dump(config, f, indent=2)
 
 
-def get_active_connection() -> Optional[dict[str, Any]]:
+def get_active_connection() -> dict[str, Any] | None:
     """Return the active connection dict (host, user, password if set) or None."""
     config = _load_config()
     active_name = config.get("active")
@@ -47,7 +56,7 @@ def get_active_connection() -> Optional[dict[str, Any]]:
     return conns.get(active_name)
 
 
-def get_connection(name: Optional[str] = None) -> Optional[dict[str, Any]]:
+def get_connection(name: str | None = None) -> dict[str, Any] | None:
     """Return connection by name, or active connection if name is None."""
     config = _load_config()
     conns = config.get("connections", {})
@@ -70,8 +79,8 @@ def list_connections() -> list[tuple[str, bool]]:
 def save_connection(
     host: str,
     user: str = "root",
-    password: Optional[str] = None,
-    name: Optional[str] = None,
+    password: str | None = None,
+    name: str | None = None,
     set_active: bool = True,
 ) -> str:
     """Save a connection. Returns the name used (name or derived from host)."""
@@ -122,7 +131,7 @@ def delete_connection(name: str) -> bool:
     return True
 
 
-def get_host_from_connection(name: Optional[str] = None) -> Optional[str]:
+def get_host_from_connection(name: str | None = None) -> str | None:
     """Convenience: return host string for the given or active connection."""
     conn = get_connection(name)
     if conn is None:

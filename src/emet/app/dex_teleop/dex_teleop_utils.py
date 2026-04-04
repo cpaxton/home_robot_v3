@@ -69,9 +69,7 @@ def format_state(raw_state: dict | None = None, teleop_mode: str | None = "base_
     elif teleop_mode == "old_stationary_base":
         pass
     else:
-        raise NotImplementedError(
-            f"{teleop_mode} is not a supported teleop mode. Supported modes: {SUPPORTED_MODES}"
-        )
+        raise NotImplementedError(f"{teleop_mode} is not a supported teleop mode. Supported modes: {SUPPORTED_MODES}")
 
     return raw_state
 
@@ -110,9 +108,7 @@ def get_teleop_controlled_joints(teleop_mode: str):
         return arm
 
 
-def process_goal_dict(
-    goal_dict: dict, prev_goal_dict: dict = None, use_gripper_center: bool = True
-) -> dict:
+def process_goal_dict(goal_dict: dict, prev_goal_dict: dict = None, use_gripper_center: bool = True) -> dict:
     """Process goal dict:
     - fix orientation if necessary
     - calculate relative gripper position and orientation
@@ -166,7 +162,6 @@ def process_goal_dict(
 
     goal_dict["use_gripper_center"] = use_gripper_center
     if prev_goal_dict is not None and "gripper_orientation" in prev_goal_dict:
-
         T0 = np.eye(4)
         r0 = Rotation.from_quat(prev_goal_dict["gripper_orientation"])
         T0[:3, :3] = r0.as_matrix()

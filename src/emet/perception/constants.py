@@ -15,7 +15,6 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -87,14 +86,14 @@ class SemanticCategoryMapping(ABC):
     the color palettes and legends to visualize these categories.
     """
 
-    def __init__(self, goal_id_to_goal_name: Dict[int, str]):
+    def __init__(self, goal_id_to_goal_name: dict[int, str]):
         self.goal_id_to_goal_name = goal_id_to_goal_name
-        self.goal_name_to_goal_id: Dict[str, int] = {}
+        self.goal_name_to_goal_id: dict[str, int] = {}
         for gid, gname in self.goal_id_to_goal_name.items():
             self.goal_name_to_goal_id[gname] = gid
 
     @abstractmethod
-    def map_goal_id(self, goal_id: int) -> Tuple[int, str]:
+    def map_goal_id(self, goal_id: int) -> tuple[int, str]:
         pass
 
     @abstractmethod
@@ -326,7 +325,7 @@ class HM3DtoCOCOIndoor(SemanticCategoryMapping):
         self._instance_id_to_category_id = None
         super().__init__(self.goal_id_to_goal_name)
 
-    def map_goal_id(self, goal_id: int) -> Tuple[int, str]:
+    def map_goal_id(self, goal_id: int) -> tuple[int, str]:
         return (
             self.hm3d_goal_id_to_coco_goal_id[goal_id],
             self.hm3d_goal_id_to_coco_goal_name[goal_id],
@@ -370,13 +369,9 @@ languagenav_2categories_indexes = {
     2: "landmark",
 }
 
-languagenav_2categories_padded = (
-    ["."] + [languagenav_2categories_indexes[i] for i in range(1, 3)] + ["other"]
-)
+languagenav_2categories_padded = ["."] + [languagenav_2categories_indexes[i] for i in range(1, 3)] + ["other"]
 
-languagenav_2categories_legend_path = str(
-    Path(__file__).resolve().parent / "rearrange_3categories_legend.png"
-)
+languagenav_2categories_legend_path = str(Path(__file__).resolve().parent / "rearrange_3categories_legend.png")
 
 # languagenav_2categories_color_palette = [255, 255, 255] + list(
 #     d3_40_colors_rgb[1:3].flatten()
@@ -436,7 +431,7 @@ class LanguageNavCategories(SemanticCategoryMapping):
         self._instance_id_to_category_id = None
         super().__init__(self.goal_id_to_goal_name)
 
-    def map_goal_id(self, goal_id: int) -> Tuple[int, str]:
+    def map_goal_id(self, goal_id: int) -> tuple[int, str]:
         return (goal_id, self.goal_id_to_goal_name[goal_id])
 
     def reset_instance_id_to_category_id(self, env):
@@ -483,13 +478,9 @@ rearrange_3categories_indexes = {
     3: "goal_receptacle",
 }
 
-rearrange_3categories_padded = (
-    ["."] + [rearrange_3categories_indexes[i] for i in range(1, 4)] + ["other"]
-)
+rearrange_3categories_padded = ["."] + [rearrange_3categories_indexes[i] for i in range(1, 4)] + ["other"]
 
-rearrange_3categories_legend_path = str(
-    Path(__file__).resolve().parent / "rearrange_3categories_legend.png"
-)
+rearrange_3categories_legend_path = str(Path(__file__).resolve().parent / "rearrange_3categories_legend.png")
 
 rearrange_3categories_color_palette = [255, 255, 255] + list(d3_40_colors_rgb[1:4].flatten())
 rearrange_3categories_frame_color_palette = rearrange_3categories_color_palette + [
@@ -575,13 +566,9 @@ mukul_33categories_indexes = {
     32: "wardrobe",
     33: "washer_dryer",
 }
-mukul_33categories_padded = (
-    ["."] + [mukul_33categories_indexes[i] for i in range(1, 34)] + ["other"]
-)
+mukul_33categories_padded = ["."] + [mukul_33categories_indexes[i] for i in range(1, 34)] + ["other"]
 
-mukul_33categories_legend_path = str(
-    Path(__file__).resolve().parent / "mukul_33categories_legend.png"
-)
+mukul_33categories_legend_path = str(Path(__file__).resolve().parent / "mukul_33categories_legend.png")
 
 mukul_33categories_color_palette = [255, 255, 255] + list(d3_40_colors_rgb[1:34].flatten())
 mukul_33categories_frame_color_palette = mukul_33categories_color_palette + [
@@ -640,7 +627,7 @@ class FloorplannertoMukulIndoor(SemanticCategoryMapping):
         self._instance_id_to_category_id = None
         super().__init__(self.floorplanner_goal_id_to_goal_name)
 
-    def map_goal_id(self, goal_id: int) -> Tuple[int, str]:
+    def map_goal_id(self, goal_id: int) -> tuple[int, str]:
         return (goal_id, self.floorplanner_goal_id_to_goal_name[goal_id])
 
     def reset_instance_id_to_category_id(self, env):
@@ -762,7 +749,7 @@ class HM3DtoHSSD28Indoor(SemanticCategoryMapping):
         self._instance_id_to_category_id = None
         super().__init__(self.floorplanner_goal_id_to_goal_name)
 
-    def map_goal_id(self, goal_id: int) -> Tuple[int, str]:
+    def map_goal_id(self, goal_id: int) -> tuple[int, str]:
         return (goal_id, self.floorplanner_goal_id_to_goal_name[goal_id])
 
     def reset_instance_id_to_category_id(self, env):
@@ -794,10 +781,10 @@ class RearrangeBasicCategories(SemanticCategoryMapping):
     def __init__(self):
         self.goal_id_to_goal_name = rearrange_3categories_indexes
         self._instance_id_to_category_id = None
-        self.goal_name_to_goal_id: Dict[str, int] = {}
+        self.goal_name_to_goal_id: dict[str, int] = {}
         super().__init__(self.goal_id_to_goal_name)
 
-    def map_goal_id(self, goal_id: int) -> Tuple[int, str]:
+    def map_goal_id(self, goal_id: int) -> tuple[int, str]:
         return (goal_id, self.goal_id_to_goal_name[goal_id])
 
     def reset_instance_id_to_category_id(self, env=None):
@@ -828,9 +815,7 @@ class RearrangeBasicCategories(SemanticCategoryMapping):
         return 5
 
 
-rearrange_detic_categories_legend_path = str(
-    Path(__file__).resolve().parent / "rearrange_detic_categories_legend.png"
-)
+rearrange_detic_categories_legend_path = str(Path(__file__).resolve().parent / "rearrange_detic_categories_legend.png")
 
 
 class RearrangeCategories(SemanticCategoryMapping):
@@ -841,10 +826,10 @@ class RearrangeCategories(SemanticCategoryMapping):
         self.goal_id_to_goal_name = categories_indexes
         self._num_sem_obj_categories = num_sem_objects
         self._instance_id_to_category_id = None
-        self.goal_name_to_goal_id: Dict[str, int] = {}
+        self.goal_name_to_goal_id: dict[str, int] = {}
         super().__init__(self.goal_id_to_goal_name)
 
-    def map_goal_id(self, goal_id: int) -> Tuple[int, str]:
+    def map_goal_id(self, goal_id: int) -> tuple[int, str]:
         return (goal_id, self.goal_id_to_goal_name[goal_id])
 
     def reset_instance_id_to_category_id(self, env=None):
@@ -858,9 +843,7 @@ class RearrangeCategories(SemanticCategoryMapping):
 
     @property
     def color_palette(self):
-        color_palette = [255, 255, 255] + d3_40_colors_rgb[
-            1 : self.num_sem_categories
-        ].flatten().tolist()
+        color_palette = [255, 255, 255] + d3_40_colors_rgb[1 : self.num_sem_categories].flatten().tolist()
         return color_palette
 
     @property
@@ -1814,7 +1797,7 @@ class HM3DtoLongTailIndoor(SemanticCategoryMapping):
         self._instance_id_to_category_id = None
         super().__init__(self.hm3d_goal_id_to_longtail_goal_name)
 
-    def map_goal_id(self, goal_id: int) -> Tuple[int, str]:
+    def map_goal_id(self, goal_id: int) -> tuple[int, str]:
         return (
             self.hm3d_goal_id_to_longtail_goal_id[goal_id],
             self.hm3d_goal_id_to_longtail_goal_name[goal_id],

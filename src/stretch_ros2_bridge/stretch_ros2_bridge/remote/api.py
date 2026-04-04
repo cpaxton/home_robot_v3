@@ -8,13 +8,12 @@
 # license information maybe found below, if so.
 
 import time
+from collections.abc import Iterable
 
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Dict, Iterable, List, Optional
-
 import numpy as np
 import torch
 import trimesh.transformations as tra
@@ -46,13 +45,13 @@ class StretchClient(AbstractRobotClient):
     def __init__(
         self,
         init_node: bool = True,
-        camera_overrides: Optional[Dict] = None,
+        camera_overrides: dict | None = None,
         urdf_path: str = "",
         ik_type: str = "pinocchio",
         visualize_ik: bool = False,
-        grasp_frame: Optional[str] = None,
-        ee_link_name: Optional[str] = None,
-        manip_mode_controlled_joints: Optional[List[str]] = None,
+        grasp_frame: str | None = None,
+        ee_link_name: str | None = None,
+        manip_mode_controlled_joints: list[str] | None = None,
         d405: bool = True,
     ):
         """Create an interface into ROS execution here. This one needs to connect to:
@@ -186,18 +185,14 @@ class StretchClient(AbstractRobotClient):
 
     @property
     def head_camera_pose(self):
-        p0 = self._ros_client.get_frame_pose(
-            self.head_camera_frame, base_frame=self.world_frame, timeout_s=5.0
-        )
+        p0 = self._ros_client.get_frame_pose(self.head_camera_frame, base_frame=self.world_frame, timeout_s=5.0)
         if p0 is not None:
             p0 = p0 @ tra.euler_matrix(0, 0, -np.pi / 2)
         return p0
 
     @property
     def ee_camera_pose(self):
-        p0 = self._ros_client.get_frame_pose(
-            self.ee_camera_frame, base_frame=self.world_frame, timeout_s=5.0
-        )
+        p0 = self._ros_client.get_frame_pose(self.ee_camera_frame, base_frame=self.world_frame, timeout_s=5.0)
         return p0
 
     @property
@@ -298,7 +293,7 @@ class StretchClient(AbstractRobotClient):
     def get_observation(
         self,
         rotate_head_pts=False,
-        start_pose: Optional[np.ndarray] = None,
+        start_pose: np.ndarray | None = None,
         compute_xyz: bool = True,
     ) -> Observations:
         """Get an observation from the current robot.
@@ -369,9 +364,7 @@ class StretchClient(AbstractRobotClient):
             while True:
                 cur_pan, cur_tilt = self.head.get_pan_tilt()
                 t1 = time.time()
-                if (abs(cur_pan - pan) <= threshold and abs(cur_tilt - tilt) < threshold) or (
-                    t1 - t0 > timeout
-                ):
+                if (abs(cur_pan - pan) <= threshold and abs(cur_tilt - tilt) < threshold) or (t1 - t0 > timeout):
                     break
                 else:
                     time.sleep(0.1)
@@ -433,4 +426,3 @@ if __name__ == "__main__":
 
     rclpy.init()
     client = StretchClient()
-    breakpoint()

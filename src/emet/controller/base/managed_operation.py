@@ -8,7 +8,6 @@
 # license information maybe found below, if so.
 
 import os
-from typing import Optional
 
 from termcolor import colored
 
@@ -24,8 +23,8 @@ class ManagedOperation(Operation):
     def __init__(
         self,
         name,
-        agent: Optional[RobotAgent] = None,
-        robot: Optional[AbstractRobotClient] = None,
+        agent: RobotAgent | None = None,
+        robot: AbstractRobotClient | None = None,
         **kwargs,
     ):
         super().__init__(name, **kwargs)
@@ -94,7 +93,7 @@ class ManagedOperation(Operation):
         plt.imshow(self.agent.get_voxel_map().observations[0].instance)
         plt.show()
 
-    def show_instance(self, instance: Instance, title: Optional[str] = None):
+    def show_instance(self, instance: Instance, title: str | None = None):
         """Show the instance in the voxel grid."""
         import matplotlib
 

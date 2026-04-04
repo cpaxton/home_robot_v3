@@ -1,11 +1,22 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Tests for GraphEQA memory (graph-based EQA). No code copied from closed-source repos.
 
-import numpy as np
-import pytest
-from PIL import Image
+import tempfile
+from pathlib import Path
 
+import numpy as np
+
+from emet.memory.adapters import GraphEQABackend
 from emet.memory.graph_eqa import GraphEQAMemory
 from emet.memory.graph_eqa.graph_memory import _near, _on_floor
 
@@ -54,13 +65,7 @@ def test_parse_answer():
         eqa_client=lambda x: "",
         image_description_client=lambda x: "",
     )
-    raw = (
-        "reasoning: I see a table.\n"
-        "answer: Yes\n"
-        "confidence: True\n"
-        "action: \n"
-        "confidence_reasoning: I am sure."
-    )
+    raw = "reasoning: I see a table.\nanswer: Yes\nconfidence: True\naction: \nconfidence_reasoning: I am sure."
     r, a, c, act, cr = mem.parse_answer(raw)
     assert "table" in r
     assert a.strip().lower() == "yes"
@@ -100,14 +105,9 @@ def test_on_floor_heuristic():
 
 def test_query_answer_returns_tuple_with_mock_client():
     """query_answer returns (reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images)."""
+
     def mock_eqa(commands):
-        return (
-            "reasoning: I see a table.\n"
-            "answer: Yes\n"
-            "confidence: true\n"
-            "action: \n"
-            "confidence_reasoning: Sure."
-        )
+        return "reasoning: I see a table.\nanswer: Yes\nconfidence: true\naction: \nconfidence_reasoning: Sure."
 
     mem = GraphEQAMemory(
         eqa_client=mock_eqa,
@@ -127,3 +127,87 @@ def test_query_answer_returns_tuple_with_mock_client():
     assert isinstance(confidence_reasoning, str)
     assert target_point is None  # confident, so no exploration
     assert isinstance(relevant_images, list)
+
+
+def test_to_tree_string():
+    """to_tree_string formats the scene graph as an indented tree with Floor and relations."""
+    mem = GraphEQAMemory(
+        eqa_client=lambda x: "",
+        image_description_client=lambda x: "",
+    )
+    rgb = np.zeros((60, 80, 3), dtype=np.uint8)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.0]), ["carpet"])
+    mem.add_observation(rgb, np.array([0.5, 0.0, 0.8]), ["table"])
+    mem.add_observation(rgb, np.array([0.5, 0.0, 0.85]), ["cup"], description="A red cup on the table")
+    tree = mem.to_tree_string()
+    assert "Scene (3D spatial graph)" in tree
+    assert "Floor" in tree
+    assert "carpet" in tree
+    assert "table" in tree
+    assert "cup" in tree
+    assert "0.50" in tree
+    assert "A red cup" in tree or "red cup" in tree
+
+
+def test_print_memory():
+    """print_memory returns the same tree as to_tree_string."""
+    mem = GraphEQAMemory(
+        eqa_client=lambda x: "",
+        image_description_client=lambda x: "",
+    )
+    mem.add_observation(
+        np.zeros((60, 80, 3), dtype=np.uint8),
+        np.array([0.0, 0.0, 0.1]),
+        ["sofa"],
+    )
+    out = mem.print_memory()
+    assert "Scene" in out
+    assert "sofa" in out
+
+
+def test_graph_eqa_backend_print_memory():
+    """GraphEQABackend.print_memory delegates to graph and returns tree text."""
+    mem = GraphEQAMemory(
+        eqa_client=lambda x: "",
+        image_description_client=lambda x: "",
+    )
+    mem.add_observation(
+        np.zeros((60, 80, 3), dtype=np.uint8),
+        np.array([0.0, 0.0, 0.0]),
+        ["lamp"],
+    )
+    backend = GraphEQABackend(mem)
+    text = backend.print_memory()
+    assert "Scene" in text
+    assert "lamp" in text
+
+
+def test_graph_eqa_save_load_roundtrip():
+    """Save and load graph memory restores nodes, edges, observations (xyz and labels)."""
+    mem = GraphEQAMemory(
+        eqa_client=lambda x: "",
+        image_description_client=lambda x: "",
+    )
+    rgb = np.zeros((64, 64, 3), dtype=np.uint8)
+    mem.add_observation(rgb, np.array([1.0, 2.0, 0.5]), ["chair"], description="A wooden chair")
+    mem.add_observation(rgb, np.array([1.1, 2.1, 0.5]), ["desk"])
+    backend = GraphEQABackend(mem)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "graph_mem"
+        backend.save(str(path))
+        assert (path / "manifest.json").exists()
+        assert (path / "graph.json").exists()
+        mem2 = GraphEQAMemory(eqa_client=lambda x: "", image_description_client=lambda x: "")
+        backend2 = GraphEQABackend(mem2)
+        backend2.load(str(path))
+        nodes = mem2.get_nodes()
+        obs = mem2.get_observations()
+        assert len(nodes) == 2
+        assert len(obs) == 2
+        n1 = next(n for n in nodes if n.node_id == 1)
+        assert "chair" in n1.labels
+        assert n1.description == "A wooden chair"
+        o1 = next(o for o in obs if o.obs_id == 1)
+        assert list(o1.xyz) == [1.0, 2.0, 0.5]
+        assert o1.labels == ["chair"]
+        assert o1.description == "A wooden chair"

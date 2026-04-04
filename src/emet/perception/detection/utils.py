@@ -12,14 +12,11 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Optional, Tuple
 
 import numpy as np
 
 
-def overlay_masks(
-    masks: np.ndarray, class_idcs: np.ndarray, shape: Tuple[int, int]
-) -> Tuple[np.ndarray, np.ndarray]:
+def overlay_masks(masks: np.ndarray, class_idcs: np.ndarray, shape: tuple[int, int]) -> tuple[np.ndarray, np.ndarray]:
     """Overlays the masks of objects
     Determines the order of masks based on mask size
     """
@@ -35,9 +32,7 @@ def overlay_masks(
     return semantic_mask, instance_mask
 
 
-def filter_depth(
-    mask: np.ndarray, depth: np.ndarray, depth_threshold: Optional[float] = None
-) -> np.ndarray:
+def filter_depth(mask: np.ndarray, depth: np.ndarray, depth_threshold: float | None = None) -> np.ndarray:
     """Filter object mask by depth.
 
     Arguments:

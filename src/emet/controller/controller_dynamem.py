@@ -15,7 +15,7 @@
 
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 from uuid import uuid4
 
 import numpy as np
@@ -25,27 +25,26 @@ import torch
 import zmq
 from PIL import Image
 
+from emet.audio.text_to_speech import PiperTextToSpeech
+from emet.controller.base_controller import BaseController
 from emet.controller.manipulation.dynamem_manipulation.dynamem_manipulation import (
     DynamemManipulationWrapper as ManipulationWrapper,
 )
-from emet.visualization.rerun import has_display
 from emet.controller.manipulation.dynamem_manipulation.grasper_utils import (
     capture_and_process_image,
     move_to_point,
     pickup,
     process_image_for_placing,
 )
-from emet.controller.base_controller import BaseController
-from emet.audio.text_to_speech import PiperTextToSpeech
-from emet.core.interfaces import Observations
 from emet.core.parameters import Parameters
 from emet.core.robot import AbstractRobotClient
-from emet.mapping.instance import Instance
+from emet.mapping.instance import instances_to_text
 from emet.mapping.scene_graph import SceneGraph
 from emet.mapping.voxel import SparseVoxelMapDynamem as SparseVoxelMap
 from emet.mapping.voxel import (
     SparseVoxelMapNavigationSpaceDynamem as SparseVoxelMapNavigationSpace,
 )
+from emet.mapping.voxel.voxel import _instance_memory_kwargs_from_params
 from emet.motion.algo.a_star import AStar
 from emet.perception.detection.owl import OwlPerception
 from emet.perception.detection.yoloe import YoloEPerception
@@ -54,6 +53,7 @@ from emet.perception.detection.yoloe import YoloEPerception
 from emet.perception.encoders.clip_encoder import MaskClipEncoder
 from emet.perception.encoders.siglip_encoder import MaskSiglipEncoder
 from emet.perception.wrapper import OvmmPerception
+from emet.visualization.rerun import has_display
 
 # Manipulation hyperparameters
 INIT_LIFT_POS = 0.45
@@ -74,15 +74,15 @@ class DynamemController(BaseController):
     def __init__(
         self,
         robot: AbstractRobotClient,
-        parameters: Union[Parameters, Dict[str, Any]],
-        semantic_sensor: Optional[OvmmPerception] = None,
+        parameters: Parameters | dict[str, Any],
+        semantic_sensor: OvmmPerception | None = None,
         save_rerun: bool = False,
         use_instance_memory: bool = False,
         realtime_updates: bool = False,
         re: int = 3,
         manip_port: int = 5557,
-        log: Optional[str] = None,
-        server_ip: Optional[str] = "127.0.0.1",
+        log: str | None = None,
+        server_ip: str | None = "127.0.0.1",
         mllm: bool = False,
         manipulation_only: bool = False,
         cpu_only: bool = False,
@@ -135,9 +135,7 @@ class DynamemController(BaseController):
             stretch_gripper_max = 0.64
             end_link = "link_gripper_s3_body"
         self.transform_node = end_link
-        self.manip_wrapper = ManipulationWrapper(
-            self.robot, stretch_gripper_max=stretch_gripper_max, end_link=end_link
-        )
+        self.manip_wrapper = ManipulationWrapper(self.robot, stretch_gripper_max=stretch_gripper_max, end_link=end_link)
         self.robot.move_to_nav_posture()
 
         self.re = re
@@ -158,15 +156,11 @@ class DynamemController(BaseController):
             self.encoder = None
         elif self.cpu_only:
             # Assume we only have CPU, we will use CLIP ViT-B/16 for fast inference
-            self.encoder = MaskClipEncoder(
-                version="ViT-B/16", feature_matching_threshold=0.35, device=self.device
-            )
+            self.encoder = MaskClipEncoder(version="ViT-B/16", feature_matching_threshold=0.35, device=self.device)
         else:
             # Use SIGLip-so400m for accurate inference
             # We personally feel that Siglipv1 is better than Siglipv2, but we still include the Siglipv2 in src/emet/perception/encoders/ for future reference
-            self.encoder = MaskSiglipEncoder(
-                version="so400m", feature_matching_threshold=0.14, device=self.device
-            )
+            self.encoder = MaskSiglipEncoder(version="so400m", feature_matching_threshold=0.14, device=self.device)
 
         # You can see a clear difference in hyperparameter selection in different querying strategies
         # Running gpt4o is time consuming, so we don't want to waste more time on object detection or Siglip or voxelization
@@ -181,9 +175,7 @@ class DynamemController(BaseController):
             image_shape = (360, 270)
         elif self.mllm:
             # Use GPT4o to localize objects, we use OWLV2-B for fast inference
-            self.detection_model = OwlPerception(
-                version="owlv2-B-p16", device=self.device, confidence_threshold=0.01
-            )
+            self.detection_model = OwlPerception(version="owlv2-B-p16", device=self.device, confidence_threshold=0.01)
             semantic_memory_resolution = 0.1
             image_shape = (360, 270)
         elif self._use_instance_memory or self.cpu_only:
@@ -214,10 +206,8 @@ class DynamemController(BaseController):
             min_depth=parameters["min_depth"],
             max_depth=parameters["max_depth"],
             pad_obstacles=parameters["pad_obstacles"],
-            add_local_radius_points=parameters.get("add_local_radius_points", default=True),
-            remove_visited_from_obstacles=parameters.get(
-                "remove_visited_from_obstacles", default=False
-            ),
+            add_local_radius_points=parameters.get("add_local_radius_points", True),
+            remove_visited_from_obstacles=parameters.get("remove_visited_from_obstacles", False),
             smooth_kernel_size=parameters.get("filters/smooth_kernel_size", -1),
             use_median_filter=parameters.get("filters/use_median_filter", False),
             median_filter_size=parameters.get("filters/median_filter_size", 5),
@@ -230,6 +220,7 @@ class DynamemController(BaseController):
             mllm=self.mllm,
             run_eqa=self.eqa,
             use_instance_memory=self._use_instance_memory,
+            instance_memory_kwargs=_instance_memory_kwargs_from_params(parameters),
         )
         self.space = SparseVoxelMapNavigationSpace(
             self.voxel_map,
@@ -284,19 +275,34 @@ class DynamemController(BaseController):
             instances = self.get_voxel_map().get_instances()
             if instances:
                 self._update_scene_graph()
-                self.rerun_visualizer.update_scene_graph(
-                    self.scene_graph, self.semantic_sensor
-                )
+                self.rerun_visualizer.update_scene_graph(self.scene_graph, self.semantic_sensor)
 
     def _update_scene_graph(self) -> None:
         """Update the scene graph with the latest instances from the voxel map."""
         if self.scene_graph is None:
-            self.scene_graph = SceneGraph(
-                self.parameters, self.get_voxel_map().get_instances()
-            )
+            self.scene_graph = SceneGraph(self.parameters, self.get_voxel_map().get_instances())
         else:
             self.scene_graph.update(self.get_voxel_map().get_instances())
         self.scene_graph.get_relationships(debug=False)
+
+    def dump_memory_to_text(
+        self,
+        include_bounds: bool = True,
+        class_names: dict[int, str] | None = None,
+    ) -> str:
+        """Return instance memory as human-readable text (for logging or CLI dump)."""
+        if not self.voxel_map.use_instance_memory:
+            return "Instance memory is disabled."
+        instances = self.get_voxel_map().get_instances()
+        if class_names is None and self.semantic_sensor is not None and self.semantic_sensor.is_semantic():
+            class_names = {}
+            for inst in instances:
+                cid = inst.get_category_id()
+                if cid is not None and cid not in class_names:
+                    name = self.semantic_sensor.get_class_name_for_id(cid)
+                    if name is not None:
+                        class_names[cid] = name
+        return instances_to_text(instances, class_names=class_names, include_bounds=include_bounds)
 
     def look_around(self):
         """
@@ -317,7 +323,7 @@ class DynamemController(BaseController):
             rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")
         xyt = self.robot.get_base_pose()
         self.robot.head_to(head_pan=0, head_tilt=-0.6, blocking=True)
-        for i in range(8):
+        for _i in range(8):
             xyt[2] += 2 * np.pi / 8
             self.robot.move_base_to(xyt, blocking=True)
             if not self._realtime_updates:
@@ -327,7 +333,7 @@ class DynamemController(BaseController):
     def execute_action(
         self,
         text: str,
-    ) -> Tuple[Optional[bool], Optional[np.ndarray]]:
+    ) -> tuple[bool | None, np.ndarray | None]:
         """
         This function is used to navigate the robot give text query.
         It will call the process_text function to get the trajectory for the robot to follow.
@@ -481,7 +487,6 @@ class DynamemController(BaseController):
         # the object so that we can make sure the robot looks at the object after navigation
         traj = []
         if waypoints is not None:
-
             self.rerun_visualizer.log_custom_pointcloud(
                 "world/object",
                 [localized_point[0], localized_point[1], 1.5],
@@ -524,12 +529,8 @@ class DynamemController(BaseController):
             for idx in range(len(traj)):
                 if idx != len(traj) - 1:
                     origins.append([traj[idx][0], traj[idx][1], 1.5])
-                    vectors.append(
-                        [traj[idx + 1][0] - traj[idx][0], traj[idx + 1][1] - traj[idx][1], 0]
-                    )
-            self.rerun_visualizer.log_arrow3D(
-                "world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1
-            )
+                    vectors.append([traj[idx + 1][0] - traj[idx][0], traj[idx + 1][1] - traj[idx][1], 0])
+            self.rerun_visualizer.log_arrow3D("world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1)
             self.rerun_visualizer.log_custom_pointcloud(
                 "world/robot_start_pose",
                 [start_pose[0], start_pose[1], 1.5],
@@ -598,9 +599,7 @@ class DynamemController(BaseController):
                 # self.owl_sam_detector = OWLSAMProcessor(confidence_threshold=0.1)
 
                 # A misnomer, this is actually YOLOE while its named as self.owl_sam_detector
-                self.owl_sam_detector = YoloEPerception(
-                    confidence_threshold=0.05, size="l", device=self.device
-                )
+                self.owl_sam_detector = YoloEPerception(confidence_threshold=0.05, size="l", device=self.device)
             rotation, translation = process_image_for_placing(
                 obj=text,
                 hello_robot=self.manip_wrapper,
@@ -621,9 +620,7 @@ class DynamemController(BaseController):
         self.manip_wrapper.move_to_position(gripper_pos=1, blocking=True)
 
         # Lift the arm a little bit, and rotate the wrist roll of the robot in case the object attached on the gripper
-        self.manip_wrapper.move_to_position(
-            lift_pos=min(self.manip_wrapper.robot.get_six_joints()[1] + 0.3, 1.1)
-        )
+        self.manip_wrapper.move_to_position(lift_pos=min(self.manip_wrapper.robot.get_six_joints()[1] + 0.3, 1.1))
         self.manip_wrapper.move_to_position(wrist_roll=2.5, blocking=True)
         self.manip_wrapper.move_to_position(wrist_roll=-2.5, blocking=True)
 
@@ -632,9 +629,7 @@ class DynamemController(BaseController):
         self.manip_wrapper.move_to_position(wrist_pitch=-1.57)
 
         # Shift the base back to the original point as we are certain that original point is navigable in navigation obstacle map
-        self.manip_wrapper.move_to_position(
-            base_trans=-self.manip_wrapper.robot.get_six_joints()[0]
-        )
+        self.manip_wrapper.move_to_position(base_trans=-self.manip_wrapper.robot.get_six_joints()[0])
         return True
 
     def get_voxel_map(self):
@@ -703,13 +698,11 @@ class DynamemController(BaseController):
             )
 
         # Shift the base back to the original point as we are certain that original point is navigable in navigation obstacle map
-        self.manip_wrapper.move_to_position(
-            base_trans=-self.manip_wrapper.robot.get_six_joints()[0]
-        )
+        self.manip_wrapper.move_to_position(base_trans=-self.manip_wrapper.robot.get_six_joints()[0])
 
         return True
 
-    def _patch_images(self, images: List[Image.Image], patch_size=(480, 640), gap=5):
+    def _patch_images(self, images: list[Image.Image], patch_size=(480, 640), gap=5):
         """
         Patch a list of PIL Images into a numpy array, used for dicrod bot
         """
@@ -746,7 +739,7 @@ class DynamemController(BaseController):
 
         discord_text, relevant_images = "", []
 
-        for cnt_step in range(max_planning_steps):
+        for _cnt_step in range(max_planning_steps):
             answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(question)
             if confidence:
                 self.robot.say("The answer to " + question + " is " + answer)
@@ -786,9 +779,7 @@ class DynamemController(BaseController):
             )
 
         # Log the texts to rerun visualizer
-        confidence_text = (
-            "I am confident with the answer" if confidence else "I am NOT confident with the answer"
-        )
+        confidence_text = "I am confident with the answer" if confidence else "I am NOT confident with the answer"
 
         reasoning_output = (
             "\n#### Reasoning for the answer: " + reasoning
@@ -816,9 +807,7 @@ class DynamemController(BaseController):
         if confidence:
             discord_text = answer + ". I believe this answer is correct because " + reasoning
         else:
-            discord_text = (
-                "I am not confident to answer the question because " + confidence_reasoning
-            )
+            discord_text = "I am not confident to answer the question because " + confidence_reasoning
 
         discord_text += "\nI also provide relevant images here."
 
@@ -850,9 +839,9 @@ class DynamemController(BaseController):
 
     def navigate_to_target_pose(
         self,
-        target_pose: Optional[Union[torch.Tensor, np.ndarray, list, tuple]],
-        start_pose: Optional[Union[torch.Tensor, np.ndarray, list, tuple]],
-        target_theta: Optional[float] = None,
+        target_pose: torch.Tensor | np.ndarray | list | tuple | None,
+        start_pose: torch.Tensor | np.ndarray | list | tuple | None,
+        target_theta: float | None = None,
     ):
         res = None
         original_target_pose = target_pose
@@ -901,12 +890,8 @@ class DynamemController(BaseController):
             for idx in range(len(traj)):
                 if idx != len(traj) - 1:
                     origins.append([traj[idx][0], traj[idx][1], 1.5])
-                    vectors.append(
-                        [traj[idx + 1][0] - traj[idx][0], traj[idx + 1][1] - traj[idx][1], 0]
-                    )
-            self.rerun_visualizer.log_arrow3D(
-                "world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1
-            )
+                    vectors.append([traj[idx + 1][0] - traj[idx][0], traj[idx + 1][1] - traj[idx][1], 0])
+            self.rerun_visualizer.log_arrow3D("world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1)
             self.rerun_visualizer.log_custom_pointcloud(
                 "world/robot_start_pose",
                 [start_pose[0], start_pose[1], 1.5],

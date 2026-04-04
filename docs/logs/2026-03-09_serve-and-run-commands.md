@@ -171,19 +171,19 @@ To exit DynaMem cleanly, use the mode prompt and choose **Q** (quit) when the ap
 
 ## 5. Testing checklist (SVM vs DynaMem in Robocasa)
 
-1. **Robocasa server**  
+1. **Robocasa server**
    `emet serve mujoco --use-robocasa` (same for both flows).
 
-2. **SVM only (mapping)**  
-   - `emet run mapping --robot-ip 127.0.0.1`  
-   - Optionally set `--explore-iter`, `--output-filename`.  
+2. **SVM only (mapping)**
+   - `emet run mapping --robot-ip 127.0.0.1`
+   - Optionally set `--explore-iter`, `--output-filename`.
    - Inspect: `python -m emet.app.read_map -i <map.pkl> --show-svm`.
 
-3. **DynaMem (pick-and-place)**  
-   - `emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo --match-method class`  
+3. **DynaMem (pick-and-place)**
+   - `emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo --match-method class`
    - Add goals: `--target-object apple --target-receptacle plate` (and choose **M** at the mode prompt).
 
-4. **Relevant tests**  
-   - **DynaMem semantic memory (unit):** `pytest src/test/mapping/test_semantic_memory.py`  
-   - **SVM from saved map (unit):** `pytest src/test/mapping/test_svm.py` (requires `hq_small.pkl` / `hq_large.pkl`)  
+4. **Relevant tests**
+   - **DynaMem semantic memory (unit):** `pytest src/test/mapping/test_semantic_memory.py`
+   - **SVM from saved map (unit):** `pytest src/test/mapping/test_svm.py` (requires `hq_small.pkl` / `hq_large.pkl`)
    - **Red cylinder in default sim:** `src/test/mapping/test_red_cylinder_in_sim.py` (default MuJoCo scene, not Robocasa)
