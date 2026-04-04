@@ -51,6 +51,92 @@ def _has_uv() -> bool:
         return False
 
 
+def _molmospaces_ensure_py311_venv(root: Path) -> None:
+    """MolmoSpaces upstream requires Python >=3.11; recreate an older .venv-molmospaces."""
+    venv = root / ".venv-molmospaces"
+    py = venv / "bin" / "python"
+    if py.is_file():
+        r = subprocess.run(
+            [str(py), "-c", "import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 11) else 1)"],
+            cwd=root,
+            capture_output=True,
+        )
+        if r.returncode != 0:
+            print("  Replacing .venv-molmospaces (molmo-spaces requires Python >=3.11)...")
+            shutil.rmtree(venv, ignore_errors=True)
+    if not venv.is_dir():
+        r = subprocess.call(["uv", "venv", ".venv-molmospaces", "--python", "3.11"], cwd=root)
+        if r != 0:
+            subprocess.call(["uv", "venv", ".venv-molmospaces", "--python", "3.12"], cwd=root)
+
+
+def _molmospaces_pip_install_chain(py_molmo: Path, root: Path, use_uv: str | None) -> None:
+    """Install local emet (--no-deps), then emet-molmospaces (pulls molmo-spaces from GitHub). emet is not on PyPI."""
+    if use_uv:
+        subprocess.call(
+            ["uv", "pip", "install", "--python", str(py_molmo), "--upgrade", "pip"],
+            cwd=root,
+        )
+        subprocess.call(["uv", "pip", "install", "--python", str(py_molmo), "--no-deps", "-e", "."], cwd=root)
+        wrapper_dir = root / "packages" / "emet_molmospaces"
+        if wrapper_dir.exists():
+            subprocess.call(["uv", "pip", "install", "--python", str(py_molmo), "-e", str(wrapper_dir)], cwd=root)
+        else:
+            subprocess.call(
+                [
+                    "uv",
+                    "pip",
+                    "install",
+                    "--python",
+                    str(py_molmo),
+                    "molmo-spaces @ git+https://github.com/allenai/molmospaces.git@62b416089b2eddff339e52a32106a6bc08ed92b1",
+                    "mujoco>=3.4",
+                    "numpy>=2.2",
+                ],
+                cwd=root,
+            )
+    else:
+        subprocess.call([str(py_molmo), "-m", "pip", "install", "--upgrade", "pip"], cwd=root)
+        subprocess.call([str(py_molmo), "-m", "pip", "install", "--no-deps", "-e", "."], cwd=root)
+        wrapper_dir = root / "packages" / "emet_molmospaces"
+        if wrapper_dir.exists():
+            subprocess.call([str(py_molmo), "-m", "pip", "install", "-e", str(wrapper_dir)], cwd=root)
+        else:
+            subprocess.call(
+                [
+                    str(py_molmo),
+                    "-m",
+                    "pip",
+                    "install",
+                    "molmo-spaces @ git+https://github.com/allenai/molmospaces.git@62b416089b2eddff339e52a32106a6bc08ed92b1",
+                    "mujoco>=3.4",
+                    "numpy>=2.2",
+                ],
+                cwd=root,
+            )
+
+
+def _molmospaces_venv_needs_install_or_repair(root: Path, py_molmo: Path) -> bool:
+    if not py_molmo.is_file():
+        return True
+    r = subprocess.run(
+        [
+            str(py_molmo),
+            "-c",
+            "import emet; import emet_molmospaces; "
+            "from molmo_spaces.molmo_spaces_constants import get_scenes; "
+            "from molmo_spaces.utils.lazy_loading_utils import "
+            "install_scene_with_objects_and_grasps_from_path",
+        ],
+        cwd=root,
+        capture_output=True,
+    )
+    if r.returncode != 0:
+        return True
+    exe = root / ".venv-molmospaces" / "bin" / "emet-molmospaces"
+    return not exe.is_file()
+
+
 def _check_submodules(root: Path) -> AssetStatus:
     sam2 = root / "third_party" / "segment-anything-2"
     if not sam2.exists():
@@ -137,7 +223,7 @@ def _check_molmospaces(root: Path) -> AssetStatus:
             name="MolmoSpaces wrapper (.venv-molmospaces / emet-molmospaces)",
             description="Scenes + rby1 robot; thin wrapper (molmo-spaces, mujoco 3.4).",
             status="missing",
-            detail="Run: ./install.sh --molmospaces -y  or  emet install full --all",
+            detail="Run: ./install.sh --molmospaces -y  or  emet install full -y --molmospaces  (or --all)",
         )
     return AssetStatus(
         id="molmospaces",
@@ -274,27 +360,13 @@ def run_install_menu() -> int:
             venv_molmo = root / ".venv-molmospaces"
             py_molmo = venv_molmo / "bin" / "python"
             use_uv = shutil.which("uv") if shutil else None
-
-            def _molmo_pip(*args):
-                if use_uv:
-                    subprocess.call(["uv", "pip", "install", "--python", str(py_molmo)] + list(args), cwd=root)
-                else:
-                    subprocess.call([str(py_molmo), "-m", "pip", "install"] + list(args), cwd=root)
-
-            if not py_molmo.exists():
-                subprocess.call(["uv", "venv", ".venv-molmospaces"], cwd=root)
-                _molmo_pip("--upgrade", "pip")
-                _molmo_pip("--no-deps", "-e", ".")
-                wrapper_dir = root / "packages" / "emet_molmospaces"
-                if wrapper_dir.exists():
-                    _molmo_pip("-e", str(wrapper_dir))
-                else:
-                    _molmo_pip("molmo-spaces", "mujoco>=3.4", "numpy>=2.2")
+            _molmospaces_ensure_py311_venv(root)
+            py_molmo = venv_molmo / "bin" / "python"
+            if _molmospaces_venv_needs_install_or_repair(root, py_molmo):
+                print("  Installing / repairing .venv-molmospaces (editable emet + wrapper + molmo-spaces)...")
+                _molmospaces_pip_install_chain(py_molmo, root, use_uv)
             else:
-                print("  .venv-molmospaces already exists.")
-                wrapper_dir = root / "packages" / "emet_molmospaces"
-                if wrapper_dir.exists() and not (venv_molmo / "bin" / "emet-molmospaces").exists():
-                    _molmo_pip("-e", str(wrapper_dir))
+                print("  .venv-molmospaces already complete.")
             print("\nDone. Run emet sync -e sim (and -e dynamem if needed) to sync extras.")
             continue
 
@@ -335,32 +407,17 @@ def run_install_menu() -> int:
                 print("Run: emet install sim  (includes asset download prompt)")
         elif s.id == "molmospaces":
             venv_molmo = root / ".venv-molmospaces"
-            py_molmo = venv_molmo / "bin" / "python"
             use_uv = shutil.which("uv") if shutil else None
-
-            def _molmo_pip(*args):
-                if use_uv:
-                    subprocess.call(["uv", "pip", "install", "--python", str(py_molmo)] + list(args), cwd=root)
-                else:
-                    subprocess.call([str(py_molmo), "-m", "pip", "install"] + list(args), cwd=root)
-
-            if (venv_molmo / "bin" / "emet-molmospaces").exists():
-                print(".venv-molmospaces already has emet-molmospaces wrapper.")
-            elif py_molmo.exists():
-                print(".venv-molmospaces exists but wrapper missing. Install: pip install -e packages/emet_molmospaces")
+            _molmospaces_ensure_py311_venv(root)
+            py_molmo = venv_molmo / "bin" / "python"
+            if _molmospaces_venv_needs_install_or_repair(root, py_molmo):
+                print("\nInstalling / repairing MolmoSpaces venv (editable emet + wrapper + molmo-spaces)...")
+                _molmospaces_pip_install_chain(py_molmo, root, use_uv)
             else:
-                print("\nCreating .venv-molmospaces and installing emet-molmospaces wrapper...")
-                subprocess.call(["uv", "venv", ".venv-molmospaces"], cwd=root)
-                _molmo_pip("--upgrade", "pip")
-                _molmo_pip("--no-deps", "-e", ".")
-                wrapper_dir = root / "packages" / "emet_molmospaces"
-                if wrapper_dir.exists():
-                    _molmo_pip("-e", str(wrapper_dir))
-                else:
-                    _molmo_pip("molmo-spaces", "mujoco>=3.4", "numpy>=2.2")
-                print(
-                    "Set MLSPACES_ASSETS_DIR for scene data (e.g. export MLSPACES_ASSETS_DIR=~/.cache/molmospaces/assets)"
-                )
+                print(".venv-molmospaces already has emet-molmospaces wrapper.")
+            print(
+                "Set MLSPACES_ASSETS_DIR for scene data (e.g. export MLSPACES_ASSETS_DIR=~/.cache/molmospaces/assets)"
+            )
 
         print()
         input("Press Enter to return to menu...")
