@@ -93,7 +93,15 @@ def _load_default_scene_with_robot(robot_key: str):
 @click.option("--image_scaling", default=1.0, help="Scaling factor for images")
 @click.option("--ee_image_scaling", default=1.0, help="Scaling factor for end-effector images")
 @click.option("--depth_scaling", default=0.001, help="Scaling factor for depth images")
-@click.option("--scene_path", default=None, help="Provide a path to mujoco scene file with stretch.xml")
+@click.option(
+    "--scene_path",
+    default=None,
+    help=(
+        "Stretch: MJCF path (default: packaged scene.xml). "
+        "Non-stretch (e.g. rby1): optional path to a merged MJCF (e.g. MolmoSpaces scene + robot); "
+        "if omitted, uses the default table scene + robot."
+    ),
+)
 @click.option(
     "--use-robocasa",
     "--use_robocasa",
@@ -170,7 +178,7 @@ def main(
     image_scaling: float,
     ee_image_scaling: float,
     depth_scaling: float,
-    scene_path: str,
+    scene_path: str | None,
     use_robocasa: bool,
     robocasa_task: str,
     robocasa_style: int,
@@ -199,7 +207,7 @@ def main(
                 print(f"  {t}")
             sys.exit(0)
         except Exception as e:
-            logger.error("Could not list Robocasa tasks: %s", e)
+            logger.error(f"Could not list Robocasa tasks: {e}")
             sys.exit(1)
 
     scene_model = None
@@ -289,11 +297,12 @@ def main(
             logger.error(msg.format(e.filename))
             sys.exit(1)
 
-    # If no scene path
-    if scene_path is None or len(scene_path) == 0:
+    # Default Stretch scene only when no path given (non-stretch uses None or explicit merged MJCF).
+    if use_stretch and (scene_path is None or len(str(scene_path).strip()) == 0):
         scene_path = default_scene_xml_path
 
-    if _ROBOCASA_IMPORT_FAILED:
+    # Only relevant when we fall back to generated/default scenes, not when --scene_path is set (e.g. MolmoSpaces).
+    if _ROBOCASA_IMPORT_FAILED and not (scene_path and str(scene_path).strip()):
         logger.warning(
             "Robocasa scene generation (--use-robocasa) is not available. "
             "Using default scene. To enable: emet install sim  then  emet sync -e sim",
@@ -353,15 +362,34 @@ def main(
         from emet.simulation.robosuite_server import RobosuiteZmqServer
 
         robot_key = robot.lower().replace("-", "_")
-        # Default scene (floor, table, blue cube, red cylinder) + robot when not using Robocasa
+        # Custom merged MJCF (e.g. MolmoSpaces) or default scene + robot when not using Robocasa
         if not use_robocasa and scene_model is None:
-            scene_model = _load_default_scene_with_robot(robot_key)
-            if scene_model is None:
-                logger.error(
-                    "Default scene with robot not found (scene_default.xml or robot MJCF missing). "
-                    "Use --use-robocasa for Robocasa-generated scenes, or run from repo root with assets."
-                )
-                sys.exit(1)
+            custom_path = (scene_path or "").strip()
+            if custom_path and Path(custom_path).is_file():
+                import mujoco
+
+                from emet.simulation.molmospaces_config import ensure_molmo_asset_layout_symlinks
+
+                ensure_molmo_asset_layout_symlinks()
+                try:
+                    scene_model = mujoco.MjModel.from_xml_path(custom_path)
+                except Exception as e:
+                    logger.error(f"Failed to load MJCF from --scene_path {custom_path}: {e}")
+                    logger.error(
+                        "If this is a MolmoSpaces scene, ensure THOR objects are installed under "
+                        "MLSPACES_ASSETS_DIR and run merge again (emet molmospaces merge-scene or "
+                        "emet serve mujoco --molmospaces-scene ...).",
+                    )
+                    sys.exit(1)
+            else:
+                scene_model = _load_default_scene_with_robot(robot_key)
+                if scene_model is None:
+                    logger.error(
+                        "Default scene with robot not found (scene_default.xml or robot MJCF missing). "
+                        "Use --scene_path with a merged MJCF, --use-robocasa for Robocasa-generated scenes, "
+                        "or run from repo root with assets."
+                    )
+                    sys.exit(1)
         if robot_key in ROBOT_REGISTRY:
             import importlib
 
