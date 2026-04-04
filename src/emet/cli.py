@@ -246,7 +246,17 @@ def serve(
         click.echo("Cannot combine --molmospaces-scene with --use-robocasa / robocasa backend.", err=True)
         sys.exit(1)
     if molmospaces_scene:
-        fd, merged_path = tempfile.mkstemp(suffix=".xml", prefix="molmospaces_merged_")
+        from emet.simulation.molmospaces_config import (
+            ensure_molmospaces_assets_dir_env,
+            galaxea_r1_assets_directory,
+        )
+
+        # Defaults for MLSPACES_ASSETS_DIR / MLSPACES_CACHE_DIR (sibling dirs); merge + mujoco_server inherit.
+        ensure_molmospaces_assets_dir_env()
+        # Merge output must sit next to galaxea_r1.xml so robot mesh paths (assetdir=meshes) resolve.
+        fd, merged_path = tempfile.mkstemp(
+            suffix=".xml", prefix="molmospaces_merged_", dir=str(galaxea_r1_assets_directory())
+        )
         os.close(fd)
         merge_robot = robot.lower().replace("-", "_")
         if merge_robot in ("stretch", "hello_stretch", "hellostretch"):
@@ -332,7 +342,9 @@ def _run_molmospaces_wrapper(args: list[str]) -> int:
             "  uv venv .venv-molmospaces\n"
             "  uv pip install --python .venv-molmospaces/bin/python --no-deps -e .\n"
             "  uv pip install --python .venv-molmospaces/bin/python -e packages/emet_molmospaces\n\n"
-            "Optional: set MLSPACES_ASSETS_DIR (defaults to ~/.cache/molmospaces/assets; see docs/molmospaces.md).",
+            "Optional: set MLSPACES_ASSETS_DIR (defaults to ~/.cache/molmospaces/assets) and "
+            "MLSPACES_CACHE_DIR (defaults to ~/.cache/molmospaces/resource_cache; must differ from assets; "
+            "see docs/molmospaces.md).",
             err=True,
         )
         return 1

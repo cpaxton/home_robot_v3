@@ -197,6 +197,10 @@ def main(
     if "MUJOCO_GL" not in os.environ and (headless or not os.environ.get("DISPLAY")):
         os.environ["MUJOCO_GL"] = "egl"
 
+    from emet.simulation.molmospaces_config import ensure_molmospaces_assets_dir_env
+
+    ensure_molmospaces_assets_dir_env()
+
     if list_robocasa_tasks:
         try:
             from robocasa.environments import ALL_KITCHEN_ENVIRONMENTS
@@ -373,12 +377,20 @@ def main(
                 ensure_molmo_asset_layout_symlinks()
                 try:
                     scene_model = mujoco.MjModel.from_xml_path(custom_path)
+                    # Auto-merge writes molmospaces_merged_*.xml next to galaxea_r1.xml; safe to delete after load.
+                    try:
+                        cp = Path(custom_path)
+                        if cp.is_file() and cp.name.startswith("molmospaces_merged_"):
+                            cp.unlink(missing_ok=True)
+                    except OSError:
+                        pass
                 except Exception as e:
                     logger.error(f"Failed to load MJCF from --scene_path {custom_path}: {e}")
                     logger.error(
-                        "If this is a MolmoSpaces scene, ensure THOR objects are installed under "
-                        "MLSPACES_ASSETS_DIR and run merge again (emet molmospaces merge-scene or "
-                        "emet serve mujoco --molmospaces-scene ...).",
+                        "If this is a MolmoSpaces scene, ensure THOR objects are installed and "
+                        "MLSPACES_ASSETS_DIR / MLSPACES_CACHE_DIR match the env used for merge "
+                        "(sibling dirs; they must not be the same path). Re-run merge: "
+                        "emet molmospaces merge-scene or emet serve mujoco --molmospaces-scene ...",
                     )
                     sys.exit(1)
             else:

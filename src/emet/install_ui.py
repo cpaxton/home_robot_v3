@@ -416,7 +416,9 @@ def run_install_menu() -> int:
             else:
                 print(".venv-molmospaces already has emet-molmospaces wrapper.")
             print(
-                "Set MLSPACES_ASSETS_DIR for scene data (e.g. export MLSPACES_ASSETS_DIR=~/.cache/molmospaces/assets)"
+                "Set MLSPACES_ASSETS_DIR for scene data (e.g. ~/.cache/molmospaces/assets) and "
+                "MLSPACES_CACHE_DIR for extracted archives (e.g. ~/.cache/molmospaces/resource_cache); "
+                "they must differ (upstream ResourceManager)."
             )
 
         print()

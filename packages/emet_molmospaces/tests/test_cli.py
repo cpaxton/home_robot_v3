@@ -123,17 +123,92 @@ def test_split_scene_count():
     assert _split_scene_count(["x", "y"], "train") == 2
 
 
+def test_ensure_resource_cache_ready_calls_setup_when_manifest_missing(tmp_path, monkeypatch):
+    """New MLSPACES_CACHE_DIR can be empty while assets manifest says OK; setup() must repopulate cache."""
+    pytest.importorskip("molmo_spaces")
+
+    import molmo_spaces.molmo_spaces_constants as mconst
+    from emet_molmospaces.runner import _ensure_resource_cache_ready
+
+    monkeypatch.setattr(
+        mconst,
+        "DATA_TYPE_TO_SOURCE_TO_VERSION",
+        {"scenes": {"ithor": "v"}, "objects": {}, "grasps": {}},
+    )
+    setup_calls = 0
+
+    class FakeRM:
+        cache_dir = tmp_path / "cache"
+
+        def cache_path(self, dt, src):
+            return tmp_path / dt / src / "ver"
+
+        def symlink_path(self, dt, src):
+            return tmp_path / "assets" / dt / src
+
+        def setup(self):
+            nonlocal setup_calls
+            setup_calls += 1
+
+    monkeypatch.setattr(mconst, "get_resource_manager", lambda *a, **k: FakeRM())
+    _ensure_resource_cache_ready()
+    assert setup_calls == 1
+
+
+def test_ensure_resource_cache_ready_skips_setup_when_manifests_exist(tmp_path, monkeypatch):
+    pytest.importorskip("molmo_spaces")
+
+    import molmo_spaces.molmo_spaces_constants as mconst
+    from emet_molmospaces.runner import _ensure_resource_cache_ready
+
+    # Same basename as molmospaces_resources.constants.REMOTE_MANIFEST_NAME
+    remote_manifest = "mjthor_resource_file_to_size_mb.json"
+
+    monkeypatch.setattr(
+        mconst,
+        "DATA_TYPE_TO_SOURCE_TO_VERSION",
+        {"scenes": {"ithor": "v"}, "objects": {}, "grasps": {}},
+    )
+    setup_calls = 0
+    root = tmp_path / "scenes" / "ithor" / "ver"
+    root.mkdir(parents=True)
+    (root / remote_manifest).write_text("{}")
+
+    class FakeRM:
+        cache_dir = tmp_path / "cache"
+
+        def cache_path(self, dt, src):
+            return tmp_path / dt / src / "ver"
+
+        def symlink_path(self, dt, src):
+            return tmp_path / "assets" / dt / src
+
+        def setup(self):
+            nonlocal setup_calls
+            setup_calls += 1
+
+    monkeypatch.setattr(mconst, "get_resource_manager", lambda *a, **k: FakeRM())
+    _ensure_resource_cache_ready()
+    assert setup_calls == 0
+
+
 def test_install_scene_with_deps_ithor_includes_thor_objects():
     """iTHOR must call upstream with exclude_thor=False so kitchen object meshes are installed."""
     from emet_molmospaces.runner import _install_scene_with_deps
 
     install_fn = MagicMock()
-    with patch("emet_molmospaces.runner._get_molmo_api", return_value=(None, install_fn)):
+    with (
+        patch("emet_molmospaces.runner._ensure_resource_cache_ready"),
+        patch("emet_molmospaces.runner._get_molmo_api", return_value=(None, install_fn)),
+    ):
         _install_scene_with_deps("/tmp/scene.xml", "ithor")
     assert install_fn.call_args.kwargs.get("exclude_thor") is False
 
     install_fn.reset_mock()
-    with patch("emet_molmospaces.runner._get_molmo_api", return_value=(None, install_fn)):
+    with (
+        patch("emet_molmospaces.runner._ensure_resource_cache_ready"),
+        patch("emet_molmospaces.runner._get_molmo_api", return_value=(None, install_fn)),
+    ):
         _install_scene_with_deps("/tmp/scene.xml", "procthor-10k")
     assert install_fn.call_args.kwargs.get("exclude_thor") is True
 

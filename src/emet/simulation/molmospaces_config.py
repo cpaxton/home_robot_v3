@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -54,50 +55,160 @@ def default_molmospaces_assets_dir() -> Path:
     return Path.home() / ".cache" / "molmospaces" / "assets"
 
 
+def default_molmospaces_cache_dir() -> Path:
+    """Default ``MLSPACES_CACHE_DIR``: sibling of :func:`default_molmospaces_assets_dir`.
+
+    ``molmospaces_resources.ResourceManager`` requires ``symlink_dir`` (from ``MLSPACES_ASSETS_DIR``)
+    and ``cache_dir`` to differ and neither may contain the other.
+    """
+    return companion_cache_dir_for_assets(default_molmospaces_assets_dir())
+
+
+def companion_cache_dir_for_assets(assets_path: Path) -> Path:
+    """Directory for extracted archives next to *assets_path* (``…/resource_cache`` beside ``…/assets``)."""
+    return assets_path.resolve().parent / "resource_cache"
+
+
 def ensure_molmospaces_assets_dir_env(env: dict[str, str] | None = None) -> Path:
     """If ``MLSPACES_ASSETS_DIR`` is unset, set it to :func:`default_molmospaces_assets_dir` and mkdir.
 
-    Pass a subprocess *env* dict (e.g. ``os.environ.copy()``) so ``emet`` forwards the same default
-    to ``emet-molmospaces`` before MolmoSpaces imports resolve ``ASSETS_DIR``.
+    If ``MLSPACES_CACHE_DIR`` is unset, set it to :func:`companion_cache_dir_for_assets` for the
+    resolved assets path. Upstream forbids using the same path for both (and forbids nesting).
+
+    Pass a subprocess *env* dict (e.g. ``os.environ.copy()``) so ``emet`` forwards the same defaults
+    to ``emet-molmospaces`` before MolmoSpaces imports resolve paths.
     """
     key = "MLSPACES_ASSETS_DIR"
+    cache_key = "MLSPACES_CACHE_DIR"
+
+    def _ensure_default_cache_dir(assets_path: Path) -> None:
+        companion = companion_cache_dir_for_assets(assets_path)
+        if env is None:
+            if not os.environ.get(cache_key, "").strip():
+                os.environ[cache_key] = str(companion)
+                companion.mkdir(parents=True, exist_ok=True)
+            return
+        cur_cache = (env.get(cache_key) or os.environ.get(cache_key, "")).strip()
+        if not cur_cache:
+            env[cache_key] = str(companion)
+            companion.mkdir(parents=True, exist_ok=True)
+
     if env is None:
         cur = os.environ.get(key, "").strip()
         if not cur:
             path = default_molmospaces_assets_dir()
             os.environ[key] = str(path)
             path.mkdir(parents=True, exist_ok=True)
+            _ensure_default_cache_dir(path)
             return path
-        return Path(cur)
+        path = Path(cur)
+        _ensure_default_cache_dir(path)
+        return path
     cur = (env.get(key) or os.environ.get(key, "")).strip()
     if not cur:
         path = default_molmospaces_assets_dir()
         env[key] = str(path)
         path.mkdir(parents=True, exist_ok=True)
+        _ensure_default_cache_dir(path)
         return path
-    return Path(cur)
+    path = Path(cur)
+    _ensure_default_cache_dir(path)
+    return path
 
 
-def ensure_molmo_asset_layout_symlinks() -> None:
-    """Link ``<MLSPACES_ASSETS_DIR>/scenes/objects`` → ``.../objects`` when possible.
-
-    Scene MJCF under ``scenes/<dataset>/`` uses paths like ``../objects/thor/...``. That resolves to
-    ``scenes/objects/...`` beside ``scenes/<dataset>``, not the real tree at the asset-root
-    ``objects/``. Symlinking ``scenes/objects`` to the root ``objects`` directory makes those
-    relative paths load the installed THOR meshes.
-    """
-    root = ensure_molmospaces_assets_dir_env()
+def _scenes_objects_symlink_for_root(root: Path) -> None:
+    """``<root>/scenes/objects`` → ``<root>/objects`` so ``../objects`` from scene XML resolves."""
     target = root / "objects"
     if not target.is_dir():
         return
     link = root / "scenes" / "objects"
-    if link.exists() or link.is_symlink():
-        return
+    if link.is_symlink():
+        try:
+            if link.resolve() == target.resolve():
+                return
+        except OSError:
+            pass
+        try:
+            link.unlink()
+        except OSError:
+            return
+    elif link.is_dir():
+        try:
+            shutil.rmtree(link)
+        except OSError:
+            return
+    elif link.exists():
+        try:
+            link.unlink()
+        except OSError:
+            return
     try:
         (root / "scenes").mkdir(parents=True, exist_ok=True)
         link.symlink_to(target.resolve(), target_is_directory=True)
     except OSError:
         pass
+
+
+def _flatten_single_versioned_child(parent: Path) -> None:
+    """If *parent* has exactly one subdirectory (e.g. THOR version), symlink each child up.
+
+    Cache layout is ``objects/thor/<version>/Kitchen Objects/...`` while MJCF and asset links
+    often reference ``objects/thor/Kitchen Objects/...``. The assets tree is already flat; the
+    raw cache tree needs sibling symlinks next to the version folder.
+    """
+    if not parent.is_dir():
+        return
+    subs = [p for p in parent.iterdir() if p.is_dir() and not p.name.startswith(".") and p.name != "__pycache__"]
+    if len(subs) != 1:
+        return
+    vroot = subs[0]
+    for child in vroot.iterdir():
+        link = parent / child.name
+        if link.exists() or link.is_symlink():
+            continue
+        try:
+            link.symlink_to(child.resolve(), target_is_directory=child.is_dir())
+        except OSError:
+            pass
+
+
+def ensure_molmo_asset_layout_symlinks() -> None:
+    """Link ``scenes/objects`` → ``objects`` under MolmoSpaces roots (assets and cache).
+
+    Scene MJCF uses paths like ``../objects/thor/...``. From ``scenes/<dataset>/`` that resolves to
+    ``scenes/objects/...``, not the real ``objects/`` tree at the dataset root. MolmoSpaces installs
+    meshes under ``<MLSPACES_ASSETS_DIR>/objects`` and (for GLOBAL link strategy) under
+    ``<MLSPACES_CACHE_DIR>/objects``. Absolute paths in merged MJCF may point under *cache*; we must
+    symlink ``<cache>/scenes/objects`` → ``<cache>/objects`` as well as under assets.
+
+    Under ``.../objects/thor``, the cache often keeps a single version directory (e.g. ``20251117``)
+    with ``Kitchen Objects`` inside; MJCF may reference ``thor/Kitchen Objects`` without the version
+    segment — mirror each version child up next to that folder when there is exactly one version dir.
+    """
+    assets = ensure_molmospaces_assets_dir_env()
+    _scenes_objects_symlink_for_root(assets)
+    _flatten_single_versioned_child(assets / "objects" / "thor")
+    cache_raw = os.environ.get("MLSPACES_CACHE_DIR", "").strip()
+    if cache_raw:
+        cache = Path(cache_raw)
+        if cache.resolve() != assets.resolve():
+            _scenes_objects_symlink_for_root(cache)
+            _flatten_single_versioned_child(cache / "objects" / "thor")
+
+
+def galaxea_r1_assets_directory() -> Path:
+    """Directory containing packaged ``galaxea_r1.xml``.
+
+    MolmoSpaces merge writes a top-level wrapper MJCF that includes the scene and this robot.
+    That file must live in this directory (not under ``/tmp``): MuJoCo resolves ``assetdir="meshes"``
+    for the included robot XML relative to the main file path, so a merge under ``/tmp`` breaks
+    mesh loading for Galaxea R1 (rby1).
+    """
+    import emet
+
+    d = Path(emet.__file__).resolve().parent / "assets" / "robot" / "galaxea_r1"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 def _project_root() -> Path:

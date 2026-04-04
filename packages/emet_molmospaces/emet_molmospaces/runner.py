@@ -218,8 +218,70 @@ def _get_molmo_api():
 _SCENES_NEEDING_THOR_OBJECT_INSTALL = frozenset({"ithor"})
 
 
+def _ensure_resource_cache_ready() -> None:
+    """Populate ``MLSPACES_CACHE_DIR`` so :meth:`ResourceManager.install_packages` can run.
+
+    ``setup_resource_manager`` may skip :meth:`ResourceManager.setup` when the *assets* tree's
+    version manifest matches, while ``MLSPACES_CACHE_DIR`` is empty or inconsistent. The cache
+    copy of ``LOCAL_MANIFEST`` can also list a version as installed while ``_setup_source`` skips
+    the download (``must_download`` false) and then fails to open the remote manifest.
+
+    If any ``scenes`` / ``objects`` / ``grasps`` remote manifest is missing under
+    ``cache_dir``, we remove the cache ``LOCAL_MANIFEST``, delete those versioned cache
+    directories, reset the MolmoSpaces resource-manager singleton, and run ``setup()`` on a
+    fresh manager so manifests are fetched before ``get_scenes`` / ``install_packages``.
+
+    **Important:** ``ResourceManager.setup`` skips ``_setup_source`` when COMBINED/REMOTE manifests
+    exist under ``symlink_dir/<type>/<source>``. Those paths are often **symlinks** into an *old*
+    ``MLSPACES_CACHE_DIR`` (e.g. ``~/.cache/molmo-spaces-resources/...``). After resolving,
+    ``parent.name == <version>`` matches and the new ``cache_dir`` never gets populated.  For any
+    source whose *versioned* cache dir lacks the remote manifest, we remove the symlink install path
+    ``symlink_dir/<type>/<source>`` so setup cannot skip.
+    """
+    import molmo_spaces.molmo_spaces_constants as mconst
+    from molmo_spaces.molmo_spaces_constants import DATA_TYPE_TO_SOURCE_TO_VERSION
+    from molmospaces_resources.constants import LOCAL_MANIFEST_NAME, REMOTE_MANIFEST_NAME
+    from molmospaces_resources.setup_utils import _RESOURCE_MANAGERS as _rm_registries
+
+    rm = mconst.get_resource_manager()
+    cache_dir = Path(rm.cache_dir)
+    cache_local = cache_dir / LOCAL_MANIFEST_NAME
+    need_setup = False
+
+    for dt in ("scenes", "objects", "grasps"):
+        for _src, _ver in DATA_TYPE_TO_SOURCE_TO_VERSION.get(dt, {}).items():
+            cp = rm.cache_path(dt, _src)
+            if (cp / REMOTE_MANIFEST_NAME).is_file():
+                continue
+            need_setup = True
+            if cp.exists():
+                shutil.rmtree(cp, ignore_errors=True)
+            inst = rm.symlink_path(dt, _src)
+            try:
+                if inst.is_symlink():
+                    inst.unlink()
+                elif inst.exists():
+                    shutil.rmtree(inst, ignore_errors=True)
+            except OSError:
+                pass
+
+    if not need_setup:
+        return
+
+    try:
+        cache_local.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+    mconst._RESOURCE_MANAGER = None
+    _rm_registries.clear()
+    rm = mconst.get_resource_manager()
+    rm.setup()
+
+
 def _install_scene_with_deps(path: str | Path, scene: str) -> None:
     """Install scene package plus object/grasp archives. iTHOR must not exclude THOR object meshes."""
+    _ensure_resource_cache_ready()
     _, install_fn = _get_molmo_api()
     install_fn(
         path,
@@ -319,6 +381,7 @@ def _scene_xml_after_install(path_from_index: str | Path, scene: str, index: int
 def run_install_scene(
     scene: str, split: str, index: int, scene_path_out: str, *, install_if_missing: bool = False
 ) -> int:
+    _ensure_resource_cache_ready()
     try:
         get_scenes, _ = _get_molmo_api()
     except ImportError as e:
@@ -397,6 +460,7 @@ def run_merge_scene(
     install_if_missing: bool = False,
 ) -> int:
     """Install scene (if needed), merge robot MJCF, write persistent merged XML for emet serve mujoco --scene_path."""
+    _ensure_resource_cache_ready()
     try:
         get_scenes, _ = _get_molmo_api()
     except ImportError as e:
@@ -458,6 +522,7 @@ def run_serve(
     *,
     install_if_missing: bool = False,
 ) -> int:
+    _ensure_resource_cache_ready()
     try:
         import mujoco
 

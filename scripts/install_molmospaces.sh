@@ -11,7 +11,8 @@ cd "$ROOT_DIR"
 XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
 MLSPACES_CACHE="${MLSPACES_ASSETS_DIR:-$XDG_CACHE_HOME/molmospaces/assets}"
 export MLSPACES_ASSETS_DIR="$MLSPACES_CACHE"
-mkdir -p "$MLSPACES_ASSETS_DIR"
+export MLSPACES_CACHE_DIR="${MLSPACES_CACHE_DIR:-$XDG_CACHE_HOME/molmospaces/resource_cache}"
+mkdir -p "$MLSPACES_ASSETS_DIR" "$MLSPACES_CACHE_DIR"
 
 PY_MOLMO=".venv-molmospaces/bin/python"
 molmo_pip_install() {
@@ -84,4 +85,5 @@ if ! "$PY_MOLMO" -c "import mujoco; import emet_molmospaces; from molmo_spaces.m
 fi
 echo "  -> Verified: molmo_spaces OK in .venv-molmospaces"
 echo "  -> MLSPACES_ASSETS_DIR=$MLSPACES_ASSETS_DIR"
+echo "  -> MLSPACES_CACHE_DIR=$MLSPACES_CACHE_DIR"
 echo "  -> Run: emet molmospaces list-robots  &&  emet molmospaces serve --viewer"
