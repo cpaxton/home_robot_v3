@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import threading
@@ -20,6 +21,7 @@ import timeit
 from datetime import datetime
 from typing import Any
 
+import click
 from termcolor import colored
 
 from emet.agent.prompt import AgentPromptBuilder, parse_tool_calls_response
@@ -31,6 +33,7 @@ from emet.llms import get_llm_client
 from emet.llms.discord_bot import EmetDiscordBot
 from emet.memory.backend import get_memory_backend
 from emet.memory.utils import print_memory_view_help_on_quit
+from emet.robots import ROBOT_REGISTRY
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -166,6 +169,7 @@ def _call_llm(
 
 def run_agent_with_robot(
     robot_ip: str = "127.0.0.1",
+    robot: str = "stretch",
     input_path: str | None = None,
     discord: bool = False,
     use_llm: bool = False,
@@ -187,14 +191,36 @@ def run_agent_with_robot(
     """
     parameters = get_parameters("dynav_config.yaml")
 
-    robot = StretchZmqClient(
-        robot_ip=robot_ip,
-        enable_rerun_server=True,
-        port_offset=port_offset,
-    )
+    robot_key = robot.lower().replace("-", "_")
+    if robot_key == "stretch":
+        robot_client = StretchZmqClient(
+            robot_ip=robot_ip,
+            enable_rerun_server=True,
+            port_offset=port_offset,
+        )
+    elif robot_key in ROBOT_REGISTRY:
+        mod = importlib.import_module(ROBOT_REGISTRY[robot_key])
+        backend_cls = None
+        for attr_name in dir(mod):
+            attr = getattr(mod, attr_name)
+            if isinstance(attr, type) and hasattr(attr, "get_spec") and attr_name != "RobotBackend":
+                backend_cls = attr
+                break
+        if backend_cls is None:
+            raise RuntimeError(f"No RobotBackend found in {ROBOT_REGISTRY[robot_key]}")
+        backend = backend_cls()
+        robot_client = backend.create_client(
+            robot_ip=robot_ip,
+            port_offset=port_offset,
+        )
+    else:
+        raise click.UsageError(
+            f"Unknown robot '{robot}'. Known: stretch, {list(ROBOT_REGISTRY.keys())}. "
+            "Start the server with the same robot: emet serve mujoco --robot <name>"
+        )
 
     executor = DynamemTaskExecutor(
-        robot,
+        robot_client,
         parameters,
         server_ip=server_ip,
         skip_confirmations=skip_confirmations,
@@ -211,7 +237,7 @@ def run_agent_with_robot(
     memory_backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
     context: dict[str, Any] = {
         "executor": executor,
-        "robot": robot,
+        "robot": robot_client,
         "memory_backend": memory_backend,
         "discord_bot": None,
         "xyt_for_query": None,
@@ -271,7 +297,7 @@ def run_agent_with_robot(
             logger.warning("LLM failed to load (%s):", llm, e)
             print(colored("Agent mode requires an LLM; it failed to load.", "red"))
             print(colored("Fix the LLM (e.g. --llm, device) or run with --no-llm for letter commands only.", "yellow"))
-            robot.stop()
+            robot_client.stop()
             chat_log.close()
             return
 
@@ -462,4 +488,4 @@ def run_agent_with_robot(
     chat_log.close()
     print(colored(f"Chat log saved: {chat_log.path}", "green"))
     print_memory_view_help_on_quit(getattr(executor, "_last_memory_save_path", None))
-    robot.stop()
+    robot_client.stop()
