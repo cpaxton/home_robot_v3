@@ -7,12 +7,14 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+from __future__ import annotations
+
 import logging
 import os
 import pickle
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import cv2
 import numpy as np
@@ -22,9 +24,9 @@ from PIL import Image
 from scipy.ndimage import maximum_filter, median_filter
 from torch import Tensor
 
+from emet.core.parameters import Parameters
 from emet.llms import OpenaiClient
 from emet.llms.prompts import DYNAMEM_VISUAL_GROUNDING_PROMPT
-from emet.llms.qwen_client import Qwen25VLClient
 from emet.utils.image import Camera, camera_xyz_to_global_xyz
 from emet.utils.morphology import binary_dilation, binary_erosion, get_edges
 from emet.utils.point_cloud_torch import unproject_masked_depth_to_xyz_coordinates
@@ -45,7 +47,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         resolution: float = 0.01,
         semantic_memory_resolution: float = 0.05,
         feature_dim: int = 3,
-        grid_size: Tuple[int, int] = None,
+        grid_size: tuple[int, int] = None,
         grid_resolution: float = 0.05,
         obs_min_height: float = 0.1,
         obs_max_height: float = 1.8,
@@ -59,11 +61,11 @@ class SparseVoxelMap(SparseVoxelMapBase):
         max_depth: float = 2.5,
         pad_obstacles: int = 0,
         background_instance_label: int = -1,
-        instance_memory_kwargs: Dict[str, Any] = {},
-        voxel_kwargs: Dict[str, Any] = {},
+        instance_memory_kwargs: dict[str, Any] = {},
+        voxel_kwargs: dict[str, Any] = {},
         encoder=None,
         map_2d_device: str = "cpu",
-        device: Optional[str] = None,
+        device: str | None = None,
         use_instance_memory: bool = False,
         use_median_filter: bool = False,
         median_filter_size: int = 5,
@@ -80,6 +82,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         log="test",
         mllm=False,
         run_eqa=False,
+        parameters: Parameters | dict | None = None,
     ):
         super().__init__(
             resolution=resolution,
@@ -116,7 +119,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         )
 
         self.point_update_threshold = point_update_threshold
-        self._history_soft: Optional[Tensor] = None
+        self._history_soft: Tensor | None = None
         self.semantic_memory = VoxelizedPointcloud(voxel_size=semantic_memory_resolution).to(
             self.device
         )
@@ -126,6 +129,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self.detection_model = detection
         self.log = log
         self.mllm = mllm
+        self.parameters = parameters
 
         # Open-vocabulary scene graph (optional, enabled via config or set_scene_graph_processor)
         self._scene_graph_processor = None
@@ -137,23 +141,23 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
         self.run_eqa = run_eqa
         if self.run_eqa:
-            # To avoid using too much closed source VLMs, we use Qwen2.5-3b-vl-instruct for image description.
-            self.image_description_client = Qwen25VLClient(
-                model_size="3B", quantization="int4", max_tokens=20
+            from emet.llms.eqa_qwen import build_shared_eqa_clients
+            from emet.llms.eqa_vl_settings import apply_eqa_vl_runtime_settings, get_eqa_vl_int
+
+            apply_eqa_vl_runtime_settings(self.parameters)
+            kw = get_eqa_vl_int(self.parameters, "voxel_keyword_max_tokens", 20)
+            self.image_description_client, self.eqa_client = build_shared_eqa_clients(
+                parameters=self.parameters,
+                keyword_max_tokens=kw,
             )
 
-            self.image_descriptions: List[Tuple[List[str], List[int]]] = []
-
-            from emet.llms.gemini_client import GeminiClient
-            from emet.llms.prompts.eqa_prompt import EQA_PROMPT
-
-            self.eqa_client = GeminiClient(EQA_PROMPT, model="gemini-2.5-flash")
+            self.image_descriptions: list[tuple[list[str], list[int]]] = []
 
         # Attributes for EQA, If you are not running EQA module, this will stay the same.
-        self._question: Optional[str] = None
-        self.relevant_objects: Optional[list] = None
+        self._question: str | None = None
+        self.relevant_objects: list | None = None
 
-        self.history_outputs: List[str] = []
+        self.history_outputs: list[str] = []
 
     def set_scene_graph_processor(self, processor) -> None:
         """Attach a SceneGraphProcessor to update an open-vocab scene graph on each frame."""
@@ -194,7 +198,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
     def verify_point(
         self,
         text: str,
-        point: Union[torch.Tensor, np.ndarray],
+        point: torch.Tensor | np.ndarray,
         distance_threshold: float = 0.1,
         similarity_threshold: float = 0.21,
     ):
@@ -222,7 +226,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
     def get_2d_map(
         self, debug: bool = False, return_history_id: bool = False, kernel: int = 7
-    ) -> Tuple[Tensor, ...]:
+    ) -> tuple[Tensor, ...]:
         """
         Get 2d map with explored area and frontiers.
         return_history_id: if True, return when each voxel was recently updated
@@ -245,8 +249,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
         obs_ids = self.voxel_pcd._obs_counts
         if xyz is None:
             xyz = torch.zeros((0, 3))
-            counts = torch.zeros((0))
-            obs_ids = torch.zeros((0))
+            counts = torch.zeros(0)
+            obs_ids = torch.zeros(0)
 
         device = xyz.device
         xyz = ((xyz / self.grid_resolution) + self.grid_origin + 0.5).long()
@@ -473,10 +477,10 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
     def add_to_semantic_memory(
         self,
-        valid_xyz: Optional[torch.Tensor],
-        feature: Optional[torch.Tensor],
-        valid_rgb: Optional[torch.Tensor],
-        weights: Optional[torch.Tensor] = None,
+        valid_xyz: torch.Tensor | None,
+        feature: torch.Tensor | None,
+        valid_rgb: torch.Tensor | None,
+        weights: torch.Tensor | None = None,
         threshold: float = 0.95,
     ):
         """
@@ -521,9 +525,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
     def find_all_images(
         self,
         text: str,
-        min_similarity_threshold: Optional[float] = None,
+        min_similarity_threshold: float | None = None,
         min_point_num: int = 100,
-        max_img_num: Optional[int] = 3,
+        max_img_num: int | None = 3,
     ):
         """
         Select all images with high pixel similarity with text (by identifying whether points in this image are relevant objects)
@@ -614,7 +618,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
         return sorted_obs_counts, sorted_points, top_alignments
 
-    def llm_locator(self, image_ids: Union[torch.Tensor, np.ndarray, list], text: str):
+    def llm_locator(self, image_ids: torch.Tensor | np.ndarray | list, text: str):
         """
         Prompting the mLLM to select the images containing objects of interest.
 
@@ -814,15 +818,15 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self,
         camera_pose: Tensor,
         rgb: Tensor,
-        xyz: Optional[Tensor] = None,
-        camera_K: Optional[Tensor] = None,
-        feats: Optional[Tensor] = None,
-        depth: Optional[Tensor] = None,
-        base_pose: Optional[Tensor] = None,
+        xyz: Tensor | None = None,
+        camera_K: Tensor | None = None,
+        feats: Tensor | None = None,
+        depth: Tensor | None = None,
+        base_pose: Tensor | None = None,
         xyz_frame: str = "camera",
-        instance_image: Optional[Tensor] = None,
-        instance_classes: Optional[Tensor] = None,
-        instance_scores: Optional[Tensor] = None,
+        instance_image: Tensor | None = None,
+        instance_classes: Tensor | None = None,
+        instance_scores: Tensor | None = None,
         **info,
     ):
         """Add this to our history of observations. Also update the current running map.
@@ -995,7 +999,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         # Increment sequence counter
         self._seq += 1
 
-    def xy_to_grid_coords(self, xy: np.ndarray) -> Optional[np.ndarray]:
+    def xy_to_grid_coords(self, xy: np.ndarray) -> np.ndarray | None:
         if not isinstance(xy, np.ndarray):
             xy = np.array(xy)
         return self.grid.xy_to_grid_coords(torch.Tensor(xy))
@@ -1063,7 +1067,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self.semantic_memory.obs_count = max(self.semantic_memory._obs_counts).item()
         self.semantic_memory.obs_count = max(self.semantic_memory._obs_counts).item()
 
-    def write_to_pickle(self, filename: Optional[str] = None) -> None:
+    def write_to_pickle(self, filename: str | None = None) -> None:
         """Write out to a pickle file. This is a rough, quick-and-easy output for debugging, not intended to replace the scalable data writer in data_tools for bigger efforts.
 
         Args:
@@ -1073,7 +1077,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
             os.mkdir("debug")
         if filename is None:
             filename = self.log + ".pkl"
-        data: Dict[str, Any] = {}
+        data: dict[str, Any] = {}
         data["camera_poses"] = []
         data["camera_K"] = []
         data["base_poses"] = []
@@ -1238,7 +1242,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self.extract_relevant_objects(question)
 
         # messages = [{"type": "text", "text": "Question: " + question}]
-        commands: List[Any] = ["Question: " + question]
+        commands: list[Any] = ["Question: " + question]
         # messages.append({"type": "text", "text": "HISTORY: "})
         commands.append("HISTORY: ")
         for (i, history_output) in enumerate(self.history_outputs):
@@ -1426,7 +1430,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         return np.unique(history)
 
     def list_objects_in_an_image(
-        self, image: Union[torch.Tensor, Image.Image, np.ndarray], max_tries: int = 3
+        self, image: torch.Tensor | Image.Image | np.ndarray, max_tries: int = 3
     ):
         """
         Extract visual clues (a list of featured objects) from the image observation and add the clues to a list

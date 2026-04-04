@@ -85,6 +85,7 @@ class GraphEQAController(DynamemController):
             use_voxel_fallback=True,
             device=dev,
             cpu_only=self.cpu_only,
+            parameters=parameters,
         )
 
     def update(self) -> None:

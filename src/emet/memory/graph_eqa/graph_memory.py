@@ -11,8 +11,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -25,7 +26,7 @@ class GraphNode:
     """Single node in the scene graph: an object or region with label and position."""
 
     node_id: int
-    labels: List[str]
+    labels: list[str]
     xyz: np.ndarray  # (3,) world position
     obs_id: int  # 1-based index into observations list
 
@@ -37,7 +38,7 @@ class GraphObservation:
     obs_id: int  # 1-based
     rgb: np.ndarray  # (H, W, 3)
     xyz: np.ndarray  # (3,) e.g. mean of visible points or camera position
-    labels: List[str]
+    labels: list[str]
 
 
 def _near(p1: np.ndarray, p2: np.ndarray, max_dist: float = 1.5) -> bool:
@@ -70,22 +71,22 @@ class GraphEQAMemory:
 
     def __init__(
         self,
-        parameters: Optional[Parameters] = None,
+        parameters: Parameters | None = None,
         max_near_distance: float = 1.5,
-        eqa_client: Optional[Callable[..., str]] = None,
-        image_description_client: Optional[Callable[..., str]] = None,
+        eqa_client: Callable[..., str] | None = None,
+        image_description_client: Callable[..., str] | None = None,
         log_dir: str = "graph_eqa_log",
         defer_llm_clients: bool = False,
     ):
         self.parameters = parameters or {}
         self.max_near_distance = max_near_distance
-        self._nodes: List[GraphNode] = []
-        self._edges: List[Tuple[int, int, str]] = []  # (id1, id2, relation)
-        self._observations: List[GraphObservation] = []
+        self._nodes: list[GraphNode] = []
+        self._edges: list[tuple[int, int, str]] = []  # (id1, id2, relation)
+        self._observations: list[GraphObservation] = []
         self._next_obs_id = 1
-        self._question: Optional[str] = None
-        self._relevant_objects: Optional[List[str]] = None
-        self._history_outputs: List[str] = []
+        self._question: str | None = None
+        self._relevant_objects: list[str] | None = None
+        self._history_outputs: list[str] = []
 
         self.log_dir = log_dir
         self.eqa_client = eqa_client
@@ -98,31 +99,34 @@ class GraphEQAMemory:
             self._init_clients()
 
     def _ensure_llm_clients(self) -> None:
-        """Load Gemini + Qwen VL on first use when defer_llm_clients=True."""
+        """Load shared Qwen3.5 multimodal on first use when defer_llm_clients=True."""
         if self.eqa_client is not None and self.image_description_client is not None:
             return
         self._init_clients()
 
     def _init_clients(self) -> None:
-        """Initialize EQA and image-description clients (same pattern as voxel_dynamem)."""
+        """Initialize EQA + keyword helper on one shared Qwen3.5 multimodal load."""
         try:
-            from emet.llms.gemini_client import GeminiClient
-            from emet.llms.prompts.eqa_prompt import EQA_PROMPT
-            from emet.llms.qwen_client import Qwen25VLClient
+            from emet.llms.eqa_qwen import build_shared_eqa_clients
+            from emet.llms.eqa_vl_settings import apply_eqa_vl_runtime_settings, get_eqa_vl_int
+
+            apply_eqa_vl_runtime_settings(self.parameters)
+            kw = get_eqa_vl_int(self.parameters, "graph_keyword_max_tokens", 64)
+            self.image_description_client, self.eqa_client = build_shared_eqa_clients(
+                parameters=self.parameters,
+                keyword_max_tokens=kw,
+            )
         except ImportError as e:
             raise ImportError(
-                "GraphEQA memory requires emet.llms (Gemini, Qwen) for EQA. Install extras and set GOOGLE_API_KEY."
+                "GraphEQA memory requires emet.llms (Qwen3.5 multimodal) for EQA. "
+                "Install extras with GPU support."
             ) from e
-        self.image_description_client = Qwen25VLClient(
-            model_size="3B", quantization="int4", max_tokens=20
-        )
-        self.eqa_client = GeminiClient(EQA_PROMPT, model="gemini-2.5-flash")
 
     def add_observation(
         self,
-        rgb: Union[np.ndarray, Image.Image],
+        rgb: np.ndarray | Image.Image,
         xyz: np.ndarray,
-        labels: List[str],
+        labels: list[str],
     ) -> int:
         """
         Add one observation to the graph: create a node and update edges.
@@ -191,18 +195,18 @@ class GraphEQAMemory:
 
     def _select_relevant_obs_ids(
         self, max_images: int = 6
-    ) -> List[int]:
+    ) -> list[int]:
         """Select observation IDs whose labels match relevant_objects (1-based)."""
         if not self._relevant_objects or not self._observations:
             return [o.obs_id for o in self._observations[:max_images]]
         seen: set = set()
-        out: List[int] = []
+        out: list[int] = []
         for obj in self._relevant_objects:
             obj_lower = obj.lower()
             for o in self._observations:
                 if o.obs_id in seen:
                     continue
-                if any(obj_lower in l.lower() for l in o.labels):
+                if any(obj_lower in lab.lower() for lab in o.labels):
                     seen.add(o.obs_id)
                     out.append(o.obs_id)
                     if len(out) >= max_images:
@@ -217,7 +221,7 @@ class GraphEQAMemory:
         return out
 
     def _get_image_descriptions_str(
-        self, obs_ids: List[int]
+        self, obs_ids: list[int]
     ) -> str:
         """Build IMAGE_DESCRIPTIONS string for the prompt (1-indexed image ids)."""
         options = []
@@ -230,7 +234,7 @@ class GraphEQAMemory:
             options.append(line)
         return "IMAGE_DESCRIPTIONS: " + "\n".join(options) if options else "IMAGE_DESCRIPTIONS: (none)"
 
-    def parse_answer(self, answer_outputs: str) -> Tuple[str, str, bool, str, str]:
+    def parse_answer(self, answer_outputs: str) -> tuple[str, str, bool, str, str]:
         """Parse mLLM output into reasoning, answer, confidence, action, confidence_reasoning."""
         def extract_between(text: str, start: str, end: str) -> str:
             try:
@@ -258,7 +262,7 @@ class GraphEQAMemory:
         confidence_reasoning = extract_after(answer_outputs, "confidence_reasoning:")
         return reasoning, answer, confidence, action, confidence_reasoning
 
-    def _target_point_from_image_id(self, image_id: int) -> Optional[np.ndarray]:
+    def _target_point_from_image_id(self, image_id: int) -> np.ndarray | None:
         """Return (x, y, 1) for the observation's position when mLLM suggests navigating to that image."""
         for obs in self._observations:
             if obs.obs_id == image_id:
@@ -268,10 +272,10 @@ class GraphEQAMemory:
     def query_answer(
         self,
         question: str,
-        xyt: Optional[Union[Any, np.ndarray, list]] = None,
+        xyt: Any | np.ndarray | list | None = None,
         planner: Any = None,
-    ) -> Tuple[
-        str, str, bool, str, Optional[np.ndarray], List[Image.Image]
+    ) -> tuple[
+        str, str, bool, str, np.ndarray | None, list[Image.Image]
     ]:
         """
         Answer the question using the scene graph and task-relevant images.
@@ -286,14 +290,14 @@ class GraphEQAMemory:
         graph_str = self.to_string()
         img_desc_str = self._get_image_descriptions_str(obs_ids)
 
-        commands: List[Any] = ["Question: " + question]
+        commands: list[Any] = ["Question: " + question]
         commands.append("HISTORY: ")
         for i, h in enumerate(self._history_outputs):
             commands.append("Iteration_" + str(i) + ":" + h)
         commands.append(graph_str)
         commands.append(img_desc_str)
 
-        relevant_images: List[Image.Image] = []
+        relevant_images: list[Image.Image] = []
         for obs in self._observations:
             if obs.obs_id in obs_ids:
                 relevant_images.append(Image.fromarray(obs.rgb.astype(np.uint8), mode="RGB"))
@@ -338,11 +342,11 @@ class GraphEQAMemory:
             relevant_images,
         )
 
-    def get_observations(self) -> List[GraphObservation]:
+    def get_observations(self) -> list[GraphObservation]:
         return list(self._observations)
 
-    def get_nodes(self) -> List[GraphNode]:
+    def get_nodes(self) -> list[GraphNode]:
         return list(self._nodes)
 
-    def get_edges(self) -> List[Tuple[int, int, str]]:
+    def get_edges(self) -> list[tuple[int, int, str]]:
         return list(self._edges)

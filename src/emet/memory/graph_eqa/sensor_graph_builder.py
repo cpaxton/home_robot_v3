@@ -6,11 +6,12 @@
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional
+from collections.abc import Callable
 
 import numpy as np
 
 from emet.core.interfaces import Observations
+from emet.core.parameters import Parameters
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -41,14 +42,14 @@ def world_xyz_median_from_depth(obs: Observations) -> np.ndarray:
     return np.median(sel, axis=0).astype(np.float64)
 
 
-def parse_comma_separated_labels(text: str, max_labels: int = 16) -> List[str]:
+def parse_comma_separated_labels(text: str, max_labels: int = 16) -> list[str]:
     """Parse model output into a clean label list."""
     cleaned = (
         text.replace(";", ",")
         .replace("\n", ",")
         .replace(".", ",")
     )
-    out: List[str] = []
+    out: list[str] = []
     for part in cleaned.split(","):
         s = part.strip().strip("-•").strip()
         if not s or len(s) > 64:
@@ -63,49 +64,48 @@ class SensorGraphBuilder:
     """
     Produces object labels (VLM) and a world-frame anchor xyz from Observations.
 
-    If ``cpu_only`` or no GPU, skips loading Qwen2.5-VL and relies on
+    If ``cpu_only`` or no GPU, skips loading Qwen3.5 multimodal and relies on
     ``voxel_labels`` / fallback ``["object"]``.
     """
 
     def __init__(
         self,
         *,
-        perception_client: Optional[Callable[..., str]] = None,
+        perception_client: Callable[..., str] | None = None,
         use_voxel_fallback: bool = True,
         device: str = "cuda",
         cpu_only: bool = False,
+        parameters: Parameters | dict | None = None,
     ):
         self._perception = perception_client
         self.use_voxel_fallback = use_voxel_fallback
         self._device = device
         self.cpu_only = cpu_only
-        self._lazy_vl_client: Optional[Callable[..., str]] = None
+        self._parameters = parameters
+        self._lazy_vl_client: Callable[..., str] | None = None
 
-    def _get_default_vl_client(self) -> Optional[Callable[..., str]]:
+    def _get_default_vl_client(self) -> Callable[..., str] | None:
         if self.cpu_only:
             return None
         try:
-            from emet.llms.qwen_client import Qwen25VLClient
+            from emet.llms.eqa_qwen import get_shared_qwen35_vl_client
         except ImportError as e:
-            logger.warning(f"Qwen25VLClient unavailable ({e}); using voxel/fallback labels")
+            logger.warning(f"get_shared_qwen35_vl_client unavailable ({e}); using voxel/fallback labels")
             return None
         dev = self._device
         if dev not in ("cuda", "mps"):
             dev = "cuda"
         try:
-            return Qwen25VLClient(
-                prompt=None,
-                model_size="3B",
-                quantization="int4",
-                max_tokens=128,
-                num_beams=1,
+            return get_shared_qwen35_vl_client(
                 device=dev,
+                quantization=None,
+                parameters=self._parameters,
             )
         except Exception as e:
-            logger.warning(f"Could not load Qwen2.5-VL ({e}); using voxel/fallback labels")
+            logger.warning(f"Could not load Qwen3.5 multimodal ({e}); using voxel/fallback labels")
             return None
 
-    def _client(self) -> Optional[Callable[..., str]]:
+    def _client(self) -> Callable[..., str] | None:
         if self._perception is not None:
             return self._perception
         if self.cpu_only:
@@ -117,8 +117,8 @@ class SensorGraphBuilder:
     def labels_from_observation(
         self,
         obs: Observations,
-        voxel_labels: Optional[List[str]] = None,
-    ) -> List[str]:
+        voxel_labels: list[str] | None = None,
+    ) -> list[str]:
         client = self._client()
         if client is None:
             if voxel_labels:
@@ -130,7 +130,14 @@ class SensorGraphBuilder:
             "Reply with comma-separated short nouns only (max 12), no sentences."
         )
         try:
-            out = client([prompt, obs.rgb])
+            if self._perception is not None:
+                out = client([prompt, obs.rgb])
+            else:
+                out = client(
+                    [prompt, obs.rgb],
+                    system_prompt=None,
+                    max_new_tokens=128,
+                )
             if not isinstance(out, str):
                 out = str(out)
             labels = parse_comma_separated_labels(out)

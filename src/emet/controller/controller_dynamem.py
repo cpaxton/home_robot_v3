@@ -230,6 +230,7 @@ class DynamemController(BaseController):
             mllm=self.mllm,
             run_eqa=self.eqa,
             use_instance_memory=self._use_instance_memory,
+            parameters=parameters,
         )
         self.space = SparseVoxelMapNavigationSpace(
             self.voxel_map,

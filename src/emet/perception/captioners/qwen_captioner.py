@@ -8,33 +8,40 @@
 # license information maybe found below, if so.
 
 import os
-from typing import Optional, Union
 
 import torch
 from numpy import ndarray
 from PIL import Image, ImageDraw
 from torch import Tensor
 
-from emet.llms.qwen_client import Qwen25VLClient
+from emet.llms.eqa_qwen import get_shared_qwen35_vl_client
 
 # pip install flash-attn
 
+# Legacy size labels → Qwen3.5 HF ids (``Qwen/Qwen3.5-{size}``)
+_LEGACY_VL_SIZE = {"3B": "2B", "7B": "9B", "8B": "9B", "32B": "27B", "72B": "27B"}
+
+
+def _qwen35_vl_size(model_size: str) -> str:
+    return _LEGACY_VL_SIZE.get(model_size, model_size)
+
 
 class QwenCaptioner:
-    """Image captioner using Qwen2.5 model."""
+    """Image captioner using the same shared Qwen3.5 multimodal model as EQA when possible."""
 
     def __init__(
         self,
-        model_size: str = "3B",
+        model_size: str = "2B",
         max_length: int = 200,
         num_beams: int = 1,
-        device: Optional[str] = None,
+        device: str | None = None,
         image_shape=None,
         draw_on_image=True,
     ):
-        """Initialize the Qwen2.5 image captioner.
+        """Initialize the Qwen3.5 image captioner.
 
         Args:
+            model_size: Qwen3.5 size (e.g. 2B, 4B, 9B). Legacy Qwen3-VL labels are mapped.
             max_length (int, optional): Maximum length of the generated caption. Defaults to 100.
             num_beams (int, optional): Number of beams for beam search. Defaults to 1.
             device (str, optional): Device to run the model on. Defaults to None (auto-detect).
@@ -47,16 +54,34 @@ class QwenCaptioner:
         else:
             self._device = torch.device(device)
 
-        self.client = Qwen25VLClient(
-            model_size=model_size, max_tokens=self.max_length, num_beams=self.num_beams
-        )
+        if device is not None:
+            td = torch.device(device)
+            if td.type == "cuda":
+                vl_device = "cuda"
+            elif td.type == "mps":
+                vl_device = "mps"
+            else:
+                raise RuntimeError(
+                    "Qwen3.5 multimodal captioner requires CUDA or MPS.",
+                )
+        elif torch.cuda.is_available():
+            vl_device = "cuda"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            vl_device = "mps"
+        else:
+            raise RuntimeError(
+                "Qwen3.5 multimodal captioner requires a GPU (CUDA or Apple MPS).",
+            )
+
+        self._caption_model_size = _qwen35_vl_size(model_size)
+        self._vl_device = vl_device
 
         self.draw_on_image = draw_on_image
 
     def caption_image(
         self,
-        image: Union[ndarray, Tensor, Image.Image],
-        bbox: Optional[Union[list, Tensor, ndarray]] = None,
+        image: ndarray | Tensor | Image.Image,
+        bbox: list | Tensor | ndarray | None = None,
         verbose: bool = False,
     ) -> str:
         """Generate a caption for the given image.
@@ -109,7 +134,17 @@ class QwenCaptioner:
             "Limit your answer in 10 words. E.G. a yellow banana; a white hand sanitizer",
         ]
 
-        output_text = self.client(messages, verbose=verbose)
+        vl = get_shared_qwen35_vl_client(
+            model_size=self._caption_model_size,
+            device=self._vl_device,
+            quantization="int4",
+        )
+        output_text = vl(
+            messages,
+            verbose=verbose,
+            system_prompt=None,
+            max_new_tokens=self.max_length,
+        )
 
         if bbox is not None:
             if not self.draw_on_image:
