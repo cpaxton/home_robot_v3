@@ -25,6 +25,7 @@ FRAME_RGB_FILENAME = "rgb.png"  # legacy per-subdirectory name
 FRAME_DEPTH_FILENAME = "depth.npy"  # legacy per-subdirectory name
 FRAME_POSE_FILENAME = "pose.npz"  # legacy per-subdirectory name
 GRAPH_FILENAME = "graph.json"
+SCENE_GRAPH_REPORT_TXT = "scene_graph_report.txt"
 DESCRIPTIONS_FILENAME = "descriptions.json"
 USER_MESSAGES_FILENAME = "user_messages.json"
 

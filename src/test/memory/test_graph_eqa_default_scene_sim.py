@@ -17,6 +17,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from emet.memory.format import SCENE_GRAPH_REPORT_TXT
+from emet.memory.headless_export import export_graph_eqa_dir
+
 _SRC_ROOT = Path(__file__).resolve().parent.parent.parent
 
 _run_sim = os.environ.get("RUN_SIM_TESTS", "1").strip().lower()
@@ -112,6 +115,16 @@ def test_graph_eqa_color_question_default_mujoco_scene():
         al = answer.lower()
         assert "red" in al, f"expected red in answer, got {answer!r}"
         assert "blue" in al, f"expected blue in answer, got {answer!r}"
+
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            report_text = export_graph_eqa_dir(mem, None, tmp)
+            assert "red" in report_text.lower()
+            assert "blue" in report_text.lower()
+            rp = Path(tmp) / SCENE_GRAPH_REPORT_TXT
+            assert rp.is_file()
+            assert "red" in rp.read_text(encoding="utf-8").lower()
 
     finally:
         if robot is not None:

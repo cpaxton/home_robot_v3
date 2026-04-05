@@ -10,7 +10,7 @@ from emet.controller.controller_graph_eqa import GraphEQAController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.controller.zmq_client import StretchZmqClient
 from emet.core.parameters import get_parameters
-from emet.memory.graph_eqa import format_scene_graph_pretty
+from emet.memory.headless_export import export_graph_eqa_dir
 
 
 @click.command()
@@ -47,6 +47,16 @@ from emet.memory.graph_eqa import format_scene_graph_pretty
     help="Load graph memory from a saved directory (common format) before running",
 )
 @click.option(
+    "--export",
+    "export_dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=str),
+    default=None,
+    help=(
+        "Headless: after spin, save graph + scene_graph_report.txt here, print graph to stdout, "
+        "and exit (no question loop). Use for machines without a TTY."
+    ),
+)
+@click.option(
     "--dump-memory",
     type=click.Path(file_okay=False, dir_okay=True, path_type=str),
     default=None,
@@ -69,6 +79,7 @@ def main(
     save_rerun: bool = False,
     port_offset: int = 0,
     input_path: str | None = None,
+    export_dir: str | None = None,
     dump_memory: str | None = None,
     cpu_only: bool = False,
     no_sensor_perception: bool = False,
@@ -110,18 +121,33 @@ def main(
     def _save_dump() -> None:
         if not dump_memory:
             return
-        from emet.memory.backend import get_memory_backend
-
-        backend = get_memory_backend(
-            "graph_eqa",
-            graph_memory=agent.graph_memory,
-            voxel_map=getattr(agent, "voxel_map", None),
+        text = export_graph_eqa_dir(
+            agent.graph_memory,
+            getattr(agent, "voxel_map", None),
+            dump_memory,
+            title="Scene graph (saved)",
         )
-        backend.save(dump_memory)
         print(f"Saved graph memory to {dump_memory}")
-        print(format_scene_graph_pretty(agent.graph_memory, title="Scene graph (saved)"))
+        print(text)
 
     try:
+        if export_dir and discord:
+            raise click.UsageError("Use either --export or --discord, not both.")
+
+        if export_dir:
+            executor = EQAExecuter(agent)
+            if not not_rotate_in_place:
+                executor.rotate_in_place()
+            text = export_graph_eqa_dir(
+                agent.graph_memory,
+                getattr(agent, "voxel_map", None),
+                export_dir,
+                title="Scene graph (export)",
+            )
+            print(text)
+            print(f"Exported graph memory to {export_dir}")
+            return
+
         if discord:
             from emet.llms.discord_bot import EmetDiscordBot
 

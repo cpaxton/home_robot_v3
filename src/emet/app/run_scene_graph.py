@@ -11,7 +11,7 @@
 # object queries.
 
 import os
-from typing import Optional
+import sys
 
 import click
 
@@ -79,7 +79,22 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
     "--output-path",
     type=click.Path(),
     default=None,
-    help="Output path for saving memory",
+    help="Output directory for saving memory (open-vocab scene graph + report when used with --export or after spin)",
+)
+@click.option(
+    "--export",
+    "export_dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=str),
+    default=None,
+    help=(
+        "After spin: save open-vocab scene graph here + scene_graph_report.txt, print to stdout. "
+        "Implies --no-interactive when set."
+    ),
+)
+@click.option(
+    "--no-interactive",
+    is_flag=True,
+    help="After initial scan/load, skip the E/L/M REPL (exit immediately if no LLM).",
 )
 @click.option(
     "--match-method",
@@ -125,8 +140,10 @@ def main(
     manual_wait,
     explore_iter: int = 3,
     match_method: str = "class",
-    input_path: Optional[str] = None,
-    output_path: Optional[str] = None,
+    input_path: str | None = None,
+    output_path: str | None = None,
+    export_dir: str | None = None,
+    no_interactive: bool = False,
     robot_ip: str = "",
     visual_servo: bool = False,
     skip_confirmations: bool = True,
@@ -206,6 +223,27 @@ def main(
         )
         backend.load(input_path)
         executor._last_memory_save_path = input_path
+
+    # Headless export: --export DIR, or --no-interactive with --output-path (same dir as executor log)
+    save_dir = export_dir or (output_path if no_interactive else None)
+    if save_dir:
+        from emet.memory.headless_export import export_open_vocab_scene_graph_dir
+
+        text = export_open_vocab_scene_graph_dir(sg_processor.scene_graph, save_dir)
+        print(text)
+        print(f"Exported open-vocab scene graph to {save_dir}")
+        executor._last_memory_save_path = save_dir
+
+    if export_dir or no_interactive:
+        if no_interactive and not save_dir:
+            raise click.UsageError(
+                "--no-interactive requires --export DIR or --output-path (where to write the scene graph)."
+            )
+        from emet.memory.utils import print_memory_view_help_on_quit
+
+        print_memory_view_help_on_quit(getattr(executor, "_last_memory_save_path", None))
+        robot.stop()
+        sys.exit(0)
 
     prompt = PickupPromptBuilder()
 
