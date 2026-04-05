@@ -76,6 +76,8 @@ dependencies = [
     "open3d",
     "click>=8.1.8",
     "paramiko>=3.0.0",
+    # Required by pinocchio (pin) at import time when built with collision support; do not remove.
+    "hpp-fcl",
 ]
 
 [project.scripts]
@@ -109,6 +111,9 @@ hand_tracker = [
 dynamem = [
     "SAM-2",
 ]
+# MolmoSpaces: optional extra does NOT add molmo-spaces to main env (version conflict with numpy<2).
+# Use a separate venv for the runner; see docs/molmospaces.md and install.sh --molmospaces.
+molmospaces = []
 
 [tool.uv]
 # Robocasa 0.2 pins numpy==1.23.3 and numba==0.56.4; dynamem/SAM-2 need numpy>=1.24.4.
@@ -156,6 +161,17 @@ select = [
 ignore = [
     "E501",   # line too long (handled by formatter)
     "B008",   # do not perform function calls in argument defaults
+]
+# Allow deferred/conditional imports and other patterns used in this codebase
+extend-ignore = [
+    "E402",   # module level import not at top (deferred imports for optional deps)
+    "E722",   # bare except (legacy; prefer except Exception where appropriate)
+    "E741",   # ambiguous variable name (e.g. l); many in vendored-style code
+    "B012",   # return in finally (existing pattern in mapping.py)
+    "B023",   # function does not bind loop variable (false positives in closures)
+    "B024",   # abstract base class with no abstract methods
+    "B027",   # empty method in ABC without abstract decorator
+    "F811",   # redefinition of unused name (stretch_ros2_bridge ros.py)
 ]
 
 [tool.ruff.lint.per-file-ignores]

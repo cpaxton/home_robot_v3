@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Molmo Spaces simulator — https://github.com/allenai/molmo-spaces."""
 
@@ -13,9 +22,7 @@ class MolmoSpacesSimulator(BaseSimulatorServer):
     """Stub for Molmo Spaces simulator integration."""
 
     def get_robot_spec(self):
-        raise NotImplementedError(
-            "Molmo Spaces integration is a stub. See https://github.com/allenai/molmo-spaces"
-        )
+        raise NotImplementedError("Molmo Spaces integration is a stub. See https://github.com/allenai/molmo-spaces")
 
     def get_full_observation_message(self):
         raise NotImplementedError("Molmo Spaces not yet implemented")

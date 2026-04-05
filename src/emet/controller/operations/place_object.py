@@ -9,7 +9,6 @@
 
 # Description: Place an object on top of the target receptacle, by just using the arm for now.
 import time
-from typing import Optional
 
 import numpy as np
 
@@ -93,9 +92,7 @@ class PlaceObjectOperation(ManagedOperation):
         distance = np.linalg.norm(point[:2] - center_xyz[:2].cpu().numpy())
         # Take a step towards the center of the object
         dxyz = (center_xyz - point).cpu().numpy()
-        point[:2] = point[:2] + (
-            dxyz[:2] / np.linalg.norm(dxyz[:2]) * min(distance, self.place_step_size)
-        )
+        point[:2] = point[:2] + (dxyz[:2] / np.linalg.norm(dxyz[:2]) * min(distance, self.place_step_size))
         if self.verbose:
             print(" - After taking a step towards the center of the object, we are at", point)
             print(
@@ -105,9 +102,7 @@ class PlaceObjectOperation(ManagedOperation):
         return point
 
     def can_start(self) -> bool:
-        self.attempt(
-            "will start placing the object if we have object and receptacle, and are close enough to drop."
-        )
+        self.attempt("will start placing the object if we have object and receptacle, and are close enough to drop.")
         if self.agent.current_object is None and self.require_object:
             self.error("Object not found.")
             return False
@@ -132,9 +127,7 @@ class PlaceObjectOperation(ManagedOperation):
         self.cheer(f"Object is probably close enough to place upon: {dist}")
         return True
 
-    def _get_place_joint_state(
-        self, pos: np.ndarray, quat: np.ndarray, joint_state: Optional[np.ndarray] = None
-    ):
+    def _get_place_joint_state(self, pos: np.ndarray, quat: np.ndarray, joint_state: np.ndarray | None = None):
         """Use inverse kinematics to compute joint position for (pos, quat) in base frame.
 
         Args:
@@ -145,9 +138,7 @@ class PlaceObjectOperation(ManagedOperation):
         if joint_state is None:
             joint_state = self.robot.get_observation().joint
 
-        target_joint_positions, _, _, success, _ = self.robot_model.manip_ik_for_grasp_frame(
-            pos, quat, q0=joint_state
-        )
+        target_joint_positions, _, _, success, _ = self.robot_model.manip_ik_for_grasp_frame(pos, quat, q0=joint_state)
 
         return target_joint_positions, success
 
@@ -193,14 +184,10 @@ class PlaceObjectOperation(ManagedOperation):
         max_xyz = self.get_target().point_cloud.max(axis=0)[0]
 
         # Placement is at xy = object_xyz[:2], z = max_xyz[2] + margin
-        place_xyz = np.array(
-            [relative_object_xyz[0], relative_object_xyz[1], max_xyz[2] + self.place_height_margin]
-        )
+        place_xyz = np.array([relative_object_xyz[0], relative_object_xyz[1], max_xyz[2] + self.place_height_margin])
 
         if self.show_place_in_voxel_grid:
-            self.agent.get_voxel_map().show(
-                orig=place_xyz, xyt=xyt, footprint=self.robot_model.get_footprint()
-            )
+            self.agent.get_voxel_map().show(orig=place_xyz, xyt=xyt, footprint=self.robot_model.get_footprint())
 
         target_joint_positions, success = self._get_place_joint_state(
             pos=place_xyz, quat=ee_rot, joint_state=joint_state

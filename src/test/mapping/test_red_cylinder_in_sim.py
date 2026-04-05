@@ -1,4 +1,13 @@
 # Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
 #
 # Integration test: robot moves around in the default MuJoCo scene (rotate_in_place),
 # then we assert that the memory backend can find the red cylinder. Ensures the full
@@ -35,7 +44,7 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
         try:
             with socket.create_connection((host, port), timeout=2) as _:
                 return True
-        except (OSError, socket.timeout):
+        except (TimeoutError, OSError):
             time.sleep(0.5)
     return False
 
@@ -53,9 +62,7 @@ def test_red_cylinder_detected_in_sim():
     proc = None
     robot = None
     env = dict(os.environ)
-    env["PYTHONPATH"] = os.pathsep.join(
-        [str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep)
-    )
+    env["PYTHONPATH"] = os.pathsep.join([str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep))
     if sys.platform == "linux":
         env["MUJOCO_GL"] = "egl"
 
@@ -75,9 +82,7 @@ def test_red_cylinder_detected_in_sim():
             stderr = proc.stderr.read().decode() if proc.stderr else ""
             proc.terminate()
             proc.wait(timeout=5)
-            pytest.fail(
-                "MuJoCo server did not bind to 4401 within 45s. stderr:\n" + stderr
-            )
+            pytest.fail("MuJoCo server did not bind to 4401 within 45s. stderr:\n" + stderr)
 
         from emet.controller.task.dynamem import DynamemTaskExecutor
         from emet.controller.zmq_client import StretchZmqClient
@@ -101,10 +106,7 @@ def test_red_cylinder_detected_in_sim():
         result = voxel_map.localize_text("red cylinder", return_debug=True)
         point, debug_text = result[0], result[1]
 
-        assert point is not None, (
-            "localize_text('red cylinder') should return a target in sim. "
-            f"debug: {debug_text!r}"
-        )
+        assert point is not None, f"localize_text('red cylinder') should return a target in sim. debug: {debug_text!r}"
         target = point.squeeze()
         assert target.shape == (3,), "target should be 3D (x, y, z)"
 

@@ -8,8 +8,8 @@
 # license information maybe found below, if so.
 
 """
-    Dynamem uses OK-Robot's manipulation stack, so it relies on an accurately calibrated urdf.
-    This script does the same thing as described in https://github.com/ok-robot/ok-robot/blob/main/docs/robot-calibration.md
+Dynamem uses OK-Robot's manipulation stack, so it relies on an accurately calibrated urdf.
+This script does the same thing as described in https://github.com/ok-robot/ok-robot/blob/main/docs/robot-calibration.md
 """
 
 import argparse

@@ -20,7 +20,7 @@ from rclpy.time import Time
 from sensor_msgs.msg import LaserScan
 
 
-class RosLidar(object):
+class RosLidar:
     """Simple wrapper node for a ROS lidar"""
 
     _max_dist = 100.0
@@ -35,9 +35,7 @@ class RosLidar(object):
         # print(f"robot client is: {type(robot_client)}")
 
         self._ros_client = ros_client
-        self._subscriber = self._ros_client.create_subscription(
-            LaserScan, self.name, self._lidar_scan_callback, 10
-        )
+        self._subscriber = self._ros_client.create_subscription(LaserScan, self.name, self._lidar_scan_callback, 10)
         print("Done!!!!")
 
     def _lidar_scan_callback(self, scan_msg):

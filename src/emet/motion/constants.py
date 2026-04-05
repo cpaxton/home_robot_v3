@@ -7,85 +7,55 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-import logging
 import math
 import os
-import re
-import xml.etree.ElementTree as ET
 
 import numpy as np
 
 from emet.utils.config import get_full_config_path
 
-logger = logging.getLogger(__name__)
+# Stretch stuff: use config urdf if present, else generate from hello-robot-stretch-urdf package
+_CONFIG_STRETCH_URDF = get_full_config_path("urdf/stretch.urdf")
+
+# XML snippet added by dynamem (OK-Robot manipulation stack): joint_fake so joint_mast is child
+_JOINT_FAKE_SNIPPET = """
+    <link name="fake_link_x">
+        <inertial>
+            <origin rpy="0.0 0.0 0." xyz="0. 0. 0."/>
+            <mass value="0.749143203376"/>
+            <inertia ixx="0.0709854511955" ixy="-0.00433428742758" ixz="-0.000186110788698" iyy="0.000437922053343" iyz="-0.00288788257713" izz="0.0711048085017"/>
+        </inertial>
+    </link>
+    <joint name="joint_fake" type="prismatic">
+        <origin rpy="0. 0. 0." xyz="0. 0. 0."/>
+        <axis xyz="1.0 0.0 0.0"/>
+        <parent link="base_link"/>
+        <child link="fake_link_x"/>
+        <limit effort="100.0" lower="-1.0" upper="1.1" velocity="1.0"/>
+    </joint>
+"""
 
 
-def _ensure_stretch_urdf(urdf_path: str) -> str:
-    """If stretch.urdf doesn't exist, generate it from the stretch_urdf package."""
-    if os.path.isfile(urdf_path):
-        return urdf_path
+def _generate_dynamem_stretch_urdf(package_urdf_path: str, out_path: str) -> None:
+    """Write a Dynamem-modified Stretch URDF (joint_fake + mesh paths) to out_path."""
+    import xml.etree.ElementTree as ET
 
-    try:
-        import importlib.resources
-
-        pkg_path = str(importlib.resources.files("stretch_urdf"))
-    except (ImportError, ModuleNotFoundError):
-        logger.warning(
-            "stretch.urdf not found at %s and stretch_urdf package is not installed. "
-            "IK will fail. Copy a calibrated URDF or install stretch_urdf.",
-            urdf_path,
-        )
-        return urdf_path
-
-    model_name = "SE3"
-    tool_name = "eoa_wrist_dw3_tool_sg3"
-    src_urdf = os.path.join(pkg_path, model_name, f"stretch_description_{model_name}_{tool_name}.urdf")
-    mesh_dir = os.path.join(pkg_path, model_name, "meshes")
-
-    if not os.path.isfile(src_urdf):
-        logger.warning("Stock URDF not found at %s", src_urdf)
-        return urdf_path
-
-    logger.info("Generating default stretch.urdf from stretch_urdf package -> %s", urdf_path)
-
-    with open(src_urdf, "r") as f:
-        urdf_text = f.read()
-
-    # Rewrite relative mesh paths to absolute
-    for match in re.finditer(r'filename="(.+?)"', urdf_text):
-        orig = match.group(1)
-        fn = orig.split("/")[-1]
-        urdf_text = urdf_text.replace(orig, os.path.join(mesh_dir, fn))
-
-    os.makedirs(os.path.dirname(urdf_path), exist_ok=True)
-
-    # Write, then apply the dynamem joint_fake patch
-    tree = ET.ElementTree(ET.fromstring(urdf_text))
+    tree = ET.parse(package_urdf_path)
     root = tree.getroot()
+    pkg_dir = os.path.dirname(os.path.abspath(package_urdf_path))
 
+    # Resolve mesh paths relative to package so the generated file works from any cwd
+    for mesh in root.iter("mesh"):
+        fn = mesh.get("filename")
+        if fn and not os.path.isabs(fn):
+            mesh.set("filename", os.path.normpath(os.path.join(pkg_dir, fn)))
+
+    # Add joint_fake if not present (same logic as config/dynamem_urdf.py)
     has_fake = any(j.get("name") == "joint_fake" for j in root.findall("joint"))
     if not has_fake:
-        snippet = ET.fromstring(
-            "<root>"
-            '<link name="fake_link_x">'
-            "  <inertial>"
-            '    <origin rpy="0 0 0" xyz="0 0 0"/>'
-            '    <mass value="0.749143203376"/>'
-            '    <inertia ixx="0.071" ixy="-0.004" ixz="0" iyy="0.0004" iyz="-0.003" izz="0.071"/>'
-            "  </inertial>"
-            "</link>"
-            '<joint name="joint_fake" type="prismatic">'
-            '  <origin rpy="0 0 0" xyz="0 0 0"/>'
-            '  <axis xyz="1 0 0"/>'
-            '  <parent link="base_link"/>'
-            '  <child link="fake_link_x"/>'
-            '  <limit effort="100" lower="-1" upper="1.1" velocity="1"/>'
-            "</joint>"
-            "</root>"
-        )
-        for elem in snippet:
-            root.append(elem)
-
+        snippet_root = ET.fromstring(f"<root>{_JOINT_FAKE_SNIPPET}</root>")
+        for el in snippet_root:
+            root.append(el)
         for joint in root.findall("joint"):
             if joint.get("name") == "joint_mast":
                 parent = joint.find("parent")
@@ -93,13 +63,40 @@ def _ensure_stretch_urdf(urdf_path: str) -> str:
                     parent.set("link", "fake_link_x")
                 break
 
-    tree.write(urdf_path, xml_declaration=True, encoding="utf-8")
-    logger.info("Generated %s", urdf_path)
-    return urdf_path
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    tree.write(out_path, xml_declaration=True, encoding="utf-8", default_namespace="")
 
 
-# Stretch stuff
-MANIP_STRETCH_URDF = _ensure_stretch_urdf(get_full_config_path("urdf/stretch.urdf"))
+def get_stretch_urdf_path() -> str:
+    """Path to a valid Stretch URDF for kinematics (config or generated with joint_fake)."""
+    if os.path.isfile(_CONFIG_STRETCH_URDF):
+        return _CONFIG_STRETCH_URDF
+    try:
+        import stretch_urdf
+
+        pkg_dir = os.path.dirname(stretch_urdf.__file__)
+        # Prefer dex_wrist URDF so joint_wrist_pitch and joint_wrist_roll exist (Dynamem default_manip_mode_controlled_joints)
+        for rel in (
+            "RE1V0/stretch_description_RE1V0_tool_stretch_dex_wrist.urdf",
+            "RE2V0/stretch_description_RE2V0_tool_stretch_dex_wrist.urdf",
+            "RE1V0/stretch_description_RE1V0_tool_stretch_gripper.urdf",
+        ):
+            fallback = os.path.join(pkg_dir, rel)
+            if os.path.isfile(fallback):
+                _generate_dynamem_stretch_urdf(fallback, _CONFIG_STRETCH_URDF)
+                return _CONFIG_STRETCH_URDF
+        re1 = os.path.join(pkg_dir, "RE1V0")
+        if os.path.isdir(re1):
+            for name in sorted(os.listdir(re1)):
+                if name.endswith(".urdf"):
+                    _generate_dynamem_stretch_urdf(os.path.join(re1, name), _CONFIG_STRETCH_URDF)
+                    return _CONFIG_STRETCH_URDF
+    except Exception:
+        pass
+    return _CONFIG_STRETCH_URDF
+
+
+MANIP_STRETCH_URDF = get_stretch_urdf_path()
 
 # This is the gripper, and the distance in the gripper frame to where the fingers will roughly meet
 STRETCH_GRASP_FRAME = "link_grasp_center"

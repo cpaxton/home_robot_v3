@@ -3,14 +3,23 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Stretch 3 robot backend — https://hello-robot.com/stretch-3-product."""
 
 from emet.controller.zmq_client import StretchZmqClient
 from emet.motion.constants import MANIP_STRETCH_URDF, stretch_degrees_of_freedom
 from emet.motion.kinematics import HelloStretchKinematics
-from emet.motion.robot import Footprint
 from emet.robots.base import RobotBackend, RobotSpec
+from emet.robots.footprint import Footprint
 
 STRETCH_JOINT_NAMES = [
     "base_x",

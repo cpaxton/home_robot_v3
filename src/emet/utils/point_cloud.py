@@ -11,7 +11,6 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -59,9 +58,7 @@ def points_in_mesh(
     # Rotate the bounds by 60 degrees
     # Rotation matrix for 45 degrees about the z-axis
     angle = theta
-    rotation_matrix = np.array(
-        [[np.cos(angle), -np.sin(angle), 0], [np.sin(angle), np.cos(angle), 0], [0, 0, 1]]
-    )
+    rotation_matrix = np.array([[np.cos(angle), -np.sin(angle), 0], [np.sin(angle), np.cos(angle), 0], [0, 0, 1]])
 
     # Define the corners of the bounding box in the original space
     corners = np.array(
@@ -86,9 +83,7 @@ def points_in_mesh(
     bbox_quaternion = tra.quaternion_from_matrix(rotation_matrix)
 
     # Convert to xyzw quaternion
-    bbox_quaternion = np.array(
-        [bbox_quaternion[1], bbox_quaternion[2], bbox_quaternion[3], bbox_quaternion[0]]
-    )
+    bbox_quaternion = np.array([bbox_quaternion[1], bbox_quaternion[2], bbox_quaternion[3], bbox_quaternion[0]])
 
     # Translate the bounds by the base pose
     bbox = bbox + np.array([[x, y, 0], [x, y, 0]])
@@ -112,9 +107,7 @@ def points_in_mesh(
     # original_length = len(selected_indices)
     if trimesh_contains(bbox, points[selected_indices].cpu().numpy()).any():
         # Modify the selected indices to remove points that are within the bounds of the robot
-        selected_indices = selected_indices[
-            ~trimesh_contains(bbox, points[selected_indices].cpu().numpy())
-        ]
+        selected_indices = selected_indices[~trimesh_contains(bbox, points[selected_indices].cpu().numpy())]
     if visualize:
         # rr.log("world/points_in_bounds", rr.Points(points[selected_indices
         # print(f"Removed {original_length - len(selected_indices)} points inside the robot bounds")
@@ -123,9 +116,7 @@ def points_in_mesh(
     return selected_indices
 
 
-def numpy_to_pcd(
-    xyz: np.ndarray, rgb: np.ndarray = None, max_points: int = -1
-) -> o3d.geometry.PointCloud:
+def numpy_to_pcd(xyz: np.ndarray, rgb: np.ndarray = None, max_points: int = -1) -> o3d.geometry.PointCloud:
     """Create an open3d pointcloud from a single xyz/rgb pair"""
     xyz = xyz.reshape(-1, 3)
     if rgb is not None:
@@ -142,7 +133,7 @@ def numpy_to_pcd(
     return pcd
 
 
-def pcd_to_numpy(pcd: o3d.geometry.PointCloud) -> Tuple[np.ndarray, np.ndarray]:
+def pcd_to_numpy(pcd: o3d.geometry.PointCloud) -> tuple[np.ndarray, np.ndarray]:
     """Convert an open3d point cloud into xyz, rgb numpy arrays and return them."""
     xyz = np.asarray(pcd.points)
     rgb = np.asarray(pcd.colors)
@@ -188,19 +179,19 @@ def show_pcd(
 
 
 def create_visualization_geometries(
-    pcd: Optional[o3d.geometry.PointCloud] = None,
-    xyz: Optional[np.ndarray] = None,
-    rgb: Optional[np.ndarray] = None,
-    orig: Optional[np.ndarray] = None,
-    R: Optional[np.ndarray] = None,
-    size: Optional[float] = 1.0,
-    arrow_pos: Optional[np.ndarray] = None,
-    arrow_size: Optional[float] = 1.0,
-    arrow_R: Optional[np.ndarray] = None,
-    arrow_color: Optional[np.ndarray] = None,
-    sphere_pos: Optional[np.ndarray] = None,
-    sphere_size: Optional[float] = 1.0,
-    sphere_color: Optional[np.ndarray] = None,
+    pcd: o3d.geometry.PointCloud | None = None,
+    xyz: np.ndarray | None = None,
+    rgb: np.ndarray | None = None,
+    orig: np.ndarray | None = None,
+    R: np.ndarray | None = None,
+    size: float | None = 1.0,
+    arrow_pos: np.ndarray | None = None,
+    arrow_size: float | None = 1.0,
+    arrow_R: np.ndarray | None = None,
+    arrow_color: np.ndarray | None = None,
+    sphere_pos: np.ndarray | None = None,
+    sphere_size: float | None = 1.0,
+    sphere_color: np.ndarray | None = None,
     grasps: list = None,
 ):
     """
@@ -258,9 +249,7 @@ def create_visualization_geometries(
 
     if grasps is not None:
         for grasp in grasps:
-            coords = o3d.geometry.TriangleMesh.create_coordinate_frame(
-                size=0.05, origin=grasp[:3, 3]
-            )
+            coords = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.05, origin=grasp[:3, 3])
             coords = coords.rotate(grasp[:3, :3])
             geoms.append(coords)
 
@@ -269,13 +258,13 @@ def create_visualization_geometries(
 
 def save_geometries_as_image(
     geoms: list,
-    camera_extrinsic: Optional[np.ndarray] = None,
-    look_at_point: Optional[np.ndarray] = None,
-    output_path: Optional[str] = None,
-    zoom: Optional[float] = None,
-    point_size: Optional[float] = None,
-    near_clipping: Optional[float] = None,
-    far_clipping: Optional[float] = None,
+    camera_extrinsic: np.ndarray | None = None,
+    look_at_point: np.ndarray | None = None,
+    output_path: str | None = None,
+    zoom: float | None = None,
+    point_size: float | None = None,
+    near_clipping: float | None = None,
+    far_clipping: float | None = None,
     live_visualization: bool = False,
 ):
     """
@@ -454,13 +443,17 @@ def add_multiplicative_noise(depth_img, gamma_shape=10000, gamma_scale=0.0001):
 
 def add_additive_noise_to_xyz(
     xyz_img,
-    gp_rescale_factor_range=[12, 20],
-    gaussian_scale_range=[0.0, 0.003],
+    gp_rescale_factor_range=None,
+    gaussian_scale_range=None,
     valid_mask=None,
 ):
     """Add (approximate) Gaussian Process noise to ordered point cloud
     @param xyz_img: a [H x W x 3] ordered point cloud
     """
+    if gaussian_scale_range is None:
+        gaussian_scale_range = [0.0, 0.003]
+    if gp_rescale_factor_range is None:
+        gp_rescale_factor_range = [12, 20]
     xyz_img = xyz_img.copy()
 
     H, W, C = xyz_img.shape
@@ -495,12 +488,8 @@ def dropout_random_ellipses(depth_img, dropout_mean, gamma_shape=10000, gamma_sc
 
     # Sample ellipse centers
     nonzero_pixel_indices = np.array(np.where(depth_img > 0)).T  # Shape: [#nonzero_pixels x 2]
-    dropout_centers_indices = np.random.choice(
-        nonzero_pixel_indices.shape[0], size=num_ellipses_to_dropout
-    )
-    dropout_centers = nonzero_pixel_indices[
-        dropout_centers_indices, :
-    ]  # Shape: [num_ellipses_to_dropout x 2]
+    dropout_centers_indices = np.random.choice(nonzero_pixel_indices.shape[0], size=num_ellipses_to_dropout)
+    dropout_centers = nonzero_pixel_indices[dropout_centers_indices, :]  # Shape: [num_ellipses_to_dropout x 2]
 
     # Sample ellipse radii and angles
     x_radii = np.random.gamma(gamma_shape, gamma_scale, size=num_ellipses_to_dropout)
@@ -534,7 +523,6 @@ def dropout_random_ellipses(depth_img, dropout_mean, gamma_shape=10000, gamma_sc
 
 import numpy as np
 import open3d as o3d
-from scipy.spatial import cKDTree
 
 
 def ransac_transform(source_xyz, target_xyz, visualize=False, distance_threshold: float = 0.25):
@@ -624,10 +612,10 @@ def ransac_transform(source_xyz, target_xyz, visualize=False, distance_threshold
 
 
 def find_se3_transform(
-    cloud1: Union[torch.Tensor, np.ndarray],
-    cloud2: Union[torch.Tensor, np.ndarray],
-    rgb1: Union[torch.Tensor, np.ndarray],
-    rgb2: Union[torch.Tensor, np.ndarray],
+    cloud1: torch.Tensor | np.ndarray,
+    cloud2: torch.Tensor | np.ndarray,
+    rgb1: torch.Tensor | np.ndarray,
+    rgb2: torch.Tensor | np.ndarray,
     color_weight=0.5,
     max_iterations=50,
     tolerance=1e-5,
@@ -693,7 +681,7 @@ def find_se3_transform(
     R = np.eye(3)
     t = np.zeros(3)
 
-    for iteration in range(max_iterations):
+    for _iteration in range(max_iterations):
         # Find nearest neighbors
         tree = cKDTree(combined2)
         distances, indices = tree.query(combined1, k=1)

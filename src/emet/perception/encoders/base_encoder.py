@@ -13,8 +13,6 @@ import abc
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Union
-
 from numpy import ndarray
 from torch import Tensor
 
@@ -25,7 +23,7 @@ class BaseImageTextEncoder(abc.ABC):
     """
 
     @abc.abstractmethod
-    def encode_image(self, image: Union[ndarray, Tensor]):
+    def encode_image(self, image: ndarray | Tensor):
         raise NotImplementedError
 
     @abc.abstractmethod

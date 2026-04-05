@@ -21,6 +21,4 @@ def get_captioner(captioner_name, args: Any):
     elif captioner_name == "blip":
         return BlipCaptioner(**args)
     else:
-        raise ValueError(
-            f"Captioner {captioner_name} not implemented or not supported. Should be one of {captioners}."
-        )
+        raise ValueError(f"Captioner {captioner_name} not implemented or not supported. Should be one of {captioners}.")

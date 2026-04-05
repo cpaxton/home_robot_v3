@@ -1,13 +1,21 @@
-import atexit
-import os
-from multiprocessing import Lock, Manager, Process
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
 
+import atexit
 import multiprocessing
+import os
 import platform
 import signal
 import sys
 import threading
 import time
+from multiprocessing import Lock, Manager, Process
 
 import numpy as np
 
@@ -19,6 +27,14 @@ try:
 except ImportError:
     from mujoco._structs import MjModel
 
+import emet.simulation.stretch_mujoco.utils as utils
+from emet.simulation.stretch_mujoco.datamodels.status_command import (
+    CommandBaseVelocity,
+    CommandCoordinateFrameArrowsViz,
+    CommandKeyframe,
+    CommandMove,
+    StatusCommand,
+)
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_joints import StatusStretchJoints
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_sensors import StatusStretchSensors
@@ -27,15 +43,7 @@ from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 from emet.simulation.stretch_mujoco.mujoco_server import MujocoServer, MujocoServerProxies
 from emet.simulation.stretch_mujoco.mujoco_server_managed import MujocoServerManaged
 from emet.simulation.stretch_mujoco.mujoco_server_passive import MujocoServerPassive
-from emet.simulation.stretch_mujoco.datamodels.status_command import (
-    CommandBaseVelocity,
-    CommandCoordinateFrameArrowsViz,
-    CommandKeyframe,
-    CommandMove,
-    StatusCommand,
-)
-import emet.simulation.stretch_mujoco.utils as utils
-from emet.simulation.stretch_mujoco.utils import require_connection, block_until_check_succeeds
+from emet.simulation.stretch_mujoco.utils import block_until_check_succeeds, require_connection
 
 
 class StretchMujocoSimulator:
@@ -56,10 +64,12 @@ class StretchMujocoSimulator:
         scene_xml_path: str | None = None,
         model: MjModel | None = None,
         camera_hz: float = 30,
-        cameras_to_use: list[StretchCameras] = [],
-        start_translation: list|None = None,
-        start_rotation_quat: list|None = None
+        cameras_to_use: list[StretchCameras] = None,
+        start_translation: list | None = None,
+        start_rotation_quat: list | None = None,
     ) -> None:
+        if cameras_to_use is None:
+            cameras_to_use = []
         self.scene_xml_path = scene_xml_path
         self.model = model
         self.camera_hz = camera_hz
@@ -103,9 +113,7 @@ class StretchMujocoSimulator:
 
         if platform.system() == "Darwin" and mujoco_server is MujocoServerPassive:
             # On a mac, the process for MujocoServerPassive needs to be started with mjpython
-            mjpython_path = sys.executable.replace("bin/python3", "bin/mjpython").replace(
-                "bin/python", "bin/mjpython"
-            )
+            mjpython_path = sys.executable.replace("bin/python3", "bin/mjpython").replace("bin/python", "bin/mjpython")
             print(f"{mjpython_path=}")
             multiprocessing.set_executable(mjpython_path)
 
@@ -161,9 +169,7 @@ class StretchMujocoSimulator:
 
         logger.alert("Starting Stretch MuJoCo Simulator...")
         need_camera = len(self._cameras_passed) > 0
-        while self.pull_status().time == 0 or (
-            need_camera and self.pull_camera_data().time == 0
-        ):
+        while self.pull_status().time == 0 or (need_camera and self.pull_camera_data().time == 0):
             time.sleep(1)
             logger.warning("Still waiting to connect to the MuJoCo Simulator.")
 
@@ -217,7 +223,7 @@ class StretchMujocoSimulator:
                 and not isinstance(thread, threading._DummyThread)
             ):
                 logger.warning(
-                    f"Stopping thread {index}/{len(active_threads)-1}.",
+                    f"Stopping thread {index}/{len(active_threads) - 1}.",
                 )
                 thread.join(timeout=10.0)
                 if thread.is_alive():
@@ -279,9 +285,7 @@ class StretchMujocoSimulator:
         Move the robot to home position
         """
         with self._command_lock:
-            self.data_proxies.set_command(
-                StatusCommand(keyframe=CommandKeyframe(name="home", trigger=True))
-            )
+            self.data_proxies.set_command(StatusCommand(keyframe=CommandKeyframe(name="home", trigger=True)))
         self.wait_while_is_moving(Actuators.lift)
 
     @require_connection
@@ -290,9 +294,7 @@ class StretchMujocoSimulator:
         Move the robot to stow position
         """
         with self._command_lock:
-            self.data_proxies.set_command(
-                StatusCommand(keyframe=CommandKeyframe(name="stow", trigger=True))
-            )
+            self.data_proxies.set_command(StatusCommand(keyframe=CommandKeyframe(name="stow", trigger=True)))
 
         self.wait_while_is_moving(Actuators.wrist_pitch)
 
@@ -327,9 +329,7 @@ class StretchMujocoSimulator:
 
         return bool(np.isclose(current_position, set_position, atol=position_tolerance))
 
-    def wait_until_at_setpoint(
-        self, actuator: str | Actuators, timeout: float = 5.0, position_tolerance: float = 0.05
-    ):
+    def wait_until_at_setpoint(self, actuator: str | Actuators, timeout: float = 5.0, position_tolerance: float = 0.05):
         """Blocks until the actuator reaches its previously set point."""
         if isinstance(actuator, str):
             actuator = Actuators[actuator]
@@ -341,17 +341,14 @@ class StretchMujocoSimulator:
 
         if not block_until_check_succeeds(
             wait_timeout=timeout,
-            check=lambda: self.is_reached_set_position(
-                actuator=actuator, position_tolerance=position_tolerance
-            )
-            == True,
+            check=lambda: self.is_reached_set_position(actuator=actuator, position_tolerance=position_tolerance),
             is_alive=self.is_running,
         ):
             pos = move_command.pos
             actual = actuator.get_position(self.pull_status())
             error = pos - actual
             logger.error(
-                f"Timeout: Joint {actuator.name} did not reach {pos}. Actual: {actual:.4f} Diff: {error*100:.4f}cm",
+                f"Timeout: Joint {actuator.name} did not reach {pos}. Actual: {actual:.4f} Diff: {error * 100:.4f}cm",
             )
             return False
         return True
@@ -382,9 +379,7 @@ class StretchMujocoSimulator:
                 Actuators.base_rotate,
                 Actuators.base_translate,
             ]:
-                current_position = actuator.get_position_relative(
-                    self.pull_status()
-                )
+                current_position = actuator.get_position_relative(self.pull_status())
                 if actuator == Actuators.left_wheel_vel or actuator == Actuators.base_translate:
                     current_position = current_position[0]
                 elif actuator == Actuators.right_wheel_vel:
@@ -394,7 +389,7 @@ class StretchMujocoSimulator:
             else:
                 current_position = actuator.get_position(self.pull_status())
 
-            if not actuator in self._last_movement_positions:
+            if actuator not in self._last_movement_positions:
                 self._last_movement_positions[actuator] = current_position
                 return True
 
@@ -408,7 +403,7 @@ class StretchMujocoSimulator:
 
         if not block_until_check_succeeds(
             wait_timeout=timeout,
-            check=lambda: check_if_moved() == False,
+            check=lambda: not check_if_moved(),
             is_alive=self.is_running,
         ):
             if timeout is not None:
@@ -437,9 +432,7 @@ class StretchMujocoSimulator:
             Actuators.base_rotate,
             Actuators.base_translate,
         ]:
-            raise Exception(
-                f"Cannot set an absolute position for a continuous joint {actuator.name}"
-            )
+            raise Exception(f"Cannot set an absolute position for a continuous joint {actuator.name}")
 
         with self._command_lock:
             command = self.data_proxies.get_command()
@@ -464,9 +457,7 @@ class StretchMujocoSimulator:
             logger.error(
                 f"Cannot set a position for a velocity joint {actuator.name}",
             )
-            raise Exception(
-                f"Cannot set an absolute position for a continuous joint {actuator.name}"
-            )
+            raise Exception(f"Cannot set an absolute position for a continuous joint {actuator.name}")
 
         with self._command_lock:
             command = self.data_proxies.get_command()
@@ -489,9 +480,7 @@ class StretchMujocoSimulator:
 
         with self._command_lock:
             command = self.data_proxies.get_command()
-            command.set_base_velocity(
-                CommandBaseVelocity(v_linear=v_linear, omega=omega, trigger=True)
-            )
+            command.set_base_velocity(CommandBaseVelocity(v_linear=v_linear, omega=omega, trigger=True))
 
             self.data_proxies.set_command(command)
 

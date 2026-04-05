@@ -14,7 +14,6 @@
 import copy
 import functools
 import io
-from typing import List
 
 import cv2
 import numpy as np
@@ -41,13 +40,11 @@ def compute_pinhole_K(width, height, fov_degrees) -> np.ndarray:
     v_focal_length = width / (2 * np.tan(horizontal_fov_rad / 2) * float(height) / width)
     principal_point_x = (width - 1.0) / 2
     principal_point_y = (height - 1.0) / 2
-    K = np.array(
-        [[v_focal_length, 0, principal_point_x], [0, h_focal_length, principal_point_y], [0, 0, 1]]
-    )
+    K = np.array([[v_focal_length, 0, principal_point_x], [0, h_focal_length, principal_point_y], [0, 0, 1]])
     return K
 
 
-class Camera(object):
+class Camera:
     """
     Simple pinhole camera model. Contains parameters for projecting from depth to xyz, and saving information about camera position for planning.
     TODO: Move this to utils/cameras.py?
@@ -318,15 +315,13 @@ def smooth_mask(mask, kernel=None, num_iterations=3):
     return mask1, mask2
 
 
-def rotate_image(imgs: List[np.ndarray]) -> List[np.ndarray]:
+def rotate_image(imgs: list[np.ndarray]) -> list[np.ndarray]:
     """stretch specific routine to flip and rotate sideways images for normal viewing"""
     imgs = [np.rot90(np.fliplr(np.flipud(x))) for x in imgs]
     return imgs
 
 
-def build_mask(
-    target: Tensor, val: float = 0.0, tol: float = 1e-3, mask_extra_radius: int = 5
-) -> Tensor:
+def build_mask(target: Tensor, val: float = 0.0, tol: float = 1e-3, mask_extra_radius: int = 5) -> Tensor:
     """Build mask where all channels are (val - tol) <= target <= (val + tol)
         Optionally, dilate by mask_extra_radius
 

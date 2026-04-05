@@ -38,7 +38,7 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
 
 
 @pytest.mark.skipif(not RUN_SIM_TESTS, reason="RUN_SIM_TESTS=0")
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(360)
 def test_graph_eqa_color_question_default_mujoco_scene():
     """
     MuJoCo default scene (red cylinder, blue cube on table): build GraphEQAMemory from

@@ -11,6 +11,8 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+"""Simple tools for creating and loading objects in pybullet for simulation and data generation."""
+
 from collections import namedtuple
 
 import matplotlib.pyplot as plt
@@ -22,11 +24,6 @@ import trimesh.transformations as tra
 
 # Helpers
 from emet.utils.image import Camera, opengl_depth_to_xyz, z_from_opengl_depth
-
-"""
-This file contains simple tools for creating and loading objects in pybullet for easy simulation
-and data generation.
-"""
 
 PbJointInfo = namedtuple(
     "PbJointInfo",
@@ -52,17 +49,21 @@ PbJointInfo = namedtuple(
 )
 
 
-class PbObject(object):
+class PbObject:
     def __init__(
         self,
         name,
         filename,
         assets_path=None,
-        start_pos=[0, 0, 0],
-        start_rot=[0, 0, 0, 1],
+        start_pos=None,
+        start_rot=None,
         static=False,
         client=None,
     ):
+        if start_rot is None:
+            start_rot = [0, 0, 0, 1]
+        if start_pos is None:
+            start_pos = [0, 0, 0]
         self.name = name
         self.filename = filename
         assert client is not None
@@ -105,16 +106,18 @@ class PbArticulatedObject(PbObject):
         name,
         filename,
         assets_path=None,
-        start_pos=[0, 0, 0],
-        start_rot=[0, 0, 0, 1],
+        start_pos=None,
+        start_rot=None,
         static=False,
         client=None,
         *args,
         **kwargs,
     ):
-        super(PbArticulatedObject, self).__init__(
-            name, filename, assets_path, start_pos, start_rot, static, client
-        )
+        if start_rot is None:
+            start_rot = [0, 0, 0, 1]
+        if start_pos is None:
+            start_pos = [0, 0, 0]
+        super().__init__(name, filename, assets_path, start_pos, start_rot, static, client)
         self._link_idx = {}
         self._read_joint_info()
 
@@ -175,7 +178,7 @@ class PbArticulatedObject(PbObject):
         dof = self.get_num_controllable_joints()
         if len(positions) > dof:
             raise RuntimeError("too many positions sent to set_joint_positions")
-        for i, q in zip(self.controllable_joint_infos, positions):
+        for i, q in zip(self.controllable_joint_infos, positions, strict=False):
             self.set_joint_position(i.index, q)
 
     def get_joint_positions(self):
@@ -338,7 +341,7 @@ class PbCamera(Camera):
         return self.pose_matrix.copy()
 
 
-class PbClient(object):
+class PbClient:
     """
     Physics client; connects to backend.
     """

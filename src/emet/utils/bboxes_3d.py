@@ -45,7 +45,7 @@
 # ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-from typing import List, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
 
 import torch
 from torch import Tensor
@@ -73,9 +73,9 @@ class BBoxes3D:
 
     def __init__(
         self,
-        bounds: List[torch.Tensor],
-        features: Optional[List[torch.Tensor]] = None,
-        names: Optional[List[torch.Tensor]] = None,
+        bounds: list[torch.Tensor],
+        features: list[torch.Tensor] | None = None,
+        names: list[torch.Tensor] | None = None,
     ) -> None:
         """
         Args:
@@ -163,9 +163,7 @@ class BBoxes3D:
                     if p.device != self.device:
                         raise ValueError("All boxes must be on the same device")
 
-                num_boxes_per_scene = torch.tensor(
-                    [len(p) for p in self._bounds_list], device=self.device
-                )
+                num_boxes_per_scene = torch.tensor([len(p) for p in self._bounds_list], device=self.device)
                 self._P = int(num_boxes_per_scene.max())
                 self.valid = torch.tensor(
                     [len(p) > 0 for p in self._bounds_list],
@@ -207,9 +205,7 @@ class BBoxes3D:
         if features_C is not None:
             self._C = features_C
 
-    def _parse_auxiliary_input(
-        self, aux_input
-    ) -> Tuple[Optional[List[torch.Tensor]], Optional[torch.Tensor], Optional[int]]:
+    def _parse_auxiliary_input(self, aux_input) -> tuple[list[torch.Tensor] | None, torch.Tensor | None, int | None]:
         """
         Interpret the auxiliary inputs (names, features) given to __init__.
 
@@ -255,9 +251,7 @@ class BBoxes3D:
                     boxes in a scene."
             )
 
-    def _parse_auxiliary_input_list(
-        self, aux_input: list
-    ) -> Tuple[Optional[List[torch.Tensor]], None, Optional[int]]:
+    def _parse_auxiliary_input_list(self, aux_input: list) -> tuple[list[torch.Tensor] | None, None, int | None]:
         """
         Interpret the auxiliary inputs (names, features) given to __init__,
         if a list.
@@ -279,7 +273,7 @@ class BBoxes3D:
 
         if len(aux_input) != self._N:
             raise ValueError("Bboxes and auxiliary input must be the same length.")
-        for p, d in zip(self._num_boxes_per_scene, aux_input):
+        for p, d in zip(self._num_boxes_per_scene, aux_input, strict=False):
             valid_but_empty = p == 0 and d is not None and d.ndim == 2
             if p > 0 or valid_but_empty:
                 if p != d.shape[0]:
@@ -291,9 +285,7 @@ class BBoxes3D:
                 elif aux_input_C != d.shape[1]:
                     raise ValueError("The scenes must have the same number of channels")
                 if d.device != self.device:
-                    raise ValueError(
-                        "All auxiliary inputs must be on the same device as the boxes."
-                    )
+                    raise ValueError("All auxiliary inputs must be on the same device as the boxes.")
             else:
                 needs_fixing = True
 
@@ -306,7 +298,7 @@ class BBoxes3D:
             if good_empty is None:
                 good_empty = torch.zeros((0, aux_input_C), device=self.device)
             aux_input_out = []
-            for p, d in zip(self._num_boxes_per_scene, aux_input):
+            for p, d in zip(self._num_boxes_per_scene, aux_input, strict=False):
                 valid_but_empty = p == 0 and d is not None and d.ndim == 2
                 if p > 0 or valid_but_empty:
                     aux_input_out.append(d)
@@ -325,7 +317,7 @@ class BBoxes3D:
 
     def __getitem__(
         self,
-        index: Union[int, List[int], slice, torch.BoolTensor, torch.LongTensor],
+        index: int | list[int] | slice | torch.BoolTensor | torch.LongTensor,
     ) -> "BBoxes3D":
         """
         Args:
@@ -386,7 +378,7 @@ class BBoxes3D:
         # mypy type checking is failing here
         return self._N == 0 or self.valid.eq(False).all()  # type: ignore
 
-    def bounds_list(self) -> List[torch.Tensor]:
+    def bounds_list(self) -> list[torch.Tensor]:
         """
         Get the list representation of the boxes.
 
@@ -394,16 +386,14 @@ class BBoxes3D:
             list of tensors of boxes of shape (P_n, 3).
         """
         if self._bounds_list is None:
-            assert (
-                self._bounds_padded is not None
-            ), "bounds_padded is required to compute bounds_list."
+            assert self._bounds_padded is not None, "bounds_padded is required to compute bounds_list."
             bounds_list = []
             for i in range(self._N):
                 bounds_list.append(self._bounds_padded[i, : self.num_boxes_per_scene()[i]])
             self._bounds_list = bounds_list
         return self._bounds_list
 
-    def names_list(self) -> Optional[List[torch.Tensor]]:
+    def names_list(self) -> list[torch.Tensor] | None:
         """
         Get the list representation of the names,
         or None if there are no names.
@@ -415,12 +405,10 @@ class BBoxes3D:
             if self._names_padded is None:
                 # No names provided so return None
                 return None
-            self._names_list = struct_utils.padded_to_list(
-                self._names_padded, self.num_boxes_per_scene().tolist()
-            )
+            self._names_list = struct_utils.padded_to_list(self._names_padded, self.num_boxes_per_scene().tolist())
         return self._names_list
 
-    def features_list(self) -> Optional[List[torch.Tensor]]:
+    def features_list(self) -> list[torch.Tensor] | None:
         """
         Get the list representation of the features,
         or None if there are no features.
@@ -447,7 +435,7 @@ class BBoxes3D:
         self._compute_packed()
         return self._bounds_packed
 
-    def names_packed(self) -> Optional[torch.Tensor]:
+    def names_packed(self) -> torch.Tensor | None:
         """
         Get the packed representation of the names.
 
@@ -458,7 +446,7 @@ class BBoxes3D:
         self._compute_packed()
         return self._names_packed
 
-    def features_packed(self) -> Optional[torch.Tensor]:
+    def features_packed(self) -> torch.Tensor | None:
         """
         Get the packed representation of the features.
 
@@ -512,7 +500,7 @@ class BBoxes3D:
         self._compute_padded()
         return self._bounds_padded
 
-    def names_padded(self) -> Optional[torch.Tensor]:
+    def names_padded(self) -> torch.Tensor | None:
         """
         Get the padded representation of the names,
         or None if there are no names.
@@ -523,7 +511,7 @@ class BBoxes3D:
         self._compute_padded()
         return self._names_padded
 
-    def features_padded(self) -> Optional[torch.Tensor]:
+    def features_padded(self) -> torch.Tensor | None:
         """
         Get the padded representation of the features,
         or None if there are no features.
@@ -631,9 +619,7 @@ class BBoxes3D:
         if self.isempty():
             self._bounds_packed = torch.zeros((0, 3), dtype=torch.float32, device=self.device)
             self._packed_to_scene_idx = torch.zeros((0,), dtype=torch.int64, device=self.device)
-            self._scene_to_packed_first_idx = torch.zeros(
-                (0,), dtype=torch.int64, device=self.device
-            )
+            self._scene_to_packed_first_idx = torch.zeros((0,), dtype=torch.int64, device=self.device)
             self._names_packed = None
             self._features_packed = None
             return
@@ -831,9 +817,9 @@ class BBoxes3D:
         if N <= 0:
             raise ValueError("N must be > 0.")
 
-        new_bounds_list: List[int] = []
-        new_names_list: Optional[List[str]] = None
-        new_features_list: Optional[List[Tensor]] = None
+        new_bounds_list: list[int] = []
+        new_names_list: list[str] | None = None
+        new_features_list: list[Tensor] | None = None
         for bounds in self.bounds_list():
             # mypy type checking is failing here
             new_bounds_list.extend(bounds.clone() for _ in range(N))  # type: ignore
@@ -849,9 +835,7 @@ class BBoxes3D:
             for features in features_list:
                 # mypy type checking is failing here
                 new_features_list.extend(features.clone() for _ in range(N))  # type: ignore
-        return self.__class__(
-            bounds=new_bounds_list, names=new_names_list, features=new_features_list
-        )
+        return self.__class__(bounds=new_bounds_list, names=new_names_list, features=new_features_list)
 
 
 def join_boxes_as_batch(boxes: Sequence[BBoxes3D]) -> BBoxes3D:
@@ -879,23 +863,18 @@ def join_boxes_as_batch(boxes: Sequence[BBoxes3D]) -> BBoxes3D:
             if field == "bounds":
                 raise ValueError("boxes cannot have their bounds set to None!")
             if not all(f is None for f in field_list):
-                raise ValueError(
-                    f"boxes in the batch have some fields '{field}'"
-                    + " defined and some set to None."
-                )
+                raise ValueError(f"boxes in the batch have some fields '{field}'" + " defined and some set to None.")
             field_list = None
         else:
             field_list = [p for boxes in field_list for p in boxes]
-            if field == "features" and any(
-                p.shape[1] != field_list[0].shape[1] for p in field_list[1:]
-            ):
+            if field == "features" and any(p.shape[1] != field_list[0].shape[1] for p in field_list[1:]):
                 raise ValueError("BBoxes3D must have the same number of features")
         kwargs[field] = field_list
 
     return BBoxes3D(**kwargs)
 
 
-def join_boxes_as_scene(boxes: Union[BBoxes3D, List[BBoxes3D]]) -> BBoxes3D:
+def join_boxes_as_scene(boxes: BBoxes3D | list[BBoxes3D]) -> BBoxes3D:
     """
     Joins a batch of point scene in the form of a BBoxes3D object or a list of BBoxes3D
     objects as a single point scene. If the input is a list, the BBoxes3D objects in the
@@ -931,7 +910,7 @@ def join_boxes_as_scene(boxes: Union[BBoxes3D, List[BBoxes3D]]) -> BBoxes3D:
 
 def get_box_verts_from_bounds(
     bounds: torch.Tensor,  # (N, 3, 2)
-    R: Optional[torch.Tensor] = None,
+    R: torch.Tensor | None = None,
 ):  # pragma: no cover
     """
     Returns corners of a bounding box.
@@ -986,7 +965,8 @@ def get_box_verts_from_bounds(
 
 
 def get_box_bounds_from_verts(
-    verts: torch.Tensor, R: Optional[torch.Tensor] = None  # (N, 8, 3)
+    verts: torch.Tensor,
+    R: torch.Tensor | None = None,  # (N, 8, 3)
 ) -> torch.Tensor:
     """
     Returns the bounds of a bbox given vertices. Assumes axis-aligned for now.
@@ -1103,7 +1083,6 @@ def box3d_nms(bounding_boxes, confidence_score, iou_threshold=0.3):
     keep = []
     assignments = {}
     while len(order) > 0:
-
         idx = order[-1]  # Highest confidence (S)
 
         # push S in filtered predictions list

@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 from enum import Enum
 from functools import cache
 
@@ -19,7 +28,7 @@ class StretchSensors(Enum):
         """
         Returns all the available sensors
         """
-        return [sensor for sensor in StretchSensors]
+        return list(StretchSensors)
 
     @staticmethod
     def none() -> list["StretchSensors"]:
@@ -35,15 +44,13 @@ class StretchSensors(Enum):
         Mujoco names replicated rangefinders using the base_lidar000 -> base_lidar719 nominclature. We need to poll each one individually.
         """
         num_digits = len(str(resolution))
-        return [
-            f"{StretchSensors.base_lidar.name}{str(i).zfill(num_digits)}" for i in range(resolution)
-        ]
+        return [f"{StretchSensors.base_lidar.name}{str(i).zfill(num_digits)}" for i in range(resolution)]
 
     @staticmethod
     def from_mjmodel(mjmodel: mujoco._structs.MjModel) -> "list[StretchSensors]":
         """Get all the sensors in an mjmodel. We don't have the spec, only the compiled model. We're gonna try to find all the sensors."""
         sensors: set[StretchSensors] = set()
-        remaining_sensors = [s for s in StretchSensors]
+        remaining_sensors = list(StretchSensors)
         try:
             index = 0
             while True:
@@ -60,6 +67,7 @@ class StretchSensors(Enum):
                 if len(remaining_sensors) == 0:
                     break
 
-        except IndexError: ...
+        except IndexError:
+            ...
 
         return list(sensors)

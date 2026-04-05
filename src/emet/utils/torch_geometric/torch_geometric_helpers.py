@@ -15,7 +15,7 @@
 import itertools
 import numbers
 import typing
-from typing import Any, List, Optional, Union
+from typing import Any
 
 import torch
 from torch import Tensor
@@ -71,10 +71,10 @@ def repeat(src: Any, length: int) -> Any:
 @typing.no_type_check
 def voxel_grid(
     pos: Tensor,
-    size: Union[float, List[float], Tensor],
-    batch: Optional[Tensor] = None,
-    start: Optional[Union[float, List[float], Tensor]] = None,
-    end: Optional[Union[float, List[float], Tensor]] = None,
+    size: float | list[float] | Tensor,
+    batch: Tensor | None = None,
+    start: float | list[float] | Tensor | None = None,
+    end: float | list[float] | Tensor | None = None,
 ) -> Tensor:
     r"""Voxel grid pooling from the, *e.g.*, `Dynamic Edge-Conditioned Filters
     in Convolutional Networks on Graphs <https://arxiv.org/abs/1704.02901>`_
@@ -132,10 +132,10 @@ def voxel_grid(
 @typing.no_type_check
 def voxel_grid_no_cluster(
     pos: Tensor,
-    size: Union[float, List[float], Tensor],
-    batch: Optional[Tensor] = None,
-    start: Optional[Union[float, List[float], Tensor]] = None,
-    end: Optional[Union[float, List[float], Tensor]] = None,
+    size: float | list[float] | Tensor,
+    batch: Tensor | None = None,
+    start: float | list[float] | Tensor | None = None,
+    end: float | list[float] | Tensor | None = None,
 ) -> Tensor:
     r"""Voxel grid pooling from the, *e.g.*, `Dynamic Edge-Conditioned Filters
     in Convolutional Networks on Graphs <https://arxiv.org/abs/1704.02901>`_

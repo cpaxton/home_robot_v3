@@ -26,9 +26,7 @@ from emet.utils import LoopStats
     help="Set if we are executing on the robot and not on a remote computer",
 )
 @click.option("--headless", is_flag=True, help="Do not show camera feeds")
-@click.option(
-    "--iterations", default=100, help="Number of iterations between rate histogram updates"
-)
+@click.option("--iterations", default=100, help="Number of iterations between rate histogram updates")
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 def main(
     robot_ip: str = "",

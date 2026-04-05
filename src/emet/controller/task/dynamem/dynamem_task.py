@@ -8,15 +8,15 @@
 # license information maybe found below, if so.
 
 import datetime
-from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
 import torch
 from PIL import Image
+from termcolor import colored
 
-from emet.controller.operations import GraspObjectOperation
 from emet.controller.controller_dynamem import RobotAgent
+from emet.controller.operations import GraspObjectOperation
 from emet.controller.task.emote import EmoteTask
 from emet.controller.task.pickup.hand_over_task import HandOverTask
 from emet.core import AbstractRobotClient, Parameters
@@ -25,7 +25,6 @@ from emet.memory.utils import print_memory_saved_help
 from emet.perception import create_semantic_sensor
 from emet.utils.image import numpy_image_to_bytes
 from emet.utils.logger import Logger
-from termcolor import colored
 
 logger = Logger(__name__)
 
@@ -52,8 +51,8 @@ class DynamemTaskExecutor:
         match_method: str = "feature",
         visual_servo: bool = False,
         device_id: int = 0,
-        output_path: Optional[str] = None,
-        server_ip: Optional[str] = "127.0.0.1",
+        output_path: str | None = None,
+        server_ip: str | None = "127.0.0.1",
         skip_confirmations: bool = True,
         explore_iter: int = 5,
         mllm: bool = False,
@@ -137,7 +136,7 @@ class DynamemTaskExecutor:
         # `filename` = None means write to default log path (the datetime you started to run the process)
         self.agent.voxel_map.write_to_pickle(filename=None)
         if point is None:
-            logger.error("Navigation Failure: Could not find the object {}".format(target_object))
+            logger.error(f"Navigation Failure: Could not find the object {target_object}")
             return None
         cv2.imwrite(target_object + ".jpg", self.robot.get_observation().rgb[:, :, [2, 1, 0]])
         self.robot.switch_to_navigation_mode()
@@ -149,7 +148,7 @@ class DynamemTaskExecutor:
     def _pickup(
         self,
         target_object: str,
-        point: Optional[np.ndarray] = None,
+        point: np.ndarray | None = None,
         skip_confirmations: bool = False,
     ) -> None:
         """Pick up an object.
@@ -220,7 +219,7 @@ class DynamemTaskExecutor:
                 content=numpy_image_to_bytes(obs.ee_rgb),
             )
 
-    def _place(self, target_receptacle: str, point: Optional[np.ndarray]) -> None:
+    def _place(self, target_receptacle: str, point: np.ndarray | None) -> None:
         """Place an object.
 
         Args:
@@ -240,7 +239,7 @@ class DynamemTaskExecutor:
 
     def _hand_over(self) -> None:
         """Create a task to find a person, navigate to them, and extend the arm toward them"""
-        logger.alert(f"[Pickup task] Hand Over")
+        logger.alert("[Pickup task] Hand Over")
 
         # After the robot has started...
         try:
@@ -254,7 +253,7 @@ class DynamemTaskExecutor:
         # Execute the task
         task.run()
 
-    def __call__(self, response: List[Tuple[str, str]], channel=None) -> bool:
+    def __call__(self, response: list[tuple[str, str]], channel=None) -> bool:
         """Execute the list of commands given by the LLM bot.
 
         Args:
@@ -301,10 +300,7 @@ class DynamemTaskExecutor:
                 # Either we wait for users to confirm whether to run navigation, or we just directly control the robot to navigate.
                 if not self.manipulation_only and (
                     self.skip_confirmations
-                    or (
-                        not self.skip_confirmations
-                        and input("Do you want to run navigation? [Y/n]: ").upper() != "N"
-                    )
+                    or (not self.skip_confirmations and input("Do you want to run navigation? [Y/n]: ").upper() != "N")
                 ):
                     self.robot.move_to_nav_posture()
                     point = self._find(args)
@@ -340,10 +336,7 @@ class DynamemTaskExecutor:
                 # Either we wait for users to confirm whether to run navigation, or we just directly control the robot to navigate.
                 if not self.manipulation_only and (
                     self.skip_confirmations
-                    or (
-                        not self.skip_confirmations
-                        and input("Do you want to run navigation? [Y/n]: ").upper() != "N"
-                    )
+                    or (not self.skip_confirmations and input("Do you want to run navigation? [Y/n]: ").upper() != "N")
                 ):
                     point = self._find(args)
                 # Or the user explicitly tells that he or she does not want to run navigation.
@@ -393,7 +386,7 @@ class DynamemTaskExecutor:
                 for _ in range(self.explore_iter):
                     self.agent.run_exploration()
             elif command == "find":
-                logger.info("[Pickup task] Finding {}.".format(args))
+                logger.info(f"[Pickup task] Finding {args}.")
                 point = self._find(args)
             elif command == "nod_head":
                 logger.info("[Pickup task] Nodding head.")

@@ -1,38 +1,47 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 import contextlib
-from dataclasses import dataclass
-from multiprocessing.managers import DictProxy, SyncManager
 import os
 import platform
 import signal
 import threading
 import time
-from typing import Callable
+from collections.abc import Callable
+from dataclasses import dataclass
+from multiprocessing.managers import DictProxy, SyncManager
 
 import click
 import mujoco
-import mujoco._functions
 import mujoco._enums
+import mujoco._functions
 import numpy as np
+
 try:
     from mujoco import MjData, MjModel
 except ImportError:
     from mujoco._structs import MjData, MjModel
-import mujoco._enums
 
+import emet.simulation.stretch_mujoco.config as config
+import emet.simulation.stretch_mujoco.utils as utils
+from emet.simulation.stretch_mujoco.datamodels.status_command import CommandBaseVelocity, CommandMove, StatusCommand
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_joints import StatusStretchJoints
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_sensors import StatusStretchSensors
 from emet.simulation.stretch_mujoco.enums.actuators import Actuators
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
-import emet.simulation.stretch_mujoco.config as config
 from emet.simulation.stretch_mujoco.enums.stretch_sensors import StretchSensors
 from emet.simulation.stretch_mujoco.mujoco_server_camera_manager import (
-    MujocoServerCameraManagerThreaded,
     MujocoServerCameraManagerSync,
+    MujocoServerCameraManagerThreaded,
 )
-from emet.simulation.stretch_mujoco.datamodels.status_command import CommandBaseVelocity, CommandMove, StatusCommand
 from emet.simulation.stretch_mujoco.mujoco_server_sensor_manager import MujocoServerSensorManagerThreaded
-import emet.simulation.stretch_mujoco.utils as utils
 from emet.simulation.stretch_mujoco.utils import FpsCounter
 
 
@@ -95,7 +104,6 @@ class MujocoServerProxies:
 
 
 class BaseController:
-
     def __init__(self, mujoco_server: "MujocoServer") -> None:
         self.mujoco_server = mujoco_server
         self.last_command: CommandMove | CommandBaseVelocity | None = None
@@ -197,21 +205,23 @@ class MujocoServer:
         stop_mujoco_process_event: threading.Event,
         data_proxies: MujocoServerProxies,
         cameras_to_use: list[StretchCameras],
-        start_translation: list|None,
-        start_rotation_quat: list|None,
+        start_translation: list | None,
+        start_rotation_quat: list | None,
         use_glx: bool = False,
     ):
         # Use EGL on Linux unless use_glx (e.g. Xvfb on WSL).
         if platform.system() == "Linux" and cameras_to_use and not use_glx:
             os.environ.setdefault("MUJOCO_GL", "egl")
-        server = cls(scene_xml_path, model, stop_mujoco_process_event, data_proxies,start_translation , start_rotation_quat)
+        server = cls(
+            scene_xml_path, model, stop_mujoco_process_event, data_proxies, start_translation, start_rotation_quat
+        )
         server.run(
             show_viewer_ui=show_viewer_ui,
             camera_hz=camera_hz,
             cameras_to_use=cameras_to_use,
         )
 
-    def change_start_pose(self,model: MjModel, translation: list|None, rotation_quat: list|None):
+    def change_start_pose(self, model: MjModel, translation: list | None, rotation_quat: list | None):
         body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
 
         if body_id == -1:
@@ -227,16 +237,14 @@ class MujocoServer:
         qadr = model.jnt_qposadr[joint_id]
 
         if translation is not None:
-            model.qpos0[qadr:qadr+3] = translation
+            model.qpos0[qadr : qadr + 3] = translation
 
         if rotation_quat is not None:
-            model.qpos0[qadr+3:qadr+7] = rotation_quat
+            model.qpos0[qadr + 3 : qadr + 7] = rotation_quat
 
-        print(f"Start pose: {model.qpos0[qadr:qadr+3]}, {model.qpos0[qadr+3:qadr+7]}")
+        print(f"Start pose: {model.qpos0[qadr : qadr + 3]}, {model.qpos0[qadr + 3 : qadr + 7]}")
 
         return model
-
-
 
     def __init__(
         self,
@@ -244,8 +252,8 @@ class MujocoServer:
         model: MjModel | None,
         stop_mujoco_process_event: threading.Event,
         data_proxies: MujocoServerProxies,
-        start_translation: list|None,
-        start_rotation_quat: list|None
+        start_translation: list | None,
+        start_rotation_quat: list | None,
     ):
         """
         Initialize the Simulator handle with a scene
@@ -292,9 +300,7 @@ class MujocoServer:
             joint_range = self.mjmodel.jnt_range[i]  # This gives [lower_limit, upper_limit]
             try:
                 actuator = Actuators.get_actuator_by_joint_names_in_mjcf(name)
-                self.data_proxies.set_joint_limit(
-                    actuator=actuator, min_max=(joint_range[0], joint_range[1])
-                )
+                self.data_proxies.set_joint_limit(actuator=actuator, min_max=(joint_range[0], joint_range[1]))
             except:
                 ...
 
@@ -336,9 +342,7 @@ class MujocoServer:
         cameras_to_use: list[StretchCameras],
     ):
         # self.__run_headless_simulation(camera_hz=camera_hz, cameras_to_use=cameras_to_use)
-        self.__run_headless_simulation_with_physics_thread(
-            camera_hz=camera_hz, cameras_to_use=cameras_to_use
-        )
+        self.__run_headless_simulation_with_physics_thread(camera_hz=camera_hz, cameras_to_use=cameras_to_use)
 
     def _is_requested_to_stop(self):
         try:
@@ -391,9 +395,7 @@ class MujocoServer:
             # Sleep to match the timestep.
             time.sleep(time_until_next_step)
 
-    def _physics_loop(
-        self, lock: contextlib.AbstractContextManager, termination_check: Callable[[], bool]
-    ):
+    def _physics_loop(self, lock: contextlib.AbstractContextManager, termination_check: Callable[[], bool]):
         """
         A loop to use when starting physics in a thread.
         """
@@ -402,9 +404,7 @@ class MujocoServer:
 
         click.secho("Physics Loop has terminated.", fg="red")
 
-    def __run_headless_simulation(
-        self, camera_hz: float, cameras_to_use: list[StretchCameras]
-    ) -> None:
+    def __run_headless_simulation(self, camera_hz: float, cameras_to_use: list[StretchCameras]) -> None:
         """
         Run the simulation without the viewer headless.
 
@@ -501,12 +501,8 @@ class MujocoServer:
         new_status.wrist_roll.pos = self.mjdata.actuator("wrist_roll").length[0]
         new_status.wrist_roll.vel = self.mjdata.actuator("wrist_roll").velocity[0]
 
-        new_status.gripper.pos = self._to_real_gripper_range(
-            self.mjdata.actuator("gripper").length[0]
-        )
-        new_status.gripper.vel = self.mjdata.actuator("gripper").velocity[
-            0
-        ]  # This is still in sim gripper range
+        new_status.gripper.pos = self._to_real_gripper_range(self.mjdata.actuator("gripper").length[0])
+        new_status.gripper.vel = self.mjdata.actuator("gripper").velocity[0]  # This is still in sim gripper range
 
         left_wheel_vel = self.mjdata.actuator("left_wheel_vel").velocity[0]
         right_wheel_vel = self.mjdata.actuator("right_wheel_vel").velocity[0]
@@ -532,7 +528,7 @@ class MujocoServer:
             config.robot_settings["gripper_min_max"],
         )
 
-    def push_command(self, command_status:StatusCommand):
+    def push_command(self, command_status: StatusCommand):
         """
         Handles setting mujoco ctrl properties to move joints.
         """
@@ -546,12 +542,8 @@ class MujocoServer:
                     self.base_controller.push_command(command)
                 else:
                     if actuator_name == Actuators.gripper.name:
-                        current_value = self._to_real_gripper_range(
-                            self.mjdata.actuator("gripper").length[0]
-                        )
-                        self.mjdata.actuator(actuator_name).ctrl = self._to_sim_gripper_range(
-                            current_value + pos
-                        )
+                        current_value = self._to_real_gripper_range(self.mjdata.actuator("gripper").length[0])
+                        self.mjdata.actuator(actuator_name).ctrl = self._to_sim_gripper_range(current_value + pos)
                     else:
                         current_value = self.mjdata.actuator(actuator_name).length[0]
                         self.mjdata.actuator(actuator_name).ctrl = current_value + pos
@@ -565,9 +557,7 @@ class MujocoServer:
                 if actuator_name == Actuators.gripper.name:
                     self.mjdata.actuator(actuator_name).ctrl = self._to_sim_gripper_range(pos)
                 elif actuator_name in (Actuators.base_translate.name, Actuators.base_rotate.name):
-                    raise NotImplementedError(
-                        f"Cannot set move_to for {actuator_name}, which is a relative joint."
-                    )
+                    raise NotImplementedError(f"Cannot set move_to for {actuator_name}, which is a relative joint.")
                 else:
                     self.mjdata.actuator(actuator_name).ctrl = pos
 

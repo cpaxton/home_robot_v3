@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+saved_memory/
 *.py[cod]
 *$py.class
 
@@ -64,6 +65,9 @@ local_settings.py
 
 # Flask stuff:
 instance/
+# Exception: emet mapping instance package (do not ignore)
+!src/emet/mapping/instance/
+!src/emet/mapping/instance/**
 .webassets-cache
 
 # Scrapy stuff:

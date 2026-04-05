@@ -12,7 +12,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import abc
-from typing import Optional, Tuple
 
 import numpy as np
 from omegaconf import DictConfig
@@ -32,7 +31,7 @@ class DiffDriveVelocityController(abc.ABC):
         self.ang_error_tol = error_tol
 
     @abc.abstractmethod
-    def __call__(self, xyt_err: np.ndarray) -> Tuple[float, float, bool]:
+    def __call__(self, xyt_err: np.ndarray) -> tuple[float, float, bool]:
         """Contain execution logic, predict velocities for the left and right wheels. Expected to
         return true/false if we have reached this goal and the controller will be moving no
         farther."""
@@ -51,16 +50,14 @@ class DDVelocityControlNoplan(DiffDriveVelocityController):
 
     def reset_velocity_profile(self):
         """Read velocity configuration info from the config"""
-        self.update_velocity_profile(
-            self.cfg.v_max, self.cfg.w_max, self.cfg.acc_lin, self.cfg.acc_ang
-        )
+        self.update_velocity_profile(self.cfg.v_max, self.cfg.w_max, self.cfg.acc_lin, self.cfg.acc_ang)
 
     def update_velocity_profile(
         self,
-        v_max: Optional[float] = None,
-        w_max: Optional[float] = None,
-        acc_lin: Optional[float] = None,
-        acc_ang: Optional[float] = None,
+        v_max: float | None = None,
+        w_max: float | None = None,
+        acc_lin: float | None = None,
+        acc_ang: float | None = None,
     ):
         """Call controller and update velocity profile.
 
@@ -110,15 +107,9 @@ class DDVelocityControlNoplan(DiffDriveVelocityController):
         if heading_diff > self.cfg.max_heading_ang:
             return 0.0
         else:
-            return (
-                w_max
-                * lin_err
-                / (np.sin(heading_diff) + heading_diff * np.cos(heading_diff) + 1e-5)
-            )
+            return w_max * lin_err / (np.sin(heading_diff) + heading_diff * np.cos(heading_diff) + 1e-5)
 
-    def __call__(
-        self, xyt_err: np.ndarray, allow_reverse: bool = False
-    ) -> Tuple[float, float, bool]:
+    def __call__(self, xyt_err: np.ndarray, allow_reverse: bool = False) -> tuple[float, float, bool]:
         v_cmd = w_cmd = 0
         in_reverse = False
         done = True

@@ -16,8 +16,8 @@
 
 
 import time
+from collections.abc import Callable
 from random import random
-from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 
@@ -37,7 +37,7 @@ class RRT(Planner):
         max_iter: int = 100,
     ):
         """Create RRT planner with configuration"""
-        super(RRT, self).__init__(space, validate_fn)
+        super().__init__(space, validate_fn)
         self.p_sample_goal = p_sample_goal
         self.goal_tolerance = goal_tolerance
         self.max_iter = max_iter
@@ -93,7 +93,7 @@ class RRT(Planner):
         if res.success:
             return res
         # Iterate a bunch of times
-        for i in range(self.max_iter - 1):
+        for _i in range(self.max_iter - 1):
             res, _ = self.step_planner(nodes=self.nodes)
             if res.success:
                 return res
@@ -102,9 +102,9 @@ class RRT(Planner):
     def step_planner(
         self,
         force_sample_goal=False,
-        nodes: Optional[List[TreeNode]] = None,
-        next_state: Optional[np.ndarray] = None,
-    ) -> Tuple[PlanResult, TreeNode]:
+        nodes: list[TreeNode] | None = None,
+        next_state: np.ndarray | None = None,
+    ) -> tuple[PlanResult, TreeNode]:
         """Continue planning for a while. In case you want to try for anytime planning.
 
         Args:
@@ -117,9 +117,7 @@ class RRT(Planner):
             TreeNode: The last node in the tree
         """
         assert self.goal_state is not None, "no goal provided with a call to plan(start, goal)"
-        assert (
-            self.start_time is not None
-        ), "does not look like you started planning with plan(start, goal)"
+        assert self.start_time is not None, "does not look like you started planning with plan(start, goal)"
 
         if force_sample_goal or next_state is not None:
             should_sample_goal = True

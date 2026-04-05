@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 """ZMQ server that wraps a robosuite environment for non-Stretch robots.
 
 For robots natively supported by robosuite (PandaOmron, Tiago, GR1, etc.)
@@ -7,8 +16,7 @@ ZMQ protocol as MujocoZmqServer.
 
 import threading
 import time
-import timeit
-from typing import Any, Dict, Optional
+from typing import Any
 
 import mujoco
 import numpy as np
@@ -18,8 +26,7 @@ import emet.utils.compression as compression
 import emet.utils.logger as log
 from emet.core.server import BaseZmqServer
 from emet.robots.base import RobotSpec
-from emet.utils.geometry import xyt_base_to_global, xyt_global_to_base
-from emet.utils.image import scale_camera_matrix
+from emet.utils.geometry import xyt_global_to_base
 
 logger = log.Logger(__name__)
 
@@ -37,8 +44,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         self,
         robot_spec: RobotSpec,
         *args,
-        scene_xml: Optional[str] = None,
-        scene_model: Optional[mujoco.MjModel] = None,
+        scene_xml: str | None = None,
+        scene_model: mujoco.MjModel | None = None,
         simulation_rate: int = 80,
         **kwargs,
     ):
@@ -48,9 +55,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._scene_model = scene_model
         self.simulation_rate = simulation_rate
 
-        self._mjmodel: Optional[mujoco.MjModel] = None
-        self._mjdata: Optional[mujoco.MjData] = None
-        self._initial_xyt: Optional[np.ndarray] = None
+        self._mjmodel: mujoco.MjModel | None = None
+        self._mjdata: mujoco.MjData | None = None
+        self._initial_xyt: np.ndarray | None = None
         self._running = False
         self.control_mode = "navigation"
         self._at_goal = False
@@ -77,6 +84,38 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._mjdata = mujoco.MjData(self._mjmodel)
         mujoco.mj_forward(self._mjmodel, self._mjdata)
 
+    def get_scene_summary(self) -> str:
+        """Return a short text summary of the scene: robot, position, and notable objects."""
+        if self._mjmodel is None or self._mjdata is None:
+            return "Scene not loaded."
+        lines = [
+            "--- Scene summary ---",
+            f"Robot: {self._spec.name}",
+        ]
+        try:
+            xyt = self.get_base_xyt()
+            lines.append(f"Robot position (x, y, theta): ({xyt[0]:.3f}, {xyt[1]:.3f}, {xyt[2]:.3f})")
+            body_id = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, self._spec.base_link_name)
+            if body_id >= 0:
+                z = float(self._mjdata.body(body_id).xpos[2])
+                lines.append(f"Robot height (z): {z:.3f}")
+        except Exception:
+            lines.append("Robot position: (unknown)")
+        # Describe notable bodies (object1, object2, table, floor)
+        for bid in range(self._mjmodel.nbody):
+            name = mujoco.mj_id2name(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, bid)
+            if name is None or name == self._spec.base_link_name:
+                continue
+            xpos = self._mjdata.body(bid).xpos
+            if "object1" in (name or ""):
+                lines.append(f"  Blue cube (object1): pos ({xpos[0]:.3f}, {xpos[1]:.3f}, {xpos[2]:.3f})")
+            elif "object2" in (name or ""):
+                lines.append(f"  Red cylinder (object2): pos ({xpos[0]:.3f}, {xpos[1]:.3f}, {xpos[2]:.3f})")
+            elif name in ("table", "floor"):
+                lines.append(f"  {name}: pos ({xpos[0]:.3f}, {xpos[1]:.3f}, {xpos[2]:.3f})")
+        lines.append("-------------------")
+        return "\n".join(lines)
+
     def get_base_xyt(self) -> np.ndarray:
         base_name = self._spec.base_link_name
         try:
@@ -87,7 +126,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         except Exception:
             return np.zeros(3)
 
-    def get_base_pose(self) -> Optional[np.ndarray]:
+    def get_base_pose(self) -> np.ndarray | None:
         if self._initial_xyt is None:
             return None
         xyt = self.get_base_xyt()
@@ -117,7 +156,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         return positions, velocities, efforts
 
     def _render_camera(self, camera_name: str, width: int = 640, height: int = 480):
-        """Render an RGB image from a named MuJoCo camera."""
+        """Render an RGB image from a named MuJoCo camera. Uses MUJOCO_GL (egl recommended headless)."""
         renderer = mujoco.Renderer(self._mjmodel, height, width)
         renderer.update_scene(self._mjdata, camera=camera_name)
         rgb = renderer.render()
@@ -144,7 +183,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         return np.array([[f, 0, width / 2], [0, f, height / 2], [0, 0, 1]])
 
     @override
-    def handle_action(self, action: Dict[str, Any]):
+    def handle_action(self, action: dict[str, Any]):
         if "control_mode" in action:
             self.control_mode = action["control_mode"]
 
@@ -152,9 +191,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             joint_targets = action["joint"]
             for i, aname in enumerate(self._spec.actuator_names):
                 if i < len(joint_targets):
-                    aid = mujoco.mj_name2id(
-                        self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, aname
-                    )
+                    aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
                     if aid >= 0:
                         self._mjdata.ctrl[aid] = joint_targets[i]
 
@@ -162,7 +199,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             logger.info(f"Navigation goal received: {action['xyt']} (not yet implemented for robosuite server)")
 
     @override
-    def get_full_observation_message(self) -> Dict[str, Any]:
+    def get_full_observation_message(self) -> dict[str, Any]:
         if self._mjdata is None:
             return None
 
@@ -210,7 +247,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         return message
 
     @override
-    def get_state_message(self) -> Dict[str, Any]:
+    def get_state_message(self) -> dict[str, Any]:
         if self._mjdata is None:
             return None
         q, dq, eff = self.get_joint_state()
@@ -228,7 +265,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         }
 
     @override
-    def get_servo_message(self) -> Dict[str, Any]:
+    def get_servo_message(self) -> dict[str, Any]:
         if self._mjdata is None:
             return None
 
@@ -276,6 +313,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._running = True
         self._initial_xyt = self.get_base_xyt()
 
+        # Print scene summary before any rendering (so it appears in headless / no-DISPLAY runs)
+        summary = self.get_scene_summary()
+        print(summary, flush=True)
+        logger.info("\n" + summary)
+
         super().start()
 
         self._sim_thread = threading.Thread(target=self._sim_loop, daemon=True)
@@ -285,6 +327,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             f"RobosuiteZmqServer started for robot '{self._spec.name}' "
             f"({self._spec.dof} DOF, {len(self._spec.actuator_names)} actuators)"
         )
+        print("Server running. Press Ctrl+C to stop.", flush=True)
 
         while self._running:
             time.sleep(1 / self.simulation_rate)

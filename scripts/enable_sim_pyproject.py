@@ -36,8 +36,8 @@ SIM_FULL = """sim = [
 
 # Commented source lines to uncomment (match with or without leading # and space)
 SOURCES_COMMENTED_PATTERN = (
-    "# robosuite = { path = \"third_party/robosuite\", editable = true }\n"
-    "# robocasa = { path = \"third_party/robocasa\", editable = true }"
+    '# robosuite = { path = "third_party/robosuite", editable = true }\n'
+    '# robocasa = { path = "third_party/robocasa", editable = true }'
 )
 SOURCES_ACTIVE = """robosuite = { path = "third_party/robosuite", editable = true }
 robocasa = { path = "third_party/robocasa", editable = true }"""

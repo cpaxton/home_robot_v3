@@ -10,7 +10,7 @@
 import io
 import os
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import numpy as np
 from google.oauth2.service_account import Credentials
@@ -30,7 +30,7 @@ class GoogleDriveUploader:
     A class to handle uploading photos to Google Drive.
     """
 
-    def __init__(self, credentials_path: Optional[str] = None, folder_name: Optional[str] = None):
+    def __init__(self, credentials_path: str | None = None, folder_name: str | None = None):
         """
         Initialize the GoogleDriveUploader.
 
@@ -69,7 +69,7 @@ class GoogleDriveUploader:
         )
         return build("drive", "v3", credentials=creds)
 
-    def upload_photo(self, file_path: str) -> Optional[str]:
+    def upload_photo(self, file_path: str) -> str | None:
         """
         Upload a photo to the specified Google Drive folder.
 
@@ -88,15 +88,13 @@ class GoogleDriveUploader:
                 .create(body=file_metadata, media_body=media, fields="id", supportsAllDrives=True)
                 .execute()
             )
-            print(f'File uploaded successfully. File ID: {file.get("id")}')
+            print(f"File uploaded successfully. File ID: {file.get('id')}")
             return file.get("id")
         except Exception as e:
             print(f"An error occurred while uploading the file: {e}")
             return None
 
-    def upload_numpy_image(
-        self, image: np.ndarray, file_name: str, format: str = "JPEG"
-    ) -> Optional[str]:
+    def upload_numpy_image(self, image: np.ndarray, file_name: str, format: str = "JPEG") -> str | None:
         """
         Upload a NumPy image array to the specified Google Drive folder.
 
@@ -118,21 +116,19 @@ class GoogleDriveUploader:
             byte_arr.seek(0)
 
             file_metadata = {"name": file_name, "parents": [self.folder_id]}
-            media = MediaInMemoryUpload(
-                byte_arr.getvalue(), mimetype=f"image/{format.lower()}", resumable=True
-            )
+            media = MediaInMemoryUpload(byte_arr.getvalue(), mimetype=f"image/{format.lower()}", resumable=True)
             file = (
                 self.drive_service.files()
                 .create(body=file_metadata, media_body=media, fields="id", supportsAllDrives=True)
                 .execute()
             )
-            print(f'NumPy image uploaded successfully. File ID: {file.get("id")}')
+            print(f"NumPy image uploaded successfully. File ID: {file.get('id')}")
             return file.get("id")
         except Exception as e:
             print(f"An error occurred while uploading the NumPy image: {e}")
             return None
 
-    def create_folder(self, folder_name: str, parent_folder_id: Optional[str] = None) -> str:
+    def create_folder(self, folder_name: str, parent_folder_id: str | None = None) -> str:
         """
         Create a folder in Google Drive.
 
@@ -143,7 +139,7 @@ class GoogleDriveUploader:
         Returns:
             str: ID of the created folder.
         """
-        folder_metadata: Dict[str, Any] = {
+        folder_metadata: dict[str, Any] = {
             "name": folder_name,
             "mimeType": "application/vnd.google-apps.folder",
         }
@@ -151,11 +147,7 @@ class GoogleDriveUploader:
         if parent_folder_id:
             folder_metadata["parents"] = [parent_folder_id]
 
-        folder = (
-            self.drive_service.files()
-            .create(body=folder_metadata, fields="id", supportsAllDrives=True)
-            .execute()
-        )
+        folder = self.drive_service.files().create(body=folder_metadata, fields="id", supportsAllDrives=True).execute()
         print(f'Folder created. ID: "{folder.get("id")}"')
         return folder.get("id")
 
@@ -177,9 +169,7 @@ class GoogleDriveUploader:
             print(e)
         return False
 
-    def get_folder_by_name(
-        self, folder_name: str, parent_folder_id: Optional[str] = None
-    ) -> Optional[Dict[str, str]]:
+    def get_folder_by_name(self, folder_name: str, parent_folder_id: str | None = None) -> dict[str, str] | None:
         """
         Get a folder by its name in Google Drive.
 
@@ -215,7 +205,7 @@ class GoogleDriveUploader:
 
         return {"id": items[0]["id"], "name": items[0]["name"]}
 
-    def get_folder_info(self, folder_id: str) -> Optional[dict]:
+    def get_folder_info(self, folder_id: str) -> dict | None:
         """
         Get information about a folder in Google Drive.
 
@@ -226,17 +216,13 @@ class GoogleDriveUploader:
             Optional[dict]: Dictionary containing folder information if it exists, None otherwise.
         """
         try:
-            return (
-                self.drive_service.files()
-                .get(fileId=folder_id, fields="id, name, mimeType")
-                .execute()
-            )
+            return self.drive_service.files().get(fileId=folder_id, fields="id, name, mimeType").execute()
         except:
             return None
 
     def upload_multiple_photos(
-        self, files: List[Union[str, np.ndarray, Any]], file_names: Optional[List[str | Any]] = None
-    ) -> list[Optional[str]]:
+        self, files: list[str | np.ndarray | Any], file_names: list[str | Any] | None = None
+    ) -> list[str | None]:
         """
         Upload multiple photos to the specified Google Drive folder.
 
@@ -261,7 +247,7 @@ class GoogleDriveUploader:
                 results.append(None)
         return results
 
-    def get_folder_contents(self, folder_id: Optional[str] = None) -> List[Dict[str, str]]:
+    def get_folder_contents(self, folder_id: str | None = None) -> list[dict[str, str]]:
         """
         Get all contents (files and subfolders) of a specified folder.
 
@@ -297,7 +283,7 @@ class GoogleDriveUploader:
 
         return results
 
-    def get_web_link(self, file_id: str) -> Optional[str]:
+    def get_web_link(self, file_id: str) -> str | None:
         """
         Get the web link (URL) for a file or folder in Google Drive.
 
@@ -339,9 +325,7 @@ class GoogleDriveUploader:
             print(f"Error transferring ownership: {e}")
             return False
 
-    def transfer_ownership_of_folder_contents(
-        self, new_owner_email: str, folder_id: Optional[str] = None
-    ):
+    def transfer_ownership_of_folder_contents(self, new_owner_email: str, folder_id: str | None = None):
         """
         Transfer ownership of all files in a folder to a new owner.
 
@@ -360,7 +344,7 @@ class GoogleDriveUploader:
                 else:
                     print(f"Failed to transfer ownership of '{item['name']}'")
 
-    def download_folder_contents(self, local_path: str, folder_id: Optional[str] = None):
+    def download_folder_contents(self, local_path: str, folder_id: str | None = None):
         """
         Download all contents of a specified folder to a local directory.
 
@@ -416,7 +400,7 @@ class GoogleDriveUploader:
         except Exception as e:
             print(f"Error downloading file {file_id}: {e}")
 
-    def delete_folder(self, folder_id: str, permanent: bool = False) -> Optional[bool]:
+    def delete_folder(self, folder_id: str, permanent: bool = False) -> bool | None:
         """
         Delete a folder from Google Drive.
 
@@ -446,9 +430,7 @@ class GoogleDriveUploader:
         """
         try:
             if permanent:
-                self.drive_service.files().delete(
-                    fileId=folder_id, supportsAllDrives=True
-                ).execute()
+                self.drive_service.files().delete(fileId=folder_id, supportsAllDrives=True).execute()
                 print(f"Folder with ID {folder_id} deleted permanently.")
                 return True
             else:

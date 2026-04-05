@@ -38,7 +38,6 @@ prev_save_time = time.time()
 num_images = 0
 
 while num_images < num_images_to_collect:
-
     color_image, camera_info = webcam.get_next_frame()
 
     cv2.imshow("image from camera", color_image)

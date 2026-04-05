@@ -7,7 +7,6 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -22,7 +21,7 @@ class GridParams:
 
     def __init__(
         self,
-        grid_size: Tuple[int, int],
+        grid_size: tuple[int, int],
         resolution: float,
         device: torch.device = torch.device("cpu"),
     ):
@@ -41,7 +40,7 @@ class GridParams:
         # Used for tensorized bounds checks
         self._grid_size_t = Tensor(self.grid_size, device=device)
 
-    def xy_to_grid_coords(self, xy: torch.Tensor) -> Optional[np.ndarray]:
+    def xy_to_grid_coords(self, xy: torch.Tensor) -> np.ndarray | None:
         """convert xy point to grid coords"""
         assert xy.shape[-1] == 2, "coords must be Nx2 or 2d array"
         # Handle conversion between world (X, Y) and grid coordinates

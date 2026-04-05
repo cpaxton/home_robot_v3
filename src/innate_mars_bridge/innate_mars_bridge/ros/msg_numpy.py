@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """
 MIT License
@@ -28,11 +37,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import sys
-
 import numpy as np
-
-from sensor_msgs.msg import Image
 
 name_to_dtypes = {
     "rgb8": (np.uint8, 3),
@@ -66,7 +71,7 @@ name_to_dtypes = {
 
 def image_to_numpy(msg):
     if msg.encoding not in name_to_dtypes:
-        raise TypeError("Unrecognized encoding {}".format(msg.encoding))
+        raise TypeError(f"Unrecognized encoding {msg.encoding}")
 
     dtype_class, channels = name_to_dtypes[msg.encoding]
     dtype = np.dtype(dtype_class)

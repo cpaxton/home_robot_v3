@@ -24,17 +24,9 @@ from scipy.spatial.transform import Rotation
 def compute_pose_from_rotation_matrix(T_pose, r_matrix):
     batch = r_matrix.shape[0]
     joint_num = T_pose.shape[0]
-    r_matrices = (
-        r_matrix.view(batch, 1, 3, 3)
-        .expand(batch, joint_num, 3, 3)
-        .contiguous()
-        .view(batch * joint_num, 3, 3)
-    )
+    r_matrices = r_matrix.view(batch, 1, 3, 3).expand(batch, joint_num, 3, 3).contiguous().view(batch * joint_num, 3, 3)
     src_poses = (
-        T_pose.view(1, joint_num, 3, 1)
-        .expand(batch, joint_num, 3, 1)
-        .contiguous()
-        .view(batch * joint_num, 3, 1)
+        T_pose.view(1, joint_num, 3, 1).expand(batch, joint_num, 3, 1).contiguous().view(batch * joint_num, 3, 1)
     )
 
     out_poses = torch.matmul(r_matrices, src_poses)  # (batch*joint_num)*3*1
@@ -158,12 +150,12 @@ def get_new_pose(pose, rel_pose_change):
 
 def get_new_pose_batch(pose, rel_pose_change):
     const = 57.29577951308232
-    pose[:, 1] += rel_pose_change[:, 0] * torch.sin(pose[:, 2] / const) + rel_pose_change[
-        :, 1
-    ] * torch.cos(pose[:, 2] / const)
-    pose[:, 0] += rel_pose_change[:, 0] * torch.cos(pose[:, 2] / const) - rel_pose_change[
-        :, 1
-    ] * torch.sin(pose[:, 2] / const)
+    pose[:, 1] += rel_pose_change[:, 0] * torch.sin(pose[:, 2] / const) + rel_pose_change[:, 1] * torch.cos(
+        pose[:, 2] / const
+    )
+    pose[:, 0] += rel_pose_change[:, 0] * torch.cos(pose[:, 2] / const) - rel_pose_change[:, 1] * torch.sin(
+        pose[:, 2] / const
+    )
     pose[:, 2] += rel_pose_change[:, 2] * const
     pose[:, 2] = torch.fmod(pose[:, 2] - 180.0, 360.0) + 180.0
     pose[:, 2] = torch.fmod(pose[:, 2] + 180.0, 360.0) - 180.0

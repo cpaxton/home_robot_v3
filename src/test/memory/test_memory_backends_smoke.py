@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Smoke tests for all three memory backends: SVM (instance memory), DynaMem (voxel
@@ -16,6 +25,7 @@ from emet.utils.dummy_stretch_client import DummyStretchClient
 def test_svm_backend_smoke():
     """SVM (InstanceMemoryController / RobotAgent) can be created and exposes voxel map and navigation space."""
     from pathlib import Path
+
     config_path = Path(__file__).resolve().parent.parent / "mapping" / "planner.yaml"
     if not config_path.exists():
         pytest.skip("SVM test requires src/test/mapping/planner.yaml")
@@ -47,6 +57,7 @@ def _make_red_cylinder_map():
 def _make_red_cylinder_and_blue_cube_map():
     """Dynamem map with red cylinder and blue cube at default MuJoCo scene positions."""
     import torch
+
     from emet.mapping.voxel.voxel_dynamem import SparseVoxelMap
 
     class _MockEnc:
@@ -61,9 +72,7 @@ def _make_red_cylinder_and_blue_cube_map():
                 self._text_to_feature[k] = v
 
         def encode_text(self, text):
-            return self._text_to_feature.get(
-                text.lower().strip(), self._text_to_feature["red cylinder"]
-            )
+            return self._text_to_feature.get(text.lower().strip(), self._text_to_feature["red cylinder"])
 
     encoder = _MockEnc()
     voxel_map = SparseVoxelMap(
@@ -79,13 +88,9 @@ def _make_red_cylinder_and_blue_cube_map():
     # Red cylinder at (0.08, -0.55, 0.6), blue cube at (-0.02, -0.55, 0.6) (scene.xml object1/object2)
     red_feat = encoder.encode_text("red cylinder").squeeze(0)
     blue_feat = encoder.encode_text("blue cube").squeeze(0)
-    points = torch.tensor(
-        [[0.08, -0.55, 0.6], [-0.02, -0.55, 0.6]], dtype=torch.float32
-    )
+    points = torch.tensor([[0.08, -0.55, 0.6], [-0.02, -0.55, 0.6]], dtype=torch.float32)
     features = torch.stack([red_feat, blue_feat])
-    rgb = torch.tensor(
-        [[255, 0, 0], [0, 0, 255]], dtype=torch.float32
-    ) / 255.0
+    rgb = torch.tensor([[255, 0, 0], [0, 0, 255]], dtype=torch.float32) / 255.0
     voxel_map.semantic_memory.add(
         points=points,
         features=features,
@@ -99,6 +104,7 @@ def _make_red_cylinder_and_blue_cube_map():
 def test_dynamem_backend_smoke():
     """DynaMem (SparseVoxelMap with semantic memory) can localize 'red cylinder' when it is in the map."""
     import numpy as np
+
     voxel_map = _make_red_cylinder_map()
     result = voxel_map.localize_text("red cylinder", debug=True, return_debug=True)
     target_point, _ = result[0], result[1]
@@ -111,16 +117,12 @@ def test_dynamem_backend_smoke():
 def test_graph_eqa_backend_smoke():
     """GraphEQA memory can add observations and run a query_answer with mock clients."""
     import numpy as np
+
     from emet.memory.graph_eqa import GraphEQAMemory
 
     def mock_eqa(_):
-        return (
-            "reasoning: I see a table.\n"
-            "answer: Yes\n"
-            "confidence: true\n"
-            "action: \n"
-            "confidence_reasoning: Sure."
-        )
+        return "reasoning: I see a table.\nanswer: Yes\nconfidence: true\naction: \nconfidence_reasoning: Sure."
+
     mem = GraphEQAMemory(
         eqa_client=mock_eqa,
         image_description_client=lambda x: "table",
@@ -144,6 +146,7 @@ def test_graph_eqa_backend_smoke():
 def test_unified_backend_dynamem():
     """Unified MemoryBackend (DynaMem): check_memory_for_object and localize_text for red cylinder and blue cube."""
     import numpy as np
+
     from emet.memory.backend import get_memory_backend
 
     voxel_map, _ = _make_red_cylinder_and_blue_cube_map()
@@ -183,6 +186,7 @@ def test_unified_backend_dynamem():
     assert backend.supports_save_load()
     import tempfile
     from pathlib import Path
+
     with tempfile.TemporaryDirectory() as d:
         backend.save(d)
         assert (Path(d) / "manifest.json").exists(), "Expected manifest.json in memory directory"
@@ -191,13 +195,12 @@ def test_unified_backend_dynamem():
 def test_unified_backend_graph_eqa():
     """Unified MemoryBackend (GraphEQA): check_memory_for_object and localize_text via graph nodes."""
     import numpy as np
+
     from emet.memory.backend import get_memory_backend
     from emet.memory.graph_eqa import GraphEQAMemory
 
     def mock_eqa(_):
-        return (
-            "reasoning: ok.\nanswer: Yes\nconfidence: true\naction: \nconfidence_reasoning: ok."
-        )
+        return "reasoning: ok.\nanswer: Yes\nconfidence: true\naction: \nconfidence_reasoning: ok."
 
     mem = GraphEQAMemory(
         eqa_client=mock_eqa,
@@ -231,12 +234,14 @@ def test_unified_backend_graph_eqa():
 def test_unified_backend_svm_empty():
     """Unified MemoryBackend (SVM): empty instance memory returns confidence 0 and localize fails."""
     from pathlib import Path
+
     from emet.memory.backend import get_memory_backend
 
     config_path = Path(__file__).resolve().parent.parent / "mapping" / "planner.yaml"
     if not config_path.exists():
         pytest.skip("SVM test requires src/test/mapping/planner.yaml")
     from emet.utils.config import Config
+
     config = Config()
     config.merge_from_file(str(config_path))
     config.freeze()

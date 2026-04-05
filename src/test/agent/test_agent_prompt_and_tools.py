@@ -1,11 +1,16 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Tests for agent prompt building, tool registry, and response parsing.
 # Run with:  pytest src/test/agent/test_agent_prompt_and_tools.py -v
-
-import json
-
-import pytest
 
 
 def test_parse_strips_think_block():
@@ -13,7 +18,7 @@ def test_parse_strips_think_block():
     from emet.agent.prompt import parse_tool_calls_response
 
     raw = (
-        '<think>\nThe user wants a picture. The JSON would be '
+        "<think>\nThe user wants a picture. The JSON would be "
         '{"tool_calls": [{"name": "bad"}]}\n</think>\n\n'
         '{"tool_calls": [{"name": "take_picture", "arguments": {}}], "message": "Taking a picture."}'
     )
@@ -28,8 +33,8 @@ def test_parse_partial_think_block():
     from emet.agent.prompt import parse_tool_calls_response
 
     raw = (
-        ', I should greet them. The tool for that is wave().\n'
-        '</think>\n\n'
+        ", I should greet them. The tool for that is wave().\n"
+        "</think>\n\n"
         '{"tool_calls": [{"name": "wave", "arguments": {}}], "message": "Hello!"}'
     )
     result = parse_tool_calls_response(raw)

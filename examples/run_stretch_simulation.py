@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 """
 Simple script to start the Stretch MuJoCo simulation.
 
@@ -36,7 +45,7 @@ def main():
         from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
     except ImportError as e:
         print("Error: Could not import simulation modules.")
-        print("Install with: pip install -e \".[sim]\"")
+        print('Install with: pip install -e ".[sim]"')
         print(f"  {e}")
         sys.exit(1)
 
@@ -55,6 +64,7 @@ def main():
     try:
         if args.cameras and not args.headless:
             import cv2
+
             while sim.is_running():
                 camera_data = sim.pull_camera_data()
                 if camera_data:

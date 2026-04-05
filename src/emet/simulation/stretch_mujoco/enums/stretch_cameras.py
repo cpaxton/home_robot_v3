@@ -1,6 +1,15 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable
 
 import numpy as np
 
@@ -28,7 +37,7 @@ class StretchCameras(Enum):
         """
         Returns all the available cameras
         """
-        return [camera for camera in StretchCameras]
+        return list(StretchCameras)
 
     @staticmethod
     def none() -> list["StretchCameras"]:
@@ -141,9 +150,7 @@ class StretchCameras(Enum):
 
         if self == StretchCameras.cam_nav_rgb:
             # Arducam B0385 - 70 degrees FOV-X from spec, converted to FOV-Y by field_of_view_vertical_from_horizontal()
-            field_of_view_vertical_in_degrees = (
-                CameraSettings.field_of_view_vertical_from_horizontal(70, 1280, 720)
-            )
+            field_of_view_vertical_in_degrees = CameraSettings.field_of_view_vertical_from_horizontal(70, 1280, 720)
             return CameraSettings(
                 field_of_view_vertical_in_degrees=field_of_view_vertical_in_degrees,
                 focal=(0.0, 0.0),  # TODO We don't have calibrated values.
@@ -221,9 +228,7 @@ class CameraSettings:
         )  # mm
 
     @staticmethod
-    def field_of_view_vertical_from_horizontal(
-        fov_horizontal_degrees: int, width: int, height: int
-    ) -> int:
+    def field_of_view_vertical_from_horizontal(fov_horizontal_degrees: int, width: int, height: int) -> int:
         """Calculates vertical FOV from horizontal using aspect ratio."""
         horizontal_fov = np.radians(fov_horizontal_degrees)
         aspect_ratio = width / height

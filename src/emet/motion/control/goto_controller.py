@@ -13,7 +13,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 
 import numpy as np
 from omegaconf import DictConfig
@@ -99,13 +99,11 @@ class GotoVelocityController:
 
         # Control module
         self.control = DDVelocityControlNoplan(cfg)
-        self.update_velocity_profile(
-            self.cfg.v_max, self.cfg.w_max, self.cfg.acc_lin, self.cfg.acc_ang
-        )
+        self.update_velocity_profile(self.cfg.v_max, self.cfg.w_max, self.cfg.acc_lin, self.cfg.acc_ang)
 
         # Initialize
         self.xyt_loc = np.zeros(3)
-        self.xyt_goal: Optional[np.ndarray] = None
+        self.xyt_goal: np.ndarray | None = None
 
         self.active = False
         self.track_yaw = True
@@ -115,10 +113,10 @@ class GotoVelocityController:
 
     def update_velocity_profile(
         self,
-        v_max: Optional[float] = None,
-        w_max: Optional[float] = None,
-        acc_lin: Optional[float] = None,
-        acc_ang: Optional[float] = None,
+        v_max: float | None = None,
+        w_max: float | None = None,
+        acc_lin: float | None = None,
+        acc_ang: float | None = None,
     ):
         """Call controller and update velocity profile"""
         self.control.update_velocity_profile(v_max, w_max, acc_lin, acc_ang)
@@ -184,7 +182,7 @@ class GotoVelocityController:
         """Returns true if it's taken too long."""
         return time_taken > self._timeout
 
-    def compute_control(self) -> Tuple[float, float]:
+    def compute_control(self) -> tuple[float, float]:
         # Get state estimation
         xyt_err = self._compute_error_pose()
         lin_err = np.linalg.norm(xyt_err[:2])

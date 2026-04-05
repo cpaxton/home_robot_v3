@@ -12,20 +12,18 @@
 import os
 import time
 import timeit
-from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import rerun as rr
 
 from emet.memory.format import MemoryState, PointCloudBlob
 
+
 # Rerun's native viewer requires a display; use spawn=False when headless
 def has_display() -> bool:
-    return bool(
-        os.environ.get("DISPLAY")
-        or os.environ.get("WAYLAND_DISPLAY")
-        or os.environ.get("WAYLAND_SOCKET")
-    )
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY") or os.environ.get("WAYLAND_SOCKET"))
+
+
 import rerun.blueprint as rrb
 import torch
 
@@ -57,7 +55,7 @@ logger = Logger(__name__)
 #   world/map_box          Boxes3D (static)
 
 
-def decompose_homogeneous_matrix(homogeneous_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def decompose_homogeneous_matrix(homogeneous_matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Decomposes a 4x4 homogeneous transformation matrix into its rotation matrix and translation vector components.
 
@@ -103,9 +101,9 @@ def occupancy_map_to_indices(occupancy_map):
 
 def occupancy_map_to_3d_points(
     occupancy_map: np.ndarray,
-    grid_center: Union[np.ndarray, torch.Tensor],
+    grid_center: np.ndarray | torch.Tensor,
     grid_resolution: float,
-    offset: Optional[np.ndarray] = np.zeros(3),
+    offset: np.ndarray | None = np.zeros(3),
 ) -> np.ndarray:
     """
     Converts a 2D occupancy map to a list of 3D points.
@@ -249,7 +247,6 @@ def _null_noop(*args, **kwargs):
 
 
 class RerunVisualizer:
-
     camera_point_radius = 0.01
     max_displayed_points_per_camera: int = 10000
 
@@ -306,9 +303,7 @@ class RerunVisualizer:
             server_memory_limit=server_memory_limit,
         )
         if not has_display() or headless:
-            logger.info(
-                "Rerun web viewer: connect at http://<this-host>:9090?url=ws://<this-host>:9877"
-            )
+            logger.info("Rerun web viewer: connect at http://<this-host>:9090?url=ws://<this-host>:9877")
 
         self.display_robot_mesh = display_robot_mesh
         self.show_cameras_in_3d_view = show_cameras_in_3d_view
@@ -407,7 +402,7 @@ class RerunVisualizer:
         """
         rr.log(identity_name, rr.Clear(recursive=True))
 
-    def log_custom_2d_image(self, identity_name: str, img: Union[np.ndarray, torch.Tensor]):
+    def log_custom_2d_image(self, identity_name: str, img: np.ndarray | torch.Tensor):
         """Log custom 2d image
 
         Args:
@@ -430,9 +425,9 @@ class RerunVisualizer:
     def log_arrow3D(
         self,
         identity_name: str,
-        origins: Union[list, List[list], np.ndarray, torch.Tensor],
-        vectors: Union[list, List[list], np.ndarray, torch.Tensor],
-        colors: Union[list, List[list], np.ndarray, torch.Tensor],
+        origins: list | list[list] | np.ndarray | torch.Tensor,
+        vectors: list | list[list] | np.ndarray | torch.Tensor,
+        colors: list | list[list] | np.ndarray | torch.Tensor,
         radii: float,
     ):
         """Log custom 3D arrows
@@ -453,8 +448,8 @@ class RerunVisualizer:
     def log_custom_pointcloud(
         self,
         identity_name: str,
-        points: Union[list, List[list], np.ndarray, torch.Tensor],
-        colors: Union[list, List[list], np.ndarray, torch.Tensor],
+        points: list | list[list] | np.ndarray | torch.Tensor,
+        colors: list | list[list] | np.ndarray | torch.Tensor,
         radii: float,
     ):
         """Log custom 3D pointcloud
@@ -505,9 +500,7 @@ class RerunVisualizer:
 
         if self.show_cameras_in_3d_view and getattr(obs, "camera_pose", None) is not None:
             rot, trans = decompose_homogeneous_matrix(obs.camera_pose)
-            log_to_rerun(
-                "world/head_camera", rr.Transform3D(translation=trans, mat3x3=rot, axis_length=0.3)
-            )
+            log_to_rerun("world/head_camera", rr.Transform3D(translation=trans, mat3x3=rot, axis_length=0.3))
             log_to_rerun(
                 "world/head_camera",
                 rr.Pinhole(
@@ -551,14 +544,12 @@ class RerunVisualizer:
         """
         # rr.set_time_seconds("realtime", time.time())
         # EE Frame
-        if not "ee_pose" in obs:
+        if "ee_pose" not in obs:
             return
         if obs["ee_pose"] is None:
             return
         rot, trans = decompose_homogeneous_matrix(obs["ee_pose"])
-        ee_arrow = rr.Arrows3D(
-            origins=[0, 0, 0], vectors=[0.2, 0, 0], radii=0.02, labels="ee", colors=[0, 255, 0, 255]
-        )
+        rr.Arrows3D(origins=[0, 0, 0], vectors=[0.2, 0, 0], radii=0.02, labels="ee", colors=[0, 255, 0, 255])
         # log_to_rerun("world/ee/arrow", ee_arrow)
         rr.log("world/ee", rr.Transform3D(translation=trans, mat3x3=rot, axis_length=0.3))
 
@@ -604,9 +595,7 @@ class RerunVisualizer:
 
         if self.show_cameras_in_3d_view:
             rot, trans = decompose_homogeneous_matrix(servo.ee_camera_pose)
-            log_to_rerun(
-                "world/ee_camera", rr.Transform3D(translation=trans, mat3x3=rot, axis_length=0.3)
-            )
+            log_to_rerun("world/ee_camera", rr.Transform3D(translation=trans, mat3x3=rot, axis_length=0.3))
             log_to_rerun(
                 "world/ee_camera",
                 rr.Pinhole(
@@ -687,9 +676,7 @@ class RerunVisualizer:
         if grid_origin is not None and obstacles_2d is not None:
             if hasattr(grid_origin, "cpu"):
                 grid_origin = grid_origin.cpu().numpy()
-            obs_points = np.array(
-                occupancy_map_to_3d_points(obstacles_2d, grid_origin, grid_resolution)
-            )
+            obs_points = np.array(occupancy_map_to_3d_points(obstacles_2d, grid_origin, grid_resolution))
             obs_points[:, 2] += 0.01
             n_obs = obs_points.shape[0]
             rr.log(
@@ -704,9 +691,7 @@ class RerunVisualizer:
         if grid_origin is not None and explored_2d is not None:
             if hasattr(grid_origin, "cpu"):
                 grid_origin = grid_origin.cpu().numpy()
-            explored_points = np.array(
-                occupancy_map_to_3d_points(explored_2d, grid_origin, grid_resolution)
-            )
+            explored_points = np.array(occupancy_map_to_3d_points(explored_2d, grid_origin, grid_resolution))
             explored_points[:, 2] -= 0.01
             n_exp = explored_points.shape[0]
             rr.log(
@@ -773,7 +758,11 @@ class RerunVisualizer:
             parts.append("\n".join(lines))
         # Robot state over time (base pose per frame); scrub the 'frame' timeline in the viewer to see it.
         if state.frames:
-            state_lines = ["## Robot state over time", "Scrub the **frame** timeline to see the robot move and the current-frame image.", ""]
+            state_lines = [
+                "## Robot state over time",
+                "Scrub the **frame** timeline to see the robot move and the current-frame image.",
+                "",
+            ]
             for i, fr in enumerate(state.frames):
                 xyt = fr.base_pose
                 if xyt is not None:
@@ -785,7 +774,9 @@ class RerunVisualizer:
                 else:
                     trans = fr.camera_pose[:3, 3] if fr.camera_pose is not None else None
                     if trans is not None:
-                        state_lines.append(f"- **Frame {i}**: camera at (x={trans[0]:.2f}, y={trans[1]:.2f}, z={trans[2]:.2f})")
+                        state_lines.append(
+                            f"- **Frame {i}**: camera at (x={trans[0]:.2f}, y={trans[1]:.2f}, z={trans[2]:.2f})"
+                        )
             parts.append("\n".join(state_lines))
         if parts:
             rr.log(
@@ -896,10 +887,10 @@ class RerunVisualizer:
 
     def _log_instance_boxes(
         self,
-        centers: List,
-        half_sizes: List[List[float]],
-        labels: List[str],
-        colors: List[np.ndarray],
+        centers: list,
+        half_sizes: list[list[float]],
+        labels: list[str],
+        colors: list[np.ndarray],
         entity: str = "world/objects",
     ) -> None:
         """Log 3D boxes with labels (shared by update_scene_graph and optional MemoryState)."""
@@ -918,7 +909,7 @@ class RerunVisualizer:
     def update_scene_graph(
         self,
         scene_graph: SceneGraph,
-        semantic_sensor: Optional[OvmmPerception] = None,
+        semantic_sensor: OvmmPerception | None = None,
         verbose: bool = False,
     ):
         """Log objects bounding boxes and relationships.
@@ -950,16 +941,22 @@ class RerunVisualizer:
             bbox_bounds = best_view.bounds  # 3D Bounds
             point_cloud_rgb = instance.point_cloud
             pcd_rgb = instance.point_cloud_rgb
-            log_to_rerun(
-                f"world/{instance.id}_{name}" if name is not None else f"world/{instance.id}",
-                rr.Points3D(positions=point_cloud_rgb, colors=np.int64(pcd_rgb)),
-                static=True,
-            )
-            half_sizes = [(b[0] - b[1]) / 2 for b in bbox_bounds]
+            if point_cloud_rgb is not None and pcd_rgb is not None:
+                pos_np = (
+                    point_cloud_rgb.cpu().numpy() if hasattr(point_cloud_rgb, "cpu") else np.asarray(point_cloud_rgb)
+                )
+                col_np = np.int64(pcd_rgb.cpu().numpy() if hasattr(pcd_rgb, "cpu") else pcd_rgb)
+                log_to_rerun(
+                    f"world/{instance.id}_{name}" if name is not None else f"world/{instance.id}",
+                    rr.Points3D(positions=pos_np, colors=col_np),
+                    static=True,
+                )
+            half_sizes = [(float(b[1]) - float(b[0])) / 2 for b in bbox_bounds]
             bounds.append(half_sizes)
             pose = scene_graph.get_ins_center_pos(idx)
-            confidence = best_view.score
-            centers.append(rr.components.PoseTranslation3D(pose))
+            pose_np = pose.cpu().numpy() if hasattr(pose, "cpu") else np.asarray(pose)
+            confidence = best_view.score if best_view.score is not None else 0.0
+            centers.append(rr.components.PoseTranslation3D(pose_np))
             labels.append(f"{name} {confidence:.2f}")
             colors.append(self.bbox_colors_memory[name])
         self._log_instance_boxes(centers, bounds, labels, colors, entity="world/objects")

@@ -9,7 +9,6 @@
 
 import argparse
 import sys
-from typing import Optional
 
 import cv2
 import zmq
@@ -24,7 +23,7 @@ class RobotClient:
     def __init__(
         self,
         use_remote_computer: bool = True,
-        robot_ip: Optional[str] = None,
+        robot_ip: str | None = None,
         d405_port: int = 4405,
         verbose: bool = False,
         name: str = "robot_client",
@@ -63,7 +62,6 @@ class RobotClient:
 
         try:
             while True:
-
                 loop_timer.mark_start()
                 message = self.d405_socket.recv_pyobj()
                 _ = evaluator.apply(message)

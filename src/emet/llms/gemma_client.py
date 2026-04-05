@@ -8,7 +8,7 @@
 # license information maybe found below, if so.
 
 import timeit
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 import torch
 from termcolor import colored
@@ -20,8 +20,8 @@ from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder
 class GemmaClient(AbstractLLMClient):
     def __init__(
         self,
-        prompt: Union[str, AbstractPromptBuilder],
-        prompt_kwargs: Optional[Dict[str, Any]] = None,
+        prompt: str | AbstractPromptBuilder,
+        prompt_kwargs: dict[str, Any] | None = None,
         max_tokens: int = 4096,
         device: str = "cuda",
         model_size: str = "4b",

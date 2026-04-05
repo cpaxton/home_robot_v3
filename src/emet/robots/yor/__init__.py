@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """YOR robot — https://github.com/YOR-robot/YOR."""
 
@@ -13,9 +22,7 @@ class YORBackend(RobotBackend):
     """Stub for YOR robot integration."""
 
     def get_spec(self) -> RobotSpec:
-        raise NotImplementedError(
-            "YOR integration is a stub. See https://github.com/YOR-robot/YOR"
-        )
+        raise NotImplementedError("YOR integration is a stub. See https://github.com/YOR-robot/YOR")
 
     def create_client(self, robot_ip: str, **kwargs):
         raise NotImplementedError("YOR client not yet implemented")

@@ -10,7 +10,7 @@
 
 # (c) 2024 Hello Robot, under MIT license
 
-from typing import Any, Dict
+from typing import Any
 
 import click
 import numpy as np
@@ -61,7 +61,7 @@ class ZmqServer(BaseZmqServer):
         return control_mode
 
     @override
-    def get_full_observation_message(self) -> Dict[str, Any]:
+    def get_full_observation_message(self) -> dict[str, Any]:
         # get information
         # Still about 0.01 seconds to get observations
         obs = self.client.get_observation(compute_xyz=False)
@@ -100,7 +100,7 @@ class ZmqServer(BaseZmqServer):
         return data
 
     @override
-    def get_state_message(self) -> Dict[str, Any]:
+    def get_state_message(self) -> dict[str, Any]:
         """Get the state message for the robot."""
         q, dq, eff = self.client.get_joint_state()
         message = {
@@ -118,7 +118,7 @@ class ZmqServer(BaseZmqServer):
         return message
 
     @override
-    def handle_action(self, action: Dict[str, Any]):
+    def handle_action(self, action: dict[str, Any]):
         """Handle an action from the client."""
 
         if "posture" in action:
@@ -227,7 +227,7 @@ class ZmqServer(BaseZmqServer):
             logger.warning(" - action not recognized or supported.")
             logger.warning(action)
 
-    def _get_ee_cam_message(self) -> Dict[str, Any]:
+    def _get_ee_cam_message(self) -> dict[str, Any]:
         # Read images from the end effector and head cameras
         ee_depth_image = self.client.ee_dpt_cam.get()
         ee_color_image = self.client.ee_rgb_cam.get()
@@ -248,12 +248,8 @@ class ZmqServer(BaseZmqServer):
         ee_camera_pose = self.client.ee_camera_pose
 
         d405_output = {
-            "ee_cam/color_camera_K": scale_camera_matrix(
-                self.client.ee_rgb_cam.get_K(), self.ee_image_scaling
-            ),
-            "ee_cam/depth_camera_K": scale_camera_matrix(
-                self.client.ee_dpt_cam.get_K(), self.ee_image_scaling
-            ),
+            "ee_cam/color_camera_K": scale_camera_matrix(self.client.ee_rgb_cam.get_K(), self.ee_image_scaling),
+            "ee_cam/depth_camera_K": scale_camera_matrix(self.client.ee_dpt_cam.get_K(), self.ee_image_scaling),
             "ee_cam/color_image": compressed_ee_color_image,
             "ee_cam/depth_image": compressed_ee_depth_image,
             "ee_cam/color_image/shape": ee_color_image.shape,
@@ -264,28 +260,22 @@ class ZmqServer(BaseZmqServer):
         }
         return d405_output
 
-    def get_servo_message(self) -> Dict[str, Any]:
+    def get_servo_message(self) -> dict[str, Any]:
         if self.use_d405:
             d405_output = self._get_ee_cam_message()
         else:
             d405_output = {}
 
         obs = self.client.get_observation(compute_xyz=False)
-        head_color_image, head_depth_image = self._rescale_color_and_depth(
-            obs.rgb, obs.depth, self.image_scaling
-        )
+        head_color_image, head_depth_image = self._rescale_color_and_depth(obs.rgb, obs.depth, self.image_scaling)
         head_depth_image = (head_depth_image * 1000).astype(np.uint16)
         compressed_head_depth_image = compression.to_jp2(head_depth_image)
         compressed_head_color_image = compression.to_jpg(head_color_image)
 
         message = {
             "ee/pose": self.client.ee_pose,
-            "head_cam/color_camera_K": scale_camera_matrix(
-                self.client.rgb_cam.get_K(), self.image_scaling
-            ),
-            "head_cam/depth_camera_K": scale_camera_matrix(
-                self.client.dpt_cam.get_K(), self.image_scaling
-            ),
+            "head_cam/color_camera_K": scale_camera_matrix(self.client.rgb_cam.get_K(), self.image_scaling),
+            "head_cam/depth_camera_K": scale_camera_matrix(self.client.dpt_cam.get_K(), self.image_scaling),
             "head_cam/color_image": compressed_head_color_image,
             "head_cam/depth_image": compressed_head_depth_image,
             "head_cam/color_image/shape": head_color_image.shape,

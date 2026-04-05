@@ -11,7 +11,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from collections.abc import Callable
 
 import numpy as np
 import pinocchio
@@ -51,9 +51,7 @@ class PinocchioIKSolver(IKSolverBase):
     DT = 1e-1
     DAMP = 1e-12
 
-    def __init__(
-        self, urdf_path: str, ee_link_name: str, controlled_joints: List[str], verbose: bool = False
-    ):
+    def __init__(self, urdf_path: str, ee_link_name: str, controlled_joints: list[str], verbose: bool = False):
         """
         urdf_path: path to urdf file
         ee_link_name: name of the end-effector link
@@ -98,13 +96,11 @@ class PinocchioIKSolver(IKSolverBase):
         """returns number of controllable joints under this solver's purview"""
         return len(self.controlled_joints)
 
-    def get_all_joint_names(self) -> List[str]:
+    def get_all_joint_names(self) -> list[str]:
         """Return a list of joints"""
         return [self.model.names[i + 1] for i in range(self.model.nq)]
 
-    def _qmap_control2model(
-        self, q_input: Union[np.ndarray, dict], ignore_missing_joints: bool = False
-    ) -> np.ndarray:
+    def _qmap_control2model(self, q_input: np.ndarray | dict, ignore_missing_joints: bool = False) -> np.ndarray:
         """returns a full joint configuration from a partial joint configuration"""
         q_out = self.q_neutral.copy()
         if isinstance(q_input, dict):
@@ -116,15 +112,11 @@ class PinocchioIKSolver(IKSolverBase):
                     if jid >= len(self.model.idx_qs):
                         if not ignore_missing_joints:
                             logger.error(f"ERROR: {joint_name=} {jid=} not in model.idx_qs")
-                            raise RuntimeError(
-                                f"Tried to set joint not in model.idx_qs: {joint_name=}"
-                            )
+                            raise RuntimeError(f"Tried to set joint not in model.idx_qs: {joint_name=}")
                     else:
                         q_out[self.model.idx_qs[self.model.getJointId(joint_name)]] = value
         else:
-            assert len(self.controlled_joints) == len(
-                q_input
-            ), "if not specifying by name, must match length"
+            assert len(self.controlled_joints) == len(q_input), "if not specifying by name, must match length"
             for i, joint_idx in enumerate(self.controlled_joints):
                 q_out[joint_idx] = q_input[i]
         return q_out
@@ -140,7 +132,7 @@ class PinocchioIKSolver(IKSolverBase):
 
     def get_frame_pose(
         self,
-        config: Union[np.ndarray, dict],
+        config: np.ndarray | dict,
         node_a: str,
         node_b: str,
         ignore_missing_joints: bool = False,
@@ -178,7 +170,7 @@ class PinocchioIKSolver(IKSolverBase):
 
     def compute_fk(
         self, config: np.ndarray, link_name: str = None, ignore_missing_joints: bool = False
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Given joint values, return end-effector position and quaternion associated with it.
 
         Args:
@@ -213,8 +205,8 @@ class PinocchioIKSolver(IKSolverBase):
         num_attempts: int = 1,
         verbose: bool = False,
         ignore_missing_joints: bool = False,
-        custom_ee_frame: Optional[str] = None,
-    ) -> Tuple[np.ndarray, bool, dict]:
+        custom_ee_frame: str | None = None,
+    ) -> tuple[np.ndarray, bool, dict]:
         """given end-effector position and quaternion, return joint values.
 
         Two parameters are currently unused and might be implemented in the future:
@@ -232,9 +224,7 @@ class PinocchioIKSolver(IKSolverBase):
         if q_init is None:
             q = self.q_neutral.copy()
             if num_attempts > 1:
-                raise NotImplementedError(
-                    "Sampling multiple initial configs not yet supported by Pinocchio solver."
-                )
+                raise NotImplementedError("Sampling multiple initial configs not yet supported by Pinocchio solver.")
         else:
             q = self._qmap_control2model(q_init, ignore_missing_joints=ignore_missing_joints)
             # Override the number of attempts
@@ -293,10 +283,10 @@ class PositionIKOptimizer(IKSolverBase):
         self,
         ik_solver: IKSolverBase,
         pos_error_tol: float,
-        ori_error_range: Union[float, np.ndarray],
+        ori_error_range: float | np.ndarray,
         pos_weight: float = 1.0,
         ori_weight: float = 0.0,
-        cem_params: Optional[Dict] = None,
+        cem_params: dict | None = None,
     ):
         self.pos_wt = pos_weight
         self.ori_wt = ori_weight
@@ -312,9 +302,7 @@ class PositionIKOptimizer(IKSolverBase):
             self.ori_error_range = ori_error_range  # type: ignore
 
         cem_params = {} if cem_params is None else cem_params
-        max_iterations = (
-            cem_params["max_iterations"] if "max_iterations" in cem_params else self.max_iterations
-        )
+        max_iterations = cem_params["max_iterations"] if "max_iterations" in cem_params else self.max_iterations
         num_samples = cem_params["num_samples"] if "num_samples" in cem_params else self.num_samples
         num_top = cem_params["num_top"] if "num_top" in cem_params else self.num_top
 
@@ -338,7 +326,7 @@ class PositionIKOptimizer(IKSolverBase):
         quat_desired: np.ndarray,
         *args,
         **kwargs,
-    ) -> Tuple[np.ndarray, bool, dict]:
+    ) -> tuple[np.ndarray, bool, dict]:
         """optimization-based IK solver using CEM"""
 
         # Function to optimize: IK error given delta from original desired orientation
@@ -357,9 +345,7 @@ class PositionIKOptimizer(IKSolverBase):
             return cost, q
 
         # Optimize for IK and best orientation (x=0 -> use original desired orientation)
-        cost_opt, q_result, max_iter, opt_sigma, success = self.opt.optimize(
-            solve_ik, x0=np.zeros(3)
-        )
+        cost_opt, q_result, max_iter, opt_sigma, success = self.opt.optimize(solve_ik, x0=np.zeros(3))
         pos_out, quat_out = self.ik_solver.compute_fk(q_result)
         print(
             f"After ik optimization, cost: {cost_opt}, result: {pos_out, quat_out} vs desired: {pos_desired, quat_desired}"
@@ -402,9 +388,9 @@ class CEM:
 
     def optimize(self, func: Callable, x0: np.ndarray):
         """optimize function func with initial guess mu=x0 and initial std=sigma0"""
-        assert (
-            x0.shape == self.sigma0.shape
-        ), f"x0 and sigma0 must have same shape, got {x0.shape} and {self.sigma0.shape}"
+        assert x0.shape == self.sigma0.shape, (
+            f"x0 and sigma0 must have same shape, got {x0.shape} and {self.sigma0.shape}"
+        )
 
         i = 0
         mu = x0

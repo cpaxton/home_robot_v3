@@ -38,7 +38,7 @@ class Camera:
         view_matrix=None,
         fov=None,
         *args,
-        **kwargs
+        **kwargs,
     ):
         self.pos = pos
         self.orn = orn

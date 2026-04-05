@@ -8,24 +8,24 @@
 # license information maybe found below, if so.
 
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import torch
 import wget
-from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
-from sam2.build_sam import build_sam2
-from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 from emet.core.abstract_perception import PerceptionModule
 from emet.perception.detection.utils import filter_depth, overlay_masks
+from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
+from sam2.build_sam import build_sam2
+from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 
 class SAM2Perception(PerceptionModule):
     def __init__(
         self,
-        custom_vocabulary: List[str] = "['', 'dog', 'grass', 'sky']",
-        gpu_device_id: Optional[int] = None,
+        custom_vocabulary: list[str] = "['', 'dog', 'grass', 'sky']",
+        gpu_device_id: int | None = None,
         configuration: str = "l",
         verbose=False,
     ):
@@ -72,21 +72,17 @@ class SAM2Perception(PerceptionModule):
         elif gpu_device_id is None:
             device = torch.device("cuda")
         elif gpu_device_id < 0 or gpu_device_id >= torch.cuda.device_count():
-            print(
-                f"Warning: Invalid GPU device ID {gpu_device_id}. Falling back to default CUDA device."
-            )
+            print(f"Warning: Invalid GPU device ID {gpu_device_id}. Falling back to default CUDA device.")
             device = torch.device("cuda")
         else:
             device = torch.device(f"cuda:{gpu_device_id}")
 
-        self.sam2_predictor = build_sam2(
-            model_cfg, checkpoint, device=device, apply_postprocessing=False
-        )
+        self.sam2_predictor = build_sam2(model_cfg, checkpoint, device=device, apply_postprocessing=False)
         self._verbose = verbose
 
         self.mask_generator = SAM2AutomaticMaskGenerator(self.sam2_predictor)
 
-    def reset_vocab(self, new_vocab: List[str]):
+    def reset_vocab(self, new_vocab: list[str]):
         """Resets the vocabulary of the model allowing you to change detection on
         the fly. Note that previous vocabulary is not preserved.
         Args:
@@ -126,9 +122,9 @@ class SAM2Perception(PerceptionModule):
         self,
         rgb=None,
         depth=None,
-        depth_threshold: Optional[float] = None,
+        depth_threshold: float | None = None,
         draw_instance_predictions: bool = False,
-    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
+    ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
         """
         Get masks using SAM
         Arguments:
@@ -154,7 +150,7 @@ class SAM2Perception(PerceptionModule):
             masks = np.array([filter_depth(mask, depth, depth_threshold) for mask in masks])
         semantic_map, instance_map = overlay_masks(masks, np.zeros(len(masks)), (height, width))
 
-        task_observations = dict()
+        task_observations = {}
         task_observations["instance_map"] = instance_map
         # random filling object classes -- right now using cups
         task_observations["instance_classes"] = np.full(len(masks), 31)

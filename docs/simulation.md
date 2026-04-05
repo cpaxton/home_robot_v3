@@ -159,6 +159,12 @@ python -m emet.app.keyboard_teleop --robot_ip 127.0.0.1
 
 ---
 
+## MolmoSpaces (scenes + rby1 / Galaxea R1)
+
+For [MolmoSpaces](https://github.com/allenai/molmospaces) scenes (iTHOR, ProcTHOR, Holodeck) and their robots (e.g. **rby1** / Galaxea R1), use a separate runner venv and the `emet molmospaces` commands. See **[MolmoSpaces](molmospaces.md)** for install, `MLSPACES_ASSETS_DIR`, and usage (install-scene, serve, viewer, rerun).
+
+---
+
 ## Robocasa (rich kitchen scenes)
 
 The default scene has a robot and docking station. [Robocasa](https://github.com/robocasa/robocasa) adds kitchen scenes with objects for pick-and-place. We use a fork ([cpaxton/robocasa](https://github.com/cpaxton/robocasa)) with numpy 1.24+ compatibility so the same env can run robocasa and dynamem.
@@ -180,7 +186,7 @@ This clones robosuite and robocasa, **downloads kitchen assets (~10GB)** via `py
 emet sync -e sim
 ```
 
-Macro setup (robosuite + robocasa `macros_private.py`) runs automatically during install when missing; use `emet install robocasa -a` to force overwrite. To skip the asset download (e.g. CI): `emet install sim --no-download-assets`.
+Macro setup (robosuite + robocasa `macros_private.py`) runs automatically during install when missing; use `emet install robocasa -a` to force overwrite. To skip the asset download (e.g. CI): `emet install sim --no-download-assets`. If kitchen assets (textures, fixtures, etc.) are already present, the install script prompts **Re-download? (y/N)** (default N); with `./install.sh -y` we skip the prompt and do not re-download when assets exist.
 
 **Version pairing:** Robocasa (and our fork) require **RoboSuite v1.5.0**. The install script clones robosuite v1.5.0, [cpaxton/robosuite_models](https://github.com/cpaxton/robosuite_models) (optional extra robot models), and the [cpaxton/robocasa](https://github.com/cpaxton/robocasa) fork (numpy 1.24+ compat). All live in `third_party/` and are gitignored.
 
@@ -283,7 +289,7 @@ Use `sim_planner.yaml` and `--parameter_file sim_planner.yaml` for grasp_object.
 **Robocasa import errors or pip conflicts**
 Run `emet install robocasa` (or `emet install sim`) to clone the [cpaxton/robocasa](https://github.com/cpaxton/robocasa) fork and robosuite v1.5.0 into `third_party/`. If you see `ImportError: cannot import name 'load_composite_controller_config'` (or `PandaOmron`), you likely have the wrong robosuite version—ensure **robosuite v1.5.0**: `cd third_party/robosuite && git fetch origin --tags && git checkout v1.5.0 && pip install -e .`. If you see numpy version errors, ensure you're using the fork (numpy 1.24+), not upstream robocasa.
 
-**Using sim and dynamem together (uv)**  
+**Using sim and dynamem together (uv)**
 We use the [cpaxton/robocasa](https://github.com/cpaxton/robocasa) fork, which supports numpy 1.24+. The project's **uv override** (`numpy>=1.24.4,<2`, `numba>=0.58.1`) lets `emet sync -e sim -e dynamem` use one env for both robocasa and dynamem.
 
 **DynaMem / Rerun headless**

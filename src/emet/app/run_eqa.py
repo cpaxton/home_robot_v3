@@ -91,14 +91,12 @@ def main(
         bot.push_task_to_all_channels(content=obs.rgb)
         bot.run()
     else:
-
         executor = EQAExecuter(agent)
 
         if not not_rotate_in_place:
             executor.rotate_in_place()
 
         while True:
-
             # If target object and receptacle are provided, set mode to manipulation
             question = input("Question (Press enter to quit):").lower()
             if question.replace(" ", "") == "":

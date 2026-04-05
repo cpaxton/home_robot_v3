@@ -13,8 +13,6 @@
 # LICENSE file in the root directory of this source tree.
 
 
-from typing import List
-
 import numpy as np
 
 from emet.motion.base import Node
@@ -25,11 +23,11 @@ class TreeNode(Node):
 
     def __init__(self, state: np.ndarray, parent=None):
         """A treenode is just a pointer back to its parent and an associated state."""
-        super(TreeNode, self).__init__(state)
+        super().__init__(state)
         self.state = state
         self.parent = parent
 
-    def backup(self) -> List["TreeNode"]:
+    def backup(self) -> list["TreeNode"]:
         """Get the full plan by looking back from this point. Returns a list of TreeNodes which contain state."""
         sequence = []
         node = self

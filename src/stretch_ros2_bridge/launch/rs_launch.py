@@ -22,6 +22,7 @@
 # limitations under the License.
 
 """Launch realsense2_camera node."""
+
 import os
 
 import launch_ros.actions
@@ -203,19 +204,17 @@ configurable_parameters = [
 
 def declare_configurable_parameters(parameters):
     return [
-        DeclareLaunchArgument(
-            param["name"], default_value=param["default"], description=param["description"]
-        )
+        DeclareLaunchArgument(param["name"], default_value=param["default"], description=param["description"])
         for param in parameters
     ]
 
 
 def set_configurable_parameters(parameters):
-    return dict([(param["name"], LaunchConfiguration(param["name"])) for param in parameters])
+    return {param["name"]: LaunchConfiguration(param["name"]) for param in parameters}
 
 
 def yaml_to_dict(path_to_yaml):
-    with open(path_to_yaml, "r") as f:
+    with open(path_to_yaml) as f:
         return yaml.load(f, Loader=yaml.SafeLoader)
 
 

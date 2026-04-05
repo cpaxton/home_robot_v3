@@ -7,7 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-EQA_PROMPT = f"""
+EQA_PROMPT = """
         You are an excellent agent that can explore the environment and answer the questions about the environment.
         For the input,
         you will be provided:

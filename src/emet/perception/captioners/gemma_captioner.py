@@ -10,7 +10,6 @@
 import base64
 import os
 from io import BytesIO
-from typing import Optional, Union
 
 import torch
 from numpy import ndarray
@@ -22,7 +21,7 @@ from transformers import pipeline
 class GemmaCaptioner:
     """Image captioner using Gemma3 model."""
 
-    def __init__(self, device: Optional[str] = None, image_shape=None, max_length: int = 100):
+    def __init__(self, device: str | None = None, image_shape=None, max_length: int = 100):
         """Initialize the GPT image captioner.
 
         Args:
@@ -44,8 +43,8 @@ class GemmaCaptioner:
 
     def caption_image(
         self,
-        image: Union[ndarray, Tensor, Image.Image],
-        bbox: Optional[Union[list, Tensor, ndarray]] = None,
+        image: ndarray | Tensor | Image.Image,
+        bbox: list | Tensor | ndarray | None = None,
     ) -> str:
         """Generate a caption for the given image.
 

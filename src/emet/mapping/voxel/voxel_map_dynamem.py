@@ -11,7 +11,6 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,7 +24,6 @@ from .voxel_map import SparseVoxelMapNavigationSpace as SparseVoxelMapNavigation
 
 
 class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
-
     # Used for making sure we do not divide by zero anywhere
     tolerance: float = 1e-8
 
@@ -66,15 +64,9 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
 
         for i in range(orientation_resolution):
             theta = i * 2 * np.pi / orientation_resolution
-            mask = self._footprint.get_rotated_mask(
-                self.voxel_map.grid_resolution, angle_radians=theta
-            )
+            mask = self._footprint.get_rotated_mask(self.voxel_map.grid_resolution, angle_radians=theta)
             # Footprint returns numpy; store as tensor for get_oriented_mask / collision checks
-            mask_t = (
-                torch.from_numpy(np.asarray(mask)).bool()
-                if not hasattr(mask, "cuda")
-                else mask
-            )
+            mask_t = torch.from_numpy(np.asarray(mask)).bool() if not hasattr(mask, "cuda") else mask
             self._oriented_masks.append(mask_t)
 
     def compute_theta(self, cur_x, cur_y, end_x, end_y):
@@ -95,7 +87,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
 
     def sample_target_point(
         self, start: torch.Tensor, point: torch.Tensor, planner, exploration: bool = False
-    ) -> Optional[np.ndarray]:
+    ) -> np.ndarray | None:
         """Sample a position near the mask and return.
 
         Args:
@@ -110,7 +102,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         if len(reachable_points) == 0:
             print("No target point find, maybe no point is reachable")
             return None
-        reachable_xs, reachable_ys = zip(*reachable_points)
+        reachable_xs, reachable_ys = zip(*reachable_points, strict=False)
         # # type: ignore comments used to bypass mypy check
         reachable_xs = torch.tensor(reachable_xs)  # type: ignore
         reachable_ys = torch.tensor(reachable_ys)  # type: ignore
@@ -127,9 +119,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             print("No target point find, maybe no point is reachable")
             return None
         selected_targets = torch.stack([xs, ys], dim=-1)[
-            torch.linalg.norm(
-                (torch.stack([xs, ys], dim=-1) - torch.tensor([target_x, target_y])).float(), dim=-1
-            )
+            torch.linalg.norm((torch.stack([xs, ys], dim=-1) - torch.tensor([target_x, target_y])).float(), dim=-1)
             .topk(k=len(xs), largest=False)
             .indices
         ]
@@ -162,9 +152,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         """
         Sample an exploration target
         """
-        obstacles, explored, history_soft = self.voxel_map.get_2d_map(
-            return_history_id=True, kernel=5
-        )
+        obstacles, explored, history_soft = self.voxel_map.get_2d_map(return_history_id=True, kernel=5)
         outside_frontier = self.voxel_map.get_outside_frontier(xyt, planner)
 
         time_heuristics = self._time_heuristic(history_soft, outside_frontier, debug=debug)
@@ -267,9 +255,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             plt.show()
         return index, time_heuristics, alignments_heuristics, total_heuristics
 
-    def _time_heuristic(
-        self, history_soft, outside_frontier, time_smooth=0.1, time_threshold=10, debug=False
-    ):
+    def _time_heuristic(self, history_soft, outside_frontier, time_smooth=0.1, time_threshold=10, debug=False):
         history_soft = np.ma.masked_array(history_soft, ~outside_frontier)
         time_heuristics = history_soft.max() - history_soft
         time_heuristics[history_soft < 1] = float("inf")
@@ -285,7 +271,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             plt.show()
         return time_heuristics
 
-    def to_pt(self, xy: Tuple[float, float]) -> Tuple[int, int]:
+    def to_pt(self, xy: tuple[float, float]) -> tuple[int, int]:
         """Converts a point from continuous, world xy coordinates to grid coordinates.
 
         Args:
@@ -299,7 +285,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         pt = self.voxel_map.xy_to_grid_coords(xy)  # type: ignore
         return int(pt[0]), int(pt[1])
 
-    def to_xy(self, pt: Tuple[int, int]) -> Tuple[float, float]:
+    def to_xy(self, pt: tuple[int, int]) -> tuple[float, float]:
         """Converts a point from grid coordinates to continuous, world xy coordinates.
 
         Args:
@@ -332,7 +318,9 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         # plt.show()
         return goal
 
-    def sample_frontier(self, planner, start_pose=[0, 0, 0], text=None):
+    def sample_frontier(self, planner, start_pose=None, text=None):
+        if start_pose is None:
+            start_pose = [0, 0, 0]
         (
             index,
             time_heuristics,

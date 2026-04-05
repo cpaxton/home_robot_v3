@@ -13,10 +13,9 @@
 # LICENSE file in the root directory of this source tree.
 
 """
-    This file contains a torch implementation and helpers of a
-    "voxelized pointcloud" that stores features, centroids, and counts in a sparse voxel grid
+This file contains a torch implementation and helpers of a
+"voxelized pointcloud" that stores features, centroids, and counts in a sparse voxel grid
 """
-from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -39,9 +38,7 @@ if not USE_TORCH_GEOMETRIC:
 
 from typing import Literal
 
-import torch
 from sklearn.cluster import DBSCAN
-from torch import Tensor
 
 
 def xyz_to_flat_index(xyz, grid_size):
@@ -85,9 +82,9 @@ def flat_index_to_xyz(flat_index, grid_size):
 def merge_features(
     idx: Tensor,
     features: Tensor,
-    method: Union[str, Literal["sum", "min", "max", "mean"]] = "sum",
-    grid_dimensions: Optional[List[int]] = None,
-) -> Tuple[Tensor, Tensor]:
+    method: str | Literal["sum", "min", "max", "mean"] = "sum",
+    grid_dimensions: list[int] | None = None,
+) -> tuple[Tensor, Tensor]:
     """
     Merge features based on the given indices using the specified method.
 
@@ -126,7 +123,7 @@ def merge_features(
         # Convert from voxel indices
         idx = xyz_to_flat_index(idx, grid_size=grid_dimensions)
     elif idx.dim() != 1:
-        raise ValueError("idx must be a 1D tensor or a N x 3 tensor; was {}".format(idx.shape))
+        raise ValueError(f"idx must be a 1D tensor or a N x 3 tensor; was {idx.shape}")
     if features.dim() != 2 or features.size(0) != idx.size(0):
         raise ValueError("features must be a 2D tensor with shape (len(idx), feature_dim)")
 
@@ -138,14 +135,10 @@ def merge_features(
         merged = torch.zeros(num_unique, feature_dim, dtype=features.dtype, device=features.device)
         merged.index_add_(0, inverse_idx, features)
     elif method == "min":
-        merged = torch.full(
-            (num_unique, feature_dim), float("inf"), dtype=features.dtype, device=features.device
-        )
+        merged = torch.full((num_unique, feature_dim), float("inf"), dtype=features.dtype, device=features.device)
         merged = torch.min(merged.index_copy(0, inverse_idx, features), merged)
     elif method == "max":
-        merged = torch.full(
-            (num_unique, feature_dim), -1, dtype=features.dtype, device=features.device
-        )
+        merged = torch.full((num_unique, feature_dim), -1, dtype=features.dtype, device=features.device)
         merged = torch.max(merged.index_copy(0, inverse_idx, features), merged)
     elif method == "mean":
         merged = torch.zeros(num_unique, feature_dim, dtype=features.dtype, device=features.device)
@@ -170,9 +163,7 @@ def project_points(points_3d, K, pose):
         pose = torch.Tensor(pose)
     pose = pose.to(points_3d)
     # Convert points to homogeneous coordinates
-    points_3d_homogeneous = torch.hstack(
-        (points_3d, torch.ones((points_3d.shape[0], 1)).to(points_3d))
-    )
+    points_3d_homogeneous = torch.hstack((points_3d, torch.ones((points_3d.shape[0], 1)).to(points_3d)))
 
     # Transform points into camera coordinate system
     points_camera_homogeneous = torch.matmul(torch.linalg.inv(pose), points_3d_homogeneous.T).T
@@ -190,9 +181,7 @@ def get_depth_values(points_3d, pose):
     if not isinstance(pose, torch.Tensor):
         pose = torch.Tensor(pose)
     pose = pose.to(points_3d)
-    points_3d_homogeneous = torch.hstack(
-        (points_3d, torch.ones((points_3d.shape[0], 1)).to(points_3d))
-    )
+    points_3d_homogeneous = torch.hstack((points_3d, torch.ones((points_3d.shape[0], 1)).to(points_3d)))
 
     # Transform points into camera coordinate system
     points_camera_homogeneous = torch.matmul(torch.linalg.inv(pose), points_3d_homogeneous.T).T
@@ -220,8 +209,8 @@ class VoxelizedPointcloud:
     def __init__(
         self,
         voxel_size: float = 0.05,
-        dim_mins: Optional[Tensor] = None,
-        dim_maxs: Optional[Tensor] = None,
+        dim_mins: Tensor | None = None,
+        dim_maxs: Tensor | None = None,
         feature_pool_method: str = "mean",
     ):
         """
@@ -256,11 +245,11 @@ class VoxelizedPointcloud:
 
     def remove(
         self,
-        bounds: Optional[np.ndarray] = None,
-        point: Optional[np.ndarray] = None,
-        radius: Optional[float] = None,
-        min_height: Optional[float] = None,
-        min_bound_z: Optional[float] = 0.0,
+        bounds: np.ndarray | None = None,
+        point: np.ndarray | None = None,
+        radius: float | None = None,
+        min_height: float | None = None,
+        min_bound_z: float | None = 0.0,
     ):
         """Deletes points within a certain radius of a point, or optionally within certain bounds."""
 
@@ -294,9 +283,7 @@ class VoxelizedPointcloud:
             else:
                 _bounds = bounds
             assert len(_bounds.flatten()) == 6, "Bounds must be 6D"
-            mask = torch.all(self._points > _bounds[:, 0], dim=1) & torch.all(
-                self._points < _bounds[:, 1], dim=1
-            )
+            mask = torch.all(self._points > _bounds[:, 0], dim=1) & torch.all(self._points < _bounds[:, 1], dim=1)
             self._points = self._points[~mask]
             if self._features is not None:
                 self._features = self._features[~mask]
@@ -372,11 +359,11 @@ class VoxelizedPointcloud:
     def add(
         self,
         points: Tensor,
-        features: Optional[Tensor],
-        rgb: Optional[Tensor],
-        weights: Optional[Tensor] = None,
+        features: Tensor | None,
+        rgb: Tensor | None,
+        weights: Tensor | None = None,
         min_weight_per_voxel: float = 10.0,
-        obs_count: Optional[int] = None,
+        obs_count: int | None = None,
     ):
         """Add a feature pointcloud to the voxel grid.
 
@@ -405,13 +392,9 @@ class VoxelizedPointcloud:
         pos_mins, _ = points.min(dim=0)
         pos_maxs, _ = points.max(dim=0)
         if self.dim_mins is not None:
-            assert torch.all(
-                self.dim_mins <= pos_mins
-            ), "Got points outside of user-defined 3D bounds"
+            assert torch.all(self.dim_mins <= pos_mins), "Got points outside of user-defined 3D bounds"
         if self.dim_maxs is not None:
-            assert torch.all(
-                pos_maxs <= self.dim_maxs
-            ), "Got points outside of user-defined 3D bounds"
+            assert torch.all(pos_maxs <= self.dim_maxs), "Got points outside of user-defined 3D bounds"
 
         if self._mins is None:
             self._mins, self._maxs = pos_mins, pos_maxs
@@ -437,9 +420,7 @@ class VoxelizedPointcloud:
             assert (self._features is None) == (features is None)
             all_points = torch.cat([self._points, points], dim=0)
             all_weights = torch.cat([self._weights, weights], dim=0)
-            all_features = (
-                torch.cat([self._features, features], dim=0) if (features is not None) else None
-            )
+            all_features = torch.cat([self._features, features], dim=0) if (features is not None) else None
             all_rgb = torch.cat([self._rgb, rgb], dim=0) if (rgb is not None) else None
 
             all_obs_counts = torch.cat([self._obs_counts, obs_counts], dim=0)
@@ -470,7 +451,7 @@ class VoxelizedPointcloud:
         self._obs_counts = self._obs_counts.int()
         return
 
-    def get_idxs(self, points: Tensor) -> Tuple[Tensor, Tensor]:
+    def get_idxs(self, points: Tensor) -> tuple[Tensor, Tensor]:
         """Returns voxel index (long tensor) for each point in points
 
         Args:
@@ -517,7 +498,7 @@ class VoxelizedPointcloud:
         ) = self.get_idxs(points)
         return cluster_consecutive_idx
 
-    def get_pointcloud(self) -> Tuple[Tensor, ...]:
+    def get_pointcloud(self) -> tuple[Tensor, ...]:
         """Returns pointcloud (1 point per occupied voxel)
 
         Returns:
@@ -561,7 +542,7 @@ class VoxelizedPointcloud:
                 setattr(other, k, v.clone())
         return other
 
-    def to(self, device: Union[str, torch.device]):
+    def to(self, device: str | torch.device):
         """
 
         Args:
@@ -601,10 +582,10 @@ class VoxelizedPointcloud:
 def voxelize(
     pos: Tensor,
     voxel_size: float,
-    batch: Optional[Tensor] = None,
-    start: Optional[Union[float, Tensor]] = None,
-    end: Optional[Union[float, Tensor]] = None,
-) -> Tuple[Tensor, Tensor, Tensor]:
+    batch: Tensor | None = None,
+    start: float | Tensor | None = None,
+    end: float | Tensor | None = None,
+) -> tuple[Tensor, Tensor, Tensor]:
     """Returns voxel indices and packed (consecutive) indices for points
 
     Args:
@@ -656,12 +637,12 @@ def reduce_pointcloud(
     voxel_cluster: Tensor,
     pos: Tensor,
     features: Tensor,
-    weights: Optional[Tensor] = None,
-    rgbs: Optional[Tensor] = None,
-    obs_counts: Optional[Tensor] = None,
+    weights: Tensor | None = None,
+    rgbs: Tensor | None = None,
+    obs_counts: Tensor | None = None,
     feature_reduce: str = "mean",
     min_weight_per_voxel: float = 10.0,
-) -> Tuple[Tensor, ...]:
+) -> tuple[Tensor, ...]:
     """Pools values within each voxel
 
     Args:
@@ -687,8 +668,6 @@ def reduce_pointcloud(
 
     pos_cluster = scatter_weighted_mean(pos, weights, voxel_cluster, weights_cluster, dim=0)
 
-    valid_idx = weights_cluster >= min_weight_per_voxel
-
     if rgbs is not None:
         rgb_cluster = scatter_weighted_mean(rgbs, weights, voxel_cluster, weights_cluster, dim=0)
         # rgb_cluster = rgb_cluster[valid_idx]
@@ -710,9 +689,7 @@ def reduce_pointcloud(
         )
 
     if feature_reduce == "mean":
-        feature_cluster = scatter_weighted_mean(
-            features, weights, voxel_cluster, weights_cluster, dim=0
-        )
+        feature_cluster = scatter_weighted_mean(features, weights, voxel_cluster, weights_cluster, dim=0)
     elif feature_reduce == "max":
         feature_cluster = scatter(features, voxel_cluster, dim=0, reduce="max")
     elif feature_reduce == "sum":
@@ -732,8 +709,8 @@ def reduce_pointcloud(
 def scatter3d(
     voxel_indices: Tensor,
     weights: Tensor,
-    grid_dimensions: List[int],
-    method: Optional[str] = None,
+    grid_dimensions: list[int],
+    method: str | None = None,
     verbose: bool = False,
 ) -> Tensor:
     """Scatter weights into a 3d voxel grid of the appropriate size.
@@ -759,9 +736,7 @@ def scatter3d(
 
     # Compute voxel indices for each point
     # voxel_indices = (points / voxel_size).long().clamp(min=0, max=torch.tensor(grid_size) - 1)
-    voxel_indices = voxel_indices.clamp(
-        min=torch.zeros(3), max=torch.tensor(grid_dimensions) - 1
-    ).long()
+    voxel_indices = voxel_indices.clamp(min=torch.zeros(3), max=torch.tensor(grid_dimensions) - 1).long()
 
     # Reduce according to min/max/mean or none
     if method is not None and method != "any":

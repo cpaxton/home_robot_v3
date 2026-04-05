@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Deploy emet_core and innate_mars_bridge to a robot via rsync and SSH."""
 
@@ -11,7 +20,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from emet.utils.connection import get_active_connection, get_connection
 
@@ -20,14 +29,14 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
-def _run(cmd: list[str], env: Optional[dict] = None, check: bool = True) -> subprocess.CompletedProcess:
+def _run(cmd: list[str], env: dict | None = None, check: bool = True) -> subprocess.CompletedProcess:
     r = subprocess.run(cmd, env=env or os.environ)
     if check and r.returncode != 0:
         sys.exit(r.returncode)
     return r
 
 
-def _ssh_target(host: str, user: str, _password: Optional[str]) -> str:
+def _ssh_target(host: str, user: str, _password: str | None) -> str:
     return f"{user}@{host}"
 
 
@@ -40,7 +49,7 @@ def _rsync_to_robot(
     remote_path: str,
     host: str,
     user: str,
-    password: Optional[str],
+    password: str | None,
     use_paramiko: bool,
 ) -> None:
     if use_paramiko:
@@ -58,7 +67,7 @@ def _rsync_to_robot(
 def _paramiko_upload(
     host: str,
     user: str,
-    password: Optional[str],
+    password: str | None,
     local_path: Path,
     remote_path: str,
 ) -> None:
@@ -119,9 +128,9 @@ def _sftp_put_r(sftp: Any, local: Path, remote: str) -> None:
 def _ssh_run(
     host: str,
     user: str,
-    password: Optional[str],
+    password: str | None,
     remote_cmd: str,
-    use_paramiko: Optional[bool] = None,
+    use_paramiko: bool | None = None,
 ) -> None:
     if use_paramiko is None:
         use_paramiko = bool(password and not _has_sshpass())
@@ -153,14 +162,14 @@ def _ssh_run(
 
 
 def deploy(
-    host: Optional[str] = None,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    connection_name: Optional[str] = None,
+    host: str | None = None,
+    user: str | None = None,
+    password: str | None = None,
+    connection_name: str | None = None,
     workspace: str = "~/ament_ws",
     emet_dir: str = "~/emet",
     start_bridge: bool = False,
-    root: Optional[Path] = None,
+    root: Path | None = None,
 ) -> None:
     """Sync emet_core and innate_mars_bridge to the robot and install.
 

@@ -12,8 +12,7 @@
 #
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in this directory.
-
-from typing import Tuple
+"""Helpers for 3D boxes and meshes (e.g. IoU)."""
 
 import torch
 import torch.nn.functional as F
@@ -25,13 +24,9 @@ from torch.autograd import Function
 
 # -------------------------------------------------- #
 #                  CONSTANTS                         #
+# _box_planes and _box_triangles define the 4- and 3-connectivity
+# of the 8 box corners (quad and triangle faces of the 3D box).
 # -------------------------------------------------- #
-"""
-_box_planes and _box_triangles define the 4- and 3-connectivity
-of the 8 box corners.
-_box_planes gives the quad faces of the 3D box
-_box_triangles gives the triangle faces of the 3D box
-"""
 _box_planes = [
     [0, 1, 2, 3],
     [3, 2, 6, 7],
@@ -173,9 +168,7 @@ class _box3d_overlap(Function):
         raise ValueError("box3d_overlap backward is not supported")
 
 
-def box3d_overlap(
-    boxes1: torch.Tensor, boxes2: torch.Tensor, eps: float = 1e-4
-) -> Tuple[torch.Tensor, torch.Tensor]:
+def box3d_overlap(boxes1: torch.Tensor, boxes2: torch.Tensor, eps: float = 1e-4) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Computes the intersection of 3D boxes1 and boxes2.
 

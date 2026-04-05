@@ -13,7 +13,7 @@ __version__ = None
 with open("emet/version.py") as f:
     exec(f.read())  # overrides __version__
 
-with open("../README.md", "r") as fh:
+with open("../README.md") as fh:
     long_description = fh.read()
 
 setuptools.setup(

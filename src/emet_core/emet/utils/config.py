@@ -16,7 +16,6 @@
 import json
 import os
 from pathlib import Path
-from typing import Optional, Tuple
 
 import hydra
 import yacs.config
@@ -64,7 +63,7 @@ def get_full_config_path(ext: str) -> str:
     return os.path.join(CONFIG_ROOT, ext)
 
 
-def get_config(path: str, opts: Optional[list] = None) -> Tuple[Config, str]:
+def get_config(path: str, opts: list | None = None) -> tuple[Config, str]:
     """Get configuration and ensure consistency between configurations
     inherited from the task and defaults and our code's configuration.
 
@@ -78,8 +77,8 @@ def get_config(path: str, opts: Optional[list] = None) -> Tuple[Config, str]:
     config = Config()
     try:
         config.merge_from_file(full_path)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Config file not found: {path=}, {full_path=}")
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"Config file not found: {path=}, {full_path=}") from e
 
     # Add command line arguments
     if opts is not None:

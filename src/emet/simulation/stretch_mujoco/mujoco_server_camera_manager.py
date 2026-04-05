@@ -1,15 +1,25 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 import platform
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
+
 import mujoco
 import mujoco._enums
 import numpy as np
 
-from emet.simulation.stretch_mujoco import config, utils
-from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
+from emet.simulation.stretch_mujoco import utils
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
+from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 from emet.simulation.stretch_mujoco.utils import FpsCounter, switch_to_glfw_renderer
 
 if TYPE_CHECKING:
@@ -23,9 +33,7 @@ class MujocoServerCameraManagerSync:
     Call `pull_camera_data_at_camera_rate()` from the UI thread and the cameras will be rendered at the specified `camera_hz`.
     """
 
-    def __init__(
-        self, camera_hz: float, cameras_to_use: list[StretchCameras], mujoco_server: "MujocoServer"
-    ) -> None:
+    def __init__(self, camera_hz: float, cameras_to_use: list[StretchCameras], mujoco_server: "MujocoServer") -> None:
 
         self.mujoco_server = mujoco_server
 
@@ -96,7 +104,7 @@ class MujocoServerCameraManagerSync:
     def _create_camera_renderer(self, for_camera: StretchCameras):
         settings = for_camera.initial_camera_settings
 
-        # Update mujoco's offscreen gl buffer size to accomodate bigger resolutions:
+        # Update mujoco's offscreen gl buffer size to accommodate bigger resolutions:
         offscreen_buffer_width = self.mujoco_server.mjmodel.vis.global_.offwidth
         offscreen_buffer_height = self.mujoco_server.mjmodel.vis.global_.offheight
 
@@ -105,17 +113,15 @@ class MujocoServerCameraManagerSync:
         if settings.height > offscreen_buffer_height:
             self.mujoco_server.mjmodel.vis.global_.offheight = settings.height
 
-        renderer = mujoco.Renderer(
-            self.mujoco_server.mjmodel, width=settings.width, height=settings.height
-        )
+        renderer = mujoco.Renderer(self.mujoco_server.mjmodel, width=settings.width, height=settings.height)
 
-        renderer._scene_option.flags[mujoco._enums.mjtVisFlag.mjVIS_RANGEFINDER] = False # Disables the lidar yellow lines.
+        renderer._scene_option.flags[mujoco._enums.mjtVisFlag.mjVIS_RANGEFINDER] = (
+            False  # Disables the lidar yellow lines.
+        )
 
         from emet.simulation.stretch_mujoco.mujoco_server_passive import MujocoServerPassive
 
-        if platform.system() == "Darwin" and not isinstance(
-            self.mujoco_server, MujocoServerPassive
-        ):
+        if platform.system() == "Darwin" and not isinstance(self.mujoco_server, MujocoServerPassive):
             # On MacOS, switch to glfw because CGL is not compatible with offscreen rendering on the managed viewer (because of mutex locking).
             switch_to_glfw_renderer(self.mujoco_server.mjmodel, renderer)
 
@@ -200,9 +206,7 @@ class MujocoServerCameraManagerSync:
             0,
         ]  # a Mujoco takes: [fx, fy, px, py]
         self.mujoco_server.mjmodel.cam_resolution[cam.id] = (
-            settings.sensor_resolution
-            if settings.sensor_resolution is not None
-            else (settings.width, settings.height)
+            settings.sensor_resolution if settings.sensor_resolution is not None else (settings.width, settings.height)
         )
         if settings.sensor_size is not None:
             self.mujoco_server.mjmodel.cam_sensorsize[cam.id] = settings.sensor_size
@@ -214,9 +218,7 @@ Initializing camera {camera.name}:
 """
         )
 
-    def _set_camera_properties_and_create_renderers_in_mujoco(
-        self, cameras_to_use: list[StretchCameras]
-    ):
+    def _set_camera_properties_and_create_renderers_in_mujoco(self, cameras_to_use: list[StretchCameras]):
         """
         Set the camera properties and create a camera renderer for each camera in use.
         """
@@ -275,9 +277,7 @@ class MujocoServerCameraManagerThreaded(MujocoServerCameraManagerSync):
         Call this on the UI thread to render camera data.
         """
         if self.use_camera_thread:
-            raise Exception(
-                "This call is not allowed when This update is managed in the _camera_loop."
-            )
+            raise Exception("This call is not allowed when This update is managed in the _camera_loop.")
 
         if not self.is_ready_to_pull_camera_data(is_sleep_until_ready):
             return
@@ -298,7 +298,6 @@ class MujocoServerCameraManagerThreaded(MujocoServerCameraManagerSync):
             time.sleep(0.1)
 
         while not self.mujoco_server._is_requested_to_stop():
-
             if not self.is_ready_to_pull_camera_data(is_sleep_until_ready=True):
                 return
 

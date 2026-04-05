@@ -1,6 +1,15 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
 # Central location for robot model assets. Assets are stored in emet/assets/
 # and installed with the package.
 
@@ -21,3 +30,12 @@ def get_robot_assets_path() -> Path:
 def get_mujoco_models_path() -> Path:
     """Return the path to MuJoCo robot models (stretch.xml, scene.xml, etc.)."""
     return get_robot_assets_path()
+
+
+def get_robot_mjcf_path(robot_key: str) -> Path | None:
+    """Return path to the robot MJCF XML for rby1/galaxea_r1, or None."""
+    robot_key = robot_key.lower().replace("-", "_")
+    if robot_key in ("rby1", "galaxea_r1", "rb_y1"):
+        path = get_mujoco_models_path() / "galaxea_r1" / "galaxea_r1.xml"
+        return path if path.exists() else None
+    return None

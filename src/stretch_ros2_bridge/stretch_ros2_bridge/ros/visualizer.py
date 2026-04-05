@@ -13,8 +13,6 @@
 # LICENSE file in the root directory of this source tree.
 
 
-from typing import List, Optional
-
 import numpy as np
 from rclpy.node import Node
 from visualization_msgs.msg import Marker, MarkerArray
@@ -25,7 +23,7 @@ from stretch_ros2_bridge.ros.utils import matrix_to_pose_msg
 class Visualizer(Node):
     """Simple visualizer to send a single marker message"""
 
-    def __init__(self, topic_name: str, rgba: Optional[List] = None):
+    def __init__(self, topic_name: str, rgba: list | None = None):
         super().__init__("visualizer")
         self.pub = self.create_publisher(Marker, topic_name, 1)
         if rgba is None:
@@ -66,7 +64,7 @@ class Visualizer(Node):
 class ArrayVisualizer(Node):
     """Simple visualizer to send an array of marker message"""
 
-    def __init__(self, topic_name: str, rgba: Optional[List] = None):
+    def __init__(self, topic_name: str, rgba: list | None = None):
         super().__init__("Array Visualizer")
         self.array_pub = self.create_publisher(MarkerArray, topic_name, 1)
         if rgba is None:

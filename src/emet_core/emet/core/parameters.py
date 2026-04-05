@@ -11,7 +11,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Any, Tuple
+from typing import Any
 
 from emet.utils.config import get_config
 from emet.utils.logger import Logger
@@ -19,7 +19,7 @@ from emet.utils.logger import Logger
 logger = Logger(__name__)
 
 
-class Parameters(object):
+class Parameters:
     """Wrapper class for handling parameters safely. Sets defaults and provides access to different parameters used by the motion planner and the voxel representation."""
 
     def __init__(self, **kwargs):
@@ -83,7 +83,7 @@ class Parameters(object):
             result += f"{key}: {value}"
         return result
 
-    def get_task_goals(parameters) -> Tuple[str, str]:
+    def get_task_goals(parameters) -> tuple[str, str]:
         """Helper for extracting task information: returns the two different task goals for a very simple OVMM-style (pick, place) task."""
         if "object_to_find" in parameters.data:
             object_to_find = parameters["object_to_find"]

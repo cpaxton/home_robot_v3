@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Galaxea R1 robot — two-armed mobile manipulator with swerve drive.
 
@@ -11,8 +20,8 @@ Reference: https://github.com/userguide-galaxea/URDF
 
 from pathlib import Path
 
-from emet.motion.robot import Footprint
 from emet.robots.base import RobotBackend, RobotSpec
+from emet.robots.footprint import Footprint
 
 _ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets" / "robot" / "galaxea_r1"
 _MJCF_PATH = str(_ASSETS_DIR / "galaxea_r1.xml")
@@ -107,8 +116,7 @@ class GalaxeaR1Backend(RobotBackend):
 
     def create_model(self, **kwargs):
         raise NotImplementedError(
-            "Galaxea R1 kinematic model not yet implemented. "
-            "Use MuJoCo-based IK or a third-party IK solver."
+            "Galaxea R1 kinematic model not yet implemented. Use MuJoCo-based IK or a third-party IK solver."
         )
 
 

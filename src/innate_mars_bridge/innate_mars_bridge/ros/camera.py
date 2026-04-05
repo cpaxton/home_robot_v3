@@ -3,13 +3,21 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """ROS2 camera subscriber for Innate Mars topics."""
 
 from __future__ import annotations
 
 import threading
-from typing import Optional
 
 import numpy as np
 from rclpy.time import Time
@@ -35,7 +43,7 @@ class RosCamera(Camera):
         self,
         ros_client,
         image_topic: str,
-        camera_info_topic: Optional[str] = None,
+        camera_info_topic: str | None = None,
         rotations: int = 0,
         image_ext: str = "/image_raw",
         verbose: bool = True,
@@ -52,9 +60,7 @@ class RosCamera(Camera):
         if camera_info_topic is None:
             camera_info_topic = image_topic.replace(image_ext, "/camera_info")
 
-        self._info_sub = ros_client.create_subscription(
-            CameraInfo, camera_info_topic, self._cam_info_callback, 10
-        )
+        self._info_sub = ros_client.create_subscription(CameraInfo, camera_info_topic, self._cam_info_callback, 10)
         self.camera_info = None
         if verbose:
             print("Waiting for camera info on", camera_info_topic, "...")
@@ -92,9 +98,7 @@ class RosCamera(Camera):
             if timeout_s > 0:
                 elapsed = (self._ros_client.get_clock().now() - t0).nanoseconds / 1e9
                 if elapsed > timeout_s:
-                    raise RuntimeError(
-                        f"Timeout waiting for camera_info (topic derived from {self.name})"
-                    )
+                    raise RuntimeError(f"Timeout waiting for camera_info (topic derived from {self.name})")
             rate.sleep()
             if not rclpy.ok():
                 return

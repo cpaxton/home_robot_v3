@@ -80,7 +80,7 @@ class SimpleEnv:
             ax.plot(traj_point[0], traj_point[1], "bo")  # 'bo' means blue circles
 
         # Connect trajectory points with lines
-        traj_x, traj_y = zip(*states)
+        traj_x, traj_y = zip(*states, strict=False)
         ax.plot(traj_x, traj_y, "b-")  # 'b-' means blue solid line
 
         if show:

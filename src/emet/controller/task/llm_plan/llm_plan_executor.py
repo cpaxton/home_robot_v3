@@ -7,7 +7,6 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import Optional
 
 from emet.controller.controller_instance_memory import RobotAgent
 from emet.core.task import Task
@@ -15,7 +14,7 @@ from emet.utils.llm_plan_wrapper import LLMPlanWrapper
 
 
 class LLMPlanExecutor:
-    def __init__(self, agent: RobotAgent, llm_plan: Optional[str] = None):
+    def __init__(self, agent: RobotAgent, llm_plan: str | None = None):
         # Sync these things
         self.agent = agent
         self.robot = agent.robot
@@ -32,7 +31,7 @@ class LLMPlanExecutor:
         if llm_plan is not None:
             self.llm_plan_wrapper = LLMPlanWrapper(agent, self.llm_plan)
 
-    def configure(self, llm_plan: Optional[str] = None):
+    def configure(self, llm_plan: str | None = None):
         """Configure the task given a LLM plan."""
         self.llm_plan = llm_plan
 

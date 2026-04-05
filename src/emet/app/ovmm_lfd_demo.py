@@ -17,10 +17,11 @@ from pathlib import Path
 import click
 import numpy as np
 
+from emet.app.lfd.ros2_lfd_leader import ROS2LfdLeader
+
 # Mapping and perception
 from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.zmq_client import StretchZmqClient
-from emet.app.lfd.ros2_lfd_leader import ROS2LfdLeader
 from emet.core import get_parameters
 from emet.llms.gemma_client import GemmaClient
 from emet.llms.prompts.object_manip_nav_prompt import ObjectManipNavPromptBuilder
@@ -37,9 +38,7 @@ from emet.llms.prompts.object_manip_nav_prompt import ObjectManipNavPromptBuilde
 @click.option("--explore-iter", default=0)
 @click.option("--spin", default=False, is_flag=True)
 @click.option("--reset", is_flag=True)
-@click.option(
-    "--input_file", default="", type=str, help="Path to input file used instead of robot data"
-)
+@click.option("--input_file", default="", type=str, help="Path to input file used instead of robot data")
 @click.option(
     "--write-instance-images",
     default=False,
@@ -101,10 +100,9 @@ def main(
     # )
     semantic_sensor = None
 
-    real_robot = True
     current_datetime = datetime.datetime.now()
     formatted_datetime = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
-    output_pkl_filename = output_filename + "_" + formatted_datetime + ".pkl"
+    output_filename + "_" + formatted_datetime + ".pkl"
 
     robot = StretchZmqClient(
         robot_ip=robot_ip,
@@ -198,7 +196,7 @@ def main(
             print("[ERROR] NO PLAN COULD BE GENERATED")
             return False
 
-        pickup_policy_path = f"/lerobot/outputs/train/2024-08-07/18-55-17_stretch_real_diffusion_default/checkpoints/100000/pretrained_model"
+        pickup_policy_path = "/lerobot/outputs/train/2024-08-07/18-55-17_stretch_real_diffusion_default/checkpoints/100000/pretrained_model"
         pickup_leader = ROS2LfdLeader(
             robot=robot,
             verbose=False,
@@ -229,7 +227,7 @@ def main(
         return True
 
     def open_cabinet(self):
-        cabinet_policy_path = f"/lerobot/outputs/train/2024-07-28/17-34-36_stretch_real_diffusion_default/checkpoints/100000/pretrained_model"
+        cabinet_policy_path = "/lerobot/outputs/train/2024-07-28/17-34-36_stretch_real_diffusion_default/checkpoints/100000/pretrained_model"
         cabinet_leader = ROS2LfdLeader(
             robot=robot,
             verbose=False,

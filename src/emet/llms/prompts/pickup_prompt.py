@@ -7,7 +7,6 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-from typing import List, Tuple
 
 from emet.llms.base import AbstractPromptBuilder
 
@@ -322,21 +321,21 @@ class PickupPromptBuilder(AbstractPromptBuilder):
 
         return parsed_commands
 
-    def get_object(self, response: List[Tuple[str, str]]) -> str:
+    def get_object(self, response: list[tuple[str, str]]) -> str:
         """Return the object from the response."""
         for command, args in response:
             if command == "pickup":
                 return args
         return ""
 
-    def get_receptacle(self, response: List[Tuple[str, str]]) -> str:
+    def get_receptacle(self, response: list[tuple[str, str]]) -> str:
         """Return the receptacle from the response."""
         for command, args in response:
             if command == "place":
                 return args
         return ""
 
-    def get_say_this(self, response: List[Tuple[str, str]]) -> str:
+    def get_say_this(self, response: list[tuple[str, str]]) -> str:
         """Return the text to say from the response."""
         all_messages = []
         for command, args in response:
@@ -344,9 +343,9 @@ class PickupPromptBuilder(AbstractPromptBuilder):
                 all_messages.append(args)
         return " ".join(all_messages)
 
-    def get_wave(self, response: List[Tuple[str, str]]) -> bool:
+    def get_wave(self, response: list[tuple[str, str]]) -> bool:
         """Return if the robot should wave."""
-        for command, args in response:
+        for command, _args in response:
             if command == "wave":
                 return True
         return False

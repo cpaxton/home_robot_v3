@@ -12,7 +12,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import datetime
-from typing import Optional
 
 import click
 
@@ -151,7 +150,7 @@ def demo_main(
     radius: float = -1.0,
     explore_iter: int = 10,
     write_instance_images: bool = False,
-    parameters: Optional[Parameters] = None,
+    parameters: Parameters | None = None,
     parameter_file: str = "config/default.yaml",
     reset: bool = False,
     enable_realtime_updates: bool = False,
@@ -196,9 +195,7 @@ def demo_main(
         semantic_sensor = None
 
     print("- Start robot agent with data collection")
-    agent = RobotAgent(
-        robot, parameters, semantic_sensor, enable_realtime_updates=enable_realtime_updates
-    )
+    agent = RobotAgent(robot, parameters, semantic_sensor, enable_realtime_updates=enable_realtime_updates)
     if radius is not None and radius > 0:
         agent.set_allowed_radius(radius)
 
@@ -243,7 +240,6 @@ def demo_main(
     except Exception as e:
         raise (e)
     finally:
-
         # Stop updating the map
         agent.stop_realtime_updates()
 

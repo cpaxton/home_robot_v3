@@ -24,7 +24,7 @@ errors/warnings go to stderr (safe for piping stdout).
 """
 
 import sys
-from typing import Optional, TextIO
+from typing import TextIO
 
 from termcolor import colored
 
@@ -34,7 +34,7 @@ class Logger:
 
     def __init__(
         self,
-        name: Optional[str] = None,
+        name: str | None = None,
         hide_info: bool = False,
         hide_debug: bool = True,
         *,

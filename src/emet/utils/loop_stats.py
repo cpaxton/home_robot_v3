@@ -79,9 +79,7 @@ class LoopStats:
 
         # Calculate sleep time to achieve desired loop rate
         self.sleep_time_s = (1 / self.target_loop_rate) - (self.status["execution_time_ns"] * 1e-9)
-        if (
-            self.sleep_time_s < 0.0 and time.time() - self.ts_0 > 5.0
-        ):  # Allow 5s for timing to stabilize on startup
+        if self.sleep_time_s < 0.0 and time.time() - self.ts_0 > 5.0:  # Allow 5s for timing to stabilize on startup
             self.status["missed_loops"] += 1
 
         self.last_ts_loop_start = time.perf_counter_ns()
@@ -97,7 +95,7 @@ class LoopStats:
         import matplotlib.pyplot as plt
 
         fig, axs = plt.subplots(1, 1, sharey=True, tight_layout=True)
-        fig.suptitle("Distribution of loop rate (Hz). Target of %.2f " % self.target_loop_rate)
+        fig.suptitle(f"Distribution of loop rate (Hz). Target of {self.target_loop_rate:.2f} ")
         axs.hist(
             x=self.curr_rate_history,
             bins="auto",

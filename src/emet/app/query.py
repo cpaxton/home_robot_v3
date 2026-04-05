@@ -34,9 +34,7 @@ from emet.utils.dummy_stretch_client import DummyStretchClient
 @click.option("--explore-iter", default=0)
 @click.option("--spin", default=False, is_flag=True)
 @click.option("--reset", is_flag=True)
-@click.option(
-    "-i", "--input-path", default="", type=str, help="Path to input file used instead of robot data"
-)
+@click.option("-i", "--input-path", default="", type=str, help="Path to input file used instead of robot data")
 @click.option(
     "--write-instance-images",
     default=False,
@@ -115,9 +113,7 @@ def main(
             parameters=parameters,
         )
         robot.move_to_nav_posture()
-        agent = RobotAgent(
-            robot, parameters, semantic_sensor, enable_realtime_updates=enable_realtime_updates
-        )
+        agent = RobotAgent(robot, parameters, semantic_sensor, enable_realtime_updates=enable_realtime_updates)
 
         if reset:
             agent.move_closed_loop([0, 0, 0], max_time=60.0)

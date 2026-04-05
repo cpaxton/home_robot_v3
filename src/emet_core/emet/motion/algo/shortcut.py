@@ -28,7 +28,7 @@ class Shortcut(Planner):
         shortcut_iter: int = 100,
     ):
         self.planner = planner
-        super(Shortcut, self).__init__(self.planner.space, self.planner.validate)
+        super().__init__(self.planner.space, self.planner.validate)
         self.shortcut_iter = shortcut_iter
         self.reset()
 
@@ -49,7 +49,7 @@ class Shortcut(Planner):
         # print("Plan =")
         # for i, pt in enumerate(res.trajectory):
         #     print(i, pt.state)
-        for i in range(self.shortcut_iter):
+        for _i in range(self.shortcut_iter):
             # Sample two indices
             idx0 = np.random.randint(len(res.trajectory) - 3)
             idx1 = np.random.randint(idx0 + 1, len(res.trajectory))

@@ -8,7 +8,6 @@
 # license information maybe found below, if so.
 
 import time
-from typing import List, Optional
 
 import numpy as np
 import torch
@@ -20,14 +19,13 @@ from emet.mapping.instance import Instance
 
 
 class ManagedSearchOperation(ManagedOperation):
-
     # For debugging
     show_map_so_far: bool = False
     show_instances_detected: bool = False
 
     # Important parameters
-    _object_class: Optional[str] = None
-    _object_class_feature: Optional[torch.Tensor] = None
+    _object_class: str | None = None
+    _object_class_feature: torch.Tensor | None = None
 
     # How to choose the features from multiple views
     aggregation_method: str = "mean"
@@ -69,13 +67,11 @@ class ManagedSearchOperation(ManagedOperation):
         # Compute the feature vector for the object if not saved
         if self._object_class_feature is None:
             self._object_class_feature = self.agent.encode_text(self.object_class)
-        emb = instance.get_image_embedding(
-            aggregation_method=self.aggregation_method, normalize=True
-        ).to(self._object_class_feature.device)
-        activation = torch.cosine_similarity(emb, self._object_class_feature, dim=-1)
-        print(
-            f" - Found instance {instance.global_id} with similarity {activation} to {self.object_class}."
+        emb = instance.get_image_embedding(aggregation_method=self.aggregation_method, normalize=True).to(
+            self._object_class_feature.device
         )
+        activation = torch.cosine_similarity(emb, self._object_class_feature, dim=-1)
+        print(f" - Found instance {instance.global_id} with similarity {activation} to {self.object_class}.")
         if verbose:
             from matplotlib import pyplot as plt
 
@@ -128,9 +124,7 @@ class SearchForReceptacleOperation(ManagedSearchOperation):
         if self.show_map_so_far:
             # This shows us what the robot has found so far
             xyt = self.robot.get_base_pose()
-            self.agent.get_voxel_map().show(
-                orig=np.zeros(3), xyt=xyt, footprint=self.robot_model.get_footprint()
-            )
+            self.agent.get_voxel_map().show(orig=np.zeros(3), xyt=xyt, footprint=self.robot_model.get_footprint())
 
         if self.show_instances_detected:
             self.show_instance_segmentation_image()
@@ -165,7 +159,7 @@ class SearchForReceptacleOperation(ManagedSearchOperation):
                     break
                 else:
                     self.agent.set_instance_as_unreachable(instance)
-                    self.warn(f" - Found a receptacle but could not reach it.")
+                    self.warn(" - Found a receptacle but could not reach it.")
 
         # If no receptacle, pick a random point nearby and just wander around
         if self.agent.current_receptacle is None:
@@ -174,9 +168,7 @@ class SearchForReceptacleOperation(ManagedSearchOperation):
             # Find a point on the frontier and move there
             res = self.agent.plan_to_frontier(start=start)
             if res.success:
-                self.robot.execute_trajectory(
-                    [node.state for node in res.trajectory], final_timeout=10.0
-                )
+                self.robot.execute_trajectory([node.state for node in res.trajectory], final_timeout=10.0)
                 # After moving
                 self.update()
 
@@ -188,7 +180,7 @@ class SearchForReceptacleOperation(ManagedSearchOperation):
                 self.set_status(status.EXPLORATION_IMPOSSIBLE)
                 self.agent.go_home()
         else:
-            self.cheer(f"Found a receptacle!")
+            self.cheer("Found a receptacle!")
             if self.talk:
                 self.agent.robot_say(f"I found a {self.sayable_object_class} that I can reach!")
                 time.sleep(self.talk_t)
@@ -259,9 +251,7 @@ class SearchForObjectOnFloorOperation(ManagedSearchOperation):
         if self.show_map_so_far:
             # This shows us what the robot has found so far
             xyt = self.robot.get_base_pose()
-            self.agent.get_voxel_map().show(
-                orig=np.zeros(3), xyt=xyt, footprint=self.robot_model.get_footprint()
-            )
+            self.agent.get_voxel_map().show(orig=np.zeros(3), xyt=xyt, footprint=self.robot_model.get_footprint())
 
         # Get the current location of the robot
         start = self.robot.get_base_pose()
@@ -287,7 +277,6 @@ class SearchForObjectOnFloorOperation(ManagedSearchOperation):
         # Compute scene graph from instance memory so that we can use it
         scene_graph = self.agent.get_scene_graph()
 
-        receptacle_options: List[Instance] = []
         print(f"Check explored instances for reachable {self.object_class} instances:")
         for i, (_, _, instance) in enumerate(instances):
             name = self.agent.semantic_sensor.get_class_name_for_id(instance.category_id)
@@ -302,9 +291,7 @@ class SearchForObjectOnFloorOperation(ManagedSearchOperation):
 
             if self.is_match(instance):
                 if self.on_floor_only:
-                    relations = scene_graph.get_matching_relations(
-                        instance.global_id, "floor", "on"
-                    )
+                    relations = scene_graph.get_matching_relations(instance.global_id, "floor", "on")
                     found_match = len(relations) > 0
                 else:
                     found_match = True
@@ -315,9 +302,7 @@ class SearchForObjectOnFloorOperation(ManagedSearchOperation):
                     # Move to object on floor
                     plan = self.agent.plan_to_instance_for_manipulation(instance, start=start)
                     if plan.success:
-                        print(
-                            f" - Confirmed toy is reachable with base pose at {plan.trajectory[-1]}."
-                        )
+                        print(f" - Confirmed toy is reachable with base pose at {plan.trajectory[-1]}.")
                         self.agent.current_object = instance
                         break
             else:
@@ -331,9 +316,7 @@ class SearchForObjectOnFloorOperation(ManagedSearchOperation):
             # Find a point on the frontier and move there
             res = self.agent.plan_to_frontier(start=start)
             if res.success:
-                self.robot.execute_trajectory(
-                    [node.state for node in res.trajectory], final_timeout=10.0
-                )
+                self.robot.execute_trajectory([node.state for node in res.trajectory], final_timeout=10.0)
             # Update world model once we get to frontier
             self.update()
 

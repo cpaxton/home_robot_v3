@@ -79,9 +79,7 @@ def _eval_svm(filename: Path, start_pos: np.ndarray, possible: bool = False) -> 
     assert agent.get_navigation_space() is not None, "Failed to create navigation space"
     navigation_space = agent.get_navigation_space()
     assert navigation_space is not None, "Failed to create navigation space"
-    assert navigation_space.is_valid(
-        start_pos, verbose=True
-    ), f"Start position is not valid: {start_pos}"
+    assert navigation_space.is_valid(start_pos, verbose=True), f"Start position is not valid: {start_pos}"
 
     # Show the map
     if debug:
@@ -94,9 +92,7 @@ def _eval_svm(filename: Path, start_pos: np.ndarray, possible: bool = False) -> 
         print(f"Query: {query} Score: {score} Instance ID: {instance_id}")
         assert instance_id is not None, f"Failed to find instance ID for {query}"
         if expected_result:
-            assert (
-                score > similarity_threshold
-            ), f"Failed to find instance with positive score for {query}"
+            assert score > similarity_threshold, f"Failed to find instance with positive score for {query}"
         else:
             # TODO: remove debug code
             # import matplotlib.pyplot as plt
@@ -106,17 +102,17 @@ def _eval_svm(filename: Path, start_pos: np.ndarray, possible: bool = False) -> 
 
         if expected_result and possible:
             # Try motion planning to matching instances
-            for i, (score, instance_id, instance) in enumerate(instances):
+            for _i, (score, _instance_id, instance) in enumerate(instances):
                 if score < similarity_threshold:
-                    assert (
-                        False
-                    ), f"Failed to find instance with acceptable score for {query}: {score} < {similarity_threshold}"
+                    raise AssertionError(
+                        f"Failed to find instance with acceptable score for {query}: {score} < {similarity_threshold}"
+                    )
                 res = agent.plan_to_instance(instance, start_pos, verbose=False, radius_m=0.3)
                 # print(f"Plan to instance {i}={instance.global_id} = {res.success}")
                 if res.success:
                     break
             else:
-                assert False, "Failed to find a plan to any acceptable instance for {query}"
+                raise AssertionError("Failed to find a plan to any acceptable instance for {query}")
 
     # Plan to the frontier
     print("Plan to the frontier")
@@ -141,17 +137,16 @@ def _eval_svm(filename: Path, start_pos: np.ndarray, possible: bool = False) -> 
         instances = agent.get_ranked_instances(query)
         new_score, new_instance_id, new_instance = instances[0]
 
-        assert (
-            new_score < score
-        ), f"Failed to delete instance or instances were not returned in the right order; {new_score} >= {score}"
-        assert (
-            new_instance_id != instance_id
-        ), f"Failed to delete instance; {new_instance_id} == {instance_id}"
+        assert new_score < score, (
+            f"Failed to delete instance or instances were not returned in the right order; {new_score} >= {score}"
+        )
+        assert new_instance_id != instance_id, f"Failed to delete instance; {new_instance_id} == {instance_id}"
 
 
 def test_svm_small():
     if not SMALL_DATA_FILE.exists():
         import pytest
+
         pytest.skip(f"Mapping test data not found: {SMALL_DATA_FILE}")
     _eval_svm(SMALL_DATA_FILE, SMALL_DATA_START, possible=False)
 
@@ -159,6 +154,7 @@ def test_svm_small():
 def test_svm_large():
     if not LARGE_DATA_FILE.exists():
         import pytest
+
         pytest.skip(f"Mapping test data not found: {LARGE_DATA_FILE}")
     _eval_svm(LARGE_DATA_FILE, LARGE_DATA_START, possible=True)
 

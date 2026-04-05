@@ -8,7 +8,6 @@
 # license information maybe found below, if so.
 
 from enum import Enum
-from typing import List
 
 import cv2
 import mediapipe as mp
@@ -79,7 +78,7 @@ def _get_extended_fingers(estimate, threshold=0.25):
     distances = [_tip2wrist_dist(tip, estimate) for tip in tips]
 
     extended = []
-    for tip, distance in zip(tips, distances):
+    for tip, distance in zip(tips, distances, strict=False):
         if distance > threshold:
             extended.append(tip)
 
@@ -135,7 +134,7 @@ class HandAnalyzer:
     def __init__(self) -> None:
         pass
 
-    def get_extended_fingers(self, hand_prediction_results, threshold=0.25) -> List[LANDMARK]:
+    def get_extended_fingers(self, hand_prediction_results, threshold=0.25) -> list[LANDMARK]:
         landmarks = hand_prediction_results.multi_hand_landmarks
         if landmarks is not None:
             return _get_extended_fingers(landmarks, threshold=threshold)
@@ -155,9 +154,7 @@ class HandAnalyzer:
 
         return 10.0
 
-    def check_fingers_in_contact(
-        self, hand_prediction_results, finger_1: LANDMARK, finger_2: LANDMARK, threshold=0.1
-    ):
+    def check_fingers_in_contact(self, hand_prediction_results, finger_1: LANDMARK, finger_2: LANDMARK, threshold=0.1):
         if self.get_finger_distance(hand_prediction_results, finger_1, finger_2) < threshold:
             return True
         else:
@@ -168,9 +165,7 @@ class HandTracker(HandAnalyzer):
     # contains interface with a webcam and visualization methods
     def __init__(self, left_clutch: bool = True) -> None:
         self.left_clutch = left_clutch
-        self.hands_model = mp_hands.Hands(
-            model_complexity=0, min_detection_confidence=0.5, min_tracking_confidence=0.5
-        )
+        self.hands_model = mp_hands.Hands(model_complexity=0, min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
     def run_detection(self, image):
         image = cv2.flip(image, 0)

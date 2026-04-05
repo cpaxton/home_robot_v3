@@ -13,6 +13,7 @@
 
 ## Dependencies
 - **rerun-sdk**: Use `>=0.21.0,<0.23.0` (compatible with lerobot). Do not pin to 0.18.x.
+- **pinocchio / hppfcl**: The dynamics library is installed as the **pin** package (PyPI). Pinocchio imports the **hppfcl** module at load time when built with collision support. Always list **hpp-fcl** in `pyproject.toml` dependencies so `uv sync` (or `pip install -e .`) installs it; otherwise `emet serve mujoco --robot stretch` fails with `ModuleNotFoundError: No module named 'hppfcl'`. **Do not** fix dependency or import issues by editing or patching anything under **.venv**; fix only via `pyproject.toml` (add/version deps) and re-run `uv sync`.
 - **third_party/robocasa**: This repo uses a fork. Keep `lerobot==0.3.3` and `mujoco>=3.3.0` in `install_requires` in `third_party/robocasa/setup.py`. Keep `mujoco>=3.3.0` in pyproject.toml `[tool.uv]` override-dependencies so the resolver uses the local robocasa (PyPI robocasa pins mujoco==3.2.6 and would otherwise be selected when the path is not considered).
 - **pyproject.toml** and **src/setup.py**: Keep dependency versions in sync where both exist.
 - **third_party/robosuite**: Keep `mujoco` requirement aligned with `pyproject.toml` sim extra (e.g. `mujoco>=3.3.0`). Robocasa imports `get_elements` from robosuite's `mjcf_utils`; use the local fork so that API is available.
@@ -33,3 +34,9 @@
 - MuJoCo sim: `emet serve mujoco --use-robocasa` (or `emet serve robocasa`). Sim is **present** when `third_party/robocasa` and `third_party/robosuite` exist; `emet sync --all` then includes the sim extra.
 - DynaMem: `emet run dynamem ...`. Rerun viewer: `http://localhost:9090?url=ws://localhost:9877`.
 - Simulation install: `./install.sh --sim -y`; robocasa/robosuite come from `third_party/` (see install scripts).
+
+## MolmoSpaces (optional wrapper)
+- **Install**: `./install.sh --molmospaces -y` creates `.venv-molmospaces` and installs `packages/emet_molmospaces`. Core emet delegates `merge-scene` / `list-scenes` to that wrapper (molmo-spaces needs mujoco 3.4 + numpy≥2.2, separate from main `.venv`).
+- **Usage**: `emet serve mujoco --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0 --robot rby1 --headless` merges scene+rby1 (Galaxea R1) then starts the ZMQ server. `ensure_molmospaces_assets_dir_env()` sets default `MLSPACES_ASSETS_DIR` / `MLSPACES_CACHE_DIR` (sibling dirs under `~/.cache/molmospaces/`) if unset—do not point both at the same path.
+- **Testing after MolmoSpaces changes**: Run `uv run emet test src/test/cli/test_molmospaces_cli.py` (and `-- -q` if passing pytest flags). Optional integration: `RUN_MOLMOSPACES_TESTS=1 uv run emet test src/test/cli/test_molmospaces_cli.py -k ...` when `.venv-molmospaces` is installed. Wrapper unit tests: `uv run pytest packages/emet_molmospaces/tests/ -q`. Smoke: short `timeout 25 uv run emet serve mujoco --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0 --robot rby1 --headless` should reach “Server running” without MJCF load errors.
+- **Code touchpoints**: `src/emet/simulation/molmospaces_config.py` (defaults, `ensure_molmo_asset_layout_symlinks`, `galaxea_r1_assets_directory`), `src/emet/cli.py` (`--molmospaces-*`), `src/emet/simulation/mujoco_server.py` (load + symlink prep), `packages/emet_molmospaces/emet_molmospaces/runner.py` (merge, resource cache). Details: `docs/molmospaces.md`.

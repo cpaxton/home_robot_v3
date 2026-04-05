@@ -11,14 +11,19 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from enum import Enum
-from typing import Iterable, List, Optional, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from emet.core.interfaces import ContinuousNavigationAction
-from emet.motion.robot import RobotModel
+
+if TYPE_CHECKING:
+    from emet.motion.robot import RobotModel
 
 
 class ControlMode(Enum):
@@ -39,11 +44,11 @@ class AbstractRobotClient(ABC):
     @abstractmethod
     def move_base_to(
         self,
-        xyt: Union[Iterable[float], ContinuousNavigationAction],
+        xyt: Iterable[float] | ContinuousNavigationAction,
         relative=False,
         blocking=False,
         verbose: bool = False,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ):
         """Move to xyt in global coordinates or relative coordinates."""
         raise NotImplementedError()
@@ -87,7 +92,7 @@ class AbstractRobotClient(ABC):
     @abstractmethod
     def execute_trajectory(
         self,
-        trajectory: List[np.ndarray],
+        trajectory: list[np.ndarray],
         pos_err_threshold: float = 0.2,
         rot_err_threshold: float = 0.75,
         spin_rate: int = 10,

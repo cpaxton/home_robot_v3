@@ -8,7 +8,6 @@
 # license information maybe found below, if so.
 
 import timeit
-from typing import Optional, Union
 
 import torch
 import transformers
@@ -25,7 +24,7 @@ class LlamaClient(AbstractLLMClient):
 
     def __init__(
         self,
-        prompt: Optional[Union[str, AbstractPromptBuilder]],
+        prompt: str | AbstractPromptBuilder | None,
         model_id: str = None,
         max_tokens: int = 512,
     ):
@@ -75,9 +74,7 @@ class LlamaClient(AbstractLLMClient):
         user_idx = assistant_response.find("User")
         if user_idx != -1:
             assistant_response = assistant_response[:user_idx]
-        assistant_idx = min(
-            assistant_response.find("Assistant"), assistant_response.find("assistant")
-        )
+        assistant_idx = min(assistant_response.find("Assistant"), assistant_response.find("assistant"))
         if assistant_idx != -1:
             assistant_response = assistant_response[:assistant_idx]
 
