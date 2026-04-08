@@ -543,3 +543,62 @@ class SVMBackend(MemoryBackend):
 
     def supports_save_load(self) -> bool:
         return True
+
+
+class SceneGraphBackend(MemoryBackend):
+    """Adapter for OpenVocabSceneGraph."""
+
+    def __init__(self, scene_graph: Any, text_encoder: Any = None):
+        self._sg = scene_graph
+        self._text_encoder = text_encoder
+
+    def check_memory_for_object(self, text: str) -> CheckMemoryResult:
+        if self._text_encoder is None:
+            node = self._sg.get_node_by_label(text)
+            if node is not None and node.center is not None:
+                return CheckMemoryResult(
+                    confidence=0.8,
+                    location_xyz=node.center,
+                    extra_info={"node_id": node.node_id, "label": node.primary_label},
+                )
+            return CheckMemoryResult(confidence=0.0, location_xyz=None, extra_info={})
+
+        confidence, location = self._sg.check_for_object(text, self._text_encoder)
+        return CheckMemoryResult(
+            confidence=confidence,
+            location_xyz=location,
+            extra_info={},
+        )
+
+    def localize_text(self, text: str) -> LocalizeResult:
+        if self._text_encoder is None:
+            node = self._sg.get_node_by_label(text)
+            if node is not None and node.center is not None:
+                return LocalizeResult(
+                    point_xyz=node.center,
+                    success=True,
+                    extra_info={"node_id": node.node_id},
+                )
+            return LocalizeResult(point_xyz=None, success=False, extra_info={})
+
+        center = self._sg.localize_text(text, self._text_encoder)
+        if center is not None:
+            return LocalizeResult(point_xyz=center, success=True, extra_info={})
+        return LocalizeResult(point_xyz=None, success=False, extra_info={})
+
+    def list_objects(self) -> List[str]:
+        return self._sg.list_objects()
+
+    def save(self, path: str) -> None:
+        self._sg.save(path)
+
+    def load(self, path: str) -> None:
+        from emet.mapping.scene_graph.open_vocab_scene_graph import OpenVocabSceneGraph
+
+        loaded = OpenVocabSceneGraph.load(path)
+        self._sg.nodes = loaded.nodes
+        self._sg.edges = loaded.edges
+        self._sg._next_id = loaded._next_id
+
+    def supports_save_load(self) -> bool:
+        return True

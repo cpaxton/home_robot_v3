@@ -18,5 +18,21 @@
 # from the closed-source graph_eqa repository.
 
 from .graph_memory import GraphEQAMemory
+from .mujoco_align import compare_graph_to_placements_report, nearest_gt_for_node
+from .pretty_print import format_graph_edges_only, format_scene_graph_pretty
+from .sensor_graph_builder import (
+    SensorGraphBuilder,
+    parse_comma_separated_labels,
+    world_xyz_median_from_depth,
+)
 
-__all__ = ["GraphEQAMemory"]
+__all__ = [
+    "GraphEQAMemory",
+    "SensorGraphBuilder",
+    "compare_graph_to_placements_report",
+    "format_graph_edges_only",
+    "format_scene_graph_pretty",
+    "nearest_gt_for_node",
+    "parse_comma_separated_labels",
+    "world_xyz_median_from_depth",
+]

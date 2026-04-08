@@ -84,6 +84,7 @@ class GraphEQAMemory:
         eqa_client: Callable[..., str] | None = None,
         image_description_client: Callable[..., str] | None = None,
         log_dir: str = "graph_eqa_log",
+        defer_llm_clients: bool = False,
     ):
         self.parameters = parameters or {}
         self.max_near_distance = max_near_distance
@@ -98,22 +99,36 @@ class GraphEQAMemory:
         self.log_dir = log_dir
         self.eqa_client = eqa_client
         self.image_description_client = image_description_client
+        self._defer_llm_clients = defer_llm_clients
 
-        if self.eqa_client is None or self.image_description_client is None:
+        if not defer_llm_clients and (
+            self.eqa_client is None or self.image_description_client is None
+        ):
             self._init_clients()
 
+    def _ensure_llm_clients(self) -> None:
+        """Load shared Qwen3.5 multimodal on first use when defer_llm_clients=True."""
+        if self.eqa_client is not None and self.image_description_client is not None:
+            return
+        self._init_clients()
+
     def _init_clients(self) -> None:
-        """Initialize EQA and image-description clients (same pattern as voxel_dynamem)."""
+        """Initialize EQA + keyword helper on one shared Qwen3.5 multimodal load."""
         try:
-            from emet.llms.gemini_client import GeminiClient
-            from emet.llms.prompts.eqa_prompt import EQA_PROMPT
-            from emet.llms.qwen_client import Qwen25VLClient
+            from emet.llms.eqa_qwen import build_shared_eqa_clients
+            from emet.llms.eqa_vl_settings import apply_eqa_vl_runtime_settings, get_eqa_vl_int
+
+            apply_eqa_vl_runtime_settings(self.parameters)
+            kw = get_eqa_vl_int(self.parameters, "graph_keyword_max_tokens", 64)
+            self.image_description_client, self.eqa_client = build_shared_eqa_clients(
+                parameters=self.parameters,
+                keyword_max_tokens=kw,
+            )
         except ImportError as e:
             raise ImportError(
-                "GraphEQA memory requires emet.llms (Gemini, Qwen) for EQA. Install extras and set GOOGLE_API_KEY."
+                "GraphEQA memory requires emet.llms (Qwen3.5 multimodal) for EQA. "
+                "Install extras with GPU support."
             ) from e
-        self.image_description_client = Qwen25VLClient(model_size="3B", quantization="int4", max_tokens=20)
-        self.eqa_client = GeminiClient(EQA_PROMPT, model="gemini-2.5-flash")
 
     def add_observation(
         self,
@@ -271,7 +286,7 @@ class GraphEQAMemory:
             for o in self._observations:
                 if o.obs_id in seen:
                     continue
-                if any(obj_lower in l.lower() for l in o.labels):
+                if any(obj_lower in lab.lower() for lab in o.labels):
                     seen.add(o.obs_id)
                     out.append(o.obs_id)
                     if len(out) >= max_images:
@@ -340,6 +355,7 @@ class GraphEQAMemory:
         Returns:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
         """
+        self._ensure_llm_clients()
         self.extract_relevant_objects(question)
         obs_ids = self._select_relevant_obs_ids(max_images=6)
         graph_str = self.to_string()

@@ -18,7 +18,7 @@
 
 from .grid import GridParams
 from .instance import Instance, InstanceMemory, InstanceView
-from .scene_graph import SceneGraph
+from .scene_graph import SceneGraph, OpenVocabSceneGraph
 from .voxel import (
     SparseVoxelMap,
     SparseVoxelMapDynamem,
@@ -33,6 +33,7 @@ __all__ = [
     "Instance",
     "InstanceMemory",
     "InstanceView",
+    "OpenVocabSceneGraph",
     "SceneGraph",
     "SparseVoxelMap",
     "SparseVoxelMapNavigationSpace",

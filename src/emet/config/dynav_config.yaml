@@ -122,3 +122,48 @@ motion_planner:
 trajectory_pos_err_threshold: 0.15
 trajectory_rot_err_threshold: 0.5
 trajectory_per_step_timeout: 3.0
+
+agent:
+  realtime:
+    # This is the distance to pose graph nodes
+    matching_distance: 0.5
+    # This was 0.05 in Atharva's exerimetns
+    # It is how close lidar spins have to be to be considered the same
+    temporal_threshold: 0.1
+  realtime_rotation_steps: 4
+  in_place_rotation_steps: 4
+  sweep_head_on_update: True
+
+# These are mostly around making sure that we reject views of objects that are too small, too spotty, too unreliable, etc.
+instance_memory:
+  min_instance_thickness: 0.01
+  min_instance_vol: 1e-6
+  max_instance_vol: 10.0
+  min_instance_height: 0.01
+  max_instance_height: 1.8
+  min_pixels_for_instance_view: 100
+  min_percent_for_instance_view: 0.1
+  # Should we remove the background from the instance views?
+  # What doe this mean? If you have a view of a bottle on a table, should we remove the table?
+  # It will have an effect on performance.
+  mask_cropped_instances: False  # Should we remove the background from the instance views?
+  matching:
+    # Feature matching threshold for if something is considered a particular class
+    # Set this value by experimting with:
+    #   python -m emet.app.query --threshold 0.05
+    # You can change the threshold to anything that makes sense.
+    feature_match_threshold: 0.05
+
+# Qwen3.5 multimodal (EQA + keyword helpers for GraphEQA / DynaMem). Loaded once per process.
+# Prefer a single locked size (default 9B int4). Set model_size: null to pick once from free VRAM via vram_mib_tier_*.
+# Override: EMET_EQA_VL_MODEL_SIZE=4B
+eqa_vl:
+  model_size: "9B"
+  quantization: int4
+  vram_mib_tier_9b: 20000
+  vram_mib_tier_4b: 11000
+  keyword_max_tokens: 64
+  graph_keyword_max_tokens: 64
+  voxel_keyword_max_tokens: 20
+  eqa_max_tokens: 1024
+  verbose_hf: false

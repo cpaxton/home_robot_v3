@@ -560,6 +560,21 @@ def show_memory(path: str, open_browser: bool) -> None:
     sys.exit(_run_module("emet.app.show_memory", args))
 
 
+@main.command("graph-memory-show", short_help="Print formatted scene graph from saved memory directory")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+)
+@click.option("--max-nodes", type=int, default=None, help="Truncate long node lists")
+def graph_memory_show(path: Path, max_nodes: int | None) -> None:
+    """Load common memory format (graph_eqa) and print nodes/edges to stdout."""
+
+    args = [str(path)]
+    if max_nodes is not None:
+        args.extend(["--max-nodes", str(max_nodes)])
+    sys.exit(_run_module("emet.app.graph_memory_show", args))
+
+
 @main.command("print", short_help="Print summary of a saved memory directory")
 @click.argument(
     "path",
@@ -692,6 +707,7 @@ def deploy(
     type=click.Choice(
         [
             "dynamem",
+            "scene-graph",
             "graph-eqa",
             "mapping",
             "grasp",
@@ -770,6 +786,19 @@ def run(
         if target_receptacle:
             args.extend(["--target_receptacle", target_receptacle])
         sys.exit(_run_module("emet.app.run_dynamem", args))
+    elif app == "scene-graph":
+        args.extend(["--server_ip", server_ip])
+        if skip_confirmations:
+            args.append("-S")
+        if headless:
+            args.append("--headless")
+        if visual_servo:
+            args.append("--visual-servo")
+        if target_object:
+            args.extend(["--target_object", target_object])
+        if target_receptacle:
+            args.extend(["--target_receptacle", target_receptacle])
+        sys.exit(_run_module("emet.app.run_scene_graph", args))
     elif app == "graph-eqa":
         sys.exit(_run_module("emet.app.run_graph_eqa", args))
     elif app == "mapping":

@@ -22,6 +22,7 @@ from emet.controller.controller_graph_eqa import GraphEQAController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.controller.zmq_client import StretchZmqClient
 from emet.core.parameters import get_parameters
+from emet.memory.headless_export import export_graph_eqa_dir
 
 
 @click.command()
@@ -51,12 +52,49 @@ from emet.core.parameters import get_parameters
     help="Whether to save Rerun rrd",
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
+@click.option(
+    "--input-path",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=str),
+    default=None,
+    help="Load graph memory from a saved directory (common format) before running",
+)
+@click.option(
+    "--export",
+    "export_dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=str),
+    default=None,
+    help=(
+        "Headless: after spin, save graph + scene_graph_report.txt here, print graph to stdout, "
+        "and exit (no question loop). Use for machines without a TTY."
+    ),
+)
+@click.option(
+    "--dump-memory",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=str),
+    default=None,
+    help="Save graph memory to this directory when the session ends (empty line to quit)",
+)
+@click.option(
+    "--cpu-only",
+    is_flag=True,
+    help="CPU-only: skip loading Qwen3.5 multimodal for scene labels; use voxel fallback",
+)
+@click.option(
+    "--no-sensor-perception",
+    is_flag=True,
+    help="Do not use VLM scene labels; use voxel image_descriptions only (legacy)",
+)
 def main(
     robot_ip: str,
     discord: bool = False,
     not_rotate_in_place: bool = False,
     save_rerun: bool = False,
     port_offset: int = 0,
+    input_path: str | None = None,
+    export_dir: str | None = None,
+    dump_memory: str | None = None,
+    cpu_only: bool = False,
+    no_sensor_perception: bool = False,
     **kwargs,
 ) -> None:
     """Run GraphEQA: EQA using graph-based semantic memory (see docs/graph_eqa.md)."""
@@ -70,41 +108,94 @@ def main(
 
     parameters["encoder"] = None
 
+    ev = parameters.get("eqa_vl", {}) or {}
+    ms = ev.get("model_size")
+    qn = ev.get("quantization", "int4")
+    if ms is None or str(ms).lower() == "null":
+        print(
+            "- EQA VL: one Qwen3.5 load sized by VRAM tiers (see eqa_vl/vram_mib_tier_* in dynav_config.yaml),",
+            f"quantization={qn}",
+        )
+    else:
+        print(f"- EQA VL: single shared Qwen3.5-{ms} ({qn}) for labels + EQA")
+
     print("- Start GraphEQA agent (graph memory + voxel map for navigation)")
-    agent = GraphEQAController(robot, parameters, save_rerun=save_rerun)
+    agent = GraphEQAController(
+        robot,
+        parameters,
+        save_rerun=save_rerun,
+        graph_memory_input_path=input_path,
+        use_sensor_perception=not no_sensor_perception,
+        cpu_only=cpu_only,
+    )
     agent.start()
 
-    if discord:
-        from emet.llms.discord_bot import EmetDiscordBot
+    def _save_dump() -> None:
+        if not dump_memory:
+            return
+        text = export_graph_eqa_dir(
+            agent.graph_memory,
+            getattr(agent, "voxel_map", None),
+            dump_memory,
+            title="Scene graph (saved)",
+        )
+        print(f"Saved graph memory to {dump_memory}")
+        print(text)
 
-        bot = EmetDiscordBot(agent, task="graph_eqa")
-        if not not_rotate_in_place:
-            bot.executor.rotate_in_place()
+    try:
+        if export_dir and discord:
+            raise click.UsageError("Use either --export or --discord, not both.")
 
-        @bot.client.command(name="summon", help="Summon the bot to a channel.")
-        async def summon(ctx):
-            print("Summoning the bot.")
-            print(" -> Channel name:", ctx.channel.name)
-            print(" -> Channel ID:", ctx.channel.id)
-            bot.allowed_channels.visit(ctx.channel)
-            await ctx.send("Hello! I am here to help you (GraphEQA).")
+        if export_dir:
+            executor = EQAExecuter(agent)
+            if not not_rotate_in_place:
+                executor.rotate_in_place()
+            text = export_graph_eqa_dir(
+                agent.graph_memory,
+                getattr(agent, "voxel_map", None),
+                export_dir,
+                title="Scene graph (export)",
+            )
+            print(text)
+            print(f"Exported graph memory to {export_dir}")
+            return
 
-        obs = robot.get_observation()
-        bot.push_task_to_all_channels(content=obs.rgb)
-        bot.run()
-    else:
-        executor = EQAExecuter(agent)
-        if not not_rotate_in_place:
-            executor.rotate_in_place()
+        if discord:
+            from emet.llms.discord_bot import EmetDiscordBot
 
-        while True:
-            question = input("Question (Press enter to quit): ").strip()
-            if not question:
-                break
-            robot.move_to_nav_posture()
-            robot.switch_to_navigation_mode()
-            robot.say("Answering the question " + question)
-            executor(question)
+            bot = EmetDiscordBot(agent, task="graph_eqa")
+            if not not_rotate_in_place:
+                bot.executor.rotate_in_place()
+
+            @bot.client.command(name="summon", help="Summon the bot to a channel.")
+            async def summon(ctx):
+                print("Summoning the bot.")
+                print(" -> Channel name:", ctx.channel.name)
+                print(" -> Channel ID:", ctx.channel.id)
+                bot.allowed_channels.visit(ctx.channel)
+                await ctx.send("Hello! I am here to help you (GraphEQA).")
+
+            obs = robot.get_observation()
+            bot.push_task_to_all_channels(content=obs.rgb)
+            bot.run()
+        else:
+            executor = EQAExecuter(agent)
+            if not not_rotate_in_place:
+                executor.rotate_in_place()
+
+            while True:
+                question = input("Question (Press enter to quit): ").strip()
+                if not question:
+                    break
+                robot.move_to_nav_posture()
+                robot.switch_to_navigation_mode()
+                robot.say("Answering the question " + question)
+                discord_text, _imgs = executor(question)
+                # run_eqa / GraphEQAController also prints; keep a one-line confirmation for piping/logs
+                if not discord_text.strip():
+                    print("(Empty EQA reply — check graph memory / observations.)")
+    finally:
+        _save_dump()
 
 
 if __name__ == "__main__":

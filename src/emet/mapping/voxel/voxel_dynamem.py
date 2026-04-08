@@ -7,6 +7,8 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+from __future__ import annotations
+
 import logging
 import os
 import pickle
@@ -22,9 +24,9 @@ from PIL import Image
 from scipy.ndimage import maximum_filter, median_filter
 from torch import Tensor
 
+from emet.core.parameters import Parameters
 from emet.llms import OpenaiClient
 from emet.llms.prompts import DYNAMEM_VISUAL_GROUNDING_PROMPT
-from emet.llms.qwen_client import Qwen25VLClient
 from emet.utils.image import Camera, camera_xyz_to_global_xyz
 from emet.utils.morphology import binary_dilation, binary_erosion, get_edges
 from emet.utils.point_cloud_torch import unproject_masked_depth_to_xyz_coordinates
@@ -80,6 +82,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         log="test",
         mllm=False,
         run_eqa=False,
+        parameters: Parameters | dict | None = None,
     ):
         if voxel_kwargs is None:
             voxel_kwargs = {}
@@ -128,27 +131,43 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self.detection_model = detection
         self.log = log
         self.mllm = mllm
+        self.parameters = parameters
+
+        # Open-vocabulary scene graph (optional, enabled via config or set_scene_graph_processor)
+        self._scene_graph_processor = None
         if self.mllm:
             # Used to do visual grounding task
             self.gpt_client = OpenaiClient(DYNAMEM_VISUAL_GROUNDING_PROMPT, model="gpt-4o-2024-05-13")
 
         self.run_eqa = run_eqa
         if self.run_eqa:
-            # To avoid using too much closed source VLMs, we use Qwen2.5-3b-vl-instruct for image description.
-            self.image_description_client = Qwen25VLClient(model_size="3B", quantization="int4", max_tokens=20)
+            from emet.llms.eqa_qwen import build_shared_eqa_clients
+            from emet.llms.eqa_vl_settings import apply_eqa_vl_runtime_settings, get_eqa_vl_int
+
+            apply_eqa_vl_runtime_settings(self.parameters)
+            kw = get_eqa_vl_int(self.parameters, "voxel_keyword_max_tokens", 20)
+            self.image_description_client, self.eqa_client = build_shared_eqa_clients(
+                parameters=self.parameters,
+                keyword_max_tokens=kw,
+            )
 
             self.image_descriptions: list[tuple[list[str], list[int]]] = []
-
-            from emet.llms.gemini_client import GeminiClient
-            from emet.llms.prompts.eqa_prompt import EQA_PROMPT
-
-            self.eqa_client = GeminiClient(EQA_PROMPT, model="gemini-2.5-flash")
 
         # Attributes for EQA, If you are not running EQA module, this will stay the same.
         self._question: str | None = None
         self.relevant_objects: list | None = None
 
         self.history_outputs: list[str] = []
+
+    def set_scene_graph_processor(self, processor) -> None:
+        """Attach a SceneGraphProcessor to update an open-vocab scene graph on each frame."""
+        self._scene_graph_processor = processor
+
+    def get_scene_graph(self):
+        """Return the OpenVocabSceneGraph if a processor is attached, else None."""
+        if self._scene_graph_processor is not None:
+            return self._scene_graph_processor.scene_graph
+        return None
 
     def find_alignment_over_model(self, queries: str):
         clip_text_tokens = self.encoder.encode_text(queries).cpu()
@@ -332,6 +351,12 @@ class SparseVoxelMap(SparseVoxelMapBase):
         """
         Process rgbd images for Dynamem
         """
+        # Keep originals for scene graph processor (before any resizing/filtering)
+        original_rgb = rgb.copy()
+        original_depth = depth.copy()
+        original_intrinsics = intrinsics.copy()
+        original_pose = pose.copy()
+
         # Log input data to debug subdir so memory root stays canonical for save_memory().
         if not os.path.exists(self.log):
             os.mkdir(self.log)
@@ -420,6 +445,21 @@ class SparseVoxelMap(SparseVoxelMapBase):
         valid_rgb = rgb.permute(1, 2, 0)[~mask]
         if len(valid_xyz) != 0:
             self.add_to_semantic_memory(valid_xyz, features, valid_rgb)
+
+        # Update open-vocab scene graph if attached
+        if self._scene_graph_processor is not None:
+            try:
+                self._scene_graph_processor.process_frame(
+                    rgb=original_rgb,
+                    depth=original_depth,
+                    intrinsics=original_intrinsics,
+                    camera_pose=original_pose,
+                    world_xyz=world_xyz,
+                )
+            except Exception as e:
+                from emet.utils.logger import warning as _warn_colored
+
+                _warn_colored(f"Scene graph update failed: {e}")
 
     def add_to_semantic_memory(
         self,

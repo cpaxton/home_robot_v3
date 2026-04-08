@@ -19,7 +19,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import threading
 import timeit
 from functools import partial
@@ -27,9 +26,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
 import click
-
-for _name in ("httpx", "httpcore", "huggingface_hub", "transformers"):
-    logging.getLogger(_name).setLevel(logging.WARNING)
 
 
 _CHAT_HTML = r"""<!DOCTYPE html>

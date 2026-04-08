@@ -174,9 +174,13 @@ class StretchMujocoSimulator:
             logger.warning("Still waiting to connect to the MuJoCo Simulator.")
 
             if not self.is_running():
-                self._server_process.join(timeout=2.0)
+                # is_running() may call stop(), which sets _server_process to None
+                if self._server_process is not None:
+                    self._server_process.join(timeout=2.0)
                 raise RuntimeError(
                     "The MuJoCo simulator process exited before connecting. "
+                    "If you have no display (SSH, Docker), use: emet serve mujoco --headless "
+                    "(or robocasa with --headless). "
                     "On WSL, try: Xvfb :99 -screen 0 1024x768x24 & then DISPLAY=:99 emet serve mujoco --headless --use-glx. "
                     "Or use --no-cameras if you do not need camera images. "
                     "Check the process output above for OpenGL/EGL/GLX errors."

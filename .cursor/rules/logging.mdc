@@ -1,0 +1,52 @@
+---
+description: Use emet.utils.logger for colored warnings/errors instead of stdlib logging
+globs: src/emet/**/*.py
+alwaysApply: false
+---
+
+# Logging: use emet.utils.logger for colored output
+
+Use `emet.utils.logger.Logger` instead of `logging.getLogger()` so that
+warnings print in yellow and errors print in red on the terminal.
+
+## Usage
+
+```python
+from emet.utils.logger import Logger
+
+logger = Logger(__name__)
+
+logger.error("Something broke")       # red, stderr
+logger.warning("Falling back to X")   # yellow, stderr
+logger.info("Loaded model")           # white, stdout
+logger.alert("Ready")                 # green, stdout
+logger.debug("Step details")          # white, stdout (hidden by default)
+```
+
+## Do NOT use
+
+```python
+import logging
+logger = logging.getLogger(__name__)   # no color, easy to miss warnings
+```
+
+## Formatting
+
+The custom Logger joins `*args` with spaces. Use f-strings, not `%s`:
+
+```python
+# Good
+logger.warning(f"SAM3 not available ({err}), falling back")
+
+# Bad — %s formatting is for stdlib logging only
+logger.warning("SAM3 not available (%s), falling back", err)
+```
+
+## Module-level shortcuts
+
+For one-off calls without a named logger:
+
+```python
+from emet.utils.logger import warning, error
+warning("Feature X unavailable")
+```
