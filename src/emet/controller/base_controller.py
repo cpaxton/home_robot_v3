@@ -124,7 +124,14 @@ class BaseController(ABC):
         """Start the robot and put it in a ready state (nav posture, navigation mode)."""
         started = self.robot.start()
         if not started:
-            raise RuntimeError("Robot failed to start!")
+            client = type(self.robot).__name__
+            raise RuntimeError(
+                f"Robot failed to start ({client}). No ZMQ observations in time — start the "
+                "MuJoCo or robot server first (e.g. `emet serve mujoco --robot rby1 --headless`, "
+                "or `--robot stretch` for Stretch). The agent `--robot` must match the server "
+                "(default agent robot is stretch; use `--robot rby1` if the server is rby1). "
+                "Check IP, `--port-offset`, and firewall."
+            )
         if verbose:
             logger.debug("ZMQ connection to robot started.")
         if can_move:

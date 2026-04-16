@@ -28,6 +28,7 @@ import emet.utils.compression as compression
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient
+from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY, is_stretch_family
 from emet.motion import PlanResult
 from emet.motion.kinematics import HelloStretchIdx, HelloStretchKinematics
 from emet.utils.geometry import (
@@ -156,6 +157,7 @@ class StretchZmqClient(AbstractRobotClient):
         self._iter = -1  # Tracks number of actions set, never reset this
         self._seq_id = 0  # Number of messages we received
         self._started = False
+        self._zmq_closed = False  # Idempotent stop(); avoids ctx.term() twice (ZMQ double-free)
 
         # Resend all actions immediately - helps if we are losing packets or something?
         self._resend_all_actions = resend_all_actions
@@ -272,34 +274,35 @@ class StretchZmqClient(AbstractRobotClient):
     def get_joint_state(self, timeout: float = 5.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Get the current joint positions, velocities, and efforts"""
         t0 = timeit.default_timer()
-        with self._state_lock:
-            while self._state is None:
-                time.sleep(1e-4)
-                if timeit.default_timer() - t0 > timeout:
-                    logger.error(
-                        "Timeout waiting for state message. Is the simulator running? "
-                        "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
+        while timeit.default_timer() - t0 < timeout:
+            with self._state_lock:
+                if self._state is not None:
+                    st = self._state
+                    return (
+                        st["joint_positions"],
+                        st["joint_velocities"],
+                        st["joint_efforts"],
                     )
-                    return None, None, None
-            joint_positions = self._state["joint_positions"]
-            joint_velocities = self._state["joint_velocities"]
-            joint_efforts = self._state["joint_efforts"]
-        return joint_positions, joint_velocities, joint_efforts
+            time.sleep(0.001)
+        logger.error(
+            "Timeout waiting for state message. Is the simulator running? "
+            "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
+        )
+        return None, None, None
 
     def get_joint_positions(self, timeout: float = 5.0) -> np.ndarray:
         """Get the current joint positions"""
         t0 = timeit.default_timer()
-        with self._state_lock:
-            while self._state is None:
-                time.sleep(1e-4)
-                if timeit.default_timer() - t0 > timeout:
-                    logger.error(
-                        "Timeout waiting for state message. Is the simulator running? "
-                        "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
-                    )
-                    return None
-            joint_positions = self._state["joint_positions"]
-        return joint_positions
+        while timeit.default_timer() - t0 < timeout:
+            with self._state_lock:
+                if self._state is not None:
+                    return self._state["joint_positions"]
+            time.sleep(0.001)
+        logger.error(
+            "Timeout waiting for state message. Is the simulator running? "
+            "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
+        )
+        return None
 
     def get_six_joints(self, timeout: float = 5.0) -> np.ndarray:
         """
@@ -318,17 +321,16 @@ class StretchZmqClient(AbstractRobotClient):
     def get_joint_velocities(self, timeout: float = 5.0) -> np.ndarray:
         """Get the current joint velocities"""
         t0 = timeit.default_timer()
-        with self._state_lock:
-            while self._state is None:
-                time.sleep(1e-4)
-                if timeit.default_timer() - t0 > timeout:
-                    logger.error(
-                        "Timeout waiting for state message. Is the simulator running? "
-                        "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
-                    )
-                    return None
-            joint_velocities = self._state["joint_velocities"]
-        return joint_velocities
+        while timeit.default_timer() - t0 < timeout:
+            with self._state_lock:
+                if self._state is not None:
+                    return self._state["joint_velocities"]
+            time.sleep(0.001)
+        logger.error(
+            "Timeout waiting for state message. Is the simulator running? "
+            "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
+        )
+        return None
 
     def get_joint_efforts(self, timeout: float = 5.0) -> np.ndarray:
         """Get the current joint efforts from the robot.
@@ -341,17 +343,16 @@ class StretchZmqClient(AbstractRobotClient):
         """
 
         t0 = timeit.default_timer()
-        with self._state_lock:
-            while self._state is None:
-                time.sleep(1e-4)
-                if timeit.default_timer() - t0 > timeout:
-                    logger.error(
-                        "Timeout waiting for state message. Is the simulator running? "
-                        "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
-                    )
-                    return None
-            joint_efforts = self._state["joint_efforts"]
-        return joint_efforts
+        while timeit.default_timer() - t0 < timeout:
+            with self._state_lock:
+                if self._state is not None:
+                    return self._state["joint_efforts"]
+            time.sleep(0.001)
+        logger.error(
+            "Timeout waiting for state message. Is the simulator running? "
+            "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
+        )
+        return None
 
     def get_base_pose(self, timeout: float = 5.0) -> np.ndarray:
         """Get the current pose of the base.
@@ -364,28 +365,26 @@ class StretchZmqClient(AbstractRobotClient):
         """
         t0 = timeit.default_timer()
         if self.update_base_pose_from_full_obs:
-            with self._obs_lock:
-                print("[Getting base pose from full obs]")
-                while self._obs is None:
-                    time.sleep(0.01)
-                    if timeit.default_timer() - t0 > timeout:
-                        logger.error("Timeout waiting for observation")
-                        return None
-                gps = self._obs["gps"]
-                compass = self._obs["compass"]
-                xyt = np.concatenate([gps, compass], axis=-1)
-        else:
+            print("[Getting base pose from full obs]")
+            while timeit.default_timer() - t0 < timeout:
+                with self._obs_lock:
+                    if self._obs is not None:
+                        gps = self._obs["gps"]
+                        compass = self._obs["compass"]
+                        return np.concatenate([gps, compass], axis=-1)
+                time.sleep(0.01)
+            logger.error("Timeout waiting for observation")
+            return None
+        while timeit.default_timer() - t0 < timeout:
             with self._state_lock:
-                while self._state is None:
-                    time.sleep(1e-4)
-                    if timeit.default_timer() - t0 > timeout:
-                        logger.error(
-                            "Timeout waiting for state message. Is the simulator running? "
-                            "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
-                        )
-                        return None
-                xyt = self._state["base_pose"]
-        return xyt
+                if self._state is not None:
+                    return self._state["base_pose"]
+            time.sleep(0.001)
+        logger.error(
+            "Timeout waiting for state message. Is the simulator running? "
+            "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
+        )
+        return None
 
     def get_pan_tilt(self):
         """Get the current pan and tilt of the head.
@@ -1721,6 +1720,26 @@ class StretchZmqClient(AbstractRobotClient):
         with self._state_lock:
             return self._state is not None and self._state["is_runstopped"]
 
+    def _verify_emet_robot_id_stretch(self) -> bool:
+        """Fail if the ZMQ server identifies as a non-Stretch robot (see ``emet_robot_id``)."""
+        with self._obs_lock:
+            obs = self._obs
+        if obs is None:
+            return True
+        rid = obs.get(EMET_ZMQ_ROBOT_ID_KEY)
+        if rid is None:
+            return True
+        if is_stretch_family(str(rid)):
+            return True
+        logger.error(
+            colored(
+                f"Robot ID mismatch: server reports {EMET_ZMQ_ROBOT_ID_KEY}={rid!r} but this client is Stretch "
+                f"(Hello Stretch). Start the agent with a matching `--robot`, e.g. `emet run agent --robot {rid}`.",
+                "red",
+            )
+        )
+        return False
+
     def start(self) -> bool:
         """Start running blocking thread in a separate thread. This will wait for observations to come in and update internal state.
 
@@ -1730,6 +1749,9 @@ class StretchZmqClient(AbstractRobotClient):
         if self._started:
             # Already started
             return True
+        if self._zmq_closed:
+            logger.error("StretchZmqClient.start() called after the client was shut down; create a new client.")
+            return False
 
         self._thread = threading.Thread(target=self.blocking_spin)
         self._state_thread = threading.Thread(target=self.blocking_spin_state)
@@ -1758,7 +1780,13 @@ class StretchZmqClient(AbstractRobotClient):
                     "Try making sure that the server on the robot is publishing, and that you can ping the robot IP address."
                 )
                 logger.info("Robot IP:", self.send_address)
+                self.stop()
                 return False
+
+        if not self._verify_emet_robot_id_stretch():
+            logger.info("Robot IP:", self.send_address)
+            self.stop()
+            return False
 
         # Separately wait for state messages
         while self._state is None:
@@ -1788,10 +1816,16 @@ class StretchZmqClient(AbstractRobotClient):
 
     def __del__(self):
         """Destructor to make sure we stop the client when it is deleted"""
-        self.stop()
+        try:
+            self.stop()
+        except Exception:
+            pass
 
     def stop(self):
         """Stop the client and close all sockets. Safe to call even if __init__ failed partway."""
+        if self._zmq_closed:
+            return
+        self._zmq_closed = True
         self._finish = True
         for attr in ("_thread", "_state_thread", "_servo_thread", "_rerun_thread"):
             t = getattr(self, attr, None)
@@ -1802,7 +1836,16 @@ class StretchZmqClient(AbstractRobotClient):
             s = getattr(self, attr, None)
             if s is not None:
                 try:
-                    s.close()
+                    s.setsockopt(zmq.LINGER, 0)
+                except Exception:
+                    pass
+                try:
+                    s.close(linger=0)
+                except TypeError:
+                    try:
+                        s.close()
+                    except Exception:
+                        pass
                 except Exception:
                     pass
         ctx = getattr(self, "context", None)

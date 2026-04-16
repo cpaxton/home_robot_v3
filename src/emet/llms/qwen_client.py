@@ -18,6 +18,14 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig, 
 
 from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder
 
+# Presets for get_llm_client (Qwen2.5-VL / stand-in for Qwen3.5-VL-9B until a dedicated HF id is wired).
+QWEN_VL_PRESETS: dict[str, dict[str, Any]] = {
+    "qwen25-VL-3B": {"model_size": "3B", "hf_model_id": None},
+    "qwen25-VL-7B": {"model_size": "7B", "hf_model_id": None},
+    # Maps to 2.5-VL-7B-Instruct (closest widely available); swap hf_model_id when Qwen3.5-VL-9B is published.
+    "qwen35-vl-9B": {"model_size": "7B", "hf_model_id": "Qwen/Qwen2.5-VL-7B-Instruct"},
+}
+
 qwen_typing_options = ["Math", "Coder", "Deepseek", None]
 qwen_quantization_options = {
     None: [None, "Int4", "Int8", "Int", "Instruct", "Instruct-Int4", "Instruct-Int8", "Instruct-Int"],
@@ -221,10 +229,16 @@ from qwen_vl_utils import process_vision_info
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 
 
-class Qwen25VLClient:
+class Qwen25VLClient(AbstractLLMClient):
+    """Qwen2.5-VL multimodal chat for agent tool JSON (same text contract as Qwen25Client).
+
+    Supports optional ``image=`` (RGB ndarray) on a user turn for camera-conditioned replies.
+    """
+
     def __init__(
         self,
-        prompt: str | None = None,
+        prompt: str | AbstractPromptBuilder | None = None,
+        prompt_kwargs: dict[str, Any] | None = None,
         model_size: str = "3B",
         fine_tuning: str | None = "Instruct",
         max_tokens: int = 4096,
@@ -232,16 +246,18 @@ class Qwen25VLClient:
         device: str = "cuda",
         quantization: str | None = "int4",
         use_fast_attn: bool = False,
+        hf_model_id: str | None = None,
     ):
-        """
-        A simple API for Qwen2.5-VL models
+        super().__init__(prompt, prompt_kwargs)
+        if device == "cpu":
+            import warnings
 
-        Parameters:
-            quantization: we support no quatization, and bitsandbytes int4 and int8
-        """
-        self.system_prompt = prompt
-        assert device in ["cuda", "mps"], f"Invalid device: {device}"
-        assert model_size in ["3B", "7B", "72B"], f"Invalid model size: {model_size}"
+            warnings.warn(
+                "Qwen25VLClient on CPU: very slow; prefer GPU or a smaller VL model.",
+                UserWarning,
+                stacklevel=2,
+            )
+        assert model_size in ["3B", "7B", "72B"], f"Invalid Qwen VL model size: {model_size}"
         assert fine_tuning in [None, "Instruct"], f"Invalid fine-tuning: {fine_tuning}"
 
         self._device = device
@@ -249,13 +265,20 @@ class Qwen25VLClient:
         self.num_beams = num_beams
         self.use_fast_attn = use_fast_attn
 
-        if fine_tuning is None:
+        if hf_model_id is not None:
+            model_name = hf_model_id
+        elif fine_tuning is None:
             model_name = f"Qwen/Qwen2.5-VL-{model_size}"
         else:
             model_name = f"Qwen/Qwen2.5-VL-{model_size}-{fine_tuning}"
 
-        print(f"Loading model: {model_name}")
-        model_kwargs = {"dtype": "auto"}
+        if model_name == "Qwen/Qwen2.5-VL-7B-Instruct":
+            print(
+                "Note: qwen35-vl-9B currently loads Qwen/Qwen2.5-VL-7B-Instruct; "
+                "set hf_model_id when a Qwen3.5-VL-9B checkpoint is available.",
+            )
+        print(f"Loading VL model: {model_name}")
+        model_kwargs: dict[str, Any] = {"dtype": "auto"}
 
         quantization_config = None
         if quantization is not None:
@@ -284,68 +307,58 @@ class Qwen25VLClient:
             model_kwargs["quantization_config"] = quantization_config
 
         self.processor = AutoProcessor.from_pretrained(model_name)
-        if self.use_fast_attn:
-            attn_implementaion = "flash_attention_2"
-        else:
-            attn_implementaion = None
-        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-            model_name,
-            attn_implementation=attn_implementaion,
-            device_map=device,
+        attn_implementation = "flash_attention_2" if self.use_fast_attn else None
+        pretrained_kw: dict[str, Any] = {
+            "attn_implementation": attn_implementation,
             **model_kwargs,
-        )
+        }
+        if device == "cuda":
+            pretrained_kw["device_map"] = "auto"
+        elif device == "mps":
+            pretrained_kw["device_map"] = "mps"
+        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_name, **pretrained_kw)
+        if device == "cpu":
+            self.model = self.model.to("cpu")
 
-    def _process_input(self, command):
-        """
-        Transform command sent from the user to the command query OpenAI GPT
-
-        TODO: Add this function to Qwen25Client as well
-        """
+    def _process_input(self, command: Any) -> Any:
         if isinstance(command, str):
-            user_commands = command
-        else:
-            user_commands = []  # type:ignore
-            for c in command:
-                # If this is a strungm then we assume it is a text message from the user
-                if isinstance(c, str):
-                    user_commands.append({"type": "text", "text": c})
-                # For now, the only remaining option is image
-                elif isinstance(c, Image.Image) or isinstance(c, np.ndarray):
-                    if isinstance(c, np.ndarray):
-                        image = Image.fromarray(c.astype(np.uint8), mode="RGB")
-                    else:
-                        image = c
-
-                    user_commands.append(
-                        {
-                            "type": "image",
-                            "image": image,
-                        }
-                    )
-                else:
-                    raise NotImplementedError("We only support text and image for now!")
-
+            return command
+        user_commands: list[Any] = []
+        for c in command:
+            if isinstance(c, str):
+                user_commands.append({"type": "text", "text": c})
+            elif isinstance(c, Image.Image) or isinstance(c, np.ndarray):
+                image = Image.fromarray(c.astype(np.uint8), mode="RGB") if isinstance(c, np.ndarray) else c
+                user_commands.append({"type": "image", "image": image})
+            else:
+                raise NotImplementedError("Only text and image content supported for VL.")
         return user_commands
 
-    def __call__(self, command: str | list[dict[str, Any]] | Image.Image, verbose: bool = False):
-        if self.system_prompt is not None:
-            messages = [{"role": "system", "content": self.system_prompt}]
-        else:
-            messages = []
+    def __call__(
+        self,
+        command: str | list[Any],
+        image: np.ndarray | None = None,
+        verbose: bool = False,
+        tools: list[Any] | None = None,
+    ) -> str:
+        if tools is not None:
+            pass  # Agent uses JSON-in-text, not native tool APIs.
+        if self.is_first_message():
+            self.add_history({"role": "system", "content": self.system_prompt})
 
-        # Prepare the messages
-        inputs = (
-            [{"role": "user", "content": self._process_input(command=command)}]
-            if not isinstance(command[0], dict)
-            else command
-        )
-        messages += inputs  # type:ignore
+        if image is not None:
+            pil = Image.fromarray(np.asarray(image).astype(np.uint8), mode="RGB")
+            user_content: Any = [{"type": "image", "image": pil}, {"type": "text", "text": command}]
+        else:
+            user_content = self._process_input(command)
+
+        self.add_history({"role": "user", "content": user_content})
+        messages = self.get_history()
 
         if verbose:
-            print("input", messages)
+            print("VL messages (truncated):", str(messages)[:800])
 
         t0 = timeit.default_timer()
-
         text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         image_inputs, video_inputs = process_vision_info(messages)
         inputs = self.processor(
@@ -355,7 +368,8 @@ class Qwen25VLClient:
             padding=True,
             return_tensors="pt",
         )
-        inputs = inputs.to(self._device)
+        dev = next(self.model.parameters()).device
+        inputs = inputs.to(dev)
 
         generated_ids = self.model.generate(**inputs, max_new_tokens=self.max_tokens, num_beams=self.num_beams)
         generated_ids_trimmed = [
@@ -365,10 +379,11 @@ class Qwen25VLClient:
             generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )[0]
 
+        self.add_history({"role": "assistant", "content": output_text})
         t1 = timeit.default_timer()
 
         if verbose:
-            print(f"Assistant response: {output_text}")
+            print(f"Assistant response: {output_text[:500]}...")
             print(f"Time taken: {t1 - t0:.2f}s")
 
         return output_text

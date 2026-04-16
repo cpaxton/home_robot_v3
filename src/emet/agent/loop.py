@@ -16,12 +16,14 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import queue
 import threading
 import timeit
 from datetime import datetime
 from typing import Any
 
 import click
+import numpy as np
 from termcolor import colored
 
 from emet.agent.prompt import AgentPromptBuilder, parse_tool_calls_response
@@ -30,7 +32,6 @@ from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
 from emet.llms import get_llm_client
-from emet.llms.discord_bot import EmetDiscordBot
 from emet.memory.backend import get_memory_backend
 from emet.memory.utils import print_memory_view_help_on_quit
 from emet.robots import ROBOT_REGISTRY
@@ -149,14 +150,30 @@ def _call_llm(
     text: str,
     openai_tools_param: list | None,
     debug: bool,
+    image: np.ndarray | None = None,
 ) -> tuple[str, float]:
     """Call the LLM and return (raw_response, elapsed_seconds)."""
     t0 = timeit.default_timer()
-    try:
+
+    def _invoke(**img_kw: Any) -> str:
         if openai_tools_param is not None:
-            raw = llm_client(text, verbose=debug, tools=openai_tools_param)
+            try:
+                return llm_client(text, verbose=debug, tools=openai_tools_param, **img_kw)
+            except TypeError:
+                return llm_client(text, verbose=debug, tools=openai_tools_param)
+        try:
+            return llm_client(text, verbose=debug, **img_kw)
+        except TypeError:
+            return llm_client(text, verbose=debug)
+
+    try:
+        if image is not None:
+            try:
+                raw = _invoke(image=image)
+            except TypeError:
+                raw = _invoke()
         else:
-            raw = llm_client(text, verbose=debug)
+            raw = _invoke()
     except TypeError:
         raw = llm_client(text)
     return raw, timeit.default_timer() - t0
@@ -181,6 +198,10 @@ def run_agent_with_robot(
     agent_name: str = "Emet",
     commands: list[str] | None = None,
     port_offset: int = 0,
+    agent_config: str = "dynav_config.yaml",
+    device: str = "cuda",
+    max_tokens: int = 1024,
+    vl_include_camera: bool = False,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -189,14 +210,17 @@ def run_agent_with_robot(
     (LLM mode) or manual command (no-LLM mode) instead of reading stdin.
     The agent exits after all commands are consumed.
     """
-    parameters = get_parameters("dynav_config.yaml")
+    parameters = get_parameters(agent_config)
 
     robot_key = robot.lower().replace("-", "_")
     if robot_key == "stretch":
+        # Do not start ZMQ in __init__: DynamemTaskExecutor calls agent.start() which invokes
+        # robot.start() again; double-start left orphan recv threads and led to ZMQ double-free crashes.
         robot_client = StretchZmqClient(
             robot_ip=robot_ip,
             enable_rerun_server=True,
             port_offset=port_offset,
+            start_immediately=False,
         )
     elif robot_key in ROBOT_REGISTRY:
         mod = importlib.import_module(ROBOT_REGISTRY[robot_key])
@@ -249,7 +273,19 @@ def run_agent_with_robot(
             context["xyt_for_query"] = executor.agent.robot.get_base_pose()
 
     discord_bot = None
+    unified_input_queue: queue.Queue[str] | None = None
+    if discord and not os.environ.get("DISCORD_TOKEN"):
+        print(
+            colored(
+                "Warning: --discord was set but DISCORD_TOKEN is not in the environment. "
+                "Discord bot will not start. Export DISCORD_TOKEN (and: uv sync -e discord).",
+                "yellow",
+            )
+        )
     if discord and os.environ.get("DISCORD_TOKEN"):
+        from emet.llms.discord_bot import EmetDiscordBot
+
+        unified_input_queue = queue.Queue()
 
         class AgentPlaceholder:
             def __init__(self, exec_obj):
@@ -264,6 +300,7 @@ def run_agent_with_robot(
             skip_confirmations=skip_confirmations,
             output_path=getattr(executor.agent, "log", "."),
             kwargs=kwargs.get("discord_kwargs", {"match_method": "feature", "mllm_for_visual_grounding": False}),
+            agent_input_queue=unified_input_queue,
         )
         context["discord_bot"] = discord_bot
         executor.discord_bot = discord_bot
@@ -288,7 +325,9 @@ def run_agent_with_robot(
     if use_llm:
         try:
             prompt_builder = AgentPromptBuilder(tools=tools, name=agent_name, context=context)
-            llm_client = get_llm_client(llm, prompt=prompt_builder)
+            llm_client = get_llm_client(llm, prompt=prompt_builder, device=device)
+            if hasattr(llm_client, "max_tokens"):
+                llm_client.max_tokens = max_tokens
             from emet.llms.openai_client import OpenaiClient
 
             if isinstance(llm_client, OpenaiClient):
@@ -337,6 +376,17 @@ def run_agent_with_robot(
     cmd_queue: list[str] = list(commands) if commands else []
     scripted = bool(cmd_queue)
 
+    if unified_input_queue is not None and not scripted:
+
+        def _stdin_to_unified_queue() -> None:
+            while True:
+                try:
+                    unified_input_queue.put(input(colored("You: ", "green")).strip())
+                except (EOFError, KeyboardInterrupt):
+                    break
+
+        threading.Thread(target=_stdin_to_unified_queue, daemon=True).start()
+
     def _get_input(prompt_text: str) -> str | None:
         """Read next input from queue (scripted) or stdin (interactive). None = done."""
         if cmd_queue:
@@ -345,6 +395,8 @@ def run_agent_with_robot(
             return text
         if scripted:
             return None  # queue exhausted
+        if unified_input_queue is not None:
+            return unified_input_queue.get()
         try:
             return input(colored(prompt_text, "green")).strip()
         except (EOFError, KeyboardInterrupt):
@@ -375,11 +427,17 @@ def run_agent_with_robot(
             # When that happens we feed the results back and let the LLM summarize.
             current_input = user_text
             for _round in range(_MAX_TOOL_ROUNDS):
+                cam_image = None
+                if vl_include_camera and _round == 0 and hasattr(robot_client, "get_observation"):
+                    obs = robot_client.get_observation()
+                    if obs is not None and getattr(obs, "rgb", None) is not None:
+                        cam_image = np.asarray(obs.rgb)
                 raw_response, elapsed = _call_llm(
                     llm_client,
                     current_input,
                     openai_tools_param,
                     debug_llm,
+                    image=cam_image,
                 )
 
                 if debug_llm:

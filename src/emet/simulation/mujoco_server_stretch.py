@@ -32,6 +32,7 @@ import emet.motion.constants as constants
 import emet.utils.compression as compression
 import emet.utils.logger as logger
 from emet.core.server import BaseZmqServer
+from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY
 from emet.motion import HelloStretchIdx
 from emet.motion.control.goto_controller import GotoVelocityController
 from emet.robots.base import RobotSpec
@@ -690,6 +691,7 @@ class MujocoZmqServer(BaseZmqServer):
             "is_simulation": True,
             "lidar_points": None,
             "lidar_timestamp": None,
+            EMET_ZMQ_ROBOT_ID_KEY: self.get_robot_spec().name,
         }
         return message
 
@@ -708,6 +710,7 @@ class MujocoZmqServer(BaseZmqServer):
             "is_homed": True,
             "is_runstopped": False,
             "step": self._last_step,
+            EMET_ZMQ_ROBOT_ID_KEY: self.get_robot_spec().name,
         }
         return message
 

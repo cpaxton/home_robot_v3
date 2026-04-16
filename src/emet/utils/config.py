@@ -64,6 +64,24 @@ def get_full_config_path(ext: str) -> str:
     return os.path.join(CONFIG_ROOT, ext)
 
 
+def resolve_config_yaml_path(path: str) -> str:
+    """Resolve a YAML config path: absolute path, cwd-relative path, or basename under ``emet/config``.
+
+    Used by :func:`get_config` and agent ``--agent-config``.
+    """
+    p = Path(path).expanduser()
+    if not p.is_absolute():
+        cwd_candidate = Path.cwd() / p
+        if cwd_candidate.is_file():
+            return str(cwd_candidate.resolve())
+    if p.is_file():
+        return str(p.resolve())
+    packaged = Path(get_full_config_path(path))
+    if packaged.is_file():
+        return str(packaged)
+    raise FileNotFoundError(f"Config file not found: {path!r} (tried cwd-relative, absolute path, and {packaged})")
+
+
 def get_config(path: str, opts: list | None = None) -> tuple[Config, str]:
     """Get configuration and ensure consistency between configurations
     inherited from the task and defaults and our code's configuration.
@@ -72,7 +90,7 @@ def get_config(path: str, opts: list | None = None) -> tuple[Config, str]:
         path: path to our code's config
         opts: command line arguments overriding the config
     """
-    full_path = get_full_config_path(path)
+    full_path = resolve_config_yaml_path(path)
 
     # Start with our code's config
     config = Config()
@@ -87,7 +105,8 @@ def get_config(path: str, opts: list | None = None) -> tuple[Config, str]:
     config.freeze()
 
     # Generate a string representation of our code's config
-    config_dict = yaml.load(open(full_path), Loader=yaml.FullLoader)
+    with open(full_path, encoding="utf-8") as fh:
+        config_dict = yaml.load(fh, Loader=yaml.FullLoader)
     if opts is not None:
         for i in range(0, len(opts), 2):
             dict = config_dict

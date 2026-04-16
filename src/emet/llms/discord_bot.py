@@ -9,6 +9,7 @@
 
 import datetime
 import os
+import queue
 import threading
 import time
 from typing import Any
@@ -47,6 +48,7 @@ class EmetDiscordBot(DiscordBot):
         kwargs: dict[str, Any] = None,
         home_channel: str = "talk-to-stretch",
         executor: Any = None,
+        agent_input_queue: queue.Queue[str] | None = None,
     ) -> None:
         """
         Create a new Discord bot that can interact with the robot.
@@ -87,6 +89,8 @@ class EmetDiscordBot(DiscordBot):
 
         self.home_channel = os.environ.get("EMET_DISCORD_CHANNEL", home_channel)
         self.sent_prompt = False
+        # When set with llm=None (emet run agent), inbound Discord text is enqueued for the agent loop.
+        self.agent_input_queue = agent_input_queue
 
         if kwargs is None:
             # Default parameters
@@ -292,8 +296,12 @@ class EmetDiscordBot(DiscordBot):
 
         with self._llm_lock:
             if self.llm_client is None:
-                # Agent mode: no local LLM; just log the incoming message
-                print(colored(f"[Discord] {text}", "cyan"))
+                # Agent loop owns the LLM: feed Discord text into the same queue as terminal stdin.
+                if self.agent_input_queue is not None:
+                    self.agent_input_queue.put(f"[discord] {text}")
+                    print(colored(f"[Discord -> agent] {text}", "cyan"))
+                else:
+                    print(colored(f"[Discord] {text}", "cyan"))
                 return
             if self.task != "eqa":
                 response = self.llm_client(text, verbose=True)

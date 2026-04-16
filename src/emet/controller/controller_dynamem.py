@@ -27,6 +27,7 @@ from PIL import Image
 
 from emet.audio.text_to_speech import PiperTextToSpeech
 from emet.controller.base_controller import BaseController
+from emet.controller.generic_zmq_client import GenericZmqClient
 from emet.controller.manipulation.dynamem_manipulation.dynamem_manipulation import (
     DynamemManipulationWrapper as ManipulationWrapper,
 )
@@ -36,6 +37,7 @@ from emet.controller.manipulation.dynamem_manipulation.grasper_utils import (
     pickup,
     process_image_for_placing,
 )
+from emet.controller.zmq_client import StretchZmqClient
 from emet.core.parameters import Parameters
 from emet.core.robot import AbstractRobotClient
 from emet.mapping.instance import instances_to_text
@@ -53,7 +55,7 @@ from emet.perception.detection.yoloe import YoloEPerception
 from emet.perception.encoders.clip_encoder import MaskClipEncoder
 from emet.perception.encoders.siglip_encoder import MaskSiglipEncoder
 from emet.perception.wrapper import OvmmPerception
-from emet.visualization.rerun import has_display
+from emet.visualization.rerun import NullVisualizer, has_display
 
 # Manipulation hyperparameters
 INIT_LIFT_POS = 0.45
@@ -96,7 +98,8 @@ class DynamemController(BaseController):
             default_config_path=None,
         )
         self.semantic_sensor = semantic_sensor
-        self.rerun_visualizer = self.robot._rerun
+        # StretchZmqClient sets _rerun; GenericZmqClient (rby1 / galaxea_r1) does not — use no-op visualizer.
+        self.rerun_visualizer = getattr(self.robot, "_rerun", None) or NullVisualizer()
         self.setup_custom_blueprint()
 
         self.mllm = mllm
@@ -135,6 +138,15 @@ class DynamemController(BaseController):
             stretch_gripper_max = 0.64
             end_link = "link_gripper_s3_body"
         self.transform_node = end_link
+        # ManipulationWrapper.__init__ calls get_pan_tilt(); ZMQ clients use start_immediately=False in
+        # run_agent/run_dynamem so streams must be started here before any joint reads.
+        if isinstance(self.robot, (StretchZmqClient, GenericZmqClient)):
+            if not self.robot.start():
+                raise RuntimeError(
+                    "Robot ZMQ client did not connect. Start the simulator first with the same robot, e.g. "
+                    "`emet serve mujoco --robot stretch` (default agent uses stretch), then retry. "
+                    "Check 127.0.0.1 and `--port-offset` if you use a non-default offset."
+                )
         self.manip_wrapper = ManipulationWrapper(self.robot, stretch_gripper_max=stretch_gripper_max, end_link=end_link)
         self.robot.move_to_nav_posture()
 
