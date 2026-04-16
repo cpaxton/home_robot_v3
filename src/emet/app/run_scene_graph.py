@@ -15,8 +15,8 @@ import sys
 
 import click
 
+from emet.app.robot_cli import create_robot_client_from_cli
 from emet.controller.task.dynamem import DynamemTaskExecutor
-from emet.controller.zmq_client import HomeRobotZmqClient
 from emet.core.parameters import get_parameters
 from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_llm_client
 
@@ -56,6 +56,14 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
 @click.option(
     "--robot_ip", type=str, default="", help="Robot IP address (leave empty for saved default)"
 )
+@click.option(
+    "--robot",
+    "robot_backend",
+    default="stretch",
+    type=str,
+    help="Robot backend (stretch, rby1, galaxea_r1, etc.). Must match emet serve mujoco --robot.",
+)
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 @click.option("--target_object", type=str, default=None, help="Target object to grasp")
 @click.option(
     "--target_receptacle", "--receptacle", type=str, default=None, help="Target receptacle to place"
@@ -145,6 +153,8 @@ def main(
     export_dir: str | None = None,
     no_interactive: bool = False,
     robot_ip: str = "",
+    robot_backend: str = "stretch",
+    port_offset: int = 0,
     visual_servo: bool = False,
     skip_confirmations: bool = True,
     device_id: int = 0,
@@ -184,8 +194,10 @@ def main(
         os.environ["RERUN_BIND_ALL"] = "1"
 
     print("- Create robot client")
-    robot = HomeRobotZmqClient(
-        robot_ip=robot_ip,
+    robot = create_robot_client_from_cli(
+        robot_backend,
+        robot_ip,
+        port_offset=port_offset,
         enable_rerun_server=not no_rerun,
         rerun_headless=headless,
         rerun_show_panels=rerun_show_panels,

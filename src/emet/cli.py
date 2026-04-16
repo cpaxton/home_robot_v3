@@ -28,6 +28,9 @@ import click
 # Enable shell completion for bash/zsh
 _CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
+# Sub-apps that define @click.option("--robot") and receive --robot from `emet run`.
+_EMET_RUN_APPS_WITH_ROBOT = frozenset({"dynamem", "agent", "graph-eqa", "scene-graph"})
+
 
 def _project_root() -> Path:
     """Return project root (parent of src/emet)."""
@@ -769,7 +772,7 @@ def run(
     """
     args = list(ctx.args)
     args.extend(["--robot_ip", robot_ip])
-    if app != "create-and-print-memory":
+    if app in _EMET_RUN_APPS_WITH_ROBOT:
         args.extend(["--robot", robot])
     if port_offset:
         args.extend(["--port-offset", str(port_offset)])

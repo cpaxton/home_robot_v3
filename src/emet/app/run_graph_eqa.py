@@ -18,9 +18,9 @@
 
 import click
 
+from emet.app.robot_cli import create_robot_client_from_cli
 from emet.controller.controller_graph_eqa import GraphEQAController
 from emet.controller.task.dynamem import EQAExecuter
-from emet.controller.zmq_client import StretchZmqClient
 from emet.core.parameters import get_parameters
 from emet.memory.headless_export import export_graph_eqa_dir
 
@@ -32,6 +32,13 @@ from emet.memory.headless_export import export_graph_eqa_dir
     default="127.0.0.1",
     type=str,
     help="Robot IP address (leave empty for saved default)",
+)
+@click.option(
+    "--robot",
+    "robot_backend",
+    default="stretch",
+    type=str,
+    help="Robot backend (stretch, rby1, galaxea_r1, etc.). Must match emet serve mujoco --robot.",
 )
 @click.option(
     "--not_rotate_in_place",
@@ -86,6 +93,7 @@ from emet.memory.headless_export import export_graph_eqa_dir
 )
 def main(
     robot_ip: str,
+    robot_backend: str = "stretch",
     discord: bool = False,
     not_rotate_in_place: bool = False,
     save_rerun: bool = False,
@@ -99,7 +107,12 @@ def main(
 ) -> None:
     """Run GraphEQA: EQA using graph-based semantic memory (see docs/graph_eqa.md)."""
     click.echo("GraphEQA: connecting to robot and starting graph-based EQA.")
-    robot = StretchZmqClient(robot_ip=robot_ip, port_offset=port_offset)
+    robot = create_robot_client_from_cli(
+        robot_backend,
+        robot_ip,
+        port_offset=port_offset,
+        enable_rerun_server=True,
+    )
 
     print("- Load parameters")
     parameters = get_parameters("dynav_config.yaml")
