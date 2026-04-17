@@ -34,6 +34,7 @@ import emet.utils.compression as compression
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient, ControlMode
+from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY, read_emet_robot_id, robot_ids_match
 from emet.robots.base import RobotSpec
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
@@ -113,6 +114,8 @@ class GenericZmqClient(AbstractRobotClient):
         self.send_socket.connect(send_address)
         logger.debug("...connected.")
 
+        self._recv_threads_started = False
+
         if start_immediately:
             self.start()
 
@@ -147,17 +150,56 @@ class GenericZmqClient(AbstractRobotClient):
 
     # -- Lifecycle ------------------------------------------------------------
 
+    def _wait_for_zmq_ready(self, timeout: float = 10.0) -> bool:
+        """Wait until at least one observation and one state message arrived."""
+        t0 = timeit.default_timer()
+        while True:
+            with self._obs_lock:
+                ready = self._obs is not None and self._state is not None
+            if ready:
+                return True
+            if timeit.default_timer() - t0 > timeout:
+                return False
+            time.sleep(0.05)
+
+    def _verify_emet_robot_id(self) -> bool:
+        """Ensure ``emet_robot_id`` from the server matches this client's RobotSpec (if present)."""
+        with self._obs_lock:
+            msg = self._obs if self._obs is not None else self._state
+        rid = read_emet_robot_id(msg)
+        if rid is None:
+            return True
+        expected = self._spec.name
+        if robot_ids_match(rid, expected):
+            return True
+        logger.error(
+            f"Robot ID mismatch: server reports {EMET_ZMQ_ROBOT_ID_KEY}={rid!r} but this client expects "
+            f"{expected!r} (same as `emet serve mujoco --robot`). "
+            "Use matching `--robot` on the agent, e.g. `--robot stretch` for the Stretch sim."
+        )
+        return False
+
     def start(self) -> bool:
         if self._started:
+            return True
+        if not self._recv_threads_started:
+            self._recv_threads_started = True
+            self._finish = False
+            self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
+            self._recv_thread.start()
+            self._state_thread = threading.Thread(target=self._state_loop, daemon=True)
+            self._state_thread.start()
+            self._servo_thread = threading.Thread(target=self._servo_loop, daemon=True)
+            self._servo_thread.start()
+        if not self._wait_for_zmq_ready(timeout=10.0):
+            logger.error(
+                "Timeout waiting for observations/state from ZMQ server. "
+                "Start `emet serve mujoco` with the same `--robot` and check IP / `--port-offset`."
+            )
+            return False
+        if not self._verify_emet_robot_id():
             return False
         self._started = True
-        self._finish = False
-        self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
-        self._recv_thread.start()
-        self._state_thread = threading.Thread(target=self._state_loop, daemon=True)
-        self._state_thread.start()
-        self._servo_thread = threading.Thread(target=self._servo_loop, daemon=True)
-        self._servo_thread.start()
         return True
 
     def stop(self) -> None:
@@ -365,6 +407,71 @@ class GenericZmqClient(AbstractRobotClient):
     def move_to_manip_posture(self) -> None:
         action = {"posture": "manipulation"}
         self.send_action(action)
+
+    # -- Stretch / DynaMem API shims (this client is spec-driven, not Stretch-indexed) ------------
+
+    def get_joint_state(
+        self, timeout: float = 5.0
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | tuple[None, None, None]:
+        """Joint positions, velocities, and efforts from the state stream (Stretch-compatible shape)."""
+        t0 = timeit.default_timer()
+        while timeit.default_timer() - t0 < timeout:
+            with self._obs_lock:
+                st = self._state
+            if st is not None and "joint_positions" in st:
+                q = np.asarray(st["joint_positions"], dtype=float)
+                dq = np.asarray(st.get("joint_velocities", np.zeros_like(q)), dtype=float)
+                tau = np.asarray(st.get("joint_efforts", np.zeros_like(q)), dtype=float)
+                return q, dq, tau
+            time.sleep(0.01)
+        return None, None, None
+
+    def get_six_joints(self, _timeout: float = 5.0) -> np.ndarray:
+        """Placeholder for DynaMem's Stretch 6-DOF slice; non-Stretch robots have no universal mapping."""
+        return np.zeros(6, dtype=float)
+
+    def get_pan_tilt(self) -> tuple[float, float]:
+        """Stretch head pan/tilt; mobile manipulators without that head return zeros."""
+        return (0.0, 0.0)
+
+    def get_gripper_position(self) -> float:
+        q, _, _ = self.get_joint_state(timeout=2.0)
+        if q is None:
+            return 0.5
+        for i, name in enumerate(self._spec.joint_names):
+            if "gripper" in name and "finger" in name:
+                return float(q[i])
+        return 0.5
+
+    def arm_to(self, joint_angles=None, gripper=None, head=None, blocking=True, **kwargs) -> bool:
+        if not getattr(self, "_logged_arm_to_nonstretch", False):
+            logger.warning(
+                "arm_to() targets Stretch's 6-DOF arm; this generic robot does not map those commands (no-op). "
+                "DynaMem manipulation paths remain Stretch-oriented."
+            )
+            self._logged_arm_to_nonstretch = True
+        return True
+
+    def head_to(self, head_pan: float, head_tilt: float, blocking: bool = False, **kwargs) -> None:
+        if not getattr(self, "_logged_head_to_nonstretch", False):
+            logger.warning("head_to() is Stretch-specific; ignored for this robot.")
+            self._logged_head_to_nonstretch = True
+
+    def navigate_to(self, xyt, relative: bool = False, blocking: bool = True, **kwargs) -> None:
+        xyt_a = np.asarray(xyt, dtype=float).reshape(-1)
+        if xyt_a.size != 3:
+            logger.error("navigate_to expects a length-3 xyt vector")
+            return
+        self.move_base_to(xyt_a, relative=relative, blocking=blocking, timeout=kwargs.get("timeout"))
+
+    def gripper_to(self, target: float, blocking: bool = True, reliable: bool = True) -> None:
+        """Stretch-compatible gripper command (absolute opening target)."""
+        action: dict[str, Any] = {"gripper": float(target)}
+        if blocking:
+            action["gripper_blocking"] = True
+        self.send_action(action, reliable=reliable)
+        if blocking:
+            time.sleep(0.05)
 
     def get_robot_model(self):
         return None

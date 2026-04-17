@@ -840,17 +840,16 @@ def run(
         sys.exit(1)
 
 
-_SYNC_ALL_EXTRAS = ("sim", "dynamem", "dev", "discord")  # MuJoCo, SAM-2, pytest, discord bot, etc.
+_SYNC_ALL_EXTRAS = ("sim", "dynamem", "dev")  # MuJoCo, SAM-2, pytest, etc.
 
 
 @main.command(short_help="Sync dependencies (uv or pip)")
 @click.option("--extra", "-e", "extra_list", multiple=True, help="Extra to install (sim, dynamem, dev, etc.)")
-@click.option("--all", "sync_all", is_flag=True, help="Install all common extras (sim, dynamem, dev, discord)")
+@click.option("--all", "sync_all", is_flag=True, help="Install all common extras (sim, dynamem, dev)")
 @click.option("--sim", is_flag=True, help="Include sim (MuJoCo, robocasa)")
 @click.option("--dynamem", "dynamem_flag", is_flag=True, help="Include dynamem (SAM-2)")
 @click.option("--dev", "dev_flag", is_flag=True, help="Include dev (pytest, black, mypy)")
 @click.option("--hand-tracker", is_flag=True, help="Include hand_tracker (mediapipe)")
-@click.option("--discord", is_flag=True, help="Include discord")
 @click.option("--no-install", is_flag=True, help="Only sync lockfile, do not install emet")
 def sync(
     extra_list: tuple[str, ...],
@@ -859,12 +858,11 @@ def sync(
     dynamem_flag: bool,
     dev_flag: bool,
     hand_tracker: bool,
-    discord: bool,
     no_install: bool,
 ) -> None:
     """Sync dependencies (uv sync or pip install -e .).
 
-    Use --all for sim + dynamem + dev + discord, or pick extras with -e or individual flags.
+    Use --all for sim + dynamem + dev, or pick extras with -e or individual flags.
     Sim pip deps (mujoco, etc.) are always in pyproject.toml. robosuite/robocasa are
     installed editable by: emet install sim (scripts/install_simulation.sh).
 
@@ -887,8 +885,6 @@ def sync(
         extras.append("dev")
     if hand_tracker:
         extras.append("hand_tracker")
-    if discord:
-        extras.append("discord")
     # Deduplicate, preserve order
     extras = list(dict.fromkeys(extras))
 

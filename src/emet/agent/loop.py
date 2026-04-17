@@ -16,12 +16,15 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import queue
+import sys
 import threading
 import timeit
 from datetime import datetime
 from typing import Any
 
 import click
+import numpy as np
 from termcolor import colored
 
 from emet.agent.prompt import AgentPromptBuilder, parse_tool_calls_response
@@ -30,7 +33,6 @@ from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
 from emet.llms import get_llm_client
-from emet.llms.discord_bot import EmetDiscordBot
 from emet.memory.backend import get_memory_backend
 from emet.memory.utils import print_memory_view_help_on_quit
 from emet.robots import ROBOT_REGISTRY
@@ -40,6 +42,19 @@ logger = Logger(__name__)
 
 # Maximum follow-up LLM calls per user turn (prevents infinite loops)
 _MAX_TOOL_ROUNDS = 3
+
+
+def parse_manual_find_command(raw: str) -> str | None:
+    """Parse no-LLM find syntax: FIND x, F x, or find x (case-insensitive verb)."""
+    s = raw.strip()
+    u = s.upper()
+    if u.startswith("FIND "):
+        return s[5:].strip()
+    if u.startswith("F ") and len(s) > 2:
+        return s[2:].strip()
+    if s.lower().startswith("find "):
+        return s[5:].strip()
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -149,14 +164,30 @@ def _call_llm(
     text: str,
     openai_tools_param: list | None,
     debug: bool,
+    image: np.ndarray | None = None,
 ) -> tuple[str, float]:
     """Call the LLM and return (raw_response, elapsed_seconds)."""
     t0 = timeit.default_timer()
-    try:
+
+    def _invoke(**img_kw: Any) -> str:
         if openai_tools_param is not None:
-            raw = llm_client(text, verbose=debug, tools=openai_tools_param)
+            try:
+                return llm_client(text, verbose=debug, tools=openai_tools_param, **img_kw)
+            except TypeError:
+                return llm_client(text, verbose=debug, tools=openai_tools_param)
+        try:
+            return llm_client(text, verbose=debug, **img_kw)
+        except TypeError:
+            return llm_client(text, verbose=debug)
+
+    try:
+        if image is not None:
+            try:
+                raw = _invoke(image=image)
+            except TypeError:
+                raw = _invoke()
         else:
-            raw = llm_client(text, verbose=debug)
+            raw = _invoke()
     except TypeError:
         raw = llm_client(text)
     return raw, timeit.default_timer() - t0
@@ -171,7 +202,7 @@ def run_agent_with_robot(
     robot_ip: str = "127.0.0.1",
     robot: str = "stretch",
     input_path: str | None = None,
-    discord: bool = False,
+    discord: bool = True,
     use_llm: bool = False,
     llm: str = "qwen35-9B",
     server_ip: str = "127.0.0.1",
@@ -181,6 +212,10 @@ def run_agent_with_robot(
     agent_name: str = "Emet",
     commands: list[str] | None = None,
     port_offset: int = 0,
+    agent_config: str = "dynav_config.yaml",
+    device: str = "cuda",
+    max_tokens: int = 1024,
+    vl_include_camera: bool = False,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -189,14 +224,17 @@ def run_agent_with_robot(
     (LLM mode) or manual command (no-LLM mode) instead of reading stdin.
     The agent exits after all commands are consumed.
     """
-    parameters = get_parameters("dynav_config.yaml")
+    parameters = get_parameters(agent_config)
 
     robot_key = robot.lower().replace("-", "_")
     if robot_key == "stretch":
+        # Do not start ZMQ in __init__: DynamemTaskExecutor calls agent.start() which invokes
+        # robot.start() again; double-start left orphan recv threads and led to ZMQ double-free crashes.
         robot_client = StretchZmqClient(
             robot_ip=robot_ip,
             enable_rerun_server=True,
             port_offset=port_offset,
+            start_immediately=False,
         )
     elif robot_key in ROBOT_REGISTRY:
         mod = importlib.import_module(ROBOT_REGISTRY[robot_key])
@@ -249,7 +287,19 @@ def run_agent_with_robot(
             context["xyt_for_query"] = executor.agent.robot.get_base_pose()
 
     discord_bot = None
+    unified_input_queue: queue.Queue[str] | None = None
+    if discord and not os.environ.get("DISCORD_TOKEN"):
+        print(
+            colored(
+                "Warning: Discord bridge is enabled but DISCORD_TOKEN is not in the environment. "
+                "Discord bot will not start. Export DISCORD_TOKEN or use --no-discord.",
+                "yellow",
+            )
+        )
     if discord and os.environ.get("DISCORD_TOKEN"):
+        from emet.llms.discord_bot import EmetDiscordBot
+
+        unified_input_queue = queue.Queue()
 
         class AgentPlaceholder:
             def __init__(self, exec_obj):
@@ -264,6 +314,7 @@ def run_agent_with_robot(
             skip_confirmations=skip_confirmations,
             output_path=getattr(executor.agent, "log", "."),
             kwargs=kwargs.get("discord_kwargs", {"match_method": "feature", "mllm_for_visual_grounding": False}),
+            agent_input_queue=unified_input_queue,
         )
         context["discord_bot"] = discord_bot
         executor.discord_bot = discord_bot
@@ -288,7 +339,9 @@ def run_agent_with_robot(
     if use_llm:
         try:
             prompt_builder = AgentPromptBuilder(tools=tools, name=agent_name, context=context)
-            llm_client = get_llm_client(llm, prompt=prompt_builder)
+            llm_client = get_llm_client(llm, prompt=prompt_builder, device=device)
+            if hasattr(llm_client, "max_tokens"):
+                llm_client.max_tokens = max_tokens
             from emet.llms.openai_client import OpenaiClient
 
             if isinstance(llm_client, OpenaiClient):
@@ -317,7 +370,8 @@ def run_agent_with_robot(
 
     def _send_to_discord(text: str) -> None:
         if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
-            discord_bot.push_task_to_all_channels(message=f"**{agent_name}:** {text}")
+            # Plain text only; the bot identity is already shown by Discord (no "**Name:**" prefix).
+            discord_bot.push_task_to_all_channels(message=text)
 
     # Wait for Discord to connect before sending the greeting
     if discord_bot is not None and hasattr(discord_bot, "wait_until_ready"):
@@ -329,13 +383,28 @@ def run_agent_with_robot(
 
     # Startup greeting
     greeting = f"Hello! I'm {agent_name}. I'm online and ready to help."
-    print(colored(f"{agent_name}:", "blue"), greeting)
+    print(colored(f"{agent_name}:", "blue"), greeting, flush=True)
     _send_to_discord(greeting)
     chat_log.log("assistant", greeting)
 
     # Command queue for non-interactive / scripted mode
     cmd_queue: list[str] = list(commands) if commands else []
     scripted = bool(cmd_queue)
+
+    if unified_input_queue is not None and not scripted:
+        # Prompt on stderr so agent replies on stdout do not splice into the same TTY line as "You:".
+        def _stdin_to_unified_queue() -> None:
+            while True:
+                try:
+                    print(colored("You: ", "green"), end="", flush=True, file=sys.stderr)
+                    line = sys.stdin.readline()
+                    if not line:
+                        break
+                    unified_input_queue.put(line.strip())
+                except (EOFError, KeyboardInterrupt):
+                    break
+
+        threading.Thread(target=_stdin_to_unified_queue, daemon=True).start()
 
     def _get_input(prompt_text: str) -> str | None:
         """Read next input from queue (scripted) or stdin (interactive). None = done."""
@@ -345,18 +414,28 @@ def run_agent_with_robot(
             return text
         if scripted:
             return None  # queue exhausted
+        if unified_input_queue is not None:
+            return unified_input_queue.get()
         try:
             return input(colored(prompt_text, "green")).strip()
         except (EOFError, KeyboardInterrupt):
             return None
 
     ok = True
+    # When Discord + terminal share the session, prompts go to stderr; keep stdout lines clearly separated.
+    _stdout_pad = unified_input_queue is not None and not scripted
+
+    def _print_user_turn_separator() -> None:
+        if _stdout_pad:
+            print(file=sys.stdout)
+        print("-" * 60, flush=True)
+
     while ok:
         update_xyt()
 
         # --- LLM path ---
         if use_llm and llm_client is not None:
-            print("-" * 60)
+            _print_user_turn_separator()
             user_text = _get_input("You: ")
             if user_text is None:
                 break
@@ -375,11 +454,17 @@ def run_agent_with_robot(
             # When that happens we feed the results back and let the LLM summarize.
             current_input = user_text
             for _round in range(_MAX_TOOL_ROUNDS):
+                cam_image = None
+                if vl_include_camera and _round == 0 and hasattr(robot_client, "get_observation"):
+                    obs = robot_client.get_observation()
+                    if obs is not None and getattr(obs, "rgb", None) is not None:
+                        cam_image = np.asarray(obs.rgb)
                 raw_response, elapsed = _call_llm(
                     llm_client,
                     current_input,
                     openai_tools_param,
                     debug_llm,
+                    image=cam_image,
                 )
 
                 if debug_llm:
@@ -397,13 +482,13 @@ def run_agent_with_robot(
                 # No tool calls — this is the final answer
                 if not tool_calls:
                     if message:
-                        print(colored(f"{agent_name}:", "blue"), message)
+                        print(colored(f"{agent_name}:", "blue"), message, flush=True)
                         _send_to_discord(message)
                     break
 
                 # Print and relay the intermediate message (e.g. "Let me check my memory.")
                 if message:
-                    print(colored(f"{agent_name}:", "blue"), message)
+                    print(colored(f"{agent_name}:", "blue"), message, flush=True)
                     _send_to_discord(message)
 
                 # Execute tool calls
@@ -474,9 +559,9 @@ def run_agent_with_robot(
             rec = input("Receptacle: ").strip() if len(parts) < 2 else (parts[1] if len(parts) >= 2 else "")
             ok = executor([("pickup", obj), ("place", rec)])
             continue
-        if line.upper().startswith("FIND ") or line.upper().startswith("F "):
-            text = line[5:].strip() if line.upper().startswith("FIND ") else line[2:].strip()
-            ok = executor([("find", text)])
+        find_query = parse_manual_find_command(line)
+        if find_query:
+            ok = executor([("find", find_query)])
             continue
 
         if use_llm:

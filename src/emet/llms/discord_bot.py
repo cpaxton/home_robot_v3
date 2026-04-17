@@ -9,6 +9,7 @@
 
 import datetime
 import os
+import queue
 import threading
 import time
 from typing import Any
@@ -25,6 +26,17 @@ from emet.utils.discord_bot import DiscordBot, Task
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
+
+
+def _format_discord_timestamp(message: discord.Message) -> str:
+    """Format message time for terminal (UTC)."""
+    try:
+        dt = message.created_at
+        if getattr(dt, "tzinfo", None) is not None:
+            dt = dt.astimezone(datetime.timezone.utc)
+        return dt.strftime("%H:%M UTC")
+    except Exception:
+        return "??:?? UTC"
 
 
 class EmetDiscordBot(DiscordBot):
@@ -47,6 +59,7 @@ class EmetDiscordBot(DiscordBot):
         kwargs: dict[str, Any] = None,
         home_channel: str = "talk-to-stretch",
         executor: Any = None,
+        agent_input_queue: queue.Queue[str] | None = None,
     ) -> None:
         """
         Create a new Discord bot that can interact with the robot.
@@ -87,6 +100,8 @@ class EmetDiscordBot(DiscordBot):
 
         self.home_channel = os.environ.get("EMET_DISCORD_CHANNEL", home_channel)
         self.sent_prompt = False
+        # When set with llm=None (emet run agent), inbound Discord text is enqueued for the agent loop.
+        self.agent_input_queue = agent_input_queue
 
         if kwargs is None:
             # Default parameters
@@ -142,6 +157,35 @@ class EmetDiscordBot(DiscordBot):
 
         self._llm_lock = threading.Lock()
         self._ready_event = threading.Event()
+
+    def _print_discord_inbound(self, message: discord.Message) -> None:
+        """Mirror inbound Discord chat lines on the terminal."""
+        who = message.author.display_name or message.author.name
+        ch = getattr(message.channel, "name", "?")
+        ts = _format_discord_timestamp(message)
+        print(colored(f"(discord) #{ch} {who} — {ts}", "cyan"), flush=True)
+        if message.content and message.content.strip():
+            print(colored(f"  {message.content}", "cyan"), flush=True)
+        elif message.attachments:
+            names = ", ".join(a.filename or "file" for a in message.attachments[:3])
+            print(colored(f"  (attachment: {names})", "cyan"), flush=True)
+
+    def _print_discord_outbound(self, channel_name: str, text: str | None, *, has_image: bool) -> None:
+        """Mirror outbound posts (text/image) to Discord on the terminal."""
+        prefix = colored(f"(discord) → #{channel_name}", "magenta")
+        parts: list[str] = []
+        if text and text.strip():
+            parts.append(text.strip())
+        if has_image:
+            parts.append("[image]")
+        if parts:
+            print(prefix, " ".join(parts), flush=True)
+
+    def greeting(self) -> str:
+        """When bridged to ``emet run agent``, the loop sends the startup line; skip duplicate generic text."""
+        if self.agent_input_queue is not None:
+            return ""
+        return super().greeting()
 
     @property
     def is_ready(self) -> bool:
@@ -236,40 +280,39 @@ class EmetDiscordBot(DiscordBot):
 
         # TODO: make this a command line parameter for which channel(s) he should be in
         channel_name = message.channel.name
-        print("Channel name:", channel_name)
-        channel_id = message.channel.id
-        print("Channel ID:", channel_id)
-        # datetime = message.created_at
-
-        timestamp = message.created_at.timestamp()
-        print("Timestamp:", timestamp)
-
-        print(self.allowed_channels)
         if message.channel not in self.allowed_channels:
-            print(" -> Not in allowed channels. Skipping.")
+            logger.debug(
+                "Ignoring message (not in allowed channels): #%s id=%s",
+                channel_name,
+                message.channel.id,
+            )
             return None
 
+        self._print_discord_inbound(message)
+
         # Construct the text to prompt the AI
-        # TODO: Do we ever want to add the channel name? If so we can revert this change
         # text = f"{sender_name} on #{channel_name}: " + message.content
         text = f"{sender_name}: " + message.content
         self.push_task(channel=message.channel, message=text)
 
-        print("Current task queue: ", self.task_queue.qsize())
+        logger.debug("Queued user message from #%s (queue depth ~%s)", channel_name, self.task_queue.qsize())
         # print(" -> Response:", response)
         return None
 
     async def handle_task(self, task: Task):
         """Handle a task by sending the message to the channel. This will make the necessary calls in its thread to the different child functions that send messages, for example."""
-        print()
-        print("-" * 40)
-        print("Handling task from channel:", task.channel.name)
-        print("Handling task: message =", task.message)
-
         text = task.message
         try:
             if task.explicit:
-                print("This task was explicitly triggered.")
+                logger.debug(
+                    "Discord outbound task #%s explicit=%s message=%s",
+                    task.channel.name,
+                    task.explicit,
+                    (task.message or "")[:200],
+                )
+                ch_name = getattr(task.channel, "name", "?")
+                has_img = task.content is not None
+                self._print_discord_outbound(ch_name, task.message, has_image=has_img)
                 if task.message:
                     await task.channel.send(task.message)
                 if task.content is not None:
@@ -292,8 +335,11 @@ class EmetDiscordBot(DiscordBot):
 
         with self._llm_lock:
             if self.llm_client is None:
-                # Agent mode: no local LLM; just log the incoming message
-                print(colored(f"[Discord] {text}", "cyan"))
+                # Agent loop owns the LLM: feed Discord text into the same queue as terminal stdin.
+                if self.agent_input_queue is not None:
+                    self.agent_input_queue.put(f"[discord] {text}")
+                else:
+                    print(colored(f"[Discord] {text}", "cyan"))
                 return
             if self.task != "eqa":
                 response = self.llm_client(text, verbose=True)

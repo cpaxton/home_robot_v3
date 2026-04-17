@@ -185,6 +185,7 @@ def main(
             rerun_show_panels=rerun_show_panels,
             rerun_debug=rerun_debug,
             port_offset=port_offset,
+            start_immediately=False,
         )
     elif robot_key in ROBOT_REGISTRY:
         import importlib
