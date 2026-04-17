@@ -135,6 +135,15 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     is_flag=True,
     help="Do not pass robot RGB to VL models (saves VRAM / faster).",
 )
+@click.option(
+    "--eqa",
+    "dynamem_eqa",
+    is_flag=True,
+    help=(
+        "Enable DynaMem EQA stack on the voxel map (Qwen VL + Gemini): full query_memory answers. "
+        "Heavier GPU/RAM and slower startup; default is off (query_memory falls back to localize_text)."
+    ),
+)
 def main(
     llm: str,
     prompt: str,
@@ -154,6 +163,7 @@ def main(
     agent_config: str = "dynav_config.yaml",
     vl_include_camera: bool = False,
     no_vl_camera: bool = False,
+    dynamem_eqa: bool = False,
 ) -> None:
     """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
 
@@ -200,6 +210,7 @@ def main(
             device=device,
             max_tokens=max_tokens,
             vl_include_camera=vl_include_effective,
+            eqa=dynamem_eqa,
         )
         return
 

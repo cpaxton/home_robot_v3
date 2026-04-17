@@ -19,6 +19,10 @@ from typing import Any
 
 import numpy as np
 
+from emet.utils.logger import Logger
+
+_logger = Logger(__name__)
+
 
 class Tool:
     """A single agent tool: name, description, JSON Schema parameters, callable, and executor mapping.
@@ -92,6 +96,8 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
                 return f"{answer} (Confidence: {confidence})"
             except NotImplementedError:
                 pass
+            except AttributeError as e:
+                _logger.warning("query_memory backend call failed (%s); using localize_text fallback.", e)
         # Fallback: check if the object is in the voxel map via localize_text
         executor = context.get("executor")
         if executor is not None and hasattr(executor, "agent"):
@@ -108,7 +114,10 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
     tools.append(
         Tool(
             name="query_memory",
-            description="Answer a question about what the robot has seen (memory log). E.g. How far is it to the sink? Have I seen a red cylinder?",
+            description=(
+                "Questions about mapped memory and object locations (e.g. where is X, have I seen Y). "
+                "For open-ended 'what do you see', prefer describe_scene and send_image unless DynaMem EQA is enabled."
+            ),
             parameters={
                 "type": "object",
                 "properties": {
@@ -135,10 +144,8 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
                 image = np.asarray(obs.rgb)
         if discord_bot is not None and image is not None:
             if hasattr(discord_bot, "push_task_to_all_channels"):
-                discord_bot.push_task_to_all_channels(
-                    message="Here's what I see:",
-                    content=image,
-                )
+                # Image only: the assistant message (e.g. "Here's a picture…") is already sent by the agent loop.
+                discord_bot.push_task_to_all_channels(message=None, content=image)
                 return "Image sent to Discord."
         if image is not None:
             return "Image captured (no Discord to send to)."
@@ -232,7 +239,10 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
     tools.append(
         Tool(
             name="describe_scene",
-            description="Describe what you see from the robot's cameras.",
+            description=(
+                "Brief text about the camera view; pair with send_image to show the user a photo. "
+                "Use for 'what can you see' style questions instead of query_memory when not using full EQA."
+            ),
             parameters=_NO_PARAMS,
             func=describe_scene,
             returns_info=True,

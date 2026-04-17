@@ -146,9 +146,20 @@ class DynaMemBackend(MemoryBackend):
         Returns:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
         """
-        if not hasattr(self._voxel_map, "query_answer"):
+        vm = self._voxel_map
+        if not hasattr(vm, "query_answer"):
             raise NotImplementedError("This voxel map does not support query_answer")
-        return self._voxel_map.query_answer(question, xyt, planner)
+        if not getattr(vm, "run_eqa", False):
+            raise NotImplementedError(
+                "DynaMem EQA is not enabled on this map (run_eqa=False). "
+                "Use object-style questions with localize_text fallback, enable --eqa on the agent, "
+                "or use describe_scene / send_image for open-ended visual questions."
+            )
+        if not hasattr(vm, "image_description_client") or not hasattr(vm, "eqa_client"):
+            raise NotImplementedError(
+                "DynaMem EQA clients are not initialized (expected image_description_client and eqa_client)."
+            )
+        return vm.query_answer(question, xyt, planner)
 
     def save(self, path: str, extra_graph: GraphBlob | None = None) -> None:
         """Save to common directory format. Path must be a directory.

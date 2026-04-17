@@ -46,6 +46,16 @@ def test_help_lists_command_long_and_short():
     assert "-c" in r.output
 
 
+def test_help_lists_dynamem_eqa_flag():
+    """DynaMem EQA is opt-in via --eqa (heavy models)."""
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "--eqa" in r.output
+
+
 def test_vl_camera_default_logic():
     """Mirror run_agent: VL model names enable camera unless --no-vl-camera."""
 

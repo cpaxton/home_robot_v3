@@ -216,6 +216,7 @@ def run_agent_with_robot(
     device: str = "cuda",
     max_tokens: int = 1024,
     vl_include_camera: bool = False,
+    eqa: bool = False,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -264,6 +265,7 @@ def run_agent_with_robot(
         skip_confirmations=skip_confirmations,
         explore_iter=explore_iter,
         discord_bot=None,
+        eqa=eqa,
         **kwargs,
     )
 
@@ -515,9 +517,7 @@ def run_agent_with_robot(
                         print(colored("[DEBUG] Info tools returned results; requesting LLM follow-up", "yellow"))
                     continue
                 else:
-                    # Action-only tools: send the initial message and we're done
-                    if message:
-                        _send_to_discord(message)
+                    # Action-only tools: assistant message was already printed and sent to Discord above.
                     if results and hasattr(llm_client, "add_history"):
                         llm_client.add_history({"role": "assistant", "content": raw_response})
                         llm_client.add_history({"role": "user", "content": f"[Tool results]\n{result_text}"})

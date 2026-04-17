@@ -43,6 +43,8 @@ If no action is needed, set "tool_calls" to [].
 
 When you call query_memory or describe_scene, the results will be provided back to you.
 You must then summarize them for the user in a follow-up response (no more tool calls).
+Use query_memory for map / object-location questions (where is X, have I seen Y).
+For open-ended "what do you see" questions, prefer describe_scene and send_image unless full EQA is enabled for memory Q&A.
 
 # Examples
 
@@ -59,13 +61,13 @@ User: "Take a picture and send it to me."
 {"tool_calls": [{"name": "take_picture", "arguments": {}}, {"name": "send_image", "arguments": {}}], "message": "Here you go."}
 
 User: "What objects can you see?"
-{"tool_calls": [{"name": "query_memory", "arguments": {"question": "What objects are visible?"}}], "message": "Let me check."}
+{"tool_calls": [{"name": "describe_scene", "arguments": {}}, {"name": "send_image", "arguments": {}}], "message": "Taking a look."}
 
 [Tool results]
-[query_memory] Yes, I can see a blue cube and a red cylinder. (Confidence: True)
+[describe_scene] A blue cube and a red cylinder on the table.
 
 Summarize these results for the user in your message. Do not call any more tools.
-{"tool_calls": [], "message": "I can see a blue cube and a red cylinder in the scene."}
+{"tool_calls": [], "message": "I can see a blue cube and a red cylinder on the table."}
 
 User: "Wave hello!"
 {"tool_calls": [{"name": "wave", "arguments": {}}], "message": "Hi!"}

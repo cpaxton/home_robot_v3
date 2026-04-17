@@ -58,6 +58,7 @@ class DynamemTaskExecutor:
         mllm: bool = False,
         manipulation_only: bool = False,
         cpu_only: bool = False,
+        eqa: bool = False,
         discord_bot=None,
     ) -> None:
         """Initialize the executor."""
@@ -107,6 +108,7 @@ class DynamemTaskExecutor:
             manipulation_only=manipulation_only,
             cpu_only=self.cpu_only,
             use_instance_memory=self.parameters.get("use_instance_memory", True),
+            eqa=eqa,
         )
         self.agent.start()
 
