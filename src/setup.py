@@ -103,6 +103,9 @@ setuptools.setup(
         # These are not supported > python 3.11
         "scikit-fmm",
         "open3d",
+        "click>=8.1.8",
+        "discord.py",
+        "python-dotenv",
     ],
     extras_require={
         "dev": [
@@ -112,10 +115,6 @@ setuptools.setup(
             "black",
             "mypy",
             "lark",
-        ],
-        "discord": [
-            "discord.py",
-            "python-dotenv",
         ],
         "sim": [
             "mujoco>=3.3.0",

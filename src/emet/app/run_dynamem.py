@@ -183,6 +183,7 @@ def main(
         rerun_headless=headless,
         rerun_show_panels=rerun_show_panels,
         rerun_debug=rerun_debug,
+        start_immediately=False,
     )
 
     print("- Create task executor")

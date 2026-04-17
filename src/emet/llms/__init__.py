@@ -17,7 +17,7 @@ from .prompts.object_manip_nav_prompt import ObjectManipNavPromptBuilder
 from .prompts.ok_robot_prompt import OkRobotPromptBuilder
 from .prompts.pickup_prompt import PickupPromptBuilder
 from .prompts.simple_prompt import SimpleStretchPromptBuilder
-from .qwen_client import Qwen25Client, get_qwen35_variants, get_qwen_variants
+from .qwen_client import QWEN_VL_PRESETS, Qwen25Client, Qwen25VLClient, get_qwen35_variants, get_qwen_variants
 
 # This is a list of all the modules that are imported when you use the import * syntax.
 # The __all__ variable is used to define what symbols get exported when from a module when you use the import * syntax.
@@ -33,6 +33,8 @@ __all__ = [
     "AbstractPromptBuilder",
     "LLMChatWrapper",
     "Qwen25Client",
+    "Qwen25VLClient",
+    "QWEN_VL_PRESETS",
 ]
 
 llms = {
@@ -125,7 +127,7 @@ def get_prompt_choices():
 
 def get_llm_choices():
     """Return a list of available LLM clients."""
-    return llms.keys()
+    return sorted(set(llms.keys()) | set(QWEN_VL_PRESETS.keys()))
 
 
 def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwargs) -> AbstractLLMClient:
@@ -151,6 +153,14 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
         return LlamaClient(prompt, **kwargs)
     elif client_type == "openai":
         return OpenaiClient(prompt, **kwargs)
+    elif client_type in QWEN_VL_PRESETS:
+        preset = QWEN_VL_PRESETS[client_type]
+        return Qwen25VLClient(
+            prompt,
+            model_size=preset["model_size"],
+            hf_model_id=preset.get("hf_model_id"),
+            **kwargs,
+        )
     elif "qwen" in client_type:
         # Parse model size and fine-tuning from client_type
         model_size, typing_option, fine_tuning, quantization_option = process_incoming_qwen_types(client_type)

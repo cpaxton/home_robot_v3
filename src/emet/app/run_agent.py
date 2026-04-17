@@ -11,7 +11,7 @@
 #
 # Agent chatbot: lightweight LLM (default Qwen 3.5) for local testing.
 # Run with: emet run agent
-# With --robot-ip: start robot with logging, optional --input-path and --discord; tool loop.
+# Default: connect to sim/robot at 127.0.0.1 (embodied agent). Use --offline for local LLM chat only.
 
 import os
 import tempfile
@@ -33,8 +33,8 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
 @click.option(
     "--llm",
     default=DEFAULT_AGENT_LLM,
-    help=f"LLM to use (default: {DEFAULT_AGENT_LLM}). Use a small Coder model for local testing.",
-    type=click.Choice(get_llm_choices()),
+    help=f"LLM to use (default: {DEFAULT_AGENT_LLM}). Case-insensitive (e.g. qwen35-vl-9b = qwen35-vl-9B).",
+    type=click.Choice(get_llm_choices(), case_sensitive=False),
 )
 @click.option(
     "--prompt",
@@ -53,8 +53,15 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
 @click.option(
     "--robot-ip",
     "--robot_ip",
-    default="",
-    help="Robot IP. If set, start robot with logging and run agent loop (explore, pick/place, query memory, optional Discord).",
+    default="127.0.0.1",
+    show_default=True,
+    help="Simulator or robot IP (default: 127.0.0.1). Ignored with --offline.",
+)
+@click.option(
+    "--offline",
+    "offline",
+    is_flag=True,
+    help="Local LLM chat only (uses --prompt); do not connect to ZMQ / sim. No tools or Discord bridge.",
 )
 @click.option(
     "--input-path",
@@ -63,9 +70,10 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     help="Memory directory to load when using --robot-ip.",
 )
 @click.option(
-    "--discord",
-    is_flag=True,
-    help="Start Discord bot when using --robot-ip (DISCORD_TOKEN in env; install deps: uv sync -e discord).",
+    "--discord/--no-discord",
+    "discord",
+    default=True,
+    help="Start Discord bot when DISCORD_TOKEN is set (default: on; ignored with --offline). Use --no-discord to skip.",
 )
 @click.option(
     "--no-llm",
@@ -92,13 +100,35 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     "--command",
     "commands",
     multiple=True,
-    help="Run command(s) non-interactively then exit. Repeatable: -c 'explore' -c 'find red cylinder'.",
+    help=(
+        "Run one or more commands non-interactively, then exit (embodied mode only). "
+        'Same flag as -c; use quotes for multi-word phrases, e.g. --command "find red cylinder". '
+        "With --no-llm: E/M/Q/P/FIND or find …; with an LLM: natural language per turn."
+    ),
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 @click.option(
     "--robot",
     default="stretch",
     help="Robot backend (stretch, rby1, galaxea_r1). Must match emet serve mujoco --robot.",
+)
+@click.option(
+    "--agent-config",
+    "agent_config",
+    default="dynav_config.yaml",
+    help="DynaMem / scene YAML: basename under emet/config, or path to a YAML file (cwd or absolute).",
+)
+@click.option(
+    "--vl-include-camera",
+    "vl_include_camera",
+    is_flag=True,
+    help="Pass latest robot RGB to VL models each user turn (on by default for *VL* models).",
+)
+@click.option(
+    "--no-vl-camera",
+    "no_vl_camera",
+    is_flag=True,
+    help="Do not pass robot RGB to VL models (saves VRAM / faster).",
 )
 def main(
     llm: str,
@@ -107,6 +137,7 @@ def main(
     voice: bool,
     max_tokens: int,
     robot_ip: str,
+    offline: bool,
     input_path: str | None,
     discord: bool,
     no_llm: bool,
@@ -115,26 +146,41 @@ def main(
     commands: tuple[str, ...],
     port_offset: int = 0,
     robot: str = "stretch",
+    agent_config: str = "dynav_config.yaml",
+    vl_include_camera: bool = False,
+    no_vl_camera: bool = False,
 ) -> None:
     """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
 
-    With --robot-ip: start robot with LLM enabled by default to parse natural language; optional memory load and Discord.
+    Default: connect to 127.0.0.1 (start ``emet serve mujoco`` first). Use --offline for local chat only.
+    The --prompt option applies to --offline only; embodied mode uses the agent tool prompt (JSON tool_calls).
 
     Examples:
-      emet run agent
-      emet run agent --device cpu
-      emet run agent --llm qwen35-9B
-      emet run agent --name Stretch
-      emet run agent --robot-ip 127.0.0.1 --input-path logs/memory_xxx --discord
-      emet run agent --robot-ip 127.0.0.1 --no-llm   # letter commands only (E/M/Q/P)
-      emet run agent --robot-ip 127.0.0.1 --no-llm -c 'FIND red cylinder'
-      emet run agent --robot-ip 127.0.0.1 -c 'find the red cylinder' -c 'what objects do you see?'
-      emet run agent --robot-ip 127.0.0.1 --robot rby1   # with emet serve mujoco --robot rby1
+      emet run agent --offline
+      emet run agent --device cpu --offline
+      emet run agent --llm qwen35-9B --offline
+      emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
+      emet run agent --input-path logs/memory_xxx --no-discord
+      emet run agent --no-llm   # letter commands (E/M/Q/P)
+      emet run agent --no-llm --command 'find red cylinder'
+      emet run agent --no-llm -c 'FIND blue cube'
+      emet run agent -c 'find the red cylinder' -c 'what objects do you see?'
     """
     cmd_list = list(commands) if commands else None
-    if robot_ip:
+
+    # Embodied mode: default IP 127.0.0.1 unless --offline
+    robot_effective: str | None = None
+    if not offline:
+        robot_effective = str(robot_ip or "").strip() or "127.0.0.1"
+
+    # Vision LLMs: include camera RGB on new user turns (default on for *VL*; use --no-vl-camera to disable)
+    llm_l = llm.lower()
+    is_vl_name = "-vl-" in llm_l or "vl-" in llm_l
+    vl_include_effective = (not no_vl_camera) and (vl_include_camera or is_vl_name)
+
+    if robot_effective:
         run_agent_with_robot(
-            robot_ip=robot_ip,
+            robot_ip=robot_effective,
             robot=robot,
             input_path=input_path,
             discord=discord,
@@ -145,6 +191,10 @@ def main(
             agent_name=agent_name,
             commands=cmd_list,
             port_offset=port_offset,
+            agent_config=agent_config,
+            device=device,
+            max_tokens=max_tokens,
+            vl_include_camera=vl_include_effective,
         )
         return
 
@@ -160,7 +210,12 @@ def main(
         audio_recorder = None
         whisper = None
 
-    print(colored("Agent chatbot (Qwen Coder). Type a message and press Enter. Empty line to quit.", "green"))
+    print(
+        colored(
+            "Offline LLM chat (--offline). Type a message and press Enter. Empty line to quit.",
+            "green",
+        )
+    )
     print(colored(f"LLM: {llm}  device: {device}", "yellow"))
     if debug_llm:
         print(colored("Debug: full prompt, raw and parsed response will be printed.", "yellow"))

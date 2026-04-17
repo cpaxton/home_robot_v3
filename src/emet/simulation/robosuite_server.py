@@ -25,6 +25,7 @@ from overrides import override
 import emet.utils.compression as compression
 import emet.utils.logger as log
 from emet.core.server import BaseZmqServer
+from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY
 from emet.robots.base import RobotSpec
 from emet.utils.geometry import xyt_global_to_base
 
@@ -243,6 +244,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "is_simulation": True,
             "lidar_points": None,
             "lidar_timestamp": None,
+            EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
         }
         return message
 
@@ -262,6 +264,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "is_homed": True,
             "is_runstopped": False,
             "step": self._last_step,
+            EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
         }
 
     @override

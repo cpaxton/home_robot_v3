@@ -75,6 +75,8 @@ dependencies = [
     "scikit-fmm",
     "open3d",
     "click>=8.1.8",
+    "discord.py",
+    "python-dotenv",
     "paramiko>=3.0.0",
     # Required by pinocchio (pin) at import time when built with collision support; do not remove.
     "hpp-fcl",
@@ -91,10 +93,6 @@ dev = [
     "ruff>=0.8.0",
     "mypy",
     "lark",
-]
-discord = [
-    "discord.py",
-    "python-dotenv",
 ]
 sim = [
     "mujoco>=3.3.0",  # Align with upstream robosuite; 3.2.6 was for older Stretch compat
