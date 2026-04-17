@@ -205,16 +205,17 @@ class DiscordBot:
         """Process the queue of messages to send."""
 
         if not self._started:
-            # Loop over all channels we have not yet started
-            # Add a message for each one
-            for channel in self.client.get_all_channels():
-                if channel.type == discord.ChannelType.text:
-                    if channel in self.allowed_channels:
-                        _logger.debug(f"Introducing myself to channel {channel.name}")
-                        try:
-                            self.push_task(channel, message=self.greeting(), content=None, explicit=True)
-                        except Exception as e:
-                            _logger.error("Error in introducing myself:", str(e))
+            # One-time intro per bot process. (Do not reset _started on reconnect — see on_ready hook.)
+            intro = (self.greeting() or "").strip()
+            if intro:
+                for channel in self.client.get_all_channels():
+                    if channel.type == discord.ChannelType.text:
+                        if channel in self.allowed_channels:
+                            _logger.debug(f"Introducing myself to channel {channel.name}")
+                            try:
+                                self.push_task(channel, message=intro, content=None, explicit=True)
+                            except Exception as e:
+                                _logger.error("Error in introducing myself:", str(e))
             self._started = True
 
         # Print queue length
@@ -254,7 +255,8 @@ class DiscordBot:
 
         @client.event
         async def on_ready():
-            self._started = False
+            # Do not reset self._started here: discord.py may call on_ready again on reconnect;
+            # resetting would re-post greeting() to every channel (duplicate "Hello everyone!").
             self._user_name = self.client.user.name
             self._user_id = self.client.user.id
             return self.on_ready()

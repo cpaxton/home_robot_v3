@@ -28,6 +28,17 @@ from emet.utils.logger import Logger
 logger = Logger(__name__)
 
 
+def _format_discord_timestamp(message: discord.Message) -> str:
+    """Format message time for terminal (UTC)."""
+    try:
+        dt = message.created_at
+        if getattr(dt, "tzinfo", None) is not None:
+            dt = dt.astimezone(datetime.timezone.utc)
+        return dt.strftime("%H:%M UTC")
+    except Exception:
+        return "??:?? UTC"
+
+
 class EmetDiscordBot(DiscordBot):
     """Discord bot that connects to a robot agent (pickup, dynamem, eqa, graph_eqa)."""
 
@@ -147,6 +158,35 @@ class EmetDiscordBot(DiscordBot):
         self._llm_lock = threading.Lock()
         self._ready_event = threading.Event()
 
+    def _print_discord_inbound(self, message: discord.Message) -> None:
+        """Mirror inbound Discord chat lines on the terminal."""
+        who = message.author.display_name or message.author.name
+        ch = getattr(message.channel, "name", "?")
+        ts = _format_discord_timestamp(message)
+        print(colored(f"(discord) #{ch} {who} — {ts}", "cyan"), flush=True)
+        if message.content and message.content.strip():
+            print(colored(f"  {message.content}", "cyan"), flush=True)
+        elif message.attachments:
+            names = ", ".join(a.filename or "file" for a in message.attachments[:3])
+            print(colored(f"  (attachment: {names})", "cyan"), flush=True)
+
+    def _print_discord_outbound(self, channel_name: str, text: str | None, *, has_image: bool) -> None:
+        """Mirror outbound posts (text/image) to Discord on the terminal."""
+        prefix = colored(f"(discord) → #{channel_name}", "magenta")
+        parts: list[str] = []
+        if text and text.strip():
+            parts.append(text.strip())
+        if has_image:
+            parts.append("[image]")
+        if parts:
+            print(prefix, " ".join(parts), flush=True)
+
+    def greeting(self) -> str:
+        """When bridged to ``emet run agent``, the loop sends the startup line; skip duplicate generic text."""
+        if self.agent_input_queue is not None:
+            return ""
+        return super().greeting()
+
     @property
     def is_ready(self) -> bool:
         return self._ready_event.is_set()
@@ -248,6 +288,8 @@ class EmetDiscordBot(DiscordBot):
             )
             return None
 
+        self._print_discord_inbound(message)
+
         # Construct the text to prompt the AI
         # text = f"{sender_name} on #{channel_name}: " + message.content
         text = f"{sender_name}: " + message.content
@@ -268,6 +310,9 @@ class EmetDiscordBot(DiscordBot):
                     task.explicit,
                     (task.message or "")[:200],
                 )
+                ch_name = getattr(task.channel, "name", "?")
+                has_img = task.content is not None
+                self._print_discord_outbound(ch_name, task.message, has_image=has_img)
                 if task.message:
                     await task.channel.send(task.message)
                 if task.content is not None:
@@ -293,7 +338,6 @@ class EmetDiscordBot(DiscordBot):
                 # Agent loop owns the LLM: feed Discord text into the same queue as terminal stdin.
                 if self.agent_input_queue is not None:
                     self.agent_input_queue.put(f"[discord] {text}")
-                    print(colored(f"\n[Discord -> agent] {text}", "cyan"), flush=True)
                 else:
                     print(colored(f"[Discord] {text}", "cyan"))
                 return
