@@ -48,7 +48,7 @@ _logger = Logger(__name__)
 
 
 def read_discord_token_from_env():
-    """Read DISCORD_TOKEN from environment. Requires discord extra (python-dotenv): uv sync -e discord."""
+    """Read DISCORD_TOKEN from environment (python-dotenv loads .env if present)."""
     load_dotenv()
     TOKEN = os.getenv("DISCORD_TOKEN")
     if not TOKEN:

@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from emet.controller.emotes.backend import EmoteBackend
     from emet.core.robot import AbstractRobotClient
     from emet.motion.robot import RobotModel
 
@@ -58,3 +59,9 @@ class RobotBackend(ABC):
     def create_model(self, **kwargs: Any) -> "RobotModel":
         """Create a kinematic/planning model of the robot."""
         ...
+
+    def get_emote_backend(self) -> "EmoteBackend":
+        """Emote/gesture implementation for this robot (Stretch motion vs speech-only, etc.)."""
+        from emet.controller.emotes.backend import GenericEmoteBackend
+
+        return GenericEmoteBackend(self.get_spec().name)

@@ -5,12 +5,13 @@
 #   Terminal 1 — simulation:
 #     uv run emet serve mujoco --robot rby1 --headless
 #
-#   Terminal 2 — agent (--robot-ip defaults to 127.0.0.1; uv sync -e discord; DISCORD_TOKEN required):
+#   Terminal 2 — agent (--robot-ip defaults to 127.0.0.1; DISCORD_TOKEN required for Discord):
 #     export DISCORD_TOKEN="your-bot-token"
 #     # optional: export EMET_DISCORD_CHANNEL="your-channel-name"   # default: talk-to-stretch
 #     uv run python -m emet.app.run_agent --robot rby1 \
 #       --llm qwen35-9B --device cuda --max-tokens 1024 \
-#       --agent-config configs/agent_rby1_discord.yaml --discord
+#       --agent-config configs/agent_rby1_discord.yaml
+#     # Use --no-discord to skip the Discord bridge; default is to start it when DISCORD_TOKEN is set.
 #     # Vision LLM: e.g. --llm qwen35-vl-9B (camera on by default; use --no-vl-camera to disable)
 #     # Local chat only (no robot): --offline
 #

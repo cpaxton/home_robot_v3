@@ -17,6 +17,7 @@ import importlib
 import json
 import os
 import queue
+import sys
 import threading
 import timeit
 from datetime import datetime
@@ -188,7 +189,7 @@ def run_agent_with_robot(
     robot_ip: str = "127.0.0.1",
     robot: str = "stretch",
     input_path: str | None = None,
-    discord: bool = False,
+    discord: bool = True,
     use_llm: bool = False,
     llm: str = "qwen35-9B",
     server_ip: str = "127.0.0.1",
@@ -277,8 +278,8 @@ def run_agent_with_robot(
     if discord and not os.environ.get("DISCORD_TOKEN"):
         print(
             colored(
-                "Warning: --discord was set but DISCORD_TOKEN is not in the environment. "
-                "Discord bot will not start. Export DISCORD_TOKEN (and: uv sync -e discord).",
+                "Warning: Discord bridge is enabled but DISCORD_TOKEN is not in the environment. "
+                "Discord bot will not start. Export DISCORD_TOKEN or use --no-discord.",
                 "yellow",
             )
         )
@@ -368,7 +369,7 @@ def run_agent_with_robot(
 
     # Startup greeting
     greeting = f"Hello! I'm {agent_name}. I'm online and ready to help."
-    print(colored(f"{agent_name}:", "blue"), greeting)
+    print(colored(f"{agent_name}:", "blue"), greeting, flush=True)
     _send_to_discord(greeting)
     chat_log.log("assistant", greeting)
 
@@ -377,11 +378,15 @@ def run_agent_with_robot(
     scripted = bool(cmd_queue)
 
     if unified_input_queue is not None and not scripted:
-
+        # Prompt on stderr so agent replies on stdout do not splice into the same TTY line as "You:".
         def _stdin_to_unified_queue() -> None:
             while True:
                 try:
-                    unified_input_queue.put(input(colored("You: ", "green")).strip())
+                    print(colored("You: ", "green"), end="", flush=True, file=sys.stderr)
+                    line = sys.stdin.readline()
+                    if not line:
+                        break
+                    unified_input_queue.put(line.strip())
                 except (EOFError, KeyboardInterrupt):
                     break
 
@@ -403,12 +408,20 @@ def run_agent_with_robot(
             return None
 
     ok = True
+    # When Discord + terminal share the session, prompts go to stderr; keep stdout lines clearly separated.
+    _stdout_pad = unified_input_queue is not None and not scripted
+
+    def _print_user_turn_separator() -> None:
+        if _stdout_pad:
+            print(file=sys.stdout)
+        print("-" * 60, flush=True)
+
     while ok:
         update_xyt()
 
         # --- LLM path ---
         if use_llm and llm_client is not None:
-            print("-" * 60)
+            _print_user_turn_separator()
             user_text = _get_input("You: ")
             if user_text is None:
                 break
@@ -455,13 +468,13 @@ def run_agent_with_robot(
                 # No tool calls — this is the final answer
                 if not tool_calls:
                     if message:
-                        print(colored(f"{agent_name}:", "blue"), message)
+                        print(colored(f"{agent_name}:", "blue"), message, flush=True)
                         _send_to_discord(message)
                     break
 
                 # Print and relay the intermediate message (e.g. "Let me check my memory.")
                 if message:
-                    print(colored(f"{agent_name}:", "blue"), message)
+                    print(colored(f"{agent_name}:", "blue"), message, flush=True)
                     _send_to_discord(message)
 
                 # Execute tool calls

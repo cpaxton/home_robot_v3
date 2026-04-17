@@ -158,6 +158,14 @@ class DynamemController(BaseController):
         """DynamemController does not use realtime update threads."""
         pass
 
+    def move_to_manip_posture(self) -> None:
+        """Move the robot to manipulation posture (delegates to the robot client)."""
+        self.robot.move_to_manip_posture()
+
+    def move_to_nav_posture(self) -> None:
+        """Move the robot to navigation posture (delegates to the robot client)."""
+        self.robot.move_to_nav_posture()
+
     def create_obstacle_map(self, parameters):
         """
         This function creates the MaskSiglipEncoder, Owlv2 detector, voxel map util class and voxel map navigation space util class

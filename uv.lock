@@ -925,6 +925,7 @@ dependencies = [
     { name = "bitsandbytes" },
     { name = "click" },
     { name = "clip" },
+    { name = "discord-py" },
     { name = "einops" },
     { name = "gitpython" },
     { name = "google-genai" },
@@ -950,6 +951,7 @@ dependencies = [
     { name = "pyliblzfse" },
     { name = "pynput" },
     { name = "pyrealsense2" },
+    { name = "python-dotenv" },
     { name = "pyusb" },
     { name = "pyyaml" },
     { name = "pyzmq" },
@@ -989,10 +991,6 @@ dev = [
     { name = "pytest-timeout" },
     { name = "ruff" },
 ]
-discord = [
-    { name = "discord-py" },
-    { name = "python-dotenv" },
-]
 dynamem = [
     { name = "sam-2" },
 ]
@@ -1015,7 +1013,7 @@ requires-dist = [
     { name = "click", specifier = ">=8.1.8" },
     { name = "click", marker = "extra == 'sim'", specifier = ">=8.1.8" },
     { name = "clip", git = "https://github.com/ultralytics/CLIP.git" },
-    { name = "discord-py", marker = "extra == 'discord'" },
+    { name = "discord-py" },
     { name = "einops" },
     { name = "gitpython" },
     { name = "google-genai" },
@@ -1051,7 +1049,7 @@ requires-dist = [
     { name = "pyrealsense2" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-timeout", marker = "extra == 'dev'" },
-    { name = "python-dotenv", marker = "extra == 'discord'" },
+    { name = "python-dotenv" },
     { name = "pyusb" },
     { name = "pyyaml" },
     { name = "pyzmq" },
@@ -1082,7 +1080,7 @@ requires-dist = [
     { name = "wget" },
     { name = "yacs" },
 ]
-provides-extras = ["dev", "discord", "sim", "hand-tracker", "dynamem", "molmospaces"]
+provides-extras = ["dev", "sim", "hand-tracker", "dynamem", "molmospaces"]
 
 [[package]]
 name = "etils"

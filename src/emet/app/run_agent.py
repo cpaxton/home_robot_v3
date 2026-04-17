@@ -75,9 +75,10 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     help="Memory directory to load when using --robot-ip.",
 )
 @click.option(
-    "--discord",
-    is_flag=True,
-    help="Start Discord bot (requires DISCORD_TOKEN; not used with --offline). Install: uv sync -e discord.",
+    "--discord/--no-discord",
+    "discord",
+    default=True,
+    help="Start Discord bot when DISCORD_TOKEN is set (default: on; ignored with --offline). Use --no-discord to skip.",
 )
 @click.option(
     "--no-llm",
@@ -159,16 +160,13 @@ def main(
       emet run agent --offline
       emet run agent --device cpu --offline
       emet run agent --llm qwen35-9B --offline
-      emet run agent --robot rby1 --discord   # ZMQ @ 127.0.0.1, DISCORD_TOKEN set
-      emet run agent --input-path logs/memory_xxx --discord
+      emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
+      emet run agent --input-path logs/memory_xxx --no-discord
       emet run agent --no-llm   # letter commands (E/M/Q/P)
       emet run agent --no-llm -c 'FIND red cylinder'
       emet run agent -c 'find the red cylinder' -c 'what objects do you see?'
     """
     cmd_list = list(commands) if commands else None
-
-    if offline and discord:
-        raise click.UsageError("--discord cannot be used with --offline (no ZMQ / agent loop).")
 
     # Embodied mode: default IP 127.0.0.1 unless --offline
     robot_effective: str | None = None

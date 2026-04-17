@@ -150,6 +150,8 @@ class Qwen25Client(AbstractLLMClient):
             model_kwargs["quantization_config"] = quantization_config
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        if self.tokenizer.pad_token_id is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
         # When using quantization, omit torch_dtype and use device_map so bitsandbytes loads correctly
         load_kwargs = dict(model_kwargs)
         if quantization_config is not None:
@@ -192,7 +194,10 @@ class Qwen25Client(AbstractLLMClient):
         )
 
         t0 = timeit.default_timer()
-        gen_config = GenerationConfig(max_new_tokens=self.max_tokens)
+        gen_config = GenerationConfig(
+            max_new_tokens=self.max_tokens,
+            pad_token_id=self.tokenizer.pad_token_id,
+        )
         outputs = self.pipe(text, generation_config=gen_config)
         t1 = timeit.default_timer()
 
@@ -307,6 +312,9 @@ class Qwen25VLClient(AbstractLLMClient):
             model_kwargs["quantization_config"] = quantization_config
 
         self.processor = AutoProcessor.from_pretrained(model_name)
+        _vl_tok = getattr(self.processor, "tokenizer", None)
+        if _vl_tok is not None and getattr(_vl_tok, "pad_token_id", None) is None:
+            _vl_tok.pad_token = _vl_tok.eos_token
         attn_implementation = "flash_attention_2" if self.use_fast_attn else None
         pretrained_kw: dict[str, Any] = {
             "attn_implementation": attn_implementation,
@@ -371,7 +379,14 @@ class Qwen25VLClient(AbstractLLMClient):
         dev = next(self.model.parameters()).device
         inputs = inputs.to(dev)
 
-        generated_ids = self.model.generate(**inputs, max_new_tokens=self.max_tokens, num_beams=self.num_beams)
+        pad_id = getattr(getattr(self.processor, "tokenizer", None), "pad_token_id", None)
+        gen_kw: dict[str, Any] = {
+            "max_new_tokens": self.max_tokens,
+            "num_beams": self.num_beams,
+        }
+        if pad_id is not None:
+            gen_kw["pad_token_id"] = pad_id
+        generated_ids = self.model.generate(**inputs, **gen_kw)
         generated_ids_trimmed = [
             out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids, strict=False)
         ]

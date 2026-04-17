@@ -15,13 +15,14 @@
 from click.testing import CliRunner
 
 
-def test_offline_and_discord_mutually_exclusive():
+def test_help_lists_discord_toggle():
+    """Discord is on by default; --no-discord opts out."""
     from emet.app.run_agent import main
 
     runner = CliRunner()
-    r = runner.invoke(main, ["--offline", "--discord"])
-    assert r.exit_code != 0
-    assert "offline" in r.output.lower()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "--no-discord" in r.output
 
 
 def test_help_lists_offline_and_default_robot_ip():

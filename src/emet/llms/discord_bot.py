@@ -240,40 +240,34 @@ class EmetDiscordBot(DiscordBot):
 
         # TODO: make this a command line parameter for which channel(s) he should be in
         channel_name = message.channel.name
-        print("Channel name:", channel_name)
-        channel_id = message.channel.id
-        print("Channel ID:", channel_id)
-        # datetime = message.created_at
-
-        timestamp = message.created_at.timestamp()
-        print("Timestamp:", timestamp)
-
-        print(self.allowed_channels)
         if message.channel not in self.allowed_channels:
-            print(" -> Not in allowed channels. Skipping.")
+            logger.debug(
+                "Ignoring message (not in allowed channels): #%s id=%s",
+                channel_name,
+                message.channel.id,
+            )
             return None
 
         # Construct the text to prompt the AI
-        # TODO: Do we ever want to add the channel name? If so we can revert this change
         # text = f"{sender_name} on #{channel_name}: " + message.content
         text = f"{sender_name}: " + message.content
         self.push_task(channel=message.channel, message=text)
 
-        print("Current task queue: ", self.task_queue.qsize())
+        logger.debug("Queued user message from #%s (queue depth ~%s)", channel_name, self.task_queue.qsize())
         # print(" -> Response:", response)
         return None
 
     async def handle_task(self, task: Task):
         """Handle a task by sending the message to the channel. This will make the necessary calls in its thread to the different child functions that send messages, for example."""
-        print()
-        print("-" * 40)
-        print("Handling task from channel:", task.channel.name)
-        print("Handling task: message =", task.message)
-
         text = task.message
         try:
             if task.explicit:
-                print("This task was explicitly triggered.")
+                logger.debug(
+                    "Discord outbound task #%s explicit=%s message=%s",
+                    task.channel.name,
+                    task.explicit,
+                    (task.message or "")[:200],
+                )
                 if task.message:
                     await task.channel.send(task.message)
                 if task.content is not None:
@@ -299,7 +293,7 @@ class EmetDiscordBot(DiscordBot):
                 # Agent loop owns the LLM: feed Discord text into the same queue as terminal stdin.
                 if self.agent_input_queue is not None:
                     self.agent_input_queue.put(f"[discord] {text}")
-                    print(colored(f"[Discord -> agent] {text}", "cyan"))
+                    print(colored(f"\n[Discord -> agent] {text}", "cyan"), flush=True)
                 else:
                     print(colored(f"[Discord] {text}", "cyan"))
                 return
