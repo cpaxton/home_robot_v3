@@ -35,6 +35,17 @@ def test_help_lists_offline_and_default_robot_ip():
     assert "127.0.0.1" in r.output
 
 
+def test_help_lists_command_long_and_short():
+    """Scripted runs use -c / --command (repeatable)."""
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "--command" in r.output
+    assert "-c" in r.output
+
+
 def test_vl_camera_default_logic():
     """Mirror run_agent: VL model names enable camera unless --no-vl-camera."""
 

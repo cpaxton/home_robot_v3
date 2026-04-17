@@ -44,6 +44,19 @@ logger = Logger(__name__)
 _MAX_TOOL_ROUNDS = 3
 
 
+def parse_manual_find_command(raw: str) -> str | None:
+    """Parse no-LLM find syntax: FIND x, F x, or find x (case-insensitive verb)."""
+    s = raw.strip()
+    u = s.upper()
+    if u.startswith("FIND "):
+        return s[5:].strip()
+    if u.startswith("F ") and len(s) > 2:
+        return s[2:].strip()
+    if s.lower().startswith("find "):
+        return s[5:].strip()
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Chat log
 # ---------------------------------------------------------------------------
@@ -357,7 +370,8 @@ def run_agent_with_robot(
 
     def _send_to_discord(text: str) -> None:
         if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
-            discord_bot.push_task_to_all_channels(message=f"**{agent_name}:** {text}")
+            # Plain text only; the bot identity is already shown by Discord (no "**Name:**" prefix).
+            discord_bot.push_task_to_all_channels(message=text)
 
     # Wait for Discord to connect before sending the greeting
     if discord_bot is not None and hasattr(discord_bot, "wait_until_ready"):
@@ -545,9 +559,9 @@ def run_agent_with_robot(
             rec = input("Receptacle: ").strip() if len(parts) < 2 else (parts[1] if len(parts) >= 2 else "")
             ok = executor([("pickup", obj), ("place", rec)])
             continue
-        if line.upper().startswith("FIND ") or line.upper().startswith("F "):
-            text = line[5:].strip() if line.upper().startswith("FIND ") else line[2:].strip()
-            ok = executor([("find", text)])
+        find_query = parse_manual_find_command(line)
+        if find_query:
+            ok = executor([("find", find_query)])
             continue
 
         if use_llm:

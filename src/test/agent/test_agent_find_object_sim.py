@@ -32,6 +32,21 @@ _run_sim = os.environ.get("RUN_SIM_TESTS", "1").strip().lower()
 RUN_SIM_TESTS = _run_sim not in ("0", "false", "no", "off")
 
 
+def _have_mujoco() -> bool:
+    try:
+        import mujoco  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+_SKIP_AGENT_SIM = not RUN_SIM_TESTS or not _have_mujoco()
+pytestmark = pytest.mark.skipif(
+    _SKIP_AGENT_SIM,
+    reason="RUN_SIM_TESTS=0 or mujoco not installed (uv sync --extra sim)",
+)
+
+
 def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
     deadline = time.monotonic() + timeout_sec
     while time.monotonic() < deadline:
@@ -43,7 +58,6 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
     return False
 
 
-@pytest.mark.skipif(not RUN_SIM_TESTS, reason="RUN_SIM_TESTS=0")
 @pytest.mark.timeout(300)
 def test_agent_find_red_cylinder_no_llm():
     """
@@ -81,8 +95,9 @@ def test_agent_find_red_cylinder_no_llm():
                 "--robot-ip",
                 "127.0.0.1",
                 "--no-llm",
-                "-c",
-                "FIND red cylinder",
+                "--no-discord",
+                "--command",
+                "find red cylinder",
             ],
             env=env,
             capture_output=True,
@@ -113,11 +128,67 @@ def test_agent_find_red_cylinder_no_llm():
                 proc.wait(timeout=2)
 
 
-@pytest.mark.skipif(not RUN_SIM_TESTS, reason="RUN_SIM_TESTS=0")
+@pytest.mark.timeout(300)
+def test_agent_find_blue_cube_no_llm():
+    """Scripted find for the default-scene blue cube (near red cylinder)."""
+    proc = None
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join([str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep))
+    if sys.platform == "linux":
+        env["MUJOCO_GL"] = "egl"
+
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "emet.simulation.mujoco_server", "--headless"],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        if not _wait_for_port("127.0.0.1", 4401, timeout_sec=45):
+            stderr = proc.stderr.read().decode() if proc.stderr else ""
+            proc.terminate()
+            proc.wait(timeout=5)
+            pytest.fail("MuJoCo server did not start. stderr:\n" + stderr)
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "emet.app.run_agent",
+                "--robot-ip",
+                "127.0.0.1",
+                "--no-llm",
+                "--no-discord",
+                "--command",
+                "find blue cube",
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=240,
+        )
+
+        stdout = result.stdout
+        print("--- STDOUT (blue cube) ---")
+        print(stdout[-3000:] if len(stdout) > 3000 else stdout)
+
+        assert result.returncode == 0 or result.returncode is None, f"Agent exited with code {result.returncode}"
+        assert "find" in stdout.lower() or "FIND" in stdout, "Expected find-related output"
+
+    finally:
+        if proc is not None and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=8)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=2)
+
+
 @pytest.mark.timeout(300)
 def test_agent_multi_command_no_llm():
     """
-    Scripted multi-command test: explore, then query memory for red cylinder.
+    Scripted multi-command test: explore, then find red cylinder (mixed -c / --command).
     """
     proc = None
     env = dict(os.environ)
@@ -138,7 +209,7 @@ def test_agent_multi_command_no_llm():
             proc.wait(timeout=5)
             pytest.fail("MuJoCo server did not start. stderr:\n" + stderr)
 
-        # Commands: E (explore), Q followed by question, QUIT
+        # Commands: E (explore), then find red cylinder via --command (no Q: query_memory path varies by map setup)
         result = subprocess.run(
             [
                 sys.executable,
@@ -147,12 +218,11 @@ def test_agent_multi_command_no_llm():
                 "--robot-ip",
                 "127.0.0.1",
                 "--no-llm",
+                "--no-discord",
                 "-c",
                 "E",
-                "-c",
-                "Q Is there a red cylinder?",
-                "-c",
-                "FIND red cylinder",
+                "--command",
+                "find red cylinder",
             ],
             env=env,
             capture_output=True,

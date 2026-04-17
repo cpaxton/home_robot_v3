@@ -105,7 +105,11 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     "--command",
     "commands",
     multiple=True,
-    help="Run command(s) non-interactively then exit. Repeatable: -c 'explore' -c 'find red cylinder'.",
+    help=(
+        "Run one or more commands non-interactively, then exit (embodied mode only). "
+        'Same flag as -c; use quotes for multi-word phrases, e.g. --command "find red cylinder". '
+        "With --no-llm: E/M/Q/P/FIND or find …; with an LLM: natural language per turn."
+    ),
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 @click.option(
@@ -163,7 +167,8 @@ def main(
       emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
       emet run agent --input-path logs/memory_xxx --no-discord
       emet run agent --no-llm   # letter commands (E/M/Q/P)
-      emet run agent --no-llm -c 'FIND red cylinder'
+      emet run agent --no-llm --command 'find red cylinder'
+      emet run agent --no-llm -c 'FIND blue cube'
       emet run agent -c 'find the red cylinder' -c 'what objects do you see?'
     """
     cmd_list = list(commands) if commands else None
