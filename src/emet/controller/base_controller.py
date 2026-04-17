@@ -22,6 +22,16 @@ from emet.utils.logger import Logger
 logger = Logger(__name__)
 
 
+def _format_discord_action_line(plain: str) -> str:
+    """Wrap *plain* in Discord italics (*...*) for action/narration lines."""
+    t = plain.strip()
+    if not t:
+        return plain
+    if t.startswith("*") and t.endswith("*") and len(t) >= 2:
+        return plain
+    return f"*{t}*"
+
+
 def _parse_parameters(
     parameters: Parameters | dict[str, Any] | None,
     default_path: str | None = "default_planner.yaml",
@@ -151,16 +161,20 @@ class BaseController(ABC):
         """Return the voxel map in use by this controller. Subclasses implement."""
         pass
 
-    def robot_say(self, msg: str) -> str:
+    def robot_say(self, msg: str, *, discord_action_italic: bool = False) -> str:
         """Say a message: optional TTS on robot, send to Discord if bot is set, return for chatbot.
 
         Subclasses can override. Base implementation: strip quotes, call robot.say if available,
         push to Discord via self.discord_bot if set, and return the message string.
+
+        If ``discord_action_italic`` is True, Discord gets markdown italics (``*...*``); speech/TTS
+        always uses plain text.
         """
         msg = msg.strip("'\"").strip()
         if hasattr(self.robot, "say") and callable(self.robot.say):
             self.robot.say(msg)
         discord_bot = getattr(self, "discord_bot", None)
         if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
-            discord_bot.push_task_to_all_channels(message=msg)
+            discord_text = _format_discord_action_line(msg) if discord_action_italic else msg
+            discord_bot.push_task_to_all_channels(message=discord_text)
         return msg

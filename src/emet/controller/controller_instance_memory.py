@@ -23,7 +23,7 @@ import torch
 from PIL import Image
 
 import emet.utils.memory as memory
-from emet.controller.base_controller import BaseController
+from emet.controller.base_controller import BaseController, _format_discord_action_line
 from emet.core.interfaces import Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient
@@ -1822,10 +1822,16 @@ class InstanceMemoryController(BaseController):
         """Provide input either on the command line or via chat client"""
         self.tts.say_async(msg)
 
-    def robot_say(self, msg: str):
-        """Have the robot say something out loud. This will send the text over to the robot from wherever the client is running."""
+    def robot_say(self, msg: str, *, discord_action_italic: bool = False):
+        """Have the robot say something out loud; mirror to Discord when ``discord_bot`` is set."""
         msg = msg.strip('"' + "'")
-        self.robot.say(msg)
+        if hasattr(self.robot, "say") and callable(self.robot.say):
+            self.robot.say(msg)
+        discord_bot = getattr(self, "discord_bot", None)
+        if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
+            discord_text = _format_discord_action_line(msg) if discord_action_italic else msg
+            discord_bot.push_task_to_all_channels(message=discord_text)
+        return msg
 
     def open_cabinet(self, object_goal: str, **kwargs) -> bool:
         """Open a cabinet."""

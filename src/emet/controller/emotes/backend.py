@@ -46,16 +46,16 @@ class StretchEmoteBackend(EmoteBackend):
 
     def add_named_emote(self, task: Task, name: str, agent: Any) -> None:
         if name == "nod" or name == "nod_head":
-            agent.robot_say("I'm nodding my head.")
+            agent.robot_say("I'm nodding my head.", discord_action_italic=True)
             task.add_operation(NodHeadOperation("emote", agent))
         elif name == "shake" or name == "shake_head":
-            agent.robot_say("I'm shaking my head.")
+            agent.robot_say("I'm shaking my head.", discord_action_italic=True)
             task.add_operation(ShakeHeadOperation("emote", agent))
         elif name == "wave":
-            agent.robot_say("I'm waving my hand.")
+            agent.robot_say("I'm waving my hand.", discord_action_italic=True)
             task.add_operation(WaveOperation("emote", agent))
         elif name == "avert" or name == "avert_gaze":
-            agent.robot_say("I'm looking away.")
+            agent.robot_say("I'm looking away.", discord_action_italic=True)
             task.add_operation(AvertGazeOperation("emote", agent))
         else:
             raise ValueError(f"Invalid emote operation: {name}")
@@ -74,7 +74,7 @@ class VoiceOnlyEmote(Operation):
 
     def run(self) -> None:
         self._started = True
-        self._agent.robot_say(self._message)
+        self._agent.robot_say(self._message, discord_action_italic=True)
 
     def was_successful(self) -> bool:
         return True
