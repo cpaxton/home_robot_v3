@@ -25,6 +25,7 @@ from emet.controller.controller_dynamem import DynamemController
 from emet.core.parameters import Parameters
 from emet.core.robot import AbstractRobotClient
 from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder, short_labels_from_voxel_descriptions
+from emet.memory.graph_eqa.graph_memory import labels_are_semantic_graph_hypothesis
 from emet.memory.graph_eqa.graph_observation_pipeline import (
     apply_instance_items_to_graph,
 )
@@ -172,7 +173,19 @@ class GraphEQAController(DynamemController):
             desc = None
             xyz = np.array(obs.camera_pose[:3, 3], dtype=float)
 
-        self.graph_memory.add_observation(rgb, xyz, labels, description=desc)
+        base_xyz: np.ndarray | None = None
+        try:
+            bp = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)
+            if bp.size >= 2:
+                bz = float(bp[2]) if bp.size >= 3 else 0.0
+                base_xyz = np.array([float(bp[0]), float(bp[1]), bz], dtype=np.float64)
+        except Exception:
+            pass
+
+        if labels_are_semantic_graph_hypothesis(labels):
+            self.graph_memory.add_observation(rgb, xyz, labels, description=desc)
+        else:
+            self.graph_memory.record_navigation_sample(rgb, xyz, base_xyz=base_xyz)
 
     def run_eqa_one_iter(self, question: str, max_movement_step: int = 5) -> tuple[str, str, list[Image.Image], bool]:
         """One EQA iteration using graph memory instead of voxel map."""

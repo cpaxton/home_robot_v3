@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from emet.memory.adapters import GraphEQABackend
-from emet.memory.graph_eqa import GraphEQAMemory
+from emet.memory.graph_eqa import GraphEQAMemory, labels_are_semantic_graph_hypothesis
 from emet.memory.graph_eqa.graph_memory import _near, _on_floor
 
 
@@ -247,3 +247,47 @@ def test_graph_eqa_save_load_roundtrip():
         assert list(o1.xyz) == [1.0, 2.0, 0.5]
         assert o1.labels == ["chair"]
         assert o1.description == "A wooden chair"
+
+
+def test_labels_are_semantic_graph_hypothesis():
+    assert labels_are_semantic_graph_hypothesis(["cup"]) is True
+    assert labels_are_semantic_graph_hypothesis(["object"]) is False
+    assert labels_are_semantic_graph_hypothesis(["OBJECT"]) is False
+    assert labels_are_semantic_graph_hypothesis(["object", "mug"]) is True
+    assert labels_are_semantic_graph_hypothesis([]) is False
+
+
+def test_record_navigation_sample_does_not_create_nodes():
+    mem = GraphEQAMemory(eqa_client=lambda x: "", image_description_client=lambda x: "")
+    rgb = np.zeros((20, 20, 3), dtype=np.uint8)
+    mem.record_navigation_sample(rgb, np.array([1.0, 2.0, 0.1]), base_xyz=np.array([1.1, 2.0, 0.0]))
+    assert len(mem.get_nodes()) == 0
+    assert len(mem.get_observations()) == 0
+    assert len(mem.get_navigation_samples()) == 1
+
+
+def test_record_navigation_respects_graph_eqa_record_navigation_false():
+    mem = GraphEQAMemory(
+        parameters={"graph_eqa_record_navigation": False},
+        eqa_client=lambda x: "",
+        image_description_client=lambda x: "",
+    )
+    rgb = np.zeros((10, 10, 3), dtype=np.uint8)
+    mem.record_navigation_sample(rgb, np.array([0.0, 0.0, 0.0]))
+    assert mem.get_navigation_samples() == []
+
+
+def test_query_answer_navigation_fallback_images_and_target():
+    mem = GraphEQAMemory(
+        eqa_client=lambda x: (
+            "reasoning: r\nanswer: no\nconfidence: false\naction: 1\nconfidence_reasoning: look"
+        ),
+        image_description_client=lambda q: "mug",
+    )
+    rgb = np.zeros((40, 40, 3), dtype=np.uint8)
+    mem.record_navigation_sample(rgb, np.array([0.5, -0.25, 0.12]), base_xyz=np.array([0.0, 0.0, 0.0]))
+    _r, _a, _c, _cr, target_point, imgs = mem.query_answer("Is there a mug?", None, None)
+    assert len(imgs) == 1
+    assert target_point is not None
+    assert abs(float(target_point[0]) - 0.5) < 1e-5
+    assert abs(float(target_point[1]) - (-0.25)) < 1e-5

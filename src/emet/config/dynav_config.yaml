@@ -172,6 +172,11 @@ eqa_vl:
 graph_eqa_extract:
   # Enough for a small JSON object after Qwen3.5 answer channel (thinking disabled in VL client).
   max_tokens: 128
+  # Ring buffer for navigation-only frames (no semantic graph node; e.g. VLM fallback "object").
+  navigation_samples_max: 256
   # Optional overrides:
   # system_prompt: "..."
   # user_suffix: "Focus on manipulable objects."
+
+# When false, generic-label frames are dropped (no graph node, no navigation sample).
+graph_eqa_record_navigation: true

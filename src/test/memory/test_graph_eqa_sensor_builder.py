@@ -173,6 +173,18 @@ def test_format_scene_graph_pretty():
     assert "obj_a" in s
 
 
+def test_format_scene_graph_pretty_navigation_samples_section():
+    mem = GraphEQAMemory(eqa_client=lambda x: "", image_description_client=lambda x: "")
+    mem.record_navigation_sample(
+        np.zeros((10, 10, 3), dtype=np.uint8),
+        np.array([1.0, 2.0, 0.05]),
+        base_xyz=np.array([1.01, 2.02, 0.0]),
+    )
+    s = format_scene_graph_pretty(mem, title="Scene graph (export)")
+    assert "Navigation samples" in s
+    assert "anchor=" in s
+
+
 def test_format_scene_graph_pretty_truncates_many_labels():
     mem = GraphEQAMemory(
         eqa_client=lambda x: "",

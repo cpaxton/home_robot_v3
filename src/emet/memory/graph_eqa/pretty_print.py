@@ -58,6 +58,23 @@ def format_scene_graph_pretty(
         b_str = "floor" if b == -1 else str(b)
         lines.append(f"   {rel}({a}, {b_str})")
 
+    nav = memory.get_navigation_samples()
+    if nav:
+        lines.append(f" Navigation samples ({len(nav)}) — camera views without a semantic graph node")
+        tail = nav[-4:]
+        for nv in tail:
+            if nv.base_xyz is not None:
+                lines.append(
+                    f"   base=({nv.base_xyz[0]:7.3f}, {nv.base_xyz[1]:7.3f}, {nv.base_xyz[2]:7.3f})  "
+                    f"anchor=({nv.xyz[0]:7.3f}, {nv.xyz[1]:7.3f}, {nv.xyz[2]:7.3f})"
+                )
+            else:
+                lines.append(
+                    f"   anchor=({nv.xyz[0]:7.3f}, {nv.xyz[1]:7.3f}, {nv.xyz[2]:7.3f})"
+                )
+        if len(nav) > len(tail):
+            lines.append(f"   ... ({len(nav) - len(tail)} earlier samples)")
+
     lines.append(sep)
     return "\n".join(lines)
 

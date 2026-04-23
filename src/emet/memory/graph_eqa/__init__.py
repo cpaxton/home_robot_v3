@@ -17,7 +17,7 @@
 # GraphEQA (Saxena et al., https://arxiv.org/abs/2412.14480). No code copied
 # from the closed-source graph_eqa repository.
 
-from .graph_memory import GraphEQAMemory
+from .graph_memory import GraphEQAMemory, labels_are_semantic_graph_hypothesis
 from .instance_observations import (
     DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M,
     frame_instances_to_labels_xyz,
@@ -37,6 +37,7 @@ from .sensor_graph_builder import (
 __all__ = [
     "DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M",
     "GraphEQAMemory",
+    "labels_are_semantic_graph_hypothesis",
     "SensorGraphBuilder",
     "compare_graph_to_placements_report",
     "format_graph_edges_only",
