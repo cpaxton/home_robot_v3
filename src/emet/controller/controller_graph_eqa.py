@@ -24,14 +24,9 @@ from PIL import Image
 from emet.controller.controller_dynamem import DynamemController
 from emet.core.parameters import Parameters
 from emet.core.robot import AbstractRobotClient
-from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder, short_labels_from_voxel_descriptions
-from emet.memory.graph_eqa.graph_memory import labels_are_semantic_graph_hypothesis
-from emet.memory.graph_eqa.graph_observation_pipeline import (
-    apply_instance_items_to_graph,
-)
+from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
 from emet.memory.graph_eqa.instance_observations import (
     DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M,
-    frame_instances_to_labels_xyz,
 )
 
 
@@ -137,55 +132,19 @@ class GraphEQAController(DynamemController):
         """Step collector and feed the graph memory with the new observation."""
         super().update()
         obs = self.robot.get_observation()
-        rgb = obs.rgb
-        if obs.camera_pose is None:
-            return
+        from emet.memory.graph_eqa.dynamem_graph_hooks import update_graph_memory_from_dynamem_observation
 
-        vm = self.voxel_map
-        if self.use_instance_graph and getattr(vm, "observations", None) and len(vm.observations) > 0:
-            frame = vm.observations[-1]
-            items = frame_instances_to_labels_xyz(
-                frame,
-                min_depth=float(vm.min_depth),
-                max_depth=float(vm.max_depth),
-                detection_model=self.detection_model,
-            )
-            if items:
-                apply_instance_items_to_graph(
-                    self.graph_memory,
-                    rgb,
-                    items,
-                    dedup_skips=self._graph_dedup_skips,
-                )
-                return
-
-        voxel_labels = None
-        if getattr(vm, "image_descriptions", None) and len(vm.image_descriptions) > 0:
-            voxel_labels = vm.image_descriptions[-1][0]
-
-        if self.use_sensor_perception:
-            labels, desc = self.sensor_builder.labels_and_description_from_observation(
-                obs, voxel_labels=voxel_labels
-            )
-            xyz = self.sensor_builder.world_xyz_for_observation(obs)
-        else:
-            labels = short_labels_from_voxel_descriptions(voxel_labels) if voxel_labels else ["object"]
-            desc = None
-            xyz = np.array(obs.camera_pose[:3, 3], dtype=float)
-
-        base_xyz: np.ndarray | None = None
-        try:
-            bp = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)
-            if bp.size >= 2:
-                bz = float(bp[2]) if bp.size >= 3 else 0.0
-                base_xyz = np.array([float(bp[0]), float(bp[1]), bz], dtype=np.float64)
-        except Exception:
-            pass
-
-        if labels_are_semantic_graph_hypothesis(labels):
-            self.graph_memory.add_observation(rgb, xyz, labels, description=desc)
-        else:
-            self.graph_memory.record_navigation_sample(rgb, xyz, base_xyz=base_xyz)
+        update_graph_memory_from_dynamem_observation(
+            graph_memory=self.graph_memory,
+            robot=self.robot,
+            voxel_map=self.voxel_map,
+            detection_model=self.detection_model,
+            sensor_builder=self.sensor_builder,
+            use_instance_graph=self.use_instance_graph,
+            use_sensor_perception=self.use_sensor_perception,
+            dedup_skips=self._graph_dedup_skips,
+            obs=obs,
+        )
 
     def run_eqa_one_iter(self, question: str, max_movement_step: int = 5) -> tuple[str, str, list[Image.Image], bool]:
         """One EQA iteration using graph memory instead of voxel map."""

@@ -41,9 +41,9 @@ Respond with ONLY a JSON object. No other text before or after.
 Each tool invocation: {"name": "<tool_name>", "arguments": {<key>: <value>, ...}}
 If no action is needed, set "tool_calls" to [].
 
-When you call query_memory or describe_scene, the results will be provided back to you.
+When you call query_memory, query_scene_graph, list_scene_relations, or describe_scene, the results will be provided back to you.
 You must then summarize them for the user in a follow-up response (no more tool calls).
-Use query_memory for map / object-location questions (where is X, have I seen Y).
+Use query_memory for voxel-map / semantic localization when EQA is enabled. Use query_scene_graph for graph-style embodied questions; use list_scene_relations for explicit near/on connectivity; use send_object_image for a stored object crop from the scene graph (not the live camera).
 For open-ended "what do you see" questions, prefer describe_scene and send_image unless full EQA is enabled for memory Q&A.
 
 # Examples

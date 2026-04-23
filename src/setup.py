@@ -75,6 +75,7 @@ setuptools.setup(
         "gitpython",
         # Configuration tools and neural networks
         "hydra-core",
+        "draccus>=0.11.0",
         "timm>1.0.0",
         "huggingface_hub[cli]>=0.24.7",
         # For mobile clip

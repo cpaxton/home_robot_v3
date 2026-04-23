@@ -53,6 +53,7 @@ dependencies = [
     "sentencepiece",
     "gitpython",
     "hydra-core",
+    "draccus>=0.11.0",
     "timm>1.0.0",
     "huggingface_hub[cli]>=0.24.7",
     "open-clip-torch>=2.32.0",

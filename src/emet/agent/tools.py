@@ -115,8 +115,9 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         Tool(
             name="query_memory",
             description=(
-                "Questions about mapped memory and object locations (e.g. where is X, have I seen Y). "
-                "For open-ended 'what do you see', prefer describe_scene and send_image unless DynaMem EQA is enabled."
+                "Questions about DynaMem voxel map / semantic memory (where is X, have I seen Y) when voxel EQA is enabled. "
+                "For graph-style questions (relations, what connects to what) use list_scene_relations or query_scene_graph. "
+                "For open-ended 'what do you see', prefer describe_scene and send_image unless full voxel EQA is enabled."
             ),
             parameters={
                 "type": "object",
@@ -331,6 +332,108 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
             parameters=_NO_PARAMS,
             func=lambda: _exec("hand_over", ""),
             executor_commands=_simple_exec_mapping("hand_over"),
+        )
+    )
+
+    # -- query_scene_graph (GraphEQA + open-vocab fallback) -------------------
+    def query_scene_graph(question: str) -> str:
+        gmb = context.get("graph_memory_backend")
+        if gmb is not None and hasattr(gmb, "query_answer"):
+            try:
+                xyt = context.get("xyt_for_query")
+                planner = context.get("planner")
+                out = gmb.query_answer(question, xyt, planner)
+                reasoning, answer, confidence, cr, _, _ = out[:6]
+                tail = f" ({cr})" if cr else ""
+                return f"{answer} (confidence={confidence}){tail}\nReasoning: {reasoning}"
+            except Exception as e:
+                _logger.warning("query_scene_graph graph backend failed: %s", e)
+        executor = context.get("executor")
+        if executor is not None and hasattr(executor, "agent"):
+            sg = executor.agent.get_voxel_map().get_scene_graph()
+            if sg is not None and sg.num_objects > 0:
+                return f"[Open-vocab scene graph snapshot]\n{sg.to_string()}\n(User question was: {question})"
+        return "No graph memory or open-vocab scene graph available yet; explore or scan first."
+
+    tools.append(
+        Tool(
+            name="query_scene_graph",
+            description=(
+                "Embodied questions using GraphEQA memory (objects, navigation context) when enabled; "
+                "otherwise dumps the open-vocab spatial scene graph as text. Use for 'why', relational, or multi-step scene questions."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "Natural language question about the scene graph / objects.",
+                    },
+                },
+                "required": ["question"],
+            },
+            func=query_scene_graph,
+            returns_info=True,
+        )
+    )
+
+    def list_scene_relations() -> str:
+        executor = context.get("executor")
+        if executor is None or not hasattr(executor, "agent"):
+            return "Robot not connected."
+        sg = executor.agent.get_voxel_map().get_scene_graph()
+        if sg is None or sg.num_objects == 0:
+            return "No open-vocab scene graph data yet."
+        return sg.to_string()
+
+    tools.append(
+        Tool(
+            name="list_scene_relations",
+            description=(
+                "List objects and spatial relations (near, on, on_floor) from the open-vocabulary 3D scene graph. "
+                "Use for 'what is connected to what' and structured connectivity questions."
+            ),
+            parameters=_NO_PARAMS,
+            func=list_scene_relations,
+            returns_info=True,
+        )
+    )
+
+    def send_object_image(object_label: str) -> str:
+        discord_bot = context.get("discord_bot")
+        executor = context.get("executor")
+        if executor is None or not hasattr(executor, "agent"):
+            return "Robot not connected."
+        sg = executor.agent.get_voxel_map().get_scene_graph()
+        if sg is None:
+            return "Open-vocab scene graph is not available."
+        node = sg.get_node_by_label(object_label)
+        if node is None:
+            return f"No object matching label {object_label!r} in the scene graph."
+        crop = getattr(node, "best_crop", None)
+        if crop is None:
+            return f"Object {object_label!r} has no stored crop image yet."
+        image = np.asarray(crop)
+        if discord_bot is not None and image is not None and hasattr(discord_bot, "push_task_to_all_channels"):
+            discord_bot.push_task_to_all_channels(message=None, content=image)
+            return f"Sent last crop image for {object_label!r} to Discord."
+        return "Crop available but Discord is not connected."
+
+    tools.append(
+        Tool(
+            name="send_object_image",
+            description=(
+                "Send the robot's last stored crop image for a named object from the open-vocab scene graph "
+                "(not the live camera). Use after the object has been observed while mapping."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "object_label": {"type": "string", "description": "Object name or label (e.g. red cylinder)."},
+                },
+                "required": ["object_label"],
+            },
+            func=send_object_image,
         )
     )
 

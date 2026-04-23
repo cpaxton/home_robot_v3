@@ -29,6 +29,7 @@ from termcolor import colored
 
 from emet.agent.prompt import AgentPromptBuilder, parse_tool_calls_response
 from emet.agent.tools import Tool, get_tools
+from emet.config.embodied_agent_config import load_embodied_agent_overlay
 from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
@@ -232,6 +233,7 @@ def run_agent_with_robot(
     applicable; otherwise it loads the local EQA VLM from ``dynav_config.yaml``.
     """
     parameters = get_parameters(agent_config)
+    embodied_overlay = load_embodied_agent_overlay(agent_config)
     defer_eqa_vllm = bool(eqa and use_llm and share_memory_vllm)
     _exec_kwargs = {k: v for k, v in kwargs.items() if k != "defer_eqa_vllm"}
 
@@ -275,6 +277,7 @@ def run_agent_with_robot(
         discord_bot=None,
         eqa=eqa,
         defer_eqa_vllm=defer_eqa_vllm,
+        embodied_agent=embodied_overlay,
         **_exec_kwargs,
     )
 
@@ -283,11 +286,23 @@ def run_agent_with_robot(
         backend.load(input_path)
         executor._last_memory_save_path = input_path
 
+    _gm = getattr(executor.agent, "graph_memory", None)
+    _graph_backend = None
+    if _gm is not None:
+        _graph_backend = get_memory_backend(
+            "graph_eqa",
+            graph_memory=_gm,
+            voxel_map=executor.agent.get_voxel_map(),
+        )
     memory_backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
     context: dict[str, Any] = {
         "executor": executor,
         "robot": robot_client,
         "memory_backend": memory_backend,
+        "graph_memory": _gm,
+        "graph_memory_backend": _graph_backend,
+        "scene_graph_processor": getattr(executor.agent, "_open_vocab_sg_processor", None),
+        "embodied_agent_config": embodied_overlay,
         "discord_bot": None,
         "xyt_for_query": None,
         "planner": getattr(executor.agent, "planner", None),

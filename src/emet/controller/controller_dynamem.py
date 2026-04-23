@@ -26,6 +26,7 @@ import zmq
 from PIL import Image
 
 from emet.audio.text_to_speech import PiperTextToSpeech
+from emet.config.embodied_agent_config import EmbodiedAgentConfig, legacy_embodied_agent_off
 from emet.controller.base_controller import BaseController
 from emet.controller.generic_zmq_client import GenericZmqClient
 from emet.controller.manipulation.dynamem_manipulation.dynamem_manipulation import (
@@ -47,6 +48,8 @@ from emet.mapping.voxel import (
     SparseVoxelMapNavigationSpaceDynamem as SparseVoxelMapNavigationSpace,
 )
 from emet.mapping.voxel.voxel import _instance_memory_kwargs_from_params
+from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
+from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
 from emet.motion.algo.a_star import AStar
 from emet.perception.detection.owl import OwlPerception
 from emet.perception.detection.yoloe import YoloEPerception
@@ -90,6 +93,7 @@ class DynamemController(BaseController):
         cpu_only: bool = False,
         eqa: bool = False,
         defer_eqa_vllm: bool = False,
+        embodied_agent: EmbodiedAgentConfig | None = None,
     ):
         super().__init__(
             robot=robot,
@@ -108,6 +112,14 @@ class DynamemController(BaseController):
         self.eqa = eqa
         self.defer_eqa_vllm = defer_eqa_vllm
         self.owl_sam_detector = None
+
+        self.embodied_agent = embodied_agent if embodied_agent is not None else legacy_embodied_agent_off()
+        self._open_vocab_sg_processor = None
+        self.graph_memory = None
+        self.sensor_builder = None
+        self._graph_eqa_use_instance_graph = True
+        self._graph_eqa_use_sensor_perception = True
+        self._graph_dedup_xy_m = 0.0
 
         self.cpu_only = cpu_only
         if self.cpu_only:
@@ -265,6 +277,47 @@ class DynamemController(BaseController):
         )
         self.planner = AStar(self.space)
 
+        cfg = self.embodied_agent
+        if cfg.open_vocab_scene_graph.enabled and not self.manipulation_only:
+            from emet.mapping.scene_graph.processor import SceneGraphProcessor
+
+            sg_name = cfg.open_vocab_scene_graph.config_name
+            if self.cpu_only and sg_name == "default_scene_graph":
+                sg_name = "cpu_scene_graph"
+            dev = cfg.open_vocab_scene_graph.device
+            if dev is None:
+                dev = "cpu" if self.cpu_only else None
+            self._open_vocab_sg_processor = SceneGraphProcessor(config_name=sg_name, device=dev)
+            self.voxel_map.set_scene_graph_processor(self._open_vocab_sg_processor)
+
+        if cfg.graph_eqa_memory.enabled and not self.manipulation_only:
+            self.graph_memory = GraphEQAMemory(
+                parameters=parameters,
+                log_dir=os.path.join(self.log, "graph_eqa_log"),
+                defer_llm_clients=True,
+            )
+            gcfg = cfg.graph_eqa_memory
+            self._graph_eqa_use_instance_graph = gcfg.use_instance_graph
+            self._graph_eqa_use_sensor_perception = gcfg.use_sensor_perception
+            if gcfg.graph_instance_dedup_xy_m is not None:
+                self._graph_dedup_xy_m = float(gcfg.graph_instance_dedup_xy_m)
+            elif isinstance(parameters, dict):
+                self._graph_dedup_xy_m = float(
+                    parameters.get("graph_instance_dedup_xy_m", DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M)
+                )
+            else:
+                self._graph_dedup_xy_m = float(
+                    parameters.get("graph_instance_dedup_xy_m", DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M)
+                )
+            dev_sg = self.device if self.device in ("cuda", "mps") else "cuda"
+            self.sensor_builder = SensorGraphBuilder(
+                perception_client=None,
+                use_voxel_fallback=True,
+                device=dev_sg,
+                cpu_only=self.cpu_only,
+                parameters=parameters,
+            )
+
     def setup_custom_blueprint(self):
         """
         This function define rerun blueprint of DynaMem module.
@@ -293,6 +346,21 @@ class DynamemController(BaseController):
         )
         rr.send_blueprint(my_blueprint)
 
+    def _graph_dedup_skips(self, label: str, xyz: np.ndarray) -> bool:
+        """Skip adding a graph node if we already have the same label near this XY (GraphEQA v1 merge)."""
+        if self.graph_memory is None or self._graph_dedup_xy_m <= 0:
+            return False
+        lb = label.strip().lower()
+        for n in self.graph_memory.get_nodes():
+            if not n.labels:
+                continue
+            nl = (n.labels[0] or "").strip().lower()
+            if nl != lb:
+                continue
+            if float(np.linalg.norm(n.xyz[:2] - xyz[:2])) < self._graph_dedup_xy_m:
+                return True
+        return False
+
     def update(self):
         """Step the data collector. Get a single observation of the world. Remove bad points, such as those from too far or too near the camera. Update the 3d world representation."""
 
@@ -314,6 +382,21 @@ class DynamemController(BaseController):
             if instances:
                 self._update_scene_graph()
                 self.rerun_visualizer.update_scene_graph(self.scene_graph, self.semantic_sensor)
+
+        if self.graph_memory is not None and self.sensor_builder is not None:
+            from emet.memory.graph_eqa.dynamem_graph_hooks import update_graph_memory_from_dynamem_observation
+
+            update_graph_memory_from_dynamem_observation(
+                graph_memory=self.graph_memory,
+                robot=self.robot,
+                voxel_map=self.voxel_map,
+                detection_model=self.detection_model,
+                sensor_builder=self.sensor_builder,
+                use_instance_graph=self._graph_eqa_use_instance_graph,
+                use_sensor_perception=self._graph_eqa_use_sensor_perception,
+                dedup_skips=self._graph_dedup_skips,
+                obs=obs,
+            )
 
         # Visualize open-vocab scene graph if attached
         ovsg = self.voxel_map.get_scene_graph()
