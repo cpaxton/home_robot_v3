@@ -546,9 +546,19 @@ class Qwen35VLClient:
 
         t0 = timeit.default_timer()
 
-        text = self.processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
+        # Qwen3.5 template opens `<think>` by default; the model can spend the whole
+        # ``max_new_tokens`` budget inside thinking (GraphEQA JSON never appears).
+        # Pre-close the thinking block so generation starts in the answer channel.
+        _tmpl_kw: dict[str, Any] = {
+            "tokenize": False,
+            "add_generation_prompt": True,
+            "enable_thinking": False,
+        }
+        try:
+            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
+        except TypeError:
+            _tmpl_kw.pop("enable_thinking", None)
+            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
         image_inputs, video_inputs = process_vision_info(messages)
         proc_inputs = self.processor(
             text=[text],

@@ -8,7 +8,10 @@ from emet.memory.graph_eqa import (
     SensorGraphBuilder,
     compare_graph_to_placements_report,
     format_scene_graph_pretty,
+    labels_from_extract_response,
     parse_comma_separated_labels,
+    parse_graph_object_json,
+    short_labels_from_voxel_descriptions,
     world_xyz_median_from_depth,
 )
 
@@ -16,6 +19,44 @@ from emet.memory.graph_eqa import (
 def test_parse_comma_separated_labels():
     assert parse_comma_separated_labels("a, b, c") == ["a", "b", "c"]
     assert parse_comma_separated_labels("sink\ntable") == ["sink", "table"]
+
+
+def test_parse_comma_separated_labels_does_not_split_on_periods():
+    """Periods must not become comma separators (old bug: many CoT micro-labels)."""
+    out = parse_comma_separated_labels("a.b.c,d")
+    assert out == ["a.b.c", "d"]
+
+
+def test_parse_graph_object_json_plain_and_fenced():
+    d = parse_graph_object_json('{"objects":[{"name":"red cylinder"}]}')
+    assert d == {"objects": [{"name": "red cylinder"}]}
+    raw = 'Here:\n```json\n{"labels":["a","b"]}\n```\n'
+    d2 = parse_graph_object_json(raw)
+    assert d2 == {"labels": ["a", "b"]}
+    assert parse_graph_object_json("not json {") is None
+
+
+def test_parse_graph_object_json_strips_qwen_thinking_block():
+    raw = '<think>planning</think>\n{"labels":["cup"]}\n'
+    assert parse_graph_object_json(raw) == {"labels": ["cup"]}
+
+
+def test_parse_graph_object_json_balanced_when_trailing_extra_brace():
+    """First `{`..last `}` would include junk; brace-balanced slice should win."""
+    raw = '{"labels":["x"]} and then } noise'
+    assert parse_graph_object_json(raw) == {"labels": ["x"]}
+
+
+def test_labels_from_extract_response():
+    assert labels_from_extract_response('{"objects":[{"name":"cup"}]}') == ["cup"]
+    assert labels_from_extract_response('{"labels":["x","y"]}') == ["x", "y"]
+    assert labels_from_extract_response("no json") is None
+
+
+def test_labels_from_extract_response_rejects_cot_like_names():
+    assert labels_from_extract_response(
+        '{"objects":[{"name":"The user wants a list"},{"name":"real mug"}]}'
+    ) == ["real mug"]
 
 
 def test_world_xyz_median_from_depth():
@@ -50,10 +91,59 @@ def test_sensor_graph_builder_fallback_labels():
     assert b.labels_from_observation(obs, voxel_labels=["apple"]) == ["apple"]
 
 
+def test_short_labels_from_voxel_descriptions_splits_noise():
+    long_line = "a" * 100 + ", cup"
+    labs = short_labels_from_voxel_descriptions([long_line])
+    assert any("cup" in x for x in labs)
+
+
+def test_labels_and_description_json_with_long_raw_description():
+    padding = "z" * 220
+    payload = '{"objects":[{"name":"chair"},{"name":"table"}]}'
+    b = SensorGraphBuilder(
+        cpu_only=False,
+        perception_client=lambda x: f"```json\n{payload}\n```\n{padding}",
+    )
+    pose = np.eye(4)
+    obs = Observations(
+        gps=np.zeros(2),
+        compass=np.zeros(1),
+        rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+        depth=np.ones((8, 8), dtype=np.float32),
+        camera_K=np.eye(3),
+        camera_pose=pose,
+    )
+    labs, desc = b.labels_and_description_from_observation(obs, voxel_labels=None)
+    assert labs == ["chair", "table"]
+    assert desc is not None and len(desc) > 200
+
+
+def test_labels_and_description_cot_without_json_falls_back_to_object():
+    cot = (
+        "The user wants a list of visible distinct objects, 1, **Analyze the image:** "
+        "dark scene. 2, **Identify:** table."
+    )
+    b = SensorGraphBuilder(cpu_only=False, perception_client=lambda cmd: cot)
+    pose = np.eye(4)
+    obs = Observations(
+        gps=np.zeros(2),
+        compass=np.zeros(1),
+        rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+        depth=np.ones((8, 8), dtype=np.float32),
+        camera_K=np.eye(3),
+        camera_pose=pose,
+    )
+    labs, desc = b.labels_and_description_from_observation(obs, voxel_labels=None)
+    assert labs == ["object"]
+    assert desc is not None
+    assert "The user wants" in desc
+    assert not any("**Analyze" in lab for lab in labs)
+
+
 def test_sensor_graph_builder_mock_vl():
     b = SensorGraphBuilder(
         cpu_only=False,
-        perception_client=lambda x: "chair, floor, window",
+        perception_client=lambda x: '{"objects":[{"name":"chair"},{"name":"floor"},{"name":"window"}]}',
     )
     pose = np.eye(4)
     obs = Observations(
@@ -81,6 +171,32 @@ def test_format_scene_graph_pretty():
     s = format_scene_graph_pretty(mem)
     assert "Scene graph" in s
     assert "obj_a" in s
+
+
+def test_format_scene_graph_pretty_navigation_samples_section():
+    mem = GraphEQAMemory(eqa_client=lambda x: "", image_description_client=lambda x: "")
+    mem.record_navigation_sample(
+        np.zeros((10, 10, 3), dtype=np.uint8),
+        np.array([1.0, 2.0, 0.05]),
+        base_xyz=np.array([1.01, 2.02, 0.0]),
+    )
+    s = format_scene_graph_pretty(mem, title="Scene graph (export)")
+    assert "Navigation samples" in s
+    assert "anchor=" in s
+
+
+def test_format_scene_graph_pretty_truncates_many_labels():
+    mem = GraphEQAMemory(
+        eqa_client=lambda x: "",
+        image_description_client=lambda x: "",
+    )
+    mem.add_observation(
+        np.zeros((10, 10, 3), dtype=np.uint8),
+        np.array([0.0, 0.0, 0.1]),
+        ["a", "b", "c", "d", "e"],
+    )
+    s = format_scene_graph_pretty(mem)
+    assert "(+2 more)" in s
 
 
 def test_compare_graph_to_placements_report():
