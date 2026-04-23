@@ -578,6 +578,22 @@ def graph_memory_show(path: Path, max_nodes: int | None) -> None:
     sys.exit(_run_module("emet.app.graph_memory_show", args))
 
 
+@main.command(
+    "reprocess-graph-eqa-cache",
+    short_help="Rebuild GraphEQA graph from saved memory frames (offline)",
+    context_settings={"ignore_unknown_options": True},
+)
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+def reprocess_graph_eqa_cache(args: tuple[str, ...]) -> None:
+    """Re-run instance→graph logic on ``frames/`` under a saved memory directory.
+
+    Example: ``emet reprocess-graph-eqa-cache ./saved_memory -o ./saved_memory_v2``
+    """
+    if not args:
+        raise click.UsageError("Missing INPUT_DIR. See emet reprocess-graph-eqa-cache --help.")
+    sys.exit(_run_module("emet.app.reprocess_graph_eqa_cache", list(args)))
+
+
 @main.command("print", short_help="Print summary of a saved memory directory")
 @click.argument(
     "path",

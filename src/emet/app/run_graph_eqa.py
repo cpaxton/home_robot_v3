@@ -91,6 +91,11 @@ from emet.memory.headless_export import export_graph_eqa_dir
     is_flag=True,
     help="Do not use VLM scene labels; use voxel image_descriptions only (legacy)",
 )
+@click.option(
+    "--no-instance-graph",
+    is_flag=True,
+    help="Disable YoloE instance masks for graph labels; use voxel VLM list_objects + legacy labeling",
+)
 def main(
     robot_ip: str,
     robot_backend: str = "stretch",
@@ -103,6 +108,7 @@ def main(
     dump_memory: str | None = None,
     cpu_only: bool = False,
     no_sensor_perception: bool = False,
+    no_instance_graph: bool = False,
     **kwargs,
 ) -> None:
     """Run GraphEQA: EQA using graph-based semantic memory (see docs/graph_eqa.md)."""
@@ -140,6 +146,7 @@ def main(
         graph_memory_input_path=input_path,
         use_sensor_perception=not no_sensor_perception,
         cpu_only=cpu_only,
+        use_instance_graph=not no_instance_graph,
     )
     agent.start()
 

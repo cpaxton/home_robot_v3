@@ -188,8 +188,13 @@ class GraphEQAMemory:
     def to_string(self) -> str:
         """Serialize the scene graph to a string for mLLM prompts."""
         lines = []
+
+        def _prompt_labels(labels: list[str], max_len: int = 120) -> str:
+            s = ", ".join(labels) if labels else "object"
+            return s if len(s) <= max_len else s[: max_len - 3] + "..."
+
         for n in self._nodes:
-            lbl = ", ".join(n.labels) if n.labels else "object"
+            lbl = _prompt_labels(n.labels)
             lines.append(
                 f"Node {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]"
             )
@@ -243,7 +248,10 @@ class GraphEQAMemory:
             lbl = ", ".join(node.labels) if node.labels else "object"
             line = f"{pref}[{node.node_id}] {lbl}  at ({x:.2f}, {y:.2f}, {z:.2f})"
             if node.description:
-                line += f"  — {node.description}"
+                d = node.description
+                if len(d) > 160:
+                    d = d[:157] + "..."
+                line += f"  — {d}"
             lines.append(line)
             for c in children_of(node.node_id):
                 visit(c, depth + 1)

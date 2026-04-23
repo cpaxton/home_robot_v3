@@ -120,3 +120,7 @@ motion_planner:
 trajectory_pos_err_threshold: 0.15
 trajectory_rot_err_threshold: 0.5
 trajectory_per_step_timeout: 3.0
+
+# GraphEQA: VLM object-name extraction (JSON-only)
+graph_eqa_extract:
+  max_tokens: 128

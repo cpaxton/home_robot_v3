@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import pickle
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -63,6 +63,8 @@ class FrameBlob:
     instance: np.ndarray | None = None
     instance_classes: np.ndarray | None = None
     instance_scores: np.ndarray | None = None
+    # Optional structured detections (YoloE + centroids); saved as detections_NNNN.json
+    detections: list[dict[str, Any]] | None = None
     info: dict[str, Any] | None = None
 
 
@@ -120,6 +122,9 @@ class MemoryManifest:
     has_user_messages: bool = False
     frames_inline: bool = True  # True = frames in frames.pkl; False = frames/0.npz etc.
     compressed: bool = False  # for rgb/depth in frames
+    has_instance_masks: bool = False  # frames/instance_*.npy (+ classes/scores) when True
+    has_detection_json: bool = False  # frames/detections_*.json per frame when True
+    has_world_xyz_maps: bool = False  # optional full HxWx3 world_xyz_*.npy per frame
 
 
 @dataclass
@@ -188,6 +193,30 @@ def _load_frame(rgb_file: Path | None, depth_file: Path | None, pose_file: Path)
     depth = None
     if depth_file is not None and depth_file.exists():
         depth = np.load(depth_file)
+
+    frames_dir = pose_file.parent
+    tag = pose_file.stem.replace("pose_", "")
+    instance = None
+    instance_classes = None
+    instance_scores = None
+    p_i = frames_dir / f"instance_{tag}.npy"
+    if p_i.exists():
+        instance = np.load(p_i)
+    p_ic = frames_dir / f"instance_classes_{tag}.npy"
+    if p_ic.exists():
+        instance_classes = np.load(p_ic)
+    p_is = frames_dir / f"instance_scores_{tag}.npy"
+    if p_is.exists():
+        instance_scores = np.load(p_is)
+    p_wmap = frames_dir / f"world_xyz_map_{tag}.npy"
+    if p_wmap.exists():
+        world_xyz = np.load(p_wmap)
+    detections = None
+    p_det = frames_dir / f"detections_{tag}.json"
+    if p_det.exists():
+        with open(p_det, encoding="utf-8") as f:
+            detections = json.load(f)
+
     return FrameBlob(
         camera_pose=camera_pose,
         base_pose=base_pose,
@@ -195,6 +224,10 @@ def _load_frame(rgb_file: Path | None, depth_file: Path | None, pose_file: Path)
         rgb=rgb,
         depth=depth,
         world_xyz=world_xyz,
+        instance=instance,
+        instance_classes=instance_classes,
+        instance_scores=instance_scores,
+        detections=detections,
         info=info,
     )
 
@@ -251,6 +284,11 @@ def save_memory(state: MemoryState, path: str) -> None:
     manifest.has_text_descriptions = state.text_descriptions is not None and len(state.text_descriptions) > 0
     manifest.has_user_messages = len(state.user_messages) > 0
     manifest.frames_inline = False  # we use frames/<i>/ layout with PNG
+    manifest.has_instance_masks = any(fr.instance is not None for fr in state.frames)
+    manifest.has_detection_json = any(bool(fr.detections) for fr in state.frames)
+    manifest.has_world_xyz_maps = any(
+        fr.world_xyz is not None and np.asarray(fr.world_xyz).ndim == 3 for fr in state.frames
+    )
 
     with open(path / MANIFEST_FILENAME, "w") as f:
         json.dump(asdict(manifest), f, indent=2)
@@ -297,6 +335,20 @@ def save_memory(state: MemoryState, path: str) -> None:
             if fr.info is not None and fr.info.get("description"):
                 pose_dict["description"] = np.array(fr.info["description"], dtype=object)
             np.savez(frames_path / f"pose_{tag}.npz", **pose_dict)
+
+            if fr.instance is not None:
+                np.save(frames_path / f"instance_{tag}.npy", np.asarray(fr.instance, dtype=np.int64))
+            if fr.instance_classes is not None:
+                np.save(frames_path / f"instance_classes_{tag}.npy", np.asarray(fr.instance_classes))
+            if fr.instance_scores is not None:
+                np.save(frames_path / f"instance_scores_{tag}.npy", np.asarray(fr.instance_scores))
+            wx = fr.world_xyz
+            if wx is not None and np.asarray(wx).ndim == 3:
+                np.save(frames_path / f"world_xyz_map_{tag}.npy", np.asarray(wx, dtype=np.float32))
+            if fr.detections:
+                det_path = frames_path / f"detections_{tag}.json"
+                with open(det_path, "w", encoding="utf-8") as df:
+                    json.dump(_to_native(fr.detections), df, indent=2)
 
     if state.graph is not None and (len(state.graph.nodes) > 0 or len(state.graph.edges) > 0):
         graph_data = {
@@ -346,7 +398,8 @@ def load_memory(path: str) -> MemoryState:
 
     with open(manifest_path) as f:
         m = json.load(f)
-    manifest = MemoryManifest(**m)
+    _manifest_field_names = {f.name for f in fields(MemoryManifest)}
+    manifest = MemoryManifest(**{k: v for k, v in m.items() if k in _manifest_field_names})
 
     state = MemoryState(manifest=manifest)
 
@@ -385,6 +438,7 @@ def load_memory(path: str) -> MemoryState:
                         instance=d.get("instance"),
                         instance_classes=d.get("instance_classes"),
                         instance_scores=d.get("instance_scores"),
+                        detections=d.get("detections"),
                         info=d.get("info"),
                     )
                 )

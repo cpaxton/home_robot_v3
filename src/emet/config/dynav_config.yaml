@@ -167,3 +167,11 @@ eqa_vl:
   voxel_keyword_max_tokens: 20
   eqa_max_tokens: 1024
   verbose_hf: false
+
+# GraphEQA: VLM object-name extraction (JSON-only; avoids CoT in node labels)
+graph_eqa_extract:
+  # Enough for a small JSON object after Qwen3.5 answer channel (thinking disabled in VL client).
+  max_tokens: 128
+  # Optional overrides:
+  # system_prompt: "..."
+  # user_suffix: "Focus on manipulable objects."
