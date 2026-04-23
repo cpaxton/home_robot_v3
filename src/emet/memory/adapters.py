@@ -152,12 +152,19 @@ class DynaMemBackend(MemoryBackend):
         if not getattr(vm, "run_eqa", False):
             raise NotImplementedError(
                 "DynaMem EQA is not enabled on this map (run_eqa=False). "
-                "Use object-style questions with localize_text fallback, enable --eqa on the agent, "
+                "Use object-style questions with localize_text fallback, enable --eqa on the agent "
+                "(eqa.backend in dynav_config.yaml defaults to qwen_vl), "
                 "or use describe_scene / send_image for open-ended visual questions."
             )
         if not hasattr(vm, "image_description_client") or not hasattr(vm, "eqa_client"):
             raise NotImplementedError(
                 "DynaMem EQA clients are not initialized (expected image_description_client and eqa_client)."
+            )
+        if vm.image_description_client is None or vm.eqa_client is None:
+            raise NotImplementedError(
+                "DynaMem EQA vision clients are not ready yet (image_description_client or eqa_client is None). "
+                "With agent --eqa and --share-memory-vllm, wait until the agent LLM loads and binds the shared VL "
+                "client, or use --no-share-memory-vllm to load the local EQA VLM at startup."
             )
         return vm.query_answer(question, xyt, planner)
 

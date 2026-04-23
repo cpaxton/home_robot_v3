@@ -960,6 +960,7 @@ def test(
       uv run emet test --no-sim           # skip sim tests (faster)
       uv run emet test -v src/test/memory/test_memory_backends_smoke.py
       uv run emet test -k test_red_cylinder
+      Heavy VLLM tests (@pytest.mark.vllm_load) are excluded by default; see docs/plans/TESTING_VLLM_LOAD.md
     """
     root = _project_root()
     os.chdir(root)

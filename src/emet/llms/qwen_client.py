@@ -16,7 +16,7 @@ from PIL import Image
 from termcolor import colored
 from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig, pipeline
 
-from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder
+from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder, AbstractVLLMClient
 
 # Presets for get_llm_client (Qwen2.5-VL / stand-in for Qwen3.5-VL-9B until a dedicated HF id is wired).
 QWEN_VL_PRESETS: dict[str, dict[str, Any]] = {
@@ -234,7 +234,7 @@ from qwen_vl_utils import process_vision_info
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 
 
-class Qwen25VLClient(AbstractLLMClient):
+class Qwen25VLClient(AbstractVLLMClient):
     """Qwen2.5-VL multimodal chat for agent tool JSON (same text contract as Qwen25Client).
 
     Supports optional ``image=`` (RGB ndarray) on a user turn for camera-conditioned replies.
@@ -276,6 +276,9 @@ class Qwen25VLClient(AbstractLLMClient):
             model_name = f"Qwen/Qwen2.5-VL-{model_size}"
         else:
             model_name = f"Qwen/Qwen2.5-VL-{model_size}-{fine_tuning}"
+
+        self._resolved_hf_model_id = model_name
+        self._quantization = quantization
 
         if model_name == "Qwen/Qwen2.5-VL-7B-Instruct":
             print(
@@ -328,6 +331,11 @@ class Qwen25VLClient(AbstractLLMClient):
         if device == "cpu":
             self.model = self.model.to("cpu")
 
+    @property
+    def canonical_model_key(self) -> str:
+        q = self._quantization or "none"
+        return f"qwen25_vl:{self._resolved_hf_model_id}:{self._device}:{q}"
+
     def _process_input(self, command: Any) -> Any:
         if isinstance(command, str):
             return command
@@ -342,25 +350,29 @@ class Qwen25VLClient(AbstractLLMClient):
                 raise NotImplementedError("Only text and image content supported for VL.")
         return user_commands
 
-    def __call__(
+    def generate_multimodal(
         self,
-        command: str | list[Any],
-        image: np.ndarray | None = None,
+        user_content: str | list[Any],
+        *,
+        system_prompt: str | None = None,
+        max_new_tokens: int | None = None,
+        reset_context: bool = True,
         verbose: bool = False,
-        tools: list[Any] | None = None,
+        image: Any | None = None,
     ) -> str:
-        if tools is not None:
-            pass  # Agent uses JSON-in-text, not native tool APIs.
-        if self.is_first_message():
-            self.add_history({"role": "system", "content": self.system_prompt})
+        if reset_context:
+            self.reset()
+        sys_txt = system_prompt if system_prompt is not None else self.system_prompt
+        if sys_txt:
+            self.add_history({"role": "system", "content": sys_txt})
 
         if image is not None:
             pil = Image.fromarray(np.asarray(image).astype(np.uint8), mode="RGB")
-            user_content: Any = [{"type": "image", "image": pil}, {"type": "text", "text": command}]
+            content: Any = [{"type": "image", "image": pil}, {"type": "text", "text": user_content}]
         else:
-            user_content = self._process_input(command)
+            content = self._process_input(user_content)
 
-        self.add_history({"role": "user", "content": user_content})
+        self.add_history({"role": "user", "content": content})
         messages = self.get_history()
 
         if verbose:
@@ -380,8 +392,9 @@ class Qwen25VLClient(AbstractLLMClient):
         inputs = inputs.to(dev)
 
         pad_id = getattr(getattr(self.processor, "tokenizer", None), "pad_token_id", None)
+        ntok = max_new_tokens if max_new_tokens is not None else self.max_tokens
         gen_kw: dict[str, Any] = {
-            "max_new_tokens": self.max_tokens,
+            "max_new_tokens": ntok,
             "num_beams": self.num_beams,
         }
         if pad_id is not None:

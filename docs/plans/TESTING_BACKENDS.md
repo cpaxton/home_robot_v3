@@ -19,6 +19,10 @@ The refactor is consistent: mapping = spatial representation; memory = semantic/
 
 Default MuJoCo scene (`scene.xml`): **red cylinder** (object2) at (0.08, -0.55, 0.6) and **blue cube** (object1) at (-0.02, -0.55, 0.6). After a single **rotate_in_place**, both should be visible and in memory for any method (DynaMem integration test asserts red cylinder; blue cube asserted when detected).
 
+## Heavy Hugging Face VLLM load tests
+
+Optional **CUDA** smokes that download large checkpoints are marked ``vllm_load`` and are **not** part of the default ``emet test`` run (see ``docs/plans/TESTING_VLLM_LOAD.md``). Fast registry/factory tests live under ``src/test/llms/test_vllm_registry.py``.
+
 ## How to run tests
 
 Use **uv** and the **`emet test`** CLI so the project env is used. From repo root:

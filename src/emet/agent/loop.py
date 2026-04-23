@@ -33,6 +33,7 @@ from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
 from emet.llms import get_llm_client
+from emet.llms.base import AbstractVLLMClient
 from emet.memory.backend import get_memory_backend
 from emet.memory.utils import print_memory_view_help_on_quit
 from emet.robots import ROBOT_REGISTRY
@@ -217,6 +218,7 @@ def run_agent_with_robot(
     max_tokens: int = 1024,
     vl_include_camera: bool = False,
     eqa: bool = False,
+    share_memory_vllm: bool = True,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -224,8 +226,14 @@ def run_agent_with_robot(
     If *commands* is a non-empty list, each entry is fed as a user turn
     (LLM mode) or manual command (no-LLM mode) instead of reading stdin.
     The agent exits after all commands are consumed.
+
+    When *eqa*, *use_llm*, and *share_memory_vllm* are true (the CLI default for sharing), DynaMem defers its
+    local caption VLM until after the agent LLM loads, then reuses the agent vision-language client when
+    applicable; otherwise it loads the local EQA VLM from ``dynav_config.yaml``.
     """
     parameters = get_parameters(agent_config)
+    defer_eqa_vllm = bool(eqa and use_llm and share_memory_vllm)
+    _exec_kwargs = {k: v for k, v in kwargs.items() if k != "defer_eqa_vllm"}
 
     robot_key = robot.lower().replace("-", "_")
     if robot_key == "stretch":
@@ -266,7 +274,8 @@ def run_agent_with_robot(
         explore_iter=explore_iter,
         discord_bot=None,
         eqa=eqa,
-        **kwargs,
+        defer_eqa_vllm=defer_eqa_vllm,
+        **_exec_kwargs,
     )
 
     if input_path:
@@ -355,6 +364,21 @@ def run_agent_with_robot(
             robot_client.stop()
             chat_log.close()
             return
+
+    if use_llm and llm_client is not None and defer_eqa_vllm:
+        vm = executor.agent.get_voxel_map()
+        if getattr(vm, "_eqa_pending", None) is not None:
+            if isinstance(llm_client, AbstractVLLMClient):
+                vm.bind_shared_vllm_from_agent(llm_client)
+            else:
+                try:
+                    import torch
+
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except Exception:
+                    pass
+                vm.materialize_local_eqa_vllm()
 
     if use_llm and llm_client is not None:
         print(colored(f"LLM enabled ({llm}). Say what you want the robot to do.", "green"))

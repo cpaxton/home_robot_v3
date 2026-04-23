@@ -8,7 +8,7 @@
 # license information maybe found below, if so.
 from typing import Union
 
-from .base import AbstractLLMClient, AbstractPromptBuilder
+from .base import AbstractLLMClient, AbstractPromptBuilder, AbstractVLLMClient, VLInferenceKind
 from .chat_wrapper import LLMChatWrapper
 from .gemma_client import GemmaClient
 from .llama_client import LlamaClient
@@ -31,6 +31,8 @@ __all__ = [
     "PickupPromptBuilder",
     "AbstractLLMClient",
     "AbstractPromptBuilder",
+    "AbstractVLLMClient",
+    "VLInferenceKind",
     "LLMChatWrapper",
     "Qwen25Client",
     "Qwen25VLClient",

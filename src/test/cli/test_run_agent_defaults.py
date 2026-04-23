@@ -56,6 +56,17 @@ def test_help_lists_dynamem_eqa_flag():
     assert "--eqa" in r.output
 
 
+def test_help_lists_share_memory_vllm_toggle():
+    """Agent + --eqa can share one VL model with DynaMem (--no-share-memory-vllm opts out)."""
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "--share-memory-vllm" in r.output
+    assert "--no-share-memory-vllm" in r.output
+
+
 def test_vl_camera_default_logic():
     """Mirror run_agent: VL model names enable camera unless --no-vl-camera."""
 

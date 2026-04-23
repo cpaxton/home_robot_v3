@@ -89,6 +89,7 @@ class DynamemController(BaseController):
         manipulation_only: bool = False,
         cpu_only: bool = False,
         eqa: bool = False,
+        defer_eqa_vllm: bool = False,
     ):
         super().__init__(
             robot=robot,
@@ -105,6 +106,7 @@ class DynamemController(BaseController):
         self.mllm = mllm
         self.manipulation_only = manipulation_only
         self.eqa = eqa
+        self.defer_eqa_vllm = defer_eqa_vllm
         self.owl_sam_detector = None
 
         self.cpu_only = cpu_only
@@ -215,6 +217,7 @@ class DynamemController(BaseController):
             semantic_memory_resolution = 0.05
             image_shape = (480, 360)
 
+        _eqa = parameters.get("eqa", {}) or {}
         self.voxel_map = SparseVoxelMap(
             resolution=parameters["voxel_size"],
             semantic_memory_resolution=semantic_memory_resolution,
@@ -239,8 +242,18 @@ class DynamemController(BaseController):
             log=self.log,
             mllm=self.mllm,
             run_eqa=self.eqa,
+            device=self.device,
+            eqa_backend=_eqa.get("backend", "qwen_vl"),
+            eqa_vl_model_size=_eqa.get("vl_model_size", "3B"),
+            eqa_vl_max_tokens=int(_eqa.get("vl_max_tokens", 512)),
+            eqa_vl_quantization=_eqa.get("vl_quantization", "int4"),
+            eqa_vl_hf_model_id=_eqa.get("vl_hf_model_id"),
+            gemini_model=_eqa.get("gemini_model", "gemini-2.5-flash"),
+            eqa_device=self.device,
+            vl_family=_eqa.get("vl_family", "qwen3_vl"),
             use_instance_memory=self._use_instance_memory,
             instance_memory_kwargs=_instance_memory_kwargs_from_params(parameters),
+            defer_eqa_vllm=self.defer_eqa_vllm,
         )
         self.space = SparseVoxelMapNavigationSpace(
             self.voxel_map,

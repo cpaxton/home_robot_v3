@@ -56,7 +56,7 @@ dependencies = [
     "timm>1.0.0",
     "huggingface_hub[cli]>=0.24.7",
     "open-clip-torch>=2.32.0",
-    "transformers>=4.50.0",
+    "transformers>=4.51.0",
     "retry",
     "qwen_vl_utils",
     "bitsandbytes",
@@ -177,7 +177,8 @@ extend-ignore = [
 
 [tool.pytest.ini_options]
 testpaths = ["src/test"]
-addopts = "-ra -q"
+addopts = "-ra -q -m \"not vllm_load\""
 markers = [
     "timeout: timeout for test in seconds (pytest-timeout)",
+    "vllm_load: downloads and loads HF VLM weights; run with: pytest -m vllm_load -o addopts='-ra -v' (see docs/plans/TESTING_VLLM_LOAD.md)",
 ]

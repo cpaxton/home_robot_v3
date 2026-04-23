@@ -140,8 +140,17 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     "dynamem_eqa",
     is_flag=True,
     help=(
-        "Enable DynaMem EQA stack on the voxel map (Qwen VL + Gemini): full query_memory answers. "
+        "Enable DynaMem EQA on the voxel map (Qwen2.5-VL for captions + answers by default; see dynav_config.yaml eqa:). "
         "Heavier GPU/RAM and slower startup; default is off (query_memory falls back to localize_text)."
+    ),
+)
+@click.option(
+    "--share-memory-vllm/--no-share-memory-vllm",
+    "share_memory_vllm",
+    default=True,
+    help=(
+        "With --eqa and an LLM: defer loading DynaMem's local caption VLM and bind the agent VL client when possible "
+        "(saves VRAM vs loading two VL models). Use --no-share-memory-vllm to always load the EQA VLM from config."
     ),
 )
 def main(
@@ -164,6 +173,7 @@ def main(
     vl_include_camera: bool = False,
     no_vl_camera: bool = False,
     dynamem_eqa: bool = False,
+    share_memory_vllm: bool = True,
 ) -> None:
     """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
 
@@ -211,6 +221,7 @@ def main(
             max_tokens=max_tokens,
             vl_include_camera=vl_include_effective,
             eqa=dynamem_eqa,
+            share_memory_vllm=share_memory_vllm,
         )
         return
 
