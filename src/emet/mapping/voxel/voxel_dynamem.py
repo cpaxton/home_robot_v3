@@ -7,6 +7,8 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+from __future__ import annotations
+
 import logging
 import os
 import pickle
@@ -22,10 +24,11 @@ from PIL import Image
 from scipy.ndimage import maximum_filter, median_filter
 from torch import Tensor
 
+from emet.core.parameters import Parameters
 from emet.llms import OpenaiClient
 from emet.llms.prompts import DYNAMEM_VISUAL_GROUNDING_PROMPT
 from emet.llms.vllm_factory import create_dynamem_vllm, dynamem_vllm_call
-from emet.llms.vllm_registry import VLLMRunConfig, default_hf_model_id, should_share_vllm
+from emet.llms.vllm_registry import VLLMRunConfig, default_hf_model_id, normalize_vl_family, should_share_vllm
 from emet.utils.image import Camera, camera_xyz_to_global_xyz
 from emet.utils.morphology import binary_dilation, binary_erosion, get_edges
 from emet.utils.point_cloud_torch import unproject_masked_depth_to_xyz_coordinates
@@ -93,6 +96,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         log="test",
         mllm=False,
         run_eqa=False,
+        parameters: Parameters | dict | None = None,
         eqa_backend: str = "qwen_vl",
         eqa_vl_model_size: str = "3B",
         eqa_vl_max_tokens: int = 512,
@@ -150,80 +154,119 @@ class SparseVoxelMap(SparseVoxelMapBase):
         self.detection_model = detection
         self.log = log
         self.mllm = mllm
+        self.parameters = parameters
+
+        # Open-vocabulary scene graph (optional, enabled via config or set_scene_graph_processor)
+        self._scene_graph_processor = None
         if self.mllm:
             # Used to do visual grounding task
             self.gpt_client = OpenaiClient(DYNAMEM_VISUAL_GROUNDING_PROMPT, model="gpt-4o-2024-05-13")
 
         self.run_eqa = run_eqa
-        self._eqa_backend = (eqa_backend or "qwen_vl").strip().lower()
-        self._vl_family = (vl_family or "qwen3_vl").strip().lower()
-        self._eqa_max_tokens = int(eqa_vl_max_tokens)
+        if isinstance(parameters, Parameters):
+            _eqa_raw = parameters.get("eqa", {})
+        elif isinstance(parameters, dict):
+            _eqa_raw = parameters.get("eqa", {})
+        else:
+            _eqa_raw = {}
+        _eqa_cfg: dict[str, Any] = _eqa_raw if isinstance(_eqa_raw, dict) else {}
+
+        self._eqa_backend = str(_eqa_cfg.get("backend", eqa_backend) or "qwen_vl").strip().lower()
+        self._vl_family = str(_eqa_cfg.get("vl_family", vl_family) or "qwen3_vl").strip().lower()
+        eqa_ms = str(_eqa_cfg.get("vl_model_size", eqa_vl_model_size) or "3B")
+        eqa_hf = _eqa_cfg.get("vl_hf_model_id", eqa_vl_hf_model_id)
+        eqa_quant = _eqa_cfg.get("vl_quantization", eqa_vl_quantization)
+        gemini_m = str(_eqa_cfg.get("gemini_model", gemini_model) or "gemini-2.5-flash")
+        self._eqa_max_tokens = int(_eqa_cfg.get("vl_max_tokens", eqa_vl_max_tokens) or 512)
+
         self._eqa_device_resolved: str | None = None
         self._eqa_pending: dict[str, Any] | None = None
+
+        def _hf_registry_eqa_path() -> bool:
+            if self._eqa_backend == "gemini":
+                return True
+            if self._eqa_backend != "qwen_vl":
+                return False
+            return normalize_vl_family(self._vl_family) in ("qwen3_vl", "qwen2_5_vl", "gemma4")
+
         if self.run_eqa:
-            # VL device: match voxel map / caller when provided (cpu_only agents need cpu here).
-            _vl_dev = eqa_device
-            if _vl_dev is None and self.device is not None:
-                _vl_dev = str(self.device)
-            if _vl_dev not in ("cuda", "cpu", "mps"):
-                _vl_dev = "cuda" if torch.cuda.is_available() else "cpu"
-            self._eqa_device_resolved = _vl_dev
+            if self.parameters is None:
+                raise ValueError("SparseVoxelMap run_eqa=True requires ``parameters`` (dynav config).")
+
+            from emet.llms.eqa_vl_settings import apply_eqa_vl_runtime_settings, get_eqa_vl_int
+
+            apply_eqa_vl_runtime_settings(self.parameters)
 
             self.image_descriptions: list[tuple[list[str], list[int]]] = []
 
-            from emet.llms.prompts.eqa_prompt import EQA_PROMPT
+            if _hf_registry_eqa_path():
+                from emet.llms.prompts.eqa_prompt import EQA_PROMPT
 
-            if defer_eqa_vllm:
-                # Defer local VLLM weights until agent binds a shared AbstractVLLMClient or materialize_local_eqa_vllm().
-                self._eqa_pending = {
-                    "vl_family": self._vl_family,
-                    "eqa_vl_hf_model_id": eqa_vl_hf_model_id,
-                    "eqa_vl_model_size": eqa_vl_model_size,
-                    "eqa_vl_max_tokens": self._eqa_max_tokens,
-                    "eqa_vl_quantization": eqa_vl_quantization,
-                    "gemini_model": gemini_model,
-                }
-                self.image_description_client = None
-                self.eqa_client = None
-                if self._eqa_backend == "gemini":
+                _vl_dev = eqa_device
+                if _vl_dev is None and self.device is not None:
+                    _vl_dev = str(self.device)
+                if _vl_dev not in ("cuda", "cpu", "mps"):
+                    _vl_dev = "cuda" if torch.cuda.is_available() else "cpu"
+                self._eqa_device_resolved = _vl_dev
+
+                if defer_eqa_vllm:
+                    self._eqa_pending = {
+                        "vl_family": self._vl_family,
+                        "eqa_vl_hf_model_id": eqa_hf,
+                        "eqa_vl_model_size": eqa_ms,
+                        "eqa_vl_max_tokens": self._eqa_max_tokens,
+                        "eqa_vl_quantization": eqa_quant,
+                        "gemini_model": gemini_m,
+                    }
+                    self.image_description_client = None
+                    self.eqa_client = None
+                    if self._eqa_backend == "gemini":
+                        from emet.llms.gemini_client import GeminiClient
+
+                        self.eqa_client = GeminiClient(EQA_PROMPT, model=gemini_m)
+                elif self._eqa_backend == "gemini":
                     from emet.llms.gemini_client import GeminiClient
 
-                    self.eqa_client = GeminiClient(EQA_PROMPT, model=gemini_model)
-            elif self._eqa_backend == "gemini":
-                from emet.llms.gemini_client import GeminiClient
-
-                # Captions / keywords: one local VLLM; EQA answers: Gemini API.
-                self.image_description_client = create_dynamem_vllm(
-                    self._vl_family,
-                    hf_model_id=eqa_vl_hf_model_id,
-                    vl_model_size=eqa_vl_model_size,
-                    max_tokens=max(256, self._eqa_max_tokens),
-                    device=_vl_dev,
-                    quantization=eqa_vl_quantization,
-                    prompt=None,
-                )
-                self.eqa_client = GeminiClient(EQA_PROMPT, model=gemini_model)
-            elif self._eqa_backend == "qwen_vl":
-                if not _eqa_qwen_vl_single_client_ok(self._vl_family, eqa_vl_hf_model_id, _vl_dev, eqa_vl_quantization):
-                    raise ValueError(
-                        "EQA configuration does not allow a single shared local VLM for captions and QA "
-                        f"(vl_family={self._vl_family!r}). See emet.llms.vllm_registry."
+                    self.image_description_client = create_dynamem_vllm(
+                        self._vl_family,
+                        hf_model_id=eqa_hf,
+                        vl_model_size=eqa_ms,
+                        max_tokens=max(256, self._eqa_max_tokens),
+                        device=_vl_dev,
+                        quantization=eqa_quant,
+                        prompt=None,
                     )
-                shared = create_dynamem_vllm(
-                    self._vl_family,
-                    hf_model_id=eqa_vl_hf_model_id,
-                    vl_model_size=eqa_vl_model_size,
-                    max_tokens=self._eqa_max_tokens,
-                    device=_vl_dev,
-                    quantization=eqa_vl_quantization,
-                    prompt=None,
-                )
-                self.image_description_client = shared
-                self.eqa_client = shared
+                    self.eqa_client = GeminiClient(EQA_PROMPT, model=gemini_m)
+                elif self._eqa_backend == "qwen_vl":
+                    if not _eqa_qwen_vl_single_client_ok(self._vl_family, eqa_hf, _vl_dev, eqa_quant):
+                        raise ValueError(
+                            "EQA configuration does not allow a single shared local VLM for captions and QA "
+                            f"(vl_family={self._vl_family!r}). See emet.llms.vllm_registry."
+                        )
+                    shared = create_dynamem_vllm(
+                        self._vl_family,
+                        hf_model_id=eqa_hf,
+                        vl_model_size=eqa_ms,
+                        max_tokens=self._eqa_max_tokens,
+                        device=_vl_dev,
+                        quantization=eqa_quant,
+                        prompt=None,
+                    )
+                    self.image_description_client = shared
+                    self.eqa_client = shared
+                else:
+                    raise ValueError(
+                        f"Unknown eqa_backend {self._eqa_backend!r}; use 'qwen_vl' or 'gemini' (see dynav_config.yaml eqa:)."
+                    )
             else:
-                raise ValueError(
-                    f"Unknown eqa_backend {self._eqa_backend!r}; use 'qwen_vl' or 'gemini' (see dynav_config.yaml eqa:)."
+                from emet.llms.eqa_qwen import build_shared_eqa_clients
+
+                kw = get_eqa_vl_int(self.parameters, "voxel_keyword_max_tokens", 20)
+                self.image_description_client, self.eqa_client = build_shared_eqa_clients(
+                    parameters=self.parameters,
+                    keyword_max_tokens=kw,
                 )
+                self._eqa_max_tokens = get_eqa_vl_int(self.parameters, "eqa_max_tokens", 1024)
 
         # Attributes for EQA, If you are not running EQA module, this will stay the same.
         self._question: str | None = None
@@ -287,6 +330,16 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 f"Unknown eqa_backend {self._eqa_backend!r}; use 'qwen_vl' or 'gemini' (see dynav_config.yaml eqa:)."
             )
         self._eqa_pending = None
+
+    def set_scene_graph_processor(self, processor) -> None:
+        """Attach a SceneGraphProcessor to update an open-vocab scene graph on each frame."""
+        self._scene_graph_processor = processor
+
+    def get_scene_graph(self):
+        """Return the OpenVocabSceneGraph if a processor is attached, else None."""
+        if self._scene_graph_processor is not None:
+            return self._scene_graph_processor.scene_graph
+        return None
 
     def find_alignment_over_model(self, queries: str):
         clip_text_tokens = self.encoder.encode_text(queries).cpu()
@@ -470,6 +523,12 @@ class SparseVoxelMap(SparseVoxelMapBase):
         """
         Process rgbd images for Dynamem
         """
+        # Keep originals for scene graph processor (before any resizing/filtering)
+        original_rgb = rgb.copy()
+        original_depth = depth.copy()
+        original_intrinsics = intrinsics.copy()
+        original_pose = pose.copy()
+
         # Log input data to debug subdir so memory root stays canonical for save_memory().
         if not os.path.exists(self.log):
             os.mkdir(self.log)
@@ -558,6 +617,21 @@ class SparseVoxelMap(SparseVoxelMapBase):
         valid_rgb = rgb.permute(1, 2, 0)[~mask]
         if len(valid_xyz) != 0:
             self.add_to_semantic_memory(valid_xyz, features, valid_rgb)
+
+        # Update open-vocab scene graph if attached
+        if self._scene_graph_processor is not None:
+            try:
+                self._scene_graph_processor.process_frame(
+                    rgb=original_rgb,
+                    depth=original_depth,
+                    intrinsics=original_intrinsics,
+                    camera_pose=original_pose,
+                    world_xyz=world_xyz,
+                )
+            except Exception as e:
+                from emet.utils.logger import warning as _warn_colored
+
+                _warn_colored(f"Scene graph update failed: {e}")
 
     def add_to_semantic_memory(
         self,

@@ -28,6 +28,9 @@ import click
 # Enable shell completion for bash/zsh
 _CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
+# Sub-apps that define @click.option("--robot") and receive --robot from `emet run`.
+_EMET_RUN_APPS_WITH_ROBOT = frozenset({"dynamem", "agent", "graph-eqa", "scene-graph"})
+
 
 def _project_root() -> Path:
     """Return project root (parent of src/emet)."""
@@ -560,6 +563,37 @@ def show_memory(path: str, open_browser: bool) -> None:
     sys.exit(_run_module("emet.app.show_memory", args))
 
 
+@main.command("graph-memory-show", short_help="Print formatted scene graph from saved memory directory")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+)
+@click.option("--max-nodes", type=int, default=None, help="Truncate long node lists")
+def graph_memory_show(path: Path, max_nodes: int | None) -> None:
+    """Load common memory format (graph_eqa) and print nodes/edges to stdout."""
+
+    args = [str(path)]
+    if max_nodes is not None:
+        args.extend(["--max-nodes", str(max_nodes)])
+    sys.exit(_run_module("emet.app.graph_memory_show", args))
+
+
+@main.command(
+    "reprocess-graph-eqa-cache",
+    short_help="Rebuild GraphEQA graph from saved memory frames (offline)",
+    context_settings={"ignore_unknown_options": True},
+)
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+def reprocess_graph_eqa_cache(args: tuple[str, ...]) -> None:
+    """Re-run instance→graph logic on ``frames/`` under a saved memory directory.
+
+    Example: ``emet reprocess-graph-eqa-cache ./saved_memory -o ./saved_memory_v2``
+    """
+    if not args:
+        raise click.UsageError("Missing INPUT_DIR. See emet reprocess-graph-eqa-cache --help.")
+    sys.exit(_run_module("emet.app.reprocess_graph_eqa_cache", list(args)))
+
+
 @main.command("print", short_help="Print summary of a saved memory directory")
 @click.argument(
     "path",
@@ -692,6 +726,7 @@ def deploy(
     type=click.Choice(
         [
             "dynamem",
+            "scene-graph",
             "graph-eqa",
             "mapping",
             "grasp",
@@ -753,7 +788,7 @@ def run(
     """
     args = list(ctx.args)
     args.extend(["--robot_ip", robot_ip])
-    if app != "create-and-print-memory":
+    if app in _EMET_RUN_APPS_WITH_ROBOT:
         args.extend(["--robot", robot])
     if port_offset:
         args.extend(["--port-offset", str(port_offset)])
@@ -770,6 +805,19 @@ def run(
         if target_receptacle:
             args.extend(["--target_receptacle", target_receptacle])
         sys.exit(_run_module("emet.app.run_dynamem", args))
+    elif app == "scene-graph":
+        args.extend(["--server_ip", server_ip])
+        if skip_confirmations:
+            args.append("-S")
+        if headless:
+            args.append("--headless")
+        if visual_servo:
+            args.append("--visual-servo")
+        if target_object:
+            args.extend(["--target_object", target_object])
+        if target_receptacle:
+            args.extend(["--target_receptacle", target_receptacle])
+        sys.exit(_run_module("emet.app.run_scene_graph", args))
     elif app == "graph-eqa":
         sys.exit(_run_module("emet.app.run_graph_eqa", args))
     elif app == "mapping":

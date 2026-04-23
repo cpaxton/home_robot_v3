@@ -13,14 +13,9 @@
 # Run with: emet run agent
 # Default: connect to sim/robot at 127.0.0.1 (embodied agent). Use --offline for local LLM chat only.
 
-import logging
 import os
 import tempfile
 import timeit
-
-# Suppress HuggingFace/transformers/httpx INFO spam when loading models (e.g. SigLIP)
-for _name in ("httpx", "httpcore", "huggingface_hub", "transformers"):
-    logging.getLogger(_name).setLevel(logging.WARNING)
 
 import click
 from termcolor import colored

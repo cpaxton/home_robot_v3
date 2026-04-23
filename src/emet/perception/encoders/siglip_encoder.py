@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from PIL import Image
 from transformers import AutoModel, AutoProcessor, AutoTokenizer
 
-from emet.utils.logger import Logger
+from emet.utils.logger import Logger, suppress_hf_hub_http_logging
 
 from .base_encoder import BaseImageTextEncoder
 
@@ -39,6 +39,7 @@ class SiglipEncoder(BaseImageTextEncoder):
         feature_matching_threshold: float = 0.05,
         **kwargs,
     ) -> None:
+        suppress_hf_hub_http_logging()
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device

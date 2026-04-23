@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,57 @@ from emet.memory.format import (
     load_memory,
     save_memory,
 )
+
+
+def _to_numpy(x: Any) -> Any:
+    if x is None:
+        return None
+    if hasattr(x, "cpu"):
+        return x.detach().cpu().numpy()
+    return np.asarray(x)
+
+
+def frame_blobs_from_voxel_map(vm: Any) -> list[FrameBlob]:
+    """Build ``FrameBlob`` list from ``voxel_map.observations`` + detection JSON cache rows."""
+    from emet.memory.graph_eqa.graph_observation_pipeline import build_detections_json_rows
+
+    det_model = getattr(vm, "detection_model", None)
+    md = float(getattr(vm, "min_depth", 0.1))
+    xd = float(getattr(vm, "max_depth", 4.0))
+    frames: list[FrameBlob] = []
+    for obs in getattr(vm, "observations", []) or []:
+        cp = getattr(obs, "camera_pose", None)
+        if cp is None:
+            continue
+        cp = _to_numpy(cp)
+        rgb = _to_numpy(getattr(obs, "rgb", None))
+        depth = _to_numpy(getattr(obs, "depth", None))
+        camera_K = _to_numpy(getattr(obs, "camera_K", None))
+        base_pose = _to_numpy(getattr(obs, "base_pose", None))
+        feats = _to_numpy(getattr(obs, "feats", None))
+        world_xyz = _to_numpy(getattr(obs, "full_world_xyz", None))
+        inst = _to_numpy(getattr(obs, "instance", None))
+        ic = _to_numpy(getattr(obs, "instance_classes", None))
+        isc = _to_numpy(getattr(obs, "instance_scores", None))
+        info = getattr(obs, "info", None)
+        fb = FrameBlob(
+            camera_pose=cp,
+            base_pose=base_pose,
+            camera_K=camera_K,
+            rgb=rgb,
+            depth=depth,
+            feats=feats,
+            world_xyz=world_xyz,
+            instance=inst,
+            instance_classes=ic,
+            instance_scores=isc,
+            info=info,
+        )
+        dets = build_detections_json_rows(fb, min_depth=md, max_depth=xd, detection_model=det_model)
+        if dets:
+            fb = replace(fb, detections=dets)
+        frames.append(fb)
+    return frames
 
 
 def _restore_dynamem_from_state(voxel_map: Any, state: MemoryState) -> None:
@@ -190,39 +242,7 @@ class DynaMemBackend(MemoryBackend):
                     obs_id=obs_id.cpu().numpy() if obs_id is not None and hasattr(obs_id, "cpu") else obs_id,
                 )
 
-        frames: list[FrameBlob] = []
-        for obs in getattr(vm, "observations", []) or []:
-            cp = getattr(obs, "camera_pose", None)
-            if cp is None:
-                continue
-            cp = cp.cpu().numpy() if hasattr(cp, "cpu") else cp
-            rgb = getattr(obs, "rgb", None)
-            rgb = rgb.cpu().numpy() if rgb is not None and hasattr(rgb, "cpu") else rgb
-            depth = getattr(obs, "depth", None)
-            depth = depth.cpu().numpy() if depth is not None and hasattr(depth, "cpu") else depth
-            camera_K = getattr(obs, "camera_K", None)
-            camera_K = camera_K.cpu().numpy() if camera_K is not None and hasattr(camera_K, "cpu") else camera_K
-            base_pose = getattr(obs, "base_pose", None)
-            base_pose = base_pose.cpu().numpy() if base_pose is not None and hasattr(base_pose, "cpu") else base_pose
-            feats = getattr(obs, "feats", None)
-            feats = feats.cpu().numpy() if feats is not None and hasattr(feats, "cpu") else feats
-            world_xyz = getattr(obs, "full_world_xyz", None)
-            world_xyz = world_xyz.cpu().numpy() if world_xyz is not None and hasattr(world_xyz, "cpu") else world_xyz
-            frames.append(
-                FrameBlob(
-                    camera_pose=cp,
-                    base_pose=base_pose,
-                    camera_K=camera_K,
-                    rgb=rgb,
-                    depth=depth,
-                    feats=feats,
-                    world_xyz=world_xyz,
-                    instance=getattr(obs, "instance", None),
-                    instance_classes=getattr(obs, "instance_classes", None),
-                    instance_scores=getattr(obs, "instance_scores", None),
-                    info=getattr(obs, "info", None),
-                )
-            )
+        frames = frame_blobs_from_voxel_map(vm)
 
         grid_origin = getattr(vm, "grid_origin", None)
         if grid_origin is not None and hasattr(grid_origin, "cpu"):
@@ -341,7 +361,7 @@ class GraphEQABackend(MemoryBackend):
         return self._graph.query_answer(question, xyt, planner)
 
     def save(self, path: str) -> None:
-        """Save to common directory format (graph + optional frames from observations)."""
+        """Save to common directory format (graph + full voxel frame history when ``voxel_map`` is set)."""
 
         dir_path = Path(path)
         dir_path.mkdir(parents=True, exist_ok=True)
@@ -361,27 +381,31 @@ class GraphEQABackend(MemoryBackend):
             ],
             edges=[GraphEdgeView(id1=e[0], id2=e[1], relation=e[2]) for e in edges],
         )
-        frames: list[FrameBlob] = []
-        for obs in self._graph.get_observations():
-            xyz = np.ravel(obs.xyz)
-            if xyz.size < 3:
-                xyz = np.array([0.0, 0.0, 0.0], dtype=np.float64)
-            pose = np.eye(4, dtype=np.float64)
-            pose[:3, 3] = xyz[:3]
-            info = None
-            if obs.labels or getattr(obs, "description", None):
-                info = {"labels": list(obs.labels) if obs.labels else []}
-                if getattr(obs, "description", None):
-                    info["description"] = obs.description
-            frames.append(
-                FrameBlob(
-                    camera_pose=pose,
-                    base_pose=xyz[:3].tolist() if xyz.size >= 3 else None,
-                    rgb=obs.rgb,
-                    world_xyz=xyz.reshape(-1, 3)[0:1],
-                    info=info,
+        frames: list[FrameBlob]
+        if self._voxel_map is not None:
+            frames = frame_blobs_from_voxel_map(self._voxel_map)
+        else:
+            frames = []
+            for obs in self._graph.get_observations():
+                xyz = np.ravel(obs.xyz)
+                if xyz.size < 3:
+                    xyz = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+                pose = np.eye(4, dtype=np.float64)
+                pose[:3, 3] = xyz[:3]
+                info = None
+                if obs.labels or getattr(obs, "description", None):
+                    info = {"labels": list(obs.labels) if obs.labels else []}
+                    if getattr(obs, "description", None):
+                        info["description"] = obs.description
+                frames.append(
+                    FrameBlob(
+                        camera_pose=pose,
+                        base_pose=xyz[:3].tolist() if xyz.size >= 3 else None,
+                        rgb=obs.rgb,
+                        world_xyz=xyz.reshape(-1, 3)[0:1],
+                        info=info,
+                    )
                 )
-            )
 
         state = MemoryState(
             point_cloud=None,
@@ -558,6 +582,65 @@ class SVMBackend(MemoryBackend):
         real_vm = getattr(self._agent.get_voxel_map(), "_voxel_map", self._agent.get_voxel_map())
         if getattr(real_vm, "semantic_memory", None) is not None:
             _restore_dynamem_from_state(real_vm, state)
+
+    def supports_save_load(self) -> bool:
+        return True
+
+
+class SceneGraphBackend(MemoryBackend):
+    """Adapter for OpenVocabSceneGraph."""
+
+    def __init__(self, scene_graph: Any, text_encoder: Any = None):
+        self._sg = scene_graph
+        self._text_encoder = text_encoder
+
+    def check_memory_for_object(self, text: str) -> CheckMemoryResult:
+        if self._text_encoder is None:
+            node = self._sg.get_node_by_label(text)
+            if node is not None and node.center is not None:
+                return CheckMemoryResult(
+                    confidence=0.8,
+                    location_xyz=node.center,
+                    extra_info={"node_id": node.node_id, "label": node.primary_label},
+                )
+            return CheckMemoryResult(confidence=0.0, location_xyz=None, extra_info={})
+
+        confidence, location = self._sg.check_for_object(text, self._text_encoder)
+        return CheckMemoryResult(
+            confidence=confidence,
+            location_xyz=location,
+            extra_info={},
+        )
+
+    def localize_text(self, text: str) -> LocalizeResult:
+        if self._text_encoder is None:
+            node = self._sg.get_node_by_label(text)
+            if node is not None and node.center is not None:
+                return LocalizeResult(
+                    point_xyz=node.center,
+                    success=True,
+                    extra_info={"node_id": node.node_id},
+                )
+            return LocalizeResult(point_xyz=None, success=False, extra_info={})
+
+        center = self._sg.localize_text(text, self._text_encoder)
+        if center is not None:
+            return LocalizeResult(point_xyz=center, success=True, extra_info={})
+        return LocalizeResult(point_xyz=None, success=False, extra_info={})
+
+    def list_objects(self) -> list[str]:
+        return self._sg.list_objects()
+
+    def save(self, path: str) -> None:
+        self._sg.save(path)
+
+    def load(self, path: str) -> None:
+        from emet.mapping.scene_graph.open_vocab_scene_graph import OpenVocabSceneGraph
+
+        loaded = OpenVocabSceneGraph.load(path)
+        self._sg.nodes = loaded.nodes
+        self._sg.edges = loaded.edges
+        self._sg._next_id = loaded._next_id
 
     def supports_save_load(self) -> bool:
         return True

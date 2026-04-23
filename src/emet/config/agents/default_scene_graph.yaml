@@ -1,0 +1,62 @@
+# Default agent configuration for open-vocabulary scene graph memory.
+# This config controls perception, embedding, segmentation, and scene graph parameters.
+# Override any value via a separate YAML or CLI args.
+
+# --- Perception: segmentation ---
+segmentation:
+  # Primary segmenter: "sam3" (text-prompted concept segmentation) or "sam2" or "owlsam"
+  primary: "sam3"
+  # Fallback if primary is unavailable
+  fallback: "owlsam"
+  sam3:
+    model_id: "facebook/sam3"
+    confidence_threshold: 0.5
+    min_area: 500
+  sam2:
+    configuration: "l"
+    min_area: 500
+  owlsam:
+    owl_version: "owlv2-L-p14-ensemble"
+    owl_confidence: 0.15
+
+# --- Embeddings ---
+embeddings:
+  # Text-aligned encoder for open-vocab retrieval
+  text_encoder:
+    name: "siglip"
+    version: "so400m"
+    feature_matching_threshold: 0.14
+  # Visual encoder for appearance similarity and deduplication
+  visual_encoder:
+    name: "dinov3"
+    version: "vitb16"
+
+# --- Scene graph ---
+scene_graph:
+  # Minimum cosine similarity (DINOv3) to merge two object candidates
+  dedup_visual_threshold: 0.85
+  # Minimum 3D bbox IoU to consider two detections as the same object
+  dedup_iou_threshold: 0.3
+  # Maximum distance (meters) between object centers to consider "near"
+  max_near_distance: 1.5
+  # Height thresholds for "on" relation
+  min_on_height: 0.02
+  max_on_height: 0.3
+  # Floor height threshold
+  floor_z_threshold: 0.05
+  # Points older than this many steps are considered stale (0 = never expire)
+  staleness_horizon: 0
+  # Minimum number of observations before an object is considered stable
+  min_observations_stable: 2
+  # Minimum points in an object's cloud to keep it
+  min_points_per_object: 10
+
+# --- Voxel / point cloud ---
+voxel:
+  resolution: 0.05
+  semantic_memory_resolution: 0.05
+  min_depth: 0.25
+  max_depth: 2.5
+
+# --- Object detection vocabulary (empty = class-agnostic) ---
+vocabulary: []

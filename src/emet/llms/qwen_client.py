@@ -17,6 +17,7 @@ from termcolor import colored
 from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig, pipeline
 
 from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder, AbstractVLLMClient
+from emet.utils.logger import suppress_hf_hub_http_logging
 
 # Presets for get_llm_client (Qwen2.5-VL / stand-in for Qwen3.5-VL-9B until a dedicated HF id is wired).
 QWEN_VL_PRESETS: dict[str, dict[str, Any]] = {
@@ -231,7 +232,27 @@ class Qwen25Client(AbstractLLMClient):
 
 
 from qwen_vl_utils import process_vision_info
-from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+from transformers import (
+    AutoProcessor,
+    Qwen2_5_VLForConditionalGeneration,
+    Qwen3_5ForConditionalGeneration,
+)
+
+# Hugging Face IDs: ``Qwen/Qwen3.5-{size}`` (multimodal; uses ``Qwen3VLProcessor`` + ``Qwen3_5ForConditionalGeneration``).
+_QWEN35_VL_SIZES = frozenset(
+    {
+        "0.8B",
+        "2B",
+        "4B",
+        "9B",
+        "27B",
+        "35B-A3B",
+        "122B-A10B",
+        "397B-A17B",
+    }
+)
+
+_VL_SYSTEM_PROMPT_UNSET = object()
 
 
 class Qwen25VLClient(AbstractVLLMClient):
@@ -415,6 +436,172 @@ class Qwen25VLClient(AbstractVLLMClient):
             print(f"Time taken: {t1 - t0:.2f}s")
 
         return output_text
+
+
+class Qwen35VLClient:
+    """
+    Qwen3.5 multimodal (``Qwen/Qwen3.5-*`` on Hugging Face).
+
+    Same calling convention as ``Qwen25VLClient``. Pass ``system_prompt=`` / ``max_new_tokens=`` on
+    ``__call__`` to share one loaded model across EQA and short keyword runs.
+    """
+
+    def __init__(
+        self,
+        prompt: str | None = None,
+        model_size: str = "2B",
+        max_tokens: int = 4096,
+        num_beams: int = 1,
+        device: str = "cuda",
+        quantization: str | None = "int4",
+        use_fast_attn: bool = False,
+    ):
+        suppress_hf_hub_http_logging()
+        self.system_prompt = prompt
+        assert device in ["cuda", "mps"], f"Invalid device: {device}"
+        assert model_size in _QWEN35_VL_SIZES, f"Invalid Qwen3.5 multimodal size: {model_size}"
+
+        self._device = device
+        self.max_tokens = max_tokens
+        self.num_beams = num_beams
+        self.use_fast_attn = use_fast_attn
+
+        model_name = f"Qwen/Qwen3.5-{model_size}"
+
+        print(f"Loading model: {model_name}")
+        model_kwargs: dict = {"dtype": "auto"}
+
+        quantization_config = None
+        if quantization is not None:
+            quantization = quantization.lower()
+            if quantization in ["int8", "int4"]:
+                try:
+                    import bitsandbytes  # noqa: F401
+                    from transformers import BitsAndBytesConfig
+                except ImportError as e:
+                    raise ImportError(
+                        "bitsandbytes required for int4/int8 quantization: pip install bitsandbytes"
+                    ) from e
+
+                quantization_config = BitsAndBytesConfig(
+                    load_in_4bit=(quantization == "int4"),
+                    load_in_8bit=(quantization == "int8"),
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_compute_dtype=torch.bfloat16,
+                )
+                model_kwargs["quantization_config"] = quantization_config
+            else:
+                raise ValueError(f"Unknown quantization method: {quantization}")
+
+        if quantization_config is not None:
+            model_kwargs["quantization_config"] = quantization_config
+
+        self.processor = AutoProcessor.from_pretrained(model_name)
+        attn_implementation = "flash_attention_2" if self.use_fast_attn else None
+        self.model = Qwen3_5ForConditionalGeneration.from_pretrained(
+            model_name,
+            attn_implementation=attn_implementation,
+            device_map=device,
+            **model_kwargs,
+        )
+
+    def _process_input(self, command):
+        if isinstance(command, str):
+            user_commands = command
+        else:
+            user_commands = []  # type:ignore
+            for c in command:
+                if isinstance(c, str):
+                    user_commands.append({"type": "text", "text": c})
+                elif isinstance(c, Image.Image) or isinstance(c, np.ndarray):
+                    if isinstance(c, np.ndarray):
+                        image = Image.fromarray(c.astype(np.uint8), mode="RGB")
+                    else:
+                        image = c
+
+                    user_commands.append(
+                        {
+                            "type": "image",
+                            "image": image,
+                        }
+                    )
+                else:
+                    raise NotImplementedError("We only support text and image for now!")
+
+        return user_commands
+
+    def __call__(
+        self,
+        command: str | list[dict[str, Any]] | Image.Image,
+        verbose: bool = False,
+        *,
+        system_prompt: Any = _VL_SYSTEM_PROMPT_UNSET,
+        max_new_tokens: int | None = None,
+    ):
+        if system_prompt is _VL_SYSTEM_PROMPT_UNSET:
+            sp = self.system_prompt
+        else:
+            sp = system_prompt
+
+        messages = []
+        if sp:
+            messages.append({"role": "system", "content": sp})
+
+        if isinstance(command, list) and command and isinstance(command[0], dict):
+            inputs = command
+        else:
+            inputs = [{"role": "user", "content": self._process_input(command=command)}]
+        messages += inputs  # type:ignore
+
+        if verbose:
+            print("input", messages)
+
+        t0 = timeit.default_timer()
+
+        # Qwen3.5 template opens `<think>` by default; the model can spend the whole
+        # ``max_new_tokens`` budget inside thinking (GraphEQA JSON never appears).
+        # Pre-close the thinking block so generation starts in the answer channel.
+        _tmpl_kw: dict[str, Any] = {
+            "tokenize": False,
+            "add_generation_prompt": True,
+            "enable_thinking": False,
+        }
+        try:
+            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
+        except TypeError:
+            _tmpl_kw.pop("enable_thinking", None)
+            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
+        image_inputs, video_inputs = process_vision_info(messages)
+        proc_inputs = self.processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        )
+        proc_inputs = proc_inputs.to(self._device)
+
+        cap = self.max_tokens if max_new_tokens is None else max_new_tokens
+        generated_ids = self.model.generate(**proc_inputs, max_new_tokens=cap, num_beams=self.num_beams)
+        generated_ids_trimmed = [
+            out_ids[len(in_ids) :] for in_ids, out_ids in zip(proc_inputs.input_ids, generated_ids, strict=True)
+        ]
+        output_text = self.processor.batch_decode(
+            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )[0]
+
+        t1 = timeit.default_timer()
+
+        if verbose:
+            print(f"Assistant response: {output_text}")
+            print(f"Time taken: {t1 - t0:.2f}s")
+
+        return output_text
+
+
+# Back-compat: older code imported ``Qwen3VLClient`` (Qwen3-VL weights); EQA now uses Qwen3.5 multimodal.
+Qwen3VLClient = Qwen35VLClient
 
 
 if __name__ == "__main__":

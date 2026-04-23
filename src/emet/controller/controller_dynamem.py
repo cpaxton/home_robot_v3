@@ -190,8 +190,9 @@ class DynamemController(BaseController):
         # When use_instance_memory is True we need a detector that returns instance segmentation (YoloE)
         # so that object icons show in the UI (default MuJoCo scene: red cylinder, blue cube on table).
         det_conf = parameters.get("detection", {}).get("confidence_threshold", 0.05)
-        if self.manipulation_only or self.eqa:
-            # No object detection, just need to test manipulation
+        if self.manipulation_only or (self.eqa and not self._use_instance_memory):
+            # No object detection for pure manipulation or voxel EQA without instances.
+            # GraphEQA may set eqa=False and use_instance_memory=True so YoloE runs for instance labels.
             self.detection_model = None
             semantic_memory_resolution = 0.1
             image_shape = (360, 270)
@@ -253,6 +254,7 @@ class DynamemController(BaseController):
             vl_family=_eqa.get("vl_family", "qwen3_vl"),
             use_instance_memory=self._use_instance_memory,
             instance_memory_kwargs=_instance_memory_kwargs_from_params(parameters),
+            parameters=parameters,
             defer_eqa_vllm=self.defer_eqa_vllm,
         )
         self.space = SparseVoxelMapNavigationSpace(
@@ -279,7 +281,10 @@ class DynamemController(BaseController):
                 rrb.Spatial2DView(name="head_rgb", origin="world/head_camera"),
                 rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera"),
             ),
-            column_shares=[2, 1, 1],
+            rrb.Vertical(
+                rrb.TextDocumentView(name="Scene Graph", origin="world/scene_graph/summary"),
+            ),
+            column_shares=[3, 1, 1, 1],
         )
         collapse = getattr(self.rerun_visualizer, "collapse_panels", True)
         my_blueprint = rrb.Blueprint(
@@ -309,6 +314,11 @@ class DynamemController(BaseController):
             if instances:
                 self._update_scene_graph()
                 self.rerun_visualizer.update_scene_graph(self.scene_graph, self.semantic_sensor)
+
+        # Visualize open-vocab scene graph if attached
+        ovsg = self.voxel_map.get_scene_graph()
+        if ovsg is not None and ovsg.num_objects > 0:
+            self.rerun_visualizer.update_open_vocab_scene_graph(ovsg)
 
     def _update_scene_graph(self) -> None:
         """Update the scene graph with the latest instances from the voxel map."""

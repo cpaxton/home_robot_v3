@@ -30,6 +30,29 @@ from PIL import Image
 from emet.core.parameters import Parameters
 
 
+def labels_are_semantic_graph_hypothesis(labels: list[str] | None) -> bool:
+    """
+    Whether ``labels`` should become a scene-graph node (vs navigation-only sample).
+
+    Generic VLM fallback ``["object"]`` is not a semantic hypothesis: it would clutter
+    the graph with one node per controller step.
+    """
+    if not labels:
+        return False
+    if len(labels) == 1 and labels[0].strip().lower() == "object":
+        return False
+    return True
+
+
+@dataclass
+class GraphNavigationSample:
+    """A viewpoint along the run without an object-level graph node (RGB + anchors)."""
+
+    rgb: np.ndarray
+    xyz: np.ndarray  # (3,) scene anchor (e.g. depth median in world frame)
+    base_xyz: np.ndarray | None = None  # (3,) optional robot base x,y,z for trajectory context
+
+
 @dataclass
 class GraphNode:
     """Single node in the scene graph: an object or region with label and position."""
@@ -84,6 +107,7 @@ class GraphEQAMemory:
         eqa_client: Callable[..., str] | None = None,
         image_description_client: Callable[..., str] | None = None,
         log_dir: str = "graph_eqa_log",
+        defer_llm_clients: bool = False,
     ):
         self.parameters = parameters or {}
         self.max_near_distance = max_near_distance
@@ -98,22 +122,56 @@ class GraphEQAMemory:
         self.log_dir = log_dir
         self.eqa_client = eqa_client
         self.image_description_client = image_description_client
+        self._defer_llm_clients = defer_llm_clients
+        self._nav_samples: list[GraphNavigationSample] = []
+        self._record_navigation = True
+        self._nav_max = 256
+        self._load_navigation_settings()
 
-        if self.eqa_client is None or self.image_description_client is None:
+        if not defer_llm_clients and (
+            self.eqa_client is None or self.image_description_client is None
+        ):
             self._init_clients()
 
+    def _load_navigation_settings(self) -> None:
+        p = self.parameters
+        d: dict[str, Any] = {}
+        if isinstance(p, dict):
+            d = p
+        elif hasattr(p, "data") and isinstance(p.data, dict):
+            d = p.data
+        if not d:
+            return
+        v = d.get("graph_eqa_record_navigation")
+        if v is not None:
+            self._record_navigation = bool(v)
+        blk = d.get("graph_eqa_extract")
+        if isinstance(blk, dict) and blk.get("navigation_samples_max") is not None:
+            self._nav_max = max(1, int(blk["navigation_samples_max"]))
+
+    def _ensure_llm_clients(self) -> None:
+        """Load shared Qwen3.5 multimodal on first use when defer_llm_clients=True."""
+        if self.eqa_client is not None and self.image_description_client is not None:
+            return
+        self._init_clients()
+
     def _init_clients(self) -> None:
-        """Initialize EQA and image-description clients (same pattern as voxel_dynamem)."""
+        """Initialize EQA + keyword helper on one shared Qwen3.5 multimodal load."""
         try:
-            from emet.llms.gemini_client import GeminiClient
-            from emet.llms.prompts.eqa_prompt import EQA_PROMPT
-            from emet.llms.qwen_client import Qwen25VLClient
+            from emet.llms.eqa_qwen import build_shared_eqa_clients
+            from emet.llms.eqa_vl_settings import apply_eqa_vl_runtime_settings, get_eqa_vl_int
+
+            apply_eqa_vl_runtime_settings(self.parameters)
+            kw = get_eqa_vl_int(self.parameters, "graph_keyword_max_tokens", 64)
+            self.image_description_client, self.eqa_client = build_shared_eqa_clients(
+                parameters=self.parameters,
+                keyword_max_tokens=kw,
+            )
         except ImportError as e:
             raise ImportError(
-                "GraphEQA memory requires emet.llms (Gemini, Qwen) for EQA. Install extras and set GOOGLE_API_KEY."
+                "GraphEQA memory requires emet.llms (Qwen3.5 multimodal) for EQA. "
+                "Install extras with GPU support."
             ) from e
-        self.image_description_client = Qwen25VLClient(model_size="3B", quantization="int4", max_tokens=20)
-        self.eqa_client = GeminiClient(EQA_PROMPT, model="gemini-2.5-flash")
 
     def add_observation(
         self,
@@ -153,6 +211,37 @@ class GraphEQAMemory:
         self._update_edges()
         return obs_id
 
+    def record_navigation_sample(
+        self,
+        rgb: np.ndarray | Image.Image,
+        xyz: np.ndarray,
+        *,
+        base_xyz: np.ndarray | None = None,
+    ) -> None:
+        """
+        Record a navigation-time viewpoint without adding a scene-graph node.
+
+        Used when perception returns no usable object labels (e.g. generic
+        ``object`` fallback) so the trajectory is still available for debugging
+        and optional EQA image context.
+        """
+        if not self._record_navigation:
+            return
+        if isinstance(rgb, Image.Image):
+            rgb = np.array(rgb)
+        rgb = np.asarray(rgb)
+        xyz = np.asarray(xyz, dtype=float).reshape(-1)[:3]
+        bx = None
+        if base_xyz is not None:
+            bx = np.asarray(base_xyz, dtype=float).reshape(-1)[:3]
+        self._nav_samples.append(GraphNavigationSample(rgb=rgb, xyz=xyz, base_xyz=bx))
+        if len(self._nav_samples) > self._nav_max:
+            drop = len(self._nav_samples) - self._nav_max
+            self._nav_samples = self._nav_samples[drop:]
+
+    def get_navigation_samples(self) -> list[GraphNavigationSample]:
+        return list(self._nav_samples)
+
     def _update_edges(self) -> None:
         """Compute pairwise spatial relations (near, on, on_floor) from node positions."""
         self._edges.clear()
@@ -173,8 +262,13 @@ class GraphEQAMemory:
     def to_string(self) -> str:
         """Serialize the scene graph to a string for mLLM prompts."""
         lines = []
+
+        def _prompt_labels(labels: list[str], max_len: int = 120) -> str:
+            s = ", ".join(labels) if labels else "object"
+            return s if len(s) <= max_len else s[: max_len - 3] + "..."
+
         for n in self._nodes:
-            lbl = ", ".join(n.labels) if n.labels else "object"
+            lbl = _prompt_labels(n.labels)
             lines.append(
                 f"Node {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]"
             )
@@ -228,7 +322,10 @@ class GraphEQAMemory:
             lbl = ", ".join(node.labels) if node.labels else "object"
             line = f"{pref}[{node.node_id}] {lbl}  at ({x:.2f}, {y:.2f}, {z:.2f})"
             if node.description:
-                line += f"  — {node.description}"
+                d = node.description
+                if len(d) > 160:
+                    d = d[:157] + "..."
+                line += f"  — {d}"
             lines.append(line)
             for c in children_of(node.node_id):
                 visit(c, depth + 1)
@@ -271,7 +368,7 @@ class GraphEQAMemory:
             for o in self._observations:
                 if o.obs_id in seen:
                     continue
-                if any(obj_lower in l.lower() for l in o.labels):
+                if any(obj_lower in lab.lower() for lab in o.labels):
                     seen.add(o.obs_id)
                     out.append(o.obs_id)
                     if len(out) >= max_images:
@@ -340,10 +437,30 @@ class GraphEQAMemory:
         Returns:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
         """
+        self._ensure_llm_clients()
         self.extract_relevant_objects(question)
         obs_ids = self._select_relevant_obs_ids(max_images=6)
         graph_str = self.to_string()
-        img_desc_str = self._get_image_descriptions_str(obs_ids)
+        nav_fallback_tail: list[GraphNavigationSample] = []
+        if self._observations:
+            img_desc_str = self._get_image_descriptions_str(obs_ids)
+        elif self._nav_samples:
+            nav_fallback_tail = self._nav_samples[-6:]
+            lines = [
+                "IMAGE_DESCRIPTIONS (navigation-only views; no object graph nodes yet):",
+            ]
+            for i, nv in enumerate(nav_fallback_tail, start=1):
+                tail = (
+                    f" robot base (~{nv.base_xyz[0]:.2f}, {nv.base_xyz[1]:.2f})."
+                    if nv.base_xyz is not None
+                    else ""
+                )
+                lines.append(
+                    f"Image {i}. viewpoint anchor at ({nv.xyz[0]:.2f}, {nv.xyz[1]:.2f}, {nv.xyz[2]:.2f});{tail}"
+                )
+            img_desc_str = "\n".join(lines)
+        else:
+            img_desc_str = self._get_image_descriptions_str(obs_ids)
 
         commands: list[Any] = ["Question: " + question]
         commands.append("HISTORY: ")
@@ -357,6 +474,10 @@ class GraphEQAMemory:
             if obs.obs_id in obs_ids:
                 relevant_images.append(Image.fromarray(obs.rgb.astype(np.uint8), mode="RGB"))
                 commands.append(Image.fromarray(obs.rgb.astype(np.uint8), mode="RGB"))
+        for nv in nav_fallback_tail:
+            im = Image.fromarray(nv.rgb.astype(np.uint8), mode="RGB")
+            relevant_images.append(im)
+            commands.append(im)
 
         raw = self.eqa_client(commands)
         answer_outputs = raw.replace("*", "").replace("/", "").replace("#", "").lower()
@@ -373,6 +494,9 @@ class GraphEQAMemory:
                 if 1 <= image_id <= len(self._observations):
                     obs = self._observations[image_id - 1]
                     target_point = np.array([obs.xyz[0], obs.xyz[1], 1.0], dtype=float)
+                elif nav_fallback_tail and 1 <= image_id <= len(nav_fallback_tail):
+                    nv = nav_fallback_tail[image_id - 1]
+                    target_point = np.array([nv.xyz[0], nv.xyz[1], 1.0], dtype=float)
                 else:
                     target_point = self._target_point_from_image_id(image_id)
             self._history_outputs.append(

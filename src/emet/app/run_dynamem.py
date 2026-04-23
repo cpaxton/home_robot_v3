@@ -7,20 +7,14 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-import logging
 import os
 
 import click
 
-# Suppress HuggingFace/transformers/httpx INFO spam when loading SigLIP
-for _name in ("httpx", "httpcore", "huggingface_hub", "transformers"):
-    logging.getLogger(_name).setLevel(logging.WARNING)
-
+from emet.app.robot_cli import create_robot_client_from_cli
 from emet.controller.task.dynamem import DynamemTaskExecutor
-from emet.controller.zmq_client import StretchZmqClient
 from emet.core.parameters import get_parameters
 from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_llm_client
-from emet.robots import ROBOT_REGISTRY
 
 
 @click.command()
@@ -181,39 +175,16 @@ def main(
         os.environ["RERUN_BIND_ALL"] = "1"
 
     print("- Create robot client")
-    robot_key = robot.lower().replace("-", "_")
-    if robot_key == "stretch":
-        robot_client = StretchZmqClient(
-            robot_ip=robot_ip,
-            enable_rerun_server=not no_rerun,
-            rerun_headless=headless,
-            rerun_show_panels=rerun_show_panels,
-            rerun_debug=rerun_debug,
-            port_offset=port_offset,
-            start_immediately=False,
-        )
-    elif robot_key in ROBOT_REGISTRY:
-        import importlib
-
-        mod = importlib.import_module(ROBOT_REGISTRY[robot_key])
-        backend_cls = None
-        for attr_name in dir(mod):
-            attr = getattr(mod, attr_name)
-            if isinstance(attr, type) and hasattr(attr, "get_spec") and attr_name != "RobotBackend":
-                backend_cls = attr
-                break
-        if backend_cls is None:
-            raise RuntimeError(f"No RobotBackend found in {ROBOT_REGISTRY[robot_key]}")
-        backend = backend_cls()
-        robot_client = backend.create_client(
-            robot_ip=robot_ip,
-            port_offset=port_offset,
-        )
-    else:
-        raise click.UsageError(
-            f"Unknown robot '{robot}'. Known: {list(ROBOT_REGISTRY.keys())}. "
-            "Start the server with the same robot: emet serve mujoco --robot <name>"
-        )
+    robot_client = create_robot_client_from_cli(
+        robot,
+        robot_ip,
+        port_offset=port_offset,
+        enable_rerun_server=not no_rerun,
+        rerun_headless=headless,
+        rerun_show_panels=rerun_show_panels,
+        rerun_debug=rerun_debug,
+        start_immediately=False,
+    )
 
     print("- Create task executor")
     executor = DynamemTaskExecutor(

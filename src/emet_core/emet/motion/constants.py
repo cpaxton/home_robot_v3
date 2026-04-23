@@ -7,14 +7,97 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+import logging
 import math
+import os
+import re
+import xml.etree.ElementTree as ET
 
 import numpy as np
 
 from emet.utils.config import get_full_config_path
 
+logger = logging.getLogger(__name__)
+
+
+def _ensure_stretch_urdf(urdf_path: str) -> str:
+    """If stretch.urdf doesn't exist, generate it from the stretch_urdf package."""
+    if os.path.isfile(urdf_path):
+        return urdf_path
+
+    try:
+        import importlib.resources
+
+        pkg_path = str(importlib.resources.files("stretch_urdf"))
+    except (ImportError, ModuleNotFoundError):
+        logger.warning(
+            "stretch.urdf not found at %s and stretch_urdf package is not installed. "
+            "IK will fail. Copy a calibrated URDF or install stretch_urdf.",
+            urdf_path,
+        )
+        return urdf_path
+
+    model_name = "SE3"
+    tool_name = "eoa_wrist_dw3_tool_sg3"
+    src_urdf = os.path.join(pkg_path, model_name, f"stretch_description_{model_name}_{tool_name}.urdf")
+    mesh_dir = os.path.join(pkg_path, model_name, "meshes")
+
+    if not os.path.isfile(src_urdf):
+        logger.warning("Stock URDF not found at %s", src_urdf)
+        return urdf_path
+
+    logger.info("Generating default stretch.urdf from stretch_urdf package -> %s", urdf_path)
+
+    with open(src_urdf, "r") as f:
+        urdf_text = f.read()
+
+    for match in re.finditer(r'filename="(.+?)"', urdf_text):
+        orig = match.group(1)
+        fn = orig.split("/")[-1]
+        urdf_text = urdf_text.replace(orig, os.path.join(mesh_dir, fn))
+
+    os.makedirs(os.path.dirname(urdf_path), exist_ok=True)
+
+    tree = ET.ElementTree(ET.fromstring(urdf_text))
+    root = tree.getroot()
+
+    has_fake = any(j.get("name") == "joint_fake" for j in root.findall("joint"))
+    if not has_fake:
+        snippet = ET.fromstring(
+            "<root>"
+            '<link name="fake_link_x">'
+            "  <inertial>"
+            '    <origin rpy="0 0 0" xyz="0 0 0"/>'
+            '    <mass value="0.749143203376"/>'
+            '    <inertia ixx="0.071" ixy="-0.004" ixz="0" iyy="0.0004" iyz="-0.003" izz="0.071"/>'
+            "  </inertial>"
+            "</link>"
+            '<joint name="joint_fake" type="prismatic">'
+            '  <origin rpy="0 0 0" xyz="0 0 0"/>'
+            '  <axis xyz="1 0 0"/>'
+            '  <parent link="base_link"/>'
+            '  <child link="fake_link_x"/>'
+            '  <limit effort="100" lower="-1" upper="1.1" velocity="1"/>'
+            "</joint>"
+            "</root>"
+        )
+        for elem in snippet:
+            root.append(elem)
+
+        for joint in root.findall("joint"):
+            if joint.get("name") == "joint_mast":
+                parent = joint.find("parent")
+                if parent is not None:
+                    parent.set("link", "fake_link_x")
+                break
+
+    tree.write(urdf_path, xml_declaration=True, encoding="utf-8")
+    logger.info("Generated %s", urdf_path)
+    return urdf_path
+
+
 # Stretch stuff
-MANIP_STRETCH_URDF = get_full_config_path("urdf/stretch.urdf")
+MANIP_STRETCH_URDF = _ensure_stretch_urdf(get_full_config_path("urdf/stretch.urdf"))
 
 # This is the gripper, and the distance in the gripper frame to where the fingers will roughly meet
 STRETCH_GRASP_FRAME = "link_grasp_center"

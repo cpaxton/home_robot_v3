@@ -96,6 +96,12 @@ instance_memory:
   use_association: False
   association_distance_m: 0.15
   move_threshold_m: 0.05
+  matching:
+    # Feature matching threshold for if something is considered a particular class
+    # Set this value by experimting with:
+    #   python -m emet.app.query --threshold 0.05
+    # You can change the threshold to anything that makes sense.
+    feature_match_threshold: 0.05
 
 # TAMP parameters
 guarantee_instance_is_reachable: True
@@ -133,3 +139,30 @@ motion_planner:
 trajectory_pos_err_threshold: 0.15
 trajectory_rot_err_threshold: 0.5
 trajectory_per_step_timeout: 3.0
+
+# Qwen3.5 multimodal (EQA + keyword helpers for GraphEQA / DynaMem). Loaded once per process.
+# Prefer a single locked size (default 9B int4). Set model_size: null to pick once from free VRAM via vram_mib_tier_*.
+# Override: EMET_EQA_VL_MODEL_SIZE=4B
+eqa_vl:
+  model_size: "9B"
+  quantization: int4
+  vram_mib_tier_9b: 20000
+  vram_mib_tier_4b: 11000
+  keyword_max_tokens: 64
+  graph_keyword_max_tokens: 64
+  voxel_keyword_max_tokens: 20
+  eqa_max_tokens: 1024
+  verbose_hf: false
+
+# GraphEQA: VLM object-name extraction (JSON-only; avoids CoT in node labels)
+graph_eqa_extract:
+  # Enough for a small JSON object after Qwen3.5 answer channel (thinking disabled in VL client).
+  max_tokens: 128
+  # Ring buffer for navigation-only frames (no semantic graph node; e.g. VLM fallback "object").
+  navigation_samples_max: 256
+  # Optional overrides:
+  # system_prompt: "..."
+  # user_suffix: "Focus on manipulable objects."
+
+# When false, generic-label frames are dropped (no graph node, no navigation sample).
+graph_eqa_record_navigation: true

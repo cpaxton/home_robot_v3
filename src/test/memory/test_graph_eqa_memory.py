@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from emet.memory.adapters import GraphEQABackend
-from emet.memory.graph_eqa import GraphEQAMemory
+from emet.memory.graph_eqa import GraphEQAMemory, labels_are_semantic_graph_hypothesis
 from emet.memory.graph_eqa.graph_memory import _near, _on_floor
 
 
@@ -129,6 +129,42 @@ def test_query_answer_returns_tuple_with_mock_client():
     assert isinstance(relevant_images, list)
 
 
+def test_color_question_answer_contains_red_and_blue():
+    """
+    Default MuJoCo scene has a red cylinder and blue cube; GraphEQA answer should name both colors.
+
+    Uses mocks (no GPU LLM). Sim coverage: test_graph_eqa_color_question_default_mujoco_scene.
+    """
+    def mock_eqa(commands):
+        return (
+            "reasoning: the scene graph lists a red cylinder and a blue cube on the table.\n"
+            "answer: red and blue (red cylinder, blue cube).\n"
+            "confidence: true\n"
+            "action: \n"
+            "confidence_reasoning: both objects are in the graph labels.\n"
+        )
+
+    mem = GraphEQAMemory(
+        eqa_client=mock_eqa,
+        image_description_client=lambda cmd: "red cylinder, blue cube",
+    )
+    rgb = np.zeros((60, 80, 3), dtype=np.uint8)
+    # Same layout as default scene: object2 / object1 positions (see test_red_cylinder_in_sim)
+    mem.add_observation(rgb, np.array([0.08, -0.55, 0.6]), ["red cylinder"])
+    mem.add_observation(rgb, np.array([-0.02, -0.55, 0.6]), ["blue cube"])
+    graph_str = mem.to_string().lower()
+    assert "red" in graph_str
+    assert "blue" in graph_str
+
+    _reasoning, answer, confidence, _cr, _tp, _imgs = mem.query_answer(
+        "Which color objects can you see?", None, None
+    )
+    assert confidence is True
+    al = answer.lower()
+    assert "red" in al, f"expected 'red' in answer, got: {answer!r}"
+    assert "blue" in al, f"expected 'blue' in answer, got: {answer!r}"
+
+
 def test_to_tree_string():
     """to_tree_string formats the scene graph as an indented tree with Floor and relations."""
     mem = GraphEQAMemory(
@@ -211,3 +247,47 @@ def test_graph_eqa_save_load_roundtrip():
         assert list(o1.xyz) == [1.0, 2.0, 0.5]
         assert o1.labels == ["chair"]
         assert o1.description == "A wooden chair"
+
+
+def test_labels_are_semantic_graph_hypothesis():
+    assert labels_are_semantic_graph_hypothesis(["cup"]) is True
+    assert labels_are_semantic_graph_hypothesis(["object"]) is False
+    assert labels_are_semantic_graph_hypothesis(["OBJECT"]) is False
+    assert labels_are_semantic_graph_hypothesis(["object", "mug"]) is True
+    assert labels_are_semantic_graph_hypothesis([]) is False
+
+
+def test_record_navigation_sample_does_not_create_nodes():
+    mem = GraphEQAMemory(eqa_client=lambda x: "", image_description_client=lambda x: "")
+    rgb = np.zeros((20, 20, 3), dtype=np.uint8)
+    mem.record_navigation_sample(rgb, np.array([1.0, 2.0, 0.1]), base_xyz=np.array([1.1, 2.0, 0.0]))
+    assert len(mem.get_nodes()) == 0
+    assert len(mem.get_observations()) == 0
+    assert len(mem.get_navigation_samples()) == 1
+
+
+def test_record_navigation_respects_graph_eqa_record_navigation_false():
+    mem = GraphEQAMemory(
+        parameters={"graph_eqa_record_navigation": False},
+        eqa_client=lambda x: "",
+        image_description_client=lambda x: "",
+    )
+    rgb = np.zeros((10, 10, 3), dtype=np.uint8)
+    mem.record_navigation_sample(rgb, np.array([0.0, 0.0, 0.0]))
+    assert mem.get_navigation_samples() == []
+
+
+def test_query_answer_navigation_fallback_images_and_target():
+    mem = GraphEQAMemory(
+        eqa_client=lambda x: (
+            "reasoning: r\nanswer: no\nconfidence: false\naction: 1\nconfidence_reasoning: look"
+        ),
+        image_description_client=lambda q: "mug",
+    )
+    rgb = np.zeros((40, 40, 3), dtype=np.uint8)
+    mem.record_navigation_sample(rgb, np.array([0.5, -0.25, 0.12]), base_xyz=np.array([0.0, 0.0, 0.0]))
+    _r, _a, _c, _cr, target_point, imgs = mem.query_answer("Is there a mug?", None, None)
+    assert len(imgs) == 1
+    assert target_point is not None
+    assert abs(float(target_point[0]) - 0.5) < 1e-5
+    assert abs(float(target_point[1]) - (-0.25)) < 1e-5
