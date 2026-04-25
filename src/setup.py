@@ -127,5 +127,8 @@ setuptools.setup(
             "mediapipe",
             "webcam",
         ],
+        "da3": [
+            "depth-anything-3>=0.1.1",
+        ],
     },
 )
