@@ -9,18 +9,20 @@ MolmoSpaces requires **mujoco 3.4** and **numpy>=2.2**, which conflict with the 
 
 ## Install the MolmoSpaces wrapper
 
-From the project root (recommended):
+From the project root:
+
+**Default (sim install):** `./install.sh -y` and `emet install full -y` also create **`.venv-molmospaces`** when `packages/emet_molmospaces` exists, so `emet serve mujoco --molmospaces-*` works without a second install. Use **`--no-molmospaces`** to skip that venv (lighter machine / CI).
+
+**Wrapper only** (e.g. you used `--no-sim` earlier):
 
 ```bash
 ./install.sh --molmospaces -y
 ```
 
-`-y` only makes the script non-interactive (apt, link `emet`); it does **not** turn on MolmoSpaces unless you also pass **`--molmospaces`** (or **`--all`**). Same for `emet install full -y`: add **`--molmospaces`** or **`--all`**.
-
 ```bash
 emet install full -y --molmospaces
-# or
-./install.sh --molmospaces -y
+# or full default install (includes MolmoSpaces with sim):
+emet install full -y
 ```
 
 This creates `.venv-molmospaces`, installs emet (no-deps) and then the wrapper from the repo (`pip install -e packages/emet_molmospaces`). The wrapper’s script `emet-molmospaces` will be at `.venv-molmospaces/bin/emet-molmospaces`. Core emet discovers it there, or via `MOLMOSPACES_PYTHON` (see below), or via `which emet-molmospaces` if on PATH.
@@ -127,6 +129,50 @@ Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. T
 
 Use `--port-offset` on both server and agent if default ZMQ ports are busy. The agent uses **`GenericZmqClient`** for `rby1`, matching `emet run dynamem --robot rby1`.
 
+## Exploration dataset + NeRF (phase 1)
+
+Record posed RGB (and optional depth) while the robot moves in a MolmoSpaces-backed scene. This uses the **same ZMQ workflow** as above: start the MuJoCo server in one terminal, then run the explorer in another.
+
+### Two-terminal workflow
+
+1. **Terminal A — sim** (main `uv` env, sim extras):
+
+   ```bash
+   emet serve mujoco --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0 \
+     --robot rby1 --headless
+   ```
+
+2. **Terminal B — explore + record**:
+
+   ```bash
+   emet run molmospaces-explore --robot rby1 --robot-ip 127.0.0.1 \
+     --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0 \
+     --output-dir ./data/molmo_ep_ithor_0 --steps 120 --capture-hz 2 \
+     --export-transforms
+   ```
+
+By default the explorer also writes **`episode_rgb.mp4`** in the same output directory (requires a working OpenCV `VideoWriter` with `mp4v`). Use **`--no-mp4`** to disable.
+
+Scene flags on the explore command are **metadata only** (they must match the running server for sane dataset labels). Random goals use `--goal-x-min` / `--goal-x-max` / `--goal-y-min` / `--goal-y-max` (meters) and `--navigate-every` to throttle `move_base_to` calls.
+
+Optional **`--with-graph-report`** builds a lightweight **GraphEQA** text report (`graph_report.txt`) for debugging; it does not affect NeRF files. Use **`--cpu-only`** with that flag on machines without a VLM GPU.
+
+### On-disk layout (per episode)
+
+| Path | Purpose |
+|------|---------|
+| `images/frame_XXXXXX.png` | Head RGB |
+| `depths/frame_XXXXXX.npy` | Depth in meters (optional; `--no-depth` disables) |
+| `metadata.jsonl` | One JSON per line: `image`, optional `depth`, `camera_pose` (4×4), `camera_K`, `gps`, `compass`, `seq_id` |
+| `episode_rgb.mp4` | **Exploration video** (RGB timeline at `--mp4-fps`, OpenCV `mp4v`); written by default after a run. Pass **`--no-mp4`** to skip if your OpenCV lacks working `VideoWriter`. |
+| `episode.json` | Scene/robot/split/index, step counts, optional `git_commit`, and **`rgb_mp4`** filename when an MP4 was written |
+
+**Camera convention:** `camera_pose` is stored as emitted by the MuJoCo ZMQ server for the head camera (4×4 homogeneous). The **`emet molmospaces export-nerfstudio`** command maps each row to NERFStudio **`transform_matrix`** entries and sets **`camera_angle_x`** from intrinsics when available. For strict NeRF pipelines you may need an additional **OpenCV ↔ OpenGL** flip depending on the trainer; document any extra transform in your training config.
+
+```bash
+emet molmospaces export-nerfstudio --episode-dir ./data/molmo_ep_ithor_0
+```
+
 ### MuJoCo version note
 
 MolmoSpaces assets are built with **MuJoCo 3.4**; core emet typically uses **mujoco>=3.3**. If `emet serve mujoco` fails to load a merged MJCF from the wrapper, try upgrading MuJoCo in the project env or report an asset compatibility issue. The wrapper venv is still required for **download/install/merge**; the server should run where **`emet` and sim extras** are installed.
@@ -160,7 +206,24 @@ For a step-by-step **testing plan** (core tests, wrapper tests with mocks, optio
   timeout 25 uv run emet serve mujoco --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0 --robot rby1 --headless
   ```
 
+- **Optional explore + export smoke** (manual, two terminals; needs a running ZMQ server and patience for first obs):
+
+  Terminal A: same `emet serve mujoco …` as in **Exploration dataset + NeRF** above until the server is ready.
+
+  Terminal B (few steps, then NERFStudio export):
+
+  ```bash
+  uv run emet run molmospaces-explore --robot rby1 --output-dir ./tmp_molmo_explore_smoke \
+    --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0 \
+    --steps 3 --no-mp4 --export-transforms
+  ```
+
+  Core tests also cover **`emet molmospaces export-nerfstudio`** on a synthetic episode directory (no sim).
+
 ## Troubleshooting
+
+- **"Timeout waiting for observations/state from ZMQ server" (GenericZmqClient)**  
+  The MuJoCo server must be running **before** you start `emet run …` clients. Merged Molmo scenes often need **30–90 seconds** after `emet serve mujoco` starts before the first ZMQ messages appear. The client now waits **60 seconds** by default (was 10). Increase further: `export EMET_ZMQ_STARTUP_TIMEOUT=120` or `emet run molmospaces-explore --zmq-startup-timeout 120 …`. Confirm **`--robot`** and **`--port-offset`** match on server and client.
 
 - **"MolmoSpaces wrapper not found" / `pip install emet-molmospaces` fails**
   The wrapper is **not on PyPI**. From the repo root run `./install.sh --molmospaces -y`, or install editable: `uv pip install --no-deps -e .` and `uv pip install -e packages/emet_molmospaces` into `.venv-molmospaces` (see **Install the MolmoSpaces wrapper** above). Core emet discovers `.venv-molmospaces/bin/emet-molmospaces` or runs `python -m emet_molmospaces` from that venv. You can also set `MOLMOSPACES_PYTHON` to that venv’s `python` binary.

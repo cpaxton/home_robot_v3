@@ -29,7 +29,7 @@ import click
 _CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
 # Sub-apps that define @click.option("--robot") and receive --robot from `emet run`.
-_EMET_RUN_APPS_WITH_ROBOT = frozenset({"dynamem", "agent", "graph-eqa", "scene-graph"})
+_EMET_RUN_APPS_WITH_ROBOT = frozenset({"dynamem", "agent", "graph-eqa", "scene-graph", "molmospaces-explore"})
 
 
 def _project_root() -> Path:
@@ -339,7 +339,9 @@ def _run_molmospaces_wrapper(args: list[str]) -> int:
         click.echo(
             "MolmoSpaces wrapper not found. The package `emet-molmospaces` is part of this repo and is not "
             "published on PyPI, so `pip install emet-molmospaces` will not work.\n\n"
-            "From the project root, run:\n"
+            "From the project root, run (sim install also creates `.venv-molmospaces` by default):\n"
+            "  ./install.sh -y\n"
+            "Or wrapper only:\n"
             "  ./install.sh --molmospaces -y\n\n"
             "Or create the venv and install the local packages:\n"
             "  uv venv .venv-molmospaces\n"
@@ -361,8 +363,9 @@ def molmospaces_cmd() -> None:
     """Set up MolmoSpaces scenes, list robots (e.g. rby1 / Galaxea R1), and run simulation.
 
     list-robots works without the wrapper. list-scenes, install-scene, merge-scene, and serve
-    require the local emet-molmospaces package (see docs/molmospaces.md):
-      ./install.sh --molmospaces -y   or   editable install of packages/emet_molmospaces
+    require the local emet-molmospaces package (see docs/molmospaces.md). ``export-nerfstudio`` is
+    core-only (reads an explore episode directory). Install wrapper with:
+      ./install.sh -y   (default sim path)   or   ./install.sh --molmospaces -y   or   editable install of packages/emet_molmospaces
     """
 
 
@@ -484,6 +487,31 @@ def molmospaces_serve(
     if install_if_missing:
         args.append("--install-if-missing")
     sys.exit(_run_molmospaces_wrapper(args))
+
+
+@molmospaces_cmd.command("export-nerfstudio", short_help="Build transforms.json from explore episode metadata")
+@click.option(
+    "--episode-dir",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=str),
+    required=True,
+    help="Directory containing metadata.jsonl and images/ from molmospaces-explore.",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=str,
+    default="transforms.json",
+    show_default=True,
+    help="Output filename inside episode-dir (default transforms.json).",
+)
+def molmospaces_export_nerfstudio(episode_dir: str, output: str) -> None:
+    """Convert ``metadata.jsonl`` + images into NERFStudio-style ``transforms.json``."""
+    from pathlib import Path
+
+    from emet.molmospaces.episode_writer import export_nerfstudio_transforms
+
+    p = export_nerfstudio_transforms(Path(episode_dir), output_name=output)
+    click.echo(str(p))
 
 
 def _kill_processes_on_port(port: int) -> bool:
@@ -737,6 +765,7 @@ def deploy(
             "timing",
             "discord",
             "create-and-print-memory",
+            "molmospaces-explore",
         ]
     ),
 )
@@ -782,6 +811,7 @@ def run(
       emet run dynamem --robot-ip 127.0.0.1 -S
       emet run dynamem -S --port-offset 100
       emet run dynamem -S --visual-servo --match-method class --target-object apple --target-receptacle plate
+      emet run molmospaces-explore --robot rby1 --output-dir ./ep0 --steps 40
       emet run mapping --robot-ip 127.0.0.1
       emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
       emet run discord --robot-ip 192.168.1.15 --task pickup   # requires DISCORD_TOKEN in env
@@ -820,6 +850,8 @@ def run(
         sys.exit(_run_module("emet.app.run_scene_graph", args))
     elif app == "graph-eqa":
         sys.exit(_run_module("emet.app.run_graph_eqa", args))
+    elif app == "molmospaces-explore":
+        sys.exit(_run_module("emet.app.run_molmospaces_explore", args))
     elif app == "mapping":
         sys.exit(_run_module("emet.app.mapping", args))
     elif app == "grasp":
@@ -1261,22 +1293,38 @@ def install_menu() -> None:
     help="Create .venv-molmospaces (MolmoSpaces; Python 3.11+). Forwards to install.sh --molmospaces",
 )
 @click.option(
+    "--no-molmospaces",
+    "no_molmospaces",
+    is_flag=True,
+    help="Skip MolmoSpaces wrapper even when sim installs (forwards to install.sh --no-molmospaces).",
+)
+@click.option(
     "--all",
     "install_all",
     is_flag=True,
     help="Same as install.sh --all (includes MolmoSpaces among other bundles)",
 )
-def install_full(yes: bool, sim: bool, cpu: bool, no_sam2: bool, molmospaces: bool, install_all: bool) -> None:
+def install_full(
+    yes: bool,
+    sim: bool,
+    cpu: bool,
+    no_sam2: bool,
+    molmospaces: bool,
+    no_molmospaces: bool,
+    install_all: bool,
+) -> None:
     """Run full install (./install.sh).
 
     Installs uv, system deps, git-lfs, and syncs dependencies.
 
-    ``-y`` does not enable MolmoSpaces by itself — pass ``--molmospaces`` or ``--all``, or run
-    ``./install.sh --molmospaces -y``.
+    With simulation enabled (default), ``install.sh`` also creates ``.venv-molmospaces`` when
+    ``packages/emet_molmospaces`` is present, so ``emet serve mujoco --molmospaces-*`` works after
+    ``emet install full -y``. Pass ``--no-molmospaces`` to skip that venv (lighter installs / CI).
 
     Examples:
       emet install full
-      emet install full -y --sim
+      emet install full -y
+      emet install full -y --no-molmospaces
       emet install full -y --molmospaces
       emet install full -y --all
       emet install full --cpu
@@ -1299,6 +1347,8 @@ def install_full(yes: bool, sim: bool, cpu: bool, no_sam2: bool, molmospaces: bo
         args.append("--all")
     if molmospaces:
         args.append("--molmospaces")
+    if no_molmospaces:
+        args.append("--no-molmospaces")
     result = subprocess.call(["bash", str(script)] + args)
     sys.exit(result)
 

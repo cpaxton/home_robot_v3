@@ -156,10 +156,22 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         return positions, velocities, efforts
 
+    def _camera_for_renderer(self, camera_name: str) -> int | str:
+        """Resolve RobotSpec camera name to a MuJoCo camera id, or free camera if none match.
+
+        Many MJCFs use site names for logical cameras while ``mujoco.Renderer`` expects
+        ``mjOBJ_CAMERA`` names (or ``-1`` for the free camera). Merged table scenes often
+        have ``ncam == 0``; then only the free camera can render.
+        """
+        cid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_CAMERA, camera_name)
+        if cid >= 0:
+            return cid
+        return -1
+
     def _render_camera(self, camera_name: str, width: int = 640, height: int = 480):
         """Render an RGB image from a named MuJoCo camera. Uses MUJOCO_GL (egl recommended headless)."""
         renderer = mujoco.Renderer(self._mjmodel, height, width)
-        renderer.update_scene(self._mjdata, camera=camera_name)
+        renderer.update_scene(self._mjdata, camera=self._camera_for_renderer(camera_name))
         rgb = renderer.render()
         renderer.close()
         return rgb
@@ -167,7 +179,7 @@ class RobosuiteZmqServer(BaseZmqServer):
     def _render_depth(self, camera_name: str, width: int = 640, height: int = 480):
         """Render a depth image from a named MuJoCo camera."""
         renderer = mujoco.Renderer(self._mjmodel, height, width)
-        renderer.update_scene(self._mjdata, camera=camera_name)
+        renderer.update_scene(self._mjdata, camera=self._camera_for_renderer(camera_name))
         renderer.enable_depth_rendering()
         depth = renderer.render()
         renderer.disable_depth_rendering()
