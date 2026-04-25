@@ -254,31 +254,34 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         if "xyt" in action:
             self._at_goal = False
-            raw = np.asarray(action["xyt"], dtype=np.float64).reshape(-1)
-            if raw.size < 3 or self._mjdata is None:
+            try:
+                raw = np.asarray(action["xyt"], dtype=np.float64).reshape(-1)
+                if raw.size < 3 or self._mjdata is None:
+                    return
+                init = self._initial_xyt
+                if init is None:
+                    init = np.zeros(3, dtype=np.float64)
+                relative = bool(action.get("nav_relative", False))
+                if relative:
+                    cur = self.get_base_xyt()
+                    dx, dy, dt = float(raw[0]), float(raw[1]), float(raw[2])
+                    ct = float(cur[2])
+                    wx = cur[0] + np.cos(ct) * dx - np.sin(ct) * dy
+                    wy = cur[1] + np.sin(ct) * dx + np.cos(ct) * dy
+                    wt = float(np.arctan2(np.sin(cur[2] + dt), np.cos(cur[2] + dt)))
+                else:
+                    world = self._spawn_rel_xyt_to_world(raw[:3], init)
+                    wx, wy, wt = float(world[0]), float(world[1]), float(world[2])
+                if not self._teleport_base_world_xyt(wx, wy, wt):
+                    logger.warning(
+                        "Navigation xyt=%s: no free joint on base_link '%s'; cannot teleport.",
+                        action["xyt"],
+                        self._spec.base_link_name,
+                    )
+            except Exception as e:
+                logger.error(f"Navigation xyt={action.get('xyt')!r} failed in simulation server: {e!r}")
+            finally:
                 self._at_goal = True
-                return
-            init = self._initial_xyt
-            if init is None:
-                init = np.zeros(3, dtype=np.float64)
-            relative = bool(action.get("nav_relative", False))
-            if relative:
-                cur = self.get_base_xyt()
-                dx, dy, dt = float(raw[0]), float(raw[1]), float(raw[2])
-                ct = float(cur[2])
-                wx = cur[0] + np.cos(ct) * dx - np.sin(ct) * dy
-                wy = cur[1] + np.sin(ct) * dx + np.cos(ct) * dy
-                wt = float(np.arctan2(np.sin(cur[2] + dt), np.cos(cur[2] + dt)))
-            else:
-                world = self._spawn_rel_xyt_to_world(raw[:3], init)
-                wx, wy, wt = float(world[0]), float(world[1]), float(world[2])
-            if not self._teleport_base_world_xyt(wx, wy, wt):
-                logger.warning(
-                    "Navigation xyt=%s: no free joint on base_link '%s'; cannot teleport.",
-                    action["xyt"],
-                    self._spec.base_link_name,
-                )
-            self._at_goal = True
 
     @override
     def get_full_observation_message(self) -> dict[str, Any]:

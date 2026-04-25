@@ -233,7 +233,13 @@ class BaseZmqServer(CommsNode, ABC):
                     logger.info(f" - Action received: {action}")
                 # Tracking step number -- should never go backwards
                 action_step = action.get("step", -1)
-                if self.skip_duplicate_steps and action_step <= self._last_step:
+                # Always apply ``xyt`` (navigation): duplicate-step filtering can drop a goal while
+                # the client still advanced its step counter, leaving ``at_goal`` stuck False.
+                if (
+                    self.skip_duplicate_steps
+                    and action_step <= self._last_step
+                    and "xyt" not in action
+                ):
                     logger.warning(f"Skipping duplicate action {action_step}, last step = {self._last_step}")
                     continue
                 self.handle_action(action)

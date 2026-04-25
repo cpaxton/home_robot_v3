@@ -410,6 +410,8 @@ class GenericZmqClient(AbstractRobotClient):
         action = {"xyt": xyt.tolist(), "nav_relative": relative}
         self.send_action(action)
         if blocking:
+            # PUB/SUB can drop the first packet; give the server a beat to apply xyt.
+            time.sleep(0.02)
             # Avoid succeeding immediately on a stale ``at_goal`` from the previous navigation
             # before the server recv thread clears it for the new goal.
             t_clear = timeit.default_timer()
