@@ -297,7 +297,9 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         depth_u16 = (depth * 1000).astype(np.uint16)
         q, dq, eff = self.get_joint_state()
-        xyt = self.get_base_pose() or np.zeros(3)
+        xyt = self.get_base_pose()
+        if xyt is None:
+            xyt = np.zeros(3)
 
         message = {
             "head_color_image": compression.to_jpg(rgb),
