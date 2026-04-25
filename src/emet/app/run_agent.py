@@ -110,7 +110,11 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
 @click.option(
     "--robot",
     default="stretch",
-    help="Robot backend (stretch, rby1, galaxea_r1). Must match emet serve mujoco --robot.",
+    help=(
+        "Robot backend (stretch, rby1, galaxea_r1). Must match the ZMQ server: same value as "
+        "emet serve mujoco --robot after any CLI remaps. MolmoSpaces (--molmospaces-scene) uses rby1 on the "
+        "server even when serve is started with default stretch—use --robot rby1 here."
+    ),
 )
 @click.option(
     "--agent-config",
@@ -180,6 +184,8 @@ def main(
       emet run agent --device cpu --offline
       emet run agent --llm qwen35-9B --offline
       emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
+      # MolmoSpaces: ``emet serve mujoco --molmospaces-scene ithor ...`` (often DISPLAY=:1 instead of --headless); same --port-offset as serve:
+      emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml
       emet run agent --input-path logs/memory_xxx --no-discord
       emet run agent --no-llm   # letter commands (E/M/Q/P)
       emet run agent --no-llm --command 'find red cylinder'

@@ -128,7 +128,14 @@ def main() -> None:
     is_flag=True,
     help="Use Robocasa for scene generation (ignored if backend is robocasa).",
 )
-@click.option("--headless", is_flag=True, help="Run without native viewer")
+@click.option(
+    "--headless",
+    is_flag=True,
+    help=(
+        "Run without the MuJoCo viewer and use off-screen GL when no DISPLAY is set. "
+        "If you have an X server (e.g. Xvfb), set DISPLAY=:1 (or any display) and omit this flag."
+    ),
+)
 @click.option(
     "--no-cameras",
     is_flag=True,
@@ -232,14 +239,15 @@ def serve(
 
     Examples:
       emet serve
-      emet serve mujoco --headless
+      DISPLAY=:1 emet serve mujoco   # Xvfb or local display; viewer works without --headless
+      emet serve mujoco --headless   # True headless / no DISPLAY (EGL off-screen)
       emet serve robocasa
       emet serve robocasa --robot PandaOmron
       emet serve robocasa --robot galaxea_r1
       emet serve robocasa --robocasa-task PickPlaceCounterToCabinet
       emet serve robocasa --list-robocasa-tasks
       emet serve mujoco --use-robocasa --port-offset 100
-      emet serve mujoco --molmospaces-scene ithor --headless   # MolmoSpaces + rby1 ZMQ (needs wrapper)
+      DISPLAY=:1 emet serve mujoco --molmospaces-scene ithor   # MolmoSpaces + rby1 (needs wrapper)
     """
     use_robocasa_flag = use_robocasa or (backend == "robocasa")
     if molmospaces_scene and scene_path:
@@ -1236,23 +1244,38 @@ def install_robocasa(skip_download_assets: bool, setup_macros: bool, no_sync: bo
 
 
 @install.command("menu", short_help="Interactive menu to manage sub-assets")
-def install_menu() -> None:
-    """Open a text-based menu to install or update sub-assets.
+@click.option(
+    "--text-only",
+    "text_only",
+    is_flag=True,
+    help="ASCII menu only (skip Rich plan wizard when Rich is installed).",
+)
+def install_menu(text_only: bool) -> None:
+    """Open a menu to install or update sub-assets.
 
-    Shows status of: submodules (SAM-2), simulation (robosuite + robocasa),
-    kitchen assets (textures, fixtures), and MolmoSpaces venv. Choose an
-    item to run its installer, or run all with prompts.
+    With Rich (dev extra), starts a colored plan: choose defaults, then review
+    before running commands. Use --text-only for the legacy ASCII asset menu only.
 
     Examples:
       emet install menu
+      emet install menu --text-only
     """
     from emet.install_ui import run_install_menu
 
-    sys.exit(run_install_menu())
+    sys.exit(run_install_menu(text_only=text_only))
 
 
 @install.command("full", short_help="Run full install (install.sh)")
 @click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompts (non-interactive apt, link emet)")
+@click.option(
+    "--profile",
+    type=click.Choice(["minimal", "standard", "full"], case_sensitive=False),
+    default=None,
+    help=(
+        "Install profile forwarded to install.sh / EMET_INSTALL_PROFILE: "
+        "standard (default)=no sim unless --sim; full=legacy sim-on-by-default; minimal=same as standard today."
+    ),
+)
 @click.option("--sim", is_flag=True, help="Include simulation extras")
 @click.option("--cpu", is_flag=True, help="CPU-only (skip SAM2)")
 @click.option("--no-sam2", is_flag=True, help="Skip Segment Anything 2")
@@ -1267,10 +1290,21 @@ def install_menu() -> None:
     is_flag=True,
     help="Same as install.sh --all (includes MolmoSpaces among other bundles)",
 )
-def install_full(yes: bool, sim: bool, cpu: bool, no_sam2: bool, molmospaces: bool, install_all: bool) -> None:
+def install_full(
+    yes: bool,
+    profile: str | None,
+    sim: bool,
+    cpu: bool,
+    no_sam2: bool,
+    molmospaces: bool,
+    install_all: bool,
+) -> None:
     """Run full install (./install.sh).
 
     Installs uv, system deps, git-lfs, and syncs dependencies.
+
+    By default the shell script does **not** install Robocasa/simulation; pass ``--sim`` or ``--all``,
+    or set ``EMET_INSTALL_PROFILE=full`` for the old behavior.
 
     ``-y`` does not enable MolmoSpaces by itself — pass ``--molmospaces`` or ``--all``, or run
     ``./install.sh --molmospaces -y``.
@@ -1278,6 +1312,7 @@ def install_full(yes: bool, sim: bool, cpu: bool, no_sam2: bool, molmospaces: bo
     Examples:
       emet install full
       emet install full -y --sim
+      emet install full -y --profile full
       emet install full -y --molmospaces
       emet install full -y --all
       emet install full --cpu
@@ -1290,6 +1325,8 @@ def install_full(yes: bool, sim: bool, cpu: bool, no_sam2: bool, molmospaces: bo
     args = []
     if yes:
         args.append("-y")
+    if profile:
+        args.append(f"--profile={profile}")
     if sim:
         args.append("--sim")
     if cpu:
@@ -1300,7 +1337,10 @@ def install_full(yes: bool, sim: bool, cpu: bool, no_sam2: bool, molmospaces: bo
         args.append("--all")
     if molmospaces:
         args.append("--molmospaces")
-    result = subprocess.call(["bash", str(script)] + args)
+    env = os.environ.copy()
+    if profile:
+        env["EMET_INSTALL_PROFILE"] = profile.lower()
+    result = subprocess.call(["bash", str(script)] + args, env=env)
     sys.exit(result)
 
 

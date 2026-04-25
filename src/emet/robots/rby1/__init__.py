@@ -52,7 +52,9 @@ class Rby1Backend(RobotBackend):
     def create_client(self, robot_ip: str, **kwargs):
         from emet.controller.generic_zmq_client import GenericZmqClient
 
-        return GenericZmqClient(robot_spec=self.get_spec(), robot_ip=robot_ip, **kwargs)
+        opts = dict(kwargs)
+        opts.setdefault("start_immediately", False)
+        return GenericZmqClient(robot_spec=self.get_spec(), robot_ip=robot_ip, **opts)
 
     def create_model(self, **kwargs):
         raise NotImplementedError(

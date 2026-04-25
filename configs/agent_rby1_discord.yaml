@@ -1,13 +1,22 @@
 # DynaMem / scene-memory parameters for: Galaxea R1 (rby1) + emet run agent + Discord
 #
-# Run from repo root (paths are resolved relative to cwd unless absolute):
+# Run from repo root (paths are resolved relative to cwd unless absolute).
+# The agent must use --robot rby1 whenever the MuJoCo server is rby1 (including MolmoSpaces: even if you
+# start serve with default --robot stretch, emet remaps MolmoSpaces to rby1 on the server).
 #
-#   Terminal 1 — simulation:
-#     uv run emet serve mujoco --robot rby1 --headless
+#   Terminal 1 — MolmoSpaces + ZMQ (requires emet-molmospaces; see docs/molmospaces.md):
+#     export DISPLAY=:1   # e.g. Xvfb or your desktop; avoids --headless when you have X
+#     uv run emet serve mujoco --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0
+#     # First-time assets: add --molmospaces-install (non-interactive download).
+#     # No display at all: add --headless (forces EGL off-screen).
 #
-#   Terminal 2 — agent (--robot-ip defaults to 127.0.0.1; DISCORD_TOKEN required for Discord):
+#   Terminal 1 — plain Galaxea / rby1 MJCF (no MolmoSpaces):
+#     export DISPLAY=:1
+#     uv run emet serve mujoco --robot rby1
+#
+#   Terminal 2 — agent (--robot-ip defaults to 127.0.0.1; match --port-offset with Terminal 1 if set):
 #     export DISCORD_TOKEN="your-bot-token"
-#     # optional: export EMET_DISCORD_CHANNEL="your-channel-name"   # default: talk-to-stretch
+#     # optional: EMET_DISCORD_CHANNEL names the channel the bot listens on (default channel name is talk-to-stretch)
 #     uv run python -m emet.app.run_agent --robot rby1 \
 #       --llm qwen35-9B --device cuda --max-tokens 1024 \
 #       --agent-config configs/agent_rby1_discord.yaml

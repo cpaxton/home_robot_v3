@@ -157,9 +157,12 @@ class DynamemController(BaseController):
         if isinstance(self.robot, (StretchZmqClient, GenericZmqClient)):
             if not self.robot.start():
                 raise RuntimeError(
-                    "Robot ZMQ client did not connect. Start the simulator first with the same robot, e.g. "
-                    "`emet serve mujoco --robot stretch` (default agent uses stretch), then retry. "
-                    "Check 127.0.0.1 and `--port-offset` if you use a non-default offset."
+                    "Robot ZMQ client did not connect (no full observation + state within the startup timeout). "
+                    "Start the sim first with the same robot and ports, e.g. "
+                    "`emet serve mujoco` (Stretch) or `emet serve mujoco --robot rby1` / MolmoSpaces merge, "
+                    "then run the agent. Match `--port-offset` on both sides and use the same `--robot` as serve. "
+                    "If the sim is already running, check server logs: missing camera/GL errors can make "
+                    "observations None so nothing is published on the observation socket."
                 )
         self.manip_wrapper = ManipulationWrapper(self.robot, stretch_gripper_max=stretch_gripper_max, end_link=end_link)
         self.robot.move_to_nav_posture()

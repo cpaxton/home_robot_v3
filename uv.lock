@@ -975,6 +975,7 @@ dependencies = [
     { name = "qwen-vl-utils" },
     { name = "rerun-sdk" },
     { name = "retry" },
+    { name = "safetensors" },
     { name = "schema" },
     { name = "scikit-fmm" },
     { name = "scikit-image", version = "0.25.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -1006,6 +1007,7 @@ dev = [
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-timeout" },
+    { name = "rich" },
     { name = "ruff" },
 ]
 dynamem = [
@@ -1025,7 +1027,7 @@ sim = [
 
 [package.metadata]
 requires-dist = [
-    { name = "accelerate", specifier = ">=1.5.0" },
+    { name = "accelerate", specifier = ">=1.6.0" },
     { name = "bitsandbytes" },
     { name = "click", specifier = ">=8.1.8" },
     { name = "click", marker = "extra == 'sim'", specifier = ">=8.1.8" },
@@ -1039,7 +1041,7 @@ requires-dist = [
     { name = "hello-robot-stretch-urdf" },
     { name = "hello-robot-stretch-urdf", marker = "extra == 'sim'" },
     { name = "hpp-fcl" },
-    { name = "huggingface-hub", extras = ["cli"], specifier = ">=0.24.7" },
+    { name = "huggingface-hub", specifier = ">=0.28.0" },
     { name = "hydra-core" },
     { name = "inputs", marker = "extra == 'sim'", specifier = ">=0.5" },
     { name = "lark", marker = "extra == 'dev'" },
@@ -1074,7 +1076,9 @@ requires-dist = [
     { name = "qwen-vl-utils" },
     { name = "rerun-sdk", specifier = ">=0.21.0,<0.23.0" },
     { name = "retry" },
+    { name = "rich", marker = "extra == 'dev'", specifier = ">=13.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
+    { name = "safetensors", specifier = ">=0.4.5" },
     { name = "sam-2", marker = "extra == 'dynamem'", editable = "third_party/segment-anything-2" },
     { name = "schema" },
     { name = "scikit-fmm" },
@@ -1088,7 +1092,7 @@ requires-dist = [
     { name = "torch", specifier = ">=2.6" },
     { name = "torchaudio" },
     { name = "torchvision" },
-    { name = "transformers", specifier = ">=4.51.0" },
+    { name = "transformers", specifier = ">=4.55.0" },
     { name = "trimesh", specifier = ">=3.10.0" },
     { name = "triton", specifier = ">=2.3.1" },
     { name = "ultralytics", specifier = "==8.3.161" },

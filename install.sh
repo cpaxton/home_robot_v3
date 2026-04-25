@@ -9,15 +9,27 @@ ROOT_DIR="$SCRIPT_DIR"
 cd "$ROOT_DIR"
 
 # Parse options
+# Sane defaults: dev + core Python only. Simulation (robocasa, large assets) is opt-in via --sim or --all.
+# Profiles: EMET_INSTALL_PROFILE or --profile=  (minimal|standard|full). "full" = legacy sim-on-by-default.
 CPU_ONLY="false"
 SKIP_ASKING="false"
 NO_SAM2="false"
-INSTALL_SIM="true"   # default: clone third_party/robocasa+robosuite and include sim extra
+INSTALL_SIM="false"
 EXTRAS="dev"
 CLEAN_SIM="false"
 INSTALL_MOLMOSPACES="false"
+# standard | minimal | full (full = install sim without passing --sim)
+PROFILE="${EMET_INSTALL_PROFILE:-standard}"
+# Set when user passes --sim, --no-sim, or --all (all implies sim)
+SIM_EXPLICIT=""
+PREV_PROFILE=""
 
 for arg in "$@"; do
+    if [ "$PREV_PROFILE" = "1" ]; then
+        PROFILE="$arg"
+        PREV_PROFILE=""
+        continue
+    fi
     case $arg in
         -y|--yes)
             SKIP_ASKING="true"
@@ -26,6 +38,7 @@ for arg in "$@"; do
             INSTALL_SIM="true"
             INSTALL_MOLMOSPACES="true"
             NO_SAM2="false"
+            SIM_EXPLICIT="1"
             ;;
         --cpu)
             CPU_ONLY="true"
@@ -36,9 +49,11 @@ for arg in "$@"; do
             ;;
         --no-sim)
             INSTALL_SIM="false"
+            SIM_EXPLICIT="1"
             ;;
         --sim)
             INSTALL_SIM="true"
+            SIM_EXPLICIT="1"
             ;;
         --clean)
             CLEAN_SIM="true"
@@ -46,22 +61,46 @@ for arg in "$@"; do
         --molmospaces)
             INSTALL_MOLMOSPACES="true"
             ;;
+        --profile=*)
+            PROFILE="${arg#--profile=}"
+            ;;
+        --profile)
+            PREV_PROFILE="1"
+            ;;
         *)
             ;;
     esac
 done
+
+# Apply profile when --sim / --no-sim / --all were not used
+if [ -z "$SIM_EXPLICIT" ]; then
+    case "$(printf '%s' "$PROFILE" | tr '[:upper:]' '[:lower:]')" in
+        full|legacy)
+            INSTALL_SIM="true"
+            ;;
+        minimal|standard|"" )
+            ;;
+        *)
+            echo "WARNING: unknown EMET_INSTALL_PROFILE/--profile=$PROFILE (use minimal, standard, or full). Using standard."
+            ;;
+    esac
+fi
 
 [[ "$INSTALL_SIM" == "true" ]] && EXTRAS="$EXTRAS,sim"
 
 echo "=============================================="
 echo "         INSTALLING STRETCH AI (uv)"
 echo "=============================================="
-echo "Options: CPU_ONLY=$CPU_ONLY, NO_SAM2=$NO_SAM2, INSTALL_SIM=$INSTALL_SIM, EXTRAS=$EXTRAS, MOLMOSPACES=$INSTALL_MOLMOSPACES"
+echo "Options: PROFILE=$PROFILE CPU_ONLY=$CPU_ONLY NO_SAM2=$NO_SAM2 INSTALL_SIM=$INSTALL_SIM EXTRAS=$EXTRAS MOLMOSPACES=$INSTALL_MOLMOSPACES"
+echo "         Defaults: sim is OFF (uv dev + dynamem if SAM-2 present). Use --sim or --all for Robocasa/simulation."
+echo "         EMET_INSTALL_PROFILE=full  or  --profile=full  = legacy behavior (enable sim without --sim)."
 echo "         -y/--yes    = non-interactive (apt, link emet); does NOT imply MolmoSpaces — pass --molmospaces or --all"
-echo "         --all       = install everything (sim + molmospaces + dynamem); overridable by --no-sim etc."
-echo "         --sim       = install sim (Robocasa + robosuite; default). Use --no-sim to skip."
+echo "         --all       = sim + molmospaces + dynamem bundle (same as --sim --molmospaces)"
+echo "         --sim       = uv sim extra + install_simulation.sh (Robocasa + robosuite)"
+echo "         --no-sim    = force sim off even if PROFILE=full"
 echo "         --molmospaces = create .venv-molmospaces for MolmoSpaces (scenes + rby1 robot)"
 echo "         --clean     = remove and re-clone third_party/robosuite, robosuite_models, robocasa (only if needed; normally we update in place)"
+echo "         Rich menu:  uv sync --extra dev && uv run emet install menu"
 echo "Root: $ROOT_DIR"
 echo "---------------------------------------------"
 

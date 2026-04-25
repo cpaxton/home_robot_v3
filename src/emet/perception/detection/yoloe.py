@@ -19,7 +19,6 @@ import cv2
 import numpy as np
 import torch
 from PIL import Image
-from ultralytics import YOLOE
 
 from emet.core.abstract_perception import PerceptionModule
 from emet.core.interfaces import Observations
@@ -99,6 +98,12 @@ class YoloEPerception(PerceptionModule):
 
         self.device = device
         checkpoint_file = f"yoloe-v8{size}-seg.pt"
+        # ultralytics touches cv2.imshow at import time; opencv-python-headless / some ROS cv2 builds omit it.
+        if not hasattr(cv2, "imshow"):
+            cv2.imshow = lambda *_a, **_k: None  # type: ignore[method-assign, assignment]
+
+        from ultralytics import YOLOE
+
         self.model = YOLOE(checkpoint_file)
         self.model.to(self.device)
 

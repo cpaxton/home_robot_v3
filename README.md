@@ -41,10 +41,12 @@ cd home_robot_v3   # or your clone directory
 **Option A — one-shot script (recommended):**
 
 ```bash
-./install.sh              # dev + sim (Robocasa/robosuite), prompts for system deps
-./install.sh -y           # non-interactive; sim install included by default
-./install.sh --no-sim     # skip simulation (no third_party clone)
+./install.sh              # dev (+ dynamem if SAM-2 submodule); simulation is opt-in
+./install.sh -y           # non-interactive apt + link; does not add sim unless --sim / --all / profile=full
+./install.sh --sim        # add MuJoCo sim extra + clone robosuite/robocasa (large)
+./install.sh --profile=full   # legacy: enable sim without --sim (same as EMET_INSTALL_PROFILE=full)
 ./install.sh --no-sam2    # skip DynaMem/SAM2
+uv run emet install menu  # Rich plan wizard (after: uv sync --extra dev)
 ```
 
 **Option B — uv directly:**
@@ -73,8 +75,8 @@ uv run python -m emet.app.ai_pickup
 Run DynaMem in MuJoCo simulation in a few steps:
 
 ```bash
-# 1. Install (includes simulation + DynaMem/SAM2 by default)
-./install.sh -y
+# 1. Install core + sim (Robocasa) — add --sim or use: ./install.sh -y --profile full
+./install.sh -y --sim
 
 # 2. Terminal 1 — start simulation server
 emet serve mujoco --use-robocasa
@@ -227,7 +229,7 @@ Clone the repo, then install with [Astral uv](https://docs.astral.sh/uv/) as in 
 pre-commit install
 ```
 
-A plain `uv sync` works without cloning simulation repos. The full install script (`./install.sh`) includes simulation by default (clones third_party/robocasa+robosuite); use `--no-sim` to skip. Or run `emet install sim` after `uv sync`. For DynaMem (SAM2): `uv sync --extra dynamem`.
+A plain `uv sync` works without cloning simulation repos. `./install.sh` defaults to **no** Robocasa clone (use `--sim` or `EMET_INSTALL_PROFILE=full` for the old behavior). Or run `emet install sim` after `uv sync --extra dev`. For DynaMem (SAM2): `uv sync --extra dynamem`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for more information, and [debug](docs/debug.md) / [update](docs/update.md) for troubleshooting. You can test most code in [simulation](docs/simulation.md) without a physical robot.
 

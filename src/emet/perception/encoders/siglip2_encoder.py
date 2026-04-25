@@ -62,9 +62,10 @@ class Siglip2Encoder(BaseImageTextEncoder):
         else:
             raise ValueError(f"Invalid version {version}: must be one of 'base', 'so400m'")
 
-        self.processor = AutoProcessor.from_pretrained(model_name, use_fast=False)
+        _sf = {"use_safetensors": True}
+        self.processor = AutoProcessor.from_pretrained(model_name, use_fast=False, **_sf)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name).to(self.device)
+        self.model = AutoModel.from_pretrained(model_name, **_sf).to(self.device)
 
     def encode_image(
         self,

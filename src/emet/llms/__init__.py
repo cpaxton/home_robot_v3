@@ -76,7 +76,12 @@ def process_incoming_qwen_types(qwen_type: str):
         model_size = terms[1]
         # if the quantization is None, meaning no quantization shall be applied
         if len(terms) < 3:
-            finetuning_option, quantization_option = "Instruct", None
+            # qwen35-9B is only two tokens; without this branch we would load full-precision 3.5 (huge VRAM / OOM).
+            # Match the one-token default (int4) for local agent use.
+            if len(terms) == 2 and terms[0].lower() == "qwen35":
+                finetuning_option, quantization_option = None, "int4"
+            else:
+                finetuning_option, quantization_option = "Instruct", None
         # This means finetune with Instruct and using quantization "Instruct-Int4" or "Instruct-Int" (alias for Int4)
         elif len(terms) >= 4:
             q = terms[3].lower()

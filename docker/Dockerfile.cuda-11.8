@@ -61,8 +61,8 @@ WORKDIR /app
 # Copy repo (expect submodules already in context from builder, or init in install.sh)
 COPY . .
 
-# Run install (uv-based); -y = non-interactive
-RUN chmod +x install.sh && ./install.sh -y
+# Run install (uv-based); -y = non-interactive; --sim = Robocasa/MuJoCo (image default; use --no-sim to slim)
+RUN chmod +x install.sh && ./install.sh -y --sim
 
 # Ensure .venv is on PATH so `emet` and `python` work without activating
 ENV PATH="/app/.venv/bin:$PATH"

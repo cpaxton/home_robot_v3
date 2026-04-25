@@ -194,7 +194,9 @@ class GenericZmqClient(AbstractRobotClient):
         if not self._wait_for_zmq_ready(timeout=10.0):
             logger.error(
                 "Timeout waiting for observations/state from ZMQ server. "
-                "Start `emet serve mujoco` with the same `--robot` and check IP / `--port-offset`."
+                "Start `emet serve mujoco` with the same `--robot` and matching `--port-offset` / IP. "
+                "If the sim is up, it may be publishing state but not full observations (camera/GL failure "
+                "can leave observation messages unset)."
             )
             return False
         if not self._verify_emet_robot_id():

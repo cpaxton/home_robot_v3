@@ -55,14 +55,17 @@ dependencies = [
     "hydra-core",
     "draccus>=0.11.0",
     "timm>1.0.0",
-    "huggingface_hub[cli]>=0.24.7",
+    # HF stack: explicit safetensors avoids SigLIP / VLMs failing when only model.safetensors exists on the Hub.
+    # Newer transformers + hub improve from_pretrained layout detection (vs stale pytorch_model.bin errors).
+    "huggingface_hub>=0.28.0",
+    "safetensors>=0.4.5",
     "open-clip-torch>=2.32.0",
-    "transformers>=4.51.0",
+    "transformers>=4.55.0",
     "retry",
     "qwen_vl_utils",
     "bitsandbytes",
     "triton>=2.3.1",
-    "accelerate>=1.5.0",
+    "accelerate>=1.6.0",
     "einops",
     "protobuf",
     "pyliblzfse",
@@ -94,6 +97,7 @@ dev = [
     "ruff>=0.8.0",
     "mypy",
     "lark",
+    "rich>=13.0.0",
 ]
 sim = [
     "mujoco>=3.3.0",  # Align with upstream robosuite; 3.2.6 was for older Stretch compat

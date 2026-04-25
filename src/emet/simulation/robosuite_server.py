@@ -14,10 +14,12 @@ this server keeps the robosuite robot in the scene and exposes the same
 ZMQ protocol as MujocoZmqServer.
 """
 
+import contextlib
 import threading
 import time
-from typing import Any
+from typing import Any, cast
 
+import cv2
 import mujoco
 import numpy as np
 from overrides import override
@@ -30,6 +32,11 @@ from emet.robots.base import RobotSpec
 from emet.utils.geometry import xyt_global_to_base
 
 logger = log.Logger(__name__)
+
+# One ``mujoco.Renderer`` / GL context: multiple resolutions (e.g. 640 + 320 wide) each call
+# ``mjr_makeContext`` and often hit GL_INVALID_OPERATION (0x502) on EGL. Servo images downsample in CPU.
+_PRIMARY_RW, _PRIMARY_RH = 640, 480
+_SERVO_RW, _SERVO_RH = 320, 240
 
 
 class RobosuiteZmqServer(BaseZmqServer):
@@ -62,6 +69,12 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._running = False
         self.control_mode = "navigation"
         self._at_goal = False
+        # mujoco.Renderer / GLFW are not thread-safe; ZMQ send + servo threads render concurrently.
+        self._render_lock = threading.Lock()
+        # Single Renderer / GL context (see module _PRIMARY_*). Extra resolutions → extra 0x502 on EGL.
+        self._primary_renderer: Any | None = None
+        # When using the passive viewer, all mj_step / mjdata reads must use the same lock (MuJoCo docs).
+        self._mj_data_sync: contextlib.AbstractContextManager[Any] = contextlib.nullcontext()
 
     @property
     def spec(self) -> RobotSpec:
@@ -156,23 +169,32 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         return positions, velocities, efforts
 
-    def _render_camera(self, camera_name: str, width: int = 640, height: int = 480):
-        """Render an RGB image from a named MuJoCo camera. Uses MUJOCO_GL (egl recommended headless)."""
-        renderer = mujoco.Renderer(self._mjmodel, height, width)
-        renderer.update_scene(self._mjdata, camera=camera_name)
-        rgb = renderer.render()
-        renderer.close()
-        return rgb
+    def _close_renderers(self) -> None:
+        with self._render_lock:
+            if self._primary_renderer is not None:
+                try:
+                    self._primary_renderer.close()
+                except Exception:
+                    pass
+                self._primary_renderer = None
 
-    def _render_depth(self, camera_name: str, width: int = 640, height: int = 480):
-        """Render a depth image from a named MuJoCo camera."""
-        renderer = mujoco.Renderer(self._mjmodel, height, width)
-        renderer.update_scene(self._mjdata, camera=camera_name)
-        renderer.enable_depth_rendering()
-        depth = renderer.render()
-        renderer.disable_depth_rendering()
-        renderer.close()
-        return depth
+    def _primary_rgb_and_depth(self, camera_name: str) -> tuple[np.ndarray, np.ndarray]:
+        """RGB + depth under one ``_render_lock`` and one ``Renderer`` (avoids EGL 0x502 on second context)."""
+        with self._render_lock:
+            if self._primary_renderer is None:
+                self._primary_renderer = mujoco.Renderer(self._mjmodel, _PRIMARY_RH, _PRIMARY_RW)
+            renderer = self._primary_renderer
+            renderer.update_scene(self._mjdata, camera=camera_name)
+            rgb = cast(np.ndarray, renderer.render())
+            rgb = np.asarray(rgb, dtype=np.uint8).copy()
+            renderer.enable_depth_rendering()
+            try:
+                renderer.update_scene(self._mjdata, camera=camera_name)
+                depth = cast(np.ndarray, renderer.render())
+                depth = np.asarray(depth, dtype=np.float32).copy()
+            finally:
+                renderer.disable_depth_rendering()
+            return rgb, depth
 
     def _get_camera_K(self, camera_name: str, width: int = 640, height: int = 480):
         """Compute intrinsic matrix from MuJoCo camera fovy."""
@@ -185,19 +207,20 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     @override
     def handle_action(self, action: dict[str, Any]):
-        if "control_mode" in action:
-            self.control_mode = action["control_mode"]
+        with self._mj_data_sync:
+            if "control_mode" in action:
+                self.control_mode = action["control_mode"]
 
-        if "joint" in action:
-            joint_targets = action["joint"]
-            for i, aname in enumerate(self._spec.actuator_names):
-                if i < len(joint_targets):
-                    aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
-                    if aid >= 0:
-                        self._mjdata.ctrl[aid] = joint_targets[i]
+            if "joint" in action:
+                joint_targets = action["joint"]
+                for i, aname in enumerate(self._spec.actuator_names):
+                    if i < len(joint_targets):
+                        aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
+                        if aid >= 0:
+                            self._mjdata.ctrl[aid] = joint_targets[i]
 
-        if "xyt" in action:
-            logger.info(f"Navigation goal received: {action['xyt']} (not yet implemented for robosuite server)")
+            if "xyt" in action:
+                logger.info(f"Navigation goal received: {action['xyt']} (not yet implemented for robosuite server)")
 
     @override
     def get_full_observation_message(self) -> dict[str, Any]:
@@ -209,63 +232,64 @@ class RobosuiteZmqServer(BaseZmqServer):
             return None
 
         primary_cam = cam_names[0]
-        try:
-            rgb = self._render_camera(primary_cam)
-            depth = self._render_depth(primary_cam)
-        except Exception:
-            return None
+        with self._mj_data_sync:
+            try:
+                rgb, depth = self._primary_rgb_and_depth(primary_cam)
+            except Exception:
+                return None
 
-        width, height = rgb.shape[1], rgb.shape[0]
-        depth_u16 = (depth * 1000).astype(np.uint16)
+            width, height = rgb.shape[1], rgb.shape[0]
+            depth_u16 = (depth * 1000).astype(np.uint16)
 
-        positions, _, _ = self.get_joint_state()
-        xyt = self.get_base_pose()
-        if xyt is None:
-            xyt = np.zeros(3)
+            positions, _, _ = self.get_joint_state()
+            xyt = self.get_base_pose()
+            if xyt is None:
+                xyt = np.zeros(3)
 
-        K = self._get_camera_K(primary_cam, width, height)
+            K = self._get_camera_K(primary_cam, width, height)
 
-        message = {
-            "rgb": compression.to_jpg(rgb),
-            "depth": compression.to_jp2(depth_u16),
-            "camera_K": K,
-            "camera_pose": np.eye(4),
-            "ee_pose": np.eye(4),
-            "joint": positions,
-            "gps": xyt[:2],
-            "compass": np.array([xyt[2]]),
-            "rgb_width": width,
-            "rgb_height": height,
-            "control_mode": self.get_control_mode(),
-            "last_motion_failed": False,
-            "recv_address": self.recv_address,
-            "step": self._last_step,
-            "at_goal": self._at_goal,
-            "is_simulation": True,
-            "lidar_points": None,
-            "lidar_timestamp": None,
-            EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
-        }
-        return message
+            message = {
+                "rgb": compression.to_jpg(rgb),
+                "depth": compression.to_jp2(depth_u16),
+                "camera_K": K,
+                "camera_pose": np.eye(4),
+                "ee_pose": np.eye(4),
+                "joint": positions,
+                "gps": xyt[:2],
+                "compass": np.array([xyt[2]]),
+                "rgb_width": width,
+                "rgb_height": height,
+                "control_mode": self.get_control_mode(),
+                "last_motion_failed": False,
+                "recv_address": self.recv_address,
+                "step": self._last_step,
+                "at_goal": self._at_goal,
+                "is_simulation": True,
+                "lidar_points": None,
+                "lidar_timestamp": None,
+                EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
+            }
+            return message
 
     @override
     def get_state_message(self) -> dict[str, Any]:
         if self._mjdata is None:
             return None
-        q, dq, eff = self.get_joint_state()
-        return {
-            "base_pose": self.get_base_pose(),
-            "ee_pose": np.eye(4),
-            "joint_positions": q,
-            "joint_velocities": dq,
-            "joint_efforts": eff,
-            "control_mode": self.get_control_mode(),
-            "at_goal": self._at_goal,
-            "is_homed": True,
-            "is_runstopped": False,
-            "step": self._last_step,
-            EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
-        }
+        with self._mj_data_sync:
+            q, dq, eff = self.get_joint_state()
+            return {
+                "base_pose": self.get_base_pose(),
+                "ee_pose": np.eye(4),
+                "joint_positions": q,
+                "joint_velocities": dq,
+                "joint_efforts": eff,
+                "control_mode": self.get_control_mode(),
+                "at_goal": self._at_goal,
+                "is_homed": True,
+                "is_runstopped": False,
+                "step": self._last_step,
+                EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
+            }
 
     @override
     def get_servo_message(self) -> dict[str, Any]:
@@ -277,39 +301,44 @@ class RobosuiteZmqServer(BaseZmqServer):
             return None
 
         primary_cam = cam_names[0]
-        try:
-            rgb = self._render_camera(primary_cam, 320, 240)
-            depth = self._render_depth(primary_cam, 320, 240)
-        except Exception:
-            return None
+        with self._mj_data_sync:
+            try:
+                rgb_full, depth_full = self._primary_rgb_and_depth(primary_cam)
+                rgb = cv2.resize(rgb_full, (_SERVO_RW, _SERVO_RH), interpolation=cv2.INTER_AREA)
+                depth = cv2.resize(depth_full, (_SERVO_RW, _SERVO_RH), interpolation=cv2.INTER_NEAREST)
+            except Exception:
+                return None
 
-        depth_u16 = (depth * 1000).astype(np.uint16)
-        q, dq, eff = self.get_joint_state()
-        xyt = self.get_base_pose() or np.zeros(3)
+            depth_u16 = (depth * 1000).astype(np.uint16)
+            q, dq, eff = self.get_joint_state()
+            bp = self.get_base_pose()
+            xyt = np.zeros(3) if bp is None else np.asarray(bp, dtype=np.float64)
 
-        message = {
-            "head_color_image": compression.to_jpg(rgb),
-            "head_depth_image": compression.to_jp2(depth_u16),
-            "head_camera_K": self._get_camera_K(primary_cam, 320, 240),
-            "joint_positions": q,
-            "joint_velocities": dq,
-            "base_pose": xyt,
-            "control_mode": self.get_control_mode(),
-            "step": self._last_step,
-            "at_goal": self._at_goal,
-        }
-        return message
+            message = {
+                "head_color_image": compression.to_jpg(rgb),
+                "head_depth_image": compression.to_jp2(depth_u16),
+                "head_camera_K": self._get_camera_K(primary_cam, 320, 240),
+                "joint_positions": q,
+                "joint_velocities": dq,
+                "base_pose": xyt,
+                "control_mode": self.get_control_mode(),
+                "step": self._last_step,
+                "at_goal": self._at_goal,
+            }
+            return message
 
     def _sim_loop(self):
         """Step the MuJoCo simulation at the configured rate."""
         while self._running:
-            mujoco.mj_step(self._mjmodel, self._mjdata)
+            with self._mj_data_sync:
+                mujoco.mj_step(self._mjmodel, self._mjdata)
             time.sleep(1 / self.simulation_rate)
 
     def start(
         self,
         robocasa: bool = False,
         headless: bool = True,
+        show_viewer_ui: bool = False,
         **kwargs,
     ) -> None:
         self._load_model()
@@ -323,6 +352,48 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         super().start()
 
+        want_viewer = show_viewer_ui and not headless
+        viewer_cm = None
+        if want_viewer:
+            import mujoco.viewer
+
+            try:
+                viewer_cm = mujoco.viewer.launch_passive(
+                    self._mjmodel,
+                    self._mjdata,
+                    show_left_ui=show_viewer_ui,
+                    show_right_ui=show_viewer_ui,
+                )
+            except Exception as e:
+                logger.warning("MuJoCo passive viewer could not start (%s); continuing without a window.", e)
+                want_viewer = False
+
+        if want_viewer and viewer_cm is not None:
+            with viewer_cm as viewer:
+                self._mj_data_sync = viewer.lock()
+                self._sim_thread = threading.Thread(target=self._sim_loop, daemon=True)
+                self._sim_thread.start()
+
+                logger.info(
+                    f"RobosuiteZmqServer started for robot '{self._spec.name}' "
+                    f"({self._spec.dof} DOF, {len(self._spec.actuator_names)} actuators) with passive viewer"
+                )
+                print("Server running (MuJoCo viewer open). Close the viewer or press Ctrl+C to stop.", flush=True)
+
+                ui_dt = 1.0 / min(60, max(30, self.simulation_rate))
+                while self._running and viewer.is_running():
+                    viewer.sync()
+                    time.sleep(ui_dt)
+
+                self._running = False
+                if getattr(self, "_sim_thread", None) is not None:
+                    self._sim_thread.join(timeout=5.0)
+
+            self._mj_data_sync = contextlib.nullcontext()
+            self.stop()
+            return
+
+        self._mj_data_sync = contextlib.nullcontext()
         self._sim_thread = threading.Thread(target=self._sim_loop, daemon=True)
         self._sim_thread.start()
 
@@ -336,5 +407,6 @@ class RobosuiteZmqServer(BaseZmqServer):
             time.sleep(1 / self.simulation_rate)
 
     def stop(self):
+        self._close_renderers()
         self._running = False
         self._done = True

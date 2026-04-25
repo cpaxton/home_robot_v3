@@ -112,7 +112,11 @@ class GalaxeaR1Backend(RobotBackend):
     def create_client(self, robot_ip: str, **kwargs):
         from emet.controller.generic_zmq_client import GenericZmqClient
 
-        return GenericZmqClient(robot_spec=self.get_spec(), robot_ip=robot_ip, **kwargs)
+        # Match StretchZmqClient: defer ZMQ recv until RobotAgent.start() so we do not block here twice
+        # (and so a slow model load in DynamemTaskExecutor does not consume the wait before the sim is up).
+        opts = dict(kwargs)
+        opts.setdefault("start_immediately", False)
+        return GenericZmqClient(robot_spec=self.get_spec(), robot_ip=robot_ip, **opts)
 
     def create_model(self, **kwargs):
         raise NotImplementedError(

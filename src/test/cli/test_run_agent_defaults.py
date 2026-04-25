@@ -25,6 +25,17 @@ def test_help_lists_discord_toggle():
     assert "--no-discord" in r.output
 
 
+def test_help_robot_option_mentions_molmospaces_rby1():
+    """--robot help documents MolmoSpaces → rby1 server remap."""
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "MolmoSpaces" in r.output
+    assert "rby1" in r.output
+
+
 def test_help_lists_offline_and_default_robot_ip():
     from emet.app.run_agent import main
 

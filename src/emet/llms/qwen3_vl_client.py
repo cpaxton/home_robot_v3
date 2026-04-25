@@ -15,7 +15,7 @@
 
 """Qwen3-VL client (Hugging Face ``Qwen3VLForConditionalGeneration``).
 
-Requires ``transformers`` with Qwen3-VL support (project pins ``transformers>=4.51``).
+Requires ``transformers`` with Qwen3-VL support (project pins ``transformers>=4.55``).
 """
 
 from __future__ import annotations
