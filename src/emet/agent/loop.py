@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import logging
 import os
 import queue
 import sys
@@ -46,6 +47,20 @@ logger = Logger(__name__)
 _MAX_TOOL_ROUNDS = 3
 
 
+def _configure_agent_terminal_output() -> None:
+    """Reduce noisy tqdm / HF / Discord lines interleaved with the agent TTY."""
+    os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+    for name in ("discord", "discord.gateway", "discord.http", "discord.client"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    try:
+        from transformers.utils import logging as tf_logging
+
+        tf_logging.set_verbosity_error()
+    except Exception:
+        pass
+
+
 def parse_manual_find_command(raw: str) -> str | None:
     """Parse no-LLM find syntax: FIND x, F x, or find x (case-insensitive verb)."""
     s = raw.strip()
@@ -74,7 +89,7 @@ class ChatLog:
         stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         self.path = os.path.join(log_dir, f"chat_{stamp}.jsonl")
         self._fh = open(self.path, "a")
-        logger.info("Chat log:", self.path)
+        logger.debug("Chat log: %s", self.path)
 
     def log(self, role: str, content: str, **extra: Any) -> None:
         record = {"ts": datetime.now().isoformat(), "role": role, "content": content}
@@ -232,6 +247,7 @@ def run_agent_with_robot(
     local caption VLM until after the agent LLM loads, then reuses the agent vision-language client when
     applicable; otherwise it loads the local EQA VLM from ``dynav_config.yaml``.
     """
+    _configure_agent_terminal_output()
     parameters = get_parameters(agent_config)
     embodied_overlay = load_embodied_agent_overlay(agent_config)
     defer_eqa_vllm = bool(eqa and use_llm and share_memory_vllm)
@@ -364,6 +380,12 @@ def run_agent_with_robot(
     openai_tools_param = None
     if use_llm:
         try:
+            print(
+                colored(
+                    "Loading LLM (HF hub progress bars off; Discord gateway logs at WARNING). …",
+                    "cyan",
+                )
+            )
             prompt_builder = AgentPromptBuilder(tools=tools, name=agent_name, context=context)
             llm_client = get_llm_client(llm, prompt=prompt_builder, device=device)
             if hasattr(llm_client, "max_tokens"):

@@ -187,11 +187,14 @@ class RobosuiteZmqServer(BaseZmqServer):
             renderer.update_scene(self._mjdata, camera=camera_name)
             rgb = cast(np.ndarray, renderer.render())
             rgb = np.asarray(rgb, dtype=np.uint8).copy()
+            # OpenGL image origin vs. typical image / Discord display (row 0 = top).
+            rgb = np.flipud(rgb).copy()
             renderer.enable_depth_rendering()
             try:
                 renderer.update_scene(self._mjdata, camera=camera_name)
                 depth = cast(np.ndarray, renderer.render())
                 depth = np.asarray(depth, dtype=np.float32).copy()
+                depth = np.flipud(depth).copy()
             finally:
                 renderer.disable_depth_rendering()
             return rgb, depth
