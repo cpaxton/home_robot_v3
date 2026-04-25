@@ -389,10 +389,40 @@ class RobosuiteZmqServer(BaseZmqServer):
             mujoco.mj_step(self._mjmodel, self._mjdata)
             time.sleep(1 / self.simulation_rate)
 
+    def _run_passive_viewer_main_loop(self, show_viewer_ui: bool) -> None:
+        """Step physics in the same thread as ``launch_passive`` (required for a stable viewer)."""
+        import mujoco.viewer
+
+        dt = 1.0 / max(1, int(self.simulation_rate))
+        try:
+            with mujoco.viewer.launch_passive(
+                self._mjmodel,
+                self._mjdata,
+                show_left_ui=show_viewer_ui,
+                show_right_ui=show_viewer_ui,
+            ) as viewer:
+                logger.info("MuJoCo passive viewer open (close window or Ctrl+C to stop).")
+                while self._running and viewer.is_running():
+                    mujoco.mj_step(self._mjmodel, self._mjdata)
+                    viewer.sync()
+                    time.sleep(dt)
+        except Exception as e:
+            logger.warning(
+                f"MuJoCo passive viewer failed ({e!r}); falling back to headless background stepping. "
+                "Use a desktop session with DISPLAY set, or run with --headless."
+            )
+            self._sim_thread = threading.Thread(target=self._sim_loop, daemon=True)
+            self._sim_thread.start()
+            while self._running:
+                time.sleep(dt)
+            return
+        self._running = False
+
     def start(
         self,
         robocasa: bool = False,
         headless: bool = True,
+        show_viewer_ui: bool = False,
         **kwargs,
     ) -> None:
         self._load_model()
@@ -406,8 +436,8 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         super().start()
 
-        self._sim_thread = threading.Thread(target=self._sim_loop, daemon=True)
-        self._sim_thread.start()
+        self._sim_thread: threading.Thread | None = None
+        use_viewer = not headless
 
         logger.info(
             f"RobosuiteZmqServer started for robot '{self._spec.name}' "
@@ -415,8 +445,13 @@ class RobosuiteZmqServer(BaseZmqServer):
         )
         print("Server running. Press Ctrl+C to stop.", flush=True)
 
-        while self._running:
-            time.sleep(1 / self.simulation_rate)
+        if use_viewer:
+            self._run_passive_viewer_main_loop(show_viewer_ui)
+        else:
+            self._sim_thread = threading.Thread(target=self._sim_loop, daemon=True)
+            self._sim_thread.start()
+            while self._running:
+                time.sleep(1 / self.simulation_rate)
 
     def stop(self):
         self._running = False

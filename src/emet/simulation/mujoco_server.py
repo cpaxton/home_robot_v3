@@ -441,7 +441,7 @@ def main(
             raise
 
         try:
-            server.start(robocasa=use_robocasa, headless=headless)
+            server.start(robocasa=use_robocasa, headless=headless, show_viewer_ui=show_viewer_ui)
         except KeyboardInterrupt:
             server.stop()
 

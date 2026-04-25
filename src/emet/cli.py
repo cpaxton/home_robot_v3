@@ -130,6 +130,11 @@ def main() -> None:
 )
 @click.option("--headless", is_flag=True, help="Run without native viewer")
 @click.option(
+    "--show-viewer-ui",
+    is_flag=True,
+    help="Show MuJoCo viewer side panels (rby1 / MolmoSpaces path: only when not --headless).",
+)
+@click.option(
     "--no-cameras",
     is_flag=True,
     help="Disable camera rendering (use on WSL when EGL camera init hangs)",
@@ -206,6 +211,7 @@ def serve(
     backend: str,
     use_robocasa: bool,
     headless: bool,
+    show_viewer_ui: bool,
     no_cameras: bool,
     use_glx: bool,
     scene_path: str | None,
@@ -240,6 +246,7 @@ def serve(
       emet serve robocasa --list-robocasa-tasks
       emet serve mujoco --use-robocasa --port-offset 100
       emet serve mujoco --molmospaces-scene ithor --headless   # MolmoSpaces + rby1 ZMQ (needs wrapper)
+      emet serve mujoco --molmospaces-scene ithor --robot rby1   # same with MuJoCo window (local DISPLAY)
     """
     use_robocasa_flag = use_robocasa or (backend == "robocasa")
     if molmospaces_scene and scene_path:
@@ -299,6 +306,8 @@ def serve(
             args.extend(["--robocasa-task", robocasa_task])
         if headless:
             args.append("--headless")
+        if show_viewer_ui:
+            args.append("--show-viewer-ui")
         if no_cameras:
             args.append("--no-cameras")
         if use_glx:
