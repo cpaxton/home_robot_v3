@@ -207,6 +207,15 @@ class GenericZmqClient(AbstractRobotClient):
     def stop(self) -> None:
         self._finish = True
 
+    @property
+    def running(self) -> bool:
+        """True until ``stop()`` (same contract as ``StretchZmqClient``)."""
+        return not self._finish
+
+    def is_running(self) -> bool:
+        """True until ``stop()``; use ``robot.is_running()`` in loops (not ``robot.is_running``)."""
+        return not self._finish
+
     def reset(self) -> None:
         self._obs = None
         self._state = None

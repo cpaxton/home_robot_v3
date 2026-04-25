@@ -358,7 +358,7 @@ class EmetDiscordBot(DiscordBot):
     def plan_thread(self):
         """Loop. Check to see if next plan received. If so, execute it. Else, sleep. After execution, set next_plan to None."""
 
-        while self.robot.is_running:
+        while self.robot.is_running():
             if self.next_plan is not None:
                 with self._plan_lock:
                     response, channel = self.next_plan
