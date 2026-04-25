@@ -195,6 +195,50 @@ class RobosuiteZmqServer(BaseZmqServer):
         f = 0.5 * height / np.tan(np.radians(fovy) / 2)
         return np.array([[f, 0, width / 2], [0, f, height / 2], [0, 0, 1]])
 
+    def _base_freejoint_addrs(self) -> tuple[int, int] | None:
+        """Return ``(qposadr, dofadr)`` for the free joint on ``base_link``, if any."""
+        if self._mjmodel is None or self._mjdata is None:
+            return None
+        bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, self._spec.base_link_name)
+        if bid < 0:
+            return None
+        for j in range(self._mjmodel.njnt):
+            if int(self._mjmodel.jnt_bodyid[j]) != bid:
+                continue
+            if self._mjmodel.jnt_type[j] != mujoco.mjtJoint.mjJNT_FREE:
+                continue
+            return (int(self._mjmodel.jnt_qposadr[j]), int(self._mjmodel.jnt_dofadr[j]))
+        return None
+
+    @staticmethod
+    def _spawn_rel_xyt_to_world(goal_rel: np.ndarray, init_world_xyt: np.ndarray) -> np.ndarray:
+        """SE(2) compose: pose of goal in spawn frame ``goal_rel`` → world ``(x,y,theta)``."""
+        x0, y0, t0 = float(init_world_xyt[0]), float(init_world_xyt[1]), float(init_world_xyt[2])
+        gx, gy, gt = float(goal_rel[0]), float(goal_rel[1]), float(goal_rel[2])
+        ca, sa = np.cos(t0), np.sin(t0)
+        wx = x0 + ca * gx - sa * gy
+        wy = y0 + sa * gx + ca * gy
+        wt = float(np.arctan2(np.sin(t0 + gt), np.cos(t0 + gt)))
+        return np.array([wx, wy, wt], dtype=np.float64)
+
+    def _teleport_base_world_xyt(self, wx: float, wy: float, wt: float) -> bool:
+        """Teleport ``base_link`` free joint to world (x,y,yaw); preserve height and zero base twist."""
+        addrs = self._base_freejoint_addrs()
+        if addrs is None:
+            return False
+        qadr, vadr = addrs
+        z = float(self._mjdata.qpos[qadr + 2])
+        qw = float(np.cos(wt * 0.5))
+        qz = float(np.sin(wt * 0.5))
+        self._mjdata.qpos[qadr] = wx
+        self._mjdata.qpos[qadr + 1] = wy
+        self._mjdata.qpos[qadr + 2] = z
+        self._mjdata.qpos[qadr + 3 : qadr + 7] = np.array([qw, 0.0, 0.0, qz], dtype=np.float64)
+        nv = 6
+        self._mjdata.qvel[vadr : vadr + nv] = 0.0
+        mujoco.mj_forward(self._mjmodel, self._mjdata)
+        return True
+
     @override
     def handle_action(self, action: dict[str, Any]):
         if "control_mode" in action:
@@ -209,7 +253,32 @@ class RobosuiteZmqServer(BaseZmqServer):
                         self._mjdata.ctrl[aid] = joint_targets[i]
 
         if "xyt" in action:
-            logger.info(f"Navigation goal received: {action['xyt']} (not yet implemented for robosuite server)")
+            self._at_goal = False
+            raw = np.asarray(action["xyt"], dtype=np.float64).reshape(-1)
+            if raw.size < 3 or self._mjdata is None:
+                self._at_goal = True
+                return
+            init = self._initial_xyt
+            if init is None:
+                init = np.zeros(3, dtype=np.float64)
+            relative = bool(action.get("nav_relative", False))
+            if relative:
+                cur = self.get_base_xyt()
+                dx, dy, dt = float(raw[0]), float(raw[1]), float(raw[2])
+                ct = float(cur[2])
+                wx = cur[0] + np.cos(ct) * dx - np.sin(ct) * dy
+                wy = cur[1] + np.sin(ct) * dx + np.cos(ct) * dy
+                wt = float(np.arctan2(np.sin(cur[2] + dt), np.cos(cur[2] + dt)))
+            else:
+                world = self._spawn_rel_xyt_to_world(raw[:3], init)
+                wx, wy, wt = float(world[0]), float(world[1]), float(world[2])
+            if not self._teleport_base_world_xyt(wx, wy, wt):
+                logger.warning(
+                    "Navigation xyt=%s: no free joint on base_link '%s'; cannot teleport.",
+                    action["xyt"],
+                    self._spec.base_link_name,
+                )
+            self._at_goal = True
 
     @override
     def get_full_observation_message(self) -> dict[str, Any]:

@@ -410,6 +410,11 @@ class GenericZmqClient(AbstractRobotClient):
         action = {"xyt": xyt.tolist(), "nav_relative": relative}
         self.send_action(action)
         if blocking:
+            # Avoid succeeding immediately on a stale ``at_goal`` from the previous navigation
+            # before the server recv thread clears it for the new goal.
+            t_clear = timeit.default_timer()
+            while self.at_goal() and timeit.default_timer() - t_clear < 1.0:
+                time.sleep(0.01)
             return self._wait_at_goal(timeout=timeout or 30.0, target_xyt=xyt)
         return True
 
