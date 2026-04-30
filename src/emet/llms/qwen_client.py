@@ -17,7 +17,9 @@ from termcolor import colored
 from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig, pipeline
 
 from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder, AbstractVLLMClient
-from emet.utils.logger import suppress_hf_hub_http_logging
+from emet.utils.logger import Logger, suppress_hf_hub_http_logging
+
+_qwen35_vl_logger = Logger(__name__)
 
 # Presets for get_llm_client (Qwen2.5-VL / stand-in for Qwen3.5-VL-9B until a dedicated HF id is wired).
 QWEN_VL_PRESETS: dict[str, dict[str, Any]] = {
@@ -531,6 +533,78 @@ class Qwen35VLClient:
 
         return user_commands
 
+    @staticmethod
+    def _messages_text_only(messages: list) -> list:
+        """Drop vision blocks so chat template + processor can build text-only ``input_ids``."""
+        out: list = []
+        for m in messages:
+            content = m.get("content")
+            role = m["role"]
+            if isinstance(content, str):
+                out.append({"role": role, "content": content})
+            elif isinstance(content, list):
+                texts: list[str] = []
+                for blk in content:
+                    if isinstance(blk, dict) and blk.get("type") == "text":
+                        t = str(blk.get("text", "")).strip()
+                        if t:
+                            texts.append(t)
+                joined = " ".join(texts).strip() or "Reply concisely."
+                out.append({"role": role, "content": joined})
+            else:
+                out.append({"role": role, "content": str(content)})
+        return out
+
+    def _decode_generation(self, proc_inputs: Any, generated_ids: torch.Tensor) -> str:
+        generated_ids_trimmed = [
+            out_ids[len(in_ids) :] for in_ids, out_ids in zip(proc_inputs.input_ids, generated_ids, strict=True)
+        ]
+        return self.processor.batch_decode(
+            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )[0]
+
+    def _qwen35_generate_text_only(self, messages: list, _tmpl_kw: dict[str, Any], cap: int) -> str:
+        try:
+            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
+        except TypeError:
+            _tmpl_kw.pop("enable_thinking", None)
+            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
+        proc_inputs = self.processor(text=[text], padding=True, return_tensors="pt")
+        proc_inputs = proc_inputs.to(self._device)
+        generated_ids = self.model.generate(**proc_inputs, max_new_tokens=cap, num_beams=self.num_beams)
+        return self._decode_generation(proc_inputs, generated_ids)
+
+    def _qwen35_generate_multimodal(self, messages: list, _tmpl_kw: dict[str, Any], cap: int) -> str:
+        try:
+            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
+        except TypeError:
+            _tmpl_kw.pop("enable_thinking", None)
+            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
+        image_inputs, video_inputs = process_vision_info(messages)
+        proc_inputs = self.processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        )
+        proc_inputs = proc_inputs.to(self._device)
+        ids = proc_inputs.get("input_ids")
+        if ids is None or (isinstance(ids, torch.Tensor) and ids.numel() == 0):
+            raise ValueError("processor returned empty input_ids (multimodal)")
+        generated_ids = self.model.generate(**proc_inputs, max_new_tokens=cap, num_beams=self.num_beams)
+        return self._decode_generation(proc_inputs, generated_ids)
+
+    def _qwen35_generate(self, messages: list, _tmpl_kw: dict[str, Any], cap: int) -> str:
+        try:
+            return self._qwen35_generate_multimodal(messages, dict(_tmpl_kw), cap)
+        except Exception as e:
+            msg = str(e).lower()
+            if "input_ids" not in msg and "text_embeds" not in msg:
+                raise
+            _qwen35_vl_logger.warning(f"Qwen3.5 VL multimodal inference failed ({e}); retrying text-only.")
+            return self._qwen35_generate_text_only(self._messages_text_only(messages), dict(_tmpl_kw), cap)
+
     def __call__(
         self,
         command: str | list[dict[str, Any]] | Image.Image,
@@ -567,29 +641,8 @@ class Qwen35VLClient:
             "add_generation_prompt": True,
             "enable_thinking": False,
         }
-        try:
-            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
-        except TypeError:
-            _tmpl_kw.pop("enable_thinking", None)
-            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
-        image_inputs, video_inputs = process_vision_info(messages)
-        proc_inputs = self.processor(
-            text=[text],
-            images=image_inputs,
-            videos=video_inputs,
-            padding=True,
-            return_tensors="pt",
-        )
-        proc_inputs = proc_inputs.to(self._device)
-
         cap = self.max_tokens if max_new_tokens is None else max_new_tokens
-        generated_ids = self.model.generate(**proc_inputs, max_new_tokens=cap, num_beams=self.num_beams)
-        generated_ids_trimmed = [
-            out_ids[len(in_ids) :] for in_ids, out_ids in zip(proc_inputs.input_ids, generated_ids, strict=True)
-        ]
-        output_text = self.processor.batch_decode(
-            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )[0]
+        output_text = self._qwen35_generate(messages, _tmpl_kw, cap)
 
         t1 = timeit.default_timer()
 

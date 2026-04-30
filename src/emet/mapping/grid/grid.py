@@ -52,6 +52,24 @@ class GridParams:
         else:
             return grid_xy
 
+    def xy_to_grid_coords_clamped(self, xy: torch.Tensor | np.ndarray) -> Tensor:
+        """World ``xy`` → continuous grid coordinates, clamped to valid map bounds.
+
+        Used when the robot pose can sit outside the finite grid (e.g. sim GPS vs grid origin)
+        so planning still maps to a reachable cell instead of returning ``None``.
+        """
+        assert xy.shape[-1] == 2, "coords must be Nx2 or 2d array"
+        if isinstance(xy, np.ndarray):
+            xy = torch.from_numpy(xy.astype(np.float32)).float()
+        else:
+            xy = xy.float()
+        grid_xy = (xy / self.resolution) + self.grid_origin[:2].to(xy.device)
+        size = self._grid_size_t.to(device=grid_xy.device, dtype=grid_xy.dtype)
+        eps = torch.tensor(1e-3, dtype=grid_xy.dtype, device=grid_xy.device)
+        upper = (size - eps).clamp(min=eps)
+        zero = torch.zeros(2, dtype=grid_xy.dtype, device=grid_xy.device)
+        return torch.clamp(grid_xy, zero, upper)
+
     def grid_coords_to_xy(self, grid_coords: torch.Tensor) -> np.ndarray:
         """convert grid coordinate point to metric world xy point"""
         assert grid_coords.shape[-1] == 2, "grid coords must be an Nx2 or 2d array"
