@@ -49,7 +49,7 @@ INNATE_MARS_ACTUATOR_NAMES = [
     "joint6",
 ]
 
-INNATE_MARS_CAMERA_NAMES = ["head_left", "head_right", "ee"]
+INNATE_MARS_CAMERA_NAMES = ["head_left", "head_right", "camera_arm"]
 
 
 class InnateMarsBackend(RobotBackend):

@@ -76,6 +76,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         self.control_mode = "navigation"
         self._at_goal = False
         self._emet_session: dict[str, Any] | None = None
+        # Reuse GL contexts: new Renderer() every frame hammers mjr_makeContext (GL 0x502 on many EGL setups).
+        self._offscreen_renderers: dict[tuple[int, int], mujoco.Renderer] = {}
 
     @property
     def spec(self) -> RobotSpec:
@@ -261,25 +263,37 @@ class RobosuiteZmqServer(BaseZmqServer):
             return cid
         return -1
 
+    def _get_offscreen_renderer(self, height: int, width: int) -> mujoco.Renderer:
+        """Reuse one Renderer per resolution (avoid repeated GL context creation)."""
+        key = (height, width)
+        if key not in self._offscreen_renderers:
+            self._offscreen_renderers[key] = mujoco.Renderer(self._mjmodel, height, width)
+        return self._offscreen_renderers[key]
+
+    def _close_offscreen_renderers(self) -> None:
+        for r in list(self._offscreen_renderers.values()):
+            try:
+                r.close()
+            except Exception:
+                pass
+        self._offscreen_renderers.clear()
+
     def _render_camera(self, camera_name: str, width: int = 640, height: int = 480):
         """Render an RGB image from a named MuJoCo camera. Uses MUJOCO_GL (egl recommended headless)."""
         with self._mj_lock:
-            renderer = mujoco.Renderer(self._mjmodel, height, width)
+            renderer = self._get_offscreen_renderer(height, width)
             renderer.update_scene(self._mjdata, camera=self._camera_for_renderer(camera_name))
-            rgb = renderer.render()
-            renderer.close()
-        return rgb
+            return renderer.render()
 
     def _render_depth(self, camera_name: str, width: int = 640, height: int = 480):
         """Render a depth image from a named MuJoCo camera."""
         with self._mj_lock:
-            renderer = mujoco.Renderer(self._mjmodel, height, width)
+            renderer = self._get_offscreen_renderer(height, width)
             renderer.update_scene(self._mjdata, camera=self._camera_for_renderer(camera_name))
             renderer.enable_depth_rendering()
             depth = renderer.render()
             renderer.disable_depth_rendering()
-            renderer.close()
-        return depth
+            return depth
 
     def _get_camera_K(self, camera_name: str, width: int = 640, height: int = 480):
         """Compute intrinsic matrix from MuJoCo camera fovy."""
@@ -572,3 +586,4 @@ class RobosuiteZmqServer(BaseZmqServer):
     def stop(self):
         self._running = False
         self._done = True
+        self._close_offscreen_renderers()
