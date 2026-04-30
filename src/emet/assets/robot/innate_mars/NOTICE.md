@@ -14,3 +14,9 @@ Confirm redistribution terms with Innate Robotics before publishing this reposit
 ## Alignment with reference URDF
 
 Geometries and camera placements in ``innate_mars.xml`` were checked against ``maurice_sim/urdf/maurice.urdf`` (Innate Maurice package): head link + stereo camera positions, link2 offset (z), gripper finger origin (joint6), EE link, and arm camera link pose. The MJCF remains planar-base + velocity actuators for teleop-style sim (not identical joint limits to URDF).
+
+
+### Geometry sources
+
+- **Arm / gripper / wrist camera:** Kinematic tree and per-geom ``euler`` values follow the **upstream** ``maurice_sim/mjcf/maurice.mjcf`` (Innate). Those differ slightly from numeric origins in ``maurice.urdf`` because the MJCF mesh rotations were tuned for MuJoCo visualization.
+- **Head:** Mounted at the URDF ``joint_head`` translation from ``base_link``. The ``head_geom`` uses ``euler="-1.5708 0 0"`` — the same STL→MuJoCo convention as ``base_geom``. If the head still looks one axis off in your viewer, try matching ``link1_geom`` instead (``euler="0 0 1.5708"``).

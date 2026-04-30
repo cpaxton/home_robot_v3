@@ -64,7 +64,7 @@
 
             <body name="head" pos="-0.040751 -0.0002 0.25882">
               <inertial pos="0 0 0" mass="0.148" diaginertia="0.0002 0.0001 0.0002"/>
-              <geom name="head_geom" type="mesh" mesh="head_mesh" material="matt_black"/>
+              <geom name="head_geom" type="mesh" mesh="head_mesh" material="matt_black" euler="-1.5708 0 0"/>
               <camera name="head_left" pos="0.04327 0.0297 -0.000275" mode="fixed" fovy="80" quat="0.6532815 0.2705981 -0.2705981 -0.6532815"/>
               <camera name="head_right" pos="0.04327 -0.0303 -0.000275" mode="fixed" fovy="80" quat="0.6532815 0.2705981 -0.2705981 -0.6532815"/>
             </body>
@@ -74,7 +74,7 @@
               <joint name="joint1" type="hinge" axis="0 0 1" limited="true" range="-3.14 3.14" damping="5"/>
               <geom name="link1_geom" type="mesh" mesh="link1_mesh" material="bright_orange" euler="0 0 1.5708"/>
               
-              <body name="link2" pos="0 0 0.04425">
+              <body name="link2" pos="0 0 0.04225">
                 <inertial pos="0 0 0" mass="0.080" diaginertia="0.0001 0.0001 0.0001"/>
                 <joint name="joint2" type="hinge" axis="0 1 0" limited="true" range="-3.14 3.14" damping="5"/>
                 <geom name="link2_geom" type="mesh" mesh="link2_mesh" material="matt_black" euler="1.5708 0 1.5708"/>
@@ -94,7 +94,7 @@
                       <joint name="joint5" type="hinge" axis="1 0 0" limited="true" range="-3.14 3.14" damping="5"/>
                       <geom name="link5_geom" type="mesh" mesh="link5_mesh" material="bright_orange" euler="1.5708 0 1.5708"/>
                       
-                      <body name="link61" pos="0.044 -0.0092 0">
+                      <body name="link61" pos="0.044 -0.0091 0">
                         <inertial pos="0 0 0" mass="0.012" diaginertia="0.00002 0.00002 0.00002"/>
                         <joint name="joint6" type="hinge" axis="0 0 -1" limited="true" range="-1.57 1.57" damping="5"/>
                         <geom name="link61_geom" type="mesh" mesh="link61_mesh" material="matt_black" euler="1.5708 0 1.5708"/>
@@ -107,12 +107,12 @@
                       </body>
                       
                       <!-- Add End Effector -->
-                      <body name="ee_link" pos="0.091838 0 0">
+                      <body name="ee_link" pos="0.09285 0 0">
                         <inertial pos="0 0 0" mass="0.001" diaginertia="0.00001 0.00001 0.00001"/>
                         <geom name="ee_geom" type="sphere" size="0.005" material="bright_orange"/>
                       </body>
                       
-                      <body name="arm_camera_link" pos="0.03378 0 0.05052" euler="0 0.43633 0">
+                      <body name="arm_camera_link" pos="0.00454 0 0.05448">
                         <inertial pos="0 0 0" mass="0.01" diaginertia="1e-4 1e-4 1e-4"/>
                         <camera name="camera_arm" mode="fixed" fovy="80" quat="0.6532815 0.2705981 -0.2705981 -0.6532815"/>
                       </body>
@@ -132,6 +132,7 @@
     <exclude name="ex_base_root_base_x" body1="base_root" body2="base_x"/>
     <exclude name="ex_base_x_base_y" body1="base_x" body2="base_y"/>
     <exclude name="ex_base_y_base_link" body1="base_y" body2="base_link"/>
+    <exclude name="ex_base_link_head" body1="base_link" body2="head"/>
     <exclude name="ex_base_link_link1" body1="base_link" body2="link1"/>
     <exclude name="ex_link1_link2" body1="link1" body2="link2"/>
     <exclude name="ex_link2_link3" body1="link2" body2="link3"/>
