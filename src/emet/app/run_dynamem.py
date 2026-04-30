@@ -176,7 +176,8 @@ def main(
 
     print("- Create robot client")
     depth_mode = str(parameters.get("depth_source", "sensor")).lower()
-    allow_missing_depth = depth_mode in ("da3", "auto")
+    robot_key = robot.lower().replace("-", "_")
+    allow_missing_depth = depth_mode in ("da3", "auto") or robot_key == "innate_mars"
     robot_client = create_robot_client_from_cli(
         robot,
         robot_ip,

@@ -226,9 +226,8 @@ def run_agent_with_robot(
     """
     parameters = get_parameters(agent_config)
     depth_mode = str(parameters.get("depth_source", "sensor")).lower()
-    allow_missing_depth = depth_mode in ("da3", "auto")
-
     robot_key = robot.lower().replace("-", "_")
+    allow_missing_depth = depth_mode in ("da3", "auto") or robot_key == "innate_mars"
     if robot_key == "stretch":
         # Do not start ZMQ in __init__: DynamemTaskExecutor calls agent.start() which invokes
         # robot.start() again; double-start left orphan recv threads and led to ZMQ double-free crashes.
