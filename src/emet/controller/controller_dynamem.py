@@ -300,8 +300,15 @@ class DynamemController(BaseController):
         sensor_depth: np.ndarray | None,
         camera_K: np.ndarray | None,
         camera_pose: np.ndarray | None,
+        rgb_right: np.ndarray | None = None,
+        camera_K_right: np.ndarray | None = None,
+        camera_pose_right: np.ndarray | None = None,
     ) -> np.ndarray | None:
-        """Pick sensor depth, DA3, or auto per ``depth_source``."""
+        """Pick sensor depth, DA3, or auto per ``depth_source``.
+
+        When ``depth_source`` is ``da3``/``auto`` and both head RGB frames and intrinsics/extrinsics
+        are available, use two-view DA3; otherwise monocular DA3 on the head left image.
+        """
         mode = self._depth_source
         if mode == "sensor":
             return sensor_depth
@@ -311,6 +318,11 @@ class DynamemController(BaseController):
         k_use = np.asarray(camera_K, dtype=np.float32) if k_ok else None
         p_use = np.asarray(camera_pose, dtype=np.float32) if p_ok else None
 
+        kr_ok = camera_K_right is not None and np.asarray(camera_K_right).shape == (3, 3)
+        pr_ok = camera_pose_right is not None and np.asarray(camera_pose_right).shape == (4, 4)
+        k_r = np.asarray(camera_K_right, dtype=np.float32) if kr_ok else None
+        p_r = np.asarray(camera_pose_right, dtype=np.float32) if pr_ok else None
+
         if mode == "auto":
             if sensor_depth is not None and np.asarray(sensor_depth).size > 0:
                 return np.asarray(sensor_depth, dtype=np.float32)
@@ -318,6 +330,24 @@ class DynamemController(BaseController):
         est = self._lazy_da3_estimator()
         if est is None:
             raise RuntimeError("depth_source requires DA3 but estimator creation returned None.")
+
+        use_stereo = (
+            rgb_right is not None
+            and np.asarray(rgb_right).size > 0
+            and k_use is not None
+            and p_use is not None
+            and k_r is not None
+            and p_r is not None
+        )
+        if use_stereo and rgb.shape[:2] == rgb_right.shape[:2]:
+            return est.infer_stereo(
+                rgb,
+                rgb_right,
+                intrinsics_left=k_use,
+                extrinsics_w2c_left=p_use,
+                intrinsics_right=k_r,
+                extrinsics_w2c_right=p_r,
+            )
 
         if mode == "da3":
             return est.infer(rgb, intrinsics=k_use, extrinsics_w2c=p_use)
@@ -334,7 +364,15 @@ class DynamemController(BaseController):
             return
         self.obs_count += 1
         rgb, sensor_depth, K, camera_pose = obs.rgb, obs.depth, obs.camera_K, obs.camera_pose
-        depth = self._resolve_depth_map(rgb, sensor_depth, K, camera_pose)
+        depth = self._resolve_depth_map(
+            rgb,
+            sensor_depth,
+            K,
+            camera_pose,
+            rgb_right=getattr(obs, "head_rgb_right", None),
+            camera_K_right=getattr(obs, "head_camera_K_right", None),
+            camera_pose_right=getattr(obs, "head_camera_pose_right", None),
+        )
         if depth is None:
             logger.error(
                 f"No depth map available (depth_source={self._depth_source!r}); skipping voxel update."

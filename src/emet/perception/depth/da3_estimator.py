@@ -88,6 +88,45 @@ class DA3DepthEstimator:
         depth = np.clip(depth, 0.0, None)
         return resize_depth_to_match_rgb(depth, rgb)
 
+    def infer_stereo(
+        self,
+        rgb_left: np.ndarray,
+        rgb_right: np.ndarray,
+        *,
+        intrinsics_left: np.ndarray | None = None,
+        extrinsics_w2c_left: np.ndarray | None = None,
+        intrinsics_right: np.ndarray | None = None,
+        extrinsics_w2c_right: np.ndarray | None = None,
+    ) -> np.ndarray:
+        """Two-view DA3; returns depth aligned to *rgb_left* (reference view = first)."""
+        if rgb_left.shape[:2] != rgb_right.shape[:2]:
+            raise ValueError("Stereo RGB frames must match in HxW.")
+        self._ensure_model()
+        kwargs: dict[str, Any] = {
+            "image": [rgb_left, rgb_right],
+            "process_res": self._process_res,
+            "ref_view_strategy": "first",
+        }
+        if (
+            intrinsics_left is not None
+            and extrinsics_w2c_left is not None
+            and intrinsics_right is not None
+            and extrinsics_w2c_right is not None
+        ):
+            kl = np.asarray(intrinsics_left, dtype=np.float32).reshape(3, 3)
+            kr = np.asarray(intrinsics_right, dtype=np.float32).reshape(3, 3)
+            el = np.asarray(extrinsics_w2c_left, dtype=np.float32).reshape(4, 4)
+            er = np.asarray(extrinsics_w2c_right, dtype=np.float32).reshape(4, 4)
+            kwargs["intrinsics"] = np.stack([kl, kr], axis=0)
+            kwargs["extrinsics"] = np.stack([el, er], axis=0)
+            kwargs["align_to_input_ext_scale"] = True
+
+        pred = self._model.inference(**kwargs)
+        depth = np.asarray(pred.depth[0], dtype=np.float32)
+        depth = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
+        depth = np.clip(depth, 0.0, None)
+        return resize_depth_to_match_rgb(depth, rgb_left)
+
 
 def create_da3_estimator_from_parameters(parameters: Any, *, device: str) -> DA3DepthEstimator | None:
     """Build a DA3 estimator from DynaMem-style ``Parameters`` (or dict-like)."""
