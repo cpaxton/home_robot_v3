@@ -25,6 +25,7 @@ from overrides import override
 
 import emet.utils.compression as compression
 from emet.core.server import BaseZmqServer
+from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY
 from emet.utils.image import scale_camera_matrix
 from innate_mars_bridge.remote import InnateMarsClient
 
@@ -58,10 +59,25 @@ class ZmqServer(BaseZmqServer):
         head_left = head_left if head_left is not None else np.zeros((480, 640, 3), dtype=np.uint8)
         head_right = head_right if head_right is not None else np.zeros((480, 640, 3), dtype=np.uint8)
         ee_img = ee_img if ee_img is not None else np.zeros((480, 640, 3), dtype=np.uint8)
+        bp = np.asarray(base_pose, dtype=np.float64).reshape(-1)
+        gps = bp[:2].astype(np.float64)
+        compass = bp[2:3].astype(np.float64) if bp.size >= 3 else np.zeros(1, dtype=np.float64)
+        kl = self.client.head_left_cam.get_K()
+        kr = self.client.head_right_cam.get_K()
         return {
+            EMET_ZMQ_ROBOT_ID_KEY: "innate_mars",
             "base_pose": base_pose,
             "joint": q,
             "joint_velocities": dq,
+            "gps": gps,
+            "compass": compass,
+            "rgb": compression.to_jpg(head_left),
+            "rgb_right": compression.to_jpg(head_right),
+            "camera_K": kl,
+            "camera_pose": self.client.head_left_camera_pose,
+            "camera_K_right": kr,
+            "camera_pose_right": self.client.head_right_camera_pose,
+            "depth": None,
             "head_cam_left/image": compression.to_jpg(head_left),
             "head_cam_right/image": compression.to_jpg(head_right),
             "ee_cam/image": compression.to_jpg(ee_img),
@@ -79,6 +95,7 @@ class ZmqServer(BaseZmqServer):
         base_pose = self.client.base_pose_xyt
         ee_pose = self.client.ee_pose
         return {
+            EMET_ZMQ_ROBOT_ID_KEY: "innate_mars",
             "base_pose": base_pose,
             "ee_pose": ee_pose,
             "joint_positions": q,
@@ -123,6 +140,7 @@ class ZmqServer(BaseZmqServer):
         ee_compressed = compression.to_jpg(ee_img)
 
         message = {
+            EMET_ZMQ_ROBOT_ID_KEY: "innate_mars",
             "ee/pose": self.client.ee_pose,
             "robot/config": q,
             "step": self._last_step,
