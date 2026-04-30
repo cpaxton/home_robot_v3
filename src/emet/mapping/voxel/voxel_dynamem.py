@@ -27,6 +27,8 @@ from torch import Tensor
 from emet.core.parameters import Parameters
 from emet.llms import OpenaiClient
 from emet.llms.prompts import DYNAMEM_VISUAL_GROUNDING_PROMPT
+from emet.llms.vllm_factory import create_dynamem_vllm, dynamem_vllm_call
+from emet.llms.vllm_registry import VLLMRunConfig, default_hf_model_id, normalize_vl_family, should_share_vllm
 from emet.utils.image import Camera, camera_xyz_to_global_xyz
 from emet.utils.morphology import binary_dilation, binary_erosion, get_edges
 from emet.utils.point_cloud_torch import unproject_masked_depth_to_xyz_coordinates
@@ -39,6 +41,18 @@ logger = logging.getLogger(__name__)
 
 # Subdir under self.log for debug files (rgb, depth, descriptions) so memory root stays canonical.
 DEBUG_SUBDIR = "debug"
+
+
+def _eqa_qwen_vl_single_client_ok(
+    vl_family: str,
+    eqa_vl_hf_model_id: str | None,
+    vl_dev: str,
+    eqa_vl_quantization: str | None,
+) -> bool:
+    """True when registry policy allows one local :class:`~emet.llms.base.AbstractVLLMClient` for captions + EQA."""
+    resolved = eqa_vl_hf_model_id or default_hf_model_id(vl_family)
+    cfg = VLLMRunConfig(vl_family, resolved, vl_dev, eqa_vl_quantization)
+    return should_share_vllm(cfg, cfg)
 
 
 class SparseVoxelMap(SparseVoxelMapBase):
@@ -83,6 +97,15 @@ class SparseVoxelMap(SparseVoxelMapBase):
         mllm=False,
         run_eqa=False,
         parameters: Parameters | dict | None = None,
+        eqa_backend: str = "qwen_vl",
+        eqa_vl_model_size: str = "3B",
+        eqa_vl_max_tokens: int = 512,
+        eqa_vl_quantization: str | None = "int4",
+        eqa_vl_hf_model_id: str | None = None,
+        gemini_model: str = "gemini-2.5-flash",
+        eqa_device: str | None = None,
+        vl_family: str = "qwen3_vl",
+        defer_eqa_vllm: bool = False,
     ):
         if voxel_kwargs is None:
             voxel_kwargs = {}
@@ -140,24 +163,173 @@ class SparseVoxelMap(SparseVoxelMapBase):
             self.gpt_client = OpenaiClient(DYNAMEM_VISUAL_GROUNDING_PROMPT, model="gpt-4o-2024-05-13")
 
         self.run_eqa = run_eqa
+        if isinstance(parameters, Parameters):
+            _eqa_raw = parameters.get("eqa", {})
+        elif isinstance(parameters, dict):
+            _eqa_raw = parameters.get("eqa", {})
+        else:
+            _eqa_raw = {}
+        _eqa_cfg: dict[str, Any] = _eqa_raw if isinstance(_eqa_raw, dict) else {}
+
+        self._eqa_backend = str(_eqa_cfg.get("backend", eqa_backend) or "qwen_vl").strip().lower()
+        self._vl_family = str(_eqa_cfg.get("vl_family", vl_family) or "qwen3_vl").strip().lower()
+        eqa_ms = str(_eqa_cfg.get("vl_model_size", eqa_vl_model_size) or "3B")
+        eqa_hf = _eqa_cfg.get("vl_hf_model_id", eqa_vl_hf_model_id)
+        eqa_quant = _eqa_cfg.get("vl_quantization", eqa_vl_quantization)
+        gemini_m = str(_eqa_cfg.get("gemini_model", gemini_model) or "gemini-2.5-flash")
+        self._eqa_max_tokens = int(_eqa_cfg.get("vl_max_tokens", eqa_vl_max_tokens) or 512)
+
+        self._eqa_device_resolved: str | None = None
+        self._eqa_pending: dict[str, Any] | None = None
+
+        def _hf_registry_eqa_path() -> bool:
+            if self._eqa_backend == "gemini":
+                return True
+            if self._eqa_backend != "qwen_vl":
+                return False
+            return normalize_vl_family(self._vl_family) in ("qwen3_vl", "qwen2_5_vl", "gemma4")
+
         if self.run_eqa:
-            from emet.llms.eqa_qwen import build_shared_eqa_clients
+            if self.parameters is None:
+                raise ValueError("SparseVoxelMap run_eqa=True requires ``parameters`` (dynav config).")
+
             from emet.llms.eqa_vl_settings import apply_eqa_vl_runtime_settings, get_eqa_vl_int
 
             apply_eqa_vl_runtime_settings(self.parameters)
-            kw = get_eqa_vl_int(self.parameters, "voxel_keyword_max_tokens", 20)
-            self.image_description_client, self.eqa_client = build_shared_eqa_clients(
-                parameters=self.parameters,
-                keyword_max_tokens=kw,
-            )
 
             self.image_descriptions: list[tuple[list[str], list[int]]] = []
+
+            if _hf_registry_eqa_path():
+                from emet.llms.prompts.eqa_prompt import EQA_PROMPT
+
+                _vl_dev = eqa_device
+                if _vl_dev is None and self.device is not None:
+                    _vl_dev = str(self.device)
+                if _vl_dev not in ("cuda", "cpu", "mps"):
+                    _vl_dev = "cuda" if torch.cuda.is_available() else "cpu"
+                self._eqa_device_resolved = _vl_dev
+
+                if defer_eqa_vllm:
+                    self._eqa_pending = {
+                        "vl_family": self._vl_family,
+                        "eqa_vl_hf_model_id": eqa_hf,
+                        "eqa_vl_model_size": eqa_ms,
+                        "eqa_vl_max_tokens": self._eqa_max_tokens,
+                        "eqa_vl_quantization": eqa_quant,
+                        "gemini_model": gemini_m,
+                    }
+                    self.image_description_client = None
+                    self.eqa_client = None
+                    if self._eqa_backend == "gemini":
+                        from emet.llms.gemini_client import GeminiClient
+
+                        self.eqa_client = GeminiClient(EQA_PROMPT, model=gemini_m)
+                elif self._eqa_backend == "gemini":
+                    from emet.llms.gemini_client import GeminiClient
+
+                    self.image_description_client = create_dynamem_vllm(
+                        self._vl_family,
+                        hf_model_id=eqa_hf,
+                        vl_model_size=eqa_ms,
+                        max_tokens=max(256, self._eqa_max_tokens),
+                        device=_vl_dev,
+                        quantization=eqa_quant,
+                        prompt=None,
+                    )
+                    self.eqa_client = GeminiClient(EQA_PROMPT, model=gemini_m)
+                elif self._eqa_backend == "qwen_vl":
+                    if not _eqa_qwen_vl_single_client_ok(self._vl_family, eqa_hf, _vl_dev, eqa_quant):
+                        raise ValueError(
+                            "EQA configuration does not allow a single shared local VLM for captions and QA "
+                            f"(vl_family={self._vl_family!r}). See emet.llms.vllm_registry."
+                        )
+                    shared = create_dynamem_vllm(
+                        self._vl_family,
+                        hf_model_id=eqa_hf,
+                        vl_model_size=eqa_ms,
+                        max_tokens=self._eqa_max_tokens,
+                        device=_vl_dev,
+                        quantization=eqa_quant,
+                        prompt=None,
+                    )
+                    self.image_description_client = shared
+                    self.eqa_client = shared
+                else:
+                    raise ValueError(
+                        f"Unknown eqa_backend {self._eqa_backend!r}; use 'qwen_vl' or 'gemini' (see dynav_config.yaml eqa:)."
+                    )
+            else:
+                from emet.llms.eqa_qwen import build_shared_eqa_clients
+
+                kw = get_eqa_vl_int(self.parameters, "voxel_keyword_max_tokens", 20)
+                self.image_description_client, self.eqa_client = build_shared_eqa_clients(
+                    parameters=self.parameters,
+                    keyword_max_tokens=kw,
+                )
+                self._eqa_max_tokens = get_eqa_vl_int(self.parameters, "eqa_max_tokens", 1024)
 
         # Attributes for EQA, If you are not running EQA module, this will stay the same.
         self._question: str | None = None
         self.relevant_objects: list | None = None
 
         self.history_outputs: list[str] = []
+
+    def bind_shared_vllm_from_agent(self, client: Any) -> None:
+        """Use the agent's vision-language client for DynaMem EQA image paths (when init was deferred)."""
+        from emet.llms.base import AbstractVLLMClient
+
+        if not self.run_eqa or self._eqa_pending is None:
+            return
+        if not isinstance(client, AbstractVLLMClient):
+            return
+        self.image_description_client = client
+        if self._eqa_backend == "qwen_vl":
+            self.eqa_client = client
+        self._eqa_pending = None
+
+    def materialize_local_eqa_vllm(self) -> None:
+        """Load a dedicated local EQA VLM when defer was used but no shared VL client was bound."""
+        if not self.run_eqa or self._eqa_pending is None:
+            return
+        if self.image_description_client is not None:
+            self._eqa_pending = None
+            return
+        p = self._eqa_pending
+        _vl_dev = self._eqa_device_resolved or ("cuda" if torch.cuda.is_available() else "cpu")
+        if self._eqa_backend == "gemini":
+            self.image_description_client = create_dynamem_vllm(
+                p["vl_family"],
+                hf_model_id=p["eqa_vl_hf_model_id"],
+                vl_model_size=p["eqa_vl_model_size"],
+                max_tokens=max(256, int(p["eqa_vl_max_tokens"])),
+                device=_vl_dev,
+                quantization=p["eqa_vl_quantization"],
+                prompt=None,
+            )
+        elif self._eqa_backend == "qwen_vl":
+            if not _eqa_qwen_vl_single_client_ok(
+                p["vl_family"], p["eqa_vl_hf_model_id"], _vl_dev, p["eqa_vl_quantization"]
+            ):
+                raise ValueError(
+                    "EQA configuration does not allow a single shared local VLM for captions and QA "
+                    f"(vl_family={p['vl_family']!r}). See emet.llms.vllm_registry."
+                )
+            shared = create_dynamem_vllm(
+                p["vl_family"],
+                hf_model_id=p["eqa_vl_hf_model_id"],
+                vl_model_size=p["eqa_vl_model_size"],
+                max_tokens=int(p["eqa_vl_max_tokens"]),
+                device=_vl_dev,
+                quantization=p["eqa_vl_quantization"],
+                prompt=None,
+            )
+            self.image_description_client = shared
+            self.eqa_client = shared
+        else:
+            raise ValueError(
+                f"Unknown eqa_backend {self._eqa_backend!r}; use 'qwen_vl' or 'gemini' (see dynav_config.yaml eqa:)."
+            )
+        self._eqa_pending = None
 
     def set_scene_graph_processor(self, processor) -> None:
         """Attach a SceneGraphProcessor to update an open-vocab scene graph on each frame."""
@@ -1150,8 +1322,12 @@ class SparseVoxelMap(SparseVoxelMapBase):
                     gery cloth,cloth hanger
             """
             messages = [prompt, self._question]
-            # To avoid initializing too many clients and using up too much memory, I reused the client generating the image descriptions even though it is a VL model
-            self.relevant_objects = self.image_description_client(messages).split(",")
+            self.relevant_objects = dynamem_vllm_call(
+                self.image_description_client,
+                messages,
+                system_prompt="",
+                max_new_tokens=64,
+            ).split(",")
             print("relevant objects to look at", self.relevant_objects)
             self.history_outputs = []
 
@@ -1256,7 +1432,20 @@ class SparseVoxelMap(SparseVoxelMapBase):
             relevant_images.append(image)
 
         # Extract answers
-        answer_outputs = self.eqa_client(commands).replace("*", "").replace("/", "").replace("#", "").lower()
+        from emet.llms.prompts.eqa_prompt import EQA_PROMPT
+
+        answer_outputs = (
+            dynamem_vllm_call(
+                self.eqa_client,
+                commands,
+                system_prompt=EQA_PROMPT,
+                max_new_tokens=self._eqa_max_tokens,
+            )
+            .replace("*", "")
+            .replace("/", "")
+            .replace("#", "")
+            .lower()
+        )
 
         print(commands)
         print(answer_outputs)
@@ -1401,7 +1590,12 @@ class SparseVoxelMap(SparseVoxelMapBase):
         objects = []
         for _ in range(max_tries):
             try:
-                object_names = self.image_description_client(messages)
+                object_names = dynamem_vllm_call(
+                    self.image_description_client,
+                    messages,
+                    system_prompt="",
+                    max_new_tokens=32,
+                )
                 objects = object_names.split(",")[:5]
             except:
                 objects = []
@@ -1428,16 +1622,20 @@ class SparseVoxelMap(SparseVoxelMapBase):
         """
         This function selects the edges of currently reachable space.
         """
-        obstacles, _ = self.get_2d_map()
+        obstacles, explored = self.get_2d_map()
         if len(xyt) == 3:
             xyt = xyt[:2]
         reachable_points = planner.get_reachable_points(planner.to_pt(xyt))
-        reachable_xs, reachable_ys = zip(*reachable_points, strict=False)
-        reachable_xs = torch.tensor(reachable_xs)
-        reachable_ys = torch.tensor(reachable_ys)
+        if not reachable_points:
+            # Start cell and neighbors are all occupied / unknown: flood-fill returns nothing.
+            # Fall back to all explored free space so exploration still has a frontier mask.
+            reachable_map = (~obstacles & explored).to(torch.bool)
+        else:
+            reachable_xs, reachable_ys = zip(*reachable_points, strict=False)
+            reachable_xs = torch.tensor(reachable_xs, device=obstacles.device, dtype=torch.long)
+            reachable_ys = torch.tensor(reachable_ys, device=obstacles.device, dtype=torch.long)
+            reachable_map = torch.zeros_like(obstacles, dtype=torch.bool)
+            reachable_map[reachable_xs, reachable_ys] = True
 
-        reachable_map = torch.zeros_like(obstacles)
-        reachable_map[reachable_xs, reachable_ys] = 1
-        reachable_map = reachable_map.to(torch.bool)
         edges = get_edges(reachable_map)
         return edges & ~reachable_map

@@ -12,7 +12,12 @@
 # Agent package: tools, prompt, and loop for robot + memory + optional Discord.
 
 from emet.agent.loop import run_agent_with_robot
-from emet.agent.prompt import AgentPromptBuilder, build_agent_system_prompt, parse_tool_calls_response
+from emet.agent.prompt import (
+    DEFAULT_AGENT_NAME,
+    AgentPromptBuilder,
+    build_agent_system_prompt,
+    parse_tool_calls_response,
+)
 from emet.agent.tools import (
     Tool,
     get_tool_descriptions_for_prompt,
@@ -21,6 +26,7 @@ from emet.agent.tools import (
 )
 
 __all__ = [
+    "DEFAULT_AGENT_NAME",
     "AgentPromptBuilder",
     "Tool",
     "build_agent_system_prompt",

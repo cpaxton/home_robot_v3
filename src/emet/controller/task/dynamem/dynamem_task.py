@@ -15,6 +15,7 @@ import torch
 from PIL import Image
 from termcolor import colored
 
+from emet.config.embodied_agent_config import EmbodiedAgentConfig
 from emet.controller.controller_dynamem import RobotAgent
 from emet.controller.operations import GraspObjectOperation
 from emet.controller.task.emote import EmoteTask
@@ -58,12 +59,16 @@ class DynamemTaskExecutor:
         mllm: bool = False,
         manipulation_only: bool = False,
         cpu_only: bool = False,
+        eqa: bool = False,
+        defer_eqa_vllm: bool = False,
         discord_bot=None,
+        embodied_agent: EmbodiedAgentConfig | None = None,
     ) -> None:
         """Initialize the executor."""
         self.robot = robot
         self.parameters = parameters
         self.discord_bot = discord_bot
+        self.embodied_agent = embodied_agent
         self.cpu_only = cpu_only
         self._last_memory_save_path = None  # set when memory is saved (e.g. after rotate_in_place)
         # If there is no GPU, we have to use CPU
@@ -107,6 +112,9 @@ class DynamemTaskExecutor:
             manipulation_only=manipulation_only,
             cpu_only=self.cpu_only,
             use_instance_memory=self.parameters.get("use_instance_memory", True),
+            eqa=eqa,
+            defer_eqa_vllm=defer_eqa_vllm,
+            embodied_agent=self.embodied_agent,
         )
         self.agent.start()
 
@@ -429,9 +437,7 @@ class EQAExecuter:
     def rotate_in_place(self):
         self.agent.rotate_in_place()
 
-    def __call__(
-        self, response: str | list[tuple[str, str]], channel=None
-    ) -> tuple[str, list[Image.Image]]:
+    def __call__(self, response: str | list[tuple[str, str]], channel=None) -> tuple[str, list[Image.Image]]:
         """Run EQA for one user question (string) or Discord-style payload (list of tuples)."""
         discord_text, relevant_images = self.agent.run_eqa(response)
         if channel is not None:

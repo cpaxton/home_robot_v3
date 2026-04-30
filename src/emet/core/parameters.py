@@ -48,7 +48,7 @@ class Parameters:
                     return default
                 data = data[key]
             key = keys[-1]
-        if default is not None and key not in data:
+        if key not in data:
             return default
         return data[key]
 

@@ -8,8 +8,9 @@
 # license information maybe found below, if so.
 from typing import Union
 
-from .base import AbstractLLMClient, AbstractPromptBuilder
+from .base import AbstractLLMClient, AbstractPromptBuilder, AbstractVLLMClient, VLInferenceKind
 from .chat_wrapper import LLMChatWrapper
+from .gemma4_any_client import Gemma4AnyToAnyClient
 from .gemma_client import GemmaClient
 from .llama_client import LlamaClient
 from .openai_client import OpenaiClient
@@ -22,6 +23,7 @@ from .qwen_client import QWEN_VL_PRESETS, Qwen25Client, Qwen25VLClient, get_qwen
 # This is a list of all the modules that are imported when you use the import * syntax.
 # The __all__ variable is used to define what symbols get exported when from a module when you use the import * syntax.
 __all__ = [
+    "Gemma4AnyToAnyClient",
     "GemmaClient",
     "LlamaClient",
     "OpenaiClient",
@@ -31,11 +33,20 @@ __all__ = [
     "PickupPromptBuilder",
     "AbstractLLMClient",
     "AbstractPromptBuilder",
+    "AbstractVLLMClient",
+    "VLInferenceKind",
     "LLMChatWrapper",
     "Qwen25Client",
     "Qwen25VLClient",
     "QWEN_VL_PRESETS",
+    "GEMMA4_PRESETS",
 ]
+
+# Gemma 4 small (E2B / E4B) on HF ``any-to-any``; keys must be matched before the generic ``"gemma" in client_type`` branch.
+GEMMA4_PRESETS: dict[str, str] = {
+    "gemma4-e2b": "google/gemma-4-e2b-it",
+    "gemma4-e4b": "google/gemma-4-E4B-it",
+}
 
 llms = {
     "gemma": GemmaClient,
@@ -50,6 +61,7 @@ qwen_variants = get_qwen_variants()
 llms.update(dict.fromkeys(qwen_variants, Qwen25Client))
 for variant in get_qwen35_variants():
     llms[variant] = Qwen25Client
+llms.update(dict.fromkeys(GEMMA4_PRESETS, Gemma4AnyToAnyClient))
 llms.update(dict.fromkeys(["gemma4b", "gemma1b"], GemmaClient))
 
 
@@ -74,7 +86,12 @@ def process_incoming_qwen_types(qwen_type: str):
         model_size = terms[1]
         # if the quantization is None, meaning no quantization shall be applied
         if len(terms) < 3:
-            finetuning_option, quantization_option = "Instruct", None
+            # qwen35-9B is only two tokens; without this branch we would load full-precision 3.5 (huge VRAM / OOM).
+            # Match the one-token default (int4) for local agent use.
+            if len(terms) == 2 and terms[0].lower() == "qwen35":
+                finetuning_option, quantization_option = None, "int4"
+            else:
+                finetuning_option, quantization_option = "Instruct", None
         # This means finetune with Instruct and using quantization "Instruct-Int4" or "Instruct-Int" (alias for Int4)
         elif len(terms) >= 4:
             q = terms[3].lower()
@@ -140,6 +157,9 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
     Returns:
         An LLM client.
     """
+    if client_type.lower() in GEMMA4_PRESETS:
+        key = client_type.lower()
+        return Gemma4AnyToAnyClient(prompt, hf_model_id=GEMMA4_PRESETS[key], **kwargs)
     if "gemma" in client_type:
         # We assume the user enter gemma, gemma4b, or gemma1b
         if client_type not in ["gemma", "gemma4b", "gemma1b"]:

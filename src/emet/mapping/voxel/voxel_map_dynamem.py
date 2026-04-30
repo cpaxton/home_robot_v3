@@ -256,7 +256,12 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         return index, time_heuristics, alignments_heuristics, total_heuristics
 
     def _time_heuristic(self, history_soft, outside_frontier, time_smooth=0.1, time_threshold=10, debug=False):
-        history_soft = np.ma.masked_array(history_soft, ~outside_frontier)
+        frontier = np.asarray(outside_frontier, dtype=bool)
+        if frontier.any():
+            history_soft = np.ma.masked_array(history_soft, ~frontier)
+        else:
+            # No frontier cells (e.g. empty map); avoid masking the entire grid.
+            history_soft = np.asarray(history_soft, dtype=float)
         time_heuristics = history_soft.max() - history_soft
         time_heuristics[history_soft < 1] = float("inf")
         time_heuristics = 1 / (1 + np.exp(-time_smooth * (time_heuristics - time_threshold)))
@@ -281,8 +286,12 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             The point in discrete grid coordinates.
         """
         # # type: ignore to bypass mypy checking
-        xy = np.array([xy[0], xy[1]])  # type: ignore
+        xy = np.array([xy[0], xy[1]], dtype=float)  # type: ignore
         pt = self.voxel_map.xy_to_grid_coords(xy)  # type: ignore
+        if pt is None:
+            # Base pose can be outside the allocated grid (world vs map frame); snap for planning.
+            pt_t = self.voxel_map.grid.xy_to_grid_coords_clamped(torch.tensor(xy, dtype=torch.float32))
+            pt = pt_t.detach().cpu().numpy()
         return int(pt[0]), int(pt[1])
 
     def to_xy(self, pt: tuple[int, int]) -> tuple[float, float]:

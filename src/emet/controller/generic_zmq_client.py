@@ -25,6 +25,7 @@ import sys
 import threading
 import time
 import timeit
+from dataclasses import replace
 from threading import Lock
 from typing import Any
 
@@ -41,7 +42,9 @@ from emet.core.zmq_protocol import (
     read_emet_robot_id_from_message_or_session,
     robot_ids_match,
 )
+from emet.motion import constants as motion_constants
 from emet.robots.base import RobotSpec
+from emet.robots.spec_robot_model import SpecRobotModel
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
 
@@ -277,6 +280,15 @@ class GenericZmqClient(AbstractRobotClient):
     def stop(self) -> None:
         self._finish = True
 
+    @property
+    def running(self) -> bool:
+        """True until ``stop()`` (same contract as ``StretchZmqClient``)."""
+        return not self._finish
+
+    def is_running(self) -> bool:
+        """True until ``stop()``; use ``robot.is_running()`` in loops (not ``robot.is_running``)."""
+        return not self._finish
+
     def reset(self) -> None:
         self._obs = None
         self._state = None
@@ -445,6 +457,22 @@ class GenericZmqClient(AbstractRobotClient):
             compass=compass,
         )
 
+    def get_head_pose(self) -> np.ndarray:
+        """SE(3) head / primary camera frame; fall back to identity if unknown."""
+        obs = self.get_observation()
+        if obs is None or obs.camera_pose is None:
+            return np.eye(4, dtype=np.float64)
+        return np.asarray(obs.camera_pose, dtype=np.float64)
+
+    def get_servo_observation(self) -> Observations | None:
+        """Stretch: dedicated EE / servo image stream. Generic: reuse head RGB as ``ee_rgb`` if unset."""
+        obs = self.get_observation()
+        if obs is None:
+            return None
+        if obs.ee_rgb is not None:
+            return obs
+        return replace(obs, ee_rgb=obs.rgb)
+
     # -- Actions --------------------------------------------------------------
 
     def send_action(
@@ -494,11 +522,7 @@ class GenericZmqClient(AbstractRobotClient):
             if timeit.default_timer() - t0 > timeout:
                 self._nav_goal_timeout_log_streak += 1
                 g = np.asarray(target_xyt, dtype=float).reshape(-1) if target_xyt is not None else None
-                goal_s = (
-                    f"[{g[0]:.2f}, {g[1]:.2f}, {g[2]:.2f}]"
-                    if g is not None and g.size >= 3
-                    else str(target_xyt)
-                )
+                goal_s = f"[{g[0]:.2f}, {g[1]:.2f}, {g[2]:.2f}]" if g is not None and g.size >= 3 else str(target_xyt)
                 detail = (
                     f"Navigation goal not reached within {timeout:.0f}s (target_xyt={goal_s}, "
                     f"at_goal={self.at_goal()}). If this repeats, the sim may never set `at_goal`, "
@@ -509,8 +533,7 @@ class GenericZmqClient(AbstractRobotClient):
                     logger.warning(detail)
                 else:
                     logger.debug(
-                        f"{detail} (suppressing further identical warnings; "
-                        f"streak={self._nav_goal_timeout_log_streak})"
+                        f"{detail} (suppressing further identical warnings; streak={self._nav_goal_timeout_log_streak})"
                     )
                 return False
         self._nav_goal_timeout_log_streak = 0
@@ -592,9 +615,43 @@ class GenericZmqClient(AbstractRobotClient):
         return True
 
     def head_to(self, head_pan: float, head_tilt: float, blocking: bool = False, **kwargs) -> None:
-        if not getattr(self, "_logged_head_to_nonstretch", False):
-            logger.warning("head_to() is Stretch-specific; ignored for this robot.")
-            self._logged_head_to_nonstretch = True
+        """Send Stretch-compatible ``head_to`` to the ZMQ server (``RobosuiteZmqServer`` maps it for rby1/galaxea)."""
+        next_action: dict[str, Any] = {
+            "head_to": [float(head_pan), float(head_tilt)],
+        }
+        if blocking:
+            next_action["manip_blocking"] = True
+        self.send_action(
+            next_action,
+            timeout=float(kwargs.get("timeout", 5.0)),
+            reliable=bool(kwargs.get("reliable", True)),
+        )
+        if blocking:
+            time.sleep(0.05)
+
+    def look_front(self, blocking: bool = True, timeout: float = 10.0) -> None:
+        self.head_to(
+            float(motion_constants.look_front[0]),
+            float(motion_constants.look_front[1]),
+            blocking=blocking,
+            timeout=timeout,
+            reliable=True,
+        )
+
+    def look_at_ee(self, blocking: bool = True, timeout: float = 10.0) -> None:
+        self.head_to(
+            float(motion_constants.look_at_ee[0]),
+            float(motion_constants.look_at_ee[1]),
+            blocking=blocking,
+            timeout=timeout,
+            reliable=True,
+        )
+
+    def say(self, text: str) -> None:
+        """Text-to-speech on Stretch; generic client has no audio bridge (no-op)."""
+
+    def say_sync(self, text: str) -> None:
+        """Blocking TTS on Stretch; generic client has no audio bridge (no-op)."""
 
     def navigate_to(self, xyt, relative: bool = False, blocking: bool = True, **kwargs) -> bool:
         xyt_a = np.asarray(xyt, dtype=float).reshape(-1)
@@ -613,7 +670,7 @@ class GenericZmqClient(AbstractRobotClient):
             time.sleep(0.05)
 
     def get_robot_model(self):
-        return None
+        return SpecRobotModel(self._spec)
 
     def get_pose_graph(self) -> np.ndarray:
         return np.zeros((0, 3))

@@ -1,0 +1,95 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the LICENSE file in the
+# root directory of this source tree.
+
+"""TTY diagnostics for head-camera frames (empty / black PNG / dtype issues)."""
+
+from __future__ import annotations
+
+import os
+
+import numpy as np
+from termcolor import colored
+
+from emet.agent.env_flags import env_agent_camera_debug
+
+_DISCORD_BGR_ENV = "EMET_DISCORD_IMAGES_BGR"  # "0"/"false" => assume RGB (no BGR2RGB) for sim frames
+
+
+def discord_pil_bgr() -> bool:
+    """For :func:`ndarray_hwc_to_pil_rgb_u8` when uploading to Discord.
+
+    Default is True (OpenCV-style BGR) for many pipelines. If the sim already publishes RGB and
+    colors look wrong or the PNG is unreasonably dark, set ``EMET_DISCORD_IMAGES_BGR=0``.
+    When unset, defaults to 1.
+    """
+    v = os.environ.get(_DISCORD_BGR_ENV, "1").strip().lower()
+    if v in ("0", "false", "no", "off", "rgb"):
+        return False
+    return v in ("1", "true", "yes", "on", "bgr", "y")
+
+
+def print_camera_frame_diagnostics(
+    where: str,
+    arr: np.ndarray | None,
+    *,
+    force: bool = False,
+) -> None:
+    """Print one line (or a short block) of array stats. Respects :func:`env_agent_camera_debug` unless force.
+
+    *force* is used when the caller is already in verbose ( tool ) mode.
+    """
+    if not force and not env_agent_camera_debug():
+        return
+    if arr is None:
+        print(
+            colored(f"[camera debug] {where}:", "magenta"),
+            "no array (None)",
+            flush=True,
+        )
+        return
+    a = np.asarray(arr)
+    if a.size == 0:
+        print(
+            colored(f"[camera debug] {where}:", "magenta"),
+            "empty array",
+            flush=True,
+        )
+        return
+    flat = a.astype(np.float32).ravel()
+    mn, mx = float(np.nanmin(flat)), float(np.nanmax(flat))
+    mean = float(np.nanmean(flat))
+    st = f"shape={a.shape} dtype={a.dtype} min={mn:.4g} max={mx:.4g} mean={mean:.4g} contiguous={a.flags.c_contiguous}"
+    if a.ndim == 3 and a.shape[2] >= 3:
+        cmeans = [float(np.nanmean(a[..., c])) for c in range(3)]
+        st += f" ch_mean=[{cmeans[0]:.2f}, {cmeans[1]:.2f}, {cmeans[2]:.2f}]"
+    print(colored(f"[camera debug] {where}:", "magenta"), st, flush=True)
+    if mx < 1.0 and a.dtype in (np.uint8,):
+        print(
+            colored("  (hint)", "yellow"),
+            "all pixel values are < 1; uint8 this usually means a black/empty buffer.",
+            flush=True,
+        )
+    if mx < 1e-6 and a.size > 0:
+        print(
+            colored("  (hint)", "red"),
+            "Array is numerically all-zero. Check that the sim is rendering (camera, EGL/GL) and ZMQ is publishing rgb.",
+            flush=True,
+        )
+    if a.dtype in (np.float32, np.float64) and mx <= 1.0 + 1e-3 and mean < 0.01:
+        print(
+            colored("  (hint)", "yellow"),
+            "Float image near black; if values should be in 0-255, dtype/range may be wrong.",
+            flush=True,
+        )
