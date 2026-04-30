@@ -4,11 +4,20 @@
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 #
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
 # SAM 3 (Segment Anything with Concepts) perception module.
 # Uses HuggingFace transformers API for text-prompted concept segmentation.
 # Falls back to SAM2 + OWL if SAM3 is unavailable.
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import torch
@@ -33,7 +42,7 @@ class SAM3Perception(PerceptionModule):
     def __init__(
         self,
         model_id: str = SAM3_MODEL_ID,
-        device: Optional[str] = None,
+        device: str | None = None,
         confidence_threshold: float = 0.5,
         min_area: int = 500,
         verbose: bool = False,
@@ -45,7 +54,7 @@ class SAM3Perception(PerceptionModule):
         self.confidence_threshold = confidence_threshold
         self.min_area = min_area
         self._verbose = verbose
-        self._vocabulary: List[str] = []
+        self._vocabulary: list[str] = []
 
         try:
             from transformers import Sam3Model, Sam3Processor
@@ -64,15 +73,15 @@ class SAM3Perception(PerceptionModule):
     def available(self) -> bool:
         return self._available
 
-    def reset_vocab(self, new_vocab: List[str]) -> None:
+    def reset_vocab(self, new_vocab: list[str]) -> None:
         self._vocabulary = list(new_vocab)
 
     @torch.no_grad()
     def segment_concepts(
         self,
         image: np.ndarray,
-        text_prompts: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
+        text_prompts: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """Segment all instances of given text concepts in the image.
 
         Args:
@@ -96,15 +105,18 @@ class SAM3Perception(PerceptionModule):
         results = []
 
         for prompt in prompts:
-            inputs = self.processor(
-                images=pil_image, text=prompt, return_tensors="pt"
-            )
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            outputs = self.model(**inputs)
+            try:
+                inputs = self.processor(images=pil_image, text=prompt, return_tensors="pt")
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                outputs = self.model(**inputs)
+            except Exception as e:
+                err = str(e).lower()
+                if "input_ids" in err or "text_embeds" in err:
+                    logger.warning(f"SAM3 forward failed for prompt {prompt!r} ({e}); skipping")
+                    continue
+                raise
 
-            processed = self.processor.post_process_instance_segmentation(
-                outputs, threshold=self.confidence_threshold
-            )
+            processed = self.processor.post_process_instance_segmentation(outputs, threshold=self.confidence_threshold)
 
             for seg_result in processed:
                 for seg_info in seg_result.get("segments_info", []):
@@ -119,17 +131,19 @@ class SAM3Perception(PerceptionModule):
                     ys, xs = np.where(mask)
                     bbox = np.array([xs.min(), ys.min(), xs.max(), ys.max()])
 
-                    results.append({
-                        "mask": mask,
-                        "label": prompt,
-                        "score": float(score),
-                        "bbox_xyxy": bbox,
-                    })
+                    results.append(
+                        {
+                            "mask": mask,
+                            "label": prompt,
+                            "score": float(score),
+                            "bbox_xyxy": bbox,
+                        }
+                    )
 
         return results
 
     @torch.no_grad()
-    def _generate_all_masks(self, image: np.ndarray) -> List[Dict[str, Any]]:
+    def _generate_all_masks(self, image: np.ndarray) -> list[dict[str, Any]]:
         """Class-agnostic mask generation (no text prompt)."""
         if not self._available:
             return []
@@ -137,13 +151,18 @@ class SAM3Perception(PerceptionModule):
         from PIL import Image as PILImage
 
         pil_image = PILImage.fromarray(image)
-        inputs = self.processor(images=pil_image, return_tensors="pt")
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
-        outputs = self.model(**inputs)
+        try:
+            inputs = self.processor(images=pil_image, return_tensors="pt")
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            outputs = self.model(**inputs)
+        except Exception as e:
+            err = str(e).lower()
+            if "input_ids" in err or "text_embeds" in err:
+                logger.warning(f"SAM3 class-agnostic forward failed ({e}); no masks")
+                return []
+            raise
 
-        processed = self.processor.post_process_instance_segmentation(
-            outputs, threshold=self.confidence_threshold
-        )
+        processed = self.processor.post_process_instance_segmentation(outputs, threshold=self.confidence_threshold)
 
         results = []
         for seg_result in processed:
@@ -156,22 +175,24 @@ class SAM3Perception(PerceptionModule):
                     continue
                 ys, xs = np.where(mask)
                 bbox = np.array([xs.min(), ys.min(), xs.max(), ys.max()])
-                results.append({
-                    "mask": mask,
-                    "label": "object",
-                    "score": float(score),
-                    "bbox_xyxy": bbox,
-                })
+                results.append(
+                    {
+                        "mask": mask,
+                        "label": "object",
+                        "score": float(score),
+                        "bbox_xyxy": bbox,
+                    }
+                )
 
         return results
 
     def predict(
         self,
-        rgb: Optional[np.ndarray] = None,
-        depth: Optional[np.ndarray] = None,
-        depth_threshold: Optional[float] = None,
+        rgb: np.ndarray | None = None,
+        depth: np.ndarray | None = None,
+        depth_threshold: float | None = None,
         draw_instance_predictions: bool = False,
-    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
+    ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
         """Standard PerceptionModule predict interface.
 
         Returns (semantic_map, instance_map, task_observations).
@@ -207,7 +228,7 @@ class SAM3Perception(PerceptionModule):
         scores = np.array([d["score"] for d in detections])
 
         # Build label -> class_id mapping
-        label_to_id: Dict[str, int] = {}
+        label_to_id: dict[str, int] = {}
         class_ids = []
         for d in detections:
             lbl = d["label"]

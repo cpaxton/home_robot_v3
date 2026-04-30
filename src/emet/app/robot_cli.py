@@ -24,6 +24,7 @@ def create_robot_client_from_cli(
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
     start_immediately: bool = True,
+    allow_missing_depth: bool = False,
 ) -> AbstractRobotClient:
     """
     Resolve ``--robot`` the same way as ``emet serve mujoco --robot`` / ``run_dynamem``:
@@ -39,6 +40,7 @@ def create_robot_client_from_cli(
             rerun_debug=rerun_debug,
             port_offset=port_offset,
             start_immediately=start_immediately,
+            allow_missing_depth=allow_missing_depth,
         )
     if robot_key in ROBOT_REGISTRY:
         mod = importlib.import_module(ROBOT_REGISTRY[robot_key])
@@ -54,6 +56,7 @@ def create_robot_client_from_cli(
         return backend.create_client(
             robot_ip=robot_ip,
             port_offset=port_offset,
+            allow_missing_depth=allow_missing_depth,
         )
     raise click.UsageError(
         f"Unknown robot '{robot}'. Known: stretch, {list(ROBOT_REGISTRY.keys())}. "

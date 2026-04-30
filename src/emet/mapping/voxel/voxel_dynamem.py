@@ -1622,16 +1622,20 @@ class SparseVoxelMap(SparseVoxelMapBase):
         """
         This function selects the edges of currently reachable space.
         """
-        obstacles, _ = self.get_2d_map()
+        obstacles, explored = self.get_2d_map()
         if len(xyt) == 3:
             xyt = xyt[:2]
         reachable_points = planner.get_reachable_points(planner.to_pt(xyt))
-        reachable_xs, reachable_ys = zip(*reachable_points, strict=False)
-        reachable_xs = torch.tensor(reachable_xs)
-        reachable_ys = torch.tensor(reachable_ys)
+        if not reachable_points:
+            # Start cell and neighbors are all occupied / unknown: flood-fill returns nothing.
+            # Fall back to all explored free space so exploration still has a frontier mask.
+            reachable_map = (~obstacles & explored).to(torch.bool)
+        else:
+            reachable_xs, reachable_ys = zip(*reachable_points, strict=False)
+            reachable_xs = torch.tensor(reachable_xs, device=obstacles.device, dtype=torch.long)
+            reachable_ys = torch.tensor(reachable_ys, device=obstacles.device, dtype=torch.long)
+            reachable_map = torch.zeros_like(obstacles, dtype=torch.bool)
+            reachable_map[reachable_xs, reachable_ys] = True
 
-        reachable_map = torch.zeros_like(obstacles)
-        reachable_map[reachable_xs, reachable_ys] = 1
-        reachable_map = reachable_map.to(torch.bool)
         edges = get_edges(reachable_map)
         return edges & ~reachable_map
