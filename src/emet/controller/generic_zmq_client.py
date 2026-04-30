@@ -63,6 +63,7 @@ class GenericZmqClient(AbstractRobotClient):
         parameters: Parameters | None = None,
         use_remote_computer: bool = True,
         start_immediately: bool = True,
+        allow_missing_depth: bool = False,
     ):
         super().__init__()
         if port_offset:
@@ -79,6 +80,7 @@ class GenericZmqClient(AbstractRobotClient):
         if parameters is None:
             parameters = get_parameters("default_planner.yaml")
         self._parameters = parameters
+        self._allow_missing_depth = allow_missing_depth
 
         self._iter = -1
         self._seq_id = 0
@@ -225,8 +227,16 @@ class GenericZmqClient(AbstractRobotClient):
                 continue
             self._seq_id += 1
             output["rgb"] = compression.from_jpg(output["rgb"])
-            depth = compression.from_jp2(output["depth"]) / 1000
-            output["depth"] = depth
+            raw_depth = output.get("depth")
+            if raw_depth is None:
+                if not self._allow_missing_depth:
+                    logger.warning(
+                        "Observation missing depth; skipping frame (use allow_missing_depth for RGB-only servers)."
+                    )
+                    continue
+                output["depth"] = None
+            else:
+                output["depth"] = compression.from_jp2(raw_depth) / 1000
             with self._obs_lock:
                 self._obs = output
                 if "step" in output:
@@ -312,7 +322,9 @@ class GenericZmqClient(AbstractRobotClient):
 
         rgb = obs.get("rgb")
         depth = obs.get("depth")
-        if rgb is None or depth is None:
+        if rgb is None:
+            return None
+        if depth is None and not self._allow_missing_depth:
             return None
 
         camera_K = obs.get("camera_K")
