@@ -13,22 +13,70 @@
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 
-"""Innate Mars robot — https://github.com/innate-robotics."""
+"""Innate Mars mobile manipulator — MuJoCo assets vendored as Maurice; real robot via innate_mars_bridge."""
+
+from pathlib import Path
 
 from emet.robots.base import RobotBackend, RobotSpec
+from emet.robots.footprint import Footprint
+
+_ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets" / "robot" / "innate_mars"
+_MJCF_PATH = str(_ASSETS_DIR / "innate_mars.xml")
+
+# Matches `maurice.mjcf`: planar base + arm + mimic gripper joint.
+INNATE_MARS_JOINT_NAMES = [
+    "base_x",
+    "base_y",
+    "base_yaw",
+    "joint1",
+    "joint2",
+    "joint3",
+    "joint4",
+    "joint5",
+    "joint6",
+    "joint6M",
+]
+
+INNATE_MARS_ACTUATOR_NAMES = [
+    "base_x",
+    "base_y",
+    "base_yaw",
+    "joint1",
+    "joint2",
+    "joint3",
+    "joint4",
+    "joint5",
+    "joint6",
+]
+
+INNATE_MARS_CAMERA_NAMES = ["head_left", "head_right", "ee"]
 
 
 class InnateMarsBackend(RobotBackend):
-    """Stub for Innate Mars robot integration."""
+    """Innate Mars / Maurice-style mobile manipulator."""
 
     def get_spec(self) -> RobotSpec:
-        raise NotImplementedError("Innate Mars integration is a stub. See https://github.com/innate-robotics")
+        return RobotSpec(
+            name="innate_mars",
+            dof=len(INNATE_MARS_JOINT_NAMES),
+            joint_names=list(INNATE_MARS_JOINT_NAMES),
+            camera_names=list(INNATE_MARS_CAMERA_NAMES),
+            urdf_path=None,
+            mjcf_path=_MJCF_PATH,
+            actuator_names=list(INNATE_MARS_ACTUATOR_NAMES),
+            base_link_name="base_link",
+            footprint=Footprint(width=0.48, length=0.48, width_offset=0.0, length_offset=0.0),
+        )
 
     def create_client(self, robot_ip: str, **kwargs):
-        raise NotImplementedError("Innate Mars client not yet implemented")
+        from emet.controller.generic_zmq_client import GenericZmqClient
+
+        return GenericZmqClient(robot_spec=self.get_spec(), robot_ip=robot_ip, **kwargs)
 
     def create_model(self, **kwargs):
-        raise NotImplementedError("Innate Mars model not yet implemented")
+        raise NotImplementedError(
+            "Innate Mars kinematic model not yet implemented. Use MuJoCo-based planning or a third-party IK solver."
+        )
 
 
-__all__ = ["InnateMarsBackend"]
+__all__ = ["InnateMarsBackend", "INNATE_MARS_JOINT_NAMES"]
