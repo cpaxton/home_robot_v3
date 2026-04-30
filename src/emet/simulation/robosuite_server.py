@@ -58,6 +58,7 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         self._mjmodel: mujoco.MjModel | None = None
         self._mjdata: mujoco.MjData | None = None
+        self._mj_lock = threading.RLock()
         self._initial_xyt: np.ndarray | None = None
         self._running = False
         self.control_mode = "navigation"
@@ -83,7 +84,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         else:
             raise ValueError("Either scene_xml or scene_model must be provided")
         self._mjdata = mujoco.MjData(self._mjmodel)
-        mujoco.mj_forward(self._mjmodel, self._mjdata)
+        with self._mj_lock:
+            mujoco.mj_forward(self._mjmodel, self._mjdata)
 
     def get_scene_summary(self) -> str:
         """Return a short text summary of the scene: robot, position, and notable objects."""
@@ -94,36 +96,39 @@ class RobosuiteZmqServer(BaseZmqServer):
             f"Robot: {self._spec.name}",
         ]
         try:
-            xyt = self.get_base_xyt()
-            lines.append(f"Robot position (x, y, theta): ({xyt[0]:.3f}, {xyt[1]:.3f}, {xyt[2]:.3f})")
-            body_id = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, self._spec.base_link_name)
-            if body_id >= 0:
-                z = float(self._mjdata.body(body_id).xpos[2])
-                lines.append(f"Robot height (z): {z:.3f}")
+            with self._mj_lock:
+                xyt = self.get_base_xyt()
+                lines.append(f"Robot position (x, y, theta): ({xyt[0]:.3f}, {xyt[1]:.3f}, {xyt[2]:.3f})")
+                body_id = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, self._spec.base_link_name)
+                if body_id >= 0:
+                    z = float(self._mjdata.body(body_id).xpos[2])
+                    lines.append(f"Robot height (z): {z:.3f}")
+                for bid in range(self._mjmodel.nbody):
+                    name = mujoco.mj_id2name(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, bid)
+                    if name is None or name == self._spec.base_link_name:
+                        continue
+                    xpos = self._mjdata.body(bid).xpos
+                    if "object1" in (name or ""):
+                        lines.append(f"  Blue cube (object1): pos ({xpos[0]:.3f}, {xpos[1]:.3f}, {xpos[2]:.3f})")
+                    elif "object2" in (name or ""):
+                        lines.append(f"  Red cylinder (object2): pos ({xpos[0]:.3f}, {xpos[1]:.3f}, {xpos[2]:.3f})")
+                    elif name in ("table", "floor"):
+                        lines.append(f"  {name}: pos ({xpos[0]:.3f}, {xpos[1]:.3f}, {xpos[2]:.3f})")
         except Exception:
             lines.append("Robot position: (unknown)")
-        # Describe notable bodies (object1, object2, table, floor)
-        for bid in range(self._mjmodel.nbody):
-            name = mujoco.mj_id2name(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, bid)
-            if name is None or name == self._spec.base_link_name:
-                continue
-            xpos = self._mjdata.body(bid).xpos
-            if "object1" in (name or ""):
-                lines.append(f"  Blue cube (object1): pos ({xpos[0]:.3f}, {xpos[1]:.3f}, {xpos[2]:.3f})")
-            elif "object2" in (name or ""):
-                lines.append(f"  Red cylinder (object2): pos ({xpos[0]:.3f}, {xpos[1]:.3f}, {xpos[2]:.3f})")
-            elif name in ("table", "floor"):
-                lines.append(f"  {name}: pos ({xpos[0]:.3f}, {xpos[1]:.3f}, {xpos[2]:.3f})")
         lines.append("-------------------")
         return "\n".join(lines)
 
     def get_base_xyt(self) -> np.ndarray:
         base_name = self._spec.base_link_name
+        if self._mjdata is None:
+            return np.zeros(3)
         try:
-            xpos = self._mjdata.body(base_name).xpos
-            xmat = self._mjdata.body(base_name).xmat.reshape(3, 3)
-            theta = np.arctan2(xmat[1, 0], xmat[0, 0])
-            return np.array([xpos[0], xpos[1], theta])
+            with self._mj_lock:
+                xpos = self._mjdata.body(base_name).xpos
+                xmat = self._mjdata.body(base_name).xmat.reshape(3, 3)
+                theta = np.arctan2(xmat[1, 0], xmat[0, 0])
+                return np.array([xpos[0], xpos[1], theta])
         except Exception:
             return np.zeros(3)
 
@@ -142,17 +147,18 @@ class RobosuiteZmqServer(BaseZmqServer):
         if self._mjdata is None:
             return positions, velocities, efforts
 
-        for i, jname in enumerate(self._spec.joint_names):
-            try:
-                jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jname)
-                if jid < 0:
+        with self._mj_lock:
+            for i, jname in enumerate(self._spec.joint_names):
+                try:
+                    jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jname)
+                    if jid < 0:
+                        continue
+                    qadr = self._mjmodel.jnt_qposadr[jid]
+                    vadr = self._mjmodel.jnt_dofadr[jid]
+                    positions[i] = self._mjdata.qpos[qadr]
+                    velocities[i] = self._mjdata.qvel[vadr]
+                except Exception:
                     continue
-                qadr = self._mjmodel.jnt_qposadr[jid]
-                vadr = self._mjmodel.jnt_dofadr[jid]
-                positions[i] = self._mjdata.qpos[qadr]
-                velocities[i] = self._mjdata.qvel[vadr]
-            except Exception:
-                continue
 
         return positions, velocities, efforts
 
@@ -170,20 +176,22 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     def _render_camera(self, camera_name: str, width: int = 640, height: int = 480):
         """Render an RGB image from a named MuJoCo camera. Uses MUJOCO_GL (egl recommended headless)."""
-        renderer = mujoco.Renderer(self._mjmodel, height, width)
-        renderer.update_scene(self._mjdata, camera=self._camera_for_renderer(camera_name))
-        rgb = renderer.render()
-        renderer.close()
+        with self._mj_lock:
+            renderer = mujoco.Renderer(self._mjmodel, height, width)
+            renderer.update_scene(self._mjdata, camera=self._camera_for_renderer(camera_name))
+            rgb = renderer.render()
+            renderer.close()
         return rgb
 
     def _render_depth(self, camera_name: str, width: int = 640, height: int = 480):
         """Render a depth image from a named MuJoCo camera."""
-        renderer = mujoco.Renderer(self._mjmodel, height, width)
-        renderer.update_scene(self._mjdata, camera=self._camera_for_renderer(camera_name))
-        renderer.enable_depth_rendering()
-        depth = renderer.render()
-        renderer.disable_depth_rendering()
-        renderer.close()
+        with self._mj_lock:
+            renderer = mujoco.Renderer(self._mjmodel, height, width)
+            renderer.update_scene(self._mjdata, camera=self._camera_for_renderer(camera_name))
+            renderer.enable_depth_rendering()
+            depth = renderer.render()
+            renderer.disable_depth_rendering()
+            renderer.close()
         return depth
 
     def _get_camera_K(self, camera_name: str, width: int = 640, height: int = 480):
@@ -223,20 +231,21 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     def _teleport_base_world_xyt(self, wx: float, wy: float, wt: float) -> bool:
         """Teleport ``base_link`` free joint to world (x,y,yaw); preserve height and zero base twist."""
-        addrs = self._base_freejoint_addrs()
-        if addrs is None:
-            return False
-        qadr, vadr = addrs
-        z = float(self._mjdata.qpos[qadr + 2])
-        qw = float(np.cos(wt * 0.5))
-        qz = float(np.sin(wt * 0.5))
-        self._mjdata.qpos[qadr] = wx
-        self._mjdata.qpos[qadr + 1] = wy
-        self._mjdata.qpos[qadr + 2] = z
-        self._mjdata.qpos[qadr + 3 : qadr + 7] = np.array([qw, 0.0, 0.0, qz], dtype=np.float64)
-        nv = 6
-        self._mjdata.qvel[vadr : vadr + nv] = 0.0
-        mujoco.mj_forward(self._mjmodel, self._mjdata)
+        with self._mj_lock:
+            addrs = self._base_freejoint_addrs()
+            if addrs is None:
+                return False
+            qadr, vadr = addrs
+            z = float(self._mjdata.qpos[qadr + 2])
+            qw = float(np.cos(wt * 0.5))
+            qz = float(np.sin(wt * 0.5))
+            self._mjdata.qpos[qadr] = wx
+            self._mjdata.qpos[qadr + 1] = wy
+            self._mjdata.qpos[qadr + 2] = z
+            self._mjdata.qpos[qadr + 3 : qadr + 7] = np.array([qw, 0.0, 0.0, qz], dtype=np.float64)
+            nv = 6
+            self._mjdata.qvel[vadr : vadr + nv] = 0.0
+            mujoco.mj_forward(self._mjmodel, self._mjdata)
         return True
 
     @override
@@ -244,43 +253,50 @@ class RobosuiteZmqServer(BaseZmqServer):
         if "control_mode" in action:
             self.control_mode = action["control_mode"]
 
-        if "joint" in action:
-            joint_targets = action["joint"]
-            for i, aname in enumerate(self._spec.actuator_names):
-                if i < len(joint_targets):
-                    aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
-                    if aid >= 0:
-                        self._mjdata.ctrl[aid] = joint_targets[i]
-
-        if "xyt" in action:
+        has_xyt = "xyt" in action
+        if has_xyt:
             self._at_goal = False
-            try:
-                raw = np.asarray(action["xyt"], dtype=np.float64).reshape(-1)
-                if raw.size < 3 or self._mjdata is None:
+        try:
+            with self._mj_lock:
+                if self._mjdata is None:
                     return
-                init = self._initial_xyt
-                if init is None:
-                    init = np.zeros(3, dtype=np.float64)
-                relative = bool(action.get("nav_relative", False))
-                if relative:
-                    cur = self.get_base_xyt()
-                    dx, dy, dt = float(raw[0]), float(raw[1]), float(raw[2])
-                    ct = float(cur[2])
-                    wx = cur[0] + np.cos(ct) * dx - np.sin(ct) * dy
-                    wy = cur[1] + np.sin(ct) * dx + np.cos(ct) * dy
-                    wt = float(np.arctan2(np.sin(cur[2] + dt), np.cos(cur[2] + dt)))
-                else:
-                    world = self._spawn_rel_xyt_to_world(raw[:3], init)
-                    wx, wy, wt = float(world[0]), float(world[1]), float(world[2])
-                if not self._teleport_base_world_xyt(wx, wy, wt):
-                    logger.warning(
-                        "Navigation xyt=%s: no free joint on base_link '%s'; cannot teleport.",
-                        action["xyt"],
-                        self._spec.base_link_name,
-                    )
-            except Exception as e:
+                if "joint" in action:
+                    joint_targets = action["joint"]
+                    for i, aname in enumerate(self._spec.actuator_names):
+                        if i < len(joint_targets):
+                            aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
+                            if aid >= 0:
+                                self._mjdata.ctrl[aid] = joint_targets[i]
+
+                if has_xyt:
+                    raw = np.asarray(action["xyt"], dtype=np.float64).reshape(-1)
+                    if raw.size < 3:
+                        return
+                    init = self._initial_xyt
+                    if init is None:
+                        init = np.zeros(3, dtype=np.float64)
+                    relative = bool(action.get("nav_relative", False))
+                    if relative:
+                        cur = self.get_base_xyt()
+                        dx, dy, dt = float(raw[0]), float(raw[1]), float(raw[2])
+                        ct = float(cur[2])
+                        wx = cur[0] + np.cos(ct) * dx - np.sin(ct) * dy
+                        wy = cur[1] + np.sin(ct) * dx + np.cos(ct) * dy
+                        wt = float(np.arctan2(np.sin(cur[2] + dt), np.cos(cur[2] + dt)))
+                    else:
+                        world = self._spawn_rel_xyt_to_world(raw[:3], init)
+                        wx, wy, wt = float(world[0]), float(world[1]), float(world[2])
+                    if not self._teleport_base_world_xyt(wx, wy, wt):
+                        logger.warning(
+                            "Navigation xyt=%s: no free joint on base_link '%s'; cannot teleport.",
+                            action["xyt"],
+                            self._spec.base_link_name,
+                        )
+        except Exception as e:
+            if has_xyt:
                 logger.error(f"Navigation xyt={action.get('xyt')!r} failed in simulation server: {e!r}")
-            finally:
+        finally:
+            if has_xyt:
                 self._at_goal = True
 
     @override
@@ -389,7 +405,8 @@ class RobosuiteZmqServer(BaseZmqServer):
     def _sim_loop(self):
         """Step the MuJoCo simulation at the configured rate."""
         while self._running:
-            mujoco.mj_step(self._mjmodel, self._mjdata)
+            with self._mj_lock:
+                mujoco.mj_step(self._mjmodel, self._mjdata)
             time.sleep(1 / self.simulation_rate)
 
     def _run_passive_viewer_main_loop(self, show_viewer_ui: bool) -> None:
@@ -406,7 +423,8 @@ class RobosuiteZmqServer(BaseZmqServer):
             ) as viewer:
                 logger.info("MuJoCo passive viewer open (close window or Ctrl+C to stop).")
                 while self._running and viewer.is_running():
-                    mujoco.mj_step(self._mjmodel, self._mjdata)
+                    with self._mj_lock:
+                        mujoco.mj_step(self._mjmodel, self._mjdata)
                     viewer.sync()
                     time.sleep(dt)
         except Exception as e:

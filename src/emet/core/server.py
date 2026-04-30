@@ -239,6 +239,7 @@ class BaseZmqServer(CommsNode, ABC):
                     self.skip_duplicate_steps
                     and action_step <= self._last_step
                     and "xyt" not in action
+                    and "posture" not in action
                 ):
                     logger.warning(f"Skipping duplicate action {action_step}, last step = {self._last_step}")
                     continue
