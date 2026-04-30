@@ -334,6 +334,15 @@ def run_agent_with_robot(
         **_exec_kwargs,
     )
 
+    if eqa:
+        print(
+            colored(
+                "EQA/DynaMem: SigLIP, optional SAM3/DINO, and GraphEQA Qwen3.5-VL load lazily on the first "
+                "robot update—separate HF checkpoints from text --llm (each loads once per process).",
+                "cyan",
+            )
+        )
+
     if input_path:
         backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
         backend.load(input_path)
