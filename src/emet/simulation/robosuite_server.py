@@ -16,8 +16,9 @@ ZMQ protocol as MujocoZmqServer.
 
 import threading
 import time
-from typing import Any
+from typing import Any, cast
 
+import cv2
 import mujoco
 import numpy as np
 from overrides import override
@@ -33,9 +34,15 @@ from emet.core.zmq_protocol import (
 )
 from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn
+from emet.simulation.head_look_action import apply_head_to_robosuite
 from emet.utils.geometry import xyt_global_to_base
 
 logger = log.Logger(__name__)
+
+# One ``mujoco.Renderer`` / GL context: multiple resolutions each call ``mjr_makeContext`` and often
+# hit GL_INVALID_OPERATION (0x502) on EGL. Primary + servo reuse one renderer; servo resizes in CPU.
+_PRIMARY_RW, _PRIMARY_RH = 640, 480
+_SERVO_RW, _SERVO_RH = 320, 240
 
 
 class RobosuiteZmqServer(BaseZmqServer):
@@ -84,6 +91,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._nav_kp_theta = 2.2
         self._nav_v_max = 0.42
         self._nav_w_max = 0.95
+        self._render_lock = threading.Lock()
+        self._primary_renderer: Any | None = None
 
     @property
     def spec(self) -> RobotSpec:
@@ -270,6 +279,37 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         return positions, velocities, efforts
 
+    def _close_renderers(self) -> None:
+        with self._render_lock:
+            if self._primary_renderer is not None:
+                try:
+                    self._primary_renderer.close()
+                except Exception:
+                    pass
+                self._primary_renderer = None
+
+    def _primary_rgb_and_depth(self, camera_name: str) -> tuple[np.ndarray, np.ndarray]:
+        """RGB + depth using one ``Renderer`` under ``_render_lock`` (avoids EGL 0x502 on extra contexts)."""
+        cam = self._camera_for_renderer(camera_name)
+        with self._mj_lock:
+            with self._render_lock:
+                if self._primary_renderer is None:
+                    self._primary_renderer = mujoco.Renderer(self._mjmodel, _PRIMARY_RH, _PRIMARY_RW)
+                renderer = self._primary_renderer
+                renderer.update_scene(self._mjdata, camera=cam)
+                rgb = cast(np.ndarray, renderer.render())
+                rgb = np.asarray(rgb, dtype=np.uint8).copy()
+                rgb = np.flipud(rgb).copy()
+                renderer.enable_depth_rendering()
+                try:
+                    renderer.update_scene(self._mjdata, camera=cam)
+                    depth = cast(np.ndarray, renderer.render())
+                    depth = np.asarray(depth, dtype=np.float32).copy()
+                    depth = np.flipud(depth).copy()
+                finally:
+                    renderer.disable_depth_rendering()
+                return rgb, depth
+
     def _camera_for_renderer(self, camera_name: str) -> int | str:
         """Resolve RobotSpec camera name to a MuJoCo camera id, or free camera if none match.
 
@@ -281,26 +321,6 @@ class RobosuiteZmqServer(BaseZmqServer):
         if cid >= 0:
             return cid
         return -1
-
-    def _render_camera(self, camera_name: str, width: int = 640, height: int = 480):
-        """Render an RGB image from a named MuJoCo camera. Uses MUJOCO_GL (egl recommended headless)."""
-        with self._mj_lock:
-            renderer = mujoco.Renderer(self._mjmodel, height, width)
-            renderer.update_scene(self._mjdata, camera=self._camera_for_renderer(camera_name))
-            rgb = renderer.render()
-            renderer.close()
-        return rgb
-
-    def _render_depth(self, camera_name: str, width: int = 640, height: int = 480):
-        """Render a depth image from a named MuJoCo camera."""
-        with self._mj_lock:
-            renderer = mujoco.Renderer(self._mjmodel, height, width)
-            renderer.update_scene(self._mjdata, camera=self._camera_for_renderer(camera_name))
-            renderer.enable_depth_rendering()
-            depth = renderer.render()
-            renderer.disable_depth_rendering()
-            renderer.close()
-        return depth
 
     def _get_camera_K(self, camera_name: str, width: int = 640, height: int = 480):
         """Compute intrinsic matrix from MuJoCo camera fovy."""
@@ -467,6 +487,12 @@ class RobosuiteZmqServer(BaseZmqServer):
             if has_xyt:
                 logger.error(f"Navigation xyt={action.get('xyt')!r} failed in simulation server: {e!r}")
 
+        if "head_to" in action and self._mjmodel is not None and self._mjdata is not None:
+            ht = action["head_to"]
+            if isinstance(ht, (list, tuple)) and len(ht) >= 2:
+                with self._mj_lock:
+                    apply_head_to_robosuite(self._spec, self._mjmodel, self._mjdata, float(ht[0]), float(ht[1]))
+
     @override
     def get_full_observation_message(self) -> dict[str, Any]:
         if self._mjdata is None:
@@ -478,8 +504,7 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         primary_cam = cam_names[0]
         try:
-            rgb = self._render_camera(primary_cam)
-            depth = self._render_depth(primary_cam)
+            rgb, depth = self._primary_rgb_and_depth(primary_cam)
         except Exception:
             return None
 
@@ -547,8 +572,9 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         primary_cam = cam_names[0]
         try:
-            rgb = self._render_camera(primary_cam, 320, 240)
-            depth = self._render_depth(primary_cam, 320, 240)
+            rgb_full, depth_full = self._primary_rgb_and_depth(primary_cam)
+            rgb = cv2.resize(rgb_full, (_SERVO_RW, _SERVO_RH), interpolation=cv2.INTER_AREA)
+            depth = cv2.resize(depth_full, (_SERVO_RW, _SERVO_RH), interpolation=cv2.INTER_NEAREST)
         except Exception:
             return None
 
@@ -652,5 +678,6 @@ class RobosuiteZmqServer(BaseZmqServer):
                 time.sleep(1 / self.simulation_rate)
 
     def stop(self):
+        self._close_renderers()
         self._running = False
         self._done = True

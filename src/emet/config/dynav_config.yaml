@@ -30,6 +30,17 @@ da3_model_id: depth-anything/DA3METRIC-LARGE
 da3_process_res: 504
 # da3_device: cuda   # optional; defaults to same device as the DynaMem controller (cuda if available else cpu)
 
+# EQA (memory Q&A when using emet run agent --eqa). Default: local Qwen3-VL (one load for captions + EQA).
+# vl_family: qwen3_vl | qwen2_5_vl | gemma4 — set vl_hf_model_id to override the default checkpoint.
+eqa:
+  backend: qwen_vl
+  vl_family: qwen3_vl
+  vl_model_size: 3B
+  vl_max_tokens: 512
+  vl_quantization: int4
+  vl_hf_model_id: Qwen/Qwen3-VL-4B-Instruct
+  gemini_model: gemini-2.5-flash
+
 # Object detection parameters (used when use_instance_memory is True; YoloE runs for instance segmentation)
 # Lower confidence_threshold helps detect small objects in the default MuJoCo scene (red cylinder, blue cube on table).
 detection:
@@ -92,6 +103,12 @@ instance_memory:
   use_association: False
   association_distance_m: 0.15
   move_threshold_m: 0.05
+  matching:
+    # Feature matching threshold for if something is considered a particular class
+    # Set this value by experimting with:
+    #   python -m emet.app.query --threshold 0.05
+    # You can change the threshold to anything that makes sense.
+    feature_match_threshold: 0.05
 
 # TAMP parameters
 guarantee_instance_is_reachable: True
@@ -129,37 +146,6 @@ motion_planner:
 trajectory_pos_err_threshold: 0.15
 trajectory_rot_err_threshold: 0.5
 trajectory_per_step_timeout: 3.0
-
-agent:
-  realtime:
-    # This is the distance to pose graph nodes
-    matching_distance: 0.5
-    # This was 0.05 in Atharva's exerimetns
-    # It is how close lidar spins have to be to be considered the same
-    temporal_threshold: 0.1
-  realtime_rotation_steps: 4
-  in_place_rotation_steps: 4
-  sweep_head_on_update: True
-
-# These are mostly around making sure that we reject views of objects that are too small, too spotty, too unreliable, etc.
-instance_memory:
-  min_instance_thickness: 0.01
-  min_instance_vol: 1e-6
-  max_instance_vol: 10.0
-  min_instance_height: 0.01
-  max_instance_height: 1.8
-  min_pixels_for_instance_view: 100
-  min_percent_for_instance_view: 0.1
-  # Should we remove the background from the instance views?
-  # What doe this mean? If you have a view of a bottle on a table, should we remove the table?
-  # It will have an effect on performance.
-  mask_cropped_instances: False  # Should we remove the background from the instance views?
-  matching:
-    # Feature matching threshold for if something is considered a particular class
-    # Set this value by experimting with:
-    #   python -m emet.app.query --threshold 0.05
-    # You can change the threshold to anything that makes sense.
-    feature_match_threshold: 0.05
 
 # Qwen3.5 multimodal (EQA + keyword helpers for GraphEQA / DynaMem). Loaded once per process.
 # Prefer a single locked size (default 9B int4). Set model_size: null to pick once from free VRAM via vram_mib_tier_*.

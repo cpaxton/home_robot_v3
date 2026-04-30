@@ -41,7 +41,7 @@ newgrp docker
 
 ## Building the Docker Image
 
-The image uses **uv** and runs `install.sh -y` (no conda). Ensure the segment-anything-2 submodule is present before building (the build script does this for you).
+The image uses **uv** and runs `install.sh -y --sim` (no conda). Ensure the segment-anything-2 submodule is present before building (the build script does this for you).
 
 From the **root** of the repository:
 

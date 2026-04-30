@@ -14,6 +14,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import os
+from collections import Counter
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
@@ -25,7 +26,9 @@ import torch
 import zmq
 from PIL import Image
 
+from emet.agent.env_flags import env_agent_camera_debug, env_agent_model_debug
 from emet.audio.text_to_speech import PiperTextToSpeech
+from emet.config.embodied_agent_config import EmbodiedAgentConfig, legacy_embodied_agent_off
 from emet.controller.base_controller import BaseController
 from emet.controller.generic_zmq_client import GenericZmqClient
 from emet.controller.manipulation.dynamem_manipulation.dynamem_manipulation import (
@@ -47,6 +50,8 @@ from emet.mapping.voxel import (
     SparseVoxelMapNavigationSpaceDynamem as SparseVoxelMapNavigationSpace,
 )
 from emet.mapping.voxel.voxel import _instance_memory_kwargs_from_params
+from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
+from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
 from emet.motion.algo.a_star import AStar
 from emet.perception.depth import create_da3_estimator_from_parameters
 from emet.perception.detection.owl import OwlPerception
@@ -69,6 +74,35 @@ INIT_WRIST_ROLL = 0
 INIT_WRIST_YAW = 0
 INIT_HEAD_PAN = -1.57
 INIT_HEAD_TILT = -0.65
+
+# Batched OWL text queries for describe_head_camera_scene_text (single forward pass).
+_DESCRIBE_SCENE_OWL_QUERIES: tuple[str, ...] = (
+    "table",
+    "chair",
+    "person",
+    "cup",
+    "bottle",
+    "laptop",
+    "computer monitor",
+    "television",
+    "cabinet",
+    "shelf",
+    "door",
+    "window",
+    "couch",
+    "bed",
+    "counter",
+    "box",
+    "bowl",
+    "plate",
+    "plant",
+    "book",
+    "keyboard",
+    "microwave",
+    "refrigerator",
+    "sink",
+    "robot arm",
+)
 
 
 class DynamemController(BaseController):
@@ -93,6 +127,8 @@ class DynamemController(BaseController):
         manipulation_only: bool = False,
         cpu_only: bool = False,
         eqa: bool = False,
+        defer_eqa_vllm: bool = False,
+        embodied_agent: EmbodiedAgentConfig | None = None,
     ):
         super().__init__(
             robot=robot,
@@ -109,7 +145,16 @@ class DynamemController(BaseController):
         self.mllm = mllm
         self.manipulation_only = manipulation_only
         self.eqa = eqa
+        self.defer_eqa_vllm = defer_eqa_vllm
         self.owl_sam_detector = None
+
+        self.embodied_agent = embodied_agent if embodied_agent is not None else legacy_embodied_agent_off()
+        self._open_vocab_sg_processor = None
+        self.graph_memory = None
+        self.sensor_builder = None
+        self._graph_eqa_use_instance_graph = True
+        self._graph_eqa_use_sensor_perception = True
+        self._graph_dedup_xy_m = 0.0
 
         self.cpu_only = cpu_only
         if self.cpu_only:
@@ -150,9 +195,12 @@ class DynamemController(BaseController):
         if isinstance(self.robot, (StretchZmqClient, GenericZmqClient)):
             if not self.robot.start():
                 raise RuntimeError(
-                    "Robot ZMQ client did not connect. Start the simulator first with the same robot, e.g. "
-                    "`emet serve mujoco --robot stretch` (default agent uses stretch), then retry. "
-                    "Check 127.0.0.1 and `--port-offset` if you use a non-default offset."
+                    "Robot ZMQ client did not connect (no full observation + state within the startup timeout). "
+                    "Start the sim first with the same robot and ports, e.g. "
+                    "`emet serve mujoco` (Stretch) or `emet serve mujoco --robot rby1` / MolmoSpaces merge, "
+                    "then run the agent. Match `--port-offset` on both sides and use the same `--robot` as serve. "
+                    "If the sim is already running, check server logs: missing camera/GL errors can make "
+                    "observations None so nothing is published on the observation socket."
                 )
         self.manip_wrapper = ManipulationWrapper(self.robot, stretch_gripper_max=stretch_gripper_max, end_link=end_link)
         self.robot.move_to_nav_posture()
@@ -223,6 +271,7 @@ class DynamemController(BaseController):
             semantic_memory_resolution = 0.05
             image_shape = (480, 360)
 
+        _eqa = parameters.get("eqa", {}) or {}
         self.voxel_map = SparseVoxelMap(
             resolution=parameters["voxel_size"],
             semantic_memory_resolution=semantic_memory_resolution,
@@ -247,9 +296,19 @@ class DynamemController(BaseController):
             log=self.log,
             mllm=self.mllm,
             run_eqa=self.eqa,
+            device=self.device,
+            eqa_backend=_eqa.get("backend", "qwen_vl"),
+            eqa_vl_model_size=_eqa.get("vl_model_size", "3B"),
+            eqa_vl_max_tokens=int(_eqa.get("vl_max_tokens", 512)),
+            eqa_vl_quantization=_eqa.get("vl_quantization", "int4"),
+            eqa_vl_hf_model_id=_eqa.get("vl_hf_model_id"),
+            gemini_model=_eqa.get("gemini_model", "gemini-2.5-flash"),
+            eqa_device=self.device,
+            vl_family=_eqa.get("vl_family", "qwen3_vl"),
             use_instance_memory=self._use_instance_memory,
             instance_memory_kwargs=_instance_memory_kwargs_from_params(parameters),
             parameters=parameters,
+            defer_eqa_vllm=self.defer_eqa_vllm,
         )
         self.space = SparseVoxelMapNavigationSpace(
             self.voxel_map,
@@ -258,6 +317,47 @@ class DynamemController(BaseController):
             dilate_obstacle_size=parameters.get("motion_planner/frontier/dilate_obstacle_size", 0),
         )
         self.planner = AStar(self.space)
+
+        cfg = self.embodied_agent
+        if cfg.open_vocab_scene_graph.enabled and not self.manipulation_only:
+            from emet.mapping.scene_graph.processor import SceneGraphProcessor
+
+            sg_name = cfg.open_vocab_scene_graph.config_name
+            if self.cpu_only and sg_name == "default_scene_graph":
+                sg_name = "cpu_scene_graph"
+            dev = cfg.open_vocab_scene_graph.device
+            if dev is None:
+                dev = "cpu" if self.cpu_only else None
+            self._open_vocab_sg_processor = SceneGraphProcessor(config_name=sg_name, device=dev)
+            self.voxel_map.set_scene_graph_processor(self._open_vocab_sg_processor)
+
+        if cfg.graph_eqa_memory.enabled and not self.manipulation_only:
+            self.graph_memory = GraphEQAMemory(
+                parameters=parameters,
+                log_dir=os.path.join(self.log, "graph_eqa_log"),
+                defer_llm_clients=True,
+            )
+            gcfg = cfg.graph_eqa_memory
+            self._graph_eqa_use_instance_graph = gcfg.use_instance_graph
+            self._graph_eqa_use_sensor_perception = gcfg.use_sensor_perception
+            if gcfg.graph_instance_dedup_xy_m is not None:
+                self._graph_dedup_xy_m = float(gcfg.graph_instance_dedup_xy_m)
+            elif isinstance(parameters, dict):
+                self._graph_dedup_xy_m = float(
+                    parameters.get("graph_instance_dedup_xy_m", DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M)
+                )
+            else:
+                self._graph_dedup_xy_m = float(
+                    parameters.get("graph_instance_dedup_xy_m", DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M)
+                )
+            dev_sg = self.device if self.device in ("cuda", "mps") else "cuda"
+            self.sensor_builder = SensorGraphBuilder(
+                perception_client=None,
+                use_voxel_fallback=True,
+                device=dev_sg,
+                cpu_only=self.cpu_only,
+                parameters=parameters,
+            )
 
     def setup_custom_blueprint(self):
         """
@@ -286,6 +386,21 @@ class DynamemController(BaseController):
             collapse_panels=collapse,
         )
         rr.send_blueprint(my_blueprint)
+
+    def _graph_dedup_skips(self, label: str, xyz: np.ndarray) -> bool:
+        """Skip adding a graph node if we already have the same label near this XY (GraphEQA v1 merge)."""
+        if self.graph_memory is None or self._graph_dedup_xy_m <= 0:
+            return False
+        lb = label.strip().lower()
+        for n in self.graph_memory.get_nodes():
+            if not n.labels:
+                continue
+            nl = (n.labels[0] or "").strip().lower()
+            if nl != lb:
+                continue
+            if float(np.linalg.norm(n.xyz[:2] - xyz[:2])) < self._graph_dedup_xy_m:
+                return True
+        return False
 
     def _lazy_da3_estimator(self):
         if self._depth_source not in ("da3", "auto"):
@@ -336,9 +451,7 @@ class DynamemController(BaseController):
         rgb, sensor_depth, K, camera_pose = obs.rgb, obs.depth, obs.camera_K, obs.camera_pose
         depth = self._resolve_depth_map(rgb, sensor_depth, K, camera_pose)
         if depth is None:
-            logger.error(
-                f"No depth map available (depth_source={self._depth_source!r}); skipping voxel update."
-            )
+            logger.error(f"No depth map available (depth_source={self._depth_source!r}); skipping voxel update.")
             return
         self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose)
         if self.voxel_map.voxel_pcd._points is not None:
@@ -355,6 +468,21 @@ class DynamemController(BaseController):
             if instances:
                 self._update_scene_graph()
                 self.rerun_visualizer.update_scene_graph(self.scene_graph, self.semantic_sensor)
+
+        if self.graph_memory is not None and self.sensor_builder is not None:
+            from emet.memory.graph_eqa.dynamem_graph_hooks import update_graph_memory_from_dynamem_observation
+
+            update_graph_memory_from_dynamem_observation(
+                graph_memory=self.graph_memory,
+                robot=self.robot,
+                voxel_map=self.voxel_map,
+                detection_model=self.detection_model,
+                sensor_builder=self.sensor_builder,
+                use_instance_graph=self._graph_eqa_use_instance_graph,
+                use_sensor_perception=self._graph_eqa_use_sensor_perception,
+                dedup_skips=self._graph_dedup_skips,
+                obs=obs,
+            )
 
         # Visualize open-vocab scene graph if attached
         ovsg = self.voxel_map.get_scene_graph()
@@ -387,6 +515,112 @@ class DynamemController(BaseController):
                     if name is not None:
                         class_names[cid] = name
         return instances_to_text(instances, class_names=class_names, include_bounds=include_bounds)
+
+    def describe_head_camera_scene_text(self) -> str:
+        """Summarize the current head RGB using the controller's detector (YoloE or OWL).
+
+        Used by the embodied agent ``describe_scene`` tool so the model can answer
+        "what do you see" without sending an image.
+        """
+        if self.robot is None or not hasattr(self.robot, "get_observation"):
+            return "No robot view available."
+        obs = self.robot.get_observation()
+        if obs is None or getattr(obs, "rgb", None) is None:
+            return "No current image."
+        rgb = np.asarray(obs.rgb)
+        if rgb.dtype != np.uint8:
+            if rgb.size and float(np.nanmax(rgb)) <= 1.0 + 1e-6:
+                rgb = (np.clip(rgb, 0.0, 1.0) * 255.0).astype(np.uint8)
+            else:
+                rgb = np.clip(rgb, 0, 255).astype(np.uint8)
+        if rgb.ndim != 3 or rgb.shape[2] != 3:
+            return "Head camera image has an unexpected shape."
+
+        if env_agent_camera_debug():
+            from emet.agent.camera_debug import print_camera_frame_diagnostics
+
+            print_camera_frame_diagnostics("describe_scene (head RGB, detector input)", rgb, force=True)
+
+        depth = getattr(obs, "depth", None)
+        if depth is not None:
+            depth = np.asarray(depth)
+
+        dm = self.detection_model
+        if env_agent_model_debug():
+            if dm is None:
+                print(
+                    "[model debug] describe_scene: no detection_model on controller (YoloE/OWL labels unavailable)",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"[model debug] describe_scene: detector={type(dm).__name__} on head RGB "
+                    "(separate from the chat LLM; tool result is from this detector, not from the LLM's weights)",
+                    flush=True,
+                )
+
+        if dm is None:
+            return (
+                "I have a live camera frame but object detection is disabled for this session "
+                "(e.g. manipulation-only or voxel EQA without instances), so I cannot name objects. "
+                "Use send_image to show the view, or explore and query_memory if you need the map."
+            )
+
+        try:
+            if isinstance(dm, YoloEPerception):
+                return self._describe_scene_yoloe(rgb, depth, dm)
+            if isinstance(dm, OwlPerception):
+                thr = float(dm.confidence_threshold) if dm.confidence_threshold is not None else 0.2
+                thr = max(0.12, min(thr, 0.35))
+                return self._describe_scene_owl(rgb, dm, thr)
+        except Exception as e:
+            return (
+                f"I could not run detection on the camera frame ({type(e).__name__}: {e}). "
+                "Try send_image if you need the raw view."
+            )
+
+        return "Unknown detector type for scene description; try send_image for a picture."
+
+    def _describe_scene_yoloe(self, rgb: np.ndarray, depth: np.ndarray | None, dm: YoloEPerception) -> str:
+        _sem, _inst, task = dm.predict(rgb, depth=depth, draw_instance_predictions=False)
+        ic = task.get("instance_classes")
+        if ic is None or len(ic) == 0:
+            return (
+                "From my head camera: nothing is segmented above the current detection threshold. "
+                "The view may be empty, dark, or objects may not match the detector vocabulary. "
+                "send_image can still show the raw frame."
+            )
+        class_list = dm.class_list
+        names: list[str] = []
+        for idx in np.atleast_1d(np.asarray(ic)).astype(int).ravel():
+            if 0 <= int(idx) < len(class_list):
+                names.append(class_list[int(idx)])
+        if not names:
+            return "From my head camera: detections did not map to class names. send_image can show the raw view."
+        counts = Counter(names)
+        parts = [f"{n} (×{c})" if c > 1 else n for n, c in counts.most_common()]
+        summary = ", ".join(parts)
+        return f"From my head camera I can make out: {summary}."
+
+    def _describe_scene_owl(self, rgb: np.ndarray, dm: OwlPerception, confidence_threshold: float) -> str:
+        texts = list(_DESCRIBE_SCENE_OWL_QUERIES)
+        res = dm.predict(rgb, texts, confidence_threshold=confidence_threshold)
+        labels = res["labels"]
+        if labels.numel() == 0:
+            return (
+                "From my head camera: nothing matched the open-vocabulary checks above the confidence cutoff. "
+                "You can still use send_image to see the frame."
+            )
+        scores = res["scores"]
+        best_by_label: dict[int, float] = {}
+        for lab, sc in zip(labels.cpu().tolist(), scores.cpu().tolist(), strict=True):
+            li = int(lab)
+            sf = float(sc)
+            if li not in best_by_label or sf > best_by_label[li]:
+                best_by_label[li] = sf
+        picked = [texts[i] for i in sorted(best_by_label)]
+        summary = ", ".join(picked)
+        return f"From my head camera, open-vocabulary detection suggests: {summary}."
 
     def look_around(self):
         """

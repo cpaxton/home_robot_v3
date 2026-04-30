@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # EQA multimodal (Qwen3.5) options from ``dynav_config.yaml`` under ``eqa_vl:`` and env overrides.
@@ -90,7 +99,7 @@ def resolve_eqa_vl_model_size(
         norm = _normalize_size(env_override)
         if norm in _VALID_SIZES:
             _resolved_eqa_vl_model_size = norm
-            logger.info("EQA VL model size from EMET_EQA_VL_MODEL_SIZE: %s", norm)
+            logger.info(f"EQA VL model size from EMET_EQA_VL_MODEL_SIZE: {norm}")
             return _resolved_eqa_vl_model_size
 
     fixed = _pget(parameters, "eqa_vl/model_size", None)
@@ -98,9 +107,9 @@ def resolve_eqa_vl_model_size(
         norm = _normalize_size(str(fixed).strip())
         if norm in _VALID_SIZES:
             _resolved_eqa_vl_model_size = norm
-            logger.info("EQA VL model size from config eqa_vl/model_size: %s", norm)
+            logger.info(f"EQA VL model size from config eqa_vl/model_size: {norm}")
             return _resolved_eqa_vl_model_size
-        logger.warning("Invalid eqa_vl/model_size=%r; using VRAM tiers", fixed)
+        logger.warning(f"Invalid eqa_vl/model_size={fixed!r}; using VRAM tiers")
 
     tier_9 = float(_pget(parameters, "eqa_vl/vram_mib_tier_9b", 20000))
     tier_4 = float(_pget(parameters, "eqa_vl/vram_mib_tier_4b", 11000))
@@ -111,19 +120,13 @@ def resolve_eqa_vl_model_size(
             return "2B"
         if free_mib >= tier_9:
             logger.info(
-                "GPU free memory ~%.0f MiB (tiers >=%.0f / >=%.0f MiB): Qwen3.5-9B",
-                free_mib,
-                tier_9,
-                tier_4,
+                f"GPU free memory ~{free_mib:.0f} MiB (tiers >={tier_9:.0f} / >={tier_4:.0f} MiB): Qwen3.5-9B",
             )
             return "9B"
         if free_mib >= tier_4:
-            logger.info(
-                "GPU free memory ~%.0f MiB: Qwen3.5-4B",
-                free_mib,
-            )
+            logger.info(f"GPU free memory ~{free_mib:.0f} MiB (tier >={tier_4:.0f} MiB): Qwen3.5-4B")
             return "4B"
-        logger.info("GPU free memory ~%.0f MiB: Qwen3.5-2B", free_mib)
+        logger.info(f"GPU free memory ~{free_mib:.0f} MiB: Qwen3.5-2B")
         return "2B"
 
     if device == "cuda":

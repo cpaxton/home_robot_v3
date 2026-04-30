@@ -19,6 +19,12 @@ from typing import Any
 
 import numpy as np
 
+from emet.agent.camera_debug import print_camera_frame_diagnostics
+from emet.utils.logger import Logger
+from emet.visualization.map_snapshot import format_navigation_report, snapshot_from_voxel_map
+
+_logger = Logger(__name__)
+
 
 class Tool:
     """A single agent tool: name, description, JSON Schema parameters, callable, and executor mapping.
@@ -67,6 +73,27 @@ class Tool:
 _NO_PARAMS: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
 
 
+def _robot_base_xy(robot: Any) -> tuple[float, float] | None:
+    if robot is None or not hasattr(robot, "get_base_pose"):
+        return None
+    try:
+        bp = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
+        if bp.size >= 2:
+            return float(bp[0]), float(bp[1])
+    except Exception:
+        return None
+    return None
+
+
+def _voxel_map_from_executor(executor: Any) -> Any:
+    if executor is None or not hasattr(executor, "agent"):
+        return None
+    agent = executor.agent
+    if hasattr(agent, "get_voxel_map"):
+        return agent.get_voxel_map()
+    return None
+
+
 def _simple_exec_mapping(cmd: str) -> Callable[[dict[str, Any]], list[tuple[str, str]]]:
     """Return a mapping function for a no-arg executor command."""
     return lambda args: [(cmd, "")]
@@ -92,6 +119,8 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
                 return f"{answer} (Confidence: {confidence})"
             except NotImplementedError:
                 pass
+            except AttributeError as e:
+                _logger.warning("query_memory backend call failed (%s); using localize_text fallback.", e)
         # Fallback: check if the object is in the voxel map via localize_text
         executor = context.get("executor")
         if executor is not None and hasattr(executor, "agent"):
@@ -108,7 +137,11 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
     tools.append(
         Tool(
             name="query_memory",
-            description="Answer a question about what the robot has seen (memory log). E.g. How far is it to the sink? Have I seen a red cylinder?",
+            description=(
+                "Questions about DynaMem voxel map / semantic memory (where is X, have I seen Y) when voxel EQA is enabled. "
+                "For graph-style questions (relations, what connects to what) use list_scene_relations or query_scene_graph. "
+                "For open-ended 'what do you see', prefer describe_scene and send_image unless full voxel EQA is enabled."
+            ),
             parameters={
                 "type": "object",
                 "properties": {
@@ -132,13 +165,18 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         if robot is not None and hasattr(robot, "get_observation"):
             obs = robot.get_observation()
             if obs is not None and getattr(obs, "rgb", None) is not None:
-                image = np.asarray(obs.rgb)
+                # Copy so ZMQ recv cannot mutate the buffer while Discord async-upload runs.
+                image = np.asarray(obs.rgb).copy()
+        if image is not None:
+            print_camera_frame_diagnostics(
+                "send_image (head obs rgb → Discord)",
+                image,
+                force=bool(context.get("verbose_tools")) or bool(context.get("camera_debug")),
+            )
         if discord_bot is not None and image is not None:
             if hasattr(discord_bot, "push_task_to_all_channels"):
-                discord_bot.push_task_to_all_channels(
-                    message="Here's what I see:",
-                    content=image,
-                )
+                # Image only: the assistant message (e.g. "Here's a picture…") is already sent by the agent loop.
+                discord_bot.push_task_to_all_channels(message=None, content=image)
                 return "Image sent to Discord."
         if image is not None:
             return "Image captured (no Discord to send to)."
@@ -153,7 +191,6 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    # -- explore -------------------------------------------------------------
     def _exec(cmd: str, args: Any = "") -> str:
         executor = context.get("executor")
         if executor is None:
@@ -161,13 +198,103 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         ok = executor([(cmd, args)])
         return "Done." if ok else "Command was interrupted or failed."
 
+    # -- explore -------------------------------------------------------------
+    def explore() -> str:
+        executor = context.get("executor")
+        robot = context.get("robot")
+        if executor is None:
+            return "Robot not connected."
+        ok = executor([("explore", "")])
+        robot_xy = _robot_base_xy(robot)
+        vm = _voxel_map_from_executor(executor)
+        _img, stats = snapshot_from_voxel_map(vm, robot_xy)
+        summary = format_navigation_report(stats, explore_ok=ok)
+        head = "Explore finished." if ok else "Explore failed or interrupted."
+        return f"{head} {summary}"
+
     tools.append(
         Tool(
             name="explore",
-            description="Explore and build a map of the environment.",
+            description=(
+                "Explore and build a map of the environment. Returns a short map diagnostic "
+                "(coverage, base cell) after the run — not a camera stream; pair with send_map_snapshot or describe_scene if stuck."
+            ),
             parameters=_NO_PARAMS,
-            func=lambda: _exec("explore", ""),
-            executor_commands=_simple_exec_mapping("explore"),
+            func=explore,
+            returns_info=True,
+        )
+    )
+
+    # -- navigation_diagnostics / send_map_snapshot -------------------------
+    def navigation_diagnostics() -> str:
+        executor = context.get("executor")
+        robot = context.get("robot")
+        if executor is None:
+            return "Robot not connected."
+        robot_xy = _robot_base_xy(robot)
+        vm = _voxel_map_from_executor(executor)
+        _img, stats = snapshot_from_voxel_map(vm, robot_xy)
+        return format_navigation_report(stats, explore_ok=None)
+
+    def send_map_snapshot() -> str:
+        executor = context.get("executor")
+        robot = context.get("robot")
+        discord_bot = context.get("discord_bot")
+        if executor is None:
+            return "Robot not connected."
+        robot_xy = _robot_base_xy(robot)
+        vm = _voxel_map_from_executor(executor)
+        img, stats = snapshot_from_voxel_map(vm, robot_xy)
+        summary = format_navigation_report(stats, explore_ok=None)
+        if img is None:
+            return f"No map image available. {summary}"
+        viz = None
+        if hasattr(executor, "agent"):
+            viz = getattr(executor.agent, "rerun_visualizer", None)
+        rerun_logged = False
+        if viz is not None and getattr(viz, "enabled", True) and hasattr(viz, "log_custom_2d_image"):
+            try:
+                viz.log_custom_2d_image("world/map_snapshot/topdown", img)
+                rerun_logged = True
+            except Exception as e:
+                _logger.warning(f"Rerun map snapshot log failed: {e}")
+        discord_sent = False
+        if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
+            try:
+                discord_bot.push_task_to_all_channels(message=None, content=np.asarray(img).copy())
+                discord_sent = True
+            except Exception as e:
+                _logger.warning(f"Discord map snapshot failed: {e}")
+        parts = [summary]
+        if discord_sent:
+            parts.append("Top-down map image sent to Discord.")
+        if rerun_logged:
+            parts.append("Top-down map logged to Rerun at world/map_snapshot/topdown.")
+        return " ".join(parts)
+
+    tools.append(
+        Tool(
+            name="navigation_diagnostics",
+            description=(
+                "Text summary of the current 2D voxel map: explored vs obstacle cell counts, base pose in grid, "
+                "and hints if the map is empty or the base sits on an obstacle cell. Use after failed explore/find or when the user asks why navigation failed."
+            ),
+            parameters=_NO_PARAMS,
+            func=navigation_diagnostics,
+            returns_info=True,
+        )
+    )
+
+    tools.append(
+        Tool(
+            name="send_map_snapshot",
+            description=(
+                "Render a top-down RGB view of obstacles vs explored space and send to Discord (if configured); "
+                "also logs to Rerun at world/map_snapshot/topdown when the live Rerun visualizer is enabled."
+            ),
+            parameters=_NO_PARAMS,
+            func=send_map_snapshot,
+            returns_info=True,
         )
     )
 
@@ -222,17 +349,28 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
     # -- describe_scene ------------------------------------------------------
     def describe_scene() -> str:
         robot = context.get("robot")
+        executor = context.get("executor")
         if robot is None or not hasattr(robot, "get_observation"):
             return "No robot view available."
         obs = robot.get_observation()
         if obs is None or getattr(obs, "rgb", None) is None:
             return "No current image."
-        return "I can see the environment through my camera. Use send_image to share the picture."
+        agent = getattr(executor, "agent", None) if executor is not None else None
+        if agent is not None and hasattr(agent, "describe_head_camera_scene_text"):
+            return agent.describe_head_camera_scene_text()
+        return (
+            "I have a camera frame but this session's controller does not expose scene description; "
+            "use send_image to show the view."
+        )
 
     tools.append(
         Tool(
             name="describe_scene",
-            description="Describe what you see from the robot's cameras.",
+            description=(
+                "Brief text about the camera view; pair with send_image to show the user a photo. "
+                "Use for 'what can you see' style questions instead of query_memory when not using full EQA. "
+                'With send_image, use an empty JSON "message" on the tool-call turn so chat/Discord only show your answer after [Tool results].'
+            ),
             parameters=_NO_PARAMS,
             func=describe_scene,
             returns_info=True,
@@ -321,6 +459,108 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
             parameters=_NO_PARAMS,
             func=lambda: _exec("hand_over", ""),
             executor_commands=_simple_exec_mapping("hand_over"),
+        )
+    )
+
+    # -- query_scene_graph (GraphEQA + open-vocab fallback) -------------------
+    def query_scene_graph(question: str) -> str:
+        gmb = context.get("graph_memory_backend")
+        if gmb is not None and hasattr(gmb, "query_answer"):
+            try:
+                xyt = context.get("xyt_for_query")
+                planner = context.get("planner")
+                out = gmb.query_answer(question, xyt, planner)
+                reasoning, answer, confidence, cr, _, _ = out[:6]
+                tail = f" ({cr})" if cr else ""
+                return f"{answer} (confidence={confidence}){tail}\nReasoning: {reasoning}"
+            except Exception as e:
+                _logger.warning("query_scene_graph graph backend failed: %s", e)
+        executor = context.get("executor")
+        if executor is not None and hasattr(executor, "agent"):
+            sg = executor.agent.get_voxel_map().get_scene_graph()
+            if sg is not None and sg.num_objects > 0:
+                return f"[Open-vocab scene graph snapshot]\n{sg.to_string()}\n(User question was: {question})"
+        return "No graph memory or open-vocab scene graph available yet; explore or scan first."
+
+    tools.append(
+        Tool(
+            name="query_scene_graph",
+            description=(
+                "Embodied questions using GraphEQA memory (objects, navigation context) when enabled; "
+                "otherwise dumps the open-vocab spatial scene graph as text. Use for 'why', relational, or multi-step scene questions."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "Natural language question about the scene graph / objects.",
+                    },
+                },
+                "required": ["question"],
+            },
+            func=query_scene_graph,
+            returns_info=True,
+        )
+    )
+
+    def list_scene_relations() -> str:
+        executor = context.get("executor")
+        if executor is None or not hasattr(executor, "agent"):
+            return "Robot not connected."
+        sg = executor.agent.get_voxel_map().get_scene_graph()
+        if sg is None or sg.num_objects == 0:
+            return "No open-vocab scene graph data yet."
+        return sg.to_string()
+
+    tools.append(
+        Tool(
+            name="list_scene_relations",
+            description=(
+                "List objects and spatial relations (near, on, on_floor) from the open-vocabulary 3D scene graph. "
+                "Use for 'what is connected to what' and structured connectivity questions."
+            ),
+            parameters=_NO_PARAMS,
+            func=list_scene_relations,
+            returns_info=True,
+        )
+    )
+
+    def send_object_image(object_label: str) -> str:
+        discord_bot = context.get("discord_bot")
+        executor = context.get("executor")
+        if executor is None or not hasattr(executor, "agent"):
+            return "Robot not connected."
+        sg = executor.agent.get_voxel_map().get_scene_graph()
+        if sg is None:
+            return "Open-vocab scene graph is not available."
+        node = sg.get_node_by_label(object_label)
+        if node is None:
+            return f"No object matching label {object_label!r} in the scene graph."
+        crop = getattr(node, "best_crop", None)
+        if crop is None:
+            return f"Object {object_label!r} has no stored crop image yet."
+        image = np.asarray(crop).copy()
+        if discord_bot is not None and image is not None and hasattr(discord_bot, "push_task_to_all_channels"):
+            discord_bot.push_task_to_all_channels(message=None, content=image)
+            return f"Sent last crop image for {object_label!r} to Discord."
+        return "Crop available but Discord is not connected."
+
+    tools.append(
+        Tool(
+            name="send_object_image",
+            description=(
+                "Send the robot's last stored crop image for a named object from the open-vocab scene graph "
+                "(not the live camera). Use after the object has been observed while mapping."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "object_label": {"type": "string", "description": "Object name or label (e.g. red cylinder)."},
+                },
+                "required": ["object_label"],
+            },
+            func=send_object_image,
         )
     )
 

@@ -24,6 +24,22 @@ from pathlib import Path
 
 
 @dataclass
+class WizardPlan:
+    """User-selected install steps (Rich wizard or defaults)."""
+
+    submodules: bool = True
+    uv_dev: bool = True
+    include_dynamem: bool = True
+    uv_sim: bool = False
+    install_simulation: bool = False
+    molmospaces: bool = False
+
+    def __post_init__(self) -> None:
+        if self.install_simulation:
+            self.uv_sim = True
+
+
+@dataclass
 class AssetStatus:
     """Status of an installable asset."""
 
@@ -260,6 +276,137 @@ def _run_script(script: Path, args: list[str], env: dict | None = None) -> int:
     return subprocess.call(["bash", str(script)] + args, env=env)
 
 
+def _execute_wizard_plan(root: Path, plan: WizardPlan) -> int:
+    """Run git / uv / bash steps selected in the wizard. Returns shell exit code (0 ok)."""
+    env = os.environ.copy()
+    env["EMET_PYTHON"] = sys.executable
+    if _has_uv():
+        env["EMET_USE_UV"] = "1"
+    code = 0
+    if plan.submodules:
+        print("\n--- Git submodule (SAM-2) ---")
+        code = subprocess.call(
+            ["git", "submodule", "update", "--init", "--recursive", "third_party/segment-anything-2"],
+            cwd=root,
+        )
+        if code != 0:
+            return code
+    if plan.uv_dev or plan.uv_sim or plan.include_dynamem:
+        if not _has_uv():
+            print("uv not found; install uv or run sync manually.")
+            return 1
+        extras: list[str] = []
+        if plan.uv_dev:
+            extras.append("dev")
+        if plan.include_dynamem and (root / "third_party" / "segment-anything-2").exists():
+            extras.append("dynamem")
+        if plan.uv_sim:
+            extras.append("sim")
+        if not extras:
+            extras = ["dev"]
+        cmd = ["uv", "sync"] + [item for e in extras for item in ("--extra", e)]
+        print(f"\n--- uv sync ({', '.join(extras)}) ---\n  {' '.join(cmd)}")
+        code = subprocess.call(cmd, cwd=root)
+        if code != 0:
+            return code
+    if plan.install_simulation:
+        script_sim = root / "scripts" / "install_simulation.sh"
+        print("\n--- Simulation installer (robosuite + robocasa; may download assets) ---")
+        if not script_sim.is_file():
+            print(f"Missing: {script_sim}")
+            return 1
+        code = _run_script(script_sim, [], env=env)
+        if code != 0:
+            return code
+    if plan.molmospaces:
+        print("\n--- MolmoSpaces venv ---")
+        venv_molmo = root / ".venv-molmospaces"
+        use_uv = shutil.which("uv")
+        _molmospaces_ensure_py311_venv(root)
+        py_molmo = venv_molmo / "bin" / "python"
+        if _molmospaces_venv_needs_install_or_repair(root, py_molmo):
+            print("  Installing / repairing .venv-molmospaces...")
+            _molmospaces_pip_install_chain(py_molmo, root, use_uv)
+        else:
+            print("  .venv-molmospaces already looks complete.")
+    return 0
+
+
+def _run_rich_plan_wizard(root: Path) -> bool | None:
+    """Colored plan + toggles. Returns True if user finished (stay out of legacy menu), False to fall back to ASCII-only, None = skip wizard (no Rich)."""
+    try:
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.prompt import Confirm
+        from rich.table import Table
+    except ImportError:
+        return None
+
+    console = Console()
+
+    console.print(
+        Panel.fit(
+            "[bold cyan]Emet install planner[/]\n"
+            "[dim]Defaults avoid multi‑GB Robocasa assets. Enable simulation only if you need "
+            "`emet serve mujoco` / robocasa.[/dim]\n"
+            "[dim]Shell install: [bold]./install.sh[/bold] (standard=no sim) or "
+            "[bold]EMET_INSTALL_PROFILE=full ./install.sh -y[/bold] for legacy sim-by-default.[/dim]",
+            border_style="cyan",
+        )
+    )
+
+    plan = WizardPlan()
+    plan.submodules = Confirm.ask("1) Init/update SAM-2 submodule (third_party/segment-anything-2)?", default=True)
+    plan.include_dynamem = Confirm.ask(
+        "2) Add [bold]dynamem[/bold] extra on uv sync (editable SAM-2)?",
+        default=plan.submodules,
+    )
+    plan.uv_dev = Confirm.ask("3) Run [bold]uv sync --extra dev[/bold] (pytest, ruff, rich, …)?", default=True)
+    plan.uv_sim = Confirm.ask("4) Add [bold]sim[/bold] extra to uv sync (MuJoCo pip extra)?", default=False)
+    plan.install_simulation = Confirm.ask(
+        "5) Run [bold]scripts/install_simulation.sh[/bold] (clone robosuite/robocasa; large downloads)?",
+        default=False,
+    )
+    plan.molmospaces = Confirm.ask(
+        "6) Create [bold].venv-molmospaces[/bold] (MolmoSpaces; Python 3.11+ separate venv)?",
+        default=False,
+    )
+    if plan.install_simulation:
+        plan.uv_sim = True
+
+    table = Table(title="Plan summary", show_lines=True)
+    table.add_column("Step", style="cyan", no_wrap=True)
+    table.add_column("Run?", justify="center")
+    table.add_column("Notes", style="dim")
+    rows = [
+        ("SAM-2 submodule", "yes" if plan.submodules else "no", "git submodule update"),
+        ("uv dev", "yes" if plan.uv_dev else "no", "pytest, ruff, rich, …"),
+        ("uv dynamem", "yes" if plan.include_dynamem else "no", "SAM-2 / segmentation"),
+        ("uv sim", "yes" if plan.uv_sim else "no", "mujoco pip extra"),
+        ("install_simulation.sh", "yes" if plan.install_simulation else "no", "robosuite + robocasa"),
+        ("MolmoSpaces venv", "yes" if plan.molmospaces else "no", ".venv-molmospaces"),
+    ]
+    for r in rows:
+        table.add_row(*r)
+    console.print(table)
+
+    if not Confirm.ask("\n[bold green]Run this plan now?[/bold green]", default=True):
+        console.print("[yellow]Cancelled.[/yellow]")
+        return True
+
+    code = _execute_wizard_plan(root, plan)
+    if code != 0:
+        console.print(f"[red]A step failed (exit {code}).[/red]")
+    else:
+        console.print(
+            "[green]Plan finished.[/green] Hint: [bold]uv run emet serve mujoco --headless[/bold] after sim install."
+        )
+
+    if Confirm.ask("Open the detailed ASCII asset menu?", default=False):
+        return False
+    return True
+
+
 def _run_sync_menu(root: Path) -> None:
     """Prompt for extras and run uv sync (or pip)."""
     if not _has_uv():
@@ -298,11 +445,8 @@ def _run_sync_menu(root: Path) -> None:
         print("Sync failed (check missing third_party or enable_sim_pyproject).")
 
 
-def run_install_menu() -> int:
-    """Run the text-based install menu. Returns exit code."""
-    root = _project_root()
-    os.chdir(root)
-
+def _legacy_asset_menu_loop(root: Path) -> int:
+    """Original ASCII menu (status + per-asset actions)."""
     statuses = _get_all_statuses(root)
     width = 72
 
@@ -425,3 +569,17 @@ def run_install_menu() -> int:
         input("Press Enter to return to menu...")
 
     return 0
+
+
+def run_install_menu(*, text_only: bool = False) -> int:
+    """Rich plan wizard when available; then optional legacy ASCII asset menu."""
+    root = _project_root()
+    os.chdir(root)
+
+    if not text_only:
+        rich_result = _run_rich_plan_wizard(root)
+        if rich_result is True:
+            return 0
+        if rich_result is None:
+            print("Tip: install Rich for a colored plan wizard:  uv sync --extra dev")
+    return _legacy_asset_menu_loop(root)

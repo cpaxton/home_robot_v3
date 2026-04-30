@@ -13,12 +13,22 @@ from typing import Any
 from PIL import Image
 
 
+class VLInferenceKind:
+    """Caller intent hints for DynaMem / EQA (documentation only; not enforced by clients).
+
+    Pass at call sites (e.g. comments or kwargs) so engineers know expected token budget and prompt style;
+    :class:`AbstractVLLMClient` implementations stay general-purpose.
+    """
+
+    SHORT_CAPTION = "short_caption"
+    KEYWORDS_FROM_TEXT = "keywords_from_text"
+    EQA_MULTI_IMAGE = "eqa_multi_image"
+
+
 class AbstractPromptBuilder(ABC):
     """Abstract base class for a prompt generator."""
 
     def __init__(self, **kwargs):
-        print(" kwargs: ")
-        print(kwargs)
         self.prompt_str = self.configure(**kwargs)
 
     def configure(self, **kwargs) -> str:
@@ -44,7 +54,12 @@ class AbstractPromptBuilder(ABC):
 
 
 class AbstractLLMClient(ABC):
-    """Abstract base class for a client that interacts with a language model."""
+    """Abstract base class for a **text-centric** language client.
+
+    Subclasses implement :meth:`__call__` for string (and optionally one image) turns, often with
+    conversation history. For **vision-heavy**, multi-image, or per-turn system prompts, prefer
+    :class:`AbstractVLLMClient` and :meth:`AbstractVLLMClient.generate_multimodal`.
+    """
 
     def __init__(
         self,
@@ -113,3 +128,72 @@ class AbstractLLMClient(ABC):
             action, target = command.split("=")
             plan.append((action, target))
         return plan
+
+
+class AbstractVLLMClient(AbstractLLMClient):
+    """Vision-language client for **stateless or reset-per-turn** multimodal inference.
+
+    **Contract vs** :class:`AbstractLLMClient`: DynaMem and tools should call
+    :meth:`generate_multimodal` with explicit ``system_prompt`` and ``max_new_tokens`` per turn.
+    Implementations **must** honor ``reset_context=True`` (default) by clearing conversational state
+    before each generation so one physical model can serve caption, keyword, and EQA roles safely.
+
+    **Dedup identity**: :meth:`canonical_model_key` encodes ``family``, resolved HF id, ``device``, and
+    (where applicable) quantization so :func:`emet.llms.vllm_registry.should_share_vllm` can compare
+    run configs. :meth:`vllm_id` is an alias for the same string for readability at call sites.
+    """
+
+    @property
+    def canonical_model_key(self) -> str:
+        """Stable key for registry / dedup (subclasses override with ``family:hf:device:quant`` style)."""
+        return f"{type(self).__name__}"
+
+    @property
+    def vllm_id(self) -> str:
+        """Same as :meth:`canonical_model_key` (explicit name for registry consumers)."""
+        return self.canonical_model_key
+
+    @abstractmethod
+    def generate_multimodal(
+        self,
+        user_content: str | list[Any],
+        *,
+        system_prompt: str | None = None,
+        max_new_tokens: int | None = None,
+        reset_context: bool = True,
+        verbose: bool = False,
+        image: Any | None = None,
+    ) -> str:
+        """One VL turn.
+
+        ``user_content`` is a string or a list of strings / images (``PIL.Image`` or ``ndarray``) in
+        model-specific order. When ``image`` is set, it is combined with text per subclass rules.
+        If ``reset_context`` is True, clear history before this turn (default for DynaMem).
+        """
+
+    def __call__(
+        self,
+        command: str | list[Any],
+        image: Image.Image | None = None,
+        verbose: bool = False,
+    ) -> str:
+        max_tok = getattr(self, "max_tokens", None)
+        if image is not None:
+            import numpy as np
+
+            return self.generate_multimodal(
+                command,
+                system_prompt=self.system_prompt or None,
+                max_new_tokens=max_tok,
+                reset_context=True,
+                verbose=verbose,
+                image=np.asarray(image),
+            )
+        return self.generate_multimodal(
+            command,
+            system_prompt=self.system_prompt or None,
+            max_new_tokens=max_tok,
+            reset_context=True,
+            verbose=verbose,
+            image=None,
+        )

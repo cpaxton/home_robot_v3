@@ -134,11 +134,11 @@
               <joint name="torso_joint4" class="torso" axis="0 0 1" range="-3.0543 3.0543"/>
               <geom type="mesh" mesh="torso_link4" class="visual" rgba="0.82 0.82 1 1"/>
 
-              <!-- ZED stereo camera (head, fixed) -->
+              <!-- ZED stereo camera (head, fixed). Named MuJoCo cameras for Renderer / ZMQ (sites are not cameras). -->
               <body name="zed_link" pos="0.065512 0.060005 0.47598" quat="0.405568 -0.579235 0.579237 -0.40557">
                 <geom type="mesh" mesh="zed_link" class="visual" rgba="0.81 0.84 0.91 1"/>
-                <!-- MuJoCo <camera> (not site) so Renderer/update_scene can bind to this frame. -->
-                <camera name="zed_camera" pos="0 0 0" fovy="70"/>
+                <!-- MuJoCo looks along -local Z; euler aligns view with +link X and keeps image upright. -->
+                <camera name="zed_camera" pos="0 0 0" euler="3.14159265 -1.57079633 0" fovy="70"/>
               </body>
 
               <!-- Arm base visual geoms (fixed) -->
@@ -173,7 +173,7 @@
                           <!-- Left wrist RealSense (fixed) -->
                           <body name="left_realsense_link" pos="0.098768 0.0021071 0.05055" quat="0.382254 -0.594878 0.597837 -0.377614">
                             <geom type="mesh" mesh="left_realsense_link" class="visual" rgba="0.8 0.8 0.8 1"/>
-                            <camera name="left_camera" pos="0 0 0" fovy="70"/>
+                            <camera name="left_camera" pos="0 0 0" euler="0 -1.57079633 3.14159265" fovy="69.4"/>
                           </body>
                           <!-- Left gripper -->
                           <geom pos="0.1039 0 0" type="mesh" mesh="left_gripper_link" class="visual" rgba="0.82 0.82 1 1"/>
@@ -222,7 +222,7 @@
                           <!-- Right wrist RealSense (fixed) -->
                           <body name="right_realsense_link" pos="0.098762 0.0021071 0.05055" quat="0.382254 -0.594878 0.597837 -0.377614">
                             <geom type="mesh" mesh="right_realsense_link" class="visual" rgba="0.8 0.8 0.8 1"/>
-                            <camera name="right_camera" pos="0 0 0" fovy="70"/>
+                            <camera name="right_camera" pos="0 0 0" euler="0 -1.57079633 3.14159265" fovy="69.4"/>
                           </body>
                           <!-- Right gripper -->
                           <geom pos="0.1039 0 0" type="mesh" mesh="right_gripper_link" class="visual" rgba="0.82 0.82 1 1"/>

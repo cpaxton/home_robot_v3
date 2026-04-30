@@ -65,6 +65,8 @@ class Task:
     content: Any | None = None
     explicit: bool = False
     t: float | None = None
+    # When True, EmetDiscordBot.handle_task skips _print_discord_outbound (already printed synchronously).
+    skip_terminal_mirror: bool = False
 
 
 class ChannelList:
@@ -149,10 +151,20 @@ class DiscordBot:
         message: str | None = None,
         content: str | None = None,
         explicit: bool = False,
+        skip_terminal_mirror: bool = False,
     ):
         """Add a message to the queue to send."""
         # print("Adding task to queue:", message, channel.name, content)
-        self.task_queue.put(Task(message, channel, content, explicit=explicit, t=timeit.default_timer()))
+        self.task_queue.put(
+            Task(
+                message,
+                channel,
+                content,
+                explicit=explicit,
+                t=timeit.default_timer(),
+                skip_terminal_mirror=skip_terminal_mirror,
+            )
+        )
         # print( "Queue length after push:", self.task_queue.qsize())
 
     def send_message(self, channel, message: str | None = None, content: str | None = None):
@@ -163,7 +175,7 @@ class DiscordBot:
             message: The message to send (text), if any.
             content: The image or file to send as a BytesIO object.
         """
-        self.push_task(channel, message=message, content=content, explicit=True)
+        self.push_task(channel, message=message, content=content, explicit=True, skip_terminal_mirror=False)
 
     async def handle_task(self, task: Task):
         """Handle a task by sending the message to the channel. This will make the necessary calls in its thread to the different child functions that send messages, for example."""
