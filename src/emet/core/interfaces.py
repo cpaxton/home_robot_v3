@@ -120,7 +120,7 @@ class Observations:
 
     # Camera
     rgb: np.ndarray  # (camera_height, camera_width, 3) in [0, 255]
-    depth: np.ndarray  # (camera_height, camera_width) in meters
+    depth: np.ndarray | None = None  # (camera_height, camera_width) in meters; None if RGB-only / pending DA3
     xyz: np.ndarray | None = None  # (camera_height, camera_width, 3) in camera coordinates
     semantic: np.ndarray | None = None  # (camera_height, camera_width) in [0, num_sem_categories - 1]
     camera_K: np.ndarray | None = None  # (3, 3) camera intrinsics matrix

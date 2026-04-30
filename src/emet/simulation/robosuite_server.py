@@ -32,6 +32,7 @@ from emet.core.zmq_protocol import (
     EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
 )
 from emet.robots.base import RobotSpec
+from emet.simulation import molmospaces_spawn
 from emet.utils.geometry import xyt_global_to_base
 
 logger = log.Logger(__name__)
@@ -98,6 +99,38 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._mjdata = mujoco.MjData(self._mjmodel)
         with self._mj_lock:
             mujoco.mj_forward(self._mjmodel, self._mjdata)
+            self._molmospaces_autoplace_free_base_after_load()
+
+    def _molmospaces_autoplace_free_base_after_load(self) -> None:
+        """Move merged MolmoSpaces + mobile robot off origin when the base starts inside scene clutter."""
+        env = self._environment_descriptor
+        if env is None or env.get("kind") != "molmospaces":
+            return
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        if self._base_freejoint_addrs() is None:
+            return
+        base_name = self._spec.base_link_name
+        try:
+            placed = molmospaces_spawn.find_molmospaces_freejoint_xyz(
+                self._mjmodel,
+                self._mjdata,
+                base_body_name=base_name,
+            )
+        except Exception as e:
+            logger.warning(f"MolmoSpaces base autoplace skipped ({e!r}).")
+            return
+        if placed is None:
+            logger.warning(
+                "MolmoSpaces base autoplace: no walkable floor ray / free joint pose found; "
+                "robot may start at MJCF default (often the world origin)."
+            )
+            return
+        x, y, z = placed
+        logger.info(
+            f"MolmoSpaces base autoplace: moved free joint on {base_name!r} to "
+            f"({x:.3f}, {y:.3f}, {z:.3f}) to avoid origin clutter."
+        )
 
     def _build_emet_session(self, *, robocasa: bool) -> dict[str, Any]:
         mj_name: str | None = None

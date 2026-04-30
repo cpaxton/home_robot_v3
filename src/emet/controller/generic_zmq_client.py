@@ -38,7 +38,7 @@ from emet.core.robot import AbstractRobotClient, ControlMode
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
     emet_session_cache_update,
-    read_emet_robot_id,
+    read_emet_robot_id_from_message_or_session,
     robot_ids_match,
 )
 from emet.robots.base import RobotSpec
@@ -71,6 +71,7 @@ class GenericZmqClient(AbstractRobotClient):
         start_immediately: bool = True,
         *,
         zmq_startup_timeout: float | None = None,
+        allow_missing_depth: bool = False,
     ):
         super().__init__()
         self._robot_ip = robot_ip
@@ -96,6 +97,7 @@ class GenericZmqClient(AbstractRobotClient):
         if parameters is None:
             parameters = get_parameters("default_planner.yaml")
         self._parameters = parameters
+        self._allow_missing_depth = allow_missing_depth
 
         self._iter = -1
         self._seq_id = 0
@@ -221,7 +223,7 @@ class GenericZmqClient(AbstractRobotClient):
         """Ensure ``emet_robot_id`` from the server matches this client's RobotSpec (if present)."""
         with self._obs_lock:
             msg = self._obs if self._obs is not None else self._state
-        rid = read_emet_robot_id(msg)
+        rid = read_emet_robot_id_from_message_or_session(msg)
         if rid is None:
             return True
         expected = self._spec.name
@@ -297,8 +299,16 @@ class GenericZmqClient(AbstractRobotClient):
                 continue
             self._seq_id += 1
             output["rgb"] = compression.from_jpg(output["rgb"])
-            depth = compression.from_jp2(output["depth"]) / 1000
-            output["depth"] = depth
+            raw_depth = output.get("depth")
+            if raw_depth is None:
+                if not self._allow_missing_depth:
+                    logger.warning(
+                        "Observation missing depth; skipping frame (use allow_missing_depth for RGB-only servers)."
+                    )
+                    continue
+                output["depth"] = None
+            else:
+                output["depth"] = compression.from_jp2(raw_depth) / 1000
             with self._obs_lock:
                 self._obs = output
                 if "step" in output:
@@ -412,7 +422,9 @@ class GenericZmqClient(AbstractRobotClient):
 
         rgb = obs.get("rgb")
         depth = obs.get("depth")
-        if rgb is None or depth is None:
+        if rgb is None:
+            return None
+        if depth is None and not self._allow_missing_depth:
             return None
 
         camera_K = obs.get("camera_K")

@@ -175,6 +175,8 @@ def main(
         os.environ["RERUN_BIND_ALL"] = "1"
 
     print("- Create robot client")
+    depth_mode = str(parameters.get("depth_source", "sensor")).lower()
+    allow_missing_depth = depth_mode in ("da3", "auto")
     robot_client = create_robot_client_from_cli(
         robot,
         robot_ip,
@@ -184,6 +186,7 @@ def main(
         rerun_show_panels=rerun_show_panels,
         rerun_debug=rerun_debug,
         start_immediately=False,
+        allow_missing_depth=allow_missing_depth,
     )
 
     print("- Create task executor")

@@ -4,12 +4,14 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import click
 
-from emet.app.robot_cli import create_robot_client_from_cli
+from emet.app.robot_cli import create_robot_client_from_cli, discover_zmq_server_robot_id
 from emet.core.parameters import get_parameters
+from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY, EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY, robot_ids_match
 from emet.molmospaces.episode_writer import (
     MolmoEpisodeWriter,
     export_nerfstudio_transforms,
@@ -18,25 +20,76 @@ from emet.molmospaces.episode_writer import (
 from emet.molmospaces.exploration import MolmoExploreSession, build_graph_sidecar
 
 
-def _sync_molmospaces_metadata_from_zmq_session(
+def _json_safe_episode_session(sess: dict[str, object]) -> dict[str, object]:
+    """Subset of ``emet_session`` safe to embed in ``episode.json``."""
+    out: dict[str, object] = {}
+    for k in (
+        EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
+        "runtime_kind",
+        "is_simulation",
+        EMET_ZMQ_ROBOT_ID_KEY,
+        "mjcf_model_name",
+        "scene_source_basename",
+    ):
+        if k not in sess:
+            continue
+        v = sess[k]
+        if isinstance(v, (str, int, float, bool, type(None))):
+            out[k] = v
+    env = sess.get("environment")
+    if isinstance(env, dict):
+        safe_env: dict[str, object] = {}
+        for ek, ev in env.items():
+            if isinstance(ev, (str, int, float, bool, type(None))):
+                safe_env[str(ek)] = ev
+        out["environment"] = safe_env
+    caps = sess.get("capabilities")
+    if isinstance(caps, dict):
+        safe_c: dict[str, object] = {}
+        for ck, cv in caps.items():
+            if isinstance(cv, (str, int, float, bool, type(None))):
+                safe_c[str(ck)] = cv
+        out["capabilities"] = safe_c
+    return out
+
+
+def sync_episode_metadata_from_zmq_session(
     robot: object,
+    episode_fields: dict[str, object],
     *,
+    cli_robot: str | None,
     cli_scene: str,
     cli_split: str,
     cli_index: int,
-    episode_fields: dict[str, object],
 ) -> None:
-    """Prefer ``emet_session.environment`` from the running ZMQ server for episode metadata; warn on CLI mismatch."""
+    """Fill ``episode_fields`` from ``robot.get_emet_session()`` (robot + scene + capabilities)."""
     get_sess = getattr(robot, "get_emet_session", None)
     if not callable(get_sess):
+        click.echo(
+            "Note: client has no get_emet_session(); episode metadata uses CLI / discovered values only.",
+            err=True,
+        )
         return
     sess = get_sess()
     if not sess:
         click.echo(
-            "Note: no ``emet_session`` on ZMQ messages (older sim?). Using CLI MolmoSpaces metadata for the episode.",
+            "Note: no ``emet_session`` on ZMQ messages (restart ``emet serve mujoco`` with current emet for "
+            "full metadata). Episode uses CLI / discovered robot and scene flags.",
             err=True,
         )
         return
+
+    episode_fields["emet_session"] = _json_safe_episode_session(sess)
+    srv_robot = sess.get(EMET_ZMQ_ROBOT_ID_KEY)
+    if isinstance(srv_robot, str) and srv_robot.strip():
+        episode_fields["robot"] = str(srv_robot).strip()
+    if cli_robot and isinstance(srv_robot, str) and not robot_ids_match(str(srv_robot), cli_robot):
+        click.echo(
+            f"Warning: server ``emet_session`` robot {srv_robot!r} differs from CLI --robot {cli_robot!r}; "
+            "episode.json follows the server.",
+            err=True,
+        )
+
     env = sess.get("environment")
     if not isinstance(env, dict) or env.get("kind") != "molmospaces":
         return
@@ -67,9 +120,12 @@ def _sync_molmospaces_metadata_from_zmq_session(
 @click.option(
     "--robot",
     "robot_backend",
-    default="rby1",
-    show_default=True,
-    help="Robot backend; must match ``emet serve mujoco --robot``.",
+    default=None,
+    show_default=False,
+    help=(
+        "Robot backend (e.g. rby1). If omitted, discover ``emet_robot_id`` from the running ZMQ server "
+        "(server must already be publishing). Otherwise must match ``emet serve mujoco --robot``."
+    ),
 )
 @click.option("--port-offset", default=0, type=int, show_default=True)
 @click.option(
@@ -131,7 +187,7 @@ def _sync_molmospaces_metadata_from_zmq_session(
 )
 def main(
     robot_ip: str,
-    robot_backend: str,
+    robot_backend: str | None,
     port_offset: int,
     molmospaces_scene: str,
     molmospaces_split: str,
@@ -160,14 +216,36 @@ def main(
         emet serve mujoco --molmospaces-scene ithor --molmospaces-split train \\
           --molmospaces-index 0 --robot rby1 --headless
 
-    Then run this command with matching ``--robot`` / scene metadata.
+    Then run this command; ``--robot`` is optional if the server publishes ``emet_robot_id`` / ``emet_session``.
     """
+    zmq_to = zmq_startup_timeout
+    if zmq_to is None:
+        env = os.environ.get("EMET_ZMQ_STARTUP_TIMEOUT", "").strip()
+        zmq_to = float(env) if env else 60.0
+
+    resolved_robot = (robot_backend or "").strip() or None
+    if not resolved_robot:
+        click.echo("MolmoSpaces explore: discovering robot from ZMQ (no --robot)…", err=True)
+        discovered = discover_zmq_server_robot_id(
+            robot_ip,
+            port_offset=port_offset,
+            timeout=float(zmq_to),
+            use_remote_computer=True,
+        )
+        if not discovered:
+            raise click.UsageError(
+                "Could not read robot id from ZMQ (timeout). Start ``emet serve mujoco`` first, or pass "
+                "``--robot <name>`` explicitly (same as the server)."
+            )
+        resolved_robot = discovered
+        click.echo(f"Using robot from ZMQ server: {resolved_robot!r} (pass --robot to override).")
+
     click.echo(
         "MolmoSpaces explore: connecting to ZMQ MuJoCo server… "
         "(ensure `emet serve mujoco` is already running with the same --robot and --port-offset.)"
     )
     robot = create_robot_client_from_cli(
-        robot_backend,
+        resolved_robot,
         robot_ip,
         port_offset=port_offset,
         enable_rerun_server=False,
@@ -176,21 +254,22 @@ def main(
     )
 
     parameters = get_parameters("dynav_config.yaml")
-    episode_fields = {
+    episode_fields: dict[str, object] = {
         "molmospaces_scene": molmospaces_scene,
         "molmospaces_split": molmospaces_split,
         "molmospaces_index": int(molmospaces_index),
-        "robot": robot_backend,
+        "robot": resolved_robot,
         "steps": int(steps),
         "capture_hz": float(capture_hz),
         "navigate_every": int(navigate_every),
     }
-    _sync_molmospaces_metadata_from_zmq_session(
+    sync_episode_metadata_from_zmq_session(
         robot,
+        episode_fields,
+        cli_robot=robot_backend,
         cli_scene=molmospaces_scene,
         cli_split=molmospaces_split,
         cli_index=int(molmospaces_index),
-        episode_fields=episode_fields,
     )
 
     writer = MolmoEpisodeWriter(

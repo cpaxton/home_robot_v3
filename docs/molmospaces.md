@@ -147,15 +147,17 @@ Record posed RGB (and optional depth) while the robot moves in a MolmoSpaces-bac
 2. **Terminal B — explore + record**:
 
    ```bash
-   emet run molmospaces-explore --robot rby1 --robot-ip 127.0.0.1 \
+   emet run molmospaces-explore --robot-ip 127.0.0.1 \
      --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0 \
      --output-dir ./data/molmo_ep_ithor_0 --steps 120 --capture-hz 2 \
      --export-transforms
    ```
 
+   Add ``--robot rby1`` if you want to force a backend; if omitted, the explorer reads ``emet_robot_id`` from the running ZMQ server first.
+
 By default the explorer also writes **`episode_rgb.mp4`** in the same output directory (requires a working OpenCV `VideoWriter` with `mp4v`). Use **`--no-mp4`** to disable.
 
-Scene flags on the explore command are **metadata only** (they must match the running server for sane dataset labels). Random goals use `--goal-x-min` / `--goal-x-max` / `--goal-y-min` / `--goal-y-max` (meters) and `--navigate-every` to throttle `move_base_to` calls.
+Scene flags on the explore command are **defaults for metadata**; when the server publishes **`emet_session`**, `episode.json` prefers the server’s MolmoSpaces `environment` and embeds a JSON-safe copy of **`emet_session`** (robot, runtime, capabilities). Random goals use `--goal-x-min` / `--goal-x-max` / `--goal-y-min` / `--goal-y-max` (meters) and `--navigate-every` to throttle `move_base_to` calls.
 
 Optional **`--with-graph-report`** builds a lightweight **GraphEQA** text report (`graph_report.txt`) for debugging; it does not affect NeRF files. Use **`--cpu-only`** with that flag on machines without a VLM GPU.
 

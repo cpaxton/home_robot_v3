@@ -225,6 +225,8 @@ def run_agent_with_robot(
     The agent exits after all commands are consumed.
     """
     parameters = get_parameters(agent_config)
+    depth_mode = str(parameters.get("depth_source", "sensor")).lower()
+    allow_missing_depth = depth_mode in ("da3", "auto")
 
     robot_key = robot.lower().replace("-", "_")
     if robot_key == "stretch":
@@ -235,6 +237,7 @@ def run_agent_with_robot(
             enable_rerun_server=True,
             port_offset=port_offset,
             start_immediately=False,
+            allow_missing_depth=allow_missing_depth,
         )
     elif robot_key in ROBOT_REGISTRY:
         mod = importlib.import_module(ROBOT_REGISTRY[robot_key])
@@ -250,6 +253,7 @@ def run_agent_with_robot(
         robot_client = backend.create_client(
             robot_ip=robot_ip,
             port_offset=port_offset,
+            allow_missing_depth=allow_missing_depth,
         )
     else:
         raise click.UsageError(

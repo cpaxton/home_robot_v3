@@ -62,6 +62,20 @@ def read_emet_session(msg: dict[str, Any] | None) -> dict[str, Any] | None:
     return raw
 
 
+def read_emet_robot_id_from_message_or_session(msg: dict[str, Any] | None) -> str | None:
+    """Top-level ``emet_robot_id``, or the same key inside ``emet_session`` (newer servers)."""
+    rid = read_emet_robot_id(msg)
+    if rid:
+        return rid
+    sess = read_emet_session(msg)
+    if sess is None:
+        return None
+    v = sess.get(EMET_ZMQ_ROBOT_ID_KEY)
+    if v is None:
+        return None
+    return str(v)
+
+
 def emet_session_has_current_schema(session: dict[str, Any] | None) -> bool:
     if session is None:
         return False

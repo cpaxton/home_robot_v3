@@ -831,7 +831,8 @@ def run(
       emet run dynamem --robot-ip 127.0.0.1 -S
       emet run dynamem -S --port-offset 100
       emet run dynamem -S --visual-servo --match-method class --target-object apple --target-receptacle plate
-      emet run molmospaces-explore --robot rby1 --output-dir ./ep0 --steps 40
+      emet run molmospaces-explore --output-dir ./ep0 --steps 40
+      # --robot optional: omit to read emet_robot_id from the running ZMQ server
       emet run mapping --robot-ip 127.0.0.1
       emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
       emet run discord --robot-ip 192.168.1.15 --task pickup   # requires DISCORD_TOKEN in env

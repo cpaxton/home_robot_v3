@@ -121,6 +121,7 @@ class StretchZmqClient(AbstractRobotClient):
         rerun_debug: bool = False,
         resend_all_actions: bool = False,
         publish_observations: bool = False,
+        allow_missing_depth: bool = False,
     ):
         """
         Create a client to communicate with the robot over ZMQ.
@@ -137,6 +138,7 @@ class StretchZmqClient(AbstractRobotClient):
             ee_link_name: The name of the end effector link
             manip_mode_controlled_joints: The joints to control in manipulation mode
             port_offset: Added to all default port numbers (e.g. 100 → 4501-4504)
+            allow_missing_depth: If True, accept observations without a depth JP2 (RGB-only); pair with ``depth_source: auto|da3`` in DynaMem YAML.
         """
         if port_offset:
             recv_port += port_offset
@@ -152,6 +154,7 @@ class StretchZmqClient(AbstractRobotClient):
         if parameters is None:
             parameters = get_parameters("default_planner.yaml")
         self._parameters = parameters
+        self._allow_missing_depth = allow_missing_depth
 
         # Variables we set here should not change
         self._iter = -1  # Tracks number of actions set, never reset this
@@ -1544,16 +1547,23 @@ class StretchZmqClient(AbstractRobotClient):
 
             self._seq_id += 1
             output["rgb"] = compression.from_jpg(output["rgb"])
-            compressed_depth = output["depth"]
-            depth = compression.from_jp2(compressed_depth) / 1000
-            output["depth"] = depth
+            compressed_depth = output.get("depth")
+            if compressed_depth is None:
+                if not self._allow_missing_depth:
+                    logger.warning("Observation missing depth key; skipping frame (use allow_missing_depth for RGB-only).")
+                    continue
+                output["depth"] = None
+                output["xyz"] = None
+            else:
+                depth = compression.from_jp2(compressed_depth) / 1000
+                output["depth"] = depth
 
-            if camera is None:
-                camera = Camera.from_K(output["camera_K"], output["rgb_height"], output["rgb_width"])
+                if camera is None:
+                    camera = Camera.from_K(output["camera_K"], output["rgb_height"], output["rgb_width"])
 
-            output["xyz"] = camera.depth_to_xyz(output["depth"])
+                output["xyz"] = camera.depth_to_xyz(output["depth"])
 
-            if visualize and not shown_point_cloud:
+            if visualize and not shown_point_cloud and output.get("xyz") is not None:
                 show_point_cloud(output["xyz"], output["rgb"] / 255.0, orig=np.zeros(3))
                 shown_point_cloud = True
 
