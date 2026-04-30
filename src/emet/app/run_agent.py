@@ -21,6 +21,8 @@ import click
 from termcolor import colored
 
 from emet.agent import run_agent_with_robot
+from emet.agent.model_debug import print_offline_model_line
+from emet.agent.prompt import DEFAULT_AGENT_NAME
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
@@ -33,7 +35,7 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
 @click.option(
     "--llm",
     default=DEFAULT_AGENT_LLM,
-    help=f"LLM to use (default: {DEFAULT_AGENT_LLM}). Case-insensitive (e.g. qwen35-vl-9b = qwen35-vl-9B).",
+    help=f"LLM to use (default: {DEFAULT_AGENT_LLM}). Case-insensitive (e.g. qwen35-vl-9b = qwen35-vl-9B, gemma4-e4b).",
     type=click.Choice(get_llm_choices(), case_sensitive=False),
 )
 @click.option(
@@ -90,10 +92,38 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     help="Print full prompt, user input, raw LLM response, and parsed response.",
 )
 @click.option(
+    "--debug-tools",
+    "debug_tools",
+    is_flag=True,
+    help=(
+        "Print raw tool_calls JSON, full tool return strings, executor tuples, combined [tool results] lines, "
+        "the exact [Tool results] block sent back to the LLM, VL camera stats, and send_image array stats. "
+        "Same as setting EMET_AGENT_TOOL_DEBUG=1."
+    ),
+)
+@click.option(
+    "--debug-models",
+    "debug_models",
+    is_flag=True,
+    help=(
+        "Print which models/clients are in use (chat LLM, describe_scene detector, DynaMem VLM, etc.). "
+        "Same as setting EMET_AGENT_MODEL_DEBUG=1."
+    ),
+)
+@click.option(
+    "--debug-camera",
+    "debug_camera",
+    is_flag=True,
+    help=(
+        "Print head-camera frame stats for describe_scene, send_image, and Discord encode (black-PNG diagnosis). "
+        "Same as EMET_AGENT_CAMERA_DEBUG=1. If the PNG is black but stats look valid, try EMET_DISCORD_IMAGES_BGR=0."
+    ),
+)
+@click.option(
     "--name",
     "agent_name",
-    default="Emet",
-    help="Agent name used in the system prompt (default: Emet).",
+    default=DEFAULT_AGENT_NAME,
+    help=f"Agent / persona name in the system prompt and greetings (default: {DEFAULT_AGENT_NAME!r}).",
 )
 @click.option(
     "-c",
@@ -164,6 +194,9 @@ def main(
     discord: bool,
     no_llm: bool,
     debug_llm: bool,
+    debug_tools: bool,
+    debug_models: bool,
+    debug_camera: bool,
     agent_name: str,
     commands: tuple[str, ...],
     port_offset: int = 0,
@@ -183,6 +216,7 @@ def main(
       emet run agent --offline
       emet run agent --device cpu --offline
       emet run agent --llm qwen35-9B --offline
+      emet run agent --llm gemma4-e4b --device cuda --offline   # Gemma 4 (HF any-to-any)
       emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
       # MolmoSpaces: ``emet serve mujoco --molmospaces-scene ithor ...`` (often DISPLAY=:1 instead of --headless); same --port-offset as serve:
       emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml
@@ -193,6 +227,11 @@ def main(
       emet run agent -c 'find the red cylinder' -c 'what objects do you see?'
     """
     cmd_list = list(commands) if commands else None
+
+    if debug_models:
+        os.environ["EMET_AGENT_MODEL_DEBUG"] = "1"
+    if debug_camera:
+        os.environ["EMET_AGENT_CAMERA_DEBUG"] = "1"
 
     # Embodied mode: default IP 127.0.0.1 unless --offline
     robot_effective: str | None = None
@@ -214,6 +253,7 @@ def main(
             llm=llm,
             skip_confirmations=True,
             debug_llm=debug_llm,
+            tool_debug=debug_tools,
             agent_name=agent_name,
             commands=cmd_list,
             port_offset=port_offset,
@@ -230,6 +270,7 @@ def main(
     client = get_llm_client(llm, prompt_builder, device=device)
     if hasattr(client, "max_tokens"):
         client.max_tokens = max_tokens
+    print_offline_model_line(llm, client, device, max_tokens)
 
     if voice:
         audio_recorder = AudioRecorder()

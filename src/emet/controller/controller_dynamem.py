@@ -14,6 +14,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import os
+from collections import Counter
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
@@ -25,6 +26,7 @@ import torch
 import zmq
 from PIL import Image
 
+from emet.agent.env_flags import env_agent_camera_debug, env_agent_model_debug
 from emet.audio.text_to_speech import PiperTextToSpeech
 from emet.config.embodied_agent_config import EmbodiedAgentConfig, legacy_embodied_agent_off
 from emet.controller.base_controller import BaseController
@@ -68,6 +70,35 @@ INIT_WRIST_ROLL = 0
 INIT_WRIST_YAW = 0
 INIT_HEAD_PAN = -1.57
 INIT_HEAD_TILT = -0.65
+
+# Batched OWL text queries for describe_head_camera_scene_text (single forward pass).
+_DESCRIBE_SCENE_OWL_QUERIES: tuple[str, ...] = (
+    "table",
+    "chair",
+    "person",
+    "cup",
+    "bottle",
+    "laptop",
+    "computer monitor",
+    "television",
+    "cabinet",
+    "shelf",
+    "door",
+    "window",
+    "couch",
+    "bed",
+    "counter",
+    "box",
+    "bowl",
+    "plate",
+    "plant",
+    "book",
+    "keyboard",
+    "microwave",
+    "refrigerator",
+    "sink",
+    "robot arm",
+)
 
 
 class DynamemController(BaseController):
@@ -432,6 +463,112 @@ class DynamemController(BaseController):
                     if name is not None:
                         class_names[cid] = name
         return instances_to_text(instances, class_names=class_names, include_bounds=include_bounds)
+
+    def describe_head_camera_scene_text(self) -> str:
+        """Summarize the current head RGB using the controller's detector (YoloE or OWL).
+
+        Used by the embodied agent ``describe_scene`` tool so the model can answer
+        "what do you see" without sending an image.
+        """
+        if self.robot is None or not hasattr(self.robot, "get_observation"):
+            return "No robot view available."
+        obs = self.robot.get_observation()
+        if obs is None or getattr(obs, "rgb", None) is None:
+            return "No current image."
+        rgb = np.asarray(obs.rgb)
+        if rgb.dtype != np.uint8:
+            if rgb.size and float(np.nanmax(rgb)) <= 1.0 + 1e-6:
+                rgb = (np.clip(rgb, 0.0, 1.0) * 255.0).astype(np.uint8)
+            else:
+                rgb = np.clip(rgb, 0, 255).astype(np.uint8)
+        if rgb.ndim != 3 or rgb.shape[2] != 3:
+            return "Head camera image has an unexpected shape."
+
+        if env_agent_camera_debug():
+            from emet.agent.camera_debug import print_camera_frame_diagnostics
+
+            print_camera_frame_diagnostics("describe_scene (head RGB, detector input)", rgb, force=True)
+
+        depth = getattr(obs, "depth", None)
+        if depth is not None:
+            depth = np.asarray(depth)
+
+        dm = self.detection_model
+        if env_agent_model_debug():
+            if dm is None:
+                print(
+                    "[model debug] describe_scene: no detection_model on controller (YoloE/OWL labels unavailable)",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"[model debug] describe_scene: detector={type(dm).__name__} on head RGB "
+                    "(separate from the chat LLM; tool result is from this detector, not from the LLM's weights)",
+                    flush=True,
+                )
+
+        if dm is None:
+            return (
+                "I have a live camera frame but object detection is disabled for this session "
+                "(e.g. manipulation-only or voxel EQA without instances), so I cannot name objects. "
+                "Use send_image to show the view, or explore and query_memory if you need the map."
+            )
+
+        try:
+            if isinstance(dm, YoloEPerception):
+                return self._describe_scene_yoloe(rgb, depth, dm)
+            if isinstance(dm, OwlPerception):
+                thr = float(dm.confidence_threshold) if dm.confidence_threshold is not None else 0.2
+                thr = max(0.12, min(thr, 0.35))
+                return self._describe_scene_owl(rgb, dm, thr)
+        except Exception as e:
+            return (
+                f"I could not run detection on the camera frame ({type(e).__name__}: {e}). "
+                "Try send_image if you need the raw view."
+            )
+
+        return "Unknown detector type for scene description; try send_image for a picture."
+
+    def _describe_scene_yoloe(self, rgb: np.ndarray, depth: np.ndarray | None, dm: YoloEPerception) -> str:
+        _sem, _inst, task = dm.predict(rgb, depth=depth, draw_instance_predictions=False)
+        ic = task.get("instance_classes")
+        if ic is None or len(ic) == 0:
+            return (
+                "From my head camera: nothing is segmented above the current detection threshold. "
+                "The view may be empty, dark, or objects may not match the detector vocabulary. "
+                "send_image can still show the raw frame."
+            )
+        class_list = dm.class_list
+        names: list[str] = []
+        for idx in np.atleast_1d(np.asarray(ic)).astype(int).ravel():
+            if 0 <= int(idx) < len(class_list):
+                names.append(class_list[int(idx)])
+        if not names:
+            return "From my head camera: detections did not map to class names. send_image can show the raw view."
+        counts = Counter(names)
+        parts = [f"{n} (×{c})" if c > 1 else n for n, c in counts.most_common()]
+        summary = ", ".join(parts)
+        return f"From my head camera I can make out: {summary}."
+
+    def _describe_scene_owl(self, rgb: np.ndarray, dm: OwlPerception, confidence_threshold: float) -> str:
+        texts = list(_DESCRIBE_SCENE_OWL_QUERIES)
+        res = dm.predict(rgb, texts, confidence_threshold=confidence_threshold)
+        labels = res["labels"]
+        if labels.numel() == 0:
+            return (
+                "From my head camera: nothing matched the open-vocabulary checks above the confidence cutoff. "
+                "You can still use send_image to see the frame."
+            )
+        scores = res["scores"]
+        best_by_label: dict[int, float] = {}
+        for lab, sc in zip(labels.cpu().tolist(), scores.cpu().tolist(), strict=True):
+            li = int(lab)
+            sf = float(sc)
+            if li not in best_by_label or sf > best_by_label[li]:
+                best_by_label[li] = sf
+        picked = [texts[i] for i in sorted(best_by_label)]
+        summary = ", ".join(picked)
+        return f"From my head camera, open-vocabulary detection suggests: {summary}."
 
     def look_around(self):
         """

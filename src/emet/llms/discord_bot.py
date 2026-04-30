@@ -18,11 +18,14 @@ import discord
 from termcolor import colored
 
 # import emet.utils.logger as logger
+from emet.agent.camera_debug import discord_pil_bgr, print_camera_frame_diagnostics
+from emet.agent.env_flags import env_agent_camera_debug
 from emet.controller.controller_instance_memory import RobotAgent
 from emet.controller.task.dynamem import DynamemTaskExecutor, EQAExecuter
 from emet.controller.task.pickup import PickupExecutor
 from emet.llms import PickupPromptBuilder, get_llm_client
 from emet.utils.discord_bot import DiscordBot, Task
+from emet.utils.image import ndarray_hwc_to_pil_rgb_u8
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -247,16 +250,29 @@ class EmetDiscordBot(DiscordBot):
         # Signal that the bot is ready
         self._ready_event.set()
 
-    def push_task_to_all_channels(self, message: str | None = None, content: str | None = None):
+    def push_task_to_all_channels(
+        self,
+        message: str | None = None,
+        content: str | None = None,
+        *,
+        skip_terminal_mirror: bool = False,
+    ):
         """Push a task to all channels. Message will be "as-is" with no processing.
 
         Args:
             message: The message to send to the channel.
             content: The content (image string) to send to the channel.
+            skip_terminal_mirror: If True, do not print ``(discord) →`` again in handle_task (caller mirrored already).
         """
 
         for channel in self.allowed_channels:
-            self.push_task(channel, message=message, content=content, explicit=True)
+            self.push_task(
+                channel,
+                message=message,
+                content=content,
+                explicit=True,
+                skip_terminal_mirror=skip_terminal_mirror,
+            )
 
     def on_message(self, message: discord.Message, verbose: bool = False):
         """Event listener for whenever a new message is sent to a channel that this bot is in."""
@@ -312,23 +328,34 @@ class EmetDiscordBot(DiscordBot):
                 )
                 ch_name = getattr(task.channel, "name", "?")
                 has_img = task.content is not None
-                self._print_discord_outbound(ch_name, task.message, has_image=has_img)
+                if not getattr(task, "skip_terminal_mirror", False):
+                    self._print_discord_outbound(ch_name, task.message, has_image=has_img)
                 if task.message:
                     await task.channel.send(task.message)
                 if task.content is not None:
                     import io
 
                     import numpy as np
-                    from PIL import Image as PILImage
 
-                    buf = io.BytesIO()
-                    img = task.content
-                    if isinstance(img, np.ndarray):
-                        img = PILImage.fromarray(img.astype(np.uint8))
-                    img.save(buf, format="PNG")
-                    buf.seek(0)
                     filename = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".png"
-                    await task.channel.send(file=discord.File(buf, filename=filename))
+                    raw = task.content
+                    if isinstance(raw, np.ndarray):
+                        print_camera_frame_diagnostics(
+                            "Discord upload (numpy before PNG)",
+                            raw,
+                            force=env_agent_camera_debug(),
+                        )
+                        buf = io.BytesIO()
+                        ndarray_hwc_to_pil_rgb_u8(np.asarray(raw), assume_opencv_bgr=discord_pil_bgr()).save(
+                            buf, format="PNG"
+                        )
+                        buf.seek(0)
+                        await task.channel.send(file=discord.File(buf, filename=filename))
+                    else:
+                        byte_arr = raw
+                        if hasattr(byte_arr, "seek"):
+                            byte_arr.seek(0)
+                        await task.channel.send(file=discord.File(byte_arr, filename=filename))
                 return
         except Exception as e:
             print(colored("Error in handling task: " + str(e), "red"))

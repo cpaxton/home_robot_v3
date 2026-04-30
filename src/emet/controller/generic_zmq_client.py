@@ -24,6 +24,7 @@ import sys
 import threading
 import time
 import timeit
+from dataclasses import replace
 from threading import Lock
 from typing import Any
 
@@ -35,7 +36,9 @@ from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient, ControlMode
 from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY, read_emet_robot_id, robot_ids_match
+from emet.motion import constants as motion_constants
 from emet.robots.base import RobotSpec
+from emet.robots.spec_robot_model import SpecRobotModel
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
 
@@ -344,6 +347,22 @@ class GenericZmqClient(AbstractRobotClient):
             compass=compass,
         )
 
+    def get_head_pose(self) -> np.ndarray:
+        """SE(3) head / primary camera frame; fall back to identity if unknown."""
+        obs = self.get_observation()
+        if obs is None or obs.camera_pose is None:
+            return np.eye(4, dtype=np.float64)
+        return np.asarray(obs.camera_pose, dtype=np.float64)
+
+    def get_servo_observation(self) -> Observations | None:
+        """Stretch: dedicated EE / servo image stream. Generic: reuse head RGB as ``ee_rgb`` if unset."""
+        obs = self.get_observation()
+        if obs is None:
+            return None
+        if obs.ee_rgb is not None:
+            return obs
+        return replace(obs, ee_rgb=obs.rgb)
+
     # -- Actions --------------------------------------------------------------
 
     def send_action(
@@ -464,9 +483,43 @@ class GenericZmqClient(AbstractRobotClient):
         return True
 
     def head_to(self, head_pan: float, head_tilt: float, blocking: bool = False, **kwargs) -> None:
-        if not getattr(self, "_logged_head_to_nonstretch", False):
-            logger.warning("head_to() is Stretch-specific; ignored for this robot.")
-            self._logged_head_to_nonstretch = True
+        """Send Stretch-compatible ``head_to`` to the ZMQ server (``RobosuiteZmqServer`` maps it for rby1/galaxea)."""
+        next_action: dict[str, Any] = {
+            "head_to": [float(head_pan), float(head_tilt)],
+        }
+        if blocking:
+            next_action["manip_blocking"] = True
+        self.send_action(
+            next_action,
+            timeout=float(kwargs.get("timeout", 5.0)),
+            reliable=bool(kwargs.get("reliable", True)),
+        )
+        if blocking:
+            time.sleep(0.05)
+
+    def look_front(self, blocking: bool = True, timeout: float = 10.0) -> None:
+        self.head_to(
+            float(motion_constants.look_front[0]),
+            float(motion_constants.look_front[1]),
+            blocking=blocking,
+            timeout=timeout,
+            reliable=True,
+        )
+
+    def look_at_ee(self, blocking: bool = True, timeout: float = 10.0) -> None:
+        self.head_to(
+            float(motion_constants.look_at_ee[0]),
+            float(motion_constants.look_at_ee[1]),
+            blocking=blocking,
+            timeout=timeout,
+            reliable=True,
+        )
+
+    def say(self, text: str) -> None:
+        """Text-to-speech on Stretch; generic client has no audio bridge (no-op)."""
+
+    def say_sync(self, text: str) -> None:
+        """Blocking TTS on Stretch; generic client has no audio bridge (no-op)."""
 
     def navigate_to(self, xyt, relative: bool = False, blocking: bool = True, **kwargs) -> None:
         xyt_a = np.asarray(xyt, dtype=float).reshape(-1)
@@ -485,7 +538,7 @@ class GenericZmqClient(AbstractRobotClient):
             time.sleep(0.05)
 
     def get_robot_model(self):
-        return None
+        return SpecRobotModel(self._spec)
 
     def get_pose_graph(self) -> np.ndarray:
         return np.zeros((0, 3))

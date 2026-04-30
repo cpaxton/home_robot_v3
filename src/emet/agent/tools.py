@@ -19,6 +19,7 @@ from typing import Any
 
 import numpy as np
 
+from emet.agent.camera_debug import print_camera_frame_diagnostics
 from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
@@ -142,7 +143,14 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         if robot is not None and hasattr(robot, "get_observation"):
             obs = robot.get_observation()
             if obs is not None and getattr(obs, "rgb", None) is not None:
-                image = np.asarray(obs.rgb)
+                # Copy so ZMQ recv cannot mutate the buffer while Discord async-upload runs.
+                image = np.asarray(obs.rgb).copy()
+        if image is not None:
+            print_camera_frame_diagnostics(
+                "send_image (head obs rgb → Discord)",
+                image,
+                force=bool(context.get("verbose_tools")) or bool(context.get("camera_debug")),
+            )
         if discord_bot is not None and image is not None:
             if hasattr(discord_bot, "push_task_to_all_channels"):
                 # Image only: the assistant message (e.g. "Here's a picture…") is already sent by the agent loop.
@@ -230,12 +238,19 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
     # -- describe_scene ------------------------------------------------------
     def describe_scene() -> str:
         robot = context.get("robot")
+        executor = context.get("executor")
         if robot is None or not hasattr(robot, "get_observation"):
             return "No robot view available."
         obs = robot.get_observation()
         if obs is None or getattr(obs, "rgb", None) is None:
             return "No current image."
-        return "I can see the environment through my camera. Use send_image to share the picture."
+        agent = getattr(executor, "agent", None) if executor is not None else None
+        if agent is not None and hasattr(agent, "describe_head_camera_scene_text"):
+            return agent.describe_head_camera_scene_text()
+        return (
+            "I have a camera frame but this session's controller does not expose scene description; "
+            "use send_image to show the view."
+        )
 
     tools.append(
         Tool(
@@ -413,7 +428,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         crop = getattr(node, "best_crop", None)
         if crop is None:
             return f"Object {object_label!r} has no stored crop image yet."
-        image = np.asarray(crop)
+        image = np.asarray(crop).copy()
         if discord_bot is not None and image is not None and hasattr(discord_bot, "push_task_to_all_channels"):
             discord_bot.push_task_to_all_channels(message=None, content=image)
             return f"Sent last crop image for {object_label!r} to Discord."

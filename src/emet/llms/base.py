@@ -29,8 +29,6 @@ class AbstractPromptBuilder(ABC):
     """Abstract base class for a prompt generator."""
 
     def __init__(self, **kwargs):
-        print(" kwargs: ")
-        print(kwargs)
         self.prompt_str = self.configure(**kwargs)
 
     def configure(self, **kwargs) -> str:

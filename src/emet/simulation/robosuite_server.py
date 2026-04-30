@@ -29,6 +29,7 @@ import emet.utils.logger as log
 from emet.core.server import BaseZmqServer
 from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY
 from emet.robots.base import RobotSpec
+from emet.simulation.head_look_action import apply_head_to_robosuite
 from emet.utils.geometry import xyt_global_to_base
 
 logger = log.Logger(__name__)
@@ -224,6 +225,11 @@ class RobosuiteZmqServer(BaseZmqServer):
 
             if "xyt" in action:
                 logger.info(f"Navigation goal received: {action['xyt']} (not yet implemented for robosuite server)")
+
+            if "head_to" in action and self._mjmodel is not None and self._mjdata is not None:
+                ht = action["head_to"]
+                if isinstance(ht, (list, tuple)) and len(ht) >= 2:
+                    apply_head_to_robosuite(self._spec, self._mjmodel, self._mjdata, float(ht[0]), float(ht[1]))
 
     @override
     def get_full_observation_message(self) -> dict[str, Any]:

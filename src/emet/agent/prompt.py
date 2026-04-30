@@ -21,7 +21,8 @@ from typing import Any
 
 from emet.agent.tools import Tool, get_tool_descriptions_for_prompt, get_tools
 
-DEFAULT_AGENT_NAME = "Emet"
+# Default persona for embodied agent + ``emet run agent`` / web chat (override with ``--name``).
+DEFAULT_AGENT_NAME = "Virgil"
 
 # Identity block: kept short so small models focus on the tool contract.
 _IDENTITY_TEMPLATE = """\
@@ -45,6 +46,7 @@ When you call query_memory, query_scene_graph, list_scene_relations, or describe
 You must then summarize them for the user in a follow-up response (no more tool calls).
 Use query_memory for voxel-map / semantic localization when EQA is enabled. Use query_scene_graph for graph-style embodied questions; use list_scene_relations for explicit near/on connectivity; use send_object_image for a stored object crop from the scene graph (not the live camera).
 For open-ended "what do you see" questions, prefer describe_scene and send_image unless full EQA is enabled for memory Q&A.
+When you receive bracketed tool results (e.g. `[describe_scene] ...`), your **message** must reflect **only** what those results say. Do not copy object names, colors, or counts from the examples in this prompt; those examples use fictional placeholders.
 
 # Examples
 
@@ -64,10 +66,10 @@ User: "What objects can you see?"
 {"tool_calls": [{"name": "describe_scene", "arguments": {}}, {"name": "send_image", "arguments": {}}], "message": "Taking a look."}
 
 [Tool results]
-[describe_scene] A blue cube and a red cylinder on the table.
+[describe_scene] From my head camera I can make out: bookshelf, chair, door.
 
 Summarize these results for the user in your message. Do not call any more tools.
-{"tool_calls": [], "message": "I can see a blue cube and a red cylinder on the table."}
+{"tool_calls": [], "message": "Mostly a bookshelf, a chair, and a door in view. Sending a picture as well."}
 
 User: "Wave hello!"
 {"tool_calls": [{"name": "wave", "arguments": {}}], "message": "Hi!"}
