@@ -25,7 +25,12 @@ from overrides import override
 
 import emet.utils.compression as compression
 from emet.core.server import BaseZmqServer
-from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY
+from emet.core.zmq_protocol import (
+    CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
+    EMET_ZMQ_ROBOT_ID_KEY,
+    EMET_ZMQ_SESSION_KEY,
+    EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
+)
 from emet.utils.image import scale_camera_matrix
 from innate_mars_bridge.remote import InnateMarsClient
 
@@ -40,6 +45,24 @@ class ZmqServer(BaseZmqServer):
 
         self._spin_thread = threading.Thread(target=rclpy.spin, args=(self.client._ros,), daemon=True)
         self._spin_thread.start()
+
+    def _emet_session_payload(self) -> dict[str, Any]:
+        """Schema v1 session metadata (see docs/zmq_session_metadata.md)."""
+        return {
+            EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY: CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
+            "runtime_kind": "innate_mars_ros2_bridge",
+            "is_simulation": False,
+            EMET_ZMQ_ROBOT_ID_KEY: "innate_mars",
+            "capabilities": {
+                "teleport_base": False,
+                "depth": False,
+                "stereo_head": True,
+                "num_cameras": 3,
+                "dof": 10,
+            },
+            "environment": {"kind": "ros2", "package": "innate_mars_bridge"},
+        }
+
 
     @override
     def is_running(self) -> bool:
@@ -66,6 +89,7 @@ class ZmqServer(BaseZmqServer):
         kr = self.client.head_right_cam.get_K()
         return {
             EMET_ZMQ_ROBOT_ID_KEY: "innate_mars",
+            EMET_ZMQ_SESSION_KEY: self._emet_session_payload(),
             "base_pose": base_pose,
             "joint": q,
             "joint_velocities": dq,
@@ -96,6 +120,7 @@ class ZmqServer(BaseZmqServer):
         ee_pose = self.client.ee_pose
         return {
             EMET_ZMQ_ROBOT_ID_KEY: "innate_mars",
+            EMET_ZMQ_SESSION_KEY: self._emet_session_payload(),
             "base_pose": base_pose,
             "ee_pose": ee_pose,
             "joint_positions": q,
@@ -141,6 +166,7 @@ class ZmqServer(BaseZmqServer):
 
         message = {
             EMET_ZMQ_ROBOT_ID_KEY: "innate_mars",
+            EMET_ZMQ_SESSION_KEY: self._emet_session_payload(),
             "ee/pose": self.client.ee_pose,
             "robot/config": q,
             "step": self._last_step,
