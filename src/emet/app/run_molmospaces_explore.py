@@ -155,12 +155,31 @@ def sync_episode_metadata_from_zmq_session(
 @click.option(
     "--goal-x-min",
     type=float,
-    default=-4.0,
+    default=-1.5,
     show_default=True,
+    help="Random nav goals are spawn-relative (ZMQ); keep range modest so goals do not map to world origin/porch.",
 )
-@click.option("--goal-x-max", type=float, default=4.0, show_default=True)
-@click.option("--goal-y-min", type=float, default=-4.0, show_default=True)
-@click.option("--goal-y-max", type=float, default=4.0, show_default=True)
+@click.option(
+    "--goal-x-max",
+    type=float,
+    default=1.5,
+    show_default=True,
+    help="Upper X bound for spawn-relative random goals (see --goal-x-min).",
+)
+@click.option(
+    "--goal-y-min",
+    type=float,
+    default=-1.5,
+    show_default=True,
+    help="Lower Y bound for spawn-relative random goals.",
+)
+@click.option(
+    "--goal-y-max",
+    type=float,
+    default=1.5,
+    show_default=True,
+    help="Upper Y bound for spawn-relative random goals.",
+)
 @click.option("--no-depth", is_flag=True, help="Do not save depth .npy files.")
 @click.option(
     "--export-transforms",

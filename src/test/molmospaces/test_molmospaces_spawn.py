@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import mujoco
 
-from emet.simulation.molmospaces_spawn import walkable_floor_z_at_xy
+from emet.simulation.molmospaces_spawn import (
+    upward_ray_hit_distance,
+    walkable_floor_z_at_xy,
+)
 
 SLAB_OVER_ORIGIN = """<?xml version="1.0"?>
 <mujoco model="slab_scene">
@@ -31,3 +34,13 @@ def test_walkable_floor_z_multisegment_past_slab():
     z_clear = walkable_floor_z_at_xy(m, d, 4.0, 0.0)
     assert z_clear is not None
     assert abs(z_clear) < 0.02
+
+
+def test_upward_ray_detects_open_void_beside_slab_scene():
+    """Outside the slab footprint the upward ray misses geometry (void); under slab it hits."""
+    m = mujoco.MjModel.from_xml_string(SLAB_OVER_ORIGIN)
+    d = mujoco.MjData(m)
+    mujoco.mj_forward(m, d)
+    assert upward_ray_hit_distance(m, d, 4.0, 0.0, 0.12) is None
+    d_hit = upward_ray_hit_distance(m, d, 0.0, 0.0, 0.12)
+    assert d_hit is not None and d_hit >= 0.15

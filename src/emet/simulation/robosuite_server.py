@@ -76,6 +76,14 @@ class RobosuiteZmqServer(BaseZmqServer):
         self.control_mode = "navigation"
         self._at_goal = False
         self._emet_session: dict[str, Any] | None = None
+        # World-frame (x, y, yaw) holonomic drive goal for the base free joint (velocity before mj_step).
+        self._nav_goal_world: np.ndarray | None = None
+        self._nav_tol_xy = 0.07
+        self._nav_tol_theta = 0.15
+        self._nav_kp_xy = 0.95
+        self._nav_kp_theta = 2.2
+        self._nav_v_max = 0.42
+        self._nav_w_max = 0.95
 
     @property
     def spec(self) -> RobotSpec:
@@ -101,10 +109,17 @@ class RobosuiteZmqServer(BaseZmqServer):
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             self._molmospaces_autoplace_free_base_after_load()
 
+    def _want_molmospaces_spawn_heuristic(self) -> bool:
+        """True when we merged a MolmoSpaces house + mobile base (needs placement away from origin)."""
+        env = self._environment_descriptor
+        if env and env.get("kind") == "molmospaces":
+            return True
+        bn = (self._scene_source_basename or "").lower()
+        return bn.startswith("molmospaces_merged")
+
     def _molmospaces_autoplace_free_base_after_load(self) -> None:
         """Move merged MolmoSpaces + mobile robot off origin when the base starts inside scene clutter."""
-        env = self._environment_descriptor
-        if env is None or env.get("kind") != "molmospaces":
+        if not self._want_molmospaces_spawn_heuristic():
             return
         if self._mjmodel is None or self._mjdata is None:
             return
@@ -131,6 +146,11 @@ class RobosuiteZmqServer(BaseZmqServer):
             f"MolmoSpaces base autoplace: moved free joint on {base_name!r} to "
             f"({x:.3f}, {y:.3f}, {z:.3f}) to avoid origin clutter."
         )
+        # Copy placed free-joint pose into qpos0 so resets use autoplace (Python MjModel has no qvel0).
+        addrs = self._base_freejoint_addrs()
+        if addrs is not None:
+            qadr = int(addrs[0])
+            self._mjmodel.qpos0[qadr : qadr + 7] = self._mjdata.qpos[qadr : qadr + 7]
 
     def _build_emet_session(self, *, robocasa: bool) -> dict[str, Any]:
         mj_name: str | None = None
@@ -148,7 +168,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         else:
             env = {"kind": "default_table"}
         caps: dict[str, Any] = {
-            "teleport_base": True,
+            "teleport_base": False,
+            "nav_velocity_drive": True,
             "depth": bool(self._spec.camera_names),
             "num_cameras": len(self._spec.camera_names),
             "dof": int(self._spec.dof),
@@ -252,9 +273,9 @@ class RobosuiteZmqServer(BaseZmqServer):
     def _camera_for_renderer(self, camera_name: str) -> int | str:
         """Resolve RobotSpec camera name to a MuJoCo camera id, or free camera if none match.
 
-        Many MJCFs use site names for logical cameras while ``mujoco.Renderer`` expects
-        ``mjOBJ_CAMERA`` names (or ``-1`` for the free camera). Merged table scenes often
-        have ``ncam == 0``; then only the free camera can render.
+        Requires a real ``<camera>`` in the MJCF (``mjOBJ_CAMERA``). **Sites** with the same
+        name are not used by ``mujoco.Renderer``; falling back to camera ``-1`` is a fixed
+        world view and will not follow the robot.
         """
         cid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_CAMERA, camera_name)
         if cid >= 0:
@@ -335,6 +356,55 @@ class RobosuiteZmqServer(BaseZmqServer):
             mujoco.mj_forward(self._mjmodel, self._mjdata)
         return True
 
+    def _zero_base_free_joint_velocity(self) -> None:
+        """Zero the 6 velocity dofs of the base free joint (world-frame ang then lin; see MuJoCo free joint)."""
+        addrs = self._base_freejoint_addrs()
+        if addrs is None or self._mjdata is None:
+            return
+        _, vadr = addrs
+        v0 = int(vadr)
+        self._mjdata.qvel[v0 : v0 + 6] = 0.0
+
+    def _step_base_navigation_drive(self) -> None:
+        """P controller in world XY + yaw toward ``_nav_goal_world``; clears goal and sets ``at_goal`` when close."""
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        goal = self._nav_goal_world
+        if goal is None:
+            return
+        addrs = self._base_freejoint_addrs()
+        if addrs is None:
+            self._nav_goal_world = None
+            self._at_goal = True
+            return
+        _, vadr = addrs
+        v0 = int(vadr)
+        cur = self.get_base_xyt()
+        cx, cy, ct = float(cur[0]), float(cur[1]), float(cur[2])
+        wx, wy, wt = float(goal[0]), float(goal[1]), float(goal[2])
+        dx, dy = wx - cx, wy - cy
+        dist = float(np.hypot(dx, dy))
+        eth = float(np.arctan2(np.sin(wt - ct), np.cos(wt - ct)))
+        if dist < self._nav_tol_xy and abs(eth) < self._nav_tol_theta:
+            self._mjdata.qvel[v0 : v0 + 6] = 0.0
+            self._nav_goal_world = None
+            self._at_goal = True
+            return
+
+        vx = self._nav_kp_xy * dx
+        vy = self._nav_kp_xy * dy
+        sp = float(np.hypot(vx, vy))
+        if sp > self._nav_v_max and sp > 1e-9:
+            s = self._nav_v_max / sp
+            vx *= s
+            vy *= s
+        if dist < self._nav_tol_xy * 2.0:
+            vx = vy = 0.0
+        wz = float(np.clip(self._nav_kp_theta * eth, -self._nav_w_max, self._nav_w_max))
+        # MuJoCo free joint qvel: (wx, wy, wz) angular then (vx, vy, vz) linear, world frame.
+        self._mjdata.qvel[v0 : v0 + 3] = (0.0, 0.0, wz)
+        self._mjdata.qvel[v0 + 3 : v0 + 6] = (vx, vy, 0.0)
+
     @override
     def handle_action(self, action: dict[str, Any]):
         if "control_mode" in action:
@@ -373,22 +443,29 @@ class RobosuiteZmqServer(BaseZmqServer):
                     else:
                         world = self._spawn_rel_xyt_to_world(raw[:3], init)
                         wx, wy, wt = float(world[0]), float(world[1]), float(world[2])
-                    if not self._teleport_base_world_xyt(wx, wy, wt):
-                        logger.warning(
-                            f"Navigation xyt={action['xyt']!r}: no free joint on base_link "
-                            f"{self._spec.base_link_name!r}; cannot teleport."
-                        )
+                    nav_teleport = bool(action.get("nav_teleport", False))
+                    if nav_teleport:
+                        if not self._teleport_base_world_xyt(wx, wy, wt):
+                            logger.warning(
+                                f"Navigation xyt={action['xyt']!r}: no free joint on base_link "
+                                f"{self._spec.base_link_name!r}; cannot teleport."
+                            )
+                        else:
+                            logger.info(
+                                f"Sim navigation (teleport): base at x={wx:.3f} y={wy:.3f} theta={wt:.3f}."
+                            )
+                        self._nav_goal_world = None
+                        self._zero_base_free_joint_velocity()
+                        self._at_goal = True
                     else:
+                        self._nav_goal_world = np.array([wx, wy, wt], dtype=np.float64)
                         logger.info(
-                            f"Sim navigation: teleported base to x={wx:.3f} y={wy:.3f} theta={wt:.3f} "
-                            f"(at_goal=True after apply)."
+                            f"Sim navigation: driving toward x={wx:.3f} y={wy:.3f} theta={wt:.3f} "
+                            f"(set action nav_teleport=true for instant snap)."
                         )
         except Exception as e:
             if has_xyt:
                 logger.error(f"Navigation xyt={action.get('xyt')!r} failed in simulation server: {e!r}")
-        finally:
-            if has_xyt:
-                self._at_goal = True
 
     @override
     def get_full_observation_message(self) -> dict[str, Any]:
@@ -498,6 +575,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         """Step the MuJoCo simulation at the configured rate."""
         while self._running:
             with self._mj_lock:
+                self._step_base_navigation_drive()
                 mujoco.mj_step(self._mjmodel, self._mjdata)
             time.sleep(1 / self.simulation_rate)
 
@@ -518,6 +596,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                     # Keep mj_step and viewer.sync under the same lock: sync uses mj_copyDataVisual
                     # and must not overlap Renderer / mj_forward on other ZMQ threads.
                     with self._mj_lock:
+                        self._step_base_navigation_drive()
                         mujoco.mj_step(self._mjmodel, self._mjdata)
                         viewer.sync()
                     time.sleep(dt)
@@ -543,6 +622,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._load_model()
         self._running = True
         self._initial_xyt = self.get_base_xyt()
+        self._nav_goal_world = None
+        self._zero_base_free_joint_velocity()
+        self._at_goal = True
         self._emet_session = self._build_emet_session(robocasa=robocasa)
 
         # Print scene summary before any rendering (so it appears in headless / no-DISPLAY runs)
