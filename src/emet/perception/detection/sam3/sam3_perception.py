@@ -36,7 +36,8 @@ class SAM3Perception(PerceptionModule):
 
     SAM3 supports Promptable Concept Segmentation (PCS): given a text prompt
     (e.g. "cup", "red cylinder"), it detects and segments ALL instances of that
-    concept in the image. It also supports class-agnostic mask generation.
+    concept in the image. When no vocabulary is configured, segmentation uses
+    a generic ``"object"`` text prompt (HF SAM3 does not support image-only input).
     """
 
     def __init__(
@@ -95,9 +96,11 @@ class SAM3Perception(PerceptionModule):
         if not self._available:
             return []
 
-        prompts = text_prompts or self._vocabulary
+        prompts = list(text_prompts or self._vocabulary)
         if not prompts:
-            return self._generate_all_masks(image)
+            # HuggingFace ``facebook/sam3`` rejects image-only forwards ("exactly one of input_ids or
+            # text_embeds"). Default scene graph YAML uses ``vocabulary: []``; use a generic prompt.
+            prompts = ["object"]
 
         from PIL import Image as PILImage
 
@@ -139,50 +142,6 @@ class SAM3Perception(PerceptionModule):
                             "bbox_xyxy": bbox,
                         }
                     )
-
-        return results
-
-    @torch.no_grad()
-    def _generate_all_masks(self, image: np.ndarray) -> list[dict[str, Any]]:
-        """Class-agnostic mask generation (no text prompt)."""
-        if not self._available:
-            return []
-
-        from PIL import Image as PILImage
-
-        pil_image = PILImage.fromarray(image)
-        try:
-            inputs = self.processor(images=pil_image, return_tensors="pt")
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            outputs = self.model(**inputs)
-        except Exception as e:
-            err = str(e).lower()
-            if "input_ids" in err or "text_embeds" in err:
-                logger.warning(f"SAM3 class-agnostic forward failed ({e}); no masks")
-                return []
-            raise
-
-        processed = self.processor.post_process_instance_segmentation(outputs, threshold=self.confidence_threshold)
-
-        results = []
-        for seg_result in processed:
-            seg_map = seg_result["segmentation"]
-            for seg_info in seg_result.get("segments_info", []):
-                mask_id = seg_info["id"]
-                score = seg_info.get("score", 1.0)
-                mask = (seg_map == mask_id).cpu().numpy()
-                if mask.sum() < self.min_area:
-                    continue
-                ys, xs = np.where(mask)
-                bbox = np.array([xs.min(), ys.min(), xs.max(), ys.max()])
-                results.append(
-                    {
-                        "mask": mask,
-                        "label": "object",
-                        "score": float(score),
-                        "bbox_xyxy": bbox,
-                    }
-                )
 
         return results
 

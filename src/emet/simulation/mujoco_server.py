@@ -13,6 +13,7 @@ import random
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import click
 import numpy as np
@@ -145,6 +146,22 @@ def _load_default_scene_with_robot(robot_key: str):
     is_flag=True,
     help="Use GLX instead of EGL for rendering (use with Xvfb on WSL to get camera images)",
 )
+@click.option(
+    "--molmospaces-session-scene",
+    default=None,
+    help="Internal: scene id for emet_session when using MolmoSpaces merge via CLI.",
+)
+@click.option(
+    "--molmospaces-session-split",
+    default=None,
+    help="Internal: split for emet_session (train/val/test).",
+)
+@click.option(
+    "--molmospaces-session-index",
+    default=None,
+    type=int,
+    help="Internal: scene index for emet_session.",
+)
 @click.option("--seed", default=0, help="Seed for the simulation")
 @click.option(
     "--robocasa-write-to-xml",
@@ -191,6 +208,9 @@ def main(
     seed: int = 0,
     list_robocasa_tasks: bool = False,
     robot: str = "stretch",
+    molmospaces_session_scene: str | None = None,
+    molmospaces_session_split: str | None = None,
+    molmospaces_session_index: int | None = None,
 ):
     # Use EGL for offscreen rendering when headless (or no DISPLAY) to avoid GLFW X11 assertion
     # (_glfwGrabErrorHandlerX11: errorHandler == NULL) in headless/CI/no-window-manager setups
@@ -238,6 +258,26 @@ def main(
     if seed is not None:
         np.random.seed(seed)
         random.seed(seed)
+
+    zmq_environment: dict[str, Any] | None = None
+    if molmospaces_session_scene:
+        zmq_environment = {
+            "kind": "molmospaces",
+            "scene": molmospaces_session_scene,
+            "split": molmospaces_session_split or "train",
+            "index": int(0 if molmospaces_session_index is None else molmospaces_session_index),
+        }
+    elif use_robocasa:
+        zmq_environment = {
+            "kind": "robocasa",
+            "task": robocasa_task,
+            "style": int(robocasa_style),
+            "layout": int(robocasa_layout),
+        }
+
+    scene_source_basename: str | None = None
+    if scene_path and str(scene_path).strip():
+        scene_source_basename = Path(str(scene_path).strip()).name
 
     use_stretch = robot.lower() in ("stretch", "hello_stretch", "hellostretch")
 
@@ -345,6 +385,8 @@ def main(
                 scene_model=scene_model,
                 objects_info=objects_info,
                 no_cameras=no_cameras,
+                environment=zmq_environment,
+                scene_source_basename=scene_source_basename,
             )
         except zmq.error.ZMQError as e:
             if "Address already in use" in str(e):
@@ -449,6 +491,8 @@ def main(
                 verbose=verbose,
                 scene_xml=scene_xml if use_robocasa else None,
                 scene_model=scene_model if not use_robocasa else None,
+                environment=zmq_environment,
+                scene_source_basename=scene_source_basename,
             )
         except zmq.error.ZMQError as e:
             if "Address already in use" in str(e):

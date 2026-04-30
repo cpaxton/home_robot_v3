@@ -14,11 +14,14 @@
 # delegate to emet-molmospaces wrapper (subprocess). Without wrapper, those commands
 # exit non-zero with an "install wrapper" message. RUN_MOLMOSPACES_TESTS=1 runs list-scenes.
 
+import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 from click.testing import CliRunner
 
@@ -129,6 +132,7 @@ def test_molmospaces_help():
     assert "install-scene" in result.stdout
     assert "merge-scene" in result.stdout
     assert "serve" in result.stdout
+    assert "export-nerfstudio" in result.stdout
 
 
 def test_serve_mujoco_help_includes_molmospaces_scene():
@@ -187,6 +191,75 @@ def test_molmospaces_merge_scene_help():
     )
     assert result.returncode == 0
     assert "--output" in result.stdout or "-o" in result.stdout
+
+
+def test_molmospaces_export_nerfstudio_help():
+    """emet molmospaces export-nerfstudio --help works."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "molmospaces", "export-nerfstudio", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "episode-dir" in result.stdout
+    assert "transforms" in result.stdout.lower()
+
+
+def test_molmospaces_export_nerfstudio_cli_writes_transforms(tmp_path: Path):
+    """CLI export-nerfstudio reads an on-disk episode and writes transforms.json (no live sim)."""
+    from emet.core.interfaces import Observations
+    from emet.molmospaces.episode_writer import MolmoEpisodeWriter
+
+    h, w = 16, 24
+    K = np.array([[40.0, 0, w / 2], [0, 40.0, h / 2], [0, 0, 1.0]], dtype=np.float64)
+    obs = Observations(
+        gps=np.zeros(2),
+        compass=np.zeros(1),
+        rgb=np.zeros((h, w, 3), dtype=np.uint8),
+        depth=None,
+        camera_K=K,
+        camera_pose=np.eye(4, dtype=np.float64),
+        seq_id=0,
+    )
+    writer = MolmoEpisodeWriter(
+        str(tmp_path),
+        episode_fields={"molmospaces_scene": "ithor", "robot": "rby1"},
+        save_depth=False,
+    )
+    writer.write_frame(obs, 0)
+    writer.finalize()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "emet.cli",
+            "molmospaces",
+            "export-nerfstudio",
+            "--episode-dir",
+            str(tmp_path),
+            "--output",
+            "transforms_cli.json",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    out = tmp_path / "transforms_cli.json"
+    assert out.is_file()
+    data = json.loads(out.read_text())
+    assert "frames" in data and len(data["frames"]) == 1
+
+
+def test_run_molmospaces_explore_help():
+    """emet run molmospaces-explore --help works."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "run", "molmospaces-explore", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "output-dir" in result.stdout
 
 
 def test_molmospaces_list_scenes_without_wrapper():

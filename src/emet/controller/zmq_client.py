@@ -28,7 +28,7 @@ import emet.utils.compression as compression
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient
-from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY, is_stretch_family
+from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY, emet_session_cache_update, is_stretch_family
 from emet.motion import PlanResult
 from emet.motion.kinematics import HelloStretchIdx, HelloStretchKinematics
 from emet.utils.geometry import (
@@ -222,6 +222,7 @@ class StretchZmqClient(AbstractRobotClient):
         self._state_lock = Lock()
         self._servo_lock = Lock()
         self._send_lock = Lock()
+        self._emet_session_lock = Lock()
 
         if enable_rerun_server:
             from emet.visualization.rerun import RerunVisualizer
@@ -801,6 +802,8 @@ class StretchZmqClient(AbstractRobotClient):
         self._rerun_thread = None
         self._finish = False
         self._last_step = -1
+        self._emet_session_cache = None
+        self._emet_session_cache_step = -1
 
     def open_gripper(self, blocking: bool = True, timeout: float = 10.0, verbose: bool = False) -> bool:
         """Open the gripper based on hard-coded presets."""
@@ -1225,6 +1228,24 @@ class StretchZmqClient(AbstractRobotClient):
             self._last_step = obs["step"]
             if self._iter <= 0:
                 self._iter = max(self._last_step, self._iter)
+        self._note_emet_session_from_zmq_dict(obs)
+
+    def _note_emet_session_from_zmq_dict(self, msg: dict[str, Any] | None) -> None:
+        if msg is None:
+            return
+        with self._emet_session_lock:
+            self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
+                self._emet_session_cache,
+                self._emet_session_cache_step,
+                msg,
+            )
+
+    def get_emet_session(self) -> dict[str, Any] | None:
+        """Copy of the latest ``emet_session`` from the ZMQ server, if any."""
+        with self._emet_session_lock:
+            if self._emet_session_cache is None:
+                return None
+            return dict(self._emet_session_cache)
 
     def is_up_to_date(self, no_action=False):
         """Check if the robot is up to date with the latest observation"""
@@ -1274,6 +1295,7 @@ class StretchZmqClient(AbstractRobotClient):
             self._state = state
             self._control_mode = state["control_mode"]
             self._at_goal = state["at_goal"]
+        self._note_emet_session_from_zmq_dict(state)
 
     def at_goal(self) -> bool:
         """Check if the robot is at the goal.
@@ -1562,6 +1584,8 @@ class StretchZmqClient(AbstractRobotClient):
         if message is None or self._state is None:
             return
 
+        self._note_emet_session_from_zmq_dict(message)
+
         # color_image = compression.from_webp(message["ee_cam/color_image"])
         if "ee_cam/color_image" in message:
             color_image = compression.from_jpg(message["ee_cam/color_image"])
@@ -1797,6 +1821,13 @@ class StretchZmqClient(AbstractRobotClient):
             logger.info("Robot IP:", self.send_address)
             self.stop()
             return False
+
+        with self._obs_lock:
+            obs_snapshot = self._obs
+        with self._state_lock:
+            state_snapshot = self._state
+        self._note_emet_session_from_zmq_dict(obs_snapshot)
+        self._note_emet_session_from_zmq_dict(state_snapshot)
 
         # Separately wait for state messages
         while self._state is None:

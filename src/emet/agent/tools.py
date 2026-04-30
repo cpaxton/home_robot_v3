@@ -21,6 +21,7 @@ import numpy as np
 
 from emet.agent.camera_debug import print_camera_frame_diagnostics
 from emet.utils.logger import Logger
+from emet.visualization.map_snapshot import format_navigation_report, snapshot_from_voxel_map
 
 _logger = Logger(__name__)
 
@@ -70,6 +71,27 @@ class Tool:
 
 
 _NO_PARAMS: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
+
+
+def _robot_base_xy(robot: Any) -> tuple[float, float] | None:
+    if robot is None or not hasattr(robot, "get_base_pose"):
+        return None
+    try:
+        bp = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
+        if bp.size >= 2:
+            return float(bp[0]), float(bp[1])
+    except Exception:
+        return None
+    return None
+
+
+def _voxel_map_from_executor(executor: Any) -> Any:
+    if executor is None or not hasattr(executor, "agent"):
+        return None
+    agent = executor.agent
+    if hasattr(agent, "get_voxel_map"):
+        return agent.get_voxel_map()
+    return None
 
 
 def _simple_exec_mapping(cmd: str) -> Callable[[dict[str, Any]], list[tuple[str, str]]]:
@@ -169,7 +191,6 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    # -- explore -------------------------------------------------------------
     def _exec(cmd: str, args: Any = "") -> str:
         executor = context.get("executor")
         if executor is None:
@@ -177,13 +198,103 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         ok = executor([(cmd, args)])
         return "Done." if ok else "Command was interrupted or failed."
 
+    # -- explore -------------------------------------------------------------
+    def explore() -> str:
+        executor = context.get("executor")
+        robot = context.get("robot")
+        if executor is None:
+            return "Robot not connected."
+        ok = executor([("explore", "")])
+        robot_xy = _robot_base_xy(robot)
+        vm = _voxel_map_from_executor(executor)
+        _img, stats = snapshot_from_voxel_map(vm, robot_xy)
+        summary = format_navigation_report(stats, explore_ok=ok)
+        head = "Explore finished." if ok else "Explore failed or interrupted."
+        return f"{head} {summary}"
+
     tools.append(
         Tool(
             name="explore",
-            description="Explore and build a map of the environment.",
+            description=(
+                "Explore and build a map of the environment. Returns a short map diagnostic "
+                "(coverage, base cell) after the run — not a camera stream; pair with send_map_snapshot or describe_scene if stuck."
+            ),
             parameters=_NO_PARAMS,
-            func=lambda: _exec("explore", ""),
-            executor_commands=_simple_exec_mapping("explore"),
+            func=explore,
+            returns_info=True,
+        )
+    )
+
+    # -- navigation_diagnostics / send_map_snapshot -------------------------
+    def navigation_diagnostics() -> str:
+        executor = context.get("executor")
+        robot = context.get("robot")
+        if executor is None:
+            return "Robot not connected."
+        robot_xy = _robot_base_xy(robot)
+        vm = _voxel_map_from_executor(executor)
+        _img, stats = snapshot_from_voxel_map(vm, robot_xy)
+        return format_navigation_report(stats, explore_ok=None)
+
+    def send_map_snapshot() -> str:
+        executor = context.get("executor")
+        robot = context.get("robot")
+        discord_bot = context.get("discord_bot")
+        if executor is None:
+            return "Robot not connected."
+        robot_xy = _robot_base_xy(robot)
+        vm = _voxel_map_from_executor(executor)
+        img, stats = snapshot_from_voxel_map(vm, robot_xy)
+        summary = format_navigation_report(stats, explore_ok=None)
+        if img is None:
+            return f"No map image available. {summary}"
+        viz = None
+        if hasattr(executor, "agent"):
+            viz = getattr(executor.agent, "rerun_visualizer", None)
+        rerun_logged = False
+        if viz is not None and getattr(viz, "enabled", True) and hasattr(viz, "log_custom_2d_image"):
+            try:
+                viz.log_custom_2d_image("world/map_snapshot/topdown", img)
+                rerun_logged = True
+            except Exception as e:
+                _logger.warning(f"Rerun map snapshot log failed: {e}")
+        discord_sent = False
+        if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
+            try:
+                discord_bot.push_task_to_all_channels(message=None, content=np.asarray(img).copy())
+                discord_sent = True
+            except Exception as e:
+                _logger.warning(f"Discord map snapshot failed: {e}")
+        parts = [summary]
+        if discord_sent:
+            parts.append("Top-down map image sent to Discord.")
+        if rerun_logged:
+            parts.append("Top-down map logged to Rerun at world/map_snapshot/topdown.")
+        return " ".join(parts)
+
+    tools.append(
+        Tool(
+            name="navigation_diagnostics",
+            description=(
+                "Text summary of the current 2D voxel map: explored vs obstacle cell counts, base pose in grid, "
+                "and hints if the map is empty or the base sits on an obstacle cell. Use after failed explore/find or when the user asks why navigation failed."
+            ),
+            parameters=_NO_PARAMS,
+            func=navigation_diagnostics,
+            returns_info=True,
+        )
+    )
+
+    tools.append(
+        Tool(
+            name="send_map_snapshot",
+            description=(
+                "Render a top-down RGB view of obstacles vs explored space and send to Discord (if configured); "
+                "also logs to Rerun at world/map_snapshot/topdown when the live Rerun visualizer is enabled."
+            ),
+            parameters=_NO_PARAMS,
+            func=send_map_snapshot,
+            returns_info=True,
         )
     )
 
@@ -257,7 +368,8 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
             name="describe_scene",
             description=(
                 "Brief text about the camera view; pair with send_image to show the user a photo. "
-                "Use for 'what can you see' style questions instead of query_memory when not using full EQA."
+                "Use for 'what can you see' style questions instead of query_memory when not using full EQA. "
+                'With send_image, use an empty JSON "message" on the tool-call turn so chat/Discord only show your answer after [Tool results].'
             ),
             parameters=_NO_PARAMS,
             func=describe_scene,

@@ -14,6 +14,7 @@
 import threading
 import time
 import timeit
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -32,7 +33,12 @@ import emet.motion.constants as constants
 import emet.utils.compression as compression
 import emet.utils.logger as logger
 from emet.core.server import BaseZmqServer
-from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY
+from emet.core.zmq_protocol import (
+    CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
+    EMET_ZMQ_ROBOT_ID_KEY,
+    EMET_ZMQ_SESSION_KEY,
+    EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
+)
 from emet.motion import HelloStretchIdx
 from emet.motion.control.goto_controller import GotoVelocityController
 from emet.robots.base import RobotSpec
@@ -194,10 +200,13 @@ class MujocoZmqServer(BaseZmqServer):
         config_name: str = "noplan_velocity_sim",
         objects_info: dict[str, Any] | None = None,
         no_cameras: bool = False,
+        environment: dict[str, Any] | None = None,
+        scene_source_basename: str | None = None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         cameras_to_use = [] if no_cameras else self._default_cameras
+        self._cameras_enabled = bool(cameras_to_use)
         # TODO: decide how we want to save scenes, if they should be here in stretch_ai or in stretch_mujoco
         # They should probably stay in stretch mujoco
         if scene_path is None:
@@ -248,6 +257,13 @@ class MujocoZmqServer(BaseZmqServer):
 
         self.simulation_rate = simulation_rate
         self.objects_info = objects_info
+        self._environment_descriptor = dict(environment) if environment else None
+        if scene_source_basename:
+            self._scene_source_basename = scene_source_basename
+        elif scene_path:
+            self._scene_source_basename = Path(scene_path).name
+        else:
+            self._scene_source_basename = None
 
         # Hard coded printout rates
         self.report_steps = 1000
@@ -272,6 +288,8 @@ class MujocoZmqServer(BaseZmqServer):
         self.control_mode = "navigation"
         self.controller_finished = True
         self.active = False
+
+        self._emet_session: dict[str, Any] | None = None
 
         # Control module
         controller_cfg = get_control_config(config_name)
@@ -556,6 +574,7 @@ class MujocoZmqServer(BaseZmqServer):
             raise RuntimeError(
                 "MuJoCo simulator did not start. See above for errors; on WSL try DISPLAY=:99 and --use-glx, or --no-cameras."
             )
+        self._emet_session = self._build_emet_session_stretch(robocasa=robocasa)
         super().start()
 
         # Create a thread for the control loop
@@ -575,6 +594,37 @@ class MujocoZmqServer(BaseZmqServer):
             self._camera_data = self.robot_sim.pull_camera_data()
             self._status = self.robot_sim.pull_status()
             time.sleep(1 / self.simulation_rate)
+
+    def _build_emet_session_stretch(self, *, robocasa: bool) -> dict[str, Any]:
+        spec = self.get_robot_spec()
+        if self._environment_descriptor:
+            env = dict(self._environment_descriptor)
+        elif robocasa:
+            env = {"kind": "robocasa"}
+        else:
+            env = {"kind": "stretch_default_scene"}
+        caps: dict[str, Any] = {
+            "teleport_base": False,
+            "depth": self._cameras_enabled,
+            "num_cameras": 2 if self._cameras_enabled else 0,
+            "dof": int(spec.dof),
+        }
+        session: dict[str, Any] = {
+            EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY: CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
+            "runtime_kind": "stretch_mujoco_sim",
+            "is_simulation": True,
+            EMET_ZMQ_ROBOT_ID_KEY: spec.name,
+            "capabilities": caps,
+            "environment": env,
+        }
+        if self._scene_source_basename:
+            session["scene_source_basename"] = self._scene_source_basename
+        return session
+
+    def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
+        if self._emet_session is not None:
+            message[EMET_ZMQ_SESSION_KEY] = self._emet_session
+        return message
 
     @override
     def handle_action(self, action: dict[str, Any]):
@@ -693,7 +743,7 @@ class MujocoZmqServer(BaseZmqServer):
             "lidar_timestamp": None,
             EMET_ZMQ_ROBOT_ID_KEY: self.get_robot_spec().name,
         }
-        return message
+        return self._attach_emet_session(message)
 
     @override
     def get_state_message(self) -> dict[str, Any]:
@@ -712,7 +762,7 @@ class MujocoZmqServer(BaseZmqServer):
             "step": self._last_step,
             EMET_ZMQ_ROBOT_ID_KEY: self.get_robot_spec().name,
         }
-        return message
+        return self._attach_emet_session(message)
 
     @override
     def get_servo_message(self) -> dict[str, Any]:
@@ -775,8 +825,10 @@ class MujocoZmqServer(BaseZmqServer):
             "head_cam/pose": self.get_head_camera_pose(),
             "robot/config": positions,
             "is_simulation": True,
+            "step": self._last_step,
+            EMET_ZMQ_ROBOT_ID_KEY: self.get_robot_spec().name,
         }
-        return message
+        return self._attach_emet_session(message)
 
     @override
     def is_running(self) -> bool:

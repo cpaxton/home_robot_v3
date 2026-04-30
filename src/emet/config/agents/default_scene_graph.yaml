@@ -58,5 +58,5 @@ voxel:
   min_depth: 0.25
   max_depth: 2.5
 
-# --- Object detection vocabulary (empty = class-agnostic) ---
+# --- Object detection vocabulary for SAM3 text segmentation (empty = generic "object" prompt) ---
 vocabulary: []
