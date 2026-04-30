@@ -69,7 +69,11 @@ instance/
 # Exception: emet mapping instance package (do not ignore)
 !src/emet/mapping/instance/
 !src/emet/mapping/instance/**
+src/emet/mapping/instance/__pycache__/
 .webassets-cache
+
+# Local graph / explore scratch output (not committed)
+test_graph_out/
 
 # Scrapy stuff:
 .scrapy

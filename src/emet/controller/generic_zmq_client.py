@@ -20,6 +20,7 @@ StretchZmqClient, but derives joint indexing and DOF from a RobotSpec rather
 than hardcoding Stretch-specific constants.
 """
 
+import os
 import sys
 import threading
 import time
@@ -34,7 +35,12 @@ import emet.utils.compression as compression
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient, ControlMode
-from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY, read_emet_robot_id, robot_ids_match
+from emet.core.zmq_protocol import (
+    EMET_ZMQ_ROBOT_ID_KEY,
+    emet_session_cache_update,
+    read_emet_robot_id_from_message_or_session,
+    robot_ids_match,
+)
 from emet.robots.base import RobotSpec
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
@@ -63,9 +69,13 @@ class GenericZmqClient(AbstractRobotClient):
         parameters: Parameters | None = None,
         use_remote_computer: bool = True,
         start_immediately: bool = True,
+        *,
+        zmq_startup_timeout: float | None = None,
         allow_missing_depth: bool = False,
     ):
         super().__init__()
+        self._robot_ip = robot_ip
+        self._use_remote_computer = use_remote_computer
         if port_offset:
             recv_port += port_offset
             send_port += port_offset
@@ -74,6 +84,13 @@ class GenericZmqClient(AbstractRobotClient):
         self._spec = robot_spec
         self.recv_port = recv_port
         self.send_port = send_port
+        self.recv_state_port = recv_state_port
+        self.recv_servo_port = recv_servo_port
+        if zmq_startup_timeout is not None:
+            self._zmq_startup_timeout = max(1.0, float(zmq_startup_timeout))
+        else:
+            env = os.environ.get("EMET_ZMQ_STARTUP_TIMEOUT", "").strip()
+            self._zmq_startup_timeout = max(1.0, float(env)) if env else 60.0
 
         self._joint_index: dict[str, int] = {name: i for i, name in enumerate(robot_spec.joint_names)}
 
@@ -95,7 +112,11 @@ class GenericZmqClient(AbstractRobotClient):
         self._obs_lock = Lock()
         self._act_lock = Lock()
 
+        self._emet_session_cache: dict[str, Any] | None = None
+        self._emet_session_cache_step: int = -1
+
         self._base_xyt = np.zeros(3)
+        self._nav_goal_timeout_log_streak = 0
 
         # ZMQ sockets
         self.context = zmq.Context()
@@ -119,7 +140,17 @@ class GenericZmqClient(AbstractRobotClient):
         self._recv_threads_started = False
 
         if start_immediately:
-            self.start()
+            if not self.start(log_startup_timeout=False):
+                with self._obs_lock:
+                    streams_ready = self._obs is not None and self._state is not None
+                if not streams_ready:
+                    msg = self._zmq_startup_failure_message()
+                    logger.error(msg)
+                    raise ConnectionError(msg)
+                raise RuntimeError(
+                    f"ZMQ streams are up but client startup failed (likely {EMET_ZMQ_ROBOT_ID_KEY} mismatch "
+                    f"with server); client expects robot {self._spec.name!r}. Match `emet serve mujoco --robot`."
+                )
 
     @property
     def spec(self) -> RobotSpec:
@@ -152,23 +183,47 @@ class GenericZmqClient(AbstractRobotClient):
 
     # -- Lifecycle ------------------------------------------------------------
 
-    def _wait_for_zmq_ready(self, timeout: float = 10.0) -> bool:
+    def _zmq_startup_failure_message(self) -> str:
+        host = lookup_address(self._robot_ip, self._use_remote_computer) or self._robot_ip or "127.0.0.1"
+        return (
+            "Timeout waiting for first observations + state from MuJoCo ZMQ server "
+            f"(waited {self._zmq_startup_timeout:.0f}s). "
+            f"Host {host}: SUB obs={self.recv_port} state={self.recv_state_port} "
+            f"servo={self.recv_servo_port}; PUB send={self.send_port} "
+            "(use the same `--port-offset` on server and client). "
+            "Start `emet serve mujoco` before the client; large MolmoSpaces scenes can take 30–90s to load. "
+            "Increase wait: export EMET_ZMQ_STARTUP_TIMEOUT=120 or pass zmq_startup_timeout=120. "
+            f"Robot must match: `emet serve mujoco --robot {self._spec.name}`. "
+            "Use the same Python environment for client and server (e.g. `uv run emet` from repo root)."
+        )
+
+    def _wait_for_zmq_ready(self, timeout: float | None = None) -> bool:
         """Wait until at least one observation and one state message arrived."""
+        if timeout is None:
+            timeout = self._zmq_startup_timeout
         t0 = timeit.default_timer()
+        last_log = t0
         while True:
             with self._obs_lock:
                 ready = self._obs is not None and self._state is not None
             if ready:
                 return True
-            if timeit.default_timer() - t0 > timeout:
+            now = timeit.default_timer()
+            if now - t0 > timeout:
                 return False
+            if now - last_log >= 10.0:
+                logger.info(
+                    f"Still waiting for ZMQ observations/state ({now - t0:.0f} / {timeout:.0f}s) "
+                    f"on ports {self.recv_port} / {self.recv_state_port}…"
+                )
+                last_log = now
             time.sleep(0.05)
 
     def _verify_emet_robot_id(self) -> bool:
         """Ensure ``emet_robot_id`` from the server matches this client's RobotSpec (if present)."""
         with self._obs_lock:
             msg = self._obs if self._obs is not None else self._state
-        rid = read_emet_robot_id(msg)
+        rid = read_emet_robot_id_from_message_or_session(msg)
         if rid is None:
             return True
         expected = self._spec.name
@@ -181,7 +236,7 @@ class GenericZmqClient(AbstractRobotClient):
         )
         return False
 
-    def start(self) -> bool:
+    def start(self, *, log_startup_timeout: bool = True) -> bool:
         if self._started:
             return True
         if not self._recv_threads_started:
@@ -193,16 +248,31 @@ class GenericZmqClient(AbstractRobotClient):
             self._state_thread.start()
             self._servo_thread = threading.Thread(target=self._servo_loop, daemon=True)
             self._servo_thread.start()
-        if not self._wait_for_zmq_ready(timeout=10.0):
-            logger.error(
-                "Timeout waiting for observations/state from ZMQ server. "
-                "Start `emet serve mujoco` with the same `--robot` and check IP / `--port-offset`."
-            )
+        if not self._wait_for_zmq_ready():
+            if log_startup_timeout:
+                logger.error(self._zmq_startup_failure_message())
             return False
+        self._refresh_emet_session_from_streams()
         if not self._verify_emet_robot_id():
             return False
         self._started = True
         return True
+
+    def _refresh_emet_session_from_streams(self) -> None:
+        with self._obs_lock:
+            for msg in (self._obs, self._state, self._servo):
+                self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
+                    self._emet_session_cache,
+                    self._emet_session_cache_step,
+                    msg,
+                )
+
+    def get_emet_session(self) -> dict[str, Any] | None:
+        """Copy of the latest ``emet_session`` block from the server, if any (schema v1)."""
+        with self._obs_lock:
+            if self._emet_session_cache is None:
+                return None
+            return dict(self._emet_session_cache)
 
     def stop(self) -> None:
         self._finish = True
@@ -213,6 +283,8 @@ class GenericZmqClient(AbstractRobotClient):
         self._servo = None
         self._base_xyt = np.zeros(3)
         self._base_control_mode = ControlMode.IDLE
+        self._emet_session_cache = None
+        self._emet_session_cache_step = -1
 
     # -- Receive loops --------------------------------------------------------
 
@@ -245,6 +317,11 @@ class GenericZmqClient(AbstractRobotClient):
                     self._last_step = output["step"]
                 if "gps" in output and "compass" in output:
                     self._base_xyt = np.array([output["gps"][0], output["gps"][1], output["compass"][0]])
+                self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
+                    self._emet_session_cache,
+                    self._emet_session_cache_step,
+                    output,
+                )
 
     def _state_loop(self) -> None:
         while not self._finish:
@@ -259,6 +336,11 @@ class GenericZmqClient(AbstractRobotClient):
                 self._state = msg
                 if "step" in msg:
                     self._last_step = msg["step"]
+                self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
+                    self._emet_session_cache,
+                    self._emet_session_cache_step,
+                    msg,
+                )
 
     def _servo_loop(self) -> None:
         while not self._finish:
@@ -271,6 +353,11 @@ class GenericZmqClient(AbstractRobotClient):
                 continue
             with self._obs_lock:
                 self._servo = msg
+                self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
+                    self._emet_session_cache,
+                    self._emet_session_cache_step,
+                    msg,
+                )
 
     # -- Observations ---------------------------------------------------------
 
@@ -306,13 +393,26 @@ class GenericZmqClient(AbstractRobotClient):
                 return np.array(bp)
         return self._base_xyt.copy()
 
+    def _nav_goal_reset_seen(self) -> bool:
+        """True if any cached ZMQ message reports ``at_goal`` false (server cleared stale true)."""
+        with self._obs_lock:
+            chunks = (self._state, self._obs, self._servo)
+        for msg in chunks:
+            if msg is None:
+                continue
+            if not bool(msg.get("at_goal", False)):
+                return True
+        return False
+
     def at_goal(self) -> bool:
-        state = self._state
-        if state is not None:
-            return state.get("at_goal", False)
-        obs = self._obs
-        if obs is not None:
-            return obs.get("at_goal", False)
+        """True if any of state / full-obs / servo reports at goal (ZMQ CONFLATE can leave one socket stale)."""
+        with self._obs_lock:
+            chunks = (self._state, self._obs, self._servo)
+        for msg in chunks:
+            if msg is None:
+                continue
+            if bool(msg.get("at_goal", False)):
+                return True
         return False
 
     def get_observation(self, max_iter: int = 5) -> Observations | None:
@@ -383,16 +483,43 @@ class GenericZmqClient(AbstractRobotClient):
         action = {"xyt": xyt.tolist(), "nav_relative": relative}
         self.send_action(action)
         if blocking:
-            self._wait_at_goal(timeout=timeout or 30.0)
+            # PUB/SUB can drop the first packet; give the server a beat to apply xyt.
+            time.sleep(0.02)
+            # Avoid succeeding immediately on a stale ``at_goal`` from the previous navigation
+            # before the server recv thread clears it for the new goal.
+            t_clear = timeit.default_timer()
+            while not self._nav_goal_reset_seen() and timeit.default_timer() - t_clear < 1.0:
+                time.sleep(0.01)
+            return self._wait_at_goal(timeout=timeout or 30.0, target_xyt=xyt)
         return True
 
-    def _wait_at_goal(self, timeout: float = 30.0) -> bool:
+    def _wait_at_goal(self, timeout: float = 30.0, target_xyt: np.ndarray | None = None) -> bool:
         t0 = timeit.default_timer()
         while not self.at_goal():
             time.sleep(0.05)
             if timeit.default_timer() - t0 > timeout:
-                logger.warning("Timeout waiting to reach goal.")
+                self._nav_goal_timeout_log_streak += 1
+                g = np.asarray(target_xyt, dtype=float).reshape(-1) if target_xyt is not None else None
+                goal_s = (
+                    f"[{g[0]:.2f}, {g[1]:.2f}, {g[2]:.2f}]"
+                    if g is not None and g.size >= 3
+                    else str(target_xyt)
+                )
+                detail = (
+                    f"Navigation goal not reached within {timeout:.0f}s (target_xyt={goal_s}, "
+                    f"at_goal={self.at_goal()}). If this repeats, the sim may never set `at_goal`, "
+                    "the target may be unreachable, or try tighter `--goal-*` bounds / "
+                    "`emet run molmospaces-explore --navigate-every` less often."
+                )
+                if self._nav_goal_timeout_log_streak <= 2:
+                    logger.warning(detail)
+                else:
+                    logger.debug(
+                        f"{detail} (suppressing further identical warnings; "
+                        f"streak={self._nav_goal_timeout_log_streak})"
+                    )
                 return False
+        self._nav_goal_timeout_log_streak = 0
         return True
 
     def set_joint_positions(self, positions: dict[str, float]) -> None:
@@ -475,12 +602,12 @@ class GenericZmqClient(AbstractRobotClient):
             logger.warning("head_to() is Stretch-specific; ignored for this robot.")
             self._logged_head_to_nonstretch = True
 
-    def navigate_to(self, xyt, relative: bool = False, blocking: bool = True, **kwargs) -> None:
+    def navigate_to(self, xyt, relative: bool = False, blocking: bool = True, **kwargs) -> bool:
         xyt_a = np.asarray(xyt, dtype=float).reshape(-1)
         if xyt_a.size != 3:
             logger.error("navigate_to expects a length-3 xyt vector")
-            return
-        self.move_base_to(xyt_a, relative=relative, blocking=blocking, timeout=kwargs.get("timeout"))
+            return False
+        return self.move_base_to(xyt_a, relative=relative, blocking=blocking, timeout=kwargs.get("timeout"))
 
     def gripper_to(self, target: float, blocking: bool = True, reliable: bool = True) -> None:
         """Stretch-compatible gripper command (absolute opening target)."""
@@ -510,5 +637,6 @@ class GenericZmqClient(AbstractRobotClient):
         blocking: bool = True,
     ) -> bool:
         for waypoint in trajectory:
-            self.move_base_to(waypoint, relative=relative, blocking=blocking, timeout=per_waypoint_timeout)
+            if not self.move_base_to(waypoint, relative=relative, blocking=blocking, timeout=per_waypoint_timeout):
+                return False
         return True

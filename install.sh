@@ -16,6 +16,7 @@ INSTALL_SIM="true"   # default: clone third_party/robocasa+robosuite and include
 EXTRAS="dev"
 CLEAN_SIM="false"
 INSTALL_MOLMOSPACES="false"
+NO_MOLMOSPACES="false"
 
 for arg in "$@"; do
     case $arg in
@@ -24,8 +25,10 @@ for arg in "$@"; do
             ;;
         --all)
             INSTALL_SIM="true"
-            INSTALL_MOLMOSPACES="true"
             NO_SAM2="false"
+            if [ "$NO_MOLMOSPACES" != "true" ]; then
+                INSTALL_MOLMOSPACES="true"
+            fi
             ;;
         --cpu)
             CPU_ONLY="true"
@@ -45,22 +48,35 @@ for arg in "$@"; do
             ;;
         --molmospaces)
             INSTALL_MOLMOSPACES="true"
+            NO_MOLMOSPACES="false"
+            ;;
+        --no-molmospaces)
+            NO_MOLMOSPACES="true"
+            INSTALL_MOLMOSPACES="false"
             ;;
         *)
             ;;
     esac
 done
 
+# With sim on, install MolmoSpaces wrapper by default (separate venv) so `emet serve mujoco
+# --molmospaces-*` works without a second step. Opt out: --no-molmospaces. Skip if wrapper package
+# is not in this checkout (e.g. sparse clone).
+if [ "$INSTALL_SIM" = "true" ] && [ "$NO_MOLMOSPACES" != "true" ] && [ -d "$ROOT_DIR/packages/emet_molmospaces" ]; then
+    INSTALL_MOLMOSPACES="true"
+fi
+
 [[ "$INSTALL_SIM" == "true" ]] && EXTRAS="$EXTRAS,sim"
 
 echo "=============================================="
 echo "         INSTALLING STRETCH AI (uv)"
 echo "=============================================="
-echo "Options: CPU_ONLY=$CPU_ONLY, NO_SAM2=$NO_SAM2, INSTALL_SIM=$INSTALL_SIM, EXTRAS=$EXTRAS, MOLMOSPACES=$INSTALL_MOLMOSPACES"
-echo "         -y/--yes    = non-interactive (apt, link emet); does NOT imply MolmoSpaces — pass --molmospaces or --all"
+echo "Options: CPU_ONLY=$CPU_ONLY, NO_SAM2=$NO_SAM2, INSTALL_SIM=$INSTALL_SIM, EXTRAS=$EXTRAS, MOLMOSPACES=$INSTALL_MOLMOSPACES, NO_MOLMOSPACES=$NO_MOLMOSPACES"
+echo "         -y/--yes    = non-interactive (apt, link emet)"
 echo "         --all       = install everything (sim + molmospaces + dynamem); overridable by --no-sim etc."
 echo "         --sim       = install sim (Robocasa + robosuite; default). Use --no-sim to skip."
-echo "         --molmospaces = create .venv-molmospaces for MolmoSpaces (scenes + rby1 robot)"
+echo "         --molmospaces = force MolmoSpaces venv; with default sim, wrapper installs automatically if packages/emet_molmospaces exists"
+echo "         --no-molmospaces = skip MolmoSpaces venv even when sim is installed (lighter / CI)"
 echo "         --clean     = remove and re-clone third_party/robosuite, robosuite_models, robocasa (only if needed; normally we update in place)"
 echo "Root: $ROOT_DIR"
 echo "---------------------------------------------"
@@ -281,6 +297,14 @@ echo "  source .venv/bin/activate"
 echo ""
 echo "Run the CLI:  emet  (if linked above) or  uv run emet"
 echo ""
+if [ "$INSTALL_SIM" = "true" ] && [ "$INSTALL_MOLMOSPACES" != "true" ]; then
+    if [ "$NO_MOLMOSPACES" = "true" ]; then
+        echo "MolmoSpaces: skipped (--no-molmospaces). For \`emet serve mujoco --molmospaces-*\` run:  ./install.sh --molmospaces -y"
+    elif [ ! -d "$ROOT_DIR/packages/emet_molmospaces" ]; then
+        echo "MolmoSpaces: packages/emet_molmospaces not in tree — wrapper not installed. Clone full repo or run:  ./install.sh --molmospaces -y"
+    fi
+    echo ""
+fi
 echo "Optional: init all submodules (including ok-robot for advanced workflows):"
 echo "  emet install submodules"
 echo ""

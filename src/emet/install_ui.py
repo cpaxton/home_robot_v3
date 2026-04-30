@@ -223,7 +223,7 @@ def _check_molmospaces(root: Path) -> AssetStatus:
             name="MolmoSpaces wrapper (.venv-molmospaces / emet-molmospaces)",
             description="Scenes + rby1 robot; thin wrapper (molmo-spaces, mujoco 3.4).",
             status="missing",
-            detail="Run: ./install.sh --molmospaces -y  or  emet install full -y --molmospaces  (or --all)",
+            detail="Run: ./install.sh -y  (sim + MolmoSpaces wrapper by default) or  ./install.sh --molmospaces -y",
         )
     return AssetStatus(
         id="molmospaces",
