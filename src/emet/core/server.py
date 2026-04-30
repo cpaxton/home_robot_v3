@@ -235,11 +235,14 @@ class BaseZmqServer(CommsNode, ABC):
                 action_step = action.get("step", -1)
                 # Always apply ``xyt`` (navigation): duplicate-step filtering can drop a goal while
                 # the client still advanced its step counter, leaving ``at_goal`` stuck False.
+                # Same for ``posture`` / ``control_mode``: the client may repeat the same step id
+                # while mode-switching; skipping drops real commands.
                 if (
                     self.skip_duplicate_steps
                     and action_step <= self._last_step
                     and "xyt" not in action
                     and "posture" not in action
+                    and "control_mode" not in action
                 ):
                     logger.warning(f"Skipping duplicate action {action_step}, last step = {self._last_step}")
                     continue

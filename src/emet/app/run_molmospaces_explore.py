@@ -18,6 +18,50 @@ from emet.molmospaces.episode_writer import (
 from emet.molmospaces.exploration import MolmoExploreSession, build_graph_sidecar
 
 
+def _sync_molmospaces_metadata_from_zmq_session(
+    robot: object,
+    *,
+    cli_scene: str,
+    cli_split: str,
+    cli_index: int,
+    episode_fields: dict[str, object],
+) -> None:
+    """Prefer ``emet_session.environment`` from the running ZMQ server for episode metadata; warn on CLI mismatch."""
+    get_sess = getattr(robot, "get_emet_session", None)
+    if not callable(get_sess):
+        return
+    sess = get_sess()
+    if not sess:
+        click.echo(
+            "Note: no ``emet_session`` on ZMQ messages (older sim?). Using CLI MolmoSpaces metadata for the episode.",
+            err=True,
+        )
+        return
+    env = sess.get("environment")
+    if not isinstance(env, dict) or env.get("kind") != "molmospaces":
+        return
+    srv_scene = str(env.get("scene", cli_scene))
+    srv_split = str(env.get("split", cli_split))
+    srv_index = int(env.get("index", cli_index))
+    warn: list[str] = []
+    if srv_scene != cli_scene:
+        warn.append(f"scene (server={srv_scene!r} vs CLI={cli_scene!r})")
+    if srv_split != cli_split:
+        warn.append(f"split (server={srv_split!r} vs CLI={cli_split!r})")
+    if srv_index != cli_index:
+        warn.append(f"index (server={srv_index} vs CLI={cli_index})")
+    if warn:
+        click.echo(
+            "Warning: ``emet_session`` MolmoSpaces environment differs from CLI: "
+            + "; ".join(warn)
+            + ". Episode JSON will follow the server.",
+            err=True,
+        )
+    episode_fields["molmospaces_scene"] = srv_scene
+    episode_fields["molmospaces_split"] = srv_split
+    episode_fields["molmospaces_index"] = srv_index
+
+
 @click.command()
 @click.option("--robot-ip", "--robot_ip", default="127.0.0.1", show_default=True)
 @click.option(
@@ -141,6 +185,14 @@ def main(
         "capture_hz": float(capture_hz),
         "navigate_every": int(navigate_every),
     }
+    _sync_molmospaces_metadata_from_zmq_session(
+        robot,
+        cli_scene=molmospaces_scene,
+        cli_split=molmospaces_split,
+        cli_index=int(molmospaces_index),
+        episode_fields=episode_fields,
+    )
+
     writer = MolmoEpisodeWriter(
         output_dir,
         episode_fields=episode_fields,
@@ -164,6 +216,7 @@ def main(
         nav_timeout=nav_timeout,
         graph_memory=graph_memory,
         sensor_builder=sensor_builder,
+        progress_echo=click.echo,
     )
 
     try:
@@ -176,6 +229,7 @@ def main(
             extra["graph_report"] = str(rp)
         writer.finalize(extra=extra or None)
         click.echo(f"Wrote episode to {output_dir} ({writer.frame_count} frames).")
+        click.echo(f"Progress log: {Path(output_dir) / 'explore_progress.txt'}")
         if getattr(session, "navigation_goal_timeouts", 0) > 0:
             n = session.navigation_goal_timeouts
             click.echo(

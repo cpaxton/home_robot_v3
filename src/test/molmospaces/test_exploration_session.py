@@ -37,6 +37,10 @@ def test_molmo_explore_session_records_frames(tmp_path: Path) -> None:
     writer.finalize()
 
     assert writer.frame_count == 3
+    prog = (tmp_path / "explore_progress.txt").read_text(encoding="utf-8")
+    assert "explore started" in prog
+    assert "first frame saved" in prog
+    assert "explore loop finished" in prog
     lines = (tmp_path / "metadata.jsonl").read_text().strip().splitlines()
     assert len(lines) == 3
     assert robot.get_observation.call_count == 3

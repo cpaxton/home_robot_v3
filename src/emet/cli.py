@@ -314,6 +314,17 @@ def serve(
             args.append("--use-glx")
         if scene_path:
             args.extend(["--scene_path", scene_path])
+        if molmospaces_scene:
+            args.extend(
+                [
+                    "--molmospaces-session-scene",
+                    molmospaces_scene,
+                    "--molmospaces-session-split",
+                    molmospaces_split,
+                    "--molmospaces-session-index",
+                    str(molmospaces_index),
+                ]
+            )
         args.extend(["--seed", str(seed)])
         if port_offset:
             args.extend(["--port-offset", str(port_offset)])

@@ -35,7 +35,12 @@ import emet.utils.compression as compression
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient, ControlMode
-from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY, read_emet_robot_id, robot_ids_match
+from emet.core.zmq_protocol import (
+    EMET_ZMQ_ROBOT_ID_KEY,
+    emet_session_cache_update,
+    read_emet_robot_id,
+    robot_ids_match,
+)
 from emet.robots.base import RobotSpec
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
@@ -104,6 +109,9 @@ class GenericZmqClient(AbstractRobotClient):
 
         self._obs_lock = Lock()
         self._act_lock = Lock()
+
+        self._emet_session_cache: dict[str, Any] | None = None
+        self._emet_session_cache_step: int = -1
 
         self._base_xyt = np.zeros(3)
         self._nav_goal_timeout_log_streak = 0
@@ -242,10 +250,27 @@ class GenericZmqClient(AbstractRobotClient):
             if log_startup_timeout:
                 logger.error(self._zmq_startup_failure_message())
             return False
+        self._refresh_emet_session_from_streams()
         if not self._verify_emet_robot_id():
             return False
         self._started = True
         return True
+
+    def _refresh_emet_session_from_streams(self) -> None:
+        with self._obs_lock:
+            for msg in (self._obs, self._state, self._servo):
+                self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
+                    self._emet_session_cache,
+                    self._emet_session_cache_step,
+                    msg,
+                )
+
+    def get_emet_session(self) -> dict[str, Any] | None:
+        """Copy of the latest ``emet_session`` block from the server, if any (schema v1)."""
+        with self._obs_lock:
+            if self._emet_session_cache is None:
+                return None
+            return dict(self._emet_session_cache)
 
     def stop(self) -> None:
         self._finish = True
@@ -256,6 +281,8 @@ class GenericZmqClient(AbstractRobotClient):
         self._servo = None
         self._base_xyt = np.zeros(3)
         self._base_control_mode = ControlMode.IDLE
+        self._emet_session_cache = None
+        self._emet_session_cache_step = -1
 
     # -- Receive loops --------------------------------------------------------
 
@@ -278,6 +305,11 @@ class GenericZmqClient(AbstractRobotClient):
                     self._last_step = output["step"]
                 if "gps" in output and "compass" in output:
                     self._base_xyt = np.array([output["gps"][0], output["gps"][1], output["compass"][0]])
+                self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
+                    self._emet_session_cache,
+                    self._emet_session_cache_step,
+                    output,
+                )
 
     def _state_loop(self) -> None:
         while not self._finish:
@@ -292,6 +324,11 @@ class GenericZmqClient(AbstractRobotClient):
                 self._state = msg
                 if "step" in msg:
                     self._last_step = msg["step"]
+                self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
+                    self._emet_session_cache,
+                    self._emet_session_cache_step,
+                    msg,
+                )
 
     def _servo_loop(self) -> None:
         while not self._finish:
@@ -304,6 +341,11 @@ class GenericZmqClient(AbstractRobotClient):
                 continue
             with self._obs_lock:
                 self._servo = msg
+                self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
+                    self._emet_session_cache,
+                    self._emet_session_cache_step,
+                    msg,
+                )
 
     # -- Observations ---------------------------------------------------------
 
@@ -339,13 +381,26 @@ class GenericZmqClient(AbstractRobotClient):
                 return np.array(bp)
         return self._base_xyt.copy()
 
+    def _nav_goal_reset_seen(self) -> bool:
+        """True if any cached ZMQ message reports ``at_goal`` false (server cleared stale true)."""
+        with self._obs_lock:
+            chunks = (self._state, self._obs, self._servo)
+        for msg in chunks:
+            if msg is None:
+                continue
+            if not bool(msg.get("at_goal", False)):
+                return True
+        return False
+
     def at_goal(self) -> bool:
-        state = self._state
-        if state is not None:
-            return state.get("at_goal", False)
-        obs = self._obs
-        if obs is not None:
-            return obs.get("at_goal", False)
+        """True if any of state / full-obs / servo reports at goal (ZMQ CONFLATE can leave one socket stale)."""
+        with self._obs_lock:
+            chunks = (self._state, self._obs, self._servo)
+        for msg in chunks:
+            if msg is None:
+                continue
+            if bool(msg.get("at_goal", False)):
+                return True
         return False
 
     def get_observation(self, max_iter: int = 5) -> Observations | None:
@@ -415,7 +470,7 @@ class GenericZmqClient(AbstractRobotClient):
             # Avoid succeeding immediately on a stale ``at_goal`` from the previous navigation
             # before the server recv thread clears it for the new goal.
             t_clear = timeit.default_timer()
-            while self.at_goal() and timeit.default_timer() - t_clear < 1.0:
+            while not self._nav_goal_reset_seen() and timeit.default_timer() - t_clear < 1.0:
                 time.sleep(0.01)
             return self._wait_at_goal(timeout=timeout or 30.0, target_xyt=xyt)
         return True

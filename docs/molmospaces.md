@@ -129,6 +129,8 @@ Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. T
 
 Use `--port-offset` on both server and agent if default ZMQ ports are busy. The agent uses **`GenericZmqClient`** for `rby1`, matching `emet run dynamem --robot rby1`.
 
+The ZMQ server publishes a static **`emet_session`** block (scene / robot / capabilities) on every message; see [zmq_session_metadata.md](zmq_session_metadata.md). `emet run molmospaces-explore` prefers this metadata for `episode.json` when the server reports a MolmoSpaces environment.
+
 ## Exploration dataset + NeRF (phase 1)
 
 Record posed RGB (and optional depth) while the robot moves in a MolmoSpaces-backed scene. This uses the **same ZMQ workflow** as above: start the MuJoCo server in one terminal, then run the explorer in another.

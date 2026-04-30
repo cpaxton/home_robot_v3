@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 import random
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -55,9 +56,11 @@ class MolmoExploreSession:
         nav_timeout: float = 90.0,
         graph_memory: GraphEQAMemory | None = None,
         sensor_builder: SensorGraphBuilder | None = None,
+        progress_echo: Callable[[str], None] | None = None,
     ) -> None:
         self.robot = robot
         self.writer = writer
+        self._progress_echo = progress_echo
         self._xmin, self._xmax, self._ymin, self._ymax = goal_xy_bounds
         self.navigate_every = max(1, int(navigate_every))
         self.nav_timeout = float(nav_timeout)
@@ -148,24 +151,46 @@ class MolmoExploreSession:
             except Exception:
                 pass
 
-        for _ in range(int(steps)):
-            t0 = time.monotonic()
-            self._navigate_if_due()
-            time.sleep(sleep_after_nav)
+        progress_path = self.writer.root / "explore_progress.txt"
 
-            obs = self._get_observation_safe()
-            if obs is None:
-                time.sleep(dt)
+        def _emit_progress(message: str) -> None:
+            line = f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {message}\n"
+            progress_fp.write(line)
+            progress_fp.flush()
+            if self._progress_echo is not None:
+                self._progress_echo(message)
+
+        with progress_path.open("w", encoding="utf-8") as progress_fp:
+            _emit_progress(f"explore started (steps={int(steps)}, capture_hz={capture_hz:.3g})")
+
+            for _ in range(int(steps)):
+                t0 = time.monotonic()
+                self._navigate_if_due()
+                time.sleep(sleep_after_nav)
+
+                obs = self._get_observation_safe()
+                if obs is None:
+                    time.sleep(dt)
+                    self._step_idx += 1
+                    continue
+
+                self.writer.write_frame(obs)
+                self._maybe_update_graph(obs)
                 self._step_idx += 1
-                continue
+                if self._step_idx == 1:
+                    _emit_progress(f"first frame saved (saved_frames={self.writer.frame_count})")
+                elif self._step_idx % 10 == 0:
+                    _emit_progress(
+                        f"step {self._step_idx} / {int(steps)} (saved_frames={self.writer.frame_count})"
+                    )
 
-            self.writer.write_frame(obs)
-            self._maybe_update_graph(obs)
-            self._step_idx += 1
+                elapsed = time.monotonic() - t0
+                if elapsed < dt:
+                    time.sleep(dt - elapsed)
 
-            elapsed = time.monotonic() - t0
-            if elapsed < dt:
-                time.sleep(dt - elapsed)
+            _emit_progress(
+                f"explore loop finished (saved_frames={self.writer.frame_count}, step_index={self._step_idx})"
+            )
 
     def _get_observation_safe(self) -> Observations | None:
         go = getattr(self.robot, "get_observation", None)

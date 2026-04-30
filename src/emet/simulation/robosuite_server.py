@@ -25,7 +25,12 @@ from overrides import override
 import emet.utils.compression as compression
 import emet.utils.logger as log
 from emet.core.server import BaseZmqServer
-from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY
+from emet.core.zmq_protocol import (
+    CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
+    EMET_ZMQ_ROBOT_ID_KEY,
+    EMET_ZMQ_SESSION_KEY,
+    EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
+)
 from emet.robots.base import RobotSpec
 from emet.utils.geometry import xyt_global_to_base
 
@@ -48,6 +53,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         scene_xml: str | None = None,
         scene_model: mujoco.MjModel | None = None,
         simulation_rate: int = 80,
+        environment: dict[str, Any] | None = None,
+        scene_source_basename: str | None = None,
+        session_extra: dict[str, Any] | None = None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -55,6 +63,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._scene_xml = scene_xml
         self._scene_model = scene_model
         self.simulation_rate = simulation_rate
+        self._environment_descriptor = dict(environment) if environment else None
+        self._scene_source_basename = scene_source_basename
+        self._session_extra = dict(session_extra) if session_extra else None
 
         self._mjmodel: mujoco.MjModel | None = None
         self._mjdata: mujoco.MjData | None = None
@@ -63,6 +74,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._running = False
         self.control_mode = "navigation"
         self._at_goal = False
+        self._emet_session: dict[str, Any] | None = None
 
     @property
     def spec(self) -> RobotSpec:
@@ -86,6 +98,48 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._mjdata = mujoco.MjData(self._mjmodel)
         with self._mj_lock:
             mujoco.mj_forward(self._mjmodel, self._mjdata)
+
+    def _build_emet_session(self, *, robocasa: bool) -> dict[str, Any]:
+        mj_name: str | None = None
+        if self._mjmodel is not None:
+            try:
+                if self._mjmodel.nnames > 0:
+                    n0 = self._mjmodel.names[0]
+                    mj_name = n0.decode("utf-8") if isinstance(n0, (bytes, bytearray)) else str(n0)
+            except Exception:
+                mj_name = None
+        if self._environment_descriptor:
+            env = dict(self._environment_descriptor)
+        elif robocasa:
+            env = {"kind": "robocasa"}
+        else:
+            env = {"kind": "default_table"}
+        caps: dict[str, Any] = {
+            "teleport_base": True,
+            "depth": bool(self._spec.camera_names),
+            "num_cameras": len(self._spec.camera_names),
+            "dof": int(self._spec.dof),
+        }
+        session: dict[str, Any] = {
+            EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY: CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
+            "runtime_kind": "robosuite_sim",
+            "is_simulation": True,
+            EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
+            "capabilities": caps,
+            "environment": env,
+        }
+        if mj_name:
+            session["mjcf_model_name"] = mj_name
+        if self._scene_source_basename:
+            session["scene_source_basename"] = self._scene_source_basename
+        if self._session_extra:
+            session.update(self._session_extra)
+        return session
+
+    def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
+        if self._emet_session is not None:
+            message[EMET_ZMQ_SESSION_KEY] = self._emet_session
+        return message
 
     def get_scene_summary(self) -> str:
         """Return a short text summary of the scene: robot, position, and notable objects."""
@@ -288,9 +342,13 @@ class RobosuiteZmqServer(BaseZmqServer):
                         wx, wy, wt = float(world[0]), float(world[1]), float(world[2])
                     if not self._teleport_base_world_xyt(wx, wy, wt):
                         logger.warning(
-                            "Navigation xyt=%s: no free joint on base_link '%s'; cannot teleport.",
-                            action["xyt"],
-                            self._spec.base_link_name,
+                            f"Navigation xyt={action['xyt']!r}: no free joint on base_link "
+                            f"{self._spec.base_link_name!r}; cannot teleport."
+                        )
+                    else:
+                        logger.info(
+                            f"Sim navigation: teleported base to x={wx:.3f} y={wy:.3f} theta={wt:.3f} "
+                            f"(at_goal=True after apply)."
                         )
         except Exception as e:
             if has_xyt:
@@ -346,14 +404,14 @@ class RobosuiteZmqServer(BaseZmqServer):
             "lidar_timestamp": None,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
         }
-        return message
+        return self._attach_emet_session(message)
 
     @override
     def get_state_message(self) -> dict[str, Any]:
         if self._mjdata is None:
             return None
         q, dq, eff = self.get_joint_state()
-        return {
+        message = {
             "base_pose": self.get_base_pose(),
             "ee_pose": np.eye(4),
             "joint_positions": q,
@@ -366,6 +424,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "step": self._last_step,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
         }
+        return self._attach_emet_session(message)
 
     @override
     def get_servo_message(self) -> dict[str, Any]:
@@ -400,9 +459,9 @@ class RobosuiteZmqServer(BaseZmqServer):
             "step": self._last_step,
             "at_goal": self._at_goal,
         }
-        return message
+        return self._attach_emet_session(message)
 
-    def _sim_loop(self):
+    def _sim_loop(self) -> None:
         """Step the MuJoCo simulation at the configured rate."""
         while self._running:
             with self._mj_lock:
@@ -423,9 +482,11 @@ class RobosuiteZmqServer(BaseZmqServer):
             ) as viewer:
                 logger.info("MuJoCo passive viewer open (close window or Ctrl+C to stop).")
                 while self._running and viewer.is_running():
+                    # Keep mj_step and viewer.sync under the same lock: sync uses mj_copyDataVisual
+                    # and must not overlap Renderer / mj_forward on other ZMQ threads.
                     with self._mj_lock:
                         mujoco.mj_step(self._mjmodel, self._mjdata)
-                    viewer.sync()
+                        viewer.sync()
                     time.sleep(dt)
         except Exception as e:
             logger.warning(
@@ -449,6 +510,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._load_model()
         self._running = True
         self._initial_xyt = self.get_base_xyt()
+        self._emet_session = self._build_emet_session(robocasa=robocasa)
 
         # Print scene summary before any rendering (so it appears in headless / no-DISPLAY runs)
         summary = self.get_scene_summary()
