@@ -168,3 +168,6 @@ debug*/
 */piper_tts/
 piper_tts/
 *.ts
+
+# Bytecode dirs: after any `!` negations (e.g. Flask instance/ exception for emet.mapping.instance) so __pycache__ stays ignored.
+**/__pycache__/
