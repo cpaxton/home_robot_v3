@@ -227,6 +227,8 @@ class GenericZmqClient(AbstractRobotClient):
                 continue
             self._seq_id += 1
             output["rgb"] = compression.from_jpg(output["rgb"])
+            if "rgb_right" in output and output["rgb_right"] is not None:
+                output["rgb_right"] = compression.from_jpg(output["rgb_right"])
             raw_depth = output.get("depth")
             if raw_depth is None:
                 if not self._allow_missing_depth:
@@ -339,8 +341,12 @@ class GenericZmqClient(AbstractRobotClient):
             depth=depth,
             camera_K=camera_K,
             camera_pose=camera_pose,
+            head_rgb_right=obs.get("rgb_right"),
+            head_camera_K_right=obs.get("camera_K_right"),
+            head_camera_pose_right=obs.get("camera_pose_right"),
             ee_pose=ee_pose,
             joint=joint,
+            joint_velocities=obs.get("joint_velocities"),
             gps=gps,
             compass=compass,
         )
