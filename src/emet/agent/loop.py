@@ -42,6 +42,7 @@ from emet.memory.backend import get_memory_backend
 from emet.memory.utils import print_memory_view_help_on_quit
 from emet.robots import ROBOT_REGISTRY
 from emet.utils.logger import Logger
+from emet.utils.vram_debug import print_vram_snapshot
 
 logger = Logger(__name__)
 
@@ -344,12 +345,15 @@ def run_agent_with_robot(
         embodied_agent=embodied_overlay,
         **_exec_kwargs,
     )
+    print_vram_snapshot("after_dyn_av_executor_init_siglip_detector_voxel")
 
     if eqa:
         print(
             colored(
                 "EQA/DynaMem: SigLIP, optional SAM3/DINO, and GraphEQA Qwen3.5-VL load lazily on the first "
-                "robot update—separate HF checkpoints from text --llm (each loads once per process).",
+                "robot update—separate HF checkpoints from text --llm (each loads once per process). "
+                "VRAM milestones: EMET_VRAM_DEBUG=1 or --debug-vram (with --debug-models). "
+                "One Qwen3-VL for agent+captions: --llm qwen3-vl-eqa --eqa --share-memory-vllm.",
                 "cyan",
             )
         )
@@ -439,6 +443,12 @@ def run_agent_with_robot(
     openai_tools_param = None
     if use_llm:
         try:
+            if device == "cuda":
+                from emet.utils.vram_debug import cuda_pre_llm_memory_notice
+
+                pre = cuda_pre_llm_memory_notice(device=device)
+                if pre:
+                    print(colored(pre, "yellow"), flush=True)
             print(
                 colored(
                     "Loading LLM (HF hub progress bars off; Discord gateway logs at WARNING). …",
@@ -446,7 +456,9 @@ def run_agent_with_robot(
                 )
             )
             prompt_builder = AgentPromptBuilder(tools=tools, name=agent_name, context=context)
-            llm_client = get_llm_client(llm, prompt=prompt_builder, device=device)
+            print_vram_snapshot("before_agent_llm_load")
+            llm_client = get_llm_client(llm, prompt=prompt_builder, device=device, parameters=parameters)
+            print_vram_snapshot("after_agent_llm_load")
             if hasattr(llm_client, "max_tokens"):
                 llm_client.max_tokens = max_tokens
             from emet.llms.openai_client import OpenaiClient
@@ -457,6 +469,26 @@ def run_agent_with_robot(
             logger.warning("LLM failed to load (%s):", llm, e)
             print(colored("Agent mode requires an LLM; it failed to load.", "red"))
             print(colored("Fix the LLM (e.g. --llm, device) or run with --no-llm for letter commands only.", "yellow"))
+            if use_llm and device == "cuda" and "out of memory" in str(e).lower():
+                try:
+                    from emet.utils.vram_debug import (
+                        cuda_oom_followup_hint,
+                        format_cuda_torch_state_line,
+                    )
+
+                    post = format_cuda_torch_state_line(label="after LLM load failure", device_index=0)
+                    if post:
+                        print(colored(post, "yellow"), flush=True)
+                    print(colored(cuda_oom_followup_hint(llm_key=llm), "yellow"), flush=True)
+                    try:
+                        import torch
+
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
             robot_client.stop()
             chat_log.close()
             return
@@ -466,6 +498,10 @@ def run_agent_with_robot(
         if getattr(vm, "_eqa_pending", None) is not None:
             if isinstance(llm_client, AbstractVLLMClient):
                 vm.bind_shared_vllm_from_agent(llm_client)
+                print_vram_snapshot(
+                    "after_bind_shared_vllm_from_agent",
+                    extra="DynaMem caption/EQA uses the same VL object as --llm",
+                )
             else:
                 try:
                     import torch
@@ -475,6 +511,14 @@ def run_agent_with_robot(
                 except Exception:
                     pass
                 vm.materialize_local_eqa_vllm()
+                logger.info(
+                    "EQA: loaded DynaMem VLM from yaml (agent --llm is not a shareable VL client). "
+                    "To reuse one Qwen3-VL for chat+captions: --llm qwen3-vl-eqa with --eqa --share-memory-vllm."
+                )
+                print_vram_snapshot(
+                    "after_materialize_local_eqa_vllm",
+                    extra="second local VL vs agent text LLM; see log line above",
+                )
 
     if use_llm and llm_client is not None:
         print_embodied_model_report(
@@ -495,7 +539,8 @@ def run_agent_with_robot(
                 "Tool debug: raw tool_calls JSON, full tool strings, executor command list, "
                 "[Tool results] text sent back to the LLM, and send_image array stats. "
                 "Unset EMET_AGENT_TOOL_DEBUG or omit --debug-tools to disable. "
-                "For which-model tracing: EMET_AGENT_MODEL_DEBUG=1 or ``emet run agent --debug-models``.",
+                "For which-model tracing: EMET_AGENT_MODEL_DEBUG=1 or ``emet run agent --debug-models``. "
+                "VRAM snapshots: EMET_VRAM_DEBUG=1 or ``--debug-vram`` (also enabled with --debug-models).",
                 "yellow",
             )
         )

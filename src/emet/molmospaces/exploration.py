@@ -43,6 +43,11 @@ class MolmoExploreSession:
     """
     Connect to a running MuJoCo ZMQ server, capture posed RGB, and optionally random-walk.
 
+    Random goals call ``move_base_to(..., relative=False)`` with spawn-relative targets; the
+    non-Stretch MuJoCo server (``RobosuiteZmqServer``) follows them with **velocity-controlled**
+    base motion instead of teleporting. Use action ``nav_teleport: true`` on the server if you
+    need an instant snap. Keep ``goal_xy_bounds`` modest so goals stay inside walkable space.
+
     Expects ``robot.get_observation()`` (e.g. ``GenericZmqClient`` / ``StretchZmqClient``).
     """
 
@@ -51,7 +56,7 @@ class MolmoExploreSession:
         robot: AbstractRobotClient,
         writer: MolmoEpisodeWriter,
         *,
-        goal_xy_bounds: tuple[float, float, float, float] = (-4.0, 4.0, -4.0, 4.0),
+        goal_xy_bounds: tuple[float, float, float, float] = (-1.5, 1.5, -1.5, 1.5),
         navigate_every: int = 5,
         nav_timeout: float = 90.0,
         graph_memory: GraphEQAMemory | None = None,

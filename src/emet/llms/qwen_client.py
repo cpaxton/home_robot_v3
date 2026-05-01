@@ -155,12 +155,16 @@ class Qwen25Client(AbstractLLMClient):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-        # When using quantization, omit torch_dtype and use device_map so bitsandbytes loads correctly
+        # When using quantization, omit torch_dtype and use device_map so bitsandbytes loads correctly.
+        # Single-GPU ``{"": 0}`` avoids ``device_map="auto"`` dispatching layers to CPU/disk (spikes VRAM / errors)
+        # and matches Qwen3-VL int4 loading elsewhere in emet.
         load_kwargs = dict(model_kwargs)
         if quantization_config is not None:
             load_kwargs.pop("dtype", None)
             load_kwargs.pop("torch_dtype", None)
-            if device != "cpu":
+            if device == "cuda":
+                load_kwargs["device_map"] = {"": 0}
+            elif device != "cpu":
                 load_kwargs["device_map"] = "auto"
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -168,15 +172,22 @@ class Qwen25Client(AbstractLLMClient):
         )
         if device == "cpu":
             self.model = self.model.to("cpu")
-        # Pipeline device: 0 or "cuda" for GPU, -1 for CPU
+        # Pipeline: do not pass ``device=`` when the model already uses ``device_map`` (HF warns; can
+        # duplicate GPU memory). Do not pass ``model_kwargs`` (quantization_config) again after load.
         pipe_device = -1 if device == "cpu" else (0 if device == "cuda" else device)
-        self.pipe = pipeline(
-            "text-generation",
-            model=self.model,
-            tokenizer=self.tokenizer,
-            device=pipe_device,
-            model_kwargs=model_kwargs,
-        )
+        if quantization_config is not None and device == "cuda":
+            self.pipe = pipeline(
+                "text-generation",
+                model=self.model,
+                tokenizer=self.tokenizer,
+            )
+        else:
+            self.pipe = pipeline(
+                "text-generation",
+                model=self.model,
+                tokenizer=self.tokenizer,
+                device=pipe_device,
+            )
 
     def __call__(self, command: str, verbose: bool = False):
         if self.is_first_message():

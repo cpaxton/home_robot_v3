@@ -144,7 +144,7 @@ def get_prompt_choices():
 
 def get_llm_choices():
     """Return a list of available LLM clients."""
-    return sorted(set(llms.keys()) | set(QWEN_VL_PRESETS.keys()))
+    return sorted(set(llms.keys()) | set(QWEN_VL_PRESETS.keys()) | {"qwen3-vl-eqa"})
 
 
 def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwargs) -> AbstractLLMClient:
@@ -153,10 +153,15 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
     Args:
         client_type: The type of client to create.
         kwargs: Additional keyword arguments to pass to the client constructor.
+            ``parameters`` (dynav :class:`~emet.core.parameters.Parameters`) is consumed
+            only by ``qwen3-vl-eqa`` and is **not** forwarded to other clients.
 
     Returns:
         An LLM client.
     """
+    kwargs = dict(kwargs)
+    parameters = kwargs.pop("parameters", None)
+
     if client_type.lower() in GEMMA4_PRESETS:
         key = client_type.lower()
         return Gemma4AnyToAnyClient(prompt, hf_model_id=GEMMA4_PRESETS[key], **kwargs)
@@ -180,6 +185,30 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
             model_size=preset["model_size"],
             hf_model_id=preset.get("hf_model_id"),
             **kwargs,
+        )
+    elif (client_type or "").strip().lower() == "qwen3-vl-eqa":
+        # One Qwen3-VL load from dynav ``eqa:`` — same class as DynaMem captions so ``bind_shared_vllm_from_agent`` can dedup.
+        from emet.core.parameters import get_parameters
+        from emet.llms.vllm_factory import create_dynamem_vllm
+
+        p = parameters if parameters is not None else get_parameters("dynav_config.yaml")
+        eqa_cfg = p.get("eqa", {}) or {}
+        if not isinstance(eqa_cfg, dict):
+            eqa_cfg = {}
+        vl_family = str(eqa_cfg.get("vl_family", "qwen3_vl") or "qwen3_vl").strip()
+        hf_id = eqa_cfg.get("vl_hf_model_id")
+        vl_sz = str(eqa_cfg.get("vl_model_size", "4B") or "4B")
+        vl_tok = int(eqa_cfg.get("vl_max_tokens", 512) or 512)
+        vl_q = eqa_cfg.get("vl_quantization", "int4")
+        dev = str(kwargs.get("device", "cuda"))
+        return create_dynamem_vllm(
+            vl_family,
+            hf_model_id=hf_id,
+            vl_model_size=vl_sz,
+            max_tokens=vl_tok,
+            device=dev,
+            quantization=vl_q,
+            prompt=prompt,
         )
     elif "qwen" in client_type:
         # Parse model size and fine-tuning from client_type

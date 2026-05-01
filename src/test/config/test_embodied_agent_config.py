@@ -26,8 +26,8 @@ def test_load_overlay_missing_key_defaults():
         path = f.name
     try:
         cfg = load_embodied_agent_overlay(path)
-        assert cfg.open_vocab_scene_graph.enabled is True
-        assert cfg.graph_eqa_memory.enabled is True
+        assert cfg.open_vocab_scene_graph.enabled is False
+        assert cfg.graph_eqa_memory.enabled is False
     finally:
         Path(path).unlink(missing_ok=True)
 
@@ -40,7 +40,7 @@ def test_load_overlay_partial_override():
         cfg = load_embodied_agent_overlay(path)
         assert cfg.graph_eqa_memory.enabled is False
         assert cfg.graph_eqa_memory.use_instance_graph is False
-        assert cfg.open_vocab_scene_graph.enabled is True
+        assert cfg.open_vocab_scene_graph.enabled is False
     finally:
         Path(path).unlink(missing_ok=True)
 
@@ -51,6 +51,7 @@ def test_decode_empty_dict_all_defaults():
     cfg = draccus.decode(EmbodiedAgentConfig, {})
     assert isinstance(cfg, EmbodiedAgentConfig)
     assert cfg.open_vocab_scene_graph.config_name == "default_scene_graph"
+    assert cfg.open_vocab_scene_graph.enabled is False
 
 
 def test_legacy_embodied_agent_off():

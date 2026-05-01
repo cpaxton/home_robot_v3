@@ -32,3 +32,9 @@ def env_agent_camera_debug() -> bool:
     """When set, print per-frame stats for head cam / send_image / Discord (black-frame diagnosis)."""
     v = os.environ.get("EMET_AGENT_CAMERA_DEBUG", "").strip().lower()
     return v in _TRUE
+
+
+def env_vram_debug() -> bool:
+    """When set, print nvidia-smi + torch CUDA memory snapshots at major load milestones (see ``emet.utils.vram_debug``)."""
+    v = os.environ.get("EMET_VRAM_DEBUG", "").strip().lower()
+    return v in _TRUE
