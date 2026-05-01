@@ -62,14 +62,6 @@
             <camera name="camera_base" pos="0.0197 0 0.19663" 
                     quat="0.5416752 0.4545195 -0.4545195 -0.5416752" mode="fixed" fovy="80"/>
 
-            <!-- head body origin = URDF joint_head; mesh pos z offsets STL pivot after same euler as base_geom -->
-            <body name="head" pos="-0.040751 -0.0002 0.25882">
-              <inertial pos="0 0 0" mass="0.148" diaginertia="0.0002 0.0001 0.0002"/>
-              <geom name="head_geom" type="mesh" mesh="head_mesh" material="matt_black" pos="0 0 0.02175" euler="-1.5708 0 0"/>
-              <camera name="head_left" pos="0.04327 0.0297 -0.000275" mode="fixed" fovy="80" quat="0.6532815 0.2705981 -0.2705981 -0.6532815"/>
-              <camera name="head_right" pos="0.04327 -0.0303 -0.000275" mode="fixed" fovy="80" quat="0.6532815 0.2705981 -0.2705981 -0.6532815"/>
-            </body>
-            
             <body name="link1" pos="0.086 -0.05285 0.04025">
               <inertial pos="0 0 0" mass="0.065" diaginertia="0.0001 0.0001 0.0001"/>
               <joint name="joint1" type="hinge" axis="0 0 1" limited="true" range="-3.14 3.14" damping="5"/>
@@ -121,6 +113,14 @@
                   </body>
                 </body>
               </body>
+            </body>
+
+            <!-- Same subtree as URDF joint_head + head cameras; placed after arm like upstream maurice.mjcf link order + URDF joint ordering -->
+            <body name="head" pos="-0.040751 -0.0002 0.25882">
+              <inertial pos="0 0 0" mass="0.148" diaginertia="0.0002 0.0001 0.0002"/>
+              <geom name="head_geom" type="mesh" mesh="head_mesh" material="matt_black" pos="0 0 0.02175" euler="-1.5708 0 0"/>
+              <camera name="head_left" pos="0.04327 0.0297 -0.000275" mode="fixed" fovy="80" quat="0.6532815 0.2705981 -0.2705981 -0.6532815"/>
+              <camera name="head_right" pos="0.04327 -0.0303 -0.000275" mode="fixed" fovy="80" quat="0.6532815 0.2705981 -0.2705981 -0.6532815"/>
             </body>
           </body>
         </body>

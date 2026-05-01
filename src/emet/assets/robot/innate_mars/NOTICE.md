@@ -6,6 +6,11 @@ These meshes and `innate_mars.xml` are derived from the **Maurice** simulation p
 
 - `meshdir` in the MJCF was changed from a developer-specific absolute path to `meshdir="meshes"` (relative to this directory).
 - The ground-plane geom was renamed from `floor` to `maurice_floor` so the model can be merged with `scene_default.xml` without duplicate default geom names.
+- **Body order** under `base_link` matches the upstream Maurice MJCF: `link1` (full arm) first, then the **`head`** subtree. Upstream’s `maurice.mjcf` has no head; the head block is an Emet extension from `maurice.urdf` and is listed after the arm to mirror Innate’s arm-first MJCF and the URDF’s joint ordering.
+
+## Innate OS Docker simulation (reference)
+
+In the **innate-os** repository (e.g. `~/src/innate-os`), the documented flow is: `docker compose -f docker-compose.dev.yml build`, `up -d`, `exec innate zsh -l`, then `./scripts/launch_sim_in_tmux.zsh` (see root `README.md` and `SIMULATION_MODE.md`). That stack runs ROS 2 (Zenoh, RWS/rosbridge, nav, manipulation, etc.); **RViz** is the usual 3D view (often via noVNC on `http://localhost:8080/vnc.html`). The **authoritative** robot shape for that stack is `maurice_sim/urdf/maurice.urdf` (plus SRDF for the arm), not the MJCF. The upstream `maurice_sim/mjcf/maurice.mjcf` is for optional MuJoCo nodes (e.g. `maurice_sim/sim.py`) and historically contains **no `head` body**—only `camera_base` and `camera_arm`. Emet’s `innate_mars.xml` adds the head, head mesh, and `head_left` / `head_right` from the same URDF so our MuJoCo sim can render stereo and stay consistent with hardware/bridge camera names.
 
 ## License
 
