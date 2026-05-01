@@ -15,14 +15,80 @@ penetration using contact scoring and optional vertical refinement.
 from __future__ import annotations
 
 import math
+import os
 from collections.abc import Iterable
+from typing import Any
 
 import mujoco
 import numpy as np
 
+import emet.utils.logger as log
+
 # Reject XY where an upward ray finds nothing (open void) or only a glancing hit very close above
 # the probe (likely under a thin shelf / numerical noise).
 _MIN_UPWARD_CEILING_CLEARANCE_M = 0.15
+
+logger = log.Logger(__name__)
+
+
+def resolve_floor_geom_name(model: mujoco.MjModel) -> str | None:
+    """Best-effort walkable floor plane for iTHOR / Molmo / generic MJCF (not always named ``floor``)."""
+    for name in ("floor", "Floor", "ground", "Ground"):
+        if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name) >= 0:
+            return name
+    for g in range(model.ngeom):
+        if int(model.geom_type[g]) != mujoco.mjtGeom.mjGEOM_PLANE:
+            continue
+        if not (int(model.geom_contype[g]) or int(model.geom_conaffinity[g])):
+            continue
+        nm = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g)
+        if nm:
+            return str(nm)
+    return None
+
+
+def effective_floor_geom_name(model: mujoco.MjModel, floor_geom_name: str = "floor") -> str:
+    """Return *floor_geom_name* if present, else :func:`resolve_floor_geom_name` or the hint string."""
+    if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_geom_name) >= 0:
+        return floor_geom_name
+    resolved = resolve_floor_geom_name(model)
+    return resolved if resolved is not None else floor_geom_name
+
+
+def want_molmospaces_autoplace(
+    *,
+    environment: dict[str, Any] | None,
+    scene_source_basename: str | None,
+    molmospaces_autoplace_env: str | None = None,
+) -> bool:
+    """Whether to run MolmoSpaces-style free-base placement after MJCF load.
+
+    ``EMET_MOLMOSPACES_AUTOPLACE`` (default ``1``): ``0``/``false``/``no``/``off`` disables.
+    ``extended``/``2`` also enables heuristics for common renamed merges (e.g. *FloorPlan* / *ithor*
+    in the basename when the env value is ``extended`` or ``2``).
+    """
+    raw = (
+        molmospaces_autoplace_env
+        if molmospaces_autoplace_env is not None
+        else os.environ.get("EMET_MOLMOSPACES_AUTOPLACE", "1")
+    )
+    v = str(raw).strip().lower()
+    if v in ("0", "false", "no", "off"):
+        return False
+    env = environment
+    if env and env.get("kind") == "molmospaces":
+        return True
+    bn = (scene_source_basename or "").lower()
+    if bn.startswith("molmospaces_merged"):
+        return True
+    if "molmospaces" in bn or "mlspaces" in bn:
+        return True
+    if "merged" in bn and bn.endswith(".xml"):
+        return True
+    if v in ("extended", "2"):
+        if bn.endswith(".xml") and ("floorplan" in bn or "ithor" in bn):
+            return True
+    return False
 
 
 def _bodies_descending_from(model: mujoco.MjModel, root_body_id: int) -> set[int]:
@@ -81,13 +147,15 @@ def collision_scene_xy_clip_rect(
     floor_geom_name: str = "floor",
     margin: float = 0.42,
     max_geom_rbound: float = 15.0,
+    suppress_exterior_filter: bool = False,
 ) -> tuple[float, float, float, float] | None:
     """Rough axis-aligned (x,y) range of scene collision content (excludes robot and infinite floor).
 
     Uses each collision geom's world position and ``geom_rbound`` so we do not sample spawn XY
     on the ``floor`` plane beyond walls/room content (which would look like a black void).
     """
-    floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_geom_name)
+    floor_resolved = effective_floor_geom_name(model, floor_geom_name)
+    floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_resolved)
     xmin: float = 1e30
     xmax: float = -1e30
     ymin: float = 1e30
@@ -102,7 +170,7 @@ def collision_scene_xy_clip_rect(
             continue
         if _geom_body_is_robot(model, g, robot_bodies):
             continue
-        if _geom_exterior_heuristic(model, g):
+        if not suppress_exterior_filter and _geom_exterior_heuristic(model, g):
             continue
         rb = float(model.geom_rbound[g])
         if rb <= 0.0 or rb > max_geom_rbound:
@@ -140,9 +208,11 @@ def scene_collision_centroid_xy(
     robot_bodies: set[int],
     floor_geom_name: str = "floor",
     max_geom_rbound: float = 15.0,
+    suppress_exterior_filter: bool = False,
 ) -> tuple[float, float] | None:
     """Mean (x, y) of scene collision geoms (same filters as :func:`collision_scene_xy_clip_rect`)."""
-    floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_geom_name)
+    floor_resolved = effective_floor_geom_name(model, floor_geom_name)
+    floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_resolved)
     sx = 0.0
     sy = 0.0
     n = 0
@@ -155,7 +225,7 @@ def scene_collision_centroid_xy(
             continue
         if _geom_body_is_robot(model, g, robot_bodies):
             continue
-        if _geom_exterior_heuristic(model, g):
+        if not suppress_exterior_filter and _geom_exterior_heuristic(model, g):
             continue
         rb = float(model.geom_rbound[g])
         if rb <= 0.0 or rb > max_geom_rbound:
@@ -205,7 +275,8 @@ def walkable_floor_z_at_xy(
     A single downward ray often hits ceiling or furniture first; this walks the ray in
     segments until the ``floor`` geom is hit or the beam leaves a plausible band.
     """
-    floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_geom_name)
+    floor_resolved = effective_floor_geom_name(model, floor_geom_name)
+    floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_resolved)
     if floor_gid < 0:
         return None
     pnt = np.array([float(x), float(y), float(z_beam_top)], dtype=np.float64)
@@ -237,7 +308,8 @@ def worst_robot_nonfloor_contact_dist(
 
     Robot–robot pairs are ignored (internal links). Values < 0 mean penetration into scene clutter.
     """
-    floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_geom_name)
+    floor_resolved = effective_floor_geom_name(model, floor_geom_name)
+    floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_resolved)
     base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
     if floor_gid < 0 or base_bid < 0:
         return 0.0
@@ -411,6 +483,124 @@ def settle_free_base_z_to_floor(
     return best
 
 
+def _find_molmospaces_freejoint_xyz_pass(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    base_body_name: str,
+    floor_effective: str,
+    z_margins: tuple[float, ...],
+    min_nonfloor_clearance: float,
+    min_upward_clearance: float,
+    max_geom_rbound: float,
+    clip_erode_m: float,
+    suppress_exterior_filter: bool,
+) -> tuple[float, float, float] | None:
+    base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
+    robot_bodies: set[int] = set()
+    if base_bid >= 0:
+        robot_bodies = _bodies_descending_from(model, base_bid)
+    ray_exclude = int(base_bid) if base_bid >= 0 else -1
+    xy_clip_raw = collision_scene_xy_clip_rect(
+        model,
+        data,
+        robot_bodies=robot_bodies,
+        floor_geom_name=floor_effective,
+        max_geom_rbound=max_geom_rbound,
+        suppress_exterior_filter=suppress_exterior_filter,
+    )
+    xy_clip = _erode_xy_rect(xy_clip_raw, clip_erode_m) if xy_clip_raw is not None else None
+    if xy_clip is None:
+        xy_clip = xy_clip_raw
+
+    centroid = scene_collision_centroid_xy(
+        model,
+        data,
+        robot_bodies=robot_bodies,
+        floor_geom_name=floor_effective,
+        max_geom_rbound=max_geom_rbound,
+        suppress_exterior_filter=suppress_exterior_filter,
+    )
+    candidates = list(iter_annulus_xy_candidates(xy_clip=xy_clip))
+    if centroid is not None:
+        cx, cy = centroid
+        candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
+    elif xy_clip is not None:
+        cx = 0.5 * (xy_clip[0] + xy_clip[1])
+        cy = 0.5 * (xy_clip[2] + xy_clip[3])
+        candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
+
+    best_xy: tuple[float, float, float, float] | None = None  # x, y, z_floor, worst_score
+    for x, y in candidates:
+        z_floor = walkable_floor_z_at_xy(
+            model, data, x, y, floor_geom_name=floor_effective, exclude_body_id=ray_exclude
+        )
+        if z_floor is None:
+            continue
+        z_probe = float(z_floor) + 0.08
+        up_dist = upward_ray_hit_distance(
+            model, data, x, y, z_probe, exclude_body_id=ray_exclude
+        )
+        if up_dist is None or up_dist < min_upward_clearance:
+            continue
+        for zm in z_margins:
+            z = z_floor + float(zm)
+            if not write_freejoint_base_xyzw(model, data, base_body_name=base_body_name, x=x, y=y, z=z):
+                return None
+            mujoco.mj_forward(model, data)
+            worst = worst_robot_nonfloor_contact_dist(
+                model, data, base_body_name=base_body_name, floor_geom_name=floor_effective
+            )
+            if worst >= min_nonfloor_clearance:
+                z_settled = settle_free_base_z_to_floor(
+                    model,
+                    data,
+                    base_body_name=base_body_name,
+                    floor_geom_name=floor_effective,
+                    x=x,
+                    y=y,
+                    z_floor=float(z_floor),
+                    z_start=z,
+                    robot_bodies=robot_bodies,
+                    min_nonfloor_clearance=min_nonfloor_clearance,
+                )
+                return (x, y, z_settled)
+            if best_xy is None or worst > best_xy[3]:
+                best_xy = (x, y, float(z_floor), worst)
+
+    if best_xy is None:
+        return None
+    bx, by, bz_floor, _ = best_xy
+    z_ref = _first_z_with_nonpenetrating_base(
+        model,
+        data,
+        base_body_name=base_body_name,
+        floor_geom_name=floor_effective,
+        x=bx,
+        y=by,
+        z_floor=bz_floor,
+        z_min_above_floor=0.06,
+        z_max_above_floor=1.15,
+        n_z=48,
+        min_clearance=min_nonfloor_clearance,
+    )
+    if z_ref is not None:
+        z_settled = settle_free_base_z_to_floor(
+            model,
+            data,
+            base_body_name=base_body_name,
+            floor_geom_name=floor_effective,
+            x=bx,
+            y=by,
+            z_floor=bz_floor,
+            z_start=z_ref,
+            robot_bodies=robot_bodies,
+            min_nonfloor_clearance=min_nonfloor_clearance,
+        )
+        return (bx, by, z_settled)
+    return None
+
+
 def find_molmospaces_freejoint_xyz(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -433,6 +623,7 @@ def find_molmospaces_freejoint_xyz(
         0.54,
     ),
     min_nonfloor_clearance: float = -5e-5,
+    scene_label: str | None = None,
 ) -> tuple[float, float, float] | None:
     """Return a world-space base position (x, y, z) for the robot free joint, or None to keep defaults.
 
@@ -442,96 +633,53 @@ def find_molmospaces_freejoint_xyz(
     points under open sky (no upward ray hit), then a finer vertical sweep on the best XY when needed.
     Leaves *data* at the chosen pose with :func:`mujoco.mj_forward` applied.
     """
+    floor_effective = effective_floor_geom_name(model, floor_geom_name)
     base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
     robot_bodies: set[int] = set()
     if base_bid >= 0:
         robot_bodies = _bodies_descending_from(model, base_bid)
-    ray_exclude = int(base_bid) if base_bid >= 0 else -1
-    xy_clip_raw = collision_scene_xy_clip_rect(
-        model, data, robot_bodies=robot_bodies, floor_geom_name=floor_geom_name
+
+    clip_probe = collision_scene_xy_clip_rect(
+        model, data, robot_bodies=robot_bodies, floor_geom_name=floor_effective, max_geom_rbound=15.0
     )
-    xy_clip = _erode_xy_rect(xy_clip_raw, 0.30) if xy_clip_raw is not None else None
-    if xy_clip is None:
-        xy_clip = xy_clip_raw
 
-    centroid = scene_collision_centroid_xy(
-        model, data, robot_bodies=robot_bodies, floor_geom_name=floor_geom_name
-    )
-    candidates = list(iter_annulus_xy_candidates(xy_clip=xy_clip))
-    if centroid is not None:
-        cx, cy = centroid
-        candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
-    elif xy_clip is not None:
-        cx = 0.5 * (xy_clip[0] + xy_clip[1])
-        cy = 0.5 * (xy_clip[2] + xy_clip[3])
-        candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
-
-    best_xy: tuple[float, float, float, float] | None = None  # x, y, z_floor, worst_score
-    for x, y in candidates:
-        z_floor = walkable_floor_z_at_xy(
-            model, data, x, y, floor_geom_name=floor_geom_name, exclude_body_id=ray_exclude
-        )
-        if z_floor is None:
-            continue
-        z_probe = float(z_floor) + 0.08
-        up_dist = upward_ray_hit_distance(
-            model, data, x, y, z_probe, exclude_body_id=ray_exclude
-        )
-        if up_dist is None or up_dist < _MIN_UPWARD_CEILING_CLEARANCE_M:
-            continue
-        for zm in z_margins:
-            z = z_floor + float(zm)
-            if not write_freejoint_base_xyzw(model, data, base_body_name=base_body_name, x=x, y=y, z=z):
-                return None
-            mujoco.mj_forward(model, data)
-            worst = worst_robot_nonfloor_contact_dist(
-                model, data, base_body_name=base_body_name, floor_geom_name=floor_geom_name
-            )
-            if worst >= min_nonfloor_clearance:
-                z_settled = settle_free_base_z_to_floor(
-                    model,
-                    data,
-                    base_body_name=base_body_name,
-                    floor_geom_name=floor_geom_name,
-                    x=x,
-                    y=y,
-                    z_floor=float(z_floor),
-                    z_start=z,
-                    robot_bodies=robot_bodies,
-                    min_nonfloor_clearance=min_nonfloor_clearance,
-                )
-                return (x, y, z_settled)
-            if best_xy is None or worst > best_xy[3]:
-                best_xy = (x, y, float(z_floor), worst)
-
-    if best_xy is None:
-        return None
-    bx, by, bz_floor, _ = best_xy
-    z_ref = _first_z_with_nonpenetrating_base(
+    placed = _find_molmospaces_freejoint_xyz_pass(
         model,
         data,
         base_body_name=base_body_name,
-        floor_geom_name=floor_geom_name,
-        x=bx,
-        y=by,
-        z_floor=bz_floor,
-        z_min_above_floor=0.06,
-        z_max_above_floor=1.15,
-        n_z=48,
-        min_clearance=min_nonfloor_clearance,
+        floor_effective=floor_effective,
+        z_margins=z_margins,
+        min_nonfloor_clearance=min_nonfloor_clearance,
+        min_upward_clearance=float(_MIN_UPWARD_CEILING_CLEARANCE_M),
+        max_geom_rbound=15.0,
+        clip_erode_m=0.30,
+        suppress_exterior_filter=False,
     )
-    if z_ref is not None:
-        z_settled = settle_free_base_z_to_floor(
-            model,
-            data,
-            base_body_name=base_body_name,
-            floor_geom_name=floor_geom_name,
-            x=bx,
-            y=by,
-            z_floor=bz_floor,
-            z_start=z_ref,
-            robot_bodies=robot_bodies,
-            min_nonfloor_clearance=min_nonfloor_clearance,
-        )
-        return (bx, by, z_settled)
+    if placed is not None:
+        return placed
+
+    placed_relaxed = _find_molmospaces_freejoint_xyz_pass(
+        model,
+        data,
+        base_body_name=base_body_name,
+        floor_effective=floor_effective,
+        z_margins=z_margins,
+        min_nonfloor_clearance=min_nonfloor_clearance,
+        min_upward_clearance=0.06,
+        max_geom_rbound=45.0,
+        clip_erode_m=0.12,
+        suppress_exterior_filter=True,
+    )
+    if placed_relaxed is not None:
+        return placed_relaxed
+
+    label = scene_label or "(unknown scene)"
+    logger.warning(
+        "molmospaces_spawn.find_molmospaces_freejoint_xyz: primary and relaxed search failed "
+        "(scene=%s floor_geom_resolved=%r xy_clip_rect=%s)",
+        label,
+        floor_effective,
+        "yes" if clip_probe is not None else "no",
+    )
     return None
+

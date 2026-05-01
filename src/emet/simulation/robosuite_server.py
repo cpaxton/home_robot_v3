@@ -120,11 +120,10 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     def _want_molmospaces_spawn_heuristic(self) -> bool:
         """True when we merged a MolmoSpaces house + mobile base (needs placement away from origin)."""
-        env = self._environment_descriptor
-        if env and env.get("kind") == "molmospaces":
-            return True
-        bn = (self._scene_source_basename or "").lower()
-        return bn.startswith("molmospaces_merged")
+        return molmospaces_spawn.want_molmospaces_autoplace(
+            environment=self._environment_descriptor,
+            scene_source_basename=self._scene_source_basename,
+        )
 
     def _molmospaces_autoplace_free_base_after_load(self) -> None:
         """Move merged MolmoSpaces + mobile robot off origin when the base starts inside scene clutter."""
@@ -140,15 +139,12 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjmodel,
                 self._mjdata,
                 base_body_name=base_name,
+                scene_label=self._scene_source_basename,
             )
         except Exception as e:
             logger.warning(f"MolmoSpaces base autoplace skipped ({e!r}).")
             return
         if placed is None:
-            logger.warning(
-                "MolmoSpaces base autoplace: no walkable floor ray / free joint pose found; "
-                "robot may start at MJCF default (often the world origin)."
-            )
             return
         x, y, z = placed
         logger.info(
