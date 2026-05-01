@@ -10,7 +10,7 @@
 ## Config and models
 
 - **Scene / mapping YAML**: `--agent-config` (default `dynav_config.yaml`). Use a basename under `src/emet/config/` or a path to your own YAML.
-- **Chat / tool backbone**: `--llm` (default `qwen35-9B` text). Vision models: `qwen25-VL-7B`, `qwen35-vl-9B`, etc. For `*VL*` models, **robot RGB is passed by default** on each new user turn; use **`--no-vl-camera`** to disable.
+- **Chat / tool backbone**: `--llm` (default `qwen35-4B` text; use `qwen35-9B` if you have spare VRAM after SigLIP/detector). Vision models: `qwen25-VL-7B`, `qwen35-vl-9B`, etc. For `*VL*` models, **robot RGB is passed by default** on each new user turn; use **`--no-vl-camera`** to disable.
 - **Device / length**: `--device`, `--max-tokens` apply to embodied and `--offline` modes.
 
 ## Testing

@@ -28,8 +28,9 @@ from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.core import get_parameters
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
 
-# Default: Qwen 3.5 9B (good quality on 24GB GPU; use qwen35-4B if VRAM is tight)
-DEFAULT_AGENT_LLM = "qwen35-9B"
+# Default: Qwen 3.5 4B — agent loads SigLIP + detector first; 9B often OOMs on a single 24GB card.
+# Use ``--llm qwen35-9B`` when you have headroom (or offload / second GPU).
+DEFAULT_AGENT_LLM = "qwen35-4B"
 
 
 @click.command()
