@@ -251,7 +251,7 @@ def run_agent_with_robot(
     input_path: str | None = None,
     discord: bool = True,
     use_llm: bool = False,
-    llm: str = "qwen35-4B",
+    llm: str = "qwen35-9B",
     server_ip: str = "127.0.0.1",
     skip_confirmations: bool = True,
     explore_iter: int = 3,

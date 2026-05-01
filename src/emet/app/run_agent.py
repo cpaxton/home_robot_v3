@@ -14,6 +14,11 @@
 # Default: connect to sim/robot at 127.0.0.1 (embodied agent). Use --offline for local LLM chat only.
 
 import os
+
+# PyTorch: must be set before the first CUDA allocation in this process (subprocess from ``emet run agent``).
+# User override: ``export PYTORCH_ALLOC_CONF=...`` before launch replaces this default.
+os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
+
 import tempfile
 import timeit
 
@@ -28,9 +33,9 @@ from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.core import get_parameters
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
 
-# Default: Qwen 3.5 4B — agent loads SigLIP + detector first; 9B often OOMs on a single 24GB card.
-# Use ``--llm qwen35-9B`` when you have headroom (or offload / second GPU).
-DEFAULT_AGENT_LLM = "qwen35-4B"
+# Default: Qwen 3.5 9B (with expandable CUDA segments enabled above to reduce fragmentation).
+# Use ``--llm qwen35-4B`` if you still hit OOM on a single consumer GPU.
+DEFAULT_AGENT_LLM = "qwen35-9B"
 
 
 @click.command()
