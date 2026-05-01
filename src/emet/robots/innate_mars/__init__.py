@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
@@ -16,10 +18,14 @@
 """Innate Mars mobile manipulator — MuJoCo assets vendored as Maurice; real robot via innate_mars_bridge."""
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from emet.robots.base import RobotBackend, RobotSpec
 from emet.robots.footprint import Footprint
 from emet.utils.assets import get_robot_mjcf_path
+
+if TYPE_CHECKING:
+    from emet.controller.emotes.backend import EmoteBackend
 
 
 def _innate_mars_mjcf_path() -> str:
@@ -88,6 +94,11 @@ class InnateMarsBackend(RobotBackend):
         from emet.controller.generic_zmq_client import GenericZmqClient
 
         return GenericZmqClient(robot_spec=self.get_spec(), robot_ip=robot_ip, **kwargs)
+
+    def get_emote_backend(self) -> EmoteBackend:
+        from emet.robots.innate_mars.emote_backend import InnateMarsEmoteBackend
+
+        return InnateMarsEmoteBackend()
 
     def create_model(self, **kwargs):
         raise NotImplementedError(
