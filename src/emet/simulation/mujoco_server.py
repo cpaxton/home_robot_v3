@@ -56,14 +56,25 @@ def _load_default_scene_with_robot(robot_key: str):
         return None
     scene_abs = str(scene_path.resolve())
     robot_abs = str(robot_path.resolve())
+    # When a vendored model uses relative meshdir/asset paths, resolving meshes via an absolute directory in the
+    # merge wrapper avoids ambiguous resolution across MuJoCo versions and symlinked/editable installs (parent include
+    # directory vs. included-file directory). Only inject when that folder exists (robot shipped without meshes omits it).
+    meshes_dir = robot_path.parent / "meshes"
+    compiler_line = ""
+    if meshes_dir.is_dir():
+        mesh_abs = str(meshes_dir.resolve())
+        compiler_line = (
+            f'  <compiler meshdir="{mesh_abs}" angle="radian" coordinate="local" eulerseq="zyx"/>\n'
+        )
     wrapper = (
         '<?xml version="1.0"?>\n'
         '<mujoco model="default_scene_with_robot">\n'
+        f"{compiler_line}"
         f'  <include file="{scene_abs}"/>\n'
         f'  <include file="{robot_abs}"/>\n'
         "</mujoco>\n"
     )
-    # Write merged file into robot's dir so the included robot XML's mesh paths (assetdir="meshes") resolve
+    # Write merged file into robot's dir so the included robot XML's mesh paths resolve consistently next to meshes/.
     robot_dir = str(robot_path.parent)
     fd, path = tempfile.mkstemp(suffix=".xml", prefix="scene_robot_", dir=robot_dir)
     try:

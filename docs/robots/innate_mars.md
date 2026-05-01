@@ -8,4 +8,4 @@
 
 **Session metadata:** Messages include schema v1 ``emet_session`` (see [zmq_session_metadata](../zmq_session_metadata.md)): ``runtime_kind`` = ``innate_mars_ros2_bridge``, stereo/camera/dof capabilities, and ``is_simulation: false``.
 
-**Sim cameras (MuJoCo):** ``RobotSpec.camera_names`` are ``head_left``, ``head_right``, ``camera_arm`` (wrist), matching named cameras in the MJCF after URDF alignment. An extra ``camera_base`` exists for debugging. Primary ZMQ RGB uses the first name (head left).
+**Sim cameras (MuJoCo):** ``RobotSpec.camera_names`` are ``head_left``, ``head_right``, ``camera_arm`` (wrist), matching named cameras in the MJCF after URDF alignment. An extra ``camera_base`` exists for debugging. Primary ZMQ RGB uses the first name (head left). ``emet serve mujoco`` merges ``scene_default.xml`` with the robot and, when a ``meshes/`` directory exists, injects an absolute ``meshdir`` in the merge wrapper so the same STL files load as for the standalone MJCF. The head STL uses a small ``head_geom`` translation for the visual shell (see ``NOTICE.md``); camera poses follow the URDF head link frame.

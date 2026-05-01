@@ -587,6 +587,80 @@ def kill_mujoco_server(port: int, kill_all: bool) -> None:
     sys.exit(0 if killed_any else 1)
 
 
+@main.command("view-mujoco", short_help="Open MuJoCo viewer for a robot MJCF (no ZMQ server)")
+@click.option(
+    "--robot",
+    default="innate_mars",
+    help="Robot key for get_robot_mjcf_path (e.g. innate_mars, rby1, galaxea_r1).",
+)
+@click.option(
+    "--merge-scene",
+    is_flag=True,
+    help="Merge scene_default.xml (table, objects) the same way as emet serve mujoco.",
+)
+@click.option(
+    "--show-viewer-ui",
+    is_flag=True,
+    help="Show MuJoCo viewer left/right control panels.",
+)
+def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool) -> None:
+    """Open the native MuJoCo viewer to inspect a robot model (requires ``uv sync --extra sim``).
+
+    Uses ``launch_passive``: close the window or Ctrl+C to exit. Needs a desktop ``DISPLAY`` (or X forwarding).
+
+    Examples:
+      emet view-mujoco --robot innate_mars
+      emet view-mujoco --robot innate_mars --merge-scene
+    """
+    import time
+
+    import mujoco
+    import mujoco.viewer
+
+    from emet.utils.assets import get_robot_mjcf_path
+
+    robot_key = robot.lower().replace("-", "_")
+    if merge_scene:
+        from emet.simulation.mujoco_server import _load_default_scene_with_robot
+
+        model = _load_default_scene_with_robot(robot_key)
+        if model is None:
+            click.echo(
+                "Could not build merged model (scene_default.xml or robot MJCF missing).",
+                err=True,
+            )
+            sys.exit(1)
+    else:
+        p = get_robot_mjcf_path(robot_key)
+        if p is None or not p.is_file():
+            click.echo(
+                f"No MuJoCo XML for {robot!r} (see get_robot_mjcf_path in emet.utils.assets).",
+                err=True,
+            )
+            sys.exit(1)
+        model = mujoco.MjModel.from_xml_path(str(p))
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    try:
+        with mujoco.viewer.launch_passive(
+            model,
+            data,
+            show_left_ui=show_viewer_ui,
+            show_right_ui=show_viewer_ui,
+        ) as viewer:
+            click.echo("MuJoCo viewer open — close the window or Ctrl+C to exit.")
+            while viewer.is_running():
+                mujoco.mj_forward(model, data)
+                viewer.sync()
+                time.sleep(0.01)
+    except Exception as e:
+        click.echo(
+            f"Viewer failed ({e!r}). On headless hosts use X11 forwarding or run with a local DISPLAY.",
+            err=True,
+        )
+        sys.exit(1)
+
+
 @main.command("show-memory", short_help="Open a saved memory in Rerun")
 @click.argument(
     "path",
