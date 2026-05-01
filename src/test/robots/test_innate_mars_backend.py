@@ -15,6 +15,8 @@ def test_innate_mars_spec():
     canonical = get_robot_mjcf_path("innate_mars")
     assert canonical is not None
     assert Path(s.mjcf_path).resolve() == canonical.resolve()
+    assert s.urdf_path is not None
+    assert Path(s.urdf_path).resolve() == canonical.with_name("maurice.urdf").resolve()
 
 
 def test_innate_mars_mjcf_registered():

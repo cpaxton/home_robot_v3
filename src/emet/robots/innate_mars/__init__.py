@@ -15,6 +15,8 @@
 
 """Innate Mars mobile manipulator — MuJoCo assets vendored as Maurice; real robot via innate_mars_bridge."""
 
+from pathlib import Path
+
 from emet.robots.base import RobotBackend, RobotSpec
 from emet.robots.footprint import Footprint
 from emet.utils.assets import get_robot_mjcf_path
@@ -30,7 +32,14 @@ def _innate_mars_mjcf_path() -> str:
         )
     return str(p.resolve())
 
-# Matches `maurice.mjcf`: planar base + arm + mimic gripper joint.
+
+def _innate_mars_urdf_path() -> str | None:
+    """Vendored ``maurice.urdf`` next to ``innate_mars.xml`` (same kinematics as innate-os)."""
+    urdf = Path(_innate_mars_mjcf_path()).with_name("maurice.urdf")
+    return str(urdf.resolve()) if urdf.is_file() else None
+
+
+# Planar base + arm + mimic gripper; MJCF joint translations match ``maurice.urdf`` (RViz / innate-os).
 INNATE_MARS_JOINT_NAMES = [
     "base_x",
     "base_y",
@@ -68,7 +77,7 @@ class InnateMarsBackend(RobotBackend):
             dof=len(INNATE_MARS_JOINT_NAMES),
             joint_names=list(INNATE_MARS_JOINT_NAMES),
             camera_names=list(INNATE_MARS_CAMERA_NAMES),
-            urdf_path=None,
+            urdf_path=_innate_mars_urdf_path(),
             mjcf_path=_innate_mars_mjcf_path(),
             actuator_names=list(INNATE_MARS_ACTUATOR_NAMES),
             base_link_name="base_link",

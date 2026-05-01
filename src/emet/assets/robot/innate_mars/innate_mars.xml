@@ -14,9 +14,9 @@
     <mesh name="link2_mesh" file="link2.STL" scale="1 1 1"/>
     <mesh name="link3_mesh" file="link3.STL" scale="1 1 1"/>
     <mesh name="link4_mesh" file="link4.STL" scale="1 1 1"/>
-    <mesh name="link5_mesh" file="link5.STL" scale="0.001 0.001 0.001"/>
-    <mesh name="link61_mesh" file="link61.STL" scale="0.001 0.001 0.001"/>
-    <mesh name="link62_mesh" file="link62.STL" scale="0.001 0.001 0.001"/>
+    <mesh name="link5_mesh" file="link5.STL" scale="1 1 1"/>
+    <mesh name="link61_mesh" file="link61.STL" scale="1 1 1"/>
+    <mesh name="link62_mesh" file="link62.STL" scale="1 1 1"/>
     <mesh name="head_mesh" file="head.STL" scale="1 1 1"/>
     
     <!-- Add grid texture and material -->
@@ -65,49 +65,50 @@
             <body name="link1" pos="0.086 -0.05285 0.04025">
               <inertial pos="0 0 0" mass="0.065" diaginertia="0.0001 0.0001 0.0001"/>
               <joint name="joint1" type="hinge" axis="0 0 1" limited="true" range="-3.14 3.14" damping="5"/>
-              <geom name="link1_geom" type="mesh" mesh="link1_mesh" material="bright_orange" euler="0 0 1.5708"/>
+              <geom name="link1_geom" type="mesh" mesh="link1_mesh" material="bright_orange"/>
               
-              <body name="link2" pos="0 0 0.04225">
+              <body name="link2" pos="0 0 0.04425">
                 <inertial pos="0 0 0" mass="0.080" diaginertia="0.0001 0.0001 0.0001"/>
                 <joint name="joint2" type="hinge" axis="0 1 0" limited="true" range="-3.14 3.14" damping="5"/>
-                <geom name="link2_geom" type="mesh" mesh="link2_mesh" material="matt_black" euler="1.5708 0 1.5708"/>
+                <geom name="link2_geom" type="mesh" mesh="link2_mesh" material="matt_black"/>
                 
                 <body name="link3" pos="0.02825 0 0.12125">
                   <inertial pos="0 0 0" mass="0.055" diaginertia="0.0001 0.0001 0.0001"/>
                   <joint name="joint3" type="hinge" axis="0 1 0" limited="true" range="-3.14 3.14" damping="5"/>
-                  <geom name="link3_geom" type="mesh" mesh="link3_mesh" material="bright_orange" euler="1.5708 0 1.5708"/>
+                  <geom name="link3_geom" type="mesh" mesh="link3_mesh" material="bright_orange"/>
                   
-                  <body name="link4" pos="0.1375 0 -0.0045">
+                  <body name="link4" pos="0.1375 0 0.0045">
                     <inertial pos="0 0 0" mass="0.022" diaginertia="0.00005 0.00005 0.00005"/>
                     <joint name="joint4" type="hinge" axis="0 1 0" limited="true" range="-3.14 3.14" damping="5"/>
-                    <geom name="link4_geom" type="mesh" mesh="link4_mesh" material="matt_black" euler="1.5708 0 1.5708"/>
+                    <geom name="link4_geom" type="mesh" mesh="link4_mesh" material="matt_black"/>
                     
                     <body name="link5" pos="0.019 0 0">
                       <inertial pos="0 0 0" mass="0.050" diaginertia="0.00005 0.00005 0.00005"/>
                       <joint name="joint5" type="hinge" axis="1 0 0" limited="true" range="-3.14 3.14" damping="5"/>
-                      <geom name="link5_geom" type="mesh" mesh="link5_mesh" material="bright_orange" euler="1.5708 0 1.5708"/>
+                      <geom name="link5_geom" type="mesh" mesh="link5_mesh" material="bright_orange"/>
                       
-                      <body name="link61" pos="0.044 -0.0091 0">
+                      <body name="link61" pos="0.044 -0.0092 0">
                         <inertial pos="0 0 0" mass="0.012" diaginertia="0.00002 0.00002 0.00002"/>
                         <joint name="joint6" type="hinge" axis="0 0 -1" limited="true" range="-1.57 1.57" damping="5"/>
-                        <geom name="link61_geom" type="mesh" mesh="link61_mesh" material="matt_black" euler="1.5708 0 1.5708"/>
+                        <geom name="link61_geom" type="mesh" mesh="link61_mesh" material="matt_black"/>
                       </body>
                       
                       <body name="link62" pos="0.044 0.0091 0">
                         <inertial pos="0 0 0" mass="0.012" diaginertia="0.00002 0.00002 0.00002"/>
-                        <joint name="joint6M" type="hinge" axis="0 0 1" limited="true" range="-1.57 1.57" damping="5"/>
-                        <geom name="link62_geom" type="mesh" mesh="link62_mesh" material="matt_black" euler="1.5708 0 1.5708"/>
+                        <joint name="joint6M" type="hinge" axis="0 0 -1" limited="true" range="-1.57 1.57" damping="5"/>
+                        <geom name="link62_geom" type="mesh" mesh="link62_mesh" material="matt_black"/>
                       </body>
                       
                       <!-- Add End Effector -->
-                      <body name="ee_link" pos="0.09285 0 0">
+                      <body name="ee_link" pos="0.091838 0 0">
                         <inertial pos="0 0 0" mass="0.001" diaginertia="0.00001 0.00001 0.00001"/>
                         <geom name="ee_geom" type="sphere" size="0.005" material="bright_orange"/>
                       </body>
                       
-                      <body name="arm_camera_link" pos="0.00454 0 0.05448">
+                      <body name="arm_camera_link" pos="0.03378 0 0.05052">
                         <inertial pos="0 0 0" mass="0.01" diaginertia="1e-4 1e-4 1e-4"/>
-                        <camera name="camera_arm" mode="fixed" fovy="80" quat="0.6532815 0.2705981 -0.2705981 -0.6532815"/>
+                        <!-- Orientation from URDF fixed_arm_camera_link rpy="0 0.43633 0" (pitch about Y) → quat wxyz -->
+                        <camera name="camera_arm" mode="fixed" fovy="80" quat="0.976296 0 0.216438 0"/>
                       </body>
                     </body>
                   </body>
@@ -118,7 +119,7 @@
             <!-- Same subtree as URDF joint_head + head cameras; placed after arm like upstream maurice.mjcf link order + URDF joint ordering -->
             <body name="head" pos="-0.040751 -0.0002 0.25882">
               <inertial pos="0 0 0" mass="0.148" diaginertia="0.0002 0.0001 0.0002"/>
-              <geom name="head_geom" type="mesh" mesh="head_mesh" material="matt_black" pos="0 0 0.02175" euler="-1.5708 0 0"/>
+              <geom name="head_geom" type="mesh" mesh="head_mesh" material="matt_black" euler="-1.5708 0 0"/>
               <camera name="head_left" pos="0.04327 0.0297 -0.000275" mode="fixed" fovy="80" quat="0.6532815 0.2705981 -0.2705981 -0.6532815"/>
               <camera name="head_right" pos="0.04327 -0.0303 -0.000275" mode="fixed" fovy="80" quat="0.6532815 0.2705981 -0.2705981 -0.6532815"/>
             </body>
@@ -143,9 +144,9 @@
     <exclude name="ex_link5_link62" body1="link5" body2="link62"/>
   </contact>
   
-  <!-- Geared gripper constraint: joint6M mimics joint6 with 1:1 ratio -->
+  <!-- Gripper mimic: URDF joint6M has axis (0,0,-1) and mimic multiplier -1 → q6M = -q6 -->
   <equality>
-    <joint name="gripper_gear" joint1="joint6" joint2="joint6M" polycoef="0 1 0 0 0" solref="0.001 1" solimp="0.99 0.999 0.001"/>
+    <joint name="gripper_gear" joint1="joint6" joint2="joint6M" polycoef="0 -1 0 0 0" solref="0.001 1" solimp="0.99 0.999 0.001"/>
   </equality>
 
   <actuator>

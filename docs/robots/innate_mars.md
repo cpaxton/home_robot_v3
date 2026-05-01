@@ -1,8 +1,10 @@
 # Innate Mars (Maurice)
 
+**Reference URDF:** ``src/emet/assets/robot/innate_mars/maurice.urdf`` matches innate-os ``maurice_sim/urdf/maurice.urdf`` with ``package://…/meshes/`` rewritten to ``meshes/``. Use it for RViz / TF parity checks; **MuJoCo** still uses ``innate_mars.xml``. Link placements and arm mesh orientations follow the URDF; **base** and **head** geoms keep an extra MuJoCo roll where STL frames still disagree with MuJoCo’s mesh convention.
+
 **Simulation (Emet / MuJoCo):** `emet serve mujoco --robot innate_mars` loads the vendored Maurice-style MJCF under `src/emet/assets/robot/innate_mars/` merged with `scene_default.xml`. See `NOTICE.md` in that directory for asset provenance and license. To inspect the model only: `emet view-mujoco --robot innate_mars` (or `--merge-scene` to match the server merge).
 
-**Innate OS Docker (upstream reference):** The public **innate-os** tree (e.g. ``~/src/innate-os``) documents simulation in the root **README** and **SIMULATION_MODE.md**: build with ``docker compose -f docker-compose.dev.yml build``, run ``up -d``, enter the container with ``exec innate zsh -l``, then ``./scripts/launch_sim_in_tmux.zsh``. That starts the ROS 2 stack (Zenoh, RWS, navigation, manipulation, etc.); **RViz** is the usual robot visualization (often via noVNC at ``http://localhost:8080/vnc.html``). The **canonical robot geometry** there is ``ros2_ws/src/maurice_bot/maurice_sim/urdf/maurice.urdf`` (via ``robot_state_publisher`` / MoveIt), **not** the MJCF file. Upstream ``maurice_sim/mjcf/maurice.mjcf`` matches **base + arm + floor** in MuJoCo but **does not include a head body**; optional Python MuJoCo drivers only reference ``camera_base`` and ``camera_arm``. Emet’s ``innate_mars.xml`` extends that MJCF with portable ``meshdir``, head link + ``head.STL``, stereo cameras, ``maurice_floor`` rename for scene merge, and small ``head_geom`` offsets so MuJoCo matches the URDF-backed robot you see in innate-os.
+**Innate OS Docker (upstream reference):** The public **innate-os** tree (e.g. ``~/src/innate-os``) documents simulation in the root **README** and **SIMULATION_MODE.md**: build with ``docker compose -f docker-compose.dev.yml build``, run ``up -d``, enter the container with ``exec innate zsh -l``, then ``./scripts/launch_sim_in_tmux.zsh``. That starts the ROS 2 stack (Zenoh, RWS, navigation, manipulation, etc.); **RViz** is the usual robot visualization (often via noVNC at ``http://localhost:8080/vnc.html``). The **canonical robot geometry** there is ``ros2_ws/src/maurice_bot/maurice_sim/urdf/maurice.urdf`` (via ``robot_state_publisher`` / MoveIt), **not** the MJCF file. Upstream ``maurice_sim/mjcf/maurice.mjcf`` matches **base + arm + floor** in MuJoCo but **does not include a head body**; optional Python MuJoCo drivers only reference ``camera_base`` and ``camera_arm``. Emet’s ``innate_mars.xml`` extends that line of development with portable ``meshdir``, head link + ``head.STL``, stereo cameras, and ``maurice_floor`` for scene merge; **link** transforms follow the vendored URDF, with base/head mesh rolls only where needed for MuJoCo STLs.
 
 **Real robot:** On the compute that runs ROS 2, start the bridge (e.g. `ros2 launch innate_mars_bridge server.launch.py`). The bridge publishes the same ZMQ keys as other Emet robots, including `rgb`, `rgb_right`, `gps`, `compass`, `camera_K`, `camera_pose`, `camera_K_right`, `camera_pose_right`, and `emet_robot_id` (`innate_mars`). Depth is absent on the wire; use `depth_source: auto` or `da3` in DynaMem config so **Depth Anything 3** fills depth (two-view when both head images and poses are present).
 
@@ -10,4 +12,22 @@
 
 **Session metadata:** Messages include schema v1 ``emet_session`` (see [zmq_session_metadata](../zmq_session_metadata.md)): ``runtime_kind`` = ``innate_mars_ros2_bridge``, stereo/camera/dof capabilities, and ``is_simulation: false``.
 
-**Sim cameras (MuJoCo):** ``RobotSpec.camera_names`` are ``head_left``, ``head_right``, ``camera_arm`` (wrist), matching named cameras in the MJCF after URDF alignment. An extra ``camera_base`` exists for debugging. Primary ZMQ RGB uses the first name (head left). ``emet serve mujoco`` merges ``scene_default.xml`` with the robot and, when a ``meshes/`` directory exists, injects an absolute ``meshdir`` in the merge wrapper so the same STL files load as for the standalone MJCF. The head STL uses a small ``head_geom`` translation for the visual shell (see ``NOTICE.md``); camera poses follow the URDF head link frame.
+**Sim cameras (MuJoCo):** ``RobotSpec.camera_names`` are ``head_left``, ``head_right``, ``camera_arm`` (wrist), matching named cameras in the MJCF after URDF alignment. An extra ``camera_base`` exists for debugging. Primary ZMQ RGB uses the first name (head left). ``emet serve mujoco`` merges ``scene_default.xml`` with the robot and, when a ``meshes/`` directory exists, injects an absolute ``meshdir`` in the merge wrapper so the same STL files load as for the standalone MJCF. Stereo head cameras use fixed ``quat`` in MJCF (ROS-style mounting); base and head meshes keep an extra roll vs URDF for STL alignment.
+
+## Debugging URDF vs MuJoCo
+
+MuJoCo only reads MJCF; RViz / standalone URDF viewers only read URDF. Compare **maurice.urdf** side‑by‑side with ``emet view-mujoco --robot innate_mars``.
+
+**Standalone URDF viewer (no ROS):** [**urdf-viz**](https://github.com/openrr/urdf-viz) (Rust) opens URDF + STL quickly:
+
+```bash
+# Install once: cargo install urdf-viz   # or: brew install openrr/tap/urdf-viz
+cd src/emet/assets/robot/innate_mars
+urdf-viz maurice.urdf
+```
+
+Meshes load relative to the URDF path (`meshes/*.STL`). Use joint sliders to sanity‑check the kinematic tree.
+
+**ROS 2 RViz:** Source ROS Humble, publish ``robot_description`` from ``maurice.urdf``, run ``rviz2`` — matches innate-os Docker workflows.
+
+**Quick STL sanity:** Open individual ``meshes/*.STL`` in **MeshLab** or **Blender** if you suspect a bad mesh frame (does not show joints).
