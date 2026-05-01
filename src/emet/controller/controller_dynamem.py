@@ -62,6 +62,7 @@ from emet.perception.encoders.clip_encoder import MaskClipEncoder
 from emet.perception.encoders.siglip_encoder import MaskSiglipEncoder
 from emet.perception.wrapper import OvmmPerception
 from emet.utils.logger import Logger
+from emet.utils.vram_debug import print_vram_snapshot
 from emet.visualization.rerun import NullVisualizer, has_display
 
 logger = Logger(__name__)
@@ -310,6 +311,7 @@ class DynamemController(BaseController):
             parameters=parameters,
             defer_eqa_vllm=self.defer_eqa_vllm,
         )
+        print_vram_snapshot("after_create_obstacle_map_sparse_voxel_map")
         self.space = SparseVoxelMapNavigationSpace(
             self.voxel_map,
             rotation_step_size=parameters.get("motion_planner/rotation_step_size", 0.2),

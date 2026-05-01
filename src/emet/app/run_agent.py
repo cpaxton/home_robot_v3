@@ -25,6 +25,7 @@ from emet.agent.model_debug import print_offline_model_line
 from emet.agent.prompt import DEFAULT_AGENT_NAME
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
+from emet.core import get_parameters
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
 
 # Default: Qwen 3.5 9B (good quality on 24GB GPU; use qwen35-4B if VRAM is tight)
@@ -35,7 +36,8 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
 @click.option(
     "--llm",
     default=DEFAULT_AGENT_LLM,
-    help=f"LLM to use (default: {DEFAULT_AGENT_LLM}). Case-insensitive (e.g. qwen35-vl-9b = qwen35-vl-9B, gemma4-e4b).",
+    help=f"LLM to use (default: {DEFAULT_AGENT_LLM}). Case-insensitive. "
+    f"Use qwen3-vl-eqa with --eqa to load one Qwen3-VL from dynav ``eqa:`` for chat + shared DynaMem captions.",
     type=click.Choice(get_llm_choices(), case_sensitive=False),
 )
 @click.option(
@@ -107,7 +109,16 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     is_flag=True,
     help=(
         "Print which models/clients are in use (chat LLM, describe_scene detector, DynaMem VLM, etc.). "
-        "Same as setting EMET_AGENT_MODEL_DEBUG=1."
+        "Same as setting EMET_AGENT_MODEL_DEBUG=1. Also enables VRAM snapshots (nvidia-smi + torch CUDA)."
+    ),
+)
+@click.option(
+    "--debug-vram",
+    "debug_vram",
+    is_flag=True,
+    help=(
+        "Print nvidia-smi and torch CUDA memory at major load milestones (SigLIP, agent LLM, EQA bind/materialize, "
+        "shared Qwen3.5-VL). Same as EMET_VRAM_DEBUG=1. Combine with --debug-models for full model + VRAM report."
     ),
 )
 @click.option(
@@ -196,6 +207,7 @@ def main(
     debug_llm: bool,
     debug_tools: bool,
     debug_models: bool,
+    debug_vram: bool,
     debug_camera: bool,
     agent_name: str,
     commands: tuple[str, ...],
@@ -224,12 +236,14 @@ def main(
       emet run agent --no-llm   # letter commands (E/M/Q/P)
       emet run agent --no-llm --command 'find red cylinder'
       emet run agent --no-llm -c 'FIND blue cube'
-      emet run agent -c 'find the red cylinder' -c 'what objects do you see?'
+      emet run agent --llm qwen3-vl-eqa --eqa --debug-vram   # one Qwen3-VL + VRAM milestones
     """
     cmd_list = list(commands) if commands else None
 
     if debug_models:
         os.environ["EMET_AGENT_MODEL_DEBUG"] = "1"
+    if debug_vram:
+        os.environ["EMET_VRAM_DEBUG"] = "1"
     if debug_camera:
         os.environ["EMET_AGENT_CAMERA_DEBUG"] = "1"
 
@@ -267,7 +281,8 @@ def main(
         return
 
     prompt_builder = get_prompt_builder(prompt)
-    client = get_llm_client(llm, prompt_builder, device=device)
+    dynav_params = get_parameters(agent_config)
+    client = get_llm_client(llm, prompt_builder, device=device, parameters=dynav_params)
     if hasattr(client, "max_tokens"):
         client.max_tokens = max_tokens
     print_offline_model_line(llm, client, device, max_tokens)
