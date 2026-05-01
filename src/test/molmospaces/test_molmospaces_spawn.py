@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import math
+
 import mujoco
 
 from emet.simulation.molmospaces_spawn import (
@@ -110,3 +112,25 @@ def test_want_molmospaces_autoplace_kind_and_merged_basename():
         molmospaces_autoplace_env="extended",
     )
 
+
+
+def test_iter_annulus_xy_candidates_respects_xy_origin():
+    """Rings must be around *xy_origin*, not world (0,0), so offset houses get interior samples."""
+    from emet.simulation.molmospaces_spawn import iter_annulus_xy_candidates
+
+    clip = (4.0, 12.0, -1.0, 7.0)
+    pts = list(
+        iter_annulus_xy_candidates(
+            r_min=0.4,
+            r_max=2.0,
+            n_radii=4,
+            base_angles_per_ring=8,
+            xy_clip=clip,
+            xy_origin=(8.0, 3.0),
+        )
+    )
+    assert len(pts) >= 4
+    for x, y in pts:
+        assert clip[0] <= x <= clip[1] and clip[2] <= y <= clip[3]
+    # (0,0) is outside clip; if we wrongly used origin, almost no points would land in clip
+    assert any(math.hypot(x - 8.0, y - 3.0) < 1.5 for x, y in pts)

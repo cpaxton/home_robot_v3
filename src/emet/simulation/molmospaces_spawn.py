@@ -340,23 +340,50 @@ def iter_annulus_xy_candidates(
     n_radii: int = 22,
     base_angles_per_ring: int = 12,
     xy_clip: tuple[float, float, float, float] | None = None,
+    xy_origin: tuple[float, float] = (0.0, 0.0),
 ) -> Iterable[tuple[float, float]]:
-    """Polar grid from *r_min* to *r_max* (inner rings first — favors core room over porch / perimeter).
+    """Polar grid from *r_min* to *r_max* around *xy_origin* (inner rings first).
+
+    iTHOR / Molmo scenes are often **not** centered on the world origin; sampling only around
+    ``(0, 0)`` misses the house footprint and yields spawns on open floor outside walls.
 
     If *xy_clip* is ``(xmin, xmax, ymin, ymax)``, only yields points inside that rectangle.
     """
+    ox, oy = float(xy_origin[0]), float(xy_origin[1])
     radii = np.linspace(r_min, r_max, n_radii)
     for r in radii:
         n_ang = max(base_angles_per_ring, int(base_angles_per_ring + 8 * (r / r_max)))
         for k in range(n_ang):
             th = (2.0 * math.pi * k) / n_ang
-            x = float(r * math.cos(th))
-            y = float(r * math.sin(th))
+            x = ox + float(r * math.cos(th))
+            y = oy + float(r * math.sin(th))
             if xy_clip is not None:
                 cx0, cx1, cy0, cy1 = xy_clip
                 if not (cx0 <= x <= cx1 and cy0 <= y <= cy1):
                     continue
             yield x, y
+
+
+def _coarse_grid_xy_in_clip(
+    xy_clip: tuple[float, float, float, float],
+    *,
+    step: float = 0.62,
+    max_points: int = 220,
+) -> list[tuple[float, float]]:
+    """Regular grid inside *xy_clip*, center-sorted (interior-first for typical houses)."""
+    x0, x1, y0, y1 = xy_clip
+    cx = 0.5 * (x0 + x1)
+    cy = 0.5 * (y0 + y1)
+    pts: list[tuple[float, float]] = []
+    xs = np.arange(x0 + step * 0.2, x1, step)
+    ys = np.arange(y0 + step * 0.2, y1, step)
+    for px in xs:
+        for py in ys:
+            pts.append((float(px), float(py)))
+    pts.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
+    if len(pts) > max_points:
+        pts = pts[:max_points]
+    return pts
 
 
 def write_freejoint_base_xyzw(
@@ -521,7 +548,35 @@ def _find_molmospaces_freejoint_xyz_pass(
         max_geom_rbound=max_geom_rbound,
         suppress_exterior_filter=suppress_exterior_filter,
     )
-    candidates = list(iter_annulus_xy_candidates(xy_clip=xy_clip))
+    ox, oy = 0.0, 0.0
+    if centroid is not None:
+        ox, oy = float(centroid[0]), float(centroid[1])
+    elif xy_clip is not None:
+        ox = 0.5 * float(xy_clip[0] + xy_clip[1])
+        oy = 0.5 * float(xy_clip[2] + xy_clip[3])
+
+    r_annulus_max = 3.2
+    if xy_clip is not None:
+        x0c, x1c, y0c, y1c = xy_clip
+        half_diag = 0.5 * math.hypot(x1c - x0c, y1c - y0c)
+        r_annulus_max = float(min(14.5, max(3.8, 0.52 * half_diag + 0.65)))
+
+    candidates = list(
+        iter_annulus_xy_candidates(
+            r_max=r_annulus_max,
+            xy_clip=xy_clip,
+            xy_origin=(ox, oy),
+        )
+    )
+    if xy_clip is not None and len(candidates) < 72:
+        seen = {(round(a, 2), round(b, 2)) for a, b in candidates}
+        for px, py in _coarse_grid_xy_in_clip(xy_clip, step=0.62, max_points=220):
+            key = (round(px, 2), round(py, 2))
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append((px, py))
+
     if centroid is not None:
         cx, cy = centroid
         candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
@@ -668,7 +723,7 @@ def find_molmospaces_freejoint_xyz(
         min_upward_clearance=0.06,
         max_geom_rbound=45.0,
         clip_erode_m=0.12,
-        suppress_exterior_filter=True,
+        suppress_exterior_filter=False,
     )
     if placed_relaxed is not None:
         return placed_relaxed
