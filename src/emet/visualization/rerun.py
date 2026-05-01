@@ -12,6 +12,7 @@
 import os
 import time
 import timeit
+from typing import Any
 
 import numpy as np
 import rerun as rr
@@ -247,6 +248,9 @@ def _null_noop(*args, **kwargs):
 
 
 class RerunVisualizer:
+    """Live Rerun logging for Stretch (mesh + joints) and generic ZMQ robots (cameras + base pose)."""
+
+    enabled = True
     camera_point_radius = 0.01
     max_displayed_points_per_camera: int = 10000
 
@@ -513,8 +517,9 @@ class RerunVisualizer:
     def log_robot_xyt(self, obs: Observations):
         """Log robot world pose"""
         # rr.set_time_seconds("realtime", time.time())
-        xy = obs["gps"]
-        theta = obs["compass"]
+        xy = np.asarray(obs["gps"], dtype=float).reshape(-1)[:2]
+        comp = np.asarray(obs["compass"], dtype=float).ravel()
+        theta = float(comp[0]) if comp.size else 0.0
         rb_arrow = rr.Arrows3D(
             origins=[0, 0, 0],
             vectors=[0.4, 0, 0],
@@ -1095,14 +1100,8 @@ class RerunVisualizer:
                     ),
                 )
 
-        # Text summary
-        summary = scene_graph.to_string()
         stable_count = len(scene_graph.stable_objects)
-        header = (
-            f"## Scene Graph\n\n"
-            f"**{scene_graph.num_objects}** objects "
-            f"({stable_count} stable)\n\n"
-        )
+        header = f"## Scene Graph\n\n**{scene_graph.num_objects}** objects ({stable_count} stable)\n\n"
         # Object table
         table_lines = ["| ID | Label | Seen | Stable |", "|---|---|---|---|"]
         for node in scene_graph.nodes.values():
@@ -1155,27 +1154,53 @@ class RerunVisualizer:
         # rr.set_time_seconds("realtime", ts)
 
     def step(self, obs, servo):
-        """Log all the data"""
-        if obs and servo:
-            rr.set_time_seconds("realtime", time.time())
-            try:
-                t0 = timeit.default_timer()
-                self.log_robot_xyt(obs)
-                self.log_ee_frame(obs)
+        """Log streaming robot/sensor data.
 
-                # Cameras use the lower-res servo object
-                self.log_head_camera(servo)
-                self.log_ee_camera(servo)
+        *obs* is typically the full ZMQ observation dict (Stretch / Generic) or an Observations instance.
+        *servo* is optional low-res head/EE `Observations` (Stretch servo thread); if missing but *obs*
+        contains ``rgb``, head camera is logged from *obs* instead.
+        """
+        if obs is None:
+            time.sleep(0.05)
+            return
 
-                self.log_robot_state(obs)
+        head_cam = servo
+        if head_cam is None:
+            if isinstance(obs, dict) and obs.get("rgb") is not None:
+                head_cam = Observations.from_dict(obs)
+            elif isinstance(obs, Observations) and obs.rgb is not None:
+                head_cam = obs
+        if head_cam is None or getattr(head_cam, "rgb", None) is None:
+            time.sleep(0.05)
+            return
 
-                if self.display_robot_mesh:
-                    self.log_robot_transforms(obs)
-                t1 = timeit.default_timer()
-                sleep_time = self.step_delay_s - (t1 - t0)
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
+        if isinstance(obs, Observations):
+            obs_pose: dict[str, Any] = {
+                "gps": obs.gps,
+                "compass": obs.compass,
+                "ee_pose": obs.ee_pose,
+                "joint": obs.joint,
+            }
+        else:
+            obs_pose = obs
 
-            except Exception as e:
-                logger.error(e)
-                raise e
+        rr.set_time_seconds("realtime", time.time())
+        try:
+            t0 = timeit.default_timer()
+            self.log_robot_xyt(obs_pose)
+            self.log_ee_frame(obs_pose)
+
+            self.log_head_camera(head_cam)
+            self.log_ee_camera(head_cam)
+
+            if self.display_robot_mesh and getattr(self, "urdf_logger", None) is not None:
+                self.log_robot_state(obs_pose)
+                self.log_robot_transforms(obs_pose)
+            t1 = timeit.default_timer()
+            sleep_time = self.step_delay_s - (t1 - t0)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+
+        except Exception as e:
+            logger.error(e)
+            raise e

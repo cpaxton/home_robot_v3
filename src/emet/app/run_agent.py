@@ -138,6 +138,31 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 @click.option(
+    "--headless",
+    is_flag=True,
+    help="With --rerun: no native Rerun window; open http://<this-host>:9090?url=ws://<this-host>:9877.",
+)
+@click.option(
+    "--rerun",
+    is_flag=True,
+    help="Enable Rerun live visualization (off by default; same viewer as emet run dynamem).",
+)
+@click.option(
+    "--rerun-show-panels",
+    is_flag=True,
+    help="Rerun: show blueprint/selection panel (debug).",
+)
+@click.option(
+    "--rerun-debug",
+    is_flag=True,
+    help="Print periodic Rerun / ZMQ stream status for generic robots.",
+)
+@click.option(
+    "--rerun-bind",
+    is_flag=True,
+    help="Bind Rerun to 0.0.0.0 (sets RERUN_BIND_ALL=1; same as emet run dynamem --rerun-bind).",
+)
+@click.option(
     "--robot",
     default="stretch",
     help=(
@@ -200,6 +225,11 @@ def main(
     agent_name: str,
     commands: tuple[str, ...],
     port_offset: int = 0,
+    headless: bool = False,
+    rerun: bool = False,
+    rerun_show_panels: bool = False,
+    rerun_debug: bool = False,
+    rerun_bind: bool = False,
     robot: str = "stretch",
     agent_config: str = "dynav_config.yaml",
     vl_include_camera: bool = False,
@@ -244,6 +274,8 @@ def main(
     vl_include_effective = (not no_vl_camera) and (vl_include_camera or is_vl_name)
 
     if robot_effective:
+        if rerun_bind:
+            os.environ["RERUN_BIND_ALL"] = "1"
         run_agent_with_robot(
             robot_ip=robot_effective,
             robot=robot,
@@ -263,6 +295,10 @@ def main(
             vl_include_camera=vl_include_effective,
             eqa=dynamem_eqa,
             share_memory_vllm=share_memory_vllm,
+            headless=headless,
+            rerun=rerun,
+            rerun_show_panels=rerun_show_panels,
+            rerun_debug=rerun_debug,
         )
         return
 

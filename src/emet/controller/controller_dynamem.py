@@ -138,7 +138,7 @@ class DynamemController(BaseController):
             default_config_path=None,
         )
         self.semantic_sensor = semantic_sensor
-        # StretchZmqClient sets _rerun; GenericZmqClient (rby1 / galaxea_r1) does not — use no-op visualizer.
+        # StretchZmqClient and GenericZmqClient set ``_rerun`` when Rerun is enabled; otherwise NullVisualizer.
         self.rerun_visualizer = getattr(self.robot, "_rerun", None) or NullVisualizer()
         self.setup_custom_blueprint()
 

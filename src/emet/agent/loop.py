@@ -265,6 +265,10 @@ def run_agent_with_robot(
     vl_include_camera: bool = False,
     eqa: bool = False,
     share_memory_vllm: bool = True,
+    headless: bool = False,
+    rerun: bool = False,
+    rerun_show_panels: bool = False,
+    rerun_debug: bool = False,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -294,7 +298,10 @@ def run_agent_with_robot(
         # robot.start() again; double-start left orphan recv threads and led to ZMQ double-free crashes.
         robot_client = StretchZmqClient(
             robot_ip=robot_ip,
-            enable_rerun_server=True,
+            enable_rerun_server=rerun,
+            rerun_headless=headless,
+            rerun_show_panels=rerun_show_panels,
+            rerun_debug=rerun_debug,
             port_offset=port_offset,
             start_immediately=False,
             allow_missing_depth=allow_missing_depth,
@@ -314,6 +321,10 @@ def run_agent_with_robot(
             robot_ip=robot_ip,
             port_offset=port_offset,
             allow_missing_depth=allow_missing_depth,
+            enable_rerun_server=rerun,
+            rerun_headless=headless,
+            rerun_show_panels=rerun_show_panels,
+            rerun_debug=rerun_debug,
         )
     else:
         raise click.UsageError(

@@ -26,6 +26,7 @@ import threading
 import time
 import timeit
 from dataclasses import replace
+from pathlib import Path
 from threading import Lock
 from typing import Any
 
@@ -49,6 +50,66 @@ from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
 
 logger = Logger(__name__)
+
+
+def _decode_servo_message_to_observations(
+    msg: dict[str, Any],
+    state: dict[str, Any] | None,
+    full_obs: dict[str, Any] | None,
+) -> Observations | None:
+    """Build `Observations` for Rerun from RobosuiteZmqServer servo dict (head_color_image / head_depth_image)."""
+    if not msg or msg.get("head_color_image") is None:
+        return None
+    try:
+        rgb = compression.from_jpg(msg["head_color_image"])
+    except Exception:
+        return None
+    depth = None
+    raw_d = msg.get("head_depth_image")
+    if raw_d is not None:
+        try:
+            depth = compression.from_jp2(raw_d) / 1000.0
+        except Exception:
+            depth = None
+    K = msg.get("head_camera_K")
+    joint: np.ndarray | None = None
+    if msg.get("joint_positions") is not None:
+        joint = np.asarray(msg["joint_positions"], dtype=float)
+    elif state is not None and state.get("joint_positions") is not None:
+        joint = np.asarray(state["joint_positions"], dtype=float)
+    elif full_obs is not None and full_obs.get("joint") is not None:
+        joint = np.asarray(full_obs["joint"], dtype=float)
+
+    bp = msg.get("base_pose")
+    if bp is None and state is not None:
+        bp = state.get("base_pose")
+    if bp is not None:
+        bp = np.asarray(bp, dtype=float).ravel()
+        if bp.size >= 3:
+            gps, compass = bp[:2].copy(), np.asarray([float(bp[2])], dtype=float)
+        else:
+            gps, compass = np.zeros(2, dtype=float), np.zeros(1, dtype=float)
+    elif full_obs is not None:
+        g = full_obs.get("gps")
+        c = full_obs.get("compass")
+        if g is not None and c is not None:
+            gps = np.asarray(g, dtype=float).reshape(-1)[:2]
+            cc = np.asarray(c, dtype=float).ravel()
+            compass = cc[:1].copy() if cc.size else np.zeros(1, dtype=float)
+        else:
+            gps, compass = np.zeros(2, dtype=float), np.zeros(1, dtype=float)
+    else:
+        gps, compass = np.zeros(2, dtype=float), np.zeros(1, dtype=float)
+
+    return Observations(
+        gps=gps,
+        compass=compass,
+        rgb=rgb,
+        depth=depth,
+        camera_K=K,
+        joint=joint,
+        is_simulation=bool(msg.get("is_simulation", True)),
+    )
 
 
 class GenericZmqClient(AbstractRobotClient):
@@ -75,6 +136,11 @@ class GenericZmqClient(AbstractRobotClient):
         *,
         zmq_startup_timeout: float | None = None,
         allow_missing_depth: bool = False,
+        enable_rerun_server: bool = False,
+        rerun_headless: bool = False,
+        rerun_show_panels: bool = False,
+        rerun_debug: bool = False,
+        output_path: Path | str | None = None,
     ):
         super().__init__()
         self._robot_ip = robot_ip
@@ -106,10 +172,12 @@ class GenericZmqClient(AbstractRobotClient):
         self._seq_id = 0
         self._started = False
         self._finish = False
+        self._zmq_closed = False
 
         self._obs: dict[str, Any] | None = None
         self._state: dict[str, Any] | None = None
         self._servo: dict[str, Any] | None = None
+        self._servo_obs_rerun: Observations | None = None
         self._last_step = -1
 
         self._obs_lock = Lock()
@@ -120,6 +188,26 @@ class GenericZmqClient(AbstractRobotClient):
 
         self._base_xyt = np.zeros(3)
         self._nav_goal_timeout_log_streak = 0
+
+        self._rerun_debug = bool(rerun_debug) if enable_rerun_server else False
+        self._rerun: Any = None
+        self._rerun_thread: threading.Thread | None = None
+        if enable_rerun_server:
+            from emet.visualization.rerun import RerunVisualizer
+
+            out_p = Path(output_path) if output_path is not None else None
+            if out_p is not None and not out_p.exists():
+                out_p.mkdir(parents=True, exist_ok=True)
+            self._rerun = RerunVisualizer(
+                output_path=out_p,
+                display_robot_mesh=False,
+                headless=rerun_headless,
+                collapse_panels=not rerun_show_panels,
+            )
+        else:
+            from emet.visualization.rerun import NullVisualizer
+
+            self._rerun = NullVisualizer()
 
         # ZMQ sockets
         self.context = zmq.Context()
@@ -141,6 +229,9 @@ class GenericZmqClient(AbstractRobotClient):
         logger.debug("...connected.")
 
         self._recv_threads_started = False
+        self._recv_thread: threading.Thread | None = None
+        self._state_thread: threading.Thread | None = None
+        self._servo_thread: threading.Thread | None = None
 
         if start_immediately:
             if not self.start(log_startup_timeout=False):
@@ -251,6 +342,9 @@ class GenericZmqClient(AbstractRobotClient):
             self._state_thread.start()
             self._servo_thread = threading.Thread(target=self._servo_loop, daemon=True)
             self._servo_thread.start()
+            if getattr(self._rerun, "enabled", False) and self._rerun_thread is None:
+                self._rerun_thread = threading.Thread(target=self.blocking_spin_rerun, daemon=True)
+                self._rerun_thread.start()
         if not self._wait_for_zmq_ready():
             if log_startup_timeout:
                 logger.error(self._zmq_startup_failure_message())
@@ -278,7 +372,68 @@ class GenericZmqClient(AbstractRobotClient):
             return dict(self._emet_session_cache)
 
     def stop(self) -> None:
+        """Signal threads to stop, join them, and close ZMQ sockets (idempotent)."""
+        if self._zmq_closed:
+            return
+        self._zmq_closed = True
         self._finish = True
+        for attr in ("_rerun_thread", "_recv_thread", "_state_thread", "_servo_thread"):
+            t = getattr(self, attr, None)
+            if t is not None and t.is_alive():
+                t.join(timeout=3.0)
+        for sock_name in ("recv_socket", "recv_state_socket", "recv_servo_socket", "send_socket"):
+            s = getattr(self, sock_name, None)
+            if s is not None:
+                try:
+                    s.setsockopt(zmq.LINGER, 0)
+                except Exception:
+                    pass
+                try:
+                    s.close(linger=0)
+                except TypeError:
+                    try:
+                        s.close()
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+        ctx = getattr(self, "context", None)
+        if ctx is not None:
+            try:
+                ctx.term()
+            except Exception:
+                pass
+
+    def blocking_spin_rerun(self) -> None:
+        """Background thread: stream latest ZMQ obs + decoded servo images to Rerun."""
+        last_debug_t = 0.0
+        step_count = 0
+        while not self._finish:
+            if getattr(self._rerun, "enabled", False):
+                with self._obs_lock:
+                    obs = self._obs
+                    servo_obs = self._servo_obs_rerun
+                self._rerun.step(obs, servo_obs)
+                step_count += 1
+                if self._rerun_debug:
+                    now = time.time()
+                    if now - last_debug_t >= 2.0:
+                        has_obs = obs is not None
+                        has_servo = servo_obs is not None
+                        rgb_shape = (
+                            servo_obs.rgb.shape
+                            if (servo_obs is not None and getattr(servo_obs, "rgb", None) is not None)
+                            else None
+                        )
+                        logger.info(
+                            f"[RERUN] generic obs={has_obs} servo_obs={has_servo} servo_rgb_shape={rgb_shape} "
+                            f"steps={step_count}" + (" — waiting for MuJoCo ZMQ streams" if not has_obs else "")
+                        )
+                        last_debug_t = now
+                if obs is None and servo_obs is None:
+                    time.sleep(0.1)
+            else:
+                time.sleep(0.1)
 
     @property
     def running(self) -> bool:
@@ -293,6 +448,7 @@ class GenericZmqClient(AbstractRobotClient):
         self._obs = None
         self._state = None
         self._servo = None
+        self._servo_obs_rerun = None
         self._base_xyt = np.zeros(3)
         self._base_control_mode = ControlMode.IDLE
         self._emet_session_cache = None
@@ -363,6 +519,7 @@ class GenericZmqClient(AbstractRobotClient):
                 continue
             with self._obs_lock:
                 self._servo = msg
+                self._servo_obs_rerun = _decode_servo_message_to_observations(msg, self._state, self._obs)
                 self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
                     self._emet_session_cache,
                     self._emet_session_cache_step,
