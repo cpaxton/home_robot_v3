@@ -153,7 +153,8 @@ trajectory_pos_err_threshold: 0.15
 trajectory_rot_err_threshold: 0.5
 trajectory_per_step_timeout: 3.0
 
-# Embodied agent overlay (Draccus): open-vocab 3D scene graph + GraphEQA memory (defaults match dataclass when omitted)
+# Embodied overlay: open-vocab 3D scene graph + GraphEQA memory (re-enabled; uses extra GPU VRAM).
+# If you hit CUDA OOM again: use ``--llm qwen35-4B``, or set ``enabled: false`` below for one/both blocks.
 embodied_agent:
   open_vocab_scene_graph:
     enabled: true

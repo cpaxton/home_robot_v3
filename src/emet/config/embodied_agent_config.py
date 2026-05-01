@@ -30,7 +30,7 @@ from emet.utils.config import resolve_config_yaml_path
 class OpenVocabSceneGraphConfig:
     """Attach :class:`SceneGraphProcessor` to the DynaMem voxel map."""
 
-    enabled: bool = True
+    enabled: bool = False
     config_name: str = "default_scene_graph"
     device: str | None = None
 
@@ -39,7 +39,7 @@ class OpenVocabSceneGraphConfig:
 class GraphEQAMemoryConfig:
     """Feed :class:`GraphEQAMemory` each controller update (GraphEQA-style EQA)."""
 
-    enabled: bool = True
+    enabled: bool = False
     use_instance_graph: bool = True
     use_sensor_perception: bool = True
     graph_instance_dedup_xy_m: float | None = None
@@ -47,7 +47,7 @@ class GraphEQAMemoryConfig:
 
 @dataclass
 class EmbodiedAgentConfig:
-    """Defaults: open-vocab scene graph + GraphEQA memory both on."""
+    """Defaults: open-vocab scene graph + GraphEQA memory off (opt in via YAML ``embodied_agent``)."""
 
     open_vocab_scene_graph: OpenVocabSceneGraphConfig = field(default_factory=OpenVocabSceneGraphConfig)
     graph_eqa_memory: GraphEQAMemoryConfig = field(default_factory=GraphEQAMemoryConfig)
@@ -63,7 +63,10 @@ def legacy_embodied_agent_off() -> EmbodiedAgentConfig:
 
 
 def load_embodied_agent_overlay(config_path: str | None) -> EmbodiedAgentConfig:
-    """Load ``embodied_agent`` subtree from a dynav-style YAML. Missing key → all defaults."""
+    """Load ``embodied_agent`` subtree from a dynav-style YAML.
+
+    Missing ``embodied_agent:`` key → conservative defaults (both features off); enable in YAML when needed.
+    """
     if not config_path:
         return EmbodiedAgentConfig()
     full_path = Path(resolve_config_yaml_path(config_path))

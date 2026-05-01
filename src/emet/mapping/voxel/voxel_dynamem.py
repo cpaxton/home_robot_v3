@@ -33,6 +33,7 @@ from emet.utils.image import Camera, camera_xyz_to_global_xyz
 from emet.utils.morphology import binary_dilation, binary_erosion, get_edges
 from emet.utils.point_cloud_torch import unproject_masked_depth_to_xyz_coordinates
 from emet.utils.voxel import VoxelizedPointcloud, scatter3d
+from emet.utils.vram_debug import print_vram_snapshot
 
 from .voxel import VALID_FRAMES, Frame
 from .voxel import SparseVoxelMap as SparseVoxelMapBase
@@ -286,6 +287,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         if self._eqa_backend == "qwen_vl":
             self.eqa_client = client
         self._eqa_pending = None
+        print_vram_snapshot("voxel_dynamem_bind_shared_vllm_from_agent")
 
     def materialize_local_eqa_vllm(self) -> None:
         """Load a dedicated local EQA VLM when defer was used but no shared VL client was bound."""
@@ -330,6 +332,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 f"Unknown eqa_backend {self._eqa_backend!r}; use 'qwen_vl' or 'gemini' (see dynav_config.yaml eqa:)."
             )
         self._eqa_pending = None
+        print_vram_snapshot("voxel_dynamem_materialize_local_eqa_vllm")
 
     def set_scene_graph_processor(self, processor) -> None:
         """Attach a SceneGraphProcessor to update an open-vocab scene graph on each frame."""

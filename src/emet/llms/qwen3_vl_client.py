@@ -159,6 +159,16 @@ class Qwen3VLClient(AbstractVLLMClient):
             if device == "cpu":
                 self.model = self.model.to("cpu")
 
+        try:
+            from emet.utils.vram_debug import print_vram_snapshot
+
+            print_vram_snapshot(
+                "qwen3_vl_client_init",
+                extra=f"{model_name!r} quant={self._quantization!r} device={self._device!r}",
+            )
+        except Exception:
+            pass
+
     @property
     def canonical_model_key(self) -> str:
         q = self._quantization or "none"
