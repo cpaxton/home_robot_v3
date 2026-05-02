@@ -455,7 +455,13 @@ class DynamemController(BaseController):
         if depth is None:
             logger.error(f"No depth map available (depth_source={self._depth_source!r}); skipping voxel update.")
             return
-        self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose)
+        base_xyt = None
+        if obs.gps is not None and obs.compass is not None:
+            g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
+            c = np.asarray(obs.compass, dtype=np.float64).ravel()
+            if g.size >= 2 and c.size >= 1:
+                base_xyt = np.array([float(g[0]), float(g[1]), float(c[0])], dtype=np.float64)
+        self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt)
         if self.voxel_map.voxel_pcd._points is not None:
             self.rerun_visualizer.update_voxel_map(space=self.space)
         if self.voxel_map.semantic_memory._points is not None:

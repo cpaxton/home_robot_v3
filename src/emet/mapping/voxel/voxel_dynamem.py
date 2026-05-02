@@ -522,9 +522,22 @@ class SparseVoxelMap(SparseVoxelMapBase):
         else:
             return obstacles, explored, history_soft
 
-    def process_rgbd_images(self, rgb: np.ndarray, depth: np.ndarray, intrinsics: np.ndarray, pose: np.ndarray):
+    def process_rgbd_images(
+        self,
+        rgb: np.ndarray,
+        depth: np.ndarray,
+        intrinsics: np.ndarray,
+        pose: np.ndarray,
+        *,
+        base_xyt: np.ndarray | None = None,
+    ):
         """
         Process rgbd images for Dynamem
+
+        Args:
+            base_xyt: Optional ``(x, y, yaw)`` in the same world frame as ``gps`` / ``compass`` from the
+                robot client. When set, stamps ``_visited`` at the **base** so A* ``_navigable`` matches the
+                planner start pose (camera pose alone can miss the footprint for head-mounted cameras).
         """
         # Keep originals for scene graph processor (before any resizing/filtering)
         original_rgb = rgb.copy()
@@ -562,11 +575,20 @@ class SparseVoxelMap(SparseVoxelMapBase):
             except Exception as e:
                 logger.warning("Instance detection failed in process_rgbd_images: %s", e)
 
+        base_pose_t: Tensor | None = None
+        if base_xyt is not None:
+            b = np.asarray(base_xyt, dtype=np.float64).ravel()
+            if b.size >= 2:
+                th = float(b[2]) if b.size >= 3 else 0.0
+                dev = torch.device(self.map_2d_device)
+                base_pose_t = torch.tensor([float(b[0]), float(b[1]), th], dtype=torch.float32, device=dev)
+
         self.add(
             camera_pose=torch.Tensor(pose),
             rgb=torch.Tensor(rgb),
             depth=torch.Tensor(depth),
             camera_K=torch.Tensor(intrinsics),
+            base_pose=base_pose_t,
             instance_image=instance_image,
             instance_classes=instance_classes,
             instance_scores=instance_scores,
