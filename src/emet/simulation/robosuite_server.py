@@ -364,6 +364,43 @@ class RobosuiteZmqServer(BaseZmqServer):
         f = 0.5 * height / np.tan(np.radians(fovy) / 2)
         return np.array([[f, 0, width / 2], [0, f, height / 2], [0, 0, 1]])
 
+    def _sync_actuator_ctrl_from_joint_positions(self) -> None:
+        """Set ``ctrl`` so actuators command the current pose (and zero for swerve *velocity* wheels).
+
+        After MolmoSpaces autoplace or any MJCF merge, ``ctrl`` defaults to 0 while articulated
+        ``qpos`` may not; the first ``mj_step`` then applies large PD errors and the robot can
+        collapse. Velocity wheel actuators (Galaxea / rby1 ``wheel*``) must use ``ctrl=0`` at rest.
+        """
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        n = min(len(self._spec.actuator_names), len(self._spec.joint_names))
+        for i in range(n):
+            jname = self._spec.joint_names[i]
+            aname = self._spec.actuator_names[i]
+            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jname)
+            aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
+            if jid < 0 or aid < 0:
+                continue
+            qadr = int(self._mjmodel.jnt_qposadr[jid])
+            if aname.startswith("wheel"):
+                self._mjdata.ctrl[aid] = 0.0
+            else:
+                self._mjdata.ctrl[aid] = float(self._mjdata.qpos[qadr])
+
+    def _stabilize_physics_state_after_load(self) -> None:
+        """Zero all velocities, align actuators with ``qpos``, and run a few dynamics steps."""
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        with self._mj_lock:
+            self._mjdata.qvel.fill(0.0)
+            self._sync_actuator_ctrl_from_joint_positions()
+            mujoco.mj_forward(self._mjmodel, self._mjdata)
+            for _ in range(8):
+                mujoco.mj_step(self._mjmodel, self._mjdata)
+            self._mjdata.qvel.fill(0.0)
+            self._sync_actuator_ctrl_from_joint_positions()
+            mujoco.mj_forward(self._mjmodel, self._mjdata)
+
     def _base_freejoint_addrs(self) -> tuple[int, int] | None:
         """Return ``(qposadr, dofadr)`` for the free joint on ``base_link``, if any."""
         if self._mjmodel is None or self._mjdata is None:
@@ -694,9 +731,9 @@ class RobosuiteZmqServer(BaseZmqServer):
     ) -> None:
         self._load_model()
         self._running = True
+        self._stabilize_physics_state_after_load()
         self._initial_xyt = self.get_base_xyt()
         self._nav_goal_world = None
-        self._zero_base_free_joint_velocity()
         self._at_goal = True
         self._emet_session = self._build_emet_session(robocasa=robocasa)
 
