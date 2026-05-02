@@ -11,6 +11,9 @@
 - **Three memory backends**: SVM (instance memory), DynaMem (voxel semantic), GraphEQA (graph EQA). Smoke tests in `src/test/memory/test_memory_backends_smoke.py`. See `docs/plans/TESTING_BACKENDS.md`.
 - When changing behavior, run the relevant tests and fix any failures before committing. Prefer invoking tests via **`emet test`** so the project env (uv) is used.
 
+## User-facing commands (agent behavior)
+- **Before suggesting shell commands** to the user, **run them yourself** when the workspace and environment allow (from repo root: `uv run emet …`, `uv run python …`, smoke `timeout … emet serve …`, etc.). Confirm paths, flags, and typical stderr; then report what actually happened instead of only pasting commands for the user to discover errors.
+
 ## Dependencies
 - **rerun-sdk**: Use `>=0.21.0,<0.23.0` (compatible with lerobot). Do not pin to 0.18.x.
 - **pinocchio / hppfcl**: The dynamics library is installed as the **pin** package (PyPI). Pinocchio imports the **hppfcl** module at load time when built with collision support. Always list **hpp-fcl** in `pyproject.toml` dependencies so `uv sync` (or `pip install -e .`) installs it; otherwise `emet serve mujoco --robot stretch` fails with `ModuleNotFoundError: No module named 'hppfcl'`. **Do not** fix dependency or import issues by editing or patching anything under **.venv**; fix only via `pyproject.toml` (add/version deps) and re-run `uv sync`.

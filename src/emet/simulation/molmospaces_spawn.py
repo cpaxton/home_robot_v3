@@ -656,6 +656,111 @@ def _find_molmospaces_freejoint_xyz_pass(
     return None
 
 
+def _try_spawn_at_xy_candidates(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    base_body_name: str,
+    floor_effective: str,
+    robot_bodies: set[int],
+    ray_exclude: int,
+    x: float,
+    y: float,
+    z_margins: tuple[float, ...],
+    min_nonfloor_clearance: float,
+    min_upward_clearance: float,
+) -> tuple[float, float, float] | None:
+    """Single (x,y): walkable floor, upward clearance, z margin sweep + settle (shared by fallbacks)."""
+    z_floor = walkable_floor_z_at_xy(
+        model, data, x, y, floor_geom_name=floor_effective, exclude_body_id=ray_exclude
+    )
+    if z_floor is None:
+        return None
+    z_probe = float(z_floor) + 0.08
+    up_dist = upward_ray_hit_distance(model, data, x, y, z_probe, exclude_body_id=ray_exclude)
+    if up_dist is not None and up_dist < min_upward_clearance:
+        return None
+    for zm in z_margins:
+        z = z_floor + float(zm)
+        if not write_freejoint_base_xyzw(model, data, base_body_name=base_body_name, x=x, y=y, z=z):
+            return None
+        mujoco.mj_forward(model, data)
+        worst = worst_robot_nonfloor_contact_dist(
+            model, data, base_body_name=base_body_name, floor_geom_name=floor_effective
+        )
+        if worst >= min_nonfloor_clearance:
+            z_settled = settle_free_base_z_to_floor(
+                model,
+                data,
+                base_body_name=base_body_name,
+                floor_geom_name=floor_effective,
+                x=x,
+                y=y,
+                z_floor=float(z_floor),
+                z_start=z,
+                robot_bodies=robot_bodies,
+                min_nonfloor_clearance=min_nonfloor_clearance,
+            )
+            return (x, y, z_settled)
+    return None
+
+
+def _fallback_spawn_near_clip_center(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    base_body_name: str,
+    floor_effective: str,
+    robot_bodies: set[int],
+    ray_exclude: int,
+    xy_clip_raw: tuple[float, float, float, float] | None,
+    z_margins: tuple[float, ...],
+    min_nonfloor_clearance: float,
+) -> tuple[float, float, float] | None:
+    """Last resort: a few XY points near the collision clip center with looser ceiling / contact."""
+    if xy_clip_raw is None:
+        return None
+    x0, x1, y0, y1 = xy_clip_raw
+    cx = 0.5 * (x0 + x1)
+    cy = 0.5 * (y0 + y1)
+    w = x1 - x0
+    h = y1 - y0
+    dxy = min(0.55, 0.12 * min(w, h))
+    offsets = (
+        (0.0, 0.0),
+        (dxy, 0.0),
+        (-dxy, 0.0),
+        (0.0, dxy),
+        (0.0, -dxy),
+        (dxy, dxy),
+        (-dxy, dxy),
+        (dxy, -dxy),
+        (-dxy, -dxy),
+    )
+    for ox, oy in offsets:
+        px, py = cx + ox, cy + oy
+        if not (x0 <= px <= x1 and y0 <= py <= y1):
+            continue
+        for min_up in (0.12, 0.06, 0.035):
+            for clear in (min_nonfloor_clearance, -0.002, -0.006):
+                got = _try_spawn_at_xy_candidates(
+                    model,
+                    data,
+                    base_body_name=base_body_name,
+                    floor_effective=floor_effective,
+                    robot_bodies=robot_bodies,
+                    ray_exclude=ray_exclude,
+                    x=px,
+                    y=py,
+                    z_margins=z_margins,
+                    min_nonfloor_clearance=float(clear),
+                    min_upward_clearance=min_up,
+                )
+                if got is not None:
+                    return got
+    return None
+
+
 def find_molmospaces_freejoint_xyz(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -728,13 +833,26 @@ def find_molmospaces_freejoint_xyz(
     if placed_relaxed is not None:
         return placed_relaxed
 
+    ray_exclude = int(base_bid) if base_bid >= 0 else -1
+    placed_fb = _fallback_spawn_near_clip_center(
+        model,
+        data,
+        base_body_name=base_body_name,
+        floor_effective=floor_effective,
+        robot_bodies=robot_bodies,
+        ray_exclude=ray_exclude,
+        xy_clip_raw=clip_probe,
+        z_margins=z_margins,
+        min_nonfloor_clearance=min_nonfloor_clearance,
+    )
+    if placed_fb is not None:
+        return placed_fb
+
     label = scene_label or "(unknown scene)"
+    clip_s = "yes" if clip_probe is not None else "no"
     logger.warning(
-        "molmospaces_spawn.find_molmospaces_freejoint_xyz: primary and relaxed search failed "
-        "(scene=%s floor_geom_resolved=%r xy_clip_rect=%s)",
-        label,
-        floor_effective,
-        "yes" if clip_probe is not None else "no",
+        f"molmospaces_spawn.find_molmospaces_freejoint_xyz: primary, relaxed, and clip-center "
+        f"fallback failed (scene={label!r} floor_geom_resolved={floor_effective!r} xy_clip_rect={clip_s})"
     )
     return None
 
