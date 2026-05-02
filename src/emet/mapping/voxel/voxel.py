@@ -649,14 +649,22 @@ class SparseVoxelMap:
         """Update 2d map of where robot has visited"""
         # Add exploration here
         # Base pose can be whatever, going to assume xyt for now
-        map_xy = ((base_pose[:2] / self.grid_resolution) + self.grid_origin[:2]).int()
-        x0 = int(map_xy[0] - self._disk_size)
-        x1 = int(map_xy[0] + self._disk_size + 1)
-        y0 = int(map_xy[1] - self._disk_size)
-        y1 = int(map_xy[1] + self._disk_size + 1)
-        assert x0 >= 0
-        assert y0 >= 0
-        self._visited[x0:x1, y0:y1] += self._visited_disk
+        device = base_pose.device
+        res = float(self.grid_resolution)
+        origin = self.grid_origin[:2].to(device=device, dtype=base_pose.dtype)
+        map_xy = ((base_pose[:2] / res) + origin).long()
+        mx, my = int(map_xy[0]), int(map_xy[1])
+        ds = int(self._disk_size)
+        h, w = int(self._visited.shape[0]), int(self._visited.shape[1])
+        x0, x1 = max(0, mx - ds), min(h, mx + ds + 1)
+        y0, y1 = max(0, my - ds), min(w, my + ds + 1)
+        if x0 >= x1 or y0 >= y1:
+            return
+        xd0 = x0 - (mx - ds)
+        yd0 = y0 - (my - ds)
+        xd1 = xd0 + (x1 - x0)
+        yd1 = yd0 + (y1 - y0)
+        self._visited[x0:x1, y0:y1] += self._visited_disk[xd0:xd1, yd0:yd1]
 
     def write_to_pickle(self, filename: str, compress: bool = True) -> None:
         """Write out to a pickle file. This is a rough, quick-and-easy output for debugging, not intended to replace the scalable data writer in data_tools for bigger efforts."""
