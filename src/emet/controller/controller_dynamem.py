@@ -694,6 +694,8 @@ class DynamemController(BaseController):
                         blocking=True,
                     )
 
+                self.robot.look_front()
+                self.update()
                 return True, res[-1]
             # The robot has not reached the object. Next it should look around and continue navigation
             else:
@@ -703,6 +705,8 @@ class DynamemController(BaseController):
                     rot_err_threshold=self.rot_err_threshold,
                     blocking=True,
                 )
+                self.robot.look_front()
+                self.update()
                 return False, None
         else:
             print("Failed. Try again!")

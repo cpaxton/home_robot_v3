@@ -520,6 +520,8 @@ class RerunVisualizer:
         xy = np.asarray(obs["gps"], dtype=float).reshape(-1)[:2]
         comp = np.asarray(obs["compass"], dtype=float).ravel()
         theta = float(comp[0]) if comp.size else 0.0
+        # Live streaming: static=True pins the entity to a single value in the viewer timeline.
+        static_pose = bool(getattr(self, "_memory_view", False))
         rb_arrow = rr.Arrows3D(
             origins=[0, 0, 0],
             vectors=[0.4, 0, 0],
@@ -527,10 +529,11 @@ class RerunVisualizer:
             labels="robot",
             colors=[255, 0, 0, 255],
         )
-        rr.log("world/robot/arrow", rb_arrow, static=True)
+        rr.log("world/robot/arrow", rb_arrow, static=static_pose)
         rr.log(
             "world/robot/blob",
             rr.Points3D([0, 0, 0], colors=[255, 0, 0, 255], radii=0.13),
+            static=static_pose,
         )
         rr.log(
             "world/robot",
@@ -539,7 +542,7 @@ class RerunVisualizer:
                 rotation=rr.RotationAxisAngle(axis=[0, 0, 1], radians=theta),
                 axis_length=0.7,
             ),
-            static=True,
+            static=static_pose,
         )
 
     def log_ee_frame(self, obs):
@@ -1159,13 +1162,12 @@ class RerunVisualizer:
         *obs* is typically the full ZMQ observation dict (Stretch / Generic) or an Observations instance.
         *servo* is optional low-res head/EE `Observations` (Stretch servo thread); if missing but *obs*
         contains ``rgb``, head camera is logged from *obs* instead.
-        """
-        if obs is None:
-            time.sleep(0.05)
-            return
 
+        When the full-observation socket has no frame yet (or frames are skipped e.g. missing depth),
+        *obs* may be ``None`` while *servo* still carries head RGB and base pose — log from *servo* in that case.
+        """
         head_cam = servo
-        if head_cam is None:
+        if head_cam is None or getattr(head_cam, "rgb", None) is None:
             if isinstance(obs, dict) and obs.get("rgb") is not None:
                 head_cam = Observations.from_dict(obs)
             elif isinstance(obs, Observations) and obs.rgb is not None:
@@ -1181,8 +1183,15 @@ class RerunVisualizer:
                 "ee_pose": obs.ee_pose,
                 "joint": obs.joint,
             }
-        else:
+        elif isinstance(obs, dict):
             obs_pose = obs
+        else:
+            obs_pose = {
+                "gps": head_cam.gps,
+                "compass": head_cam.compass,
+                "ee_pose": head_cam.ee_pose,
+                "joint": head_cam.joint,
+            }
 
         rr.set_time_seconds("realtime", time.time())
         try:
