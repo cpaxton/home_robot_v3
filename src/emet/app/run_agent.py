@@ -175,11 +175,14 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
 )
 @click.option(
     "--robot",
+    metavar="NAME",
     default="stretch",
     help=(
         "Robot backend (stretch, rby1, galaxea_r1). Must match the ZMQ server: same value as "
         "emet serve mujoco --robot after any CLI remaps. MolmoSpaces (--molmospaces-scene) uses rby1 on the "
-        "server even when serve is started with default stretch—use --robot rby1 here."
+        "server even when serve is started with default stretch—use --robot rby1 here. "
+        "Always pass the name after --robot (e.g. --robot stretch); if you omit it, the next flag may be "
+        "parsed as the robot string and you will see 'unexpected extra argument'."
     ),
 )
 @click.option(
@@ -270,6 +273,14 @@ def main(
       emet run agent --llm qwen3-vl-eqa --eqa --debug-vram   # one Qwen3-VL + VRAM milestones
     """
     cmd_list = list(commands) if commands else None
+
+    robot = str(robot).strip()
+    if not robot or robot.startswith("-"):
+        raise click.UsageError(
+            "`--robot` must be followed by a backend name (e.g. `stretch`, `rby1`). "
+            "You left it empty or the next token was parsed as the value (often another flag); "
+            "use e.g. `emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml --rerun`."
+        )
 
     if debug_models:
         os.environ["EMET_AGENT_MODEL_DEBUG"] = "1"
