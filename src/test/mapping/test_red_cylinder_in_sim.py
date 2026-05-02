@@ -18,6 +18,8 @@
 # Sim tests run by default; use RUN_SIM_TESTS=0 or emet test --no-sim to skip.
 # With timeout (requires pytest-timeout): same command; test is marked with 120s timeout.
 # On Linux, MuJoCo uses EGL (headless).
+#
+# Parametrized: default Stretch sim, and ``--robot innate_mars`` (GenericZmqClient + same table scene)
 
 import os
 import socket
@@ -54,7 +56,8 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 30) -> bool:
     reason="Set RUN_SIM_TESTS=0 to skip (sim tests run by default)",
 )
 @pytest.mark.timeout(120)
-def test_red_cylinder_detected_in_sim():
+@pytest.mark.parametrize("sim_robot", ["stretch", "innate_mars"])
+def test_red_cylinder_detected_in_sim(sim_robot: str):
     """
     Robot moves around in the default MuJoCo scene (rotate_in_place to build map),
     then we find the red cylinder via localize_text. Fails if not found within 120s.
@@ -67,13 +70,11 @@ def test_red_cylinder_detected_in_sim():
         env["MUJOCO_GL"] = "egl"
 
     try:
+        server_cmd = [sys.executable, "-m", "emet.simulation.mujoco_server", "--headless"]
+        if sim_robot == "innate_mars":
+            server_cmd.extend(["--robot", "innate_mars"])
         proc = subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "emet.simulation.mujoco_server",
-                "--headless",
-            ],
+            server_cmd,
             env=env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
@@ -84,15 +85,26 @@ def test_red_cylinder_detected_in_sim():
             proc.wait(timeout=5)
             pytest.fail("MuJoCo server did not bind to 4401 within 45s. stderr:\n" + stderr)
 
+        from emet.app.robot_cli import create_robot_client_from_cli
         from emet.controller.task.dynamem import DynamemTaskExecutor
-        from emet.controller.zmq_client import StretchZmqClient
         from emet.core.parameters import get_parameters
 
-        robot = StretchZmqClient(
-            robot_ip="127.0.0.1",
-            enable_rerun_server=False,
-            start_immediately=True,
-        )
+        if sim_robot == "stretch":
+            from emet.controller.zmq_client import StretchZmqClient
+
+            robot = StretchZmqClient(
+                robot_ip="127.0.0.1",
+                enable_rerun_server=False,
+                start_immediately=True,
+            )
+        else:
+            robot = create_robot_client_from_cli(
+                sim_robot,
+                "127.0.0.1",
+                enable_rerun_server=False,
+                start_immediately=True,
+                allow_missing_depth=True,
+            )
         parameters = get_parameters("dynav_config.yaml")
         executor = DynamemTaskExecutor(
             robot,

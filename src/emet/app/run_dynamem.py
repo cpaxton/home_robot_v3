@@ -58,7 +58,7 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
     "--robot",
     type=str,
     default="stretch",
-    help="Robot backend (stretch, rby1, galaxea_r1, etc.). Must match the server started with emet serve mujoco --robot <name>.",
+    help="Robot backend (stretch, innate_mars, rby1, galaxea_r1, …). Must match emet serve mujoco --robot.",
 )
 @click.option("--target_object", type=str, default=None, help="Target object to grasp")
 @click.option("--target_receptacle", "--receptacle", type=str, default=None, help="Target receptacle to place")
