@@ -648,9 +648,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
         Add pixel points into the semantic memory
         """
         # Adding all points to voxelizedPointCloud is useless and expensive, we should exclude threshold of all points
-        selected_indices = torch.randperm(len(valid_xyz))[: int((1 - threshold) * len(valid_xyz))]
-        if len(selected_indices) == 0:
-            return
+        # Adding pixel points into the semantic memory is expensive; subsample but always keep ≥1 point.
+        n_keep = max(1, int((1 - threshold) * len(valid_xyz)))
+        selected_indices = torch.randperm(len(valid_xyz))[:n_keep]
         if valid_xyz is not None:
             valid_xyz = valid_xyz[selected_indices]
         if feature is not None:
@@ -1122,9 +1122,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
         # TODO: weights could also be confidence, inv distance from camera, etc
         if world_xyz.nelement() > 0:
-            selected_indices = torch.randperm(len(world_xyz))[: int((1 - self.point_update_threshold) * len(world_xyz))]
-            if len(selected_indices) == 0:
-                return
+            n_keep = max(1, int((1 - self.point_update_threshold) * len(world_xyz)))
+            selected_indices = torch.randperm(len(world_xyz))[:n_keep]
             if world_xyz is not None:
                 world_xyz = world_xyz[selected_indices]
             if feats is not None:

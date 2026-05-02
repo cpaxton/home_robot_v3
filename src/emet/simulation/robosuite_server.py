@@ -331,6 +331,26 @@ class RobosuiteZmqServer(BaseZmqServer):
         f = 0.5 * height / np.tan(np.radians(fovy) / 2)
         return np.array([[f, 0, width / 2], [0, f, height / 2], [0, 0, 1]])
 
+    def _camera_pose_world(self, camera_name: str) -> np.ndarray:
+        """4x4 camera-to-world transform for depth unprojection and map ``_visited`` updates.
+
+        Previously this server sent ``np.eye(4)``, which left DynaMem with geometry near the origin
+        while the robot reported ``gps`` elsewhere, so ``_navigable = ~obstacle & explored`` had no
+        overlap at the base and exploration planning failed immediately.
+        """
+        if self._mjmodel is None or self._mjdata is None:
+            return np.eye(4, dtype=np.float64)
+        with self._mj_lock:
+            cam_id = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_CAMERA, camera_name)
+            if cam_id < 0:
+                return np.eye(4, dtype=np.float64)
+            R = np.asarray(self._mjdata.cam_xmat[cam_id], dtype=np.float64).reshape(3, 3)
+            pos = np.asarray(self._mjdata.cam_xpos[cam_id], dtype=np.float64).reshape(3)
+            T = np.eye(4, dtype=np.float64)
+            T[:3, :3] = R
+            T[:3, 3] = pos
+            return T
+
     def _base_freejoint_addrs(self) -> tuple[int, int] | None:
         """Return ``(qposadr, dofadr)`` for the free joint on ``base_link``, if any."""
         if self._mjmodel is None or self._mjdata is None:
@@ -471,9 +491,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                                 f"{self._spec.base_link_name!r}; cannot teleport."
                             )
                         else:
-                            logger.info(
-                                f"Sim navigation (teleport): base at x={wx:.3f} y={wy:.3f} theta={wt:.3f}."
-                            )
+                            logger.info(f"Sim navigation (teleport): base at x={wx:.3f} y={wy:.3f} theta={wt:.3f}.")
                         self._nav_goal_world = None
                         self._zero_base_free_joint_velocity()
                         self._at_goal = True
@@ -517,12 +535,13 @@ class RobosuiteZmqServer(BaseZmqServer):
             xyt = np.zeros(3)
 
         K = self._get_camera_K(primary_cam, width, height)
+        cam_pose = self._camera_pose_world(primary_cam)
 
         message = {
             "rgb": compression.to_jpg(rgb),
             "depth": compression.to_jp2(depth_u16),
             "camera_K": K,
-            "camera_pose": np.eye(4),
+            "camera_pose": cam_pose,
             "ee_pose": np.eye(4),
             "joint": positions,
             "gps": xyt[:2],
