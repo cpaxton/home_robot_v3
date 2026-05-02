@@ -1,6 +1,15 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
 # Shared robot ZMQ client construction for `emet run` CLIs (`--robot`, `--robot-ip`, `--port-offset`).
 
 from __future__ import annotations
@@ -68,7 +77,7 @@ def create_robot_client_from_cli(
     robot_ip: str,
     *,
     port_offset: int = 0,
-    enable_rerun_server: bool = True,
+    enable_rerun_server: bool = False,
     rerun_headless: bool = False,
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
@@ -79,6 +88,9 @@ def create_robot_client_from_cli(
     """
     Resolve ``--robot`` the same way as ``emet serve mujoco --robot`` / ``run_dynamem``:
     Stretch uses ``StretchZmqClient``; other names use ``ROBOT_REGISTRY`` backends.
+
+    Rerun is **off** unless *enable_rerun_server* is true (``run_dynamem`` / ``run_scene_graph`` pass
+    ``enable_rerun_server=not no_rerun``; ``run_graph_eqa`` passes true explicitly).
     """
     robot_key = robot.lower().replace("-", "_")
     if robot_key == "stretch":
@@ -107,6 +119,10 @@ def create_robot_client_from_cli(
             "robot_ip": robot_ip,
             "port_offset": port_offset,
             "allow_missing_depth": allow_missing_depth,
+            "enable_rerun_server": enable_rerun_server,
+            "rerun_headless": rerun_headless,
+            "rerun_show_panels": rerun_show_panels,
+            "rerun_debug": rerun_debug,
         }
         if zmq_startup_timeout is not None:
             kwargs["zmq_startup_timeout"] = float(zmq_startup_timeout)

@@ -12,6 +12,7 @@
 import os
 import time
 import timeit
+from typing import Any
 
 import numpy as np
 import rerun as rr
@@ -247,6 +248,9 @@ def _null_noop(*args, **kwargs):
 
 
 class RerunVisualizer:
+    """Live Rerun logging for Stretch (mesh + joints) and generic ZMQ robots (cameras + base pose)."""
+
+    enabled = True
     camera_point_radius = 0.01
     max_displayed_points_per_camera: int = 10000
 
@@ -264,10 +268,11 @@ class RerunVisualizer:
         *,
         memory_view: bool = False,
         num_frames: int = 0,
+        mjcf_robot: tuple[str, tuple[str, ...], int, str] | None = None,
     ):
         """Rerun visualizer class
         Args:
-            display_robot_mesh (bool): Display robot mesh
+            display_robot_mesh (bool): Display robot mesh (Stretch URDF) or MJCF skeleton when *mjcf_robot* is set
             open_browser (bool): Open browser at start
             headless (bool): If True, disable native viewer and serve web only (connect at :9090)
             server_memory_limit (str): Server memory limit E.g. 2GB or 20%
@@ -297,19 +302,38 @@ class RerunVisualizer:
 
         if output_path is not None:
             rr.save(output_path / "rerun_log.rrd")
-        # Always start web server so :9090 is available (for remote viewing even when native viewer spawns)
-        rr.serve(
-            open_browser=open_browser and has_display() and not headless,
-            server_memory_limit=server_memory_limit,
-        )
-        if not has_display() or headless:
-            logger.info("Rerun web viewer: connect at http://<this-host>:9090?url=ws://<this-host>:9877")
+        # ``rr.serve`` streams over WebSockets (web UI on :9090). ``init(spawn=True)`` streams to the native
+        # viewer over TCP (default :9876). Doing both routes logs only to the WebSocket sink, so the native
+        # window stays empty while the browser looks fine. Serve only when we are not using a spawned native viewer.
+        use_spawned_native = bool(spawn_gui) and not bool(headless)
+        if not use_spawned_native:
+            rr.serve(
+                open_browser=open_browser and has_display() and not headless,
+                server_memory_limit=server_memory_limit,
+            )
+            if not has_display() or headless:
+                logger.info("Rerun web viewer: connect at http://<this-host>:9090?url=ws://<this-host>:9877")
+        else:
+            logger.info(
+                "Rerun native viewer is receiving the log stream (TCP). Web viewer is not started for this "
+                "process; use RERUN_HEADLESS=1 or `emet run agent ... --rerun` with `--headless` to use :9090 instead."
+            )
 
         self.display_robot_mesh = display_robot_mesh
         self.show_cameras_in_3d_view = show_cameras_in_3d_view
         self.show_camera_point_clouds = show_camera_point_clouds
 
-        if self.display_robot_mesh:
+        self.mjcf_skeleton = None
+        self.urdf_logger = None
+        if mjcf_robot is not None and display_robot_mesh:
+            mjcf_path, joint_names, dof, base_link = mjcf_robot
+            try:
+                from emet.visualization.mjcf_rerun_robot import MjcfBodySkeletonLogger
+
+                self.mjcf_skeleton = MjcfBodySkeletonLogger(mjcf_path, joint_names, dof, base_link)
+            except Exception as e:
+                logger.warning("MJCF Rerun robot skeleton disabled (%s).", e)
+        if self.mjcf_skeleton is None and display_robot_mesh and mjcf_robot is None:
             self.urdf_logger = StretchURDFLogger()
             self.urdf_logger.load_robot_mesh(use_collision=False)
 
@@ -409,7 +433,12 @@ class RerunVisualizer:
             identity_name (str): rerun identity name
             img (2D or 3D array): the 2d image you want to log into rerun
         """
-        # rr.init("Stretch_robot", spawn=(not self.open_browser))
+        if not self._memory_view:
+            rr.set_time_seconds("realtime", time.time())
+        if isinstance(img, torch.Tensor):
+            img = img.detach().cpu().numpy()
+        if isinstance(img, np.ndarray):
+            img = np.ascontiguousarray(img)
         log_to_rerun(identity_name, rr.Image(img))
 
     def log_text(self, identity_name: str, text: str):
@@ -419,7 +448,8 @@ class RerunVisualizer:
             identity_name (str): rerun identity name
             text (str): Markdown codes you want to log in rerun
         """
-        # rr.init("Stretch_robot", spawn=(not self.open_browser))
+        if not self._memory_view:
+            rr.set_time_seconds("realtime", time.time())
         rr.log(identity_name, rr.TextDocument(text, media_type=rr.MediaType.MARKDOWN))
 
     def log_arrow3D(
@@ -513,8 +543,11 @@ class RerunVisualizer:
     def log_robot_xyt(self, obs: Observations):
         """Log robot world pose"""
         # rr.set_time_seconds("realtime", time.time())
-        xy = obs["gps"]
-        theta = obs["compass"]
+        xy = np.asarray(obs["gps"], dtype=float).reshape(-1)[:2]
+        comp = np.asarray(obs["compass"], dtype=float).ravel()
+        theta = float(comp[0]) if comp.size else 0.0
+        # Live streaming: static=True pins the entity to a single value in the viewer timeline.
+        static_pose = bool(getattr(self, "_memory_view", False))
         rb_arrow = rr.Arrows3D(
             origins=[0, 0, 0],
             vectors=[0.4, 0, 0],
@@ -522,10 +555,11 @@ class RerunVisualizer:
             labels="robot",
             colors=[255, 0, 0, 255],
         )
-        rr.log("world/robot/arrow", rb_arrow, static=True)
+        rr.log("world/robot/arrow", rb_arrow, static=static_pose)
         rr.log(
             "world/robot/blob",
             rr.Points3D([0, 0, 0], colors=[255, 0, 0, 255], radii=0.13),
+            static=static_pose,
         )
         rr.log(
             "world/robot",
@@ -534,7 +568,7 @@ class RerunVisualizer:
                 rotation=rr.RotationAxisAngle(axis=[0, 0, 1], radians=theta),
                 axis_length=0.7,
             ),
-            static=True,
+            static=static_pose,
         )
 
     def log_ee_frame(self, obs):
@@ -1095,14 +1129,8 @@ class RerunVisualizer:
                     ),
                 )
 
-        # Text summary
-        summary = scene_graph.to_string()
         stable_count = len(scene_graph.stable_objects)
-        header = (
-            f"## Scene Graph\n\n"
-            f"**{scene_graph.num_objects}** objects "
-            f"({stable_count} stable)\n\n"
-        )
+        header = f"## Scene Graph\n\n**{scene_graph.num_objects}** objects ({stable_count} stable)\n\n"
         # Object table
         table_lines = ["| ID | Label | Seen | Stable |", "|---|---|---|---|"]
         for node in scene_graph.nodes.values():
@@ -1155,27 +1183,61 @@ class RerunVisualizer:
         # rr.set_time_seconds("realtime", ts)
 
     def step(self, obs, servo):
-        """Log all the data"""
-        if obs and servo:
-            rr.set_time_seconds("realtime", time.time())
-            try:
-                t0 = timeit.default_timer()
-                self.log_robot_xyt(obs)
-                self.log_ee_frame(obs)
+        """Log streaming robot/sensor data.
 
-                # Cameras use the lower-res servo object
-                self.log_head_camera(servo)
-                self.log_ee_camera(servo)
+        *obs* is typically the full ZMQ observation dict (Stretch / Generic) or an Observations instance.
+        *servo* is optional low-res head/EE `Observations` (Stretch servo thread); if missing but *obs*
+        contains ``rgb``, head camera is logged from *obs* instead.
 
-                self.log_robot_state(obs)
+        When the full-observation socket has no frame yet (or frames are skipped e.g. missing depth),
+        *obs* may be ``None`` while *servo* still carries head RGB and base pose — log from *servo* in that case.
+        """
+        head_cam = servo
+        if head_cam is None or getattr(head_cam, "rgb", None) is None:
+            if isinstance(obs, dict) and obs.get("rgb") is not None:
+                head_cam = Observations.from_dict(obs)
+            elif isinstance(obs, Observations) and obs.rgb is not None:
+                head_cam = obs
+        if head_cam is None or getattr(head_cam, "rgb", None) is None:
+            time.sleep(0.05)
+            return
 
-                if self.display_robot_mesh:
-                    self.log_robot_transforms(obs)
-                t1 = timeit.default_timer()
-                sleep_time = self.step_delay_s - (t1 - t0)
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
+        if isinstance(obs, Observations):
+            obs_pose: dict[str, Any] = {
+                "gps": obs.gps,
+                "compass": obs.compass,
+                "ee_pose": obs.ee_pose,
+                "joint": obs.joint,
+            }
+        elif isinstance(obs, dict):
+            obs_pose = obs
+        else:
+            obs_pose = {
+                "gps": head_cam.gps,
+                "compass": head_cam.compass,
+                "ee_pose": head_cam.ee_pose,
+                "joint": head_cam.joint,
+            }
 
-            except Exception as e:
-                logger.error(e)
-                raise e
+        rr.set_time_seconds("realtime", time.time())
+        try:
+            t0 = timeit.default_timer()
+            self.log_robot_xyt(obs_pose)
+            self.log_ee_frame(obs_pose)
+
+            self.log_head_camera(head_cam)
+            self.log_ee_camera(head_cam)
+
+            if self.display_robot_mesh and getattr(self, "mjcf_skeleton", None) is not None:
+                self.mjcf_skeleton.apply_and_log(obs_pose)
+            elif self.display_robot_mesh and getattr(self, "urdf_logger", None) is not None:
+                self.log_robot_state(obs_pose)
+                self.log_robot_transforms(obs_pose)
+            t1 = timeit.default_timer()
+            sleep_time = self.step_delay_s - (t1 - t0)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+
+        except Exception as e:
+            logger.error(e)
+            raise e

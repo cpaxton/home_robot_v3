@@ -39,13 +39,23 @@ def update_graph_memory_from_dynamem_observation(
     dedup_skips: Callable[[str, np.ndarray], bool] | None,
     obs: Any,
 ) -> None:
-    """Append one observation to ``graph_memory`` (same logic as ``GraphEQAController.update`` tail)."""
+    """Append one observation to ``graph_memory`` (same logic as ``GraphEQAController.update`` tail).
+
+    When ``use_sensor_perception`` is true, labels always come from the sensor VLM path below.
+    The instance-detector branch runs only if instance graph is enabled **and** sensor VLM is off,
+    so YoloE/OWL nodes are not used as a shortcut that skips Qwen3.5-VL.
+    """
     rgb = obs.rgb
     if obs.camera_pose is None:
         return
 
     vm = voxel_map
-    if use_instance_graph and getattr(vm, "observations", None) and len(vm.observations) > 0:
+    if (
+        use_instance_graph
+        and not use_sensor_perception
+        and getattr(vm, "observations", None)
+        and len(vm.observations) > 0
+    ):
         frame = vm.observations[-1]
         items = frame_instances_to_labels_xyz(
             frame,

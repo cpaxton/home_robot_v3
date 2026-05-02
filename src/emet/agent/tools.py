@@ -207,7 +207,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         ok = executor([("explore", "")])
         robot_xy = _robot_base_xy(robot)
         vm = _voxel_map_from_executor(executor)
-        _img, stats = snapshot_from_voxel_map(vm, robot_xy)
+        _img, stats, _ = snapshot_from_voxel_map(vm, robot_xy)
         summary = format_navigation_report(stats, explore_ok=ok)
         head = "Explore finished." if ok else "Explore failed or interrupted."
         return f"{head} {summary}"
@@ -233,7 +233,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
             return "Robot not connected."
         robot_xy = _robot_base_xy(robot)
         vm = _voxel_map_from_executor(executor)
-        _img, stats = snapshot_from_voxel_map(vm, robot_xy)
+        _img, stats, _ = snapshot_from_voxel_map(vm, robot_xy)
         return format_navigation_report(stats, explore_ok=None)
 
     def send_map_snapshot() -> str:
@@ -244,7 +244,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
             return "Robot not connected."
         robot_xy = _robot_base_xy(robot)
         vm = _voxel_map_from_executor(executor)
-        img, stats = snapshot_from_voxel_map(vm, robot_xy)
+        img, stats, img_discord = snapshot_from_voxel_map(vm, robot_xy)
         summary = format_navigation_report(stats, explore_ok=None)
         if img is None:
             return f"No map image available. {summary}"
@@ -261,13 +261,14 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         discord_sent = False
         if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
             try:
-                discord_bot.push_task_to_all_channels(message=None, content=np.asarray(img).copy())
+                to_send = img_discord if img_discord is not None else img
+                discord_bot.push_task_to_all_channels(message=None, content=np.asarray(to_send).copy())
                 discord_sent = True
             except Exception as e:
                 _logger.warning(f"Discord map snapshot failed: {e}")
         parts = [summary]
         if discord_sent:
-            parts.append("Top-down map image sent to Discord.")
+            parts.append("Top-down map image sent to Discord (cropped to explored region).")
         if rerun_logged:
             parts.append("Top-down map logged to Rerun at world/map_snapshot/topdown.")
         return " ".join(parts)
@@ -289,8 +290,9 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         Tool(
             name="send_map_snapshot",
             description=(
-                "Render a top-down RGB view of obstacles vs explored space and send to Discord (if configured); "
-                "also logs to Rerun at world/map_snapshot/topdown when the live Rerun visualizer is enabled."
+                "Render a top-down RGB view of obstacles vs explored space and send to Discord (if configured) "
+                "as a crop around the explored region (plus margin); "
+                "also logs the full top-down map to Rerun at world/map_snapshot/topdown when the live Rerun visualizer is enabled."
             ),
             parameters=_NO_PARAMS,
             func=send_map_snapshot,
