@@ -76,6 +76,21 @@ INIT_WRIST_YAW = 0
 INIT_HEAD_PAN = -1.57
 INIT_HEAD_TILT = -0.65
 
+
+def _finite_xyz_traj_target(traj_target_point: Any) -> bool:
+    """True if traj tail looks like a 3D world point (not a waypoint or NaN sentinel)."""
+    if isinstance(traj_target_point, torch.Tensor):
+        t = traj_target_point.detach().cpu().reshape(-1)
+        return t.numel() >= 3 and bool(torch.isfinite(t[:3]).all())
+    if isinstance(traj_target_point, np.ndarray):
+        a = np.asarray(traj_target_point, dtype=np.float64).reshape(-1)
+        return a.size >= 3 and bool(np.all(np.isfinite(a[:3])))
+    if isinstance(traj_target_point, (list, tuple)) and len(traj_target_point) >= 3:
+        a = np.asarray(traj_target_point[:3], dtype=np.float64)
+        return bool(np.all(np.isfinite(a)))
+    return False
+
+
 # Batched OWL text queries for describe_head_camera_scene_text (single forward pass).
 _DESCRIBE_SCENE_OWL_QUERIES: tuple[str, ...] = (
     "table",
@@ -761,6 +776,10 @@ class DynamemController(BaseController):
             ):
                 localized_point = traj_target_point
                 debug_text += "## Last visual grounding results looks fine so directly use it.\n"
+            elif hasattr(self.encoder, "feature_matching_threshold") and _finite_xyz_traj_target(traj_target_point):
+                # Short queries ("red object") often fail SigLIP neighborhood re-check; still navigate to last grounding.
+                localized_point = traj_target_point
+                debug_text += "## Reusing saved trajectory target; semantic re-check was not decisive.\n"
 
         print("Target verification finished")
 

@@ -395,9 +395,12 @@ class SparseVoxelMap(SparseVoxelMapBase):
         if alignments is None:
             return False
         alignments = alignments.detach().cpu()[0]
-        if torch.max(alignments[distances <= distance_threshold]) < similarity_threshold:
-            print("Points close the the point are not similar to the text!")
-        return torch.max(alignments[distances < distance_threshold]) >= similarity_threshold
+        near = distances <= distance_threshold
+        if torch.count_nonzero(near) == 0:
+            return False
+        if torch.max(alignments[near]) < similarity_threshold:
+            print("Points close to the point are not similar to the text!")
+        return torch.max(alignments[near]) >= similarity_threshold
 
     def get_2d_map(self, debug: bool = False, return_history_id: bool = False, kernel: int = 7) -> tuple[Tensor, ...]:
         """
