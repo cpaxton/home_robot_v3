@@ -176,13 +176,14 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
 @click.option(
     "--robot",
     metavar="NAME",
-    default="stretch",
+    default=None,
     help=(
-        "Robot backend (stretch, rby1, galaxea_r1). Must match the ZMQ server: same value as "
+        "Robot backend (stretch, rby1, galaxea_r1). Overrides top-level ``robot`` in --agent-config when set; "
+        "if omitted, that YAML key is used (default ``stretch`` when the key is absent). Must match "
         "emet serve mujoco --robot after any CLI remaps. MolmoSpaces (--molmospaces-scene) uses rby1 on the "
-        "server even when serve is started with default stretch—use --robot rby1 here. "
-        "Always pass the name after --robot (e.g. --robot stretch); if you omit it, the next flag may be "
-        "parsed as the robot string and you will see 'unexpected extra argument'."
+        "server even when serve is started with default stretch—set ``robot: rby1`` in YAML or pass --robot rby1. "
+        "Always put the name immediately after --robot (e.g. --robot stretch); if you omit the name, the next "
+        "flag may be parsed as the value."
     ),
 )
 @click.option(
@@ -245,7 +246,7 @@ def main(
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
     rerun_bind: bool = False,
-    robot: str = "stretch",
+    robot: str | None = None,
     agent_config: str = "dynav_config.yaml",
     vl_include_camera: bool = False,
     no_vl_camera: bool = False,
@@ -265,6 +266,7 @@ def main(
       emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
       # MolmoSpaces: ``emet serve mujoco --molmospaces-scene ithor ...`` (often DISPLAY=:1 instead of --headless); same --port-offset as serve:
       emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml
+      emet run agent --agent-config configs/agent_rby1_discord.yaml   # uses robot: from YAML
       emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml
       emet run agent --input-path logs/memory_xxx --no-discord
       emet run agent --no-llm   # letter commands (E/M/Q/P)
@@ -274,7 +276,10 @@ def main(
     """
     cmd_list = list(commands) if commands else None
 
-    robot = str(robot).strip()
+    if robot is None or str(robot).strip() == "":
+        robot = str(get_parameters(agent_config).get("robot", "stretch")).strip()
+    else:
+        robot = str(robot).strip()
     if not robot or robot.startswith("-"):
         raise click.UsageError(
             "`--robot` must be followed by a backend name (e.g. `stretch`, `rby1`). "
