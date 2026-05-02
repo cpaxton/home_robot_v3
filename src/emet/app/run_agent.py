@@ -149,12 +149,41 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 @click.option(
+    "--headless",
+    is_flag=True,
+    help="With --rerun: no native Rerun window; open http://<this-host>:9090?url=ws://<this-host>:9877.",
+)
+@click.option(
+    "--rerun",
+    is_flag=True,
+    help="Enable Rerun live visualization (off by default; same viewer as emet run dynamem).",
+)
+@click.option(
+    "--rerun-show-panels",
+    is_flag=True,
+    help="Rerun: show blueprint/selection panel (debug).",
+)
+@click.option(
+    "--rerun-debug",
+    is_flag=True,
+    help="Print periodic Rerun / ZMQ stream status for generic robots.",
+)
+@click.option(
+    "--rerun-bind",
+    is_flag=True,
+    help="Bind Rerun to 0.0.0.0 (sets RERUN_BIND_ALL=1; same as emet run dynamem --rerun-bind).",
+)
+@click.option(
     "--robot",
-    default="stretch",
+    metavar="NAME",
+    default=None,
     help=(
-        "Robot backend (stretch, rby1, galaxea_r1). Must match the ZMQ server: same value as "
+        "Robot backend (stretch, rby1, galaxea_r1). Overrides top-level ``robot`` in --agent-config when set; "
+        "if omitted, that YAML key is used (default ``stretch`` when the key is absent). Must match "
         "emet serve mujoco --robot after any CLI remaps. MolmoSpaces (--molmospaces-scene) uses rby1 on the "
-        "server even when serve is started with default stretch—use --robot rby1 here."
+        "server even when serve is started with default stretch—set ``robot: rby1`` in YAML or pass --robot rby1. "
+        "Always put the name immediately after --robot (e.g. --robot stretch); if you omit the name, the next "
+        "flag may be parsed as the value."
     ),
 )
 @click.option(
@@ -212,7 +241,12 @@ def main(
     agent_name: str,
     commands: tuple[str, ...],
     port_offset: int = 0,
-    robot: str = "stretch",
+    headless: bool = False,
+    rerun: bool = False,
+    rerun_show_panels: bool = False,
+    rerun_debug: bool = False,
+    rerun_bind: bool = False,
+    robot: str | None = None,
     agent_config: str = "dynav_config.yaml",
     vl_include_camera: bool = False,
     no_vl_camera: bool = False,
@@ -232,6 +266,8 @@ def main(
       emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
       # MolmoSpaces: ``emet serve mujoco --molmospaces-scene ithor ...`` (often DISPLAY=:1 instead of --headless); same --port-offset as serve:
       emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml
+      emet run agent --agent-config configs/agent_rby1_discord.yaml   # uses robot: from YAML
+      emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml
       emet run agent --input-path logs/memory_xxx --no-discord
       emet run agent --no-llm   # letter commands (E/M/Q/P)
       emet run agent --no-llm --command 'find red cylinder'
@@ -239,6 +275,17 @@ def main(
       emet run agent --llm qwen3-vl-eqa --eqa --debug-vram   # one Qwen3-VL + VRAM milestones
     """
     cmd_list = list(commands) if commands else None
+
+    if robot is None or str(robot).strip() == "":
+        robot = str(get_parameters(agent_config).get("robot", "stretch")).strip()
+    else:
+        robot = str(robot).strip()
+    if not robot or robot.startswith("-"):
+        raise click.UsageError(
+            "`--robot` must be followed by a backend name (e.g. `stretch`, `rby1`). "
+            "You left it empty or the next token was parsed as the value (often another flag); "
+            "use e.g. `emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml --rerun`."
+        )
 
     if debug_models:
         os.environ["EMET_AGENT_MODEL_DEBUG"] = "1"
@@ -258,6 +305,8 @@ def main(
     vl_include_effective = (not no_vl_camera) and (vl_include_camera or is_vl_name)
 
     if robot_effective:
+        if rerun_bind:
+            os.environ["RERUN_BIND_ALL"] = "1"
         run_agent_with_robot(
             robot_ip=robot_effective,
             robot=robot,
@@ -277,6 +326,10 @@ def main(
             vl_include_camera=vl_include_effective,
             eqa=dynamem_eqa,
             share_memory_vllm=share_memory_vllm,
+            headless=headless,
+            rerun=rerun,
+            rerun_show_panels=rerun_show_panels,
+            rerun_debug=rerun_debug,
         )
         return
 

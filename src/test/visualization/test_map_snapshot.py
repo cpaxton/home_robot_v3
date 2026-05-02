@@ -19,6 +19,7 @@ import numpy as np
 from emet.agent.tools import get_tools
 from emet.visualization.map_snapshot import (
     build_map_stats,
+    discord_share_map_rgb,
     format_navigation_report,
     render_topdown_map_rgb,
     snapshot_from_voxel_map,
@@ -73,9 +74,22 @@ def test_snapshot_from_voxel_map_fake():
             exp[1:5, 1:5] = True
             return obs, exp
 
-    img, stats = snapshot_from_voxel_map(FakeVM(), (0.0, 0.0))
+    img, stats, img_discord = snapshot_from_voxel_map(FakeVM(), (0.0, 0.0))
     assert img is not None
+    assert img_discord is not None
     assert stats["map_nonempty"]
+    assert img_discord.shape[0] <= img.shape[0]
+    assert img_discord.shape[1] <= img.shape[1]
+
+
+def test_discord_share_map_crops_large_grid_to_explored_patch():
+    obs = np.zeros((128, 128), dtype=bool)
+    exp = np.zeros((128, 128), dtype=bool)
+    exp[50:60, 50:60] = True
+    go = np.array([0.0, 0.0])
+    full = render_topdown_map_rgb(obs, exp, go, 0.1, None, max_side=None)
+    disc = discord_share_map_rgb(obs, exp, go, 0.1, None, max_side=640)
+    assert disc.shape[0] < full.shape[0] or disc.shape[1] < full.shape[1]
 
 
 def test_explore_tool_returns_diagnostic_text():

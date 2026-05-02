@@ -76,6 +76,21 @@ INIT_WRIST_YAW = 0
 INIT_HEAD_PAN = -1.57
 INIT_HEAD_TILT = -0.65
 
+
+def _finite_xyz_traj_target(traj_target_point: Any) -> bool:
+    """True if traj tail looks like a 3D world point (not a waypoint or NaN sentinel)."""
+    if isinstance(traj_target_point, torch.Tensor):
+        t = traj_target_point.detach().cpu().reshape(-1)
+        return t.numel() >= 3 and bool(torch.isfinite(t[:3]).all())
+    if isinstance(traj_target_point, np.ndarray):
+        a = np.asarray(traj_target_point, dtype=np.float64).reshape(-1)
+        return a.size >= 3 and bool(np.all(np.isfinite(a[:3])))
+    if isinstance(traj_target_point, (list, tuple)) and len(traj_target_point) >= 3:
+        a = np.asarray(traj_target_point[:3], dtype=np.float64)
+        return bool(np.all(np.isfinite(a)))
+    return False
+
+
 # Batched OWL text queries for describe_head_camera_scene_text (single forward pass).
 _DESCRIBE_SCENE_OWL_QUERIES: tuple[str, ...] = (
     "table",
@@ -139,7 +154,7 @@ class DynamemController(BaseController):
             default_config_path=None,
         )
         self.semantic_sensor = semantic_sensor
-        # StretchZmqClient sets _rerun; GenericZmqClient (rby1 / galaxea_r1) does not — use no-op visualizer.
+        # StretchZmqClient and GenericZmqClient set ``_rerun`` when Rerun is enabled; otherwise NullVisualizer.
         self.rerun_visualizer = getattr(self.robot, "_rerun", None) or NullVisualizer()
         self.setup_custom_blueprint()
 
@@ -376,6 +391,7 @@ class DynamemController(BaseController):
             rrb.Vertical(
                 rrb.Spatial2DView(name="head_rgb", origin="world/head_camera"),
                 rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera"),
+                rrb.Spatial2DView(name="map_topdown", origin="world/map_snapshot/topdown"),
             ),
             rrb.Vertical(
                 rrb.TextDocumentView(name="Scene Graph", origin="world/scene_graph/summary"),
@@ -455,7 +471,13 @@ class DynamemController(BaseController):
         if depth is None:
             logger.error(f"No depth map available (depth_source={self._depth_source!r}); skipping voxel update.")
             return
-        self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose)
+        base_xyt = None
+        if obs.gps is not None and obs.compass is not None:
+            g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
+            c = np.asarray(obs.compass, dtype=np.float64).ravel()
+            if g.size >= 2 and c.size >= 1:
+                base_xyt = np.array([float(g[0]), float(g[1]), float(c[0])], dtype=np.float64)
+        self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt)
         if self.voxel_map.voxel_pcd._points is not None:
             self.rerun_visualizer.update_voxel_map(space=self.space)
         if self.voxel_map.semantic_memory._points is not None:
@@ -694,6 +716,8 @@ class DynamemController(BaseController):
                         blocking=True,
                     )
 
+                self.robot.look_front()
+                self.update()
                 return True, res[-1]
             # The robot has not reached the object. Next it should look around and continue navigation
             else:
@@ -703,6 +727,8 @@ class DynamemController(BaseController):
                     rot_err_threshold=self.rot_err_threshold,
                     blocking=True,
                 )
+                self.robot.look_front()
+                self.update()
                 return False, None
         else:
             print("Failed. Try again!")
@@ -750,6 +776,10 @@ class DynamemController(BaseController):
             ):
                 localized_point = traj_target_point
                 debug_text += "## Last visual grounding results looks fine so directly use it.\n"
+            elif hasattr(self.encoder, "feature_matching_threshold") and _finite_xyz_traj_target(traj_target_point):
+                # Short queries ("red object") often fail SigLIP neighborhood re-check; still navigate to last grounding.
+                localized_point = traj_target_point
+                debug_text += "## Reusing saved trajectory target; semantic re-check was not decisive.\n"
 
         print("Target verification finished")
 
@@ -865,9 +895,10 @@ class DynamemController(BaseController):
         The robot calls this function to navigate to the object.
         It will call execute_action function until it is ready for manipulation
         """
-        # Start a new rerun recording to avoid an overly large rerun video.
-        rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
+        # Do not call rr.init here during normal live viewing: RerunVisualizer already called
+        # rr.init + rr.serve; a second init clears the recording and the ZMQ Rerun thread appears empty.
         if self.save_rerun:
+            rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
             if not os.path.exists(self.log):
                 os.makedirs(self.log)
             rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")
@@ -1049,8 +1080,9 @@ class DynamemController(BaseController):
         """
         API for calling EQA module
         """
-        rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
+        # See navigate(): avoid rr.init during live Rerun streaming (would reset the recording).
         if self.save_rerun:
+            rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
             if not os.path.exists(self.log):
                 os.makedirs(self.log)
             rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")

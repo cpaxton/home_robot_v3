@@ -78,6 +78,18 @@ def test_help_lists_share_memory_vllm_toggle():
     assert "--no-share-memory-vllm" in r.output
 
 
+def test_help_lists_rerun_agent_flags():
+    """Rerun is opt-in on the agent (--rerun); headless/bind flags documented."""
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "--rerun" in r.output
+    assert "--headless" in r.output
+    assert "--rerun-bind" in r.output
+
+
 def test_vl_camera_default_logic():
     """Mirror run_agent: VL model names enable camera unless --no-vl-camera."""
 

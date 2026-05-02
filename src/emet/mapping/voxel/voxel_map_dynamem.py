@@ -118,33 +118,41 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         if len(xs) < 1:
             print("No target point find, maybe no point is reachable")
             return None
-        selected_targets = torch.stack([xs, ys], dim=-1)[
-            torch.linalg.norm((torch.stack([xs, ys], dim=-1) - torch.tensor([target_x, target_y])).float(), dim=-1)
-            .topk(k=len(xs), largest=False)
-            .indices
-        ]
+        dist_to_goal = torch.linalg.norm(
+            (torch.stack([xs, ys], dim=-1) - torch.tensor([target_x, target_y], dtype=torch.float32)).float(),
+            dim=-1,
+        )
+        selected_targets = torch.stack([xs, ys], dim=-1)[dist_to_goal.topk(k=len(xs), largest=False).indices]
 
-        for selected_target in selected_targets:
-            selected_x, selected_y = planner.to_xy([selected_target[0], selected_target[1]])
-            theta = self.compute_theta(selected_x, selected_y, point[0], point[1])
+        px = float(point[0].item() if hasattr(point[0], "item") else point[0])
+        py = float(point[1].item() if hasattr(point[1], "item") else point[1])
+        # Tight scenes: strict standoff can leave no valid goal; relax standoff for object navigation only.
+        standoffs = [0.35, 0.24, 0.14, 0.08] if not exploration else [0.35]
+        obs_h, obs_w = int(obstacles.shape[0]), int(obstacles.shape[1])
 
-            target_is_valid = self.is_valid(np.array([selected_x, selected_y, theta]))
-            if not target_is_valid:
-                continue
-            if np.linalg.norm([selected_x - point[0], selected_y - point[1]]) <= 0.35:
-                continue
-            elif np.linalg.norm([selected_x - point[0], selected_y - point[1]]) <= 0.5:
-                i = (point[0] - selected_target[0]) // abs(point[0] - selected_target[0])
-                j = (point[1] - selected_target[1]) // abs(point[1] - selected_target[1])
-                index_i = int(selected_target[0].int() + i)
-                index_j = int(selected_target[1].int() + j)
-                if obstacles[index_i][index_j]:
-                    target_is_valid = False
+        for min_standoff in standoffs:
+            for selected_target in selected_targets:
+                sx_i, sy_i = int(selected_target[0]), int(selected_target[1])
+                selected_x, selected_y = planner.to_xy([sx_i, sy_i])
+                theta = self.compute_theta(selected_x, selected_y, px, py)
 
-            if not target_is_valid:
-                continue
+                if not self.is_valid(np.array([selected_x, selected_y, theta])):
+                    continue
 
-            return np.array([selected_x, selected_y, theta])
+                dist_xy = float(np.hypot(selected_x - px, selected_y - py))
+                if dist_xy <= min_standoff:
+                    continue
+
+                ok = True
+                if dist_xy <= 0.5:
+                    step_i = int(np.sign(target_x - sx_i)) if target_x != sx_i else 0
+                    step_j = int(np.sign(target_y - sy_i)) if target_y != sy_i else 0
+                    ni, nj = sx_i + step_i, sy_i + step_j
+                    if 0 <= ni < obs_h and 0 <= nj < obs_w and bool(obstacles[ni, nj]):
+                        ok = False
+
+                if ok:
+                    return np.array([selected_x, selected_y, theta])
 
         return None
 

@@ -395,9 +395,12 @@ class SparseVoxelMap(SparseVoxelMapBase):
         if alignments is None:
             return False
         alignments = alignments.detach().cpu()[0]
-        if torch.max(alignments[distances <= distance_threshold]) < similarity_threshold:
-            print("Points close the the point are not similar to the text!")
-        return torch.max(alignments[distances < distance_threshold]) >= similarity_threshold
+        near = distances <= distance_threshold
+        if torch.count_nonzero(near) == 0:
+            return False
+        if torch.max(alignments[near]) < similarity_threshold:
+            print("Points close to the point are not similar to the text!")
+        return torch.max(alignments[near]) >= similarity_threshold
 
     def get_2d_map(self, debug: bool = False, return_history_id: bool = False, kernel: int = 7) -> tuple[Tensor, ...]:
         """
@@ -522,9 +525,22 @@ class SparseVoxelMap(SparseVoxelMapBase):
         else:
             return obstacles, explored, history_soft
 
-    def process_rgbd_images(self, rgb: np.ndarray, depth: np.ndarray, intrinsics: np.ndarray, pose: np.ndarray):
+    def process_rgbd_images(
+        self,
+        rgb: np.ndarray,
+        depth: np.ndarray,
+        intrinsics: np.ndarray,
+        pose: np.ndarray,
+        *,
+        base_xyt: np.ndarray | None = None,
+    ):
         """
         Process rgbd images for Dynamem
+
+        Args:
+            base_xyt: Optional ``(x, y, yaw)`` in the same world frame as ``gps`` / ``compass`` from the
+                robot client. When set, stamps ``_visited`` at the **base** so A* ``_navigable`` matches the
+                planner start pose (camera pose alone can miss the footprint for head-mounted cameras).
         """
         # Keep originals for scene graph processor (before any resizing/filtering)
         original_rgb = rgb.copy()
@@ -562,11 +578,20 @@ class SparseVoxelMap(SparseVoxelMapBase):
             except Exception as e:
                 logger.warning("Instance detection failed in process_rgbd_images: %s", e)
 
+        base_pose_t: Tensor | None = None
+        if base_xyt is not None:
+            b = np.asarray(base_xyt, dtype=np.float64).ravel()
+            if b.size >= 2:
+                th = float(b[2]) if b.size >= 3 else 0.0
+                dev = torch.device(self.map_2d_device)
+                base_pose_t = torch.tensor([float(b[0]), float(b[1]), th], dtype=torch.float32, device=dev)
+
         self.add(
             camera_pose=torch.Tensor(pose),
             rgb=torch.Tensor(rgb),
             depth=torch.Tensor(depth),
             camera_K=torch.Tensor(intrinsics),
+            base_pose=base_pose_t,
             instance_image=instance_image,
             instance_classes=instance_classes,
             instance_scores=instance_scores,
@@ -648,9 +673,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
         Add pixel points into the semantic memory
         """
         # Adding all points to voxelizedPointCloud is useless and expensive, we should exclude threshold of all points
-        selected_indices = torch.randperm(len(valid_xyz))[: int((1 - threshold) * len(valid_xyz))]
-        if len(selected_indices) == 0:
-            return
+        # Adding pixel points into the semantic memory is expensive; subsample but always keep ≥1 point.
+        n_keep = max(1, int((1 - threshold) * len(valid_xyz)))
+        selected_indices = torch.randperm(len(valid_xyz))[:n_keep]
         if valid_xyz is not None:
             valid_xyz = valid_xyz[selected_indices]
         if feature is not None:
@@ -1122,9 +1147,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
         # TODO: weights could also be confidence, inv distance from camera, etc
         if world_xyz.nelement() > 0:
-            selected_indices = torch.randperm(len(world_xyz))[: int((1 - self.point_update_threshold) * len(world_xyz))]
-            if len(selected_indices) == 0:
-                return
+            n_keep = max(1, int((1 - self.point_update_threshold) * len(world_xyz)))
+            selected_indices = torch.randperm(len(world_xyz))[:n_keep]
             if world_xyz is not None:
                 world_xyz = world_xyz[selected_indices]
             if feats is not None:

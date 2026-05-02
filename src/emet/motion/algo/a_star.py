@@ -224,19 +224,26 @@ class AStar(Planner):
             i = j
         return cleaned_path
 
-    def get_unoccupied_neighbor(self, pt: tuple[int, int], goal_pt=None) -> tuple[int, int]:
+    def get_unoccupied_neighbor(self, pt: tuple[int, int], goal_pt=None, max_ring: int = 4) -> tuple[int, int] | None:
         if not self.point_is_occupied(*pt):
             return pt
 
-        # This is a sort of hack to deal with points that are close to an edge.
-        # If the start point is occupied, we check adjacent points until we get
-        # one which is unoccupied. If we can't find one, we throw an error.
-        neighbor_pts = neighbors(pt)
-        if goal_pt is not None:
-            goal_pt_non_null = goal_pt
-            neighbor_pts.sort(key=lambda n: self.compute_heuristic(n, goal_pt_non_null))
-        for neighbor_pt in neighbor_pts:
-            if not self.point_is_occupied(*neighbor_pt):
+        # If the start cell is marked occupied (pose noise / dilation), search outward by Chebyshev ring.
+        h, w = self._navigable.shape
+        for ring in range(1, max_ring + 1):
+            ring_pts: list[tuple[int, int]] = []
+            for di in range(-ring, ring + 1):
+                for dj in range(-ring, ring + 1):
+                    if max(abs(di), abs(dj)) != ring:
+                        continue
+                    ni, nj = pt[0] + di, pt[1] + dj
+                    if not (0 <= ni < h and 0 <= nj < w):
+                        continue
+                    if not self.point_is_occupied(ni, nj):
+                        ring_pts.append((ni, nj))
+            if goal_pt is not None and ring_pts:
+                ring_pts.sort(key=lambda n: self.compute_heuristic(n, goal_pt))
+            for neighbor_pt in ring_pts:
                 return neighbor_pt
         print("The robot might stand on a non navigable point, so check obstacle map and restart roslaunch")
         return None
