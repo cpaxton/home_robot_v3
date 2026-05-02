@@ -106,4 +106,12 @@ class InnateMarsBackend(RobotBackend):
         )
 
 
-__all__ = ["InnateMarsBackend", "INNATE_MARS_JOINT_NAMES"]
+from .dummy_client import DummyInnateMarsClient
+from .ros_client import InnateMarsRosRobotClient
+
+__all__ = [
+    "INNATE_MARS_JOINT_NAMES",
+    "DummyInnateMarsClient",
+    "InnateMarsBackend",
+    "InnateMarsRosRobotClient",
+]

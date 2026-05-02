@@ -3,7 +3,11 @@
 
 from pathlib import Path
 
-from emet.robots.innate_mars import INNATE_MARS_JOINT_NAMES, InnateMarsBackend
+from emet.robots.innate_mars import (
+    INNATE_MARS_JOINT_NAMES,
+    DummyInnateMarsClient,
+    InnateMarsBackend,
+)
 from emet.utils.assets import get_robot_mjcf_path
 
 
@@ -55,8 +59,8 @@ def test_merge_scene_loads():
 
 def test_innate_mars_merged_scene_matches_standalone_kinematics():
     """How emet serve mujoco merges scene + robot must not change head geom pose vs standalone MJCF."""
-    import numpy as np
     import mujoco
+    import numpy as np
 
     from emet.simulation.mujoco_server import _load_default_scene_with_robot
 
@@ -74,3 +78,25 @@ def test_innate_mars_merged_scene_matches_standalone_kinematics():
     gid2 = mujoco.mj_name2id(m2, mujoco.mjtObj.mjOBJ_GEOM, "head_geom")
 
     np.testing.assert_allclose(d1.geom_xpos[gid1], d2.geom_xpos[gid2], atol=1e-6)
+
+
+def test_dummy_innate_mars_utils_reexport_matches_package():
+    from emet.robots.innate_mars.dummy_client import DummyInnateMarsClient as Direct
+    from emet.utils.dummy_innate_mars_client import DummyInnateMarsClient as ViaUtils
+
+    assert ViaUtils is Direct
+
+
+def test_innate_mars_wave_operation_smoke():
+    """Plan smoke: arm wave mutates joint5 on DummyInnateMarsClient."""
+    from emet.robots.innate_mars.emote_backend import InnateMarsWaveOperation
+
+    class _Agent:
+        pass
+
+    agent = _Agent()
+    agent.robot = DummyInnateMarsClient()
+    op = InnateMarsWaveOperation("emote", agent)
+    op.run(n_waves=1)
+    q, _, _ = agent.robot.get_joint_state()
+    assert q.shape[0] == len(INNATE_MARS_JOINT_NAMES)
