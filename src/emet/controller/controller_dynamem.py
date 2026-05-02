@@ -376,6 +376,7 @@ class DynamemController(BaseController):
             rrb.Vertical(
                 rrb.Spatial2DView(name="head_rgb", origin="world/head_camera"),
                 rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera"),
+                rrb.Spatial2DView(name="map_topdown", origin="world/map_snapshot/topdown"),
             ),
             rrb.Vertical(
                 rrb.TextDocumentView(name="Scene Graph", origin="world/scene_graph/summary"),
@@ -875,9 +876,10 @@ class DynamemController(BaseController):
         The robot calls this function to navigate to the object.
         It will call execute_action function until it is ready for manipulation
         """
-        # Start a new rerun recording to avoid an overly large rerun video.
-        rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
+        # Do not call rr.init here during normal live viewing: RerunVisualizer already called
+        # rr.init + rr.serve; a second init clears the recording and the ZMQ Rerun thread appears empty.
         if self.save_rerun:
+            rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
             if not os.path.exists(self.log):
                 os.makedirs(self.log)
             rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")
@@ -1059,8 +1061,9 @@ class DynamemController(BaseController):
         """
         API for calling EQA module
         """
-        rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
+        # See navigate(): avoid rr.init during live Rerun streaming (would reset the recording).
         if self.save_rerun:
+            rr.init("Stretch_robot", recording_id=uuid4(), spawn=has_display())
             if not os.path.exists(self.log):
                 os.makedirs(self.log)
             rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")

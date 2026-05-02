@@ -198,11 +198,22 @@ class GenericZmqClient(AbstractRobotClient):
             out_p = Path(output_path) if output_path is not None else None
             if out_p is not None and not out_p.exists():
                 out_p.mkdir(parents=True, exist_ok=True)
+            mjcf_p = getattr(self._spec, "mjcf_path", None)
+            use_mjcf = bool(mjcf_p and Path(str(mjcf_p)).is_file())
+            mjcf_robot = None
+            if use_mjcf:
+                mjcf_robot = (
+                    str(Path(str(mjcf_p)).resolve()),
+                    tuple(self._spec.joint_names),
+                    int(self._spec.dof),
+                    str(self._spec.base_link_name),
+                )
             self._rerun = RerunVisualizer(
                 output_path=out_p,
-                display_robot_mesh=False,
+                display_robot_mesh=use_mjcf,
                 headless=rerun_headless,
                 collapse_panels=not rerun_show_panels,
+                mjcf_robot=mjcf_robot,
             )
         else:
             from emet.visualization.rerun import NullVisualizer

@@ -268,10 +268,11 @@ class RerunVisualizer:
         *,
         memory_view: bool = False,
         num_frames: int = 0,
+        mjcf_robot: tuple[str, tuple[str, ...], int, str] | None = None,
     ):
         """Rerun visualizer class
         Args:
-            display_robot_mesh (bool): Display robot mesh
+            display_robot_mesh (bool): Display robot mesh (Stretch URDF) or MJCF skeleton when *mjcf_robot* is set
             open_browser (bool): Open browser at start
             headless (bool): If True, disable native viewer and serve web only (connect at :9090)
             server_memory_limit (str): Server memory limit E.g. 2GB or 20%
@@ -313,7 +314,17 @@ class RerunVisualizer:
         self.show_cameras_in_3d_view = show_cameras_in_3d_view
         self.show_camera_point_clouds = show_camera_point_clouds
 
-        if self.display_robot_mesh:
+        self.mjcf_skeleton = None
+        self.urdf_logger = None
+        if mjcf_robot is not None and display_robot_mesh:
+            mjcf_path, joint_names, dof, base_link = mjcf_robot
+            try:
+                from emet.visualization.mjcf_rerun_robot import MjcfBodySkeletonLogger
+
+                self.mjcf_skeleton = MjcfBodySkeletonLogger(mjcf_path, joint_names, dof, base_link)
+            except Exception as e:
+                logger.warning("MJCF Rerun robot skeleton disabled (%s).", e)
+        if self.mjcf_skeleton is None and display_robot_mesh and mjcf_robot is None:
             self.urdf_logger = StretchURDFLogger()
             self.urdf_logger.load_robot_mesh(use_collision=False)
 
@@ -413,7 +424,12 @@ class RerunVisualizer:
             identity_name (str): rerun identity name
             img (2D or 3D array): the 2d image you want to log into rerun
         """
-        # rr.init("Stretch_robot", spawn=(not self.open_browser))
+        if not self._memory_view:
+            rr.set_time_seconds("realtime", time.time())
+        if isinstance(img, torch.Tensor):
+            img = img.detach().cpu().numpy()
+        if isinstance(img, np.ndarray):
+            img = np.ascontiguousarray(img)
         log_to_rerun(identity_name, rr.Image(img))
 
     def log_text(self, identity_name: str, text: str):
@@ -423,7 +439,8 @@ class RerunVisualizer:
             identity_name (str): rerun identity name
             text (str): Markdown codes you want to log in rerun
         """
-        # rr.init("Stretch_robot", spawn=(not self.open_browser))
+        if not self._memory_view:
+            rr.set_time_seconds("realtime", time.time())
         rr.log(identity_name, rr.TextDocument(text, media_type=rr.MediaType.MARKDOWN))
 
     def log_arrow3D(
@@ -1202,7 +1219,9 @@ class RerunVisualizer:
             self.log_head_camera(head_cam)
             self.log_ee_camera(head_cam)
 
-            if self.display_robot_mesh and getattr(self, "urdf_logger", None) is not None:
+            if self.display_robot_mesh and getattr(self, "mjcf_skeleton", None) is not None:
+                self.mjcf_skeleton.apply_and_log(obs_pose)
+            elif self.display_robot_mesh and getattr(self, "urdf_logger", None) is not None:
                 self.log_robot_state(obs_pose)
                 self.log_robot_transforms(obs_pose)
             t1 = timeit.default_timer()

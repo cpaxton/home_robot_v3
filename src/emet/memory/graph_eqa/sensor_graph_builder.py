@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Build GraphEQA labels and 3D anchors from robot Observations (RGB-D + pose).
@@ -97,22 +106,35 @@ def _extract_json_object_blob(raw: str) -> str | None:
     return _json_object_blob_or_none(blob, s, start)
 
 
+def _repair_trailing_commas_json(s: str) -> str:
+    """Remove trailing commas before ``}`` / ``]`` (common invalid VLM JSON)."""
+    t = s
+    prev = None
+    while prev != t:
+        prev = t
+        t = re.sub(r",\s*}", "}", t)
+        t = re.sub(r",\s*]", "]", t)
+    return t
+
+
 def _json_object_blob_or_none(blob: str, full: str, start: int) -> str | None:
     """Try json.loads(blob); on failure, try brace-balanced slice from ``start``."""
     if not blob:
         return None
-    try:
-        json.loads(blob)
-        return blob
-    except json.JSONDecodeError:
-        pass
+    for candidate in (_repair_trailing_commas_json(blob), blob):
+        try:
+            json.loads(candidate)
+            return candidate
+        except json.JSONDecodeError:
+            pass
     balanced = _balanced_json_object_from(full, start)
     if balanced:
-        try:
-            json.loads(balanced)
-            return balanced
-        except json.JSONDecodeError:
-            return None
+        for candidate in (_repair_trailing_commas_json(balanced), balanced):
+            try:
+                json.loads(candidate)
+                return candidate
+            except json.JSONDecodeError:
+                continue
     return None
 
 
@@ -148,15 +170,85 @@ def _balanced_json_object_from(s: str, start: int) -> str | None:
     return None
 
 
+def _balanced_json_array_from(s: str, start: int) -> str | None:
+    """Extract outermost ``[...]`` from ``start`` using bracket depth (string-aware)."""
+    if start < 0 or start >= len(s) or s[start] != "[":
+        return None
+    depth = 0
+    in_str = False
+    esc = False
+    quote = ""
+    for i in range(start, len(s)):
+        ch = s[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == quote:
+                in_str = False
+                quote = ""
+            continue
+        if ch in "\"'":
+            in_str = True
+            quote = ch
+            continue
+        if ch == "[":
+            depth += 1
+        elif ch == "]":
+            depth -= 1
+            if depth == 0:
+                return s[start : i + 1]
+    return None
+
+
+def _extract_json_array_blob(raw: str) -> str | None:
+    """Return first JSON array substring from model output (fences stripped)."""
+    s = _strip_thinking_and_fences(raw)
+    if "```" in s:
+        m = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", s, re.IGNORECASE)
+        if m:
+            s = m.group(1).strip()
+    start = s.find("[")
+    if start == -1:
+        return None
+    blob = _balanced_json_array_from(s, start)
+    if not blob:
+        return None
+    for candidate in (_repair_trailing_commas_json(blob), blob):
+        try:
+            json.loads(candidate)
+            return candidate
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
 def parse_graph_object_json(raw: str) -> dict | None:
     """Parse first JSON object from ``raw``; return dict or None."""
     blob = _extract_json_object_blob(raw)
     if not blob:
         return None
+    for candidate in (_repair_trailing_commas_json(blob), blob):
+        try:
+            data = json.loads(candidate)
+            if isinstance(data, dict):
+                return data
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def parse_graph_root_json_array(raw: str) -> list | None:
+    """Parse first top-level JSON array from ``raw`` (e.g. ``[\"a\",\"b\"]`` or list of objects)."""
+    blob = _extract_json_array_blob(raw)
+    if not blob:
+        return None
     try:
-        return json.loads(blob)
+        val = json.loads(blob)
     except json.JSONDecodeError:
         return None
+    return val if isinstance(val, list) else None
 
 
 def _normalize_extract_label(s: str, max_len: int = 48) -> str | None:
@@ -174,33 +266,66 @@ def _normalize_extract_label(s: str, max_len: int = 48) -> str | None:
     return t
 
 
+def _labels_from_object_dict_list(seq: list, *, max_len: int) -> list[str]:
+    names: list[str] = []
+    for o in seq:
+        if not isinstance(o, dict):
+            continue
+        n = o.get("name") or o.get("label")
+        if n is None:
+            continue
+        nn = _normalize_extract_label(str(n), max_len=max_len)
+        if nn:
+            names.append(nn)
+    return names
+
+
+def _labels_from_extract_dict(data: dict, *, max_labels: int, max_len: int) -> list[str]:
+    """Pull label strings from common VLM JSON shapes (objects / labels / items / detected_objects)."""
+    names: list[str] = []
+    if "objects" in data and isinstance(data["objects"], list):
+        names = _labels_from_object_dict_list(data["objects"], max_len=max_len)
+    elif "items" in data and isinstance(data["items"], list):
+        names = _labels_from_object_dict_list(data["items"], max_len=max_len)
+    elif "detected_objects" in data and isinstance(data["detected_objects"], list):
+        names = _labels_from_object_dict_list(data["detected_objects"], max_len=max_len)
+    elif "labels" in data and isinstance(data["labels"], list):
+        for x in data["labels"]:
+            nn = _normalize_extract_label(str(x), max_len=max_len)
+            if nn:
+                names.append(nn)
+    return names[:max_labels]
+
+
 def labels_from_extract_response(raw: str, *, max_labels: int = 8, max_len: int = 48) -> list[str] | None:
     """
     If ``raw`` contains valid extract JSON, return normalized short object names.
     Returns None if JSON missing or invalid or no usable labels.
     """
     data = parse_graph_object_json(raw)
-    if not isinstance(data, dict):
-        return None
-    names: list[str] = []
-    if "objects" in data and isinstance(data["objects"], list):
-        for o in data["objects"]:
-            if not isinstance(o, dict):
-                continue
-            n = o.get("name") or o.get("label")
-            if n is None:
-                continue
-            nn = _normalize_extract_label(str(n), max_len=max_len)
-            if nn:
-                names.append(nn)
-    elif "labels" in data and isinstance(data["labels"], list):
-        for x in data["labels"]:
-            nn = _normalize_extract_label(str(x), max_len=max_len)
-            if nn:
-                names.append(nn)
-    if not names:
-        return None
-    return names[:max_labels]
+    if isinstance(data, dict):
+        names = _labels_from_extract_dict(data, max_labels=max_labels, max_len=max_len)
+        if names:
+            return names
+    arr = parse_graph_root_json_array(raw)
+    if isinstance(arr, list) and arr:
+        names = []
+        for x in arr:
+            if isinstance(x, dict):
+                n = x.get("name") or x.get("label")
+                if n is not None:
+                    nn = _normalize_extract_label(str(n), max_len=max_len)
+                    if nn:
+                        names.append(nn)
+            else:
+                nn = _normalize_extract_label(str(x), max_len=max_len)
+                if nn:
+                    names.append(nn)
+            if len(names) >= max_labels:
+                break
+        if names:
+            return names[:max_labels]
+    return None
 
 
 def parse_voxel_label_line(text: str, max_labels: int = 16, max_segment_len: int = 64) -> list[str]:
@@ -345,7 +470,11 @@ class SensorGraphBuilder:
             if structured:
                 desc = raw if len(raw) > 200 else None
                 return structured, desc
-            logger.warning("Graph label extract: JSON parse failed or empty; using object fallback")
+            raw_hint = f"{raw[:120]!r}..." if len(raw) > 120 else repr(raw)
+            logger.debug(
+                "Graph label extract: no usable JSON labels after tolerant parse; using object fallback "
+                f"(raw={raw_hint})"
+            )
             return ["object"], raw if raw else None
         except Exception as e:
             logger.warning(f"Perception VLM failed ({e})")

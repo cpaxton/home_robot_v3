@@ -161,5 +161,6 @@ embodied_agent:
     config_name: default_scene_graph
   graph_eqa_memory:
     enabled: true
+    # Instance detector graph runs only if use_sensor_perception is false; VLM path when true.
     use_instance_graph: true
     use_sensor_perception: true

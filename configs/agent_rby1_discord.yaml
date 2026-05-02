@@ -169,5 +169,7 @@ embodied_agent:
     config_name: default_scene_graph
   graph_eqa_memory:
     enabled: true
+    # Instance detector graph runs only if use_sensor_perception is false. When true, graph labels
+    # use the Qwen3.5-VL sensor path (look_around / explore / update), not YoloE-only shortcuts.
     use_instance_graph: true
     use_sensor_perception: true

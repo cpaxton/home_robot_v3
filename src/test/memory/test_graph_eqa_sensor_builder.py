@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 
 import numpy as np
@@ -47,16 +56,33 @@ def test_parse_graph_object_json_balanced_when_trailing_extra_brace():
     assert parse_graph_object_json(raw) == {"labels": ["x"]}
 
 
-def test_labels_from_extract_response():
+def test_parse_graph_object_json_accepts_trailing_comma():
+    d = parse_graph_object_json('{"labels":["a","b",],}')
+    assert d == {"labels": ["a", "b"]}
+
+
+def test_labels_from_extract_response_root_string_array():
+    assert labels_from_extract_response('["cup", "bowl"]') == ["cup", "bowl"]
+
+
+def test_labels_from_extract_response_root_object_array():
+    assert labels_from_extract_response('[{"name":"x"},{"label":"y"}]') == ["x", "y"]
+
+
+def test_labels_from_extract_response_items_key():
+    assert labels_from_extract_response('{"items":[{"name":"sofa"}]}') == ["sofa"]
+
+
+def test_labels_from_extract_response_objects_and_labels_keys():
     assert labels_from_extract_response('{"objects":[{"name":"cup"}]}') == ["cup"]
     assert labels_from_extract_response('{"labels":["x","y"]}') == ["x", "y"]
     assert labels_from_extract_response("no json") is None
 
 
 def test_labels_from_extract_response_rejects_cot_like_names():
-    assert labels_from_extract_response(
-        '{"objects":[{"name":"The user wants a list"},{"name":"real mug"}]}'
-    ) == ["real mug"]
+    assert labels_from_extract_response('{"objects":[{"name":"The user wants a list"},{"name":"real mug"}]}') == [
+        "real mug"
+    ]
 
 
 def test_world_xyz_median_from_depth():

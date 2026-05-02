@@ -197,6 +197,9 @@ class RobosuiteZmqServer(BaseZmqServer):
             session["scene_source_basename"] = self._scene_source_basename
         if self._session_extra:
             session.update(self._session_extra)
+        if self._initial_xyt is not None:
+            ixy = np.asarray(self._initial_xyt, dtype=np.float64).reshape(-1)[:3]
+            session["navigation_origin_xyt"] = [float(ixy[0]), float(ixy[1]), float(ixy[2])]
         return session
 
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
