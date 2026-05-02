@@ -302,13 +302,22 @@ class RerunVisualizer:
 
         if output_path is not None:
             rr.save(output_path / "rerun_log.rrd")
-        # Always start web server so :9090 is available (for remote viewing even when native viewer spawns)
-        rr.serve(
-            open_browser=open_browser and has_display() and not headless,
-            server_memory_limit=server_memory_limit,
-        )
-        if not has_display() or headless:
-            logger.info("Rerun web viewer: connect at http://<this-host>:9090?url=ws://<this-host>:9877")
+        # ``rr.serve`` streams over WebSockets (web UI on :9090). ``init(spawn=True)`` streams to the native
+        # viewer over TCP (default :9876). Doing both routes logs only to the WebSocket sink, so the native
+        # window stays empty while the browser looks fine. Serve only when we are not using a spawned native viewer.
+        use_spawned_native = bool(spawn_gui) and not bool(headless)
+        if not use_spawned_native:
+            rr.serve(
+                open_browser=open_browser and has_display() and not headless,
+                server_memory_limit=server_memory_limit,
+            )
+            if not has_display() or headless:
+                logger.info("Rerun web viewer: connect at http://<this-host>:9090?url=ws://<this-host>:9877")
+        else:
+            logger.info(
+                "Rerun native viewer is receiving the log stream (TCP). Web viewer is not started for this "
+                "process; use RERUN_HEADLESS=1 or `emet run agent ... --rerun` with `--headless` to use :9090 instead."
+            )
 
         self.display_robot_mesh = display_robot_mesh
         self.show_cameras_in_3d_view = show_cameras_in_3d_view
