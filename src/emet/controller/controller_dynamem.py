@@ -755,6 +755,7 @@ class DynamemController(BaseController):
         print("Processing", text, "starts")
 
         self.rerun_visualizer.clear_identity("world/object")
+        self.rerun_visualizer.clear_identity("world/xyt_goal")
         self.rerun_visualizer.clear_identity("world/robot_start_pose")
         self.rerun_visualizer.clear_identity("world/direction")
         self.rerun_visualizer.clear_identity("robot_monologue")
@@ -816,6 +817,21 @@ class DynamemController(BaseController):
         if len(localized_point) == 2:
             localized_point = np.array([localized_point[0], localized_point[1], 0])
 
+        _lp = np.asarray(
+            localized_point.detach().cpu().numpy() if isinstance(localized_point, torch.Tensor) else localized_point,
+            dtype=np.float64,
+        ).reshape(-1)
+        ox, oy = float(_lp[0]), float(_lp[1])
+        oz = float(_lp[2]) if _lp.size > 2 else 1.5
+        if not np.isfinite(oz) or abs(oz) < 1e-9:
+            oz = 1.5
+        self.rerun_visualizer.log_custom_pointcloud(
+            "world/object",
+            [ox, oy, oz],
+            torch.Tensor([1, 0, 0]),
+            0.12,
+        )
+
         point = self.space.sample_navigation(start_pose, self.planner, localized_point)
 
         print("Navigation endpoint selected")
@@ -833,17 +849,14 @@ class DynamemController(BaseController):
         elif res is not None:
             waypoints = None
             print("[FAILURE]", res.reason)
+
+        if point is not None:
+            self.rerun_visualizer.update_nav_goal(np.asarray(point, dtype=np.float64))
+
         # If we are navigating to some object of interest, send (x, y, z) of
         # the object so that we can make sure the robot looks at the object after navigation
         traj = []
         if waypoints is not None:
-            self.rerun_visualizer.log_custom_pointcloud(
-                "world/object",
-                [localized_point[0], localized_point[1], 1.5],
-                torch.Tensor([1, 0, 0]),
-                0.1,
-            )
-
             finished = len(waypoints) <= 8 and mode == "navigation"
             if finished:
                 self.space.traj = None
