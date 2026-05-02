@@ -186,6 +186,18 @@ def main() -> None:
 )
 @click.option("--seed", default=0, type=int, help="Random seed")
 @click.option(
+    "--steps",
+    default=None,
+    type=int,
+    metavar="N",
+    help="Stop the MuJoCo server after N physics steps (debug; rby1 / merged MJCF path).",
+)
+@click.option(
+    "--debug-molmospaces-spawn",
+    is_flag=True,
+    help="Verbose MolmoSpaces base placement and post-spawn contact diagnostics (non-stretch server).",
+)
+@click.option(
     "--port-offset",
     default=0,
     type=int,
@@ -227,6 +239,8 @@ def serve(
     molmospaces_index: int,
     molmospaces_install: bool,
     seed: int,
+    steps: int | None,
+    debug_molmospaces_spawn: bool,
     port_offset: int,
     list_robocasa_tasks: bool,
     robocasa_task: str,
@@ -334,6 +348,10 @@ def serve(
                 ]
             )
         args.extend(["--seed", str(seed)])
+        if steps is not None:
+            args.extend(["--steps", str(int(steps))])
+        if debug_molmospaces_spawn:
+            args.append("--debug-molmospaces-spawn")
         if port_offset:
             args.extend(["--port-offset", str(port_offset)])
         if robot and robot != "stretch":

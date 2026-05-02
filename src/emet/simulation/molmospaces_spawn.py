@@ -10,6 +10,9 @@ Merged scenes place the robot at the world origin on a ``freejoint``. The global
 extends beyond walls, so XY must stay inside the **collision footprint** of room content and
 points where an **upward** ray hits geometry (open void returns no hit). We then avoid furniture
 penetration using contact scoring and optional vertical refinement.
+
+The upstream ``molmo_spaces`` Python package (scene lists / resource install) does not define a
+merged-robot spawn policy; emet autoplace owns XY/Z on the free joint after MJCF merge.
 """
 
 from __future__ import annotations
@@ -29,6 +32,17 @@ import emet.utils.logger as log
 _MIN_UPWARD_CEILING_CLEARANCE_M = 0.15
 
 logger = log.Logger(__name__)
+
+
+def spawn_debug_enabled() -> bool:
+    """True when ``EMET_MOLMOSPACES_SPAWN_DEBUG`` is set or ``--debug-molmospaces-spawn`` turned it on."""
+    v = os.environ.get("EMET_MOLMOSPACES_SPAWN_DEBUG", "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def spawn_dbg(msg: str) -> None:
+    if spawn_debug_enabled():
+        logger.info(f"[molmospaces_spawn] {msg}")
 
 
 def resolve_floor_geom_name(model: mujoco.MjModel) -> str | None:
@@ -333,6 +347,89 @@ def worst_robot_nonfloor_contact_dist(
     return worst
 
 
+def format_spawn_contact_report(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    base_body_name: str,
+    floor_geom_name: str = "floor",
+    max_lines: int = 40,
+    dist_report_threshold: float = 0.12,
+) -> list[str]:
+    """After :func:`mujoco.mj_forward`, run collision and list robot–scene contacts (for spawn QA)."""
+    floor_eff = effective_floor_geom_name(model, floor_geom_name)
+    floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_eff)
+    base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
+    if floor_gid < 0 or base_bid < 0:
+        return [f"contact_report: missing floor ({floor_eff!r}) or base body {base_body_name!r}"]
+    robot_bodies = _bodies_descending_from(model, base_bid)
+    mujoco.mj_collision(model, data)
+    lines: list[str] = [
+        f"contact_report: ncon={data.ncon} floor_geom={floor_eff!r} worst_nonfloor="
+        f"{worst_robot_nonfloor_contact_dist(model, data, base_body_name=base_body_name, floor_geom_name=floor_geom_name):.4f}"
+    ]
+    n = 0
+    for i in range(data.ncon):
+        c = data.contact[i]
+        g1, g2 = int(c.geom1), int(c.geom2)
+        r1 = _geom_body_is_robot(model, g1, robot_bodies)
+        r2 = _geom_body_is_robot(model, g2, robot_bodies)
+        if not r1 and not r2:
+            continue
+        if r1 and r2:
+            continue
+        if g1 == floor_gid or g2 == floor_gid:
+            continue
+        dist = float(c.dist)
+        if dist > dist_report_threshold:
+            continue
+        n1 = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g1) or f"geom{g1}"
+        n2 = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g2) or f"geom{g2}"
+        lines.append(f"  con[{i}] dist={dist:+.5f} {n1!r} <-> {n2!r}")
+        n += 1
+        if n >= max_lines:
+            lines.append(f"  ... truncated after {max_lines} scene contacts")
+            break
+    if n == 0:
+        lines.append("  (no robot–scene contacts under dist threshold besides floor)")
+    return lines
+
+
+def format_spawn_floor_alignment_report(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    base_body_name: str,
+    floor_geom_name: str = "floor",
+    xy: tuple[float, float],
+) -> list[str]:
+    """One-line summary: floor height under *xy* vs lowest robot collision geom (after ``mj_forward``)."""
+    floor_eff = effective_floor_geom_name(model, floor_geom_name)
+    x, y = float(xy[0]), float(xy[1])
+    base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
+    if base_bid < 0:
+        return [f"floor_align: missing base body {base_body_name!r}"]
+    robot_bodies = _bodies_descending_from(model, base_bid)
+    ray_excl = int(base_bid)
+    mujoco.mj_forward(model, data)
+    zf = walkable_floor_z_at_xy(
+        model, data, x, y, floor_geom_name=floor_eff, exclude_body_id=ray_excl
+    )
+    zb = _min_robot_collision_geom_bottom_z(model, data, robot_bodies)
+    worst = worst_robot_nonfloor_contact_dist(
+        model, data, base_body_name=base_body_name, floor_geom_name=floor_eff
+    )
+    zf_s = f"{zf:.4f}" if zf is not None else "None"
+    zb_s = f"{zb:.4f}" if zb is not None else "None"
+    delta_s = "n/a"
+    if zf is not None and zb is not None:
+        delta_s = f"{float(zb) - float(zf):+.4f}"
+    return [
+        f"floor_align: floor_geom={floor_eff!r} z_floor_under_xy={zf_s} zb_geom_min={zb_s} "
+        f"zb_minus_zfloor={delta_s} worst_nonfloor={worst:.5f}"
+    ]
+
+
 def iter_annulus_xy_candidates(
     r_min: float = 0.35,
     r_max: float = 3.2,
@@ -477,14 +574,18 @@ def settle_free_base_z_to_floor(
     z_start: float,
     robot_bodies: set[int],
     min_nonfloor_clearance: float,
-    max_steps: int = 160,
+    max_steps: int = 320,
     step_m: float = 0.0028,
     target_foot_clearance_above_floor_m: float = 0.018,
     min_z_above_floor_m: float = -0.02,
-) -> float:
-    """Lower base *z* until collision hull is near *z_floor* while keeping non-floor contacts acceptable."""
+) -> float | None:
+    """Lower base *z* until collision hull is near *z_floor* while keeping non-floor contacts acceptable.
+
+    Returns ``None`` if no pose along the descent had acceptable non-floor clearance (e.g. base
+    starts intersecting a wall so the first ``mj_forward`` already fails the clearance test).
+    """
     z = float(z_start)
-    best = z
+    last_good_z: float | None = None
     for _ in range(max_steps):
         if not write_freejoint_base_xyzw(
             model, data, base_body_name=base_body_name, x=x, y=y, z=z
@@ -496,8 +597,8 @@ def settle_free_base_z_to_floor(
         )
         if worst < min_nonfloor_clearance - 1e-6:
             break
+        last_good_z = z
         zb = _min_robot_collision_geom_bottom_z(model, data, robot_bodies)
-        best = z
         if zb is None:
             break
         if zb <= z_floor + target_foot_clearance_above_floor_m + 2e-4:
@@ -505,9 +606,42 @@ def settle_free_base_z_to_floor(
         z -= step_m
         if z < z_floor + min_z_above_floor_m:
             break
-    write_freejoint_base_xyzw(model, data, base_body_name=base_body_name, x=x, y=y, z=best)
+    if last_good_z is None:
+        return None
+    write_freejoint_base_xyzw(
+        model, data, base_body_name=base_body_name, x=x, y=y, z=float(last_good_z)
+    )
     mujoco.mj_forward(model, data)
-    return best
+    return float(last_good_z)
+
+
+def _post_settle_pose_acceptable(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    base_body_name: str,
+    floor_geom_name: str,
+    z_floor: float,
+    robot_bodies: set[int],
+    min_nonfloor_clearance: float,
+    max_foot_above_floor_m: float = 0.14,
+    max_foot_below_floor_m: float = 0.05,
+) -> bool:
+    """After :func:`settle_free_base_z_to_floor`, reject poses that still clip scene or float far above floor."""
+    mujoco.mj_forward(model, data)
+    worst = worst_robot_nonfloor_contact_dist(
+        model, data, base_body_name=base_body_name, floor_geom_name=floor_geom_name
+    )
+    if worst < min_nonfloor_clearance - 1e-6:
+        return False
+    zb = _min_robot_collision_geom_bottom_z(model, data, robot_bodies)
+    if zb is None:
+        return False
+    if zb < z_floor - max_foot_below_floor_m:
+        return False
+    if zb > z_floor + max_foot_above_floor_m:
+        return False
+    return True
 
 
 def _find_molmospaces_freejoint_xyz_pass(
@@ -585,6 +719,11 @@ def _find_molmospaces_freejoint_xyz_pass(
         cy = 0.5 * (xy_clip[2] + xy_clip[3])
         candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
 
+    spawn_dbg(
+        f"pass: origin=({ox:.3f},{oy:.3f}) r_annulus_max={r_annulus_max:.3f} n_candidates={len(candidates)} "
+        f"clip_erode={clip_erode_m} max_rbound={max_geom_rbound} suppress_exterior={suppress_exterior_filter}"
+    )
+
     best_xy: tuple[float, float, float, float] | None = None  # x, y, z_floor, worst_score
     for x, y in candidates:
         z_floor = walkable_floor_z_at_xy(
@@ -619,6 +758,18 @@ def _find_molmospaces_freejoint_xyz_pass(
                     robot_bodies=robot_bodies,
                     min_nonfloor_clearance=min_nonfloor_clearance,
                 )
+                if z_settled is None:
+                    continue
+                if not _post_settle_pose_acceptable(
+                    model,
+                    data,
+                    base_body_name=base_body_name,
+                    floor_geom_name=floor_effective,
+                    z_floor=float(z_floor),
+                    robot_bodies=robot_bodies,
+                    min_nonfloor_clearance=min_nonfloor_clearance,
+                ):
+                    continue
                 return (x, y, z_settled)
             if best_xy is None or worst > best_xy[3]:
                 best_xy = (x, y, float(z_floor), worst)
@@ -652,6 +803,18 @@ def _find_molmospaces_freejoint_xyz_pass(
             robot_bodies=robot_bodies,
             min_nonfloor_clearance=min_nonfloor_clearance,
         )
+        if z_settled is None:
+            return None
+        if not _post_settle_pose_acceptable(
+            model,
+            data,
+            base_body_name=base_body_name,
+            floor_geom_name=floor_effective,
+            z_floor=float(bz_floor),
+            robot_bodies=robot_bodies,
+            min_nonfloor_clearance=min_nonfloor_clearance,
+        ):
+            return None
         return (bx, by, z_settled)
     return None
 
@@ -701,6 +864,18 @@ def _try_spawn_at_xy_candidates(
                 robot_bodies=robot_bodies,
                 min_nonfloor_clearance=min_nonfloor_clearance,
             )
+            if z_settled is None:
+                continue
+            if not _post_settle_pose_acceptable(
+                model,
+                data,
+                base_body_name=base_body_name,
+                floor_geom_name=floor_effective,
+                z_floor=float(z_floor),
+                robot_bodies=robot_bodies,
+                min_nonfloor_clearance=min_nonfloor_clearance,
+            ):
+                continue
             return (x, y, z_settled)
     return None
 
@@ -802,6 +977,13 @@ def find_molmospaces_freejoint_xyz(
     clip_probe = collision_scene_xy_clip_rect(
         model, data, robot_bodies=robot_bodies, floor_geom_name=floor_effective, max_geom_rbound=15.0
     )
+    if clip_probe is not None:
+        spawn_dbg(
+            f"find: clip_probe=({clip_probe[0]:.3f},{clip_probe[1]:.3f})x({clip_probe[2]:.3f},{clip_probe[3]:.3f}) "
+            f"floor_effective={floor_effective!r} label={scene_label!r}"
+        )
+    else:
+        spawn_dbg(f"find: clip_probe=None floor_effective={floor_effective!r} label={scene_label!r}")
 
     placed = _find_molmospaces_freejoint_xyz_pass(
         model,
@@ -816,6 +998,7 @@ def find_molmospaces_freejoint_xyz(
         suppress_exterior_filter=False,
     )
     if placed is not None:
+        spawn_dbg(f"find: primary pass OK -> {placed}")
         return placed
 
     placed_relaxed = _find_molmospaces_freejoint_xyz_pass(
@@ -831,6 +1014,7 @@ def find_molmospaces_freejoint_xyz(
         suppress_exterior_filter=False,
     )
     if placed_relaxed is not None:
+        spawn_dbg(f"find: relaxed pass OK -> {placed_relaxed}")
         return placed_relaxed
 
     ray_exclude = int(base_bid) if base_bid >= 0 else -1
@@ -846,6 +1030,7 @@ def find_molmospaces_freejoint_xyz(
         min_nonfloor_clearance=min_nonfloor_clearance,
     )
     if placed_fb is not None:
+        spawn_dbg(f"find: clip-center fallback OK -> {placed_fb}")
         return placed_fb
 
     label = scene_label or "(unknown scene)"

@@ -164,6 +164,19 @@ def _load_default_scene_with_robot(robot_key: str):
 )
 @click.option("--seed", default=0, help="Seed for the simulation")
 @click.option(
+    "--steps",
+    default=None,
+    type=int,
+    metavar="N",
+    help="Exit after N MuJoCo physics steps (debug; non-stretch / rby1 server).",
+)
+@click.option(
+    "--debug-molmospaces-spawn",
+    default=False,
+    is_flag=True,
+    help="Verbose MolmoSpaces spawn placement logs and contact summary after base move.",
+)
+@click.option(
     "--robocasa-write-to-xml",
     default=False,
     help="Write the generated scene to an xml file",
@@ -211,6 +224,8 @@ def main(
     molmospaces_session_scene: str | None = None,
     molmospaces_session_split: str | None = None,
     molmospaces_session_index: int | None = None,
+    steps: int | None = None,
+    debug_molmospaces_spawn: bool = False,
 ):
     # Use EGL for offscreen rendering when headless (or no DISPLAY) to avoid GLFW X11 assertion
     # (_glfwGrabErrorHandlerX11: errorHandler == NULL) in headless/CI/no-window-manager setups
@@ -225,6 +240,9 @@ def main(
     from emet.simulation.molmospaces_config import ensure_molmospaces_assets_dir_env
 
     ensure_molmospaces_assets_dir_env()
+
+    if debug_molmospaces_spawn:
+        os.environ["EMET_MOLMOSPACES_SPAWN_DEBUG"] = "1"
 
     if list_robocasa_tasks:
         try:
@@ -493,6 +511,8 @@ def main(
                 scene_model=scene_model if not use_robocasa else None,
                 environment=zmq_environment,
                 scene_source_basename=scene_source_basename,
+                max_sim_steps=steps,
+                debug_molmospaces_spawn=debug_molmospaces_spawn,
             )
         except zmq.error.ZMQError as e:
             if "Address already in use" in str(e):
@@ -500,9 +520,18 @@ def main(
             raise
 
         try:
-            server.start(robocasa=use_robocasa, headless=headless, show_viewer_ui=show_viewer_ui)
+            try:
+                server.start(robocasa=use_robocasa, headless=headless, show_viewer_ui=show_viewer_ui)
+            finally:
+                try:
+                    server.stop()
+                except Exception:
+                    pass
         except KeyboardInterrupt:
-            server.stop()
+            try:
+                server.stop()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

@@ -66,6 +66,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         session_extra: dict[str, Any] | None = None,
         **kwargs,
     ):
+        max_sim_steps = kwargs.pop("max_sim_steps", None)
+        debug_molmospaces_spawn = bool(kwargs.pop("debug_molmospaces_spawn", False))
         super().__init__(*args, **kwargs)
         self._spec = robot_spec
         self._scene_xml = scene_xml
@@ -93,6 +95,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._nav_w_max = 0.95
         self._render_lock = threading.Lock()
         self._primary_renderer: Any | None = None
+        self._max_sim_steps: int | None = (
+            int(max_sim_steps) if max_sim_steps is not None and int(max_sim_steps) > 0 else None
+        )
+        self._debug_molmospaces_spawn = debug_molmospaces_spawn
+        self._physics_steps_executed = 0
 
     @property
     def spec(self) -> RobotSpec:
@@ -134,6 +141,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         if self._base_freejoint_addrs() is None:
             return
         base_name = self._spec.base_link_name
+        if self._debug_molmospaces_spawn:
+            logger.info(
+                f"MolmoSpaces spawn debug: scene_source_basename={self._scene_source_basename!r} "
+                f"environment={self._environment_descriptor!r} base_body_name={base_name!r}"
+            )
         try:
             placed = molmospaces_spawn.find_molmospaces_freejoint_xyz(
                 self._mjmodel,
@@ -145,12 +157,37 @@ class RobosuiteZmqServer(BaseZmqServer):
             logger.warning(f"MolmoSpaces base autoplace skipped ({e!r}).")
             return
         if placed is None:
+            if self._debug_molmospaces_spawn:
+                logger.info("MolmoSpaces base autoplace: find_molmospaces_freejoint_xyz returned None (see spawn debug lines above).")
             return
         x, y, z = placed
         logger.info(
             f"MolmoSpaces base autoplace: moved free joint on {base_name!r} to "
             f"({x:.3f}, {y:.3f}, {z:.3f}) to avoid origin clutter."
         )
+        if self._debug_molmospaces_spawn:
+            try:
+                mujoco.mj_forward(self._mjmodel, self._mjdata)
+                lines = molmospaces_spawn.format_spawn_contact_report(
+                    self._mjmodel,
+                    self._mjdata,
+                    base_body_name=base_name,
+                    floor_geom_name="floor",
+                    max_lines=50,
+                    dist_report_threshold=0.15,
+                )
+                for ln in lines:
+                    logger.info(f"[molmospaces_spawn/post-place] {ln}")
+                for ln in molmospaces_spawn.format_spawn_floor_alignment_report(
+                    self._mjmodel,
+                    self._mjdata,
+                    base_body_name=base_name,
+                    floor_geom_name="floor",
+                    xy=(float(x), float(y)),
+                ):
+                    logger.info(f"[molmospaces_spawn/post-place] {ln}")
+            except Exception as e:
+                logger.warning(f"MolmoSpaces spawn debug contact report failed: {e!r}")
         # Copy placed free-joint pose into qpos0 so resets use autoplace (Python MjModel has no qvel0).
         addrs = self._base_freejoint_addrs()
         if addrs is not None:
@@ -599,6 +636,13 @@ class RobosuiteZmqServer(BaseZmqServer):
             with self._mj_lock:
                 self._step_base_navigation_drive()
                 mujoco.mj_step(self._mjmodel, self._mjdata)
+            self._physics_steps_executed += 1
+            if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
+                logger.info(
+                    f"MuJoCo step limit reached (--steps {self._max_sim_steps}); stopping simulation loop."
+                )
+                self._running = False
+                break
             time.sleep(1 / self.simulation_rate)
 
     def _run_passive_viewer_main_loop(self, show_viewer_ui: bool) -> None:
@@ -621,6 +665,13 @@ class RobosuiteZmqServer(BaseZmqServer):
                         self._step_base_navigation_drive()
                         mujoco.mj_step(self._mjmodel, self._mjdata)
                         viewer.sync()
+                    self._physics_steps_executed += 1
+                    if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
+                        logger.info(
+                            f"MuJoCo step limit reached (--steps {self._max_sim_steps}); closing viewer loop."
+                        )
+                        self._running = False
+                        break
                     time.sleep(dt)
         except Exception as e:
             logger.warning(
