@@ -262,6 +262,7 @@ def main(
       emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
       # MolmoSpaces: ``emet serve mujoco --molmospaces-scene ithor ...`` (often DISPLAY=:1 instead of --headless); same --port-offset as serve:
       emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml
+      emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml
       emet run agent --input-path logs/memory_xxx --no-discord
       emet run agent --no-llm   # letter commands (E/M/Q/P)
       emet run agent --no-llm --command 'find red cylinder'

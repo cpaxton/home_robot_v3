@@ -1,35 +1,28 @@
-# DynaMem / scene-memory parameters for: Galaxea R1 (rby1) + emet run agent + Discord
+# DynaMem / scene-memory parameters for: Hello Stretch + emet run agent + Discord
 #
-# ZMQ ``emet_session`` carries runtime metadata (robot id, scene, capabilities); this file is DynaMem +
-# embodied tuning. Stretch with the same preset: ``configs/agent_stretch_discord.yaml``.
+# Server ``emet_session`` (robot id, scene, capabilities) is for logging and mismatch checks; it does
+# not supply these YAML keys. Same tuning as ``agent_rby1_discord.yaml`` works for both backends unless
+# you want different presets (lighter graph_eqa, DA3 depth, etc.)—then keep separate files.
 #
 # Run from repo root (paths are resolved relative to cwd unless absolute).
-# The agent must use --robot rby1 whenever the MuJoCo server is rby1 (including MolmoSpaces: even if you
-# start serve with default --robot stretch, emet remaps MolmoSpaces to rby1 on the server).
+# Use ``--robot stretch`` with ``emet serve mujoco`` started for Stretch (default sim robot is Stretch;
+# Robocasa: ``emet serve mujoco --use-robocasa`` per project docs).
 #
-#   Terminal 1 — MolmoSpaces + ZMQ (requires emet-molmospaces; see docs/molmospaces.md):
-#     export DISPLAY=:1   # e.g. Xvfb or your desktop; avoids --headless when you have X
-#     uv run emet serve mujoco --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0
-#     # First-time assets: add --molmospaces-install (non-interactive download).
-#     # No display at all: add --headless (forces EGL off-screen).
-#
-#   Terminal 1 — plain Galaxea / rby1 MJCF (no MolmoSpaces):
+#   Terminal 1 — sim (example):
 #     export DISPLAY=:1
-#     uv run emet serve mujoco --robot rby1
+#     uv run emet serve mujoco
 #
 #   Terminal 2 — agent (--robot-ip defaults to 127.0.0.1; match --port-offset with Terminal 1 if set):
 #     export DISCORD_TOKEN="your-bot-token"
-#     # optional: EMET_DISCORD_CHANNEL names the channel the bot listens on (default channel name is talk-to-stretch)
-#     uv run python -m emet.app.run_agent --robot rby1 \
+#     uv run emet run agent --robot stretch \
 #       --llm qwen35-9B --device cuda --max-tokens 1024 \
-#       --agent-config configs/agent_rby1_discord.yaml
+#       --agent-config configs/agent_stretch_discord.yaml
 #     # Use --no-discord to skip the Discord bridge; default is to start it when DISCORD_TOKEN is set.
-#     # Vision LLM: e.g. --llm qwen35-vl-9B (camera on by default; use --no-vl-camera to disable)
 #     # Local chat only (no robot): --offline
 #
 # Optional: load a saved memory dir with --input-path /path/to/logs/memory_xxx
 #
-# This file is a copy of emet’s default dynav_config.yaml; tune voxel/detection/instance_memory here.
+# This file matches ``configs/agent_rby1_discord.yaml`` (DynaMem + embodied preset); only the header differs.
 
 # Hyperparameters for DynaMem
 
