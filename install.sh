@@ -9,8 +9,8 @@ ROOT_DIR="$SCRIPT_DIR"
 cd "$ROOT_DIR"
 
 # Parse options
-# Sane defaults: dev + core Python only. Simulation (robocasa, large assets) is opt-in via --sim or --all.
-# Profiles: EMET_INSTALL_PROFILE or --profile=  (minimal|standard|full). "full" = legacy sim-on-by-default.
+# Default profile is "full" (sim + MolmoSpaces wrapper when packages exist). Use --no-sim or --profile=minimal for CI/light installs.
+# Profiles: EMET_INSTALL_PROFILE or --profile=  (minimal|standard|full). "full" = sim-on-by-default (legacy).
 CPU_ONLY="false"
 SKIP_ASKING="false"
 NO_SAM2="false"
@@ -19,8 +19,8 @@ EXTRAS="dev"
 CLEAN_SIM="false"
 INSTALL_MOLMOSPACES="false"
 NO_MOLMOSPACES="false"
-# standard | minimal | full (full = install sim without passing --sim)
-PROFILE="${EMET_INSTALL_PROFILE:-standard}"
+# standard | minimal | full (full = install sim without passing --sim; default profile is full)
+PROFILE="${EMET_INSTALL_PROFILE:-full}"
 # Set when user passes --sim, --no-sim, or --all (all implies sim)
 SIM_EXPLICIT=""
 PREV_PROFILE=""
@@ -107,8 +107,8 @@ echo "=============================================="
 echo "         INSTALLING STRETCH AI (uv)"
 echo "=============================================="
 echo "Options: PROFILE=$PROFILE CPU_ONLY=$CPU_ONLY NO_SAM2=$NO_SAM2 INSTALL_SIM=$INSTALL_SIM EXTRAS=$EXTRAS MOLMOSPACES=$INSTALL_MOLMOSPACES NO_MOLMOSPACES=$NO_MOLMOSPACES"
-echo "         Defaults: sim is OFF (uv dev + dynamem if SAM-2 present). Use --sim or --all for Robocasa/simulation."
-echo "         EMET_INSTALL_PROFILE=full  or  --profile=full  = legacy behavior (enable sim without --sim)."
+echo "         Defaults: profile=full enables sim when third_party/robocasa exists (use --no-sim or --profile=minimal to skip)."
+echo "         EMET_INSTALL_PROFILE=standard  or  --profile=minimal  = no sim unless you also pass --sim."
 echo "         -y/--yes    = non-interactive (apt, link emet); does NOT imply MolmoSpaces — pass --molmospaces or use --all"
 echo "         --all       = sim + molmospaces + dynamem bundle (same as --sim --molmospaces when wrapper package exists)"
 echo "         --sim       = uv sim extra + install_simulation.sh (Robocasa + robosuite)"

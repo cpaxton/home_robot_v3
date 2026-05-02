@@ -5,6 +5,7 @@
 MolmoSpaces requires **mujoco 3.4** and **numpy>=2.2**, which conflict with the main emet environment (numpy<2, mujoco>=3.3). So the integration is split:
 
 - **Core emet**: No dependency on molmo-spaces or mujoco 3.4. The `emet molmospaces` CLI lives in core; `list-robots` uses a static config. For `list-scenes`, `install-scene`, `merge-scene`, and `serve`, the CLI **delegates to a thin wrapper** via subprocess.
+- **Sim YAML / one-terminal agent**: see [sim_configs.md](sim_configs.md) for `configs/sim/molmospaces_*.yaml` and `emet run agent --start-sim`.
 - **Wrapper (emet-molmospaces)**: A separate package that depends on emet, molmo-spaces, mujoco>=3.4, and numpy>=2.2. It provides the `emet-molmospaces` console script and implements list-scenes, install-scene, merge-scene, and serve. Install it in a dedicated venv (e.g. `.venv-molmospaces`) or any env where you accept those deps.
 
 ## Install the MolmoSpaces wrapper

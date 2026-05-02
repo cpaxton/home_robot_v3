@@ -1,0 +1,9 @@
+# Robocasa kitchen task (requires: emet install sim, uv sync -e sim, kitchen assets).
+kind: robocasa
+robot: PandaOmron
+robocasa_task: PickPlaceCounterToCabinet
+robocasa_style: 1
+robocasa_layout: 1
+headless: true
+port_offset: 0
+seed: 0

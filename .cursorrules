@@ -34,9 +34,10 @@
 - **Before committing**: Run `git diff origin/main HEAD` and trim "AI slop"—unnecessary try/except, vague or redundant comments, over-defensive checks. Prefer clear failures and declared deps over silent fallbacks.
 
 ## Simulation
+- Default `./install.sh` profile is **full** (sim on when `third_party/robocasa` exists; use `--no-sim` or `--profile=minimal` for lightweight/CI). MolmoSpaces wrapper venv is still created when `packages/emet_molmospaces` exists unless `--no-molmospaces`.
 - MuJoCo sim: `emet serve mujoco --use-robocasa` (or `emet serve robocasa`). Sim is **present** when `third_party/robocasa` and `third_party/robosuite` exist; `emet sync --all` then includes the sim extra.
 - DynaMem: `emet run dynamem ...`. Rerun viewer: `http://localhost:9090?url=ws://localhost:9877`.
-- Simulation install: `./install.sh --sim -y`; robocasa/robosuite come from `third_party/` (see install scripts).
+- Simulation install: `./install.sh -y` (default includes sim when third_party is present); or `./install.sh --sim -y`; robocasa/robosuite come from `third_party/` (see install scripts).
 
 ## MolmoSpaces (optional wrapper)
 - **Install**: `./install.sh -y` (with default sim) also creates `.venv-molmospaces` when `packages/emet_molmospaces` exists; use `--no-molmospaces` to skip. Wrapper-only: `./install.sh --molmospaces -y`. Core emet delegates `merge-scene` / `list-scenes` to that wrapper (molmo-spaces needs mujoco 3.4 + numpy≥2.2, separate from main `.venv`).

@@ -199,6 +199,23 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
         "(saves VRAM vs loading two VL models). Use --no-share-memory-vllm to always load the EQA VLM from config."
     ),
 )
+@click.option(
+    "--start-sim",
+    "start_sim",
+    is_flag=True,
+    help=(
+        "Start ``emet.simulation.mujoco_server`` as a subprocess before connecting. "
+        "Requires ``sim_config`` or ``sim:`` in the agent YAML, unless you pass ``--sim-config``."
+    ),
+)
+@click.option(
+    "--sim-config",
+    "sim_config",
+    default=None,
+    type=str,
+    metavar="PATH",
+    help="YAML sim launch profile (overrides sim_config / sim: in --agent-config). See configs/sim/*.yaml.",
+)
 def main(
     llm: str,
     prompt: str,
@@ -224,6 +241,8 @@ def main(
     no_vl_camera: bool = False,
     dynamem_eqa: bool = False,
     share_memory_vllm: bool = True,
+    start_sim: bool = False,
+    sim_config: str | None = None,
 ) -> None:
     """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
 
@@ -243,8 +262,12 @@ def main(
       emet run agent --no-llm --command 'find red cylinder'
       emet run agent --no-llm -c 'FIND blue cube'
       emet run agent --llm qwen3-vl-eqa --eqa --debug-vram   # one Qwen3-VL + VRAM milestones
+      emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml --start-sim --command "describe the scene"
     """
     cmd_list = list(commands) if commands else None
+
+    if offline and start_sim:
+        raise click.UsageError("Cannot combine --offline with --start-sim.")
 
     if debug_models:
         os.environ["EMET_AGENT_MODEL_DEBUG"] = "1"
@@ -264,6 +287,23 @@ def main(
     vl_include_effective = (not no_vl_camera) and (vl_include_camera or is_vl_name)
 
     if robot_effective:
+        if start_sim:
+            from emet.config.sim_launch_config import resolve_sim_launch_for_agent
+            from emet.simulation.sim_subprocess import spawn_mujoco_server_subprocess
+
+            try:
+                sim_cfg = resolve_sim_launch_for_agent(
+                    agent_config_path=agent_config,
+                    sim_config_cli=sim_config,
+                    port_offset_cli=port_offset,
+                )
+            except ValueError as e:
+                raise click.UsageError(str(e)) from e
+            if robot and robot.lower() not in ("stretch", "hello_stretch", "hellostretch", ""):
+                sim_cfg.robot = robot
+            print(colored("Starting MuJoCo sim subprocess (--start-sim)…", "cyan"))
+            spawn_mujoco_server_subprocess(sim_cfg)
+            print(colored("Sim is up; connecting agent.", "green"))
         run_agent_with_robot(
             robot_ip=robot_effective,
             robot=robot,

@@ -28,6 +28,9 @@
 #
 # This file is a copy of emet’s default dynav_config.yaml; tune voxel/detection/instance_memory here.
 
+# Optional: sim profile for ``emet run agent --start-sim`` (see docs/sim_configs.md).
+sim_config: configs/sim/molmospaces_ithor_train_0.yaml
+
 # Hyperparameters for DynaMem
 
 # Encoder setup
