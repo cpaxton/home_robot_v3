@@ -107,14 +107,18 @@
             <!-- Same subtree as URDF joint_head + head cameras; placed after arm like upstream maurice.mjcf link order + URDF joint ordering -->
             <body name="head" pos="-0.040751 -0.0002 0.25882">
               <inertial pos="0 0 0" mass="0.148" diaginertia="0.0002 0.0001 0.0002"/>
-              <geom name="head_geom" class="visual" type="mesh" mesh="head_mesh" material="matt_black" euler="-1.5708 0 0"/>
-              <!-- Head RGB: same xyz as maurice.urdf head_camera_{left,right} on head. Orientation =
-                   R(head_camera -> camera_optical_frame) from fixed_camera_optical_frame rpy="-1.5708 0 -1.5708"
-                   (intrinsic xyz) times diag(1,-1,-1) to map ROS optical (+Z forward) to MuJoCo camera (-Z view, +Y up).
-                   The old quat looked ~45° below horizontal and put the base/arm in the FOV, which showed up as
-                   self-obstacles in depth/DA3 maps. -->
-              <camera name="head_left" pos="0.04327 0.0297 -0.000275" mode="fixed" fovy="80" quat="0.5 0.5 -0.5 -0.5"/>
-              <camera name="head_right" pos="0.04327 -0.0303 -0.000275" mode="fixed" fovy="80" quat="0.5 0.5 -0.5 -0.5"/>
+              <!-- Visual alignment with base.STL neck opening: joint_head origin matches URDF, but the torso
+                   mesh “neck” rim centroid sits ~(+40 mm, +42 mm) in base_link XY relative to the head link
+                   origin at rest. Shift only this geom (cameras stay on URDF head frame). -->
+              <geom name="head_geom" class="visual" type="mesh" mesh="head_mesh" material="matt_black" pos="0.0396 0.0517 -0.023" euler="-1.5708 0 0"/>
+              <!-- Head stereo: positions match maurice.urdf fixed_head_camera_{left,right} (60 mm baseline on Y).
+                   Orientation matches ``camera_base`` (same parent frame at identity pose): the URDF→MuJoCo optical
+                   derivation (old quat 0.5 0.5 −0.5 −0.5) aimed along +base X but reads as lateral in sim tabletop;
+                   base camera quaternion tilts slightly toward −Z (+X dominant) so head stereo faces forward. -->
+              <camera name="head_left" pos="0.04327 0.0297 -0.000275" mode="fixed" fovy="80"
+                      quat="0.5416752 0.4545195 -0.4545195 -0.5416752"/>
+              <camera name="head_right" pos="0.04327 -0.0303 -0.000275" mode="fixed" fovy="80"
+                      quat="0.5416752 0.4545195 -0.4545195 -0.5416752"/>
             </body>
           </body>
         </body>

@@ -45,6 +45,8 @@ class RobotSpec:
     """Extras to ``uv sync --extra …`` for typical full-stack use when something is not in core deps."""
     dynamem_depth_source_hint: str | None = None
     """When hardware omits depth on ZMQ, DynaMem usually needs this ``depth_source`` (see dynav YAML)."""
+    robosuite_rgb_depth_ops: tuple[str, ...] = ()
+    """MuJoCo RGB/depth post-steps for :class:`RobosuiteZmqServer` (``flipud``, ``rot90_cw``). Intrinsics are chained."""
 
 
 def format_uv_sync_extras_hint(spec: RobotSpec) -> str | None:

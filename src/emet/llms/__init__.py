@@ -144,7 +144,8 @@ def get_prompt_choices():
 
 def get_llm_choices():
     """Return a list of available LLM clients."""
-    return sorted(set(llms.keys()) | set(QWEN_VL_PRESETS.keys()) | {"qwen3-vl-eqa"})
+    qwen35_vlm = [f"qwen35-vlm-{s}" for s in ("0.8B", "2B", "4B", "9B", "27B")]
+    return sorted(set(llms.keys()) | set(QWEN_VL_PRESETS.keys()) | {"qwen3-vl-eqa"} | set(qwen35_vlm))
 
 
 def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwargs) -> AbstractLLMClient:
@@ -209,6 +210,24 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
             device=dev,
             quantization=vl_q,
             prompt=prompt,
+        )
+    elif client_type.lower().startswith("qwen35-vlm-"):
+        # Shared Qwen3.5-VLM checkpoint with GraphEQA / EQA VL (avoid loading text-only qwen35-* + multimodal twice).
+        from emet.llms.eqa_qwen import Qwen35SharedVLChatClient
+
+        tail = client_type[len("qwen35-vlm-") :].strip()
+        if not tail:
+            tail = "4B"
+        model_size = tail.upper().replace(" ", "")
+        dev = str(kwargs.get("device", "cuda"))
+        q = kwargs.get("quantization")
+        return Qwen35SharedVLChatClient(
+            prompt,
+            model_size=model_size,
+            device=dev,
+            parameters=parameters,
+            quantization=q,
+            max_tokens=1024,
         )
     elif "qwen" in client_type:
         # Parse model size and fine-tuning from client_type

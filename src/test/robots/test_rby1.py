@@ -99,6 +99,19 @@ def test_decode_servo_message_robosuite_format():
     assert obs.depth is not None and obs.depth.shape == (48, 64)
     assert obs.joint is not None and obs.joint.shape == (5,)
     assert abs(float(obs.gps[0]) - 1.0) < 1e-5
+    assert obs.camera_pose is None
+
+    T = np.eye(4, dtype=np.float64)
+    T[0, 3] = 3.0
+    msg_pose = {**msg, "camera_pose": T}
+    obs2 = _decode_servo_message_to_observations(msg_pose, None, None)
+    assert obs2 is not None and obs2.camera_pose is not None
+    assert abs(float(obs2.camera_pose[0, 3]) - 3.0) < 1e-8
+
+    full = {"camera_pose": np.diag([2.0, 2.0, 2.0, 1.0])}
+    obs3 = _decode_servo_message_to_observations(msg, None, full)
+    assert obs3 is not None and obs3.camera_pose is not None
+    assert float(obs3.camera_pose[0, 0]) == 2.0
 
 
 def test_default_scene_with_rby1_loads_and_robot_can_be_commanded():

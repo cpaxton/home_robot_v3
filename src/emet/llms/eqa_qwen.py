@@ -11,11 +11,12 @@ from __future__ import annotations
 import gc
 import threading
 from collections.abc import Callable
+from typing import Any
 
 import torch
 
 from emet.core.parameters import Parameters
-from emet.llms.base import AbstractPromptBuilder
+from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder
 from emet.llms.eqa_vl_settings import (
     apply_eqa_vl_runtime_settings,
     get_eqa_vl_int,
@@ -78,6 +79,81 @@ def default_eqa_vl_device() -> str:
     )
 
 
+class Qwen35SharedVLChatClient(AbstractLLMClient):
+    """Agent chat that uses :func:`get_shared_qwen35_vl_client` — **same** Qwen3.5-VLM weights as GraphEQA / EQA VL.
+
+    Prefer ``--llm qwen35-vlm-4B`` (or ``9B``) instead of ``qwen35-4B`` / ``qwen35-9B`` when using embodied
+    GraphEQA so Hugging Face does not load a second checkpoint (text-only ``AutoModelForCausalLM`` +
+    multimodal ``Qwen3_5ForConditionalGeneration``).
+    """
+
+    def __init__(
+        self,
+        prompt: str | AbstractPromptBuilder,
+        *,
+        model_size: str,
+        device: str = "cuda",
+        parameters: Parameters | dict | None = None,
+        quantization: str | None = None,
+        max_tokens: int = 1024,
+        prompt_kwargs: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(prompt, prompt_kwargs)
+        apply_eqa_vl_runtime_settings(parameters)
+        q = quantization if quantization is not None else get_eqa_vl_str(parameters, "quantization", "int4")
+        self._vl = get_shared_qwen35_vl_client(
+            model_size=model_size,
+            device=device,
+            quantization=q,
+            parameters=parameters,
+        )
+        self.max_tokens = max_tokens
+
+    def __call__(self, command: str, verbose: bool = False, image: Any | None = None, **kwargs: Any) -> str:
+        del kwargs
+        if self.is_first_message():
+            self.add_history({"role": "system", "content": self.system_prompt})
+        if image is not None:
+            import numpy as np
+            from PIL import Image
+
+            pil = Image.fromarray(np.asarray(image).astype(np.uint8), mode="RGB")
+            user_content: Any = [
+                {"type": "image", "image": pil},
+                {"type": "text", "text": command},
+            ]
+        else:
+            user_content = command
+        self.add_history({"role": "user", "content": user_content})
+        messages = self.get_history()
+        out = self._vl(
+            messages,
+            verbose=verbose,
+            system_prompt=None,
+            max_new_tokens=self.max_tokens,
+        )
+        self.add_history({"role": "assistant", "content": out})
+        self._iterations += 1
+        return out
+
+
+def _warn_shared_vl_size_mismatch(requested: str | None) -> None:
+    global _shared_qwen35_vl
+    if _shared_qwen35_vl is None or not (requested and str(requested).strip()):
+        return
+    got = getattr(_shared_qwen35_vl, "model_size", None)
+    req = str(requested).strip()
+    if got and req and got != req:
+        logger.warning(
+            "EQA VL shared client is already Qwen3.5-%s; ignoring requested size %r "
+            "(one multimodal load per process). Prefer matching ``--llm qwen35-vlm-%s`` with ``eqa_vl/model_size: \"%s\"``.",
+            got,
+            req,
+            got,
+            got,
+        )
+
+
 def get_shared_qwen35_vl_client(
     *,
     model_size: str | None = None,
@@ -95,9 +171,11 @@ def get_shared_qwen35_vl_client(
     """
     global _shared_qwen35_vl
     if _shared_qwen35_vl is not None:
+        _warn_shared_vl_size_mismatch(model_size)
         return _shared_qwen35_vl
     with _shared_qwen35_vl_lock:
         if _shared_qwen35_vl is not None:
+            _warn_shared_vl_size_mismatch(model_size)
             return _shared_qwen35_vl
         if device is None:
             device = default_eqa_vl_device()

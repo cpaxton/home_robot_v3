@@ -101,12 +101,19 @@ def _decode_servo_message_to_observations(
     else:
         gps, compass = np.zeros(2, dtype=float), np.zeros(1, dtype=float)
 
+    cp = msg.get("camera_pose")
+    if cp is None and full_obs is not None:
+        cp = full_obs.get("camera_pose")
+    if cp is not None:
+        cp = np.asarray(cp, dtype=np.float64).reshape(4, 4)
+
     return Observations(
         gps=gps,
         compass=compass,
         rgb=rgb,
         depth=depth,
         camera_K=K,
+        camera_pose=cp,
         joint=joint,
         is_simulation=bool(msg.get("is_simulation", True)),
     )

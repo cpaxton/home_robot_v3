@@ -25,6 +25,7 @@ def test_innate_mars_spec():
     assert Path(s.urdf_path).resolve() == canonical.with_name("maurice.urdf").resolve()
     assert s.optional_uv_extras == ()
     assert s.dynamem_depth_source_hint == "da3"
+    assert s.robosuite_rgb_depth_ops == ()
 
 
 def test_innate_mars_mjcf_registered():
@@ -114,6 +115,76 @@ def test_stereo_right_camera_name_from_spec_innate_mars():
 
     names = InnateMarsBackend().get_spec().camera_names
     assert stereo_right_camera_name_from_spec(list(names)) == "head_right"
+
+
+def test_innate_mars_pinhole_K_chain_identity_ops():
+    """Innate Mars uses no robosuite pixel ops by default; intrinsics stay aligned with raw Renderer output."""
+    import numpy as np
+
+    from emet.utils.pinhole_intrinsics import chain_pinhole_K_pixel_ops
+
+    np.random.seed(1)
+    K0 = np.array([[400.0, 0.0, 320.0], [0.0, 380.0, 239.5], [0.0, 0.0, 1.0]])
+    h0, w0 = 480, 640
+    ops: tuple[str, ...] = ()
+    Kf, hf, wf = chain_pinhole_K_pixel_ops(K0, h0, w0, ops)
+    np.testing.assert_allclose(Kf, K0)
+    assert hf == h0 and wf == w0
+    for _ in range(20):
+        X, Y, Z = np.random.uniform(-0.1, 0.1), np.random.uniform(-0.08, 0.08), np.random.uniform(0.8, 2.0)
+        p = K0 @ np.array([X, Y, Z])
+        u0, v0, _ = p / p[2]
+        p2 = Kf @ np.array([X, Y, Z])
+        u2p, v2p, _ = p2 / p2[2]
+        assert np.hypot(u2p - u0, v2p - v0) < 1e-3
+
+
+def test_innate_mars_head_stereo_cameras_match_urdf():
+    """Stereo: URDF-mounted positions (+60 mm Y baseline); same orientation as ``camera_base``; parallel optics."""
+    pytest.importorskip("mujoco")
+    import mujoco
+    import numpy as np
+
+    from emet.robots.innate_mars import InnateMarsBackend
+
+    def cam_look_world(d, cid: int) -> np.ndarray:
+        R = np.asarray(d.cam_xmat[cid]).reshape(3, 3)
+        v = R @ np.array([0.0, 0.0, -1.0], dtype=np.float64)
+        return v / np.linalg.norm(v)
+
+    spec = InnateMarsBackend().get_spec()
+    assert spec.mjcf_path is not None
+    model = mujoco.MjModel.from_xml_path(spec.mjcf_path)
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+
+    lid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "head_left")
+    rid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "head_right")
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "camera_base")
+    assert lid >= 0 and rid >= 0 and bid >= 0
+
+    pl = np.asarray(data.cam_xpos[lid], dtype=np.float64).ravel()
+    pr = np.asarray(data.cam_xpos[rid], dtype=np.float64).ravel()
+    # URDF: left y=0.0297, right y=-0.0303 on head → 60 mm baseline along head Y (world Y at identity pose).
+    np.testing.assert_allclose(pl[0], pr[0], atol=1e-6)
+    np.testing.assert_allclose(pl[2], pr[2], atol=1e-6)
+    np.testing.assert_allclose(pr[1] - pl[1], -0.06, rtol=0, atol=1e-5)
+    np.testing.assert_allclose(np.linalg.norm(pr - pl), 0.06, rtol=0, atol=1e-5)
+
+    Rl = np.asarray(data.cam_xmat[lid]).reshape(3, 3)
+    Rr = np.asarray(data.cam_xmat[rid]).reshape(3, 3)
+    np.testing.assert_allclose(Rl, Rr, atol=1e-6)
+    np.testing.assert_allclose(model.cam_fovy[lid], model.cam_fovy[rid])
+    np.testing.assert_allclose(float(model.cam_fovy[lid]), 80.0)
+
+    # Same optical axis convention as robot base RGB (tiny pitch toward −Z vs pure +X URDF heuristic).
+    look_h = cam_look_world(data, lid)
+    look_b = cam_look_world(data, bid)
+    np.testing.assert_allclose(look_h, look_b, rtol=0, atol=1e-5)
+
+    # Same OpenCV camera→world rotation from MuJoCo cam_xmat + diag(1,-1,-1) as RobosuiteZmqServer._camera_pose_world.
+    D = np.diag([1.0, -1.0, -1.0])
+    np.testing.assert_allclose(Rl @ D, Rr @ D, atol=1e-6)
 
 
 def test_get_robot_spec_and_runtime_notes_innate_mars():

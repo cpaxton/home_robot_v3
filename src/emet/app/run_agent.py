@@ -134,7 +134,8 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     is_flag=True,
     help=(
         "Print head-camera frame stats for describe_scene, send_image, and Discord encode (black-PNG diagnosis). "
-        "Same as EMET_AGENT_CAMERA_DEBUG=1. If the PNG is black but stats look valid, try EMET_DISCORD_IMAGES_BGR=0."
+        "Same as EMET_AGENT_CAMERA_DEBUG=1. Discord assumes RGB buffers (matching compression.from_jpg); legacy "
+        "OpenCV BGR pipelines can set EMET_DISCORD_IMAGES_BGR=1."
     ),
 )
 @click.option(

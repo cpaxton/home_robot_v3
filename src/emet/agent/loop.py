@@ -565,7 +565,8 @@ def run_agent_with_robot(
             colored(
                 "Camera debug: head-frame stats on describe_scene, send_image, and Discord PNG encode. "
                 "Unset EMET_AGENT_CAMERA_DEBUG or omit --debug-camera. "
-                "If PNG looks black but stats show valid pixels: try EMET_DISCORD_IMAGES_BGR=0 (sim RGB vs OpenCV BGR).",
+                "If Discord PNG colors look swapped but stats show valid pixels: set EMET_DISCORD_IMAGES_BGR=1 only "
+                "for raw OpenCV BGR matrices (JPEG via from_jpg is already RGB).",
                 "yellow",
             )
         )
