@@ -322,7 +322,7 @@ def main(
                     f"  {err_type}: {err_msg}\n\n"
                     f"  (Python: {sys.executable})\n\n"
                     "  If you see 'initialization of _internal failed' (numba), run:\n"
-                    "    uv sync --extra sim --extra dynamem   (or emet sync -e sim -e dynamem)\n"
+                    "    uv sync   (or: emet sync)\n"
                     "  to install a numba version compatible with numpy in this project.\n\n"
                     "  Otherwise ensure Robocasa is installed:\n"
                     "    1. emet install sim   (clones third_party/robosuite and robocasa)\n"
@@ -447,13 +447,6 @@ def main(
                 ensure_molmo_asset_layout_symlinks()
                 try:
                     scene_model = mujoco.MjModel.from_xml_path(custom_path)
-                    # Auto-merge writes molmospaces_merged_*.xml next to galaxea_r1.xml; safe to delete after load.
-                    try:
-                        cp = Path(custom_path)
-                        if cp.is_file() and cp.name.startswith("molmospaces_merged_"):
-                            cp.unlink(missing_ok=True)
-                    except OSError:
-                        pass
                 except Exception as e:
                     logger.error(f"Failed to load MJCF from --scene_path {custom_path}: {e}")
                     logger.error(
@@ -499,6 +492,11 @@ def main(
             if "MUJOCO_GL" not in os.environ and not use_glx and not show_viewer_ui:
                 os.environ["MUJOCO_GL"] = "egl"
 
+            spawn_scene_disk: str | None = None
+            spath = (scene_path or "").strip()
+            if spath and Path(spath).is_file():
+                spawn_scene_disk = str(Path(spath).resolve())
+
             server = RobosuiteZmqServer(
                 robot_spec=robot_spec,
                 send_port=send_port,
@@ -513,6 +511,7 @@ def main(
                 scene_source_basename=scene_source_basename,
                 max_sim_steps=steps,
                 debug_molmospaces_spawn=debug_molmospaces_spawn,
+                scene_disk_path=spawn_scene_disk,
             )
         except zmq.error.ZMQError as e:
             if "Address already in use" in str(e):

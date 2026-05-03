@@ -24,7 +24,7 @@ min_depth: 0.25
 max_depth: 2.5
 
 # Depth for voxel mapping: ``sensor`` (ZMQ/real depth), ``da3`` (Depth Anything 3 from RGB), ``auto`` (sensor if present else DA3).
-# Install DA3 with: ``uv sync --extra da3``. ZMQ clients must use ``allow_missing_depth`` when the server omits depth (see ``emet run agent``).
+# Install DA3 with: ``uv sync`` (da3 is a default dependency group). ZMQ clients must use ``allow_missing_depth`` when the server omits depth (see ``emet run agent``).
 depth_source: sensor
 da3_model_id: depth-anything/DA3METRIC-LARGE
 da3_process_res: 504

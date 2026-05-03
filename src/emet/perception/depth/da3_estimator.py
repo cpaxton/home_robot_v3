@@ -42,7 +42,7 @@ class DA3DepthEstimator:
             from depth_anything_3.api import DepthAnything3  # type: ignore[import-not-found]
         except ImportError as e:
             raise ImportError(
-                "depth_anything_3 is required for DA3 depth. Install with: uv sync --extra da3 "
+                "depth_anything_3 is required for DA3 depth. Install with: uv sync "
                 "or pip install 'depth-anything-3>=0.1.1'"
             ) from e
 

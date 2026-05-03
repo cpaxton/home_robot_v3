@@ -1,0 +1,7 @@
+# Vendored MolmoSpaces occupancy / renderer slice (Allen Institute for AI, Apache-2.0).
+#
+# Source: molmo_spaces (https://github.com/allenai/molmospaces), files including
+# ``utils/scene_maps.py``, ``env/mj_extensions.py``, ``renderer/opengl_rendering.py``,
+# ``renderer/abstract_renderer.py``, and small utilities. Trimmed and import-rewritten for emet.
+#
+# Do not remove this notice when copying forward.

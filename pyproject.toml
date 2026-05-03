@@ -100,7 +100,7 @@ dev = [
     "rich>=13.0.0",
 ]
 sim = [
-    "mujoco>=3.3.0",  # Align with upstream robosuite; 3.2.6 was for older Stretch compat
+    "mujoco>=3.4.0",
     "hello-robot-stretch-urdf",
     "grpcio",
     "click>=8.1.8",
@@ -121,11 +121,44 @@ da3 = [
 # Use a separate venv for the runner; see docs/molmospaces.md and install.sh --molmospaces.
 molmospaces = []
 
+# PEP 735 dependency groups: keep package lists in sync with [project.optional-dependencies] above.
+# [tool.uv] default-groups installs these on a plain `uv sync`. Minimal/CI: `uv sync --no-default-groups`.
+# Skip SAM-2 only: `uv sync --no-group dynamem` (e.g. install.sh --no-sam2).
+[dependency-groups]
+dev = [
+    "pre-commit",
+    "pytest",
+    "pytest-timeout",
+    "ruff>=0.8.0",
+    "mypy",
+    "lark",
+    "rich>=13.0.0",
+]
+sim = [
+    "mujoco>=3.4.0",
+    "hello-robot-stretch-urdf",
+    "grpcio",
+    "click>=8.1.8",
+    "inputs>=0.5",
+    # robosuite and robocasa are installed editable from third_party by: emet install sim (or scripts/install_simulation.sh)
+]
+hand_tracker = [
+    "mediapipe",
+    "webcam",
+]
+dynamem = [
+    "SAM-2",
+]
+da3 = [
+    "depth-anything-3>=0.1.1",
+]
+
 [tool.uv]
+default-groups = ["dev", "sim", "hand_tracker", "dynamem", "da3"]
 # Robocasa 0.2 pins numpy==1.23.3 and numba==0.56.4; dynamem/SAM-2 need numpy>=1.24.4.
 # Override so both sim and dynamem resolve; numba>=0.58.1 works with numpy 1.24+ and avoids "initialization of _internal failed".
-# mujoco>=3.3.0 forces use of third_party/robocasa (which has mujoco>=3.3.0); PyPI robocasa pins mujoco==3.2.6 and would conflict.
-override-dependencies = ["numpy>=1.24.4,<2", "numba>=0.58.1", "mujoco>=3.3.0"]
+# mujoco>=3.4.0 forces use of third_party/robocasa (which has mujoco>=3.4.0); PyPI robocasa pins mujoco==3.2.6 and would conflict.
+override-dependencies = ["numpy>=1.24.4,<2", "numba>=0.58.1", "mujoco>=3.4.0"]
 
 [tool.uv.sources]
 "SAM-2" = { path = "third_party/segment-anything-2", editable = true }

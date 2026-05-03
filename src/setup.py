@@ -120,7 +120,7 @@ setuptools.setup(
             "rich>=13.0.0",
         ],
         "sim": [
-            "mujoco>=3.3.0",
+            "mujoco>=3.4.0",
             "hello-robot-stretch-urdf",
             "grpcio",
             "click>=8.1.8",

@@ -117,6 +117,68 @@ def test_want_molmospaces_autoplace_kind_and_merged_basename():
     )
 
 
+def test_clamp_xy_into_rect_and_corner_reach():
+    from emet.simulation.molmospaces_spawn import (
+        _clamp_xy_into_rect,
+        _max_xy_distance_to_rect_corners,
+    )
+
+    rect = (2.0, 8.0, 4.0, 10.0)
+    assert _clamp_xy_into_rect(5.0, 3.0, rect) == (5.0, 4.0)
+    ox, oy = _clamp_xy_into_rect(-10.0, 20.0, rect)
+    assert (ox, oy) == (2.0, 10.0)
+    r = _max_xy_distance_to_rect_corners(5.0, 7.0, rect)
+    assert abs(r - math.hypot(3.0, 3.0)) < 1e-6
+
+
+MEGA_SHELL_OFFSET = """<?xml version="1.0"?>
+<mujoco model="mega_shell">
+  <worldbody>
+    <geom name="floor" type="plane" pos="0 0 0" size="80 80 0.01" rgba="0.72 0.72 0.72 1"/>
+    <!-- Wide deck: geom_rbound >> 15 so clip must cap (not skip). Ceiling gives upward-ray clearance. -->
+    <geom name="deck" type="box" pos="18 14 0.06" size="24 24 0.06" contype="1" conaffinity="1" rgba="0.55 0.5 0.45 0.4"/>
+    <geom name="ceiling" type="box" pos="18 14 2.75" size="26 26 0.1" contype="1" conaffinity="1" rgba="0.55 0.55 0.6 0.2"/>
+    <body name="base_link" pos="0 0 0.95">
+      <freejoint name="root"/>
+      <geom name="hull" type="box" size="0.22 0.22 0.14" contype="1" conaffinity="1" rgba="0 0.85 0.25 0.55"/>
+    </body>
+  </worldbody>
+</mujoco>
+"""
+
+
+def test_collision_clip_and_centroid_use_capped_rbound_for_mega_mesh():
+    """Regression: skipping geoms with rb > max_geom_rbound left no clip; search fell back to (0,0) outside the shell."""
+    from emet.simulation.molmospaces_spawn import collision_scene_xy_clip_rect, scene_collision_centroid_xy
+
+    m = mujoco.MjModel.from_xml_string(MEGA_SHELL_OFFSET)
+    d = mujoco.MjData(m)
+    mujoco.mj_forward(m, d)
+    bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+    robot_bodies = molmospaces_spawn._bodies_descending_from(m, bid)  # noqa: SLF001
+    clip = collision_scene_xy_clip_rect(
+        m, d, robot_bodies=robot_bodies, floor_geom_name="floor", margin=0.0, max_geom_rbound=15.0
+    )
+    assert clip is not None
+    xmin, xmax, ymin, ymax = clip
+    assert xmin <= 18.0 <= xmax and ymin <= 14.0 <= ymax
+    c = scene_collision_centroid_xy(m, d, robot_bodies=robot_bodies, max_geom_rbound=15.0)
+    assert c is not None
+    cx, cy = c
+    assert abs(cx - 18.0) < 2.5 and abs(cy - 14.0) < 2.5
+
+
+def test_find_molmospaces_moves_base_into_offset_mega_shell():
+    m = mujoco.MjModel.from_xml_string(MEGA_SHELL_OFFSET)
+    d = mujoco.MjData(m)
+    mujoco.mj_forward(m, d)
+    out = molmospaces_spawn.find_molmospaces_freejoint_xyz(
+        m, d, base_body_name="base_link", min_nonfloor_clearance=-5e-5
+    )
+    assert out is not None
+    x, y, _z = out
+    assert math.hypot(x - 18.0, y - 14.0) < 12.0, f"expected spawn near house center (18,14), got ({x},{y})"
+
 
 def test_iter_annulus_xy_candidates_respects_xy_origin():
     """Rings must be around *xy_origin*, not world (0,0), so offset houses get interior samples."""

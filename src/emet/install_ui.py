@@ -295,17 +295,16 @@ def _execute_wizard_plan(root: Path, plan: WizardPlan) -> int:
         if not _has_uv():
             print("uv not found; install uv or run sync manually.")
             return 1
-        extras: list[str] = []
-        if plan.uv_dev:
-            extras.append("dev")
-        if plan.include_dynamem and (root / "third_party" / "segment-anything-2").exists():
-            extras.append("dynamem")
-        if plan.uv_sim:
-            extras.append("sim")
-        if not extras:
-            extras = ["dev"]
-        cmd = ["uv", "sync"] + [item for e in extras for item in ("--extra", e)]
-        print(f"\n--- uv sync ({', '.join(extras)}) ---\n  {' '.join(cmd)}")
+        cmd = ["uv", "sync"]
+        if not plan.uv_dev:
+            cmd.extend(["--no-group", "dev"])
+        if not plan.uv_sim:
+            cmd.extend(["--no-group", "sim"])
+        dynamem_ok = plan.include_dynamem and (root / "third_party" / "segment-anything-2").is_dir()
+        if not dynamem_ok:
+            cmd.extend(["--no-group", "dynamem"])
+        label = "defaults" if (plan.uv_dev and plan.uv_sim and dynamem_ok) else "custom groups"
+        print(f"\n--- uv sync ({label}) ---\n  {' '.join(cmd)}")
         code = subprocess.call(cmd, cwd=root)
         if code != 0:
             return code
@@ -358,11 +357,14 @@ def _run_rich_plan_wizard(root: Path) -> bool | None:
     plan = WizardPlan()
     plan.submodules = Confirm.ask("1) Init/update SAM-2 submodule (third_party/segment-anything-2)?", default=True)
     plan.include_dynamem = Confirm.ask(
-        "2) Add [bold]dynamem[/bold] extra on uv sync (editable SAM-2)?",
+        "2) Include [bold]dynamem[/bold] dependency group (editable SAM-2)?",
         default=plan.submodules,
     )
-    plan.uv_dev = Confirm.ask("3) Run [bold]uv sync --extra dev[/bold] (pytest, ruff, rich, …)?", default=True)
-    plan.uv_sim = Confirm.ask("4) Add [bold]sim[/bold] extra to uv sync (MuJoCo pip extra)?", default=False)
+    plan.uv_dev = Confirm.ask("3) Run [bold]uv sync[/bold] (pytest, ruff, rich, … from default groups)?", default=True)
+    plan.uv_sim = Confirm.ask(
+        "4) Include [bold]sim[/bold] dependency group (MuJoCo pip deps, grpcio, …)?",
+        default=False,
+    )
     plan.install_simulation = Confirm.ask(
         "5) Run [bold]scripts/install_simulation.sh[/bold] (clone robosuite/robocasa; large downloads)?",
         default=False,
@@ -408,35 +410,27 @@ def _run_rich_plan_wizard(root: Path) -> bool | None:
 
 
 def _run_sync_menu(root: Path) -> None:
-    """Prompt for extras and run uv sync (or pip)."""
+    """Prompt for uv sync variant (default dependency groups vs minimal)."""
     if not _has_uv():
         print("uv not found. Run: pip install -e .[sim,dynamem,dev] as needed.")
         return
-    print("\nSync extras:")
-    print("  1. sim      (MuJoCo, robocasa – requires third_party/robocasa)")
-    print("  2. dynamem  (SAM-2 – requires third_party/segment-anything-2)")
-    print("  3. dev      (pytest, ruff, mypy)")
-    print("  4. all      (sim + dynamem + dev)")
+    print("\nSync:")
+    print("  1. uv sync  (default groups: dev, sim, hand_tracker, dynamem, da3)")
+    print("  2. uv sync --no-default-groups  (base [project] dependencies only)")
     print("  Q. Cancel")
     try:
-        c = input("Choice (1–4, Q) [Q]: ").strip().upper() or "Q"
+        c = input("Choice (1–2, Q) [1]: ").strip().upper() or "1"
     except (EOFError, KeyboardInterrupt):
         return
     if c == "Q":
         return
-    extras: list[str] = []
     if c == "1":
-        extras = ["sim"]
+        cmd = ["uv", "sync"]
     elif c == "2":
-        extras = ["dynamem"]
-    elif c == "3":
-        extras = ["dev"]
-    elif c == "4":
-        extras = ["sim", "dynamem", "dev"]
+        cmd = ["uv", "sync", "--no-default-groups"]
     else:
         print("Invalid choice.")
         return
-    cmd = ["uv", "sync"] + [arg for e in extras for arg in ("--extra", e)]
     print(f"Running: {' '.join(cmd)}")
     result = subprocess.call(cmd, cwd=root)
     if result == 0:
@@ -467,7 +461,7 @@ def _legacy_asset_menu_loop(root: Path) -> int:
             print()
 
         print("  A. Run all (submodules, sim, kitchen assets, MolmoSpaces – with prompts)")
-        print("  S. Sync extras (uv sync: sim, dynamem, dev – prompt for which)")
+        print("  S. Sync (uv: full defaults or base-only)")
         print("  Q. Quit")
         print()
 
@@ -511,7 +505,7 @@ def _legacy_asset_menu_loop(root: Path) -> int:
                 _molmospaces_pip_install_chain(py_molmo, root, use_uv)
             else:
                 print("  .venv-molmospaces already complete.")
-            print("\nDone. Run emet sync -e sim (and -e dynamem if needed) to sync extras.")
+            print("\nDone. Run uv sync from the repo root if you have not already.")
             continue
 
         try:
@@ -581,5 +575,5 @@ def run_install_menu(*, text_only: bool = False) -> int:
         if rich_result is True:
             return 0
         if rich_result is None:
-            print("Tip: install Rich for a colored plan wizard:  uv sync --extra dev")
+            print("Tip: install Rich for a colored plan wizard:  uv sync")
     return _legacy_asset_menu_loop(root)

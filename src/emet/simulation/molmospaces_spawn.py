@@ -167,6 +167,11 @@ def collision_scene_xy_clip_rect(
 
     Uses each collision geom's world position and ``geom_rbound`` so we do not sample spawn XY
     on the ``floor`` plane beyond walls/room content (which would look like a black void).
+
+    Geoms with a very large ``geom_rbound`` (typical merged room / house meshes) **cap** their
+    contribution at *max_geom_rbound* instead of being skipped entirely. Skipping them used to
+    yield an empty clip, then XY search fell back to world ``(0,0)`` with no clip — spawns on open
+    floor **outside** offset house footprints.
     """
     floor_resolved = effective_floor_geom_name(model, floor_geom_name)
     floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_resolved)
@@ -187,8 +192,9 @@ def collision_scene_xy_clip_rect(
         if not suppress_exterior_filter and _geom_exterior_heuristic(model, g):
             continue
         rb = float(model.geom_rbound[g])
-        if rb <= 0.0 or rb > max_geom_rbound:
+        if rb <= 0.0:
             continue
+        rb = min(rb, float(max_geom_rbound))
         p = data.geom_xpos[g]
         xmin = min(xmin, float(p[0]) - rb)
         xmax = max(xmax, float(p[0]) + rb)
@@ -215,6 +221,21 @@ def _erode_xy_rect(
     return (x0 + inset, x1 - inset, y0 + inset, y1 - inset)
 
 
+def _clamp_xy_into_rect(x: float, y: float, rect: tuple[float, float, float, float]) -> tuple[float, float]:
+    """Clamp *x*, *y* to the closed axis-aligned rectangle (xmin, xmax, ymin, ymax)."""
+    x0, x1, y0, y1 = rect
+    return (min(max(float(x), x0), x1), min(max(float(y), y0), y1))
+
+
+def _max_xy_distance_to_rect_corners(
+    x: float, y: float, rect: tuple[float, float, float, float]
+) -> float:
+    """Max Euclidean distance from *(x,y)* to one of the four corners of *rect*."""
+    x0, x1, y0, y1 = rect
+    corners = ((x0, y0), (x1, y0), (x0, y1), (x1, y1))
+    return max(math.hypot(float(x) - cx, float(y) - cy) for cx, cy in corners)
+
+
 def scene_collision_centroid_xy(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -224,7 +245,11 @@ def scene_collision_centroid_xy(
     max_geom_rbound: float = 15.0,
     suppress_exterior_filter: bool = False,
 ) -> tuple[float, float] | None:
-    """Mean (x, y) of scene collision geoms (same filters as :func:`collision_scene_xy_clip_rect`)."""
+    """Mean (x, y) of scene collision geoms (same filters as :func:`collision_scene_xy_clip_rect`).
+
+    Like the clip rect, each geom's influence on the mean is capped at *max_geom_rbound* so merged
+    mega-meshes still contribute a centroid near the house rather than being dropped.
+    """
     floor_resolved = effective_floor_geom_name(model, floor_geom_name)
     floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_resolved)
     sx = 0.0
@@ -242,13 +267,14 @@ def scene_collision_centroid_xy(
         if not suppress_exterior_filter and _geom_exterior_heuristic(model, g):
             continue
         rb = float(model.geom_rbound[g])
-        if rb <= 0.0 or rb > max_geom_rbound:
+        if rb <= 0.0:
             continue
+        rb = min(rb, float(max_geom_rbound))
         p = data.geom_xpos[g]
         sx += float(p[0])
         sy += float(p[1])
         n += 1
-    if n < 8:
+    if n == 0:
         return None
     return (sx / n, sy / n)
 
@@ -644,6 +670,50 @@ def _post_settle_pose_acceptable(
     return True
 
 
+def _ithor_occupancy_priority_xy(
+    merged_mjcf_path: str | None,
+    environment: dict[str, Any] | None,
+    *,
+    agent_radius: float = 0.32,
+    px_per_m: int = 120,
+    max_points: int = 450,
+) -> list[tuple[float, float]]:
+    """Molmo-style orthographic occupancy free-space samples (vendored iTHORMap), optional XY priority."""
+    raw = os.environ.get("EMET_MOLMOSPACES_OCC_MAP", "1").strip().lower()
+    if raw in ("0", "false", "no", "off") or not merged_mjcf_path:
+        return []
+    env = environment or {}
+    scene = str(env.get("scene", "")).lower()
+    path_l = merged_mjcf_path.lower()
+    if "ithor" not in scene and "ithor" not in path_l:
+        return []
+    try:
+        from emet.simulation.molmo_occupancy.ithor_map import iTHORMap
+
+        th = iTHORMap.from_mj_model_path(
+            merged_mjcf_path, camera=None, agent_radius=agent_radius, px_per_m=px_per_m
+        )
+        fp = th.get_free_points()
+    except Exception as e:
+        logger.warning(f"MolmoSpaces occupancy map skipped ({e!r}).")
+        return []
+    if fp.size == 0:
+        return []
+    n = min(max_points, len(fp))
+    seed = int(os.environ.get("EMET_MOLMOSPACES_OCC_SEED", "0") or 0)
+    rng = np.random.default_rng(seed)
+    if len(fp) > n:
+        idx = rng.choice(len(fp), size=n, replace=False)
+    else:
+        idx = np.arange(len(fp))
+    out = [(float(fp[i, 0]), float(fp[i, 1])) for i in idx]
+    spawn_dbg(
+        f"occupancy_map: n_free={len(fp)} priority_sample={len(out)} path={merged_mjcf_path!r} "
+        f"agent_r={agent_radius} px_per_m={px_per_m}"
+    )
+    return out
+
+
 def _find_molmospaces_freejoint_xyz_pass(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -656,6 +726,7 @@ def _find_molmospaces_freejoint_xyz_pass(
     max_geom_rbound: float,
     clip_erode_m: float,
     suppress_exterior_filter: bool,
+    xy_priority: list[tuple[float, float]] | None = None,
 ) -> tuple[float, float, float] | None:
     base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
     robot_bodies: set[int] = set()
@@ -688,12 +759,18 @@ def _find_molmospaces_freejoint_xyz_pass(
     elif xy_clip is not None:
         ox = 0.5 * float(xy_clip[0] + xy_clip[1])
         oy = 0.5 * float(xy_clip[2] + xy_clip[3])
+    if xy_clip is not None:
+        # Collision centroid can sit outside the *eroded* clip (e.g. porch geoms below the room
+        # AABB). Annulus + clip filter then misses most walkable floor; clamp into the search rect.
+        ox, oy = _clamp_xy_into_rect(ox, oy, xy_clip)
 
     r_annulus_max = 3.2
     if xy_clip is not None:
         x0c, x1c, y0c, y1c = xy_clip
         half_diag = 0.5 * math.hypot(x1c - x0c, y1c - y0c)
-        r_annulus_max = float(min(14.5, max(3.8, 0.52 * half_diag + 0.65)))
+        # Must reach every corner from (ox,oy) plus inner ring (r_min ~0.35).
+        reach_corners = _max_xy_distance_to_rect_corners(ox, oy, xy_clip) + 0.42
+        r_annulus_max = float(min(14.5, max(3.8, reach_corners, half_diag + 0.9)))
 
     candidates = list(
         iter_annulus_xy_candidates(
@@ -702,7 +779,7 @@ def _find_molmospaces_freejoint_xyz_pass(
             xy_origin=(ox, oy),
         )
     )
-    if xy_clip is not None and len(candidates) < 72:
+    if xy_clip is not None:
         seen = {(round(a, 2), round(b, 2)) for a, b in candidates}
         for px, py in _coarse_grid_xy_in_clip(xy_clip, step=0.62, max_points=220):
             key = (round(px, 2), round(py, 2))
@@ -711,12 +788,23 @@ def _find_molmospaces_freejoint_xyz_pass(
             seen.add(key)
             candidates.append((px, py))
 
-    if centroid is not None:
-        cx, cy = centroid
-        candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
-    elif xy_clip is not None:
+    if xy_priority:
+        seen_xy = {(round(a, 2), round(b, 2)) for a, b in candidates}
+        front: list[tuple[float, float]] = []
+        for px, py in xy_priority:
+            k = (round(px, 2), round(py, 2))
+            if k in seen_xy:
+                continue
+            seen_xy.add(k)
+            front.append((float(px), float(py)))
+        candidates = front + candidates
+
+    if xy_clip is not None:
         cx = 0.5 * (xy_clip[0] + xy_clip[1])
         cy = 0.5 * (xy_clip[2] + xy_clip[3])
+        candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
+    elif centroid is not None:
+        cx, cy = float(centroid[0]), float(centroid[1])
         candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
 
     spawn_dbg(
@@ -959,6 +1047,8 @@ def find_molmospaces_freejoint_xyz(
     ),
     min_nonfloor_clearance: float = -5e-5,
     scene_label: str | None = None,
+    merged_mjcf_path: str | None = None,
+    environment: dict[str, Any] | None = None,
 ) -> tuple[float, float, float] | None:
     """Return a world-space base position (x, y, z) for the robot free joint, or None to keep defaults.
 
@@ -985,6 +1075,8 @@ def find_molmospaces_freejoint_xyz(
     else:
         spawn_dbg(f"find: clip_probe=None floor_effective={floor_effective!r} label={scene_label!r}")
 
+    occ_xy = _ithor_occupancy_priority_xy(merged_mjcf_path, environment)
+
     placed = _find_molmospaces_freejoint_xyz_pass(
         model,
         data,
@@ -996,6 +1088,7 @@ def find_molmospaces_freejoint_xyz(
         max_geom_rbound=15.0,
         clip_erode_m=0.30,
         suppress_exterior_filter=False,
+        xy_priority=occ_xy or None,
     )
     if placed is not None:
         spawn_dbg(f"find: primary pass OK -> {placed}")
@@ -1012,10 +1105,28 @@ def find_molmospaces_freejoint_xyz(
         max_geom_rbound=45.0,
         clip_erode_m=0.12,
         suppress_exterior_filter=False,
+        xy_priority=occ_xy or None,
     )
     if placed_relaxed is not None:
         spawn_dbg(f"find: relaxed pass OK -> {placed_relaxed}")
         return placed_relaxed
+
+    placed_ceiling_loose = _find_molmospaces_freejoint_xyz_pass(
+        model,
+        data,
+        base_body_name=base_body_name,
+        floor_effective=floor_effective,
+        z_margins=z_margins,
+        min_nonfloor_clearance=min_nonfloor_clearance,
+        min_upward_clearance=0.035,
+        max_geom_rbound=45.0,
+        clip_erode_m=0.06,
+        suppress_exterior_filter=False,
+        xy_priority=occ_xy or None,
+    )
+    if placed_ceiling_loose is not None:
+        spawn_dbg(f"find: ceiling-loose pass OK -> {placed_ceiling_loose}")
+        return placed_ceiling_loose
 
     ray_exclude = int(base_bid) if base_bid >= 0 else -1
     placed_fb = _fallback_spawn_near_clip_center(
@@ -1036,7 +1147,7 @@ def find_molmospaces_freejoint_xyz(
     label = scene_label or "(unknown scene)"
     clip_s = "yes" if clip_probe is not None else "no"
     logger.warning(
-        f"molmospaces_spawn.find_molmospaces_freejoint_xyz: primary, relaxed, and clip-center "
+        f"molmospaces_spawn.find_molmospaces_freejoint_xyz: primary, relaxed, ceiling-loose, and clip-center "
         f"fallback failed (scene={label!r} floor_geom_resolved={floor_effective!r} xy_clip_rect={clip_s})"
     )
     return None

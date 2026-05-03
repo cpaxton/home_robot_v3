@@ -30,9 +30,9 @@ def assert_mujoco_available() -> None:
     except ImportError as e:
         raise ImportError(
             "The mujoco package is not installed. From the repo root run:\n"
-            "  uv sync --extra sim\n"
-            "For dev tools as well:  uv sync --extra dev --extra sim\n"
-            "For robocasa/robosuite clones + pip sim extra:  ./install.sh --sim -y  (or: emet install sim)\n"
+            "  uv sync\n"
+            "For base deps only (no dev/sim/SAM-2):  uv sync --no-default-groups\n"
+            "For robocasa/robosuite clones + sim pip deps:  ./install.sh --sim -y  (or: emet install sim)\n"
         ) from e
     except Exception as e:
         # MuJoCo loads GL at import time; wrong or broken MUJOCO_GL surfaces as AttributeError/OSError, not ImportError.

@@ -16,6 +16,7 @@ ZMQ protocol as MujocoZmqServer.
 
 import threading
 import time
+from pathlib import Path
 from typing import Any, cast
 
 import cv2
@@ -68,6 +69,7 @@ class RobosuiteZmqServer(BaseZmqServer):
     ):
         max_sim_steps = kwargs.pop("max_sim_steps", None)
         debug_molmospaces_spawn = bool(kwargs.pop("debug_molmospaces_spawn", False))
+        scene_disk_path = kwargs.pop("scene_disk_path", None)
         super().__init__(*args, **kwargs)
         self._spec = robot_spec
         self._scene_xml = scene_xml
@@ -99,6 +101,9 @@ class RobosuiteZmqServer(BaseZmqServer):
             int(max_sim_steps) if max_sim_steps is not None and int(max_sim_steps) > 0 else None
         )
         self._debug_molmospaces_spawn = debug_molmospaces_spawn
+        self._scene_disk_path: str | None = (
+            str(scene_disk_path).strip() if scene_disk_path and str(scene_disk_path).strip() else None
+        )
         self._physics_steps_executed = 0
 
     @property
@@ -152,6 +157,8 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjdata,
                 base_body_name=base_name,
                 scene_label=self._scene_source_basename,
+                merged_mjcf_path=self._scene_disk_path,
+                environment=self._environment_descriptor,
             )
         except Exception as e:
             logger.warning(f"MolmoSpaces base autoplace skipped ({e!r}).")
@@ -787,3 +794,10 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._close_renderers()
         self._running = False
         self._done = True
+        p = self._scene_disk_path
+        if p and Path(p).is_file() and Path(p).name.startswith("molmospaces_merged_"):
+            try:
+                Path(p).unlink(missing_ok=True)
+            except OSError:
+                pass
+        self._scene_disk_path = None
