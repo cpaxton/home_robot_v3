@@ -98,34 +98,64 @@ class DA3DepthEstimator:
         intrinsics_right: np.ndarray | None = None,
         extrinsics_w2c_right: np.ndarray | None = None,
     ) -> np.ndarray:
-        """Two-view DA3; returns depth aligned to *rgb_left* (reference view = first)."""
+        """Two-view DA3; returns depth aligned to *rgb_left* (reference view = first).
+
+        Some checkpoints (e.g. DA3METRIC-LARGE) omit ``cam_enc`` in the network; passing stacked
+        intrinsics/extrinsics then crashes inside ``depth_anything_3``. We retry without camera
+        tensors, then fall back to monocular depth on the left image.
+        """
         if rgb_left.shape[:2] != rgb_right.shape[:2]:
             raise ValueError("Stereo RGB frames must match in HxW.")
         self._ensure_model()
-        kwargs: dict[str, Any] = {
+
+        kwargs_images_only: dict[str, Any] = {
             "image": [rgb_left, rgb_right],
             "process_res": self._process_res,
             "ref_view_strategy": "first",
         }
-        if (
+        kwargs_with_cam: dict[str, Any] = dict(kwargs_images_only)
+        have_cam = (
             intrinsics_left is not None
             and extrinsics_w2c_left is not None
             and intrinsics_right is not None
             and extrinsics_w2c_right is not None
-        ):
+        )
+        if have_cam:
             kl = np.asarray(intrinsics_left, dtype=np.float32).reshape(3, 3)
             kr = np.asarray(intrinsics_right, dtype=np.float32).reshape(3, 3)
             el = np.asarray(extrinsics_w2c_left, dtype=np.float32).reshape(4, 4)
             er = np.asarray(extrinsics_w2c_right, dtype=np.float32).reshape(4, 4)
-            kwargs["intrinsics"] = np.stack([kl, kr], axis=0)
-            kwargs["extrinsics"] = np.stack([el, er], axis=0)
-            kwargs["align_to_input_ext_scale"] = True
+            kwargs_with_cam["intrinsics"] = np.stack([kl, kr], axis=0)
+            kwargs_with_cam["extrinsics"] = np.stack([el, er], axis=0)
+            kwargs_with_cam["align_to_input_ext_scale"] = True
 
-        pred = self._model.inference(**kwargs)
-        depth = np.asarray(pred.depth[0], dtype=np.float32)
-        depth = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
-        depth = np.clip(depth, 0.0, None)
-        return resize_depth_to_match_rgb(depth, rgb_left)
+        # Prefer two-view RGB without poses first: DA3METRIC-LARGE often has cam_enc=None and crashes
+        # when passing stacked intrinsics/extrinsics (see depth_anything_3.model.da3.forward).
+        attempts: list[tuple[str, dict[str, Any]]] = [("stereo_RGB_only", kwargs_images_only)]
+        if have_cam:
+            attempts.append(("stereo+intrinsics+extrinsics", kwargs_with_cam))
+
+        last_err: BaseException | None = None
+        for label, kwargs in attempts:
+            try:
+                pred = self._model.inference(**kwargs)
+                depth = np.asarray(pred.depth[0], dtype=np.float32)
+                depth = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
+                depth = np.clip(depth, 0.0, None)
+                return resize_depth_to_match_rgb(depth, rgb_left)
+            except (TypeError, RuntimeError) as e:
+                last_err = e
+                logger.warning("DA3 %s inference failed (%s); trying fallback.", label, e)
+
+        logger.warning(
+            "DA3 stereo unavailable (%s); using monocular depth on the left image.",
+            last_err,
+        )
+        return self.infer(
+            rgb_left,
+            intrinsics=intrinsics_left,
+            extrinsics_w2c=extrinsics_w2c_left,
+        )
 
 
 def create_da3_estimator_from_parameters(parameters: Any, *, device: str) -> DA3DepthEstimator | None:
