@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import gc
 import threading
 from collections.abc import Callable
 
@@ -31,6 +32,33 @@ logger = Logger(__name__)
 
 _shared_qwen35_vl: Qwen35VLClient | None = None
 _shared_qwen35_vl_lock = threading.Lock()
+
+# Multimodal checkpoints to try on CUDA OOM (largest → smallest). Matches ``eqa_vl/model_size`` presets.
+_EQA_VL_SIZE_FALLBACK_CHAIN = ("27B", "9B", "4B", "2B", "0.8B")
+
+
+def _eqa_vl_sizes_to_try(preferred: str) -> list[str]:
+    """Return ``preferred`` first, then smaller Qwen3.5-VL checkpoints until exhausted."""
+    ps = str(preferred).strip()
+    chain = _EQA_VL_SIZE_FALLBACK_CHAIN
+    if ps in chain:
+        return list(chain[chain.index(ps) :])
+    # MoE / uncommon Hub ids: try once, then fall back from 9B downward.
+    return [ps] + list(chain[chain.index("9B") :])
+
+
+def _is_vram_oom(exc: BaseException) -> bool:
+    if isinstance(exc, torch.cuda.OutOfMemoryError):
+        return True
+    msg = str(exc).lower()
+    return "out of memory" in msg
+
+
+def _release_cuda_memory_best_effort() -> None:
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
 
 
 def reset_shared_qwen35_vl_for_tests() -> None:
@@ -61,11 +89,9 @@ def get_shared_qwen35_vl_client(
     Return a single process-wide Qwen3.5 multimodal client (same weights for EQA + helpers).
 
     Loads at most once: later calls return the existing client even if free VRAM dropped (avoids a
-    second checkpoint after SigLIP / first VL pass). Size comes from ``resolve_eqa_vl_model_size``.
-
-    Initialization is serialized (lock): concurrent first callers must not each run VRAM tiering
-    after the other has allocated GPU memory, which previously could load a second checkpoint (e.g.
-    4B then 2B).
+    second checkpoint after SigLIP / first VL pass). Size comes from ``resolve_eqa_vl_model_size``
+    (or an explicit ``model_size``). On **CUDA/MPS OOM** while building the first client, automatically
+    retries with smaller Qwen3.5-VL checkpoints (e.g. 9B → 4B → 2B → 0.8B) before failing.
     """
     global _shared_qwen35_vl
     if _shared_qwen35_vl is not None:
@@ -81,19 +107,41 @@ def get_shared_qwen35_vl_client(
             model_size = resolve_eqa_vl_model_size(parameters, device=device)
         else:
             model_size = sync_resolved_eqa_vl_model_size_from_explicit(model_size)
-        _shared_qwen35_vl = Qwen35VLClient(
-            prompt=None,
-            model_size=model_size,
-            max_tokens=4096,
-            num_beams=1,
-            device=device,
-            quantization=quantization,
-        )
-        print_vram_snapshot(
-            "eqa_qwen_shared_qwen35_vl_first_load",
-            extra=f"Qwen3.5-{model_size} multimodal (eqa_vl / graph helpers)",
-        )
-        return _shared_qwen35_vl
+
+        requested_start = model_size
+        sizes = _eqa_vl_sizes_to_try(model_size)
+        for idx, sz in enumerate(sizes):
+            try:
+                _shared_qwen35_vl = Qwen35VLClient(
+                    prompt=None,
+                    model_size=sz,
+                    max_tokens=4096,
+                    num_beams=1,
+                    device=device,
+                    quantization=quantization,
+                )
+                sync_resolved_eqa_vl_model_size_from_explicit(sz)
+                if sz != requested_start:
+                    logger.warning(
+                        "EQA VL: loaded Qwen3.5-%s instead of requested %s (OOM while loading a larger checkpoint).",
+                        sz,
+                        requested_start,
+                    )
+                print_vram_snapshot(
+                    "eqa_qwen_shared_qwen35_vl_first_load",
+                    extra=f"Qwen3.5-{sz} multimodal (eqa_vl / graph helpers)",
+                )
+                return _shared_qwen35_vl
+            except Exception as e:
+                if _is_vram_oom(e) and idx < len(sizes) - 1:
+                    logger.warning(
+                        "EQA VL: failed to load Qwen3.5-%s (%s); retrying smaller multimodal checkpoint.",
+                        sz,
+                        e,
+                    )
+                    _release_cuda_memory_best_effort()
+                    continue
+                raise
 
 
 class Qwen3VLEQAClient:

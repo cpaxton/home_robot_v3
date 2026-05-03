@@ -133,7 +133,10 @@ trajectory_rot_err_threshold: 0.5
 trajectory_per_step_timeout: 3.0
 
 eqa_vl:
-  model_size: "9B"
+  # GraphEQA + SigLIP + agent LLM: 9B often OOMs on a single 24GB card; 4B is a practical default.
+  # Override with ``9B`` or set ``EMET_EQA_VL_MODEL_SIZE``; ``get_shared_qwen35_vl_client`` falls back
+  # to smaller Qwen3.5-VL checkpoints on load OOM.
+  model_size: "4B"
   quantization: int4
   vram_mib_tier_9b: 20000
   vram_mib_tier_4b: 11000
