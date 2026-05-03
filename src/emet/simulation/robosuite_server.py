@@ -705,6 +705,17 @@ class RobosuiteZmqServer(BaseZmqServer):
                     message["camera_pose_right"] = self._camera_pose_world(right_name)
             except Exception:
                 logger.debug("Stereo auxiliary RGB failed for %s", right_name, exc_info=True)
+        if len(cam_names) >= 3:
+            tertiary = cam_names[2]
+            if tertiary not in (primary_cam, right_name):
+                try:
+                    rgb_t, K_t = self._primary_rgb_only_with_K(tertiary)
+                    message["rgb_tertiary"] = compression.to_jpg(rgb_t)
+                    message["camera_K_tertiary"] = K_t
+                    message["camera_pose_tertiary"] = self._camera_pose_world(tertiary)
+                    message["camera_name_tertiary"] = tertiary
+                except Exception:
+                    logger.debug("Tertiary RGB failed for %s", tertiary, exc_info=True)
         return self._attach_emet_session(message)
 
     @override

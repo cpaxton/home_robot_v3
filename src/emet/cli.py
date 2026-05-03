@@ -815,6 +815,26 @@ def view_bridge(robot_ip: str) -> None:
     sys.exit(_run_module("emet.app.view_bridge", ["--robot-ip", robot_ip] if robot_ip else []))
 
 
+@main.command(
+    "preview-cameras",
+    short_help="Montage robot cameras (local MJCF or ZMQ) for diagnostics",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
+@click.pass_context
+def preview_cameras(ctx: click.Context) -> None:
+    """Save a PNG strip of stereo + arm cameras, optionally post to Discord.
+
+    Runs ``emet.app.preview_robot_cameras``: default local merged scene MJCF preview; use ``--source zmq``
+    for one frame from observation port (4401).
+
+    Examples:
+      emet preview-cameras
+      emet preview-cameras --source zmq --robot innate_mars
+      emet preview-cameras --discord --caption "check head aim"
+    """
+    sys.exit(_run_module("emet.app.preview_robot_cameras", list(ctx.args)))
+
+
 @main.command(short_help="Deploy emet_core and innate_mars_bridge to robot")
 @click.option("--host", "-H", default=None, help="Robot host (default: active connection)")
 @click.option("--user", "-u", default=None, help="SSH user (default: from connection or root)")

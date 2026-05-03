@@ -487,6 +487,8 @@ class GenericZmqClient(AbstractRobotClient):
             output["rgb"] = compression.from_jpg(output["rgb"])
             if "rgb_right" in output and output["rgb_right"] is not None:
                 output["rgb_right"] = compression.from_jpg(output["rgb_right"])
+            if "rgb_tertiary" in output and output["rgb_tertiary"] is not None:
+                output["rgb_tertiary"] = compression.from_jpg(output["rgb_tertiary"])
             raw_depth = output.get("depth")
             if raw_depth is None:
                 if not self._allow_missing_depth:
