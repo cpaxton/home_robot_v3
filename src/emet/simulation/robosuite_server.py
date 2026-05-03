@@ -66,6 +66,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         session_extra: dict[str, Any] | None = None,
         **kwargs,
     ):
+        max_sim_steps = kwargs.pop("max_sim_steps", None)
+        debug_molmospaces_spawn = bool(kwargs.pop("debug_molmospaces_spawn", False))
         super().__init__(*args, **kwargs)
         self._spec = robot_spec
         self._scene_xml = scene_xml
@@ -93,6 +95,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._nav_w_max = 0.95
         self._render_lock = threading.Lock()
         self._primary_renderer: Any | None = None
+        self._max_sim_steps: int | None = (
+            int(max_sim_steps) if max_sim_steps is not None and int(max_sim_steps) > 0 else None
+        )
+        self._debug_molmospaces_spawn = debug_molmospaces_spawn
+        self._physics_steps_executed = 0
 
     @property
     def spec(self) -> RobotSpec:
@@ -120,11 +127,10 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     def _want_molmospaces_spawn_heuristic(self) -> bool:
         """True when we merged a MolmoSpaces house + mobile base (needs placement away from origin)."""
-        env = self._environment_descriptor
-        if env and env.get("kind") == "molmospaces":
-            return True
-        bn = (self._scene_source_basename or "").lower()
-        return bn.startswith("molmospaces_merged")
+        return molmospaces_spawn.want_molmospaces_autoplace(
+            environment=self._environment_descriptor,
+            scene_source_basename=self._scene_source_basename,
+        )
 
     def _molmospaces_autoplace_free_base_after_load(self) -> None:
         """Move merged MolmoSpaces + mobile robot off origin when the base starts inside scene clutter."""
@@ -135,26 +141,53 @@ class RobosuiteZmqServer(BaseZmqServer):
         if self._base_freejoint_addrs() is None:
             return
         base_name = self._spec.base_link_name
+        if self._debug_molmospaces_spawn:
+            logger.info(
+                f"MolmoSpaces spawn debug: scene_source_basename={self._scene_source_basename!r} "
+                f"environment={self._environment_descriptor!r} base_body_name={base_name!r}"
+            )
         try:
             placed = molmospaces_spawn.find_molmospaces_freejoint_xyz(
                 self._mjmodel,
                 self._mjdata,
                 base_body_name=base_name,
+                scene_label=self._scene_source_basename,
             )
         except Exception as e:
             logger.warning(f"MolmoSpaces base autoplace skipped ({e!r}).")
             return
         if placed is None:
-            logger.warning(
-                "MolmoSpaces base autoplace: no walkable floor ray / free joint pose found; "
-                "robot may start at MJCF default (often the world origin)."
-            )
+            if self._debug_molmospaces_spawn:
+                logger.info("MolmoSpaces base autoplace: find_molmospaces_freejoint_xyz returned None (see spawn debug lines above).")
             return
         x, y, z = placed
         logger.info(
             f"MolmoSpaces base autoplace: moved free joint on {base_name!r} to "
             f"({x:.3f}, {y:.3f}, {z:.3f}) to avoid origin clutter."
         )
+        if self._debug_molmospaces_spawn:
+            try:
+                mujoco.mj_forward(self._mjmodel, self._mjdata)
+                lines = molmospaces_spawn.format_spawn_contact_report(
+                    self._mjmodel,
+                    self._mjdata,
+                    base_body_name=base_name,
+                    floor_geom_name="floor",
+                    max_lines=50,
+                    dist_report_threshold=0.15,
+                )
+                for ln in lines:
+                    logger.info(f"[molmospaces_spawn/post-place] {ln}")
+                for ln in molmospaces_spawn.format_spawn_floor_alignment_report(
+                    self._mjmodel,
+                    self._mjdata,
+                    base_body_name=base_name,
+                    floor_geom_name="floor",
+                    xy=(float(x), float(y)),
+                ):
+                    logger.info(f"[molmospaces_spawn/post-place] {ln}")
+            except Exception as e:
+                logger.warning(f"MolmoSpaces spawn debug contact report failed: {e!r}")
         # Copy placed free-joint pose into qpos0 so resets use autoplace (Python MjModel has no qvel0).
         addrs = self._base_freejoint_addrs()
         if addrs is not None:
@@ -333,6 +366,43 @@ class RobosuiteZmqServer(BaseZmqServer):
         fovy = self._mjmodel.cam_fovy[cam_id]
         f = 0.5 * height / np.tan(np.radians(fovy) / 2)
         return np.array([[f, 0, width / 2], [0, f, height / 2], [0, 0, 1]])
+
+    def _sync_actuator_ctrl_from_joint_positions(self) -> None:
+        """Set ``ctrl`` so actuators command the current pose (and zero for swerve *velocity* wheels).
+
+        After MolmoSpaces autoplace or any MJCF merge, ``ctrl`` defaults to 0 while articulated
+        ``qpos`` may not; the first ``mj_step`` then applies large PD errors and the robot can
+        collapse. Velocity wheel actuators (Galaxea / rby1 ``wheel*``) must use ``ctrl=0`` at rest.
+        """
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        n = min(len(self._spec.actuator_names), len(self._spec.joint_names))
+        for i in range(n):
+            jname = self._spec.joint_names[i]
+            aname = self._spec.actuator_names[i]
+            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jname)
+            aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
+            if jid < 0 or aid < 0:
+                continue
+            qadr = int(self._mjmodel.jnt_qposadr[jid])
+            if aname.startswith("wheel"):
+                self._mjdata.ctrl[aid] = 0.0
+            else:
+                self._mjdata.ctrl[aid] = float(self._mjdata.qpos[qadr])
+
+    def _stabilize_physics_state_after_load(self) -> None:
+        """Zero all velocities, align actuators with ``qpos``, and run a few dynamics steps."""
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        with self._mj_lock:
+            self._mjdata.qvel.fill(0.0)
+            self._sync_actuator_ctrl_from_joint_positions()
+            mujoco.mj_forward(self._mjmodel, self._mjdata)
+            for _ in range(8):
+                mujoco.mj_step(self._mjmodel, self._mjdata)
+            self._mjdata.qvel.fill(0.0)
+            self._sync_actuator_ctrl_from_joint_positions()
+            mujoco.mj_forward(self._mjmodel, self._mjdata)
 
     def _camera_pose_world(self, camera_name: str) -> np.ndarray:
         """4x4 camera-to-world transform for depth unprojection and map ``_visited`` updates.
@@ -625,6 +695,13 @@ class RobosuiteZmqServer(BaseZmqServer):
             with self._mj_lock:
                 self._step_base_navigation_drive()
                 mujoco.mj_step(self._mjmodel, self._mjdata)
+            self._physics_steps_executed += 1
+            if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
+                logger.info(
+                    f"MuJoCo step limit reached (--steps {self._max_sim_steps}); stopping simulation loop."
+                )
+                self._running = False
+                break
             time.sleep(1 / self.simulation_rate)
 
     def _run_passive_viewer_main_loop(self, show_viewer_ui: bool) -> None:
@@ -647,6 +724,13 @@ class RobosuiteZmqServer(BaseZmqServer):
                         self._step_base_navigation_drive()
                         mujoco.mj_step(self._mjmodel, self._mjdata)
                         viewer.sync()
+                    self._physics_steps_executed += 1
+                    if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
+                        logger.info(
+                            f"MuJoCo step limit reached (--steps {self._max_sim_steps}); closing viewer loop."
+                        )
+                        self._running = False
+                        break
                     time.sleep(dt)
         except Exception as e:
             logger.warning(
@@ -669,9 +753,9 @@ class RobosuiteZmqServer(BaseZmqServer):
     ) -> None:
         self._load_model()
         self._running = True
+        self._stabilize_physics_state_after_load()
         self._initial_xyt = self.get_base_xyt()
         self._nav_goal_world = None
-        self._zero_base_free_joint_velocity()
         self._at_goal = True
         self._emet_session = self._build_emet_session(robocasa=robocasa)
 

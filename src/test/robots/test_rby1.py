@@ -127,6 +127,7 @@ def test_default_scene_with_rby1_loads_and_robot_can_be_commanded():
         send_servo_port=0,
     )
     server._load_model()
+    server._stabilize_physics_state_after_load()
     server._initial_xyt = server.get_base_xyt()
 
     # Get initial joint state and base position
