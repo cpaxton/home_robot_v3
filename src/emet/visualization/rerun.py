@@ -928,10 +928,13 @@ class RerunVisualizer:
         explored_radius=0.025,
         obstacle_radius=0.05,
         world_radius=0.03,
+        robot_base_xy: np.ndarray | tuple[float, float] | None = None,
     ):
         """Log voxel map and send it to Rerun visualizer.
 
         Builds a minimal MemoryState from space and calls log_memory_state.
+        Also logs a top-down RGB to ``world/map_snapshot/topdown`` (same path as
+        ``send_map_snapshot``) so the blueprint ``map_topdown`` view stays live.
         """
         rr.set_time_seconds("realtime", time.time())
 
@@ -969,6 +972,15 @@ class RerunVisualizer:
             world_radius=world_radius,
         )
         t2 = timeit.default_timer()
+
+        try:
+            from emet.visualization.map_snapshot import snapshot_from_voxel_map
+
+            img, _stats, _discord = snapshot_from_voxel_map(space.voxel_map, robot_base_xy, max_side=640)
+            if img is not None and getattr(img, "size", 0) > 0:
+                self.log_custom_2d_image("world/map_snapshot/topdown", img)
+        except Exception as e:
+            logger.debug("Rerun top-down map snapshot skipped: %s", e)
 
         if debug:
             print("Time to get voxel data: ", t1 - t0)

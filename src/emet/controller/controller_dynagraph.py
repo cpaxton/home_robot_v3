@@ -53,3 +53,4 @@ class DynagraphController(GraphEQAController):
             return
         self.graph_memory.maintain(self.obs_count)
         self.rerun_visualizer.log_dynagraph_state(self.graph_memory)
+        self._rerun_refresh_monologue_panel()

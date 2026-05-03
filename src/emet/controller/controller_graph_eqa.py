@@ -130,10 +130,20 @@ class GraphEQAController(DynamemController):
                 return True
         return False
 
-    def run_eqa_one_iter(self, question: str, max_movement_step: int = 5) -> tuple[str, str, list[Image.Image], bool]:
-        """One EQA iteration using graph memory instead of voxel map."""
+    def run_eqa_one_iter(
+        self,
+        question: str,
+        max_movement_step: int = 5,
+        *,
+        skip_perception_prelude: bool = False,
+    ) -> tuple[str, str, list[Image.Image], bool]:
+        """One EQA iteration using graph memory instead of voxel map.
+
+        When *skip_perception_prelude* is True, skip the head sweep / look-around before the LLM call
+        (used on follow-up EQA iterations after navigation so we do not re-run perception every step).
+        """
         answer_output = None
-        if not self._realtime_updates:
+        if not self._realtime_updates and not skip_perception_prelude:
             self.robot.look_front()
             self.look_around()
             self.robot.look_front()
@@ -177,7 +187,8 @@ class GraphEQAController(DynamemController):
             + confidence_text
             + reasoning_output
         )
-        self.rerun_visualizer.log_text("robot_monologue", answer_output)
+        self._rerun_monologue_base = answer_output
+        self._rerun_refresh_monologue_panel()
         if relevant_images and hasattr(self, "_patch_images"):
             self.rerun_visualizer.log_custom_2d_image(
                 "/observation_similar_to_text", self._patch_images(relevant_images)
@@ -221,8 +232,11 @@ class GraphEQAController(DynamemController):
         confidence = False
         discord_text = ""
         relevant_images: list[Image.Image] = []
-        for _ in range(max_planning_steps):
-            answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(question)
+        for step in range(max_planning_steps):
+            answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(
+                question,
+                skip_perception_prelude=(step > 0),
+            )
             if confidence:
                 break
         if not relevant_images:

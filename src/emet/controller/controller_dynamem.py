@@ -156,6 +156,8 @@ class DynamemController(BaseController):
         self.semantic_sensor = semantic_sensor
         # StretchZmqClient and GenericZmqClient set ``_rerun`` when Rerun is enabled; otherwise NullVisualizer.
         self.rerun_visualizer = getattr(self.robot, "_rerun", None) or NullVisualizer()
+        # Last navigation / EQA markdown for Rerun ``robot_monologue``; ``update()`` appends live status.
+        self._rerun_monologue_base = ""
         self.setup_custom_blueprint()
 
         self.mllm = mllm
@@ -458,6 +460,46 @@ class DynamemController(BaseController):
         # auto: no usable sensor depth
         return est.infer(rgb, intrinsics=k_use, extrinsics_w2c=p_use)
 
+    def _rerun_live_status_markdown(self) -> str:
+        """Short markdown for the Rerun text panel: mapping progress and graph state."""
+        lines: list[str] = [f"- **Observation step:** {self.obs_count}"]
+        vm = getattr(self, "voxel_map", None)
+        if vm is not None:
+            try:
+                obstacles, explored = vm.get_2d_map()
+                if hasattr(obstacles, "cpu"):
+                    obstacles = obstacles.cpu().numpy()
+                if hasattr(explored, "cpu"):
+                    explored = explored.cpu().numpy()
+                obs_cells = int(obstacles.sum()) if obstacles is not None and obstacles.size else 0
+                exp_cells = int(explored.sum()) if explored is not None and explored.size else 0
+                lines.append(f"- **2D map:** {exp_cells} explored cells, {obs_cells} obstacle cells")
+            except Exception:
+                lines.append("- **2D map:** (unavailable)")
+            pcd = getattr(vm, "voxel_pcd", None)
+            pts = getattr(pcd, "_points", None) if pcd is not None else None
+            if pts is not None:
+                n = int(pts.shape[0]) if hasattr(pts, "shape") else 0
+                lines.append(f"- **Voxel point cloud:** {n} points")
+        gm = getattr(self, "graph_memory", None)
+        if gm is not None:
+            try:
+                lines.append(f"- **Graph memory nodes:** {len(gm.get_nodes())}")
+            except Exception:
+                lines.append("- **Graph memory:** (unavailable)")
+        return "\n".join(lines)
+
+    def _rerun_refresh_monologue_panel(self) -> None:
+        """Push ``robot_monologue`` = stored plan/EQA text plus live mapping status."""
+        if not getattr(self.rerun_visualizer, "enabled", True):
+            return
+        base = (self._rerun_monologue_base or "").strip()
+        if not base:
+            base = "*No navigation plan or EQA answer in this session step yet — building the map from depth.*"
+        live = self._rerun_live_status_markdown()
+        doc = f"{base}\n\n---\n\n## Live status\n{live}"
+        self.rerun_visualizer.log_text("robot_monologue", doc)
+
     def update(self):
         """Step the data collector. Get a single observation of the world. Remove bad points, such as those from too far or too near the camera. Update the 3d world representation."""
 
@@ -479,7 +521,12 @@ class DynamemController(BaseController):
                 base_xyt = np.array([float(g[0]), float(g[1]), float(c[0])], dtype=np.float64)
         self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt)
         if self.voxel_map.voxel_pcd._points is not None:
-            self.rerun_visualizer.update_voxel_map(space=self.space)
+            robot_xy = None
+            if obs.gps is not None:
+                g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
+                if g.size >= 2:
+                    robot_xy = (float(g[0]), float(g[1]))
+            self.rerun_visualizer.update_voxel_map(space=self.space, robot_base_xy=robot_xy)
         if self.voxel_map.semantic_memory._points is not None:
             self.rerun_visualizer.log_custom_pointcloud(
                 "world/semantic_memory/pointcloud",
@@ -513,6 +560,8 @@ class DynamemController(BaseController):
         ovsg = self.voxel_map.get_scene_graph()
         if ovsg is not None and ovsg.num_objects > 0:
             self.rerun_visualizer.update_open_vocab_scene_graph(ovsg)
+
+        self._rerun_refresh_monologue_panel()
 
     def _update_scene_graph(self) -> None:
         """Update the scene graph with the latest instances from the voxel map."""
@@ -885,7 +934,8 @@ class DynamemController(BaseController):
         else:
             debug_text = "### I have not received any text query from human user.\n ### So, I plan to explore the environment with Frontier-based exploration.\n"
         debug_text = "# Robot's monologue: \n" + debug_text
-        self.rerun_visualizer.log_text("robot_monologue", debug_text)
+        self._rerun_monologue_base = debug_text
+        self._rerun_refresh_monologue_panel()
 
         if traj is not None:
             origins = []
@@ -1163,7 +1213,8 @@ class DynamemController(BaseController):
             + reasoning_output
         )
 
-        self.rerun_visualizer.log_text("robot_monologue", answer_output)
+        self._rerun_monologue_base = answer_output
+        self._rerun_refresh_monologue_panel()
         if len(relevant_images) != 0:
             self.rerun_visualizer.log_custom_2d_image(
                 "/observation_similar_to_text", self._patch_images(relevant_images)
