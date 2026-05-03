@@ -359,7 +359,7 @@ def main(
     if _ROBOCASA_IMPORT_FAILED and not (scene_path and str(scene_path).strip()):
         logger.warning(
             "Robocasa scene generation (--use-robocasa) is not available. "
-            "Using default scene. To enable: emet install sim  then  emet sync -e sim",
+            "Using default scene. To enable: emet install sim  then  uv sync --extra sim  (or: emet sync -e sim)",
         )
 
     # Free server ports so we can bind (e.g. kill previous mujoco_server).

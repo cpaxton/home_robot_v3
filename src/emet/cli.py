@@ -239,7 +239,7 @@ def serve(
       mujoco   MuJoCo server (default). Add --use-robocasa for Robocasa scenes.
       robocasa Shortcut for mujoco with Robocasa (same as emet serve mujoco --use-robocasa).
 
-    List Robocasa environments (requires sim extra: uv sync -e sim after emet install sim):
+    List Robocasa environments (requires sim extra: ``uv sync --extra sim`` or ``emet sync -e sim`` after ``emet install sim``):
       emet robocasa list
       emet serve robocasa --list-robocasa-tasks
 

@@ -151,12 +151,20 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
 @click.option(
     "--headless",
     is_flag=True,
-    help="With --rerun: no native Rerun window; open http://<this-host>:9090?url=ws://<this-host>:9877.",
+    help=(
+        "Simulation / Rerun: no auto-open browser for Rerun; use http://<this-host>:9090?url=ws://... manually. "
+        "Does not select the native Rerun app (use --rerun-native for that)."
+    ),
 )
 @click.option(
     "--rerun",
     is_flag=True,
-    help="Enable Rerun live visualization (off by default; same viewer as emet run dynamem).",
+    help="Enable Rerun live visualization (default: web viewer at :9090; use --rerun-native for desktop app).",
+)
+@click.option(
+    "--rerun-native",
+    is_flag=True,
+    help="With --rerun: use the native Rerun desktop viewer instead of the browser (needs DISPLAY).",
 )
 @click.option(
     "--rerun-show-panels",
@@ -243,6 +251,7 @@ def main(
     port_offset: int = 0,
     headless: bool = False,
     rerun: bool = False,
+    rerun_native: bool = False,
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
     rerun_bind: bool = False,
@@ -307,6 +316,8 @@ def main(
     if robot_effective:
         if rerun_bind:
             os.environ["RERUN_BIND_ALL"] = "1"
+        if rerun_native and headless:
+            raise click.UsageError("Use either --rerun-native or --headless for Rerun, not both.")
         run_agent_with_robot(
             robot_ip=robot_effective,
             robot=robot,
@@ -328,6 +339,7 @@ def main(
             share_memory_vllm=share_memory_vllm,
             headless=headless,
             rerun=rerun,
+            rerun_native=rerun_native,
             rerun_show_panels=rerun_show_panels,
             rerun_debug=rerun_debug,
         )

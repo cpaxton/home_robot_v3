@@ -117,6 +117,7 @@ class StretchZmqClient(AbstractRobotClient):
         start_immediately: bool = True,
         enable_rerun_server: bool = True,
         rerun_headless: bool = False,
+        rerun_native_viewer: bool = False,
         rerun_show_panels: bool = False,
         rerun_debug: bool = False,
         resend_all_actions: bool = False,
@@ -233,6 +234,7 @@ class StretchZmqClient(AbstractRobotClient):
             self._rerun = RerunVisualizer(
                 output_path=output_path,
                 headless=rerun_headless,
+                rerun_native_viewer=rerun_native_viewer,
                 collapse_panels=not rerun_show_panels,
             )
         else:

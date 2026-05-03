@@ -138,6 +138,7 @@ class GenericZmqClient(AbstractRobotClient):
         allow_missing_depth: bool = False,
         enable_rerun_server: bool = False,
         rerun_headless: bool = False,
+        rerun_native_viewer: bool = False,
         rerun_show_panels: bool = False,
         rerun_debug: bool = False,
         output_path: Path | str | None = None,
@@ -212,6 +213,7 @@ class GenericZmqClient(AbstractRobotClient):
                 output_path=out_p,
                 display_robot_mesh=use_mjcf,
                 headless=rerun_headless,
+                rerun_native_viewer=rerun_native_viewer,
                 collapse_panels=not rerun_show_panels,
                 mjcf_robot=mjcf_robot,
             )

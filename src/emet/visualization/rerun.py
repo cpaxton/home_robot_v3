@@ -257,8 +257,8 @@ class RerunVisualizer:
     def __init__(
         self,
         display_robot_mesh: bool = True,
-        spawn_gui: bool = True,
-        open_browser: bool = False,
+        spawn_gui: bool = False,
+        open_browser: bool = True,
         headless: bool = False,
         server_memory_limit: str = "4GB",
         collapse_panels: bool = True,
@@ -269,35 +269,56 @@ class RerunVisualizer:
         memory_view: bool = False,
         num_frames: int = 0,
         mjcf_robot: tuple[str, tuple[str, ...], int, str] | None = None,
+        rerun_native_viewer: bool = False,
     ):
         """Rerun visualizer class
         Args:
             display_robot_mesh (bool): Display robot mesh (Stretch URDF) or MJCF skeleton when *mjcf_robot* is set
-            open_browser (bool): Open browser at start
-            headless (bool): If True, disable native viewer and serve web only (connect at :9090)
+            spawn_gui (bool): If True, native Rerun desktop viewer (TCP). Default False (browser via ``rr.serve``).
+            open_browser (bool): When using the web server, open a browser tab if a display exists.
+            headless (bool): If True, no native viewer and no auto-open browser; use the :9090 URL manually.
+            rerun_native_viewer (bool): Same as env ``RERUN_NATIVE_VIEWER=1``: use the native app, not the browser.
             server_memory_limit (str): Server memory limit E.g. 2GB or 20%
             collapse_panels (bool): Set to false to have customizable rerun panels
         """
-        self.open_browser = open_browser
-        # RERUN_HEADLESS=1 forces web-only (useful when DISPLAY is set but native viewer is unwanted)
+        # RERUN_HEADLESS=1 forces no native viewer and no auto-open browser (web server only).
         if os.environ.get("RERUN_HEADLESS", "").lower() in ("1", "true", "yes"):
             headless = True
+        want_native = bool(rerun_native_viewer) or (
+            os.environ.get("RERUN_NATIVE_VIEWER", "").lower() in ("1", "true", "yes")
+        )
         # RERUN_BIND_ALL=1 makes the server listen on 0.0.0.0 for remote viewing (Tailscale, etc.)
         if os.environ.get("RERUN_BIND_ALL", "").lower() in ("1", "true", "yes"):
             os.environ["RERUN_SERVER_HOST"] = "0.0.0.0"
             os.environ["RERUN_SERVER_WS_HOST"] = "0.0.0.0"
+
         if headless:
             spawn_gui = False
             open_browser = False
+        elif want_native:
+            if has_display():
+                spawn_gui = True
+                open_browser = False
+            else:
+                logger.warning(
+                    "Native Rerun viewer requested but no DISPLAY/WAYLAND; starting web server only "
+                    "(open http://<this-host>:9090?url=ws://<this-host>:9877 manually)."
+                )
+                spawn_gui = False
+                open_browser = False
         elif spawn_gui or open_browser:
-            # Check environment variables to see if this is docker
             if "DOCKER" in os.environ:
                 spawn_gui = False
                 open_browser = True
-                logger.warning("Docker environment detected. Disabling GUI.")
+                logger.warning("Docker environment detected. Using web Rerun viewer.")
             if not has_display():
                 spawn_gui = False
-                logger.warning("No DISPLAY/WAYLAND set. Disabling Rerun GUI (spawn=False).")
+                open_browser = False
+                logger.warning(
+                    "No DISPLAY/WAYLAND set. Rerun web server only; open :9090 manually (or use SSH port forwarding)."
+                )
+
+        self.open_browser = open_browser
         rr.init("Stretch_robot", spawn=spawn_gui)
 
         if output_path is not None:
@@ -315,8 +336,8 @@ class RerunVisualizer:
                 logger.info("Rerun web viewer: connect at http://<this-host>:9090?url=ws://<this-host>:9877")
         else:
             logger.info(
-                "Rerun native viewer is receiving the log stream (TCP). Web viewer is not started for this "
-                "process; use RERUN_HEADLESS=1 or `emet run agent ... --rerun` with `--headless` to use :9090 instead."
+                "Rerun native desktop viewer (TCP). For the browser UI instead, omit --rerun-native / "
+                "RERUN_NATIVE_VIEWER or set RERUN_HEADLESS=1 and use :9090."
             )
 
         self.display_robot_mesh = display_robot_mesh
