@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -62,6 +62,9 @@ class GraphNode:
     xyz: np.ndarray  # (3,) world position
     obs_id: int  # 1-based index into observations list
     description: str | None = None  # optional VLM-generated description
+    last_seen: int = 0
+    support_count: int = 1
+    extent_half: np.ndarray | None = None  # (3,) half-axis sizes in meters; None = point-like
 
 
 @dataclass
@@ -98,6 +101,10 @@ class GraphEQAMemory:
     3D positions; edges = spatial relations). Uses the same EQA query contract as
     the DynaMem voxel map: query_answer(question, xyt, planner) returns
     (reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images).
+
+    Optional **Dynagraph** behavior (parameters ``dynagraph_merge_xy_m``,
+    ``dynagraph_staleness_horizon``): spatial merge of nodes with the same primary
+    label within XY distance, and ``maintain(current_step)`` to drop stale nodes.
     """
 
     def __init__(
@@ -126,20 +133,26 @@ class GraphEQAMemory:
         self._nav_samples: list[GraphNavigationSample] = []
         self._record_navigation = True
         self._nav_max = 256
+        self._graph_timestep: int = 0
+        self._fallback_timestep: int = 0
+        self.spatial_merge_m: float = 0.0
+        self.staleness_horizon: int = 0
         self._load_navigation_settings()
+        self._load_dynagraph_settings()
 
-        if not defer_llm_clients and (
-            self.eqa_client is None or self.image_description_client is None
-        ):
+        if not defer_llm_clients and (self.eqa_client is None or self.image_description_client is None):
             self._init_clients()
 
-    def _load_navigation_settings(self) -> None:
+    def _parameters_dict(self) -> dict[str, Any]:
         p = self.parameters
-        d: dict[str, Any] = {}
         if isinstance(p, dict):
-            d = p
-        elif hasattr(p, "data") and isinstance(p.data, dict):
-            d = p.data
+            return p
+        if hasattr(p, "data") and isinstance(p.data, dict):
+            return p.data
+        return {}
+
+    def _load_navigation_settings(self) -> None:
+        d = self._parameters_dict()
         if not d:
             return
         v = d.get("graph_eqa_record_navigation")
@@ -148,6 +161,48 @@ class GraphEQAMemory:
         blk = d.get("graph_eqa_extract")
         if isinstance(blk, dict) and blk.get("navigation_samples_max") is not None:
             self._nav_max = max(1, int(blk["navigation_samples_max"]))
+
+    def _load_dynagraph_settings(self) -> None:
+        d = self._parameters_dict()
+        if not d:
+            return
+        if d.get("dynagraph_merge_xy_m") is not None:
+            self.spatial_merge_m = float(d["dynagraph_merge_xy_m"])
+        if d.get("dynagraph_staleness_horizon") is not None:
+            self.staleness_horizon = max(0, int(d["dynagraph_staleness_horizon"]))
+
+    def set_graph_timestep(self, step: int) -> None:
+        """Set the discrete time index used for ``last_seen`` and staleness (e.g. controller ``obs_count``)."""
+        self._graph_timestep = int(step)
+
+    def _effective_timestep(self) -> int:
+        if self._graph_timestep > 0:
+            return self._graph_timestep
+        self._fallback_timestep += 1
+        return self._fallback_timestep
+
+    def maintain(self, current_step: int) -> int:
+        """
+        Drop stale nodes (and their observations) when ``staleness_horizon`` > 0,
+        then renumber ``node_id`` to 1..N and rebuild edges.
+
+        Returns:
+            Number of nodes removed.
+        """
+        if self.staleness_horizon <= 0 or not self._nodes:
+            return 0
+        cur = int(current_step)
+        to_drop: list[GraphNode] = [n for n in self._nodes if cur - int(n.last_seen) > self.staleness_horizon]
+        if not to_drop:
+            return 0
+        drop_obs = {n.obs_id for n in to_drop}
+        drop_node_ids = {n.node_id for n in to_drop}
+        self._nodes = [n for n in self._nodes if n.node_id not in drop_node_ids]
+        self._observations = [o for o in self._observations if o.obs_id not in drop_obs]
+        for i, n in enumerate(self._nodes, start=1):
+            self._nodes[i - 1] = replace(n, node_id=i)
+        self._update_edges()
+        return len(to_drop)
 
     def _ensure_llm_clients(self) -> None:
         """Load shared Qwen3.5 multimodal on first use when defer_llm_clients=True."""
@@ -169,8 +224,7 @@ class GraphEQAMemory:
             )
         except ImportError as e:
             raise ImportError(
-                "GraphEQA memory requires emet.llms (Qwen3.5 multimodal) for EQA. "
-                "Install extras with GPU support."
+                "GraphEQA memory requires emet.llms (Qwen3.5 multimodal) for EQA. Install extras with GPU support."
             ) from e
 
     def add_observation(
@@ -194,19 +248,64 @@ class GraphEQAMemory:
         """
         if isinstance(rgb, Image.Image):
             rgb = np.array(rgb)
+        step = self._effective_timestep()
+        xyz_a = np.asarray(xyz, dtype=float).reshape(-1)[:3]
+        labels_norm = [str(l).strip() for l in labels if str(l).strip()]
+        if not labels_norm:
+            labels_norm = ["object"]
+        primary = labels_norm[0].lower()
+
+        if self.spatial_merge_m > 0:
+            for idx, existing in enumerate(self._nodes):
+                el = [(x or "").strip().lower() for x in existing.labels if str(x).strip()]
+                if not el or el[0] != primary:
+                    continue
+                ex = np.asarray(existing.xyz, dtype=float).reshape(-1)[:3]
+                if float(np.linalg.norm(ex[:2] - xyz_a[:2])) <= self.spatial_merge_m:
+                    sc = int(existing.support_count) + 1
+                    new_xyz = (existing.xyz * (sc - 1) + xyz_a) / sc
+                    merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), *labels_norm})
+                    new_desc = description if description else existing.description
+                    self._nodes[idx] = replace(
+                        existing,
+                        xyz=new_xyz,
+                        labels=merged_labels,
+                        last_seen=step,
+                        support_count=sc,
+                        description=new_desc,
+                    )
+                    for o in self._observations:
+                        if o.obs_id == existing.obs_id:
+                            o.xyz = new_xyz
+                            o.labels = merged_labels
+                            if new_desc and not o.description:
+                                o.description = new_desc
+                            break
+                    self._update_edges()
+                    return int(existing.obs_id)
+
         obs_id = self._next_obs_id
         self._next_obs_id += 1
         node_id = len(self._nodes) + 1
         node = GraphNode(
             node_id=node_id,
-            labels=labels,
-            xyz=np.asarray(xyz, dtype=float),
+            labels=labels_norm,
+            xyz=xyz_a.copy(),
             obs_id=obs_id,
             description=description,
+            last_seen=step,
+            support_count=1,
+            extent_half=None,
         )
         self._nodes.append(node)
         self._observations.append(
-            GraphObservation(obs_id=obs_id, rgb=rgb, xyz=xyz, labels=labels, description=description)
+            GraphObservation(
+                obs_id=obs_id,
+                rgb=rgb,
+                xyz=xyz_a.copy(),
+                labels=list(labels_norm),
+                description=description,
+            )
         )
         self._update_edges()
         return obs_id
@@ -269,8 +368,9 @@ class GraphEQAMemory:
 
         for n in self._nodes:
             lbl = _prompt_labels(n.labels)
+            sup = f" n={n.support_count}" if getattr(n, "support_count", 1) != 1 else ""
             lines.append(
-                f"Node {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]"
+                f"Node {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]{sup}"
             )
         for a, b, rel in self._edges:
             b_str = "floor" if b == -1 else str(b)
@@ -450,11 +550,7 @@ class GraphEQAMemory:
                 "IMAGE_DESCRIPTIONS (navigation-only views; no object graph nodes yet):",
             ]
             for i, nv in enumerate(nav_fallback_tail, start=1):
-                tail = (
-                    f" robot base (~{nv.base_xyz[0]:.2f}, {nv.base_xyz[1]:.2f})."
-                    if nv.base_xyz is not None
-                    else ""
-                )
+                tail = f" robot base (~{nv.base_xyz[0]:.2f}, {nv.base_xyz[1]:.2f})." if nv.base_xyz is not None else ""
                 lines.append(
                     f"Image {i}. viewpoint anchor at ({nv.xyz[0]:.2f}, {nv.xyz[1]:.2f}, {nv.xyz[2]:.2f});{tail}"
                 )

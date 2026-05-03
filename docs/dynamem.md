@@ -39,6 +39,8 @@ In [Dynamem paper](https://arxiv.org/pdf/2411.04999), three ways to query semant
 
 In terms of exploration, we discovered that commonly used frontier based exploration (FBE) is not suitable for dynamic environments because obtacles might be moved around, creating new frontier, and already scanned portions of the room might also be changed. Therefore, we introduced a value based exploration that assigns any point in the 2D map a heuristic value evaluating how valuable it is to explore to this point. The detailed analysis is described in [Dynamem paper](https://arxiv.org/pdf/2411.04999).
 
+For **graph-based EQA** on the same voxel stack (optional graph node merge and staleness), see [Dynagraph](dynagraph.md).
+
 ## Picking and placing
 Dynamem has two manipulation systems, one is Stretch AI Visual Servoing code, as described in the [LLM agent](llm_agent.md) while another is [OK-Robot manipulation](https://github.com/ok-robot/ok-robot/tree/main/ok-robot-manipulation).
 

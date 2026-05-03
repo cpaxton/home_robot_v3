@@ -92,6 +92,8 @@ class GraphEQAController(DynamemController):
             backend.load(graph_memory_input_path)
 
         self.use_instance_graph = use_instance_graph
+        self._graph_eqa_use_instance_graph = self.use_instance_graph
+        self._graph_eqa_use_sensor_perception = self.use_sensor_perception
         if graph_instance_dedup_xy_m is not None:
             self._graph_dedup_xy_m = float(graph_instance_dedup_xy_m)
         elif isinstance(parameters, dict):
@@ -127,24 +129,6 @@ class GraphEQAController(DynamemController):
             if float(np.linalg.norm(n.xyz[:2] - xyz[:2])) < self._graph_dedup_xy_m:
                 return True
         return False
-
-    def update(self) -> None:
-        """Step collector and feed the graph memory with the new observation."""
-        super().update()
-        obs = self.robot.get_observation()
-        from emet.memory.graph_eqa.dynamem_graph_hooks import update_graph_memory_from_dynamem_observation
-
-        update_graph_memory_from_dynamem_observation(
-            graph_memory=self.graph_memory,
-            robot=self.robot,
-            voxel_map=self.voxel_map,
-            detection_model=self.detection_model,
-            sensor_builder=self.sensor_builder,
-            use_instance_graph=self.use_instance_graph,
-            use_sensor_perception=self.use_sensor_perception,
-            dedup_skips=self._graph_dedup_skips,
-            obs=obs,
-        )
 
     def run_eqa_one_iter(self, question: str, max_movement_step: int = 5) -> tuple[str, str, list[Image.Image], bool]:
         """One EQA iteration using graph memory instead of voxel map."""

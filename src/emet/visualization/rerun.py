@@ -47,6 +47,8 @@ logger = Logger(__name__)
 #   world/frames/<i>/depth DepthImage
 #   world/frames/current   (at each frame time) Transform3D, rgb, depth — scrub "frame" timeline for playback
 #   world/graph/nodes      Points3D (graph nodes)
+#   world/dynagraph/nodes  Points3D (Dynagraph graph nodes)
+#   world/dynagraph/summary TextDocument (tree view)
 #   world/memory/text      TextDocument
 #   world/head_camera      Transform3D (optional); world/head_camera/rgb Image, world/head_camera/depth
 #   world/ee_camera        same for end-effector camera
@@ -519,6 +521,31 @@ class RerunVisualizer:
                 colors=colors,
                 radii=radii,
             ),
+        )
+
+    def log_dynagraph_state(self, graph_memory: Any) -> None:
+        """Log ``GraphEQAMemory`` nodes and tree summary under ``world/dynagraph/``."""
+        if getattr(self, "_memory_view", False):
+            return
+        nodes = graph_memory.get_nodes()
+        rr.set_time_seconds("realtime", time.time())
+        if not nodes:
+            return
+        xyz = np.array([n.xyz for n in nodes], dtype=np.float64)
+        labels: list[str] = []
+        for n in nodes:
+            lb = ", ".join(n.labels) if n.labels else str(n.node_id)
+            sc = int(getattr(n, "support_count", 1))
+            if sc != 1:
+                lb = f"{lb} (x{sc})"
+            labels.append(lb)
+        log_to_rerun(
+            "world/dynagraph/nodes",
+            rr.Points3D(positions=xyz, radii=0.06, labels=labels),
+        )
+        log_to_rerun(
+            "world/dynagraph/summary",
+            rr.TextDocument(graph_memory.print_memory(), media_type=rr.MediaType.MARKDOWN),
         )
 
     def log_head_camera(self, obs: Observations):

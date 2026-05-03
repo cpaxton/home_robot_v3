@@ -29,7 +29,9 @@ import click
 _CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
 # Sub-apps that define @click.option("--robot") and receive --robot from `emet run`.
-_EMET_RUN_APPS_WITH_ROBOT = frozenset({"dynamem", "agent", "graph-eqa", "scene-graph", "molmospaces-explore"})
+_EMET_RUN_APPS_WITH_ROBOT = frozenset(
+    {"dynamem", "agent", "graph-eqa", "dynagraph", "scene-graph", "molmospaces-explore"}
+)
 
 
 def _project_root() -> Path:
@@ -784,6 +786,7 @@ def deploy(
             "dynamem",
             "scene-graph",
             "graph-eqa",
+            "dynagraph",
             "mapping",
             "grasp",
             "chat",
@@ -879,6 +882,8 @@ def run(
         sys.exit(_run_module("emet.app.run_scene_graph", args))
     elif app == "graph-eqa":
         sys.exit(_run_module("emet.app.run_graph_eqa", args))
+    elif app == "dynagraph":
+        sys.exit(_run_module("emet.app.run_dynagraph", args))
     elif app == "molmospaces-explore":
         sys.exit(_run_module("emet.app.run_molmospaces_explore", args))
     elif app == "mapping":

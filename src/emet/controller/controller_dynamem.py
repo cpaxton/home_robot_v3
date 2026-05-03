@@ -506,6 +506,7 @@ class DynamemController(BaseController):
                 use_sensor_perception=self._graph_eqa_use_sensor_perception,
                 dedup_skips=self._graph_dedup_skips,
                 obs=obs,
+                frame_step=self.obs_count,
             )
 
         # Visualize open-vocab scene graph if attached
