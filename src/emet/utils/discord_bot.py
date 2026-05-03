@@ -309,7 +309,8 @@ class DiscordBot:
             _logger.debug(f"- {guild.id} (name: {guild.name})")
             guild_count = guild_count + 1
         _logger.debug("This bot is in", guild_count, "guilds.")
-        self.process_queue.start()
+        if not self.process_queue.is_running():
+            self.process_queue.start()
 
     def on_message(self, message, verbose: bool = False):
         """Event listener for whenever a new message is sent to a channel that this bot is in."""
