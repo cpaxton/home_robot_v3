@@ -448,6 +448,23 @@ def run_agent_with_robot(
                 pre = cuda_pre_llm_memory_notice(device=device)
                 if pre:
                     print(colored(pre, "yellow"), flush=True)
+                if "9b" in llm.lower():
+                    try:
+                        from emet.utils.vram_debug import torch_cuda_alloc_reserved_gib
+
+                        a, _ = torch_cuda_alloc_reserved_gib(0)
+                        if a is not None and a > 10.0:
+                            print(
+                                colored(
+                                    f"Heavy VRAM use (~{a:.1f} GiB torch) before chat LLM; "
+                                    "`--llm qwen35-9B` may CUDA-OOM on a single 24GB GPU with SigLIP/detector. "
+                                    "Prefer `--llm qwen35-4B` (default) or free GPU memory.",
+                                    "yellow",
+                                ),
+                                flush=True,
+                            )
+                    except Exception:
+                        pass
             print(
                 colored(
                     "Loading LLM (HF hub progress bars off; Discord gateway logs at WARNING). …",

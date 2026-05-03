@@ -14,6 +14,11 @@
 # Default: connect to sim/robot at 127.0.0.1 (embodied agent). Use --offline for local LLM chat only.
 
 import os
+
+# PyTorch: must be set before the first CUDA allocation in this process (subprocess from ``emet run agent``).
+# User override: ``export PYTORCH_ALLOC_CONF=...`` before launch replaces this default.
+os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
+
 import tempfile
 import timeit
 
@@ -28,7 +33,8 @@ from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.core import get_parameters
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
 
-# Default: Qwen 3.5 9B (good quality on 24GB GPU; use qwen35-4B if VRAM is tight)
+# Default: Qwen 3.5 9B (with expandable CUDA segments enabled above to reduce fragmentation).
+# Use ``--llm qwen35-4B`` if you still hit OOM on a single consumer GPU.
 DEFAULT_AGENT_LLM = "qwen35-9B"
 
 
@@ -222,6 +228,23 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
         "(saves VRAM vs loading two VL models). Use --no-share-memory-vllm to always load the EQA VLM from config."
     ),
 )
+@click.option(
+    "--start-sim",
+    "start_sim",
+    is_flag=True,
+    help=(
+        "Start ``emet.simulation.mujoco_server`` as a subprocess before connecting. "
+        "Requires ``sim_config`` or ``sim:`` in the agent YAML, unless you pass ``--sim-config``."
+    ),
+)
+@click.option(
+    "--sim-config",
+    "sim_config",
+    default=None,
+    type=str,
+    metavar="PATH",
+    help="YAML sim launch profile (overrides sim_config / sim: in --agent-config). See configs/sim/*.yaml.",
+)
 def main(
     llm: str,
     prompt: str,
@@ -252,6 +275,8 @@ def main(
     no_vl_camera: bool = False,
     dynamem_eqa: bool = False,
     share_memory_vllm: bool = True,
+    start_sim: bool = False,
+    sim_config: str | None = None,
 ) -> None:
     """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
 
@@ -273,6 +298,7 @@ def main(
       emet run agent --no-llm --command 'find red cylinder'
       emet run agent --no-llm -c 'FIND blue cube'
       emet run agent --llm qwen3-vl-eqa --eqa --debug-vram   # one Qwen3-VL + VRAM milestones
+      emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml --start-sim --command "describe the scene"
     """
     cmd_list = list(commands) if commands else None
 
@@ -286,6 +312,9 @@ def main(
             "You left it empty or the next token was parsed as the value (often another flag); "
             "use e.g. `emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml --rerun`."
         )
+
+    if offline and start_sim:
+        raise click.UsageError("Cannot combine --offline with --start-sim.")
 
     if debug_models:
         os.environ["EMET_AGENT_MODEL_DEBUG"] = "1"
@@ -307,6 +336,23 @@ def main(
     if robot_effective:
         if rerun_bind:
             os.environ["RERUN_BIND_ALL"] = "1"
+        if start_sim:
+            from emet.config.sim_launch_config import resolve_sim_launch_for_agent
+            from emet.simulation.sim_subprocess import spawn_mujoco_server_subprocess
+
+            try:
+                sim_cfg = resolve_sim_launch_for_agent(
+                    agent_config_path=agent_config,
+                    sim_config_cli=sim_config,
+                    port_offset_cli=port_offset,
+                )
+            except ValueError as e:
+                raise click.UsageError(str(e)) from e
+            if robot and robot.lower() not in ("stretch", "hello_stretch", "hellostretch", ""):
+                sim_cfg.robot = robot
+            print(colored("Starting MuJoCo sim subprocess (--start-sim)…", "cyan"))
+            spawn_mujoco_server_subprocess(sim_cfg)
+            print(colored("Sim is up; connecting agent.", "green"))
         run_agent_with_robot(
             robot_ip=robot_effective,
             robot=robot,

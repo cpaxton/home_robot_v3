@@ -20,7 +20,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import click
@@ -186,6 +185,18 @@ def main() -> None:
 )
 @click.option("--seed", default=0, type=int, help="Random seed")
 @click.option(
+    "--steps",
+    default=None,
+    type=int,
+    metavar="N",
+    help="Stop the MuJoCo server after N physics steps (debug; rby1 / merged MJCF path).",
+)
+@click.option(
+    "--debug-molmospaces-spawn",
+    is_flag=True,
+    help="Verbose MolmoSpaces base placement and post-spawn contact diagnostics (non-stretch server).",
+)
+@click.option(
     "--port-offset",
     default=0,
     type=int,
@@ -228,6 +239,8 @@ def serve(
     molmospaces_index: int,
     molmospaces_install: bool,
     seed: int,
+    steps: int | None,
+    debug_molmospaces_spawn: bool,
     port_offset: int,
     list_robocasa_tasks: bool,
     robocasa_task: str,
@@ -265,81 +278,42 @@ def serve(
     if molmospaces_scene and use_robocasa_flag:
         click.echo("Cannot combine --molmospaces-scene with --use-robocasa / robocasa backend.", err=True)
         sys.exit(1)
-    if molmospaces_scene:
-        from emet.simulation.molmospaces_config import (
-            ensure_molmospaces_assets_dir_env,
-            galaxea_r1_assets_directory,
-        )
-
-        # Defaults for MLSPACES_ASSETS_DIR / MLSPACES_CACHE_DIR (sibling dirs); merge + mujoco_server inherit.
-        ensure_molmospaces_assets_dir_env()
-        # Merge output must sit next to galaxea_r1.xml so robot mesh paths (assetdir=meshes) resolve.
-        fd, merged_path = tempfile.mkstemp(
-            suffix=".xml", prefix="molmospaces_merged_", dir=str(galaxea_r1_assets_directory())
-        )
-        os.close(fd)
-        merge_robot = robot.lower().replace("-", "_")
-        if merge_robot in ("stretch", "hello_stretch", "hellostretch"):
-            merge_robot = "rby1"
-        merge_argv = [
-            "merge-scene",
-            "--scene",
-            molmospaces_scene,
-            "--split",
-            molmospaces_split,
-            "--index",
-            str(molmospaces_index),
-            "--robot",
-            merge_robot,
-            "--output",
-            merged_path,
-        ]
-        if molmospaces_install:
-            merge_argv.append("--install-if-missing")
-        code = _run_molmospaces_wrapper(merge_argv)
-        if code != 0:
-            try:
-                os.unlink(merged_path)
-            except OSError:
-                pass
-            sys.exit(code)
-        scene_path = merged_path
-        if robot.lower() in ("stretch", "hello_stretch", "hellostretch"):
-            robot = "rby1"
     if backend == "mujoco" or backend == "robocasa":
-        args = list(extra)
-        if use_robocasa_flag:
-            args.append("--use-robocasa")
+        from emet.config.sim_launch_config import (
+            SimLaunchDefaultMujoco,
+            SimLaunchMolmospaces,
+            SimLaunchRobocasa,
+        )
+        from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
+
         if list_robocasa_tasks:
-            args.append("--list-robocasa-tasks")
-        if robocasa_task:
-            args.extend(["--robocasa-task", robocasa_task])
-        if headless:
-            args.append("--headless")
-        if show_viewer_ui:
-            args.append("--show-viewer-ui")
-        if no_cameras:
-            args.append("--no-cameras")
-        if use_glx:
-            args.append("--use-glx")
-        if scene_path:
-            args.extend(["--scene_path", scene_path])
+            args = list(extra) + ["--use-robocasa", "--list-robocasa-tasks"]
+            sys.exit(_run_module("emet.simulation.mujoco_server", args))
+
+        common = {
+            "headless": headless,
+            "show_viewer_ui": show_viewer_ui,
+            "no_cameras": no_cameras,
+            "use_glx": use_glx,
+            "seed": seed,
+            "steps": steps,
+            "debug_molmospaces_spawn": debug_molmospaces_spawn,
+            "port_offset": port_offset,
+        }
         if molmospaces_scene:
-            args.extend(
-                [
-                    "--molmospaces-session-scene",
-                    molmospaces_scene,
-                    "--molmospaces-session-split",
-                    molmospaces_split,
-                    "--molmospaces-session-index",
-                    str(molmospaces_index),
-                ]
+            cfg = SimLaunchMolmospaces(
+                scene=molmospaces_scene,
+                split=molmospaces_split,
+                index=molmospaces_index,
+                molmospaces_install=molmospaces_install,
+                robot=robot,
+                **common,
             )
-        args.extend(["--seed", str(seed)])
-        if port_offset:
-            args.extend(["--port-offset", str(port_offset)])
-        if robot and robot != "stretch":
-            args.extend(["--robot", robot])
+        elif use_robocasa_flag:
+            cfg = SimLaunchRobocasa(robot=robot, robocasa_task=robocasa_task or "", **common)
+        else:
+            cfg = SimLaunchDefaultMujoco(robot=robot, scene_path=scene_path, **common)
+        args = list(extra) + prepare_mujoco_server_argv(cfg)
         sys.exit(_run_module("emet.simulation.mujoco_server", args))
     else:
         click.echo(f"Unknown backend: {backend}", err=True)

@@ -1,0 +1,6 @@
+# Default MuJoCo table scene (scene_default.xml) + Galaxea R1 / rby1 — no Robocasa, no MolmoSpaces merge.
+kind: default_mujoco
+robot: rby1
+headless: true
+port_offset: 0
+seed: 0
