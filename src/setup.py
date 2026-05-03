@@ -75,16 +75,18 @@ setuptools.setup(
         "gitpython",
         # Configuration tools and neural networks
         "hydra-core",
+        "draccus>=0.11.0",
         "timm>1.0.0",
-        "huggingface_hub[cli]>=0.24.7",
+        "huggingface_hub>=0.28.0",
+        "safetensors>=0.4.5",
         # For mobile clip
         "open-clip-torch>=2.32.0",
-        "transformers>=4.50.0",
+        "transformers>=4.55.0",
         "retry",
         "qwen_vl_utils",
         "bitsandbytes",
         "triton >= 2.3.1",
-        "accelerate >= 1.5.0",
+        "accelerate >= 1.6.0",
         "einops",
         "protobuf",
         # Compression tools
@@ -115,6 +117,7 @@ setuptools.setup(
             "black",
             "mypy",
             "lark",
+            "rich>=13.0.0",
         ],
         "sim": [
             "mujoco>=3.3.0",

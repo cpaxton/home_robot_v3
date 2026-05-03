@@ -25,6 +25,8 @@ import sys
 import threading
 import time
 import timeit
+from dataclasses import replace
+from pathlib import Path
 from threading import Lock
 from typing import Any
 
@@ -41,11 +43,73 @@ from emet.core.zmq_protocol import (
     read_emet_robot_id_from_message_or_session,
     robot_ids_match,
 )
+from emet.motion import constants as motion_constants
 from emet.robots.base import RobotSpec
+from emet.robots.spec_robot_model import SpecRobotModel
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
 
 logger = Logger(__name__)
+
+
+def _decode_servo_message_to_observations(
+    msg: dict[str, Any],
+    state: dict[str, Any] | None,
+    full_obs: dict[str, Any] | None,
+) -> Observations | None:
+    """Build `Observations` for Rerun from RobosuiteZmqServer servo dict (head_color_image / head_depth_image)."""
+    if not msg or msg.get("head_color_image") is None:
+        return None
+    try:
+        rgb = compression.from_jpg(msg["head_color_image"])
+    except Exception:
+        return None
+    depth = None
+    raw_d = msg.get("head_depth_image")
+    if raw_d is not None:
+        try:
+            depth = compression.from_jp2(raw_d) / 1000.0
+        except Exception:
+            depth = None
+    K = msg.get("head_camera_K")
+    joint: np.ndarray | None = None
+    if msg.get("joint_positions") is not None:
+        joint = np.asarray(msg["joint_positions"], dtype=float)
+    elif state is not None and state.get("joint_positions") is not None:
+        joint = np.asarray(state["joint_positions"], dtype=float)
+    elif full_obs is not None and full_obs.get("joint") is not None:
+        joint = np.asarray(full_obs["joint"], dtype=float)
+
+    bp = msg.get("base_pose")
+    if bp is None and state is not None:
+        bp = state.get("base_pose")
+    if bp is not None:
+        bp = np.asarray(bp, dtype=float).ravel()
+        if bp.size >= 3:
+            gps, compass = bp[:2].copy(), np.asarray([float(bp[2])], dtype=float)
+        else:
+            gps, compass = np.zeros(2, dtype=float), np.zeros(1, dtype=float)
+    elif full_obs is not None:
+        g = full_obs.get("gps")
+        c = full_obs.get("compass")
+        if g is not None and c is not None:
+            gps = np.asarray(g, dtype=float).reshape(-1)[:2]
+            cc = np.asarray(c, dtype=float).ravel()
+            compass = cc[:1].copy() if cc.size else np.zeros(1, dtype=float)
+        else:
+            gps, compass = np.zeros(2, dtype=float), np.zeros(1, dtype=float)
+    else:
+        gps, compass = np.zeros(2, dtype=float), np.zeros(1, dtype=float)
+
+    return Observations(
+        gps=gps,
+        compass=compass,
+        rgb=rgb,
+        depth=depth,
+        camera_K=K,
+        joint=joint,
+        is_simulation=bool(msg.get("is_simulation", True)),
+    )
 
 
 class GenericZmqClient(AbstractRobotClient):
@@ -72,6 +136,11 @@ class GenericZmqClient(AbstractRobotClient):
         *,
         zmq_startup_timeout: float | None = None,
         allow_missing_depth: bool = False,
+        enable_rerun_server: bool = False,
+        rerun_headless: bool = False,
+        rerun_show_panels: bool = False,
+        rerun_debug: bool = False,
+        output_path: Path | str | None = None,
     ):
         super().__init__()
         self._robot_ip = robot_ip
@@ -103,10 +172,12 @@ class GenericZmqClient(AbstractRobotClient):
         self._seq_id = 0
         self._started = False
         self._finish = False
+        self._zmq_closed = False
 
         self._obs: dict[str, Any] | None = None
         self._state: dict[str, Any] | None = None
         self._servo: dict[str, Any] | None = None
+        self._servo_obs_rerun: Observations | None = None
         self._last_step = -1
 
         self._obs_lock = Lock()
@@ -117,6 +188,37 @@ class GenericZmqClient(AbstractRobotClient):
 
         self._base_xyt = np.zeros(3)
         self._nav_goal_timeout_log_streak = 0
+
+        self._rerun_debug = bool(rerun_debug) if enable_rerun_server else False
+        self._rerun: Any = None
+        self._rerun_thread: threading.Thread | None = None
+        if enable_rerun_server:
+            from emet.visualization.rerun import RerunVisualizer
+
+            out_p = Path(output_path) if output_path is not None else None
+            if out_p is not None and not out_p.exists():
+                out_p.mkdir(parents=True, exist_ok=True)
+            mjcf_p = getattr(self._spec, "mjcf_path", None)
+            use_mjcf = bool(mjcf_p and Path(str(mjcf_p)).is_file())
+            mjcf_robot = None
+            if use_mjcf:
+                mjcf_robot = (
+                    str(Path(str(mjcf_p)).resolve()),
+                    tuple(self._spec.joint_names),
+                    int(self._spec.dof),
+                    str(self._spec.base_link_name),
+                )
+            self._rerun = RerunVisualizer(
+                output_path=out_p,
+                display_robot_mesh=use_mjcf,
+                headless=rerun_headless,
+                collapse_panels=not rerun_show_panels,
+                mjcf_robot=mjcf_robot,
+            )
+        else:
+            from emet.visualization.rerun import NullVisualizer
+
+            self._rerun = NullVisualizer()
 
         # ZMQ sockets
         self.context = zmq.Context()
@@ -138,6 +240,9 @@ class GenericZmqClient(AbstractRobotClient):
         logger.debug("...connected.")
 
         self._recv_threads_started = False
+        self._recv_thread: threading.Thread | None = None
+        self._state_thread: threading.Thread | None = None
+        self._servo_thread: threading.Thread | None = None
 
         if start_immediately:
             if not self.start(log_startup_timeout=False):
@@ -248,6 +353,9 @@ class GenericZmqClient(AbstractRobotClient):
             self._state_thread.start()
             self._servo_thread = threading.Thread(target=self._servo_loop, daemon=True)
             self._servo_thread.start()
+            if getattr(self._rerun, "enabled", False) and self._rerun_thread is None:
+                self._rerun_thread = threading.Thread(target=self.blocking_spin_rerun, daemon=True)
+                self._rerun_thread.start()
         if not self._wait_for_zmq_ready():
             if log_startup_timeout:
                 logger.error(self._zmq_startup_failure_message())
@@ -275,12 +383,83 @@ class GenericZmqClient(AbstractRobotClient):
             return dict(self._emet_session_cache)
 
     def stop(self) -> None:
+        """Signal threads to stop, join them, and close ZMQ sockets (idempotent)."""
+        if self._zmq_closed:
+            return
+        self._zmq_closed = True
         self._finish = True
+        for attr in ("_rerun_thread", "_recv_thread", "_state_thread", "_servo_thread"):
+            t = getattr(self, attr, None)
+            if t is not None and t.is_alive():
+                t.join(timeout=3.0)
+        for sock_name in ("recv_socket", "recv_state_socket", "recv_servo_socket", "send_socket"):
+            s = getattr(self, sock_name, None)
+            if s is not None:
+                try:
+                    s.setsockopt(zmq.LINGER, 0)
+                except Exception:
+                    pass
+                try:
+                    s.close(linger=0)
+                except TypeError:
+                    try:
+                        s.close()
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+        ctx = getattr(self, "context", None)
+        if ctx is not None:
+            try:
+                ctx.term()
+            except Exception:
+                pass
+
+    def blocking_spin_rerun(self) -> None:
+        """Background thread: stream latest ZMQ obs + decoded servo images to Rerun."""
+        last_debug_t = 0.0
+        step_count = 0
+        while not self._finish:
+            if getattr(self._rerun, "enabled", False):
+                with self._obs_lock:
+                    obs = self._obs
+                    servo_obs = self._servo_obs_rerun
+                self._rerun.step(obs, servo_obs)
+                step_count += 1
+                if self._rerun_debug:
+                    now = time.time()
+                    if now - last_debug_t >= 2.0:
+                        has_obs = obs is not None
+                        has_servo = servo_obs is not None
+                        rgb_shape = (
+                            servo_obs.rgb.shape
+                            if (servo_obs is not None and getattr(servo_obs, "rgb", None) is not None)
+                            else None
+                        )
+                        logger.info(
+                            f"[RERUN] generic obs={has_obs} servo_obs={has_servo} servo_rgb_shape={rgb_shape} "
+                            f"steps={step_count}" + (" — waiting for MuJoCo ZMQ streams" if not has_obs else "")
+                        )
+                        last_debug_t = now
+                if obs is None and servo_obs is None:
+                    time.sleep(0.1)
+            else:
+                time.sleep(0.1)
+
+    @property
+    def running(self) -> bool:
+        """True until ``stop()`` (same contract as ``StretchZmqClient``)."""
+        return not self._finish
+
+    def is_running(self) -> bool:
+        """True until ``stop()``; use ``robot.is_running()`` in loops (not ``robot.is_running``)."""
+        return not self._finish
 
     def reset(self) -> None:
         self._obs = None
         self._state = None
         self._servo = None
+        self._servo_obs_rerun = None
         self._base_xyt = np.zeros(3)
         self._base_control_mode = ControlMode.IDLE
         self._emet_session_cache = None
@@ -353,6 +532,7 @@ class GenericZmqClient(AbstractRobotClient):
                 continue
             with self._obs_lock:
                 self._servo = msg
+                self._servo_obs_rerun = _decode_servo_message_to_observations(msg, self._state, self._obs)
                 self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
                     self._emet_session_cache,
                     self._emet_session_cache_step,
@@ -451,6 +631,22 @@ class GenericZmqClient(AbstractRobotClient):
             compass=compass,
         )
 
+    def get_head_pose(self) -> np.ndarray:
+        """SE(3) head / primary camera frame; fall back to identity if unknown."""
+        obs = self.get_observation()
+        if obs is None or obs.camera_pose is None:
+            return np.eye(4, dtype=np.float64)
+        return np.asarray(obs.camera_pose, dtype=np.float64)
+
+    def get_servo_observation(self) -> Observations | None:
+        """Stretch: dedicated EE / servo image stream. Generic: reuse head RGB as ``ee_rgb`` if unset."""
+        obs = self.get_observation()
+        if obs is None:
+            return None
+        if obs.ee_rgb is not None:
+            return obs
+        return replace(obs, ee_rgb=obs.rgb)
+
     # -- Actions --------------------------------------------------------------
 
     def send_action(
@@ -500,11 +696,7 @@ class GenericZmqClient(AbstractRobotClient):
             if timeit.default_timer() - t0 > timeout:
                 self._nav_goal_timeout_log_streak += 1
                 g = np.asarray(target_xyt, dtype=float).reshape(-1) if target_xyt is not None else None
-                goal_s = (
-                    f"[{g[0]:.2f}, {g[1]:.2f}, {g[2]:.2f}]"
-                    if g is not None and g.size >= 3
-                    else str(target_xyt)
-                )
+                goal_s = f"[{g[0]:.2f}, {g[1]:.2f}, {g[2]:.2f}]" if g is not None and g.size >= 3 else str(target_xyt)
                 detail = (
                     f"Navigation goal not reached within {timeout:.0f}s (target_xyt={goal_s}, "
                     f"at_goal={self.at_goal()}). If this repeats, the sim may never set `at_goal`, "
@@ -515,8 +707,7 @@ class GenericZmqClient(AbstractRobotClient):
                     logger.warning(detail)
                 else:
                     logger.debug(
-                        f"{detail} (suppressing further identical warnings; "
-                        f"streak={self._nav_goal_timeout_log_streak})"
+                        f"{detail} (suppressing further identical warnings; streak={self._nav_goal_timeout_log_streak})"
                     )
                 return False
         self._nav_goal_timeout_log_streak = 0
@@ -598,9 +789,43 @@ class GenericZmqClient(AbstractRobotClient):
         return True
 
     def head_to(self, head_pan: float, head_tilt: float, blocking: bool = False, **kwargs) -> None:
-        if not getattr(self, "_logged_head_to_nonstretch", False):
-            logger.warning("head_to() is Stretch-specific; ignored for this robot.")
-            self._logged_head_to_nonstretch = True
+        """Send Stretch-compatible ``head_to`` to the ZMQ server (``RobosuiteZmqServer`` maps it for rby1/galaxea)."""
+        next_action: dict[str, Any] = {
+            "head_to": [float(head_pan), float(head_tilt)],
+        }
+        if blocking:
+            next_action["manip_blocking"] = True
+        self.send_action(
+            next_action,
+            timeout=float(kwargs.get("timeout", 5.0)),
+            reliable=bool(kwargs.get("reliable", True)),
+        )
+        if blocking:
+            time.sleep(0.05)
+
+    def look_front(self, blocking: bool = True, timeout: float = 10.0) -> None:
+        self.head_to(
+            float(motion_constants.look_front[0]),
+            float(motion_constants.look_front[1]),
+            blocking=blocking,
+            timeout=timeout,
+            reliable=True,
+        )
+
+    def look_at_ee(self, blocking: bool = True, timeout: float = 10.0) -> None:
+        self.head_to(
+            float(motion_constants.look_at_ee[0]),
+            float(motion_constants.look_at_ee[1]),
+            blocking=blocking,
+            timeout=timeout,
+            reliable=True,
+        )
+
+    def say(self, text: str) -> None:
+        """Text-to-speech on Stretch; generic client has no audio bridge (no-op)."""
+
+    def say_sync(self, text: str) -> None:
+        """Blocking TTS on Stretch; generic client has no audio bridge (no-op)."""
 
     def navigate_to(self, xyt, relative: bool = False, blocking: bool = True, **kwargs) -> bool:
         xyt_a = np.asarray(xyt, dtype=float).reshape(-1)
@@ -619,7 +844,7 @@ class GenericZmqClient(AbstractRobotClient):
             time.sleep(0.05)
 
     def get_robot_model(self):
-        return None
+        return SpecRobotModel(self._spec)
 
     def get_pose_graph(self) -> np.ndarray:
         return np.zeros((0, 3))

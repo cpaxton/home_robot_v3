@@ -20,7 +20,7 @@ This implementation is a **re-implementation** inspired by the [GraphEQA paper](
 | Representation | Dense 2D/3D voxels, instance segments | Explicit objects and relations (e.g. “table near cup”) |
 | Best for | Environments where dense spatial grounding helps | When you want an interpretable, graph-style memory and the same EQA workflow |
 
-Both use the same exploration loop (rotate, navigate, look around), the same mLLM for answers and confidence, and the same Rerun visualization. GraphEQA feeds the graph string into the prompt instead of (or in addition to) the voxel-based image descriptions.
+Both use the same exploration loop (rotate, navigate, look around), the same mLLM for answers and confidence, and the same Rerun visualization when the robot client enables it (Stretch and registry robots such as **rby1** / **galaxea_r1** wire `GenericZmqClient` the same way as `emet run dynamem`: live maps and scene graph under `world/…`). **`emet run dynamem`** turns Rerun on by default (use `--no-rerun` to disable). **`emet run agent`** leaves Rerun off unless you pass **`--rerun`**. **Prerequisite:** the MuJoCo ZMQ server must be publishing observations and state before the client connects; if Rerun’s web viewer is empty, confirm `emet serve mujoco --robot <name>` is running first (large scenes can take 30–90s). With `--headless` (with Rerun) or no display, open `http://<host>:9090?url=ws://<host>:9877` (or set `RERUN_BIND_ALL=1` / `--rerun-bind` for remote access). Saved runs still use `--save_rerun` / `--SR` as below. GraphEQA feeds the graph string into the prompt instead of (or in addition to) the voxel-based image descriptions.
 
 ## Running GraphEQA
 

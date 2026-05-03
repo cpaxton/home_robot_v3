@@ -21,8 +21,11 @@ import click
 from termcolor import colored
 
 from emet.agent import run_agent_with_robot
+from emet.agent.model_debug import print_offline_model_line
+from emet.agent.prompt import DEFAULT_AGENT_NAME
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
+from emet.core import get_parameters
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
 
 # Default: Qwen 3.5 9B (good quality on 24GB GPU; use qwen35-4B if VRAM is tight)
@@ -33,7 +36,8 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
 @click.option(
     "--llm",
     default=DEFAULT_AGENT_LLM,
-    help=f"LLM to use (default: {DEFAULT_AGENT_LLM}). Case-insensitive (e.g. qwen35-vl-9b = qwen35-vl-9B).",
+    help=f"LLM to use (default: {DEFAULT_AGENT_LLM}). Case-insensitive. "
+    f"Use qwen3-vl-eqa with --eqa to load one Qwen3-VL from dynav ``eqa:`` for chat + shared DynaMem captions.",
     type=click.Choice(get_llm_choices(), case_sensitive=False),
 )
 @click.option(
@@ -90,10 +94,47 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     help="Print full prompt, user input, raw LLM response, and parsed response.",
 )
 @click.option(
+    "--debug-tools",
+    "debug_tools",
+    is_flag=True,
+    help=(
+        "Print raw tool_calls JSON, full tool return strings, executor tuples, combined [tool results] lines, "
+        "the exact [Tool results] block sent back to the LLM, VL camera stats, and send_image array stats. "
+        "Same as setting EMET_AGENT_TOOL_DEBUG=1."
+    ),
+)
+@click.option(
+    "--debug-models",
+    "debug_models",
+    is_flag=True,
+    help=(
+        "Print which models/clients are in use (chat LLM, describe_scene detector, DynaMem VLM, etc.). "
+        "Same as setting EMET_AGENT_MODEL_DEBUG=1. Also enables VRAM snapshots (nvidia-smi + torch CUDA)."
+    ),
+)
+@click.option(
+    "--debug-vram",
+    "debug_vram",
+    is_flag=True,
+    help=(
+        "Print nvidia-smi and torch CUDA memory at major load milestones (SigLIP, agent LLM, EQA bind/materialize, "
+        "shared Qwen3.5-VL). Same as EMET_VRAM_DEBUG=1. Combine with --debug-models for full model + VRAM report."
+    ),
+)
+@click.option(
+    "--debug-camera",
+    "debug_camera",
+    is_flag=True,
+    help=(
+        "Print head-camera frame stats for describe_scene, send_image, and Discord encode (black-PNG diagnosis). "
+        "Same as EMET_AGENT_CAMERA_DEBUG=1. If the PNG is black but stats look valid, try EMET_DISCORD_IMAGES_BGR=0."
+    ),
+)
+@click.option(
     "--name",
     "agent_name",
-    default="Emet",
-    help="Agent name used in the system prompt (default: Emet).",
+    default=DEFAULT_AGENT_NAME,
+    help=f"Agent / persona name in the system prompt and greetings (default: {DEFAULT_AGENT_NAME!r}).",
 )
 @click.option(
     "-c",
@@ -108,9 +149,42 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 @click.option(
+    "--headless",
+    is_flag=True,
+    help="With --rerun: no native Rerun window; open http://<this-host>:9090?url=ws://<this-host>:9877.",
+)
+@click.option(
+    "--rerun",
+    is_flag=True,
+    help="Enable Rerun live visualization (off by default; same viewer as emet run dynamem).",
+)
+@click.option(
+    "--rerun-show-panels",
+    is_flag=True,
+    help="Rerun: show blueprint/selection panel (debug).",
+)
+@click.option(
+    "--rerun-debug",
+    is_flag=True,
+    help="Print periodic Rerun / ZMQ stream status for generic robots.",
+)
+@click.option(
+    "--rerun-bind",
+    is_flag=True,
+    help="Bind Rerun to 0.0.0.0 (sets RERUN_BIND_ALL=1; same as emet run dynamem --rerun-bind).",
+)
+@click.option(
     "--robot",
-    default="stretch",
-    help="Robot backend (stretch, rby1, galaxea_r1). Must match emet serve mujoco --robot.",
+    metavar="NAME",
+    default=None,
+    help=(
+        "Robot backend (stretch, rby1, galaxea_r1). Overrides top-level ``robot`` in --agent-config when set; "
+        "if omitted, that YAML key is used (default ``stretch`` when the key is absent). Must match "
+        "emet serve mujoco --robot after any CLI remaps. MolmoSpaces (--molmospaces-scene) uses rby1 on the "
+        "server even when serve is started with default stretch—set ``robot: rby1`` in YAML or pass --robot rby1. "
+        "Always put the name immediately after --robot (e.g. --robot stretch); if you omit the name, the next "
+        "flag may be parsed as the value."
+    ),
 )
 @click.option(
     "--agent-config",
@@ -130,6 +204,24 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     is_flag=True,
     help="Do not pass robot RGB to VL models (saves VRAM / faster).",
 )
+@click.option(
+    "--eqa",
+    "dynamem_eqa",
+    is_flag=True,
+    help=(
+        "Enable DynaMem EQA on the voxel map (Qwen2.5-VL for captions + answers by default; see dynav_config.yaml eqa:). "
+        "Heavier GPU/RAM and slower startup; default is off (query_memory falls back to localize_text)."
+    ),
+)
+@click.option(
+    "--share-memory-vllm/--no-share-memory-vllm",
+    "share_memory_vllm",
+    default=True,
+    help=(
+        "With --eqa and an LLM: defer loading DynaMem's local caption VLM and bind the agent VL client when possible "
+        "(saves VRAM vs loading two VL models). Use --no-share-memory-vllm to always load the EQA VLM from config."
+    ),
+)
 def main(
     llm: str,
     prompt: str,
@@ -142,13 +234,24 @@ def main(
     discord: bool,
     no_llm: bool,
     debug_llm: bool,
+    debug_tools: bool,
+    debug_models: bool,
+    debug_vram: bool,
+    debug_camera: bool,
     agent_name: str,
     commands: tuple[str, ...],
     port_offset: int = 0,
-    robot: str = "stretch",
+    headless: bool = False,
+    rerun: bool = False,
+    rerun_show_panels: bool = False,
+    rerun_debug: bool = False,
+    rerun_bind: bool = False,
+    robot: str | None = None,
     agent_config: str = "dynav_config.yaml",
     vl_include_camera: bool = False,
     no_vl_camera: bool = False,
+    dynamem_eqa: bool = False,
+    share_memory_vllm: bool = True,
 ) -> None:
     """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
 
@@ -159,14 +262,37 @@ def main(
       emet run agent --offline
       emet run agent --device cpu --offline
       emet run agent --llm qwen35-9B --offline
+      emet run agent --llm gemma4-e4b --device cuda --offline   # Gemma 4 (HF any-to-any)
       emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
+      # MolmoSpaces: ``emet serve mujoco --molmospaces-scene ithor ...`` (often DISPLAY=:1 instead of --headless); same --port-offset as serve:
+      emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml
+      emet run agent --agent-config configs/agent_rby1_discord.yaml   # uses robot: from YAML
+      emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml
       emet run agent --input-path logs/memory_xxx --no-discord
       emet run agent --no-llm   # letter commands (E/M/Q/P)
       emet run agent --no-llm --command 'find red cylinder'
       emet run agent --no-llm -c 'FIND blue cube'
-      emet run agent -c 'find the red cylinder' -c 'what objects do you see?'
+      emet run agent --llm qwen3-vl-eqa --eqa --debug-vram   # one Qwen3-VL + VRAM milestones
     """
     cmd_list = list(commands) if commands else None
+
+    if robot is None or str(robot).strip() == "":
+        robot = str(get_parameters(agent_config).get("robot", "stretch")).strip()
+    else:
+        robot = str(robot).strip()
+    if not robot or robot.startswith("-"):
+        raise click.UsageError(
+            "`--robot` must be followed by a backend name (e.g. `stretch`, `rby1`). "
+            "You left it empty or the next token was parsed as the value (often another flag); "
+            "use e.g. `emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml --rerun`."
+        )
+
+    if debug_models:
+        os.environ["EMET_AGENT_MODEL_DEBUG"] = "1"
+    if debug_vram:
+        os.environ["EMET_VRAM_DEBUG"] = "1"
+    if debug_camera:
+        os.environ["EMET_AGENT_CAMERA_DEBUG"] = "1"
 
     # Embodied mode: default IP 127.0.0.1 unless --offline
     robot_effective: str | None = None
@@ -179,6 +305,8 @@ def main(
     vl_include_effective = (not no_vl_camera) and (vl_include_camera or is_vl_name)
 
     if robot_effective:
+        if rerun_bind:
+            os.environ["RERUN_BIND_ALL"] = "1"
         run_agent_with_robot(
             robot_ip=robot_effective,
             robot=robot,
@@ -188,6 +316,7 @@ def main(
             llm=llm,
             skip_confirmations=True,
             debug_llm=debug_llm,
+            tool_debug=debug_tools,
             agent_name=agent_name,
             commands=cmd_list,
             port_offset=port_offset,
@@ -195,13 +324,21 @@ def main(
             device=device,
             max_tokens=max_tokens,
             vl_include_camera=vl_include_effective,
+            eqa=dynamem_eqa,
+            share_memory_vllm=share_memory_vllm,
+            headless=headless,
+            rerun=rerun,
+            rerun_show_panels=rerun_show_panels,
+            rerun_debug=rerun_debug,
         )
         return
 
     prompt_builder = get_prompt_builder(prompt)
-    client = get_llm_client(llm, prompt_builder, device=device)
+    dynav_params = get_parameters(agent_config)
+    client = get_llm_client(llm, prompt_builder, device=device, parameters=dynav_params)
     if hasattr(client, "max_tokens"):
         client.max_tokens = max_tokens
+    print_offline_model_line(llm, client, device, max_tokens)
 
     if voice:
         audio_recorder = AudioRecorder()

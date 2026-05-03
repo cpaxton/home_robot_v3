@@ -46,6 +46,10 @@ def test_rby1_mjcf_loads():
         aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
         assert aid >= 0, f"Actuator '{aname}' not found in MJCF"
 
+    for cname in spec.camera_names:
+        cid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, cname)
+        assert cid >= 0, f"MuJoCo camera '{cname}' missing (RobotSpec names must be mjOBJ_CAMERA for ZMQ render)"
+
     data = mujoco.MjData(model)
     mujoco.mj_step(model, data)
     assert data.time > 0
@@ -58,9 +62,43 @@ def test_rby1_create_client():
     from emet.robots.rby1 import Rby1Backend
 
     backend = Rby1Backend()
-    client = backend.create_client("127.0.0.1", start_immediately=False)
+    client = backend.create_client("127.0.0.1", start_immediately=False, enable_rerun_server=False)
     assert isinstance(client, GenericZmqClient)
     assert client._spec.name == "rby1"
+
+
+def test_rby1_create_client_defers_zmq_start_by_default():
+    """Avoid blocking ZMQ wait in __init__ (RobotAgent.start() connects once after model setup)."""
+    pytest.importorskip("emet.robots.rby1")
+    from emet.robots.rby1 import Rby1Backend
+
+    client = Rby1Backend().create_client("127.0.0.1", enable_rerun_server=False)
+    assert not client._recv_threads_started
+    assert not client._started
+
+
+def test_decode_servo_message_robosuite_format():
+    """Servo ZMQ dict from RobosuiteZmqServer decodes to Observations for Rerun."""
+    import numpy as np
+
+    import emet.utils.compression as compression
+    from emet.controller.generic_zmq_client import _decode_servo_message_to_observations
+
+    rgb = np.zeros((48, 64, 3), dtype=np.uint8)
+    depth_u16 = (np.ones((48, 64), dtype=np.float32) * 0.5 * 1000).astype(np.uint16)
+    msg = {
+        "head_color_image": compression.to_jpg(rgb),
+        "head_depth_image": compression.to_jp2(depth_u16),
+        "head_camera_K": np.eye(3, dtype=np.float64),
+        "joint_positions": np.zeros(5, dtype=np.float64),
+        "base_pose": np.array([1.0, 2.0, 0.5], dtype=np.float64),
+    }
+    obs = _decode_servo_message_to_observations(msg, None, None)
+    assert obs is not None
+    assert obs.rgb.shape[0] == 48 and obs.rgb.shape[2] == 3
+    assert obs.depth is not None and obs.depth.shape == (48, 64)
+    assert obs.joint is not None and obs.joint.shape == (5,)
+    assert abs(float(obs.gps[0]) - 1.0) < 1e-5
 
 
 def test_default_scene_with_rby1_loads_and_robot_can_be_commanded():

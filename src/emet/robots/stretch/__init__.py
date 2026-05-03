@@ -15,15 +15,17 @@
 
 """Stretch 3 robot backend — https://hello-robot.com/stretch-3-product."""
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
-from emet.controller.zmq_client import StretchZmqClient
 from emet.motion.constants import MANIP_STRETCH_URDF, stretch_degrees_of_freedom
 from emet.motion.kinematics import HelloStretchKinematics
 from emet.robots.base import RobotBackend, RobotSpec
 
 if TYPE_CHECKING:
     from emet.controller.emotes.backend import EmoteBackend
+    from emet.controller.zmq_client import StretchZmqClient
 from emet.robots.footprint import Footprint
 
 STRETCH_JOINT_NAMES = [
@@ -55,7 +57,7 @@ class StretchBackend(RobotBackend):
             footprint=Footprint(width=0.34, length=0.33, width_offset=0.0, length_offset=-0.1),
         )
 
-    def create_client(self, robot_ip: str, **kwargs) -> "StretchZmqClient":
+    def create_client(self, robot_ip: str, **kwargs) -> StretchZmqClient:
         from emet.controller.zmq_client import StretchZmqClient
 
         return StretchZmqClient(robot_ip=robot_ip, **kwargs)
@@ -63,7 +65,7 @@ class StretchBackend(RobotBackend):
     def create_model(self, **kwargs) -> HelloStretchKinematics:
         return HelloStretchKinematics(**kwargs)
 
-    def get_emote_backend(self) -> "EmoteBackend":
+    def get_emote_backend(self) -> EmoteBackend:
         from emet.controller.emotes.backend import StretchEmoteBackend
 
         return StretchEmoteBackend()

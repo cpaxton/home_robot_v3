@@ -25,6 +25,17 @@ def test_help_lists_discord_toggle():
     assert "--no-discord" in r.output
 
 
+def test_help_robot_option_mentions_molmospaces_rby1():
+    """--robot help documents MolmoSpaces → rby1 server remap."""
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "MolmoSpaces" in r.output
+    assert "rby1" in r.output
+
+
 def test_help_lists_offline_and_default_robot_ip():
     from emet.app.run_agent import main
 
@@ -44,6 +55,39 @@ def test_help_lists_command_long_and_short():
     assert r.exit_code == 0
     assert "--command" in r.output
     assert "-c" in r.output
+
+
+def test_help_lists_dynamem_eqa_flag():
+    """DynaMem EQA is opt-in via --eqa (heavy models)."""
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "--eqa" in r.output
+
+
+def test_help_lists_share_memory_vllm_toggle():
+    """Agent + --eqa can share one VL model with DynaMem (--no-share-memory-vllm opts out)."""
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "--share-memory-vllm" in r.output
+    assert "--no-share-memory-vllm" in r.output
+
+
+def test_help_lists_rerun_agent_flags():
+    """Rerun is opt-in on the agent (--rerun); headless/bind flags documented."""
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "--rerun" in r.output
+    assert "--headless" in r.output
+    assert "--rerun-bind" in r.output
 
 
 def test_vl_camera_default_logic():

@@ -22,10 +22,11 @@ import numpy as np
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
-try:
-    from mujoco import MjModel
-except ImportError:
-    from mujoco._structs import MjModel
+
+from emet.utils.mujoco_import import assert_mujoco_available
+
+assert_mujoco_available()
+from mujoco import MjModel
 
 import emet.simulation.stretch_mujoco.utils as utils
 from emet.simulation.stretch_mujoco.datamodels.status_command import (

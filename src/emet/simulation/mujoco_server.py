@@ -139,7 +139,7 @@ def _load_default_scene_with_robot(robot_key: str):
     "--show-viewer-ui",
     "--show_viewier_ui",
     default=False,
-    help="Show the Mujoco viewer UI",
+    help="Show the MuJoCo passive viewer (Stretch always; rby1 / merged MJCF when not --headless)",
     is_flag=True,
 )
 @click.option("--headless", default=False, help="Run the simulation headless", is_flag=True)
@@ -228,6 +228,11 @@ def main(
     if "MUJOCO_GL" not in os.environ and (headless or not os.environ.get("DISPLAY")):
         os.environ["MUJOCO_GL"] = "egl"
 
+    # Fail fast if ROS or another layout shadows ``cv2`` (missing resize/imencode breaks image threads).
+    from emet.utils.opencv_import import assert_cv2_is_real_opencv
+
+    assert_cv2_is_real_opencv()
+
     from emet.simulation.molmospaces_config import ensure_molmospaces_assets_dir_env
 
     ensure_molmospaces_assets_dir_env()
@@ -244,6 +249,11 @@ def main(
         except Exception as e:
             logger.error(f"Could not list Robocasa tasks: {e}")
             sys.exit(1)
+
+    # MuJoCo is optional in pyproject unless ``sim`` extra is installed (avoid long import chains).
+    from emet.utils.mujoco_import import assert_mujoco_available
+
+    assert_mujoco_available()
 
     scene_model = None
     objects_info = None
@@ -477,6 +487,11 @@ def main(
             sys.exit(1)
 
         try:
+            # RobosuiteZmqServer renders from multiple ZMQ threads; EGL avoids GLFW issues headless.
+            # With --show-viewer-ui, leave MUJOCO_GL unset (or set MUJOCO_GL=glfw) so the passive viewer can open a window.
+            if "MUJOCO_GL" not in os.environ and not use_glx and not show_viewer_ui:
+                os.environ["MUJOCO_GL"] = "egl"
+
             server = RobosuiteZmqServer(
                 robot_spec=robot_spec,
                 send_port=send_port,

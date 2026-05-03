@@ -25,6 +25,7 @@ from emet.llms.eqa_vl_settings import (
 from emet.llms.prompts.eqa_prompt import EQA_PROMPT
 from emet.llms.qwen_client import Qwen35VLClient
 from emet.utils.logger import Logger
+from emet.utils.vram_debug import print_vram_snapshot
 
 logger = Logger(__name__)
 
@@ -87,6 +88,10 @@ def get_shared_qwen35_vl_client(
             num_beams=1,
             device=device,
             quantization=quantization,
+        )
+        print_vram_snapshot(
+            "eqa_qwen_shared_qwen35_vl_first_load",
+            extra=f"Qwen3.5-{model_size} multimodal (eqa_vl / graph helpers)",
         )
         return _shared_qwen35_vl
 

@@ -27,13 +27,14 @@ from typing import Any
 
 import click
 
+from emet.agent.prompt import DEFAULT_AGENT_NAME, AgentPromptBuilder
 
 _CHAT_HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Emet – Robot Chat</title>
+<title>%%AGENT_NAME%% – Robot Chat</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#0f1117;--card:#1a1d27;--border:#2a2d3a;--accent:#6366f1;--accent2:#818cf8;--text:#e2e8f0;--muted:#94a3b8;--user:#1e3a5f;--bot:#1e293b;--input-bg:#1e2030;--success:#22c55e}
@@ -64,12 +65,12 @@ header .status .dot{width:8px;height:8px;border-radius:50%;background:var(--succ
 </head>
 <body>
 <header>
-  <div class="logo">E</div>
-  <h1>Emet</h1>
+  <div class="logo">%%AGENT_INITIAL%%</div>
+  <h1>%%AGENT_NAME%%</h1>
   <div class="status"><span class="dot"></span>Online</div>
 </header>
 <div id="chat">
-  <div class="msg bot">Hello! I'm Emet, a mobile robot assistant. How can I help?</div>
+  <div class="msg bot">Hello! I'm %%AGENT_NAME%%, a mobile robot assistant. How can I help?</div>
 </div>
 <div class="typing" id="typing"><span>.</span><span>.</span><span>.</span> thinking</div>
 <div id="input-bar">
@@ -108,6 +109,11 @@ inp.focus();
 </html>"""
 
 
+def _render_chat_html(agent_name: str) -> str:
+    initial = (agent_name[:1] or "?").upper()
+    return _CHAT_HTML.replace("%%AGENT_NAME%%", agent_name).replace("%%AGENT_INITIAL%%", initial)
+
+
 class _ChatState:
     """Shared mutable state for the chat handler."""
 
@@ -118,7 +124,7 @@ class _ChatState:
         self.tools_by_name = None
         self.context: dict[str, Any] = {}
         self.debug = False
-        self.agent_name = "Emet"
+        self.agent_name = DEFAULT_AGENT_NAME
         self.chat_log = None
         self.lock = threading.Lock()
 
@@ -171,7 +177,7 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(_CHAT_HTML.encode("utf-8"))
+            self.wfile.write(_render_chat_html(self.state.agent_name).encode("utf-8"))
         else:
             self.send_error(404)
 
@@ -206,7 +212,9 @@ class _Handler(BaseHTTPRequestHandler):
 @click.option("--llm", default="qwen35-4B", help="LLM backend to use.")
 @click.option("--port", default=8080, type=int, help="Port to serve on.")
 @click.option("--host", default="0.0.0.0", help="Bind address.")
-@click.option("--name", "agent_name", default="Emet", help="Agent name.")
+@click.option(
+    "--name", "agent_name", default=DEFAULT_AGENT_NAME, help="Agent / persona name (in prompt and page header)."
+)
 @click.option("--debug", is_flag=True, help="Print raw LLM responses.")
 @click.option("--device", default="cuda", type=click.Choice(["cuda", "cpu", "mps"]))
 def main(llm: str, port: int, host: str, agent_name: str, debug: bool, device: str):
@@ -220,7 +228,6 @@ def main(llm: str, port: int, host: str, agent_name: str, debug: bool, device: s
       emet run web-chat --device cpu --debug
     """
     from emet.agent.loop import ChatLog
-    from emet.agent.prompt import AgentPromptBuilder
     from emet.agent.tools import get_tools
     from emet.llms import get_llm_client
 
@@ -249,7 +256,7 @@ def main(llm: str, port: int, host: str, agent_name: str, debug: bool, device: s
 
     server = HTTPServer((host, port), handler)
     url = f"http://{'localhost' if host == '0.0.0.0' else host}:{port}"
-    print(f"\n  Emet Web Chat: {url}\n")
+    print(f"\n  Web chat: {url}\n")
     print(f"  Agent: {agent_name} | LLM: {llm} | device: {device}")
     print("  Press Ctrl+C to stop.\n")
 

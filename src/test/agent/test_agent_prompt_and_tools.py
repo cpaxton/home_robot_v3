@@ -130,3 +130,33 @@ def test_query_memory_tool_with_mock_backend():
     qm = next(t for t in tools if t.name == "query_memory")
     result = qm.func(question="What objects are here?")
     assert "answer about" in result
+
+
+def test_describe_scene_delegates_to_agent():
+    """describe_scene should call executor.agent.describe_head_camera_scene_text when present."""
+    import numpy as np
+
+    from emet.agent.tools import get_tools
+    from emet.core.interfaces import Observations
+
+    class MockRobot:
+        def get_observation(self):
+            return Observations(
+                gps=np.zeros(2, dtype=np.float32),
+                compass=np.zeros(1, dtype=np.float32),
+                rgb=np.zeros((4, 4, 3), dtype=np.uint8),
+                depth=np.zeros((4, 4), dtype=np.float32),
+            )
+
+    class MockAgent:
+        def describe_head_camera_scene_text(self):
+            return "From my head camera I can make out: table, chair."
+
+    class MockExecutor:
+        robot = None
+        agent = MockAgent()
+
+    context = {"robot": MockRobot(), "executor": MockExecutor()}
+    tools = get_tools(context)
+    ds = next(t for t in tools if t.name == "describe_scene")
+    assert ds.func() == "From my head camera I can make out: table, chair."

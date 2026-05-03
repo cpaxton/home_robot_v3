@@ -22,8 +22,6 @@ from scipy.spatial import cKDTree
 from trimesh import Trimesh
 from trimesh.bounds import contains as trimesh_contains
 
-rr.init("Stretch_robot", spawn=False)
-
 
 def points_in_mesh(
     points: np.ndarray,
@@ -89,6 +87,8 @@ def points_in_mesh(
     bbox = bbox + np.array([[x, y, 0], [x, y, 0]])
 
     if visualize:
+        # Standalone debug only; never at module import (that reset live RerunVisualizer recordings).
+        rr.init("Stretch_robot", spawn=False)
         bbox_center = rr.components.PoseTranslation3D(bbox.mean(axis=0))
         bbox_half_size = (bbox[0] - bbox[1]) / 2
 

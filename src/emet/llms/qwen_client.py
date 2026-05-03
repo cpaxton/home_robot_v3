@@ -16,8 +16,10 @@ from PIL import Image
 from termcolor import colored
 from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig, pipeline
 
-from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder
-from emet.utils.logger import suppress_hf_hub_http_logging
+from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder, AbstractVLLMClient
+from emet.utils.logger import Logger, suppress_hf_hub_http_logging
+
+_qwen35_vl_logger = Logger(__name__)
 
 # Presets for get_llm_client (Qwen2.5-VL / stand-in for Qwen3.5-VL-9B until a dedicated HF id is wired).
 QWEN_VL_PRESETS: dict[str, dict[str, Any]] = {
@@ -153,12 +155,16 @@ class Qwen25Client(AbstractLLMClient):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-        # When using quantization, omit torch_dtype and use device_map so bitsandbytes loads correctly
+        # When using quantization, omit torch_dtype and use device_map so bitsandbytes loads correctly.
+        # Single-GPU ``{"": 0}`` avoids ``device_map="auto"`` dispatching layers to CPU/disk (spikes VRAM / errors)
+        # and matches Qwen3-VL int4 loading elsewhere in emet.
         load_kwargs = dict(model_kwargs)
         if quantization_config is not None:
             load_kwargs.pop("dtype", None)
             load_kwargs.pop("torch_dtype", None)
-            if device != "cpu":
+            if device == "cuda":
+                load_kwargs["device_map"] = {"": 0}
+            elif device != "cpu":
                 load_kwargs["device_map"] = "auto"
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -166,15 +172,22 @@ class Qwen25Client(AbstractLLMClient):
         )
         if device == "cpu":
             self.model = self.model.to("cpu")
-        # Pipeline device: 0 or "cuda" for GPU, -1 for CPU
+        # Pipeline: do not pass ``device=`` when the model already uses ``device_map`` (HF warns; can
+        # duplicate GPU memory). Do not pass ``model_kwargs`` (quantization_config) again after load.
         pipe_device = -1 if device == "cpu" else (0 if device == "cuda" else device)
-        self.pipe = pipeline(
-            "text-generation",
-            model=self.model,
-            tokenizer=self.tokenizer,
-            device=pipe_device,
-            model_kwargs=model_kwargs,
-        )
+        if quantization_config is not None and device == "cuda":
+            self.pipe = pipeline(
+                "text-generation",
+                model=self.model,
+                tokenizer=self.tokenizer,
+            )
+        else:
+            self.pipe = pipeline(
+                "text-generation",
+                model=self.model,
+                tokenizer=self.tokenizer,
+                device=pipe_device,
+            )
 
     def __call__(self, command: str, verbose: bool = False):
         if self.is_first_message():
@@ -255,7 +268,7 @@ _QWEN35_VL_SIZES = frozenset(
 _VL_SYSTEM_PROMPT_UNSET = object()
 
 
-class Qwen25VLClient(AbstractLLMClient):
+class Qwen25VLClient(AbstractVLLMClient):
     """Qwen2.5-VL multimodal chat for agent tool JSON (same text contract as Qwen25Client).
 
     Supports optional ``image=`` (RGB ndarray) on a user turn for camera-conditioned replies.
@@ -297,6 +310,9 @@ class Qwen25VLClient(AbstractLLMClient):
             model_name = f"Qwen/Qwen2.5-VL-{model_size}"
         else:
             model_name = f"Qwen/Qwen2.5-VL-{model_size}-{fine_tuning}"
+
+        self._resolved_hf_model_id = model_name
+        self._quantization = quantization
 
         if model_name == "Qwen/Qwen2.5-VL-7B-Instruct":
             print(
@@ -349,6 +365,11 @@ class Qwen25VLClient(AbstractLLMClient):
         if device == "cpu":
             self.model = self.model.to("cpu")
 
+    @property
+    def canonical_model_key(self) -> str:
+        q = self._quantization or "none"
+        return f"qwen25_vl:{self._resolved_hf_model_id}:{self._device}:{q}"
+
     def _process_input(self, command: Any) -> Any:
         if isinstance(command, str):
             return command
@@ -363,25 +384,29 @@ class Qwen25VLClient(AbstractLLMClient):
                 raise NotImplementedError("Only text and image content supported for VL.")
         return user_commands
 
-    def __call__(
+    def generate_multimodal(
         self,
-        command: str | list[Any],
-        image: np.ndarray | None = None,
+        user_content: str | list[Any],
+        *,
+        system_prompt: str | None = None,
+        max_new_tokens: int | None = None,
+        reset_context: bool = True,
         verbose: bool = False,
-        tools: list[Any] | None = None,
+        image: Any | None = None,
     ) -> str:
-        if tools is not None:
-            pass  # Agent uses JSON-in-text, not native tool APIs.
-        if self.is_first_message():
-            self.add_history({"role": "system", "content": self.system_prompt})
+        if reset_context:
+            self.reset()
+        sys_txt = system_prompt if system_prompt is not None else self.system_prompt
+        if sys_txt:
+            self.add_history({"role": "system", "content": sys_txt})
 
         if image is not None:
             pil = Image.fromarray(np.asarray(image).astype(np.uint8), mode="RGB")
-            user_content: Any = [{"type": "image", "image": pil}, {"type": "text", "text": command}]
+            content: Any = [{"type": "image", "image": pil}, {"type": "text", "text": user_content}]
         else:
-            user_content = self._process_input(command)
+            content = self._process_input(user_content)
 
-        self.add_history({"role": "user", "content": user_content})
+        self.add_history({"role": "user", "content": content})
         messages = self.get_history()
 
         if verbose:
@@ -401,8 +426,9 @@ class Qwen25VLClient(AbstractLLMClient):
         inputs = inputs.to(dev)
 
         pad_id = getattr(getattr(self.processor, "tokenizer", None), "pad_token_id", None)
+        ntok = max_new_tokens if max_new_tokens is not None else self.max_tokens
         gen_kw: dict[str, Any] = {
-            "max_new_tokens": self.max_tokens,
+            "max_new_tokens": ntok,
             "num_beams": self.num_beams,
         }
         if pad_id is not None:
@@ -518,6 +544,78 @@ class Qwen35VLClient:
 
         return user_commands
 
+    @staticmethod
+    def _messages_text_only(messages: list) -> list:
+        """Drop vision blocks so chat template + processor can build text-only ``input_ids``."""
+        out: list = []
+        for m in messages:
+            content = m.get("content")
+            role = m["role"]
+            if isinstance(content, str):
+                out.append({"role": role, "content": content})
+            elif isinstance(content, list):
+                texts: list[str] = []
+                for blk in content:
+                    if isinstance(blk, dict) and blk.get("type") == "text":
+                        t = str(blk.get("text", "")).strip()
+                        if t:
+                            texts.append(t)
+                joined = " ".join(texts).strip() or "Reply concisely."
+                out.append({"role": role, "content": joined})
+            else:
+                out.append({"role": role, "content": str(content)})
+        return out
+
+    def _decode_generation(self, proc_inputs: Any, generated_ids: torch.Tensor) -> str:
+        generated_ids_trimmed = [
+            out_ids[len(in_ids) :] for in_ids, out_ids in zip(proc_inputs.input_ids, generated_ids, strict=True)
+        ]
+        return self.processor.batch_decode(
+            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )[0]
+
+    def _qwen35_generate_text_only(self, messages: list, _tmpl_kw: dict[str, Any], cap: int) -> str:
+        try:
+            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
+        except TypeError:
+            _tmpl_kw.pop("enable_thinking", None)
+            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
+        proc_inputs = self.processor(text=[text], padding=True, return_tensors="pt")
+        proc_inputs = proc_inputs.to(self._device)
+        generated_ids = self.model.generate(**proc_inputs, max_new_tokens=cap, num_beams=self.num_beams)
+        return self._decode_generation(proc_inputs, generated_ids)
+
+    def _qwen35_generate_multimodal(self, messages: list, _tmpl_kw: dict[str, Any], cap: int) -> str:
+        try:
+            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
+        except TypeError:
+            _tmpl_kw.pop("enable_thinking", None)
+            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
+        image_inputs, video_inputs = process_vision_info(messages)
+        proc_inputs = self.processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        )
+        proc_inputs = proc_inputs.to(self._device)
+        ids = proc_inputs.get("input_ids")
+        if ids is None or (isinstance(ids, torch.Tensor) and ids.numel() == 0):
+            raise ValueError("processor returned empty input_ids (multimodal)")
+        generated_ids = self.model.generate(**proc_inputs, max_new_tokens=cap, num_beams=self.num_beams)
+        return self._decode_generation(proc_inputs, generated_ids)
+
+    def _qwen35_generate(self, messages: list, _tmpl_kw: dict[str, Any], cap: int) -> str:
+        try:
+            return self._qwen35_generate_multimodal(messages, dict(_tmpl_kw), cap)
+        except Exception as e:
+            msg = str(e).lower()
+            if "input_ids" not in msg and "text_embeds" not in msg:
+                raise
+            _qwen35_vl_logger.warning(f"Qwen3.5 VL multimodal inference failed ({e}); retrying text-only.")
+            return self._qwen35_generate_text_only(self._messages_text_only(messages), dict(_tmpl_kw), cap)
+
     def __call__(
         self,
         command: str | list[dict[str, Any]] | Image.Image,
@@ -554,32 +652,8 @@ class Qwen35VLClient:
             "add_generation_prompt": True,
             "enable_thinking": False,
         }
-        try:
-            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
-        except TypeError:
-            _tmpl_kw.pop("enable_thinking", None)
-            text = self.processor.apply_chat_template(messages, **_tmpl_kw)
-        image_inputs, video_inputs = process_vision_info(messages)
-        proc_inputs = self.processor(
-            text=[text],
-            images=image_inputs,
-            videos=video_inputs,
-            padding=True,
-            return_tensors="pt",
-        )
-        proc_inputs = proc_inputs.to(self._device)
-
         cap = self.max_tokens if max_new_tokens is None else max_new_tokens
-        generated_ids = self.model.generate(
-            **proc_inputs, max_new_tokens=cap, num_beams=self.num_beams
-        )
-        generated_ids_trimmed = [
-            out_ids[len(in_ids) :]
-            for in_ids, out_ids in zip(proc_inputs.input_ids, generated_ids, strict=True)
-        ]
-        output_text = self.processor.batch_decode(
-            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )[0]
+        output_text = self._qwen35_generate(messages, _tmpl_kw, cap)
 
         t1 = timeit.default_timer()
 

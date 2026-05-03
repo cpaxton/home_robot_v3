@@ -160,6 +160,18 @@ def test_install_full_help():
     )
     assert result.returncode == 0
     assert "install" in result.stdout.lower()
+    assert "--profile" in result.stdout
+
+
+def test_install_menu_help():
+    """emet install menu --help lists --text-only."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "install", "menu", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "--text-only" in result.stdout
 
 
 def test_install_pre_commit_help():

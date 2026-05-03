@@ -576,18 +576,52 @@ def scale_camera_matrix(K: np.ndarray, scale_factor: float) -> np.ndarray:
     return K_scaled
 
 
+def ndarray_hwc_to_pil_rgb_u8(
+    arr: np.ndarray,
+    *,
+    assume_opencv_bgr: bool = True,
+) -> Image.Image:
+    """Convert an H×W×3 image array to a PIL ``RGB`` ``uint8`` image.
+
+    - Handles ``float32`` / ``float64`` and wider integer dtypes via ``cv2.NORM_MINMAX`` so
+      naive ``astype(uint8)`` does not collapse floats in ``[0, 1]`` to all zeros (black PNG).
+    - Accepts ``(3, H, W)`` CHW layouts (common from torch / some sim paths) and transposes.
+    - When ``assume_opencv_bgr`` is True (default), applies ``cv2.COLOR_BGR2RGB`` for arrays
+      from ``cv2.imdecode`` / ZMQ JPEG decode before PIL / Discord.
+    """
+    a = np.asarray(arr)
+    if hasattr(a, "detach"):
+        a = a.detach().cpu().numpy()
+    if a.ndim != 3:
+        raise ValueError(f"expected HxWxC image, got shape {a.shape}")
+    # CHW (e.g. 3×H×W) → HWC when the channel axis is the smallest leading dim.
+    if a.shape[0] in (1, 3) and a.shape[0] < min(a.shape[1], a.shape[2]):
+        a = np.transpose(a, (1, 2, 0))
+    if a.shape[2] < 3:
+        raise ValueError(f"expected at least 3 channels, got shape {a.shape}")
+    if a.shape[2] > 3:
+        a = a[:, :, :3]
+    if a.dtype != np.uint8:
+        flat = a.astype(np.float32)
+        lo, hi = float(np.nanmin(flat)), float(np.nanmax(flat))
+        if hi - lo < 1e-12:
+            a = np.zeros((*a.shape[:2], 3), dtype=np.uint8)
+        else:
+            a = cv2.normalize(flat, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+    a = np.ascontiguousarray(a, dtype=np.uint8)
+    if assume_opencv_bgr:
+        a = cv2.cvtColor(a, cv2.COLOR_BGR2RGB)
+    return Image.fromarray(a)
+
+
 def numpy_image_to_bytes(np_image: np.ndarray) -> io.BytesIO:
     """Convert a numpy image to a byte array."""
-    # Create a BytesIO object
     byte_arr = io.BytesIO()
-
-    # Create an Image object
-    image = Image.fromarray(np_image)
-
-    # Save the image to the BytesIO object
-    image.save(byte_arr, format="PNG")  # Save as PNG
-
-    # Move the cursor to the beginning of the BytesIO object
+    a = np.asarray(np_image)
+    if a.ndim == 2:
+        Image.fromarray(a).save(byte_arr, format="PNG")
+        byte_arr.seek(0)
+        return byte_arr
+    ndarray_hwc_to_pil_rgb_u8(a, assume_opencv_bgr=True).save(byte_arr, format="PNG")
     byte_arr.seek(0)
-
     return byte_arr
