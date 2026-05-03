@@ -208,6 +208,7 @@ def test_debug_da3_depth_help():
     assert result.returncode == 0
     assert "--model-id" in result.stdout
     assert "--depth-source" in result.stdout
+    assert "--meshes" in result.stdout or "--no-meshes" in result.stdout
 
 
 def test_install_completion_bash():
