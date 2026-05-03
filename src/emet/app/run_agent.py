@@ -20,7 +20,7 @@ import timeit
 import click
 from termcolor import colored
 
-from emet.agent import run_agent_with_robot
+from emet.agent.loop import run_agent_with_robot
 from emet.agent.model_debug import print_offline_model_line
 from emet.agent.prompt import DEFAULT_AGENT_NAME
 from emet.audio import AudioRecorder
