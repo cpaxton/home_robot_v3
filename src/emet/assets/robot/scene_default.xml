@@ -1,5 +1,6 @@
 <mujoco model="default_scene">
   <!-- Scene only: floor, table, blue cube (object1), red cylinder (object2). No robot; merge with robot MJCF for rby1/galaxea. -->
+  <!-- Explicit contype/conaffinity so merged robot files cannot override the main geom default (e.g. innate_mars disables collisions for arm meshes). -->
   <statistic center="0 0 .75" extent="1.2" meansize="0.05"/>
 
   <visual>
@@ -17,17 +18,17 @@
 
   <worldbody>
     <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
-    <geom name="floor" size="0 0 0.05" type="plane" material="floor"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="floor" contype="1" conaffinity="1"/>
     <body name="table" pos="0 -1 .24">
-      <geom type="box" size=".6 .5 .24" mass="1" material="table_mat"/>
+      <geom type="box" size=".6 .5 .24" mass="1" material="table_mat" contype="1" conaffinity="1"/>
     </body>
     <body name="object1" pos="-.02 -0.55 .6">
       <freejoint/>
-      <geom type="box" size=".02 .04 .04" mass=".5" rgba=".2 .2 .5 1"/>
+      <geom type="box" size=".02 .04 .04" mass=".5" rgba=".2 .2 .5 1" contype="1" conaffinity="1"/>
     </body>
     <body name="object2" pos=".08 -0.55 .6">
       <freejoint/>
-      <geom type="cylinder" size=".02 .04 .04" mass=".5" rgba=".8 .2 .2 1"/>
+      <geom type="cylinder" size=".02 .04 .04" mass=".5" rgba=".8 .2 .2 1" contype="1" conaffinity="1"/>
     </body>
   </worldbody>
 </mujoco>
