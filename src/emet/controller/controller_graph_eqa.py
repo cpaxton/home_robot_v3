@@ -92,6 +92,7 @@ class GraphEQAController(DynamemController):
             backend.load(graph_memory_input_path)
 
         self.use_instance_graph = use_instance_graph
+        self.use_sensor_perception = use_sensor_perception
         self._graph_eqa_use_instance_graph = self.use_instance_graph
         self._graph_eqa_use_sensor_perception = self.use_sensor_perception
         if graph_instance_dedup_xy_m is not None:
@@ -105,7 +106,6 @@ class GraphEQAController(DynamemController):
                 parameters.get("graph_instance_dedup_xy_m", DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M)
             )
 
-        self.use_sensor_perception = use_sensor_perception
         dev = self.device if self.device in ("cuda", "mps") else "cuda"
         self.sensor_builder = SensorGraphBuilder(
             perception_client=perception_client,
