@@ -163,6 +163,7 @@ install/
 # MuJoCo / sim runtime artifacts
 MUJOCO_LOG.TXT
 **/stretch_temp_abs.xml
+molmo_videos/
 
 # Partial downloads / caches
 *.partial
