@@ -171,6 +171,9 @@ def test_innate_mars_head_stereo_cameras_match_urdf():
     np.testing.assert_allclose(pr[1] - pl[1], -0.06, rtol=0, atol=1e-5)
     np.testing.assert_allclose(np.linalg.norm(pr - pl), 0.06, rtol=0, atol=1e-5)
 
+    np.testing.assert_allclose(float(model.cam_pos[lid][0]), float(model.cam_pos[rid][0]), rtol=0, atol=1e-9)
+    np.testing.assert_allclose(float(model.cam_pos[lid][0]), 0.05827, rtol=0, atol=1e-5)
+
     Rl = np.asarray(data.cam_xmat[lid]).reshape(3, 3)
     Rr = np.asarray(data.cam_xmat[rid]).reshape(3, 3)
     np.testing.assert_allclose(Rl, Rr, atol=1e-6)
@@ -187,6 +190,38 @@ def test_innate_mars_head_stereo_cameras_match_urdf():
     # Same OpenCV camera→world rotation from MuJoCo cam_xmat + diag(1,-1,-1) as RobosuiteZmqServer._camera_pose_world.
     D = np.diag([1.0, -1.0, -1.0])
     np.testing.assert_allclose(Rl @ D, Rr @ D, atol=1e-6)
+
+
+def test_head_stereo_center_rays_miss_head_geom():
+    """head_left used to intersect head_geom within ~cm (black wedge); both eyes should sight past shell first."""
+    pytest.importorskip("mujoco")
+    import mujoco
+    import numpy as np
+
+    from emet.simulation.mujoco_server import _load_default_scene_with_robot
+
+    model = _load_default_scene_with_robot("innate_mars")
+    assert model is not None
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+
+    hid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "head_geom")
+    assert hid >= 0
+
+    def prim_hit(name: str) -> tuple[int, float]:
+        cid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, name)
+        R = np.asarray(data.cam_xmat[cid]).reshape(3, 3)
+        pos = np.asarray(data.cam_xpos[cid], dtype=np.float64).ravel()
+        look = R @ np.array([0.0, 0.0, -1.0], dtype=np.float64)
+        look /= np.linalg.norm(look)
+        gidbuf = np.zeros(1, dtype=np.int32)
+        d = mujoco.mj_ray(model, data, pos + 6e-4 * look, look, None, 1, -1, gidbuf)
+        return int(gidbuf[0]) if d >= 0 else -1, float(d)
+
+    for cam in ("head_left", "head_right"):
+        gid, dist = prim_hit(cam)
+        assert gid != hid, (cam, gid, dist)
+        assert dist > 0.1, (cam, dist)
 
 
 def test_innate_mars_camera_arm_table_aim_matches_head_at_default_pose():

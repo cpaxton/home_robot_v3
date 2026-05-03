@@ -119,16 +119,18 @@
               <!-- Visual alignment with base.STL neck opening: joint_head origin matches URDF, but the torso
                    mesh “neck” rim centroid sits ~(+40 mm, +42 mm) in base_link XY relative to the head link
                    origin at rest. Shift only this geom (cameras stay on URDF head frame). -->
-              <geom name="head_geom" class="visual" type="mesh" mesh="head_mesh" material="matt_black" pos="0.0396 0.0517 -0.023" euler="-1.5708 0 0"/>
+              <!-- Pulled −X (−head “out the face”) vs older offset so STL shell does not wedge into the narrow
+                   left-camera frustum: center-ray tests otherwise hit head_geom ~27 mm out while head_right clears. -->
+              <geom name="head_geom" class="visual" type="mesh" mesh="head_mesh" material="matt_black" pos="0.0066 0.0517 -0.023" euler="-1.5708 0 0"/>
               <!-- Head stereo: positions from maurice.urdf fixed_head_camera_{left,right} — same X/Z, 60 mm baseline
                    on head Y (left +0.0297 m, right −0.0303 m; intentionally not ±0.03). Optics share one quat below.
                    Default ``scene_environment.xml`` places the work table along **−world Y** from the robot origin
                    (+base_link X faces empty space perpendicular to the table). ``camera_base`` looks ~+base X —
                    visually “pointed sideways” toward the arm vs the tabletop. Compose **Rz_head(−π/2) · R_camera_base**
                    so MuJoCo −Z sights along **−Y** (toward table) with the same slight downward pitch as the base RGB. -->
-              <camera name="head_left" pos="0.04327 0.0297 -0.000275" mode="fixed" fovy="80"
+              <camera name="head_left" pos="0.05827 0.0297 -0.000275" mode="fixed" fovy="80"
                       quat="0 0 -0.64278764 -0.76604442"/>
-              <camera name="head_right" pos="0.04327 -0.0303 -0.000275" mode="fixed" fovy="80"
+              <camera name="head_right" pos="0.05827 -0.0303 -0.000275" mode="fixed" fovy="80"
                       quat="0 0 -0.64278764 -0.76604442"/>
             </body>
           </body>

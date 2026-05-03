@@ -48,7 +48,9 @@ Use **`emet preview-cameras`** (see [CLI: preview-cameras](../cli.md#emet-previe
 
 **Session metadata:** Messages include schema v1 ``emet_session`` (see [zmq_session_metadata](../zmq_session_metadata.md)): ``runtime_kind`` = ``innate_mars_ros2_bridge``, stereo/camera/dof capabilities, and ``is_simulation: false``.
 
-**Sim cameras (MuJoCo):** ``RobotSpec.camera_names`` are ``head_left``, ``head_right``, ``camera_arm`` (wrist), matching named cameras in the MJCF after URDF alignment. An extra ``camera_base`` exists for debugging. Primary ZMQ RGB uses the first name (head left). ``emet serve mujoco`` merges ``scene_environment.xml`` with the robot and, when a ``meshes/`` directory exists, injects an absolute ``meshdir`` in the merge wrapper so the same STL files load as for the standalone MJCF. Stereo head cameras use fixed ``quat`` in MJCF (ROS-style mounting); base and head meshes keep an extra roll vs URDF for STL alignment.
+**Sim cameras (MuJoCo):** ``RobotSpec.camera_names`` are ``head_left``, ``head_right``, ``camera_arm`` (wrist). An extra ``camera_base`` exists for debugging. Primary ZMQ RGB uses the first list entry (``head_left``). Stereo cameras share identical ``fovy`` and quat in MJCF; left‑only black wedges were **self‑occlusion** from ``head.STL`` asymmetric to the baseline, not mismatched ``fov``. The mesh was shifted **`−X`** in the head frame and both cameras bumped **`+X`** (sim‑visual only) so neither center ray hits ``head_geom`` first; expect only **parallax** differences plus shared wide‑angle (**80°**) edge stretching—lower ``fovy`` on **both** MJCF cameras equally if you want less barrel‑like framing.
+
+``emet serve mujoco`` merges ``scene_environment.xml`` with the robot and, when a ``meshes/`` directory exists, injects an absolute ``meshdir`` in the merge wrapper so the same STL files load as for the standalone MJCF. Base and head meshes keep an extra roll vs URDF where STLs disagree with MuJoCo’s mesh convention.
 
 ## Debugging URDF vs MuJoCo
 
