@@ -67,7 +67,7 @@ def apply_head_to_robosuite(
         return n
 
     if spec.name == "innate_mars":
-        # Single hinge `joint_head`; Stretch-style tilt = nod (+X base_link so gaze pitches vs −Y table gaze).
+        # Single hinge `joint_head`; Stretch-style tilt = URDF nominal nod (**−base Y** hinge; REP optics +**X**).
         if _set_ctrl_clipped(model, data, "joint_head", float(tilt)):
             return 1
         logger.debug(

@@ -95,11 +95,10 @@
                       
                       <body name="arm_camera_link" pos="0.03378 0 0.05052">
                         <inertial pos="0 0 0" mass="0.01" diaginertia="1e-4 1e-4 1e-4"/>
-                        <!-- EE cam: URDF joint has rpy="0 0.43633 0" pitch on link5→arm_camera_link; that alone puts
-                             MuJoCo −Z roughly along −world X at rest—parallel to the default table (−world Y),
-                             which reads as “blocked / wrong hemisphere” beside head_rgb. Compose an extra fixed
-                             rotation (wxyz below) so at **default mujoco qpos** the −Z axis matches head stereo
-                             (+same slight downward pitch). Real hardware aim still follows link5 FK. -->
+                        <!-- EE cam: URDF pitch on link5→arm_camera_link leaves MuJoCo −Z near −world **X** (∥ table edge).
+                             Compose the extra fixed rotation (wxyz) so at default qpos −Z aims **−world Y** (tablefront)
+                             with modest downward pitch — **not** the head REP stereo (+**X**) axis. Real hardware aim
+                             follows link5 FK + whatever optical frame the bridge uses. -->
                         <camera name="camera_arm" mode="fixed" fovy="80" quat="0.75312453 -0.63194657 0.1175563 0.14009814"/>
                       </body>
                     </body>
@@ -110,28 +109,25 @@
 
             <!-- Same subtree as URDF joint_head + head cameras; placed after arm like upstream maurice.mjcf link order + URDF joint ordering -->
             <body name="head" pos="-0.040751 -0.0002 0.25882">
-              <!-- Nominal nod axis: maurice.urdf lists joint_head axis xyz="0 -1 0" in base_link — that rotates the
-                   head rigidly about base ±Y; with head_left/right optically rotated toward −world Y, ω×look
-                   mostly slews gaze in XY (looks like sideways roll / shake). Use +base_link X so +q bends
-                   look toward −Z (physical chin‑up/down vs default table gaze). Limits kept from URDF. -->
-              <joint name="joint_head" type="hinge" axis="1 0 0" limited="true" range="-0.1745 0.5236" damping="5"/>
+              <!-- Nominal nod: match maurice.urdf joint_head axis "0 −1 0"; with REP stereo sight along +head **X**, this
+                   axis is ⟂ lk so nod pitches gaze (toward −Z/+Z world at default yaw), not −Y slewing around +X lk. -->
+              <joint name="joint_head" type="hinge" axis="0 -1 0" limited="true" range="-0.1745 0.5236" damping="5"/>
               <inertial pos="0 0 0" mass="0.148" diaginertia="0.0002 0.0001 0.0002"/>
-              <!-- Visual alignment with base.STL neck opening: joint_head origin matches URDF, but the torso
-                   mesh “neck” rim centroid sits ~(+40 mm, +42 mm) in base_link XY relative to the head link
-                   origin at rest. Shift only this geom (cameras stay on URDF head frame). -->
-              <!-- Pulled −X (−head “out the face”) vs older offset so STL shell does not wedge into the narrow
-                   left-camera frustum: center-ray tests otherwise hit head_geom ~27 mm out while head_right clears. -->
-              <geom name="head_geom" class="visual" type="mesh" mesh="head_mesh" material="matt_black" pos="0.0066 0.0517 -0.023" euler="-1.5708 0 0"/>
+              <!-- Nested ``head_visual`` so STL ``pos`` is literal head-frame; Euler stays on ``head_geom``.
+                   **+Y** shifts mesh toward ``head_left``; **−Z** lowers mesh on the neck. -->
+              <body name="head_visual" pos="0 0.015 -0.005">
+                <inertial pos="0 0 0" mass="1e-6" diaginertia="1e-9 1e-9 1e-9"/>
+                <geom name="head_geom" class="visual" type="mesh" mesh="head_mesh" material="matt_black" pos="0 0 0" euler="-1.5708 0 0"/>
+              </body>
               <!-- Head stereo: positions from maurice.urdf fixed_head_camera_{left,right} — same X/Z, 60 mm baseline
                    on head Y (left +0.0297 m, right −0.0303 m; intentionally not ±0.03). Optics share one quat below.
-                   Default ``scene_environment.xml`` places the work table along **−world Y** from the robot origin
-                   (+base_link X faces empty space perpendicular to the table). ``camera_base`` looks ~+base X —
-                   visually “pointed sideways” toward the arm vs the tabletop. Compose **Rz_head(−π/2) · R_camera_base**
-                   so MuJoCo −Z sights along **−Y** (toward table) with the same slight downward pitch as the base RGB. -->
-              <camera name="head_left" pos="0.05827 0.0297 -0.000275" mode="fixed" fovy="80"
-                      quat="0 0 -0.64278764 -0.76604442"/>
-              <camera name="head_right" pos="0.05827 -0.0303 -0.000275" mode="fixed" fovy="80"
-                      quat="0 0 -0.64278764 -0.76604442"/>
+                   URDF ``fixed_*_camera_optical_frame`` rpy="−π/2 0 −π/2" (REP: optical +Z forward) maps optical +Z
+                   to **+head X** (⊥ stereo baseline along head **Y**). MuJoCo camera ``quat`` is the rotation from
+                   head to cam such that −local Z equals that REP forward (+X bump ``0.0601`` vs URDF ``0.04327`` clears ``head_geom``). -->
+              <camera name="head_left" pos="0.0601 0.0297 -0.000275" mode="fixed" fovy="80"
+                      quat="0.5 0.5 -0.5 -0.5"/>
+              <camera name="head_right" pos="0.0601 -0.0303 -0.000275" mode="fixed" fovy="80"
+                      quat="0.5 0.5 -0.5 -0.5"/>
             </body>
           </body>
         </body>

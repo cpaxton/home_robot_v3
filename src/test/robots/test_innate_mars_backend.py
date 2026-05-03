@@ -140,7 +140,7 @@ def test_innate_mars_pinhole_K_chain_identity_ops():
 
 
 def test_innate_mars_head_stereo_cameras_match_urdf():
-    """Stereo: URDF-mounted positions (+60 mm Y baseline); parallel optics; −Y tabletop aim in default scene."""
+    """Stereo: URDF-mounted positions (+60 mm Y baseline); shared optics matching REP optical rpy (⊥ baseline)."""
     pytest.importorskip("mujoco")
     import mujoco
     import numpy as np
@@ -172,7 +172,7 @@ def test_innate_mars_head_stereo_cameras_match_urdf():
     np.testing.assert_allclose(np.linalg.norm(pr - pl), 0.06, rtol=0, atol=1e-5)
 
     np.testing.assert_allclose(float(model.cam_pos[lid][0]), float(model.cam_pos[rid][0]), rtol=0, atol=1e-9)
-    np.testing.assert_allclose(float(model.cam_pos[lid][0]), 0.05827, rtol=0, atol=1e-5)
+    np.testing.assert_allclose(float(model.cam_pos[lid][0]), 0.0601, rtol=0, atol=1e-5)
 
     Rl = np.asarray(data.cam_xmat[lid]).reshape(3, 3)
     Rr = np.asarray(data.cam_xmat[rid]).reshape(3, 3)
@@ -180,12 +180,12 @@ def test_innate_mars_head_stereo_cameras_match_urdf():
     np.testing.assert_allclose(model.cam_fovy[lid], model.cam_fovy[rid])
     np.testing.assert_allclose(float(model.cam_fovy[lid]), 80.0)
 
-    # Head stereo optical axis (~−world Y toward default scene_environment table): not aligned with camera_base (~+base X).
+    # Head REP optical (+Z_forward) aligns with **+world X / +base_link X** here (PIN + maurice.urdf rpy −π/2 0 −π/2).
     look_h = cam_look_world(data, lid)
     look_b = cam_look_world(data, bid)
-    toward_table = np.array([0.0, -1.0, 0.0], dtype=np.float64)
-    assert float(np.dot(look_h, toward_table)) > 0.97
-    assert abs(float(np.dot(look_h, look_b))) < 0.1
+    toward_fwd_x = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+    assert float(np.dot(look_h, toward_fwd_x)) > 0.97
+    assert abs(float(np.dot(look_h, look_b))) > 0.95
 
     # Same OpenCV camera→world rotation from MuJoCo cam_xmat + diag(1,-1,-1) as RobosuiteZmqServer._camera_pose_world.
     D = np.diag([1.0, -1.0, -1.0])
@@ -193,7 +193,7 @@ def test_innate_mars_head_stereo_cameras_match_urdf():
 
 
 def test_head_stereo_center_rays_miss_head_geom():
-    """head_left used to intersect head_geom within ~cm (black wedge); both eyes should sight past shell first."""
+    """Any visible hit along optic axis must not be head_geom in the near wedge (black mesh artifact)."""
     pytest.importorskip("mujoco")
     import mujoco
     import numpy as np
@@ -208,24 +208,25 @@ def test_head_stereo_center_rays_miss_head_geom():
     hid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "head_geom")
     assert hid >= 0
 
-    def prim_hit(name: str) -> tuple[int, float]:
+    def prim_fwd(name: str) -> tuple[int, float]:
         cid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, name)
         R = np.asarray(data.cam_xmat[cid]).reshape(3, 3)
         pos = np.asarray(data.cam_xpos[cid], dtype=np.float64).ravel()
         look = R @ np.array([0.0, 0.0, -1.0], dtype=np.float64)
         look /= np.linalg.norm(look)
         gidbuf = np.zeros(1, dtype=np.int32)
-        d = mujoco.mj_ray(model, data, pos + 6e-4 * look, look, None, 1, -1, gidbuf)
-        return int(gidbuf[0]) if d >= 0 else -1, float(d)
+        dist = mujoco.mj_ray(model, data, pos + 6e-4 * look, look, None, 1, -1, gidbuf)
+        return int(gidbuf[0]) if dist >= 0 else -1, float(dist)
 
     for cam in ("head_left", "head_right"):
-        gid, dist = prim_hit(cam)
-        assert gid != hid, (cam, gid, dist)
-        assert dist > 0.1, (cam, dist)
+        gid, dist = prim_fwd(cam)
+        if dist >= 0:
+            assert gid != hid, (cam, gid, dist)
+            assert dist > 0.1, (cam, dist)
 
 
-def test_innate_mars_camera_arm_table_aim_matches_head_at_default_pose():
-    """Arm RGB should not stare along −world X (∥ table); align EE −Z with head stereo at default merged qpos."""
+def test_innate_mars_camera_arm_table_aim_and_head_rep_optics():
+    """Wrist EE cam (~−world Y tabletop); head stereo REP optics along +base_link X — intentionally different rigs."""
     pytest.importorskip("mujoco")
     import mujoco
     import numpy as np
@@ -245,11 +246,12 @@ def test_innate_mars_camera_arm_table_aim_matches_head_at_default_pose():
 
     look_h = cam_look_world(data, model, "head_left")
     look_a = cam_look_world(data, model, "camera_arm")
+    toward_fwd_x = np.array([1.0, 0.0, 0.0], dtype=np.float64)
     toward_table = np.array([0.0, -1.0, 0.0], dtype=np.float64)
 
-    assert float(np.dot(look_h, toward_table)) > 0.96
+    assert float(np.dot(look_h, toward_fwd_x)) > 0.96
     assert float(np.dot(look_a, toward_table)) > 0.96
-    assert float(np.dot(look_h, look_a)) > 0.999
+    assert abs(float(np.dot(look_h, look_a))) < 0.15
 
 
 def test_innate_mars_head_nod_montage_sequence_records_varying_images(tmp_path):
@@ -300,7 +302,7 @@ def test_innate_mars_joint_head_hinge_axis_pitches_camera_gaze_not_sideways():
     jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "joint_head")
     assert jid >= 0
     ax = np.asarray(model.jnt_axis[jid]).ravel()
-    np.testing.assert_allclose(ax / np.linalg.norm(ax), np.array([1.0, 0.0, 0.0]), atol=1e-7)
+    np.testing.assert_allclose(ax / np.linalg.norm(ax), np.array([0.0, -1.0, 0.0]), atol=1e-7)
 
     data = mujoco.MjData(model)
     qa = int(model.jnt_qposadr[jid])
