@@ -126,6 +126,46 @@ emet debug-da3-depth --model-id depth-anything/DA3METRIC-LARGE --process-res 504
 
 ---
 
+### `emet preview-cameras [options]`
+
+Build a **labeled horizontal montage** of the robot’s MuJoCo/ZMQ cameras (for Innate Mars: `head_left`, `head_right`, `camera_arm`) to check orientation, stereo wiring, and tabletop aim without running a full agent loop. Implements `emet.app.preview_robot_cameras`; options are passed through (see `emet preview-cameras -h`).
+
+**Modes**
+- **`--source local`** (default) — Load the same **merged** model as `emet serve mujoco` (`scene_environment.xml` + robot MJCF), render with MuJoCo at 640×480, and apply the same RGB postprocess as `RobosuiteZmqServer` (empty `robosuite_rgb_depth_ops` plus optional `EMET_ROBOSUITE_RENDER_FLIPUD`).
+- **`--source zmq`** — Subscribe once on the **full observation** port (default **4401**, same as `GenericZmqClient`), decode JPEG fields, and montage. Requires a running sim or bridge. Newer `RobosuiteZmqServer` builds also attach a third JPEG (`rgb_tertiary`, `camera_name_tertiary`) when the spec lists a distinct third camera.
+
+**Common options:** `--robot`, `--out` (single PNG), `--max-cams`, `--row-height`, `--recv-port` / `--timeout-ms` (ZMQ), `--discord` (post the single montage; needs `DISCORD_TOKEN`, `EMET_DISCORD_CHANNEL`).
+
+**Head nod capture (`--nod`, local only)**
+
+Sweeps the sim **head hinge** (`joint_head` on Innate Mars) and writes **one montage PNG per pose** so you can scrub a nod in the image viewer or ffmpeg. Default motion is a full **bounce** (low → high → low) in exactly `--nod-frames` samples; use `--nod-motion once` for a one-way sweep only.
+
+| Flag | Meaning |
+|------|--------|
+| `--nod-out-dir DIR` | PNG output directory (default: `./robot_cam_nod_<robot>`) |
+| `--nod-joint` | Hinge name (default `joint_head`) |
+| `--nod-low`, `--nod-high` | Joint limits in radians (defaults match URDF ± nod range) |
+| `--nod-frames` | Number of captured poses |
+| `--nod-motion bounce\|once` | `bounce` (default) or single stroke |
+| `--nod-video PATH` | Optional stitched **mp4** (OpenCV `mp4v`) |
+| `--nod-fps` | Frames per second for `--nod-video` |
+
+`--discord` is not supported together with `--nod`. Set `EMET_PREVIEW_CAMERAS_OPENCV=1` (or `EMET_OPENCV_PREVIEW=1`) to open the last frame in an OpenCV window after a successful run.
+
+**Examples:**
+```bash
+emet preview-cameras
+emet preview-cameras --robot innate_mars --out /tmp/mars_cams.png
+emet preview-cameras --source zmq --robot innate_mars --robot-ip 127.0.0.1
+
+emet preview-cameras --nod --nod-out-dir ./nod_caps --nod-frames 41 --nod-video ./nod.mp4
+emet preview-cameras --nod --nod-motion once --nod-low -0.12 --nod-high 0.25 --nod-frames 25
+```
+
+See [Innate Mars](robots/innate_mars.md#camera-diagnostics-and-head-nod-preview) for MJCF head joint and ZMQ image keys.
+
+---
+
 ### `emet sync [options]`
 
 Sync dependencies. Uses `uv sync` if available, otherwise `pip install -e .`.

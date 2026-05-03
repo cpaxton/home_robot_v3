@@ -29,9 +29,20 @@ In **Rerun**, check `world/semantic_memory/pointcloud` for table and props align
 | `rgb`, `camera_K`, `camera_pose` | Primary head camera (JPEG bytes decoded in client) |
 | `depth` | Optional; omit on real Mars (`allow_missing_depth` + DA3) |
 | `rgb_right`, `camera_K_right`, `camera_pose_right` | Second eye for stereo DA3 (JPEG); MuJoCo sim publishes these for `head_left`/`head_right` pairs |
+| `rgb_tertiary`, `camera_name_tertiary`, `camera_K_tertiary`, `camera_pose_tertiary` | Optional third camera (JPEG + intrinsics/pose); **MuJoCo sim** when MJCF exposes a distinct third cam (see note below); typically absent on real bridge |
 | `gps`, `compass` | Base pose for voxel exploration frame |
 
 Same schema as other Emet robots; see [zmq_session_metadata](../zmq_session_metadata.md) for session envelopes.
+
+**Sim tertiary camera (`rgb_tertiary`, …):** See table row above. The Mars ROS bridge normally omits these; they appear when running **`emet serve mujoco --robot innate_mars`** with a current `RobosuiteZmqServer` that attaches the third MJCF cam (`camera_arm`).
+
+### Camera diagnostics and head nod preview
+
+Use **`emet preview-cameras`** (see [CLI: preview-cameras](../cli.md#emet-preview-cameras-options)) for a quick **montage** from either the merged default scene (`--source local`) or one live ZMQ frame (`--source zmq`, port 4401).
+
+- **Local render** matches `RobosuiteZmqServer` RGB handling (same table scene as `emet serve mujoco --robot innate_mars`).
+- **`--nod`** (local only): sweeps **`joint_head`** (URDF hinge on axis `0 −1 0`; added in Emet’s MJCF for sim) through the nod range and writes **`montage_0000.png` …** plus optional **`--nod-video`**. Default motion is **`bounce`** (down–up–down) in `--nod-frames` steps; use **`--nod-motion once`** for a single stroke.
+- **`head_to`** actions in sim map Stretch-style **`tilt`** to **`joint_head`** (**`pan`** is ignored until a second head DOF exists in MJCF).
 
 **Agent / DynaMem:** `emet run agent --robot innate_mars` and `emet run dynamem` pass `allow_missing_depth` for this robot so RGB-only ZMQ messages are accepted.
 
