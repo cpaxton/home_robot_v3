@@ -189,6 +189,34 @@ def test_innate_mars_head_stereo_cameras_match_urdf():
     np.testing.assert_allclose(Rl @ D, Rr @ D, atol=1e-6)
 
 
+def test_innate_mars_camera_arm_table_aim_matches_head_at_default_pose():
+    """Arm RGB should not stare along −world X (∥ table); align EE −Z with head stereo at default merged qpos."""
+    pytest.importorskip("mujoco")
+    import mujoco
+    import numpy as np
+
+    from emet.simulation.mujoco_server import _load_default_scene_with_robot
+
+    def cam_look_world(d, m, name: str) -> np.ndarray:
+        cid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_CAMERA, name)
+        R = np.asarray(d.cam_xmat[cid]).reshape(3, 3)
+        v = R @ np.array([0.0, 0.0, -1.0], dtype=np.float64)
+        return v / np.linalg.norm(v)
+
+    model = _load_default_scene_with_robot("innate_mars")
+    assert model is not None
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+
+    look_h = cam_look_world(data, model, "head_left")
+    look_a = cam_look_world(data, model, "camera_arm")
+    toward_table = np.array([0.0, -1.0, 0.0], dtype=np.float64)
+
+    assert float(np.dot(look_h, toward_table)) > 0.96
+    assert float(np.dot(look_a, toward_table)) > 0.96
+    assert float(np.dot(look_h, look_a)) > 0.999
+
+
 def test_get_robot_spec_and_runtime_notes_innate_mars():
     from emet.robots import format_robot_runtime_notes, get_robot_spec
 

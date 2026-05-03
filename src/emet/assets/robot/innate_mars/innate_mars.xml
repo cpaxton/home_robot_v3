@@ -95,8 +95,12 @@
                       
                       <body name="arm_camera_link" pos="0.03378 0 0.05052">
                         <inertial pos="0 0 0" mass="0.01" diaginertia="1e-4 1e-4 1e-4"/>
-                        <!-- Orientation from URDF fixed_arm_camera_link rpy="0 0.43633 0" (pitch about Y) → quat wxyz -->
-                        <camera name="camera_arm" mode="fixed" fovy="80" quat="0.976296 0 0.216438 0"/>
+                        <!-- EE cam: URDF joint has rpy="0 0.43633 0" pitch on link5→arm_camera_link; that alone puts
+                             MuJoCo −Z roughly along −world X at rest—parallel to the default table (−world Y),
+                             which reads as “blocked / wrong hemisphere” beside head_rgb. Compose an extra fixed
+                             rotation (wxyz below) so at **default mujoco qpos** the −Z axis matches head stereo
+                             (+same slight downward pitch). Real hardware aim still follows link5 FK. -->
+                        <camera name="camera_arm" mode="fixed" fovy="80" quat="0.75312453 -0.63194657 0.1175563 0.14009814"/>
                       </body>
                     </body>
                   </body>
@@ -111,7 +115,8 @@
                    mesh “neck” rim centroid sits ~(+40 mm, +42 mm) in base_link XY relative to the head link
                    origin at rest. Shift only this geom (cameras stay on URDF head frame). -->
               <geom name="head_geom" class="visual" type="mesh" mesh="head_mesh" material="matt_black" pos="0.0396 0.0517 -0.023" euler="-1.5708 0 0"/>
-              <!-- Head stereo: positions match maurice.urdf fixed_head_camera_{left,right} (60 mm baseline on Y).
+              <!-- Head stereo: positions from maurice.urdf fixed_head_camera_{left,right} — same X/Z, 60 mm baseline
+                   on head Y (left +0.0297 m, right −0.0303 m; intentionally not ±0.03). Optics share one quat below.
                    Default ``scene_environment.xml`` places the work table along **−world Y** from the robot origin
                    (+base_link X faces empty space perpendicular to the table). ``camera_base`` looks ~+base X —
                    visually “pointed sideways” toward the arm vs the tabletop. Compose **Rz_head(−π/2) · R_camera_base**
