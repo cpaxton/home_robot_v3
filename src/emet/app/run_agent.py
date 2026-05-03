@@ -354,6 +354,12 @@ def main(
             print(colored("Starting MuJoCo sim subprocess (--start-sim)…", "cyan"))
             spawn_mujoco_server_subprocess(sim_cfg)
             print(colored("Sim is up; connecting agent.", "green"))
+        print(
+            colored(
+                f"Robot backend: {robot} (from --robot or YAML `{agent_config}`; must match `emet serve mujoco --robot`).",
+                "cyan",
+            )
+        )
         run_agent_with_robot(
             robot_ip=robot_effective,
             robot=robot,

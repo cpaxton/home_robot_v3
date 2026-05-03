@@ -1559,7 +1559,8 @@ class StretchZmqClient(AbstractRobotClient):
                 output["depth"] = depth
 
                 if camera is None:
-                    camera = Camera.from_K(output["camera_K"], output["rgb_height"], output["rgb_width"])
+                    # Camera.from_K(K, width, height): columns first (matches rgb_width / rgb_height keys).
+                    camera = Camera.from_K(output["camera_K"], output["rgb_width"], output["rgb_height"])
 
                 output["xyz"] = camera.depth_to_xyz(output["depth"])
 
@@ -1595,11 +1596,32 @@ class StretchZmqClient(AbstractRobotClient):
             color_image = None
             depth_image = None
 
-        # Get head information from the message as well
-        head_color_image = compression.from_jpg(message["head_cam/color_image"])
-        head_depth_image = compression.from_jp2(message["head_cam/depth_image"]) / 1000
-        message["head_cam/image_scaling"]
-        joint = message["robot/config"]
+        # Head cameras: Stretch (`head_cam/*` + `robot/config`) vs MuJoCo robosuite servo (`head_color_image`, …).
+        if "head_cam/color_image" in message:
+            head_color_image = compression.from_jpg(message["head_cam/color_image"])
+            head_depth_image = compression.from_jp2(message["head_cam/depth_image"]) / 1000
+            joint = message["robot/config"]
+            depth_scaling = message["head_cam/depth_scaling"]
+            camera_K_head = message["head_cam/depth_camera_K"]
+            camera_pose_head = message["head_cam/pose"]
+            ee_pose_val = message["ee/pose"]
+        elif "head_color_image" in message:
+            head_color_image = compression.from_jpg(message["head_color_image"])
+            raw_hd = message.get("head_depth_image")
+            head_depth_image = compression.from_jp2(raw_hd) / 1000 if raw_hd is not None else None
+            jp = message.get("joint_positions")
+            if jp is None:
+                return
+            joint = np.asarray(jp, dtype=np.float64)
+            depth_scaling = float(message.get("head_cam/depth_scaling", 1.0))
+            camera_K_head = message.get("head_camera_K") or message.get("head_cam/depth_camera_K")
+            camera_pose_head = message.get("head_cam/pose") or message.get("camera_pose")
+            ee_pose_val = message.get("ee/pose")
+            if ee_pose_val is None:
+                ee_pose_val = np.eye(4, dtype=np.float64)
+        else:
+            return
+
         with self._servo_lock and self._state_lock:
             observation = Observations(
                 gps=self._state["base_pose"][:2],
@@ -1620,10 +1642,10 @@ class StretchZmqClient(AbstractRobotClient):
                 observation.ee_camera_pose = message["ee_cam/pose"]
                 observation.ee_depth_scaling = message["ee_cam/image_scaling"]
 
-            observation.ee_pose = message["ee/pose"]
-            observation.depth_scaling = message["head_cam/depth_scaling"]
-            observation.camera_K = message["head_cam/depth_camera_K"]
-            observation.camera_pose = message["head_cam/pose"]
+            observation.ee_pose = ee_pose_val
+            observation.depth_scaling = depth_scaling
+            observation.camera_K = camera_K_head
+            observation.camera_pose = camera_pose_head
             if "is_simulation" in message:
                 observation.is_simulation = message["is_simulation"]
             else:

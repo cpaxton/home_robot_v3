@@ -213,7 +213,8 @@ class DynamemController(BaseController):
                 raise RuntimeError(
                     "Robot ZMQ client did not connect (no full observation + state within the startup timeout). "
                     "Start the sim first with the same robot and ports, e.g. "
-                    "`emet serve mujoco` (Stretch) or `emet serve mujoco --robot rby1` / MolmoSpaces merge, "
+                    "`emet serve mujoco` (Stretch), `emet serve mujoco --robot innate_mars`, or "
+                    "`emet serve mujoco --robot rby1` / MolmoSpaces merge, "
                     "then run the agent. Match `--port-offset` on both sides and use the same `--robot` as serve. "
                     "If the sim is already running, check server logs: missing camera/GL errors can make "
                     "observations None so nothing is published on the observation socket."
