@@ -115,7 +115,7 @@ def test_default_scene_with_rby1_loads_and_robot_can_be_commanded():
 
     model = _load_default_scene_with_robot("rby1")
     if model is None:
-        pytest.skip("scene_default.xml or rby1 MJCF not found (run from repo with assets)")
+        pytest.skip("scene_environment.xml or rby1 MJCF not found (run from repo with assets)")
 
     spec = Rby1Backend().get_spec()
     server = RobosuiteZmqServer(

@@ -5,7 +5,7 @@ These meshes and `innate_mars.xml` are derived from the **Maurice** simulation p
 ## Modifications in this tree
 
 - `meshdir` in the MJCF was changed from a developer-specific absolute path to `meshdir="meshes"` (relative to this directory).
-- The ground-plane geom was renamed from `floor` to `maurice_floor` so the model can be merged with `scene_default.xml` without duplicate default geom names.
+- The MJCF is **robot-only** for merge: no duplicate scene floor or world lights in `innate_mars.xml`; compose with `scene_environment.xml` (or MolmoSpaces scenes) for the room. Legacy `scene_default.xml` is a thin alias of `scene_environment.xml`.
 - **Body order** under `base_link` matches the upstream Maurice MJCF: `link1` (full arm) first, then the **`head`** subtree. Upstream’s `maurice.mjcf` has no head; the head block is an Emet extension from `maurice.urdf` and is listed after the arm to mirror Innate’s arm-first MJCF and the URDF’s joint ordering.
 
 ## Innate OS Docker simulation (reference)
@@ -28,4 +28,4 @@ Geometries and camera placements in ``innate_mars.xml`` were checked against ``m
 - **Base / head meshes:** URDF also uses identity ``rpy`` on ``base`` and ``head`` visuals, but the exported STL frames still need a single roll fix in MuJoCo; ``base_geom`` and ``head_geom`` keep ``euler="-1.5708 0 0"`` (same convention as many ROS→MuJoCo pipelines).
 - **Arm / wrist camera:** ``arm_camera_link`` pose and ``camera_arm`` orientation match URDF ``fixed_arm_camera_link``.
 - **Gripper equality:** Matches URDF mimic on ``joint6M``: both hinges use axis ``(0,0,-1)``, with ``polycoef="0 -1 0 0 0"`` so ``q_joint6M = -q_joint6`` (URDF ``multiplier="-1"``). The legacy MJCF used axis ``+Z`` on ``joint6M`` and ``polycoef`` ``+1`` to fake the same motion—confusing for URDF comparisons.
-- **Merge wrapper:** When merging with ``scene_default.xml``, an absolute ``meshdir`` may be injected (see ``mujoco_server``).
+- **Merge wrapper:** When merging with ``scene_environment.xml`` (or the deprecated ``scene_default.xml`` shim), an absolute ``meshdir`` may be injected (see ``mujoco_server``).

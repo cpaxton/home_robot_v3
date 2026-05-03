@@ -606,14 +606,14 @@ def kill_mujoco_server(port: int, kill_all: bool) -> None:
 @click.option(
     "--merge-scene",
     is_flag=True,
-    help="Merge scene_default.xml (table, objects) the same way as emet serve mujoco.",
+    help="Merge scene_environment.xml (table, objects) the same way as emet serve mujoco.",
 )
 @click.option(
-    "--show-viewer-ui",
+    "--no-extras",
     is_flag=True,
-    help="Show MuJoCo viewer left/right control panels.",
+    help="With innate_mars only: load robot MJCF alone (no grid floor / extra lights). Ignored with --merge-scene.",
 )
-def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool) -> None:
+def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool, no_extras: bool) -> None:
     """Open the native MuJoCo viewer to inspect a robot model (requires ``uv sync --extra sim``).
 
     Uses ``launch_passive``: close the window or Ctrl+C to exit. Needs a desktop ``DISPLAY`` (or X forwarding).
@@ -621,6 +621,7 @@ def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool) -> None:
     Examples:
       emet view-mujoco --robot innate_mars
       emet view-mujoco --robot innate_mars --merge-scene
+      emet view-mujoco --robot innate_mars --no-extras
     """
     import time
 
@@ -636,7 +637,7 @@ def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool) -> None:
         model = _load_default_scene_with_robot(robot_key)
         if model is None:
             click.echo(
-                "Could not build merged model (scene_default.xml or robot MJCF missing).",
+                "Could not build merged model (scene_environment.xml or robot MJCF missing).",
                 err=True,
             )
             sys.exit(1)
@@ -648,7 +649,34 @@ def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool) -> None:
                 err=True,
             )
             sys.exit(1)
-        model = mujoco.MjModel.from_xml_path(str(p))
+        use_extras = robot_key == "innate_mars" and not no_extras
+        extras_p = p.parent / "innate_mars_visual_extras.xml" if use_extras else None
+        if use_extras and extras_p is not None and extras_p.is_file():
+            import os
+            import tempfile
+
+            robot_abs = str(p.resolve())
+            extras_abs = str(extras_p.resolve())
+            wrapper = (
+                "<?xml version=\"1.0\"?>\n"
+                '<mujoco model="innate_mars_view">\n'
+                f'  <include file="{robot_abs}"/>\n'
+                f'  <include file="{extras_abs}"/>\n'
+                "</mujoco>\n"
+            )
+            fd, tmp = tempfile.mkstemp(suffix=".xml", prefix="view_", dir=str(p.parent))
+            os.close(fd)
+            tmp_path = Path(tmp)
+            try:
+                tmp_path.write_text(wrapper)
+                model = mujoco.MjModel.from_xml_path(str(tmp_path))
+            finally:
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        else:
+            model = mujoco.MjModel.from_xml_path(str(p))
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
     try:

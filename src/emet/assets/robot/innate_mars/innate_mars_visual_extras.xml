@@ -1,0 +1,15 @@
+<mujoco model="innate_mars_visual_extras">
+  <!-- Optional: grid floor + extra lights for standalone view-mujoco. Geoms use explicit contype 0
+       (no default class) so merging with robot's `visual` class does not duplicate MJCF default names. -->
+  <asset>
+    <texture type="2d" name="grid" builtin="checker" rgb1=".1 .2 .3" rgb2=".2 .3 .4" width="512" height="512" mark="edge" markrgb=".8 .8 .8"/>
+    <material name="grid_material" texture="grid" texrepeat="5 5" texuniform="true" reflectance=".0"/>
+  </asset>
+  <worldbody>
+    <light name="innate_spotlight" mode="targetbody" target="base_link" diffuse=".8 .8 .8" specular="0.3 0.3 0.3" pos="0 -1 2" cutoff="30"/>
+    <light name="innate_top" pos="0 0 10" dir="0 0 -1" diffuse=".7 .7 .7" specular="0.3 0.3 0.3"/>
+    <light name="innate_side1" pos="2 0 1" dir="-1 0 -0.5" diffuse=".5 .5 .5" specular="0.2 0.2 0.2"/>
+    <light name="innate_side2" pos="-2 0 1" dir="1 0 -0.5" diffuse=".5 .5 .5" specular="0.2 0.2 0.2"/>
+    <geom name="innate_viewer_floor" type="plane" pos="0 0 0" size="10 10 0.1" material="grid_material" contype="0" conaffinity="0"/>
+  </worldbody>
+</mujoco>

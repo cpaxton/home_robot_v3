@@ -29,7 +29,7 @@ from emet.utils.assets import get_mujoco_models_path, get_robot_mjcf_path
 from emet.utils.port_utils import kill_processes_on_port
 
 default_scene_xml_path = str(get_mujoco_models_path() / "scene.xml")
-DEFAULT_SCENE_NO_ROBOT = "scene_default.xml"  # floor, table, blue cube, red cylinder
+DEFAULT_SCENE_NO_ROBOT = "scene_environment.xml"  # canonical table room (wood floor texture); scene_default.xml aliases this
 
 # Stretch-specific server (MujocoZmqServer) and motion/pinocchio deps are imported only when
 # --robot stretch, so that emet serve mujoco --robot rby1 works without pinocchio/hppfcl.
@@ -43,7 +43,7 @@ def _get_stretch_server():
 
 
 def _load_default_scene_with_robot(robot_key: str):
-    """Merge scene_default.xml (floor, table, blue cube, red cylinder) with robot MJCF; return MjModel or None."""
+    """Merge scene_environment.xml (canonical table room, Stretch materials) with robot MJCF; return MjModel or None."""
     import os
     import tempfile
 
@@ -74,7 +74,8 @@ def _load_default_scene_with_robot(robot_key: str):
         f'  <include file="{robot_abs}"/>\n'
         "</mujoco>\n"
     )
-    # Write merged file into robot's dir so the included robot XML's mesh paths resolve consistently next to meshes/.
+    # Write merged file into robot's dir so meshdir="meshes" in the robot MJCF resolves, and relative
+    # assets in scene_environment.xml resolve consistently (same directory as scene.xml when merged from models_path).
     robot_dir = str(robot_path.parent)
     fd, path = tempfile.mkstemp(suffix=".xml", prefix="scene_robot_", dir=robot_dir)
     try:
@@ -460,7 +461,7 @@ def main(
                 scene_model = _load_default_scene_with_robot(robot_key)
                 if scene_model is None:
                     logger.error(
-                        "Default scene with robot not found (scene_default.xml or robot MJCF missing). "
+                        "Default scene with robot not found (scene_environment.xml or robot MJCF missing). "
                         "Use --scene_path with a merged MJCF, --use-robocasa for Robocasa-generated scenes, "
                         "or run from repo root with assets."
                     )

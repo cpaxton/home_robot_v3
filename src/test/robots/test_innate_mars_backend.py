@@ -33,7 +33,7 @@ def test_merge_scene_loads():
 
     from emet.utils.assets import get_mujoco_models_path
 
-    scene = get_mujoco_models_path() / "scene_default.xml"
+    scene = get_mujoco_models_path() / "scene_environment.xml"
     robot = get_robot_mjcf_path("innate_mars")
     assert scene.exists() and robot is not None
     import os

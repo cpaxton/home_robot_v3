@@ -1,7 +1,7 @@
 <mujoco model="maurice_bot">
   <compiler angle="radian" coordinate="local" meshdir="meshes" eulerseq="zyx"/>
   <!-- Robot meshes: visual-only contact (external / simplified collision elsewhere). Use class `visual`
-       so merged scene_default.xml geoms keep their own collision masks (global geom default must not be zeroed). -->
+       so merged scene_environment.xml geoms keep their own collision masks (global geom default must not be zeroed). -->
   <default>
     <default class="visual">
       <geom contype="0" conaffinity="0"/>
@@ -20,27 +20,13 @@
     <mesh name="link61_mesh" file="link61.STL" scale="1 1 1"/>
     <mesh name="link62_mesh" file="link62.STL" scale="1 1 1"/>
     <mesh name="head_mesh" file="head.STL" scale="1 1 1"/>
-    
-    <!-- Add grid texture and material -->
-    <texture type="2d" name="grid" builtin="checker" rgb1=".1 .2 .3" rgb2=".2 .3 .4" width="512" height="512" mark="edge" markrgb=".8 .8 .8"/>
-    <material name="grid_material" texture="grid" texrepeat="5 5" texuniform="true" reflectance=".0"/>
-    
-    <!-- New materials -->
+
     <material name="matt_black" rgba="0.05 0.05 0.05 1"/>
     <material name="bright_orange" rgba="1.0 0.5 0.0 1"/>
   </asset>
 
   <worldbody>
-    <!-- Standard lighting setup -->
-    <light name="spotlight" mode="targetbody" target="base_link" diffuse=".8 .8 .8" specular="0.3 0.3 0.3" pos="0 -1 2" cutoff="30"/>
-    <light name="top" pos="0 0 10" dir="0 0 -1" diffuse=".7 .7 .7" specular="0.3 0.3 0.3"/>
-    <light name="side1" pos="2 0 1" dir="-1 0 -0.5" diffuse=".5 .5 .5" specular="0.2 0.2 0.2"/>
-    <light name="side2" pos="-2 0 1" dir="1 0 -0.5" diffuse=".5 .5 .5" specular="0.2 0.2 0.2"/>
-
-    <!-- Ground plane with grid material -->
-    <geom name="maurice_floor" class="visual" type="plane" pos="0 0 0" size="10 10 0.1" material="grid_material"/>
-
-    <!-- Reordering: x and y translations before yaw rotation -->
+    <!-- Robot only — lighting/floor come from scene_environment.xml when merged, or innate_mars_visual_extras.xml for view-mujoco. -->
     <body name="base_root" pos="0 0 0">
       <inertial pos="0 0 0" mass="0.01" diaginertia="0.1 0.1 0.1"/>
       
