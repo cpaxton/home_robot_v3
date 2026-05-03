@@ -132,6 +132,14 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
     "If direct connection fails, use SSH port forwarding instead.",
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
+@click.option(
+    "--dynav-config",
+    "--dynav_config",
+    type=str,
+    default="dynav_config.yaml",
+    help="DynaMem YAML: basename under emet/config/, cwd path, or absolute path. "
+    "Use dynav_innate_mars.yaml for Innate Mars + Depth Anything 3 (install da3 extra).",
+)
 def main(
     server_ip,
     manual_wait,
@@ -159,6 +167,7 @@ def main(
     rerun_debug: bool = False,
     rerun_bind: bool = False,
     port_offset: int = 0,
+    dynav_config: str = "dynav_config.yaml",
     **kwargs,
 ):
     """
@@ -169,7 +178,7 @@ def main(
     """
 
     print("- Load parameters")
-    parameters = get_parameters("dynav_config.yaml")
+    parameters = get_parameters(dynav_config)
 
     if rerun_bind:
         os.environ["RERUN_BIND_ALL"] = "1"
@@ -256,7 +265,7 @@ def main(
     from emet.memory.utils import print_memory_view_help_on_quit
 
     print_memory_view_help_on_quit(getattr(executor, "_last_memory_save_path", None))
-    robot.stop()
+    robot_client.stop()
 
 
 if __name__ == "__main__":

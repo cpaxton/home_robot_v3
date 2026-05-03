@@ -1,0 +1,130 @@
+# DynaMem / dynav parameters for Innate Mars (no hardware depth on ZMQ).
+#
+# Use: ``emet run dynamem --robot innate_mars --dynav-config dynav_innate_mars.yaml -S``
+# (basename resolves under ``emet/config/``; pass an absolute path for a custom copy).
+#
+# Requires: ``uv sync --extra da3``. For sim-only tests with default MuJoCo depth, use ``dynav_config.yaml``
+# (``depth_source: sensor``) instead; this file forces DA3 so behavior matches the real robot stack.
+
+# --- Start from defaults; only overrides are below. Full keys live in dynav_config.yaml. ---
+# (YAML merge is not used; this file is a copy with depth + doc tweaks. Keep in sync on structural changes.)
+
+# Encoder setup
+encoder: "siglip"
+open_vocab_category_map_file: example_cat_map.json
+
+voxel_size: 0.1
+obs_min_height: 0.2
+obs_max_height: 1.5
+obs_min_density: 5
+exp_min_density: 1
+min_points_per_voxel: 15
+
+pad_obstacles: 2
+min_pad_obstacles: 1
+
+local_radius: 0.5
+add_local_every_step: False
+remove_visited_from_obstacles: False
+min_depth: 0.25
+max_depth: 2.5
+
+# Depth Anything 3 from head RGB (and stereo when ZMQ provides rgb_right + right intrinsics/extrinsics).
+depth_source: da3
+da3_model_id: depth-anything/DA3METRIC-LARGE
+da3_process_res: 504
+
+eqa:
+  backend: qwen_vl
+  vl_family: qwen3_vl
+  vl_model_size: 3B
+  vl_max_tokens: 512
+  vl_quantization: int4
+  vl_hf_model_id: Qwen/Qwen3-VL-4B-Instruct
+  gemini_model: gemini-2.5-flash
+
+detection:
+  module: "owlsam"
+  category_map_file: example_cat_map.json
+  use_detic_viz: False
+  confidence_threshold: 0.02
+
+filters:
+  smooth_kernel_size: 3
+  use_median_filter: True
+  median_filter_size: 4
+  median_filter_max_error: 0.01
+  use_derivative_filter: True
+  derivative_filter_threshold: 0.2
+
+agent:
+  realtime:
+    matching_distance: 0.5
+    temporal_threshold: 0.1
+    maximum_matched_observations: 10
+    camera_pose_match_threshold: 0.1
+  use_realtime_updates: False
+  realtime_rotation_steps: 4
+  in_place_rotation_steps: 8
+  sweep_head_on_update: False
+
+instance_memory:
+  min_instance_thickness: 0.01
+  min_instance_vol: 1e-6
+  max_instance_vol: 10.0
+  min_instance_height: 0.01
+  max_instance_height: 1.8
+  min_pixels_for_instance_view: 100
+  min_percent_for_instance_view: 0.1
+  mask_cropped_instances: False
+  use_captioning: False
+  captioner: null
+  use_association: False
+  association_distance_m: 0.15
+  move_threshold_m: 0.05
+  matching:
+    feature_match_threshold: 0.05
+
+guarantee_instance_is_reachable: True
+use_instance_memory: True
+use_scene_graph: True
+scene_graph:
+  max_near_distance: 0.3
+  min_on_height: 0.05
+  max_on_height: 0.2
+
+motion_planner:
+  step_size: 0.05
+  rotation_step_size: 0.2
+  simplify_plans: True
+  shortcut_plans: True
+  shortcut_iter: 100
+  frontier:
+    dilate_frontier_size: 2
+    dilate_obstacle_size: 0
+    default_expand_frontier_size: 12
+    min_dist: 0.1
+    step_dist: 0.2
+  goals:
+    manipulation_radius: 0.55
+
+trajectory_pos_err_threshold: 0.15
+trajectory_rot_err_threshold: 0.5
+trajectory_per_step_timeout: 3.0
+
+eqa_vl:
+  model_size: "9B"
+  quantization: int4
+  vram_mib_tier_9b: 20000
+  vram_mib_tier_4b: 11000
+  keyword_max_tokens: 64
+  graph_keyword_max_tokens: 64
+  voxel_keyword_max_tokens: 20
+  eqa_max_tokens: 1024
+  verbose_hf: false
+
+graph_eqa_extract:
+  max_tokens: 128
+  navigation_samples_max: 256
+
+graph_eqa_record_navigation: true

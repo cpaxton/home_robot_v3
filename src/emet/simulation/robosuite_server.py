@@ -35,6 +35,7 @@ from emet.core.zmq_protocol import (
 from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn
 from emet.simulation.head_look_action import apply_head_to_robosuite
+from emet.simulation.stereo_camera_utils import stereo_right_camera_name_from_spec
 from emet.utils.geometry import xyt_global_to_base
 
 logger = log.Logger(__name__)
@@ -324,8 +325,8 @@ class RobosuiteZmqServer(BaseZmqServer):
                     pass
                 self._primary_renderer = None
 
-    def _primary_rgb_and_depth(self, camera_name: str) -> tuple[np.ndarray, np.ndarray]:
-        """RGB + depth using one ``Renderer`` under ``_render_lock`` (avoids EGL 0x502 on extra contexts)."""
+    def _primary_rgb_only(self, camera_name: str) -> np.ndarray:
+        """RGB at primary resolution (no depth pass). Used for stereo aux camera."""
         cam = self._camera_for_renderer(camera_name)
         with self._mj_lock:
             with self._render_lock:
@@ -335,7 +336,15 @@ class RobosuiteZmqServer(BaseZmqServer):
                 renderer.update_scene(self._mjdata, camera=cam)
                 rgb = cast(np.ndarray, renderer.render())
                 rgb = np.asarray(rgb, dtype=np.uint8).copy()
-                rgb = np.flipud(rgb).copy()
+                return np.flipud(rgb).copy()
+
+    def _primary_rgb_and_depth(self, camera_name: str) -> tuple[np.ndarray, np.ndarray]:
+        """RGB + depth using one ``Renderer`` under ``_render_lock`` (avoids EGL 0x502 on extra contexts)."""
+        rgb = self._primary_rgb_only(camera_name)
+        cam = self._camera_for_renderer(camera_name)
+        with self._mj_lock:
+            with self._render_lock:
+                renderer = self._primary_renderer
                 renderer.enable_depth_rendering()
                 try:
                     renderer.update_scene(self._mjdata, camera=cam)
@@ -345,6 +354,9 @@ class RobosuiteZmqServer(BaseZmqServer):
                 finally:
                     renderer.disable_depth_rendering()
                 return rgb, depth
+
+    def _stereo_right_camera_name(self) -> str | None:
+        return stereo_right_camera_name_from_spec(list(self._spec.camera_names))
 
     def _camera_for_renderer(self, camera_name: str) -> int | str:
         """Resolve RobotSpec camera name to a MuJoCo camera id, or free camera if none match.
@@ -631,6 +643,16 @@ class RobosuiteZmqServer(BaseZmqServer):
             "lidar_timestamp": None,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
         }
+        right_name = self._stereo_right_camera_name()
+        if right_name is not None:
+            try:
+                rgb_r = self._primary_rgb_only(right_name)
+                if rgb_r.shape[0] == rgb.shape[0] and rgb_r.shape[1] == rgb.shape[1]:
+                    message["rgb_right"] = compression.to_jpg(rgb_r)
+                    message["camera_K_right"] = self._get_camera_K(right_name, width, height)
+                    message["camera_pose_right"] = self._camera_pose_world(right_name)
+            except Exception:
+                logger.debug("Stereo auxiliary RGB failed for %s", right_name, exc_info=True)
         return self._attach_emet_session(message)
 
     @override

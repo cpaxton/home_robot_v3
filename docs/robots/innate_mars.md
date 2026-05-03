@@ -8,6 +8,29 @@
 
 **Real robot:** On the compute that runs ROS 2, start the bridge (e.g. `ros2 launch innate_mars_bridge server.launch.py`). The bridge publishes the same ZMQ keys as other Emet robots, including `rgb`, `rgb_right`, `gps`, `compass`, `camera_K`, `camera_pose`, `camera_K_right`, `camera_pose_right`, and `emet_robot_id` (`innate_mars`). Depth is absent on the wire; use `depth_source: auto` or `da3` in DynaMem config so **Depth Anything 3** fills depth (two-view when both head images and poses are present).
 
+**DynaMem + Depth Anything 3:** Hardware Mars does not publish depth on ZMQ. Install DA3 (`uv sync --extra da3`) and run the client with the packaged preset:
+
+```bash
+emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S --dynav-config dynav_innate_mars.yaml
+```
+
+That YAML sets `depth_source: da3`. For MuJoCo sim you can keep `dynav_config.yaml` (`depth_source: sensor`) to use rendered depth, or use `dynav_innate_mars.yaml` to validate DA3 point clouds against the same scene as the real robot.
+
+`RobotSpec` for this robot declares `optional_uv_extras=("da3",)` and `dynamem_depth_source_hint="da3"` (see `emet.robots.base` / `get_robot_spec("innate_mars")`) so tools can surface install commands consistently.
+
+In **Rerun**, check `world/semantic_memory/pointcloud` for table and props aligned with the room; fix `camera_K` / `camera_pose` / `gps` if the cloud is sheared or floating.
+
+**ZMQ observation keys (bridge ↔ client):** Full-fidelity DA3 uses head stereo when present. The generic client expects:
+
+| Key | Role |
+|-----|------|
+| `rgb`, `camera_K`, `camera_pose` | Primary head camera (JPEG bytes decoded in client) |
+| `depth` | Optional; omit on real Mars (`allow_missing_depth` + DA3) |
+| `rgb_right`, `camera_K_right`, `camera_pose_right` | Second eye for stereo DA3 (JPEG); MuJoCo sim publishes these for `head_left`/`head_right` pairs |
+| `gps`, `compass` | Base pose for voxel exploration frame |
+
+Same schema as other Emet robots; see [zmq_session_metadata](../zmq_session_metadata.md) for session envelopes.
+
 **Agent / DynaMem:** `emet run agent --robot innate_mars` and `emet run dynamem` pass `allow_missing_depth` for this robot so RGB-only ZMQ messages are accepted.
 
 **Session metadata:** Messages include schema v1 ``emet_session`` (see [zmq_session_metadata](../zmq_session_metadata.md)): ``runtime_kind`` = ``innate_mars_ros2_bridge``, stereo/camera/dof capabilities, and ``is_simulation: false``.

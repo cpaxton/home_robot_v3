@@ -3,6 +3,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from emet.robots.innate_mars import (
     INNATE_MARS_JOINT_NAMES,
     DummyInnateMarsClient,
@@ -21,6 +23,8 @@ def test_innate_mars_spec():
     assert Path(s.mjcf_path).resolve() == canonical.resolve()
     assert s.urdf_path is not None
     assert Path(s.urdf_path).resolve() == canonical.with_name("maurice.urdf").resolve()
+    assert s.optional_uv_extras == ("da3",)
+    assert s.dynamem_depth_source_hint == "da3"
 
 
 def test_innate_mars_mjcf_registered():
@@ -29,6 +33,7 @@ def test_innate_mars_mjcf_registered():
 
 
 def test_merge_scene_loads():
+    pytest.importorskip("mujoco")
     import mujoco
 
     from emet.utils.assets import get_mujoco_models_path
@@ -59,6 +64,7 @@ def test_merge_scene_loads():
 
 def test_innate_mars_merged_scene_matches_standalone_kinematics():
     """How emet serve mujoco merges scene + robot must not change head geom pose vs standalone MJCF."""
+    pytest.importorskip("mujoco")
     import mujoco
     import numpy as np
 
@@ -100,3 +106,31 @@ def test_innate_mars_wave_operation_smoke():
     op.run(n_waves=1)
     q, _, _ = agent.robot.get_joint_state()
     assert q.shape[0] == len(INNATE_MARS_JOINT_NAMES)
+
+
+def test_stereo_right_camera_name_from_spec_innate_mars():
+    from emet.robots.innate_mars import InnateMarsBackend
+    from emet.simulation.stereo_camera_utils import stereo_right_camera_name_from_spec
+
+    names = InnateMarsBackend().get_spec().camera_names
+    assert stereo_right_camera_name_from_spec(list(names)) == "head_right"
+
+
+def test_get_robot_spec_and_runtime_notes_innate_mars():
+    from emet.robots import format_robot_runtime_notes, get_robot_spec
+
+    s = get_robot_spec("innate_mars")
+    assert s is not None
+    assert s.optional_uv_extras == ("da3",)
+    notes = format_robot_runtime_notes(s)
+    assert notes is not None
+    assert "da3" in notes
+    assert "depth_source=" in notes
+
+
+def test_stereo_right_camera_name_from_spec_galaxea_no_pair():
+    from emet.robots.galaxea_r1 import GalaxeaR1Backend
+    from emet.simulation.stereo_camera_utils import stereo_right_camera_name_from_spec
+
+    names = GalaxeaR1Backend().get_spec().camera_names
+    assert stereo_right_camera_name_from_spec(list(names)) is None
