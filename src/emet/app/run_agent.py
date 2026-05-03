@@ -184,7 +184,7 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     metavar="NAME",
     default=None,
     help=(
-        "Robot backend (stretch, rby1, galaxea_r1). Overrides top-level ``robot`` in --agent-config when set; "
+        "Robot backend (stretch, rby1, galaxea_r1, innate_mars). Overrides top-level ``robot`` in --agent-config when set; "
         "if omitted, that YAML key is used (default ``stretch`` when the key is absent). Must match "
         "emet serve mujoco --robot after any CLI remaps. MolmoSpaces (--molmospaces-scene) uses rby1 on the "
         "server even when serve is started with default stretch—set ``robot: rby1`` in YAML or pass --robot rby1. "
@@ -293,6 +293,7 @@ def main(
       emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml
       emet run agent --agent-config configs/agent_rby1_discord.yaml   # uses robot: from YAML
       emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml
+      emet run agent --robot innate_mars --agent-config configs/agent_innate_mars.yaml
       emet run agent --input-path logs/memory_xxx --no-discord
       emet run agent --no-llm   # letter commands (E/M/Q/P)
       emet run agent --no-llm --command 'find red cylinder'
@@ -308,7 +309,7 @@ def main(
         robot = str(robot).strip()
     if not robot or robot.startswith("-"):
         raise click.UsageError(
-            "`--robot` must be followed by a backend name (e.g. `stretch`, `rby1`). "
+            "`--robot` must be followed by a backend name (e.g. `stretch`, `rby1`, `innate_mars`). "
             "You left it empty or the next token was parsed as the value (often another flag); "
             "use e.g. `emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml --rerun`."
         )

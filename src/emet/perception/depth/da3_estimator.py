@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import sys
+import types
 from typing import Any
 
 import cv2
@@ -15,6 +17,30 @@ import numpy as np
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
+
+
+def _stub_gsplat_if_missing() -> None:
+    """``depth_anything_3.api`` imports export helpers that load ``gs_renderer``, which tries ``import gsplat``.
+
+    That optional dependency is only for 3D Gaussian splatting export/rendering—not for depth inference.
+    Pre-register a minimal stub so import succeeds without ByteDance's warning spam when gsplat is omitted.
+    """
+    try:
+        import gsplat  # noqa: F401
+        return
+    except ImportError:
+        pass
+    if "gsplat" in sys.modules:
+        return
+    stub = types.ModuleType("gsplat")
+
+    def rasterization(*_a: Any, **_k: Any) -> Any:
+        raise RuntimeError(
+            "gsplat is not installed; Depth Anything 3 Gaussian splatting export is unavailable."
+        )
+
+    stub.rasterization = rasterization  # type: ignore[attr-defined]
+    sys.modules["gsplat"] = stub
 
 
 def resize_depth_to_match_rgb(depth: np.ndarray, rgb: np.ndarray) -> np.ndarray:
@@ -38,6 +64,7 @@ class DA3DepthEstimator:
         device: str = "cuda",
         process_res: int = 504,
     ) -> None:
+        _stub_gsplat_if_missing()
         try:
             from depth_anything_3.api import DepthAnything3  # type: ignore[import-not-found]
         except ImportError as e:
