@@ -1550,7 +1550,9 @@ class StretchZmqClient(AbstractRobotClient):
             compressed_depth = output.get("depth")
             if compressed_depth is None:
                 if not self._allow_missing_depth:
-                    logger.warning("Observation missing depth key; skipping frame (use allow_missing_depth for RGB-only).")
+                    logger.warning(
+                        "Observation missing depth key; skipping frame (use allow_missing_depth for RGB-only)."
+                    )
                     continue
                 output["depth"] = None
                 output["xyz"] = None
@@ -1559,7 +1561,11 @@ class StretchZmqClient(AbstractRobotClient):
                 output["depth"] = depth
 
                 if camera is None:
-                    camera = Camera.from_K(output["camera_K"], output["rgb_height"], output["rgb_width"])
+                    camera = Camera.from_K(
+                        output["camera_K"],
+                        width=output["rgb_width"],
+                        height=output["rgb_height"],
+                    )
 
                 output["xyz"] = camera.depth_to_xyz(output["depth"])
 
