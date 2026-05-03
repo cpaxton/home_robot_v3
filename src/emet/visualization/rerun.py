@@ -10,6 +10,7 @@
 # license information maybe found below, if so.
 
 import os
+import socket
 import time
 import timeit
 from typing import Any
@@ -334,12 +335,17 @@ class RerunVisualizer:
                 open_browser=open_browser and has_display() and not headless,
                 server_memory_limit=server_memory_limit,
             )
-            if not has_display() or headless:
-                logger.info("Rerun web viewer: connect at http://<this-host>:9090?url=ws://<this-host>:9877")
+            # Always print: logging is often WARNING+, and we want the URL even when the browser auto-opens.
+            local_url = "http://127.0.0.1:9090?url=ws://127.0.0.1:9877"
+            print(f"Rerun web viewer: {local_url}", flush=True)
+            if os.environ.get("RERUN_BIND_ALL", "").lower() in ("1", "true", "yes"):
+                hn = socket.gethostname()
+                print(f"Rerun web viewer (LAN/remote): http://{hn}:9090?url=ws://{hn}:9877", flush=True)
         else:
-            logger.info(
-                "Rerun native desktop viewer (TCP). For the browser UI instead, omit --rerun-native / "
-                "RERUN_NATIVE_VIEWER or set RERUN_HEADLESS=1 and use :9090."
+            print(
+                "Rerun: native desktop viewer (TCP). For the web UI omit --rerun-native / RERUN_NATIVE_VIEWER "
+                "or set RERUN_HEADLESS=1, then use http://127.0.0.1:9090?url=ws://127.0.0.1:9877",
+                flush=True,
             )
 
         self.display_robot_mesh = display_robot_mesh
@@ -527,9 +533,14 @@ class RerunVisualizer:
         """Log ``GraphEQAMemory`` nodes and tree summary under ``world/dynagraph/``."""
         if getattr(self, "_memory_view", False):
             return
-        nodes = graph_memory.get_nodes()
         rr.set_time_seconds("realtime", time.time())
+        log_to_rerun(
+            "world/dynagraph/summary",
+            rr.TextDocument(graph_memory.print_memory(), media_type=rr.MediaType.MARKDOWN),
+        )
+        nodes = graph_memory.get_nodes()
         if not nodes:
+            self.clear_identity("world/dynagraph/nodes")
             return
         xyz = np.array([n.xyz for n in nodes], dtype=np.float64)
         labels: list[str] = []
@@ -542,10 +553,6 @@ class RerunVisualizer:
         log_to_rerun(
             "world/dynagraph/nodes",
             rr.Points3D(positions=xyz, radii=0.06, labels=labels),
-        )
-        log_to_rerun(
-            "world/dynagraph/summary",
-            rr.TextDocument(graph_memory.print_memory(), media_type=rr.MediaType.MARKDOWN),
         )
 
     def log_head_camera(self, obs: Observations):

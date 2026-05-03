@@ -21,6 +21,8 @@ class DynagraphController(GraphEQAController):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setup_custom_blueprint()
+        if self.graph_memory is not None and getattr(self.rerun_visualizer, "enabled", True):
+            self.rerun_visualizer.log_dynagraph_state(self.graph_memory)
 
     def setup_custom_blueprint(self) -> None:
         if getattr(self.rerun_visualizer, "enabled", True) is False:

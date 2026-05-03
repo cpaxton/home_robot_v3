@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import os
+
 import click
 
 from emet.app.robot_cli import create_robot_client_from_cli
@@ -13,6 +15,16 @@ from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import get_parameters
 from emet.memory.headless_export import export_graph_eqa_dir
+
+
+def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
+    """Dynagraph-specific Rerun hints (web URL is printed from RerunVisualizer after rr.serve)."""
+    if not enabled:
+        click.echo("Rerun visualization is disabled (--no-rerun).")
+        return
+    if headless:
+        click.echo("Rerun headless: no auto-open browser (use the URL printed when the viewer started).")
+    click.echo("Dynagraph: use blueprint columns «Dynagraph 3D» and «Dynagraph graph» (3D nodes + tree).")
 
 
 @click.command()
@@ -47,6 +59,36 @@ from emet.memory.headless_export import export_graph_eqa_dir
     "--SR",
     is_flag=True,
     help="Whether to save Rerun rrd",
+)
+@click.option(
+    "--headless",
+    is_flag=True,
+    help="No auto-open browser for Rerun; open http://<host>:9090 manually.",
+)
+@click.option(
+    "--no-rerun",
+    is_flag=True,
+    help="Disable Rerun visualization entirely",
+)
+@click.option(
+    "--rerun-native",
+    is_flag=True,
+    help="Use the native Rerun desktop viewer instead of the browser (needs DISPLAY).",
+)
+@click.option(
+    "--rerun-show-panels",
+    is_flag=True,
+    help="Show Rerun blueprint/selection panel (useful for debugging)",
+)
+@click.option(
+    "--rerun-debug",
+    is_flag=True,
+    help="Print Rerun logging status (obs/servo received, step count)",
+)
+@click.option(
+    "--rerun-bind",
+    is_flag=True,
+    help="Bind Rerun to 0.0.0.0 for remote viewing (Tailscale, etc.).",
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 @click.option(
@@ -101,6 +143,12 @@ def main(
     discord: bool = False,
     not_rotate_in_place: bool = False,
     save_rerun: bool = False,
+    headless: bool = False,
+    no_rerun: bool = False,
+    rerun_native: bool = False,
+    rerun_show_panels: bool = False,
+    rerun_debug: bool = False,
+    rerun_bind: bool = False,
     port_offset: int = 0,
     input_path: str | None = None,
     export_dir: str | None = None,
@@ -114,12 +162,23 @@ def main(
 ) -> None:
     """Run Dynagraph: voxel + graph EQA with optional merge and staleness (see docs/dynagraph.md)."""
     click.echo("Dynagraph: graph memory with DynaMem-style voxel navigation.")
+
+    if rerun_bind:
+        os.environ["RERUN_BIND_ALL"] = "1"
+    if rerun_native and headless:
+        raise click.UsageError("Use either --rerun-native or --headless for Rerun, not both.")
+
     robot = create_robot_client_from_cli(
         robot_backend,
         robot_ip,
         port_offset=port_offset,
-        enable_rerun_server=True,
+        enable_rerun_server=not no_rerun,
+        rerun_headless=headless,
+        rerun_native_viewer=rerun_native,
+        rerun_show_panels=rerun_show_panels,
+        rerun_debug=rerun_debug,
     )
+    _print_dynagraph_rerun_help(enabled=not no_rerun, headless=headless)
 
     print("- Load parameters")
     parameters = get_parameters("dynav_config.yaml")
@@ -134,6 +193,17 @@ def main(
     robot.set_velocity(v=30.0, w=15.0)
 
     parameters["encoder"] = None
+
+    ev = parameters.get("eqa_vl", {}) or {}
+    ms = ev.get("model_size")
+    qn = ev.get("quantization", "int4")
+    if ms is None or str(ms).lower() == "null":
+        print(
+            "- EQA VL: one Qwen3.5 load sized by VRAM tiers (see eqa_vl/vram_mib_tier_* in dynav_config.yaml),",
+            f"quantization={qn}",
+        )
+    else:
+        print(f"- EQA VL: single shared Qwen3.5-{ms} ({qn}) for labels + EQA")
 
     print("- Start Dynagraph agent")
     agent = DynagraphController(
