@@ -140,7 +140,7 @@ def test_innate_mars_pinhole_K_chain_identity_ops():
 
 
 def test_innate_mars_head_stereo_cameras_match_urdf():
-    """Stereo: URDF-mounted positions (+60 mm Y baseline); same orientation as ``camera_base``; parallel optics."""
+    """Stereo: URDF-mounted positions (+60 mm Y baseline); parallel optics; −Y tabletop aim in default scene."""
     pytest.importorskip("mujoco")
     import mujoco
     import numpy as np
@@ -177,10 +177,12 @@ def test_innate_mars_head_stereo_cameras_match_urdf():
     np.testing.assert_allclose(model.cam_fovy[lid], model.cam_fovy[rid])
     np.testing.assert_allclose(float(model.cam_fovy[lid]), 80.0)
 
-    # Same optical axis convention as robot base RGB (tiny pitch toward −Z vs pure +X URDF heuristic).
+    # Head stereo optical axis (~−world Y toward default scene_environment table): not aligned with camera_base (~+base X).
     look_h = cam_look_world(data, lid)
     look_b = cam_look_world(data, bid)
-    np.testing.assert_allclose(look_h, look_b, rtol=0, atol=1e-5)
+    toward_table = np.array([0.0, -1.0, 0.0], dtype=np.float64)
+    assert float(np.dot(look_h, toward_table)) > 0.97
+    assert abs(float(np.dot(look_h, look_b))) < 0.1
 
     # Same OpenCV camera→world rotation from MuJoCo cam_xmat + diag(1,-1,-1) as RobosuiteZmqServer._camera_pose_world.
     D = np.diag([1.0, -1.0, -1.0])
