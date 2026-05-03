@@ -15,9 +15,13 @@ emet --help
 ```bash
 # 1. Start the MuJoCo simulation server (in one terminal)
 emet serve mujoco
+# Innate Mars (default table + robot): same command with --robot
+emet serve --robot innate_mars --headless   # optional: default backend is mujoco
 
 # 2. Run DynaMem with visual servoing (in another terminal)
 emet run dynamem --robot-ip 127.0.0.1 -S --visual-servo
+# With Innate Mars sim, pass the same robot to the client:
+emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S
 
 # 3. Or run mapping
 emet run mapping --robot-ip 127.0.0.1
@@ -35,17 +39,22 @@ Start a simulation server.
 |---------|--------------|
 | `mujoco` | MuJoCo simulation (default) |
 
+The positional **`[mujoco|robocasa]`** is optional (`emet serve` defaults to **mujoco**).
+
 **Options:**
+- `--robot NAME` — Simulator robot (default `stretch`). Use **`innate_mars`**, **`rby1`**, **`galaxea_r1`**, etc. for registry robots: loads the **default table scene** (red cylinder, blue cube, floor) merged with that robot’s MJCF and starts the **generic ZMQ** sim (`RobosuiteZmqServer`) on ports **4401–4404**. Must match **`emet run dynamem --robot NAME`** (or `create_robot_client_from_cli`) on the client.
 - `--use-robocasa` — Use Robocasa for scene generation (default task: PickPlaceCounterToCabinet)
 - `--list-robocasa-tasks` — Print all Robocasa task names and exit (for use with `--robocasa-task`)
 - `--headless` — Run without native viewer (use web at http://localhost:9090?url=ws://localhost:9877)
 - `--scene-path PATH` — Path to MuJoCo scene XML
+- `--port-offset N` — Add N to default ports (e.g. 100 → 4501–4504) when 4401 is busy
 - `--seed N` — Random seed (default: 0)
 
 **Examples:**
 ```bash
-emet serve                          # MuJoCo, default scene
+emet serve                          # MuJoCo, default scene, Stretch
 emet serve mujoco --headless        # No native viewer
+emet serve --robot innate_mars --headless   # Innate Mars + default table (match client --robot)
 emet serve mujoco --use-robocasa    # Robocasa scene
 ```
 
@@ -65,6 +74,7 @@ Run a robot agent or app.
 | `timing` | Network timing test |
 
 **Common options:**
+- `--robot` — Robot backend (`stretch`, **`innate_mars`**, `rby1`, …). **Must match** the simulator: `emet serve --robot <name>` and `emet run dynamem --robot <name>` use the same registry key.
 - `--robot-ip` / `--robot_ip` — Robot or simulator IP (default: 127.0.0.1)
 - `--server-ip` / `--server_ip` — Server IP for AnyGrasp (dynamem)
 - `-S, --skip` — Skip confirmations
@@ -136,13 +146,24 @@ Run tests with pytest. Uses coverage if pytest-cov is installed.
 **Options:**
 - `-v, --verbose` — Verbose output
 - `--no-cov` — Disable coverage
+- `--no-sim` — Set `RUN_SIM_TESTS=0` (skip MuJoCo integration tests)
+
+Pytest options (`-k`, `-m`, `-x`, file paths, etc.) are forwarded to pytest. You can put them after the file list, for example:
+
+```bash
+uv run emet test src/test/mapping/test_red_cylinder_in_sim.py -k innate_mars
+```
+
+(`emet test` uses Click `ignore_unknown_options` so pytest’s `-k` is not mistaken for an emet flag.)
 
 **Examples:**
 ```bash
 emet test
 emet test -v
+emet test --no-sim                    # skip sim tests (faster)
 emet test src/test/cli/test_cli.py
 emet test -k test_serve
+emet test src/test/mapping/test_red_cylinder_in_sim.py -k innate_mars
 ```
 
 ---
@@ -245,6 +266,8 @@ Then restart your shell or `source` your config file. After that, `emet <TAB>` c
 
 ## Simulation workflow
 
+### Stretch (default)
+
 1. **Terminal 1** — Start the server:
    ```bash
    emet serve mujoco
@@ -256,12 +279,27 @@ Then restart your shell or `source` your config file. After that, `emet <TAB>` c
    emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo
    ```
 
-3. **Headless** — If running without a display:
+### Innate Mars (same ZMQ protocol, registry robot)
+
+1. **Terminal 1** — MuJoCo sim with the Mars MJCF and default table scene:
    ```bash
-   emet serve mujoco --headless
-   emet run dynamem --robot-ip 127.0.0.1 -S --headless
+   emet serve --robot innate_mars --headless
+   # equivalent: emet serve mujoco --robot innate_mars --headless
    ```
-   Then open http://localhost:9090?url=ws://localhost:9877 in a browser.
+
+2. **Terminal 2** — DynaMem (or `examples/mapping_innate_mars_sim.py`) with the same `--robot`:
+   ```bash
+   emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S --cpu-only
+   ```
+
+### Headless / no display
+
+```bash
+emet serve mujoco --headless
+emet run dynamem --robot-ip 127.0.0.1 -S --headless
+```
+
+Then open http://localhost:9090?url=ws://localhost:9877 in a browser.
 
 ---
 

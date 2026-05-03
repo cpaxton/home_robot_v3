@@ -7,7 +7,8 @@
 # Minimal DynaMem mapping on Innate Mars in sim (same stack as Stretch, different --robot).
 #
 # Terminal 1 (from repo root, with sim extra / assets):
-#   emet serve mujoco --robot innate_mars --headless
+#   emet serve --robot innate_mars --headless
+#   # or: emet serve mujoco --robot innate_mars --headless
 #
 # Terminal 2:
 #   uv run python examples/mapping_innate_mars_sim.py

@@ -208,9 +208,10 @@ def main() -> None:
     "--robot",
     default="stretch",
     help=(
-        "Robot to simulate. 'stretch' (default) uses the Stretch-MuJoCo path. "
-        "Robosuite-native names (PandaOmron, Tiago, GR1, etc.) keep the "
-        "robosuite robot in the scene. 'galaxea_r1' uses the Galaxea R1 MJCF."
+        "Robot to simulate. 'stretch' (default) uses the Stretch-MuJoCo server. "
+        "Registry robots (e.g. innate_mars, rby1, galaxea_r1) load the default table "
+        "scene merged with that robot's MJCF and use the generic ZMQ sim (RobosuiteZmqServer). "
+        "Robosuite-native names (PandaOmron, Tiago, GR1) use the stock robosuite robot in Robocasa."
     ),
 )
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
@@ -247,6 +248,7 @@ def serve(
       emet serve
       DISPLAY=:1 emet serve mujoco   # Xvfb or local display; viewer works without --headless
       emet serve mujoco --headless   # True headless / no DISPLAY (EGL off-screen)
+      emet serve --robot innate_mars --headless   # Innate Mars + default table (ports 4401–4404)
       emet serve robocasa
       emet serve robocasa --robot PandaOmron
       emet serve robocasa --robot galaxea_r1
@@ -1115,7 +1117,10 @@ def show(path: str, web: bool) -> None:
         sys.exit(1)
 
 
-@main.command(short_help="Run pytest (use uv: uv run emet test)")
+@main.command(
+    short_help="Run pytest (use uv: uv run emet test)",
+    context_settings={**_CONTEXT_SETTINGS, "ignore_unknown_options": True},
+)
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.option("--no-cov", "no_cov", is_flag=True, help="Disable coverage")
 @click.option(
@@ -1142,6 +1147,7 @@ def test(
       uv run emet test -v
       uv run emet test --no-sim           # skip sim tests (faster)
       uv run emet test -v src/test/memory/test_memory_backends_smoke.py
+      uv run emet test src/test/mapping/test_red_cylinder_in_sim.py -k innate_mars
       uv run emet test -k test_red_cylinder
       Heavy VLLM tests (@pytest.mark.vllm_load) are excluded by default; see docs/plans/TESTING_VLLM_LOAD.md
     """
