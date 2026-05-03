@@ -42,9 +42,10 @@ def apply_head_to_robosuite(
     """Apply look pan/tilt to ``data.ctrl`` for the loaded MJCF. Returns number of actuators set.
 
     Stretch is handled by ``MujocoZmqServerStretch`` (``head_pan`` / ``head_tilt`` in sim).
-    This covers ``RobosuiteZmqServer`` (Galaxea R1 / rby1 merged MJCF):
+    This covers ``RobosuiteZmqServer`` (Galaxea R1 / rby1 / innate_mars merged MJCF):
     - Actuators named ``head_pan`` / ``head_tilt`` if present.
     - ``rby1`` / ``galaxea_r1``: map to ``torso2`` / ``torso3`` with reduced gain.
+    - ``innate_mars``: ``joint_head`` position actuator driven by ``tilt`` only (Stretch-style nod).
     """
     n = 0
     anames = spec.actuator_names
@@ -64,6 +65,15 @@ def apply_head_to_robosuite(
         if n == 0:
             logger.debug("head_to: no torso2/torso3 actuators for spec %r; look request ignored", spec.name)
         return n
+
+    if spec.name == "innate_mars":
+        # Single hinge `joint_head` (URDF axis 0 −1 0): Stretch-style tilt = nod angle; pan ignored.
+        if _set_ctrl_clipped(model, data, "joint_head", float(tilt)):
+            return 1
+        logger.debug(
+            "head_to: innate_mars has no joint_head position actuator (MJCF mismatch?); tilt=%r ignored", tilt
+        )
+        return 0
 
     logger.debug("head_to: no head_pan/head_tilt and no rby1/galaxea mapping for spec %r; ignored", spec.name)
     return 0

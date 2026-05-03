@@ -217,6 +217,41 @@ def test_innate_mars_camera_arm_table_aim_matches_head_at_default_pose():
     assert float(np.dot(look_h, look_a)) > 0.999
 
 
+def test_innate_mars_head_nod_montage_sequence_records_varying_images(tmp_path):
+    """Local MuJoCo: sweep joint_head and write montages; pixel means should change across poses."""
+    pytest.importorskip("mujoco")
+    import cv2
+    import numpy as np
+
+    from emet.app.preview_robot_cameras import record_head_nod_montage_sequence
+
+    outs = record_head_nod_montage_sequence(
+        "innate_mars",
+        tmp_path,
+        n_frames=8,
+        motion="once",
+        angle_low_rad=-0.08,
+        angle_high_rad=0.12,
+    )
+    assert len(outs) == 8
+
+    im0 = cv2.imread(str(outs[0]))
+    im_last = cv2.imread(str(outs[-1]))
+    assert im0 is not None and im_last is not None and im0.shape == im_last.shape
+    mse = float(np.mean((im0.astype(np.float64) - im_last.astype(np.float64)) ** 2))
+    assert mse > 50.0
+
+    bounce = record_head_nod_montage_sequence(
+        "innate_mars",
+        tmp_path / "bounce",
+        n_frames=11,
+        motion="bounce",
+        angle_low_rad=-0.05,
+        angle_high_rad=0.1,
+    )
+    assert len(bounce) == 11
+
+
 def test_get_robot_spec_and_runtime_notes_innate_mars():
     from emet.robots import format_robot_runtime_notes, get_robot_spec
 

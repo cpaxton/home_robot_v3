@@ -831,6 +831,7 @@ def preview_cameras(ctx: click.Context) -> None:
       emet preview-cameras
       emet preview-cameras --source zmq --robot innate_mars
       emet preview-cameras --discord --caption "check head aim"
+      emet preview-cameras --nod --nod-out-dir ./nod_caps --nod-motion bounce
     """
     sys.exit(_run_module("emet.app.preview_robot_cameras", list(ctx.args)))
 
