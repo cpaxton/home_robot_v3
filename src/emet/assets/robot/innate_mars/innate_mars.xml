@@ -110,8 +110,11 @@
 
             <!-- Same subtree as URDF joint_head + head cameras; placed after arm like upstream maurice.mjcf link order + URDF joint ordering -->
             <body name="head" pos="-0.040751 -0.0002 0.25882">
-              <!-- URDF joint_head: axis 0 −1 0 (−yaw in link frame acts as nod), limits −0.1745 … 0.5236 rad. -->
-              <joint name="joint_head" type="hinge" axis="0 -1 0" limited="true" range="-0.1745 0.5236" damping="5"/>
+              <!-- Nominal nod axis: maurice.urdf lists joint_head axis xyz="0 -1 0" in base_link — that rotates the
+                   head rigidly about base ±Y; with head_left/right optically rotated toward −world Y, ω×look
+                   mostly slews gaze in XY (looks like sideways roll / shake). Use +base_link X so +q bends
+                   look toward −Z (physical chin‑up/down vs default table gaze). Limits kept from URDF. -->
+              <joint name="joint_head" type="hinge" axis="1 0 0" limited="true" range="-0.1745 0.5236" damping="5"/>
               <inertial pos="0 0 0" mass="0.148" diaginertia="0.0002 0.0001 0.0002"/>
               <!-- Visual alignment with base.STL neck opening: joint_head origin matches URDF, but the torso
                    mesh “neck” rim centroid sits ~(+40 mm, +42 mm) in base_link XY relative to the head link

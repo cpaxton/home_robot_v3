@@ -252,6 +252,43 @@ def test_innate_mars_head_nod_montage_sequence_records_varying_images(tmp_path):
     assert len(bounce) == 11
 
 
+def test_innate_mars_joint_head_hinge_axis_pitches_camera_gaze_not_sideways():
+    """joint_head rotation must change head_left −Z elevation (nod), not slew horizontally."""
+    pytest.importorskip("mujoco")
+    import mujoco
+    import numpy as np
+
+    from emet.simulation.mujoco_server import _load_default_scene_with_robot
+
+    model = _load_default_scene_with_robot("innate_mars")
+    assert model is not None
+    jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "joint_head")
+    assert jid >= 0
+    ax = np.asarray(model.jnt_axis[jid]).ravel()
+    np.testing.assert_allclose(ax / np.linalg.norm(ax), np.array([1.0, 0.0, 0.0]), atol=1e-7)
+
+    data = mujoco.MjData(model)
+    qa = int(model.jnt_qposadr[jid])
+    cid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "head_left")
+    assert cid >= 0
+
+    def gaze() -> np.ndarray:
+        m = np.asarray(data.cam_xmat[cid]).reshape(3, 3)
+        v = m @ np.array([0.0, 0.0, -1.0])
+        return v / np.linalg.norm(v)
+
+    data.qpos[qa] = 0.0
+    mujoco.mj_forward(model, data)
+    l0 = gaze()
+    data.qpos[qa] = 0.08
+    mujoco.mj_forward(model, data)
+    l1 = gaze()
+    dl = l1 - l0
+    vertical = abs(float(dl[2]))
+    horizontal = float(np.hypot(dl[0], dl[1]))
+    assert vertical > 3.5 * horizontal, (vertical, horizontal, dl)
+
+
 def test_get_robot_spec_and_runtime_notes_innate_mars():
     from emet.robots import format_robot_runtime_notes, get_robot_spec
 
