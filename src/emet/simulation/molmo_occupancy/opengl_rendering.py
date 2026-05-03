@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Vendored from MolmoSpaces / molmo-spaces (OpenGL rendering); see NOTICE in this package.
 
+import platform
 from queue import Queue
 from typing import Any, Literal
 
@@ -78,17 +79,8 @@ class MjOpenGLRenderer(MjAbstractRenderer):
             based on the estimated maximum number of renderable geoms in the model_bindings.
         Raises:
           ValueError: If `camera_id` is outside the valid range, or if `width` or
-            `height` exceed the dimensions of MuJoCo's offscreen framebuffer.
+          `height` exceed the dimensions of MuJoCo's offscreen framebuffer.
         """
-        if device_id is None:
-            try:
-                import torch
-
-                if torch.cuda.is_available():
-                    device_id = 0
-            except ImportError:
-                pass
-
         super().__init__(**prepare_locals_for_super(locals()))
 
         self._width = width
@@ -108,18 +100,15 @@ class MjOpenGLRenderer(MjAbstractRenderer):
         # Enable shadow rendering by default (shadows are controlled by lights with castshadow enabled)
         self._scene.flags[mjtRndFlag.mjRND_SHADOW] = True
 
-        # Create render contexts.
-        # TODO(nimrod): Figure out why pytype doesn't like gl_context.GLContext
-        self._context_is_cgl = False
-        if device_id is None:
-            from mujoco import gl_context
+        # Offscreen GL via MuJoCo only (EGL / OSMesa / GLFW from MUJOCO_GL). Never import
+        # molmo_spaces here: optional MolmoSpaces venv does not install that package, and the
+        # old torch+CUDA path forced device_id!=0 which required molmo_spaces.EGLGLContext and
+        # broke iTHOR occupancy inside the main emet venv.
+        from mujoco import gl_context
 
-            self._gl_context = gl_context.GLContext(width, height)  # type: ignore
-            self._context_is_cgl = True
-        else:
-            from molmo_spaces.renderer.opengl_context import EGLGLContext
-
-            self._gl_context = EGLGLContext(width, height, device_id)
+        self._gl_context = gl_context.GLContext(width, height)  # type: ignore[arg-type]
+        self._context_is_cgl = platform.system() == "Darwin"
+        _ = device_id  # Still passed to super(); MuJoCo GLContext does not take a GPU index.
         self._gl_context.make_current()
         self._mjr_context = MjrContext(model, mjtFontScale.mjFONTSCALE_150.value)
         mjr_resizeOffscreen(width, height, self._mjr_context)

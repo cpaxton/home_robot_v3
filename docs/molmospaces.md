@@ -207,7 +207,15 @@ For a step-by-step **testing plan** (core tests, wrapper tests with mocks, optio
   uv run emet test src/test/cli/test_molmospaces_cli.py
   ```
 
-- **Optional**: tests that invoke the real wrapper need `RUN_MOLMOSPACES_TESTS=1` and a working `.venv-molmospaces` (see pytest markers/skips in that file).
+- **Optional**: tests that invoke the real wrapper need `RUN_MOLMOSPACES_TESTS=1` and a Python env where `import emet_molmospaces` succeeds (often `.venv-molmospaces` after `./install.sh --molmospaces`; you can run pytest with that interpreter).
+
+- **Optional — base orientation after spawn + physics** (10 iTHOR FloorPlans, autoplace, ~900 `mj_step`, checks upright + small quaternion drift):
+
+  ```bash
+  RUN_MOLMOSPACES_TESTS=1 uv run emet test src/test/molmospaces/test_molmospaces_ithor_base_settle.py -v
+  ```
+
+  Tunables: `EMET_MOLMOSPACES_ORIENTATION_N` (default 10), `EMET_MOLMOSPACES_SETTLE_STEPS` (default 900), `EMET_MOLMOSPACES_ORIENTATION_MAX_DEG` (default 8), `EMET_MOLMOSPACES_MIN_UP_DOT` (default 0.92).
 
 - **Wrapper package tests**:
 

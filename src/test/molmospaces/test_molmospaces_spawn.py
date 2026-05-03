@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 
 import mujoco
+import numpy as np
 import pytest
 
 import emet.simulation.molmospaces_spawn as molmospaces_spawn
@@ -303,6 +304,60 @@ MINIMAL_WALLED_ROOM_WITH_BASE = """<?xml version="1.0"?>
   </worldbody>
 </mujoco>
 """
+
+
+def test_horizontal_spawn_rejects_exterior_tongue_infinite_plane_open_horizon():
+    from emet.simulation.molmospaces_spawn import horizontal_spawn_rejects_exterior_tongue
+
+    xml = """<?xml version="1.0"?>
+<mujoco model="plane">
+  <worldbody>
+    <geom name="floor" type="plane" pos="0 0 0" size="10 10 0.01"/>
+    <body name="base_link" pos="0 0 1.5">
+      <freejoint name="root"/>
+      <geom name="hull" type="sphere" size="0.02" contype="0" conaffinity="0"/>
+    </body>
+  </worldbody>
+</mujoco>
+"""
+    m = mujoco.MjModel.from_xml_string(xml)
+    d = mujoco.MjData(m)
+    mujoco.mj_forward(m, d)
+    bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+    assert bid >= 0
+    assert horizontal_spawn_rejects_exterior_tongue(m, d, 0.0, 0.0, 0.08, exclude_body_id=int(bid))
+
+
+def test_horizontal_spawn_rejects_exterior_tongue_false_center_of_walled_room():
+    from emet.simulation.molmospaces_spawn import horizontal_spawn_rejects_exterior_tongue
+
+    m = mujoco.MjModel.from_xml_string(MINIMAL_WALLED_ROOM_WITH_BASE)
+    d = mujoco.MjData(m)
+    mujoco.mj_forward(m, d)
+    bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+    assert bid >= 0
+    assert not horizontal_spawn_rejects_exterior_tongue(m, d, 0.0, 0.0, 0.08, exclude_body_id=int(bid))
+
+
+def test_restore_freejoint_base_from_model_qpos0_after_spawn_search_hoist():
+    """Failed spawn search hoists the base to high z; restore must put qpos back to qpos0."""
+    m = mujoco.MjModel.from_xml_string(MINIMAL_WALLED_ROOM_WITH_BASE)
+    d = mujoco.MjData(m)
+    mujoco.mj_forward(m, d)
+    bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+    assert bid >= 0
+    qadr = None
+    for j in range(m.njnt):
+        if int(m.jnt_bodyid[j]) == bid and m.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE:
+            qadr = int(m.jnt_qposadr[j])
+            break
+    assert qadr is not None
+    assert molmospaces_spawn.write_freejoint_base_xyzw(
+        m, d, base_body_name="base_link", x=1.0, y=-2.0, z=88.0
+    )
+    mujoco.mj_forward(m, d)
+    assert molmospaces_spawn.restore_freejoint_base_from_model_qpos0(m, d, base_body_name="base_link")
+    np.testing.assert_allclose(d.qpos[qadr : qadr + 7], m.qpos0[qadr : qadr + 7], rtol=0, atol=1e-9)
 
 
 def test_find_molmospaces_freejoint_xyz_finds_valid_pose_in_walled_room():

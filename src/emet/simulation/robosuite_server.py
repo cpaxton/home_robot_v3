@@ -105,6 +105,9 @@ class RobosuiteZmqServer(BaseZmqServer):
             str(scene_disk_path).strip() if scene_disk_path and str(scene_disk_path).strip() else None
         )
         self._physics_steps_executed = 0
+        # After MolmoSpaces autoplace, ``qpos0`` holds the chosen free-joint pose; see
+        # :meth:`_restore_merged_base_freejoint_from_qpos0` after physics stabilize.
+        self._molmospaces_autoplace_snap_qpos0 = False
 
     @property
     def spec(self) -> RobotSpec:
@@ -200,6 +203,25 @@ class RobosuiteZmqServer(BaseZmqServer):
         if addrs is not None:
             qadr = int(addrs[0])
             self._mjmodel.qpos0[qadr : qadr + 7] = self._mjdata.qpos[qadr : qadr + 7]
+            self._molmospaces_autoplace_snap_qpos0 = True
+
+    def _restore_merged_base_freejoint_from_qpos0(self) -> None:
+        """Put ``base_link`` free joint back to ``qpos0`` after :meth:`_stabilize_physics_state_after_load`.
+
+        Stabilize runs a few ``mj_step`` calls with PD actuators synced to ``qpos``. For a floating
+        base that can **drift** the robot away from the MolmoSpaces spawn chosen from occupancy,
+        while logs and ``qpos0`` still show the intended pose — so the viewer no longer matches the
+        top-down map. Restoring the 7 free-joint coordinates from ``qpos0`` preserves spawn XY/Z.
+        """
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        addrs = self._base_freejoint_addrs()
+        if addrs is None:
+            return
+        qadr, vadr = int(addrs[0]), int(addrs[1])
+        self._mjdata.qpos[qadr : qadr + 7] = self._mjmodel.qpos0[qadr : qadr + 7]
+        if vadr >= 0:
+            self._mjdata.qvel[vadr : vadr + 6] = 0.0
 
     def _build_emet_session(self, *, robocasa: bool) -> dict[str, Any]:
         mj_name: str | None = None
@@ -761,6 +783,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._load_model()
         self._running = True
         self._stabilize_physics_state_after_load()
+        if self._molmospaces_autoplace_snap_qpos0:
+            with self._mj_lock:
+                self._restore_merged_base_freejoint_from_qpos0()
+                self._sync_actuator_ctrl_from_joint_positions()
+                mujoco.mj_forward(self._mjmodel, self._mjdata)
         self._initial_xyt = self.get_base_xyt()
         self._nav_goal_world = None
         self._at_goal = True

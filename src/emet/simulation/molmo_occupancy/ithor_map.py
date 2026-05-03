@@ -1,5 +1,7 @@
 # Copyright (c) Allen Institute for AI (MolmoSpaces). Apache-2.0.
 # Vendored from molmo_spaces/utils/scene_maps.py (iTHORMap + from_mj_model_path).
+# Two-pass occupancy (Pass 1: high/low visual geoms vs floor+1.5m; Pass 2: drop high bodies)
+# matches upstream molmospaces main; merged MJCF skips robot subtree in Pass 1 (base_link).
 
 from __future__ import annotations
 
@@ -28,6 +30,46 @@ def _handle_compile_error_and_blacklist(_error: Exception) -> None:
     return
 
 
+def _safe_model_data(spec: mujoco.MjSpec) -> tuple[mujoco.MjModel, mujoco.MjData]:
+    """Compile *spec* after blacklist cleanup; mirrors upstream ProcTHORMap.safe_model_data."""
+    _delete_blacklisted_bodies(spec)
+    try:
+        model = spec.compile()
+    except ValueError as e:
+        _handle_compile_error_and_blacklist(e)
+        raise
+    finally:
+        del spec
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    return model, data
+
+
+def _body_in_robot_subtree(model: mujoco.MjModel, body_id: int, robot_root_id: int) -> bool:
+    """True if *body_id* is *robot_root_id* or a descendant (kinematic parent walk)."""
+    if robot_root_id < 0:
+        return False
+    b = body_id
+    for _ in range(model.nbody + 2):
+        if b < 0:
+            return False
+        if b == robot_root_id:
+            return True
+        b = int(model.body_parentid[b])
+    return False
+
+
+def _canonical_ithor_top_level_body_name(model: mujoco.MjModel, body_id: int) -> str | None:
+    raw = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
+    if not raw:
+        return None
+    parts = raw.split("_")
+    if len(parts) < 2:
+        return raw
+    parts[-2] = "0"
+    return "_".join(parts)
+
+
 class iTHORMap(ProcTHORMap):
     """iTHOR-style orthographic occupancy (MolmoSpaces iTHORMap vendored slice)."""
 
@@ -48,7 +90,54 @@ class iTHORMap(ProcTHORMap):
         agent_radius: float | None = None,
         px_per_m: int = 100,
         device_id: int | None = None,
+        *,
+        robot_root_body_name: str | None = "base_link",
     ) -> iTHORMap:
+        # Two passes (upstream iTHORMap): (1) high vs low visual geoms; (2) occupancy with highs removed.
+
+        # Pass 1
+        spec = mujoco.MjSpec.from_file(model_path)
+        model, mj_data = _safe_model_data(spec)
+
+        floor_ids: list[int] = []
+        for geom_id in range(model.ngeom):
+            geom_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
+            if geom_name and "floor" in geom_name.lower():
+                if int(model.geom(geom_id).contype) == 0:
+                    floor_ids.append(geom_id)
+        if len(floor_ids) == 0:
+            raise RuntimeError("No floors found in the model (visual floor geoms with contype==0)")
+
+        aabb_center, aabb_size = geom_aabb(model, mj_data, floor_ids, tight_mesh=False)
+        z_threshold = 1.5 + (float(aabb_center[2]) + float(aabb_size[2]) / 2.0)
+
+        robot_root_id = -1
+        if robot_root_body_name:
+            robot_root_id = int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, robot_root_body_name))
+
+        high_names: set[str] = set()
+        low_names: set[str] = set()
+        for geom_id in range(model.ngeom):
+            if int(model.geom(geom_id).contype) != 0:
+                continue
+            body_id = int(model.geom_bodyid[geom_id])
+            if _body_in_robot_subtree(model, body_id, robot_root_id):
+                continue
+            gaabb_c, gaabb_s = geom_aabb(model, mj_data, [geom_id], tight_mesh=False)
+            min_z = float(gaabb_c[2]) - float(gaabb_s[2]) / 2.0
+            top_level = _canonical_ithor_top_level_body_name(model, body_id)
+            if top_level is None:
+                continue
+            if min_z > z_threshold:
+                high_names.add(top_level)
+            else:
+                low_names.add(top_level)
+
+        high_names -= low_names
+
+        del mj_data, model
+
+        # Pass 2
         spec = mujoco.MjSpec.from_file(model_path)
         for body in spec.worldbody.bodies:
             body_name = body.name
@@ -56,23 +145,16 @@ class iTHORMap(ProcTHORMap):
                 spec.delete(body)
             elif body_name and "light" in body_name.lower():
                 spec.delete(body)
-        _delete_blacklisted_bodies(spec)
-        try:
-            model = spec.compile()
-        except ValueError as e:
-            _handle_compile_error_and_blacklist(e)
-            raise
-        finally:
-            del spec
+            elif body_name in high_names:
+                spec.delete(body)
 
-        mj_data = mujoco.MjData(model)
-        mujoco.mj_forward(model, mj_data)
+        model, mj_data = _safe_model_data(spec)
 
-        floor_ids: list[int] = []
+        floor_ids = []
         for geom_id in range(model.ngeom):
             geom_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
             if geom_name and "floor" in geom_name.lower():
-                if model.geom(geom_id).contype == 0:
+                if int(model.geom(geom_id).contype) == 0:
                     floor_ids.append(geom_id)
         if len(floor_ids) == 0:
             raise RuntimeError("No floors found in the model (visual floor geoms with contype==0)")
