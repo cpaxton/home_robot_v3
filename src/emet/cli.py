@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 
 import click
+from click.core import ParameterSource
 
 # Enable shell completion for bash/zsh
 _CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
@@ -882,7 +883,11 @@ def deploy(
 @click.option(
     "--robot",
     default="stretch",
-    help="Robot backend (stretch, rby1, galaxea_r1). Must match emet serve mujoco --robot.",
+    help=(
+        "Robot backend (stretch, innate_mars, rby1, galaxea_r1). Must match emet serve mujoco --robot. "
+        "If you omit this flag, ``emet run`` does not forward ``--robot`` to sub-apps—so e.g. "
+        "``emet run agent --agent-config configs/agent_innate_mars.yaml`` uses top-level ``robot:`` from that YAML."
+    ),
 )
 @click.option("--server-ip", "--server_ip", default="127.0.0.1", help="Server IP (e.g. for AnyGrasp)")
 @click.option("-S", "--skip", "skip_confirmations", is_flag=True, help="Skip confirmations")
@@ -930,7 +935,11 @@ def run(
     args = list(ctx.args)
     args.extend(["--robot_ip", robot_ip])
     if app in _EMET_RUN_APPS_WITH_ROBOT:
-        args.extend(["--robot", robot])
+        # Do not inject ``--robot stretch`` when the user omitted ``--robot`` on ``emet run``: the wrapper's
+        # default would override ``robot:`` from ``--agent-config`` (run_agent) or MolmoSpaces discovery
+        # (robot_backend=None). Forward ``--robot`` only when explicitly set (CLI or env).
+        if ctx.get_parameter_source("robot") != ParameterSource.DEFAULT:
+            args.extend(["--robot", robot])
     if port_offset:
         args.extend(["--port-offset", str(port_offset)])
     if app == "dynamem":

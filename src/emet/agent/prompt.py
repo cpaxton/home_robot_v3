@@ -20,6 +20,9 @@ import re
 from typing import Any
 
 from emet.agent.tools import Tool, get_tool_descriptions_for_prompt, get_tools
+from emet.utils.logger import Logger
+
+_logger = Logger(__name__)
 
 # Default persona for embodied agent + ``emet run agent`` / web chat (override with ``--name``).
 DEFAULT_AGENT_NAME = "Virgil"
@@ -43,6 +46,8 @@ Each tool invocation: {"name": "<tool_name>", "arguments": {<key>: <value>, ...}
 If no action is needed, set "tool_calls" to [].
 
 **Relay order (important for chat/Discord):** When **tool_calls** is non-empty, your **"message"** is shown to the user **before** tools run. If you will get a **second** turn because tool results are fed back (see list below), set **"message"** to **""** on that first turn. Otherwise users see a placeholder (e.g. "Taking a look.") and then a full answer that repeats the same facts. Your **only** spoken reply for that question should be the follow-up JSON (with **"tool_calls": []**), written **after** you read `[Tool results]` — base what you say strictly on those lines (and mention a sent image only if `[send_image]` says it succeeded).
+
+For **gesture-only** tools (wave, nod_head, shake_head, avert_gaze) there is **no** second LLM turn with `[Tool results]`. Prefer **"message": ""** so the channel is not spammed with a generic chatbot intro ("Hi! How can I help…") **and** the gesture — that duplicates a greeting. If you must say something, use at most a **few words** (e.g. "Waving.").
 
 When you call query_memory, query_scene_graph, list_scene_relations, describe_scene, explore, navigation_diagnostics, or send_map_snapshot, the results will be provided back to you.
 You must then summarize them for the user in a follow-up response (no more tool calls).
@@ -79,7 +84,7 @@ Summarize these results for the user in your message. Do not call any more tools
 {"tool_calls": [], "message": "I see a bookshelf, a chair, and a door. I also sent a photo to the channel."}
 
 User: "Wave hello!"
-{"tool_calls": [{"name": "wave", "arguments": {}}], "message": "Hi!"}
+{"tool_calls": [{"name": "wave", "arguments": {}}], "message": ""}
 
 User: "Can you put that away?"
 {"tool_calls": [], "message": "Which object, and where should I put it?"}
@@ -104,46 +109,87 @@ def build_agent_system_prompt(
     return f"{identity}\n\n{tools_block}\n\n{_FORMAT_BLOCK}"
 
 
+def _fence_inner_json(text: str) -> str | None:
+    """Return inner JSON string from first ```json ... ``` or ``` ... ``` fence, or None."""
+    m = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+    return m.group(1).strip() if m else None
+
+
+def _first_json_dict(text: str) -> dict[str, Any] | None:
+    """Parse the first balanced JSON object from *text* using :meth:`json.JSONDecoder.raw_decode`.
+
+    Avoids greedy ``\\{[\\s\\S]*\\}`` bugs when there is trailing prose or multiple ``{`` tokens.
+    """
+    dec = json.JSONDecoder()
+    i = 0
+    n = len(text)
+    while i < n:
+        j = text.find("{", i)
+        if j < 0:
+            break
+        try:
+            obj, end = dec.raw_decode(text, j)
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
+        i = j + 1
+    return None
+
+
+def _normalize_message_field(raw: Any) -> str:
+    if raw is None:
+        return ""
+    if isinstance(raw, str):
+        return raw
+    return str(raw)
+
+
 def parse_tool_calls_response(response: str) -> dict[str, Any]:
     """Parse LLM response into {tool_calls: [{name, arguments}], message: str}.
 
-    Handles <think> blocks, markdown code fences, and text around JSON.
-    Returns {"tool_calls": [], "message": <raw_text>} on parse failure.
+    Handles <think> blocks, markdown code fences, prefix/suffix text around JSON,
+    and balanced-brace JSON via :meth:`json.JSONDecoder.raw_decode`.
+    Returns {"tool_calls": [], "message": <raw_text>} on total parse failure (never leaks JSON blobs as message).
     """
     response = response.strip()
-    # Strip <think>...</think> reasoning blocks (Qwen 3.5, DeepSeek, etc.)
     response = re.sub(r"<think>[\s\S]*?</think>", "", response).strip()
-    # Handle partial think blocks: opening tag stripped by tokenizer but </think> remains
     if "</think>" in response:
         response = response.split("</think>")[-1].strip()
-    # Strip markdown code fences
-    fenced = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", response)
+
+    candidate_sources: list[str] = []
+    fenced = _fence_inner_json(response)
     if fenced:
-        candidate = fenced.group(1)
-    else:
-        candidate_match = re.search(r"\{[\s\S]*\}", response)
-        candidate = candidate_match.group() if candidate_match else ""
+        candidate_sources.append(fenced)
+    candidate_sources.append(response)
+
+    data: dict[str, Any] | None = None
+    for blob in candidate_sources:
+        data = _first_json_dict(blob)
+        if data is not None:
+            break
 
     tool_calls: list[dict[str, Any]] = []
     message = ""
-    if candidate:
-        try:
-            data = json.loads(candidate)
-            raw = data.get("tool_calls", [])
-            if isinstance(raw, list):
-                for item in raw:
-                    if isinstance(item, dict) and "name" in item:
-                        args = item.get("arguments")
-                        if not isinstance(args, dict):
-                            args = {}
-                        tool_calls.append({"name": item["name"], "arguments": args})
-            message = data.get("message", "") or ""
-        except json.JSONDecodeError:
-            pass
+    if data is not None:
+        raw_tc = data.get("tool_calls", [])
+        if isinstance(raw_tc, list):
+            for item in raw_tc:
+                if isinstance(item, dict) and "name" in item:
+                    args = item.get("arguments")
+                    if not isinstance(args, dict):
+                        args = {}
+                    tool_calls.append({"name": item["name"], "arguments": args})
+        message = _normalize_message_field(data.get("message", ""))
 
-    # If no JSON was found, treat the whole response as a message
-    if not tool_calls and not message:
-        message = response
+    # Total failure: no dict — treat whole reply as natural language unless it looks like broken JSON.
+    if data is None:
+        if response.startswith("{") and '"tool_calls"' in response:
+            _logger.warning(
+                "Assistant returned JSON-shaped text that did not parse; suppressing raw JSON from user message."
+            )
+            return {"tool_calls": [], "message": ""}
+        return {"tool_calls": [], "message": response}
 
     return {"tool_calls": tool_calls, "message": message}
 

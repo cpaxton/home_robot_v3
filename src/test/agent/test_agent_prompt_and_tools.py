@@ -48,6 +48,36 @@ def test_parse_plain_json():
     raw = '{"tool_calls": [{"name": "wave", "arguments": {}}], "message": "Hi!"}'
     result = parse_tool_calls_response(raw)
     assert result["tool_calls"] == [{"name": "wave", "arguments": {}}]
+    assert result["message"] == "Hi!"
+
+
+def test_parse_json_with_trailing_text():
+    """Trailing prose after a balanced JSON object must not break parsing or leak into message."""
+    from emet.agent.prompt import parse_tool_calls_response
+
+    raw = '{"tool_calls": [{"name": "wave", "arguments": {}}], "message": ""}\n(internal)'
+    result = parse_tool_calls_response(raw)
+    assert result["tool_calls"][0]["name"] == "wave"
+    assert result["message"] == ""
+
+
+def test_parse_prefix_prose_before_json():
+    from emet.agent.prompt import parse_tool_calls_response
+
+    raw = 'Certainly.\n{"tool_calls": [], "message": "Here you go."}'
+    result = parse_tool_calls_response(raw)
+    assert result["tool_calls"] == []
+    assert result["message"] == "Here you go."
+
+
+def test_parse_broken_json_blob_not_user_message():
+    """Invalid JSON that mentions tool_calls must not become the assistant message verbatim."""
+    from emet.agent.prompt import parse_tool_calls_response
+
+    raw = '{"tool_calls": [{"name": "wave", "arguments": {}'
+    result = parse_tool_calls_response(raw)
+    assert result["tool_calls"] == []
+    assert result["message"] == ""
 
 
 def test_parse_plain_text_fallback():

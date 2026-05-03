@@ -44,6 +44,18 @@ from emet.utils.point_cloud import show_point_cloud
 
 logger = Logger(__name__)
 
+
+def _dict_first_nonempty(msg: dict[str, Any], *keys: str) -> Any:
+    """First ``msg[k]`` that is not None. Do not use ``or``: ndarray truth values are ambiguous."""
+    for k in keys:
+        if k not in msg:
+            continue
+        v = msg[k]
+        if v is not None:
+            return v
+    return None
+
+
 # TODO: debug code - remove later if necessary
 # import faulthandler
 # faulthandler.enable()
@@ -1597,7 +1609,7 @@ class StretchZmqClient(AbstractRobotClient):
             depth_image = None
 
         # Head cameras: Stretch (`head_cam/*` + `robot/config`) vs MuJoCo robosuite servo (`head_color_image`, …).
-        if "head_cam/color_image" in message:
+        if message.get("head_cam/color_image") is not None:
             head_color_image = compression.from_jpg(message["head_cam/color_image"])
             head_depth_image = compression.from_jp2(message["head_cam/depth_image"]) / 1000
             joint = message["robot/config"]
@@ -1605,7 +1617,7 @@ class StretchZmqClient(AbstractRobotClient):
             camera_K_head = message["head_cam/depth_camera_K"]
             camera_pose_head = message["head_cam/pose"]
             ee_pose_val = message["ee/pose"]
-        elif "head_color_image" in message:
+        elif message.get("head_color_image") is not None:
             head_color_image = compression.from_jpg(message["head_color_image"])
             raw_hd = message.get("head_depth_image")
             head_depth_image = compression.from_jp2(raw_hd) / 1000 if raw_hd is not None else None
@@ -1614,8 +1626,8 @@ class StretchZmqClient(AbstractRobotClient):
                 return
             joint = np.asarray(jp, dtype=np.float64)
             depth_scaling = float(message.get("head_cam/depth_scaling", 1.0))
-            camera_K_head = message.get("head_camera_K") or message.get("head_cam/depth_camera_K")
-            camera_pose_head = message.get("head_cam/pose") or message.get("camera_pose")
+            camera_K_head = _dict_first_nonempty(message, "head_camera_K", "head_cam/depth_camera_K")
+            camera_pose_head = _dict_first_nonempty(message, "head_cam/pose", "camera_pose")
             ee_pose_val = message.get("ee/pose")
             if ee_pose_val is None:
                 ee_pose_val = np.eye(4, dtype=np.float64)

@@ -32,6 +32,7 @@ from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.core import get_parameters
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
+from emet.utils.config import read_top_level_robot_from_yaml
 
 # Default: Qwen 3.5 9B (with expandable CUDA segments enabled above to reduce fragmentation).
 # Use ``--llm qwen35-4B`` if you still hit OOM on a single consumer GPU.
@@ -304,7 +305,12 @@ def main(
     cmd_list = list(commands) if commands else None
 
     if robot is None or str(robot).strip() == "":
-        robot = str(get_parameters(agent_config).get("robot", "stretch")).strip()
+        r_yaml = read_top_level_robot_from_yaml(agent_config)
+        robot = (
+            r_yaml
+            if r_yaml is not None
+            else str(get_parameters(agent_config).get("robot", "stretch")).strip()
+        )
     else:
         robot = str(robot).strip()
     if not robot or robot.startswith("-"):
