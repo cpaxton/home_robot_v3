@@ -37,7 +37,7 @@ from emet.utils.geometry import (
     sophus2posquat,
     xyt_base_to_global,
 )
-from emet.utils.image import Camera
+from emet.utils.image import pinhole_camera_from_intrinsics_and_depth
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
 from emet.utils.point_cloud import show_point_cloud
@@ -1561,13 +1561,31 @@ class StretchZmqClient(AbstractRobotClient):
             else:
                 depth = compression.from_jp2(compressed_depth) / 1000
                 output["depth"] = depth
-
-                if camera is None:
-                    camera = Camera.from_K(
-                        output["camera_K"],
-                        width=output["rgb_width"],
-                        height=output["rgb_height"],
-                    )
+                dh, dw = int(depth.shape[0]), int(depth.shape[1])
+                k = np.asarray(output["camera_K"], dtype=np.float64)
+                if camera is None or int(camera.height) != dh or int(camera.width) != dw:
+                    if camera is not None:
+                        logger.warning(
+                            "Depth shape (%s, %s) != camera (%s, %s); rebuilding from K and depth "
+                            "(server rgb_width/rgb_height may be swapped vs depth).",
+                            dh,
+                            dw,
+                            camera.height,
+                            camera.width,
+                        )
+                    elif output.get("rgb_width") is not None and output.get("rgb_height") is not None:
+                        mh = int(output["rgb_height"])
+                        mw = int(output["rgb_width"])
+                        if mh != dh or mw != dw:
+                            logger.warning(
+                                "Depth shape (%s, %s) != message rgb_height/rgb_width (%s, %s); "
+                                "using depth shape for unprojection.",
+                                dh,
+                                dw,
+                                mh,
+                                mw,
+                            )
+                    camera = pinhole_camera_from_intrinsics_and_depth(k, depth)
 
                 output["xyz"] = camera.depth_to_xyz(output["depth"])
 

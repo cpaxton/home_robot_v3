@@ -164,7 +164,8 @@ class Camera:
 
     def depth_to_xyz(self, depth, data_type: type = np.float16):
         """get depth from numpy using simple pinhole self model"""
-        indices = np.indices((self.height, self.width), dtype=np.float32).transpose(1, 2, 0)
+        h, w = int(self.height), int(self.width)
+        indices = np.indices((h, w), dtype=np.float32).transpose(1, 2, 0)
         z = depth
         # pixel indices start at top-left corner. for these equations, it starts at bottom-left
         x = (indices[:, :, 1] - self.px) * (z / self.fx)
@@ -183,6 +184,20 @@ class Camera:
         depth[depth > self.far_val] = 0
         depth[depth < self.near_val] = 0
         return depth
+
+
+def pinhole_camera_from_intrinsics_and_depth(camera_K: np.ndarray, depth_meters: np.ndarray) -> Camera:
+    """
+    Build a :class:`Camera` for :meth:`Camera.depth_to_xyz` using ``depth_meters`` shape as truth.
+
+    Decoded depth is ``(H, W)``. Message fields ``rgb_width`` / ``rgb_height`` should match, but
+    servers (or legacy runs) can get row/column order wrong; sizing the pinhole model from ``depth``
+    avoids broadcast errors against :func:`numpy.indices` inside ``depth_to_xyz``.
+    """
+    if depth_meters.ndim != 2:
+        raise ValueError(f"depth_meters must be 2D, got shape {getattr(depth_meters, 'shape', None)}")
+    dh, dw = int(depth_meters.shape[0]), int(depth_meters.shape[1])
+    return Camera.from_K(np.asarray(camera_K, dtype=np.float64), width=float(dw), height=float(dh))
 
 
 def camera_xyz_to_global_xyz(camera_xyz, camera_pose):

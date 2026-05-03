@@ -52,6 +52,18 @@ class Parameters:
             return default
         return data[key]
 
+    def setdefault(self, key: str, default: Any) -> Any:
+        """If *key* is missing, set it to *default* and return *default*; else return stored value.
+
+        Only top-level keys are supported (no ``/`` paths; use :meth:`get` / :meth:`set` for nested).
+        """
+        if "/" in key:
+            raise ValueError("Parameters.setdefault only supports top-level keys, not paths with '/'")
+        if key not in self.data:
+            self.data[key] = default
+            return default
+        return self.data[key]
+
     def set(self, key: str, value: Any):
         """Safe wrapper to dictionary. Sets the value of the key.
 

@@ -20,6 +20,8 @@ from __future__ import annotations
 import click
 
 from emet.app.robot_cli import create_robot_client_from_cli
+from emet.controller.controller_dynagraph import DynagraphController
+from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import get_parameters
 from emet.memory.headless_export import export_graph_eqa_dir
 
@@ -131,7 +133,7 @@ def main(
     )
 
     print("- Load parameters")
-    parameters: dict = get_parameters("dynav_config.yaml")
+    parameters = get_parameters("dynav_config.yaml")
     parameters.setdefault("dynagraph_merge_xy_m", 0.45)
     parameters.setdefault("dynagraph_staleness_horizon", 256)
     if merge_xy_m is not None:
@@ -145,9 +147,6 @@ def main(
     parameters["encoder"] = None
 
     print("- Start Dynagraph agent")
-    from emet.controller.controller_dynagraph import DynagraphController
-    from emet.controller.task.dynamem import EQAExecuter
-
     agent = DynagraphController(
         robot,
         parameters,

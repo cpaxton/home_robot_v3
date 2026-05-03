@@ -36,6 +36,7 @@ from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn
 from emet.simulation.head_look_action import apply_head_to_robosuite
 from emet.utils.geometry import xyt_global_to_base
+from emet.utils.observation_layout import rgb_height_width_for_zmq
 
 logger = log.Logger(__name__)
 
@@ -529,7 +530,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         except Exception:
             return None
 
-        width, height = rgb.shape[1], rgb.shape[0]
+        height, width = rgb_height_width_for_zmq(rgb)
         depth_u16 = (depth * 1000).astype(np.uint16)
 
         positions, _, _ = self.get_joint_state()

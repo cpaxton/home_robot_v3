@@ -10,8 +10,12 @@
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Agent package: tools, prompt, and loop for robot + memory + optional Discord.
+#
+# ``run_agent_with_robot`` is loaded lazily (``__getattr__``) so submodules like
+# ``emet.agent.env_flags`` can be imported while ``emet.controller.controller_dynamem``
+# is still initializing — otherwise ``agent`` → ``loop`` → ``dynamem_task`` → ``RobotAgent``
+# creates a circular import.
 
-from emet.agent.loop import run_agent_with_robot
 from emet.agent.prompt import (
     DEFAULT_AGENT_NAME,
     AgentPromptBuilder,
@@ -36,3 +40,12 @@ __all__ = [
     "parse_tool_calls_response",
     "run_agent_with_robot",
 ]
+
+
+def __getattr__(name: str):
+    if name == "run_agent_with_robot":
+        from emet.agent.loop import run_agent_with_robot as _run_agent_with_robot
+
+        globals()["run_agent_with_robot"] = _run_agent_with_robot
+        return _run_agent_with_robot
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
