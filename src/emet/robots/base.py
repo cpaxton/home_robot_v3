@@ -42,7 +42,7 @@ class RobotSpec:
     base_link_name: str = "base_link"
     # --- Optional install / app hints (names match pyproject [project.optional-dependencies]) ---
     optional_uv_extras: tuple[str, ...] = ()
-    """Extras to ``uv sync --extra …`` for typical full-stack use (e.g. ``da3`` for depth inference)."""
+    """Extras to ``uv sync --extra …`` for typical full-stack use when something is not in core deps."""
     dynamem_depth_source_hint: str | None = None
     """When hardware omits depth on ZMQ, DynaMem usually needs this ``depth_source`` (see dynav YAML)."""
 

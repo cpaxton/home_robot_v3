@@ -25,6 +25,11 @@ emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S
 
 # 3. Or run mapping
 emet run mapping --robot-ip 127.0.0.1
+
+# Optional: DA3 depth + point cloud in Rerun (sim must be running; depth-anything-3 is a default dep)
+emet debug-da3-depth --robot innate_mars
+# Equivalent:
+emet run debug-da3-depth --robot innate_mars
 ```
 
 If port 4401 is already in use: `emet kill-mujoco-server` then retry, or `emet serve mujoco --port-offset 100`.
@@ -55,7 +60,7 @@ The positional **`[mujoco|robocasa]`** is optional (`emet serve` defaults to **m
 emet serve                          # MuJoCo, default scene, Stretch
 emet serve mujoco --headless        # No native viewer
 emet serve --robot innate_mars --headless   # Innate Mars + default table (match client --robot)
-emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S --dynav-config dynav_innate_mars.yaml   # DynaMem + DA3 (needs uv sync --extra da3)
+emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S --dynav-config dynav_innate_mars.yaml   # DynaMem + DA3
 emet serve mujoco --use-robocasa    # Robocasa scene
 ```
 
@@ -73,6 +78,7 @@ Run a robot agent or app.
 | `chat` | LLM chat with robot |
 | `ai_pickup` | AI-powered pickup |
 | `timing` | Network timing test |
+| `debug-da3-depth` | Live DA3 depth + point cloud to Rerun (same as `emet debug-da3-depth …`) |
 
 **Common options:**
 - `--robot` — Robot backend (`stretch`, **`innate_mars`**, `rby1`, …). **Must match** the simulator: `emet serve --robot <name>` and `emet run dynamem --robot <name>` use the same registry key.
@@ -93,6 +99,29 @@ emet run dynamem -S --visual-servo --match-method class --rerun-debug
 emet run mapping --robot-ip 127.0.0.1
 emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
 emet run timing --robot-ip 192.168.1.15 --headless
+emet run debug-da3-depth --robot innate_mars --depth-source sensor
+```
+
+---
+
+### `emet debug-da3-depth [options]`
+
+Stream head camera(s) from the ZMQ server through **Depth Anything 3** (or sim depth) and log left RGB, colormapped depth, and a strided world-frame point cloud to **Rerun**. Uses the same `resolve_depth_map` path as DynaMem, so it is the quickest way to confirm intrinsics, poses, and stereo wiring before chasing exploration failures.
+
+**Prerequisites:** Sim or robot bridge running (`emet serve mujoco --robot innate_mars --headless`). The `depth-anything-3` package is installed with the project (`uv sync`); first run may download model weights from Hugging Face.
+
+**Useful options:**
+- `--meshes` / `--no-meshes` (default: on) — log robot **visual meshes** from the robot MJCF under `da3/robot/mesh/…` in world frame (needs `mujoco` + `uv sync --extra sim`) so you can check alignment with the point cloud.
+- `--depth-source da3` (default) — run DA3; `--depth-source sensor` uses rendered sim depth (no DA3) for A/B checks.
+- `--model-id` — default `depth-anything/DA3-SMALL` for speed; use `DA3METRIC-LARGE` when you need metric calibration.
+- `--process-res` — default `378` (faster); raise for sharper depth at more compute.
+- `--hz`, `--stride` — cap FPS and point-cloud density.
+
+**Examples:**
+```bash
+emet debug-da3-depth --robot innate_mars
+emet debug-da3-depth --robot innate_mars --depth-source sensor
+emet debug-da3-depth --model-id depth-anything/DA3METRIC-LARGE --process-res 504 --hz 2
 ```
 
 ---

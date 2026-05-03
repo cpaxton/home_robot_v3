@@ -8,15 +8,17 @@
 
 **Real robot:** On the compute that runs ROS 2, start the bridge (e.g. `ros2 launch innate_mars_bridge server.launch.py`). The bridge publishes the same ZMQ keys as other Emet robots, including `rgb`, `rgb_right`, `gps`, `compass`, `camera_K`, `camera_pose`, `camera_K_right`, `camera_pose_right`, and `emet_robot_id` (`innate_mars`). Depth is absent on the wire; use `depth_source: auto` or `da3` in DynaMem config so **Depth Anything 3** fills depth (two-view when both head images and poses are present).
 
-**DynaMem + Depth Anything 3:** Hardware Mars does not publish depth on ZMQ. Install DA3 (`uv sync --extra da3`) and run the client with the packaged preset:
+**DynaMem + Depth Anything 3:** Hardware Mars does not publish depth on ZMQ. The `depth-anything-3` library is a default project dependency; run the client with the packaged preset:
 
 ```bash
 emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S --dynav-config dynav_innate_mars.yaml
 ```
 
-That YAML sets `depth_source: da3`. For MuJoCo sim you can keep `dynav_config.yaml` (`depth_source: sensor`) to use rendered depth, or use `dynav_innate_mars.yaml` to validate DA3 point clouds against the same scene as the real robot.
+That YAML sets `depth_source: da3` and defaults to a **faster** checkpoint (`DA3-SMALL`, lower `da3_process_res`) for interactive use; override `da3_model_id` for maximum metric quality. For MuJoCo sim you can keep `dynav_config.yaml` (`depth_source: sensor`) to use rendered depth, or use `dynav_innate_mars.yaml` to validate DA3 point clouds against the same scene as the real robot.
 
-`RobotSpec` for this robot declares `optional_uv_extras=("da3",)` and `dynamem_depth_source_hint="da3"` (see `emet.robots.base` / `get_robot_spec("innate_mars")`) so tools can surface install commands consistently.
+**Fast DA3 sanity check (Rerun):** With `emet serve mujoco --robot innate_mars` running, use `emet debug-da3-depth --robot innate_mars` to log left RGB, colormapped depth, and a strided point cloud under `da3/…` (same `resolve_depth_map` path as DynaMem). Add `--depth-source sensor` to compare against sim-rendered depth without running DA3.
+
+`RobotSpec` for this robot declares `dynamem_depth_source_hint="da3"` (see `emet.robots.base` / `get_robot_spec("innate_mars")`). Depth inference uses the `depth-anything-3` package from the default install.
 
 In **Rerun**, check `world/semantic_memory/pointcloud` for table and props aligned with the room; fix `camera_K` / `camera_pose` / `gps` if the cloud is sheared or floating.
 

@@ -88,7 +88,7 @@ class InnateMarsBackend(RobotBackend):
             actuator_names=list(INNATE_MARS_ACTUATOR_NAMES),
             base_link_name="base_link",
             footprint=Footprint(width=0.48, length=0.48, width_offset=0.0, length_offset=0.0),
-            optional_uv_extras=("da3",),
+            optional_uv_extras=(),
             dynamem_depth_source_hint="da3",
         )
 

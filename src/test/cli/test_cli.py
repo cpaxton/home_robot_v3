@@ -34,6 +34,7 @@ def test_cli_help():
     assert "install" in result.stdout
     assert "show" in result.stdout
     assert "test" in result.stdout
+    assert "debug-da3-depth" in result.stdout
 
 
 def test_cli_version():
@@ -70,6 +71,7 @@ def test_run_help():
     assert "dynamem" in result.stdout
     assert "graph" in result.stdout and "eqa" in result.stdout
     assert "mapping" in result.stdout
+    assert "debug-da3-depth" in result.stdout
 
 
 def test_run_graph_eqa_help():
@@ -194,6 +196,18 @@ def test_install_completion_help():
     )
     assert result.returncode == 0
     assert "bash" in result.stdout or "zsh" in result.stdout
+
+
+def test_debug_da3_depth_help():
+    """emet debug-da3-depth --help lists DA3 options (top-level subcommand)."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "debug-da3-depth", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "--model-id" in result.stdout
+    assert "--depth-source" in result.stdout
 
 
 def test_install_completion_bash():

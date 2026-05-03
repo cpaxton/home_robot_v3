@@ -23,7 +23,7 @@ def test_innate_mars_spec():
     assert Path(s.mjcf_path).resolve() == canonical.resolve()
     assert s.urdf_path is not None
     assert Path(s.urdf_path).resolve() == canonical.with_name("maurice.urdf").resolve()
-    assert s.optional_uv_extras == ("da3",)
+    assert s.optional_uv_extras == ()
     assert s.dynamem_depth_source_hint == "da3"
 
 
@@ -121,10 +121,10 @@ def test_get_robot_spec_and_runtime_notes_innate_mars():
 
     s = get_robot_spec("innate_mars")
     assert s is not None
-    assert s.optional_uv_extras == ("da3",)
+    assert s.optional_uv_extras == ()
     notes = format_robot_runtime_notes(s)
     assert notes is not None
-    assert "da3" in notes
+    assert "uv sync" not in notes
     assert "depth_source=" in notes
 
 

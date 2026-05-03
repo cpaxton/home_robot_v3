@@ -28,7 +28,9 @@ import click
 _CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
 # Sub-apps that define @click.option("--robot") and receive --robot from `emet run`.
-_EMET_RUN_APPS_WITH_ROBOT = frozenset({"dynamem", "agent", "graph-eqa", "scene-graph", "molmospaces-explore"})
+_EMET_RUN_APPS_WITH_ROBOT = frozenset(
+    {"dynamem", "agent", "graph-eqa", "scene-graph", "molmospaces-explore", "debug-da3-depth"}
+)
 
 
 def _project_root() -> Path:
@@ -872,6 +874,7 @@ def deploy(
             "discord",
             "create-and-print-memory",
             "molmospaces-explore",
+            "debug-da3-depth",
         ]
     ),
 )
@@ -922,6 +925,7 @@ def run(
       emet run mapping --robot-ip 127.0.0.1
       emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
       emet run discord --robot-ip 192.168.1.15 --task pickup   # requires DISCORD_TOKEN in env
+      emet run debug-da3-depth --robot innate_mars   # DA3 depth + point cloud in Rerun (or: emet debug-da3-depth)
     """
     args = list(ctx.args)
     args.extend(["--robot_ip", robot_ip])
@@ -993,6 +997,8 @@ def run(
     elif app == "create-and-print-memory":
         args.extend(["--robot-ip", robot_ip])
         sys.exit(_run_module("emet.app.create_and_print_memory", args))
+    elif app == "debug-da3-depth":
+        sys.exit(_run_module("emet.app.debug_da3_depth", args))
     else:
         click.echo(f"Unknown app: {app}", err=True)
         sys.exit(1)
@@ -1556,6 +1562,13 @@ def install_completion(shell: str | None) -> None:
         sys.exit(1)
     comp = comp_cls(main, {}, "emet", "_EMET_COMPLETE")
     click.echo(comp.source())
+
+
+# Full Click options (not a thin wrapper) so `emet debug-da3-depth --help` lists all flags.
+from emet.app.debug_da3_depth import main as _debug_da3_depth_app  # noqa: E402
+
+_debug_da3_depth_app.short_help = "Live DA3 depth + point cloud from ZMQ (Rerun)"
+main.add_command(_debug_da3_depth_app)
 
 
 if __name__ == "__main__":

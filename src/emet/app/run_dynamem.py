@@ -138,7 +138,7 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
     type=str,
     default="dynav_config.yaml",
     help="DynaMem YAML: basename under emet/config/, cwd path, or absolute path. "
-    "Use dynav_innate_mars.yaml for Innate Mars + Depth Anything 3 (install da3 extra).",
+    "Use dynav_innate_mars.yaml for Innate Mars + Depth Anything 3.",
 )
 def main(
     server_ip,

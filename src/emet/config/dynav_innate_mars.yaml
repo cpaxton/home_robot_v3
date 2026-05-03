@@ -3,7 +3,7 @@
 # Use: ``emet run dynamem --robot innate_mars --dynav-config dynav_innate_mars.yaml -S``
 # (basename resolves under ``emet/config/``; pass an absolute path for a custom copy).
 #
-# Requires: ``uv sync --extra da3``. For sim-only tests with default MuJoCo depth, use ``dynav_config.yaml``
+# depth-anything-3 ships with the default env. For sim-only tests with default MuJoCo depth, use ``dynav_config.yaml``
 # (``depth_source: sensor``) instead; this file forces DA3 so behavior matches the real robot stack.
 
 # --- Start from defaults; only overrides are below. Full keys live in dynav_config.yaml. ---
@@ -29,10 +29,10 @@ remove_visited_from_obstacles: False
 min_depth: 0.25
 max_depth: 2.5
 
-# Depth Anything 3 from head RGB (and stereo when ZMQ provides rgb_right + right intrinsics/extrinsics).
+# Depth Anything 3: ``DA3-SMALL`` is faster for live stereo; use ``DA3METRIC-LARGE`` for best metric monocular.
 depth_source: da3
-da3_model_id: depth-anything/DA3METRIC-LARGE
-da3_process_res: 504
+da3_model_id: depth-anything/DA3-SMALL
+da3_process_res: 378
 
 eqa:
   backend: qwen_vl

@@ -417,11 +417,11 @@ class RobosuiteZmqServer(BaseZmqServer):
             mujoco.mj_forward(self._mjmodel, self._mjdata)
 
     def _camera_pose_world(self, camera_name: str) -> np.ndarray:
-        """4x4 camera-to-world transform for depth unprojection and map ``_visited`` updates.
+        """4x4 **OpenCV** camera-to-world transform for pinhole unprojection (DynaMem voxel code).
 
-        Previously this server sent ``np.eye(4)``, which left DynaMem with geometry near the origin
-        while the robot reported ``gps`` elsewhere, so ``_navigable = ~obstacle & explored`` had no
-        overlap at the base and exploration planning failed immediately.
+        MuJoCo reports ``cam_xmat`` in an OpenGL-style camera frame (+Y up, −Z forward). EMET unprojection
+        uses OpenCV-style rays (+Y down image rows, +Z into the scene). For the same physical camera,
+        ``R_world_from_cv = R_mujoco @ diag(1,-1,-1)`` so ``p_world = R_mujoco @ (D @ p_cv)``.
         """
         if self._mjmodel is None or self._mjdata is None:
             return np.eye(4, dtype=np.float64)
@@ -431,8 +431,13 @@ class RobosuiteZmqServer(BaseZmqServer):
                 return np.eye(4, dtype=np.float64)
             R = np.asarray(self._mjdata.cam_xmat[cam_id], dtype=np.float64).reshape(3, 3)
             pos = np.asarray(self._mjdata.cam_xpos[cam_id], dtype=np.float64).reshape(3)
+            # MuJoCo camera frame: +Y up, −Z forward (OpenGL). Point unprojection in emet uses OpenCV
+            # camera coordinates (+Y down, +Z forward). World = R_mj @ p_mj; with p_mj = D @ p_cv and
+            # D = diag(1,-1,-1), we have p_world = (R_mj @ D) @ p_cv.
+            d = np.diag([1.0, -1.0, -1.0])
+            r_cv = R @ d
             T = np.eye(4, dtype=np.float64)
-            T[:3, :3] = R
+            T[:3, :3] = r_cv
             T[:3, 3] = pos
             return T
 
