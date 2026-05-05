@@ -53,7 +53,7 @@ from emet.mapping.voxel.voxel import _instance_memory_kwargs_from_params
 from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
 from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
 from emet.motion.algo.a_star import AStar
-from emet.perception.depth import create_da3_estimator_from_parameters
+from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
 from emet.perception.detection.owl import OwlPerception
 from emet.perception.detection.yoloe import YoloEPerception
 
@@ -156,6 +156,8 @@ class DynamemController(BaseController):
         self.semantic_sensor = semantic_sensor
         # StretchZmqClient and GenericZmqClient set ``_rerun`` when Rerun is enabled; otherwise NullVisualizer.
         self.rerun_visualizer = getattr(self.robot, "_rerun", None) or NullVisualizer()
+        # Last navigation / EQA markdown for Rerun ``robot_monologue``; ``update()`` appends live status.
+        self._rerun_monologue_base = ""
         self.setup_custom_blueprint()
 
         self.mllm = mllm
@@ -213,7 +215,8 @@ class DynamemController(BaseController):
                 raise RuntimeError(
                     "Robot ZMQ client did not connect (no full observation + state within the startup timeout). "
                     "Start the sim first with the same robot and ports, e.g. "
-                    "`emet serve mujoco` (Stretch) or `emet serve mujoco --robot rby1` / MolmoSpaces merge, "
+                    "`emet serve mujoco` (Stretch), `emet serve mujoco --robot innate_mars`, or "
+                    "`emet serve mujoco --robot rby1` / MolmoSpaces merge, "
                     "then run the agent. Match `--port-offset` on both sides and use the same `--robot` as serve. "
                     "If the sim is already running, check server logs: missing camera/GL errors can make "
                     "observations None so nothing is published on the observation socket."
@@ -433,30 +436,69 @@ class DynamemController(BaseController):
         sensor_depth: np.ndarray | None,
         camera_K: np.ndarray | None,
         camera_pose: np.ndarray | None,
+        rgb_right: np.ndarray | None = None,
+        camera_K_right: np.ndarray | None = None,
+        camera_pose_right: np.ndarray | None = None,
     ) -> np.ndarray | None:
         """Pick sensor depth, DA3, or auto per ``depth_source``."""
-        mode = self._depth_source
+        mode = str(self._depth_source).lower()
         if mode == "sensor":
             return sensor_depth
-
-        k_ok = camera_K is not None and np.asarray(camera_K).shape == (3, 3)
-        p_ok = camera_pose is not None and np.asarray(camera_pose).shape == (4, 4)
-        k_use = np.asarray(camera_K, dtype=np.float32) if k_ok else None
-        p_use = np.asarray(camera_pose, dtype=np.float32) if p_ok else None
-
-        if mode == "auto":
-            if sensor_depth is not None and np.asarray(sensor_depth).size > 0:
-                return np.asarray(sensor_depth, dtype=np.float32)
-
+        # Auto: prefer sensor without constructing DA3 (heavy); matches resolve_depth_map logic.
+        if mode == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
+            return np.asarray(sensor_depth, dtype=np.float32)
         est = self._lazy_da3_estimator()
-        if est is None:
-            raise RuntimeError("depth_source requires DA3 but estimator creation returned None.")
+        return resolve_depth_map(
+            self._depth_source,
+            est,
+            rgb,
+            sensor_depth,
+            camera_K,
+            camera_pose,
+            rgb_right,
+            camera_K_right,
+            camera_pose_right,
+        )
 
-        if mode == "da3":
-            return est.infer(rgb, intrinsics=k_use, extrinsics_w2c=p_use)
+    def _rerun_live_status_markdown(self) -> str:
+        """Short markdown for the Rerun text panel: mapping progress and graph state."""
+        lines: list[str] = [f"- **Observation step:** {self.obs_count}"]
+        vm = getattr(self, "voxel_map", None)
+        if vm is not None:
+            try:
+                obstacles, explored = vm.get_2d_map()
+                if hasattr(obstacles, "cpu"):
+                    obstacles = obstacles.cpu().numpy()
+                if hasattr(explored, "cpu"):
+                    explored = explored.cpu().numpy()
+                obs_cells = int(obstacles.sum()) if obstacles is not None and obstacles.size else 0
+                exp_cells = int(explored.sum()) if explored is not None and explored.size else 0
+                lines.append(f"- **2D map:** {exp_cells} explored cells, {obs_cells} obstacle cells")
+            except Exception:
+                lines.append("- **2D map:** (unavailable)")
+            pcd = getattr(vm, "voxel_pcd", None)
+            pts = getattr(pcd, "_points", None) if pcd is not None else None
+            if pts is not None:
+                n = int(pts.shape[0]) if hasattr(pts, "shape") else 0
+                lines.append(f"- **Voxel point cloud:** {n} points")
+        gm = getattr(self, "graph_memory", None)
+        if gm is not None:
+            try:
+                lines.append(f"- **Graph memory nodes:** {len(gm.get_nodes())}")
+            except Exception:
+                lines.append("- **Graph memory:** (unavailable)")
+        return "\n".join(lines)
 
-        # auto: no usable sensor depth
-        return est.infer(rgb, intrinsics=k_use, extrinsics_w2c=p_use)
+    def _rerun_refresh_monologue_panel(self) -> None:
+        """Push ``robot_monologue`` = stored plan/EQA text plus live mapping status."""
+        if not getattr(self.rerun_visualizer, "enabled", True):
+            return
+        base = (self._rerun_monologue_base or "").strip()
+        if not base:
+            base = "*No navigation plan or EQA answer in this session step yet — building the map from depth.*"
+        live = self._rerun_live_status_markdown()
+        doc = f"{base}\n\n---\n\n## Live status\n{live}"
+        self.rerun_visualizer.log_text("robot_monologue", doc)
 
     def update(self):
         """Step the data collector. Get a single observation of the world. Remove bad points, such as those from too far or too near the camera. Update the 3d world representation."""
@@ -467,7 +509,15 @@ class DynamemController(BaseController):
             return
         self.obs_count += 1
         rgb, sensor_depth, K, camera_pose = obs.rgb, obs.depth, obs.camera_K, obs.camera_pose
-        depth = self._resolve_depth_map(rgb, sensor_depth, K, camera_pose)
+        depth = self._resolve_depth_map(
+            rgb,
+            sensor_depth,
+            K,
+            camera_pose,
+            rgb_right=getattr(obs, "head_rgb_right", None),
+            camera_K_right=getattr(obs, "head_camera_K_right", None),
+            camera_pose_right=getattr(obs, "head_camera_pose_right", None),
+        )
         if depth is None:
             logger.error(f"No depth map available (depth_source={self._depth_source!r}); skipping voxel update.")
             return
@@ -479,7 +529,12 @@ class DynamemController(BaseController):
                 base_xyt = np.array([float(g[0]), float(g[1]), float(c[0])], dtype=np.float64)
         self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt)
         if self.voxel_map.voxel_pcd._points is not None:
-            self.rerun_visualizer.update_voxel_map(space=self.space)
+            robot_xy = None
+            if obs.gps is not None:
+                g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
+                if g.size >= 2:
+                    robot_xy = (float(g[0]), float(g[1]))
+            self.rerun_visualizer.update_voxel_map(space=self.space, robot_base_xy=robot_xy)
         if self.voxel_map.semantic_memory._points is not None:
             self.rerun_visualizer.log_custom_pointcloud(
                 "world/semantic_memory/pointcloud",
@@ -506,12 +561,15 @@ class DynamemController(BaseController):
                 use_sensor_perception=self._graph_eqa_use_sensor_perception,
                 dedup_skips=self._graph_dedup_skips,
                 obs=obs,
+                frame_step=self.obs_count,
             )
 
         # Visualize open-vocab scene graph if attached
         ovsg = self.voxel_map.get_scene_graph()
         if ovsg is not None and ovsg.num_objects > 0:
             self.rerun_visualizer.update_open_vocab_scene_graph(ovsg)
+
+        self._rerun_refresh_monologue_panel()
 
     def _update_scene_graph(self) -> None:
         """Update the scene graph with the latest instances from the voxel map."""
@@ -755,6 +813,7 @@ class DynamemController(BaseController):
         print("Processing", text, "starts")
 
         self.rerun_visualizer.clear_identity("world/object")
+        self.rerun_visualizer.clear_identity("world/xyt_goal")
         self.rerun_visualizer.clear_identity("world/robot_start_pose")
         self.rerun_visualizer.clear_identity("world/direction")
         self.rerun_visualizer.clear_identity("robot_monologue")
@@ -816,6 +875,21 @@ class DynamemController(BaseController):
         if len(localized_point) == 2:
             localized_point = np.array([localized_point[0], localized_point[1], 0])
 
+        _lp = np.asarray(
+            localized_point.detach().cpu().numpy() if isinstance(localized_point, torch.Tensor) else localized_point,
+            dtype=np.float64,
+        ).reshape(-1)
+        ox, oy = float(_lp[0]), float(_lp[1])
+        oz = float(_lp[2]) if _lp.size > 2 else 1.5
+        if not np.isfinite(oz) or abs(oz) < 1e-9:
+            oz = 1.5
+        self.rerun_visualizer.log_custom_pointcloud(
+            "world/object",
+            [ox, oy, oz],
+            torch.Tensor([1, 0, 0]),
+            0.12,
+        )
+
         point = self.space.sample_navigation(start_pose, self.planner, localized_point)
 
         print("Navigation endpoint selected")
@@ -833,17 +907,14 @@ class DynamemController(BaseController):
         elif res is not None:
             waypoints = None
             print("[FAILURE]", res.reason)
+
+        if point is not None:
+            self.rerun_visualizer.update_nav_goal(np.asarray(point, dtype=np.float64))
+
         # If we are navigating to some object of interest, send (x, y, z) of
         # the object so that we can make sure the robot looks at the object after navigation
         traj = []
         if waypoints is not None:
-            self.rerun_visualizer.log_custom_pointcloud(
-                "world/object",
-                [localized_point[0], localized_point[1], 1.5],
-                torch.Tensor([1, 0, 0]),
-                0.1,
-            )
-
             finished = len(waypoints) <= 8 and mode == "navigation"
             if finished:
                 self.space.traj = None
@@ -871,7 +942,8 @@ class DynamemController(BaseController):
         else:
             debug_text = "### I have not received any text query from human user.\n ### So, I plan to explore the environment with Frontier-based exploration.\n"
         debug_text = "# Robot's monologue: \n" + debug_text
-        self.rerun_visualizer.log_text("robot_monologue", debug_text)
+        self._rerun_monologue_base = debug_text
+        self._rerun_refresh_monologue_panel()
 
         if traj is not None:
             origins = []
@@ -1149,7 +1221,8 @@ class DynamemController(BaseController):
             + reasoning_output
         )
 
-        self.rerun_visualizer.log_text("robot_monologue", answer_output)
+        self._rerun_monologue_base = answer_output
+        self._rerun_refresh_monologue_panel()
         if len(relevant_images) != 0:
             self.rerun_visualizer.log_custom_2d_image(
                 "/observation_similar_to_text", self._patch_images(relevant_images)

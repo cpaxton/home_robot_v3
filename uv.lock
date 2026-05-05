@@ -1048,6 +1048,7 @@ dependencies = [
     { name = "bitsandbytes" },
     { name = "click" },
     { name = "clip" },
+    { name = "depth-anything-3" },
     { name = "discord-py" },
     { name = "draccus" },
     { name = "einops" },
@@ -1108,9 +1109,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-da3 = [
-    { name = "depth-anything-3" },
-]
 dev = [
     { name = "lark" },
     { name = "mypy" },
@@ -1170,7 +1168,7 @@ requires-dist = [
     { name = "click", specifier = ">=8.1.8" },
     { name = "click", marker = "extra == 'sim'", specifier = ">=8.1.8" },
     { name = "clip", git = "https://github.com/ultralytics/CLIP.git" },
-    { name = "depth-anything-3", marker = "extra == 'da3'", specifier = ">=0.1.1" },
+    { name = "depth-anything-3", specifier = ">=0.1.1" },
     { name = "discord-py" },
     { name = "draccus", specifier = ">=0.11.0" },
     { name = "einops" },
@@ -1241,7 +1239,7 @@ requires-dist = [
     { name = "wget" },
     { name = "yacs" },
 ]
-provides-extras = ["dev", "sim", "hand-tracker", "dynamem", "da3", "molmospaces"]
+provides-extras = ["dev", "sim", "hand-tracker", "dynamem", "molmospaces"]
 
 [package.metadata.requires-dev]
 da3 = [{ name = "depth-anything-3", specifier = ">=0.1.1" }]

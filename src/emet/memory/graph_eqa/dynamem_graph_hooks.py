@@ -38,6 +38,7 @@ def update_graph_memory_from_dynamem_observation(
     use_sensor_perception: bool,
     dedup_skips: Callable[[str, np.ndarray], bool] | None,
     obs: Any,
+    frame_step: int | None = None,
 ) -> None:
     """Append one observation to ``graph_memory`` (same logic as ``GraphEQAController.update`` tail).
 
@@ -48,6 +49,9 @@ def update_graph_memory_from_dynamem_observation(
     rgb = obs.rgb
     if obs.camera_pose is None:
         return
+
+    if frame_step is not None and hasattr(graph_memory, "set_graph_timestep"):
+        graph_memory.set_graph_timestep(int(frame_step))
 
     vm = voxel_map
     if (

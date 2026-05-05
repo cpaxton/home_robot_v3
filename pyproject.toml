@@ -78,6 +78,7 @@ dependencies = [
     "simpleaudio",
     "scikit-fmm",
     "open3d",
+    "depth-anything-3>=0.1.1",
     "click>=8.1.8",
     "discord.py",
     "python-dotenv",
@@ -113,9 +114,6 @@ hand_tracker = [
 ]
 dynamem = [
     "SAM-2",
-]
-da3 = [
-    "depth-anything-3>=0.1.1",
 ]
 # MolmoSpaces: optional extra does NOT add molmo-spaces to main env (version conflict with numpy<2).
 # Use a separate venv for the runner; see docs/molmospaces.md and install.sh --molmospaces.

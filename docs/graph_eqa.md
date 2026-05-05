@@ -11,6 +11,7 @@ This implementation is a **re-implementation** inspired by the [GraphEQA paper](
 | **Sparse voxel map** | Base 2D/3D voxel map + optional instance memory. | Default agent (InstanceMemoryController), mapping, navigation. |
 | **DynaMem** | Voxel map + VL features + EQA, pick-and-place. | `emet run dynamem`; EQA with voxel-based memory. |
 | **Graph EQA** | Scene graph (nodes + edges) + task-relevant images. | `emet run graph-eqa`; EQA with graph-based memory. |
+| **Dynagraph** | Graph EQA + optional merge/staleness on graph nodes (same voxel nav). | `emet run dynagraph`; see [dynagraph.md](dynagraph.md). |
 
 ## When to use GraphEQA vs DynaMem EQA
 
@@ -138,13 +139,15 @@ Other components:
 
 | Component | Location |
 |-----------|----------|
-| GraphEQA agent | `src/emet/controller/robot_agent_graph_eqa.py` (`GraphEQAController`) |
+| GraphEQA agent | `src/emet/controller/controller_graph_eqa.py` (`GraphEQAController`) |
+| Dynagraph agent | `src/emet/controller/controller_dynagraph.py` — merge/staleness on `GraphEQAMemory`; see [dynagraph.md](dynagraph.md) |
 | App entry point | `src/emet/app/run_graph_eqa.py` |
+| Dynagraph app | `src/emet/app/run_dynagraph.py` |
 | Plan (design) | [docs/plans/GRAPH_EQA_PLAN.md](plans/GRAPH_EQA_PLAN.md) |
 
 ## Tests and contributing
 
-- **Tests**: `pytest src/test/memory/test_graph_eqa_memory.py` for the graph memory; controller smoke tests include `GraphEQAController`; CLI tests check that `emet run graph-eqa` is available.
+- **Tests**: `pytest src/test/memory/test_graph_eqa_memory.py` for the graph memory; controller smoke tests include `GraphEQAController`; CLI tests check that `emet run graph-eqa` and `emet run --help` list `dynagraph` (`emet.app.run_dynagraph --help` for merge/staleness flags).
 - **Contributing**: Follow the main [CONTRIBUTING.md](../CONTRIBUTING.md). The implementation is intentionally a clean re-implementation; do not paste code from the closed-source GraphEQA repo.
 
 ---

@@ -93,16 +93,23 @@ def to_jp2(image: np.ndarray, quality: int = 800):
 
 
 def to_jpg(image: np.ndarray, quality: int = 90):
-    """Encode as jpeg"""
+    """Encode as JPEG. Input must be **RGB** uint8 (H,W,3); OpenCV expects BGR for ``imencode``."""
+    if image.ndim == 3 and image.shape[2] == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     _, compressed_image = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])
     return compressed_image
 
 
 def from_jpg(compressed_image: bytes | np.ndarray) -> np.ndarray:
-    """Convert compressed image to numpy array"""
+    """Decode JPEG to **RGB** uint8 (H,W,3). ``imdecode`` yields BGR; we convert back."""
     if isinstance(compressed_image, bytes):
         compressed_image = np.frombuffer(compressed_image, dtype=np.uint8)
-    return cv2.imdecode(compressed_image, cv2.IMREAD_COLOR)
+    bgr = cv2.imdecode(compressed_image, cv2.IMREAD_COLOR)
+    if bgr is None:
+        raise ValueError("cv2.imdecode failed for JPEG bytes")
+    if bgr.ndim == 3 and bgr.shape[2] == 3:
+        return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    return bgr
 
 
 def from_jp2(compressed_image: bytes | np.ndarray) -> np.ndarray:

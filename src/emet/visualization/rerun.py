@@ -10,6 +10,7 @@
 # license information maybe found below, if so.
 
 import os
+import socket
 import time
 import timeit
 from typing import Any
@@ -47,6 +48,8 @@ logger = Logger(__name__)
 #   world/frames/<i>/depth DepthImage
 #   world/frames/current   (at each frame time) Transform3D, rgb, depth — scrub "frame" timeline for playback
 #   world/graph/nodes      Points3D (graph nodes)
+#   world/dynagraph/nodes  Points3D (Dynagraph graph nodes)
+#   world/dynagraph/summary TextDocument (tree view)
 #   world/memory/text      TextDocument
 #   world/head_camera      Transform3D (optional); world/head_camera/rgb Image, world/head_camera/depth
 #   world/ee_camera        same for end-effector camera
@@ -257,8 +260,8 @@ class RerunVisualizer:
     def __init__(
         self,
         display_robot_mesh: bool = True,
-        spawn_gui: bool = True,
-        open_browser: bool = False,
+        spawn_gui: bool = False,
+        open_browser: bool = True,
         headless: bool = False,
         server_memory_limit: str = "4GB",
         collapse_panels: bool = True,
@@ -269,35 +272,56 @@ class RerunVisualizer:
         memory_view: bool = False,
         num_frames: int = 0,
         mjcf_robot: tuple[str, tuple[str, ...], int, str] | None = None,
+        rerun_native_viewer: bool = False,
     ):
         """Rerun visualizer class
         Args:
             display_robot_mesh (bool): Display robot mesh (Stretch URDF) or MJCF skeleton when *mjcf_robot* is set
-            open_browser (bool): Open browser at start
-            headless (bool): If True, disable native viewer and serve web only (connect at :9090)
+            spawn_gui (bool): If True, native Rerun desktop viewer (TCP). Default False (browser via ``rr.serve``).
+            open_browser (bool): When using the web server, open a browser tab if a display exists.
+            headless (bool): If True, no native viewer and no auto-open browser; use the :9090 URL manually.
+            rerun_native_viewer (bool): Same as env ``RERUN_NATIVE_VIEWER=1``: use the native app, not the browser.
             server_memory_limit (str): Server memory limit E.g. 2GB or 20%
             collapse_panels (bool): Set to false to have customizable rerun panels
         """
-        self.open_browser = open_browser
-        # RERUN_HEADLESS=1 forces web-only (useful when DISPLAY is set but native viewer is unwanted)
+        # RERUN_HEADLESS=1 forces no native viewer and no auto-open browser (web server only).
         if os.environ.get("RERUN_HEADLESS", "").lower() in ("1", "true", "yes"):
             headless = True
+        want_native = bool(rerun_native_viewer) or (
+            os.environ.get("RERUN_NATIVE_VIEWER", "").lower() in ("1", "true", "yes")
+        )
         # RERUN_BIND_ALL=1 makes the server listen on 0.0.0.0 for remote viewing (Tailscale, etc.)
         if os.environ.get("RERUN_BIND_ALL", "").lower() in ("1", "true", "yes"):
             os.environ["RERUN_SERVER_HOST"] = "0.0.0.0"
             os.environ["RERUN_SERVER_WS_HOST"] = "0.0.0.0"
+
         if headless:
             spawn_gui = False
             open_browser = False
+        elif want_native:
+            if has_display():
+                spawn_gui = True
+                open_browser = False
+            else:
+                logger.warning(
+                    "Native Rerun viewer requested but no DISPLAY/WAYLAND; starting web server only "
+                    "(open http://<this-host>:9090?url=ws://<this-host>:9877 manually)."
+                )
+                spawn_gui = False
+                open_browser = False
         elif spawn_gui or open_browser:
-            # Check environment variables to see if this is docker
             if "DOCKER" in os.environ:
                 spawn_gui = False
                 open_browser = True
-                logger.warning("Docker environment detected. Disabling GUI.")
+                logger.warning("Docker environment detected. Using web Rerun viewer.")
             if not has_display():
                 spawn_gui = False
-                logger.warning("No DISPLAY/WAYLAND set. Disabling Rerun GUI (spawn=False).")
+                open_browser = False
+                logger.warning(
+                    "No DISPLAY/WAYLAND set. Rerun web server only; open :9090 manually (or use SSH port forwarding)."
+                )
+
+        self.open_browser = open_browser
         rr.init("Stretch_robot", spawn=spawn_gui)
 
         if output_path is not None:
@@ -311,12 +335,17 @@ class RerunVisualizer:
                 open_browser=open_browser and has_display() and not headless,
                 server_memory_limit=server_memory_limit,
             )
-            if not has_display() or headless:
-                logger.info("Rerun web viewer: connect at http://<this-host>:9090?url=ws://<this-host>:9877")
+            # Always print: logging is often WARNING+, and we want the URL even when the browser auto-opens.
+            local_url = "http://127.0.0.1:9090?url=ws://127.0.0.1:9877"
+            print(f"Rerun web viewer: {local_url}", flush=True)
+            if os.environ.get("RERUN_BIND_ALL", "").lower() in ("1", "true", "yes"):
+                hn = socket.gethostname()
+                print(f"Rerun web viewer (LAN/remote): http://{hn}:9090?url=ws://{hn}:9877", flush=True)
         else:
-            logger.info(
-                "Rerun native viewer is receiving the log stream (TCP). Web viewer is not started for this "
-                "process; use RERUN_HEADLESS=1 or `emet run agent ... --rerun` with `--headless` to use :9090 instead."
+            print(
+                "Rerun: native desktop viewer (TCP). For the web UI omit --rerun-native / RERUN_NATIVE_VIEWER "
+                "or set RERUN_HEADLESS=1, then use http://127.0.0.1:9090?url=ws://127.0.0.1:9877",
+                flush=True,
             )
 
         self.display_robot_mesh = display_robot_mesh
@@ -498,6 +527,32 @@ class RerunVisualizer:
                 colors=colors,
                 radii=radii,
             ),
+        )
+
+    def log_dynagraph_state(self, graph_memory: Any) -> None:
+        """Log ``GraphEQAMemory`` nodes and tree summary under ``world/dynagraph/``."""
+        if getattr(self, "_memory_view", False):
+            return
+        rr.set_time_seconds("realtime", time.time())
+        log_to_rerun(
+            "world/dynagraph/summary",
+            rr.TextDocument(graph_memory.print_memory(), media_type=rr.MediaType.MARKDOWN),
+        )
+        nodes = graph_memory.get_nodes()
+        if not nodes:
+            self.clear_identity("world/dynagraph/nodes")
+            return
+        xyz = np.array([n.xyz for n in nodes], dtype=np.float64)
+        labels: list[str] = []
+        for n in nodes:
+            lb = ", ".join(n.labels) if n.labels else str(n.node_id)
+            sc = int(getattr(n, "support_count", 1))
+            if sc != 1:
+                lb = f"{lb} (x{sc})"
+            labels.append(lb)
+        log_to_rerun(
+            "world/dynagraph/nodes",
+            rr.Points3D(positions=xyz, radii=0.06, labels=labels),
         )
 
     def log_head_camera(self, obs: Observations):
@@ -873,10 +928,13 @@ class RerunVisualizer:
         explored_radius=0.025,
         obstacle_radius=0.05,
         world_radius=0.03,
+        robot_base_xy: np.ndarray | tuple[float, float] | None = None,
     ):
         """Log voxel map and send it to Rerun visualizer.
 
         Builds a minimal MemoryState from space and calls log_memory_state.
+        Also logs a top-down RGB to ``world/map_snapshot/topdown`` (same path as
+        ``send_map_snapshot``) so the blueprint ``map_topdown`` view stays live.
         """
         rr.set_time_seconds("realtime", time.time())
 
@@ -914,6 +972,15 @@ class RerunVisualizer:
             world_radius=world_radius,
         )
         t2 = timeit.default_timer()
+
+        try:
+            from emet.visualization.map_snapshot import snapshot_from_voxel_map
+
+            img, _stats, _discord = snapshot_from_voxel_map(space.voxel_map, robot_base_xy, max_side=640)
+            if img is not None and getattr(img, "size", 0) > 0:
+                self.log_custom_2d_image("world/map_snapshot/topdown", img)
+        except Exception as e:
+            logger.debug("Rerun top-down map snapshot skipped: %s", e)
 
         if debug:
             print("Time to get voxel data: ", t1 - t0)

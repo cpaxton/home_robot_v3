@@ -196,7 +196,7 @@ def print_embodied_model_report(
         print(
             colored(
                 "[model debug] Head camera / black PNG: EMET_AGENT_CAMERA_DEBUG=1 or --debug-camera. "
-                "Discord black PNG: try EMET_DISCORD_IMAGES_BGR=0.",
+                "Discord assumes RGB (from_jpg); try EMET_DISCORD_IMAGES_BGR=1 for legacy OpenCV BGR.",
                 "cyan",
             ),
             flush=True,

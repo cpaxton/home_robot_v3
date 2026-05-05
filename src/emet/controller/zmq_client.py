@@ -37,12 +37,24 @@ from emet.utils.geometry import (
     sophus2posquat,
     xyt_base_to_global,
 )
-from emet.utils.image import Camera
+from emet.utils.image import pinhole_camera_from_intrinsics_and_depth
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
 from emet.utils.point_cloud import show_point_cloud
 
 logger = Logger(__name__)
+
+
+def _dict_first_nonempty(msg: dict[str, Any], *keys: str) -> Any:
+    """First ``msg[k]`` that is not None. Do not use ``or``: ndarray truth values are ambiguous."""
+    for k in keys:
+        if k not in msg:
+            continue
+        v = msg[k]
+        if v is not None:
+            return v
+    return None
+
 
 # TODO: debug code - remove later if necessary
 # import faulthandler
@@ -117,6 +129,7 @@ class StretchZmqClient(AbstractRobotClient):
         start_immediately: bool = True,
         enable_rerun_server: bool = True,
         rerun_headless: bool = False,
+        rerun_native_viewer: bool = False,
         rerun_show_panels: bool = False,
         rerun_debug: bool = False,
         resend_all_actions: bool = False,
@@ -233,6 +246,7 @@ class StretchZmqClient(AbstractRobotClient):
             self._rerun = RerunVisualizer(
                 output_path=output_path,
                 headless=rerun_headless,
+                rerun_native_viewer=rerun_native_viewer,
                 collapse_panels=not rerun_show_panels,
             )
         else:
@@ -1550,16 +1564,40 @@ class StretchZmqClient(AbstractRobotClient):
             compressed_depth = output.get("depth")
             if compressed_depth is None:
                 if not self._allow_missing_depth:
-                    logger.warning("Observation missing depth key; skipping frame (use allow_missing_depth for RGB-only).")
+                    logger.warning(
+                        "Observation missing depth key; skipping frame (use allow_missing_depth for RGB-only)."
+                    )
                     continue
                 output["depth"] = None
                 output["xyz"] = None
             else:
                 depth = compression.from_jp2(compressed_depth) / 1000
                 output["depth"] = depth
-
-                if camera is None:
-                    camera = Camera.from_K(output["camera_K"], output["rgb_height"], output["rgb_width"])
+                dh, dw = int(depth.shape[0]), int(depth.shape[1])
+                k = np.asarray(output["camera_K"], dtype=np.float64)
+                if camera is None or int(camera.height) != dh or int(camera.width) != dw:
+                    if camera is not None:
+                        logger.warning(
+                            "Depth shape (%s, %s) != camera (%s, %s); rebuilding from K and depth "
+                            "(server rgb_width/rgb_height may be swapped vs depth).",
+                            dh,
+                            dw,
+                            camera.height,
+                            camera.width,
+                        )
+                    elif output.get("rgb_width") is not None and output.get("rgb_height") is not None:
+                        mh = int(output["rgb_height"])
+                        mw = int(output["rgb_width"])
+                        if mh != dh or mw != dw:
+                            logger.warning(
+                                "Depth shape (%s, %s) != message rgb_height/rgb_width (%s, %s); "
+                                "using depth shape for unprojection.",
+                                dh,
+                                dw,
+                                mh,
+                                mw,
+                            )
+                    camera = pinhole_camera_from_intrinsics_and_depth(k, depth)
 
                 output["xyz"] = camera.depth_to_xyz(output["depth"])
 
@@ -1595,11 +1633,32 @@ class StretchZmqClient(AbstractRobotClient):
             color_image = None
             depth_image = None
 
-        # Get head information from the message as well
-        head_color_image = compression.from_jpg(message["head_cam/color_image"])
-        head_depth_image = compression.from_jp2(message["head_cam/depth_image"]) / 1000
-        message["head_cam/image_scaling"]
-        joint = message["robot/config"]
+        # Head cameras: Stretch (`head_cam/*` + `robot/config`) vs MuJoCo robosuite servo (`head_color_image`, …).
+        if message.get("head_cam/color_image") is not None:
+            head_color_image = compression.from_jpg(message["head_cam/color_image"])
+            head_depth_image = compression.from_jp2(message["head_cam/depth_image"]) / 1000
+            joint = message["robot/config"]
+            depth_scaling = message["head_cam/depth_scaling"]
+            camera_K_head = message["head_cam/depth_camera_K"]
+            camera_pose_head = message["head_cam/pose"]
+            ee_pose_val = message["ee/pose"]
+        elif message.get("head_color_image") is not None:
+            head_color_image = compression.from_jpg(message["head_color_image"])
+            raw_hd = message.get("head_depth_image")
+            head_depth_image = compression.from_jp2(raw_hd) / 1000 if raw_hd is not None else None
+            jp = message.get("joint_positions")
+            if jp is None:
+                return
+            joint = np.asarray(jp, dtype=np.float64)
+            depth_scaling = float(message.get("head_cam/depth_scaling", 1.0))
+            camera_K_head = _dict_first_nonempty(message, "head_camera_K", "head_cam/depth_camera_K")
+            camera_pose_head = _dict_first_nonempty(message, "head_cam/pose", "camera_pose")
+            ee_pose_val = message.get("ee/pose")
+            if ee_pose_val is None:
+                ee_pose_val = np.eye(4, dtype=np.float64)
+        else:
+            return
+
         with self._servo_lock and self._state_lock:
             observation = Observations(
                 gps=self._state["base_pose"][:2],
@@ -1620,10 +1679,10 @@ class StretchZmqClient(AbstractRobotClient):
                 observation.ee_camera_pose = message["ee_cam/pose"]
                 observation.ee_depth_scaling = message["ee_cam/image_scaling"]
 
-            observation.ee_pose = message["ee/pose"]
-            observation.depth_scaling = message["head_cam/depth_scaling"]
-            observation.camera_K = message["head_cam/depth_camera_K"]
-            observation.camera_pose = message["head_cam/pose"]
+            observation.ee_pose = ee_pose_val
+            observation.depth_scaling = depth_scaling
+            observation.camera_K = camera_K_head
+            observation.camera_pose = camera_pose_head
             if "is_simulation" in message:
                 observation.is_simulation = message["is_simulation"]
             else:

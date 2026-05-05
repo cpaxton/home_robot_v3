@@ -128,6 +128,11 @@ class Observations:
     # Pose of the camera in world coordinates
     camera_pose: np.ndarray | None = None
 
+    # Optional stereo head (right eye); same shape convention as ``rgb`` / ``camera_K`` / ``camera_pose``
+    head_rgb_right: np.ndarray | None = None
+    head_camera_K_right: np.ndarray | None = None
+    head_camera_pose_right: np.ndarray | None = None
+
     # End effector camera
     ee_rgb: np.ndarray | None = None  # (camera_height, camera_width, 3) in [0, 255]
     ee_depth: np.ndarray | None = None  # (camera_height, camera_width) in meters
@@ -249,6 +254,9 @@ class Observations:
             semantic=data.get("semantic"),
             camera_K=data.get("camera_K"),
             camera_pose=data.get("camera_pose"),
+            head_rgb_right=data.get("head_rgb_right"),
+            head_camera_K_right=data.get("head_camera_K_right"),
+            head_camera_pose_right=data.get("head_camera_pose_right"),
             ee_rgb=data.get("ee_rgb"),
             ee_depth=data.get("ee_depth"),
             ee_xyz=data.get("ee_xyz"),
@@ -261,6 +269,7 @@ class Observations:
             lidar_points=data.get("lidar_points"),
             lidar_timestamp=data.get("lidar_timestamp"),
             joint=data.get("joint"),
+            joint_velocities=data.get("joint_velocities"),
             relative_resting_position=data.get("relative_resting_position"),
             is_holding=data.get("is_holding"),
             task_observations=data.get("task_observations"),

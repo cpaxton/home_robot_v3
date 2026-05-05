@@ -25,13 +25,14 @@ import timeit
 import click
 from termcolor import colored
 
-from emet.agent import run_agent_with_robot
+from emet.agent.loop import run_agent_with_robot
 from emet.agent.model_debug import print_offline_model_line
 from emet.agent.prompt import DEFAULT_AGENT_NAME
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.core import get_parameters
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
+from emet.utils.config import read_top_level_robot_from_yaml
 
 # Default: Qwen 3.5 9B (with expandable CUDA segments enabled above to reduce fragmentation).
 # Use ``--llm qwen35-4B`` if you still hit OOM on a single consumer GPU.
@@ -133,7 +134,8 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     is_flag=True,
     help=(
         "Print head-camera frame stats for describe_scene, send_image, and Discord encode (black-PNG diagnosis). "
-        "Same as EMET_AGENT_CAMERA_DEBUG=1. If the PNG is black but stats look valid, try EMET_DISCORD_IMAGES_BGR=0."
+        "Same as EMET_AGENT_CAMERA_DEBUG=1. Discord assumes RGB buffers (matching compression.from_jpg); legacy "
+        "OpenCV BGR pipelines can set EMET_DISCORD_IMAGES_BGR=1."
     ),
 )
 @click.option(
@@ -157,12 +159,20 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
 @click.option(
     "--headless",
     is_flag=True,
-    help="With --rerun: no native Rerun window; open http://<this-host>:9090?url=ws://<this-host>:9877.",
+    help=(
+        "Simulation / Rerun: no auto-open browser for Rerun; use http://<this-host>:9090?url=ws://... manually. "
+        "Does not select the native Rerun app (use --rerun-native for that)."
+    ),
 )
 @click.option(
     "--rerun",
     is_flag=True,
-    help="Enable Rerun live visualization (off by default; same viewer as emet run dynamem).",
+    help="Enable Rerun live visualization (default: web viewer at :9090; use --rerun-native for desktop app).",
+)
+@click.option(
+    "--rerun-native",
+    is_flag=True,
+    help="With --rerun: use the native Rerun desktop viewer instead of the browser (needs DISPLAY).",
 )
 @click.option(
     "--rerun-show-panels",
@@ -184,7 +194,7 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     metavar="NAME",
     default=None,
     help=(
-        "Robot backend (stretch, rby1, galaxea_r1). Overrides top-level ``robot`` in --agent-config when set; "
+        "Robot backend (stretch, rby1, galaxea_r1, innate_mars). Overrides top-level ``robot`` in --agent-config when set; "
         "if omitted, that YAML key is used (default ``stretch`` when the key is absent). Must match "
         "emet serve mujoco --robot after any CLI remaps. MolmoSpaces (--molmospaces-scene) uses rby1 on the "
         "server even when serve is started with default stretch—set ``robot: rby1`` in YAML or pass --robot rby1. "
@@ -266,6 +276,7 @@ def main(
     port_offset: int = 0,
     headless: bool = False,
     rerun: bool = False,
+    rerun_native: bool = False,
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
     rerun_bind: bool = False,
@@ -293,6 +304,7 @@ def main(
       emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml
       emet run agent --agent-config configs/agent_rby1_discord.yaml   # uses robot: from YAML
       emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml
+      emet run agent --robot innate_mars --agent-config configs/agent_innate_mars.yaml
       emet run agent --input-path logs/memory_xxx --no-discord
       emet run agent --no-llm   # letter commands (E/M/Q/P)
       emet run agent --no-llm --command 'find red cylinder'
@@ -303,12 +315,13 @@ def main(
     cmd_list = list(commands) if commands else None
 
     if robot is None or str(robot).strip() == "":
-        robot = str(get_parameters(agent_config).get("robot", "stretch")).strip()
+        r_yaml = read_top_level_robot_from_yaml(agent_config)
+        robot = r_yaml if r_yaml is not None else str(get_parameters(agent_config).get("robot", "stretch")).strip()
     else:
         robot = str(robot).strip()
     if not robot or robot.startswith("-"):
         raise click.UsageError(
-            "`--robot` must be followed by a backend name (e.g. `stretch`, `rby1`). "
+            "`--robot` must be followed by a backend name (e.g. `stretch`, `rby1`, `innate_mars`). "
             "You left it empty or the next token was parsed as the value (often another flag); "
             "use e.g. `emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml --rerun`."
         )
@@ -336,6 +349,8 @@ def main(
     if robot_effective:
         if rerun_bind:
             os.environ["RERUN_BIND_ALL"] = "1"
+        if rerun_native and headless:
+            raise click.UsageError("Use either --rerun-native or --headless for Rerun, not both.")
         if start_sim:
             from emet.config.sim_launch_config import resolve_sim_launch_for_agent
             from emet.simulation.sim_subprocess import spawn_mujoco_server_subprocess
@@ -353,6 +368,12 @@ def main(
             print(colored("Starting MuJoCo sim subprocess (--start-sim)…", "cyan"))
             spawn_mujoco_server_subprocess(sim_cfg)
             print(colored("Sim is up; connecting agent.", "green"))
+        print(
+            colored(
+                f"Robot backend: {robot} (from --robot or YAML `{agent_config}`; must match `emet serve mujoco --robot`).",
+                "cyan",
+            )
+        )
         run_agent_with_robot(
             robot_ip=robot_effective,
             robot=robot,
@@ -374,6 +395,7 @@ def main(
             share_memory_vllm=share_memory_vllm,
             headless=headless,
             rerun=rerun,
+            rerun_native=rerun_native,
             rerun_show_panels=rerun_show_panels,
             rerun_debug=rerun_debug,
         )

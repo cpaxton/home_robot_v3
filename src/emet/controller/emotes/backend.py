@@ -21,7 +21,7 @@ import importlib
 from abc import ABC, abstractmethod
 from typing import Any
 
-from emet.controller.operations import (
+from emet.controller.operations.emote import (
     AvertGazeOperation,
     NodHeadOperation,
     ShakeHeadOperation,

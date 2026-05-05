@@ -92,6 +92,9 @@ class GraphEQAController(DynamemController):
             backend.load(graph_memory_input_path)
 
         self.use_instance_graph = use_instance_graph
+        self.use_sensor_perception = use_sensor_perception
+        self._graph_eqa_use_instance_graph = self.use_instance_graph
+        self._graph_eqa_use_sensor_perception = self.use_sensor_perception
         if graph_instance_dedup_xy_m is not None:
             self._graph_dedup_xy_m = float(graph_instance_dedup_xy_m)
         elif isinstance(parameters, dict):
@@ -103,7 +106,6 @@ class GraphEQAController(DynamemController):
                 parameters.get("graph_instance_dedup_xy_m", DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M)
             )
 
-        self.use_sensor_perception = use_sensor_perception
         dev = self.device if self.device in ("cuda", "mps") else "cuda"
         self.sensor_builder = SensorGraphBuilder(
             perception_client=perception_client,
@@ -128,28 +130,20 @@ class GraphEQAController(DynamemController):
                 return True
         return False
 
-    def update(self) -> None:
-        """Step collector and feed the graph memory with the new observation."""
-        super().update()
-        obs = self.robot.get_observation()
-        from emet.memory.graph_eqa.dynamem_graph_hooks import update_graph_memory_from_dynamem_observation
+    def run_eqa_one_iter(
+        self,
+        question: str,
+        max_movement_step: int = 5,
+        *,
+        skip_perception_prelude: bool = False,
+    ) -> tuple[str, str, list[Image.Image], bool]:
+        """One EQA iteration using graph memory instead of voxel map.
 
-        update_graph_memory_from_dynamem_observation(
-            graph_memory=self.graph_memory,
-            robot=self.robot,
-            voxel_map=self.voxel_map,
-            detection_model=self.detection_model,
-            sensor_builder=self.sensor_builder,
-            use_instance_graph=self.use_instance_graph,
-            use_sensor_perception=self.use_sensor_perception,
-            dedup_skips=self._graph_dedup_skips,
-            obs=obs,
-        )
-
-    def run_eqa_one_iter(self, question: str, max_movement_step: int = 5) -> tuple[str, str, list[Image.Image], bool]:
-        """One EQA iteration using graph memory instead of voxel map."""
+        When *skip_perception_prelude* is True, skip the head sweep / look-around before the LLM call
+        (used on follow-up EQA iterations after navigation so we do not re-run perception every step).
+        """
         answer_output = None
-        if not self._realtime_updates:
+        if not self._realtime_updates and not skip_perception_prelude:
             self.robot.look_front()
             self.look_around()
             self.robot.look_front()
@@ -193,7 +187,8 @@ class GraphEQAController(DynamemController):
             + confidence_text
             + reasoning_output
         )
-        self.rerun_visualizer.log_text("robot_monologue", answer_output)
+        self._rerun_monologue_base = answer_output
+        self._rerun_refresh_monologue_panel()
         if relevant_images and hasattr(self, "_patch_images"):
             self.rerun_visualizer.log_custom_2d_image(
                 "/observation_similar_to_text", self._patch_images(relevant_images)
@@ -237,8 +232,11 @@ class GraphEQAController(DynamemController):
         confidence = False
         discord_text = ""
         relevant_images: list[Image.Image] = []
-        for _ in range(max_planning_steps):
-            answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(question)
+        for step in range(max_planning_steps):
+            answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(
+                question,
+                skip_perception_prelude=(step > 0),
+            )
             if confidence:
                 break
         if not relevant_images:

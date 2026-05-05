@@ -82,6 +82,30 @@ def resolve_config_yaml_path(path: str) -> str:
     raise FileNotFoundError(f"Config file not found: {path!r} (tried cwd-relative, absolute path, and {packaged})")
 
 
+def read_top_level_robot_from_yaml(path: str) -> str | None:
+    """Return top-level ``robot`` from a YAML file, or None if absent.
+
+    Reads the file directly (not via yacs merge) so agent configs reliably expose ``robot:``
+    for CLI defaults such as ``emet run agent --agent-config configs/agent_innate_mars.yaml``.
+    """
+    try:
+        full_path = resolve_config_yaml_path(path)
+    except FileNotFoundError:
+        return None
+    try:
+        with open(full_path, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+    except OSError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    r = data.get("robot")
+    if r is None:
+        return None
+    s = str(r).strip()
+    return s or None
+
+
 def get_config(path: str, opts: list | None = None) -> tuple[Config, str]:
     """Get configuration and ensure consistency between configurations
     inherited from the task and defaults and our code's configuration.

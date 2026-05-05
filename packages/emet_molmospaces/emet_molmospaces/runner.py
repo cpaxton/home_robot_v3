@@ -409,22 +409,19 @@ def run_install_scene(
 
 
 def _get_robot_mjcf_path(robot: str) -> Path | None:
-    """Resolve robot id (e.g. rby1, rb_y1, galaxea_r1) to MJCF path. Uses emet package layout
-    so we avoid importing emet.robots (which pulls pinocchio/hppfcl). MolmoSpaces rby1 = Galaxea R1.
+    """Resolve robot id to vendored MJCF under emet (rby1, galaxea_r1, innate_mars, …).
+
+    Delegates to :func:`emet.utils.assets.get_robot_mjcf_path` so the registry stays in one place.
     """
-    key = robot.lower().replace("-", "_")
-    # rby1 / rb_y1 / galaxea_r1 -> Galaxea R1 MJCF in emet assets
-    if key not in ("rby1", "rb_y1", "galaxea_r1"):
-        return None
     try:
-        import emet
+        from emet.utils.assets import get_robot_mjcf_path as emet_robot_mjcf
     except ImportError:
         return None
-    emet_dir = Path(emet.__file__).resolve().parent
-    candidate = emet_dir / "assets" / "robot" / "galaxea_r1" / "galaxea_r1.xml"
-    if candidate.exists():
-        return candidate
-    return None
+    key = robot.lower().replace("-", "_")
+    p = emet_robot_mjcf(key)
+    if p is None or not p.is_file():
+        return None
+    return p
 
 
 def _merge_robot_into_scene(scene_xml_path: Path, robot_mjcf_path: Path) -> Path:
@@ -483,7 +480,7 @@ def run_merge_scene(
     robot_mjcf = _get_robot_mjcf_path(robot)
     if robot_mjcf is None:
         print(
-            f"No bundled MJCF merge for robot '{robot}'. Use rby1 / galaxea_r1, or merge manually.",
+            f"No bundled MJCF merge for robot '{robot}'. Use rby1, galaxea_r1, innate_mars, or merge manually.",
             file=sys.stderr,
         )
         return 1

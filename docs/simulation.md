@@ -104,6 +104,8 @@ emet serve mujoco --use-robocasa
 emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo --match-method class
 ```
 
+Graph-based EQA on the same sim (no pick-and-place): `emet run graph-eqa --robot-ip 127.0.0.1` or `emet run dynagraph --robot-ip 127.0.0.1` ([graph_eqa.md](graph_eqa.md), [dynagraph.md](dynagraph.md)).
+
 - `-S` / `--skip`: skip confirmations for autonomous runs
 - `--visual-servo` / `-V`: use visual servoing (required in sim; AnyGrasp needs real robot)
 - `--match-method class`: class-based matching (works well in sim)

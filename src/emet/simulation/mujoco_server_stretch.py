@@ -47,6 +47,7 @@ from emet.utils.assets import get_mujoco_models_path
 from emet.utils.config import get_control_config
 from emet.utils.geometry import pose_global_to_base, xyt_base_to_global, xyt_global_to_base
 from emet.utils.image import scale_camera_matrix
+from emet.utils.observation_layout import rgb_height_width_for_zmq
 
 default_scene_xml_path = str(get_mujoco_models_path() / "scene.xml")
 
@@ -707,7 +708,7 @@ class MujocoZmqServer(BaseZmqServer):
         depth = cam_data.cam_d435i_depth
         rgb = np.rot90(rgb, k=-1)
         depth = np.rot90(depth, k=-1)
-        width, height = rgb.shape[:2]
+        rgb_height, rgb_width = rgb_height_width_for_zmq(rgb)
 
         # Convert depth into int format
         depth = (depth * 1000).astype(np.uint16)
@@ -731,8 +732,8 @@ class MujocoZmqServer(BaseZmqServer):
             "joint": positions,
             "gps": xyt[:2],
             "compass": np.array([xyt[2]]),
-            "rgb_width": width,
-            "rgb_height": height,
+            "rgb_width": rgb_width,
+            "rgb_height": rgb_height,
             "control_mode": self.get_control_mode(),
             "last_motion_failed": False,
             "recv_address": self.recv_address,

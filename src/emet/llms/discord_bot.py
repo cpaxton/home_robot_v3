@@ -159,6 +159,9 @@ class EmetDiscordBot(DiscordBot):
             self.llm_client = None
 
         self._llm_lock = threading.Lock()
+        self._plan_lock = threading.Lock()
+        self._plan_thread: threading.Thread | None = None
+        self.next_plan = None
         self._ready_event = threading.Event()
 
     def _print_discord_inbound(self, message: discord.Message) -> None:
@@ -232,9 +235,8 @@ class EmetDiscordBot(DiscordBot):
                 )
                 self.allowed_channels.add_home(first_text_channel)
 
-        self.next_plan = None
-        self._plan_lock = threading.Lock()
-        self._plan_thread = None
+        with self._plan_lock:
+            self.next_plan = None
 
         if len(self.allowed_channels) == 0:
             logger.error("No Discord channels found! Messages will not be sent.")
@@ -242,7 +244,8 @@ class EmetDiscordBot(DiscordBot):
         else:
             logger.info("Discord channels:", len(self.allowed_channels), "in", guild_count, "guild(s).")
 
-        self.process_queue.start()
+        if not self.process_queue.is_running():
+            self.process_queue.start()
 
         # Start the plan thread
         self.start_plan_thread()
@@ -400,8 +403,10 @@ class EmetDiscordBot(DiscordBot):
                 time.sleep(0.01)
 
     def start_plan_thread(self):
-        """Start the plan thread."""
-        self._plan_thread = threading.Thread(target=self.plan_thread)
+        """Start the plan thread once (idempotent across Discord reconnects)."""
+        if self._plan_thread is not None and self._plan_thread.is_alive():
+            return
+        self._plan_thread = threading.Thread(target=self.plan_thread, daemon=True)
         self._plan_thread.start()
 
     def __del__(self):

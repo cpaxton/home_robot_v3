@@ -18,7 +18,27 @@ import io
 import numpy as np
 from PIL import Image
 
+from emet.agent.camera_debug import discord_pil_bgr
 from emet.utils.image import ndarray_hwc_to_pil_rgb_u8
+
+
+def test_ndarray_hwc_to_pil_defaults_to_rgb_layout():
+    """Default must not BGR-swap: matches ZMQ JPEG decode and MuJoCo Renderer (RGB)."""
+    arr = np.zeros((8, 8, 3), dtype=np.uint8)
+    arr[..., 0] = 255
+    pil = ndarray_hwc_to_pil_rgb_u8(arr)
+    out = np.asarray(pil)
+    assert out[..., 0].mean() > 200 and out[..., 2].mean() < 30
+
+
+def test_discord_pil_bgr_env_defaults_false(monkeypatch):
+    monkeypatch.delenv("EMET_DISCORD_IMAGES_BGR", raising=False)
+    assert discord_pil_bgr() is False
+
+
+def test_discord_pil_bgr_env_truthy(monkeypatch):
+    monkeypatch.setenv("EMET_DISCORD_IMAGES_BGR", "1")
+    assert discord_pil_bgr() is True
 
 
 def test_float01_image_not_all_black():

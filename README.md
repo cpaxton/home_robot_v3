@@ -212,6 +212,7 @@ Find out more about the LLM-based AI agent in its [documentation](docs/llm_agent
 Check out additional documentation for ways to use Stretch AI:
 
 - [Simulation](docs/simulation.md) -- Run DynaMem, grasp, and mapping in MuJoCo without a physical robot
+- [Innate Mars](docs/robots/innate_mars.md) -- Maurice-style robot: bridge, MuJoCo asset, DA3 depth
 - [LLM Agent](docs/llm_agent.md) -- How to use the LLM agent for language-directed pick and place
 - [Add a New LLM Task](docs/adding_a_new_task.md) -- How to add a new task that can be called by an LLM
 - [DynaMem](docs/dynamem.md) -- Open-vocabulary mobile manipulation; works in simulation and headless (connect Rerun at `http://<server>:9090?url=ws://<server>:9877`)

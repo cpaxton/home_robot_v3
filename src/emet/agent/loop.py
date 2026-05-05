@@ -268,6 +268,7 @@ def run_agent_with_robot(
     share_memory_vllm: bool = True,
     headless: bool = False,
     rerun: bool = False,
+    rerun_native: bool = False,
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
     **kwargs: Any,
@@ -291,9 +292,8 @@ def run_agent_with_robot(
     defer_eqa_vllm = bool(eqa and use_llm and share_memory_vllm)
     _exec_kwargs = {k: v for k, v in kwargs.items() if k != "defer_eqa_vllm"}
     depth_mode = str(parameters.get("depth_source", "sensor")).lower()
-    allow_missing_depth = depth_mode in ("da3", "auto")
-
     robot_key = robot.lower().replace("-", "_")
+    allow_missing_depth = depth_mode in ("da3", "auto") or robot_key == "innate_mars"
     if robot_key == "stretch":
         # Do not start ZMQ in __init__: DynamemTaskExecutor calls agent.start() which invokes
         # robot.start() again; double-start left orphan recv threads and led to ZMQ double-free crashes.
@@ -301,6 +301,7 @@ def run_agent_with_robot(
             robot_ip=robot_ip,
             enable_rerun_server=rerun,
             rerun_headless=headless,
+            rerun_native_viewer=rerun_native,
             rerun_show_panels=rerun_show_panels,
             rerun_debug=rerun_debug,
             port_offset=port_offset,
@@ -324,6 +325,7 @@ def run_agent_with_robot(
             allow_missing_depth=allow_missing_depth,
             enable_rerun_server=rerun,
             rerun_headless=headless,
+            rerun_native_viewer=rerun_native,
             rerun_show_panels=rerun_show_panels,
             rerun_debug=rerun_debug,
         )
@@ -566,7 +568,8 @@ def run_agent_with_robot(
             colored(
                 "Camera debug: head-frame stats on describe_scene, send_image, and Discord PNG encode. "
                 "Unset EMET_AGENT_CAMERA_DEBUG or omit --debug-camera. "
-                "If PNG looks black but stats show valid pixels: try EMET_DISCORD_IMAGES_BGR=0 (sim RGB vs OpenCV BGR).",
+                "If Discord PNG colors look swapped but stats show valid pixels: set EMET_DISCORD_IMAGES_BGR=1 only "
+                "for raw OpenCV BGR matrices (JPEG via from_jpg is already RGB).",
                 "yellow",
             )
         )

@@ -22,7 +22,6 @@ import timeit
 import click
 import zmq
 
-from emet.controller.zmq_client import StretchZmqClient
 from emet.core.robot import AbstractRobotClient
 from emet.core.zmq_protocol import read_emet_robot_id_from_message_or_session
 from emet.robots import ROBOT_REGISTRY
@@ -79,6 +78,7 @@ def create_robot_client_from_cli(
     port_offset: int = 0,
     enable_rerun_server: bool = False,
     rerun_headless: bool = False,
+    rerun_native_viewer: bool = False,
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
     start_immediately: bool = True,
@@ -94,10 +94,13 @@ def create_robot_client_from_cli(
     """
     robot_key = robot.lower().replace("-", "_")
     if robot_key == "stretch":
+        from emet.controller.zmq_client import StretchZmqClient
+
         return StretchZmqClient(
             robot_ip=robot_ip,
             enable_rerun_server=enable_rerun_server,
             rerun_headless=rerun_headless,
+            rerun_native_viewer=rerun_native_viewer,
             rerun_show_panels=rerun_show_panels,
             rerun_debug=rerun_debug,
             port_offset=port_offset,
@@ -121,6 +124,7 @@ def create_robot_client_from_cli(
             "allow_missing_depth": allow_missing_depth,
             "enable_rerun_server": enable_rerun_server,
             "rerun_headless": rerun_headless,
+            "rerun_native_viewer": rerun_native_viewer,
             "rerun_show_panels": rerun_show_panels,
             "rerun_debug": rerun_debug,
         }

@@ -22,7 +22,7 @@ from emet.utils.geometry import xyt_base_to_global
 
 
 class DummyStretchClient(AbstractRobotClient, RobotModel):
-    """Defines a ROS-based interface to the real Stretch robot. Collect observations and command the robot."""
+    """Test double for Stretch (`AbstractRobotClient`). The ROS implementation is ``stretch_ros2_bridge.remote.api.StretchClient``, not emet. Collect observations and command the robot (stubbed here)."""
 
     def __init__(
         self,

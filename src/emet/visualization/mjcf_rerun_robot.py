@@ -29,6 +29,65 @@ from emet.utils.geometry import xyt_base_to_global
 _MAX_BODIES = 72
 
 
+def apply_zmq_obs_to_mujoco_data(
+    model: Any,
+    data: Any,
+    obs_pose: dict[str, Any],
+    *,
+    joint_names: tuple[str, ...],
+    dof: int,
+    base_link_name: str,
+    nav_origin_slot: list[np.ndarray | None],
+    free_qadr: int | None,
+) -> None:
+    """Reset ``data.qpos`` to defaults, then fill from ZMQ-style ``gps``/``compass``/``joint``."""
+    import mujoco
+
+    data.qpos[:] = model.qpos0
+    data.qvel[:] = 0.0
+
+    if nav_origin_slot[0] is None:
+        sess = obs_pose.get(EMET_ZMQ_SESSION_KEY)
+        if isinstance(sess, dict):
+            org = sess.get("navigation_origin_xyt")
+            if org is not None:
+                nav_origin_slot[0] = np.asarray(org, dtype=np.float64).reshape(-1)[:3].copy()
+
+    if free_qadr is not None:
+        qadr = free_qadr
+        gps = np.asarray(obs_pose.get("gps", np.zeros(2)), dtype=np.float64).reshape(-1)[:2]
+        comp = np.asarray(obs_pose.get("compass", np.zeros(1)), dtype=np.float64).ravel()
+        theta = float(comp[0]) if comp.size else 0.0
+        local_xyt = np.array([float(gps[0]), float(gps[1]), theta], dtype=np.float64)
+        if nav_origin_slot[0] is not None:
+            world_xyt = xyt_base_to_global(local_xyt, nav_origin_slot[0])
+        else:
+            world_xyt = local_xyt
+        z0 = float(model.qpos0[qadr + 2])
+        qw, qx, qy, qz = _quat_wxyz_yaw(float(world_xyt[2]))
+        data.qpos[qadr : qadr + 3] = [float(world_xyt[0]), float(world_xyt[1]), z0]
+        data.qpos[qadr + 3 : qadr + 7] = [qw, qx, qy, qz]
+
+    jraw = obs_pose.get("joint")
+    if jraw is None:
+        jvec = np.zeros(max(dof, len(joint_names)), dtype=np.float64)
+    else:
+        jvec = np.asarray(jraw, dtype=np.float64).reshape(-1)
+
+    for i, jname in enumerate(joint_names):
+        if i >= len(jvec):
+            break
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jname)
+        if jid < 0:
+            continue
+        jt = int(model.jnt_type[jid])
+        qadr = int(model.jnt_qposadr[jid])
+        if jt == mujoco.mjtJoint.mjJNT_FREE:
+            continue
+        if jt == mujoco.mjtJoint.mjJNT_HINGE or jt == mujoco.mjtJoint.mjJNT_SLIDE:
+            data.qpos[qadr] = float(jvec[i])
+
+
 def _quat_wxyz_yaw(theta: float) -> tuple[float, float, float, float]:
     half = 0.5 * float(theta)
     return float(np.cos(half)), 0.0, 0.0, float(np.sin(half))
@@ -94,55 +153,22 @@ class MjcfBodySkeletonLogger:
         for bid in self._body_ids:
             nm = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, bid) or f"body{bid}"
             self._body_paths.append(f"world/robot/mjcf/{_safe_entity_segment(nm)}")
-        self._nav_origin: np.ndarray | None = None
+        self._nav_origin_slot: list[np.ndarray | None] = [None]
 
     def apply_and_log(self, obs_pose: dict[str, Any]) -> None:
         import mujoco
         import rerun as rr
 
-        self.data.qpos[:] = self.model.qpos0
-        self.data.qvel[:] = 0.0
-
-        if self._nav_origin is None:
-            sess = obs_pose.get(EMET_ZMQ_SESSION_KEY)
-            if isinstance(sess, dict):
-                org = sess.get("navigation_origin_xyt")
-                if org is not None:
-                    self._nav_origin = np.asarray(org, dtype=np.float64).reshape(-1)[:3].copy()
-
-        if self._free_qadr is not None:
-            qadr = self._free_qadr
-            gps = np.asarray(obs_pose.get("gps", np.zeros(2)), dtype=np.float64).reshape(-1)[:2]
-            comp = np.asarray(obs_pose.get("compass", np.zeros(1)), dtype=np.float64).ravel()
-            theta = float(comp[0]) if comp.size else 0.0
-            local_xyt = np.array([float(gps[0]), float(gps[1]), theta], dtype=np.float64)
-            if self._nav_origin is not None:
-                world_xyt = xyt_base_to_global(local_xyt, self._nav_origin)
-            else:
-                world_xyt = local_xyt
-            z0 = float(self.model.qpos0[qadr + 2])
-            qw, qx, qy, qz = _quat_wxyz_yaw(float(world_xyt[2]))
-            self.data.qpos[qadr : qadr + 3] = [float(world_xyt[0]), float(world_xyt[1]), z0]
-            self.data.qpos[qadr + 3 : qadr + 7] = [qw, qx, qy, qz]
-
-        jraw = obs_pose.get("joint")
-        if jraw is None:
-            jvec = np.zeros(max(self._dof, len(self.joint_names)), dtype=np.float64)
-        else:
-            jvec = np.asarray(jraw, dtype=np.float64).reshape(-1)
-
-        for i, jname in enumerate(self.joint_names):
-            if i >= len(jvec):
-                break
-            jid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, jname)
-            if jid < 0:
-                continue
-            jt = int(self.model.jnt_type[jid])
-            qadr = int(self.model.jnt_qposadr[jid])
-            if jt == mujoco.mjtJoint.mjJNT_FREE:
-                continue
-            if jt == mujoco.mjtJoint.mjJNT_HINGE or jt == mujoco.mjtJoint.mjJNT_SLIDE:
-                self.data.qpos[qadr] = float(jvec[i])
+        apply_zmq_obs_to_mujoco_data(
+            self.model,
+            self.data,
+            obs_pose,
+            joint_names=self.joint_names,
+            dof=self._dof,
+            base_link_name=self.base_link_name,
+            nav_origin_slot=self._nav_origin_slot,
+            free_qadr=self._free_qadr,
+        )
 
         mujoco.mj_forward(self.model, self.data)
 
@@ -151,3 +177,65 @@ class MjcfBodySkeletonLogger:
             R = np.asarray(b.xmat, dtype=np.float64).reshape(3, 3)
             p = np.asarray(b.xpos, dtype=np.float64).reshape(3)
             rr.log(path, rr.Transform3D(translation=p, mat3x3=R, axis_length=0.07))
+
+
+class MjcfVisualMeshLogger:
+    """Robot MJCF visual meshes in **world** frame for Rerun (aligns with pinhole point clouds)."""
+
+    def __init__(self, mjcf_path: str | Path, joint_names: tuple[str, ...] | list[str], dof: int, base_link_name: str):
+        import mujoco
+
+        path = Path(mjcf_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"MJCF not found: {path}")
+        self.model = mujoco.MjModel.from_xml_path(str(path.resolve()))
+        self.data = mujoco.MjData(self.model)
+        self.joint_names = tuple(joint_names)
+        self._dof = int(dof)
+        self.base_link_name = str(base_link_name)
+        self._free_qadr = _base_freejoint_qadr(self.model, self.base_link_name)
+        self._nav_origin_slot: list[np.ndarray | None] = [None]
+        self._geom_mesh_cache: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+        for gid in range(self.model.ngeom):
+            if int(self.model.geom_type[gid]) != int(mujoco.mjtGeom.mjGEOM_MESH):
+                continue
+            mid = int(self.model.geom_dataid[gid])
+            if mid < 0:
+                continue
+            vadr = int(self.model.mesh_vertadr[mid])
+            vnum = int(self.model.mesh_vertnum[mid])
+            verts = self.model.mesh_vert[vadr * 3 : (vadr + vnum) * 3].reshape(-1, 3).astype(np.float64).copy()
+            fadr = int(self.model.mesh_faceadr[mid])
+            fnum = int(self.model.mesh_facenum[mid])
+            faces = self.model.mesh_face[fadr : fadr + fnum].reshape(-1, 3).astype(np.int32).copy()
+            self._geom_mesh_cache[gid] = (verts, faces)
+
+    def log_meshes_world(self, rr: Any, obs_pose: dict[str, Any], *, entity_prefix: str = "da3/robot/mesh") -> None:
+        """Sync kinematics from *obs_pose*, then log each cached mesh geom at ``entity_prefix/<geom_name>``."""
+        import mujoco
+
+        apply_zmq_obs_to_mujoco_data(
+            self.model,
+            self.data,
+            obs_pose,
+            joint_names=self.joint_names,
+            dof=self._dof,
+            base_link_name=self.base_link_name,
+            nav_origin_slot=self._nav_origin_slot,
+            free_qadr=self._free_qadr,
+        )
+        mujoco.mj_forward(self.model, self.data)
+
+        for gid, (V_loc, F) in self._geom_mesh_cache.items():
+            R = np.asarray(self.data.geom_xmat[gid], dtype=np.float64).reshape(3, 3)
+            p = np.asarray(self.data.geom_xpos[gid], dtype=np.float64).reshape(3)
+            V_w = (R @ V_loc.T).T + p
+            gname = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, gid) or f"geom{gid}"
+            seg = _safe_entity_segment(str(gname))
+            rr.log(
+                f"{entity_prefix}/{seg}",
+                rr.Mesh3D(
+                    vertex_positions=V_w.astype(np.float32),
+                    triangle_indices=F.flatten(),
+                ),
+            )
