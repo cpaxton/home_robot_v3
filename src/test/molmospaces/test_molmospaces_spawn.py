@@ -388,6 +388,20 @@ def test_find_molmospaces_freejoint_xyz_finds_valid_pose_in_walled_room():
     assert float(zb) >= float(zf) - 0.06
 
 
+def test_find_molmospaces_placed_passes_horizontal_interior_gate_minimal_room():
+    """Spawn result must pass the same 3D horizontal exterior-tongue check used during search."""
+    m = mujoco.MjModel.from_xml_string(MINIMAL_WALLED_ROOM_WITH_BASE)
+    d = mujoco.MjData(m)
+    mujoco.mj_forward(m, d)
+    out = molmospaces_spawn.find_molmospaces_freejoint_xyz(
+        m, d, base_body_name="base_link", min_nonfloor_clearance=-5e-5
+    )
+    assert out is not None
+    assert molmospaces_spawn.molmospaces_placed_pose_passes_horizontal_interior_gate(
+        m, d, base_body_name="base_link", placed=out
+    )
+
+
 @pytest.mark.skipif(os.environ.get("RUN_MOLMOSPACES_TESTS", "") != "1", reason="set RUN_MOLMOSPACES_TESTS=1")
 def test_find_molmospaces_freejoint_on_installed_ithor_if_available():
     """With assets + emet_molmospaces: merged FloorPlan + rby1 must admit a floor-valid spawn."""
@@ -413,6 +427,9 @@ def test_find_molmospaces_freejoint_on_installed_ithor_if_available():
         )
         assert out is not None
         x, y, z = out
+        assert molmospaces_spawn.molmospaces_placed_pose_passes_horizontal_interior_gate(
+            m, d, base_body_name="base_link", placed=out
+        )
         assert molmospaces_spawn.write_freejoint_base_xyzw(
             m, d, base_body_name="base_link", x=x, y=y, z=float(z)
         )
@@ -425,5 +442,42 @@ def test_find_molmospaces_freejoint_on_installed_ithor_if_available():
             m, d, base_body_name="base_link", floor_geom_name="floor", xy=(float(x), float(y))
         )
         assert lines and "zb_minus_zfloor" in lines[0]
+    finally:
+        merged.unlink(missing_ok=True)
+
+
+@pytest.mark.skipif(os.environ.get("RUN_MOLMOSPACES_TESTS", "") != "1", reason="set RUN_MOLMOSPACES_TESTS=1")
+def test_merged_ithor_index3_spawn_passes_horizontal_interior_gate():
+    """Regression: iTHOR train index 3 merge must spawn and pass 3D horizontal interior gate."""
+    try:
+        from emet_molmospaces.runner import (
+            _find_installed_scene_xml,
+            _get_robot_mjcf_path,
+            _merge_robot_into_scene,
+        )
+    except ImportError:
+        pytest.skip("emet_molmospaces not installed in this environment")
+    scene = _find_installed_scene_xml("ithor", 3)
+    robot = _get_robot_mjcf_path("rby1")
+    if scene is None or robot is None or not scene.is_file():
+        pytest.skip("iTHOR scene index 3 or rby1 MJCF not on disk")
+    merged = _merge_robot_into_scene(Path(scene), robot)
+    try:
+        m = mujoco.MjModel.from_xml_path(str(merged))
+        d = mujoco.MjData(m)
+        mujoco.mj_forward(m, d)
+        env = {"kind": "molmospaces", "scene": "ithor", "split": "train", "index": 3}
+        out = molmospaces_spawn.find_molmospaces_freejoint_xyz(
+            m,
+            d,
+            base_body_name="base_link",
+            min_nonfloor_clearance=-5e-5,
+            merged_mjcf_path=str(merged),
+            environment=env,
+        )
+        assert out is not None, "find_molmospaces_freejoint_xyz returned None for iTHOR index 3 merge"
+        assert molmospaces_spawn.molmospaces_placed_pose_passes_horizontal_interior_gate(
+            m, d, base_body_name="base_link", placed=out
+        ), f"placed XY failed horizontal interior gate: {out!r}"
     finally:
         merged.unlink(missing_ok=True)

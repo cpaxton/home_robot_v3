@@ -8,7 +8,10 @@
 
 Merged scenes place the robot at the world origin on a ``freejoint``. The global ``floor`` plane
 extends beyond walls, so XY must stay inside the **collision footprint** of room content and
-points where an **upward** ray hits geometry (open void returns no hit). We also skip XY where
+points where an **upward** ray, when present, is not too close to overhead geometry (a very near
+hit still rejects, as under a shelf). **Open sky** (no upward hit) is allowed because many iTHOR
+merged scenes omit an explicit ceiling while ``walkable_floor_z_at_xy`` still finds the floor.
+We also skip XY where
 **horizontal** cardinal ``mj_ray`` hits suggest an infinite-floor **exterior** tongue (several
 open directions with only very short finite hits). If no valid pose is found, placement returns
 ``None`` and the caller must not move the base to an invalid exterior tongue.
@@ -56,6 +59,10 @@ def spawn_debug_enabled() -> bool:
     writes a PNG: use ``EMET_MOLMOSPACES_SPAWN_DEBUG_MAP_PNG`` for an explicit path, or leave it unset
     to default to ``./molmospaces_spawn_topdown.png`` in the process cwd. Set
     ``EMET_MOLMOSPACES_SPAWN_DEBUG_MAP_PNG=0`` to skip the default PNG (ASCII still logs).
+
+    ASCII legend (see ``topdown_map_key`` log line): ``'.'`` free, ``'#'`` blocked, ``'='`` collision
+    clip, ``'*'`` first 72 occupancy-priority samples, ``'o'`` base before autoplace, ``'@'`` chosen
+    spawn (robot base XY).
     """
     v = os.environ.get("EMET_MOLMOSPACES_SPAWN_DEBUG", "").strip().lower()
     return v in ("1", "true", "yes", "on")
@@ -371,6 +378,36 @@ def horizontal_spawn_rejects_exterior_tongue(
     return False
 
 
+def molmospaces_placed_pose_passes_horizontal_interior_gate(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    base_body_name: str,
+    placed: tuple[float, float, float],
+    floor_geom_name: str = "floor",
+) -> bool:
+    """True if the placed base (x, y) is not classified as an infinite-floor **exterior tongue** in 3D.
+
+    Recomputes walkable floor *z* under the placed XY and runs the same horizontal cardinal ``mj_ray``
+    rule used during spawn. Call immediately after :func:`find_molmospaces_freejoint_xyz` (with
+    ``data`` already at the returned pose and ``mj_forward`` applied).
+    """
+    x, y = float(placed[0]), float(placed[1])
+    floor_eff = effective_floor_geom_name(model, floor_geom_name)
+    base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
+    excl = int(base_bid) if base_bid >= 0 else -1
+    mujoco.mj_forward(model, data)
+    zf = walkable_floor_z_at_xy(
+        model, data, x, y, floor_geom_name=floor_eff, exclude_body_id=excl
+    )
+    if zf is None:
+        return False
+    z_probe = float(zf) + 0.08
+    return not horizontal_spawn_rejects_exterior_tongue(
+        model, data, x, y, z_probe, exclude_body_id=excl
+    )
+
+
 def walkable_floor_z_at_xy(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -390,7 +427,9 @@ def walkable_floor_z_at_xy(
 
     Geoms with **no collision** (``contype==0`` and ``conaffinity==0``), typical of iTHOR visual
     meshes, are stepped past with a larger advance so thin decorative shells do not exhaust
-    ``max_segments`` before the global floor plane.
+    ``max_segments`` before the global floor plane. A **floor-aligned** visual hit (``z <= 0.12``)
+    is treated as walkable height: stepping past would push the probe under the infinite floor
+    where the next ray often returns no hit.
     """
     floor_resolved = effective_floor_geom_name(model, floor_geom_name)
     floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_resolved)
@@ -407,8 +446,14 @@ def walkable_floor_z_at_xy(
         hit = pnt + float(dist) * vec
         if hit_gid == floor_gid:
             return float(hit[2])
+        ct = int(model.geom_contype[hit_gid])
+        ca = int(model.geom_conaffinity[hit_gid])
+        # iTHOR often stacks large **visual-only** floor meshes at z≈0. Stepping past them moves the
+        # probe below the infinite floor plane where the next ``mj_ray`` commonly returns no hit.
+        if ct == 0 and ca == 0 and float(hit[2]) <= 0.12:
+            return float(hit[2])
         step = float(step_past_hit)
-        if int(model.geom_contype[hit_gid]) == 0 and int(model.geom_conaffinity[hit_gid]) == 0:
+        if ct == 0 and ca == 0:
             rb = float(model.geom_rbound[hit_gid])
             step = max(step, min(0.52, 2.4 * rb + 0.05))
         pnt = hit + vec * step
@@ -782,21 +827,28 @@ def _post_settle_pose_acceptable(
 
 
 def _ithor_free_xy_order_by_interior_depth(ithor_map: Any, fp: np.ndarray) -> np.ndarray:
-    """Row indices into *fp* sorting world (x,y) free samples by descending interior depth (pixels).
+    """Row indices into *fp* sorting free samples by descending interior depth (grid pixels).
 
     OpenCV ``distanceTransform`` distance at a free cell is the distance in pixels to the nearest
     blocked cell, so orthographic **deep interior** points sort first for spawn priority.
+
+    ``get_free_points()`` returns either ``(N, 2)`` or ``(N, 3)`` world coordinates; both are
+    accepted for ``pos_m_to_px`` (which requires a homogeneous *xy* with a *z* column).
     """
     occ = np.asarray(ithor_map.occupancy, dtype=np.uint8)
     H, W = occ.shape
     src = occ.copy()
     dt = cv2.distanceTransform(src, cv2.DIST_L2, 5)
-    n = int(fp.shape[0])
+    fp64 = np.asarray(fp, dtype=np.float64)
+    if fp64.ndim != 2 or fp64.shape[1] < 2:
+        return np.zeros(0, dtype=np.int64)
+    n = int(fp64.shape[0])
     if n == 0:
         return np.zeros(0, dtype=np.int64)
-    xyz = np.concatenate(
-        [fp.astype(np.float64), np.zeros((n, 1), dtype=np.float64)], axis=1
-    )
+    if fp64.shape[1] == 2:
+        xyz = np.concatenate([fp64, np.zeros((n, 1), dtype=np.float64)], axis=1)
+    else:
+        xyz = fp64[:, :3].copy()
     rc = np.asarray(ithor_map.pos_m_to_px(xyz), dtype=np.int64).reshape(-1, 2)
     rows = np.clip(rc[:, 0], 0, H - 1)
     cols = np.clip(rc[:, 1], 0, W - 1)
@@ -958,9 +1010,10 @@ def _spawn_debug_ascii_topdown(
             ch[br][bc] = "@"
 
     lines = [
+        "topdown_map_key: '.'=occupancy_free '#'=blocked '='=collision_clip_rect "
+        "'*'=occ_priority_xy[:72]_on_free 'o'=base_xy_before_autoplace '@'=chosen_spawn_base_xy",
         "topdown_map: occupancy downsampled "
-        f"(orig {H}x{W} stride {sh}x{sw} -> {nh}x{nw}; '.'=free '#'=blocked '='=collision_clip "
-        "'*'=occ_priority_on_free[:72] 'o'=base_xy_before '@'=chosen_xy)",
+        f"(orig {H}x{W} stride {sh}x{sw} -> {nh}x{nw}; same symbol key as topdown_map_key line above)",
     ]
     for i in range(nh):
         lines.append("topdown_map: " + "".join(ch[i][j] for j in range(nw)))
@@ -1450,9 +1503,11 @@ def find_molmospaces_freejoint_xyz(
 
     Requires **no meaningful penetration** (``contact.dist >= min_nonfloor_clearance``) vs scene
     geoms other than *floor* (tiny negative values are treated as numerical noise).
-    Uses a coarse polar XY search (clipped to scene collision footprint when available), rejects
-    points under open sky (no upward ray hit), rejects **exterior floor tongues** via horizontal
-    cardinal ``mj_ray`` heuristics, then a finer vertical sweep on the best XY when needed.
+    Uses a coarse polar XY search (clipped to scene collision footprint when available), requires
+    a resolvable floor under (x,y), rejects **too-close** upward ceiling hits when an upward ray
+    exists (open sky with no ceiling geom is allowed for iTHOR-style merges), rejects **exterior
+    floor tongues** via horizontal cardinal ``mj_ray`` heuristics, then a finer vertical sweep on
+    the best XY when needed.
     Returns ``None`` if no valid pose is found (caller must not apply a bogus exterior placement).
     On failure, resets the base free joint from ``model.qpos0`` so ``data`` is not left at a probe
     pose (e.g. very high *z*). On success, leaves *data* at the chosen pose with ``mj_forward``.
