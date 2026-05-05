@@ -53,7 +53,7 @@ from emet.mapping.voxel.voxel import _instance_memory_kwargs_from_params
 from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
 from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
 from emet.motion.algo.a_star import AStar
-from emet.perception.depth import create_da3_estimator_from_parameters
+from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
 from emet.perception.detection.owl import OwlPerception
 from emet.perception.detection.yoloe import YoloEPerception
 
@@ -213,7 +213,8 @@ class DynamemController(BaseController):
                 raise RuntimeError(
                     "Robot ZMQ client did not connect (no full observation + state within the startup timeout). "
                     "Start the sim first with the same robot and ports, e.g. "
-                    "`emet serve mujoco` (Stretch) or `emet serve mujoco --robot rby1` / MolmoSpaces merge, "
+                    "`emet serve mujoco` (Stretch), `emet serve mujoco --robot innate_mars`, or "
+                    "`emet serve mujoco --robot rby1` / MolmoSpaces merge, "
                     "then run the agent. Match `--port-offset` on both sides and use the same `--robot` as serve. "
                     "If the sim is already running, check server logs: missing camera/GL errors can make "
                     "observations None so nothing is published on the observation socket."
@@ -433,30 +434,29 @@ class DynamemController(BaseController):
         sensor_depth: np.ndarray | None,
         camera_K: np.ndarray | None,
         camera_pose: np.ndarray | None,
+        rgb_right: np.ndarray | None = None,
+        camera_K_right: np.ndarray | None = None,
+        camera_pose_right: np.ndarray | None = None,
     ) -> np.ndarray | None:
         """Pick sensor depth, DA3, or auto per ``depth_source``."""
-        mode = self._depth_source
+        mode = str(self._depth_source).lower()
         if mode == "sensor":
             return sensor_depth
-
-        k_ok = camera_K is not None and np.asarray(camera_K).shape == (3, 3)
-        p_ok = camera_pose is not None and np.asarray(camera_pose).shape == (4, 4)
-        k_use = np.asarray(camera_K, dtype=np.float32) if k_ok else None
-        p_use = np.asarray(camera_pose, dtype=np.float32) if p_ok else None
-
-        if mode == "auto":
-            if sensor_depth is not None and np.asarray(sensor_depth).size > 0:
-                return np.asarray(sensor_depth, dtype=np.float32)
-
+        # Auto: prefer sensor without constructing DA3 (heavy); matches resolve_depth_map logic.
+        if mode == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
+            return np.asarray(sensor_depth, dtype=np.float32)
         est = self._lazy_da3_estimator()
-        if est is None:
-            raise RuntimeError("depth_source requires DA3 but estimator creation returned None.")
-
-        if mode == "da3":
-            return est.infer(rgb, intrinsics=k_use, extrinsics_w2c=p_use)
-
-        # auto: no usable sensor depth
-        return est.infer(rgb, intrinsics=k_use, extrinsics_w2c=p_use)
+        return resolve_depth_map(
+            self._depth_source,
+            est,
+            rgb,
+            sensor_depth,
+            camera_K,
+            camera_pose,
+            rgb_right,
+            camera_K_right,
+            camera_pose_right,
+        )
 
     def update(self):
         """Step the data collector. Get a single observation of the world. Remove bad points, such as those from too far or too near the camera. Update the 3d world representation."""
@@ -467,7 +467,15 @@ class DynamemController(BaseController):
             return
         self.obs_count += 1
         rgb, sensor_depth, K, camera_pose = obs.rgb, obs.depth, obs.camera_K, obs.camera_pose
-        depth = self._resolve_depth_map(rgb, sensor_depth, K, camera_pose)
+        depth = self._resolve_depth_map(
+            rgb,
+            sensor_depth,
+            K,
+            camera_pose,
+            rgb_right=getattr(obs, "head_rgb_right", None),
+            camera_K_right=getattr(obs, "head_camera_K_right", None),
+            camera_pose_right=getattr(obs, "head_camera_pose_right", None),
+        )
         if depth is None:
             logger.error(f"No depth map available (depth_source={self._depth_source!r}); skipping voxel update.")
             return

@@ -24,19 +24,18 @@ from termcolor import colored
 
 from emet.agent.env_flags import env_agent_camera_debug
 
-_DISCORD_BGR_ENV = "EMET_DISCORD_IMAGES_BGR"  # "0"/"false" => assume RGB (no BGR2RGB) for sim frames
+_DISCORD_BGR_ENV = "EMET_DISCORD_IMAGES_BGR"  # "1"/"true" => raw OpenCV BGR matrices (JPEG not via from_jpg)
 
 
 def discord_pil_bgr() -> bool:
-    """For :func:`ndarray_hwc_to_pil_rgb_u8` when uploading to Discord.
+    """For :func:`emet.utils.image.ndarray_hwc_to_pil_rgb_u8` when uploading to Discord.
 
-    Default is True (OpenCV-style BGR) for many pipelines. If the sim already publishes RGB and
-    colors look wrong or the PNG is unreasonably dark, set ``EMET_DISCORD_IMAGES_BGR=0``.
-    When unset, defaults to 1.
+    ZMQ JPEG decode (:func:`emet.utils.compression.from_jpg`) and MuJoCo ``Renderer.render`` buffers
+    are **RGB**. Default is False (do not apply ``cv2.COLOR_BGR2RGB``) so Discord PNGs match pixel
+    order. Legacy paths that feed raw ``cv2.imdecode`` buffers without converting to RGB should set
+    ``EMET_DISCORD_IMAGES_BGR=1``.
     """
-    v = os.environ.get(_DISCORD_BGR_ENV, "1").strip().lower()
-    if v in ("0", "false", "no", "off", "rgb"):
-        return False
+    v = os.environ.get(_DISCORD_BGR_ENV, "0").strip().lower()
     return v in ("1", "true", "yes", "on", "bgr", "y")
 
 

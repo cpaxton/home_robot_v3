@@ -14,7 +14,7 @@ The refactor is consistent: mapping = spatial representation; memory = semantic/
 | Backend   | What it is                    | Unit / smoke tests                    | Integration (sim) test                    |
 |-----------|--------------------------------|---------------------------------------|--------------------------------------------|
 | **SVM**   | Instance memory (RobotAgent)   | `test_svm.py`, `test_memory_backends_smoke::test_svm_backend_smoke`, `test_unified_backend_svm_empty` | — (SVM uses pkl or real robot)             |
-| **DynaMem** | Voxel + VL features          | `test_semantic_memory.py`, `test_memory_backends_smoke::test_dynamem_backend_smoke`, `test_unified_backend_dynamem` | `test_red_cylinder_in_sim.py` (default scene), `test_robocasa_memory_after_spin.py` (Robocasa) |
+| **DynaMem** | Voxel + VL features          | `test_semantic_memory.py`, `test_memory_backends_smoke::test_dynamem_backend_smoke`, `test_unified_backend_dynamem` | `test_red_cylinder_in_sim.py` (parametrized: **stretch** and **innate_mars** + default table), `test_robocasa_memory_after_spin.py` (Robocasa) |
 | **GraphEQA** | Graph-based EQA memory     | `test_graph_eqa_memory.py`, `test_memory_backends_smoke::test_graph_eqa_backend_smoke`, `test_unified_backend_graph_eqa` | — (same sim as DynaMem for nav; EQA is graph) |
 
 Default MuJoCo scene (`scene.xml`): **red cylinder** (object2) at (0.08, -0.55, 0.6) and **blue cube** (object1) at (-0.02, -0.55, 0.6). After a single **rotate_in_place**, both should be visible and in memory for any method (DynaMem integration test asserts red cylinder; blue cube asserted when detected).
@@ -65,8 +65,16 @@ uv run emet test -v src/test/controller/test_controller_smoke.py
 This test starts the default MuJoCo scene (red cylinder + blue cube), runs the robot’s **rotate_in_place** to build the map, then: asserts **localize_text("red cylinder")** returns a point near (0.08, -0.55, 0.6); if **localize_text("blue cube")** returns a point, asserts it is near (-0.02, -0.55, 0.6); uses the **unified MemoryBackend** and asserts **check_memory_for_object("red cylinder")** has confidence > 0 (and blue cube when detected). Runs by default with `emet test`; skip with `emet test --no-sim` or `RUN_SIM_TESTS=0`. Has a 120s timeout (pytest-timeout, in dev deps).
 
 ```bash
-uv run emet test --sim -v src/test/mapping/test_red_cylinder_in_sim.py
+uv run emet test -v src/test/mapping/test_red_cylinder_in_sim.py
 ```
+
+Only the **innate_mars** parametrized case:
+
+```bash
+uv run emet test src/test/mapping/test_red_cylinder_in_sim.py -k innate_mars
+```
+
+(`emet test` forwards pytest `-k`, `-m`, etc.; see `docs/cli.md`.)
 
 On Linux, MuJoCo runs headless (EGL). Requires full env (e.g. `pip install -e ".[sim]"` or `emet sync -e sim`).
 

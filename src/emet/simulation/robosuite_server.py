@@ -14,6 +14,7 @@ this server keeps the robosuite robot in the scene and exposes the same
 ZMQ protocol as MujocoZmqServer.
 """
 
+import os
 import threading
 import time
 from typing import Any, cast
@@ -35,7 +36,9 @@ from emet.core.zmq_protocol import (
 from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn
 from emet.simulation.head_look_action import apply_head_to_robosuite
+from emet.simulation.stereo_camera_utils import stereo_right_camera_name_from_spec
 from emet.utils.geometry import xyt_global_to_base
+from emet.utils.pinhole_intrinsics import apply_pinhole_pixel_ops, chain_pinhole_K_pixel_ops, scale_pinhole_K
 
 logger = log.Logger(__name__)
 
@@ -324,8 +327,20 @@ class RobosuiteZmqServer(BaseZmqServer):
                     pass
                 self._primary_renderer = None
 
-    def _primary_rgb_and_depth(self, camera_name: str) -> tuple[np.ndarray, np.ndarray]:
-        """RGB + depth using one ``Renderer`` under ``_render_lock`` (avoids EGL 0x502 on extra contexts)."""
+    def _apply_optional_mujoco_render_flip_ud(self, img: np.ndarray) -> np.ndarray:
+        """Legacy vertical flip when ``EMET_ROBOSUITE_RENDER_FLIPUD=1``.
+
+        Ignored when :attr:`RobotSpec.robosuite_rgb_depth_ops` is non-empty (use ops instead).
+        """
+        v = os.environ.get("EMET_ROBOSUITE_RENDER_FLIPUD")
+        if v is None or not str(v).strip():
+            return img
+        if str(v).strip().lower() in ("1", "true", "yes", "on"):
+            return np.flipud(img).copy()
+        return img
+
+    def _render_rgb_raw(self, camera_name: str) -> np.ndarray:
+        """RGB uint8 from ``mujoco.Renderer`` at primary resolution (no pixel postprocess)."""
         cam = self._camera_for_renderer(camera_name)
         with self._mj_lock:
             with self._render_lock:
@@ -334,17 +349,62 @@ class RobosuiteZmqServer(BaseZmqServer):
                 renderer = self._primary_renderer
                 renderer.update_scene(self._mjdata, camera=cam)
                 rgb = cast(np.ndarray, renderer.render())
-                rgb = np.asarray(rgb, dtype=np.uint8).copy()
-                rgb = np.flipud(rgb).copy()
+                return np.asarray(rgb, dtype=np.uint8).copy()
+
+    def _render_depth_raw(self, camera_name: str) -> np.ndarray:
+        """Depth float32 for ``camera_name`` after ``update_scene`` (enable_depth_rendering)."""
+        cam = self._camera_for_renderer(camera_name)
+        with self._mj_lock:
+            with self._render_lock:
+                renderer = self._primary_renderer
                 renderer.enable_depth_rendering()
                 try:
                     renderer.update_scene(self._mjdata, camera=cam)
                     depth = cast(np.ndarray, renderer.render())
-                    depth = np.asarray(depth, dtype=np.float32).copy()
-                    depth = np.flipud(depth).copy()
+                    return np.asarray(depth, dtype=np.float32).copy()
                 finally:
                     renderer.disable_depth_rendering()
-                return rgb, depth
+
+    def _postprocess_rgb_depth_and_K(
+        self, camera_name: str, rgb: np.ndarray, depth: np.ndarray | None
+    ) -> tuple[np.ndarray, np.ndarray | None, np.ndarray]:
+        """Apply ``RobotSpec.robosuite_rgb_depth_ops`` or legacy env flipud; return matching pinhole ``K``."""
+        h0, w0 = int(rgb.shape[0]), int(rgb.shape[1])
+        K0 = self._get_camera_K(camera_name, w0, h0)
+        ops = getattr(self._spec, "robosuite_rgb_depth_ops", ()) or ()
+        if ops:
+            rgb = apply_pinhole_pixel_ops(rgb, ops)
+            if depth is not None:
+                depth = apply_pinhole_pixel_ops(depth, ops)
+            K, _, _ = chain_pinhole_K_pixel_ops(K0, h0, w0, ops)
+        else:
+            rgb = self._apply_optional_mujoco_render_flip_ud(rgb)
+            if depth is not None:
+                depth = self._apply_optional_mujoco_render_flip_ud(depth)
+            K = K0
+        return rgb, depth, K
+
+    def _primary_rgb_only(self, camera_name: str) -> np.ndarray:
+        """RGB at primary resolution (no depth pass). Used for stereo aux camera."""
+        rgb = self._render_rgb_raw(camera_name)
+        rgb, _, _ = self._postprocess_rgb_depth_and_K(camera_name, rgb, None)
+        return rgb
+
+    def _primary_rgb_only_with_K(self, camera_name: str) -> tuple[np.ndarray, np.ndarray]:
+        """RGB + intrinsics after the same postprocess as depth observations."""
+        rgb = self._render_rgb_raw(camera_name)
+        rgb, _, K = self._postprocess_rgb_depth_and_K(camera_name, rgb, None)
+        return rgb, K
+
+    def _primary_rgb_and_depth(self, camera_name: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """RGB + depth + intrinsics ``K`` matching both buffers (primary resolution)."""
+        rgb = self._render_rgb_raw(camera_name)
+        depth = self._render_depth_raw(camera_name)
+        rgb, depth, K = self._postprocess_rgb_depth_and_K(camera_name, rgb, depth)
+        return rgb, depth, K
+
+    def _stereo_right_camera_name(self) -> str | None:
+        return stereo_right_camera_name_from_spec(list(self._spec.camera_names))
 
     def _camera_for_renderer(self, camera_name: str) -> int | str:
         """Resolve RobotSpec camera name to a MuJoCo camera id, or free camera if none match.
@@ -405,11 +465,11 @@ class RobosuiteZmqServer(BaseZmqServer):
             mujoco.mj_forward(self._mjmodel, self._mjdata)
 
     def _camera_pose_world(self, camera_name: str) -> np.ndarray:
-        """4x4 camera-to-world transform for depth unprojection and map ``_visited`` updates.
+        """4x4 **OpenCV** camera-to-world transform for pinhole unprojection (DynaMem voxel code).
 
-        Previously this server sent ``np.eye(4)``, which left DynaMem with geometry near the origin
-        while the robot reported ``gps`` elsewhere, so ``_navigable = ~obstacle & explored`` had no
-        overlap at the base and exploration planning failed immediately.
+        MuJoCo reports ``cam_xmat`` in an OpenGL-style camera frame (+Y up, −Z forward). EMET unprojection
+        uses OpenCV-style rays (+Y down image rows, +Z into the scene). For the same physical camera,
+        ``R_world_from_cv = R_mujoco @ diag(1,-1,-1)`` so ``p_world = R_mujoco @ (D @ p_cv)``.
         """
         if self._mjmodel is None or self._mjdata is None:
             return np.eye(4, dtype=np.float64)
@@ -419,8 +479,13 @@ class RobosuiteZmqServer(BaseZmqServer):
                 return np.eye(4, dtype=np.float64)
             R = np.asarray(self._mjdata.cam_xmat[cam_id], dtype=np.float64).reshape(3, 3)
             pos = np.asarray(self._mjdata.cam_xpos[cam_id], dtype=np.float64).reshape(3)
+            # MuJoCo camera frame: +Y up, −Z forward (OpenGL). Point unprojection in emet uses OpenCV
+            # camera coordinates (+Y down, +Z forward). World = R_mj @ p_mj; with p_mj = D @ p_cv and
+            # D = diag(1,-1,-1), we have p_world = (R_mj @ D) @ p_cv.
+            d = np.diag([1.0, -1.0, -1.0])
+            r_cv = R @ d
             T = np.eye(4, dtype=np.float64)
-            T[:3, :3] = R
+            T[:3, :3] = r_cv
             T[:3, 3] = pos
             return T
 
@@ -595,7 +660,7 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         primary_cam = cam_names[0]
         try:
-            rgb, depth = self._primary_rgb_and_depth(primary_cam)
+            rgb, depth, K = self._primary_rgb_and_depth(primary_cam)
         except Exception:
             return None
 
@@ -607,7 +672,6 @@ class RobosuiteZmqServer(BaseZmqServer):
         if xyt is None:
             xyt = np.zeros(3)
 
-        K = self._get_camera_K(primary_cam, width, height)
         cam_pose = self._camera_pose_world(primary_cam)
 
         message = {
@@ -631,6 +695,27 @@ class RobosuiteZmqServer(BaseZmqServer):
             "lidar_timestamp": None,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
         }
+        right_name = self._stereo_right_camera_name()
+        if right_name is not None:
+            try:
+                rgb_r, K_r = self._primary_rgb_only_with_K(right_name)
+                if rgb_r.shape[0] == rgb.shape[0] and rgb_r.shape[1] == rgb.shape[1]:
+                    message["rgb_right"] = compression.to_jpg(rgb_r)
+                    message["camera_K_right"] = K_r
+                    message["camera_pose_right"] = self._camera_pose_world(right_name)
+            except Exception:
+                logger.debug("Stereo auxiliary RGB failed for %s", right_name, exc_info=True)
+        if len(cam_names) >= 3:
+            tertiary = cam_names[2]
+            if tertiary not in (primary_cam, right_name):
+                try:
+                    rgb_t, K_t = self._primary_rgb_only_with_K(tertiary)
+                    message["rgb_tertiary"] = compression.to_jpg(rgb_t)
+                    message["camera_K_tertiary"] = K_t
+                    message["camera_pose_tertiary"] = self._camera_pose_world(tertiary)
+                    message["camera_name_tertiary"] = tertiary
+                except Exception:
+                    logger.debug("Tertiary RGB failed for %s", tertiary, exc_info=True)
         return self._attach_emet_session(message)
 
     @override
@@ -664,7 +749,7 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         primary_cam = cam_names[0]
         try:
-            rgb_full, depth_full = self._primary_rgb_and_depth(primary_cam)
+            rgb_full, depth_full, K_full = self._primary_rgb_and_depth(primary_cam)
             rgb = cv2.resize(rgb_full, (_SERVO_RW, _SERVO_RH), interpolation=cv2.INTER_AREA)
             depth = cv2.resize(depth_full, (_SERVO_RW, _SERVO_RH), interpolation=cv2.INTER_NEAREST)
         except Exception:
@@ -676,10 +761,15 @@ class RobosuiteZmqServer(BaseZmqServer):
         if xyt is None:
             xyt = np.zeros(3)
 
+        K_servo = scale_pinhole_K(K_full, rgb_full.shape[1], rgb_full.shape[0], _SERVO_RW, _SERVO_RH)
+
         message = {
             "head_color_image": compression.to_jpg(rgb),
             "head_depth_image": compression.to_jp2(depth_u16),
-            "head_camera_K": self._get_camera_K(primary_cam, 320, 240),
+            "head_camera_K": K_servo,
+            # Same OpenCV camera-to-world convention as full observations (``camera_pose``); required for
+            # Rerun head-camera transform + DynaMem when the client only consumes the servo socket.
+            "camera_pose": self._camera_pose_world(primary_cam),
             "joint_positions": q,
             "joint_velocities": dq,
             "base_pose": xyt,

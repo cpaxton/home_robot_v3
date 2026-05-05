@@ -10,8 +10,11 @@
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Agent package: tools, prompt, and loop for robot + memory + optional Discord.
+#
+# Do not import ``emet.agent.loop`` here: it pulls DynaMem and would circular-import with
+# ``controller_dynamem`` (loop → dynamem_task → controller_dynamem → env_flags under emet.agent).
+# Use ``from emet.agent.loop import run_agent_with_robot`` at call sites.
 
-from emet.agent.loop import run_agent_with_robot
 from emet.agent.prompt import (
     DEFAULT_AGENT_NAME,
     AgentPromptBuilder,
@@ -34,5 +37,4 @@ __all__ = [
     "get_tool_schemas_for_llm",
     "get_tools",
     "parse_tool_calls_response",
-    "run_agent_with_robot",
 ]

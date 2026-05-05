@@ -105,6 +105,7 @@ setuptools.setup(
         # These are not supported > python 3.11
         "scikit-fmm",
         "open3d",
+        "depth-anything-3>=0.1.1",
         "click>=8.1.8",
         "discord.py",
         "python-dotenv",
@@ -129,9 +130,6 @@ setuptools.setup(
         "hand_tracker": [
             "mediapipe",
             "webcam",
-        ],
-        "da3": [
-            "depth-anything-3>=0.1.1",
         ],
     },
 )

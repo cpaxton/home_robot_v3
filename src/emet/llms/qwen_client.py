@@ -474,6 +474,7 @@ class Qwen35VLClient:
         assert device in ["cuda", "mps"], f"Invalid device: {device}"
         assert model_size in _QWEN35_VL_SIZES, f"Invalid Qwen3.5 multimodal size: {model_size}"
 
+        self.model_size = model_size
         self._device = device
         self.max_tokens = max_tokens
         self.num_beams = num_beams

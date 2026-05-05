@@ -23,12 +23,15 @@ import sys
 from pathlib import Path
 
 import click
+from click.core import ParameterSource
 
 # Enable shell completion for bash/zsh
 _CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
 # Sub-apps that define @click.option("--robot") and receive --robot from `emet run`.
-_EMET_RUN_APPS_WITH_ROBOT = frozenset({"dynamem", "agent", "graph-eqa", "scene-graph", "molmospaces-explore"})
+_EMET_RUN_APPS_WITH_ROBOT = frozenset(
+    {"dynamem", "agent", "graph-eqa", "scene-graph", "molmospaces-explore", "debug-da3-depth"}
+)
 
 
 def _project_root() -> Path:
@@ -219,9 +222,10 @@ def main() -> None:
     "--robot",
     default="stretch",
     help=(
-        "Robot to simulate. 'stretch' (default) uses the Stretch-MuJoCo path. "
-        "Robosuite-native names (PandaOmron, Tiago, GR1, etc.) keep the "
-        "robosuite robot in the scene. 'galaxea_r1' uses the Galaxea R1 MJCF."
+        "Robot to simulate. 'stretch' (default) uses the Stretch-MuJoCo server. "
+        "Registry robots (e.g. innate_mars, rby1, galaxea_r1) load the default table "
+        "scene merged with that robot's MJCF and use the generic ZMQ sim (RobosuiteZmqServer). "
+        "Robosuite-native names (PandaOmron, Tiago, GR1) use the stock robosuite robot in Robocasa."
     ),
 )
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
@@ -260,6 +264,7 @@ def serve(
       emet serve
       DISPLAY=:1 emet serve mujoco   # Xvfb or local display; viewer works without --headless
       emet serve mujoco --headless   # True headless / no DISPLAY (EGL off-screen)
+      emet serve --robot innate_mars --headless   # Innate Mars + default table (ports 4401–4404)
       emet serve robocasa
       emet serve robocasa --robot PandaOmron
       emet serve robocasa --robot galaxea_r1
@@ -569,6 +574,108 @@ def kill_mujoco_server(port: int, kill_all: bool) -> None:
     sys.exit(0 if killed_any else 1)
 
 
+@main.command("view-mujoco", short_help="Open MuJoCo viewer for a robot MJCF (no ZMQ server)")
+@click.option(
+    "--robot",
+    default="innate_mars",
+    help="Robot key for get_robot_mjcf_path (e.g. innate_mars, rby1, galaxea_r1).",
+)
+@click.option(
+    "--merge-scene",
+    is_flag=True,
+    help="Merge scene_environment.xml (table, objects) the same way as emet serve mujoco.",
+)
+@click.option(
+    "--no-extras",
+    is_flag=True,
+    help="With innate_mars only: load robot MJCF alone (no grid floor / extra lights). Ignored with --merge-scene.",
+)
+def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool, no_extras: bool) -> None:
+    """Open the native MuJoCo viewer to inspect a robot model (requires ``uv sync --extra sim``).
+
+    Uses ``launch_passive``: close the window or Ctrl+C to exit. Needs a desktop ``DISPLAY`` (or X forwarding).
+
+    Examples:
+      emet view-mujoco --robot innate_mars
+      emet view-mujoco --robot innate_mars --merge-scene
+      emet view-mujoco --robot innate_mars --no-extras
+    """
+    import time
+
+    import mujoco
+    import mujoco.viewer
+
+    from emet.utils.assets import get_robot_mjcf_path
+
+    robot_key = robot.lower().replace("-", "_")
+    if merge_scene:
+        from emet.simulation.mujoco_server import _load_default_scene_with_robot
+
+        model = _load_default_scene_with_robot(robot_key)
+        if model is None:
+            click.echo(
+                "Could not build merged model (scene_environment.xml or robot MJCF missing).",
+                err=True,
+            )
+            sys.exit(1)
+    else:
+        p = get_robot_mjcf_path(robot_key)
+        if p is None or not p.is_file():
+            click.echo(
+                f"No MuJoCo XML for {robot!r} (see get_robot_mjcf_path in emet.utils.assets).",
+                err=True,
+            )
+            sys.exit(1)
+        use_extras = robot_key == "innate_mars" and not no_extras
+        extras_p = p.parent / "innate_mars_visual_extras.xml" if use_extras else None
+        if use_extras and extras_p is not None and extras_p.is_file():
+            import os
+            import tempfile
+
+            robot_abs = str(p.resolve())
+            extras_abs = str(extras_p.resolve())
+            wrapper = (
+                "<?xml version=\"1.0\"?>\n"
+                '<mujoco model="innate_mars_view">\n'
+                f'  <include file="{robot_abs}"/>\n'
+                f'  <include file="{extras_abs}"/>\n'
+                "</mujoco>\n"
+            )
+            fd, tmp = tempfile.mkstemp(suffix=".xml", prefix="view_", dir=str(p.parent))
+            os.close(fd)
+            tmp_path = Path(tmp)
+            try:
+                tmp_path.write_text(wrapper)
+                model = mujoco.MjModel.from_xml_path(str(tmp_path))
+            finally:
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        else:
+            model = mujoco.MjModel.from_xml_path(str(p))
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    try:
+        with mujoco.viewer.launch_passive(
+            model,
+            data,
+            show_left_ui=show_viewer_ui,
+            show_right_ui=show_viewer_ui,
+        ) as viewer:
+            click.echo("MuJoCo viewer open — close the window or Ctrl+C to exit.")
+            while viewer.is_running():
+                mujoco.mj_forward(model, data)
+                viewer.sync()
+                time.sleep(0.01)
+    except Exception as e:
+        click.echo(
+            f"Viewer failed ({e!r}). On headless hosts use X11 forwarding or run with a local DISPLAY.",
+            err=True,
+        )
+        sys.exit(1)
+
+
 @main.command("show-memory", short_help="Open a saved memory in Rerun")
 @click.argument(
     "path",
@@ -708,6 +815,27 @@ def view_bridge(robot_ip: str) -> None:
     sys.exit(_run_module("emet.app.view_bridge", ["--robot-ip", robot_ip] if robot_ip else []))
 
 
+@main.command(
+    "preview-cameras",
+    short_help="Montage robot cameras (local MJCF or ZMQ) for diagnostics",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
+@click.pass_context
+def preview_cameras(ctx: click.Context) -> None:
+    """Save a PNG strip of stereo + arm cameras, optionally post to Discord.
+
+    Runs ``emet.app.preview_robot_cameras``: default local merged scene MJCF preview; use ``--source zmq``
+    for one frame from observation port (4401).
+
+    Examples:
+      emet preview-cameras
+      emet preview-cameras --source zmq --robot innate_mars
+      emet preview-cameras --discord --caption "check head aim"
+      emet preview-cameras --nod --nod-out-dir ./nod_caps --nod-motion bounce
+    """
+    sys.exit(_run_module("emet.app.preview_robot_cameras", list(ctx.args)))
+
+
 @main.command(short_help="Deploy emet_core and innate_mars_bridge to robot")
 @click.option("--host", "-H", default=None, help="Robot host (default: active connection)")
 @click.option("--user", "-u", default=None, help="SSH user (default: from connection or root)")
@@ -768,6 +896,7 @@ def deploy(
             "discord",
             "create-and-print-memory",
             "molmospaces-explore",
+            "debug-da3-depth",
         ]
     ),
 )
@@ -775,7 +904,11 @@ def deploy(
 @click.option(
     "--robot",
     default="stretch",
-    help="Robot backend (stretch, rby1, galaxea_r1). Must match emet serve mujoco --robot.",
+    help=(
+        "Robot backend (stretch, innate_mars, rby1, galaxea_r1). Must match emet serve mujoco --robot. "
+        "If you omit this flag, ``emet run`` does not forward ``--robot`` to sub-apps—so e.g. "
+        "``emet run agent --agent-config configs/agent_innate_mars.yaml`` uses top-level ``robot:`` from that YAML."
+    ),
 )
 @click.option("--server-ip", "--server_ip", default="127.0.0.1", help="Server IP (e.g. for AnyGrasp)")
 @click.option("-S", "--skip", "skip_confirmations", is_flag=True, help="Skip confirmations")
@@ -818,11 +951,16 @@ def run(
       emet run mapping --robot-ip 127.0.0.1
       emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
       emet run discord --robot-ip 192.168.1.15 --task pickup   # requires DISCORD_TOKEN in env
+      emet run debug-da3-depth --robot innate_mars   # DA3 depth + point cloud in Rerun (or: emet debug-da3-depth)
     """
     args = list(ctx.args)
     args.extend(["--robot_ip", robot_ip])
     if app in _EMET_RUN_APPS_WITH_ROBOT:
-        args.extend(["--robot", robot])
+        # Do not inject ``--robot stretch`` when the user omitted ``--robot`` on ``emet run``: the wrapper's
+        # default would override ``robot:`` from ``--agent-config`` (run_agent) or MolmoSpaces discovery
+        # (robot_backend=None). Forward ``--robot`` only when explicitly set (CLI or env).
+        if ctx.get_parameter_source("robot") != ParameterSource.DEFAULT:
+            args.extend(["--robot", robot])
     if port_offset:
         args.extend(["--port-offset", str(port_offset)])
     if app == "dynamem":
@@ -889,6 +1027,8 @@ def run(
     elif app == "create-and-print-memory":
         args.extend(["--robot-ip", robot_ip])
         sys.exit(_run_module("emet.app.create_and_print_memory", args))
+    elif app == "debug-da3-depth":
+        sys.exit(_run_module("emet.app.debug_da3_depth", args))
     else:
         click.echo(f"Unknown app: {app}", err=True)
         sys.exit(1)
@@ -1015,7 +1155,10 @@ def show(path: str, web: bool) -> None:
         sys.exit(1)
 
 
-@main.command(short_help="Run pytest (use uv: uv run emet test)")
+@main.command(
+    short_help="Run pytest (use uv: uv run emet test)",
+    context_settings={**_CONTEXT_SETTINGS, "ignore_unknown_options": True},
+)
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.option("--no-cov", "no_cov", is_flag=True, help="Disable coverage")
 @click.option(
@@ -1042,6 +1185,7 @@ def test(
       uv run emet test -v
       uv run emet test --no-sim           # skip sim tests (faster)
       uv run emet test -v src/test/memory/test_memory_backends_smoke.py
+      uv run emet test src/test/mapping/test_red_cylinder_in_sim.py -k innate_mars
       uv run emet test -k test_red_cylinder
       Heavy VLLM tests (@pytest.mark.vllm_load) are excluded by default; see docs/plans/TESTING_VLLM_LOAD.md
     """
@@ -1448,6 +1592,13 @@ def install_completion(shell: str | None) -> None:
         sys.exit(1)
     comp = comp_cls(main, {}, "emet", "_EMET_COMPLETE")
     click.echo(comp.source())
+
+
+# Full Click options (not a thin wrapper) so `emet debug-da3-depth --help` lists all flags.
+from emet.app.debug_da3_depth import main as _debug_da3_depth_app  # noqa: E402
+
+_debug_da3_depth_app.short_help = "Live DA3 depth + point cloud from ZMQ (Rerun)"
+main.add_command(_debug_da3_depth_app)
 
 
 if __name__ == "__main__":

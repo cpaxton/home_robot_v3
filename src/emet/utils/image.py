@@ -579,15 +579,15 @@ def scale_camera_matrix(K: np.ndarray, scale_factor: float) -> np.ndarray:
 def ndarray_hwc_to_pil_rgb_u8(
     arr: np.ndarray,
     *,
-    assume_opencv_bgr: bool = True,
+    assume_opencv_bgr: bool = False,
 ) -> Image.Image:
     """Convert an H×W×3 image array to a PIL ``RGB`` ``uint8`` image.
 
     - Handles ``float32`` / ``float64`` and wider integer dtypes via ``cv2.NORM_MINMAX`` so
       naive ``astype(uint8)`` does not collapse floats in ``[0, 1]`` to all zeros (black PNG).
     - Accepts ``(3, H, W)`` CHW layouts (common from torch / some sim paths) and transposes.
-    - When ``assume_opencv_bgr`` is True (default), applies ``cv2.COLOR_BGR2RGB`` for arrays
-      from ``cv2.imdecode`` / ZMQ JPEG decode before PIL / Discord.
+    - Default ``assume_opencv_bgr=False``: canonical ZMQ / :func:`~emet.utils.compression.from_jpg`
+      and MuJoCo RGB buffers are RGB. Set True only for raw ``cv2`` BGR matrices.
     """
     a = np.asarray(arr)
     if hasattr(a, "detach"):
@@ -622,6 +622,6 @@ def numpy_image_to_bytes(np_image: np.ndarray) -> io.BytesIO:
         Image.fromarray(a).save(byte_arr, format="PNG")
         byte_arr.seek(0)
         return byte_arr
-    ndarray_hwc_to_pil_rgb_u8(a, assume_opencv_bgr=True).save(byte_arr, format="PNG")
+    ndarray_hwc_to_pil_rgb_u8(a, assume_opencv_bgr=False).save(byte_arr, format="PNG")
     byte_arr.seek(0)
     return byte_arr

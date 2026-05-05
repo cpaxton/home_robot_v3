@@ -22,7 +22,6 @@ import timeit
 import click
 import zmq
 
-from emet.controller.zmq_client import StretchZmqClient
 from emet.core.robot import AbstractRobotClient
 from emet.core.zmq_protocol import read_emet_robot_id_from_message_or_session
 from emet.robots import ROBOT_REGISTRY
@@ -94,6 +93,8 @@ def create_robot_client_from_cli(
     """
     robot_key = robot.lower().replace("-", "_")
     if robot_key == "stretch":
+        from emet.controller.zmq_client import StretchZmqClient
+
         return StretchZmqClient(
             robot_ip=robot_ip,
             enable_rerun_server=enable_rerun_server,

@@ -33,9 +33,12 @@ def get_mujoco_models_path() -> Path:
 
 
 def get_robot_mjcf_path(robot_key: str) -> Path | None:
-    """Return path to the robot MJCF XML for rby1/galaxea_r1, or None."""
+    """Return path to the robot MJCF XML for rby1/galaxea_r1/innate_mars, or None."""
     robot_key = robot_key.lower().replace("-", "_")
     if robot_key in ("rby1", "galaxea_r1", "rb_y1"):
         path = get_mujoco_models_path() / "galaxea_r1" / "galaxea_r1.xml"
+        return path if path.exists() else None
+    if robot_key in ("innate_mars", "maurice"):
+        path = get_mujoco_models_path() / "innate_mars" / "innate_mars.xml"
         return path if path.exists() else None
     return None

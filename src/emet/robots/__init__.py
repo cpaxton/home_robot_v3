@@ -15,7 +15,9 @@
 
 """Robot backends for EMET — Stretch, Mobile ALOHA, Galaxea R1 / RB-Y1, Innate Mars, YOR."""
 
-from emet.robots.base import RobotBackend, RobotSpec
+import importlib
+
+from emet.robots.base import RobotBackend, RobotSpec, format_robot_runtime_notes, format_uv_sync_extras_hint
 
 ROBOT_REGISTRY = {
     "stretch": "emet.robots.stretch",
@@ -27,4 +29,34 @@ ROBOT_REGISTRY = {
     "yor": "emet.robots.yor",
 }
 
-__all__ = ["RobotBackend", "RobotSpec", "ROBOT_REGISTRY"]
+
+def get_robot_spec(robot: str) -> RobotSpec | None:
+    """Return :class:`RobotSpec` for a CLI robot name (``stretch``, ``innate_mars``, …), or None if unknown."""
+    key = robot.lower().replace("-", "_")
+    if key == "stretch":
+        from emet.robots.stretch import StretchBackend
+
+        return StretchBackend().get_spec()
+    mod_name = ROBOT_REGISTRY.get(key)
+    if mod_name is None:
+        return None
+    mod = importlib.import_module(mod_name)
+    backend_cls = None
+    for attr_name in dir(mod):
+        attr = getattr(mod, attr_name)
+        if isinstance(attr, type) and hasattr(attr, "get_spec") and attr_name != "RobotBackend":
+            backend_cls = attr
+            break
+    if backend_cls is None:
+        return None
+    return backend_cls().get_spec()
+
+
+__all__ = [
+    "ROBOT_REGISTRY",
+    "RobotBackend",
+    "RobotSpec",
+    "format_robot_runtime_notes",
+    "format_uv_sync_extras_hint",
+    "get_robot_spec",
+]
