@@ -385,12 +385,21 @@ def molmospaces_placed_pose_passes_horizontal_interior_gate(
     base_body_name: str,
     placed: tuple[float, float, float],
     floor_geom_name: str = "floor",
+    require_upward_ceiling_hit: bool = False,
+    min_upward_clearance_m: float | None = None,
 ) -> bool:
-    """True if the placed base (x, y) is not classified as an infinite-floor **exterior tongue** in 3D.
+    """True if the placed base (x, y) passes post-spawn checks (horizontal tongue by default).
 
     Recomputes walkable floor *z* under the placed XY and runs the same horizontal cardinal ``mj_ray``
-    rule used during spawn. Call immediately after :func:`find_molmospaces_freejoint_xyz` (with
-    ``data`` already at the returned pose and ``mj_forward`` applied).
+    **exterior-tongue** rule used during spawn. Call immediately after :func:`find_molmospaces_freejoint_xyz`
+    (with ``data`` already at the returned pose and ``mj_forward`` applied).
+
+    **What this does *not* assert by default:** an upward ``mj_ray`` hit (ceiling). Many iTHOR merges
+    have no ceiling geom; spawn allows **open sky** (no upward hit) in that case. Set
+    ``require_upward_ceiling_hit=True`` for scenes where you expect real overhead geometry and want
+    to assert ``+z`` clearance (e.g. closed rooms in synthetic tests like ``MEGA_SHELL_OFFSET``).
+    Use *min_upward_clearance_m* to tune the threshold when the floor probe sits just under a low
+    deck (defaults to ``_MIN_UPWARD_CEILING_CLEARANCE_M`` when omitted).
     """
     x, y = float(placed[0]), float(placed[1])
     floor_eff = effective_floor_geom_name(model, floor_geom_name)
@@ -403,9 +412,22 @@ def molmospaces_placed_pose_passes_horizontal_interior_gate(
     if zf is None:
         return False
     z_probe = float(zf) + 0.08
-    return not horizontal_spawn_rejects_exterior_tongue(
+    if horizontal_spawn_rejects_exterior_tongue(
         model, data, x, y, z_probe, exclude_body_id=excl
-    )
+    ):
+        return False
+    if require_upward_ceiling_hit:
+        min_up = (
+            float(min_upward_clearance_m)
+            if min_upward_clearance_m is not None
+            else float(_MIN_UPWARD_CEILING_CLEARANCE_M)
+        )
+        up = upward_ray_hit_distance(
+            model, data, x, y, z_probe, exclude_body_id=excl
+        )
+        if up is None or up < min_up:
+            return False
+    return True
 
 
 def walkable_floor_z_at_xy(

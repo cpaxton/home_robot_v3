@@ -181,6 +181,28 @@ def test_find_molmospaces_moves_base_into_offset_mega_shell():
     assert math.hypot(x - 18.0, y - 14.0) < 12.0, f"expected spawn near house center (18,14), got ({x},{y})"
 
 
+def test_mega_shell_placed_passes_horizontal_and_optional_upward_ceiling_gate():
+    """Synthetic shell has a ceiling geom; optional gate asserts +z ray hit with clearance."""
+    m = mujoco.MjModel.from_xml_string(MEGA_SHELL_OFFSET)
+    d = mujoco.MjData(m)
+    mujoco.mj_forward(m, d)
+    out = molmospaces_spawn.find_molmospaces_freejoint_xyz(
+        m, d, base_body_name="base_link", min_nonfloor_clearance=-5e-5
+    )
+    assert out is not None
+    assert molmospaces_spawn.molmospaces_placed_pose_passes_horizontal_interior_gate(
+        m, d, base_body_name="base_link", placed=out
+    )
+    assert molmospaces_spawn.molmospaces_placed_pose_passes_horizontal_interior_gate(
+        m,
+        d,
+        base_body_name="base_link",
+        placed=out,
+        require_upward_ceiling_hit=True,
+        min_upward_clearance_m=0.03,
+    )
+
+
 def test_iter_annulus_xy_candidates_respects_xy_origin():
     """Rings must be around *xy_origin*, not world (0,0), so offset houses get interior samples."""
     from emet.simulation.molmospaces_spawn import iter_annulus_xy_candidates
@@ -389,7 +411,10 @@ def test_find_molmospaces_freejoint_xyz_finds_valid_pose_in_walled_room():
 
 
 def test_find_molmospaces_placed_passes_horizontal_interior_gate_minimal_room():
-    """Spawn result must pass the same 3D horizontal exterior-tongue check used during search."""
+    """After spawn, re-run the horizontal exterior-tongue rule at the placed XY.
+
+    This MJCF has no ceiling; we only assert the horizontal gate (default), not overhead rays.
+    """
     m = mujoco.MjModel.from_xml_string(MINIMAL_WALLED_ROOM_WITH_BASE)
     d = mujoco.MjData(m)
     mujoco.mj_forward(m, d)
@@ -448,7 +473,10 @@ def test_find_molmospaces_freejoint_on_installed_ithor_if_available():
 
 @pytest.mark.skipif(os.environ.get("RUN_MOLMOSPACES_TESTS", "") != "1", reason="set RUN_MOLMOSPACES_TESTS=1")
 def test_merged_ithor_index3_spawn_passes_horizontal_interior_gate():
-    """Regression: iTHOR train index 3 merge must spawn and pass 3D horizontal interior gate."""
+    """Regression: iTHOR train index 3 merge must spawn and pass horizontal tongue post-check.
+
+    Many iTHOR scenes omit a ceiling geom; we do not require ``require_upward_ceiling_hit`` here.
+    """
     try:
         from emet_molmospaces.runner import (
             _find_installed_scene_xml,
