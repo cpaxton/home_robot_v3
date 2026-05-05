@@ -101,12 +101,19 @@ def _decode_servo_message_to_observations(
     else:
         gps, compass = np.zeros(2, dtype=float), np.zeros(1, dtype=float)
 
+    cp = msg.get("camera_pose")
+    if cp is None and full_obs is not None:
+        cp = full_obs.get("camera_pose")
+    if cp is not None:
+        cp = np.asarray(cp, dtype=np.float64).reshape(4, 4)
+
     return Observations(
         gps=gps,
         compass=compass,
         rgb=rgb,
         depth=depth,
         camera_K=K,
+        camera_pose=cp,
         joint=joint,
         is_simulation=bool(msg.get("is_simulation", True)),
     )
@@ -480,6 +487,10 @@ class GenericZmqClient(AbstractRobotClient):
                 continue
             self._seq_id += 1
             output["rgb"] = compression.from_jpg(output["rgb"])
+            if "rgb_right" in output and output["rgb_right"] is not None:
+                output["rgb_right"] = compression.from_jpg(output["rgb_right"])
+            if "rgb_tertiary" in output and output["rgb_tertiary"] is not None:
+                output["rgb_tertiary"] = compression.from_jpg(output["rgb_tertiary"])
             raw_depth = output.get("depth")
             if raw_depth is None:
                 if not self._allow_missing_depth:
@@ -621,8 +632,12 @@ class GenericZmqClient(AbstractRobotClient):
             depth=depth,
             camera_K=camera_K,
             camera_pose=camera_pose,
+            head_rgb_right=obs.get("rgb_right"),
+            head_camera_K_right=obs.get("camera_K_right"),
+            head_camera_pose_right=obs.get("camera_pose_right"),
             ee_pose=ee_pose,
             joint=joint,
+            joint_velocities=obs.get("joint_velocities"),
             gps=gps,
             compass=compass,
         )

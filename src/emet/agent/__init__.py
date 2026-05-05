@@ -11,10 +11,10 @@
 #
 # Agent package: tools, prompt, and loop for robot + memory + optional Discord.
 #
-# ``run_agent_with_robot`` is loaded lazily (``__getattr__``) so submodules like
-# ``emet.agent.env_flags`` can be imported while ``emet.controller.controller_dynamem``
-# is still initializing — otherwise ``agent`` → ``loop`` → ``dynamem_task`` → ``RobotAgent``
-# creates a circular import.
+# Do not import ``emet.agent.loop`` at module level: it pulls DynaMem and circular-imports with
+# ``controller_dynamem`` (loop → dynamem_task → ``RobotAgent``). ``run_agent_with_robot`` is
+# exposed lazily via ``__getattr__`` so ``emet.agent.env_flags`` and other submodules can import
+# safely; call sites may also ``from emet.agent.loop import run_agent_with_robot`` directly.
 
 from emet.agent.prompt import (
     DEFAULT_AGENT_NAME,
@@ -38,7 +38,6 @@ __all__ = [
     "get_tool_schemas_for_llm",
     "get_tools",
     "parse_tool_calls_response",
-    "run_agent_with_robot",
 ]
 
 

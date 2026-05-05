@@ -32,6 +32,45 @@ MINIMAL_SCENE_XML = """<?xml version="1.0"?>
 """
 
 
+def test_innate_mars_robot_mjcf_path():
+    from emet_molmospaces.runner import _get_robot_mjcf_path
+
+    path = _get_robot_mjcf_path("innate_mars")
+    assert path is not None
+    assert path.exists()
+    assert path.name == "innate_mars.xml"
+
+
+def test_merge_innate_mars_into_minimal_scene_no_double_floor():
+    """Innate Mars MJCF is robot-only (no maurice_floor); merged scene has one floor from the scene file."""
+    import mujoco
+    from emet_molmospaces.runner import _get_robot_mjcf_path, _merge_robot_into_scene
+
+    robot_path = _get_robot_mjcf_path("innate_mars")
+    if robot_path is None:
+        pytest.skip("innate_mars MJCF not found (need emet with innate_mars assets)")
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
+        f.write(MINIMAL_SCENE_XML)
+        scene_path = Path(f.name)
+    try:
+        merged_path = _merge_robot_into_scene(scene_path, robot_path)
+        try:
+            model = mujoco.MjModel.from_xml_path(str(merged_path))
+        finally:
+            if merged_path.exists():
+                merged_path.unlink(missing_ok=True)
+    finally:
+        scene_path.unlink(missing_ok=True)
+
+    floor_ids = [
+        i
+        for i in range(model.ngeom)
+        if mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, i) == "floor"
+    ]
+    assert len(floor_ids) == 1, "scene provides single floor; robot must not add another"
+    assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "innate_viewer_floor") < 0
+
+
 def test_rby1_robot_mjcf_path():
     """Resolve rby1 to Galaxea R1 MJCF path via emet registry."""
     from emet_molmospaces.runner import _get_robot_mjcf_path

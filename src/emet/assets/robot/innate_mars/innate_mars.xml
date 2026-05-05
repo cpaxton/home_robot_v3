@@ -1,0 +1,174 @@
+<mujoco model="maurice_bot">
+  <compiler angle="radian" coordinate="local" meshdir="meshes" eulerseq="zyx"/>
+  <!-- Robot meshes: visual-only contact (external / simplified collision elsewhere). Use class `visual`
+       so merged scene_environment.xml geoms keep their own collision masks (global geom default must not be zeroed). -->
+  <default>
+    <default class="visual">
+      <geom contype="0" conaffinity="0"/>
+    </default>
+  </default>
+
+  <option gravity="0 0 -9.81"/>
+
+  <asset>
+    <mesh name="base_mesh" file="base.STL" scale="1 1 1"/>
+    <mesh name="link1_mesh" file="link1.STL" scale="1 1 1"/>
+    <mesh name="link2_mesh" file="link2.STL" scale="1 1 1"/>
+    <mesh name="link3_mesh" file="link3.STL" scale="1 1 1"/>
+    <mesh name="link4_mesh" file="link4.STL" scale="1 1 1"/>
+    <mesh name="link5_mesh" file="link5.STL" scale="1 1 1"/>
+    <mesh name="link61_mesh" file="link61.STL" scale="1 1 1"/>
+    <mesh name="link62_mesh" file="link62.STL" scale="1 1 1"/>
+    <mesh name="head_mesh" file="head.STL" scale="1 1 1"/>
+
+    <material name="matt_black" rgba="0.05 0.05 0.05 1"/>
+    <material name="bright_orange" rgba="1.0 0.5 0.0 1"/>
+  </asset>
+
+  <worldbody>
+    <!-- Robot only — lighting/floor come from scene_environment.xml when merged, or innate_mars_visual_extras.xml for view-mujoco. -->
+    <body name="base_root" pos="0 0 0">
+      <inertial pos="0 0 0" mass="0.01" diaginertia="0.1 0.1 0.1"/>
+      
+      <!-- First, translation along the x-axis -->
+      <joint name="base_x" type="slide" axis="1 0 0" damping="5"/>
+      
+      <body name="base_x" pos="0 0 0">
+        <inertial pos="0 0 0" mass="0.01" diaginertia="0.1 0.1 0.1"/>
+        <!-- Then, translation along the y-axis -->
+        <joint name="base_y" type="slide" axis="0 1 0" damping="5"/>
+        
+        <body name="base_y" pos="0 0 0">
+          <inertial pos="0 0 0" mass="0.01" diaginertia="0.1 0.1 0.1"/>
+          <!-- Finally, apply yaw rotation -->
+          <joint name="base_yaw" type="hinge" axis="0 0 1" damping="5"/>
+          
+          <!-- Base link and the rest of the arm -->
+          <body name="base_link" pos="0 0 0">
+            <inertial pos="0 0 0" mass="0.89" diaginertia="0.001 0.001 0.001"/>
+            <geom name="base_geom" class="visual" type="mesh" mesh="base_mesh" material="matt_black" euler="-1.5708 0 0"/>
+            <camera name="camera_base" pos="0.0197 0 0.19663" 
+                    quat="0.5416752 0.4545195 -0.4545195 -0.5416752" mode="fixed" fovy="80"/>
+
+            <body name="link1" pos="0.086 -0.05285 0.04025">
+              <inertial pos="0 0 0" mass="0.065" diaginertia="0.0001 0.0001 0.0001"/>
+              <joint name="joint1" type="hinge" axis="0 0 1" limited="true" range="-3.14 3.14" damping="5"/>
+              <geom name="link1_geom" class="visual" type="mesh" mesh="link1_mesh" material="bright_orange"/>
+              
+              <body name="link2" pos="0 0 0.04425">
+                <inertial pos="0 0 0" mass="0.080" diaginertia="0.0001 0.0001 0.0001"/>
+                <joint name="joint2" type="hinge" axis="0 1 0" limited="true" range="-3.14 3.14" damping="5"/>
+                <geom name="link2_geom" class="visual" type="mesh" mesh="link2_mesh" material="matt_black"/>
+                
+                <body name="link3" pos="0.02825 0 0.12125">
+                  <inertial pos="0 0 0" mass="0.055" diaginertia="0.0001 0.0001 0.0001"/>
+                  <joint name="joint3" type="hinge" axis="0 1 0" limited="true" range="-3.14 3.14" damping="5"/>
+                  <geom name="link3_geom" class="visual" type="mesh" mesh="link3_mesh" material="bright_orange"/>
+                  
+                  <body name="link4" pos="0.1375 0 0.0045">
+                    <inertial pos="0 0 0" mass="0.022" diaginertia="0.00005 0.00005 0.00005"/>
+                    <joint name="joint4" type="hinge" axis="0 1 0" limited="true" range="-3.14 3.14" damping="5"/>
+                    <geom name="link4_geom" class="visual" type="mesh" mesh="link4_mesh" material="matt_black"/>
+                    
+                    <body name="link5" pos="0.019 0 0">
+                      <inertial pos="0 0 0" mass="0.050" diaginertia="0.00005 0.00005 0.00005"/>
+                      <joint name="joint5" type="hinge" axis="1 0 0" limited="true" range="-3.14 3.14" damping="5"/>
+                      <geom name="link5_geom" class="visual" type="mesh" mesh="link5_mesh" material="bright_orange"/>
+                      
+                      <body name="link61" pos="0.044 -0.0092 0">
+                        <inertial pos="0 0 0" mass="0.012" diaginertia="0.00002 0.00002 0.00002"/>
+                        <joint name="joint6" type="hinge" axis="0 0 -1" limited="true" range="-1.57 1.57" damping="5"/>
+                        <geom name="link61_geom" class="visual" type="mesh" mesh="link61_mesh" material="matt_black"/>
+                      </body>
+                      
+                      <body name="link62" pos="0.044 0.0091 0">
+                        <inertial pos="0 0 0" mass="0.012" diaginertia="0.00002 0.00002 0.00002"/>
+                        <joint name="joint6M" type="hinge" axis="0 0 -1" limited="true" range="-1.57 1.57" damping="5"/>
+                        <geom name="link62_geom" class="visual" type="mesh" mesh="link62_mesh" material="matt_black"/>
+                      </body>
+                      
+                      <!-- Add End Effector -->
+                      <body name="ee_link" pos="0.091838 0 0">
+                        <inertial pos="0 0 0" mass="0.001" diaginertia="0.00001 0.00001 0.00001"/>
+                        <geom name="ee_geom" class="visual" type="sphere" size="0.005" material="bright_orange"/>
+                      </body>
+                      
+                      <body name="arm_camera_link" pos="0.03378 0 0.05052">
+                        <inertial pos="0 0 0" mass="0.01" diaginertia="1e-4 1e-4 1e-4"/>
+                        <!-- EE cam: URDF pitch on link5→arm_camera_link leaves MuJoCo −Z near −world **X** (∥ table edge).
+                             Compose the extra fixed rotation (wxyz) so at default qpos −Z aims **−world Y** (tablefront)
+                             with modest downward pitch — **not** the head REP stereo (+**X**) axis. Real hardware aim
+                             follows link5 FK + whatever optical frame the bridge uses. -->
+                        <camera name="camera_arm" mode="fixed" fovy="80" quat="0.75312453 -0.63194657 0.1175563 0.14009814"/>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+
+            <!-- Same subtree as URDF joint_head + head cameras; placed after arm like upstream maurice.mjcf link order + URDF joint ordering -->
+            <body name="head" pos="-0.040751 -0.0002 0.25882">
+              <!-- Nominal nod: match maurice.urdf joint_head axis "0 −1 0"; with REP stereo sight along +head **X**, this
+                   axis is ⟂ lk so nod pitches gaze (toward −Z/+Z world at default yaw), not −Y slewing around +X lk. -->
+              <joint name="joint_head" type="hinge" axis="0 -1 0" limited="true" range="-0.1745 0.5236" damping="5"/>
+              <inertial pos="0 0 0" mass="0.148" diaginertia="0.0002 0.0001 0.0002"/>
+              <!-- Nested ``head_visual`` so STL ``pos`` is literal head-frame; Euler stays on ``head_geom``.
+                   **+Y** shifts mesh toward ``head_left``; **−Z** lowers mesh on the neck. -->
+              <body name="head_visual" pos="0 0.015 -0.005">
+                <inertial pos="0 0 0" mass="1e-6" diaginertia="1e-9 1e-9 1e-9"/>
+                <geom name="head_geom" class="visual" type="mesh" mesh="head_mesh" material="matt_black" pos="0 0 0" euler="-1.5708 0 0"/>
+              </body>
+              <!-- Head stereo: positions from maurice.urdf fixed_head_camera_{left,right} — same X/Z, 60 mm baseline
+                   on head Y (left +0.0297 m, right −0.0303 m; intentionally not ±0.03). Optics share one quat below.
+                   URDF ``fixed_*_camera_optical_frame`` rpy="−π/2 0 −π/2" (REP: optical +Z forward) maps optical +Z
+                   to **+head X** (⊥ stereo baseline along head **Y**). MuJoCo camera ``quat`` is the rotation from
+                   head to cam such that −local Z equals that REP forward (+X bump ``0.0601`` vs URDF ``0.04327`` clears ``head_geom``). -->
+              <camera name="head_left" pos="0.0601 0.0297 -0.000275" mode="fixed" fovy="80"
+                      quat="0.5 0.5 -0.5 -0.5"/>
+              <camera name="head_right" pos="0.0601 -0.0303 -0.000275" mode="fixed" fovy="80"
+                      quat="0.5 0.5 -0.5 -0.5"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <!-- Collision settings -->
+  <contact>
+    <exclude name="ex_base_root_base_x" body1="base_root" body2="base_x"/>
+    <exclude name="ex_base_x_base_y" body1="base_x" body2="base_y"/>
+    <exclude name="ex_base_y_base_link" body1="base_y" body2="base_link"/>
+    <exclude name="ex_base_link_head" body1="base_link" body2="head"/>
+    <exclude name="ex_base_link_link1" body1="base_link" body2="link1"/>
+    <exclude name="ex_link1_link2" body1="link1" body2="link2"/>
+    <exclude name="ex_link2_link3" body1="link2" body2="link3"/>
+    <exclude name="ex_link3_link4" body1="link3" body2="link4"/>
+    <exclude name="ex_link4_link5" body1="link4" body2="link5"/>
+    <exclude name="ex_link5_link61" body1="link5" body2="link61"/>
+    <exclude name="ex_link5_link62" body1="link5" body2="link62"/>
+  </contact>
+  
+  <!-- Gripper mimic: URDF joint6M has axis (0,0,-1) and mimic multiplier -1 → q6M = -q6 -->
+  <equality>
+    <joint name="gripper_gear" joint1="joint6" joint2="joint6M" polycoef="0 -1 0 0 0" solref="0.001 1" solimp="0.99 0.999 0.001"/>
+  </equality>
+
+  <actuator>
+    <!-- Velocity control actuators -->
+    <velocity joint="base_x" kv="100"/>
+    <velocity joint="base_y" kv="100"/>
+    <velocity joint="base_yaw" kv="100"/>
+    
+    <!-- Position control actuators for the arm joints -->
+    <position joint="joint1" kp="1000"/>
+    <position joint="joint2" kp="1000"/>
+    <position joint="joint3" kp="1000"/>
+    <position joint="joint4" kp="1000"/>
+    <position joint="joint5" kp="1000"/>
+    <position joint="joint6" kp="1000"/>
+    <position joint="joint_head" kp="800"/>
+    <!-- joint6M is controlled via equality constraint, no separate actuator needed -->
+  </actuator>
+</mujoco>
