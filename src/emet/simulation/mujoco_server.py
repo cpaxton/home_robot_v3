@@ -29,7 +29,9 @@ from emet.utils.assets import get_mujoco_models_path, get_robot_mjcf_path
 from emet.utils.port_utils import kill_processes_on_port
 
 default_scene_xml_path = str(get_mujoco_models_path() / "scene.xml")
-DEFAULT_SCENE_NO_ROBOT = "scene_environment.xml"  # canonical table room (wood floor texture); scene_default.xml aliases this
+DEFAULT_SCENE_NO_ROBOT = (
+    "scene_environment.xml"  # canonical table room (wood floor texture); scene_default.xml aliases this
+)
 
 # Stretch-specific server (MujocoZmqServer) and motion/pinocchio deps are imported only when
 # --robot stretch, so that emet serve mujoco --robot rby1 works without pinocchio/hppfcl.
@@ -63,9 +65,7 @@ def _load_default_scene_with_robot(robot_key: str):
     compiler_line = ""
     if meshes_dir.is_dir():
         mesh_abs = str(meshes_dir.resolve())
-        compiler_line = (
-            f'  <compiler meshdir="{mesh_abs}" angle="radian" coordinate="local" eulerseq="zyx"/>\n'
-        )
+        compiler_line = f'  <compiler meshdir="{mesh_abs}" angle="radian" coordinate="local" eulerseq="zyx"/>\n'
     wrapper = (
         '<?xml version="1.0"?>\n'
         '<mujoco model="default_scene_with_robot">\n'
@@ -389,7 +389,7 @@ def main(
     if _ROBOCASA_IMPORT_FAILED and not (scene_path and str(scene_path).strip()):
         logger.warning(
             "Robocasa scene generation (--use-robocasa) is not available. "
-            "Using default scene. To enable: emet install sim  then  emet sync -e sim",
+            "Using default scene. To enable: emet install sim  then  uv sync --extra sim  (or: emet sync -e sim)",
         )
 
     # Free server ports so we can bind (e.g. kill previous mujoco_server).

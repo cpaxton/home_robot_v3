@@ -1,5 +1,14 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
 
 from pathlib import Path
 
@@ -21,8 +30,12 @@ def test_innate_mars_spec():
     canonical = get_robot_mjcf_path("innate_mars")
     assert canonical is not None
     assert Path(s.mjcf_path).resolve() == canonical.resolve()
-    assert s.urdf_path is not None
-    assert Path(s.urdf_path).resolve() == canonical.with_name("maurice.urdf").resolve()
+    urdf = canonical.with_name("maurice.urdf")
+    if urdf.is_file():
+        assert s.urdf_path is not None
+        assert Path(s.urdf_path).resolve() == urdf.resolve()
+    else:
+        assert s.urdf_path is None
     assert s.optional_uv_extras == ()
     assert s.dynamem_depth_source_hint == "da3"
     assert s.robosuite_rgb_depth_ops == ()

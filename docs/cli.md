@@ -73,6 +73,8 @@ Run a robot agent or app.
 | App | Description |
 |-----|--------------|
 | `dynamem` | DynaMem navigation + manipulation |
+| `graph-eqa` | Graph-based EQA memory (see [graph_eqa.md](graph_eqa.md)) |
+| `dynagraph` | Graph EQA + merge/staleness ([dynagraph.md](dynagraph.md)) |
 | `mapping` | 3D mapping and exploration |
 | `grasp` | Grasp object (red cylinder demo) |
 | `chat` | LLM chat with robot |

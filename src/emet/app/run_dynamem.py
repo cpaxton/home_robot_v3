@@ -108,12 +108,17 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
 @click.option(
     "--headless",
     is_flag=True,
-    help="Run without native Rerun viewer; connect at http://<server-ip>:9090",
+    help="No auto-open browser for Rerun; open http://<this-host>:9090 manually. For native app use --rerun-native.",
 )
 @click.option(
     "--no-rerun",
     is_flag=True,
     help="Disable Rerun visualization entirely",
+)
+@click.option(
+    "--rerun-native",
+    is_flag=True,
+    help="Use the native Rerun desktop viewer instead of the browser (needs DISPLAY).",
 )
 @click.option(
     "--rerun-show-panels",
@@ -163,6 +168,7 @@ def main(
     cpu_only: bool = False,
     headless: bool = False,
     no_rerun: bool = False,
+    rerun_native: bool = False,
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
     rerun_bind: bool = False,
@@ -183,6 +189,9 @@ def main(
     if rerun_bind:
         os.environ["RERUN_BIND_ALL"] = "1"
 
+    if rerun_native and headless:
+        raise click.UsageError("Use either --rerun-native or --headless for Rerun, not both.")
+
     print("- Create robot client")
     depth_mode = str(parameters.get("depth_source", "sensor")).lower()
     robot_key = robot.lower().replace("-", "_")
@@ -193,6 +202,7 @@ def main(
         port_offset=port_offset,
         enable_rerun_server=not no_rerun,
         rerun_headless=headless,
+        rerun_native_viewer=rerun_native,
         rerun_show_panels=rerun_show_panels,
         rerun_debug=rerun_debug,
         start_immediately=False,

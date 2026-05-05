@@ -38,6 +38,7 @@ from emet.simulation import molmospaces_spawn
 from emet.simulation.head_look_action import apply_head_to_robosuite
 from emet.simulation.stereo_camera_utils import stereo_right_camera_name_from_spec
 from emet.utils.geometry import xyt_global_to_base
+from emet.utils.observation_layout import rgb_height_width_for_zmq
 from emet.utils.pinhole_intrinsics import apply_pinhole_pixel_ops, chain_pinhole_K_pixel_ops, scale_pinhole_K
 
 logger = log.Logger(__name__)
@@ -161,7 +162,9 @@ class RobosuiteZmqServer(BaseZmqServer):
             return
         if placed is None:
             if self._debug_molmospaces_spawn:
-                logger.info("MolmoSpaces base autoplace: find_molmospaces_freejoint_xyz returned None (see spawn debug lines above).")
+                logger.info(
+                    "MolmoSpaces base autoplace: find_molmospaces_freejoint_xyz returned None (see spawn debug lines above)."
+                )
             return
         x, y, z = placed
         logger.info(
@@ -664,7 +667,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         except Exception:
             return None
 
-        width, height = rgb.shape[1], rgb.shape[0]
+        height, width = rgb_height_width_for_zmq(rgb)
         depth_u16 = (depth * 1000).astype(np.uint16)
 
         positions, _, _ = self.get_joint_state()
@@ -787,9 +790,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 mujoco.mj_step(self._mjmodel, self._mjdata)
             self._physics_steps_executed += 1
             if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
-                logger.info(
-                    f"MuJoCo step limit reached (--steps {self._max_sim_steps}); stopping simulation loop."
-                )
+                logger.info(f"MuJoCo step limit reached (--steps {self._max_sim_steps}); stopping simulation loop.")
                 self._running = False
                 break
             time.sleep(1 / self.simulation_rate)
@@ -816,9 +817,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                         viewer.sync()
                     self._physics_steps_executed += 1
                     if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
-                        logger.info(
-                            f"MuJoCo step limit reached (--steps {self._max_sim_steps}); closing viewer loop."
-                        )
+                        logger.info(f"MuJoCo step limit reached (--steps {self._max_sim_steps}); closing viewer loop.")
                         self._running = False
                         break
                     time.sleep(dt)

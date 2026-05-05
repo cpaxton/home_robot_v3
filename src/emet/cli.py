@@ -30,7 +30,15 @@ _CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
 # Sub-apps that define @click.option("--robot") and receive --robot from `emet run`.
 _EMET_RUN_APPS_WITH_ROBOT = frozenset(
-    {"dynamem", "agent", "graph-eqa", "scene-graph", "molmospaces-explore", "debug-da3-depth"}
+    {
+        "dynamem",
+        "agent",
+        "graph-eqa",
+        "dynagraph",
+        "scene-graph",
+        "molmospaces-explore",
+        "debug-da3-depth",
+    }
 )
 
 
@@ -256,7 +264,7 @@ def serve(
       mujoco   MuJoCo server (default). Add --use-robocasa for Robocasa scenes.
       robocasa Shortcut for mujoco with Robocasa (same as emet serve mujoco --use-robocasa).
 
-    List Robocasa environments (requires sim extra: uv sync -e sim after emet install sim):
+    List Robocasa environments (requires sim extra: ``uv sync --extra sim`` or ``emet sync -e sim`` after ``emet install sim``):
       emet robocasa list
       emet serve robocasa --list-robocasa-tasks
 
@@ -635,7 +643,7 @@ def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool, no_extras: 
             robot_abs = str(p.resolve())
             extras_abs = str(extras_p.resolve())
             wrapper = (
-                "<?xml version=\"1.0\"?>\n"
+                '<?xml version="1.0"?>\n'
                 '<mujoco model="innate_mars_view">\n'
                 f'  <include file="{robot_abs}"/>\n'
                 f'  <include file="{extras_abs}"/>\n'
@@ -886,6 +894,7 @@ def deploy(
             "dynamem",
             "scene-graph",
             "graph-eqa",
+            "dynagraph",
             "mapping",
             "grasp",
             "chat",
@@ -991,6 +1000,8 @@ def run(
         sys.exit(_run_module("emet.app.run_scene_graph", args))
     elif app == "graph-eqa":
         sys.exit(_run_module("emet.app.run_graph_eqa", args))
+    elif app == "dynagraph":
+        sys.exit(_run_module("emet.app.run_dynagraph", args))
     elif app == "molmospaces-explore":
         sys.exit(_run_module("emet.app.run_molmospaces_explore", args))
     elif app == "mapping":

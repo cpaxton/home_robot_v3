@@ -135,6 +135,7 @@ def test_color_question_answer_contains_red_and_blue():
 
     Uses mocks (no GPU LLM). Sim coverage: test_graph_eqa_color_question_default_mujoco_scene.
     """
+
     def mock_eqa(commands):
         return (
             "reasoning: the scene graph lists a red cylinder and a blue cube on the table.\n"
@@ -156,9 +157,7 @@ def test_color_question_answer_contains_red_and_blue():
     assert "red" in graph_str
     assert "blue" in graph_str
 
-    _reasoning, answer, confidence, _cr, _tp, _imgs = mem.query_answer(
-        "Which color objects can you see?", None, None
-    )
+    _reasoning, answer, confidence, _cr, _tp, _imgs = mem.query_answer("Which color objects can you see?", None, None)
     assert confidence is True
     al = answer.lower()
     assert "red" in al, f"expected 'red' in answer, got: {answer!r}"
@@ -279,9 +278,7 @@ def test_record_navigation_respects_graph_eqa_record_navigation_false():
 
 def test_query_answer_navigation_fallback_images_and_target():
     mem = GraphEQAMemory(
-        eqa_client=lambda x: (
-            "reasoning: r\nanswer: no\nconfidence: false\naction: 1\nconfidence_reasoning: look"
-        ),
+        eqa_client=lambda x: "reasoning: r\nanswer: no\nconfidence: false\naction: 1\nconfidence_reasoning: look",
         image_description_client=lambda q: "mug",
     )
     rgb = np.zeros((40, 40, 3), dtype=np.uint8)
@@ -291,3 +288,37 @@ def test_query_answer_navigation_fallback_images_and_target():
     assert target_point is not None
     assert abs(float(target_point[0]) - 0.5) < 1e-5
     assert abs(float(target_point[1]) - (-0.25)) < 1e-5
+
+
+def test_dynagraph_spatial_merge_same_obs_id():
+    mem = GraphEQAMemory(
+        parameters={"dynagraph_merge_xy_m": 1.0},
+        eqa_client=lambda x: "",
+        image_description_client=lambda x: "",
+    )
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.set_graph_timestep(1)
+    id1 = mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["cup"])
+    mem.set_graph_timestep(2)
+    id2 = mem.add_observation(rgb, np.array([0.2, 0.0, 0.5]), ["cup"])
+    assert id1 == id2
+    assert len(mem.get_nodes()) == 1
+    assert mem.get_nodes()[0].support_count == 2
+
+
+def test_dynagraph_maintain_prunes_stale_nodes():
+    mem = GraphEQAMemory(
+        parameters={"dynagraph_staleness_horizon": 5},
+        eqa_client=lambda x: "",
+        image_description_client=lambda x: "",
+    )
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.set_graph_timestep(1)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.1]), ["table"])
+    mem.set_graph_timestep(16)
+    mem.add_observation(rgb, np.array([2.0, 0.0, 0.1]), ["chair"])
+    removed = mem.maintain(current_step=20)
+    assert removed == 1
+    assert len(mem.get_nodes()) == 1
+    assert mem.get_nodes()[0].node_id == 1
+    assert "chair" in mem.get_nodes()[0].labels

@@ -37,7 +37,7 @@ from emet.utils.geometry import (
     sophus2posquat,
     xyt_base_to_global,
 )
-from emet.utils.image import Camera
+from emet.utils.image import pinhole_camera_from_intrinsics_and_depth
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
 from emet.utils.point_cloud import show_point_cloud
@@ -129,6 +129,7 @@ class StretchZmqClient(AbstractRobotClient):
         start_immediately: bool = True,
         enable_rerun_server: bool = True,
         rerun_headless: bool = False,
+        rerun_native_viewer: bool = False,
         rerun_show_panels: bool = False,
         rerun_debug: bool = False,
         resend_all_actions: bool = False,
@@ -245,6 +246,7 @@ class StretchZmqClient(AbstractRobotClient):
             self._rerun = RerunVisualizer(
                 output_path=output_path,
                 headless=rerun_headless,
+                rerun_native_viewer=rerun_native_viewer,
                 collapse_panels=not rerun_show_panels,
             )
         else:
@@ -1562,17 +1564,40 @@ class StretchZmqClient(AbstractRobotClient):
             compressed_depth = output.get("depth")
             if compressed_depth is None:
                 if not self._allow_missing_depth:
-                    logger.warning("Observation missing depth key; skipping frame (use allow_missing_depth for RGB-only).")
+                    logger.warning(
+                        "Observation missing depth key; skipping frame (use allow_missing_depth for RGB-only)."
+                    )
                     continue
                 output["depth"] = None
                 output["xyz"] = None
             else:
                 depth = compression.from_jp2(compressed_depth) / 1000
                 output["depth"] = depth
-
-                if camera is None:
-                    # Camera.from_K(K, width, height): columns first (matches rgb_width / rgb_height keys).
-                    camera = Camera.from_K(output["camera_K"], output["rgb_width"], output["rgb_height"])
+                dh, dw = int(depth.shape[0]), int(depth.shape[1])
+                k = np.asarray(output["camera_K"], dtype=np.float64)
+                if camera is None or int(camera.height) != dh or int(camera.width) != dw:
+                    if camera is not None:
+                        logger.warning(
+                            "Depth shape (%s, %s) != camera (%s, %s); rebuilding from K and depth "
+                            "(server rgb_width/rgb_height may be swapped vs depth).",
+                            dh,
+                            dw,
+                            camera.height,
+                            camera.width,
+                        )
+                    elif output.get("rgb_width") is not None and output.get("rgb_height") is not None:
+                        mh = int(output["rgb_height"])
+                        mw = int(output["rgb_width"])
+                        if mh != dh or mw != dw:
+                            logger.warning(
+                                "Depth shape (%s, %s) != message rgb_height/rgb_width (%s, %s); "
+                                "using depth shape for unprojection.",
+                                dh,
+                                dw,
+                                mh,
+                                mw,
+                            )
+                    camera = pinhole_camera_from_intrinsics_and_depth(k, depth)
 
                 output["xyz"] = camera.depth_to_xyz(output["depth"])
 

@@ -69,6 +69,7 @@ def test_run_help():
     )
     assert result.returncode == 0
     assert "dynamem" in result.stdout
+    assert "dynagraph" in result.stdout
     assert "graph" in result.stdout and "eqa" in result.stdout
     assert "mapping" in result.stdout
     assert "debug-da3-depth" in result.stdout
@@ -83,6 +84,25 @@ def test_run_graph_eqa_help():
     )
     assert result.returncode == 0
     assert "robot" in result.stdout.lower() or "robot_ip" in result.stdout
+
+
+def test_run_dynagraph_help():
+    """emet run --help lists dynagraph; app module --help lists merge/staleness."""
+    r1 = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "run", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert r1.returncode == 0
+    assert "dynagraph" in r1.stdout.lower()
+    r2 = subprocess.run(
+        [sys.executable, "-m", "emet.app.run_dynagraph", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert r2.returncode == 0
+    out2 = (r2.stdout + r2.stderr).lower()
+    assert "staleness" in out2 or "merge" in out2
 
 
 def test_sync_help():
