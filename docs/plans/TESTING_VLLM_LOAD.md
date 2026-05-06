@@ -4,7 +4,7 @@ Tests marked `@pytest.mark.vllm_load` download Hugging Face weights and run a mi
 
 ## When to run
 
-- **Manual** (GPU recommended): after `uv sync --extra dev`, from the repo root:
+- **Manual** (GPU recommended): after `uv sync`, from the repo root:
 
   ```bash
   uv run pytest -m vllm_load -o addopts='-ra -v' src/test/llms/test_vllm_load_smoke.py

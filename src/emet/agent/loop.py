@@ -268,6 +268,7 @@ def run_agent_with_robot(
     share_memory_vllm: bool = True,
     headless: bool = False,
     rerun: bool = False,
+    rerun_native: bool = False,
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
     **kwargs: Any,
@@ -300,6 +301,7 @@ def run_agent_with_robot(
             robot_ip=robot_ip,
             enable_rerun_server=rerun,
             rerun_headless=headless,
+            rerun_native_viewer=rerun_native,
             rerun_show_panels=rerun_show_panels,
             rerun_debug=rerun_debug,
             port_offset=port_offset,
@@ -323,6 +325,7 @@ def run_agent_with_robot(
             allow_missing_depth=allow_missing_depth,
             enable_rerun_server=rerun,
             rerun_headless=headless,
+            rerun_native_viewer=rerun_native,
             rerun_show_panels=rerun_show_panels,
             rerun_debug=rerun_debug,
         )

@@ -73,6 +73,8 @@ Run a robot agent or app.
 | App | Description |
 |-----|--------------|
 | `dynamem` | DynaMem navigation + manipulation |
+| `graph-eqa` | Graph-based EQA memory (see [graph_eqa.md](graph_eqa.md)) |
+| `dynagraph` | Graph EQA + merge/staleness ([dynagraph.md](dynagraph.md)) |
 | `mapping` | 3D mapping and exploration |
 | `grasp` | Grasp object (red cylinder demo) |
 | `chat` | LLM chat with robot |
@@ -171,13 +173,12 @@ See [Innate Mars](robots/innate_mars.md#camera-diagnostics-and-head-nod-preview)
 Sync dependencies. Uses `uv sync` if available, otherwise `pip install -e .`.
 
 **Options:**
-- `--all` — Install all common extras (sim, dynamem, dev) — MuJoCo, SAM-2, pytest, etc.
-- `-e, --extra EXTRA` — Install extra (repeat for multiple)
-- `--sim` — Include sim (MuJoCo, robocasa). `./install.sh` defaults to **no** sim; use `--sim`, `--all`, or `--profile=full` / `EMET_INSTALL_PROFILE=full` for legacy behavior
+- `--all` — Request all common extras (same packages as default uv groups: dev, sim, hand_tracker, dynamem, da3); redundant with a plain `emet sync` when using uv.
+- `-e, --extra EXTRA` — Include optional dependency extra (repeat for multiple); adds on top of default dependency groups unless you use `uv sync --no-default-groups` yourself.
+- `--sim` — Include sim extra (MuJoCo pip deps). `./install.sh` defaults to **no** Robocasa clone; use `--sim`, `--all`, or `--profile=full` / `EMET_INSTALL_PROFILE=full` for legacy behavior
 - `--dynamem` — Include dynamem (SAM-2)
-- `--dev` — Include dev (pytest, black, mypy)
+- `--dev` — Include dev (pytest, ruff, mypy)
 - `--hand-tracker` — Include hand_tracker (mediapipe)
-- `--discord` — Include discord
 - `--no-install` — Only sync lockfile, do not install emet
 
 **Examples:**
@@ -185,12 +186,11 @@ Sync dependencies. Uses `uv sync` if available, otherwise `pip install -e .`.
 emet sync
 emet sync --all
 emet sync -e sim -e dynamem
-emet sync -e sim -e dynamem
 emet sync --all --hand-tracker
 emet sync --no-install
 ```
 
-When using both `sim` and `dynamem`, uv applies a numpy override (see `[tool.uv] override-dependencies` in `pyproject.toml`) so Robocasa’s pin and SAM-2’s requirement resolve together.
+With **uv**, `emet sync` runs `uv sync`, which installs **[tool.uv] default-groups** from `pyproject.toml` (dev, sim, hand_tracker, dynamem, da3). For base dependencies only: `uv sync --no-default-groups`. To skip SAM-2: `uv sync --no-group dynamem`.
 
 ---
 

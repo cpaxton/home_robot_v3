@@ -131,6 +131,7 @@ def test_molmospaces_help():
     assert "list-scenes" in result.stdout
     assert "install-scene" in result.stdout
     assert "merge-scene" in result.stdout
+    assert "build-occ-map" in result.stdout
     assert "serve" in result.stdout
     assert "export-nerfstudio" in result.stdout
 
@@ -191,6 +192,17 @@ def test_molmospaces_merge_scene_help():
     )
     assert result.returncode == 0
     assert "--output" in result.stdout or "-o" in result.stdout
+
+
+def test_molmospaces_build_occ_map_help():
+    """emet molmospaces build-occ-map --help works."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "molmospaces", "build-occ-map", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "mjcf" in result.stdout.lower() or "occupancy" in result.stdout.lower()
 
 
 def test_molmospaces_export_nerfstudio_help():

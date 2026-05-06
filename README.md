@@ -49,15 +49,15 @@ cd home_robot_v3   # or your clone directory
 # With sim on, MolmoSpaces (``.venv-molmospaces``) installs when ``packages/emet_molmospaces`` exists unless you pass:
 ./install.sh --no-molmospaces   # skip MolmoSpaces venv (lighter / CI)
 ./install.sh --no-sam2    # skip DynaMem/SAM2
-uv run emet install menu  # Rich plan wizard (after: uv sync --extra dev)
+uv run emet install menu  # Rich plan wizard (after: uv sync)
 ```
 
 **Option B — uv directly:**
 
 ```bash
-uv sync --extra dev                          # base + dev tools
-uv sync --extra dev --extra sim              # + MuJoCo simulation
-uv sync --extra dev --extra sim --extra dynamem   # + DynaMem (SAM-2)
+uv sync                                    # default groups: dev, sim, hand_tracker, dynamem, da3
+uv sync --no-default-groups                # base package only (no pytest/MuJoCo/SAM-2/…)
+uv sync --no-group dynamem                 # skip SAM-2 (e.g. submodule not checked out)
 ```
 
 The script installs system deps (e.g. `portaudio`, `espeak`, `ffmpeg`) and runs `uv sync` for you. For reproducible installs, a `uv.lock` is included; `uv sync` uses it automatically.
@@ -130,8 +130,8 @@ After this, we recommend trying the [Language-Directed Pick and Place](#language
 You can run AI apps in MuJoCo simulation before connecting a physical robot:
 
 ```bash
-# Install simulation support
-uv sync --extra sim
+# Dependencies (MuJoCo, dev tools, etc.) — plain uv sync uses default groups in pyproject.toml
+uv sync
 
 # Terminal 1: start simulation server
 python -m emet.simulation.mujoco_server
@@ -229,11 +229,11 @@ Clone the repo, then install with [Astral uv](https://docs.astral.sh/uv/) as in 
 
 ```bash
 ./install.sh
-# or: uv sync --extra dev
+# or: uv sync
 pre-commit install
 ```
 
-A plain `uv sync` works without cloning simulation repos. `./install.sh` defaults to **no** Robocasa clone (use `--sim` or `EMET_INSTALL_PROFILE=full` for the old behavior). With sim enabled, MolmoSpaces (``.venv-molmospaces``) installs automatically when ``packages/emet_molmospaces`` is present unless you pass ``--no-molmospaces``. Or run `emet install sim` after `uv sync --extra dev`. For DynaMem (SAM2): `uv sync --extra dynamem`.
+A plain `uv sync` installs **default dependency groups** (dev, sim, hand_tracker, dynamem, da3) and works without cloning simulation repos; **robosuite/robocasa** still come from `./install.sh --sim` / `emet install sim`. `./install.sh` defaults to **no** Robocasa clone (use `--sim` or `EMET_INSTALL_PROFILE=full` for the old behavior). With sim enabled, MolmoSpaces (``.venv-molmospaces``) installs automatically when ``packages/emet_molmospaces`` is present unless you pass ``--no-molmospaces``. Use `./install.sh --no-sam2` or `uv sync --no-group dynamem` if the SAM-2 submodule is absent.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for more information, and [debug](docs/debug.md) / [update](docs/update.md) for troubleshooting. You can test most code in [simulation](docs/simulation.md) without a physical robot.
 

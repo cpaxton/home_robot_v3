@@ -1,0 +1,11 @@
+# Vendored MolmoSpaces occupancy / renderer slice (Allen Institute for AI, Apache-2.0).
+#
+# Source: molmo_spaces (https://github.com/allenai/molmospaces), files including
+# ``utils/scene_maps.py``, ``env/mj_extensions.py``, ``renderer/opengl_rendering.py``,
+# ``renderer/abstract_renderer.py``, and small utilities. Trimmed and import-rewritten for emet.
+#
+# iTHORMap two-pass ``from_mj_model_path`` aligned with upstream main
+# (commit 62a7565a329850ffb42ef32bc47fbbca58185a05); Pass 1 skips geoms under ``base_link``
+# when present so merged scene+robot MJCF does not classify/delete the robot.
+#
+# Do not remove this notice when copying forward.

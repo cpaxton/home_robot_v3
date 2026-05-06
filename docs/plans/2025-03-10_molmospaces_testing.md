@@ -15,7 +15,7 @@ This document describes how to test the MolmoSpaces integration. The integration
 From project root:
 
 ```bash
-uv sync --extra dev
+uv sync
 uv run python -m pytest src/test/cli/test_molmospaces_cli.py -v
 ```
 
@@ -38,7 +38,7 @@ From repo root, run the wrapper’s tests. The wrapper must be importable (e.g. 
 uv run python -m pytest packages/emet_molmospaces/tests -v
 
 # Or from wrapper package dir (dev deps include pytest):
-cd packages/emet_molmospaces && uv sync --extra dev && uv run pytest tests -v
+cd packages/emet_molmospaces && uv sync && uv run pytest tests -v
 ```
 
 **Expected:** Tests pass. They mock `_get_molmo_api` so no real molmo-spaces or mujoco is required. Tests cover: list-scenes --help (SystemExit 0), list-scenes with mocked API returns 0, install-scene --help, serve --help. Optional test for console script `emet-molmospaces list-scenes --help` is skipped if the script is not in the current env.

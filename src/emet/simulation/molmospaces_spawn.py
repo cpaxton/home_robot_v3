@@ -8,8 +8,14 @@
 
 Merged scenes place the robot at the world origin on a ``freejoint``. The global ``floor`` plane
 extends beyond walls, so XY must stay inside the **collision footprint** of room content and
-points where an **upward** ray hits geometry (open void returns no hit). We then avoid furniture
-penetration using contact scoring and optional vertical refinement.
+points where an **upward** ray, when present, is not too close to overhead geometry (a very near
+hit still rejects, as under a shelf). **Open sky** (no upward hit) is allowed because many iTHOR
+merged scenes omit an explicit ceiling while ``walkable_floor_z_at_xy`` still finds the floor.
+We also skip XY where
+**horizontal** cardinal ``mj_ray`` hits suggest an infinite-floor **exterior** tongue (several
+open directions with only very short finite hits). If no valid pose is found, placement returns
+``None`` and the caller must not move the base to an invalid exterior tongue.
+We then avoid furniture penetration using contact scoring and optional vertical refinement.
 
 The upstream ``molmo_spaces`` Python package (scene lists / resource install) does not define a
 merged-robot spawn policy; emet autoplace owns XY/Z on the free joint after MJCF merge.
@@ -20,8 +26,10 @@ from __future__ import annotations
 import math
 import os
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
 
+import cv2
 import mujoco
 import numpy as np
 
@@ -31,11 +39,31 @@ import emet.utils.logger as log
 # the probe (likely under a thin shelf / numerical noise).
 _MIN_UPWARD_CEILING_CLEARANCE_M = 0.15
 
+# Horizontal cardinal rays: orthographic occupancy can mark infinite exterior floor as “free”.
+# We skip XY that look like an **exterior tongue**: many open cardinals, or two opens with no
+# distant wall in any remaining direction (tight cage + voids on multiple sides).
+_HORIZ_EXTERIOR_MAX_FINITE_M = 0.75
+
+# Default caps (override with env): occupancy free-cell priority count, coarse XY grid in clip.
+_DEFAULT_MOLMOSPACES_OCC_PRIORITY_MAX = 900
+_DEFAULT_MOLMOSPACES_GRID_IN_CLIP_MAX = 420
+_DEFAULT_MOLMOSPACES_GRID_STEP_M = 0.46
+
 logger = log.Logger(__name__)
 
 
 def spawn_debug_enabled() -> bool:
-    """True when ``EMET_MOLMOSPACES_SPAWN_DEBUG`` is set or ``--debug-molmospaces-spawn`` turned it on."""
+    """True when ``EMET_MOLMOSPACES_SPAWN_DEBUG`` is set or ``--debug-molmospaces-spawn`` turned it on.
+
+    When true, :func:`find_molmospaces_freejoint_xyz` logs a downsampled ASCII occupancy map and
+    writes a PNG: use ``EMET_MOLMOSPACES_SPAWN_DEBUG_MAP_PNG`` for an explicit path, or leave it unset
+    to default to ``./molmospaces_spawn_topdown.png`` in the process cwd. Set
+    ``EMET_MOLMOSPACES_SPAWN_DEBUG_MAP_PNG=0`` to skip the default PNG (ASCII still logs).
+
+    ASCII legend (see ``topdown_map_key`` log line): ``'.'`` free, ``'#'`` blocked, ``'='`` collision
+    clip, ``'*'`` first 72 occupancy-priority samples, ``'o'`` base before autoplace, ``'@'`` chosen
+    spawn (robot base XY).
+    """
     v = os.environ.get("EMET_MOLMOSPACES_SPAWN_DEBUG", "").strip().lower()
     return v in ("1", "true", "yes", "on")
 
@@ -167,6 +195,11 @@ def collision_scene_xy_clip_rect(
 
     Uses each collision geom's world position and ``geom_rbound`` so we do not sample spawn XY
     on the ``floor`` plane beyond walls/room content (which would look like a black void).
+
+    Geoms with a very large ``geom_rbound`` (typical merged room / house meshes) **cap** their
+    contribution at *max_geom_rbound* instead of being skipped entirely. Skipping them used to
+    yield an empty clip, then XY search fell back to world ``(0,0)`` with no clip — spawns on open
+    floor **outside** offset house footprints.
     """
     floor_resolved = effective_floor_geom_name(model, floor_geom_name)
     floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_resolved)
@@ -187,8 +220,9 @@ def collision_scene_xy_clip_rect(
         if not suppress_exterior_filter and _geom_exterior_heuristic(model, g):
             continue
         rb = float(model.geom_rbound[g])
-        if rb <= 0.0 or rb > max_geom_rbound:
+        if rb <= 0.0:
             continue
+        rb = min(rb, float(max_geom_rbound))
         p = data.geom_xpos[g]
         xmin = min(xmin, float(p[0]) - rb)
         xmax = max(xmax, float(p[0]) + rb)
@@ -215,6 +249,21 @@ def _erode_xy_rect(
     return (x0 + inset, x1 - inset, y0 + inset, y1 - inset)
 
 
+def _clamp_xy_into_rect(x: float, y: float, rect: tuple[float, float, float, float]) -> tuple[float, float]:
+    """Clamp *x*, *y* to the closed axis-aligned rectangle (xmin, xmax, ymin, ymax)."""
+    x0, x1, y0, y1 = rect
+    return (min(max(float(x), x0), x1), min(max(float(y), y0), y1))
+
+
+def _max_xy_distance_to_rect_corners(
+    x: float, y: float, rect: tuple[float, float, float, float]
+) -> float:
+    """Max Euclidean distance from *(x,y)* to one of the four corners of *rect*."""
+    x0, x1, y0, y1 = rect
+    corners = ((x0, y0), (x1, y0), (x0, y1), (x1, y1))
+    return max(math.hypot(float(x) - cx, float(y) - cy) for cx, cy in corners)
+
+
 def scene_collision_centroid_xy(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -224,7 +273,11 @@ def scene_collision_centroid_xy(
     max_geom_rbound: float = 15.0,
     suppress_exterior_filter: bool = False,
 ) -> tuple[float, float] | None:
-    """Mean (x, y) of scene collision geoms (same filters as :func:`collision_scene_xy_clip_rect`)."""
+    """Mean (x, y) of scene collision geoms (same filters as :func:`collision_scene_xy_clip_rect`).
+
+    Like the clip rect, each geom's influence on the mean is capped at *max_geom_rbound* so merged
+    mega-meshes still contribute a centroid near the house rather than being dropped.
+    """
     floor_resolved = effective_floor_geom_name(model, floor_geom_name)
     floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_resolved)
     sx = 0.0
@@ -242,13 +295,14 @@ def scene_collision_centroid_xy(
         if not suppress_exterior_filter and _geom_exterior_heuristic(model, g):
             continue
         rb = float(model.geom_rbound[g])
-        if rb <= 0.0 or rb > max_geom_rbound:
+        if rb <= 0.0:
             continue
+        rb = min(rb, float(max_geom_rbound))
         p = data.geom_xpos[g]
         sx += float(p[0])
         sy += float(p[1])
         n += 1
-    if n < 8:
+    if n == 0:
         return None
     return (sx / n, sy / n)
 
@@ -272,6 +326,110 @@ def upward_ray_hit_distance(
     return float(dist)
 
 
+def _horizontal_cardinal_ray_voids_and_finite(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    x: float,
+    y: float,
+    z_probe: float,
+    *,
+    exclude_body_id: int = -1,
+) -> tuple[int, list[float]]:
+    """Cardinal +x,-x,+y,-y ``mj_ray`` results: void count and list of finite hit distances."""
+    pz = float(z_probe)
+    gidbuf = np.zeros(1, dtype=np.int32)
+    voids = 0
+    finite: list[float] = []
+    for dx, dy in ((1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)):
+        pnt = np.array([float(x), float(y), pz], dtype=np.float64)
+        vec = np.array([dx, dy, 0.0], dtype=np.float64)
+        dist = mujoco.mj_ray(model, data, pnt, vec, None, 1, exclude_body_id, gidbuf)
+        if dist < 0.0:
+            voids += 1
+        else:
+            finite.append(float(dist))
+    return voids, finite
+
+
+def horizontal_spawn_rejects_exterior_tongue(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    x: float,
+    y: float,
+    z_probe: float,
+    *,
+    exclude_body_id: int = -1,
+) -> bool:
+    """True if horizontal cardinals suggest infinite-floor **exterior** (skip this XY).
+
+    Uses cardinal ``mj_ray`` distances (excluding the robot subtree). Interior rooms usually have
+    several multi-meter hits; house-edge tongues often show two or more voids **and** every finite
+    hit is very short.
+    """
+    voids, finite = _horizontal_cardinal_ray_voids_and_finite(
+        model, data, x, y, z_probe, exclude_body_id=exclude_body_id
+    )
+    if voids >= 3:
+        return True
+    if voids >= 2:
+        if not finite:
+            return True
+        return max(finite) < float(_HORIZ_EXTERIOR_MAX_FINITE_M)
+    return False
+
+
+def molmospaces_placed_pose_passes_horizontal_interior_gate(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    base_body_name: str,
+    placed: tuple[float, float, float],
+    floor_geom_name: str = "floor",
+    require_upward_ceiling_hit: bool = False,
+    min_upward_clearance_m: float | None = None,
+) -> bool:
+    """True if the placed base (x, y) passes post-spawn checks (horizontal tongue by default).
+
+    Recomputes walkable floor *z* under the placed XY and runs the same horizontal cardinal ``mj_ray``
+    **exterior-tongue** rule used during spawn. Call immediately after :func:`find_molmospaces_freejoint_xyz`
+    (with ``data`` already at the returned pose and ``mj_forward`` applied).
+
+    **What this does *not* assert by default:** an upward ``mj_ray`` hit (ceiling). Many iTHOR merges
+    have no ceiling geom; spawn allows **open sky** (no upward hit) in that case. Set
+    ``require_upward_ceiling_hit=True`` for scenes where you expect real overhead geometry and want
+    to assert ``+z`` clearance (e.g. closed rooms in synthetic tests like ``MEGA_SHELL_OFFSET``).
+    Use *min_upward_clearance_m* to tune the threshold when the floor probe sits just under a low
+    deck (defaults to ``_MIN_UPWARD_CEILING_CLEARANCE_M`` when omitted).
+    """
+    x, y = float(placed[0]), float(placed[1])
+    floor_eff = effective_floor_geom_name(model, floor_geom_name)
+    base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
+    excl = int(base_bid) if base_bid >= 0 else -1
+    mujoco.mj_forward(model, data)
+    zf = walkable_floor_z_at_xy(
+        model, data, x, y, floor_geom_name=floor_eff, exclude_body_id=excl
+    )
+    if zf is None:
+        return False
+    z_probe = float(zf) + 0.08
+    if horizontal_spawn_rejects_exterior_tongue(
+        model, data, x, y, z_probe, exclude_body_id=excl
+    ):
+        return False
+    if require_upward_ceiling_hit:
+        min_up = (
+            float(min_upward_clearance_m)
+            if min_upward_clearance_m is not None
+            else float(_MIN_UPWARD_CEILING_CLEARANCE_M)
+        )
+        up = upward_ray_hit_distance(
+            model, data, x, y, z_probe, exclude_body_id=excl
+        )
+        if up is None or up < min_up:
+            return False
+    return True
+
+
 def walkable_floor_z_at_xy(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -281,13 +439,19 @@ def walkable_floor_z_at_xy(
     floor_geom_name: str = "floor",
     z_beam_top: float = 1.55,
     step_past_hit: float = 0.06,
-    max_segments: int = 48,
+    max_segments: int = 80,
     exclude_body_id: int = -1,
 ) -> float | None:
     """Return world *z* of the walkable floor under (x, y), or None if the ray never hits *floor*.
 
     A single downward ray often hits ceiling or furniture first; this walks the ray in
     segments until the ``floor`` geom is hit or the beam leaves a plausible band.
+
+    Geoms with **no collision** (``contype==0`` and ``conaffinity==0``), typical of iTHOR visual
+    meshes, are stepped past with a larger advance so thin decorative shells do not exhaust
+    ``max_segments`` before the global floor plane. A **floor-aligned** visual hit (``z <= 0.12``)
+    is treated as walkable height: stepping past would push the probe under the infinite floor
+    where the next ray often returns no hit.
     """
     floor_resolved = effective_floor_geom_name(model, floor_geom_name)
     floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_resolved)
@@ -304,8 +468,18 @@ def walkable_floor_z_at_xy(
         hit = pnt + float(dist) * vec
         if hit_gid == floor_gid:
             return float(hit[2])
-        pnt = hit + vec * float(step_past_hit)
-        if pnt[2] < -1.5 or pnt[2] > z_beam_top + 2.0:
+        ct = int(model.geom_contype[hit_gid])
+        ca = int(model.geom_conaffinity[hit_gid])
+        # iTHOR often stacks large **visual-only** floor meshes at z≈0. Stepping past them moves the
+        # probe below the infinite floor plane where the next ``mj_ray`` commonly returns no hit.
+        if ct == 0 and ca == 0 and float(hit[2]) <= 0.12:
+            return float(hit[2])
+        step = float(step_past_hit)
+        if ct == 0 and ca == 0:
+            rb = float(model.geom_rbound[hit_gid])
+            step = max(step, min(0.52, 2.4 * rb + 0.05))
+        pnt = hit + vec * step
+        if pnt[2] < -2.5 or pnt[2] > z_beam_top + 2.5:
             return None
     return None
 
@@ -513,6 +687,36 @@ def write_freejoint_base_xyzw(
     return False
 
 
+def restore_freejoint_base_from_model_qpos0(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    base_body_name: str,
+) -> bool:
+    """Reset the base ``freejoint`` ``qpos``/``qvel`` from ``model.qpos0`` (compiled MJCF default).
+
+    Spawn search moves the base to many candidate poses, often hoisting *z* very high between
+    probes. If placement ultimately fails, callers should invoke this so the robot is not left
+    invisible above the scene.
+    """
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
+    if bid < 0:
+        return False
+    for j in range(model.njnt):
+        if int(model.jnt_bodyid[j]) != bid:
+            continue
+        if model.jnt_type[j] != mujoco.mjtJoint.mjJNT_FREE:
+            continue
+        qadr = int(model.jnt_qposadr[j])
+        vadr = int(model.jnt_dofadr[j])
+        data.qpos[qadr : qadr + 7] = model.qpos0[qadr : qadr + 7]
+        if vadr >= 0:
+            data.qvel[vadr : vadr + 6] = 0.0
+        mujoco.mj_forward(model, data)
+        return True
+    return False
+
+
 def _first_z_with_nonpenetrating_base(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -530,7 +734,7 @@ def _first_z_with_nonpenetrating_base(
     """Sweep base height until robot–scene contacts (excluding floor) are non-penetrating."""
     for z in np.linspace(z_floor + z_min_above_floor, z_floor + z_max_above_floor, n_z):
         if not write_freejoint_base_xyzw(model, data, base_body_name=base_body_name, x=x, y=y, z=float(z)):
-            return None
+            break
         mujoco.mj_forward(model, data)
         worst = worst_robot_nonfloor_contact_dist(
             model, data, base_body_name=base_body_name, floor_geom_name=floor_geom_name
@@ -644,6 +848,301 @@ def _post_settle_pose_acceptable(
     return True
 
 
+def _ithor_free_xy_order_by_interior_depth(ithor_map: Any, fp: np.ndarray) -> np.ndarray:
+    """Row indices into *fp* sorting free samples by descending interior depth (grid pixels).
+
+    OpenCV ``distanceTransform`` distance at a free cell is the distance in pixels to the nearest
+    blocked cell, so orthographic **deep interior** points sort first for spawn priority.
+
+    ``get_free_points()`` returns either ``(N, 2)`` or ``(N, 3)`` world coordinates; both are
+    accepted for ``pos_m_to_px`` (which requires a homogeneous *xy* with a *z* column).
+    """
+    occ = np.asarray(ithor_map.occupancy, dtype=np.uint8)
+    H, W = occ.shape
+    src = occ.copy()
+    dt = cv2.distanceTransform(src, cv2.DIST_L2, 5)
+    fp64 = np.asarray(fp, dtype=np.float64)
+    if fp64.ndim != 2 or fp64.shape[1] < 2:
+        return np.zeros(0, dtype=np.int64)
+    n = int(fp64.shape[0])
+    if n == 0:
+        return np.zeros(0, dtype=np.int64)
+    if fp64.shape[1] == 2:
+        xyz = np.concatenate([fp64, np.zeros((n, 1), dtype=np.float64)], axis=1)
+    else:
+        xyz = fp64[:, :3].copy()
+    rc = np.asarray(ithor_map.pos_m_to_px(xyz), dtype=np.int64).reshape(-1, 2)
+    rows = np.clip(rc[:, 0], 0, H - 1)
+    cols = np.clip(rc[:, 1], 0, W - 1)
+    depths = dt[rows, cols]
+    return np.argsort(-depths, kind="stable")
+
+
+def _ithor_occupancy_priority_xy(
+    merged_mjcf_path: str | None,
+    environment: dict[str, Any] | None,
+    *,
+    agent_radius: float = 0.32,
+    px_per_m: int = 120,
+    max_points: int = 900,
+) -> tuple[list[tuple[float, float]], Any | None]:
+    """Molmo-style orthographic occupancy free-space samples (vendored iTHORMap), optional XY priority.
+
+    Returns ``(priority_xy_samples, ithor_map_or_none)``. The map reference is kept **only** when
+    :func:`spawn_debug_enabled` so we can log a top-down ASCII / optional PNG without loading MJCF twice.
+
+    Free cells are ordered by **interior depth** (distance in the occupancy grid to the nearest
+    blocked cell), not a random subsample, so spawn tries room interiors before exterior tongues.
+    ``EMET_MOLMOSPACES_OCC_PRIORITY_MAX`` overrides *max_points* (clamped to ``[200, 12000]``).
+    """
+    raw = os.environ.get("EMET_MOLMOSPACES_OCC_MAP", "1").strip().lower()
+    if raw in ("0", "false", "no", "off") or not merged_mjcf_path:
+        return [], None
+    env = environment or {}
+    scene = str(env.get("scene", "")).lower()
+    path_l = merged_mjcf_path.lower()
+    if "ithor" not in scene and "ithor" not in path_l:
+        return [], None
+    raw_cap = os.environ.get("EMET_MOLMOSPACES_OCC_PRIORITY_MAX", "").strip()
+    eff_cap = int(raw_cap) if raw_cap.isdigit() else int(max_points)
+    eff_cap = max(200, min(eff_cap, 12_000))
+    try:
+        from emet.simulation.molmo_occupancy.ithor_map import iTHORMap
+
+        th = iTHORMap.from_mj_model_path(
+            merged_mjcf_path, camera=None, agent_radius=agent_radius, px_per_m=px_per_m
+        )
+        fp = th.get_free_points()
+    except Exception as e:
+        logger.warning(f"MolmoSpaces occupancy map skipped ({e!r}).")
+        return [], None
+    if fp.size == 0:
+        return [], None
+    n = min(eff_cap, len(fp))
+    seed = int(os.environ.get("EMET_MOLMOSPACES_OCC_SEED", "0") or 0)
+    rng = np.random.default_rng(seed)
+    order_mode = "interior_dt"
+    try:
+        order = _ithor_free_xy_order_by_interior_depth(th, fp)
+    except Exception as e:
+        order_mode = f"shuffle_fallback({e!r})"
+        logger.warning(f"MolmoSpaces occupancy interior-depth sort skipped ({e!r}); using shuffle.")
+        order = rng.permutation(len(fp))
+    idx = order[:n]
+    out = [(float(fp[i, 0]), float(fp[i, 1])) for i in idx]
+    spawn_dbg(
+        f"occupancy_map: n_free={len(fp)} priority_sample={len(out)} order={order_mode} "
+        f"path={merged_mjcf_path!r} agent_r={agent_radius} px_per_m={px_per_m}"
+    )
+    th_dbg: Any | None = th if spawn_debug_enabled() else None
+    return out, th_dbg
+
+
+def _world_xy_to_occ_cell(ithor_map: Any, x: float, y: float) -> tuple[int, int] | None:
+    """Map world *x*, *y* to occupancy array indices ``(row, col)``, or ``None`` if off-map."""
+    raw = ithor_map.pos_m_to_px(np.array([[float(x), float(y), 0.0]], dtype=np.float64))
+    arr = np.asarray(raw, dtype=np.float64).reshape(-1)
+    if arr.size < 2:
+        return None
+    r, c = int(round(float(arr[0]))), int(round(float(arr[1])))
+    H, W = int(ithor_map.occupancy.shape[0]), int(ithor_map.occupancy.shape[1])
+    if r < 0 or c < 0 or r >= H or c >= W:
+        return None
+    return r, c
+
+
+def _spawn_debug_downsample_occ(occ: np.ndarray, max_h: int, max_w: int) -> tuple[np.ndarray, int, int]:
+    """Return ``(nh, nw)`` uint8 grid ``1`` = free, ``0`` = blocked, plus strides ``sh, sw``."""
+    H, W = int(occ.shape[0]), int(occ.shape[1])
+    sh = max(1, (H + max_h - 1) // max_h)
+    sw = max(1, (W + max_w - 1) // max_w)
+    nh = (H + sh - 1) // sh
+    nw = (W + sw - 1) // sw
+    out = np.zeros((nh, nw), dtype=np.uint8)
+    for i in range(nh):
+        r0, r1 = i * sh, min(H, (i + 1) * sh)
+        for j in range(nw):
+            c0, c1 = j * sw, min(W, (j + 1) * sw)
+            patch = occ[r0:r1, c0:c1]
+            if patch.size == 0:
+                continue
+            out[i, j] = 1 if float(np.mean(patch.astype(np.float64))) > 0.5 else 0
+    return out, sh, sw
+
+
+def _spawn_debug_ascii_topdown(
+    ithor_map: Any,
+    *,
+    clip_probe: tuple[float, float, float, float] | None,
+    occ_priority_xy: list[tuple[float, float]],
+    placed: tuple[float, float, float] | None,
+    initial_xy: tuple[float, float] | None,
+) -> list[str]:
+    """Build printable ASCII lines (legend + map). ``ithor_map.occupancy`` is ``True`` = free."""
+    max_h, max_w = 52, 88
+    occ = np.asarray(ithor_map.occupancy, dtype=bool)
+    H, W = occ.shape
+    small, sh, sw = _spawn_debug_downsample_occ(occ, max_h, max_w)
+    nh, nw = small.shape
+    ch: list[list[str]] = [["#" if small[i, j] == 0 else "." for j in range(nw)] for i in range(nh)]
+
+    def world_to_small(x: float, y: float) -> tuple[int, int] | None:
+        rc = _world_xy_to_occ_cell(ithor_map, x, y)
+        if rc is None:
+            return None
+        r0, c0 = rc
+        return (r0 // sh, c0 // sw)
+
+    if clip_probe is not None:
+        x0, x1, y0, y1 = clip_probe
+        step = max(0.18, min(0.45, 0.02 * min(x1 - x0, y1 - y0)))
+        xs = np.arange(x0, x1 + 1e-9, step, dtype=np.float64)
+        ys = np.arange(y0, y1 + 1e-9, step, dtype=np.float64)
+        for x in xs:
+            for y in (y0, y1):
+                p = world_to_small(float(x), float(y))
+                if p:
+                    br, bc = p
+                    ch[br][bc] = "="
+        for y in ys:
+            for x in (x0, x1):
+                p = world_to_small(float(x), float(y))
+                if p:
+                    br, bc = p
+                    ch[br][bc] = "="
+
+    for px, py in occ_priority_xy[:72]:
+        p = world_to_small(px, py)
+        if p:
+            br, bc = p
+            if ch[br][bc] in (".", "="):
+                ch[br][bc] = "*"
+
+    if initial_xy is not None:
+        p = world_to_small(initial_xy[0], initial_xy[1])
+        if p:
+            br, bc = p
+            if ch[br][bc] != "@":
+                ch[br][bc] = "o"
+
+    if placed is not None:
+        p = world_to_small(placed[0], placed[1])
+        if p:
+            br, bc = p
+            ch[br][bc] = "@"
+
+    lines = [
+        "topdown_map_key: '.'=occupancy_free '#'=blocked '='=collision_clip_rect "
+        "'*'=occ_priority_xy[:72]_on_free 'o'=base_xy_before_autoplace '@'=chosen_spawn_base_xy",
+        "topdown_map: occupancy downsampled "
+        f"(orig {H}x{W} stride {sh}x{sw} -> {nh}x{nw}; same symbol key as topdown_map_key line above)",
+    ]
+    for i in range(nh):
+        lines.append("topdown_map: " + "".join(ch[i][j] for j in range(nw)))
+    return lines
+
+
+def _spawn_debug_write_occupancy_png(
+    ithor_map: Any,
+    path: str,
+    *,
+    clip_probe: tuple[float, float, float, float] | None,
+    occ_priority_xy: list[tuple[float, float]],
+    placed: tuple[float, float, float] | None,
+    initial_xy: tuple[float, float] | None,
+) -> None:
+    from PIL import Image, ImageDraw
+
+    occ = np.asarray(ithor_map.occupancy, dtype=np.uint8)
+    rgb = np.stack([255 - occ * 255] * 3, axis=-1)
+    img = Image.fromarray(rgb, mode="RGB")
+    draw = ImageDraw.Draw(img)
+    H, W = occ.shape
+
+    def wc(x: float, y: float) -> tuple[int, int] | None:
+        rc = _world_xy_to_occ_cell(ithor_map, x, y)
+        if rc is None:
+            return None
+        row, col = int(rc[0]), int(rc[1])
+        return (col, row)  # PIL (x=col, y=row)
+
+    if clip_probe is not None:
+        x0, x1, y0, y1 = clip_probe
+        poly = []
+        for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)):
+            p = wc(x, y)
+            if p:
+                poly.append(p)
+        if len(poly) >= 2:
+            draw.line(poly, fill=(255, 80, 80), width=2)
+    for px, py in occ_priority_xy[:200]:
+        p = wc(px, py)
+        if p:
+            draw.rectangle((p[0] - 1, p[1] - 1, p[0] + 1, p[1] + 1), fill=(80, 200, 255))
+    if initial_xy is not None:
+        p = wc(initial_xy[0], initial_xy[1])
+        if p:
+            draw.ellipse((p[0] - 4, p[1] - 4, p[0] + 4, p[1] + 4), outline=(255, 200, 0), width=2)
+    if placed is not None:
+        p = wc(placed[0], placed[1])
+        if p:
+            draw.ellipse((p[0] - 5, p[1] - 5, p[0] + 5, p[1] + 5), outline=(50, 255, 80), width=2)
+    outp = Path(path).expanduser()
+    outp.parent.mkdir(parents=True, exist_ok=True)
+    img.save(str(outp))
+
+
+def _spawn_debug_emit_topdown(
+    ithor_map: Any | None,
+    *,
+    clip_probe: tuple[float, float, float, float] | None,
+    occ_priority_xy: list[tuple[float, float]],
+    placed: tuple[float, float, float] | None,
+    how: str,
+    initial_xy: tuple[float, float] | None,
+) -> None:
+    if not spawn_debug_enabled():
+        return
+    spawn_dbg(
+        f"spawn_debug_summary: how={how!r} placed={placed!r} initial_base_xy={initial_xy!r} "
+        f"n_occ_priority={len(occ_priority_xy)} clip_probe={'set' if clip_probe is not None else 'none'}"
+    )
+    if ithor_map is None:
+        spawn_dbg("topdown_map: (no iTHOR occupancy — enable EMET_MOLMOSPACES_OCC_MAP or use iTHOR scene)")
+        return
+    try:
+        for line in _spawn_debug_ascii_topdown(
+            ithor_map,
+            clip_probe=clip_probe,
+            occ_priority_xy=occ_priority_xy,
+            placed=placed,
+            initial_xy=initial_xy,
+        ):
+            spawn_dbg(line)
+    except Exception as e:
+        spawn_dbg(f"topdown_map_ascii: failed ({e!r})")
+
+    png_raw = os.environ.get("EMET_MOLMOSPACES_SPAWN_DEBUG_MAP_PNG", "")
+    png_path = png_raw.strip()
+    if png_path.lower() in ("0", "false", "no", "none", "off"):
+        png_path = ""
+    elif not png_path:
+        png_path = str(Path.cwd() / "molmospaces_spawn_topdown.png")
+    if png_path:
+        try:
+            _spawn_debug_write_occupancy_png(
+                ithor_map,
+                png_path,
+                clip_probe=clip_probe,
+                occ_priority_xy=occ_priority_xy,
+                placed=placed,
+                initial_xy=initial_xy,
+            )
+            spawn_dbg(f"topdown_map_png: wrote {png_path!r}")
+        except Exception as e:
+            spawn_dbg(f"topdown_map_png: failed ({e!r})")
+
+
 def _find_molmospaces_freejoint_xyz_pass(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -656,6 +1155,7 @@ def _find_molmospaces_freejoint_xyz_pass(
     max_geom_rbound: float,
     clip_erode_m: float,
     suppress_exterior_filter: bool,
+    xy_priority: list[tuple[float, float]] | None = None,
 ) -> tuple[float, float, float] | None:
     base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
     robot_bodies: set[int] = set()
@@ -688,44 +1188,87 @@ def _find_molmospaces_freejoint_xyz_pass(
     elif xy_clip is not None:
         ox = 0.5 * float(xy_clip[0] + xy_clip[1])
         oy = 0.5 * float(xy_clip[2] + xy_clip[3])
+    if xy_clip is not None:
+        # Collision centroid can sit outside the *eroded* clip (e.g. porch geoms below the room
+        # AABB). Annulus + clip filter then misses most walkable floor; clamp into the search rect.
+        ox, oy = _clamp_xy_into_rect(ox, oy, xy_clip)
 
     r_annulus_max = 3.2
     if xy_clip is not None:
         x0c, x1c, y0c, y1c = xy_clip
         half_diag = 0.5 * math.hypot(x1c - x0c, y1c - y0c)
-        r_annulus_max = float(min(14.5, max(3.8, 0.52 * half_diag + 0.65)))
+        # Must reach every corner from (ox,oy) plus inner ring (r_min ~0.35).
+        reach_corners = _max_xy_distance_to_rect_corners(ox, oy, xy_clip) + 0.42
+        r_annulus_max = float(min(14.5, max(3.8, reach_corners, half_diag + 0.9)))
 
-    candidates = list(
+    _nr = os.environ.get("EMET_MOLMOSPACES_ANNULUS_N_RADII", "").strip()
+    _na = os.environ.get("EMET_MOLMOSPACES_ANNULUS_BASE_ANGLES", "").strip()
+    n_radii_ann = int(_nr) if _nr.isdigit() else 28
+    n_radii_ann = max(14, min(n_radii_ann, 60))
+    base_ang_ann = int(_na) if _na.isdigit() else 15
+    base_ang_ann = max(10, min(base_ang_ann, 48))
+
+    base_candidates = list(
         iter_annulus_xy_candidates(
             r_max=r_annulus_max,
             xy_clip=xy_clip,
             xy_origin=(ox, oy),
+            n_radii=n_radii_ann,
+            base_angles_per_ring=base_ang_ann,
         )
     )
-    if xy_clip is not None and len(candidates) < 72:
-        seen = {(round(a, 2), round(b, 2)) for a, b in candidates}
-        for px, py in _coarse_grid_xy_in_clip(xy_clip, step=0.62, max_points=220):
+    if xy_clip is not None:
+        seen = {(round(a, 2), round(b, 2)) for a, b in base_candidates}
+        _gs = os.environ.get("EMET_MOLMOSPACES_GRID_STEP_M", "").strip()
+        _gm = os.environ.get("EMET_MOLMOSPACES_GRID_MAX_POINTS", "").strip()
+        gstep = float(_gs) if _gs else float(_DEFAULT_MOLMOSPACES_GRID_STEP_M)
+        gstep = max(0.28, min(gstep, 1.2))
+        gmax = int(_gm) if _gm.isdigit() else int(_DEFAULT_MOLMOSPACES_GRID_IN_CLIP_MAX)
+        gmax = max(120, min(gmax, 2000))
+        for px, py in _coarse_grid_xy_in_clip(xy_clip, step=gstep, max_points=gmax):
             key = (round(px, 2), round(py, 2))
             if key in seen:
                 continue
             seen.add(key)
-            candidates.append((px, py))
+            base_candidates.append((px, py))
 
-    if centroid is not None:
-        cx, cy = centroid
-        candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
-    elif xy_clip is not None:
+    if xy_clip is not None:
         cx = 0.5 * (xy_clip[0] + xy_clip[1])
         cy = 0.5 * (xy_clip[2] + xy_clip[3])
-        candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
+        base_candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
+    elif centroid is not None:
+        cx, cy = float(centroid[0]), float(centroid[1])
+        base_candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
+
+    # iTHOR occupancy samples must be tried *first* in this order. Previously they were prepended
+    # then the combined list was sorted by distance to clip center, burying them behind hundreds
+    # of annulus/grid points and letting stale robot poses dominate early failures.
+    priority_xy: list[tuple[float, float]] = []
+    if xy_priority:
+        seen_xy = {(round(a, 2), round(b, 2)) for a, b in base_candidates}
+        for px, py in xy_priority:
+            k = (round(px, 2), round(py, 2))
+            if k in seen_xy:
+                continue
+            seen_xy.add(k)
+            priority_xy.append((float(px), float(py)))
+    candidates = priority_xy + base_candidates
 
     spawn_dbg(
         f"pass: origin=({ox:.3f},{oy:.3f}) r_annulus_max={r_annulus_max:.3f} n_candidates={len(candidates)} "
+        f"n_occ_priority={len(priority_xy)} "
         f"clip_erode={clip_erode_m} max_rbound={max_geom_rbound} suppress_exterior={suppress_exterior_filter}"
     )
 
     best_xy: tuple[float, float, float, float] | None = None  # x, y, z_floor, worst_score
+    z_air_probe = max(8.0, 3.0 * float(model.stat.extent))
     for x, y in candidates:
+        # Clear bad penetration from the previous (x,y) attempt before floor / ceiling rays.
+        if not write_freejoint_base_xyzw(
+            model, data, base_body_name=base_body_name, x=float(x), y=float(y), z=z_air_probe
+        ):
+            continue
+        mujoco.mj_forward(model, data)
         z_floor = walkable_floor_z_at_xy(
             model, data, x, y, floor_geom_name=floor_effective, exclude_body_id=ray_exclude
         )
@@ -735,12 +1278,18 @@ def _find_molmospaces_freejoint_xyz_pass(
         up_dist = upward_ray_hit_distance(
             model, data, x, y, z_probe, exclude_body_id=ray_exclude
         )
-        if up_dist is None or up_dist < min_upward_clearance:
+        # Open sky (no upward hit) is common in iTHOR MJCF without an explicit ceiling geom; do not
+        # treat that like "void under a shelf". Reject only a *close* ceiling when a hit exists.
+        if up_dist is not None and up_dist < min_upward_clearance:
+            continue
+        if horizontal_spawn_rejects_exterior_tongue(
+            model, data, x, y, z_probe, exclude_body_id=ray_exclude
+        ):
             continue
         for zm in z_margins:
             z = z_floor + float(zm)
             if not write_freejoint_base_xyzw(model, data, base_body_name=base_body_name, x=x, y=y, z=z):
-                return None
+                break
             mujoco.mj_forward(model, data)
             worst = worst_robot_nonfloor_contact_dist(
                 model, data, base_body_name=base_body_name, floor_geom_name=floor_effective
@@ -834,6 +1383,12 @@ def _try_spawn_at_xy_candidates(
     min_upward_clearance: float,
 ) -> tuple[float, float, float] | None:
     """Single (x,y): walkable floor, upward clearance, z margin sweep + settle (shared by fallbacks)."""
+    z_air = max(8.0, 3.0 * float(model.stat.extent))
+    if not write_freejoint_base_xyzw(
+        model, data, base_body_name=base_body_name, x=float(x), y=float(y), z=z_air
+    ):
+        return None
+    mujoco.mj_forward(model, data)
     z_floor = walkable_floor_z_at_xy(
         model, data, x, y, floor_geom_name=floor_effective, exclude_body_id=ray_exclude
     )
@@ -843,10 +1398,14 @@ def _try_spawn_at_xy_candidates(
     up_dist = upward_ray_hit_distance(model, data, x, y, z_probe, exclude_body_id=ray_exclude)
     if up_dist is not None and up_dist < min_upward_clearance:
         return None
+    if horizontal_spawn_rejects_exterior_tongue(
+        model, data, x, y, z_probe, exclude_body_id=ray_exclude
+    ):
+        return None
     for zm in z_margins:
         z = z_floor + float(zm)
         if not write_freejoint_base_xyzw(model, data, base_body_name=base_body_name, x=x, y=y, z=z):
-            return None
+            break
         mujoco.mj_forward(model, data)
         worst = worst_robot_nonfloor_contact_dist(
             model, data, base_body_name=base_body_name, floor_geom_name=floor_effective
@@ -892,7 +1451,7 @@ def _fallback_spawn_near_clip_center(
     z_margins: tuple[float, ...],
     min_nonfloor_clearance: float,
 ) -> tuple[float, float, float] | None:
-    """Last resort: a few XY points near the collision clip center with looser ceiling / contact."""
+    """Fallback: a few XY points near the collision clip center with looser ceiling / contact."""
     if xy_clip_raw is None:
         return None
     x0, x1, y0, y1 = xy_clip_raw
@@ -959,20 +1518,32 @@ def find_molmospaces_freejoint_xyz(
     ),
     min_nonfloor_clearance: float = -5e-5,
     scene_label: str | None = None,
+    merged_mjcf_path: str | None = None,
+    environment: dict[str, Any] | None = None,
 ) -> tuple[float, float, float] | None:
     """Return a world-space base position (x, y, z) for the robot free joint, or None to keep defaults.
 
     Requires **no meaningful penetration** (``contact.dist >= min_nonfloor_clearance``) vs scene
     geoms other than *floor* (tiny negative values are treated as numerical noise).
-    Uses a coarse polar XY search (clipped to scene collision footprint when available), rejects
-    points under open sky (no upward ray hit), then a finer vertical sweep on the best XY when needed.
-    Leaves *data* at the chosen pose with :func:`mujoco.mj_forward` applied.
+    Uses a coarse polar XY search (clipped to scene collision footprint when available), requires
+    a resolvable floor under (x,y), rejects **too-close** upward ceiling hits when an upward ray
+    exists (open sky with no ceiling geom is allowed for iTHOR-style merges), rejects **exterior
+    floor tongues** via horizontal cardinal ``mj_ray`` heuristics, then a finer vertical sweep on
+    the best XY when needed.
+    Returns ``None`` if no valid pose is found (caller must not apply a bogus exterior placement).
+    On failure, resets the base free joint from ``model.qpos0`` so ``data`` is not left at a probe
+    pose (e.g. very high *z*). On success, leaves *data* at the chosen pose with ``mj_forward``.
     """
     floor_effective = effective_floor_geom_name(model, floor_geom_name)
     base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
     robot_bodies: set[int] = set()
     if base_bid >= 0:
         robot_bodies = _bodies_descending_from(model, base_bid)
+
+    initial_base_xy: tuple[float, float] | None = None
+    if base_bid >= 0:
+        pos = data.xpos[base_bid]
+        initial_base_xy = (float(pos[0]), float(pos[1]))
 
     clip_probe = collision_scene_xy_clip_rect(
         model, data, robot_bodies=robot_bodies, floor_geom_name=floor_effective, max_geom_rbound=15.0
@@ -985,6 +1556,21 @@ def find_molmospaces_freejoint_xyz(
     else:
         spawn_dbg(f"find: clip_probe=None floor_effective={floor_effective!r} label={scene_label!r}")
 
+    occ_xy, occ_map_dbg = _ithor_occupancy_priority_xy(merged_mjcf_path, environment)
+
+    def _spawn_debug_finish(
+        out: tuple[float, float, float] | None, how: str
+    ) -> tuple[float, float, float] | None:
+        _spawn_debug_emit_topdown(
+            occ_map_dbg,
+            clip_probe=clip_probe,
+            occ_priority_xy=occ_xy,
+            placed=out,
+            how=how,
+            initial_xy=initial_base_xy,
+        )
+        return out
+
     placed = _find_molmospaces_freejoint_xyz_pass(
         model,
         data,
@@ -996,10 +1582,11 @@ def find_molmospaces_freejoint_xyz(
         max_geom_rbound=15.0,
         clip_erode_m=0.30,
         suppress_exterior_filter=False,
+        xy_priority=occ_xy if occ_xy else None,
     )
     if placed is not None:
         spawn_dbg(f"find: primary pass OK -> {placed}")
-        return placed
+        return _spawn_debug_finish(placed, "primary")
 
     placed_relaxed = _find_molmospaces_freejoint_xyz_pass(
         model,
@@ -1012,10 +1599,28 @@ def find_molmospaces_freejoint_xyz(
         max_geom_rbound=45.0,
         clip_erode_m=0.12,
         suppress_exterior_filter=False,
+        xy_priority=occ_xy if occ_xy else None,
     )
     if placed_relaxed is not None:
         spawn_dbg(f"find: relaxed pass OK -> {placed_relaxed}")
-        return placed_relaxed
+        return _spawn_debug_finish(placed_relaxed, "relaxed")
+
+    placed_ceiling_loose = _find_molmospaces_freejoint_xyz_pass(
+        model,
+        data,
+        base_body_name=base_body_name,
+        floor_effective=floor_effective,
+        z_margins=z_margins,
+        min_nonfloor_clearance=min_nonfloor_clearance,
+        min_upward_clearance=0.035,
+        max_geom_rbound=45.0,
+        clip_erode_m=0.06,
+        suppress_exterior_filter=False,
+        xy_priority=occ_xy if occ_xy else None,
+    )
+    if placed_ceiling_loose is not None:
+        spawn_dbg(f"find: ceiling-loose pass OK -> {placed_ceiling_loose}")
+        return _spawn_debug_finish(placed_ceiling_loose, "ceiling_loose")
 
     ray_exclude = int(base_bid) if base_bid >= 0 else -1
     placed_fb = _fallback_spawn_near_clip_center(
@@ -1031,13 +1636,20 @@ def find_molmospaces_freejoint_xyz(
     )
     if placed_fb is not None:
         spawn_dbg(f"find: clip-center fallback OK -> {placed_fb}")
-        return placed_fb
+        return _spawn_debug_finish(placed_fb, "clip_center_fallback")
 
     label = scene_label or "(unknown scene)"
     clip_s = "yes" if clip_probe is not None else "no"
     logger.warning(
-        f"molmospaces_spawn.find_molmospaces_freejoint_xyz: primary, relaxed, and clip-center "
+        f"molmospaces_spawn.find_molmospaces_freejoint_xyz: primary, relaxed, ceiling-loose, and clip-center "
         f"fallback failed (scene={label!r} floor_geom_resolved={floor_effective!r} xy_clip_rect={clip_s})"
     )
-    return None
+    if restore_freejoint_base_from_model_qpos0(model, data, base_body_name=base_body_name):
+        logger.info(
+            "molmospaces_spawn.find_molmospaces_freejoint_xyz: all spawn passes failed; restored base "
+            "free joint from model qpos0 (MJCF default) so the robot is not left at an internal "
+            "search pose (e.g. hoisted z)."
+        )
+        spawn_dbg("find: failed_all_passes — restored base free joint from model qpos0 (MJCF default)")
+    return _spawn_debug_finish(None, "failed_all_passes")
 

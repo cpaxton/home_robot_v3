@@ -7,7 +7,10 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+from __future__ import annotations
+
 import datetime
+from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -16,7 +19,6 @@ from PIL import Image
 from termcolor import colored
 
 from emet.config.embodied_agent_config import EmbodiedAgentConfig
-from emet.controller.controller_dynamem import RobotAgent
 from emet.controller.operations import GraspObjectOperation
 from emet.controller.task.emote import EmoteTask
 from emet.controller.task.pickup.hand_over_task import HandOverTask
@@ -26,6 +28,9 @@ from emet.memory.utils import print_memory_saved_help
 from emet.perception import create_semantic_sensor
 from emet.utils.image import numpy_image_to_bytes
 from emet.utils.logger import Logger
+
+if TYPE_CHECKING:
+    from emet.controller.controller_dynamem import RobotAgent
 
 logger = Logger(__name__)
 
@@ -102,6 +107,8 @@ class DynamemTaskExecutor:
             self.semantic_sensor = None
 
         logger.debug("- Start robot agent with data collection")
+        from emet.controller.controller_dynamem import RobotAgent
+
         self.agent = RobotAgent(
             self.robot,
             self.parameters,

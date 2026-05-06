@@ -66,7 +66,7 @@ class ZmqServer(BaseZmqServer):
         # Still about 0.01 seconds to get observations
         obs = self.client.get_observation(compute_xyz=False)
         rgb, depth = obs.rgb, obs.depth
-        width, height = rgb.shape[:2]
+        height, width = rgb.shape[:2]
 
         # Convert depth into int format
         depth = (depth * 1000).astype(np.uint16)

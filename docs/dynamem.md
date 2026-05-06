@@ -39,6 +39,8 @@ In [Dynamem paper](https://arxiv.org/pdf/2411.04999), three ways to query semant
 
 In terms of exploration, we discovered that commonly used frontier based exploration (FBE) is not suitable for dynamic environments because obtacles might be moved around, creating new frontier, and already scanned portions of the room might also be changed. Therefore, we introduced a value based exploration that assigns any point in the 2D map a heuristic value evaluating how valuable it is to explore to this point. The detailed analysis is described in [Dynamem paper](https://arxiv.org/pdf/2411.04999).
 
+For **graph-based EQA** on the same voxel stack (optional graph node merge and staleness), see [Dynagraph](dynagraph.md).
+
 ## Picking and placing
 Dynamem has two manipulation systems, one is Stretch AI Visual Servoing code, as described in the [LLM agent](llm_agent.md) while another is [OK-Robot manipulation](https://github.com/ok-robot/ok-robot/tree/main/ok-robot-manipulation).
 
@@ -64,7 +66,7 @@ The disadvantages includes:
 
 You can run DynaMem in MuJoCo simulation without a physical robot. See [Simulation docs](simulation.md) for setup.
 
-**Install SAM2** (required for OWL+SAM segmentation): `emet sync -e dynamem` or `uv sync --extra dynamem` or run `./install.sh` (includes SAM2 by default; use `--no-sam2` to skip).
+**Install SAM2** (required for OWL+SAM segmentation): `emet sync -e dynamem` or `uv sync` (dynamem is a default group when `third_party/segment-anything-2` exists) or run `./install.sh` (includes SAM2 by default; use `--no-sam2` to skip).
 
 **Headless (no DISPLAY)**: The native Rerun viewer is disabled, but the web server starts automatically. To view from a laptop over Tailscale or VPN, use SSH port forwarding: `ssh -L 9090:localhost:9090 -L 9877:localhost:9877 user@<robot-ip>`, then open `http://localhost:9090?url=ws://localhost:9877`. Direct connection at `http://<robot-ip>:9090?url=ws://<robot-ip>:9877` may fail because Rerun binds to localhost by default. See [Debug: Headless and Rerun](debug.md#headless-and-rerun) for more.
 

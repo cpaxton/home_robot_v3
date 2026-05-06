@@ -4,6 +4,15 @@
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 #
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
 # Entry point for the open-vocabulary scene graph: builds a 3D object-centric
 # memory (nodes + edges) as the robot explores, using dual SigLIP/DINOv3
 # embeddings and SAM3 segmentation.  Navigation and manipulation reuse the
@@ -53,9 +62,7 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
     is_flag=True,
     help="Use visual servoing grasp",
 )
-@click.option(
-    "--robot_ip", type=str, default="", help="Robot IP address (leave empty for saved default)"
-)
+@click.option("--robot_ip", type=str, default="", help="Robot IP address (leave empty for saved default)")
 @click.option(
     "--robot",
     "robot_backend",
@@ -65,9 +72,7 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 @click.option("--target_object", type=str, default=None, help="Target object to grasp")
-@click.option(
-    "--target_receptacle", "--receptacle", type=str, default=None, help="Target receptacle to place"
-)
+@click.option("--target_receptacle", "--receptacle", type=str, default=None, help="Target receptacle to place")
 @click.option(
     "--skip_confirmations",
     "--skip",
@@ -121,12 +126,17 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
 @click.option(
     "--headless",
     is_flag=True,
-    help="Run without native Rerun viewer; connect at http://<server-ip>:9090",
+    help="No auto-open browser for Rerun; open http://<this-host>:9090 manually. For native app use --rerun-native.",
 )
 @click.option(
     "--no-rerun",
     is_flag=True,
     help="Disable Rerun visualization entirely",
+)
+@click.option(
+    "--rerun-native",
+    is_flag=True,
+    help="Use the native Rerun desktop viewer instead of the browser (needs DISPLAY).",
 )
 @click.option(
     "--rerun-show-panels",
@@ -167,6 +177,7 @@ def main(
     cpu_only: bool = False,
     headless: bool = False,
     no_rerun: bool = False,
+    rerun_native: bool = False,
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
     rerun_bind: bool = False,
@@ -193,6 +204,9 @@ def main(
     if rerun_bind:
         os.environ["RERUN_BIND_ALL"] = "1"
 
+    if rerun_native and headless:
+        raise click.UsageError("Use either --rerun-native or --headless for Rerun, not both.")
+
     print("- Create robot client")
     robot = create_robot_client_from_cli(
         robot_backend,
@@ -200,6 +214,7 @@ def main(
         port_offset=port_offset,
         enable_rerun_server=not no_rerun,
         rerun_headless=headless,
+        rerun_native_viewer=rerun_native,
         rerun_show_panels=rerun_show_panels,
         rerun_debug=rerun_debug,
     )
@@ -268,8 +283,7 @@ def main(
     while ok:
         if llm_client is None:
             explore = input(
-                "Enter desired mode "
-                "[E (explore) / L (list objects) / M (pick and place) / Q (quit)]: "
+                "Enter desired mode [E (explore) / L (list objects) / M (pick and place) / Q (quit)]: "
             ).strip()
             if explore.upper() in ("Q", "QUIT"):
                 llm_response = [("quit", "")]

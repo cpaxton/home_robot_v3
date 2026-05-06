@@ -38,7 +38,7 @@ def test_assert_mujoco_raises_when_import_fails(monkeypatch):
         return real(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
-    with pytest.raises(ImportError, match="uv sync --extra sim"):
+    with pytest.raises(ImportError, match="uv sync"):
         assert_mujoco_available()
 
 

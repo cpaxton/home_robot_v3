@@ -5,8 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-echo "=== Phase 0: environment (uv + sim extra) ==="
-uv sync --extra dev --extra sim
+echo "=== Phase 0: environment (uv; default groups include dev + sim) ==="
+uv sync
 # If import cv2 fails or cv2 has no imwrite/imshow, reinstall: uv pip install --reinstall opencv-python
 
 echo ""

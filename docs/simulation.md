@@ -11,7 +11,7 @@ Stretch AI includes a MuJoCo-based simulation that lets you run AI apps without 
 ```bash
 # From project root (base sim: MuJoCo, no Robocasa)
 emet sync -e sim
-# or: uv sync --extra sim
+# or: uv sync
 ```
 
 For **Robocasa** kitchen scenes, install it first then sync: `emet install robocasa` then `emet sync -e sim`. See [Robocasa](#robocasa-rich-kitchen-scenes) below.
@@ -103,6 +103,8 @@ emet serve mujoco --use-robocasa
 # Terminal 2 – DynaMem with visual servoing
 emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo --match-method class
 ```
+
+Graph-based EQA on the same sim (no pick-and-place): `emet run graph-eqa --robot-ip 127.0.0.1` or `emet run dynagraph --robot-ip 127.0.0.1` ([graph_eqa.md](graph_eqa.md), [dynagraph.md](dynagraph.md)).
 
 - `-S` / `--skip`: skip confirmations for autonomous runs
 - `--visual-servo` / `-V`: use visual servoing (required in sim; AnyGrasp needs real robot)
@@ -281,7 +283,7 @@ On Linux, `--headless` uses EGL automatically (no display needed). On Mac/Window
 On Linux, the sim now sets `MUJOCO_GL=egl` when using cameras so MuJoCo uses EGL instead of GLX for rendering (avoids failures after GPU/driver issues). If you still see this, run headless: `emet serve mujoco --headless`. Ensure EGL is installed: `sudo apt install libegl1-mesa libgles2-mesa`. On Mac/Windows without a display, use Xvfb then `DISPLAY=:99 emet serve mujoco --headless`.
 
 **"mesh volume is too small"**
-MuJoCo 3.3+ is required for sim. Ensure `uv sync --extra sim` or `pip install -e ".[sim]"` is used.
+MuJoCo 3.4+ is required for sim. Ensure `uv sync` (default groups include sim) or `pip install -e ".[sim]"` is used.
 
 **Grasp/detection fails in sim**
 Use `sim_planner.yaml` and `--parameter_file sim_planner.yaml` for grasp_object.

@@ -29,7 +29,9 @@ from emet.utils.assets import get_mujoco_models_path, get_robot_mjcf_path
 from emet.utils.port_utils import kill_processes_on_port
 
 default_scene_xml_path = str(get_mujoco_models_path() / "scene.xml")
-DEFAULT_SCENE_NO_ROBOT = "scene_environment.xml"  # canonical table room (wood floor texture); scene_default.xml aliases this
+DEFAULT_SCENE_NO_ROBOT = (
+    "scene_environment.xml"  # canonical table room (wood floor texture); scene_default.xml aliases this
+)
 
 # Stretch-specific server (MujocoZmqServer) and motion/pinocchio deps are imported only when
 # --robot stretch, so that emet serve mujoco --robot rby1 works without pinocchio/hppfcl.
@@ -63,9 +65,7 @@ def _load_default_scene_with_robot(robot_key: str):
     compiler_line = ""
     if meshes_dir.is_dir():
         mesh_abs = str(meshes_dir.resolve())
-        compiler_line = (
-            f'  <compiler meshdir="{mesh_abs}" angle="radian" coordinate="local" eulerseq="zyx"/>\n'
-        )
+        compiler_line = f'  <compiler meshdir="{mesh_abs}" angle="radian" coordinate="local" eulerseq="zyx"/>\n'
     wrapper = (
         '<?xml version="1.0"?>\n'
         '<mujoco model="default_scene_with_robot">\n'
@@ -334,7 +334,7 @@ def main(
                     f"  {err_type}: {err_msg}\n\n"
                     f"  (Python: {sys.executable})\n\n"
                     "  If you see 'initialization of _internal failed' (numba), run:\n"
-                    "    uv sync --extra sim --extra dynamem   (or emet sync -e sim -e dynamem)\n"
+                    "    uv sync   (or: emet sync)\n"
                     "  to install a numba version compatible with numpy in this project.\n\n"
                     "  Otherwise ensure Robocasa is installed:\n"
                     "    1. emet install sim   (clones third_party/robosuite and robocasa)\n"
@@ -389,7 +389,7 @@ def main(
     if _ROBOCASA_IMPORT_FAILED and not (scene_path and str(scene_path).strip()):
         logger.warning(
             "Robocasa scene generation (--use-robocasa) is not available. "
-            "Using default scene. To enable: emet install sim  then  emet sync -e sim",
+            "Using default scene. To enable: emet install sim  then  uv sync --extra sim  (or: emet sync -e sim)",
         )
 
     # Free server ports so we can bind (e.g. kill previous mujoco_server).
@@ -459,13 +459,6 @@ def main(
                 ensure_molmo_asset_layout_symlinks()
                 try:
                     scene_model = mujoco.MjModel.from_xml_path(custom_path)
-                    # Auto-merge writes molmospaces_merged_*.xml next to galaxea_r1.xml; safe to delete after load.
-                    try:
-                        cp = Path(custom_path)
-                        if cp.is_file() and cp.name.startswith("molmospaces_merged_"):
-                            cp.unlink(missing_ok=True)
-                    except OSError:
-                        pass
                 except Exception as e:
                     logger.error(f"Failed to load MJCF from --scene_path {custom_path}: {e}")
                     logger.error(
@@ -511,6 +504,11 @@ def main(
             if "MUJOCO_GL" not in os.environ and not use_glx and not show_viewer_ui:
                 os.environ["MUJOCO_GL"] = "egl"
 
+            spawn_scene_disk: str | None = None
+            spath = (scene_path or "").strip()
+            if spath and Path(spath).is_file():
+                spawn_scene_disk = str(Path(spath).resolve())
+
             server = RobosuiteZmqServer(
                 robot_spec=robot_spec,
                 send_port=send_port,
@@ -525,6 +523,7 @@ def main(
                 scene_source_basename=scene_source_basename,
                 max_sim_steps=steps,
                 debug_molmospaces_spawn=debug_molmospaces_spawn,
+                scene_disk_path=spawn_scene_disk,
             )
         except zmq.error.ZMQError as e:
             if "Address already in use" in str(e):

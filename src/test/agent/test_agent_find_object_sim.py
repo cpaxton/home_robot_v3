@@ -43,7 +43,7 @@ def _have_mujoco() -> bool:
 _SKIP_AGENT_SIM = not RUN_SIM_TESTS or not _have_mujoco()
 pytestmark = pytest.mark.skipif(
     _SKIP_AGENT_SIM,
-    reason="RUN_SIM_TESTS=0 or mujoco not installed (uv sync --extra sim)",
+    reason="RUN_SIM_TESTS=0 or mujoco not installed (uv sync)",
 )
 
 

@@ -5,8 +5,8 @@ Simple examples for loading and running Stretch.
 ## Prerequisites
 
 ```bash
-# From project root - install simulation support (mujoco, etc.)
-uv sync --extra sim
+# From project root — default uv groups include sim (MuJoCo, etc.)
+uv sync
 # or: pip install -e ".[sim]"
 ```
 

@@ -1,7 +1,7 @@
 # Home Robot v2 / Emet – Cursor code rules
 
 ## Testing (uv)
-- **Setup**: Use **uv**. Install deps including dev (pytest, pytest-timeout): `uv sync --extra dev`.
+- **Setup**: Use **uv**. Install deps including dev (pytest, pytest-timeout): `uv sync` (default groups include `dev`, `sim`, `hand_tracker`, `dynamem`, `da3`). Minimal install: `uv sync --no-default-groups`.
 - **Canonical run**: From repo root, run **`uv run emet test`** (or just `emet test` — emet re-execs under `uv run` when in project). This uses `[tool.pytest.ini_options]` in pyproject.toml (testpaths = `src/test`).
 - **Useful variants**:
   - `uv run emet test -v` — verbose
@@ -17,9 +17,9 @@
 ## Dependencies
 - **rerun-sdk**: Use `>=0.21.0,<0.23.0` (compatible with lerobot). Do not pin to 0.18.x.
 - **pinocchio / hppfcl**: The dynamics library is installed as the **pin** package (PyPI). Pinocchio imports the **hppfcl** module at load time when built with collision support. Always list **hpp-fcl** in `pyproject.toml` dependencies so `uv sync` (or `pip install -e .`) installs it; otherwise `emet serve mujoco --robot stretch` fails with `ModuleNotFoundError: No module named 'hppfcl'`. **Do not** fix dependency or import issues by editing or patching anything under **.venv**; fix only via `pyproject.toml` (add/version deps) and re-run `uv sync`.
-- **third_party/robocasa**: This repo uses a fork. Keep `lerobot==0.3.3` and `mujoco>=3.3.0` in `install_requires` in `third_party/robocasa/setup.py`. Keep `mujoco>=3.3.0` in pyproject.toml `[tool.uv]` override-dependencies so the resolver uses the local robocasa (PyPI robocasa pins mujoco==3.2.6 and would otherwise be selected when the path is not considered).
+- **third_party/robocasa**: This repo uses a fork. Keep `lerobot==0.3.3` and `mujoco>=3.4.0` in `install_requires` in `third_party/robocasa/setup.py`. Keep `mujoco>=3.4.0` in pyproject.toml `[tool.uv]` override-dependencies so the resolver uses the local robocasa (PyPI robocasa pins mujoco==3.2.6 and would otherwise be selected when the path is not considered).
 - **pyproject.toml** and **src/setup.py**: Keep dependency versions in sync where both exist.
-- **third_party/robosuite**: Keep `mujoco` requirement aligned with `pyproject.toml` sim extra (e.g. `mujoco>=3.3.0`). Robocasa imports `get_elements` from robosuite's `mjcf_utils`; use the local fork so that API is available.
+- **third_party/robosuite**: Keep `mujoco` requirement aligned with `pyproject.toml` sim extra (e.g. `mujoco>=3.4.0`). Robocasa imports `get_elements` from robosuite's `mjcf_utils`; use the local fork so that API is available.
 
 ## Package layout
 - Main package is `emet` under `src/`. CLI entrypoint: `emet` (see `emet.cli:main`).

@@ -15,7 +15,6 @@ CPU_ONLY="false"
 SKIP_ASKING="false"
 NO_SAM2="false"
 INSTALL_SIM="false"
-EXTRAS="dev"
 CLEAN_SIM="false"
 INSTALL_MOLMOSPACES="false"
 NO_MOLMOSPACES="false"
@@ -101,12 +100,10 @@ if [ "$INSTALL_SIM" = "true" ] && [ "$NO_MOLMOSPACES" != "true" ] && [ -d "$ROOT
     INSTALL_MOLMOSPACES="true"
 fi
 
-[[ "$INSTALL_SIM" == "true" ]] && EXTRAS="$EXTRAS,sim"
-
 echo "=============================================="
 echo "         INSTALLING STRETCH AI (uv)"
 echo "=============================================="
-echo "Options: PROFILE=$PROFILE CPU_ONLY=$CPU_ONLY NO_SAM2=$NO_SAM2 INSTALL_SIM=$INSTALL_SIM EXTRAS=$EXTRAS MOLMOSPACES=$INSTALL_MOLMOSPACES NO_MOLMOSPACES=$NO_MOLMOSPACES"
+echo "Options: PROFILE=$PROFILE CPU_ONLY=$CPU_ONLY NO_SAM2=$NO_SAM2 INSTALL_SIM=$INSTALL_SIM MOLMOSPACES=$INSTALL_MOLMOSPACES NO_MOLMOSPACES=$NO_MOLMOSPACES"
 echo "         Defaults: profile=full enables sim when third_party/robocasa exists (use --no-sim or --profile=minimal to skip)."
 echo "         EMET_INSTALL_PROFILE=standard  or  --profile=minimal  = no sim unless you also pass --sim."
 echo "         -y/--yes    = non-interactive (apt, link emet); does NOT imply MolmoSpaces — pass --molmospaces or use --all"
@@ -116,7 +113,7 @@ echo "         --no-sim    = force sim off even if PROFILE=full"
 echo "         --molmospaces = create .venv-molmospaces for MolmoSpaces (scenes + rby1 robot)"
 echo "         --no-molmospaces = skip MolmoSpaces venv even when sim is installed (lighter / CI)"
 echo "         --clean     = remove and re-clone third_party/robosuite, robosuite_models, robocasa (only if needed; normally we update in place)"
-echo "         Rich menu:  uv sync --extra dev && uv run emet install menu"
+echo "         Rich menu:  uv sync && uv run emet install menu"
 echo "Root: $ROOT_DIR"
 echo "---------------------------------------------"
 
@@ -178,23 +175,21 @@ echo ""
 echo "[4/5] Setting up git-lfs..."
 git lfs install || { echo "Install git-lfs: sudo apt-get install git-lfs"; exit 1; }
 
-# Create venv and install with uv (pyproject has sim=[] by default so sync works without third_party/robocasa)
+# Create venv and install with uv (default-groups in pyproject.toml: dev, sim, hand_tracker, dynamem, da3)
 echo ""
 echo "[5/5] Creating virtual environment and installing dependencies..."
-EXTRA_ARGS="--extra dev"
-if [[ "$EXTRAS" == *"sim"* ]]; then
-    if [ ! -d "third_party/robocasa" ] || [ ! -d "third_party/robosuite" ]; then
-        echo "Skipping sim (third_party/robocasa or robosuite missing). Run: ./scripts/install_simulation.sh  then  python scripts/enable_sim_pyproject.py  then  uv sync -e sim"
-    elif ! grep -q '^robocasa = {' pyproject.toml 2>/dev/null; then
-        echo "Skipping sim (not enabled in pyproject). Run: python scripts/enable_sim_pyproject.py  then  uv lock && uv sync -e sim"
-    else
-        EXTRA_ARGS="$EXTRA_ARGS --extra sim"
-    fi
+UV_SYNC=(uv sync)
+if [[ "$NO_SAM2" == "true" ]]; then
+    UV_SYNC+=(--no-group dynamem)
 fi
-[[ "$NO_SAM2" == "false" ]] && [ -d "third_party/segment-anything-2" ] && EXTRA_ARGS="$EXTRA_ARGS --extra dynamem"
+if [ ! -d "third_party/robocasa" ] || [ ! -d "third_party/robosuite" ]; then
+    echo "Note: third_party/robocasa or robosuite missing — MuJoCo/sim pip deps still install; run ./scripts/install_simulation.sh for editable robosuite/robocasa."
+elif ! grep -q '^robocasa = {' pyproject.toml 2>/dev/null; then
+    echo "Note: sim block not enabled in pyproject.toml — run: python scripts/enable_sim_pyproject.py  then  uv lock && uv sync"
+fi
 
-echo "  -> Running: uv sync $EXTRA_ARGS"
-uv sync $EXTRA_ARGS
+echo "  -> Running: ${UV_SYNC[*]}"
+"${UV_SYNC[@]}"
 echo "  -> uv sync completed."
 
 # Uninstall av to avoid conflict (from old install.sh)
@@ -299,7 +294,7 @@ fi
 
 # Quick sanity check
 if ! uv run python -c "import emet; print('emet:', emet.__file__)" 2>/dev/null; then
-    echo "WARNING: emet import check failed. You may need to run: uv sync $EXTRA_ARGS"
+    echo "WARNING: emet import check failed. You may need to run: uv sync"
 fi
 
 # Put emet CLI in a reasonable place (~/.local/bin so it's on PATH when present)

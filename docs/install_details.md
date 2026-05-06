@@ -2,7 +2,7 @@
 
 Stretch AI supports Python 3.10–3.12. We recommend using [uv](https://docs.astral.sh/uv/) for fast, reproducible installs (no conda required), or [starting with Docker](./start_with_docker.md).
 
-**Try simulation first?** You can run AI apps without a robot using [Simulation](simulation.md). Install with `emet sync -e sim` or `uv sync --extra sim`, then run `emet serve mujoco` and `emet run dynamem` (or other apps). See [CLI](cli.md).
+**Try simulation first?** You can run AI apps without a robot using [Simulation](simulation.md). Install with `emet sync` or `uv sync` (default groups include sim), then run `emet serve mujoco` and `emet run dynamem` (or other apps). See [CLI](cli.md).
 
 ### System Dependencies
 
@@ -45,14 +45,14 @@ Options:
 - `--all`: Install everything: sim (Robocasa + robosuite), MolmoSpaces runner venv, and dynamem (SAM-2). Overridable by `--no-sim` or `--no-sam2`.
 - `--sim` / `--no-sim`: Include or skip simulation (third_party/robocasa, robosuite). Sim is on by default.
 - `--molmospaces`: Create `.venv-molmospaces` for [MolmoSpaces](molmospaces.md) (scenes + rby1 robot). Requires separate venv due to numpy/mujoco version mismatch with main env.
-- `--no-sam2`: Skip Segment Anything 2 (dynamem extra). Use `--cpu` for CPU-only (also skips SAM-2).
+- `--no-sam2`: Skip Segment Anything 2 (omit the **dynamem** default group: `uv sync --no-group dynamem`). Use `--cpu` for CPU-only (also skips SAM-2).
 - `--clean`: Remove and re-clone third_party/robosuite, robosuite_models, robocasa before installing. Only use if repos are in a bad state; **by default we update in place** (git fetch/pull).
 
 When sim is installed, `scripts/install_simulation.sh` updates existing robosuite/robocasa clones (fetch + pull) instead of deleting them. Use `./install.sh --clean` only when you need a fresh clone.
 
-**Dependencies:** Main env uses `numpy<2` and `mujoco>=3.3.0` (pyproject.toml and override-dependencies). Robocasa/robosuite are installed editable from third_party. MolmoSpaces uses a separate venv (`.venv-molmospaces`) with `molmo-spaces` and `mujoco>=3.4`, `numpy>=2.2`, because it cannot share the main lockfile.
+**Dependencies:** Main env uses `numpy<2` and `mujoco>=3.4.0` (pyproject.toml sim extra and override-dependencies). Robocasa/robosuite are installed editable from third_party. MolmoSpaces uses a separate venv (`.venv-molmospaces`) with `molmo-spaces` and `mujoco>=3.4`, `numpy>=2.2`, because it cannot share the main lockfile.
 
-To add SAM2 after install: `emet sync -e dynamem` or `uv sync --extra dynamem`.
+To add SAM2 after install: `emet sync -e dynamem` or ensure **`third_party/segment-anything-2`** is present and run `uv sync` (dynamem is a default group). Or `./install.sh` (includes SAM2 by default; use `--no-sam2` to skip).
 
 **Interactive menu:** Run `emet install menu` for a text-based UI that shows the status of each sub-asset (submodules, simulation, kitchen assets, MolmoSpaces) and lets you install or update them one by one, or run all with prompts.
 

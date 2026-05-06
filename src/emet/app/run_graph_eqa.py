@@ -203,12 +203,28 @@ def main(
             if not not_rotate_in_place:
                 executor.rotate_in_place()
 
+            click.echo(
+                "Interactive mode: type a **question** for graph EQA, "
+                "**explore** (or **e**) to extend the map without the EQA model, "
+                "or Enter to quit."
+            )
             while True:
-                question = input("Question (Press enter to quit): ").strip()
+                question = input("GraphEQA [question | explore | Enter=quit]: ").strip()
                 if not question:
                     break
                 robot.move_to_nav_posture()
                 robot.switch_to_navigation_mode()
+                low = question.lower()
+                if low in ("explore", "e", "map", "nav"):
+                    click.echo("- Exploring (no EQA call)…")
+                    finished, _pt = agent.execute_action("")
+                    if finished is None:
+                        click.echo("Explore step failed (no plan / blocked).")
+                    elif finished:
+                        click.echo("Explore step finished at target pose.")
+                    else:
+                        click.echo("Explore step advanced; ask a question or explore again.")
+                    continue
                 robot.say("Answering the question " + question)
                 discord_text, _imgs = executor(question)
                 # run_eqa / GraphEQAController also prints; keep a one-line confirmation for piping/logs

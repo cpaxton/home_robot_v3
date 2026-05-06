@@ -12,7 +12,7 @@ resolution-markers = [
 
 [manifest]
 overrides = [
-    { name = "mujoco", specifier = ">=3.3.0" },
+    { name = "mujoco", specifier = ">=3.4.0" },
     { name = "numba", specifier = ">=0.58.1" },
     { name = "numpy", specifier = ">=1.24.4,<2" },
 ]
@@ -1133,6 +1133,34 @@ sim = [
     { name = "mujoco" },
 ]
 
+[package.dev-dependencies]
+da3 = [
+    { name = "depth-anything-3" },
+]
+dev = [
+    { name = "lark" },
+    { name = "mypy" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-timeout" },
+    { name = "rich" },
+    { name = "ruff" },
+]
+dynamem = [
+    { name = "sam-2" },
+]
+hand-tracker = [
+    { name = "mediapipe" },
+    { name = "webcam" },
+]
+sim = [
+    { name = "click" },
+    { name = "grpcio" },
+    { name = "hello-robot-stretch-urdf" },
+    { name = "inputs" },
+    { name = "mujoco" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "accelerate", specifier = ">=1.6.0" },
@@ -1157,7 +1185,7 @@ requires-dist = [
     { name = "librosa" },
     { name = "matplotlib" },
     { name = "mediapipe", marker = "extra == 'hand-tracker'" },
-    { name = "mujoco", marker = "extra == 'sim'", specifier = ">=3.3.0" },
+    { name = "mujoco", marker = "extra == 'sim'", specifier = ">=3.4.0" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "numba" },
     { name = "numpy", specifier = "<2" },
@@ -1212,6 +1240,30 @@ requires-dist = [
     { name = "yacs" },
 ]
 provides-extras = ["dev", "sim", "hand-tracker", "dynamem", "molmospaces"]
+
+[package.metadata.requires-dev]
+da3 = [{ name = "depth-anything-3", specifier = ">=0.1.1" }]
+dev = [
+    { name = "lark" },
+    { name = "mypy" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-timeout" },
+    { name = "rich", specifier = ">=13.0.0" },
+    { name = "ruff", specifier = ">=0.8.0" },
+]
+dynamem = [{ name = "sam-2", editable = "third_party/segment-anything-2" }]
+hand-tracker = [
+    { name = "mediapipe" },
+    { name = "webcam" },
+]
+sim = [
+    { name = "click", specifier = ">=8.1.8" },
+    { name = "grpcio" },
+    { name = "hello-robot-stretch-urdf" },
+    { name = "inputs", specifier = ">=0.5" },
+    { name = "mujoco", specifier = ">=3.4.0" },
+]
 
 [[package]]
 name = "etils"

@@ -2,7 +2,7 @@
 
 [MolmoSpaces](https://github.com/allenai/molmospaces) is an open ecosystem for robot manipulation and navigation: indoor scenes (iTHOR, ProcTHOR, Holodeck), object models, and robot assets (e.g. **rby1** / Galaxea R1 family, Franka). Emet integrates MolmoSpaces so you can set up scenes, use their robots, and run or visualize results in simulation.
 
-MolmoSpaces requires **mujoco 3.4** and **numpy>=2.2**, which conflict with the main emet environment (numpy<2, mujoco>=3.3). So the integration is split:
+MolmoSpaces requires **mujoco 3.4** and **numpy>=2.2**, which conflict with the main emet environment (numpy<2). The main sim extra uses **mujoco>=3.4** so merged Molmo MJCFs load in the ZMQ server; numpy stays on the 1.x line in core. So the integration is split:
 
 - **Core emet**: No dependency on molmo-spaces or mujoco 3.4. The `emet molmospaces` CLI lives in core; `list-robots` uses a static config. For `list-scenes`, `install-scene`, `merge-scene`, and `serve`, the CLI **delegates to a thin wrapper** via subprocess.
 - **Sim YAML / one-terminal agent**: see [sim_configs.md](sim_configs.md) for `configs/sim/molmospaces_*.yaml` and `emet run agent --start-sim`.
@@ -90,6 +90,14 @@ export MOLMOSPACES_PYTHON=/path/to/your/molmospaces/venv/bin/python
 
   Delegates to the wrapper: installs the scene if needed, merges the **rby1** (Galaxea R1) MJCF from core emet assets into the scene, and writes a **persistent** merged MJCF. Prefer writing **`-o`** under `src/emet/assets/robot/galaxea_r1/` (next to `galaxea_r1.xml`) so MuJoCo resolves robot meshes; `/tmp` breaks `assetdir="meshes"`. Use that path with **`emet serve mujoco`** in your **main** project environment (see below), not only with passive `emet molmospaces serve`.
 
+- **Build iTHOR orthographic occupancy (debug / offline)**:
+
+  ```bash
+  emet molmospaces build-occ-map path/to/merged.xml
+  ```
+
+  Uses the vendored Molmo-style **`iTHORMap`** (orthographic segmentation render) and writes **`occupancy.png`** and **`occupancy_meta.json`** next to the MJCF (or under **`-o` / `--output-dir`**). Headless servers should set **`MUJOCO_GL=egl`** (or `osmesa`) so MuJoCo can render. This does not call the MolmoSpaces wrapper.
+
 - **Run simulation (serve)**:
 
   ```bash
@@ -107,7 +115,7 @@ export MOLMOSPACES_PYTHON=/path/to/your/molmospaces/venv/bin/python
 
 ## Agent chat and ZMQ (core emet)
 
-Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. To drive the robot and use **`emet run agent`** (LLM + tools), run the **ZMQ MuJoCo server** from the same environment you use for normal simulation (`uv sync --extra sim`).
+Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. To drive the robot and use **`emet run agent`** (LLM + tools), run the **ZMQ MuJoCo server** from the same environment you use for normal simulation (`uv sync` from the repo root installs default groups including **sim**).
 
 **Recommended (one command):** `emet serve mujoco` can merge a MolmoSpaces scene with **rby1** (Galaxea R1) via the wrapper, then start the ZMQ server. You do **not** need to run `merge-scene` first.
 
@@ -118,7 +126,7 @@ Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. T
    emet serve mujoco --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0 --robot rby1 --headless
    ```
 
-   This calls the wrapper’s `merge-scene`, writes the merged MJCF under **`src/emet/assets/robot/galaxea_r1/`** (a temp file named `molmospaces_merged_*.xml`), then starts `emet.simulation.mujoco_server` with `--robot rby1` (unless you pass `--robot galaxea_r1` / `rby1`). The file must live next to `galaxea_r1.xml` so MuJoCo resolves the robot’s `assetdir="meshes"`; writing the merge under `/tmp` breaks mesh loading. The server deletes `molmospaces_merged_*.xml` after a successful load. Default `--robot stretch` is upgraded to **rby1** when using `--molmospaces-scene`.
+   This calls the wrapper’s `merge-scene`, writes the merged MJCF under **`src/emet/assets/robot/galaxea_r1/`** (a temp file named `molmospaces_merged_*.xml`), then starts `emet.simulation.mujoco_server` with `--robot rby1` (unless you pass `--robot galaxea_r1` / `rby1`). The file must live next to `galaxea_r1.xml` so MuJoCo resolves the robot’s `assetdir="meshes"`; writing the merge under `/tmp` breaks mesh loading. The merged file is kept on disk until the server **stops** (so iTHOR occupancy sampling can read the same path), then removed. Default `--robot stretch` is upgraded to **rby1** when using `--molmospaces-scene`.
 
 3. Run the agent:
 
@@ -129,6 +137,8 @@ Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. T
 **Optional: fixed path** — use `emet molmospaces merge-scene ... -o /path/to/merged.xml` if you want a stable file, then `emet serve mujoco --robot rby1 --scene-path /path/to/merged.xml`.
 
 Use `--port-offset` on both server and agent if default ZMQ ports are busy. The agent uses **`GenericZmqClient`** for `rby1`, matching `emet run dynamem --robot rby1`.
+
+**iTHOR spawn occupancy (ZMQ server):** For **`ithor`** scenes, free-joint XY search prefers points sampled from the same orthographic occupancy map (Molmo-style) before falling back to annulus/grid heuristics. Set **`EMET_MOLMOSPACES_OCC_MAP=0`** (or `false`) to disable. **`EMET_MOLMOSPACES_OCC_SEED`** seeds the occupancy free-point subsample (default `0`).
 
 The ZMQ server publishes a static **`emet_session`** block (scene / robot / capabilities) on every message; see [zmq_session_metadata.md](zmq_session_metadata.md). `emet run molmospaces-explore` prefers this metadata for `episode.json` when the server reports a MolmoSpaces environment.
 
@@ -180,7 +190,7 @@ emet molmospaces export-nerfstudio --episode-dir ./data/molmo_ep_ithor_0
 
 ### MuJoCo version note
 
-MolmoSpaces assets are built with **MuJoCo 3.4**; core emet typically uses **mujoco>=3.3**. If `emet serve mujoco` fails to load a merged MJCF from the wrapper, try upgrading MuJoCo in the project env or report an asset compatibility issue. The wrapper venv is still required for **download/install/merge**; the server should run where **`emet` and sim extras** are installed.
+MolmoSpaces assets are built with **MuJoCo 3.4**; the main **`sim`** extra pins **mujoco>=3.4** for compatibility. If `emet serve mujoco` still fails to load a merged MJCF, report an asset compatibility issue. The wrapper venv is still required for **download/install/merge**; the server should run where **`emet` and sim extras** are installed.
 
 ## Showing results
 
@@ -197,7 +207,15 @@ For a step-by-step **testing plan** (core tests, wrapper tests with mocks, optio
   uv run emet test src/test/cli/test_molmospaces_cli.py
   ```
 
-- **Optional**: tests that invoke the real wrapper need `RUN_MOLMOSPACES_TESTS=1` and a working `.venv-molmospaces` (see pytest markers/skips in that file).
+- **Optional**: tests that invoke the real wrapper need `RUN_MOLMOSPACES_TESTS=1` and a Python env where `import emet_molmospaces` succeeds (often `.venv-molmospaces` after `./install.sh --molmospaces`; you can run pytest with that interpreter).
+
+- **Optional — base orientation after spawn + physics** (10 iTHOR FloorPlans, autoplace, ~900 `mj_step`, checks upright + small quaternion drift):
+
+  ```bash
+  RUN_MOLMOSPACES_TESTS=1 uv run emet test src/test/molmospaces/test_molmospaces_ithor_base_settle.py -v
+  ```
+
+  Tunables: `EMET_MOLMOSPACES_ORIENTATION_N` (default 10), `EMET_MOLMOSPACES_SETTLE_STEPS` (default 900), `EMET_MOLMOSPACES_ORIENTATION_MAX_DEG` (default 8), `EMET_MOLMOSPACES_MIN_UP_DOT` (default 0.92).
 
 - **Wrapper package tests**:
 
@@ -240,7 +258,7 @@ For a step-by-step **testing plan** (core tests, wrapper tests with mocks, optio
   The wrapper is running in an env that doesn’t have molmo-spaces. Use the venv where you installed emet-molmospaces (e.g. `.venv-molmospaces`) or set `MOLMOSPACES_PYTHON` so the core invokes the wrapper from that env.
 
 - **`emet serve mujoco` fails to parse merged MJCF**
-  See **MuJoCo version note** above (3.3 vs 3.4). Confirm `--scene_path` points to the file written by `merge-scene` and that `--robot rby1` matches the merged robot.
+  See **MuJoCo version note** above. Confirm `--scene_path` points to the file written by `merge-scene` and that `--robot rby1` matches the merged robot.
 
 - **Missing THOR object meshes (`…/objects/thor/...`) or broken `resource_cache` layout**
   Ensure `MLSPACES_ASSETS_DIR` and `MLSPACES_CACHE_DIR` match the env used for install/merge (sibling dirs). Re-run `emet serve mujoco --molmospaces-scene …` or `emet molmospaces merge-scene …` after `./install.sh --molmospaces -y`. Core applies `ensure_molmo_asset_layout_symlinks()` before load to link `scenes/objects` → `objects` and flatten versioned THOR folders where needed.

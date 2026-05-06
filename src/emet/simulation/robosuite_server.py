@@ -17,6 +17,7 @@ ZMQ protocol as MujocoZmqServer.
 import os
 import threading
 import time
+from pathlib import Path
 from typing import Any, cast
 
 import cv2
@@ -38,6 +39,7 @@ from emet.simulation import molmospaces_spawn
 from emet.simulation.head_look_action import apply_head_to_robosuite
 from emet.simulation.stereo_camera_utils import stereo_right_camera_name_from_spec
 from emet.utils.geometry import xyt_global_to_base
+from emet.utils.observation_layout import rgb_height_width_for_zmq
 from emet.utils.pinhole_intrinsics import apply_pinhole_pixel_ops, chain_pinhole_K_pixel_ops, scale_pinhole_K
 
 logger = log.Logger(__name__)
@@ -71,6 +73,7 @@ class RobosuiteZmqServer(BaseZmqServer):
     ):
         max_sim_steps = kwargs.pop("max_sim_steps", None)
         debug_molmospaces_spawn = bool(kwargs.pop("debug_molmospaces_spawn", False))
+        scene_disk_path = kwargs.pop("scene_disk_path", None)
         super().__init__(*args, **kwargs)
         self._spec = robot_spec
         self._scene_xml = scene_xml
@@ -102,7 +105,13 @@ class RobosuiteZmqServer(BaseZmqServer):
             int(max_sim_steps) if max_sim_steps is not None and int(max_sim_steps) > 0 else None
         )
         self._debug_molmospaces_spawn = debug_molmospaces_spawn
+        self._scene_disk_path: str | None = (
+            str(scene_disk_path).strip() if scene_disk_path and str(scene_disk_path).strip() else None
+        )
         self._physics_steps_executed = 0
+        # After MolmoSpaces autoplace, ``qpos0`` holds the chosen free-joint pose; see
+        # :meth:`_restore_merged_base_freejoint_from_qpos0` after physics stabilize.
+        self._molmospaces_autoplace_snap_qpos0 = False
 
     @property
     def spec(self) -> RobotSpec:
@@ -155,13 +164,17 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjdata,
                 base_body_name=base_name,
                 scene_label=self._scene_source_basename,
+                merged_mjcf_path=self._scene_disk_path,
+                environment=self._environment_descriptor,
             )
         except Exception as e:
             logger.warning(f"MolmoSpaces base autoplace skipped ({e!r}).")
             return
         if placed is None:
             if self._debug_molmospaces_spawn:
-                logger.info("MolmoSpaces base autoplace: find_molmospaces_freejoint_xyz returned None (see spawn debug lines above).")
+                logger.info(
+                    "MolmoSpaces base autoplace: find_molmospaces_freejoint_xyz returned None (see spawn debug lines above)."
+                )
             return
         x, y, z = placed
         logger.info(
@@ -196,6 +209,25 @@ class RobosuiteZmqServer(BaseZmqServer):
         if addrs is not None:
             qadr = int(addrs[0])
             self._mjmodel.qpos0[qadr : qadr + 7] = self._mjdata.qpos[qadr : qadr + 7]
+            self._molmospaces_autoplace_snap_qpos0 = True
+
+    def _restore_merged_base_freejoint_from_qpos0(self) -> None:
+        """Put ``base_link`` free joint back to ``qpos0`` after :meth:`_stabilize_physics_state_after_load`.
+
+        Stabilize runs a few ``mj_step`` calls with PD actuators synced to ``qpos``. For a floating
+        base that can **drift** the robot away from the MolmoSpaces spawn chosen from occupancy,
+        while logs and ``qpos0`` still show the intended pose — so the viewer no longer matches the
+        top-down map. Restoring the 7 free-joint coordinates from ``qpos0`` preserves spawn XY/Z.
+        """
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        addrs = self._base_freejoint_addrs()
+        if addrs is None:
+            return
+        qadr, vadr = int(addrs[0]), int(addrs[1])
+        self._mjdata.qpos[qadr : qadr + 7] = self._mjmodel.qpos0[qadr : qadr + 7]
+        if vadr >= 0:
+            self._mjdata.qvel[vadr : vadr + 6] = 0.0
 
     def _build_emet_session(self, *, robocasa: bool) -> dict[str, Any]:
         mj_name: str | None = None
@@ -664,7 +696,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         except Exception:
             return None
 
-        width, height = rgb.shape[1], rgb.shape[0]
+        height, width = rgb_height_width_for_zmq(rgb)
         depth_u16 = (depth * 1000).astype(np.uint16)
 
         positions, _, _ = self.get_joint_state()
@@ -787,9 +819,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 mujoco.mj_step(self._mjmodel, self._mjdata)
             self._physics_steps_executed += 1
             if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
-                logger.info(
-                    f"MuJoCo step limit reached (--steps {self._max_sim_steps}); stopping simulation loop."
-                )
+                logger.info(f"MuJoCo step limit reached (--steps {self._max_sim_steps}); stopping simulation loop.")
                 self._running = False
                 break
             time.sleep(1 / self.simulation_rate)
@@ -816,9 +846,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                         viewer.sync()
                     self._physics_steps_executed += 1
                     if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
-                        logger.info(
-                            f"MuJoCo step limit reached (--steps {self._max_sim_steps}); closing viewer loop."
-                        )
+                        logger.info(f"MuJoCo step limit reached (--steps {self._max_sim_steps}); closing viewer loop.")
                         self._running = False
                         break
                     time.sleep(dt)
@@ -844,6 +872,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._load_model()
         self._running = True
         self._stabilize_physics_state_after_load()
+        if self._molmospaces_autoplace_snap_qpos0:
+            with self._mj_lock:
+                self._restore_merged_base_freejoint_from_qpos0()
+                self._sync_actuator_ctrl_from_joint_positions()
+                mujoco.mj_forward(self._mjmodel, self._mjdata)
         self._initial_xyt = self.get_base_xyt()
         self._nav_goal_world = None
         self._at_goal = True
@@ -877,3 +910,10 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._close_renderers()
         self._running = False
         self._done = True
+        p = self._scene_disk_path
+        if p and Path(p).is_file() and Path(p).name.startswith("molmospaces_merged_"):
+            try:
+                Path(p).unlink(missing_ok=True)
+            except OSError:
+                pass
+        self._scene_disk_path = None

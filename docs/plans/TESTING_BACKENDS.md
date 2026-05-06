@@ -28,7 +28,7 @@ Optional **CUDA** smokes that download large checkpoints are marked ``vllm_load`
 Use **uv** and the **`emet test`** CLI so the project env is used. From repo root:
 
 ```bash
-uv sync --extra dev
+uv sync
 uv run emet test -v
 ```
 

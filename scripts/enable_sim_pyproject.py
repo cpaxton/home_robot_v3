@@ -11,7 +11,7 @@
 """Restore sim extra and robosuite/robocasa path sources in pyproject.toml.
 
 Run this after scripts/install_simulation.sh has cloned third_party/robocasa
-and third_party/robosuite. Then run: uv lock && uv sync -e sim
+and third_party/robosuite. Then run: uv lock && uv sync
 
 Usage:
   python scripts/enable_sim_pyproject.py
@@ -25,7 +25,7 @@ PYPROJECT = ROOT / "pyproject.toml"
 
 SIM_EMPTY = "sim = []"
 SIM_FULL = """sim = [
-    "mujoco>=3.3.0",  # Align with upstream robosuite; 3.2.6 was for older Stretch compat
+    "mujoco>=3.4.0",  # Align with MolmoSpaces merged MJCF + third_party robosuite/robocasa
     "hello-robot-stretch-urdf",
     "grpcio",
     "click>=8.1.8",
@@ -63,7 +63,7 @@ def main() -> None:
     if SOURCES_COMMENTED_PATTERN in text:
         text = text.replace(SOURCES_COMMENTED_PATTERN, SOURCES_ACTIVE, 1)
     PYPROJECT.write_text(text)
-    print("Enabled sim in pyproject.toml. Run: uv lock && uv sync -e sim")
+    print("Enabled sim in pyproject.toml. Run: uv lock && uv sync")
 
 
 if __name__ == "__main__":

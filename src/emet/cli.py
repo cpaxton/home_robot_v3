@@ -30,7 +30,15 @@ _CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
 # Sub-apps that define @click.option("--robot") and receive --robot from `emet run`.
 _EMET_RUN_APPS_WITH_ROBOT = frozenset(
-    {"dynamem", "agent", "graph-eqa", "scene-graph", "molmospaces-explore", "debug-da3-depth"}
+    {
+        "dynamem",
+        "agent",
+        "graph-eqa",
+        "dynagraph",
+        "scene-graph",
+        "molmospaces-explore",
+        "debug-da3-depth",
+    }
 )
 
 
@@ -256,7 +264,7 @@ def serve(
       mujoco   MuJoCo server (default). Add --use-robocasa for Robocasa scenes.
       robocasa Shortcut for mujoco with Robocasa (same as emet serve mujoco --use-robocasa).
 
-    List Robocasa environments (requires sim extra: uv sync -e sim after emet install sim):
+    List Robocasa environments (requires sim extra: ``uv sync --extra sim`` or ``emet sync -e sim`` after ``emet install sim``):
       emet robocasa list
       emet serve robocasa --list-robocasa-tasks
 
@@ -325,7 +333,7 @@ def serve(
 
 @main.group("robocasa", short_help="Robocasa simulation helpers (requires sim extra)")
 def robocasa_cmd() -> None:
-    """List Robocasa environments or run the server. Requires: emet install sim, then uv sync -e sim."""
+    """List Robocasa environments or run the server. Requires: emet install sim, then uv sync."""
 
 
 @robocasa_cmd.command("list", short_help="List all Robocasa environment names")
@@ -413,6 +421,26 @@ def molmospaces_install_scene(
     if install_if_missing:
         args.append("--install-if-missing")
     sys.exit(_run_molmospaces_wrapper(args))
+
+
+@molmospaces_cmd.command("build-occ-map", short_help="Build vendored iTHOR orthographic occupancy map from merged MJCF")
+@click.argument("mjcf", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "-o",
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Output directory (default: same directory as MJCF).",
+)
+@click.option("--agent-radius", default=0.32, type=float, show_default=True)
+@click.option("--px-per-m", default=120, type=int, show_default=True)
+def molmospaces_build_occ_map(mjcf: Path, output_dir: Path | None, agent_radius: float, px_per_m: int) -> None:
+    """Orthographic segmentation occupancy (Molmo-style) for spawn QA; writes occupancy.png + occupancy_meta.json."""
+    from emet.app.build_molmo_occupancy_map import run_build
+
+    png, meta = run_build(mjcf, output_dir, agent_radius=agent_radius, px_per_m=px_per_m)
+    click.echo(f"Wrote {png}")
+    click.echo(f"Wrote {meta}")
 
 
 @molmospaces_cmd.command("merge-scene", short_help="Write merged scene+robot MJCF for emet serve mujoco")
@@ -635,7 +663,7 @@ def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool, no_extras: 
             robot_abs = str(p.resolve())
             extras_abs = str(extras_p.resolve())
             wrapper = (
-                "<?xml version=\"1.0\"?>\n"
+                '<?xml version="1.0"?>\n'
                 '<mujoco model="innate_mars_view">\n'
                 f'  <include file="{robot_abs}"/>\n'
                 f'  <include file="{extras_abs}"/>\n'
@@ -886,6 +914,7 @@ def deploy(
             "dynamem",
             "scene-graph",
             "graph-eqa",
+            "dynagraph",
             "mapping",
             "grasp",
             "chat",
@@ -991,6 +1020,8 @@ def run(
         sys.exit(_run_module("emet.app.run_scene_graph", args))
     elif app == "graph-eqa":
         sys.exit(_run_module("emet.app.run_graph_eqa", args))
+    elif app == "dynagraph":
+        sys.exit(_run_module("emet.app.run_dynagraph", args))
     elif app == "molmospaces-explore":
         sys.exit(_run_module("emet.app.run_molmospaces_explore", args))
     elif app == "mapping":
@@ -1034,12 +1065,12 @@ def run(
         sys.exit(1)
 
 
-_SYNC_ALL_EXTRAS = ("sim", "dynamem", "dev")  # MuJoCo, SAM-2, pytest, etc.
+_SYNC_ALL_EXTRAS = ("dev", "sim", "hand_tracker", "dynamem", "da3")
 
 
 @main.command(short_help="Sync dependencies (uv or pip)")
 @click.option("--extra", "-e", "extra_list", multiple=True, help="Extra to install (sim, dynamem, dev, etc.)")
-@click.option("--all", "sync_all", is_flag=True, help="Install all common extras (sim, dynamem, dev)")
+@click.option("--all", "sync_all", is_flag=True, help="Install all common extras (same as defaults: dev, sim, hand_tracker, dynamem, da3)")
 @click.option("--sim", is_flag=True, help="Include sim (MuJoCo, robocasa)")
 @click.option("--dynamem", "dynamem_flag", is_flag=True, help="Include dynamem (SAM-2)")
 @click.option("--dev", "dev_flag", is_flag=True, help="Include dev (pytest, black, mypy)")
@@ -1056,9 +1087,11 @@ def sync(
 ) -> None:
     """Sync dependencies (uv sync or pip install -e .).
 
-    Use --all for sim + dynamem + dev, or pick extras with -e or individual flags.
-    Sim pip deps (mujoco, etc.) are always in pyproject.toml. robosuite/robocasa are
-    installed editable by: emet install sim (scripts/install_simulation.sh).
+    With **uv**, a plain ``emet sync`` runs ``uv sync``, which installs
+    **default dependency groups** from ``pyproject.toml`` (dev, sim, hand_tracker,
+    dynamem, da3). Use ``uv sync --no-default-groups`` for base dependencies only.
+
+    robosuite/robocasa are installed editable by: ``emet install sim`` (not from the lockfile).
 
     Examples:
 
@@ -1066,7 +1099,6 @@ def sync(
       emet sync --all
       emet sync -e sim -e dynamem
       emet sync --sim --dynamem
-      emet sync --all --hand-tracker
     """
     extras: list[str] = list(extra_list)
     if sync_all:
@@ -1180,7 +1212,7 @@ def test(
     pytest-timeout) are available. Sim tests (e.g. red cylinder in MuJoCo) run by default;
     use --no-sim to skip them for a faster run.
 
-      uv sync --extra dev
+      uv sync
       uv run emet test
       uv run emet test -v
       uv run emet test --no-sim           # skip sim tests (faster)
@@ -1355,12 +1387,12 @@ def install_sim(skip_download_assets: bool, setup_macros: bool, no_sync: bool) -
     if result != 0:
         sys.exit(result)
     if no_sync:
-        click.echo("Simulation install complete. Run: uv sync --extra sim")
+        click.echo("Simulation install complete. Run: uv sync")
         return
     click.echo("Syncing sim extra...")
     os.chdir(root)
     if _has_uv():
-        result = subprocess.call(["uv", "sync", "--extra", "sim"], cwd=root)
+        result = subprocess.call(["uv", "sync"], cwd=root)
     else:
         result = subprocess.call([sys.executable, "-m", "pip", "install", "-e", ".[sim]"])
     if result == 0:
@@ -1400,12 +1432,12 @@ def install_robocasa(skip_download_assets: bool, setup_macros: bool, no_sync: bo
     if result != 0:
         sys.exit(result)
     if no_sync:
-        click.echo("Robocasa install complete. Run: uv sync --extra sim")
+        click.echo("Robocasa install complete. Run: uv sync")
         return
     click.echo("Syncing sim extra...")
     os.chdir(root)
     if _has_uv():
-        result = subprocess.call(["uv", "sync", "--extra", "sim"], cwd=root)
+        result = subprocess.call(["uv", "sync"], cwd=root)
     else:
         result = subprocess.call([sys.executable, "-m", "pip", "install", "-e", ".[sim]"])
     if result == 0:
