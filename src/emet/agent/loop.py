@@ -21,6 +21,7 @@ import queue
 import sys
 import threading
 import timeit
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
@@ -271,6 +272,7 @@ def run_agent_with_robot(
     rerun_native: bool = False,
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
+    shutdown_sim_subprocess: Callable[[], None] | None = None,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -278,6 +280,10 @@ def run_agent_with_robot(
     If *commands* is a non-empty list, each entry is fed as a user turn
     (LLM mode) or manual command (no-LLM mode) instead of reading stdin.
     The agent exits after all commands are consumed.
+
+    *shutdown_sim_subprocess*, when set, is called after ``robot_client.stop()`` so a sim
+    started with ``emet run agent --start-sim`` can exit as soon as the ZMQ client disconnects
+    (``run_agent`` still registers a final shutdown in ``finally`` as a safety net).
 
     When *eqa*, *use_llm*, and *share_memory_vllm* are true (the CLI default for sharing), DynaMem defers its
     local caption VLM until after the agent LLM loads, then reuses the agent vision-language client when
@@ -833,3 +839,5 @@ def run_agent_with_robot(
     print(colored(f"Chat log saved: {chat_log.path}", "green"))
     print_memory_view_help_on_quit(getattr(executor, "_last_memory_save_path", None))
     robot_client.stop()
+    if shutdown_sim_subprocess is not None:
+        shutdown_sim_subprocess()

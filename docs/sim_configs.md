@@ -37,25 +37,25 @@ Precedence: **`--sim-config PATH`** overrides both `sim_config:` and inline `sim
 
 If you pass **`--start-sim`** with no `sim:` / `sim_config:` in the agent YAML and no **`--sim-config`**, emet uses the **packaged default-table MuJoCo** scene with the same **`--robot`** (or YAML `robot:`) and honors **`--headless`** for the sim as well.
 
-Sim-only flags (same idea as `emet serve mujoco`) include **`--use-robocasa`**, **`--robocasa-task`**, **`--scene-path`**, **`--molmospaces-scene`**, **`--molmospaces-split`**, **`--molmospaces-index`**, **`--molmospaces-install`**, **`--sim-seed`**, **`--sim-steps`**, **`--sim-no-cameras`**, **`--sim-use-glx`**, **`--sim-show-viewer-ui`**, **`--sim-debug-molmospaces-spawn`**. They require **`--start-sim`**.
+Sim-only flags (same idea as `emet serve mujoco`) include **`--use-robocasa`**, **`--robocasa-task`**, **`--scene-path`**, **`--molmospaces-scene`**, **`--molmospaces-split`**, **`--molmospaces-index`**, **`--molmospaces-install`**, **`--sim-seed`**, **`--sim-steps`**, **`--sim-no-cameras`**, **`--sim-use-glx`**, **`--sim-show-viewer-ui`**, **`--sim-debug-molmospaces-spawn`**, **`--sim-show-subprocess-output`**. They require **`--start-sim`**.
 
 ## One-terminal agent + sim
 
-`--command` / `-c` already runs non-interactive user turns then exits. With `--start-sim`, the sim is spawned in-process first (same ZMQ ports as `emet serve mujoco`; use `--port-offset` on the agent to match a non-default sim if needed). The subprocess uses a **new session** so Ctrl+C is handled cleanly: the sim is terminated before the agent exits.
+`--command` / `-c` already runs non-interactive user turns then exits. With `--start-sim`, the sim is spawned in-process first (same ZMQ ports as `emet serve mujoco`; use `--port-offset` on the agent to match a non-default sim if needed). The subprocess uses a **new session** so Ctrl+C is handled cleanly: the sim is terminated before the agent exits. Non-interactive ``--command`` / ``-c`` runs **disable Discord** automatically; if Discord would have started (default on when ``DISCORD_TOKEN`` is set) and you did not pass ``--no-discord``, emet prints a one-time warning—use ``--no-discord`` in scripts to silence it. The sim subprocess **does not print to your terminal** by default (MuJoCo / server logs are discarded); use ``--sim-show-subprocess-output`` with ``--start-sim`` to stream sim stdout/stderr here. The sim process is **stopped when the agent session ends** (right after the ZMQ client disconnects, and again in a ``finally`` guard).
 
 ```bash
 # Default table + same robot as agent (no sim YAML required):
-uv run emet run agent --robot stretch --start-sim --no-discord --command "describe the scene"
+uv run emet run agent --robot stretch --start-sim --command "describe the scene"
 
 uv run emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml \
-  --start-sim --no-discord --command "What do you see?"
+  --start-sim --command "What do you see?"
 ```
 
 MolmoSpaces one-liner (wrapper + assets required):
 
 ```bash
 uv run emet run agent --robot rby1 --start-sim --molmospaces-scene ithor --headless \
-  --no-discord --command "describe the scene"
+  --command "describe the scene"
 ```
 
 ## `kind` field

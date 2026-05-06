@@ -42,8 +42,10 @@ def test_spawn_terminates_subprocess_when_wait_fails(monkeypatch: pytest.MonkeyP
 
     fake = FakeProc()
 
-    def fake_popen(*_a: object, **_kw: object) -> FakeProc:
+    def fake_popen(*_a: object, **kw: object) -> FakeProc:
         calls.append("popen")
+        assert kw.get("stdout") == ssub.subprocess.DEVNULL
+        assert kw.get("stderr") == ssub.subprocess.DEVNULL
         return fake
 
     monkeypatch.setattr(ssub.subprocess, "Popen", fake_popen)

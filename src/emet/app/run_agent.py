@@ -21,8 +21,10 @@ os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
 
 import tempfile
 import timeit
+from collections.abc import Callable
 
 import click
+from click.core import ParameterSource
 from termcolor import colored
 
 from emet.agent.loop import run_agent_with_robot
@@ -84,7 +86,11 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     "--discord/--no-discord",
     "discord",
     default=True,
-    help="Start Discord bot when DISCORD_TOKEN is set (default: on; ignored with --offline). Use --no-discord to skip.",
+    help=(
+        "Start Discord bot when DISCORD_TOKEN is set (default: on; ignored with --offline). "
+        "Non-interactive ``--command`` / ``-c`` runs disable Discord automatically; pass ``--no-discord`` "
+        "to acknowledge and hide the warning."
+    ),
 )
 @click.option(
     "--no-llm",
@@ -152,7 +158,8 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     help=(
         "Run one or more commands non-interactively, then exit (embodied mode only). "
         'Same flag as -c; use quotes for multi-word phrases, e.g. --command "find red cylinder". '
-        "With --no-llm: E/M/Q/P/FIND or find …; with an LLM: natural language per turn."
+        "With --no-llm: E/M/Q/P/FIND or find …; with an LLM: natural language per turn. "
+        "Discord is disabled for this mode (see ``--discord`` / ``--no-discord``)."
     ),
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
@@ -343,7 +350,18 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     is_flag=True,
     help="With --start-sim: pass --debug-molmospaces-spawn.",
 )
+@click.option(
+    "--sim-show-subprocess-output",
+    "sim_show_subprocess_output",
+    is_flag=True,
+    help=(
+        "With --start-sim: inherit this terminal for sim stdout/stderr (verbose). "
+        "Default is to discard sim logs so scripted runs stay readable."
+    ),
+)
+@click.pass_context
 def main(
+    ctx: click.Context,
     llm: str,
     prompt: str,
     device: str,
@@ -389,6 +407,7 @@ def main(
     sim_use_glx: bool = False,
     sim_show_viewer_ui: bool = False,
     sim_debug_molmospaces_spawn: bool = False,
+    sim_show_subprocess_output: bool = False,
 ) -> None:
     """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
 
@@ -411,8 +430,8 @@ def main(
       emet run agent --no-llm --command 'find red cylinder'
       emet run agent --no-llm -c 'FIND blue cube'
       emet run agent --llm qwen3-vl-eqa --eqa --debug-vram   # one Qwen3-VL + VRAM milestones
-      emet run agent --robot stretch --start-sim --no-discord --command "describe the scene"
-      emet run agent --robot rby1 --start-sim --molmospaces-scene ithor --headless --no-discord -c "describe the scene"
+      emet run agent --robot stretch --start-sim --command "describe the scene"
+      emet run agent --robot rby1 --start-sim --molmospaces-scene ithor --headless -c "describe the scene"
     """
     cmd_list = list(commands) if commands else None
 
@@ -446,12 +465,27 @@ def main(
             sim_use_glx,
             sim_show_viewer_ui,
             sim_debug_molmospaces_spawn,
+            sim_show_subprocess_output,
         ]
     )
     if sim_cli_used and not start_sim:
         raise click.UsageError(
-            "Sim-only flags (--use-robocasa, --molmospaces-scene, --sim-seed, etc.) require --start-sim."
+            "Sim-only flags (--use-robocasa, --molmospaces-scene, --sim-seed, "
+            "--sim-show-subprocess-output, etc.) require --start-sim."
         )
+
+    if not offline and cmd_list:
+        discord_src = ctx.get_parameter_source("discord")
+        explicit_no_discord = discord_src == ParameterSource.COMMANDLINE and not discord
+        if discord and not explicit_no_discord:
+            print(
+                colored(
+                    "Warning: `--command` / `-c` runs are non-interactive; Discord is disabled for this run. "
+                    "Pass `--no-discord` to acknowledge and hide this warning in scripts.",
+                    "yellow",
+                )
+            )
+        discord = False
 
     if debug_models:
         os.environ["EMET_AGENT_MODEL_DEBUG"] = "1"
@@ -475,13 +509,15 @@ def main(
             os.environ["RERUN_BIND_ALL"] = "1"
         if rerun_native and headless:
             raise click.UsageError("Use either --rerun-native or --headless for Rerun, not both.")
-        sim_spawned_ok = False
+        sim_shutdown: Callable[[], None] | None = None
         if start_sim:
             from emet.config.sim_launch_config import apply_sim_launch_cli_overrides, resolve_sim_launch_for_agent
             from emet.simulation.sim_subprocess import (
                 shutdown_mujoco_server_subprocess,
                 spawn_mujoco_server_subprocess,
             )
+
+            sim_shutdown = shutdown_mujoco_server_subprocess
 
             try:
                 sim_cfg = resolve_sim_launch_for_agent(
@@ -521,8 +557,10 @@ def main(
             if robot and robot.lower() not in ("stretch", "hello_stretch", "hellostretch", ""):
                 sim_cfg.robot = robot
             print(colored("Starting MuJoCo sim subprocess (--start-sim)…", "cyan"))
-            spawn_mujoco_server_subprocess(sim_cfg)
-            sim_spawned_ok = True
+            spawn_mujoco_server_subprocess(
+                sim_cfg,
+                silence_sim_output=not sim_show_subprocess_output,
+            )
             print(colored("Sim is up; connecting agent.", "green"))
         print(
             colored(
@@ -555,10 +593,11 @@ def main(
                 rerun_native=rerun_native,
                 rerun_show_panels=rerun_show_panels,
                 rerun_debug=rerun_debug,
+                shutdown_sim_subprocess=sim_shutdown,
             )
         finally:
-            if start_sim and sim_spawned_ok:
-                shutdown_mujoco_server_subprocess()
+            if sim_shutdown is not None:
+                sim_shutdown()
         return
 
     prompt_builder = get_prompt_builder(prompt)

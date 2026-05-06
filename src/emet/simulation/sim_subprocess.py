@@ -94,7 +94,8 @@ def wait_for_sim_tcp_port(
         if proc.poll() is not None:
             raise RuntimeError(
                 f"MuJoCo server process exited before binding (code={proc.returncode}). "
-                "Check stderr above or run `emet serve mujoco` with the same flags."
+                "Re-run with the same flags via ``emet serve mujoco`` or "
+                "``emet run agent --start-sim --sim-show-subprocess-output`` to see sim logs."
             )
         try:
             with socket.create_connection((host, port), timeout=1.5):
@@ -108,8 +109,17 @@ def wait_for_sim_tcp_port(
     raise TimeoutError(msg)
 
 
-def spawn_mujoco_server_subprocess(cfg: SimLaunchConfig) -> subprocess.Popen[bytes]:
-    """Start ``python -m emet.simulation.mujoco_server``; register atexit shutdown; wait for ZMQ send port."""
+def spawn_mujoco_server_subprocess(
+    cfg: SimLaunchConfig,
+    *,
+    silence_sim_output: bool = True,
+) -> subprocess.Popen[bytes]:
+    """Start ``python -m emet.simulation.mujoco_server``; register atexit shutdown; wait for ZMQ send port.
+
+    By default sim stdout/stderr are discarded so the agent terminal stays readable. Use
+    *silence_sim_output=False* (``--sim-show-subprocess-output`` on ``emet run agent --start-sim``) to
+    inherit the parent TTY for debugging.
+    """
     from emet.config.sim_launch_config import SimLaunchMolmospaces
     from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
     from emet.utils.port_utils import get_ports
@@ -120,10 +130,13 @@ def spawn_mujoco_server_subprocess(cfg: SimLaunchConfig) -> subprocess.Popen[byt
 
     argv = prepare_mujoco_server_argv(cfg)
     cmd = [sys.executable, "-m", "emet.simulation.mujoco_server", *argv]
+    out_err: int | None = subprocess.DEVNULL if silence_sim_output else None
     proc = subprocess.Popen(
         cmd,
         cwd=str(_repo_root()),
         stdin=subprocess.DEVNULL,
+        stdout=out_err,
+        stderr=out_err,
         start_new_session=True,
     )
     _SIM_PROC = proc
