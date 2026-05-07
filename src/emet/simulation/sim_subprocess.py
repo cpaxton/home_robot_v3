@@ -9,24 +9,30 @@
 from __future__ import annotations
 
 import atexit
+import signal
 import socket
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from emet.config.sim_launch_config import SimLaunchConfig
 
 _SIM_PROC: subprocess.Popen[bytes] | None = None
+_PREV_SIGINT: Callable[..., Any] | int | None = None
+_PREV_SIGTERM: Callable[..., Any] | int | None = None
+_SIGNALS_INSTALLED = False
 
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent.parent
 
 
-def _shutdown_sim_process() -> None:
+def shutdown_mujoco_server_subprocess() -> None:
+    """Terminate the sim subprocess started by :func:`spawn_mujoco_server_subprocess` (idempotent)."""
     global _SIM_PROC
     p = _SIM_PROC
     if p is None:
@@ -38,6 +44,39 @@ def _shutdown_sim_process() -> None:
         except subprocess.TimeoutExpired:
             p.kill()
     _SIM_PROC = None
+
+
+def _shutdown_sim_process() -> None:
+    shutdown_mujoco_server_subprocess()
+
+
+def _on_signal(signum: int, frame: object | None) -> None:
+    shutdown_mujoco_server_subprocess()
+    if signum == signal.SIGINT:
+        prev = _PREV_SIGINT
+        if prev is signal.SIG_DFL:
+            raise KeyboardInterrupt
+        if prev is not None and prev is not signal.SIG_IGN and callable(prev):
+            prev(signum, frame)
+            return
+        raise KeyboardInterrupt
+    if signum == signal.SIGTERM:
+        prev = _PREV_SIGTERM
+        if prev is signal.SIG_DFL:
+            raise SystemExit(143)
+        if prev is not None and prev is not signal.SIG_IGN and callable(prev):
+            prev(signum, frame)
+            return
+        raise SystemExit(143)
+
+
+def _ensure_sim_signal_handlers() -> None:
+    global _PREV_SIGINT, _PREV_SIGTERM, _SIGNALS_INSTALLED
+    if _SIGNALS_INSTALLED:
+        return
+    _PREV_SIGINT = signal.signal(signal.SIGINT, _on_signal)
+    _PREV_SIGTERM = signal.signal(signal.SIGTERM, _on_signal)
+    _SIGNALS_INSTALLED = True
 
 
 def wait_for_sim_tcp_port(
@@ -55,7 +94,8 @@ def wait_for_sim_tcp_port(
         if proc.poll() is not None:
             raise RuntimeError(
                 f"MuJoCo server process exited before binding (code={proc.returncode}). "
-                "Check stderr above or run `emet serve mujoco` with the same flags."
+                "Re-run with the same flags via ``emet serve mujoco`` or "
+                "``emet run agent --start-sim --sim-show-subprocess-output`` to see sim logs."
             )
         try:
             with socket.create_connection((host, port), timeout=1.5):
@@ -69,8 +109,17 @@ def wait_for_sim_tcp_port(
     raise TimeoutError(msg)
 
 
-def spawn_mujoco_server_subprocess(cfg: SimLaunchConfig) -> subprocess.Popen[bytes]:
-    """Start ``python -m emet.simulation.mujoco_server``; register atexit shutdown; wait for ZMQ send port."""
+def spawn_mujoco_server_subprocess(
+    cfg: SimLaunchConfig,
+    *,
+    silence_sim_output: bool = True,
+) -> subprocess.Popen[bytes]:
+    """Start ``python -m emet.simulation.mujoco_server``; register atexit shutdown; wait for ZMQ send port.
+
+    By default sim stdout/stderr are discarded so the agent terminal stays readable. Use
+    *silence_sim_output=False* (``--sim-show-subprocess-output`` on ``emet run agent --start-sim``) to
+    inherit the parent TTY for debugging.
+    """
     from emet.config.sim_launch_config import SimLaunchMolmospaces
     from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
     from emet.utils.port_utils import get_ports
@@ -81,15 +130,25 @@ def spawn_mujoco_server_subprocess(cfg: SimLaunchConfig) -> subprocess.Popen[byt
 
     argv = prepare_mujoco_server_argv(cfg)
     cmd = [sys.executable, "-m", "emet.simulation.mujoco_server", *argv]
+    out_err: int | None = subprocess.DEVNULL if silence_sim_output else None
     proc = subprocess.Popen(
         cmd,
         cwd=str(_repo_root()),
+        stdin=subprocess.DEVNULL,
+        stdout=out_err,
+        stderr=out_err,
+        start_new_session=True,
     )
     _SIM_PROC = proc
     atexit.register(_shutdown_sim_process)
+    _ensure_sim_signal_handlers()
 
     ports = get_ports(int(cfg.port_offset))
-    wait_for_sim_tcp_port("127.0.0.1", int(ports.send), proc=proc)
+    try:
+        wait_for_sim_tcp_port("127.0.0.1", int(ports.send), proc=proc)
+    except BaseException:
+        shutdown_mujoco_server_subprocess()
+        raise
     # Brief pause so ZMQ bind is fully ready before client connects
     time.sleep(0.4)
     if isinstance(cfg, SimLaunchMolmospaces):

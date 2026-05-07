@@ -15,10 +15,13 @@ from emet.config.sim_launch_config import (
     SimLaunchDefaultMujoco,
     SimLaunchMolmospaces,
     SimLaunchRobocasa,
+    apply_sim_launch_cli_overrides,
+    build_sim_launch_config_from_serve_cli,
     decode_sim_launch_config,
     load_sim_launch_config_from_path,
     load_sim_launch_from_agent_yaml,
     resolve_sim_launch_for_agent,
+    validate_sim_launch_serve_combo,
 )
 from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
 
@@ -99,3 +102,68 @@ def test_port_offset_override_from_cli(tmp_path: Path):
         port_offset_cli=50,
     )
     assert cfg.port_offset == 50
+
+
+def test_resolve_raises_without_sim_when_no_fallback(tmp_path: Path):
+    agent = tmp_path / "agent.yaml"
+    agent.write_text(yaml.dump({"encoder": "siglip"}), encoding="utf-8")
+    with pytest.raises(ValueError, match="No sim launch configuration"):
+        resolve_sim_launch_for_agent(
+            agent_config_path=str(agent),
+            sim_config_cli=None,
+            port_offset_cli=0,
+            default_mujoco_table_if_missing=False,
+        )
+
+
+def test_resolve_default_mujoco_fallback(tmp_path: Path):
+    agent = tmp_path / "agent.yaml"
+    agent.write_text(yaml.dump({"encoder": "siglip"}), encoding="utf-8")
+    cfg = resolve_sim_launch_for_agent(
+        agent_config_path=str(agent),
+        sim_config_cli=None,
+        port_offset_cli=7,
+        default_mujoco_table_if_missing=True,
+        default_robot="galaxea_r1",
+        default_headless=True,
+    )
+    assert isinstance(cfg, SimLaunchDefaultMujoco)
+    assert cfg.robot == "galaxea_r1"
+    assert cfg.headless is True
+    assert cfg.port_offset == 7
+
+
+def test_build_sim_launch_from_serve_cli_matches_molmospaces():
+    cfg = build_sim_launch_config_from_serve_cli(
+        molmospaces_scene="ithor",
+        molmospaces_split="val",
+        molmospaces_index=3,
+        molmospaces_install=False,
+        use_robocasa=False,
+        scene_path=None,
+        robot="rby1",
+        headless=True,
+        show_viewer_ui=False,
+        no_cameras=False,
+        use_glx=False,
+        seed=1,
+        steps=None,
+        debug_molmospaces_spawn=False,
+        port_offset=0,
+        robocasa_task="",
+    )
+    assert isinstance(cfg, SimLaunchMolmospaces)
+    assert cfg.scene == "ithor" and cfg.split == "val" and cfg.index == 3
+
+
+def test_validate_sim_launch_serve_combo_molmo_vs_robocasa():
+    with pytest.raises(ValueError, match="Cannot combine"):
+        validate_sim_launch_serve_combo(molmospaces_scene="ithor", scene_path=None, use_robocasa=True)
+
+
+def test_apply_sim_seed_on_existing_default():
+    base = SimLaunchDefaultMujoco(robot="stretch", headless=False, seed=0)
+    out = apply_sim_launch_cli_overrides(base, seed=99)
+    assert isinstance(out, SimLaunchDefaultMujoco)
+    assert out.seed == 99
+    assert out.robot == "stretch"

@@ -283,47 +283,36 @@ def serve(
       emet serve mujoco --molmospaces-scene ithor --headless   # same, headless / no window
     """
     use_robocasa_flag = use_robocasa or (backend == "robocasa")
-    if molmospaces_scene and scene_path:
-        click.echo("Use either --scene-path or --molmospaces-scene, not both.", err=True)
-        sys.exit(1)
-    if molmospaces_scene and use_robocasa_flag:
-        click.echo("Cannot combine --molmospaces-scene with --use-robocasa / robocasa backend.", err=True)
-        sys.exit(1)
     if backend == "mujoco" or backend == "robocasa":
-        from emet.config.sim_launch_config import (
-            SimLaunchDefaultMujoco,
-            SimLaunchMolmospaces,
-            SimLaunchRobocasa,
-        )
+        from emet.config.sim_launch_config import build_sim_launch_config_from_serve_cli
         from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
 
         if list_robocasa_tasks:
             args = list(extra) + ["--use-robocasa", "--list-robocasa-tasks"]
             sys.exit(_run_module("emet.simulation.mujoco_server", args))
 
-        common = {
-            "headless": headless,
-            "show_viewer_ui": show_viewer_ui,
-            "no_cameras": no_cameras,
-            "use_glx": use_glx,
-            "seed": seed,
-            "steps": steps,
-            "debug_molmospaces_spawn": debug_molmospaces_spawn,
-            "port_offset": port_offset,
-        }
-        if molmospaces_scene:
-            cfg = SimLaunchMolmospaces(
-                scene=molmospaces_scene,
-                split=molmospaces_split,
-                index=molmospaces_index,
+        try:
+            cfg = build_sim_launch_config_from_serve_cli(
+                molmospaces_scene=molmospaces_scene,
+                molmospaces_split=molmospaces_split,
+                molmospaces_index=molmospaces_index,
                 molmospaces_install=molmospaces_install,
+                use_robocasa=use_robocasa_flag,
+                scene_path=scene_path,
                 robot=robot,
-                **common,
+                headless=headless,
+                show_viewer_ui=show_viewer_ui,
+                no_cameras=no_cameras,
+                use_glx=use_glx,
+                seed=seed,
+                steps=steps,
+                debug_molmospaces_spawn=debug_molmospaces_spawn,
+                port_offset=port_offset,
+                robocasa_task=robocasa_task,
             )
-        elif use_robocasa_flag:
-            cfg = SimLaunchRobocasa(robot=robot, robocasa_task=robocasa_task or "", **common)
-        else:
-            cfg = SimLaunchDefaultMujoco(robot=robot, scene_path=scene_path, **common)
+        except ValueError as e:
+            click.echo(str(e), err=True)
+            sys.exit(1)
         args = list(extra) + prepare_mujoco_server_argv(cfg)
         sys.exit(_run_module("emet.simulation.mujoco_server", args))
     else:

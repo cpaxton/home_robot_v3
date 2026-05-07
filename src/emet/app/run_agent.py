@@ -21,8 +21,10 @@ os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
 
 import tempfile
 import timeit
+from collections.abc import Callable
 
 import click
+from click.core import ParameterSource
 from termcolor import colored
 
 from emet.agent.loop import run_agent_with_robot
@@ -84,7 +86,11 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     "--discord/--no-discord",
     "discord",
     default=True,
-    help="Start Discord bot when DISCORD_TOKEN is set (default: on; ignored with --offline). Use --no-discord to skip.",
+    help=(
+        "Start Discord bot when DISCORD_TOKEN is set (default: on; ignored with --offline). "
+        "Non-interactive ``--command`` / ``-c`` runs disable Discord automatically; pass ``--no-discord`` "
+        "to acknowledge and hide the warning."
+    ),
 )
 @click.option(
     "--no-llm",
@@ -152,7 +158,8 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     help=(
         "Run one or more commands non-interactively, then exit (embodied mode only). "
         'Same flag as -c; use quotes for multi-word phrases, e.g. --command "find red cylinder". '
-        "With --no-llm: E/M/Q/P/FIND or find …; with an LLM: natural language per turn."
+        "With --no-llm: E/M/Q/P/FIND or find …; with an LLM: natural language per turn. "
+        "Discord is disabled for this mode (see ``--discord`` / ``--no-discord``)."
     ),
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
@@ -244,7 +251,8 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     is_flag=True,
     help=(
         "Start ``emet.simulation.mujoco_server`` as a subprocess before connecting. "
-        "Requires ``sim_config`` or ``sim:`` in the agent YAML, unless you pass ``--sim-config``."
+        "Uses ``sim_config`` / ``sim:`` in the agent YAML, ``--sim-config``, or (if none are set) "
+        "the packaged default-table MuJoCo scene with the same ``--robot`` / YAML robot and ``--headless``."
     ),
 )
 @click.option(
@@ -255,7 +263,105 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     metavar="PATH",
     help="YAML sim launch profile (overrides sim_config / sim: in --agent-config). See configs/sim/*.yaml.",
 )
+@click.option(
+    "--use-robocasa",
+    "sim_use_robocasa",
+    is_flag=True,
+    help="With --start-sim: Robocasa kitchen (same as emet serve mujoco --use-robocasa). Incompatible with --molmospaces-scene / --scene-path.",
+)
+@click.option(
+    "--robocasa-task",
+    "sim_robocasa_task",
+    default=None,
+    type=str,
+    metavar="NAME",
+    help="With --start-sim and Robocasa: task name (default from sim YAML or PickPlaceCounterToCabinet).",
+)
+@click.option(
+    "--scene-path",
+    "sim_scene_path",
+    default=None,
+    type=click.Path(),
+    metavar="PATH",
+    help="With --start-sim: load this MJCF (default MuJoCo path). Incompatible with --molmospaces-scene.",
+)
+@click.option(
+    "--molmospaces-scene",
+    "sim_molmospaces_scene",
+    default=None,
+    metavar="NAME",
+    help="With --start-sim: MolmoSpaces scene (e.g. ithor). Same as emet serve mujoco --molmospaces-scene.",
+)
+@click.option(
+    "--molmospaces-split",
+    "sim_molmospaces_split",
+    default=None,
+    type=click.Choice(["train", "val", "test"]),
+    help="With --start-sim and MolmoSpaces: data split (default train or from sim YAML).",
+)
+@click.option(
+    "--molmospaces-index",
+    "sim_molmospaces_index",
+    default=None,
+    type=int,
+    help="With --start-sim and MolmoSpaces: scene index (default 0 or from sim YAML).",
+)
+@click.option(
+    "--molmospaces-install",
+    "sim_molmospaces_install",
+    is_flag=True,
+    help="With --start-sim and MolmoSpaces: download scene assets if missing (non-interactive).",
+)
+@click.option(
+    "--sim-seed",
+    "sim_seed",
+    default=None,
+    type=int,
+    help="With --start-sim: MuJoCo server --seed (overrides sim YAML).",
+)
+@click.option(
+    "--sim-steps",
+    "sim_steps",
+    default=None,
+    type=int,
+    help="With --start-sim: stop server after N MuJoCo steps (debug).",
+)
+@click.option(
+    "--sim-no-cameras",
+    "sim_no_cameras",
+    is_flag=True,
+    help="With --start-sim: pass --no-cameras to mujoco_server (e.g. WSL EGL camera hang).",
+)
+@click.option(
+    "--sim-use-glx",
+    "sim_use_glx",
+    is_flag=True,
+    help="With --start-sim: pass --use-glx (Xvfb / GLX instead of EGL).",
+)
+@click.option(
+    "--sim-show-viewer-ui",
+    "sim_show_viewer_ui",
+    is_flag=True,
+    help="With --start-sim: pass --show-viewer-ui (only when not headless).",
+)
+@click.option(
+    "--sim-debug-molmospaces-spawn",
+    "sim_debug_molmospaces_spawn",
+    is_flag=True,
+    help="With --start-sim: pass --debug-molmospaces-spawn.",
+)
+@click.option(
+    "--sim-show-subprocess-output",
+    "sim_show_subprocess_output",
+    is_flag=True,
+    help=(
+        "With --start-sim: inherit this terminal for sim stdout/stderr (verbose). "
+        "Default is to discard sim logs so scripted runs stay readable."
+    ),
+)
+@click.pass_context
 def main(
+    ctx: click.Context,
     llm: str,
     prompt: str,
     device: str,
@@ -288,6 +394,20 @@ def main(
     share_memory_vllm: bool = True,
     start_sim: bool = False,
     sim_config: str | None = None,
+    sim_use_robocasa: bool = False,
+    sim_robocasa_task: str | None = None,
+    sim_scene_path: str | None = None,
+    sim_molmospaces_scene: str | None = None,
+    sim_molmospaces_split: str | None = None,
+    sim_molmospaces_index: int | None = None,
+    sim_molmospaces_install: bool = False,
+    sim_seed: int | None = None,
+    sim_steps: int | None = None,
+    sim_no_cameras: bool = False,
+    sim_use_glx: bool = False,
+    sim_show_viewer_ui: bool = False,
+    sim_debug_molmospaces_spawn: bool = False,
+    sim_show_subprocess_output: bool = False,
 ) -> None:
     """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
 
@@ -310,7 +430,8 @@ def main(
       emet run agent --no-llm --command 'find red cylinder'
       emet run agent --no-llm -c 'FIND blue cube'
       emet run agent --llm qwen3-vl-eqa --eqa --debug-vram   # one Qwen3-VL + VRAM milestones
-      emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml --start-sim --command "describe the scene"
+      emet run agent --robot stretch --start-sim --command "describe the scene"
+      emet run agent --robot rby1 --start-sim --molmospaces-scene ithor --headless -c "describe the scene"
     """
     cmd_list = list(commands) if commands else None
 
@@ -328,6 +449,43 @@ def main(
 
     if offline and start_sim:
         raise click.UsageError("Cannot combine --offline with --start-sim.")
+
+    sim_cli_used = any(
+        [
+            sim_use_robocasa,
+            sim_robocasa_task is not None and str(sim_robocasa_task).strip() != "",
+            sim_scene_path is not None and str(sim_scene_path).strip() != "",
+            sim_molmospaces_scene is not None and str(sim_molmospaces_scene).strip() != "",
+            sim_molmospaces_split is not None,
+            sim_molmospaces_index is not None,
+            sim_molmospaces_install,
+            sim_seed is not None,
+            sim_steps is not None,
+            sim_no_cameras,
+            sim_use_glx,
+            sim_show_viewer_ui,
+            sim_debug_molmospaces_spawn,
+            sim_show_subprocess_output,
+        ]
+    )
+    if sim_cli_used and not start_sim:
+        raise click.UsageError(
+            "Sim-only flags (--use-robocasa, --molmospaces-scene, --sim-seed, "
+            "--sim-show-subprocess-output, etc.) require --start-sim."
+        )
+
+    if not offline and cmd_list:
+        discord_src = ctx.get_parameter_source("discord")
+        explicit_no_discord = discord_src == ParameterSource.COMMANDLINE and not discord
+        if discord and not explicit_no_discord:
+            print(
+                colored(
+                    "Warning: `--command` / `-c` runs are non-interactive; Discord is disabled for this run. "
+                    "Pass `--no-discord` to acknowledge and hide this warning in scripts.",
+                    "yellow",
+                )
+            )
+        discord = False
 
     if debug_models:
         os.environ["EMET_AGENT_MODEL_DEBUG"] = "1"
@@ -351,22 +509,75 @@ def main(
             os.environ["RERUN_BIND_ALL"] = "1"
         if rerun_native and headless:
             raise click.UsageError("Use either --rerun-native or --headless for Rerun, not both.")
+        sim_shutdown: Callable[[], None] | None = None
         if start_sim:
-            from emet.config.sim_launch_config import resolve_sim_launch_for_agent
-            from emet.simulation.sim_subprocess import spawn_mujoco_server_subprocess
+            from emet.config.sim_launch_config import apply_sim_launch_cli_overrides, resolve_sim_launch_for_agent
+            from emet.simulation.sim_subprocess import (
+                shutdown_mujoco_server_subprocess,
+                spawn_mujoco_server_subprocess,
+            )
+
+            sim_shutdown = shutdown_mujoco_server_subprocess
 
             try:
                 sim_cfg = resolve_sim_launch_for_agent(
                     agent_config_path=agent_config,
                     sim_config_cli=sim_config,
                     port_offset_cli=port_offset,
+                    default_mujoco_table_if_missing=True,
+                    default_robot=robot,
+                    default_headless=headless,
                 )
             except ValueError as e:
                 raise click.UsageError(str(e)) from e
+            if sim_cli_used:
+                try:
+                    sim_cfg = apply_sim_launch_cli_overrides(
+                        sim_cfg,
+                        use_robocasa=sim_use_robocasa,
+                        robocasa_task=sim_robocasa_task,
+                        scene_path=str(sim_scene_path) if sim_scene_path else None,
+                        molmospaces_scene=sim_molmospaces_scene,
+                        molmospaces_split=sim_molmospaces_split,
+                        molmospaces_index=sim_molmospaces_index,
+                        molmospaces_install=True if sim_molmospaces_install else None,
+                        headless=None,
+                        show_viewer_ui=True if sim_show_viewer_ui else None,
+                        no_cameras=True if sim_no_cameras else None,
+                        use_glx=True if sim_use_glx else None,
+                        seed=sim_seed,
+                        steps=sim_steps,
+                        debug_molmospaces_spawn=True if sim_debug_molmospaces_spawn else None,
+                        robot=None,
+                    )
+                except ValueError as e:
+                    raise click.UsageError(str(e)) from e
+            # Stretch (passive viewer) exits when there is no DISPLAY or when stdout is not a TTY for
+            # the viewer subprocess; scripted --command runs do not need a window. Force headless so
+            # the sim stays up for ZMQ (4402) while the agent loads.
+            had_headless = bool(sim_cfg.headless)
+            need_sim_headless = (
+                headless
+                or not str(os.environ.get("DISPLAY", "")).strip()
+                or (bool(cmd_list) and not sim_show_viewer_ui)
+            )
+            if need_sim_headless:
+                sim_cfg.headless = True
+            if sim_cfg.headless and not had_headless:
+                print(
+                    colored(
+                        "Note: MuJoCo server is running headless (no DISPLAY, --command/-c, or --headless) "
+                        "so the Stretch sim keeps publishing observations.",
+                        "cyan",
+                    )
+                )
             if robot and robot.lower() not in ("stretch", "hello_stretch", "hellostretch", ""):
                 sim_cfg.robot = robot
             print(colored("Starting MuJoCo sim subprocess (--start-sim)…", "cyan"))
-            spawn_mujoco_server_subprocess(sim_cfg)
+            spawn_mujoco_server_subprocess(
+                sim_cfg,
+                silence_sim_output=not sim_show_subprocess_output,
+            )
             print(colored("Sim is up; connecting agent.", "green"))
         print(
             colored(
@@ -374,31 +585,36 @@ def main(
                 "cyan",
             )
         )
-        run_agent_with_robot(
-            robot_ip=robot_effective,
-            robot=robot,
-            input_path=input_path,
-            discord=discord,
-            use_llm=not no_llm,
-            llm=llm,
-            skip_confirmations=True,
-            debug_llm=debug_llm,
-            tool_debug=debug_tools,
-            agent_name=agent_name,
-            commands=cmd_list,
-            port_offset=port_offset,
-            agent_config=agent_config,
-            device=device,
-            max_tokens=max_tokens,
-            vl_include_camera=vl_include_effective,
-            eqa=dynamem_eqa,
-            share_memory_vllm=share_memory_vllm,
-            headless=headless,
-            rerun=rerun,
-            rerun_native=rerun_native,
-            rerun_show_panels=rerun_show_panels,
-            rerun_debug=rerun_debug,
-        )
+        try:
+            run_agent_with_robot(
+                robot_ip=robot_effective,
+                robot=robot,
+                input_path=input_path,
+                discord=discord,
+                use_llm=not no_llm,
+                llm=llm,
+                skip_confirmations=True,
+                debug_llm=debug_llm,
+                tool_debug=debug_tools,
+                agent_name=agent_name,
+                commands=cmd_list,
+                port_offset=port_offset,
+                agent_config=agent_config,
+                device=device,
+                max_tokens=max_tokens,
+                vl_include_camera=vl_include_effective,
+                eqa=dynamem_eqa,
+                share_memory_vllm=share_memory_vllm,
+                headless=headless,
+                rerun=rerun,
+                rerun_native=rerun_native,
+                rerun_show_panels=rerun_show_panels,
+                rerun_debug=rerun_debug,
+                shutdown_sim_subprocess=sim_shutdown,
+            )
+        finally:
+            if sim_shutdown is not None:
+                sim_shutdown()
         return
 
     prompt_builder = get_prompt_builder(prompt)
