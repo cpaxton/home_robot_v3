@@ -201,6 +201,7 @@ if [ "$INSTALL_SIM" = "true" ]; then
     echo ""
     echo "Installing simulation (Robocasa + robosuite)..."
     export EMET_USE_UV=1
+    export EMET_PYTHON="$ROOT_DIR/.venv/bin/python"
     SIM_SCRIPT="$ROOT_DIR/scripts/install_simulation.sh"
     if [ "$SKIP_ASKING" = "true" ]; then
         bash "$SIM_SCRIPT" -y

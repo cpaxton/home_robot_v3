@@ -10,7 +10,7 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 DOWNLOAD_ASSETS=true
 # -a = force run macro setup (overwrite if exists); otherwise we run only when macros_private is missing
 SETUP_MACROS_FORCE=false
-# -y = non-interactive: if assets exist, skip re-download (no prompt)
+# -y = non-interactive: skip interactive prompts (asset re-download + macro overwrite)
 NONINTERACTIVE_ASSETS="false"
 
 # Parse command line options
@@ -33,7 +33,7 @@ while getopts "dany" opt; do
             echo "  -d: Download kitchen assets (default: yes)"
             echo "  -n: Skip downloading kitchen assets (~10GB)"
             echo "  -a: Force setup macros (overwrite existing macros_private.py)"
-            echo "  -y: Non-interactive: if assets already exist, skip re-download without prompting"
+            echo "  -y: Non-interactive: skip prompts (asset re-download and macro overwrite)"
             exit 1
             ;;
     esac
@@ -84,11 +84,12 @@ fi
 cd robosuite || exit 1
 pip_install_editable || { echo "robosuite install failed." >&2; exit 1; }
 # Create macros_private.py from macros.py if missing (silences "No private macro file" warnings).
-if [ "$SETUP_MACROS_FORCE" = true ] || [ ! -f "robosuite/robosuite/macros_private.py" ]; then
-    if [ "$SETUP_MACROS_FORCE" = true ]; then
-        echo "y" | "$PYTHON" robosuite/scripts/setup_macros.py || true
+if [ "$SETUP_MACROS_FORCE" = true ] || [ ! -f "robosuite/macros_private.py" ]; then
+    # In non-interactive mode, auto-confirm overwrite prompts.
+    if [ "$SETUP_MACROS_FORCE" = true ] || [ "$NONINTERACTIVE_ASSETS" = "true" ]; then
+        echo "y" | "$PYTHON" scripts/setup_macros.py || true
     else
-        "$PYTHON" robosuite/scripts/setup_macros.py || { echo "robosuite setup_macros failed." >&2; exit 1; }
+        "$PYTHON" scripts/setup_macros.py || { echo "robosuite setup_macros failed." >&2; exit 1; }
     fi
 fi
 cd ..
