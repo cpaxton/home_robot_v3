@@ -552,8 +552,25 @@ def main(
                     )
                 except ValueError as e:
                     raise click.UsageError(str(e)) from e
-            if headless:
+            # Stretch (passive viewer) exits when there is no DISPLAY or when stdout is not a TTY for
+            # the viewer subprocess; scripted --command runs do not need a window. Force headless so
+            # the sim stays up for ZMQ (4402) while the agent loads.
+            had_headless = bool(sim_cfg.headless)
+            need_sim_headless = (
+                headless
+                or not str(os.environ.get("DISPLAY", "")).strip()
+                or (bool(cmd_list) and not sim_show_viewer_ui)
+            )
+            if need_sim_headless:
                 sim_cfg.headless = True
+            if sim_cfg.headless and not had_headless:
+                print(
+                    colored(
+                        "Note: MuJoCo server is running headless (no DISPLAY, --command/-c, or --headless) "
+                        "so the Stretch sim keeps publishing observations.",
+                        "cyan",
+                    )
+                )
             if robot and robot.lower() not in ("stretch", "hello_stretch", "hellostretch", ""):
                 sim_cfg.robot = robot
             print(colored("Starting MuJoCo sim subprocess (--start-sim)…", "cyan"))
