@@ -122,12 +122,13 @@
               <!-- Head stereo: positions from maurice.urdf fixed_head_camera_{left,right} — same X/Z, 60 mm baseline
                    on head Y (left +0.0297 m, right −0.0303 m; intentionally not ±0.03). Optics share one quat below.
                    URDF ``fixed_*_camera_optical_frame`` rpy="−π/2 0 −π/2" (REP: optical +Z forward) maps optical +Z
-                   to **+head X** (⊥ stereo baseline along head **Y**). MuJoCo camera ``quat`` is the rotation from
-                   head to cam such that −local Z equals that REP forward (+X bump ``0.0601`` vs URDF ``0.04327`` clears ``head_geom``). -->
-              <camera name="head_left" pos="0.0601 0.0297 -0.000275" mode="fixed" fovy="80"
-                      quat="0.5 0.5 -0.5 -0.5"/>
-              <camera name="head_right" pos="0.0601 -0.0303 -0.000275" mode="fixed" fovy="80"
-                      quat="0.5 0.5 -0.5 -0.5"/>
+                   to **+head X** (⊥ stereo baseline along head **Y**). The STL / joint layout read as “face” along **−head Z**;
+                   compose **Ry_head(+π/2)** so MuJoCo −local Z sights **−head Z** (straight down at default yaw), not +X along the neck.
+                   X bump ``0.0625`` vs URDF ``0.04327`` clears ``head_geom`` for **−head Z** stereo center rays. -->
+              <camera name="head_left" pos="0.0625 0.0297 -0.000275" mode="fixed" fovy="80"
+                      quat="-0.7071067811865476 0 0 0.7071067811865476"/>
+              <camera name="head_right" pos="0.0625 -0.0303 -0.000275" mode="fixed" fovy="80"
+                      quat="-0.7071067811865476 0 0 0.7071067811865476"/>
             </body>
           </body>
         </body>
