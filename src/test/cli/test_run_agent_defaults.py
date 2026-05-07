@@ -12,6 +12,7 @@
 
 """Defaults and CLI wiring for emet.app.run_agent (no heavy LLM load)."""
 
+import pytest
 from click.testing import CliRunner
 
 
@@ -55,6 +56,44 @@ def test_help_lists_command_long_and_short():
     assert r.exit_code == 0
     assert "--command" in r.output
     assert "-c" in r.output
+    assert "Discord" in r.output
+
+
+def test_command_mode_disables_discord_warns_without_no_discord(monkeypatch: pytest.MonkeyPatch) -> None:
+    from emet.app import run_agent as ra
+
+    captured: list[bool] = []
+
+    def stub(**kw: object) -> None:
+        captured.append(kw["discord"])  # type: ignore[index]
+
+    monkeypatch.setattr(ra, "run_agent_with_robot", stub)
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--robot", "stretch", "--no-llm", "-c", "E"])
+    assert r.exit_code == 0, r.output
+    assert captured == [False]
+    assert "Warning" in r.output
+    assert "Discord" in r.output
+
+
+def test_command_mode_disables_discord_no_warning_with_no_discord(monkeypatch: pytest.MonkeyPatch) -> None:
+    from emet.app import run_agent as ra
+
+    captured: list[bool] = []
+
+    def stub(**kw: object) -> None:
+        captured.append(kw["discord"])  # type: ignore[index]
+
+    monkeypatch.setattr(ra, "run_agent_with_robot", stub)
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--robot", "stretch", "--no-llm", "-c", "E", "--no-discord"])
+    assert r.exit_code == 0, r.output
+    assert captured == [False]
+    assert "Warning" not in r.output
 
 
 def test_help_lists_dynamem_eqa_flag():
@@ -76,6 +115,7 @@ def test_help_lists_share_memory_vllm_toggle():
     assert r.exit_code == 0
     assert "--share-memory-vllm" in r.output
     assert "--no-share-memory-vllm" in r.output
+    assert "--sim-show-subprocess-output" in r.output
 
 
 def test_help_lists_rerun_agent_flags():
