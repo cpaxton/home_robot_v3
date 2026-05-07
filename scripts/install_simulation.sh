@@ -12,6 +12,21 @@ DOWNLOAD_ASSETS=true
 SETUP_MACROS_FORCE=false
 # -y = non-interactive: skip interactive prompts (asset re-download + macro overwrite)
 NONINTERACTIVE_ASSETS="false"
+FORCE_DOWNLOAD_ASSETS="false"
+
+# Parse long options first (keep getopts for existing short flags).
+PARSED_ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        --force-download)
+            FORCE_DOWNLOAD_ASSETS="true"
+            ;;
+        *)
+            PARSED_ARGS+=("$arg")
+            ;;
+    esac
+done
+set -- "${PARSED_ARGS[@]}"
 
 # Parse command line options
 while getopts "dany" opt; do
@@ -29,11 +44,12 @@ while getopts "dany" opt; do
             NONINTERACTIVE_ASSETS="true"
             ;;
         \? )
-            echo "Usage: $0 [-d] [-n] [-a] [-y]"
+            echo "Usage: $0 [-d] [-n] [-a] [-y] [--force-download]"
             echo "  -d: Download kitchen assets (default: yes)"
             echo "  -n: Skip downloading kitchen assets (~10GB)"
             echo "  -a: Force setup macros (overwrite existing macros_private.py)"
             echo "  -y: Non-interactive: skip prompts (asset re-download and macro overwrite)"
+            echo "  --force-download: Re-download kitchen assets even when already present"
             exit 1
             ;;
     esac
@@ -139,17 +155,24 @@ fi
 # Asset download: if assets already exist, ask to re-download (default N). Use -n to skip entirely, -y to skip prompt when present.
 ASSETS_DIR="$ROOT_DIR/third_party/robocasa/robocasa/models/assets"
 if [ "$DOWNLOAD_ASSETS" = true ]; then
+    if [ "$FORCE_DOWNLOAD_ASSETS" = "true" ]; then
+        echo "Force-download enabled; Robocasa kitchen assets will be re-downloaded."
+    fi
     if [ -d "$ASSETS_DIR/textures" ] && [ -n "$(ls -A "$ASSETS_DIR/textures" 2>/dev/null)" ]; then
-        if [ "$NONINTERACTIVE_ASSETS" = "true" ]; then
+        if [ "$FORCE_DOWNLOAD_ASSETS" = "true" ]; then
+            :
+        elif [ "$NONINTERACTIVE_ASSETS" = "true" ]; then
             echo "Robocasa kitchen assets already present; skipping re-download (non-interactive)."
             DOWNLOAD_ASSETS=false
         else
             echo ""
             read -p "Robocasa kitchen assets appear to be present. Re-download? (y/N) " yn
-            case "${yn:-n}" in
-                y|Y) ;;
-                *) echo "Skipping asset download."; DOWNLOAD_ASSETS=false ;;
-            esac
+            if [ "${yn:-n}" = "y" ] || [ "${yn:-n}" = "Y" ]; then
+                :
+            else
+                echo "Skipping asset download."
+                DOWNLOAD_ASSETS=false
+            fi
         fi
     fi
 fi
@@ -157,7 +180,15 @@ if [ "$DOWNLOAD_ASSETS" = true ]; then
     echo "Checking and downloading Robocasa kitchen assets as needed (~10GB max)..."
     cd "$ROOT_DIR" || exit 1
     if [ "$NONINTERACTIVE_ASSETS" = "true" ]; then
-        "$PYTHON" scripts/download_robocasa_assets.py --yes || \
+        if [ "$FORCE_DOWNLOAD_ASSETS" = "true" ]; then
+            "$PYTHON" scripts/download_robocasa_assets.py --yes --force || \
+                { echo "download_robocasa_assets failed." >&2; exit 1; }
+        else
+            "$PYTHON" scripts/download_robocasa_assets.py --yes || \
+                { echo "download_robocasa_assets failed." >&2; exit 1; }
+        fi
+    elif [ "$FORCE_DOWNLOAD_ASSETS" = "true" ]; then
+        "$PYTHON" scripts/download_robocasa_assets.py --force || \
             { echo "download_robocasa_assets failed." >&2; exit 1; }
     else
         "$PYTHON" scripts/download_robocasa_assets.py || \
