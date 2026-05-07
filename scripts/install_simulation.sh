@@ -60,11 +60,13 @@ echo "Using Python: $PYTHON"
 # EMET_USE_UV=1 is set by the CLI when uv is available.
 pip_install_editable() {
     if [ -n "${EMET_USE_UV:-}" ] && command -v uv >/dev/null 2>&1; then
-        uv pip install -e .
+        # Keep the main environment stable: uv sync owns dependency resolution.
+        # Editable third_party installs should register package code only.
+        uv pip install -e . --no-deps
     elif command -v uv >/dev/null 2>&1; then
-        uv pip install -e .
+        uv pip install -e . --no-deps
     else
-        "$PYTHON" -m pip install -e .
+        "$PYTHON" -m pip install -e . --no-deps
     fi
 }
 
@@ -152,10 +154,15 @@ if [ "$DOWNLOAD_ASSETS" = true ]; then
     fi
 fi
 if [ "$DOWNLOAD_ASSETS" = true ]; then
-    echo "Downloading Robocasa kitchen assets (~10GB)..."
+    echo "Checking and downloading Robocasa kitchen assets as needed (~10GB max)..."
     cd "$ROOT_DIR" || exit 1
-    echo "y" | "$PYTHON" -m robocasa.scripts.download_kitchen_assets || \
-        { echo "download_kitchen_assets failed." >&2; exit 1; }
+    if [ "$NONINTERACTIVE_ASSETS" = "true" ]; then
+        "$PYTHON" scripts/download_robocasa_assets.py --yes || \
+            { echo "download_robocasa_assets failed." >&2; exit 1; }
+    else
+        "$PYTHON" scripts/download_robocasa_assets.py || \
+            { echo "download_robocasa_assets failed." >&2; exit 1; }
+    fi
     cd "$ROOT_DIR/third_party" || exit 1
 fi
 
