@@ -41,6 +41,7 @@ from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
     emet_session_cache_update,
     read_emet_robot_id_from_message_or_session,
+    read_emet_session,
     robot_ids_match,
 )
 from emet.motion import constants as motion_constants
@@ -107,6 +108,13 @@ def _decode_servo_message_to_observations(
     if cp is not None:
         cp = np.asarray(cp, dtype=np.float64).reshape(4, 4)
 
+    step = msg.get("step")
+    seq_id = int(step) if step is not None else -1
+
+    sess = read_emet_session(msg)
+    if sess is None:
+        sess = read_emet_session(full_obs)
+
     return Observations(
         gps=gps,
         compass=compass,
@@ -115,7 +123,9 @@ def _decode_servo_message_to_observations(
         camera_K=K,
         camera_pose=cp,
         joint=joint,
+        seq_id=seq_id,
         is_simulation=bool(msg.get("is_simulation", True)),
+        emet_session=sess,
     )
 
 
@@ -640,6 +650,7 @@ class GenericZmqClient(AbstractRobotClient):
             joint_velocities=obs.get("joint_velocities"),
             gps=gps,
             compass=compass,
+            emet_session=read_emet_session(obs),
         )
 
     def get_head_pose(self) -> np.ndarray:

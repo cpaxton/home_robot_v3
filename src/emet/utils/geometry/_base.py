@@ -122,6 +122,28 @@ def xyt_base_to_global(out_XYT, current_pose):
     return sophus2xyt(pose_world2target)
 
 
+def nav_xyt_to_world_xyt(local_xyt: np.ndarray, session: dict | None) -> np.ndarray:
+    """Map episode-relative ``(x, y, θ)`` to world ``(x, y, θ)`` using ZMQ session metadata.
+
+    Robosuite (and similar) ZMQ servers send ``gps``/``compass`` in a frame whose origin is the
+    robot pose at episode start, while ``camera_pose`` is absolute MuJoCo world. The session block
+    carries ``navigation_origin_xyt`` (world pose of that origin). When present, compose with
+    :func:`xyt_base_to_global` so Rerun base markers and MJCF meshes align with camera / point clouds.
+    """
+    xyt = np.asarray(local_xyt, dtype=np.float64).reshape(-1)
+    if xyt.size < 3:
+        xyt = np.pad(xyt, (0, max(0, 3 - xyt.size)), mode="constant")
+    if session is None:
+        return xyt
+    org = session.get("navigation_origin_xyt")
+    if org is None:
+        return xyt
+    origin = np.asarray(org, dtype=np.float64).reshape(-1)[:3]
+    if origin.size < 3:
+        return xyt
+    return xyt_base_to_global(xyt, origin)
+
+
 def xyz2sophus(xyz: np.ndarray) -> sp.SE3:
     """
     Converts XYZ coordinates to an sophus SE3 pose object.

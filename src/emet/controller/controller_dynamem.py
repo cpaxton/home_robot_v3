@@ -54,6 +54,7 @@ from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
 from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
 from emet.motion.algo.a_star import AStar
 from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
+from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask
 from emet.perception.detection.owl import OwlPerception
 from emet.perception.detection.yoloe import YoloEPerception
 
@@ -61,6 +62,7 @@ from emet.perception.detection.yoloe import YoloEPerception
 from emet.perception.encoders.clip_encoder import MaskClipEncoder
 from emet.perception.encoders.siglip_encoder import MaskSiglipEncoder
 from emet.perception.wrapper import OvmmPerception
+from emet.utils.geometry import nav_xyt_to_world_xyt
 from emet.utils.logger import Logger
 from emet.utils.vram_debug import print_vram_snapshot
 from emet.visualization.rerun import NullVisualizer, has_display
@@ -521,19 +523,29 @@ class DynamemController(BaseController):
         if depth is None:
             logger.error(f"No depth map available (depth_source={self._depth_source!r}); skipping voxel update.")
             return
+        if self._depth_source in ("da3", "auto"):
+            sky = float(self.parameters.get("da3_ignore_sky_fraction_top", 0.0) or 0.0)
+            if sky > 0.0:
+                depth = apply_da3_sky_row_mask(np.asarray(depth, dtype=np.float32), sky)
         base_xyt = None
         if obs.gps is not None and obs.compass is not None:
             g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
             c = np.asarray(obs.compass, dtype=np.float64).ravel()
             if g.size >= 2 and c.size >= 1:
-                base_xyt = np.array([float(g[0]), float(g[1]), float(c[0])], dtype=np.float64)
+                local_xyt = np.array([float(g[0]), float(g[1]), float(c[0])], dtype=np.float64)
+                base_xyt = nav_xyt_to_world_xyt(local_xyt, getattr(obs, "emet_session", None))
         self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt)
         if self.voxel_map.voxel_pcd._points is not None:
             robot_xy = None
-            if obs.gps is not None:
+            if obs.gps is not None and obs.compass is not None:
                 g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
-                if g.size >= 2:
-                    robot_xy = (float(g[0]), float(g[1]))
+                cc = np.asarray(obs.compass, dtype=np.float64).ravel()
+                if g.size >= 2 and cc.size >= 1:
+                    wxyt = nav_xyt_to_world_xyt(
+                        np.array([float(g[0]), float(g[1]), float(cc[0])], dtype=np.float64),
+                        getattr(obs, "emet_session", None),
+                    )
+                    robot_xy = (float(wxyt[0]), float(wxyt[1]))
             self.rerun_visualizer.update_voxel_map(space=self.space, robot_base_xy=robot_xy)
         if self.voxel_map.semantic_memory._points is not None:
             self.rerun_visualizer.log_custom_pointcloud(

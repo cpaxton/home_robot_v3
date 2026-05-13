@@ -10,7 +10,21 @@ import pytest
 
 from emet.core.interfaces import Observations
 from emet.core.parameters import Parameters
-from emet.perception.depth.da3_estimator import create_da3_estimator_from_parameters, resize_depth_to_match_rgb
+from emet.perception.depth.da3_estimator import (
+    apply_da3_sky_row_mask,
+    create_da3_estimator_from_parameters,
+    resize_depth_to_match_rgb,
+)
+
+
+def test_apply_da3_sky_row_mask_zeros_top_fraction():
+    d = np.ones((100, 40), dtype=np.float32) * 1.5
+    out = apply_da3_sky_row_mask(d, 0.2)
+    assert out.shape == d.shape
+    assert float(out[19, 0]) == 0.0
+    assert float(out[20, 0]) == 1.5
+    assert float(out[0, 39]) == 0.0
+    assert np.array_equal(apply_da3_sky_row_mask(d, 0.0), d)
 
 
 def test_resize_depth_to_match_rgb():
@@ -25,6 +39,21 @@ def test_resize_depth_to_match_rgb():
 def test_create_da3_estimator_sensor_returns_none():
     p = Parameters(depth_source="sensor")
     assert create_da3_estimator_from_parameters(p, device="cpu") is None
+
+
+@pytest.mark.skipif(
+    os.environ.get("RUN_DA3_TESTS", "") != "1",
+    reason="Set RUN_DA3_TESTS=1 to run (imports depth_anything_3).",
+)
+def test_create_da3_estimator_respects_clip_max_m():
+    pytest.importorskip("depth_anything_3")
+    p = Parameters(depth_source="da3", da3_clip_max_m=3.25, max_depth=2.5)
+    est = create_da3_estimator_from_parameters(p, device="cpu")
+    assert est is not None
+    assert abs(float(est._clip_output_max_m) - 3.25) < 1e-5
+    p2 = Parameters(depth_source="da3", max_depth=2.0)
+    est2 = create_da3_estimator_from_parameters(p2, device="cpu")
+    assert float(est2._clip_output_max_m) == max(2.0 + 1.0, 4.0)
 
 
 @pytest.mark.skipif(

@@ -1082,6 +1082,8 @@ def sync(
     dynamem, da3). Use ``uv sync --no-default-groups`` for base dependencies only.
 
     robosuite/robocasa are installed editable by: ``emet install sim`` (not from the lockfile).
+    A plain ``emet sync`` reinstalls them when present under ``third_party/`` (default groups
+    include sim). ``emet sync -e dynamem`` alone does not.
 
     Examples:
 
@@ -1107,10 +1109,11 @@ def sync(
     root = _project_root()
     os.chdir(root)
 
-    # Sim extra: pip-installable deps (mujoco, stretch-urdf, etc.) are always in pyproject.toml.
-    # robosuite/robocasa are installed editable from third_party/ when present.
-    sim_editable_pkgs: list[str] = []
-    if "sim" in extras:
+    # Sim extra: pip-installable deps (mujoco, stretch-urdf, etc.) are in pyproject.toml.
+    # robosuite/robocasa live in third_party/ and are *not* lockfile deps — ``uv sync`` removes them unless
+    # we reinstall with ``uv pip install -e`` after sync whenever sim is part of this sync.
+    want_sim_third_party = (not extras) or ("sim" in extras)
+    if want_sim_third_party:
         missing = [name for name in ("robosuite", "robocasa") if not (root / "third_party" / name).is_dir()]
         if missing:
             click.echo(
@@ -1118,8 +1121,6 @@ def sync(
                 "Sim pip deps (mujoco, etc.) will install, but robosuite/robocasa need: emet install sim",
                 err=True,
             )
-        else:
-            sim_editable_pkgs = [str(root / "third_party" / name) for name in ("robosuite", "robocasa")]
 
     if extras:
         click.echo("Syncing extras: " + ", ".join(extras))
@@ -1133,10 +1134,10 @@ def sync(
         result = subprocess.call(cmd)
         if result != 0:
             sys.exit(result)
-        # Install robosuite/robocasa editable from third_party (not in lockfile)
-        if sim_editable_pkgs:
-            click.echo("Installing robosuite/robocasa from third_party...")
-            result = subprocess.call(["uv", "pip", "install"] + [arg for p in sim_editable_pkgs for arg in ["-e", p]])
+        if want_sim_third_party:
+            result = _uv_pip_install_sim_third_party_editables(root)
+            if result != 0:
+                sys.exit(result)
         sys.exit(result)
     else:
         # Fallback to pip
@@ -1243,6 +1244,24 @@ def test(
 
 
 _SIM_THIRD_PARTY_DIRS = ("robosuite", "robosuite_models", "robocasa")
+
+
+def _third_party_sim_editable_paths(root: Path) -> list[Path]:
+    """Paths under ``third_party/`` to install with ``uv pip install -e`` (not declared in uv.lock)."""
+    return [root / "third_party" / name for name in _SIM_THIRD_PARTY_DIRS if (root / "third_party" / name).is_dir()]
+
+
+def _uv_pip_install_sim_third_party_editables(root: Path) -> int:
+    """Re-register robosuite / robosuite_models / robocasa after ``uv sync`` (sync prunes undeclared packages)."""
+    paths = _third_party_sim_editable_paths(root)
+    if not paths or not _has_uv():
+        return 0
+    click.echo("Installing robosuite/robocasa from third_party (not in uv.lock)...")
+    args: list[str] = []
+    for p in paths:
+        args.extend(["-e", str(p)])
+    # Do not use ``--no-deps``: robocasa/robosuite need install_requires (e.g. h5py, imageio).
+    return subprocess.call(["uv", "pip", "install"] + args, cwd=root)
 
 
 @main.command("clean", short_help="Remove third-party sim clones (robosuite, robocasa, etc.)")
@@ -1359,13 +1378,15 @@ def _run_install_simulation(
     is_flag=True,
     help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing",
 )
-@click.option("--no-sync", is_flag=True, help="Skip running emet sync -e sim after clone/install")
+@click.option("--no-sync", is_flag=True, help="Skip uv sync and third_party reinstall after clone/install")
 def install_sim(skip_download_assets: bool, setup_macros: bool, no_sync: bool) -> None:
     """Install simulation third-party deps (Robocasa + robosuite).
 
     Clones robosuite and robocasa, runs macro setup when missing (silences
     "No private macro file" warnings), downloads kitchen assets (~10GB), then
-    runs emet sync -e sim. Use -n to skip the asset download (e.g. CI).
+    runs ``uv sync`` and reinstalls editable ``third_party/`` robosuite /
+    robosuite_models / robocasa (not in uv.lock; sync would otherwise remove them).
+    Use -n to skip the asset download (e.g. CI).
 
     Examples:
       emet install sim
@@ -1379,10 +1400,12 @@ def install_sim(skip_download_assets: bool, setup_macros: bool, no_sync: bool) -
     if no_sync:
         click.echo("Simulation install complete. Run: uv sync")
         return
-    click.echo("Syncing sim extra...")
+    click.echo("Syncing project env (uv sync); then reinstalling third_party sim packages...")
     os.chdir(root)
     if _has_uv():
         result = subprocess.call(["uv", "sync"], cwd=root)
+        if result == 0:
+            result = _uv_pip_install_sim_third_party_editables(root)
     else:
         result = subprocess.call([sys.executable, "-m", "pip", "install", "-e", ".[sim]"])
     if result == 0:
@@ -1405,12 +1428,13 @@ def install_sim(skip_download_assets: bool, setup_macros: bool, no_sync: bool) -
     is_flag=True,
     help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing",
 )
-@click.option("--no-sync", is_flag=True, help="Skip running emet sync -e sim after clone/install")
+@click.option("--no-sync", is_flag=True, help="Skip uv sync and third_party reinstall after clone/install")
 def install_robocasa(skip_download_assets: bool, setup_macros: bool, no_sync: bool) -> None:
     """Install Robocasa and robosuite (same as emet install sim).
 
     Clones robosuite and robocasa, runs macro setup when missing, downloads
-    kitchen assets (~10GB), then runs emet sync -e sim. Use -n to skip the asset download.
+    kitchen assets (~10GB), then runs ``uv sync`` and reinstalls editable
+    third_party sim packages. Use -n to skip the asset download.
 
     Examples:
       emet install robocasa
@@ -1424,10 +1448,12 @@ def install_robocasa(skip_download_assets: bool, setup_macros: bool, no_sync: bo
     if no_sync:
         click.echo("Robocasa install complete. Run: uv sync")
         return
-    click.echo("Syncing sim extra...")
+    click.echo("Syncing project env (uv sync); then reinstalling third_party sim packages...")
     os.chdir(root)
     if _has_uv():
         result = subprocess.call(["uv", "sync"], cwd=root)
+        if result == 0:
+            result = _uv_pip_install_sim_third_party_editables(root)
     else:
         result = subprocess.call([sys.executable, "-m", "pip", "install", "-e", ".[sim]"])
     if result == 0:

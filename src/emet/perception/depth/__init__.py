@@ -8,8 +8,14 @@
 
 from emet.perception.depth.da3_estimator import (
     DA3DepthEstimator,
+    apply_da3_sky_row_mask,
     create_da3_estimator_from_parameters,
     resolve_depth_map,
 )
 
-__all__ = ["DA3DepthEstimator", "create_da3_estimator_from_parameters", "resolve_depth_map"]
+__all__ = [
+    "DA3DepthEstimator",
+    "apply_da3_sky_row_mask",
+    "create_da3_estimator_from_parameters",
+    "resolve_depth_map",
+]

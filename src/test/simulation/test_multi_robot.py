@@ -158,6 +158,19 @@ def test_robot_spec_new_fields():
     assert spec.base_link_name == "base"
 
 
+def test_xml_remove_all_tags_strips_key():
+    """xml_remove_all_tags removes every ``<key>`` (used after Robocasa strip-replace)."""
+    from emet.simulation.stretch_mujoco.utils import xml_remove_all_tags
+
+    xml = (
+        '<mujoco model="t"><key name="k" qpos="0 1 2"/><worldbody><body name="b"/></worldbody>'
+        '<key qpos="3 4 5"/></mujoco>'
+    )
+    out = xml_remove_all_tags(xml, "key")
+    assert "<key" not in out
+    assert "worldbody" in out
+
+
 def test_robocasa_gen_robosuite_mapping():
     """_robosuite_robot_for maps names correctly."""
     from emet.simulation.stretch_mujoco.robocasa_gen import _robosuite_robot_for

@@ -28,7 +28,12 @@ import emet.utils.compression as compression
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient
-from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY, emet_session_cache_update, is_stretch_family
+from emet.core.zmq_protocol import (
+    EMET_ZMQ_ROBOT_ID_KEY,
+    emet_session_cache_update,
+    is_stretch_family,
+    read_emet_session,
+)
 from emet.motion import PlanResult
 from emet.motion.kinematics import HelloStretchIdx, HelloStretchKinematics
 from emet.utils.geometry import (
@@ -1342,6 +1347,7 @@ class StretchZmqClient(AbstractRobotClient):
                 xyz=self._obs["xyz"],
                 lidar_points=self._obs["lidar_points"],
                 lidar_timestamp=self._obs["lidar_timestamp"],
+                emet_session=read_emet_session(self._obs),
             )
             observation.joint = self._obs.get("joint", None)
             observation.joint_velocities = self._obs.get("joint_velocities", None)
@@ -1670,6 +1676,7 @@ class StretchZmqClient(AbstractRobotClient):
                 ee_depth=depth_image,
                 ee_xyz=None,
                 joint=joint,
+                emet_session=read_emet_session(message) or read_emet_session(self._state),
             )
 
             # We may not have the camera information yet

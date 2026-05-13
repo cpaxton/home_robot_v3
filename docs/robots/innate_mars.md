@@ -20,6 +20,8 @@ To force **MuJoCo rendered depth** instead of DA3, pass an explicit YAML path so
 
 Override `da3_model_id` in that YAML (or a fork) for heavier metric checkpoints when you have GPU headroom.
 
+**DA3 voxel “walls” / sky junk:** Stereo networks often assign **finite** depth to textureless sky or bright ceiling strips; unprojection then paints tall vertical sheets into the voxel map. The packaged `dynav_innate_mars.yaml` sets **`da3_clip_max_m`** (hard cap on predicted meters) and **`da3_ignore_sky_fraction_top`** (zeros the top rows of the depth image before mapping). Tune those keys if your room lighting or camera tilt still leaves phantom obstacles; `emet debug-da3-depth` supports `--sky-fraction-top` and `--clip-depth-max-m` for the same behavior outside DynaMem.
+
 **Fast DA3 sanity check (Rerun):** With `emet serve mujoco --robot innate_mars` running, use `emet debug-da3-depth --robot innate_mars` to log left RGB, colormapped depth, and a strided point cloud under `da3/…` (same `resolve_depth_map` path as DynaMem). Add `--depth-source sensor` to compare against sim-rendered depth without running DA3.
 
 `RobotSpec` for this robot sets `dynamem_depth_source_hint="da3"` and `default_dynav_config="dynav_innate_mars.yaml"` so `emet run dynamem --robot innate_mars` picks the DA3 preset without extra flags (see `emet.robots` / `get_robot_spec("innate_mars")`).
