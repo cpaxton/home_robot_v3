@@ -67,7 +67,7 @@ def apply_head_to_robosuite(
         return n
 
     if spec.name == "innate_mars":
-        # Single hinge `joint_head`; Stretch-style tilt = URDF nod (**−base Y**; stereo −**Z** after REP+Ry in MJCF).
+        # joint_head sim hinge +base X: stereo lk ~ -world Y, so Stretch tilt pitches nod (URDF hinge differs).
         if _set_ctrl_clipped(model, data, "joint_head", float(tilt)):
             return 1
         logger.debug(

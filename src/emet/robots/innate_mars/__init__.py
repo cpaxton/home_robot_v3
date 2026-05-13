@@ -94,7 +94,8 @@ class InnateMarsBackend(RobotBackend):
             # on typical EGL/GL backends. Avoid baked flip/rot here—extra ops distort stereo/overlays. If pixels
             # look upside-down on your GPU, export EMET_ROBOSUITE_RENDER_FLIPUD=1 before starting the robosuite
             # server (only applies when ops is empty; see RobosuiteZmqServer).
-            robosuite_rgb_depth_ops=(),
+            # MuJoCo Renderer buffers are vertically flipped vs OpenCV / ``imshow``; match ZMQ + preview-cameras.
+            robosuite_rgb_depth_ops=("flipud",),
         )
 
     def create_client(self, robot_ip: str, **kwargs):

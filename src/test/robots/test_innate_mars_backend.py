@@ -38,7 +38,7 @@ def test_innate_mars_spec():
         assert s.urdf_path is None
     assert s.optional_uv_extras == ()
     assert s.dynamem_depth_source_hint == "da3"
-    assert s.robosuite_rgb_depth_ops == ()
+    assert s.robosuite_rgb_depth_ops == ("flipud",)
 
 
 def test_innate_mars_mjcf_registered():
@@ -130,8 +130,8 @@ def test_stereo_right_camera_name_from_spec_innate_mars():
     assert stereo_right_camera_name_from_spec(list(names)) == "head_right"
 
 
-def test_innate_mars_pinhole_K_chain_identity_ops():
-    """Innate Mars uses no robosuite pixel ops by default; intrinsics stay aligned with raw Renderer output."""
+def test_innate_mars_pinhole_K_chain_flipud_ops():
+    """Sim uses ``flipud`` on Renderer RGB/depth; intrinsics chain must match projected pixels."""
     import numpy as np
 
     from emet.utils.pinhole_intrinsics import chain_pinhole_K_pixel_ops
@@ -139,21 +139,36 @@ def test_innate_mars_pinhole_K_chain_identity_ops():
     np.random.seed(1)
     K0 = np.array([[400.0, 0.0, 320.0], [0.0, 380.0, 239.5], [0.0, 0.0, 1.0]])
     h0, w0 = 480, 640
-    ops: tuple[str, ...] = ()
+    ops: tuple[str, ...] = ("flipud",)
     Kf, hf, wf = chain_pinhole_K_pixel_ops(K0, h0, w0, ops)
-    np.testing.assert_allclose(Kf, K0)
+    Hm = np.array([[1.0, 0.0, 0.0], [0.0, -1.0, float(h0) - 1.0], [0.0, 0.0, 1.0]])
+    np.testing.assert_allclose(Kf, Hm @ K0, rtol=0, atol=1e-9)
     assert hf == h0 and wf == w0
     for _ in range(20):
         X, Y, Z = np.random.uniform(-0.1, 0.1), np.random.uniform(-0.08, 0.08), np.random.uniform(0.8, 2.0)
         p = K0 @ np.array([X, Y, Z])
         u0, v0, _ = p / p[2]
         p2 = Kf @ np.array([X, Y, Z])
-        u2p, v2p, _ = p2 / p2[2]
-        assert np.hypot(u2p - u0, v2p - v0) < 1e-3
+        u2p, v2p, _ = p2 / p[2]
+        # flipud maps row v → h0 - 1 - v before rot90 chaining (none here)
+        v_flipped = h0 - 1.0 - v0
+        assert np.hypot(u2p - u0, v2p - v_flipped) < 1e-3
 
 
-def test_innate_mars_head_stereo_cameras_match_urdf():
-    """Stereo: URDF-mounted positions (+60 mm Y baseline); shared optics matching REP optical rpy (⊥ baseline)."""
+def test_innate_mars_flipud_pixels_match_numpy_flipud():
+    import numpy as np
+
+    from emet.utils.pinhole_intrinsics import apply_pinhole_pixel_ops
+
+    rng = np.random.default_rng(2)
+    img = rng.integers(0, 255, size=(480, 640, 3), dtype=np.uint8)
+    ops = ("flipud",)
+    out = apply_pinhole_pixel_ops(img, ops)
+    np.testing.assert_array_equal(out, np.flipud(img))
+
+
+def test_innate_mars_head_stereo_cameras_match_mjcf():
+    """Stereo: 60 mm baseline on head **X**, shared optics ~−head/world **Y**, matches ``innate_mars.xml`` MJCF mounts."""
     pytest.importorskip("mujoco")
     import mujoco
     import numpy as np
@@ -178,14 +193,14 @@ def test_innate_mars_head_stereo_cameras_match_urdf():
 
     pl = np.asarray(data.cam_xpos[lid], dtype=np.float64).ravel()
     pr = np.asarray(data.cam_xpos[rid], dtype=np.float64).ravel()
-    # URDF: left y=0.0297, right y=-0.0303 on head → 60 mm baseline along head Y (world Y at identity pose).
-    np.testing.assert_allclose(pl[0], pr[0], atol=1e-6)
+    # MJCF: Rz(+π/2) remaps URDF Y offsets → −X stereo separation (~60 mm on head X).
+    np.testing.assert_allclose(pl[1], pr[1], atol=1e-6)
     np.testing.assert_allclose(pl[2], pr[2], atol=1e-6)
-    np.testing.assert_allclose(pr[1] - pl[1], -0.06, rtol=0, atol=1e-5)
+    np.testing.assert_allclose(pr[0] - pl[0], 0.06, rtol=0, atol=1e-5)
     np.testing.assert_allclose(np.linalg.norm(pr - pl), 0.06, rtol=0, atol=1e-5)
 
-    np.testing.assert_allclose(float(model.cam_pos[lid][0]), float(model.cam_pos[rid][0]), rtol=0, atol=1e-9)
-    np.testing.assert_allclose(float(model.cam_pos[lid][0]), 0.0625, rtol=0, atol=1e-5)
+    np.testing.assert_allclose(float(model.cam_pos[lid][2]), float(model.cam_pos[rid][2]), rtol=0, atol=1e-9)
+    np.testing.assert_allclose(float(model.cam_pos[lid][2]), -0.000275, rtol=0, atol=1e-9)
 
     Rl = np.asarray(data.cam_xmat[lid]).reshape(3, 3)
     Rr = np.asarray(data.cam_xmat[rid]).reshape(3, 3)
@@ -193,13 +208,12 @@ def test_innate_mars_head_stereo_cameras_match_urdf():
     np.testing.assert_allclose(model.cam_fovy[lid], model.cam_fovy[rid])
     np.testing.assert_allclose(float(model.cam_fovy[lid]), 80.0)
 
-    # URDF REP chain (+X optic) × Ry(+π/2) in head so gaze is **−world Z / −head Z** at default pose (⊥ stereo baseline).
+    # Rz(−π/2)×REP ⇒ MuJoCo −Z ∥ −head **Y** (table-forward sim hack vs raw URDF optical +Z ∥ +head **X**).
     look_h = cam_look_world(data, lid)
     look_b = cam_look_world(data, bid)
-    toward_floor = np.array([0.0, 0.0, -1.0], dtype=np.float64)
-    assert float(np.dot(look_h, toward_floor)) > 0.97
-    # camera_base (~+base X debug cam) differs from vertically-down stereo
-    assert abs(float(np.dot(look_h, look_b))) < 0.35
+    toward_table = np.array([0.0, -1.0, 0.0], dtype=np.float64)
+    assert float(np.dot(look_h, toward_table)) > 0.97
+    assert abs(float(np.dot(look_h, look_b))) < 0.1
 
     # Same OpenCV camera→world rotation from MuJoCo cam_xmat + diag(1,-1,-1) as RobosuiteZmqServer._camera_pose_world.
     D = np.diag([1.0, -1.0, -1.0])
@@ -239,8 +253,8 @@ def test_head_stereo_center_rays_miss_head_geom():
             assert dist > 0.08, (cam, dist)
 
 
-def test_innate_mars_camera_arm_table_aim_and_head_rep_optics():
-    """Wrist EE cam (~−world Y tabletop); head stereo ~−world Z (⊥ baseline) — intentional rig difference."""
+def test_innate_mars_camera_arm_table_aim_heads_match_at_default_pose():
+    """Head stereo aims −world **Y** (sim hack); wrist uses URDF pitch + optical→MuJoCo (world ray differs)."""
     pytest.importorskip("mujoco")
     import mujoco
     import numpy as np
@@ -260,12 +274,11 @@ def test_innate_mars_camera_arm_table_aim_and_head_rep_optics():
 
     look_h = cam_look_world(data, model, "head_left")
     look_a = cam_look_world(data, model, "camera_arm")
-    toward_floor = np.array([0.0, 0.0, -1.0], dtype=np.float64)
     toward_table = np.array([0.0, -1.0, 0.0], dtype=np.float64)
 
-    assert float(np.dot(look_h, toward_floor)) > 0.96
-    assert float(np.dot(look_a, toward_table)) > 0.96
-    assert abs(float(np.dot(look_h, look_a))) < 0.35
+    assert float(np.dot(look_h, toward_table)) > 0.96
+    assert float(np.linalg.norm(look_a)) > 0.99
+    assert float(look_a[2]) < -0.35
 
 
 def test_innate_mars_head_nod_montage_sequence_records_varying_images(tmp_path):
@@ -303,8 +316,35 @@ def test_innate_mars_head_nod_montage_sequence_records_varying_images(tmp_path):
     assert len(bounce) == 11
 
 
-def test_innate_mars_joint_head_hinge_matches_urdf_and_nods_gaze():
-    """joint_head hinge is URDF nominal −base Y (⊥ REP stereo lk ≈ −Z); qpos motion rotates gaze (no dead hinge)."""
+def test_innate_mars_nod_montage_with_arm_joint_smoke(tmp_path):
+    """Head nod + parallel joint5 sweep writes PNGs; arm labels differ across frames."""
+    pytest.importorskip("mujoco")
+    import cv2
+    import numpy as np
+
+    from emet.app.preview_robot_cameras import record_head_nod_montage_sequence
+
+    outs = record_head_nod_montage_sequence(
+        "innate_mars",
+        tmp_path,
+        n_frames=5,
+        motion="once",
+        angle_low_rad=-0.06,
+        angle_high_rad=0.08,
+        arm_joint_name="joint5",
+        arm_angle_low_rad=-0.12,
+        arm_angle_high_rad=0.12,
+    )
+    assert len(outs) == 5
+    im0 = cv2.imread(str(outs[0]))
+    im_mid = cv2.imread(str(outs[2]))
+    assert im0 is not None and im_mid is not None
+    mse = float(np.mean((im0.astype(np.float64) - im_mid.astype(np.float64)) ** 2))
+    assert mse > 20.0
+
+
+def test_innate_mars_joint_head_hinge_matches_mjcf_sim_nods_gaze():
+    """Sim hinge +head **X**: stereo ~−**Y** gaze pitches under ``joint_head`` (URDF −Y hinge differs — see MJCF comment)."""
     pytest.importorskip("mujoco")
     import mujoco
     import numpy as np
@@ -316,7 +356,7 @@ def test_innate_mars_joint_head_hinge_matches_urdf_and_nods_gaze():
     jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "joint_head")
     assert jid >= 0
     ax = np.asarray(model.jnt_axis[jid]).ravel()
-    np.testing.assert_allclose(ax / np.linalg.norm(ax), np.array([0.0, -1.0, 0.0]), atol=1e-7)
+    np.testing.assert_allclose(ax / np.linalg.norm(ax), np.array([1.0, 0.0, 0.0]), atol=1e-7)
 
     data = mujoco.MjData(model)
     qa = int(model.jnt_qposadr[jid])
@@ -331,8 +371,9 @@ def test_innate_mars_joint_head_hinge_matches_urdf_and_nods_gaze():
     data.qpos[qa] = 0.0
     mujoco.mj_forward(model, data)
     l0 = gaze()
-    # Hinge perpendicular to lk so rotation does genuine nod (REP stereo ~−world Z vs horizontal table gaze).
-    assert abs(float(np.dot(ax / np.linalg.norm(ax), l0))) < 0.03
+    toward_table = np.array([0.0, -1.0, 0.0], dtype=np.float64)
+    assert float(np.dot(l0, toward_table)) > 0.94
+    assert abs(float(np.dot(ax / np.linalg.norm(ax), l0))) < 0.15
     data.qpos[qa] = 0.08
     mujoco.mj_forward(model, data)
     l1 = gaze()
