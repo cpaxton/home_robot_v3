@@ -10,8 +10,23 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 DOWNLOAD_ASSETS=true
 # -a = force run macro setup (overwrite if exists); otherwise we run only when macros_private is missing
 SETUP_MACROS_FORCE=false
-# -y = non-interactive: if assets exist, skip re-download (no prompt)
+# -y = non-interactive: skip interactive prompts (asset re-download + macro overwrite)
 NONINTERACTIVE_ASSETS="false"
+FORCE_DOWNLOAD_ASSETS="false"
+
+# Parse long options first (keep getopts for existing short flags).
+PARSED_ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        --force-download)
+            FORCE_DOWNLOAD_ASSETS="true"
+            ;;
+        *)
+            PARSED_ARGS+=("$arg")
+            ;;
+    esac
+done
+set -- "${PARSED_ARGS[@]}"
 
 # Parse command line options
 while getopts "dany" opt; do
@@ -29,11 +44,12 @@ while getopts "dany" opt; do
             NONINTERACTIVE_ASSETS="true"
             ;;
         \? )
-            echo "Usage: $0 [-d] [-n] [-a] [-y]"
+            echo "Usage: $0 [-d] [-n] [-a] [-y] [--force-download]"
             echo "  -d: Download kitchen assets (default: yes)"
             echo "  -n: Skip downloading kitchen assets (~10GB)"
             echo "  -a: Force setup macros (overwrite existing macros_private.py)"
-            echo "  -y: Non-interactive: if assets already exist, skip re-download without prompting"
+            echo "  -y: Non-interactive: skip prompts (asset re-download and macro overwrite)"
+            echo "  --force-download: Re-download kitchen assets even when already present"
             exit 1
             ;;
     esac
@@ -60,11 +76,13 @@ echo "Using Python: $PYTHON"
 # EMET_USE_UV=1 is set by the CLI when uv is available.
 pip_install_editable() {
     if [ -n "${EMET_USE_UV:-}" ] && command -v uv >/dev/null 2>&1; then
-        uv pip install -e .
+        # Keep the main environment stable: uv sync owns dependency resolution.
+        # Editable third_party installs should register package code only.
+        uv pip install -e . --no-deps
     elif command -v uv >/dev/null 2>&1; then
-        uv pip install -e .
+        uv pip install -e . --no-deps
     else
-        "$PYTHON" -m pip install -e .
+        "$PYTHON" -m pip install -e . --no-deps
     fi
 }
 
@@ -84,11 +102,12 @@ fi
 cd robosuite || exit 1
 pip_install_editable || { echo "robosuite install failed." >&2; exit 1; }
 # Create macros_private.py from macros.py if missing (silences "No private macro file" warnings).
-if [ "$SETUP_MACROS_FORCE" = true ] || [ ! -f "robosuite/robosuite/macros_private.py" ]; then
-    if [ "$SETUP_MACROS_FORCE" = true ]; then
-        echo "y" | "$PYTHON" robosuite/scripts/setup_macros.py || true
+if [ "$SETUP_MACROS_FORCE" = true ] || [ ! -f "robosuite/macros_private.py" ]; then
+    # In non-interactive mode, auto-confirm overwrite prompts.
+    if [ "$SETUP_MACROS_FORCE" = true ] || [ "$NONINTERACTIVE_ASSETS" = "true" ]; then
+        echo "y" | "$PYTHON" scripts/setup_macros.py || true
     else
-        "$PYTHON" robosuite/scripts/setup_macros.py || { echo "robosuite setup_macros failed." >&2; exit 1; }
+        "$PYTHON" scripts/setup_macros.py || { echo "robosuite setup_macros failed." >&2; exit 1; }
     fi
 fi
 cd ..
@@ -136,25 +155,45 @@ fi
 # Asset download: if assets already exist, ask to re-download (default N). Use -n to skip entirely, -y to skip prompt when present.
 ASSETS_DIR="$ROOT_DIR/third_party/robocasa/robocasa/models/assets"
 if [ "$DOWNLOAD_ASSETS" = true ]; then
+    if [ "$FORCE_DOWNLOAD_ASSETS" = "true" ]; then
+        echo "Force-download enabled; Robocasa kitchen assets will be re-downloaded."
+    fi
     if [ -d "$ASSETS_DIR/textures" ] && [ -n "$(ls -A "$ASSETS_DIR/textures" 2>/dev/null)" ]; then
-        if [ "$NONINTERACTIVE_ASSETS" = "true" ]; then
+        if [ "$FORCE_DOWNLOAD_ASSETS" = "true" ]; then
+            :
+        elif [ "$NONINTERACTIVE_ASSETS" = "true" ]; then
             echo "Robocasa kitchen assets already present; skipping re-download (non-interactive)."
             DOWNLOAD_ASSETS=false
         else
             echo ""
             read -p "Robocasa kitchen assets appear to be present. Re-download? (y/N) " yn
-            case "${yn:-n}" in
-                y|Y) ;;
-                *) echo "Skipping asset download."; DOWNLOAD_ASSETS=false ;;
-            esac
+            if [ "${yn:-n}" = "y" ] || [ "${yn:-n}" = "Y" ]; then
+                :
+            else
+                echo "Skipping asset download."
+                DOWNLOAD_ASSETS=false
+            fi
         fi
     fi
 fi
 if [ "$DOWNLOAD_ASSETS" = true ]; then
-    echo "Downloading Robocasa kitchen assets (~10GB)..."
+    echo "Checking and downloading Robocasa kitchen assets as needed (~10GB max)..."
     cd "$ROOT_DIR" || exit 1
-    echo "y" | "$PYTHON" -m robocasa.scripts.download_kitchen_assets || \
-        { echo "download_kitchen_assets failed." >&2; exit 1; }
+    if [ "$NONINTERACTIVE_ASSETS" = "true" ]; then
+        if [ "$FORCE_DOWNLOAD_ASSETS" = "true" ]; then
+            "$PYTHON" scripts/download_robocasa_assets.py --yes --force || \
+                { echo "download_robocasa_assets failed." >&2; exit 1; }
+        else
+            "$PYTHON" scripts/download_robocasa_assets.py --yes || \
+                { echo "download_robocasa_assets failed." >&2; exit 1; }
+        fi
+    elif [ "$FORCE_DOWNLOAD_ASSETS" = "true" ]; then
+        "$PYTHON" scripts/download_robocasa_assets.py --force || \
+            { echo "download_robocasa_assets failed." >&2; exit 1; }
+    else
+        "$PYTHON" scripts/download_robocasa_assets.py || \
+            { echo "download_robocasa_assets failed." >&2; exit 1; }
+    fi
     cd "$ROOT_DIR/third_party" || exit 1
 fi
 

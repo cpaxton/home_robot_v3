@@ -93,13 +93,13 @@
                         <geom name="ee_geom" class="visual" type="sphere" size="0.005" material="bright_orange"/>
                       </body>
                       
-                      <body name="arm_camera_link" pos="0.03378 0 0.05052">
+                      <!-- URDF ``fixed_arm_camera_link`` pitch on **link5 Y** (body ``quat``). Camera ``quat`` matches
+                           head stereo: same optical→MuJoCo mapping relative to the (pitched) ``arm_camera_link``,
+                           then **Rz(π)** in camera frame (image upright / 180°). ``pos`` shifts 1 cm along optical
+                           forward (MuJoCo **−Z**) in ``arm_camera_link`` to clear nearby wrist mesh from the frustum. -->
+                      <body name="arm_camera_link" pos="0.03378 0 0.05052" quat="0.97629626 0 0.21643848 0">
                         <inertial pos="0 0 0" mass="0.01" diaginertia="1e-4 1e-4 1e-4"/>
-                        <!-- EE cam: URDF pitch on link5→arm_camera_link leaves MuJoCo −Z near −world **X** (∥ table edge).
-                             Compose the extra fixed rotation (wxyz) so at default qpos −Z aims **−world Y** (tablefront)
-                             with modest downward pitch — **not** the head REP stereo (+**X**) axis. Real hardware aim
-                             follows link5 FK + whatever optical frame the bridge uses. -->
-                        <camera name="camera_arm" mode="fixed" fovy="80" quat="0.75312453 -0.63194657 0.1175563 0.14009814"/>
+                        <camera name="camera_arm" mode="fixed" fovy="80" pos="0.00906309 0 -0.00422616" quat="0.5 -0.5 -0.5 0.5"/>
                       </body>
                     </body>
                   </body>
@@ -109,9 +109,8 @@
 
             <!-- Same subtree as URDF joint_head + head cameras; placed after arm like upstream maurice.mjcf link order + URDF joint ordering -->
             <body name="head" pos="-0.040751 -0.0002 0.25882">
-              <!-- Nominal nod: match maurice.urdf joint_head axis "0 −1 0"; with REP stereo sight along +head **X**, this
-                   axis is ⟂ lk so nod pitches gaze (toward −Z/+Z world at default yaw), not −Y slewing around +X lk. -->
-              <joint name="joint_head" type="hinge" axis="0 -1 0" limited="true" range="-0.1745 0.5236" damping="5"/>
+              <!-- Nominal nod: sim hinge on **+head X** so gaze ~**−world Y** (parallel to hinge **⊥ lk**) pitches up/down under ``tilt``; URDF still lists −Y for hardware. -->
+              <joint name="joint_head" type="hinge" axis="1 0 0" limited="true" range="-0.1745 0.5236" damping="5"/>
               <inertial pos="0 0 0" mass="0.148" diaginertia="0.0002 0.0001 0.0002"/>
               <!-- Nested ``head_visual`` so STL ``pos`` is literal head-frame; Euler stays on ``head_geom``.
                    **+Y** shifts mesh toward ``head_left``; **−Z** lowers mesh on the neck. -->
@@ -119,15 +118,15 @@
                 <inertial pos="0 0 0" mass="1e-6" diaginertia="1e-9 1e-9 1e-9"/>
                 <geom name="head_geom" class="visual" type="mesh" mesh="head_mesh" material="matt_black" pos="0 0 0" euler="-1.5708 0 0"/>
               </body>
-              <!-- Head stereo: positions from maurice.urdf fixed_head_camera_{left,right} — same X/Z, 60 mm baseline
-                   on head Y (left +0.0297 m, right −0.0303 m; intentionally not ±0.03). Optics share one quat below.
-                   URDF ``fixed_*_camera_optical_frame`` rpy="−π/2 0 −π/2" (REP: optical +Z forward) maps optical +Z
-                   to **+head X** (⊥ stereo baseline along head **Y**). MuJoCo camera ``quat`` is the rotation from
-                   head to cam such that −local Z equals that REP forward (+X bump ``0.0601`` vs URDF ``0.04327`` clears ``head_geom``). -->
-              <camera name="head_left" pos="0.0601 0.0297 -0.000275" mode="fixed" fovy="80"
-                      quat="0.5 0.5 -0.5 -0.5"/>
-              <camera name="head_right" pos="0.0601 -0.0303 -0.000275" mode="fixed" fovy="80"
-                      quat="0.5 0.5 -0.5 -0.5"/>
+              <!-- Head stereo mounts: URDF xyz on **head** rotated by ``R_head_z(+π/2)`` (−**Y**/−**Z** ⇒ **−X**/−**Z**)
+                   so outward offset matches **−head Y** (table-forward in default room) vs raw +**X**. Same 60 mm baseline on **±X**.
+                   Optics ``quat`` = REP (optical **+**Z ∥ kinematic **+**X from ``fixed_*_camera_optical_frame``) ◦ ``R_head_z(−π/2)``
+                   ⇒ MuJoCo −**Z** ∥ −**head Y** (sim table-forward **hack** vs raw URDF optical +Z ∥ +head **X**). Extra **−head Y** shift on stereo **y** places optical origins **past** ``head_geom``
+                   (merged scene ``mj_ray`` first hit ≥ 80 mm). Wrist ``camera_arm`` uses a separate URDF-body-pitch + optical→MuJoCo mapping (no Rz table hack). -->
+              <camera name="head_left" pos="-0.0297 -0.04596 -0.000275" mode="fixed" fovy="80"
+                      quat="0.7071067811865476 -0.7071067811865476 0 0"/>
+              <camera name="head_right" pos="0.0303 -0.04596 -0.000275" mode="fixed" fovy="80"
+                      quat="0.7071067811865476 -0.7071067811865476 0 0"/>
             </body>
           </body>
         </body>

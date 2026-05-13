@@ -17,8 +17,10 @@ layout as robocasa/robocasa/scripts/download_kitchen_assets.py but does not
 import robocasa, so it runs with the project's Python.
 
 If assets (textures, fixtures, etc.) already exist, prompts: "Re-download? (y/N)"
-default N. Use --yes to skip the initial confirmation; use --force to re-download
-even when assets exist (no re-download prompt).
+default N. Use --yes to skip prompts:
+- if all required assets exist, skip download
+- if only some assets exist, download missing assets without prompting
+Use --force to re-download everything even when assets exist.
 
 Usage (from project root):
   python scripts/download_robocasa_assets.py [--yes]
@@ -93,18 +95,21 @@ def main() -> int:
         print(f"Error: robocasa package not found at {base}", file=sys.stderr)
         return 1
 
-    # Check if any asset dirs already exist
+    # Check current asset state
     any_exist = False
+    all_exist = True
     for item in ASSETS:
         rel = item[2]
         required_subpaths = item[3] if len(item) > 3 else ()
         folder = base / rel
-        if _asset_dir_exists(folder, required_subpaths):
+        exists = _asset_dir_exists(folder, required_subpaths)
+        if exists:
             any_exist = True
-            break
+        else:
+            all_exist = False
 
     force_redownload = args.force
-    if any_exist and not force_redownload:
+    if all_exist and not force_redownload:
         if not args.yes:
             reply = input("Kitchen assets appear to be present. Re-download? (y/N) ").strip().lower()
             if reply in ("y", "yes"):
@@ -114,6 +119,11 @@ def main() -> int:
                 return 0
         else:
             print("Kitchen assets already present; skipping (use --force to re-download).")
+            return 0
+    elif any_exist and not force_redownload and not args.yes:
+        reply = input("Some kitchen assets are present. Download missing assets now? (Y/n) ").strip().lower()
+        if reply in ("n", "no"):
+            print("Skipped.")
             return 0
 
     if not args.yes and not any_exist:

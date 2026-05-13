@@ -156,6 +156,53 @@ def _set_hinge_joint_qpos(model: mujoco.MjModel, data: mujoco.MjData, joint_name
     data.qpos[adr] = float(radians)
 
 
+def _nod_hinge_angles_rad(
+    model: mujoco.MjModel,
+    joint_name: str,
+    angle_low_rad: float,
+    angle_high_rad: float,
+    *,
+    motion: str,
+    n_frames: int,
+) -> np.ndarray:
+    """Same timing as head nod: ``once`` or ``bounce``; angles clipped to hinge limits when defined."""
+    if n_frames < 2:
+        raise ValueError(f"n_frames must be >= 2 for a nod sweep, got {n_frames}")
+    if motion not in ("once", "bounce"):
+        raise ValueError("motion must be 'once' or 'bounce'")
+
+    jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+    if jid < 0:
+        raise ValueError(f"Joint {joint_name!r} not in MJCF.")
+
+    rng = model.jnt_range[jid].copy()
+    lo, hi = float(rng[0]), float(rng[1])
+    if hi > lo:
+        clip_lo = max(angle_low_rad, lo)
+        clip_hi = min(angle_high_rad, hi)
+        if clip_lo >= clip_hi:
+            raise ValueError(
+                f"Nod angles [{angle_low_rad}, {angle_high_rad}] rad for {joint_name!r} do not overlap "
+                f"joint limits ({lo}, {hi})."
+            )
+    else:
+        clip_lo, clip_hi = float(angle_low_rad), float(angle_high_rad)
+
+    if motion == "bounce":
+        if int(n_frames) < 3:
+            raise ValueError("motion='bounce' requires n_frames >= 3")
+        n_up = max(2, int(np.ceil(float(n_frames) / 2.0)))
+        n_down = max(2, int(n_frames) - n_up + 1)
+        angles_up = np.linspace(clip_lo, clip_hi, n_up, dtype=np.float64)
+        angles_dn = np.linspace(clip_hi, clip_lo, n_down, dtype=np.float64)[1:]
+        angles = np.concatenate([angles_up, angles_dn])
+        if angles.size != int(n_frames):
+            raise RuntimeError(f"bounce nod length {angles.size} != {int(n_frames)}")
+    else:
+        angles = np.linspace(clip_lo, clip_hi, max(2, int(n_frames)), dtype=np.float64)
+    return angles
+
+
 def record_head_nod_montage_sequence(
     robot_key: str,
     out_dir: str | Path,
@@ -169,8 +216,13 @@ def record_head_nod_montage_sequence(
     mp4_out: Path | str | None = None,
     video_fps: float = 12.0,
     motion: str = "bounce",
+    arm_joint_name: str | None = None,
+    arm_angle_low_rad: float = -0.2,
+    arm_angle_high_rad: float = 0.2,
 ) -> list[Path]:
     """Sweep a head hinge angle, save one labeled camera montage per frame (PNG). Optional mp4 stitch.
+
+    Optionally sweep a second hinge (e.g. ``joint5``) in **lockstep** with the head for wrist-camera motion.
 
     ``motion``:
     - ``once``: monotonic ``angle_low_rad`` → ``angle_high_rad``
@@ -179,42 +231,27 @@ def record_head_nod_montage_sequence(
     Returns paths to PNGs in capture order."""
     out_p = Path(out_dir).resolve()
     out_p.mkdir(parents=True, exist_ok=True)
-    if n_frames < 2:
-        raise ValueError(f"n_frames must be >= 2 for a nod sweep, got {n_frames}")
-    if motion not in ("once", "bounce"):
-        raise ValueError("motion must be 'once' or 'bounce'")
 
     model, spec, cam_names = _load_local_merged_preview(robot_key, max_cams)
 
-    jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
-    if jid < 0:
-        raise ValueError(
-            f"Joint {joint_name!r} not in merged MJCF; nod capture needs a kinematic head (e.g. innate_mars)."
+    angles = _nod_hinge_angles_rad(
+        model, joint_name, angle_low_rad, angle_high_rad, motion=motion, n_frames=n_frames
+    )
+    arm_angles: np.ndarray | None = None
+    if arm_joint_name:
+        if arm_joint_name == joint_name:
+            raise ValueError("arm_joint_name must differ from head joint_name.")
+        arm_angles = _nod_hinge_angles_rad(
+            model,
+            arm_joint_name,
+            arm_angle_low_rad,
+            arm_angle_high_rad,
+            motion=motion,
+            n_frames=n_frames,
         )
+        if arm_angles.shape != angles.shape:
+            raise RuntimeError("internal: head/arm nod angle arrays differ in length")
 
-    rng = model.jnt_range[jid].copy()
-    lo, hi = float(rng[0]), float(rng[1])
-    if hi > lo:
-        clip_lo = max(angle_low_rad, lo)
-        clip_hi = min(angle_high_rad, hi)
-        if clip_lo >= clip_hi:
-            raise ValueError(
-                f"Nod angles [{angle_low_rad}, {angle_high_rad}] rad do not overlap joint limits ({lo}, {hi})."
-            )
-    else:
-        clip_lo, clip_hi = float(angle_low_rad), float(angle_high_rad)
-
-    if motion == "bounce":
-        if int(n_frames) < 3:
-            raise ValueError("motion='bounce' requires n_frames >= 3")
-        n_up = max(2, int(np.ceil(float(n_frames) / 2.0)))
-        n_down = max(2, int(n_frames) - n_up + 1)
-        angles_up = np.linspace(clip_lo, clip_hi, n_up, dtype=np.float64)
-        angles_dn = np.linspace(clip_hi, clip_lo, n_down, dtype=np.float64)[1:]
-        angles = np.concatenate([angles_up, angles_dn])
-        assert angles.size == int(n_frames), f"bounce nod length {angles.size} != {int(n_frames)}"
-    else:
-        angles = np.linspace(clip_lo, clip_hi, max(2, int(n_frames)), dtype=np.float64)
     data = mujoco.MjData(model)
     renderer = mujoco.Renderer(model, height=_PREVIEW_RH, width=_PREVIEW_RW)
     written: list[Path] = []
@@ -222,9 +259,16 @@ def record_head_nod_montage_sequence(
     try:
         for i, ang in enumerate(angles):
             _set_hinge_joint_qpos(model, data, joint_name, float(ang))
+            if arm_angles is not None:
+                _set_hinge_joint_qpos(model, data, arm_joint_name, float(arm_angles[i]))
             mujoco.mj_forward(model, data)
             imgs = [_render_local_rgb(model, data, renderer, spec, n) for n in cam_names]
-            labels = [f"{n}  {joint_name}={ang:.3f}rad" for n in cam_names]
+            arm_s = (
+                f" {arm_joint_name}={float(arm_angles[i]):.3f}rad"
+                if arm_angles is not None
+                else ""
+            )
+            labels = [f"{n}  {joint_name}={ang:.3f}rad{arm_s}" for n in cam_names]
             montage_rgb = build_montage(imgs, labels, row_height=row_height)
             png_path = out_p / f"montage_{i:04d}.png"
             _save_montage_rgb(png_path, montage_rgb)
@@ -388,6 +432,15 @@ def _zmq_frames(robot_key: str, host: str, recv_port: int, timeout_ms: int, max_
     show_default=True,
     help="bounce: low→high→low; once: low→high only",
 )
+@click.option(
+    "--nod-arm",
+    "nod_arm",
+    is_flag=True,
+    help="With --nod: also sweep an arm hinge in sync (default joint5, ±0.2 rad; innate_mars wrist roll).",
+)
+@click.option("--nod-arm-joint", "nod_arm_joint", default="joint5", show_default=True)
+@click.option("--nod-arm-low", "nod_arm_low", type=float, default=-0.2, show_default=True)
+@click.option("--nod-arm-high", "nod_arm_high", type=float, default=0.2, show_default=True)
 @click.option("--nod-fps", "nod_fps", type=float, default=12.0, show_default=True)
 def main(
     robot_key: str,
@@ -409,6 +462,10 @@ def main(
     nod_video: Path | None,
     nod_fps: float,
     nod_motion: str,
+    nod_arm: bool,
+    nod_arm_joint: str,
+    nod_arm_low: float,
+    nod_arm_high: float,
 ) -> None:
     """Save a labeled horizontal montage of robot cameras (MJCF preview or live ZMQ frame).
 
@@ -424,6 +481,8 @@ def main(
         emet preview-cameras --discord --caption "mars cams smoke test"
 
         emet preview-cameras --nod --nod-out-dir ./nod_run --nod-frames 31 --nod-video ./nod.mp4
+
+        emet preview-cameras --nod --nod-arm --nod-out-dir ./nod_run --nod-frames 31
     """
     robot_key_norm = _normalized_robot_key(robot_key)
 
@@ -440,6 +499,7 @@ def main(
                 else (Path.cwd() / f"robot_cam_nod_{robot_key_norm}").resolve()
             )
             vid = nod_video.resolve() if nod_video is not None else None
+            arm_j = nod_arm_joint.strip() if nod_arm_joint else ""
             seq = record_head_nod_montage_sequence(
                 robot_key_norm,
                 dest_dir,
@@ -452,6 +512,9 @@ def main(
                 mp4_out=vid,
                 video_fps=nod_fps,
                 motion=nod_motion,
+                arm_joint_name=(arm_j if nod_arm and arm_j else None),
+                arm_angle_low_rad=nod_arm_low,
+                arm_angle_high_rad=nod_arm_high,
             )
             click.echo(f"Wrote {len(seq)} montage PNGs under {dest_dir}")
             if vid is not None:

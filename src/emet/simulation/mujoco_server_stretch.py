@@ -706,6 +706,9 @@ class MujocoZmqServer(BaseZmqServer):
         # Rotate the camera matrix and images
         rgb = cam_data.cam_d435i_rgb
         depth = cam_data.cam_d435i_depth
+        if not isinstance(rgb, np.ndarray) or not isinstance(depth, np.ndarray) or rgb.ndim < 2 or depth.ndim < 2:
+            # Happens when cameras are disabled (e.g. --no-cameras) or not initialized yet.
+            return None
         rgb = np.rot90(rgb, k=-1)
         depth = np.rot90(depth, k=-1)
         rgb_height, rgb_width = rgb_height_width_for_zmq(rgb)
@@ -775,10 +778,24 @@ class MujocoZmqServer(BaseZmqServer):
 
         head_color_image = cam_data.cam_d435i_rgb
         head_depth_image = cam_data.cam_d435i_depth
+        if (
+            not isinstance(head_color_image, np.ndarray)
+            or not isinstance(head_depth_image, np.ndarray)
+            or head_color_image.ndim < 2
+            or head_depth_image.ndim < 2
+        ):
+            return None
         head_color_image = np.rot90(head_color_image, k=-1)
         head_depth_image = np.rot90(head_depth_image, k=-1)
         ee_color_image = cam_data.cam_d405_rgb
         ee_depth_image = cam_data.cam_d405_depth
+        if (
+            not isinstance(ee_color_image, np.ndarray)
+            or not isinstance(ee_depth_image, np.ndarray)
+            or ee_color_image.ndim < 2
+            or ee_depth_image.ndim < 2
+        ):
+            return None
 
         # Adapt color so we can use higher shutter speed
         # TODO: do we need this? Probably not.
