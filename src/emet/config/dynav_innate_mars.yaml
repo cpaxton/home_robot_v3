@@ -1,6 +1,7 @@
 # DynaMem / dynav parameters for Innate Mars (no hardware depth on ZMQ).
 #
-# Use: ``emet run dynamem --robot innate_mars --dynav-config dynav_innate_mars.yaml -S``
+# Use: ``emet run dynamem --robot innate_mars -S`` (auto-selects this file) or explicitly
+# ``--dynav-config dynav_innate_mars.yaml``
 # (basename resolves under ``emet/config/``; pass an absolute path for a custom copy).
 #
 # depth-anything-3 ships with the default env. For sim-only tests with default MuJoCo depth, use ``dynav_config.yaml``

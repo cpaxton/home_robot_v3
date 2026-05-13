@@ -91,7 +91,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         self.control_mode = "navigation"
         self._at_goal = False
         self._emet_session: dict[str, Any] | None = None
-        # World-frame (x, y, yaw) holonomic drive goal for the base free joint (velocity before mj_step).
+        # World-frame (x, y, yaw) holonomic drive goal (velocity before mj_step): either a base **free**
+        # joint or **planar** slide_X / slide_Y / hinge_yaw velocity actuators (``planar_base_joint_names``).
         self._nav_goal_world: np.ndarray | None = None
         self._nav_tol_xy = 0.07
         self._nav_tol_theta = 0.15
@@ -112,6 +113,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         # After MolmoSpaces autoplace, ``qpos0`` holds the chosen free-joint pose; see
         # :meth:`_restore_merged_base_freejoint_from_qpos0` after physics stabilize.
         self._molmospaces_autoplace_snap_qpos0 = False
+        # Actuator indices for :attr:`RobotSpec.planar_base_joint_names` (velocity motors); filled lazily.
+        self._planar_base_actuator_ids_cache: tuple[int, int, int] | None = None
 
     @property
     def spec(self) -> RobotSpec:
@@ -136,6 +139,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         with self._mj_lock:
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             self._molmospaces_autoplace_free_base_after_load()
+        self._planar_base_actuator_ids_cache = None
 
     def _want_molmospaces_spawn_heuristic(self) -> bool:
         """True when we merged a MolmoSpaces house + mobile base (needs placement away from origin)."""
@@ -469,6 +473,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         if self._mjmodel is None or self._mjdata is None:
             return
         n = min(len(self._spec.actuator_names), len(self._spec.joint_names))
+        planar = getattr(self._spec, "planar_base_joint_names", None) or ()
         for i in range(n):
             jname = self._spec.joint_names[i]
             aname = self._spec.actuator_names[i]
@@ -478,6 +483,9 @@ class RobosuiteZmqServer(BaseZmqServer):
                 continue
             qadr = int(self._mjmodel.jnt_qposadr[jid])
             if aname.startswith("wheel"):
+                self._mjdata.ctrl[aid] = 0.0
+            elif jname in planar:
+                # Velocity actuators on the planar base: ``ctrl`` is target joint velocity, not position.
                 self._mjdata.ctrl[aid] = 0.0
             else:
                 self._mjdata.ctrl[aid] = float(self._mjdata.qpos[qadr])
@@ -536,6 +544,52 @@ class RobosuiteZmqServer(BaseZmqServer):
             return (int(self._mjmodel.jnt_qposadr[j]), int(self._mjmodel.jnt_dofadr[j]))
         return None
 
+    def _planar_base_velocity_actuator_ids(self) -> tuple[int, int, int] | None:
+        """MuJoCo actuator indices driving ``planar_base_joint_names`` (velocity transmissions)."""
+        if self._planar_base_actuator_ids_cache is not None:
+            return self._planar_base_actuator_ids_cache
+        names = getattr(self._spec, "planar_base_joint_names", None)
+        if not names or len(names) != 3 or self._mjmodel is None:
+            return None
+        aids: list[int] = []
+        for jn in names:
+            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jn)
+            if jid < 0:
+                self._planar_base_actuator_ids_cache = None
+                return None
+            found = -1
+            for a in range(self._mjmodel.nu):
+                if int(self._mjmodel.actuator_trnid[a, 0]) == jid:
+                    found = int(a)
+                    break
+            if found < 0:
+                self._planar_base_actuator_ids_cache = None
+                return None
+            aids.append(found)
+        self._planar_base_actuator_ids_cache = (aids[0], aids[1], aids[2])
+        return self._planar_base_actuator_ids_cache
+
+    def _teleport_planar_base_world_xyt(self, wx: float, wy: float, wt: float) -> bool:
+        """Snap planar slide+slide+yaw joints to world (x,y,yaw); zero their velocities and velocity ctrl."""
+        names = getattr(self._spec, "planar_base_joint_names", None)
+        if not names or len(names) != 3 or self._mjmodel is None or self._mjdata is None:
+            return False
+        vals = (float(wx), float(wy), float(wt))
+        for jn, val in zip(names, vals, strict=True):
+            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jn)
+            if jid < 0:
+                return False
+            qadr = int(self._mjmodel.jnt_qposadr[jid])
+            vadr = int(self._mjmodel.jnt_dofadr[jid])
+            self._mjdata.qpos[qadr] = val
+            self._mjdata.qvel[vadr] = 0.0
+        aids = self._planar_base_velocity_actuator_ids()
+        if aids is not None:
+            for aid in aids:
+                self._mjdata.ctrl[aid] = 0.0
+        mujoco.mj_forward(self._mjmodel, self._mjdata)
+        return True
+
     @staticmethod
     def _spawn_rel_xyt_to_world(goal_rel: np.ndarray, init_world_xyt: np.ndarray) -> np.ndarray:
         """SE(2) compose: pose of goal in spawn frame ``goal_rel`` → world ``(x,y,theta)``."""
@@ -548,8 +602,12 @@ class RobosuiteZmqServer(BaseZmqServer):
         return np.array([wx, wy, wt], dtype=np.float64)
 
     def _teleport_base_world_xyt(self, wx: float, wy: float, wt: float) -> bool:
-        """Teleport ``base_link`` free joint to world (x,y,yaw); preserve height and zero base twist."""
+        """Teleport base to world (x,y,yaw): planar slide/slide/yaw joints or ``base_link`` free joint."""
         with self._mj_lock:
+            if self._mjdata is None or self._mjmodel is None:
+                return False
+            if self._teleport_planar_base_world_xyt(wx, wy, wt):
+                return True
             addrs = self._base_freejoint_addrs()
             if addrs is None:
                 return False
@@ -567,13 +625,26 @@ class RobosuiteZmqServer(BaseZmqServer):
         return True
 
     def _zero_base_free_joint_velocity(self) -> None:
-        """Zero the 6 velocity dofs of the base free joint (world-frame ang then lin; see MuJoCo free joint)."""
-        addrs = self._base_freejoint_addrs()
-        if addrs is None or self._mjdata is None:
+        """Zero base motion: free-joint qvel or planar slide/yaw joint velocities and velocity ctrl."""
+        if self._mjdata is None or self._mjmodel is None:
             return
-        _, vadr = addrs
-        v0 = int(vadr)
-        self._mjdata.qvel[v0 : v0 + 6] = 0.0
+        addrs = self._base_freejoint_addrs()
+        if addrs is not None:
+            _, vadr = addrs
+            v0 = int(vadr)
+            self._mjdata.qvel[v0 : v0 + 6] = 0.0
+            return
+        names = getattr(self._spec, "planar_base_joint_names", None)
+        if names:
+            for jn in names:
+                jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jn)
+                if jid >= 0:
+                    vadr = int(self._mjmodel.jnt_dofadr[jid])
+                    self._mjdata.qvel[vadr] = 0.0
+        aids = self._planar_base_velocity_actuator_ids()
+        if aids is not None:
+            for aid in aids:
+                self._mjdata.ctrl[aid] = 0.0
 
     def _step_base_navigation_drive(self) -> None:
         """P controller in world XY + yaw toward ``_nav_goal_world``; clears goal and sets ``at_goal`` when close."""
@@ -582,13 +653,13 @@ class RobosuiteZmqServer(BaseZmqServer):
         goal = self._nav_goal_world
         if goal is None:
             return
-        addrs = self._base_freejoint_addrs()
-        if addrs is None:
+        free_addrs = self._base_freejoint_addrs()
+        planar_aids = self._planar_base_velocity_actuator_ids()
+        if free_addrs is None and planar_aids is None:
             self._nav_goal_world = None
             self._at_goal = True
             return
-        _, vadr = addrs
-        v0 = int(vadr)
+
         cur = self.get_base_xyt()
         cx, cy, ct = float(cur[0]), float(cur[1]), float(cur[2])
         wx, wy, wt = float(goal[0]), float(goal[1]), float(goal[2])
@@ -596,9 +667,14 @@ class RobosuiteZmqServer(BaseZmqServer):
         dist = float(np.hypot(dx, dy))
         eth = float(np.arctan2(np.sin(wt - ct), np.cos(wt - ct)))
         if dist < self._nav_tol_xy and abs(eth) < self._nav_tol_theta:
-            self._mjdata.qvel[v0 : v0 + 6] = 0.0
             self._nav_goal_world = None
             self._at_goal = True
+            if free_addrs is not None:
+                _, vadr = free_addrs
+                v0 = int(vadr)
+                self._mjdata.qvel[v0 : v0 + 6] = 0.0
+            elif planar_aids is not None:
+                self._zero_base_free_joint_velocity()
             return
 
         vx = self._nav_kp_xy * dx
@@ -611,9 +687,19 @@ class RobosuiteZmqServer(BaseZmqServer):
         if dist < self._nav_tol_xy * 2.0:
             vx = vy = 0.0
         wz = float(np.clip(self._nav_kp_theta * eth, -self._nav_w_max, self._nav_w_max))
-        # MuJoCo free joint qvel: (wx, wy, wz) angular then (vx, vy, vz) linear, world frame.
-        self._mjdata.qvel[v0 : v0 + 3] = (0.0, 0.0, wz)
-        self._mjdata.qvel[v0 + 3 : v0 + 6] = (vx, vy, 0.0)
+
+        if free_addrs is not None:
+            _, vadr = free_addrs
+            v0 = int(vadr)
+            # MuJoCo free joint qvel: (wx, wy, wz) angular then (vx, vy, vz) linear, world frame.
+            self._mjdata.qvel[v0 : v0 + 3] = (0.0, 0.0, wz)
+            self._mjdata.qvel[v0 + 3 : v0 + 6] = (vx, vy, 0.0)
+        else:
+            ax, ay, aw = planar_aids
+            # Planar Maurice base: world X/Y slides + world Z yaw; joint rates match world vx/vy/wz.
+            self._mjdata.ctrl[ax] = vx
+            self._mjdata.ctrl[ay] = vy
+            self._mjdata.ctrl[aw] = wz
 
     @override
     def handle_action(self, action: dict[str, Any]):
@@ -657,8 +743,9 @@ class RobosuiteZmqServer(BaseZmqServer):
                     if nav_teleport:
                         if not self._teleport_base_world_xyt(wx, wy, wt):
                             logger.warning(
-                                f"Navigation xyt={action['xyt']!r}: no free joint on base_link "
-                                f"{self._spec.base_link_name!r}; cannot teleport."
+                                f"Navigation xyt={action['xyt']!r}: cannot teleport base "
+                                f"(no free joint on {self._spec.base_link_name!r} and no planar_base_joint_names / "
+                                f"matching MJCF actuators)."
                             )
                         else:
                             logger.info(f"Sim navigation (teleport): base at x={wx:.3f} y={wy:.3f} theta={wt:.3f}.")

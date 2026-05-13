@@ -14,6 +14,7 @@ import click
 from emet.app.robot_cli import create_robot_client_from_cli
 from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.core.parameters import get_parameters
+from emet.robots import resolve_dynav_config_yaml
 from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_llm_client
 
 
@@ -143,7 +144,8 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
     type=str,
     default="dynav_config.yaml",
     help="DynaMem YAML: basename under emet/config/, cwd path, or absolute path. "
-    "Use dynav_innate_mars.yaml for Innate Mars + Depth Anything 3.",
+    "Innate Mars: when this is the default dynav_config.yaml, emet substitutes dynav_innate_mars.yaml "
+    "(DA3 stereo depth). Override with an explicit path or basename to use a different preset.",
 )
 def main(
     server_ip,
@@ -184,7 +186,10 @@ def main(
     """
 
     print("- Load parameters")
-    parameters = get_parameters(dynav_config)
+    dynav_resolved = resolve_dynav_config_yaml(robot, dynav_config)
+    if dynav_resolved != dynav_config:
+        print(f"- Using {robot} DynaMem preset: {dynav_resolved}")
+    parameters = get_parameters(dynav_resolved)
 
     if rerun_bind:
         os.environ["RERUN_BIND_ALL"] = "1"

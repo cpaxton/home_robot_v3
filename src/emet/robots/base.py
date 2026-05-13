@@ -45,6 +45,13 @@ class RobotSpec:
     """Extras to ``uv sync --extra …`` for typical full-stack use when something is not in core deps."""
     dynamem_depth_source_hint: str | None = None
     """When hardware omits depth on ZMQ, DynaMem usually needs this ``depth_source`` (see dynav YAML)."""
+    default_dynav_config: str | None = None
+    """When ``emet run dynamem`` is invoked with the global default ``--dynav-config dynav_config.yaml``,
+    substitute this packaged basename (under ``emet/config/``) for this robot."""
+    planar_base_joint_names: tuple[str, str, str] | None = None
+    """If set, MuJoCo nav uses three **world-aligned** scalar joints ``(slide_X, slide_Y, hinge_yaw)``
+    actuated as **velocity** targets instead of a single ``base_link`` **free** joint. Names must match
+    the MJCF and the order used by :class:`RobosuiteZmqServer` SE(2) commands."""
     robosuite_rgb_depth_ops: tuple[str, ...] = ()
     """MuJoCo RGB/depth post-steps for :class:`RobosuiteZmqServer` (``flipud``, ``rot90_cw``). Intrinsics are chained."""
 

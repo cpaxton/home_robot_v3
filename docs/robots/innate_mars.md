@@ -2,23 +2,53 @@
 
 **Reference URDF:** ``src/emet/assets/robot/innate_mars/maurice.urdf`` matches innate-os ``maurice_sim/urdf/maurice.urdf`` with ``package://…/meshes/`` rewritten to ``meshes/``. Use it for RViz / TF parity checks; **MuJoCo** still uses ``innate_mars.xml``. Link placements and arm mesh orientations follow the URDF; **base** and **head** geoms keep an extra MuJoCo roll where STL frames still disagree with MuJoCo’s mesh convention.
 
-**Simulation (Emet / MuJoCo):** `emet serve mujoco --robot innate_mars` loads the vendored Maurice-style MJCF under `src/emet/assets/robot/innate_mars/` merged with the shared **`scene_environment.xml`** (table room + props). The robot MJCF is **robot-only** (no scene floor or world lights). See `NOTICE.md` in that directory for asset provenance and license. To inspect the model: `emet view-mujoco --robot innate_mars` adds optional grid/lights via `innate_mars_visual_extras.xml`; use `--merge-scene` or `--no-extras` as needed (see CLI docs).
+**Simulation (Emet / MuJoCo):** `emet serve mujoco --robot innate_mars` loads the vendored Maurice-style MJCF under `src/emet/assets/robot/innate_mars/` merged with the shared **`scene_environment.xml`** (table room + props). The robot MJCF is **robot-only** (no scene floor or world lights). See `NOTICE.md` in that directory for asset provenance and license. To inspect the model: `emet view-mujoco --robot innate_mars` adds optional grid/lights via `innate_mars_visual_extras.xml`; use `--merge-scene` or `--no-extras` as needed (see CLI docs). **ZMQ `xyt` navigation** in sim drives the planar **slide X / slide Y / hinge yaw** base (`base_x`, `base_y`, `base_yaw` velocity actuators), not a floating free joint—see `RobotSpec.planar_base_joint_names` and `RobosuiteZmqServer` (same protocol as Stretch; different MuJoCo mechanics).
 
 **Innate OS Docker (upstream reference):** The public **innate-os** tree (e.g. ``~/src/innate-os``) documents simulation in the root **README** and **SIMULATION_MODE.md**: build with ``docker compose -f docker-compose.dev.yml build``, run ``up -d``, enter the container with ``exec innate zsh -l``, then ``./scripts/launch_sim_in_tmux.zsh``. That starts the ROS 2 stack (Zenoh, RWS, navigation, manipulation, etc.); **RViz** is the usual robot visualization (often via noVNC at ``http://localhost:8080/vnc.html``). The **canonical robot geometry** there is ``ros2_ws/src/maurice_bot/maurice_sim/urdf/maurice.urdf`` (via ``robot_state_publisher`` / MoveIt), **not** the MJCF file. Upstream ``maurice_sim/mjcf/maurice.mjcf`` matches **base + arm + floor** in MuJoCo but **does not include a head body**; optional Python MuJoCo drivers only reference ``camera_base`` and ``camera_arm``. Emet’s ``innate_mars.xml`` extends that line with portable ``meshdir``, head link + ``head.STL``, and stereo cameras; for Emet MuJoCo merges, the **room floor** comes from ``scene_environment.xml``, not the robot file. **Link** transforms follow the vendored URDF, with base/head mesh rolls only where needed for MuJoCo STLs.
 
 **Real robot:** On the compute that runs ROS 2, start the bridge (e.g. `ros2 launch innate_mars_bridge server.launch.py`). The bridge publishes the same ZMQ keys as other Emet robots, including `rgb`, `rgb_right`, `gps`, `compass`, `camera_K`, `camera_pose`, `camera_K_right`, `camera_pose_right`, and `emet_robot_id` (`innate_mars`). Depth is absent on the wire; use `depth_source: auto` or `da3` in DynaMem config so **Depth Anything 3** fills depth (two-view when both head images and poses are present).
 
-**DynaMem + Depth Anything 3:** Hardware Mars does not publish depth on ZMQ. The `depth-anything-3` library is a default project dependency; run the client with the packaged preset:
+**DynaMem + Depth Anything 3:** Hardware Mars does not publish depth on ZMQ. The `depth-anything-3` library is included with the default install (`uv sync` / default dependency groups). Stereo RGB plus both intrinsics and poses feed **Depth Anything 3** stereo inference; the result drives voxel mapping the same way as sensor depth on other robots.
 
 ```bash
-emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S --dynav-config dynav_innate_mars.yaml
+# Default --dynav-config is dynav_config.yaml; for --robot innate_mars, emet substitutes
+# dynav_innate_mars.yaml automatically (depth_source: da3, DA3-SMALL, da3_process_res: 378).
+emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S
 ```
 
-That YAML sets `depth_source: da3` and defaults to a **faster** checkpoint (`DA3-SMALL`, lower `da3_process_res`) for interactive use; override `da3_model_id` for maximum metric quality. For MuJoCo sim you can keep `dynav_config.yaml` (`depth_source: sensor`) to use rendered depth, or use `dynav_innate_mars.yaml` to validate DA3 point clouds against the same scene as the real robot.
+To force **MuJoCo rendered depth** instead of DA3, pass an explicit YAML path so the substitution does not trigger—for example the absolute path to `dynav_config.yaml` under `src/emet/config/`, or a small copy with `depth_source: sensor`. To force the Mars DA3 preset while using a non-default basename, pass `--dynav-config dynav_innate_mars.yaml` as before.
+
+Override `da3_model_id` in that YAML (or a fork) for heavier metric checkpoints when you have GPU headroom.
 
 **Fast DA3 sanity check (Rerun):** With `emet serve mujoco --robot innate_mars` running, use `emet debug-da3-depth --robot innate_mars` to log left RGB, colormapped depth, and a strided point cloud under `da3/…` (same `resolve_depth_map` path as DynaMem). Add `--depth-source sensor` to compare against sim-rendered depth without running DA3.
 
-`RobotSpec` for this robot declares `dynamem_depth_source_hint="da3"` (see `emet.robots.base` / `get_robot_spec("innate_mars")`). Depth inference uses the `depth-anything-3` package from the default install.
+`RobotSpec` for this robot sets `dynamem_depth_source_hint="da3"` and `default_dynav_config="dynav_innate_mars.yaml"` so `emet run dynamem --robot innate_mars` picks the DA3 preset without extra flags (see `emet.robots` / `get_robot_spec("innate_mars")`).
+
+### DynaMem exploration (sim or hardware)
+
+Prerequisites: project env with default groups (includes **dynamem** and **da3**); first DA3 run may download model weights.
+
+1. **MuJoCo server** (table scene + stereo ZMQ), from repo root:
+
+   ```bash
+   uv run emet serve mujoco --robot innate_mars
+   ```
+
+2. **DynaMem client** (uses auto `dynav_innate_mars.yaml` for this robot):
+
+   ```bash
+   uv run emet run dynamem --robot innate_mars -S
+   ```
+
+   With Rerun enabled (default), open the viewer (browser or native) as for other `emet run dynamem` sessions—for example `http://localhost:9090?url=ws://localhost:9877` when the log shows the websocket URL. Use `--no-rerun` for headless mapping.
+
+3. **LLM agent + same memory stack:** use [`configs/agent_innate_mars.yaml`](../../configs/agent_innate_mars.yaml) (`depth_source: da3` and `robot: innate_mars`); see the comments in that file for `emet run agent --agent-config …` examples.
+
+4. **Optional integration test** (slow; GPU recommended; caches weights after first run):
+
+   ```bash
+   RUN_DA3_TESTS=1 uv run emet test src/test/mapping/test_innate_mars_da3_sim.py -q
+   ```
 
 In **Rerun**, check `world/semantic_memory/pointcloud` for table and props aligned with the room; fix `camera_K` / `camera_pose` / `gps` if the cloud is sheared or floating.
 
