@@ -94,10 +94,12 @@
                       </body>
                       
                       <!-- URDF ``fixed_arm_camera_link`` pitch on **link5 Y** (body ``quat``). Camera ``quat`` matches
-                           head stereo: same optical→MuJoCo mapping relative to the (pitched) ``arm_camera_link``. -->
+                           head stereo: same optical→MuJoCo mapping relative to the (pitched) ``arm_camera_link``,
+                           then **Rz(π)** in camera frame (image upright / 180°). ``pos`` shifts 1 cm along optical
+                           forward (MuJoCo **−Z**) in ``arm_camera_link`` to clear nearby wrist mesh from the frustum. -->
                       <body name="arm_camera_link" pos="0.03378 0 0.05052" quat="0.97629626 0 0.21643848 0">
                         <inertial pos="0 0 0" mass="0.01" diaginertia="1e-4 1e-4 1e-4"/>
-                        <camera name="camera_arm" mode="fixed" fovy="80" quat="0.5 0.5 -0.5 -0.5"/>
+                        <camera name="camera_arm" mode="fixed" fovy="80" pos="0.00906309 0 -0.00422616" quat="0.5 -0.5 -0.5 0.5"/>
                       </body>
                     </body>
                   </body>
