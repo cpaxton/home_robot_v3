@@ -94,6 +94,28 @@ emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo --
 
 For CPU-only: add `--cpu`. The `-S` flag skips confirmations for autonomous runs. At the mode prompt, enter **Q** (or **quit**) to exit cleanly.
 
+### Debugging map drift (rotate in place, floor height)
+
+Spinning **in place** should leave **static world geometry** (floor, furniture) fixed in Rerun under `world/point_cloud` while `world/robot` yaw changes. If the cloud rotates with the robot or the floor “floats,” split **depth** vs **pose** vs **nav frame**:
+
+**Rerun head points vs voxel cloud:** When DynaMem is running, **`world/head_camera/points`** is built from the **same resolved depth map** as voxel fusion (whatever `depth_source` / DA3 / `--perfect-depth` produced), not a separate raw-ZMQ-only buffer. **`world/point_cloud`** is the fused voxel representation and often looks smoother than the head channel, which shows **per-pixel** depth unprojected into the world (holes, flying pixels, ceiling strips). With **`--perfect-depth`** in sim, a **clean voxel layout** plus a **noisy-looking head PCD** usually means the fusion path matches ground-truth depth—the voxels are the clearer signal for “did we get the room right?”
+
+**When to use DA3 in sim:** Prefer **sensor** depth whenever the simulator publishes it (default `dynav_config.yaml`). Use **DA3** only when reproducing a **model or deployment** whose depth path is DA3 (see [Innate Mars / sim depth](robots/innate_mars.md)). Turning on DA3 in sim while the rest of the stack expects sensor depth makes debugging harder.
+
+1. **Isolate depth** — `emet run dynamem ... --perfect-depth` or `EMET_DYNAMEM_PERFECT_DEPTH=1` forces observation **sensor** depth when available. If the map stabilizes, focus on DA3 / intrinsics; if not, focus on `camera_pose`, `gps`/`compass`, and `emet_session.navigation_origin_xyt`.
+
+2. **Rerun** — Scrub the **frame** timeline: compare `world/point_cloud`, `world/robot`, `world/head_camera`. World-locked features should not co-rotate with the base marker.
+
+3. **Per-step logging** — `export EMET_DYNAMEM_MAP_DEBUG=1` prints camera translation, world `base_xyt`, `depth_source`, whether depth came from DA3 inference, and whether `navigation_origin_xyt` was on the observation.
+
+4. **Saved tensors** — `logs/memory_*/.../debug/` (see `SparseVoxelMap` `DEBUG_SUBDIR`) stores `rgb*.npy`, `depth*.npy`, `intrinsics*.npy`, `pose*.npy` per observation for offline replay.
+
+5. **Narrow the stack** — `emet debug-circle-rerun` (in-process sensor geometry) and `emet debug-da3-depth` (live ZMQ depth + Rerun) test projection without the full voxel pipeline.
+
+6. **Sensor vs DA3 sky mask** — Raw **sensor** depth from `auto` or perfect-depth mode does **not** get `da3_ignore_sky_fraction_top` (that mask applies only to DA3-produced maps). Ceiling rows can add bogus vertical structure; adjust dynav height / depth clamps or use DA3 when you need that mask on inferred depth.
+
+See `docs/logs/pointcloud-alignment-circle-test.md` for nav vs world notes on ZMQ sim.
+
 ---
 
 ## Running DynaMem on Physical Robot

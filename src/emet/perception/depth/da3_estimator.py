@@ -19,6 +19,23 @@ from emet.utils.logger import Logger
 logger = Logger(__name__)
 
 
+def apply_da3_sky_row_mask(depth: np.ndarray, fraction_top: float) -> np.ndarray:
+    """Zero the top *fraction_top* of image rows in a depth map (HxW).
+
+    Textureless sky/ceiling often gets spurious finite depths from DA3 stereo; unprojection then
+    paints tall vertical sheets. Zeros are removed downstream by ``min_depth`` filtering in voxel code.
+    """
+    if fraction_top <= 0.0 or depth.ndim != 2:
+        return depth
+    h = int(depth.shape[0])
+    n = int(round(float(fraction_top) * h))
+    if n <= 0:
+        return depth
+    out = np.array(depth, dtype=np.float32, copy=True)
+    out[:n, :] = 0.0
+    return out
+
+
 def _stub_gsplat_if_missing() -> None:
     """``depth_anything_3.api`` imports export helpers that load ``gs_renderer``, which tries ``import gsplat``.
 
@@ -63,6 +80,7 @@ class DA3DepthEstimator:
         model_id: str = "depth-anything/DA3METRIC-LARGE",
         device: str = "cuda",
         process_res: int = 504,
+        clip_output_max_m: float = 6.0,
     ) -> None:
         _stub_gsplat_if_missing()
         try:
@@ -77,6 +95,7 @@ class DA3DepthEstimator:
         self._model_id = model_id
         self._device = device
         self._process_res = int(process_res)
+        self._clip_output_max_m = float(clip_output_max_m)
         self._model: Any = None
 
     def _ensure_model(self) -> None:
@@ -111,8 +130,8 @@ class DA3DepthEstimator:
 
         pred = self._model.inference(**kwargs)
         depth = np.asarray(pred.depth[0], dtype=np.float32)
-        depth = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
-        depth = np.clip(depth, 0.0, None)
+        depth = np.nan_to_num(depth, nan=0.0, posinf=self._clip_output_max_m, neginf=0.0)
+        depth = np.clip(depth, 0.0, self._clip_output_max_m)
         return resize_depth_to_match_rgb(depth, rgb)
 
     def infer_stereo(
@@ -167,8 +186,8 @@ class DA3DepthEstimator:
             try:
                 pred = self._model.inference(**kwargs)
                 depth = np.asarray(pred.depth[0], dtype=np.float32)
-                depth = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
-                depth = np.clip(depth, 0.0, None)
+                depth = np.nan_to_num(depth, nan=0.0, posinf=self._clip_output_max_m, neginf=0.0)
+                depth = np.clip(depth, 0.0, self._clip_output_max_m)
                 return resize_depth_to_match_rgb(depth, rgb_left)
             except (TypeError, RuntimeError) as e:
                 last_err = e
@@ -194,7 +213,12 @@ def create_da3_estimator_from_parameters(parameters: Any, *, device: str) -> DA3
     process_res = int(parameters.get("da3_process_res", 504))
     da3_dev = parameters.get("da3_device", None)
     dev = str(da3_dev).strip() if da3_dev is not None else device
-    return DA3DepthEstimator(model_id=model_id, device=dev, process_res=process_res)
+    md = float(parameters.get("max_depth", 2.5))
+    clip_raw = parameters.get("da3_clip_max_m", None)
+    clip_m = float(clip_raw) if clip_raw is not None else max(md + 1.0, 4.0)
+    return DA3DepthEstimator(
+        model_id=model_id, device=dev, process_res=process_res, clip_output_max_m=clip_m
+    )
 
 
 def resolve_depth_map(
@@ -256,3 +280,19 @@ def resolve_depth_map(
         return est.infer(rgb, intrinsics=k_use, extrinsics_w2c=p_use)
 
     return est.infer(rgb, intrinsics=k_use, extrinsics_w2c=p_use)
+
+
+def resolve_depth_map_uses_observation_sensor_only(
+    depth_source: str,
+    sensor_depth: np.ndarray | None,
+) -> bool:
+    """True when :func:`resolve_depth_map` returns raw ``sensor_depth`` (not DA3 / stereo inference).
+
+    Used to skip ``da3_ignore_sky_fraction_top`` masking on real / simulator depth.
+    """
+    mode = str(depth_source).lower()
+    if mode == "sensor":
+        return True
+    if mode == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
+        return True
+    return False

@@ -15,6 +15,7 @@ from emet.app.robot_cli import create_robot_client_from_cli
 from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.core.parameters import get_parameters
 from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_llm_client
+from emet.robots import resolve_dynav_config_yaml
 
 
 @click.command()
@@ -100,6 +101,12 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
 @click.option("--device_id", default=0, type=int, help="Device ID for semantic sensor")
 @click.option("--manipulation-only", "--manipulation", is_flag=True, help="For debugging manipulation")
 @click.option(
+    "--perfect-depth",
+    "--perfect_depth",
+    is_flag=True,
+    help="Debug: always use ZMQ/sim sensor depth for mapping when present (skip DA3), to isolate pose / intrinsics.",
+)
+@click.option(
     "--cpu-only",
     "--cpu",
     is_flag=True,
@@ -143,7 +150,8 @@ from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_
     type=str,
     default="dynav_config.yaml",
     help="DynaMem YAML: basename under emet/config/, cwd path, or absolute path. "
-    "Use dynav_innate_mars.yaml for Innate Mars + Depth Anything 3.",
+    "Default is dynav_config.yaml for all robots (same voxel / depth defaults). "
+    "For Innate Mars without ZMQ depth, pass --dynav-config dynav_innate_mars.yaml (DA3 preset).",
 )
 def main(
     server_ip,
@@ -165,6 +173,7 @@ def main(
     debug_llm: bool = False,
     llm: str = "qwen25-3B-Instruct",
     manipulation_only: bool = False,
+    perfect_depth: bool = False,
     cpu_only: bool = False,
     headless: bool = False,
     no_rerun: bool = False,
@@ -184,7 +193,15 @@ def main(
     """
 
     print("- Load parameters")
-    parameters = get_parameters(dynav_config)
+    dynav_resolved = resolve_dynav_config_yaml(robot, dynav_config)
+    print(f"- DynaMem parameters: {dynav_resolved}")
+    if dynav_resolved != dynav_config:
+        print(f"- Resolved from CLI default {dynav_config!r} via robot preset")
+    parameters = get_parameters(dynav_resolved)
+
+    if perfect_depth:
+        parameters["debug_perfect_sensor_depth"] = True
+        print("- debug: perfect sensor depth (DA3 skipped when observation depth is present)")
 
     if rerun_bind:
         os.environ["RERUN_BIND_ALL"] = "1"
@@ -223,6 +240,12 @@ def main(
         manipulation_only=manipulation_only,
         cpu_only=cpu_only,
     )
+
+    peek_rid = getattr(robot_client, "peek_emet_robot_id", None)
+    if callable(peek_rid):
+        srv = peek_rid()
+        if srv:
+            print(f"- ZMQ server emet_robot_id: {srv!r} (CLI --robot {robot!r})")
 
     if not manipulation_only:
         if input_path is None:

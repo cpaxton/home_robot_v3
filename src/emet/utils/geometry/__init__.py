@@ -13,6 +13,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from ._base import (
+    nav_xyt_to_world_xyt,
     normalize_ang_error,
     point_global_to_base,
     pose2sophus,

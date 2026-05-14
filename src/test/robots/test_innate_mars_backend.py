@@ -38,6 +38,8 @@ def test_innate_mars_spec():
         assert s.urdf_path is None
     assert s.optional_uv_extras == ()
     assert s.dynamem_depth_source_hint == "da3"
+    assert s.default_dynav_config is None
+    assert s.planar_base_joint_names == ("base_x", "base_y", "base_yaw")
     assert s.robosuite_rgb_depth_ops == ("flipud",)
 
 
@@ -380,16 +382,79 @@ def test_innate_mars_joint_head_hinge_matches_mjcf_sim_nods_gaze():
     assert float(np.linalg.norm(l1 - l0)) > 0.06
 
 
+def test_resolve_dynav_config_yaml_innate_mars_and_stretch():
+    from emet.robots import DEFAULT_DYNAV_CONFIG_YAML, resolve_dynav_config_yaml
+
+    assert resolve_dynav_config_yaml("innate_mars", DEFAULT_DYNAV_CONFIG_YAML) == DEFAULT_DYNAV_CONFIG_YAML
+    assert resolve_dynav_config_yaml("innate-mars", DEFAULT_DYNAV_CONFIG_YAML) == DEFAULT_DYNAV_CONFIG_YAML
+    assert (
+        resolve_dynav_config_yaml("innate_mars", "dynav_innate_mars.yaml") == "dynav_innate_mars.yaml"
+    )
+    assert resolve_dynav_config_yaml("stretch", DEFAULT_DYNAV_CONFIG_YAML) == DEFAULT_DYNAV_CONFIG_YAML
+
+
+def test_dynav_innate_mars_yaml_parameters_use_da3():
+    from emet.core.parameters import get_parameters
+
+    params = get_parameters("dynav_innate_mars.yaml")
+    assert str(params.get("depth_source")).lower() == "da3"
+
+
 def test_get_robot_spec_and_runtime_notes_innate_mars():
     from emet.robots import format_robot_runtime_notes, get_robot_spec
 
     s = get_robot_spec("innate_mars")
     assert s is not None
     assert s.optional_uv_extras == ()
+    assert s.default_dynav_config is None
     notes = format_robot_runtime_notes(s)
     assert notes is not None
     assert "uv sync" not in notes
     assert "depth_source=" in notes
+    assert "dynav_innate_mars.yaml" in notes
+
+
+def test_innate_mars_planar_base_navigation_moves_toward_xyt_goal():
+    """Innate Mars has slide/slide/yaw base joints (no free joint); nav must drive them, not no-op."""
+    pytest.importorskip("mujoco")
+    import mujoco
+    import numpy as np
+
+    from emet.robots.innate_mars import InnateMarsBackend
+    from emet.simulation.mujoco_server import _load_default_scene_with_robot
+    from emet.simulation.robosuite_server import RobosuiteZmqServer
+
+    model = _load_default_scene_with_robot("innate_mars")
+    if model is None:
+        pytest.skip("Merged innate_mars scene not available")
+    spec = InnateMarsBackend().get_spec()
+    server = RobosuiteZmqServer(
+        robot_spec=spec,
+        scene_model=model,
+        send_port=0,
+        recv_port=0,
+        send_state_port=0,
+        send_servo_port=0,
+    )
+    server._load_model()
+    server._stabilize_physics_state_after_load()
+    server._initial_xyt = server.get_base_xyt().copy()
+    assert server._planar_base_velocity_actuator_ids() is not None
+
+    xyt0 = server.get_base_xyt().copy()
+    server.handle_action({"xyt": [0.25, 0.0, 0.0], "nav_relative": False})
+    assert server._nav_goal_world is not None
+
+    for _ in range(900):
+        with server._mj_lock:
+            server._step_base_navigation_drive()
+            mujoco.mj_step(server._mjmodel, server._mjdata)
+        if server._at_goal:
+            break
+
+    xyt1 = server.get_base_xyt()
+    moved = float(np.hypot(xyt1[0] - xyt0[0], xyt1[1] - xyt0[1]))
+    assert moved > 0.02, f"expected planar base to translate toward goal; |Δxy|={moved:.4f}"
 
 
 def test_stereo_right_camera_name_from_spec_galaxea_no_pair():

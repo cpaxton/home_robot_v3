@@ -13,6 +13,7 @@ import os
 import socket
 import time
 import timeit
+from dataclasses import replace
 from typing import Any
 
 import numpy as np
@@ -30,10 +31,12 @@ import rerun.blueprint as rrb
 import torch
 
 from emet.core.interfaces import Observations
+from emet.core.zmq_protocol import EMET_ZMQ_SESSION_KEY, read_emet_session
 from emet.mapping.scene_graph import SceneGraph
 from emet.mapping.voxel.voxel_map import SparseVoxelMapNavigationSpace
 from emet.motion import HelloStretchIdx
 from emet.perception.wrapper import OvmmPerception
+from emet.utils.geometry import nav_xyt_to_world_xyt
 from emet.utils.logger import Logger
 from emet.visualization import urdf_visualizer
 
@@ -248,6 +251,57 @@ class NullVisualizer:
 
 def _null_noop(*args, **kwargs):
     return None
+
+
+def _sim_step_counter(obs: Any) -> int:
+    """Simulation step from a ZMQ observation dict (``step``) or ``Observations.seq_id``."""
+    if isinstance(obs, dict):
+        s = obs.get("step")
+        try:
+            return int(s) if s is not None else -1
+        except (TypeError, ValueError):
+            return -1
+    if isinstance(obs, Observations):
+        sid = getattr(obs, "seq_id", -1)
+        return int(sid) if sid >= 0 else -1
+    return -1
+
+
+def _pick_rerun_head_cam(obs: Any, servo: Observations | None) -> Observations | None:
+    """Choose head RGB for Rerun from full ``obs`` vs low-latency ``servo``.
+
+    Stretch: decoded servo ``Observations`` typically have no ``seq_id``; we keep preferring ``servo``
+    for the higher-rate preview.
+
+    Generic ZMQ: both full obs and servo carry ``step`` / ``seq_id``. Prefer the **full** observation
+    whenever it is at least as new as servo (same step → full-res RGB). Use servo only when it is
+    strictly newer (lower latency between socket arrivals).
+    """
+    obs_head: Observations | None = None
+    if isinstance(obs, dict) and obs.get("rgb") is not None:
+        obs_head = Observations.from_dict(obs)
+    elif isinstance(obs, Observations) and obs.rgb is not None:
+        obs_head = obs
+
+    servo_ok = servo is not None and getattr(servo, "rgb", None) is not None
+    if obs_head is None:
+        return servo if servo_ok else None
+    if not servo_ok:
+        return obs_head
+
+    obs_s = _sim_step_counter(obs)
+    servo_s = int(servo.seq_id) if getattr(servo, "seq_id", -1) >= 0 else -1
+
+    # Stretch-style: servo stream has no step metadata — prefer it when present.
+    if servo_s < 0:
+        return servo
+
+    if obs_s < 0:
+        return servo
+
+    if servo_s > obs_s:
+        return servo
+    return obs_head
 
 
 class RerunVisualizer:
@@ -555,22 +609,32 @@ class RerunVisualizer:
             rr.Points3D(positions=xyz, radii=0.06, labels=labels),
         )
 
-    def log_head_camera(self, obs: Observations):
-        """Log head camera pose and images
+    def log_head_camera(self, obs: Observations, *, mapping_depth: np.ndarray | None = None):
+        """Log head camera pose and images.
 
         Args:
-            obs (Observations): Observation dataclass
+            obs: Observation dataclass.
+            mapping_depth: Optional H×W depth (meters), same shape as ``obs.rgb`` rows/cols. When provided,
+                the head point cloud (and optional depth panel) uses this buffer so Rerun matches the
+                depth map fused into DynaMem (e.g. DA3). Otherwise ZMQ ``obs.depth`` is used.
         """
         if obs is None or getattr(obs, "rgb", None) is None:
             return
         rr.set_time_seconds("realtime", time.time())
-        log_to_rerun("world/head_camera/rgb", rr.Image(obs.rgb))
+        rgb = np.ascontiguousarray(_rgb_to_uint8(obs.rgb))
+        log_to_rerun("world/head_camera/rgb", rr.Image(rgb, color_model=rr.ColorModel.RGB))
+
+        cam = obs
+        if mapping_depth is not None and rgb.ndim == 3 and rgb.shape[2] == 3:
+            md = np.asarray(mapping_depth, dtype=np.float32)
+            if md.ndim == 2 and md.shape == tuple(rgb.shape[:2]):
+                cam = replace(obs, depth=md, xyz=None)
 
         if self.show_camera_point_clouds:
-            head_xyz = obs.get_xyz_in_world_frame()
+            head_xyz = cam.get_xyz_in_world_frame()
             if head_xyz is not None:
                 head_xyz = head_xyz.reshape(-1, 3)
-                head_rgb = obs.rgb.reshape(-1, 3)
+                head_rgb = rgb.reshape(-1, 3)
                 log_to_rerun(
                     "world/head_camera/points",
                     rr.Points3D(
@@ -580,8 +644,9 @@ class RerunVisualizer:
                     ),
                 )
         else:
-            if obs.depth is not None:
-                log_to_rerun("world/head_camera/depth", rr.depthimage(obs.depth))
+            dvis = cam.depth if cam.depth is not None else obs.depth
+            if dvis is not None:
+                log_to_rerun("world/head_camera/depth", rr.depthimage(dvis))
 
         if self.show_cameras_in_3d_view and getattr(obs, "camera_pose", None) is not None:
             rot, trans = decompose_homogeneous_matrix(obs.camera_pose)
@@ -589,18 +654,24 @@ class RerunVisualizer:
             log_to_rerun(
                 "world/head_camera",
                 rr.Pinhole(
-                    resolution=[obs.rgb.shape[1], obs.rgb.shape[0]],
+                    resolution=[rgb.shape[1], rgb.shape[0]],
                     image_from_camera=obs.camera_K,
                     image_plane_distance=0.15,
                 ),
             )
 
     def log_robot_xyt(self, obs: Observations):
-        """Log robot world pose"""
-        # rr.set_time_seconds("realtime", time.time())
+        """Log robot base pose in **MuJoCo / map world** when ``navigation_origin_xyt`` is in ``emet_session``.
+
+        Otherwise uses raw ``gps``/``compass`` (episode-relative on sim servers, or client-local otherwise).
+        """
         xy = np.asarray(obs["gps"], dtype=float).reshape(-1)[:2]
         comp = np.asarray(obs["compass"], dtype=float).ravel()
         theta = float(comp[0]) if comp.size else 0.0
+        sess = read_emet_session(obs)
+        wxyt = nav_xyt_to_world_xyt(np.array([float(xy[0]), float(xy[1]), theta], dtype=np.float64), sess)
+        xy_w = np.asarray(wxyt[:2], dtype=float).reshape(-1)
+        theta_w = float(wxyt[2])
         # Live streaming: static=True pins the entity to a single value in the viewer timeline.
         static_pose = bool(getattr(self, "_memory_view", False))
         rb_arrow = rr.Arrows3D(
@@ -619,8 +690,8 @@ class RerunVisualizer:
         rr.log(
             "world/robot",
             rr.Transform3D(
-                translation=[xy[0], xy[1], 0],
-                rotation=rr.RotationAxisAngle(axis=[0, 0, 1], radians=theta),
+                translation=[float(xy_w[0]), float(xy_w[1]), 0],
+                rotation=rr.RotationAxisAngle(axis=[0, 0, 1], radians=theta_w),
                 axis_length=0.7,
             ),
             static=static_pose,
@@ -654,7 +725,8 @@ class RerunVisualizer:
         rr.set_time_seconds("realtime", time.time())
 
         # EE Camera
-        log_to_rerun("world/ee_camera/rgb", rr.Image(servo.ee_rgb))
+        ee_rgb = np.ascontiguousarray(_rgb_to_uint8(servo.ee_rgb))
+        log_to_rerun("world/ee_camera/rgb", rr.Image(ee_rgb, color_model=rr.ColorModel.RGB))
 
         if self.show_camera_point_clouds:
             ee_xyz = servo.get_ee_xyz_in_world_frame().reshape(-1, 3)
@@ -1249,7 +1321,7 @@ class RerunVisualizer:
         # log_to_rerun("world/xyt_goal", rr.Clear(recursive=True))
         # rr.set_time_seconds("realtime", ts)
 
-    def step(self, obs, servo):
+    def step(self, obs, servo, *, mapping_depth: np.ndarray | None = None):
         """Log streaming robot/sensor data.
 
         *obs* is typically the full ZMQ observation dict (Stretch / Generic) or an Observations instance.
@@ -1258,13 +1330,11 @@ class RerunVisualizer:
 
         When the full-observation socket has no frame yet (or frames are skipped e.g. missing depth),
         *obs* may be ``None`` while *servo* still carries head RGB and base pose — log from *servo* in that case.
+
+        *mapping_depth* is the H×W depth (meters) last used for DynaMem voxel fusion; when its shape matches
+        head RGB, ``world/head_camera/points`` is built from it so Rerun matches ``world/point_cloud``.
         """
-        head_cam = servo
-        if head_cam is None or getattr(head_cam, "rgb", None) is None:
-            if isinstance(obs, dict) and obs.get("rgb") is not None:
-                head_cam = Observations.from_dict(obs)
-            elif isinstance(obs, Observations) and obs.rgb is not None:
-                head_cam = obs
+        head_cam = _pick_rerun_head_cam(obs, servo)
         if head_cam is None or getattr(head_cam, "rgb", None) is None:
             time.sleep(0.05)
             return
@@ -1276,6 +1346,8 @@ class RerunVisualizer:
                 "ee_pose": obs.ee_pose,
                 "joint": obs.joint,
             }
+            if obs.emet_session is not None:
+                obs_pose[EMET_ZMQ_SESSION_KEY] = obs.emet_session
         elif isinstance(obs, dict):
             obs_pose = obs
         else:
@@ -1285,6 +1357,8 @@ class RerunVisualizer:
                 "ee_pose": head_cam.ee_pose,
                 "joint": head_cam.joint,
             }
+            if getattr(head_cam, "emet_session", None) is not None:
+                obs_pose[EMET_ZMQ_SESSION_KEY] = head_cam.emet_session
 
         rr.set_time_seconds("realtime", time.time())
         try:
@@ -1292,7 +1366,7 @@ class RerunVisualizer:
             self.log_robot_xyt(obs_pose)
             self.log_ee_frame(obs_pose)
 
-            self.log_head_camera(head_cam)
+            self.log_head_camera(head_cam, mapping_depth=mapping_depth)
             self.log_ee_camera(head_cam)
 
             if self.display_robot_mesh and getattr(self, "mjcf_skeleton", None) is not None:

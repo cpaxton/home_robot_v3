@@ -275,6 +275,25 @@ def xml_remove_subelement(xml_str: str, subelement: str) -> str:
     return ET.tostring(root, encoding="unicode")
 
 
+def xml_remove_all_tags(xml_string: str, tag: str) -> str:
+    """Remove every element with the given tag name anywhere under the document root.
+
+    Used after Robocasa ``get_xml()`` when replacing the placeholder robot: ``<key>`` records can
+    still carry the old robot's ``qpos`` vector length, which mis-aligns joint defaults (e.g. head
+    tilt) on the merged Innate Mars / Stretch subtree.
+    """
+    root = ET.fromstring(xml_string)
+    parent_map = {c: p for p in root.iter() for c in p}
+    for elem in list(root.iter(tag)):
+        p = parent_map.get(elem)
+        if p is not None:
+            try:
+                p.remove(elem)
+            except ValueError:
+                pass
+    return ET.tostring(root, encoding="unicode")
+
+
 def xml_remove_tag_by_name(xml_string: str, tag: str, name: str) -> tuple[str, dict | None]:
     """
     Remove a subelement from an XML string with a specified tag and name attribute

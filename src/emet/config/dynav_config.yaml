@@ -27,7 +27,10 @@ max_depth: 2.5
 # ``da3_model_id`` examples: ``depth-anything/DA3-SMALL`` (faster, good for stereo), ``depth-anything/DA3METRIC-LARGE`` (heavier, metric monocular).
 # ``da3_process_res``: lower = faster (e.g. 378); default in dynav_config is 504.
 # depth-anything-3 is included in the default ``uv sync`` install. ZMQ clients must use ``allow_missing_depth`` when the server omits depth (see ``emet run agent``).
-# Innate Mars (no hardware depth): use packaged ``dynav_innate_mars.yaml`` via ``emet run dynamem --dynav-config dynav_innate_mars.yaml``.
+# Optional DA3 tuning (dynav / agent YAML): ``da3_clip_max_m`` caps network output (m); ``da3_ignore_sky_fraction_top``
+# zeros the top fraction of image rows before mapping (reduces spurious “walls” from sky/ceiling stereo).
+# ``depth_source`` / DA3 tuning: see ``dynav_config.yaml``. For Innate Mars hardware without ZMQ depth,
+# pass ``--dynav-config dynav_innate_mars.yaml`` to ``emet run dynamem`` (DA3 preset).
 depth_source: sensor
 da3_model_id: depth-anything/DA3METRIC-LARGE
 da3_process_res: 504

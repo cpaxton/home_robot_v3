@@ -54,6 +54,7 @@ from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
 from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
 from emet.motion.algo.a_star import AStar
 from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
+from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask
 from emet.perception.detection.owl import OwlPerception
 from emet.perception.detection.yoloe import YoloEPerception
 
@@ -61,11 +62,20 @@ from emet.perception.detection.yoloe import YoloEPerception
 from emet.perception.encoders.clip_encoder import MaskClipEncoder
 from emet.perception.encoders.siglip_encoder import MaskSiglipEncoder
 from emet.perception.wrapper import OvmmPerception
+from emet.utils.geometry import nav_xyt_to_world_xyt
 from emet.utils.logger import Logger
 from emet.utils.vram_debug import print_vram_snapshot
 from emet.visualization.rerun import NullVisualizer, has_display
 
 logger = Logger(__name__)
+
+# Env truthy check (same tokens as ``EMET_DYNAMEM_PERFECT_DEPTH``).
+_TRUEISH = frozenset({"1", "true", "yes", "on"})
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in _TRUEISH
+
 
 # Manipulation hyperparameters
 INIT_LIFT_POS = 0.45
@@ -182,6 +192,14 @@ class DynamemController(BaseController):
 
         self._depth_source = str(self.parameters.get("depth_source", "sensor")).lower()
         self._da3_estimator = None
+        self._debug_perfect_sensor_depth = bool(
+            self.parameters.get("debug_perfect_sensor_depth", False)
+        ) or _env_truthy("EMET_DYNAMEM_PERFECT_DEPTH")
+        if self._debug_perfect_sensor_depth:
+            logger.info(
+                "Dynamem: debug perfect sensor depth — when ZMQ observation includes depth, it is used for "
+                "mapping and DA3 is skipped (YAML ``debug_perfect_sensor_depth: true`` or EMET_DYNAMEM_PERFECT_DEPTH=1)."
+            )
 
         logs_dir = "logs"
         if not os.path.exists(logs_dir):
@@ -440,14 +458,35 @@ class DynamemController(BaseController):
         camera_K_right: np.ndarray | None = None,
         camera_pose_right: np.ndarray | None = None,
     ) -> np.ndarray | None:
-        """Pick sensor depth, DA3, or auto per ``depth_source``."""
+        """Pick sensor depth, DA3, or auto per ``depth_source``.
+
+        When ``debug_perfect_sensor_depth`` (YAML) or ``EMET_DYNAMEM_PERFECT_DEPTH=1`` is set, always prefer
+        simulator / hardware **sensor** depth from the observation whenever it is present, so DA3 noise
+        cannot mask extrinsic or frame bugs during calibration runs.
+
+        Sets ``self._depth_map_from_da3_infer`` so :meth:`update` only applies ``da3_ignore_sky_fraction_top``
+        to DA3-produced maps (never to raw sensor depth).
+        """
+        self._depth_map_from_da3_infer = False
         mode = str(self._depth_source).lower()
+        if getattr(self, "_debug_perfect_sensor_depth", False):
+            if sensor_depth is not None:
+                sd = np.asarray(sensor_depth, dtype=np.float32)
+                if sd.size > 0 and bool(np.any(np.isfinite(sd) & (sd > 1e-6))):
+                    logger.info("debug_perfect_sensor_depth: using observation sensor depth (skipping DA3).")
+                    return sd
+            logger.warning(
+                "debug_perfect_sensor_depth enabled but observation has no usable sensor depth; "
+                "falling back to depth_source=%r.",
+                mode,
+            )
         if mode == "sensor":
             return sensor_depth
         # Auto: prefer sensor without constructing DA3 (heavy); matches resolve_depth_map logic.
         if mode == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
             return np.asarray(sensor_depth, dtype=np.float32)
         est = self._lazy_da3_estimator()
+        self._depth_map_from_da3_infer = True
         return resolve_depth_map(
             self._depth_source,
             est,
@@ -506,6 +545,7 @@ class DynamemController(BaseController):
         obs = self.robot.get_observation()
         if obs is None:
             logger.warning("get_observation() returned None; skipping voxel update")
+            self.robot.set_mapping_depth_for_rerun(None)
             return
         self.obs_count += 1
         rgb, sensor_depth, K, camera_pose = obs.rgb, obs.depth, obs.camera_K, obs.camera_pose
@@ -520,20 +560,51 @@ class DynamemController(BaseController):
         )
         if depth is None:
             logger.error(f"No depth map available (depth_source={self._depth_source!r}); skipping voxel update.")
+            self.robot.set_mapping_depth_for_rerun(None)
             return
+        if getattr(self, "_depth_map_from_da3_infer", False):
+            sky = float(self.parameters.get("da3_ignore_sky_fraction_top", 0.0) or 0.0)
+            if sky > 0.0:
+                depth = apply_da3_sky_row_mask(np.asarray(depth, dtype=np.float32), sky)
+        self.robot.set_mapping_depth_for_rerun(depth)
         base_xyt = None
         if obs.gps is not None and obs.compass is not None:
             g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
             c = np.asarray(obs.compass, dtype=np.float64).ravel()
             if g.size >= 2 and c.size >= 1:
-                base_xyt = np.array([float(g[0]), float(g[1]), float(c[0])], dtype=np.float64)
+                local_xyt = np.array([float(g[0]), float(g[1]), float(c[0])], dtype=np.float64)
+                base_xyt = nav_xyt_to_world_xyt(local_xyt, getattr(obs, "emet_session", None))
+        if _env_truthy("EMET_DYNAMEM_MAP_DEBUG"):
+            sess = getattr(obs, "emet_session", None) or {}
+            org = sess.get("navigation_origin_xyt")
+            cam_t = None
+            if camera_pose is not None:
+                cp = np.asarray(camera_pose, dtype=np.float64)
+                if cp.shape == (4, 4):
+                    cam_t = np.round(cp[:3, 3], 4).tolist()
+            logger.info(
+                "dynamem_map_debug step=%s depth_source=%s da3_infer=%s perfect_depth=%s "
+                "nav_origin_xyt=%s base_xyt=%s camera_t=%s",
+                self.obs_count,
+                self._depth_source,
+                bool(getattr(self, "_depth_map_from_da3_infer", False)),
+                bool(getattr(self, "_debug_perfect_sensor_depth", False)),
+                None if org is None else np.asarray(org, dtype=np.float64).round(4).tolist(),
+                None if base_xyt is None else np.asarray(base_xyt, dtype=np.float64).round(4).tolist(),
+                cam_t,
+            )
         self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt)
         if self.voxel_map.voxel_pcd._points is not None:
             robot_xy = None
-            if obs.gps is not None:
+            if obs.gps is not None and obs.compass is not None:
                 g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
-                if g.size >= 2:
-                    robot_xy = (float(g[0]), float(g[1]))
+                cc = np.asarray(obs.compass, dtype=np.float64).ravel()
+                if g.size >= 2 and cc.size >= 1:
+                    wxyt = nav_xyt_to_world_xyt(
+                        np.array([float(g[0]), float(g[1]), float(cc[0])], dtype=np.float64),
+                        getattr(obs, "emet_session", None),
+                    )
+                    robot_xy = (float(wxyt[0]), float(wxyt[1]))
             self.rerun_visualizer.update_voxel_map(space=self.space, robot_base_xy=robot_xy)
         if self.voxel_map.semantic_memory._points is not None:
             self.rerun_visualizer.log_custom_pointcloud(

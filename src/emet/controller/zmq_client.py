@@ -28,7 +28,12 @@ import emet.utils.compression as compression
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient
-from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY, emet_session_cache_update, is_stretch_family
+from emet.core.zmq_protocol import (
+    EMET_ZMQ_ROBOT_ID_KEY,
+    emet_session_cache_update,
+    is_stretch_family,
+    read_emet_session,
+)
 from emet.motion import PlanResult
 from emet.motion.kinematics import HelloStretchIdx, HelloStretchKinematics
 from emet.utils.geometry import (
@@ -236,6 +241,8 @@ class StretchZmqClient(AbstractRobotClient):
         self._servo_lock = Lock()
         self._send_lock = Lock()
         self._emet_session_lock = Lock()
+        self._mapping_depth_lock = Lock()
+        self._mapping_depth_for_rerun: np.ndarray | None = None
 
         if enable_rerun_server:
             from emet.visualization.rerun import RerunVisualizer
@@ -818,6 +825,18 @@ class StretchZmqClient(AbstractRobotClient):
         self._last_step = -1
         self._emet_session_cache = None
         self._emet_session_cache_step = -1
+        with self._mapping_depth_lock:
+            self._mapping_depth_for_rerun = None
+
+    def set_mapping_depth_for_rerun(self, depth: np.ndarray | None) -> None:
+        with self._mapping_depth_lock:
+            self._mapping_depth_for_rerun = (
+                None if depth is None else np.asarray(depth, dtype=np.float32).copy()
+            )
+
+    def peek_mapping_depth_for_rerun(self) -> np.ndarray | None:
+        with self._mapping_depth_lock:
+            return self._mapping_depth_for_rerun
 
     def open_gripper(self, blocking: bool = True, timeout: float = 10.0, verbose: bool = False) -> bool:
         """Open the gripper based on hard-coded presets."""
@@ -1342,6 +1361,7 @@ class StretchZmqClient(AbstractRobotClient):
                 xyz=self._obs["xyz"],
                 lidar_points=self._obs["lidar_points"],
                 lidar_timestamp=self._obs["lidar_timestamp"],
+                emet_session=read_emet_session(self._obs),
             )
             observation.joint = self._obs.get("joint", None)
             observation.joint_velocities = self._obs.get("joint_velocities", None)
@@ -1670,6 +1690,7 @@ class StretchZmqClient(AbstractRobotClient):
                 ee_depth=depth_image,
                 ee_xyz=None,
                 joint=joint,
+                emet_session=read_emet_session(message) or read_emet_session(self._state),
             )
 
             # We may not have the camera information yet
@@ -1771,7 +1792,8 @@ class StretchZmqClient(AbstractRobotClient):
         last_debug_t = 0
         while not self._finish:
             if self._rerun:
-                self._rerun.step(self._obs, self._servo)
+                mapping_depth = self.peek_mapping_depth_for_rerun()
+                self._rerun.step(self._obs, self._servo, mapping_depth=mapping_depth)
                 step_count += 1
                 if self._rerun_debug:
                     now = time.time()

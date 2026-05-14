@@ -1,10 +1,16 @@
 # DynaMem / dynav parameters for Innate Mars (no hardware depth on ZMQ).
 #
-# Use: ``emet run dynamem --robot innate_mars --dynav-config dynav_innate_mars.yaml -S``
-# (basename resolves under ``emet/config/``; pass an absolute path for a custom copy).
+# Use: ``emet run dynamem --robot innate_mars -S --dynav-config dynav_innate_mars.yaml`` (or set the same
+# basename in an agent YAML ``dynav_config:`` field). Basename resolves under ``emet/config/``.
+#
+# Default ``emet run dynamem`` uses ``dynav_config.yaml`` for all robots (including Mars in sim); pass
+# this file when the ZMQ stack omits depth and you want DA3 + Mars-specific DA3 tuning.
 #
 # depth-anything-3 ships with the default env. For sim-only tests with default MuJoCo depth, use ``dynav_config.yaml``
 # (``depth_source: sensor``) instead; this file forces DA3 so behavior matches the real robot stack.
+#
+# Debug (rule out DA3): set ``debug_perfect_sensor_depth: true`` or ``EMET_DYNAMEM_PERFECT_DEPTH=1`` / ``emet run dynamem --perfect-depth``.
+# When ZMQ ``sensor_depth`` is present and finite, the controller uses it and skips DA3.
 
 # --- Start from defaults; only overrides are below. Full keys live in dynav_config.yaml. ---
 # (YAML merge is not used; this file is a copy with depth + doc tweaks. Keep in sync on structural changes.)
@@ -33,6 +39,10 @@ max_depth: 2.5
 depth_source: da3
 da3_model_id: depth-anything/DA3-SMALL
 da3_process_res: 378
+# Cap runaway DA3 / stereo depths (meters) before voxel ``max_depth`` filtering.
+da3_clip_max_m: 4.0
+# Zero top image rows so textureless sky/ceiling does not become vertical obstacle sheets after unprojection.
+da3_ignore_sky_fraction_top: 0.16
 
 eqa:
   backend: qwen_vl

@@ -76,13 +76,13 @@ echo "Using Python: $PYTHON"
 # EMET_USE_UV=1 is set by the CLI when uv is available.
 pip_install_editable() {
     if [ -n "${EMET_USE_UV:-}" ] && command -v uv >/dev/null 2>&1; then
-        # Keep the main environment stable: uv sync owns dependency resolution.
-        # Editable third_party installs should register package code only.
-        uv pip install -e . --no-deps
+        # Install package + declared deps (h5py, imageio, …). Do not use ``--no-deps`` or
+        # ``emet sync`` + third_party reinstall leaves robocasa unimportable.
+        uv pip install -e .
     elif command -v uv >/dev/null 2>&1; then
-        uv pip install -e . --no-deps
+        uv pip install -e .
     else
-        "$PYTHON" -m pip install -e . --no-deps
+        "$PYTHON" -m pip install -e .
     fi
 }
 

@@ -78,6 +78,14 @@ class AbstractRobotClient(ABC):
         """Override this if you want to check to see if a particular motion failed, e.g. it was not reachable and we don't know why."""
         return False
 
+    def set_mapping_depth_for_rerun(self, depth: np.ndarray | None) -> None:
+        """Optional hook: DynaMem stores the fused depth map so Rerun ``world/head_camera/points`` matches voxels."""
+        return None
+
+    def peek_mapping_depth_for_rerun(self) -> np.ndarray | None:
+        """Latest depth passed to :meth:`set_mapping_depth_for_rerun`, or ``None``."""
+        return None
+
     def start(self) -> bool:
         """Override this if there's custom startup logic that you want to add before anything else.
 
