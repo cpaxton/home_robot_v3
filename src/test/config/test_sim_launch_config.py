@@ -26,6 +26,71 @@ from emet.config.sim_launch_config import (
 from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
 
 
+def test_build_sim_launch_molmospaces_rejects_explicit_stretch():
+    with pytest.raises(ValueError, match="Stretch"):
+        build_sim_launch_config_from_serve_cli(
+            molmospaces_scene="ithor",
+            molmospaces_split="train",
+            molmospaces_index=0,
+            molmospaces_install=False,
+            use_robocasa=False,
+            scene_path=None,
+            robot="stretch",
+            headless=False,
+            show_viewer_ui=False,
+            no_cameras=False,
+            use_glx=False,
+            seed=0,
+            steps=None,
+            debug_molmospaces_spawn=False,
+            port_offset=0,
+            robocasa_task="",
+        )
+
+
+def test_prepare_mujoco_argv_molmospaces_passes_robot_to_merge_and_cli(monkeypatch):
+    """No stretch→rby1 remap: merge and mujoco_server see the same robot id."""
+    from emet.simulation import mujoco_serve_argv as msa
+
+    called: dict[str, str] = {}
+
+    def fake_merge(**kwargs):
+        called["robot"] = kwargs["robot"]
+        return "/tmp/fake_molmospaces_merged.xml"
+
+    monkeypatch.setattr(msa, "_merge_molmospaces_scene", fake_merge)
+    cfg = SimLaunchMolmospaces(scene="ithor", split="train", index=0, robot="innate_mars")
+    argv = prepare_mujoco_server_argv(cfg)
+    assert called["robot"] == "innate_mars"
+    assert "--robot" in argv
+    assert argv[argv.index("--robot") + 1] == "innate_mars"
+    assert "--scene_path" in argv
+
+
+def test_apply_sim_launch_molmospaces_defaults_stretch_to_rby1_when_robot_override_none():
+    """--start-sim passes robot=None; inherited stretch from table sim becomes rby1 for MolmoSpaces."""
+    base = SimLaunchDefaultMujoco(robot="stretch", headless=False, seed=0)
+    out = apply_sim_launch_cli_overrides(
+        base,
+        molmospaces_scene="ithor",
+        molmospaces_split="train",
+        molmospaces_index=0,
+        robot=None,
+    )
+    assert isinstance(out, SimLaunchMolmospaces)
+    assert out.robot == "rby1"
+
+
+def test_apply_sim_launch_molmospaces_rejects_explicit_stretch_override():
+    base = SimLaunchDefaultMujoco(robot="stretch", headless=False, seed=0)
+    with pytest.raises(ValueError, match="Stretch"):
+        apply_sim_launch_cli_overrides(
+            base,
+            molmospaces_scene="ithor",
+            robot="stretch",
+        )
+
+
 def test_load_default_table_yaml():
     cfg = load_sim_launch_config_from_path("configs/sim/default_table_rby1.yaml")
     assert isinstance(cfg, SimLaunchDefaultMujoco)

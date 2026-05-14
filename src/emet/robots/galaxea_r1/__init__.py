@@ -19,9 +19,13 @@ Reference: https://github.com/userguide-galaxea/URDF
 """
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from emet.robots.base import RobotBackend, RobotSpec
 from emet.robots.footprint import Footprint
+
+if TYPE_CHECKING:
+    from emet.simulation.mujoco_stationary_control import MujocoStationaryControl
 
 _ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets" / "robot" / "galaxea_r1"
 _MJCF_PATH = str(_ASSETS_DIR / "galaxea_r1.xml")
@@ -96,6 +100,11 @@ R1_CAMERA_NAMES = ["zed_camera", "left_camera", "right_camera"]
 class GalaxeaR1Backend(RobotBackend):
     """Galaxea R1 two-armed mobile manipulator backend."""
 
+    def create_mujoco_stationary_control(self) -> "MujocoStationaryControl":
+        from emet.robots.galaxea_r1.sim_stationary import GalaxeaR1FamilyMujocoStationary
+
+        return GalaxeaR1FamilyMujocoStationary()
+
     def get_spec(self) -> RobotSpec:
         return RobotSpec(
             name="galaxea_r1",
@@ -124,4 +133,4 @@ class GalaxeaR1Backend(RobotBackend):
         )
 
 
-__all__ = ["GalaxeaR1Backend"]
+__all__ = ["GalaxeaR1Backend", "R1_ACTUATOR_NAMES", "R1_CAMERA_NAMES", "R1_JOINT_NAMES"]

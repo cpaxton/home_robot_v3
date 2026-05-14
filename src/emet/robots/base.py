@@ -23,8 +23,18 @@ if TYPE_CHECKING:
     from emet.controller.emotes.backend import EmoteBackend
     from emet.core.robot import AbstractRobotClient
     from emet.motion.robot import RobotModel
+    from emet.simulation.mujoco_stationary_control import MujocoStationaryControl
 
 from emet.robots.footprint import Footprint
+
+
+@dataclass
+class RobotSpawnSpec:
+    """Optional MolmoSpaces / merged-scene spawn tuning (see ``molmospaces_spawn.json`` next to MJCF)."""
+
+    molmospaces_target_foot_clearance_above_floor_m: float | None = None
+    molmospaces_nominal_base_height_above_floor_m: float | None = None
+    requires_floating_base_spawn_settle: bool = False
 
 
 @dataclass
@@ -47,6 +57,10 @@ class RobotSpec:
     """When hardware omits depth on ZMQ, DynaMem usually needs this ``depth_source`` (see dynav YAML)."""
     robosuite_rgb_depth_ops: tuple[str, ...] = ()
     """MuJoCo RGB/depth post-steps for :class:`RobosuiteZmqServer` (``flipud``, ``rot90_cw``). Intrinsics are chained."""
+    spawn: RobotSpawnSpec | None = None
+    """Spawn / placement hints for MolmoSpaces merge and similar sims (optional)."""
+    sim_uses_stretch_mujoco_zmq: bool = False
+    """True when ``emet serve mujoco`` uses :class:`MujocoZmqServer` (Stretch table sim), not RobosuiteZmqServer."""
 
 
 def format_uv_sync_extras_hint(spec: RobotSpec) -> str | None:
@@ -94,3 +108,10 @@ class RobotBackend(ABC):
         from emet.controller.emotes.backend import GenericEmoteBackend
 
         return GenericEmoteBackend(self.get_spec().name)
+
+    def create_mujoco_stationary_control(self) -> "MujocoStationaryControl | None":
+        """Optional MuJoCo ``ctrl``/hold policy for :class:`emet.simulation.robosuite_server.RobosuiteZmqServer`.
+
+        Return ``None`` to use :class:`emet.simulation.mujoco_stationary_control.DefaultMujocoStationaryControl`.
+        """
+        return None

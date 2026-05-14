@@ -291,8 +291,8 @@
   </actuator>
 
   <keyframe>
-    <!-- Home: torso upright, arms at sides, grippers open -->
-    <key name="home" ctrl="0 0 0 0 0 0  0 0 0 0  0 0.5 -0.5 0 0 0  0.04 0.04  0 0.5 -0.5 0 0 0  0.04 0.04"/>
+    <!-- Home: torso upright; arms forward with elbows bent (arm1=0 avoids side abduction), grippers open. -->
+    <key name="home" ctrl="0 0 0 0 0 0  0 0 0 0  0 1.15 -1.05 0.35 -0.4 0  0.04 0.04  0 1.15 -1.05 -0.35 0.4 0  0.04 0.04"/>
   </keyframe>
 
 </mujoco>

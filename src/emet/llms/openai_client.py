@@ -129,7 +129,7 @@ class OpenaiClient(AbstractLLMClient):
                 result_calls.append({"name": tc.function.name, "arguments": args})
             return _json.dumps({"tool_calls": result_calls, "message": msg.content or ""})
 
-        output_text = msg.content
+        output_text = msg.content or ""
         if verbose:
             print(f"output_text={output_text}")
         return output_text

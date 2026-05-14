@@ -205,7 +205,10 @@ def main() -> None:
 @click.option(
     "--debug-molmospaces-spawn",
     is_flag=True,
-    help="Verbose MolmoSpaces base placement and post-spawn contact diagnostics (non-stretch server).",
+    help=(
+        "Verbose MolmoSpaces base placement and post-spawn contact diagnostics (non-stretch server). "
+        "Also enables post-load actuator/floor/qvel-step diagnostics; or set EMET_ROBOSUITE_POST_LOAD_DEBUG=1 without full spawn ASCII maps."
+    ),
 )
 @click.option(
     "--port-offset",
@@ -228,12 +231,13 @@ def main() -> None:
 )
 @click.option(
     "--robot",
-    default="stretch",
+    default=None,
     help=(
-        "Robot to simulate. 'stretch' (default) uses the Stretch-MuJoCo server. "
-        "Registry robots (e.g. innate_mars, rby1, galaxea_r1) load the default table "
-        "scene merged with that robot's MJCF and use the generic ZMQ sim (RobosuiteZmqServer). "
-        "Robosuite-native names (PandaOmron, Tiago, GR1) use the stock robosuite robot in Robocasa."
+        "Robot to simulate. Default: stretch for table MuJoCo; when using --molmospaces-scene, "
+        "default is rby1 (Stretch has no merged MJCF on that path). "
+        "Registry robots (e.g. innate_mars, rby1, galaxea_r1) use RobosuiteZmqServer with the default table "
+        "or a merged --scene_path. Robosuite-native names (PandaOmron, Tiago, GR1) use the stock robosuite "
+        "robot in Robocasa."
     ),
 )
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
@@ -255,7 +259,7 @@ def serve(
     port_offset: int,
     list_robocasa_tasks: bool,
     robocasa_task: str,
-    robot: str,
+    robot: str | None,
     extra: tuple[str, ...],
 ) -> None:
     """Start a simulation server.
@@ -290,6 +294,9 @@ def serve(
         if list_robocasa_tasks:
             args = list(extra) + ["--use-robocasa", "--list-robocasa-tasks"]
             sys.exit(_run_module("emet.simulation.mujoco_server", args))
+
+        if robot is None:
+            robot = "rby1" if molmospaces_scene else "stretch"
 
         try:
             cfg = build_sim_launch_config_from_serve_cli(
@@ -375,11 +382,17 @@ def molmospaces_cmd() -> None:
 
 @molmospaces_cmd.command("list-robots", short_help="List supported robot IDs")
 def molmospaces_list_robots() -> None:
-    """Print MolmoSpaces robot IDs (rby1, rby1m, franka_*, etc.). Default robot is rby1 (Galaxea R1 family)."""
-    from emet.simulation.molmospaces_config import DEFAULT_MOLMOSPACES_ROBOT, MOLMOSPACES_ROBOT_IDS
+    """Print MolmoSpaces-related robot ids: vendored merge MJCF keys and upstream Molmo asset names."""
+    from emet.simulation.molmospaces_config import (
+        DEFAULT_MOLMOSPACES_ROBOT,
+        MOLMOSPACES_ROBOT_IDS,
+        emet_molmospaces_merge_robot_keys_with_mjcf,
+    )
 
-    click.echo("Robots: " + ", ".join(MOLMOSPACES_ROBOT_IDS))
-    click.echo(f"Default: {DEFAULT_MOLMOSPACES_ROBOT}")
+    emet_keys = emet_molmospaces_merge_robot_keys_with_mjcf()
+    click.echo("Emet merge-scene / serve --molmospaces-scene (bundled MJCF): " + ", ".join(emet_keys))
+    click.echo("MolmoSpaces upstream asset robot ids: " + ", ".join(MOLMOSPACES_ROBOT_IDS))
+    click.echo(f"Default (serve MolmoSpaces when --robot omitted): {DEFAULT_MOLMOSPACES_ROBOT}")
 
 
 @molmospaces_cmd.command("list-scenes", short_help="List scene names and split sizes")

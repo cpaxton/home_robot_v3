@@ -49,17 +49,23 @@ If no action is needed, set "tool_calls" to [].
 
 For **gesture-only** tools (wave, nod_head, shake_head, avert_gaze) there is **no** second LLM turn with `[Tool results]`. Prefer **"message": ""** so the channel is not spammed with a generic chatbot intro ("Hi! How can I help…") **and** the gesture — that duplicates a greeting. If you must say something, use at most a **few words** (e.g. "Waving.").
 
-When you call query_memory, query_scene_graph, list_scene_relations, describe_scene, explore, navigation_diagnostics, or send_map_snapshot, the results will be provided back to you.
-You must then summarize them for the user in a follow-up response (no more tool calls).
-Use query_memory for voxel-map / semantic localization when EQA is enabled. Use query_scene_graph for graph-style embodied questions; use list_scene_relations for explicit near/on connectivity; use send_object_image for a stored object crop from the scene graph (not the live camera).
-For open-ended "what do you see" questions, prefer describe_scene and send_image unless full EQA is enabled for memory Q&A.
-The explore tool moves the robot to extend the map and returns a short text diagnostic (cell counts, whether the base cell is explored/obstacle) — not a camera stream. If explore fails, navigation is stuck, or the user asks what went wrong: call navigation_diagnostics and usually send_map_snapshot (and describe_scene + send_image if they need the live view).
+Use **query_memory** for voxel-map / semantic localization when **`--eqa`** (voxel EQA) is enabled. Use **query_scene_graph** / **list_scene_relations** for graph-style or connectivity questions when the open-vocab scene graph or GraphEQA is enabled. Use **send_object_image** for a stored object crop from the scene graph (not the live camera). For open-ended "what do you see" questions, prefer **describe_scene** and **send_image** unless full EQA is enabled for memory Q&A.
+
+The **explore** tool moves the robot to extend the map and returns a short text diagnostic (cell counts, whether the base cell is explored/obstacle) — not a camera stream. If explore fails, navigation is stuck, or the user asks what went wrong: call **navigation_diagnostics** and usually **send_map_snapshot** (and **describe_scene** + **send_image** if they need the live view).
+
+**Household / sim homes (RoboSuite kitchens, MolmoSpaces iTHOR, etc.):** For finding objects in an unfamiliar layout, prefer **explore** or **scan_environment** before **find_objects** so the voxel map and (when enabled) open-vocab scene graph populate. Then use **list_scene_relations** or **query_scene_graph** to read object names and relations; call **find_objects** with the **same string** the user used or a label from the graph. If **find_objects** or **explore** fails, call **navigation_diagnostics** and **send_map_snapshot**, and optionally **describe_scene** + **send_image** for the live view.
+
+When you call **query_memory**, **query_scene_graph**, **list_scene_relations**, **describe_scene**, **explore**, **find_objects**, **pick_place**, **scan_environment**, **go_home**, **hand_over**, **navigation_diagnostics**, or **send_map_snapshot**, the results will be provided back to you (tool lines often include map coverage hints after motion). You must then summarize them for the user in a follow-up response (no more tool calls) when that second turn is issued.
+
 When you receive bracketed tool results (e.g. `[describe_scene] ...`), your **message** must reflect **only** what those results say. Do not copy object names, colors, or counts from the examples in this prompt; those examples use fictional placeholders.
 
 # Examples
 
 User: "Explore the room."
 {"tool_calls": [{"name": "explore", "arguments": {}}], "message": ""}
+
+User: "Map the room and send a top-down map."
+{"tool_calls": [{"name": "explore", "arguments": {}}, {"name": "send_map_snapshot", "arguments": {}}], "message": ""}
 
 User: "Explore failed — what's wrong with the map?"
 {"tool_calls": [{"name": "navigation_diagnostics", "arguments": {}}, {"name": "send_map_snapshot", "arguments": {}}], "message": ""}
@@ -145,13 +151,17 @@ def _normalize_message_field(raw: Any) -> str:
     return str(raw)
 
 
-def parse_tool_calls_response(response: str) -> dict[str, Any]:
+def parse_tool_calls_response(response: Any) -> dict[str, Any]:
     """Parse LLM response into {tool_calls: [{name, arguments}], message: str}.
 
     Handles <think> blocks, markdown code fences, prefix/suffix text around JSON,
     and balanced-brace JSON via :meth:`json.JSONDecoder.raw_decode`.
     Returns {"tool_calls": [], "message": <raw_text>} on total parse failure (never leaks JSON blobs as message).
     """
+    if response is None:
+        response = ""
+    elif not isinstance(response, str):
+        response = str(response)
     response = response.strip()
     response = re.sub(r"<think>[\s\S]*?</think>", "", response).strip()
     if "</think>" in response:
@@ -184,6 +194,10 @@ def parse_tool_calls_response(response: str) -> dict[str, Any]:
 
     # Total failure: no dict — treat whole reply as natural language unless it looks like broken JSON.
     if data is None:
+        lowered = response.lower()
+        if lowered.startswith("<!doctype html") or lowered.startswith("<html") or "<head>" in lowered:
+            _logger.warning("Assistant returned HTML/error payload; suppressing raw body from user message.")
+            return {"tool_calls": [], "message": ""}
         if response.startswith("{") and '"tool_calls"' in response:
             _logger.warning(
                 "Assistant returned JSON-shaped text that did not parse; suppressing raw JSON from user message."

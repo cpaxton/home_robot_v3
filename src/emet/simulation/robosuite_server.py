@@ -37,6 +37,17 @@ from emet.core.zmq_protocol import (
 from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn
 from emet.simulation.head_look_action import apply_head_to_robosuite
+from emet.simulation.mujoco_stationary_control import (
+    DefaultMujocoStationaryControl,
+    MujocoStationaryControl,
+    compute_stationary_ctrl_vector,
+)
+from emet.simulation.robosuite_load_utils import (
+    apply_home_keyframe_preserving_base,
+    log_post_load_diagnostics,
+    probe_max_qvel_unforced_steps,
+    robosuite_post_load_debug_enabled,
+)
 from emet.simulation.stereo_camera_utils import stereo_right_camera_name_from_spec
 from emet.utils.geometry import xyt_global_to_base
 from emet.utils.observation_layout import rgb_height_width_for_zmq
@@ -74,6 +85,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         max_sim_steps = kwargs.pop("max_sim_steps", None)
         debug_molmospaces_spawn = bool(kwargs.pop("debug_molmospaces_spawn", False))
         scene_disk_path = kwargs.pop("scene_disk_path", None)
+        mujoco_stationary_control: MujocoStationaryControl | None = kwargs.pop(
+            "mujoco_stationary_control", None
+        )
         super().__init__(*args, **kwargs)
         self._spec = robot_spec
         self._scene_xml = scene_xml
@@ -112,6 +126,186 @@ class RobosuiteZmqServer(BaseZmqServer):
         # After MolmoSpaces autoplace, ``qpos0`` holds the chosen free-joint pose; see
         # :meth:`_restore_merged_base_freejoint_from_qpos0` after physics stabilize.
         self._molmospaces_autoplace_snap_qpos0 = False
+        # Stationary joint-position targets mirrored each physics step onto ``data.ctrl`` (see
+        # :meth:`_apply_joint_ctrl_hold_to_actuators`). Same idea as MolmoSpaces ``set_to_stationary``
+        # + ``compute_control`` (see comments on that method).
+        self._joint_ctrl_hold: np.ndarray | None = None
+        # When False, :meth:`_apply_joint_ctrl_hold_to_actuators` copies that spec row from the
+        # transmission stationary vector (current ``q``) into ``_joint_ctrl_hold`` before overlay.
+        # ZMQ ``joint`` actions set True so streamed / one-shot targets are not overwritten each substep.
+        self._joint_ctrl_hold_client_pin: np.ndarray | None = None
+        self._mujoco_stationary: MujocoStationaryControl = (
+            mujoco_stationary_control
+            if mujoco_stationary_control is not None
+            else DefaultMujocoStationaryControl()
+        )
+        # ``mj_step`` calls per outer server tick (see :meth:`_configure_mj_substeps_per_tick`).
+        self._mj_substeps_per_tick: int = 1
+        # When ``EMET_MUJOCO_CTRL_DEBUG=1``: log first N stationary apply cycles, then periodic summaries.
+        self._ctrl_debug_initial_logs_remaining: int = 0
+        self._ctrl_debug_periodic_counter: int = 0
+        self._ctrl_debug_emit_apply_logs: bool = False
+
+    @staticmethod
+    def _mujoco_ctrl_debug_enabled() -> bool:
+        return os.environ.get("EMET_MUJOCO_CTRL_DEBUG", "").strip().lower() in ("1", "true", "yes", "on")
+
+    @staticmethod
+    def _mujoco_ctrl_debug_verbose() -> bool:
+        return os.environ.get("EMET_MUJOCO_CTRL_DEBUG_VERBOSE", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+
+    def _mujoco_ctrl_debug_pd_tracking(self) -> str:
+        """Torso / limb diagnostics meaningful with per-step ``ctrl≈qpos`` re-sync.
+
+        With unpinned spec rows, :meth:`_apply_joint_ctrl_hold_to_actuators` keeps ``hold`` and ``ctrl`` in
+        step with **current** ``qpos`` each substep, so ``q - ctrl`` stays ~0 and does **not** show a “limp”
+        joint. Use ``Δq0 = q - qpos0`` (drift from MJCF reference), ``dq``, ``actuator_force`` (scalar actuator
+        output), and ``qfrc_actuator`` on the joint dof instead.
+        """
+        if self._mjmodel is None or self._mjdata is None:
+            return ""
+        m, d = self._mjmodel, self._mjdata
+        hold = self._joint_ctrl_hold
+
+        def one_joint(jn: str, an: str, spec_i: int | None) -> str | None:
+            jid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, jn)
+            aid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, an)
+            if jid < 0 or aid < 0:
+                return None
+            jt = int(m.jnt_type[jid])
+            if jt not in (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)):
+                return None
+            qadr = int(m.jnt_qposadr[jid])
+            vadr = int(m.jnt_dofadr[jid])
+            q = float(d.qpos[qadr])
+            q0 = float(m.qpos0[qadr])
+            dq = float(d.qvel[vadr]) if 0 <= vadr < int(m.nv) else float("nan")
+            c = float(d.ctrl[aid])
+            d_q0 = q - q0
+            h = (
+                float(hold[spec_i])
+                if spec_i is not None and hold is not None and 0 <= spec_i < int(hold.shape[0])
+                else float("nan")
+            )
+            tau_dof = (
+                float(d.qfrc_actuator[vadr])
+                if 0 <= vadr < int(d.qfrc_actuator.shape[0])
+                else float("nan")
+            )
+            tau_c = (
+                float(d.qfrc_constraint[vadr])
+                if 0 <= vadr < int(d.qfrc_constraint.shape[0])
+                else float("nan")
+            )
+            f_act = float(d.actuator_force[aid]) if 0 <= aid < int(d.actuator_force.shape[0]) else float("nan")
+            return (
+                f"{an}({jn}):q={q:.4f} q0={q0:.4f} Δq0={d_q0:.4f} dq={dq:.4f} "
+                f"ctrl={c:.4f} hold={h:.4f} F_act={f_act:.3f} τ_dof={tau_dof:.3f} τ_con={tau_c:.3f}"
+            )
+
+        # Resolve spec index for torso1 / torso_joint1
+        hip_spec_i: int | None = None
+        n = min(len(self._spec.actuator_names), len(self._spec.joint_names))
+        for i in range(n):
+            if self._spec.actuator_names[i] == "torso1" and self._spec.joint_names[i] == "torso_joint1":
+                hip_spec_i = i
+                break
+
+        hip_line = one_joint("torso_joint1", "torso1", hip_spec_i)
+        if hip_line is None:
+            hip_line = "torso_hip: (torso_joint1/torso1 not found in model)"
+
+        max_abs_dq0 = 0.0
+        max_abs_dq = 0.0
+        torso_chunks: list[str] = []
+        for i in range(n):
+            an = self._spec.actuator_names[i]
+            if not an.startswith("torso"):
+                continue
+            jn = self._spec.joint_names[i]
+            jid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, jn)
+            if jid < 0:
+                continue
+            jt = int(m.jnt_type[jid])
+            if jt not in (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)):
+                continue
+            qadr = int(m.jnt_qposadr[jid])
+            vadr = int(m.jnt_dofadr[jid])
+            q = float(d.qpos[qadr])
+            q0 = float(m.qpos0[qadr])
+            dq = float(d.qvel[vadr]) if 0 <= vadr < int(m.nv) else 0.0
+            max_abs_dq0 = max(max_abs_dq0, abs(q - q0))
+            max_abs_dq = max(max_abs_dq, abs(dq))
+            if self._mujoco_ctrl_debug_verbose():
+                ol = one_joint(jn, an, i)
+                if ol:
+                    torso_chunks.append(ol)
+        if self._mujoco_ctrl_debug_verbose():
+            for i in range(n):
+                an = self._spec.actuator_names[i]
+                if an not in ("left_arm1", "right_arm1"):
+                    continue
+                jn = self._spec.joint_names[i]
+                ol = one_joint(jn, an, i)
+                if ol:
+                    torso_chunks.append(ol)
+
+        head = (
+            f"pd torso_agg max|Δq0|={max_abs_dq0:.4f} max|dq|={max_abs_dq:.4f} "
+            f"(unpinned hold tracks q each substep — use Δq0 vs qpos0 to see drift) | hip: {hip_line}"
+        )
+        if torso_chunks:
+            return head + " | " + " ; ".join(torso_chunks)
+        return head
+
+    def _mujoco_ctrl_debug_summary(self) -> str:
+        """One-line diagnostics (call with ``_mj_lock`` held)."""
+        if self._mjmodel is None or self._mjdata is None:
+            return "no model/data"
+        d = self._mjdata
+        m = self._mjmodel
+        qv = float(np.max(np.abs(d.qvel))) if d.qvel.size else 0.0
+        cu = float(np.max(np.abs(d.ctrl))) if d.ctrl.size else 0.0
+        parts = [
+            f"phys_steps={self._physics_steps_executed}",
+            f"max|qvel|={qv:.5g}",
+            f"max|ctrl|={cu:.5g}",
+        ]
+        bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, self._spec.base_link_name)
+        if 0 <= bid < int(m.nbody):
+            z = float(np.asarray(d.xpos)[bid, 2])
+            parts.append(f"base_z={z:.4f}")
+        for aname in ("torso1", "steer1", "wheel1"):
+            aid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
+            if aid >= 0:
+                parts.append(f"ctrl[{aname}]={float(d.ctrl[aid]):.5g}")
+        hip_jid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "torso_joint1")
+        if hip_jid >= 0:
+            hq = int(m.jnt_qposadr[hip_jid])
+            parts.append(f"q[torso_joint1]={float(d.qpos[hq]):.5g}")
+        hold = self._joint_ctrl_hold
+        if hold is not None and hold.size >= 3:
+            parts.append(f"hold0..2={float(hold[0]):.4g},{float(hold[1]):.4g},{float(hold[2]):.4g}")
+        return " ".join(parts)
+
+    def _maybe_log_mujoco_ctrl_debug_after_apply(self) -> None:
+        if not self._mujoco_ctrl_debug_enabled() or not self._ctrl_debug_emit_apply_logs:
+            return
+        self._ctrl_debug_periodic_counter += 1
+        if self._ctrl_debug_initial_logs_remaining > 0:
+            self._ctrl_debug_initial_logs_remaining -= 1
+            logger.info(f"[mujoco_ctrl_debug] after_apply {self._mujoco_ctrl_debug_summary()}")
+            logger.info(f"[mujoco_ctrl_debug] after_apply {self._mujoco_ctrl_debug_pd_tracking()}")
+            return
+        # ~0.5 s at 80 Hz × 6 substeps
+        if self._ctrl_debug_periodic_counter % 240 == 0:
+            logger.info(f"[mujoco_ctrl_debug] periodic {self._mujoco_ctrl_debug_summary()}")
+            logger.info(f"[mujoco_ctrl_debug] periodic {self._mujoco_ctrl_debug_pd_tracking()}")
 
     @property
     def spec(self) -> RobotSpec:
@@ -136,6 +330,29 @@ class RobosuiteZmqServer(BaseZmqServer):
         with self._mj_lock:
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             self._molmospaces_autoplace_free_base_after_load()
+        self._configure_mj_substeps_per_tick()
+
+    def _configure_mj_substeps_per_tick(self) -> None:
+        """Run several ``mj_step`` calls per server tick so wall-clock pacing matches ``opt.timestep``.
+
+        At 80 Hz one wall tick is 12.5 ms; with MuJoCo ``timestep`` = 2 ms, ~6 integration steps belong
+        in that interval (same idea as MolmoSpaces ``_n_ctrl_steps_per_policy``). Otherwise the sim
+        advances too slowly in sim-time and joint PD + contacts look artificially sloppy.
+        """
+        self._mj_substeps_per_tick = 1
+        if self._mjmodel is None:
+            return
+        dt = float(self._mjmodel.opt.timestep)
+        if dt <= 0.0:
+            return
+        tick = 1.0 / max(1.0, float(self.simulation_rate))
+        n = int(tick / dt + 0.5)
+        self._mj_substeps_per_tick = max(1, min(64, n))
+        if self._mj_substeps_per_tick > 1:
+            logger.info(
+                f"MuJoCo substeps per server tick: {self._mj_substeps_per_tick} "
+                f"(timestep={dt:g}s, server_rate={self.simulation_rate}Hz)"
+            )
 
     def _want_molmospaces_spawn_heuristic(self) -> bool:
         """True when we merged a MolmoSpaces house + mobile base (needs placement away from origin)."""
@@ -166,6 +383,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 scene_label=self._scene_source_basename,
                 merged_mjcf_path=self._scene_disk_path,
                 environment=self._environment_descriptor,
+                robot_key=self._spec.name,
             )
         except Exception as e:
             logger.warning(f"MolmoSpaces base autoplace skipped ({e!r}).")
@@ -218,6 +436,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         base that can **drift** the robot away from the MolmoSpaces spawn chosen from occupancy,
         while logs and ``qpos0`` still show the intended pose — so the viewer no longer matches the
         top-down map. Restoring the 7 free-joint coordinates from ``qpos0`` preserves spawn XY/Z.
+
+        Callers should run additional ``mj_step`` + hold re-apply after this (see ``start()``) so the
+        snap does not leave the articulated body in a bad transient.
         """
         if self._mjmodel is None or self._mjdata is None:
             return
@@ -460,27 +681,77 @@ class RobosuiteZmqServer(BaseZmqServer):
         return np.array([[f, 0, width / 2], [0, f, height / 2], [0, 0, 1]])
 
     def _sync_actuator_ctrl_from_joint_positions(self) -> None:
-        """Set ``ctrl`` so actuators command the current pose (and zero for swerve *velocity* wheels).
+        """Set full ``ctrl`` from joint transmissions + current ``qpos``, then refresh the spec hold buffer.
 
-        After MolmoSpaces autoplace or any MJCF merge, ``ctrl`` defaults to 0 while articulated
-        ``qpos`` may not; the first ``mj_step`` then applies large PD errors and the robot can
-        collapse. Velocity wheel actuators (Galaxea / rby1 ``wheel*``) must use ``ctrl=0`` at rest.
+        Uses :attr:`_mujoco_stationary` (:class:`emet.simulation.mujoco_stationary_control.MujocoStationaryControl`)
+        — MolmoSpaces-style stationary targets for **every** actuator index ``nu``, not only :class:`RobotSpec`
+        rows (merged scenes often add extra actuators whose default ``ctrl=0`` would fight the pose).
         """
         if self._mjmodel is None or self._mjdata is None:
             return
         n = min(len(self._spec.actuator_names), len(self._spec.joint_names))
+        if self._joint_ctrl_hold is None or int(self._joint_ctrl_hold.shape[0]) != n:
+            self._joint_ctrl_hold = np.zeros(n, dtype=np.float64)
+        if self._joint_ctrl_hold_client_pin is None or int(self._joint_ctrl_hold_client_pin.shape[0]) != n:
+            self._joint_ctrl_hold_client_pin = np.zeros(n, dtype=np.bool_)
+        else:
+            self._joint_ctrl_hold_client_pin.fill(False)
+        self._mujoco_stationary.sync_ctrl_and_spec_hold(
+            self._mjmodel, self._mjdata, self._spec, self._joint_ctrl_hold
+        )
+
+    def _snapshot_spec_hold_from_ctrl(self) -> None:
+        """After code paths that write ``data.ctrl`` directly (e.g. ``head_to``), mirror into the hold buffer.
+
+        Otherwise :meth:`_apply_joint_ctrl_hold_to_actuators` immediately overwrites those actuators on
+        the next ``mj_step``.
+        """
+        if self._mjmodel is None or self._mjdata is None or self._joint_ctrl_hold is None:
+            return
+        n = min(len(self._spec.actuator_names), int(self._joint_ctrl_hold.shape[0]))
         for i in range(n):
-            jname = self._spec.joint_names[i]
-            aname = self._spec.actuator_names[i]
-            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jname)
-            aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
-            if jid < 0 or aid < 0:
+            aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, self._spec.actuator_names[i])
+            if aid < 0:
                 continue
-            qadr = int(self._mjmodel.jnt_qposadr[jid])
-            if aname.startswith("wheel"):
-                self._mjdata.ctrl[aid] = 0.0
-            else:
-                self._mjdata.ctrl[aid] = float(self._mjdata.qpos[qadr])
+            self._joint_ctrl_hold[i] = float(self._mjdata.ctrl[aid])
+        n_pin = min(len(self._spec.actuator_names), int(self._joint_ctrl_hold.shape[0]))
+        if self._joint_ctrl_hold_client_pin is None or int(self._joint_ctrl_hold_client_pin.shape[0]) != n_pin:
+            self._joint_ctrl_hold_client_pin = np.zeros(n_pin, dtype=np.bool_)
+        else:
+            self._joint_ctrl_hold_client_pin.fill(False)
+
+    def _refresh_unpinned_joint_ctrl_hold_from_stationary(self) -> None:
+        """Align unpinned :attr:`_joint_ctrl_hold` rows with ``compute_stationary_ctrl_vector`` (current ``q``)."""
+        if self._mjmodel is None or self._mjdata is None or self._joint_ctrl_hold is None:
+            return
+        n = min(len(self._spec.actuator_names), int(self._joint_ctrl_hold.shape[0]))
+        if self._joint_ctrl_hold_client_pin is None or int(self._joint_ctrl_hold_client_pin.shape[0]) != n:
+            self._joint_ctrl_hold_client_pin = np.zeros(n, dtype=np.bool_)
+        pin = self._joint_ctrl_hold_client_pin
+        hold = self._joint_ctrl_hold
+        full = compute_stationary_ctrl_vector(self._mjmodel, self._mjdata)
+        for i in range(n):
+            if bool(pin[i]):
+                continue
+            aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, self._spec.actuator_names[i])
+            if aid >= 0:
+                hold[i] = float(full[aid])
+
+    def _apply_joint_ctrl_hold_to_actuators(self) -> None:
+        """Recompute full stationary ``ctrl`` from ``qpos``, then overlay :attr:`_joint_ctrl_hold`.
+
+        Unpinned hold rows are refreshed from current ``q`` each call so the overlay does not leave
+        stale ZMQ-era targets (which would pin ``ctrl`` while ``q`` drifts and saturate actuators).
+
+        See :attr:`_mujoco_stationary` and :meth:`_sync_actuator_ctrl_from_joint_positions`.
+        """
+        if self._mjmodel is None or self._mjdata is None or self._joint_ctrl_hold is None:
+            return
+        self._refresh_unpinned_joint_ctrl_hold_from_stationary()
+        self._mujoco_stationary.write_ctrl_with_spec_hold(
+            self._mjmodel, self._mjdata, self._spec, self._joint_ctrl_hold
+        )
+        self._maybe_log_mujoco_ctrl_debug_after_apply()
 
     def _stabilize_physics_state_after_load(self) -> None:
         """Zero all velocities, align actuators with ``qpos``, and run a few dynamics steps."""
@@ -491,6 +762,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._sync_actuator_ctrl_from_joint_positions()
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             for _ in range(8):
+                self._apply_joint_ctrl_hold_to_actuators()
                 mujoco.mj_step(self._mjmodel, self._mjdata)
             self._mjdata.qvel.fill(0.0)
             self._sync_actuator_ctrl_from_joint_positions()
@@ -629,11 +901,23 @@ class RobosuiteZmqServer(BaseZmqServer):
                     return
                 if "joint" in action:
                     joint_targets = action["joint"]
+                    n_spec = len(self._spec.actuator_names)
+                    if self._joint_ctrl_hold_client_pin is None or int(
+                        self._joint_ctrl_hold_client_pin.shape[0]
+                    ) != n_spec:
+                        self._joint_ctrl_hold_client_pin = np.zeros(n_spec, dtype=np.bool_)
                     for i, aname in enumerate(self._spec.actuator_names):
                         if i < len(joint_targets):
                             aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
                             if aid >= 0:
-                                self._mjdata.ctrl[aid] = joint_targets[i]
+                                v = float(joint_targets[i])
+                                self._mjdata.ctrl[aid] = v
+                                if (
+                                    self._joint_ctrl_hold is not None
+                                    and i < int(self._joint_ctrl_hold.shape[0])
+                                ):
+                                    self._joint_ctrl_hold[i] = v
+                                    self._joint_ctrl_hold_client_pin[i] = True
 
                 if has_xyt:
                     raw = np.asarray(action["xyt"], dtype=np.float64).reshape(-1)
@@ -662,6 +946,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                             )
                         else:
                             logger.info(f"Sim navigation (teleport): base at x={wx:.3f} y={wy:.3f} theta={wt:.3f}.")
+                            self._sync_actuator_ctrl_from_joint_positions()
                         self._nav_goal_world = None
                         self._zero_base_free_joint_velocity()
                         self._at_goal = True
@@ -680,6 +965,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             if isinstance(ht, (list, tuple)) and len(ht) >= 2:
                 with self._mj_lock:
                     apply_head_to_robosuite(self._spec, self._mjmodel, self._mjdata, float(ht[0]), float(ht[1]))
+                    self._snapshot_spec_hold_from_ctrl()
 
     @override
     def get_full_observation_message(self) -> dict[str, Any]:
@@ -727,17 +1013,20 @@ class RobosuiteZmqServer(BaseZmqServer):
             "lidar_timestamp": None,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
         }
+        # Extra cameras use the shared EGL renderer; after --steps the sim thread may have stopped
+        # and the GL context can be invalid — skip optional views to avoid eglMakeCurrent failures.
+        allow_extra_cams = bool(getattr(self, "_running", True))
         right_name = self._stereo_right_camera_name()
-        if right_name is not None:
+        if right_name is not None and allow_extra_cams:
             try:
                 rgb_r, K_r = self._primary_rgb_only_with_K(right_name)
                 if rgb_r.shape[0] == rgb.shape[0] and rgb_r.shape[1] == rgb.shape[1]:
                     message["rgb_right"] = compression.to_jpg(rgb_r)
                     message["camera_K_right"] = K_r
                     message["camera_pose_right"] = self._camera_pose_world(right_name)
-            except Exception:
-                logger.debug("Stereo auxiliary RGB failed for %s", right_name, exc_info=True)
-        if len(cam_names) >= 3:
+            except Exception as e:
+                logger.debug(f"Stereo auxiliary RGB failed for {right_name}: {e!r}")
+        if len(cam_names) >= 3 and allow_extra_cams:
             tertiary = cam_names[2]
             if tertiary not in (primary_cam, right_name):
                 try:
@@ -746,8 +1035,8 @@ class RobosuiteZmqServer(BaseZmqServer):
                     message["camera_K_tertiary"] = K_t
                     message["camera_pose_tertiary"] = self._camera_pose_world(tertiary)
                     message["camera_name_tertiary"] = tertiary
-                except Exception:
-                    logger.debug("Tertiary RGB failed for %s", tertiary, exc_info=True)
+                except Exception as e:
+                    logger.debug(f"Tertiary RGB failed for {tertiary}: {e!r}")
         return self._attach_emet_session(message)
 
     @override
@@ -813,11 +1102,18 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     def _sim_loop(self) -> None:
         """Step the MuJoCo simulation at the configured rate."""
+        if self._mujoco_ctrl_debug_enabled():
+            self._ctrl_debug_emit_apply_logs = True
+            logger.info("[mujoco_ctrl_debug] headless _sim_loop: apply logging enabled")
         while self._running:
             with self._mj_lock:
                 self._step_base_navigation_drive()
-                mujoco.mj_step(self._mjmodel, self._mjdata)
-            self._physics_steps_executed += 1
+                for _ in range(self._mj_substeps_per_tick):
+                    self._apply_joint_ctrl_hold_to_actuators()
+                    mujoco.mj_step(self._mjmodel, self._mjdata)
+                    self._physics_steps_executed += 1
+                    if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
+                        break
             if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
                 logger.info(f"MuJoCo step limit reached (--steps {self._max_sim_steps}); stopping simulation loop.")
                 self._running = False
@@ -837,14 +1133,21 @@ class RobosuiteZmqServer(BaseZmqServer):
                 show_right_ui=show_viewer_ui,
             ) as viewer:
                 logger.info("MuJoCo passive viewer open (close window or Ctrl+C to stop).")
+                if self._mujoco_ctrl_debug_enabled():
+                    self._ctrl_debug_emit_apply_logs = True
+                    logger.info("[mujoco_ctrl_debug] passive viewer: apply logging enabled")
                 while self._running and viewer.is_running():
                     # Keep mj_step and viewer.sync under the same lock: sync uses mj_copyDataVisual
                     # and must not overlap Renderer / mj_forward on other ZMQ threads.
                     with self._mj_lock:
                         self._step_base_navigation_drive()
-                        mujoco.mj_step(self._mjmodel, self._mjdata)
+                        for _ in range(self._mj_substeps_per_tick):
+                            self._apply_joint_ctrl_hold_to_actuators()
+                            mujoco.mj_step(self._mjmodel, self._mjdata)
+                            self._physics_steps_executed += 1
+                            if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
+                                break
                         viewer.sync()
-                    self._physics_steps_executed += 1
                     if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
                         logger.info(f"MuJoCo step limit reached (--steps {self._max_sim_steps}); closing viewer loop.")
                         self._running = False
@@ -871,12 +1174,72 @@ class RobosuiteZmqServer(BaseZmqServer):
     ) -> None:
         self._load_model()
         self._running = True
+        pl_debug = robosuite_post_load_debug_enabled(self._debug_molmospaces_spawn)
+        if self._mjmodel is not None and self._mjdata is not None:
+            with self._mj_lock:
+                if pl_debug:
+                    log_post_load_diagnostics(
+                        logger,
+                        model=self._mjmodel,
+                        data=self._mjdata,
+                        spec=self._spec,
+                        stage="after_load",
+                        base_body_name=self._spec.base_link_name,
+                    )
+                if apply_home_keyframe_preserving_base(
+                    self._mjmodel,
+                    self._mjdata,
+                    base_body_name=self._spec.base_link_name,
+                ):
+                    logger.info("Applied MJCF keyframe 'home' (preserved base free-joint pose).")
+                    self._sync_actuator_ctrl_from_joint_positions()
+                    mujoco.mj_forward(self._mjmodel, self._mjdata)
         self._stabilize_physics_state_after_load()
         if self._molmospaces_autoplace_snap_qpos0:
             with self._mj_lock:
                 self._restore_merged_base_freejoint_from_qpos0()
                 self._sync_actuator_ctrl_from_joint_positions()
                 mujoco.mj_forward(self._mjmodel, self._mjdata)
+                # ``restore`` snaps the free base out of whatever pose stabilize drifted to; that jump
+                # can leave arms / contacts inconsistent with the spawn frame. Run a longer settle so
+                # PD + contacts re-equilibrate before ZMQ clients observe the scene (iTHOR + rby1).
+                for _ in range(72):
+                    self._apply_joint_ctrl_hold_to_actuators()
+                    mujoco.mj_step(self._mjmodel, self._mjdata)
+                self._mjdata.qvel.fill(0.0)
+                self._sync_actuator_ctrl_from_joint_positions()
+                mujoco.mj_forward(self._mjmodel, self._mjdata)
+                if molmospaces_spawn.resettle_free_base_z_at_current_xy_preserving_yaw(
+                    self._mjmodel,
+                    self._mjdata,
+                    base_body_name=self._spec.base_link_name,
+                    robot_key=self._spec.name,
+                ):
+                    logger.info(
+                        "MolmoSpaces post-settle: re-aligned base height to floor at fixed (x,y) "
+                        "(torso/arms match home after dynamics)."
+                    )
+                    self._sync_actuator_ctrl_from_joint_positions()
+                    mujoco.mj_forward(self._mjmodel, self._mjdata)
+                np.copyto(self._mjmodel.qpos0, self._mjdata.qpos)
+        if pl_debug and self._mjmodel is not None and self._mjdata is not None:
+            with self._mj_lock:
+                log_post_load_diagnostics(
+                    logger,
+                    model=self._mjmodel,
+                    data=self._mjdata,
+                    spec=self._spec,
+                    stage="after_stabilize",
+                    base_body_name=self._spec.base_link_name,
+                )
+                mx = probe_max_qvel_unforced_steps(
+                    self._mjmodel,
+                    self._mjdata,
+                    n_steps=24,
+                    sync_ctrl=self._sync_actuator_ctrl_from_joint_positions,
+                )
+                if mx is not None:
+                    logger.info(f"[robosuite_load] post-stabilize 24-step probe max|qvel|={mx:.4f}")
         self._initial_xyt = self.get_base_xyt()
         self._nav_goal_world = None
         self._at_goal = True
@@ -887,6 +1250,31 @@ class RobosuiteZmqServer(BaseZmqServer):
         print(summary, flush=True)
         logger.info("\n" + summary)
 
+        if self._mjmodel is not None and self._mjdata is not None:
+            with self._mj_lock:
+                if self._mujoco_ctrl_debug_enabled():
+                    self._ctrl_debug_periodic_counter = 0
+                    self._ctrl_debug_initial_logs_remaining = max(
+                        48, int(self._mj_substeps_per_tick) * 8
+                    )
+                self._sync_actuator_ctrl_from_joint_positions()
+                self._apply_joint_ctrl_hold_to_actuators()
+                mujoco.mj_forward(self._mjmodel, self._mjdata)
+                if self._mujoco_ctrl_debug_enabled():
+                    logger.info(
+                        "[mujoco_ctrl_debug] pre_threads (set EMET_MUJOCO_CTRL_DEBUG=0 to disable): "
+                        f"nu={int(self._mjmodel.nu)} nv={int(self._mjmodel.nv)} "
+                        f"timestep={float(self._mjmodel.opt.timestep):g}s "
+                        f"substeps_per_tick={int(self._mj_substeps_per_tick)} "
+                        f"stationary={type(self._mujoco_stationary).__name__} "
+                        f"| {self._mujoco_ctrl_debug_summary()}"
+                    )
+                    logger.info(f"[mujoco_ctrl_debug] pre_threads_pd {self._mujoco_ctrl_debug_pd_tracking()}")
+                    logger.info(
+                        "[mujoco_ctrl_debug] set EMET_MUJOCO_CTRL_DEBUG_VERBOSE=1 for full lines "
+                        "(Δq0 vs qpos0, dq, F_act, τ_dof, τ_con) on all torso joints + arm1 pair."
+                    )
+
         super().start()
 
         self._sim_thread: threading.Thread | None = None
@@ -896,6 +1284,13 @@ class RobosuiteZmqServer(BaseZmqServer):
             f"RobosuiteZmqServer started for robot '{self._spec.name}' "
             f"({self._spec.dof} DOF, {len(self._spec.actuator_names)} actuators)"
         )
+        if self._mujoco_ctrl_debug_enabled():
+            mode = "passive_viewer_main_loop" if use_viewer else "headless_sim_thread"
+            logger.info(
+                f"[mujoco_ctrl_debug] physics mode={mode!r}; first "
+                f"{self._ctrl_debug_initial_logs_remaining} apply cycles at INFO, then every 240 applies; "
+                "second line: torso hip + max|Δq0| vs qpos0 (q−ctrl not diagnostic when unpinned hold tracks q)."
+            )
         print("Server running. Press Ctrl+C to stop.", flush=True)
 
         if use_viewer:

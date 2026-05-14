@@ -126,7 +126,7 @@ Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. T
    emet serve mujoco --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0 --robot rby1 --headless
    ```
 
-   This calls the wrapper’s `merge-scene`, writes the merged MJCF under **`src/emet/assets/robot/galaxea_r1/`** (a temp file named `molmospaces_merged_*.xml`), then starts `emet.simulation.mujoco_server` with `--robot rby1` (unless you pass `--robot galaxea_r1` / `rby1`). The file must live next to `galaxea_r1.xml` so MuJoCo resolves the robot’s `assetdir="meshes"`; writing the merge under `/tmp` breaks mesh loading. The merged file is kept on disk until the server **stops** (so iTHOR occupancy sampling can read the same path), then removed. Default `--robot stretch` is upgraded to **rby1** when using `--molmospaces-scene`.
+   This calls the wrapper’s `merge-scene`, writes the merged MJCF under **`src/emet/assets/robot/galaxea_r1/`** (a temp file named `molmospaces_merged_*.xml`), then starts `emet.simulation.mujoco_server` with `--robot` set to the same robot you merged (e.g. `rby1` or `galaxea_r1`). The file must live next to `galaxea_r1.xml` so MuJoCo resolves the robot’s `assetdir="meshes"`; writing the merge under `/tmp` breaks mesh loading. The merged file is kept on disk until the server **stops** (so iTHOR occupancy sampling can read the same path), then removed. If you omit `--robot`, the effective default for this path is **rby1** (Stretch has no bundled merge MJCF; passing `--robot stretch` is an error).
 
 3. Run the agent:
 
@@ -137,6 +137,20 @@ Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. T
 **Optional: fixed path** — use `emet molmospaces merge-scene ... -o /path/to/merged.xml` if you want a stable file, then `emet serve mujoco --robot rby1 --scene-path /path/to/merged.xml`.
 
 Use `--port-offset` on both server and agent if default ZMQ ports are busy. The agent uses **`GenericZmqClient`** for `rby1`, matching `emet run dynamem --robot rby1`.
+
+### FAQ (ZMQ path vs wrapper `molmospaces serve`)
+
+- **Why does the merged MJCF always live under `…/galaxea_r1/` even when I pass `--robot innate_mars`?**  
+  MuJoCo resolves the robot’s `assetdir="meshes"` relative to the **main** MJCF file. Emet always writes the temp merge next to the vendored **Galaxea R1** XML so mesh paths resolve. That directory name is **not** a claim that the articulated model is always “Galaxea”; the merged robot follows `--robot` (bundled MJCF only).
+
+- **Why does `--robot stretch` fail?**  
+  There is no Stretch-in-iTHOR MJCF on the emet merge path. Use `rby1`, `galaxea_r1`, `innate_mars`, `rb_y1`, or `maurice`, or omit `--robot` (defaults to `rby1` when `--molmospaces-scene` is set).
+
+- **Does `emet serve mujoco --molmospaces-scene` run Molmo’s learned policies?**  
+  No. The ZMQ server uses **emet’s** `RobosuiteZmqServer`: MuJoCo dynamics, PD-style actuators from the MJCF, and the same ZMQ protocol as other non-Stretch sims. It is not the upstream MolmoSpaces Python control stack.
+
+- **Post-load diagnostics (actuators, floor height, short `mj_step` probe):**  
+  Pass `--debug-molmospaces-spawn` on `emet serve mujoco`, or set **`EMET_ROBOSUITE_POST_LOAD_DEBUG=1`**. After load, emet applies the MJCF **`home` keyframe** when present (e.g. Galaxea R1) while **preserving** the MolmoSpaces autoplace base pose, then stabilizes; this reduces arm/torso collapse from default compiled `qpos`.
 
 **iTHOR spawn occupancy (ZMQ server):** For **`ithor`** scenes, free-joint XY search prefers points sampled from the same orthographic occupancy map (Molmo-style) before falling back to annulus/grid heuristics. Set **`EMET_MOLMOSPACES_OCC_MAP=0`** (or `false`) to disable. **`EMET_MOLMOSPACES_OCC_SEED`** seeds the occupancy free-point subsample (default `0`).
 
@@ -191,6 +205,12 @@ emet molmospaces export-nerfstudio --episode-dir ./data/molmo_ep_ithor_0
 ### MuJoCo version note
 
 MolmoSpaces assets are built with **MuJoCo 3.4**; the main **`sim`** extra pins **mujoco>=3.4** for compatibility. If `emet serve mujoco` still fails to load a merged MJCF, report an asset compatibility issue. The wrapper venv is still required for **download/install/merge**; the server should run where **`emet` and sim extras** are installed.
+
+### Simulation control (emet ZMQ vs MolmoSpaces upstream)
+
+MolmoSpaces keeps articulated robots from collapsing at idle by **holding joint targets** and **rewriting actuator `ctrl` every physics sub-step** before `env.step` (see upstream `molmo_spaces/tasks/task.py`: inner loop calls `robot.compute_control()` then steps; `RBY1.update_control` / `compute_control` in `molmo_spaces/robots/rby1.py`; stationary joint targets in `molmo_spaces/controllers/joint_pos.py`).
+
+The emet **`RobosuiteZmqServer`** path does not import that stack (different object graph and optional MolmoSpaces venv). It **mirrors the same semantics**: a per-actuator hold buffer aligned with `RobotSpec` joint/actuator names, refreshed when ZMQ sends `joint` targets or when post-load sync copies `qpos` into `ctrl`, then **re-applied before each `mj_step`** so PD actuators never sit on stale `ctrl` between client messages.
 
 ## Showing results
 
