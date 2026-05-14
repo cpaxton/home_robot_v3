@@ -11,6 +11,7 @@ from emet.perception.depth.da3_estimator import (
     apply_da3_sky_row_mask,
     create_da3_estimator_from_parameters,
     resolve_depth_map,
+    resolve_depth_map_uses_observation_sensor_only,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "apply_da3_sky_row_mask",
     "create_da3_estimator_from_parameters",
     "resolve_depth_map",
+    "resolve_depth_map_uses_observation_sensor_only",
 ]

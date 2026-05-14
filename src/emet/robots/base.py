@@ -46,8 +46,9 @@ class RobotSpec:
     dynamem_depth_source_hint: str | None = None
     """When hardware omits depth on ZMQ, DynaMem usually needs this ``depth_source`` (see dynav YAML)."""
     default_dynav_config: str | None = None
-    """When ``emet run dynamem`` is invoked with the global default ``--dynav-config dynav_config.yaml``,
-    substitute this packaged basename (under ``emet/config/``) for this robot."""
+    """Optional packaged basename under ``emet/config/`` when ``emet run dynamem`` uses the global
+    default ``--dynav-config dynav_config.yaml``. Most robots omit this and share ``dynav_config.yaml``.
+    """
     planar_base_joint_names: tuple[str, str, str] | None = None
     """If set, MuJoCo nav uses three **world-aligned** scalar joints ``(slide_X, slide_Y, hinge_yaw)``
     actuated as **velocity** targets instead of a single ``base_link`` **free** joint. Names must match
@@ -73,7 +74,7 @@ def format_robot_runtime_notes(spec: RobotSpec) -> str | None:
     if spec.dynamem_depth_source_hint:
         chunks.append(
             f"DynaMem without hardware depth: depth_source={spec.dynamem_depth_source_hint!r} "
-            f"(e.g. config dynav_{spec.name}.yaml when shipped)"
+            f"(e.g. ``--dynav-config dynav_innate_mars.yaml`` for innate_mars; or a packaged dynav_<robot>.yaml)"
         )
     return " — ".join(chunks) if chunks else None
 

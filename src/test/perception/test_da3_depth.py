@@ -13,6 +13,7 @@ from emet.core.parameters import Parameters
 from emet.perception.depth.da3_estimator import (
     apply_da3_sky_row_mask,
     create_da3_estimator_from_parameters,
+    resolve_depth_map_uses_observation_sensor_only,
     resize_depth_to_match_rgb,
 )
 
@@ -132,3 +133,88 @@ def test_dynamem_controller_resolve_depth_auto_falls_back_to_da3(monkeypatch):
     out = DynamemController._resolve_depth_map(ctrl, rgb, None, np.eye(3), np.eye(4))
     assert out.shape == (5, 6)
     assert float(out.mean()) == pytest.approx(1.25)
+
+
+def test_resolve_depth_map_uses_observation_sensor_only():
+    assert resolve_depth_map_uses_observation_sensor_only("sensor", None) is True
+    assert resolve_depth_map_uses_observation_sensor_only("auto", np.zeros((2, 2), np.float32)) is True
+    assert resolve_depth_map_uses_observation_sensor_only("auto", None) is False
+    assert resolve_depth_map_uses_observation_sensor_only("da3", np.zeros((2, 2))) is False
+
+
+def test_dynamem_resolve_depth_infer_flag_auto_uses_sensor(monkeypatch):
+    pytest.importorskip("torch")
+    from emet.controller.controller_dynamem import DynamemController
+    from emet.core.parameters import get_parameters
+
+    params = get_parameters("dynav_config.yaml")
+    params["depth_source"] = "auto"
+    ctrl = DynamemController.__new__(DynamemController)
+    ctrl.parameters = params
+    ctrl._depth_source = "auto"
+    ctrl._debug_perfect_sensor_depth = False
+    ctrl._da3_estimator = None
+    ctrl.device = "cpu"
+
+    def _boom(self):
+        raise AssertionError("DA3 must not load when auto uses sensor depth")
+
+    monkeypatch.setattr(DynamemController, "_lazy_da3_estimator", _boom)
+
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+    sd = np.ones((4, 4), dtype=np.float32) * 0.4
+    out = DynamemController._resolve_depth_map(ctrl, rgb, sd, np.eye(3), np.eye(4))
+    assert out is not None
+    assert getattr(ctrl, "_depth_map_from_da3_infer", True) is False
+
+
+def test_dynamem_resolve_depth_infer_flag_da3_infer(monkeypatch):
+    pytest.importorskip("torch")
+    from emet.controller.controller_dynamem import DynamemController
+    from emet.core.parameters import get_parameters
+
+    params = get_parameters("dynav_config.yaml")
+    params["depth_source"] = "da3"
+    ctrl = DynamemController.__new__(DynamemController)
+    ctrl.parameters = params
+    ctrl._depth_source = "da3"
+    ctrl._debug_perfect_sensor_depth = False
+    ctrl._da3_estimator = None
+    ctrl.device = "cpu"
+
+    class FakeEst:
+        def infer(self, rgb, intrinsics=None, extrinsics_w2c=None):
+            return np.full((rgb.shape[0], rgb.shape[1]), 0.88, dtype=np.float32)
+
+    monkeypatch.setattr(DynamemController, "_lazy_da3_estimator", lambda self: FakeEst())
+
+    rgb = np.zeros((3, 5, 3), dtype=np.uint8)
+    out = DynamemController._resolve_depth_map(ctrl, rgb, None, np.eye(3), np.eye(4))
+    assert out is not None
+    assert getattr(ctrl, "_depth_map_from_da3_infer", False) is True
+
+
+def test_dynamem_debug_perfect_depth_skips_da3_and_infer_flag(monkeypatch):
+    pytest.importorskip("torch")
+    from emet.controller.controller_dynamem import DynamemController
+    from emet.core.parameters import get_parameters
+
+    params = get_parameters("dynav_config.yaml")
+    params["depth_source"] = "da3"
+    ctrl = DynamemController.__new__(DynamemController)
+    ctrl.parameters = params
+    ctrl._depth_source = "da3"
+    ctrl._debug_perfect_sensor_depth = True
+    ctrl._da3_estimator = None
+    ctrl.device = "cpu"
+
+    def _must_not_load_da3(self):
+        raise AssertionError("DA3 must not load")
+
+    monkeypatch.setattr(DynamemController, "_lazy_da3_estimator", _must_not_load_da3)
+
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+    sd = np.ones((4, 4), dtype=np.float32) * 0.6
+    out = DynamemController._resolve_depth_map(ctrl, rgb, sd, np.eye(3), np.eye(4))
+    assert out is not None and np.allclose(out, 0.6)
+    assert getattr(ctrl, "_depth_map_from_da3_infer", True) is False

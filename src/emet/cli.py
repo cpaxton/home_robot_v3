@@ -916,6 +916,7 @@ def deploy(
             "create-and-print-memory",
             "molmospaces-explore",
             "debug-da3-depth",
+            "debug-circle-rerun",
         ]
     ),
 )
@@ -971,6 +972,7 @@ def run(
       emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
       emet run discord --robot-ip 192.168.1.15 --task pickup   # requires DISCORD_TOKEN in env
       emet run debug-da3-depth --robot innate_mars   # DA3 depth + point cloud in Rerun (or: emet debug-da3-depth)
+      emet run debug-circle-rerun   # pole-ring calibration → Rerun (or: emet debug-circle-rerun)
     """
     args = list(ctx.args)
     args.extend(["--robot_ip", robot_ip])
@@ -1050,6 +1052,8 @@ def run(
         sys.exit(_run_module("emet.app.create_and_print_memory", args))
     elif app == "debug-da3-depth":
         sys.exit(_run_module("emet.app.debug_da3_depth", args))
+    elif app == "debug-circle-rerun":
+        sys.exit(_run_module("emet.app.debug_circle_rerun", args))
     else:
         click.echo(f"Unknown app: {app}", err=True)
         sys.exit(1)
@@ -1647,6 +1651,11 @@ from emet.app.debug_da3_depth import main as _debug_da3_depth_app  # noqa: E402
 
 _debug_da3_depth_app.short_help = "Live DA3 depth + point cloud from ZMQ (Rerun)"
 main.add_command(_debug_da3_depth_app)
+
+from emet.app.debug_circle_rerun import main as _debug_circle_rerun_app  # noqa: E402
+
+_debug_circle_rerun_app.short_help = "Pole-ring calibration scene → Rerun (sensor depth, in-process)"
+main.add_command(_debug_circle_rerun_app)
 
 
 if __name__ == "__main__":

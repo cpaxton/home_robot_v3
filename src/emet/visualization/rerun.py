@@ -13,6 +13,7 @@ import os
 import socket
 import time
 import timeit
+from dataclasses import replace
 from typing import Any
 
 import numpy as np
@@ -608,11 +609,14 @@ class RerunVisualizer:
             rr.Points3D(positions=xyz, radii=0.06, labels=labels),
         )
 
-    def log_head_camera(self, obs: Observations):
-        """Log head camera pose and images
+    def log_head_camera(self, obs: Observations, *, mapping_depth: np.ndarray | None = None):
+        """Log head camera pose and images.
 
         Args:
-            obs (Observations): Observation dataclass
+            obs: Observation dataclass.
+            mapping_depth: Optional H×W depth (meters), same shape as ``obs.rgb`` rows/cols. When provided,
+                the head point cloud (and optional depth panel) uses this buffer so Rerun matches the
+                depth map fused into DynaMem (e.g. DA3). Otherwise ZMQ ``obs.depth`` is used.
         """
         if obs is None or getattr(obs, "rgb", None) is None:
             return
@@ -620,8 +624,14 @@ class RerunVisualizer:
         rgb = np.ascontiguousarray(_rgb_to_uint8(obs.rgb))
         log_to_rerun("world/head_camera/rgb", rr.Image(rgb, color_model=rr.ColorModel.RGB))
 
+        cam = obs
+        if mapping_depth is not None and rgb.ndim == 3 and rgb.shape[2] == 3:
+            md = np.asarray(mapping_depth, dtype=np.float32)
+            if md.ndim == 2 and md.shape == tuple(rgb.shape[:2]):
+                cam = replace(obs, depth=md, xyz=None)
+
         if self.show_camera_point_clouds:
-            head_xyz = obs.get_xyz_in_world_frame()
+            head_xyz = cam.get_xyz_in_world_frame()
             if head_xyz is not None:
                 head_xyz = head_xyz.reshape(-1, 3)
                 head_rgb = rgb.reshape(-1, 3)
@@ -634,8 +644,9 @@ class RerunVisualizer:
                     ),
                 )
         else:
-            if obs.depth is not None:
-                log_to_rerun("world/head_camera/depth", rr.depthimage(obs.depth))
+            dvis = cam.depth if cam.depth is not None else obs.depth
+            if dvis is not None:
+                log_to_rerun("world/head_camera/depth", rr.depthimage(dvis))
 
         if self.show_cameras_in_3d_view and getattr(obs, "camera_pose", None) is not None:
             rot, trans = decompose_homogeneous_matrix(obs.camera_pose)
@@ -1310,7 +1321,7 @@ class RerunVisualizer:
         # log_to_rerun("world/xyt_goal", rr.Clear(recursive=True))
         # rr.set_time_seconds("realtime", ts)
 
-    def step(self, obs, servo):
+    def step(self, obs, servo, *, mapping_depth: np.ndarray | None = None):
         """Log streaming robot/sensor data.
 
         *obs* is typically the full ZMQ observation dict (Stretch / Generic) or an Observations instance.
@@ -1319,6 +1330,9 @@ class RerunVisualizer:
 
         When the full-observation socket has no frame yet (or frames are skipped e.g. missing depth),
         *obs* may be ``None`` while *servo* still carries head RGB and base pose — log from *servo* in that case.
+
+        *mapping_depth* is the H×W depth (meters) last used for DynaMem voxel fusion; when its shape matches
+        head RGB, ``world/head_camera/points`` is built from it so Rerun matches ``world/point_cloud``.
         """
         head_cam = _pick_rerun_head_cam(obs, servo)
         if head_cam is None or getattr(head_cam, "rgb", None) is None:
@@ -1352,7 +1366,7 @@ class RerunVisualizer:
             self.log_robot_xyt(obs_pose)
             self.log_ee_frame(obs_pose)
 
-            self.log_head_camera(head_cam)
+            self.log_head_camera(head_cam, mapping_depth=mapping_depth)
             self.log_ee_camera(head_cam)
 
             if self.display_robot_mesh and getattr(self, "mjcf_skeleton", None) is not None:

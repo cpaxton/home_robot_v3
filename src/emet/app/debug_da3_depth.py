@@ -22,6 +22,7 @@ from emet.perception.depth.da3_estimator import (
     DA3DepthEstimator,
     apply_da3_sky_row_mask,
     resolve_depth_map,
+    resolve_depth_map_uses_observation_sensor_only,
 )
 
 
@@ -251,7 +252,11 @@ def main(
                 getattr(obs, "head_camera_K_right", None),
                 getattr(obs, "head_camera_pose_right", None),
             )
-            if depth is not None and sky_fraction_top > 0:
+            if (
+                depth is not None
+                and sky_fraction_top > 0
+                and not resolve_depth_map_uses_observation_sensor_only(depth_source, obs.depth)
+            ):
                 depth = apply_da3_sky_row_mask(np.asarray(depth, dtype=np.float32), sky_fraction_top)
 
             rr.set_time_sequence("frame", frame)

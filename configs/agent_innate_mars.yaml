@@ -4,7 +4,7 @@
 # DA3 depth so behavior matches the real Mars stack (no hardware depth on ZMQ). For MuJoCo-only
 # tests with sim depth, you can use ``depth_source: sensor`` and drop the ``da3_*`` keys; see
 # ``src/emet/config/dynav_innate_mars.yaml`` for the minimal dynav override. For ``emet run dynamem``,
-# ``--robot innate_mars`` with the default ``--dynav-config`` auto-loads that YAML (see ``RobotSpec.default_dynav_config``).
+# use ``--dynav-config dynav_innate_mars.yaml`` when you need that preset (default is ``dynav_config.yaml``).
 #
 # ``robot`` below is used when you omit ``--robot`` on the CLI (CLI always wins if set).
 #

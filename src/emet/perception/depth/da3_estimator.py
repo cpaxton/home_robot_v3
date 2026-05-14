@@ -280,3 +280,19 @@ def resolve_depth_map(
         return est.infer(rgb, intrinsics=k_use, extrinsics_w2c=p_use)
 
     return est.infer(rgb, intrinsics=k_use, extrinsics_w2c=p_use)
+
+
+def resolve_depth_map_uses_observation_sensor_only(
+    depth_source: str,
+    sensor_depth: np.ndarray | None,
+) -> bool:
+    """True when :func:`resolve_depth_map` returns raw ``sensor_depth`` (not DA3 / stereo inference).
+
+    Used to skip ``da3_ignore_sky_fraction_top`` masking on real / simulator depth.
+    """
+    mode = str(depth_source).lower()
+    if mode == "sensor":
+        return True
+    if mode == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
+        return True
+    return False

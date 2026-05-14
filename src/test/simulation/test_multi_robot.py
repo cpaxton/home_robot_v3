@@ -113,6 +113,43 @@ def test_generic_zmq_client_import():
     assert GenericZmqClient is not None
 
 
+def test_generic_zmq_mapping_depth_copy_on_store():
+    """Fused depth is copied on store so voxel/Rerun threads do not share a mutable buffer."""
+    from threading import Lock
+
+    import numpy as np
+
+    from emet.controller.generic_zmq_client import GenericZmqClient
+
+    c = GenericZmqClient.__new__(GenericZmqClient)
+    c._mapping_depth_lock = Lock()
+    c._mapping_depth_for_rerun = None
+    d = np.ones((2, 4), dtype=np.float32)
+    c.set_mapping_depth_for_rerun(d)
+    d[0, 0] = 7.0
+    out = c.peek_mapping_depth_for_rerun()
+    assert out is not None and float(out[0, 0]) == 1.0
+    c.set_mapping_depth_for_rerun(None)
+    assert c.peek_mapping_depth_for_rerun() is None
+
+
+def test_stretch_zmq_mapping_depth_copy_on_store():
+    from threading import Lock
+
+    import numpy as np
+
+    from emet.controller.zmq_client import StretchZmqClient
+
+    c = StretchZmqClient.__new__(StretchZmqClient)
+    c._mapping_depth_lock = Lock()
+    c._mapping_depth_for_rerun = None
+    d = np.ones((3, 2), dtype=np.float32)
+    c.set_mapping_depth_for_rerun(d)
+    d[1, 1] = 8.0
+    out = c.peek_mapping_depth_for_rerun()
+    assert out is not None and float(out[1, 1]) == 1.0
+
+
 def test_stretch_zmq_client_backward_compat():
     """HomeRobotZmqClient alias still works."""
     from emet.controller import HomeRobotZmqClient, StretchZmqClient

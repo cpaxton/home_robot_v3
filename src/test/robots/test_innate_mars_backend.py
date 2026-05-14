@@ -38,7 +38,7 @@ def test_innate_mars_spec():
         assert s.urdf_path is None
     assert s.optional_uv_extras == ()
     assert s.dynamem_depth_source_hint == "da3"
-    assert s.default_dynav_config == "dynav_innate_mars.yaml"
+    assert s.default_dynav_config is None
     assert s.planar_base_joint_names == ("base_x", "base_y", "base_yaw")
     assert s.robosuite_rgb_depth_ops == ("flipud",)
 
@@ -385,23 +385,18 @@ def test_innate_mars_joint_head_hinge_matches_mjcf_sim_nods_gaze():
 def test_resolve_dynav_config_yaml_innate_mars_and_stretch():
     from emet.robots import DEFAULT_DYNAV_CONFIG_YAML, resolve_dynav_config_yaml
 
-    assert (
-        resolve_dynav_config_yaml("innate_mars", DEFAULT_DYNAV_CONFIG_YAML)
-        == "dynav_innate_mars.yaml"
-    )
-    assert resolve_dynav_config_yaml("innate-mars", DEFAULT_DYNAV_CONFIG_YAML) == "dynav_innate_mars.yaml"
+    assert resolve_dynav_config_yaml("innate_mars", DEFAULT_DYNAV_CONFIG_YAML) == DEFAULT_DYNAV_CONFIG_YAML
+    assert resolve_dynav_config_yaml("innate-mars", DEFAULT_DYNAV_CONFIG_YAML) == DEFAULT_DYNAV_CONFIG_YAML
     assert (
         resolve_dynav_config_yaml("innate_mars", "dynav_innate_mars.yaml") == "dynav_innate_mars.yaml"
     )
     assert resolve_dynav_config_yaml("stretch", DEFAULT_DYNAV_CONFIG_YAML) == DEFAULT_DYNAV_CONFIG_YAML
 
 
-def test_innate_mars_resolved_default_dynav_parameters_use_da3():
+def test_dynav_innate_mars_yaml_parameters_use_da3():
     from emet.core.parameters import get_parameters
-    from emet.robots import DEFAULT_DYNAV_CONFIG_YAML, resolve_dynav_config_yaml
 
-    path = resolve_dynav_config_yaml("innate_mars", DEFAULT_DYNAV_CONFIG_YAML)
-    params = get_parameters(path)
+    params = get_parameters("dynav_innate_mars.yaml")
     assert str(params.get("depth_source")).lower() == "da3"
 
 
@@ -411,11 +406,12 @@ def test_get_robot_spec_and_runtime_notes_innate_mars():
     s = get_robot_spec("innate_mars")
     assert s is not None
     assert s.optional_uv_extras == ()
-    assert s.default_dynav_config == "dynav_innate_mars.yaml"
+    assert s.default_dynav_config is None
     notes = format_robot_runtime_notes(s)
     assert notes is not None
     assert "uv sync" not in notes
     assert "depth_source=" in notes
+    assert "dynav_innate_mars.yaml" in notes
 
 
 def test_innate_mars_planar_base_navigation_moves_toward_xyt_goal():

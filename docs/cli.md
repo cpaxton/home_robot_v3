@@ -47,7 +47,7 @@ Start a simulation server.
 The positional **`[mujoco|robocasa]`** is optional (`emet serve` defaults to **mujoco**).
 
 **Options:**
-- `--robot NAME` — Simulator robot (default `stretch`). Use **`innate_mars`**, **`rby1`**, **`galaxea_r1`**, etc. for registry robots: loads **`scene_environment.xml`** (default table room: red cylinder, blue cube, floor) merged with that robot’s MJCF and starts the **generic ZMQ** sim (`RobosuiteZmqServer`) on ports **4401–4404**. Must match **`emet run dynamem --robot NAME`** (or `create_robot_client_from_cli`) on the client. For DynaMem with Innate Mars + Depth Anything 3, pass **`--dynav-config dynav_innate_mars.yaml`** to **`emet run dynamem`** (see `docs/robots/innate_mars.md`).
+- `--robot NAME` — Simulator robot (default `stretch`). Use **`innate_mars`**, **`rby1`**, **`galaxea_r1`**, etc. for registry robots: loads **`scene_environment.xml`** (default table room: red cylinder, blue cube, floor) merged with that robot’s MJCF and starts the **generic ZMQ** sim (`RobosuiteZmqServer`) on ports **4401–4404**. Must match **`emet run dynamem --robot NAME`** (or `create_robot_client_from_cli`) on the client. DynaMem uses the same default **`dynav_config.yaml`** for all robots; for Innate Mars **without** ZMQ depth, add **`--dynav-config dynav_innate_mars.yaml`** (see `docs/robots/innate_mars.md`).
 - `--use-robocasa` — Use Robocasa for scene generation (default task: PickPlaceCounterToCabinet)
 - `--list-robocasa-tasks` — Print all Robocasa task names and exit (for use with `--robocasa-task`)
 - `--headless` — Run without native viewer (use web at http://localhost:9090?url=ws://localhost:9877)
@@ -60,7 +60,7 @@ The positional **`[mujoco|robocasa]`** is optional (`emet serve` defaults to **m
 emet serve                          # MuJoCo, default scene, Stretch
 emet serve mujoco --headless        # No native viewer
 emet serve --robot innate_mars --headless   # Innate Mars + default table (match client --robot)
-emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S --dynav-config dynav_innate_mars.yaml   # DynaMem + DA3
+emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S --dynav-config dynav_innate_mars.yaml   # DynaMem + DA3 (no ZMQ depth)
 emet serve mujoco --use-robocasa    # Robocasa scene
 ```
 
