@@ -115,6 +115,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._molmospaces_autoplace_snap_qpos0 = False
         # After Robocasa planar autoplace, planar joint ``qpos0`` holds chosen (x, y, yaw).
         self._planar_autoplace_snap_qpos0 = False
+        # World SE(2) chosen by planar autoplace — reapplied after :meth:`_stabilize_physics_state_after_load`
+        # because fixture dynamics can shift the mount while planar qpos stay nearly unchanged.
+        self._planar_autoplace_world_xyt: np.ndarray | None = None
         # Actuator indices for :attr:`RobotSpec.planar_base_joint_names` (velocity motors); filled lazily.
         self._planar_base_actuator_ids_cache: tuple[int, int, int] | None = None
 
@@ -138,6 +141,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         else:
             raise ValueError("Either scene_xml or scene_model must be provided")
         self._mjdata = mujoco.MjData(self._mjmodel)
+        self._molmospaces_autoplace_snap_qpos0 = False
+        self._planar_autoplace_snap_qpos0 = False
+        self._planar_autoplace_world_xyt = None
         with self._mj_lock:
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             self._molmospaces_autoplace_free_base_after_load()
@@ -239,11 +245,6 @@ class RobosuiteZmqServer(BaseZmqServer):
                 f"Robocasa planar spawn debug: environment={self._environment_descriptor!r} "
                 f"base_body_name={base_name!r} joints={joint_names!r}"
             )
-        hint: np.ndarray | None = None
-        if self._environment_descriptor:
-            h = self._environment_descriptor.get("spawn_hint_xyt")
-            if h is not None:
-                hint = np.asarray(h, dtype=np.float64).reshape(-1)[:3]
         fp = self._spec.footprint
         margin = float(
             0.5
@@ -264,7 +265,6 @@ class RobosuiteZmqServer(BaseZmqServer):
                 merged_mjcf_path=self._scene_disk_path,
                 environment=self._environment_descriptor,
                 footprint_xy_margin_m=margin,
-                spawn_hint_xyt=hint,
             )
         except Exception as e:
             logger.warning(f"Robocasa planar autoplace skipped ({e!r}).")
@@ -275,6 +275,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             )
             return
         wx, wy, wt = placed
+        self._planar_autoplace_world_xyt = np.array([float(wx), float(wy), float(wt)], dtype=np.float64)
         logger.info(
             f"Robocasa planar autoplace: moved base to x={wx:.3f} y={wy:.3f} theta={wt:.3f} "
             f"(joints {joint_names!r}) for clearance from scene geometry."
@@ -600,6 +601,14 @@ class RobosuiteZmqServer(BaseZmqServer):
         with self._mj_lock:
             self._mjdata.qvel.fill(0.0)
             self._sync_actuator_ctrl_from_joint_positions()
+            # After Robocasa planar autoplace, ``mj_forward`` here (post-actuator sync) can corrupt
+            # the slide chain: ``base_link`` xpos collapses onto ``base_root`` while planar qpos are
+            # unchanged — only ``mj_fwdPosition`` is safe. Skip dynamics integration regardless.
+            # Post–planar-autoplace, avoid ``mj_forward``/``mj_fwdPosition`` after actuator sync: with
+            # velocity motors on the base and a freshly chosen ``qpos``, the full forward pass can put
+            # ``base_link`` on ``base_root`` while planar joint values stay fixed (MuJoCo 3.x in this merge).
+            if self._planar_autoplace_snap_qpos0:
+                return
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             for _ in range(8):
                 mujoco.mj_step(self._mjmodel, self._mjdata)
@@ -673,25 +682,22 @@ class RobosuiteZmqServer(BaseZmqServer):
         return self._planar_base_actuator_ids_cache
 
     def _teleport_planar_base_world_xyt(self, wx: float, wy: float, wt: float) -> bool:
-        """Snap planar slide+slide+yaw joints to world (x,y,yaw); zero their velocities and velocity ctrl."""
+        """Snap planar slide+slide+yaw so ``base_link`` reaches world (x,y,yaw); zero velocity ctrl."""
         names = getattr(self._spec, "planar_base_joint_names", None)
         if not names or len(names) != 3 or self._mjmodel is None or self._mjdata is None:
             return False
-        vals = (float(wx), float(wy), float(wt))
-        for jn, val in zip(names, vals, strict=True):
-            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jn)
-            if jid < 0:
-                return False
-            qadr = int(self._mjmodel.jnt_qposadr[jid])
-            vadr = int(self._mjmodel.jnt_dofadr[jid])
-            self._mjdata.qpos[qadr] = val
-            self._mjdata.qvel[vadr] = 0.0
-        aids = self._planar_base_velocity_actuator_ids()
-        if aids is not None:
-            for aid in aids:
-                self._mjdata.ctrl[aid] = 0.0
-        mujoco.mj_forward(self._mjmodel, self._mjdata)
-        return True
+        jn = (str(names[0]), str(names[1]), str(names[2]))
+        return bool(
+            scene_base_spawn.write_planar_base_xyt(
+                self._mjmodel,
+                self._mjdata,
+                joint_names=jn,
+                world_x=float(wx),
+                world_y=float(wy),
+                world_yaw=float(wt),
+                base_body_name=self._spec.base_link_name,
+            )
+        )
 
     @staticmethod
     def _spawn_rel_xyt_to_world(goal_rel: np.ndarray, init_world_xyt: np.ndarray) -> np.ndarray:
@@ -799,10 +805,30 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._mjdata.qvel[v0 + 3 : v0 + 6] = (vx, vy, 0.0)
         else:
             ax, ay, aw = planar_aids
-            # Planar Maurice base: world X/Y slides + world Z yaw; joint rates match world vx/vy/wz.
-            self._mjdata.ctrl[ax] = vx
-            self._mjdata.ctrl[ay] = vy
-            self._mjdata.ctrl[aw] = wz
+            names = getattr(self._spec, "planar_base_joint_names", None)
+            qxd, qyd = float(vx), float(vy)
+            qdot_yaw = float(wz)
+            if names and len(names) == 3:
+                jn = (str(names[0]), str(names[1]), str(names[2]))
+                anchor = scene_base_spawn.infer_planar_anchor_body_name(self._mjmodel, jn)
+                if anchor:
+                    bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, anchor)
+                    if bid >= 0:
+                        R = np.asarray(self._mjdata.body(bid).xmat, dtype=np.float64).reshape(3, 3)
+                        M = R[:2, :2]
+                        v_world = np.array([vx, vy], dtype=np.float64)
+                        try:
+                            v_joint = np.linalg.solve(M, v_world)
+                        except np.linalg.LinAlgError:
+                            v_joint, *_ = np.linalg.lstsq(M, v_world, rcond=None)
+                        qxd, qyd = float(v_joint[0]), float(v_joint[1])
+                        a_axis = R[:, 2]
+                        az = float(a_axis[2])
+                        if abs(az) >= 0.2:
+                            qdot_yaw = float(wz) / az
+            self._mjdata.ctrl[ax] = qxd
+            self._mjdata.ctrl[ay] = qyd
+            self._mjdata.ctrl[aw] = qdot_yaw
 
     @override
     def handle_action(self, action: dict[str, Any]):
@@ -1069,9 +1095,42 @@ class RobosuiteZmqServer(BaseZmqServer):
                 mujoco.mj_forward(self._mjmodel, self._mjdata)
         elif self._planar_autoplace_snap_qpos0:
             with self._mj_lock:
-                self._restore_planar_base_from_qpos0()
+                jn = getattr(self._spec, "planar_base_joint_names", None)
+                wxyt = self._planar_autoplace_world_xyt
+                reapply_ok = False
+                if (
+                    wxyt is not None
+                    and np.asarray(wxyt).size >= 3
+                    and jn is not None
+                    and len(jn) == 3
+                ):
+                    w = np.asarray(wxyt, dtype=np.float64).reshape(-1)[:3]
+                    reapply_ok = bool(
+                        scene_base_spawn.write_planar_base_xyt(
+                            self._mjmodel,
+                            self._mjdata,
+                            joint_names=(str(jn[0]), str(jn[1]), str(jn[2])),
+                            world_x=float(w[0]),
+                            world_y=float(w[1]),
+                            world_yaw=float(w[2]),
+                            base_body_name=self._spec.base_link_name,
+                        )
+                    )
+                if not reapply_ok:
+                    self._restore_planar_base_from_qpos0()
+                else:
+                    for jname in jn:
+                        jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, str(jname))
+                        if jid >= 0:
+                            qadr = int(self._mjmodel.jnt_qposadr[jid])
+                            self._mjmodel.qpos0[qadr] = float(self._mjdata.qpos[qadr])
                 self._sync_actuator_ctrl_from_joint_positions()
-                mujoco.mj_forward(self._mjmodel, self._mjdata)
+                # ``write_planar_base_xyt`` already ends with ``mj_forward``. Do not call
+                # ``mj_forward`` or ``mj_fwdPosition`` here: ``_sync_actuator_ctrl_from_joint_positions``
+                # only touches ``ctrl`` (zeros velocity actuators). A follow-up ``mj_fwdPosition`` has
+                # been observed to rewrite ``body_xpos`` without changing ``qpos``, desyncing FK and
+                # breaking :meth:`get_base_xyt`; full ``mj_forward`` after sync can likewise corrupt
+                # the planar slide chain for this merged MJCF.
         self._initial_xyt = self.get_base_xyt()
         self._nav_goal_world = None
         self._at_goal = True

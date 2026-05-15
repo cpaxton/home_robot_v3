@@ -87,6 +87,15 @@ def resolve_floor_geom_name(model: mujoco.MjModel) -> str | None:
         nm = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g)
         if nm:
             return str(nm)
+    # Robocasa kitchens often use a large **visual-only** floor mesh/plane (e.g. ``floor_room_g0_vis``);
+    # skipping these made ``walkable_floor_z_at_xy`` bail out and planar spawn never find a pose.
+    for g in range(model.ngeom):
+        nm = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g)
+        if not nm:
+            continue
+        low = nm.lower()
+        if "floor_room" in low or low.startswith("floor") and low.endswith("_vis"):
+            return str(nm)
     return None
 
 
@@ -484,7 +493,9 @@ def walkable_floor_z_at_xy(
     floor_resolved = effective_floor_geom_name(model, floor_geom_name)
     floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_resolved)
     if floor_gid < 0:
-        return None
+        # No registered floor geom name; still ray-cast using visual-floor / plane heuristics below.
+        floor_gid = -1
+
     pnt = np.array([float(x), float(y), float(z_beam_top)], dtype=np.float64)
     vec = np.array([0.0, 0.0, -1.0], dtype=np.float64)
     for _ in range(max_segments):
@@ -1682,24 +1693,154 @@ def find_molmospaces_freejoint_xyz(
     return _spawn_debug_finish(None, "failed_all_passes")
 
 
+def infer_planar_anchor_body_name(
+    model: mujoco.MjModel, joint_names: tuple[str, str, str]
+) -> str | None:
+    """Body that hosts the first planar slide joint (parent frame for slide axes)."""
+    jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_names[0])
+    if jid < 0:
+        return None
+    bid = int(model.jnt_bodyid[jid])
+    name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, bid)
+    return str(name) if name else None
+
+
+def world_se2_to_planar_qpos(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    anchor_body_name: str,
+    world_x: float,
+    world_y: float,
+    world_yaw: float,
+) -> tuple[float, float, float]:
+    """Map desired ``base_link`` world *(x, y, yaw)* to planar *(slide_x, slide_y, hinge_yaw)* qpos.
+
+    Slides move along the anchor body's local X/Y; after Robocasa merge, ``base_root`` is often
+    translated and yawed, so **world** coordinates must not be written directly to the joints.
+    """
+    mujoco.mj_forward(model, data)
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, anchor_body_name)
+    if bid < 0:
+        raise ValueError(f"planar anchor body {anchor_body_name!r} not found")
+    R = np.asarray(data.body(bid).xmat, dtype=np.float64).reshape(3, 3)
+    pr = np.asarray(data.body(bid).xpos, dtype=np.float64)
+    delta_xy = np.array([float(world_x) - pr[0], float(world_y) - pr[1]], dtype=np.float64)
+    M = R[:2, :2]
+    try:
+        q_vec = np.linalg.solve(M, delta_xy)
+    except np.linalg.LinAlgError:
+        q_vec, *_ = np.linalg.lstsq(M, delta_xy, rcond=None)
+    qx, qy = float(q_vec[0]), float(q_vec[1])
+
+    cw = float(math.cos(float(world_yaw)))
+    sw = float(math.sin(float(world_yaw)))
+    rhs = np.array([cw, sw], dtype=np.float64)
+    try:
+        j_dir = np.linalg.solve(M, rhs)
+    except np.linalg.LinAlgError:
+        j_dir, *_ = np.linalg.lstsq(M, rhs, rcond=None)
+    nj = float(np.linalg.norm(j_dir))
+    if nj < 1e-9:
+        j_yaw = 0.0
+    else:
+        j_dir = j_dir / nj
+        j_yaw = float(math.atan2(float(j_dir[1]), float(j_dir[0])))
+    return (qx, qy, j_yaw)
+
+
 def write_planar_base_xyt(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     *,
     joint_names: tuple[str, str, str],
-    x: float,
-    y: float,
-    yaw: float,
+    world_x: float,
+    world_y: float,
+    world_yaw: float,
+    anchor_body_name: str | None = None,
+    base_body_name: str = "base_link",
 ) -> bool:
-    """Set world-planar base joints ``(slide_x, slide_y, yaw)`` to *(x, y, yaw)*; zero dof and matching velocity ctrl."""
+    """Set planar joints so *base_body_name* reaches world ``(world_x, world_y, world_yaw)`` after ``mj_forward``.
+
+    Joint values are **not** raw world XY when the anchor body (parent of the first slide) is rotated
+    or shifted (Robocasa merged robots). Pass ``anchor_body_name`` or rely on inference from
+    ``joint_names[0]``.
+
+    After dynamics (e.g. :meth:`RobosuiteZmqServer._stabilize_physics_state_after_load`), the kinematic
+    subtree can sit in a state where a single analytic step does not match FK; we run a few Gauss–Newton
+    style corrections in slide space, then yaw, until the reported *base* pose matches within tight
+    tolerance.
+    """
     for jn in joint_names:
         if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn) < 0:
             return False
-    for jn, val in zip(joint_names, (x, y, yaw), strict=True):
+    anchor = anchor_body_name or infer_planar_anchor_body_name(model, joint_names)
+    if anchor is None:
+        return False
+    try:
+        qx, qy, j_yaw = world_se2_to_planar_qpos(
+            model,
+            data,
+            anchor_body_name=anchor,
+            world_x=float(world_x),
+            world_y=float(world_y),
+            world_yaw=float(world_yaw),
+        )
+    except ValueError:
+        return False
+    vals = (qx, qy, j_yaw)
+    qadr_x = qadr_y = qadr_yaw = -1
+    for jn, val in zip(joint_names, vals, strict=True):
         jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn)
         qadr = int(model.jnt_qposadr[jid])
         vadr = int(model.jnt_dofadr[jid])
         data.qpos[qadr] = float(val)
+        if vadr >= 0:
+            data.qvel[vadr] = 0.0
+        if jn == joint_names[0]:
+            qadr_x = qadr
+        elif jn == joint_names[1]:
+            qadr_y = qadr
+        else:
+            qadr_yaw = qadr
+    for a in range(model.nu):
+        jid_tr = int(model.actuator_trnid[a, 0])
+        if jid_tr < 0:
+            continue
+        jname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, jid_tr)
+        if jname is not None and jname in joint_names:
+            data.ctrl[a] = 0.0
+
+    bid_bl = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
+    bid_a = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, anchor)
+    if bid_bl >= 0 and bid_a >= 0 and qadr_x >= 0 and qadr_y >= 0 and qadr_yaw >= 0:
+        for _ in range(12):
+            mujoco.mj_forward(model, data)
+            ex = float(world_x) - float(data.body(bid_bl).xpos[0])
+            ey = float(world_y) - float(data.body(bid_bl).xpos[1])
+            if ex * ex + ey * ey < 2.25e-6:
+                break
+            R = np.asarray(data.body(bid_a).xmat, dtype=np.float64).reshape(3, 3)
+            M = R[:2, :2]
+            delta = np.array([ex, ey], dtype=np.float64)
+            try:
+                dq = np.linalg.solve(M, delta)
+            except np.linalg.LinAlgError:
+                dq, *_ = np.linalg.lstsq(M, delta, rcond=None)
+            data.qpos[qadr_x] = float(data.qpos[qadr_x]) + float(dq[0])
+            data.qpos[qadr_y] = float(data.qpos[qadr_y]) + float(dq[1])
+        for _ in range(8):
+            mujoco.mj_forward(model, data)
+            xmat = np.asarray(data.body(bid_bl).xmat, dtype=np.float64).reshape(3, 3)
+            cur = float(math.atan2(xmat[1, 0], xmat[0, 0]))
+            err = float(np.arctan2(np.sin(float(world_yaw) - cur), np.cos(float(world_yaw) - cur)))
+            if abs(err) < 5e-4:
+                break
+            data.qpos[qadr_yaw] = float(data.qpos[qadr_yaw]) + err
+
+    for jn in joint_names:
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn)
+        vadr = int(model.jnt_dofadr[jid])
         if vadr >= 0:
             data.qvel[vadr] = 0.0
     for a in range(model.nu):
@@ -1726,16 +1867,28 @@ def find_planar_base_xyt(
     environment: dict[str, Any] | None = None,
     footprint_xy_margin_m: float = 0.35,
     spawn_hint_xyt: np.ndarray | None = None,
+    anchor_body_name: str | None = None,
 ) -> tuple[float, float, float] | None:
     """Search collision-free world `(x, y, yaw)` for planar slide+yaw bases (Robocasa + Maurice-style MJCF).
 
     Uses the same collision clip / floor probe / contact scoring ideas as free-joint Molmo spawn,
     but applies poses via :func:`write_planar_base_xyt`. For ``spawn_profile == \"robocasa\"`` we
-    skip the horizontal **exterior-tongue** filter (open kitchens confuse it) and disable upward-ray
-    rejection (upper cabinets are not ceilings).
+    disable upward-ray rejection (open ceilings / cabinet tops) but **keep** the horizontal
+    exterior-tongue filter so we do not pick the infinite floor outside the kitchen footprint.
+    ``spawn_hint_xyt`` is accepted for API compatibility but **not** used for ordering (Robosuite
+    placeholder base pose can disagree with the merged MJCF frame).
 
-    Returns ``(x, y, yaw)`` in world coordinates matching the three planar joint values, or ``None``.
+    Candidate *(x, y)* and *yaw* are **world** / kitchen-map coordinates; they are mapped to slide
+    joint values using the planar anchor body (parent of the first slide), e.g. after Robocasa
+    strip-and-replace when ``base_root`` carries a non-identity ``pos`` / ``quat``.
+
+    Returns world ``(x, y, yaw)`` matching :func:`get_base_xyt`-style conventions, or ``None``.
     """
+    anchor_resolved = anchor_body_name or infer_planar_anchor_body_name(model, joint_names)
+    if anchor_resolved is None:
+        spawn_dbg("planar_find: could not infer anchor body for first planar joint; abort")
+        return None
+
     floor_effective = effective_floor_geom_name(model, floor_geom_name)
     base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
     robot_bodies: set[int] = set()
@@ -1743,19 +1896,21 @@ def find_planar_base_xyt(
         robot_bodies = _bodies_descending_from(model, base_bid)
     ray_exclude = int(base_bid) if base_bid >= 0 else -1
 
-    xy_clip_raw = collision_scene_xy_clip_rect(
+    # Same exterior-geom filtering as Molmo: suppressing it inflates the clip with porch/deck
+    # geoms and lets candidates land on open floor **outside** the kitchen footprint.
+    xy_clip_scene = collision_scene_xy_clip_rect(
         model,
         data,
         robot_bodies=robot_bodies,
         floor_geom_name=floor_effective,
         margin=0.55,
         max_geom_rbound=15.0,
-        suppress_exterior_filter=(spawn_profile == "robocasa"),
+        suppress_exterior_filter=False,
     )
-    inset = float(footprint_xy_margin_m) + (0.22 if spawn_profile == "robocasa" else 0.30)
-    xy_clip = _erode_xy_rect(xy_clip_raw, inset) if xy_clip_raw is not None else None
+    inset = float(footprint_xy_margin_m) + 0.10
+    xy_clip = _erode_xy_rect(xy_clip_scene, inset) if xy_clip_scene is not None else None
     if xy_clip is None:
-        xy_clip = xy_clip_raw
+        xy_clip = xy_clip_scene
 
     centroid = scene_collision_centroid_xy(
         model,
@@ -1763,23 +1918,27 @@ def find_planar_base_xyt(
         robot_bodies=robot_bodies,
         floor_geom_name=floor_effective,
         max_geom_rbound=15.0,
-        suppress_exterior_filter=(spawn_profile == "robocasa"),
+        suppress_exterior_filter=False,
     )
-    ox, oy = 0.0, 0.0
-    if centroid is not None:
-        ox, oy = float(centroid[0]), float(centroid[1])
-    elif xy_clip is not None:
+    # Prefer annulus origin at **eroded clip center** so search stays inside walkable bounds
+    # (scene centroid can sit near porch / merged-shell outliers).
+    if xy_clip is not None:
         ox = 0.5 * float(xy_clip[0] + xy_clip[1])
         oy = 0.5 * float(xy_clip[2] + xy_clip[3])
+    elif centroid is not None:
+        ox, oy = float(centroid[0]), float(centroid[1])
+    else:
+        ox, oy = 0.0, 0.0
     if xy_clip is not None:
         ox, oy = _clamp_xy_into_rect(ox, oy, xy_clip)
 
-    r_annulus_max = 4.5
+    r_annulus_max = 3.5
     if xy_clip is not None:
         x0c, x1c, y0c, y1c = xy_clip
-        half_diag = 0.5 * math.hypot(x1c - x0c, y1c - y0c)
-        reach_corners = _max_xy_distance_to_rect_corners(ox, oy, xy_clip) + 0.35
-        r_annulus_max = float(min(12.0, max(3.2, reach_corners, half_diag + 0.6)))
+        w = float(x1c - x0c)
+        h = float(y1c - y0c)
+        half_diag = 0.5 * math.hypot(w, h)
+        r_annulus_max = float(min(4.5, max(2.0, 0.38 * half_diag + 0.2)))
 
     base_candidates: list[tuple[float, float]] = list(
         iter_annulus_xy_candidates(
@@ -1812,23 +1971,15 @@ def find_planar_base_xyt(
             priority_xy.append((float(px), float(py)))
 
     candidates = priority_xy + base_candidates
-    hint = None
-    if spawn_hint_xyt is not None:
-        hint = np.asarray(spawn_hint_xyt, dtype=np.float64).reshape(-1)
-        if hint.size >= 2:
-            hx, hy = float(hint[0]), float(hint[1])
-            candidates.sort(key=lambda p: (p[0] - hx) ** 2 + (p[1] - hy) ** 2)
-    if hint is None or hint.size < 2:
-        if xy_clip is not None:
-            cx = 0.5 * (xy_clip[0] + xy_clip[1])
-            cy = 0.5 * (xy_clip[2] + xy_clip[3])
-            candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
-        elif centroid is not None:
-            cx, cy = float(centroid[0]), float(centroid[1])
-            candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
+    if xy_clip is not None:
+        cx = 0.5 * (xy_clip[0] + xy_clip[1])
+        cy = 0.5 * (xy_clip[2] + xy_clip[3])
+        candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
+    elif centroid is not None:
+        cx, cy = float(centroid[0]), float(centroid[1])
+        candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
 
     yaws = [float(k * math.pi / 4.0) for k in range(8)]
-    check_horizontal_tongue = spawn_profile != "robocasa"
     min_upward = -1.0 if spawn_profile == "robocasa" else float(_MIN_UPWARD_CEILING_CLEARANCE_M)
     clearance_passes = (
         (0.045, "clear045"),
@@ -1840,14 +1991,21 @@ def find_planar_base_xyt(
 
     spawn_dbg(
         f"planar_find: profile={spawn_profile!r} scene={scene_label!r} n_xy={len(candidates)} "
-        f"margin_m={footprint_xy_margin_m:.3f} clip={'yes' if xy_clip_raw is not None else 'no'}"
+        f"margin_m={footprint_xy_margin_m:.3f} clip={'yes' if xy_clip_scene is not None else 'no'}"
     )
 
     for min_clear, tag in clearance_passes:
         for x, y in candidates:
             for yaw in yaws:
                 if not write_planar_base_xyt(
-                    model, data, joint_names=joint_names, x=float(x), y=float(y), yaw=float(yaw)
+                    model,
+                    data,
+                    joint_names=joint_names,
+                    world_x=float(x),
+                    world_y=float(y),
+                    world_yaw=float(yaw),
+                    anchor_body_name=anchor_resolved,
+                    base_body_name=base_body_name,
                 ):
                     continue
                 z_floor = walkable_floor_z_at_xy(
@@ -1862,7 +2020,7 @@ def find_planar_base_xyt(
                     )
                     if up_dist is not None and up_dist < min_upward:
                         continue
-                if check_horizontal_tongue and horizontal_spawn_rejects_exterior_tongue(
+                if horizontal_spawn_rejects_exterior_tongue(
                     model, data, x, y, z_probe, exclude_body_id=ray_exclude
                 ):
                     continue
@@ -1870,6 +2028,13 @@ def find_planar_base_xyt(
                     model, data, base_body_name=base_body_name, floor_geom_name=floor_effective
                 )
                 if worst >= float(min_clear):
+                    if xy_clip_scene is not None and base_bid >= 0:
+                        bx = float(data.body(base_body_name).xpos[0])
+                        by = float(data.body(base_body_name).xpos[1])
+                        x0s, x1s, y0s, y1s = xy_clip_scene
+                        pad = 0.22
+                        if not (x0s + pad <= bx <= x1s - pad and y0s + pad <= by <= y1s - pad):
+                            continue
                     spawn_dbg(f"planar_find: OK pass={tag!r} xy=({x:.3f},{y:.3f}) yaw={yaw:.3f} worst={worst:.5f}")
                     return (float(x), float(y), float(yaw))
     spawn_dbg(f"planar_find: failed scene={scene_label!r} profile={spawn_profile!r}")

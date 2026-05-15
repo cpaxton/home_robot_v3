@@ -50,9 +50,10 @@ class RobotSpec:
     default ``--dynav-config dynav_config.yaml``. Most robots omit this and share ``dynav_config.yaml``.
     """
     planar_base_joint_names: tuple[str, str, str] | None = None
-    """If set, MuJoCo nav uses three **world-aligned** scalar joints ``(slide_X, slide_Y, hinge_yaw)``
-    actuated as **velocity** targets instead of a single ``base_link`` **free** joint. Names must match
-    the MJCF and the order used by :class:`RobosuiteZmqServer` SE(2) commands."""
+    """If set, MuJoCo nav uses three scalar joints (slide, slide, hinge yaw) as velocity targets instead
+    of a ``base_link`` free joint. Slide axes live on the parent body of the first slide (e.g. ``base_root``);
+    world `(x, y, yaw)` is converted to joint values when that body has a non-identity Robocasa merge pose.
+    Names must match the MJCF and :class:`RobosuiteZmqServer` SE(2) commands."""
     robosuite_rgb_depth_ops: tuple[str, ...] = ()
     """MuJoCo RGB/depth post-steps for :class:`RobosuiteZmqServer` (``flipud``, ``rot90_cw``). Intrinsics are chained."""
 
