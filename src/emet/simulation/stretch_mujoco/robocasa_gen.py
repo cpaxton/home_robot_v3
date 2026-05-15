@@ -303,6 +303,16 @@ def model_generation_wizard(
 
     model = mujoco.MjModel.from_xml_string(xml)
 
+    if use_strip_placeholder_robot and hasattr(env, "init_robot_base_pos"):
+        pos = np.asarray(env.init_robot_base_pos, dtype=float).reshape(-1)
+        yaw = 0.0
+        if hasattr(env, "init_robot_base_ori"):
+            ori = np.asarray(env.init_robot_base_ori, dtype=float).reshape(-1)
+            if ori.size >= 3:
+                yaw = float(ori[2])
+        if pos.size >= 2:
+            object_placements_info["_emet_spawn_hint_xyt"] = [float(pos[0]), float(pos[1]), yaw]
+
     if write_to_file is not None:
         with open(write_to_file, "w") as f:
             f.write(xml)

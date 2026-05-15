@@ -164,6 +164,21 @@ def test_robosuite_server_import():
     assert RobosuiteZmqServer is not None
 
 
+def test_want_robocasa_planar_autoplace_innate_mars():
+    from emet.robots.innate_mars import InnateMarsBackend
+    from emet.simulation import scene_base_spawn
+
+    spec = InnateMarsBackend().get_spec()
+    assert scene_base_spawn.want_robocasa_planar_autoplace(
+        environment={"kind": "robocasa", "task": "PickPlaceCounterToCabinet"},
+        robot_spec=spec,
+    )
+    assert not scene_base_spawn.want_robocasa_planar_autoplace(
+        environment={"kind": "default_table"},
+        robot_spec=spec,
+    )
+
+
 def test_robocasa_gen_robot_param():
     """model_generation_wizard accepts robot parameter (import-only test)."""
     import inspect
