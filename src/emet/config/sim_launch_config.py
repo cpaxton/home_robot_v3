@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """YAML-driven MuJoCo / Robocasa / MolmoSpaces launch configs for ``emet serve mujoco`` and ``emet run agent --start-sim``."""
 
@@ -18,13 +27,19 @@ import yaml
 from emet.utils.config import resolve_config_yaml_path
 
 SimLaunchKind = Literal["default_mujoco", "robocasa", "molmospaces"]
+SimPhysicsMode = Literal["dynamic", "kinematic"]
 
 
 @dataclass
 class SimLaunchCommon:
-    """Flags shared by all ``emet.simulation.mujoco_server`` backends."""
+    """Flags shared by all ``emet.simulation.mujoco_server`` backends.
+
+    ``physics_mode=kinematic``: non-Stretch server uses ``mj_forward`` only (pose snap, no ``mj_step``).
+    Default Stretch (merged table) uses the same kinematic/dynamic mode via RobosuiteZmqServer.
+    """
 
     port_offset: int = 0
+    physics_mode: SimPhysicsMode = "dynamic"
     headless: bool = False
     show_viewer_ui: bool = False
     no_cameras: bool = False
@@ -43,6 +58,7 @@ class SimLaunchDefaultMujoco(SimLaunchCommon):
     kind: str = "default_mujoco"
     robot: str = "rby1"
     scene_path: str | None = None
+    stretch_legacy: bool = False
 
 
 @dataclass
@@ -153,6 +169,8 @@ def build_sim_launch_config_from_serve_cli(
     debug_molmospaces_spawn: bool,
     port_offset: int,
     robocasa_task: str,
+    physics_mode: SimPhysicsMode = "dynamic",
+    stretch_legacy: bool = False,
 ) -> SimLaunchConfig:
     """Build :class:`SimLaunchConfig` the same way ``emet serve mujoco`` does (single source of truth)."""
     validate_sim_launch_serve_combo(
@@ -169,6 +187,7 @@ def build_sim_launch_config_from_serve_cli(
         "steps": steps,
         "debug_molmospaces_spawn": debug_molmospaces_spawn,
         "port_offset": port_offset,
+        "physics_mode": physics_mode,
     }
     if molmospaces_scene:
         return SimLaunchMolmospaces(
@@ -181,7 +200,7 @@ def build_sim_launch_config_from_serve_cli(
         )
     if use_robocasa:
         return SimLaunchRobocasa(robot=robot, robocasa_task=robocasa_task or "", **common)
-    return SimLaunchDefaultMujoco(robot=robot, scene_path=scene_path, **common)
+    return SimLaunchDefaultMujoco(robot=robot, scene_path=scene_path, stretch_legacy=stretch_legacy, **common)
 
 
 def apply_sim_launch_cli_overrides(
@@ -202,6 +221,7 @@ def apply_sim_launch_cli_overrides(
     steps: int | None = None,
     debug_molmospaces_spawn: bool | None = None,
     robot: str | None = None,
+    physics_mode: SimPhysicsMode | None = None,
 ) -> SimLaunchConfig:
     """Apply ``emet serve mujoco``-style CLI overrides onto a resolved sim config (for ``--start-sim``)."""
     ms = str(molmospaces_scene).strip() if molmospaces_scene else None
@@ -216,6 +236,7 @@ def apply_sim_launch_cli_overrides(
     def _common_from(c: SimLaunchCommon) -> dict[str, Any]:
         return {
             "port_offset": c.port_offset,
+            "physics_mode": c.physics_mode,
             "headless": c.headless,
             "show_viewer_ui": c.show_viewer_ui,
             "no_cameras": c.no_cameras,
@@ -242,6 +263,11 @@ def apply_sim_launch_cli_overrides(
         merged_common["steps"] = int(steps)
     if debug_molmospaces_spawn is not None:
         merged_common["debug_molmospaces_spawn"] = bool(debug_molmospaces_spawn)
+    if physics_mode is not None:
+        pm = str(physics_mode).strip().lower()
+        if pm not in ("dynamic", "kinematic"):
+            raise ValueError(f"physics_mode must be 'dynamic' or 'kinematic', not {physics_mode!r}")
+        merged_common["physics_mode"] = pm  # type: ignore[assignment]
 
     if ms is not None:
         if molmospaces_split is not None:

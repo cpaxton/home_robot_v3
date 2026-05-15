@@ -150,7 +150,14 @@ policy/
 data/
 log/
 logs/
+# Allow tracked branch / PR planning notes under docs/logs/
+!docs/logs/
+!docs/logs/**
 dynamem_log/
+
+# Local sim episode capture dirs (emet dataset capture default names)
+ep0/
+episode0/
 
 # Third-party sim (cloned by emet install sim / emet install robocasa)
 third_party/robocasa/

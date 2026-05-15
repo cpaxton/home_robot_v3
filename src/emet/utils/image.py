@@ -164,7 +164,16 @@ class Camera:
 
     def depth_to_xyz(self, depth, data_type: type = np.float16):
         """get depth from numpy using simple pinhole self model"""
-        h, w = int(self.height), int(self.width)
+        depth = np.asarray(depth)
+        if depth.ndim != 2:
+            raise ValueError(f"depth must be 2D, got shape {depth.shape}")
+        dh, dw = int(depth.shape[0]), int(depth.shape[1])
+        if dh != int(self.height) or dw != int(self.width):
+            raise ValueError(
+                f"depth shape {(dh, dw)} does not match camera "
+                f"(height={int(self.height)}, width={int(self.width)}); check rgb_height/rgb_width vs depth"
+            )
+        h, w = dh, dw
         indices = np.indices((h, w), dtype=np.float32).transpose(1, 2, 0)
         z = depth
         # pixel indices start at top-left corner. for these equations, it starts at bottom-left
@@ -187,12 +196,11 @@ class Camera:
 
 
 def pinhole_camera_from_intrinsics_and_depth(camera_K: np.ndarray, depth_meters: np.ndarray) -> Camera:
-    """
-    Build a :class:`Camera` for :meth:`Camera.depth_to_xyz` using ``depth_meters`` shape as truth.
+    """Build a :class:`Camera` for :meth:`Camera.depth_to_xyz` using ``depth_meters`` shape as truth.
 
     Decoded depth is ``(H, W)``. Message fields ``rgb_width`` / ``rgb_height`` should match, but
     servers (or legacy runs) can get row/column order wrong; sizing the pinhole model from ``depth``
-    avoids broadcast errors against :func:`numpy.indices` inside ``depth_to_xyz``.
+    keeps intrinsics aligned with the raster that is actually unprojected.
     """
     if depth_meters.ndim != 2:
         raise ValueError(f"depth_meters must be 2D, got shape {getattr(depth_meters, 'shape', None)}")

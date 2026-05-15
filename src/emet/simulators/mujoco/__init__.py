@@ -15,6 +15,6 @@
 
 """MuJoCo simulator — Stretch in MuJoCo. Code lives in emet.simulation until full migration."""
 
-from emet.simulation.mujoco_server import MujocoZmqServer
+from emet.simulation.mujoco_server_stretch import MujocoZmqServer
 
 __all__ = ["MujocoZmqServer"]

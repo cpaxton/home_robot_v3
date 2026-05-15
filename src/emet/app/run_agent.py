@@ -351,6 +351,12 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     help="With --start-sim: pass --debug-molmospaces-spawn.",
 )
 @click.option(
+    "--sim-kinematic",
+    "sim_kinematic",
+    is_flag=True,
+    help="With --start-sim: spawn MuJoCo in kinematic mode (mj_forward only; snap poses; non-Stretch path).",
+)
+@click.option(
     "--sim-show-subprocess-output",
     "sim_show_subprocess_output",
     is_flag=True,
@@ -407,6 +413,7 @@ def main(
     sim_use_glx: bool = False,
     sim_show_viewer_ui: bool = False,
     sim_debug_molmospaces_spawn: bool = False,
+    sim_kinematic: bool = False,
     sim_show_subprocess_output: bool = False,
 ) -> None:
     """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
@@ -466,11 +473,12 @@ def main(
             sim_show_viewer_ui,
             sim_debug_molmospaces_spawn,
             sim_show_subprocess_output,
+            sim_kinematic,
         ]
     )
     if sim_cli_used and not start_sim:
         raise click.UsageError(
-            "Sim-only flags (--use-robocasa, --molmospaces-scene, --sim-seed, "
+            "Sim-only flags (--use-robocasa, --molmospaces-scene, --sim-seed, --sim-kinematic, "
             "--sim-show-subprocess-output, etc.) require --start-sim."
         )
 
@@ -549,6 +557,7 @@ def main(
                         steps=sim_steps,
                         debug_molmospaces_spawn=True if sim_debug_molmospaces_spawn else None,
                         robot=None,
+                        physics_mode="kinematic" if sim_kinematic else None,
                     )
                 except ValueError as e:
                     raise click.UsageError(str(e)) from e

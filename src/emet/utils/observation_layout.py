@@ -15,7 +15,7 @@ def rgb_height_width_for_zmq(rgb: np.ndarray) -> tuple[int, int]:
 
     NumPy images are ``(H, W, C)``; ``rgb_height`` is the row count and ``rgb_width`` the column count.
     This must match a same-resolution depth map ``(H, W)`` so clients can build a pinhole grid
-    consistent with ``depth`` (see ``pinhole_camera_from_intrinsics_and_depth`` in ``image.py``).
+    consistent with ``depth`` (see :meth:`emet.utils.image.Camera.from_K` / :meth:`emet.utils.image.Camera.depth_to_xyz`).
     """
     if rgb.ndim < 2:
         raise ValueError(f"rgb must be at least 2D, got shape {rgb.shape}")

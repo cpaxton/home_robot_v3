@@ -1,0 +1,7 @@
+# Default MuJoCo table scene (Stretch + packaged stretch.xml) — no Robocasa, no MolmoSpaces merge.
+kind: default_mujoco
+robot: stretch
+physics_mode: kinematic
+headless: true
+port_offset: 0
+seed: 0

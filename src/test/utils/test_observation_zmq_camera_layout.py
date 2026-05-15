@@ -23,13 +23,23 @@ def test_rgb_height_width_for_zmq_rejects_bad_rank():
         rgb_height_width_for_zmq(np.zeros((4,), dtype=np.uint8))
 
 
-def test_pinhole_camera_from_intrinsics_and_depth_matches_depth_to_xyz():
+def test_camera_from_K_sized_by_depth_matches_depth_to_xyz():
     """depth_to_xyz indices must match depth shape (H, W)."""
     h, w = 12, 18
     depth = np.full((h, w), 1.5, dtype=np.float32)
     fx, fy = 300.0, 300.0
     cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
     k = np.array([[fx, 0.0, cx], [0.0, fy, cy], [0.0, 0.0, 1.0]], dtype=np.float64)
+    cam = Camera.from_K(k, width=float(w), height=float(h))
+    assert int(cam.height) == h and int(cam.width) == w
+    xyz = cam.depth_to_xyz(depth)
+    assert xyz.shape == (h, w, 3)
+
+
+def test_pinhole_camera_from_intrinsics_and_depth_matches_raster():
+    h, w = 8, 12
+    depth = np.ones((h, w), dtype=np.float32)
+    k = np.array([[200.0, 0.0, 6.0], [0.0, 210.0, 4.0], [0.0, 0.0, 1.0]], dtype=np.float64)
     cam = pinhole_camera_from_intrinsics_and_depth(k, depth)
     assert int(cam.height) == h and int(cam.width) == w
     xyz = cam.depth_to_xyz(depth)

@@ -569,16 +569,37 @@ class RerunVisualizer:
         if self.show_camera_point_clouds:
             head_xyz = obs.get_xyz_in_world_frame()
             if head_xyz is not None:
-                head_xyz = head_xyz.reshape(-1, 3)
-                head_rgb = obs.rgb.reshape(-1, 3)
-                log_to_rerun(
-                    "world/head_camera/points",
-                    rr.Points3D(
-                        positions=head_xyz,
-                        radii=np.ones(head_xyz.shape[:2]) * self.camera_point_radius,
-                        colors=np.int64(head_rgb),
-                    ),
-                )
+                head_xyz_flat = head_xyz.reshape(-1, 3)
+                head_rgb_flat = obs.rgb.reshape(-1, 3)
+                depth_flat = obs.depth.reshape(-1) if obs.depth is not None else None
+                mask = np.isfinite(head_xyz_flat).all(axis=1)
+                if depth_flat is not None and depth_flat.shape[0] == mask.shape[0]:
+                    mask &= np.isfinite(depth_flat)
+                    # Match typical indoor use; keeps the Rerun 3D view usable (full-raster clouds look like lidar).
+                    mask &= (depth_flat > 0.05) & (depth_flat < 8.0)
+                head_xyz_flat = head_xyz_flat[mask]
+                head_rgb_flat = head_rgb_flat[mask]
+                if (
+                    self.max_displayed_points_per_camera > 0
+                    and head_xyz_flat.shape[0] > self.max_displayed_points_per_camera
+                ):
+                    idx = np.arange(head_xyz_flat.shape[0])
+                    np.random.shuffle(idx)
+                    idx = idx[: self.max_displayed_points_per_camera]
+                    head_xyz_flat = head_xyz_flat[idx]
+                    head_rgb_flat = head_rgb_flat[idx]
+                if head_xyz_flat.shape[0] == 0:
+                    self.clear_identity("world/head_camera/points")
+                else:
+                    n = head_xyz_flat.shape[0]
+                    log_to_rerun(
+                        "world/head_camera/points",
+                        rr.Points3D(
+                            positions=head_xyz_flat,
+                            radii=np.full(n, self.camera_point_radius, dtype=np.float32),
+                            colors=np.int64(head_rgb_flat),
+                        ),
+                    )
         else:
             if obs.depth is not None:
                 log_to_rerun("world/head_camera/depth", rr.depthimage(obs.depth))

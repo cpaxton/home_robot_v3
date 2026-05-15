@@ -9,7 +9,9 @@
 # license information maybe found below, if so.
 
 # Copyright (c) Hello Robot, Inc.
-# Stretch-only MuJoCo ZMQ server. Imported only when --robot stretch to avoid loading pinocchio/hppfcl for rby1/galaxea_r1.
+# Stretch-only MuJoCo ZMQ server (legacy stack: ``--stretch-legacy``, ``emet stretch-mujoco``, Robocasa Stretch).
+# Default ``emet serve mujoco --robot stretch`` uses ``StretchRobosuiteZmqServer`` in ``mujoco_server.py``.
+# Imported only when that legacy path is selected so rby1/galaxea_r1 avoid pinocchio/hppfcl via lazy import in ``mujoco_server.py``.
 
 import threading
 import time
@@ -35,6 +37,7 @@ import emet.utils.logger as logger
 from emet.core.server import BaseZmqServer
 from emet.core.zmq_protocol import (
     CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
+    EMET_ZMQ_GT_OBJECTS_KEY,
     EMET_ZMQ_ROBOT_ID_KEY,
     EMET_ZMQ_SESSION_KEY,
     EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
@@ -45,7 +48,7 @@ from emet.robots.base import RobotSpec
 from emet.robots.stretch import StretchBackend
 from emet.utils.assets import get_mujoco_models_path
 from emet.utils.config import get_control_config
-from emet.utils.geometry import pose_global_to_base, xyt_base_to_global, xyt_global_to_base
+from emet.utils.geometry import pose_global_to_base, spawn_rel_xyt_to_world, xyt_base_to_global, xyt_global_to_base
 from emet.utils.image import scale_camera_matrix
 from emet.utils.observation_layout import rgb_height_width_for_zmq
 
@@ -203,9 +206,14 @@ class MujocoZmqServer(BaseZmqServer):
         no_cameras: bool = False,
         environment: dict[str, Any] | None = None,
         scene_source_basename: str | None = None,
+        physics_mode: str = "dynamic",
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
+        pm = str(physics_mode).strip().lower()
+        if pm not in ("dynamic", "kinematic"):
+            raise ValueError(f"physics_mode must be 'dynamic' or 'kinematic', got {physics_mode!r}")
+        self._physics_mode = pm
         cameras_to_use = [] if no_cameras else self._default_cameras
         self._cameras_enabled = bool(cameras_to_use)
         # TODO: decide how we want to save scenes, if they should be here in stretch_ai or in stretch_mujoco
@@ -219,12 +227,14 @@ class MujocoZmqServer(BaseZmqServer):
                 model=scene_model,
                 cameras_to_use=cameras_to_use,
                 camera_hz=camera_hz,
+                kinematic=self._physics_mode == "kinematic",
             )
         else:
             self.robot_sim = StretchMujocoSimulator(
                 scene_xml_path=scene_path,
                 cameras_to_use=cameras_to_use,
                 camera_hz=camera_hz,
+                kinematic=self._physics_mode == "kinematic",
             )
         # Get the intrinsic parameters of the d435i rgb camera
         (
@@ -318,6 +328,22 @@ class MujocoZmqServer(BaseZmqServer):
             xyt_goal = xyt_base_to_global(xyt_goal, xyt_base)
         else:
             xyt_goal = xyt_goal
+
+        if self._physics_mode == "kinematic":
+            if self._initial_xyt is None:
+                logger.warning("set_goal_pose(kinematic): initial pose not ready yet; ignoring goal.")
+                return
+            world = spawn_rel_xyt_to_world(
+                np.asarray(xyt_goal, dtype=np.float64), np.asarray(self._initial_xyt, dtype=np.float64)
+            )
+            self.robot_sim.teleport_base_world_xyt(float(world[0]), float(world[1]), float(world[2]))
+            self.xyt_goal = np.asarray(xyt_goal, dtype=np.float64).copy()
+            self.active = False
+            self.is_done = True
+            self.controller_finished = True
+            self._base_controller_at_goal = True
+            self.goal_set_t = timeit.default_timer()
+            return
 
         if self.debug_control_loop or self.debug_set_goal_pose:
             print("-" * 20)
@@ -569,7 +595,9 @@ class MujocoZmqServer(BaseZmqServer):
         use_glx: bool = False,
     ) -> None:
         self.robot_sim.start(
-            show_viewer_ui=show_viewer_ui, headless=headless, use_glx=use_glx
+            show_viewer_ui=show_viewer_ui,
+            headless=headless,
+            use_glx=use_glx,
         )  # This will start the simulation and open Mujoco-Viewer window
         if not self.robot_sim.is_running():
             raise RuntimeError(
@@ -605,10 +633,12 @@ class MujocoZmqServer(BaseZmqServer):
         else:
             env = {"kind": "stretch_default_scene"}
         caps: dict[str, Any] = {
-            "teleport_base": False,
+            "teleport_base": self._physics_mode == "kinematic",
+            "nav_velocity_drive": self._physics_mode == "dynamic",
             "depth": self._cameras_enabled,
             "num_cameras": 2 if self._cameras_enabled else 0,
             "dof": int(spec.dof),
+            "is_kinematic": self._physics_mode == "kinematic",
         }
         session: dict[str, Any] = {
             EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY: CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
@@ -744,6 +774,13 @@ class MujocoZmqServer(BaseZmqServer):
             "lidar_timestamp": None,
             EMET_ZMQ_ROBOT_ID_KEY: self.get_robot_spec().name,
         }
+        try:
+            from emet.dataset.mujoco_gt import extract_gt_object_dicts
+
+            gt_objs = extract_gt_object_dicts(self.robot_sim.mjmodel, self.robot_sim.mjdata)
+        except Exception:
+            gt_objs = []
+        message[EMET_ZMQ_GT_OBJECTS_KEY] = gt_objs
         return self._attach_emet_session(message)
 
     @override

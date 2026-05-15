@@ -68,6 +68,8 @@ class StretchMujocoSimulator:
         cameras_to_use: list[StretchCameras] = None,
         start_translation: list | None = None,
         start_rotation_quat: list | None = None,
+        *,
+        kinematic: bool = False,
     ) -> None:
         if cameras_to_use is None:
             cameras_to_use = []
@@ -79,6 +81,7 @@ class StretchMujocoSimulator:
         self._cameras_to_use = cameras_to_use
         self._start_translation = start_translation
         self._start_rotation_quat = start_rotation_quat
+        self._kinematic = bool(kinematic)
 
         self.is_stop_called = False
 
@@ -111,6 +114,12 @@ class StretchMujocoSimulator:
 
         if not headless:
             mujoco_server = MujocoServerPassive if use_passive_viewer else MujocoServerManaged
+            if self._kinematic and mujoco_server is MujocoServerManaged:
+                logger.warning(
+                    "Stretch kinematic mode is not supported with the managed MuJoCo viewer; "
+                    "use --headless or passive viewer (default). Falling back to passive viewer."
+                )
+                mujoco_server = MujocoServerPassive
 
         if platform.system() == "Darwin" and mujoco_server is MujocoServerPassive:
             # On a mac, the process for MujocoServerPassive needs to be started with mjpython
@@ -158,6 +167,7 @@ class StretchMujocoSimulator:
                 self._start_translation,
                 self._start_rotation_quat,
                 use_glx,
+                self._kinematic,
             ),
             daemon=False,  # We're gonna handle terminating this in stop_mujoco_process()
         )
@@ -509,6 +519,15 @@ class StretchMujocoSimulator:
         """Get the se(2) base pose: x, y, and theta"""
         status = self.pull_status()
         return (status.base.x, status.base.y, status.base.theta)
+
+    @require_connection
+    def teleport_base_world_xyt(self, wx: float, wy: float, wt: float) -> None:
+        """IPC: teleport ``base_link`` in the subprocess to world SE(2) (used for kinematic nav)."""
+        with self._command_lock:
+            command = self.data_proxies.get_command().copy()
+            command.teleport_world_xyt = (float(wx), float(wy), float(wt))
+            command.teleport_world_trigger = True
+            self.data_proxies.set_command(command)
 
     @require_connection
     def get_ee_pose(self) -> np.ndarray:

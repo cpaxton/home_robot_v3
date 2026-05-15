@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Build ``emet.simulation.mujoco_server`` argv from :class:`SimLaunchConfig` (shared by CLI and ``--start-sim``)."""
 
@@ -63,9 +72,7 @@ def _merge_molmospaces_scene(
             os.unlink(merged_path)
         except OSError:
             pass
-        raise RuntimeError(
-            "MolmoSpaces wrapper not found (install: ./install.sh --molmospaces -y or full install)."
-        )
+        raise RuntimeError("MolmoSpaces wrapper not found (install: ./install.sh --molmospaces -y or full install).")
     env = os.environ.copy()
     ensure_molmospaces_assets_dir_env(env)
     r = subprocess.run(cmd, cwd=str(repo_root), env=env)
@@ -149,4 +156,8 @@ def prepare_mujoco_server_argv(sim: SimLaunchConfig) -> list[str]:
         args.extend(["--robot", robot_out])
     if sim.verbose:
         args.append("--verbose")
+    if getattr(sim, "physics_mode", "dynamic") == "kinematic":
+        args.append("--kinematic-sim")
+    if getattr(sim, "stretch_legacy", False):
+        args.append("--stretch-legacy")
     return args

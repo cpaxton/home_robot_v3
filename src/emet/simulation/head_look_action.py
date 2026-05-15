@@ -10,8 +10,8 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
-# This source code is licensed under the LICENSE file in the
-# root directory of this source tree.
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Map Stretch-style ``head_to`` (pan, tilt) to non-Stretch MuJoCo actuators (spec-driven)."""
 
@@ -36,10 +36,33 @@ def _set_ctrl_clipped(model: mujoco.MjModel, data: mujoco.MjData, actuator_name:
     return True
 
 
+def _set_joint_qpos_clipped(model: mujoco.MjModel, data: mujoco.MjData, joint_name: str, value: float) -> bool:
+    """Set hinge/slide ``qpos`` using the same numeric *value* as a position actuator target (clipped to joint range)."""
+    jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+    if jid < 0:
+        return False
+    jt = int(model.jnt_type[jid])
+    if jt not in (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)):
+        return False
+    lo, hi = float(model.jnt_range[jid, 0]), float(model.jnt_range[jid, 1])
+    v = float(value)
+    if int(model.jnt_limited[jid]):
+        v = float(np.clip(v, lo, hi))
+    qadr = int(model.jnt_qposadr[jid])
+    data.qpos[qadr] = v
+    return True
+
+
 def apply_head_to_robosuite(
-    spec: RobotSpec, model: mujoco.MjModel, data: mujoco.MjData, pan: float, tilt: float
+    spec: RobotSpec,
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    pan: float,
+    tilt: float,
+    *,
+    kinematic: bool = False,
 ) -> int:
-    """Apply look pan/tilt to ``data.ctrl`` for the loaded MJCF. Returns number of actuators set.
+    """Apply look pan/tilt to ``data.ctrl`` or, when *kinematic*, to matching joint ``qpos``.
 
     Stretch is handled by ``MujocoZmqServerStretch`` (``head_pan`` / ``head_tilt`` in sim).
     This covers ``RobosuiteZmqServer`` (Galaxea R1 / rby1 / innate_mars merged MJCF):
@@ -52,27 +75,26 @@ def apply_head_to_robosuite(
     if not anames:
         return 0
 
-    if _set_ctrl_clipped(model, data, "head_pan", pan):
+    set_pose = _set_joint_qpos_clipped if kinematic else _set_ctrl_clipped
+
+    if set_pose(model, data, "head_pan", pan):
         n += 1
-    if _set_ctrl_clipped(model, data, "head_tilt", tilt):
+    if set_pose(model, data, "head_tilt", tilt):
         n += 1
     if n > 0:
         return n
 
     if spec.name in ("rby1", "galaxea_r1"):
-        n += int(_set_ctrl_clipped(model, data, "torso2", 0.25 * float(np.clip(pan, -1.2, 1.2))))
-        n += int(_set_ctrl_clipped(model, data, "torso3", 0.2 * float(np.clip(tilt, -1.2, 0.3))))
+        n += int(set_pose(model, data, "torso2", 0.25 * float(np.clip(pan, -1.2, 1.2))))
+        n += int(set_pose(model, data, "torso3", 0.2 * float(np.clip(tilt, -1.2, 0.3))))
         if n == 0:
             logger.debug("head_to: no torso2/torso3 actuators for spec %r; look request ignored", spec.name)
         return n
 
     if spec.name == "innate_mars":
-        # Single hinge `joint_head`; Stretch-style tilt = URDF nominal nod (**−base Y** hinge; REP optics +**X**).
-        if _set_ctrl_clipped(model, data, "joint_head", float(tilt)):
+        if set_pose(model, data, "joint_head", float(tilt)):
             return 1
-        logger.debug(
-            "head_to: innate_mars has no joint_head position actuator (MJCF mismatch?); tilt=%r ignored", tilt
-        )
+        logger.debug("head_to: innate_mars has no joint_head position actuator (MJCF mismatch?); tilt=%r ignored", tilt)
         return 0
 
     logger.debug("head_to: no head_pan/head_tilt and no rby1/galaxea mapping for spec %r; ignored", spec.name)

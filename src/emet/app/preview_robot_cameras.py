@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Horizontal montage of robot cameras (default: head left, head right, arm) for MJCF vs ZMQ checks."""
 
@@ -21,7 +30,7 @@ import zmq
 
 import emet.utils.compression as compression
 from emet.robots import get_robot_spec
-from emet.simulation.mujoco_server import _load_default_scene_with_robot
+from emet.simulation.scene_resolution import load_default_scene_with_robot
 from emet.utils.connection import get_host_from_connection
 from emet.utils.discord_bot import read_discord_token_from_env
 from emet.utils.memory import lookup_address
@@ -69,9 +78,7 @@ def _label_strip(img_rgb: np.ndarray, label: str, banner_h: int = 28) -> np.ndar
     h, w = img_rgb.shape[:2]
     strip = np.zeros((banner_h, w, 3), dtype=np.uint8)
     strip[:] = (36, 36, 36)
-    cv2.putText(
-        strip, label[:80], (6, banner_h - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 240, 240), 1
-    )
+    cv2.putText(strip, label[:80], (6, banner_h - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 240, 240), 1)
     return np.vstack([strip, img_rgb])
 
 
@@ -85,10 +92,7 @@ def _resize_to_height(img_rgb: np.ndarray, row_height: int) -> np.ndarray:
 
 
 def build_montage(images: list[np.ndarray], labels: list[str], row_height: int = _PREVIEW_RH) -> np.ndarray:
-    parts = [
-        _label_strip(_resize_to_height(im, row_height), lb)
-        for im, lb in zip(images, labels, strict=True)
-    ]
+    parts = [_label_strip(_resize_to_height(im, row_height), lb) for im, lb in zip(images, labels, strict=True)]
     return np.hstack(parts) if parts else np.zeros((row_height + 28, 1, 3), dtype=np.uint8)
 
 
@@ -140,7 +144,7 @@ def _load_local_merged_preview(robot_key: str, max_cams: int):
     cam_names = list(spec.camera_names)[: max(1, max_cams)]
     if not cam_names:
         raise ValueError(f"No cameras in spec for {rk!r}.")
-    model = _load_default_scene_with_robot(rk)
+        model = load_default_scene_with_robot(rk)
     if model is None:
         raise ValueError(f"Could not load default scene + robot MJCF for {rk!r} (missing assets?).")
     return model, spec, cam_names
@@ -475,20 +479,12 @@ def main(
 
         montage = build_montage(imgs, labels, row_height=row_height)
 
-        dest = (
-            out_path
-            if out_path is not None
-            else Path.cwd() / f"robot_cam_preview_{robot_key_norm}.png"
-        )
+        dest = out_path if out_path is not None else Path.cwd() / f"robot_cam_preview_{robot_key_norm}.png"
         _save_montage_rgb(dest, montage)
         click.echo(f"Wrote {dest.resolve()} ({montage.shape[1]}×{montage.shape[0]})")
 
         if discord:
-            cap = (
-                caption.strip()
-                if caption.strip()
-                else f"Robot camera montage ({robot_key_norm}, source={source})"
-            )
+            cap = caption.strip() if caption.strip() else f"Robot camera montage ({robot_key_norm}, source={source})"
             _discord_send_file(dest, cap)
             click.echo("Posted to Discord.")
 

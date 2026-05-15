@@ -22,6 +22,7 @@ from ._base import (
     sophus2pose,
     sophus2posquat,
     sophus2xyt,
+    spawn_rel_xyt_to_world,
     xyt2sophus,
     xyt_base_to_global,
     xyt_global_to_base,

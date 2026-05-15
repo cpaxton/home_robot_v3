@@ -122,6 +122,17 @@ def xyt_base_to_global(out_XYT, current_pose):
     return sophus2xyt(pose_world2target)
 
 
+def spawn_rel_xyt_to_world(goal_rel: np.ndarray, init_world_xyt: np.ndarray) -> np.ndarray:
+    """Compose SE(2): ``goal_rel`` in the spawn frame (initial base pose) → world ``(x, y, theta)``."""
+    x0, y0, t0 = float(init_world_xyt[0]), float(init_world_xyt[1]), float(init_world_xyt[2])
+    gx, gy, gt = float(goal_rel[0]), float(goal_rel[1]), float(goal_rel[2])
+    ca, sa = np.cos(t0), np.sin(t0)
+    wx = x0 + ca * gx - sa * gy
+    wy = y0 + sa * gx + ca * gy
+    wt = float(np.arctan2(np.sin(t0 + gt), np.cos(t0 + gt)))
+    return np.array([wx, wy, wt], dtype=np.float64)
+
+
 def xyz2sophus(xyz: np.ndarray) -> sp.SE3:
     """
     Converts XYZ coordinates to an sophus SE3 pose object.

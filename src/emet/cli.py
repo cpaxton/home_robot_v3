@@ -28,6 +28,21 @@ from click.core import ParameterSource
 # Enable shell completion for bash/zsh
 _CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
+
+class _DatasetLazyGroup(click.Group):
+    """Load dataset subcommands on demand so ``emet --help`` stays light."""
+
+    def list_commands(self, ctx: click.Context) -> list[str]:
+        return ["capture-sim-episode"]
+
+    def get_command(self, ctx: click.Context, name: str) -> click.Command | None:
+        if name == "capture-sim-episode":
+            from emet.app.capture_sim_dataset_episode import capture_sim_episode
+
+            return capture_sim_episode
+        return None
+
+
 # Sub-apps that define @click.option("--robot") and receive --robot from `emet run`.
 _EMET_RUN_APPS_WITH_ROBOT = frozenset(
     {
@@ -125,6 +140,15 @@ def main() -> None:
     uses the project environment (as if you had run uv run emet ...).
     """
     _ensure_uv_project()
+
+
+@main.group(
+    cls=_DatasetLazyGroup,
+    name="dataset",
+    short_help="Sim episode datasets (voxel + MuJoCo GT)",
+)
+def dataset_cmd() -> None:
+    """Sim episode datasets: DynaMem voxel map + MuJoCo object ground truth per run."""
 
 
 @main.command(short_help="Start simulation server (mujoco or robocasa)")
@@ -230,11 +254,24 @@ def main() -> None:
     "--robot",
     default="stretch",
     help=(
-        "Robot to simulate. 'stretch' (default) uses the Stretch-MuJoCo server. "
+        "Robot to simulate. Default Stretch uses merged table + StretchRobosuiteZmqServer; "
+        "use --stretch-legacy or `emet stretch-mujoco` for the legacy stack. "
         "Registry robots (e.g. innate_mars, rby1, galaxea_r1) load the default table "
         "scene merged with that robot's MJCF and use the generic ZMQ sim (RobosuiteZmqServer). "
         "Robosuite-native names (PandaOmron, Tiago, GR1) use the stock robosuite robot in Robocasa."
     ),
+)
+@click.option(
+    "--kinematic-sim",
+    "kinematic_sim",
+    is_flag=True,
+    help="Kinematic sim (mj_forward-only + pose snaps). Applies to default Stretch and merged MJCF robots.",
+)
+@click.option(
+    "--stretch-legacy",
+    "stretch_legacy",
+    is_flag=True,
+    help="Stretch only: use the legacy StretchMujocoSimulator stack instead of the default merged-table server.",
 )
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
 def serve(
@@ -256,6 +293,8 @@ def serve(
     list_robocasa_tasks: bool,
     robocasa_task: str,
     robot: str,
+    kinematic_sim: bool,
+    stretch_legacy: bool,
     extra: tuple[str, ...],
 ) -> None:
     """Start a simulation server.
@@ -309,6 +348,8 @@ def serve(
                 debug_molmospaces_spawn=debug_molmospaces_spawn,
                 port_offset=port_offset,
                 robocasa_task=robocasa_task,
+                physics_mode="kinematic" if kinematic_sim else "dynamic",
+                stretch_legacy=stretch_legacy,
             )
         except ValueError as e:
             click.echo(str(e), err=True)
@@ -318,6 +359,17 @@ def serve(
     else:
         click.echo(f"Unknown backend: {backend}", err=True)
         sys.exit(1)
+
+
+@main.command(
+    "stretch-mujoco",
+    short_help="Legacy Stretch-only MuJoCo ZMQ server (StretchMujocoSimulator / scene.xml path)",
+)
+@click.argument("extra", nargs=-1, type=click.UNPROCESSED)
+def stretch_mujoco(extra: tuple[str, ...]) -> None:
+    """Run ``python -m emet.simulation.mujoco_server`` with ``--robot stretch --stretch-legacy``."""
+    argv = ["--robot", "stretch", "--stretch-legacy", *list(extra)]
+    sys.exit(_run_module("emet.simulation.mujoco_server", argv))
 
 
 @main.group("robocasa", short_help="Robocasa simulation helpers (requires sim extra)")
@@ -626,9 +678,9 @@ def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool, no_extras: 
 
     robot_key = robot.lower().replace("-", "_")
     if merge_scene:
-        from emet.simulation.mujoco_server import _load_default_scene_with_robot
+        from emet.simulation.scene_resolution import load_default_scene_with_robot
 
-        model = _load_default_scene_with_robot(robot_key)
+        model = load_default_scene_with_robot(robot_key)
         if model is None:
             click.echo(
                 "Could not build merged model (scene_environment.xml or robot MJCF missing).",
@@ -684,6 +736,9 @@ def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool, no_extras: 
             while viewer.is_running():
                 mujoco.mj_forward(model, data)
                 viewer.sync()
+                opt = getattr(viewer, "opt", None) or getattr(viewer, "_opt", None)
+                if opt is not None:
+                    opt.flags[mujoco.mjtVisFlag.mjVIS_RANGEFINDER] = False
                 time.sleep(0.01)
     except Exception as e:
         click.echo(
@@ -851,6 +906,24 @@ def preview_cameras(ctx: click.Context) -> None:
       emet preview-cameras --nod --nod-out-dir ./nod_caps --nod-motion bounce
     """
     sys.exit(_run_module("emet.app.preview_robot_cameras", list(ctx.args)))
+
+
+@main.command(
+    "debug-stretch-zmq-cameras",
+    short_help="Save one frame of Stretch ZMQ head/EE images (no Dynamem, no posture)",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
+@click.pass_context
+def debug_stretch_zmq_cameras(ctx: click.Context) -> None:
+    """Passive subscriber to observation (4401) and servo (4404) ports; writes PNGs under --out.
+
+    Requires a running Stretch ZMQ publisher (e.g. ``emet serve mujoco --robot stretch``).
+
+    Example:
+
+      emet debug-stretch-zmq-cameras --out /tmp/cam_dbg --wait 8
+    """
+    sys.exit(_run_module("emet.app.debug_stretch_zmq_cameras", list(ctx.args)))
 
 
 @main.command(short_help="Deploy emet_core and innate_mars_bridge to robot")
@@ -1059,7 +1132,12 @@ _SYNC_ALL_EXTRAS = ("dev", "sim", "hand_tracker", "dynamem", "da3")
 
 @main.command(short_help="Sync dependencies (uv or pip)")
 @click.option("--extra", "-e", "extra_list", multiple=True, help="Extra to install (sim, dynamem, dev, etc.)")
-@click.option("--all", "sync_all", is_flag=True, help="Install all common extras (same as defaults: dev, sim, hand_tracker, dynamem, da3)")
+@click.option(
+    "--all",
+    "sync_all",
+    is_flag=True,
+    help="Install all common extras (same as defaults: dev, sim, hand_tracker, dynamem, da3)",
+)
 @click.option("--sim", is_flag=True, help="Include sim (MuJoCo, robocasa)")
 @click.option("--dynamem", "dynamem_flag", is_flag=True, help="Include dynamem (SAM-2)")
 @click.option("--dev", "dev_flag", is_flag=True, help="Include dev (pytest, black, mypy)")

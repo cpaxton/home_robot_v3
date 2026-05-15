@@ -12,8 +12,6 @@ import os
 import random
 import sys
 import time
-from pathlib import Path
-from typing import Any
 
 import click
 import numpy as np
@@ -25,13 +23,15 @@ model_generation_wizard = None
 _ROBOCASA_IMPORT_FAILED = True
 
 import emet.utils.logger as logger
-from emet.utils.assets import get_mujoco_models_path, get_robot_mjcf_path
+from emet.simulation.scene_resolution import (
+    build_zmq_environment,
+    default_packaged_stretch_scene_xml_path,
+    resolve_merged_physics_scene,
+    scene_source_basename_from_path,
+)
 from emet.utils.port_utils import kill_processes_on_port
 
-default_scene_xml_path = str(get_mujoco_models_path() / "scene.xml")
-DEFAULT_SCENE_NO_ROBOT = (
-    "scene_environment.xml"  # canonical table room (wood floor texture); scene_default.xml aliases this
-)
+default_scene_xml_path = default_packaged_stretch_scene_xml_path()
 
 # Stretch-specific server (MujocoZmqServer) and motion/pinocchio deps are imported only when
 # --robot stretch, so that emet serve mujoco --robot rby1 works without pinocchio/hppfcl.
@@ -45,49 +45,10 @@ def _get_stretch_server():
 
 
 def _load_default_scene_with_robot(robot_key: str):
-    """Merge scene_environment.xml (canonical table room, Stretch materials) with robot MJCF; return MjModel or None."""
-    import os
-    import tempfile
+    """Backward-compatible wrapper; see :func:`emet.simulation.scene_resolution.load_default_scene_with_robot`."""
+    from emet.simulation.scene_resolution import load_default_scene_with_robot
 
-    import mujoco
-
-    models_path = get_mujoco_models_path()
-    scene_path = models_path / DEFAULT_SCENE_NO_ROBOT
-    robot_path = get_robot_mjcf_path(robot_key)
-    if not scene_path.exists() or not robot_path:
-        return None
-    scene_abs = str(scene_path.resolve())
-    robot_abs = str(robot_path.resolve())
-    # When a vendored model uses relative meshdir/asset paths, resolving meshes via an absolute directory in the
-    # merge wrapper avoids ambiguous resolution across MuJoCo versions and symlinked/editable installs (parent include
-    # directory vs. included-file directory). Only inject when that folder exists (robot shipped without meshes omits it).
-    meshes_dir = robot_path.parent / "meshes"
-    compiler_line = ""
-    if meshes_dir.is_dir():
-        mesh_abs = str(meshes_dir.resolve())
-        compiler_line = f'  <compiler meshdir="{mesh_abs}" angle="radian" coordinate="local" eulerseq="zyx"/>\n'
-    wrapper = (
-        '<?xml version="1.0"?>\n'
-        '<mujoco model="default_scene_with_robot">\n'
-        f"{compiler_line}"
-        f'  <include file="{scene_abs}"/>\n'
-        f'  <include file="{robot_abs}"/>\n'
-        "</mujoco>\n"
-    )
-    # Write merged file into robot's dir so meshdir="meshes" in the robot MJCF resolves, and relative
-    # assets in scene_environment.xml resolve consistently (same directory as scene.xml when merged from models_path).
-    robot_dir = str(robot_path.parent)
-    fd, path = tempfile.mkstemp(suffix=".xml", prefix="scene_robot_", dir=robot_dir)
-    try:
-        os.close(fd)
-        Path(path).write_text(wrapper)
-        model = mujoco.MjModel.from_xml_path(path)
-        return model
-    finally:
-        try:
-            Path(path).unlink(missing_ok=True)
-        except Exception:
-            pass
+    return load_default_scene_with_robot(robot_key)
 
 
 @click.command()
@@ -204,9 +165,31 @@ def _load_default_scene_with_robot(robot_key: str):
     "--robot",
     default="stretch",
     help=(
-        "Robot to simulate. 'stretch' (default) uses Stretch-MuJoCo. "
-        "'rby1' or 'galaxea_r1' use the Galaxea R1 / Rainbow RB-Y1 MJCF (GenericZmqClient). "
-        "Robosuite names (PandaOmron, Tiago, GR1) keep the robosuite robot."
+        "Robot to simulate. Default Stretch uses merged table + StretchRobosuiteZmqServer. "
+        "Use --stretch-legacy or Robocasa for the legacy StretchMujocoSimulator stack. "
+        "'rby1' / 'galaxea_r1' / 'innate_mars' load the default table + generic ZMQ sim. "
+        "Robosuite-native names (PandaOmron, Tiago, GR1) keep the robosuite robot in Robocasa."
+    ),
+)
+@click.option(
+    "--stretch-legacy",
+    "stretch_legacy",
+    default=False,
+    is_flag=True,
+    help=(
+        "Stretch only: use the legacy StretchMujocoSimulator ZMQ stack (packaged scene.xml or "
+        "Robocasa-generated MJCF) instead of the default merged table + StretchRobosuiteZmqServer."
+    ),
+)
+@click.option(
+    "--kinematic-sim",
+    "kinematic_sim",
+    default=False,
+    is_flag=True,
+    help=(
+        "Kinematic sim: mj_forward-only stepping with base pose snaps (merged MJCF path). "
+        "Stretch legacy stack: threads the same mode into StretchMujocoSimulator. "
+        "Default Stretch (merged table) uses RobosuiteZmqServer kinematics."
     ),
 )
 def main(
@@ -238,6 +221,8 @@ def main(
     molmospaces_session_index: int | None = None,
     steps: int | None = None,
     debug_molmospaces_spawn: bool = False,
+    kinematic_sim: bool = False,
+    stretch_legacy: bool = False,
 ):
     # Use EGL for offscreen rendering when headless (or no DISPLAY) to avoid GLFW X11 assertion
     # (_glfwGrabErrorHandlerX11: errorHandler == NULL) in headless/CI/no-window-manager setups
@@ -289,27 +274,20 @@ def main(
         np.random.seed(seed)
         random.seed(seed)
 
-    zmq_environment: dict[str, Any] | None = None
-    if molmospaces_session_scene:
-        zmq_environment = {
-            "kind": "molmospaces",
-            "scene": molmospaces_session_scene,
-            "split": molmospaces_session_split or "train",
-            "index": int(0 if molmospaces_session_index is None else molmospaces_session_index),
-        }
-    elif use_robocasa:
-        zmq_environment = {
-            "kind": "robocasa",
-            "task": robocasa_task,
-            "style": int(robocasa_style),
-            "layout": int(robocasa_layout),
-        }
+    zmq_environment = build_zmq_environment(
+        molmospaces_session_scene=molmospaces_session_scene,
+        molmospaces_session_split=molmospaces_session_split,
+        molmospaces_session_index=molmospaces_session_index,
+        use_robocasa=use_robocasa,
+        robocasa_task=robocasa_task,
+        robocasa_style=robocasa_style,
+        robocasa_layout=robocasa_layout,
+    )
 
-    scene_source_basename: str | None = None
-    if scene_path and str(scene_path).strip():
-        scene_source_basename = Path(str(scene_path).strip()).name
+    scene_source_basename = scene_source_basename_from_path(scene_path)
 
     use_stretch = robot.lower() in ("stretch", "hello_stretch", "hellostretch")
+    stretch_legacy_stack = use_stretch and (stretch_legacy or use_robocasa)
 
     if use_robocasa:
         # Lazy import so we only load robosuite/numba when actually using Robocasa.
@@ -381,8 +359,7 @@ def main(
             logger.error(msg.format(e.filename))
             sys.exit(1)
 
-    # Default Stretch scene only when no path given (non-stretch uses None or explicit merged MJCF).
-    if use_stretch and (scene_path is None or len(str(scene_path).strip()) == 0):
+    if stretch_legacy_stack and use_stretch and (scene_path is None or len(str(scene_path).strip()) == 0):
         scene_path = default_scene_xml_path
 
     # Only relevant when we fall back to generated/default scenes, not when --scene_path is set (e.g. MolmoSpaces).
@@ -398,7 +375,70 @@ def main(
             logger.warning(f"Freed port {p} (killed previous process).")
     time.sleep(0.5)
 
-    if use_stretch:
+    physics_mode = "kinematic" if kinematic_sim else "dynamic"
+
+    if use_stretch and not stretch_legacy_stack:
+        from emet.simulation.stretch_robosuite_server import StretchRobosuiteZmqServer
+        from emet.simulation.stretch_zmq_spec import get_stretch_robosuite_mjcf_spec
+
+        robot_spec = get_stretch_robosuite_mjcf_spec()
+        try:
+            loaded = resolve_merged_physics_scene(
+                robot_key="stretch",
+                scene_path=scene_path,
+                use_robocasa=False,
+                wizard_scene_model=None,
+                wizard_scene_xml=None,
+                wizard_objects_info=None,
+                zmq_environment=zmq_environment,
+                scene_source_basename=scene_source_basename,
+            )
+        except (FileNotFoundError, RuntimeError) as e:
+            logger.error(str(e))
+            sys.exit(1)
+        scene_model = loaded.scene_model
+
+        try:
+            if "MUJOCO_GL" not in os.environ and not use_glx and not show_viewer_ui:
+                os.environ["MUJOCO_GL"] = "egl"
+
+            server = StretchRobosuiteZmqServer(
+                robot_spec=robot_spec,
+                send_port=send_port,
+                recv_port=recv_port,
+                send_state_port=send_state_port,
+                send_servo_port=send_servo_port,
+                use_remote_computer=use_remote_computer,
+                verbose=verbose,
+                scene_xml=None,
+                scene_model=scene_model,
+                environment=loaded.zmq_environment,
+                scene_source_basename=loaded.scene_source_basename,
+                max_sim_steps=steps,
+                debug_molmospaces_spawn=debug_molmospaces_spawn,
+                scene_disk_path=loaded.scene_disk_path,
+                physics_mode=physics_mode,
+            )
+        except zmq.error.ZMQError as e:
+            if "Address already in use" in str(e):
+                logger.error(f"\nPort {send_port} is already in use. Use --port-offset or emet kill-mujoco-server.\n")
+            raise
+
+        try:
+            try:
+                server.start(robocasa=False, headless=headless, show_viewer_ui=show_viewer_ui)
+            finally:
+                try:
+                    server.stop()
+                except Exception:
+                    pass
+        except KeyboardInterrupt:
+            try:
+                server.stop()
+            except Exception:
+                pass
+
+    elif stretch_legacy_stack:
         MujocoZmqServer = _get_stretch_server()
         try:
             server = MujocoZmqServer(
@@ -417,6 +457,7 @@ def main(
                 no_cameras=no_cameras,
                 environment=zmq_environment,
                 scene_source_basename=scene_source_basename,
+                physics_mode=physics_mode,
             )
         except zmq.error.ZMQError as e:
             if "Address already in use" in str(e):
@@ -448,35 +489,21 @@ def main(
         from emet.simulation.robosuite_server import RobosuiteZmqServer
 
         robot_key = robot.lower().replace("-", "_")
-        # Custom merged MJCF (e.g. MolmoSpaces) or default scene + robot when not using Robocasa
-        if not use_robocasa and scene_model is None:
-            custom_path = (scene_path or "").strip()
-            if custom_path and Path(custom_path).is_file():
-                import mujoco
+        try:
+            loaded = resolve_merged_physics_scene(
+                robot_key=robot_key,
+                scene_path=scene_path,
+                use_robocasa=use_robocasa,
+                wizard_scene_model=scene_model,
+                wizard_scene_xml=scene_xml,
+                wizard_objects_info=objects_info,
+                zmq_environment=zmq_environment,
+                scene_source_basename=scene_source_basename,
+            )
+        except (FileNotFoundError, RuntimeError) as e:
+            logger.error(str(e))
+            sys.exit(1)
 
-                from emet.simulation.molmospaces_config import ensure_molmo_asset_layout_symlinks
-
-                ensure_molmo_asset_layout_symlinks()
-                try:
-                    scene_model = mujoco.MjModel.from_xml_path(custom_path)
-                except Exception as e:
-                    logger.error(f"Failed to load MJCF from --scene_path {custom_path}: {e}")
-                    logger.error(
-                        "If this is a MolmoSpaces scene, ensure THOR objects are installed and "
-                        "MLSPACES_ASSETS_DIR / MLSPACES_CACHE_DIR match the env used for merge "
-                        "(sibling dirs; they must not be the same path). Re-run merge: "
-                        "emet molmospaces merge-scene or emet serve mujoco --molmospaces-scene ...",
-                    )
-                    sys.exit(1)
-            else:
-                scene_model = _load_default_scene_with_robot(robot_key)
-                if scene_model is None:
-                    logger.error(
-                        "Default scene with robot not found (scene_environment.xml or robot MJCF missing). "
-                        "Use --scene_path with a merged MJCF, --use-robocasa for Robocasa-generated scenes, "
-                        "or run from repo root with assets."
-                    )
-                    sys.exit(1)
         if robot_key in ROBOT_REGISTRY:
             import importlib
 
@@ -504,11 +531,6 @@ def main(
             if "MUJOCO_GL" not in os.environ and not use_glx and not show_viewer_ui:
                 os.environ["MUJOCO_GL"] = "egl"
 
-            spawn_scene_disk: str | None = None
-            spath = (scene_path or "").strip()
-            if spath and Path(spath).is_file():
-                spawn_scene_disk = str(Path(spath).resolve())
-
             server = RobosuiteZmqServer(
                 robot_spec=robot_spec,
                 send_port=send_port,
@@ -517,13 +539,14 @@ def main(
                 send_servo_port=send_servo_port,
                 use_remote_computer=use_remote_computer,
                 verbose=verbose,
-                scene_xml=scene_xml if use_robocasa else None,
-                scene_model=scene_model if not use_robocasa else None,
-                environment=zmq_environment,
-                scene_source_basename=scene_source_basename,
+                scene_xml=loaded.scene_xml if use_robocasa else None,
+                scene_model=None if use_robocasa else loaded.scene_model,
+                environment=loaded.zmq_environment,
+                scene_source_basename=loaded.scene_source_basename,
                 max_sim_steps=steps,
                 debug_molmospaces_spawn=debug_molmospaces_spawn,
-                scene_disk_path=spawn_scene_disk,
+                scene_disk_path=loaded.scene_disk_path,
+                physics_mode=physics_mode,
             )
         except zmq.error.ZMQError as e:
             if "Address already in use" in str(e):

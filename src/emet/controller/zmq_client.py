@@ -1578,7 +1578,7 @@ class StretchZmqClient(AbstractRobotClient):
                     if camera is not None:
                         logger.warning(
                             "Depth shape (%s, %s) != camera (%s, %s); rebuilding from K and depth "
-                            "(server rgb_width/rgb_height may be swapped vs depth).",
+                            "(server rgb_width/rgb_height may disagree with decoded depth).",
                             dh,
                             dw,
                             camera.height,

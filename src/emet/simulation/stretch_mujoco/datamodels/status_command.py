@@ -56,6 +56,8 @@ class StatusCommand:
     base_velocity: CommandBaseVelocity = field(default_factory=lambda: CommandBaseVelocity(0, 0, False))
     keyframe: CommandKeyframe = field(default_factory=lambda: CommandKeyframe("", False))
     coordinate_frame_arrows_viz: list[CommandCoordinateFrameArrowsViz] = field(default_factory=list)
+    teleport_world_xyt: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    teleport_world_trigger: bool = False
 
     def set_move_to(self, command: CommandMove):
         """Sends a move_to command and removes the move_by command."""

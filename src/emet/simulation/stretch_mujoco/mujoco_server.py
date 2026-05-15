@@ -208,12 +208,19 @@ class MujocoServer:
         start_translation: list | None,
         start_rotation_quat: list | None,
         use_glx: bool = False,
+        kinematic: bool = False,
     ):
         # Use EGL on Linux unless use_glx (e.g. Xvfb on WSL).
         if platform.system() == "Linux" and cameras_to_use and not use_glx:
             os.environ.setdefault("MUJOCO_GL", "egl")
         server = cls(
-            scene_xml_path, model, stop_mujoco_process_event, data_proxies, start_translation, start_rotation_quat
+            scene_xml_path,
+            model,
+            stop_mujoco_process_event,
+            data_proxies,
+            start_translation,
+            start_rotation_quat,
+            kinematic=kinematic,
         )
         server.run(
             show_viewer_ui=show_viewer_ui,
@@ -254,6 +261,8 @@ class MujocoServer:
         data_proxies: MujocoServerProxies,
         start_translation: list | None,
         start_rotation_quat: list | None,
+        *,
+        kinematic: bool = False,
     ):
         """
         Initialize the Simulator handle with a scene
@@ -272,6 +281,8 @@ class MujocoServer:
         self.mjmodel = model
 
         self.mjdata = MjData(self.mjmodel)
+
+        self._kinematic = bool(kinematic)
 
         self._base_in_pos_motion = False
 
@@ -387,8 +398,12 @@ class MujocoServer:
         start_time = time.perf_counter()
 
         with lock:
-            mujoco._functions.mj_step(self.mjmodel, self.mjdata)
-            self._ctrl_callback(self.mjmodel, self.mjdata)
+            if self._kinematic:
+                self.pull_status()
+                self.push_command(self.data_proxies.get_command())
+            else:
+                mujoco._functions.mj_step(self.mjmodel, self.mjdata)
+                self._ctrl_callback(self.mjmodel, self.mjdata)
 
         time_until_next_step = self.mjmodel.opt.timestep - (time.perf_counter() - start_time)
         if time_until_next_step > 0:
@@ -518,6 +533,40 @@ class MujocoServer:
 
         self.data_proxies.set_status(new_status)
 
+    def _teleport_base_world_xyt(self, wx: float, wy: float, wt: float) -> bool:
+        """Teleport ``base_link`` free joint to world (x,y,yaw); preserve height and zero base twist."""
+        bid = mujoco.mj_name2id(self.mjmodel, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+        if bid < 0:
+            return False
+        joint_id = -1
+        for j in range(self.mjmodel.njnt):
+            if int(self.mjmodel.jnt_bodyid[j]) == int(bid):
+                joint_id = j
+                break
+        if joint_id < 0 or int(self.mjmodel.jnt_type[joint_id]) != int(mujoco.mjtJoint.mjJNT_FREE):
+            return False
+        qadr = int(self.mjmodel.jnt_qposadr[joint_id])
+        vadr = int(self.mjmodel.jnt_dofadr[joint_id])
+        z = float(self.mjdata.qpos[qadr + 2])
+        qw = float(np.cos(wt * 0.5))
+        qz = float(np.sin(wt * 0.5))
+        self.mjdata.qpos[qadr] = wx
+        self.mjdata.qpos[qadr + 1] = wy
+        self.mjdata.qpos[qadr + 2] = z
+        self.mjdata.qpos[qadr + 3 : qadr + 7] = np.array([qw, 0.0, 0.0, qz], dtype=np.float64)
+        self.mjdata.qvel[vadr : vadr + 6] = 0.0
+        mujoco.mj_forward(self.mjmodel, self.mjdata)
+        return True
+
+    def _stretch_finish_kinematic_frame(self) -> None:
+        self.base_controller.last_command = None
+        self.mjdata.qvel.fill(0.0)
+        for name in ("left_wheel_vel", "right_wheel_vel"):
+            aid = mujoco.mj_name2id(self.mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
+            if aid >= 0:
+                self.mjdata.ctrl[aid] = 0.0
+        mujoco.mj_forward(self.mjmodel, self.mjdata)
+
     def _to_real_gripper_range(self, pos: float) -> float:
         """
         Map the gripper position to real gripper range
@@ -532,6 +581,11 @@ class MujocoServer:
         """
         Handles setting mujoco ctrl properties to move joints.
         """
+        if command_status.teleport_world_trigger:
+            command_status.teleport_world_trigger = False
+            wx, wy, wt = command_status.teleport_world_xyt
+            self._teleport_base_world_xyt(float(wx), float(wy), float(wt))
+
         # move_by
         for _, command in command_status.move_by.items():
             if command.trigger:
@@ -571,7 +625,10 @@ class MujocoServer:
             command_status.keyframe.trigger = False
             self.mjdata.ctrl = self.mjmodel.keyframe(command_status.keyframe.name).ctrl
 
-        self.base_controller.update()
+        if self._kinematic:
+            self._stretch_finish_kinematic_frame()
+        else:
+            self.base_controller.update()
 
         self.data_proxies.set_command(command_status)
 

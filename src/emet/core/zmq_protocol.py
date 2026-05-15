@@ -2,6 +2,15 @@
 # All rights reserved.
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source code tree.
 #
 # Some code may be adapted from other open-source works with their respective licenses. Original
@@ -21,6 +30,9 @@ from typing import Any
 
 # Published on observation and state dicts so the client can detect Stretch vs rby1, etc.
 EMET_ZMQ_ROBOT_ID_KEY = "emet_robot_id"
+
+# Optional list of JSON-serializable object dicts (simulator GT), attached by MuJoCo ZMQ servers.
+EMET_ZMQ_GT_OBJECTS_KEY = "emet_gt_objects"
 
 # Frozen per-process metadata on every outbound ZMQ dict (obs / state / servo). See docs/zmq_session_metadata.md.
 EMET_ZMQ_SESSION_KEY = "emet_session"

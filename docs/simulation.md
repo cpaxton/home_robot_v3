@@ -33,6 +33,8 @@ emet serve mujoco
 # or: python -m emet.simulation.mujoco_server
 ```
 
+**Default Stretch vs legacy stack:** `emet serve mujoco` (default `--robot stretch`) now loads the packaged **table + `stretch.xml` merge** and runs `StretchRobosuiteZmqServer` (same kinematic/dynamic mode flags as other merged MJCF robots). The older **StretchMujocoSimulator** subprocess stack remains available as **`emet stretch-mujoco`** or **`emet serve mujoco --robot stretch --stretch-legacy`** (and is still used automatically for **Robocasa** Stretch scenes, which require the legacy generator path).
+
 **Terminal 2** – Run an app (use `127.0.0.1` for local simulation):
 
 ```bash
