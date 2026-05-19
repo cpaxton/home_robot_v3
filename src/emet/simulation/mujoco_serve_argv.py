@@ -14,10 +14,12 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from emet.utils.logger import Logger
+
 if TYPE_CHECKING:
     from emet.config.sim_launch_config import SimLaunchConfig
 
-
+_log = Logger(__name__)
 def _merge_molmospaces_scene(
     *,
     scene: str,
@@ -31,6 +33,7 @@ def _merge_molmospaces_scene(
         build_molmospaces_wrapper_command,
         ensure_molmospaces_assets_dir_env,
         galaxea_r1_assets_directory,
+        validate_robot_for_molmospaces_merge,
     )
 
     repo_root = Path(__file__).resolve().parent.parent.parent.parent
@@ -39,9 +42,7 @@ def _merge_molmospaces_scene(
         suffix=".xml", prefix="molmospaces_merged_", dir=str(galaxea_r1_assets_directory())
     )
     os.close(fd)
-    merge_robot = robot.lower().replace("-", "_")
-    if merge_robot in ("stretch", "hello_stretch", "hellostretch"):
-        merge_robot = "rby1"
+    merge_robot = validate_robot_for_molmospaces_merge(robot)
     merge_argv = [
         "merge-scene",
         "--scene",
@@ -98,11 +99,18 @@ def prepare_mujoco_server_argv(sim: SimLaunchConfig) -> list[str]:
             robot=sim.robot,
             install_if_missing=bool(sim.molmospaces_install),
         )
+        _log.info(
+            "MolmoSpaces merge: robot model=%r scene=%r split=%r index=%r — merged MJCF path "
+            "(written under galaxea_r1/ for mesh assetdir resolution, not an implication of robot id): %s",
+            sim.robot,
+            sim.scene,
+            sim.split,
+            int(sim.index),
+            merged,
+        )
         args.extend(["--scene_path", merged])
         mol_session = (sim.scene, sim.split, int(sim.index))
         robot_out = sim.robot
-        if robot_out.lower() in ("stretch", "hello_stretch", "hellostretch"):
-            robot_out = "rby1"
     elif isinstance(sim, SimLaunchRobocasa):
         args.append("--use-robocasa")
         task = (sim.robocasa_task or "").strip() or "PickPlaceCounterToCabinet"

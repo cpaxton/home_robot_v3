@@ -88,6 +88,23 @@ def test_parse_plain_text_fallback():
     assert "cannot" in result["message"]
 
 
+def test_parse_html_payload_suppressed():
+    from emet.agent.prompt import parse_tool_calls_response
+
+    raw = "<html><head><meta charset='utf-8'/></head><body>502 Bad Gateway</body></html>"
+    result = parse_tool_calls_response(raw)
+    assert result["tool_calls"] == []
+    assert result["message"] == ""
+
+
+def test_parse_non_string_input():
+    from emet.agent.prompt import parse_tool_calls_response
+
+    result = parse_tool_calls_response({"tool_calls": []})
+    assert result["tool_calls"] == []
+    assert isinstance(result["message"], str)
+
+
 def test_parse_markdown_fenced_json():
     from emet.agent.prompt import parse_tool_calls_response
 

@@ -36,6 +36,9 @@
 
 robot: rby1
 
+# Agent tools: same playbook as Stretch — explore/scan before find in new MolmoSpaces layouts; graph tools
+# need embodied_agent below. See configs/agent_stretch_discord.yaml for the longer operator comment block.
+
 # Optional: sim profile for ``emet run agent --start-sim`` (see docs/sim_configs.md).
 sim_config: configs/sim/molmospaces_ithor_train_0.yaml
 

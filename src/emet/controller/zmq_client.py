@@ -1345,9 +1345,8 @@ class StretchZmqClient(AbstractRobotClient):
         """Get the current observation. This uses the FULL observation track. Expected to be syncd with RGBD."""
         iteration = 0
         while not self.is_up_to_date(no_action=True) and iteration < max_iter:
-            if self.is_up_to_date(no_action=True):
-                iteration += 1
             time.sleep(0.1)
+            iteration += 1
         time.sleep(0.1)
 
         with self._obs_lock:

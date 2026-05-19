@@ -36,6 +36,11 @@ _MJCF_PATH = str(_assets_dir / "galaxea_r1.xml")
 class Rby1Backend(RobotBackend):
     """Rainbow RB-Y1 backend (Galaxea R1 family). Uses same MJCF and GenericZmqClient as galaxea_r1."""
 
+    def create_mujoco_stationary_control(self):
+        from emet.robots.galaxea_r1.sim_stationary import GalaxeaR1FamilyMujocoStationary
+
+        return GalaxeaR1FamilyMujocoStationary()
+
     def get_spec(self) -> RobotSpec:
         return RobotSpec(
             name="rby1",

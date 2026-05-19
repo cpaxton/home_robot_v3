@@ -44,8 +44,7 @@ class GeminiClient(AbstractLLMClient):
             command = [command]
         command = [self.system_prompt] + command
         response = self._gemini.models.generate_content(model=self.model, contents=command)
-
-        plan = response.text
+        plan = response.text or ""
         if verbose:
             print(f"plan={plan}")
         return plan
