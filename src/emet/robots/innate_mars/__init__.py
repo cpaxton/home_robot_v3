@@ -90,11 +90,19 @@ class InnateMarsBackend(RobotBackend):
             footprint=Footprint(width=0.48, length=0.48, width_offset=0.0, length_offset=0.0),
             optional_uv_extras=(),
             dynamem_depth_source_hint="da3",
+            planar_base_joint_names=("base_x", "base_y", "base_yaw"),
+            # Robocasa planar spawn: arm geoms are visual-only, so mj_collision misses arm–scene overlap;
+            # inflate clip erosion and require wrist / EE XY inside the walkable floor projection.
+            planar_spawn_xy_extra_margin_m=0.50,
+            planar_spawn_clip_guard_body_names=("ee_link", "link5", "link3"),
+            planar_spawn_clip_guard_pad_m=0.40,
+            planar_spawn_robocasa_first_clearance_m=0.068,
             # MJCF head cameras align with ROS optical (+X mount forward); MuJoCo Renderer buffers are upright
             # on typical EGL/GL backends. Avoid baked flip/rot here—extra ops distort stereo/overlays. If pixels
             # look upside-down on your GPU, export EMET_ROBOSUITE_RENDER_FLIPUD=1 before starting the robosuite
             # server (only applies when ops is empty; see RobosuiteZmqServer).
-            robosuite_rgb_depth_ops=(),
+            # MuJoCo Renderer buffers are vertically flipped vs OpenCV / ``imshow``; match ZMQ + preview-cameras.
+            robosuite_rgb_depth_ops=("flipud",),
         )
 
     def create_client(self, robot_ip: str, **kwargs):

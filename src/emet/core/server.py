@@ -332,17 +332,36 @@ class BaseZmqServer(CommsNode, ABC):
             t0 = timeit.default_timer()
 
     def __del__(self):
-        if hasattr(self, "_done"):
-            self._done = True
-        # Wait for the threads to finish
+        self._done = True
         time.sleep(0.15)
 
-        # Threads are created in start(); objects GC'd earlier (e.g. failed init / tests) have none.
-        if hasattr(self, "_send_thread"):
-            self._send_thread.join()
-            self._recv_thread.join()
-            self._send_state_thread.join()
-            self._send_servo_thread.join()
+        # ``start()`` creates *_thread; unit tests often construct the server only to exercise MuJoCo
+        # without starting ZMQ loops. In that case ``join``/``context.term()`` can block indefinitely
+        # (no background threads draining sockets).
+        if getattr(self, "_send_thread", None) is None:
+            try:
+                if hasattr(self, "recv_socket"):
+                    self.recv_socket.close(linger=0)
+                if hasattr(self, "send_socket"):
+                    self.send_socket.close(linger=0)
+                if hasattr(self, "send_state_socket"):
+                    self.send_state_socket.close(linger=0)
+                if hasattr(self, "send_servo_socket"):
+                    self.send_servo_socket.close(linger=0)
+            except Exception:
+                pass
+            try:
+                if hasattr(self, "context"):
+                    self.context.destroy(linger=0)
+            except Exception:
+                pass
+            return
+
+        # Close threads
+        self._send_thread.join()
+        self._recv_thread.join()
+        self._send_state_thread.join()
+        self._send_servo_thread.join()
 
         # Close sockets (present after __init__ completes)
         if hasattr(self, "recv_socket"):

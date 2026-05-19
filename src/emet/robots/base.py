@@ -55,12 +55,38 @@ class RobotSpec:
     """Extras to ``uv sync --extra …`` for typical full-stack use when something is not in core deps."""
     dynamem_depth_source_hint: str | None = None
     """When hardware omits depth on ZMQ, DynaMem usually needs this ``depth_source`` (see dynav YAML)."""
+    default_dynav_config: str | None = None
+    """Optional packaged basename under ``emet/config/`` when ``emet run dynamem`` uses the global
+    default ``--dynav-config dynav_config.yaml``. Most robots omit this and share ``dynav_config.yaml``.
+    """
+    planar_base_joint_names: tuple[str, str, str] | None = None
+    """If set, MuJoCo nav uses three scalar joints (slide, slide, hinge yaw) as velocity targets instead
+    of a ``base_link`` free joint. Slide axes live on the parent body of the first slide (e.g. ``base_root``);
+    world `(x, y, yaw)` is converted to joint values when that body has a non-identity Robocasa merge pose.
+    Names must match the MJCF and :class:`RobosuiteZmqServer` SE(2) commands."""
     robosuite_rgb_depth_ops: tuple[str, ...] = ()
     """MuJoCo RGB/depth post-steps for :class:`RobosuiteZmqServer` (``flipud``, ``rot90_cw``). Intrinsics are chained."""
     spawn: RobotSpawnSpec | None = None
     """Spawn / placement hints for MolmoSpaces merge and similar sims (optional)."""
     sim_uses_stretch_mujoco_zmq: bool = False
     """True when ``emet serve mujoco`` uses :class:`MujocoZmqServer` (Stretch table sim), not RobosuiteZmqServer."""
+    planar_spawn_xy_extra_margin_m: float = 0.0
+    """Added to Robocasa planar spawn ``footprint_xy_margin_m`` (erodes walkable XY clip). Use when
+    :attr:`footprint` is base-sized but appendages extend horizontally (typical mobile manipulators)."""
+    planar_spawn_clip_edge_pad_m: float | None = None
+    """Minimum XY distance from :func:`~emet.simulation.scene_base_spawn.collision_scene_xy_clip_rect`
+    edges for the base link. If ``None``, uses ``0.22 + 0.5 * planar_spawn_xy_extra_margin_m``."""
+    planar_spawn_clip_guard_body_name: str | None = None
+    """Legacy single guard body. Prefer :attr:`planar_spawn_clip_guard_body_names`; if that tuple is
+    empty and this is set, spawn uses a one-element guard list."""
+    planar_spawn_clip_guard_body_names: tuple[str, ...] = ()
+    """Bodies whose world XY must lie inside the scene walkable clip (same pad). Use for EE + mid-arm when
+    meshes are visual-only."""
+    planar_spawn_clip_guard_pad_m: float = 0.18
+    """XY inset inside the scene clip for each :attr:`planar_spawn_clip_guard_body_names` body (meters)."""
+    planar_spawn_robocasa_first_clearance_m: float | None = None
+    """If set (Robocasa planar spawn only), the first :func:`~emet.simulation.scene_base_spawn.find_planar_base_xyt`
+    contact-distance pass uses at least this many meters of ``worst`` before relaxing (see clearance ladder there)."""
 
 
 def format_uv_sync_extras_hint(spec: RobotSpec) -> str | None:
@@ -80,7 +106,7 @@ def format_robot_runtime_notes(spec: RobotSpec) -> str | None:
     if spec.dynamem_depth_source_hint:
         chunks.append(
             f"DynaMem without hardware depth: depth_source={spec.dynamem_depth_source_hint!r} "
-            f"(e.g. config dynav_{spec.name}.yaml when shipped)"
+            f"(e.g. ``--dynav-config dynav_innate_mars.yaml`` for innate_mars; or a packaged dynav_<robot>.yaml)"
         )
     return " — ".join(chunks) if chunks else None
 

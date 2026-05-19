@@ -17,7 +17,13 @@ import cv2
 import numpy as np
 
 from emet.app.robot_cli import create_robot_client_from_cli
-from emet.perception.depth.da3_estimator import DA3DepthEstimator, resolve_depth_map
+from emet.core.zmq_protocol import EMET_ZMQ_SESSION_KEY
+from emet.perception.depth.da3_estimator import (
+    DA3DepthEstimator,
+    apply_da3_sky_row_mask,
+    resolve_depth_map,
+    resolve_depth_map_uses_observation_sensor_only,
+)
 
 
 def _depth_colorize(depth: np.ndarray, near: float = 0.15, far: float = 6.0) -> np.ndarray:
@@ -106,6 +112,26 @@ def _depth_to_world_points(
     show_default=True,
     help="Same as dynav depth_source: sensor uses sim depth if present; da3 runs DA3.",
 )
+@click.option(
+    "--da3-stereo/--no-da3-stereo",
+    default=False,
+    show_default=True,
+    help="Match dynav da3_stereo: on = two-view DA3 when right RGB exists (slower); default off for speed.",
+)
+@click.option(
+    "--sky-fraction-top",
+    default=0.0,
+    type=float,
+    show_default=True,
+    help="Zero top fraction of rows in DA3 depth (matches dynav da3_ignore_sky_fraction_top; e.g. 0.16).",
+)
+@click.option(
+    "--clip-depth-max-m",
+    default=4.0,
+    type=float,
+    show_default=True,
+    help="Clip DA3 output depth to this max (meters); aligns with dynav da3_clip_max_m.",
+)
 def main(
     robot_ip: str,
     robot: str,
@@ -118,7 +144,10 @@ def main(
     cpu_only: bool,
     spawn: bool,
     depth_source: str,
+    da3_stereo: bool,
     show_meshes: bool,
+    sky_fraction_top: float,
+    clip_depth_max_m: float,
 ) -> None:
     """Stream head camera(s) from the ZMQ server through DA3 and log RGB, depth, and a light point cloud to Rerun.
 
@@ -178,7 +207,12 @@ def main(
 
     est: DA3DepthEstimator | None = None
     if depth_source in ("da3", "auto"):
-        est = DA3DepthEstimator(model_id=model_id, device=device, process_res=process_res)
+        est = DA3DepthEstimator(
+            model_id=model_id,
+            device=device,
+            process_res=process_res,
+            clip_output_max_m=float(clip_depth_max_m),
+        )
 
     robot_client = create_robot_client_from_cli(
         robot,
@@ -224,7 +258,14 @@ def main(
                 getattr(obs, "head_rgb_right", None),
                 getattr(obs, "head_camera_K_right", None),
                 getattr(obs, "head_camera_pose_right", None),
+                da3_use_stereo=da3_stereo,
             )
+            if (
+                depth is not None
+                and sky_fraction_top > 0
+                and not resolve_depth_map_uses_observation_sensor_only(depth_source, obs.depth)
+            ):
+                depth = apply_da3_sky_row_mask(np.asarray(depth, dtype=np.float32), sky_fraction_top)
 
             rr.set_time_sequence("frame", frame)
 
@@ -236,6 +277,8 @@ def main(
                     pose_d["gps"] = obs.gps
                 if getattr(obs, "compass", None) is not None:
                     pose_d["compass"] = obs.compass
+                if getattr(obs, "emet_session", None) is not None:
+                    pose_d[EMET_ZMQ_SESSION_KEY] = obs.emet_session
                 if pose_d:
                     mesh_logger.log_meshes_world(rr, pose_d, entity_prefix="da3/robot/mesh")
 

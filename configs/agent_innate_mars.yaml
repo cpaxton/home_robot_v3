@@ -3,7 +3,8 @@
 # Same embodied/DynaMem preset as ``agent_stretch_discord.yaml``, with ``robot: innate_mars`` and
 # DA3 depth so behavior matches the real Mars stack (no hardware depth on ZMQ). For MuJoCo-only
 # tests with sim depth, you can use ``depth_source: sensor`` and drop the ``da3_*`` keys; see
-# ``src/emet/config/dynav_innate_mars.yaml`` for the minimal dynav override.
+# ``src/emet/config/dynav_innate_mars.yaml`` for the minimal dynav override. For ``emet run dynamem``,
+# use ``--dynav-config dynav_innate_mars.yaml`` when you need that preset (default is ``dynav_config.yaml``).
 #
 # ``robot`` below is used when you omit ``--robot`` on the CLI (CLI always wins if set).
 #
@@ -53,6 +54,8 @@ max_depth: 2.5
 depth_source: da3
 da3_model_id: depth-anything/DA3-SMALL
 da3_process_res: 378
+da3_clip_max_m: 4.0
+da3_ignore_sky_fraction_top: 0.16
 
 eqa:
   backend: qwen_vl

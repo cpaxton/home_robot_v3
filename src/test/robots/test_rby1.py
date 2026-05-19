@@ -92,9 +92,11 @@ def test_decode_servo_message_robosuite_format():
         "head_camera_K": np.eye(3, dtype=np.float64),
         "joint_positions": np.zeros(5, dtype=np.float64),
         "base_pose": np.array([1.0, 2.0, 0.5], dtype=np.float64),
+        "step": 7,
     }
     obs = _decode_servo_message_to_observations(msg, None, None)
     assert obs is not None
+    assert obs.seq_id == 7
     assert obs.rgb.shape[0] == 48 and obs.rgb.shape[2] == 3
     assert obs.depth is not None and obs.depth.shape == (48, 64)
     assert obs.joint is not None and obs.joint.shape == (5,)
@@ -112,6 +114,58 @@ def test_decode_servo_message_robosuite_format():
     obs3 = _decode_servo_message_to_observations(msg, None, full)
     assert obs3 is not None and obs3.camera_pose is not None
     assert float(obs3.camera_pose[0, 0]) == 2.0
+
+
+def test_rerun_head_cam_prefers_fresher_full_obs_over_stale_servo():
+    """When servo ``seq_id`` lags ``obs['step']``, Rerun should use full-obs RGB (avoids frozen head)."""
+    import numpy as np
+
+    from emet.core.interfaces import Observations
+    from emet.visualization.rerun import _pick_rerun_head_cam
+
+    rgb_main = np.zeros((4, 4, 3), dtype=np.uint8)
+    rgb_servo = np.ones((4, 4, 3), dtype=np.uint8)
+    obs = {
+        "rgb": rgb_main,
+        "step": 100,
+        "gps": np.zeros(2, dtype=np.float64),
+        "compass": np.zeros(1, dtype=np.float64),
+    }
+    servo = Observations(
+        gps=np.zeros(2, dtype=np.float64),
+        compass=np.zeros(1, dtype=np.float64),
+        rgb=rgb_servo,
+        seq_id=5,
+    )
+    picked = _pick_rerun_head_cam(obs, servo)
+    assert picked is not None
+    assert (picked.rgb == rgb_main).all()
+
+
+def test_rerun_head_cam_same_step_prefers_full_obs():
+    """When ``step`` matches, Rerun should use full-observation RGB (higher resolution / canonical camera)."""
+    import numpy as np
+
+    from emet.core.interfaces import Observations
+    from emet.visualization.rerun import _pick_rerun_head_cam
+
+    rgb_main = np.zeros((8, 8, 3), dtype=np.uint8)
+    rgb_servo = np.ones((2, 2, 3), dtype=np.uint8)
+    obs = {
+        "rgb": rgb_main,
+        "step": 7,
+        "gps": np.zeros(2, dtype=np.float64),
+        "compass": np.zeros(1, dtype=np.float64),
+    }
+    servo = Observations(
+        gps=np.zeros(2, dtype=np.float64),
+        compass=np.zeros(1, dtype=np.float64),
+        rgb=rgb_servo,
+        seq_id=7,
+    )
+    picked = _pick_rerun_head_cam(obs, servo)
+    assert picked is not None
+    assert (picked.rgb == rgb_main).all()
 
 
 def test_default_scene_with_rby1_loads_and_robot_can_be_commanded():

@@ -113,6 +113,43 @@ def test_generic_zmq_client_import():
     assert GenericZmqClient is not None
 
 
+def test_generic_zmq_mapping_depth_copy_on_store():
+    """Fused depth is copied on store so voxel/Rerun threads do not share a mutable buffer."""
+    from threading import Lock
+
+    import numpy as np
+
+    from emet.controller.generic_zmq_client import GenericZmqClient
+
+    c = GenericZmqClient.__new__(GenericZmqClient)
+    c._mapping_depth_lock = Lock()
+    c._mapping_depth_for_rerun = None
+    d = np.ones((2, 4), dtype=np.float32)
+    c.set_mapping_depth_for_rerun(d)
+    d[0, 0] = 7.0
+    out = c.peek_mapping_depth_for_rerun()
+    assert out is not None and float(out[0, 0]) == 1.0
+    c.set_mapping_depth_for_rerun(None)
+    assert c.peek_mapping_depth_for_rerun() is None
+
+
+def test_stretch_zmq_mapping_depth_copy_on_store():
+    from threading import Lock
+
+    import numpy as np
+
+    from emet.controller.zmq_client import StretchZmqClient
+
+    c = StretchZmqClient.__new__(StretchZmqClient)
+    c._mapping_depth_lock = Lock()
+    c._mapping_depth_for_rerun = None
+    d = np.ones((3, 2), dtype=np.float32)
+    c.set_mapping_depth_for_rerun(d)
+    d[1, 1] = 8.0
+    out = c.peek_mapping_depth_for_rerun()
+    assert out is not None and float(out[1, 1]) == 1.0
+
+
 def test_stretch_zmq_client_backward_compat():
     """HomeRobotZmqClient alias still works."""
     from emet.controller import HomeRobotZmqClient, StretchZmqClient
@@ -125,6 +162,21 @@ def test_robosuite_server_import():
     from emet.simulation.robosuite_server import RobosuiteZmqServer
 
     assert RobosuiteZmqServer is not None
+
+
+def test_want_robocasa_planar_autoplace_innate_mars():
+    from emet.robots.innate_mars import InnateMarsBackend
+    from emet.simulation import scene_base_spawn
+
+    spec = InnateMarsBackend().get_spec()
+    assert scene_base_spawn.want_robocasa_planar_autoplace(
+        environment={"kind": "robocasa", "task": "PickPlaceCounterToCabinet"},
+        robot_spec=spec,
+    )
+    assert not scene_base_spawn.want_robocasa_planar_autoplace(
+        environment={"kind": "default_table"},
+        robot_spec=spec,
+    )
 
 
 def test_robocasa_gen_robot_param():
@@ -156,6 +208,19 @@ def test_robot_spec_new_fields():
     assert spec.mjcf_path == "/tmp/test.xml"
     assert spec.actuator_names == ["a1", "a2"]
     assert spec.base_link_name == "base"
+
+
+def test_xml_remove_all_tags_strips_key():
+    """xml_remove_all_tags removes every ``<key>`` (used after Robocasa strip-replace)."""
+    from emet.simulation.stretch_mujoco.utils import xml_remove_all_tags
+
+    xml = (
+        '<mujoco model="t"><key name="k" qpos="0 1 2"/><worldbody><body name="b"/></worldbody>'
+        '<key qpos="3 4 5"/></mujoco>'
+    )
+    out = xml_remove_all_tags(xml, "key")
+    assert "<key" not in out
+    assert "worldbody" in out
 
 
 def test_robocasa_gen_robosuite_mapping():

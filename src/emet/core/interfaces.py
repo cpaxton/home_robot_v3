@@ -19,6 +19,8 @@ from typing import Any
 
 import numpy as np
 
+from emet.core.zmq_protocol import EMET_ZMQ_SESSION_KEY
+
 
 class Action:
     """Controls."""
@@ -187,6 +189,9 @@ class Observations:
     initial_pose_graph_gps: np.ndarray | None = None
     initial_pose_graph_compass: np.ndarray | None = None
 
+    # Latest ``emet_session`` from ZMQ (navigation_origin_xyt, capabilities, …) when present.
+    emet_session: dict[str, Any] | None = None
+
     def compute_xyz(self, scaling: float = 1e-3) -> np.ndarray | None:
         """Compute xyz from depth and camera intrinsics."""
         if self.depth is not None and self.camera_K is not None:
@@ -279,4 +284,5 @@ class Observations:
             pose_graph_timestamp=data.get("pose_graph_timestamp"),
             initial_pose_graph_gps=data.get("initial_pose_graph_gps"),
             initial_pose_graph_compass=data.get("initial_pose_graph_compass"),
+            emet_session=data.get(EMET_ZMQ_SESSION_KEY),
         )

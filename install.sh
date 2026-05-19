@@ -16,6 +16,7 @@ SKIP_ASKING="false"
 NO_SAM2="false"
 INSTALL_SIM="false"
 CLEAN_SIM="false"
+FORCE_DOWNLOAD="false"
 INSTALL_MOLMOSPACES="false"
 NO_MOLMOSPACES="false"
 # standard | minimal | full (full = install sim without passing --sim; default profile is full)
@@ -59,6 +60,9 @@ for arg in "$@"; do
             ;;
         --clean)
             CLEAN_SIM="true"
+            ;;
+        --force-download)
+            FORCE_DOWNLOAD="true"
             ;;
         --molmospaces)
             INSTALL_MOLMOSPACES="true"
@@ -113,6 +117,7 @@ echo "         --no-sim    = force sim off even if PROFILE=full"
 echo "         --molmospaces = create .venv-molmospaces for MolmoSpaces (scenes + rby1 robot)"
 echo "         --no-molmospaces = skip MolmoSpaces venv even when sim is installed (lighter / CI)"
 echo "         --clean     = remove and re-clone third_party/robosuite, robosuite_models, robocasa (only if needed; normally we update in place)"
+echo "         --force-download = re-download sim assets even if they already exist (use with --sim/--all)"
 echo "         Rich menu:  uv sync && uv run emet install menu"
 echo "Root: $ROOT_DIR"
 echo "---------------------------------------------"
@@ -192,6 +197,28 @@ echo "  -> Running: ${UV_SYNC[*]}"
 "${UV_SYNC[@]}"
 echo "  -> uv sync completed."
 
+# OpenCV sanity/repair:
+# Some dependency combinations (e.g. mediapipe + opencv wheels) can leave cv2 as a namespace
+# package without the compiled extension. Detect and repair proactively.
+if ! uv run python - <<'PY'
+import cv2
+required = ["resize", "imencode", "INTER_AREA", "IMWRITE_JPEG_QUALITY"]
+missing = [name for name in required if not hasattr(cv2, name)]
+raise SystemExit(0 if not missing and getattr(cv2, "__file__", None) else 1)
+PY
+then
+    echo "  -> OpenCV appears broken (cv2 stub/namespace). Reinstalling opencv-contrib-python..."
+    uv pip install --python .venv/bin/python --reinstall opencv-contrib-python
+    uv run python - <<'PY'
+import cv2
+required = ["resize", "imencode", "INTER_AREA", "IMWRITE_JPEG_QUALITY"]
+missing = [name for name in required if not hasattr(cv2, name)]
+if missing or not getattr(cv2, "__file__", None):
+    raise SystemExit(f"ERROR: OpenCV repair failed. Missing attributes: {missing}, cv2.__file__={getattr(cv2, '__file__', None)}")
+print(f"  -> OpenCV repaired: {cv2.__file__}")
+PY
+fi
+
 # Uninstall av to avoid conflict (from old install.sh)
 source .venv/bin/activate
 uv pip uninstall av -y 2>/dev/null || true
@@ -201,11 +228,20 @@ if [ "$INSTALL_SIM" = "true" ]; then
     echo ""
     echo "Installing simulation (Robocasa + robosuite)..."
     export EMET_USE_UV=1
+    export EMET_PYTHON="$ROOT_DIR/.venv/bin/python"
     SIM_SCRIPT="$ROOT_DIR/scripts/install_simulation.sh"
     if [ "$SKIP_ASKING" = "true" ]; then
-        bash "$SIM_SCRIPT" -y
+        if [ "$FORCE_DOWNLOAD" = "true" ]; then
+            bash "$SIM_SCRIPT" -y --force-download
+        else
+            bash "$SIM_SCRIPT" -y
+        fi
     else
-        bash "$SIM_SCRIPT"
+        if [ "$FORCE_DOWNLOAD" = "true" ]; then
+            bash "$SIM_SCRIPT" --force-download
+        else
+            bash "$SIM_SCRIPT"
+        fi
     fi
 fi
 

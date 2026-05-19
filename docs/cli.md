@@ -47,7 +47,7 @@ Start a simulation server.
 The positional **`[mujoco|robocasa]`** is optional (`emet serve` defaults to **mujoco**).
 
 **Options:**
-- `--robot NAME` — Simulator robot (default `stretch`). Use **`innate_mars`**, **`rby1`**, **`galaxea_r1`**, etc. for registry robots: loads **`scene_environment.xml`** (default table room: red cylinder, blue cube, floor) merged with that robot’s MJCF and starts the **generic ZMQ** sim (`RobosuiteZmqServer`) on ports **4401–4404**. Must match **`emet run dynamem --robot NAME`** (or `create_robot_client_from_cli`) on the client. For DynaMem with Innate Mars + Depth Anything 3, pass **`--dynav-config dynav_innate_mars.yaml`** to **`emet run dynamem`** (see `docs/robots/innate_mars.md`).
+- `--robot NAME` — Simulator robot (default `stretch`). Use **`innate_mars`**, **`rby1`**, **`galaxea_r1`**, etc. for registry robots: loads **`scene_environment.xml`** (default table room: red cylinder, blue cube, floor) merged with that robot’s MJCF and starts the **generic ZMQ** sim (`RobosuiteZmqServer`) on ports **4401–4404**. Must match **`emet run dynamem --robot NAME`** (or `create_robot_client_from_cli`) on the client. DynaMem uses the same default **`dynav_config.yaml`** for all robots; for Innate Mars **without** ZMQ depth, add **`--dynav-config dynav_innate_mars.yaml`** (see `docs/robots/innate_mars.md`).
 - `--use-robocasa` — Use Robocasa for scene generation (default task: PickPlaceCounterToCabinet)
 - `--list-robocasa-tasks` — Print all Robocasa task names and exit (for use with `--robocasa-task`)
 - `--headless` — Run without native viewer (use web at http://localhost:9090?url=ws://localhost:9877)
@@ -60,7 +60,7 @@ The positional **`[mujoco|robocasa]`** is optional (`emet serve` defaults to **m
 emet serve                          # MuJoCo, default scene, Stretch
 emet serve mujoco --headless        # No native viewer
 emet serve --robot innate_mars --headless   # Innate Mars + default table (match client --robot)
-emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S --dynav-config dynav_innate_mars.yaml   # DynaMem + DA3
+emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S --dynav-config dynav_innate_mars.yaml   # DynaMem + DA3 (no ZMQ depth)
 emet serve mujoco --use-robocasa    # Robocasa scene
 ```
 
@@ -117,6 +117,7 @@ Stream head camera(s) from the ZMQ server through **Depth Anything 3** (or sim d
 - `--depth-source da3` (default) — run DA3; `--depth-source sensor` uses rendered sim depth (no DA3) for A/B checks.
 - `--model-id` — default `depth-anything/DA3-SMALL` for speed; use `DA3METRIC-LARGE` when you need metric calibration.
 - `--process-res` — default `378` (faster); raise for sharper depth at more compute.
+- `--da3-stereo` — default **off** (monocular DA3, matches dynav); pass `--da3-stereo` for two-view inference when wiring stereo depth.
 - `--hz`, `--stride` — cap FPS and point-cloud density.
 
 **Examples:**
@@ -133,7 +134,7 @@ emet debug-da3-depth --model-id depth-anything/DA3METRIC-LARGE --process-res 504
 Build a **labeled horizontal montage** of the robot’s MuJoCo/ZMQ cameras (for Innate Mars: `head_left`, `head_right`, `camera_arm`) to check orientation, stereo wiring, and tabletop aim without running a full agent loop. Implements `emet.app.preview_robot_cameras`; options are passed through (see `emet preview-cameras -h`).
 
 **Modes**
-- **`--source local`** (default) — Load the same **merged** model as `emet serve mujoco` (`scene_environment.xml` + robot MJCF), render with MuJoCo at 640×480, and apply the same RGB postprocess as `RobosuiteZmqServer` (empty `robosuite_rgb_depth_ops` plus optional `EMET_ROBOSUITE_RENDER_FLIPUD`).
+- **`--source local`** (default) — Load the same **merged** model as `emet serve mujoco` (`scene_environment.xml` + robot MJCF), render with MuJoCo at 640×480, and apply the same RGB postprocess as `RobosuiteZmqServer` (per robot: `RobotSpec.robosuite_rgb_depth_ops`; innate_mars uses **`flipud`** on MuJoCo `Renderer` output; robots with empty ops may still honor optional `EMET_ROBOSUITE_RENDER_FLIPUD`).
 - **`--source zmq`** — Subscribe once on the **full observation** port (default **4401**, same as `GenericZmqClient`), decode JPEG fields, and montage. Requires a running sim or bridge. Newer `RobosuiteZmqServer` builds also attach a third JPEG (`rgb_tertiary`, `camera_name_tertiary`) when the spec lists a distinct third camera.
 
 **Common options:** `--robot`, `--out` (single PNG), `--max-cams`, `--row-height`, `--recv-port` / `--timeout-ms` (ZMQ), `--discord` (post the single montage; needs `DISCORD_TOKEN`, `EMET_DISCORD_CHANNEL`).

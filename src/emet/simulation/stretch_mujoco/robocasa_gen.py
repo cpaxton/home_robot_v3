@@ -8,7 +8,10 @@
 # license information maybe found below, if so.
 """Modified version of robocasa's kitchen scene generation script."""
 
+import re
+import tempfile
 from collections import OrderedDict
+from pathlib import Path
 
 import click
 import mujoco
@@ -25,11 +28,13 @@ from robosuite.utils.transform_utils import euler2mat, mat2quat
 from termcolor import colored
 
 from emet.simulation.stretch_mujoco.utils import (
+    _strip_geom_shellinertia,
     ensure_mesh_inertia,
     get_absolute_path_stretch_xml,
     insert_line_after_mujoco_tag,
     replace_xml_tag_value,
     xml_modify_body_pos,
+    xml_remove_all_tags,
     xml_remove_subelement,
     xml_remove_tag_by_name,
 )
@@ -144,7 +149,7 @@ ROBOSUITE_ROBOTS = [
 def _robosuite_robot_for(robot_name: str) -> str:
     """Map an emet robot name to the robosuite robot class used as the scene placeholder.
 
-    For Stretch we use PandaMobile as a placeholder (then strip-and-replace).
+    For Stretch and innate_mars we use PandaMobile as a placeholder (then strip-and-replace).
     For robosuite-native robots we use the robot directly.
     """
     if robot_name in ("stretch", None):
@@ -182,9 +187,9 @@ def model_generation_wizard(
         style: Style id (None = interactive choice).
         write_to_file: Optional path to save the generated XML.
         robot_spawn_pose: Override spawn pose ``{pos: "x y z", quat: "w x y z"}``.
-        robot: Robot name. ``"stretch"`` uses the strip-and-replace flow.
-            Any robosuite-native name (e.g. ``"PandaOmron"``, ``"Tiago"``,
-            ``"GR1"``) keeps the robosuite robot in the scene.
+        robot: Robot name. ``"stretch"`` and ``"innate_mars"`` use a PandaMobile placeholder in Robocasa,
+            then strip-and-replace with the real MJCF (same pattern as Stretch).
+            Robosuite-native names (e.g. ``"PandaOmron"``, ``"Tiago"``, ``"GR1"``) keep that robot in the scene.
     Returns:
         Tuple of (MjModel, xml_string, object_placements_info).
     """
@@ -196,12 +201,18 @@ def model_generation_wizard(
     if style is None:
         style = choose_style()
 
-    use_stretch = robot.lower() in ("stretch", "hello_stretch", "hellostretch")
+    use_strip_placeholder_robot = robot.lower() in (
+        "stretch",
+        "hello_stretch",
+        "hellostretch",
+        "innate_mars",
+    )
+    use_stretch_robot = robot.lower() in ("stretch", "hello_stretch", "hellostretch")
     rs_robot = _robosuite_robot_for(robot)
 
     config = {
         "env_name": task,
-        "robots": rs_robot if not use_stretch else "PandaMobile",
+        "robots": "PandaMobile" if use_strip_placeholder_robot else rs_robot,
         "controller_configs": load_part_controller_config(default_controller="OSC_POSE"),
         "translucent_robot": False,
         "layout_and_style_ids": [[layout, style]],
@@ -252,7 +263,7 @@ def model_generation_wizard(
             "quat": object_placements[obj_name][1],
         }
 
-    if use_stretch:
+    if use_strip_placeholder_robot:
         xml, remove_robot_attrib = custom_cleanups(xml)
 
         if hasattr(env, "init_robot_base_pos") and hasattr(env, "init_robot_base_ori"):
@@ -275,13 +286,32 @@ def model_generation_wizard(
         xml = ensure_mesh_inertia(xml)
 
         click.secho("\nMaking Robot Placement...\n", fg="yellow")
-        xml = add_stretch_to_kitchen(xml, robot_base_fixture_pose)
+        if use_stretch_robot:
+            xml = add_stretch_to_kitchen(xml, robot_base_fixture_pose)
+        else:
+            xml = add_innate_mars_to_kitchen(xml, robot_base_fixture_pose)
     else:
         xml = _cleanup_for_native_robot(xml)
         xml = ensure_mesh_inertia(xml)
         click.secho(f"\nKeeping robosuite robot '{rs_robot}' in scene.\n", fg="yellow")
 
+    # Strip keyframes from the serialized kitchen model when we swapped in a different robot:
+    # ``get_xml()`` can retain Panda-sized ``<key qpos="..."/>`` vectors that no longer line up
+    # with Innate Mars / Stretch ``nq``, shifting joint defaults (notably the head).
+    if use_strip_placeholder_robot:
+        xml = xml_remove_all_tags(xml, "key")
+
     model = mujoco.MjModel.from_xml_string(xml)
+
+    if use_strip_placeholder_robot and hasattr(env, "init_robot_base_pos"):
+        pos = np.asarray(env.init_robot_base_pos, dtype=float).reshape(-1)
+        yaw = 0.0
+        if hasattr(env, "init_robot_base_ori"):
+            ori = np.asarray(env.init_robot_base_ori, dtype=float).reshape(-1)
+            if ori.size >= 3:
+                yaw = float(ori[2])
+        if pos.size >= 2:
+            object_placements_info["_emet_spawn_hint_xyt"] = [float(pos[0]), float(pos[1]), yaw]
 
     if write_to_file is not None:
         with open(write_to_file, "w") as f:
@@ -341,3 +371,58 @@ def add_stretch_to_kitchen(xml: str, robot_pose_attrib: dict) -> str:
         f' <include file="{stretch_xml_absolute}"/>',
     )
     return xml
+
+
+def add_innate_mars_to_kitchen(xml: str, robot_pose_attrib: dict) -> str:
+    """Add Innate Mars MJCF to kitchen XML (strip-and-replace after PandaMobile placeholder)."""
+    from emet.utils.assets import get_robot_mjcf_path
+
+    mjcf = get_robot_mjcf_path("innate_mars")
+    if mjcf is None or not mjcf.is_file():
+        raise FileNotFoundError(
+            "Innate Mars MJCF not found (emet package data). Cannot build Robocasa scene for innate_mars."
+        )
+    root_dir = mjcf.parent.resolve()
+    meshes_abs = (root_dir / "meshes").resolve()
+    if not meshes_abs.is_dir():
+        raise FileNotFoundError(f"Innate Mars meshes directory missing: {meshes_abs}")
+
+    text = mjcf.read_text(encoding="utf-8")
+    text = text.replace('meshdir="meshes"', f'meshdir="{meshes_abs.as_posix()}"')
+
+    def _abs_mesh_file_attr(m: re.Match) -> str:
+        fname = m.group(1)
+        if fname.startswith("/") or "/" in fname:
+            return m.group(0)
+        return f'file="{(meshes_abs / fname).resolve().as_posix()}"'
+
+    text = re.sub(r'file="([^"]+\.(?:STL|stl))"', _abs_mesh_file_attr, text)
+    # Geom `euler=` on head/base assumes `compiler eulerseq="zyx"` (see innate_mars.xml). Robocasa's
+    # merged kitchen root often omits eulerseq, so MuJoCo's default reinterprets those euler angles
+    # while cameras keep explicit `quat` — head cameras then look "wrong" relative to the head mesh.
+    # Replace the two known Rz(-π/2) mesh tilts with an explicit wxyz quaternion (same as zyx Rz(-π/2)).
+    _rz_neg_90_wxyz = "0.7071067811865476 0 0 -0.7071067811865476"
+    text = text.replace('euler="-1.5708 0 0"', f'quat="{_rz_neg_90_wxyz}"')
+    if robot_pose_attrib is not None:
+        pos = robot_pose_attrib["pos"]
+        quat = robot_pose_attrib["quat"]
+        text = re.sub(
+            r'<body\s+name="base_root"[^>]*>',
+            f'<body name="base_root" pos="{pos}" quat="{quat}">',
+            text,
+            count=1,
+        )
+    text = ensure_mesh_inertia(text)
+    text = _strip_geom_shellinertia(text)
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix="_innate_mars_kitchen.xml",
+        delete=False,
+        encoding="utf-8",
+    ) as fh:
+        fh.write(text)
+        tmp_path = fh.name
+    abs_path = Path(tmp_path).resolve().as_posix()
+    print(f"Adding innate_mars to kitchen via temp MJCF: {abs_path}")
+    return insert_line_after_mujoco_tag(xml, f' <include file="{abs_path}"/>')

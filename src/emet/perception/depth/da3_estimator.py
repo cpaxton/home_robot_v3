@@ -13,10 +13,30 @@ from typing import Any
 
 import cv2
 import numpy as np
+import torch
 
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
+
+_MISSING = object()
+
+
+def apply_da3_sky_row_mask(depth: np.ndarray, fraction_top: float) -> np.ndarray:
+    """Zero the top *fraction_top* of image rows in a depth map (HxW).
+
+    Textureless sky/ceiling often gets spurious finite depths from DA3 stereo; unprojection then
+    paints tall vertical sheets. Zeros are removed downstream by ``min_depth`` filtering in voxel code.
+    """
+    if fraction_top <= 0.0 or depth.ndim != 2:
+        return depth
+    h = int(depth.shape[0])
+    n = int(round(float(fraction_top) * h))
+    if n <= 0:
+        return depth
+    out = np.array(depth, dtype=np.float32, copy=True)
+    out[:n, :] = 0.0
+    return out
 
 
 def _stub_gsplat_if_missing() -> None:
@@ -60,9 +80,12 @@ class DA3DepthEstimator:
     def __init__(
         self,
         *,
-        model_id: str = "depth-anything/DA3METRIC-LARGE",
+        model_id: str = "depth-anything/DA3-SMALL",
         device: str = "cuda",
-        process_res: int = 504,
+        process_res: int = 378,
+        clip_output_max_m: float = 6.0,
+        use_amp: bool = False,
+        torch_compile: bool = False,
     ) -> None:
         _stub_gsplat_if_missing()
         try:
@@ -77,7 +100,39 @@ class DA3DepthEstimator:
         self._model_id = model_id
         self._device = device
         self._process_res = int(process_res)
+        self._clip_output_max_m = float(clip_output_max_m)
+        self._use_amp = bool(use_amp)
+        self._torch_compile = bool(torch_compile)
+        self._torch_compile_tried = False
         self._model: Any = None
+
+    def _maybe_torch_compile(self) -> None:
+        if not self._torch_compile or self._torch_compile_tried or self._model is None:
+            return
+        self._torch_compile_tried = True
+        try:
+            self._model = torch.compile(self._model)  # type: ignore[assignment]
+            logger.info("DA3: torch.compile enabled on the loaded model.")
+        except Exception as e:
+            logger.warning("DA3: torch.compile failed (%s); using eager inference.", e)
+
+    def _model_inference(self, **kwargs: Any) -> Any:
+        use_cuda_amp = (
+            self._use_amp
+            and str(self._device).startswith("cuda")
+            and torch.cuda.is_available()
+        )
+        if use_cuda_amp:
+            with torch.autocast(device_type="cuda", dtype=torch.float16):
+                return self._model.inference(**kwargs)
+        if self._use_amp and str(self._device).startswith("mps"):
+            # MPS supports float16 autocast; omit if unsupported on older torch.
+            try:
+                with torch.autocast(device_type="mps", dtype=torch.float16):
+                    return self._model.inference(**kwargs)
+            except Exception as e:
+                logger.warning("DA3: MPS autocast failed (%s); using eager inference.", e)
+        return self._model.inference(**kwargs)
 
     def _ensure_model(self) -> None:
         if self._model is not None:
@@ -86,6 +141,7 @@ class DA3DepthEstimator:
         self._model = self._DepthAnything3.from_pretrained(self._model_id)
         self._model.to(self._device)
         self._model.eval()
+        self._maybe_torch_compile()
 
     def infer(
         self,
@@ -109,10 +165,10 @@ class DA3DepthEstimator:
             kwargs["extrinsics"] = ext.reshape(1, 4, 4)
             kwargs["align_to_input_ext_scale"] = True
 
-        pred = self._model.inference(**kwargs)
+        pred = self._model_inference(**kwargs)
         depth = np.asarray(pred.depth[0], dtype=np.float32)
-        depth = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
-        depth = np.clip(depth, 0.0, None)
+        depth = np.nan_to_num(depth, nan=0.0, posinf=self._clip_output_max_m, neginf=0.0)
+        depth = np.clip(depth, 0.0, self._clip_output_max_m)
         return resize_depth_to_match_rgb(depth, rgb)
 
     def infer_stereo(
@@ -165,10 +221,10 @@ class DA3DepthEstimator:
         last_err: BaseException | None = None
         for label, kwargs in attempts:
             try:
-                pred = self._model.inference(**kwargs)
+                pred = self._model_inference(**kwargs)
                 depth = np.asarray(pred.depth[0], dtype=np.float32)
-                depth = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
-                depth = np.clip(depth, 0.0, None)
+                depth = np.nan_to_num(depth, nan=0.0, posinf=self._clip_output_max_m, neginf=0.0)
+                depth = np.clip(depth, 0.0, self._clip_output_max_m)
                 return resize_depth_to_match_rgb(depth, rgb_left)
             except (TypeError, RuntimeError) as e:
                 last_err = e
@@ -190,11 +246,27 @@ def create_da3_estimator_from_parameters(parameters: Any, *, device: str) -> DA3
     src = str(parameters.get("depth_source", "sensor")).lower()
     if src not in ("da3", "auto"):
         return None
-    model_id = str(parameters.get("da3_model_id", "depth-anything/DA3METRIC-LARGE"))
-    process_res = int(parameters.get("da3_process_res", 504))
+    model_id = str(parameters.get("da3_model_id", "depth-anything/DA3-SMALL"))
+    process_res = int(parameters.get("da3_process_res", 378))
     da3_dev = parameters.get("da3_device", None)
     dev = str(da3_dev).strip() if da3_dev is not None else device
-    return DA3DepthEstimator(model_id=model_id, device=dev, process_res=process_res)
+    md = float(parameters.get("max_depth", 2.5))
+    clip_raw = parameters.get("da3_clip_max_m", None)
+    clip_m = float(clip_raw) if clip_raw is not None else max(md + 1.0, 4.0)
+    raw_amp = parameters.get("da3_use_amp", _MISSING)
+    if raw_amp is _MISSING:
+        use_amp = str(dev).startswith("cuda") and torch.cuda.is_available()
+    else:
+        use_amp = bool(raw_amp)
+    torch_compile = bool(parameters.get("da3_torch_compile", False))
+    return DA3DepthEstimator(
+        model_id=model_id,
+        device=dev,
+        process_res=process_res,
+        clip_output_max_m=clip_m,
+        use_amp=use_amp,
+        torch_compile=torch_compile,
+    )
 
 
 def resolve_depth_map(
@@ -207,10 +279,15 @@ def resolve_depth_map(
     rgb_right: np.ndarray | None = None,
     camera_K_right: np.ndarray | None = None,
     camera_pose_right: np.ndarray | None = None,
+    *,
+    da3_use_stereo: bool = False,
 ) -> np.ndarray | None:
     """Resolve depth the same way as :meth:`DynamemController._resolve_depth_map` (sensor / da3 / auto).
 
     Shared with CLI debug tooling so visualization matches mapping.
+
+    When *da3_use_stereo* is false, DA3 always uses monocular :meth:`DA3DepthEstimator.infer` on *rgb* even if
+    stereo RGB and intrinsics are present (dynav ``da3_stereo: false``).
     """
     mode = str(depth_source).lower()
     if mode == "sensor":
@@ -235,7 +312,8 @@ def resolve_depth_map(
 
     rgb_r_arr = np.asarray(rgb_right) if rgb_right is not None else None
     use_stereo = (
-        rgb_r_arr is not None
+        bool(da3_use_stereo)
+        and rgb_r_arr is not None
         and rgb_r_arr.size > 0
         and k_use is not None
         and p_use is not None
@@ -256,3 +334,19 @@ def resolve_depth_map(
         return est.infer(rgb, intrinsics=k_use, extrinsics_w2c=p_use)
 
     return est.infer(rgb, intrinsics=k_use, extrinsics_w2c=p_use)
+
+
+def resolve_depth_map_uses_observation_sensor_only(
+    depth_source: str,
+    sensor_depth: np.ndarray | None,
+) -> bool:
+    """True when :func:`resolve_depth_map` returns raw ``sensor_depth`` (not DA3 / stereo inference).
+
+    Used to skip ``da3_ignore_sky_fraction_top`` masking on real / simulator depth.
+    """
+    mode = str(depth_source).lower()
+    if mode == "sensor":
+        return True
+    if mode == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
+        return True
+    return False

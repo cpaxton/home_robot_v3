@@ -58,7 +58,28 @@ def get_robot_spec(robot: str) -> RobotSpec | None:
     return backend_cls().get_spec()
 
 
+DEFAULT_DYNAV_CONFIG_YAML = "dynav_config.yaml"
+"""Global default for ``emet run dynamem --dynav-config`` (shared ``dynav_config.yaml`` unless overridden)."""
+
+
+def resolve_dynav_config_yaml(robot: str, dynav_config: str) -> str:
+    """If *dynav_config* is :data:`DEFAULT_DYNAV_CONFIG_YAML` and the robot spec declares
+    :attr:`RobotSpec.default_dynav_config`, return that basename; else return *dynav_config* unchanged.
+
+    Most robots use the shared default YAML. Optional ``RobotSpec.default_dynav_config`` lets a backend
+    ship a packaged preset; Innate Mars does **not** set one—use ``--dynav-config dynav_innate_mars.yaml``
+    when the ZMQ stack has no hardware depth and you need the DA3 preset.
+    """
+    if dynav_config != DEFAULT_DYNAV_CONFIG_YAML:
+        return dynav_config
+    spec = get_robot_spec(robot.lower().replace("-", "_"))
+    if spec is None or not spec.default_dynav_config:
+        return dynav_config
+    return spec.default_dynav_config
+
+
 __all__ = [
+    "DEFAULT_DYNAV_CONFIG_YAML",
     "ROBOT_REGISTRY",
     "RobotBackend",
     "RobotSpec",
@@ -66,4 +87,5 @@ __all__ = [
     "format_robot_runtime_notes",
     "format_uv_sync_extras_hint",
     "get_robot_spec",
+    "resolve_dynav_config_yaml",
 ]

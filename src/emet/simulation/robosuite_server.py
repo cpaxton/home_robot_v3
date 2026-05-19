@@ -36,7 +36,7 @@ from emet.core.zmq_protocol import (
     EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
 )
 from emet.robots.base import RobotSpec
-from emet.simulation import molmospaces_spawn
+from emet.simulation import molmospaces_spawn, scene_base_spawn
 from emet.simulation.head_look_action import apply_head_to_robosuite
 from emet.simulation.mujoco_stationary_control import (
     DefaultMujocoStationaryControl,
@@ -106,7 +106,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self.control_mode = "navigation"
         self._at_goal = False
         self._emet_session: dict[str, Any] | None = None
-        # World-frame (x, y, yaw) holonomic drive goal for the base free joint (velocity before mj_step).
+        # World-frame (x, y, yaw) holonomic drive goal (velocity before mj_step): free joint or planar joints.
         self._nav_goal_world: np.ndarray | None = None
         self._nav_tol_xy = 0.07
         self._nav_tol_theta = 0.15
@@ -127,6 +127,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         # After MolmoSpaces autoplace, ``qpos0`` holds the chosen free-joint pose; see
         # :meth:`_restore_merged_base_freejoint_from_qpos0` after physics stabilize.
         self._molmospaces_autoplace_snap_qpos0 = False
+        self._planar_autoplace_snap_qpos0 = False
+        self._planar_autoplace_world_xyt: np.ndarray | None = None
+        self._planar_base_actuator_ids_cache: tuple[int, int, int] | None = None
         # After spawn / resettle, lock the base free joint while idle (no nav goal) so gravity does not
         # drop a floating base through the floor (wheels are visual-only on Galaxea / rby1).
         self._stationary_base_freejoint_qpos: np.ndarray | None = None
@@ -412,9 +415,14 @@ class RobosuiteZmqServer(BaseZmqServer):
         else:
             raise ValueError("Either scene_xml or scene_model must be provided")
         self._mjdata = mujoco.MjData(self._mjmodel)
+        self._molmospaces_autoplace_snap_qpos0 = False
+        self._planar_autoplace_snap_qpos0 = False
+        self._planar_autoplace_world_xyt = None
         with self._mj_lock:
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             self._molmospaces_autoplace_free_base_after_load()
+            self._robocasa_planar_autoplace_after_load()
+        self._planar_base_actuator_ids_cache = None
         self._configure_mj_substeps_per_tick()
 
     def _configure_mj_substeps_per_tick(self) -> None:
@@ -514,6 +522,96 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._mjmodel.qpos0[qadr : qadr + 7] = self._mjdata.qpos[qadr : qadr + 7]
             self._molmospaces_autoplace_snap_qpos0 = True
 
+    def _robocasa_planar_autoplace_after_load(self) -> None:
+        """Reposition planar (slide X/Y + yaw) base away from Robocasa clutter when enabled."""
+        if not scene_base_spawn.want_robocasa_planar_autoplace(
+            environment=self._environment_descriptor,
+            robot_spec=self._spec,
+        ):
+            return
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        if self._base_freejoint_addrs() is not None:
+            return
+        names = getattr(self._spec, "planar_base_joint_names", None)
+        if not names or len(names) != 3:
+            return
+        base_name = self._spec.base_link_name
+        joint_names = (str(names[0]), str(names[1]), str(names[2]))
+        if self._debug_molmospaces_spawn:
+            logger.info(
+                f"Robocasa planar spawn debug: environment={self._environment_descriptor!r} "
+                f"base_body_name={base_name!r} joints={joint_names!r}"
+            )
+        fp = self._spec.footprint
+        base_margin = float(
+            0.5
+            * np.hypot(
+                float(fp.length) + abs(float(fp.length_offset)),
+                float(fp.width) + abs(float(fp.width_offset)),
+            )
+            + 0.10
+        )
+        extra_xy = float(self._spec.planar_spawn_xy_extra_margin_m)
+        margin = base_margin + extra_xy
+        clip_pad = self._spec.planar_spawn_clip_edge_pad_m
+        if clip_pad is None:
+            clip_pad = float(0.22 + 0.5 * extra_xy)
+        guard_names = self._spec.planar_spawn_clip_guard_body_names
+        if not guard_names and self._spec.planar_spawn_clip_guard_body_name:
+            guard_names = (self._spec.planar_spawn_clip_guard_body_name,)
+        guard_pad = float(self._spec.planar_spawn_clip_guard_pad_m)
+        try:
+            placed = scene_base_spawn.find_planar_base_xyt(
+                self._mjmodel,
+                self._mjdata,
+                base_body_name=base_name,
+                joint_names=joint_names,
+                spawn_profile="robocasa",
+                scene_label=self._scene_source_basename,
+                merged_mjcf_path=self._scene_disk_path,
+                environment=self._environment_descriptor,
+                footprint_xy_margin_m=margin,
+                clip_edge_pad_m=clip_pad,
+                clip_guard_body_names=guard_names,
+                clip_guard_pad_m=guard_pad,
+                robocasa_first_clearance_m=self._spec.planar_spawn_robocasa_first_clearance_m,
+            )
+        except Exception as e:
+            logger.warning(f"Robocasa planar autoplace skipped ({e!r}).")
+            return
+        if placed is None:
+            logger.info(
+                "Robocasa planar autoplace: no safer (x,y,yaw) found; keeping MJCF default base pose."
+            )
+            return
+        wx, wy, wt = placed
+        self._planar_autoplace_world_xyt = np.array([float(wx), float(wy), float(wt)], dtype=np.float64)
+        logger.info(
+            f"Robocasa planar autoplace: moved base to x={wx:.3f} y={wy:.3f} theta={wt:.3f} "
+            f"(joints {joint_names!r}) for clearance from scene geometry."
+        )
+        if self._debug_molmospaces_spawn:
+            try:
+                mujoco.mj_forward(self._mjmodel, self._mjdata)
+                for ln in molmospaces_spawn.format_spawn_contact_report(
+                    self._mjmodel,
+                    self._mjdata,
+                    base_body_name=base_name,
+                    floor_geom_name="floor",
+                    max_lines=40,
+                    dist_report_threshold=0.12,
+                ):
+                    logger.info(f"[scene_base_spawn/post-place] {ln}")
+            except Exception as e:
+                logger.warning(f"Robocasa planar spawn debug contact report failed: {e!r}")
+        for jn, _val in zip(joint_names, (wx, wy, wt), strict=True):
+            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jn)
+            if jid >= 0:
+                qadr = int(self._mjmodel.jnt_qposadr[jid])
+                self._mjmodel.qpos0[qadr] = float(self._mjdata.qpos[qadr])
+        self._planar_autoplace_snap_qpos0 = True
+
     def _snapshot_stationary_base_freejoint_pose(self) -> None:
         """Remember base free-joint ``qpos`` for idle sim (see :meth:`_hold_stationary_base_freejoint_if_idle`)."""
         if self._mjmodel is None or self._mjdata is None:
@@ -564,6 +662,24 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._mjdata.qpos[qadr : qadr + 7] = self._mjmodel.qpos0[qadr : qadr + 7]
         if vadr >= 0:
             self._mjdata.qvel[vadr : vadr + 6] = 0.0
+
+    def _restore_planar_base_from_qpos0(self) -> None:
+        """Restore planar slide+yaw ``qpos`` from ``qpos0`` after stabilize (same idea as free joint)."""
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        names = getattr(self._spec, "planar_base_joint_names", None)
+        if not names or len(names) != 3:
+            return
+        for jn in names:
+            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, str(jn))
+            if jid < 0:
+                return
+            qadr = int(self._mjmodel.jnt_qposadr[jid])
+            vadr = int(self._mjmodel.jnt_dofadr[jid])
+            self._mjdata.qpos[qadr] = float(self._mjmodel.qpos0[qadr])
+            if vadr >= 0:
+                self._mjdata.qvel[vadr] = 0.0
+        mujoco.mj_forward(self._mjmodel, self._mjdata)
 
     def _build_emet_session(self, *, robocasa: bool) -> dict[str, Any]:
         mj_name: str | None = None
@@ -924,6 +1040,8 @@ class RobosuiteZmqServer(BaseZmqServer):
             return
         with self._mj_lock:
             self._mjdata.qvel.fill(0.0)
+            if self._planar_autoplace_snap_qpos0:
+                return
             self._preserve_joint_ctrl_hold_from_ctrl()
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             for _ in range(8):
@@ -984,9 +1102,56 @@ class RobosuiteZmqServer(BaseZmqServer):
         wt = float(np.arctan2(np.sin(t0 + gt), np.cos(t0 + gt)))
         return np.array([wx, wy, wt], dtype=np.float64)
 
+    def _planar_base_velocity_actuator_ids(self) -> tuple[int, int, int] | None:
+        """MuJoCo actuator indices driving ``planar_base_joint_names`` (velocity transmissions)."""
+        if self._planar_base_actuator_ids_cache is not None:
+            return self._planar_base_actuator_ids_cache
+        names = getattr(self._spec, "planar_base_joint_names", None)
+        if not names or len(names) != 3 or self._mjmodel is None:
+            return None
+        aids: list[int] = []
+        for jn in names:
+            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jn)
+            if jid < 0:
+                self._planar_base_actuator_ids_cache = None
+                return None
+            found = -1
+            for a in range(self._mjmodel.nu):
+                if int(self._mjmodel.actuator_trnid[a, 0]) == jid:
+                    found = int(a)
+                    break
+            if found < 0:
+                self._planar_base_actuator_ids_cache = None
+                return None
+            aids.append(found)
+        self._planar_base_actuator_ids_cache = (aids[0], aids[1], aids[2])
+        return self._planar_base_actuator_ids_cache
+
+    def _teleport_planar_base_world_xyt(self, wx: float, wy: float, wt: float) -> bool:
+        """Snap planar slide+slide+yaw so ``base_link`` reaches world (x,y,yaw); zero velocity ctrl."""
+        names = getattr(self._spec, "planar_base_joint_names", None)
+        if not names or len(names) != 3 or self._mjmodel is None or self._mjdata is None:
+            return False
+        jn = (str(names[0]), str(names[1]), str(names[2]))
+        return bool(
+            scene_base_spawn.write_planar_base_xyt(
+                self._mjmodel,
+                self._mjdata,
+                joint_names=jn,
+                world_x=float(wx),
+                world_y=float(wy),
+                world_yaw=float(wt),
+                base_body_name=self._spec.base_link_name,
+            )
+        )
+
     def _teleport_base_world_xyt(self, wx: float, wy: float, wt: float) -> bool:
-        """Teleport ``base_link`` free joint to world (x,y,yaw); preserve height and zero base twist."""
+        """Teleport base to world (x,y,yaw): planar slide/slide/yaw joints or ``base_link`` free joint."""
         with self._mj_lock:
+            if self._mjdata is None or self._mjmodel is None:
+                return False
+            if self._teleport_planar_base_world_xyt(wx, wy, wt):
+                return True
             addrs = self._base_freejoint_addrs()
             if addrs is None:
                 return False
@@ -1004,13 +1169,26 @@ class RobosuiteZmqServer(BaseZmqServer):
         return True
 
     def _zero_base_free_joint_velocity(self) -> None:
-        """Zero the 6 velocity dofs of the base free joint (world-frame ang then lin; see MuJoCo free joint)."""
-        addrs = self._base_freejoint_addrs()
-        if addrs is None or self._mjdata is None:
+        """Zero base motion: free-joint qvel or planar slide/yaw joint velocities and velocity ctrl."""
+        if self._mjdata is None or self._mjmodel is None:
             return
-        _, vadr = addrs
-        v0 = int(vadr)
-        self._mjdata.qvel[v0 : v0 + 6] = 0.0
+        addrs = self._base_freejoint_addrs()
+        if addrs is not None:
+            _, vadr = addrs
+            v0 = int(vadr)
+            self._mjdata.qvel[v0 : v0 + 6] = 0.0
+            return
+        names = getattr(self._spec, "planar_base_joint_names", None)
+        if names:
+            for jn in names:
+                jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jn)
+                if jid >= 0:
+                    vadr = int(self._mjmodel.jnt_dofadr[jid])
+                    self._mjdata.qvel[vadr] = 0.0
+        aids = self._planar_base_velocity_actuator_ids()
+        if aids is not None:
+            for aid in aids:
+                self._mjdata.ctrl[aid] = 0.0
 
     def _step_base_navigation_drive(self) -> None:
         """P controller in world XY + yaw toward ``_nav_goal_world``; clears goal and sets ``at_goal`` when close."""
@@ -1019,13 +1197,13 @@ class RobosuiteZmqServer(BaseZmqServer):
         goal = self._nav_goal_world
         if goal is None:
             return
-        addrs = self._base_freejoint_addrs()
-        if addrs is None:
+        free_addrs = self._base_freejoint_addrs()
+        planar_aids = self._planar_base_velocity_actuator_ids()
+        if free_addrs is None and planar_aids is None:
             self._nav_goal_world = None
             self._at_goal = True
             return
-        _, vadr = addrs
-        v0 = int(vadr)
+
         cur = self.get_base_xyt()
         cx, cy, ct = float(cur[0]), float(cur[1]), float(cur[2])
         wx, wy, wt = float(goal[0]), float(goal[1]), float(goal[2])
@@ -1033,9 +1211,14 @@ class RobosuiteZmqServer(BaseZmqServer):
         dist = float(np.hypot(dx, dy))
         eth = float(np.arctan2(np.sin(wt - ct), np.cos(wt - ct)))
         if dist < self._nav_tol_xy and abs(eth) < self._nav_tol_theta:
-            self._mjdata.qvel[v0 : v0 + 6] = 0.0
             self._nav_goal_world = None
             self._at_goal = True
+            if free_addrs is not None:
+                _, vadr = free_addrs
+                v0 = int(vadr)
+                self._mjdata.qvel[v0 : v0 + 6] = 0.0
+            elif planar_aids is not None:
+                self._zero_base_free_joint_velocity()
             return
 
         vx = self._nav_kp_xy * dx
@@ -1048,9 +1231,38 @@ class RobosuiteZmqServer(BaseZmqServer):
         if dist < self._nav_tol_xy * 2.0:
             vx = vy = 0.0
         wz = float(np.clip(self._nav_kp_theta * eth, -self._nav_w_max, self._nav_w_max))
-        # MuJoCo free joint qvel: (wx, wy, wz) angular then (vx, vy, vz) linear, world frame.
-        self._mjdata.qvel[v0 : v0 + 3] = (0.0, 0.0, wz)
-        self._mjdata.qvel[v0 + 3 : v0 + 6] = (vx, vy, 0.0)
+
+        if free_addrs is not None:
+            _, vadr = free_addrs
+            v0 = int(vadr)
+            self._mjdata.qvel[v0 : v0 + 3] = (0.0, 0.0, wz)
+            self._mjdata.qvel[v0 + 3 : v0 + 6] = (vx, vy, 0.0)
+        else:
+            ax, ay, aw = planar_aids
+            names = getattr(self._spec, "planar_base_joint_names", None)
+            qxd, qyd = float(vx), float(vy)
+            qdot_yaw = float(wz)
+            if names and len(names) == 3:
+                jn = (str(names[0]), str(names[1]), str(names[2]))
+                anchor = scene_base_spawn.infer_planar_anchor_body_name(self._mjmodel, jn)
+                if anchor:
+                    bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, anchor)
+                    if bid >= 0:
+                        R = np.asarray(self._mjdata.body(bid).xmat, dtype=np.float64).reshape(3, 3)
+                        M = R[:2, :2]
+                        v_world = np.array([vx, vy], dtype=np.float64)
+                        try:
+                            v_joint = np.linalg.solve(M, v_world)
+                        except np.linalg.LinAlgError:
+                            v_joint, *_ = np.linalg.lstsq(M, v_world, rcond=None)
+                        qxd, qyd = float(v_joint[0]), float(v_joint[1])
+                        a_axis = R[:, 2]
+                        az = float(a_axis[2])
+                        if abs(az) >= 0.2:
+                            qdot_yaw = float(wz) / az
+            self._mjdata.ctrl[ax] = qxd
+            self._mjdata.ctrl[ay] = qyd
+            self._mjdata.ctrl[aw] = qdot_yaw
 
     @override
     def handle_action(self, action: dict[str, Any]):
@@ -1393,6 +1605,38 @@ class RobosuiteZmqServer(BaseZmqServer):
                     self._preserve_joint_ctrl_hold_from_ctrl()
                     mujoco.mj_forward(self._mjmodel, self._mjdata)
                 np.copyto(self._mjmodel.qpos0, self._mjdata.qpos)
+        elif self._planar_autoplace_snap_qpos0:
+            with self._mj_lock:
+                jn = getattr(self._spec, "planar_base_joint_names", None)
+                wxyt = self._planar_autoplace_world_xyt
+                reapply_ok = False
+                if (
+                    wxyt is not None
+                    and np.asarray(wxyt).size >= 3
+                    and jn is not None
+                    and len(jn) == 3
+                ):
+                    w = np.asarray(wxyt, dtype=np.float64).reshape(-1)[:3]
+                    reapply_ok = bool(
+                        scene_base_spawn.write_planar_base_xyt(
+                            self._mjmodel,
+                            self._mjdata,
+                            joint_names=(str(jn[0]), str(jn[1]), str(jn[2])),
+                            world_x=float(w[0]),
+                            world_y=float(w[1]),
+                            world_yaw=float(w[2]),
+                            base_body_name=self._spec.base_link_name,
+                        )
+                    )
+                if not reapply_ok:
+                    self._restore_planar_base_from_qpos0()
+                else:
+                    for jname in jn:
+                        jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, str(jname))
+                        if jid >= 0:
+                            qadr = int(self._mjmodel.jnt_qposadr[jid])
+                            self._mjmodel.qpos0[qadr] = float(self._mjdata.qpos[qadr])
+                self._preserve_joint_ctrl_hold_from_ctrl()
         if self._mjmodel is not None and self._mjdata is not None:
             with self._mj_lock:
                 self._snapshot_stationary_base_freejoint_pose()

@@ -41,6 +41,7 @@ from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
     emet_session_cache_update,
     read_emet_robot_id_from_message_or_session,
+    read_emet_session,
     robot_ids_match,
 )
 from emet.motion import constants as motion_constants
@@ -107,6 +108,13 @@ def _decode_servo_message_to_observations(
     if cp is not None:
         cp = np.asarray(cp, dtype=np.float64).reshape(4, 4)
 
+    step = msg.get("step")
+    seq_id = int(step) if step is not None else -1
+
+    sess = read_emet_session(msg)
+    if sess is None:
+        sess = read_emet_session(full_obs)
+
     return Observations(
         gps=gps,
         compass=compass,
@@ -115,7 +123,9 @@ def _decode_servo_message_to_observations(
         camera_K=K,
         camera_pose=cp,
         joint=joint,
+        seq_id=seq_id,
         is_simulation=bool(msg.get("is_simulation", True)),
+        emet_session=sess,
     )
 
 
@@ -190,6 +200,8 @@ class GenericZmqClient(AbstractRobotClient):
 
         self._obs_lock = Lock()
         self._act_lock = Lock()
+        self._mapping_depth_lock = Lock()
+        self._mapping_depth_for_rerun: np.ndarray | None = None
 
         self._emet_session_cache: dict[str, Any] | None = None
         self._emet_session_cache_step: int = -1
@@ -433,7 +445,8 @@ class GenericZmqClient(AbstractRobotClient):
                 with self._obs_lock:
                     obs = self._obs
                     servo_obs = self._servo_obs_rerun
-                self._rerun.step(obs, servo_obs)
+                mapping_depth = self.peek_mapping_depth_for_rerun()
+                self._rerun.step(obs, servo_obs, mapping_depth=mapping_depth)
                 step_count += 1
                 if self._rerun_debug:
                     now = time.time()
@@ -473,6 +486,18 @@ class GenericZmqClient(AbstractRobotClient):
         self._base_control_mode = ControlMode.IDLE
         self._emet_session_cache = None
         self._emet_session_cache_step = -1
+        with self._mapping_depth_lock:
+            self._mapping_depth_for_rerun = None
+
+    def set_mapping_depth_for_rerun(self, depth: np.ndarray | None) -> None:
+        with self._mapping_depth_lock:
+            self._mapping_depth_for_rerun = (
+                None if depth is None else np.asarray(depth, dtype=np.float32).copy()
+            )
+
+    def peek_mapping_depth_for_rerun(self) -> np.ndarray | None:
+        with self._mapping_depth_lock:
+            return self._mapping_depth_for_rerun
 
     # -- Receive loops --------------------------------------------------------
 
@@ -640,7 +665,14 @@ class GenericZmqClient(AbstractRobotClient):
             joint_velocities=obs.get("joint_velocities"),
             gps=gps,
             compass=compass,
+            emet_session=read_emet_session(obs),
         )
+
+    def peek_emet_robot_id(self) -> str | None:
+        """Return ``emet_robot_id`` from the latest full-observation ZMQ dict (logging / CLI)."""
+        with self._obs_lock:
+            raw = self._obs
+        return read_emet_robot_id_from_message_or_session(raw)
 
     def get_head_pose(self) -> np.ndarray:
         """SE(3) head / primary camera frame; fall back to identity if unknown."""
