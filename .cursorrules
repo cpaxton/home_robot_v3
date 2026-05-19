@@ -11,6 +11,11 @@
 - **Three memory backends**: SVM (instance memory), DynaMem (voxel semantic), GraphEQA (graph EQA). Smoke tests in `src/test/memory/test_memory_backends_smoke.py`. See `docs/plans/TESTING_BACKENDS.md`.
 - When changing behavior, run the relevant tests and fix any failures before committing. Prefer invoking tests via **`emet test`** so the project env (uv) is used.
 
+## Git (agent behavior)
+- **NEVER push to `main` or `master`.** Do not `git push origin main`, do not merge a feature branch into `main` and push. Shared `main` is updated via PR on GitHub, not agent direct push.
+- **To bring in latest `main`:** stay on the feature branch, `git fetch origin`, `git merge origin/main`, fix conflicts, commit, then `git push origin <feature-branch>` only.
+- If the user says “merge main”, they mean **merge `main` into the current feature branch**, not the reverse—unless they explicitly say to land changes on `main` via a PR they will merge themselves.
+
 ## User-facing commands (agent behavior)
 - **Before suggesting shell commands** to the user, **run them yourself** when the workspace and environment allow (from repo root: `uv run emet …`, `uv run python …`, smoke `timeout … emet serve …`, etc.). Confirm paths, flags, and typical stderr; then report what actually happened instead of only pasting commands for the user to discover errors.
 - **Before claiming a sim / spawn / placement bug is fixed**, run a **concrete verification experiment** in this repo and **compare numbers in the output** (do not hand-wave). Examples: `timeout … uv run python -m emet.simulation.mujoco_server --robot innate_mars --use-robocasa --headless --seed 0` and confirm **scene summary** `Robot position (x, y, theta)` matches the **Robocasa planar autoplace** log line (`moved base to x=… y=…`) within a few millimeters; or a small `uv run python …` script that loads the merged MJCF and asserts bounds. Paste or summarize the measured outcome. Do not treat “tests passed” or code review alone as proof for behavior-only regressions. **Avoid** calling `mj_fwdPosition` alone after `mj_forward` + actuator sync on planar Robocasa merges; it can desync `body_xpos` from `qpos` for this stack—extend with a full `mj_forward` only when you know the model needs it, or skip the extra forward if `write_planar_base_xyt` already forwarded.
