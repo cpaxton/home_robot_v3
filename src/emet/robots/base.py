@@ -56,6 +56,17 @@ class RobotSpec:
     Names must match the MJCF and :class:`RobosuiteZmqServer` SE(2) commands."""
     robosuite_rgb_depth_ops: tuple[str, ...] = ()
     """MuJoCo RGB/depth post-steps for :class:`RobosuiteZmqServer` (``flipud``, ``rot90_cw``). Intrinsics are chained."""
+    planar_spawn_xy_extra_margin_m: float = 0.0
+    """Added to Robocasa planar spawn ``footprint_xy_margin_m`` (erodes walkable XY clip). Use when
+    :attr:`footprint` is base-sized but appendages extend horizontally (typical mobile manipulators)."""
+    planar_spawn_clip_edge_pad_m: float | None = None
+    """Minimum XY distance from :func:`~emet.simulation.scene_base_spawn.collision_scene_xy_clip_rect`
+    edges for the base link. If ``None``, uses ``0.22 + 0.5 * planar_spawn_xy_extra_margin_m``."""
+    planar_spawn_clip_guard_body_name: str | None = None
+    """Optional body (e.g. ``ee_link``) whose world XY must also lie inside the eroded clip. Needed when
+    arm meshes are visual-only (no ``mj_collision`` vs scene) but still must not start through counters."""
+    planar_spawn_clip_guard_pad_m: float = 0.18
+    """XY inset for :attr:`planar_spawn_clip_guard_body_name` inside the scene clip (meters)."""
 
 
 def format_uv_sync_extras_hint(spec: RobotSpec) -> str | None:

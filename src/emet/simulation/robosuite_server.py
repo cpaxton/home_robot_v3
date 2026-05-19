@@ -246,7 +246,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 f"base_body_name={base_name!r} joints={joint_names!r}"
             )
         fp = self._spec.footprint
-        margin = float(
+        base_margin = float(
             0.5
             * np.hypot(
                 float(fp.length) + abs(float(fp.length_offset)),
@@ -254,6 +254,13 @@ class RobosuiteZmqServer(BaseZmqServer):
             )
             + 0.10
         )
+        extra_xy = float(self._spec.planar_spawn_xy_extra_margin_m)
+        margin = base_margin + extra_xy
+        clip_pad = self._spec.planar_spawn_clip_edge_pad_m
+        if clip_pad is None:
+            clip_pad = float(0.22 + 0.5 * extra_xy)
+        guard_body = self._spec.planar_spawn_clip_guard_body_name
+        guard_pad = float(self._spec.planar_spawn_clip_guard_pad_m)
         try:
             placed = scene_base_spawn.find_planar_base_xyt(
                 self._mjmodel,
@@ -265,6 +272,9 @@ class RobosuiteZmqServer(BaseZmqServer):
                 merged_mjcf_path=self._scene_disk_path,
                 environment=self._environment_descriptor,
                 footprint_xy_margin_m=margin,
+                clip_edge_pad_m=clip_pad,
+                clip_guard_body_name=guard_body,
+                clip_guard_pad_m=guard_pad,
             )
         except Exception as e:
             logger.warning(f"Robocasa planar autoplace skipped ({e!r}).")

@@ -1868,6 +1868,9 @@ def find_planar_base_xyt(
     footprint_xy_margin_m: float = 0.35,
     spawn_hint_xyt: np.ndarray | None = None,
     anchor_body_name: str | None = None,
+    clip_edge_pad_m: float = 0.22,
+    clip_guard_body_name: str | None = None,
+    clip_guard_pad_m: float = 0.18,
 ) -> tuple[float, float, float] | None:
     """Search collision-free world `(x, y, yaw)` for planar slide+yaw bases (Robocasa + Maurice-style MJCF).
 
@@ -1881,6 +1884,11 @@ def find_planar_base_xyt(
     Candidate *(x, y)* and *yaw* are **world** / kitchen-map coordinates; they are mapped to slide
     joint values using the planar anchor body (parent of the first slide), e.g. after Robocasa
     strip-and-replace when ``base_root`` carries a non-identity ``pos`` / ``quat``.
+
+    ``clip_edge_pad_m`` insets the base link from the **un-eroded** scene walkable clip (room
+    footprint projection). ``clip_guard_body_name`` adds the same style of test for another body
+    (e.g. end-effector) when arm meshes are visual-only so :func:`worst_robot_nonfloor_contact_dist`
+    does not see arm–counter penetration.
 
     Returns world ``(x, y, yaw)`` matching :func:`get_base_xyt`-style conventions, or ``None``.
     """
@@ -2032,9 +2040,20 @@ def find_planar_base_xyt(
                         bx = float(data.body(base_body_name).xpos[0])
                         by = float(data.body(base_body_name).xpos[1])
                         x0s, x1s, y0s, y1s = xy_clip_scene
-                        pad = 0.22
+                        pad = float(clip_edge_pad_m)
                         if not (x0s + pad <= bx <= x1s - pad and y0s + pad <= by <= y1s - pad):
                             continue
+                        if clip_guard_body_name:
+                            gbid = mujoco.mj_name2id(
+                                model, mujoco.mjtObj.mjOBJ_BODY, str(clip_guard_body_name)
+                            )
+                            if gbid < 0:
+                                continue
+                            gx = float(data.body(gbid).xpos[0])
+                            gy = float(data.body(gbid).xpos[1])
+                            pg = float(clip_guard_pad_m)
+                            if not (x0s + pg <= gx <= x1s - pg and y0s + pg <= gy <= y1s - pg):
+                                continue
                     spawn_dbg(f"planar_find: OK pass={tag!r} xy=({x:.3f},{y:.3f}) yaw={yaw:.3f} worst={worst:.5f}")
                     return (float(x), float(y), float(yaw))
     spawn_dbg(f"planar_find: failed scene={scene_label!r} profile={spawn_profile!r}")
