@@ -740,15 +740,23 @@ def view_mujoco(robot: str, merge_scene: bool, no_viewer_panels: bool, no_extras
     show_default=True,
     help="Body with the free joint when using --apply-home.",
 )
+@click.option(
+    "--tune-base-z",
+    default=0.38,
+    show_default=True,
+    help="World z for the base before freezing (free joint removed so the robot does not fall in Simulate).",
+)
 def tune_mujoco_home(
     robot: str,
     mjcf_path: Path | None,
     apply_home: bool,
     base_body_name: str,
+    tune_base_z: float,
 ) -> None:
     """Open MuJoCo **Simulate**, pose joints, close the window — prints ``<key name=\"home\" ctrl=.../>``.
 
-    Uses the same actuator-order convention as ``galaxea_r1.xml`` / stationary fill. Needs DISPLAY.
+    Robot-only MJCF gets a ground plane; floating bases are frozen at ``--tune-base-z`` so physics
+    does not drop the model. Uses the same actuator-order convention as ``galaxea_r1.xml``. Needs DISPLAY.
 
     Examples:
       emet tune-mujoco-home --robot rby1
@@ -772,6 +780,7 @@ def tune_mujoco_home(
             path,
             apply_home_keyframe=apply_home,
             base_body_name=base_body_name,
+            tune_base_z=float(tune_base_z),
         )
     except FileNotFoundError as e:
         click.echo(str(e), err=True)

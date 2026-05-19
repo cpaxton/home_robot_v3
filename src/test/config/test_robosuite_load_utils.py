@@ -103,6 +103,29 @@ def test_apply_home_snaps_arm_qpos_to_ctrl_on_merged_mjcf():
     np.testing.assert_allclose(data.qpos[q3], data.ctrl[a3], rtol=0, atol=1e-5)
 
 
+def test_build_tune_model_freezes_base_and_adds_floor():
+    from emet.robots.rby1 import Rby1Backend
+    from emet.simulation.mujoco_home_tune import build_tune_model
+    from emet.simulation.robosuite_load_utils import freejoint_qpos_qvel_addrs
+
+    spec = Rby1Backend().get_spec()
+    path = spec.mjcf_path
+    if not path:
+        pytest.skip("no mjcf_path on spec")
+    model, data, logs = build_tune_model(
+        path, apply_home_keyframe=True, base_body_name=spec.base_link_name, tune_base_z=0.38
+    )
+    assert any("emet_tune_floor" in ln for ln in logs)
+    assert any("Froze" in ln for ln in logs)
+    assert freejoint_qpos_qvel_addrs(model, spec.base_link_name) is None
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, spec.base_link_name)
+    z0 = float(data.xpos[bid, 2])
+    for _ in range(120):
+        mujoco.mj_step(model, data)
+    z1 = float(data.xpos[bid, 2])
+    assert abs(z1 - z0) < 0.02, f"base should stay fixed during tune sandbox, z0={z0} z1={z1}"
+
+
 def test_format_key_ctrl_attr_matches_stationary_vector():
     from emet.robots.rby1 import Rby1Backend
     from emet.simulation.mujoco_home_tune import format_key_ctrl_attr
