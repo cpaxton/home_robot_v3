@@ -65,22 +65,3 @@ def test_call_llm_drops_tools_then_uses_image():
     assert raw == "with_image"
     assert c.last_kw.get("image") is img
     assert "tools" not in c.last_kw
-
-
-def test_call_llm_coerces_non_string_response():
-    class _Client:
-        def __call__(self, text: str, verbose: bool = False, **kwargs):
-            return {"result": "ok"}
-
-    raw, _ = _call_llm(_Client(), "hi", None, debug=False, image=None)
-    assert isinstance(raw, str)
-    assert "result" in raw
-
-
-def test_call_llm_returns_empty_on_provider_exception():
-    class _Client:
-        def __call__(self, text: str, verbose: bool = False, **kwargs):
-            raise RuntimeError("provider failed")
-
-    raw, _ = _call_llm(_Client(), "hi", None, debug=False, image=None)
-    assert raw == ""

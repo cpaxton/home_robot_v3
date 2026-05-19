@@ -186,10 +186,7 @@ def _load_default_scene_with_robot(robot_key: str):
     "--debug-molmospaces-spawn",
     default=False,
     is_flag=True,
-    help=(
-        "Verbose MolmoSpaces spawn placement logs and contact summary after base move. "
-        "Also enables RobosuiteZmqServer post-load diagnostics; or set EMET_ROBOSUITE_POST_LOAD_DEBUG=1."
-    ),
+    help="Verbose MolmoSpaces spawn placement logs and contact summary after base move.",
 )
 @click.option(
     "--robocasa-write-to-xml",
@@ -498,9 +495,7 @@ def main(
             if backend_cls is None:
                 logger.error(f"No RobotBackend found in {ROBOT_REGISTRY[robot_key]}")
                 sys.exit(1)
-            backend = backend_cls()
-            robot_spec = backend.get_spec()
-            mujoco_stationary_control = backend.create_mujoco_stationary_control()
+            robot_spec = backend_cls().get_spec()
         else:
             logger.error(
                 f"Unknown robot '{robot}'. Known robots: {list(ROBOT_REGISTRY.keys())}.\n"
@@ -521,7 +516,6 @@ def main(
 
             server = RobosuiteZmqServer(
                 robot_spec=robot_spec,
-                mujoco_stationary_control=mujoco_stationary_control,
                 send_port=send_port,
                 recv_port=recv_port,
                 send_state_port=send_state_port,

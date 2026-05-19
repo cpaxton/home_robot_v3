@@ -149,17 +149,16 @@ def test_serve_mujoco_help_includes_molmospaces_scene():
 
 
 def test_molmospaces_list_robots():
-    """emet molmospaces list-robots prints bundled-merge keys and upstream Molmo ids."""
+    """emet molmospaces list-robots prints robot IDs (static list, no runner)."""
     result = subprocess.run(
         [sys.executable, "-m", "emet.cli", "molmospaces", "list-robots"],
         capture_output=True,
         text=True,
     )
     assert result.returncode == 0
-    assert "bundled MJCF" in result.stdout
     assert "rby1" in result.stdout
     assert "franka" in result.stdout.lower()
-    assert "Default" in result.stdout
+    assert "Default:" in result.stdout
 
 
 def test_molmospaces_install_scene_help():

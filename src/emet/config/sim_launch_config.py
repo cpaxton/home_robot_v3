@@ -15,11 +15,6 @@ from typing import Any, Literal
 import draccus
 import yaml
 
-from emet.simulation.molmospaces_config import (
-    DEFAULT_MOLMOSPACES_ROBOT,
-    is_stretch_like_robot_token,
-    validate_robot_for_molmospaces_merge,
-)
 from emet.utils.config import resolve_config_yaml_path
 
 SimLaunchKind = Literal["default_mujoco", "robocasa", "molmospaces"]
@@ -176,7 +171,6 @@ def build_sim_launch_config_from_serve_cli(
         "port_offset": port_offset,
     }
     if molmospaces_scene:
-        robot = validate_robot_for_molmospaces_merge(robot)
         return SimLaunchMolmospaces(
             scene=molmospaces_scene,
             split=molmospaces_split,
@@ -269,11 +263,6 @@ def apply_sim_launch_cli_overrides(
         else:
             inst = False
         rob = robot if robot is not None else cfg.robot
-        if is_stretch_like_robot_token(rob):
-            if robot is not None:
-                validate_robot_for_molmospaces_merge(rob)
-            rob = DEFAULT_MOLMOSPACES_ROBOT
-        rob = validate_robot_for_molmospaces_merge(rob)
         return SimLaunchMolmospaces(
             scene=ms,
             split=split,
@@ -322,7 +311,6 @@ def apply_sim_launch_cli_overrides(
         )
     assert isinstance(cfg, SimLaunchMolmospaces)
     r = robot if robot is not None else cfg.robot
-    r = validate_robot_for_molmospaces_merge(r)
     split = str(molmospaces_split) if molmospaces_split is not None else cfg.split
     idx = int(molmospaces_index) if molmospaces_index is not None else int(cfg.index)
     inst = bool(molmospaces_install) if molmospaces_install is not None else bool(cfg.molmospaces_install)

@@ -22,8 +22,7 @@ import subprocess
 from pathlib import Path
 
 # Robots supported by MolmoSpaces (from molmo_spaces_constants / their assets).
-# rby1 / rby1m are Rainbow Robotics "Galaxea R1" family. Emet's merge-scene path only wires robots
-# with vendored MJCFs; see :func:`emet_molmospaces_merge_robot_keys_with_mjcf`.
+# rby1 / rby1m are Rainbow Robotics "Galaxea R1" family.
 MOLMOSPACES_ROBOT_IDS = [
     "rby1",
     "rby1m",
@@ -46,60 +45,6 @@ MOLMOSPACES_SCENE_NAMES = [
 ]
 
 MOLMOSPACES_SPLITS = ("train", "val", "test")
-
-# Hello Stretch has no MJCF on the emet-molmospaces merge path; reject instead of substituting rby1.
-_STRETCH_LIKE_ROBOT_TOKENS = frozenset({"stretch", "hello_stretch", "hellostretch"})
-
-
-def normalize_molmospaces_cli_robot_token(robot: str) -> str:
-    """Lowercase CLI robot token with hyphens mapped to underscores (``rb-y1`` → ``rb_y1``)."""
-    return str(robot).strip().lower().replace("-", "_")
-
-
-def is_stretch_like_robot_token(robot: str) -> bool:
-    """True for Hello Stretch CLI names that have no MolmoSpaces merge MJCF."""
-    return normalize_molmospaces_cli_robot_token(robot) in _STRETCH_LIKE_ROBOT_TOKENS
-
-
-def emet_molmospaces_merge_robot_keys_with_mjcf() -> tuple[str, ...]:
-    """Robot ids that resolve to an on-disk MJCF for ``emet-molmospaces merge-scene`` (vendored under emet)."""
-    from emet.utils.assets import get_robot_mjcf_path
-
-    keys = ("rby1", "galaxea_r1", "rb_y1", "innate_mars", "maurice")
-    out: list[str] = []
-    for k in keys:
-        p = get_robot_mjcf_path(k)
-        if p is not None and p.is_file() and k not in out:
-            out.append(k)
-    return tuple(out)
-
-
-def validate_robot_for_molmospaces_merge(robot: str) -> str:
-    """Return normalized robot id for ``merge-scene --robot``.
-
-    Raises:
-        ValueError: Stretch-like names (no bundled Stretch-in-room MJCF) or unknown robots without MJCF.
-    """
-    from emet.utils.assets import get_robot_mjcf_path
-
-    key = normalize_molmospaces_cli_robot_token(robot)
-    if key in _STRETCH_LIKE_ROBOT_TOKENS:
-        emet_keys = ", ".join(emet_molmospaces_merge_robot_keys_with_mjcf()) or "(none found)"
-        molmo = ", ".join(MOLMOSPACES_ROBOT_IDS)
-        raise ValueError(
-            "MolmoSpaces merged scenes do not include a Hello Robot Stretch MJCF on this path. "
-            f"Use a robot with a vendored merge MJCF (e.g. {emet_keys}; try innate_mars for a different mobile model). "
-            "For `emet serve mujoco --molmospaces-scene …`, omit `--robot` to default to rby1. "
-            f"(Upstream MolmoSpaces asset robot ids include: {molmo}; emet merge-scene only wires bundled MJCFs.)"
-        )
-    mjcf = get_robot_mjcf_path(key)
-    if mjcf is None or not mjcf.is_file():
-        emet_keys = ", ".join(emet_molmospaces_merge_robot_keys_with_mjcf()) or "(none)"
-        raise ValueError(
-            f"No vendored MJCF for MolmoSpaces merge with --robot {robot!r}. "
-            f"Use one of: {emet_keys}."
-        )
-    return key
 
 
 def default_molmospaces_assets_dir() -> Path:

@@ -22,17 +22,16 @@
       <position kp="200" kv="20" ctrlrange="-1.5708 1.5708"/>
     </default>
     <default class="torso">
-      <joint damping="36" stiffness="0.02" armature="0.01" frictionloss="0.5"/>
-      <!-- biastype affine: biasprm kp/kv on joint q,qd; ctrl is position setpoint (MolmoSpaces / emet hold). -->
-      <general biastype="affine" gainprm="300" biasprm="0 -150 -50" forcerange="-100 100"/>
+      <joint damping="20" stiffness="0.02" armature="0.01" frictionloss="0.5"/>
+      <general gainprm="300" biasprm="0 -150 -50" forcerange="-100 100"/>
     </default>
     <default class="arm_proximal">
       <joint damping="8" armature="0.005" frictionloss="0.3"/>
-      <general biastype="affine" gainprm="200" biasprm="0 -100 -30" forcerange="-40 40"/>
+      <general gainprm="200" biasprm="0 -100 -30" forcerange="-40 40"/>
     </default>
     <default class="arm_distal">
       <joint damping="3" armature="0.002" frictionloss="0.1"/>
-      <general biastype="affine" gainprm="80" biasprm="0 -40 -10" forcerange="-7 7"/>
+      <general gainprm="80" biasprm="0 -40 -10" forcerange="-7 7"/>
     </default>
     <default class="gripper">
       <joint damping="1" armature="0.001"/>
@@ -78,8 +77,7 @@
   </asset>
 
   <worldbody>
-    <!-- gravcomp on free base can destabilize merged scenes -->
-    <body name="base_link" gravcomp="0">
+    <body name="base_link" gravcomp="1">
       <freejoint name="base_freejoint"/>
       <geom type="mesh" mesh="base_link" class="visual" rgba="0.82 0.82 1 1"/>
       <geom type="mesh" mesh="base_link" class="collision"/>
@@ -293,8 +291,8 @@
   </actuator>
 
   <keyframe>
-    <!-- Home: torso upright, modest arm bend; tune interactively: ``emet tune-mujoco-home --robot rby1``. -->
-    <key name="home" ctrl="0 0 0 0 0 0  0 0 0 0  0 0 0 0 0 0  0 0  0 0 0 0 0 0  0 0"/>
+    <!-- Home: torso upright, arms at sides, grippers open -->
+    <key name="home" ctrl="0 0 0 0 0 0  0 0 0 0  0 0.5 -0.5 0 0 0  0.04 0.04  0 0.5 -0.5 0 0 0  0.04 0.04"/>
   </keyframe>
 
 </mujoco>

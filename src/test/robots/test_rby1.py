@@ -184,8 +184,7 @@ def test_default_scene_with_rby1_loads_and_robot_can_be_commanded():
     if model is None:
         pytest.skip("scene_environment.xml or rby1 MJCF not found (run from repo with assets)")
 
-    backend = Rby1Backend()
-    spec = backend.get_spec()
+    spec = Rby1Backend().get_spec()
     server = RobosuiteZmqServer(
         robot_spec=spec,
         scene_model=model,
@@ -193,7 +192,6 @@ def test_default_scene_with_rby1_loads_and_robot_can_be_commanded():
         recv_port=0,
         send_state_port=0,
         send_servo_port=0,
-        mujoco_stationary_control=backend.create_mujoco_stationary_control(),
     )
     server._load_model()
     server._stabilize_physics_state_after_load()

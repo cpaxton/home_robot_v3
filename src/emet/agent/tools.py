@@ -99,37 +99,6 @@ def _simple_exec_mapping(cmd: str) -> Callable[[dict[str, Any]], list[tuple[str,
     return lambda args: [(cmd, "")]
 
 
-_CAP_NAV_TAIL = 360
-_CAP_REASONING = 450
-_CAP_LOCALIZE_DEBUG = 380
-_CAP_SCENE_GRAPH_DUMP = 2200
-_CAP_SCENE_GRAPH_LINES = 45
-
-
-def _truncate_text(value: object, max_len: int) -> str:
-    text = ("" if value is None else str(value)).strip()
-    if len(text) <= max_len:
-        return text
-    return text[: max_len - 1] + "…"
-
-
-def _navigation_report_suffix(executor: Any, robot: Any, *, max_len: int = _CAP_NAV_TAIL) -> str:
-    """Compact map / navigation stats after motion tools (bounded for LLM context)."""
-    robot_xy = _robot_base_xy(robot)
-    vm = _voxel_map_from_executor(executor)
-    _img, stats, _ = snapshot_from_voxel_map(vm, robot_xy)
-    nav = format_navigation_report(stats, explore_ok=None)
-    return _truncate_text(nav, max_len)
-
-
-def _cap_multiline_text(text: str, *, max_lines: int, max_chars: int) -> str:
-    lines = text.splitlines()
-    if len(lines) > max_lines:
-        lines = lines[:max_lines] + ["… (truncated: more lines omitted)"]
-    out = "\n".join(lines)
-    return _truncate_text(out, max_chars)
-
-
 def get_tools(context: dict[str, Any]) -> list[Tool]:
     """Return list of tools available given context (executor, robot, discord_bot, memory_backend).
 
@@ -147,12 +116,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
                 planner = context.get("planner")
                 out = memory_backend.query_answer(question, xyt, planner)
                 reasoning, answer, confidence, _, _, relevant_images = out[:6]
-                lines = [f"{answer} (Confidence: {confidence})"]
-                if reasoning:
-                    lines.append(f"Reasoning: {_truncate_text(reasoning, _CAP_REASONING)}")
-                if relevant_images:
-                    lines.append(f"(Returned {len(relevant_images)} relevant image(s) for grounding.)")
-                return "\n".join(lines)
+                return f"{answer} (Confidence: {confidence})"
             except NotImplementedError:
                 pass
             except AttributeError as e:
@@ -163,23 +127,11 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
             voxel_map = executor.agent.get_voxel_map()
             if voxel_map is not None and hasattr(voxel_map, "localize_text"):
                 result = voxel_map.localize_text(question, return_debug=True)
-                if isinstance(result, (list, tuple)) and len(result) >= 2:
-                    point, debug_text = result[0], result[1]
-                else:
-                    point, debug_text = result, ""
+                point = result[0] if isinstance(result, (list, tuple)) else result
                 if point is not None:
-                    coords = np.asarray(point).reshape(-1)
-                    if coords.size >= 3:
-                        loc = f"Yes, found at approximately ({coords[0]:.2f}, {coords[1]:.2f}, {coords[2]:.2f})."
-                    else:
-                        loc = f"Yes, found at approximately {coords.tolist()}."
-                    if debug_text:
-                        return f"{loc}\nLocalization note: {_truncate_text(debug_text, _CAP_LOCALIZE_DEBUG)}"
-                    return loc
-                tail = ""
-                if debug_text:
-                    tail = f"\nLocalization note: {_truncate_text(debug_text, _CAP_LOCALIZE_DEBUG)}"
-                return f"I haven't seen that in my memory.{tail}"
+                    coords = point.squeeze()
+                    return f"Yes, found at approximately ({coords[0]:.2f}, {coords[1]:.2f}, {coords[2]:.2f})."
+                return "I haven't seen that in my memory."
         return "Memory not available."
 
     tools.append(
@@ -239,12 +191,12 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def _run_executor_cmds(cmds: list[tuple[str, str]]) -> tuple[bool, str]:
+    def _exec(cmd: str, args: Any = "") -> str:
         executor = context.get("executor")
         if executor is None:
-            return False, "Robot not connected."
-        ok = executor(cmds)
-        return ok, ("ok" if ok else "interrupted_or_failed")
+            return "Robot not connected."
+        ok = executor([(cmd, args)])
+        return "Done." if ok else "Command was interrupted or failed."
 
     # -- explore -------------------------------------------------------------
     def explore() -> str:
@@ -351,29 +303,17 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
     # -- pick_place ----------------------------------------------------------
     def pick_place(object_name: str, receptacle_name: str) -> str:
         executor = context.get("executor")
-        robot = context.get("robot")
         if executor is None:
             return "Robot not connected."
-        ok, _st = _run_executor_cmds([("pickup", object_name), ("place", receptacle_name)])
-        if ok:
-            return (
-                f"Pick and place finished: picked {object_name!r} and placed on {receptacle_name!r} "
-                "(executor reported success)."
-            )
-        nav = _navigation_report_suffix(executor, robot)
+        ok = executor([("pickup", object_name), ("place", receptacle_name)])
         return (
-            f"Pick/place failed or was interrupted (object={object_name!r}, receptacle={receptacle_name!r}). "
-            f"If pickup failed, try find_objects with the same object name, or explore / scan_environment first. "
-            f"Map snapshot: {nav}"
+            f"Pick and place ({object_name} -> {receptacle_name}) done." if ok else "Pick/place failed or interrupted."
         )
 
     tools.append(
         Tool(
             name="pick_place",
-            description=(
-                "Pick up an object and place it on a receptacle. Prefer find_objects or memory/graph tools "
-                "so the object is localized before pickup."
-            ),
+            description="Pick up an object and place it on a receptacle.",
             parameters={
                 "type": "object",
                 "properties": {
@@ -386,47 +326,25 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
                 "required": ["object_name", "receptacle_name"],
             },
             func=pick_place,
-            returns_info=True,
+            executor_commands=lambda args: [
+                ("pickup", args.get("object_name", "")),
+                ("place", args.get("receptacle_name", "")),
+            ],
         )
     )
 
     # -- find_objects --------------------------------------------------------
-    def find_objects(text: str) -> str:
-        executor = context.get("executor")
-        robot = context.get("robot")
-        if executor is None:
-            return "Robot not connected."
-        target = (text or "").strip()
-        if not target:
-            return "find_objects: missing target name (text must be non-empty)."
-        ok, _st = _run_executor_cmds([("find", target)])
-        nav = _navigation_report_suffix(executor, robot)
-        if ok:
-            return (
-                f"find_objects: navigation toward {target!r} completed (executor success). "
-                f"Map / coverage context: {nav}"
-            )
-        return (
-            f"find_objects: navigation toward {target!r} failed or was interrupted. "
-            f"If coverage is low or the map is empty, call explore or scan_environment first, then "
-            f"list_scene_relations / query_scene_graph for labels; use navigation_diagnostics or send_map_snapshot. "
-            f"Map / coverage context: {nav}"
-        )
-
     tools.append(
         Tool(
             name="find_objects",
-            description=(
-                "Navigate to an object or place by name (same string you would use for manual FIND). "
-                "In a new room, grow the map with explore or scan_environment before relying on find."
-            ),
+            description="Find and navigate to an object or location in the environment by name.",
             parameters={
                 "type": "object",
                 "properties": {"text": {"type": "string", "description": "Object or location name to find."}},
                 "required": ["text"],
             },
-            func=find_objects,
-            returns_info=True,
+            func=lambda text: _exec("find", text),
+            executor_commands=lambda args: [("find", args.get("text", ""))],
         )
     )
 
@@ -462,18 +380,6 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
     )
 
     # -- say -----------------------------------------------------------------
-    def say(text: str) -> str:
-        executor = context.get("executor")
-        if executor is None:
-            return "Robot not connected."
-        ok, _st = _run_executor_cmds([("say", text)])
-        quoted = _truncate_text(text, 220)
-        return (
-            f"TTS (say): queued {quoted!r} — executor reported success."
-            if ok
-            else f"TTS (say): {quoted!r} did not finish (interrupted or failed)."
-        )
-
     tools.append(
         Tool(
             name="say",
@@ -483,8 +389,8 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
                 "properties": {"text": {"type": "string", "description": "The message to speak aloud."}},
                 "required": ["text"],
             },
-            func=say,
-            returns_info=False,
+            func=lambda text: _exec("say", text),
+            executor_commands=lambda args: [("say", args.get("text", ""))],
         )
     )
 
@@ -495,145 +401,66 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         ("shake_head", "Shake the robot's head (e.g. to indicate no or disagreement)."),
         ("avert_gaze", "Avert the robot's gaze (look away)."),
     ]:
-
-        def _make_gesture(name: str):
-            def _gesture() -> str:
-                executor = context.get("executor")
-                if executor is None:
-                    return "Robot not connected."
-                ok, _st = _run_executor_cmds([(name, "")])
-                label = name.replace("_", " ")
-                return (
-                    f"{label.title()} gesture completed."
-                    if ok
-                    else f"{label.title()} gesture did not complete (interrupted or failed)."
-                )
-
-            return _gesture
-
         tools.append(
             Tool(
                 name=cmd,
                 description=desc,
                 parameters=_NO_PARAMS,
-                func=_make_gesture(cmd),
-                returns_info=False,
+                func=lambda _cmd=cmd: _exec(_cmd, ""),
+                executor_commands=_simple_exec_mapping(cmd),
             )
         )
 
     # -- navigation ----------------------------------------------------------
-    def go_home() -> str:
-        executor = context.get("executor")
-        robot = context.get("robot")
-        if executor is None:
-            return "Robot not connected."
-        ok, _st = _run_executor_cmds([("go_home", "")])
-        nav = _navigation_report_suffix(executor, robot)
-        return (
-            f"go_home finished (executor success). Map context: {nav}"
-            if ok
-            else f"go_home failed or interrupted. Map context: {nav}"
-        )
-
     tools.append(
         Tool(
             name="go_home",
             description="Navigate the robot back to its starting position. Requires a map from prior exploration.",
             parameters=_NO_PARAMS,
-            func=go_home,
-            returns_info=True,
+            func=lambda: _exec("go_home", ""),
+            executor_commands=_simple_exec_mapping("go_home"),
         )
     )
-
-    def scan_environment() -> str:
-        executor = context.get("executor")
-        robot = context.get("robot")
-        if executor is None:
-            return "Robot not connected."
-        ok, _st = _run_executor_cmds([("rotate_in_place", "")])
-        nav = _navigation_report_suffix(executor, robot)
-        head = (
-            "scan_environment (rotate_in_place): completed; voxel map / scene graph may have updated."
-            if ok
-            else "scan_environment (rotate_in_place): interrupted or failed; map may be partial."
-        )
-        return f"{head} Map context: {nav}"
 
     tools.append(
         Tool(
             name="scan_environment",
-            description=(
-                "Rotate in place to scan the environment and update the map (360-degree scan). Saves memory. "
-                "Returns map coverage hints — pair with list_scene_relations after a scan in a new room."
-            ),
+            description="Rotate in place to scan the environment and update the map (360-degree scan). Saves memory.",
             parameters=_NO_PARAMS,
-            func=scan_environment,
-            returns_info=True,
+            func=lambda: _exec("rotate_in_place", ""),
+            executor_commands=_simple_exec_mapping("rotate_in_place"),
         )
     )
 
     # -- camera --------------------------------------------------------------
-    def take_picture() -> str:
-        executor = context.get("executor")
-        if executor is None:
-            return "Robot not connected."
-        ok, _st = _run_executor_cmds([("take_picture", "")])
-        return (
-            "take_picture: head camera frame captured (use send_image to deliver it)."
-            if ok
-            else "take_picture: failed or interrupted."
-        )
-
     tools.append(
         Tool(
             name="take_picture",
             description="Take a picture with the main camera. Does NOT send it — use send_image after to send.",
             parameters=_NO_PARAMS,
-            func=take_picture,
-            returns_info=False,
+            func=lambda: _exec("take_picture", ""),
+            executor_commands=_simple_exec_mapping("take_picture"),
         )
     )
-
-    def take_ee_picture() -> str:
-        executor = context.get("executor")
-        if executor is None:
-            return "Robot not connected."
-        ok, _st = _run_executor_cmds([("take_ee_picture", "")])
-        return (
-            "take_ee_picture: wrist camera frame captured."
-            if ok
-            else "take_ee_picture: failed or interrupted."
-        )
 
     tools.append(
         Tool(
             name="take_ee_picture",
             description="Take a picture with the end-effector (wrist) camera.",
             parameters=_NO_PARAMS,
-            func=take_ee_picture,
-            returns_info=False,
+            func=lambda: _exec("take_ee_picture", ""),
+            executor_commands=_simple_exec_mapping("take_ee_picture"),
         )
     )
 
     # -- manipulation --------------------------------------------------------
-    def hand_over() -> str:
-        executor = context.get("executor")
-        if executor is None:
-            return "Robot not connected."
-        ok, _st = _run_executor_cmds([("hand_over", "")])
-        return (
-            "hand_over: sequence finished (executor success)."
-            if ok
-            else "hand_over: failed or interrupted (ensure something is grasped and a person is visible if required)."
-        )
-
     tools.append(
         Tool(
             name="hand_over",
             description="Hand the held object to a person (find person, navigate, extend arm).",
             parameters=_NO_PARAMS,
-            func=hand_over,
-            returns_info=True,
+            func=lambda: _exec("hand_over", ""),
+            executor_commands=_simple_exec_mapping("hand_over"),
         )
     )
 
@@ -647,23 +474,14 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
                 out = gmb.query_answer(question, xyt, planner)
                 reasoning, answer, confidence, cr, _, _ = out[:6]
                 tail = f" ({cr})" if cr else ""
-                rsn = _truncate_text(reasoning, _CAP_REASONING) if reasoning else ""
-                base = f"{answer} (confidence={confidence}){tail}"
-                return f"{base}\nReasoning: {rsn}" if rsn else base
+                return f"{answer} (confidence={confidence}){tail}\nReasoning: {reasoning}"
             except Exception as e:
                 _logger.warning("query_scene_graph graph backend failed: %s", e)
         executor = context.get("executor")
         if executor is not None and hasattr(executor, "agent"):
             sg = executor.agent.get_voxel_map().get_scene_graph()
             if sg is not None and sg.num_objects > 0:
-                dump = sg.to_string()
-                capped = _cap_multiline_text(
-                    dump, max_lines=_CAP_SCENE_GRAPH_LINES, max_chars=_CAP_SCENE_GRAPH_DUMP
-                )
-                return (
-                    f"[Open-vocab scene graph — excerpt for the model]\n{capped}\n"
-                    f"(User question was: {question})"
-                )
+                return f"[Open-vocab scene graph snapshot]\n{sg.to_string()}\n(User question was: {question})"
         return "No graph memory or open-vocab scene graph available yet; explore or scan first."
 
     tools.append(
@@ -695,8 +513,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         sg = executor.agent.get_voxel_map().get_scene_graph()
         if sg is None or sg.num_objects == 0:
             return "No open-vocab scene graph data yet."
-        raw = sg.to_string()
-        return _cap_multiline_text(raw, max_lines=_CAP_SCENE_GRAPH_LINES, max_chars=_CAP_SCENE_GRAPH_DUMP)
+        return sg.to_string()
 
     tools.append(
         Tool(

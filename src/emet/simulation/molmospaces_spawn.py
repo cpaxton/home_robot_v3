@@ -2,7 +2,7 @@
 # All rights reserved.
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
+# of this source code tree.
 
 """Compatibility shim: scene spawn / autoplace lives in :mod:`emet.simulation.scene_base_spawn`.
 

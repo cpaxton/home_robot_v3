@@ -205,10 +205,7 @@ def main() -> None:
 @click.option(
     "--debug-molmospaces-spawn",
     is_flag=True,
-    help=(
-        "Verbose MolmoSpaces base placement and post-spawn contact diagnostics (non-stretch server). "
-        "Also enables post-load actuator/floor/qvel-step diagnostics; or set EMET_ROBOSUITE_POST_LOAD_DEBUG=1 without full spawn ASCII maps."
-    ),
+    help="Verbose MolmoSpaces base placement and post-spawn contact diagnostics (non-stretch server).",
 )
 @click.option(
     "--port-offset",
@@ -231,13 +228,12 @@ def main() -> None:
 )
 @click.option(
     "--robot",
-    default=None,
+    default="stretch",
     help=(
-        "Robot to simulate. Default: stretch for table MuJoCo; when using --molmospaces-scene, "
-        "default is rby1 (Stretch has no merged MJCF on that path). "
-        "Registry robots (e.g. innate_mars, rby1, galaxea_r1) use RobosuiteZmqServer with the default table "
-        "or a merged --scene_path. Robosuite-native names (PandaOmron, Tiago, GR1) use the stock robosuite "
-        "robot in Robocasa."
+        "Robot to simulate. 'stretch' (default) uses the Stretch-MuJoCo server. "
+        "Registry robots (e.g. innate_mars, rby1, galaxea_r1) load the default table "
+        "scene merged with that robot's MJCF and use the generic ZMQ sim (RobosuiteZmqServer). "
+        "Robosuite-native names (PandaOmron, Tiago, GR1) use the stock robosuite robot in Robocasa."
     ),
 )
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
@@ -259,7 +255,7 @@ def serve(
     port_offset: int,
     list_robocasa_tasks: bool,
     robocasa_task: str,
-    robot: str | None,
+    robot: str,
     extra: tuple[str, ...],
 ) -> None:
     """Start a simulation server.
@@ -294,9 +290,6 @@ def serve(
         if list_robocasa_tasks:
             args = list(extra) + ["--use-robocasa", "--list-robocasa-tasks"]
             sys.exit(_run_module("emet.simulation.mujoco_server", args))
-
-        if robot is None:
-            robot = "rby1" if molmospaces_scene else "stretch"
 
         try:
             cfg = build_sim_launch_config_from_serve_cli(
@@ -382,17 +375,11 @@ def molmospaces_cmd() -> None:
 
 @molmospaces_cmd.command("list-robots", short_help="List supported robot IDs")
 def molmospaces_list_robots() -> None:
-    """Print MolmoSpaces-related robot ids: vendored merge MJCF keys and upstream Molmo asset names."""
-    from emet.simulation.molmospaces_config import (
-        DEFAULT_MOLMOSPACES_ROBOT,
-        MOLMOSPACES_ROBOT_IDS,
-        emet_molmospaces_merge_robot_keys_with_mjcf,
-    )
+    """Print MolmoSpaces robot IDs (rby1, rby1m, franka_*, etc.). Default robot is rby1 (Galaxea R1 family)."""
+    from emet.simulation.molmospaces_config import DEFAULT_MOLMOSPACES_ROBOT, MOLMOSPACES_ROBOT_IDS
 
-    emet_keys = emet_molmospaces_merge_robot_keys_with_mjcf()
-    click.echo("Emet merge-scene / serve --molmospaces-scene (bundled MJCF): " + ", ".join(emet_keys))
-    click.echo("MolmoSpaces upstream asset robot ids: " + ", ".join(MOLMOSPACES_ROBOT_IDS))
-    click.echo(f"Default (serve MolmoSpaces when --robot omitted): {DEFAULT_MOLMOSPACES_ROBOT}")
+    click.echo("Robots: " + ", ".join(MOLMOSPACES_ROBOT_IDS))
+    click.echo(f"Default: {DEFAULT_MOLMOSPACES_ROBOT}")
 
 
 @molmospaces_cmd.command("list-scenes", short_help="List scene names and split sizes")
@@ -620,12 +607,7 @@ def kill_mujoco_server(port: int, kill_all: bool) -> None:
     is_flag=True,
     help="With innate_mars only: load robot MJCF alone (no grid floor / extra lights). Ignored with --merge-scene.",
 )
-@click.option(
-    "--no-viewer-panels",
-    is_flag=True,
-    help="Hide left/right UI panels in the passive viewer.",
-)
-def view_mujoco(robot: str, merge_scene: bool, no_viewer_panels: bool, no_extras: bool) -> None:
+def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool, no_extras: bool) -> None:
     """Open the native MuJoCo viewer to inspect a robot model (requires ``uv sync --extra sim``).
 
     Uses ``launch_passive``: close the window or Ctrl+C to exit. Needs a desktop ``DISPLAY`` (or X forwarding).
@@ -692,12 +674,11 @@ def view_mujoco(robot: str, merge_scene: bool, no_viewer_panels: bool, no_extras
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
     try:
-        show_ui = not no_viewer_panels
         with mujoco.viewer.launch_passive(
             model,
             data,
-            show_left_ui=show_ui,
-            show_right_ui=show_ui,
+            show_left_ui=show_viewer_ui,
+            show_right_ui=show_viewer_ui,
         ) as viewer:
             click.echo("MuJoCo viewer open — close the window or Ctrl+C to exit.")
             while viewer.is_running():
@@ -709,98 +690,6 @@ def view_mujoco(robot: str, merge_scene: bool, no_viewer_panels: bool, no_extras
             f"Viewer failed ({e!r}). On headless hosts use X11 forwarding or run with a local DISPLAY.",
             err=True,
         )
-        sys.exit(1)
-
-
-@main.command(
-    "tune-mujoco-home",
-    short_help="Simulate GUI: pose the robot, then print MJCF <key ctrl=.../> for home",
-)
-@click.option(
-    "--robot",
-    default="rby1",
-    help="Robot key for get_robot_mjcf_path when --mjcf is omitted (rby1, galaxea_r1, innate_mars, …).",
-)
-@click.option(
-    "--mjcf",
-    "mjcf_path",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    default=None,
-    help="Explicit MJCF (overrides --robot), e.g. a merged MolmoSpaces wrapper.",
-)
-@click.option(
-    "--initial-pose",
-    type=click.Choice(["default", "zeros", "home"], case_sensitive=False),
-    default="zeros",
-    show_default=True,
-    help="Starting joint targets before tuning: compiled defaults, all-zero ctrl/qpos, or MJCF 'home' keyframe.",
-)
-@click.option(
-    "--apply-home",
-    is_flag=True,
-    help="Alias for --initial-pose home (keeps base free joint until frozen).",
-)
-@click.option(
-    "--kinematic",
-    is_flag=True,
-    help="Passive viewer with mj_forward only (no physics). Default uses MuJoCo Simulate (physics + control).",
-)
-@click.option(
-    "--base-body",
-    "base_body_name",
-    default="base_link",
-    show_default=True,
-    help="Body with the free joint for initial pose / hoist.",
-)
-@click.option(
-    "--tune-base-z",
-    default=0.38,
-    show_default=True,
-    help="World z for the base before freezing (free joint removed so the robot does not fall in Simulate).",
-)
-def tune_mujoco_home(
-    robot: str,
-    mjcf_path: Path | None,
-    initial_pose: str,
-    apply_home: bool,
-    kinematic: bool,
-    base_body_name: str,
-    tune_base_z: float,
-) -> None:
-    """Open MuJoCo to pose the robot; on close prints ``<key ctrl=.../>`` for the MJCF home keyframe.
-
-    Default: **Simulate** (physics and control). Use ``--kinematic`` for a no-physics sandbox. Robot-only
-    MJCF gets a floor plane; floating bases are hoisted to ``--tune-base-z`` and frozen. Needs DISPLAY.
-
-    Examples:
-      emet tune-mujoco-home --robot rby1
-      emet tune-mujoco-home --robot rby1 --initial-pose home
-      emet tune-mujoco-home --robot rby1 --kinematic
-      emet tune-mujoco-home --mjcf path/to/molmospaces_merged_xxx.xml --initial-pose default
-    """
-    from emet.simulation.mujoco_home_tune import run_tune_home_gui
-    from emet.utils.assets import get_robot_mjcf_path
-
-    if mjcf_path is not None:
-        path = str(mjcf_path.resolve())
-    else:
-        rk = robot.lower().replace("-", "_")
-        p = get_robot_mjcf_path(rk)
-        if p is None or not p.is_file():
-            click.echo(f"No MJCF for robot={robot!r}; pass --mjcf PATH.", err=True)
-            sys.exit(1)
-        path = str(p)
-    pose = "home" if apply_home else initial_pose.lower()
-    try:
-        run_tune_home_gui(
-            path,
-            initial_pose=pose,  # type: ignore[arg-type]
-            base_body_name=base_body_name,
-            tune_base_z=float(tune_base_z),
-            kinematic=kinematic,
-        )
-    except FileNotFoundError as e:
-        click.echo(str(e), err=True)
         sys.exit(1)
 
 

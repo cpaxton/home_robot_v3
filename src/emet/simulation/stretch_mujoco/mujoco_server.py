@@ -30,8 +30,6 @@ except ImportError:
 
 import emet.simulation.stretch_mujoco.config as config
 import emet.simulation.stretch_mujoco.utils as utils
-from emet.robots.stretch import StretchBackend
-from emet.simulation.mujoco_stationary_control import DefaultMujocoStationaryControl
 from emet.simulation.stretch_mujoco.datamodels.status_command import CommandBaseVelocity, CommandMove, StatusCommand
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_joints import StatusStretchJoints
@@ -281,13 +279,6 @@ class MujocoServer:
 
         self.data_proxies = data_proxies
 
-        _stretch_backend = StretchBackend()
-        _stationary = _stretch_backend.create_mujoco_stationary_control()
-        self._mujoco_stationary = (
-            _stationary if _stationary is not None else DefaultMujocoStationaryControl()
-        )
-        self._mujoco_stationary_spec = _stretch_backend.get_spec()
-
         self.base_controller = BaseController(self)
 
         self.physics_fps_counter = FpsCounter()
@@ -474,10 +465,6 @@ class MujocoServer:
         if not self.mjdata or not self.mjdata.time:
             print("WARNING: no mujoco data to report")
             return
-
-        self._mujoco_stationary.write_ctrl_with_spec_hold(
-            self.mjmodel, self.mjdata, self._mujoco_stationary_spec, None
-        )
 
         self.physics_fps_counter.tick(sim_time=data.time)
         self.pull_status()

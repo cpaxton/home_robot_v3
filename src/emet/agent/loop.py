@@ -48,7 +48,7 @@ from emet.utils.vram_debug import print_vram_snapshot
 logger = Logger(__name__)
 
 # Maximum follow-up LLM calls per user turn (prevents infinite loops)
-_MAX_TOOL_ROUNDS = 5
+_MAX_TOOL_ROUNDS = 3
 
 
 def _env_agent_tool_debug() -> bool:
@@ -213,18 +213,8 @@ def _call_llm(
     """Call the LLM and return (raw_response, elapsed_seconds)."""
     t0 = timeit.default_timer()
 
-    def _normalize_response_text(value: Any) -> str:
-        if value is None:
-            return ""
-        if isinstance(value, str):
-            return value
-        try:
-            return str(value)
-        except Exception:
-            return ""
-
     def _with(verbose: bool, **call_kw: Any) -> str:
-        return _normalize_response_text(llm_client(text, verbose=verbose, **call_kw))
+        return llm_client(text, verbose=verbose, **call_kw)
 
     def _try_chain() -> str:
         if openai_tools_param is not None and image is not None:
@@ -245,13 +235,9 @@ def _call_llm(
         try:
             return _with(debug)
         except TypeError:
-            return _normalize_response_text(llm_client(text))
+            return llm_client(text)
 
-    try:
-        raw = _try_chain()
-    except Exception as e:
-        logger.warning(f"LLM call failed: {e}")
-        raw = ""
+    raw = _try_chain()
     return raw, timeit.default_timer() - t0
 
 

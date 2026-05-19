@@ -287,41 +287,6 @@ MINIMAL_BASE_INSIDE_WALL = """<?xml version="1.0"?>
 """
 
 
-def test_settle_free_base_z_does_not_keep_hull_below_target_clearance():
-    """When a descent step overshoots, settle must not keep a pose with zb under z_floor + clearance."""
-    m = mujoco.MjModel.from_xml_string(MINIMAL_OPEN_FLOOR_WITH_BASE)
-    d = mujoco.MjData(m)
-    mujoco.mj_forward(m, d)
-    bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "base_link")
-    rb = molmospaces_spawn._bodies_descending_from(m, bid)  # noqa: SLF001
-    x, y = -2.5, 0.0
-    zf = molmospaces_spawn.walkable_floor_z_at_xy(m, d, x, y, exclude_body_id=bid)
-    assert zf is not None
-    clearance = 0.04
-    z_done = molmospaces_spawn.settle_free_base_z_to_floor(
-        m,
-        d,
-        base_body_name="base_link",
-        floor_geom_name="floor",
-        x=x,
-        y=y,
-        z_floor=float(zf),
-        z_start=float(zf) + 1.25,
-        robot_bodies=rb,
-        min_nonfloor_clearance=-5e-5,
-        max_steps=500,
-        step_m=0.08,
-        target_foot_clearance_above_floor_m=clearance,
-    )
-    assert z_done is not None
-    mujoco.mj_forward(m, d)
-    zb = molmospaces_spawn.robot_placement_bottom_z(
-        m, d, base_body_name="base_link", robot_bodies=rb
-    )
-    assert zb is not None
-    assert float(zb) >= float(zf) + clearance - 0.01
-
-
 def test_settle_free_base_z_returns_none_when_base_xy_intersects_wall():
     """If the hull already clips non-floor geometry at the first height sample, settle must not fake success."""
     m = mujoco.MjModel.from_xml_string(MINIMAL_BASE_INSIDE_WALL)

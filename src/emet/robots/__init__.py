@@ -17,13 +17,7 @@
 
 import importlib
 
-from emet.robots.base import (
-    RobotBackend,
-    RobotSpawnSpec,
-    RobotSpec,
-    format_robot_runtime_notes,
-    format_uv_sync_extras_hint,
-)
+from emet.robots.base import RobotBackend, RobotSpec, format_robot_runtime_notes, format_uv_sync_extras_hint
 
 ROBOT_REGISTRY = {
     "stretch": "emet.robots.stretch",
@@ -83,7 +77,6 @@ __all__ = [
     "ROBOT_REGISTRY",
     "RobotBackend",
     "RobotSpec",
-    "RobotSpawnSpec",
     "format_robot_runtime_notes",
     "format_uv_sync_extras_hint",
     "get_robot_spec",
