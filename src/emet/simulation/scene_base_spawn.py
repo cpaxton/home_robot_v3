@@ -1871,6 +1871,7 @@ def find_planar_base_xyt(
     clip_edge_pad_m: float = 0.22,
     clip_guard_body_names: tuple[str, ...] = (),
     clip_guard_pad_m: float = 0.18,
+    robocasa_first_clearance_m: float | None = None,
 ) -> tuple[float, float, float] | None:
     """Search collision-free world `(x, y, yaw)` for planar slide+yaw bases (Robocasa + Maurice-style MJCF).
 
@@ -1886,9 +1887,11 @@ def find_planar_base_xyt(
     strip-and-replace when ``base_root`` carries a non-identity ``pos`` / ``quat``.
 
     ``clip_edge_pad_m`` insets the base link from the **un-eroded** scene walkable clip (room
-    footprint projection). ``clip_guard_body_names`` applies the same inset test for additional
+    footprint projection).     ``clip_guard_body_names`` applies the same inset test for additional
     bodies (e.g. end-effector and wrist) when arm meshes are visual-only so
     :func:`worst_robot_nonfloor_contact_dist` does not see arm–counter penetration.
+    ``robocasa_first_clearance_m`` (Robocasa profile) raises the first contact-clearance
+    threshold before the ladder relaxes (helps mobile manipulators with visual-only arms).
 
     Returns world ``(x, y, yaw)`` matching :func:`get_base_xyt`-style conventions, or ``None``.
     """
@@ -1989,13 +1992,22 @@ def find_planar_base_xyt(
 
     yaws = [float(k * math.pi / 4.0) for k in range(8)]
     min_upward = -1.0 if spawn_profile == "robocasa" else float(_MIN_UPWARD_CEILING_CLEARANCE_M)
-    clearance_passes = (
+    clearance_passes: tuple[tuple[float, str], ...] = (
         (0.045, "clear045"),
         (0.028, "clear028"),
         (0.014, "clear014"),
         (0.005, "clear005"),
         (-5e-5, "clear_num"),
     )
+    if spawn_profile == "robocasa" and robocasa_first_clearance_m is not None:
+        fc = float(robocasa_first_clearance_m)
+        clearance_passes = (
+            (fc, "clear_robo_strict"),
+            (max(0.028, 0.55 * fc), "clear_robo_mid"),
+            (max(0.014, 0.32 * fc), "clear_robo_lo"),
+            (0.005, "clear005"),
+            (-5e-5, "clear_num"),
+        )
 
     spawn_dbg(
         f"planar_find: profile={spawn_profile!r} scene={scene_label!r} n_xy={len(candidates)} "

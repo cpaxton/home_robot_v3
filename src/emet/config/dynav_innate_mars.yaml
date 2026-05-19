@@ -43,6 +43,9 @@ da3_process_res: 378
 da3_clip_max_m: 4.0
 # Zero top image rows so textureless sky/ceiling does not become vertical obstacle sheets after unprojection.
 da3_ignore_sky_fraction_top: 0.16
+# Speed knobs (optional): da3_infer_every_n: 2 — skip some DA3 runs and reuse last depth (mapping tradeoff).
+# da3_stereo: false — monocular path only (faster than stereo when both eyes are available).
+# da3_use_amp: true — CUDA autocast around inference when supported.
 
 eqa:
   backend: qwen_vl

@@ -277,6 +277,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 clip_edge_pad_m=clip_pad,
                 clip_guard_body_names=guard_names,
                 clip_guard_pad_m=guard_pad,
+                robocasa_first_clearance_m=self._spec.planar_spawn_robocasa_first_clearance_m,
             )
         except Exception as e:
             logger.warning(f"Robocasa planar autoplace skipped ({e!r}).")

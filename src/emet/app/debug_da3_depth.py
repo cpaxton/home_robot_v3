@@ -113,6 +113,12 @@ def _depth_to_world_points(
     help="Same as dynav depth_source: sensor uses sim depth if present; da3 runs DA3.",
 )
 @click.option(
+    "--da3-stereo/--no-da3-stereo",
+    default=True,
+    show_default=True,
+    help="Match dynav da3_stereo: when off, monocular DA3 on the left image (faster; weaker geometry).",
+)
+@click.option(
     "--sky-fraction-top",
     default=0.0,
     type=float,
@@ -138,6 +144,7 @@ def main(
     cpu_only: bool,
     spawn: bool,
     depth_source: str,
+    da3_stereo: bool,
     show_meshes: bool,
     sky_fraction_top: float,
     clip_depth_max_m: float,
@@ -251,6 +258,7 @@ def main(
                 getattr(obs, "head_rgb_right", None),
                 getattr(obs, "head_camera_K_right", None),
                 getattr(obs, "head_camera_pose_right", None),
+                da3_use_stereo=da3_stereo,
             )
             if (
                 depth is not None

@@ -70,6 +70,9 @@ class RobotSpec:
     meshes are visual-only."""
     planar_spawn_clip_guard_pad_m: float = 0.18
     """XY inset inside the scene clip for each :attr:`planar_spawn_clip_guard_body_names` body (meters)."""
+    planar_spawn_robocasa_first_clearance_m: float | None = None
+    """If set (Robocasa planar spawn only), the first :func:`~emet.simulation.scene_base_spawn.find_planar_base_xyt`
+    contact-distance pass uses at least this many meters of ``worst`` before relaxing (see clearance ladder there)."""
 
 
 def format_uv_sync_extras_hint(spec: RobotSpec) -> str | None:

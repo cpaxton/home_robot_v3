@@ -34,6 +34,14 @@ max_depth: 2.5
 depth_source: sensor
 da3_model_id: depth-anything/DA3METRIC-LARGE
 da3_process_res: 504
+# --- Optional DA3 speed / quality (defaults match previous behavior) ---
+# Speed recipe (typical): depth_source: auto in sim (MuJoCo depth when present), da3_model_id: depth-anything/DA3-SMALL,
+# da3_process_res: 378, da3_infer_every_n: 2 (reuse last DA3 between runs; weaker temporal consistency for mapping),
+# da3_stereo: false when RGB-right is populated but monocular is enough, da3_use_amp: true on CUDA (optional).
+# da3_infer_every_n: 1          # >1 reuses last DA3 depth between full inference steps (see DynamemController.update).
+# da3_stereo: true               # false forces monocular infer even when stereo RGB + intrinsics exist.
+# da3_use_amp: false            # CUDA/MPS mixed precision around model.inference (try true on GPU for throughput).
+# da3_torch_compile: false      # experimental torch.compile on the loaded DA3 module (may fail on some torch/builds).
 # da3_device: cuda   # optional; defaults to same device as the DynaMem controller (cuda if available else cpu)
 
 # EQA (memory Q&A when using emet run agent --eqa). Default: local Qwen3-VL (one load for captions + EQA).
