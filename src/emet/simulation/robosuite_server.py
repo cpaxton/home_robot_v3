@@ -259,7 +259,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         clip_pad = self._spec.planar_spawn_clip_edge_pad_m
         if clip_pad is None:
             clip_pad = float(0.22 + 0.5 * extra_xy)
-        guard_body = self._spec.planar_spawn_clip_guard_body_name
+        guard_names = self._spec.planar_spawn_clip_guard_body_names
+        if not guard_names and self._spec.planar_spawn_clip_guard_body_name:
+            guard_names = (self._spec.planar_spawn_clip_guard_body_name,)
         guard_pad = float(self._spec.planar_spawn_clip_guard_pad_m)
         try:
             placed = scene_base_spawn.find_planar_base_xyt(
@@ -273,7 +275,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 environment=self._environment_descriptor,
                 footprint_xy_margin_m=margin,
                 clip_edge_pad_m=clip_pad,
-                clip_guard_body_name=guard_body,
+                clip_guard_body_names=guard_names,
                 clip_guard_pad_m=guard_pad,
             )
         except Exception as e:

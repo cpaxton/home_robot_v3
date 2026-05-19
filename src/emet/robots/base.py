@@ -63,10 +63,13 @@ class RobotSpec:
     """Minimum XY distance from :func:`~emet.simulation.scene_base_spawn.collision_scene_xy_clip_rect`
     edges for the base link. If ``None``, uses ``0.22 + 0.5 * planar_spawn_xy_extra_margin_m``."""
     planar_spawn_clip_guard_body_name: str | None = None
-    """Optional body (e.g. ``ee_link``) whose world XY must also lie inside the eroded clip. Needed when
-    arm meshes are visual-only (no ``mj_collision`` vs scene) but still must not start through counters."""
+    """Legacy single guard body. Prefer :attr:`planar_spawn_clip_guard_body_names`; if that tuple is
+    empty and this is set, spawn uses a one-element guard list."""
+    planar_spawn_clip_guard_body_names: tuple[str, ...] = ()
+    """Bodies whose world XY must lie inside the scene walkable clip (same pad). Use for EE + mid-arm when
+    meshes are visual-only."""
     planar_spawn_clip_guard_pad_m: float = 0.18
-    """XY inset for :attr:`planar_spawn_clip_guard_body_name` inside the scene clip (meters)."""
+    """XY inset inside the scene clip for each :attr:`planar_spawn_clip_guard_body_names` body (meters)."""
 
 
 def format_uv_sync_extras_hint(spec: RobotSpec) -> str | None:

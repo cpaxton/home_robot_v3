@@ -1,15 +1,6 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
-#
-# Some code may be adapted from other open-source works with their respective licenses. Original
-# license information maybe found below, if so.
-
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
-#
 # This source code is licensed under the license found in the LICENSE file in
 # the root directory of this source tree.
 
@@ -23,8 +14,8 @@ from typing import Any
 
 import numpy as np
 
-from emet.core.zmq_protocol import EMET_ZMQ_SESSION_KEY
-from emet.utils.geometry import xyt_base_to_global
+from emet.core.zmq_protocol import EMET_ZMQ_SESSION_KEY, read_emet_session
+from emet.utils.geometry import nav_xyt_to_world_xyt, xyt_base_to_global
 
 _MAX_BODIES = 72
 
@@ -40,7 +31,13 @@ def apply_zmq_obs_to_mujoco_data(
     nav_origin_slot: list[np.ndarray | None],
     free_qadr: int | None,
 ) -> None:
-    """Reset ``data.qpos`` to defaults, then fill from ZMQ-style ``gps``/``compass``/``joint``."""
+    """Reset ``data.qpos`` to defaults, then fill from ZMQ-style ``gps``/``compass``/``joint``.
+
+    Planar slide/slide/yaw values in ``joint`` are replayed as-is. Absolute body poses in the
+    standalone MJCF sit in that model's world (often ``base_root`` at origin); callers align Rerun
+    with the sim by logging **base_link-relative** transforms under ``world/robot`` (see
+    :meth:`MjcfBodySkeletonLogger.apply_and_log`).
+    """
     import mujoco
 
     data.qpos[:] = model.qpos0
@@ -88,6 +85,39 @@ def apply_zmq_obs_to_mujoco_data(
             data.qpos[qadr] = float(jvec[i])
 
 
+def _body_T_world(data: Any, bid: int) -> np.ndarray:
+    b = data.body(bid)
+    R = np.asarray(b.xmat, dtype=np.float64).reshape(3, 3)
+    p = np.asarray(b.xpos, dtype=np.float64).reshape(3)
+    T = np.eye(4, dtype=np.float64)
+    T[:3, :3] = R
+    T[:3, 3] = p
+    return T
+
+
+def _T_world_from_planar_xyt(x: float, y: float, yaw: float, z: float) -> np.ndarray:
+    c, s = np.cos(float(yaw)), np.sin(float(yaw))
+    T = np.eye(4, dtype=np.float64)
+    T[0, 0], T[0, 1], T[1, 0], T[1, 1] = c, -s, s, c
+    T[0, 3], T[1, 3], T[2, 3] = float(x), float(y), float(z)
+    return T
+
+
+def _nav_world_xyt_from_obs(obs_pose: dict[str, Any]) -> np.ndarray:
+    xy = np.asarray(obs_pose.get("gps", np.zeros(2)), dtype=np.float64).reshape(-1)[:2]
+    comp = np.asarray(obs_pose.get("compass", np.zeros(1)), dtype=np.float64).ravel()
+    theta = float(comp[0]) if comp.size else 0.0
+    local = np.array([float(xy[0]), float(xy[1]), theta], dtype=np.float64)
+    return nav_xyt_to_world_xyt(local, read_emet_session(obs_pose))
+
+
+def _world_alignment_fixup_T(nav_wxyt: np.ndarray, T_standalone_base: np.ndarray) -> np.ndarray:
+    """``T_nav_world @ inv(T_standalone_base)`` maps standalone-world points → nav / map world."""
+    z = float(T_standalone_base[2, 3])
+    T_nav = _T_world_from_planar_xyt(float(nav_wxyt[0]), float(nav_wxyt[1]), float(nav_wxyt[2]), z)
+    return T_nav @ np.linalg.inv(T_standalone_base)
+
+
 def _quat_wxyz_yaw(theta: float) -> tuple[float, float, float, float]:
     half = 0.5 * float(theta)
     return float(np.cos(half)), 0.0, 0.0, float(np.sin(half))
@@ -133,6 +163,7 @@ class MjcfBodySkeletonLogger:
 
     def __init__(self, mjcf_path: str | Path, joint_names: tuple[str, ...] | list[str], dof: int, base_link_name: str):
         import mujoco
+        import rerun as rr
 
         path = Path(mjcf_path)
         if not path.is_file():
@@ -154,6 +185,13 @@ class MjcfBodySkeletonLogger:
             nm = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, bid) or f"body{bid}"
             self._body_paths.append(f"world/robot/mjcf/{_safe_entity_segment(nm)}")
         self._nav_origin_slot: list[np.ndarray | None] = [None]
+        # Establish hierarchy: transforms on ``world/robot/mjcf/*`` are **relative to base_link**
+        # (parent chain → ``world/robot`` uses the same nav-world pose as ``log_robot_xyt``).
+        rr.log(
+            "world/robot/mjcf",
+            rr.Transform3D(translation=[0.0, 0.0, 0.0], mat3x3=np.eye(3)),
+            static=True,
+        )
 
     def apply_and_log(self, obs_pose: dict[str, Any]) -> None:
         import mujoco
@@ -172,11 +210,16 @@ class MjcfBodySkeletonLogger:
 
         mujoco.mj_forward(self.model, self.data)
 
-        for bid, path in zip(self._body_ids, self._body_paths, strict=True):
-            b = self.data.body(bid)
-            R = np.asarray(b.xmat, dtype=np.float64).reshape(3, 3)
-            p = np.asarray(b.xpos, dtype=np.float64).reshape(3)
-            rr.log(path, rr.Transform3D(translation=p, mat3x3=R, axis_length=0.07))
+        root_bid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, self.base_link_name)
+        T_base_w = _body_T_world(self.data, int(root_bid))
+        T_inv = np.linalg.inv(T_base_w)
+
+        for bid, entity_path in zip(self._body_ids, self._body_paths, strict=True):
+            T_w = _body_T_world(self.data, int(bid))
+            T_rel = T_inv @ T_w
+            R = T_rel[:3, :3]
+            p = T_rel[:3, 3]
+            rr.log(entity_path, rr.Transform3D(translation=p, mat3x3=R, axis_length=0.07))
 
 
 class MjcfVisualMeshLogger:
@@ -211,7 +254,7 @@ class MjcfVisualMeshLogger:
             self._geom_mesh_cache[gid] = (verts, faces)
 
     def log_meshes_world(self, rr: Any, obs_pose: dict[str, Any], *, entity_prefix: str = "da3/robot/mesh") -> None:
-        """Sync kinematics from *obs_pose*, then log each cached mesh geom at ``entity_prefix/<geom_name>``."""
+        """Sync kinematics from *obs_pose*, then log each cached mesh geom in **nav / map world**."""
         import mujoco
 
         apply_zmq_obs_to_mujoco_data(
@@ -226,16 +269,25 @@ class MjcfVisualMeshLogger:
         )
         mujoco.mj_forward(self.model, self.data)
 
+        root_bid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, self.base_link_name)
+        T_sb = _body_T_world(self.data, int(root_bid))
+        wxyt = _nav_world_xyt_from_obs(obs_pose)
+        T_fix = _world_alignment_fixup_T(wxyt, T_sb)
+        R_fix = T_fix[:3, :3]
+        t_fix = T_fix[:3, 3]
+
         for gid, (V_loc, F) in self._geom_mesh_cache.items():
             R = np.asarray(self.data.geom_xmat[gid], dtype=np.float64).reshape(3, 3)
             p = np.asarray(self.data.geom_xpos[gid], dtype=np.float64).reshape(3)
             V_w = (R @ V_loc.T).T + p
+            V_out = (R_fix @ V_w.T).T + t_fix
             gname = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, gid) or f"geom{gid}"
             seg = _safe_entity_segment(str(gname))
             rr.log(
                 f"{entity_prefix}/{seg}",
                 rr.Mesh3D(
-                    vertex_positions=V_w.astype(np.float32),
+                    vertex_positions=V_out.astype(np.float32),
                     triangle_indices=F.flatten(),
                 ),
             )
+

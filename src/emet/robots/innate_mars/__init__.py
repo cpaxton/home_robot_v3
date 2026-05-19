@@ -92,10 +92,10 @@ class InnateMarsBackend(RobotBackend):
             dynamem_depth_source_hint="da3",
             planar_base_joint_names=("base_x", "base_y", "base_yaw"),
             # Robocasa planar spawn: arm geoms are visual-only, so mj_collision misses arm–scene overlap;
-            # inflate clip erosion and require EE XY inside the walkable floor projection.
-            planar_spawn_xy_extra_margin_m=0.38,
-            planar_spawn_clip_guard_body_name="ee_link",
-            planar_spawn_clip_guard_pad_m=0.20,
+            # inflate clip erosion and require wrist / EE XY inside the walkable floor projection.
+            planar_spawn_xy_extra_margin_m=0.42,
+            planar_spawn_clip_guard_body_names=("ee_link", "link5"),
+            planar_spawn_clip_guard_pad_m=0.32,
             # MJCF head cameras align with ROS optical (+X mount forward); MuJoCo Renderer buffers are upright
             # on typical EGL/GL backends. Avoid baked flip/rot here—extra ops distort stereo/overlays. If pixels
             # look upside-down on your GPU, export EMET_ROBOSUITE_RENDER_FLIPUD=1 before starting the robosuite
