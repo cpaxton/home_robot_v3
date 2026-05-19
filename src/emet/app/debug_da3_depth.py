@@ -114,9 +114,9 @@ def _depth_to_world_points(
 )
 @click.option(
     "--da3-stereo/--no-da3-stereo",
-    default=True,
+    default=False,
     show_default=True,
-    help="Match dynav da3_stereo: when off, monocular DA3 on the left image (faster; weaker geometry).",
+    help="Match dynav da3_stereo: on = two-view DA3 when right RGB exists (slower); default off for speed.",
 )
 @click.option(
     "--sky-fraction-top",

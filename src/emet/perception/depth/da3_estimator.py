@@ -19,6 +19,8 @@ from emet.utils.logger import Logger
 
 logger = Logger(__name__)
 
+_MISSING = object()
+
 
 def apply_da3_sky_row_mask(depth: np.ndarray, fraction_top: float) -> np.ndarray:
     """Zero the top *fraction_top* of image rows in a depth map (HxW).
@@ -78,9 +80,9 @@ class DA3DepthEstimator:
     def __init__(
         self,
         *,
-        model_id: str = "depth-anything/DA3METRIC-LARGE",
+        model_id: str = "depth-anything/DA3-SMALL",
         device: str = "cuda",
-        process_res: int = 504,
+        process_res: int = 378,
         clip_output_max_m: float = 6.0,
         use_amp: bool = False,
         torch_compile: bool = False,
@@ -244,14 +246,18 @@ def create_da3_estimator_from_parameters(parameters: Any, *, device: str) -> DA3
     src = str(parameters.get("depth_source", "sensor")).lower()
     if src not in ("da3", "auto"):
         return None
-    model_id = str(parameters.get("da3_model_id", "depth-anything/DA3METRIC-LARGE"))
-    process_res = int(parameters.get("da3_process_res", 504))
+    model_id = str(parameters.get("da3_model_id", "depth-anything/DA3-SMALL"))
+    process_res = int(parameters.get("da3_process_res", 378))
     da3_dev = parameters.get("da3_device", None)
     dev = str(da3_dev).strip() if da3_dev is not None else device
     md = float(parameters.get("max_depth", 2.5))
     clip_raw = parameters.get("da3_clip_max_m", None)
     clip_m = float(clip_raw) if clip_raw is not None else max(md + 1.0, 4.0)
-    use_amp = bool(parameters.get("da3_use_amp", False))
+    raw_amp = parameters.get("da3_use_amp", _MISSING)
+    if raw_amp is _MISSING:
+        use_amp = str(dev).startswith("cuda") and torch.cuda.is_available()
+    else:
+        use_amp = bool(raw_amp)
     torch_compile = bool(parameters.get("da3_torch_compile", False))
     return DA3DepthEstimator(
         model_id=model_id,
@@ -274,7 +280,7 @@ def resolve_depth_map(
     camera_K_right: np.ndarray | None = None,
     camera_pose_right: np.ndarray | None = None,
     *,
-    da3_use_stereo: bool = True,
+    da3_use_stereo: bool = False,
 ) -> np.ndarray | None:
     """Resolve depth the same way as :meth:`DynamemController._resolve_depth_map` (sensor / da3 / auto).
 

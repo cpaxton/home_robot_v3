@@ -192,9 +192,9 @@ class DynamemController(BaseController):
 
         self._depth_source = str(self.parameters.get("depth_source", "sensor")).lower()
         self._da3_estimator = None
-        self._da3_infer_every_n = max(1, int(self.parameters.get("da3_infer_every_n", 1) or 1))
+        self._da3_infer_every_n = max(1, int(self.parameters.get("da3_infer_every_n", 2) or 1))
         self._da3_last_depth: np.ndarray | None = None
-        self._da3_use_stereo = bool(self.parameters.get("da3_stereo", True))
+        self._da3_use_stereo = bool(self.parameters.get("da3_stereo", False))
         self._debug_perfect_sensor_depth = bool(
             self.parameters.get("debug_perfect_sensor_depth", False)
         ) or _env_truthy("EMET_DYNAMEM_PERFECT_DEPTH")

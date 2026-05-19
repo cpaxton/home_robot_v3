@@ -117,6 +117,7 @@ Stream head camera(s) from the ZMQ server through **Depth Anything 3** (or sim d
 - `--depth-source da3` (default) — run DA3; `--depth-source sensor` uses rendered sim depth (no DA3) for A/B checks.
 - `--model-id` — default `depth-anything/DA3-SMALL` for speed; use `DA3METRIC-LARGE` when you need metric calibration.
 - `--process-res` — default `378` (faster); raise for sharper depth at more compute.
+- `--da3-stereo` — default **off** (monocular DA3, matches dynav); pass `--da3-stereo` for two-view inference when wiring stereo depth.
 - `--hz`, `--stride` — cap FPS and point-cloud density.
 
 **Examples:**
