@@ -795,6 +795,36 @@ class RobosuiteZmqServer(BaseZmqServer):
         f = 0.5 * height / np.tan(np.radians(fovy) / 2)
         return np.array([[f, 0, width / 2], [0, f, height / 2], [0, 0, 1]])
 
+    def _ensure_joint_ctrl_hold_buffers(self) -> None:
+        """Allocate :attr:`_joint_ctrl_hold` and client pin mask (spec actuator count)."""
+        n = min(len(self._spec.actuator_names), len(self._spec.joint_names))
+        if self._joint_ctrl_hold is None or int(self._joint_ctrl_hold.shape[0]) != n:
+            self._joint_ctrl_hold = np.zeros(n, dtype=np.float64)
+        if self._joint_ctrl_hold_client_pin is None or int(self._joint_ctrl_hold_client_pin.shape[0]) != n:
+            self._joint_ctrl_hold_client_pin = np.zeros(n, dtype=np.bool_)
+
+    def _seed_joint_ctrl_hold_from_keyframe(self, key_name: str = "home") -> bool:
+        """Copy MJCF keyframe ``ctrl`` into :attr:`_joint_ctrl_hold` (position setpoints for PD actuators)."""
+        if self._mjmodel is None or self._mjdata is None:
+            return False
+        kid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_KEY, key_name)
+        if kid < 0:
+            return False
+        self._ensure_joint_ctrl_hold_buffers()
+        assert self._joint_ctrl_hold is not None
+        n = min(len(self._spec.actuator_names), int(self._joint_ctrl_hold.shape[0]))
+        key_ctrl = np.asarray(self._mjmodel.key_ctrl[kid], dtype=np.float64)
+        for i in range(n):
+            aname = self._spec.actuator_names[i]
+            aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
+            if aid >= 0 and aid < int(key_ctrl.shape[0]):
+                self._joint_ctrl_hold[i] = float(key_ctrl[aid])
+            elif aid >= 0:
+                self._joint_ctrl_hold[i] = float(self._mjdata.ctrl[aid])
+        if self._joint_ctrl_hold_client_pin is not None:
+            self._joint_ctrl_hold_client_pin.fill(False)
+        return True
+
     def _sync_actuator_ctrl_from_joint_positions(self) -> None:
         """Set full ``ctrl`` from joint transmissions + current ``qpos``, then refresh the spec hold buffer.
 
@@ -804,16 +834,23 @@ class RobosuiteZmqServer(BaseZmqServer):
         """
         if self._mjmodel is None or self._mjdata is None:
             return
-        n = min(len(self._spec.actuator_names), len(self._spec.joint_names))
-        if self._joint_ctrl_hold is None or int(self._joint_ctrl_hold.shape[0]) != n:
-            self._joint_ctrl_hold = np.zeros(n, dtype=np.float64)
-        if self._joint_ctrl_hold_client_pin is None or int(self._joint_ctrl_hold_client_pin.shape[0]) != n:
-            self._joint_ctrl_hold_client_pin = np.zeros(n, dtype=np.bool_)
-        else:
+        self._ensure_joint_ctrl_hold_buffers()
+        if self._joint_ctrl_hold_client_pin is not None:
             self._joint_ctrl_hold_client_pin.fill(False)
         self._mujoco_stationary.sync_ctrl_and_spec_hold(
             self._mjmodel, self._mjdata, self._spec, self._joint_ctrl_hold
         )
+
+    def _preserve_joint_ctrl_hold_from_ctrl(self) -> None:
+        """Keep PD targets in :attr:`_joint_ctrl_hold` from current ``data.ctrl`` (not from ``qpos``).
+
+        Use after MJCF ``home`` / zero pose setup and after dynamics settle so post-load ``q`` drift does
+        not retarget unpinned joints. Contrasts with :meth:`_sync_actuator_ctrl_from_joint_positions`,
+        which sets hold from current joint angles (MolmoSpaces ``set_to_stationary`` / hold-current-pose).
+        """
+        self._ensure_joint_ctrl_hold_buffers()
+        self._snapshot_spec_hold_from_ctrl()
+        self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
 
     def _snapshot_spec_hold_from_ctrl(self) -> None:
         """After code paths that write ``data.ctrl`` directly (e.g. ``head_to``), mirror into the hold buffer.
@@ -821,7 +858,10 @@ class RobosuiteZmqServer(BaseZmqServer):
         Otherwise :meth:`_apply_joint_ctrl_hold_to_actuators` immediately overwrites those actuators on
         the next ``mj_step``.
         """
-        if self._mjmodel is None or self._mjdata is None or self._joint_ctrl_hold is None:
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        self._ensure_joint_ctrl_hold_buffers()
+        if self._joint_ctrl_hold is None:
             return
         n = min(len(self._spec.actuator_names), int(self._joint_ctrl_hold.shape[0]))
         for i in range(n):
@@ -866,7 +906,10 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         See :attr:`_mujoco_stationary` and :meth:`_sync_actuator_ctrl_from_joint_positions`.
         """
-        if self._mjmodel is None or self._mjdata is None or self._joint_ctrl_hold is None:
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        self._ensure_joint_ctrl_hold_buffers()
+        if self._joint_ctrl_hold is None:
             return
         if refresh_unpinned_hold:
             self._refresh_unpinned_joint_ctrl_hold_from_stationary()
@@ -881,13 +924,13 @@ class RobosuiteZmqServer(BaseZmqServer):
             return
         with self._mj_lock:
             self._mjdata.qvel.fill(0.0)
-            self._sync_actuator_ctrl_from_joint_positions()
+            self._preserve_joint_ctrl_hold_from_ctrl()
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             for _ in range(8):
                 self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                 mujoco.mj_step(self._mjmodel, self._mjdata)
             self._mjdata.qvel.fill(0.0)
-            self._sync_actuator_ctrl_from_joint_positions()
+            self._preserve_joint_ctrl_hold_from_ctrl()
             mujoco.mj_forward(self._mjmodel, self._mjdata)
 
     def _camera_pose_world(self, camera_name: str) -> np.ndarray:
@@ -1316,13 +1359,16 @@ class RobosuiteZmqServer(BaseZmqServer):
                     base_body_name=self._spec.base_link_name,
                 ):
                     logger.info("Applied MJCF keyframe 'home' (preserved base free-joint pose).")
-                    self._sync_actuator_ctrl_from_joint_positions()
+                    if not self._seed_joint_ctrl_hold_from_keyframe("home"):
+                        self._preserve_joint_ctrl_hold_from_ctrl()
+                    else:
+                        self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                     mujoco.mj_forward(self._mjmodel, self._mjdata)
         self._stabilize_physics_state_after_load()
         if self._molmospaces_autoplace_snap_qpos0:
             with self._mj_lock:
                 self._restore_merged_base_freejoint_from_qpos0()
-                self._sync_actuator_ctrl_from_joint_positions()
+                self._preserve_joint_ctrl_hold_from_ctrl()
                 mujoco.mj_forward(self._mjmodel, self._mjdata)
                 # ``restore`` snaps the free base out of whatever pose stabilize drifted to; that jump
                 # can leave arms / contacts inconsistent with the spawn frame. Run a longer settle so
@@ -1332,7 +1378,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                     mujoco.mj_step(self._mjmodel, self._mjdata)
                 # Avoid a hard velocity zero here: it injects impulses while contacts are loaded and
                 # can excite the torso PD chain before the realtime loop starts.
-                self._sync_actuator_ctrl_from_joint_positions()
+                self._preserve_joint_ctrl_hold_from_ctrl()
                 mujoco.mj_forward(self._mjmodel, self._mjdata)
                 if molmospaces_spawn.resettle_free_base_z_at_current_xy_preserving_yaw(
                     self._mjmodel,
@@ -1344,7 +1390,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                         "MolmoSpaces post-settle: re-aligned base height to floor at fixed (x,y) "
                         "(torso/arms match home after dynamics)."
                     )
-                    self._sync_actuator_ctrl_from_joint_positions()
+                    self._preserve_joint_ctrl_hold_from_ctrl()
                     mujoco.mj_forward(self._mjmodel, self._mjdata)
                 np.copyto(self._mjmodel.qpos0, self._mjdata.qpos)
         if self._mjmodel is not None and self._mjdata is not None:
@@ -1388,8 +1434,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                     self._ctrl_debug_initial_logs_remaining = max(
                         48, int(self._mj_substeps_per_tick) * 8
                     )
-                self._sync_actuator_ctrl_from_joint_positions()
-                self._apply_joint_ctrl_hold_to_actuators()
+                self._preserve_joint_ctrl_hold_from_ctrl()
                 mujoco.mj_forward(self._mjmodel, self._mjdata)
                 if self._mujoco_ctrl_debug_enabled():
                     logger.info(

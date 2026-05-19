@@ -210,7 +210,9 @@ MolmoSpaces assets are built with **MuJoCo 3.4**; the main **`sim`** extra pins 
 
 MolmoSpaces keeps articulated robots from collapsing at idle by **holding joint targets** and **rewriting actuator `ctrl` every physics sub-step** before `env.step` (see upstream `molmo_spaces/tasks/task.py`: inner loop calls `robot.compute_control()` then steps; `RBY1.update_control` / `compute_control` in `molmo_spaces/robots/rby1.py`; stationary joint targets in `molmo_spaces/controllers/joint_pos.py`).
 
-The emet **`RobosuiteZmqServer`** path does not import that stack (different object graph and optional MolmoSpaces venv). It **mirrors the same semantics**: a per-actuator hold buffer aligned with `RobotSpec` joint/actuator names, refreshed when ZMQ sends `joint` targets or when post-load sync copies `qpos` into `ctrl`, then **re-applied before each `mj_step`** so PD actuators never sit on stale `ctrl` between client messages.
+The emet **`RobosuiteZmqServer`** path does not import that stack (different object graph and optional MolmoSpaces venv). It **mirrors the same semantics**: a per-actuator hold buffer aligned with `RobotSpec` joint/actuator names, then **re-applied before each `mj_step`** so PD actuators never sit on stale `ctrl` between client messages.
+
+After MJCF keyframe **`home`** (default all-zero `ctrl` in `galaxea_r1.xml`), emet seeds that buffer from **`data.ctrl`** (the PD setpoints), not from post-settle `qpos`—otherwise arms drift into the hold targets. ZMQ `joint` commands pin rows in the hold buffer; `_sync_actuator_ctrl_from_joint_positions` is for “hold current pose” (teleport / explicit sync), not for replacing keyframe targets after dynamics.
 
 ## Showing results
 

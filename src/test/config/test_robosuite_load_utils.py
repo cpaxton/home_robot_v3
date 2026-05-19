@@ -103,6 +103,33 @@ def test_apply_home_snaps_arm_qpos_to_ctrl_on_merged_mjcf():
     np.testing.assert_allclose(data.qpos[q3], data.ctrl[a3], rtol=0, atol=1e-5)
 
 
+def test_apply_zero_joint_pose_preserving_base():
+    from emet.robots.rby1 import Rby1Backend
+    from emet.simulation.robosuite_load_utils import (
+        apply_zero_joint_pose_preserving_base,
+        freejoint_qpos_qvel_addrs,
+    )
+
+    spec = Rby1Backend().get_spec()
+    path = spec.mjcf_path
+    if not path:
+        pytest.skip("no mjcf_path on spec")
+    model = mujoco.MjModel.from_xml_path(path)
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    addrs = freejoint_qpos_qvel_addrs(model, spec.base_link_name)
+    if addrs is None:
+        pytest.skip("no base free joint")
+    qadr, _ = addrs
+    data.qpos[qadr + 2] = 0.5
+    apply_zero_joint_pose_preserving_base(model, data, base_body_name=spec.base_link_name)
+    la2 = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "left_arm_joint2")
+    q2 = int(model.jnt_qposadr[la2])
+    assert abs(float(data.qpos[q2])) < 1e-9
+    assert abs(float(data.qpos[qadr + 2]) - 0.5) < 1e-9
+    assert np.max(np.abs(data.ctrl)) < 1e-9
+
+
 def test_build_tune_model_freezes_base_and_adds_floor():
     from emet.robots.rby1 import Rby1Backend
     from emet.simulation.mujoco_home_tune import build_tune_model
@@ -113,17 +140,126 @@ def test_build_tune_model_freezes_base_and_adds_floor():
     if not path:
         pytest.skip("no mjcf_path on spec")
     model, data, logs = build_tune_model(
-        path, apply_home_keyframe=True, base_body_name=spec.base_link_name, tune_base_z=0.38
+        path,
+        initial_pose="home",
+        base_body_name=spec.base_link_name,
+        tune_base_z=0.38,
+        kinematic=False,
     )
     assert any("emet_tune_floor" in ln for ln in logs)
     assert any("Froze" in ln for ln in logs)
     assert freejoint_qpos_qvel_addrs(model, spec.base_link_name) is None
+    assert float(np.linalg.norm(model.opt.gravity)) > 0.0
     bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, spec.base_link_name)
     z0 = float(data.xpos[bid, 2])
     for _ in range(120):
         mujoco.mj_step(model, data)
     z1 = float(data.xpos[bid, 2])
     assert abs(z1 - z0) < 0.02, f"base should stay fixed during tune sandbox, z0={z0} z1={z1}"
+
+
+def test_home_keyframe_ctrl_is_all_zeros():
+    from emet.utils.assets import get_robot_mjcf_path
+
+    path = get_robot_mjcf_path("rby1")
+    if not path:
+        pytest.skip("no mjcf")
+    model = mujoco.MjModel.from_xml_path(str(path))
+    kid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
+    assert kid >= 0
+    assert np.max(np.abs(model.key_ctrl[kid])) < 1e-9
+
+
+def test_sync_hold_from_qpos_differs_from_ctrl_targets_after_pose_perturb():
+    """``sync_stationary`` seeds hold from ``q``; PD setpoints live in ``ctrl`` (regression guard)."""
+    from emet.robots.rby1 import Rby1Backend
+    from emet.simulation.mujoco_stationary_control import (
+        sync_stationary_ctrl_and_spec_hold,
+        write_ctrl_stationary_with_spec_hold,
+    )
+    from emet.simulation.robosuite_load_utils import apply_home_keyframe_preserving_base
+
+    spec = Rby1Backend().get_spec()
+    path = spec.mjcf_path
+    if not path:
+        pytest.skip("no mjcf_path on spec")
+    model = mujoco.MjModel.from_xml_path(path)
+    data = mujoco.MjData(model)
+    assert apply_home_keyframe_preserving_base(model, data, base_body_name=spec.base_link_name)
+    hold = np.zeros(len(spec.actuator_names), dtype=np.float64)
+    write_ctrl_stationary_with_spec_hold(model, data, spec, hold)
+    la2 = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "left_arm_joint2")
+    qadr2 = int(model.jnt_qposadr[la2])
+    data.qpos[qadr2] = 0.35
+    mujoco.mj_forward(model, data)
+    sync_stationary_ctrl_and_spec_hold(model, data, spec, hold)
+    i2 = spec.actuator_names.index("left_arm2")
+    assert abs(float(hold[i2]) - 0.35) < 1e-6
+    hold[:] = 0.0
+    write_ctrl_stationary_with_spec_hold(model, data, spec, hold)
+    for i, aname in enumerate(spec.actuator_names):
+        aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
+        if aid >= 0:
+            hold[i] = float(data.ctrl[aid])
+    assert abs(float(hold[i2])) < 1e-6
+
+
+def test_zero_home_ctrl_holds_under_gravity_with_affine_general_actuators():
+    """Torso/arm ``general`` actuators need ``biastype=affine`` so ``ctrl=0`` is a position setpoint."""
+    from emet.robots.rby1 import Rby1Backend
+    from emet.simulation.mujoco_stationary_control import write_ctrl_stationary_with_spec_hold
+    from emet.simulation.robosuite_load_utils import apply_home_keyframe_preserving_base
+
+    spec = Rby1Backend().get_spec()
+    path = spec.mjcf_path
+    if not path:
+        pytest.skip("no mjcf_path on spec")
+    model = mujoco.MjModel.from_xml_path(path)
+    data = mujoco.MjData(model)
+    aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "torso2")
+    assert int(model.actuator_biastype[aid]) == int(mujoco.mjtBias.mjBIAS_AFFINE)
+    assert apply_home_keyframe_preserving_base(model, data, base_body_name=spec.base_link_name)
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, spec.base_link_name)
+    qadr = vadr = None
+    for j in range(model.njnt):
+        if model.jnt_bodyid[j] == bid and model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE:
+            qadr, vadr = int(model.jnt_qposadr[j]), int(model.jnt_dofadr[j])
+    assert qadr is not None
+    base_snap = np.array(data.qpos[qadr : qadr + 7], copy=True)
+    hold = np.zeros(len(spec.actuator_names), dtype=np.float64)
+    for _ in range(400):
+        data.qpos[qadr : qadr + 7] = base_snap
+        if vadr >= 0:
+            data.qvel[vadr : vadr + 6] = 0.0
+        write_ctrl_stationary_with_spec_hold(model, data, spec, hold)
+        mujoco.mj_step(model, data)
+    la2 = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "left_arm_joint2")
+    t2 = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "torso_joint2")
+    assert abs(float(data.qpos[model.jnt_qposadr[la2]])) < 0.02
+    assert abs(float(data.qpos[model.jnt_qposadr[t2]])) < 0.06
+    assert float(np.max(np.abs(data.qvel))) < 0.15
+
+
+def test_build_tune_model_kinematic_does_not_drift():
+    from emet.robots.rby1 import Rby1Backend
+    from emet.simulation.mujoco_home_tune import build_tune_model
+
+    spec = Rby1Backend().get_spec()
+    path = spec.mjcf_path
+    if not path:
+        pytest.skip("no mjcf_path on spec")
+    model, data, logs = build_tune_model(
+        path,
+        initial_pose="zeros",
+        base_body_name=spec.base_link_name,
+        kinematic=True,
+    )
+    assert any("Kinematic" in ln for ln in logs)
+    assert float(np.linalg.norm(model.opt.gravity)) == 0.0
+    q0 = np.array(data.qpos, copy=True)
+    for _ in range(80):
+        mujoco.mj_step(model, data)
+    assert np.max(np.abs(data.qpos - q0)) < 1e-9
 
 
 def test_format_key_ctrl_attr_matches_stationary_vector():

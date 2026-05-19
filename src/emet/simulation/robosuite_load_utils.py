@@ -114,6 +114,33 @@ def apply_home_keyframe_preserving_base(
     return True
 
 
+def apply_zero_joint_pose_preserving_base(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    base_body_name: str,
+) -> None:
+    """Set hinge/slide ``qpos`` and all ``ctrl`` to zero; keep the base free joint pose if present."""
+    addrs = freejoint_qpos_qvel_addrs(model, base_body_name)
+    base_q: np.ndarray | None = None
+    if addrs is not None:
+        qadr, vadr = int(addrs[0]), int(addrs[1])
+        base_q = np.array(data.qpos[qadr : qadr + 7], dtype=np.float64, copy=True)
+    for jid in range(int(model.njnt)):
+        jt = int(model.jnt_type[jid])
+        if jt not in (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)):
+            continue
+        qadr_j = int(model.jnt_qposadr[jid])
+        data.qpos[qadr_j] = 0.0
+    data.ctrl[:] = 0.0
+    if base_q is not None:
+        data.qpos[qadr : qadr + 7] = base_q
+        if vadr >= 0:
+            data.qvel[vadr : vadr + 6] = 0.0
+    data.qvel.fill(0.0)
+    mujoco.mj_forward(model, data)
+
+
 def actuator_spec_vs_model_report(model: mujoco.MjModel, spec: RobotSpec) -> tuple[list[str], list[str]]:
     """Return (missing_in_model, extra_in_model_not_in_spec) actuator name lists (short names)."""
     spec_names = list(spec.actuator_names)

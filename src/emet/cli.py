@@ -729,16 +729,28 @@ def view_mujoco(robot: str, merge_scene: bool, no_viewer_panels: bool, no_extras
     help="Explicit MJCF (overrides --robot), e.g. a merged MolmoSpaces wrapper.",
 )
 @click.option(
+    "--initial-pose",
+    type=click.Choice(["default", "zeros", "home"], case_sensitive=False),
+    default="zeros",
+    show_default=True,
+    help="Starting joint targets before tuning: compiled defaults, all-zero ctrl/qpos, or MJCF 'home' keyframe.",
+)
+@click.option(
     "--apply-home",
     is_flag=True,
-    help="Apply keyframe 'home' first (keeps base free joint). Skip for merged scenes if unsure.",
+    help="Alias for --initial-pose home (keeps base free joint until frozen).",
+)
+@click.option(
+    "--kinematic",
+    is_flag=True,
+    help="Passive viewer with mj_forward only (no physics). Default uses MuJoCo Simulate (physics + control).",
 )
 @click.option(
     "--base-body",
     "base_body_name",
     default="base_link",
     show_default=True,
-    help="Body with the free joint when using --apply-home.",
+    help="Body with the free joint for initial pose / hoist.",
 )
 @click.option(
     "--tune-base-z",
@@ -749,19 +761,22 @@ def view_mujoco(robot: str, merge_scene: bool, no_viewer_panels: bool, no_extras
 def tune_mujoco_home(
     robot: str,
     mjcf_path: Path | None,
+    initial_pose: str,
     apply_home: bool,
+    kinematic: bool,
     base_body_name: str,
     tune_base_z: float,
 ) -> None:
-    """Open MuJoCo **Simulate**, pose joints, close the window — prints ``<key name=\"home\" ctrl=.../>``.
+    """Open MuJoCo to pose the robot; on close prints ``<key ctrl=.../>`` for the MJCF home keyframe.
 
-    Robot-only MJCF gets a ground plane; floating bases are frozen at ``--tune-base-z`` so physics
-    does not drop the model. Uses the same actuator-order convention as ``galaxea_r1.xml``. Needs DISPLAY.
+    Default: **Simulate** (physics and control). Use ``--kinematic`` for a no-physics sandbox. Robot-only
+    MJCF gets a floor plane; floating bases are hoisted to ``--tune-base-z`` and frozen. Needs DISPLAY.
 
     Examples:
       emet tune-mujoco-home --robot rby1
-      emet tune-mujoco-home --mjcf path/to/molmospaces_merged_xxx.xml
-      emet tune-mujoco-home --robot galaxea_r1 --apply-home
+      emet tune-mujoco-home --robot rby1 --initial-pose home
+      emet tune-mujoco-home --robot rby1 --kinematic
+      emet tune-mujoco-home --mjcf path/to/molmospaces_merged_xxx.xml --initial-pose default
     """
     from emet.simulation.mujoco_home_tune import run_tune_home_gui
     from emet.utils.assets import get_robot_mjcf_path
@@ -775,12 +790,14 @@ def tune_mujoco_home(
             click.echo(f"No MJCF for robot={robot!r}; pass --mjcf PATH.", err=True)
             sys.exit(1)
         path = str(p)
+    pose = "home" if apply_home else initial_pose.lower()
     try:
         run_tune_home_gui(
             path,
-            apply_home_keyframe=apply_home,
+            initial_pose=pose,  # type: ignore[arg-type]
             base_body_name=base_body_name,
             tune_base_z=float(tune_base_z),
+            kinematic=kinematic,
         )
     except FileNotFoundError as e:
         click.echo(str(e), err=True)

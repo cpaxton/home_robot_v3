@@ -23,15 +23,16 @@
     </default>
     <default class="torso">
       <joint damping="36" stiffness="0.02" armature="0.01" frictionloss="0.5"/>
-      <general gainprm="300" biasprm="0 -150 -50" forcerange="-100 100"/>
+      <!-- biastype affine: biasprm kp/kv on joint q,qd; ctrl is position setpoint (MolmoSpaces / emet hold). -->
+      <general biastype="affine" gainprm="300" biasprm="0 -150 -50" forcerange="-100 100"/>
     </default>
     <default class="arm_proximal">
       <joint damping="8" armature="0.005" frictionloss="0.3"/>
-      <general gainprm="200" biasprm="0 -100 -30" forcerange="-40 40"/>
+      <general biastype="affine" gainprm="200" biasprm="0 -100 -30" forcerange="-40 40"/>
     </default>
     <default class="arm_distal">
       <joint damping="3" armature="0.002" frictionloss="0.1"/>
-      <general gainprm="80" biasprm="0 -40 -10" forcerange="-7 7"/>
+      <general biastype="affine" gainprm="80" biasprm="0 -40 -10" forcerange="-7 7"/>
     </default>
     <default class="gripper">
       <joint damping="1" armature="0.001"/>
@@ -293,7 +294,7 @@
 
   <keyframe>
     <!-- Home: torso upright, modest arm bend; tune interactively: ``emet tune-mujoco-home --robot rby1``. -->
-    <key name="home" ctrl="0 0 0 0 0 0  0 0 0 0  0 0.5 -0.5 0 0 0  0.04 0.04  0 0.5 -0.5 0 0 0  0.04 0.04"/>
+    <key name="home" ctrl="0 0 0 0 0 0  0 0 0 0  0 0 0 0 0 0  0 0  0 0 0 0 0 0  0 0"/>
   </keyframe>
 
 </mujoco>
