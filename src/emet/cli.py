@@ -620,7 +620,12 @@ def kill_mujoco_server(port: int, kill_all: bool) -> None:
     is_flag=True,
     help="With innate_mars only: load robot MJCF alone (no grid floor / extra lights). Ignored with --merge-scene.",
 )
-def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool, no_extras: bool) -> None:
+@click.option(
+    "--no-viewer-panels",
+    is_flag=True,
+    help="Hide left/right UI panels in the passive viewer.",
+)
+def view_mujoco(robot: str, merge_scene: bool, no_viewer_panels: bool, no_extras: bool) -> None:
     """Open the native MuJoCo viewer to inspect a robot model (requires ``uv sync --extra sim``).
 
     Uses ``launch_passive``: close the window or Ctrl+C to exit. Needs a desktop ``DISPLAY`` (or X forwarding).
@@ -687,11 +692,12 @@ def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool, no_extras: 
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
     try:
+        show_ui = not no_viewer_panels
         with mujoco.viewer.launch_passive(
             model,
             data,
-            show_left_ui=show_viewer_ui,
-            show_right_ui=show_viewer_ui,
+            show_left_ui=show_ui,
+            show_right_ui=show_ui,
         ) as viewer:
             click.echo("MuJoCo viewer open — close the window or Ctrl+C to exit.")
             while viewer.is_running():
@@ -703,6 +709,72 @@ def view_mujoco(robot: str, merge_scene: bool, show_viewer_ui: bool, no_extras: 
             f"Viewer failed ({e!r}). On headless hosts use X11 forwarding or run with a local DISPLAY.",
             err=True,
         )
+        sys.exit(1)
+
+
+@main.command(
+    "tune-mujoco-home",
+    short_help="Simulate GUI: pose the robot, then print MJCF <key ctrl=.../> for home",
+)
+@click.option(
+    "--robot",
+    default="rby1",
+    help="Robot key for get_robot_mjcf_path when --mjcf is omitted (rby1, galaxea_r1, innate_mars, …).",
+)
+@click.option(
+    "--mjcf",
+    "mjcf_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Explicit MJCF (overrides --robot), e.g. a merged MolmoSpaces wrapper.",
+)
+@click.option(
+    "--apply-home",
+    is_flag=True,
+    help="Apply keyframe 'home' first (keeps base free joint). Skip for merged scenes if unsure.",
+)
+@click.option(
+    "--base-body",
+    "base_body_name",
+    default="base_link",
+    show_default=True,
+    help="Body with the free joint when using --apply-home.",
+)
+def tune_mujoco_home(
+    robot: str,
+    mjcf_path: Path | None,
+    apply_home: bool,
+    base_body_name: str,
+) -> None:
+    """Open MuJoCo **Simulate**, pose joints, close the window — prints ``<key name=\"home\" ctrl=.../>``.
+
+    Uses the same actuator-order convention as ``galaxea_r1.xml`` / stationary fill. Needs DISPLAY.
+
+    Examples:
+      emet tune-mujoco-home --robot rby1
+      emet tune-mujoco-home --mjcf path/to/molmospaces_merged_xxx.xml
+      emet tune-mujoco-home --robot galaxea_r1 --apply-home
+    """
+    from emet.simulation.mujoco_home_tune import run_tune_home_gui
+    from emet.utils.assets import get_robot_mjcf_path
+
+    if mjcf_path is not None:
+        path = str(mjcf_path.resolve())
+    else:
+        rk = robot.lower().replace("-", "_")
+        p = get_robot_mjcf_path(rk)
+        if p is None or not p.is_file():
+            click.echo(f"No MJCF for robot={robot!r}; pass --mjcf PATH.", err=True)
+            sys.exit(1)
+        path = str(p)
+    try:
+        run_tune_home_gui(
+            path,
+            apply_home_keyframe=apply_home,
+            base_body_name=base_body_name,
+        )
+    except FileNotFoundError as e:
+        click.echo(str(e), err=True)
         sys.exit(1)
 
 

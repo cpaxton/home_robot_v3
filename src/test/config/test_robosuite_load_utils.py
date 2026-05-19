@@ -103,6 +103,24 @@ def test_apply_home_snaps_arm_qpos_to_ctrl_on_merged_mjcf():
     np.testing.assert_allclose(data.qpos[q3], data.ctrl[a3], rtol=0, atol=1e-5)
 
 
+def test_format_key_ctrl_attr_matches_stationary_vector():
+    from emet.robots.rby1 import Rby1Backend
+    from emet.simulation.mujoco_home_tune import format_key_ctrl_attr
+    from emet.simulation.mujoco_stationary_control import compute_stationary_ctrl_vector
+
+    spec = Rby1Backend().get_spec()
+    path = spec.mjcf_path
+    if not path:
+        pytest.skip("no mjcf_path on spec")
+    model = mujoco.MjModel.from_xml_path(path)
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    s = format_key_ctrl_attr(model, data)
+    assert len(s.split()) == int(model.nu)
+    u = compute_stationary_ctrl_vector(model, data)
+    np.testing.assert_allclose(np.array([float(x) for x in s.split()]), u, rtol=0, atol=1e-9)
+
+
 def test_stationary_ctrl_full_vector_matches_qpos_for_spec_hinges():
     """Merged models need ``ctrl`` length ``nu``; position actuators should track ``qpos`` at rest."""
     from emet.robots.rby1 import Rby1Backend

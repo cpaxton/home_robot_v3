@@ -14,6 +14,7 @@ this server keeps the robosuite robot in the scene and exposes the same
 ZMQ protocol as MujocoZmqServer.
 """
 
+import math
 import os
 import threading
 import time
@@ -126,13 +127,16 @@ class RobosuiteZmqServer(BaseZmqServer):
         # After MolmoSpaces autoplace, ``qpos0`` holds the chosen free-joint pose; see
         # :meth:`_restore_merged_base_freejoint_from_qpos0` after physics stabilize.
         self._molmospaces_autoplace_snap_qpos0 = False
+        # After spawn / resettle, lock the base free joint while idle (no nav goal) so gravity does not
+        # drop a floating base through the floor (wheels are visual-only on Galaxea / rby1).
+        self._stationary_base_freejoint_qpos: np.ndarray | None = None
         # Stationary joint-position targets mirrored each physics step onto ``data.ctrl`` (see
         # :meth:`_apply_joint_ctrl_hold_to_actuators`). Same idea as MolmoSpaces ``set_to_stationary``
         # + ``compute_control`` (see comments on that method).
         self._joint_ctrl_hold: np.ndarray | None = None
-        # When False, :meth:`_apply_joint_ctrl_hold_to_actuators` copies that spec row from the
-        # transmission stationary vector (current ``q``) into ``_joint_ctrl_hold`` before overlay.
-        # ZMQ ``joint`` actions set True so streamed / one-shot targets are not overwritten each substep.
+        # When False, :meth:`_refresh_unpinned_joint_ctrl_hold_from_stationary` copies that spec row
+        # from the transmission stationary vector (current ``q``) into ``_joint_ctrl_hold``.
+        # ZMQ ``joint`` actions set True so streamed / one-shot targets are not overwritten on refresh.
         self._joint_ctrl_hold_client_pin: np.ndarray | None = None
         self._mujoco_stationary: MujocoStationaryControl = (
             mujoco_stationary_control
@@ -160,12 +164,13 @@ class RobosuiteZmqServer(BaseZmqServer):
         )
 
     def _mujoco_ctrl_debug_pd_tracking(self) -> str:
-        """Torso / limb diagnostics meaningful with per-step ``ctrl≈qpos`` re-sync.
+        """Torso / limb diagnostics (``Δq0`` vs MJCF ``qpos0``, ``dq``, actuator / constraint torques).
 
-        With unpinned spec rows, :meth:`_apply_joint_ctrl_hold_to_actuators` keeps ``hold`` and ``ctrl`` in
-        step with **current** ``qpos`` each substep, so ``q - ctrl`` stays ~0 and does **not** show a “limp”
-        joint. Use ``Δq0 = q - qpos0`` (drift from MJCF reference), ``dq``, ``actuator_force`` (scalar actuator
-        output), and ``qfrc_actuator`` on the joint dof instead.
+        In the realtime sim loop, unpinned :attr:`_joint_ctrl_hold` rows are **not** overwritten from
+        ``q`` each tick (that would retarget PD every frame and kill restoring torque). They advance
+        only via :meth:`_sync_actuator_ctrl_from_joint_positions`, ZMQ ``joint`` (pinned rows), or
+        :meth:`_snapshot_spec_hold_from_ctrl`. ``ctrl`` is fixed across substeps; ``q - ctrl`` shows
+        tracking error for unpinned joints.
         """
         if self._mjmodel is None or self._mjdata is None:
             return ""
@@ -257,11 +262,89 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         head = (
             f"pd torso_agg max|Δq0|={max_abs_dq0:.4f} max|dq|={max_abs_dq:.4f} "
-            f"(unpinned hold tracks q each substep — use Δq0 vs qpos0 to see drift) | hip: {hip_line}"
+            f"(unpinned hold fixed until sync / joint / head_to; Δq0 vs qpos0 = keyframe drift) | hip: {hip_line}"
         )
         if torso_chunks:
             return head + " | " + " ; ".join(torso_chunks)
         return head
+
+    def _mujoco_ctrl_debug_base_stability(self) -> str:
+        """Base free-joint orientation (deg), twist, COM height — for tipping / fall-over diagnosis.
+
+        Call only with ``_mj_lock`` held. Uses ``base_link`` free-joint quaternion and qvel layout
+        (angular wx,wy,wz then linear vx,vy,vz in world frame).
+        """
+        if self._mjmodel is None or self._mjdata is None:
+            return "base: (no model)"
+        addrs = self._base_freejoint_addrs()
+        if addrs is None:
+            return "base: (no free joint on base_link)"
+        qadr, vadr = addrs
+        d = self._mjdata
+        qw = float(d.qpos[qadr + 3])
+        qx = float(d.qpos[qadr + 4])
+        qy = float(d.qpos[qadr + 5])
+        qz = float(d.qpos[qadr + 6])
+        norm = math.hypot(qw, qx, qy, qz)
+        if norm < 1e-9:
+            return "base: (invalid quaternion)"
+        qw, qx, qy, qz = qw / norm, qx / norm, qy / norm, qz / norm
+        # Tait–Bryan ZYX (yaw, pitch, roll) in radians; pitch = rotation about body Y.
+        sinp = 2.0 * (qw * qy - qz * qx)
+        pitch = math.asin(float(np.clip(sinp, -1.0, 1.0)))
+        roll = math.atan2(2.0 * (qw * qx + qy * qz), 1.0 - 2.0 * (qx * qx + qy * qy))
+        yaw = math.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
+        r_deg, p_deg, y_deg = math.degrees(roll), math.degrees(pitch), math.degrees(yaw)
+        v0 = int(vadr)
+        wv = np.asarray(d.qvel[v0 : v0 + 3], dtype=np.float64).ravel()
+        lv = np.asarray(d.qvel[v0 + 3 : v0 + 6], dtype=np.float64).ravel()
+        wn = float(np.linalg.norm(wv))
+        ln = float(np.linalg.norm(lv))
+        bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, self._spec.base_link_name)
+        z = float(d.xpos[bid, 2]) if 0 <= bid < int(self._mjmodel.nbody) else float("nan")
+        # Body X (forward) and Z (up) axes in world: xmat rows are body axes expressed in world (MuJoCo).
+        R = np.asarray(d.xmat[bid], dtype=np.float64).reshape(3, 3)
+        up_z = float(R[2, 2])
+        fwd_z = float(R[0, 2])
+        floor_z = float("nan")
+        zb_place = float("nan")
+        if bid >= 0:
+            try:
+                from emet.simulation.molmospaces_spawn import (
+                    effective_floor_geom_name,
+                    robot_placement_bottom_z,
+                    walkable_floor_z_at_xy,
+                )
+
+                floor_nm = effective_floor_geom_name(self._mjmodel)
+                x, y = float(d.xpos[bid, 0]), float(d.xpos[bid, 1])
+                zf = walkable_floor_z_at_xy(
+                    self._mjmodel,
+                    d,
+                    x,
+                    y,
+                    floor_geom_name=floor_nm,
+                    exclude_body_id=int(bid),
+                )
+                if zf is not None:
+                    floor_z = float(zf)
+                rb = molmospaces_spawn._bodies_descending_from(self._mjmodel, int(bid))
+                zb = robot_placement_bottom_z(
+                    self._mjmodel,
+                    d,
+                    base_body_name=self._spec.base_link_name,
+                    robot_bodies=rb,
+                )
+                if zb is not None:
+                    zb_place = float(zb)
+            except Exception:
+                pass
+        pen = zb_place - floor_z if np.isfinite(zb_place) and np.isfinite(floor_z) else float("nan")
+        return (
+            f"base rpy_deg=({r_deg:.2f},{p_deg:.2f},{y_deg:.2f}) z={z:.4f} "
+            f"z_floor={floor_z:.4f} zb_place={zb_place:.4f} pen={pen:+.4f} "
+            f"|ω|={wn:.4f} |v|={ln:.4f} up·ẑ={up_z:.3f} fwd·ẑ={fwd_z:.3f}"
+        )
 
     def _mujoco_ctrl_debug_summary(self) -> str:
         """One-line diagnostics (call with ``_mj_lock`` held)."""
@@ -301,11 +384,13 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._ctrl_debug_initial_logs_remaining -= 1
             logger.info(f"[mujoco_ctrl_debug] after_apply {self._mujoco_ctrl_debug_summary()}")
             logger.info(f"[mujoco_ctrl_debug] after_apply {self._mujoco_ctrl_debug_pd_tracking()}")
+            logger.info(f"[mujoco_ctrl_debug] after_apply_base {self._mujoco_ctrl_debug_base_stability()}")
             return
         # ~0.5 s at 80 Hz × 6 substeps
         if self._ctrl_debug_periodic_counter % 240 == 0:
             logger.info(f"[mujoco_ctrl_debug] periodic {self._mujoco_ctrl_debug_summary()}")
             logger.info(f"[mujoco_ctrl_debug] periodic {self._mujoco_ctrl_debug_pd_tracking()}")
+            logger.info(f"[mujoco_ctrl_debug] periodic_base {self._mujoco_ctrl_debug_base_stability()}")
 
     @property
     def spec(self) -> RobotSpec:
@@ -428,6 +513,36 @@ class RobosuiteZmqServer(BaseZmqServer):
             qadr = int(addrs[0])
             self._mjmodel.qpos0[qadr : qadr + 7] = self._mjdata.qpos[qadr : qadr + 7]
             self._molmospaces_autoplace_snap_qpos0 = True
+
+    def _snapshot_stationary_base_freejoint_pose(self) -> None:
+        """Remember base free-joint ``qpos`` for idle sim (see :meth:`_hold_stationary_base_freejoint_if_idle`)."""
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        addrs = self._base_freejoint_addrs()
+        if addrs is None:
+            self._stationary_base_freejoint_qpos = None
+            return
+        qadr, _ = addrs
+        self._stationary_base_freejoint_qpos = np.array(
+            self._mjdata.qpos[qadr : qadr + 7], dtype=np.float64, copy=True
+        )
+
+    def _hold_stationary_base_freejoint_if_idle(self) -> None:
+        """While there is no navigation goal, pin the base free joint to the post-spawn snapshot."""
+        if self._nav_goal_world is not None:
+            return
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        snap = self._stationary_base_freejoint_qpos
+        if snap is None or int(snap.shape[0]) != 7:
+            return
+        addrs = self._base_freejoint_addrs()
+        if addrs is None:
+            return
+        qadr, vadr = addrs
+        self._mjdata.qpos[qadr : qadr + 7] = snap
+        if vadr >= 0:
+            self._mjdata.qvel[vadr : vadr + 6] = 0.0
 
     def _restore_merged_base_freejoint_from_qpos0(self) -> None:
         """Put ``base_link`` free joint back to ``qpos0`` after :meth:`_stabilize_physics_state_after_load`.
@@ -737,17 +852,24 @@ class RobosuiteZmqServer(BaseZmqServer):
             if aid >= 0:
                 hold[i] = float(full[aid])
 
-    def _apply_joint_ctrl_hold_to_actuators(self) -> None:
+    def _apply_joint_ctrl_hold_to_actuators(self, *, refresh_unpinned_hold: bool = True) -> None:
         """Recompute full stationary ``ctrl`` from ``qpos``, then overlay :attr:`_joint_ctrl_hold`.
 
-        Unpinned hold rows are refreshed from current ``q`` each call so the overlay does not leave
-        stale ZMQ-era targets (which would pin ``ctrl`` while ``q`` drifts and saturate actuators).
+        When *refresh_unpinned_hold* is true, unpinned spec rows are copied from
+        :func:`~emet.simulation.mujoco_stationary_control.compute_stationary_ctrl_vector` (current ``q``).
+
+        **Realtime sim loop:** call with *refresh_unpinned_hold* **false** only. Do **not** refresh
+        unpinned hold each tick or substep from ``q``—that retargets PD continuously and removes
+        position stiffness (arms collapse). Unpinned targets are updated by
+        :meth:`_sync_actuator_ctrl_from_joint_positions`, ZMQ ``joint`` (pinned rows), or
+        :meth:`_snapshot_spec_hold_from_ctrl`.
 
         See :attr:`_mujoco_stationary` and :meth:`_sync_actuator_ctrl_from_joint_positions`.
         """
         if self._mjmodel is None or self._mjdata is None or self._joint_ctrl_hold is None:
             return
-        self._refresh_unpinned_joint_ctrl_hold_from_stationary()
+        if refresh_unpinned_hold:
+            self._refresh_unpinned_joint_ctrl_hold_from_stationary()
         self._mujoco_stationary.write_ctrl_with_spec_hold(
             self._mjmodel, self._mjdata, self._spec, self._joint_ctrl_hold
         )
@@ -762,7 +884,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._sync_actuator_ctrl_from_joint_positions()
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             for _ in range(8):
-                self._apply_joint_ctrl_hold_to_actuators()
+                self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                 mujoco.mj_step(self._mjmodel, self._mjdata)
             self._mjdata.qvel.fill(0.0)
             self._sync_actuator_ctrl_from_joint_positions()
@@ -1109,7 +1231,8 @@ class RobosuiteZmqServer(BaseZmqServer):
             with self._mj_lock:
                 self._step_base_navigation_drive()
                 for _ in range(self._mj_substeps_per_tick):
-                    self._apply_joint_ctrl_hold_to_actuators()
+                    self._hold_stationary_base_freejoint_if_idle()
+                    self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                     mujoco.mj_step(self._mjmodel, self._mjdata)
                     self._physics_steps_executed += 1
                     if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
@@ -1142,7 +1265,8 @@ class RobosuiteZmqServer(BaseZmqServer):
                     with self._mj_lock:
                         self._step_base_navigation_drive()
                         for _ in range(self._mj_substeps_per_tick):
-                            self._apply_joint_ctrl_hold_to_actuators()
+                            self._hold_stationary_base_freejoint_if_idle()
+                            self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                             mujoco.mj_step(self._mjmodel, self._mjdata)
                             self._physics_steps_executed += 1
                             if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
@@ -1203,10 +1327,11 @@ class RobosuiteZmqServer(BaseZmqServer):
                 # ``restore`` snaps the free base out of whatever pose stabilize drifted to; that jump
                 # can leave arms / contacts inconsistent with the spawn frame. Run a longer settle so
                 # PD + contacts re-equilibrate before ZMQ clients observe the scene (iTHOR + rby1).
-                for _ in range(72):
-                    self._apply_joint_ctrl_hold_to_actuators()
+                for _ in range(120):
+                    self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                     mujoco.mj_step(self._mjmodel, self._mjdata)
-                self._mjdata.qvel.fill(0.0)
+                # Avoid a hard velocity zero here: it injects impulses while contacts are loaded and
+                # can excite the torso PD chain before the realtime loop starts.
                 self._sync_actuator_ctrl_from_joint_positions()
                 mujoco.mj_forward(self._mjmodel, self._mjdata)
                 if molmospaces_spawn.resettle_free_base_z_at_current_xy_preserving_yaw(
@@ -1222,6 +1347,9 @@ class RobosuiteZmqServer(BaseZmqServer):
                     self._sync_actuator_ctrl_from_joint_positions()
                     mujoco.mj_forward(self._mjmodel, self._mjdata)
                 np.copyto(self._mjmodel.qpos0, self._mjdata.qpos)
+        if self._mjmodel is not None and self._mjdata is not None:
+            with self._mj_lock:
+                self._snapshot_stationary_base_freejoint_pose()
         if pl_debug and self._mjmodel is not None and self._mjdata is not None:
             with self._mj_lock:
                 log_post_load_diagnostics(
@@ -1237,6 +1365,9 @@ class RobosuiteZmqServer(BaseZmqServer):
                     self._mjdata,
                     n_steps=24,
                     sync_ctrl=self._sync_actuator_ctrl_from_joint_positions,
+                    before_physics_step=lambda: self._apply_joint_ctrl_hold_to_actuators(
+                        refresh_unpinned_hold=False
+                    ),
                 )
                 if mx is not None:
                     logger.info(f"[robosuite_load] post-stabilize 24-step probe max|qvel|={mx:.4f}")
@@ -1271,6 +1402,9 @@ class RobosuiteZmqServer(BaseZmqServer):
                     )
                     logger.info(f"[mujoco_ctrl_debug] pre_threads_pd {self._mujoco_ctrl_debug_pd_tracking()}")
                     logger.info(
+                        f"[mujoco_ctrl_debug] pre_threads_base {self._mujoco_ctrl_debug_base_stability()}"
+                    )
+                    logger.info(
                         "[mujoco_ctrl_debug] set EMET_MUJOCO_CTRL_DEBUG_VERBOSE=1 for full lines "
                         "(Δq0 vs qpos0, dq, F_act, τ_dof, τ_con) on all torso joints + arm1 pair."
                     )
@@ -1289,7 +1423,8 @@ class RobosuiteZmqServer(BaseZmqServer):
             logger.info(
                 f"[mujoco_ctrl_debug] physics mode={mode!r}; first "
                 f"{self._ctrl_debug_initial_logs_remaining} apply cycles at INFO, then every 240 applies; "
-                "second line: torso hip + max|Δq0| vs qpos0 (q−ctrl not diagnostic when unpinned hold tracks q)."
+                "second line: torso PD; third line: base rpy/tilt (fall-over). "
+                "Unpinned hold: no per-tick q→hold refresh in sim loop."
             )
         print("Server running. Press Ctrl+C to stop.", flush=True)
 

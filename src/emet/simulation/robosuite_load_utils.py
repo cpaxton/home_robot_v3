@@ -183,8 +183,13 @@ def probe_max_qvel_unforced_steps(
     *,
     n_steps: int,
     sync_ctrl: Any,
+    before_physics_step: Any | None = None,
 ) -> float | None:
     """Run *n_steps* ``mj_step`` with zero navigation after *sync_ctrl*; restore qpos/qvel/ctrl.
+
+    *before_physics_step*: optional callable invoked with no args before each ``mj_step`` (e.g. apply
+    stationary ``ctrl`` + spec hold in :class:`RobosuiteZmqServer`). Without it, ``ctrl`` is frozen
+    at the post-*sync_ctrl* snapshot, which can mis-report stability for PD-driven models.
 
     Returns max |qvel| during probe, or None on failure. Caller should hold the sim lock.
     """
@@ -200,6 +205,8 @@ def probe_max_qvel_unforced_steps(
         c0 = np.array(data.ctrl, copy=True) if data.ctrl.size else None
         mx = 0.0
         for _ in range(int(n_steps)):
+            if before_physics_step is not None:
+                before_physics_step()
             mujoco.mj_step(model, data)
             mx = max(mx, max_qvel_abs(data))
         np.copyto(data.qpos, q0)
