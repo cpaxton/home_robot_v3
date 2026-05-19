@@ -40,6 +40,12 @@ def test_innate_mars_spec():
     assert s.dynamem_depth_source_hint == "da3"
     assert s.default_dynav_config is None
     assert s.planar_base_joint_names == ("base_x", "base_y", "base_yaw")
+    assert s.planar_spawn_xy_extra_margin_m == 0.50
+    assert s.planar_spawn_clip_edge_pad_m is None
+    assert s.planar_spawn_clip_guard_body_name is None
+    assert s.planar_spawn_clip_guard_body_names == ("ee_link", "link5", "link3")
+    assert s.planar_spawn_clip_guard_pad_m == 0.40
+    assert s.planar_spawn_robocasa_first_clearance_m == 0.068
     assert s.robosuite_rgb_depth_ops == ("flipud",)
 
 

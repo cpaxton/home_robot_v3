@@ -192,6 +192,9 @@ class DynamemController(BaseController):
 
         self._depth_source = str(self.parameters.get("depth_source", "sensor")).lower()
         self._da3_estimator = None
+        self._da3_infer_every_n = max(1, int(self.parameters.get("da3_infer_every_n", 2) or 1))
+        self._da3_last_depth: np.ndarray | None = None
+        self._da3_use_stereo = bool(self.parameters.get("da3_stereo", False))
         self._debug_perfect_sensor_depth = bool(
             self.parameters.get("debug_perfect_sensor_depth", False)
         ) or _env_truthy("EMET_DYNAMEM_PERFECT_DEPTH")
@@ -497,6 +500,7 @@ class DynamemController(BaseController):
             rgb_right,
             camera_K_right,
             camera_pose_right,
+            da3_use_stereo=self._da3_use_stereo,
         )
 
     def _rerun_live_status_markdown(self) -> str:
@@ -549,15 +553,34 @@ class DynamemController(BaseController):
             return
         self.obs_count += 1
         rgb, sensor_depth, K, camera_pose = obs.rgb, obs.depth, obs.camera_K, obs.camera_pose
-        depth = self._resolve_depth_map(
-            rgb,
-            sensor_depth,
-            K,
-            camera_pose,
-            rgb_right=getattr(obs, "head_rgb_right", None),
-            camera_K_right=getattr(obs, "head_camera_K_right", None),
-            camera_pose_right=getattr(obs, "head_camera_pose_right", None),
+        run_da3_full = (
+            self._da3_infer_every_n <= 1 or (self.obs_count - 1) % self._da3_infer_every_n == 0
         )
+        depth: np.ndarray | None
+        if (
+            not run_da3_full
+            and self._depth_source in ("da3", "auto")
+            and not getattr(self, "_debug_perfect_sensor_depth", False)
+            and self._da3_last_depth is not None
+            and self._da3_last_depth.shape[:2] == rgb.shape[:2]
+        ):
+            depth = np.asarray(self._da3_last_depth, dtype=np.float32, copy=True)
+            self._depth_map_from_da3_infer = True
+            if self._depth_source == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
+                depth = np.asarray(sensor_depth, dtype=np.float32)
+                self._depth_map_from_da3_infer = False
+        else:
+            depth = self._resolve_depth_map(
+                rgb,
+                sensor_depth,
+                K,
+                camera_pose,
+                rgb_right=getattr(obs, "head_rgb_right", None),
+                camera_K_right=getattr(obs, "head_camera_K_right", None),
+                camera_pose_right=getattr(obs, "head_camera_pose_right", None),
+            )
+            if depth is not None and getattr(self, "_depth_map_from_da3_infer", False):
+                self._da3_last_depth = np.asarray(depth, dtype=np.float32).copy()
         if depth is None:
             logger.error(f"No depth map available (depth_source={self._depth_source!r}); skipping voxel update.")
             self.robot.set_mapping_depth_for_rerun(None)

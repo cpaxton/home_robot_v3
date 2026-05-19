@@ -43,6 +43,9 @@ da3_process_res: 378
 da3_clip_max_m: 4.0
 # Zero top image rows so textureless sky/ceiling does not become vertical obstacle sheets after unprojection.
 da3_ignore_sky_fraction_top: 0.16
+# Throughput defaults (tune for quality): reuse depth every other step; monocular DA3. Set ``da3_stereo: true`` for two-view.
+da3_infer_every_n: 2
+da3_stereo: false
 
 eqa:
   backend: qwen_vl

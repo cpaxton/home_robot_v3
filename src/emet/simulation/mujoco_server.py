@@ -380,6 +380,11 @@ def main(
             )
             logger.error(msg.format(e.filename))
             sys.exit(1)
+        if zmq_environment is not None and objects_info and isinstance(objects_info, dict):
+            hint = objects_info.get("_emet_spawn_hint_xyt")
+            if hint is not None:
+                zmq_environment = dict(zmq_environment)
+                zmq_environment["spawn_hint_xyt"] = hint
 
     # Default Stretch scene only when no path given (non-stretch uses None or explicit merged MJCF).
     if use_stretch and (scene_path is None or len(str(scene_path).strip()) == 0):
