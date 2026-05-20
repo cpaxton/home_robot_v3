@@ -12,6 +12,7 @@
 import importlib.resources as importlib_resources
 import re
 import timeit
+from pathlib import Path
 
 import numpy as np
 import urchin as urdf_loader
@@ -97,13 +98,17 @@ class URDFVisualizer:
             fk = self.urdf.visual_trimesh_fk(cfg=cfg)
         t1 = timeit.default_timer()
         t_meshes = {"mesh": [], "pose": [], "link": []}
-        for tm in fk:
+        for i, tm in enumerate(fk):
             pose = fk[tm]
             t_mesh = tm.copy()
             t_meshes["mesh"].append(t_mesh)
             t_meshes["pose"].append(pose)
-            # [:-4] to remove the .STL extension
-            t_meshes["link"].append(tm.metadata["file_name"][:-4] if "file_name" in tm.metadata.keys() else None)
+            # urchin/strech: visual meshes often lack ``file_name`` in metadata; use stable path names.
+            fn = tm.metadata.get("file_name") if isinstance(tm.metadata, dict) else None
+            if fn:
+                t_meshes["link"].append(Path(str(fn)).stem)
+            else:
+                t_meshes["link"].append(f"mesh_{i}")
         t2 = timeit.default_timer()
         if debug:
             print(f"[get_trimeshes method] Time to compute FK (ms): {1000 * (t1 - t0)}")

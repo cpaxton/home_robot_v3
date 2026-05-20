@@ -398,6 +398,12 @@ class InstanceMemoryController(BaseController):
         logger.info("Rotate in place")
         if audio_feedback:
             self.robot.say_sync("Rotating in place")
+        self.robot.move_to_nav_posture()
+        time.sleep(self._after_head_motion_sleep_t)
+        lf = getattr(self.robot, "look_front", None)
+        if callable(lf):
+            lf(blocking=True)
+            time.sleep(self._after_head_motion_sleep_t)
         if steps is None or steps <= 0:
             # Read the number of steps from the parameters
             if self._realtime_updates:

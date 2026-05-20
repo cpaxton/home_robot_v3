@@ -14,6 +14,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import os
+import time
 from collections import Counter
 from datetime import datetime
 from typing import Any
@@ -85,6 +86,10 @@ INIT_WRIST_ROLL = 0
 INIT_WRIST_YAW = 0
 INIT_HEAD_PAN = -1.57
 INIT_HEAD_TILT = -0.65
+
+# After look_front / move_to_nav_posture, wait briefly so the head reaches goal and depth/RGB
+# stabilize before base motion (Stretch ZMQ + mapping).
+DYNAMEM_HEAD_SETTLE_S = 0.25
 
 
 def _finite_xyz_traj_target(traj_target_point: Any) -> bool:
@@ -815,8 +820,10 @@ class DynamemController(BaseController):
             if not os.path.exists(self.log):
                 os.makedirs(self.log)
             rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")
+        self.robot.move_to_nav_posture()
+        self.robot.look_front(blocking=True)
+        time.sleep(DYNAMEM_HEAD_SETTLE_S)
         xyt = self.robot.get_base_pose()
-        self.robot.head_to(head_pan=0, head_tilt=-0.6, blocking=True)
         for _i in range(8):
             xyt[2] += 2 * np.pi / 8
             self.robot.move_base_to(xyt, blocking=True)
@@ -857,6 +864,10 @@ class DynamemController(BaseController):
 
         if len(res) > 0:
             print("Plan successful!")
+            # process_text ends with robot.say(...); re-sync nav posture + forward gaze before base moves.
+            self.robot.move_to_nav_posture()
+            self.robot.look_front(blocking=True)
+            time.sleep(DYNAMEM_HEAD_SETTLE_S)
             # This means that the robot has already finished all of its trajectories and should stop to manipulate the object.
             # We will append a nan and point coordinates of the target object on the trajectory to denote that the robot is reaching the target point
             if len(res) >= 2 and np.isnan(res[-2]).all():

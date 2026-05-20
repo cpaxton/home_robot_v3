@@ -218,8 +218,7 @@ class StretchURDFLogger(urdf_visualizer.URDFVisualizer):
         t1 = timeit.default_timer()
         self.link_poses = tms["pose"]
         self.link_names = tms["link"]
-        for link in self.link_names:
-            idx = self.link_names.index(link)
+        for idx, link in enumerate(self.link_names):
             rr.set_time_seconds("realtime", time.time())
             rr.log(
                 f"world/robot/mesh/{link}",
