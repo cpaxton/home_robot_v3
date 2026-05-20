@@ -110,7 +110,7 @@ Spinning **in place** should leave **static world geometry** (floor, furniture) 
 
 4. **Saved tensors** — `logs/memory_*/.../debug/` (see `SparseVoxelMap` `DEBUG_SUBDIR`) stores `rgb*.npy`, `depth*.npy`, `intrinsics*.npy`, `pose*.npy` per observation for offline replay.
 
-5. **Narrow the stack** — `emet debug-circle-rerun` (in-process sensor geometry) and `emet debug-da3-depth` (live ZMQ depth + Rerun) test projection without the full voxel pipeline.
+5. **Narrow the stack** — `emet debug-da3-depth` (live ZMQ depth + Rerun) tests projection without the full voxel pipeline.
 
 6. **Sensor vs DA3 sky mask** — Raw **sensor** depth from `auto` or perfect-depth mode does **not** get `da3_ignore_sky_fraction_top` (that mask applies only to DA3-produced maps). Ceiling rows can add bogus vertical structure; adjust dynav height / depth clamps or use DA3 when you need that mask on inferred depth.
 

@@ -82,6 +82,26 @@ def _settle_foot_clearance_kw(target_foot_clearance_above_floor_m: float | None)
     return {"target_foot_clearance_above_floor_m": float(target_foot_clearance_above_floor_m)}
 
 
+def _molmospaces_z_settle_options(
+    model: mujoco.MjModel,
+    *,
+    base_body_name: str,
+    robot_key: str | None,
+) -> tuple[dict[str, float], set[int] | None]:
+    """Foot-clearance kwargs and base+leg probe bodies for Molmo free-joint Z placement."""
+    stf: float | None = None
+    if robot_key:
+        rk = str(robot_key).strip()
+        if rk:
+            meta = load_molmospaces_spawn_metadata(rk)
+            if meta is not None and meta.molmospaces_target_foot_clearance_above_floor_m is not None:
+                stf = float(meta.molmospaces_target_foot_clearance_above_floor_m)
+    return (
+        _settle_foot_clearance_kw(stf),
+        support_collision_body_ids_for_base_z_placement(model, base_body_name),
+    )
+
+
 def resolve_floor_geom_name(model: mujoco.MjModel) -> str | None:
     """Best-effort walkable floor plane for iTHOR / Molmo / generic MJCF (not always named ``floor``)."""
     for name in ("floor", "Floor", "ground", "Ground"):
@@ -1406,6 +1426,8 @@ def _find_molmospaces_freejoint_xyz_pass(
     clip_erode_m: float,
     suppress_exterior_filter: bool,
     xy_priority: list[tuple[float, float]] | None = None,
+    settle_kw: dict[str, float] | None = None,
+    zb_probe_bodies: set[int] | None = None,
 ) -> tuple[float, float, float] | None:
     base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
     robot_bodies: set[int] = set()
@@ -1510,6 +1532,7 @@ def _find_molmospaces_freejoint_xyz_pass(
         f"clip_erode={clip_erode_m} max_rbound={max_geom_rbound} suppress_exterior={suppress_exterior_filter}"
     )
 
+    _settle_kw = dict(settle_kw or {})
     best_xy: tuple[float, float, float, float] | None = None  # x, y, z_floor, worst_score
     z_air_probe = max(8.0, 3.0 * float(model.stat.extent))
     for x, y in candidates:
@@ -1556,6 +1579,8 @@ def _find_molmospaces_freejoint_xyz_pass(
                     z_start=z,
                     robot_bodies=robot_bodies,
                     min_nonfloor_clearance=min_nonfloor_clearance,
+                    zb_probe_bodies=zb_probe_bodies,
+                    **_settle_kw,
                 )
                 if z_settled is None:
                     continue
@@ -1567,6 +1592,7 @@ def _find_molmospaces_freejoint_xyz_pass(
                     z_floor=float(z_floor),
                     robot_bodies=robot_bodies,
                     min_nonfloor_clearance=min_nonfloor_clearance,
+                    zb_height_bodies=zb_probe_bodies,
                 ):
                     continue
                 return (x, y, z_settled)
@@ -1601,6 +1627,8 @@ def _find_molmospaces_freejoint_xyz_pass(
             z_start=z_ref,
             robot_bodies=robot_bodies,
             min_nonfloor_clearance=min_nonfloor_clearance,
+            zb_probe_bodies=zb_probe_bodies,
+            **_settle_kw,
         )
         if z_settled is None:
             return None
@@ -1612,6 +1640,7 @@ def _find_molmospaces_freejoint_xyz_pass(
             z_floor=float(bz_floor),
             robot_bodies=robot_bodies,
             min_nonfloor_clearance=min_nonfloor_clearance,
+            zb_height_bodies=zb_probe_bodies,
         ):
             return None
         return (bx, by, z_settled)
@@ -1631,8 +1660,11 @@ def _try_spawn_at_xy_candidates(
     z_margins: tuple[float, ...],
     min_nonfloor_clearance: float,
     min_upward_clearance: float,
+    settle_kw: dict[str, float] | None = None,
+    zb_probe_bodies: set[int] | None = None,
 ) -> tuple[float, float, float] | None:
     """Single (x,y): walkable floor, upward clearance, z margin sweep + settle (shared by fallbacks)."""
+    _settle_kw = dict(settle_kw or {})
     z_air = max(8.0, 3.0 * float(model.stat.extent))
     if not write_freejoint_base_xyzw(
         model, data, base_body_name=base_body_name, x=float(x), y=float(y), z=z_air
@@ -1672,6 +1704,8 @@ def _try_spawn_at_xy_candidates(
                 z_start=z,
                 robot_bodies=robot_bodies,
                 min_nonfloor_clearance=min_nonfloor_clearance,
+                zb_probe_bodies=zb_probe_bodies,
+                **_settle_kw,
             )
             if z_settled is None:
                 continue
@@ -1683,6 +1717,7 @@ def _try_spawn_at_xy_candidates(
                 z_floor=float(z_floor),
                 robot_bodies=robot_bodies,
                 min_nonfloor_clearance=min_nonfloor_clearance,
+                zb_height_bodies=zb_probe_bodies,
             ):
                 continue
             return (x, y, z_settled)
@@ -1700,6 +1735,8 @@ def _fallback_spawn_near_clip_center(
     xy_clip_raw: tuple[float, float, float, float] | None,
     z_margins: tuple[float, ...],
     min_nonfloor_clearance: float,
+    settle_kw: dict[str, float] | None = None,
+    zb_probe_bodies: set[int] | None = None,
 ) -> tuple[float, float, float] | None:
     """Fallback: a few XY points near the collision clip center with looser ceiling / contact."""
     if xy_clip_raw is None:
@@ -1739,6 +1776,8 @@ def _fallback_spawn_near_clip_center(
                     z_margins=z_margins,
                     min_nonfloor_clearance=float(clear),
                     min_upward_clearance=min_up,
+                    settle_kw=settle_kw,
+                    zb_probe_bodies=zb_probe_bodies,
                 )
                 if got is not None:
                     return got
@@ -1770,8 +1809,12 @@ def find_molmospaces_freejoint_xyz(
     scene_label: str | None = None,
     merged_mjcf_path: str | None = None,
     environment: dict[str, Any] | None = None,
+    robot_key: str | None = None,
 ) -> tuple[float, float, float] | None:
     """Return a world-space base position (x, y, z) for the robot free joint, or None to keep defaults.
+
+    *robot_key* (e.g. ``RobotSpec.name``) loads optional ``molmospaces_spawn.json`` foot clearance
+    and uses base+leg collision bodies for vertical placement (rby1 / galaxea_r1).
 
     Requires **no meaningful penetration** (``contact.dist >= min_nonfloor_clearance``) vs scene
     geoms other than *floor* (tiny negative values are treated as numerical noise).
@@ -1807,6 +1850,9 @@ def find_molmospaces_freejoint_xyz(
         spawn_dbg(f"find: clip_probe=None floor_effective={floor_effective!r} label={scene_label!r}")
 
     occ_xy, occ_map_dbg = _ithor_occupancy_priority_xy(merged_mjcf_path, environment)
+    settle_kw, zb_probe = _molmospaces_z_settle_options(
+        model, base_body_name=base_body_name, robot_key=robot_key
+    )
 
     def _spawn_debug_finish(
         out: tuple[float, float, float] | None, how: str
@@ -1821,6 +1867,10 @@ def find_molmospaces_freejoint_xyz(
         )
         return out
 
+    _pass_common = dict(
+        settle_kw=settle_kw,
+        zb_probe_bodies=zb_probe,
+    )
     placed = _find_molmospaces_freejoint_xyz_pass(
         model,
         data,
@@ -1833,6 +1883,7 @@ def find_molmospaces_freejoint_xyz(
         clip_erode_m=0.30,
         suppress_exterior_filter=False,
         xy_priority=occ_xy if occ_xy else None,
+        **_pass_common,
     )
     if placed is not None:
         spawn_dbg(f"find: primary pass OK -> {placed}")
@@ -1850,6 +1901,7 @@ def find_molmospaces_freejoint_xyz(
         clip_erode_m=0.12,
         suppress_exterior_filter=False,
         xy_priority=occ_xy if occ_xy else None,
+        **_pass_common,
     )
     if placed_relaxed is not None:
         spawn_dbg(f"find: relaxed pass OK -> {placed_relaxed}")
@@ -1867,6 +1919,7 @@ def find_molmospaces_freejoint_xyz(
         clip_erode_m=0.06,
         suppress_exterior_filter=False,
         xy_priority=occ_xy if occ_xy else None,
+        **_pass_common,
     )
     if placed_ceiling_loose is not None:
         spawn_dbg(f"find: ceiling-loose pass OK -> {placed_ceiling_loose}")
@@ -1883,6 +1936,8 @@ def find_molmospaces_freejoint_xyz(
         xy_clip_raw=clip_probe,
         z_margins=z_margins,
         min_nonfloor_clearance=min_nonfloor_clearance,
+        settle_kw=settle_kw,
+        zb_probe_bodies=zb_probe,
     )
     if placed_fb is not None:
         spawn_dbg(f"find: clip-center fallback OK -> {placed_fb}")

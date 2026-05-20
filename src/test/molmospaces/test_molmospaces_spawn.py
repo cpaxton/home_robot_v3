@@ -78,6 +78,16 @@ def test_walkable_floor_z_uses_effective_floor_name():
     assert abs(z0) < 0.02
 
 
+def test_find_molmospaces_freejoint_xyz_accepts_robot_key():
+    """``RobosuiteZmqServer`` passes ``robot_key``; must not raise (regression: merge dropped param)."""
+    m = mujoco.MjModel.from_xml_string(SLAB_OVER_ORIGIN)
+    d = mujoco.MjData(m)
+    mujoco.mj_forward(m, d)
+    molmospaces_spawn.find_molmospaces_freejoint_xyz(
+        m, d, base_body_name="base_link", robot_key="rby1"
+    )
+
+
 def test_want_molmospaces_autoplace_off():
     from emet.simulation.molmospaces_spawn import want_molmospaces_autoplace
 
