@@ -166,6 +166,10 @@ class StretchZmqClient(AbstractRobotClient):
             pub_obs_port += port_offset
         self.recv_port = recv_port
         self.send_port = send_port
+        # reset() uses _mapping_depth_lock; create before any reset() (including below).
+        self._mapping_depth_lock = Lock()
+        self._mapping_depth_for_rerun: np.ndarray | None = None
+        self.reset()
 
         # Load parameters
         if parameters is None:
@@ -240,9 +244,6 @@ class StretchZmqClient(AbstractRobotClient):
         self._servo_lock = Lock()
         self._send_lock = Lock()
         self._emet_session_lock = Lock()
-        self._mapping_depth_lock = Lock()
-        self._mapping_depth_for_rerun: np.ndarray | None = None
-        self.reset()
 
         if enable_rerun_server:
             from emet.visualization.rerun import RerunVisualizer

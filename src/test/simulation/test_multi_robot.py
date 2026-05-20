@@ -150,6 +150,23 @@ def test_stretch_zmq_mapping_depth_copy_on_store():
     assert out is not None and float(out[1, 1]) == 1.0
 
 
+def test_stretch_zmq_client_init_before_mapping_depth_lock_regression():
+    """Regression: __init__ must not call reset() before _mapping_depth_lock exists."""
+    from unittest.mock import MagicMock, patch
+
+    from emet.controller.zmq_client import StretchZmqClient
+
+    with patch.object(StretchZmqClient, "_create_recv_socket", return_value=MagicMock()):
+        client = StretchZmqClient(
+            robot_ip="127.0.0.1",
+            start_immediately=False,
+            enable_rerun_server=False,
+        )
+    client.reset()
+    assert client._mapping_depth_lock is not None
+    assert client.peek_mapping_depth_for_rerun() is None
+
+
 def test_stretch_zmq_client_backward_compat():
     """HomeRobotZmqClient alias still works."""
     from emet.controller import HomeRobotZmqClient, StretchZmqClient
