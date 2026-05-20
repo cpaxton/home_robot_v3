@@ -327,16 +327,23 @@ class RerunVisualizer:
         num_frames: int = 0,
         mjcf_robot: tuple[str, tuple[str, ...], int, str] | None = None,
         rerun_native_viewer: bool = False,
+        mjcf_show_visual_mesh: bool = True,
+        mjcf_show_skeleton: bool = False,
     ):
         """Rerun visualizer class
         Args:
-            display_robot_mesh (bool): Display robot mesh (Stretch URDF) or MJCF skeleton when *mjcf_robot* is set
+            display_robot_mesh (bool): Display robot mesh (Stretch URDF) or MJCF assets when *mjcf_robot* is set
             spawn_gui (bool): If True, native Rerun desktop viewer (TCP). Default False (browser via ``rr.serve``).
             open_browser (bool): When using the web server, open a browser tab if a display exists.
             headless (bool): If True, no native viewer and no auto-open browser; use the :9090 URL manually.
             rerun_native_viewer (bool): Same as env ``RERUN_NATIVE_VIEWER=1``: use the native app, not the browser.
             server_memory_limit (str): Server memory limit E.g. 2GB or 20%
             collapse_panels (bool): Set to false to have customizable rerun panels
+            mjcf_show_visual_mesh (bool): For MJCF robots, log triangle meshes each ``step`` (re-uploads vertices;
+                can be heavy). Paths are under ``world/robot/mjcf_visual/…`` in nav/map world (not parented under
+                ``world/robot`` transform). Set False to disable.
+            mjcf_show_skeleton (bool): For MJCF robots, log per-body axis frames under ``world/robot/mjcf``. Default
+                False when using solid meshes; set True for kinematic debugging.
         """
         # RERUN_HEADLESS=1 forces no native viewer and no auto-open browser (web server only).
         if os.environ.get("RERUN_HEADLESS", "").lower() in ("1", "true", "yes"):
@@ -407,15 +414,25 @@ class RerunVisualizer:
         self.show_camera_point_clouds = show_camera_point_clouds
 
         self.mjcf_skeleton = None
+        self.mjcf_mesh_logger = None
+        self._mjcf_visual_entity_prefix = "world/robot/mjcf_visual"
         self.urdf_logger = None
         if mjcf_robot is not None and display_robot_mesh:
             mjcf_path, joint_names, dof, base_link = mjcf_robot
-            try:
-                from emet.visualization.mjcf_rerun_robot import MjcfBodySkeletonLogger
+            if mjcf_show_skeleton:
+                try:
+                    from emet.visualization.mjcf_rerun_robot import MjcfBodySkeletonLogger
 
-                self.mjcf_skeleton = MjcfBodySkeletonLogger(mjcf_path, joint_names, dof, base_link)
-            except Exception as e:
-                logger.warning("MJCF Rerun robot skeleton disabled (%s).", e)
+                    self.mjcf_skeleton = MjcfBodySkeletonLogger(mjcf_path, joint_names, dof, base_link)
+                except Exception as e:
+                    logger.warning("MJCF Rerun robot skeleton disabled (%s).", e)
+            if mjcf_show_visual_mesh:
+                try:
+                    from emet.visualization.mjcf_rerun_robot import MjcfVisualMeshLogger
+
+                    self.mjcf_mesh_logger = MjcfVisualMeshLogger(mjcf_path, joint_names, dof, base_link)
+                except Exception as e:
+                    logger.warning("MJCF Rerun visual mesh disabled (%s).", e)
         if self.mjcf_skeleton is None and display_robot_mesh and mjcf_robot is None:
             self.urdf_logger = StretchURDFLogger()
             self.urdf_logger.load_robot_mesh(use_collision=False)
@@ -1369,6 +1386,10 @@ class RerunVisualizer:
             self.log_head_camera(head_cam, mapping_depth=mapping_depth)
             self.log_ee_camera(head_cam)
 
+            if self.display_robot_mesh and getattr(self, "mjcf_mesh_logger", None) is not None:
+                self.mjcf_mesh_logger.log_meshes_world(
+                    rr, obs_pose, entity_prefix=self._mjcf_visual_entity_prefix
+                )
             if self.display_robot_mesh and getattr(self, "mjcf_skeleton", None) is not None:
                 self.mjcf_skeleton.apply_and_log(obs_pose)
             elif self.display_robot_mesh and getattr(self, "urdf_logger", None) is not None:

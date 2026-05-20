@@ -15,7 +15,12 @@ import pytest
 from emet.core.zmq_protocol import EMET_ZMQ_SESSION_KEY
 from emet.robots.galaxea_r1 import R1_JOINT_NAMES
 from emet.robots.innate_mars import INNATE_MARS_JOINT_NAMES
-from emet.visualization.mjcf_rerun_robot import MjcfBodySkeletonLogger, _body_T_world, apply_zmq_obs_to_mujoco_data
+from emet.visualization.mjcf_rerun_robot import (
+    MjcfBodySkeletonLogger,
+    MjcfVisualMeshLogger,
+    _body_T_world,
+    apply_zmq_obs_to_mujoco_data,
+)
 
 _MJCF = Path(__file__).resolve().parents[2] / "emet" / "assets" / "robot" / "galaxea_r1" / "galaxea_r1.xml"
 _INNATE_MJCF = Path(__file__).resolve().parents[2] / "emet" / "assets" / "robot" / "innate_mars" / "innate_mars.xml"
@@ -70,3 +75,37 @@ def test_innate_mars_base_relative_body_transforms():
     Te = _body_T_world(data, int(ee))
     Trel = np.linalg.inv(Tb) @ Te
     assert np.allclose(Tb @ Trel, Te, atol=1e-9)
+
+
+@pytest.mark.skipif(not _INNATE_MJCF.is_file(), reason="innate_mars MJCF not present")
+def test_mjcf_visual_mesh_logger_smoke():
+    """MjcfVisualMeshLogger logs mesh geoms without raising (Rerun + MuJoCo)."""
+    pytest.importorskip("mujoco")
+    rr = pytest.importorskip("rerun")
+    rr.init("test_mjcf_visual_mesh_smoke", spawn=False)
+    log = MjcfVisualMeshLogger(_INNATE_MJCF, tuple(INNATE_MARS_JOINT_NAMES), len(INNATE_MARS_JOINT_NAMES), "base_link")
+    joint_names = tuple(INNATE_MARS_JOINT_NAMES)
+    obs = {
+        "gps": [0.0, 0.0],
+        "compass": [0.0],
+        "joint": [0.05, -0.04, 0.2] + [0.15, -0.1, 0.2, 0.0, 0.0, 0.0] + [0.0] * (len(joint_names) - 9),
+        EMET_ZMQ_SESSION_KEY: {"navigation_origin_xyt": [0.0, 0.0, 0.0]},
+    }
+    log.log_meshes_world(rr, obs, entity_prefix="world/robot/mjcf_visual")
+    assert log._geom_mesh_cache, "expected at least one mesh geom in innate_mars MJCF"
+
+
+@pytest.mark.skipif(not _MJCF.is_file(), reason="galaxea_r1 MJCF not present")
+def test_mjcf_visual_mesh_logger_galaxea_smoke():
+    pytest.importorskip("mujoco")
+    rr = pytest.importorskip("rerun")
+    rr.init("test_mjcf_visual_mesh_galaxea_smoke", spawn=False)
+    log = MjcfVisualMeshLogger(_MJCF, R1_JOINT_NAMES, 26, "base_link")
+    obs = {
+        "gps": [0.1, -0.2],
+        "compass": [0.3],
+        "joint": [0.01] * 26,
+        EMET_ZMQ_SESSION_KEY: {"navigation_origin_xyt": [1.0, 2.0, 0.5]},
+    }
+    log.log_meshes_world(rr, obs, entity_prefix="world/robot/mjcf_visual")
+    assert log._geom_mesh_cache
