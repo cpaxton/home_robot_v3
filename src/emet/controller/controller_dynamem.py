@@ -808,14 +808,14 @@ class DynamemController(BaseController):
         Let the robot look around to check its surroudings.
         Rotating the robot head to compensate for the narrow field of view of realsense head camera
         """
-        print("*" * 10, "Look around to check", "*" * 10)
+        logger.info("Look around: sweeping head")
         for pan in [0.6, -0.2, -1.0, -1.8]:
             tilt = -0.6
             self.robot.head_to(pan, tilt, blocking=True)
             self.update()
 
     def rotate_in_place(self):
-        print("*" * 10, "Rotate in place", "*" * 10)
+        logger.info("Rotate in place: scanning environment")
         if self.save_rerun:
             if not os.path.exists(self.log):
                 os.makedirs(self.log)
@@ -863,7 +863,7 @@ class DynamemController(BaseController):
             res = self.process_text("", start)
 
         if len(res) > 0:
-            print("Plan successful!")
+            logger.info("Navigation plan OK; executing trajectory")
             # process_text ends with robot.say(...); re-sync nav posture + forward gaze before base moves.
             self.robot.move_to_nav_posture()
             self.robot.look_front(blocking=True)
@@ -894,7 +894,7 @@ class DynamemController(BaseController):
                 self.update()
                 return False, None
         else:
-            print("Failed. Try again!")
+            logger.warning("No plan from process_text; try again.")
             return None, None
 
     def run_exploration(self):
@@ -906,7 +906,7 @@ class DynamemController(BaseController):
         # "" means the robot has not received any text query from the user and should conduct exploration just to better know the environment
         status, _ = self.execute_action("")
         if status is None:
-            print("Exploration failed! Perhaps nowhere to explore!")
+            logger.warning("Exploration failed (no valid plan or frontier).")
             return False
         return True
 
@@ -915,7 +915,7 @@ class DynamemController(BaseController):
         Process the text query and return the trajectory for the robot to follow.
         """
 
-        print("Processing", text, "starts")
+        logger.debug("process_text: %r", text)
 
         self.rerun_visualizer.clear_identity("world/object")
         self.rerun_visualizer.clear_identity("world/xyt_goal")
@@ -931,7 +931,7 @@ class DynamemController(BaseController):
         waypoints = None
 
         if text is not None and text != "" and self.space.traj is not None:
-            print("saved traj", self.space.traj)
+            logger.debug("Reusing saved trajectory target: %s", self.space.traj)
             traj_target_point = self.space.traj[-1]
             if hasattr(self.encoder, "feature_matching_threshold") and self.voxel_map.verify_point(
                 text,
@@ -945,7 +945,7 @@ class DynamemController(BaseController):
                 localized_point = traj_target_point
                 debug_text += "## Reusing saved trajectory target; semantic re-check was not decisive.\n"
 
-        print("Target verification finished")
+        logger.debug("Target verification done (localized_point=%s)", localized_point is not None)
 
         if text is not None and text != "" and localized_point is None:
             (
@@ -954,7 +954,7 @@ class DynamemController(BaseController):
                 obs,
                 pointcloud,
             ) = self.voxel_map.localize_text(text, debug=True, return_debug=True)
-            print("Target point selected!")
+            logger.debug("Localized target from map for query %r", text)
 
         # Do Frontier based exploration
         if text is None or text == "" or localized_point is None:
@@ -997,13 +997,13 @@ class DynamemController(BaseController):
 
         point = self.space.sample_navigation(start_pose, self.planner, localized_point)
 
-        print("Navigation endpoint selected")
+        logger.debug("Navigation endpoint: %s", point)
 
         waypoints = None
 
         if point is None:
             res = None
-            print("Unable to find any target point, some exception might happen")
+            logger.warning("No navigation endpoint sampled (planner may fail).")
         else:
             res = self.planner.plan(start_pose, point)
 
@@ -1011,7 +1011,7 @@ class DynamemController(BaseController):
             waypoints = [pt.state for pt in res.trajectory]
         elif res is not None:
             waypoints = None
-            print("[FAILURE]", res.reason)
+            logger.warning("Planner failure: %s", res.reason)
 
         if point is not None:
             self.rerun_visualizer.update_nav_goal(np.asarray(point, dtype=np.float64))
@@ -1033,7 +1033,7 @@ class DynamemController(BaseController):
                 if isinstance(localized_point, torch.Tensor):
                     localized_point = localized_point.tolist()
                 traj.append(localized_point)
-            print("Planned trajectory:", traj)
+            logger.debug("Planned trajectory (%d waypoints): %s", len(traj), traj)
 
         # Talk about what you are doing, as the robot.
         if self.robot is not None:
@@ -1083,11 +1083,11 @@ class DynamemController(BaseController):
         step = 0
         end_point = None
         while not finished and step < max_step:
-            print("*" * 20, step, "*" * 20)
+            logger.debug("navigate step %s/%s", step, max_step)
             step += 1
             finished, end_point = self.execute_action(text)
             if finished is None:
-                print("Navigation failed! The path might be blocked!")
+                logger.warning("Navigation failed (blocked or no progress).")
                 return None
         return end_point
 
@@ -1134,7 +1134,7 @@ class DynamemController(BaseController):
                 detection_model=self.owl_sam_detector,
                 save_dir=self.log,
             )
-        print("Place: ", rotation, translation)
+        logger.debug("Place: rotation=%s translation=%s", rotation, translation)
 
         if rotation is None:
             return False
@@ -1346,13 +1346,13 @@ class DynamemController(BaseController):
 
         start_pose = self.robot.get_base_pose()
 
-        print("Target point", target_point)
+        logger.debug("EQA navigate: target_point=%s", target_point)
         # If we want to explore non obstacles (especially frontiers), remember where we currently want to face
         obstacles, _ = self.voxel_map.get_2d_map()
         target_grid = self.voxel_map.xy_to_grid_coords((target_point[0], target_point[1]))
         if not obstacles[int(target_grid[0]), int(target_grid[1])]:
             target_theta = self.space.sample_navigation(start_pose, self.planner, target_point)[-1]
-            print("Target theta", target_theta)
+            logger.debug("EQA navigate: target_theta=%s", target_theta)
         else:
             target_theta = None
 
@@ -1389,7 +1389,7 @@ class DynamemController(BaseController):
             waypoints = [pt.state for pt in res.trajectory]
         elif res is not None:
             waypoints = None
-            print("[FAILURE]", res.reason)
+            logger.warning("navigate_to_target_pose planner failure: %s", res.reason)
         else:
             waypoints = None
 
@@ -1409,7 +1409,7 @@ class DynamemController(BaseController):
             traj = self.planner.clean_path_for_xy(waypoints)
             if finished and target_theta is not None:
                 traj[-1][2] = target_theta
-            print("Planned trajectory:", traj)
+            logger.debug("navigate_to_target_pose trajectory (%d pts): %s", len(traj), traj)
         else:
             traj = None
 

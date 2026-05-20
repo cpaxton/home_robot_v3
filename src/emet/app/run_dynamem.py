@@ -16,6 +16,9 @@ from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.core.parameters import get_parameters
 from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_llm_client
 from emet.robots import resolve_dynav_config_yaml
+from emet.utils.logger import Logger
+
+logger = Logger(__name__)
 
 
 @click.command()
@@ -192,16 +195,15 @@ def main(
         random_goals(bool): randomly sample frontier goals instead of looking for closest
     """
 
-    print("- Load parameters")
     dynav_resolved = resolve_dynav_config_yaml(robot, dynav_config)
-    print(f"- DynaMem parameters: {dynav_resolved}")
+    logger.info("DynaMem startup: dynav=%s robot=%s", dynav_resolved, robot)
     if dynav_resolved != dynav_config:
-        print(f"- Resolved from CLI default {dynav_config!r} via robot preset")
+        logger.info("Resolved dynav from CLI default %r via robot preset", dynav_config)
     parameters = get_parameters(dynav_resolved)
 
     if perfect_depth:
         parameters["debug_perfect_sensor_depth"] = True
-        print("- debug: perfect sensor depth (DA3 skipped when observation depth is present)")
+        logger.info("debug: perfect sensor depth (DA3 skipped when observation depth is present)")
 
     if rerun_bind:
         os.environ["RERUN_BIND_ALL"] = "1"
@@ -209,7 +211,7 @@ def main(
     if rerun_native and headless:
         raise click.UsageError("Use either --rerun-native or --headless for Rerun, not both.")
 
-    print("- Create robot client")
+    logger.info("Creating robot client…")
     depth_mode = str(parameters.get("depth_source", "sensor")).lower()
     robot_key = robot.lower().replace("-", "_")
     allow_missing_depth = depth_mode in ("da3", "auto") or robot_key == "innate_mars"
@@ -226,7 +228,7 @@ def main(
         allow_missing_depth=allow_missing_depth,
     )
 
-    print("- Create task executor")
+    logger.info("Creating task executor…")
     executor = DynamemTaskExecutor(
         robot_client,
         parameters,
@@ -245,7 +247,7 @@ def main(
     if callable(peek_rid):
         srv = peek_rid()
         if srv:
-            print(f"- ZMQ server emet_robot_id: {srv!r} (CLI --robot {robot!r})")
+            logger.info("ZMQ server emet_robot_id=%r (CLI --robot %r)", srv, robot)
 
     if not manipulation_only:
         if input_path is None:
@@ -288,7 +290,7 @@ def main(
             # Call the LLM client and parse
             llm_response = chat_wrapper.query(verbose=debug_llm)
             if debug_llm:
-                print("Parsed LLM Response:", llm_response)
+                logger.debug("Parsed LLM Response: %s", llm_response)
 
         ok = executor(llm_response)
         target_object = None

@@ -35,6 +35,9 @@ from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.core import get_parameters
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
 from emet.utils.config import read_top_level_robot_from_yaml
+from emet.utils.logger import Logger
+
+log = Logger(__name__)
 
 # Default: Qwen 3.5 9B (with expandable CUDA segments enabled above to reduce fragmentation).
 # Use ``--llm qwen35-4B`` if you still hit OOM on a single consumer GPU.
@@ -478,12 +481,9 @@ def main(
         discord_src = ctx.get_parameter_source("discord")
         explicit_no_discord = discord_src == ParameterSource.COMMANDLINE and not discord
         if discord and not explicit_no_discord:
-            print(
-                colored(
-                    "Warning: `--command` / `-c` runs are non-interactive; Discord is disabled for this run. "
-                    "Pass `--no-discord` to acknowledge and hide this warning in scripts.",
-                    "yellow",
-                )
+            log.warning(
+                "`--command` / `-c` runs are non-interactive; Discord is disabled for this run. "
+                "Pass `--no-discord` to acknowledge and hide this warning in scripts."
             )
         discord = False
 
@@ -564,26 +564,22 @@ def main(
             if need_sim_headless:
                 sim_cfg.headless = True
             if sim_cfg.headless and not had_headless:
-                print(
-                    colored(
-                        "Note: MuJoCo server is running headless (no DISPLAY, --command/-c, or --headless) "
-                        "so the Stretch sim keeps publishing observations.",
-                        "cyan",
-                    )
+                log.info(
+                    "MuJoCo server is running headless (no DISPLAY, --command/-c, or --headless) "
+                    "so the sim keeps publishing observations."
                 )
             if robot and robot.lower() not in ("stretch", "hello_stretch", "hellostretch", ""):
                 sim_cfg.robot = robot
-            print(colored("Starting MuJoCo sim subprocess (--start-sim)…", "cyan"))
+            log.info("Starting MuJoCo sim subprocess (--start-sim)…")
             spawn_mujoco_server_subprocess(
                 sim_cfg,
                 silence_sim_output=not sim_show_subprocess_output,
             )
-            print(colored("Sim is up; connecting agent.", "green"))
-        print(
-            colored(
-                f"Robot backend: {robot} (from --robot or YAML `{agent_config}`; must match `emet serve mujoco --robot`).",
-                "cyan",
-            )
+            log.info("Sim is up; connecting agent.")
+        log.info(
+            "Robot backend: %s (from --robot or YAML `%s`; must match `emet serve mujoco --robot`).",
+            robot,
+            agent_config,
         )
         try:
             run_agent_with_robot(
@@ -631,15 +627,10 @@ def main(
         audio_recorder = None
         whisper = None
 
-    print(
-        colored(
-            "Offline LLM chat (--offline). Type a message and press Enter. Empty line to quit.",
-            "green",
-        )
-    )
-    print(colored(f"LLM: {llm}  device: {device}", "yellow"))
+    log.info("Offline LLM chat (--offline). Type a message and press Enter. Empty line to quit.")
+    log.info("LLM: %s  device: %s", llm, device)
     if debug_llm:
-        print(colored("Debug: full prompt, raw and parsed response will be printed.", "yellow"))
+        log.info("Debug: full prompt, raw and parsed response will be printed.")
     print("-" * 60)
 
     while True:

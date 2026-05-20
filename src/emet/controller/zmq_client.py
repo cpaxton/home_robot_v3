@@ -579,7 +579,12 @@ class StretchZmqClient(AbstractRobotClient):
             whole_body_q[HelloStretchIdx.HEAD_TILT] = float(head_tilt)
 
             time.sleep(0.1)
-            self._wait_for_head(whole_body_q, block_id=step)
+            self._wait_for_head(
+                whole_body_q,
+                timeout=timeout,
+                resend_action=next_action if reliable else None,
+                block_id=step,
+            )
             time.sleep(0.1)
 
             # time.sleep(0.25)
@@ -998,7 +1003,12 @@ class StretchZmqClient(AbstractRobotClient):
             prev_t = timeit.default_timer()
 
             if verbose:
-                print("Waiting for head to move", pan_err, tilt_err, "head speed =", head_speed)
+                logger.debug(
+                    "Waiting for head: pan_err=%.4f tilt_err=%.4f head_speed=%.5f",
+                    float(pan_err),
+                    float(tilt_err),
+                    float(head_speed),
+                )
             if head_speed > self._head_not_moving_tolerance:
                 at_goal = False
             elif pan_err < self._head_pan_tolerance and tilt_err < self._head_tilt_tolerance:
@@ -1019,11 +1029,16 @@ class StretchZmqClient(AbstractRobotClient):
             t1 = timeit.default_timer()
             if t1 - t0 > min_wait_time and head_speed < self._head_not_moving_tolerance:
                 if verbose:
-                    print("Head not moving, we are done")
+                    logger.debug("Head settled before reaching target (stationary, min_wait elapsed).")
                 break
 
             if t1 - t0 > timeout:
-                print("Timeout waiting for head to move")
+                logger.warning(
+                    "Timeout (%.1fs) waiting for head: pan_err=%.4f tilt_err=%.4f (target may be unreachable or sim slow)",
+                    timeout,
+                    float(pan_err),
+                    float(tilt_err),
+                )
                 break
             time.sleep(0.01)
 
@@ -1146,7 +1161,7 @@ class StretchZmqClient(AbstractRobotClient):
             goal_angle_threshold(float): The threshold for the goal angle
             resend_action(dict): The action to resend if the robot is not moving. If none, do not resend.
         """
-        print("=" * 20, f"Waiting for {block_id} at goal", "=" * 20)
+        logger.info("Navigation: waiting for motion step %s to finish (timeout=%ss)", block_id, timeout)
         last_pos = None
         last_ang = None
         last_obs_t = None
@@ -1166,22 +1181,24 @@ class StretchZmqClient(AbstractRobotClient):
             time.sleep(0.01)
 
             if timeit.default_timer() > deadline:
-                print(f"Timeout ({timeout}s) waiting for block with step id = {block_id}")
+                logger.warning("Timeout (%ss) waiting for navigation step %s", timeout, block_id)
                 break
 
             if not self.is_up_to_date():
                 if verbose:
-                    print("Waiting for client to receive and process action")
+                    logger.debug("Waiting for client to receive and process action")
                 continue
 
             with self._state_lock:
                 if self._state is None:
-                    print("waiting for obs")
+                    if verbose:
+                        logger.debug("Waiting for state message")
                     continue
 
             with self._obs_lock:
                 if self._obs is None:
-                    print("waiting for obs")
+                    if verbose:
+                        logger.debug("Waiting for observation")
                     continue
 
             xyt = self.get_base_pose()
@@ -1217,15 +1234,27 @@ class StretchZmqClient(AbstractRobotClient):
             last_obs_t = obs_t
             close_to_goal = at_goal
             if verbose:
-                print(
-                    f"Waiting for step={block_id} {self._last_step} prev={self._last_step} at {pos} moved {moved_dist:0.04f} angle {angle_dist:0.04f} not_moving {not_moving_count} at_goal {self._state['at_goal']}"
+                logger.debug(
+                    "nav wait step=%s last_step=%s pos=%s moved=%.4f angle=%.4f not_moving=%s at_goal_flag=%s",
+                    block_id,
+                    self._last_step,
+                    pos,
+                    moved_dist,
+                    angle_dist,
+                    not_moving_count,
+                    self._state["at_goal"],
                 )
-                print(min_steps_not_moving, self._last_step, at_goal)
+                logger.debug(
+                    "nav wait min_steps=%s last_step=%s angle_ok=%s",
+                    min_steps_not_moving,
+                    self._last_step,
+                    at_goal,
+                )
                 if goal_angle is not None:
-                    print(f"Goal angle {goal_angle} angle dist to goal {angle_dist_to_goal}")
+                    logger.debug("Goal angle %s angle dist to goal %s", goal_angle, angle_dist_to_goal)
             if self._last_step >= block_id and at_goal and not_moving_count > min_steps_not_moving:
                 if verbose:
-                    print("---> At goal")
+                    logger.debug("Navigation at goal for step %s", block_id)
                 break
 
             # Resend the action if we are not moving for some reason and it's been provided
@@ -1235,7 +1264,7 @@ class StretchZmqClient(AbstractRobotClient):
 
             t1 = timeit.default_timer()
             if t1 - t0 > timeout:
-                print(f"Timeout waiting for block with step id = {block_id}")
+                logger.warning("Timeout waiting for navigation step %s (inner loop)", block_id)
                 break
                 # raise RuntimeError(f"Timeout waiting for block with step id = {block_id}")
 
@@ -1433,7 +1462,7 @@ class StretchZmqClient(AbstractRobotClient):
                 "base trajectory needs to be 2-3 dimensions: x, y, and (optionally) theta"
             )
             self.move_base_to(pt, relative, blocking=False, reliable=False)
-            print("Moving to", pt)
+            logger.debug("Moving to waypoint %s", pt)
             last_waypoint = i == len(trajectory) - 1
             self.move_base_to(
                 pt,
