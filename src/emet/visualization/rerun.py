@@ -395,17 +395,16 @@ class RerunVisualizer:
                 open_browser=open_browser and has_display() and not headless,
                 server_memory_limit=server_memory_limit,
             )
-            # Always print: logging is often WARNING+, and we want the URL even when the browser auto-opens.
+            # Log URL at INFO so it appears even when stderr is filtered; flush for immediate visibility.
             local_url = "http://127.0.0.1:9090?url=ws://127.0.0.1:9877"
-            print(f"Rerun web viewer: {local_url}", flush=True)
+            logger.info("Rerun web viewer: %s", local_url)
             if os.environ.get("RERUN_BIND_ALL", "").lower() in ("1", "true", "yes"):
                 hn = socket.gethostname()
-                print(f"Rerun web viewer (LAN/remote): http://{hn}:9090?url=ws://{hn}:9877", flush=True)
+                logger.info("Rerun web viewer (LAN/remote): http://%s:9090?url=ws://%s:9877", hn, hn)
         else:
-            print(
+            logger.info(
                 "Rerun: native desktop viewer (TCP). For the web UI omit --rerun-native / RERUN_NATIVE_VIEWER "
                 "or set RERUN_HEADLESS=1, then use http://127.0.0.1:9090?url=ws://127.0.0.1:9877",
-                flush=True,
             )
 
         self.display_robot_mesh = display_robot_mesh
