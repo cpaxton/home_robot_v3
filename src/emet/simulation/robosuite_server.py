@@ -30,6 +30,7 @@ import emet.utils.logger as log
 from emet.core.server import BaseZmqServer
 from emet.core.zmq_protocol import (
     CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
+    EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY,
     EMET_ZMQ_ROBOT_ID_KEY,
     EMET_ZMQ_SESSION_KEY,
     EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
@@ -37,6 +38,10 @@ from emet.core.zmq_protocol import (
 from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn, scene_base_spawn
 from emet.simulation.head_look_action import apply_head_to_robosuite
+from emet.simulation.mujoco_ground_truth import (
+    mujoco_ground_truth_write_path,
+    parse_ground_truth_dump_action_field,
+)
 from emet.simulation.stereo_camera_utils import stereo_right_camera_name_from_spec
 from emet.utils.geometry import xyt_global_to_base
 from emet.utils.observation_layout import rgb_height_width_for_zmq
@@ -845,6 +850,40 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     @override
     def handle_action(self, action: dict[str, Any]):
+        if EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY in action:
+            path_gt, exclude_robot, as_json = parse_ground_truth_dump_action_field(
+                action[EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY]
+            )
+            if path_gt:
+                hdr: dict[str, Any] | None = None
+                if isinstance(self._environment_descriptor, dict):
+                    hdr = {
+                        k: self._environment_descriptor[k]
+                        for k in sorted(self._environment_descriptor.keys())
+                        if k in ("kind", "task", "style", "layout")
+                    }
+
+                try:
+                    with self._mj_lock:
+                        if self._mjmodel is None or self._mjdata is None:
+                            logger.warning(
+                                "mujoco_ground_truth_dump: model not loaded; cannot write %r",
+                                path_gt,
+                            )
+                        else:
+                            out = mujoco_ground_truth_write_path(
+                                self._mjmodel,
+                                self._mjdata,
+                                dest=path_gt,
+                                exclude_robot=exclude_robot,
+                                robot_base_body_name=str(self._spec.base_link_name),
+                                json=as_json,
+                                extras=hdr,
+                            )
+                            logger.info(f"Wrote MuJoCo ground-truth snapshot -> {out}")
+                except Exception as e:
+                    logger.error("mujoco_ground_truth_dump failed for %r: %s", path_gt, e)
+
         if "control_mode" in action:
             self.control_mode = action["control_mode"]
 

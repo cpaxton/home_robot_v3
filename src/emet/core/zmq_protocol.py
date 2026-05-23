@@ -27,6 +27,36 @@ EMET_ZMQ_SESSION_KEY = "emet_session"
 EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY = "schema_version"
 CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION = 1
 
+# Optional sim introspection: client sends ``{EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY: {...}}``.
+EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY = "mujoco_ground_truth_dump"
+
+# ZMQ recv actions that must bypass duplicate ``step`` filtering (see ``BaseZmqServer.spin_recv``).
+EMET_ZMQ_META_ACTION_KEYS: frozenset[str] = frozenset({EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY})
+
+
+def zmq_meta_action_should_bypass_duplicate_step(action: dict[str, Any]) -> bool:
+    """True when *action* includes a meta command alongside ``step`` repeats."""
+    if not action:
+        return False
+    return not EMET_ZMQ_META_ACTION_KEYS.isdisjoint(action.keys())
+
+
+def build_mujoco_ground_truth_dump_action(
+    step: int,
+    path_on_sim_host: str,
+    *,
+    exclude_robot: bool = True,
+    as_json: bool = False,
+) -> dict[str, Any]:
+    """Build a recv action dict instructing MuJoCo ZMQ servers to write a body pose snapshot."""
+
+    payload: dict[str, Any] = {
+        "path": str(path_on_sim_host),
+        "exclude_robot": bool(exclude_robot),
+        "json": bool(as_json),
+    }
+    return {"step": int(step), EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY: payload}
+
 # Normalized ids that count as Hello Stretch for StretchZmqClient.
 _STRETCH_FAMILY = frozenset({"stretch", "hello_stretch", "hellostretch"})
 

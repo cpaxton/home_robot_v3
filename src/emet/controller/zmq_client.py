@@ -30,6 +30,7 @@ from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
+    build_mujoco_ground_truth_dump_action,
     emet_session_cache_update,
     is_stretch_family,
     read_emet_session,
@@ -1327,6 +1328,25 @@ class StretchZmqClient(AbstractRobotClient):
         """Send a message to the robot"""
         with self._send_lock:
             self.send_socket.send_pyobj(message)
+
+    def request_sim_mujoco_ground_truth_snapshot(
+        self,
+        path_on_sim_host: str,
+        *,
+        exclude_robot: bool = True,
+        as_json: bool = False,
+    ) -> None:
+        step_next = int(getattr(self, "_last_step", -1)) + 1
+        if step_next < 1:
+            step_next = max(1, int(time.time() * 1000.0) % 2_000_000_000)
+        payload = build_mujoco_ground_truth_dump_action(
+            step_next,
+            path_on_sim_host,
+            exclude_robot=exclude_robot,
+            as_json=as_json,
+        )
+        with self._send_lock:
+            self.send_socket.send_pyobj(payload)
 
     def _update_pose_graph(self, obs):
         """Update internal pose graph"""

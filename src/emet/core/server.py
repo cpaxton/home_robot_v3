@@ -18,6 +18,7 @@ import numpy as np
 import zmq
 
 from emet.core.comms import CommsNode
+from emet.core.zmq_protocol import zmq_meta_action_should_bypass_duplicate_step
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -243,6 +244,7 @@ class BaseZmqServer(CommsNode, ABC):
                     and "xyt" not in action
                     and "posture" not in action
                     and "control_mode" not in action
+                    and not zmq_meta_action_should_bypass_duplicate_step(action)
                 ):
                     logger.warning(f"Skipping duplicate action {action_step}, last step = {self._last_step}")
                     continue
@@ -302,7 +304,10 @@ class BaseZmqServer(CommsNode, ABC):
         steps: int = 0
         t0 = timeit.default_timer()
 
-        while not self._done:
+        # Match ``spin_send`` / ``spin_send_state``: use ``is_running()`` so backends that latch off a live sim
+        # (e.g. Stretch Mujoco ``robot_sim.is_running()``) stop when the simulator exits, even if ``_done`` was
+        # never set explicitly.
+        while self.is_running():
             message = self.get_servo_message()
 
             # Skip if no message - could not access camera yet

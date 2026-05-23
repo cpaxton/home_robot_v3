@@ -39,6 +39,7 @@ from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient, ControlMode
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
+    build_mujoco_ground_truth_dump_action,
     emet_session_cache_update,
     read_emet_robot_id_from_message_or_session,
     read_emet_session,
@@ -306,6 +307,25 @@ class GenericZmqClient(AbstractRobotClient):
 
     def send_message(self, message: dict[str, Any]) -> None:
         self.send_socket.send_pyobj(message)
+
+    def request_sim_mujoco_ground_truth_snapshot(
+        self,
+        path_on_sim_host: str,
+        *,
+        exclude_robot: bool = True,
+        as_json: bool = False,
+    ) -> None:
+        step_next = int(getattr(self, "_last_step", -1)) + 1
+        if step_next < 1:
+            step_next = max(1, int(time.time() * 1000.0) % 2_000_000_000)
+        self.send_message(
+            build_mujoco_ground_truth_dump_action(
+                step_next,
+                path_on_sim_host,
+                exclude_robot=exclude_robot,
+                as_json=as_json,
+            ),
+        )
 
     # -- Lifecycle ------------------------------------------------------------
 
@@ -707,6 +727,10 @@ class GenericZmqClient(AbstractRobotClient):
                 self.send_message(action)
                 time.sleep(0.01)
         return action
+
+    def set_velocity(self, v: float, w: float) -> None:
+        """Set base translational (v) and rotational (w) velocity setpoints."""
+        self.send_action({"v": v, "w": w})
 
     def move_base_to(
         self,
