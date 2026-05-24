@@ -744,6 +744,8 @@ class GenericZmqClient(AbstractRobotClient):
             xyt = xyt.xyt
         xyt = np.array(xyt, dtype=float)
         action = {"xyt": xyt.tolist(), "nav_relative": relative}
+        if os.environ.get("EMET_SIM_NAV_TELEPORT", "").strip().lower() in ("1", "true", "yes", "on"):
+            action["nav_teleport"] = True
         self.send_action(action)
         if blocking:
             # PUB/SUB can drop the first packet; give the server a beat to apply xyt.

@@ -196,6 +196,26 @@ def test_want_robocasa_planar_autoplace_innate_mars():
     )
 
 
+def test_want_robocasa_freejoint_autoplace_galaxea_r1():
+    from emet.robots.galaxea_r1 import GalaxeaR1Backend
+    from emet.simulation import scene_base_spawn
+
+    spec = GalaxeaR1Backend().get_spec()
+    env = {"kind": "robocasa", "task": "PickPlaceCounterToCabinet"}
+    assert scene_base_spawn.want_robocasa_freejoint_autoplace(environment=env, robot_spec=spec)
+    assert not scene_base_spawn.want_robocasa_planar_autoplace(environment=env, robot_spec=spec)
+
+
+def test_robocasa_gen_strip_replace_includes_galaxea():
+    import inspect
+
+    from emet.simulation.stretch_mujoco import robocasa_gen
+
+    src = inspect.getsource(robocasa_gen.model_generation_wizard)
+    assert "galaxea_r1" in src
+    assert "add_galaxea_r1_to_kitchen" in src
+
+
 def test_robocasa_gen_robot_param():
     """model_generation_wizard accepts robot parameter (import-only test)."""
     import inspect

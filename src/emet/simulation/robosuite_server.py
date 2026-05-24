@@ -153,6 +153,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             self._molmospaces_autoplace_free_base_after_load()
             self._robocasa_planar_autoplace_after_load()
+            self._robocasa_freejoint_autoplace_after_load()
         self._planar_base_actuator_ids_cache = None
 
     def _want_molmospaces_spawn_heuristic(self) -> bool:
@@ -319,6 +320,65 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjmodel.qpos0[qadr] = float(self._mjdata.qpos[qadr])
         self._planar_autoplace_snap_qpos0 = True
 
+    def _robocasa_freejoint_autoplace_after_load(self) -> None:
+        """Reposition freejoint base away from Robocasa clutter (Galaxea R1 / RB-Y1, etc.)."""
+        if not scene_base_spawn.want_robocasa_freejoint_autoplace(
+            environment=self._environment_descriptor,
+            robot_spec=self._spec,
+        ):
+            return
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        if self._base_freejoint_addrs() is None:
+            return
+        base_name = self._spec.base_link_name
+        if self._debug_molmospaces_spawn:
+            logger.info(
+                f"Robocasa freejoint spawn debug: environment={self._environment_descriptor!r} "
+                f"base_body_name={base_name!r}"
+            )
+        try:
+            placed = scene_base_spawn.find_molmospaces_freejoint_xyz(
+                self._mjmodel,
+                self._mjdata,
+                base_body_name=base_name,
+                scene_label=self._scene_source_basename,
+                merged_mjcf_path=self._scene_disk_path,
+                environment=self._environment_descriptor,
+            )
+        except Exception as e:
+            logger.warning(f"Robocasa freejoint autoplace skipped ({e!r}).")
+            return
+        if placed is None:
+            logger.info(
+                "Robocasa freejoint autoplace: no safer (x,y,z) found; keeping MJCF default base pose."
+            )
+            return
+        x, y, z = placed
+        logger.info(
+            f"Robocasa freejoint autoplace: moved base on {base_name!r} to "
+            f"({x:.3f}, {y:.3f}, {z:.3f}) for clearance from scene geometry."
+        )
+        if self._debug_molmospaces_spawn:
+            try:
+                mujoco.mj_forward(self._mjmodel, self._mjdata)
+                for ln in molmospaces_spawn.format_spawn_contact_report(
+                    self._mjmodel,
+                    self._mjdata,
+                    base_body_name=base_name,
+                    floor_geom_name="floor",
+                    max_lines=40,
+                    dist_report_threshold=0.12,
+                ):
+                    logger.info(f"[scene_base_spawn/post-place] {ln}")
+            except Exception as e:
+                logger.warning(f"Robocasa freejoint spawn debug contact report failed: {e!r}")
+        addrs = self._base_freejoint_addrs()
+        if addrs is not None:
+            qadr = int(addrs[0])
+            self._mjmodel.qpos0[qadr : qadr + 7] = self._mjdata.qpos[qadr : qadr + 7]
+            self._molmospaces_autoplace_snap_qpos0 = True
+
     def _restore_merged_base_freejoint_from_qpos0(self) -> None:
         """Put ``base_link`` free joint back to ``qpos0`` after :meth:`_stabilize_physics_state_after_load`.
 
@@ -355,7 +415,39 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjdata.qvel[vadr] = 0.0
         mujoco.mj_forward(self._mjmodel, self._mjdata)
 
-    def _build_emet_session(self, *, robocasa: bool) -> dict[str, Any]:
+    def _spawn_footprint_xy_margin_m(self) -> float:
+        fp = self._spec.footprint
+        base_margin = float(
+            0.5
+            * np.hypot(
+                float(fp.length) + abs(float(fp.length_offset)),
+                float(fp.width) + abs(float(fp.width_offset)),
+            )
+            + 0.10
+        )
+        extra = float(getattr(self._spec, "planar_spawn_xy_extra_margin_m", 0.0) or 0.0)
+        return base_margin + extra
+
+    def _compute_robocasa_spawn_floor_map(self) -> dict[str, Any] | None:
+        if self._environment_descriptor and self._environment_descriptor.get("spawn_floor_map") is not None:
+            return dict(self._environment_descriptor["spawn_floor_map"])
+        if self._mjmodel is None or self._mjdata is None:
+            return None
+        with self._mj_lock:
+            return scene_base_spawn.compute_spawn_walkable_map_metrics(
+                self._mjmodel,
+                self._mjdata,
+                base_body_name=self._spec.base_link_name,
+                grid_resolution_m=0.10,
+                footprint_xy_margin_m=self._spawn_footprint_xy_margin_m(),
+            )
+
+    def _build_emet_session(
+        self,
+        *,
+        robocasa: bool,
+        spawn_floor_map: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         mj_name: str | None = None
         if self._mjmodel is not None:
             try:
@@ -394,6 +486,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         if self._initial_xyt is not None:
             ixy = np.asarray(self._initial_xyt, dtype=np.float64).reshape(-1)[:3]
             session["navigation_origin_xyt"] = [float(ixy[0]), float(ixy[1]), float(ixy[2])]
+        if spawn_floor_map is not None:
+            session["spawn_floor_map"] = spawn_floor_map
         return session
 
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
@@ -887,6 +981,12 @@ class RobosuiteZmqServer(BaseZmqServer):
         if "control_mode" in action:
             self.control_mode = action["control_mode"]
 
+        if "posture" in action:
+            p = str(action["posture"])
+            if p in ("navigation", "manipulation"):
+                self.control_mode = p
+            self._at_goal = True
+
         has_xyt = "xyt" in action
         if has_xyt:
             self._at_goal = False
@@ -1186,7 +1286,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._initial_xyt = self.get_base_xyt()
         self._nav_goal_world = None
         self._at_goal = True
-        self._emet_session = self._build_emet_session(robocasa=robocasa)
+        spawn_floor_map = self._compute_robocasa_spawn_floor_map() if robocasa else None
+        self._emet_session = self._build_emet_session(
+            robocasa=robocasa,
+            spawn_floor_map=spawn_floor_map,
+        )
 
         # Print scene summary before any rendering (so it appears in headless / no-DISPLAY runs)
         summary = self.get_scene_summary()

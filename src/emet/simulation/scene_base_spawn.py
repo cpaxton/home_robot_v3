@@ -143,6 +143,16 @@ def want_molmospaces_autoplace(
     return False
 
 
+def _robocasa_autoplace_enabled(robocasa_autoplace_env: str | None = None) -> bool:
+    raw = (
+        robocasa_autoplace_env
+        if robocasa_autoplace_env is not None
+        else os.environ.get("EMET_ROBOSUITE_AUTOPLACE", "1")
+    )
+    v = str(raw).strip().lower()
+    return v not in ("0", "false", "no", "off")
+
+
 def want_robocasa_planar_autoplace(
     *,
     environment: dict[str, Any] | None,
@@ -159,15 +169,28 @@ def want_robocasa_planar_autoplace(
     pbn = getattr(robot_spec, "planar_base_joint_names", None)
     if not pbn or len(pbn) != 3:
         return False
-    raw = (
-        robocasa_autoplace_env
-        if robocasa_autoplace_env is not None
-        else os.environ.get("EMET_ROBOSUITE_AUTOPLACE", "1")
-    )
-    v = str(raw).strip().lower()
-    if v in ("0", "false", "no", "off"):
+    return _robocasa_autoplace_enabled(robocasa_autoplace_env)
+
+
+def want_robocasa_freejoint_autoplace(
+    *,
+    environment: dict[str, Any] | None,
+    robot_spec: RobotSpec,
+    robocasa_autoplace_env: str | None = None,
+) -> bool:
+    """Whether to run collision-free **freejoint** base placement for Robocasa kitchens.
+
+    Used for robots such as Galaxea R1 / RB-Y1 (``freejoint`` base, no planar slide joints).
+    Planar robots (innate_mars, stretch in merged MJCF) use :func:`want_robocasa_planar_autoplace`.
+    """
+    if environment is None or environment.get("kind") != "robocasa":
         return False
-    return True
+    pbn = getattr(robot_spec, "planar_base_joint_names", None)
+    if pbn and len(pbn) == 3:
+        return False
+    if not _robocasa_autoplace_enabled(robocasa_autoplace_env):
+        return False
+    return bool(getattr(robot_spec, "base_link_name", None))
 
 
 def _bodies_descending_from(model: mujoco.MjModel, root_body_id: int) -> set[int]:
@@ -284,6 +307,89 @@ def _erode_xy_rect(
     if x1 - x0 < 2.0 * inset + 0.9 or y1 - y0 < 2.0 * inset + 0.9:
         return None
     return (x0 + inset, x1 - inset, y0 + inset, y1 - inset)
+
+
+def _xy_rect_area_m2(rect: tuple[float, float, float, float] | None) -> float | None:
+    if rect is None:
+        return None
+    x0, x1, y0, y1 = rect
+    w = float(x1) - float(x0)
+    h = float(y1) - float(y0)
+    if w <= 0.0 or h <= 0.0:
+        return 0.0
+    return w * h
+
+
+def compute_spawn_walkable_map_metrics(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    base_body_name: str,
+    floor_geom_name: str = "floor",
+    grid_resolution_m: float = 0.05,
+    footprint_xy_margin_m: float = 0.35,
+    spawn_profile: str = "robocasa",
+) -> dict[str, Any]:
+    """Walkable floor map from spawner collision clip (same geometry as Robocasa autoplace).
+
+    Samples a top-down grid inside the eroded scene clip and counts cells where
+    :func:`walkable_floor_z_at_xy` resolves a floor height (matches spawner occupancy logic).
+    """
+    floor_effective = effective_floor_geom_name(model, floor_geom_name)
+    base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
+    robot_bodies: set[int] = set()
+    if base_bid >= 0:
+        robot_bodies = _bodies_descending_from(model, base_bid)
+    ray_excl = int(base_bid) if base_bid >= 0 else -1
+
+    xy_clip_scene = collision_scene_xy_clip_rect(
+        model,
+        data,
+        robot_bodies=robot_bodies,
+        floor_geom_name=floor_effective,
+        margin=0.55,
+        max_geom_rbound=15.0,
+        suppress_exterior_filter=False,
+    )
+    inset = float(footprint_xy_margin_m) + 0.10
+    xy_clip = _erode_xy_rect(xy_clip_scene, inset) if xy_clip_scene is not None else None
+    if xy_clip is None:
+        xy_clip = xy_clip_scene
+
+    grid_res = float(grid_resolution_m)
+    walkable_cells = 0
+    if xy_clip is not None:
+        x0, x1, y0, y1 = xy_clip
+        xs = np.arange(float(x0), float(x1) + grid_res * 0.5, grid_res)
+        ys = np.arange(float(y0), float(y1) + grid_res * 0.5, grid_res)
+        for x in xs:
+            for y in ys:
+                zf = walkable_floor_z_at_xy(
+                    model,
+                    data,
+                    float(x),
+                    float(y),
+                    floor_geom_name=floor_effective,
+                    exclude_body_id=ray_excl,
+                )
+                if zf is not None:
+                    walkable_cells += 1
+
+    cell_area = grid_res * grid_res
+    scene_area = _xy_rect_area_m2(xy_clip_scene)
+    scene_cells = int(round(scene_area / cell_area)) if scene_area is not None else 0
+    return {
+        "grid_resolution_m": grid_res,
+        "clip_scene_xy": list(xy_clip_scene) if xy_clip_scene is not None else None,
+        "clip_eroded_xy": list(xy_clip) if xy_clip is not None else None,
+        "clip_scene_area_m2": scene_area,
+        "clip_eroded_area_m2": _xy_rect_area_m2(xy_clip),
+        "spawn_walkable_cell_count": int(walkable_cells),
+        "spawn_walkable_area_m2": float(walkable_cells * cell_area),
+        "scene_walkable_cell_count": scene_cells,
+        "scene_walkable_area_m2": float(scene_cells * cell_area) if scene_cells else scene_area,
+        "spawn_profile": spawn_profile,
+    }
 
 
 def _clamp_xy_into_rect(x: float, y: float, rect: tuple[float, float, float, float]) -> tuple[float, float]:

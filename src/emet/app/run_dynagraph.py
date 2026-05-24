@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import time
+from typing import Any
 
 import click
 
@@ -18,7 +19,7 @@ from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import get_parameters
 from emet.memory.graph_eqa import format_scene_graph_pretty
 from emet.memory.headless_export import export_graph_eqa_dir
-from emet.robots import resolve_dynav_config_yaml
+from emet.robots import apply_robot_dynav_parameter_overrides, resolve_dynav_config_yaml
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -257,6 +258,16 @@ def main(
 
     click.echo("- Load parameters")
     parameters = get_parameters(dynav_resolved)
+    robot_key = robot_backend.lower().replace("-", "_")
+    apply_robot_dynav_parameter_overrides(robot_backend, parameters)
+    if robot_key == "stretch" and os.environ.get("EMET_STRETCH_ROBOSUITE_ZMQ", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        parameters["local_radius"] = max(float(parameters.get("local_radius", 0.5)), 1.4)
+        parameters["max_depth"] = max(float(parameters.get("max_depth", 2.5)), 3.8)
     parameters.setdefault("dynagraph_merge_xy_m", 0.45)
     parameters.setdefault("dynagraph_staleness_horizon", 256)
     if merge_xy_m is not None:
@@ -265,8 +276,12 @@ def main(
         parameters["dynagraph_staleness_horizon"] = int(staleness_horizon)
 
     depth_mode = str(parameters.get("depth_source", "sensor")).lower()
-    robot_key = robot_backend.lower().replace("-", "_")
-    allow_missing_depth = depth_mode in ("da3", "auto") or robot_key == "innate_mars"
+    allow_missing_depth = depth_mode in ("da3", "auto") or robot_key in (
+        "innate_mars",
+        "galaxea_r1",
+        "rby1",
+        "stretch",
+    )
 
     robot = create_robot_client_from_cli(
         robot_backend,
@@ -321,14 +336,29 @@ def main(
         )
         click.echo(f"- Explore-loop [{reason}] done: reason={reason_lab} successes={ok} iterations_executed={nit}")
 
+    def _export_session_fields() -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        get_sess = getattr(robot, "get_emet_session", None)
+        if get_sess is None:
+            return None, None
+        sess = get_sess()
+        if not sess:
+            return None, None
+        env = sess.get("environment")
+        spawn = sess.get("spawn_floor_map")
+        return (dict(env) if isinstance(env, dict) else None, dict(spawn) if isinstance(spawn, dict) else None)
+
     def _save_dump() -> None:
         if not dump_memory:
             return
+        env, spawn = _export_session_fields()
         text = export_graph_eqa_dir(
             agent.graph_memory,
             getattr(agent, "voxel_map", None),
             dump_memory,
             title="Scene graph (Dynagraph, saved)",
+            robot=robot_backend,
+            environment=env,
+            spawn_floor_map=spawn,
         )
         print(f"Saved graph memory to {dump_memory}")
         print(text)
@@ -376,11 +406,15 @@ def main(
                     click.echo("(Empty EQA reply — check graph memory / observations.)")
                 else:
                     click.echo(discord_text)
+            env, spawn = _export_session_fields()
             text = export_graph_eqa_dir(
                 agent.graph_memory,
                 getattr(agent, "voxel_map", None),
                 export_dir,
                 title="Scene graph (Dynagraph export)",
+                robot=robot_backend,
+                environment=env,
+                spawn_floor_map=spawn,
             )
             click.echo(text)
             click.echo(f"Exported graph memory to {export_dir}")

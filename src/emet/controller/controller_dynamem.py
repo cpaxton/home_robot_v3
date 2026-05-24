@@ -63,7 +63,7 @@ from emet.perception.detection.yoloe import YoloEPerception
 from emet.perception.encoders.clip_encoder import MaskClipEncoder
 from emet.perception.encoders.siglip_encoder import MaskSiglipEncoder
 from emet.perception.wrapper import OvmmPerception
-from emet.utils.geometry import nav_xyt_to_world_xyt
+from emet.utils.geometry import nav_xyt_to_world_xyt, xyt_global_to_base
 from emet.utils.logger import Logger
 from emet.utils.vram_debug import print_vram_snapshot
 from emet.visualization.rerun import NullVisualizer, has_display
@@ -265,6 +265,41 @@ class DynamemController(BaseController):
     def move_to_nav_posture(self) -> None:
         """Move the robot to navigation posture (delegates to the robot client)."""
         self.robot.move_to_nav_posture()
+
+    def _robot_emet_session(self) -> dict[str, Any] | None:
+        get_sess = getattr(self.robot, "get_emet_session", None)
+        if get_sess is None:
+            return None
+        return get_sess()
+
+    def _planning_base_xyt(self, local_xyt: np.ndarray | list | tuple) -> np.ndarray:
+        """Episode-relative ZMQ base pose → world frame for voxel-grid planning."""
+        xyt = np.asarray(local_xyt, dtype=np.float64).reshape(-1)
+        if xyt.size < 3:
+            xyt = np.pad(xyt, (0, max(0, 3 - xyt.size)), mode="constant")
+        return nav_xyt_to_world_xyt(xyt[:3], self._robot_emet_session())
+
+    def _robot_nav_xyt(self, world_xyt: np.ndarray | list | tuple) -> np.ndarray:
+        """World-frame planning pose → episode-relative for ZMQ ``xyt`` actions."""
+        xyt = np.asarray(world_xyt, dtype=np.float64).reshape(-1)
+        if xyt.size < 3:
+            xyt = np.pad(xyt, (0, max(0, 3 - xyt.size)), mode="constant")
+        sess = self._robot_emet_session()
+        org = None if sess is None else sess.get("navigation_origin_xyt")
+        if org is None:
+            return xyt[:3]
+        origin = np.asarray(org, dtype=np.float64).reshape(-1)[:3]
+        return xyt_global_to_base(xyt[:3], origin)
+
+    def _robot_nav_trajectory(self, world_traj: list) -> list:
+        out: list = []
+        for wp in world_traj:
+            arr = np.asarray(wp, dtype=np.float64).reshape(-1)
+            if arr.size >= 1 and np.isnan(arr[0]):
+                out.append(wp)
+            else:
+                out.append(self._robot_nav_xyt(arr[:3]))
+        return out
 
     def create_obstacle_map(self, parameters):
         """
@@ -857,7 +892,7 @@ class DynamemController(BaseController):
 
         self.robot.switch_to_navigation_mode()
 
-        start = self.robot.get_base_pose()
+        start = self._planning_base_xyt(self.robot.get_base_pose())
         res = self.process_text(text, start)
         if len(res) == 0 and text != "" and text is not None:
             res = self.process_text("", start)
@@ -868,12 +903,13 @@ class DynamemController(BaseController):
             self.robot.move_to_nav_posture()
             self.robot.look_front(blocking=True)
             time.sleep(DYNAMEM_HEAD_SETTLE_S)
+            nav_res = self._robot_nav_trajectory(res)
             # This means that the robot has already finished all of its trajectories and should stop to manipulate the object.
             # We will append a nan and point coordinates of the target object on the trajectory to denote that the robot is reaching the target point
-            if len(res) >= 2 and np.isnan(res[-2]).all():
-                if len(res) > 2:
+            if len(nav_res) >= 2 and np.isnan(nav_res[-2]).all():
+                if len(nav_res) > 2:
                     self.robot.execute_trajectory(
-                        res[:-2],
+                        nav_res[:-2],
                         pos_err_threshold=self.pos_err_threshold,
                         rot_err_threshold=self.rot_err_threshold,
                         blocking=True,
@@ -885,7 +921,7 @@ class DynamemController(BaseController):
             # The robot has not reached the object. Next it should look around and continue navigation
             else:
                 self.robot.execute_trajectory(
-                    res,
+                    nav_res,
                     pos_err_threshold=self.pos_err_threshold,
                     rot_err_threshold=self.rot_err_threshold,
                     blocking=True,
@@ -1296,14 +1332,18 @@ class DynamemController(BaseController):
                 confidence_reasoning,
                 target_point,
                 relevant_images,
-            ) = self.voxel_map.query_answer(question, self.robot.get_base_pose(), self.planner)
+            ) = self.voxel_map.query_answer(
+                question, self._planning_base_xyt(self.robot.get_base_pose()), self.planner
+            )
         except:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images = (
                 "Exception happens in LLM querying!",
                 "Unknown",
                 False,
                 "Exception happens in LLM querying!",
-                self.space.sample_frontier(self.planner, self.robot.get_base_pose(), text=None),
+                self.space.sample_frontier(
+                    self.planner, self._planning_base_xyt(self.robot.get_base_pose()), text=None
+                ),
                 [],
             )
 
@@ -1344,7 +1384,7 @@ class DynamemController(BaseController):
         if confidence:
             return answer, discord_text, relevant_images, confidence
 
-        start_pose = self.robot.get_base_pose()
+        start_pose = self._planning_base_xyt(self.robot.get_base_pose())
 
         logger.debug("EQA navigate: target_point=%s", target_point)
         # If we want to explore non obstacles (especially frontiers), remember where we currently want to face
@@ -1358,7 +1398,7 @@ class DynamemController(BaseController):
 
         movement_step = 0
         while movement_step < max_movement_step:
-            start_pose = self.robot.get_base_pose()
+            start_pose = self._planning_base_xyt(self.robot.get_base_pose())
             movement_step += 1
             self.update()
             finished = self.navigate_to_target_pose(target_point, start_pose, target_theta)
@@ -1430,7 +1470,7 @@ class DynamemController(BaseController):
             )
 
             self.robot.execute_trajectory(
-                traj,
+                self._robot_nav_trajectory(traj),
                 pos_err_threshold=self.pos_err_threshold,
                 rot_err_threshold=self.rot_err_threshold,
                 blocking=True,

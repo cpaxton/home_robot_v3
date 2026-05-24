@@ -660,6 +660,8 @@ class MujocoZmqServer(BaseZmqServer):
         }
         if self._scene_source_basename:
             session["scene_source_basename"] = self._scene_source_basename
+        if self._environment_descriptor and self._environment_descriptor.get("spawn_floor_map") is not None:
+            session["spawn_floor_map"] = self._environment_descriptor["spawn_floor_map"]
         return session
 
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:

@@ -97,6 +97,8 @@ class InnateMarsBackend(RobotBackend):
             planar_spawn_clip_guard_body_names=("ee_link", "link5", "link3"),
             planar_spawn_clip_guard_pad_m=0.40,
             planar_spawn_robocasa_first_clearance_m=0.068,
+            # Slightly wider explored stamp vs default 0.5 m (shorter head camera).
+            dynav_parameter_overrides={"local_radius": 0.85, "max_depth": 3.2},
             # MJCF head cameras align with ROS optical (+X mount forward); MuJoCo Renderer buffers are upright
             # on typical EGL/GL backends. Avoid baked flip/rot here—extra ops distort stereo/overlays. If pixels
             # look upside-down on your GPU, export EMET_ROBOSUITE_RENDER_FLIPUD=1 before starting the robosuite

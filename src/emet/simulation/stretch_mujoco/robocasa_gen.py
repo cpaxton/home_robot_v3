@@ -201,13 +201,18 @@ def model_generation_wizard(
     if style is None:
         style = choose_style()
 
-    use_strip_placeholder_robot = robot.lower() in (
+    use_strip_placeholder_robot = robot.lower().replace("-", "_") in (
         "stretch",
         "hello_stretch",
         "hellostretch",
         "innate_mars",
+        "galaxea_r1",
+        "galaxear1",
+        "rby1",
+        "rb_y1",
     )
     use_stretch_robot = robot.lower() in ("stretch", "hello_stretch", "hellostretch")
+    use_galaxea_robot = robot.lower().replace("-", "_") in ("galaxea_r1", "galaxear1", "rby1", "rb_y1")
     rs_robot = _robosuite_robot_for(robot)
 
     config = {
@@ -288,6 +293,8 @@ def model_generation_wizard(
         click.secho("\nMaking Robot Placement...\n", fg="yellow")
         if use_stretch_robot:
             xml = add_stretch_to_kitchen(xml, robot_base_fixture_pose)
+        elif use_galaxea_robot:
+            xml = add_galaxea_r1_to_kitchen(xml, robot_base_fixture_pose)
         else:
             xml = add_innate_mars_to_kitchen(xml, robot_base_fixture_pose)
     else:
@@ -425,4 +432,53 @@ def add_innate_mars_to_kitchen(xml: str, robot_pose_attrib: dict) -> str:
         tmp_path = fh.name
     abs_path = Path(tmp_path).resolve().as_posix()
     print(f"Adding innate_mars to kitchen via temp MJCF: {abs_path}")
+    return insert_line_after_mujoco_tag(xml, f' <include file="{abs_path}"/>')
+
+
+def add_galaxea_r1_to_kitchen(xml: str, robot_pose_attrib: dict) -> str:
+    """Add Galaxea R1 / RB-Y1 MJCF to kitchen XML (strip-and-replace after GR1 placeholder)."""
+    from emet.utils.assets import get_robot_mjcf_path
+
+    mjcf = get_robot_mjcf_path("galaxea_r1")
+    if mjcf is None or not mjcf.is_file():
+        raise FileNotFoundError(
+            "Galaxea R1 MJCF not found (emet package data). Cannot build Robocasa scene for galaxea_r1 / rby1."
+        )
+    root_dir = mjcf.parent.resolve()
+    meshes_abs = (root_dir / "meshes").resolve()
+    if not meshes_abs.is_dir():
+        raise FileNotFoundError(f"Galaxea R1 meshes directory missing: {meshes_abs}")
+
+    text = mjcf.read_text(encoding="utf-8")
+    text = text.replace('assetdir="meshes"', f'assetdir="{meshes_abs.as_posix()}"')
+
+    def _abs_mesh_file_attr(m: re.Match) -> str:
+        fname = m.group(1)
+        if fname.startswith("/") or "/" in fname:
+            return m.group(0)
+        return f'file="{(meshes_abs / fname).resolve().as_posix()}"'
+
+    text = re.sub(r'file="([^"]+\.(?:STL|stl))"', _abs_mesh_file_attr, text)
+    if robot_pose_attrib is not None:
+        pos = robot_pose_attrib["pos"]
+        quat = robot_pose_attrib["quat"]
+        text = re.sub(
+            r'<body\s+name="base_link"([^>]*)>',
+            f'<body name="base_link" pos="{pos}" quat="{quat}"\\1>',
+            text,
+            count=1,
+        )
+    text = ensure_mesh_inertia(text)
+    text = _strip_geom_shellinertia(text)
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix="_galaxea_r1_kitchen.xml",
+        delete=False,
+        encoding="utf-8",
+    ) as fh:
+        fh.write(text)
+        tmp_path = fh.name
+    abs_path = Path(tmp_path).resolve().as_posix()
+    print(f"Adding galaxea_r1 to kitchen via temp MJCF: {abs_path}")
     return insert_line_after_mujoco_tag(xml, f' <include file="{abs_path}"/>')

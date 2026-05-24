@@ -8,6 +8,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from emet.memory.floor_metrics import (
+    compute_explored_floor_metrics,
+    format_floor_metrics_summary,
+    merge_spawn_floor_map,
+    write_floor_metrics_json,
+)
 from emet.memory.format import SCENE_GRAPH_REPORT_TXT
 from emet.memory.graph_eqa import format_scene_graph_pretty
 
@@ -18,6 +24,9 @@ def export_graph_eqa_dir(
     path: str,
     *,
     title: str = "Scene graph",
+    robot: str | None = None,
+    environment: dict[str, Any] | None = None,
+    spawn_floor_map: dict[str, Any] | None = None,
 ) -> str:
     """
     Save GraphEQA memory via MemoryBackend (manifest, graph.json, frames, …) and write
@@ -35,6 +44,15 @@ def export_graph_eqa_dir(
     )
     backend.save(path)
     text = format_scene_graph_pretty(graph_memory, title=title)
+    floor_metrics = compute_explored_floor_metrics(
+        voxel_map,
+        robot=robot,
+        environment=environment,
+    )
+    floor_metrics = merge_spawn_floor_map(floor_metrics, spawn_floor_map)
+    write_floor_metrics_json(path, floor_metrics)
+    floor_summary = format_floor_metrics_summary(floor_metrics)
+    text = f"{text.rstrip()}\n\n--- Explored floor ---\n{floor_summary}\n"
     out = Path(path)
     out.mkdir(parents=True, exist_ok=True)
     report_path = out / SCENE_GRAPH_REPORT_TXT

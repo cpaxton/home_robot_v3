@@ -16,6 +16,7 @@ The refactor is consistent: mapping = spatial representation; memory = semantic/
 | **SVM**   | Instance memory (RobotAgent)   | `test_svm.py`, `test_memory_backends_smoke::test_svm_backend_smoke`, `test_unified_backend_svm_empty` | — (SVM uses pkl or real robot)             |
 | **DynaMem** | Voxel + VL features          | `test_semantic_memory.py`, `test_memory_backends_smoke::test_dynamem_backend_smoke`, `test_unified_backend_dynamem` | `test_red_cylinder_in_sim.py` (parametrized: **stretch** and **innate_mars** + default table), `test_robocasa_memory_after_spin.py` (Robocasa) |
 | **GraphEQA** | Graph-based EQA memory     | `test_graph_eqa_memory.py`, `test_memory_backends_smoke::test_graph_eqa_backend_smoke`, `test_unified_backend_graph_eqa` | — (same sim as DynaMem for nav; EQA is graph) |
+| **Dynagraph (multi-robot Robocasa)** | Voxel nav + graph EQA + floor export | `test_floor_metrics.py`, `test_nav_xyt_session.py` | [`run_dynagraph_multi_robot_e2e.py`](../../src/test/app/run_dynagraph_multi_robot_e2e.py) — see [dynagraph_robocasa_e2e.md](../dynagraph_robocasa_e2e.md) |
 
 Default MuJoCo scene (`scene.xml`): **red cylinder** (object2) at (0.08, -0.55, 0.6) and **blue cube** (object1) at (-0.02, -0.55, 0.6). After a single **rotate_in_place**, both should be visible and in memory for any method (DynaMem integration test asserts red cylinder; blue cube asserted when detected).
 

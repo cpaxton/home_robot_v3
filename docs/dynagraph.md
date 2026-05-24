@@ -46,6 +46,28 @@ Dynagraph never chooses an MJCF/Robocasa layout by itself—you run the simulato
 
 The server attaches **`navigation_origin_xyt`** in the ZMQ session; Rerun meshes and voxel fusion align when this matches the fused map frame.
 
+#### Multi-robot Robocasa E2E (stretch, innate_mars, galaxea_r1)
+
+Automated three-robot comparison (explored floor vs spawner walkable map, same seed):
+
+```bash
+uv run python src/test/app/run_dynagraph_multi_robot_e2e.py
+```
+
+**Full guide:** [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md) — how to run, pass criteria, result paths, and example export / detection output for quality review.
+
+All three use **`RobosuiteZmqServer`** on Robocasa (strip-and-replace MJCF + autoplace). **`stretch`** additionally needs **`EMET_STRETCH_ROBOSUITE_ZMQ=1`** so Dynagraph uses **`GenericZmqClient`**. Each **`--export DIR`** writes **`floor_metrics.json`** and **`scene_graph_report.txt`**.
+
+Manual pairwise compare:
+
+```python
+from emet.memory.floor_metrics import compare_explored_floor_metrics, load_floor_metrics
+
+a = load_floor_metrics("/tmp/dynagraph_e2e_compare/innate_mars/graph")
+b = load_floor_metrics("/tmp/dynagraph_e2e_compare/stretch/graph")
+print(compare_explored_floor_metrics(a, b, rtol_area=0.35))
+```
+
 #### Pretty text vs MuJoCo “ground truth”
 
 - **Semantic graph**: **`--export DIR`** prints the same **`format_scene_graph_pretty`** summary to stdout as it writes **`scene_graph_report.txt`** inside **`DIR`**.
@@ -125,6 +147,7 @@ Live runs log graph nodes and a text tree under **`world/dynagraph/`** (`world/d
 
 ## See also
 
+- [Dynagraph Robocasa E2E](dynagraph_robocasa_e2e.md) — multi-robot floor-metrics harness and quality artefacts.
 - [GraphEQA](graph_eqa.md) — baseline graph EQA without merge/staleness defaults.
 - [Simulation](simulation.md) — MuJoCo / Robocasa and `emet serve mujoco`.
 - [CLI](cli.md) — `emet run` apps table.
