@@ -147,6 +147,7 @@ Live runs log graph nodes and a text tree under **`world/dynagraph/`** (`world/d
 
 ## See also
 
+- [Testing index](TESTING.md) — master map of test docs, suites, and known gaps (graph + EQA on known scene).
 - [Dynagraph Robocasa E2E](dynagraph_robocasa_e2e.md) — multi-robot floor-metrics harness and quality artefacts.
 - [GraphEQA](graph_eqa.md) — baseline graph EQA without merge/staleness defaults.
 - [Simulation](simulation.md) — MuJoCo / Robocasa and `emet serve mujoco`.

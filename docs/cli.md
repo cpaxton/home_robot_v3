@@ -381,6 +381,8 @@ Run the full test suite:
 emet test
 ```
 
+**Master index:** [TESTING.md](TESTING.md) — all test docs, harnesses, and the Dynagraph graph+EQA gap.
+
 Run only CLI tests:
 ```bash
 emet test src/test/cli/

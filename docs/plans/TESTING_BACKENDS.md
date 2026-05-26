@@ -1,5 +1,7 @@
 # Testing the three memory backends (SVM, DynaMem, GraphEQA)
 
+**Index:** [TESTING.md](../TESTING.md) lists all testing documentation and automated suites in one place.
+
 ## Refactor summary (branch vs main)
 
 The **mapping** and **memory** refactor on this branch:

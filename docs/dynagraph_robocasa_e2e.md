@@ -2,6 +2,8 @@
 
 End-to-end comparison of **explored floor area** and **spawner walkability maps** for three robots on the same Robocasa kitchen (seed 0): **`stretch`**, **`innate_mars`**, and **`galaxea_r1`**.
 
+**Testing index:** [TESTING.md](TESTING.md). **Next gap (graph + EQA on known scene):** [TESTING.md#known-gap-graph--eqa-on-a-known-scene-dynagraph](TESTING.md#known-gap-graph--eqa-on-a-known-scene-dynagraph).
+
 See also: [Dynagraph overview](dynagraph.md), [Simulation](simulation.md), [Multi-robot testing plan](plans/MULTI_ROBOT_TESTING.md).
 
 ## Quick start
