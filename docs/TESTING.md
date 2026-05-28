@@ -2,6 +2,16 @@
 
 Central map of **how to run tests**, **what each suite validates**, and **where detailed write-ups live**. From the repo root, use **`uv sync`** then **`uv run emet test`** (see [cli.md](cli.md#testing)).
 
+## Run from this repo
+
+Use **`uv run emet …`** (or `source .venv/bin/activate` then bare `emet`) from the **project root** so commands pick up **this checkout’s** code and virtualenv.
+
+| Symptom | Fix |
+|---------|-----|
+| `No such option: --explore-loop` on `emet run dynagraph` | Wrong `emet` on PATH (another clone or old install). Run `which emet`; use **`uv run emet`** from this repo. Confirm with `uv run python -m emet.app.run_dynagraph --help` (should list `--explore-loop`) |
+| Tests skip sim unexpectedly | Default runs include sim; set `RUN_SIM_TESTS=0` or `uv run emet test --no-sim` to skip |
+| Missing MuJoCo / Robocasa | `uv sync` with default groups, or `./install.sh --sim` |
+
 ## Quick commands
 
 | Goal | Command |
@@ -11,6 +21,10 @@ Central map of **how to run tests**, **what each suite validates**, and **where 
 | Verbose | `uv run emet test -v` |
 | Memory backend smokes | `uv run emet test src/test/memory/test_memory_backends_smoke.py -v` |
 | Multi-robot Dynagraph floor E2E | `uv run python src/test/app/run_dynagraph_multi_robot_e2e.py` |
+| Dynagraph unit (explore loop, graph memory) | `uv run emet test src/test/app/test_dynagraph_explore.py src/test/memory/test_graph_eqa_memory.py -v` |
+| GraphEQA human-answer formatter | `uv run emet test src/test/memory/test_graph_eqa_human_answer.py -v` |
+| Manual Dynagraph EQA + export (Robocasa) | See [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md#single-eqa-question-manual-per-robot) |
+| Dynagraph Robocasa question CLI (CI) | `uv run emet test src/test/app/test_dynagraph_robocasa_question_cli.py -v` |
 
 Environment: **`RUN_SIM_TESTS=0`** skips sim integration tests. Heavy VLLM download tests use marker **`vllm_load`** and are excluded from default runs — see [plans/TESTING_VLLM_LOAD.md](plans/TESTING_VLLM_LOAD.md).
 
@@ -94,7 +108,7 @@ Add **`test_dynagraph_graph_eqa_known_scene.py`** (or extend the E2E harness) th
 | Step | Detail |
 |------|--------|
 | Scene | Default MuJoCo table (**red cylinder**, **blue cube**) and/or Robocasa **seed 0** with documented fixture objects |
-| Run | `emet run dynagraph --explore-loop … --question "What colors are the objects on the table?" --export /tmp/…` (or pytest driving the same APIs) |
+| Run | `uv run emet run dynagraph --explore-loop … --question "What colors are the objects on the table?" --export /tmp/…` (or pytest driving the same APIs) |
 | Assert graph | `scene_graph_report.txt` or `GraphEQAMemory.to_string()`: **≥ 1 node**; labels match allowlist (e.g. contains *red*, *blue*, or kitchen nouns from detections JSON) |
 | Assert EQA | Answer text contains expected tokens; optional mocked EQA client for CI stability (pattern from `test_graph_eqa_default_scene_sim`) |
 | Docs | Link from [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md) and this page |

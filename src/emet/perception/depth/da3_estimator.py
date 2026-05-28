@@ -22,6 +22,19 @@ logger = Logger(__name__)
 _MISSING = object()
 
 
+def sensor_depth_usable(sensor_depth: np.ndarray | None, *, min_valid_fraction: float = 1e-4) -> bool:
+    """True when *sensor_depth* has a non-trivial amount of finite, positive depth."""
+    if sensor_depth is None:
+        return False
+    sd = np.asarray(sensor_depth, dtype=np.float32)
+    if sd.size == 0:
+        return False
+    valid = np.isfinite(sd) & (sd > 1e-6)
+    if not bool(np.any(valid)):
+        return False
+    return float(np.count_nonzero(valid)) / float(sd.size) >= min_valid_fraction
+
+
 def apply_da3_sky_row_mask(depth: np.ndarray, fraction_top: float) -> np.ndarray:
     """Zero the top *fraction_top* of image rows in a depth map (HxW).
 
@@ -143,6 +156,20 @@ class DA3DepthEstimator:
         self._model.eval()
         self._maybe_torch_compile()
 
+    def _depth_from_prediction(self, pred: Any, rgb: np.ndarray) -> np.ndarray:
+        depth = np.asarray(pred.depth[0], dtype=np.float32)
+        depth = np.nan_to_num(depth, nan=0.0, posinf=self._clip_output_max_m, neginf=0.0)
+        depth = np.clip(depth, 0.0, self._clip_output_max_m)
+        return resize_depth_to_match_rgb(depth, rgb)
+
+    @staticmethod
+    def _is_pose_alignment_failure(err: BaseException) -> bool:
+        name = type(err).__name__
+        if name == "GeometryException":
+            return True
+        msg = str(err).lower()
+        return "umeyama" in msg or "degenerate covariance" in msg
+
     def infer(
         self,
         rgb: np.ndarray,
@@ -154,22 +181,40 @@ class DA3DepthEstimator:
         if rgb.ndim != 3 or rgb.shape[2] != 3:
             raise ValueError(f"rgb must be HxWx3 uint8/float; got {rgb.shape}")
         self._ensure_model()
-        kwargs: dict[str, Any] = {
+        kwargs_rgb_only: dict[str, Any] = {
             "image": [rgb],
             "process_res": self._process_res,
         }
+        attempts: list[tuple[str, dict[str, Any]]] = [("monocular_RGB_only", kwargs_rgb_only)]
         if intrinsics is not None and extrinsics_w2c is not None:
             k = np.asarray(intrinsics, dtype=np.float32).reshape(3, 3)
             ext = np.asarray(extrinsics_w2c, dtype=np.float32).reshape(4, 4)
-            kwargs["intrinsics"] = k.reshape(1, 3, 3)
-            kwargs["extrinsics"] = ext.reshape(1, 4, 4)
-            kwargs["align_to_input_ext_scale"] = True
+            kwargs_with_cam: dict[str, Any] = {
+                **kwargs_rgb_only,
+                "intrinsics": k.reshape(1, 3, 3),
+                "extrinsics": ext.reshape(1, 4, 4),
+                "align_to_input_ext_scale": True,
+            }
+            attempts.insert(0, ("monocular+intrinsics+extrinsics", kwargs_with_cam))
 
-        pred = self._model_inference(**kwargs)
-        depth = np.asarray(pred.depth[0], dtype=np.float32)
-        depth = np.nan_to_num(depth, nan=0.0, posinf=self._clip_output_max_m, neginf=0.0)
-        depth = np.clip(depth, 0.0, self._clip_output_max_m)
-        return resize_depth_to_match_rgb(depth, rgb)
+        last_err: BaseException | None = None
+        for label, kwargs in attempts:
+            try:
+                pred = self._model_inference(**kwargs)
+                return self._depth_from_prediction(pred, rgb)
+            except Exception as e:
+                last_err = e
+                if self._is_pose_alignment_failure(e):
+                    logger.warning(
+                        "DA3 %s pose alignment failed (%s); trying fallback.",
+                        label,
+                        e,
+                    )
+                    continue
+                raise
+
+        assert last_err is not None
+        raise last_err
 
     def infer_stereo(
         self,
@@ -304,7 +349,7 @@ def resolve_depth_map(
     p_r = np.asarray(camera_pose_right, dtype=np.float32) if pr_ok else None
 
     if mode == "auto":
-        if sensor_depth is not None and np.asarray(sensor_depth).size > 0:
+        if sensor_depth_usable(sensor_depth):
             return np.asarray(sensor_depth, dtype=np.float32)
 
     if est is None:
@@ -347,6 +392,6 @@ def resolve_depth_map_uses_observation_sensor_only(
     mode = str(depth_source).lower()
     if mode == "sensor":
         return True
-    if mode == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
+    if mode == "auto" and sensor_depth_usable(sensor_depth):
         return True
     return False

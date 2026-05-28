@@ -20,10 +20,23 @@ from typing import Any
 import numpy as np
 
 from emet.agent.camera_debug import print_camera_frame_diagnostics
+from emet.memory.graph_eqa.human_answer import HumanEQAResult, format_eqa_tool_response
 from emet.utils.logger import Logger
 from emet.visualization.map_snapshot import format_navigation_report, snapshot_from_voxel_map
 
 _logger = Logger(__name__)
+
+
+def _graph_eqa_tool_string(query_out: tuple) -> str:
+    """Format ``query_answer`` tuple for agent tools (human answer, not image ids)."""
+    reasoning, answer, confidence, confidence_reasoning, _, _ = query_out[:6]
+    human = HumanEQAResult(
+        user_answer=str(answer).strip(),
+        location_hint=None,
+        confidence_summary="confident" if confidence else "not confident",
+        debug_reasoning=(reasoning or confidence_reasoning or "").strip(),
+    )
+    return format_eqa_tool_response(human)
 
 
 class Tool:
@@ -109,14 +122,19 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
 
     # -- query_memory --------------------------------------------------------
     def query_memory(question: str) -> str:
+        xyt = context.get("xyt_for_query")
+        planner = context.get("planner")
+        graph_backend = context.get("graph_memory_backend")
+        if graph_backend is not None and hasattr(graph_backend, "query_answer"):
+            try:
+                return _graph_eqa_tool_string(graph_backend.query_answer(question, xyt, planner))
+            except Exception as e:
+                _logger.warning("query_memory graph backend failed (%s); trying voxel memory.", e)
         memory_backend = context.get("memory_backend")
         if memory_backend is not None and hasattr(memory_backend, "query_answer"):
             try:
-                xyt = context.get("xyt_for_query")
-                planner = context.get("planner")
                 out = memory_backend.query_answer(question, xyt, planner)
-                reasoning, answer, confidence, _, _, relevant_images = out[:6]
-                return f"{answer} (Confidence: {confidence})"
+                return _graph_eqa_tool_string(out)
             except NotImplementedError:
                 pass
             except AttributeError as e:
@@ -138,9 +156,9 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         Tool(
             name="query_memory",
             description=(
-                "Questions about DynaMem voxel map / semantic memory (where is X, have I seen Y) when voxel EQA is enabled. "
-                "For graph-style questions (relations, what connects to what) use list_scene_relations or query_scene_graph. "
-                "For open-ended 'what do you see', prefer describe_scene and send_image unless full voxel EQA is enabled."
+                "Questions about the scene (where is X, have I seen Y). Uses graph EQA when enabled, else voxel memory. "
+                "Returns a final user-facing Answer line (not image numbers). "
+                "For relations use list_scene_relations; for open-ended views use describe_scene and send_image."
             ),
             parameters={
                 "type": "object",
@@ -471,10 +489,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
             try:
                 xyt = context.get("xyt_for_query")
                 planner = context.get("planner")
-                out = gmb.query_answer(question, xyt, planner)
-                reasoning, answer, confidence, cr, _, _ = out[:6]
-                tail = f" ({cr})" if cr else ""
-                return f"{answer} (confidence={confidence}){tail}\nReasoning: {reasoning}"
+                return _graph_eqa_tool_string(gmb.query_answer(question, xyt, planner))
             except Exception as e:
                 _logger.warning("query_scene_graph graph backend failed: %s", e)
         executor = context.get("executor")
@@ -488,8 +503,9 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         Tool(
             name="query_scene_graph",
             description=(
-                "Embodied questions using GraphEQA memory (objects, navigation context) when enabled; "
-                "otherwise dumps the open-vocab spatial scene graph as text. Use for 'why', relational, or multi-step scene questions."
+                "Embodied where/what questions using GraphEQA (objects, 3D positions) when enabled. "
+                "Returns Answer / Location / Confidence for the user (not internal image ids). "
+                "Otherwise dumps the open-vocab spatial scene graph. Prefer for 'where is', 'what color', 'is there'."
             ),
             parameters={
                 "type": "object",

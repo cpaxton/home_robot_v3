@@ -55,7 +55,7 @@ from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
 from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
 from emet.motion.algo.a_star import AStar
 from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
-from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask
+from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask, sensor_depth_usable
 from emet.perception.detection.owl import OwlPerception
 from emet.perception.detection.yoloe import YoloEPerception
 
@@ -526,7 +526,7 @@ class DynamemController(BaseController):
         if mode == "sensor":
             return sensor_depth
         # Auto: prefer sensor without constructing DA3 (heavy); matches resolve_depth_map logic.
-        if mode == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
+        if mode == "auto" and sensor_depth_usable(sensor_depth):
             return np.asarray(sensor_depth, dtype=np.float32)
         est = self._lazy_da3_estimator()
         self._depth_map_from_da3_infer = True

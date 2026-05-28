@@ -2,7 +2,7 @@
 
 Stretch AI includes a MuJoCo-based simulation that lets you run AI apps without a physical robot. The simulation uses the same ZMQ interface as the real robot, so apps like DynaMem, grasp_object, and mapping work with `--robot_ip 127.0.0.1`.
 
-**Tip:** Use the [emet CLI](cli.md) for simpler commands: `emet serve mujoco`, `emet run dynamem`, etc.
+**Tip:** Use the [emet CLI](cli.md) for simpler commands: `uv run emet serve mujoco`, `uv run emet run dynamem`, etc. From the project root, **`uv run emet`** ensures you use this checkout’s code (see [TESTING.md](TESTING.md#run-from-this-repo)).
 
 ## Quick Start
 
@@ -104,7 +104,9 @@ emet serve mujoco --use-robocasa
 emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo --match-method class
 ```
 
-Graph-based EQA on the same sim (no pick-and-place): `emet run graph-eqa --robot-ip 127.0.0.1` or `emet run dynagraph --robot-ip 127.0.0.1` ([graph_eqa.md](graph_eqa.md), [dynagraph.md](dynagraph.md)).
+Graph-based EQA on the same sim (no pick-and-place): `uv run emet run graph-eqa --robot-ip 127.0.0.1` or `uv run emet run dynagraph --robot-ip 127.0.0.1` ([graph_eqa.md](graph_eqa.md), [dynagraph.md](dynagraph.md)).
+
+**Dynagraph testing:** unit tests (`test_dynagraph_explore.py`, `test_graph_eqa_memory.py`), multi-robot Robocasa floor E2E (`run_dynagraph_multi_robot_e2e.py`), and manual `--explore-loop` / `--export` runs — see [TESTING.md](TESTING.md) and [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md).
 
 - `-S` / `--skip`: skip confirmations for autonomous runs
 - `--visual-servo` / `-V`: use visual servoing (required in sim; AnyGrasp needs real robot)

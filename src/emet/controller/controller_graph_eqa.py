@@ -196,11 +196,15 @@ class GraphEQAController(DynamemController):
         elif relevant_images:
             self.rerun_visualizer.log_custom_2d_image("/observation_similar_to_text", relevant_images)
 
-        discord_text = (
-            answer + ". I believe this answer is correct because " + reasoning
-            if confidence
-            else "I am not confident to answer the question because " + confidence_reasoning
-        )
+        if confidence:
+            discord_text = answer
+        else:
+            short_cr = (confidence_reasoning or reasoning or "").strip()
+            if len(short_cr) > 280:
+                short_cr = short_cr[:277] + "..."
+            discord_text = (
+                f"{answer} I am not fully confident yet; {short_cr}" if short_cr else answer
+            )
         discord_text += "\nI also provide relevant images here."
 
         if confidence:
@@ -215,7 +219,8 @@ class GraphEQAController(DynamemController):
                 and obstacles.shape[1] > int(target_grid[1])
                 and not obstacles[int(target_grid[0]), int(target_grid[1])]
             ):
-                target_theta = self.space.sample_navigation(start_pose, self.planner, target_point)[-1]
+                nav_samples = self.space.sample_navigation(start_pose, self.planner, target_point)
+                target_theta = nav_samples[-1] if nav_samples is not None else None
             else:
                 target_theta = None
             for _ in range(max_movement_step):

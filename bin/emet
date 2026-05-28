@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Run emet from this checkout's uv environment (avoids ~/.local/bin emet from another clone).
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+exec uv run emet "$@"

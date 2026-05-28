@@ -28,6 +28,7 @@ import numpy as np
 from PIL import Image
 
 from emet.core.parameters import Parameters
+from emet.memory.graph_eqa.human_answer import format_human_eqa_answer
 
 
 def labels_are_semantic_graph_hypothesis(labels: list[str] | None) -> bool:
@@ -579,6 +580,18 @@ class GraphEQAMemory:
         answer_outputs = raw.replace("*", "").replace("/", "").replace("#", "").lower()
 
         reasoning, answer, confidence, action, confidence_reasoning = self.parse_answer(answer_outputs)
+        raw_answer = answer
+        human = format_human_eqa_answer(
+            question,
+            answer,
+            reasoning,
+            self,
+            confidence=confidence,
+            confidence_reasoning=confidence_reasoning,
+            selected_obs_ids=obs_ids,
+        )
+        answer = human.user_answer
+        reasoning = human.debug_reasoning
 
         target_point = None
         if not confidence and action.strip():
@@ -597,7 +610,7 @@ class GraphEQAMemory:
                     target_point = self._target_point_from_image_id(image_id)
             self._history_outputs.append(
                 "Answer:"
-                + answer
+                + raw_answer
                 + "\nReasoning:"
                 + reasoning
                 + "\nConfidence:"
@@ -610,7 +623,7 @@ class GraphEQAMemory:
         else:
             self._history_outputs.append(
                 "Answer:"
-                + answer
+                + raw_answer
                 + "\nReasoning:"
                 + reasoning
                 + "\nConfidence:"

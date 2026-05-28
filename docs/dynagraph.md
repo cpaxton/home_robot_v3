@@ -4,6 +4,8 @@
 
 Use it when you want GraphEQA-style prompts and task images, but also want a simple discrete-time lifecycle on graph nodes (similar in spirit to object aging in dense mapping stacks, without replacing the full [open-vocab scene graph](simulation.md) path used by DynaMem instance mode).
 
+**CLI:** Run from the project root with **`uv run emet run dynagraph …`** (or activate `.venv` first). See [TESTING.md](TESTING.md#run-from-this-repo) if flags like **`--explore-loop`** are missing from `--help`.
+
 ## References
 
 - **GraphEQA** (graph memory + EQA): [paper (arXiv:2412.14480)](https://arxiv.org/abs/2412.14480), [project site](https://saumyasaxena.github.io/graph-eqa/). This repo’s re-implementation is described in [graph_eqa.md](graph_eqa.md).
@@ -12,7 +14,7 @@ Use it when you want GraphEQA-style prompts and task images, but also want a sim
 ## CLI
 
 ```bash
-emet run dynagraph --robot-ip 127.0.0.1
+uv run emet run dynagraph --robot-ip 127.0.0.1
 ```
 
 Options mirror `emet run graph-eqa` (robot, Discord, Rerun export, `--no-instance-graph`, `--no-sensor-perception`, etc.). Additional Dynagraph-specific flags:
@@ -32,16 +34,20 @@ Dynagraph never chooses an MJCF/Robocasa layout by itself—you run the simulato
 
 1. **Terminal 1** — MuJoCo + Robocasa + matching `--robot`:
    ```bash
-   emet serve mujoco --use-robocasa --robot stretch
+   uv run emet serve mujoco --use-robocasa --robot stretch
    ```
    Substitute **`innate_mars`**, **`rby1`**, etc., to match assets (see [simulation.md](simulation.md)).
 2. **Terminal 2** — Dynagraph with the **same robot key** and dynav YAML if needed:
    ```bash
-   emet run dynagraph --robot stretch --robot-ip 127.0.0.1
+   uv run emet run dynagraph --robot stretch --robot-ip 127.0.0.1
    ```
-   Innate Mars in kitchen scenes often wants **`dynav_innate_mars.yaml`** (DA3 preset) when observation depth from ZMQ is missing or thin:
+   **Robocasa sim** (ZMQ renders depth): default **`dynav_config.yaml`** or **`--perfect-depth`** (skips DA3 when sensor depth is present). **`dynav_innate_mars.yaml`** now uses **`depth_source: auto`** (sensor in sim, DA3 on real robot when depth is missing):
    ```bash
-   emet run dynagraph --robot innate_mars --dynav-config dynav_innate_mars.yaml --robot-ip 127.0.0.1
+   # Sim (kitchen) — recommended
+   uv run emet run dynagraph --robot innate_mars --robot-ip 127.0.0.1 --perfect-depth
+
+   # Real robot (auto → DA3 when no ZMQ depth)
+   uv run emet run dynagraph --robot innate_mars --dynav-config dynav_innate_mars.yaml --robot-ip <ROBOT_IP>
    ```
 
 The server attaches **`navigation_origin_xyt`** in the ZMQ session; Rerun meshes and voxel fusion align when this matches the fused map frame.
@@ -79,11 +85,11 @@ print(compare_explored_floor_metrics(a, b, rtol_area=0.35))
 
   ```bash
   # Terminal 1
-  emet serve mujoco --use-robocasa --robot stretch
+  uv run emet serve mujoco --use-robocasa --robot stretch
 
   # Terminal 2 — shared directory so both artefacts land beside each other:
   mkdir -p /tmp/dynagraph_robo
-  emet run dynagraph --robot stretch --robot-ip 127.0.0.1 \
+  uv run emet run dynagraph --robot stretch --robot-ip 127.0.0.1 \
     --explore-loop --explore-max-iters 40 --explore-max-failures 5 \
     --export /tmp/dynagraph_robo/graph \
     --dump-sim-ground-truth /tmp/dynagraph_robo/mujoco_bodies.txt
@@ -104,7 +110,7 @@ This is **not** a formal “100% geometric coverage guarantee.” Robocasa geome
 **Batch graph export:**
 
 ```bash
-emet run dynagraph --robot-ip 127.0.0.1 \
+uv run emet run dynagraph --robot-ip 127.0.0.1 \
   --explore-loop --explore-max-iters 80 --explore-max-failures 5 \
   --export /tmp/dynagraph_out
 ```
@@ -124,6 +130,10 @@ Append a pretty-print snapshot of **`GraphEQAMemory`** at session end (**`finall
 
 The controller passes `frame_step=self.obs_count` into the shared DynaMem→graph hook so `last_seen` stays aligned with the run’s discrete time index.
 
+## Human-readable EQA answers
+
+`--question "Where is the sink?"` prints a **short spatial sentence** (object + approximate XYZ), not “image 1”. Formatting lives in [`human_answer.py`](../src/emet/memory/graph_eqa/human_answer.py) and applies to Dynagraph, graph-eqa, and **`run_agent`** (`query_scene_graph` / `query_memory`). See [graph_eqa.md](graph_eqa.md#answer-format-human-readable).
+
 ## Rerun
 
 Live runs log graph nodes and a text tree under **`world/dynagraph/`** (`world/dynagraph/nodes`, `world/dynagraph/summary`). The Dynagraph blueprint adds a dedicated panel for that subtree alongside the usual 3D view and cameras.
@@ -131,8 +141,18 @@ Live runs log graph nodes and a text tree under **`world/dynagraph/`** (`world/d
 ### Manual smoke (Robocasa + export)
 
 - Start server as in **Robocasa** above with **`--use-robocasa`**.
-- **`emet run dynagraph --robot-ip 127.0.0.1 --explore-loop --explore-max-iters 20 --explore-max-failures 4 --export /tmp/graphtest`**.
+- **`uv run emet run dynagraph --robot-ip 127.0.0.1 --explore-loop --explore-max-iters 20 --explore-max-failures 4 --export /tmp/graphtest`**.
 - Confirm **`/tmp/graphtest/scene_graph_report.txt`** exists and is non-empty when the voxel map populated.
+
+## Testing
+
+| Layer | Command |
+|-------|---------|
+| Unit (explore loop, graph memory) | `uv run emet test src/test/app/test_dynagraph_explore.py src/test/memory/test_graph_eqa_memory.py -v` |
+| Multi-robot Robocasa floor E2E | `uv run python src/test/app/run_dynagraph_multi_robot_e2e.py` |
+| Manual EQA + export | [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md#assessing-semantic--eqa-quality) |
+
+Full index and known gaps (graph + EQA on known scene): [TESTING.md](TESTING.md).
 
 ## Code map
 

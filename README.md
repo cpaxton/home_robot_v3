@@ -35,7 +35,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ```bash
 git clone <this-repo>
-cd home_robot_v3   # or your clone directory
+cd home_robot_v2   # or your clone directory
 ```
 
 **Option A — one-shot script (recommended):**
@@ -66,12 +66,15 @@ The script installs system deps (e.g. `portaudio`, `espeak`, `ffmpeg`) and runs 
 
 **3. Use the environment:**
 
+From the **project root**, prefer **`uv run emet …`** so commands use this checkout’s `.venv` and current code. After `uv sync`, you can instead `source .venv/bin/activate` and run bare `emet …`.
+
 ```bash
-source .venv/bin/activate
-# or run without activating:
 uv run emet --help
 uv run python -m emet.app.ai_pickup
+# or: source .venv/bin/activate && emet --help
 ```
+
+If a command fails with **`No such option: --explore-loop`** (or other flags missing from `--help`), your shell’s `emet` likely points at another install. Run `which emet` and use **`uv run emet`** from this repo (see [Testing](docs/TESTING.md#run-from-this-repo)).
 
 ## Quick Start (Simulation)
 
@@ -82,12 +85,12 @@ Run DynaMem in MuJoCo simulation in a few steps:
 ./install.sh -y --sim
 
 # 2. Terminal 1 — start simulation server
-emet serve mujoco --use-robocasa
-# or: python -m emet.simulation.mujoco_server --use-robocasa
+uv run emet serve mujoco --use-robocasa
+# or: uv run python -m emet.simulation.mujoco_server --use-robocasa
 
 # 3. Terminal 2 — run DynaMem
-emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo --headless
-# or: python -m emet.app.run_dynamem ...
+uv run emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo --headless
+# or: uv run python -m emet.app.run_dynamem ...
 ```
 
 **4. View in browser:** Open `http://localhost:9090?url=ws://localhost:9877` to see the Rerun visualization (cameras, 3D scene, robot).
@@ -218,6 +221,8 @@ Check out additional documentation for ways to use Stretch AI:
 - [DynaMem](docs/dynamem.md) -- Open-vocabulary mobile manipulation; works in simulation and headless (connect Rerun at `http://<server>:9090?url=ws://<server>:9877`)
 - [Data Collection for Learning from Demonstration](docs/data_collection.md) -- How to collect data for learning from demonstration
 - [Embodied Question Answering](docs/eqa.md) -- Allow the robot to explore the environment and answer questions from the users about the environment. For a graph-based memory alternative, see [GraphEQA](docs/graph_eqa.md).
+- [Dynagraph](docs/dynagraph.md) -- GraphEQA + voxel navigation with graph merge/staleness; Robocasa explore-loop and export ([E2E testing guide](docs/dynagraph_robocasa_e2e.md)).
+- [Testing index](docs/TESTING.md) -- How to run `emet test`, memory-backend smokes, and Dynagraph harnesses.
 - [Learning from Demonstration](docs/learning_from_demonstration.md)  -- How to train and evaluate policies with LfD
 - [Open-Vocabulary Mobile Manipulation](docs/ovmm.md) -- Experimental code which can handle more complex language commands
 - [Apps](docs/apps.md) -- List of many different apps that you can run
@@ -236,6 +241,19 @@ pre-commit install
 A plain `uv sync` installs **default dependency groups** (dev, sim, hand_tracker, dynamem, da3) and works without cloning simulation repos; **robosuite/robocasa** still come from `./install.sh --sim` / `emet install sim`. `./install.sh` defaults to **no** Robocasa clone (use `--sim` or `EMET_INSTALL_PROFILE=full` for the old behavior). With sim enabled, MolmoSpaces (``.venv-molmospaces``) installs automatically when ``packages/emet_molmospaces`` is present unless you pass ``--no-molmospaces``. Use `./install.sh --no-sam2` or `uv sync --no-group dynamem` if the SAM-2 submodule is absent.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for more information, and [debug](docs/debug.md) / [update](docs/update.md) for troubleshooting. You can test most code in [simulation](docs/simulation.md) without a physical robot.
+
+### Testing
+
+From the repo root (uses project `.venv` via uv):
+
+```bash
+uv sync
+uv run emet test                    # full suite (sim on by default)
+uv run emet test --no-sim           # faster; skip sim integration tests
+uv run emet test -v src/test/memory/test_memory_backends_smoke.py
+```
+
+**Dynagraph (this branch):** unit tests for explore-loop and graph memory, plus an optional multi-robot Robocasa floor-metrics harness (~20 min). See [docs/TESTING.md](docs/TESTING.md) and [docs/dynagraph_robocasa_e2e.md](docs/dynagraph_robocasa_e2e.md).
 
 ### Updating Code on the Robot
 

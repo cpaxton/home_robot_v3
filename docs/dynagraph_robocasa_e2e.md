@@ -4,6 +4,8 @@ End-to-end comparison of **explored floor area** and **spawner walkability maps*
 
 **Testing index:** [TESTING.md](TESTING.md). **Next gap (graph + EQA on known scene):** [TESTING.md#known-gap-graph--eqa-on-a-known-scene-dynagraph](TESTING.md#known-gap-graph--eqa-on-a-known-scene-dynagraph).
 
+**CLI:** Use **`uv run emet …`** from the project root (see [TESTING.md#run-from-this-repo](TESTING.md#run-from-this-repo)). The harness invokes `emet run dynagraph` from this repo’s `.venv` automatically.
+
 See also: [Dynagraph overview](dynagraph.md), [Simulation](simulation.md), [Multi-robot testing plan](plans/MULTI_ROBOT_TESTING.md).
 
 ## Quick start
@@ -157,14 +159,16 @@ Run one robot at a time with a natural-language question after exploration:
 
 ```bash
 # Terminal 1
-emet serve mujoco --use-robocasa --robot innate_mars --headless --seed 0
+uv run emet serve mujoco --use-robocasa --robot innate_mars --headless --seed 0
 
 # Terminal 2
-emet run dynagraph --robot innate_mars --robot-ip 127.0.0.1 --no-rerun --cpu-only \
+uv run emet run dynagraph --robot innate_mars --robot-ip 127.0.0.1 --no-rerun --cpu-only \
   --explore-loop --explore-max-iters 15 \
   --question "Where is the sink?" \
   --export /tmp/dynagraph_q/innate_mars
 ```
+
+Use default **`dynav_config.yaml`** (`depth_source: sensor`) in Robocasa sim so ZMQ depth is used. **`dynav_innate_mars.yaml`** forces DA3 and is for the real robot (or sim without hardware depth); it can crash during rotate-in-place in kitchen sim (`Umeyama alignment` / degenerate poses).
 
 Stdout includes the **GraphEQA answer** and an updated **`scene_graph_report.txt`** with **Nodes (N)** when observations merge into the graph. Repeat with **`--robot stretch`** (and **`EMET_STRETCH_ROBOSUITE_ZMQ=1`**) and **`--robot galaxea_r1`** for side-by-side EQA comparison.
 
@@ -182,6 +186,7 @@ Navigation uses **world-frame** planning (`navigation_origin_xyt` from ZMQ sessi
 
 | Symptom | Likely cause |
 |---------|----------------|
+| `No such option: --explore-loop` | Shell `emet` is not this repo’s install — use **`uv run emet`** from project root ([TESTING.md](TESTING.md#run-from-this-repo)) |
 | Harness exit **1**, `area_match=False` | Run-to-run variance; re-run full harness or increase explore iters; check **`dynagraph.stdout`** for nav timeouts |
 | Stale metrics / wrong robot numbers | Old **`graph/`** not wiped — fixed in harness; delete **`/tmp/dynagraph_e2e_compare`** and re-run |
 | **stretch** hang or EGL crash | Ensure **`EMET_STRETCH_ROBOSUITE_ZMQ=1`** (Robocasa uses Robosuite server, not Stretch subprocess) |

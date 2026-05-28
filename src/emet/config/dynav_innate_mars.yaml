@@ -36,7 +36,8 @@ min_depth: 0.25
 max_depth: 2.5
 
 # Depth Anything 3: ``DA3-SMALL`` is faster for live stereo; use ``DA3METRIC-LARGE`` for best metric monocular.
-depth_source: da3
+# ``auto``: use ZMQ/sim sensor depth when present; fall back to DA3 on the real robot when depth is missing.
+depth_source: auto
 da3_model_id: depth-anything/DA3-SMALL
 da3_process_res: 378
 # Cap runaway DA3 / stereo depths (meters) before voxel ``max_depth`` filtering.

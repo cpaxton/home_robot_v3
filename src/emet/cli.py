@@ -94,6 +94,39 @@ def _project_venv_python() -> Path | None:
     return None
 
 
+def _in_project_tree() -> bool:
+    """True when cwd is the project root or a subdirectory."""
+    root = _project_root()
+    if not (root / "pyproject.toml").exists():
+        return False
+    try:
+        cwd = Path.cwd().resolve()
+    except OSError:
+        return False
+    return cwd == root or str(cwd).startswith(str(root) + os.sep)
+
+
+def _require_repo_venv_when_in_repo() -> None:
+    """Fail fast when ``emet`` on PATH is not this checkout's ``.venv`` (common with old symlinks)."""
+    venv_py = _project_venv_python()
+    if venv_py is None or not _in_project_tree():
+        return
+    if Path(sys.executable).resolve() == venv_py.resolve():
+        return
+    root = _project_root()
+    click.secho(
+        "Error: emet is not running from this repo's .venv.\n"
+        f"  Current:  {sys.executable}\n"
+        f"  Expected: {venv_py}\n"
+        f"  From {root}, use:\n"
+        "    uv run emet …\n"
+        "    # or: source .venv/bin/activate && emet …",
+        fg="red",
+        err=True,
+    )
+    sys.exit(2)
+
+
 def _run_module(module: str, args: list[str], env: dict | None = None) -> int:
     """Run a Python module. Returns exit code."""
     env = env or os.environ.copy()
@@ -974,6 +1007,7 @@ def run(
       emet run debug-da3-depth --robot innate_mars   # DA3 depth + point cloud in Rerun (or: emet debug-da3-depth)
       emet run debug-circle-rerun   # pole-ring calibration → Rerun (or: emet debug-circle-rerun)
     """
+    _require_repo_venv_when_in_repo()
     args = list(ctx.args)
     args.extend(["--robot_ip", robot_ip])
     if app in _EMET_RUN_APPS_WITH_ROBOT:

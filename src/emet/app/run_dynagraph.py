@@ -132,6 +132,12 @@ def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
     help="CPU-only: skip loading Qwen3.5 multimodal for scene labels; use voxel fallback",
 )
 @click.option(
+    "--perfect-depth",
+    "--perfect_depth",
+    is_flag=True,
+    help="Prefer observation sensor depth over DA3 when available (sim calibration / Robocasa)",
+)
+@click.option(
     "--no-sensor-perception",
     is_flag=True,
     help="Do not use VLM scene labels; use voxel image_descriptions only",
@@ -218,6 +224,7 @@ def main(
     export_dir: str | None = None,
     dump_memory: str | None = None,
     cpu_only: bool = False,
+    perfect_depth: bool = False,
     no_sensor_perception: bool = False,
     no_instance_graph: bool = False,
     merge_xy_m: float | None = None,
@@ -260,6 +267,17 @@ def main(
     parameters = get_parameters(dynav_resolved)
     robot_key = robot_backend.lower().replace("-", "_")
     apply_robot_dynav_parameter_overrides(robot_backend, parameters)
+    if perfect_depth:
+        parameters["debug_perfect_sensor_depth"] = True
+        logger.info("debug: perfect sensor depth (DA3 skipped when observation depth is present)")
+    elif robot_ip.strip() in ("127.0.0.1", "localhost", "::1") and str(
+        parameters.get("depth_source", "")
+    ).lower() == "da3":
+        parameters["depth_source"] = "auto"
+        logger.info(
+            "Dynagraph: local sim (robot_ip=%s); depth_source da3 -> auto (prefer ZMQ sensor depth)",
+            robot_ip,
+        )
     if robot_key == "stretch" and os.environ.get("EMET_STRETCH_ROBOSUITE_ZMQ", "").strip().lower() in (
         "1",
         "true",
@@ -401,11 +419,15 @@ def main(
                 robot.move_to_nav_posture()
                 robot.switch_to_navigation_mode()
                 robot.say("Answering the question " + question)
-                discord_text, _imgs = executor(question)
-                if not discord_text.strip():
-                    click.echo("(Empty EQA reply — check graph memory / observations.)")
-                else:
-                    click.echo(discord_text)
+                try:
+                    discord_text, _imgs = executor(question)
+                    if not discord_text.strip():
+                        click.echo("(Empty EQA reply — check graph memory / observations.)")
+                    else:
+                        click.echo(discord_text)
+                except Exception as e:
+                    logger.warning(f"EQA question failed (export will continue): {e}")
+                    click.echo(f"EQA question failed: {e}")
             env, spawn = _export_session_fields()
             text = export_graph_eqa_dir(
                 agent.graph_memory,

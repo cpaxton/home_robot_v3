@@ -18,6 +18,11 @@
 # from the closed-source graph_eqa repository.
 
 from .graph_memory import GraphEQAMemory, labels_are_semantic_graph_hypothesis
+from .human_answer import (
+    HumanEQAResult,
+    format_eqa_tool_response,
+    format_human_eqa_answer,
+)
 from .instance_observations import (
     DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M,
     frame_instances_to_labels_xyz,
@@ -37,6 +42,9 @@ from .sensor_graph_builder import (
 __all__ = [
     "DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M",
     "GraphEQAMemory",
+    "HumanEQAResult",
+    "format_eqa_tool_response",
+    "format_human_eqa_answer",
     "labels_are_semantic_graph_hypothesis",
     "SensorGraphBuilder",
     "compare_graph_to_placements_report",

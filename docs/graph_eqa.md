@@ -32,14 +32,14 @@ Both use the same exploration loop (rotate, navigate, look around), the same mLL
 
 ### Command line
 
-From the project root:
+From the project root (prefer **`uv run emet`** — see [TESTING.md](TESTING.md#run-from-this-repo)):
 
 ```bash
 # Simulation
-emet run graph-eqa --robot-ip 127.0.0.1
+uv run emet run graph-eqa --robot-ip 127.0.0.1
 
 # Physical robot (set ROBOT_IP)
-emet run graph-eqa --robot-ip $ROBOT_IP
+uv run emet run graph-eqa --robot-ip $ROBOT_IP
 ```
 
 Other options (mirroring `run_eqa`):
@@ -115,6 +115,14 @@ emet run graph-eqa --robot-ip 127.0.0.1
 
 So “find some known object” means: **ask about an object that is actually in the scene** (e.g. an apple or a pot in the default Robocasa task). The robot will explore until the graph contains enough information for the mLLM to answer.
 
+### Answer format (human-readable)
+
+EQA answers are formatted for **people and agents**, not internal image indices:
+
+- The mLLM may reason about “Image 1 / Image 8” in **reasoning**, but the **answer** shown to users is a short sentence with **object names and scene coordinates** (e.g. *The sink is on the counter at (2.1, -0.8, 0.9) m*).
+- **`emet run agent`**: use **`query_scene_graph`** for where-is / what-is questions; tool results look like `Answer: …`, `Location: …`, `Confidence: …`.
+- When **`Nodes (0)`** in export, answers may rely on navigation viewpoints only until graph merge populates nodes; see [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md).
+
 ### 5. First-run model downloads
 
 As with DynaMem/EQA, the first run may download vision/encoder models (e.g. for image descriptions). See [simulation.md](simulation.md) for typical first-run messages and caches.
@@ -147,7 +155,7 @@ Other components:
 
 ## Tests and contributing
 
-- **Tests**: `pytest src/test/memory/test_graph_eqa_memory.py` for the graph memory; controller smoke tests include `GraphEQAController`; CLI tests check that `emet run graph-eqa` and `emet run --help` list `dynagraph` (`emet.app.run_dynagraph --help` for merge/staleness flags).
+- **Tests**: `uv run emet test src/test/memory/test_graph_eqa_memory.py src/test/memory/test_graph_eqa_human_answer.py` for the graph memory and human-answer formatter; controller smoke tests include `GraphEQAController`; CLI tests check that `emet run graph-eqa` and `emet run --help` list `dynagraph` (`uv run python -m emet.app.run_dynagraph --help` for merge/staleness and **`--explore-loop`** flags). Dynagraph harnesses: [TESTING.md](TESTING.md), [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md).
 - **Contributing**: Follow the main [CONTRIBUTING.md](../CONTRIBUTING.md). The implementation is intentionally a clean re-implementation; do not paste code from the closed-source GraphEQA repo.
 
 ---

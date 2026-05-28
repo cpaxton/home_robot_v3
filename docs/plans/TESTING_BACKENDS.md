@@ -1,6 +1,6 @@
 # Testing the three memory backends (SVM, DynaMem, GraphEQA)
 
-**Index:** [TESTING.md](../TESTING.md) lists all testing documentation and automated suites in one place.
+**Index:** [TESTING.md](../TESTING.md) lists all testing documentation and automated suites in one place. Run commands from the project root with **`uv run emet`** (see [Run from this repo](../TESTING.md#run-from-this-repo)).
 
 ## Refactor summary (branch vs main)
 
