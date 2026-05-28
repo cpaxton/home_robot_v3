@@ -203,11 +203,13 @@ class MujocoZmqServer(BaseZmqServer):
         no_cameras: bool = False,
         environment: dict[str, Any] | None = None,
         scene_source_basename: str | None = None,
+        debug_molmospaces_spawn: bool = False,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         cameras_to_use = [] if no_cameras else self._default_cameras
         self._cameras_enabled = bool(cameras_to_use)
+        molmospaces_environment = dict(environment) if environment else None
         # TODO: decide how we want to save scenes, if they should be here in stretch_ai or in stretch_mujoco
         # They should probably stay in stretch mujoco
         if scene_path is None:
@@ -219,12 +221,16 @@ class MujocoZmqServer(BaseZmqServer):
                 model=scene_model,
                 cameras_to_use=cameras_to_use,
                 camera_hz=camera_hz,
+                molmospaces_environment=molmospaces_environment,
+                debug_molmospaces_spawn=debug_molmospaces_spawn,
             )
         else:
             self.robot_sim = StretchMujocoSimulator(
                 scene_xml_path=scene_path,
                 cameras_to_use=cameras_to_use,
                 camera_hz=camera_hz,
+                molmospaces_environment=molmospaces_environment,
+                debug_molmospaces_spawn=debug_molmospaces_spawn,
             )
         # Get the intrinsic parameters of the d435i rgb camera
         (

@@ -63,7 +63,7 @@ export MOLMOSPACES_PYTHON=/path/to/your/molmospaces/venv/bin/python
   emet molmospaces list-robots
   ```
 
-  Prints supported robot IDs (rby1, rby1m, franka_droid, franka_cap, etc.). Default is **rby1** (Galaxea R1 family).
+  Prints supported robot IDs (rby1, rby1m, stretch, franka_droid, franka_cap, etc.). MolmoSpaces-native assets include rby1; **stretch** is merged from emet’s packaged `stretch.xml` (not an upstream MolmoSpaces asset). Default is **rby1** (Galaxea R1 family).
 
 - **List scenes** (delegates to wrapper):
 
@@ -126,8 +126,11 @@ Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. T
    emet serve mujoco --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0 --robot rby1 --headless
    ```
 
-   This calls the wrapper’s `merge-scene`, writes the merged MJCF under **`src/emet/assets/robot/galaxea_r1/`** (a temp file named `molmospaces_merged_*.xml`), then starts `emet.simulation.mujoco_server` with `--robot rby1` (unless you pass `--robot galaxea_r1` / `rby1`). The file must live next to `galaxea_r1.xml` so MuJoCo resolves the robot’s `assetdir="meshes"`; writing the merge under `/tmp` breaks mesh loading. The merged file is kept on disk until the server **stops** (so iTHOR occupancy sampling can read the same path), then removed. Default `--robot stretch` is upgraded to **rby1** when using `--molmospaces-scene`.
+   This calls the wrapper’s `merge-scene`, writes the merged MJCF beside the **chosen robot’s MJCF** (a temp file named `molmospaces_merged_*.xml` under that robot’s asset directory: e.g. galaxea r1 meshes for `--robot rby1`, or beside `stretch.xml` for `--robot stretch`), then starts `emet.simulation.mujoco_server` with the matching `--robot`. The file must live next to the robot MJCF so MuJoCo resolves `assetdir`; writing the merge under `/tmp` breaks mesh loading. The merged file is kept on disk until the server **stops**, then removed.
 
+   **Stretch (default `emet serve mujoco --robot stretch`):** merges the real Stretch model and uses the Stretch MuJoCo ZMQ stack, with the **same MolmoSpaces free-joint base autoplace** as registry robots (disable with `EMET_MOLMOSPACES_AUTOPLACE=0` if needed).
+
+   **Adding another vendored mobile robot:** expose a top-level MJCF path in `emet.utils.assets.get_robot_mjcf_path`, merge with `emet molmospaces merge-scene --robot <key>`, then `emet serve mujoco --scene_path … --robot <key>`. The MJCF should use a **world freejoint** on the base body (autoplace heuristic); planar-only bases need extra wiring (see Robocasa path).
 3. Run the agent:
 
    ```bash
@@ -217,6 +220,21 @@ For a step-by-step **testing plan** (core tests, wrapper tests with mocks, optio
 
   Tunables: `EMET_MOLMOSPACES_ORIENTATION_N` (default 10), `EMET_MOLMOSPACES_SETTLE_STEPS` (default 900), `EMET_MOLMOSPACES_ORIENTATION_MAX_DEG` (default 8), `EMET_MOLMOSPACES_MIN_UP_DOT` (default 0.92).
 
+- **Optional — Stretch + MolmoSpaces + DynaMem (full voxel 2d map vs MJCF footprint)** merges iTHOR + Stretch, spins `rotate_in_place` with a **light** DynaMem stack (`manipulation_only=True`: no detectors / VL encoders; `depth_source: sensor`), asserts collision-clip corners land inside the finite grid and occupancy is non‑empty:
+
+  ```bash
+  RUN_SIM_TESTS=1 RUN_MOLMOSPACES_TESTS=1 RUN_STRETCH_MOLMO_DYNAMEM=1 \
+    uv run pytest src/test/molmospaces/test_stretch_molmospaces_dynamem_floor_map.py -v --timeout=600
+  ```
+
+  Requires the wrapper venv/assets like other `RUN_MOLMOSPACES_TESTS` integration tests. Uses **non‑default ZMQ ports** by default (**`4401 + EMET_MOLMO_DYNAMEM_PORT_OFFSET`**, offset default **100** → bind **4501**, etc.) so it does not clash with an interactive `emet serve mujoco`.
+
+  Set **`EMET_NAVGRID_ASCII=1`** when running Dynamem/Dynagraph to print a terminal downsampling of the 2D obstacle/explored grid (stderr) after mapping updates — useful for sanity-checking MolmoSpaces floor maps without Rerun. Maps are cropped to explored cells (Discord-style); default **`EMET_NAVGRID_MAX_SIDE=320`** keeps ~0.1 m/char at voxel resolution; use **`640`** to match Discord PNG detail. Limit hooks with **`EMET_NAVGRID_CONTEXTS=rotate_in_place,explore`**.
+
+  **Cross-robot similarity** (same iTHOR scene, stretch + rby1 + innate_mars):
+  `EMET_NAVGRID_ASCII=1 uv run python scripts/tier4_multi_robot_navgrid_compare.py`
+  Optional: `EMET_NAVGRID_COMPARE_ROBOTS=stretch,rby1`, `EMET_TIER4_EXPLORE_ITERS=2`, `EMET_NAVGRID_MIN_EXPLORED_IOU=0.25`. Pytest: `RUN_MULTI_ROBOT_NAVGRID=1` + `src/test/molmospaces/test_multi_robot_molmospaces_navgrid_similarity.py`.
+
 - **Wrapper package tests**:
 
   ```bash
@@ -245,7 +263,7 @@ For a step-by-step **testing plan** (core tests, wrapper tests with mocks, optio
 
 ## Troubleshooting
 
-- **"Timeout waiting for observations/state from ZMQ server" (GenericZmqClient)**  
+- **"Timeout waiting for observations/state from ZMQ server" (GenericZmqClient)**
   The MuJoCo server must be running **before** you start `emet run …` clients. Merged Molmo scenes often need **30–90 seconds** after `emet serve mujoco` starts before the first ZMQ messages appear. The client now waits **60 seconds** by default (was 10). Increase further: `export EMET_ZMQ_STARTUP_TIMEOUT=120` or `emet run molmospaces-explore --zmq-startup-timeout 120 …`. Confirm **`--robot`** and **`--port-offset`** match on server and client.
 
 - **"MolmoSpaces wrapper not found" / `pip install emet-molmospaces` fails**

@@ -1,0 +1,131 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# MolmoSpaces merged-scene placement for mobile robots using a ``base_link`` (or named)
+# **freejoint**. Shared by :class:`~emet.simulation.robosuite_server.RobosuiteZmqServer`
+# and Stretch's subprocess :class:`~emet.simulation.stretch_mujoco.mujoco_server.MujocoServer`.
+
+from __future__ import annotations
+
+from typing import Any
+
+import mujoco
+
+from emet.simulation import molmospaces_spawn
+from emet.utils.logger import Logger
+
+logger = Logger(__name__)
+
+
+def base_body_free_joint_qposadr(model: mujoco.MjModel, base_body_name: str) -> int | None:
+    """Return the free-joint ``qpos`` slice start index for *base_body_name*, or None."""
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
+    if bid < 0:
+        return None
+    for j in range(model.njnt):
+        if int(model.jnt_bodyid[j]) != bid:
+            continue
+        if model.jnt_type[j] != mujoco.mjtJoint.mjJNT_FREE:
+            continue
+        return int(model.jnt_qposadr[j])
+    return None
+
+
+def maybe_prepare_molmospaces_meshes(scene_xml_path: str) -> None:
+    """Ensure Molmo symlink layout when loading a CLI-merged MJCF named ``molmospaces_merged_*.xml``."""
+    bn = scene_xml_path.rsplit("/", maxsplit=1)[-1]
+    if not bn.startswith("molmospaces_merged"):
+        return
+    from emet.simulation.molmospaces_config import ensure_molmo_asset_layout_symlinks
+
+    ensure_molmo_asset_layout_symlinks()
+
+
+def apply_molmospaces_freejoint_base_autoplace(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    merged_mjcf_path: str | None,
+    base_body_name: str,
+    environment: dict[str, Any] | None,
+    scene_source_basename: str | None,
+    debug: bool,
+) -> bool:
+    """If Molmo heuristic applies, reposition the base freejoint and snap ``model.qpos0``.
+
+    Assumes *data* matches *model* and kinematics were initialized (``mj_forward``).
+
+    Returns:
+        True if placement ran and updated ``model.qpos0`` for the freejoint.
+    """
+    if not molmospaces_spawn.want_molmospaces_autoplace(
+        environment=environment,
+        scene_source_basename=scene_source_basename,
+    ):
+        return False
+    qadr = base_body_free_joint_qposadr(model, base_body_name)
+    if qadr is None:
+        return False
+    if debug:
+        logger.info(
+            "MolmoSpaces spawn debug: "
+            f"scene_source_basename={scene_source_basename!r} "
+            f"environment={environment!r} base_body_name={base_body_name!r}"
+        )
+    try:
+        placed = molmospaces_spawn.find_molmospaces_freejoint_xyz(
+            model,
+            data,
+            base_body_name=base_body_name,
+            scene_label=scene_source_basename,
+            merged_mjcf_path=merged_mjcf_path,
+            environment=environment,
+        )
+    except Exception as e:
+        logger.warning(f"MolmoSpaces base autoplace skipped ({e!r}).")
+        return False
+    if placed is None:
+        if debug:
+            logger.info(
+                "MolmoSpaces base autoplace: find_molmospaces_freejoint_xyz returned None "
+                "(see spawn debug lines above)."
+            )
+        return False
+    x, y, z = placed
+    logger.info(
+        f"MolmoSpaces base autoplace: moved free joint on {base_body_name!r} to "
+        f"({x:.3f}, {y:.3f}, {z:.3f}) to avoid origin clutter."
+    )
+    if debug:
+        try:
+            mujoco.mj_forward(model, data)
+            for ln in molmospaces_spawn.format_spawn_contact_report(
+                model,
+                data,
+                base_body_name=base_body_name,
+                floor_geom_name="floor",
+                max_lines=50,
+                dist_report_threshold=0.15,
+            ):
+                logger.info(f"[molmospaces_spawn/post-place] {ln}")
+            for ln in molmospaces_spawn.format_spawn_floor_alignment_report(
+                model,
+                data,
+                base_body_name=base_body_name,
+                floor_geom_name="floor",
+                xy=(float(x), float(y)),
+            ):
+                logger.info(f"[molmospaces_spawn/post-place] {ln}")
+        except Exception as e:
+            logger.warning(f"MolmoSpaces spawn debug contact report failed: {e!r}")
+    model.qpos0[qadr : qadr + 7] = data.qpos[qadr : qadr + 7]
+    return True

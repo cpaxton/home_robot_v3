@@ -16,6 +16,8 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from multiprocessing.managers import DictProxy, SyncManager
+from pathlib import Path
+from typing import Any
 
 import click
 import mujoco
@@ -30,6 +32,10 @@ except ImportError:
 
 import emet.simulation.stretch_mujoco.config as config
 import emet.simulation.stretch_mujoco.utils as utils
+from emet.simulation.molmospaces_mobile_autoplace import (
+    apply_molmospaces_freejoint_base_autoplace,
+    maybe_prepare_molmospaces_meshes,
+)
 from emet.simulation.stretch_mujoco.datamodels.status_command import CommandBaseVelocity, CommandMove, StatusCommand
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_joints import StatusStretchJoints
@@ -208,12 +214,21 @@ class MujocoServer:
         start_translation: list | None,
         start_rotation_quat: list | None,
         use_glx: bool = False,
+        molmospaces_environment: dict[str, Any] | None = None,
+        debug_molmospaces_spawn: bool = False,
     ):
         # Use EGL on Linux unless use_glx (e.g. Xvfb on WSL).
         if platform.system() == "Linux" and cameras_to_use and not use_glx:
             os.environ.setdefault("MUJOCO_GL", "egl")
         server = cls(
-            scene_xml_path, model, stop_mujoco_process_event, data_proxies, start_translation, start_rotation_quat
+            scene_xml_path,
+            model,
+            stop_mujoco_process_event,
+            data_proxies,
+            start_translation,
+            start_rotation_quat,
+            molmospaces_environment=molmospaces_environment,
+            debug_molmospaces_spawn=debug_molmospaces_spawn,
         )
         server.run(
             show_viewer_ui=show_viewer_ui,
@@ -254,6 +269,8 @@ class MujocoServer:
         data_proxies: MujocoServerProxies,
         start_translation: list | None,
         start_rotation_quat: list | None,
+        molmospaces_environment: dict[str, Any] | None = None,
+        debug_molmospaces_spawn: bool = False,
     ):
         """
         Initialize the Simulator handle with a scene
@@ -265,7 +282,21 @@ class MujocoServer:
             scene_xml_path = utils.default_scene_xml_path
 
         if model is None:
+            maybe_prepare_molmospaces_meshes(scene_xml_path)
             model = MjModel.from_xml_path(scene_xml_path)
+            bn = Path(scene_xml_path).name
+            merged_abs = str(Path(scene_xml_path).resolve())
+            scratch = MjData(model)
+            mujoco.mj_forward(model, scratch)
+            apply_molmospaces_freejoint_base_autoplace(
+                model,
+                scratch,
+                merged_mjcf_path=merged_abs,
+                base_body_name="base_link",
+                environment=molmospaces_environment,
+                scene_source_basename=bn,
+                debug=debug_molmospaces_spawn,
+            )
 
         model = self.change_start_pose(model, start_translation, start_rotation_quat)
 

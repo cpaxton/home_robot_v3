@@ -598,7 +598,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         )
 
         # Add image descriptions if we want to explore intelligently
-        if self.run_eqa:
+        if self.run_eqa and self.image_description_client is not None:
             self.list_objects_in_an_image(rgb)
 
         # Process data: reshaping images, computing xyz coordinate, depth filtering
@@ -631,20 +631,21 @@ class SparseVoxelMap(SparseVoxelMapBase):
         valid_depth = valid_depth & (median_filter_error < 0.01).bool()
         mask = ~valid_depth
 
-        # Update semantic memory
+        # Update semantic memory (skipped when encoder is None, e.g. manipulation_only mapping)
         self.semantic_memory.clear_points(
             depth, torch.from_numpy(intrinsics), torch.from_numpy(pose), min_samples_clear=10
         )
 
-        with torch.no_grad():
-            rgb, features = self.encoder.run_mask_siglip(rgb, self.image_shape)  # type:ignore
-            rgb, features = rgb.squeeze(), features.squeeze()
+        if self.encoder is not None:
+            with torch.no_grad():
+                rgb, features = self.encoder.run_mask_siglip(rgb, self.image_shape)  # type:ignore
+                rgb, features = rgb.squeeze(), features.squeeze()
 
-        valid_xyz = world_xyz[~mask]
-        features = features[~mask]
-        valid_rgb = rgb.permute(1, 2, 0)[~mask]
-        if len(valid_xyz) != 0:
-            self.add_to_semantic_memory(valid_xyz, features, valid_rgb)
+            valid_xyz = world_xyz[~mask]
+            features = features[~mask]
+            valid_rgb = rgb.permute(1, 2, 0)[~mask]
+            if len(valid_xyz) != 0:
+                self.add_to_semantic_memory(valid_xyz, features, valid_rgb)
 
         # Update open-vocab scene graph if attached
         if self._scene_graph_processor is not None:
