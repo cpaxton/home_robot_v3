@@ -861,29 +861,9 @@ class DynamemController(BaseController):
         wait_obs = getattr(self.robot, "wait_for_obs", None)
         if callable(wait_obs):
             wait_obs(timeout=10.0)
-        sess = self._robot_emet_session()
-        origin = self._navigation_origin_xyt()
-        start_ep = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)[:3]
-        robosuite_sim = sess is not None and sess.get("runtime_kind") == "robosuite_sim"
-        # Rotate at spawn: episode (0, 0, θ); server composes with navigation_origin (no nav_world).
-        if robosuite_sim:
-            start_ep[0], start_ep[1] = 0.0, 0.0
-        origin_s = None if origin is None else [round(float(origin[i]), 3) for i in range(3)]
-        logger.info(
-            f"rotate_in_place: origin_world={origin_s} start_theta={float(start_ep[2]):.3f} "
-            "(8× +45° episode frame, fixed x/y)"
-        )
-        ep = np.array([float(start_ep[0]), float(start_ep[1]), float(start_ep[2])], dtype=np.float64)
+        logger.info("rotate_in_place: 8× relative +45° yaw (no XY translation)")
         for step_i in range(8):
-            ep[2] = float(ep[2]) + (np.pi / 4.0)
-            if robosuite_sim and origin is not None:
-                expected_world = nav_xyt_to_world_xyt(ep, sess)
-                logger.info(
-                    f"rotate_in_place step {step_i + 1}/8: episode "
-                    f"[{ep[0]:.3f}, {ep[1]:.3f}, {ep[2]:.3f}] -> expected world "
-                    f"[{expected_world[0]:.3f}, {expected_world[1]:.3f}, {expected_world[2]:.3f}]"
-                )
-            self.robot.move_base_to(ep, blocking=True, world_frame=False)
+            self.robot.move_base_to([0.0, 0.0, np.pi / 4.0], relative=True, blocking=True)
             if not self._realtime_updates:
                 self.update()
         self.rerun_iter += 1

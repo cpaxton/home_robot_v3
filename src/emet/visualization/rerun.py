@@ -52,6 +52,10 @@ logger = Logger(__name__)
 #   world/frames/current   (at each frame time) Transform3D, rgb, depth — scrub "frame" timeline for playback
 #   world/graph/nodes      Points3D (graph nodes)
 #   world/dynagraph/nodes  Points3D (Dynagraph graph nodes)
+#   world/dynagraph/crops/<node_id>_<label>  Image (head RGB when node was created)
+#   world/dynagraph/crops_mosaic  Image (grid of node thumbnails)
+#   world/dynagraph/edges  LineStrips3D (near / on / on_floor relations)
+#   world/dynagraph/gallery TextDocument (markdown list + recording:// links to crops)
 #   world/dynagraph/summary TextDocument (tree view)
 #   world/memory/text      TextDocument
 #   world/head_camera      Transform3D (optional); world/head_camera/rgb Image, world/head_camera/depth
@@ -148,6 +152,223 @@ def _rgb_to_uint8(rgb: np.ndarray) -> np.ndarray:
         else:
             arr = arr.clip(0, 255)
     return arr.astype(np.uint8)
+
+
+def _safe_rerun_path_component(text: str, *, max_len: int = 48) -> str:
+    s = (text or "object").strip().replace(" ", "_").replace("/", "_")
+    if len(s) > max_len:
+        s = s[: max_len - 3] + "..."
+    return s or "object"
+
+
+def format_dynagraph_node_label(node: Any) -> str:
+    """Rerun 3D label: primary label, graph node id, observation id, optional merge count."""
+    labels = getattr(node, "labels", None) or []
+    primary = labels[0] if labels else str(getattr(node, "node_id", "?"))
+    obs_id = int(getattr(node, "obs_id", 0))
+    sc = int(getattr(node, "support_count", 1))
+    suffix = f" n={sc}" if sc != 1 else ""
+    return f"{primary} [#{node.node_id} img {obs_id}]{suffix}"
+
+
+def dynagraph_crop_entity_path(node: Any) -> str:
+    """Rerun entity path for a node's observation thumbnail."""
+    primary = (node.labels[0] if getattr(node, "labels", None) else "object").strip()
+    return f"world/dynagraph/crops/{int(node.node_id):03d}_{_safe_rerun_path_component(primary)}"
+
+
+def build_dynagraph_gallery_markdown(
+    nodes: list[Any],
+    *,
+    max_nodes: int = 48,
+    has_crop_images: bool = True,
+) -> str:
+    """
+    Markdown index for the Dynagraph sidebar (TextDocumentView).
+
+    Uses Rerun ``recording://`` links so each row jumps to the crop entity in the viewer.
+    Rerun does not provide a native thumbnail list widget; this is the supported pattern.
+    """
+    if not nodes:
+        return "# Graph nodes\n\n_(empty)_\n"
+    shown = nodes[:max_nodes]
+    omitted = len(nodes) - len(shown)
+    lines = [
+        f"# Graph nodes ({len(nodes)})",
+        "",
+        "Click a **label** (or *open RGB*) to focus that observation. "
+        "Use the **Node RGB** panel or entity tree under `world/dynagraph/crops/`.",
+        "",
+        "| Node | Label | img | xyz (m) |",
+        "| ---: | ----- | --: | ------- |",
+    ]
+    for n in shown:
+        primary = (n.labels[0] if n.labels else "object").strip()
+        xyz = np.asarray(n.xyz, dtype=np.float64).reshape(3)
+        xyz_s = f"({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})"
+        crop = dynagraph_crop_entity_path(n)
+        if has_crop_images:
+            label_cell = f"[{primary}](recording://{crop})"
+        else:
+            label_cell = primary
+        lines.append(
+            f"| {n.node_id} | {label_cell} | {int(n.obs_id)} | {xyz_s} |"
+        )
+    if omitted > 0:
+        lines.append("")
+        lines.append(f"_({omitted} more nodes omitted; see mosaic or 3D view.)_")
+    lines.extend(["", "---", ""])
+    for n in shown:
+        primary = (n.labels[0] if n.labels else "object").strip()
+        xyz = np.asarray(n.xyz, dtype=np.float64).reshape(3)
+        crop = dynagraph_crop_entity_path(n)
+        sc = int(getattr(n, "support_count", 1))
+        merge = f" · merged **{sc}×**" if sc != 1 else ""
+        desc = getattr(n, "description", None)
+        lines.append(f"### [{n.node_id}] {primary}{merge}")
+        lines.append(
+            f"**img** {int(n.obs_id)} · **xyz** ({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})"
+        )
+        if has_crop_images:
+            lines.append(f"→ [open RGB](recording://{crop}) · [3D nodes](recording://world/dynagraph/nodes)")
+        if desc:
+            lines.append(f"> {str(desc).strip()[:280]}")
+        lines.append("")
+    return "\n".join(lines).strip() + "\n"
+
+
+def _thumbnail_rgb(rgb: np.ndarray, max_side: int = 384) -> np.ndarray:
+    """Downscale RGB for Rerun panels (full head frames are large)."""
+    import cv2
+
+    img = _rgb_to_uint8(rgb)
+    h, w = img.shape[:2]
+    if max(h, w) <= max_side:
+        return img
+    scale = max_side / float(max(h, w))
+    nw = max(1, int(w * scale))
+    nh = max(1, int(h * scale))
+    return cv2.resize(img, (nw, nh), interpolation=cv2.INTER_AREA)
+
+
+def _mosaic_labeled_images(
+    entries: list[tuple[str, np.ndarray]],
+    *,
+    thumb_max: int = 200,
+    cols: int = 4,
+    pad: int = 6,
+    header_h: int = 22,
+) -> np.ndarray | None:
+    """Tile thumbnails with a short text header per cell (node id + label)."""
+    import cv2
+
+    if not entries:
+        return None
+    thumbs: list[tuple[str, np.ndarray]] = []
+    for caption, rgb in entries:
+        thumb = _thumbnail_rgb(rgb, max_side=thumb_max)
+        h, w = thumb.shape[:2]
+        canvas = np.zeros((h + header_h, w, 3), dtype=np.uint8)
+        canvas[header_h:, :] = thumb
+        cv2.putText(
+            canvas,
+            caption[:64],
+            (4, 16),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (255, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
+        thumbs.append((caption, canvas))
+    cell_h = max(t[1].shape[0] for t in thumbs)
+    cell_w = max(t[1].shape[1] for t in thumbs)
+    n = len(thumbs)
+    ncol = min(cols, n)
+    nrow = (n + ncol - 1) // ncol
+    out_h = nrow * cell_h + (nrow + 1) * pad
+    out_w = ncol * cell_w + (ncol + 1) * pad
+    mosaic = np.zeros((out_h, out_w, 3), dtype=np.uint8)
+    for i, (_cap, tile) in enumerate(thumbs):
+        r, c = divmod(i, ncol)
+        y0 = pad + r * (cell_h + pad)
+        x0 = pad + c * (cell_w + pad)
+        th, tw = tile.shape[:2]
+        mosaic[y0 : y0 + th, x0 : x0 + tw] = tile
+    return mosaic
+
+
+def _color_for_graph_label(label: str) -> list[int]:
+    """Stable RGB per label (for graph nodes in the main 3D view)."""
+    h = hash(label.strip().lower()) & 0xFFFFFF
+    return [(h >> 16) & 255, (h >> 8) & 255, h & 255]
+
+
+def _log_graph_eqa_edges(
+    nodes: list[Any],
+    edges: list[tuple[int, int, str]],
+    *,
+    entity: str = "world/dynagraph/edges",
+) -> None:
+    """Log spatial graph edges as 3D line strips (visible under origin ``world``)."""
+    if not nodes or not edges:
+        rr.log(entity, rr.Clear(recursive=True))
+        return
+    node_by_id = {int(n.node_id): n for n in nodes}
+    relation_colors = {
+        "near": [200, 200, 200],
+        "on": [0, 200, 100],
+        "on_floor": [100, 100, 255],
+    }
+    line_strips: list[list[list[float]]] = []
+    colors: list[list[int]] = []
+    labels: list[str] = []
+    for a, b, rel in edges:
+        na = node_by_id.get(int(a))
+        if na is None:
+            continue
+        src = np.asarray(na.xyz, dtype=np.float64).reshape(3).tolist()
+        if int(b) == -1:
+            tgt = [src[0], src[1], 0.0]
+            tgt_lbl = "floor"
+            rel_key = "on_floor" if rel == "on" else rel
+        else:
+            nb = node_by_id.get(int(b))
+            if nb is None:
+                continue
+            tgt = np.asarray(nb.xyz, dtype=np.float64).reshape(3).tolist()
+            tgt_lbl = (nb.labels[0] if nb.labels else str(b)).strip()
+            rel_key = rel
+        line_strips.append([src, tgt])
+        colors.append(relation_colors.get(rel_key, [180, 180, 180]))
+        src_lbl = (na.labels[0] if na.labels else str(a)).strip()
+        labels.append(f"{src_lbl} --{rel}--> {tgt_lbl}")
+    if line_strips:
+        log_to_rerun(
+            entity,
+            rr.LineStrips3D(
+                line_strips,
+                colors=colors,
+                radii=0.012,
+                labels=labels,
+            ),
+        )
+    else:
+        rr.log(entity, rr.Clear(recursive=True))
+
+
+def _obs_rgb_by_id(graph_memory: Any) -> dict[int, np.ndarray]:
+    """Map graph ``obs_id`` → RGB array from in-memory observations."""
+    out: dict[int, np.ndarray] = {}
+    get_obs = getattr(graph_memory, "get_observations", None)
+    if get_obs is None:
+        return out
+    for obs in get_obs():
+        rgb = getattr(obs, "rgb", None)
+        if rgb is None:
+            continue
+        out[int(obs.obs_id)] = np.asarray(rgb)
+    return out
 
 
 def log_to_rerun(topic_name, data, **kwargs):
@@ -599,29 +820,67 @@ class RerunVisualizer:
         )
 
     def log_dynagraph_state(self, graph_memory: Any) -> None:
-        """Log ``GraphEQAMemory`` nodes and tree summary under ``world/dynagraph/``."""
+        """Log ``GraphEQAMemory`` nodes, observation images, and tree summary under ``world/dynagraph/``."""
         if getattr(self, "_memory_view", False):
             return
         rr.set_time_seconds("realtime", time.time())
+        nodes = graph_memory.get_nodes()
+        obs_rgb = _obs_rgb_by_id(graph_memory)
+        summary = graph_memory.print_memory()
+        if obs_rgb:
+            summary += (
+                "\n\n--- Rerun debug ---\n"
+                "Each graph node links to the **head RGB** stored at creation time "
+                f"(`world/dynagraph/crops/*`, {len(obs_rgb)} observations). "
+                "3D `xyz` is the instance centroid or depth median—not the image center."
+            )
         log_to_rerun(
             "world/dynagraph/summary",
-            rr.TextDocument(graph_memory.print_memory(), media_type=rr.MediaType.MARKDOWN),
+            rr.TextDocument(summary, media_type=rr.MediaType.MARKDOWN),
         )
-        nodes = graph_memory.get_nodes()
+        self.clear_identity("world/dynagraph/crops")
         if not nodes:
             self.clear_identity("world/dynagraph/nodes")
+            self.clear_identity("world/dynagraph/edges")
+            self.clear_identity("world/dynagraph/crops_mosaic")
+            log_to_rerun(
+                "world/dynagraph/gallery",
+                rr.TextDocument("# Graph nodes\n\n_(empty)_\n", media_type=rr.MediaType.MARKDOWN),
+            )
             return
         xyz = np.array([n.xyz for n in nodes], dtype=np.float64)
-        labels: list[str] = []
-        for n in nodes:
-            lb = ", ".join(n.labels) if n.labels else str(n.node_id)
-            sc = int(getattr(n, "support_count", 1))
-            if sc != 1:
-                lb = f"{lb} (x{sc})"
-            labels.append(lb)
+        labels = [format_dynagraph_node_label(n) for n in nodes]
+        node_colors = [
+            _color_for_graph_label(n.labels[0] if n.labels else str(n.node_id)) for n in nodes
+        ]
         log_to_rerun(
             "world/dynagraph/nodes",
-            rr.Points3D(positions=xyz, radii=0.06, labels=labels),
+            rr.Points3D(positions=xyz, radii=0.08, labels=labels, colors=node_colors),
+        )
+        get_edges = getattr(graph_memory, "get_edges", None)
+        edges = list(get_edges()) if get_edges is not None else []
+        _log_graph_eqa_edges(nodes, edges)
+        mosaic_entries: list[tuple[str, np.ndarray]] = []
+        for n in nodes:
+            rgb = obs_rgb.get(int(n.obs_id))
+            if rgb is None:
+                continue
+            primary = (n.labels[0] if n.labels else "object").strip()
+            cap = f"#{n.node_id} img{n.obs_id} {primary}"
+            entity = dynagraph_crop_entity_path(n)
+            log_to_rerun(entity, rr.Image(_thumbnail_rgb(rgb)))
+            mosaic_entries.append((cap, rgb))
+        mosaic = _mosaic_labeled_images(mosaic_entries)
+        if mosaic is not None:
+            log_to_rerun("world/dynagraph/crops_mosaic", rr.Image(mosaic))
+        else:
+            self.clear_identity("world/dynagraph/crops_mosaic")
+        log_to_rerun(
+            "world/dynagraph/gallery",
+            rr.TextDocument(
+                build_dynagraph_gallery_markdown(nodes, has_crop_images=bool(mosaic_entries)),
+                media_type=rr.MediaType.MARKDOWN,
+            ),
         )
 
     def log_head_camera(self, obs: Observations, *, mapping_depth: np.ndarray | None = None):
@@ -901,11 +1160,24 @@ class RerunVisualizer:
             nodes = state.graph.nodes
             xyz = np.array([n.xyz for n in nodes], dtype=np.float64)
             labels = [", ".join(n.labels) if n.labels else str(n.node_id) for n in nodes]
+            node_colors = [
+                _color_for_graph_label(n.labels[0] if n.labels else str(n.node_id)) for n in nodes
+            ]
             rr.log(
                 "world/graph/nodes",
-                rr.Points3D(positions=xyz, radii=0.05, labels=labels),
+                rr.Points3D(positions=xyz, radii=0.08, labels=labels, colors=node_colors),
                 **log_kw,
             )
+            if state.graph.edges:
+                class _NodeAdapter:
+                    def __init__(self, nv):
+                        self.node_id = nv.node_id
+                        self.labels = nv.labels
+                        self.xyz = nv.xyz
+
+                adapted = [_NodeAdapter(n) for n in nodes]
+                edge_tuples = [(e.id1, e.id2, e.relation) for e in state.graph.edges]
+                _log_graph_eqa_edges(adapted, edge_tuples, entity="world/graph/edges")
 
         parts = []
         if state.text_descriptions:

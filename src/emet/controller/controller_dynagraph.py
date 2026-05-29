@@ -30,6 +30,11 @@ class DynagraphController(GraphEQAController):
         main = rrb.Horizontal(
             rrb.Spatial3DView(name="3D View", origin="world"),
             rrb.Vertical(
+                rrb.TextDocumentView(name="Graph node list", origin="world/dynagraph/gallery"),
+                rrb.Spatial2DView(name="Node RGB", origin="world/dynagraph/crops"),
+                rrb.Spatial2DView(name="Node RGB mosaic", origin="world/dynagraph/crops_mosaic"),
+            ),
+            rrb.Vertical(
                 rrb.TextDocumentView(name="text", origin="robot_monologue"),
                 rrb.Spatial2DView(name="relevant image", origin="/observation_similar_to_text"),
             ),
@@ -38,11 +43,8 @@ class DynagraphController(GraphEQAController):
                 rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera"),
                 rrb.Spatial2DView(name="map_topdown", origin="world/map_snapshot/topdown"),
             ),
-            rrb.Vertical(
-                rrb.Spatial3DView(name="Dynagraph 3D", origin="world/dynagraph"),
-                rrb.TextDocumentView(name="Dynagraph graph", origin="world/dynagraph/summary"),
-            ),
-            column_shares=[3, 1, 1, 1],
+            rrb.TextDocumentView(name="Dynagraph graph", origin="world/dynagraph/summary"),
+            column_shares=[3, 1, 1, 1, 1],
         )
         collapse = getattr(self.rerun_visualizer, "collapse_panels", True)
         rr.send_blueprint(rrb.Blueprint(rrb.Vertical(main, rrb.TimePanel(state=True)), collapse_panels=collapse))

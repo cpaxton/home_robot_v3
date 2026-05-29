@@ -30,6 +30,8 @@ RUN_SIM_TESTS = _run_sim not in ("0", "false", "no", "off")
 _NAV_GOAL_RE = re.compile(
     r"frame=(\w+).*goal_world=\[([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)\].*nav_world=(\w+)"
 )
+# rotate_in_place uses nav_relative: small Δxy in world from current base
+_MAX_ROTATE_XY_DRIFT_M = 0.35
 _SPAWN_RE = re.compile(
     r"spawn / navigation_origin \(world\): \(([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)\)"
 )
@@ -154,20 +156,25 @@ def test_rotate_in_place_robocasa_innate_mars_world_xy_stays_at_spawn():
         )
 
         max_xy_jump = 0.0
+        base_xy = None
         for wx, wy, _wt, nav_world, frame in goals:
             assert not nav_world, f"rotate_in_place must not use nav_world (got frame={frame!r})"
-            assert frame in ("spawn_compose", "spawn_compose_corrected_world"), (
-                f"rotate expects episode_compose on server, got frame={frame!r}"
-            )
-            jump = float(np.hypot(wx - origin[0], wy - origin[1]))
-            max_xy_jump = max(max_xy_jump, jump)
-            assert jump < 3.0, (
-                f"rotate goal world ({wx:.3f}, {wy:.3f}) is {jump:.2f}m from spawn {origin[:2]} — "
-                "rotate_in_place should only change θ"
+            assert frame in (
+                "relative_delta_world",
+                "spawn_compose",
+                "spawn_compose_corrected_world",
+            ), f"rotate expects relative or spawn compose, got frame={frame!r}"
+            if base_xy is None:
+                base_xy = (wx, wy)
+            jump_spawn = float(np.hypot(wx - origin[0], wy - origin[1]))
+            jump_step = float(np.hypot(wx - base_xy[0], wy - base_xy[1]))
+            max_xy_jump = max(max_xy_jump, jump_spawn, jump_step)
+            assert jump_spawn < 3.0, (
+                f"rotate goal world ({wx:.3f}, {wy:.3f}) is {jump_spawn:.2f}m from spawn {origin[:2]}"
             )
 
-        assert max_xy_jump < 1.5, (
-            f"rotate world xy should stay at spawn (max jump {max_xy_jump:.3f}m, origin={origin.tolist()})"
+        assert max_xy_jump < _MAX_ROTATE_XY_DRIFT_M, (
+            f"rotate should not translate base (max drift {max_xy_jump:.3f}m, origin={origin.tolist()})"
         )
 
     finally:

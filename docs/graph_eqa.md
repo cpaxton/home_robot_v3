@@ -111,7 +111,7 @@ emet run graph-eqa --robot-ip 127.0.0.1
    - Use the current scene graph (and task-relevant images) to try to answer.
    - If not confident, it will **navigate to a suggested frontier** and **look around** again; each observation updates the graph with new object labels from the encoder.
    - Repeat until it can answer with confidence or hits the step limit.
-4. The graph is updated on every observation (from the voxel map’s image descriptions); objects like “apple”, “sink”, “pot” appear as nodes as the robot explores.
+4. The graph is updated on every controller step via `update_graph_memory_from_dynamem_observation` in `dynamem_graph_hooks.py`. With **`use_instance_graph: true`** (default for Dynagraph / `agent_*.yaml`), YoloE instance masks on each voxel **Frame** become labeled 3D nodes. With **`use_sensor_perception: true`** as well, the VLM may add extra nodes for objects the detector missed (deduped by label + XY). **`--no-instance-graph`** or **`--no-sensor-perception`** disable the corresponding path.
 
 So “find some known object” means: **ask about an object that is actually in the scene** (e.g. an apple or a pot in the default Robocasa task). The robot will explore until the graph contains enough information for the mLLM to answer.
 
@@ -155,7 +155,7 @@ Other components:
 
 ## Tests and contributing
 
-- **Tests**: `uv run emet test src/test/memory/test_graph_eqa_memory.py src/test/memory/test_graph_eqa_human_answer.py` for the graph memory and human-answer formatter; controller smoke tests include `GraphEQAController`; CLI tests check that `emet run graph-eqa` and `emet run --help` list `dynagraph` (`uv run python -m emet.app.run_dynagraph --help` for merge/staleness and **`--explore-loop`** flags). Dynagraph harnesses: [TESTING.md](TESTING.md), [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md).
+- **Tests**: `uv run emet test src/test/memory/test_graph_eqa_memory.py src/test/memory/test_graph_eqa_human_answer.py src/test/memory/test_dynamem_graph_hooks.py` for graph memory, human-answer formatting, and instance+VLM graph hooks; controller smoke tests include `GraphEQAController`; CLI tests check that `emet run graph-eqa` and `emet run --help` list `dynagraph` (`uv run python -m emet.app.run_dynagraph --help` for merge/staleness and **`--explore-loop`** flags). Dynagraph harnesses: [TESTING.md](TESTING.md), [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md).
 - **Contributing**: Follow the main [CONTRIBUTING.md](../CONTRIBUTING.md). The implementation is intentionally a clean re-implementation; do not paste code from the closed-source GraphEQA repo.
 
 ---

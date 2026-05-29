@@ -42,9 +42,9 @@ def update_graph_memory_from_dynamem_observation(
 ) -> None:
     """Append one observation to ``graph_memory`` (same logic as ``GraphEQAController.update`` tail).
 
-    When ``use_sensor_perception`` is true, labels always come from the sensor VLM path below.
-    The instance-detector branch runs only if instance graph is enabled **and** sensor VLM is off,
-    so YoloE/OWL nodes are not used as a shortcut that skips Qwen3.5-VL.
+    When ``use_instance_graph`` is true, YoloE / instance-mask detections are added as graph nodes
+    first. When ``use_sensor_perception`` is also true, the sensor VLM may add further nodes for
+    objects the detector missed (deduped by ``dedup_skips``).
     """
     rgb = obs.rgb
     if obs.camera_pose is None:
@@ -54,27 +54,22 @@ def update_graph_memory_from_dynamem_observation(
         graph_memory.set_graph_timestep(int(frame_step))
 
     vm = voxel_map
-    if (
-        use_instance_graph
-        and not use_sensor_perception
-        and getattr(vm, "observations", None)
-        and len(vm.observations) > 0
-    ):
+    instance_items: list[tuple[str, np.ndarray]] = []
+    if use_instance_graph and getattr(vm, "observations", None) and len(vm.observations) > 0:
         frame = vm.observations[-1]
-        items = frame_instances_to_labels_xyz(
+        instance_items = frame_instances_to_labels_xyz(
             frame,
             min_depth=float(vm.min_depth),
             max_depth=float(vm.max_depth),
             detection_model=detection_model,
         )
-        if items:
+        if instance_items:
             apply_instance_items_to_graph(
                 graph_memory,
                 rgb,
-                items,
+                instance_items,
                 dedup_skips=dedup_skips or (lambda _l, _x: False),
             )
-            return
 
     voxel_labels = None
     if getattr(vm, "image_descriptions", None) and len(vm.image_descriptions) > 0:
@@ -98,6 +93,9 @@ def update_graph_memory_from_dynamem_observation(
         pass
 
     if labels_are_semantic_graph_hypothesis(labels):
-        graph_memory.add_observation(rgb, xyz, labels, description=desc)
-    else:
+        for label in labels:
+            if dedup_skips and dedup_skips(label, xyz):
+                continue
+            graph_memory.add_observation(rgb, xyz, [label], description=desc)
+    elif not instance_items:
         graph_memory.record_navigation_sample(rgb, xyz, base_xyz=base_xyz)
