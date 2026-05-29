@@ -159,7 +159,7 @@ class GraphEQAController(DynamemController):
                 relevant_images,
             ) = self.graph_memory.query_answer(
                 question,
-                self.robot.get_base_pose(),
+                self._planning_base_xyt(self.robot.get_base_pose()),
                 self.planner,
             )
         except Exception as e:
@@ -169,7 +169,9 @@ class GraphEQAController(DynamemController):
             confidence_reasoning = str(e)
             target_point = None
             if hasattr(self, "space") and hasattr(self.space, "sample_frontier"):
-                target_point = self.space.sample_frontier(self.planner, self.robot.get_base_pose(), text=None)
+                target_point = self.space.sample_frontier(
+                    self.planner, self._planning_base_xyt(self.robot.get_base_pose()), text=None
+                )
             relevant_images = []
 
         confidence_text = "I am confident with the answer" if confidence else "I am NOT confident with the answer"
@@ -211,7 +213,7 @@ class GraphEQAController(DynamemController):
             return answer, discord_text, relevant_images, confidence
 
         if target_point is not None and hasattr(self, "navigate_to_target_pose"):
-            start_pose = self.robot.get_base_pose()
+            start_pose = self._planning_base_xyt(self.robot.get_base_pose())
             obstacles, _ = self.voxel_map.get_2d_map()
             target_grid = self.voxel_map.xy_to_grid_coords((float(target_point[0]), float(target_point[1])))
             if (
@@ -224,7 +226,7 @@ class GraphEQAController(DynamemController):
             else:
                 target_theta = None
             for _ in range(max_movement_step):
-                start_pose = self.robot.get_base_pose()
+                start_pose = self._planning_base_xyt(self.robot.get_base_pose())
                 self.update()
                 if self.navigate_to_target_pose(target_point, start_pose, target_theta):
                     break

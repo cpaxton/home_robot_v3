@@ -19,9 +19,32 @@ import zmq
 
 from emet.core.comms import CommsNode
 from emet.core.zmq_protocol import zmq_meta_action_should_bypass_duplicate_step
+from emet.simulation.env_flags import env_sim_nav_debug
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
+
+
+def _action_recv_log_line(action: dict[str, Any], step: int) -> str:
+    """One-line action summary (navigation flags show values, not only key names)."""
+    parts: list[str] = [f"Action #{step}"]
+    if "xyt" in action:
+        xyt = action.get("xyt")
+        parts.append(
+            f"xyt={xyt!r} nav_relative={action.get('nav_relative', False)!r} "
+            f"nav_world={action.get('nav_world', False)!r} nav_teleport={action.get('nav_teleport', False)!r}"
+        )
+    if "head_to" in action:
+        parts.append(f"head_to={action['head_to']!r}")
+    if "posture" in action:
+        parts.append(f"posture={action['posture']!r}")
+    if "control_mode" in action:
+        parts.append(f"control_mode={action['control_mode']!r}")
+    extra = [k for k in action if k not in ("xyt", "nav_relative", "nav_world", "nav_teleport", "head_to", "posture", "control_mode", "step")]
+    if extra:
+        parts.append(f"keys={extra}")
+    return " ".join(parts)
+
 
 try:
     from emet.audio.text_to_speech import PiperTextToSpeech
@@ -250,10 +273,11 @@ class BaseZmqServer(CommsNode, ABC):
                     continue
                 self.handle_action(action)
                 self._last_step = max(action_step, self._last_step)
-                logger.info(
-                    f"Action #{self._last_step} received:",
-                    [str(key) for key in action.keys()],
-                )
+                line = _action_recv_log_line(action, self._last_step)
+                if "xyt" in action and env_sim_nav_debug():
+                    logger.warning(line)
+                else:
+                    logger.info(line)
                 if self.verbose:
                     logger.info(f" - last action step: {self._last_step}")
             # Finish with some speed info

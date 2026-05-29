@@ -43,8 +43,25 @@ _EMET_RUN_APPS_WITH_ROBOT = frozenset(
 
 
 def _project_root() -> Path:
-    """Return project root (parent of src/emet)."""
+    """Return project root (parent of src/emet) for the installed ``emet`` package."""
     return Path(__file__).resolve().parent.parent.parent
+
+
+def _cwd_project_root() -> Path | None:
+    """Emet checkout containing the current working directory, if any."""
+    try:
+        cwd = Path.cwd().resolve()
+    except OSError:
+        return None
+    for p in (cwd, *cwd.parents):
+        if (p / "pyproject.toml").is_file() and (p / "src" / "emet" / "cli.py").is_file():
+            return p
+    return None
+
+
+def _active_project_root() -> Path:
+    """Repo to use for this command: cwd checkout wins over ``emet`` install location."""
+    return _cwd_project_root() or _project_root()
 
 
 def _has_uv() -> bool:
@@ -67,7 +84,8 @@ def _ensure_uv_project() -> None:
         return
     if not _has_uv():
         return
-    root = _project_root()
+    root = _active_project_root()
+    pkg_root = _project_root()
     try:
         cwd = Path.cwd().resolve()
     except OSError:
@@ -78,15 +96,22 @@ def _ensure_uv_project() -> None:
         return
     env = os.environ.copy()
     env["EMET_UV_RUN"] = "1"
+    if root.resolve() != pkg_root.resolve():
+        env["EMET_ACTIVE_REPO"] = str(root)
+        click.secho(
+            f"emet on PATH is from {pkg_root} but cwd is {root}; re-running: uv run emet …",
+            fg="yellow",
+            err=True,
+        )
     try:
-        os.execvpe("uv", ["uv", "run", "emet"] + sys.argv[1:], env)
+        os.execvpe("uv", ["uv", "run", "emet", *sys.argv[1:]], env)
     except Exception:
         pass
 
 
 def _project_venv_python() -> Path | None:
     """Return the project .venv Python path if it exists."""
-    root = _project_root()
+    root = _active_project_root()
     for name in ("python", "python3"):
         p = root / ".venv" / "bin" / name
         if p.exists():
@@ -96,7 +121,7 @@ def _project_venv_python() -> Path | None:
 
 def _in_project_tree() -> bool:
     """True when cwd is the project root or a subdirectory."""
-    root = _project_root()
+    root = _active_project_root()
     if not (root / "pyproject.toml").exists():
         return False
     try:
@@ -113,14 +138,18 @@ def _require_repo_venv_when_in_repo() -> None:
         return
     if Path(sys.executable).resolve() == venv_py.resolve():
         return
-    root = _project_root()
+    root = _active_project_root()
+    pkg_root = _project_root()
     click.secho(
         "Error: emet is not running from this repo's .venv.\n"
-        f"  Current:  {sys.executable}\n"
-        f"  Expected: {venv_py}\n"
+        f"  Current:   {sys.executable}\n"
+        f"  Expected:  {venv_py}\n"
+        f"  Cwd repo:  {root}\n"
+        f"  Installed: {pkg_root}\n"
         f"  From {root}, use:\n"
         "    uv run emet …\n"
-        "    # or: source .venv/bin/activate && emet …",
+        "    # or: source .venv/bin/activate && emet …\n"
+        "  Fix PATH: pip install -e .  in this repo (not home_robot_v4).",
         fg="red",
         err=True,
     )
@@ -158,6 +187,14 @@ def main() -> None:
     uses the project environment (as if you had run uv run emet ...).
     """
     _ensure_uv_project()
+    _require_repo_venv_when_in_repo()
+    active = os.environ.get("EMET_ACTIVE_REPO")
+    if active:
+        click.secho(
+            f"emet: using checkout {active} ({_project_root()})",
+            fg="green",
+            err=True,
+        )
 
 
 @main.command(short_help="Start simulation server (mujoco or robocasa)")

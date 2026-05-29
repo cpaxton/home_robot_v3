@@ -312,10 +312,13 @@ def main(
         rerun_debug=rerun_debug,
         allow_missing_depth=allow_missing_depth,
     )
+    if hasattr(robot, "wait_for_obs"):
+        robot.wait_for_obs(timeout=30.0)
     _print_dynagraph_rerun_help(enabled=not no_rerun, headless=headless)
 
     robot.move_to_nav_posture()
-    robot.set_velocity(v=30.0, w=15.0)
+    if robot_key == "stretch":
+        robot.set_velocity(v=30.0, w=15.0)
 
     parameters["encoder"] = None
 

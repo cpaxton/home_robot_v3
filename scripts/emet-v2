@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Run emet from this repo (home_robot_v2). Use when ~/.local/bin/emet points at another checkout.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+exec uv run emet "$@"

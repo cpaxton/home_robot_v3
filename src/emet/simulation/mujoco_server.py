@@ -274,6 +274,14 @@ def main(
 
     assert_mujoco_available()
 
+    import emet as _emet_pkg
+
+    logger.warning("mujoco_server: emet package %s", Path(_emet_pkg.__file__).resolve().parent.parent)
+
+    from emet.simulation.env_flags import warn_sim_nav_env_flags
+
+    warn_sim_nav_env_flags()
+
     scene_model = None
     objects_info = None
 

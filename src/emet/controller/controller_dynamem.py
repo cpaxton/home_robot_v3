@@ -63,7 +63,7 @@ from emet.perception.detection.yoloe import YoloEPerception
 from emet.perception.encoders.clip_encoder import MaskClipEncoder
 from emet.perception.encoders.siglip_encoder import MaskSiglipEncoder
 from emet.perception.wrapper import OvmmPerception
-from emet.utils.geometry import nav_xyt_to_world_xyt, xyt_global_to_base
+from emet.utils.geometry import nav_xyt_to_world_xyt
 from emet.utils.logger import Logger
 from emet.utils.vram_debug import print_vram_snapshot
 from emet.visualization.rerun import NullVisualizer, has_display
@@ -253,6 +253,7 @@ class DynamemController(BaseController):
         self.re = re
         self.save_rerun = save_rerun
         self.rerun_iter = 0
+        self._cached_navigation_origin_xyt: np.ndarray | None = None
 
     def _start_threads(self) -> None:
         """DynamemController does not use realtime update threads."""
@@ -272,34 +273,28 @@ class DynamemController(BaseController):
             return None
         return get_sess()
 
+    def _navigation_origin_xyt(self) -> np.ndarray | None:
+        """World spawn pose from ZMQ ``emet_session`` (cached from first observation if needed)."""
+        sess = self._robot_emet_session()
+        if sess is not None:
+            org = sess.get("navigation_origin_xyt")
+            if org is not None:
+                origin = np.asarray(org, dtype=np.float64).reshape(-1)[:3]
+                self._cached_navigation_origin_xyt = origin.copy()
+                return origin
+        if self._cached_navigation_origin_xyt is not None:
+            return self._cached_navigation_origin_xyt
+        return None
+
     def _planning_base_xyt(self, local_xyt: np.ndarray | list | tuple) -> np.ndarray:
         """Episode-relative ZMQ base pose → world frame for voxel-grid planning."""
         xyt = np.asarray(local_xyt, dtype=np.float64).reshape(-1)
         if xyt.size < 3:
             xyt = np.pad(xyt, (0, max(0, 3 - xyt.size)), mode="constant")
-        return nav_xyt_to_world_xyt(xyt[:3], self._robot_emet_session())
-
-    def _robot_nav_xyt(self, world_xyt: np.ndarray | list | tuple) -> np.ndarray:
-        """World-frame planning pose → episode-relative for ZMQ ``xyt`` actions."""
-        xyt = np.asarray(world_xyt, dtype=np.float64).reshape(-1)
-        if xyt.size < 3:
-            xyt = np.pad(xyt, (0, max(0, 3 - xyt.size)), mode="constant")
         sess = self._robot_emet_session()
-        org = None if sess is None else sess.get("navigation_origin_xyt")
-        if org is None:
-            return xyt[:3]
-        origin = np.asarray(org, dtype=np.float64).reshape(-1)[:3]
-        return xyt_global_to_base(xyt[:3], origin)
-
-    def _robot_nav_trajectory(self, world_traj: list) -> list:
-        out: list = []
-        for wp in world_traj:
-            arr = np.asarray(wp, dtype=np.float64).reshape(-1)
-            if arr.size >= 1 and np.isnan(arr[0]):
-                out.append(wp)
-            else:
-                out.append(self._robot_nav_xyt(arr[:3]))
-        return out
+        if sess is None and self._cached_navigation_origin_xyt is not None:
+            sess = {"navigation_origin_xyt": self._cached_navigation_origin_xyt.tolist()}
+        return nav_xyt_to_world_xyt(xyt[:3], sess)
 
     def create_obstacle_map(self, parameters):
         """
@@ -656,6 +651,11 @@ class DynamemController(BaseController):
                 None if base_xyt is None else np.asarray(base_xyt, dtype=np.float64).round(4).tolist(),
                 cam_t,
             )
+        if getattr(obs, "emet_session", None) is not None:
+            org = getattr(obs, "emet_session", {}).get("navigation_origin_xyt")
+            if org is not None:
+                self._cached_navigation_origin_xyt = np.asarray(org, dtype=np.float64).reshape(-1)[:3].copy()
+
         self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt)
         if self.voxel_map.voxel_pcd._points is not None:
             robot_xy = None
@@ -858,10 +858,32 @@ class DynamemController(BaseController):
         self.robot.move_to_nav_posture()
         self.robot.look_front(blocking=True)
         time.sleep(DYNAMEM_HEAD_SETTLE_S)
-        xyt = self.robot.get_base_pose()
-        for _i in range(8):
-            xyt[2] += 2 * np.pi / 8
-            self.robot.move_base_to(xyt, blocking=True)
+        wait_obs = getattr(self.robot, "wait_for_obs", None)
+        if callable(wait_obs):
+            wait_obs(timeout=10.0)
+        sess = self._robot_emet_session()
+        origin = self._navigation_origin_xyt()
+        start_ep = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)[:3]
+        robosuite_sim = sess is not None and sess.get("runtime_kind") == "robosuite_sim"
+        # Rotate at spawn: episode (0, 0, θ); server composes with navigation_origin (no nav_world).
+        if robosuite_sim:
+            start_ep[0], start_ep[1] = 0.0, 0.0
+        origin_s = None if origin is None else [round(float(origin[i]), 3) for i in range(3)]
+        logger.info(
+            f"rotate_in_place: origin_world={origin_s} start_theta={float(start_ep[2]):.3f} "
+            "(8× +45° episode frame, fixed x/y)"
+        )
+        ep = np.array([float(start_ep[0]), float(start_ep[1]), float(start_ep[2])], dtype=np.float64)
+        for step_i in range(8):
+            ep[2] = float(ep[2]) + (np.pi / 4.0)
+            if robosuite_sim and origin is not None:
+                expected_world = nav_xyt_to_world_xyt(ep, sess)
+                logger.info(
+                    f"rotate_in_place step {step_i + 1}/8: episode "
+                    f"[{ep[0]:.3f}, {ep[1]:.3f}, {ep[2]:.3f}] -> expected world "
+                    f"[{expected_world[0]:.3f}, {expected_world[1]:.3f}, {expected_world[2]:.3f}]"
+                )
+            self.robot.move_base_to(ep, blocking=True, world_frame=False)
             if not self._realtime_updates:
                 self.update()
         self.rerun_iter += 1
@@ -899,20 +921,28 @@ class DynamemController(BaseController):
 
         if len(res) > 0:
             logger.info("Navigation plan OK; executing trajectory")
+            wait_obs = getattr(self.robot, "wait_for_obs", None)
+            if wait_obs is not None:
+                wait_obs(timeout=10.0)
+            if self._navigation_origin_xyt() is None:
+                logger.warning(
+                    "navigation_origin_xyt missing from emet_session; sim nav may use wrong frame "
+                    "(restart sim server and ensure first observation arrived)."
+                )
             # process_text ends with robot.say(...); re-sync nav posture + forward gaze before base moves.
             self.robot.move_to_nav_posture()
             self.robot.look_front(blocking=True)
             time.sleep(DYNAMEM_HEAD_SETTLE_S)
-            nav_res = self._robot_nav_trajectory(res)
             # This means that the robot has already finished all of its trajectories and should stop to manipulate the object.
             # We will append a nan and point coordinates of the target object on the trajectory to denote that the robot is reaching the target point
-            if len(nav_res) >= 2 and np.isnan(nav_res[-2]).all():
-                if len(nav_res) > 2:
+            if len(res) >= 2 and np.isnan(res[-2]).all():
+                if len(res) > 2:
                     self.robot.execute_trajectory(
-                        nav_res[:-2],
+                        res[:-2],
                         pos_err_threshold=self.pos_err_threshold,
                         rot_err_threshold=self.rot_err_threshold,
                         blocking=True,
+                        world_frame=True,
                     )
 
                 self.robot.look_front()
@@ -921,10 +951,11 @@ class DynamemController(BaseController):
             # The robot has not reached the object. Next it should look around and continue navigation
             else:
                 self.robot.execute_trajectory(
-                    nav_res,
+                    res,
                     pos_err_threshold=self.pos_err_threshold,
                     rot_err_threshold=self.rot_err_threshold,
                     blocking=True,
+                    world_frame=True,
                 )
                 self.robot.look_front()
                 self.update()
@@ -1470,10 +1501,11 @@ class DynamemController(BaseController):
             )
 
             self.robot.execute_trajectory(
-                self._robot_nav_trajectory(traj),
+                traj,
                 pos_err_threshold=self.pos_err_threshold,
                 rot_err_threshold=self.rot_err_threshold,
                 blocking=True,
+                world_frame=True,
             )
 
         return finished

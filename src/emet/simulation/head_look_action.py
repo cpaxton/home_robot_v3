@@ -68,12 +68,33 @@ def apply_head_to_robosuite(
 
     if spec.name == "innate_mars":
         # joint_head sim hinge +base X: stereo lk ~ -world Y, so Stretch tilt pitches nod (URDF hinge differs).
-        if _set_ctrl_clipped(model, data, "joint_head", float(tilt)):
-            return 1
-        logger.debug(
-            "head_to: innate_mars has no joint_head position actuator (MJCF mismatch?); tilt=%r ignored", tilt
-        )
-        return 0
+        aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "joint_head")
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "joint_head")
+        if aid < 0 or jid < 0:
+            logger.debug(
+                "head_to: innate_mars has no joint_head position actuator (MJCF mismatch?); tilt=%r ignored",
+                tilt,
+            )
+            return 0
+        lo, hi = model.actuator_ctrlrange[aid]
+        # Stretch look_front uses ~−π/4; innate hinge only allows ~[−10°, 30°].
+        stretch_tilt = float(tilt)
+        if stretch_tilt <= -0.35:
+            target = float(lo) + 0.02
+        elif stretch_tilt >= 0.1:
+            target = float(hi) * 0.35
+        else:
+            target = float(np.interp(stretch_tilt, [-0.35, 0.0], [float(lo), 0.08]))
+        target = float(np.clip(target, lo, hi))
+        qadr = int(model.jnt_qposadr[jid])
+        vadr = int(model.jnt_dofadr[jid])
+        current = float(data.qpos[qadr])
+        step = float(np.clip(target - current, -0.06, 0.06))
+        new_q = current + step
+        data.qpos[qadr] = new_q
+        data.qvel[vadr] = 0.0
+        data.ctrl[aid] = new_q
+        return 1
 
     logger.debug("head_to: no head_pan/head_tilt and no rby1/galaxea mapping for spec %r; ignored", spec.name)
     return 0
