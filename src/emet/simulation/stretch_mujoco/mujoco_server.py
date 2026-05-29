@@ -35,6 +35,7 @@ import emet.simulation.stretch_mujoco.utils as utils
 from emet.simulation.molmospaces_mobile_autoplace import (
     apply_molmospaces_freejoint_base_autoplace,
     maybe_prepare_molmospaces_meshes,
+    write_base_freejoint_xyt,
 )
 from emet.simulation.stretch_mujoco.datamodels.status_command import CommandBaseVelocity, CommandMove, StatusCommand
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
@@ -596,6 +597,22 @@ class MujocoServer:
         if command_status.base_velocity is not None and command_status.base_velocity.trigger:
             command_status.base_velocity.trigger = False
             self.base_controller.push_command(command_status.base_velocity)
+
+        if command_status.teleport_base is not None and command_status.teleport_base.trigger:
+            command_status.teleport_base.trigger = False
+            tb = command_status.teleport_base
+            if write_base_freejoint_xyt(
+                self.mjmodel,
+                self.mjdata,
+                base_body_name="base_link",
+                x=tb.x,
+                y=tb.y,
+                theta=tb.theta,
+            ):
+                self.base_controller.last_command = None
+                self._set_base_velocity(0.0, 0.0)
+            else:
+                print("WARNING: teleport_base failed (no free joint on base_link?)")
 
         # keyframe
         if command_status.keyframe is not None and command_status.keyframe.trigger:

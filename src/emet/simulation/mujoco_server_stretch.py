@@ -611,7 +611,7 @@ class MujocoZmqServer(BaseZmqServer):
         else:
             env = {"kind": "stretch_default_scene"}
         caps: dict[str, Any] = {
-            "teleport_base": False,
+            "teleport_base": self._is_molmospaces_session(),
             "depth": self._cameras_enabled,
             "num_cameras": 2 if self._cameras_enabled else 0,
             "dof": int(spec.dof),
@@ -627,6 +627,28 @@ class MujocoZmqServer(BaseZmqServer):
         if self._scene_source_basename:
             session["scene_source_basename"] = self._scene_source_basename
         return session
+
+    def _is_molmospaces_session(self) -> bool:
+        env = self._environment_descriptor
+        if isinstance(env, dict) and env.get("kind") == "molmospaces":
+            return True
+        bn = self._scene_source_basename or ""
+        return bn.startswith("molmospaces_merged")
+
+    def _xyt_action_to_world(self, xyt: np.ndarray, *, relative: bool) -> np.ndarray:
+        """Map client ``xyt`` (spawn-relative) to world coordinates for MuJoCo free joint."""
+        raw = np.asarray(xyt, dtype=np.float64).reshape(-1)[:3]
+        init = self._initial_xyt
+        if init is None:
+            init = np.zeros(3, dtype=np.float64)
+        if relative:
+            cur = self.get_base_pose()
+            if cur is None:
+                cur = np.zeros(3, dtype=np.float64)
+            rel = xyt_base_to_global(raw, cur)
+        else:
+            rel = raw
+        return xyt_base_to_global(rel, init)
 
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
         if self._emet_session is not None:
@@ -696,11 +718,22 @@ class MujocoZmqServer(BaseZmqServer):
         if "base_velocity" in action:
             self.robot_sim.set_base_velocity(v_linear=action["base_velocity"]["v"], omega=action["base_velocity"]["w"])
         elif "xyt" in action:
-            # Set the goal pose for the simulated velocity controller
-            # If relative motion is set, the goal is relative to the current pose
-            relative_motion = action.get("nav_relative", False)
-            # We pass goals and let the control thread compute velocities
-            self.set_goal_pose(action["xyt"], relative=relative_motion)
+            relative_motion = bool(action.get("nav_relative", False))
+            nav_teleport = bool(action.get("nav_teleport", False)) or self._is_molmospaces_session()
+            if nav_teleport:
+                world = self._xyt_action_to_world(np.asarray(action["xyt"], dtype=np.float64), relative=relative_motion)
+                self.robot_sim.teleport_base_xyt(float(world[0]), float(world[1]), float(world[2]))
+                self.active = False
+                self.xyt_goal = None
+                self._base_controller_at_goal = True
+                self.is_done = True
+                self.robot_sim.set_base_velocity(0.0, 0.0)
+                if self.debug_control_loop or self.debug_set_goal_pose:
+                    logger.info(
+                        f"MolmoSpaces/teleport nav: base at x={world[0]:.3f} y={world[1]:.3f} theta={world[2]:.3f}"
+                    )
+            else:
+                self.set_goal_pose(action["xyt"], relative=relative_motion)
 
     @override
     def get_full_observation_message(self) -> dict[str, Any]:

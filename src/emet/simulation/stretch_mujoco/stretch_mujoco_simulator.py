@@ -35,6 +35,7 @@ from emet.simulation.stretch_mujoco.datamodels.status_command import (
     CommandCoordinateFrameArrowsViz,
     CommandKeyframe,
     CommandMove,
+    CommandTeleportBase,
     StatusCommand,
 )
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
@@ -476,6 +477,14 @@ class StretchMujocoSimulator:
                 CommandMove(actuator_name=actuator.name, pos=pos, trigger=True)
             )
 
+            self.data_proxies.set_command(command)
+
+    @require_connection
+    def teleport_base_xyt(self, x: float, y: float, theta: float) -> None:
+        """Snap ``base_link`` free joint to world (x, y, theta) in the MuJoCo subprocess."""
+        with self._command_lock:
+            command = self.data_proxies.get_command()
+            command.set_teleport_base(CommandTeleportBase(float(x), float(y), float(theta), True))
             self.data_proxies.set_command(command)
 
     @require_connection

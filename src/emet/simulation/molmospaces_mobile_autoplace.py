@@ -7,11 +7,55 @@ from __future__ import annotations
 from typing import Any
 
 import mujoco
+import numpy as np
 
 from emet.simulation import molmospaces_spawn
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
+
+
+def base_body_free_joint_dofadr(model: mujoco.MjModel, base_body_name: str) -> tuple[int, int] | None:
+    """Return ``(qposadr, dofadr)`` for the free joint on *base_body_name*, or None."""
+    qadr = base_body_free_joint_qposadr(model, base_body_name)
+    if qadr is None:
+        return None
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
+    for j in range(model.njnt):
+        if int(model.jnt_bodyid[j]) != bid:
+            continue
+        if model.jnt_type[j] != mujoco.mjtJoint.mjJNT_FREE:
+            continue
+        return qadr, int(model.jnt_dofadr[j])
+    return None
+
+
+def write_base_freejoint_xyt(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    base_body_name: str,
+    x: float,
+    y: float,
+    theta: float,
+    z: float | None = None,
+) -> bool:
+    """Snap ``base_body_name`` free joint to world SE(2) ``(x, y, theta)``; preserve *z* if omitted."""
+    addrs = base_body_free_joint_dofadr(model, base_body_name)
+    if addrs is None:
+        return False
+    qadr, vadr = addrs
+    z_use = float(data.qpos[qadr + 2]) if z is None else float(z)
+    wt = float(theta)
+    qw = float(np.cos(wt * 0.5))
+    qz = float(np.sin(wt * 0.5))
+    data.qpos[qadr] = float(x)
+    data.qpos[qadr + 1] = float(y)
+    data.qpos[qadr + 2] = z_use
+    data.qpos[qadr + 3 : qadr + 7] = np.array([qw, 0.0, 0.0, qz], dtype=np.float64)
+    data.qvel[vadr : vadr + 6] = 0.0
+    mujoco.mj_forward(model, data)
+    return True
 
 
 def base_body_free_joint_qposadr(model: mujoco.MjModel, base_body_name: str) -> int | None:
