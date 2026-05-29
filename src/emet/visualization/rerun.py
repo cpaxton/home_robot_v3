@@ -174,6 +174,35 @@ def format_dynagraph_node_label(node: Any) -> str:
     return f"{primary} [#{node.node_id} img {obs_id}]{suffix}"
 
 
+def _bbox_crop_area_fraction(bbox_xyxy: tuple[int, int, int, int], image_hw: tuple[int, int]) -> float:
+    """Fraction of image pixels inside ``bbox_xyxy`` (x0, y0, x1, y1)."""
+    h, w = int(image_hw[0]), int(image_hw[1])
+    if h <= 0 or w <= 0:
+        return 1.0
+    x0, y0, x1, y1 = (int(bbox_xyxy[0]), int(bbox_xyxy[1]), int(bbox_xyxy[2]), int(bbox_xyxy[3]))
+    bw = max(0, min(x1, w) - max(0, x0))
+    bh = max(0, min(y1, h) - max(0, y0))
+    return float(bw * bh) / float(h * w)
+
+
+def node_has_detection_crop(
+    node: Any,
+    obs_rgb: dict[int, np.ndarray] | None = None,
+    *,
+    max_area_fraction: float = 0.85,
+) -> bool:
+    """True when the node has a YoloE/instance bbox crop (not a full-frame fallback)."""
+    bbox = getattr(node, "bbox_xyxy", None)
+    if bbox is None or len(bbox) != 4:
+        return False
+    if obs_rgb is None:
+        return True
+    rgb = obs_rgb.get(int(getattr(node, "obs_id", 0)))
+    if rgb is None or rgb.ndim < 2:
+        return True
+    return _bbox_crop_area_fraction(tuple(int(x) for x in bbox), rgb.shape[:2]) <= max_area_fraction
+
+
 def dynagraph_crop_entity_path(node: Any) -> str:
     """Rerun entity path for a node's observation thumbnail."""
     primary = (node.labels[0] if getattr(node, "labels", None) else "object").strip()
@@ -199,8 +228,8 @@ def build_dynagraph_gallery_markdown(
     lines = [
         f"# Graph nodes ({len(nodes)})",
         "",
-        "Click a **label** (or *open crop*) to focus that object's thumbnail. "
-        "Use the **Node RGB** panel or entity tree under `world/dynagraph/crops/`.",
+        "Click a **label** with a detection crop to open its YoloE/instance thumbnail. "
+        "The **Node RGB mosaic** lists only detector crops (not full head frames).",
         "",
         "| Node | Label | img | xyz (m) |",
         "| ---: | ----- | --: | ------- |",
@@ -210,7 +239,7 @@ def build_dynagraph_gallery_markdown(
         xyz = np.asarray(n.xyz, dtype=np.float64).reshape(3)
         xyz_s = f"({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})"
         crop = dynagraph_crop_entity_path(n)
-        if has_crop_images:
+        if has_crop_images and node_has_detection_crop(n):
             label_cell = f"[{primary}](recording://{crop})"
         else:
             label_cell = primary
@@ -232,8 +261,10 @@ def build_dynagraph_gallery_markdown(
         lines.append(
             f"**img** {int(n.obs_id)} · **xyz** ({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})"
         )
-        if has_crop_images:
+        if has_crop_images and node_has_detection_crop(n):
             lines.append(f"→ [open crop](recording://{crop}) · [3D nodes](recording://world/dynagraph/nodes)")
+        elif not node_has_detection_crop(n):
+            lines.append("_no detector crop (VLM / semantic node — see 3D view only)_")
         if desc:
             lines.append(f"> {str(desc).strip()[:280]}")
         lines.append("")
@@ -268,14 +299,15 @@ def crop_rgb_bbox_xyxy(
 
 
 def dynagraph_node_rgb_crop(node: Any, obs_rgb: dict[int, np.ndarray]) -> np.ndarray | None:
-    """Object crop for a graph node, or full observation frame when no bbox is stored."""
+    """Instance-detector crop for a graph node, or ``None`` when no usable bbox is stored."""
+    if not node_has_detection_crop(node, obs_rgb):
+        return None
     rgb = obs_rgb.get(int(getattr(node, "obs_id", 0)))
     if rgb is None:
         return None
     bbox = getattr(node, "bbox_xyxy", None)
-    if bbox is not None and len(bbox) == 4:
-        return crop_rgb_bbox_xyxy(rgb, tuple(int(x) for x in bbox))
-    return rgb
+    assert bbox is not None and len(bbox) == 4
+    return crop_rgb_bbox_xyxy(rgb, tuple(int(x) for x in bbox))
 
 
 def _thumbnail_rgb(rgb: np.ndarray, max_side: int = 384) -> np.ndarray:
@@ -878,9 +910,10 @@ class RerunVisualizer:
         if obs_rgb:
             summary += (
                 "\n\n--- Rerun debug ---\n"
-                "Each graph node links to an **object crop** (instance mask bbox when available) "
-                f"from the head frame at creation (`world/dynagraph/crops/*`, {len(obs_rgb)} frames). "
-                "3D `xyz` is the instance centroid or depth median—not the image center."
+                "The **mosaic** and `world/dynagraph/crops/*` show **YoloE/instance mask bboxes** only. "
+                "VLM-only nodes appear in 3D but not in the mosaic. "
+                f"({len(obs_rgb)} head frames stored.) "
+                "Object `xyz` is the detector centroid or depth median—not the image center."
             )
         log_to_rerun(
             "world/dynagraph/summary",
@@ -929,8 +962,9 @@ class RerunVisualizer:
         edges = list(get_edges()) if get_edges is not None else []
         obs_by_id = {int(o.obs_id): o for o in graph_memory.get_observations()}
         _log_graph_eqa_edges(nodes, edges, observations_by_id=obs_by_id)
+        crop_nodes = [n for n in obj_nodes if node_has_detection_crop(n, obs_rgb)]
         mosaic_entries: list[tuple[str, np.ndarray]] = []
-        for n in obj_nodes:
+        for n in crop_nodes:
             rgb = dynagraph_node_rgb_crop(n, obs_rgb)
             if rgb is None:
                 continue
@@ -947,7 +981,7 @@ class RerunVisualizer:
         log_to_rerun(
             "world/dynagraph/gallery",
             rr.TextDocument(
-                build_dynagraph_gallery_markdown(nodes, has_crop_images=bool(mosaic_entries)),
+                build_dynagraph_gallery_markdown(obj_nodes, has_crop_images=bool(mosaic_entries)),
                 media_type=rr.MediaType.MARKDOWN,
             ),
         )

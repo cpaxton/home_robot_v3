@@ -335,6 +335,21 @@ def test_query_answer_navigation_fallback_images_and_target():
     assert abs(float(target_point[1]) - (-0.25)) < 1e-5
 
 
+def test_dynagraph_spatial_merge_keeps_detection_bbox():
+    mem = GraphEQAMemory(
+        parameters={"dynagraph_merge_xy_m": 1.0},
+        defer_llm_clients=True,
+    )
+    rgb = np.zeros((80, 60, 3), dtype=np.uint8)
+    mem.set_graph_timestep(1)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["cup"], bbox_xyxy=(5, 5, 25, 30))
+    mem.set_graph_timestep(2)
+    mem.add_observation(rgb, np.array([0.15, 0.0, 0.5]), ["cup"], bbox_xyxy=(30, 10, 50, 35))
+    node = mem.get_nodes()[0]
+    assert not node.is_viewpoint
+    assert node.bbox_xyxy == (30, 10, 50, 35)
+
+
 def test_dynagraph_spatial_merge_same_obs_id():
     mem = GraphEQAMemory(
         parameters={"dynagraph_merge_xy_m": 1.0},

@@ -291,6 +291,7 @@ class GraphEQAMemory:
                     new_xyz = (existing.xyz * (sc - 1) + xyz_a) / sc
                     merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), *labels_norm})
                     new_desc = description if description else existing.description
+                    merged_bbox = bbox_i if bbox_i is not None else existing.bbox_xyxy
                     self._nodes[idx] = replace(
                         existing,
                         xyz=new_xyz,
@@ -298,6 +299,7 @@ class GraphEQAMemory:
                         last_seen=step,
                         support_count=sc,
                         description=new_desc,
+                        bbox_xyxy=merged_bbox,
                     )
                     for o in self._observations:
                         if o.obs_id == existing.obs_id:

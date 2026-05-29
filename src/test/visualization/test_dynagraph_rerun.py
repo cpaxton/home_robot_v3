@@ -20,6 +20,7 @@ from emet.visualization.rerun import (
     dynagraph_crop_entity_path,
     dynagraph_node_rgb_crop,
     format_dynagraph_node_label,
+    node_has_detection_crop,
 )
 
 
@@ -59,6 +60,7 @@ def test_build_dynagraph_gallery_markdown_links():
             xyz=[1.0, 2.0, 0.5],
             support_count=1,
             description=None,
+            bbox_xyxy=(10, 10, 40, 40),
         ),
     ]
     md = build_dynagraph_gallery_markdown(nodes, has_crop_images=True)
@@ -88,11 +90,18 @@ def test_dynagraph_node_rgb_crop_uses_bbox_when_present():
     assert crop.shape[0] == 2 and crop.shape[1] == 2
 
 
-def test_dynagraph_node_rgb_crop_full_frame_without_bbox():
+def test_dynagraph_node_rgb_crop_none_without_bbox():
     frame = np.ones((4, 4, 3), dtype=np.uint8) * 7
     node = SimpleNamespace(obs_id=2, bbox_xyxy=None)
-    crop = dynagraph_node_rgb_crop(node, {2: frame})
-    assert np.array_equal(crop, frame)
+    assert dynagraph_node_rgb_crop(node, {2: frame}) is None
+
+
+def test_node_has_detection_crop_rejects_full_frame_bbox():
+    frame = np.zeros((100, 100, 3), dtype=np.uint8)
+    node = SimpleNamespace(obs_id=1, bbox_xyxy=(0, 0, 100, 100))
+    assert not node_has_detection_crop(node, {1: frame})
+    node2 = SimpleNamespace(obs_id=1, bbox_xyxy=(10, 10, 40, 50))
+    assert node_has_detection_crop(node2, {1: frame})
 
 
 def test_mosaic_labeled_images_nonempty():
