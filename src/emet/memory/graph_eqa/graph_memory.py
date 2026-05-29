@@ -66,6 +66,7 @@ class GraphNode:
     last_seen: int = 0
     support_count: int = 1
     extent_half: np.ndarray | None = None  # (3,) half-axis sizes in meters; None = point-like
+    bbox_xyxy: tuple[int, int, int, int] | None = None  # pixel crop in obs RGB; None = full frame
 
 
 @dataclass
@@ -77,6 +78,11 @@ class GraphObservation:
     xyz: np.ndarray  # (3,) e.g. mean of visible points or camera position
     labels: list[str]
     description: str | None = None  # optional VLM-generated description
+    viewer_xyz: np.ndarray | None = None  # (3,) robot base or camera when the image was taken
+
+
+# Edge endpoint ``b == -obs_id`` with relation ``seen_from`` means object ``a`` was seen from the
+# viewpoint stored on observation ``obs_id`` (``GraphObservation.viewer_xyz``).
 
 
 def _near(p1: np.ndarray, p2: np.ndarray, max_dist: float = 1.5) -> bool:
@@ -234,6 +240,9 @@ class GraphEQAMemory:
         xyz: np.ndarray,
         labels: list[str],
         description: str | None = None,
+        *,
+        viewer_xyz: np.ndarray | None = None,
+        bbox_xyxy: tuple[int, int, int, int] | None = None,
     ) -> int:
         """
         Add one observation to the graph: create a node and update edges.
@@ -243,6 +252,8 @@ class GraphEQAMemory:
             xyz: (3,) world position for this observation (e.g. camera or centroid)
             labels: list of object/region labels (e.g. from a VLM)
             description: optional text description of the scene (e.g. from VLM)
+            viewer_xyz: optional (3,) robot base or head-camera position in world frame when captured
+            bbox_xyxy: optional (x0, y0, x1, y1) crop in ``rgb`` for this object (instance mask bbox)
 
         Returns:
             obs_id: 1-based observation id (used as image id in EQA).
@@ -251,10 +262,19 @@ class GraphEQAMemory:
             rgb = np.array(rgb)
         step = self._effective_timestep()
         xyz_a = np.asarray(xyz, dtype=float).reshape(-1)[:3]
+        viewer_a: np.ndarray | None = None
+        if viewer_xyz is not None:
+            viewer_a = np.asarray(viewer_xyz, dtype=float).reshape(-1)[:3].copy()
         labels_norm = [str(l).strip() for l in labels if str(l).strip()]
         if not labels_norm:
             labels_norm = ["object"]
         primary = labels_norm[0].lower()
+
+        bbox_i: tuple[int, int, int, int] | None = None
+        if bbox_xyxy is not None:
+            b = tuple(int(x) for x in bbox_xyxy)
+            if len(b) == 4:
+                bbox_i = (b[0], b[1], b[2], b[3])
 
         if self.spatial_merge_m > 0:
             for idx, existing in enumerate(self._nodes):
@@ -281,6 +301,8 @@ class GraphEQAMemory:
                             o.labels = merged_labels
                             if new_desc and not o.description:
                                 o.description = new_desc
+                            if viewer_a is not None:
+                                o.viewer_xyz = viewer_a
                             break
                     self._update_edges()
                     return int(existing.obs_id)
@@ -297,6 +319,7 @@ class GraphEQAMemory:
             last_seen=step,
             support_count=1,
             extent_half=None,
+            bbox_xyxy=bbox_i,
         )
         self._nodes.append(node)
         self._observations.append(
@@ -306,6 +329,7 @@ class GraphEQAMemory:
                 xyz=xyz_a.copy(),
                 labels=list(labels_norm),
                 description=description,
+                viewer_xyz=viewer_a,
             )
         )
         self._update_edges()
@@ -342,8 +366,23 @@ class GraphEQAMemory:
     def get_navigation_samples(self) -> list[GraphNavigationSample]:
         return list(self._nav_samples)
 
+    def _ensure_seen_from_edge(self, node_id: int, obs_id: int) -> None:
+        """Link object *node_id* to viewpoint observation *obs_id* (edge target ``-obs_id``)."""
+        obs = self._observation_by_id(obs_id)
+        if obs is None or obs.viewer_xyz is None:
+            return
+        edge = (int(node_id), -int(obs_id), "seen_from")
+        if edge not in self._edges:
+            self._edges.append(edge)
+
+    def _observation_by_id(self, obs_id: int) -> GraphObservation | None:
+        for o in self._observations:
+            if int(o.obs_id) == int(obs_id):
+                return o
+        return None
+
     def _update_edges(self) -> None:
-        """Compute pairwise spatial relations (near, on, on_floor) from node positions."""
+        """Compute spatial relations (near, on, on_floor) and ``seen_from`` viewpoint links."""
         self._edges.clear()
         for i, na in enumerate(self._nodes):
             if _on_floor(na.xyz):
@@ -358,6 +397,8 @@ class GraphEQAMemory:
                     self._edges.append((na.node_id, nb.node_id, "on"))
                 elif _on(nb.xyz, na.xyz):
                     self._edges.append((nb.node_id, na.node_id, "on"))
+        for node in self._nodes:
+            self._ensure_seen_from_edge(node.node_id, int(node.obs_id))
 
     def to_string(self) -> str:
         """Serialize the scene graph to a string for mLLM prompts."""
@@ -374,7 +415,10 @@ class GraphEQAMemory:
                 f"Node {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]{sup}"
             )
         for a, b, rel in self._edges:
-            b_str = "floor" if b == -1 else str(b)
+            if rel == "seen_from" and int(b) < 0:
+                b_str = f"view/Image {-int(b)}"
+            else:
+                b_str = "floor" if b == -1 else str(b)
             lines.append(f"  {rel}({a}, {b_str})")
         return "SCENE_GRAPH:\n" + "\n".join(lines) if lines else "SCENE_GRAPH: (empty)"
 
@@ -442,6 +486,20 @@ class GraphEQAMemory:
                 la = ", ".join(na.labels) if na and na.labels else str(a)
                 lb = ", ".join(nb.labels) if nb and nb.labels else str(b)
                 lines.append(f"{indent}{la} — {lb}")
+
+        seen_from_edges = [(a, b) for a, b, rel in self._edges if rel == "seen_from"]
+        if seen_from_edges:
+            lines.append("")
+            lines.append("Seen from (viewpoint → object):")
+            for a, b in seen_from_edges:
+                na = node_by_id.get(a)
+                la = ", ".join(na.labels) if na and na.labels else str(a)
+                obs = self._observation_by_id(-int(b))
+                if obs is not None and obs.viewer_xyz is not None:
+                    vx, vy, vz = (float(obs.viewer_xyz[i]) for i in range(3))
+                    lines.append(f"{indent}{la} ← view img {-int(b)} at ({vx:.2f}, {vy:.2f}, {vz:.2f})")
+                else:
+                    lines.append(f"{indent}{la} ← view img {-int(b)}")
 
         return "\n".join(lines) if lines else "Scene (3D spatial graph): (empty)"
 

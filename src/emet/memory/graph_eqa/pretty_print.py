@@ -55,7 +55,10 @@ def format_scene_graph_pretty(
 
     lines.append(f" Edges ({len(edges)})")
     for a, b, rel in edges:
-        b_str = "floor" if b == -1 else str(b)
+        if rel == "seen_from" and int(b) < 0:
+            b_str = f"view/img {-int(b)}"
+        else:
+            b_str = "floor" if b == -1 else str(b)
         lines.append(f"   {rel}({a}, {b_str})")
 
     nav = memory.get_navigation_samples()

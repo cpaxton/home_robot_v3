@@ -16,7 +16,9 @@ from emet.visualization.rerun import (
     _obs_rgb_by_id,
     _safe_rerun_path_component,
     build_dynagraph_gallery_markdown,
+    crop_rgb_bbox_xyxy,
     dynagraph_crop_entity_path,
+    dynagraph_node_rgb_crop,
     format_dynagraph_node_label,
 )
 
@@ -68,6 +70,29 @@ def test_build_dynagraph_gallery_markdown_links():
 def test_color_for_graph_label_stable():
     assert _color_for_graph_label("mug") == _color_for_graph_label("mug")
     assert _color_for_graph_label("mug") != _color_for_graph_label("cup")
+
+
+def test_crop_rgb_bbox_xyxy_crops_instance_region():
+    rgb = np.zeros((10, 12, 3), dtype=np.uint8)
+    rgb[2:6, 3:9] = 255
+    crop = crop_rgb_bbox_xyxy(rgb, (3, 2, 9, 6), padding_frac=0.0)
+    assert crop.shape[0] == 4 and crop.shape[1] == 6
+    assert crop.max() == 255
+
+
+def test_dynagraph_node_rgb_crop_uses_bbox_when_present():
+    frame = np.arange(60, dtype=np.uint8).reshape(5, 4, 3)
+    node = SimpleNamespace(obs_id=1, bbox_xyxy=(1, 1, 3, 3))
+    obs_rgb = {1: frame}
+    crop = dynagraph_node_rgb_crop(node, obs_rgb)
+    assert crop.shape[0] == 2 and crop.shape[1] == 2
+
+
+def test_dynagraph_node_rgb_crop_full_frame_without_bbox():
+    frame = np.ones((4, 4, 3), dtype=np.uint8) * 7
+    node = SimpleNamespace(obs_id=2, bbox_xyxy=None)
+    crop = dynagraph_node_rgb_crop(node, {2: frame})
+    assert np.array_equal(crop, frame)
 
 
 def test_mosaic_labeled_images_nonempty():

@@ -196,7 +196,7 @@ def build_dynagraph_gallery_markdown(
     lines = [
         f"# Graph nodes ({len(nodes)})",
         "",
-        "Click a **label** (or *open RGB*) to focus that observation. "
+        "Click a **label** (or *open crop*) to focus that object's thumbnail. "
         "Use the **Node RGB** panel or entity tree under `world/dynagraph/crops/`.",
         "",
         "| Node | Label | img | xyz (m) |",
@@ -230,11 +230,49 @@ def build_dynagraph_gallery_markdown(
             f"**img** {int(n.obs_id)} · **xyz** ({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})"
         )
         if has_crop_images:
-            lines.append(f"→ [open RGB](recording://{crop}) · [3D nodes](recording://world/dynagraph/nodes)")
+            lines.append(f"→ [open crop](recording://{crop}) · [3D nodes](recording://world/dynagraph/nodes)")
         if desc:
             lines.append(f"> {str(desc).strip()[:280]}")
         lines.append("")
     return "\n".join(lines).strip() + "\n"
+
+
+def crop_rgb_bbox_xyxy(
+    rgb: np.ndarray,
+    bbox_xyxy: tuple[int, int, int, int],
+    *,
+    padding_frac: float = 0.12,
+) -> np.ndarray:
+    """Crop ``rgb`` to ``bbox_xyxy`` (x0, y0, x1, y1) with fractional padding, clipped to image bounds."""
+    img = _rgb_to_uint8(rgb)
+    h, w = img.shape[:2]
+    x0, y0, x1, y1 = (int(bbox_xyxy[0]), int(bbox_xyxy[1]), int(bbox_xyxy[2]), int(bbox_xyxy[3]))
+    x0 = max(0, min(x0, w - 1))
+    y0 = max(0, min(y0, h - 1))
+    x1 = max(x0 + 1, min(x1, w))
+    y1 = max(y0 + 1, min(y1, h))
+    bw = x1 - x0
+    bh = y1 - y0
+    pad_x = int(bw * padding_frac)
+    pad_y = int(bh * padding_frac)
+    x0 = max(0, x0 - pad_x)
+    y0 = max(0, y0 - pad_y)
+    x1 = min(w, x1 + pad_x)
+    y1 = min(h, y1 + pad_y)
+    if x1 <= x0 or y1 <= y0:
+        return img
+    return img[y0:y1, x0:x1]
+
+
+def dynagraph_node_rgb_crop(node: Any, obs_rgb: dict[int, np.ndarray]) -> np.ndarray | None:
+    """Object crop for a graph node, or full observation frame when no bbox is stored."""
+    rgb = obs_rgb.get(int(getattr(node, "obs_id", 0)))
+    if rgb is None:
+        return None
+    bbox = getattr(node, "bbox_xyxy", None)
+    if bbox is not None and len(bbox) == 4:
+        return crop_rgb_bbox_xyxy(rgb, tuple(int(x) for x in bbox))
+    return rgb
 
 
 def _thumbnail_rgb(rgb: np.ndarray, max_side: int = 384) -> np.ndarray:
@@ -309,6 +347,7 @@ def _log_graph_eqa_edges(
     edges: list[tuple[int, int, str]],
     *,
     entity: str = "world/dynagraph/edges",
+    observations_by_id: dict[int, Any] | None = None,
 ) -> None:
     """Log spatial graph edges as 3D line strips (visible under origin ``world``)."""
     if not nodes or not edges:
@@ -319,6 +358,7 @@ def _log_graph_eqa_edges(
         "near": [200, 200, 200],
         "on": [0, 200, 100],
         "on_floor": [100, 100, 255],
+        "seen_from": [255, 165, 0],
     }
     line_strips: list[list[list[float]]] = []
     colors: list[list[int]] = []
@@ -328,7 +368,15 @@ def _log_graph_eqa_edges(
         if na is None:
             continue
         src = np.asarray(na.xyz, dtype=np.float64).reshape(3).tolist()
-        if int(b) == -1:
+        if rel == "seen_from" and int(b) < 0 and observations_by_id is not None:
+            obs = observations_by_id.get(-int(b))
+            vxyz = getattr(obs, "viewer_xyz", None) if obs is not None else None
+            if vxyz is None:
+                continue
+            tgt = np.asarray(vxyz, dtype=np.float64).reshape(3).tolist()
+            tgt_lbl = f"view img {-int(b)}"
+            rel_key = "seen_from"
+        elif int(b) == -1:
             tgt = [src[0], src[1], 0.0]
             tgt_lbl = "floor"
             rel_key = "on_floor" if rel == "on" else rel
@@ -560,8 +608,8 @@ class RerunVisualizer:
             server_memory_limit (str): Server memory limit E.g. 2GB or 20%
             collapse_panels (bool): Set to false to have customizable rerun panels
             mjcf_show_visual_mesh (bool): For MJCF robots, log triangle meshes each ``step`` (re-uploads vertices;
-                can be heavy). Paths are under ``world/robot/mjcf_visual/…`` in nav/map world (not parented under
-                ``world/robot`` transform). Set False to disable.
+                can be heavy). Meshes are **base_link-relative** under ``world/robot/mjcf_visual/…``; ``world/robot``
+                uses GPS + ``navigation_origin_xyt`` (same frame as the voxel map). Set False to disable.
             mjcf_show_skeleton (bool): For MJCF robots, log per-body axis frames under ``world/robot/mjcf``. Default
                 False when using solid meshes; set True for kinematic debugging.
         """
@@ -650,6 +698,11 @@ class RerunVisualizer:
                     from emet.visualization.mjcf_rerun_robot import MjcfVisualMeshLogger
 
                     self.mjcf_mesh_logger = MjcfVisualMeshLogger(mjcf_path, joint_names, dof, base_link)
+                    rr.log(
+                        "world/robot/mjcf_visual",
+                        rr.Transform3D(translation=[0.0, 0.0, 0.0], mat3x3=np.eye(3)),
+                        static=True,
+                    )
                 except Exception as e:
                     logger.warning("MJCF Rerun visual mesh disabled (%s).", e)
         if self.mjcf_skeleton is None and display_robot_mesh and mjcf_robot is None:
@@ -830,8 +883,8 @@ class RerunVisualizer:
         if obs_rgb:
             summary += (
                 "\n\n--- Rerun debug ---\n"
-                "Each graph node links to the **head RGB** stored at creation time "
-                f"(`world/dynagraph/crops/*`, {len(obs_rgb)} observations). "
+                "Each graph node links to an **object crop** (instance mask bbox when available) "
+                f"from the head frame at creation (`world/dynagraph/crops/*`, {len(obs_rgb)} frames). "
                 "3D `xyz` is the instance centroid or depth median—not the image center."
             )
         log_to_rerun(
@@ -859,10 +912,11 @@ class RerunVisualizer:
         )
         get_edges = getattr(graph_memory, "get_edges", None)
         edges = list(get_edges()) if get_edges is not None else []
-        _log_graph_eqa_edges(nodes, edges)
+        obs_by_id = {int(o.obs_id): o for o in graph_memory.get_observations()}
+        _log_graph_eqa_edges(nodes, edges, observations_by_id=obs_by_id)
         mosaic_entries: list[tuple[str, np.ndarray]] = []
         for n in nodes:
-            rgb = obs_rgb.get(int(n.obs_id))
+            rgb = dynagraph_node_rgb_crop(n, obs_rgb)
             if rgb is None:
                 continue
             primary = (n.labels[0] if n.labels else "object").strip()
@@ -935,15 +989,19 @@ class RerunVisualizer:
             )
 
     def log_robot_xyt(self, obs: Observations):
-        """Log robot base pose in **MuJoCo / map world** when ``navigation_origin_xyt`` is in ``emet_session``.
+        """Log ``world/robot`` from ``gps``/``compass`` (+ ``navigation_origin_xyt`` when present).
 
-        Otherwise uses raw ``gps``/``compass`` (episode-relative on sim servers, or client-local otherwise).
+        MJCF visual meshes are logged base-relative under ``world/robot/mjcf_visual/`` so they compose with this
+        transform (nav/map frame). Do not override with standalone-MJCF FK here—that moves the robot frame to the
+        mesh instead of aligning the mesh to the map.
         """
         xy = np.asarray(obs["gps"], dtype=float).reshape(-1)[:2]
         comp = np.asarray(obs["compass"], dtype=float).ravel()
         theta = float(comp[0]) if comp.size else 0.0
         sess = read_emet_session(obs)
-        wxyt = nav_xyt_to_world_xyt(np.array([float(xy[0]), float(xy[1]), theta], dtype=np.float64), sess)
+        wxyt = nav_xyt_to_world_xyt(
+            np.array([float(xy[0]), float(xy[1]), theta], dtype=np.float64), sess
+        )
         xy_w = np.asarray(wxyt[:2], dtype=float).reshape(-1)
         theta_w = float(wxyt[2])
         # Live streaming: static=True pins the entity to a single value in the viewer timeline.

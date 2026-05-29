@@ -92,6 +92,13 @@ def frame_instances_to_detections(
             continue
         pts = fw[mask]
         xyz = pts.median(dim=0).values.detach().cpu().numpy().astype(np.float64)
+        ys, xs = torch.where(mask)
+        bbox_xyxy = (
+            int(xs.min().item()),
+            int(ys.min().item()),
+            int(xs.max().item()) + 1,
+            int(ys.max().item()) + 1,
+        )
 
         category_id = -1
         if classes is not None and uid < classes.shape[0]:
@@ -103,6 +110,7 @@ def frame_instances_to_detections(
                 "category_id": category_id,
                 "label_short": label,
                 "xyz": [float(xyz[0]), float(xyz[1]), float(xyz[2])],
+                "bbox_xyxy": bbox_xyxy,
             }
         )
 
@@ -128,6 +136,10 @@ def frame_instances_to_labels_xyz(
         background_instance_labels=background_instance_labels,
     )
     return [
-        (d["label_short"], np.asarray(d["xyz"], dtype=np.float64))
+        (
+            d["label_short"],
+            np.asarray(d["xyz"], dtype=np.float64),
+            tuple(d["bbox_xyxy"]),
+        )
         for d in dets
     ]

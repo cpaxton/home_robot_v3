@@ -55,9 +55,12 @@ def test_frame_instances_to_labels_xyz_medians_and_labels():
         min_points=4,
     )
     assert len(out) == 2
-    by_label = dict(out)
+    by_label = {label: xyz for label, xyz, _bbox in out}
     assert np.allclose(by_label["cls_2"], [1.0, 2.0, 3.0])
     assert np.allclose(by_label["cls_5"], [10.0, 20.0, 30.0])
+    bboxes = {label: bbox for label, _xyz, bbox in out}
+    assert bboxes["cls_2"] == (0, 0, 4, 4)
+    assert bboxes["cls_5"] == (4, 4, 8, 8)
 
 
 def test_frame_instances_to_labels_xyz_skips_small_mask():

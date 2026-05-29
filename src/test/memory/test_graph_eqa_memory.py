@@ -97,6 +97,41 @@ def test_near_heuristic():
     assert _near(np.array([0, 0, 0]), np.array([2, 0, 0]), max_dist=1.0) is False
 
 
+def test_add_observation_stores_bbox_xyxy_on_node():
+    """Instance graph nodes keep a pixel crop for Dynagraph Rerun thumbnails."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((60, 80, 3), dtype=np.uint8)
+    mem.add_observation(
+        rgb,
+        np.array([1.0, 2.0, 0.5]),
+        ["mug"],
+        bbox_xyxy=(10, 20, 40, 55),
+    )
+    node = mem.get_nodes()[0]
+    assert node.bbox_xyxy == (10, 20, 40, 55)
+
+
+def test_seen_from_edge_links_object_to_viewpoint_observation():
+    """``seen_from`` edges use negative obs_id as viewpoint; viewer_xyz on observation."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    viewer = np.array([1.0, 2.0, 0.0], dtype=np.float64)
+    mem.add_observation(
+        rgb,
+        np.array([3.0, 4.0, 0.9]),
+        ["mug"],
+        viewer_xyz=viewer,
+    )
+    edges = mem.get_edges()
+    assert (1, -1, "seen_from") in edges
+    obs = mem.get_observations()[0]
+    assert obs.viewer_xyz is not None
+    np.testing.assert_allclose(obs.viewer_xyz, viewer)
+    s = mem.to_string()
+    assert "seen_from" in s
+    assert "view/Image 1" in s
+
+
 def test_on_floor_heuristic():
     """_on_floor returns True when z <= threshold."""
     assert _on_floor(np.array([0, 0, 0.02])) is True

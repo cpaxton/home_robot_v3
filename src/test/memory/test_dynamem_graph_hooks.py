@@ -60,9 +60,10 @@ def test_instance_detections_added_when_sensor_perception_also_enabled():
     sensor_builder.labels_and_description_from_observation.return_value = (["table"], "a table")
     sensor_builder.world_xyz_for_observation.return_value = np.array([1.0, 2.0, 3.0])
 
+    robot = MagicMock(get_base_pose=MagicMock(return_value=np.array([0.5, 1.0, 0.0])))
     update_graph_memory_from_dynamem_observation(
         graph_memory=gm,
-        robot=MagicMock(get_base_pose=MagicMock(return_value=np.zeros(3))),
+        robot=robot,
         voxel_map=vm,
         detection_model=det,
         sensor_builder=sensor_builder,
@@ -77,3 +78,7 @@ def test_instance_detections_added_when_sensor_perception_also_enabled():
     labels_flat = [lb for n in nodes for lb in n.labels]
     assert "mug" in labels_flat or "plate" in labels_flat, labels_flat
     assert "table" in labels_flat, labels_flat
+    assert any(rel == "seen_from" for _a, _b, rel in gm.get_edges())
+    instance_nodes = [n for n in nodes if n.bbox_xyxy is not None]
+    assert instance_nodes, "YoloE instance nodes should carry mask bbox for Rerun crops"
+    assert instance_nodes[0].bbox_xyxy == (0, 0, 4, 4)

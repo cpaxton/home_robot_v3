@@ -53,8 +53,19 @@ def update_graph_memory_from_dynamem_observation(
     if frame_step is not None and hasattr(graph_memory, "set_graph_timestep"):
         graph_memory.set_graph_timestep(int(frame_step))
 
+    viewer_xyz: np.ndarray | None = None
+    try:
+        bp = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
+        if bp.size >= 2:
+            bz = float(bp[2]) if bp.size >= 3 else 0.0
+            viewer_xyz = np.array([float(bp[0]), float(bp[1]), bz], dtype=np.float64)
+    except Exception:
+        pass
+    if viewer_xyz is None and obs.camera_pose is not None:
+        viewer_xyz = np.asarray(obs.camera_pose[:3, 3], dtype=np.float64).reshape(3).copy()
+
     vm = voxel_map
-    instance_items: list[tuple[str, np.ndarray]] = []
+    instance_items: list[tuple[str, np.ndarray, tuple[int, int, int, int]]] = []
     if use_instance_graph and getattr(vm, "observations", None) and len(vm.observations) > 0:
         frame = vm.observations[-1]
         instance_items = frame_instances_to_labels_xyz(
@@ -69,6 +80,7 @@ def update_graph_memory_from_dynamem_observation(
                 rgb,
                 instance_items,
                 dedup_skips=dedup_skips or (lambda _l, _x: False),
+                viewer_xyz=viewer_xyz,
             )
 
     voxel_labels = None
@@ -83,19 +95,10 @@ def update_graph_memory_from_dynamem_observation(
         desc = None
         xyz = np.array(obs.camera_pose[:3, 3], dtype=float)
 
-    base_xyz: np.ndarray | None = None
-    try:
-        bp = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
-        if bp.size >= 2:
-            bz = float(bp[2]) if bp.size >= 3 else 0.0
-            base_xyz = np.array([float(bp[0]), float(bp[1]), bz], dtype=np.float64)
-    except Exception:
-        pass
-
     if labels_are_semantic_graph_hypothesis(labels):
         for label in labels:
             if dedup_skips and dedup_skips(label, xyz):
                 continue
-            graph_memory.add_observation(rgb, xyz, [label], description=desc)
+            graph_memory.add_observation(rgb, xyz, [label], description=desc, viewer_xyz=viewer_xyz)
     elif not instance_items:
-        graph_memory.record_navigation_sample(rgb, xyz, base_xyz=base_xyz)
+        graph_memory.record_navigation_sample(rgb, xyz, base_xyz=viewer_xyz)
