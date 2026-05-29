@@ -402,21 +402,33 @@ def _log_graph_eqa_edges(
         na = node_by_id.get(int(a))
         if na is None:
             continue
-        src = np.asarray(na.xyz, dtype=np.float64).reshape(3).tolist()
-        if int(b) == -1:
+        if rel == "seen_from":
+            nb = node_by_id.get(int(b))
+            if nb is None:
+                continue
+            # Viewpoint → object (where we stood → what we saw)
+            src = np.asarray(nb.xyz, dtype=np.float64).reshape(3).tolist()
+            tgt = np.asarray(na.xyz, dtype=np.float64).reshape(3).tolist()
+            src_lbl = format_dynagraph_node_label(nb)
+            tgt_lbl = (na.labels[0] if na.labels else str(a)).strip()
+            rel_key = "seen_from"
+        elif int(b) == -1:
+            src = np.asarray(na.xyz, dtype=np.float64).reshape(3).tolist()
             tgt = [src[0], src[1], 0.0]
             tgt_lbl = "floor"
             rel_key = "on_floor" if rel == "on" else rel
+            src_lbl = (na.labels[0] if na.labels else str(a)).strip()
         else:
             nb = node_by_id.get(int(b))
             if nb is None:
                 continue
+            src = np.asarray(na.xyz, dtype=np.float64).reshape(3).tolist()
             tgt = np.asarray(nb.xyz, dtype=np.float64).reshape(3).tolist()
             tgt_lbl = (nb.labels[0] if nb.labels else str(b)).strip()
             rel_key = rel
+            src_lbl = (na.labels[0] if na.labels else str(a)).strip()
         line_strips.append([src, tgt])
         colors.append(relation_colors.get(rel_key, [180, 180, 180]))
-        src_lbl = (na.labels[0] if na.labels else str(a)).strip()
         labels.append(f"{src_lbl} --{rel}--> {tgt_lbl}")
     if line_strips:
         log_to_rerun(

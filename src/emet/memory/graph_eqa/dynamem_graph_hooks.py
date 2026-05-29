@@ -25,6 +25,7 @@ from emet.memory.graph_eqa.graph_memory import labels_are_semantic_graph_hypothe
 from emet.memory.graph_eqa.graph_observation_pipeline import apply_instance_items_to_graph
 from emet.memory.graph_eqa.instance_observations import frame_instances_to_labels_xyz
 from emet.memory.graph_eqa.sensor_graph_builder import SensorGraphBuilder, short_labels_from_voxel_descriptions
+from emet.memory.graph_eqa.viewer_frame import viewer_xyz_world_from_observation
 
 
 def update_graph_memory_from_dynamem_observation(
@@ -53,16 +54,7 @@ def update_graph_memory_from_dynamem_observation(
     if frame_step is not None and hasattr(graph_memory, "set_graph_timestep"):
         graph_memory.set_graph_timestep(int(frame_step))
 
-    viewer_xyz: np.ndarray | None = None
-    try:
-        bp = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
-        if bp.size >= 2:
-            bz = float(bp[2]) if bp.size >= 3 else 0.0
-            viewer_xyz = np.array([float(bp[0]), float(bp[1]), bz], dtype=np.float64)
-    except Exception:
-        pass
-    if viewer_xyz is None and obs.camera_pose is not None:
-        viewer_xyz = np.asarray(obs.camera_pose[:3, 3], dtype=np.float64).reshape(3).copy()
+    viewer_xyz = viewer_xyz_world_from_observation(obs, robot=robot)
 
     vm = voxel_map
     instance_items: list[tuple[str, np.ndarray, tuple[int, int, int, int]]] = []
