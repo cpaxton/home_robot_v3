@@ -12,6 +12,7 @@ import torch
 
 from emet.memory.graph_eqa.instance_observations import (
     frame_instances_to_labels_xyz,
+    frame_world_xyz_hw3,
     label_for_detection_category,
 )
 
@@ -29,6 +30,16 @@ def test_label_for_detection_category_uses_class_list():
 def test_label_for_detection_category_out_of_range():
     m = _MockYoloEVocab()
     assert label_for_detection_category(m, 500) == "class_500"
+
+
+def test_frame_world_xyz_hw3_from_flat_unproject_layout():
+    h, w = 8, 8
+    depth = torch.ones(h, w)
+    fw_flat = torch.randn(h * w, 3)
+    frame = SimpleNamespace(depth=depth, full_world_xyz=fw_flat, instance=None)
+    hw3 = frame_world_xyz_hw3(frame)
+    assert hw3 is not None
+    assert tuple(hw3.shape) == (h, w, 3)
 
 
 def test_frame_instances_to_labels_xyz_medians_and_labels():

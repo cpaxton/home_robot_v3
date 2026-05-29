@@ -23,7 +23,11 @@ import numpy as np
 
 from emet.memory.graph_eqa.graph_memory import labels_are_semantic_graph_hypothesis
 from emet.memory.graph_eqa.graph_observation_pipeline import apply_instance_items_to_graph
-from emet.memory.graph_eqa.instance_observations import frame_instances_to_labels_xyz
+from emet.memory.graph_eqa.instance_observations import (
+    frame_instances_to_labels_xyz,
+    frame_rgb_hwc_uint8,
+    instance_items_from_instance_memory,
+)
 from emet.memory.graph_eqa.sensor_graph_builder import SensorGraphBuilder, short_labels_from_voxel_descriptions
 from emet.memory.graph_eqa.viewer_frame import viewer_xyz_world_from_observation
 
@@ -66,10 +70,16 @@ def update_graph_memory_from_dynamem_observation(
             max_depth=float(vm.max_depth),
             detection_model=detection_model,
         )
+        if not instance_items and getattr(frame, "instance", None) is not None and getattr(
+            vm, "use_instance_memory", False
+        ):
+            instance_items = instance_items_from_instance_memory(vm, detection_model)
         if instance_items:
+            frame_rgb = frame_rgb_hwc_uint8(frame)
+            crop_rgb = frame_rgb if frame_rgb is not None else np.asarray(rgb)
             apply_instance_items_to_graph(
                 graph_memory,
-                rgb,
+                crop_rgb,
                 instance_items,
                 dedup_skips=dedup_skips or (lambda _l, _x: False),
                 viewer_xyz=viewer_xyz,
