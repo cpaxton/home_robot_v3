@@ -1,28 +1,6 @@
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
+# Copyright (c) Chris Paxton
 #
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
-#
-# Some code may be adapted from other open-source works with their respective licenses. Original
-# license information maybe found below, if so.
-
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
-#
-# Full-stack opt-in smoke: Stretch + MolmoSpaces merged MJCF (iTHOR) + MuJoCo ZMQ +
-# DynaMem lightweight path (manipulation_only: no detectors / VL encoders), then assert
-# the finite 2D grid covers MolmoSpaces collision XY clip corners and occupancy is populated.
-#
-# Prerequisites: MolmoSpaces assets + emet-molmospaces wrapper (see docs/molmospaces.md).
-#
-# Run from repo root (main dev env: sim + dynamem deps), e.g.:
-#
-#   export RUN_SIM_TESTS=1 RUN_MOLMOSPACES_TESTS=1 RUN_STRETCH_MOLMO_DYNAMEM=1
-#   # Optional additive offset so ZMQ binds away from defaults (4401→4501, etc.):
-#   # export EMET_MOLMO_DYNAMEM_PORT_OFFSET=110
-#
-#   uv run pytest src/test/molmospaces/test_stretch_molmospaces_dynamem_floor_map.py -v --timeout=600
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
 from __future__ import annotations
 

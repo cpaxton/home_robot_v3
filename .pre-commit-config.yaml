@@ -43,9 +43,19 @@ repos:
             src/emet/controller/controller_dynagraph\.py|
             src/emet/utils/observation_layout\.py|
             src/emet/app/run_dynagraph\.py|
+            src/emet/dev_system_packages\.py|
+            src/emet/mapping/debug_navgrid_ascii\.py|
+            src/emet/mapping/navgrid_compare\.py|
+            src/emet/simulation/molmospaces_mobile_autoplace\.py|
+            scripts/molmospaces_navgrid_smoke\.py|
+            scripts/tier4_.*\.py|
             src/test/agent/test_dynagraph_import_cycle\.py|
             src/test/utils/test_observation_zmq_camera_layout\.py|
-            src/test/core/test_parameters_setdefault\.py
+            src/test/core/test_parameters_setdefault\.py|
+            src/test/mapping/test_debug_navgrid_ascii\.py|
+            src/test/mapping/test_navgrid_compare\.py|
+            src/test/molmospaces/test_multi_robot_molmospaces_navgrid_similarity\.py|
+            src/test/molmospaces/test_stretch_molmospaces_dynamem_floor_map\.py
           )
       - id: insert-license
         alias: insert-license-chris-paxton
@@ -57,9 +67,19 @@ repos:
             src/emet/controller/controller_dynagraph\.py|
             src/emet/utils/observation_layout\.py|
             src/emet/app/run_dynagraph\.py|
+            src/emet/dev_system_packages\.py|
+            src/emet/mapping/debug_navgrid_ascii\.py|
+            src/emet/mapping/navgrid_compare\.py|
+            src/emet/simulation/molmospaces_mobile_autoplace\.py|
+            scripts/molmospaces_navgrid_smoke\.py|
+            scripts/tier4_.*\.py|
             src/test/agent/test_dynagraph_import_cycle\.py|
             src/test/utils/test_observation_zmq_camera_layout\.py|
-            src/test/core/test_parameters_setdefault\.py
+            src/test/core/test_parameters_setdefault\.py|
+            src/test/mapping/test_debug_navgrid_ascii\.py|
+            src/test/mapping/test_navgrid_compare\.py|
+            src/test/molmospaces/test_multi_robot_molmospaces_navgrid_similarity\.py|
+            src/test/molmospaces/test_stretch_molmospaces_dynamem_floor_map\.py
           )$
 
   # Ruff: lint + format (line-length 120, third_party excluded in pyproject.toml and here)

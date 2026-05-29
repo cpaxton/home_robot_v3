@@ -1,19 +1,6 @@
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
+# Copyright (c) Chris Paxton
 #
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
-#
-# Some code may be adapted from other open-source works with their respective licenses. Original
-# license information maybe found below, if so.
-
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
-#
-# Opt-in: same Molmo iTHOR scene, multiple mobile robots, world-map IoU similarity.
-#
-#   RUN_SIM_TESTS=1 RUN_MOLMOSPACES_TESTS=1 RUN_MULTI_ROBOT_NAVGRID=1 \\
-#     uv run pytest src/test/molmospaces/test_multi_robot_molmospaces_navgrid_similarity.py -v --timeout=2400
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
 from __future__ import annotations
 
