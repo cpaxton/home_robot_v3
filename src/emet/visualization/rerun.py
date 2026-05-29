@@ -163,6 +163,9 @@ def _safe_rerun_path_component(text: str, *, max_len: int = 48) -> str:
 
 def format_dynagraph_node_label(node: Any) -> str:
     """Rerun 3D label: primary label, graph node id, observation id, optional merge count."""
+    if getattr(node, "is_viewpoint", False):
+        obs_id = int(getattr(node, "obs_id", 0))
+        return f"view [#{node.node_id} img {obs_id}]"
     labels = getattr(node, "labels", None) or []
     primary = labels[0] if labels else str(getattr(node, "node_id", "?"))
     obs_id = int(getattr(node, "obs_id", 0))
@@ -368,15 +371,7 @@ def _log_graph_eqa_edges(
         if na is None:
             continue
         src = np.asarray(na.xyz, dtype=np.float64).reshape(3).tolist()
-        if rel == "seen_from" and int(b) < 0 and observations_by_id is not None:
-            obs = observations_by_id.get(-int(b))
-            vxyz = getattr(obs, "viewer_xyz", None) if obs is not None else None
-            if vxyz is None:
-                continue
-            tgt = np.asarray(vxyz, dtype=np.float64).reshape(3).tolist()
-            tgt_lbl = f"view img {-int(b)}"
-            rel_key = "seen_from"
-        elif int(b) == -1:
+        if int(b) == -1:
             tgt = [src[0], src[1], 0.0]
             tgt_lbl = "floor"
             rel_key = "on_floor" if rel == "on" else rel
@@ -894,6 +889,7 @@ class RerunVisualizer:
         self.clear_identity("world/dynagraph/crops")
         if not nodes:
             self.clear_identity("world/dynagraph/nodes")
+            self.clear_identity("world/dynagraph/viewpoints")
             self.clear_identity("world/dynagraph/edges")
             self.clear_identity("world/dynagraph/crops_mosaic")
             log_to_rerun(
@@ -901,21 +897,40 @@ class RerunVisualizer:
                 rr.TextDocument("# Graph nodes\n\n_(empty)_\n", media_type=rr.MediaType.MARKDOWN),
             )
             return
-        xyz = np.array([n.xyz for n in nodes], dtype=np.float64)
-        labels = [format_dynagraph_node_label(n) for n in nodes]
-        node_colors = [
-            _color_for_graph_label(n.labels[0] if n.labels else str(n.node_id)) for n in nodes
-        ]
-        log_to_rerun(
-            "world/dynagraph/nodes",
-            rr.Points3D(positions=xyz, radii=0.08, labels=labels, colors=node_colors),
-        )
+        obj_nodes = [n for n in nodes if not getattr(n, "is_viewpoint", False)]
+        vp_nodes = [n for n in nodes if getattr(n, "is_viewpoint", False)]
+        if obj_nodes:
+            xyz = np.array([n.xyz for n in obj_nodes], dtype=np.float64)
+            labels = [format_dynagraph_node_label(n) for n in obj_nodes]
+            node_colors = [
+                _color_for_graph_label(n.labels[0] if n.labels else str(n.node_id)) for n in obj_nodes
+            ]
+            log_to_rerun(
+                "world/dynagraph/nodes",
+                rr.Points3D(positions=xyz, radii=0.08, labels=labels, colors=node_colors),
+            )
+        else:
+            self.clear_identity("world/dynagraph/nodes")
+        if vp_nodes:
+            vxyz = np.array([n.xyz for n in vp_nodes], dtype=np.float64)
+            vlabels = [format_dynagraph_node_label(n) for n in vp_nodes]
+            log_to_rerun(
+                "world/dynagraph/viewpoints",
+                rr.Points3D(
+                    positions=vxyz,
+                    radii=0.06,
+                    labels=vlabels,
+                    colors=[[255, 165, 0]] * len(vp_nodes),
+                ),
+            )
+        else:
+            self.clear_identity("world/dynagraph/viewpoints")
         get_edges = getattr(graph_memory, "get_edges", None)
         edges = list(get_edges()) if get_edges is not None else []
         obs_by_id = {int(o.obs_id): o for o in graph_memory.get_observations()}
         _log_graph_eqa_edges(nodes, edges, observations_by_id=obs_by_id)
         mosaic_entries: list[tuple[str, np.ndarray]] = []
-        for n in nodes:
+        for n in obj_nodes:
             rgb = dynagraph_node_rgb_crop(n, obs_rgb)
             if rgb is None:
                 continue

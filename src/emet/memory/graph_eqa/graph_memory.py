@@ -67,6 +67,7 @@ class GraphNode:
     support_count: int = 1
     extent_half: np.ndarray | None = None  # (3,) half-axis sizes in meters; None = point-like
     bbox_xyxy: tuple[int, int, int, int] | None = None  # pixel crop in obs RGB; None = full frame
+    is_viewpoint: bool = False  # True = robot/camera vantage (``seen_from`` target), not a detected object
 
 
 @dataclass
@@ -79,10 +80,6 @@ class GraphObservation:
     labels: list[str]
     description: str | None = None  # optional VLM-generated description
     viewer_xyz: np.ndarray | None = None  # (3,) robot base or camera when the image was taken
-
-
-# Edge endpoint ``b == -obs_id`` with relation ``seen_from`` means object ``a`` was seen from the
-# viewpoint stored on observation ``obs_id`` (``GraphObservation.viewer_xyz``).
 
 
 def _near(p1: np.ndarray, p2: np.ndarray, max_dist: float = 1.5) -> bool:
@@ -138,6 +135,7 @@ class GraphEQAMemory:
         self.image_description_client = image_description_client
         self._defer_llm_clients = defer_llm_clients
         self._nav_samples: list[GraphNavigationSample] = []
+        self._viewpoint_by_obs_id: dict[int, int] = {}
         self._record_navigation = True
         self._nav_max = 256
         self._graph_timestep: int = 0
@@ -202,12 +200,16 @@ class GraphEQAMemory:
         to_drop: list[GraphNode] = [n for n in self._nodes if cur - int(n.last_seen) > self.staleness_horizon]
         if not to_drop:
             return 0
-        drop_obs = {n.obs_id for n in to_drop}
+        drop_obs = {n.obs_id for n in to_drop if not n.is_viewpoint}
         drop_node_ids = {n.node_id for n in to_drop}
+        drop_node_ids |= {
+            n.node_id for n in self._nodes if n.is_viewpoint and int(n.obs_id) in drop_obs
+        }
         self._nodes = [n for n in self._nodes if n.node_id not in drop_node_ids]
         self._observations = [o for o in self._observations if o.obs_id not in drop_obs]
         for i, n in enumerate(self._nodes, start=1):
             self._nodes[i - 1] = replace(n, node_id=i)
+        self._rebuild_viewpoint_index()
         self._update_edges()
         return len(to_drop)
 
@@ -278,6 +280,8 @@ class GraphEQAMemory:
 
         if self.spatial_merge_m > 0:
             for idx, existing in enumerate(self._nodes):
+                if existing.is_viewpoint:
+                    continue
                 el = [(x or "").strip().lower() for x in existing.labels if str(x).strip()]
                 if not el or el[0] != primary:
                     continue
@@ -304,6 +308,8 @@ class GraphEQAMemory:
                             if viewer_a is not None:
                                 o.viewer_xyz = viewer_a
                             break
+                    if viewer_a is not None:
+                        self._ensure_viewpoint_node(int(existing.obs_id), viewer_a)
                     self._update_edges()
                     return int(existing.obs_id)
 
@@ -332,6 +338,8 @@ class GraphEQAMemory:
                 viewer_xyz=viewer_a,
             )
         )
+        if viewer_a is not None:
+            self._ensure_viewpoint_node(obs_id, viewer_a)
         self._update_edges()
         return obs_id
 
@@ -362,16 +370,61 @@ class GraphEQAMemory:
         if len(self._nav_samples) > self._nav_max:
             drop = len(self._nav_samples) - self._nav_max
             self._nav_samples = self._nav_samples[drop:]
+        if bx is not None:
+            nav_obs_id = self._next_obs_id
+            self._next_obs_id += 1
+            self._ensure_viewpoint_node(nav_obs_id, bx, labels=["viewpoint", "nav"])
 
     def get_navigation_samples(self) -> list[GraphNavigationSample]:
         return list(self._nav_samples)
 
+    def _rebuild_viewpoint_index(self) -> None:
+        self._viewpoint_by_obs_id = {
+            int(n.obs_id): int(n.node_id) for n in self._nodes if n.is_viewpoint
+        }
+
+    def _ensure_viewpoint_node(
+        self,
+        obs_id: int,
+        viewer_xyz: np.ndarray,
+        *,
+        labels: list[str] | None = None,
+    ) -> int:
+        """Create or refresh a graph node at the observation vantage (``seen_from`` target)."""
+        vxyz = np.asarray(viewer_xyz, dtype=float).reshape(-1)[:3].copy()
+        step = self._effective_timestep()
+        vp_labels = labels or [f"view img {int(obs_id)}"]
+        existing_id = self._viewpoint_by_obs_id.get(int(obs_id))
+        if existing_id is not None:
+            for idx, n in enumerate(self._nodes):
+                if int(n.node_id) == int(existing_id):
+                    self._nodes[idx] = replace(
+                        n,
+                        xyz=vxyz,
+                        labels=list(vp_labels),
+                        last_seen=step,
+                    )
+                    return int(existing_id)
+        node_id = len(self._nodes) + 1
+        self._nodes.append(
+            GraphNode(
+                node_id=node_id,
+                labels=list(vp_labels),
+                xyz=vxyz,
+                obs_id=int(obs_id),
+                last_seen=step,
+                is_viewpoint=True,
+            )
+        )
+        self._viewpoint_by_obs_id[int(obs_id)] = int(node_id)
+        return int(node_id)
+
     def _ensure_seen_from_edge(self, node_id: int, obs_id: int) -> None:
-        """Link object *node_id* to viewpoint observation *obs_id* (edge target ``-obs_id``)."""
-        obs = self._observation_by_id(obs_id)
-        if obs is None or obs.viewer_xyz is None:
+        """Link object *node_id* to the viewpoint graph node for observation *obs_id*."""
+        vp_id = self._viewpoint_by_obs_id.get(int(obs_id))
+        if vp_id is None:
             return
-        edge = (int(node_id), -int(obs_id), "seen_from")
+        edge = (int(node_id), int(vp_id), "seen_from")
         if edge not in self._edges:
             self._edges.append(edge)
 
@@ -384,10 +437,11 @@ class GraphEQAMemory:
     def _update_edges(self) -> None:
         """Compute spatial relations (near, on, on_floor) and ``seen_from`` viewpoint links."""
         self._edges.clear()
-        for i, na in enumerate(self._nodes):
+        objects = [n for n in self._nodes if not n.is_viewpoint]
+        for i, na in enumerate(objects):
             if _on_floor(na.xyz):
                 self._edges.append((na.node_id, -1, "on"))  # -1 = floor
-            for j, nb in enumerate(self._nodes):
+            for j, nb in enumerate(objects):
                 if i >= j:
                     continue
                 if _near(na.xyz, nb.xyz, self.max_near_distance):
@@ -397,7 +451,7 @@ class GraphEQAMemory:
                     self._edges.append((na.node_id, nb.node_id, "on"))
                 elif _on(nb.xyz, na.xyz):
                     self._edges.append((nb.node_id, na.node_id, "on"))
-        for node in self._nodes:
+        for node in objects:
             self._ensure_seen_from_edge(node.node_id, int(node.obs_id))
 
     def to_string(self) -> str:
@@ -411,14 +465,12 @@ class GraphEQAMemory:
         for n in self._nodes:
             lbl = _prompt_labels(n.labels)
             sup = f" n={n.support_count}" if getattr(n, "support_count", 1) != 1 else ""
+            kind = "View" if n.is_viewpoint else "Node"
             lines.append(
-                f"Node {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]{sup}"
+                f"{kind} {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]{sup}"
             )
         for a, b, rel in self._edges:
-            if rel == "seen_from" and int(b) < 0:
-                b_str = f"view/Image {-int(b)}"
-            else:
-                b_str = "floor" if b == -1 else str(b)
+            b_str = "floor" if b == -1 else str(b)
             lines.append(f"  {rel}({a}, {b_str})")
         return "SCENE_GRAPH:\n" + "\n".join(lines) if lines else "SCENE_GRAPH: (empty)"
 
@@ -432,6 +484,7 @@ class GraphEQAMemory:
         """
         edge_set = set(self._edges)
         node_by_id = {n.node_id: n for n in self._nodes}
+        object_nodes = [n for n in self._nodes if not n.is_viewpoint]
 
         def on_floor(nid: int) -> bool:
             return (nid, -1, "on") in edge_set
@@ -448,7 +501,7 @@ class GraphEQAMemory:
                 # Floor children: explicitly on floor, or no "on" relation (in-scene)
                 out = [
                     node_by_id[n.node_id]
-                    for n in self._nodes
+                    for n in object_nodes
                     if on_floor(n.node_id) or has_on_parent(n.node_id) is None
                 ]
             else:
@@ -490,16 +543,17 @@ class GraphEQAMemory:
         seen_from_edges = [(a, b) for a, b, rel in self._edges if rel == "seen_from"]
         if seen_from_edges:
             lines.append("")
-            lines.append("Seen from (viewpoint → object):")
+            lines.append("Seen from (viewpoint node → object):")
             for a, b in seen_from_edges:
                 na = node_by_id.get(a)
+                nb = node_by_id.get(b)
                 la = ", ".join(na.labels) if na and na.labels else str(a)
-                obs = self._observation_by_id(-int(b))
-                if obs is not None and obs.viewer_xyz is not None:
-                    vx, vy, vz = (float(obs.viewer_xyz[i]) for i in range(3))
-                    lines.append(f"{indent}{la} ← view img {-int(b)} at ({vx:.2f}, {vy:.2f}, {vz:.2f})")
+                if nb is not None:
+                    vx, vy, vz = (float(nb.xyz[i]) for i in range(3))
+                    lb = ", ".join(nb.labels) if nb.labels else str(b)
+                    lines.append(f"{indent}{la} ← {lb} [{b}] at ({vx:.2f}, {vy:.2f}, {vz:.2f})")
                 else:
-                    lines.append(f"{indent}{la} ← view img {-int(b)}")
+                    lines.append(f"{indent}{la} ← node {b}")
 
         return "\n".join(lines) if lines else "Scene (3D spatial graph): (empty)"
 

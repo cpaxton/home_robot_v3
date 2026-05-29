@@ -79,6 +79,7 @@ def test_instance_detections_added_when_sensor_perception_also_enabled():
     assert "mug" in labels_flat or "plate" in labels_flat, labels_flat
     assert "table" in labels_flat, labels_flat
     assert any(rel == "seen_from" for _a, _b, rel in gm.get_edges())
+    assert any(n.is_viewpoint for n in nodes), "expected viewpoint node at robot base"
     instance_nodes = [n for n in nodes if n.bbox_xyxy is not None]
     assert instance_nodes, "YoloE instance nodes should carry mask bbox for Rerun crops"
     assert instance_nodes[0].bbox_xyxy == (0, 0, 4, 4)

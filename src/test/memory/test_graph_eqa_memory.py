@@ -111,8 +111,8 @@ def test_add_observation_stores_bbox_xyxy_on_node():
     assert node.bbox_xyxy == (10, 20, 40, 55)
 
 
-def test_seen_from_edge_links_object_to_viewpoint_observation():
-    """``seen_from`` edges use negative obs_id as viewpoint; viewer_xyz on observation."""
+def test_seen_from_edge_links_object_to_viewpoint_node():
+    """``seen_from`` targets a viewpoint graph node at ``viewer_xyz``."""
     mem = GraphEQAMemory(defer_llm_clients=True)
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     viewer = np.array([1.0, 2.0, 0.0], dtype=np.float64)
@@ -122,14 +122,20 @@ def test_seen_from_edge_links_object_to_viewpoint_observation():
         ["mug"],
         viewer_xyz=viewer,
     )
+    nodes = mem.get_nodes()
+    objects = [n for n in nodes if not n.is_viewpoint]
+    viewpoints = [n for n in nodes if n.is_viewpoint]
+    assert len(objects) == 1
+    assert len(viewpoints) == 1
+    np.testing.assert_allclose(viewpoints[0].xyz, viewer)
     edges = mem.get_edges()
-    assert (1, -1, "seen_from") in edges
+    assert (objects[0].node_id, viewpoints[0].node_id, "seen_from") in edges
     obs = mem.get_observations()[0]
     assert obs.viewer_xyz is not None
     np.testing.assert_allclose(obs.viewer_xyz, viewer)
     s = mem.to_string()
     assert "seen_from" in s
-    assert "view/Image 1" in s
+    assert "View " in s
 
 
 def test_on_floor_heuristic():
@@ -291,13 +297,17 @@ def test_labels_are_semantic_graph_hypothesis():
     assert labels_are_semantic_graph_hypothesis([]) is False
 
 
-def test_record_navigation_sample_does_not_create_nodes():
+def test_record_navigation_sample_adds_viewpoint_not_object_node():
     mem = GraphEQAMemory(eqa_client=lambda x: "", image_description_client=lambda x: "")
     rgb = np.zeros((20, 20, 3), dtype=np.uint8)
-    mem.record_navigation_sample(rgb, np.array([1.0, 2.0, 0.1]), base_xyz=np.array([1.1, 2.0, 0.0]))
-    assert len(mem.get_nodes()) == 0
+    base = np.array([1.1, 2.0, 0.0])
+    mem.record_navigation_sample(rgb, np.array([1.0, 2.0, 0.1]), base_xyz=base)
+    nodes = mem.get_nodes()
     assert len(mem.get_observations()) == 0
     assert len(mem.get_navigation_samples()) == 1
+    assert len(nodes) == 1
+    assert nodes[0].is_viewpoint
+    np.testing.assert_allclose(nodes[0].xyz, base)
 
 
 def test_record_navigation_respects_graph_eqa_record_navigation_false():
