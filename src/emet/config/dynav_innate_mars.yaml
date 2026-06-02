@@ -29,6 +29,10 @@ min_points_per_voxel: 15
 pad_obstacles: 2
 min_pad_obstacles: 1
 
+map_boundary:
+  obstacle_barrier_cells: 0
+  history_penalty_cells: 0
+
 local_radius: 0.5
 add_local_every_step: False
 remove_visited_from_obstacles: False

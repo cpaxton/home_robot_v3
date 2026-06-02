@@ -44,6 +44,48 @@ logger = logging.getLogger(__name__)
 DEBUG_SUBDIR = "debug"
 
 
+def _map_boundary_config(parameters: Parameters | dict | None) -> tuple[int, int]:
+    """Return (obstacle_barrier_cells, history_penalty_cells); default 0 (no grid-edge barrier)."""
+    if parameters is None:
+        return 0, 0
+    if isinstance(parameters, Parameters):
+        mb = parameters.get("map_boundary", {})
+    elif isinstance(parameters, dict):
+        mb = parameters.get("map_boundary", {})
+    else:
+        mb = {}
+    if not isinstance(mb, dict):
+        mb = {}
+    obs_cells = int(mb.get("obstacle_barrier_cells", 0) or 0)
+    hist_cells = int(mb.get("history_penalty_cells", 0) or 0)
+    return max(0, obs_cells), max(0, hist_cells)
+
+
+def _apply_map_boundary_2d(
+    obstacles: Tensor,
+    history_soft: Tensor | None,
+    parameters: Parameters | dict | None,
+) -> None:
+    """Mark grid-edge obstacles and optional history penalty from ``map_boundary`` config."""
+    obs_barrier, hist_penalty = _map_boundary_config(parameters)
+    h, w = int(obstacles.shape[0]), int(obstacles.shape[1])
+    if obs_barrier > 0:
+        n = min(obs_barrier, h // 2, w // 2)
+        if n > 0:
+            obstacles[0:n, :] = True
+            obstacles[-n:, :] = True
+            obstacles[:, 0:n] = True
+            obstacles[:, -n:] = True
+    if history_soft is not None and hist_penalty > 0:
+        n = min(hist_penalty, h // 2, w // 2)
+        if n > 0:
+            mx = history_soft.max().item()
+            history_soft[0:n, :] = mx
+            history_soft[-n:, :] = mx
+            history_soft[:, 0:n] = mx
+            history_soft[:, -n:] = mx
+
+
 def _eqa_qwen_vl_single_client_ok(
     vl_family: str,
     eqa_vl_hf_model_id: str | None,
@@ -504,17 +546,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
             plt.title("explored")
             plt.show()
 
-        # Set the boundary in case the robot runs out from the environment
-        obstacles[0:30, :] = True
-        obstacles[-30:, :] = True
-        obstacles[:, 0:30] = True
-        obstacles[:, -30:] = True
-        # Generate exploration heuristic to prevent robot from staying around the boundary
-        if history_soft is not None:
-            history_soft[0:35, :] = history_soft.max().item()
-            history_soft[-35:, :] = history_soft.max().item()
-            history_soft[:, 0:35] = history_soft.max().item()
-            history_soft[:, -35:] = history_soft.max().item()
+        # Optional grid-edge obstacle barrier (map_boundary/obstacle_barrier_cells in dynav YAML).
+        _apply_map_boundary_2d(obstacles, history_soft, self.parameters)
 
         # Update cache
         self._map2d = (obstacles, explored)

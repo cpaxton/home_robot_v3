@@ -15,13 +15,16 @@
 from __future__ import annotations
 
 import numpy as np
+import torch
 
 from emet.agent.tools import get_tools
+from emet.mapping.voxel.voxel_dynamem import _apply_map_boundary_2d, _map_boundary_config
 from emet.visualization.map_snapshot import (
     build_map_stats,
     discord_share_map_rgb,
     format_navigation_report,
     render_topdown_map_rgb,
+    share_topdown_map_rgb,
     snapshot_from_voxel_map,
     world_xy_to_grid_ij,
 )
@@ -63,33 +66,59 @@ def test_format_navigation_report_explore_flag():
     assert "failure" in s
 
 
-def test_snapshot_from_voxel_map_fake():
+def test_snapshot_from_voxel_map_fake_crops_to_explored():
     class FakeVM:
-        grid_origin = np.array([3.0, 3.0, 0.0])
-        grid_resolution = 0.05
+        grid_origin = np.array([0.0, 0.0, 0.0])
+        grid_resolution = 0.1
 
         def get_2d_map(self):
-            obs = np.zeros((6, 6), dtype=bool)
-            exp = np.zeros((6, 6), dtype=bool)
-            exp[1:5, 1:5] = True
+            obs = np.zeros((128, 128), dtype=bool)
+            exp = np.zeros((128, 128), dtype=bool)
+            exp[50:60, 50:60] = True
             return obs, exp
 
-    img, stats, img_discord = snapshot_from_voxel_map(FakeVM(), (0.0, 0.0))
+    vm = FakeVM()
+    obs, exp = vm.get_2d_map()
+    go = np.array(vm.grid_origin[:2])
+    img, stats, img_share = snapshot_from_voxel_map(vm, (0.0, 0.0))
+    full = render_topdown_map_rgb(obs, exp, go, vm.grid_resolution, None, max_side=None)
     assert img is not None
-    assert img_discord is not None
+    assert img_share is img
     assert stats["map_nonempty"]
-    assert img_discord.shape[0] <= img.shape[0]
-    assert img_discord.shape[1] <= img.shape[1]
+    assert img.shape[0] < full.shape[0] or img.shape[1] < full.shape[1]
 
 
-def test_discord_share_map_crops_large_grid_to_explored_patch():
+def test_map_boundary_config_defaults():
+    assert _map_boundary_config(None) == (0, 0)
+    assert _map_boundary_config({}) == (0, 0)
+    assert _map_boundary_config({"map_boundary": {"obstacle_barrier_cells": 30, "history_penalty_cells": 35}}) == (
+        30,
+        35,
+    )
+
+
+def test_apply_map_boundary_2d_off_by_default():
+    obs = torch.zeros(40, 40, dtype=torch.bool)
+    _apply_map_boundary_2d(obs, None, None)
+    assert not obs.any()
+
+
+def test_apply_map_boundary_2d_marks_edge_when_enabled():
+    obs = torch.zeros(40, 40, dtype=torch.bool)
+    _apply_map_boundary_2d(obs, None, {"map_boundary": {"obstacle_barrier_cells": 5}})
+    assert obs[0, 0].item()
+    assert not obs[20, 20].item()
+
+
+def test_share_topdown_map_crops_large_grid_to_explored_patch():
     obs = np.zeros((128, 128), dtype=bool)
     exp = np.zeros((128, 128), dtype=bool)
     exp[50:60, 50:60] = True
     go = np.array([0.0, 0.0])
     full = render_topdown_map_rgb(obs, exp, go, 0.1, None, max_side=None)
-    disc = discord_share_map_rgb(obs, exp, go, 0.1, None, max_side=640)
-    assert disc.shape[0] < full.shape[0] or disc.shape[1] < full.shape[1]
+    cropped = share_topdown_map_rgb(obs, exp, go, 0.1, None, max_side=640)
+    assert cropped.shape[0] < full.shape[0] or cropped.shape[1] < full.shape[1]
+    assert np.array_equal(cropped, discord_share_map_rgb(obs, exp, go, 0.1, None, max_side=640))
 
 
 def test_explore_tool_returns_diagnostic_text():

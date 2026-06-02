@@ -41,6 +41,20 @@ In terms of exploration, we discovered that commonly used frontier based explora
 
 For **graph-based EQA** on the same voxel stack (optional graph node merge and staleness), see [Dynagraph](dynagraph.md).
 
+### Configuration and Rerun `map_topdown`
+
+Navigation and mapping hyperparameters live in **`dynav_config.yaml`** (or `--dynav-config`). See **[Dynav configuration](dynav_config.md)** for a section-by-section reference, including:
+
+- **`map_boundary`** — optional grid-edge obstacle barrier (default **off**). To restore the legacy red frame at the map rim used for exploration safety:
+
+  ```yaml
+  map_boundary:
+    obstacle_barrier_cells: 30
+    history_penalty_cells: 35
+  ```
+
+- **Top-down map in Rerun** — the `map_topdown` panel and `send_map_snapshot` crop to the explored region (same framing as Discord), without large unexplored margins.
+
 ## Picking and placing
 Dynamem has two manipulation systems, one is Stretch AI Visual Servoing code, as described in the [LLM agent](llm_agent.md) while another is [OK-Robot manipulation](https://github.com/ok-robot/ok-robot/tree/main/ok-robot-manipulation).
 

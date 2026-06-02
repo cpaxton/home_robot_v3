@@ -147,7 +147,7 @@ def crop_topdown_rgb_to_explored(
     return np.ascontiguousarray(rgb[i0:i1, j0:j1])
 
 
-def discord_share_map_rgb(
+def share_topdown_map_rgb(
     obstacles: Any,
     explored: Any,
     grid_origin_xy: np.ndarray,
@@ -157,7 +157,7 @@ def discord_share_map_rgb(
     max_side: int = 640,
     margin_cells: int = 16,
 ) -> np.ndarray:
-    """Full-resolution render, crop to explored region, then downsample (for Discord / compact sharing)."""
+    """Full-resolution render, crop to explored region, then downsample (Rerun / Discord / sharing)."""
     rgb_full = render_topdown_map_rgb(
         obstacles,
         explored,
@@ -175,6 +175,28 @@ def discord_share_map_rgb(
         margin_cells=margin_cells,
     )
     return downsample_topdown_rgb_max_side(cropped, max_side)
+
+
+def discord_share_map_rgb(
+    obstacles: Any,
+    explored: Any,
+    grid_origin_xy: np.ndarray,
+    grid_resolution: float,
+    robot_xy: np.ndarray | tuple[float, float] | None,
+    *,
+    max_side: int = 640,
+    margin_cells: int = 16,
+) -> np.ndarray:
+    """Alias for :func:`share_topdown_map_rgb` (Discord map posts)."""
+    return share_topdown_map_rgb(
+        obstacles,
+        explored,
+        grid_origin_xy,
+        grid_resolution,
+        robot_xy,
+        max_side=max_side,
+        margin_cells=margin_cells,
+    )
 
 
 def build_map_stats(
@@ -245,11 +267,11 @@ def snapshot_from_voxel_map(
     *,
     max_side: int = 640,
 ) -> tuple[np.ndarray | None, dict[str, Any], np.ndarray | None]:
-    """Build RGB snapshot + stats + Discord-oriented crop from a SparseVoxelMap-like object.
+    """Build RGB snapshot + stats from a SparseVoxelMap-like object.
 
-    Returns ``(img_rerun, stats, img_discord)``. ``img_discord`` is cropped to the explored region
-    (plus margin) then downsampled; ``img_rerun`` keeps the usual full-map view (downsampled to
-    ``max_side``). If no map, all three are ``None`` / empty stats.
+    Returns ``(img, stats, img_share)``. Both images are cropped to the explored region (plus margin)
+    then downsampled to ``max_side`` (same pipeline as Discord sharing). If no map, all three are
+    ``None`` / empty stats.
     """
     if voxel_map is None or not hasattr(voxel_map, "get_2d_map"):
         empty: dict[str, Any] = {
@@ -261,6 +283,5 @@ def snapshot_from_voxel_map(
     go = _grid_origin_xy(getattr(voxel_map, "grid_origin", np.zeros(2)))
     res = float(getattr(voxel_map, "grid_resolution", 0.1) or 0.1)
     stats = build_map_stats(obstacles, explored, go, res, robot_xy)
-    img = render_topdown_map_rgb(obstacles, explored, go, res, robot_xy, max_side=max_side)
-    img_discord = discord_share_map_rgb(obstacles, explored, go, res, robot_xy, max_side=max_side)
-    return img, stats, img_discord
+    img = share_topdown_map_rgb(obstacles, explored, go, res, robot_xy, max_side=max_side)
+    return img, stats, img
