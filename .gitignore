@@ -164,9 +164,17 @@ install/
 MUJOCO_LOG.TXT
 **/stretch_temp_abs.xml
 molmo_videos/
-# MolmoSpaces merged MJCF temp files (next to packaged galaxea R1 MJCF for assetdir resolution)
-src/emet/assets/robot/galaxea_r1/molmospaces_merged_*.xml
+# MolmoSpaces merged MJCF temp files (next to packaged robot MJCF for assetdir resolution)
+src/emet/assets/robot/molmospaces_merged_*.xml
+src/emet/assets/robot/**/molmospaces_merged_*.xml
+src/emet/assets/robot/scene_robot_*.xml
+src/emet/assets/robot/**/scene_robot_*.xml
 src/emet/assets/robot/galaxea_r1/t_*.xml
+
+# Local MolmoSpaces exploration / navgrid scratch at repo root (see docs/molmospaces.md)
+tmp_*_explore/
+ep0/
+episode0/
 
 # Partial downloads / caches
 *.partial

@@ -23,9 +23,11 @@ from pathlib import Path
 
 # Robots supported by MolmoSpaces (from molmo_spaces_constants / their assets).
 # rby1 / rby1m are Rainbow Robotics "Galaxea R1" family.
+# stretch: not a MolmoSpaces asset; merge uses vendored emet ``stretch.xml`` via ``get_robot_mjcf_path``.
 MOLMOSPACES_ROBOT_IDS = [
     "rby1",
     "rby1m",
+    "stretch",
     "franka_droid",
     "franka_cap",
     "floating_rum",

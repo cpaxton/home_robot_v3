@@ -16,6 +16,7 @@ import sys
 import threading
 import time
 from multiprocessing import Lock, Manager, Process
+from typing import Any
 
 import numpy as np
 
@@ -34,6 +35,7 @@ from emet.simulation.stretch_mujoco.datamodels.status_command import (
     CommandCoordinateFrameArrowsViz,
     CommandKeyframe,
     CommandMove,
+    CommandTeleportBase,
     StatusCommand,
 )
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
@@ -68,6 +70,9 @@ class StretchMujocoSimulator:
         cameras_to_use: list[StretchCameras] = None,
         start_translation: list | None = None,
         start_rotation_quat: list | None = None,
+        *,
+        molmospaces_environment: dict[str, Any] | None = None,
+        debug_molmospaces_spawn: bool = False,
     ) -> None:
         if cameras_to_use is None:
             cameras_to_use = []
@@ -79,6 +84,8 @@ class StretchMujocoSimulator:
         self._cameras_to_use = cameras_to_use
         self._start_translation = start_translation
         self._start_rotation_quat = start_rotation_quat
+        self._molmospaces_environment = molmospaces_environment
+        self._debug_molmospaces_spawn = debug_molmospaces_spawn
 
         self.is_stop_called = False
 
@@ -158,6 +165,8 @@ class StretchMujocoSimulator:
                 self._start_translation,
                 self._start_rotation_quat,
                 use_glx,
+                self._molmospaces_environment,
+                self._debug_molmospaces_spawn,
             ),
             daemon=False,  # We're gonna handle terminating this in stop_mujoco_process()
         )
@@ -469,6 +478,44 @@ class StretchMujocoSimulator:
             )
 
             self.data_proxies.set_command(command)
+
+    @require_connection
+    def teleport_base_xyt(
+        self,
+        x: float,
+        y: float,
+        theta: float,
+        *,
+        wait: bool = False,
+        timeout: float = 2.0,
+    ) -> bool:
+        """Snap ``base_link`` free joint to world (x, y, theta) in the MuJoCo subprocess.
+
+        Returns True when *wait* is False, or when the base reaches the goal within *timeout*.
+        """
+        with self._command_lock:
+            command = self.data_proxies.get_command()
+            command.set_teleport_base(CommandTeleportBase(float(x), float(y), float(theta), True))
+            self.data_proxies.set_command(command)
+        if not wait:
+            return True
+        goal = np.array([float(x), float(y), float(theta)], dtype=np.float64)
+
+        def _at_goal() -> bool:
+            from emet.simulation.molmospaces_mobile_autoplace import se2_pose_at_goal
+
+            cur = self.get_base_pose()
+            if cur is None:
+                return False
+            return se2_pose_at_goal(np.asarray(cur, dtype=np.float64), goal, xy_tol=0.08, theta_tol=0.12)
+
+        return bool(
+            block_until_check_succeeds(
+                wait_timeout=timeout,
+                check=_at_goal,
+                is_alive=self.is_running,
+            )
+        )
 
     @require_connection
     def set_base_velocity(self, v_linear: float, omega: float) -> None:

@@ -37,6 +37,8 @@ from emet.core.zmq_protocol import (
 from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn, scene_base_spawn
 from emet.simulation.head_look_action import apply_head_to_robosuite
+from emet.simulation.molmospaces_env import molmospaces_nav_teleport_enabled
+from emet.simulation.molmospaces_mobile_autoplace import apply_molmospaces_freejoint_base_autoplace
 from emet.simulation.stereo_camera_utils import stereo_right_camera_name_from_spec
 from emet.utils.geometry import xyt_global_to_base
 from emet.utils.observation_layout import rgb_height_width_for_zmq
@@ -150,79 +152,19 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._robocasa_planar_autoplace_after_load()
         self._planar_base_actuator_ids_cache = None
 
-    def _want_molmospaces_spawn_heuristic(self) -> bool:
-        """True when we merged a MolmoSpaces house + mobile base (needs placement away from origin)."""
-        return molmospaces_spawn.want_molmospaces_autoplace(
-            environment=self._environment_descriptor,
-            scene_source_basename=self._scene_source_basename,
-        )
-
     def _molmospaces_autoplace_free_base_after_load(self) -> None:
         """Move merged MolmoSpaces + mobile robot off origin when the base starts inside scene clutter."""
-        if not self._want_molmospaces_spawn_heuristic():
-            return
         if self._mjmodel is None or self._mjdata is None:
             return
-        if self._base_freejoint_addrs() is None:
-            return
-        base_name = self._spec.base_link_name
-        if self._debug_molmospaces_spawn:
-            logger.info(
-                f"MolmoSpaces spawn debug: scene_source_basename={self._scene_source_basename!r} "
-                f"environment={self._environment_descriptor!r} base_body_name={base_name!r}"
-            )
-        try:
-            placed = molmospaces_spawn.find_molmospaces_freejoint_xyz(
-                self._mjmodel,
-                self._mjdata,
-                base_body_name=base_name,
-                scene_label=self._scene_source_basename,
-                merged_mjcf_path=self._scene_disk_path,
-                environment=self._environment_descriptor,
-            )
-        except Exception as e:
-            logger.warning(f"MolmoSpaces base autoplace skipped ({e!r}).")
-            return
-        if placed is None:
-            if self._debug_molmospaces_spawn:
-                logger.info(
-                    "MolmoSpaces base autoplace: find_molmospaces_freejoint_xyz returned None (see spawn debug lines above)."
-                )
-            return
-        x, y, z = placed
-        logger.info(
-            f"MolmoSpaces base autoplace: moved free joint on {base_name!r} to "
-            f"({x:.3f}, {y:.3f}, {z:.3f}) to avoid origin clutter."
+        self._molmospaces_autoplace_snap_qpos0 = apply_molmospaces_freejoint_base_autoplace(
+            self._mjmodel,
+            self._mjdata,
+            merged_mjcf_path=self._scene_disk_path,
+            base_body_name=self._spec.base_link_name,
+            environment=self._environment_descriptor,
+            scene_source_basename=self._scene_source_basename,
+            debug=self._debug_molmospaces_spawn,
         )
-        if self._debug_molmospaces_spawn:
-            try:
-                mujoco.mj_forward(self._mjmodel, self._mjdata)
-                lines = molmospaces_spawn.format_spawn_contact_report(
-                    self._mjmodel,
-                    self._mjdata,
-                    base_body_name=base_name,
-                    floor_geom_name="floor",
-                    max_lines=50,
-                    dist_report_threshold=0.15,
-                )
-                for ln in lines:
-                    logger.info(f"[molmospaces_spawn/post-place] {ln}")
-                for ln in molmospaces_spawn.format_spawn_floor_alignment_report(
-                    self._mjmodel,
-                    self._mjdata,
-                    base_body_name=base_name,
-                    floor_geom_name="floor",
-                    xy=(float(x), float(y)),
-                ):
-                    logger.info(f"[molmospaces_spawn/post-place] {ln}")
-            except Exception as e:
-                logger.warning(f"MolmoSpaces spawn debug contact report failed: {e!r}")
-        # Copy placed free-joint pose into qpos0 so resets use autoplace (Python MjModel has no qvel0).
-        addrs = self._base_freejoint_addrs()
-        if addrs is not None:
-            qadr = int(addrs[0])
-            self._mjmodel.qpos0[qadr : qadr + 7] = self._mjdata.qpos[qadr : qadr + 7]
-            self._molmospaces_autoplace_snap_qpos0 = True
 
     def _robocasa_planar_autoplace_after_load(self) -> None:
         """Reposition planar (slide X/Y + yaw) base away from Robocasa clutter when enabled."""
@@ -283,9 +225,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             logger.warning(f"Robocasa planar autoplace skipped ({e!r}).")
             return
         if placed is None:
-            logger.info(
-                "Robocasa planar autoplace: no safer (x,y,yaw) found; keeping MJCF default base pose."
-            )
+            logger.info("Robocasa planar autoplace: no safer (x,y,yaw) found; keeping MJCF default base pose.")
             return
         wx, wy, wt = placed
         self._planar_autoplace_world_xyt = np.array([float(wx), float(wy), float(wt)], dtype=np.float64)
@@ -350,6 +290,16 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjdata.qvel[vadr] = 0.0
         mujoco.mj_forward(self._mjmodel, self._mjdata)
 
+    def _is_molmospaces_session(self) -> bool:
+        env = self._environment_descriptor
+        if isinstance(env, dict) and env.get("kind") == "molmospaces":
+            return True
+        bn = self._scene_source_basename or ""
+        return bn.startswith("molmospaces_merged")
+
+    def _use_molmospaces_nav_teleport(self) -> bool:
+        return self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()
+
     def _build_emet_session(self, *, robocasa: bool) -> dict[str, Any]:
         mj_name: str | None = None
         if self._mjmodel is not None:
@@ -366,7 +316,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         else:
             env = {"kind": "default_table"}
         caps: dict[str, Any] = {
-            "teleport_base": False,
+            "teleport_base": self._use_molmospaces_nav_teleport(),
             "nav_velocity_drive": True,
             "depth": bool(self._spec.camera_names),
             "num_cameras": len(self._spec.camera_names),
@@ -881,7 +831,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                     else:
                         world = self._spawn_rel_xyt_to_world(raw[:3], init)
                         wx, wy, wt = float(world[0]), float(world[1]), float(world[2])
-                    nav_teleport = bool(action.get("nav_teleport", False))
+                    nav_teleport = bool(action.get("nav_teleport", False)) or self._use_molmospaces_nav_teleport()
                     if nav_teleport:
                         if not self._teleport_base_world_xyt(wx, wy, wt):
                             logger.warning(
@@ -1111,12 +1061,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 jn = getattr(self._spec, "planar_base_joint_names", None)
                 wxyt = self._planar_autoplace_world_xyt
                 reapply_ok = False
-                if (
-                    wxyt is not None
-                    and np.asarray(wxyt).size >= 3
-                    and jn is not None
-                    and len(jn) == 3
-                ):
+                if wxyt is not None and np.asarray(wxyt).size >= 3 and jn is not None and len(jn) == 3:
                     w = np.asarray(wxyt, dtype=np.float64).reshape(-1)[:3]
                     reapply_ok = bool(
                         scene_base_spawn.write_planar_base_xyt(
@@ -1148,6 +1093,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._nav_goal_world = None
         self._at_goal = True
         self._emet_session = self._build_emet_session(robocasa=robocasa)
+        if self._is_molmospaces_session() and not molmospaces_nav_teleport_enabled():
+            log.info("MolmoSpaces navigation: wheel/goal drive (EMET_MOLMOSPACES_NAV_TELEPORT=0)")
 
         # Print scene summary before any rendering (so it appears in headless / no-DISPLAY runs)
         summary = self.get_scene_summary()

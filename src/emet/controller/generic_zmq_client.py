@@ -491,9 +491,7 @@ class GenericZmqClient(AbstractRobotClient):
 
     def set_mapping_depth_for_rerun(self, depth: np.ndarray | None) -> None:
         with self._mapping_depth_lock:
-            self._mapping_depth_for_rerun = (
-                None if depth is None else np.asarray(depth, dtype=np.float32).copy()
-            )
+            self._mapping_depth_for_rerun = None if depth is None else np.asarray(depth, dtype=np.float32).copy()
 
     def peek_mapping_depth_for_rerun(self) -> np.ndarray | None:
         with self._mapping_depth_lock:
@@ -720,6 +718,9 @@ class GenericZmqClient(AbstractRobotClient):
             xyt = xyt.xyt
         xyt = np.array(xyt, dtype=float)
         action = {"xyt": xyt.tolist(), "nav_relative": relative}
+        sess = self.get_emet_session()
+        if sess and (sess.get("capabilities") or {}).get("teleport_base"):
+            action["nav_teleport"] = True
         self.send_action(action)
         if blocking:
             # PUB/SUB can drop the first packet; give the server a beat to apply xyt.

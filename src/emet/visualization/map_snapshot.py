@@ -114,6 +114,43 @@ def downsample_topdown_rgb_max_side(rgb: np.ndarray, max_side: int) -> np.ndarra
     return rgb[::step, ::step].copy()
 
 
+def explored_crop_indices(
+    explored: Any,
+    robot_xy: np.ndarray | tuple[float, float] | None,
+    grid_origin_xy: np.ndarray,
+    grid_resolution: float,
+    shape_hw: tuple[int, int],
+    *,
+    margin_cells: int = 16,
+    robot_radius_cells: int = 5,
+) -> tuple[int, int, int, int] | None:
+    """Row/col slice ``(i0, i1, j0, j1)`` around explored cells (+ robot neighborhood).
+
+    Same bounding box as :func:`crop_topdown_rgb_to_explored` / Discord share maps.
+    Returns ``None`` when no explored cells (and no robot) are present.
+    """
+    exp = _to_numpy_bool_2d(explored)
+    h, w = int(shape_hw[0]), int(shape_hw[1])
+    if exp.shape[0] != h or exp.shape[1] != w:
+        h, w = exp.shape[0], exp.shape[1]
+    mask = exp.copy()
+    if robot_xy is not None:
+        ri, rj = world_xy_to_grid_ij(robot_xy, grid_origin_xy, grid_resolution, (h, w))
+        rr = int(robot_radius_cells)
+        ri0, ri1 = max(0, ri - rr), min(h, ri + rr + 1)
+        rj0, rj1 = max(0, rj - rr), min(w, rj + rr + 1)
+        mask[ri0:ri1, rj0:rj1] = True
+    ys, xs = np.where(mask)
+    if ys.size == 0:
+        return None
+    mc = int(margin_cells)
+    i0, i1 = max(0, int(ys.min()) - mc), min(h, int(ys.max()) + 1 + mc)
+    j0, j1 = max(0, int(xs.min()) - mc), min(w, int(xs.max()) + 1 + mc)
+    if i1 <= i0 or j1 <= j0:
+        return None
+    return i0, i1, j0, j1
+
+
 def crop_topdown_rgb_to_explored(
     rgb: np.ndarray,
     explored: Any,
@@ -128,22 +165,18 @@ def crop_topdown_rgb_to_explored(
     exp = _to_numpy_bool_2d(explored)
     if rgb.shape[0] != exp.shape[0] or rgb.shape[1] != exp.shape[1]:
         return np.ascontiguousarray(rgb)
-    mask = exp.copy()
-    if robot_xy is not None:
-        ri, rj = world_xy_to_grid_ij(robot_xy, grid_origin_xy, grid_resolution, exp.shape)
-        rr = int(robot_radius_cells)
-        i0, i1 = max(0, ri - rr), min(exp.shape[0], ri + rr + 1)
-        j0, j1 = max(0, rj - rr), min(exp.shape[1], rj + rr + 1)
-        mask[i0:i1, j0:j1] = True
-    ys, xs = np.where(mask)
-    if ys.size == 0:
+    bbox = explored_crop_indices(
+        explored,
+        robot_xy,
+        grid_origin_xy,
+        grid_resolution,
+        exp.shape,
+        margin_cells=margin_cells,
+        robot_radius_cells=robot_radius_cells,
+    )
+    if bbox is None:
         return np.ascontiguousarray(rgb)
-    h, w = rgb.shape[0], rgb.shape[1]
-    mc = int(margin_cells)
-    i0, i1 = max(0, int(ys.min()) - mc), min(h, int(ys.max()) + 1 + mc)
-    j0, j1 = max(0, int(xs.min()) - mc), min(w, int(xs.max()) + 1 + mc)
-    if i1 <= i0 or j1 <= j0:
-        return np.ascontiguousarray(rgb)
+    i0, i1, j0, j1 = bbox
     return np.ascontiguousarray(rgb[i0:i1, j0:j1])
 
 

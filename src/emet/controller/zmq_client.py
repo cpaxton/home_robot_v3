@@ -783,6 +783,9 @@ class StretchZmqClient(AbstractRobotClient):
         # We never send a relative motion over wireless - this is because we can run into timing issues.
         # Instead, we always send the absolute position and let the robot handle the motions itself.
         next_action = {"xyt": _xyt, "nav_relative": False, "nav_blocking": blocking}
+        sess = self.get_emet_session()
+        if sess and (sess.get("capabilities") or {}).get("teleport_base"):
+            next_action["nav_teleport"] = True
         if self._rerun:
             self._rerun.update_nav_goal(_xyt)
 
@@ -836,9 +839,7 @@ class StretchZmqClient(AbstractRobotClient):
 
     def set_mapping_depth_for_rerun(self, depth: np.ndarray | None) -> None:
         with self._mapping_depth_lock:
-            self._mapping_depth_for_rerun = (
-                None if depth is None else np.asarray(depth, dtype=np.float32).copy()
-            )
+            self._mapping_depth_for_rerun = None if depth is None else np.asarray(depth, dtype=np.float32).copy()
 
     def peek_mapping_depth_for_rerun(self) -> np.ndarray | None:
         with self._mapping_depth_lock:
