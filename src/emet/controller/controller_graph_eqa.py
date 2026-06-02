@@ -75,6 +75,7 @@ class GraphEQAController(DynamemController):
             manipulation_only=manipulation_only,
             cpu_only=cpu_only,
             eqa=voxel_eqa,
+            defer_eqa_vllm=True,
         )
         self.graph_memory = GraphEQAMemory(
             parameters=parameters,
@@ -107,13 +108,15 @@ class GraphEQAController(DynamemController):
             )
 
         dev = self.device if self.device in ("cuda", "mps") else "cuda"
-        self.sensor_builder = SensorGraphBuilder(
-            perception_client=perception_client,
-            use_voxel_fallback=True,
-            device=dev,
-            cpu_only=self.cpu_only,
-            parameters=parameters,
-        )
+        self.sensor_builder = None
+        if use_sensor_perception:
+            self.sensor_builder = SensorGraphBuilder(
+                perception_client=perception_client,
+                use_voxel_fallback=True,
+                device=dev,
+                cpu_only=self.cpu_only,
+                parameters=parameters,
+            )
 
     def _graph_dedup_skips(self, label: str, xyz: np.ndarray) -> bool:
         """Skip adding a node if we already have the same label near this XY (v1 merge)."""

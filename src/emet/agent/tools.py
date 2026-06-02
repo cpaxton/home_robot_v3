@@ -288,7 +288,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         if discord_sent:
             parts.append("Top-down map image sent to Discord (cropped to explored region).")
         if rerun_logged:
-            parts.append("Top-down map logged to Rerun at world/map_snapshot/topdown.")
+            parts.append("Top-down map logged to Rerun at world/map_snapshot/topdown (cropped to explored region).")
         return " ".join(parts)
 
     tools.append(
@@ -308,9 +308,9 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         Tool(
             name="send_map_snapshot",
             description=(
-                "Render a top-down RGB view of obstacles vs explored space and send to Discord (if configured) "
-                "as a crop around the explored region (plus margin); "
-                "also logs the full top-down map to Rerun at world/map_snapshot/topdown when the live Rerun visualizer is enabled."
+                "Render a top-down RGB view of obstacles vs explored space (cropped to the explored region plus margin) "
+                "and send to Discord if configured; also logs the same crop to Rerun at world/map_snapshot/topdown "
+                "when the live Rerun visualizer is enabled."
             ),
             parameters=_NO_PARAMS,
             func=send_map_snapshot,

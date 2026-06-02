@@ -275,7 +275,7 @@ def main() -> None:
 @click.option(
     "--debug-molmospaces-spawn",
     is_flag=True,
-    help="Verbose MolmoSpaces base placement and post-spawn contact diagnostics (non-stretch server).",
+    help="Verbose MolmoSpaces base placement and post-spawn contact diagnostics (merged MJCF / Stretch subprocess).",
 )
 @click.option(
     "--port-offset",
@@ -349,8 +349,8 @@ def serve(
       emet serve robocasa --robocasa-task PickPlaceCounterToCabinet
       emet serve robocasa --list-robocasa-tasks
       emet serve mujoco --use-robocasa --port-offset 100
-      DISPLAY=:1 emet serve mujoco --molmospaces-scene ithor --robot rby1   # MolmoSpaces + rby1 (needs wrapper)
-      emet serve mujoco --molmospaces-scene ithor --headless   # same, headless / no window
+      DISPLAY=:1 emet serve mujoco --molmospaces-scene ithor --robot stretch   # MolmoSpaces + Stretch (needs wrapper)
+      emet serve mujoco --molmospaces-scene ithor --headless --robot rby1
     """
     use_robocasa_flag = use_robocasa or (backend == "robocasa")
     if backend == "mujoco" or backend == "robocasa":
@@ -445,7 +445,7 @@ def molmospaces_cmd() -> None:
 
 @molmospaces_cmd.command("list-robots", short_help="List supported robot IDs")
 def molmospaces_list_robots() -> None:
-    """Print MolmoSpaces robot IDs (rby1, rby1m, franka_*, etc.). Default robot is rby1 (Galaxea R1 family)."""
+    """Print MolmoSpaces robot IDs (rby1, rby1m, stretch for merge, franka_*, etc.). Default Molmo CLI robot is rby1 (Galaxea R1 family)."""
     from emet.simulation.molmospaces_config import DEFAULT_MOLMOSPACES_ROBOT, MOLMOSPACES_ROBOT_IDS
 
     click.echo("Robots: " + ", ".join(MOLMOSPACES_ROBOT_IDS))
@@ -1123,8 +1123,6 @@ def run(
         sys.exit(_run_module("emet.app.create_and_print_memory", args))
     elif app == "debug-da3-depth":
         sys.exit(_run_module("emet.app.debug_da3_depth", args))
-    elif app == "debug-circle-rerun":
-        sys.exit(_run_module("emet.app.debug_circle_rerun", args))
     else:
         click.echo(f"Unknown app: {app}", err=True)
         sys.exit(1)
@@ -1135,7 +1133,12 @@ _SYNC_ALL_EXTRAS = ("dev", "sim", "hand_tracker", "dynamem", "da3")
 
 @main.command(short_help="Sync dependencies (uv or pip)")
 @click.option("--extra", "-e", "extra_list", multiple=True, help="Extra to install (sim, dynamem, dev, etc.)")
-@click.option("--all", "sync_all", is_flag=True, help="Install all common extras (same as defaults: dev, sim, hand_tracker, dynamem, da3)")
+@click.option(
+    "--all",
+    "sync_all",
+    is_flag=True,
+    help="Install all common extras (same as defaults: dev, sim, hand_tracker, dynamem, da3)",
+)
 @click.option("--sim", is_flag=True, help="Include sim (MuJoCo, robocasa)")
 @click.option("--dynamem", "dynamem_flag", is_flag=True, help="Include dynamem (SAM-2)")
 @click.option("--dev", "dev_flag", is_flag=True, help="Include dev (pytest, black, mypy)")
@@ -1393,6 +1396,22 @@ def install(ctx: click.Context) -> None:
     from emet.install_ui import run_install_menu
 
     sys.exit(run_install_menu())
+
+
+@install.command("gh", short_help="Install GitHub CLI (apt)")
+@click.option("-y", "--yes", "non_interactive", is_flag=True, help="Run apt-get without prompting")
+def install_gh(non_interactive: bool) -> None:
+    """Install the GitHub CLI (``gh``) for pull requests and issues.
+
+    Package name is declared in ``pyproject.toml`` under ``[tool.emet.system-packages]``.
+    After install, authenticate once: ``gh auth login``.
+
+    Examples:
+      emet install gh -y
+    """
+    from emet.dev_system_packages import ensure_apt_package
+
+    sys.exit(ensure_apt_package("gh", non_interactive=non_interactive))
 
 
 @install.command("submodules", short_help="Init and update git submodules")
@@ -1722,11 +1741,6 @@ from emet.app.debug_da3_depth import main as _debug_da3_depth_app  # noqa: E402
 
 _debug_da3_depth_app.short_help = "Live DA3 depth + point cloud from ZMQ (Rerun)"
 main.add_command(_debug_da3_depth_app)
-
-from emet.app.debug_circle_rerun import main as _debug_circle_rerun_app  # noqa: E402
-
-_debug_circle_rerun_app.short_help = "Pole-ring calibration scene → Rerun (sensor depth, in-process)"
-main.add_command(_debug_circle_rerun_app)
 
 
 if __name__ == "__main__":

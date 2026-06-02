@@ -56,3 +56,5 @@ class DynagraphController(GraphEQAController):
         self.graph_memory.maintain(self.obs_count)
         self.rerun_visualizer.log_dynagraph_state(self.graph_memory)
         self._rerun_refresh_monologue_panel()
+        if self.obs_count % 8 == 0:
+            self._maybe_emit_navgrid_ascii(context="dynagraph")

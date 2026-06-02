@@ -474,6 +474,7 @@ def main(
                 no_cameras=no_cameras,
                 environment=zmq_environment,
                 scene_source_basename=scene_source_basename,
+                debug_molmospaces_spawn=debug_molmospaces_spawn,
             )
         except zmq.error.ZMQError as e:
             if "Address already in use" in str(e):

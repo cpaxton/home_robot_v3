@@ -516,9 +516,7 @@ class GenericZmqClient(AbstractRobotClient):
 
     def set_mapping_depth_for_rerun(self, depth: np.ndarray | None) -> None:
         with self._mapping_depth_lock:
-            self._mapping_depth_for_rerun = (
-                None if depth is None else np.asarray(depth, dtype=np.float32).copy()
-            )
+            self._mapping_depth_for_rerun = None if depth is None else np.asarray(depth, dtype=np.float32).copy()
 
     def peek_mapping_depth_for_rerun(self) -> np.ndarray | None:
         with self._mapping_depth_lock:
@@ -765,7 +763,10 @@ class GenericZmqClient(AbstractRobotClient):
             f"move_base_to: goal=[{float(xyt[0]):.3f}, {float(xyt[1]):.3f}, {float(xyt[2]):.3f}] "
             f"frame={frame_tag} blocking={blocking}"
         )
-        if env_sim_nav_teleport():
+        sess = self.get_emet_session()
+        if sess and (sess.get("capabilities") or {}).get("teleport_base"):
+            action["nav_teleport"] = True
+        elif env_sim_nav_teleport():
             warn_sim_nav_env_flags()
             action["nav_teleport"] = True
         if world_frame and self._robosuite_sim_zmq():

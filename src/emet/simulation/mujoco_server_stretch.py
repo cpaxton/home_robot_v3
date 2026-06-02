@@ -48,6 +48,7 @@ from emet.motion import HelloStretchIdx
 from emet.motion.control.goto_controller import GotoVelocityController
 from emet.robots.base import RobotSpec
 from emet.robots.stretch import StretchBackend
+from emet.simulation.molmospaces_env import molmospaces_nav_teleport_enabled
 from emet.utils.assets import get_mujoco_models_path
 from emet.utils.config import get_control_config
 from emet.utils.geometry import pose_global_to_base, xyt_base_to_global, xyt_global_to_base
@@ -208,11 +209,13 @@ class MujocoZmqServer(BaseZmqServer):
         no_cameras: bool = False,
         environment: dict[str, Any] | None = None,
         scene_source_basename: str | None = None,
+        debug_molmospaces_spawn: bool = False,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         cameras_to_use = [] if no_cameras else self._default_cameras
         self._cameras_enabled = bool(cameras_to_use)
+        molmospaces_environment = dict(environment) if environment else None
         # TODO: decide how we want to save scenes, if they should be here in stretch_ai or in stretch_mujoco
         # They should probably stay in stretch mujoco
         if scene_path is None:
@@ -224,12 +227,16 @@ class MujocoZmqServer(BaseZmqServer):
                 model=scene_model,
                 cameras_to_use=cameras_to_use,
                 camera_hz=camera_hz,
+                molmospaces_environment=molmospaces_environment,
+                debug_molmospaces_spawn=debug_molmospaces_spawn,
             )
         else:
             self.robot_sim = StretchMujocoSimulator(
                 scene_xml_path=scene_path,
                 cameras_to_use=cameras_to_use,
                 camera_hz=camera_hz,
+                molmospaces_environment=molmospaces_environment,
+                debug_molmospaces_spawn=debug_molmospaces_spawn,
             )
         # Get the intrinsic parameters of the d435i rgb camera
         (
@@ -613,6 +620,8 @@ class MujocoZmqServer(BaseZmqServer):
                 "MuJoCo simulator did not start. See above for errors; on WSL try DISPLAY=:99 and --use-glx, or --no-cameras."
             )
         self._emet_session = self._build_emet_session_stretch(robocasa=robocasa)
+        if self._is_molmospaces_session() and not molmospaces_nav_teleport_enabled():
+            logger.info("MolmoSpaces navigation: wheel/goal drive (EMET_MOLMOSPACES_NAV_TELEPORT=0)")
         super().start()
 
         # Create a thread for the control loop
@@ -645,7 +654,7 @@ class MujocoZmqServer(BaseZmqServer):
         else:
             env = {"kind": "stretch_default_scene"}
         caps: dict[str, Any] = {
-            "teleport_base": False,
+            "teleport_base": self._is_molmospaces_session() and molmospaces_nav_teleport_enabled(),
             "depth": self._cameras_enabled,
             "num_cameras": 2 if self._cameras_enabled else 0,
             "dof": int(spec.dof),
@@ -663,6 +672,46 @@ class MujocoZmqServer(BaseZmqServer):
         if self._environment_descriptor and self._environment_descriptor.get("spawn_floor_map") is not None:
             session["spawn_floor_map"] = self._environment_descriptor["spawn_floor_map"]
         return session
+
+    def _is_molmospaces_session(self) -> bool:
+        env = self._environment_descriptor
+        if isinstance(env, dict) and env.get("kind") == "molmospaces":
+            return True
+        bn = self._scene_source_basename or ""
+        return bn.startswith("molmospaces_merged")
+
+    def _use_molmospaces_nav_teleport(self) -> bool:
+        return self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()
+
+    def _teleport_base_world(self, world_xyt: np.ndarray, *, timeout: float = 2.0) -> bool:
+        """Apply free-joint teleport in the MuJoCo subprocess and wait until pose matches."""
+        goal = np.asarray(world_xyt, dtype=np.float64).reshape(-1)[:3]
+        # Do not call set_base_velocity here: StatusCommand.set_base_velocity clears teleport_base.trigger.
+        ok = self.robot_sim.teleport_base_xyt(
+            float(goal[0]), float(goal[1]), float(goal[2]), wait=True, timeout=timeout
+        )
+        if not ok:
+            cur = self.robot_sim.get_base_pose()
+            logger.warning(
+                f"MolmoSpaces teleport did not reach goal within {timeout:.2f}s "
+                f"(goal={goal.tolist()!r}, current={None if cur is None else list(cur)!r})"
+            )
+        return ok
+
+    def _xyt_action_to_world(self, xyt: np.ndarray, *, relative: bool) -> np.ndarray:
+        """Map client ``xyt`` (spawn-relative) to world coordinates for MuJoCo free joint."""
+        raw = np.asarray(xyt, dtype=np.float64).reshape(-1)[:3]
+        init = self._initial_xyt
+        if init is None:
+            init = np.zeros(3, dtype=np.float64)
+        if relative:
+            cur = self.get_base_pose()
+            if cur is None:
+                cur = np.zeros(3, dtype=np.float64)
+            rel = xyt_base_to_global(raw, cur)
+        else:
+            rel = raw
+        return xyt_base_to_global(rel, init)
 
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
         if self._emet_session is not None:
@@ -764,11 +813,22 @@ class MujocoZmqServer(BaseZmqServer):
         if "base_velocity" in action:
             self.robot_sim.set_base_velocity(v_linear=action["base_velocity"]["v"], omega=action["base_velocity"]["w"])
         elif "xyt" in action:
-            # Set the goal pose for the simulated velocity controller
-            # If relative motion is set, the goal is relative to the current pose
-            relative_motion = action.get("nav_relative", False)
-            # We pass goals and let the control thread compute velocities
-            self.set_goal_pose(action["xyt"], relative=relative_motion)
+            relative_motion = bool(action.get("nav_relative", False))
+            nav_teleport = bool(action.get("nav_teleport", False)) or self._use_molmospaces_nav_teleport()
+            if nav_teleport:
+                world = self._xyt_action_to_world(np.asarray(action["xyt"], dtype=np.float64), relative=relative_motion)
+                if self._teleport_base_world(world):
+                    self.active = False
+                    self.xyt_goal = None
+                    self._base_controller_at_goal = True
+                    self.is_done = True
+                    logger.info(
+                        f"MolmoSpaces teleport nav: base at x={world[0]:.3f} y={world[1]:.3f} theta={world[2]:.3f}"
+                    )
+                else:
+                    self.set_goal_pose(action["xyt"], relative=relative_motion)
+            else:
+                self.set_goal_pose(action["xyt"], relative=relative_motion)
 
     @override
     def get_full_observation_message(self) -> dict[str, Any]:

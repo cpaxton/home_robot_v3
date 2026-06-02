@@ -588,9 +588,7 @@ class DynamemController(BaseController):
             return
         self.obs_count += 1
         rgb, sensor_depth, K, camera_pose = obs.rgb, obs.depth, obs.camera_K, obs.camera_pose
-        run_da3_full = (
-            self._da3_infer_every_n <= 1 or (self.obs_count - 1) % self._da3_infer_every_n == 0
-        )
+        run_da3_full = self._da3_infer_every_n <= 1 or (self.obs_count - 1) % self._da3_infer_every_n == 0
         depth: np.ndarray | None
         if (
             not run_da3_full
@@ -867,6 +865,33 @@ class DynamemController(BaseController):
             if not self._realtime_updates:
                 self.update()
         self.rerun_iter += 1
+        self._maybe_emit_navgrid_ascii(context="rotate_in_place")
+
+    def _maybe_emit_navgrid_ascii(self, *, context: str = "") -> None:
+        from emet.mapping.debug_navgrid_ascii import (
+            build_navgrid_from_voxel_map,
+            maybe_print_navgrid_ascii,
+            navgrid_context_allowed,
+        )
+
+        if not navgrid_context_allowed(context):
+            return
+        try:
+            xyt = self.robot.get_base_pose()
+            robot_xy = (float(xyt[0]), float(xyt[1]))
+        except Exception:
+            robot_xy = None
+        try:
+            text = build_navgrid_from_voxel_map(
+                self.voxel_map,
+                graph_memory=getattr(self, "graph_memory", None),
+                robot_xy=robot_xy,
+            )
+            if context:
+                text = f"[navgrid:{context}]\n{text}"
+            maybe_print_navgrid_ascii(text)
+        except Exception as exc:
+            logger.warning(f"Navgrid ASCII render skipped: {exc}")
 
     def execute_action(
         self,
@@ -955,6 +980,7 @@ class DynamemController(BaseController):
         if status is None:
             logger.warning("Exploration failed (no valid plan or frontier).")
             return False
+        self._maybe_emit_navgrid_ascii(context="explore")
         return True
 
     def process_text(self, text, start_pose):

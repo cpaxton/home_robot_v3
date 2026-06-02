@@ -114,6 +114,43 @@ def downsample_topdown_rgb_max_side(rgb: np.ndarray, max_side: int) -> np.ndarra
     return rgb[::step, ::step].copy()
 
 
+def explored_crop_indices(
+    explored: Any,
+    robot_xy: np.ndarray | tuple[float, float] | None,
+    grid_origin_xy: np.ndarray,
+    grid_resolution: float,
+    shape_hw: tuple[int, int],
+    *,
+    margin_cells: int = 16,
+    robot_radius_cells: int = 5,
+) -> tuple[int, int, int, int] | None:
+    """Row/col slice ``(i0, i1, j0, j1)`` around explored cells (+ robot neighborhood).
+
+    Same bounding box as :func:`crop_topdown_rgb_to_explored` / Discord share maps.
+    Returns ``None`` when no explored cells (and no robot) are present.
+    """
+    exp = _to_numpy_bool_2d(explored)
+    h, w = int(shape_hw[0]), int(shape_hw[1])
+    if exp.shape[0] != h or exp.shape[1] != w:
+        h, w = exp.shape[0], exp.shape[1]
+    mask = exp.copy()
+    if robot_xy is not None:
+        ri, rj = world_xy_to_grid_ij(robot_xy, grid_origin_xy, grid_resolution, (h, w))
+        rr = int(robot_radius_cells)
+        ri0, ri1 = max(0, ri - rr), min(h, ri + rr + 1)
+        rj0, rj1 = max(0, rj - rr), min(w, rj + rr + 1)
+        mask[ri0:ri1, rj0:rj1] = True
+    ys, xs = np.where(mask)
+    if ys.size == 0:
+        return None
+    mc = int(margin_cells)
+    i0, i1 = max(0, int(ys.min()) - mc), min(h, int(ys.max()) + 1 + mc)
+    j0, j1 = max(0, int(xs.min()) - mc), min(w, int(xs.max()) + 1 + mc)
+    if i1 <= i0 or j1 <= j0:
+        return None
+    return i0, i1, j0, j1
+
+
 def crop_topdown_rgb_to_explored(
     rgb: np.ndarray,
     explored: Any,
@@ -128,26 +165,22 @@ def crop_topdown_rgb_to_explored(
     exp = _to_numpy_bool_2d(explored)
     if rgb.shape[0] != exp.shape[0] or rgb.shape[1] != exp.shape[1]:
         return np.ascontiguousarray(rgb)
-    mask = exp.copy()
-    if robot_xy is not None:
-        ri, rj = world_xy_to_grid_ij(robot_xy, grid_origin_xy, grid_resolution, exp.shape)
-        rr = int(robot_radius_cells)
-        i0, i1 = max(0, ri - rr), min(exp.shape[0], ri + rr + 1)
-        j0, j1 = max(0, rj - rr), min(exp.shape[1], rj + rr + 1)
-        mask[i0:i1, j0:j1] = True
-    ys, xs = np.where(mask)
-    if ys.size == 0:
+    bbox = explored_crop_indices(
+        explored,
+        robot_xy,
+        grid_origin_xy,
+        grid_resolution,
+        exp.shape,
+        margin_cells=margin_cells,
+        robot_radius_cells=robot_radius_cells,
+    )
+    if bbox is None:
         return np.ascontiguousarray(rgb)
-    h, w = rgb.shape[0], rgb.shape[1]
-    mc = int(margin_cells)
-    i0, i1 = max(0, int(ys.min()) - mc), min(h, int(ys.max()) + 1 + mc)
-    j0, j1 = max(0, int(xs.min()) - mc), min(w, int(xs.max()) + 1 + mc)
-    if i1 <= i0 or j1 <= j0:
-        return np.ascontiguousarray(rgb)
+    i0, i1, j0, j1 = bbox
     return np.ascontiguousarray(rgb[i0:i1, j0:j1])
 
 
-def discord_share_map_rgb(
+def share_topdown_map_rgb(
     obstacles: Any,
     explored: Any,
     grid_origin_xy: np.ndarray,
@@ -157,7 +190,7 @@ def discord_share_map_rgb(
     max_side: int = 640,
     margin_cells: int = 16,
 ) -> np.ndarray:
-    """Full-resolution render, crop to explored region, then downsample (for Discord / compact sharing)."""
+    """Full-resolution render, crop to explored region, then downsample (Rerun / Discord / sharing)."""
     rgb_full = render_topdown_map_rgb(
         obstacles,
         explored,
@@ -175,6 +208,28 @@ def discord_share_map_rgb(
         margin_cells=margin_cells,
     )
     return downsample_topdown_rgb_max_side(cropped, max_side)
+
+
+def discord_share_map_rgb(
+    obstacles: Any,
+    explored: Any,
+    grid_origin_xy: np.ndarray,
+    grid_resolution: float,
+    robot_xy: np.ndarray | tuple[float, float] | None,
+    *,
+    max_side: int = 640,
+    margin_cells: int = 16,
+) -> np.ndarray:
+    """Alias for :func:`share_topdown_map_rgb` (Discord map posts)."""
+    return share_topdown_map_rgb(
+        obstacles,
+        explored,
+        grid_origin_xy,
+        grid_resolution,
+        robot_xy,
+        max_side=max_side,
+        margin_cells=margin_cells,
+    )
 
 
 def build_map_stats(
@@ -245,11 +300,11 @@ def snapshot_from_voxel_map(
     *,
     max_side: int = 640,
 ) -> tuple[np.ndarray | None, dict[str, Any], np.ndarray | None]:
-    """Build RGB snapshot + stats + Discord-oriented crop from a SparseVoxelMap-like object.
+    """Build RGB snapshot + stats from a SparseVoxelMap-like object.
 
-    Returns ``(img_rerun, stats, img_discord)``. ``img_discord`` is cropped to the explored region
-    (plus margin) then downsampled; ``img_rerun`` keeps the usual full-map view (downsampled to
-    ``max_side``). If no map, all three are ``None`` / empty stats.
+    Returns ``(img, stats, img_share)``. Both images are cropped to the explored region (plus margin)
+    then downsampled to ``max_side`` (same pipeline as Discord sharing). If no map, all three are
+    ``None`` / empty stats.
     """
     if voxel_map is None or not hasattr(voxel_map, "get_2d_map"):
         empty: dict[str, Any] = {
@@ -261,6 +316,5 @@ def snapshot_from_voxel_map(
     go = _grid_origin_xy(getattr(voxel_map, "grid_origin", np.zeros(2)))
     res = float(getattr(voxel_map, "grid_resolution", 0.1) or 0.1)
     stats = build_map_stats(obstacles, explored, go, res, robot_xy)
-    img = render_topdown_map_rgb(obstacles, explored, go, res, robot_xy, max_side=max_side)
-    img_discord = discord_share_map_rgb(obstacles, explored, go, res, robot_xy, max_side=max_side)
-    return img, stats, img_discord
+    img = share_topdown_map_rgb(obstacles, explored, go, res, robot_xy, max_side=max_side)
+    return img, stats, img

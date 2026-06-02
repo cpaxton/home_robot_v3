@@ -33,6 +33,14 @@ class CommandBaseVelocity:
 
 
 @dataclass
+class CommandTeleportBase:
+    x: float
+    y: float
+    theta: float
+    trigger: bool
+
+
+@dataclass
 class CommandKeyframe:
     name: str
     trigger: bool
@@ -54,6 +62,7 @@ class StatusCommand:
     move_to: dict[str, CommandMove] = field(default_factory=dict)
     move_by: dict[str, CommandMove] = field(default_factory=dict)
     base_velocity: CommandBaseVelocity = field(default_factory=lambda: CommandBaseVelocity(0, 0, False))
+    teleport_base: CommandTeleportBase = field(default_factory=lambda: CommandTeleportBase(0.0, 0.0, 0.0, False))
     keyframe: CommandKeyframe = field(default_factory=lambda: CommandKeyframe("", False))
     coordinate_frame_arrows_viz: list[CommandCoordinateFrameArrowsViz] = field(default_factory=list)
 
@@ -72,7 +81,23 @@ class StatusCommand:
     def set_base_velocity(self, command: CommandBaseVelocity):
         """Sends the velocity command and removes the move_to and move_by commands."""
         self.base_velocity = command
+        # Only cancel a pending teleport when actually commanding base motion (not when zeroing).
+        if command.trigger and (abs(command.v_linear) > 1e-9 or abs(command.omega) > 1e-9):
+            self.teleport_base.trigger = False
 
+        for actuator in [
+            Actuators.left_wheel_vel,
+            Actuators.right_wheel_vel,
+            Actuators.base_rotate,
+            Actuators.base_translate,
+        ]:
+            self.move_to.pop(actuator.name, None)
+            self.move_by.pop(actuator.name, None)
+
+    def set_teleport_base(self, command: CommandTeleportBase) -> None:
+        """Snap base free joint to world (x, y, theta); clears velocity / base move_by."""
+        self.teleport_base = command
+        self.base_velocity.trigger = False
         for actuator in [
             Actuators.left_wheel_vel,
             Actuators.right_wheel_vel,

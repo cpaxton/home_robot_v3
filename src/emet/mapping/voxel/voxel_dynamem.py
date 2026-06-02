@@ -44,6 +44,48 @@ logger = logging.getLogger(__name__)
 DEBUG_SUBDIR = "debug"
 
 
+def _map_boundary_config(parameters: Parameters | dict | None) -> tuple[int, int]:
+    """Return (obstacle_barrier_cells, history_penalty_cells); default 0 (no grid-edge barrier)."""
+    if parameters is None:
+        return 0, 0
+    if isinstance(parameters, Parameters):
+        mb = parameters.get("map_boundary", {})
+    elif isinstance(parameters, dict):
+        mb = parameters.get("map_boundary", {})
+    else:
+        mb = {}
+    if not isinstance(mb, dict):
+        mb = {}
+    obs_cells = int(mb.get("obstacle_barrier_cells", 0) or 0)
+    hist_cells = int(mb.get("history_penalty_cells", 0) or 0)
+    return max(0, obs_cells), max(0, hist_cells)
+
+
+def _apply_map_boundary_2d(
+    obstacles: Tensor,
+    history_soft: Tensor | None,
+    parameters: Parameters | dict | None,
+) -> None:
+    """Mark grid-edge obstacles and optional history penalty from ``map_boundary`` config."""
+    obs_barrier, hist_penalty = _map_boundary_config(parameters)
+    h, w = int(obstacles.shape[0]), int(obstacles.shape[1])
+    if obs_barrier > 0:
+        n = min(obs_barrier, h // 2, w // 2)
+        if n > 0:
+            obstacles[0:n, :] = True
+            obstacles[-n:, :] = True
+            obstacles[:, 0:n] = True
+            obstacles[:, -n:] = True
+    if history_soft is not None and hist_penalty > 0:
+        n = min(hist_penalty, h // 2, w // 2)
+        if n > 0:
+            mx = history_soft.max().item()
+            history_soft[0:n, :] = mx
+            history_soft[-n:, :] = mx
+            history_soft[:, 0:n] = mx
+            history_soft[:, -n:] = mx
+
+
 def _eqa_qwen_vl_single_client_ok(
     vl_family: str,
     eqa_vl_hf_model_id: str | None,
@@ -504,17 +546,8 @@ class SparseVoxelMap(SparseVoxelMapBase):
             plt.title("explored")
             plt.show()
 
-        # Set the boundary in case the robot runs out from the environment
-        obstacles[0:30, :] = True
-        obstacles[-30:, :] = True
-        obstacles[:, 0:30] = True
-        obstacles[:, -30:] = True
-        # Generate exploration heuristic to prevent robot from staying around the boundary
-        if history_soft is not None:
-            history_soft[0:35, :] = history_soft.max().item()
-            history_soft[-35:, :] = history_soft.max().item()
-            history_soft[:, 0:35] = history_soft.max().item()
-            history_soft[:, -35:] = history_soft.max().item()
+        # Optional grid-edge obstacle barrier (map_boundary/obstacle_barrier_cells in dynav YAML).
+        _apply_map_boundary_2d(obstacles, history_soft, self.parameters)
 
         # Update cache
         self._map2d = (obstacles, explored)
@@ -598,7 +631,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         )
 
         # Add image descriptions if we want to explore intelligently
-        if self.run_eqa:
+        if self.run_eqa and self.image_description_client is not None:
             self.list_objects_in_an_image(rgb)
 
         # Process data: reshaping images, computing xyz coordinate, depth filtering
@@ -631,20 +664,21 @@ class SparseVoxelMap(SparseVoxelMapBase):
         valid_depth = valid_depth & (median_filter_error < 0.01).bool()
         mask = ~valid_depth
 
-        # Update semantic memory
+        # Update semantic memory (skipped when encoder is None, e.g. manipulation_only mapping)
         self.semantic_memory.clear_points(
             depth, torch.from_numpy(intrinsics), torch.from_numpy(pose), min_samples_clear=10
         )
 
-        with torch.no_grad():
-            rgb, features = self.encoder.run_mask_siglip(rgb, self.image_shape)  # type:ignore
-            rgb, features = rgb.squeeze(), features.squeeze()
+        if self.encoder is not None:
+            with torch.no_grad():
+                rgb, features = self.encoder.run_mask_siglip(rgb, self.image_shape)  # type:ignore
+                rgb, features = rgb.squeeze(), features.squeeze()
 
-        valid_xyz = world_xyz[~mask]
-        features = features[~mask]
-        valid_rgb = rgb.permute(1, 2, 0)[~mask]
-        if len(valid_xyz) != 0:
-            self.add_to_semantic_memory(valid_xyz, features, valid_rgb)
+            valid_xyz = world_xyz[~mask]
+            features = features[~mask]
+            valid_rgb = rgb.permute(1, 2, 0)[~mask]
+            if len(valid_xyz) != 0:
+                self.add_to_semantic_memory(valid_xyz, features, valid_rgb)
 
         # Update open-vocab scene graph if attached
         if self._scene_graph_processor is not None:
