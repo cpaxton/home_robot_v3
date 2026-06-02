@@ -121,6 +121,11 @@ logger = Logger(__name__)
     help="No auto-open browser for Rerun; open http://<this-host>:9090 manually. For native app use --rerun-native.",
 )
 @click.option(
+    "--rerun",
+    is_flag=True,
+    help="Rerun is already on by default; accepted for compatibility with `emet run agent --rerun` (no-op).",
+)
+@click.option(
     "--no-rerun",
     is_flag=True,
     help="Disable Rerun visualization entirely",
@@ -179,6 +184,7 @@ def main(
     perfect_depth: bool = False,
     cpu_only: bool = False,
     headless: bool = False,
+    rerun: bool = False,
     no_rerun: bool = False,
     rerun_native: bool = False,
     rerun_show_panels: bool = False,
@@ -205,6 +211,8 @@ def main(
         parameters["debug_perfect_sensor_depth"] = True
         logger.info("debug: perfect sensor depth (DA3 skipped when observation depth is present)")
 
+    if rerun and no_rerun:
+        raise click.UsageError("Cannot use both --rerun and --no-rerun.")
     if rerun_bind:
         os.environ["RERUN_BIND_ALL"] = "1"
 
@@ -219,6 +227,7 @@ def main(
         robot,
         robot_ip,
         port_offset=port_offset,
+        parameters=parameters,
         enable_rerun_server=not no_rerun,
         rerun_headless=headless,
         rerun_native_viewer=rerun_native,

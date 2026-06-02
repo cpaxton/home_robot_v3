@@ -247,17 +247,20 @@ class StretchZmqClient(AbstractRobotClient):
         self._emet_session_lock = Lock()
 
         if enable_rerun_server:
+            from emet.config.rerun_config import build_rerun_visualizer_kwargs
             from emet.visualization.rerun import RerunVisualizer
 
             if output_path is not None and not output_path.exists():
                 output_path.mkdir(parents=True, exist_ok=True)
 
-            self._rerun = RerunVisualizer(
+            rerun_kwargs = build_rerun_visualizer_kwargs(
+                self._parameters,
                 output_path=output_path,
-                headless=rerun_headless,
-                rerun_native_viewer=rerun_native_viewer,
-                collapse_panels=not rerun_show_panels,
+                cli_headless=rerun_headless,
+                cli_native_viewer=rerun_native_viewer,
+                cli_show_panels=rerun_show_panels,
             )
+            self._rerun = RerunVisualizer(**rerun_kwargs)
         else:
             from emet.visualization.rerun import NullVisualizer
 

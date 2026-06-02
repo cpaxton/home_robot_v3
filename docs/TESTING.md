@@ -24,6 +24,8 @@ Use **`uv run emet …`** (or `source .venv/bin/activate` then bare `emet`) from
 | Memory backend smokes | `uv run emet test src/test/memory/test_memory_backends_smoke.py -v` |
 | Multi-robot Dynagraph floor E2E | `uv run python src/test/app/run_dynagraph_multi_robot_e2e.py` |
 | Dynagraph unit (explore loop, graph memory) | `uv run emet test src/test/app/test_dynagraph_explore.py src/test/memory/test_graph_eqa_memory.py -v` |
+| GraphObjectFusion + GT export (fast) | `uv run emet test src/test/memory/test_graph_object_fusion.py src/test/simulation/test_mujoco_gt_objects.py -v` |
+| Graph fusion calibration (one scene) | `emet export-sim-gt` → `emet run dynagraph --calibration-export` → `emet tune-graph-fusion` (see [dynagraph.md](dynagraph.md#object-gt-export-and-graphobjectfusion-calibration)) |
 | GraphEQA human-answer formatter | `uv run emet test src/test/memory/test_graph_eqa_human_answer.py -v` |
 | Manual Dynagraph EQA + export (Robocasa) | See [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md#single-eqa-question-manual-per-robot) |
 | Dynagraph Robocasa question CLI (CI) | `uv run emet test src/test/app/test_dynagraph_robocasa_question_cli.py -v` |

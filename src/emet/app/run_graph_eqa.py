@@ -113,15 +113,15 @@ def main(
 ) -> None:
     """Run GraphEQA: EQA using graph-based semantic memory (see docs/graph_eqa.md)."""
     click.echo("GraphEQA: connecting to robot and starting graph-based EQA.")
+    print("- Load parameters")
+    parameters = get_parameters("dynav_config.yaml")
     robot = create_robot_client_from_cli(
         robot_backend,
         robot_ip,
         port_offset=port_offset,
+        parameters=parameters,
         enable_rerun_server=True,
     )
-
-    print("- Load parameters")
-    parameters = get_parameters("dynav_config.yaml")
     robot.move_to_nav_posture()
     robot.set_velocity(v=30.0, w=15.0)
 

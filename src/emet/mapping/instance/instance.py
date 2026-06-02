@@ -144,6 +144,113 @@ def _dummy_instance_view() -> InstanceView:
     )
 
 
+def _xyz_tensor_to_np3(x: Any) -> np.ndarray | None:
+    if x is None:
+        return None
+    try:
+        if hasattr(x, "detach"):
+            return np.asarray(x.detach().cpu().numpy(), dtype=np.float64).reshape(3)
+        return np.asarray(x, dtype=np.float64).reshape(3)
+    except Exception:
+        return None
+
+
+def graph_label_for_instance_xyz(
+    xyz: np.ndarray,
+    graph_memory: Any,
+    *,
+    max_xy_m: float = 0.55,
+) -> str | None:
+    """Nearest GraphEQA object-node label in the XY plane (for Rerun when detector names are missing)."""
+    get_nodes = getattr(graph_memory, "get_nodes", None)
+    if get_nodes is None:
+        return None
+    best_lab: str | None = None
+    best_d = float(max_xy_m)
+    for node in get_nodes():
+        if getattr(node, "is_viewpoint", False):
+            continue
+        labels = getattr(node, "labels", None) or []
+        if not labels:
+            continue
+        nxyz = getattr(node, "xyz", None)
+        if nxyz is None:
+            continue
+        nxy = np.asarray(nxyz, dtype=np.float64).reshape(3)[:2]
+        d = float(np.linalg.norm(xyz[:2] - nxy))
+        if d < best_d:
+            primary = str(labels[0]).strip()
+            if primary and not primary.startswith("obj_"):
+                best_d = d
+                best_lab = primary
+    return best_lab
+
+
+def instance_display_label(
+    instance: Instance,
+    *,
+    semantic_sensor: Any | None = None,
+    detection_model: Any | None = None,
+    graph_memory: Any | None = None,
+    class_names: dict[int, str] | None = None,
+    graph_match_xy_m: float = 0.55,
+) -> str:
+    """Human-readable label for visualization (detector / graph class, not ``obj_{id}``)."""
+    raw_name = getattr(instance, "name", None)
+    if raw_name and str(raw_name).strip():
+        name = str(raw_name).strip()
+        if not name.startswith("obj_"):
+            return name.replace(" ", "_")
+
+    cid = instance.get_category_id() if hasattr(instance, "get_category_id") else None
+    if cid is None:
+        try:
+            best = instance.get_best_view()
+            view_cid = getattr(best, "category_id", None)
+            if view_cid is not None:
+                cid = int(view_cid.item()) if hasattr(view_cid, "item") else int(view_cid)
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+    if class_names and cid is not None and int(cid) in class_names:
+        return str(class_names[int(cid)]).replace(" ", "_")
+
+    if semantic_sensor is not None and getattr(semantic_sensor, "is_semantic", lambda: False)():
+        if cid is not None:
+            return semantic_sensor.get_class_name_for_id(cid).replace(" ", "_")
+
+    if detection_model is not None and cid is not None:
+        from emet.memory.graph_eqa.instance_observations import label_for_detection_category
+
+        lab = label_for_detection_category(detection_model, int(cid))
+        if lab and not lab.startswith("object_"):
+            return lab.replace(" ", "_")
+
+    try:
+        best = instance.get_best_view()
+        cap = getattr(best, "text_description", None)
+        if cap and str(cap).strip():
+            short = str(cap).strip().split(",")[0].split(".")[0][:48]
+            return short.replace(" ", "_")
+    except (ValueError, AttributeError):
+        pass
+
+    if graph_memory is not None:
+        xyz = _xyz_tensor_to_np3(instance.get_center() if hasattr(instance, "get_center") else None)
+        if xyz is not None:
+            matched = graph_label_for_instance_xyz(xyz, graph_memory, max_xy_m=graph_match_xy_m)
+            if matched:
+                return matched.replace(" ", "_")
+
+    if detection_model is not None and cid is not None:
+        from emet.memory.graph_eqa.instance_observations import label_for_detection_category
+
+        return label_for_detection_category(detection_model, int(cid)).replace(" ", "_")
+
+    gid = getattr(instance, "global_id", None) or getattr(instance, "id", None)
+    return f"id_{gid}" if gid is not None else "object"
+
+
 def instances_to_text(
     instances: list[Instance],
     class_names: dict[int, str] | None = None,

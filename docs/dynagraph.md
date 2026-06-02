@@ -6,7 +6,9 @@ Use it when you want GraphEQA-style prompts and task images, but also want a sim
 
 **CLI:** Run from the project root with **`uv run emet run dynagraph …`** (or activate `.venv` first). See [TESTING.md](TESTING.md#run-from-this-repo) if flags like **`--explore-loop`** are missing from `--help`.
 
-**Rerun (live Dynagraph):** The main **3D View** (`origin=world`) overlays the graph: colored nodes at `world/dynagraph/nodes` and relation edges at `world/dynagraph/edges` (gray **near**, green **on**, blue **on_floor**). The **Graph node list** panel (`world/dynagraph/gallery`) is a markdown table + per-node blurbs with `recording://` links—click a label to jump to that crop in the viewer (Rerun has no native thumbnail sidebar; this is the supported pattern). Below it, **Node RGB** shows the selected **detector crop** (YoloE/instance mask bbox). **Node RGB mosaic** includes only those detection crops—not full head frames and not VLM-only semantic nodes (those still appear in the 3D graph). **Orange viewpoint nodes** (`world/dynagraph/viewpoints`) mark the robot base in **map world** (`gps` + `navigation_origin_xyt`, same frame as the voxel map). **seen_from** orange arrows run **viewpoint → object** (where you stood → what you saw). 3D labels show `label [#node_id img obs_id]` on objects and `view [#id img N]` on viewpoints. Object `xyz` is the detector centroid or depth median (not the image center).
+**Rerun (live Dynagraph):** Enabled **by default** (unlike `emet run agent`, which needs **`--rerun`**). Use **`--no-rerun`** to disable. Optional: **`--headless`**, **`--rerun-native`**, **`--rerun-bind`**, **`--rerun-show-panels`**. Verify flags: `uv run python -m emet.app.run_dynagraph --help`.
+
+The main **3D View** uses a **fixed world origin** (`origin=world`; see [rerun.md](rerun.md)) so the voxel map (`world/point_cloud`, `world/obstacles`, `world/explored`), boxes, and dynagraph nodes do not spin when the robot turns. **Not streamed live:** full graph tree text (`print_memory` / old “Dynagraph graph” panel — use `--export` or stdout). **Graph edge lines** and **per-node crop images/mosaic** are also off by default (`rerun.dynagraph` in dynav YAML). Tune load via `rerun.voxel_map_stride`, `rerun.mjcf_mesh_stride`, etc.
 
 ## References
 
@@ -19,7 +21,7 @@ Use it when you want GraphEQA-style prompts and task images, but also want a sim
 uv run emet run dynagraph --robot-ip 127.0.0.1
 ```
 
-Options mirror `emet run graph-eqa` (robot, Discord, Rerun export, `--no-instance-graph`, `--no-sensor-perception`, etc.). Additional Dynagraph-specific flags:
+Options mirror `emet run graph-eqa` (robot, Discord, Rerun export, `--no-instance-graph`, `--no-sensor-perception`, etc.). **Rerun is on by default** (`--no-rerun` to disable; `--rerun` is accepted as a no-op alias). Additional Dynagraph-specific flags:
 
 - **`--merge-xy-m`**: override horizontal merge distance in meters (`dynagraph_merge_xy_m` in config; `0` disables merge).
 - **`--staleness-horizon`**: override how many **controller steps** a node can go without a reinforcing observation before `maintain()` drops it (`dynagraph_staleness_horizon`; `0` disables pruning).
@@ -99,6 +101,63 @@ print(compare_explored_floor_metrics(a, b, rtol_area=0.35))
 
   Open **`mujoco_bodies.txt`** (or use a **`.json`** path for machine-readable rows) alongside **`scene_graph_report.txt`**. Interpretation is heuristic: VL labels (“granite countertop”) do not trivially grep to MuJoCo body names (“counter_main”), but coarse **spatial clustering** plus **kitchen layout** cues should roughly align once both are mapped into the navigation world frame (**`navigation_origin_xyt`** / voxel frame). Use **`--dump-sim-gt-include-robot`** only when debugging robot-base naming; defaults exclude **`base_link`** subtrees.
 
+#### Object GT export and GraphObjectFusion calibration
+
+For **tunable instance→graph fusion** (spatial + 3D bounds + optional SigLIP embeddings), use a fixed Robocasa scene:
+
+1. **Export sim GT once** (offline kitchen load; 3D bounds + projected head **`bbox_xyxy_head`**):
+
+   ```bash
+   uv run emet export-sim-gt --robot innate_mars --seed 0 --layout 1 \
+     -o /tmp/graph_fusion_calib/gt_seed0.json
+   ```
+
+2. **Capture raw detections** during one explore run (no re-sim per grid point):
+
+   ```bash
+   uv run emet run dynagraph --robot innate_mars --explore-loop --explore-max-iters 15 \
+     --no-rerun --cpu-only \
+     --calibration-export /tmp/graph_fusion_calib/frames.jsonl
+   ```
+
+3. **Tune defaults offline**:
+
+   ```bash
+   uv run emet tune-graph-fusion \
+     --gt /tmp/graph_fusion_calib/gt_seed0.json \
+     --frames /tmp/graph_fusion_calib/frames.jsonl \
+     --write-config src/emet/config/agents/default_graph_object_fusion.yaml
+   ```
+
+Dynagraph loads [`default_graph_object_fusion.yaml`](../src/emet/config/agents/default_graph_object_fusion.yaml) into parameters when unset; enable in agent YAML under **`embodied_agent.graph_eqa_memory.graph_object_fusion`**. When fusion is on, legacy **`dynagraph_merge_xy_m`** on the instance path is disabled (VLM nodes unchanged). Implementation: [`graph_object_fusion/`](../src/emet/memory/graph_eqa/graph_object_fusion/), GT builder [`mujoco_gt_objects.py`](../src/emet/simulation/mujoco_gt_objects.py).
+
+#### Rerun load (crops / seen_from lines)
+
+Live Rerun **does not** stream per-node crop images, the RGB mosaic, or **graph edge line strips** (`near`, `on`, `seen_from`, etc.) by default—they were overloading the viewer. The graph still stores all edges and observations in memory.
+
+On **`--export DIR`**, the exporter writes:
+
+| Path | Contents |
+|------|----------|
+| `DIR/graph.json` | Nodes + all edge relations |
+| `DIR/dynagraph/crops/*.png` | YoloE/instance bbox crops per object node |
+| `DIR/dynagraph/crops_mosaic.png` | Labeled grid of crops |
+| `DIR/dynagraph/seen_from.json` | Viewpoint → object links with world XYZ |
+| `DIR/dynagraph/gallery.md` | Node table with links to crop files |
+
+The default 3D view is anchored at ``world/robot`` but includes all ``world/**`` layers (voxel point cloud, 2D obstacle/explored maps, object boxes, dynagraph nodes). Only **crop images**, **edge line strips**, and the **crop mosaic** are off by default (viewer stability).
+
+Opt back into those heavy channels in agent/dynav YAML:
+
+```yaml
+rerun:
+  dynagraph:
+    log_crops: true
+    log_edges: true
+```
+
+Or set `EMET_DYNAGRAPH_RERUN_CROPS=1` / `EMET_DYNAGRAPH_RERUN_EDGES=1` (env overrides YAML when set). Defaults and other viewer keys: `src/emet/config/agents/default_rerun.yaml`.
+
 ### Autonomous frontier exploration (heuristic)
 
 **`--explore-loop`** runs repeated **`run_exploration()`** (same as typing **`explore`** in the interactive REPL—a frontier waypoint and trajectory per iteration). Exploration **stops** when any of:
@@ -170,6 +229,8 @@ Full index and known gaps (graph + EQA on known scene): [TESTING.md](TESTING.md)
 | [`src/emet/app/dynagraph_explore.py`](../src/emet/app/dynagraph_explore.py) | `dynagraph_explore_until_terminated` for scripted frontier batches. |
 | [`src/emet/app/run_dynagraph.py`](../src/emet/app/run_dynagraph.py) | CLI entry (`emet run dynagraph`). |
 | [`src/emet/simulation/mujoco_ground_truth.py`](../src/emet/simulation/mujoco_ground_truth.py) | Text/JSON snapshots of **`mjData.body(*).xpos`** for sim validation; triggered by **`mujoco_ground_truth_dump`** ZMQ recv command. |
+| [`src/emet/simulation/mujoco_gt_objects.py`](../src/emet/simulation/mujoco_gt_objects.py) | Per-object **3D AABB** + optional head **2D bbox** JSON (`emet export-sim-gt`). |
+| [`src/emet/memory/graph_eqa/graph_object_fusion/`](../src/emet/memory/graph_eqa/graph_object_fusion/) | **GraphObjectFusion** + offline **`emet tune-graph-fusion`**. |
 
 ## See also
 

@@ -28,7 +28,7 @@ from .instance_observations import (
     frame_instances_to_labels_xyz,
     label_for_detection_category,
 )
-from .mujoco_align import compare_graph_to_placements_report, nearest_gt_for_node
+from .mujoco_align import compare_graph_to_placements_report, nearest_gt_for_node, score_nodes_vs_gt
 from .pretty_print import format_graph_edges_only, format_scene_graph_pretty
 from .sensor_graph_builder import (
     SensorGraphBuilder,
@@ -54,6 +54,7 @@ __all__ = [
     "label_for_detection_category",
     "labels_from_extract_response",
     "nearest_gt_for_node",
+    "score_nodes_vs_gt",
     "parse_comma_separated_labels",
     "parse_graph_object_json",
     "short_labels_from_voxel_descriptions",

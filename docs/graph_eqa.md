@@ -127,6 +127,12 @@ EQA answers are formatted for **people and agents**, not internal image indices:
 
 As with DynaMem/EQA, the first run may download vision/encoder models (e.g. for image descriptions). See [simulation.md](simulation.md) for typical first-run messages and caches.
 
+### GraphObjectFusion (instance detections)
+
+When **`graph_object_fusion.enabled`** is true (see [`default_graph_object_fusion.yaml`](../src/emet/config/agents/default_graph_object_fusion.yaml) or **`embodied_agent.graph_eqa_memory.graph_object_fusion`** in agent YAML), YoloE/instance rows merge into existing graph nodes using **XY distance**, **3D bounds IoU**, and optional **crop embedding cosine**—instead of only legacy **`graph_instance_dedup_xy_m`** skip-add + **`dynagraph_merge_xy_m`**.
+
+Calibrate thresholds on one Robocasa seed: **`emet export-sim-gt`**, **`emet run dynagraph --calibration-export`**, then **`emet tune-graph-fusion`** (see [dynagraph.md](dynagraph.md#object-gt-export-and-graphobjectfusion-calibration)).
+
 ### Programmatic use
 
 - **Graph memory only**: use `emet.memory.graph_eqa.GraphEQAMemory` to build a scene graph from observations and call `query_answer(question, xyt, planner)` (same return contract as the DynaMem voxel map).

@@ -27,24 +27,20 @@ class DynagraphController(GraphEQAController):
     def setup_custom_blueprint(self) -> None:
         if getattr(self.rerun_visualizer, "enabled", True) is False:
             return
+        from emet.visualization.rerun import spatial3d_view_world
+
         main = rrb.Horizontal(
-            rrb.Spatial3DView(name="3D View", origin="world"),
-            rrb.Vertical(
-                rrb.TextDocumentView(name="Graph node list", origin="world/dynagraph/gallery"),
-                rrb.Spatial2DView(name="Node RGB", origin="world/dynagraph/crops"),
-                rrb.Spatial2DView(name="Node RGB mosaic", origin="world/dynagraph/crops_mosaic"),
-            ),
+            spatial3d_view_world(),
             rrb.Vertical(
                 rrb.TextDocumentView(name="text", origin="robot_monologue"),
                 rrb.Spatial2DView(name="relevant image", origin="/observation_similar_to_text"),
             ),
             rrb.Vertical(
-                rrb.Spatial2DView(name="head_rgb", origin="world/head_camera"),
-                rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera"),
+                rrb.Spatial2DView(name="head_rgb", origin="world/head_camera/rgb"),
+                rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera/rgb"),
                 rrb.Spatial2DView(name="map_topdown", origin="world/map_snapshot/topdown"),
             ),
-            rrb.TextDocumentView(name="Dynagraph graph", origin="world/dynagraph/summary"),
-            column_shares=[3, 1, 1, 1, 1],
+            column_shares=[3, 1, 1],
         )
         collapse = getattr(self.rerun_visualizer, "collapse_panels", True)
         rr.send_blueprint(rrb.Blueprint(rrb.Vertical(main, rrb.TimePanel(state=True)), collapse_panels=collapse))

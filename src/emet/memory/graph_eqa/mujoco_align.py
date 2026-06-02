@@ -79,3 +79,80 @@ def compare_graph_to_placements_report(
             )
     lines.append("─" * 60)
     return "\n".join(lines)
+
+
+def _label_matches(node_label: str, gt_label: str) -> bool:
+    nl = _norm_label(node_label)
+    gl = _norm_label(gt_label)
+    if not gl:
+        return True
+    return gl in nl or nl in gl or gl == nl
+
+
+def score_nodes_vs_gt(
+    nodes: List[GraphNode],
+    gt_objects: List[Any],
+    *,
+    match_xy_m: float = 0.55,
+) -> dict[str, float]:
+    """
+  Score fused graph object nodes against GT export ``objects[]``.
+
+    Returns gt_recall, node_precision, duplication_penalty, node_count.
+    """
+    if not gt_objects:
+        return {
+            "gt_recall": 0.0,
+            "node_precision": 0.0,
+            "duplication_penalty": 0.0,
+            "node_count": float(len(nodes)),
+        }
+
+    gt_matched = 0
+    dup_penalty = 0.0
+    node_hits = 0
+    node_exact = 0
+
+    for gt in gt_objects:
+        if not isinstance(gt, dict):
+            continue
+        gpos = np.asarray(gt.get("pos_world", gt.get("pos", [0, 0, 0])), dtype=np.float64).ravel()[:3]
+        glabel = str(gt.get("label", ""))
+        matches = []
+        for n in nodes:
+            if not _label_matches(n.labels[0] if n.labels else "", glabel):
+                continue
+            nxy = np.asarray(n.xyz, dtype=np.float64).reshape(3)
+            d = float(np.linalg.norm(nxy[:2] - gpos[:2]))
+            if d <= match_xy_m:
+                matches.append(n)
+        if matches:
+            gt_matched += 1
+            dup_penalty += max(0, len(matches) - 1)
+
+    for n in nodes:
+        nlabel = n.labels[0] if n.labels else ""
+        gpos_n = np.asarray(n.xyz, dtype=np.float64).reshape(3)
+        gt_hits = []
+        for gt in gt_objects:
+            if not isinstance(gt, dict):
+                continue
+            glabel = str(gt.get("label", ""))
+            if not _label_matches(nlabel, glabel):
+                continue
+            gpos = np.asarray(gt.get("pos_world", gt.get("pos", [0, 0, 0])), dtype=np.float64).ravel()[:3]
+            if float(np.linalg.norm(gpos_n[:2] - gpos[:2])) <= match_xy_m:
+                gt_hits.append(gt)
+        if gt_hits:
+            node_hits += 1
+            if len(gt_hits) == 1:
+                node_exact += 1
+
+    n_gt = max(1, len([g for g in gt_objects if isinstance(g, dict)]))
+    n_nodes = len(nodes)
+    return {
+        "gt_recall": float(gt_matched) / float(n_gt),
+        "node_precision": float(node_exact) / float(max(1, node_hits)),
+        "duplication_penalty": float(dup_penalty),
+        "node_count": float(n_nodes),
+    }

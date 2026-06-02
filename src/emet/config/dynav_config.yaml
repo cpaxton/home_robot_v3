@@ -186,3 +186,16 @@ graph_eqa_extract:
 
 # When false, generic-label frames are dropped (no graph node, no navigation sample).
 graph_eqa_record_navigation: true
+
+# Live Rerun (``emet run dynamem``, ``emet run dynagraph``). See ``agents/default_rerun.yaml``.
+rerun:
+  mjcf_show_visual_mesh: true
+  mjcf_show_skeleton: false
+  server_memory_limit: "4GB"
+  show_camera_point_clouds: false
+  voxel_map_stride: 2
+  dynagraph_stride: 2
+  mjcf_mesh_stride: 3
+  dynagraph:
+    log_crops: false
+    log_edges: false

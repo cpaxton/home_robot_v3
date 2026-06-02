@@ -10,7 +10,7 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
-# This source code is licensed under the LICENSE file in the root directory of this source tree.
+# This source code is licensed under the license found in the LICENSE file in the root directory of this source tree.
 
 """Shared observation → GraphEQAMemory update (DynaMem agent + GraphEQAController)."""
 
@@ -21,15 +21,41 @@ from typing import Any
 
 import numpy as np
 
+from emet.memory.graph_eqa.calibration_export import CalibrationFrameWriter, detections_to_json_rows
 from emet.memory.graph_eqa.graph_memory import labels_are_semantic_graph_hypothesis
 from emet.memory.graph_eqa.graph_observation_pipeline import apply_instance_items_to_graph
 from emet.memory.graph_eqa.instance_observations import (
-    frame_instances_to_labels_xyz,
+    frame_instances_to_detections,
     frame_rgb_hwc_uint8,
     instance_items_from_instance_memory,
 )
 from emet.memory.graph_eqa.sensor_graph_builder import SensorGraphBuilder, short_labels_from_voxel_descriptions
 from emet.memory.graph_eqa.viewer_frame import viewer_xyz_world_from_observation
+
+
+def _nav_origin_xyt(obs: Any) -> list[float] | None:
+    origin = getattr(obs, "navigation_origin_xyt", None)
+    if origin is None:
+        return None
+    arr = np.asarray(origin, dtype=np.float64).reshape(-1)
+    if arr.size < 3:
+        return None
+    return [float(arr[0]), float(arr[1]), float(arr[2])]
+
+
+def _detection_to_candidate(d: dict[str, Any]) -> Any:
+    from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate
+
+    emb = d.get("embedding")
+    if emb is not None:
+        emb = np.asarray(emb, dtype=np.float32)
+    return GraphDetectionCandidate(
+        label=str(d.get("label_short", d.get("label", "object"))),
+        xyz=np.asarray(d["xyz"], dtype=np.float64),
+        bbox_xyxy=tuple(d["bbox_xyxy"]) if d.get("bbox_xyxy") is not None else None,
+        bounds_3d=d.get("bounds_3d"),
+        embedding=emb,
+    )
 
 
 def update_graph_memory_from_dynamem_observation(
@@ -44,6 +70,9 @@ def update_graph_memory_from_dynamem_observation(
     dedup_skips: Callable[[str, np.ndarray], bool] | None,
     obs: Any,
     frame_step: int | None = None,
+    graph_object_fusion: Any | None = None,
+    calibration_writer: CalibrationFrameWriter | None = None,
+    encoder: Any | None = None,
 ) -> None:
     """Append one observation to ``graph_memory`` (same logic as ``GraphEQAController.update`` tail).
 
@@ -62,28 +91,59 @@ def update_graph_memory_from_dynamem_observation(
 
     vm = voxel_map
     instance_items: list[tuple[str, np.ndarray, tuple[int, int, int, int]]] = []
+    raw_dets: list[dict[str, Any]] = []
     if use_instance_graph and getattr(vm, "observations", None) and len(vm.observations) > 0:
         frame = vm.observations[-1]
-        instance_items = frame_instances_to_labels_xyz(
+        raw_dets = frame_instances_to_detections(
             frame,
             min_depth=float(vm.min_depth),
             max_depth=float(vm.max_depth),
             detection_model=detection_model,
         )
+        instance_items = [
+            (
+                d["label_short"],
+                np.asarray(d["xyz"], dtype=np.float64),
+                tuple(d["bbox_xyxy"]),
+            )
+            for d in raw_dets
+        ]
         if not instance_items and getattr(frame, "instance", None) is not None and getattr(
             vm, "use_instance_memory", False
         ):
             instance_items = instance_items_from_instance_memory(vm, detection_model)
-        if instance_items:
+
+        if calibration_writer is not None and raw_dets:
+            calibration_writer.append(
+                step=int(frame_step or 0),
+                detections=detections_to_json_rows(raw_dets),
+                navigation_origin_xyt=_nav_origin_xyt(obs),
+            )
+
+        if instance_items or raw_dets:
             frame_rgb = frame_rgb_hwc_uint8(frame)
             crop_rgb = frame_rgb if frame_rgb is not None else np.asarray(rgb)
-            apply_instance_items_to_graph(
-                graph_memory,
-                crop_rgb,
-                instance_items,
-                dedup_skips=dedup_skips or (lambda _l, _x: False),
-                viewer_xyz=viewer_xyz,
-            )
+
+            cfg = getattr(graph_object_fusion, "config", None) if graph_object_fusion is not None else None
+            use_fusion = cfg is not None and getattr(cfg, "enabled", False)
+
+            if use_fusion and raw_dets:
+                for d in raw_dets:
+                    cand = _detection_to_candidate(d)
+                    graph_object_fusion.apply_detection(
+                        graph_memory,
+                        crop_rgb,
+                        cand,
+                        viewer_xyz=viewer_xyz,
+                    )
+            elif instance_items:
+                apply_instance_items_to_graph(
+                    graph_memory,
+                    crop_rgb,
+                    instance_items,
+                    dedup_skips=dedup_skips or (lambda _l, _x: False),
+                    viewer_xyz=viewer_xyz,
+                )
 
     voxel_labels = None
     if getattr(vm, "image_descriptions", None) and len(vm.image_descriptions) > 0:
@@ -97,9 +157,15 @@ def update_graph_memory_from_dynamem_observation(
         desc = None
         xyz = np.array(obs.camera_pose[:3, 3], dtype=float)
 
+    fusion_cfg = getattr(getattr(graph_object_fusion, "config", None), "enabled", False)
+    if fusion_cfg:
+        dedup = None
+    else:
+        dedup = dedup_skips
+
     if labels_are_semantic_graph_hypothesis(labels):
         for label in labels:
-            if dedup_skips and dedup_skips(label, xyz):
+            if dedup and dedup(label, xyz):
                 continue
             graph_memory.add_observation(rgb, xyz, [label], description=desc, viewer_xyz=viewer_xyz)
     elif not instance_items:

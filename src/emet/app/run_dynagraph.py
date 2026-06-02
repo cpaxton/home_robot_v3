@@ -32,7 +32,7 @@ def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
         return
     if headless:
         click.echo("Rerun headless: no auto-open browser (use the URL printed when the viewer started).")
-    click.echo("Dynagraph: use blueprint columns «Dynagraph 3D» and «Dynagraph graph» (3D nodes + tree).")
+    click.echo("Dynagraph: 3D world view + graph node list; full tree text is export/stdout only (not live Rerun).")
 
 
 @click.command()
@@ -72,6 +72,11 @@ def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
     "--headless",
     is_flag=True,
     help="No auto-open browser for Rerun; open http://<host>:9090 manually.",
+)
+@click.option(
+    "--rerun",
+    is_flag=True,
+    help="Rerun is already on by default; accepted for compatibility with `emet run agent --rerun` (no-op).",
 )
 @click.option(
     "--no-rerun",
@@ -206,6 +211,12 @@ def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
     is_flag=True,
     help="With --dump-sim-ground-truth: include kinematic subtree of robot base_link (verbose)",
 )
+@click.option(
+    "--calibration-export",
+    default=None,
+    type=str,
+    help="Append raw instance detections per step to JSONL for emet tune-graph-fusion",
+)
 def main(
     robot_ip: str,
     robot_backend: str = "stretch",
@@ -213,6 +224,7 @@ def main(
     not_rotate_in_place: bool = False,
     save_rerun: bool = False,
     headless: bool = False,
+    rerun: bool = False,
     no_rerun: bool = False,
     rerun_native: bool = False,
     rerun_show_panels: bool = False,
@@ -237,10 +249,13 @@ def main(
     print_graph: bool = False,
     dump_sim_ground_truth: str | None = None,
     dump_sim_gt_include_robot: bool = False,
+    calibration_export: str | None = None,
 ) -> None:
     """Run Dynagraph: voxel + graph EQA with optional merge and staleness (see docs/dynagraph.md)."""
     click.echo("Dynagraph: graph memory with DynaMem-style voxel navigation.")
 
+    if rerun and no_rerun:
+        raise click.UsageError("Cannot use both --rerun and --no-rerun.")
     if rerun_bind:
         os.environ["RERUN_BIND_ALL"] = "1"
     if rerun_native and headless:
@@ -288,6 +303,13 @@ def main(
         parameters["max_depth"] = max(float(parameters.get("max_depth", 2.5)), 3.8)
     parameters.setdefault("dynagraph_merge_xy_m", 0.45)
     parameters.setdefault("dynagraph_staleness_horizon", 256)
+    if parameters.get("graph_object_fusion") is None:
+        from dataclasses import asdict
+
+        from emet.memory.graph_eqa.graph_object_fusion.config import load_graph_object_fusion_config
+
+        fc = load_graph_object_fusion_config()
+        parameters["graph_object_fusion"] = asdict(fc)
     if merge_xy_m is not None:
         parameters["dynagraph_merge_xy_m"] = float(merge_xy_m)
     if staleness_horizon is not None:
@@ -305,6 +327,7 @@ def main(
         robot_backend,
         robot_ip,
         port_offset=port_offset,
+        parameters=parameters,
         enable_rerun_server=not no_rerun,
         rerun_headless=headless,
         rerun_native_viewer=rerun_native,
@@ -344,6 +367,11 @@ def main(
         use_instance_graph=not no_instance_graph,
     )
     agent.start()
+    if calibration_export:
+        from emet.memory.graph_eqa.calibration_export import CalibrationFrameWriter
+
+        agent._calibration_writer = CalibrationFrameWriter(calibration_export)
+        click.echo(f"- Calibration export: {calibration_export!r}")
 
     def _maybe_explore(reason: str) -> None:
         if not explore_loop:

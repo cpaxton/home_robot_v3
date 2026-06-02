@@ -107,6 +107,14 @@ class GraphEQAController(DynamemController):
                 parameters.get("graph_instance_dedup_xy_m", DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M)
             )
 
+        from emet.memory.graph_eqa.graph_object_fusion.setup import attach_graph_object_fusion
+
+        self._graph_object_fusion = attach_graph_object_fusion(
+            self.graph_memory,
+            parameters if isinstance(parameters, dict) else None,
+        )
+        self._calibration_writer = None
+
         dev = self.device if self.device in ("cuda", "mps") else "cuda"
         self.sensor_builder = None
         if use_sensor_perception:

@@ -1742,6 +1742,15 @@ from emet.app.debug_da3_depth import main as _debug_da3_depth_app  # noqa: E402
 _debug_da3_depth_app.short_help = "Live DA3 depth + point cloud from ZMQ (Rerun)"
 main.add_command(_debug_da3_depth_app)
 
+from emet.app.export_sim_gt import main as _export_sim_gt_app  # noqa: E402
+
+_export_sim_gt_app.short_help = "Export Robocasa sim GT objects (3D bounds + head 2D boxes)"
+main.add_command(_export_sim_gt_app)
+
+from emet.app.tune_graph_fusion import main as _tune_graph_fusion_app  # noqa: E402
+
+_tune_graph_fusion_app.short_help = "Grid-search GraphObjectFusion vs GT + calibration frames"
+main.add_command(_tune_graph_fusion_app)
 
 if __name__ == "__main__":
     main()

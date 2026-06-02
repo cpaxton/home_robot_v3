@@ -426,6 +426,14 @@ class DynamemController(BaseController):
                 self._graph_dedup_xy_m = float(
                     parameters.get("graph_instance_dedup_xy_m", DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M)
                 )
+            from emet.memory.graph_eqa.graph_object_fusion.setup import attach_graph_object_fusion
+
+            self._graph_object_fusion = attach_graph_object_fusion(
+                self.graph_memory,
+                parameters if isinstance(parameters, dict) else None,
+                fref=gcfg.graph_object_fusion,
+            )
+            self._calibration_writer = None
             dev_sg = self.device if self.device in ("cuda", "mps") else "cuda"
             self.sensor_builder = SensorGraphBuilder(
                 perception_client=None,
@@ -441,15 +449,17 @@ class DynamemController(BaseController):
         """
         if getattr(self.rerun_visualizer, "enabled", True) is False:
             return
+        from emet.visualization.rerun import spatial3d_view_world
+
         main = rrb.Horizontal(
-            rrb.Spatial3DView(name="3D View", origin="world"),
+            spatial3d_view_world(),
             rrb.Vertical(
                 rrb.TextDocumentView(name="text", origin="robot_monologue"),
                 rrb.Spatial2DView(name="relevant image", origin="/observation_similar_to_text"),
             ),
             rrb.Vertical(
-                rrb.Spatial2DView(name="head_rgb", origin="world/head_camera"),
-                rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera"),
+                rrb.Spatial2DView(name="head_rgb", origin="world/head_camera/rgb"),
+                rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera/rgb"),
                 rrb.Spatial2DView(name="map_topdown", origin="world/map_snapshot/topdown"),
             ),
             rrb.Vertical(
@@ -678,7 +688,12 @@ class DynamemController(BaseController):
             instances = self.get_voxel_map().get_instances()
             if instances:
                 self._update_scene_graph()
-                self.rerun_visualizer.update_scene_graph(self.scene_graph, self.semantic_sensor)
+                self.rerun_visualizer.update_scene_graph(
+                    self.scene_graph,
+                    self.semantic_sensor,
+                    detection_model=getattr(self, "detection_model", None),
+                    graph_memory=self.graph_memory,
+                )
 
         if self.graph_memory is not None and self.sensor_builder is not None:
             from emet.memory.graph_eqa.dynamem_graph_hooks import update_graph_memory_from_dynamem_observation
@@ -694,6 +709,8 @@ class DynamemController(BaseController):
                 dedup_skips=self._graph_dedup_skips,
                 obs=obs,
                 frame_step=self.obs_count,
+                graph_object_fusion=getattr(self, "_graph_object_fusion", None),
+                calibration_writer=getattr(self, "_calibration_writer", None),
             )
 
         # Visualize open-vocab scene graph if attached

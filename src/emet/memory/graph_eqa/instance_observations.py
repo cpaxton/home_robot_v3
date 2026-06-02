@@ -143,6 +143,15 @@ def frame_instances_to_detections(
             continue
         pts = fw[mask]
         xyz = pts.median(dim=0).values.detach().cpu().numpy().astype(np.float64)
+        pts_np = pts.detach().cpu().numpy().astype(np.float64)
+        mn = pts_np.min(axis=0)
+        mx = pts_np.max(axis=0)
+        bounds_3d = {
+            "min": mn.tolist(),
+            "max": mx.tolist(),
+            "center": (0.5 * (mn + mx)).tolist(),
+            "size": (mx - mn).tolist(),
+        }
         ys, xs = torch.where(mask)
         bbox_xyxy = (
             int(xs.min().item()),
@@ -162,6 +171,7 @@ def frame_instances_to_detections(
                 "label_short": label,
                 "xyz": [float(xyz[0]), float(xyz[1]), float(xyz[2])],
                 "bbox_xyxy": bbox_xyxy,
+                "bounds_3d": bounds_3d,
             }
         )
 

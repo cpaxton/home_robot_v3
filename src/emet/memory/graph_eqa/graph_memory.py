@@ -68,6 +68,8 @@ class GraphNode:
     extent_half: np.ndarray | None = None  # (3,) half-axis sizes in meters; None = point-like
     bbox_xyxy: tuple[int, int, int, int] | None = None  # pixel crop in obs RGB; None = full frame
     is_viewpoint: bool = False  # True = robot/camera vantage (``seen_from`` target), not a detected object
+    embedding: np.ndarray | None = None  # optional visual embedding (e.g. SigLIP crop)
+    bounds_3d: dict[str, list[float]] | None = None  # axis-aligned world bounds {min,max,center,size}
 
 
 @dataclass
@@ -343,6 +345,113 @@ class GraphEQAMemory:
         if viewer_a is not None:
             self._ensure_viewpoint_node(obs_id, viewer_a)
         self._update_edges()
+        return obs_id
+
+    def merge_object_detection(
+        self,
+        rgb: np.ndarray | Image.Image,
+        candidate: Any,
+        *,
+        merge_into_node_id: int | None,
+        viewer_xyz: np.ndarray | None = None,
+    ) -> int:
+        """
+        Add or merge an instance detection (GraphObjectFusion path).
+
+        ``candidate`` is a :class:`~emet.memory.graph_eqa.graph_object_fusion.fusion.GraphDetectionCandidate`
+        or any object with ``label``, ``xyz``, optional ``bbox_xyxy``, ``bounds_3d``, ``embedding``.
+        """
+        if isinstance(rgb, Image.Image):
+            rgb = np.array(rgb)
+        label = str(getattr(candidate, "label", "object"))
+        xyz_a = np.asarray(getattr(candidate, "xyz"), dtype=float).reshape(-1)[:3]
+        bbox_xyxy = getattr(candidate, "bbox_xyxy", None)
+        bounds_3d = getattr(candidate, "bounds_3d", None)
+        embedding = getattr(candidate, "embedding", None)
+        if embedding is not None:
+            embedding = np.asarray(embedding, dtype=np.float32).reshape(-1).copy()
+
+        step = self._effective_timestep()
+        viewer_a: np.ndarray | None = None
+        if viewer_xyz is not None:
+            viewer_a = np.asarray(viewer_xyz, dtype=float).reshape(-1)[:3].copy()
+
+        bbox_i: tuple[int, int, int, int] | None = None
+        if bbox_xyxy is not None:
+            b = tuple(int(x) for x in bbox_xyxy)
+            if len(b) == 4:
+                bbox_i = (b[0], b[1], b[2], b[3])
+
+        if merge_into_node_id is not None:
+            for idx, existing in enumerate(self._nodes):
+                if int(existing.node_id) != int(merge_into_node_id):
+                    continue
+                if existing.is_viewpoint:
+                    break
+                sc = int(existing.support_count) + 1
+                alpha = 0.35
+                new_xyz = (existing.xyz * (sc - 1) + xyz_a) / sc
+                merged_labels = sorted(
+                    {*(str(x).strip() for x in existing.labels if str(x).strip()), label}
+                )
+                new_emb = embedding
+                if embedding is not None and existing.embedding is not None:
+                    a = float(getattr(candidate, "embedding_blend_alpha", 0.35))
+                    new_emb = (1.0 - a) * np.asarray(existing.embedding, dtype=np.float32) + a * embedding
+                new_bounds = bounds_3d if bounds_3d is not None else existing.bounds_3d
+                if bounds_3d is not None and existing.bounds_3d is not None:
+                    mn = np.minimum(
+                        np.asarray(existing.bounds_3d["min"], dtype=np.float64),
+                        np.asarray(bounds_3d["min"], dtype=np.float64),
+                    )
+                    mx = np.maximum(
+                        np.asarray(existing.bounds_3d["max"], dtype=np.float64),
+                        np.asarray(bounds_3d["max"], dtype=np.float64),
+                    )
+                    c = 0.5 * (mn + mx)
+                    new_bounds = {
+                        "min": mn.tolist(),
+                        "max": mx.tolist(),
+                        "center": c.tolist(),
+                        "size": (mx - mn).tolist(),
+                    }
+                self._nodes[idx] = replace(
+                    existing,
+                    xyz=new_xyz,
+                    labels=merged_labels,
+                    last_seen=step,
+                    support_count=sc,
+                    bbox_xyxy=bbox_i if bbox_i is not None else existing.bbox_xyxy,
+                    embedding=new_emb,
+                    bounds_3d=new_bounds,
+                )
+                for o in self._observations:
+                    if o.obs_id == existing.obs_id:
+                        o.xyz = new_xyz
+                        o.labels = merged_labels
+                        if viewer_a is not None:
+                            o.viewer_xyz = viewer_a
+                        break
+                if viewer_a is not None:
+                    self._ensure_viewpoint_node(int(existing.obs_id), viewer_a)
+                self._update_edges()
+                return int(existing.obs_id)
+
+        obs_id = self.add_observation(
+            rgb,
+            xyz_a,
+            [label],
+            viewer_xyz=viewer_a,
+            bbox_xyxy=bbox_i,
+        )
+        for idx, n in enumerate(self._nodes):
+            if int(n.obs_id) == int(obs_id) and not n.is_viewpoint:
+                self._nodes[idx] = replace(
+                    n,
+                    embedding=embedding,
+                    bounds_3d=bounds_3d,
+                )
+                break
         return obs_id
 
     def record_navigation_sample(

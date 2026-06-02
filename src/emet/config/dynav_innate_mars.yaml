@@ -146,3 +146,11 @@ graph_eqa_extract:
   navigation_samples_max: 256
 
 graph_eqa_record_navigation: true
+
+rerun:
+  mjcf_show_visual_mesh: true
+  mjcf_show_skeleton: false
+  server_memory_limit: "4GB"
+  dynagraph:
+    log_crops: false
+    log_edges: false

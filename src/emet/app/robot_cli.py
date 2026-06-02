@@ -22,6 +22,7 @@ import timeit
 import click
 import zmq
 
+from emet.core.parameters import Parameters
 from emet.core.robot import AbstractRobotClient
 from emet.core.zmq_protocol import read_emet_robot_id_from_message_or_session
 from emet.robots import ROBOT_REGISTRY
@@ -76,6 +77,7 @@ def create_robot_client_from_cli(
     robot_ip: str,
     *,
     port_offset: int = 0,
+    parameters: Parameters | dict | None = None,
     enable_rerun_server: bool = False,
     rerun_headless: bool = False,
     rerun_native_viewer: bool = False,
@@ -108,6 +110,7 @@ def create_robot_client_from_cli(
             kwargs: dict = {
                 "robot_ip": robot_ip,
                 "port_offset": port_offset,
+                "parameters": parameters,
                 "allow_missing_depth": allow_missing_depth,
                 "enable_rerun_server": enable_rerun_server,
                 "rerun_headless": rerun_headless,
@@ -125,6 +128,7 @@ def create_robot_client_from_cli(
 
         return StretchZmqClient(
             robot_ip=robot_ip,
+            parameters=parameters,
             enable_rerun_server=enable_rerun_server,
             rerun_headless=rerun_headless,
             rerun_native_viewer=rerun_native_viewer,
@@ -148,6 +152,7 @@ def create_robot_client_from_cli(
         kwargs: dict = {
             "robot_ip": robot_ip,
             "port_offset": port_offset,
+            "parameters": parameters,
             "allow_missing_depth": allow_missing_depth,
             "enable_rerun_server": enable_rerun_server,
             "rerun_headless": rerun_headless,

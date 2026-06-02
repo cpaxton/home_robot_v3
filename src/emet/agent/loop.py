@@ -305,6 +305,7 @@ def run_agent_with_robot(
         # robot.start() again; double-start left orphan recv threads and led to ZMQ double-free crashes.
         robot_client = StretchZmqClient(
             robot_ip=robot_ip,
+            parameters=parameters,
             enable_rerun_server=rerun,
             rerun_headless=headless,
             rerun_native_viewer=rerun_native,
@@ -328,6 +329,7 @@ def run_agent_with_robot(
         robot_client = backend.create_client(
             robot_ip=robot_ip,
             port_offset=port_offset,
+            parameters=parameters,
             allow_missing_depth=allow_missing_depth,
             enable_rerun_server=rerun,
             rerun_headless=headless,

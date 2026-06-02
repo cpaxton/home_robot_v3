@@ -215,6 +215,7 @@ class GenericZmqClient(AbstractRobotClient):
         self._rerun: Any = None
         self._rerun_thread: threading.Thread | None = None
         if enable_rerun_server:
+            from emet.config.rerun_config import build_rerun_visualizer_kwargs
             from emet.visualization.rerun import RerunVisualizer
 
             out_p = Path(output_path) if output_path is not None else None
@@ -230,14 +231,16 @@ class GenericZmqClient(AbstractRobotClient):
                     int(self._spec.dof),
                     str(self._spec.base_link_name),
                 )
-            self._rerun = RerunVisualizer(
+            rerun_kwargs = build_rerun_visualizer_kwargs(
+                self._parameters,
                 output_path=out_p,
                 display_robot_mesh=use_mjcf,
-                headless=rerun_headless,
-                rerun_native_viewer=rerun_native_viewer,
-                collapse_panels=not rerun_show_panels,
                 mjcf_robot=mjcf_robot,
+                cli_headless=rerun_headless,
+                cli_native_viewer=rerun_native_viewer,
+                cli_show_panels=rerun_show_panels,
             )
+            self._rerun = RerunVisualizer(**rerun_kwargs)
         else:
             from emet.visualization.rerun import NullVisualizer
 
