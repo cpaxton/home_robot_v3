@@ -200,6 +200,16 @@ def main(
     if dynav_resolved != dynav_config:
         logger.info("Resolved dynav from CLI default %r via robot preset", dynav_config)
     parameters = get_parameters(dynav_resolved)
+    mb = parameters.get("map_boundary") if isinstance(parameters.get("map_boundary"), dict) else {}
+    obs_barrier = int(mb.get("obstacle_barrier_cells", 0) or 0)
+    logger.info(
+        "DynaMem map viz: Rerun panel map_topdown (cropped explored region); "
+        "grid-edge barrier=%s cells (docs/dynav_config.md). "
+        "Terminal: export EMET_NAVGRID_ASCII=1",
+        obs_barrier,
+    )
+    if no_rerun:
+        logger.info("Rerun disabled (--no-rerun); use EMET_NAVGRID_ASCII=1 for a terminal top-down map.")
 
     if perfect_depth:
         parameters["debug_perfect_sensor_depth"] = True

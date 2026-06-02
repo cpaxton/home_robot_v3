@@ -620,17 +620,19 @@ class DynamemController(BaseController):
                 cam_t,
             )
         self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt)
+        robot_xy = None
+        if obs.gps is not None and obs.compass is not None:
+            g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
+            cc = np.asarray(obs.compass, dtype=np.float64).ravel()
+            if g.size >= 2 and cc.size >= 1:
+                wxyt = nav_xyt_to_world_xyt(
+                    np.array([float(g[0]), float(g[1]), float(cc[0])], dtype=np.float64),
+                    getattr(obs, "emet_session", None),
+                )
+                robot_xy = (float(wxyt[0]), float(wxyt[1]))
+        if getattr(self.rerun_visualizer, "enabled", True):
+            self.rerun_visualizer.log_topdown_map_snapshot(self.voxel_map, robot_base_xy=robot_xy)
         if self.voxel_map.voxel_pcd._points is not None:
-            robot_xy = None
-            if obs.gps is not None and obs.compass is not None:
-                g = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
-                cc = np.asarray(obs.compass, dtype=np.float64).ravel()
-                if g.size >= 2 and cc.size >= 1:
-                    wxyt = nav_xyt_to_world_xyt(
-                        np.array([float(g[0]), float(g[1]), float(cc[0])], dtype=np.float64),
-                        getattr(obs, "emet_session", None),
-                    )
-                    robot_xy = (float(wxyt[0]), float(wxyt[1]))
             self.rerun_visualizer.update_voxel_map(space=self.space, robot_base_xy=robot_xy)
         if self.voxel_map.semantic_memory._points is not None:
             self.rerun_visualizer.log_custom_pointcloud(
