@@ -8,6 +8,8 @@ MolmoSpaces requires **mujoco 3.4** and **numpy>=2.2**, which conflict with the 
 - **Sim YAML / one-terminal agent**: see [sim_configs.md](sim_configs.md) for `configs/sim/molmospaces_*.yaml` and `emet run agent --start-sim`.
 - **Wrapper (emet-molmospaces)**: A separate package that depends on emet, molmo-spaces, mujoco>=3.4, and numpy>=2.2. It provides the `emet-molmospaces` console script and implements list-scenes, install-scene, merge-scene, and serve. Install it in a dedicated venv (e.g. `.venv-molmospaces`) or any env where you accept those deps.
 
+**Environment variables:** Optional toggles for spawn, autoplace, navigation, and tests are listed in **[MolmoSpaces environment variables](molmospaces_environment_variables.md)** (index: [environment_variables.md](environment_variables.md)).
+
 ## Install the MolmoSpaces wrapper
 
 From the project root:
@@ -128,7 +130,7 @@ Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. T
 
    This calls the wrapper’s `merge-scene`, writes the merged MJCF beside the **chosen robot’s MJCF** (a temp file named `molmospaces_merged_*.xml` under that robot’s asset directory: e.g. galaxea r1 meshes for `--robot rby1`, or beside `stretch.xml` for `--robot stretch`), then starts `emet.simulation.mujoco_server` with the matching `--robot`. The file must live next to the robot MJCF so MuJoCo resolves `assetdir`; writing the merge under `/tmp` breaks mesh loading. The merged file is kept on disk until the server **stops**, then removed.
 
-   **Stretch (default `emet serve mujoco --robot stretch`):** merges the real Stretch model and uses the Stretch MuJoCo ZMQ stack, with the **same MolmoSpaces free-joint base autoplace** as registry robots (disable with `EMET_MOLMOSPACES_AUTOPLACE=0` if needed). Navigation goals (including **`rotate_in_place`** / DynaMem scan) use **free-joint teleport** on merged Molmo scenes so the base actually turns; wheel velocity alone is unreliable on iTHOR floors. Session capability **`teleport_base: true`** is advertised for MolmoSpaces.
+   **Stretch (default `emet serve mujoco --robot stretch`):** merges the real Stretch model and uses the Stretch MuJoCo ZMQ stack, with the **same MolmoSpaces free-joint base autoplace** as registry robots (disable with `EMET_MOLMOSPACES_AUTOPLACE=0` if needed). Navigation goals (including **`rotate_in_place`** / DynaMem scan) use **free-joint teleport** on merged Molmo scenes by default (`EMET_MOLMOSPACES_NAV_TELEPORT=1`) so the base actually turns; wheel velocity alone is unreliable on iTHOR floors. Set **`EMET_MOLMOSPACES_NAV_TELEPORT=0`** to experiment with wheel / goal drive. Session capability **`teleport_base: true`** is advertised when teleport nav is enabled. See [molmospaces_environment_variables.md](molmospaces_environment_variables.md).
 
    **Adding another vendored mobile robot:** expose a top-level MJCF path in `emet.utils.assets.get_robot_mjcf_path`, merge with `emet molmospaces merge-scene --robot <key>`, then `emet serve mujoco --scene_path … --robot <key>`. The MJCF should use a **world freejoint** on the base body (autoplace heuristic); planar-only bases need extra wiring (see Robocasa path).
 3. Run the agent:
@@ -141,7 +143,7 @@ Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. T
 
 Use `--port-offset` on both server and agent if default ZMQ ports are busy. The agent uses **`GenericZmqClient`** for `rby1`, matching `emet run dynamem --robot rby1`.
 
-**iTHOR spawn occupancy (ZMQ server):** For **`ithor`** scenes, free-joint XY search prefers points sampled from the same orthographic occupancy map (Molmo-style) before falling back to annulus/grid heuristics. Set **`EMET_MOLMOSPACES_OCC_MAP=0`** (or `false`) to disable. **`EMET_MOLMOSPACES_OCC_SEED`** seeds the occupancy free-point subsample (default `0`).
+**iTHOR spawn occupancy (ZMQ server):** For **`ithor`** scenes, free-joint XY search prefers points sampled from the same orthographic occupancy map (Molmo-style) before falling back to annulus/grid heuristics. Set **`EMET_MOLMOSPACES_OCC_MAP=0`** (or `false`) to disable. **`EMET_MOLMOSPACES_OCC_SEED`** seeds the occupancy free-point subsample (default `0`). Full list: [molmospaces_environment_variables.md](molmospaces_environment_variables.md).
 
 The ZMQ server publishes a static **`emet_session`** block (scene / robot / capabilities) on every message; see [zmq_session_metadata.md](zmq_session_metadata.md). `emet run molmospaces-explore` prefers this metadata for `episode.json` when the server reports a MolmoSpaces environment.
 

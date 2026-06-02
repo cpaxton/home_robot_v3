@@ -43,6 +43,7 @@ from emet.motion import HelloStretchIdx
 from emet.motion.control.goto_controller import GotoVelocityController
 from emet.robots.base import RobotSpec
 from emet.robots.stretch import StretchBackend
+from emet.simulation.molmospaces_env import molmospaces_nav_teleport_enabled
 from emet.utils.assets import get_mujoco_models_path
 from emet.utils.config import get_control_config
 from emet.utils.geometry import pose_global_to_base, xyt_base_to_global, xyt_global_to_base
@@ -582,6 +583,8 @@ class MujocoZmqServer(BaseZmqServer):
                 "MuJoCo simulator did not start. See above for errors; on WSL try DISPLAY=:99 and --use-glx, or --no-cameras."
             )
         self._emet_session = self._build_emet_session_stretch(robocasa=robocasa)
+        if self._is_molmospaces_session() and not molmospaces_nav_teleport_enabled():
+            logger.info("MolmoSpaces navigation: wheel/goal drive (EMET_MOLMOSPACES_NAV_TELEPORT=0)")
         super().start()
 
         # Create a thread for the control loop
@@ -611,7 +614,7 @@ class MujocoZmqServer(BaseZmqServer):
         else:
             env = {"kind": "stretch_default_scene"}
         caps: dict[str, Any] = {
-            "teleport_base": self._is_molmospaces_session(),
+            "teleport_base": self._is_molmospaces_session() and molmospaces_nav_teleport_enabled(),
             "depth": self._cameras_enabled,
             "num_cameras": 2 if self._cameras_enabled else 0,
             "dof": int(spec.dof),
@@ -634,6 +637,9 @@ class MujocoZmqServer(BaseZmqServer):
             return True
         bn = self._scene_source_basename or ""
         return bn.startswith("molmospaces_merged")
+
+    def _use_molmospaces_nav_teleport(self) -> bool:
+        return self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()
 
     def _teleport_base_world(self, world_xyt: np.ndarray, *, timeout: float = 2.0) -> bool:
         """Apply free-joint teleport in the MuJoCo subprocess and wait until pose matches."""
@@ -734,7 +740,7 @@ class MujocoZmqServer(BaseZmqServer):
             self.robot_sim.set_base_velocity(v_linear=action["base_velocity"]["v"], omega=action["base_velocity"]["w"])
         elif "xyt" in action:
             relative_motion = bool(action.get("nav_relative", False))
-            nav_teleport = bool(action.get("nav_teleport", False)) or self._is_molmospaces_session()
+            nav_teleport = bool(action.get("nav_teleport", False)) or self._use_molmospaces_nav_teleport()
             if nav_teleport:
                 world = self._xyt_action_to_world(np.asarray(action["xyt"], dtype=np.float64), relative=relative_motion)
                 if self._teleport_base_world(world):

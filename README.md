@@ -235,7 +235,7 @@ pre-commit install
 
 A plain `uv sync` installs **default dependency groups** (dev, sim, hand_tracker, dynamem, da3) and works without cloning simulation repos; **robosuite/robocasa** still come from `./install.sh --sim` / `emet install sim`. `./install.sh` defaults to **no** Robocasa clone (use `--sim` or `EMET_INSTALL_PROFILE=full` for the old behavior). With sim enabled, MolmoSpaces (``.venv-molmospaces``) installs automatically when ``packages/emet_molmospaces`` is present unless you pass ``--no-molmospaces``. Use `./install.sh --no-sam2` or `uv sync --no-group dynamem` if the SAM-2 submodule is absent.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for more information, and [debug](docs/debug.md) / [update](docs/update.md) for troubleshooting. You can test most code in [simulation](docs/simulation.md) without a physical robot.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for more information, and [debug](docs/debug.md) / [update](docs/update.md) for troubleshooting. You can test most code in [simulation](docs/simulation.md) without a physical robot. Simulation and MolmoSpaces optional env toggles: [docs/environment_variables.md](docs/environment_variables.md) ([MolmoSpaces-specific](docs/molmospaces_environment_variables.md)).
 
 ### Updating Code on the Robot
 
