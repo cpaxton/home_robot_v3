@@ -17,6 +17,11 @@ min_points_per_voxel: 15  # Drop things below this density per voxel
 pad_obstacles: 2  # Add this many units (voxel_size) to the area around obstacles
 min_pad_obstacles: 1  # Do not pad LESS than this amount, for safety.
 
+# Grid-edge barrier on the 2D map (Dynamem get_2d_map). Default off; set obstacle_barrier_cells: 30 for legacy behavior.
+map_boundary:
+  obstacle_barrier_cells: 0
+  history_penalty_cells: 0
+
 local_radius: 0.5  # Area around the robot to mark as explored (kind of a hack)
 add_local_every_step: False
 remove_visited_from_obstacles: False

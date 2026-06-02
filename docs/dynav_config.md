@@ -1,0 +1,136 @@
+# DynaMem / Dynav configuration (`dynav_config.yaml`)
+
+DynaMem, GraphEQA, Dynagraph, and `emet run agent` load navigation and mapping parameters from a YAML file under [`src/emet/config/`](../src/emet/config/). The default basename is **`dynav_config.yaml`**. Pass a different file with:
+
+```bash
+emet run dynamem --dynav-config dynav_innate_mars.yaml
+emet run agent --agent-config dynav_config.yaml
+```
+
+Basenames resolve under `src/emet/config/`; absolute or repo-relative paths are also accepted (see `resolve_dynav_config_yaml`).
+
+Hardware Mars without ZMQ depth typically uses [`dynav_innate_mars.yaml`](../src/emet/config/dynav_innate_mars.yaml) (`depth_source: da3`). Sim with rendered depth should keep the default **`dynav_config.yaml`** (`depth_source: sensor`). See [Innate Mars / sim depth](robots/innate_mars.md).
+
+Related docs: [Dynamem](dynamem.md), [Dynagraph](dynagraph.md), [Simulation configs](sim_configs.md), [Agent run](AGENT_RUN.md).
+
+---
+
+## File layout (overview)
+
+| Section | Purpose |
+|--------|---------|
+| `voxel_size`, `obs_*`, `pad_obstacles` | 2D/3D voxel map resolution, height bands, obstacle density |
+| `map_boundary` | Optional grid-edge obstacle ring on the Dynamem 2D map |
+| `depth_source`, `da3_*` | Sensor vs Depth Anything 3 for mapping |
+| `detection`, `instance_memory` | Open-vocab detection and instance memory |
+| `filters` | Depth / map smoothing |
+| `motion_planner` | A* step size, frontier dilation, goal radii |
+| `eqa`, `eqa_vl`, `graph_eqa_*` | EQA and GraphEQA VLM settings |
+| `use_instance_memory`, `use_scene_graph` | Rerun instance boxes and scene graph |
+
+The canonical source of truth is [`src/emet/config/dynav_config.yaml`](../src/emet/config/dynav_config.yaml). [`dynav_innate_mars.yaml`](../src/emet/config/dynav_innate_mars.yaml) is a maintained override copy for Mars + DA3; keep structural keys in sync when you change the default file.
+
+---
+
+## `map_boundary` — grid-edge barrier
+
+Dynamem’s [`SparseVoxelMapDynamem.get_2d_map()`](../src/emet/mapping/voxel/voxel_dynamem.py) can mark a band of cells along the **fixed grid border** as obstacles so the planner does not drive the robot off the allocated map. That band also appeared as a red frame in the Rerun **`map_topdown`** view (`world/map_snapshot/topdown`).
+
+**Default (current):** barrier **off** — no artificial edge obstacles.
+
+```yaml
+map_boundary:
+  obstacle_barrier_cells: 0
+  history_penalty_cells: 0
+```
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `obstacle_barrier_cells` | `0` | Width (in grid cells) of obstacle strips on all four map edges. Affects navigation and top-down visualization. |
+| `history_penalty_cells` | `0` | Width of grid-edge band where exploration **history** is maxed (discourages lingering at the border). Used when `get_2d_map(return_history_id=True)`. |
+
+**Restore legacy behavior** (hardcoded pre-2026 values were 30 / 35 cells):
+
+```yaml
+map_boundary:
+  obstacle_barrier_cells: 30
+  history_penalty_cells: 35
+```
+
+At `grid_resolution: 0.1` m/cell, 30 cells ≈ 3 m from each edge. Values are clamped to `min(cells, height//2, width//2)` so small maps do not break.
+
+**Note:** `map_boundary` is separate from **`pad_obstacles`**, which morphologically dilates real obstacles detected from depth—not the map grid rim.
+
+---
+
+## Top-down map in Rerun and Discord
+
+The 2D snapshot pipeline lives in [`src/emet/visualization/map_snapshot.py`](../src/emet/visualization/map_snapshot.py).
+
+- **Rerun** blueprint view `map_topdown` (Dynamem / Dynagraph controllers) logs to `world/map_snapshot/topdown`.
+- **`send_map_snapshot`** agent tool posts the same style of image to Discord when configured.
+
+Both paths use **`share_topdown_map_rgb`**: render obstacles vs explored, **crop to the explored region** (plus margin and a small neighborhood around the robot), then downsample (`max_side` default 640). Unexplored dark padding outside the crop is not shown.
+
+Live updates come from [`RerunVisualizer.update_voxel_map`](../src/emet/visualization/rerun.py) on each Dynamem map refresh.
+
+---
+
+## Commonly tuned keys
+
+### Voxel map and obstacles
+
+```yaml
+voxel_size: 0.1
+obs_min_height: 0.2
+obs_max_height: 1.5
+obs_min_density: 5
+pad_obstacles: 2          # dilation radius around detected obstacles (grid cells)
+min_pad_obstacles: 1
+local_radius: 0.5         # disk marked explored around the robot
+```
+
+### Depth source
+
+```yaml
+depth_source: sensor      # sim default: ZMQ depth
+# depth_source: da3       # Depth Anything 3 from RGB (see dynav_innate_mars.yaml)
+# depth_source: auto      # sensor if present, else DA3
+```
+
+### Motion planner / exploration frontier
+
+```yaml
+motion_planner:
+  frontier:
+    dilate_frontier_size: 2
+    dilate_obstacle_size: 0
+```
+
+### Instance memory and Rerun
+
+```yaml
+use_instance_memory: True
+use_scene_graph: True
+detection:
+  confidence_threshold: 0.02
+```
+
+---
+
+## Other planner configs
+
+Pick-and-place / instance-memory stacks that do **not** use Dynamem’s voxel class may load separate YAML files, for example:
+
+- `default_planner.yaml`, `sim_planner.yaml`, `a_star_planner.yaml` under `src/emet/config/`
+
+Those files use the same `pad_obstacles` naming but **do not** include `map_boundary` (grid-edge barrier is Dynamem-specific).
+
+---
+
+## See also
+
+- [Dynamem](dynamem.md) — commands, calibration, troubleshooting
+- [Dynagraph](dynagraph.md) — `dynagraph_*` keys in the same YAML
+- [Graph EQA](graph_eqa.md)
+- [Discord bot](discord_bot.md) — `send_map_snapshot` from the agent
