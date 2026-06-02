@@ -70,5 +70,10 @@ class StretchBackend(RobotBackend):
 
         return StretchEmoteBackend()
 
+    def create_mujoco_stationary_control(self):
+        from emet.robots.stretch.sim_stationary import StretchMujocoStationary
+
+        return StretchMujocoStationary()
+
 
 __all__ = ["StretchBackend"]

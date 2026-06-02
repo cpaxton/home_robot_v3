@@ -132,7 +132,9 @@ def validate_sim_launch_serve_combo(
     if molmospaces_scene and scene_path:
         raise ValueError("Use either --scene-path or --molmospaces-scene, not both.")
     if molmospaces_scene and use_robocasa:
-        raise ValueError("Cannot combine --molmospaces-scene with --use-robocasa / robocasa backend.")
+        raise ValueError(
+            "Cannot combine --molmospaces-scene with --use-robocasa, robocasa backend, or serve robocasa."
+        )
 
 
 def build_sim_launch_config_from_serve_cli(

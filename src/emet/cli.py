@@ -127,10 +127,10 @@ def main() -> None:
     _ensure_uv_project()
 
 
-@main.command(short_help="Start simulation server (mujoco or robocasa)")
+@main.command(short_help="Start simulation server (mujoco, robocasa, or molmospaces)")
 @click.argument(
     "backend",
-    type=click.Choice(["mujoco", "robocasa"]),
+    type=click.Choice(["mujoco", "robocasa", "molmospaces"]),
     default="mujoco",
 )
 @click.option(
@@ -168,10 +168,10 @@ def main() -> None:
     metavar="NAME",
     help=(
         "MolmoSpaces scene (e.g. ithor). Runs merge via emet-molmospaces into a temp MJCF, "
-        "then starts the ZMQ server (same as merge-scene + emet serve mujoco). Requires wrapper: "
-        "install.sh --molmospaces. First-time use may need scene packages under MLSPACES_ASSETS_DIR "
-        "(you will be prompted to download unless --molmospaces-install). "
-        "Incompatible with --scene-path and --use-robocasa."
+        "then starts the ZMQ server (same as ``emet serve molmospaces`` or merge-scene + serve mujoco). "
+        "Requires wrapper: install.sh --molmospaces. First-time use may need scene packages under "
+        "MLSPACES_ASSETS_DIR (you will be prompted to download unless --molmospaces-install). "
+        "Incompatible with --scene-path and --use-robocasa / robocasa backend."
     ),
 )
 @click.option(
@@ -233,7 +233,9 @@ def main() -> None:
         "Robot to simulate. 'stretch' (default) uses the Stretch-MuJoCo server. "
         "Registry robots (e.g. innate_mars, rby1, galaxea_r1) load the default table "
         "scene merged with that robot's MJCF and use the generic ZMQ sim (RobosuiteZmqServer). "
-        "Robosuite-native names (PandaOmron, Tiago, GR1) use the stock robosuite robot in Robocasa."
+        "Robosuite-native names (PandaOmron, Tiago, GR1) use the stock robosuite robot in Robocasa. "
+        "MolmoSpaces (``emet serve molmospaces`` or ``--molmospaces-scene``) defaults to rby1 when "
+        "this flag is omitted or left at stretch."
     ),
 )
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
@@ -261,8 +263,11 @@ def serve(
     """Start a simulation server.
 
     Backends:
-      mujoco   MuJoCo server (default). Add --use-robocasa for Robocasa scenes.
-      robocasa Shortcut for mujoco with Robocasa (same as emet serve mujoco --use-robocasa).
+      mujoco       MuJoCo server (default). Add --use-robocasa for Robocasa scenes.
+      robocasa     Shortcut for mujoco with Robocasa (same as ``emet serve mujoco --use-robocasa``).
+      molmospaces  MolmoSpaces merge + ZMQ server (default scene ithor; same as
+                   ``emet serve mujoco --molmospaces-scene …``). Optional scene positional:
+                   ``emet serve molmospaces procthor-10k``.
 
     List Robocasa environments (requires sim extra: ``uv sync --extra sim`` or ``emet sync -e sim`` after ``emet install sim``):
       emet robocasa list
@@ -279,17 +284,34 @@ def serve(
       emet serve robocasa --robocasa-task PickPlaceCounterToCabinet
       emet serve robocasa --list-robocasa-tasks
       emet serve mujoco --use-robocasa --port-offset 100
-      DISPLAY=:1 emet serve mujoco --molmospaces-scene ithor --robot rby1   # MolmoSpaces + rby1 (needs wrapper)
-      emet serve mujoco --molmospaces-scene ithor --headless   # same, headless / no window
+      emet serve molmospaces --robot rby1 --headless
+      emet serve molmospaces ithor --molmospaces-index 3
+      DISPLAY=:1 emet serve mujoco --molmospaces-scene ithor --robot rby1   # same as serve molmospaces
     """
+    extra_args = list(extra)
     use_robocasa_flag = use_robocasa or (backend == "robocasa")
-    if backend == "mujoco" or backend == "robocasa":
+    if backend == "molmospaces":
+        if use_robocasa:
+            click.echo("Cannot combine --use-robocasa with molmospaces backend.", err=True)
+            sys.exit(1)
+        if list_robocasa_tasks:
+            click.echo("--list-robocasa-tasks is only for robocasa / mujoco --use-robocasa.", err=True)
+            sys.exit(1)
+        if molmospaces_scene is None:
+            if extra_args and not str(extra_args[0]).startswith("-"):
+                molmospaces_scene = str(extra_args.pop(0))
+            else:
+                molmospaces_scene = "ithor"
+    if backend in ("mujoco", "robocasa", "molmospaces"):
         from emet.config.sim_launch_config import build_sim_launch_config_from_serve_cli
         from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
 
         if list_robocasa_tasks:
-            args = list(extra) + ["--use-robocasa", "--list-robocasa-tasks"]
+            args = extra_args + ["--use-robocasa", "--list-robocasa-tasks"]
             sys.exit(_run_module("emet.simulation.mujoco_server", args))
+
+        if molmospaces_scene and robot == "stretch":
+            robot = "rby1"
 
         try:
             cfg = build_sim_launch_config_from_serve_cli(
@@ -313,7 +335,7 @@ def serve(
         except ValueError as e:
             click.echo(str(e), err=True)
             sys.exit(1)
-        args = list(extra) + prepare_mujoco_server_argv(cfg)
+        args = extra_args + prepare_mujoco_server_argv(cfg)
         sys.exit(_run_module("emet.simulation.mujoco_server", args))
     else:
         click.echo(f"Unknown backend: {backend}", err=True)
@@ -916,7 +938,6 @@ def deploy(
             "create-and-print-memory",
             "molmospaces-explore",
             "debug-da3-depth",
-            "debug-circle-rerun",
         ]
     ),
 )
@@ -972,7 +993,6 @@ def run(
       emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
       emet run discord --robot-ip 192.168.1.15 --task pickup   # requires DISCORD_TOKEN in env
       emet run debug-da3-depth --robot innate_mars   # DA3 depth + point cloud in Rerun (or: emet debug-da3-depth)
-      emet run debug-circle-rerun   # pole-ring calibration → Rerun (or: emet debug-circle-rerun)
     """
     args = list(ctx.args)
     args.extend(["--robot_ip", robot_ip])

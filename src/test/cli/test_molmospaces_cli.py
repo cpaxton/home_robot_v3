@@ -148,6 +148,42 @@ def test_serve_mujoco_help_includes_molmospaces_scene():
     assert "molmospaces-install" in result.stdout
 
 
+def test_serve_help_lists_molmospaces_and_robocasa_backends():
+    """emet serve documents mujoco, robocasa, and molmospaces backend shortcuts."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "serve", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    out = result.stdout.lower()
+    assert "robocasa" in out
+    assert "molmospaces" in out
+
+
+def test_serve_molmospaces_help():
+    """emet serve molmospaces --help works and documents MolmoSpaces options."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "serve", "molmospaces", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "molmospaces-scene" in result.stdout
+    assert "molmospaces-split" in result.stdout
+
+
+def test_serve_robocasa_help():
+    """emet serve robocasa --help works."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "serve", "robocasa", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "robocasa-task" in result.stdout or "robocasa_task" in result.stdout
+
+
 def test_molmospaces_list_robots():
     """emet molmospaces list-robots prints robot IDs (static list, no runner)."""
     result = subprocess.run(

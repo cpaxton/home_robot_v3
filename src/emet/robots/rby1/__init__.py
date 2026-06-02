@@ -61,5 +61,10 @@ class Rby1Backend(RobotBackend):
             "RB-Y1 kinematic model not yet implemented. Use MuJoCo-based IK or a third-party IK solver."
         )
 
+    def create_mujoco_stationary_control(self):
+        from emet.robots.galaxea_r1.sim_stationary import GalaxeaR1FamilyMujocoStationary
+
+        return GalaxeaR1FamilyMujocoStationary()
+
 
 __all__ = ["Rby1Backend"]

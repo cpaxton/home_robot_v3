@@ -1,0 +1,35 @@
+---
+description: Git branch workflow — never push or merge into main from the agent
+alwaysApply: true
+---
+
+# Git workflow (agent)
+
+## NEVER push to `main` or `master`
+
+- Do **not** run `git push origin main`, `git push origin master`, or `git push` while on `main`/`master`.
+- Do **not** merge a feature branch **into** `main` locally and push that result unless the user **explicitly** asks to update `main` on the remote (rare; confirm branch name first).
+- Updating shared `main` is done via **GitHub PR review/merge**, not by the agent pushing directly.
+
+## Syncing a feature branch with `main`
+
+When the user wants latest `main` on their branch (e.g. “merge main”, “update my branch”):
+
+1. Stay on (or checkout) the **feature branch**.
+2. `git fetch origin`
+3. `git merge origin/main` (or rebase only if the user explicitly requests rebase).
+4. Resolve conflicts on the **feature branch**, commit, then push **only that branch**: `git push origin <feature-branch>`.
+
+**Wrong:** checkout `main`, merge feature into `main`, push `main`.  
+**Right:** checkout feature, merge `origin/main` into feature, push feature.
+
+## Commits and pushes
+
+- Create commits only when the user asks (see user rules).
+- Default push target: the **current feature branch**, not `main`.
+- If unsure which branch to push, run `git branch --show-current` and `git status` first.
+
+## If `main` was updated by mistake
+
+- Do **not** force-push `main` unless the user explicitly requests it.
+- Prefer `git revert` on `main` (then push revert) or ask the user how they want `main` repaired.

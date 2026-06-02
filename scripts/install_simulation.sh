@@ -46,7 +46,7 @@ while getopts "dany" opt; do
         \? )
             echo "Usage: $0 [-d] [-n] [-a] [-y] [--force-download]"
             echo "  -d: Download kitchen assets (default: yes)"
-            echo "  -n: Skip downloading kitchen assets (~10GB)"
+            echo "  -n: Skip downloading kitchen assets (~10-15GB, includes LightWheel fixtures_lw)"
             echo "  -a: Force setup macros (overwrite existing macros_private.py)"
             echo "  -y: Non-interactive: skip prompts (asset re-download and macro overwrite)"
             echo "  --force-download: Re-download kitchen assets even when already present"
@@ -177,7 +177,7 @@ if [ "$DOWNLOAD_ASSETS" = true ]; then
     fi
 fi
 if [ "$DOWNLOAD_ASSETS" = true ]; then
-    echo "Checking and downloading Robocasa kitchen assets as needed (~10GB max)..."
+    echo "Checking and downloading Robocasa kitchen assets as needed (~10-15GB, includes fixtures_lw)..."
     cd "$ROOT_DIR" || exit 1
     if [ "$NONINTERACTIVE_ASSETS" = "true" ]; then
         if [ "$FORCE_DOWNLOAD_ASSETS" = "true" ]; then
@@ -201,4 +201,5 @@ fi
 cd "$ROOT_DIR" || exit 1
 
 echo "Installation complete."
-echo "For 'emet serve mujoco --use-robocasa', ensure kitchen assets were downloaded (run this script without -n if you skipped earlier)."
+echo "For 'emet serve robocasa' / '--use-robocasa', kitchen assets must include LightWheel fixtures (fixtures_lw)."
+echo "If scene load fails with 'Did not find style ... Sink025', run: uv run python scripts/download_robocasa_assets.py --yes"

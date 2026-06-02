@@ -235,14 +235,17 @@ class BaseZmqServer(CommsNode, ABC):
                 action_step = action.get("step", -1)
                 # Always apply ``xyt`` (navigation): duplicate-step filtering can drop a goal while
                 # the client still advanced its step counter, leaving ``at_goal`` stuck False.
-                # Same for ``posture`` / ``control_mode``: the client may repeat the same step id
-                # while mode-switching; skipping drops real commands.
+                # Same for ``posture`` / ``control_mode`` / ``joint`` / ``head_to``: the client may
+                # repeat the same step id while mode-switching or re-sending holds; skipping drops
+                # real commands (and can leave sim actuators on stale ``ctrl``).
                 if (
                     self.skip_duplicate_steps
                     and action_step <= self._last_step
                     and "xyt" not in action
                     and "posture" not in action
                     and "control_mode" not in action
+                    and "joint" not in action
+                    and "head_to" not in action
                 ):
                     logger.warning(f"Skipping duplicate action {action_step}, last step = {self._last_step}")
                     continue
@@ -360,8 +363,11 @@ class BaseZmqServer(CommsNode, ABC):
         self._send_state_thread.join()
         self._send_servo_thread.join()
 
-        # Close sockets
-        self.recv_socket.close()
-        self.send_socket.close()
-        self.send_state_socket.close()
-        self.context.term()
+        # Close sockets (present after __init__ completes)
+        if hasattr(self, "recv_socket"):
+            self.recv_socket.close()
+            self.send_socket.close()
+            self.send_state_socket.close()
+            self.send_servo_socket.close()
+        if hasattr(self, "context"):
+            self.context.term()
