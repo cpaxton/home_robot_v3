@@ -81,7 +81,9 @@ class StatusCommand:
     def set_base_velocity(self, command: CommandBaseVelocity):
         """Sends the velocity command and removes the move_to and move_by commands."""
         self.base_velocity = command
-        self.teleport_base.trigger = False
+        # Only cancel a pending teleport when actually commanding base motion (not when zeroing).
+        if command.trigger and (abs(command.v_linear) > 1e-9 or abs(command.omega) > 1e-9):
+            self.teleport_base.trigger = False
 
         for actuator in [
             Actuators.left_wheel_vel,

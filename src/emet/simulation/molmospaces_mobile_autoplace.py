@@ -10,9 +10,12 @@ import mujoco
 import numpy as np
 
 from emet.simulation import molmospaces_spawn
+from emet.utils.geometry import angle_difference, xyt_base_to_global
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
+
+DEFAULT_MOBILE_BASE_BODY = "base_link"
 
 
 def base_body_free_joint_dofadr(model: mujoco.MjModel, base_body_name: str) -> tuple[int, int] | None:
@@ -56,6 +59,36 @@ def write_base_freejoint_xyt(
     data.qvel[vadr : vadr + 6] = 0.0
     mujoco.mj_forward(model, data)
     return True
+
+
+def read_body_se2_xyt(data: mujoco.MjData, base_body_name: str = DEFAULT_MOBILE_BASE_BODY) -> np.ndarray:
+    """World SE(2) pose ``(x, y, theta)`` from ``body_xpos`` / ``body_xmat``."""
+    xyz = data.body(base_body_name).xpos
+    rotation = data.body(base_body_name).xmat.reshape(3, 3)
+    theta = float(np.arctan2(rotation[1, 0], rotation[0, 0]))
+    return np.array([float(xyz[0]), float(xyz[1]), theta], dtype=np.float64)
+
+
+def spawn_rel_xyt_to_world(goal_rel: np.ndarray, init_world_xyt: np.ndarray) -> np.ndarray:
+    """Map spawn-frame ``(x, y, θ)`` to world using the spawn origin pose."""
+    goal = np.asarray(goal_rel, dtype=np.float64).reshape(-1)[:3]
+    origin = np.asarray(init_world_xyt, dtype=np.float64).reshape(-1)[:3]
+    return xyt_base_to_global(goal, origin)
+
+
+def se2_pose_at_goal(
+    current_xyt: np.ndarray,
+    goal_xyt: np.ndarray,
+    *,
+    xy_tol: float = 0.05,
+    theta_tol: float = 0.15,
+) -> bool:
+    """True when planar position and yaw are within tolerances."""
+    cur = np.asarray(current_xyt, dtype=np.float64).reshape(-1)[:3]
+    goal = np.asarray(goal_xyt, dtype=np.float64).reshape(-1)[:3]
+    xy_err = float(np.linalg.norm(cur[:2] - goal[:2]))
+    th_err = abs(float(angle_difference(cur[2], goal[2])))
+    return xy_err <= xy_tol and th_err <= theta_tol
 
 
 def base_body_free_joint_qposadr(model: mujoco.MjModel, base_body_name: str) -> int | None:

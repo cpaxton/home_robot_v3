@@ -289,6 +289,13 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjdata.qvel[vadr] = 0.0
         mujoco.mj_forward(self._mjmodel, self._mjdata)
 
+    def _is_molmospaces_session(self) -> bool:
+        env = self._environment_descriptor
+        if isinstance(env, dict) and env.get("kind") == "molmospaces":
+            return True
+        bn = self._scene_source_basename or ""
+        return bn.startswith("molmospaces_merged")
+
     def _build_emet_session(self, *, robocasa: bool) -> dict[str, Any]:
         mj_name: str | None = None
         if self._mjmodel is not None:
@@ -305,7 +312,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         else:
             env = {"kind": "default_table"}
         caps: dict[str, Any] = {
-            "teleport_base": False,
+            "teleport_base": self._is_molmospaces_session(),
             "nav_velocity_drive": True,
             "depth": bool(self._spec.camera_names),
             "num_cameras": len(self._spec.camera_names),
@@ -820,7 +827,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                     else:
                         world = self._spawn_rel_xyt_to_world(raw[:3], init)
                         wx, wy, wt = float(world[0]), float(world[1]), float(world[2])
-                    nav_teleport = bool(action.get("nav_teleport", False))
+                    nav_teleport = bool(action.get("nav_teleport", False)) or self._is_molmospaces_session()
                     if nav_teleport:
                         if not self._teleport_base_world_xyt(wx, wy, wt):
                             logger.warning(

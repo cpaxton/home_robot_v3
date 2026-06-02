@@ -635,6 +635,21 @@ class MujocoZmqServer(BaseZmqServer):
         bn = self._scene_source_basename or ""
         return bn.startswith("molmospaces_merged")
 
+    def _teleport_base_world(self, world_xyt: np.ndarray, *, timeout: float = 2.0) -> bool:
+        """Apply free-joint teleport in the MuJoCo subprocess and wait until pose matches."""
+        goal = np.asarray(world_xyt, dtype=np.float64).reshape(-1)[:3]
+        # Do not call set_base_velocity here: StatusCommand.set_base_velocity clears teleport_base.trigger.
+        ok = self.robot_sim.teleport_base_xyt(
+            float(goal[0]), float(goal[1]), float(goal[2]), wait=True, timeout=timeout
+        )
+        if not ok:
+            cur = self.robot_sim.get_base_pose()
+            logger.warning(
+                f"MolmoSpaces teleport did not reach goal within {timeout:.2f}s "
+                f"(goal={goal.tolist()!r}, current={None if cur is None else list(cur)!r})"
+            )
+        return ok
+
     def _xyt_action_to_world(self, xyt: np.ndarray, *, relative: bool) -> np.ndarray:
         """Map client ``xyt`` (spawn-relative) to world coordinates for MuJoCo free joint."""
         raw = np.asarray(xyt, dtype=np.float64).reshape(-1)[:3]
@@ -722,16 +737,16 @@ class MujocoZmqServer(BaseZmqServer):
             nav_teleport = bool(action.get("nav_teleport", False)) or self._is_molmospaces_session()
             if nav_teleport:
                 world = self._xyt_action_to_world(np.asarray(action["xyt"], dtype=np.float64), relative=relative_motion)
-                self.robot_sim.teleport_base_xyt(float(world[0]), float(world[1]), float(world[2]))
-                self.active = False
-                self.xyt_goal = None
-                self._base_controller_at_goal = True
-                self.is_done = True
-                self.robot_sim.set_base_velocity(0.0, 0.0)
-                if self.debug_control_loop or self.debug_set_goal_pose:
+                if self._teleport_base_world(world):
+                    self.active = False
+                    self.xyt_goal = None
+                    self._base_controller_at_goal = True
+                    self.is_done = True
                     logger.info(
-                        f"MolmoSpaces/teleport nav: base at x={world[0]:.3f} y={world[1]:.3f} theta={world[2]:.3f}"
+                        f"MolmoSpaces teleport nav: base at x={world[0]:.3f} y={world[1]:.3f} theta={world[2]:.3f}"
                     )
+                else:
+                    self.set_goal_pose(action["xyt"], relative=relative_motion)
             else:
                 self.set_goal_pose(action["xyt"], relative=relative_motion)
 
