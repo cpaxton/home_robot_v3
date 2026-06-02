@@ -1,5 +1,24 @@
 # Home Robot v2 / Emet – Cursor code rules
 
+## Git workflow (mandatory)
+
+**Never push to `main` or `master`.** Protected integration branches are updated only via reviewed PRs (or explicit maintainer action outside the agent).
+
+| Do | Do not |
+|----|--------|
+| Create/use a **feature branch** (`feature/…`, `fix/…`, etc.) for all code changes | `git push origin main` or `git push origin master` |
+| Commit on the feature branch; open a PR when the user asks | Commit on `main` unless the user explicitly requests it **and** you are fixing an emergency they described |
+| `git push -u origin HEAD` from the **feature branch** after commit | `git push` while checked out on `main` |
+| `git checkout main` only to **pull/rebase** or branch off latest | Force-push to `main`/`master` |
+
+**Default agent flow:** `git checkout -b feature/<short-name>` → edit → test → commit → `git push -u origin feature/<short-name>` → offer `gh pr create` if the user wants a PR.
+
+If the user says “push”, assume **the current feature branch**, not `main`. If already on `main`, create a branch first, cherry-pick or move commits, then push that branch.
+
+**If you accidentally pushed to `main`:** tell the user immediately; do not push again. They can revert on GitHub or `git revert` via PR—do not attempt another direct push to `main` without explicit instruction.
+
+See also `.cursor/rules/git-workflow.mdc`.
+
 ## Testing (uv)
 - **Setup**: Use **uv**. Install deps including dev (pytest, pytest-timeout): `uv sync` (default groups include `dev`, `sim`, `hand_tracker`, `dynamem`, `da3`). Minimal install: `uv sync --no-default-groups`.
 - **Canonical run**: From repo root, run **`uv run emet test`** (or just `emet test` — emet re-execs under `uv run` when in project). This uses `[tool.pytest.ini_options]` in pyproject.toml (testpaths = `src/test`).

@@ -1,0 +1,29 @@
+---
+description: Never push to main; use feature branches and PRs only
+alwaysApply: true
+---
+
+# Git workflow — do not push to main
+
+## Hard rules
+
+1. **Never** run `git push origin main`, `git push origin master`, or `git push` while the current branch is `main` / `master`.
+2. **Never** commit directly on `main` for feature work. Branch first: `git checkout -b feature/<name>` or `fix/<name>`.
+3. **Push** only feature/fix branches: `git push -u origin HEAD` (from that branch).
+4. Merging to `main` is **out of scope** for the agent unless the user explicitly asks you to open a PR—and even then use `gh pr create`, not a direct push to `main`.
+
+## When the user says “commit and push”
+
+1. Confirm current branch: `git branch --show-current`
+2. If on `main`, create/switch to a feature branch and move work there before committing.
+3. Commit on the feature branch.
+4. `git push -u origin <feature-branch>` — **not** `main`.
+
+## When the user says “pull and switch to main”
+
+- `git fetch` / `git checkout main` / `git pull` is fine for **reading** latest.
+- Do **not** push from `main` afterward.
+
+## Accidents
+
+If `main` was pushed by mistake: report it to the user; do not push again to `main`. Suggest revert + PR or a follow-up branch with the fix.
