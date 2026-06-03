@@ -76,6 +76,24 @@ filters:
   derivative_filter_threshold: 0.2
   # use_voxel_filter: True
 
+# Motion convergence (StretchZmqClient; same as default_planner.yaml)
+motion:
+  moving_threshold: 0.01
+  angle_threshold: 0.1
+  min_steps_not_moving: 2
+  joint_tolerance:
+    arm: 0.02
+    base_x: 0.02
+    lift: 0.02
+    wrist_roll: 0.1
+    wrist_pitch: 0.1
+    wrist_yaw: 0.1
+    head_pan: 0.01
+    head_tilt: 0.01
+  joint_thresholds:
+    head_not_moving_tolerance: 1.0e-4
+    gripper_open_threshold: 0.3
+
 # Exploration
 agent:
   realtime:
