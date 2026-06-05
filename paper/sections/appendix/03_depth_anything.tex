@@ -1,0 +1,52 @@
+\section{Depth Anything 3 support}
+\label{app:da3}
+
+Several \texttt{emet} robots publish RGB (and stereo mates) without metric depth---notably \textbf{hardware Innate Mars}.
+\textbf{Depth Anything 3} (DA3) fills that gap so DynaMem, GraphEQA, and Dynagraph can fuse voxel maps from monocular or stereo RGB using the same code path as simulator sensor depth.
+
+\subsection{Integration}
+
+\begin{itemize}
+  \item \textbf{Package:} \texttt{depth-anything-3} is a default project dependency (\texttt{uv sync}).
+  \item \textbf{Estimator:} \texttt{src/emet/perception/depth/da3\_estimator.py} wraps \texttt{DepthAnything3.from\_pretrained}.
+  \item \textbf{Resolution:} \texttt{resolve\_depth\_map} in the dynav stack selects sensor depth when present, otherwise runs DA3 according to \texttt{depth\_source} (\texttt{sensor}, \texttt{da3}, or \texttt{auto}).
+  \item \textbf{Stereo:} When \texttt{rgb\_right}, \texttt{camera\_K\_right}, and \texttt{camera\_pose\_right} are available, DA3 stereo inference uses both eyes; Mars MuJoCo and the ROS bridge publish this pair for the head.
+\end{itemize}
+
+\subsection{Configuration keys (\texttt{dynav\_config.yaml})}
+
+\begin{table}[h]
+  \centering
+  \caption{Primary DA3-related dynav keys.}
+  \label{tab:da3-keys}
+  \small
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    Key & Role \\
+    \midrule
+    \texttt{depth\_source} & \texttt{sensor} (sim default), \texttt{da3}, or \texttt{auto} \\
+    \texttt{da3\_model\_id} & e.g.\ \texttt{depth-anything/DA3-SMALL} (fast) or \texttt{DA3METRIC-LARGE} \\
+    \texttt{da3\_process\_res} & Input resolution trade-off \\
+    \texttt{da3\_stereo} & Enable two-view inference when mates exist \\
+    \texttt{da3\_infer\_every\_n} & Subsample DA3 calls for live runs \\
+    \texttt{da3\_clip\_max\_m} & Hard cap on predicted meters (Mars preset) \\
+    \texttt{da3\_ignore\_sky\_fraction\_top} & Zero top rows before mapping (sky junk) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\texttt{dynav\_innate\_mars.yaml} is the maintained Mars+DA3 override; sim experiments should keep the default \texttt{dynav\_config.yaml} unless ablating depth source.
+
+\subsection{Debugging and tests}
+
+\begin{itemize}
+  \item \texttt{emet debug-da3-depth --robot <id>} streams left RGB, colormapped depth, and a strided world point cloud to Rerun under \texttt{da3/…}.
+  \item \texttt{RUN\_DA3\_TESTS=1 uv run emet test src/test/perception/test\_da3\_depth.py} --- unit tests (optional GPU/weights download).
+  \item \texttt{RUN\_DA3\_TESTS=1 … test\_innate\_mars\_da3\_sim.py} --- integration smoke with Mars sim server.
+\end{itemize}
+
+\subsection{Implications for Dynagraph}
+
+Dynagraph inherits DynaMem's depth resolution: voxel fusion and graph hooks operate on the \textbf{same resolved depth tensor} whether it comes from MuJoCo sensors or DA3.
+For fair cross-robot comparison, report \texttt{depth\_source} per embodiment (sensor for Stretch/Galaxea sim; DA3 or auto for hardware Mars).
+Rerun \texttt{world/head\_camera/points} and \texttt{world/point\_cloud} should agree on geometry when fed the same resolved depth; persistent mismatch usually indicates pose or step skew, not separate depth pipelines.
