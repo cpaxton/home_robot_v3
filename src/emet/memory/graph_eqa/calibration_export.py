@@ -17,6 +17,7 @@ class CalibrationFrameWriter:
         self._path = Path(path).expanduser() if path else None
         if self._path is not None:
             self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._path.touch()
 
     def append(
         self,

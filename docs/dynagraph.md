@@ -282,11 +282,18 @@ See [`sim_object_placements.py`](../src/emet/simulation/sim_object_placements.py
 Use sim GT **3D bounds** and head **2D bboxes** from `emet export-sim-gt`, then record live detections during a short Dynagraph run, and grid-search fusion thresholds:
 
 ```bash
-uv run emet export-sim-gt --robot innate_mars --seed 0 --layout 1 -o /tmp/gt.json
-uv run emet serve mujoco --use-robocasa --robot innate_mars --headless
-uv run emet run dynagraph --robot innate_mars --export /tmp/cal --calibration-export /tmp/frames.jsonl --no-rerun -N
+# Full loop (both robots): writes /tmp/emet_fusion_tune/<robot>/ and copies tuned YAML under src/emet/config/agents/
+./scripts/run_fusion_calibration_loop.sh all
+
+# Manual steps
+uv run emet serve mujoco --use-robocasa --robot innate_mars --headless --seed 0
+uv run python scripts/fetch_sim_gt_from_server.py --robot innate_mars -o /tmp/gt.json
+EMET_STRETCH_GENERIC_ZMQ=1 uv run emet run dynagraph --robot stretch --export /tmp/cal \
+  --calibration-export /tmp/frames.jsonl --calibration-steps 36 --no-sensor-perception --cpu-only --no-rerun -N
 uv run emet tune-graph-fusion --gt /tmp/gt.json --frames /tmp/frames.jsonl --write-config
 ```
+
+For **Stretch in Robocasa**, set `EMET_STRETCH_GENERIC_ZMQ=1` (default in the calibration loop script) so the client uses `GenericZmqClient` against the merged kitchen ZMQ server.
 
 `--calibration-export` writes per-step instance detections (label, `xyz`, `bbox_xyxy`, optional embedding) to JSONL; `tune-graph-fusion` scores association / merge against `/tmp/gt.json` and can emit an updated `graph_object_fusion` block for your dynav YAML.
 

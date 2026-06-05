@@ -285,6 +285,16 @@ def _print_dynagraph_rerun_help(
     help="Append raw instance detections per step to JSONL for emet tune-graph-fusion",
 )
 @click.option(
+    "--calibration-steps",
+    type=int,
+    default=0,
+    show_default=True,
+    help=(
+        "With --calibration-export: run this many agent.update() cycles after rotate-in-place "
+        "(instance detections only; skips explore-loop unless also set)"
+    ),
+)
+@click.option(
     "--ground-truth",
     is_flag=True,
     help=(
@@ -334,6 +344,7 @@ def main(
     dump_sim_ground_truth: str | None = None,
     dump_sim_gt_include_robot: bool = False,
     calibration_export: str | None = None,
+    calibration_steps: int = 0,
     ground_truth: bool = False,
     compare_to_gt: bool = False,
 ) -> None:
@@ -378,6 +389,13 @@ def main(
         raise click.UsageError("--explore-max-iters must be >= 1 when --explore-loop is set.")
     if explore_max_failures < 1:
         raise click.UsageError("--explore-max-failures must be >= 1.")
+    if calibration_steps < 0:
+        raise click.UsageError("--calibration-steps must be >= 0.")
+    if calibration_export and calibration_steps < 1 and not explore_loop and not export_dir:
+        raise click.UsageError(
+            "Use --calibration-steps with --calibration-export (or --export / --explore-loop) "
+            "so instance detections are recorded."
+        )
 
     logger.info(f"Dynagraph startup: dynav={dynav_resolved} robot={robot_backend}")
 
@@ -495,6 +513,18 @@ def main(
         )
         click.echo(f"- Explore-loop [{reason}] done: reason={reason_lab} successes={ok} iterations_executed={nit}")
 
+    def _run_calibration_capture(steps: int, *, rotate: bool) -> None:
+        if steps < 1:
+            return
+        executor = EQAExecuter(agent)
+        if rotate and not not_rotate_in_place:
+            executor.rotate_in_place()
+        click.echo(f"- Calibration capture: {steps} update steps (instance detections -> JSONL)")
+        for i in range(int(steps)):
+            agent.update()
+            if (i + 1) % 10 == 0 or i + 1 == steps:
+                click.echo(f"  calibration step {i + 1}/{steps}")
+
     def _export_session_fields() -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
         get_sess = getattr(robot, "get_emet_session", None)
         if get_sess is None:
@@ -555,10 +585,13 @@ def main(
             raise click.UsageError("Use either --export or --discord, not both.")
 
         if export_dir:
-            executor = EQAExecuter(agent)
-            if not not_rotate_in_place:
+            if calibration_export and calibration_steps > 0:
+                _run_calibration_capture(calibration_steps, rotate=True)
+            elif not not_rotate_in_place:
+                executor = EQAExecuter(agent)
                 executor.rotate_in_place()
-            _maybe_explore("export-path")
+            if explore_loop:
+                _maybe_explore("export-path")
             if question:
                 robot.move_to_nav_posture()
                 robot.switch_to_navigation_mode()

@@ -697,7 +697,9 @@ class DynamemController(BaseController):
                     graph_memory=self.graph_memory,
                 )
 
-        if self.graph_memory is not None and self.sensor_builder is not None:
+        if self.graph_memory is not None and (
+            self.sensor_builder is not None or self._graph_eqa_use_instance_graph
+        ):
             if getattr(self, "_skip_graph_perception_updates", False):
                 from emet.memory.graph_eqa.dynamem_graph_hooks import (
                     update_graph_memory_ground_truth_from_observation,
