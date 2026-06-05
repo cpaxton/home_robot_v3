@@ -34,7 +34,7 @@ def test_molmospaces_config_constants():
         MOLMOSPACES_SCENE_NAMES,
     )
 
-    assert "rby1" in MOLMOSPACES_ROBOT_IDS
+    assert "stretch" in MOLMOSPACES_ROBOT_IDS
     assert DEFAULT_MOLMOSPACES_ROBOT == "rby1"
     assert "ithor" in MOLMOSPACES_SCENE_NAMES
 

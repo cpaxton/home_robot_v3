@@ -1,6 +1,15 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
 # This source code is licensed under the LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
@@ -131,6 +140,33 @@ def test_resolve_default_mujoco_fallback(tmp_path: Path):
     assert cfg.robot == "galaxea_r1"
     assert cfg.headless is True
     assert cfg.port_offset == 7
+
+
+def test_get_robot_mjcf_path_stretch():
+    from emet.utils.assets import get_robot_mjcf_path
+
+    path = get_robot_mjcf_path("stretch")
+    assert path is not None and path.name == "stretch.xml"
+
+
+def test_molmospaces_prepare_argv_forward_stretch_merge_robot(monkeypatch: pytest.MonkeyPatch):
+    called: dict[str, str | int] = {}
+
+    def fake_merge(**kwargs):
+        called.update({k: kwargs[k] for k in ("robot", "scene", "index")})
+
+        return "/tmp/molmospaces_fake_merged.xml"
+
+    monkeypatch.setattr(
+        "emet.simulation.mujoco_serve_argv._merge_molmospaces_scene",
+        fake_merge,
+    )
+    cfg = SimLaunchMolmospaces(robot="stretch", scene="ithor", split="val", index=3)
+    argv = prepare_mujoco_server_argv(cfg)
+    assert called["robot"] == "stretch"
+    assert called["scene"] == "ithor"
+    assert called["index"] == 3
+    assert "--robot" not in argv
 
 
 def test_build_sim_launch_from_serve_cli_matches_molmospaces():

@@ -480,7 +480,8 @@ def run_merge_scene(
     robot_mjcf = _get_robot_mjcf_path(robot)
     if robot_mjcf is None:
         print(
-            f"No bundled MJCF merge for robot '{robot}'. Use rby1, galaxea_r1, innate_mars, or merge manually.",
+            f"No bundled MJCF merge for robot '{robot}'. "
+            "Use rby1, galaxea_r1, innate_mars, stretch, or merge manually.",
             file=sys.stderr,
         )
         return 1

@@ -163,7 +163,7 @@ python -m emet.app.keyboard_teleop --robot_ip 127.0.0.1
 
 ## MolmoSpaces (scenes + rby1 / Galaxea R1)
 
-For [MolmoSpaces](https://github.com/allenai/molmospaces) scenes (iTHOR, ProcTHOR, Holodeck) and their robots (e.g. **rby1** / Galaxea R1), use a separate runner venv and the `emet molmospaces` commands. See **[MolmoSpaces](molmospaces.md)** for install, `MLSPACES_ASSETS_DIR`, and usage (install-scene, serve, viewer, rerun).
+For [MolmoSpaces](https://github.com/allenai/molmospaces) scenes (iTHOR, ProcTHOR, Holodeck) and their robots (e.g. **rby1** / Galaxea R1), use a separate runner venv and the `emet molmospaces` commands. See **[MolmoSpaces](molmospaces.md)** for install, `MLSPACES_ASSETS_DIR`, and usage (install-scene, serve, viewer, rerun). Optional **`EMET_MOLMOSPACES_*`** toggles: [molmospaces_environment_variables.md](molmospaces_environment_variables.md).
 
 ---
 

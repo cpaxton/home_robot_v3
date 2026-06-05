@@ -214,6 +214,10 @@ extend-ignore = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 
+# Optional system CLI tools (not on PyPI). Install: emet install gh
+[tool.emet.system-packages]
+gh = "gh"
+
 [tool.pytest.ini_options]
 testpaths = ["src/test"]
 addopts = "-ra -q -m \"not vllm_load\""
