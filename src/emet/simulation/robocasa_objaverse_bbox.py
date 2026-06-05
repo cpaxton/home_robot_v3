@@ -8,15 +8,15 @@
 
 from __future__ import annotations
 
-import logging
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from emet.simulation.robocasa_assets_check import robocasa_package_dir
+from emet.utils.logger import Logger
 
-logger = logging.getLogger(__name__)
+logger = Logger(__name__)
 
 _OBJAVERSE_SENTINEL = ("apple", "apple_0", "model.xml")
 

@@ -110,7 +110,58 @@ def apply_home_keyframe_preserving_base(
     data.qvel.fill(0.0)
     snap_joint_qpos_to_ctrl_for_position_actuators(model, data)
     mujoco.mj_forward(model, data)
-    np.copyto(model.qpos0, data.qpos)
+    return True
+
+
+def update_robot_qpos0_from_data(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    spec: RobotSpec,
+) -> None:
+    """Copy current ``qpos`` into ``qpos0`` for robot DOF only (scene objects keep compile-time ``qpos0``)."""
+    addrs = freejoint_qpos_qvel_addrs(model, spec.base_link_name)
+    if addrs is not None:
+        qadr, _ = int(addrs[0]), int(addrs[1])
+        model.qpos0[qadr : qadr + 7] = data.qpos[qadr : qadr + 7]
+    else:
+        planar = getattr(spec, "planar_base_joint_names", None)
+        if planar is not None and len(planar) == 3:
+            for jname in planar:
+                jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(jname))
+                if jid >= 0:
+                    qadr = int(model.jnt_qposadr[jid])
+                    model.qpos0[qadr] = float(data.qpos[qadr])
+    for jname in spec.joint_names:
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jname)
+        if jid >= 0:
+            qadr = int(model.jnt_qposadr[jid])
+            model.qpos0[qadr] = float(data.qpos[qadr])
+
+
+def apply_home_keyframe_preserving_planar_base(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    planar_joint_names: tuple[str, str, str],
+    base_body_name: str,
+) -> bool:
+    """Apply keyframe ``home`` while preserving planar base slide/yaw ``qpos`` (Robocasa merge robots)."""
+    kid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
+    if kid < 0:
+        return False
+    saved: list[tuple[int, float]] = []
+    for jname in planar_joint_names:
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(jname))
+        if jid < 0:
+            return False
+        qadr = int(model.jnt_qposadr[jid])
+        saved.append((qadr, float(data.qpos[qadr])))
+    mujoco.mj_resetDataKeyframe(model, data, kid)
+    for qadr, val in saved:
+        data.qpos[qadr] = val
+    data.qvel.fill(0.0)
+    snap_joint_qpos_to_ctrl_for_position_actuators(model, data)
+    mujoco.mj_forward(model, data)
     return True
 
 

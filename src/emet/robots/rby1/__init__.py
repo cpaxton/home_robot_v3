@@ -21,6 +21,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from emet.robots.base import RobotBackend, RobotSpec
+from emet.simulation.molmospaces_spawn_metadata import robot_spawn_spec_from_metadata
 from emet.robots.footprint import Footprint
 from emet.robots.galaxea_r1 import (
     R1_ACTUATOR_NAMES,
@@ -47,6 +48,7 @@ class Rby1Backend(RobotBackend):
             actuator_names=R1_ACTUATOR_NAMES,
             base_link_name="base_link",
             footprint=Footprint(width=0.56, length=0.50, width_offset=0.0, length_offset=0.0),
+            spawn=robot_spawn_spec_from_metadata("rby1"),
         )
 
     def create_client(self, robot_ip: str, **kwargs):

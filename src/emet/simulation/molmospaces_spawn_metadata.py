@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from emet.robots.base import RobotSpawnSpec
 from emet.utils.assets import get_robot_mjcf_path
 
 METADATA_FILENAME = "molmospaces_spawn.json"
@@ -71,4 +72,16 @@ def load_molmospaces_spawn_metadata(robot_key: str) -> MolmospacesSpawnMetadata 
         molmospaces_target_foot_clearance_above_floor_m=_opt_float("molmospaces_target_foot_clearance_above_floor_m"),
         molmospaces_nominal_base_height_above_floor_m=_opt_float("molmospaces_nominal_base_height_above_floor_m"),
         requires_floating_base_spawn_settle=bool(settle),
+    )
+
+
+def robot_spawn_spec_from_metadata(robot_key: str) -> RobotSpawnSpec | None:
+    """Build :class:`~emet.robots.base.RobotSpawnSpec` from checked-in JSON, if present."""
+    meta = load_molmospaces_spawn_metadata(robot_key)
+    if meta is None:
+        return None
+    return RobotSpawnSpec(
+        molmospaces_target_foot_clearance_above_floor_m=meta.molmospaces_target_foot_clearance_above_floor_m,
+        molmospaces_nominal_base_height_above_floor_m=meta.molmospaces_nominal_base_height_above_floor_m,
+        requires_floating_base_spawn_settle=meta.requires_floating_base_spawn_settle,
     )

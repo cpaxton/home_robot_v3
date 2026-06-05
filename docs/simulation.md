@@ -260,6 +260,17 @@ Then run DynaMem or other apps as above.
 
 ---
 
+## Maintainer modules (sim internals)
+
+Contributor reference for new simulation Python modules (home-pose tuning, stationary `ctrl`, Robocasa asset preflight, spawn metadata loaders): **[simulation_modules.md](simulation_modules.md)**.
+
+Quick examples:
+
+- Tune Galaxea home keyframe: `uv run python -m emet.simulation.mujoco_home_tune src/emet/assets/robot/galaxea_r1/galaxea_r1.xml`
+- Molmo spawn JSON: [molmospaces_spawn_metadata.md](molmospaces_spawn_metadata.md) (`emet molmospaces write-spawn-metadata`)
+
+---
+
 ## Demo scripts
 
 Convenience scripts:

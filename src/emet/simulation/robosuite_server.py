@@ -47,6 +47,8 @@ from emet.simulation.mujoco_stationary_control import (
 )
 from emet.simulation.robosuite_load_utils import (
     apply_home_keyframe_preserving_base,
+    apply_home_keyframe_preserving_planar_base,
+    update_robot_qpos0_from_data,
     log_post_load_diagnostics,
     probe_max_qvel_unforced_steps,
     robosuite_post_load_debug_enabled,
@@ -704,7 +706,8 @@ class RobosuiteZmqServer(BaseZmqServer):
                         lines.append(f"  Red cylinder (object2): pos ({xpos[0]:.3f}, {xpos[1]:.3f}, {xpos[2]:.3f})")
                     elif name in ("table", "floor"):
                         lines.append(f"  {name}: pos ({xpos[0]:.3f}, {xpos[1]:.3f}, {xpos[2]:.3f})")
-        except Exception:
+        except Exception as e:
+            logger.warning(f"get_scene_summary partial failure: {e!r}")
             lines.append("Robot position: (unknown)")
         lines.append("-------------------")
         return "\n".join(lines)
@@ -719,7 +722,8 @@ class RobosuiteZmqServer(BaseZmqServer):
                 xmat = self._mjdata.body(base_name).xmat.reshape(3, 3)
                 theta = np.arctan2(xmat[1, 0], xmat[0, 0])
                 return np.array([xpos[0], xpos[1], theta])
-        except Exception:
+        except Exception as e:
+            logger.warning(f"get_base_xyt failed for body {base_name!r}: {e!r}")
             return np.zeros(3)
 
     def get_base_pose(self) -> np.ndarray | None:
@@ -990,8 +994,6 @@ class RobosuiteZmqServer(BaseZmqServer):
             return
         with self._mj_lock:
             self._mjdata.qvel.fill(0.0)
-            if self._planar_autoplace_snap_qpos0:
-                return
             self._preserve_joint_ctrl_hold_from_ctrl()
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             for _ in range(8):
@@ -1306,7 +1308,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         primary_cam = cam_names[0]
         try:
             rgb, depth, K = self._primary_rgb_and_depth(primary_cam)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"get_full_observation_message render failed ({primary_cam!r}): {e!r}")
             return None
 
         height, width = rgb_height_width_for_zmq(rgb)
@@ -1515,12 +1518,26 @@ class RobosuiteZmqServer(BaseZmqServer):
                         stage="after_load",
                         base_body_name=self._spec.base_link_name,
                     )
-                if apply_home_keyframe_preserving_base(
+                home_applied = apply_home_keyframe_preserving_base(
                     self._mjmodel,
                     self._mjdata,
                     base_body_name=self._spec.base_link_name,
-                ):
-                    logger.info("Applied MJCF keyframe 'home' (preserved base free-joint pose).")
+                )
+                if not home_applied:
+                    planar = getattr(self._spec, "planar_base_joint_names", None)
+                    if planar is not None and len(planar) == 3:
+                        home_applied = apply_home_keyframe_preserving_planar_base(
+                            self._mjmodel,
+                            self._mjdata,
+                            planar_joint_names=(
+                                str(planar[0]),
+                                str(planar[1]),
+                                str(planar[2]),
+                            ),
+                            base_body_name=self._spec.base_link_name,
+                        )
+                if home_applied:
+                    logger.info("Applied MJCF keyframe 'home' (preserved robot base pose).")
                     if not self._seed_joint_ctrl_hold_from_keyframe("home"):
                         self._preserve_joint_ctrl_hold_from_ctrl()
                     else:
@@ -1554,7 +1571,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                     )
                     self._preserve_joint_ctrl_hold_from_ctrl()
                     mujoco.mj_forward(self._mjmodel, self._mjdata)
-                np.copyto(self._mjmodel.qpos0, self._mjdata.qpos)
+                update_robot_qpos0_from_data(self._mjmodel, self._mjdata, self._spec)
         elif self._planar_autoplace_snap_qpos0:
             with self._mj_lock:
                 jn = getattr(self._spec, "planar_base_joint_names", None)
@@ -1575,12 +1592,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                     )
                 if not reapply_ok:
                     self._restore_planar_base_from_qpos0()
-                else:
-                    for jname in jn:
-                        jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, str(jname))
-                        if jid >= 0:
-                            qadr = int(self._mjmodel.jnt_qposadr[jid])
-                            self._mjmodel.qpos0[qadr] = float(self._mjdata.qpos[qadr])
+                update_robot_qpos0_from_data(self._mjmodel, self._mjdata, self._spec)
                 self._preserve_joint_ctrl_hold_from_ctrl()
         if self._mjmodel is not None and self._mjdata is not None:
             with self._mj_lock:

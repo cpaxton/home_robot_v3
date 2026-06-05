@@ -30,15 +30,17 @@ def basic_fixtures_present(robocasa_pkg: Path) -> bool:
     return sentinel.is_file()
 
 
+def lightwheel_registry_ok(robocasa_pkg: Path) -> bool:
+    """Read-only: LightWheel mesh present and ``Sink025`` listed in sink registry YAML."""
+    from emet.simulation.robocasa_registry_sync import _sink025_registered
+
+    sink_mesh = robocasa_pkg / "models" / "assets" / "fixtures" / "sinks" / "Sink025" / "model.xml"
+    return sink_mesh.is_file() and _sink025_registered(robocasa_pkg)
+
+
 def lightwheel_fixtures_present(robocasa_pkg: Path) -> bool:
-    """True when LightWheel fixtures are usable (registry lists ``Sink025``, etc.).
-
-    The ``fixtures_lw`` zip often adds mesh dirs without updating YAML; call
-    :func:`emet.simulation.robocasa_registry_sync.ensure_lightwheel_registry` first.
-    """
-    from emet.simulation.robocasa_registry_sync import ensure_lightwheel_registry
-
-    return ensure_lightwheel_registry(robocasa_pkg)
+    """Alias for :func:`lightwheel_registry_ok` (read-only; does not mutate registry files)."""
+    return lightwheel_registry_ok(robocasa_pkg)
 
 
 def objaverse_objects_ready(robocasa_pkg: Path) -> bool:
@@ -54,7 +56,7 @@ def robocasa_kitchen_assets_complete(robocasa_pkg: Path | None = None) -> bool:
     return (
         basic_fixtures_present(pkg)
         and fixture_registry_layout_ok(pkg)
-        and lightwheel_fixtures_present(pkg)
+        and lightwheel_registry_ok(pkg)
         and objaverse_objects_ready(pkg)
     )
 

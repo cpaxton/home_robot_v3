@@ -4,7 +4,15 @@
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 
-"""Interactive MuJoCo home-pose tuning: Simulate GUI (physics) or kinematic viewer."""
+"""Interactive MuJoCo home-pose tuning: Simulate GUI (physics) or kinematic viewer.
+
+Example::
+
+    uv run python -m emet.simulation.mujoco_home_tune \\
+      src/emet/assets/robot/galaxea_r1/galaxea_r1.xml --base-body base_link
+
+See ``docs/simulation_modules.md``.
+"""
 
 from __future__ import annotations
 
@@ -284,3 +292,43 @@ def run_tune_home_gui(
         run_physics_tune_viewer(model, data)
 
     print_home_keyframe_snippet(model, data, stream=out)
+
+
+def main() -> None:
+    import argparse
+
+    p = argparse.ArgumentParser(
+        description="Interactive MuJoCo home-pose tuning; prints <key name=\"home\" ctrl=\"...\"/> on exit.",
+        epilog="See docs/simulation_modules.md",
+    )
+    p.add_argument("mjcf", type=Path, help="Robot or merged scene MJCF path.")
+    p.add_argument("--base-body", default="base_link", help="Base body with free joint (default: base_link).")
+    p.add_argument(
+        "--initial-pose",
+        choices=("default", "zeros", "home"),
+        default="default",
+        help="Starting pose before tuning (default: default).",
+    )
+    p.add_argument(
+        "--tune-base-z",
+        type=float,
+        default=0.38,
+        help="Hoist floating base to this world Z before freezing (default: 0.38).",
+    )
+    p.add_argument(
+        "--kinematic",
+        action="store_true",
+        help="Kinematic viewer (mj_forward only) instead of full physics Simulate.",
+    )
+    args = p.parse_args()
+    run_tune_home_gui(
+        args.mjcf,
+        initial_pose=args.initial_pose,
+        base_body_name=str(args.base_body).strip() or "base_link",
+        tune_base_z=float(args.tune_base_z),
+        kinematic=bool(args.kinematic),
+    )
+
+
+if __name__ == "__main__":
+    main()

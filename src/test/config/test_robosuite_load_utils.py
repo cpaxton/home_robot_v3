@@ -34,6 +34,7 @@ def test_apply_home_keyframe_preserves_base_free_joint():
         apply_home_keyframe_preserving_base,
         freejoint_qpos_qvel_addrs,
         probe_max_qvel_unforced_steps,
+        update_robot_qpos0_from_data,
     )
 
     spec = Rby1Backend().get_spec()
@@ -53,6 +54,7 @@ def test_apply_home_keyframe_preserves_base_free_joint():
     base_expected = np.array(data.qpos[qadr : qadr + 7], copy=True)
     assert apply_home_keyframe_preserving_base(model, data, base_body_name=spec.base_link_name)
     np.testing.assert_allclose(data.qpos[qadr : qadr + 7], base_expected, rtol=0, atol=1e-6)
+    update_robot_qpos0_from_data(model, data, spec)
     np.testing.assert_allclose(model.qpos0[qadr : qadr + 7], base_expected, rtol=0, atol=1e-6)
 
     n_spec = min(len(spec.actuator_names), len(spec.joint_names))
@@ -156,6 +158,64 @@ def test_build_tune_model_freezes_base_and_adds_floor():
         mujoco.mj_step(model, data)
     z1 = float(data.xpos[bid, 2])
     assert abs(z1 - z0) < 0.02, f"base should stay fixed during tune sandbox, z0={z0} z1={z1}"
+
+
+def test_apply_home_keyframe_preserving_planar_base_with_home_keyframe():
+    from emet.simulation.robosuite_load_utils import apply_home_keyframe_preserving_planar_base
+
+    planar = ("base_x", "base_y", "base_yaw")
+    xml = """
+    <mujoco>
+      <worldbody>
+        <body name="base_link">
+          <joint name="base_x" type="slide" axis="1 0 0"/>
+          <joint name="base_y" type="slide" axis="0 1 0"/>
+          <joint name="base_yaw" type="hinge" axis="0 0 1"/>
+          <geom type="sphere" size="0.1" mass="1"/>
+        </body>
+      </worldbody>
+      <keyframe>
+        <key name="home" qpos="0 0 0"/>
+      </keyframe>
+    </mujoco>
+    """
+    model = mujoco.MjModel.from_xml_string(xml)
+    data = mujoco.MjData(model)
+    for i, jname in enumerate(planar):
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jname)
+        qadr = int(model.jnt_qposadr[jid])
+        data.qpos[qadr] = 0.25 + 0.1 * i
+    mujoco.mj_forward(model, data)
+    saved = [float(data.qpos[int(model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, j)])]) for j in planar]
+    assert apply_home_keyframe_preserving_planar_base(
+        model,
+        data,
+        planar_joint_names=planar,
+        base_body_name="base_link",
+    )
+    for jname, val in zip(planar, saved, strict=True):
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jname)
+        qadr = int(model.jnt_qposadr[jid])
+        assert abs(float(data.qpos[qadr]) - val) < 1e-6
+
+
+def test_update_robot_qpos0_from_data_does_not_require_full_vector_match():
+    from emet.robots.rby1 import Rby1Backend
+    from emet.simulation.robosuite_load_utils import update_robot_qpos0_from_data
+
+    spec = Rby1Backend().get_spec()
+    path = spec.mjcf_path
+    if not path:
+        pytest.skip("no mjcf_path on spec")
+    model = mujoco.MjModel.from_xml_path(path)
+    data = mujoco.MjData(model)
+    qpos0_before = np.array(model.qpos0, copy=True)
+    data.qpos[:] = data.qpos + 0.01
+    mujoco.mj_forward(model, data)
+    update_robot_qpos0_from_data(model, data, spec)
+  # at least one robot joint qpos0 should differ from blanket shift of entire vector
+    changed = np.any(np.abs(model.qpos0 - qpos0_before) > 1e-9)
+    assert changed
 
 
 def test_home_keyframe_exists_on_galaxea_mjcf():

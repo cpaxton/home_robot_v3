@@ -228,14 +228,10 @@ def main() -> None:
 )
 @click.option(
     "--robot",
-    default="stretch",
+    default=None,
     help=(
-        "Robot to simulate. 'stretch' (default) uses the Stretch-MuJoCo server. "
-        "Registry robots (e.g. innate_mars, rby1, galaxea_r1) load the default table "
-        "scene merged with that robot's MJCF and use the generic ZMQ sim (RobosuiteZmqServer). "
-        "Robosuite-native names (PandaOmron, Tiago, GR1) use the stock robosuite robot in Robocasa. "
-        "MolmoSpaces (``emet serve molmospaces`` or ``--molmospaces-scene``) defaults to rby1 when "
-        "this flag is omitted or left at stretch."
+        "Robot to simulate. Default: stretch (table, Robocasa, and MolmoSpaces when omitted). "
+        "Registry robots (innate_mars, rby1, galaxea_r1) use RobosuiteZmqServer on merged MJCF paths."
     ),
 )
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
@@ -310,9 +306,6 @@ def serve(
         if list_robocasa_tasks:
             args = extra_args + ["--use-robocasa", "--list-robocasa-tasks"]
             sys.exit(_run_module("emet.simulation.mujoco_server", args))
-
-        if molmospaces_scene and robot == "stretch":
-            robot = "rby1"
 
         try:
             cfg = build_sim_launch_config_from_serve_cli(
@@ -390,8 +383,9 @@ def molmospaces_cmd() -> None:
     """Set up MolmoSpaces scenes, list robots (e.g. rby1 / Galaxea R1), and run simulation.
 
     list-robots works without the wrapper. list-scenes, install-scene, merge-scene, and serve
-    require the local emet-molmospaces package (see docs/molmospaces.md). ``export-nerfstudio`` is
-    core-only (reads an explore episode directory). Install wrapper with:
+    require the local emet-molmospaces package (see docs/molmospaces.md). ``write-spawn-metadata``
+    and ``build-occ-map`` are core-only offline tools (see docs/molmospaces_spawn_metadata.md).
+    ``export-nerfstudio`` is core-only (reads an explore episode directory). Install wrapper with:
       ./install.sh -y   (default sim path)   or   ./install.sh --molmospaces -y   or   editable install of packages/emet_molmospaces
     """
 
@@ -435,6 +429,65 @@ def molmospaces_install_scene(
     sys.exit(_run_molmospaces_wrapper(args))
 
 
+@molmospaces_cmd.command(
+    "write-spawn-metadata",
+    short_help="Measure spawn hints from a merged MJCF and update molmospaces_spawn.json",
+)
+@click.option(
+    "--robot",
+    required=True,
+    help="Robot id merged into the MJCF (e.g. stretch, rby1, galaxea_r1, innate_mars).",
+)
+@click.option(
+    "--mjcf",
+    "mjcf_path",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Merged scene+robot MJCF (from merge-scene or a temp path from emet serve molmospaces).",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Override output JSON (default: <robot_mjcf_dir>/molmospaces_spawn.json).",
+)
+@click.option(
+    "--no-merge",
+    is_flag=True,
+    help="Replace the file instead of merging measured keys into existing JSON.",
+)
+@click.option("--base-body", default="base_link", show_default=True, help="Free-joint base body name.")
+@click.option("--seed-x", default=0.0, show_default=True, type=float, help="World X (m) for measurement pose.")
+@click.option("--seed-y", default=0.0, show_default=True, type=float, help="World Y (m) for measurement pose.")
+def molmospaces_write_spawn_metadata(
+    robot: str,
+    mjcf_path: Path,
+    output_path: Path | None,
+    no_merge: bool,
+    base_body: str,
+    seed_x: float,
+    seed_y: float,
+) -> None:
+    """Offline spawn tuning: kinematic floor settle → foot clearance / base height in JSON.
+
+    Full workflow and JSON field reference: docs/molmospaces_spawn_metadata.md
+    """
+    from emet.app.write_molmospaces_spawn_metadata import run_write
+
+    out = run_write(
+        robot,
+        mjcf_path,
+        output_path=output_path,
+        merge_existing=not no_merge,
+        base_body_name=base_body,
+        seed_x=seed_x,
+        seed_y=seed_y,
+    )
+    click.echo(f"Wrote {out}")
+
+
 @molmospaces_cmd.command("build-occ-map", short_help="Build vendored iTHOR orthographic occupancy map from merged MJCF")
 @click.argument("mjcf", type=click.Path(exists=True, path_type=Path))
 @click.option(
@@ -459,7 +512,7 @@ def molmospaces_build_occ_map(mjcf: Path, output_dir: Path | None, agent_radius:
 @click.option("--scene", default="ithor", help="Scene name")
 @click.option("--split", default="train", type=click.Choice(["train", "val", "test"]))
 @click.option("--index", default=0, type=int, help="Scene index within split")
-@click.option("--robot", default="rby1", help="Robot ID (default: rby1)")
+@click.option("--robot", default="stretch", help="Robot ID (default: stretch)")
 @click.option(
     "--output",
     "-o",
@@ -498,7 +551,7 @@ def molmospaces_merge_scene(
 @click.option("--scene", default="ithor", help="Scene name")
 @click.option("--split", default="train", type=click.Choice(["train", "val", "test"]))
 @click.option("--index", default=0, type=int, help="Scene index")
-@click.option("--robot", default="rby1", help="Robot ID (default: rby1, Galaxea R1 family)")
+@click.option("--robot", default="stretch", help="Robot ID (default: stretch)")
 @click.option("--headless", is_flag=True, help="Run without viewer")
 @click.option("--viewer", is_flag=True, help="Open MuJoCo viewer")
 @click.option("--rerun", type=str, default="", metavar="PORT_OR_PATH", help="Log to rerun (port or RRD path)")

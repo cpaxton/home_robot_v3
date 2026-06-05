@@ -55,6 +55,7 @@ class StretchBackend(RobotBackend):
             camera_names=STRETCH_CAMERA_NAMES,
             urdf_path=MANIP_STRETCH_URDF,
             footprint=Footprint(width=0.34, length=0.33, width_offset=0.0, length_offset=-0.1),
+            sim_uses_stretch_mujoco_zmq=True,
         )
 
     def create_client(self, robot_ip: str, **kwargs) -> StretchZmqClient:

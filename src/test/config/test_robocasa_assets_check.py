@@ -11,7 +11,7 @@ from pathlib import Path
 from emet.simulation.robocasa_assets_check import (
     fixture_registry_layout_ok,
     format_robocasa_assets_incomplete_message,
-    lightwheel_fixtures_present,
+    lightwheel_registry_ok,
     robocasa_kitchen_assets_complete,
     robocasa_package_dir,
 )
@@ -84,7 +84,7 @@ def test_robocasa_kitchen_assets_complete_matches_sentinel_when_present():
     from emet.simulation.robocasa_objaverse_bbox import objaverse_reg_bbox_present
 
     if (
-        lightwheel_fixtures_present(pkg)
+        lightwheel_registry_ok(pkg)
         and fixture_registry_layout_ok(pkg)
         and objaverse_reg_bbox_present(pkg)
     ):

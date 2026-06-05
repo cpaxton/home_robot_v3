@@ -62,7 +62,7 @@ class SimLaunchMolmospaces(SimLaunchCommon):
     """MolmoSpaces scene merged with a mobile robot (via emet-molmospaces wrapper)."""
 
     kind: str = "molmospaces"
-    robot: str = "rby1"
+    robot: str = "stretch"
     scene: str = "ithor"
     split: str = "train"
     index: int = 0
@@ -122,6 +122,27 @@ def load_sim_launch_from_agent_yaml(agent_config_path: str) -> SimLaunchConfig |
     return load_sim_launch_config_from_path(p)
 
 
+def resolve_serve_robot(
+    robot: str | None,
+    *,
+    molmospaces_scene: str | None,
+) -> str:
+    """Resolve ``--robot`` for ``emet serve`` and ``--start-sim`` (single source of truth).
+
+    Omitted or empty ``--robot`` → ``stretch`` (table, Robocasa, and MolmoSpaces).
+    Explicit values on MolmoSpaces paths are validated via :func:`~emet.simulation.molmospaces_config.validate_molmospaces_robot`
+    with no silent remap to another robot id.
+    """
+    if robot is None or not str(robot).strip():
+        return "stretch"
+    molmo = bool(molmospaces_scene and str(molmospaces_scene).strip())
+    if molmo:
+        from emet.simulation.molmospaces_config import validate_molmospaces_robot
+
+        return validate_molmospaces_robot(str(robot).strip())
+    return str(robot).strip()
+
+
 def validate_sim_launch_serve_combo(
     *,
     molmospaces_scene: str | None,
@@ -145,7 +166,7 @@ def build_sim_launch_config_from_serve_cli(
     molmospaces_install: bool,
     use_robocasa: bool,
     scene_path: str | None,
-    robot: str,
+    robot: str | None,
     headless: bool,
     show_viewer_ui: bool,
     no_cameras: bool,
@@ -162,6 +183,7 @@ def build_sim_launch_config_from_serve_cli(
         scene_path=scene_path,
         use_robocasa=use_robocasa,
     )
+    robot = resolve_serve_robot(robot, molmospaces_scene=molmospaces_scene)
     common: dict[str, Any] = {
         "headless": headless,
         "show_viewer_ui": show_viewer_ui,
@@ -246,6 +268,8 @@ def apply_sim_launch_cli_overrides(
         merged_common["debug_molmospaces_spawn"] = bool(debug_molmospaces_spawn)
 
     if ms is not None:
+        raw_robot = robot if robot is not None else cfg.robot
+        robot = resolve_serve_robot(raw_robot, molmospaces_scene=ms)
         if molmospaces_split is not None:
             split = str(molmospaces_split).strip() or "train"
         elif isinstance(cfg, SimLaunchMolmospaces):
@@ -264,13 +288,12 @@ def apply_sim_launch_cli_overrides(
             inst = bool(cfg.molmospaces_install)
         else:
             inst = False
-        rob = robot if robot is not None else cfg.robot
         return SimLaunchMolmospaces(
             scene=ms,
             split=split,
             index=idx,
             molmospaces_install=inst,
-            robot=rob,
+            robot=robot,
             **merged_common,
         )
 
@@ -312,7 +335,8 @@ def apply_sim_launch_cli_overrides(
             **merged_common,
         )
     assert isinstance(cfg, SimLaunchMolmospaces)
-    r = robot if robot is not None else cfg.robot
+    raw_r = robot if robot is not None else cfg.robot
+    r = resolve_serve_robot(raw_r, molmospaces_scene=cfg.scene)
     split = str(molmospaces_split) if molmospaces_split is not None else cfg.split
     idx = int(molmospaces_index) if molmospaces_index is not None else int(cfg.index)
     inst = bool(molmospaces_install) if molmospaces_install is not None else bool(cfg.molmospaces_install)

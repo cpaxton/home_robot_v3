@@ -21,6 +21,7 @@ Reference: https://github.com/userguide-galaxea/URDF
 from pathlib import Path
 
 from emet.robots.base import RobotBackend, RobotSpec
+from emet.simulation.molmospaces_spawn_metadata import robot_spawn_spec_from_metadata
 from emet.robots.footprint import Footprint
 
 _ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets" / "robot" / "galaxea_r1"
@@ -107,6 +108,7 @@ class GalaxeaR1Backend(RobotBackend):
             actuator_names=R1_ACTUATOR_NAMES,
             base_link_name="base_link",
             footprint=Footprint(width=0.56, length=0.50, width_offset=0.0, length_offset=0.0),
+            spawn=robot_spawn_spec_from_metadata("galaxea_r1"),
         )
 
     def create_client(self, robot_ip: str, **kwargs):

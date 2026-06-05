@@ -37,3 +37,20 @@ def test_load_molmospaces_spawn_metadata_unknown_robot():
     from emet.simulation.molmospaces_spawn_metadata import load_molmospaces_spawn_metadata
 
     assert load_molmospaces_spawn_metadata("not_a_real_robot_id") is None
+
+
+def test_robot_spawn_spec_from_metadata_rby1():
+    from emet.simulation.molmospaces_spawn_metadata import robot_spawn_spec_from_metadata
+
+    spec = robot_spawn_spec_from_metadata("rby1")
+    assert spec is not None
+    assert spec.molmospaces_target_foot_clearance_above_floor_m == 0.055
+
+
+def test_resolve_serve_robot_molmospaces_defaults():
+    from emet.config.sim_launch_config import resolve_serve_robot
+
+    assert resolve_serve_robot(None, molmospaces_scene="ithor") == "stretch"
+    assert resolve_serve_robot("stretch", molmospaces_scene="ithor") == "stretch"
+    assert resolve_serve_robot("rby1", molmospaces_scene="ithor") == "rby1"
+    assert resolve_serve_robot(None, molmospaces_scene=None) == "stretch"

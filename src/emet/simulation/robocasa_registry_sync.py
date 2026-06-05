@@ -13,7 +13,6 @@ so we add ``<name>: {xml: fixtures/<category>/<name>}`` entries when ``model.xml
 
 from __future__ import annotations
 
-import logging
 import re
 import subprocess
 from pathlib import Path
@@ -21,8 +20,9 @@ from pathlib import Path
 import yaml
 
 from emet.simulation.robocasa_assets_check import robocasa_package_dir
+from emet.utils.logger import Logger
 
-logger = logging.getLogger(__name__)
+logger = Logger(__name__)
 
 # Registry YAML stems required for default kitchen layouts (often deleted by fixtures_lw zip).
 REQUIRED_REGISTRY_STEMS: tuple[str, ...] = (
@@ -206,27 +206,22 @@ def _sink025_registered(pkg: Path) -> bool:
     if not sink_reg.is_file():
         return False
     try:
-        return "Sink025:" in sink_reg.read_text(encoding="utf-8")
-    except OSError:
+        data = yaml.safe_load(sink_reg.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
         return False
+    if not isinstance(data, dict):
+        return False
+    return "Sink025" in data
 
 
 def ensure_lightwheel_registry(robocasa_pkg: Path | None = None) -> bool:
     """Restore registry YAML if LW zip wiped them, sync meshes; True when Sink025 registered."""
     pkg = robocasa_pkg or robocasa_package_dir()
     restore_fixture_registry_from_vcs(pkg)
-    sink_reg = pkg / "models" / "assets" / "fixtures" / "fixture_registry" / "sink.yaml"
-    if sink_reg.is_file():
-        try:
-            if "Sink025:" in sink_reg.read_text(encoding="utf-8"):
-                return True
-        except OSError:
-            pass
+    if _sink025_registered(pkg):
+        return True
     sink_mesh = pkg / "models" / "assets" / "fixtures" / "sinks" / "Sink025" / "model.xml"
     if sink_mesh.is_file():
         sync_lightwheel_registry(pkg)
-        try:
-            return "Sink025:" in sink_reg.read_text(encoding="utf-8")
-        except OSError:
-            return False
+        return _sink025_registered(pkg)
     return False
