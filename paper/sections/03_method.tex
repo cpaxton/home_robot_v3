@@ -1,0 +1,63 @@
+\section{Method}
+\label{sec:method}
+
+Dynagraph is implemented as \texttt{DynagraphController}, a thin extension of \texttt{GraphEQAController}, which itself subclasses the DynaMem navigation agent.
+The design principle is \textbf{one perception update, two memory writes}: first the voxel map (unchanged DynaMem rules), then graph unification (GraphEQA), then Dynagraph-specific graph maintenance.
+
+\subsection{System overview}
+
+At each control step the robot receives RGB-D observations and pose from a MuJoCo ZMQ server (or Habitat bridge, when available).
+The controller calls the inherited DynaMem \texttt{update()}, which appends the frame and fuses it into \texttt{SparseVoxelMap} using the same add/remove and exploration logic as manipulation-oriented DynaMem runs.
+Immediately afterward, \texttt{update\_graph\_memory\_from\_dynamem\_observation} reads the freshly updated map and observation log to add or reinforce graph nodes.
+\texttt{DynagraphController} then calls \texttt{maintain(obs\_count)} for staleness pruning.
+
+\subsection{Stage 1: DynaMem voxel update (unchanged)}
+
+We deliberately reuse DynaMem's voxel fusion rather than maintaining a parallel map for EQA.
+The voxel map is an obstacle grid for A* planning and value-based exploration, but also a semantic index: each voxel accumulates vision-language features and records \textbf{provenance}---which observation index last wrote to it, and (in the 2D projection) a \textbf{recency field} over when voxels were last refreshed.
+Observations live in an append-only \textbf{frame log}; each frame bundles RGB-D, intrinsics, extrinsics, robot base pose, and optional instance segmentation.
+Dynamic scenes are handled by the same DynaMem rules that add geometry when objects appear and retire voxels when support disappears.
+
+\subsection{Stage 2: GraphEQA unification (extra steps)}
+
+Graph construction is \emph{not} a separate perception pipeline.
+After Stage~1, the shared hook inspects the latest frame and voxel semantics, optionally runs instance detection or a sensor VLM (\texttt{SensorGraphBuilder}), and writes object hypotheses into \texttt{GraphEQAMemory} with the \texttt{obs\_id} and \texttt{last\_seen} step from the current controller tick.
+Navigation-only samples (e.g.\ generic ``object'' fallbacks) can be recorded without spawning graph nodes, matching GraphEQA's separation of exploration views from semantic hypotheses.
+
+\subsection{Voxel-grounded scene graph}
+
+The scene graph is derived from the DynaMem substrate on every step rather than maintained independently.
+Each node is an object or region with labels, a world-space position, an \texttt{obs\_id} pointing into the frame log, and a discrete \texttt{last\_seen} step aligned with the controller clock.
+Edges encode spatial relations (\emph{near}, \emph{on}, \emph{on\_floor}).
+When a new detection reinforces an existing object, merge rules update the node's position, labels, and \texttt{last\_seen}; the supporting \texttt{obs\_id} tracks the freshest evidence.
+
+\textbf{Disappearance.} An object is considered gone when its voxel support stops being refreshed and no new observation reinforces it within the staleness horizon.
+Pruning then removes the node and its linked observations from the graph presented to the VLM, so EQA is not misled by hypotheses the map no longer supports.
+
+An EQA module queries a shared VLM with the serialized graph and task-relevant images until confidence is sufficient or further exploration is requested.
+
+\subsection{Stage 3: Dynagraph graph lifecycle}
+
+On top of GraphEQA node creation, Dynagraph adds merge and staleness (below).
+Labels in Stage~2 come from instance segmentation (optional YOLO-E) and/or VLM scene descriptions.
+Each new detection creates a graph node and observation unless \textbf{spatial merge} applies.
+
+\subsection{Spatial merge}
+
+If \texttt{dynagraph\_merge\_xy\_m} $> 0$ (default 0.45\,m), a new detection whose primary label matches an existing node and whose XY distance is within the threshold \emph{updates} that node: running-mean XYZ, increased support count, refreshed \texttt{last\_seen}, and merged label set.
+This reduces duplicate nodes when the robot revisits the same object from a new viewpoint.
+
+\subsection{Staleness pruning}
+
+If \texttt{dynagraph\_staleness\_horizon} $> 0$ (default 256 controller steps), \texttt{maintain(current\_step)} removes nodes whose \texttt{last\_seen} is older than the horizon, deletes their observations, renumbers nodes, and rebuilds edges.
+This discards objects that are no longer visible or relevant---analogous in spirit to map pruning in dynamic memory systems, but on the discrete object graph used for EQA.
+
+\subsection{Exploration and EQA loop}
+
+The controller inherits GraphEQA behavior: initial rotation-in-place scan (optional), navigate toward frontiers or graph-guided targets, \texttt{query\_answer} with confidence, repeat until answer or budget exhausted.
+Dynagraph-specific Rerun logging exposes \texttt{world/dynagraph/} for graph inspection during development.
+
+\subsection{Implementation}
+
+Entry point: \texttt{emet run dynagraph} (\texttt{run\_dynagraph.py}, \texttt{DynagraphController}).
+Configuration: \texttt{dynav\_config.yaml} plus CLI overrides \texttt{--merge-xy-m} and \texttt{--staleness-horizon}.

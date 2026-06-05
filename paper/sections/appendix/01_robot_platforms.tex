@@ -1,0 +1,33 @@
+\section{Robot platforms in \texttt{emet}}
+\label{app:robots}
+
+Dynagraph experiments use the same ZMQ observation protocol and DynaMem/GraphEQA stack across embodiments; only camera layout, depth availability, and base kinematics differ.
+Table~\ref{tab:robots} summarizes the robots planned for MuJoCo and (where noted) hardware evaluation.
+
+\begin{table}[h]
+  \centering
+  \caption{Emet robot embodiments for Dynagraph evaluation.}
+  \label{tab:robots}
+  \small
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    ID & Platform & Sim serve & Depth in sim \\
+    \midrule
+    \texttt{stretch} & Hello Robot Stretch & \texttt{emet serve mujoco} & Rendered sensor depth \\
+    \texttt{rby1} / \texttt{galaxea\_r1} & Galaxea R1 (MolmoSpaces) & \texttt{emet serve molmospaces} & Rendered sensor depth \\
+    \texttt{innate\_mars} & Innate Maurice (Mars) & \texttt{emet serve mujoco --robot innate\_mars} & Rendered stereo; see App.~\ref{app:innate_mars} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\textbf{Stretch} is the default table-scene robot and the closest analogue to GraphEQA's published Stretch-in-Habitat setup.
+MuJoCo merges \texttt{stretch.xml} with shared scene assets; planar base navigation uses the standard \texttt{xyt} ZMQ interface.
+
+\textbf{Galaxea R1} (\texttt{--robot rby1}) extends evaluation to a humanoid-style platform in MolmoSpaces iTHOR and Robocasa merges.
+Spawn metadata and merged MJCF paths live beside \texttt{galaxea\_r1.xml}; see project docs under \texttt{docs/molmospaces.md}.
+
+\textbf{Innate Mars} (Maurice) is documented in Appendix~\ref{app:innate_mars}.
+It is the primary case where \textbf{Depth Anything 3} (Appendix~\ref{app:da3}) replaces missing hardware depth while sim runs should keep sensor depth for reproducibility.
+
+All robots publish the same ZMQ keys where applicable: \texttt{rgb}, optional \texttt{depth}, \texttt{camera\_K}, \texttt{camera\_pose}, \texttt{gps}, \texttt{compass}, plus stereo/tertiary fields when the MJCF or ROS bridge exposes them.
+Dynagraph and GraphEQA clients consume this stream identically; embodiment-specific tuning is limited to dynav YAML (\texttt{depth\_source}, DA3 presets) and camera count.
