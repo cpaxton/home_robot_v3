@@ -12,6 +12,7 @@ import os
 import click
 
 from emet.app.robot_cli import create_robot_client_from_cli
+from emet.app.run_interactive import PickPlacePromptState, run_task_executor_loop
 from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.core.parameters import get_parameters
 from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_llm_client
@@ -274,37 +275,19 @@ def main(
 
     # Get the LLM client
     llm_client = None
+    pick_place = PickPlacePromptState(target_object=target_object, target_receptacle=target_receptacle)
     if use_llm:
         llm_client = get_llm_client(llm, prompt=prompt)
         chat_wrapper = LLMChatWrapper(llm_client, prompt=prompt, voice=use_voice)
 
-    # Parse things and listen to the user
-    ok = True
-    while ok:
-        if llm_client is None:
-            # Call the LLM client and parse
-            explore = input(
-                "Enter desired mode [E (explore and mapping) / M (Open vocabulary pick and place) / Q (quit)]: "
-            ).strip()
-            if explore.upper() in ("Q", "QUIT"):
-                llm_response = [("quit", "")]
-            elif explore.upper() == "E":
-                llm_response = [("explore", None)]
-            else:
-                if target_object is None or len(target_object) == 0:
-                    target_object = input("Enter the target object: ")
-                if target_receptacle is None or len(target_receptacle) == 0:
-                    target_receptacle = input("Enter the target receptacle: ")
-                llm_response = [("pickup", target_object), ("place", target_receptacle)]
-        else:
-            # Call the LLM client and parse
-            llm_response = chat_wrapper.query(verbose=debug_llm)
-            if debug_llm:
-                logger.debug("Parsed LLM Response: %s", llm_response)
-
-        ok = executor(llm_response)
-        target_object = None
-        target_receptacle = None
+    run_task_executor_loop(
+        executor,
+        app_name="DynaMem",
+        pick_place=pick_place,
+        llm_query=(lambda: chat_wrapper.query(verbose=debug_llm)) if llm_client is not None else None,
+        debug_llm=debug_llm,
+        log_llm_response=(lambda resp: logger.debug("Parsed LLM Response: %s", resp)) if debug_llm else None,
+    )
 
     # At the end, disable everything
     from emet.memory.utils import print_memory_view_help_on_quit
