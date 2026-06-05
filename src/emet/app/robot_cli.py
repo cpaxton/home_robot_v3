@@ -126,18 +126,23 @@ def create_robot_client_from_cli(
             return GenericZmqClient(robot_spec=spec, **kwargs)
         from emet.controller.zmq_client import StretchZmqClient
 
-        return StretchZmqClient(
-            robot_ip=robot_ip,
-            parameters=parameters,
-            enable_rerun_server=enable_rerun_server,
-            rerun_headless=rerun_headless,
-            rerun_native_viewer=rerun_native_viewer,
-            rerun_show_panels=rerun_show_panels,
-            rerun_debug=rerun_debug,
-            port_offset=port_offset,
-            start_immediately=start_immediately,
-            allow_missing_depth=allow_missing_depth,
-        )
+        stretch_kwargs: dict = {
+            "robot_ip": robot_ip,
+            "parameters": parameters,
+            "enable_rerun_server": enable_rerun_server,
+            "rerun_headless": rerun_headless,
+            "rerun_native_viewer": rerun_native_viewer,
+            "rerun_show_panels": rerun_show_panels,
+            "rerun_debug": rerun_debug,
+            "port_offset": port_offset,
+            "start_immediately": start_immediately,
+            "allow_missing_depth": allow_missing_depth,
+        }
+        if zmq_startup_timeout is not None:
+            stretch_kwargs["zmq_startup_timeout"] = float(zmq_startup_timeout)
+        elif os.environ.get("EMET_ZMQ_STARTUP_TIMEOUT", "").strip():
+            stretch_kwargs["zmq_startup_timeout"] = float(os.environ["EMET_ZMQ_STARTUP_TIMEOUT"].strip())
+        return StretchZmqClient(**stretch_kwargs)
     if robot_key in ROBOT_REGISTRY:
         mod = importlib.import_module(ROBOT_REGISTRY[robot_key])
         backend_cls = None

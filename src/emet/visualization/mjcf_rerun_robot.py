@@ -65,11 +65,19 @@ def apply_zmq_obs_to_mujoco_data(
         data.qpos[qadr : qadr + 3] = [float(world_xyt[0]), float(world_xyt[1]), z0]
         data.qpos[qadr + 3 : qadr + 7] = [qw, qx, qy, qz]
 
-    jraw = obs_pose.get("joint")
+    jraw = obs_pose.get("joint_mjcf")
+    if jraw is None:
+        jraw = obs_pose.get("joint")
     if jraw is None:
         jvec = np.zeros(max(dof, len(joint_names)), dtype=np.float64)
     else:
         jvec = np.asarray(jraw, dtype=np.float64).reshape(-1)
+    if jvec.size != len(joint_names) and jvec.size == 11 and joint_names and joint_names[0] == "joint_lift":
+        from emet.robots.stretch.joint_layout import robocasa_mjcf_joint_positions_from_hello_stretch
+
+        mapped = robocasa_mjcf_joint_positions_from_hello_stretch(jvec)
+        if mapped is not None:
+            jvec = mapped
 
     for i, jname in enumerate(joint_names):
         if i >= len(jvec):

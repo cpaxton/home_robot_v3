@@ -334,7 +334,14 @@ def main(
         rerun_show_panels=rerun_show_panels,
         rerun_debug=rerun_debug,
         allow_missing_depth=allow_missing_depth,
+        start_immediately=False,
     )
+    if not robot.start():
+        raise click.ClickException(
+            "Could not connect to the robot/sim ZMQ server. "
+            "Start `emet serve mujoco --use-robocasa --robot stretch` first, then re-run dynagraph. "
+            "Large scenes may need: export EMET_ZMQ_STARTUP_TIMEOUT=120"
+        )
     if hasattr(robot, "wait_for_obs"):
         robot.wait_for_obs(timeout=30.0)
     _print_dynagraph_rerun_help(enabled=not no_rerun, headless=headless)

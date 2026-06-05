@@ -38,7 +38,7 @@ from emet.core.zmq_protocol import (
 from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn, scene_base_spawn
 from emet.simulation.env_flags import env_sim_nav_debug, warn_sim_nav_env_flags
-from emet.simulation.head_look_action import apply_head_to_robosuite
+from emet.simulation.head_look_action import apply_head_to_robosuite, apply_stretch_posture_to_robosuite
 from emet.simulation.molmospaces_env import molmospaces_nav_teleport_enabled
 from emet.simulation.molmospaces_mobile_autoplace import apply_molmospaces_freejoint_base_autoplace
 from emet.simulation.mujoco_ground_truth import (
@@ -110,6 +110,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._nav_w_max = 0.95
         self._render_lock = threading.Lock()
         self._primary_renderer: Any | None = None
+        self._last_full_obs_for_servo: dict[str, Any] | None = None
         self._max_sim_steps: int | None = (
             int(max_sim_steps) if max_sim_steps is not None and int(max_sim_steps) > 0 else None
         )
@@ -1144,6 +1145,9 @@ class RobosuiteZmqServer(BaseZmqServer):
             p = str(action["posture"])
             if p in ("navigation", "manipulation"):
                 self.control_mode = p
+                if self._spec.name == "stretch" and self._mjmodel is not None and self._mjdata is not None:
+                    with self._mj_lock:
+                        apply_stretch_posture_to_robosuite(self._spec, self._mjmodel, self._mjdata, p)
             self._at_goal = True
 
         has_xyt = "xyt" in action
@@ -1272,7 +1276,10 @@ class RobosuiteZmqServer(BaseZmqServer):
                     message["camera_name_tertiary"] = tertiary
                 except Exception:
                     logger.debug("Tertiary RGB failed for %s", tertiary, exc_info=True)
-        return self._attach_emet_session(message)
+        message = self._attach_emet_session(message)
+        with self._render_lock:
+            self._last_full_obs_for_servo = message
+        return message
 
     @override
     def get_state_message(self) -> dict[str, Any]:
@@ -1289,6 +1296,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "at_goal": self._at_goal,
             "is_homed": True,
             "is_runstopped": False,
+            "is_simulation": True,
             "step": self._last_step,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
         }
@@ -1296,6 +1304,11 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     @override
     def get_servo_message(self) -> dict[str, Any]:
+        """Low-rate head RGB-D for StretchZmqClient / Rerun (resized from full observation).
+
+        Reuses :meth:`get_full_observation_message` so we do not run a second concurrent MuJoCo
+        render (``spin_send`` and ``spin_send_servo`` share one EGL ``Renderer``).
+        """
         if self._mjdata is None:
             return None
 
@@ -1305,10 +1318,22 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         primary_cam = cam_names[0]
         try:
-            rgb_full, depth_full, K_full = self._primary_rgb_and_depth(primary_cam)
+            with self._render_lock:
+                full = self._last_full_obs_for_servo
+            if full is None:
+                return None
+            rgb_full = compression.from_jpg(full["rgb"])
+            raw_depth = full.get("depth")
+            if raw_depth is None:
+                return None
+            depth_full = compression.from_jp2(raw_depth) / 1000.0
+            K_full = np.asarray(full["camera_K"], dtype=np.float64)
             rgb = cv2.resize(rgb_full, (_SERVO_RW, _SERVO_RH), interpolation=cv2.INTER_AREA)
             depth = cv2.resize(depth_full, (_SERVO_RW, _SERVO_RH), interpolation=cv2.INTER_NEAREST)
-        except Exception:
+        except Exception as e:
+            if not getattr(self, "_servo_publish_error_logged", False):
+                logger.warning(f"get_servo_message failed for camera {primary_cam!r}: {e!r}")
+                self._servo_publish_error_logged = True
             return None
 
         depth_u16 = (depth * 1000).astype(np.uint16)
@@ -1318,14 +1343,15 @@ class RobosuiteZmqServer(BaseZmqServer):
             xyt = np.zeros(3)
 
         K_servo = scale_pinhole_K(K_full, rgb_full.shape[1], rgb_full.shape[0], _SERVO_RW, _SERVO_RH)
+        cam_pose = full.get("camera_pose")
+        if cam_pose is None:
+            cam_pose = self._camera_pose_world(primary_cam)
 
         message = {
             "head_color_image": compression.to_jpg(rgb),
             "head_depth_image": compression.to_jp2(depth_u16),
             "head_camera_K": K_servo,
-            # Same OpenCV camera-to-world convention as full observations (``camera_pose``); required for
-            # Rerun head-camera transform + DynaMem when the client only consumes the servo socket.
-            "camera_pose": self._camera_pose_world(primary_cam),
+            "camera_pose": cam_pose,
             "joint_positions": q,
             "joint_velocities": dq,
             "base_pose": xyt,

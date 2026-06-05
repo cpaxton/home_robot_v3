@@ -902,10 +902,10 @@ class RerunVisualizer:
             )
             # Log URL at INFO so it appears even when stderr is filtered; flush for immediate visibility.
             local_url = "http://127.0.0.1:9090?url=ws://127.0.0.1:9877"
-            logger.info("Rerun web viewer: %s", local_url)
+            logger.info(f"Rerun web viewer: {local_url}")
             if os.environ.get("RERUN_BIND_ALL", "").lower() in ("1", "true", "yes"):
                 hn = socket.gethostname()
-                logger.info("Rerun web viewer (LAN/remote): http://%s:9090?url=ws://%s:9877", hn, hn)
+                logger.info(f"Rerun web viewer (LAN/remote): http://{hn}:9090?url=ws://{hn}:9877")
         else:
             logger.info(
                 "Rerun: native desktop viewer (TCP). For the web UI omit --rerun-native / RERUN_NATIVE_VIEWER "
@@ -2110,5 +2110,4 @@ class RerunVisualizer:
                 time.sleep(sleep_time)
 
         except Exception as e:
-            logger.error(e)
-            raise e
+            logger.error(f"Rerun step failed: {e}")

@@ -26,6 +26,83 @@ from emet.utils.logger import Logger
 logger = Logger(__name__)
 
 
+def _set_joint_qpos(model: mujoco.MjModel, data: mujoco.MjData, joint_name: str, value: float) -> bool:
+    jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+    if jid < 0:
+        return False
+    qadr = int(model.jnt_qposadr[jid])
+    data.qpos[qadr] = float(value)
+    vadr = int(model.jnt_dofadr[jid])
+    if vadr >= 0:
+        data.qvel[vadr] = 0.0
+    return True
+
+
+def _sync_stretch_robocasa_actuators_from_qpos(model: mujoco.MjModel, data: mujoco.MjData) -> None:
+    """Align position ``ctrl`` with ``qpos`` when ``RobotSpec.actuator_names`` is empty (Robocasa Stretch).
+
+    Without this, ``head_to`` / ``posture`` only set ``qpos`` while actuators still command 0 and the
+    head drifts back within a few ``mj_step`` calls.
+    """
+    for aid in range(model.nu):
+        aname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, aid) or ""
+        if aname.startswith("wheel") or "vel" in aname:
+            data.ctrl[aid] = 0.0
+            continue
+        if int(model.actuator_trntype[aid]) != int(mujoco.mjtTrn.mjTRN_JOINT):
+            continue
+        jid = int(model.actuator_trnid[aid, 0])
+        if jid < 0:
+            continue
+        qadr = int(model.jnt_qposadr[jid])
+        lo, hi = model.actuator_ctrlrange[aid]
+        data.ctrl[aid] = float(np.clip(data.qpos[qadr], lo, hi))
+
+
+def _set_stretch_head_qpos(model: mujoco.MjModel, data: mujoco.MjData, pan: float, tilt: float) -> int:
+    """Robocasa Stretch MJCF uses ``joint_head_*`` hinges (often no ``head_pan`` actuators)."""
+    n = 0
+    for jname, val in (("joint_head_pan", pan), ("head_pan", pan)):
+        if _set_joint_qpos(model, data, jname, val):
+            n += 1
+            break
+    for jname, val in (("joint_head_tilt", tilt), ("head_tilt", tilt)):
+        if _set_joint_qpos(model, data, jname, val):
+            n += 1
+            break
+    return n
+
+
+def apply_stretch_posture_to_robosuite(
+    spec: RobotSpec, model: mujoco.MjModel, data: mujoco.MjData, posture: str
+) -> None:
+    """Snap Robocasa Stretch arm/head to navigation or manipulation posture (``posture`` ZMQ action)."""
+    import emet.motion.constants as motion_constants
+    from emet.motion.kinematics import HelloStretchIdx
+    from emet.robots.stretch.joint_layout import robocasa_mjcf_joint_positions_from_hello_stretch
+
+    if posture not in ("navigation", "manipulation"):
+        return
+    hello_q = (
+        motion_constants.STRETCH_NAVIGATION_Q
+        if posture == "navigation"
+        else motion_constants.STRETCH_PREGRASP_Q
+    )
+    mjcf_q = robocasa_mjcf_joint_positions_from_hello_stretch(hello_q)
+    if mjcf_q is None:
+        return
+    for jname, val in zip(spec.joint_names, mjcf_q, strict=True):
+        _set_joint_qpos(model, data, jname, val)
+    _set_stretch_head_qpos(
+        model,
+        data,
+        float(hello_q[HelloStretchIdx.HEAD_PAN]),
+        float(hello_q[HelloStretchIdx.HEAD_TILT]),
+    )
+    _sync_stretch_robocasa_actuators_from_qpos(model, data)
+    mujoco.mj_forward(model, data)
+
+
 def _set_ctrl_clipped(model: mujoco.MjModel, data: mujoco.MjData, actuator_name: str, value: float) -> bool:
     aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, actuator_name)
     if aid < 0:
@@ -47,9 +124,19 @@ def apply_head_to_robosuite(
     - ``rby1`` / ``galaxea_r1``: map to ``torso2`` / ``torso3`` with reduced gain.
     - ``innate_mars``: ``joint_head`` position actuator driven by ``tilt`` only (Stretch-style nod).
     """
+    if spec.name == "stretch":
+        n = _set_stretch_head_qpos(model, data, pan, tilt)
+        _set_ctrl_clipped(model, data, "head_pan", pan)
+        _set_ctrl_clipped(model, data, "head_tilt", tilt)
+        _sync_stretch_robocasa_actuators_from_qpos(model, data)
+        mujoco.mj_forward(model, data)
+        if n > 0:
+            return n
+        # Fall through to actuator names if present on other Stretch MJCF variants.
+
     n = 0
     anames = spec.actuator_names
-    if not anames:
+    if not anames and spec.name != "stretch":
         return 0
 
     if _set_ctrl_clipped(model, data, "head_pan", pan):
