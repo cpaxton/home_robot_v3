@@ -648,20 +648,32 @@ class DynamemController(BaseController):
                 self.rerun_visualizer.update_scene_graph(self.scene_graph, self.semantic_sensor)
 
         if self.graph_memory is not None and self.sensor_builder is not None:
-            from emet.memory.graph_eqa.dynamem_graph_hooks import update_graph_memory_from_dynamem_observation
+            if getattr(self, "_skip_graph_perception_updates", False):
+                from emet.memory.graph_eqa.dynamem_graph_hooks import (
+                    update_graph_memory_ground_truth_from_observation,
+                )
 
-            update_graph_memory_from_dynamem_observation(
-                graph_memory=self.graph_memory,
-                robot=self.robot,
-                voxel_map=self.voxel_map,
-                detection_model=self.detection_model,
-                sensor_builder=self.sensor_builder,
-                use_instance_graph=self._graph_eqa_use_instance_graph,
-                use_sensor_perception=self._graph_eqa_use_sensor_perception,
-                dedup_skips=self._graph_dedup_skips,
-                obs=obs,
-                frame_step=self.obs_count,
-            )
+                update_graph_memory_ground_truth_from_observation(
+                    graph_memory=self.graph_memory,
+                    robot=self.robot,
+                    obs=obs,
+                    frame_step=self.obs_count,
+                )
+            else:
+                from emet.memory.graph_eqa.dynamem_graph_hooks import update_graph_memory_from_dynamem_observation
+
+                update_graph_memory_from_dynamem_observation(
+                    graph_memory=self.graph_memory,
+                    robot=self.robot,
+                    voxel_map=self.voxel_map,
+                    detection_model=self.detection_model,
+                    sensor_builder=self.sensor_builder,
+                    use_instance_graph=self._graph_eqa_use_instance_graph,
+                    use_sensor_perception=self._graph_eqa_use_sensor_perception,
+                    dedup_skips=self._graph_dedup_skips,
+                    obs=obs,
+                    frame_step=self.obs_count,
+                )
 
         # Visualize open-vocab scene graph if attached
         ovsg = self.voxel_map.get_scene_graph()

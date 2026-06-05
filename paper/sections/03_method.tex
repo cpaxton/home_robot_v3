@@ -57,6 +57,19 @@ This discards objects that are no longer visible or relevant---analogous in spir
 The controller inherits GraphEQA behavior: initial rotation-in-place scan (optional), navigate toward frontiers or graph-guided targets, \texttt{query\_answer} with confidence, repeat until answer or budget exhausted.
 Dynagraph-specific Rerun logging exposes \texttt{world/dynagraph/} for graph inspection during development.
 
+\subsection{Simulation ground-truth supervision}
+\label{sec:gt_supervision}
+
+For MuJoCo simulators (\texttt{emet serve mujoco}, Robocasa, MolmoSpaces), the ZMQ server attaches \texttt{sim\_object\_placements} to \texttt{emet\_session}: per-body semantic \texttt{cat}, world \texttt{pos}, and axis-aligned \texttt{bounds} from MuJoCo geoms (Appendix~\ref{app:ground_truth_graph}).
+\texttt{emet run dynagraph --ground-truth} loads graph nodes from this metadata instead of VLM or YOLO-E hypotheses, while \textbf{Stage~1 voxel fusion is unchanged}: rotate-in-place, frontier exploration, and RGB-D frame logging proceed as in the standard stack.
+
+Two CLI modes support evaluation.
+\textbf{Ground-truth mode} (\texttt{--ground-truth}) uses sim labels as the authoritative graph; GT nodes are exempt from staleness pruning and perception hooks do not append duplicate object nodes, but each control step records a navigation viewpoint sample (camera pose and RGB) for the exploration trail.
+\textbf{Compare mode} (\texttt{--compare-to-gt}) runs the full perception graph and overlays a reference GT layer in Rerun for alignment reports.
+Bidirectional \textbf{association} links sim GT to sensor evidence: YOLO-E instance centroids match nearest GT bodies in XY (forward), and projected GT bounding boxes match instance masks in each frame (reverse), producing per-frame association records for metrics and dataset export.
+
+Episode export (\texttt{--ground-truth --export}) writes the common \texttt{MemoryState} directory layout: graph, frame log (RGB-D, poses, instances), \texttt{sim\_object\_placements.json}, and GT association sidecars---used for object-finding benchmarks (Section~\ref{sec:gt_experiments}) and future VLM fine-tuning.
+
 \subsection{Implementation}
 
 Entry point: \texttt{emet run dynagraph} (\texttt{run\_dynagraph.py}, \texttt{DynagraphController}).

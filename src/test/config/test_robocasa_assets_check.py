@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 from __future__ import annotations
 
@@ -76,6 +85,17 @@ def test_format_robocasa_assets_incomplete_mentions_objaverse_bbox():
     assert "process_robocasa_objaverse_reg_bbox" in msg
 
 
+def test_basic_fixtures_present_accepts_current_sentinel():
+    pkg = robocasa_package_dir()
+    if not pkg.is_dir():
+        return
+    counter = pkg / "models/assets/fixtures/counters/counter/model.xml"
+    if counter.is_file():
+        from emet.simulation.robocasa_assets_check import basic_fixtures_present
+
+        assert basic_fixtures_present(pkg)
+
+
 def test_robocasa_kitchen_assets_complete_matches_sentinel_when_present():
     root = Path(__file__).resolve().parents[3]
     pkg = root / "third_party" / "robocasa" / "robocasa"
@@ -83,9 +103,5 @@ def test_robocasa_kitchen_assets_complete_matches_sentinel_when_present():
         return
     from emet.simulation.robocasa_objaverse_bbox import objaverse_reg_bbox_present
 
-    if (
-        lightwheel_registry_ok(pkg)
-        and fixture_registry_layout_ok(pkg)
-        and objaverse_reg_bbox_present(pkg)
-    ):
+    if lightwheel_registry_ok(pkg) and fixture_registry_layout_ok(pkg) and objaverse_reg_bbox_present(pkg):
         assert robocasa_kitchen_assets_complete(pkg)
