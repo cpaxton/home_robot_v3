@@ -6,6 +6,8 @@ Optional process-environment toggles for simulation, ZMQ clients, and MolmoSpace
 
 **[MolmoSpaces environment variables](molmospaces_environment_variables.md)** — spawn, autoplace, occupancy map, navigation teleport (`EMET_MOLMOSPACES_NAV_TELEPORT`), asset paths, and related test knobs.
 
+**[MolmoSpaces spawn metadata](molmospaces_spawn_metadata.md)** — checked-in `molmospaces_spawn.json` per robot and `emet molmospaces write-spawn-metadata` (offline; not an env var).
+
 See also [MolmoSpaces](molmospaces.md) for install and CLI usage.
 
 ## ZMQ and simulation (general)

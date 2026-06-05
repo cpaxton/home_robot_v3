@@ -10,6 +10,8 @@ MolmoSpaces requires **mujoco 3.4** and **numpy>=2.2**, which conflict with the 
 
 **Environment variables:** Optional toggles for spawn, autoplace, navigation, and tests are listed in **[MolmoSpaces environment variables](molmospaces_environment_variables.md)** (index: [environment_variables.md](environment_variables.md)).
 
+**Spawn metadata (per-robot JSON):** Optional `molmospaces_spawn.json` files tune floor Z placement. How to generate and commit them: **[MolmoSpaces spawn metadata](molmospaces_spawn_metadata.md)** (`emet molmospaces write-spawn-metadata`). Broader sim module index: **[simulation_modules.md](simulation_modules.md)**.
+
 ## Install the MolmoSpaces wrapper
 
 From the project root:
@@ -65,7 +67,7 @@ export MOLMOSPACES_PYTHON=/path/to/your/molmospaces/venv/bin/python
   emet molmospaces list-robots
   ```
 
-  Prints supported robot IDs (rby1, rby1m, stretch, franka_droid, franka_cap, etc.). MolmoSpaces-native assets include rby1; **stretch** is merged from emet’s packaged `stretch.xml` (not an upstream MolmoSpaces asset). Default is **rby1** (Galaxea R1 family).
+  Prints supported robot IDs (rby1, rby1m, stretch, franka_droid, franka_cap, etc.). MolmoSpaces-native assets include rby1; **stretch** is merged from emet’s packaged `stretch.xml` (not an upstream MolmoSpaces asset). Default when `--robot` is omitted on serve is **stretch** (same as table sim).
 
 - **List scenes** (delegates to wrapper):
 
@@ -100,6 +102,18 @@ export MOLMOSPACES_PYTHON=/path/to/your/molmospaces/venv/bin/python
 
   Uses the vendored Molmo-style **`iTHORMap`** (orthographic segmentation render) and writes **`occupancy.png`** and **`occupancy_meta.json`** next to the MJCF (or under **`-o` / `--output-dir`**). Headless servers should set **`MUJOCO_GL=egl`** (or `osmesa`) so MuJoCo can render. This does not call the MolmoSpaces wrapper.
 
+- **Write spawn metadata (offline, maintainer)**:
+
+  ```bash
+  emet molmospaces write-spawn-metadata --robot rby1 --mjcf /path/to/merged.xml
+  ```
+
+  Measures foot clearance / base height on a merged MJCF and updates **`molmospaces_spawn.json`** next to that robot’s vendored MJCF (or **`-o`**). Does not call the MolmoSpaces wrapper. See **[MolmoSpaces spawn metadata](molmospaces_spawn_metadata.md)** for the full workflow, JSON fields, and `python -m emet.app.write_molmospaces_spawn_metadata`.
+
+  ```bash
+  emet molmospaces write-spawn-metadata --help
+  ```
+
 - **Run simulation (serve)**:
 
   ```bash
@@ -130,7 +144,9 @@ Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. T
 
    This calls the wrapper’s `merge-scene`, writes the merged MJCF beside the **chosen robot’s MJCF** (a temp file named `molmospaces_merged_*.xml` under that robot’s asset directory: e.g. galaxea r1 meshes for `--robot rby1`, or beside `stretch.xml` for `--robot stretch`), then starts `emet.simulation.mujoco_server` with the matching `--robot`. The file must live next to the robot MJCF so MuJoCo resolves `assetdir`; writing the merge under `/tmp` breaks mesh loading. The merged file is kept on disk until the server **stops**, then removed.
 
-   **Stretch (default `emet serve mujoco --robot stretch`):** merges the real Stretch model and uses the Stretch MuJoCo ZMQ stack, with the **same MolmoSpaces free-joint base autoplace** as registry robots (disable with `EMET_MOLMOSPACES_AUTOPLACE=0` if needed). Navigation goals (including **`rotate_in_place`** / DynaMem scan) use **free-joint teleport** on merged Molmo scenes by default (`EMET_MOLMOSPACES_NAV_TELEPORT=1`) so the base actually turns; wheel velocity alone is unreliable on iTHOR floors. Set **`EMET_MOLMOSPACES_NAV_TELEPORT=0`** to experiment with wheel / goal drive. Session capability **`teleport_base: true`** is advertised when teleport nav is enabled. See [molmospaces_environment_variables.md](molmospaces_environment_variables.md).
+   **Stretch (default when `--robot` is omitted):** merges the real Stretch model and uses the Stretch MuJoCo ZMQ stack, with the **same MolmoSpaces free-joint base autoplace** as registry robots (disable with `EMET_MOLMOSPACES_AUTOPLACE=0` if needed). Navigation goals (including **`rotate_in_place`** / DynaMem scan) use **free-joint teleport** on merged Molmo scenes by default (`EMET_MOLMOSPACES_NAV_TELEPORT=1`) so the base actually turns; wheel velocity alone is unreliable on iTHOR floors. Set **`EMET_MOLMOSPACES_NAV_TELEPORT=0`** to experiment with wheel / goal drive. Session capability **`teleport_base: true`** is advertised when teleport nav is enabled. See [molmospaces_environment_variables.md](molmospaces_environment_variables.md).
+
+   **Agent + serve:** use the same robot id on `emet serve` and `emet run agent` (e.g. both `stretch`, or both `rby1`). `emet run agent --start-sim --molmospaces-scene …` sets the agent robot to match the sim when you omit agent `--robot`.
 
    **Adding another vendored mobile robot:** expose a top-level MJCF path in `emet.utils.assets.get_robot_mjcf_path`, merge with `emet molmospaces merge-scene --robot <key>`, then `emet serve mujoco --scene_path … --robot <key>`. The MJCF should use a **world freejoint** on the base body (autoplace heuristic); planar-only bases need extra wiring (see Robocasa path).
 3. Run the agent:

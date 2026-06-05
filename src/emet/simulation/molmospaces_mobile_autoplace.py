@@ -123,6 +123,7 @@ def apply_molmospaces_freejoint_base_autoplace(
     base_body_name: str,
     environment: dict[str, Any] | None,
     scene_source_basename: str | None,
+    robot_key: str | None = None,
     debug: bool,
 ) -> bool:
     """If Molmo heuristic applies, reposition the base freejoint and snap ``model.qpos0``.
@@ -154,6 +155,7 @@ def apply_molmospaces_freejoint_base_autoplace(
             scene_label=scene_source_basename,
             merged_mjcf_path=merged_mjcf_path,
             environment=environment,
+            robot_key=robot_key,
         )
     except Exception as e:
         logger.warning(f"MolmoSpaces base autoplace skipped ({e!r}).")
