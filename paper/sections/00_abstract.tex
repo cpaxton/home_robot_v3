@@ -1,0 +1,8 @@
+\begin{abstract}
+Embodied question answering (EQA) requires a robot to explore an unknown environment, build a semantic model of what it sees, and answer natural-language questions with sufficient confidence to know when to keep looking.
+We present \textbf{Dynagraph}, which keeps \textbf{DynaMem's voxel update rules} and adds \textbf{GraphEQA graph-creation steps} on the same perception stream.
+Each voxel records when it was last seen and a pointer to the supporting observation (pose, robot configuration, images); object-centric graphs are \textbf{grounded in this map}, so the system can detect when an object is \textbf{no longer observed} and retire stale hypotheses.
+Dynagraph adds \textbf{spatial merge} and \textbf{staleness pruning} so memory stays compact and current as the robot moves and the scene changes.
+We implement Dynagraph in the open-source \texttt{emet} stack (\texttt{emet run dynagraph}) and evaluate on \textbf{Habitat} (HM-EQA and OpenEQA-style benchmarks, via a dedicated harness) and on \textbf{MuJoCo simulation} (Robocasa kitchens, MolmoSpaces iTHOR, multiple robot embodiments).
+Results and tables are pending harness and sim experiment runs.
+\end{abstract}

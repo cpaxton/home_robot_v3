@@ -1,0 +1,53 @@
+\section{Experiments}
+\label{sec:experiments}
+
+\textit{Experimental results are pending. This section records the evaluation plan.}
+
+\subsection{Goals}
+
+\begin{enumerate}
+  \item \textbf{Habitat (primary):} Reproduce GraphEQA-style metrics on HM-EQA (113 questions) and an OpenEQA subset: success rate, mean planning steps, GraphEQA vs.\ Dynagraph vs.\ ablations.
+  \item \textbf{Emet sim (complementary):} Robocasa kitchens and MolmoSpaces iTHOR with Stretch, Galaxea R1 (rby1), and Innate Mars (Appendix~\ref{app:innate_mars}); depth-source policy in Appendix~\ref{app:da3}.
+  \item \textbf{Dynamic episodes:} After object relocation, measure stale nodes, wrong answers, and recovery steps (Dynagraph vs.\ GraphEQA without staleness).
+\end{enumerate}
+
+\subsection{Methods compared}
+
+\begin{itemize}
+  \item \textbf{GraphEQA baseline:} merge and staleness disabled (\texttt{emet run graph-eqa}).
+  \item \textbf{Dynagraph:} defaults (\texttt{emet run dynagraph}).
+  \item \textbf{Ablations:} \texttt{--merge-xy-m 0}; \texttt{--staleness-horizon 0}.
+  \item \textbf{DynaMem voxel-only EQA} and \textbf{VLM-only} baselines where applicable.
+  \item \textbf{OK-Robot-style static map} (optional): prescanned voxel, no re-explore on dynamic episodes.
+\end{itemize}
+
+\subsection{Simulation environments}
+
+\begin{table}[t]
+  \centering
+  \caption{Planned evaluation environments in \texttt{emet}.}
+  \label{tab:envs}
+  \small
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Environment & Serve command & Role \\
+    \midrule
+    Habitat + HM3D & Habitat harness & GraphEQA parity \\
+    Robocasa & \texttt{emet serve robocasa} & Kitchen objects, manipulation clutter \\
+    MolmoSpaces iTHOR & \texttt{emet serve molmospaces} & Multi-room exploration \\
+    Default table & \texttt{emet serve mujoco} & Sanity / CI-style scenes \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Metrics}
+
+EQA accuracy (multiple-choice or graded open answers), steps to confident answer, graph node/edge counts, explored map area, staleness efficacy after scripted scene changes, cross-robot variance.
+
+\subsection{Execution protocol}
+
+\begin{enumerate}
+  \item Start sim: \texttt{emet serve <backend> --robot <name> --headless --port-offset N}.
+  \item Run agent: \texttt{emet run dynagraph --robot <name> --port-offset N --export runs/<id>}.
+  \item Habitat batch runner (harness branch): dataset-driven episodes with shared metrics export.
+\end{enumerate}

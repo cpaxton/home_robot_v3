@@ -1,0 +1,38 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Mobile agents that answer questions about their surroundings must do three things well: \emph{explore} efficiently, \emph{remember} what they have seen in a form useful for reasoning, and \emph{update} that memory when the world changes.
+Embodied question answering (EQA) makes this explicit: the agent receives a question (e.g., ``What color is the mug on the counter?'') and must explore until it can answer with calibrated confidence.
+
+Two recent lines of work address complementary parts of this problem.
+\textbf{GraphEQA}~\citep{saxena2024grapheqa} maintains a real-time 3D semantic scene graph and task-relevant images as multi-modal memory for a vision-language model (VLM), with hierarchical exploration in Habitat on HM-EQA and OpenEQA-style benchmarks.
+\textbf{DynaMem}~\citep{liu2024dynamem} maintains a dynamic voxel semantic map that supports adding and removing geometry as objects move, enabling open-vocabulary mobile manipulation in changing homes.
+
+\textbf{Dynagraph} unifies these ideas for \emph{exploring robot agents} by keeping \textbf{DynaMem's voxel update rules unchanged} and adding \textbf{GraphEQA graph-creation steps} on the same perception stream.
+On every control step the robot first runs the standard DynaMem \texttt{SparseVoxelMap} update: fuse RGB-D into the sparse voxel grid, append the frame to the observation log, and refresh per-voxel provenance---\textbf{when each voxel was last seen} and a \textbf{pointer to the supporting observation} (camera pose, robot configuration, images, optional instance masks).
+Only then does a shared hook lift object hypotheses from that updated map into \texttt{GraphEQAMemory}: labels and 3D anchors from instance masks, voxel semantics, or a sensor VLM, wired to the same \texttt{obs\_id} indices the map just wrote.
+
+Scene-graph nodes are therefore \textbf{grounded in the DynaMem substrate}: every object is tied to voxel support and to the observation index that best explains it.
+Navigation, exploration, and EQA read from the same evidence trail because they are fed by one update pipeline, not two independent memories.
+
+This grounding makes \textbf{disappearance} a first-class signal.
+When the robot revisits a region and voxels that previously supported an object are no longer updated---or no fresh observation reinforces that hypothesis---the system can conclude the object is \emph{no longer observed} and retire it from the graph.
+Dynagraph adds explicit \textbf{graph lifecycle} rules on top of this substrate: spatial merge of duplicate detections across viewpoints, and staleness-based pruning of nodes whose \texttt{last\_seen} step falls behind the controller clock.
+The graph stays compact and aligned with what the voxel map currently supports, rather than accumulating stale object hypotheses indefinitely.
+
+\subsection{Contributions}
+
+\begin{itemize}
+  \item \textbf{Unified update pipeline}: DynaMem voxel fusion unchanged; GraphEQA graph construction runs as an extra stage on each observation (\texttt{update\_graph\_memory\_from\_dynamem\_observation}).
+  \item \textbf{Voxel-grounded scene graphs}: object nodes reference voxel support and observation pointers; disappearance is detectable when DynaMem stops refreshing support.
+  \item \textbf{Dynagraph graph lifecycle}: merge and staleness on top of GraphEQA (\texttt{dynagraph\_merge\_xy\_m}, \texttt{dynagraph\_staleness\_horizon}).
+  \item \textbf{Open-source implementation} in \texttt{emet} (\texttt{emet run dynagraph}), building on \texttt{GraphEQAController} and \texttt{SparseVoxelMap}.
+  \item \textbf{Habitat EQA harness} (separate development branch) to reproduce GraphEQA-style evaluation on HM-EQA / OpenEQA.
+  \item \textbf{Extended MuJoCo evaluation} on Robocasa and MolmoSpaces across Stretch, Galaxea R1, and optional registry robots.
+\end{itemize}
+
+\subsection{Limitations (draft)}
+
+Habitat harness and full experimental results are in progress.
+Our graph builder differs from Hydra-based 3DSG pipelines used in the original GraphEQA stack; we compare on EQA outcomes, not intermediate graph topology.
+Real-home manipulation trials at OK-Robot or DREAM scale are left to future work.
