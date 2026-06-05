@@ -648,7 +648,18 @@ class DynamemController(BaseController):
                 self.rerun_visualizer.update_scene_graph(self.scene_graph, self.semantic_sensor)
 
         if self.graph_memory is not None and self.sensor_builder is not None:
-            if not getattr(self, "_skip_graph_perception_updates", False):
+            if getattr(self, "_skip_graph_perception_updates", False):
+                from emet.memory.graph_eqa.dynamem_graph_hooks import (
+                    update_graph_memory_ground_truth_from_observation,
+                )
+
+                update_graph_memory_ground_truth_from_observation(
+                    graph_memory=self.graph_memory,
+                    robot=self.robot,
+                    obs=obs,
+                    frame_step=self.obs_count,
+                )
+            else:
                 from emet.memory.graph_eqa.dynamem_graph_hooks import update_graph_memory_from_dynamem_observation
 
                 update_graph_memory_from_dynamem_observation(

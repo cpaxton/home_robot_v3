@@ -19,7 +19,7 @@ Options mirror `emet run graph-eqa` (robot, Discord, Rerun export, `--no-instanc
 
 - **`--merge-xy-m`**: override horizontal merge distance in meters (`dynagraph_merge_xy_m` in config; `0` disables merge).
 - **`--staleness-horizon`**: override how many **controller steps** a node can go without a reinforcing observation before `maintain()` drops it (`dynagraph_staleness_horizon`; `0` disables pruning).
-- **`--ground-truth`**: **sim only** — build graph nodes from `emet_session["sim_object_placements"]` instead of VLM / YoloE perception. Pair with **`--export`** for a lightweight headless smoke (no full Dynamem/CLIP load). See [Ground-truth graph mode](#ground-truth-graph-mode).
+- **`--ground-truth`**: **sim only** — build graph nodes from `emet_session["sim_object_placements"]` instead of VLM / YoloE perception. Pair with **`--export`** for a **full episode** export (rotate, voxel frames, graph, GT sidecars). See [Ground-truth graph mode](#ground-truth-graph-mode).
 - **`--compare-to-gt`**: **sim only** — on the **full** `--export` path (sensor-built graph after rotate), print alignment vs `sim_object_placements` in session.
 
 If unset on the command line, `run_dynagraph` applies defaults (`dynagraph_merge_xy_m=0.45`, `dynagraph_staleness_horizon=256`) only when those keys are missing from the loaded parameters dict, so you can still set them in `dynav_config.yaml`.
@@ -43,7 +43,7 @@ Set **`EMET_NAVGRID_ASCII=1`** to print a cropped ASCII top-down map to **stderr
 
 ## Ground-truth graph mode (`--ground-truth`)
 
-Use **`--ground-truth`** in simulation to build the Dynagraph scene graph from **`emet_session["sim_object_placements"]`** instead of VLM perception labels. **Voxel mapping, rotate-in-place, explore, and YoloE instance detection still run**; detections are matched to nearest GT nodes in XY and attached as observation RGB (description suffix ``|det:…``). Use **`--compare-to-gt`** when you want a full VLM perception graph overlaid on sim reference.
+Use **`--ground-truth`** in simulation to build the Dynagraph scene graph from **`emet_session["sim_object_placements"]`** instead of VLM perception labels. **Voxel mapping, rotate-in-place, explore, and YoloE instance detection still run**; detections are matched to nearest GT nodes in XY and attached as observation RGB (description suffix ``|det:…``). Each control step also appends a **navigation viewpoint sample** (camera pose + RGB, no new entity node) so the graph memory records everywhere the robot observed from. Use **`--compare-to-gt`** when you want a full VLM perception graph overlaid on sim reference.
 
 MuJoCo ZMQ servers publish placements in [`emet_session`](zmq_session_metadata.md). Each entry has a **`cat`** label, world **`pos`**, and (when the server scanned the MJCF) axis-aligned **`bounds`** from mesh/collision geoms.
 
@@ -57,21 +57,34 @@ MuJoCo ZMQ servers publish placements in [`emet_session`](zmq_session_metadata.m
 
 | Flag | Graph source | Rerun |
 |------|--------------|-------|
-| **`--ground-truth`** | All nodes from sim GT | **«Graph (ground truth)»** column (nodes + 3D boxes); voxel map + instance→GT association |
+| **`--ground-truth`** | All nodes from sim GT | **«Graph (ground truth)»** column (nodes + 3D boxes); voxel map + instance→GT association + per-step viewpoint samples |
 | **`--compare-to-gt`** | Normal sensor / VLM graph | **«Dynagraph 3D»** (perception) + **«Sim GT (reference)»** (green overlay) |
 
 The two flags are **mutually exclusive**.
 
 ### Workflows
 
-**Headless smoke** (default table or Robocasa; no Qwen/CLIP load):
+**Export smoke** (full controller + GT sidecars; CI check):
+
+```bash
+uv run python scripts/dynagraph_ground_truth_smoke.py
+```
+
+**Full GT episode export** (rotate + voxel frames + `sim_object_placements.json`):
 
 ```bash
 emet serve mujoco --headless                    # or --use-robocasa
-emet run dynagraph --ground-truth --export /tmp/dynagraph_gt --no-rerun --cpu-only -N
+emet run dynagraph --ground-truth --export /tmp/dynagraph_gt --no-rerun --cpu-only
 ```
 
-Or: `uv run python scripts/dynagraph_ground_truth_smoke.py`.
+Exported layout: `manifest.json`, `graph.json`, `frames/`, `sim_object_placements.json`, optional `gt_alignment_report.txt`, per-frame `gt_assoc_NNNN.json` when instance masks overlap projected GT bounds.
+
+**Batch metrics** (completeness, localization error, association recall):
+
+```bash
+uv run python scripts/eval_dynagraph_ground_truth.py --episode /tmp/dynagraph_gt
+uv run python scripts/eval_dynagraph_ground_truth.py --run-live --cpu-only --output /tmp/metrics.json
+```
 
 **Interactive GT graph** (EQA / explore on known sim labels):
 

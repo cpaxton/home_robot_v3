@@ -12,7 +12,7 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""Smoke: ``emet run dynagraph --ground-truth --export`` against default MuJoCo scene."""
+"""Smoke: full ``emet run dynagraph --ground-truth --export`` against default MuJoCo scene."""
 
 from __future__ import annotations
 
@@ -92,6 +92,10 @@ def main() -> int:
             report_path = Path(tmp) / "scene_graph_report.txt"
             if not report_path.is_file():
                 print("FAIL: scene_graph_report.txt missing", file=sys.stderr)
+                return 1
+            placements_path = Path(tmp) / "sim_object_placements.json"
+            if not placements_path.is_file():
+                print("FAIL: sim_object_placements.json missing", file=sys.stderr)
                 return 1
 
         print("PASS: dynagraph ground-truth export", file=sys.stderr)

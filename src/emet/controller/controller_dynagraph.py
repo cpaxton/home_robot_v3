@@ -36,6 +36,9 @@ class DynagraphController(GraphEQAController):
         self._gt_graph_loaded = False
         self._skip_graph_perception_updates = ground_truth_mode
         super().__init__(*args, **kwargs)
+        if ground_truth_mode and self.graph_memory is not None:
+            # Keep full rotate/explore viewpoint history (voxel frames also logged on export).
+            self.graph_memory._nav_max = max(int(self.graph_memory._nav_max), 8192)
         self.setup_custom_blueprint()
         self._sync_ground_truth_from_session()
         if self.graph_memory is not None and getattr(self.rerun_visualizer, "enabled", True):
@@ -62,6 +65,34 @@ class DynagraphController(GraphEQAController):
             voxel_map=vm,
             detection_model=getattr(self, "detection_model", None),
         )
+
+    def _associate_gt_to_frame_instances(self) -> None:
+        """Project GT AABBs to image and match YoloE instance masks (reverse association)."""
+        if not self.ground_truth_mode:
+            return
+        vm = getattr(self, "voxel_map", None)
+        if vm is None:
+            return
+        obs_list = getattr(vm, "observations", None)
+        if not obs_list:
+            return
+        placements = read_sim_object_placements(self.robot.get_emet_session())
+        if not placements:
+            return
+        from emet.memory.graph_eqa.sim_ground_truth_graph import (
+            associate_ground_truth_to_frame_instances,
+            associate_ground_truth_to_voxel_observation,
+        )
+
+        frame = obs_list[-1]
+        assocs = associate_ground_truth_to_frame_instances(placements, frame)
+        if not hasattr(frame, "info") or frame.info is None:
+            frame.info = {}
+        if assocs:
+            frame.info["gt_associations"] = assocs
+        voxel_hits = associate_ground_truth_to_voxel_observation(placements, frame)
+        if voxel_hits:
+            frame.info["gt_voxel_hits"] = voxel_hits
 
     def setup_custom_blueprint(self) -> None:
         if getattr(self.rerun_visualizer, "enabled", True) is False:
@@ -141,6 +172,7 @@ class DynagraphController(GraphEQAController):
         super().update()
         if self.ground_truth_mode:
             self._associate_instances_to_ground_truth()
+            self._associate_gt_to_frame_instances()
         if self.graph_memory is None:
             return
         self.graph_memory.maintain(self.obs_count)

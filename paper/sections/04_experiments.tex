@@ -7,7 +7,7 @@
 
 \begin{enumerate}
   \item \textbf{Habitat (primary):} Reproduce GraphEQA-style metrics on HM-EQA (113 questions) and an OpenEQA subset: success rate, mean planning steps, GraphEQA vs.\ Dynagraph vs.\ ablations.
-  \item \textbf{Emet sim (complementary):} Robocasa kitchens and MolmoSpaces iTHOR with Stretch, Galaxea R1 (rby1), and Innate Mars (Appendix~\ref{app:innate_mars}); depth-source policy in Appendix~\ref{app:da3}.
+  \item \textbf{Emet sim (complementary):} Robocasa kitchens and MolmoSpaces iTHOR with Stretch, Galaxea R1 (rby1), and Innate Mars (Appendix~\ref{app:innate_mars}); depth-source policy in Appendix~\ref{app:da3}; GT-supervised object finding (Section~\ref{sec:gt_experiments}) for sim-oracle benchmarks without Habitat.
   \item \textbf{Dynamic episodes:} After object relocation, measure stale nodes, wrong answers, and recovery steps (Dynagraph vs.\ GraphEQA without staleness).
 \end{enumerate}
 
@@ -43,6 +43,39 @@
 \subsection{Metrics}
 
 EQA accuracy (multiple-choice or graded open answers), steps to confident answer, graph node/edge counts, explored map area, staleness efficacy after scripted scene changes, cross-robot variance.
+
+\subsection{GT-supervised object finding (Emet sim)}
+\label{sec:gt_experiments}
+
+\textit{Results pending.}
+MuJoCo ZMQ servers publish \texttt{sim\_object\_placements} in \texttt{emet\_session}: per-body semantic labels, world positions, and (when scanned) axis-aligned bounds.
+\texttt{emet run dynagraph --ground-truth} seeds graph nodes from this metadata while Stage~1 voxel fusion, rotate-in-place, and frame logging continue unchanged---inverting the usual perception$\rightarrow$graph flow so sim supplies authoritative labels and the voxel map supplies sensor evidence.
+This supports reproducible object-finding benchmarks and labeled episode export for fine-tuning without a Habitat harness (Appendix~\ref{app:ground_truth_graph}).
+
+We evaluate whether Dynagraph memory can \textbf{find objects whose labels and positions are known from simulation}.
+Robocasa kitchens (multiple layout/style seeds) and the default table scene serve as episodes; Stretch is the primary robot, with spot checks on rby1 and Innate Mars via the same \texttt{emet\_session} contract.
+
+\textbf{Modes.}
+\texttt{--ground-truth} uses sim metadata as the graph; \texttt{--compare-to-gt} runs full perception and reports alignment vs.\ GT (Rerun overlay + text report).
+
+\textbf{Metrics} (oracle = \texttt{sim\_object\_placements}):
+\begin{itemize}
+  \item \textbf{GT graph completeness:} fraction of placement bodies present as GT graph nodes at startup.
+  \item \textbf{Localization error:} for each manipulable body, query the graph by \texttt{cat} and report XY (and optionally Z) error vs.\ GT \texttt{pos}.
+  \item \textbf{Instance$\rightarrow$GT association recall:} fraction of GT bodies matched by a YOLO-E instance centroid within 0.75\,m XY after rotate-in-place (and optional explore steps).
+  \item \textbf{Perception$\rightarrow$GT recall @\,$r$:} under \texttt{--compare-to-gt}, fraction of GT bodies with a non-GT graph node within $r$\,m (label match optional).
+  \item \textbf{Projected association IoU:} overlap between GT AABB projected into the head camera and the best-matching instance mask per frame.
+\end{itemize}
+
+\textbf{Protocol.}
+\begin{enumerate}
+  \item \texttt{emet serve mujoco --use-robocasa --headless --port-offset N} (or default table / MolmoSpaces).
+  \item \texttt{emet run dynagraph --ground-truth --export runs/<episode\_id> --port-offset N} (rotate-in-place by default; exports graph + voxel frames + GT sidecars).
+  \item Batch: \texttt{uv run python scripts/eval\_dynagraph\_ground\_truth.py --run-live --port-offset N --output metrics.json}.
+  \item Compare perception: \texttt{emet run dynagraph --compare-to-gt --export runs/<id> -N}.
+\end{enumerate}
+
+See Appendix~\ref{app:ground_truth_graph} for GT graph construction and export layout.
 
 \subsection{Execution protocol}
 
