@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Robocasa kitchen asset completeness checks (basic fixtures + LightWheel registry)."""
 
@@ -24,10 +33,19 @@ def fixture_registry_layout_ok(robocasa_pkg: Path) -> bool:
     return not missing_required_registry_stems(robocasa_pkg)
 
 
+# Paths under ``models/assets/fixtures/`` that indicate the base ``fixtures`` zip was extracted.
+# ``white_sink`` was removed from newer Robocasa asset packs; keep it as a legacy fallback.
+BASIC_FIXTURE_SENTINELS: tuple[str, ...] = (
+    "counters/counter/model.xml",
+    "sinks/2_bins_stainless/model.xml",
+    "sinks/white_sink/model.xml",
+)
+
+
 def basic_fixtures_present(robocasa_pkg: Path) -> bool:
-    """True when the base fixtures zip was extracted (e.g. ``sinks/white_sink/model.xml``)."""
-    sentinel = robocasa_pkg / "models" / "assets" / "fixtures" / "sinks" / "white_sink" / "model.xml"
-    return sentinel.is_file()
+    """True when the base fixtures zip was extracted (any known sentinel ``model.xml``)."""
+    fixtures = robocasa_pkg / "models" / "assets" / "fixtures"
+    return any((fixtures / rel).is_file() for rel in BASIC_FIXTURE_SENTINELS)
 
 
 def lightwheel_registry_ok(robocasa_pkg: Path) -> bool:
@@ -77,19 +95,14 @@ def format_robocasa_assets_incomplete_message(
     if detail:
         lines.append(f"  {detail}")
     if missing_basic:
-        lines.append(
-            "  Missing: base fixture meshes (textures/fixtures zip). "
-            "Run from the project root:"
-        )
+        lines.append("  Missing: base fixture meshes (textures/fixtures zip). Run from the project root:")
         lines.append("    uv run python scripts/download_robocasa_assets.py --yes")
     if missing_registry:
         lines.append(
             "  Missing: fixture_registry YAML layout (often deleted when extracting fixtures_lw). "
             "Restore vendored registry files from the robocasa submodule, then sync LightWheel entries:"
         )
-        lines.append(
-            "    git -C third_party/robocasa checkout -- robocasa/models/assets/fixtures/fixture_registry/"
-        )
+        lines.append("    git -C third_party/robocasa checkout -- robocasa/models/assets/fixtures/fixture_registry/")
         lines.append("    uv run python scripts/sync_robocasa_lightwheel_registry.py")
     if missing_objaverse_bbox:
         lines.append(
@@ -104,13 +117,15 @@ def format_robocasa_assets_incomplete_message(
             "fixtures/sinks/Sink025/ but registry YAML must list them (run sync below)."
         )
         lines.append("  After downloading fixtures_lw, sync registry entries:")
-        lines.append("    uv run python -c \"from emet.simulation.robocasa_registry_sync import sync_lightwheel_registry; sync_lightwheel_registry()\"")
+        lines.append(
+            '    uv run python -c "from emet.simulation.robocasa_registry_sync import sync_lightwheel_registry; sync_lightwheel_registry()"'
+        )
         lines.append("  Download everything needed for Robocasa sim (recommended):")
         lines.append("    ./scripts/install_simulation.sh -y")
         lines.append("  Or only fetch missing packs:")
         lines.append("    uv run python scripts/download_robocasa_assets.py --yes")
         lines.append("  (installs base fixtures + fixtures_lw automatically)")
-        lines.append("  See docs/simulation.md — section \"Install Robocasa\".")
+        lines.append('  See docs/simulation.md — section "Install Robocasa".')
     lines.append("=" * 60)
     return "\n".join(lines)
 
