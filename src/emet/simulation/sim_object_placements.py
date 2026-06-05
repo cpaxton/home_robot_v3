@@ -44,6 +44,9 @@ _SKIP_BODY_RE = re.compile(
 
 # Robocasa fixture groups we skip (room shell / utilities, not semantic map labels).
 _FIXTURE_GROUP_SKIP_RE = re.compile(r"(?i)^(wall|floor|ground|sky|light|outlet|light_switch|world|default|worldbody)")
+# Robocasa fixture MJCF: layout anchor geoms sit ~10 m from their body origin and must not inflate GT bounds.
+_ROBOCASA_ANCHOR_GEOM_RE = re.compile(r"(?i)_main_group_base_")
+_MAX_GT_GEOM_CENTER_DIST_FROM_BODY_M = 2.5
 
 
 def _jsonify_placement_entry(info: dict[str, Any]) -> dict[str, Any]:
@@ -180,7 +183,25 @@ def _collect_fixture_groups(
     return groups
 
 
-def _geom_ids_for_bodies(model: mujoco.MjModel, body_ids: list[int]) -> list[int]:
+def _is_robocasa_gt_anchor_geom(model: mujoco.MjModel, data: mujoco.MjData, geom_id: int) -> bool:
+    """True for Robocasa layout-helper geoms that are far from their owning body (inflates AABB)."""
+    name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id) or ""
+    if _ROBOCASA_ANCHOR_GEOM_RE.search(name):
+        return True
+    body_id = int(model.geom_bodyid[geom_id])
+    center, _size = geom_aabb(model, data, [geom_id], tight_mesh=True)
+    dist = float(
+        np.linalg.norm(np.asarray(center, dtype=np.float64) - np.asarray(data.xpos[body_id], dtype=np.float64))
+    )
+    return dist > _MAX_GT_GEOM_CENTER_DIST_FROM_BODY_M
+
+
+def _geom_ids_for_bodies(
+    model: mujoco.MjModel,
+    body_ids: list[int],
+    *,
+    data: mujoco.MjData | None = None,
+) -> list[int]:
     body_set = frozenset(body_ids)
     gids: list[int] = []
     for gid in range(model.ngeom):
@@ -188,6 +209,8 @@ def _geom_ids_for_bodies(model: mujoco.MjModel, body_ids: list[int]) -> list[int
         if bid not in body_set:
             continue
         if int(model.geom_type[gid]) == int(mujoco.mjtGeom.mjGEOM_PLANE):
+            continue
+        if data is not None and _is_robocasa_gt_anchor_geom(model, data, gid):
             continue
         gids.append(gid)
     return gids
@@ -251,7 +274,7 @@ def placements_from_mujoco_fixture_groups(
     for group_key in sorted(groups.keys()):
         if max_groups is not None and len(out) >= max_groups:
             break
-        geom_ids = _geom_ids_for_bodies(model, groups[group_key])
+        geom_ids = _geom_ids_for_bodies(model, groups[group_key], data=data)
         cat = _label_from_fixture_group(group_key, wizard_cats)
         entry = _placement_entry_from_geom_ids(model, data, geom_ids, cat=cat)
         if entry is not None:
@@ -306,7 +329,7 @@ def placements_from_mujoco_model(
             continue
         if _SKIP_BODY_RE.match(name):
             continue
-        geom_ids = _geom_ids_for_bodies(model, [bid])
+        geom_ids = _geom_ids_for_bodies(model, [bid], data=data)
         if not geom_ids:
             continue
         cat = wizard_cats.get(name) or _label_from_body_name(name)
@@ -371,14 +394,14 @@ def overlay_live_mujoco_body_poses(
         entry = dict(info)
         cat = str(entry.get("cat") or wizard_cats.get(key) or _label_from_fixture_group(key, wizard_cats))
         if key in groups:
-            geom_ids = _geom_ids_for_bodies(model, groups[key])
+            geom_ids = _geom_ids_for_bodies(model, groups[key], data=data)
             live = _placement_entry_from_geom_ids(model, data, geom_ids, cat=cat)
             if live:
                 entry.update(live)
         else:
             bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, str(key))
             if bid >= 0:
-                geom_ids = _geom_ids_for_bodies(model, [bid])
+                geom_ids = _geom_ids_for_bodies(model, [bid], data=data)
                 live = _placement_entry_from_geom_ids(model, data, geom_ids, cat=cat)
                 if live:
                     entry.update(live)

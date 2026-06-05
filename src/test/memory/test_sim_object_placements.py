@@ -203,6 +203,34 @@ def test_fixture_group_scan_merges_wizard_and_fixtures():
     assert "bounds" in out["counter_main"]
 
 
+def test_fixture_bounds_exclude_robocasa_anchor_geoms():
+    import mujoco
+
+    from emet.simulation.sim_object_placements import build_sim_object_placements_for_session
+
+    # Robocasa counters include ``*_main_group_base_*`` geoms offset ~10 m from the body origin.
+    xml = """
+    <mujoco><worldbody>
+      <body name="counter_main_main_group_main" pos="0 0 0.46">
+        <geom name="counter_main_main_group_base_front" type="box" pos="0 0 10" size="0.01 0.01 0.01"/>
+        <geom name="counter_main_main_group_top_0" type="box" pos="0 0 0.45" size="0.5 0.3 0.02"/>
+      </body>
+    </worldbody></mujoco>
+    """
+    model = mujoco.MjModel.from_xml_string(xml)
+    data = mujoco.MjData(model)
+    out = build_sim_object_placements_for_session(
+        objects_info=None,
+        environment_kind="robocasa",
+        model=model,
+        data=data,
+    )
+    assert out is not None and "counter_main" in out
+    bounds = np.asarray(out["counter_main"]["bounds"], dtype=np.float64)
+    assert bounds[1, 2] - bounds[0, 2] < 0.2
+    assert bounds[1, 2] < 1.5
+
+
 def test_mujoco_model_data_for_gt_scan_stretch_model_attr():
     import mujoco
 
