@@ -9,12 +9,50 @@ from __future__ import annotations
 import os
 
 import click
+import numpy as np
 
 from emet.app.robot_cli import create_robot_client_from_cli
 from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import get_parameters
+from emet.memory.graph_eqa import GraphEQAMemory
+from emet.memory.graph_eqa.sim_ground_truth_graph import (
+    build_ground_truth_graph_from_session,
+    ground_truth_alignment_report,
+    read_sim_object_placements,
+)
 from emet.memory.headless_export import export_graph_eqa_dir
+
+
+def _export_ground_truth_graph(
+    robot,
+    parameters: dict,
+    export_dir: str,
+    *,
+    input_path: str | None,
+) -> None:
+    """Headless GT export without loading Dynamem/CLIP (sim smoke tests)."""
+    mem = GraphEQAMemory(parameters=parameters, defer_llm_clients=True)
+    if input_path:
+        from emet.memory.backend import get_memory_backend
+
+        backend = get_memory_backend("graph_eqa", graph_memory=mem, voxel_map=None)
+        backend.load(input_path)
+    obs = robot.get_observation()
+    n_gt, placements = build_ground_truth_graph_from_session(
+        mem,
+        np.asarray(obs.rgb, dtype=np.uint8),
+        robot.get_emet_session(),
+    )
+    if n_gt == 0:
+        raise click.ClickException(
+            "Ground-truth mode: emet_session has no sim_object_placements. "
+            "Start emet serve mujoco (default, --use-robocasa, or --molmospaces-scene …) first."
+        )
+    click.echo(ground_truth_alignment_report(mem, placements))
+    text = export_graph_eqa_dir(mem, None, export_dir, title="Scene graph (Dynagraph GT export)")
+    print(text)
+    print(f"Exported graph memory to {export_dir}")
 
 
 def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
@@ -137,6 +175,23 @@ def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
     default=None,
     help="Override dynagraph_staleness_horizon (0 disables pruning)",
 )
+@click.option(
+    "--ground-truth",
+    is_flag=True,
+    help=(
+        "Sim only: build the scene graph from emet_session sim_object_placements "
+        "(Robocasa wizard, default table, or MolmoSpaces MJCF scan) instead of VLM perception. "
+        "Use with --export for headless GT smoke tests."
+    ),
+)
+@click.option(
+    "--compare-to-gt",
+    is_flag=True,
+    help=(
+        "Sim only: after building the graph from sensors (full Dynagraph --export path), "
+        "print alignment vs emet_session sim_object_placements."
+    ),
+)
 def main(
     robot_ip: str,
     robot_backend: str = "stretch",
@@ -158,10 +213,17 @@ def main(
     no_instance_graph: bool = False,
     merge_xy_m: float | None = None,
     staleness_horizon: int | None = None,
+    ground_truth: bool = False,
+    compare_to_gt: bool = False,
     **kwargs,
 ) -> None:
     """Run Dynagraph: voxel + graph EQA with optional merge and staleness (see docs/dynagraph.md)."""
     click.echo("Dynagraph: graph memory with DynaMem-style voxel navigation.")
+    if ground_truth:
+        click.echo("Ground-truth mode: graph nodes from sim_object_placements (no VLM / instance graph).")
+        cpu_only = True
+        no_sensor_perception = True
+        no_instance_graph = True
 
     if rerun_bind:
         os.environ["RERUN_BIND_ALL"] = "1"
@@ -188,6 +250,20 @@ def main(
         parameters["dynagraph_merge_xy_m"] = float(merge_xy_m)
     if staleness_horizon is not None:
         parameters["dynagraph_staleness_horizon"] = int(staleness_horizon)
+
+    if ground_truth and export_dir:
+        if discord:
+            raise click.UsageError("Use either --export or --discord, not both.")
+        if not not_rotate_in_place:
+            click.echo(
+                "Note: --ground-truth --export uses the lightweight GT path (no rotate_in_place). "
+                "Omit --export for the full Dynagraph stack with rotation."
+            )
+        try:
+            _export_ground_truth_graph(robot, parameters, export_dir, input_path=input_path)
+        finally:
+            robot.stop()
+        return
 
     robot.move_to_nav_posture()
     robot.set_velocity(v=30.0, w=15.0)
@@ -237,6 +313,12 @@ def main(
             executor = EQAExecuter(agent)
             if not not_rotate_in_place:
                 executor.rotate_in_place()
+            if compare_to_gt:
+                placements = read_sim_object_placements(robot.get_emet_session())
+                if placements:
+                    click.echo(ground_truth_alignment_report(agent.graph_memory, placements))
+                else:
+                    click.echo("Note: --compare-to-gt skipped (no sim_object_placements in emet_session).")
             text = export_graph_eqa_dir(
                 agent.graph_memory,
                 getattr(agent, "voxel_map", None),
@@ -269,6 +351,16 @@ def main(
             executor = EQAExecuter(agent)
             if not not_rotate_in_place:
                 executor.rotate_in_place()
+            if ground_truth:
+                obs = robot.get_observation()
+                n_gt, placements = build_ground_truth_graph_from_session(
+                    agent.graph_memory,
+                    np.asarray(obs.rgb, dtype=np.uint8),
+                    robot.get_emet_session(),
+                )
+                if n_gt == 0:
+                    raise click.ClickException("Ground-truth mode: emet_session has no sim_object_placements.")
+                click.echo(ground_truth_alignment_report(agent.graph_memory, placements))
 
             click.echo(
                 "Interactive mode: type a **question** to run graph EQA, "

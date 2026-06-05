@@ -19,6 +19,8 @@ Options mirror `emet run graph-eqa` (robot, Discord, Rerun export, `--no-instanc
 
 - **`--merge-xy-m`**: override horizontal merge distance in meters (`dynagraph_merge_xy_m` in config; `0` disables merge).
 - **`--staleness-horizon`**: override how many **controller steps** a node can go without a reinforcing observation before `maintain()` drops it (`dynagraph_staleness_horizon`; `0` disables pruning).
+- **`--ground-truth`**: **sim only** — build graph nodes from `emet_session["sim_object_placements"]` instead of VLM / YoloE perception. Pair with **`--export`** for a lightweight headless smoke (no full Dynamem/CLIP load). See [Ground-truth graph mode](#ground-truth-graph-mode).
+- **`--compare-to-gt`**: **sim only** — on the **full** `--export` path (sensor-built graph after rotate), print alignment vs `sim_object_placements` in session.
 
 If unset on the command line, `run_dynagraph` applies defaults (`dynagraph_merge_xy_m=0.45`, `dynagraph_staleness_horizon=256`) only when those keys are missing from the loaded parameters dict, so you can still set them in `dynav_config.yaml`.
 
@@ -38,6 +40,38 @@ Live runs log graph nodes and a text tree under **`world/dynagraph/`** (`world/d
 ### Terminal nav grid (debug)
 
 Set **`EMET_NAVGRID_ASCII=1`** to print a cropped ASCII top-down map to **stderr** after periodic updates (same backend-neutral renderer as Dynamem: `#` obstacles, `.` explored, `@` robot, `0-9a-z` semantic glyphs with legend). Works with any robot backend that uses the shared `SparseVoxelMap` path (Stretch, Galaxea R1, etc.). Output is cropped to the explored region (same bbox as Discord share maps) at up to **320 cells** on the longest edge by default; set **`EMET_NAVGRID_MAX_SIDE=640`** for full Discord resolution.
+
+## Ground-truth graph mode
+
+MuJoCo ZMQ servers (Stretch and Robosuite / rby1) publish **`sim_object_placements`** in [`emet_session`](zmq_session_metadata.md): one entry per object (`cat` → label, `pos` → xyz).
+
+| Scene | GT source |
+|-------|-----------|
+| Default table (`emet serve mujoco`, any `--robot`) | Packaged `scene_environment.xml` constants (table, blue cube, red cylinder) |
+| Robocasa (`--use-robocasa`) | Robocasa wizard `object_placements_info` (category + pose) |
+| MolmoSpaces (`--molmospaces-scene …`) | MuJoCo body scan of merged MJCF (skips robot subtree; capped body count) |
+
+### Two workflows
+
+1. **`--ground-truth --export`** (lightweight smoke): graph nodes are created **from GT** directly — verifies session metadata and export wiring without loading Qwen/CLIP. The alignment report is a self-check (graph vs the same placements used to build it).
+
+2. **Normal perception + `--compare-to-gt --export`** (full stack): run the usual Dynagraph controller (rotate, voxel + sensor graph updates), then print **`compare_graph_to_placements_report`** so you can see how **sensor-built** nodes match sim GT. Use this to debug perception and graph hooks against known object poses.
+
+Merge, staleness, and EQA require the **full interactive** path (omit `--export` or use `--export` without `--ground-truth` and exercise the question loop).
+
+Example headless GT smoke (default table, Stretch or rby1):
+
+```bash
+# Terminal 1
+emet serve mujoco --headless
+
+# Terminal 2
+emet run dynagraph --ground-truth --export /tmp/dynagraph_gt --no-rerun --cpu-only -N
+```
+
+Or: `uv run python scripts/dynagraph_ground_truth_smoke.py`.
+
+See also [`sim_ground_truth_graph.py`](../src/emet/memory/graph_eqa/sim_ground_truth_graph.py) and [`sim_object_placements.py`](../src/emet/simulation/sim_object_placements.py).
 
 ## Code map
 

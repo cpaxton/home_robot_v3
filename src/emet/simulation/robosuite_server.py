@@ -39,6 +39,7 @@ from emet.simulation import molmospaces_spawn, scene_base_spawn
 from emet.simulation.head_look_action import apply_head_to_robosuite
 from emet.simulation.molmospaces_env import molmospaces_nav_teleport_enabled
 from emet.simulation.molmospaces_mobile_autoplace import apply_molmospaces_freejoint_base_autoplace
+from emet.simulation.sim_object_placements import attach_sim_object_placements_to_session
 from emet.simulation.stereo_camera_utils import stereo_right_camera_name_from_spec
 from emet.utils.geometry import xyt_global_to_base
 from emet.utils.observation_layout import rgb_height_width_for_zmq
@@ -71,6 +72,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         environment: dict[str, Any] | None = None,
         scene_source_basename: str | None = None,
         session_extra: dict[str, Any] | None = None,
+        objects_info: dict[str, Any] | None = None,
         **kwargs,
     ):
         max_sim_steps = kwargs.pop("max_sim_steps", None)
@@ -84,6 +86,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._environment_descriptor = dict(environment) if environment else None
         self._scene_source_basename = scene_source_basename
         self._session_extra = dict(session_extra) if session_extra else None
+        self._objects_info = objects_info
 
         self._mjmodel: mujoco.MjModel | None = None
         self._mjdata: mujoco.MjData | None = None
@@ -339,6 +342,15 @@ class RobosuiteZmqServer(BaseZmqServer):
         if self._initial_xyt is not None:
             ixy = np.asarray(self._initial_xyt, dtype=np.float64).reshape(-1)[:3]
             session["navigation_origin_xyt"] = [float(ixy[0]), float(ixy[1]), float(ixy[2])]
+        env_kind = env.get("kind") if isinstance(env, dict) else None
+        attach_sim_object_placements_to_session(
+            session,
+            objects_info=self._objects_info,
+            environment_kind=str(env_kind) if env_kind else None,
+            model=self._mjmodel,
+            data=self._mjdata,
+            robot_root_name=self._spec.base_link_name,
+        )
         return session
 
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:

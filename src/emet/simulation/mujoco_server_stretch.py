@@ -21,6 +21,7 @@ import numpy as np
 from overrides import override
 
 from emet.motion.constants import STRETCH_CAMERA_FRAME
+from emet.simulation.sim_object_placements import attach_sim_object_placements_to_session
 from emet.simulation.stretch_mujoco import StretchMujocoSimulator
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 
@@ -629,6 +630,15 @@ class MujocoZmqServer(BaseZmqServer):
         }
         if self._scene_source_basename:
             session["scene_source_basename"] = self._scene_source_basename
+        env_kind = env.get("kind") if isinstance(env, dict) else None
+        attach_sim_object_placements_to_session(
+            session,
+            objects_info=self.objects_info,
+            environment_kind=str(env_kind) if env_kind else None,
+            model=getattr(self.robot_sim, "mjmodel", None),
+            data=getattr(self.robot_sim, "mjdata", None),
+            robot_root_name="base_link",
+        )
         return session
 
     def _is_molmospaces_session(self) -> bool:

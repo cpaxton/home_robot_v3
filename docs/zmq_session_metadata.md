@@ -15,6 +15,23 @@ Every full-observation, state, and (where applicable) servo message from Emet’
 
 Optional: `mjcf_model_name`, `scene_source_basename` (short debugging strings).
 
+### `sim_object_placements` (simulation only)
+
+When the MuJoCo server knows object poses at load time, it may include:
+
+```json
+"sim_object_placements": {
+  "apple_main": {"cat": "apple", "pos": [0.1, -0.5, 0.9], "quat": [1, 0, 0, 0]},
+  "object2": {"cat": "red cylinder", "pos": [0.08, -0.55, 0.6], "quat": [1, 0, 0, 0]}
+}
+```
+
+- **Robocasa**: from the scene wizard (`object_placements_info`).
+- **Default table scene**: fixed table + red cylinder + blue cube from `scene_environment.xml` (Stretch `stretch_mujoco_sim` and Robosuite `robosuite_sim`, e.g. rby1).
+- **MolmoSpaces merged MJCF**: body scan at server start (non-robot bodies with geoms; capped count on iTHOR-scale scenes).
+
+Clients use this for Dynagraph **`--ground-truth`** mode and dev alignment checks (`mujoco_align`). Keys starting with `_emet_` are internal (e.g. spawn hints) and are not graph objects.
+
 ## `environment` kinds
 
 - `molmospaces`: `scene`, `split`, `index` identify the dataset row used to build the merged MJCF.
