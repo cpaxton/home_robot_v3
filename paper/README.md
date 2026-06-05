@@ -4,13 +4,25 @@ LaTeX scaffold for the Dynagraph paper (CoRL 2026 submission format).
 
 ## Build
 
-From this directory:
+From the repo root:
 
 ```bash
-latexmk -pdf main.tex
+./paper/build.sh
 ```
 
-Requires a TeX distribution with `latexmk`, `natbib`, and standard packages.
+Or from this directory:
+
+```bash
+./build.sh
+```
+
+Remove auxiliary files:
+
+```bash
+./paper/build.sh --clean
+```
+
+Requires a TeX distribution with `latexmk`, `natbib`, and standard packages (on Ubuntu: `texlive-latex-extra`, `texlive-bibtex-extra`, `latexmk`).
 
 ## Layout
 

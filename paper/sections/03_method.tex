@@ -6,11 +6,25 @@ Dynagraph extends the \texttt{emet} GraphEQA agent with DynaMem-style voxel navi
 \subsection{System overview}
 
 At each control step the robot receives RGB-D observations and pose from a MuJoCo ZMQ server (or Habitat bridge, when available).
-Observations update:
-\begin{enumerate}
-  \item a \textbf{SparseVoxelMap} (obstacle map, explored regions, vision-language features for grounding), and
-  \item a \textbf{scene graph} whose nodes are objects/regions with 3D position, labels, supporting observation images, and edges for spatial relations (\emph{near}, \emph{on}, \emph{on\_floor}).
-\end{enumerate}
+All perception flows into a \textbf{SparseVoxelMap}---the shared memory substrate---before any graph or EQA reasoning.
+
+\subsection{Voxel map as evidence substrate}
+
+The voxel map is not only an obstacle grid for planning.
+Each voxel accumulates semantic features and records \textbf{provenance}: which observation index last wrote to it, and (in the 2D projection used for navigation) a \textbf{recency field} over when voxels were last refreshed.
+Observations are stored in an append-only \textbf{frame log}; each frame bundles RGB-D, camera intrinsics and extrinsics, robot base pose, and optional instance segmentation.
+Voxels therefore act as spatial indices into this log: given a 3D region, the map tells us \emph{what} was seen there, \emph{when}, and \emph{from which viewpoint}.
+
+\subsection{Voxel-grounded scene graph}
+
+The scene graph is built \emph{from} this substrate rather than maintained independently.
+Each node is an object or region with labels, a world-space position, an \texttt{obs\_id} pointing into the frame log, and a discrete \texttt{last\_seen} step aligned with the controller clock.
+Edges encode spatial relations (\emph{near}, \emph{on}, \emph{on\_floor}).
+When a new detection reinforces an existing object, merge rules update the node's position, labels, and \texttt{last\_seen}; the supporting \texttt{obs\_id} tracks the freshest evidence.
+
+\textbf{Disappearance.} An object is considered gone when its voxel support stops being refreshed and no new observation reinforces it within the staleness horizon.
+Pruning then removes the node and its linked observations from the graph presented to the VLM, so EQA is not misled by hypotheses the map no longer supports.
+
 An EQA module queries a shared VLM with the serialized graph and task-relevant images until confidence is sufficient or further exploration is requested.
 
 \subsection{Graph construction}

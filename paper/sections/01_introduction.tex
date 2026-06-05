@@ -8,11 +8,20 @@ Two recent lines of work address complementary parts of this problem.
 \textbf{GraphEQA}~\citep{saxena2024grapheqa} maintains a real-time 3D semantic scene graph and task-relevant images as multi-modal memory for a vision-language model (VLM), with hierarchical exploration in Habitat on HM-EQA and OpenEQA-style benchmarks.
 \textbf{DynaMem}~\citep{liu2024dynamem} maintains a dynamic voxel semantic map that supports adding and removing geometry as objects move, enabling open-vocabulary mobile manipulation in changing homes.
 
-\textbf{Dynagraph} unifies these ideas for \emph{exploring robot agents}: the same observations feed a voxel map used for navigation (DynaMem) and an object graph used for EQA (GraphEQA), with explicit \textbf{graph lifecycle} rules---spatial merge of duplicate detections and staleness-based pruning---so the graph does not grow without bound and does not retain objects that are no longer supported by perception.
+\textbf{Dynagraph} unifies these ideas for \emph{exploring robot agents} around a single substrate: a \textbf{dynamic sparse voxel map}.
+Each occupied voxel stores not only geometry and semantics, but \textbf{when it was last seen} and a \textbf{pointer to the observation} that last supported it---camera pose, robot base configuration, RGB-D, and optional instance masks.
+Scene-graph nodes are \textbf{grounded in these voxels}: every object in the graph is tied to 3D support in the map and to the observation index that best explains it.
+Navigation, exploration, and EQA therefore read from the same evidence trail.
+
+This grounding makes \textbf{disappearance} a first-class signal.
+When the robot revisits a region and voxels that previously supported an object are no longer updated---or no fresh observation reinforces that hypothesis---the system can conclude the object is \emph{no longer observed} and retire it from the graph.
+Dynagraph adds explicit \textbf{graph lifecycle} rules on top of this substrate: spatial merge of duplicate detections across viewpoints, and staleness-based pruning of nodes whose \texttt{last\_seen} step falls behind the controller clock.
+The graph stays compact and aligned with what the voxel map currently supports, rather than accumulating stale object hypotheses indefinitely.
 
 \subsection{Contributions}
 
 \begin{itemize}
+  \item \textbf{Voxel-grounded scene graphs}: object nodes reference voxel support and observation pointers (pose, configuration, images); disappearance is detectable when support is no longer refreshed.
   \item \textbf{Dynagraph memory architecture}: coupled voxel navigation map + dynamic object scene graph with merge and staleness (\texttt{dynagraph\_merge\_xy\_m}, \texttt{dynagraph\_staleness\_horizon}).
   \item \textbf{Open-source implementation} in \texttt{emet} (\texttt{emet run dynagraph}), building on \texttt{GraphEQAController} and \texttt{SparseVoxelMap}.
   \item \textbf{Habitat EQA harness} (separate development branch) to reproduce GraphEQA-style evaluation on HM-EQA / OpenEQA.
