@@ -223,3 +223,34 @@ def test_default_scene_with_rby1_loads_and_robot_can_be_commanded():
         f"|q1-q0|={np.linalg.norm(np.array(q1) - np.array(q0)):.4f}, "
         f"base_xy_delta={np.linalg.norm(xyt1[:2] - xyt0[:2]):.4f}"
     )
+
+
+def test_rby1_emet_session_has_default_table_gt():
+    """RobosuiteZmqServer publishes sim_object_placements for default table (red/blue/table)."""
+    import pytest
+
+    pytest.importorskip("mujoco")
+
+    from emet.robots.rby1 import Rby1Backend
+    from emet.simulation.mujoco_server import _load_default_scene_with_robot
+    from emet.simulation.robosuite_server import RobosuiteZmqServer
+    from emet.simulation.sim_object_placements import assert_default_table_gt
+
+    model = _load_default_scene_with_robot("rby1")
+    if model is None:
+        pytest.skip("scene_environment.xml or rby1 MJCF not found (run from repo with assets)")
+
+    spec = Rby1Backend().get_spec()
+    server = RobosuiteZmqServer(
+        robot_spec=spec,
+        scene_model=model,
+        send_port=0,
+        recv_port=0,
+        send_state_port=0,
+        send_servo_port=0,
+    )
+    server._load_model()
+    server._stabilize_physics_state_after_load()
+    session = server._build_emet_session(robocasa=False)
+    assert "sim_object_placements" in session
+    assert_default_table_gt(session["sim_object_placements"])

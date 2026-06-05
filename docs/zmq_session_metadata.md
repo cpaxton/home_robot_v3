@@ -15,6 +15,29 @@ Every full-observation, state, and (where applicable) servo message from Emet’
 
 Optional: `mjcf_model_name`, `scene_source_basename` (short debugging strings).
 
+### `sim_object_placements` (simulation only)
+
+When the MuJoCo server knows object poses at load time, it may include:
+
+```json
+"sim_object_placements": {
+  "apple_main": {"cat": "apple", "pos": [0.1, -0.5, 0.9], "quat": [1, 0, 0, 0]},
+  "object2": {"cat": "red cylinder", "pos": [0.08, -0.55, 0.6], "quat": [1, 0, 0, 0]}
+},
+"sim_object_placements_frame": "mujoco_world"
+```
+
+- **Robocasa**: from the scene wizard (`object_placements_info`), **pos refreshed from MuJoCo `body_xpos` at server start** when the sim model is loaded.
+- **Full scene (Robocasa)**: fixture-level scan (sink, counter, cabinets, …) merged with wizard manipulable objects; each entry may include world **axis-aligned `bounds`** `[[min_xyz],[max_xyz]]` from MuJoCo mesh/collision geoms.
+- **Default table scene**: fixed table + red cylinder + blue cube from `scene_environment.xml`, **overlaid with live body poses** when the server has `model`/`data`.
+- **MolmoSpaces merged MJCF**: body scan at server start (non-robot bodies with geoms; capped count on iTHOR-scale scenes).
+
+**Frame:** every `pos` is **absolute MuJoCo world XYZ** (meters). Same as `camera_pose`. On Robosuite servers, `gps`/`compass` are **episode-relative**; use `navigation_origin_xyt` + `nav_xyt_to_world_xyt` for robot base in world. Do **not** subtract gps from GT positions.
+
+Clients use this for Dynagraph **`--ground-truth`** mode and dev alignment checks (`mujoco_align`). Keys starting with `_emet_` are internal (e.g. spawn hints) and are not graph objects.
+
+**Limitations:** placements are fixed at server start (not live physics). See [dynagraph.md — Ground-truth limitations](dynagraph.md#limitations).
+
 ## `environment` kinds
 
 - `molmospaces`: `scene`, `split`, `index` identify the dataset row used to build the merged MJCF.

@@ -25,6 +25,8 @@ Options mirror `emet run graph-eqa` (robot, Discord, Rerun export, `--no-instanc
 
 - **`--merge-xy-m`**: override horizontal merge distance in meters (`dynagraph_merge_xy_m` in config; `0` disables merge).
 - **`--staleness-horizon`**: override how many **controller steps** a node can go without a reinforcing observation before `maintain()` drops it (`dynagraph_staleness_horizon`; `0` disables pruning).
+- **`--ground-truth`**: **sim only** — build graph nodes from `emet_session["sim_object_placements"]` instead of VLM / YoloE perception. Pair with **`--export`** for a **full episode** export (rotate, voxel frames, graph, GT sidecars). See [Ground-truth graph mode](#ground-truth-graph-mode).
+- **`--compare-to-gt`**: **sim only** — on the **full** `--export` path (sensor-built graph after rotate), print alignment vs `sim_object_placements` in session.
 
 If unset on the command line, `run_dynagraph` applies defaults (`dynagraph_merge_xy_m=0.45`, `dynagraph_staleness_horizon=256`) only when those keys are missing from the loaded parameters dict, so you can still set them in the resolved dynav YAML (see **`--dynav-config`**).
 
@@ -205,6 +207,89 @@ Live runs log graph nodes and a text tree under **`world/dynagraph/`** (`world/d
 
 Set **`EMET_NAVGRID_ASCII=1`** to print a cropped ASCII top-down map to **stderr** after periodic updates (same backend-neutral renderer as Dynamem: `#` obstacles, `.` explored, `@` robot, `0-9a-z` semantic glyphs with legend). Works with any robot backend that uses the shared `SparseVoxelMap` path (Stretch, Galaxea R1, etc.). Output is cropped to the explored region (same bbox as Discord share maps) at up to **320 cells** on the longest edge by default; set **`EMET_NAVGRID_MAX_SIDE=640`** for full Discord resolution.
 
+## Ground-truth graph mode (`--ground-truth`)
+
+Use **`--ground-truth`** in simulation to build the Dynagraph scene graph from **`emet_session["sim_object_placements"]`** instead of VLM perception labels. **Voxel mapping, rotate-in-place, explore, and YoloE instance detection still run**; detections are matched to nearest GT nodes in XY and attached as observation RGB (description suffix ``|det:…``). Each control step also appends a **navigation viewpoint sample** (camera pose + RGB, no new entity node) so the graph memory records everywhere the robot observed from. Use **`--compare-to-gt`** when you want a full VLM perception graph overlaid on sim reference.
+
+MuJoCo ZMQ servers publish placements in [`emet_session`](zmq_session_metadata.md). Each entry has a **`cat`** label, world **`pos`**, and (when the server scanned the MJCF) axis-aligned **`bounds`** from mesh/collision geoms.
+
+| Scene | GT source |
+|-------|-----------|
+| Default table | Packaged `scene_environment.xml` constants, overlaid with live MuJoCo body poses when the server has the model |
+| Robocasa (`--use-robocasa`) | **Full kitchen fixture scan** (sink, counter, cabinets, appliances, …) **merged** with wizard manipulable objects |
+| MolmoSpaces | Per-body MJCF scan (robot subtree skipped; capped on large scenes) |
+
+### `--ground-truth` vs `--compare-to-gt`
+
+| Flag | Graph source | Rerun |
+|------|--------------|-------|
+| **`--ground-truth`** | All nodes from sim GT | **«Graph (ground truth)»** column (nodes + 3D boxes); voxel map + instance→GT association + per-step viewpoint samples |
+| **`--compare-to-gt`** | Normal sensor / VLM graph | **«Dynagraph 3D»** (perception) + **«Sim GT (reference)»** (green overlay) |
+
+The two flags are **mutually exclusive**.
+
+### Workflows
+
+**Export smoke** (full controller + GT sidecars; CI check):
+
+```bash
+uv run python scripts/dynagraph_ground_truth_smoke.py
+```
+
+**Full GT episode export** (rotate + voxel frames + `sim_object_placements.json`):
+
+```bash
+emet serve mujoco --headless                    # or --use-robocasa
+emet run dynagraph --ground-truth --export /tmp/dynagraph_gt --no-rerun --cpu-only
+```
+
+Exported layout: `manifest.json`, `graph.json`, `frames/`, `sim_object_placements.json`, optional `gt_alignment_report.txt`, per-frame `gt_assoc_NNNN.json` when instance masks overlap projected GT bounds.
+
+**Batch metrics** (completeness, localization error, association recall):
+
+```bash
+uv run python scripts/eval_dynagraph_ground_truth.py --episode /tmp/dynagraph_gt
+uv run python scripts/eval_dynagraph_ground_truth.py --run-live --cpu-only --output /tmp/metrics.json
+```
+
+**Interactive GT graph** (EQA / explore on known sim labels):
+
+```bash
+emet serve mujoco --use-robocasa --headless --port-offset 50
+emet run dynagraph --ground-truth --port-offset 50
+```
+
+Graph nodes and 3D bounds appear in Rerun after startup; **rotate-in-place runs by default** to seed the voxel map (use **`-N`** to skip). Use **explore** / **e** to extend the map; instance detections attach to nearby GT nodes as you move.
+
+**Perception vs GT** (full Dynagraph stack + alignment report):
+
+```bash
+emet run dynagraph --compare-to-gt --export /tmp/dg_cmp --port-offset 50 -N
+```
+
+### Limitations
+
+- **Static at server start:** placements are not updated if objects move during the episode.
+- **Stretch sim:** GT scan uses `robot_sim.model` (MuJoCo subprocess); restart the server after code changes.
+- **Coordinate frame:** `pos` / `bounds` are **MuJoCo world XYZ** (same as `camera_pose`). `gps`/`compass` are episode-relative; servers publish **`navigation_origin_xyt`** so Rerun can place the robot mesh in world.
+- **Fixture grouping (Robocasa):** cabinet doors and panels merge into one entry per fixture group (e.g. `cab_1`); walls/floors are excluded.
+- **Wrong GT on custom `--scene_path`:** if `environment.kind` stays `default_table`, you may get default-table constants — set Robocasa or MolmoSpaces session metadata instead.
+
+See [`sim_object_placements.py`](../src/emet/simulation/sim_object_placements.py) and [`sim_ground_truth_graph.py`](../src/emet/memory/graph_eqa/sim_ground_truth_graph.py).
+
+### Tune graph object fusion (offline)
+
+Use sim GT **3D bounds** and head **2D bboxes** from `emet export-sim-gt`, then record live detections during a short Dynagraph run, and grid-search fusion thresholds:
+
+```bash
+uv run emet export-sim-gt --robot innate_mars --seed 0 --layout 1 -o /tmp/gt.json
+uv run emet serve mujoco --use-robocasa --robot innate_mars --headless
+uv run emet run dynagraph --robot innate_mars --export /tmp/cal --calibration-export /tmp/frames.jsonl --no-rerun -N
+uv run emet tune-graph-fusion --gt /tmp/gt.json --frames /tmp/frames.jsonl --write-config
+```
+
+`--calibration-export` writes per-step instance detections (label, `xyz`, `bbox_xyxy`, optional embedding) to JSONL; `tune-graph-fusion` scores association / merge against `/tmp/gt.json` and can emit an updated `graph_object_fusion` block for your dynav YAML.
+
 ### Manual smoke (Robocasa + export)
 
 - Start server as in **Robocasa** above with **`--use-robocasa`**.
@@ -230,9 +315,12 @@ Full index and known gaps (graph + EQA on known scene): [TESTING.md](TESTING.md)
 | [`src/emet/memory/graph_eqa/dynamem_graph_hooks.py`](../src/emet/memory/graph_eqa/dynamem_graph_hooks.py) | Optional `frame_step` forwarded to `set_graph_timestep`. |
 | [`src/emet/app/dynagraph_explore.py`](../src/emet/app/dynagraph_explore.py) | `dynagraph_explore_until_terminated` for scripted frontier batches. |
 | [`src/emet/app/run_dynagraph.py`](../src/emet/app/run_dynagraph.py) | CLI entry (`emet run dynagraph`). |
+| [`src/emet/simulation/sim_object_placements.py`](../src/emet/simulation/sim_object_placements.py) | Session **`sim_object_placements`** + MJCF body scan for live sim GT. |
+| [`src/emet/memory/graph_eqa/sim_ground_truth_graph.py`](../src/emet/memory/graph_eqa/sim_ground_truth_graph.py) | GT graph upsert, alignment reports, instance→GT association. |
 | [`src/emet/simulation/mujoco_ground_truth.py`](../src/emet/simulation/mujoco_ground_truth.py) | Text/JSON snapshots of **`mjData.body(*).xpos`** for sim validation; triggered by **`mujoco_ground_truth_dump`** ZMQ recv command. |
 | [`src/emet/simulation/mujoco_gt_objects.py`](../src/emet/simulation/mujoco_gt_objects.py) | Per-object **3D AABB** + optional head **2D bbox** JSON (`emet export-sim-gt`). |
 | [`src/emet/memory/graph_eqa/graph_object_fusion/`](../src/emet/memory/graph_eqa/graph_object_fusion/) | **GraphObjectFusion** + offline **`emet tune-graph-fusion`**. |
+| [`src/emet/app/run_interactive.py`](../src/emet/app/run_interactive.py) | Shared interactive REPL for graph-EQA and task-mode apps. |
 
 ## See also
 

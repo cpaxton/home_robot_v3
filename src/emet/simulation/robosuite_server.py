@@ -54,10 +54,14 @@ from emet.simulation.mujoco_stationary_control import (
 from emet.simulation.robosuite_load_utils import (
     apply_home_keyframe_preserving_base,
     apply_home_keyframe_preserving_planar_base,
-    update_robot_qpos0_from_data,
     log_post_load_diagnostics,
     probe_max_qvel_unforced_steps,
     robosuite_post_load_debug_enabled,
+    update_robot_qpos0_from_data,
+)
+from emet.simulation.sim_object_placements import (
+    apply_navigation_origin_to_session,
+    attach_sim_object_placements_to_session,
 )
 from emet.simulation.stereo_camera_utils import stereo_right_camera_name_from_spec
 from emet.utils.geometry import xyt_global_to_base
@@ -91,14 +95,13 @@ class RobosuiteZmqServer(BaseZmqServer):
         environment: dict[str, Any] | None = None,
         scene_source_basename: str | None = None,
         session_extra: dict[str, Any] | None = None,
+        objects_info: dict[str, Any] | None = None,
         **kwargs,
     ):
         max_sim_steps = kwargs.pop("max_sim_steps", None)
         debug_molmospaces_spawn = bool(kwargs.pop("debug_molmospaces_spawn", False))
         scene_disk_path = kwargs.pop("scene_disk_path", None)
-        mujoco_stationary_control: MujocoStationaryControl | None = kwargs.pop(
-            "mujoco_stationary_control", None
-        )
+        mujoco_stationary_control: MujocoStationaryControl | None = kwargs.pop("mujoco_stationary_control", None)
         super().__init__(*args, **kwargs)
         self._spec = robot_spec
         self._scene_xml = scene_xml
@@ -107,6 +110,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._environment_descriptor = dict(environment) if environment else None
         self._scene_source_basename = scene_source_basename
         self._session_extra = dict(session_extra) if session_extra else None
+        self._objects_info = objects_info
 
         self._mjmodel: mujoco.MjModel | None = None
         self._mjdata: mujoco.MjData | None = None
@@ -156,9 +160,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         # ZMQ ``joint`` actions set True so streamed / one-shot targets are not overwritten on refresh.
         self._joint_ctrl_hold_client_pin: np.ndarray | None = None
         self._mujoco_stationary: MujocoStationaryControl = (
-            mujoco_stationary_control
-            if mujoco_stationary_control is not None
-            else DefaultMujocoStationaryControl()
+            mujoco_stationary_control if mujoco_stationary_control is not None else DefaultMujocoStationaryControl()
         )
         # ``mj_step`` calls per outer server tick (see :meth:`_configure_mj_substeps_per_tick`).
         self._mj_substeps_per_tick: int = 1
@@ -214,16 +216,8 @@ class RobosuiteZmqServer(BaseZmqServer):
                 if spec_i is not None and hold is not None and 0 <= spec_i < int(hold.shape[0])
                 else float("nan")
             )
-            tau_dof = (
-                float(d.qfrc_actuator[vadr])
-                if 0 <= vadr < int(d.qfrc_actuator.shape[0])
-                else float("nan")
-            )
-            tau_c = (
-                float(d.qfrc_constraint[vadr])
-                if 0 <= vadr < int(d.qfrc_constraint.shape[0])
-                else float("nan")
-            )
+            tau_dof = float(d.qfrc_actuator[vadr]) if 0 <= vadr < int(d.qfrc_actuator.shape[0]) else float("nan")
+            tau_c = float(d.qfrc_constraint[vadr]) if 0 <= vadr < int(d.qfrc_constraint.shape[0]) else float("nan")
             f_act = float(d.actuator_force[aid]) if 0 <= aid < int(d.actuator_force.shape[0]) else float("nan")
             return (
                 f"{an}({jn}):q={q:.4f} q0={q0:.4f} Δq0={d_q0:.4f} dq={dq:.4f} "
@@ -633,9 +627,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._stationary_base_freejoint_qpos = None
             return
         qadr, _ = addrs
-        self._stationary_base_freejoint_qpos = np.array(
-            self._mjdata.qpos[qadr : qadr + 7], dtype=np.float64, copy=True
-        )
+        self._stationary_base_freejoint_qpos = np.array(self._mjdata.qpos[qadr : qadr + 7], dtype=np.float64, copy=True)
 
     def _hold_stationary_base_freejoint_if_idle(self) -> None:
         """While there is no navigation goal, pin the base free joint to the post-spawn snapshot."""
@@ -772,8 +764,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         if self._session_extra:
             session.update(self._session_extra)
         if self._initial_xyt is not None:
-            ixy = np.asarray(self._initial_xyt, dtype=np.float64).reshape(-1)[:3]
-            session["navigation_origin_xyt"] = [float(ixy[0]), float(ixy[1]), float(ixy[2])]
+            apply_navigation_origin_to_session(session, self._initial_xyt)
         if spawn_floor_map is not None:
             session["spawn_floor_map"] = spawn_floor_map
         session["nav_contract"] = {
@@ -788,6 +779,15 @@ class RobosuiteZmqServer(BaseZmqServer):
         }
         if self._nav_world_clip_rect is not None:
             session["nav_walkable_clip_eroded_xy"] = list(self._nav_world_clip_rect)
+        env_kind = env.get("kind") if isinstance(env, dict) else None
+        attach_sim_object_placements_to_session(
+            session,
+            objects_info=self._objects_info,
+            environment_kind=str(env_kind) if env_kind else None,
+            model=self._mjmodel,
+            data=self._mjdata,
+            robot_root_name=self._spec.base_link_name,
+        )
         return session
 
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
@@ -1023,9 +1023,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._ensure_joint_ctrl_hold_buffers()
         if self._joint_ctrl_hold_client_pin is not None:
             self._joint_ctrl_hold_client_pin.fill(False)
-        self._mujoco_stationary.sync_ctrl_and_spec_hold(
-            self._mjmodel, self._mjdata, self._spec, self._joint_ctrl_hold
-        )
+        self._mujoco_stationary.sync_ctrl_and_spec_hold(self._mjmodel, self._mjdata, self._spec, self._joint_ctrl_hold)
 
     def _preserve_joint_ctrl_hold_from_ctrl(self) -> None:
         """Keep PD targets in :attr:`_joint_ctrl_hold` from current ``data.ctrl`` (not from ``qpos``).
@@ -1591,9 +1589,10 @@ class RobosuiteZmqServer(BaseZmqServer):
                 if "joint" in action:
                     joint_targets = action["joint"]
                     n_spec = len(self._spec.actuator_names)
-                    if self._joint_ctrl_hold_client_pin is None or int(
-                        self._joint_ctrl_hold_client_pin.shape[0]
-                    ) != n_spec:
+                    if (
+                        self._joint_ctrl_hold_client_pin is None
+                        or int(self._joint_ctrl_hold_client_pin.shape[0]) != n_spec
+                    ):
                         self._joint_ctrl_hold_client_pin = np.zeros(n_spec, dtype=np.bool_)
                     for i, aname in enumerate(self._spec.actuator_names):
                         if i < len(joint_targets):
@@ -1601,10 +1600,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                             if aid >= 0:
                                 v = float(joint_targets[i])
                                 self._mjdata.ctrl[aid] = v
-                                if (
-                                    self._joint_ctrl_hold is not None
-                                    and i < int(self._joint_ctrl_hold.shape[0])
-                                ):
+                                if self._joint_ctrl_hold is not None and i < int(self._joint_ctrl_hold.shape[0]):
                                     self._joint_ctrl_hold[i] = v
                                     self._joint_ctrl_hold_client_pin[i] = True
 
@@ -1991,9 +1987,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                     self._mjdata,
                     n_steps=24,
                     sync_ctrl=self._sync_actuator_ctrl_from_joint_positions,
-                    before_physics_step=lambda: self._apply_joint_ctrl_hold_to_actuators(
-                        refresh_unpinned_hold=False
-                    ),
+                    before_physics_step=lambda: self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False),
                 )
                 if mx is not None:
                     logger.info(f"[robosuite_load] post-stabilize 24-step probe max|qvel|={mx:.4f}")
@@ -2023,9 +2017,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             with self._mj_lock:
                 if self._mujoco_ctrl_debug_enabled():
                     self._ctrl_debug_periodic_counter = 0
-                    self._ctrl_debug_initial_logs_remaining = max(
-                        48, int(self._mj_substeps_per_tick) * 8
-                    )
+                    self._ctrl_debug_initial_logs_remaining = max(48, int(self._mj_substeps_per_tick) * 8)
                 self._preserve_joint_ctrl_hold_from_ctrl()
                 mujoco.mj_forward(self._mjmodel, self._mjdata)
                 if self._mujoco_ctrl_debug_enabled():
@@ -2038,9 +2030,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                         f"| {self._mujoco_ctrl_debug_summary()}"
                     )
                     logger.info(f"[mujoco_ctrl_debug] pre_threads_pd {self._mujoco_ctrl_debug_pd_tracking()}")
-                    logger.info(
-                        f"[mujoco_ctrl_debug] pre_threads_base {self._mujoco_ctrl_debug_base_stability()}"
-                    )
+                    logger.info(f"[mujoco_ctrl_debug] pre_threads_base {self._mujoco_ctrl_debug_base_stability()}")
                     logger.info(
                         "[mujoco_ctrl_debug] set EMET_MUJOCO_CTRL_DEBUG_VERBOSE=1 for full lines "
                         "(Δq0 vs qpos0, dq, F_act, τ_dof, τ_con) on all torso joints + arm1 pair."

@@ -614,6 +614,7 @@ def main(
                 scene_model=scene_model if not use_robocasa else None,
                 environment=zmq_environment,
                 scene_source_basename=scene_source_basename,
+                objects_info=objects_info,
                 max_sim_steps=steps,
                 debug_molmospaces_spawn=debug_molmospaces_spawn,
                 scene_disk_path=spawn_scene_disk,

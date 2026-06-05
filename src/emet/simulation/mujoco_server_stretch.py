@@ -26,6 +26,11 @@ from emet.simulation.mujoco_ground_truth import (
     mujoco_ground_truth_write_path,
     parse_ground_truth_dump_action_field,
 )
+from emet.simulation.sim_object_placements import (
+    apply_navigation_origin_to_session,
+    attach_sim_object_placements_to_session,
+    mujoco_model_data_for_gt_scan,
+)
 from emet.simulation.stretch_mujoco import StretchMujocoSimulator
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 
@@ -500,19 +505,22 @@ class MujocoZmqServer(BaseZmqServer):
             return None
         return pose_global_to_base(pose, self._initial_xyt)
 
+    def _head_camera_opencv_world(self) -> np.ndarray:
+        """Head camera 4x4 OpenCV-style transform in MuJoCo world (ZMQ / voxel / Rerun contract)."""
+        pose = self.robot_sim.get_link_pose(STRETCH_CAMERA_FRAME)
+        pose[:3, :3] = pose[:3, :3] @ np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]])
+        return pose
+
     def get_head_camera_pose(self) -> np.ndarray:
-        """Get the camera pose in world coords"""
+        """Head camera pose in episode-relative (nav) coords."""
         if self._initial_xyt is None:
             return None
         if not self._stretch_sim_publish_ok():
             return None
         try:
-            pose = self.robot_sim.get_link_pose(STRETCH_CAMERA_FRAME)
+            return pose_global_to_base(self._head_camera_opencv_world(), self._initial_xyt)
         except (ConnectionError, ConnectionResetError, OSError):
             return None
-        # We are going to rotate the head camera
-        pose[:3, :3] = pose[:3, :3] @ np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]])
-        return pose_global_to_base(pose, self._initial_xyt)
 
     def get_ee_camera_pose(self) -> np.ndarray:
         """Get the end effector camera pose in world coords"""
@@ -629,6 +637,8 @@ class MujocoZmqServer(BaseZmqServer):
         self._control_thread.start()
 
         self._initial_xyt = self.robot_sim.get_base_pose()
+        if self._emet_session is not None:
+            apply_navigation_origin_to_session(self._emet_session, self._initial_xyt)
 
         if robocasa:
             if self._move_back_at_start:
@@ -671,6 +681,16 @@ class MujocoZmqServer(BaseZmqServer):
             session["scene_source_basename"] = self._scene_source_basename
         if self._environment_descriptor and self._environment_descriptor.get("spawn_floor_map") is not None:
             session["spawn_floor_map"] = self._environment_descriptor["spawn_floor_map"]
+        env_kind = env.get("kind") if isinstance(env, dict) else None
+        gt_model, gt_data = mujoco_model_data_for_gt_scan(self.robot_sim)
+        attach_sim_object_placements_to_session(
+            session,
+            objects_info=self.objects_info,
+            environment_kind=str(env_kind) if env_kind else None,
+            model=gt_model,
+            data=gt_data,
+            robot_root_name="base_link",
+        )
         return session
 
     def _is_molmospaces_session(self) -> bool:

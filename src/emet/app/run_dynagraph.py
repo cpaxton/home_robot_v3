@@ -11,6 +11,7 @@ import time
 from typing import Any
 
 import click
+import numpy as np
 
 from emet.app.dynagraph_explore import dynagraph_explore_until_terminated
 from emet.app.robot_cli import create_robot_client_from_cli
@@ -18,21 +19,84 @@ from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import get_parameters
 from emet.memory.graph_eqa import format_scene_graph_pretty
-from emet.memory.headless_export import export_graph_eqa_dir
+from emet.memory.graph_eqa.sim_ground_truth_graph import (
+    ground_truth_alignment_report,
+    gt_pose_sanity_report,
+    read_sim_object_placements,
+)
+from emet.memory.headless_export import export_dynagraph_episode, export_graph_eqa_dir
 from emet.robots import apply_robot_dynav_parameter_overrides, resolve_dynav_config_yaml
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
 
 
-def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
+def _ensure_ground_truth_ready(agent: DynagraphController, *, context: str) -> None:
+    """Populate GT graph + Rerun immediately; fail fast when session has no placements."""
+    session = agent.robot.get_emet_session()
+    if session is None:
+        raise click.ClickException(
+            f"Ground-truth mode ({context}): no emet_session from the ZMQ server. "
+            "Start emet serve mujoco (default, --use-robocasa, or --molmospaces-scene …) with the "
+            "same --port-offset as this client, then retry."
+        )
+    n_bodies = agent.refresh_ground_truth()
+    if n_bodies == 0:
+        runtime = session.get("runtime_kind", "?")
+        raise click.ClickException(
+            f"Ground-truth mode ({context}): emet_session has no sim_object_placements "
+            f"(runtime_kind={runtime!r}). Restart the sim server from this branch with the same "
+            "--port-offset — servers started before the ground-truth feature do not publish placements."
+        )
+    n_nodes = len(agent.graph_memory.get_nodes()) if agent.graph_memory is not None else 0
+    n_boxes = sum(
+        1
+        for n in (agent.graph_memory.get_nodes() if agent.graph_memory else [])
+        if getattr(n, "extent_half", None) is not None
+    )
+    click.echo(f"Ground truth: {n_bodies} sim bodies → {n_nodes} graph nodes ({n_boxes} with 3D bounds).")
+    click.echo(
+        "Rerun: «Graph (ground truth)» column — nodes at world/dynagraph/nodes, boxes at world/dynagraph/bboxes."
+    )
+    placements = read_sim_object_placements(agent.robot.get_emet_session())
+    if agent.graph_memory is not None and placements:
+        click.echo(ground_truth_alignment_report(agent.graph_memory, placements))
+    session = agent.robot.get_emet_session()
+    try:
+        from emet.utils.geometry import nav_xyt_to_world_xyt
+
+        obs = agent.robot.get_observation()
+        gps = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
+        comp = np.asarray(obs.compass, dtype=np.float64).ravel()
+        local = np.array([float(gps[0]), float(gps[1]), float(comp[0]) if comp.size else 0.0])
+        robot_world = nav_xyt_to_world_xyt(local, session)
+    except Exception:
+        robot_world = None
+    click.echo(gt_pose_sanity_report(placements, robot_world_xyt=robot_world, session=session))
+
+
+def _print_dynagraph_rerun_help(
+    *,
+    enabled: bool,
+    headless: bool,
+    ground_truth: bool = False,
+    compare_to_gt: bool = False,
+) -> None:
     """Dynagraph-specific Rerun hints (web URL is printed from RerunVisualizer after rr.serve)."""
     if not enabled:
         click.echo("Rerun visualization is disabled (--no-rerun).")
         return
     if headless:
         click.echo("Rerun headless: no auto-open browser (use the URL printed when the viewer started).")
+    if ground_truth:
+        click.echo(
+            "Ground-truth mode: use «Graph (ground truth)» for labeled nodes and 3D boxes "
+            "(world/dynagraph/nodes, world/dynagraph/bboxes)."
+        )
+        return
     click.echo("Dynagraph: 3D world view + graph node list; full tree text is export/stdout only (not live Rerun).")
+    if compare_to_gt:
+        click.echo("Compare mode: green sim reference under «Sim GT (reference)» (world/dynagraph/ground_truth/).")
 
 
 @click.command()
@@ -116,20 +180,23 @@ def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
     "--input-path",
     type=click.Path(file_okay=False, dir_okay=True, path_type=str),
     default=None,
-    help="Load graph memory from a saved directory before running",
+    help="Load graph memory from a saved directory (common format) before running",
 )
 @click.option(
     "--export",
     "export_dir",
     type=click.Path(file_okay=False, dir_okay=True, path_type=str),
     default=None,
-    help="save graph backend + scene_graph_report.txt here, print summary, exit (unless combined with discord)",
+    help=(
+        "Save graph backend + scene_graph_report.txt here, print summary, and exit "
+        "(unless combined with --discord or --question). Use for headless / no-TTY runs."
+    ),
 )
 @click.option(
     "--dump-memory",
     type=click.Path(file_okay=False, dir_okay=True, path_type=str),
     default=None,
-    help="Save graph memory to this directory when the session ends",
+    help="Save graph memory to this directory when the session ends (empty line to quit)",
 )
 @click.option(
     "--cpu-only",
@@ -145,12 +212,12 @@ def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
 @click.option(
     "--no-sensor-perception",
     is_flag=True,
-    help="Do not use VLM scene labels; use voxel image_descriptions only",
+    help="Do not use VLM scene labels; use voxel image_descriptions only (legacy)",
 )
 @click.option(
     "--no-instance-graph",
     is_flag=True,
-    help="Disable YoloE instance masks for graph labels",
+    help="Disable YoloE instance masks for graph labels; use voxel VLM list_objects + legacy labeling",
 )
 @click.option(
     "--merge-xy-m",
@@ -217,6 +284,23 @@ def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
     type=str,
     help="Append raw instance detections per step to JSONL for emet tune-graph-fusion",
 )
+@click.option(
+    "--ground-truth",
+    is_flag=True,
+    help=(
+        "Sim only: build the scene graph from emet_session sim_object_placements "
+        "(Robocasa wizard, default table, or MolmoSpaces MJCF scan) instead of VLM perception. "
+        "Use with --export for headless GT smoke tests."
+    ),
+)
+@click.option(
+    "--compare-to-gt",
+    is_flag=True,
+    help=(
+        "Sim only: after building the graph from sensors (full Dynagraph --export path), "
+        "print alignment vs emet_session sim_object_placements."
+    ),
+)
 def main(
     robot_ip: str,
     robot_backend: str = "stretch",
@@ -250,9 +334,28 @@ def main(
     dump_sim_ground_truth: str | None = None,
     dump_sim_gt_include_robot: bool = False,
     calibration_export: str | None = None,
+    ground_truth: bool = False,
+    compare_to_gt: bool = False,
 ) -> None:
-    """Run Dynagraph: voxel + graph EQA with optional merge and staleness (see docs/dynagraph.md)."""
-    click.echo("Dynagraph: graph memory with DynaMem-style voxel navigation.")
+    """Run Dynagraph: graph EQA with DynaMem-style voxel navigation (see docs/dynagraph.md)."""
+    click.echo("Dynagraph: connecting to robot and starting graph-based EQA (with merge/staleness).")
+    if ground_truth and compare_to_gt:
+        raise click.UsageError(
+            "--ground-truth and --compare-to-gt are mutually exclusive. "
+            "Use --ground-truth to build the graph from sim GT, or --compare-to-gt to evaluate sensor perception."
+        )
+    if compare_to_gt and not export_dir:
+        click.echo(
+            "Note: --compare-to-gt prints a full alignment report on --export. "
+            "Interactive runs still show the GT Rerun layer; a summary prints when you quit."
+        )
+
+    if ground_truth:
+        click.echo(
+            "Ground-truth mode: graph nodes from sim_object_placements; "
+            "voxel map, rotate/explore, and instance detections still run (detections attach to GT nodes)."
+        )
+        no_sensor_perception = True
 
     if rerun and no_rerun:
         raise click.UsageError("Cannot use both --rerun and --no-rerun.")
@@ -336,7 +439,12 @@ def main(
         )
     if hasattr(robot, "wait_for_obs"):
         robot.wait_for_obs(timeout=30.0)
-    _print_dynagraph_rerun_help(enabled=not no_rerun, headless=headless)
+    _print_dynagraph_rerun_help(
+        enabled=not no_rerun,
+        headless=headless,
+        ground_truth=ground_truth,
+        compare_to_gt=compare_to_gt,
+    )
 
     robot.move_to_nav_posture()
     if robot_key == "stretch":
@@ -355,7 +463,8 @@ def main(
     else:
         print(f"- EQA VL: single shared Qwen3.5-{ms} ({qn}) for labels + EQA")
 
-    print("- Start Dynagraph agent")
+    print("- Start Dynagraph agent (graph memory + voxel map for navigation)")
+    agent: DynagraphController | None = None
     agent = DynagraphController(
         robot,
         parameters,
@@ -364,6 +473,8 @@ def main(
         use_sensor_perception=not no_sensor_perception,
         cpu_only=cpu_only,
         use_instance_graph=not no_instance_graph,
+        ground_truth_mode=ground_truth,
+        visualize_ground_truth=compare_to_gt,
     )
     agent.start()
     if calibration_export:
@@ -394,6 +505,9 @@ def main(
         env = sess.get("environment")
         spawn = sess.get("spawn_floor_map")
         return (dict(env) if isinstance(env, dict) else None, dict(spawn) if isinstance(spawn, dict) else None)
+
+    if ground_truth:
+        _ensure_ground_truth_ready(agent, context="export" if export_dir else "interactive")
 
     def _save_dump() -> None:
         if not dump_memory:
@@ -459,14 +573,32 @@ def main(
                     logger.warning(f"EQA question failed (export will continue): {e}")
                     click.echo(f"EQA question failed: {e}")
             env, spawn = _export_session_fields()
-            text = export_graph_eqa_dir(
+            placements = read_sim_object_placements(robot.get_emet_session())
+            gt_report: str | None = None
+            if ground_truth and placements:
+                gt_report = ground_truth_alignment_report(agent.graph_memory, placements)
+                click.echo(gt_report)
+            elif compare_to_gt:
+                if placements:
+                    gt_report = ground_truth_alignment_report(
+                        agent.graph_memory,
+                        placements,
+                        perception_nodes_only=True,
+                    )
+                    click.echo(gt_report)
+                else:
+                    click.echo("Note: --compare-to-gt skipped (no sim_object_placements in emet_session).")
+            text = export_dynagraph_episode(
                 agent.graph_memory,
                 getattr(agent, "voxel_map", None),
                 export_dir,
-                title="Scene graph (Dynagraph export)",
+                title="Scene graph (Dynagraph GT export)" if ground_truth else "Scene graph (Dynagraph export)",
                 robot=robot_backend,
                 environment=env,
                 spawn_floor_map=spawn,
+                ground_truth_mode=ground_truth,
+                sim_object_placements=placements,
+                gt_alignment_report_text=gt_report,
             )
             click.echo(text)
             click.echo(f"Exported graph memory to {export_dir}")
@@ -543,6 +675,20 @@ def main(
         _save_dump()
         if print_graph:
             _snapshot_graph_stdout("Dynagraph graph (snapshot on exit)")
+        if dump_memory:
+            from emet.memory.utils import print_memory_view_help_on_quit
+
+            print_memory_view_help_on_quit(dump_memory)
+        if compare_to_gt and not export_dir and agent is not None:
+            placements = read_sim_object_placements(robot.get_emet_session())
+            if placements and agent.graph_memory is not None:
+                click.echo(
+                    ground_truth_alignment_report(
+                        agent.graph_memory,
+                        placements,
+                        perception_nodes_only=True,
+                    )
+                )
 
 
 if __name__ == "__main__":
