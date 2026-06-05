@@ -2,7 +2,7 @@
 
 Engineering plan for reproducing GraphEQA-style embodied question answering evaluation in Habitat-Sim, driving **emet** `GraphEQAMemory` / `DynagraphController` instead of the original GraphEQA ROS/Hydra stack.
 
-**Status:** Planning / not yet implemented.
+**Status:** Scaffold implemented (`src/emet/habitat/`, `packages/emet_habitat/`, `emet run graph-eqa-habitat`). Full HM3D + batch eval requires `./scripts/install_habitat.sh` and downloaded assets.
 
 **Paper dependency:** Blocks `paper/sections/05_results.tex` until Habitat runs complete.
 

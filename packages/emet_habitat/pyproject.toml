@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emet-habitat"
+version = "0.1.0"
+description = "Habitat-Sim EQA harness for emet GraphEQA / Dynagraph evaluation."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.9,<3.11"
+# emet is not on PyPI — install scripts use `uv pip install --no-deps -e .` first, then this package.
+# Pin habitat-sim for HM3D; adjust per platform CUDA build (see scripts/install_habitat.sh).
+dependencies = [
+    "numpy>=1.23,<2.0",
+    "habitat-sim>=0.3.1",
+    "opencv-python-headless>=4.8",
+    "pillow>=10.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+emet-habitat = "emet_habitat.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
