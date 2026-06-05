@@ -113,3 +113,15 @@ def test_gt_graph_stores_extent_half_from_bounds():
     node = mem.get_nodes()[0]
     assert node.extent_half is not None
     np.testing.assert_allclose(node.extent_half, [0.2, 0.2, 0.05], atol=1e-6)
+
+
+def test_attach_detection_to_ground_truth_node():
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    placements = _default_table_placements()
+    upsert_graph_memory_from_placements(mem, _rgb(), placements)
+    rgb2 = np.full((64, 64, 3), 128, dtype=np.uint8)
+    assert mem.attach_detection_to_ground_truth_node("object1", rgb2, detection_label="cube")
+    node = next(n for n in mem.get_nodes() if n.description and "object1" in n.description)
+    assert "|det:cube" in (node.description or "")
+    obs = next(o for o in mem._observations if o.obs_id == node.obs_id)
+    assert obs.rgb[0, 0, 0] == 128

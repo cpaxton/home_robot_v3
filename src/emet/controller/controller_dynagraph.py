@@ -34,6 +34,7 @@ class DynagraphController(GraphEQAController):
         # Separate GT Rerun layer only when comparing sensor graph vs sim reference.
         self.visualize_ground_truth = visualize_ground_truth and not ground_truth_mode
         self._gt_graph_loaded = False
+        self._skip_graph_perception_updates = ground_truth_mode
         super().__init__(*args, **kwargs)
         self.setup_custom_blueprint()
         self._sync_ground_truth_from_session()
@@ -41,6 +42,26 @@ class DynagraphController(GraphEQAController):
             if self.ground_truth_mode:
                 self.rerun_visualizer.clear_identity("world/dynagraph/ground_truth/nodes")
             self.rerun_visualizer.log_dynagraph_state(self.graph_memory)
+
+    def _associate_instances_to_ground_truth(self) -> None:
+        """Attach YoloE/instance detections to nearest sim GT nodes (RGB + optional det label)."""
+        if not self.ground_truth_mode or self.graph_memory is None:
+            return
+        vm = getattr(self, "voxel_map", None)
+        if vm is None or not getattr(vm, "use_instance_memory", False):
+            return
+        obs_list = getattr(vm, "observations", None)
+        if not obs_list:
+            return
+        from emet.memory.graph_eqa.sim_ground_truth_graph import associate_instance_detections_to_ground_truth
+
+        associate_instance_detections_to_ground_truth(
+            self.graph_memory,
+            obs_list[-1],
+            rgb=np.asarray(obs_list[-1].rgb, dtype=np.uint8),
+            voxel_map=vm,
+            detection_model=getattr(self, "detection_model", None),
+        )
 
     def setup_custom_blueprint(self) -> None:
         if getattr(self.rerun_visualizer, "enabled", True) is False:
@@ -118,6 +139,8 @@ class DynagraphController(GraphEQAController):
         if self.graph_memory is not None and (self.ground_truth_mode or self.visualize_ground_truth):
             self._sync_ground_truth_from_session()
         super().update()
+        if self.ground_truth_mode:
+            self._associate_instances_to_ground_truth()
         if self.graph_memory is None:
             return
         self.graph_memory.maintain(self.obs_count)

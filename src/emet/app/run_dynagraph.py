@@ -294,10 +294,11 @@ def main(
         )
 
     if ground_truth:
-        click.echo("Ground-truth mode: graph nodes from sim_object_placements (no VLM / instance graph).")
-        cpu_only = True
+        click.echo(
+            "Ground-truth mode: graph nodes from sim_object_placements; "
+            "voxel map, rotate/explore, and instance detections still run (detections attach to GT nodes)."
+        )
         no_sensor_perception = True
-        no_instance_graph = True
 
     if rerun_bind:
         os.environ["RERUN_BIND_ALL"] = "1"
@@ -439,12 +440,6 @@ def main(
             bot.run()
         else:
             executor = EQAExecuter(agent)
-            if ground_truth and not not_rotate_in_place:
-                click.echo(
-                    "Note: --ground-truth skips rotate_in_place (GT graph is already loaded). "
-                    "Use -N to suppress this message."
-                )
-                not_rotate_in_place = True
             if not not_rotate_in_place:
                 executor.rotate_in_place()
 

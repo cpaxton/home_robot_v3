@@ -395,6 +395,34 @@ class GraphEQAMemory:
             extent_half=ext,
         )
 
+    def attach_detection_to_ground_truth_node(
+        self,
+        body_key: str,
+        rgb: np.ndarray | Image.Image,
+        *,
+        detection_label: str | None = None,
+    ) -> bool:
+        """Refresh a GT node's stored RGB when an instance detector sees it nearby."""
+        if isinstance(rgb, Image.Image):
+            rgb = np.array(rgb)
+        rgb_a = np.asarray(rgb, dtype=np.uint8)
+        desc = f"{GT_BODY_DESC_PREFIX}{body_key}"
+        det_tag = f"|det:{detection_label.strip()}" if detection_label and detection_label.strip() else ""
+        step = self._effective_timestep()
+        for idx, existing in enumerate(self._nodes):
+            if existing.description is None or not str(existing.description).startswith(desc):
+                continue
+            new_desc = f"{desc}{det_tag}" if det_tag else desc
+            self._nodes[idx] = replace(existing, last_seen=step, description=new_desc)
+            for o in self._observations:
+                if o.obs_id == existing.obs_id:
+                    o.rgb = rgb_a.copy()
+                    o.description = new_desc
+                    break
+            self._update_edges()
+            return True
+        return False
+
     def record_navigation_sample(
         self,
         rgb: np.ndarray | Image.Image,

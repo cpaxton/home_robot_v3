@@ -212,6 +212,74 @@ def ground_truth_alignment_report(
     )
 
 
+def ground_truth_body_key(node: Any) -> str | None:
+    """MuJoCo body key from a GT graph node description (``ground_truth:{body_key}``)."""
+    if not is_ground_truth_node(node):
+        return None
+    desc = str(getattr(node, "description", "") or "")
+    if not desc.startswith(GT_BODY_DESC_PREFIX):
+        return None
+    key = desc[len(GT_BODY_DESC_PREFIX) :]
+    if "|det:" in key:
+        key = key.split("|det:", 1)[0]
+    key = key.strip()
+    return key or None
+
+
+def associate_instance_detections_to_ground_truth(
+    graph_memory: GraphEQAMemory,
+    frame: Any,
+    *,
+    rgb: np.ndarray,
+    voxel_map: Any,
+    detection_model: Any | None = None,
+    max_assoc_xy_m: float = 0.75,
+) -> int:
+    """
+    Match YoloE/instance centroids to nearest GT nodes in XY; attach frame RGB + det label.
+
+    Does not add new graph nodes — only refreshes GT observation images for dataset export.
+    """
+    from emet.memory.graph_eqa.instance_observations import frame_instances_to_detections
+
+    gt_nodes = [(ground_truth_body_key(n), n) for n in graph_memory.get_nodes()]
+    gt_nodes = [(k, n) for k, n in gt_nodes if k]
+    if not gt_nodes:
+        return 0
+
+    dets = frame_instances_to_detections(
+        frame,
+        min_depth=float(voxel_map.min_depth),
+        max_depth=float(voxel_map.max_depth),
+        detection_model=detection_model,
+    )
+    if not dets:
+        return 0
+
+    matched = 0
+    used_gt: set[str] = set()
+    rgb_a = np.asarray(rgb, dtype=np.uint8)
+    for det in dets:
+        xyz = np.asarray(det["xyz"], dtype=np.float64).reshape(3)
+        label = str(det.get("label_short") or "").strip()
+        best_key: str | None = None
+        best_d = float(max_assoc_xy_m)
+        for body_key, node in gt_nodes:
+            if body_key in used_gt:
+                continue
+            nxy = np.asarray(node.xyz, dtype=np.float64).reshape(-1)[:2]
+            dxy = float(np.linalg.norm(nxy - xyz[:2]))
+            if dxy < best_d:
+                best_d = dxy
+                best_key = body_key
+        if best_key is None:
+            continue
+        if graph_memory.attach_detection_to_ground_truth_node(best_key, rgb_a, detection_label=label or None):
+            used_gt.add(best_key)
+            matched += 1
+    return matched
+
+
 def gt_pose_sanity_report(
     placements: dict[str, dict[str, Any]] | None,
     *,

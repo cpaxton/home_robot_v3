@@ -43,7 +43,7 @@ Set **`EMET_NAVGRID_ASCII=1`** to print a cropped ASCII top-down map to **stderr
 
 ## Ground-truth graph mode (`--ground-truth`)
 
-Use **`--ground-truth`** in simulation to build the Dynagraph scene graph from **`emet_session["sim_object_placements"]`** instead of VLM / YoloE perception. This is for dataset construction, sim smoke tests, and debugging map/graph wiring before running the full perception stack.
+Use **`--ground-truth`** in simulation to build the Dynagraph scene graph from **`emet_session["sim_object_placements"]`** instead of VLM perception labels. **Voxel mapping, rotate-in-place, explore, and YoloE instance detection still run**; detections are matched to nearest GT nodes in XY and attached as observation RGB (description suffix ``|det:…``). Use **`--compare-to-gt`** when you want a full VLM perception graph overlaid on sim reference.
 
 MuJoCo ZMQ servers publish placements in [`emet_session`](zmq_session_metadata.md). Each entry has a **`cat`** label, world **`pos`**, and (when the server scanned the MJCF) axis-aligned **`bounds`** from mesh/collision geoms.
 
@@ -57,7 +57,7 @@ MuJoCo ZMQ servers publish placements in [`emet_session`](zmq_session_metadata.m
 
 | Flag | Graph source | Rerun |
 |------|--------------|-------|
-| **`--ground-truth`** | All nodes from sim GT | Single **«Graph (ground truth)»** column (nodes + 3D boxes) |
+| **`--ground-truth`** | All nodes from sim GT | **«Graph (ground truth)»** column (nodes + 3D boxes); voxel map + instance→GT association |
 | **`--compare-to-gt`** | Normal sensor / VLM graph | **«Dynagraph 3D»** (perception) + **«Sim GT (reference)»** (green overlay) |
 
 The two flags are **mutually exclusive**.
@@ -80,7 +80,7 @@ emet serve mujoco --use-robocasa --headless --port-offset 50
 emet run dynagraph --ground-truth --port-offset 50
 ```
 
-Graph nodes and 3D bounds appear in Rerun immediately after startup; rotate-in-place is skipped by default.
+Graph nodes and 3D bounds appear in Rerun after startup; **rotate-in-place runs by default** to seed the voxel map (use **`-N`** to skip). Use **explore** / **e** to extend the map; instance detections attach to nearby GT nodes as you move.
 
 **Perception vs GT** (full Dynagraph stack + alignment report):
 
