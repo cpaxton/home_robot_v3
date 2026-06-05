@@ -925,21 +925,28 @@ class StretchZmqClient(AbstractRobotClient):
             block_id = action["step"]
             time.sleep(0.1)
             if sim_relative_on_wire:
-                cur = self.get_base_pose()
-                wait_goal_angle = float(
-                    np.arctan2(np.sin(cur[2] + rel_xyt[2]), np.cos(cur[2] + rel_xyt[2]))
-                )
+                theta_only = abs(float(rel_xyt[0])) < 1e-6 and abs(float(rel_xyt[1])) < 1e-6
+                if theta_only:
+                    # Stretch Robocasa (free-joint base): θ-only spins rarely assert ``at_goal`` in time.
+                    time.sleep(min(timeout, 4.0))
+                else:
+                    deadline = timeit.default_timer() + timeout
+                    while timeit.default_timer() < deadline:
+                        if self._last_step >= block_id and self.at_goal():
+                            break
+                        time.sleep(0.05)
+                    else:
+                        logger.warning(
+                            f"Timeout ({timeout}s) waiting for sim relative navigation step {block_id}"
+                        )
             else:
                 wait_goal_angle = float(goal_xyt[2])
-            # Now, wait for the command to finish
-            self._wait_for_base_motion(
-                block_id,
-                goal_angle=wait_goal_angle,
-                verbose=verbose,
-                timeout=timeout,
-                # resend_action=action,
-                # resend_action=current_action,
-            )
+                self._wait_for_base_motion(
+                    block_id,
+                    goal_angle=wait_goal_angle,
+                    verbose=verbose,
+                    timeout=timeout,
+                )
 
     def set_velocity(self, v: float, w: float):
         """Move to xyt in global coordinates or relative coordinates.

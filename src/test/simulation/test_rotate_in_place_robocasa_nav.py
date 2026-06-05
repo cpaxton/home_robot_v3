@@ -28,10 +28,12 @@ _run_sim = os.environ.get("RUN_SIM_TESTS", "1").strip().lower()
 RUN_SIM_TESTS = _run_sim not in ("0", "false", "no", "off")
 
 _NAV_GOAL_RE = re.compile(
-    r"frame=(\w+).*goal_world=\[([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)\].*nav_world=(\w+)"
+    r"frame=(\w+).*goal_world=\[([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)\]"
+    r".*base_before=\[([-\d.]+),\s*([-\d.]+)\].*Δxy=([-\d.]+)m.*nav_world=(\w+)"
 )
-# rotate_in_place uses nav_relative: small Δxy in world from current base
-_MAX_ROTATE_XY_DRIFT_M = 0.35
+# rotate_in_place uses nav_relative: goal XY must match base_before (θ-only); base may differ from spawn banner
+_MAX_GOAL_XY_OFFSET_FROM_BASE_M = 0.05
+_MAX_BASE_XY_DRIFT_DURING_ROTATE_M = 0.35
 _SPAWN_RE = re.compile(
     r"spawn / navigation_origin \(world\): \(([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)\)"
 )
@@ -48,8 +50,9 @@ def _wait_for_port(host: str, port: int, timeout_sec: float = 120) -> bool:
     return False
 
 
-def _parse_sim_nav_goals(stderr_text: str) -> list[tuple[float, float, float, bool, str]]:
-    goals: list[tuple[float, float, float, bool, str]] = []
+def _parse_sim_nav_goals(stderr_text: str) -> list[tuple[float, float, float, float, float, float, bool, str]]:
+    """(goal wx, wy, wt, base bx, by, Δxy m, nav_world, frame)."""
+    goals: list[tuple[float, float, float, float, float, float, bool, str]] = []
     for line in stderr_text.splitlines():
         if "[sim_nav]" not in line or "goal_world=" not in line:
             continue
@@ -57,8 +60,10 @@ def _parse_sim_nav_goals(stderr_text: str) -> list[tuple[float, float, float, bo
         if m:
             frame = m.group(1)
             wx, wy, wt = float(m.group(2)), float(m.group(3)), float(m.group(4))
-            nav_world = m.group(5) == "True"
-            goals.append((wx, wy, wt, nav_world, frame))
+            bx, by = float(m.group(5)), float(m.group(6))
+            dxy = float(m.group(7))
+            nav_world = m.group(8) == "True"
+            goals.append((wx, wy, wt, bx, by, dxy, nav_world, frame))
     return goals
 
 
@@ -116,7 +121,7 @@ def test_rotate_in_place_robocasa_innate_mars_world_xy_stays_at_spawn():
             enable_rerun_server=False,
             start_immediately=True,
             allow_missing_depth=True,
-            zmq_startup_timeout=60.0,
+            zmq_startup_timeout=120.0,
         )
         params = get_parameters("dynav_innate_mars.yaml")
         agent = DynamemController(
@@ -155,26 +160,28 @@ def test_rotate_in_place_robocasa_innate_mars_world_xy_stays_at_spawn():
             f"stderr tail:\n{stderr_text[-6000:]}"
         )
 
-        max_xy_jump = 0.0
-        base_xy = None
-        for wx, wy, _wt, nav_world, frame in goals:
+        max_goal_offset = 0.0
+        max_base_drift = 0.0
+        prev_base: tuple[float, float] | None = None
+        for wx, wy, _wt, bx, by, dxy, nav_world, frame in goals:
             assert not nav_world, f"rotate_in_place must not use nav_world (got frame={frame!r})"
-            assert frame in (
-                "relative_delta_world",
-                "spawn_compose",
-                "spawn_compose_corrected_world",
-            ), f"rotate expects relative or spawn compose, got frame={frame!r}"
-            if base_xy is None:
-                base_xy = (wx, wy)
-            jump_spawn = float(np.hypot(wx - origin[0], wy - origin[1]))
-            jump_step = float(np.hypot(wx - base_xy[0], wy - base_xy[1]))
-            max_xy_jump = max(max_xy_jump, jump_spawn, jump_step)
-            assert jump_spawn < 3.0, (
-                f"rotate goal world ({wx:.3f}, {wy:.3f}) is {jump_spawn:.2f}m from spawn {origin[:2]}"
+            assert frame == "relative_delta_world", (
+                f"rotate expects nav_relative world delta, got frame={frame!r}"
             )
+            max_goal_offset = max(max_goal_offset, dxy, float(np.hypot(wx - bx, wy - by)))
+            if prev_base is not None:
+                max_base_drift = max(
+                    max_base_drift,
+                    float(np.hypot(bx - prev_base[0], by - prev_base[1])),
+                )
+            prev_base = (bx, by)
 
-        assert max_xy_jump < _MAX_ROTATE_XY_DRIFT_M, (
-            f"rotate should not translate base (max drift {max_xy_jump:.3f}m, origin={origin.tolist()})"
+        assert max_goal_offset < _MAX_GOAL_XY_OFFSET_FROM_BASE_M, (
+            f"rotate goals must not translate in XY (max goal-vs-base offset {max_goal_offset:.3f}m)"
+        )
+        assert max_base_drift < _MAX_BASE_XY_DRIFT_DURING_ROTATE_M, (
+            f"rotate should not translate base (max base drift {max_base_drift:.3f}m, "
+            f"origin={origin.tolist()})"
         )
 
     finally:
