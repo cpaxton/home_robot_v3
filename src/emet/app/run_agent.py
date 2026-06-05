@@ -33,7 +33,7 @@ from emet.agent.prompt import DEFAULT_AGENT_NAME
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.core import get_parameters
-from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
+from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices, is_vl_llm_key
 from emet.utils.config import read_top_level_robot_from_yaml
 from emet.utils.logger import Logger
 
@@ -49,7 +49,9 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     "--llm",
     default=DEFAULT_AGENT_LLM,
     help=f"LLM to use (default: {DEFAULT_AGENT_LLM}). Case-insensitive. "
-    f"Use qwen3-vl-eqa with --eqa to load one Qwen3-VL from dynav ``eqa:`` for chat + shared DynaMem captions.",
+    "Gemma 4: gemma4-e2b / gemma4-e4b (text any-to-any), gemma4-vlm-e2b / gemma4-vlm-e4b (multimodal + camera). "
+    "Shared EQA VLM: qwen3-vl-eqa or gemma4-vl-eqa (set eqa.vl_family in agent YAML). "
+    "Legacy Gemma 3: gemma, gemma4b, gemma1b.",
     type=click.Choice(get_llm_choices(), case_sensitive=False),
 )
 @click.option(
@@ -420,7 +422,9 @@ def main(
       emet run agent --offline
       emet run agent --device cpu --offline
       emet run agent --llm qwen35-9B --offline
-      emet run agent --llm gemma4-e4b --device cuda --offline   # Gemma 4 (HF any-to-any)
+      emet run agent --llm gemma4-e4b --device cuda --offline   # Gemma 4 text (HF any-to-any)
+      emet run agent --llm gemma4-vlm-e4b --start-sim -c "describe the scene"  # Gemma 4 + head camera
+      emet run agent --llm gemma4-vl-eqa --eqa --agent-config dynav_config.yaml  # one Gemma 4 VLM for chat + captions
       emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
       # MolmoSpaces: ``emet serve mujoco --molmospaces-scene ithor ...`` (often DISPLAY=:1 instead of --headless); same --port-offset as serve:
       emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml
@@ -499,10 +503,8 @@ def main(
     if not offline:
         robot_effective = str(robot_ip or "").strip() or "127.0.0.1"
 
-    # Vision LLMs: include camera RGB on new user turns (default on for *VL*; use --no-vl-camera to disable)
-    llm_l = llm.lower()
-    is_vl_name = "-vl-" in llm_l or "vl-" in llm_l
-    vl_include_effective = (not no_vl_camera) and (vl_include_camera or is_vl_name)
+    # Vision LLMs: include camera RGB on new user turns (default on for VL keys; use --no-vl-camera to disable)
+    vl_include_effective = (not no_vl_camera) and (vl_include_camera or is_vl_llm_key(llm))
 
     if robot_effective:
         if rerun_bind:

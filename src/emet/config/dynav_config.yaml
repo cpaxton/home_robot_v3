@@ -45,6 +45,7 @@ da3_stereo: false
 
 # EQA (memory Q&A when using emet run agent --eqa). Default: local Qwen3-VL (one load for captions + EQA).
 # vl_family: qwen3_vl | qwen2_5_vl | gemma4 — set vl_hf_model_id to override the default checkpoint.
+# Agent: ``--llm gemma4-vl-eqa --eqa`` uses eqa.vl_family (default gemma4 checkpoint: google/gemma-4-E4B-it).
 eqa:
   backend: qwen_vl
   vl_family: qwen3_vl
