@@ -206,8 +206,7 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     help=(
         "Robot backend (stretch, rby1, galaxea_r1, innate_mars). Overrides top-level ``robot`` in --agent-config when set; "
         "if omitted, that YAML key is used (default ``stretch`` when the key is absent). Must match "
-        "emet serve mujoco --robot after any CLI remaps. MolmoSpaces (--molmospaces-scene) uses rby1 on the "
-        "server even when serve is started with default stretch—set ``robot: rby1`` in YAML or pass --robot rby1. "
+        "``emet serve mujoco --robot`` (MolmoSpaces ``--start-sim`` uses stretch when robot is unset on both). "
         "Always put the name immediately after --robot (e.g. --robot stretch); if you omit the name, the next "
         "flag may be parsed as the value."
     ),
@@ -437,6 +436,7 @@ def main(
       emet run agent --robot rby1 --start-sim --molmospaces-scene ithor --headless -c "describe the scene"
     """
     cmd_list = list(commands) if commands else None
+    robot_from_cli = robot is not None and str(robot).strip() != ""
 
     if robot is None or str(robot).strip() == "":
         r_yaml = read_top_level_robot_from_yaml(agent_config)
@@ -511,7 +511,14 @@ def main(
             raise click.UsageError("Use either --rerun-native or --headless for Rerun, not both.")
         sim_shutdown: Callable[[], None] | None = None
         if start_sim:
-            from emet.config.sim_launch_config import apply_sim_launch_cli_overrides, resolve_sim_launch_for_agent
+            from dataclasses import replace
+
+            from emet.config.sim_launch_config import (
+                SimLaunchMolmospaces,
+                apply_sim_launch_cli_overrides,
+                resolve_serve_robot,
+                resolve_sim_launch_for_agent,
+            )
             from emet.simulation.sim_subprocess import (
                 shutdown_mujoco_server_subprocess,
                 spawn_mujoco_server_subprocess,
@@ -568,8 +575,25 @@ def main(
                     "MuJoCo server is running headless (no DISPLAY, --command/-c, or --headless) "
                     "so the sim keeps publishing observations."
                 )
-            if robot and robot.lower() not in ("stretch", "hello_stretch", "hellostretch", ""):
-                sim_cfg.robot = robot
+            if isinstance(sim_cfg, SimLaunchMolmospaces):
+                ms_scene = sim_cfg.scene
+            elif sim_molmospaces_scene and str(sim_molmospaces_scene).strip():
+                ms_scene = str(sim_molmospaces_scene).strip()
+            else:
+                ms_scene = None
+            if ms_scene:
+                from emet.simulation.molmospaces_config import normalize_molmospaces_robot_key
+
+                sim_robot = resolve_serve_robot(sim_cfg.robot, molmospaces_scene=ms_scene)
+                sim_cfg = replace(sim_cfg, robot=sim_robot)
+                agent_norm = normalize_molmospaces_robot_key(robot)
+                sim_norm = normalize_molmospaces_robot_key(sim_robot)
+                if robot_from_cli and agent_norm != sim_norm:
+                    raise click.UsageError(
+                        f"Agent --robot {robot!r} does not match MolmoSpaces sim robot {sim_robot!r}. "
+                        "Use the same id for both (or omit --robot on the agent to follow the sim)."
+                    )
+                robot = sim_robot
             log.info("Starting MuJoCo sim subprocess (--start-sim)…")
             spawn_mujoco_server_subprocess(
                 sim_cfg,

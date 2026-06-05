@@ -59,12 +59,20 @@ def _export_ground_truth_graph(
 
 def _ensure_ground_truth_ready(agent: DynagraphController, *, context: str) -> None:
     """Populate GT graph + Rerun immediately; fail fast when session has no placements."""
+    session = agent.robot.get_emet_session()
+    if session is None:
+        raise click.ClickException(
+            f"Ground-truth mode ({context}): no emet_session from the ZMQ server. "
+            "Start emet serve mujoco (default, --use-robocasa, or --molmospaces-scene …) with the "
+            "same --port-offset as this client, then retry."
+        )
     n_bodies = agent.refresh_ground_truth()
     if n_bodies == 0:
+        runtime = session.get("runtime_kind", "?")
         raise click.ClickException(
-            f"Ground-truth mode ({context}): emet_session has no sim_object_placements. "
-            "Start emet serve mujoco (default, --use-robocasa, or --molmospaces-scene …) with the "
-            "same --port-offset as this client."
+            f"Ground-truth mode ({context}): emet_session has no sim_object_placements "
+            f"(runtime_kind={runtime!r}). Restart the sim server from this branch with the same "
+            "--port-offset — servers started before the ground-truth feature do not publish placements."
         )
     n_nodes = len(agent.graph_memory.get_nodes()) if agent.graph_memory is not None else 0
     n_boxes = sum(
