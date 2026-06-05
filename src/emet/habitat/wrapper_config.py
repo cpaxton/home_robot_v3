@@ -18,7 +18,12 @@ def _project_root() -> Path:
 def _python_can_import_habitat(py: Path) -> bool:
     try:
         r = subprocess.run(
-            [str(py), "-c", "import habitat_sim; import emet_habitat"],
+            [
+                str(py),
+                "-c",
+                "import habitat_sim; import emet_habitat; "
+                "from emet.habitat.config import default_habitat_eqa_data_dir",
+            ],
             capture_output=True,
             timeout=120,
             check=False,

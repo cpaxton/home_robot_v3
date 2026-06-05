@@ -1112,7 +1112,8 @@ def run(
       emet run debug-da3-depth --robot innate_mars   # DA3 depth + point cloud in Rerun (or: emet debug-da3-depth)
     """
     args = list(ctx.args)
-    args.extend(["--robot_ip", robot_ip])
+    if app != "graph-eqa-habitat":
+        args.extend(["--robot_ip", robot_ip])
     if app in _EMET_RUN_APPS_WITH_ROBOT:
         # Do not inject ``--robot stretch`` when the user omitted ``--robot`` on ``emet run``: the wrapper's
         # default would override ``robot:`` from ``--agent-config`` (run_agent) or MolmoSpaces discovery

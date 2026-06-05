@@ -21,8 +21,6 @@ from emet.habitat.config import (
 from emet.habitat.datasets import load_hmeqa_questions
 from emet.habitat.metrics import summarize_episodes, write_episode_jsonl
 
-from emet_habitat.runner import run_hmeqa_episode
-
 
 @click.group()
 def main() -> None:
@@ -77,6 +75,8 @@ def run_episode(
 
     questions_path = (data_dir / "questions.csv") if data_dir else None
     init_poses_path = (data_dir / "scene_init_poses.csv") if data_dir else None
+
+    from emet_habitat.runner import run_hmeqa_episode
 
     try:
         metrics = run_hmeqa_episode(

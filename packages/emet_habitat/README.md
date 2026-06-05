@@ -2,11 +2,13 @@
 
 Habitat-Sim harness that drives **emet** `GraphEQAController` / `DynagraphController` on HM-EQA-style benchmarks.
 
-Install from repo root:
+Install from repo root (bootstraps **micromamba** if needed; **habitat-sim is not on PyPI for Linux**):
 
 ```bash
 ./scripts/install_habitat.sh
 ```
+
+Uses Python 3.10 + `aihabitat-nightly` conda channel. Creates `.venv-habitat/` and `.micromamba/`.
 
 Run a single episode (mock LLM, no GPU VLM):
 

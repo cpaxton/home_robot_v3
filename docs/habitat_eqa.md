@@ -7,13 +7,15 @@ Reproduce **GraphEQA-style** HM-EQA evaluation in Habitat-Sim while driving **em
 
 ## Install
 
-Habitat-Sim conflicts with the main MuJoCo stack (numpy / Python versions). Use an isolated venv:
+Habitat-Sim conflicts with the main MuJoCo stack (numpy / Python versions) and **has no Linux wheels on PyPI**. Use the isolated micromamba env:
 
 ```bash
 ./scripts/install_habitat.sh
 ```
 
-This creates `.venv-habitat` with `emet` + `emet-habitat` (`packages/emet_habitat`).
+This bootstraps **micromamba** (into `.micromamba/` if needed), creates `.venv-habitat` with **Python 3.10**, installs `habitat-sim` from **`aihabitat-nightly`** (headless + bullet), then editable `emet` + `emet-habitat`.
+
+Requires: `curl`, network, ~2GB download for conda packages. No system `conda` required.
 
 ## Data
 

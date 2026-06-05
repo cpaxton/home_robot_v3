@@ -89,8 +89,18 @@ def _float_field(row: dict[str, str], *names: str, default: float = 0.0) -> floa
     return default
 
 
+def _parse_scene_floor_row(row: dict[str, str]) -> tuple[str, int]:
+    if "scene" in row and "floor" in row:
+        return row["scene"].strip(), int(row["floor"])
+    if "scene_floor" in row:
+        scene_floor = row["scene_floor"].strip()
+        scene, floor_s = scene_floor.rsplit("_", 1)
+        return scene, int(floor_s)
+    raise ValueError(f"scene_init_poses row missing scene/floor columns: {list(row.keys())}")
+
+
 def load_scene_init_poses(path: Path | None = None) -> dict[tuple[str, int], SceneInitPose]:
-    """Load ``scene_init_poses.csv`` keyed by ``(scene, floor)``."""
+    """Load Explore-EQA ``scene_init_poses.csv`` keyed by ``(scene, floor)``."""
     csv_path = path or scene_init_poses_csv_path()
     if not csv_path.is_file():
         raise FileNotFoundError(f"scene_init_poses not found: {csv_path}")
@@ -99,14 +109,13 @@ def load_scene_init_poses(path: Path | None = None) -> dict[tuple[str, int], Sce
     with csv_path.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            scene = row["scene"].strip()
-            floor = int(row["floor"])
+            scene, floor = _parse_scene_floor_row(row)
             pose = SceneInitPose(
                 scene=scene,
                 floor=floor,
                 x=_float_field(row, "x", "init_x", "position_x"),
                 y=_float_field(row, "y", "init_y", "position_y"),
-                heading=_float_field(row, "heading", "init_heading", "rotation", "theta"),
+                heading=_float_field(row, "heading", "init_heading", "init_angle", "rotation", "theta"),
             )
             poses[(scene, floor)] = pose
     return poses

@@ -1,13 +1,39 @@
 #!/usr/bin/env bash
-# Install Habitat EQA harness venv (.venv-habitat). Run from repo root:
-#   ./scripts/install_habitat.sh
+# Install Habitat EQA harness env (.venv-habitat) via micromamba + aihabitat-nightly.
+# habitat-sim has no usable Linux wheels on PyPI; conda is required.
+#
+# Run from repo root:  ./scripts/install_habitat.sh
+# Optional: HABITAT_HEADLESS=0 for GUI build (default: headless EGL).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
-PY_HAB=".venv-habitat/bin/python"
+ENV_PREFIX="$ROOT_DIR/.venv-habitat"
+MICROMAMBA_ROOT="$ROOT_DIR/.micromamba"
+MICROMAMBA_BIN="$MICROMAMBA_ROOT/bin/micromamba"
+PY_HAB="$ENV_PREFIX/bin/python"
+HEADLESS="${HABITAT_HEADLESS:-1}"
+
+ensure_micromamba() {
+  if command -v micromamba >/dev/null 2>&1; then
+    MICROMAMBA_BIN="$(command -v micromamba)"
+    return 0
+  fi
+  if [ -x "$MICROMAMBA_BIN" ]; then
+    return 0
+  fi
+  echo "Bootstrapping micromamba into $MICROMAMBA_ROOT ..."
+  mkdir -p "$MICROMAMBA_ROOT"
+  curl -fsSL "https://micro.mamba.pm/api/micromamba/linux-64/latest" -o /tmp/emet-micromamba.tar.bz2
+  tar -xjf /tmp/emet-micromamba.tar.bz2 -C "$MICROMAMBA_ROOT" bin/micromamba
+  rm -f /tmp/emet-micromamba.tar.bz2
+}
+
+mm() {
+  "$MICROMAMBA_BIN" "$@"
+}
 
 habitat_pip_install() {
   if command -v uv >/dev/null 2>&1; then
@@ -17,66 +43,77 @@ habitat_pip_install() {
   fi
 }
 
-habitat_install_editable_chain() {
+install_habitat_sim_conda() {
+  local channels=(-c conda-forge -c aihabitat-nightly)
+  local variants=(withbullet)
+  if [ "$HEADLESS" = "1" ]; then
+    variants+=(headless)
+  fi
+  echo "Installing habitat-sim (${variants[*]}) into $ENV_PREFIX ..."
+  # Nightly channel ships py3.10 builds; stable aihabitat is py3.9-only.
+  mm install -y -p "$ENV_PREFIX" "${variants[@]}" habitat-sim "${channels[@]}"
+  # Scientific stack from conda (avoid pip upgrading numpy/matplotlib under habitat-sim).
+  mm install -y -p "$ENV_PREFIX" -c conda-forge matplotlib scipy pillow numpy
+}
+
+install_emet_packages() {
+  echo "Installing emet + emet-habitat (editable, no upstream dep resolver) ..."
   habitat_pip_install --upgrade pip 2>/dev/null || true
   habitat_pip_install --no-deps -e .
-  if [ -d "packages/emet_habitat" ]; then
-    habitat_pip_install -e packages/emet_habitat
-  else
-    echo "ERROR: packages/emet_habitat not found"
-    exit 1
+  habitat_pip_install --no-deps -e packages/emet_habitat
+  habitat_pip_install -r packages/emet_habitat/requirements-pip.txt
+  # uv may skip packages it considers satisfied; verify runner import chain.
+  if ! "$PY_HAB" -c "from emet_habitat.runner import run_hmeqa_episode" 2>/dev/null; then
+    echo "  -> Retrying pip deps (runner import failed) ..."
+    habitat_pip_install --upgrade -r packages/emet_habitat/requirements-pip.txt
   fi
 }
 
-_drop_venv_if_python_wrong() {
-  if [ ! -d ".venv-habitat" ] || [ ! -x "$PY_HAB" ]; then
-    return 0
-  fi
-  if "$PY_HAB" -c "import sys; raise SystemExit(0 if (3, 9) <= sys.version_info[:2] < (3, 11) else 1)" 2>/dev/null; then
-    return 0
-  fi
-  echo "Replacing .venv-habitat (habitat-sim requires Python 3.9 or 3.10)..."
-  rm -rf .venv-habitat
-}
-
-_drop_venv_if_python_wrong
-
-if [ ! -d ".venv-habitat" ]; then
-  echo "Creating .venv-habitat (Python 3.10 preferred for habitat-sim)..."
-  if uv venv .venv-habitat --python 3.10 2>/dev/null; then
-    :
-  elif uv venv .venv-habitat --python 3.9 2>/dev/null; then
-    :
-  else
-    echo "ERROR: Need Python 3.9 or 3.10. Try: uv python install 3.10"
-    exit 1
-  fi
-  habitat_install_editable_chain
-  echo "  -> Created .venv-habitat with emet + emet-habitat"
-else
-  echo ".venv-habitat already exists."
-  NEED_REPAIR=0
+repair_if_needed() {
   if [ ! -x "$PY_HAB" ]; then
-    NEED_REPAIR=1
-  elif ! "$PY_HAB" -c "import emet" 2>/dev/null; then
-    NEED_REPAIR=1
-  elif ! "$PY_HAB" -c "import emet_habitat" 2>/dev/null; then
-    NEED_REPAIR=1
-  elif [ ! -x ".venv-habitat/bin/emet-habitat" ]; then
-    NEED_REPAIR=1
+    return 1
   fi
-  if [ "$NEED_REPAIR" -eq 1 ]; then
-    echo "  -> Repairing Habitat venv..."
-    habitat_install_editable_chain
+  if ! "$PY_HAB" -c "import habitat_sim, emet, emet_habitat" 2>/dev/null; then
+    return 1
   fi
+  if [ ! -x "$ENV_PREFIX/bin/emet-habitat" ]; then
+    return 1
+  fi
+  return 0
+}
+
+ensure_micromamba
+
+if [ ! -d "$ENV_PREFIX" ] || ! repair_if_needed; then
+  if [ -d "$ENV_PREFIX" ]; then
+    echo "Repairing incomplete $ENV_PREFIX ..."
+  else
+    echo "Creating $ENV_PREFIX (Python 3.10 + habitat-sim via micromamba) ..."
+  fi
+  if [ -d "$ENV_PREFIX" ]; then
+    rm -rf "$ENV_PREFIX"
+  fi
+  mm create -y -p "$ENV_PREFIX" python=3.10 -c conda-forge
+  install_habitat_sim_conda
+  install_emet_packages
+else
+  echo "$ENV_PREFIX looks healthy."
 fi
 
-if ! "$PY_HAB" -c "import habitat_sim; import emet_habitat" 2>/dev/null; then
-  echo ""
-  echo "WARNING: habitat_sim import failed. Install a platform wheel, e.g.:"
-  echo "  uv pip install --python $PY_HAB habitat-sim"
-  echo "See https://github.com/facebookresearch/habitat-sim/blob/main/BUILD_FROM_SOURCE.md"
+if ! "$PY_HAB" -c "
+import habitat_sim
+import emet_habitat
+from emet.habitat.config import default_habitat_eqa_data_dir
+print('habitat_sim', habitat_sim.__version__)
+print('data_dir', default_habitat_eqa_data_dir())
+"; then
+  echo "ERROR: habitat_sim or emet.habitat failed to import." >&2
   exit 1
 fi
 
-echo "Habitat harness ready: .venv-habitat/bin/emet-habitat info"
+echo ""
+echo "Habitat harness ready:"
+echo "  $ENV_PREFIX/bin/emet-habitat info"
+echo "  uv run emet run graph-eqa-habitat --mock-llm --question-id 0"
+echo ""
+echo "Data: uv run python scripts/download_habitat_eqa_data.py --fetch-csv"

@@ -36,3 +36,18 @@ def test_get_question_by_id():
 def test_get_question_missing_file():
     with pytest.raises(FileNotFoundError):
         load_hmeqa_questions(FIXTURES / "missing.csv")
+
+
+def test_load_scene_init_poses_graph_eqa_format(tmp_path: Path):
+    """Explore-EQA CSV uses scene_floor,init_x,init_y,init_z,init_angle."""
+    csv_path = tmp_path / "poses.csv"
+    csv_path.write_text(
+        "scene_floor,init_x,init_y,init_z,init_angle\n"
+        "00004-VqCaAuuoeWk_1,1.0,2.0,0.0,0.5\n",
+        encoding="utf-8",
+    )
+    poses = load_scene_init_poses(csv_path)
+    key = ("00004-VqCaAuuoeWk", 1)
+    assert key in poses
+    assert poses[key].x == 1.0
+    assert poses[key].heading == 0.5
