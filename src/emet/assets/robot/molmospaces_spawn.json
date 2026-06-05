@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "notes": "Measured from iTHOR train/0 merged MJCF (stretch); seed xy from autoplace QA via emet molmospaces write-spawn-metadata",
+  "molmospaces_nominal_base_height_above_floor_m": 0.2004,
+  "molmospaces_target_foot_clearance_above_floor_m": 0.0206
+}

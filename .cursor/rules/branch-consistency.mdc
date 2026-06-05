@@ -1,0 +1,16 @@
+---
+description: Before commit — audit branch diff vs origin/main for docs, CLI, env vars, and defaults
+alwaysApply: true
+---
+
+# Branch consistency (before commit)
+
+On a feature branch, run the full checklist in **`.cursorrules`** → **Before committing** (expanded). Summary:
+
+1. `git diff origin/main HEAD --stat` — skim all behavior changes.
+2. **Code ↔ docs** — new/changed `src/emet/simulation/`, `src/emet/app/`, or CLI subcommands → `docs/cli.md`, topic doc, or `docs/simulation_modules.md`.
+3. **CLI ↔ docs** — `emet <cmd> --help` matches documented defaults (`resolve_serve_robot()`, dataclass defaults).
+4. **Env vars** — new `EMET_*` in changed Python → `docs/environment_variables.md` or topic env doc.
+5. **Defaults** — core `emet` CLI, `packages/emet_molmospaces/emet_molmospaces/runner.py`, and `.cursorrules` agree (MolmoSpaces default robot: **stretch**).
+6. **Tests** — update CLI help tests when adding subcommands.
+7. Trim AI slop; prefer clear failures over silent fallbacks.

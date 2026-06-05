@@ -88,11 +88,15 @@ export MOLMOSPACES_PYTHON=/path/to/your/molmospaces/venv/bin/python
 - **Merge scene + robot (for ZMQ / agent)**:
 
   ```bash
+  emet molmospaces merge-scene --scene ithor --split train --index 0 \
+    -o /tmp/ithor_stretch.xml
   emet molmospaces merge-scene --scene ithor --split train --index 0 --robot rby1 \
     -o src/emet/assets/robot/galaxea_r1/molmospaces_rby1.xml
   ```
 
-  Delegates to the wrapper: installs the scene if needed, merges the **rby1** (Galaxea R1) MJCF from core emet assets into the scene, and writes a **persistent** merged MJCF. Prefer writing **`-o`** under `src/emet/assets/robot/galaxea_r1/` (next to `galaxea_r1.xml`) so MuJoCo resolves robot meshes; `/tmp` breaks `assetdir="meshes"`. Use that path with **`emet serve mujoco`** in your **main** project environment (see below), not only with passive `emet molmospaces serve`.
+  Delegates to the wrapper: installs the scene if needed, merges the chosen robot MJCF from core emet assets into the scene, and writes a **persistent** merged MJCF. Default **`--robot`** is **stretch** (same as `emet serve`). For Galaxea, prefer **`-o`** under `src/emet/assets/robot/galaxea_r1/` (next to `galaxea_r1.xml`) so MuJoCo resolves robot meshes; `/tmp` breaks `assetdir="meshes"`. Use that path with **`emet serve mujoco`** in your **main** project environment (see below), not only with passive `emet molmospaces serve`.
+
+  **Wrapper parity:** `emet molmospaces …` and direct `emet-molmospaces` / `MOLMOSPACES_PYTHON` use the same default robot (**stretch**) as core `emet serve`.
 
 - **Build iTHOR orthographic occupancy (debug / offline)**:
 
@@ -117,15 +121,16 @@ export MOLMOSPACES_PYTHON=/path/to/your/molmospaces/venv/bin/python
 - **Run simulation (serve)**:
 
   ```bash
-  emet molmospaces serve --scene ithor --robot rby1 --viewer
+  emet molmospaces serve --scene ithor --viewer
   ```
 
-  Delegates to the wrapper: installs the scene (if needed), loads the MJCF, and runs MuJoCo. Use `--viewer` for the native MuJoCo viewer, `--headless` for no GUI. Optional `--rerun PORT` or `--rerun path.rrd` logs step data to Rerun.
+  Delegates to the wrapper: installs the scene (if needed), loads the MJCF, and runs MuJoCo. Default **`--robot`** is **stretch**. Use `--viewer` for the native MuJoCo viewer, `--headless` for no GUI. Optional `--rerun PORT` or `--rerun path.rrd` logs step data to Rerun.
 
   Examples:
 
   ```bash
-  emet molmospaces serve --scene ithor --split train --index 1 --robot rby1 --viewer
+  emet molmospaces serve --scene ithor --split train --index 1 --viewer
+  emet molmospaces serve --scene ithor --robot rby1 --viewer
   emet molmospaces serve --scene procthor-10k --headless --rerun 9876
   ```
 
@@ -133,13 +138,14 @@ export MOLMOSPACES_PYTHON=/path/to/your/molmospaces/venv/bin/python
 
 Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. To drive the robot and use **`emet run agent`** (LLM + tools), run the **ZMQ MuJoCo server** from the same environment you use for normal simulation (`uv sync` from the repo root installs default groups including **sim**).
 
-**Recommended (one command):** `emet serve mujoco` can merge a MolmoSpaces scene with **rby1** (Galaxea R1) via the wrapper, then start the ZMQ server. You do **not** need to run `merge-scene` first.
+**Recommended (one command):** `emet serve mujoco` can merge a MolmoSpaces scene with the chosen robot via the wrapper, then start the ZMQ server. Default robot is **stretch** when `--robot` is omitted. You do **not** need to run `merge-scene` first.
 
 1. Install assets and (if needed) the wrapper venv: `./install.sh --molmospaces -y`. If you do not set `MLSPACES_ASSETS_DIR` / `MLSPACES_CACHE_DIR`, core emet defaults them to sibling directories under `~/.cache/molmospaces/` (`assets` and `resource_cache`). Upstream requires those roots to differ and not nest inside each other.
 2. From the project root with the **main** `.venv` (where `emet` and sim extras live):
 
    ```bash
-   emet serve mujoco --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0 --robot rby1 --headless
+   emet serve mujoco --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0 --headless
+   emet serve mujoco --molmospaces-scene ithor --robot rby1 --headless   # Galaxea R1
    ```
 
    This calls the wrapper’s `merge-scene`, writes the merged MJCF beside the **chosen robot’s MJCF** (a temp file named `molmospaces_merged_*.xml` under that robot’s asset directory: e.g. galaxea r1 meshes for `--robot rby1`, or beside `stretch.xml` for `--robot stretch`), then starts `emet.simulation.mujoco_server` with the matching `--robot`. The file must live next to the robot MJCF so MuJoCo resolves `assetdir`; writing the merge under `/tmp` breaks mesh loading. The merged file is kept on disk until the server **stops**, then removed.
@@ -149,15 +155,19 @@ Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. T
    **Agent + serve:** use the same robot id on `emet serve` and `emet run agent` (e.g. both `stretch`, or both `rby1`). `emet run agent --start-sim --molmospaces-scene …` sets the agent robot to match the sim when you omit agent `--robot`.
 
    **Adding another vendored mobile robot:** expose a top-level MJCF path in `emet.utils.assets.get_robot_mjcf_path`, merge with `emet molmospaces merge-scene --robot <key>`, then `emet serve mujoco --scene_path … --robot <key>`. The MJCF should use a **world freejoint** on the base body (autoplace heuristic); planar-only bases need extra wiring (see Robocasa path).
-3. Run the agent:
+3. Run the agent (robot must match the server):
 
    ```bash
+   emet run agent --robot-ip 127.0.0.1
+   emet run agent --robot-ip 127.0.0.1 --robot stretch
    emet run agent --robot-ip 127.0.0.1 --robot rby1
    ```
 
-**Optional: fixed path** — use `emet molmospaces merge-scene ... -o /path/to/merged.xml` if you want a stable file, then `emet serve mujoco --robot rby1 --scene-path /path/to/merged.xml`.
+   Or one terminal: `emet run agent --start-sim --molmospaces-scene ithor --headless` (agent robot follows sim when you omit `--robot`).
 
-Use `--port-offset` on both server and agent if default ZMQ ports are busy. The agent uses **`GenericZmqClient`** for `rby1`, matching `emet run dynamem --robot rby1`.
+**Optional: fixed path** — use `emet molmospaces merge-scene ... -o /path/to/merged.xml` if you want a stable file, then `emet serve mujoco --scene-path /path/to/merged.xml` with matching `--robot`.
+
+Use `--port-offset` on both server and agent if default ZMQ ports are busy. **Stretch** uses the Stretch MuJoCo ZMQ stack; registry robots (**rby1**, **galaxea_r1**, **innate_mars**, …) use **`GenericZmqClient`**, matching `emet run dynamem --robot <name>`.
 
 **iTHOR spawn occupancy (ZMQ server):** For **`ithor`** scenes, free-joint XY search prefers points sampled from the same orthographic occupancy map (Molmo-style) before falling back to annulus/grid heuristics. Set **`EMET_MOLMOSPACES_OCC_MAP=0`** (or `false`) to disable. **`EMET_MOLMOSPACES_OCC_SEED`** seeds the occupancy free-point subsample (default `0`). Full list: [molmospaces_environment_variables.md](molmospaces_environment_variables.md).
 

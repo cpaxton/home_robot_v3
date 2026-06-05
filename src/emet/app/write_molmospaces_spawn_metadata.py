@@ -59,7 +59,13 @@ def compute_spawn_metadata_from_mjcf(
 
     x, y = float(seed_xy[0]), float(seed_xy[1])
     if not molmospaces_spawn.write_freejoint_base_xyzw(
-        model, data, x=x, y=y, z=0.5, yaw=0.0, base_body_name=base_body_name
+        model,
+        data,
+        x=x,
+        y=y,
+        z=0.5,
+        quat_wxyz=(1.0, 0.0, 0.0, 0.0),
+        base_body_name=base_body_name,
     ):
         raise RuntimeError(f"failed to place free joint on {base_body_name!r}")
 

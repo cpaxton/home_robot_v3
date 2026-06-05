@@ -198,6 +198,7 @@ def test_molmospaces_help():
     assert "build-occ-map" in result.stdout
     assert "serve" in result.stdout
     assert "export-nerfstudio" in result.stdout
+    assert "write-spawn-metadata" in result.stdout
 
 
 def test_serve_mujoco_help_includes_molmospaces_scene():

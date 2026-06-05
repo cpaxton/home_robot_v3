@@ -615,7 +615,7 @@ def main_runner(argv: list[str] | None = None) -> int:
     p.add_argument("--scene", default="ithor")
     p.add_argument("--split", default="train", choices=["train", "val", "test"])
     p.add_argument("--index", type=int, default=0)
-    p.add_argument("--robot", default="rby1")
+    p.add_argument("--robot", default="stretch", help="Robot ID (default: stretch)")
     p.add_argument("--headless", action="store_true")
     p.add_argument("--viewer", action="store_true")
     p.add_argument("--rerun", type=str, default="")

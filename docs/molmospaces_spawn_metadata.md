@@ -16,6 +16,7 @@ Examples checked into the repo:
 
 | Robot | Path |
 |-------|------|
+| stretch (default MolmoSpaces serve) | [`robot/molmospaces_spawn.json`](../src/emet/assets/robot/molmospaces_spawn.json) next to [`stretch.xml`](../src/emet/assets/robot/stretch.xml) |
 | rby1 / galaxea_r1 | [`galaxea_r1/molmospaces_spawn.json`](../src/emet/assets/robot/galaxea_r1/molmospaces_spawn.json) |
 | innate_mars | [`innate_mars/molmospaces_spawn.json`](../src/emet/assets/robot/innate_mars/molmospaces_spawn.json) |
 
@@ -37,18 +38,20 @@ Examples checked into the repo:
 - When adding a **new** vendored robot used on MolmoSpaces merge paths.
 - When spawn QA shows the base floating or clipping on iTHOR-style floors for that robot.
 
-Use a **merged** scene+robot MJCF (not the standalone table scene). The measurement runs a short kinematic settle at a seed `(x, y)` on the scene floor.
+Use a **merged** scene+robot MJCF (not the standalone table scene). The measurement runs a short kinematic settle at a seed `(x, y)` on the scene floor. If `(0, 0)` fails (common on iTHOR clutter), merge beside the robot MJCF (so meshes resolve), pick a walkable point from autoplace or occupancy QA, and pass **`--seed-x` / `--seed-y`**.
 
 ## Workflow
 
 ### 1. Merge scene + robot
 
 ```bash
+emet molmospaces merge-scene --scene ithor --split train --index 0 --robot stretch \
+  -o src/emet/assets/robot/ithor_stretch_merged.xml --install-if-missing
 emet molmospaces merge-scene --scene ithor --split train --index 0 --robot rby1 \
-  -o /tmp/ithor_rby1_merged.xml --install-if-missing
+  -o src/emet/assets/robot/galaxea_r1/ithor_rby1_merged.xml --install-if-missing
 ```
 
-Use the same `--robot` you serve with. Write `-o` under the robot asset tree when you want a persistent copy; `/tmp` is fine for one-off measurement.
+Use the same `--robot` you serve with. Write **`-o`** next to the robot MJCF (e.g. `src/emet/assets/robot/` for stretch, `galaxea_r1/` for rby1) so MuJoCo can load meshes during measurement; `/tmp` often breaks mesh paths.
 
 ### 2. Measure and write JSON
 

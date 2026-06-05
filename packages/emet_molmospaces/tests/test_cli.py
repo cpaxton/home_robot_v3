@@ -83,6 +83,18 @@ def test_wrapper_merge_scene_help():
     assert exc_info.value.code == 0
 
 
+def test_wrapper_serve_help_documents_stretch_default(capsys):
+    """Wrapper --robot default matches core emet (stretch)."""
+    from emet_molmospaces.runner import main_runner
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_runner(["serve", "--help"])
+    assert exc_info.value.code == 0
+    out = capsys.readouterr().out
+    assert "--robot" in out
+    assert "stretch" in out
+
+
 def test_xml_path_for_scene_index_legacy_list():
     from emet_molmospaces.runner import _xml_path_for_scene_index
 
