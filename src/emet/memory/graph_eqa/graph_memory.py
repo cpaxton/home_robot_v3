@@ -186,6 +186,14 @@ class GraphEQAMemory:
         """Set the discrete time index used for ``last_seen`` and staleness (e.g. controller ``obs_count``)."""
         self._graph_timestep = int(step)
 
+    def set_navigation_samples_max(self, n: int) -> None:
+        """Raise or lower the cap on stored navigation viewpoint samples (default from config)."""
+        self._nav_max = max(1, int(n))
+
+    @property
+    def navigation_samples_max(self) -> int:
+        return int(self._nav_max)
+
     def _effective_timestep(self) -> int:
         if self._graph_timestep > 0:
             return self._graph_timestep

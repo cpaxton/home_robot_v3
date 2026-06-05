@@ -38,7 +38,7 @@ class DynagraphController(GraphEQAController):
         super().__init__(*args, **kwargs)
         if ground_truth_mode and self.graph_memory is not None:
             # Keep full rotate/explore viewpoint history (voxel frames also logged on export).
-            self.graph_memory._nav_max = max(int(self.graph_memory._nav_max), 8192)
+            self.graph_memory.set_navigation_samples_max(max(self.graph_memory.navigation_samples_max, 8192))
         self.setup_custom_blueprint()
         self._sync_ground_truth_from_session()
         if self.graph_memory is not None and getattr(self.rerun_visualizer, "enabled", True):
