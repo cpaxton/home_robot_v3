@@ -13,8 +13,17 @@ import emet
 
 def test_molmospaces_spawn_json_exists_for_merge_robots():
     root = Path(emet.__file__).resolve().parent / "assets" / "robot"
+    assert (root / "molmospaces_spawn.json").is_file()
     assert (root / "galaxea_r1" / "molmospaces_spawn.json").is_file()
     assert (root / "innate_mars" / "molmospaces_spawn.json").is_file()
+
+
+def test_load_molmospaces_spawn_metadata_stretch_foot_clearance():
+    from emet.simulation.molmospaces_spawn_metadata import load_molmospaces_spawn_metadata
+
+    m = load_molmospaces_spawn_metadata("stretch")
+    assert m is not None
+    assert m.molmospaces_target_foot_clearance_above_floor_m == 0.0206
 
 
 def test_load_molmospaces_spawn_metadata_for_rby1_family():

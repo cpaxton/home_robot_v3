@@ -78,7 +78,7 @@ Used during `RobosuiteZmqServer` startup:
 | `apply_home_keyframe_preserving_base` | Apply MJCF `home` keyframe; keep merged-scene base pose when Molmo autoplace ran. |
 | `apply_zero_joint_pose_preserving_base` | Zero articulated joints; preserve base. |
 | `freejoint_qpos_qvel_addrs` | Locate free joint on `base_link` (Molmo merge). |
-| `log_post_load_diagnostics` | Optional velocity / contact logging (`EMET_ROBOSUITE_POST_LOAD_DEBUG=1`). |
+| `log_post_load_diagnostics` | Optional velocity / contact logging (`EMET_ROBOSUITE_POST_LOAD_DEBUG=1`; see [environment_variables.md](environment_variables.md)). |
 | `probe_max_qvel_unforced_steps` | Short dynamics probe after load. |
 
 ---
