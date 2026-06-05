@@ -35,9 +35,12 @@ from .sensor_graph_builder import (
 )
 from .sim_ground_truth_graph import (
     build_ground_truth_graph_from_session,
+    count_ground_truth_nodes,
+    deduplicate_placements,
     ground_truth_alignment_report,
     populate_graph_memory_from_placements,
     read_sim_object_placements,
+    upsert_graph_memory_from_placements,
 )
 
 __all__ = [
@@ -47,9 +50,12 @@ __all__ = [
     "SensorGraphBuilder",
     "build_ground_truth_graph_from_session",
     "compare_graph_to_placements_report",
+    "count_ground_truth_nodes",
+    "deduplicate_placements",
     "ground_truth_alignment_report",
     "populate_graph_memory_from_placements",
     "read_sim_object_placements",
+    "upsert_graph_memory_from_placements",
     "format_graph_edges_only",
     "format_scene_graph_pretty",
     "frame_instances_to_labels_xyz",

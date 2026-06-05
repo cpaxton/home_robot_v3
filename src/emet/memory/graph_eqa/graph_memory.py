@@ -53,6 +53,9 @@ class GraphNavigationSample:
     base_xyz: np.ndarray | None = None  # (3,) optional robot base x,y,z for trajectory context
 
 
+GT_BODY_DESC_PREFIX = "ground_truth:"
+
+
 @dataclass
 class GraphNode:
     """Single node in the scene graph: an object or region with label and position."""
@@ -65,6 +68,14 @@ class GraphNode:
     last_seen: int = 0
     support_count: int = 1
     extent_half: np.ndarray | None = None  # (3,) half-axis sizes in meters; None = point-like
+
+
+def is_ground_truth_node(node: GraphNode | None) -> bool:
+    """True when ``node.description`` marks sim GT (stable ``body_name`` key)."""
+    if node is None:
+        return False
+    desc = getattr(node, "description", None)
+    return isinstance(desc, str) and desc.startswith(GT_BODY_DESC_PREFIX)
 
 
 @dataclass
@@ -192,7 +203,9 @@ class GraphEQAMemory:
         if self.staleness_horizon <= 0 or not self._nodes:
             return 0
         cur = int(current_step)
-        to_drop: list[GraphNode] = [n for n in self._nodes if cur - int(n.last_seen) > self.staleness_horizon]
+        to_drop: list[GraphNode] = [
+            n for n in self._nodes if not is_ground_truth_node(n) and cur - int(n.last_seen) > self.staleness_horizon
+        ]
         if not to_drop:
             return 0
         drop_obs = {n.obs_id for n in to_drop}
@@ -233,6 +246,8 @@ class GraphEQAMemory:
         xyz: np.ndarray,
         labels: list[str],
         description: str | None = None,
+        *,
+        extent_half: np.ndarray | None = None,
     ) -> int:
         """
         Add one observation to the graph: create a node and update edges.
@@ -257,6 +272,8 @@ class GraphEQAMemory:
 
         if self.spatial_merge_m > 0:
             for idx, existing in enumerate(self._nodes):
+                if is_ground_truth_node(existing):
+                    continue
                 el = [(x or "").strip().lower() for x in existing.labels if str(x).strip()]
                 if not el or el[0] != primary:
                     continue
@@ -287,6 +304,9 @@ class GraphEQAMemory:
         obs_id = self._next_obs_id
         self._next_obs_id += 1
         node_id = len(self._nodes) + 1
+        ext = None
+        if extent_half is not None:
+            ext = np.asarray(extent_half, dtype=float).reshape(-1)[:3].copy()
         node = GraphNode(
             node_id=node_id,
             labels=labels_norm,
@@ -295,7 +315,7 @@ class GraphEQAMemory:
             description=description,
             last_seen=step,
             support_count=1,
-            extent_half=None,
+            extent_half=ext,
         )
         self._nodes.append(node)
         self._observations.append(
@@ -309,6 +329,71 @@ class GraphEQAMemory:
         )
         self._update_edges()
         return obs_id
+
+    def upsert_ground_truth_observation(
+        self,
+        body_key: str,
+        rgb: np.ndarray | Image.Image,
+        xyz: np.ndarray,
+        labels: list[str],
+        *,
+        extent_half: np.ndarray | None = None,
+    ) -> int:
+        """
+        Insert or refresh one sim GT node keyed by MuJoCo ``body_key``.
+
+        GT nodes use ``description=ground_truth:{body_key}`` so repeated updates
+        deduplicate instead of adding duplicate detections over time.
+        """
+        if isinstance(rgb, Image.Image):
+            rgb = np.array(rgb)
+        step = self._effective_timestep()
+        xyz_a = np.asarray(xyz, dtype=float).reshape(-1)[:3]
+        labels_norm = [str(l).strip() for l in labels if str(l).strip()]
+        if not labels_norm:
+            labels_norm = ["object"]
+        desc = f"{GT_BODY_DESC_PREFIX}{body_key}"
+        ext = None
+        if extent_half is not None:
+            ext = np.asarray(extent_half, dtype=float).reshape(-1)[:3].copy()
+
+        for idx, existing in enumerate(self._nodes):
+            if existing.description != desc:
+                continue
+            same_pose = np.allclose(existing.xyz, xyz_a, atol=1e-4, rtol=0.0)
+            same_labels = list(existing.labels) == labels_norm
+            same_ext = ext is None or (
+                existing.extent_half is not None and np.allclose(existing.extent_half, ext, atol=1e-4, rtol=0.0)
+            )
+            if same_pose and same_labels and same_ext:
+                self._nodes[idx] = replace(existing, last_seen=step)
+                self._update_edges()
+                return int(existing.obs_id)
+            sc = int(existing.support_count) + 1
+            self._nodes[idx] = replace(
+                existing,
+                xyz=xyz_a.copy(),
+                labels=labels_norm,
+                last_seen=step,
+                support_count=sc,
+                extent_half=ext if ext is not None else existing.extent_half,
+            )
+            for o in self._observations:
+                if o.obs_id == existing.obs_id:
+                    o.xyz = xyz_a.copy()
+                    o.labels = list(labels_norm)
+                    o.description = desc
+                    break
+            self._update_edges()
+            return int(existing.obs_id)
+
+        return self.add_observation(
+            rgb,
+            xyz_a,
+            labels_norm,
+            description=desc,
+            extent_half=ext,
+        )
 
     def record_navigation_sample(
         self,

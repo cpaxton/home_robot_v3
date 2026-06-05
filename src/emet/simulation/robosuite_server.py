@@ -39,7 +39,10 @@ from emet.simulation import molmospaces_spawn, scene_base_spawn
 from emet.simulation.head_look_action import apply_head_to_robosuite
 from emet.simulation.molmospaces_env import molmospaces_nav_teleport_enabled
 from emet.simulation.molmospaces_mobile_autoplace import apply_molmospaces_freejoint_base_autoplace
-from emet.simulation.sim_object_placements import attach_sim_object_placements_to_session
+from emet.simulation.sim_object_placements import (
+    apply_navigation_origin_to_session,
+    attach_sim_object_placements_to_session,
+)
 from emet.simulation.stereo_camera_utils import stereo_right_camera_name_from_spec
 from emet.utils.geometry import xyt_global_to_base
 from emet.utils.observation_layout import rgb_height_width_for_zmq
@@ -340,8 +343,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         if self._session_extra:
             session.update(self._session_extra)
         if self._initial_xyt is not None:
-            ixy = np.asarray(self._initial_xyt, dtype=np.float64).reshape(-1)[:3]
-            session["navigation_origin_xyt"] = [float(ixy[0]), float(ixy[1]), float(ixy[2])]
+            apply_navigation_origin_to_session(session, self._initial_xyt)
         env_kind = env.get("kind") if isinstance(env, dict) else None
         attach_sim_object_placements_to_session(
             session,
