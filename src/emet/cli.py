@@ -197,10 +197,10 @@ def main() -> None:
         )
 
 
-@main.command(short_help="Start simulation server (mujoco or robocasa)")
+@main.command(short_help="Start simulation server (mujoco, robocasa, or molmospaces)")
 @click.argument(
     "backend",
-    type=click.Choice(["mujoco", "robocasa"]),
+    type=click.Choice(["mujoco", "robocasa", "molmospaces"]),
     default="mujoco",
 )
 @click.option(
@@ -238,10 +238,10 @@ def main() -> None:
     metavar="NAME",
     help=(
         "MolmoSpaces scene (e.g. ithor). Runs merge via emet-molmospaces into a temp MJCF, "
-        "then starts the ZMQ server (same as merge-scene + emet serve mujoco). Requires wrapper: "
-        "install.sh --molmospaces. First-time use may need scene packages under MLSPACES_ASSETS_DIR "
-        "(you will be prompted to download unless --molmospaces-install). "
-        "Incompatible with --scene-path and --use-robocasa."
+        "then starts the ZMQ server (same as ``emet serve molmospaces`` or merge-scene + serve mujoco). "
+        "Requires wrapper: install.sh --molmospaces. First-time use may need scene packages under "
+        "MLSPACES_ASSETS_DIR (you will be prompted to download unless --molmospaces-install). "
+        "Incompatible with --scene-path and --use-robocasa / robocasa backend."
     ),
 )
 @click.option(
@@ -298,12 +298,10 @@ def main() -> None:
 )
 @click.option(
     "--robot",
-    default="stretch",
+    default=None,
     help=(
-        "Robot to simulate. 'stretch' (default) uses the Stretch-MuJoCo server. "
-        "Registry robots (e.g. innate_mars, rby1, galaxea_r1) load the default table "
-        "scene merged with that robot's MJCF and use the generic ZMQ sim (RobosuiteZmqServer). "
-        "Robosuite-native names (PandaOmron, Tiago, GR1) use the stock robosuite robot in Robocasa."
+        "Robot to simulate. Default: stretch (table, Robocasa, and MolmoSpaces when omitted). "
+        "Registry robots (innate_mars, rby1, galaxea_r1) use RobosuiteZmqServer on merged MJCF paths."
     ),
 )
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
@@ -331,8 +329,11 @@ def serve(
     """Start a simulation server.
 
     Backends:
-      mujoco   MuJoCo server (default). Add --use-robocasa for Robocasa scenes.
-      robocasa Shortcut for mujoco with Robocasa (same as emet serve mujoco --use-robocasa).
+      mujoco       MuJoCo server (default). Add --use-robocasa for Robocasa scenes.
+      robocasa     Shortcut for mujoco with Robocasa (same as ``emet serve mujoco --use-robocasa``).
+      molmospaces  MolmoSpaces merge + ZMQ server (default scene ithor; same as
+                   ``emet serve mujoco --molmospaces-scene …``). Optional scene positional:
+                   ``emet serve molmospaces procthor-10k``.
 
     List Robocasa environments (requires sim extra: ``uv sync --extra sim`` or ``emet sync -e sim`` after ``emet install sim``):
       emet robocasa list
@@ -349,16 +350,31 @@ def serve(
       emet serve robocasa --robocasa-task PickPlaceCounterToCabinet
       emet serve robocasa --list-robocasa-tasks
       emet serve mujoco --use-robocasa --port-offset 100
-      DISPLAY=:1 emet serve mujoco --molmospaces-scene ithor --robot stretch   # MolmoSpaces + Stretch (needs wrapper)
-      emet serve mujoco --molmospaces-scene ithor --headless --robot rby1
+      emet serve molmospaces --headless
+      emet serve molmospaces ithor --molmospaces-index 3
+      DISPLAY=:1 emet serve mujoco --molmospaces-scene ithor   # default robot: stretch
+      emet serve molmospaces --robot rby1 --headless
     """
+    extra_args = list(extra)
     use_robocasa_flag = use_robocasa or (backend == "robocasa")
-    if backend == "mujoco" or backend == "robocasa":
+    if backend == "molmospaces":
+        if use_robocasa:
+            click.echo("Cannot combine --use-robocasa with molmospaces backend.", err=True)
+            sys.exit(1)
+        if list_robocasa_tasks:
+            click.echo("--list-robocasa-tasks is only for robocasa / mujoco --use-robocasa.", err=True)
+            sys.exit(1)
+        if molmospaces_scene is None:
+            if extra_args and not str(extra_args[0]).startswith("-"):
+                molmospaces_scene = str(extra_args.pop(0))
+            else:
+                molmospaces_scene = "ithor"
+    if backend in ("mujoco", "robocasa", "molmospaces"):
         from emet.config.sim_launch_config import build_sim_launch_config_from_serve_cli
         from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
 
         if list_robocasa_tasks:
-            args = list(extra) + ["--use-robocasa", "--list-robocasa-tasks"]
+            args = extra_args + ["--use-robocasa", "--list-robocasa-tasks"]
             sys.exit(_run_module("emet.simulation.mujoco_server", args))
 
         try:
@@ -383,7 +399,7 @@ def serve(
         except ValueError as e:
             click.echo(str(e), err=True)
             sys.exit(1)
-        args = list(extra) + prepare_mujoco_server_argv(cfg)
+        args = extra_args + prepare_mujoco_server_argv(cfg)
         sys.exit(_run_module("emet.simulation.mujoco_server", args))
     else:
         click.echo(f"Unknown backend: {backend}", err=True)
@@ -437,8 +453,9 @@ def molmospaces_cmd() -> None:
     """Set up MolmoSpaces scenes, list robots (e.g. rby1 / Galaxea R1), and run simulation.
 
     list-robots works without the wrapper. list-scenes, install-scene, merge-scene, and serve
-    require the local emet-molmospaces package (see docs/molmospaces.md). ``export-nerfstudio`` is
-    core-only (reads an explore episode directory). Install wrapper with:
+    require the local emet-molmospaces package (see docs/molmospaces.md). ``write-spawn-metadata``
+    and ``build-occ-map`` are core-only offline tools (see docs/molmospaces_spawn_metadata.md).
+    ``export-nerfstudio`` is core-only (reads an explore episode directory). Install wrapper with:
       ./install.sh -y   (default sim path)   or   ./install.sh --molmospaces -y   or   editable install of packages/emet_molmospaces
     """
 
@@ -482,6 +499,65 @@ def molmospaces_install_scene(
     sys.exit(_run_molmospaces_wrapper(args))
 
 
+@molmospaces_cmd.command(
+    "write-spawn-metadata",
+    short_help="Measure spawn hints from a merged MJCF and update molmospaces_spawn.json",
+)
+@click.option(
+    "--robot",
+    required=True,
+    help="Robot id merged into the MJCF (e.g. stretch, rby1, galaxea_r1, innate_mars).",
+)
+@click.option(
+    "--mjcf",
+    "mjcf_path",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Merged scene+robot MJCF (from merge-scene or a temp path from emet serve molmospaces).",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Override output JSON (default: <robot_mjcf_dir>/molmospaces_spawn.json).",
+)
+@click.option(
+    "--no-merge",
+    is_flag=True,
+    help="Replace the file instead of merging measured keys into existing JSON.",
+)
+@click.option("--base-body", default="base_link", show_default=True, help="Free-joint base body name.")
+@click.option("--seed-x", default=0.0, show_default=True, type=float, help="World X (m) for measurement pose.")
+@click.option("--seed-y", default=0.0, show_default=True, type=float, help="World Y (m) for measurement pose.")
+def molmospaces_write_spawn_metadata(
+    robot: str,
+    mjcf_path: Path,
+    output_path: Path | None,
+    no_merge: bool,
+    base_body: str,
+    seed_x: float,
+    seed_y: float,
+) -> None:
+    """Offline spawn tuning: kinematic floor settle → foot clearance / base height in JSON.
+
+    Full workflow and JSON field reference: docs/molmospaces_spawn_metadata.md
+    """
+    from emet.app.write_molmospaces_spawn_metadata import run_write
+
+    out = run_write(
+        robot,
+        mjcf_path,
+        output_path=output_path,
+        merge_existing=not no_merge,
+        base_body_name=base_body,
+        seed_x=seed_x,
+        seed_y=seed_y,
+    )
+    click.echo(f"Wrote {out}")
+
+
 @molmospaces_cmd.command("build-occ-map", short_help="Build vendored iTHOR orthographic occupancy map from merged MJCF")
 @click.argument("mjcf", type=click.Path(exists=True, path_type=Path))
 @click.option(
@@ -506,7 +582,7 @@ def molmospaces_build_occ_map(mjcf: Path, output_dir: Path | None, agent_radius:
 @click.option("--scene", default="ithor", help="Scene name")
 @click.option("--split", default="train", type=click.Choice(["train", "val", "test"]))
 @click.option("--index", default=0, type=int, help="Scene index within split")
-@click.option("--robot", default="rby1", help="Robot ID (default: rby1)")
+@click.option("--robot", default="stretch", help="Robot ID (default: stretch)")
 @click.option(
     "--output",
     "-o",
@@ -545,7 +621,7 @@ def molmospaces_merge_scene(
 @click.option("--scene", default="ithor", help="Scene name")
 @click.option("--split", default="train", type=click.Choice(["train", "val", "test"]))
 @click.option("--index", default=0, type=int, help="Scene index")
-@click.option("--robot", default="rby1", help="Robot ID (default: rby1, Galaxea R1 family)")
+@click.option("--robot", default="stretch", help="Robot ID (default: stretch)")
 @click.option("--headless", is_flag=True, help="Run without viewer")
 @click.option("--viewer", is_flag=True, help="Open MuJoCo viewer")
 @click.option("--rerun", type=str, default="", metavar="PORT_OR_PATH", help="Log to rerun (port or RRD path)")
@@ -986,7 +1062,6 @@ def deploy(
             "create-and-print-memory",
             "molmospaces-explore",
             "debug-da3-depth",
-            "debug-circle-rerun",
         ]
     ),
 )
@@ -1042,7 +1117,6 @@ def run(
       emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
       emet run discord --robot-ip 192.168.1.15 --task pickup   # requires DISCORD_TOKEN in env
       emet run debug-da3-depth --robot innate_mars   # DA3 depth + point cloud in Rerun (or: emet debug-da3-depth)
-      emet run debug-circle-rerun   # pole-ring calibration → Rerun (or: emet debug-circle-rerun)
     """
     _require_repo_venv_when_in_repo()
     args = list(ctx.args)

@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "notes": "Optional MolmoSpaces spawn tuning for rby1/galaxea_r1 merge path; extend via offline tools.",
+  "molmospaces_target_foot_clearance_above_floor_m": 0.055
+}

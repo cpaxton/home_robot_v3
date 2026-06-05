@@ -1,0 +1,35 @@
+\section{Background and Related Work}
+\label{sec:background}
+
+\subsection{Embodied question answering and 3D scene graphs}
+
+\textbf{GraphEQA}~\citep{saxena2024grapheqa} builds a real-time 3D metric-semantic scene graph (3DSG) and selects task-relevant images to ground a VLM for EQA in unseen environments, with semantics-guided hierarchical exploration.
+It is evaluated in Habitat-Sim on HM-EQA (113 HM3D questions) and an OpenEQA subset, and demonstrated on a Stretch robot in real homes.
+Our \texttt{emet} stack re-implements graph-based EQA memory without the Hydra/ROS pipeline, using a lighter sensor-to-graph builder (\texttt{SensorGraphBuilder}).
+
+\textbf{GraphPad} (2025) introduces a mutable scene graph updated via agent API calls during a task; Dynagraph instead updates memory automatically from streaming perception during exploration.
+
+\textbf{M3Fusion} (2026) fuses 2D semantics and 3D geometry into unified 3D tokens for LLMs on 3DQA benchmarks---complementary representation focus, not an embodied exploration loop.
+
+\subsection{Dynamic spatial memory for robots}
+
+\textbf{DynaMem}~\citep{liu2024dynamem} proposes online dynamic spatio-semantic memory for open-vocabulary mobile manipulation: voxel/point-cloud memory with add/remove, value-based exploration, and the DynaBench offline benchmark.
+Dynagraph uses DynaMem's voxel stack for navigation and adds a graph layer for EQA.
+
+\textbf{OK-Robot}~\citep{liu2024okrobot} integrates open-knowledge models for zero-shot pick-and-place with a \emph{prescanned static} semantic map; DynaMem reports substantially higher success on dynamic objects than this static baseline.
+Emet's voxel navigation code traces lineage to OK-Robot.
+
+\textbf{DREAM} (2026) extends dynamic spatio-semantic memory with redundancy-aware pruning on a pose graph for long-horizon manipulation without a pre-built map.
+Dynagraph's graph merge and staleness target \emph{discrete object nodes for EQA}, complementary to continuous map pruning.
+
+\textbf{PanoNav} (2025) uses a bounded memory queue of visited places for loop-free navigation; Dynagraph retains full semantic voxel and graph structure for question answering, not only pose history.
+
+\subsection{Dynamic memory for language agents}
+
+\textbf{DeltaMem}~\citep{deltamem2026} stores experience as residual deltas in a dual-tree structure for LLM agents (ALFWorld, ScienceWorld, WebShop).
+\textbf{$\delta$-mem} compresses history into a low-rank attention state during inference.
+These works motivate \emph{incremental} and \emph{bounded} memory but do not address embodied 3D exploration; we cite them for the forgetting/update narrative only.
+
+\subsection{Benchmarks}
+
+We target \textbf{HM-EQA} and \textbf{OpenEQA}-style evaluation via a Habitat harness (GraphEQA parity) and complementary \textbf{Robocasa} / \textbf{MolmoSpaces} episodes in MuJoCo with multi-robot support in \texttt{emet}.

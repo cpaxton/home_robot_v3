@@ -26,6 +26,70 @@ import pytest
 from click.testing import CliRunner
 
 
+def test_validate_molmospaces_robot_accepts_stretch_and_registry():
+    from emet.simulation.molmospaces_config import validate_molmospaces_robot
+
+    assert validate_molmospaces_robot("stretch") == "stretch"
+    assert validate_molmospaces_robot("rby1") == "rby1"
+    assert validate_molmospaces_robot("galaxea_r1") == "galaxea_r1"
+
+
+def test_build_sim_launch_config_default_robot_stretch_for_molmospaces():
+    from emet.config.sim_launch_config import (
+        SimLaunchMolmospaces,
+        build_sim_launch_config_from_serve_cli,
+    )
+
+    cfg = build_sim_launch_config_from_serve_cli(
+        molmospaces_scene="ithor",
+        molmospaces_split="train",
+        molmospaces_index=0,
+        molmospaces_install=False,
+        use_robocasa=False,
+        scene_path=None,
+        robot=None,
+        headless=True,
+        show_viewer_ui=False,
+        no_cameras=False,
+        use_glx=False,
+        seed=0,
+        steps=None,
+        debug_molmospaces_spawn=False,
+        port_offset=0,
+        robocasa_task="",
+    )
+    assert isinstance(cfg, SimLaunchMolmospaces)
+    assert cfg.robot == "stretch"
+
+
+def test_build_sim_launch_config_explicit_rby1_for_molmospaces():
+    from emet.config.sim_launch_config import (
+        SimLaunchMolmospaces,
+        build_sim_launch_config_from_serve_cli,
+    )
+
+    cfg = build_sim_launch_config_from_serve_cli(
+        molmospaces_scene="ithor",
+        molmospaces_split="train",
+        molmospaces_index=0,
+        molmospaces_install=False,
+        use_robocasa=False,
+        scene_path=None,
+        robot="rby1",
+        headless=True,
+        show_viewer_ui=False,
+        no_cameras=False,
+        use_glx=False,
+        seed=0,
+        steps=None,
+        debug_molmospaces_spawn=False,
+        port_offset=0,
+        robocasa_task="",
+    )
+    assert isinstance(cfg, SimLaunchMolmospaces)
+    assert cfg.robot == "rby1"
+
+
 def test_molmospaces_config_constants():
     """Config exposes robot list and default robot."""
     from emet.simulation.molmospaces_config import (
@@ -35,7 +99,7 @@ def test_molmospaces_config_constants():
     )
 
     assert "stretch" in MOLMOSPACES_ROBOT_IDS
-    assert DEFAULT_MOLMOSPACES_ROBOT == "rby1"
+    assert DEFAULT_MOLMOSPACES_ROBOT == "stretch"
     assert "ithor" in MOLMOSPACES_SCENE_NAMES
 
 
@@ -134,6 +198,7 @@ def test_molmospaces_help():
     assert "build-occ-map" in result.stdout
     assert "serve" in result.stdout
     assert "export-nerfstudio" in result.stdout
+    assert "write-spawn-metadata" in result.stdout
 
 
 def test_serve_mujoco_help_includes_molmospaces_scene():
@@ -146,6 +211,42 @@ def test_serve_mujoco_help_includes_molmospaces_scene():
     assert result.returncode == 0
     assert "molmospaces-scene" in result.stdout
     assert "molmospaces-install" in result.stdout
+
+
+def test_serve_help_lists_molmospaces_and_robocasa_backends():
+    """emet serve documents mujoco, robocasa, and molmospaces backend shortcuts."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "serve", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    out = result.stdout.lower()
+    assert "robocasa" in out
+    assert "molmospaces" in out
+
+
+def test_serve_molmospaces_help():
+    """emet serve molmospaces --help works and documents MolmoSpaces options."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "serve", "molmospaces", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "molmospaces-scene" in result.stdout
+    assert "molmospaces-split" in result.stdout
+
+
+def test_serve_robocasa_help():
+    """emet serve robocasa --help works."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "serve", "robocasa", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "robocasa-task" in result.stdout or "robocasa_task" in result.stdout
 
 
 def test_molmospaces_list_robots():
@@ -203,6 +304,19 @@ def test_molmospaces_build_occ_map_help():
     )
     assert result.returncode == 0
     assert "mjcf" in result.stdout.lower() or "occupancy" in result.stdout.lower()
+
+
+def test_molmospaces_write_spawn_metadata_help():
+    """emet molmospaces write-spawn-metadata --help works."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "molmospaces", "write-spawn-metadata", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "--robot" in result.stdout
+    assert "--mjcf" in result.stdout
+    assert "molmospaces_spawn.json" in result.stdout.lower() or "spawn metadata" in result.stdout.lower()
 
 
 def test_molmospaces_export_nerfstudio_help():

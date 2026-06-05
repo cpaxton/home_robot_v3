@@ -35,7 +35,7 @@ MOLMOSPACES_ROBOT_IDS = [
     "franka_fr3",
 ]
 
-DEFAULT_MOLMOSPACES_ROBOT = "rby1"
+DEFAULT_MOLMOSPACES_ROBOT = "stretch"
 
 # Scene names used by MolmoSpaces get_scenes(scene_name, split).
 # ithor = MSCrafted, procthor-10k = MSProc, procthor-objaverse = MSProcObja, holodeck-objaverse = MSMultiType.
@@ -47,6 +47,41 @@ MOLMOSPACES_SCENE_NAMES = [
 ]
 
 MOLMOSPACES_SPLITS = ("train", "val", "test")
+
+def normalize_molmospaces_robot_key(robot: str) -> str:
+    return str(robot).strip().lower().replace("-", "_")
+
+
+def molmospaces_merge_robot_choices_hint() -> str:
+    """Human-readable list of valid ``--robot`` values for MolmoSpaces merge."""
+    from emet.robots import ROBOT_REGISTRY
+    from emet.utils.assets import get_robot_mjcf_path
+
+    emet_mjcf = sorted(k for k in ROBOT_REGISTRY if get_robot_mjcf_path(k))
+    molmo_native = ", ".join(MOLMOSPACES_ROBOT_IDS)
+    emet_part = ", ".join(emet_mjcf) if emet_mjcf else "(none)"
+    return f"robots with vendored emet MJCF: {emet_part}; Molmo-native ids: {molmo_native}"
+
+
+def validate_molmospaces_robot(robot: str) -> str:
+    """Normalize and validate ``--robot`` for MolmoSpaces merge + serve (no silent remap).
+
+    Returns:
+        Canonical robot key passed to ``merge-scene`` and ``mujoco_server``.
+
+    Raises:
+        ValueError: Unknown robot or no vendored MJCF for registry robots.
+    """
+    from emet.utils.assets import get_robot_mjcf_path
+
+    key = normalize_molmospaces_robot_key(robot)
+    if get_robot_mjcf_path(key) is not None:
+        return key
+    if key in MOLMOSPACES_ROBOT_IDS:
+        return key
+    raise ValueError(
+        f"Unknown MolmoSpaces robot {robot!r} (normalized {key!r}). {molmospaces_merge_robot_choices_hint()}"
+    )
 
 
 def default_molmospaces_assets_dir() -> Path:

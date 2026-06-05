@@ -1700,6 +1700,25 @@ class RerunVisualizer:
                     if depth.ndim == 2:
                         rr.log("world/frames/current/depth", rr.DepthImage(depth))
 
+    def log_topdown_map_snapshot(
+        self,
+        voxel_map: Any,
+        robot_base_xy: np.ndarray | tuple[float, float] | None = None,
+        *,
+        max_side: int = 640,
+    ) -> None:
+        """Log cropped explored-region top-down RGB to ``world/map_snapshot/topdown``."""
+        if getattr(self, "enabled", True) is False:
+            return
+        try:
+            from emet.visualization.map_snapshot import snapshot_from_voxel_map
+
+            img, _stats, _share = snapshot_from_voxel_map(voxel_map, robot_base_xy, max_side=max_side)
+            if img is not None and getattr(img, "size", 0) > 0:
+                self.log_custom_2d_image("world/map_snapshot/topdown", img)
+        except Exception as e:
+            logger.debug("Rerun top-down map snapshot skipped: %s", e)
+
     def update_voxel_map(
         self,
         space: SparseVoxelMapNavigationSpace,
@@ -1718,6 +1737,7 @@ class RerunVisualizer:
         if not self._stride_tick("_voxel_map_tick", self._voxel_map_stride):
             return
         rr.set_time_seconds("realtime", time.time())
+        self.log_topdown_map_snapshot(space.voxel_map, robot_base_xy)
 
         t0 = timeit.default_timer()
         points, _, _, rgb = space.voxel_map.voxel_pcd.get_pointcloud()
@@ -1758,15 +1778,6 @@ class RerunVisualizer:
             world_radius=world_radius,
         )
         t2 = timeit.default_timer()
-
-        try:
-            from emet.visualization.map_snapshot import snapshot_from_voxel_map
-
-            img, _stats, _discord = snapshot_from_voxel_map(space.voxel_map, robot_base_xy, max_side=640)
-            if img is not None and getattr(img, "size", 0) > 0:
-                self.log_custom_2d_image("world/map_snapshot/topdown", img)
-        except Exception as e:
-            logger.debug("Rerun top-down map snapshot skipped: %s", e)
 
         if debug:
             print("Time to get voxel data: ", t1 - t0)

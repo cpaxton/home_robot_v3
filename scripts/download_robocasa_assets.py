@@ -9,75 +9,128 @@
 # license information maybe found below, if so.
 
 """
-Download Robocasa kitchen assets (~5GB) without importing robocasa.
+Download Robocasa kitchen assets without importing robocasa.
 
 Robocasa's download_kitchen_assets.py imports robocasa, which asserts numpy 1.23.x.
 This project often uses numpy 1.24+. This script uses the same URLs and folder
 layout as robocasa/robocasa/scripts/download_kitchen_assets.py but does not
 import robocasa, so it runs with the project's Python.
 
-If assets (textures, fixtures, etc.) already exist, prompts: "Re-download? (y/N)"
-default N. Use --yes to skip prompts:
-- if all required assets exist, skip download
-- if only some assets exist, download missing assets without prompting
-Use --force to re-download everything even when assets exist.
+Downloads (in order):
+  - textures, fixtures (base), fixtures_lw (LightWheel registry + meshes), objaverse,
+    generative_textures
+
+``fixtures_lw`` is required for ``emet serve robocasa`` — kitchen style YAMLs reference
+IDs such as ``Sink025`` that are only registered after the LightWheel pack is extracted.
+
+If assets already exist, prompts: "Re-download? (y/N)" default N.
+Use ``--yes`` to skip prompts and download only missing packs.
+Use ``--force`` to re-download everything even when assets exist.
 
 Usage (from project root):
-  python scripts/download_robocasa_assets.py [--yes]
-  python scripts/download_robocasa_assets.py --force   # re-download existing
+  uv run python scripts/download_robocasa_assets.py --yes
+  uv run python scripts/download_robocasa_assets.py --force
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
 from zipfile import ZipFile
 
-# Same URLs and relative paths as robocasa/robocasa/scripts/download_kitchen_assets.py
-# (robocasa.__path__[0] + "models/assets/..." -> robocasa_root/robocasa/models/assets/...)
-# Optional 4th element: required subpaths that must exist to skip (e.g. fixtures needs "sinks" for kitchen scenes).
-ASSETS = [
+# (name, url, rel_path_under_robocasa_pkg, check_kind)
+# check_kind: "dir_nonempty" | "basic_fixtures" | "lightwheel_registry"
+ASSET_SPECS: list[tuple[str, str, str, str]] = [
     (
         "textures",
-        "https://utexas.box.com/shared/static/otdsyfjontk17jdp24bkhy2hgalofbh4.zip",
+        "https://utexas.box.com/shared/static/4i85ileasdvstmlln5sbvzptz7keuoy1.zip",
         "models/assets/textures",
-        (),
+        "dir_nonempty",
     ),
     (
         "fixtures",
-        "https://utexas.box.com/shared/static/pobhbsjyacahg2mx8x4rm5fkz3wlmyzp.zip",
+        "https://utexas.box.com/shared/static/zt9vbo38yb9f1alw9iuahck55hoa65y6.zip",
         "models/assets/fixtures",
-        ("sinks",),
+        "basic_fixtures",
+    ),
+    (
+        "fixtures_lw",
+        "https://utexas.box.com/shared/static/idbncsadpnaz1jfl4i6m8qejawk7p9pi.zip",
+        "models/assets/fixtures",
+        "lightwheel_registry",
     ),
     (
         "objaverse",
-        "https://utexas.box.com/shared/static/ejt1kc2v5vhae1rl4k5697i4xvpbjcox.zip",
+        "https://utexas.box.com/shared/static/03eionyo8fk3a9dsksq9jb8du5lqfw8h.zip",
         "models/assets/objects/objaverse",
-        (),
+        "dir_nonempty",
     ),
     (
         "generative_textures",
-        "https://utexas.box.com/shared/static/gf9nkadvfrowkb9lmkcx58jwt4d6c1g3.zip",
+        "https://utexas.box.com/shared/static/ebaad09k82tmfmlq6ohdkmrh8izl9vn5.zip",
         "models/assets/generative_textures",
-        (),
+        "dir_nonempty",
     ),
 ]
 
 
-def _asset_dir_exists(folder: Path, required_subpaths: tuple[str, ...]) -> bool:
-    if not folder.exists():
+def _load_urls_from_box_links(robocasa_pkg: Path) -> dict[str, str]:
+    """Map registry name -> direct .zip URL using shipped ``box_links_assets.json``."""
+    path = robocasa_pkg / "models" / "assets" / "box_links" / "box_links_assets.json"
+    if not path.is_file():
+        return {}
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f)
+    out: dict[str, str] = {}
+    key_map = {
+        "textures": "textures",
+        "fixtures": "fixtures",
+        "fixtures_lw": "fixtures_lightwheel",
+        "objaverse": "objaverse",
+        "generative_textures": "generative_textures",
+    }
+    for spec_name, box_key in key_map.items():
+        shared = raw.get(box_key)
+        if not shared:
+            continue
+        shared_id = str(shared).rstrip("/").split("/")[-1]
+        base = str(shared).split("/s/")[0]
+        out[spec_name] = f"{base}/shared/static/{shared_id}.zip"
+    return out
+
+
+def _basic_fixtures_present(fixtures_dir: Path) -> bool:
+    return (fixtures_dir / "sinks" / "white_sink" / "model.xml").is_file()
+
+
+def _lightwheel_registry_present(fixtures_dir: Path) -> bool:
+    sink_reg = fixtures_dir / "fixture_registry" / "sink.yaml"
+    if not sink_reg.is_file():
         return False
-    if next(folder.iterdir(), None) is None:
+    try:
+        return "Sink025:" in sink_reg.read_text(encoding="utf-8")
+    except OSError:
         return False
-    if required_subpaths and not all((folder / sub).exists() for sub in required_subpaths):
+
+
+def _asset_present(base: Path, rel: str, check_kind: str) -> bool:
+    folder = base / rel
+    if check_kind == "basic_fixtures":
+        return _basic_fixtures_present(folder)
+    if check_kind == "lightwheel_registry":
+        return _lightwheel_registry_present(folder)
+    if not folder.exists() or next(folder.iterdir(), None) is None:
         return False
     return True
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Download Robocasa kitchen assets (~5GB)")
+    ap = argparse.ArgumentParser(
+        description="Download Robocasa kitchen assets (base + LightWheel fixtures for serve robocasa)"
+    )
     ap.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompts")
     ap.add_argument("--force", action="store_true", help="Re-download even when assets exist (no prompt)")
     ap.add_argument(
@@ -88,22 +141,22 @@ def main() -> int:
     script_dir = Path(__file__).resolve().parent
     root = script_dir.parent
     robocasa_root = args.robocasa_dir or (root / "third_party" / "robocasa")
-    # Assets go into robocasa package dir: robocasa/robocasa/models/assets/...
     base = robocasa_root / "robocasa"
 
     if not base.exists():
         print(f"Error: robocasa package not found at {base}", file=sys.stderr)
         return 1
 
-    # Check current asset state
+    url_overrides = _load_urls_from_box_links(base)
+    specs: list[tuple[str, str, str, str]] = []
+    for name, default_url, rel, check in ASSET_SPECS:
+        url = url_overrides.get(name, default_url)
+        specs.append((name, url, rel, check))
+
     any_exist = False
     all_exist = True
-    for item in ASSETS:
-        rel = item[2]
-        required_subpaths = item[3] if len(item) > 3 else ()
-        folder = base / rel
-        exists = _asset_dir_exists(folder, required_subpaths)
-        if exists:
+    for name, _url, rel, check in specs:
+        if _asset_present(base, rel, check):
             any_exist = True
         else:
             all_exist = False
@@ -118,16 +171,20 @@ def main() -> int:
                 print("Skipped.")
                 return 0
         else:
-            print("Kitchen assets already present; skipping (use --force to re-download).")
+            print("Kitchen assets already present (base + LightWheel fixtures); skipping.")
+            print("Use --force to re-download.")
             return 0
     elif any_exist and not force_redownload and not args.yes:
-        reply = input("Some kitchen assets are present. Download missing assets now? (Y/n) ").strip().lower()
+        reply = input("Some kitchen assets are missing. Download missing packs now? (Y/n) ").strip().lower()
         if reply in ("n", "no"):
             print("Skipped.")
             return 0
 
     if not args.yes and not any_exist:
-        print("This will download ~5GB of Robocasa kitchen assets.")
+        print(
+            "This will download Robocasa kitchen assets (~10–15 GB: textures, base fixtures, "
+            "LightWheel fixtures_lw, objaverse, generative_textures)."
+        )
         if input("Proceed? (Y/n) ").strip().lower() in ("n", "no"):
             print("Aborted.")
             return 0
@@ -157,22 +214,22 @@ def main() -> int:
         else:
             urllib.request.urlretrieve(url, filename=path)
 
-    for item in ASSETS:
-        name = item[0]
-        url = item[1]
-        rel = item[2]
-        required_subpaths = item[3] if len(item) > 3 else ()
+    for name, url, rel, check in specs:
         folder = base / rel
         parent = folder.parent
         zip_path = parent / f"{folder.name}.zip"
-        skip = not force_redownload and _asset_dir_exists(folder, required_subpaths)
+        skip = not force_redownload and _asset_present(base, rel, check)
         if skip:
-            print(f"Skipping {name} (already exists).")
+            print(f"Skipping {name} (already present).")
             continue
-        if force_redownload and folder.exists():
+        if force_redownload and check == "dir_nonempty" and folder.exists():
             shutil.rmtree(folder)
             if zip_path.exists():
                 zip_path.unlink(missing_ok=True)
+        elif force_redownload and check == "basic_fixtures" and not _lightwheel_registry_present(folder):
+            # Re-fetch base fixtures only; do not wipe LightWheel registry if already merged.
+            if folder.exists() and not _basic_fixtures_present(folder):
+                shutil.rmtree(folder)
         print(f"Downloading {name}...")
         for attempt in range(3):
             try:
@@ -186,10 +243,86 @@ def main() -> int:
         print("Extracting...")
         with ZipFile(zip_path, "r") as zf:
             zf.extractall(path=parent)
-        zip_path.unlink()
+        zip_path.unlink(missing_ok=True)
         print(f"Done: {name}")
+        if name == "fixtures_lw":
+            try:
+                from emet.simulation.robocasa_registry_sync import restore_fixture_registry_from_vcs
 
-    print("All assets downloaded.")
+                n = restore_fixture_registry_from_vcs(base)
+                if n:
+                    print(f"Restored {n} fixture_registry YAML file(s) from robocasa git.")
+            except Exception as e:
+                print(f"Registry restore failed ({e!r}).", file=sys.stderr)
+                return 1
+
+    fixtures_dir = base / "models/assets/fixtures"
+    try:
+        from emet.simulation.robocasa_registry_sync import (
+            missing_required_registry_stems,
+            restore_fixture_registry_from_vcs,
+            sync_lightwheel_registry,
+        )
+
+        if missing_required_registry_stems(base):
+            n = restore_fixture_registry_from_vcs(base)
+            if n:
+                print(f"Restored {n} fixture_registry YAML file(s) from robocasa git.")
+    except Exception as e:
+        print(f"Registry restore failed ({e!r}).", file=sys.stderr)
+        return 1
+
+    if _lightwheel_registry_present(fixtures_dir):
+        print("LightWheel fixture registry already lists Sink025.")
+    elif (fixtures_dir / "sinks" / "Sink025" / "model.xml").is_file():
+        print("Syncing LightWheel mesh folders into fixture_registry YAML...")
+        try:
+            n = sync_lightwheel_registry(base)
+            print(f"Added {n} registry entries for LightWheel fixture models.")
+        except Exception as e:
+            print(f"Registry sync failed ({e!r}).", file=sys.stderr)
+            return 1
+    if not _lightwheel_registry_present(fixtures_dir):
+        print(
+            "Warning: LightWheel fixtures still not registered (expected Sink025 in "
+            "fixture_registry/sink.yaml). Download fixtures_lw or run sync.",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        from emet.simulation.robocasa_assets_check import fixture_registry_layout_ok
+
+        if not fixture_registry_layout_ok(base):
+            from emet.simulation.robocasa_registry_sync import missing_required_registry_stems
+
+            missing = ", ".join(missing_required_registry_stems(base))
+            print(
+                f"Warning: fixture_registry layout incomplete (missing: {missing}). "
+                "Restore from git: git -C third_party/robocasa checkout -- "
+                "robocasa/models/assets/fixtures/fixture_registry/",
+                file=sys.stderr,
+            )
+            return 1
+    except Exception as e:
+        print(f"Registry layout check failed ({e!r}).", file=sys.stderr)
+        return 1
+
+    try:
+        from emet.simulation.robocasa_objaverse_bbox import ensure_objaverse_reg_bbox
+
+        if not ensure_objaverse_reg_bbox(base):
+            print(
+                "Warning: objaverse reg_bbox processing failed. Run:\n"
+                "  uv run python scripts/process_robocasa_objaverse_reg_bbox.py",
+                file=sys.stderr,
+            )
+            return 1
+    except Exception as e:
+        print(f"Objaverse reg_bbox processing failed ({e!r}).", file=sys.stderr)
+        return 1
+
+    print("All required Robocasa kitchen assets downloaded (including LightWheel fixtures).")
     return 0
 
 

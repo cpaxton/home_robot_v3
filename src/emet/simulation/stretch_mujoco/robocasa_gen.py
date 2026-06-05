@@ -145,6 +145,26 @@ ROBOSUITE_ROBOTS = [
     "SpotWithArm",
 ]
 
+# Galaxea R1 family: use PandaMobile in Robocasa (mobile-base spawn), then strip-and-replace MJCF.
+_GALAXEA_R1_ROBOT_KEYS = frozenset(
+    {"rby1", "rby1m", "galaxea_r1", "galaxear1", "rb_y1", "rby_1"}
+)
+
+
+def _normalize_robot_key(robot_name: str) -> str:
+    return robot_name.lower().replace("-", "_")
+
+
+def _uses_strip_placeholder_robot(robot_name: str) -> bool:
+    key = _normalize_robot_key(robot_name)
+    return key in (
+        "stretch",
+        "hello_stretch",
+        "hellostretch",
+        "innate_mars",
+        *_GALAXEA_R1_ROBOT_KEYS,
+    )
+
 
 def _robosuite_robot_for(robot_name: str) -> str:
     """Map an emet robot name to the robosuite robot class used as the scene placeholder.
@@ -157,10 +177,6 @@ def _robosuite_robot_for(robot_name: str) -> str:
     mapping = {r.lower(): r for r in ROBOSUITE_ROBOTS}
     mapping["pandaomron"] = "PandaOmron"
     mapping["panda_omron"] = "PandaOmron"
-    # RB-Y1 / Galaxea R1 use GR1 as the robocasa placeholder for scene generation
-    mapping["rby1"] = "GR1"
-    mapping["galaxear1"] = "GR1"
-    mapping["galaxea_r1"] = "GR1"
     key = robot_name.lower().replace("-", "").replace("_", "")
     if key in mapping:
         return mapping[key]
@@ -187,8 +203,8 @@ def model_generation_wizard(
         style: Style id (None = interactive choice).
         write_to_file: Optional path to save the generated XML.
         robot_spawn_pose: Override spawn pose ``{pos: "x y z", quat: "w x y z"}``.
-        robot: Robot name. ``"stretch"`` and ``"innate_mars"`` use a PandaMobile placeholder in Robocasa,
-            then strip-and-replace with the real MJCF (same pattern as Stretch).
+        robot: Robot name. ``"stretch"``, ``"innate_mars"``, and Galaxea R1 family ids (``"rby1"``, etc.)
+            use a PandaMobile placeholder in Robocasa, then strip-and-replace with the real MJCF.
             Robosuite-native names (e.g. ``"PandaOmron"``, ``"Tiago"``, ``"GR1"``) keep that robot in the scene.
     Returns:
         Tuple of (MjModel, xml_string, object_placements_info).
@@ -201,18 +217,10 @@ def model_generation_wizard(
     if style is None:
         style = choose_style()
 
-    use_strip_placeholder_robot = robot.lower().replace("-", "_") in (
-        "stretch",
-        "hello_stretch",
-        "hellostretch",
-        "innate_mars",
-        "galaxea_r1",
-        "galaxear1",
-        "rby1",
-        "rb_y1",
-    )
-    use_stretch_robot = robot.lower() in ("stretch", "hello_stretch", "hellostretch")
-    use_galaxea_robot = robot.lower().replace("-", "_") in ("galaxea_r1", "galaxear1", "rby1", "rb_y1")
+    robot_key = _normalize_robot_key(robot)
+    use_strip_placeholder_robot = _uses_strip_placeholder_robot(robot)
+    use_stretch_robot = robot_key in ("stretch", "hello_stretch", "hellostretch")
+    use_galaxea_robot = robot_key in _GALAXEA_R1_ROBOT_KEYS
     rs_robot = _robosuite_robot_for(robot)
 
     config = {
@@ -294,7 +302,7 @@ def model_generation_wizard(
         if use_stretch_robot:
             xml = add_stretch_to_kitchen(xml, robot_base_fixture_pose)
         elif use_galaxea_robot:
-            xml = add_galaxea_r1_to_kitchen(xml, robot_base_fixture_pose)
+            xml = add_galaxea_r1_to_kitchen(xml, robot_base_fixture_pose, robot_key=robot_key)
         else:
             xml = add_innate_mars_to_kitchen(xml, robot_base_fixture_pose)
     else:
@@ -435,14 +443,21 @@ def add_innate_mars_to_kitchen(xml: str, robot_pose_attrib: dict) -> str:
     return insert_line_after_mujoco_tag(xml, f' <include file="{abs_path}"/>')
 
 
-def add_galaxea_r1_to_kitchen(xml: str, robot_pose_attrib: dict) -> str:
-    """Add Galaxea R1 / RB-Y1 MJCF to kitchen XML (strip-and-replace after GR1 placeholder)."""
+def add_galaxea_r1_to_kitchen(
+    xml: str,
+    robot_pose_attrib: dict,
+    *,
+    robot_key: str = "rby1",
+) -> str:
+    """Add Galaxea R1 / rby1 MJCF to kitchen XML (strip-and-replace after PandaMobile placeholder)."""
     from emet.utils.assets import get_robot_mjcf_path
 
-    mjcf = get_robot_mjcf_path("galaxea_r1")
+    lookup = "galaxea_r1" if robot_key in ("galaxea_r1", "galaxear1") else "rby1"
+    mjcf = get_robot_mjcf_path(lookup)
     if mjcf is None or not mjcf.is_file():
         raise FileNotFoundError(
-            "Galaxea R1 MJCF not found (emet package data). Cannot build Robocasa scene for galaxea_r1 / rby1."
+            f"Galaxea R1 MJCF not found for {robot_key!r} (lookup {lookup!r}). "
+            "Cannot build Robocasa scene."
         )
     root_dir = mjcf.parent.resolve()
     meshes_abs = (root_dir / "meshes").resolve()
@@ -450,6 +465,7 @@ def add_galaxea_r1_to_kitchen(xml: str, robot_pose_attrib: dict) -> str:
         raise FileNotFoundError(f"Galaxea R1 meshes directory missing: {meshes_abs}")
 
     text = mjcf.read_text(encoding="utf-8")
+    text = text.replace('meshdir="meshes"', f'meshdir="{meshes_abs.as_posix()}"')
     text = text.replace('assetdir="meshes"', f'assetdir="{meshes_abs.as_posix()}"')
 
     def _abs_mesh_file_attr(m: re.Match) -> str:
@@ -463,8 +479,8 @@ def add_galaxea_r1_to_kitchen(xml: str, robot_pose_attrib: dict) -> str:
         pos = robot_pose_attrib["pos"]
         quat = robot_pose_attrib["quat"]
         text = re.sub(
-            r'<body\s+name="base_link"([^>]*)>',
-            f'<body name="base_link" pos="{pos}" quat="{quat}"\\1>',
+            r'<body\s+name="base_link"[^>]*>',
+            f'<body name="base_link" pos="{pos}" quat="{quat}" gravcomp="0">',
             text,
             count=1,
         )
@@ -480,5 +496,5 @@ def add_galaxea_r1_to_kitchen(xml: str, robot_pose_attrib: dict) -> str:
         fh.write(text)
         tmp_path = fh.name
     abs_path = Path(tmp_path).resolve().as_posix()
-    print(f"Adding galaxea_r1 to kitchen via temp MJCF: {abs_path}")
+    print(f"Adding {robot_key} (Galaxea R1) to kitchen via temp MJCF: {abs_path}")
     return insert_line_after_mujoco_tag(xml, f' <include file="{abs_path}"/>')

@@ -50,18 +50,26 @@ Start a simulation server.
 
 | Backend | Description |
 |---------|--------------|
-| `mujoco` | MuJoCo simulation (default) |
+| `mujoco` | MuJoCo ZMQ simulation (default) |
+| `robocasa` | Shortcut for `mujoco --use-robocasa` (kitchen scenes) |
+| `molmospaces` | Shortcut for `mujoco --molmospaces-scene …` (merge Molmo scene + robot, then ZMQ) |
 
-The positional **`[mujoco|robocasa]`** is optional (`emet serve` defaults to **mujoco**).
+The positional backend is optional (`emet serve` defaults to **mujoco**). Optional scene name after `molmospaces`: `emet serve molmospaces ithor`.
 
 **Options:**
-- `--robot NAME` — Simulator robot (default `stretch`). Use **`innate_mars`**, **`rby1`**, **`galaxea_r1`**, etc. for registry robots: loads **`scene_environment.xml`** (default table room: red cylinder, blue cube, floor) merged with that robot’s MJCF and starts the **generic ZMQ** sim (`RobosuiteZmqServer`) on ports **4401–4404**. Must match **`emet run dynamem --robot NAME`** (or `create_robot_client_from_cli`) on the client. DynaMem uses the same default **`dynav_config.yaml`** for all robots; for Innate Mars **without** ZMQ depth, add **`--dynav-config dynav_innate_mars.yaml`** (see `docs/robots/innate_mars.md`).
+- `--robot NAME` — Simulator robot (default `stretch` for table, Robocasa, and MolmoSpaces when omitted). Use **`innate_mars`**, **`rby1`**, **`galaxea_r1`**, etc. for registry robots: loads **`scene_environment.xml`** (default table room: red cylinder, blue cube, floor) merged with that robot’s MJCF and starts the **generic ZMQ** sim (`RobosuiteZmqServer`) on ports **4401–4404**. Must match **`emet run dynamem --robot NAME`** (or `create_robot_client_from_cli`) on the client. DynaMem uses the same default **`dynav_config.yaml`** for all robots; for Innate Mars **without** ZMQ depth, add **`--dynav-config dynav_innate_mars.yaml`** (see `docs/robots/innate_mars.md`).
 - `--use-robocasa` — Use Robocasa for scene generation (default task: PickPlaceCounterToCabinet)
+- `--molmospaces-scene NAME` — MolmoSpaces scene (e.g. `ithor`); merges via wrapper then starts ZMQ (same as `emet serve molmospaces`)
+- `--molmospaces-split` — `train` / `val` / `test` (default: `train`)
+- `--molmospaces-index N` — Scene index within split (default: `0`)
+- `--molmospaces-install` — Download/link scene assets if missing
 - `--list-robocasa-tasks` — Print all Robocasa task names and exit (for use with `--robocasa-task`)
 - `--headless` — Run without native viewer (use web at http://localhost:9090?url=ws://localhost:9877)
 - `--scene-path PATH` — Path to MuJoCo scene XML
 - `--port-offset N` — Add N to default ports (e.g. 100 → 4501–4504) when 4401 is busy
 - `--seed N` — Random seed (default: 0)
+
+See [Simulation](simulation.md), [MolmoSpaces](molmospaces.md), and maintainer [simulation_modules.md](simulation_modules.md).
 
 **Examples:**
 ```bash
@@ -70,7 +78,39 @@ emet serve mujoco --headless        # No native viewer
 emet serve --robot innate_mars --headless   # Innate Mars + default table (match client --robot)
 emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S --dynav-config dynav_innate_mars.yaml   # DynaMem + DA3 (no ZMQ depth)
 emet serve mujoco --use-robocasa    # Robocasa scene
+emet serve robocasa --robot galaxea_r1 --headless
+emet serve molmospaces --headless   # Molmo iTHOR + stretch (default robot)
+emet serve mujoco --molmospaces-scene ithor --molmospaces-index 0 --headless
+emet serve molmospaces --robot rby1 --headless   # Galaxea R1 on Molmo scene
 ```
+
+---
+
+### `emet molmospaces <subcommand>`
+
+MolmoSpaces scene setup, merge, passive sim, and offline maintainer tools. See [molmospaces.md](molmospaces.md), [molmospaces_spawn_metadata.md](molmospaces_spawn_metadata.md), and [simulation_modules.md](simulation_modules.md).
+
+| Subcommand | Wrapper? | Description |
+|------------|----------|-------------|
+| `list-robots` | No (core) | Static robot IDs; default **stretch** when `--robot` omitted on serve |
+| `list-scenes` | Yes | Scene names and split sizes |
+| `install-scene` | Yes | Download/install a scene XML |
+| `merge-scene` | Yes | Merge scene + robot MJCF (`-o` required) |
+| `serve` | Yes | Passive MuJoCo (wrapper viewer; not ZMQ agent stack) |
+| `build-occ-map` | No (core) | Orthographic occupancy PNG + meta for spawn QA |
+| `write-spawn-metadata` | No (core) | Measure and write `molmospaces_spawn.json` |
+| `export-nerfstudio` | No (core) | `transforms.json` from explore episode dir |
+
+**Examples:**
+```bash
+emet molmospaces list-robots
+emet molmospaces merge-scene --scene ithor --robot stretch -o /tmp/ithor_stretch.xml
+emet molmospaces write-spawn-metadata --robot stretch --mjcf /tmp/ithor_stretch.xml
+emet molmospaces build-occ-map /tmp/ithor_stretch.xml
+emet molmospaces serve --scene ithor --viewer   # default robot: stretch
+```
+
+For **agent + tools**, use **`emet serve mujoco --molmospaces-scene …`** (ZMQ) instead of passive `emet molmospaces serve`.
 
 ---
 

@@ -1,0 +1,54 @@
+\section{Innate Mars (Maurice)}
+\label{app:innate_mars}
+
+Innate Mars is Innate's Maurice mobile manipulator, integrated in \texttt{emet} for both MuJoCo simulation and ROS\,2 hardware bridges.
+This appendix records embodiment details relevant to Dynagraph/DynaMem mapping and EQA---especially depth policy, which differs from Stretch and Galaxea.
+
+\subsection{Assets and simulation}
+
+\begin{itemize}
+  \item \textbf{MJCF:} \texttt{src/emet/assets/robot/innate\_mars/innate\_mars.xml} (robot-only; room floor from \texttt{scene\_environment.xml}).
+  \item \textbf{URDF reference:} \texttt{maurice.urdf} for kinematic parity with innate-os; MuJoCo adds head stereo, optical-frame corrections, and sim-only wrist camera offsets documented in \texttt{docs/robots/innate\_mars.md}.
+  \item \textbf{Serve:} \texttt{emet serve mujoco --robot innate\_mars} exposes head stereo (\texttt{head\_left}, \texttt{head\_right}) and wrist \texttt{camera\_arm} over ZMQ.
+  \item \textbf{Base motion:} planar slide-X / slide-Y / yaw actuators (\texttt{base\_x}, \texttt{base\_y}, \texttt{base\_yaw}), not a free-floating joint---same \texttt{xyt} protocol as Stretch with different MuJoCo mechanics.
+\end{itemize}
+
+\subsection{Depth policy (critical for experiments)}
+
+MuJoCo already publishes \textbf{rendered sensor depth} on ZMQ.
+For sim Dynagraph/DynaMem runs we recommend \texttt{depth\_source: sensor} via the default \texttt{dynav\_config.yaml}.
+
+\textbf{Do not enable Depth Anything 3 in sim} unless deliberately reproducing a DA3-only deployment stack---mixing inferred depth with a sensor-depth pipeline complicates debugging and can desynchronize Rerun point clouds from the voxel map.
+
+On \textbf{real hardware}, the bridge omits \texttt{depth}; clients set \texttt{allow\_missing\_depth} and use \texttt{depth\_source: auto} or \texttt{da3} (see Appendix~\ref{app:da3}).
+The maintained preset is \texttt{dynav\_innate\_mars.yaml}; pass \texttt{--dynav-config dynav\_innate\_mars.yaml} for hardware Mars or when matching a DA3 depth path.
+
+\textbf{Sanity modes:}
+\begin{itemize}
+  \item \texttt{--perfect-depth} / \texttt{EMET\_DYNAMEM\_PERFECT\_DEPTH} forces sensor depth in sim and skips DA3---useful for checking navigation frame, intrinsics, and base pose.
+  \item \texttt{emet debug-da3-depth --robot innate\_mars} logs DA3 depth and a strided point cloud to Rerun via the same \texttt{resolve\_depth\_map} path as DynaMem; add \texttt{--depth-source sensor} to compare against sim ground truth.
+\end{itemize}
+
+\subsection{Cameras and ZMQ keys}
+
+Primary mapping uses \texttt{head\_left} RGB with optional stereo mate \texttt{rgb\_right} plus matched intrinsics and poses.
+Wrist \texttt{camera\_arm} is sim-polished for frustum clearance; the hardware bridge may not publish an arm stream.
+Session metadata (\texttt{emet\_session}) reports \texttt{runtime\_kind=innate\_mars\_ros2\_bridge} on hardware.
+
+\subsection{Dynagraph usage}
+
+\begin{verbatim}
+# Terminal 1 (sim)
+emet serve mujoco --robot innate_mars --headless
+
+# Terminal 2 -- sensor depth in sim (default dynav)
+emet run dynagraph --robot innate_mars --robot-ip 127.0.0.1
+
+# Hardware or DA3-matched stack
+emet run dynagraph --robot innate_mars --dynav-config dynav_innate_mars.yaml
+\end{verbatim}
+
+\subsection{Known DA3 artifacts}
+
+Stereo depth networks can assign finite depth to sky or bright ceiling strips, producing vertical ``wall'' sheets in the voxel map.
+\texttt{dynav\_innate\_mars.yaml} sets \texttt{da3\_clip\_max\_m} and \texttt{da3\_ignore\_sky\_fraction\_top} to mitigate this; tune when room lighting or camera tilt leaves phantom obstacles.

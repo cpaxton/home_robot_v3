@@ -184,7 +184,7 @@ emet install robocasa
 # or: emet install sim
 ```
 
-This clones robosuite and robocasa, **downloads kitchen assets (~10GB)** via `python -m robocasa.scripts.download_kitchen_assets`, and runs macro setup via `python -m robocasa.scripts.setup_macros` when missing. Then sync the sim extra:
+This clones robosuite and robocasa, **downloads kitchen assets (~10–15GB)** via `scripts/download_robocasa_assets.py` (textures, base **fixtures**, **fixtures_lw** LightWheel registry required for `emet serve robocasa`, objaverse, generative_textures), and runs macro setup via `python -m robocasa.scripts.setup_macros` when missing. Then sync the sim extra:
 
 ```bash
 emet sync -e sim
@@ -207,15 +207,44 @@ cd robocasa && pip install -e . && cd ..
 cd ../..
 # Set up system variables (creates robocasa/macros_private.py)
 python -m robocasa.scripts.setup_macros
-# Download kitchen assets (~10GB)
-python -m robocasa.scripts.download_kitchen_assets
+# Download kitchen assets (~10-15GB; includes fixtures_lw for LightWheel style IDs)
+uv run python scripts/download_robocasa_assets.py --yes
 ```
 
 ### Run with Robocasa
 
 ```bash
-emet serve mujoco --use-robocasa
+emet serve robocasa
+# or: emet serve mujoco --use-robocasa
 ```
+
+If startup fails with **`Did not find style that matches "Sink025" for fixture type "sink"`**, the **LightWheel fixture pack** (`fixtures_lw`) is missing. The base fixtures zip alone is not enough for generated kitchen styles. From the project root:
+
+```bash
+uv run python scripts/download_robocasa_assets.py --yes
+# or: ./scripts/install_simulation.sh -y
+```
+
+Verify registry (after ``fixtures_lw``, restore vendored YAML then sync — the lw zip adds meshes but often **replaces** ``fixture_registry/`` with a slim subset, deleting per-type files such as ``fridge_bottom_freezer.yaml`` that kitchen layouts require):
+
+```bash
+git -C third_party/robocasa checkout -- robocasa/models/assets/fixtures/fixture_registry/
+uv run python scripts/sync_robocasa_lightwheel_registry.py
+grep Sink025 third_party/robocasa/robocasa/models/assets/fixtures/fixture_registry/sink.yaml
+ls third_party/robocasa/robocasa/models/assets/fixtures/fixture_registry/fridge_bottom_freezer.yaml
+```
+
+If startup fails with **``fridge_bottom_freezer.yaml``** (or similar registry path), run the restore + sync commands above; do not re-download ``fixtures_lw`` unless meshes are missing.
+
+``emet serve robocasa`` restores registry YAML from git when needed, syncs LightWheel entries, then preflights before building the scene.
+
+If startup fails with **`AttributeError: 'NoneType' object has no attribute 'get'`** on ``reg_bbox``, the **objaverse** zip was extracted but not post-processed (914 raw ``model.xml`` files lack ``reg_bbox`` geoms). One-time fix:
+
+```bash
+uv run python scripts/process_robocasa_objaverse_reg_bbox.py
+```
+
+This runs Robocasa's ``calc_object_bb_reg`` over ``third_party/robocasa/robocasa/models/assets/objects/objaverse`` (several minutes). ``download_robocasa_assets.py`` runs it automatically after objaverse download.
 
 List all supported env names:
 
@@ -230,6 +259,17 @@ Options when serving with `--use-robocasa`:
 - `--robocasa-layout`: layout index
 
 Then run DynaMem or other apps as above.
+
+---
+
+## Maintainer modules (sim internals)
+
+Contributor reference for new simulation Python modules (home-pose tuning, stationary `ctrl`, Robocasa asset preflight, spawn metadata loaders): **[simulation_modules.md](simulation_modules.md)**.
+
+Quick examples:
+
+- Tune Galaxea home keyframe: `uv run python -m emet.simulation.mujoco_home_tune src/emet/assets/robot/galaxea_r1/galaxea_r1.xml`
+- Molmo spawn JSON: [molmospaces_spawn_metadata.md](molmospaces_spawn_metadata.md) (`emet molmospaces write-spawn-metadata`)
 
 ---
 

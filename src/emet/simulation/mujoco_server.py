@@ -364,6 +364,28 @@ def main(
                 * 60,
             )
             sys.exit(1)
+        from emet.simulation.robocasa_assets_check import (
+            diagnose_robocasa_assets,
+            format_robocasa_assets_incomplete_message,
+            robocasa_kitchen_assets_complete,
+        )
+        from emet.simulation.robocasa_objaverse_bbox import ensure_objaverse_reg_bbox
+        from emet.simulation.robocasa_registry_sync import ensure_robocasa_fixture_registry
+
+        ensure_robocasa_fixture_registry()
+        ensure_objaverse_reg_bbox()
+
+        if not robocasa_kitchen_assets_complete():
+            _complete, basic_ok, layout_ok, lw_ok, obj_ok = diagnose_robocasa_assets()
+            logger.error(
+                format_robocasa_assets_incomplete_message(
+                    missing_basic=not basic_ok,
+                    missing_registry=not layout_ok,
+                    missing_lightwheel=not lw_ok,
+                    missing_objaverse_bbox=not obj_ok,
+                )
+            )
+            sys.exit(1)
         try:
             scene_model, scene_xml, objects_info = wizard(
                 task=robocasa_task,
@@ -373,21 +395,34 @@ def main(
                 robot=robot,
             )
         except FileNotFoundError as e:
-            msg = (
-                "\n" + "=" * 60 + "\n"
-                "  Robocasa kitchen assets are missing or incomplete.\n"
-                "  Scene generation failed when loading:\n"
-                "    {}\n\n"
-                "  Download the full fixture pack (~10GB) by running from the project root:\n"
-                "    ./scripts/install_simulation.sh\n"
-                "  (do not use -n; when prompted, allow the asset download).\n\n"
-                "  Or run only the asset download:\n"
-                "    uv run python -m robocasa.scripts.download_kitchen_assets\n"
-                "  and choose to download 'fixtures_lw' (lightwheel fixtures).\n\n"
-                "  See docs/simulation.md for details.\n" + "=" * 60
+            _complete, basic_ok, layout_ok, lw_ok, obj_ok = diagnose_robocasa_assets()
+            logger.error(
+                format_robocasa_assets_incomplete_message(
+                    detail=f"Missing file: {e.filename}",
+                    missing_basic=not basic_ok,
+                    missing_registry=not layout_ok,
+                    missing_lightwheel=not lw_ok,
+                    missing_objaverse_bbox=not obj_ok,
+                )
             )
-            logger.error(msg.format(e.filename))
             sys.exit(1)
+        except (AttributeError, ValueError) as e:
+            err = str(e)
+            is_style = "Did not find style that matches" in err
+            is_bbox = isinstance(e, AttributeError) or "reg_bbox" in err
+            if is_style or is_bbox:
+                _complete, basic_ok, layout_ok, lw_ok, obj_ok = diagnose_robocasa_assets()
+                logger.error(
+                    format_robocasa_assets_incomplete_message(
+                        detail=err,
+                        missing_basic=not basic_ok,
+                        missing_registry=not layout_ok,
+                        missing_lightwheel=not lw_ok or not basic_ok,
+                        missing_objaverse_bbox=not obj_ok or is_bbox,
+                    )
+                )
+                sys.exit(1)
+            raise
         if zmq_environment is not None and objects_info and isinstance(objects_info, dict):
             hint = objects_info.get("_emet_spawn_hint_xyt")
             if hint is not None:
