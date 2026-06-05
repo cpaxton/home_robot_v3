@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from emet.habitat.config import hm3d_scene_glb_path, hm3d_scene_short_name
 from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -36,6 +37,16 @@ def test_get_question_by_id():
 def test_get_question_missing_file():
     with pytest.raises(FileNotFoundError):
         load_hmeqa_questions(FIXTURES / "missing.csv")
+
+
+def test_hm3d_scene_short_name_and_glb_path(tmp_path: Path):
+    assert hm3d_scene_short_name("00004-VqCaAuuoeWk") == "VqCaAuuoeWk"
+    train = tmp_path / "train"
+    scene_dir = train / "00004-VqCaAuuoeWk"
+    scene_dir.mkdir(parents=True)
+    glb = scene_dir / "VqCaAuuoeWk.basis.glb"
+    glb.write_bytes(b"x")
+    assert hm3d_scene_glb_path("00004-VqCaAuuoeWk", train) == glb
 
 
 def test_load_scene_init_poses_graph_eqa_format(tmp_path: Path):

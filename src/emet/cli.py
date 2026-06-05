@@ -399,7 +399,7 @@ def _run_habitat_wrapper(args: list[str]) -> int:
         click.echo(
             "Habitat wrapper not found. From the project root run:\n"
             "  ./scripts/install_habitat.sh\n\n"
-            "See docs/habitat_eqa.md.",
+            "See docs/habitat/README.md.",
             err=True,
         )
         return 1
@@ -412,7 +412,7 @@ def _run_habitat_wrapper(args: list[str]) -> int:
 def habitat_cmd() -> None:
     """HM-EQA / OpenEQA evaluation in Habitat driving emet GraphEQA / Dynagraph.
 
-    Requires ``./scripts/install_habitat.sh`` (``.venv-habitat``). See docs/habitat_eqa.md.
+    Requires ``./scripts/install_habitat.sh`` (``.venv-habitat``). See docs/habitat/README.md.
     """
 
 

@@ -17,4 +17,4 @@ Run a single episode (mock LLM, no GPU VLM):
   --dataset hmeqa --question-id 0 --method dynagraph --mock-llm
 ```
 
-Requires HM3D scenes and Explore-EQA CSVs — see `docs/habitat_eqa.md`.
+Requires HM3D scenes and Explore-EQA CSVs — see `docs/habitat/README.md` (`docs/habitat/data.md` for downloads).

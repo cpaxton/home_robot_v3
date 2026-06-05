@@ -4,6 +4,8 @@ Engineering plan for reproducing GraphEQA-style embodied question answering eval
 
 **Status:** Scaffold implemented (`src/emet/habitat/`, `packages/emet_habitat/`, `emet run graph-eqa-habitat`). Full HM3D + batch eval requires `./scripts/install_habitat.sh` and downloaded assets.
 
+**User docs:** [docs/habitat/README.md](../habitat/README.md) (install, data, Matterport API tokens, troubleshooting).
+
 **Paper dependency:** Blocks `paper/sections/05_results.tex` until Habitat runs complete.
 
 **Development branch:** `feature/habitat-eqa-harness`

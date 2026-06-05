@@ -25,12 +25,24 @@ def default_habitat_eqa_data_dir() -> Path:
     return _xdg_cache() / "habitat_eqa" / "data"
 
 
+def default_hm3d_data_path() -> Path:
+    """Root passed to ``habitat_sim.utils.datasets_download --data-path``."""
+    raw = os.environ.get("HM3D_DATA_PATH", "").strip()
+    if raw:
+        return Path(raw).expanduser()
+    return _xdg_cache() / "habitat_eqa" / "hm3d"
+
+
 def default_hm3d_scene_dir() -> Path:
-    """HM3D scene dataset root (train split for HM-EQA)."""
+    """HM3D train split directory (HM-EQA scenes).
+
+    After ``datasets_download``, scenes live under
+    ``<HM3D_DATA_PATH>/scene_datasets/hm3d/train/<scene_id>/``.
+    """
     raw = os.environ.get("HM3D_SCENE_DIR", "").strip()
     if raw:
         return Path(raw).expanduser()
-    return _xdg_cache() / "habitat_eqa" / "hm3d" / "train"
+    return default_hm3d_data_path() / "scene_datasets" / "hm3d" / "train"
 
 
 def questions_csv_path(data_dir: Path | None = None) -> Path:
@@ -45,7 +57,23 @@ def openeqa_json_path(data_dir: Path | None = None) -> Path:
     return (data_dir or default_habitat_eqa_data_dir()) / "open-eqa-v0.json"
 
 
+def hm3d_scene_short_name(scene_id: str) -> str:
+    """HM3D mesh basename (e.g. ``00004-VqCaAuuoeWk`` → ``VqCaAuuoeWk``)."""
+    if "-" in scene_id:
+        return scene_id.split("-", 1)[1]
+    return scene_id
+
+
 def hm3d_scene_glb_path(scene_id: str, hm3d_root: Path | None = None) -> Path:
-    """Resolve ``<hm3d_root>/<scene_id>/<scene_id>.basis.glb`` (HM3D train layout)."""
+    """Resolve ``<train>/<scene_id>/<short_id>.basis.glb`` (Habitat HM3D layout)."""
     root = hm3d_root or default_hm3d_scene_dir()
-    return root / scene_id / f"{scene_id}.basis.glb"
+    scene_dir = root / scene_id
+    short = hm3d_scene_short_name(scene_id)
+    candidates = [
+        scene_dir / f"{short}.basis.glb",
+        scene_dir / f"{scene_id}.basis.glb",
+    ]
+    for path in candidates:
+        if path.is_file():
+            return path
+    return candidates[0]

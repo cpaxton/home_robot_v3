@@ -20,7 +20,7 @@ def _delegate(argv: list[str]) -> int:
         click.echo(
             "Habitat wrapper not found. From repo root run:\n"
             "  ./scripts/install_habitat.sh\n"
-            "See docs/habitat_eqa.md",
+            "See docs/habitat/README.md",
             err=True,
         )
         return 1
