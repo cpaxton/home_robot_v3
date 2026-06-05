@@ -1,0 +1,26 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Mobile agents that answer questions about their surroundings must do three things well: \emph{explore} efficiently, \emph{remember} what they have seen in a form useful for reasoning, and \emph{update} that memory when the world changes.
+Embodied question answering (EQA) makes this explicit: the agent receives a question (e.g., ``What color is the mug on the counter?'') and must explore until it can answer with calibrated confidence.
+
+Two recent lines of work address complementary parts of this problem.
+\textbf{GraphEQA}~\citep{saxena2024grapheqa} maintains a real-time 3D semantic scene graph and task-relevant images as multi-modal memory for a vision-language model (VLM), with hierarchical exploration in Habitat on HM-EQA and OpenEQA-style benchmarks.
+\textbf{DynaMem}~\citep{liu2024dynamem} maintains a dynamic voxel semantic map that supports adding and removing geometry as objects move, enabling open-vocabulary mobile manipulation in changing homes.
+
+\textbf{Dynagraph} unifies these ideas for \emph{exploring robot agents}: the same observations feed a voxel map used for navigation (DynaMem) and an object graph used for EQA (GraphEQA), with explicit \textbf{graph lifecycle} rules---spatial merge of duplicate detections and staleness-based pruning---so the graph does not grow without bound and does not retain objects that are no longer supported by perception.
+
+\subsection{Contributions}
+
+\begin{itemize}
+  \item \textbf{Dynagraph memory architecture}: coupled voxel navigation map + dynamic object scene graph with merge and staleness (\texttt{dynagraph\_merge\_xy\_m}, \texttt{dynagraph\_staleness\_horizon}).
+  \item \textbf{Open-source implementation} in \texttt{emet} (\texttt{emet run dynagraph}), building on \texttt{GraphEQAController} and \texttt{SparseVoxelMap}.
+  \item \textbf{Habitat EQA harness} (separate development branch) to reproduce GraphEQA-style evaluation on HM-EQA / OpenEQA.
+  \item \textbf{Extended MuJoCo evaluation} on Robocasa and MolmoSpaces across Stretch, Galaxea R1, and optional registry robots.
+\end{itemize}
+
+\subsection{Limitations (draft)}
+
+Habitat harness and full experimental results are in progress.
+Our graph builder differs from Hydra-based 3DSG pipelines used in the original GraphEQA stack; we compare on EQA outcomes, not intermediate graph topology.
+Real-home manipulation trials at OK-Robot or DREAM scale are left to future work.

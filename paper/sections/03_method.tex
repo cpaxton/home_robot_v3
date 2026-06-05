@@ -1,0 +1,39 @@
+\section{Method}
+\label{sec:method}
+
+Dynagraph extends the \texttt{emet} GraphEQA agent with DynaMem-style voxel navigation and two graph lifecycle mechanisms implemented in \texttt{GraphEQAMemory}.
+
+\subsection{System overview}
+
+At each control step the robot receives RGB-D observations and pose from a MuJoCo ZMQ server (or Habitat bridge, when available).
+Observations update:
+\begin{enumerate}
+  \item a \textbf{SparseVoxelMap} (obstacle map, explored regions, vision-language features for grounding), and
+  \item a \textbf{scene graph} whose nodes are objects/regions with 3D position, labels, supporting observation images, and edges for spatial relations (\emph{near}, \emph{on}, \emph{on\_floor}).
+\end{enumerate}
+An EQA module queries a shared VLM with the serialized graph and task-relevant images until confidence is sufficient or further exploration is requested.
+
+\subsection{Graph construction}
+
+Labels come from instance segmentation (optional YOLO-E) and/or VLM scene descriptions (\texttt{SensorGraphBuilder}).
+Each new detection creates a graph node and observation unless \textbf{spatial merge} applies.
+
+\subsection{Spatial merge}
+
+If \texttt{dynagraph\_merge\_xy\_m} $> 0$ (default 0.45\,m), a new detection whose primary label matches an existing node and whose XY distance is within the threshold \emph{updates} that node: running-mean XYZ, increased support count, refreshed \texttt{last\_seen}, and merged label set.
+This reduces duplicate nodes when the robot revisits the same object from a new viewpoint.
+
+\subsection{Staleness pruning}
+
+If \texttt{dynagraph\_staleness\_horizon} $> 0$ (default 256 controller steps), \texttt{maintain(current\_step)} removes nodes whose \texttt{last\_seen} is older than the horizon, deletes their observations, renumbers nodes, and rebuilds edges.
+This discards objects that are no longer visible or relevant---analogous in spirit to map pruning in dynamic memory systems, but on the discrete object graph used for EQA.
+
+\subsection{Exploration and EQA loop}
+
+The controller inherits GraphEQA behavior: initial rotation-in-place scan (optional), navigate toward frontiers or graph-guided targets, \texttt{query\_answer} with confidence, repeat until answer or budget exhausted.
+Dynagraph-specific Rerun logging exposes \texttt{world/dynagraph/} for graph inspection during development.
+
+\subsection{Implementation}
+
+Entry point: \texttt{emet run dynagraph} (\texttt{run\_dynagraph.py}, \texttt{DynagraphController}).
+Configuration: \texttt{dynav\_config.yaml} plus CLI overrides \texttt{--merge-xy-m} and \texttt{--staleness-horizon}.
