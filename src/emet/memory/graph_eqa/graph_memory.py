@@ -578,6 +578,7 @@ class GraphEQAMemory:
         xyz: np.ndarray,
         *,
         base_xyz: np.ndarray | None = None,
+        link_viewpoint_node: bool = True,
     ) -> None:
         """
         Record a navigation-time viewpoint without adding a scene-graph node.
@@ -599,7 +600,7 @@ class GraphEQAMemory:
         if len(self._nav_samples) > self._nav_max:
             drop = len(self._nav_samples) - self._nav_max
             self._nav_samples = self._nav_samples[drop:]
-        if bx is not None:
+        if bx is not None and link_viewpoint_node:
             nav_obs_id = self._next_obs_id
             self._next_obs_id += 1
             self._ensure_viewpoint_node(nav_obs_id, bx, labels=["viewpoint", "nav"])

@@ -201,4 +201,9 @@ def update_graph_memory_ground_truth_from_observation(
     if frame_step is not None and hasattr(graph_memory, "set_graph_timestep"):
         graph_memory.set_graph_timestep(int(frame_step))
     xyz = np.array(obs.camera_pose[:3, 3], dtype=float)
-    graph_memory.record_navigation_sample(obs.rgb, xyz, base_xyz=_base_xyz_from_robot(robot))
+    graph_memory.record_navigation_sample(
+        obs.rgb,
+        xyz,
+        base_xyz=_base_xyz_from_robot(robot),
+        link_viewpoint_node=False,
+    )
