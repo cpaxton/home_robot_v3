@@ -293,14 +293,6 @@ def main(
             "Dynagraph: local sim (robot_ip=%s); depth_source da3 -> auto (prefer ZMQ sensor depth)",
             robot_ip,
         )
-    if robot_key == "stretch" and os.environ.get("EMET_STRETCH_ROBOSUITE_ZMQ", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    ):
-        parameters["local_radius"] = max(float(parameters.get("local_radius", 0.5)), 1.4)
-        parameters["max_depth"] = max(float(parameters.get("max_depth", 2.5)), 3.8)
     parameters.setdefault("dynagraph_merge_xy_m", 0.45)
     parameters.setdefault("dynagraph_staleness_horizon", 256)
     if parameters.get("graph_object_fusion") is None:

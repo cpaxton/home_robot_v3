@@ -175,40 +175,10 @@ def test_stretch_zmq_client_backward_compat():
 
 
 def test_robosuite_server_import():
-    """RobosuiteZmqServer can be imported (regression: posture helper must exist on import)."""
-    from emet.simulation.head_look_action import apply_stretch_posture_to_robosuite
+    """RobosuiteZmqServer can be imported."""
     from emet.simulation.robosuite_server import RobosuiteZmqServer
 
     assert RobosuiteZmqServer is not None
-    assert callable(apply_stretch_posture_to_robosuite)
-
-
-def test_stretch_sim_relative_move_sends_nav_relative():
-    """Robocasa rotate_in_place must not double-compose episode goals on the sim server."""
-    from unittest.mock import MagicMock, patch
-
-    import numpy as np
-
-    from emet.controller.zmq_client import StretchZmqClient
-
-    client = StretchZmqClient.__new__(StretchZmqClient)
-    client._finish = False
-    client._rerun = None
-    sent: list[dict] = []
-
-    def capture(msg, **kwargs):
-        sent.append(msg)
-        return {"step": 1}
-
-    with (
-        patch.object(StretchZmqClient, "_is_simulation_robot", return_value=True),
-        patch.object(StretchZmqClient, "get_emet_session", return_value=None),
-        patch.object(StretchZmqClient, "send_action", side_effect=capture),
-        patch.object(StretchZmqClient, "get_base_pose", return_value=np.array([1.0, 0.0, 0.0])),
-    ):
-        client.move_base_to([0.0, 0.0, np.pi / 4], relative=True, blocking=False)
-    assert sent[-1]["nav_relative"] is True
-    assert abs(float(sent[-1]["xyt"][2]) - np.pi / 4) < 1e-6
 
 
 def test_stretch_execute_trajectory_accepts_controller_kwargs():

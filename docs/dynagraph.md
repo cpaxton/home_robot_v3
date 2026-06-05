@@ -56,9 +56,9 @@ Dynagraph never chooses an MJCF/Robocasa layout by itself—you run the simulato
 
 The server attaches **`navigation_origin_xyt`** in the ZMQ session; Rerun meshes and voxel fusion align when this matches the fused map frame.
 
-#### Multi-robot Robocasa E2E (stretch, innate_mars, galaxea_r1)
+#### Multi-robot Robocasa E2E (innate_mars, galaxea_r1)
 
-Automated three-robot comparison (explored floor vs spawner walkable map, same seed):
+Automated two-robot comparison (explored floor vs spawner walkable map, same seed):
 
 ```bash
 uv run python src/test/app/run_dynagraph_multi_robot_e2e.py
@@ -66,7 +66,9 @@ uv run python src/test/app/run_dynagraph_multi_robot_e2e.py
 
 **Full guide:** [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md) — how to run, pass criteria, result paths, and example export / detection output for quality review.
 
-All three use **`RobosuiteZmqServer`** on Robocasa (strip-and-replace MJCF + autoplace). **`stretch`** additionally needs **`EMET_STRETCH_ROBOSUITE_ZMQ=1`** so Dynagraph uses **`GenericZmqClient`**. Each **`--export DIR`** writes **`floor_metrics.json`** and **`scene_graph_report.txt`**.
+**innate_mars** and **galaxea_r1** use **`RobosuiteZmqServer`** on Robocasa (strip-and-replace MJCF + autoplace) with **`GenericZmqClient`**. Each **`--export DIR`** writes **`floor_metrics.json`** and **`scene_graph_report.txt`**.
+
+**Stretch + Robocasa via Robosuite** (unified server with galaxea) is experimental on branch **`feature/stretch-robocasa-robosuite`**; on this branch Stretch Robocasa still uses **`stretch_mujoco`** + **`StretchZmqClient`** (same as `main`).
 
 Manual pairwise compare:
 
@@ -74,7 +76,7 @@ Manual pairwise compare:
 from emet.memory.floor_metrics import compare_explored_floor_metrics, load_floor_metrics
 
 a = load_floor_metrics("/tmp/dynagraph_e2e_compare/innate_mars/graph")
-b = load_floor_metrics("/tmp/dynagraph_e2e_compare/stretch/graph")
+b = load_floor_metrics("/tmp/dynagraph_e2e_compare/galaxea_r1/graph")
 print(compare_explored_floor_metrics(a, b, rtol_area=0.35))
 ```
 
@@ -88,12 +90,12 @@ print(compare_explored_floor_metrics(a, b, rtol_area=0.35))
   Typical one-machine batch:
 
   ```bash
-  # Terminal 1
-  uv run emet serve mujoco --use-robocasa --robot stretch
+  # Terminal 1 (innate_mars example; galaxea_r1 also uses RobosuiteZmqServer)
+  uv run emet serve mujoco --use-robocasa --robot innate_mars --headless --seed 0
 
   # Terminal 2 — shared directory so both artefacts land beside each other:
   mkdir -p /tmp/dynagraph_robo
-  uv run emet run dynagraph --robot stretch --robot-ip 127.0.0.1 \
+  uv run emet run dynagraph --robot innate_mars --robot-ip 127.0.0.1 \
     --explore-loop --explore-max-iters 40 --explore-max-failures 5 \
     --export /tmp/dynagraph_robo/graph \
     --dump-sim-ground-truth /tmp/dynagraph_robo/mujoco_bodies.txt

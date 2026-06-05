@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Run Dynagraph Robocasa E2E for stretch / innate_mars / galaxea_r1 and compare floor metrics."""
+"""Run Dynagraph Robocasa E2E for innate_mars / galaxea_r1 and compare floor metrics.
+
+Stretch Robocasa (RobosuiteZmqServer + GenericZmqClient) lives on branch
+``feature/stretch-robocasa-robosuite``; this harness uses stretch_mujoco on main path only.
+"""
 
 from __future__ import annotations
 
@@ -18,7 +22,7 @@ from emet.memory.floor_metrics import (
     load_floor_metrics,
 )
 
-ROBOTS = ("innate_mars", "galaxea_r1", "stretch")
+ROBOTS = ("innate_mars", "galaxea_r1")
 BASE = Path("/tmp/dynagraph_e2e_compare")
 SEED = 0
 LAYOUT = 1
@@ -118,8 +122,6 @@ def _run_robot(robot: str) -> dict:
         env["EMET_ZMQ_STARTUP_TIMEOUT"] = "120"
         env["EMET_SIM_NAV_TELEPORT"] = "1"
         env["PYTHONUNBUFFERED"] = "1"
-        if robot == "stretch":
-            env["EMET_STRETCH_ROBOSUITE_ZMQ"] = "1"
         print(f"=== {robot}: running dynagraph ===", flush=True)
         t_dyn_start = time.time()
         proc = subprocess.run(

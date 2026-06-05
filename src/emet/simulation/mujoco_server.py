@@ -490,7 +490,7 @@ def main(
             logger.warning(f"Freed port {p} (killed previous process).")
     time.sleep(0.5)
 
-    if use_stretch and not use_robocasa:
+    if use_stretch:
         MujocoZmqServer = _get_stretch_server()
         try:
             server = MujocoZmqServer(
@@ -570,11 +570,7 @@ def main(
                         "or run from repo root with assets."
                     )
                     sys.exit(1)
-        if robot_key in ("stretch", "hello_stretch", "hellostretch"):
-            from emet.robots.stretch import StretchBackend
-
-            robot_spec = StretchBackend().get_robosuite_robocasa_spec()
-        elif robot_key in ROBOT_REGISTRY:
+        if robot_key in ROBOT_REGISTRY:
             import importlib
 
             mod = importlib.import_module(ROBOT_REGISTRY[robot_key])

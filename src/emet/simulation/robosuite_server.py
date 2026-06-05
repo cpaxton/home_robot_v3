@@ -39,7 +39,7 @@ from emet.core.zmq_protocol import (
 from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn, scene_base_spawn
 from emet.simulation.env_flags import env_sim_nav_debug, warn_sim_nav_env_flags
-from emet.simulation.head_look_action import apply_head_to_robosuite, apply_stretch_posture_to_robosuite
+from emet.simulation.head_look_action import apply_head_to_robosuite
 from emet.simulation.molmospaces_env import molmospaces_nav_teleport_enabled
 from emet.simulation.molmospaces_mobile_autoplace import apply_molmospaces_freejoint_base_autoplace
 from emet.simulation.mujoco_ground_truth import (
@@ -1579,9 +1579,6 @@ class RobosuiteZmqServer(BaseZmqServer):
             p = str(action["posture"])
             if p in ("navigation", "manipulation"):
                 self.control_mode = p
-                if self._spec.name == "stretch" and self._mjmodel is not None and self._mjdata is not None:
-                    with self._mj_lock:
-                        apply_stretch_posture_to_robosuite(self._spec, self._mjmodel, self._mjdata, p)
             self._at_goal = True
 
         has_xyt = "xyt" in action

@@ -64,8 +64,6 @@ def test_red_cylinder_detected_in_sim(sim_robot: str):
     """
     proc = None
     robot = None
-    if sim_robot == "stretch":
-        os.environ["EMET_STRETCH_ROBOSUITE_ZMQ"] = "1"
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join([str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep))
     if sys.platform == "linux":
@@ -97,14 +95,23 @@ def test_red_cylinder_detected_in_sim(sim_robot: str):
         from emet.controller.task.dynamem import DynamemTaskExecutor
         from emet.core.parameters import get_parameters
 
-        robot = create_robot_client_from_cli(
-            sim_robot,
-            "127.0.0.1",
-            enable_rerun_server=False,
-            start_immediately=True,
-            allow_missing_depth=True,
-            zmq_startup_timeout=120.0,
-        )
+        if sim_robot == "stretch":
+            from emet.controller.zmq_client import StretchZmqClient
+
+            robot = StretchZmqClient(
+                robot_ip="127.0.0.1",
+                enable_rerun_server=False,
+                start_immediately=True,
+            )
+        else:
+            robot = create_robot_client_from_cli(
+                sim_robot,
+                "127.0.0.1",
+                enable_rerun_server=False,
+                start_immediately=True,
+                allow_missing_depth=True,
+                zmq_startup_timeout=120.0,
+            )
         parameters = get_parameters("dynav_config.yaml")
         executor = DynamemTaskExecutor(
             robot,
