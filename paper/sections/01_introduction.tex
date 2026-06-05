@@ -8,10 +8,12 @@ Two recent lines of work address complementary parts of this problem.
 \textbf{GraphEQA}~\citep{saxena2024grapheqa} maintains a real-time 3D semantic scene graph and task-relevant images as multi-modal memory for a vision-language model (VLM), with hierarchical exploration in Habitat on HM-EQA and OpenEQA-style benchmarks.
 \textbf{DynaMem}~\citep{liu2024dynamem} maintains a dynamic voxel semantic map that supports adding and removing geometry as objects move, enabling open-vocabulary mobile manipulation in changing homes.
 
-\textbf{Dynagraph} unifies these ideas for \emph{exploring robot agents} around a single substrate: a \textbf{dynamic sparse voxel map}.
-Each occupied voxel stores not only geometry and semantics, but \textbf{when it was last seen} and a \textbf{pointer to the observation} that last supported it---camera pose, robot base configuration, RGB-D, and optional instance masks.
-Scene-graph nodes are \textbf{grounded in these voxels}: every object in the graph is tied to 3D support in the map and to the observation index that best explains it.
-Navigation, exploration, and EQA therefore read from the same evidence trail.
+\textbf{Dynagraph} unifies these ideas for \emph{exploring robot agents} by keeping \textbf{DynaMem's voxel update rules unchanged} and adding \textbf{GraphEQA graph-creation steps} on the same perception stream.
+On every control step the robot first runs the standard DynaMem \texttt{SparseVoxelMap} update: fuse RGB-D into the sparse voxel grid, append the frame to the observation log, and refresh per-voxel provenance---\textbf{when each voxel was last seen} and a \textbf{pointer to the supporting observation} (camera pose, robot configuration, images, optional instance masks).
+Only then does a shared hook lift object hypotheses from that updated map into \texttt{GraphEQAMemory}: labels and 3D anchors from instance masks, voxel semantics, or a sensor VLM, wired to the same \texttt{obs\_id} indices the map just wrote.
+
+Scene-graph nodes are therefore \textbf{grounded in the DynaMem substrate}: every object is tied to voxel support and to the observation index that best explains it.
+Navigation, exploration, and EQA read from the same evidence trail because they are fed by one update pipeline, not two independent memories.
 
 This grounding makes \textbf{disappearance} a first-class signal.
 When the robot revisits a region and voxels that previously supported an object are no longer updated---or no fresh observation reinforces that hypothesis---the system can conclude the object is \emph{no longer observed} and retire it from the graph.
@@ -21,8 +23,9 @@ The graph stays compact and aligned with what the voxel map currently supports, 
 \subsection{Contributions}
 
 \begin{itemize}
-  \item \textbf{Voxel-grounded scene graphs}: object nodes reference voxel support and observation pointers (pose, configuration, images); disappearance is detectable when support is no longer refreshed.
-  \item \textbf{Dynagraph memory architecture}: coupled voxel navigation map + dynamic object scene graph with merge and staleness (\texttt{dynagraph\_merge\_xy\_m}, \texttt{dynagraph\_staleness\_horizon}).
+  \item \textbf{Unified update pipeline}: DynaMem voxel fusion unchanged; GraphEQA graph construction runs as an extra stage on each observation (\texttt{update\_graph\_memory\_from\_dynamem\_observation}).
+  \item \textbf{Voxel-grounded scene graphs}: object nodes reference voxel support and observation pointers; disappearance is detectable when DynaMem stops refreshing support.
+  \item \textbf{Dynagraph graph lifecycle}: merge and staleness on top of GraphEQA (\texttt{dynagraph\_merge\_xy\_m}, \texttt{dynagraph\_staleness\_horizon}).
   \item \textbf{Open-source implementation} in \texttt{emet} (\texttt{emet run dynagraph}), building on \texttt{GraphEQAController} and \texttt{SparseVoxelMap}.
   \item \textbf{Habitat EQA harness} (separate development branch) to reproduce GraphEQA-style evaluation on HM-EQA / OpenEQA.
   \item \textbf{Extended MuJoCo evaluation} on Robocasa and MolmoSpaces across Stretch, Galaxea R1, and optional registry robots.

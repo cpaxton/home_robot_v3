@@ -1,23 +1,32 @@
 \section{Method}
 \label{sec:method}
 
-Dynagraph extends the \texttt{emet} GraphEQA agent with DynaMem-style voxel navigation and two graph lifecycle mechanisms implemented in \texttt{GraphEQAMemory}.
+Dynagraph is implemented as \texttt{DynagraphController}, a thin extension of \texttt{GraphEQAController}, which itself subclasses the DynaMem navigation agent.
+The design principle is \textbf{one perception update, two memory writes}: first the voxel map (unchanged DynaMem rules), then graph unification (GraphEQA), then Dynagraph-specific graph maintenance.
 
 \subsection{System overview}
 
 At each control step the robot receives RGB-D observations and pose from a MuJoCo ZMQ server (or Habitat bridge, when available).
-All perception flows into a \textbf{SparseVoxelMap}---the shared memory substrate---before any graph or EQA reasoning.
+The controller calls the inherited DynaMem \texttt{update()}, which appends the frame and fuses it into \texttt{SparseVoxelMap} using the same add/remove and exploration logic as manipulation-oriented DynaMem runs.
+Immediately afterward, \texttt{update\_graph\_memory\_from\_dynamem\_observation} reads the freshly updated map and observation log to add or reinforce graph nodes.
+\texttt{DynagraphController} then calls \texttt{maintain(obs\_count)} for staleness pruning.
 
-\subsection{Voxel map as evidence substrate}
+\subsection{Stage 1: DynaMem voxel update (unchanged)}
 
-The voxel map is not only an obstacle grid for planning.
-Each voxel accumulates semantic features and records \textbf{provenance}: which observation index last wrote to it, and (in the 2D projection used for navigation) a \textbf{recency field} over when voxels were last refreshed.
-Observations are stored in an append-only \textbf{frame log}; each frame bundles RGB-D, camera intrinsics and extrinsics, robot base pose, and optional instance segmentation.
-Voxels therefore act as spatial indices into this log: given a 3D region, the map tells us \emph{what} was seen there, \emph{when}, and \emph{from which viewpoint}.
+We deliberately reuse DynaMem's voxel fusion rather than maintaining a parallel map for EQA.
+The voxel map is an obstacle grid for A* planning and value-based exploration, but also a semantic index: each voxel accumulates vision-language features and records \textbf{provenance}---which observation index last wrote to it, and (in the 2D projection) a \textbf{recency field} over when voxels were last refreshed.
+Observations live in an append-only \textbf{frame log}; each frame bundles RGB-D, intrinsics, extrinsics, robot base pose, and optional instance segmentation.
+Dynamic scenes are handled by the same DynaMem rules that add geometry when objects appear and retire voxels when support disappears.
+
+\subsection{Stage 2: GraphEQA unification (extra steps)}
+
+Graph construction is \emph{not} a separate perception pipeline.
+After Stage~1, the shared hook inspects the latest frame and voxel semantics, optionally runs instance detection or a sensor VLM (\texttt{SensorGraphBuilder}), and writes object hypotheses into \texttt{GraphEQAMemory} with the \texttt{obs\_id} and \texttt{last\_seen} step from the current controller tick.
+Navigation-only samples (e.g.\ generic ``object'' fallbacks) can be recorded without spawning graph nodes, matching GraphEQA's separation of exploration views from semantic hypotheses.
 
 \subsection{Voxel-grounded scene graph}
 
-The scene graph is built \emph{from} this substrate rather than maintained independently.
+The scene graph is derived from the DynaMem substrate on every step rather than maintained independently.
 Each node is an object or region with labels, a world-space position, an \texttt{obs\_id} pointing into the frame log, and a discrete \texttt{last\_seen} step aligned with the controller clock.
 Edges encode spatial relations (\emph{near}, \emph{on}, \emph{on\_floor}).
 When a new detection reinforces an existing object, merge rules update the node's position, labels, and \texttt{last\_seen}; the supporting \texttt{obs\_id} tracks the freshest evidence.
@@ -27,9 +36,10 @@ Pruning then removes the node and its linked observations from the graph present
 
 An EQA module queries a shared VLM with the serialized graph and task-relevant images until confidence is sufficient or further exploration is requested.
 
-\subsection{Graph construction}
+\subsection{Stage 3: Dynagraph graph lifecycle}
 
-Labels come from instance segmentation (optional YOLO-E) and/or VLM scene descriptions (\texttt{SensorGraphBuilder}).
+On top of GraphEQA node creation, Dynagraph adds merge and staleness (below).
+Labels in Stage~2 come from instance segmentation (optional YOLO-E) and/or VLM scene descriptions.
 Each new detection creates a graph node and observation unless \textbf{spatial merge} applies.
 
 \subsection{Spatial merge}
