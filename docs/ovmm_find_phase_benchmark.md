@@ -11,6 +11,19 @@ Memory ablation benchmark inspired by [OVMM](https://ovmm.github.io/) find phase
 | **S2** | `configs/sim/molmospaces_ithor_train_{0,1,2}.yaml` | MolmoSpaces iTHOR multi-room (GT scan may cap) |
 
 Episodes are listed in `configs/ovmm/find_phase_episodes.yaml`.
+Paths and smoke defaults: `configs/ovmm/benchmark.yaml` (outputs under `~/runs/emet/…`, caches under `~/.cache/…`).
+
+## Assets + smoke (multi-agent friendly)
+
+```bash
+# Verify / fetch CSVs; check HM3D scenes for habitat episodes; create ~/runs dirs
+uv run python scripts/download_ovmm_benchmark_assets.py
+
+# Full smoke: unit tests + S0 sim GT + one Habitat GT episode (~5–10 min)
+uv run python scripts/smoke_ovmm_benchmark.py --cpu-only
+```
+
+Override output location: `EMET_OVMM_OUTPUT_SIM=~/runs/emet/ovmm_find_phase` (or edit `benchmark.yaml`).
 
 ## Quick start (S0)
 
