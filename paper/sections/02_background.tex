@@ -11,6 +11,28 @@ Our \texttt{emet} stack re-implements graph-based EQA memory without the Hydra/R
 
 \textbf{M3Fusion} (2026) fuses 2D semantics and 3D geometry into unified 3D tokens for LLMs on 3DQA benchmarks---complementary representation focus, not an embodied exploration loop.
 
+\subsection{Feed-forward geometric perception and streaming mapping}
+
+A parallel line of work replaces classical bundle adjustment with \emph{feed-forward} geometric foundation models (GFMs) that predict depth, pose, and dense structure from casual RGB.
+\textbf{VGGT}~\citep{wang2025vggt} is a representative GFM: a single transformer forward pass estimates cameras, depth, point maps, and tracks from one to hundreds of views, enabling downstream SLAM and reconstruction pipelines without per-scene optimization.
+
+\textbf{Depth Anything 3} (DA3)~\citep{lin2025depthanything3} pursues a minimal design---a plain DINO backbone with joint depth--ray prediction---and sets strong any-view pose and geometry benchmarks while improving monocular depth over DA2.
+In \texttt{emet}, DA3 supplies metric depth when robots lack calibrated RGB-D (Appendix~\ref{app:da3}); Dynagraph and DynaMem consume the same resolved depth tensor whether it comes from sim sensors or DA3.
+
+\textbf{ViPE}~\citep{huang2025vipe} is an open video annotation engine that estimates intrinsics, trajectory, and dense near-metric depth from unconstrained monocular footage (pinhole, wide-angle, or 360$^\circ$), scaling to large in-the-wild corpora for spatial-AI training data.
+
+Hybrid systems wrap GFMs with lightweight optimization for \emph{online} mapping.
+\textbf{VGGT-SLAM 2.0}~\citep{maggio2026vggtslam2} incrementally aligns VGGT submaps with a redesigned factor graph, uses VGGT attention for loop-closure verification, and runs in real time on a ground robot---including open-set 3D object queries over the reconstructed map.
+
+Purely feed-forward \emph{streaming} mappers are emerging as an alternative to iterative SLAM backends.
+\textbf{LingBot-Map}~\citep{chen2026lingbotmap} maintains a compact Geometric Context Attention state---anchor frames for scale grounding, a local pose-reference window, and compressed trajectory memory---and reconstructs long monocular sequences ($>$10k frames) at roughly 20\,FPS without a separate optimization stage.
+
+Semantic mapping is beginning to merge with these geometric pipelines.
+\textbf{RADIO-ViPE}~\citep{nasser2026radiovipe} tightly couples RADIO-style vision--language embeddings with a monocular pose/depth factor graph, enabling online open-vocabulary grounding of free-form language queries to 3D regions from uncalibrated RGB video in dynamic scenes.
+
+Dynagraph is complementary to this trend: we assume a resolved RGB-D stream (sensor or DA3) and focus on \emph{object-level graph memory}---merge, staleness, and voxel-grounded nodes for EQA---rather than replacing front-end pose or dense mapping.
+Foundation-model SLAM and streaming reconstructors are promising sources of pose, depth, and even open-vocabulary semantics; our contribution is the lifecycle-aware scene graph layered on DynaMem's dynamic voxels.
+
 \subsection{Dynamic spatial memory for robots}
 
 \textbf{DynaMem}~\citep{liu2024dynamem} proposes online dynamic spatio-semantic memory for open-vocabulary mobile manipulation: voxel/point-cloud memory with add/remove, value-based exploration, and the DynaBench offline benchmark.
