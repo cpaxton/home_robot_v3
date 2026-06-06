@@ -25,7 +25,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_EPISODES = REPO / "configs" / "ovmm" / "habitat_find_phase_episodes.yaml"
-HABITAT_PY = REPO / ".venv-habitat" / "bin" / "emet-habitat"
+HABITAT_BIN = REPO / ".venv-habitat" / "bin" / "emet-habitat"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -46,7 +46,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    if not HABITAT_PY.is_file():
+    if not HABITAT_BIN.is_file():
         print(
             "Missing .venv-habitat — run ./scripts/install_habitat.sh and "
             "uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d train",
@@ -56,7 +56,7 @@ def main() -> int:
 
     args = _parse_args()
     cmd = [
-        str(HABITAT_PY),
+        str(HABITAT_BIN),
         "run-ovmm-find-batch",
         "--episodes",
         args.episodes,

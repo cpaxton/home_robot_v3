@@ -346,6 +346,7 @@ def query_find_phase_localization(
     voxel_map: Any | None = None,
     convert_nav_to_world: bool = False,
     prefer_voxel: bool = True,
+    planar_frame: PlanarFrame = "mujoco_xy",
 ) -> tuple[np.ndarray | None, bool, str]:
     """
     Query memory for FindObj/FindRec localization with query variants and fallbacks.
@@ -366,9 +367,6 @@ def query_find_phase_localization(
             converted = localize_point_to_world_xy(xyz, sess)
             xyz = converted if converted is not None else xyz
             return xyz, True, query
-    planar_frame: PlanarFrame = "mujoco_xy"
-    if placements and any(str(v.get("frame")) == "habitat_yup" for v in placements.values()):
-        planar_frame = "habitat_xz"
     if anchor_xyz is not None and _graph_nodes_matching(memory, query):
         xyz = _pick_graph_xyz_near_point(memory, query, anchor_xyz, frame=planar_frame)
         if xyz is not None:
@@ -376,9 +374,19 @@ def query_find_phase_localization(
             xyz = converted if converted is not None else xyz
             return xyz, True, query
     for q in _query_variants(query, placements):
+        if planar_frame == "habitat_xz":
+            nodes = _graph_nodes_matching(memory, q)
+            if nodes:
+                xyz = np.asarray(nodes[0].xyz, dtype=np.float64).reshape(3)
+                return xyz, True, q
         loc = memory.localize_text(q)
         if loc.success and loc.point_xyz is not None:
             xyz = localize_point_to_world_xy(loc.point_xyz, sess)
+            if xyz is not None and planar_frame == "habitat_xz" and xyz.size >= 3:
+                # Graph adapter forces z=1.0; keep Habitat Y-up XYZ from graph nodes when possible.
+                nodes = _graph_nodes_matching(memory, q)
+                if nodes:
+                    xyz = np.asarray(nodes[0].xyz, dtype=np.float64).reshape(3)
             if xyz is not None:
                 return xyz, True, q
         check = memory.check_memory_for_object(q)
