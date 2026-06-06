@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emet-lingbot-map"
+version = "0.1.0"
+description = "Thin wrapper for LingBot-Map streaming inference (isolated .venv-lingbot-map)."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "numpy>=1.24",
+    "pillow>=9.0",
+    "opencv-python-headless>=4.8",
+    "tqdm>=4.0",
+]
+
+[project.scripts]
+emet-lingbot-map = "emet_lingbot_map.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]

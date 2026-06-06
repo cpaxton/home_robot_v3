@@ -38,6 +38,7 @@ _EMET_RUN_APPS_WITH_ROBOT = frozenset(
         "scene-graph",
         "molmospaces-explore",
         "debug-da3-depth",
+        "debug-lingbot-depth",
     }
 )
 
@@ -983,6 +984,7 @@ def deploy(
             "create-and-print-memory",
             "molmospaces-explore",
             "debug-da3-depth",
+            "debug-lingbot-depth",
         ]
     ),
 )
@@ -1117,6 +1119,8 @@ def run(
         sys.exit(_run_module("emet.app.create_and_print_memory", args))
     elif app == "debug-da3-depth":
         sys.exit(_run_module("emet.app.debug_da3_depth", args))
+    elif app == "debug-lingbot-depth":
+        sys.exit(_run_module("emet.app.debug_lingbot_depth", args))
     else:
         click.echo(f"Unknown app: {app}", err=True)
         sys.exit(1)
@@ -1735,6 +1739,11 @@ from emet.app.debug_da3_depth import main as _debug_da3_depth_app  # noqa: E402
 
 _debug_da3_depth_app.short_help = "Live DA3 depth + point cloud from ZMQ (Rerun)"
 main.add_command(_debug_da3_depth_app)
+
+from emet.app.debug_lingbot_depth import main as _debug_lingbot_depth_app  # noqa: E402
+
+_debug_lingbot_depth_app.short_help = "Live LingBot-Map depth + pose from ZMQ (Rerun)"
+main.add_command(_debug_lingbot_depth_app)
 
 
 if __name__ == "__main__":

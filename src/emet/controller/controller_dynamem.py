@@ -56,6 +56,7 @@ from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_D
 from emet.motion.algo.a_star import AStar
 from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
 from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask
+from emet.perception.depth.lingbot_estimator import LingBotDepthEstimator, create_lingbot_estimator_from_parameters
 from emet.perception.detection.owl import OwlPerception
 from emet.perception.detection.yoloe import YoloEPerception
 
@@ -200,6 +201,11 @@ class DynamemController(BaseController):
         self._da3_infer_every_n = max(1, int(self.parameters.get("da3_infer_every_n", 2) or 1))
         self._da3_last_depth: np.ndarray | None = None
         self._da3_use_stereo = bool(self.parameters.get("da3_stereo", False))
+        self._lingbot_estimator: LingBotDepthEstimator | None = None
+        self._lingbot_infer_every_n = max(1, int(self.parameters.get("lingbot_infer_every_n", 2) or 1))
+        self._lingbot_last_depth: np.ndarray | None = None
+        self._lingbot_last_pose: np.ndarray | None = None
+        self._lingbot_use_pose = bool(self.parameters.get("lingbot_use_pose", True))
         self._debug_perfect_sensor_depth = bool(
             self.parameters.get("debug_perfect_sensor_depth", False)
         ) or _env_truthy("EMET_DYNAMEM_PERFECT_DEPTH")
@@ -456,6 +462,16 @@ class DynamemController(BaseController):
             self._da3_estimator = create_da3_estimator_from_parameters(self.parameters, device=self.device)
         return self._da3_estimator
 
+    def _lazy_lingbot_estimator(self) -> LingBotDepthEstimator | None:
+        if self._depth_source != "lingbot":
+            return None
+        if self._lingbot_estimator is None:
+            self._lingbot_estimator = LingBotDepthEstimator(
+                create_lingbot_estimator_from_parameters(self.parameters),
+                use_lingbot_pose=self._lingbot_use_pose,
+            )
+        return self._lingbot_estimator
+
     def _resolve_depth_map(
         self,
         rgb: np.ndarray,
@@ -490,6 +506,20 @@ class DynamemController(BaseController):
             )
         if mode == "sensor":
             return sensor_depth
+        if mode == "lingbot":
+            est_lb = self._lazy_lingbot_estimator()
+            if est_lb is None:
+                raise RuntimeError("depth_source=lingbot but LingBot estimator failed to initialize.")
+            self._depth_map_from_da3_infer = True
+            depth_lb = est_lb.infer(
+                rgb,
+                camera_K=camera_K,
+                camera_pose=camera_pose,
+                force=(self.obs_count == 1),
+            )
+            if self._lingbot_use_pose and est_lb.last_camera_pose is not None:
+                self._lingbot_last_pose = est_lb.last_camera_pose
+            return depth_lb
         # Auto: prefer sensor without constructing DA3 (heavy); matches resolve_depth_map logic.
         if mode == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
             return np.asarray(sensor_depth, dtype=np.float32)
@@ -558,10 +588,12 @@ class DynamemController(BaseController):
             return
         self.obs_count += 1
         rgb, sensor_depth, K, camera_pose = obs.rgb, obs.depth, obs.camera_K, obs.camera_pose
-        run_da3_full = self._da3_infer_every_n <= 1 or (self.obs_count - 1) % self._da3_infer_every_n == 0
+        run_infer_full = self._da3_infer_every_n <= 1 or (self.obs_count - 1) % self._da3_infer_every_n == 0
+        if self._depth_source == "lingbot":
+            run_infer_full = self._lingbot_infer_every_n <= 1 or (self.obs_count - 1) % self._lingbot_infer_every_n == 0
         depth: np.ndarray | None
         if (
-            not run_da3_full
+            not run_infer_full
             and self._depth_source in ("da3", "auto")
             and not getattr(self, "_debug_perfect_sensor_depth", False)
             and self._da3_last_depth is not None
@@ -572,6 +604,14 @@ class DynamemController(BaseController):
             if self._depth_source == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
                 depth = np.asarray(sensor_depth, dtype=np.float32)
                 self._depth_map_from_da3_infer = False
+        elif (
+            not run_infer_full
+            and self._depth_source == "lingbot"
+            and self._lingbot_last_depth is not None
+            and self._lingbot_last_depth.shape[:2] == rgb.shape[:2]
+        ):
+            depth = np.asarray(self._lingbot_last_depth, dtype=np.float32, copy=True)
+            self._depth_map_from_da3_infer = True
         else:
             depth = self._resolve_depth_map(
                 rgb,
@@ -583,7 +623,13 @@ class DynamemController(BaseController):
                 camera_pose_right=getattr(obs, "head_camera_pose_right", None),
             )
             if depth is not None and getattr(self, "_depth_map_from_da3_infer", False):
-                self._da3_last_depth = np.asarray(depth, dtype=np.float32).copy()
+                if self._depth_source == "lingbot":
+                    self._lingbot_last_depth = np.asarray(depth, dtype=np.float32).copy()
+                else:
+                    self._da3_last_depth = np.asarray(depth, dtype=np.float32).copy()
+        if self._depth_source == "lingbot" and getattr(self, "_lingbot_last_pose", None) is not None:
+            if self._lingbot_use_pose:
+                camera_pose = self._lingbot_last_pose
         if depth is None:
             logger.error(f"No depth map available (depth_source={self._depth_source!r}); skipping voxel update.")
             self.robot.set_mapping_depth_for_rerun(None)
