@@ -229,7 +229,10 @@ def compare_batch(
     eqa_hf_model_id: str | None,
     device: str,
 ) -> None:
-    """Run graph_eqa and dynagraph on the same questions; print side-by-side summary."""
+    """Run graph_eqa and dynagraph on the same questions; print side-by-side summary.
+
+    Both methods use identical graph-memory settings on HM-EQA; expect matching accuracy.
+    """
     from emet_habitat.runner import run_hmeqa_compare
 
     questions_path = (data_dir / "questions.csv") if data_dir else None

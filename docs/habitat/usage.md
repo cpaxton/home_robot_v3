@@ -69,8 +69,10 @@ Useful flags:
 
 | `--method` | Memory config | Paper baseline |
 |------------|---------------|----------------|
-| `graph_eqa` | `dynagraph_merge_xy_m=0`, `dynagraph_staleness_horizon=0` | GraphEQA-style (no dynagraph merge) |
-| `dynagraph` | Default merge + staleness | Dynagraph |
+| `graph_eqa` | `dynagraph_merge_xy_m=0`, `dynagraph_staleness_horizon=0` | GraphEQA paper settings |
+| `dynagraph` | Same graph settings as `graph_eqa` | Same EQA stack; exercises `DynagraphController` (rerun / `maintain()` noop here) |
+
+On HM-EQA both methods should give **the same accuracy** (within VLM sampling noise). Dynagraph is a regression check, not a competing benchmark config. Long-horizon merge/staleness (`0.45m` / `256` steps) is for real-robot Dynagraph runs, not this short Habitat harness.
 
 ## Tests
 

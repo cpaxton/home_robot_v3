@@ -49,12 +49,12 @@ def _apply_method_parameters(parameters: Parameters | dict, method: str) -> Para
         params = Parameters(**parameters)
     else:
         params = parameters
-    if method == "graph_eqa":
+    # HM-EQA episodes are short (~20 planning steps). Use identical graph-memory
+    # settings so Dynagraph is a same-stack regression check vs GraphEQA, not a
+    # competing merge/staleness config (those apply on long real-robot runs).
+    if method in ("graph_eqa", "dynagraph"):
         params["dynagraph_merge_xy_m"] = 0.0
         params["dynagraph_staleness_horizon"] = 0
-    elif method == "dynagraph":
-        params.setdefault("dynagraph_merge_xy_m", 0.45)
-        params.setdefault("dynagraph_staleness_horizon", 256)
     else:
         raise ValueError(f"Unknown method {method!r}; use graph_eqa or dynagraph")
     return params
