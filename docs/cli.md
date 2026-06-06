@@ -7,32 +7,40 @@ The `emet` CLI makes it easy to start simulations, run robot agents, sync depend
 After installing emet (`uv sync` or `pip install -e .`), the `emet` command is available:
 
 ```bash
-emet --help
+uv run emet --help
 ```
+
+### Run from this repo
+
+Commands in this doc assume you are in the **project root** with dependencies synced (`uv sync`).
+
+- Prefer **`uv run emet …`** so you use **this checkout’s** code and `.venv`.
+- After `source .venv/bin/activate`, bare **`emet …`** is equivalent.
+- If **`emet run dynagraph --help`** (via `uv run python -m emet.app.run_dynagraph --help`) lists **`--explore-loop`** but bare **`emet`** does not, your PATH points at another install (e.g. an old clone). Run `which emet` and stick to **`uv run emet`** here. Details: [TESTING.md](TESTING.md#run-from-this-repo).
 
 ## Quick Start
 
 ```bash
 # 1. Start the MuJoCo simulation server (in one terminal)
-emet serve mujoco
+uv run emet serve mujoco
 # Innate Mars (default table + robot): same command with --robot
-emet serve --robot innate_mars --headless   # optional: default backend is mujoco
+uv run emet serve --robot innate_mars --headless   # optional: default backend is mujoco
 
 # 2. Run DynaMem with visual servoing (in another terminal)
-emet run dynamem --robot-ip 127.0.0.1 -S --visual-servo
+uv run emet run dynamem --robot-ip 127.0.0.1 -S --visual-servo
 # With Innate Mars sim, pass the same robot to the client:
-emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S
+uv run emet run dynamem --robot innate_mars --robot-ip 127.0.0.1 -S
 
 # 3. Or run mapping
-emet run mapping --robot-ip 127.0.0.1
+uv run emet run mapping --robot-ip 127.0.0.1
 
 # Optional: DA3 depth + point cloud in Rerun (sim must be running; depth-anything-3 is a default dep)
-emet debug-da3-depth --robot innate_mars
+uv run emet debug-da3-depth --robot innate_mars
 # Equivalent:
-emet run debug-da3-depth --robot innate_mars
+uv run emet run debug-da3-depth --robot innate_mars
 ```
 
-If port 4401 is already in use: `emet kill-mujoco-server` then retry, or `emet serve mujoco --port-offset 100`.
+If port 4401 is already in use: `uv run emet kill-mujoco-server` then retry, or `uv run emet serve mujoco --port-offset 100`.
 
 ## Commands
 
@@ -130,7 +138,7 @@ Run a robot agent or app.
 |-----|--------------|
 | `dynamem` | DynaMem navigation + manipulation |
 | `graph-eqa` | Graph-based EQA memory (see [graph_eqa.md](graph_eqa.md)) |
-| `dynagraph` | Graph EQA + merge/staleness ([dynagraph.md](dynagraph.md)) |
+| `dynagraph` | Graph EQA + merge/staleness ([dynagraph.md](dynagraph.md)); **`--explore-loop`**, **`--export`**, **`--question`** |
 | `mapping` | 3D mapping and exploration |
 | `grasp` | Grasp object (red cylinder demo) |
 | `chat` | LLM chat with robot |
@@ -432,17 +440,40 @@ Then open http://localhost:9090?url=ws://localhost:9877 in a browser.
 
 ## Testing
 
-Run the full test suite:
+Run the full test suite from the project root:
+
 ```bash
-emet test
+uv run emet test
 ```
+
+**Master index:** [TESTING.md](TESTING.md) — all test docs, harnesses, and the Dynagraph graph+EQA gap.
+
+**Dynagraph quick checks:**
+
+```bash
+# Unit (fast)
+uv run emet test src/test/app/test_dynagraph_explore.py src/test/memory/test_graph_eqa_memory.py -v
+
+# Multi-robot Robocasa floor E2E (~20 min; needs sim extra)
+uv run python src/test/app/run_dynagraph_multi_robot_e2e.py
+```
+
+See [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md) for pass criteria and artefact paths.
 
 Run only CLI tests:
+
 ```bash
-emet test src/test/cli/
+uv run emet test src/test/cli/
 ```
 
-Verbose with coverage:
+Verbose:
+
 ```bash
-emet test -v
+uv run emet test -v
+```
+
+Skip sim integration tests (faster):
+
+```bash
+uv run emet test --no-sim
 ```

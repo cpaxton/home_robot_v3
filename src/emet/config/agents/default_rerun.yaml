@@ -1,0 +1,25 @@
+# Default live Rerun settings (copy ``rerun:`` into agent / dynav YAML).
+#
+# Precedence: CLI (--headless, --rerun-native, --rerun-show-panels) forces ON when set;
+# otherwise YAML; then environment (RERUN_HEADLESS, RERUN_BIND_ALL, EMET_DYNAGRAPH_RERUN_*).
+#
+rerun:
+  headless: false
+  native_viewer: false
+  bind_all: false
+  show_panels: false
+  mjcf_show_visual_mesh: true
+  mjcf_show_skeleton: false
+  server_memory_limit: "4GB"
+  # Map/graph in world frame; see docs/rerun.md (Spatial3DView origin must stay ``world``).
+  show_camera_point_clouds: false
+  max_displayed_points_per_camera: 4096
+  max_map_2d_points: 25000
+  voxel_map_stride: 2
+  dynagraph_stride: 2
+  mjcf_mesh_stride: 3
+  dynagraph:
+    log_crops: false
+    log_edges: false
+    log_summary: false
+    log_gallery: false

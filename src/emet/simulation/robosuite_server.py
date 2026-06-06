@@ -31,15 +31,21 @@ import emet.utils.logger as log
 from emet.core.server import BaseZmqServer
 from emet.core.zmq_protocol import (
     CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
+    EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY,
     EMET_ZMQ_ROBOT_ID_KEY,
     EMET_ZMQ_SESSION_KEY,
     EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
 )
 from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn, scene_base_spawn
+from emet.simulation.env_flags import env_sim_nav_debug, warn_sim_nav_env_flags
 from emet.simulation.head_look_action import apply_head_to_robosuite
 from emet.simulation.molmospaces_env import molmospaces_nav_teleport_enabled
 from emet.simulation.molmospaces_mobile_autoplace import apply_molmospaces_freejoint_base_autoplace
+from emet.simulation.mujoco_ground_truth import (
+    mujoco_ground_truth_write_path,
+    parse_ground_truth_dump_action_field,
+)
 from emet.simulation.mujoco_stationary_control import (
     DefaultMujocoStationaryControl,
     MujocoStationaryControl,
@@ -124,6 +130,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._nav_w_max = 0.95
         self._render_lock = threading.Lock()
         self._primary_renderer: Any | None = None
+        self._last_full_obs_for_servo: dict[str, Any] | None = None
         self._max_sim_steps: int | None = (
             int(max_sim_steps) if max_sim_steps is not None and int(max_sim_steps) > 0 else None
         )
@@ -138,6 +145,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._planar_autoplace_snap_qpos0 = False
         self._planar_autoplace_world_xyt: np.ndarray | None = None
         self._planar_base_actuator_ids_cache: tuple[int, int, int] | None = None
+        # Robocasa walkable AABB (xmin, xmax, ymin, ymax); clamps teleport / velocity nav goals.
+        self._nav_world_clip_rect: tuple[float, float, float, float] | None = None
+        self._nav_drive_debug_ticks = 0
         # After spawn / resettle, lock the base free joint while idle (no nav goal) so gravity does not
         # drop a floating base through the floor (wheels are visual-only on Galaxea / rby1).
         self._stationary_base_freejoint_qpos: np.ndarray | None = None
@@ -420,6 +430,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             self._molmospaces_autoplace_free_base_after_load()
             self._robocasa_planar_autoplace_after_load()
+            self._robocasa_freejoint_autoplace_after_load()
         self._planar_base_actuator_ids_cache = None
         self._configure_mj_substeps_per_tick()
 
@@ -548,6 +559,65 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjmodel.qpos0[qadr] = float(self._mjdata.qpos[qadr])
         self._planar_autoplace_snap_qpos0 = True
 
+    def _robocasa_freejoint_autoplace_after_load(self) -> None:
+        """Reposition freejoint base away from Robocasa clutter (Galaxea R1 / RB-Y1, etc.)."""
+        if not scene_base_spawn.want_robocasa_freejoint_autoplace(
+            environment=self._environment_descriptor,
+            robot_spec=self._spec,
+        ):
+            return
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        if self._base_freejoint_addrs() is None:
+            return
+        base_name = self._spec.base_link_name
+        if self._debug_molmospaces_spawn:
+            logger.info(
+                f"Robocasa freejoint spawn debug: environment={self._environment_descriptor!r} "
+                f"base_body_name={base_name!r}"
+            )
+        try:
+            placed = scene_base_spawn.find_molmospaces_freejoint_xyz(
+                self._mjmodel,
+                self._mjdata,
+                base_body_name=base_name,
+                scene_label=self._scene_source_basename,
+                merged_mjcf_path=self._scene_disk_path,
+                environment=self._environment_descriptor,
+            )
+        except Exception as e:
+            logger.warning(f"Robocasa freejoint autoplace skipped ({e!r}).")
+            return
+        if placed is None:
+            logger.info(
+                "Robocasa freejoint autoplace: no safer (x,y,z) found; keeping MJCF default base pose."
+            )
+            return
+        x, y, z = placed
+        logger.info(
+            f"Robocasa freejoint autoplace: moved base on {base_name!r} to "
+            f"({x:.3f}, {y:.3f}, {z:.3f}) for clearance from scene geometry."
+        )
+        if self._debug_molmospaces_spawn:
+            try:
+                mujoco.mj_forward(self._mjmodel, self._mjdata)
+                for ln in molmospaces_spawn.format_spawn_contact_report(
+                    self._mjmodel,
+                    self._mjdata,
+                    base_body_name=base_name,
+                    floor_geom_name="floor",
+                    max_lines=40,
+                    dist_report_threshold=0.12,
+                ):
+                    logger.info(f"[scene_base_spawn/post-place] {ln}")
+            except Exception as e:
+                logger.warning(f"Robocasa freejoint spawn debug contact report failed: {e!r}")
+        addrs = self._base_freejoint_addrs()
+        if addrs is not None:
+            qadr = int(addrs[0])
+            self._mjmodel.qpos0[qadr : qadr + 7] = self._mjdata.qpos[qadr : qadr + 7]
+            self._molmospaces_autoplace_snap_qpos0 = True
+
     def _snapshot_stationary_base_freejoint_pose(self) -> None:
         """Remember base free-joint ``qpos`` for idle sim (see :meth:`_hold_stationary_base_freejoint_if_idle`)."""
         if self._mjmodel is None or self._mjdata is None:
@@ -615,6 +685,33 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjdata.qvel[vadr] = 0.0
         mujoco.mj_forward(self._mjmodel, self._mjdata)
 
+    def _spawn_footprint_xy_margin_m(self) -> float:
+        fp = self._spec.footprint
+        base_margin = float(
+            0.5
+            * np.hypot(
+                float(fp.length) + abs(float(fp.length_offset)),
+                float(fp.width) + abs(float(fp.width_offset)),
+            )
+            + 0.10
+        )
+        extra = float(getattr(self._spec, "planar_spawn_xy_extra_margin_m", 0.0) or 0.0)
+        return base_margin + extra
+
+    def _compute_robocasa_spawn_floor_map(self) -> dict[str, Any] | None:
+        if self._environment_descriptor and self._environment_descriptor.get("spawn_floor_map") is not None:
+            return dict(self._environment_descriptor["spawn_floor_map"])
+        if self._mjmodel is None or self._mjdata is None:
+            return None
+        with self._mj_lock:
+            return scene_base_spawn.compute_spawn_walkable_map_metrics(
+                self._mjmodel,
+                self._mjdata,
+                base_body_name=self._spec.base_link_name,
+                grid_resolution_m=0.10,
+                footprint_xy_margin_m=self._spawn_footprint_xy_margin_m(),
+            )
+
     def _is_molmospaces_session(self) -> bool:
         env = self._environment_descriptor
         if isinstance(env, dict) and env.get("kind") == "molmospaces":
@@ -625,7 +722,12 @@ class RobosuiteZmqServer(BaseZmqServer):
     def _use_molmospaces_nav_teleport(self) -> bool:
         return self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()
 
-    def _build_emet_session(self, *, robocasa: bool) -> dict[str, Any]:
+    def _build_emet_session(
+        self,
+        *,
+        robocasa: bool,
+        spawn_floor_map: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         mj_name: str | None = None
         if self._mjmodel is not None:
             try:
@@ -663,6 +765,20 @@ class RobosuiteZmqServer(BaseZmqServer):
             session.update(self._session_extra)
         if self._initial_xyt is not None:
             apply_navigation_origin_to_session(session, self._initial_xyt)
+        if spawn_floor_map is not None:
+            session["spawn_floor_map"] = spawn_floor_map
+        session["nav_contract"] = {
+            "gps_compass_frame": "episode_relative_to_navigation_origin_xyt",
+            "xyt_with_nav_world": "absolute_mujoco_world_xyt",
+            "xyt_default_non_relative": "episode_relative_xyt_then_compose_with_navigation_origin",
+            "xyt_with_nav_relative": "delta_xy_in_current_world_heading",
+            "client_sets_nav_world": "GenericZmqClient move_base_to(..., world_frame=True) for voxel planner goals",
+            "sim_teleport": "action.nav_teleport or EMET_SIM_NAV_TELEPORT=1 on client",
+            "sim_motion_default": "velocity_drive via planar actuators (_nav_goal_world P-control)",
+            "sim_debug": "EMET_SIM_NAV_DEBUG=1 for verbose per-action nav logs on server",
+        }
+        if self._nav_world_clip_rect is not None:
+            session["nav_walkable_clip_eroded_xy"] = list(self._nav_world_clip_rect)
         env_kind = env.get("kind") if isinstance(env, dict) else None
         attach_sim_object_placements_to_session(
             session,
@@ -1095,12 +1211,192 @@ class RobosuiteZmqServer(BaseZmqServer):
             )
         )
 
+    @staticmethod
+    def _spawn_rel_xyt_to_world(goal_rel: np.ndarray, init_world_xyt: np.ndarray) -> np.ndarray:
+        """SE(2) compose: pose of goal in spawn frame ``goal_rel`` → world ``(x,y,theta)``."""
+        x0, y0, t0 = float(init_world_xyt[0]), float(init_world_xyt[1]), float(init_world_xyt[2])
+        gx, gy, gt = float(goal_rel[0]), float(goal_rel[1]), float(goal_rel[2])
+        ca, sa = np.cos(t0), np.sin(t0)
+        wx = x0 + ca * gx - sa * gy
+        wy = y0 + sa * gx + ca * gy
+        wt = float(np.arctan2(np.sin(t0 + gt), np.cos(t0 + gt)))
+        return np.array([wx, wy, wt], dtype=np.float64)
+
+    @staticmethod
+    def _sim_nav_debug_enabled() -> bool:
+        return env_sim_nav_debug()
+
+    @staticmethod
+    def _nav_triplet(xyt: np.ndarray | list | tuple) -> tuple[float, float, float]:
+        a = np.asarray(xyt, dtype=np.float64).reshape(-1)
+        if a.size < 3:
+            a = np.pad(a, (0, max(0, 3 - a.size)), mode="constant")
+        return float(a[0]), float(a[1]), float(a[2])
+
+    def _log_nav_startup_banner(self) -> None:
+        """Once at server start: frames, spawn pose, walkable clip (grep server log for ``[sim_nav]``)."""
+        warn_sim_nav_env_flags()
+        init = self._initial_xyt
+        init_s = "None" if init is None else f"({init[0]:.3f}, {init[1]:.3f}, {init[2]:.3f})"
+        clip = self._nav_world_clip_rect
+        clip_s = "None" if clip is None else f"[{clip[0]:.3f}, {clip[1]:.3f}, {clip[2]:.3f}, {clip[3]:.3f}]"
+        lines = [
+            "--- [sim_nav] navigation frames ---",
+            f"  spawn / navigation_origin (world): {init_s}",
+            f"  walkable clip_eroded (xmin,xmax,ymin,ymax): {clip_s}",
+            "  gps/compass in ZMQ obs: episode-relative to navigation_origin",
+            "  xyt default: episode-relative -> compose with origin -> world goal",
+            "  xyt + nav_world: absolute world (DynaMem / Dynagraph planner)",
+            "  default motion: velocity drive (not teleport unless nav_teleport)",
+            "  emet_session.nav_contract + nav_last (debug) on each observation",
+            "-----------------------------------",
+        ]
+        block = "\n".join(lines)
+        if env_sim_nav_debug():
+            for line in lines:
+                logger.warning(line)
+        else:
+            logger.info(block)
+
+    def _log_nav_action(self, meta: dict[str, Any], *, applied: str) -> None:
+        """Log one navigation command (always one line; full block if EMET_SIM_NAV_DEBUG)."""
+        raw = meta.get("raw_xyt", [])
+        goal = meta.get("goal_world", [])
+        base_b = meta.get("base_world_before", [])
+        gps = meta.get("gps_episode")
+        frame = meta.get("frame", "?")
+        jump = float(meta.get("jump_from_base_m", 0.0))
+        one = (
+            f"[sim_nav] {applied} frame={frame} raw={[round(float(raw[0]), 3), round(float(raw[1]), 3), round(float(raw[2]), 3)]} "
+            f"goal_world={[round(float(goal[0]), 3), round(float(goal[1]), 3), round(float(goal[2]), 3)]} "
+            f"base_before={[round(float(base_b[0]), 3), round(float(base_b[1]), 3)]} "
+            f"Δxy={jump:.2f}m nav_world={meta.get('nav_world')} nav_relative={meta.get('nav_relative')} "
+            f"nav_teleport={meta.get('nav_teleport')}"
+        )
+        logger.warning(one)
+        if self._emet_session is not None:
+            self._emet_session["nav_last"] = dict(meta)
+            self._emet_session["nav_last"]["applied"] = applied
+        if not self._sim_nav_debug_enabled():
+            return
+        gps_s = "None" if gps is None else f"({gps[0]:.3f}, {gps[1]:.3f}, {gps[2]:.3f})"
+        pre = meta.get("goal_world_pre_clamp", goal)
+        extra = ""
+        if "compose_jump_m" in meta:
+            extra += f"\n  compose_jump_m: {meta['compose_jump_m']:.3f}"
+        if meta.get("clamped"):
+            extra += f"\n  clamped from ({pre[0]:.3f}, {pre[1]:.3f})"
+        logger.info(
+            "[sim_nav] detail action_step=%s\n"
+            "  frame: %s\n"
+            "  flags: nav_world=%s nav_relative=%s nav_teleport=%s\n"
+            "  raw_xyt: %s\n"
+            "  spawn_world (navigation_origin): %s\n"
+            "  base body world (before): %s\n"
+            "  gps episode (get_base_pose): %s\n"
+            "  goal_world (after clamp): %s%s",
+            meta.get("action_step"),
+            frame,
+            meta.get("nav_world"),
+            meta.get("nav_relative"),
+            meta.get("nav_teleport"),
+            raw,
+            meta.get("spawn_world_xyt"),
+            base_b,
+            gps_s,
+            goal,
+            extra,
+        )
+
+    def _resolve_nav_goal_world_xyt(
+        self,
+        action: dict[str, Any],
+        raw: np.ndarray,
+        init: np.ndarray,
+    ) -> tuple[float, float, float, dict[str, Any]]:
+        """Convert action xyt to world goal; return metadata for :meth:`_log_nav_action`."""
+        meta: dict[str, Any] = {
+            "action_step": action.get("step"),
+            "raw_xyt": np.asarray(raw, dtype=np.float64).reshape(-1)[:3].tolist(),
+            "nav_relative": bool(action.get("nav_relative", False)),
+            "nav_world": bool(action.get("nav_world", False)),
+            "nav_teleport": bool(action.get("nav_teleport", False)),
+            "spawn_world_xyt": np.asarray(init, dtype=np.float64).reshape(-1)[:3].tolist(),
+        }
+        cur = self.get_base_xyt()
+        meta["base_world_before"] = [float(cur[0]), float(cur[1]), float(cur[2])]
+        pose_ep = self.get_base_pose()
+        if pose_ep is not None:
+            ep = np.asarray(pose_ep, dtype=np.float64).reshape(-1)[:3]
+            meta["gps_episode"] = [float(ep[0]), float(ep[1]), float(ep[2])]
+
+        if meta["nav_world"] and meta["nav_relative"]:
+            logger.warning(
+                "[sim_nav] action has both nav_world and nav_relative; using nav_world (absolute MuJoCo xyt)."
+            )
+            meta["nav_relative"] = False
+        if meta["nav_relative"]:
+            meta["frame"] = "relative_delta_world"
+            ct = float(cur[2])
+            dx, dy, dt = float(raw[0]), float(raw[1]), float(raw[2])
+            wx = float(cur[0]) + np.cos(ct) * dx - np.sin(ct) * dy
+            wy = float(cur[1]) + np.sin(ct) * dx + np.cos(ct) * dy
+            wt = float(np.arctan2(np.sin(cur[2] + dt), np.cos(cur[2] + dt)))
+        elif meta["nav_world"]:
+            meta["frame"] = "mujoco_world"
+            wx, wy, wt = float(raw[0]), float(raw[1]), float(raw[2])
+        else:
+            meta["frame"] = "spawn_compose"
+            world = self._spawn_rel_xyt_to_world(raw[:3], init)
+            wx, wy, wt = float(world[0]), float(world[1]), float(world[2])
+            compose_jump = float(np.hypot(wx - float(cur[0]), wy - float(cur[1])))
+            meta["compose_jump_m"] = compose_jump
+            if compose_jump > 8.0:
+                meta["frame"] = "spawn_compose_corrected_world"
+                wx, wy, wt = float(raw[0]), float(raw[1]), float(raw[2])
+                logger.warning(
+                    "[sim_nav] raw xyt looks like world coords without nav_world (compose jump %.2fm); "
+                    "using raw as world (%.3f, %.3f). Set action nav_world=true or client world_frame=True.",
+                    compose_jump,
+                    wx,
+                    wy,
+                )
+
+        meta["goal_world_pre_clamp"] = [wx, wy, wt]
+        wx_c, wy_c, wt_c = self._clamp_world_nav_xyt(wx, wy, wt)
+        meta["clamped"] = abs(wx_c - wx) > 1e-6 or abs(wy_c - wy) > 1e-6
+        wx, wy, wt = wx_c, wy_c, wt_c
+        meta["goal_world"] = [wx, wy, wt]
+        meta["jump_from_base_m"] = float(np.hypot(wx - float(cur[0]), wy - float(cur[1])))
+        return wx, wy, wt, meta
+
+    def _clamp_world_nav_xyt(self, wx: float, wy: float, wt: float) -> tuple[float, float, float]:
+        """Keep holonomic nav goals inside the Robocasa walkable clip (when known)."""
+        rect = self._nav_world_clip_rect
+        if rect is None:
+            return wx, wy, wt
+        x0, x1, y0, y1 = rect
+        cx = min(max(float(wx), x0), x1)
+        cy = min(max(float(wy), y0), y1)
+        if abs(cx - wx) > 1e-6 or abs(cy - wy) > 1e-6:
+            logger.warning(
+                "Sim navigation: clamped world goal (%.3f, %.3f) -> (%.3f, %.3f) to stay in walkable clip %s",
+                wx,
+                wy,
+                cx,
+                cy,
+                rect,
+            )
+        return cx, cy, float(np.arctan2(np.sin(wt), np.cos(wt)))
+
     def _teleport_base_world_xyt(self, wx: float, wy: float, wt: float) -> bool:
         """Teleport base to world (x,y,yaw): planar slide/slide/yaw joints or ``base_link`` free joint."""
         with self._mj_lock:
             if self._mjdata is None or self._mjmodel is None:
                 return False
             if self._teleport_planar_base_world_xyt(wx, wy, wt):
+                # Align arm/wheel ``ctrl`` with ``qpos`` after snapping planar joints (no extra mj_forward).
+                self._sync_actuator_ctrl_from_joint_positions()
                 return True
             addrs = self._base_freejoint_addrs()
             if addrs is None:
@@ -1160,7 +1456,31 @@ class RobosuiteZmqServer(BaseZmqServer):
         dx, dy = wx - cx, wy - cy
         dist = float(np.hypot(dx, dy))
         eth = float(np.arctan2(np.sin(wt - ct), np.cos(wt - ct)))
+        if self._sim_nav_debug_enabled() and dist > 1.0:
+            self._nav_drive_debug_ticks += 1
+            if self._nav_drive_debug_ticks % 40 == 1:
+                logger.info(
+                    "[sim_nav] driving dist=%.2fm goal=(%.3f,%.3f) base=(%.3f,%.3f) v_cmd~(%.2f,%.2f)",
+                    dist,
+                    wx,
+                    wy,
+                    cx,
+                    cy,
+                    dx * self._nav_kp_xy,
+                    dy * self._nav_kp_xy,
+                )
         if dist < self._nav_tol_xy and abs(eth) < self._nav_tol_theta:
+            self._nav_drive_debug_ticks = 0
+            if self._sim_nav_debug_enabled():
+                logger.info(
+                    "[sim_nav] at_goal base=(%.3f, %.3f, %.3f) goal was=(%.3f, %.3f, %.3f)",
+                    cx,
+                    cy,
+                    ct,
+                    wx,
+                    wy,
+                    wt,
+                )
             self._nav_goal_world = None
             self._at_goal = True
             if free_addrs is not None:
@@ -1216,8 +1536,48 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     @override
     def handle_action(self, action: dict[str, Any]):
+        if EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY in action:
+            path_gt, exclude_robot, as_json = parse_ground_truth_dump_action_field(
+                action[EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY]
+            )
+            if path_gt:
+                hdr: dict[str, Any] | None = None
+                if isinstance(self._environment_descriptor, dict):
+                    hdr = {
+                        k: self._environment_descriptor[k]
+                        for k in sorted(self._environment_descriptor.keys())
+                        if k in ("kind", "task", "style", "layout")
+                    }
+
+                try:
+                    with self._mj_lock:
+                        if self._mjmodel is None or self._mjdata is None:
+                            logger.warning(
+                                "mujoco_ground_truth_dump: model not loaded; cannot write %r",
+                                path_gt,
+                            )
+                        else:
+                            out = mujoco_ground_truth_write_path(
+                                self._mjmodel,
+                                self._mjdata,
+                                dest=path_gt,
+                                exclude_robot=exclude_robot,
+                                robot_base_body_name=str(self._spec.base_link_name),
+                                json=as_json,
+                                extras=hdr,
+                            )
+                            logger.info(f"Wrote MuJoCo ground-truth snapshot -> {out}")
+                except Exception as e:
+                    logger.error("mujoco_ground_truth_dump failed for %r: %s", path_gt, e)
+
         if "control_mode" in action:
             self.control_mode = action["control_mode"]
+
+        if "posture" in action:
+            p = str(action["posture"])
+            if p in ("navigation", "manipulation"):
+                self.control_mode = p
+            self._at_goal = True
 
         has_xyt = "xyt" in action
         if has_xyt:
@@ -1251,17 +1611,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                     init = self._initial_xyt
                     if init is None:
                         init = np.zeros(3, dtype=np.float64)
-                    relative = bool(action.get("nav_relative", False))
-                    if relative:
-                        cur = self.get_base_xyt()
-                        dx, dy, dt = float(raw[0]), float(raw[1]), float(raw[2])
-                        ct = float(cur[2])
-                        wx = cur[0] + np.cos(ct) * dx - np.sin(ct) * dy
-                        wy = cur[1] + np.sin(ct) * dx + np.cos(ct) * dy
-                        wt = float(np.arctan2(np.sin(cur[2] + dt), np.cos(cur[2] + dt)))
-                    else:
-                        world = self._spawn_rel_xyt_to_world(raw[:3], init)
-                        wx, wy, wt = float(world[0]), float(world[1]), float(world[2])
+                    wx, wy, wt, nav_meta = self._resolve_nav_goal_world_xyt(action, raw, init)
                     nav_teleport = bool(action.get("nav_teleport", False)) or self._use_molmospaces_nav_teleport()
                     if nav_teleport:
                         if not self._teleport_base_world_xyt(wx, wy, wt):
@@ -1269,18 +1619,25 @@ class RobosuiteZmqServer(BaseZmqServer):
                                 f"Navigation xyt={action['xyt']!r}: no free joint on base_link "
                                 f"{self._spec.base_link_name!r}; cannot teleport."
                             )
+                            self._log_nav_action(nav_meta, applied="teleport_failed")
                         else:
-                            logger.info(f"Sim navigation (teleport): base at x={wx:.3f} y={wy:.3f} theta={wt:.3f}.")
+                            self._log_nav_action(nav_meta, applied="teleport")
+                            after = self.get_base_xyt()
+                            nav_meta["base_world_after"] = [
+                                float(after[0]),
+                                float(after[1]),
+                                float(after[2]),
+                            ]
                             self._sync_actuator_ctrl_from_joint_positions()
                         self._nav_goal_world = None
                         self._zero_base_free_joint_velocity()
                         self._at_goal = True
                     else:
+                        self._zero_base_free_joint_velocity()
+                        self._sync_actuator_ctrl_from_joint_positions()
                         self._nav_goal_world = np.array([wx, wy, wt], dtype=np.float64)
-                        logger.info(
-                            f"Sim navigation: driving toward x={wx:.3f} y={wy:.3f} theta={wt:.3f} "
-                            f"(set action nav_teleport=true for instant snap)."
-                        )
+                        self._nav_drive_debug_ticks = 0
+                        self._log_nav_action(nav_meta, applied="velocity_drive")
         except Exception as e:
             if has_xyt:
                 logger.error(f"Navigation xyt={action.get('xyt')!r} failed in simulation server: {e!r}")
@@ -1363,7 +1720,10 @@ class RobosuiteZmqServer(BaseZmqServer):
                     message["camera_name_tertiary"] = tertiary
                 except Exception as e:
                     logger.debug(f"Tertiary RGB failed for {tertiary}: {e!r}")
-        return self._attach_emet_session(message)
+        message = self._attach_emet_session(message)
+        with self._render_lock:
+            self._last_full_obs_for_servo = message
+        return message
 
     @override
     def get_state_message(self) -> dict[str, Any]:
@@ -1380,6 +1740,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "at_goal": self._at_goal,
             "is_homed": True,
             "is_runstopped": False,
+            "is_simulation": True,
             "step": self._last_step,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
         }
@@ -1387,6 +1748,11 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     @override
     def get_servo_message(self) -> dict[str, Any]:
+        """Low-rate head RGB-D for StretchZmqClient / Rerun (resized from full observation).
+
+        Reuses :meth:`get_full_observation_message` so we do not run a second concurrent MuJoCo
+        render (``spin_send`` and ``spin_send_servo`` share one EGL ``Renderer``).
+        """
         if self._mjdata is None:
             return None
 
@@ -1396,10 +1762,22 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         primary_cam = cam_names[0]
         try:
-            rgb_full, depth_full, K_full = self._primary_rgb_and_depth(primary_cam)
+            with self._render_lock:
+                full = self._last_full_obs_for_servo
+            if full is None:
+                return None
+            rgb_full = compression.from_jpg(full["rgb"])
+            raw_depth = full.get("depth")
+            if raw_depth is None:
+                return None
+            depth_full = compression.from_jp2(raw_depth) / 1000.0
+            K_full = np.asarray(full["camera_K"], dtype=np.float64)
             rgb = cv2.resize(rgb_full, (_SERVO_RW, _SERVO_RH), interpolation=cv2.INTER_AREA)
             depth = cv2.resize(depth_full, (_SERVO_RW, _SERVO_RH), interpolation=cv2.INTER_NEAREST)
-        except Exception:
+        except Exception as e:
+            if not getattr(self, "_servo_publish_error_logged", False):
+                logger.warning(f"get_servo_message failed for camera {primary_cam!r}: {e!r}")
+                self._servo_publish_error_logged = True
             return None
 
         depth_u16 = (depth * 1000).astype(np.uint16)
@@ -1409,14 +1787,15 @@ class RobosuiteZmqServer(BaseZmqServer):
             xyt = np.zeros(3)
 
         K_servo = scale_pinhole_K(K_full, rgb_full.shape[1], rgb_full.shape[0], _SERVO_RW, _SERVO_RH)
+        cam_pose = full.get("camera_pose")
+        if cam_pose is None:
+            cam_pose = self._camera_pose_world(primary_cam)
 
         message = {
             "head_color_image": compression.to_jpg(rgb),
             "head_depth_image": compression.to_jp2(depth_u16),
             "head_camera_K": K_servo,
-            # Same OpenCV camera-to-world convention as full observations (``camera_pose``); required for
-            # Rerun head-camera transform + DynaMem when the client only consumes the servo socket.
-            "camera_pose": self._camera_pose_world(primary_cam),
+            "camera_pose": cam_pose,
             "joint_positions": q,
             "joint_velocities": dq,
             "base_pose": xyt,
@@ -1615,7 +1994,17 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._initial_xyt = self.get_base_xyt()
         self._nav_goal_world = None
         self._at_goal = True
-        self._emet_session = self._build_emet_session(robocasa=robocasa)
+        spawn_floor_map = self._compute_robocasa_spawn_floor_map() if robocasa else None
+        self._nav_world_clip_rect = None
+        if spawn_floor_map is not None:
+            eroded = spawn_floor_map.get("clip_eroded_xy")
+            if isinstance(eroded, (list, tuple)) and len(eroded) == 4:
+                self._nav_world_clip_rect = tuple(float(v) for v in eroded)
+        self._emet_session = self._build_emet_session(
+            robocasa=robocasa,
+            spawn_floor_map=spawn_floor_map,
+        )
+        self._log_nav_startup_banner()
         if self._is_molmospaces_session() and not molmospaces_nav_teleport_enabled():
             log.info("MolmoSpaces navigation: wheel/goal drive (EMET_MOLMOSPACES_NAV_TELEPORT=0)")
 

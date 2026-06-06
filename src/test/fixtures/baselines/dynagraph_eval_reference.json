@@ -1,0 +1,60 @@
+{
+  "description": "Reference thresholds and measured runs (2026-06-05). Re-run: emet eval-dynagraph, emet eval-calibration, run_dynagraph_benchmark_smoke.py.",
+  "measured": {
+    "date": "2026-06-05",
+    "default_table_gt": {
+      "episode": "/tmp/dynagraph_bench_smoke/default_table",
+      "graph": {"node_count": 3, "edge_count": 3},
+      "explore": {"explored_area_m2": 14.15},
+      "gt": {"gt_graph_completeness": 1.0, "localization_mean_err_xy_m": 0.0}
+    },
+    "innate_mars_calibration_jsonl": {
+      "spatial_recall": 1.0,
+      "label_recall": 0.2,
+      "mean_xy_err_m": 0.08,
+      "note": "YoloE open-vocab vs Robocasa categories; geometry strong, taxonomy weak"
+    },
+    "stretch_calibration_jsonl": {
+      "spatial_recall": 0.6,
+      "label_recall": 0.0,
+      "mean_xy_err_m": 0.4,
+      "note": "Viewpoint: robot faces office wall; cab/counter often out of radius"
+    },
+    "innate_mars_cal_export": {
+      "episode": "/tmp/emet_fusion_tune/innate_mars/cal",
+      "graph": {"node_count": 66, "edge_count": 577},
+      "explore": {"explored_fraction": 0.46, "explored_area_m2": 37.52},
+      "fusion": {"raw_spatial_recall": 1.0, "fused_spatial_recall": 1.0, "label_recall": 0.2}
+    },
+    "innate_mars_explore_question_smoke": {
+      "episode": "/tmp/dynagraph_q_test/innate_mars",
+      "graph": {"node_count": 0},
+      "explore": {"explored_fraction": 0.11},
+      "note": "Detections in frames JSON but 0 merged graph nodes — known perception→graph gap"
+    }
+  },
+  "thresholds": {
+    "default_table_gt": {
+      "graph": {"node_count_min": 2},
+      "gt": {"gt_graph_completeness_min": 0.9}
+    },
+    "robocasa_innate_mars_seed0": {
+      "explore": {"explored_fraction_min": 0.08},
+      "fusion": {"raw": {"spatial_recall_min": 0.5}},
+      "graph": {"node_count_min": 0}
+    },
+    "stretch_calibration": {
+      "fusion": {"raw": {"spatial_recall_min": 0.5}}
+    },
+    "fusion_ab": {
+      "node_count_ratio_max": 0.7,
+      "spatial_recall_drop_max": 0.05,
+      "note": "Run ./scripts/run_dynagraph_fusion_ab.sh to populate"
+    },
+    "eqa": {
+      "default_table_accuracy_min": 0.7,
+      "robocasa_accuracy_min": 0.5,
+      "note": "Requires --question-file + real LLM; not run in this pass"
+    }
+  }
+}

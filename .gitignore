@@ -167,6 +167,8 @@ install/
 # MuJoCo / sim runtime artifacts
 MUJOCO_LOG.TXT
 **/stretch_temp_abs.xml
+tmp*.xml
+*.mp4
 molmo_videos/
 # MolmoSpaces merged MJCF temp files (next to packaged robot MJCF for assetdir resolution)
 src/emet/assets/robot/molmospaces_merged_*.xml

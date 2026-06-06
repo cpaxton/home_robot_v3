@@ -39,6 +39,7 @@ from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient, ControlMode
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
+    build_mujoco_ground_truth_dump_action,
     emet_session_cache_update,
     read_emet_robot_id_from_message_or_session,
     read_emet_session,
@@ -47,6 +48,7 @@ from emet.core.zmq_protocol import (
 from emet.motion import constants as motion_constants
 from emet.robots.base import RobotSpec
 from emet.robots.spec_robot_model import SpecRobotModel
+from emet.simulation.env_flags import env_sim_nav_teleport, warn_sim_nav_env_flags
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
 
@@ -213,6 +215,7 @@ class GenericZmqClient(AbstractRobotClient):
         self._rerun: Any = None
         self._rerun_thread: threading.Thread | None = None
         if enable_rerun_server:
+            from emet.config.rerun_config import build_rerun_visualizer_kwargs
             from emet.visualization.rerun import RerunVisualizer
 
             out_p = Path(output_path) if output_path is not None else None
@@ -228,14 +231,16 @@ class GenericZmqClient(AbstractRobotClient):
                     int(self._spec.dof),
                     str(self._spec.base_link_name),
                 )
-            self._rerun = RerunVisualizer(
+            rerun_kwargs = build_rerun_visualizer_kwargs(
+                self._parameters,
                 output_path=out_p,
                 display_robot_mesh=use_mjcf,
-                headless=rerun_headless,
-                rerun_native_viewer=rerun_native_viewer,
-                collapse_panels=not rerun_show_panels,
                 mjcf_robot=mjcf_robot,
+                cli_headless=rerun_headless,
+                cli_native_viewer=rerun_native_viewer,
+                cli_show_panels=rerun_show_panels,
             )
+            self._rerun = RerunVisualizer(**rerun_kwargs)
         else:
             from emet.visualization.rerun import NullVisualizer
 
@@ -306,6 +311,25 @@ class GenericZmqClient(AbstractRobotClient):
 
     def send_message(self, message: dict[str, Any]) -> None:
         self.send_socket.send_pyobj(message)
+
+    def request_sim_mujoco_ground_truth_snapshot(
+        self,
+        path_on_sim_host: str,
+        *,
+        exclude_robot: bool = True,
+        as_json: bool = False,
+    ) -> None:
+        step_next = int(getattr(self, "_last_step", -1)) + 1
+        if step_next < 1:
+            step_next = max(1, int(time.time() * 1000.0) % 2_000_000_000)
+        self.send_message(
+            build_mujoco_ground_truth_dump_action(
+                step_next,
+                path_on_sim_host,
+                exclude_robot=exclude_robot,
+                as_json=as_json,
+            ),
+        )
 
     # -- Lifecycle ------------------------------------------------------------
 
@@ -402,6 +426,10 @@ class GenericZmqClient(AbstractRobotClient):
             if self._emet_session_cache is None:
                 return None
             return dict(self._emet_session_cache)
+
+    def _robosuite_sim_zmq(self) -> bool:
+        sess = self.get_emet_session()
+        return bool(sess and sess.get("runtime_kind") == "robosuite_sim")
 
     def stop(self) -> None:
         """Signal threads to stop, join them, and close ZMQ sockets (idempotent)."""
@@ -706,6 +734,10 @@ class GenericZmqClient(AbstractRobotClient):
                 time.sleep(0.01)
         return action
 
+    def set_velocity(self, v: float, w: float) -> None:
+        """Set base translational (v) and rotational (w) velocity setpoints."""
+        self.send_action({"v": v, "w": w})
+
     def move_base_to(
         self,
         xyt,
@@ -713,14 +745,51 @@ class GenericZmqClient(AbstractRobotClient):
         blocking=False,
         verbose: bool = False,
         timeout: float | None = None,
+        *,
+        world_frame: bool | None = None,
     ) -> bool:
         if isinstance(xyt, ContinuousNavigationAction):
             xyt = xyt.xyt
-        xyt = np.array(xyt, dtype=float)
-        action = {"xyt": xyt.tolist(), "nav_relative": relative}
+        xyt = np.array(xyt, dtype=float).reshape(-1)
+        if xyt.size < 3:
+            xyt = np.pad(xyt, (0, max(0, 3 - xyt.size)), mode="constant")
+        # Default episode-relative (gps frame); only voxel/planner paths pass world_frame=True (nav_world).
+        if world_frame is None:
+            world_frame = False
+        action: dict[str, Any] = {"xyt": xyt[:3].tolist()}
+        if relative:
+            action["nav_relative"] = True
+        elif world_frame:
+            action["nav_world"] = True
+        frame_tag = "nav_relative" if relative else ("nav_world" if world_frame else "episode_compose")
+        logger.info(
+            f"move_base_to: goal=[{float(xyt[0]):.3f}, {float(xyt[1]):.3f}, {float(xyt[2]):.3f}] "
+            f"frame={frame_tag} blocking={blocking}"
+        )
         sess = self.get_emet_session()
         if sess and (sess.get("capabilities") or {}).get("teleport_base"):
             action["nav_teleport"] = True
+        elif env_sim_nav_teleport():
+            warn_sim_nav_env_flags()
+            action["nav_teleport"] = True
+        if world_frame and self._robosuite_sim_zmq():
+            sess = read_emet_session(self._obs) or read_emet_session(self._state)
+            org = None if sess is None else sess.get("navigation_origin_xyt")
+            if org is not None:
+                origin = np.asarray(org, dtype=np.float64).reshape(-1)[:3]
+                dist = float(np.linalg.norm(xyt[:2] - origin[:2]))
+                if dist > 12.0:
+                    logger.warning(
+                        "move_base_to: refusing world goal [%.3f, %.3f, %.3f] — %.1fm from "
+                        "navigation_origin [%.3f, %.3f] (planner/rotate frame bug or unstable sim).",
+                        xyt[0],
+                        xyt[1],
+                        xyt[2],
+                        dist,
+                        origin[0],
+                        origin[1],
+                    )
+                    return False
         self.send_action(action)
         if blocking:
             # PUB/SUB can drop the first packet; give the server a beat to apply xyt.
@@ -904,8 +973,16 @@ class GenericZmqClient(AbstractRobotClient):
         relative: bool = False,
         final_timeout: float = 60.0,
         blocking: bool = True,
+        *,
+        world_frame: bool | None = None,
     ) -> bool:
         for waypoint in trajectory:
-            if not self.move_base_to(waypoint, relative=relative, blocking=blocking, timeout=per_waypoint_timeout):
+            if not self.move_base_to(
+                waypoint,
+                relative=relative,
+                blocking=blocking,
+                timeout=per_waypoint_timeout,
+                world_frame=world_frame,
+            ):
                 return False
         return True
