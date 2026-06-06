@@ -34,6 +34,10 @@ wheels/
 # VS Code
 .vscode/
 
+# Habitat EQA harness (micromamba env; not the main uv venv)
+.venv-habitat/
+.micromamba/
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -163,6 +167,8 @@ install/
 # MuJoCo / sim runtime artifacts
 MUJOCO_LOG.TXT
 **/stretch_temp_abs.xml
+tmp*.xml
+*.mp4
 molmo_videos/
 # MolmoSpaces merged MJCF temp files (next to packaged robot MJCF for assetdir resolution)
 src/emet/assets/robot/molmospaces_merged_*.xml

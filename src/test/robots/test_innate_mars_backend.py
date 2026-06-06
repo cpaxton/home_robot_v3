@@ -399,11 +399,13 @@ def test_resolve_dynav_config_yaml_innate_mars_and_stretch():
     assert resolve_dynav_config_yaml("stretch", DEFAULT_DYNAV_CONFIG_YAML) == DEFAULT_DYNAV_CONFIG_YAML
 
 
-def test_dynav_innate_mars_yaml_parameters_use_da3():
+def test_dynav_innate_mars_yaml_parameters_depth_auto_with_da3():
     from emet.core.parameters import get_parameters
 
     params = get_parameters("dynav_innate_mars.yaml")
-    assert str(params.get("depth_source")).lower() == "da3"
+    # ``auto``: sensor depth in sim when ZMQ publishes it; DA3 when hardware omits depth.
+    assert str(params.get("depth_source")).lower() == "auto"
+    assert str(params.get("da3_model_id", "")).strip()
 
 
 def test_get_robot_spec_and_runtime_notes_innate_mars():

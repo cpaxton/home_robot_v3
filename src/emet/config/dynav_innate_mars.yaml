@@ -40,7 +40,8 @@ min_depth: 0.25
 max_depth: 2.5
 
 # Depth Anything 3: ``DA3-SMALL`` is faster for live stereo; use ``DA3METRIC-LARGE`` for best metric monocular.
-depth_source: da3
+# ``auto``: use ZMQ/sim sensor depth when present; fall back to DA3 on the real robot when depth is missing.
+depth_source: auto
 da3_model_id: depth-anything/DA3-SMALL
 da3_process_res: 378
 # Cap runaway DA3 / stereo depths (meters) before voxel ``max_depth`` filtering.
@@ -73,6 +74,23 @@ filters:
   median_filter_max_error: 0.01
   use_derivative_filter: True
   derivative_filter_threshold: 0.2
+
+motion:
+  moving_threshold: 0.01
+  angle_threshold: 0.1
+  min_steps_not_moving: 2
+  joint_tolerance:
+    arm: 0.02
+    base_x: 0.02
+    lift: 0.02
+    wrist_roll: 0.1
+    wrist_pitch: 0.1
+    wrist_yaw: 0.1
+    head_pan: 0.01
+    head_tilt: 0.01
+  joint_thresholds:
+    head_not_moving_tolerance: 1.0e-4
+    gripper_open_threshold: 0.3
 
 agent:
   realtime:
@@ -145,3 +163,11 @@ graph_eqa_extract:
   navigation_samples_max: 256
 
 graph_eqa_record_navigation: true
+
+rerun:
+  mjcf_show_visual_mesh: true
+  mjcf_show_skeleton: false
+  server_memory_limit: "4GB"
+  dynagraph:
+    log_crops: false
+    log_edges: false

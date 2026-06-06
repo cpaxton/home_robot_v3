@@ -1,0 +1,59 @@
+# Pip-only deps for .venv-habitat (after micromamba installs habitat-sim + numpy/scipy/matplotlib).
+# emet is installed with --no-deps; this list covers the GraphEQA/Dynagraph import chain.
+# Do not pin numpy/scipy/matplotlib — conda provides versions compatible with habitat-sim.
+click>=8.1.8
+pyzmq
+pyliblzfse
+rerun-sdk>=0.21.0,<0.23.0
+hydra-core
+pin
+hpp-fcl
+open3d
+overrides
+yacs
+einops
+trimesh
+scikit-fmm
+scikit-image
+webp
+sophuspy
+retry
+schema
+python-dotenv
+pyyaml
+protobuf
+hello-robot-stretch-urdf
+urchin
+wget
+numba
+gitpython
+draccus>=0.11.0
+termcolor
+openai>=1.88.0
+pynput
+pyusb
+sentencepiece
+timm>1.0.0
+open-clip-torch>=2.32.0
+safetensors>=0.4.5
+huggingface_hub>=0.28.0
+transformers>=4.55.0
+torch
+torchvision
+torchaudio
+accelerate>=1.6.0
+bitsandbytes
+qwen_vl_utils
+google-genai
+opencv-python-headless
+# Optional on Habitat path (no mic / no Discord); install for import parity with emet.
+PyAudio>=0.2.14
+pydub
+librosa
+simpleaudio
+openai-whisper
+discord.py
+paramiko>=3.0.0
+ultralytics==8.3.161
+clip @ git+https://github.com/ultralytics/CLIP.git
+depth-anything-3>=0.1.1

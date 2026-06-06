@@ -97,6 +97,47 @@ def test_near_heuristic():
     assert _near(np.array([0, 0, 0]), np.array([2, 0, 0]), max_dist=1.0) is False
 
 
+def test_add_observation_stores_bbox_xyxy_on_node():
+    """Instance graph nodes keep a pixel crop for Dynagraph Rerun thumbnails."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((60, 80, 3), dtype=np.uint8)
+    mem.add_observation(
+        rgb,
+        np.array([1.0, 2.0, 0.5]),
+        ["mug"],
+        bbox_xyxy=(10, 20, 40, 55),
+    )
+    node = mem.get_nodes()[0]
+    assert node.bbox_xyxy == (10, 20, 40, 55)
+
+
+def test_seen_from_edge_links_object_to_viewpoint_node():
+    """``seen_from`` targets a viewpoint graph node at ``viewer_xyz``."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    viewer = np.array([1.0, 2.0, 0.0], dtype=np.float64)
+    mem.add_observation(
+        rgb,
+        np.array([3.0, 4.0, 0.9]),
+        ["mug"],
+        viewer_xyz=viewer,
+    )
+    nodes = mem.get_nodes()
+    objects = [n for n in nodes if not n.is_viewpoint]
+    viewpoints = [n for n in nodes if n.is_viewpoint]
+    assert len(objects) == 1
+    assert len(viewpoints) == 1
+    np.testing.assert_allclose(viewpoints[0].xyz, viewer)
+    edges = mem.get_edges()
+    assert (objects[0].node_id, viewpoints[0].node_id, "seen_from") in edges
+    obs = mem.get_observations()[0]
+    assert obs.viewer_xyz is not None
+    np.testing.assert_allclose(obs.viewer_xyz, viewer)
+    s = mem.to_string()
+    assert "seen_from" in s
+    assert "View " in s
+
+
 def test_on_floor_heuristic():
     """_on_floor returns True when z <= threshold."""
     assert _on_floor(np.array([0, 0, 0.02])) is True
@@ -256,13 +297,17 @@ def test_labels_are_semantic_graph_hypothesis():
     assert labels_are_semantic_graph_hypothesis([]) is False
 
 
-def test_record_navigation_sample_does_not_create_nodes():
+def test_record_navigation_sample_adds_viewpoint_not_object_node():
     mem = GraphEQAMemory(eqa_client=lambda x: "", image_description_client=lambda x: "")
     rgb = np.zeros((20, 20, 3), dtype=np.uint8)
-    mem.record_navigation_sample(rgb, np.array([1.0, 2.0, 0.1]), base_xyz=np.array([1.1, 2.0, 0.0]))
-    assert len(mem.get_nodes()) == 0
+    base = np.array([1.1, 2.0, 0.0])
+    mem.record_navigation_sample(rgb, np.array([1.0, 2.0, 0.1]), base_xyz=base)
+    nodes = mem.get_nodes()
     assert len(mem.get_observations()) == 0
     assert len(mem.get_navigation_samples()) == 1
+    assert len(nodes) == 1
+    assert nodes[0].is_viewpoint
+    np.testing.assert_allclose(nodes[0].xyz, base)
 
 
 def test_record_navigation_respects_graph_eqa_record_navigation_false():
@@ -290,6 +335,21 @@ def test_query_answer_navigation_fallback_images_and_target():
     assert abs(float(target_point[1]) - (-0.25)) < 1e-5
 
 
+def test_dynagraph_spatial_merge_keeps_detection_bbox():
+    mem = GraphEQAMemory(
+        parameters={"dynagraph_merge_xy_m": 1.0},
+        defer_llm_clients=True,
+    )
+    rgb = np.zeros((80, 60, 3), dtype=np.uint8)
+    mem.set_graph_timestep(1)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["cup"], bbox_xyxy=(5, 5, 25, 30))
+    mem.set_graph_timestep(2)
+    mem.add_observation(rgb, np.array([0.15, 0.0, 0.5]), ["cup"], bbox_xyxy=(30, 10, 50, 35))
+    node = mem.get_nodes()[0]
+    assert not node.is_viewpoint
+    assert node.bbox_xyxy == (30, 10, 50, 35)
+
+
 def test_dynagraph_spatial_merge_same_obs_id():
     mem = GraphEQAMemory(
         parameters={"dynagraph_merge_xy_m": 1.0},
@@ -304,6 +364,24 @@ def test_dynagraph_spatial_merge_same_obs_id():
     assert id1 == id2
     assert len(mem.get_nodes()) == 1
     assert mem.get_nodes()[0].support_count == 2
+
+
+def test_heuristic_relevant_objects_from_question():
+    from emet.memory.graph_eqa.graph_memory import heuristic_relevant_objects
+
+    objs = heuristic_relevant_objects("Is the lamp next to the bed on?")
+    assert "lamp" in objs
+    assert "bed" in objs
+
+
+def test_graph_covers_relevant_objects_requires_all_keywords():
+    mem = GraphEQAMemory(eqa_client=lambda x: "", image_description_client=lambda x: "")
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.1]), ["lamp"])
+    mem._relevant_objects = ["lamp", "bed"]
+    assert not mem._graph_covers_relevant_objects()
+    mem.add_observation(rgb, np.array([1.0, 0.0, 0.1]), ["bed"])
+    assert mem._graph_covers_relevant_objects()
 
 
 def test_dynagraph_maintain_prunes_stale_nodes():

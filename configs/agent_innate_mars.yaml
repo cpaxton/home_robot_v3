@@ -163,3 +163,22 @@ embodied_agent:
     enabled: true
     use_instance_graph: true
     use_sensor_perception: true
+    graph_object_fusion:
+      enabled: true
+      spatial_merge_xy_m: 0.42
+      embedding_min_cosine: 0.62
+      bounds_3d_iou_min: 0.08
+
+# Live Rerun: ``emet run agent --rerun`` to enable; dynagraph/dynamem have Rerun on by default (--no-rerun to disable).
+# See ``src/emet/config/agents/default_rerun.yaml``.
+rerun:
+  mjcf_show_visual_mesh: true
+  mjcf_show_skeleton: false
+  server_memory_limit: "4GB"
+  show_camera_point_clouds: false
+  voxel_map_stride: 2
+  dynagraph_stride: 2
+  mjcf_mesh_stride: 3
+  dynagraph:
+    log_crops: false
+    log_edges: false

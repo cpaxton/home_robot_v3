@@ -97,6 +97,9 @@ def compute_episode_metrics(episode_dir: str | Path) -> dict[str, Any]:
         "localization_mean_err_z_m": mean_z,
         "localization_errors": loc_errors,
     }
+    from emet.memory.graph_eqa.dynagraph_eval import compute_dynagraph_eval
+
+    metrics["unified"] = compute_dynagraph_eval(episode_dir)
     return metrics
 
 

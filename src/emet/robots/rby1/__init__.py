@@ -55,7 +55,6 @@ class Rby1Backend(RobotBackend):
         from emet.controller.generic_zmq_client import GenericZmqClient
 
         opts = dict(kwargs)
-        opts.setdefault("start_immediately", False)
         return GenericZmqClient(robot_spec=self.get_spec(), robot_ip=robot_ip, **opts)
 
     def create_model(self, **kwargs):

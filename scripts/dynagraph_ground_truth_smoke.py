@@ -165,6 +165,11 @@ def _run_gt_smoke(scene: str) -> int:
             if not Path(tmp, "scene_graph_report.txt").is_file():
                 print("FAIL: scene_graph_report.txt missing", file=sys.stderr)
                 return 1
+            if scene in ("default", "table"):
+                report_text = Path(tmp, "scene_graph_report.txt").read_text(encoding="utf-8").lower()
+                if "red" not in report_text or "blue" not in report_text or "table" not in report_text:
+                    print("FAIL: export missing red/blue/table GT labels", file=sys.stderr)
+                    return 1
 
         print(f"PASS: dynagraph ground-truth smoke (scene={scene}, nodes={n_added})", file=sys.stderr)
         return 0

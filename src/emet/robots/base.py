@@ -59,6 +59,8 @@ class RobotSpec:
     """Optional packaged basename under ``emet/config/`` when ``emet run dynamem`` uses the global
     default ``--dynav-config dynav_config.yaml``. Most robots omit this and share ``dynav_config.yaml``.
     """
+    dynav_parameter_overrides: dict[str, Any] = field(default_factory=dict)
+    """Optional ``dynav_config.yaml`` key overrides applied in ``run_dynagraph`` / ``run_dynamem`` after load."""
     planar_base_joint_names: tuple[str, str, str] | None = None
     """If set, MuJoCo nav uses three scalar joints (slide, slide, hinge yaw) as velocity targets instead
     of a ``base_link`` free joint. Slide axes live on the parent body of the first slide (e.g. ``base_root``);

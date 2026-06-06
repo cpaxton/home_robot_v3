@@ -43,6 +43,27 @@ from emet.visualization import urdf_visualizer
 
 logger = Logger(__name__)
 
+# Live Spatial3DView policy (see docs/rerun.md):
+# - ``origin`` MUST be ``world`` so voxels/maps stay fixed while ``world/robot`` moves.
+# - ``contents`` MUST include ``world/**`` (default ``$origin/**`` would hide map layers).
+RERUN_SPATIAL3D_ORIGIN_WORLD = "world"
+RERUN_SPATIAL3D_CONTENTS_WORLD = "world/**"
+# Legacy name kept for imports; do not use as view origin (scene appears to rotate with the base).
+RERUN_SPATIAL3D_ORIGIN_ROBOT = "world/robot"
+
+
+def spatial3d_view_world(name: str = "3D View", **kwargs) -> rrb.Spatial3DView:
+    """Fixed world-frame 3D panel (voxel map, obstacles, graph, robot under ``world/``)."""
+    kwargs.setdefault("origin", RERUN_SPATIAL3D_ORIGIN_WORLD)
+    kwargs.setdefault("contents", RERUN_SPATIAL3D_CONTENTS_WORLD)
+    return rrb.Spatial3DView(name=name, **kwargs)
+
+
+def spatial3d_view_robot(name: str = "3D View", **kwargs) -> rrb.Spatial3DView:
+    """Alias for :func:`spatial3d_view_world` (robot-centric view origin was removed)."""
+    return spatial3d_view_world(name=name, **kwargs)
+
+
 # Canonical Rerun entity paths (use these for consistent logging across live and memory view):
 #   world/point_cloud       Points3D
 #   world/obstacles        Points3D (2D map obstacles)
@@ -53,6 +74,11 @@ logger = Logger(__name__)
 #   world/frames/current   (at each frame time) Transform3D, rgb, depth — scrub "frame" timeline for playback
 #   world/graph/nodes      Points3D (graph nodes)
 #   world/dynagraph/nodes  Points3D (Dynagraph graph nodes)
+#   world/dynagraph/bboxes Boxes3D (object AABBs from bounds_3d / extent_half)
+#   world/dynagraph/crops/<node_id>_<label>  Image (head RGB when node was created)
+#   world/dynagraph/crops_mosaic  Image (grid of node thumbnails)
+#   world/dynagraph/edges  LineStrips3D (near / on / on_floor relations)
+#   world/dynagraph/gallery TextDocument (markdown list + recording:// links to crops)
 #   world/dynagraph/summary TextDocument (tree view)
 #   world/memory/text      TextDocument
 #   world/head_camera      Transform3D (optional); world/head_camera/rgb Image, world/head_camera/depth
@@ -149,6 +175,467 @@ def _rgb_to_uint8(rgb: np.ndarray) -> np.ndarray:
         else:
             arr = arr.clip(0, 255)
     return arr.astype(np.uint8)
+
+
+def _safe_rerun_path_component(text: str, *, max_len: int = 48) -> str:
+    s = (text or "object").strip().replace(" ", "_").replace("/", "_")
+    if len(s) > max_len:
+        s = s[: max_len - 3] + "..."
+    return s or "object"
+
+
+def graph_node_primary_label(node: Any) -> str:
+    """Best human-readable class label on a graph object node (skip ``obj_*`` placeholders)."""
+    labels = getattr(node, "labels", None) or []
+    for lab in labels:
+        s = str(lab).strip()
+        if not s:
+            continue
+        low = s.lower()
+        if low in ("object", "unknown") or s.startswith("obj_"):
+            continue
+        return s
+    if labels:
+        return str(labels[0]).strip()
+    return "object"
+
+
+def format_dynagraph_node_label(node: Any) -> str:
+    """Rerun 3D label: primary label, graph node id, observation id, optional merge count."""
+    if getattr(node, "is_viewpoint", False):
+        obs_id = int(getattr(node, "obs_id", 0))
+        return f"view [#{node.node_id} img {obs_id}]"
+    primary = graph_node_primary_label(node)
+    obs_id = int(getattr(node, "obs_id", 0))
+    sc = int(getattr(node, "support_count", 1))
+    suffix = f" n={sc}" if sc != 1 else ""
+    return f"{primary} [#{node.node_id} img {obs_id}]{suffix}"
+
+
+def _bbox_crop_area_fraction(bbox_xyxy: tuple[int, int, int, int], image_hw: tuple[int, int]) -> float:
+    """Fraction of image pixels inside ``bbox_xyxy`` (x0, y0, x1, y1)."""
+    h, w = int(image_hw[0]), int(image_hw[1])
+    if h <= 0 or w <= 0:
+        return 1.0
+    x0, y0, x1, y1 = (int(bbox_xyxy[0]), int(bbox_xyxy[1]), int(bbox_xyxy[2]), int(bbox_xyxy[3]))
+    bw = max(0, min(x1, w) - max(0, x0))
+    bh = max(0, min(y1, h) - max(0, y0))
+    return float(bw * bh) / float(h * w)
+
+
+def node_has_detection_crop(
+    node: Any,
+    obs_rgb: dict[int, np.ndarray] | None = None,
+    *,
+    max_area_fraction: float = 0.85,
+) -> bool:
+    """True when the node has a YoloE/instance bbox crop (not a full-frame fallback)."""
+    bbox = getattr(node, "bbox_xyxy", None)
+    if bbox is None or len(bbox) != 4:
+        return False
+    if obs_rgb is None:
+        return True
+    rgb = obs_rgb.get(int(getattr(node, "obs_id", 0)))
+    if rgb is None or rgb.ndim < 2:
+        return True
+    return _bbox_crop_area_fraction(tuple(int(x) for x in bbox), rgb.shape[:2]) <= max_area_fraction
+
+
+def dynagraph_crop_basename(node: Any) -> str:
+    """Filesystem-safe crop filename stem (no directory)."""
+    primary = (node.labels[0] if getattr(node, "labels", None) else "object").strip()
+    return f"{int(node.node_id):03d}_{_safe_rerun_path_component(primary)}"
+
+
+def dynagraph_crop_entity_path(node: Any) -> str:
+    """Rerun entity path for a node's observation thumbnail."""
+    return f"world/dynagraph/crops/{dynagraph_crop_basename(node)}"
+
+
+def build_dynagraph_gallery_markdown(
+    nodes: list[Any],
+    *,
+    max_nodes: int = 48,
+    has_crop_images: bool = True,
+) -> str:
+    """
+    Markdown index for the Dynagraph sidebar (TextDocumentView).
+
+    Uses Rerun ``recording://`` links so each row jumps to the crop entity in the viewer.
+    Rerun does not provide a native thumbnail list widget; this is the supported pattern.
+    """
+    if not nodes:
+        return "# Graph nodes\n\n_(empty)_\n"
+    shown = nodes[:max_nodes]
+    omitted = len(nodes) - len(shown)
+    lines = [
+        f"# Graph nodes ({len(nodes)})",
+        "",
+        "Detector crops and graph relations are saved under ``--export`` by default (not streamed live). "
+        "Optional live crops: ``EMET_DYNAGRAPH_RERUN_CROPS=1``; edge lines: ``EMET_DYNAGRAPH_RERUN_EDGES=1``.",
+        "",
+        "| Node | Label | img | xyz (m) |",
+        "| ---: | ----- | --: | ------- |",
+    ]
+    for n in shown:
+        primary = (n.labels[0] if n.labels else "object").strip()
+        xyz = np.asarray(n.xyz, dtype=np.float64).reshape(3)
+        xyz_s = f"({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})"
+        crop = dynagraph_crop_entity_path(n)
+        if has_crop_images and node_has_detection_crop(n):
+            label_cell = f"[{primary}](recording://{crop})"
+        else:
+            label_cell = primary
+        lines.append(
+            f"| {n.node_id} | {label_cell} | {int(n.obs_id)} | {xyz_s} |"
+        )
+    if omitted > 0:
+        lines.append("")
+        lines.append(f"_({omitted} more nodes omitted; see 3D view or export folder.)_")
+    lines.extend(["", "---", ""])
+    for n in shown:
+        primary = (n.labels[0] if n.labels else "object").strip()
+        xyz = np.asarray(n.xyz, dtype=np.float64).reshape(3)
+        crop = dynagraph_crop_entity_path(n)
+        sc = int(getattr(n, "support_count", 1))
+        merge = f" · merged **{sc}×**" if sc != 1 else ""
+        desc = getattr(n, "description", None)
+        lines.append(f"### [{n.node_id}] {primary}{merge}")
+        lines.append(
+            f"**img** {int(n.obs_id)} · **xyz** ({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})"
+        )
+        if has_crop_images and node_has_detection_crop(n):
+            lines.append(f"→ [open crop](recording://{crop}) · [3D nodes](recording://world/dynagraph/nodes)")
+        elif not node_has_detection_crop(n):
+            lines.append("_no detector crop (VLM / semantic node — see 3D view only)_")
+        if desc:
+            lines.append(f"> {str(desc).strip()[:280]}")
+        lines.append("")
+    return "\n".join(lines).strip() + "\n"
+
+
+def build_dynagraph_export_gallery_markdown(
+    nodes: list[Any],
+    *,
+    crop_relpath_by_node_id: dict[int, str],
+    max_nodes: int = 512,
+) -> str:
+    """Markdown index for offline export (relative ``crops/…`` paths, not Rerun recording URLs)."""
+    if not nodes:
+        return "# Graph nodes\n\n_(empty)_\n"
+    shown = nodes[:max_nodes]
+    omitted = len(nodes) - len(shown)
+    lines = [
+        f"# Graph nodes ({len(nodes)})",
+        "",
+        "Crops are under ``dynagraph/crops/``; ``seen_from`` viewpoint links in ``dynagraph/seen_from.json``.",
+        "",
+        "| Node | Label | img | xyz (m) | crop |",
+        "| ---: | ----- | --: | ------- | ---- |",
+    ]
+    for n in shown:
+        primary = (n.labels[0] if n.labels else "object").strip()
+        xyz = np.asarray(n.xyz, dtype=np.float64).reshape(3)
+        xyz_s = f"({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})"
+        rel = crop_relpath_by_node_id.get(int(n.node_id), "")
+        crop_cell = f"[png]({rel})" if rel else "—"
+        lines.append(f"| {n.node_id} | {primary} | {int(n.obs_id)} | {xyz_s} | {crop_cell} |")
+    if omitted > 0:
+        lines.append("")
+        lines.append(f"_({omitted} more nodes omitted.)_")
+    return "\n".join(lines).strip() + "\n"
+
+
+def collect_dynagraph_crop_entries(
+    graph_memory: Any,
+) -> tuple[list[tuple[str, np.ndarray]], dict[int, str]]:
+    """
+    Build mosaic tile list and ``node_id -> dynagraph/crops/<file>.png`` paths for export.
+
+    Returns:
+        ``(mosaic_entries, relpath_by_node_id)`` where each relpath is relative to the export root.
+    """
+    obs_rgb = _obs_rgb_by_id(graph_memory)
+    obj_nodes = [n for n in graph_memory.get_nodes() if not getattr(n, "is_viewpoint", False)]
+    crop_nodes = [n for n in obj_nodes if node_has_detection_crop(n, obs_rgb)]
+    mosaic_entries: list[tuple[str, np.ndarray]] = []
+    relpath_by_node_id: dict[int, str] = {}
+    for n in crop_nodes:
+        rgb = dynagraph_node_rgb_crop(n, obs_rgb)
+        if rgb is None:
+            continue
+        primary = (n.labels[0] if n.labels else "object").strip()
+        cap = f"#{n.node_id} img{n.obs_id} {primary}"
+        rel = f"dynagraph/crops/{dynagraph_crop_basename(n)}.png"
+        relpath_by_node_id[int(n.node_id)] = rel
+        mosaic_entries.append((cap, rgb))
+    return mosaic_entries, relpath_by_node_id
+
+
+def crop_rgb_bbox_xyxy(
+    rgb: np.ndarray,
+    bbox_xyxy: tuple[int, int, int, int],
+    *,
+    padding_frac: float = 0.12,
+) -> np.ndarray:
+    """Crop ``rgb`` to ``bbox_xyxy`` (x0, y0, x1, y1) with fractional padding, clipped to image bounds."""
+    img = _rgb_to_uint8(rgb)
+    h, w = img.shape[:2]
+    x0, y0, x1, y1 = (int(bbox_xyxy[0]), int(bbox_xyxy[1]), int(bbox_xyxy[2]), int(bbox_xyxy[3]))
+    x0 = max(0, min(x0, w - 1))
+    y0 = max(0, min(y0, h - 1))
+    x1 = max(x0 + 1, min(x1, w))
+    y1 = max(y0 + 1, min(y1, h))
+    bw = x1 - x0
+    bh = y1 - y0
+    pad_x = int(bw * padding_frac)
+    pad_y = int(bh * padding_frac)
+    x0 = max(0, x0 - pad_x)
+    y0 = max(0, y0 - pad_y)
+    x1 = min(w, x1 + pad_x)
+    y1 = min(h, y1 + pad_y)
+    if x1 <= x0 or y1 <= y0:
+        return img
+    return img[y0:y1, x0:x1]
+
+
+def dynagraph_node_rgb_crop(node: Any, obs_rgb: dict[int, np.ndarray]) -> np.ndarray | None:
+    """Instance-detector crop for a graph node, or ``None`` when no usable bbox is stored."""
+    if not node_has_detection_crop(node, obs_rgb):
+        return None
+    rgb = obs_rgb.get(int(getattr(node, "obs_id", 0)))
+    if rgb is None:
+        return None
+    bbox = getattr(node, "bbox_xyxy", None)
+    assert bbox is not None and len(bbox) == 4
+    return crop_rgb_bbox_xyxy(rgb, tuple(int(x) for x in bbox))
+
+
+def _thumbnail_rgb(rgb: np.ndarray, max_side: int = 384) -> np.ndarray:
+    """Downscale RGB for Rerun panels (full head frames are large)."""
+    import cv2
+
+    img = _rgb_to_uint8(rgb)
+    h, w = img.shape[:2]
+    if max(h, w) <= max_side:
+        return img
+    scale = max_side / float(max(h, w))
+    nw = max(1, int(w * scale))
+    nh = max(1, int(h * scale))
+    return cv2.resize(img, (nw, nh), interpolation=cv2.INTER_AREA)
+
+
+def _mosaic_labeled_images(
+    entries: list[tuple[str, np.ndarray]],
+    *,
+    thumb_max: int = 200,
+    cols: int = 4,
+    pad: int = 6,
+    header_h: int = 22,
+) -> np.ndarray | None:
+    """Tile thumbnails with a short text header per cell (node id + label)."""
+    import cv2
+
+    if not entries:
+        return None
+    thumbs: list[tuple[str, np.ndarray]] = []
+    for caption, rgb in entries:
+        thumb = _thumbnail_rgb(rgb, max_side=thumb_max)
+        h, w = thumb.shape[:2]
+        canvas = np.zeros((h + header_h, w, 3), dtype=np.uint8)
+        canvas[header_h:, :] = thumb
+        cv2.putText(
+            canvas,
+            caption[:64],
+            (4, 16),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (255, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
+        thumbs.append((caption, canvas))
+    cell_h = max(t[1].shape[0] for t in thumbs)
+    cell_w = max(t[1].shape[1] for t in thumbs)
+    n = len(thumbs)
+    ncol = min(cols, n)
+    nrow = (n + ncol - 1) // ncol
+    out_h = nrow * cell_h + (nrow + 1) * pad
+    out_w = ncol * cell_w + (ncol + 1) * pad
+    mosaic = np.zeros((out_h, out_w, 3), dtype=np.uint8)
+    for i, (_cap, tile) in enumerate(thumbs):
+        r, c = divmod(i, ncol)
+        y0 = pad + r * (cell_h + pad)
+        x0 = pad + c * (cell_w + pad)
+        th, tw = tile.shape[:2]
+        mosaic[y0 : y0 + th, x0 : x0 + tw] = tile
+    return mosaic
+
+
+def _subsample_rows(xyz: np.ndarray, max_points: int) -> np.ndarray:
+    """Uniform downsample N×3 world points (for 2D map layers, etc.)."""
+    n = int(xyz.shape[0])
+    if max_points <= 0 or n <= max_points:
+        return xyz
+    idx = np.linspace(0, n - 1, max_points, dtype=np.int64)
+    return xyz[idx]
+
+
+def _subsample_point_rows(
+    xyz: np.ndarray,
+    rgb: np.ndarray,
+    max_points: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    n = int(xyz.shape[0])
+    if max_points <= 0 or n <= max_points:
+        return xyz, rgb
+    idx = np.linspace(0, n - 1, max_points, dtype=np.int64)
+    return xyz[idx], rgb[idx]
+
+
+def _primary_class_label(node: Any) -> str:
+    """Detector / VLM class string for a graph node (first label token)."""
+    labels = getattr(node, "labels", None) or []
+    if labels:
+        return str(labels[0]).strip().split(",")[0].strip().lower()
+    return f"node_{getattr(node, 'node_id', '?')}"
+
+
+def _color_for_graph_label(label: str) -> list[int]:
+    """Stable categorical RGB per semantic class (D3 palette, same family as OVMM/detection viz)."""
+    from emet.perception.constants import d3_40_colors_rgb
+
+    key = (label or "object").strip().split(",")[0].strip().lower()
+    if not key or key.startswith("node_"):
+        key = "object"
+    n = len(d3_40_colors_rgb)
+    if n < 1:
+        return [200, 200, 200]
+    idx = (hash(key) & 0x7FFFFFFF) % n
+    rgb = d3_40_colors_rgb[idx]
+    return [int(rgb[0]), int(rgb[1]), int(rgb[2])]
+
+
+def _dynagraph_node_color(node: Any, obs_rgb: dict[int, np.ndarray] | None = None) -> list[int]:
+    """Display color for a dynagraph object node: class palette, optional crop mean blend."""
+    cls = _primary_class_label(node)
+    base = _color_for_graph_label(cls)
+    if obs_rgb is None or getattr(node, "is_viewpoint", False):
+        return base
+    crop = dynagraph_node_rgb_crop(node, obs_rgb)
+    if crop is None or crop.size == 0:
+        return base
+    mean = np.mean(_rgb_to_uint8(crop).reshape(-1, 3), axis=0)
+    # Slight blend so spheres read as both class-colored and object-tinted.
+    mix = 0.35
+    out = (1.0 - mix) * np.asarray(base, dtype=np.float64) + mix * mean.astype(np.float64)
+    return [int(np.clip(out[0], 0, 255)), int(np.clip(out[1], 0, 255)), int(np.clip(out[2], 0, 255))]
+
+
+def _dynagraph_node_box(
+    node: Any,
+    obs_rgb: dict[int, np.ndarray] | None = None,
+) -> tuple[np.ndarray, list[float], str, list[int]] | None:
+    """World-space center, half_sizes, label, color for a graph object node."""
+    b3 = getattr(node, "bounds_3d", None)
+    if isinstance(b3, dict) and "min" in b3 and "max" in b3:
+        mins = np.asarray(b3["min"], dtype=np.float64).reshape(3)
+        maxs = np.asarray(b3["max"], dtype=np.float64).reshape(3)
+        center = (mins + maxs) / 2.0
+        half = ((maxs - mins) / 2.0).tolist()
+    else:
+        eh = getattr(node, "extent_half", None)
+        if eh is None:
+            return None
+        eh_arr = np.asarray(eh, dtype=np.float64).reshape(3)
+        if not np.all(eh_arr > 1e-4):
+            return None
+        center = np.asarray(node.xyz, dtype=np.float64).reshape(3)
+        half = eh_arr.tolist()
+    color = _dynagraph_node_color(node, obs_rgb)
+    label = format_dynagraph_node_label(node)
+    return center, half, label, color
+
+
+def _log_graph_eqa_edges(
+    nodes: list[Any],
+    edges: list[tuple[int, int, str]],
+    *,
+    entity: str = "world/dynagraph/edges",
+    observations_by_id: dict[int, Any] | None = None,
+) -> None:
+    """Log spatial graph edges as 3D line strips (visible under origin ``world``)."""
+    if not nodes or not edges:
+        rr.log(entity, rr.Clear(recursive=True))
+        return
+    node_by_id = {int(n.node_id): n for n in nodes}
+    relation_colors = {
+        "near": [200, 200, 200],
+        "on": [0, 200, 100],
+        "on_floor": [100, 100, 255],
+        "seen_from": [255, 165, 0],
+    }
+    line_strips: list[list[list[float]]] = []
+    colors: list[list[int]] = []
+    labels: list[str] = []
+    for a, b, rel in edges:
+        na = node_by_id.get(int(a))
+        if na is None:
+            continue
+        if rel == "seen_from":
+            nb = node_by_id.get(int(b))
+            if nb is None:
+                continue
+            # Viewpoint → object (where we stood → what we saw)
+            src = np.asarray(nb.xyz, dtype=np.float64).reshape(3).tolist()
+            tgt = np.asarray(na.xyz, dtype=np.float64).reshape(3).tolist()
+            src_lbl = format_dynagraph_node_label(nb)
+            tgt_lbl = (na.labels[0] if na.labels else str(a)).strip()
+            rel_key = "seen_from"
+        elif int(b) == -1:
+            src = np.asarray(na.xyz, dtype=np.float64).reshape(3).tolist()
+            tgt = [src[0], src[1], 0.0]
+            tgt_lbl = "floor"
+            rel_key = "on_floor" if rel == "on" else rel
+            src_lbl = (na.labels[0] if na.labels else str(a)).strip()
+        else:
+            nb = node_by_id.get(int(b))
+            if nb is None:
+                continue
+            src = np.asarray(na.xyz, dtype=np.float64).reshape(3).tolist()
+            tgt = np.asarray(nb.xyz, dtype=np.float64).reshape(3).tolist()
+            tgt_lbl = (nb.labels[0] if nb.labels else str(b)).strip()
+            rel_key = rel
+            src_lbl = (na.labels[0] if na.labels else str(a)).strip()
+        line_strips.append([src, tgt])
+        colors.append(relation_colors.get(rel_key, [180, 180, 180]))
+        labels.append(f"{src_lbl} --{rel}--> {tgt_lbl}")
+    if line_strips:
+        log_to_rerun(
+            entity,
+            rr.LineStrips3D(
+                line_strips,
+                colors=colors,
+                radii=0.012,
+                labels=labels,
+            ),
+        )
+    else:
+        rr.log(entity, rr.Clear(recursive=True))
+
+
+def _obs_rgb_by_id(graph_memory: Any) -> dict[int, np.ndarray]:
+    """Map graph ``obs_id`` → RGB array from in-memory observations."""
+    out: dict[int, np.ndarray] = {}
+    get_obs = getattr(graph_memory, "get_observations", None)
+    if get_obs is None:
+        return out
+    for obs in get_obs():
+        rgb = getattr(obs, "rgb", None)
+        if rgb is None:
+            continue
+        out[int(obs.obs_id)] = np.asarray(rgb)
+    return out
 
 
 def log_to_rerun(topic_name, data, **kwargs):
@@ -313,7 +800,7 @@ class RerunVisualizer:
 
     enabled = True
     camera_point_radius = 0.01
-    max_displayed_points_per_camera: int = 10000
+    max_displayed_points_per_camera: int = 4096
 
     def __init__(
         self,
@@ -324,7 +811,7 @@ class RerunVisualizer:
         server_memory_limit: str = "4GB",
         collapse_panels: bool = True,
         show_cameras_in_3d_view: bool = False,
-        show_camera_point_clouds: bool = True,
+        show_camera_point_clouds: bool = False,
         output_path=None,
         *,
         memory_view: bool = False,
@@ -333,6 +820,15 @@ class RerunVisualizer:
         rerun_native_viewer: bool = False,
         mjcf_show_visual_mesh: bool = True,
         mjcf_show_skeleton: bool = False,
+        dynagraph_rerun_crops: bool = False,
+        dynagraph_rerun_edges: bool = False,
+        dynagraph_rerun_summary: bool = False,
+        dynagraph_rerun_gallery: bool = False,
+        max_displayed_points_per_camera: int = 4096,
+        max_map_2d_points: int = 25000,
+        voxel_map_stride: int = 2,
+        dynagraph_stride: int = 2,
+        mjcf_mesh_stride: int = 3,
     ):
         """Rerun visualizer class
         Args:
@@ -340,14 +836,23 @@ class RerunVisualizer:
             spawn_gui (bool): If True, native Rerun desktop viewer (TCP). Default False (browser via ``rr.serve``).
             open_browser (bool): When using the web server, open a browser tab if a display exists.
             headless (bool): If True, no native viewer and no auto-open browser; use the :9090 URL manually.
-            rerun_native_viewer (bool): Same as env ``RERUN_NATIVE_VIEWER=1``: use the native app, not the browser.
+            rerun_native_viewer (bool): Native app instead of browser (also ``rerun.native_viewer`` in YAML or ``RERUN_NATIVE_VIEWER=1``).
             server_memory_limit (str): Server memory limit E.g. 2GB or 20%
             collapse_panels (bool): Set to false to have customizable rerun panels
             mjcf_show_visual_mesh (bool): For MJCF robots, log triangle meshes each ``step`` (re-uploads vertices;
-                can be heavy). Paths are under ``world/robot/mjcf_visual/…`` in nav/map world (not parented under
-                ``world/robot`` transform). Set False to disable.
+                can be heavy). Meshes are **base_link-relative** under ``world/robot/mjcf_visual/…``; ``world/robot``
+                uses GPS + ``navigation_origin_xyt`` (same frame as the voxel map). Set False to disable.
             mjcf_show_skeleton (bool): For MJCF robots, log per-body axis frames under ``world/robot/mjcf``. Default
                 False when using solid meshes; set True for kinematic debugging.
+            dynagraph_rerun_crops (bool): Log per-node crop images and the RGB mosaic to Rerun (heavy). Default
+                False; crops are written under ``--export`` instead. Enable via ``rerun.dynagraph.log_crops`` in
+                agent/dynav YAML or ``EMET_DYNAGRAPH_RERUN_CROPS=1``.
+            dynagraph_rerun_edges (bool): Log spatial graph edges (``near`` / ``on`` / ``seen_from``) as 3D line
+                strips. Default False; edges remain in memory and ``graph.json`` on export. Enable via
+                ``rerun.dynagraph.log_edges`` in YAML or ``EMET_DYNAGRAPH_RERUN_EDGES=1``.
+            show_camera_point_clouds (bool): Log dense ``world/head_camera/points`` each ZMQ step (heavy).
+                Default False; use ``world/point_cloud`` from the voxel map instead.
+            voxel_map_stride / dynagraph_stride / mjcf_mesh_stride: Log those layers every N updates (≥1).
         """
         # RERUN_HEADLESS=1 forces no native viewer and no auto-open browser (web server only).
         if os.environ.get("RERUN_HEADLESS", "").lower() in ("1", "true", "yes"):
@@ -402,10 +907,10 @@ class RerunVisualizer:
             )
             # Log URL at INFO so it appears even when stderr is filtered; flush for immediate visibility.
             local_url = "http://127.0.0.1:9090?url=ws://127.0.0.1:9877"
-            logger.info("Rerun web viewer: %s", local_url)
+            logger.info(f"Rerun web viewer: {local_url}")
             if os.environ.get("RERUN_BIND_ALL", "").lower() in ("1", "true", "yes"):
                 hn = socket.gethostname()
-                logger.info("Rerun web viewer (LAN/remote): http://%s:9090?url=ws://%s:9877", hn, hn)
+                logger.info(f"Rerun web viewer (LAN/remote): http://{hn}:9090?url=ws://{hn}:9877")
         else:
             logger.info(
                 "Rerun: native desktop viewer (TCP). For the web UI omit --rerun-native / RERUN_NATIVE_VIEWER "
@@ -414,7 +919,15 @@ class RerunVisualizer:
 
         self.display_robot_mesh = display_robot_mesh
         self.show_cameras_in_3d_view = show_cameras_in_3d_view
-        self.show_camera_point_clouds = show_camera_point_clouds
+        self.show_camera_point_clouds = show_camera_point_clouds or memory_view
+        self.max_displayed_points_per_camera = max(0, int(max_displayed_points_per_camera))
+        self._voxel_map_stride = max(1, int(voxel_map_stride))
+        self._dynagraph_stride = max(1, int(dynagraph_stride))
+        self._mjcf_mesh_stride = max(1, int(mjcf_mesh_stride))
+        self._voxel_map_tick = 0
+        self._dynagraph_tick = 0
+        self._mjcf_mesh_tick = 0
+        self._zmq_step_tick = 0
 
         self.mjcf_skeleton = None
         self.mjcf_mesh_logger = None
@@ -434,6 +947,11 @@ class RerunVisualizer:
                     from emet.visualization.mjcf_rerun_robot import MjcfVisualMeshLogger
 
                     self.mjcf_mesh_logger = MjcfVisualMeshLogger(mjcf_path, joint_names, dof, base_link)
+                    rr.log(
+                        "world/robot/mjcf_visual",
+                        rr.Transform3D(translation=[0.0, 0.0, 0.0], mat3x3=np.eye(3)),
+                        static=True,
+                    )
                 except Exception as e:
                     logger.warning("MJCF Rerun visual mesh disabled (%s).", e)
         if self.mjcf_skeleton is None and display_robot_mesh and mjcf_robot is None:
@@ -463,6 +981,21 @@ class RerunVisualizer:
         self.step_delay_s = 0.3
         self.collapse_panels = collapse_panels
         self._memory_view = memory_view
+        self._dynagraph_rerun_crops = bool(dynagraph_rerun_crops) or (
+            os.environ.get("EMET_DYNAGRAPH_RERUN_CROPS", "").strip().lower() in ("1", "true", "yes", "on")
+        )
+        self._dynagraph_rerun_edges = bool(dynagraph_rerun_edges) or (
+            os.environ.get("EMET_DYNAGRAPH_RERUN_EDGES", "").strip().lower() in ("1", "true", "yes", "on")
+        )
+        self._dynagraph_rerun_summary = bool(dynagraph_rerun_summary)
+        self._dynagraph_rerun_gallery = bool(dynagraph_rerun_gallery)
+        self._max_map_2d_points = max(1000, int(max_map_2d_points))
+        self._log_head_depth_live = os.environ.get("EMET_RERUN_HEAD_DEPTH", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
         if memory_view:
             self.setup_memory_blueprint(collapse_panels, num_frames)
         else:
@@ -506,10 +1039,10 @@ class RerunVisualizer:
                                     and shows the simplified time panel
         """
         main = rrb.Horizontal(
-            rrb.Spatial3DView(name="3D View", origin="world"),
+            spatial3d_view_world(),
             rrb.Vertical(
-                rrb.Spatial2DView(name="head_rgb", origin="world/head_camera"),
-                rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera"),
+                rrb.Spatial2DView(name="head_rgb", origin="world/head_camera/rgb"),
+                rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera/rgb"),
                 rrb.TextDocumentView(name="memory/text", origin="world/memory/text"),
             ),
             column_shares=[3, 1],
@@ -519,6 +1052,14 @@ class RerunVisualizer:
             collapse_panels=collapse_panels,
         )
         rr.send_blueprint(my_blueprint)
+
+    def _stride_tick(self, counter_name: str, stride: int) -> bool:
+        """Return True when this channel should log on the current tick (always on stride 1)."""
+        if stride <= 1:
+            return True
+        tick = getattr(self, counter_name, 0) + 1
+        setattr(self, counter_name, tick)
+        return (tick - 1) % stride == 0
 
     def clear_identity(self, identity_name: str):
         """Clear existing rerun identity.
@@ -553,6 +1094,8 @@ class RerunVisualizer:
         """
         if not self._memory_view:
             rr.set_time_seconds("realtime", time.time())
+        if len(text) > 48_000:
+            text = text[:48_000] + "\n\n… _(truncated for Rerun)_\n"
         rr.log(identity_name, rr.TextDocument(text, media_type=rr.MediaType.MARKDOWN))
 
     def log_arrow3D(
@@ -594,11 +1137,20 @@ class RerunVisualizer:
             radii (float): size of the arrows
         """
         # rr.init("Stretch_robot", spawn=(not self.open_browser))
+        pts = np.asarray(points, dtype=np.float64)
+        if pts.ndim != 2 or pts.shape[1] != 3:
+            pts = pts.reshape(-1, 3)
+        cols = colors
+        if cols is not None:
+            cols = np.asarray(cols)
+            cap = self.max_displayed_points_per_camera
+            if cap > 0 and pts.shape[0] > cap:
+                pts, cols = _subsample_point_rows(pts, cols, cap)
         log_to_rerun(
             identity_name,
             rr.Points3D(
-                points,
-                colors=colors,
+                pts,
+                colors=cols,
                 radii=radii,
             ),
         )
@@ -627,51 +1179,133 @@ class RerunVisualizer:
         )
 
     def log_dynagraph_state(self, graph_memory: Any, *, ground_truth_mode: bool = False) -> None:
-        """Log ``GraphEQAMemory`` nodes and tree summary under ``world/dynagraph/``."""
+        """Log ``GraphEQAMemory`` nodes, observation images, and tree summary under ``world/dynagraph/``."""
         _ = ground_truth_mode
         if getattr(self, "_memory_view", False):
             return
+        if not self._stride_tick("_dynagraph_tick", self._dynagraph_stride):
+            return
         rr.set_time_seconds("realtime", time.time())
-        log_to_rerun(
-            "world/dynagraph/summary",
-            rr.TextDocument(graph_memory.print_memory(), media_type=rr.MediaType.MARKDOWN),
-        )
         nodes = graph_memory.get_nodes()
+        obs_rgb = _obs_rgb_by_id(graph_memory)
+        if self._dynagraph_rerun_summary:
+            summary = graph_memory.print_memory()
+            if len(summary) > 64_000:
+                summary = summary[:64_000] + "\n\n… _(truncated for Rerun)_"
+            log_to_rerun(
+                "world/dynagraph/summary",
+                rr.TextDocument(summary, media_type=rr.MediaType.MARKDOWN),
+            )
+        else:
+            self.clear_identity("world/dynagraph/summary")
+        self.clear_identity("world/dynagraph/crops")
         if not nodes:
             self.clear_identity("world/dynagraph/nodes")
             self.clear_identity("world/dynagraph/bboxes")
+            self.clear_identity("world/dynagraph/viewpoints")
+            self.clear_identity("world/dynagraph/edges")
+            self.clear_identity("world/dynagraph/crops_mosaic")
+            if self._dynagraph_rerun_gallery:
+                log_to_rerun(
+                    "world/dynagraph/gallery",
+                    rr.TextDocument("# Graph nodes\n\n_(empty)_\n", media_type=rr.MediaType.MARKDOWN),
+                )
+            else:
+                self.clear_identity("world/dynagraph/gallery")
             return
-        xyz = np.array([n.xyz for n in nodes], dtype=np.float64)
-        labels: list[str] = []
-        box_centers: list[np.ndarray] = []
-        box_half: list[list[float]] = []
-        box_labels: list[str] = []
-        box_colors: list[np.ndarray] = []
-        for n in nodes:
-            lb = ", ".join(n.labels) if n.labels else str(n.node_id)
-            sc = int(getattr(n, "support_count", 1))
-            if sc != 1:
-                lb = f"{lb} (x{sc})"
-            labels.append(lb)
-            ext = getattr(n, "extent_half", None)
-            if ext is not None:
-                half = np.asarray(ext, dtype=np.float64).reshape(3)
-                if float(np.max(half)) > 1e-6:
-                    box_centers.append(np.asarray(n.xyz, dtype=np.float64).reshape(3))
-                    box_half.append([float(half[0]), float(half[1]), float(half[2])])
-                    box_labels.append(lb)
-                    box_colors.append(np.array([100, 180, 255], dtype=np.uint8))
-        log_to_rerun(
-            "world/dynagraph/nodes",
-            rr.Points3D(positions=xyz, radii=0.06, labels=labels),
-        )
-        self._log_dynagraph_boxes(
-            centers_xyz=box_centers,
-            half_sizes=box_half,
-            labels=box_labels,
-            colors=box_colors,
-            entity="world/dynagraph/bboxes",
-        )
+        obj_nodes = [n for n in nodes if not getattr(n, "is_viewpoint", False)]
+        vp_nodes = [n for n in nodes if getattr(n, "is_viewpoint", False)]
+        if obj_nodes:
+            xyz = np.array([n.xyz for n in obj_nodes], dtype=np.float64)
+            labels = [format_dynagraph_node_label(n) for n in obj_nodes]
+            node_colors = [_dynagraph_node_color(n, obs_rgb) for n in obj_nodes]
+            log_to_rerun(
+                "world/dynagraph/nodes",
+                rr.Points3D(positions=xyz, radii=0.08, labels=labels, colors=node_colors),
+            )
+            box_centers: list = []
+            box_half: list[list[float]] = []
+            box_labels: list[str] = []
+            box_colors: list[list[int]] = []
+            for n in obj_nodes:
+                parsed = _dynagraph_node_box(n, obs_rgb)
+                if parsed is None:
+                    continue
+                center, half, blabel, bcolor = parsed
+                box_centers.append(rr.components.PoseTranslation3D(center))
+                box_half.append(half)
+                box_labels.append(blabel)
+                box_colors.append(bcolor)
+            if box_centers:
+                log_to_rerun(
+                    "world/dynagraph/bboxes",
+                    rr.Boxes3D(
+                        half_sizes=box_half,
+                        centers=box_centers,
+                        labels=box_labels,
+                        colors=box_colors,
+                        radii=0.01,
+                    ),
+                )
+            else:
+                self.clear_identity("world/dynagraph/bboxes")
+        else:
+            self.clear_identity("world/dynagraph/nodes")
+            self.clear_identity("world/dynagraph/bboxes")
+        if vp_nodes:
+            vxyz = np.array([n.xyz for n in vp_nodes], dtype=np.float64)
+            vlabels = [format_dynagraph_node_label(n) for n in vp_nodes]
+            log_to_rerun(
+                "world/dynagraph/viewpoints",
+                rr.Points3D(
+                    positions=vxyz,
+                    radii=0.06,
+                    labels=vlabels,
+                    colors=[[255, 165, 0]] * len(vp_nodes),
+                ),
+            )
+        else:
+            self.clear_identity("world/dynagraph/viewpoints")
+        if self._dynagraph_rerun_edges:
+            get_edges = getattr(graph_memory, "get_edges", None)
+            edges = list(get_edges()) if get_edges is not None else []
+            obs_by_id = {int(o.obs_id): o for o in graph_memory.get_observations()}
+            _log_graph_eqa_edges(nodes, edges, observations_by_id=obs_by_id)
+        else:
+            self.clear_identity("world/dynagraph/edges")
+        crop_nodes = [n for n in obj_nodes if node_has_detection_crop(n, obs_rgb)]
+        mosaic_entries: list[tuple[str, np.ndarray]] = []
+        if self._dynagraph_rerun_crops:
+            for n in crop_nodes:
+                rgb = dynagraph_node_rgb_crop(n, obs_rgb)
+                if rgb is None:
+                    continue
+                primary = (n.labels[0] if n.labels else "object").strip()
+                cap = f"#{n.node_id} img{n.obs_id} {primary}"
+                entity = dynagraph_crop_entity_path(n)
+                log_to_rerun(entity, rr.Image(_thumbnail_rgb(rgb)))
+                mosaic_entries.append((cap, rgb))
+            mosaic = _mosaic_labeled_images(mosaic_entries)
+            if mosaic is not None:
+                log_to_rerun("world/dynagraph/crops_mosaic", rr.Image(mosaic))
+            else:
+                self.clear_identity("world/dynagraph/crops_mosaic")
+        else:
+            self.clear_identity("world/dynagraph/crops_mosaic")
+        if self._dynagraph_rerun_gallery:
+            gallery_md = build_dynagraph_gallery_markdown(
+                obj_nodes,
+                max_nodes=16,
+                has_crop_images=self._dynagraph_rerun_crops and bool(mosaic_entries),
+            )
+            if len(gallery_md) > 48_000:
+                gallery_md = gallery_md[:48_000] + "\n\n… _(truncated)_\n"
+            log_to_rerun(
+                "world/dynagraph/gallery",
+                rr.TextDocument(gallery_md, media_type=rr.MediaType.MARKDOWN),
+            )
+        else:
+            self.clear_identity("world/dynagraph/gallery")
 
     def log_dynagraph_ground_truth(
         self,
@@ -784,18 +1418,28 @@ class RerunVisualizer:
             if head_xyz is not None:
                 head_xyz = head_xyz.reshape(-1, 3)
                 head_rgb = rgb.reshape(-1, 3)
+                head_xyz, head_rgb = _subsample_point_rows(
+                    head_xyz,
+                    head_rgb,
+                    self.max_displayed_points_per_camera,
+                )
                 log_to_rerun(
                     "world/head_camera/points",
                     rr.Points3D(
                         positions=head_xyz,
-                        radii=np.ones(head_xyz.shape[:2]) * self.camera_point_radius,
+                        radii=np.ones(head_xyz.shape[0]) * self.camera_point_radius,
                         colors=np.int64(head_rgb),
                     ),
                 )
         else:
-            dvis = cam.depth if cam.depth is not None else obs.depth
-            if dvis is not None:
-                log_to_rerun("world/head_camera/depth", rr.depthimage(dvis))
+            # Depth is not shown in the default ``head_rgb`` panel (origin ``world/head_camera/rgb``).
+            # Skip live depth logging unless explicitly enabled (avoids parent-entity confusion in Rerun).
+            if getattr(self, "_log_head_depth_live", False):
+                dvis = cam.depth if cam.depth is not None else obs.depth
+                if dvis is not None:
+                    log_to_rerun("world/head_camera/depth", rr.DepthImage(np.asarray(dvis, dtype=np.float32)))
+            else:
+                self.clear_identity("world/head_camera/depth")
 
         if self.show_cameras_in_3d_view and getattr(obs, "camera_pose", None) is not None:
             rot, trans = decompose_homogeneous_matrix(obs.camera_pose)
@@ -810,15 +1454,19 @@ class RerunVisualizer:
             )
 
     def log_robot_xyt(self, obs: Observations):
-        """Log robot base pose in **MuJoCo / map world** when ``navigation_origin_xyt`` is in ``emet_session``.
+        """Log ``world/robot`` from ``gps``/``compass`` (+ ``navigation_origin_xyt`` when present).
 
-        Otherwise uses raw ``gps``/``compass`` (episode-relative on sim servers, or client-local otherwise).
+        MJCF visual meshes are logged base-relative under ``world/robot/mjcf_visual/`` so they compose with this
+        transform (nav/map frame). Do not override with standalone-MJCF FK here—that moves the robot frame to the
+        mesh instead of aligning the mesh to the map.
         """
         xy = np.asarray(obs["gps"], dtype=float).reshape(-1)[:2]
         comp = np.asarray(obs["compass"], dtype=float).ravel()
         theta = float(comp[0]) if comp.size else 0.0
         sess = read_emet_session(obs)
-        wxyt = nav_xyt_to_world_xyt(np.array([float(xy[0]), float(xy[1]), theta], dtype=np.float64), sess)
+        wxyt = nav_xyt_to_world_xyt(
+            np.array([float(xy[0]), float(xy[1]), theta], dtype=np.float64), sess
+        )
         xy_w = np.asarray(wxyt[:2], dtype=float).reshape(-1)
         theta_w = float(wxyt[2])
         # Live streaming: static=True pins the entity to a single value in the viewer timeline.
@@ -882,8 +1530,8 @@ class RerunVisualizer:
             ee_rgb = servo.ee_rgb.reshape(-1, 3)
             # Remove points below z = 0
             # and where distance from camera > 2 meters
-            idx_depth = servo.ee_depth.reshape(-1) < 2
-            idx_z = np.where(ee_xyz[:, 2] > 0)
+            idx_depth = np.flatnonzero(servo.ee_depth.reshape(-1) < 2)
+            idx_z = np.flatnonzero(ee_xyz[:, 2] > 0)
             idx = np.intersect1d(idx_depth, idx_z)
             ee_xyz = ee_xyz[idx]
             ee_rgb = ee_rgb[idx]
@@ -896,12 +1544,14 @@ class RerunVisualizer:
                 "world/ee_camera/points",
                 rr.Points3D(
                     positions=ee_xyz,
-                    radii=np.ones(ee_xyz.shape[:2]) * self.camera_point_radius,
+                    radii=np.ones(ee_xyz.shape[0]) * self.camera_point_radius,
                     colors=np.int64(ee_rgb),
                 ),
             )
+        elif getattr(self, "_log_head_depth_live", False):
+            log_to_rerun("world/ee_camera/depth", rr.DepthImage(np.asarray(servo.ee_depth, dtype=np.float32)))
         else:
-            log_to_rerun("world/ee_camera/depth", rr.depthimage(servo.ee_depth))
+            self.clear_identity("world/ee_camera/depth")
 
         if self.show_cameras_in_3d_view:
             rot, trans = decompose_homogeneous_matrix(servo.ee_camera_pose)
@@ -968,6 +1618,11 @@ class RerunVisualizer:
                 rgb = np.ones((xyz.shape[0], 3), dtype=np.uint8) * 128
             else:
                 rgb = _rgb_to_uint8(rgb)
+            cap = getattr(self, "max_displayed_points_per_camera", 4096)
+            if cap > 0 and xyz.shape[0] > cap:
+                idx = np.linspace(0, xyz.shape[0] - 1, cap, dtype=np.int64)
+                xyz = xyz[idx]
+                rgb = rgb[idx]
             n = xyz.shape[0]
             log_to_rerun(
                 "world/point_cloud",
@@ -988,6 +1643,8 @@ class RerunVisualizer:
                 grid_origin = grid_origin.cpu().numpy()
             obs_points = np.array(occupancy_map_to_3d_points(obstacles_2d, grid_origin, grid_resolution))
             obs_points[:, 2] += 0.01
+            cap = getattr(self, "_max_map_2d_points", 25000)
+            obs_points = _subsample_rows(obs_points, cap)
             n_obs = obs_points.shape[0]
             rr.log(
                 "world/obstacles",
@@ -1003,6 +1660,8 @@ class RerunVisualizer:
                 grid_origin = grid_origin.cpu().numpy()
             explored_points = np.array(occupancy_map_to_3d_points(explored_2d, grid_origin, grid_resolution))
             explored_points[:, 2] -= 0.01
+            cap = getattr(self, "_max_map_2d_points", 25000)
+            explored_points = _subsample_rows(explored_points, cap)
             n_exp = explored_points.shape[0]
             rr.log(
                 "world/explored",
@@ -1035,11 +1694,24 @@ class RerunVisualizer:
             nodes = state.graph.nodes
             xyz = np.array([n.xyz for n in nodes], dtype=np.float64)
             labels = [", ".join(n.labels) if n.labels else str(n.node_id) for n in nodes]
+            node_colors = [
+                _color_for_graph_label(n.labels[0] if n.labels else str(n.node_id)) for n in nodes
+            ]
             rr.log(
                 "world/graph/nodes",
-                rr.Points3D(positions=xyz, radii=0.05, labels=labels),
+                rr.Points3D(positions=xyz, radii=0.08, labels=labels, colors=node_colors),
                 **log_kw,
             )
+            if state.graph.edges:
+                class _NodeAdapter:
+                    def __init__(self, nv):
+                        self.node_id = nv.node_id
+                        self.labels = nv.labels
+                        self.xyz = nv.xyz
+
+                adapted = [_NodeAdapter(n) for n in nodes]
+                edge_tuples = [(e.id1, e.id2, e.relation) for e in state.graph.edges]
+                _log_graph_eqa_edges(adapted, edge_tuples, entity="world/graph/edges")
 
         parts = []
         if state.text_descriptions:
@@ -1176,6 +1848,8 @@ class RerunVisualizer:
         Also logs a top-down RGB to ``world/map_snapshot/topdown`` (same path as
         ``send_map_snapshot``) so the blueprint ``map_topdown`` view stays live.
         """
+        if not self._stride_tick("_voxel_map_tick", self._voxel_map_stride):
+            return
         rr.set_time_seconds("realtime", time.time())
         self.log_topdown_map_snapshot(space.voxel_map, robot_base_xy)
 
@@ -1197,6 +1871,11 @@ class RerunVisualizer:
             points = points.cpu().numpy()
         if hasattr(rgb, "cpu"):
             rgb = rgb.cpu().numpy()
+        cap = self.max_displayed_points_per_camera
+        if cap > 0 and points.shape[0] > cap:
+            idx = np.linspace(0, points.shape[0] - 1, cap, dtype=np.int64)
+            points = points[idx]
+            rgb = rgb[idx]
 
         state = MemoryState(
             point_cloud=PointCloudBlob(xyz=points, rgb=rgb),
@@ -1244,6 +1923,8 @@ class RerunVisualizer:
         scene_graph: SceneGraph,
         semantic_sensor: OvmmPerception | None = None,
         verbose: bool = False,
+        detection_model: Any | None = None,
+        graph_memory: Any | None = None,
     ):
         """Log objects bounding boxes and relationships.
         Uses shared _log_instance_boxes so loaded memory with instance boxes could use the same path.
@@ -1256,15 +1937,16 @@ class RerunVisualizer:
         bounds = []
         colors = []
 
+        from emet.mapping.instance.instance import instance_display_label
+
         t0 = timeit.default_timer()
         for idx, instance in enumerate(scene_graph.instances):
-            if semantic_sensor and semantic_sensor.is_semantic():
-                name = semantic_sensor.get_class_name_for_id(instance.category_id)
-            else:
-                name = f"obj_{instance.global_id}"
-
-            # Replace spaces with underscores
-            name = name.replace(" ", "_") if name is not None else None
+            name = instance_display_label(
+                instance,
+                semantic_sensor=semantic_sensor,
+                detection_model=detection_model,
+                graph_memory=graph_memory,
+            )
 
             # Create colors (key by name so same class gets same color)
             if name not in self.bbox_colors_memory:
@@ -1278,7 +1960,12 @@ class RerunVisualizer:
                 pos_np = (
                     point_cloud_rgb.cpu().numpy() if hasattr(point_cloud_rgb, "cpu") else np.asarray(point_cloud_rgb)
                 )
+                pos_np = pos_np.reshape(-1, 3)
                 col_np = np.int64(pcd_rgb.cpu().numpy() if hasattr(pcd_rgb, "cpu") else pcd_rgb)
+                col_np = col_np.reshape(-1, 3)
+                cap = self.max_displayed_points_per_camera
+                if cap > 0 and pos_np.shape[0] > cap:
+                    pos_np, col_np = _subsample_point_rows(pos_np, col_np, cap)
                 log_to_rerun(
                     f"world/{instance.id}_{name}" if name is not None else f"world/{instance.id}",
                     rr.Points3D(positions=pos_np, colors=col_np),
@@ -1529,8 +2216,14 @@ class RerunVisualizer:
             self.log_head_camera(head_cam, mapping_depth=mapping_depth)
             self.log_ee_camera(head_cam)
 
-            if self.display_robot_mesh and getattr(self, "mjcf_mesh_logger", None) is not None:
-                self.mjcf_mesh_logger.log_meshes_world(rr, obs_pose, entity_prefix=self._mjcf_visual_entity_prefix)
+            if (
+                self.display_robot_mesh
+                and getattr(self, "mjcf_mesh_logger", None) is not None
+                and self._stride_tick("_mjcf_mesh_tick", self._mjcf_mesh_stride)
+            ):
+                self.mjcf_mesh_logger.log_meshes_world(
+                    rr, obs_pose, entity_prefix=self._mjcf_visual_entity_prefix
+                )
             if self.display_robot_mesh and getattr(self, "mjcf_skeleton", None) is not None:
                 self.mjcf_skeleton.apply_and_log(obs_pose)
             elif self.display_robot_mesh and getattr(self, "urdf_logger", None) is not None:
@@ -1542,5 +2235,4 @@ class RerunVisualizer:
                 time.sleep(sleep_time)
 
         except Exception as e:
-            logger.error(e)
-            raise e
+            logger.error(f"Rerun step failed: {e}")
