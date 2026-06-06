@@ -96,13 +96,13 @@ Use [Robocasa](simulation.md#robocasa-rich-kitchen-scenes) kitchen scenes so the
 **Terminal 1** – from the project root:
 
 ```bash
-emet serve mujoco --use-robocasa
+emet serve mujoco --scene robocasa
 ```
 
 Optional: change task, style, or layout (see [simulation.md](simulation.md#run-with-robocasa)):
 
 ```bash
-emet serve mujoco --use-robocasa --robocasa-task PnPCounterToCab --robocasa-style 1 --robocasa-layout 0
+emet serve mujoco --scene robocasa --robocasa-task PnPCounterToCab --robocasa-style 1 --robocasa-layout 0
 ```
 
 Wait until the simulator window shows the kitchen scene and the robot is ready.

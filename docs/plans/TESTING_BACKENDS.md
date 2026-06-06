@@ -83,7 +83,7 @@ On Linux, MuJoCo runs headless (EGL). Requires full env (e.g. `pip install -e ".
 
 ### Integration test: Robocasa scene — at least one object in memory after one spin (180s timeout)
 
-Starts MuJoCo server with **--use-robocasa** (default kitchen task), connects, runs **rotate_in_place** once, then uses the unified backend to try common object names and asserts at least one has confidence > 0. Runs by default with `emet test`; skip with `emet test --no-sim` or `RUN_SIM_TESTS=0`. Requires robocasa assets.
+Starts MuJoCo server with **`--scene robocasa`** (default kitchen task), connects, runs **rotate_in_place** once, then uses the unified backend to try common object names and asserts at least one has confidence > 0. Runs by default with `emet test`; skip with `emet test --no-sim` or `RUN_SIM_TESTS=0`. Requires robocasa assets.
 
 ```bash
 uv run emet test -v src/test/simulation/test_robocasa_memory_after_spin.py

@@ -7,7 +7,7 @@
 # ``robot`` below is used when you omit ``--robot`` on the CLI (CLI always wins if set).
 #
 # Run from repo root (paths are resolved relative to cwd unless absolute).
-# With ``emet serve mujoco`` for Stretch (default sim robot is Stretch; Robocasa: ``--use-robocasa`` per project docs).
+# With ``emet serve mujoco`` for Stretch (default sim robot is Stretch; Robocasa: ``--scene robocasa``).
 #
 #   Terminal 1 — sim (example):
 #     export DISPLAY=:1

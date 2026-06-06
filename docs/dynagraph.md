@@ -216,7 +216,7 @@ MuJoCo ZMQ servers publish placements in [`emet_session`](zmq_session_metadata.m
 | Scene | GT source |
 |-------|-----------|
 | Default table | Packaged `scene_environment.xml` constants, overlaid with live MuJoCo body poses when the server has the model |
-| Robocasa (`--use-robocasa`) | **Full kitchen fixture scan** (sink, counter, cabinets, appliances, …) **merged** with wizard manipulable objects |
+| Robocasa (`--scene robocasa`) | **Full kitchen fixture scan** (sink, counter, cabinets, appliances, …) **merged** with wizard manipulable objects |
 | MolmoSpaces | Per-body MJCF scan (robot subtree skipped; capped on large scenes) |
 
 ### `--ground-truth` vs `--compare-to-gt`
@@ -234,12 +234,13 @@ The two flags are **mutually exclusive**.
 
 ```bash
 uv run python scripts/dynagraph_ground_truth_smoke.py
+uv run python scripts/dynagraph_ground_truth_smoke.py --scene ithor   # MolmoSpaces (needs wrapper)
 ```
 
 **Full GT episode export** (rotate + voxel frames + `sim_object_placements.json`):
 
 ```bash
-emet serve mujoco --headless                    # or --use-robocasa
+emet serve mujoco --headless                    # or --scene robocasa / --scene ithor
 emet run dynagraph --ground-truth --export /tmp/dynagraph_gt --no-rerun --cpu-only
 ```
 
@@ -255,8 +256,15 @@ uv run python scripts/eval_dynagraph_ground_truth.py --run-live --cpu-only --out
 **Interactive GT graph** (EQA / explore on known sim labels):
 
 ```bash
-emet serve mujoco --use-robocasa --headless --port-offset 50
+emet serve mujoco --scene robocasa --headless --port-offset 50
 emet run dynagraph --ground-truth --port-offset 50
+```
+
+**MolmoSpaces GT** (iTHOR + per-body MJCF scan):
+
+```bash
+emet serve mujoco --scene ithor --headless --port-offset 50
+emet run dynagraph --ground-truth --export /tmp/molmo_gt --port-offset 50 --no-rerun --cpu-only
 ```
 
 Graph nodes and 3D bounds appear in Rerun after startup; **rotate-in-place runs by default** to seed the voxel map (use **`-N`** to skip). Use **explore** / **e** to extend the map; instance detections attach to nearby GT nodes as you move.
@@ -273,7 +281,7 @@ emet run dynagraph --compare-to-gt --export /tmp/dg_cmp --port-offset 50 -N
 - **Stretch sim:** GT scan uses `robot_sim.model` (MuJoCo subprocess); restart the server after code changes.
 - **Coordinate frame:** `pos` / `bounds` are **MuJoCo world XYZ** (same as `camera_pose`). `gps`/`compass` are episode-relative; servers publish **`navigation_origin_xyt`** so Rerun can place the robot mesh in world.
 - **Fixture grouping (Robocasa):** cabinet doors and panels merge into one entry per fixture group (e.g. `cab_1`); walls/floors are excluded.
-- **Wrong GT on custom `--scene_path`:** if `environment.kind` stays `default_table`, you may get default-table constants — set Robocasa or MolmoSpaces session metadata instead.
+- **Wrong GT on custom MJCF path:** if `environment.kind` stays `default_table`, you may get default-table constants — use `--scene robocasa`, `--scene ithor`, or merge via MolmoSpaces so session metadata is set.
 
 See [`sim_object_placements.py`](../src/emet/simulation/sim_object_placements.py) and [`sim_ground_truth_graph.py`](../src/emet/memory/graph_eqa/sim_ground_truth_graph.py).
 

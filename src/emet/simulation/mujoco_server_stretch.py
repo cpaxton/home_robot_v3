@@ -29,7 +29,6 @@ from emet.simulation.mujoco_ground_truth import (
 from emet.simulation.sim_object_placements import (
     apply_navigation_origin_to_session,
     attach_sim_object_placements_to_session,
-    mujoco_model_data_for_gt_scan,
 )
 from emet.simulation.stretch_mujoco import StretchMujocoSimulator
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
@@ -276,6 +275,7 @@ class MujocoZmqServer(BaseZmqServer):
         self.simulation_rate = simulation_rate
         self.objects_info = objects_info
         self._environment_descriptor = dict(environment) if environment else None
+        self._scene_xml_path = str(scene_path).strip() if scene_path else None
         if scene_source_basename:
             self._scene_source_basename = scene_source_basename
         elif scene_path:
@@ -682,7 +682,7 @@ class MujocoZmqServer(BaseZmqServer):
         if self._environment_descriptor and self._environment_descriptor.get("spawn_floor_map") is not None:
             session["spawn_floor_map"] = self._environment_descriptor["spawn_floor_map"]
         env_kind = env.get("kind") if isinstance(env, dict) else None
-        gt_model, gt_data = mujoco_model_data_for_gt_scan(self.robot_sim)
+        gt_model, gt_data = self._gt_model_data_for_session()
         attach_sim_object_placements_to_session(
             session,
             objects_info=self.objects_info,
@@ -692,6 +692,23 @@ class MujocoZmqServer(BaseZmqServer):
             robot_root_name="base_link",
         )
         return session
+
+    def _gt_model_data_for_session(self) -> tuple[Any, Any]:
+        """Resolve MuJoCo model/data for GT scan (subprocess sim may only expose MJCF on disk)."""
+        import mujoco
+
+        from emet.simulation.sim_object_placements import _mj_forward, mujoco_model_data_for_gt_scan
+
+        model, data = mujoco_model_data_for_gt_scan(self.robot_sim)
+        if model is not None:
+            return model, data
+        scene_path = getattr(self, "_scene_xml_path", None)
+        if scene_path and Path(str(scene_path)).is_file():
+            model = mujoco.MjModel.from_xml_path(str(scene_path))
+            data = mujoco.MjData(model)
+            _mj_forward(model, data)
+            return model, data
+        return None, None
 
     def _is_molmospaces_session(self) -> bool:
         env = self._environment_descriptor
