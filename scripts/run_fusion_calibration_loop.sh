@@ -110,6 +110,12 @@ run_robot() {
     exit 1
   fi
 
+  echo "=== $robot: eval-calibration (raw detections) ==="
+  uv run emet eval-calibration \
+    --gt "$out/gt.json" \
+    --frames "$out/frames.jsonl" \
+    --report "$out/calibration_eval.json"
+
   echo "=== $robot: tune-graph-fusion ==="
   uv run emet tune-graph-fusion \
     --gt "$out/gt.json" \
@@ -117,6 +123,24 @@ run_robot() {
     --report "$out/fusion_tune_report.json" \
     --write-config "$out/graph_object_fusion_tuned.yaml" \
     --min-recall 0.2
+
+  python3 - "$out/calibration_eval.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+raw = json.load(open(path))["raw"]
+spatial = float(raw.get("spatial_recall", 0))
+label = float(raw.get("label_recall", 0))
+print(f"spatial_recall={spatial:.3f} label_recall={label:.3f}")
+if spatial < 0.6:
+    print(f"WARN: spatial_recall {spatial:.3f} < 0.6 (viewpoint or detection coverage)", file=sys.stderr)
+PY
+
+  echo "=== $robot: eval-calibration (after tuned fusion) ==="
+  uv run emet eval-calibration \
+    --gt "$out/gt.json" \
+    --frames "$out/frames.jsonl" \
+    --fusion-config "$out/graph_object_fusion_tuned.yaml" \
+    --report "$out/calibration_eval_fused.json"
 
   local cfg_repo="$ROOT/src/emet/config/agents/graph_object_fusion_${robot}.yaml"
   cp "$out/graph_object_fusion_tuned.yaml" "$cfg_repo"

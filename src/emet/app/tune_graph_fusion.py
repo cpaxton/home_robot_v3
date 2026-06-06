@@ -42,13 +42,26 @@ from emet.simulation.mujoco_gt_objects import load_gt_scene_json
     type=click.Path(),
     help="Write tuned graph_object_fusion YAML to this path",
 )
-@click.option("--min-recall", default=0.85, type=float, show_default=True)
+@click.option(
+    "--min-recall",
+    default=0.85,
+    type=float,
+    show_default=True,
+    help="Minimum spatial_recall (geometry) to accept a grid point",
+)
+@click.option(
+    "--min-label-recall",
+    default=None,
+    type=float,
+    help="Optional minimum label_recall (taxonomy diagnostic); off by default",
+)
 def main(
     gt_path: str,
     frames_path: str,
     report_path: str | None,
     write_config_path: str | None,
     min_recall: float,
+    min_label_recall: float | None,
 ) -> None:
     """Grid-search fusion parameters on one environment (no sim)."""
     gt = load_gt_scene_json(gt_path)
@@ -56,12 +69,22 @@ def main(
     if not frames:
         raise click.ClickException(f"No frames in {frames_path}")
 
-    best_cfg, report, _ = grid_search_fusion_config(frames, gt, min_recall=min_recall)
+    best_cfg, report, _ = grid_search_fusion_config(
+        frames,
+        gt,
+        min_recall=min_recall,
+        min_label_recall=min_label_recall,
+    )
 
     rep_dest = Path(report_path) if report_path else Path(gt_path).with_name("fusion_tune_report.json")
     rep_dest.parent.mkdir(parents=True, exist_ok=True)
     rep_dest.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    click.echo(f"Best config (recall={report['best'].get('gt_recall', 0):.3f}, nodes={report['best'].get('node_count', 0):.0f}):")
+    best = report["best"]
+    click.echo(
+        f"Best config (spatial_recall={best.get('spatial_recall', 0):.3f}, "
+        f"label_recall={best.get('label_recall', 0):.3f}, "
+        f"nodes={best.get('node_count', 0):.0f}):"
+    )
     click.echo(
         f"  spatial_merge_xy_m={best_cfg.spatial_merge_xy_m} "
         f"embedding_min_cosine={best_cfg.embedding_min_cosine} "

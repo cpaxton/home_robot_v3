@@ -22,6 +22,10 @@ from emet.memory.graph_eqa.graph_object_fusion.fusion import (
     bounds_3d_iou,
     cosine_similarity_np,
 )
+from emet.memory.graph_eqa.graph_object_fusion.evaluate import (
+    associate_detections_to_gt,
+    score_detections_vs_gt,
+)
 from emet.memory.graph_eqa.mujoco_align import score_nodes_vs_gt
 
 
@@ -57,13 +61,43 @@ def test_fusion_merges_duplicate_detections():
     assert objs[0].support_count >= 2
 
 
+def test_spatial_recall_without_label_match():
+    gt = {
+        "objects": [
+            {
+                "id": "mug_main",
+                "label": "mug",
+                "pos_world": [1.0, 2.0, 0.9],
+            }
+        ]
+    }
+    frames = [
+        {
+            "step": 1,
+            "detections": [
+                {"label": "cup", "xyz": [1.02, 2.01, 0.91]},
+                {"label": "plate", "xyz": [5.0, 5.0, 0.5]},
+            ],
+        }
+    ]
+    metrics = score_detections_vs_gt(gt, frames, match_xy_m=0.55)
+    assert metrics["spatial_recall"] == 1.0
+    assert metrics["label_recall"] == 0.0
+    rows = associate_detections_to_gt(gt, frames, match_xy_m=0.55)
+    assert rows[0].matched
+    assert rows[0].det_label == "cup"
+    assert not rows[0].label_match
+
+
 def test_replay_and_score_fixture():
     gt = json.loads((_fixtures_dir() / "gt_robocasa_seed0_snippet.json").read_text(encoding="utf-8"))
     frames = load_calibration_frames_jsonl(_fixtures_dir() / "calibration_frames_snippet.jsonl")
+    raw = score_detections_vs_gt(gt, frames)
+    assert raw["spatial_recall"] >= 0.5
     cfg = GraphObjectFusionConfig(enabled=True, spatial_merge_xy_m=0.55, embedding_min_cosine=0.0)
     mem = replay_frames_with_fusion(frames, cfg)
-    metrics = score_fused_nodes_vs_gt(mem, gt)
-    assert metrics["gt_recall"] >= 0.5
+    metrics = score_fused_nodes_vs_gt(mem, gt, frames=frames)
+    assert metrics["spatial_recall"] >= 0.5
     assert metrics["node_count"] <= 3.0
 
 
@@ -79,4 +113,16 @@ def test_grid_search_fixture():
         min_recall=0.4,
     )
     assert best.enabled
-    assert "gt_recall" in report["best"]
+    assert report["best"]["spatial_recall"] >= 0.4
+    assert "label_recall" in report["best"]
+
+
+def test_score_nodes_vs_gt_label_optional():
+    from emet.memory.graph_eqa.graph_memory import GraphNode
+
+    gt_objs = [{"label": "mug", "pos_world": [1.0, 2.0, 0.9]}]
+    node = GraphNode(node_id=1, labels=["cup"], xyz=np.array([1.02, 2.01, 0.91]), obs_id=1)
+    gated = score_nodes_vs_gt([node], gt_objs, require_label_match=True)
+    spatial = score_nodes_vs_gt([node], gt_objs, require_label_match=False)
+    assert gated["gt_recall"] == 0.0
+    assert spatial["gt_recall"] == 1.0

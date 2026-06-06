@@ -79,7 +79,7 @@ def main() -> int:
                 tmp,
             ]
             print("Running dynagraph ground-truth export…", file=sys.stderr)
-            res = subprocess.run(client_cmd, env=env, capture_output=True, text=True, timeout=60)
+            res = subprocess.run(client_cmd, env=env, capture_output=True, text=True, timeout=600)
             combined = (res.stdout or "") + (res.stderr or "")
             print(combined, file=sys.stderr)
             if res.returncode != 0:

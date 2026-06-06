@@ -65,7 +65,7 @@ Replace **`/tmp/dynagraph_e2e_compare`** by passing a different base directory o
 
 The harness exits **0** when:
 
-1. **All three robots** produce a fresh **`floor_metrics.json`**
+1. **Both robots** (`innate_mars`, `galaxea_r1`) produce a fresh **`floor_metrics.json`**
 2. **Pairwise explored area** matches within **35% relative tolerance** (`rtol_area=0.35` in `compare_explored_floor_metrics`)
 3. **Spawner scene walkable area** is identical across robots (same kitchen footprint): **`scene_walkable_area_m2`** within **5%** (typically **82.25 m²** for seed 0 / layout 1)
 

@@ -7,7 +7,9 @@
 from __future__ import annotations
 
 import os
+import re
 import time
+from pathlib import Path
 from typing import Any
 
 import click
@@ -263,6 +265,18 @@ def _print_dynagraph_rerun_help(
     help="Single NL GraphEQA question (batch); exits after answering unless combined with discord",
 )
 @click.option(
+    "--question-file",
+    "question_file",
+    default=None,
+    type=click.Path(exists=True),
+    help="YAML question bank; run all questions (optionally filtered by --question-env)",
+)
+@click.option(
+    "--question-env",
+    default=None,
+    help="Filter --question-file to one environment tag (e.g. robocasa_seed0)",
+)
+@click.option(
     "--print-graph",
     is_flag=True,
     help="Pretty-print GraphEQAMemory at session exit (finally); often used with interactive runs",
@@ -311,6 +325,12 @@ def _print_dynagraph_rerun_help(
         "print alignment vs emet_session sim_object_placements."
     ),
 )
+@click.option(
+    "--graph-fusion-config",
+    default=None,
+    type=click.Path(exists=True),
+    help="Override graph_object_fusion block from standalone YAML (A/B experiments)",
+)
 def main(
     robot_ip: str,
     robot_backend: str = "stretch",
@@ -340,6 +360,8 @@ def main(
     explore_max_failures: int = 3,
     explore_timeout_s: float | None = None,
     question: str | None = None,
+    question_file: str | None = None,
+    question_env: str | None = None,
     print_graph: bool = False,
     dump_sim_ground_truth: str | None = None,
     dump_sim_gt_include_robot: bool = False,
@@ -347,6 +369,7 @@ def main(
     calibration_steps: int = 0,
     ground_truth: bool = False,
     compare_to_gt: bool = False,
+    graph_fusion_config: str | None = None,
 ) -> None:
     """Run Dynagraph: graph EQA with DynaMem-style voxel navigation (see docs/dynagraph.md)."""
     click.echo("Dynagraph: connecting to robot and starting graph-based EQA (with merge/staleness).")
@@ -378,6 +401,10 @@ def main(
         raise click.UsageError("--explore-loop is not supported together with --discord.")
     if discord and question:
         raise click.UsageError("Use Discord commands for questions instead of --question with --discord.")
+    if question and question_file:
+        raise click.UsageError("Use either --question or --question-file, not both.")
+    if question_file and not export_dir and not question:
+        click.echo("Note: --question-file without --export runs questions then exits (no eqa_results.json).")
 
     dynav_resolved = resolve_dynav_config_yaml(robot_backend, dynav_config)
     if dynav_resolved != dynav_config:
@@ -416,7 +443,15 @@ def main(
         )
     parameters.setdefault("dynagraph_merge_xy_m", 0.45)
     parameters.setdefault("dynagraph_staleness_horizon", 256)
-    if parameters.get("graph_object_fusion") is None:
+    if graph_fusion_config:
+        from dataclasses import asdict
+
+        from emet.memory.graph_eqa.graph_object_fusion.config import load_graph_object_fusion_config
+
+        fc = load_graph_object_fusion_config(graph_fusion_config)
+        parameters["graph_object_fusion"] = asdict(fc)
+        logger.info(f"Dynagraph: graph_object_fusion from {graph_fusion_config}")
+    elif parameters.get("graph_object_fusion") is None:
         from dataclasses import asdict
 
         from emet.memory.graph_eqa.graph_object_fusion.config import load_graph_object_fusion_config
@@ -513,6 +548,45 @@ def main(
         )
         click.echo(f"- Explore-loop [{reason}] done: reason={reason_lab} successes={ok} iterations_executed={nit}")
 
+    def _run_eqa_questions(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        from emet.memory.graph_eqa.question_bank import write_eqa_results
+
+        rows: list[dict[str, Any]] = []
+        eq_executor = EQAExecuter(agent)
+        robot.move_to_nav_posture()
+        robot.switch_to_navigation_mode()
+        for qspec in questions:
+            qtext = str(qspec.get("question", "")).strip()
+            if not qtext:
+                continue
+            robot.say("Answering the question " + qtext)
+            try:
+                discord_text, _imgs = eq_executor(qtext)
+            except Exception as e:
+                logger.warning(f"EQA question failed: {e}")
+                discord_text = f"EQA question failed: {e}"
+            answer = ""
+            m = re.search(r"(?i)answer:\s*(.+?)(?:\n|$)", discord_text or "")
+            if m:
+                answer = m.group(1).strip()
+            elif discord_text:
+                answer = discord_text.strip()
+            row = {
+                **qspec,
+                "question": qtext,
+                "discord_text": discord_text,
+                "answer": answer,
+            }
+            rows.append(row)
+            if discord_text.strip():
+                click.echo(discord_text)
+            else:
+                click.echo("(Empty EQA reply — check graph memory / observations.)")
+        if export_dir and rows:
+            out = write_eqa_results(Path(export_dir) / "eqa_results.json", rows)
+            click.echo(f"Wrote EQA results -> {out}")
+        return rows
+
     def _run_calibration_capture(steps: int, *, rotate: bool) -> None:
         if steps < 1:
             return
@@ -592,19 +666,15 @@ def main(
                 executor.rotate_in_place()
             if explore_loop:
                 _maybe_explore("export-path")
-            if question:
-                robot.move_to_nav_posture()
-                robot.switch_to_navigation_mode()
-                robot.say("Answering the question " + question)
-                try:
-                    discord_text, _imgs = executor(question)
-                    if not discord_text.strip():
-                        click.echo("(Empty EQA reply — check graph memory / observations.)")
-                    else:
-                        click.echo(discord_text)
-                except Exception as e:
-                    logger.warning(f"EQA question failed (export will continue): {e}")
-                    click.echo(f"EQA question failed: {e}")
+            if question_file:
+                from emet.memory.graph_eqa.question_bank import load_question_bank
+
+                bank = load_question_bank(question_file, env_filter=question_env)
+                if not bank:
+                    raise click.ClickException(f"No questions loaded from {question_file}")
+                _run_eqa_questions(bank)
+            elif question:
+                _run_eqa_questions([{"question": question}])
             env, spawn = _export_session_fields()
             placements = read_sim_object_placements(robot.get_emet_session())
             gt_report: str | None = None
@@ -656,19 +726,17 @@ def main(
             bot.push_task_to_all_channels(content=obs.rgb)
             bot.run()
 
-        elif question:
-            executor = EQAExecuter(agent)
+        elif question or question_file:
             if not not_rotate_in_place:
                 executor.rotate_in_place()
             _maybe_explore("question-only")
-            robot.move_to_nav_posture()
-            robot.switch_to_navigation_mode()
-            robot.say("Answering the question " + question)
-            discord_text, _imgs = executor(question)
-            if not discord_text.strip():
-                click.echo("(Empty EQA reply — check graph memory / observations.)")
+            if question_file:
+                from emet.memory.graph_eqa.question_bank import load_question_bank
+
+                bank = load_question_bank(question_file, env_filter=question_env)
+                _run_eqa_questions(bank)
             else:
-                click.echo(discord_text)
+                _run_eqa_questions([{"question": question}])
         else:
             executor = EQAExecuter(agent)
             if not not_rotate_in_place:

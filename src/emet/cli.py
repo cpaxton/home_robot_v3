@@ -1826,5 +1826,15 @@ from emet.app.tune_graph_fusion import main as _tune_graph_fusion_app  # noqa: E
 _tune_graph_fusion_app.short_help = "Grid-search GraphObjectFusion vs GT + calibration frames"
 main.add_command(_tune_graph_fusion_app)
 
+from emet.app.eval_calibration import main as _eval_calibration_app  # noqa: E402
+
+_eval_calibration_app.short_help = "Score calibration frames vs sim GT (spatial recall)"
+main.add_command(_eval_calibration_app)
+
+from emet.app.eval_dynagraph import main as _eval_dynagraph_app  # noqa: E402
+
+_eval_dynagraph_app.short_help = "Unified Dynagraph episode eval (explore, graph, fusion, EQA)"
+main.add_command(_eval_dynagraph_app)
+
 if __name__ == "__main__":
     main()

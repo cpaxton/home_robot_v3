@@ -279,7 +279,9 @@ See [`sim_object_placements.py`](../src/emet/simulation/sim_object_placements.py
 
 ### Tune graph object fusion (offline)
 
-Use sim GT **3D bounds** and head **2D bboxes** from `emet export-sim-gt`, then record live detections during a short Dynagraph run, and grid-search fusion thresholds:
+Use sim GT **3D bounds** and head **2D bboxes** from `emet export-sim-gt`, then record live detections during a short Dynagraph run, and grid-search fusion thresholds.
+
+**Two recall numbers:** calibration scoring is **geometry-first**. `spatial_recall` counts GT bodies with any detection centroid within `match_xy_m` (default 0.55 m), regardless of YoloE label. `label_recall` additionally requires a substring match between detection and Robocasa category names — useful as a taxonomy diagnostic, but often low because YoloE returns open-vocab “best fit” strings (`cabinet`, `shelf`) while GT uses task categories (`chicken_drumstick`, `shrimp`). Low stretch `spatial_recall` on cab/counter is often a **viewpoint** issue (robot not facing manipulables), not a classifier failure.
 
 ```bash
 # Full loop (both robots): writes /tmp/emet_fusion_tune/<robot>/ and copies tuned YAML under src/emet/config/agents/
@@ -290,12 +292,17 @@ uv run emet serve mujoco --use-robocasa --robot innate_mars --headless --seed 0
 uv run python scripts/fetch_sim_gt_from_server.py --robot innate_mars -o /tmp/gt.json
 EMET_STRETCH_GENERIC_ZMQ=1 uv run emet run dynagraph --robot stretch --export /tmp/cal \
   --calibration-export /tmp/frames.jsonl --calibration-steps 36 --no-sensor-perception --cpu-only --no-rerun -N
+
+# Assess raw detections (spatial vs label recall + taxonomy confusion table)
+uv run emet eval-calibration --gt /tmp/gt.json --frames /tmp/frames.jsonl
+
+# Grid-search fusion (objective: spatial_recall; optional --min-label-recall for strict taxonomy)
 uv run emet tune-graph-fusion --gt /tmp/gt.json --frames /tmp/frames.jsonl --write-config
 ```
 
 For **Stretch in Robocasa**, set `EMET_STRETCH_GENERIC_ZMQ=1` (default in the calibration loop script) so the client uses `GenericZmqClient` against the merged kitchen ZMQ server.
 
-`--calibration-export` writes per-step instance detections (label, `xyz`, `bbox_xyxy`, optional embedding) to JSONL; `tune-graph-fusion` scores association / merge against `/tmp/gt.json` and can emit an updated `graph_object_fusion` block for your dynav YAML.
+`--calibration-export` writes per-step instance detections (label, `xyz`, `bbox_xyxy`, optional embedding) to JSONL. `eval-calibration` reports association metrics; `tune-graph-fusion` replays frames through `GraphObjectFusion` and optimizes merge thresholds. Default fusion YAML sets `require_label_match: false` so live merging uses spatial + 3D + embedding; set `true` only for strict taxonomy experiments.
 
 ### Manual smoke (Robocasa + export)
 
@@ -303,11 +310,22 @@ For **Stretch in Robocasa**, set `EMET_STRETCH_GENERIC_ZMQ=1` (default in the ca
 - **`uv run emet run dynagraph --robot-ip 127.0.0.1 --explore-loop --explore-max-iters 20 --explore-max-failures 4 --export /tmp/graphtest`**.
 - Confirm **`/tmp/graphtest/scene_graph_report.txt`** exists and is non-empty when the voxel map populated.
 
+## Benchmarks
+
+Unified episode scoring, question bank, fusion A/B, and environment smokes: **[dynagraph_benchmarks.md](dynagraph_benchmarks.md)**.
+
+```bash
+uv run emet eval-dynagraph --episode /tmp/export -o dynagraph_eval.json
+uv run emet run dynagraph --export /tmp/ep --question-file src/emet/config/benchmarks/dynagraph_questions.yaml --question-env robocasa_seed0
+./scripts/run_dynagraph_fusion_ab.sh innate_mars 0 20
+```
+
 ## Testing
 
 | Layer | Command |
 |-------|---------|
 | Unit (explore loop, graph memory) | `uv run emet test src/test/app/test_dynagraph_explore.py src/test/memory/test_graph_eqa_memory.py -v` |
+| Benchmark smoke (unit) | `uv run emet test src/test/app/test_dynagraph_benchmark_smoke.py src/test/memory/test_dynagraph_staleness_disappearance.py -v` |
 | Multi-robot Robocasa floor E2E | `uv run python src/test/app/run_dynagraph_multi_robot_e2e.py` |
 | Manual EQA + export | [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md#assessing-semantic--eqa-quality) |
 
@@ -326,7 +344,7 @@ Full index and known gaps (graph + EQA on known scene): [TESTING.md](TESTING.md)
 | [`src/emet/memory/graph_eqa/sim_ground_truth_graph.py`](../src/emet/memory/graph_eqa/sim_ground_truth_graph.py) | GT graph upsert, alignment reports, instance→GT association. |
 | [`src/emet/simulation/mujoco_ground_truth.py`](../src/emet/simulation/mujoco_ground_truth.py) | Text/JSON snapshots of **`mjData.body(*).xpos`** for sim validation; triggered by **`mujoco_ground_truth_dump`** ZMQ recv command. |
 | [`src/emet/simulation/mujoco_gt_objects.py`](../src/emet/simulation/mujoco_gt_objects.py) | Per-object **3D AABB** + optional head **2D bbox** JSON (`emet export-sim-gt`). |
-| [`src/emet/memory/graph_eqa/graph_object_fusion/`](../src/emet/memory/graph_eqa/graph_object_fusion/) | **GraphObjectFusion** + offline **`emet tune-graph-fusion`**. |
+| [`src/emet/memory/graph_eqa/graph_object_fusion/`](../src/emet/memory/graph_eqa/graph_object_fusion/) | **GraphObjectFusion** + offline **`emet eval-calibration`** / **`emet tune-graph-fusion`**. |
 | [`src/emet/app/run_interactive.py`](../src/emet/app/run_interactive.py) | Shared interactive REPL for graph-EQA and task-mode apps. |
 
 ## See also
