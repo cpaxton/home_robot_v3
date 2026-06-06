@@ -179,6 +179,7 @@ def run_habitat_find_phase_episode(
             placements,
         )
 
+        prefer_voxel = run_cfg.backend not in ("ground_truth",)
         obj_xyz, obj_ok, obj_q_used = query_find_phase_localization(
             memory,
             object_query,
@@ -186,6 +187,8 @@ def run_habitat_find_phase_episode(
             near_recep=episode.start_recep,
             voxel_map=vm,
             convert_nav_to_world=False,
+            prefer_voxel=prefer_voxel,
+            planar_frame="habitat_xz",
         )
         recep_xyz, recep_ok, recep_q_used = query_find_phase_localization(
             memory,
@@ -194,6 +197,8 @@ def run_habitat_find_phase_episode(
             near_recep=episode.goal_recep,
             voxel_map=vm,
             convert_nav_to_world=False,
+            prefer_voxel=prefer_voxel,
+            planar_frame="habitat_xz",
         )
 
         find_metrics = compute_find_phase_metrics(

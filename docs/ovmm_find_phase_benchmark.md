@@ -136,16 +136,21 @@ Same FindObj/FindRec metrics with **XZ** horizontal scoring (`frame: habitat_yup
 ```bash
 ./scripts/install_habitat.sh
 uv run python scripts/download_habitat_eqa_data.py --fetch-csv --fetch-hm3d train
+# Optional: HM3D semantic meshes (if scenes lack semantics)
+uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d-semantics train
 
-# Batch (uses .venv-habitat)
+# Batch GT smoke (3 HM3D scenes, ~7 min CPU)
 uv run python scripts/eval_habitat_ovmm_find_phases.py \
   --backend ground_truth --not-rotate --cpu-only \
-  --output-dir runs/ovmm_habitat/gt_smoke
+  --output-dir runs/ovmm_habitat/gt_batch
 
 # Single episode
 .venv-habitat/bin/emet-habitat run-ovmm-find-episode \
-  --episode-id hm3d_lamp_bed_00004 --backend dynagraph --cpu-only
+  --episode-id hm3d_lamp_bed_00006 --backend dynagraph --cpu-only
 ```
+
+Verified GT batch: `find_partial_success=1.0`, `localization_err_*_m=0.0` on
+`hm3d_lamp_bed_00006`, `00025`, `00057` (June 2026).
 
 Full OVMM-HSSD minival (official leaderboard) is not wired yet; HM3D proxy validates the Habitat
 memory → find-phase metric path before HSSD scene download.
