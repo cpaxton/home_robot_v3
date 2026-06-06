@@ -451,6 +451,95 @@ def molmospaces_cmd() -> None:
     """
 
 
+def _run_habitat_wrapper(args: list[str]) -> int:
+    """Run the emet-habitat wrapper. Returns exit code."""
+    from emet.habitat.wrapper_config import build_habitat_wrapper_command, ensure_habitat_eqa_data_dir_env
+
+    cmd = build_habitat_wrapper_command(args)
+    if cmd is None:
+        click.echo(
+            "Habitat wrapper not found. From the project root run:\n"
+            "  ./scripts/install_habitat.sh\n\n"
+            "See docs/habitat/README.md.",
+            err=True,
+        )
+        return 1
+    env = os.environ.copy()
+    ensure_habitat_eqa_data_dir_env(env)
+    return subprocess.call(cmd, cwd=_project_root(), env=env)
+
+
+@main.group("habitat", short_help="Habitat-Sim EQA harness (requires emet-habitat / .venv-habitat)")
+def habitat_cmd() -> None:
+    """HM-EQA / OpenEQA evaluation in Habitat driving emet GraphEQA / Dynagraph.
+
+    Requires ``./scripts/install_habitat.sh`` (``.venv-habitat``). See docs/habitat/README.md.
+    """
+
+
+@habitat_cmd.command("info", short_help="Print data paths and asset status")
+def habitat_info() -> None:
+    sys.exit(_run_habitat_wrapper(["info"]))
+
+
+@habitat_cmd.command("list-questions", short_help="List HM-EQA questions from CSV")
+@click.option("--limit", default=10, type=int)
+def habitat_list_questions(limit: int) -> None:
+    sys.exit(_run_habitat_wrapper(["list-questions", "--limit", str(limit)]))
+
+
+@habitat_cmd.command("run-episode", short_help="Run one HM-EQA episode")
+@click.option("--question-id", default=0, type=int)
+@click.option("--method", type=click.Choice(["graph_eqa", "dynagraph"]), default="dynagraph")
+@click.option("--mock-llm", is_flag=True, default=False)
+@click.option("--max-planning-steps", default=5, type=int)
+def habitat_run_episode(
+    question_id: int,
+    method: str,
+    mock_llm: bool,
+    max_planning_steps: int,
+) -> None:
+    args = [
+        "run-episode",
+        "--question-id",
+        str(question_id),
+        "--method",
+        method,
+        "--max-planning-steps",
+        str(max_planning_steps),
+    ]
+    if mock_llm:
+        args.append("--mock-llm")
+    sys.exit(_run_habitat_wrapper(args))
+
+
+@habitat_cmd.command("compare-batch", short_help="GraphEQA vs Dynagraph on same questions")
+@click.option("--question-start", default=0, type=int)
+@click.option("--question-end", default=5, type=int)
+@click.option("--mock-llm", is_flag=True, default=False)
+@click.option("--max-planning-steps", default=20, type=int)
+def habitat_compare_batch(
+    question_start: int,
+    question_end: int,
+    mock_llm: bool,
+    max_planning_steps: int,
+) -> None:
+    args = [
+        "compare-batch",
+        "--question-start",
+        str(question_start),
+        "--question-end",
+        str(question_end),
+        "--max-planning-steps",
+        str(max_planning_steps),
+        "--output",
+        f"{os.path.expanduser('~')}/.cache/habitat_eqa/results/compare_q{question_start}-{question_end}.json",
+    ]
+    if mock_llm:
+        args.append("--mock-llm")
+    sys.exit(_run_habitat_wrapper(args))
+
+
 @molmospaces_cmd.command("list-robots", short_help="List supported robot IDs")
 def molmospaces_list_robots() -> None:
     """Print MolmoSpaces robot IDs (rby1, rby1m, stretch for merge, franka_*, etc.). Default Molmo CLI robot is rby1 (Galaxea R1 family)."""
@@ -1053,6 +1142,7 @@ def deploy(
             "create-and-print-memory",
             "molmospaces-explore",
             "debug-da3-depth",
+            "graph-eqa-habitat",
         ]
     ),
 )
@@ -1111,7 +1201,8 @@ def run(
     """
     _require_repo_venv_when_in_repo()
     args = list(ctx.args)
-    args.extend(["--robot_ip", robot_ip])
+    if app != "graph-eqa-habitat":
+        args.extend(["--robot_ip", robot_ip])
     if app in _EMET_RUN_APPS_WITH_ROBOT:
         # Do not inject ``--robot stretch`` when the user omitted ``--robot`` on ``emet run``: the wrapper's
         # default would override ``robot:`` from ``--agent-config`` (run_agent) or MolmoSpaces discovery
@@ -1150,6 +1241,8 @@ def run(
         sys.exit(_run_module("emet.app.run_graph_eqa", args))
     elif app == "dynagraph":
         sys.exit(_run_module("emet.app.run_dynagraph", args))
+    elif app == "graph-eqa-habitat":
+        sys.exit(_run_module("emet.app.run_graph_eqa_habitat", args))
     elif app == "molmospaces-explore":
         sys.exit(_run_module("emet.app.run_molmospaces_explore", args))
     elif app == "mapping":

@@ -366,6 +366,24 @@ def test_dynagraph_spatial_merge_same_obs_id():
     assert mem.get_nodes()[0].support_count == 2
 
 
+def test_heuristic_relevant_objects_from_question():
+    from emet.memory.graph_eqa.graph_memory import heuristic_relevant_objects
+
+    objs = heuristic_relevant_objects("Is the lamp next to the bed on?")
+    assert "lamp" in objs
+    assert "bed" in objs
+
+
+def test_graph_covers_relevant_objects_requires_all_keywords():
+    mem = GraphEQAMemory(eqa_client=lambda x: "", image_description_client=lambda x: "")
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.1]), ["lamp"])
+    mem._relevant_objects = ["lamp", "bed"]
+    assert not mem._graph_covers_relevant_objects()
+    mem.add_observation(rgb, np.array([1.0, 0.0, 0.1]), ["bed"])
+    assert mem._graph_covers_relevant_objects()
+
+
 def test_dynagraph_maintain_prunes_stale_nodes():
     mem = GraphEQAMemory(
         parameters={"dynagraph_staleness_horizon": 5},

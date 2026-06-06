@@ -173,6 +173,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 emet = [
     "config/**/*.yaml",
+    "habitat/*.yaml.bundled",
     "perception/*.tsv",
     "assets/**/*",
 ]

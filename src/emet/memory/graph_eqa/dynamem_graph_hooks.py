@@ -145,6 +145,25 @@ def update_graph_memory_from_dynamem_observation(
                     viewer_xyz=viewer_xyz,
                 )
 
+    labeler = getattr(robot, "hm3d_semantic_labeler", None)
+    if labeler is not None and obs.semantic is not None:
+        from emet.habitat.hm3d_semantics import hm3d_instance_items_from_obs
+
+        items = hm3d_instance_items_from_obs(labeler, obs)
+        if items:
+            apply_instance_items_to_graph(
+                graph_memory,
+                rgb,
+                items,
+                dedup_skips=dedup_skips or (lambda _l, _x: False),
+            )
+            return
+        hm3d_labels = labeler.labels_from_frame(obs.semantic, obs.depth)
+        if hm3d_labels:
+            xyz = sensor_builder.world_xyz_for_observation(obs)
+            graph_memory.add_observation(rgb, xyz, hm3d_labels)
+            return
+
     voxel_labels = None
     if getattr(vm, "image_descriptions", None) and len(vm.image_descriptions) > 0:
         voxel_labels = vm.image_descriptions[-1][0]
