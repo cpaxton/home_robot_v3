@@ -1929,5 +1929,12 @@ from emet.app.eval_dynagraph import main as _eval_dynagraph_app  # noqa: E402
 _eval_dynagraph_app.short_help = "Unified Dynagraph episode eval (explore, graph, fusion, EQA)"
 main.add_command(_eval_dynagraph_app)
 
+from emet.app.eval_sqa3d import eval_sqa3d_main as _eval_sqa3d_app  # noqa: E402
+from emet.app.eval_sqa3d import sqa3d_group as _sqa3d_group  # noqa: E402
+
+_eval_sqa3d_app.short_help = "Score SQA3D QA predictions (EM@1)"
+main.add_command(_eval_sqa3d_app)
+main.add_command(_sqa3d_group)
+
 if __name__ == "__main__":
     main()

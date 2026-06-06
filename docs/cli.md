@@ -460,6 +460,18 @@ uv run python src/test/app/run_dynagraph_multi_robot_e2e.py
 
 See [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md) for pass criteria and artefact paths.
 
+**SQA3D + ScanNet** (situated open QA on ScanNet meshes; see [sqa3d.md](sqa3d.md)):
+
+```bash
+uv run python scripts/download_sqa3d_data.py --fetch-annotations
+uv run python scripts/download_scannet_data.py --accept-tos --scene scene0380_00
+uv run emet test src/test/benchmarks/sqa3d/ -v
+uv run python scripts/run_sqa3d_scannet_smoke.py
+uv run emet sqa3d run-episode --split train --question-id 220602000000 --mock-llm
+uv run emet eval-sqa3d -p /tmp/sqa3d_scannet_smoke/episode.jsonl
+uv run emet sqa3d plot-results -p /tmp/sqa3d_batch.jsonl -o /tmp/sqa3d_figs
+```
+
 Run only CLI tests:
 
 ```bash

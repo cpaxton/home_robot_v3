@@ -10,6 +10,15 @@ Optional process-environment toggles for simulation, ZMQ clients, and MolmoSpace
 
 See also [MolmoSpaces](molmospaces.md) for install and CLI usage.
 
+## Benchmarks
+
+| Variable | Where used | Notes |
+|----------|------------|-------|
+| `SQA3D_DATA_DIR` | `emet sqa3d`, `emet eval-sqa3d` | Root for SQA3D Zenodo JSON (`sqa_task/`, optional `localization_task/`). Default `~/.cache/sqa3d/data`. See [sqa3d.md](sqa3d.md). |
+| `SCANNET_ROOT` | `emet sqa3d run-episode` | ScanNet v2 download root (`scans/<scene_id>/…`). Default `~/.cache/scannet`. |
+| `SCANNET_DOWNLOAD_SCRIPT` | `scripts/download_scannet_data.py` | Override path to `download-scannet.py`. |
+| `RUN_SQA3D_SCANNET_TESTS` | pytest | Set `1` to run embodied ScanNet integration smoke. |
+
 ## ZMQ and simulation (general)
 
 | Variable | Where used | Notes |

@@ -7,6 +7,7 @@
 
 \begin{enumerate}
   \item \textbf{Habitat (primary):} Reproduce GraphEQA-style metrics on HM-EQA (113 questions) and an OpenEQA subset: success rate, mean planning steps, GraphEQA vs.\ Dynagraph vs.\ ablations.
+  \item \textbf{SQA3D (situated open QA):} Embodied replay on ScanNet meshes (\texttt{emet sqa3d run-episode}) and offline EM@1 scoring (\texttt{emet eval-sqa3d}); agent pose from annotations; compare GraphEQA vs.\ Dynagraph with \texttt{prompt\_variant: sqa3d}.
   \item \textbf{Emet sim (complementary):} Robocasa kitchens and MolmoSpaces iTHOR with Stretch, Galaxea R1 (rby1), and Innate Mars (Appendix~\ref{app:innate_mars}); depth-source policy in Appendix~\ref{app:da3}; GT-supervised object finding (Section~\ref{sec:gt_experiments}) for sim-oracle benchmarks without Habitat.
   \item \textbf{Dynamic episodes:} After object relocation, measure stale nodes, wrong answers, and recovery steps (Dynagraph vs.\ GraphEQA without staleness).
 \end{enumerate}
@@ -33,6 +34,7 @@
     Environment & Serve command & Role \\
     \midrule
     Habitat + HM3D & Habitat harness & GraphEQA parity \\
+    ScanNet + SQA3D & \texttt{emet eval-sqa3d} & Situated open QA (EM@1) \\
     Robocasa & \texttt{emet serve robocasa} & Kitchen objects, manipulation clutter \\
     MolmoSpaces iTHOR & \texttt{emet serve molmospaces} & Multi-room exploration \\
     Default table & \texttt{emet serve mujoco} & Sanity / CI-style scenes \\

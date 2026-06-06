@@ -218,6 +218,33 @@ def test_install_completion_help():
     assert "bash" in result.stdout or "zsh" in result.stdout
 
 
+def test_sqa3d_help():
+    """emet sqa3d --help lists embodied subcommands."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "sqa3d", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    out = result.stdout.lower()
+    assert "run-episode" in out
+    assert "run-batch" in out
+    assert "plot-results" in out
+    assert "info" in out
+
+
+def test_eval_sqa3d_help():
+    """emet eval-sqa3d --help works."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "eval-sqa3d", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "--predictions" in result.stdout or "-p" in result.stdout
+    assert "split" in result.stdout.lower()
+
+
 def test_debug_da3_depth_help():
     """emet debug-da3-depth --help lists DA3 options (top-level subcommand)."""
     result = subprocess.run(

@@ -2,7 +2,7 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""``AbstractRobotClient`` shim over :class:`HabitatEQASimulator`."""
+"""``AbstractRobotClient`` shim over :class:`ScanNetEQASimulator`."""
 
 from __future__ import annotations
 
@@ -12,19 +12,18 @@ from typing import Any
 
 import numpy as np
 
+from emet.benchmarks.sqa3d.scannet.observations import scannet_rgb_depth_to_observations
+from emet.benchmarks.sqa3d.scannet.simulator import ScanNetEQASimulator
 from emet.core.interfaces import Observations
 from emet.core.robot import AbstractRobotClient, ControlMode
 from emet.motion import Footprint, RobotModel
 from emet.utils.geometry import xyt_base_to_global
 
-from emet_habitat.observations import habitat_rgb_depth_to_observations
-from emet_habitat.simulator import HabitatEQASimulator
 
+class ScanNetRobotClient(AbstractRobotClient, RobotModel):
+    """In-process ScanNet mesh agent for GraphEQA / Dynagraph on SQA3D."""
 
-class HabitatRobotClient(AbstractRobotClient, RobotModel):
-    """In-process Habitat agent for GraphEQA / Dynagraph controllers."""
-
-    def __init__(self, simulator: HabitatEQASimulator):
+    def __init__(self, simulator: ScanNetEQASimulator):
         super().__init__()
         self._sim = simulator
         self._xyt = np.zeros(3, dtype=np.float64)
@@ -36,53 +35,42 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
 
     def _sync_pose_from_sim(self) -> None:
         frame = self._sim.get_frame()
-        obs = habitat_rgb_depth_to_observations(
-            rgb=frame.rgb,
-            depth=frame.depth,
-            agent_state=frame.agent_state,
-            intrinsics=frame.intrinsics,
-            semantic=frame.semantic,
-        )
+        obs = self._frame_to_obs(frame)
         self._xyt = np.array([obs.gps[0], obs.gps[1], float(obs.compass[0])], dtype=np.float64)
 
-    @property
-    def hm3d_semantic_labeler(self):
-        return getattr(self._sim, "semantic_labeler", None)
-
-    @property
-    def uses_hm3d_semantics(self) -> bool:
-        return bool(getattr(self._sim, "uses_hm3d_semantics", False))
-
-    def get_observation(self, max_iter: int = 5) -> Observations | None:
-        frame = self._sim.get_frame()
-        return habitat_rgb_depth_to_observations(
+    def _frame_to_obs(self, frame) -> Observations:
+        return scannet_rgb_depth_to_observations(
             rgb=frame.rgb,
             depth=frame.depth,
-            agent_state=frame.agent_state,
+            position=frame.position,
+            quat_xyzw=frame.quat_xyzw,
             intrinsics=frame.intrinsics,
-            semantic=frame.semantic,
+            sensor_height=self._sim.sensor_height,
+            camera_tilt_deg=self._sim.camera_tilt_deg,
         )
+
+    def get_observation(self, max_iter: int = 5) -> Observations | None:
+        return self._frame_to_obs(self._sim.get_frame())
 
     def get_base_pose(self, timeout: float = 5.0) -> np.ndarray:
         self._sync_pose_from_sim()
         return self._xyt.copy()
 
-    def _greedy_to_habitat_point(self, habitat_xyz: np.ndarray, max_steps: int = 40) -> None:
-        goal_x = float(habitat_xyz[0])
-        goal_z = float(habitat_xyz[2])
+    def _greedy_to_xy(self, goal_x: float, goal_y: float, max_steps: int = 40) -> None:
         for _ in range(max_steps):
             self._sync_pose_from_sim()
             dx = goal_x - self._xyt[0]
-            dz = goal_z - self._xyt[1]
-            dist = math.hypot(dx, dz)
+            dy = goal_y - self._xyt[1]
+            dist = math.hypot(dx, dy)
             if dist < 0.12:
                 break
-            target_heading = math.atan2(dz, dx)
+            target_heading = math.atan2(dy, dx)
             dtheta = (target_heading - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
             if abs(dtheta) > 0.12:
                 self._sim.step("turn_left" if dtheta > 0 else "turn_right")
             else:
                 self._sim.step("move_forward")
+            self._sync_pose_from_sim()
 
     def move_base_to(
         self,
@@ -91,33 +79,17 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         blocking: bool = False,
         verbose: bool = False,
         timeout: float | None = None,
+        world_frame: bool = False,
+        **kwargs: Any,
     ):
         goal = np.asarray(list(xyt)[:3], dtype=np.float64)
         if relative:
             goal = xyt_base_to_global(goal, self._xyt)
-        goal_theta = float(goal[2]) if len(goal) >= 3 else None
-        if not relative:
-            path_pts = self._sim.find_path_to_xy(float(goal[0]), float(goal[1]))
-            if path_pts is not None:
-                for pt in path_pts[1:]:
-                    self._greedy_to_habitat_point(pt)
-                if goal_theta is not None:
-                    for _ in range(18):
-                        self._sync_pose_from_sim()
-                        dtheta = (goal_theta - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
-                        if abs(dtheta) < 0.1:
-                            break
-                        self._sim.step("turn_left" if dtheta > 0 else "turn_right")
-                self._sync_pose_from_sim()
-                return
-        self._greedy_to_habitat_point(
-            np.array([goal[0], 0.0, goal[1]], dtype=np.float64),
-            max_steps=80,
-        )
-        if goal_theta is not None:
+        self._greedy_to_xy(float(goal[0]), float(goal[1]), max_steps=80)
+        if len(goal) >= 3:
             for _ in range(18):
                 self._sync_pose_from_sim()
-                dtheta = (goal_theta - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
+                dtheta = (float(goal[2]) - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
                 if abs(dtheta) < 0.1:
                     break
                 self._sim.step("turn_left" if dtheta > 0 else "turn_right")
@@ -158,6 +130,8 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         relative: bool = False,
         final_timeout: float = 60.0,
         blocking: bool = True,
+        world_frame: bool = False,
+        **kwargs: Any,
     ):
         for wp in trajectory:
             self.move_base_to(wp, relative=relative, blocking=blocking)
@@ -175,7 +149,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         return self.dof
 
     def set_config(self, q) -> None:
-        """No-op: Habitat agent pose is owned by the simulator."""
+        return None
 
     def get_config(self):
         self._sync_pose_from_sim()
@@ -188,7 +162,6 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
     def say(self, text: str):
         return None
 
-    # Stretch-shaped stubs for DynaMem ManipulationWrapper (EQA uses navigation only).
     def get_pan_tilt(self) -> tuple[float, float]:
         return (0.0, 0.0)
 
