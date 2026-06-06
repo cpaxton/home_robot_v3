@@ -1,0 +1,31 @@
+# Habitat find-phase episodes (HM3D proxy for OVMM minival find phases).
+# Requires HM3D train + semantic assets; run via scripts/eval_habitat_ovmm_find_phases.py
+# inside .venv-habitat (see docs/ovmm_find_phase_benchmark.md).
+
+episodes:
+  - id: hm3d_lamp_bed_00004
+    scene: "00004-VqCaAuuoeWk"
+    floor: 1
+    object: lamp
+    start_recep: bed
+    goal_recep: nightstand
+    success_radius_m: 0.75
+    explore_steps: 0
+
+  - id: hm3d_bed_blanket_00006
+    scene: "00006-HkseAnWCgqk"
+    floor: 0
+    object: blanket
+    start_recep: bed
+    goal_recep: chair
+    success_radius_m: 0.75
+    explore_steps: 0
+
+  - id: hm3d_chair_table_00005
+    scene: "00005-yPKGKBCyYx8"
+    floor: 0
+    object: chair
+    start_recep: table
+    goal_recep: sofa
+    success_radius_m: 0.75
+    explore_steps: 0

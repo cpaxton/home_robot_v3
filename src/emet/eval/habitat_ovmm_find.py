@@ -14,11 +14,11 @@
 # of this source tree.
 
 """
-Habitat OVMM find-phase adapter (Phase 2, optional).
+Habitat OVMM find-phase adapter (Phase 2).
 
-Reuses :mod:`emet.eval.ovmm_find_phase` metric definitions on a small Habitat-OVMM
-minival split. Habitat-Sim runs in ``.venv-habitat`` (see ``docs/habitat/install.md``);
-this module stays importable from the main ``emet`` package without ``habitat_sim``.
+Episode registry and metric helpers live here (importable from main ``emet``).
+Habitat-Sim execution runs in ``.venv-habitat`` via ``emet-habitat`` CLI or
+``scripts/eval_habitat_ovmm_find_phases.py``.
 """
 
 from __future__ import annotations
@@ -26,49 +26,62 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from emet.eval.ovmm_find_phase import compute_find_phase_metrics
+import yaml
+
+from emet.eval.ovmm_find_phase import (
+    FindPhaseRunConfig,
+    compute_find_phase_metrics,
+    distance_to_placement_xy,
+    horizontal_coords,
+)
+from emet.utils.config import resolve_config_yaml_path
+
+DEFAULT_HABITAT_EPISODES = "configs/ovmm/habitat_find_phase_episodes.yaml"
 
 
-def load_habitat_ovmm_episodes(split: str = "minival") -> list[dict[str, Any]]:
+def load_habitat_ovmm_episodes(
+    path: str | Path | None = None,
+    *,
+    split: str = "minival",
+) -> list[dict[str, Any]]:
     """
-    Load Habitat OVMM episode metadata for find-phase evaluation.
+    Load Habitat find-phase episode metadata.
 
-    Returns empty list until OVMM minival JSON is wired (Habitat EQA harness is
-    separate: ``emet run graph-eqa-habitat`` / ``docs/habitat_eqa.md``).
+    ``split`` is reserved for future OVMM-HSSD minival JSON; HM3D proxy episodes
+    are listed in ``configs/ovmm/habitat_find_phase_episodes.yaml``.
     """
     _ = split
-    return []
+    full = Path(resolve_config_yaml_path(str(path or DEFAULT_HABITAT_EPISODES)))
+    with full.open(encoding="utf-8") as fh:
+        raw = yaml.safe_load(fh) or {}
+    rows = raw.get("episodes") if isinstance(raw, dict) else raw
+    if not isinstance(rows, list):
+        raise ValueError(f"expected list under 'episodes' in {full}")
+    return [dict(row) for row in rows if isinstance(row, dict)]
 
 
 def score_habitat_find_phase(
     *,
     obj_pred_xyz,
     recep_pred_xyz,
-    object_gt_xyz,
-    recep_gt_xyz_list: list,
+    placements: dict[str, dict[str, Any]] | None,
     object_query: str,
     start_recep: str,
     goal_recep: str,
     radius_m: float = 0.75,
+    object_gt_body: str | None = None,
 ) -> dict[str, Any]:
-    """
-    Score one Habitat find-phase step using the same oracle as emet sim.
-
-    ``object_gt_xyz`` / ``recep_gt_xyz_list`` should be world-frame positions from Habitat GT.
-    """
-    placements: dict[str, dict[str, Any]] = {}
-    if object_gt_xyz is not None:
-        placements["habitat_object"] = {"cat": object_query, "pos": list(object_gt_xyz)}
-    for i, xyz in enumerate(recep_gt_xyz_list or []):
-        placements[f"habitat_recep_{i}"] = {"cat": goal_recep, "pos": list(xyz)}
+    """Score one Habitat find-phase step (XZ horizontal plane, bounds-aware)."""
     return compute_find_phase_metrics(
         obj_pred_xyz=obj_pred_xyz,
         recep_pred_xyz=recep_pred_xyz,
-        placements=placements or None,
+        placements=placements,
         object_query=object_query,
         start_recep=start_recep,
         goal_recep=goal_recep,
         radius_m=radius_m,
+        object_gt_body=object_gt_body,
+        frame="habitat_xz",
     )
 
 
@@ -76,16 +89,47 @@ def run_habitat_minival_batch(
     output_dir: str | Path,
     *,
     backend: str = "dynagraph",
+    episodes_path: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Batch runner entry point for Habitat minival (no-op when episodes unavailable).
+    Batch runner entry point (delegates to ``emet_habitat`` when available).
 
-    Full implementation will mirror ``scripts/eval_ovmm_find_phases.py`` with a Habitat env bridge.
+    From repo root with Habitat venv::
+
+        .venv-habitat/bin/emet-habitat run-ovmm-find-batch --output-dir runs/ovmm_habitat
     """
-    episodes = load_habitat_ovmm_episodes("minival")
+    episodes = load_habitat_ovmm_episodes(episodes_path)
     if not episodes:
         return []
-    _ = backend
+    try:
+        from emet_habitat.ovmm_find_runner import (
+            load_habitat_find_phase_episodes,
+            run_habitat_find_phase_episode,
+        )
+    except ImportError as exc:
+        raise RuntimeError("Habitat find-phase batch requires .venv-habitat (./scripts/install_habitat.sh)") from exc
+
+    loaded = load_habitat_find_phase_episodes(episodes_path or resolve_config_yaml_path(DEFAULT_HABITAT_EPISODES))
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    return []
+    run_cfg = FindPhaseRunConfig(backend=backend)  # type: ignore[arg-type]
+    results: list[dict[str, Any]] = []
+    for ep in loaded:
+        metrics = run_habitat_find_phase_episode(ep, run_cfg)
+        (out / f"{ep.id}_{backend}.json").write_text(
+            __import__("json").dumps(metrics, indent=2),
+            encoding="utf-8",
+        )
+        results.append(metrics)
+    return results
+
+
+__all__ = [
+    "DEFAULT_HABITAT_EPISODES",
+    "FindPhaseRunConfig",
+    "distance_to_placement_xy",
+    "horizontal_coords",
+    "load_habitat_ovmm_episodes",
+    "run_habitat_minival_batch",
+    "score_habitat_find_phase",
+]

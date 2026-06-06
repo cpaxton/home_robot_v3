@@ -23,6 +23,8 @@ from emet.eval.ovmm_find_phase import (
     _query_variants,
     category_matches,
     compute_find_phase_metrics,
+    distance_to_placement_xy,
+    horizontal_coords,
     pick_find_object_gt_body,
     score_find_object,
     score_find_recep,
@@ -108,6 +110,20 @@ def test_pick_find_object_respects_gt_body():
 def test_query_variants_includes_gt_cat():
     variants = _query_variants("cab", {"cab_main": {"cat": "cab"}})
     assert "cab" in variants
+
+
+def test_distance_to_bounds_habitat_xz():
+    placement = {
+        "cat": "table",
+        "pos": [1.0, 0.5, 2.0],
+        "bounds": [[0.5, 0.0, 1.5], [1.5, 1.0, 2.5]],
+        "frame": "habitat_yup",
+    }
+    err = distance_to_placement_xy([1.0, 0.5, 2.0], placement, frame="habitat_xz")
+    assert err == 0.0
+    err2 = distance_to_placement_xy([2.0, 0.5, 2.0], placement, frame="habitat_xz")
+    assert abs(err2 - 0.5) < 1e-6
+    assert horizontal_coords([1.0, 0.5, 2.0], frame="habitat_xz").tolist() == [1.0, 2.0]
 
 
 def test_compute_find_phase_partial_success():

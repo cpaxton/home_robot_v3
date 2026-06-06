@@ -59,3 +59,9 @@ def test_ovmm_find_phase_s0_dynagraph_perception():
     assert metrics.get("find_partial_success", 0) >= 1.0, metrics
     assert metrics.get("find_object_success") is True, metrics
     assert metrics.get("find_recep_success") is True, metrics
+    obj_err = metrics.get("localization_err_obj_m")
+    recep_err = metrics.get("localization_err_recep_m")
+    if obj_err is not None:
+        assert float(obj_err) <= 0.30, metrics
+    if recep_err is not None:
+        assert float(recep_err) <= 0.30, metrics

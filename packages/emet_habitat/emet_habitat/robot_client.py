@@ -54,6 +54,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
     def __init__(self, simulator: HabitatEQASimulator):
         super().__init__()
         self._sim = simulator
+        self._emet_session: dict | None = None
         self._xyt = np.zeros(3, dtype=np.float64)
         self._v = 0.3
         self._w = 0.4
@@ -269,3 +270,11 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
 
     def get_gripper_position(self) -> float:
         return 0.5
+
+    def get_emet_session(self) -> dict | None:
+        """Optional session metadata (e.g. injected HM3D GT placements for find-phase)."""
+        return self._emet_session
+
+    def set_emet_session(self, session: dict | None) -> None:
+        """Attach session dict for GT graph refresh (Habitat find-phase harness)."""
+        self._emet_session = dict(session) if session is not None else None

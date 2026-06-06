@@ -82,10 +82,10 @@ Our sim oracle and perception backends (Stretch, rotate-in-place, perfect sim de
 
 | Tier | Backend | FindObj | FindRec | Partial | Notes |
 |------|---------|---------|---------|---------|-------|
-| S0 | ground_truth | 1.0 | 1.0 | 1.0 | `--not-rotate` |
-| S0 | dynagraph | 1.0 | 1.0 | 1.0 | rotate + perfect depth (@1.0 m on table) |
-| S1 | ground_truth | 1.0 | 1.0 | 1.0 | `--not-rotate`, `object_gt_body: obj_main` |
-| S1 | dynagraph | 1.0 | 1.0 | 1.0 | rotate + perfect depth (@0.75 m) |
+| S0 | ground_truth | 1.0 | 1.0 | 1.0 | `--not-rotate`, @0.30 m |
+| S0 | dynagraph | target | target | target | rotate + perfect depth; err ≤0.30 m @0.30 m radius |
+| S1 | ground_truth | 1.0 | 1.0 | 1.0 | `--not-rotate`, `object_gt_body: obj_main`, @0.50 m |
+| S1 | dynagraph | target | target | target | rotate + perfect depth @0.50 m |
 
 Reproduce S0 perception run:
 
@@ -128,9 +128,27 @@ uv run python scripts/eval_ovmm_find_phases.py --tier S0 \
 - **S2** requires MolmoSpaces wrapper (`.venv-molmospaces`; see `docs/molmospaces.md`). Large scenes may return capped `sim_object_placements`; compare `n_placements` across Molmo indices.
 - Use distinct `--port-offset` values when running parallel jobs.
 
-## Phase 2: Habitat OVMM subset
+## Phase 2: Habitat find-phase (HM3D proxy)
 
-Optional adapter: `src/emet/eval/habitat_ovmm_find.py`. Habitat EQA (HM-EQA) is already on `main` via `packages/emet_habitat` — install with `./scripts/install_habitat.sh` and see `docs/habitat/install.md`. OVMM minival find-phase wiring is still a stub; same metric definitions as emet sim when episodes are added.
+Episodes: `configs/ovmm/habitat_find_phase_episodes.yaml` (HM3D train scenes + semantic GT).
+Same FindObj/FindRec metrics with **XZ** horizontal scoring (`frame: habitat_yup`).
+
+```bash
+./scripts/install_habitat.sh
+uv run python scripts/download_habitat_eqa_data.py --fetch-csv --fetch-hm3d train
+
+# Batch (uses .venv-habitat)
+uv run python scripts/eval_habitat_ovmm_find_phases.py \
+  --backend ground_truth --not-rotate --cpu-only \
+  --output-dir runs/ovmm_habitat/gt_smoke
+
+# Single episode
+.venv-habitat/bin/emet-habitat run-ovmm-find-episode \
+  --episode-id hm3d_lamp_bed_00004 --backend dynagraph --cpu-only
+```
+
+Full OVMM-HSSD minival (official leaderboard) is not wired yet; HM3D proxy validates the Habitat
+memory → find-phase metric path before HSSD scene download.
 
 ## Paper
 

@@ -28,6 +28,7 @@ import yaml
 from emet.utils.config import resolve_config_yaml_path
 
 MemoryBackendName = Literal["dynamem", "graph_eqa", "dynagraph", "ground_truth"]
+PlanarFrame = Literal["mujoco_xy", "habitat_xz"]
 
 
 @dataclass(frozen=True)
@@ -138,13 +139,61 @@ def pick_find_object_gt_body(
         return sorted(obj_bodies)[0]
 
     def min_dist_to_start(body: str) -> float:
-        pos = np.asarray(placements[body]["pos"], dtype=np.float64).reshape(3)
+        frame = str(placements[body].get("frame") or "mujoco_xy")
+        planar: PlanarFrame = "habitat_xz" if frame == "habitat_yup" else "mujoco_xy"
+        pos_h = gt_horizontal_coords(placements[body], frame=planar)
         return min(
-            float(np.linalg.norm(pos[:2] - np.asarray(placements[s]["pos"], dtype=np.float64).reshape(3)[:2]))
-            for s in start_bodies
+            float(np.linalg.norm(pos_h - gt_horizontal_coords(placements[s], frame=planar))) for s in start_bodies
         )
 
     return sorted(obj_bodies, key=min_dist_to_start)[0]
+
+
+def horizontal_coords(
+    xyz: np.ndarray | list,
+    *,
+    frame: PlanarFrame = "mujoco_xy",
+) -> np.ndarray:
+    """Return horizontal-plane coordinates for distance checks (meters)."""
+    arr = np.asarray(xyz, dtype=np.float64).reshape(-1)
+    if frame == "habitat_xz":
+        if arr.size >= 3:
+            return np.array([float(arr[0]), float(arr[2])], dtype=np.float64)
+        return np.array([float(arr[0]), float(arr[1] if arr.size > 1 else 0.0)], dtype=np.float64)
+    return arr[:2]
+
+
+def gt_horizontal_coords(
+    placement: dict[str, Any],
+    *,
+    frame: PlanarFrame = "mujoco_xy",
+) -> np.ndarray:
+    """Horizontal coords for one placement entry (center or bounds clamp)."""
+    pos = np.asarray(placement["pos"], dtype=np.float64).reshape(3)
+    return horizontal_coords(pos, frame=frame)
+
+
+def distance_to_placement_xy(
+    pred_xyz: np.ndarray | list,
+    placement: dict[str, Any],
+    *,
+    frame: PlanarFrame = "mujoco_xy",
+) -> float:
+    """XY/XZ distance from prediction to GT center, or to nearest point on ``bounds`` when present."""
+    pred_h = horizontal_coords(pred_xyz, frame=frame)
+    bounds = placement.get("bounds")
+    if bounds is not None:
+        b = np.asarray(bounds, dtype=np.float64).reshape(2, 3)
+        if frame == "habitat_xz":
+            mn = np.array([float(b[0, 0]), float(b[0, 2])], dtype=np.float64)
+            mx = np.array([float(b[1, 0]), float(b[1, 2])], dtype=np.float64)
+        else:
+            mn = b[0, :2]
+            mx = b[1, :2]
+        clamped = np.clip(pred_h, mn, mx)
+        return float(np.linalg.norm(pred_h - clamped))
+    gt_h = gt_horizontal_coords(placement, frame=frame)
+    return float(np.linalg.norm(pred_h - gt_h))
 
 
 def _pred_xyz_array(pred_xyz: np.ndarray | list | None) -> np.ndarray | None:
@@ -234,10 +283,13 @@ def _pick_graph_xyz_near_recep(
     if not ref_bodies:
         xyz = np.asarray(nodes[0].xyz, dtype=np.float64).reshape(3)
         return xyz
-    ref_xy = [np.asarray(placements[b]["pos"], dtype=np.float64).reshape(3)[:2] for b in ref_bodies]
+    frame: PlanarFrame = (
+        "habitat_xz" if any(str(placements[b].get("frame")) == "habitat_yup" for b in ref_bodies) else "mujoco_xy"
+    )
+    ref_xy = [gt_horizontal_coords(placements[b], frame=frame) for b in ref_bodies]
 
     def _min_dist_to_recep(node) -> float:
-        nxy = np.asarray(node.xyz, dtype=np.float64).reshape(3)[:2]
+        nxy = horizontal_coords(node.xyz, frame=frame)
         return min(float(np.linalg.norm(nxy - rxy)) for rxy in ref_xy)
 
     best = min(nodes, key=_min_dist_to_recep)
@@ -248,19 +300,39 @@ def _pick_graph_xyz_near_point(
     memory: Any,
     query: str,
     anchor_xyz: np.ndarray,
+    *,
+    frame: PlanarFrame = "mujoco_xy",
 ) -> np.ndarray | None:
-    """Pick matching graph node nearest an anchor XYZ (e.g. localized object for FindRec)."""
+    """Pick matching graph node nearest an anchor XYZ (optional disambiguation)."""
     nodes = _graph_nodes_matching(memory, query)
     if not nodes:
         return None
-    anchor = np.asarray(anchor_xyz, dtype=np.float64).reshape(3)[:2]
+    anchor = horizontal_coords(anchor_xyz, frame=frame)
 
     def _dist(node) -> float:
-        nxy = np.asarray(node.xyz, dtype=np.float64).reshape(3)[:2]
+        nxy = horizontal_coords(node.xyz, frame=frame)
         return float(np.linalg.norm(nxy - anchor))
 
     best = min(nodes, key=_dist)
     return np.asarray(best.xyz, dtype=np.float64).reshape(3)
+
+
+def _voxel_localize(
+    voxel_map: Any,
+    query: str,
+    *,
+    placements: dict[str, dict[str, Any]] | None,
+    session: dict[str, Any] | None,
+) -> tuple[np.ndarray | None, str]:
+    """Voxel-map localization only (preferred for find-phase; avoids merged-graph centroid drift)."""
+    for q in _query_variants(query, placements):
+        result = voxel_map.localize_text(q, debug=False, return_debug=True)
+        target = result[0] if isinstance(result, (list, tuple)) else result
+        if target is not None:
+            xyz = localize_point_to_world_xy(target, session)
+            if xyz is not None:
+                return xyz, q
+    return None, query
 
 
 def query_find_phase_localization(
@@ -273,6 +345,7 @@ def query_find_phase_localization(
     anchor_xyz: np.ndarray | None = None,
     voxel_map: Any | None = None,
     convert_nav_to_world: bool = False,
+    prefer_voxel: bool = True,
 ) -> tuple[np.ndarray | None, bool, str]:
     """
     Query memory for FindObj/FindRec localization with query variants and fallbacks.
@@ -282,14 +355,10 @@ def query_find_phase_localization(
     """
     sess = session if convert_nav_to_world else None
 
-    if voxel_map is not None and hasattr(voxel_map, "localize_text"):
-        for q in _query_variants(query, placements):
-            result = voxel_map.localize_text(q, debug=False, return_debug=True)
-            target = result[0] if isinstance(result, (list, tuple)) else result
-            if target is not None:
-                xyz = localize_point_to_world_xy(target, sess)
-                if xyz is not None:
-                    return xyz, True, q
+    if prefer_voxel and voxel_map is not None and hasattr(voxel_map, "localize_text"):
+        xyz, q_used = _voxel_localize(voxel_map, query, placements=placements, session=sess)
+        if xyz is not None:
+            return xyz, True, q_used
 
     if near_recep and placements is not None and _graph_nodes_matching(memory, query):
         xyz = _pick_graph_xyz_near_recep(memory, query, placements, near_recep)
@@ -297,8 +366,11 @@ def query_find_phase_localization(
             converted = localize_point_to_world_xy(xyz, sess)
             xyz = converted if converted is not None else xyz
             return xyz, True, query
+    planar_frame: PlanarFrame = "mujoco_xy"
+    if placements and any(str(v.get("frame")) == "habitat_yup" for v in placements.values()):
+        planar_frame = "habitat_xz"
     if anchor_xyz is not None and _graph_nodes_matching(memory, query):
-        xyz = _pick_graph_xyz_near_point(memory, query, anchor_xyz)
+        xyz = _pick_graph_xyz_near_point(memory, query, anchor_xyz, frame=planar_frame)
         if xyz is not None:
             converted = localize_point_to_world_xy(xyz, sess)
             xyz = converted if converted is not None else xyz
@@ -332,6 +404,7 @@ def score_find_object(
     *,
     radius_m: float,
     object_gt_body: str | None = None,
+    frame: PlanarFrame = "mujoco_xy",
 ) -> dict[str, Any]:
     """Score FindObj: predicted XYZ within ``radius_m`` of chosen GT object body."""
     if not placements:
@@ -353,8 +426,7 @@ def score_find_object(
             "localization_err_obj_m": None,
             "gt_object_body": gt_body,
         }
-    gt_pos = np.asarray(placements[gt_body]["pos"], dtype=np.float64).reshape(3)
-    err_xy = float(np.linalg.norm(pred[:2] - gt_pos[:2]))
+    err_xy = distance_to_placement_xy(pred, placements[gt_body], frame=frame)
     return {
         "find_object_success": err_xy <= float(radius_m),
         "localization_err_obj_m": err_xy,
@@ -368,6 +440,7 @@ def score_find_recep(
     goal_recep: str,
     *,
     radius_m: float,
+    frame: PlanarFrame = "mujoco_xy",
 ) -> dict[str, Any]:
     """Score FindRec: predicted XYZ within ``radius_m`` of any GT body matching ``goal_recep``."""
     if not placements:
@@ -384,10 +457,7 @@ def score_find_recep(
             "localization_err_recep_m": None,
             "gt_recep_bodies": recep_bodies,
         }
-    errors = [
-        float(np.linalg.norm(pred[:2] - np.asarray(placements[body]["pos"], dtype=np.float64).reshape(3)[:2]))
-        for body in recep_bodies
-    ]
+    errors = [distance_to_placement_xy(pred, placements[body], frame=frame) for body in recep_bodies]
     best_err = min(errors)
     return {
         "find_recep_success": best_err <= float(radius_m),
@@ -406,6 +476,7 @@ def compute_find_phase_metrics(
     goal_recep: str,
     radius_m: float,
     object_gt_body: str | None = None,
+    frame: PlanarFrame = "mujoco_xy",
 ) -> dict[str, Any]:
     """Combine FindObj / FindRec scores and OVMM-style partial success (mean of two phases)."""
     obj = score_find_object(
@@ -415,8 +486,9 @@ def compute_find_phase_metrics(
         start_recep,
         radius_m=radius_m,
         object_gt_body=object_gt_body,
+        frame=frame,
     )
-    rec = score_find_recep(recep_pred_xyz, placements, goal_recep, radius_m=radius_m)
+    rec = score_find_recep(recep_pred_xyz, placements, goal_recep, radius_m=radius_m, frame=frame)
     partial = 0.5 * (float(obj["find_object_success"]) + float(rec["find_recep_success"]))
     return {
         **obj,
@@ -486,7 +558,8 @@ def apply_backend_parameters(
         parameters["dynagraph_merge_xy_m"] = 0.0
         parameters["dynagraph_staleness_horizon"] = 0
     elif backend in ("dynagraph", "ground_truth"):
-        parameters.setdefault("dynagraph_merge_xy_m", 0.45)
+        # Tight merge for find-phase localization (0.45 m merge inflates centroid error ~0.4 m).
+        parameters.setdefault("dynagraph_merge_xy_m", 0.15)
         parameters.setdefault("dynagraph_staleness_horizon", 256)
     if merge_xy_m is not None:
         parameters["dynagraph_merge_xy_m"] = float(merge_xy_m)
@@ -742,8 +815,7 @@ def run_episode_find_phase(
             episode.goal_recep,
             placements=placements,
             session=session,
-            near_recep=episode.start_recep,
-            anchor_xyz=obj_xyz,
+            near_recep=episode.goal_recep,
             voxel_map=vm,
             convert_nav_to_world=nav_world or run_cfg.backend == "dynamem",
         )
