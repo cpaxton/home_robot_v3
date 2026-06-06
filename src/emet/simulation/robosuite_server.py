@@ -40,7 +40,7 @@ from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn, scene_base_spawn
 from emet.simulation.env_flags import env_sim_nav_debug, warn_sim_nav_env_flags
 from emet.simulation.head_look_action import apply_head_to_robosuite
-from emet.simulation.molmospaces_env import molmospaces_nav_teleport_enabled
+from emet.simulation.molmospaces_env import env_flag, molmospaces_nav_teleport_enabled
 from emet.simulation.molmospaces_mobile_autoplace import apply_molmospaces_freejoint_base_autoplace
 from emet.simulation.mujoco_ground_truth import (
     mujoco_ground_truth_write_path,
@@ -719,8 +719,15 @@ class RobosuiteZmqServer(BaseZmqServer):
         bn = self._scene_source_basename or ""
         return bn.startswith("molmospaces_merged")
 
+    def _use_nav_teleport(self) -> bool:
+        if self._is_molmospaces_session():
+            return molmospaces_nav_teleport_enabled()
+        # Default robosuite table (innate_mars, etc.): snap base on xyt goals so rotate_in_place
+        # does not wait on wheel-drive at_goal (often never reached within 30s).
+        return env_flag("EMET_SIM_NAV_TELEPORT", default="1")
+
     def _use_molmospaces_nav_teleport(self) -> bool:
-        return self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()
+        return self._use_nav_teleport()
 
     def _build_emet_session(
         self,
@@ -743,7 +750,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         else:
             env = {"kind": "default_table"}
         caps: dict[str, Any] = {
-            "teleport_base": self._use_molmospaces_nav_teleport(),
+            "teleport_base": self._use_nav_teleport(),
             "nav_velocity_drive": True,
             "depth": bool(self._spec.camera_names),
             "num_cameras": len(self._spec.camera_names),

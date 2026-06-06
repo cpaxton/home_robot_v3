@@ -19,6 +19,7 @@ CLEAN_SIM="false"
 FORCE_DOWNLOAD="false"
 INSTALL_MOLMOSPACES="false"
 NO_MOLMOSPACES="false"
+INSTALL_LINGBOT_MAP="false"
 # standard | minimal | full (full = install sim without passing --sim; default profile is full)
 PROFILE="${EMET_INSTALL_PROFILE:-full}"
 # Set when user passes --sim, --no-sim, or --all (all implies sim)
@@ -72,6 +73,9 @@ for arg in "$@"; do
             NO_MOLMOSPACES="true"
             INSTALL_MOLMOSPACES="false"
             ;;
+        --lingbot-map)
+            INSTALL_LINGBOT_MAP="true"
+            ;;
         --profile=*)
             PROFILE="${arg#--profile=}"
             ;;
@@ -107,7 +111,7 @@ fi
 echo "=============================================="
 echo "         INSTALLING STRETCH AI (uv)"
 echo "=============================================="
-echo "Options: PROFILE=$PROFILE CPU_ONLY=$CPU_ONLY NO_SAM2=$NO_SAM2 INSTALL_SIM=$INSTALL_SIM MOLMOSPACES=$INSTALL_MOLMOSPACES NO_MOLMOSPACES=$NO_MOLMOSPACES"
+echo "Options: PROFILE=$PROFILE CPU_ONLY=$CPU_ONLY NO_SAM2=$NO_SAM2 INSTALL_SIM=$INSTALL_SIM MOLMOSPACES=$INSTALL_MOLMOSPACES LINGBOT_MAP=$INSTALL_LINGBOT_MAP NO_MOLMOSPACES=$NO_MOLMOSPACES"
 echo "         Defaults: profile=full enables sim when third_party/robocasa exists (use --no-sim or --profile=minimal to skip)."
 echo "         EMET_INSTALL_PROFILE=standard  or  --profile=minimal  = no sim unless you also pass --sim."
 echo "         -y/--yes    = non-interactive (apt, link emet); does NOT imply MolmoSpaces — pass --molmospaces or use --all"
@@ -116,6 +120,7 @@ echo "         --sim       = uv sim extra + install_simulation.sh (Robocasa + ro
 echo "         --no-sim    = force sim off even if PROFILE=full"
 echo "         --molmospaces = create .venv-molmospaces for MolmoSpaces (scenes + rby1 robot)"
 echo "         --no-molmospaces = skip MolmoSpaces venv even when sim is installed (lighter / CI)"
+echo "         --lingbot-map = create .venv-lingbot-map for LingBot-Map streaming depth (see docs/lingbot_map.md)"
 echo "         --clean     = remove and re-clone third_party/robosuite, robosuite_models, robocasa (only if needed; normally we update in place)"
 echo "         --force-download = re-download sim assets even if they already exist (use with --sim/--all)"
 echo "         Rich menu:  uv sync && uv run emet install menu"
@@ -326,6 +331,12 @@ if [ "$INSTALL_MOLMOSPACES" = "true" ]; then
     echo "  -> MLSPACES_ASSETS_DIR=$MLSPACES_ASSETS_DIR  MLSPACES_CACHE_DIR=$MLSPACES_CACHE_DIR"
     echo "     (must differ; emet defaults cache to …/molmospaces/resource_cache next to …/assets)"
     echo "  -> Run: emet molmospaces list-robots  &&  emet molmospaces serve --viewer"
+fi
+
+if [ "$INSTALL_LINGBOT_MAP" = "true" ]; then
+    echo ""
+    echo "Setting up LingBot-Map venv (.venv-lingbot-map)..."
+    bash "$ROOT_DIR/scripts/install_lingbot_map.sh"
 fi
 
 # Quick sanity check

@@ -195,6 +195,11 @@ episode0/
 
 debug*/
 
+# LingBot-Map isolated venv, upstream clone, and recorded episodes
+.venv-lingbot-map/
+third_party/lingbot-map/
+logs/lingbot_episodes/
+
 */piper_tts/
 piper_tts/
 *.ts
