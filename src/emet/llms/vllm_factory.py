@@ -63,7 +63,7 @@ def create_dynamem_vllm(
     if fam == "gemma4":
         from emet.llms.gemma4_vllm_client import Gemma4VLLMClient
 
-        mid = hf_model_id or default_hf_model_id("gemma4") or "google/gemma-3-4b-it"
+        mid = hf_model_id or default_hf_model_id("gemma4") or "google/gemma-4-E4B-it"
         return Gemma4VLLMClient(
             prompt=prompt,
             hf_model_id=mid,
