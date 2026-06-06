@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import re
 import timeit
 from typing import Any
 
@@ -30,6 +31,17 @@ from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
 
+# Gemma 4 chat/control markers that may leak when the any-to-any pipeline returns raw text.
+_GEMMA4_CONTROL_TOKEN_RE = re.compile(r"<\|?(?:turn|tool_call|tool_response|tool|think|channel|image|audio|video)\|?>")
+
+
+def _sanitize_gemma4_text(text: str) -> str:
+    """Remove Gemma 4 control tokens (e.g. ``<turn|>``) from decoded pipeline output."""
+    if not text:
+        return ""
+    cleaned = _GEMMA4_CONTROL_TOKEN_RE.sub("", text)
+    return cleaned.strip()
+
 
 def _extract_text_from_any_to_any_output(outputs: Any) -> str:
     """Normalize pipeline return shape across transformers versions."""
@@ -37,21 +49,21 @@ def _extract_text_from_any_to_any_output(outputs: Any) -> str:
         return ""
     o0 = outputs[0]
     if not isinstance(o0, dict):
-        return str(o0).strip()
+        return _sanitize_gemma4_text(str(o0))
     if "generated_text" in o0:
         gen = o0["generated_text"]
         if isinstance(gen, str):
-            return gen.strip()
+            return _sanitize_gemma4_text(gen)
         if isinstance(gen, list) and gen:
             last = gen[-1]
             if isinstance(last, dict) and "content" in last:
-                return str(last["content"]).strip()
+                return _sanitize_gemma4_text(str(last["content"]))
         if isinstance(gen, dict) and "content" in gen:
-            return str(gen["content"]).strip()
+            return _sanitize_gemma4_text(str(gen["content"]))
     for key in ("text", "content", "message"):
         if key in o0 and isinstance(o0[key], str):
-            return o0[key].strip()
-    return str(o0).strip()
+            return _sanitize_gemma4_text(o0[key])
+    return _sanitize_gemma4_text(str(o0))
 
 
 class Gemma4AnyToAnyClient(AbstractLLMClient):

@@ -25,7 +25,10 @@ from emet.llms import (
     get_llm_client,
     is_vl_llm_key,
 )
-from emet.llms.gemma4_any_client import _extract_text_from_any_to_any_output
+from emet.llms.gemma4_any_client import (
+    _extract_text_from_any_to_any_output,
+    _sanitize_gemma4_text,
+)
 
 
 def test_gemma4_presets_point_at_hf_ids():
@@ -56,6 +59,12 @@ def test_extract_text_from_empty():
 
 def test_extract_text_string_chunk():
     assert _extract_text_from_any_to_any_output([{"generated_text": "  hi  "}]) == "hi"
+
+
+def test_extract_text_strips_turn_token():
+    assert _extract_text_from_any_to_any_output([{"generated_text": "Hello<turn|>"}]) == "Hello"
+    assert _extract_text_from_any_to_any_output([{"generated_text": "Ping!<turn|>"}]) == "Ping!"
+    assert _sanitize_gemma4_text("done<|turn>") == "done"
 
 
 def test_extract_text_list_content():
