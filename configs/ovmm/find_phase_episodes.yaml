@@ -1,0 +1,77 @@
+# OVMM-inspired find-phase episodes (FindObj / FindRec memory localization).
+# See docs/ovmm_find_phase_benchmark.md and scripts/eval_ovmm_find_phases.py
+
+episodes:
+  - id: default_table_s0
+    tier: S0
+    sim: configs/sim/default_table_stretch.yaml
+    object: red cylinder
+    start_recep: table
+    goal_recep: table
+    success_radius_m: 1.0
+    explore_steps: 0
+
+  - id: default_table_s0_blue_cube
+    tier: S0
+    sim: configs/sim/default_table_stretch.yaml
+    object: blue cube
+    start_recep: table
+    goal_recep: table
+    success_radius_m: 1.0
+    explore_steps: 0
+
+  - id: robocasa_pp_s1
+    tier: S1
+    sim: configs/sim/robocasa_pick_place_stretch.yaml
+    object: obj
+    object_gt_body: obj_main
+    start_recep: counter
+    goal_recep: cab
+    success_radius_m: 0.75
+    explore_steps: 0
+
+  - id: robocasa_pp_s1_explore5
+    tier: S1
+    sim: configs/sim/robocasa_pick_place_stretch.yaml
+    object: obj
+    object_gt_body: obj_main
+    start_recep: counter
+    goal_recep: cab
+    success_radius_m: 0.75
+    explore_steps: 5
+
+  - id: molmo_ithor_s2_idx0
+    tier: S2
+    sim: configs/sim/molmospaces_ithor_train_0.yaml
+    object: chair
+    start_recep: table
+    goal_recep: sofa
+    success_radius_m: 1.0
+    explore_steps: 0
+
+  - id: molmo_ithor_s2_idx0_explore15
+    tier: S2
+    sim: configs/sim/molmospaces_ithor_train_0.yaml
+    object: chair
+    start_recep: table
+    goal_recep: sofa
+    success_radius_m: 1.0
+    explore_steps: 15
+
+  - id: molmo_ithor_s2_idx1
+    tier: S2
+    sim: configs/sim/molmospaces_ithor_train_1.yaml
+    object: chair
+    start_recep: table
+    goal_recep: sofa
+    success_radius_m: 1.0
+    explore_steps: 0
+
+  - id: molmo_ithor_s2_idx2
+    tier: S2
+    sim: configs/sim/molmospaces_ithor_train_2.yaml
+    object: chair
+    start_recep: table
+    goal_recep: sofa
+    success_radius_m: 1.0
+    explore_steps: 0
