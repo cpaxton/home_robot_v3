@@ -8,7 +8,7 @@ episodes:
     object: red cylinder
     start_recep: table
     goal_recep: table
-    success_radius_m: 1.0
+    success_radius_m: 0.30
     explore_steps: 0
 
   - id: default_table_s0_blue_cube
@@ -17,7 +17,7 @@ episodes:
     object: blue cube
     start_recep: table
     goal_recep: table
-    success_radius_m: 1.0
+    success_radius_m: 0.30
     explore_steps: 0
 
   - id: robocasa_pp_s1
@@ -27,7 +27,7 @@ episodes:
     object_gt_body: obj_main
     start_recep: counter
     goal_recep: cab
-    success_radius_m: 0.75
+    success_radius_m: 0.50
     explore_steps: 0
 
   - id: robocasa_pp_s1_explore5
@@ -37,7 +37,7 @@ episodes:
     object_gt_body: obj_main
     start_recep: counter
     goal_recep: cab
-    success_radius_m: 0.75
+    success_radius_m: 0.50
     explore_steps: 5
 
   - id: molmo_ithor_s2_idx0
@@ -46,7 +46,7 @@ episodes:
     object: chair
     start_recep: table
     goal_recep: sofa
-    success_radius_m: 1.0
+    success_radius_m: 0.75
     explore_steps: 0
 
   - id: molmo_ithor_s2_idx0_explore15
@@ -55,7 +55,7 @@ episodes:
     object: chair
     start_recep: table
     goal_recep: sofa
-    success_radius_m: 1.0
+    success_radius_m: 0.75
     explore_steps: 15
 
   - id: molmo_ithor_s2_idx1
@@ -64,7 +64,7 @@ episodes:
     object: chair
     start_recep: table
     goal_recep: sofa
-    success_radius_m: 1.0
+    success_radius_m: 0.75
     explore_steps: 0
 
   - id: molmo_ithor_s2_idx2
@@ -73,5 +73,5 @@ episodes:
     object: chair
     start_recep: table
     goal_recep: sofa
-    success_radius_m: 1.0
+    success_radius_m: 0.75
     explore_steps: 0

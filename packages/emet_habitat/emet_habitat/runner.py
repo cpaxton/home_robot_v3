@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Chris Paxton
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
@@ -7,6 +16,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.controller_graph_eqa import GraphEQAController
@@ -16,7 +26,6 @@ from emet.habitat.config import default_hm3d_scene_dir
 from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
 from emet.habitat.hmeqa_enrich_labels import enrich_labels_for_question
 from emet.habitat.metrics import EpisodeMetrics, append_episode_jsonl, extract_mcq_letter, grade_mcq_answer
-
 from emet_habitat.robot_client import HabitatRobotClient
 from emet_habitat.simulator import HabitatEQASimulator
 
@@ -105,16 +114,16 @@ def _make_controller(
     hm3d_sem = robot.uses_hm3d_semantics if use_hm3d_semantics is None else use_hm3d_semantics
     # HM3D semantic sensor supplies graph labels; reserve VLM for EQA queries only.
     graph_perception = use_real_vlm and not hm3d_sem
-    common = dict(
-        robot=robot,
-        parameters=params,
-        save_rerun=False if no_rerun else False,
-        cpu_only=not use_real_vlm,
-        use_sensor_perception=graph_perception,
-        use_instance_graph=False,
-        # Habitat: depth voxel map for nav only — no SigLIP/YoloE reload per episode.
-        manipulation_only=True,
-    )
+    # Habitat: depth voxel map for nav only — no SigLIP/YoloE reload per episode.
+    common = {
+        "robot": robot,
+        "parameters": params,
+        "save_rerun": False if no_rerun else False,
+        "cpu_only": not use_real_vlm,
+        "use_sensor_perception": graph_perception,
+        "use_instance_graph": False,
+        "manipulation_only": True,
+    }
     if method == "dynagraph":
         agent = DynagraphController(**common)
     else:
@@ -214,9 +223,7 @@ def run_hmeqa_episode(
             parsed_letter = extract_mcq_letter(answer, q.choices)
             if not parsed_letter:
                 parsed_letter = extract_mcq_letter(raw_eqa, q.choices)
-        predicted = parsed_letter or (
-            discord_text.split("---")[-1].strip() if "---" in discord_text else discord_text
-        )
+        predicted = parsed_letter or (discord_text.split("---")[-1].strip() if "---" in discord_text else discord_text)
         correct = grade_mcq_answer(predicted, q.answer_letter, choices=q.choices)
 
         return EpisodeMetrics(
@@ -275,19 +282,19 @@ def run_hmeqa_batch(
             continue
         try:
             row = run_hmeqa_episode(
-                    question_id=qid,
-                    method=method,
-                    mock_llm=mock_llm,
-                    max_planning_steps=max_planning_steps,
-                    max_movement_step=max_movement_step,
-                    hm3d_root=hm3d_root,
-                    questions_path=questions_path,
-                    init_poses_path=init_poses_path,
-                    eqa_vl_family=eqa_vl_family,
-                    eqa_hf_model_id=eqa_hf_model_id,
-                    device=device,
-                    use_hm3d_semantics=use_hm3d_semantics,
-                )
+                question_id=qid,
+                method=method,
+                mock_llm=mock_llm,
+                max_planning_steps=max_planning_steps,
+                max_movement_step=max_movement_step,
+                hm3d_root=hm3d_root,
+                questions_path=questions_path,
+                init_poses_path=init_poses_path,
+                eqa_vl_family=eqa_vl_family,
+                eqa_hf_model_id=eqa_hf_model_id,
+                device=device,
+                use_hm3d_semantics=use_hm3d_semantics,
+            )
             results.append(row)
             if output_jsonl is not None:
                 append_episode_jsonl(output_jsonl, row)
@@ -299,19 +306,19 @@ def run_hmeqa_batch(
             q = get_question(questions, question_id=qid)
             print(f"question_id={qid} failed: {exc}", flush=True)
             err_row = EpisodeMetrics(
-                    dataset="hmeqa",
-                    method=method,
-                    question_id=qid,
-                    scene=q.scene,
-                    floor=q.floor,
-                    question=q.question,
-                    gold_answer_letter=q.answer_letter,
-                    predicted_answer=f"ERROR: {exc}"[:200],
-                    correct=False,
-                    confident=False,
-                    planning_steps=0,
-                    success=False,
-                )
+                dataset="hmeqa",
+                method=method,
+                question_id=qid,
+                scene=q.scene,
+                floor=q.floor,
+                question=q.question,
+                gold_answer_letter=q.answer_letter,
+                predicted_answer=f"ERROR: {exc}"[:200],
+                correct=False,
+                confident=False,
+                planning_steps=0,
+                success=False,
+            )
             results.append(err_row)
             if output_jsonl is not None:
                 append_episode_jsonl(output_jsonl, err_row)
@@ -333,20 +340,20 @@ def run_hmeqa_compare(
     use_hm3d_semantics: bool | None = None,
 ) -> tuple[list[EpisodeMetrics], list[EpisodeMetrics]]:
     """Run the same HM-EQA questions with graph_eqa then dynagraph."""
-    common = dict(
-        mock_llm=mock_llm,
-        max_planning_steps=max_planning_steps,
-        max_movement_step=max_movement_step,
-        hm3d_root=hm3d_root,
-        questions_path=questions_path,
-        init_poses_path=init_poses_path,
-        eqa_vl_family=eqa_vl_family,
-        eqa_hf_model_id=eqa_hf_model_id,
-        device=device,
-        use_hm3d_semantics=use_hm3d_semantics,
-    )
-    graph = run_hmeqa_batch(question_ids=question_ids, method="graph_eqa", **common)
+    common: Any = {
+        "mock_llm": mock_llm,
+        "max_planning_steps": max_planning_steps,
+        "max_movement_step": max_movement_step,
+        "hm3d_root": hm3d_root,
+        "questions_path": questions_path,
+        "init_poses_path": init_poses_path,
+        "eqa_vl_family": eqa_vl_family,
+        "eqa_hf_model_id": eqa_hf_model_id,
+        "device": device,
+        "use_hm3d_semantics": use_hm3d_semantics,
+    }
+    graph = run_hmeqa_batch(question_ids=question_ids, method="graph_eqa", **cast(Any, common))
     _release_gpu_memory()
-    dyna = run_hmeqa_batch(question_ids=question_ids, method="dynagraph", **common)
+    dyna = run_hmeqa_batch(question_ids=question_ids, method="dynagraph", **cast(Any, common))
     _release_gpu_memory()
     return graph, dyna
