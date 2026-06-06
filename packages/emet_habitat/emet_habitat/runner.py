@@ -75,7 +75,13 @@ def _configure_eqa_parameters(
         eqa["backend"] = "qwen_vl"
         eqa["vl_family"] = eqa_vl_family
         if eqa_hf_model_id is None:
-            eqa["vl_hf_model_id"] = default_hf_model_id(normalize_vl_family(eqa_vl_family))
+            fam = normalize_vl_family(eqa_vl_family)
+            # E4B bf16 OOMs on 24GB with multi-image EQA; gemma-3-4b-it is the stable HM-EQA default.
+            # Override with --eqa-hf-model-id google/gemma-4-e2b-it for Gemma 4 checkpoints.
+            if fam == "gemma4":
+                eqa["vl_hf_model_id"] = "google/gemma-3-4b-it"
+            else:
+                eqa["vl_hf_model_id"] = default_hf_model_id(fam)
     if eqa_hf_model_id is not None:
         eqa["vl_hf_model_id"] = eqa_hf_model_id
     eqa.setdefault("prompt_variant", "hmeqa")

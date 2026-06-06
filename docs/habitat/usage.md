@@ -15,11 +15,12 @@ uv run emet habitat run-episode --question-id 0 --method dynagraph --mock-llm
 # Smoke (mocked LLM)
 uv run emet run graph-eqa-habitat --dataset hmeqa --question-id 0 --mock-llm
 
-# GraphEQA reproduction with local Gemma multimodal (GPU; ~first run downloads weights)
+# GraphEQA with local Gemma (GPU). Default checkpoint: ``google/gemma-3-4b-it`` (fits 24GB with 6 EQA images).
+# ``--eqa-vl-family gemma4`` maps to that default; override with ``--eqa-hf-model-id google/gemma-4-e2b-it``.
 uv run emet run graph-eqa-habitat \
   --method graph_eqa \
   --question-id 0 \
-  --max-planning-steps 5 \
+  --max-planning-steps 20 \
   --eqa-vl-family gemma4 \
   --device cuda
 
