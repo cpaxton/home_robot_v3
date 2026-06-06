@@ -23,7 +23,8 @@ From the repo root:
 # 2. HM-EQA question CSVs (~500 rows; small)
 uv run python scripts/download_habitat_eqa_data.py --fetch-csv
 
-# 3. HM3D scenes — see data.md for Matterport API tokens (not your web login)
+# 3. HM3D scenes — Profile → Settings → Developer Tools (not web login)
+#    https://my.matterport.com/settings/account/devtools
 export MATTERPORT_USERNAME='<token-id>'
 export MATTERPORT_PASSWORD='<token-secret>'
 uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d train

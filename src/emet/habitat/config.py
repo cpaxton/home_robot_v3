@@ -77,3 +77,16 @@ def hm3d_scene_glb_path(scene_id: str, hm3d_root: Path | None = None) -> Path:
         if path.is_file():
             return path
     return candidates[0]
+
+
+def hm3d_scene_navmesh_path(scene_id: str, hm3d_root: Path | None = None) -> Path:
+    """Resolve HM3D navmesh next to the scene ``.basis.glb``."""
+    glb = hm3d_scene_glb_path(scene_id, hm3d_root)
+    return glb.parent / f"{glb.stem}.navmesh"
+
+
+def hm3d_scene_semantic_glb_path(scene_id: str, hm3d_root: Path | None = None) -> Path:
+    """Resolve ``<short_id>.semantic.glb`` for an HM3D scene."""
+    glb = hm3d_scene_glb_path(scene_id, hm3d_root)
+    short = hm3d_scene_short_name(scene_id)
+    return glb.parent / f"{short}.semantic.glb"

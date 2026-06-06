@@ -26,25 +26,51 @@ class EpisodeMetrics:
     confident: bool
     planning_steps: int
     success: bool
+    parsed_answer_letter: str = ""
+    model_confident: bool = False
+    raw_eqa_output: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
-def grade_mcq_answer(predicted: str, gold_letter: str) -> bool:
+def extract_mcq_letter(predicted: str, choices: list[str] | None = None) -> str:
+    """Extract A–D letter from model output; optionally match choice text."""
+    text = (predicted or "").strip()
+    if not text:
+        return ""
+    compact = text.replace(" ", "").upper()
+    if len(compact) == 1 and compact in "ABCD":
+        return compact
+    m = re.search(r"(?:^answer\s*:\s*|^|\b)([A-D])\b", text, flags=re.IGNORECASE | re.MULTILINE)
+    if m:
+        return m.group(1).upper()
+    if choices:
+        lowered = text.lower()
+        for idx, choice in enumerate(choices[:4]):
+            choice_l = choice.strip().lower()
+            if choice_l and choice_l in lowered:
+                return chr(ord("A") + idx)
+    return ""
+
+
+def grade_mcq_answer(
+    predicted: str,
+    gold_letter: str,
+    *,
+    choices: list[str] | None = None,
+) -> bool:
     """Return True if ``predicted`` matches MCQ letter ``gold_letter`` (A–D)."""
     gold = gold_letter.strip().upper()
     if not gold:
         return False
+    letter = extract_mcq_letter(predicted, choices)
+    if letter:
+        return letter == gold
     text = predicted.strip()
     if not text:
         return False
-    # Exact single letter
     if len(text) == 1 and text.upper() == gold:
-        return True
-    # "Answer: B" / "B)" patterns
-    m = re.search(r"\b([A-D])\b", text.upper())
-    if m and m.group(1) == gold:
         return True
     return text.upper().startswith(gold)
 

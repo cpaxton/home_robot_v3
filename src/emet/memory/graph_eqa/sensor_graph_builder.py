@@ -412,21 +412,15 @@ class SensorGraphBuilder:
         if self.cpu_only:
             return None
         try:
-            from emet.llms.eqa_qwen import get_shared_qwen35_vl_client
-        except ImportError as e:
-            logger.warning(f"get_shared_qwen35_vl_client unavailable ({e}); using voxel/fallback labels")
-            return None
-        dev = self._device
-        if dev not in ("cuda", "mps"):
-            dev = "cuda"
-        try:
-            return get_shared_qwen35_vl_client(
-                device=dev,
-                quantization=None,
+            from emet.llms.graph_eqa_vlm import build_graph_eqa_vlm_clients
+
+            keyword_client, _eqa = build_graph_eqa_vlm_clients(
                 parameters=self._parameters,
+                device=self._device,
             )
+            return keyword_client
         except Exception as e:
-            logger.warning(f"Could not load Qwen3.5 multimodal ({e}); using voxel/fallback labels")
+            logger.warning(f"Could not load GraphEQA VLM ({e}); using voxel/fallback labels")
             return None
 
     def _client(self) -> Callable[..., str] | None:

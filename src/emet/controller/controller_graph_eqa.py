@@ -172,7 +172,9 @@ class GraphEQAController(DynamemController):
             confidence_reasoning = str(e)
             target_point = None
             if hasattr(self, "space") and hasattr(self.space, "sample_frontier"):
-                target_point = self.space.sample_frontier(self.planner, self.robot.get_base_pose(), text=None)
+                target_point = self.space.sample_frontier(
+                    self.planner, self.robot.get_base_pose(), text=question
+                )
             relevant_images = []
 
         confidence_text = "I am confident with the answer" if confidence else "I am NOT confident with the answer"
@@ -209,6 +211,15 @@ class GraphEQAController(DynamemController):
         if confidence:
             return answer, discord_text, relevant_images, confidence
 
+        if target_point is None and not confidence and hasattr(self, "space") and hasattr(
+            self.space, "sample_frontier"
+        ):
+            frontier = self.space.sample_frontier(
+                self.planner, self.robot.get_base_pose(), text=question
+            )
+            if frontier is not None:
+                target_point = np.array([float(frontier[0]), float(frontier[1]), 1.0], dtype=float)
+
         if target_point is not None and hasattr(self, "navigate_to_target_pose"):
             start_pose = self.robot.get_base_pose()
             obstacles, _ = self.voxel_map.get_2d_map()
@@ -218,9 +229,17 @@ class GraphEQAController(DynamemController):
                 and obstacles.shape[1] > int(target_grid[1])
                 and not obstacles[int(target_grid[0]), int(target_grid[1])]
             ):
-                target_theta = self.space.sample_navigation(start_pose, self.planner, target_point)[-1]
+                nav = self.space.sample_navigation(start_pose, self.planner, target_point)
+                target_theta = nav[-1] if nav is not None else None
             else:
                 target_theta = None
+            if target_theta is None and target_point is not None:
+                target_theta = float(
+                    np.arctan2(
+                        float(target_point[1]) - float(start_pose[1]),
+                        float(target_point[0]) - float(start_pose[0]),
+                    )
+                )
             for _ in range(max_movement_step):
                 start_pose = self.robot.get_base_pose()
                 self.update()
@@ -229,7 +248,13 @@ class GraphEQAController(DynamemController):
 
         return answer, discord_text, relevant_images, confidence
 
-    def run_eqa(self, question: str, max_planning_steps: int = 5) -> tuple[str, list[Image.Image]]:
+    def run_eqa(
+        self,
+        question: str,
+        max_planning_steps: int = 5,
+        *,
+        max_movement_step: int = 5,
+    ) -> tuple[str, list[Image.Image]]:
         """Run EQA until confident or max steps, using graph memory."""
         answer = ""
         confidence = False
@@ -238,6 +263,7 @@ class GraphEQAController(DynamemController):
         for step in range(max_planning_steps):
             answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(
                 question,
+                max_movement_step=max_movement_step,
                 skip_perception_prelude=(step > 0),
             )
             if confidence:

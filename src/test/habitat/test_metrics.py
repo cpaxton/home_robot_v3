@@ -2,13 +2,15 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-from emet.habitat.metrics import EpisodeMetrics, grade_mcq_answer, summarize_episodes
+from emet.habitat.metrics import EpisodeMetrics, extract_mcq_letter, grade_mcq_answer, summarize_episodes
 
 
 def test_grade_mcq_answer_letter():
     assert grade_mcq_answer("B", "B")
     assert grade_mcq_answer("Answer: B", "B")
     assert not grade_mcq_answer("C", "B")
+    assert extract_mcq_letter("Answer: c") == "C"
+    assert grade_mcq_answer("The lamp is off", "B", choices=["on", "off", "none", "broken"])
 
 
 def test_summarize_episodes():

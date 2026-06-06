@@ -16,10 +16,13 @@ from emet.habitat.config import questions_csv_path, scene_init_poses_csv_path
 
 @dataclass(frozen=True)
 class SceneInitPose:
+    """Explore-EQA init pose: Habitat position ``(x, y, z)`` plus ``heading`` (radians, Y-up)."""
+
     scene: str
     floor: int
     x: float
     y: float
+    z: float
     heading: float
 
 
@@ -115,6 +118,7 @@ def load_scene_init_poses(path: Path | None = None) -> dict[tuple[str, int], Sce
                 floor=floor,
                 x=_float_field(row, "x", "init_x", "position_x"),
                 y=_float_field(row, "y", "init_y", "position_y"),
+                z=_float_field(row, "z", "init_z", "position_z"),
                 heading=_float_field(row, "heading", "init_heading", "init_angle", "rotation", "theta"),
             )
             poses[(scene, floor)] = pose

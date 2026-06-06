@@ -29,6 +29,89 @@ from PIL import Image
 
 from emet.core.parameters import Parameters
 
+_QUESTION_STOPWORDS = frozenset(
+    {
+        "is",
+        "the",
+        "a",
+        "an",
+        "on",
+        "in",
+        "at",
+        "to",
+        "or",
+        "and",
+        "did",
+        "i",
+        "any",
+        "there",
+        "which",
+        "where",
+        "what",
+        "are",
+        "was",
+        "were",
+        "has",
+        "have",
+        "had",
+        "my",
+        "me",
+        "it",
+        "its",
+        "this",
+        "that",
+        "with",
+        "for",
+        "of",
+        "by",
+        "from",
+        "left",
+        "next",
+        "under",
+        "over",
+        "one",
+        "two",
+        "not",
+        "all",
+        "can",
+        "you",
+        "your",
+        "how",
+        "when",
+        "who",
+        "why",
+        "fold",
+        "turned",
+        "mounted",
+        "standing",
+        "covered",
+        "color",
+        "objects",
+        "object",
+        "see",
+        "things",
+        "thing",
+        "room",
+        "area",
+        "items",
+        "item",
+    }
+)
+
+
+def heuristic_relevant_objects(question: str, *, max_objects: int = 4) -> list[str]:
+    """Cheap noun-like tokens from the question stem (before MCQ options)."""
+    head = question.strip().split("?")[0]
+    out: list[str] = []
+    for tok in re.findall(r"[a-z]{3,}", head.lower()):
+        if tok in _QUESTION_STOPWORDS:
+            continue
+        if tok not in out:
+            out.append(tok)
+        if len(out) >= max_objects:
+            break
+    return out
+
 
 def labels_are_semantic_graph_hypothesis(labels: list[str] | None) -> bool:
     """
@@ -118,6 +201,8 @@ class GraphEQAMemory:
     ):
         self.parameters = parameters or {}
         self.max_near_distance = max_near_distance
+        self.last_eqa_raw: str = ""
+        self.last_eqa_parsed: tuple[str, str, bool, str, str] = ("", "", False, "", "")
         self._nodes: list[GraphNode] = []
         self._edges: list[tuple[int, int, str]] = []  # (id1, id2, relation)
         self._observations: list[GraphObservation] = []
@@ -211,20 +296,19 @@ class GraphEQAMemory:
         self._init_clients()
 
     def _init_clients(self) -> None:
-        """Initialize EQA + keyword helper on one shared Qwen3.5 multimodal load."""
+        """Initialize EQA + keyword helper (one shared VLM: gemma4 / Qwen-VL / Qwen3.5)."""
         try:
-            from emet.llms.eqa_qwen import build_shared_eqa_clients
-            from emet.llms.eqa_vl_settings import apply_eqa_vl_runtime_settings, get_eqa_vl_int
+            from emet.llms.eqa_vl_settings import get_eqa_vl_int
+            from emet.llms.graph_eqa_vlm import build_graph_eqa_vlm_clients
 
-            apply_eqa_vl_runtime_settings(self.parameters)
             kw = get_eqa_vl_int(self.parameters, "graph_keyword_max_tokens", 64)
-            self.image_description_client, self.eqa_client = build_shared_eqa_clients(
+            self.image_description_client, self.eqa_client = build_graph_eqa_vlm_clients(
                 parameters=self.parameters,
                 keyword_max_tokens=kw,
             )
         except ImportError as e:
             raise ImportError(
-                "GraphEQA memory requires emet.llms (Qwen3.5 multimodal) for EQA. Install extras with GPU support."
+                "GraphEQA memory requires emet.llms for EQA. Install GPU extras (torch, transformers)."
             ) from e
 
     def add_observation(
@@ -455,7 +539,14 @@ class GraphEQAMemory:
             "Example: Where is the pen? -> pen. Is there grey cloth on cloth hanger? -> grey cloth, cloth hanger"
         )
         out = self.image_description_client([prompt, question])
-        self._relevant_objects = [s.strip() for s in out.split(",") if s.strip()]
+        merged: list[str] = []
+        for obj in [s.strip() for s in out.split(",") if s.strip()] + heuristic_relevant_objects(
+            question
+        ):
+            key = obj.strip().lower()
+            if key and key not in merged:
+                merged.append(key)
+        self._relevant_objects = merged[:4]
 
     def _select_relevant_obs_ids(self, max_images: int = 6) -> list[int]:
         """Select observation IDs whose labels match relevant_objects (1-based)."""
@@ -482,6 +573,13 @@ class GraphEQAMemory:
                     break
         return out
 
+    def _graph_covers_relevant_objects(self) -> bool:
+        """True when every keyword object appears in at least one graph node label."""
+        if not self._relevant_objects or not self._observations:
+            return True
+        all_labels = " ".join(lab.lower() for o in self._observations for lab in o.labels)
+        return all(obj.lower() in all_labels for obj in self._relevant_objects)
+
     def _get_image_descriptions_str(self, obs_ids: list[int]) -> str:
         """Build IMAGE_DESCRIPTIONS string for the prompt (1-indexed image ids)."""
         options = []
@@ -496,25 +594,40 @@ class GraphEQAMemory:
 
     def parse_answer(self, answer_outputs: str) -> tuple[str, str, bool, str, str]:
         """Parse mLLM output into reasoning, answer, confidence, action, confidence_reasoning."""
+        text = answer_outputs or ""
+        lowered = text.lower()
 
-        def extract_between(text: str, start: str, end: str) -> str:
-            try:
-                return text.split(start, 1)[1].split(end, 1)[0].strip().replace("\n", "").replace("\t", "")
-            except IndexError:
+        def extract_between(src: str, start: str, end: str) -> str:
+            pattern = re.compile(
+                rf"{re.escape(start)}\s*(.*?)\s*{re.escape(end)}",
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            m = pattern.search(src)
+            if not m:
                 return ""
+            return m.group(1).strip().replace("\n", " ").replace("\t", " ")
 
-        def extract_after(text: str, start: str) -> str:
-            try:
-                return text.split(start, 1)[1].strip().replace("\n", "").replace("\t", "")
-            except IndexError:
+        def extract_after(src: str, start: str) -> str:
+            pattern = re.compile(rf"{re.escape(start)}\s*(.*)", flags=re.IGNORECASE | re.DOTALL)
+            m = pattern.search(src)
+            if not m:
                 return ""
+            return m.group(1).strip().replace("\n", " ").replace("\t", " ")
 
-        reasoning = extract_between(answer_outputs, "reasoning:", "answer:")
-        answer = extract_between(answer_outputs, "answer:", "confidence:")
-        confidence_text = extract_between(answer_outputs, "confidence:", "action:")
+        reasoning = extract_between(lowered, "reasoning:", "answer:")
+        answer = extract_between(lowered, "answer:", "confidence:")
+        confidence_text = extract_between(lowered, "confidence:", "action:")
         confidence = "true" in confidence_text.replace(" ", "").lower()
-        action = extract_between(answer_outputs, "action:", "confidence_reasoning:")
-        confidence_reasoning = extract_after(answer_outputs, "confidence_reasoning:")
+        action = extract_between(lowered, "action:", "confidence_reasoning:")
+        confidence_reasoning = extract_after(lowered, "confidence_reasoning:")
+        if not answer:
+            m = re.search(r"\banswer\s*:\s*([a-d])\b", lowered)
+            if m:
+                answer = m.group(1).upper()
+        if not answer:
+            m = re.search(r"(?:^|\n)\s*([a-d])\s*(?:\n|$)", lowered)
+            if m:
+                answer = m.group(1).upper()
         return reasoning, answer, confidence, action, confidence_reasoning
 
     def _target_point_from_image_id(self, image_id: int) -> np.ndarray | None:
@@ -576,9 +689,17 @@ class GraphEQAMemory:
             commands.append(im)
 
         raw = self.eqa_client(commands)
+        self.last_eqa_raw = raw
         answer_outputs = raw.replace("*", "").replace("/", "").replace("#", "").lower()
 
         reasoning, answer, confidence, action, confidence_reasoning = self.parse_answer(answer_outputs)
+        if confidence and not self._graph_covers_relevant_objects():
+            confidence = False
+            confidence_reasoning = (
+                confidence_reasoning
+                + " The scene graph does not yet include all question-relevant objects; explore further."
+            ).strip()
+        self.last_eqa_parsed = (reasoning, answer, confidence, action, confidence_reasoning)
 
         target_point = None
         if not confidence and action.strip():

@@ -48,14 +48,22 @@ cat ~/.cache/habitat_eqa/hm3d/hm3d-train-habitat.tar
 # {"code":"request.unauthorized","message":"Unauthorized"}
 ```
 
-**Cause:** Web login email/password were used instead of **API token ID + secret**.
+**Cause (pick one):**
+
+- Web login email/password used instead of **API token ID + secret**
+- HM3D **access not approved** yet (most common when ID + secret are correct but still 401)
+- Token created **before** access was granted — regenerate after approval
 
 **Fix:**
 
-1. Matterport → Settings → Developer Tools → Habitat dataset → create API token  
-2. `export MATTERPORT_USERNAME='<token-id>'` and `MATTERPORT_PASSWORD='<token-secret>'`  
-3. `rm -f ~/.cache/habitat_eqa/hm3d/hm3d-train-habitat.tar`  
-4. Retry `uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d train`
+1. **Profile → Settings → Developer Tools** ([link](https://my.matterport.com/settings/account/devtools))  
+2. Scroll to **Habitat dataset** → confirm access is approved (request if pending)  
+3. Create a **new** API token after approval  
+4. Set **both** env vars:  
+   `export MATTERPORT_USERNAME='<token-id>'`  
+   `export MATTERPORT_PASSWORD='<token-secret>'`  
+5. `rm -f ~/.cache/habitat_eqa/hm3d/hm3d-*-habitat.tar`  
+6. Retry `uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d minival` then `train`
 
 See [data.md — Matterport credentials](data.md#matterport-credentials-hm3d-train--val--minival).
 

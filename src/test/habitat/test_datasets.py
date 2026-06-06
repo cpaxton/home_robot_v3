@@ -61,4 +61,6 @@ def test_load_scene_init_poses_graph_eqa_format(tmp_path: Path):
     key = ("00004-VqCaAuuoeWk", 1)
     assert key in poses
     assert poses[key].x == 1.0
+    assert poses[key].y == 2.0
+    assert poses[key].z == 0.0
     assert poses[key].heading == 0.5

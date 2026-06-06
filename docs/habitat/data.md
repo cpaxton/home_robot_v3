@@ -63,33 +63,54 @@ That scene is in the **HM3D train** split, not the free `example` pack.
 
 ### Use API tokens — not your website login
 
-`habitat_sim.utils.datasets_download` authenticates to `api.matterport.com` with HTTP basic auth. You must use **API token ID + secret** from the Matterport developer page.
+`habitat_sim.utils.datasets_download` talks to `api.matterport.com` with HTTP basic auth. Habitat expects a **token ID + token secret** pair from Matterport Developer Tools.
 
-**Do not** use your Matterport account email and password. The API returns `{"code":"request.unauthorized","message":"Unauthorized"}` and leaves a tiny `hm3d-train-habitat.tar` stub (~56 bytes) that is not a real archive.
+**Do not** use your Matterport account email and password. That fails with `Unauthorized` and leaves a tiny stub file (~56 bytes), not a real tarball:
 
-### Setup steps
-
-1. **Request HM3D access** (if needed): [matterport.com/partners/meta](https://matterport.com/partners/meta)
-2. Log in at [matterport.com](https://matterport.com)
-3. Open **Settings → Developer Tools → Habitat dataset** (wording may vary)
-4. Create or export an API token pair
-5. Export in your shell (do not commit these):
-
-```bash
-export MATTERPORT_USERNAME='<token-id>'
-export MATTERPORT_PASSWORD='<token-secret>'
+```json
+{"code":"request.unauthorized","message":"Unauthorized"}
 ```
 
-6. Download:
+### Where to get tokens
+
+1. Log in to Matterport.
+2. Go to **Profile → Settings → Developer Tools**  
+   (direct link: [my.matterport.com/settings/account/devtools](https://my.matterport.com/settings/account/devtools))
+3. Scroll to **Habitat dataset** / HM3D and **request access** if you have not already.  
+   Approval is required before downloads work — a token alone is not enough.  
+   Also see [matterport.com/partners/meta](https://matterport.com/partners/meta) and [aihabitat.org/datasets/hm3d](https://aihabitat.org/datasets/hm3d/).
+4. After access is **approved**, create a **new** API token on the same page (regenerate if you made a token before approval).
+5. Copy **both** values when shown — the **secret is only displayed once**.
+
+| Matterport UI | Shell variable | Example shape |
+|---------------|----------------|---------------|
+| Token ID | `MATTERPORT_USERNAME` | short hex string from Developer Tools |
+| Token secret | `MATTERPORT_PASSWORD` | longer secret string (not your account password) |
+
+Export in your shell (do not commit these, do not paste into issues):
+
+```bash
+export MATTERPORT_USERNAME='<token-id-from-devtools>'
+export MATTERPORT_PASSWORD='<token-secret-from-devtools>'
+```
+
+Smoke auth with a small split before the full train download:
+
+```bash
+uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d minival
+```
+
+HM-EQA needs train:
 
 ```bash
 uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d train
+uv run python scripts/download_habitat_eqa_data.py --verify-question 0
 ```
 
 If a previous attempt failed with `Unauthorized`, remove the bad stub before retrying:
 
 ```bash
-rm -f ~/.cache/habitat_eqa/hm3d/hm3d-train-habitat.tar
+rm -f ~/.cache/habitat_eqa/hm3d/hm3d-*-habitat.tar
 ```
 
 ### HM3D splits

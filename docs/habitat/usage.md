@@ -12,8 +12,24 @@ uv run emet habitat info
 uv run emet habitat list-questions --limit 5
 uv run emet habitat run-episode --question-id 0 --method dynagraph --mock-llm
 
+# Smoke (mocked LLM)
 uv run emet run graph-eqa-habitat --dataset hmeqa --question-id 0 --mock-llm
-uv run emet run graph-eqa-habitat --method dynagraph --question-id 0 --mock-llm --max-planning-steps 5
+
+# GraphEQA reproduction with local Gemma multimodal (GPU; ~first run downloads weights)
+uv run emet run graph-eqa-habitat \
+  --method graph_eqa \
+  --question-id 0 \
+  --max-planning-steps 5 \
+  --eqa-vl-family gemma4 \
+  --device cuda
+
+# HM-EQA batch (113 questions; long — use nohup / tmux)
+.venv-habitat/bin/emet-habitat run-batch \
+  --method graph_eqa \
+  --question-start 0 --question-end 112 \
+  --eqa-vl-family gemma4 \
+  --device cuda \
+  --output ~/.cache/habitat_eqa/results/graph_eqa_gemma4.jsonl
 ```
 
 `--mock-llm` uses fixed EQA responses for smoke tests and CI (no OpenAI / Gemini key).

@@ -65,4 +65,5 @@ rm -rf .venv-habitat
 
 ## Next step
 
-Download HM-EQA CSVs and HM3D scenes: [data.md](data.md).
+Download HM-EQA CSVs and HM3D scenes: [data.md](data.md).  
+HM3D train/val/minival need API tokens: **Profile → Settings → Developer Tools** ([link](https://my.matterport.com/settings/account/devtools)).

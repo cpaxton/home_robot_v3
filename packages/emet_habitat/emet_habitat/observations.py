@@ -12,12 +12,26 @@ from emet.core.interfaces import Observations
 from emet.utils.pose import convert_pose_habitat_to_opencv
 
 
+def _agent_rotation_matrix(rot) -> np.ndarray:
+    """Habitat-Sim agent rotation is a unit quaternion (w, x, y, z)."""
+    import quaternion as npq
+
+    if isinstance(rot, npq.quaternion):
+        return npq.as_rotation_matrix(rot).astype(np.float64)
+    coeffs = np.asarray(rot, dtype=np.float64).reshape(-1)
+    if coeffs.shape[0] == 4:
+        q = npq.quaternion(coeffs[0], coeffs[1], coeffs[2], coeffs[3])
+        return npq.as_rotation_matrix(q).astype(np.float64)
+    return coeffs.reshape(3, 3)
+
+
 def habitat_rgb_depth_to_observations(
     *,
     rgb: np.ndarray,
     depth: np.ndarray,
     agent_state,
     intrinsics: np.ndarray,
+    semantic: np.ndarray | None = None,
     sensor_rotation_offset: np.ndarray | None = None,
 ) -> Observations:
     """Build emet observations from Habitat agent state and RGB-D."""
@@ -25,7 +39,7 @@ def habitat_rgb_depth_to_observations(
     rot = agent_state.rotation
 
     # Habitat agent rotation as 4x4 cam/world transform (agent body frame).
-    hab_R = np.array(rot, dtype=np.float64).reshape(3, 3)
+    hab_R = _agent_rotation_matrix(rot)
     hab_pose = np.eye(4, dtype=np.float64)
     hab_pose[:3, :3] = hab_R
     hab_pose[:3, 3] = pos
@@ -50,11 +64,18 @@ def habitat_rgb_depth_to_observations(
     if depth_m.ndim == 3:
         depth_m = depth_m[..., 0]
 
+    sem_u32 = None
+    if semantic is not None:
+        sem_u32 = np.asarray(semantic, dtype=np.uint32)
+        if sem_u32.ndim == 3:
+            sem_u32 = sem_u32[..., 0]
+
     return Observations(
         gps=gps,
         compass=compass,
         rgb=rgb_u8,
         depth=depth_m,
+        semantic=sem_u32,
         camera_K=np.asarray(intrinsics, dtype=np.float64),
         camera_pose=camera_pose,
     )
