@@ -289,3 +289,37 @@ def run_hmeqa_batch(
                 )
             )
     return results
+
+
+def run_hmeqa_compare(
+    *,
+    question_ids: list[int],
+    mock_llm: bool = False,
+    max_planning_steps: int = 20,
+    max_movement_step: int = 10,
+    hm3d_root: Path | None = None,
+    questions_path: Path | None = None,
+    init_poses_path: Path | None = None,
+    eqa_vl_family: str | None = "gemma4",
+    eqa_hf_model_id: str | None = None,
+    device: str | None = "cuda",
+    use_hm3d_semantics: bool | None = None,
+) -> tuple[list[EpisodeMetrics], list[EpisodeMetrics]]:
+    """Run the same HM-EQA questions with graph_eqa then dynagraph."""
+    common = dict(
+        mock_llm=mock_llm,
+        max_planning_steps=max_planning_steps,
+        max_movement_step=max_movement_step,
+        hm3d_root=hm3d_root,
+        questions_path=questions_path,
+        init_poses_path=init_poses_path,
+        eqa_vl_family=eqa_vl_family,
+        eqa_hf_model_id=eqa_hf_model_id,
+        device=device,
+        use_hm3d_semantics=use_hm3d_semantics,
+    )
+    graph = run_hmeqa_batch(question_ids=question_ids, method="graph_eqa", **common)
+    _release_gpu_memory()
+    dyna = run_hmeqa_batch(question_ids=question_ids, method="dynagraph", **common)
+    _release_gpu_memory()
+    return graph, dyna

@@ -19,7 +19,7 @@ from emet.habitat.config import (
     scene_init_poses_csv_path,
 )
 from emet.habitat.datasets import load_hmeqa_questions
-from emet.habitat.metrics import summarize_episodes, write_episode_jsonl
+from emet.habitat.metrics import compare_method_results, summarize_episodes, write_episode_jsonl
 
 
 @click.group()
@@ -198,6 +198,87 @@ def run_batch(
     summary = summarize_episodes(metrics)
     click.echo(f"wrote {output}")
     click.echo(f"summary: {summary}")
+
+
+@main.command("compare-batch")
+@click.option("--question-start", default=0, type=int)
+@click.option("--question-end", default=5, type=int, help="Inclusive; -1 = last question in CSV")
+@click.option("--mock-llm", is_flag=True, default=False)
+@click.option("--max-planning-steps", default=20, type=int)
+@click.option("--max-movement-step", default=10, type=int)
+@click.option("--hm3d-root", type=click.Path(path_type=Path), default=None)
+@click.option("--data-dir", type=click.Path(path_type=Path), default=None)
+@click.option("--output", type=click.Path(path_type=Path), default=None, help="Write comparison JSON")
+@click.option(
+    "--use-hm3d-semantics/--no-hm3d-semantics",
+    default=None,
+    help="Use HM3D semantic sensor for graph labels (default: auto if assets exist)",
+)
+@_eqa_cli_options
+def compare_batch(
+    question_start: int,
+    question_end: int,
+    mock_llm: bool,
+    max_planning_steps: int,
+    max_movement_step: int,
+    hm3d_root: Path | None,
+    data_dir: Path | None,
+    output: Path | None,
+    use_hm3d_semantics: bool | None,
+    eqa_vl_family: str | None,
+    eqa_hf_model_id: str | None,
+    device: str,
+) -> None:
+    """Run graph_eqa and dynagraph on the same questions; print side-by-side summary."""
+    from emet_habitat.runner import run_hmeqa_compare
+
+    questions_path = (data_dir / "questions.csv") if data_dir else None
+    init_poses_path = (data_dir / "scene_init_poses.csv") if data_dir else None
+    qs = load_hmeqa_questions(questions_path)
+    end = len(qs) - 1 if question_end < 0 else min(question_end, len(qs) - 1)
+    ids = list(range(max(0, question_start), end + 1))
+    click.echo(f"Comparing graph_eqa vs dynagraph on {len(ids)} questions (mock_llm={mock_llm})")
+
+    try:
+        graph, dyna = run_hmeqa_compare(
+            question_ids=ids,
+            mock_llm=mock_llm,
+            max_planning_steps=max_planning_steps,
+            max_movement_step=max_movement_step,
+            hm3d_root=hm3d_root,
+            questions_path=questions_path,
+            init_poses_path=init_poses_path,
+            eqa_vl_family=eqa_vl_family or ("gemma4" if not mock_llm else None),
+            eqa_hf_model_id=eqa_hf_model_id,
+            device=device,
+            use_hm3d_semantics=use_hm3d_semantics,
+        )
+    except FileNotFoundError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    comparison = compare_method_results(graph, dyna)
+    click.echo(f"graph_eqa:  {comparison['graph_eqa']}")
+    click.echo(f"dynagraph:  {comparison['dynagraph']}")
+    click.echo(
+        f"agreement: both={comparison['both_correct']} graph_only={comparison['graph_only']} "
+        f"dynagraph_only={comparison['dynagraph_only']} neither={comparison['neither']}"
+    )
+    for row in comparison["per_question"]:
+        click.echo(
+            f"  Q{row['question_id']:02d} gold={row['gold']} "
+            f"graph={row['graph_eqa_pred']}({'ok' if row['graph_eqa_correct'] else 'x'}) "
+            f"dyna={row['dynagraph_pred']}({'ok' if row['dynagraph_correct'] else 'x'})"
+        )
+
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "comparison": comparison,
+            "graph_eqa_episodes": [e.to_dict() for e in graph],
+            "dynagraph_episodes": [e.to_dict() for e in dyna],
+        }
+        output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        click.echo(f"wrote {output}")
 
 
 if __name__ == "__main__":

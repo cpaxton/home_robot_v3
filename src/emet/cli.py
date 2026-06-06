@@ -452,6 +452,33 @@ def habitat_run_episode(
     sys.exit(_run_habitat_wrapper(args))
 
 
+@habitat_cmd.command("compare-batch", short_help="GraphEQA vs Dynagraph on same questions")
+@click.option("--question-start", default=0, type=int)
+@click.option("--question-end", default=5, type=int)
+@click.option("--mock-llm", is_flag=True, default=False)
+@click.option("--max-planning-steps", default=20, type=int)
+def habitat_compare_batch(
+    question_start: int,
+    question_end: int,
+    mock_llm: bool,
+    max_planning_steps: int,
+) -> None:
+    args = [
+        "compare-batch",
+        "--question-start",
+        str(question_start),
+        "--question-end",
+        str(question_end),
+        "--max-planning-steps",
+        str(max_planning_steps),
+        "--output",
+        f"{os.path.expanduser('~')}/.cache/habitat_eqa/results/compare_q{question_start}-{question_end}.json",
+    ]
+    if mock_llm:
+        args.append("--mock-llm")
+    sys.exit(_run_habitat_wrapper(args))
+
+
 @molmospaces_cmd.command("list-robots", short_help="List supported robot IDs")
 def molmospaces_list_robots() -> None:
     """Print MolmoSpaces robot IDs (rby1, rby1m, stretch for merge, franka_*, etc.). Default Molmo CLI robot is rby1 (Galaxea R1 family)."""

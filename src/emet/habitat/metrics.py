@@ -92,3 +92,38 @@ def summarize_episodes(episodes: list[EpisodeMetrics]) -> dict[str, float]:
         "success_rate": sum(1 for e in episodes if e.success) / n,
         "n": float(n),
     }
+
+
+def compare_method_results(
+    graph_eqa: list[EpisodeMetrics],
+    dynagraph: list[EpisodeMetrics],
+) -> dict:
+    """Side-by-side summary for GraphEQA vs Dynagraph on the same question ids."""
+    by_q_graph = {e.question_id: e for e in graph_eqa}
+    by_q_dyna = {e.question_id: e for e in dynagraph}
+    qids = sorted(set(by_q_graph) | set(by_q_dyna))
+    rows: list[dict] = []
+    for qid in qids:
+        g = by_q_graph.get(qid)
+        d = by_q_dyna.get(qid)
+        rows.append(
+            {
+                "question_id": qid,
+                "gold": (g or d).gold_answer_letter if (g or d) else "",
+                "graph_eqa_pred": g.parsed_answer_letter or g.predicted_answer[:1] if g else "",
+                "graph_eqa_correct": g.correct if g else False,
+                "dynagraph_pred": d.parsed_answer_letter or d.predicted_answer[:1] if d else "",
+                "dynagraph_correct": d.correct if d else False,
+                "graph_eqa_steps": g.planning_steps if g else 0,
+                "dynagraph_steps": d.planning_steps if d else 0,
+            }
+        )
+    return {
+        "graph_eqa": summarize_episodes(graph_eqa),
+        "dynagraph": summarize_episodes(dynagraph),
+        "both_correct": sum(1 for r in rows if r["graph_eqa_correct"] and r["dynagraph_correct"]),
+        "graph_only": sum(1 for r in rows if r["graph_eqa_correct"] and not r["dynagraph_correct"]),
+        "dynagraph_only": sum(1 for r in rows if r["dynagraph_correct"] and not r["graph_eqa_correct"]),
+        "neither": sum(1 for r in rows if not r["graph_eqa_correct"] and not r["dynagraph_correct"]),
+        "per_question": rows,
+    }

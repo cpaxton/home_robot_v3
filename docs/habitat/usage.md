@@ -30,6 +30,12 @@ uv run emet run graph-eqa-habitat \
   --eqa-vl-family gemma4 \
   --device cuda \
   --output ~/.cache/habitat_eqa/results/graph_eqa_gemma4.jsonl
+
+# GraphEQA vs Dynagraph on the same questions (smoke with mock LLM first)
+.venv-habitat/bin/emet-habitat compare-batch \
+  --question-start 0 --question-end 5 \
+  --mock-llm \
+  --output ~/.cache/habitat_eqa/results/compare_mock_q0-5.json
 ```
 
 `--mock-llm` uses fixed EQA responses for smoke tests and CI (no OpenAI / Gemini key).
