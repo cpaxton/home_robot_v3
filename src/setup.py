@@ -81,7 +81,8 @@ setuptools.setup(
         "safetensors>=0.4.5",
         # For mobile clip
         "open-clip-torch>=2.32.0",
-        "transformers>=4.55.0",
+        # Gemma 4 (model_type gemma4) requires transformers>=5.5.0.
+        "transformers>=5.5.0,<6.0.0",
         "retry",
         "qwen_vl_utils",
         "bitsandbytes",

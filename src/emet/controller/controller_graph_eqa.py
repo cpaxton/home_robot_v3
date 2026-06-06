@@ -107,6 +107,14 @@ class GraphEQAController(DynamemController):
                 parameters.get("graph_instance_dedup_xy_m", DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M)
             )
 
+        from emet.memory.graph_eqa.graph_object_fusion.setup import attach_graph_object_fusion
+
+        self._graph_object_fusion = attach_graph_object_fusion(
+            self.graph_memory,
+            parameters if isinstance(parameters, dict) else None,
+        )
+        self._calibration_writer = None
+
         dev = self.device if self.device in ("cuda", "mps") else "cuda"
         self.sensor_builder = None
         if use_sensor_perception:
@@ -162,7 +170,7 @@ class GraphEQAController(DynamemController):
                 relevant_images,
             ) = self.graph_memory.query_answer(
                 question,
-                self.robot.get_base_pose(),
+                self._planning_base_xyt(self.robot.get_base_pose()),
                 self.planner,
             )
         except Exception as e:
@@ -172,7 +180,11 @@ class GraphEQAController(DynamemController):
             confidence_reasoning = str(e)
             target_point = None
             if hasattr(self, "space") and hasattr(self.space, "sample_frontier"):
-                target_point = self.space.sample_frontier(self.planner, self.robot.get_base_pose(), text=None)
+                target_point = self.space.sample_frontier(
+                    self.planner,
+                    self._planning_base_xyt(self.robot.get_base_pose()),
+                    text=question,
+                )
             relevant_images = []
 
         confidence_text = "I am confident with the answer" if confidence else "I am NOT confident with the answer"
@@ -199,18 +211,33 @@ class GraphEQAController(DynamemController):
         elif relevant_images:
             self.rerun_visualizer.log_custom_2d_image("/observation_similar_to_text", relevant_images)
 
-        discord_text = (
-            answer + ". I believe this answer is correct because " + reasoning
-            if confidence
-            else "I am not confident to answer the question because " + confidence_reasoning
-        )
+        if confidence:
+            discord_text = answer
+        else:
+            short_cr = (confidence_reasoning or reasoning or "").strip()
+            if len(short_cr) > 280:
+                short_cr = short_cr[:277] + "..."
+            discord_text = (
+                f"{answer} I am not fully confident yet; {short_cr}" if short_cr else answer
+            )
         discord_text += "\nI also provide relevant images here."
 
         if confidence:
             return answer, discord_text, relevant_images, confidence
 
+        if target_point is None and not confidence and hasattr(self, "space") and hasattr(
+            self.space, "sample_frontier"
+        ):
+            frontier = self.space.sample_frontier(
+                self.planner,
+                self._planning_base_xyt(self.robot.get_base_pose()),
+                text=question,
+            )
+            if frontier is not None:
+                target_point = np.array([float(frontier[0]), float(frontier[1]), 1.0], dtype=float)
+
         if target_point is not None and hasattr(self, "navigate_to_target_pose"):
-            start_pose = self.robot.get_base_pose()
+            start_pose = self._planning_base_xyt(self.robot.get_base_pose())
             obstacles, _ = self.voxel_map.get_2d_map()
             target_grid = self.voxel_map.xy_to_grid_coords((float(target_point[0]), float(target_point[1])))
             if (
@@ -218,18 +245,32 @@ class GraphEQAController(DynamemController):
                 and obstacles.shape[1] > int(target_grid[1])
                 and not obstacles[int(target_grid[0]), int(target_grid[1])]
             ):
-                target_theta = self.space.sample_navigation(start_pose, self.planner, target_point)[-1]
+                nav_samples = self.space.sample_navigation(start_pose, self.planner, target_point)
+                target_theta = nav_samples[-1] if nav_samples is not None else None
             else:
                 target_theta = None
+            if target_theta is None and target_point is not None:
+                target_theta = float(
+                    np.arctan2(
+                        float(target_point[1]) - float(start_pose[1]),
+                        float(target_point[0]) - float(start_pose[0]),
+                    )
+                )
             for _ in range(max_movement_step):
-                start_pose = self.robot.get_base_pose()
+                start_pose = self._planning_base_xyt(self.robot.get_base_pose())
                 self.update()
                 if self.navigate_to_target_pose(target_point, start_pose, target_theta):
                     break
 
         return answer, discord_text, relevant_images, confidence
 
-    def run_eqa(self, question: str, max_planning_steps: int = 5) -> tuple[str, list[Image.Image]]:
+    def run_eqa(
+        self,
+        question: str,
+        max_planning_steps: int = 5,
+        *,
+        max_movement_step: int = 5,
+    ) -> tuple[str, list[Image.Image]]:
         """Run EQA until confident or max steps, using graph memory."""
         answer = ""
         confidence = False
@@ -238,6 +279,7 @@ class GraphEQAController(DynamemController):
         for step in range(max_planning_steps):
             answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(
                 question,
+                max_movement_step=max_movement_step,
                 skip_perception_prelude=(step > 0),
             )
             if confidence:

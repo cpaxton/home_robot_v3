@@ -274,6 +274,14 @@ def main(
 
     assert_mujoco_available()
 
+    import emet as _emet_pkg
+
+    logger.warning("mujoco_server: emet package %s", Path(_emet_pkg.__file__).resolve().parent.parent)
+
+    from emet.simulation.env_flags import warn_sim_nav_env_flags
+
+    warn_sim_nav_env_flags()
+
     scene_model = None
     objects_info = None
 
@@ -420,6 +428,50 @@ def main(
             if hint is not None:
                 zmq_environment = dict(zmq_environment)
                 zmq_environment["spawn_hint_xyt"] = hint
+        if use_robocasa and scene_model is not None and zmq_environment is not None:
+            try:
+                import importlib
+
+                import mujoco
+
+                from emet.robots import ROBOT_REGISTRY
+                from emet.simulation import scene_base_spawn
+
+                robot_key = robot.lower().replace("-", "_")
+                mod_name = ROBOT_REGISTRY.get(robot_key, ROBOT_REGISTRY.get("stretch"))
+                if mod_name is not None:
+                    mod = importlib.import_module(mod_name)
+                    backend_cls = None
+                    for attr_name in dir(mod):
+                        attr = getattr(mod, attr_name)
+                        if isinstance(attr, type) and hasattr(attr, "get_spec") and attr_name != "RobotBackend":
+                            backend_cls = attr
+                            break
+                    if backend_cls is not None:
+                        spec = backend_cls().get_spec()
+                        spawn_data = mujoco.MjData(scene_model)
+                        mujoco.mj_forward(scene_model, spawn_data)
+                        fp = spec.footprint
+                        margin = float(
+                            0.5
+                            * np.hypot(
+                                float(fp.length) + abs(float(fp.length_offset)),
+                                float(fp.width) + abs(float(fp.width_offset)),
+                            )
+                            + 0.10
+                            + float(getattr(spec, "planar_spawn_xy_extra_margin_m", 0.0) or 0.0)
+                        )
+                        spawn_map = scene_base_spawn.compute_spawn_walkable_map_metrics(
+                            scene_model,
+                            spawn_data,
+                            base_body_name=spec.base_link_name,
+                            grid_resolution_m=0.10,
+                            footprint_xy_margin_m=margin,
+                        )
+                        zmq_environment = dict(zmq_environment)
+                        zmq_environment["spawn_floor_map"] = spawn_map
+            except Exception as e:
+                logger.warning(f"Robocasa spawn_floor_map precompute skipped ({e!r}).")
 
     # Default Stretch scene only when no path given (non-stretch uses None or explicit merged MJCF).
     if use_stretch and (scene_path is None or len(str(scene_path).strip()) == 0):

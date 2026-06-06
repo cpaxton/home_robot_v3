@@ -18,6 +18,16 @@
 
 ## User-facing commands (agent behavior)
 - **Before suggesting shell commands** to the user, **run them yourself** when the workspace and environment allow (from repo root: `uv run emet …`, `uv run python …`, smoke `timeout … emet serve …`, etc.). Confirm paths, flags, and typical stderr; then report what actually happened instead of only pasting commands for the user to discover errors.
+- **Before sending code that wires config → constructors** (e.g. `build_rerun_visualizer_kwargs` → `RerunVisualizer`), run a smoke import/instantiate or a unit test that asserts kwargs match `inspect.signature(...)`; do not rely on pytest alone if you did not run it.
+- **Verify CLI flags before every suggested command** (do not guess from memory or from other subcommands):
+  - Run **`uv run python -m emet.app.<module> --help`** for the specific app (e.g. `run_dynagraph`, `run_dynamem`, `run_agent`) or **`uv run emet run <subcommand> --help`** when the top-level group exposes it.
+  - If a flag might be missing from the wrapper help, check the app module’s Click options in `src/emet/app/`.
+  - Never tell the user to pass a flag until `--help` lists it (or you just added it in the same change).
+- **Rerun world frame**: Log map/voxels/graph under `world/…` in navigation world coordinates. Live `Spatial3DView` blueprint must use **`origin="world"`** (not `world/robot`) or the map appears to rotate with the base. See `docs/rerun.md` and `spatial3d_view_world()` in `src/emet/visualization/rerun.py`.
+- **Rerun flags differ by subcommand** (common mistake: `--rerun` on dynagraph/dynamem):
+  - **`emet run agent`**: Rerun **off** by default → pass **`--rerun`** to enable.
+  - **`emet run dynamem`**, **`emet run dynagraph`**, **`emet run scene-graph`**: Rerun **on** by default → omit flags, or **`--no-rerun`** to disable. Do **not** use **`--rerun`** unless `--help` shows it (compatibility alias may exist).
+  - Shared when Rerun is enabled: **`--headless`**, **`--rerun-native`**, **`--rerun-show-panels`**, **`--rerun-debug`**, **`--rerun-bind`**; dynagraph/dynamem also **`--save_rerun` / `--SR`**.
 - **Before claiming a sim / spawn / placement bug is fixed**, run a **concrete verification experiment** in this repo and **compare numbers in the output** (do not hand-wave). Examples: `timeout … uv run python -m emet.simulation.mujoco_server --robot innate_mars --use-robocasa --headless --seed 0` and confirm **scene summary** `Robot position (x, y, theta)` matches the **Robocasa planar autoplace** log line (`moved base to x=… y=…`) within a few millimeters; or a small `uv run python …` script that loads the merged MJCF and asserts bounds. Paste or summarize the measured outcome. Do not treat “tests passed” or code review alone as proof for behavior-only regressions. **Avoid** calling `mj_fwdPosition` alone after `mj_forward` + actuator sync on planar Robocasa merges; it can desync `body_xpos` from `qpos` for this stack—extend with a full `mj_forward` only when you know the model needs it, or skip the extra forward if `write_planar_base_xyt` already forwarded.
 
 ## Dependencies

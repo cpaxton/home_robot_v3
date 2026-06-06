@@ -20,7 +20,12 @@ from typing import Any
 import numpy as np
 from overrides import override
 
+from emet.core.zmq_protocol import EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY
 from emet.motion.constants import STRETCH_CAMERA_FRAME
+from emet.simulation.mujoco_ground_truth import (
+    mujoco_ground_truth_write_path,
+    parse_ground_truth_dump_action_field,
+)
 from emet.simulation.sim_object_placements import (
     apply_navigation_origin_to_session,
     attach_sim_object_placements_to_session,
@@ -400,7 +405,10 @@ class MujocoZmqServer(BaseZmqServer):
             # Command robot
             if self.debug_control_loop:
                 print(f"Commanding robot with {v_cmd} and {w_cmd}")
-            self.robot_sim.set_base_velocity(v_linear=v_cmd, omega=w_cmd)
+            try:
+                self.robot_sim.set_base_velocity(v_linear=v_cmd, omega=w_cmd)
+            except ConnectionError:
+                pass
             self._base_controller_at_goal = self.controller_finished and self.is_done
 
             if self.is_done:
@@ -410,6 +418,15 @@ class MujocoZmqServer(BaseZmqServer):
     def base_controller_at_goal(self):
         """Check if the base controller is at goal."""
         return self._base_controller_at_goal
+
+    def _stretch_sim_publish_ok(self) -> bool:
+        """True while the Stretch subprocess can answer pull_* / poses (avoid IPC errors during shutdown)."""
+        if self.robot_sim is None:
+            return False
+        try:
+            return bool(self.robot_sim.is_running())
+        except (ConnectionError, ConnectionResetError, OSError):
+            return False
 
     def get_joint_state(self):
         """Get the joint state of the robot."""
@@ -468,14 +485,24 @@ class MujocoZmqServer(BaseZmqServer):
         """Base pose is the SE(2) pose of the base in world coords (x, y, theta)"""
         if self._initial_xyt is None:
             return None
-        xyt = self.robot_sim.get_base_pose()
+        if not self._stretch_sim_publish_ok():
+            return None
+        try:
+            xyt = self.robot_sim.get_base_pose()
+        except (ConnectionError, ConnectionResetError, OSError):
+            return None
         return xyt_global_to_base(xyt, self._initial_xyt)
 
     def get_ee_pose(self) -> np.ndarray:
         """EE pose is the 4x4 matrix of the end effector location in world coords"""
         if self._initial_xyt is None:
             return None
-        pose = self.robot_sim.get_ee_pose()
+        if not self._stretch_sim_publish_ok():
+            return None
+        try:
+            pose = self.robot_sim.get_ee_pose()
+        except (ConnectionError, ConnectionResetError, OSError):
+            return None
         return pose_global_to_base(pose, self._initial_xyt)
 
     def _head_camera_opencv_world(self) -> np.ndarray:
@@ -488,13 +515,23 @@ class MujocoZmqServer(BaseZmqServer):
         """Head camera pose in episode-relative (nav) coords."""
         if self._initial_xyt is None:
             return None
-        return pose_global_to_base(self._head_camera_opencv_world(), self._initial_xyt)
+        if not self._stretch_sim_publish_ok():
+            return None
+        try:
+            return pose_global_to_base(self._head_camera_opencv_world(), self._initial_xyt)
+        except (ConnectionError, ConnectionResetError, OSError):
+            return None
 
     def get_ee_camera_pose(self) -> np.ndarray:
         """Get the end effector camera pose in world coords"""
         if self._initial_xyt is None:
             return None
-        pose = self.robot_sim.get_link_pose("gripper_camera_color_optical_frame")
+        if not self._stretch_sim_publish_ok():
+            return None
+        try:
+            pose = self.robot_sim.get_link_pose("gripper_camera_color_optical_frame")
+        except (ConnectionError, ConnectionResetError, OSError):
+            return None
         return pose_global_to_base(pose, self._initial_xyt)
 
     def set_posture(self, posture: str) -> bool:
@@ -611,8 +648,11 @@ class MujocoZmqServer(BaseZmqServer):
                 self.set_goal_pose(self.robocasa_start_offset, relative=True)
 
         while self.is_running():
-            self._camera_data = self.robot_sim.pull_camera_data()
-            self._status = self.robot_sim.pull_status()
+            try:
+                self._camera_data = self.robot_sim.pull_camera_data()
+                self._status = self.robot_sim.pull_status()
+            except ConnectionError:
+                break
             time.sleep(1 / self.simulation_rate)
 
     def _build_emet_session_stretch(self, *, robocasa: bool) -> dict[str, Any]:
@@ -639,6 +679,8 @@ class MujocoZmqServer(BaseZmqServer):
         }
         if self._scene_source_basename:
             session["scene_source_basename"] = self._scene_source_basename
+        if self._environment_descriptor and self._environment_descriptor.get("spawn_floor_map") is not None:
+            session["spawn_floor_map"] = self._environment_descriptor["spawn_floor_map"]
         env_kind = env.get("kind") if isinstance(env, dict) else None
         gt_model, gt_data = self._gt_model_data_for_session()
         attach_sim_object_placements_to_session(
@@ -716,6 +758,38 @@ class MujocoZmqServer(BaseZmqServer):
     @override
     def handle_action(self, action: dict[str, Any]):
         """Handle the action received from the client."""
+        if EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY in action:
+            path_gt, exclude_robot, as_json = parse_ground_truth_dump_action_field(
+                action[EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY]
+            )
+            if path_gt:
+                hdr = None
+                envd = self._environment_descriptor
+                if isinstance(envd, dict):
+                    hdr = {k: envd[k] for k in sorted(envd.keys()) if k in ("kind", "task", "style", "layout")}
+
+                try:
+                    model = getattr(self.robot_sim, "mjmodel", None)
+                    data = getattr(self.robot_sim, "mjdata", None)
+                    if model is None or data is None:
+                        logger.warning(
+                            "mujoco_ground_truth_dump: no mjmodel/mjdata; cannot write %r",
+                            path_gt,
+                        )
+                    else:
+                        out = mujoco_ground_truth_write_path(
+                            model,
+                            data,
+                            dest=path_gt,
+                            exclude_robot=exclude_robot,
+                            robot_base_body_name=str(self.get_robot_spec().base_link_name),
+                            json=as_json,
+                            extras=hdr,
+                        )
+                        logger.info(f"Wrote MuJoCo ground-truth snapshot -> {out}")
+                except Exception as e:
+                    logger.error("mujoco_ground_truth_dump failed for %r: %s", path_gt, e)
+
         if "control_mode" in action:
             new_control_mode = action["control_mode"]
             if new_control_mode not in ["navigation", "manipulation"]:
@@ -796,6 +870,8 @@ class MujocoZmqServer(BaseZmqServer):
     @override
     def get_full_observation_message(self) -> dict[str, Any]:
         """Get the full observation message for the robot. This includes the full state of the robot, including images and depth images."""
+        if not self._stretch_sim_publish_ok():
+            return None
         cam_data = self._camera_data
         if cam_data is None:
             return None
@@ -821,14 +897,20 @@ class MujocoZmqServer(BaseZmqServer):
         depth = compression.to_jp2(depth)
 
         xyt = self.get_base_pose()
+        if xyt is None:
+            return None
+        head_cam = self.get_head_camera_pose()
+        ee = self.get_ee_pose()
+        if head_cam is None or ee is None:
+            return None
 
         # Get the other fields from an observation
         message = {
             "rgb": rgb,
             "depth": depth,
             "camera_K": self.head_K,
-            "camera_pose": self._head_camera_opencv_world(),
-            "ee_pose": self.robot_sim.get_ee_pose(),
+            "camera_pose": head_cam,
+            "ee_pose": ee,
             "joint": positions,
             "gps": xyt[:2],
             "compass": np.array([xyt[2]]),
@@ -849,10 +931,16 @@ class MujocoZmqServer(BaseZmqServer):
     @override
     def get_state_message(self) -> dict[str, Any]:
         """Get the state message for the robot. This is a smalll message that includes floating point information and booleans like if the robot is homed."""
+        if not self._stretch_sim_publish_ok():
+            return None
         q, dq, eff = self.get_joint_state()
+        base_pose = self.get_base_pose()
+        ee_pose = self.get_ee_pose()
+        if base_pose is None or ee_pose is None:
+            return None
         message = {
-            "base_pose": self.get_base_pose(),
-            "ee_pose": self.get_ee_pose(),
+            "base_pose": base_pose,
+            "ee_pose": ee_pose,
             "joint_positions": q,
             "joint_velocities": dq,
             "joint_efforts": eff,
@@ -868,6 +956,8 @@ class MujocoZmqServer(BaseZmqServer):
     @override
     def get_servo_message(self) -> dict[str, Any]:
         """Get messages for e2e policy learning and visual servoing. These are images and depth images, but lower resolution than the large full state observations, and they include the end effector camera."""
+        if not self._stretch_sim_publish_ok():
+            return None
 
         cam_data = self._camera_data
         if cam_data is None:
@@ -917,6 +1007,11 @@ class MujocoZmqServer(BaseZmqServer):
 
         # Get position info
         positions, _, _ = self.get_joint_state()
+        ee_pose_cam = self.get_ee_camera_pose()
+        head_pose_cam = self.get_head_camera_pose()
+        ee_pose_mat = self.get_ee_pose()
+        if ee_pose_cam is None or head_pose_cam is None or ee_pose_mat is None:
+            return None
 
         message = {
             "ee_cam/color_camera_K": scale_camera_matrix(self.ee_K, self.ee_image_scaling),
@@ -927,8 +1022,8 @@ class MujocoZmqServer(BaseZmqServer):
             "ee_cam/depth_image/shape": ee_depth_image.shape,
             "ee_cam/image_scaling": self.ee_image_scaling,
             "ee_cam/depth_scaling": self.ee_depth_scaling,
-            "ee_cam/pose": self.robot_sim.get_link_pose("gripper_camera_color_optical_frame"),
-            "ee/pose": self.get_ee_pose(),
+            "ee_cam/pose": ee_pose_cam,
+            "ee/pose": ee_pose_mat,
             "head_cam/color_camera_K": scale_camera_matrix(self.head_K, self.image_scaling),
             "head_cam/depth_camera_K": scale_camera_matrix(self.head_K, self.image_scaling),
             "head_cam/color_image": compressed_head_color_image,
@@ -937,7 +1032,7 @@ class MujocoZmqServer(BaseZmqServer):
             "head_cam/depth_image/shape": head_depth_image.shape,
             "head_cam/image_scaling": self.image_scaling,
             "head_cam/depth_scaling": self.depth_scaling,
-            "head_cam/pose": self._head_camera_opencv_world(),
+            "head_cam/pose": head_pose_cam,
             "robot/config": positions,
             "is_simulation": True,
             "step": self._last_step,
@@ -951,4 +1046,4 @@ class MujocoZmqServer(BaseZmqServer):
 
         Returns:
             bool: True if the server is running, False otherwise."""
-        return self.running and self.robot_sim.is_running()
+        return self.running and self.robot_sim is not None and self.robot_sim.is_running()

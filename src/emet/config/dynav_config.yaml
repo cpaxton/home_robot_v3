@@ -45,6 +45,7 @@ da3_stereo: false
 
 # EQA (memory Q&A when using emet run agent --eqa). Default: local Qwen3-VL (one load for captions + EQA).
 # vl_family: qwen3_vl | qwen2_5_vl | gemma4 — set vl_hf_model_id to override the default checkpoint.
+# Agent: ``--llm gemma4-vl-eqa --eqa`` uses eqa.vl_family (default gemma4 checkpoint: google/gemma-4-E4B-it).
 eqa:
   backend: qwen_vl
   vl_family: qwen3_vl
@@ -75,6 +76,24 @@ filters:
   use_derivative_filter: True
   derivative_filter_threshold: 0.2
   # use_voxel_filter: True
+
+# Motion convergence (StretchZmqClient; same as default_planner.yaml)
+motion:
+  moving_threshold: 0.01
+  angle_threshold: 0.1
+  min_steps_not_moving: 2
+  joint_tolerance:
+    arm: 0.02
+    base_x: 0.02
+    lift: 0.02
+    wrist_roll: 0.1
+    wrist_pitch: 0.1
+    wrist_yaw: 0.1
+    head_pan: 0.01
+    head_tilt: 0.01
+  joint_thresholds:
+    head_not_moving_tolerance: 1.0e-4
+    gripper_open_threshold: 0.3
 
 # Exploration
 agent:
@@ -186,3 +205,16 @@ graph_eqa_extract:
 
 # When false, generic-label frames are dropped (no graph node, no navigation sample).
 graph_eqa_record_navigation: true
+
+# Live Rerun (``emet run dynamem``, ``emet run dynagraph``). See ``agents/default_rerun.yaml``.
+rerun:
+  mjcf_show_visual_mesh: true
+  mjcf_show_skeleton: false
+  server_memory_limit: "4GB"
+  show_camera_point_clouds: false
+  voxel_map_stride: 2
+  dynagraph_stride: 2
+  mjcf_mesh_stride: 3
+  dynagraph:
+    log_crops: false
+    log_edges: false

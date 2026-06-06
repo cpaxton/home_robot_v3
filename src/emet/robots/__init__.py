@@ -16,6 +16,7 @@
 """Robot backends for EMET — Stretch, Mobile ALOHA, Galaxea R1 / RB-Y1, Innate Mars, YOR."""
 
 import importlib
+from typing import Any
 
 from emet.robots.base import RobotBackend, RobotSpec, format_robot_runtime_notes, format_uv_sync_extras_hint
 
@@ -72,7 +73,17 @@ def resolve_dynav_config_yaml(robot: str, dynav_config: str) -> str:
     return spec.default_dynav_config
 
 
+def apply_robot_dynav_parameter_overrides(robot: str, parameters: dict[str, Any]) -> None:
+    """Merge :attr:`RobotSpec.dynav_parameter_overrides` into a loaded dynav parameter dict."""
+    spec = get_robot_spec(robot.lower().replace("-", "_"))
+    if spec is None or not spec.dynav_parameter_overrides:
+        return
+    for key, value in spec.dynav_parameter_overrides.items():
+        parameters[key] = value
+
+
 __all__ = [
+    "apply_robot_dynav_parameter_overrides",
     "DEFAULT_DYNAV_CONFIG_YAML",
     "ROBOT_REGISTRY",
     "RobotBackend",

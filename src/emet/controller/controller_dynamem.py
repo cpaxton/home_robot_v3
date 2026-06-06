@@ -55,8 +55,8 @@ from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
 from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
 from emet.motion.algo.a_star import AStar
 from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
-from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask
 from emet.perception.depth.lingbot_estimator import LingBotDepthEstimator, create_lingbot_estimator_from_parameters
+from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask, sensor_depth_usable
 from emet.perception.detection.owl import OwlPerception
 from emet.perception.detection.yoloe import YoloEPerception
 
@@ -259,6 +259,7 @@ class DynamemController(BaseController):
         self.re = re
         self.save_rerun = save_rerun
         self.rerun_iter = 0
+        self._cached_navigation_origin_xyt: np.ndarray | None = None
 
     def _start_threads(self) -> None:
         """DynamemController does not use realtime update threads."""
@@ -271,6 +272,35 @@ class DynamemController(BaseController):
     def move_to_nav_posture(self) -> None:
         """Move the robot to navigation posture (delegates to the robot client)."""
         self.robot.move_to_nav_posture()
+
+    def _robot_emet_session(self) -> dict[str, Any] | None:
+        get_sess = getattr(self.robot, "get_emet_session", None)
+        if get_sess is None:
+            return None
+        return get_sess()
+
+    def _navigation_origin_xyt(self) -> np.ndarray | None:
+        """World spawn pose from ZMQ ``emet_session`` (cached from first observation if needed)."""
+        sess = self._robot_emet_session()
+        if sess is not None:
+            org = sess.get("navigation_origin_xyt")
+            if org is not None:
+                origin = np.asarray(org, dtype=np.float64).reshape(-1)[:3]
+                self._cached_navigation_origin_xyt = origin.copy()
+                return origin
+        if self._cached_navigation_origin_xyt is not None:
+            return self._cached_navigation_origin_xyt
+        return None
+
+    def _planning_base_xyt(self, local_xyt: np.ndarray | list | tuple) -> np.ndarray:
+        """Episode-relative ZMQ base pose → world frame for voxel-grid planning."""
+        xyt = np.asarray(local_xyt, dtype=np.float64).reshape(-1)
+        if xyt.size < 3:
+            xyt = np.pad(xyt, (0, max(0, 3 - xyt.size)), mode="constant")
+        sess = self._robot_emet_session()
+        if sess is None and self._cached_navigation_origin_xyt is not None:
+            sess = {"navigation_origin_xyt": self._cached_navigation_origin_xyt.tolist()}
+        return nav_xyt_to_world_xyt(xyt[:3], sess)
 
     def create_obstacle_map(self, parameters):
         """
@@ -402,6 +432,14 @@ class DynamemController(BaseController):
                 self._graph_dedup_xy_m = float(
                     parameters.get("graph_instance_dedup_xy_m", DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M)
                 )
+            from emet.memory.graph_eqa.graph_object_fusion.setup import attach_graph_object_fusion
+
+            self._graph_object_fusion = attach_graph_object_fusion(
+                self.graph_memory,
+                parameters if isinstance(parameters, dict) else None,
+                fref=gcfg.graph_object_fusion,
+            )
+            self._calibration_writer = None
             dev_sg = self.device if self.device in ("cuda", "mps") else "cuda"
             self.sensor_builder = SensorGraphBuilder(
                 perception_client=None,
@@ -417,15 +455,17 @@ class DynamemController(BaseController):
         """
         if getattr(self.rerun_visualizer, "enabled", True) is False:
             return
+        from emet.visualization.rerun import spatial3d_view_world
+
         main = rrb.Horizontal(
-            rrb.Spatial3DView(name="3D View", origin="world"),
+            spatial3d_view_world(),
             rrb.Vertical(
                 rrb.TextDocumentView(name="text", origin="robot_monologue"),
                 rrb.Spatial2DView(name="relevant image", origin="/observation_similar_to_text"),
             ),
             rrb.Vertical(
-                rrb.Spatial2DView(name="head_rgb", origin="world/head_camera"),
-                rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera"),
+                rrb.Spatial2DView(name="head_rgb", origin="world/head_camera/rgb"),
+                rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera/rgb"),
                 rrb.Spatial2DView(name="map_topdown", origin="world/map_snapshot/topdown"),
             ),
             rrb.Vertical(
@@ -521,7 +561,7 @@ class DynamemController(BaseController):
                 self._lingbot_last_pose = est_lb.last_camera_pose
             return depth_lb
         # Auto: prefer sensor without constructing DA3 (heavy); matches resolve_depth_map logic.
-        if mode == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
+        if mode == "auto" and sensor_depth_usable(sensor_depth):
             return np.asarray(sensor_depth, dtype=np.float32)
         est = self._lazy_da3_estimator()
         self._depth_map_from_da3_infer = True
@@ -665,6 +705,11 @@ class DynamemController(BaseController):
                 None if base_xyt is None else np.asarray(base_xyt, dtype=np.float64).round(4).tolist(),
                 cam_t,
             )
+        if getattr(obs, "emet_session", None) is not None:
+            org = getattr(obs, "emet_session", {}).get("navigation_origin_xyt")
+            if org is not None:
+                self._cached_navigation_origin_xyt = np.asarray(org, dtype=np.float64).reshape(-1)[:3].copy()
+
         self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt)
         robot_xy = None
         if obs.gps is not None and obs.compass is not None:
@@ -691,9 +736,16 @@ class DynamemController(BaseController):
             instances = self.get_voxel_map().get_instances()
             if instances:
                 self._update_scene_graph()
-                self.rerun_visualizer.update_scene_graph(self.scene_graph, self.semantic_sensor)
+                self.rerun_visualizer.update_scene_graph(
+                    self.scene_graph,
+                    self.semantic_sensor,
+                    detection_model=getattr(self, "detection_model", None),
+                    graph_memory=self.graph_memory,
+                )
 
-        if self.graph_memory is not None and self.sensor_builder is not None:
+        if self.graph_memory is not None and (
+            self.sensor_builder is not None or self._graph_eqa_use_instance_graph
+        ):
             if getattr(self, "_skip_graph_perception_updates", False):
                 from emet.memory.graph_eqa.dynamem_graph_hooks import (
                     update_graph_memory_ground_truth_from_observation,
@@ -719,6 +771,8 @@ class DynamemController(BaseController):
                     dedup_skips=self._graph_dedup_skips,
                     obs=obs,
                     frame_step=self.obs_count,
+                    graph_object_fusion=getattr(self, "_graph_object_fusion", None),
+                    calibration_writer=getattr(self, "_calibration_writer", None),
                 )
 
         # Visualize open-vocab scene graph if attached
@@ -881,10 +935,12 @@ class DynamemController(BaseController):
         self.robot.move_to_nav_posture()
         self.robot.look_front(blocking=True)
         time.sleep(DYNAMEM_HEAD_SETTLE_S)
-        xyt = self.robot.get_base_pose()
-        for _i in range(8):
-            xyt[2] += 2 * np.pi / 8
-            self.robot.move_base_to(xyt, blocking=True)
+        wait_obs = getattr(self.robot, "wait_for_obs", None)
+        if callable(wait_obs):
+            wait_obs(timeout=10.0)
+        logger.info("rotate_in_place: 8× relative +45° yaw (no XY translation)")
+        for step_i in range(8):
+            self.robot.move_base_to([0.0, 0.0, np.pi / 4.0], relative=True, blocking=True)
             if not self._realtime_updates:
                 self.update()
         self.rerun_iter += 1
@@ -942,13 +998,21 @@ class DynamemController(BaseController):
 
         self.robot.switch_to_navigation_mode()
 
-        start = self.robot.get_base_pose()
+        start = self._planning_base_xyt(self.robot.get_base_pose())
         res = self.process_text(text, start)
         if len(res) == 0 and text != "" and text is not None:
             res = self.process_text("", start)
 
         if len(res) > 0:
             logger.info("Navigation plan OK; executing trajectory")
+            wait_obs = getattr(self.robot, "wait_for_obs", None)
+            if wait_obs is not None:
+                wait_obs(timeout=10.0)
+            if self._navigation_origin_xyt() is None:
+                logger.warning(
+                    "navigation_origin_xyt missing from emet_session; sim nav may use wrong frame "
+                    "(restart sim server and ensure first observation arrived)."
+                )
             # process_text ends with robot.say(...); re-sync nav posture + forward gaze before base moves.
             self.robot.move_to_nav_posture()
             self.robot.look_front(blocking=True)
@@ -962,6 +1026,7 @@ class DynamemController(BaseController):
                         pos_err_threshold=self.pos_err_threshold,
                         rot_err_threshold=self.rot_err_threshold,
                         blocking=True,
+                        world_frame=True,
                     )
 
                 self.robot.look_front()
@@ -974,6 +1039,7 @@ class DynamemController(BaseController):
                     pos_err_threshold=self.pos_err_threshold,
                     rot_err_threshold=self.rot_err_threshold,
                     blocking=True,
+                    world_frame=True,
                 )
                 self.robot.look_front()
                 self.update()
@@ -1382,14 +1448,18 @@ class DynamemController(BaseController):
                 confidence_reasoning,
                 target_point,
                 relevant_images,
-            ) = self.voxel_map.query_answer(question, self.robot.get_base_pose(), self.planner)
+            ) = self.voxel_map.query_answer(
+                question, self._planning_base_xyt(self.robot.get_base_pose()), self.planner
+            )
         except:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images = (
                 "Exception happens in LLM querying!",
                 "Unknown",
                 False,
                 "Exception happens in LLM querying!",
-                self.space.sample_frontier(self.planner, self.robot.get_base_pose(), text=None),
+                self.space.sample_frontier(
+                    self.planner, self._planning_base_xyt(self.robot.get_base_pose()), text=None
+                ),
                 [],
             )
 
@@ -1430,7 +1500,7 @@ class DynamemController(BaseController):
         if confidence:
             return answer, discord_text, relevant_images, confidence
 
-        start_pose = self.robot.get_base_pose()
+        start_pose = self._planning_base_xyt(self.robot.get_base_pose())
 
         logger.debug("EQA navigate: target_point=%s", target_point)
         # If we want to explore non obstacles (especially frontiers), remember where we currently want to face
@@ -1444,7 +1514,7 @@ class DynamemController(BaseController):
 
         movement_step = 0
         while movement_step < max_movement_step:
-            start_pose = self.robot.get_base_pose()
+            start_pose = self._planning_base_xyt(self.robot.get_base_pose())
             movement_step += 1
             self.update()
             finished = self.navigate_to_target_pose(target_point, start_pose, target_theta)
@@ -1520,6 +1590,7 @@ class DynamemController(BaseController):
                 pos_err_threshold=self.pos_err_threshold,
                 rot_err_threshold=self.rot_err_threshold,
                 blocking=True,
+                world_frame=True,
             )
 
         return finished

@@ -12,6 +12,7 @@ import torch
 
 from emet.memory.graph_eqa.instance_observations import (
     frame_instances_to_labels_xyz,
+    frame_world_xyz_hw3,
     label_for_detection_category,
 )
 
@@ -29,6 +30,16 @@ def test_label_for_detection_category_uses_class_list():
 def test_label_for_detection_category_out_of_range():
     m = _MockYoloEVocab()
     assert label_for_detection_category(m, 500) == "class_500"
+
+
+def test_frame_world_xyz_hw3_from_flat_unproject_layout():
+    h, w = 8, 8
+    depth = torch.ones(h, w)
+    fw_flat = torch.randn(h * w, 3)
+    frame = SimpleNamespace(depth=depth, full_world_xyz=fw_flat, instance=None)
+    hw3 = frame_world_xyz_hw3(frame)
+    assert hw3 is not None
+    assert tuple(hw3.shape) == (h, w, 3)
 
 
 def test_frame_instances_to_labels_xyz_medians_and_labels():
@@ -55,9 +66,12 @@ def test_frame_instances_to_labels_xyz_medians_and_labels():
         min_points=4,
     )
     assert len(out) == 2
-    by_label = dict(out)
+    by_label = {label: xyz for label, xyz, _bbox in out}
     assert np.allclose(by_label["cls_2"], [1.0, 2.0, 3.0])
     assert np.allclose(by_label["cls_5"], [10.0, 20.0, 30.0])
+    bboxes = {label: bbox for label, _xyz, bbox in out}
+    assert bboxes["cls_2"] == (0, 0, 4, 4)
+    assert bboxes["cls_5"] == (4, 4, 8, 8)
 
 
 def test_frame_instances_to_labels_xyz_skips_small_mask():

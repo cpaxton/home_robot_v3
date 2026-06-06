@@ -813,7 +813,12 @@ class InstanceMemoryController(BaseController):
         if self.robot._rerun:
             self.robot._rerun.update_voxel_map(self.space)
             if self.use_scene_graph:
-                self.robot._rerun.update_scene_graph(self.scene_graph, self.semantic_sensor)
+                self.robot._rerun.update_scene_graph(
+                    self.scene_graph,
+                    self.semantic_sensor,
+                    detection_model=getattr(self, "detection_model", None),
+                    graph_memory=getattr(self, "graph_memory", None),
+                )
 
         else:
             logger.error("No rerun server available!")

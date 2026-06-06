@@ -44,8 +44,25 @@ _EMET_RUN_APPS_WITH_ROBOT = frozenset(
 
 
 def _project_root() -> Path:
-    """Return project root (parent of src/emet)."""
+    """Return project root (parent of src/emet) for the installed ``emet`` package."""
     return Path(__file__).resolve().parent.parent.parent
+
+
+def _cwd_project_root() -> Path | None:
+    """Emet checkout containing the current working directory, if any."""
+    try:
+        cwd = Path.cwd().resolve()
+    except OSError:
+        return None
+    for p in (cwd, *cwd.parents):
+        if (p / "pyproject.toml").is_file() and (p / "src" / "emet" / "cli.py").is_file():
+            return p
+    return None
+
+
+def _active_project_root() -> Path:
+    """Repo to use for this command: cwd checkout wins over ``emet`` install location."""
+    return _cwd_project_root() or _project_root()
 
 
 def _has_uv() -> bool:
@@ -68,7 +85,8 @@ def _ensure_uv_project() -> None:
         return
     if not _has_uv():
         return
-    root = _project_root()
+    root = _active_project_root()
+    pkg_root = _project_root()
     try:
         cwd = Path.cwd().resolve()
     except OSError:
@@ -79,20 +97,64 @@ def _ensure_uv_project() -> None:
         return
     env = os.environ.copy()
     env["EMET_UV_RUN"] = "1"
+    if root.resolve() != pkg_root.resolve():
+        env["EMET_ACTIVE_REPO"] = str(root)
+        click.secho(
+            f"emet on PATH is from {pkg_root} but cwd is {root}; re-running: uv run emet …",
+            fg="yellow",
+            err=True,
+        )
     try:
-        os.execvpe("uv", ["uv", "run", "emet"] + sys.argv[1:], env)
+        os.execvpe("uv", ["uv", "run", "emet", *sys.argv[1:]], env)
     except Exception:
         pass
 
 
 def _project_venv_python() -> Path | None:
     """Return the project .venv Python path if it exists."""
-    root = _project_root()
+    root = _active_project_root()
     for name in ("python", "python3"):
         p = root / ".venv" / "bin" / name
         if p.exists():
             return p
     return None
+
+
+def _in_project_tree() -> bool:
+    """True when cwd is the project root or a subdirectory."""
+    root = _active_project_root()
+    if not (root / "pyproject.toml").exists():
+        return False
+    try:
+        cwd = Path.cwd().resolve()
+    except OSError:
+        return False
+    return cwd == root or str(cwd).startswith(str(root) + os.sep)
+
+
+def _require_repo_venv_when_in_repo() -> None:
+    """Fail fast when ``emet`` on PATH is not this checkout's ``.venv`` (common with old symlinks)."""
+    venv_py = _project_venv_python()
+    if venv_py is None or not _in_project_tree():
+        return
+    if Path(sys.executable).resolve() == venv_py.resolve():
+        return
+    root = _active_project_root()
+    pkg_root = _project_root()
+    click.secho(
+        "Error: emet is not running from this repo's .venv.\n"
+        f"  Current:   {sys.executable}\n"
+        f"  Expected:  {venv_py}\n"
+        f"  Cwd repo:  {root}\n"
+        f"  Installed: {pkg_root}\n"
+        f"  From {root}, use:\n"
+        "    uv run emet …\n"
+        "    # or: source .venv/bin/activate && emet …\n"
+        "  Fix PATH: pip install -e .  in this repo (not home_robot_v4).",
+        fg="red",
+        err=True,
+    )
+    sys.exit(2)
 
 
 def _run_module(module: str, args: list[str], env: dict | None = None) -> int:
@@ -126,6 +188,14 @@ def main() -> None:
     uses the project environment (as if you had run uv run emet ...).
     """
     _ensure_uv_project()
+    _require_repo_venv_when_in_repo()
+    active = os.environ.get("EMET_ACTIVE_REPO")
+    if active:
+        click.secho(
+            f"emet: using checkout {active} ({_project_root()})",
+            fg="green",
+            err=True,
+        )
 
 
 @main.command(short_help="Start simulation server (mujoco, robocasa, or molmospaces)")
@@ -380,6 +450,95 @@ def molmospaces_cmd() -> None:
     ``export-nerfstudio`` is core-only (reads an explore episode directory). Install wrapper with:
       ./install.sh -y   (default sim path)   or   ./install.sh --molmospaces -y   or   editable install of packages/emet_molmospaces
     """
+
+
+def _run_habitat_wrapper(args: list[str]) -> int:
+    """Run the emet-habitat wrapper. Returns exit code."""
+    from emet.habitat.wrapper_config import build_habitat_wrapper_command, ensure_habitat_eqa_data_dir_env
+
+    cmd = build_habitat_wrapper_command(args)
+    if cmd is None:
+        click.echo(
+            "Habitat wrapper not found. From the project root run:\n"
+            "  ./scripts/install_habitat.sh\n\n"
+            "See docs/habitat/README.md.",
+            err=True,
+        )
+        return 1
+    env = os.environ.copy()
+    ensure_habitat_eqa_data_dir_env(env)
+    return subprocess.call(cmd, cwd=_project_root(), env=env)
+
+
+@main.group("habitat", short_help="Habitat-Sim EQA harness (requires emet-habitat / .venv-habitat)")
+def habitat_cmd() -> None:
+    """HM-EQA / OpenEQA evaluation in Habitat driving emet GraphEQA / Dynagraph.
+
+    Requires ``./scripts/install_habitat.sh`` (``.venv-habitat``). See docs/habitat/README.md.
+    """
+
+
+@habitat_cmd.command("info", short_help="Print data paths and asset status")
+def habitat_info() -> None:
+    sys.exit(_run_habitat_wrapper(["info"]))
+
+
+@habitat_cmd.command("list-questions", short_help="List HM-EQA questions from CSV")
+@click.option("--limit", default=10, type=int)
+def habitat_list_questions(limit: int) -> None:
+    sys.exit(_run_habitat_wrapper(["list-questions", "--limit", str(limit)]))
+
+
+@habitat_cmd.command("run-episode", short_help="Run one HM-EQA episode")
+@click.option("--question-id", default=0, type=int)
+@click.option("--method", type=click.Choice(["graph_eqa", "dynagraph"]), default="dynagraph")
+@click.option("--mock-llm", is_flag=True, default=False)
+@click.option("--max-planning-steps", default=5, type=int)
+def habitat_run_episode(
+    question_id: int,
+    method: str,
+    mock_llm: bool,
+    max_planning_steps: int,
+) -> None:
+    args = [
+        "run-episode",
+        "--question-id",
+        str(question_id),
+        "--method",
+        method,
+        "--max-planning-steps",
+        str(max_planning_steps),
+    ]
+    if mock_llm:
+        args.append("--mock-llm")
+    sys.exit(_run_habitat_wrapper(args))
+
+
+@habitat_cmd.command("compare-batch", short_help="GraphEQA vs Dynagraph on same questions")
+@click.option("--question-start", default=0, type=int)
+@click.option("--question-end", default=5, type=int)
+@click.option("--mock-llm", is_flag=True, default=False)
+@click.option("--max-planning-steps", default=20, type=int)
+def habitat_compare_batch(
+    question_start: int,
+    question_end: int,
+    mock_llm: bool,
+    max_planning_steps: int,
+) -> None:
+    args = [
+        "compare-batch",
+        "--question-start",
+        str(question_start),
+        "--question-end",
+        str(question_end),
+        "--max-planning-steps",
+        str(max_planning_steps),
+        "--output",
+        f"{os.path.expanduser('~')}/.cache/habitat_eqa/results/compare_q{question_start}-{question_end}.json",
+    ]
+    if mock_llm:
+        args.append("--mock-llm")
+    sys.exit(_run_habitat_wrapper(args))
 
 
 @molmospaces_cmd.command("list-robots", short_help="List supported robot IDs")
@@ -985,6 +1144,7 @@ def deploy(
             "molmospaces-explore",
             "debug-da3-depth",
             "debug-lingbot-depth",
+            "graph-eqa-habitat",
         ]
     ),
 )
@@ -1041,8 +1201,10 @@ def run(
       emet run discord --robot-ip 192.168.1.15 --task pickup   # requires DISCORD_TOKEN in env
       emet run debug-da3-depth --robot innate_mars   # DA3 depth + point cloud in Rerun (or: emet debug-da3-depth)
     """
+    _require_repo_venv_when_in_repo()
     args = list(ctx.args)
-    args.extend(["--robot_ip", robot_ip])
+    if app != "graph-eqa-habitat":
+        args.extend(["--robot_ip", robot_ip])
     if app in _EMET_RUN_APPS_WITH_ROBOT:
         # Do not inject ``--robot stretch`` when the user omitted ``--robot`` on ``emet run``: the wrapper's
         # default would override ``robot:`` from ``--agent-config`` (run_agent) or MolmoSpaces discovery
@@ -1081,6 +1243,8 @@ def run(
         sys.exit(_run_module("emet.app.run_graph_eqa", args))
     elif app == "dynagraph":
         sys.exit(_run_module("emet.app.run_dynagraph", args))
+    elif app == "graph-eqa-habitat":
+        sys.exit(_run_module("emet.app.run_graph_eqa_habitat", args))
     elif app == "molmospaces-explore":
         sys.exit(_run_module("emet.app.run_molmospaces_explore", args))
     elif app == "mapping":
@@ -1745,6 +1909,25 @@ from emet.app.debug_lingbot_depth import main as _debug_lingbot_depth_app  # noq
 _debug_lingbot_depth_app.short_help = "Live LingBot-Map depth + pose from ZMQ (Rerun)"
 main.add_command(_debug_lingbot_depth_app)
 
+from emet.app.export_sim_gt import main as _export_sim_gt_app  # noqa: E402
+
+_export_sim_gt_app.short_help = "Export Robocasa sim GT objects (3D bounds + head 2D boxes)"
+main.add_command(_export_sim_gt_app)
+
+from emet.app.tune_graph_fusion import main as _tune_graph_fusion_app  # noqa: E402
+
+_tune_graph_fusion_app.short_help = "Grid-search GraphObjectFusion vs GT + calibration frames"
+main.add_command(_tune_graph_fusion_app)
+
+from emet.app.eval_calibration import main as _eval_calibration_app  # noqa: E402
+
+_eval_calibration_app.short_help = "Score calibration frames vs sim GT (spatial recall)"
+main.add_command(_eval_calibration_app)
+
+from emet.app.eval_dynagraph import main as _eval_dynagraph_app  # noqa: E402
+
+_eval_dynagraph_app.short_help = "Unified Dynagraph episode eval (explore, graph, fusion, EQA)"
+main.add_command(_eval_dynagraph_app)
 
 if __name__ == "__main__":
     main()

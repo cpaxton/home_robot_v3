@@ -164,3 +164,11 @@ embodied_agent:
     # Instance detector graph runs only if use_sensor_perception is false; VLM path when true.
     use_instance_graph: true
     use_sensor_perception: true
+
+rerun:
+  mjcf_show_visual_mesh: true
+  mjcf_show_skeleton: false
+  server_memory_limit: "4GB"
+  dynagraph:
+    log_crops: false
+    log_edges: false

@@ -752,6 +752,9 @@ class StretchZmqClient(AbstractRobotClient):
         timeout: float = 10.0,
         verbose: bool = False,
         reliable: bool = True,
+        *,
+        world_frame: bool | None = None,
+        **kwargs: Any,
     ):
         """Move to xyt in global coordinates or relative coordinates.
 
@@ -1437,6 +1440,9 @@ class StretchZmqClient(AbstractRobotClient):
         final_timeout: float = 10.0,
         relative: bool = False,
         blocking: bool = False,
+        *,
+        world_frame: bool | None = None,
+        **kwargs: Any,
     ):
         """Execute a multi-step trajectory; this is always blocking since it waits to reach each one in turn."""
 
