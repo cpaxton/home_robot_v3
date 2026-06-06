@@ -10,7 +10,6 @@ centroids, 3D bounds, and optional embeddings agree within configured thresholds
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
 
