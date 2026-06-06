@@ -91,6 +91,8 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         blocking: bool = False,
         verbose: bool = False,
         timeout: float | None = None,
+        world_frame: bool = False,
+        **kwargs: Any,
     ):
         goal = np.asarray(list(xyt)[:3], dtype=np.float64)
         if relative:
@@ -158,9 +160,16 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         relative: bool = False,
         final_timeout: float = 60.0,
         blocking: bool = True,
+        world_frame: bool = False,
+        **kwargs: Any,
     ):
         for wp in trajectory:
-            self.move_base_to(wp, relative=relative, blocking=blocking)
+            self.move_base_to(
+                wp,
+                relative=relative,
+                blocking=blocking,
+                world_frame=world_frame,
+            )
 
     def get_pose_graph(self) -> np.ndarray:
         return np.zeros((0, 3), dtype=np.float64)
@@ -199,7 +208,13 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         xyt_a = np.asarray(xyt, dtype=np.float64).reshape(-1)
         if xyt_a.size != 3:
             return False
-        self.move_base_to(xyt_a, relative=relative, blocking=blocking, timeout=kwargs.get("timeout"))
+        self.move_base_to(
+            xyt_a,
+            relative=relative,
+            blocking=blocking,
+            timeout=kwargs.get("timeout"),
+            world_frame=bool(kwargs.get("world_frame", False)),
+        )
         return True
 
     def arm_to(self, joint_angles=None, gripper=None, head=None, blocking=True, **kwargs) -> bool:
