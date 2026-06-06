@@ -7,6 +7,7 @@ from emet.habitat.metrics import (
     compare_method_results,
     extract_mcq_letter,
     grade_mcq_answer,
+    read_completed_question_ids,
     summarize_episodes,
 )
 
@@ -97,3 +98,13 @@ def test_compare_method_results():
     assert cmp["graph_only"] == 1
     assert cmp["dynagraph_only"] == 0
     assert cmp["per_question"][0]["question_id"] == 0
+
+
+def test_read_completed_question_ids(tmp_path):
+    path = tmp_path / "out.jsonl"
+    path.write_text(
+        '{"question_id": 0, "correct": true}\n{"question_id": 2, "correct": false}\n',
+        encoding="utf-8",
+    )
+    assert read_completed_question_ids(path) == {0, 2}
+    assert read_completed_question_ids(tmp_path / "missing.jsonl") == set()

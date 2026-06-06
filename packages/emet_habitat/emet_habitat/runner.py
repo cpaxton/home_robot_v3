@@ -14,7 +14,8 @@ from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import Parameters, get_parameters
 from emet.habitat.config import default_hm3d_scene_dir
 from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
-from emet.habitat.metrics import EpisodeMetrics, extract_mcq_letter, grade_mcq_answer
+from emet.habitat.hmeqa_enrich_labels import enrich_labels_for_question
+from emet.habitat.metrics import EpisodeMetrics, append_episode_jsonl, extract_mcq_letter, grade_mcq_answer
 
 from emet_habitat.robot_client import HabitatRobotClient
 from emet_habitat.simulator import HabitatEQASimulator
@@ -189,6 +190,10 @@ def run_hmeqa_episode(
             use_hm3d_semantics=use_hm3d_semantics,
         )
         agent.start()
+        if agent.graph_memory is not None:
+            hints = enrich_labels_for_question(question_id, q.scene)
+            if hints:
+                agent.graph_memory.seed_object_hints(hints)
         executor = EQAExecuter(agent)
         if rotate_in_place:
             executor.rotate_in_place()
@@ -251,13 +256,25 @@ def run_hmeqa_batch(
     device: str | None = "cuda",
     continue_on_error: bool = True,
     use_hm3d_semantics: bool | None = None,
+    output_jsonl: Path | None = None,
+    resume: bool = False,
 ) -> list[EpisodeMetrics]:
+    from emet.habitat.metrics import read_completed_question_ids
+
     results: list[EpisodeMetrics] = []
     questions = load_hmeqa_questions(questions_path)
+    done: set[int] = set()
+    if output_jsonl is not None:
+        if resume and output_jsonl.exists():
+            done = read_completed_question_ids(output_jsonl)
+        elif output_jsonl.exists():
+            output_jsonl.unlink()
     for qid in question_ids:
+        if qid in done:
+            print(f"question_id={qid} skip (already in {output_jsonl})", flush=True)
+            continue
         try:
-            results.append(
-                run_hmeqa_episode(
+            row = run_hmeqa_episode(
                     question_id=qid,
                     method=method,
                     mock_llm=mock_llm,
@@ -271,15 +288,17 @@ def run_hmeqa_batch(
                     device=device,
                     use_hm3d_semantics=use_hm3d_semantics,
                 )
-            )
+            results.append(row)
+            if output_jsonl is not None:
+                append_episode_jsonl(output_jsonl, row)
+                print(f"question_id={qid} done correct={row.correct} (appended {output_jsonl})", flush=True)
             _release_gpu_memory()
         except Exception as exc:
             if not continue_on_error:
                 raise
             q = get_question(questions, question_id=qid)
             print(f"question_id={qid} failed: {exc}", flush=True)
-            results.append(
-                EpisodeMetrics(
+            err_row = EpisodeMetrics(
                     dataset="hmeqa",
                     method=method,
                     question_id=qid,
@@ -293,7 +312,9 @@ def run_hmeqa_batch(
                     planning_steps=0,
                     success=False,
                 )
-            )
+            results.append(err_row)
+            if output_jsonl is not None:
+                append_episode_jsonl(output_jsonl, err_row)
     return results
 
 

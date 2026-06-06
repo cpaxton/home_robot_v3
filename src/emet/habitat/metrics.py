@@ -75,11 +75,35 @@ def grade_mcq_answer(
     return text.upper().startswith(gold)
 
 
-def write_episode_jsonl(path: Path, episodes: list[EpisodeMetrics]) -> None:
+def write_episode_jsonl(path: Path, episodes: list[EpisodeMetrics], *, append: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
+    mode = "a" if append else "w"
+    with path.open(mode, encoding="utf-8") as f:
         for ep in episodes:
             f.write(json.dumps(ep.to_dict()) + "\n")
+
+
+def append_episode_jsonl(path: Path, episode: EpisodeMetrics) -> None:
+    write_episode_jsonl(path, [episode], append=True)
+
+
+def read_completed_question_ids(path: Path) -> set[int]:
+    """Question ids already present in a JSONL results file (for ``--resume``)."""
+    if not path.is_file():
+        return set()
+    done: set[int] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        qid = row.get("question_id")
+        if isinstance(qid, int):
+            done.add(qid)
+    return done
 
 
 def summarize_episodes(episodes: list[EpisodeMetrics]) -> dict[str, float]:

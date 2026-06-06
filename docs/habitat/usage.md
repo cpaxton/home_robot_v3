@@ -24,13 +24,17 @@ uv run emet run graph-eqa-habitat \
   --eqa-vl-family gemma4 \
   --device cuda
 
-# HM-EQA batch (113 questions; long — use nohup / tmux)
+# HM-EQA paper batch (113 questions, indices 0–112; ~2h on 4090 with gemma-3-4b-it)
 .venv-habitat/bin/emet-habitat run-batch \
   --method graph_eqa \
-  --question-start 0 --question-end 112 \
+  --paper-subset \
   --eqa-vl-family gemma4 \
   --device cuda \
-  --output ~/.cache/habitat_eqa/results/graph_eqa_gemma4.jsonl
+  --resume \
+  --output ~/.cache/habitat_eqa/results/graph_eqa_gemma3_paper.jsonl
+
+# Full Explore-EQA CSV (500 questions) — use only if you need the extended set
+# .venv-habitat/bin/emet-habitat run-batch --all-questions --question-end 499 ...
 
 # GraphEQA vs Dynagraph on the same questions (smoke with mock LLM first)
 .venv-habitat/bin/emet-habitat compare-batch \

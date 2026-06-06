@@ -226,6 +226,7 @@ class GraphEQAMemory:
         self._next_obs_id = 1
         self._question: str | None = None
         self._relevant_objects: list[str] | None = None
+        self._enrich_object_hints: list[str] = []
         self._history_outputs: list[str] = []
 
         self.log_dir = log_dir
@@ -871,6 +872,12 @@ class GraphEQAMemory:
 
         return "\n".join(lines) if lines else "Scene (3D spatial graph): (empty)"
 
+    def seed_object_hints(self, labels: str) -> None:
+        """GraphEQA HM-EQA enrich labels (per-question object hints for planning)."""
+        from emet.habitat.hmeqa_enrich_labels import parse_enrich_label_text
+
+        self._enrich_object_hints = parse_enrich_label_text(labels)
+
     def extract_relevant_objects(self, question: str) -> None:
         """Extract keywords from the question for image selection (same idea as DynaMem)."""
         if self._question == question:
@@ -883,8 +890,11 @@ class GraphEQAMemory:
         )
         out = self.image_description_client([prompt, question])
         merged: list[str] = []
-        for obj in [s.strip() for s in out.split(",") if s.strip()] + heuristic_relevant_objects(
-            question
+        enrich_hints = getattr(self, "_enrich_object_hints", None) or []
+        for obj in (
+            list(enrich_hints)
+            + [s.strip() for s in out.split(",") if s.strip()]
+            + heuristic_relevant_objects(question)
         ):
             key = obj.strip().lower()
             if key and key not in merged:

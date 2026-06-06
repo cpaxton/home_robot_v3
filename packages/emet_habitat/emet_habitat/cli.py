@@ -19,6 +19,7 @@ from emet.habitat.config import (
     scene_init_poses_csv_path,
 )
 from emet.habitat.datasets import load_hmeqa_questions
+from emet.habitat.hmeqa_enrich_labels import HMEQA_PAPER_QUESTION_COUNT, hmeqa_paper_question_ids
 from emet.habitat.metrics import compare_method_results, summarize_episodes, write_episode_jsonl
 
 
@@ -138,7 +139,18 @@ def run_episode(
 @main.command("run-batch")
 @click.option("--method", type=click.Choice(["graph_eqa", "dynagraph"]), default="graph_eqa")
 @click.option("--question-start", default=0, type=int)
-@click.option("--question-end", default=-1, type=int, help="Inclusive; -1 = last question in CSV")
+@click.option(
+    "--question-end",
+    default=-1,
+    type=int,
+    help=f"Inclusive; -1 = last question in CSV (paper subset: 0–{HMEQA_PAPER_QUESTION_COUNT - 1})",
+)
+@click.option(
+    "--paper-subset/--all-questions",
+    default=True,
+    help=f"Limit to GraphEQA HM-EQA paper questions (indices 0–{HMEQA_PAPER_QUESTION_COUNT - 1})",
+)
+@click.option("--resume", is_flag=True, default=False, help="Skip question ids already in --output JSONL")
 @click.option("--mock-llm", is_flag=True, default=False)
 @click.option("--max-planning-steps", default=20, type=int, help="EQA planning iterations (GraphEQA ref: 20)")
 @click.option("--max-movement-step", default=10, type=int, help="Nav substeps per planning iteration")
@@ -155,6 +167,8 @@ def run_batch(
     method: str,
     question_start: int,
     question_end: int,
+    paper_subset: bool,
+    resume: bool,
     mock_llm: bool,
     max_planning_steps: int,
     max_movement_step: int,
@@ -172,9 +186,17 @@ def run_batch(
     questions_path = (data_dir / "questions.csv") if data_dir else None
     init_poses_path = (data_dir / "scene_init_poses.csv") if data_dir else None
     qs = load_hmeqa_questions(questions_path)
-    end = len(qs) - 1 if question_end < 0 else min(question_end, len(qs) - 1)
-    ids = list(range(max(0, question_start), end + 1))
-    click.echo(f"Running {len(ids)} HM-EQA episodes ({method}, mock_llm={mock_llm})")
+    if paper_subset:
+        paper_ids = set(hmeqa_paper_question_ids())
+        end = HMEQA_PAPER_QUESTION_COUNT - 1 if question_end < 0 else min(question_end, HMEQA_PAPER_QUESTION_COUNT - 1)
+        ids = [qid for qid in range(max(0, question_start), end + 1) if qid in paper_ids]
+    else:
+        end = len(qs) - 1 if question_end < 0 else min(question_end, len(qs) - 1)
+        ids = list(range(max(0, question_start), end + 1))
+    click.echo(
+        f"Running {len(ids)} HM-EQA episodes ({method}, mock_llm={mock_llm}, "
+        f"paper_subset={paper_subset}, resume={resume})"
+    )
 
     try:
         metrics = run_hmeqa_batch(
@@ -190,14 +212,15 @@ def run_batch(
             eqa_hf_model_id=eqa_hf_model_id,
             device=device,
             use_hm3d_semantics=use_hm3d_semantics,
+            output_jsonl=output,
+            resume=resume,
         )
     except FileNotFoundError as exc:
         raise click.ClickException(str(exc)) from exc
 
-    write_episode_jsonl(output, metrics)
     summary = summarize_episodes(metrics)
-    click.echo(f"wrote {output}")
-    click.echo(f"summary: {summary}")
+    click.echo(f"results: {output}")
+    click.echo(f"batch summary (this run): {summary}")
 
 
 @main.command("compare-batch")
