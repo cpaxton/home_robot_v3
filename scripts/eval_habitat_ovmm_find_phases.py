@@ -41,7 +41,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--staleness-horizon", type=int, default=None)
     parser.add_argument("--cpu-only", action="store_true")
     parser.add_argument("--not-rotate", action="store_true")
-    parser.add_argument("--output-dir", default=str(REPO / "runs" / "ovmm_habitat"))
+    parser.add_argument("--benchmark", default="configs/ovmm/benchmark.yaml")
+    parser.add_argument("--output-dir", default=None)
     return parser.parse_args()
 
 
@@ -54,16 +55,23 @@ def main() -> int:
         )
         return 1
 
+    from emet.eval.ovmm_benchmark_config import load_ovmm_benchmark_config
+
     args = _parse_args()
+    bench = load_ovmm_benchmark_config(args.benchmark)
+    episodes = args.episodes
+    if episodes == str(DEFAULT_EPISODES):
+        episodes = str(bench.habitat_episodes_yaml)
+    output_dir = args.output_dir or str(bench.paths.output_dir_habitat)
     cmd = [
         str(HABITAT_BIN),
         "run-ovmm-find-batch",
         "--episodes",
-        args.episodes,
+        episodes,
         "--backend",
         args.backend,
         "--output-dir",
-        args.output_dir,
+        output_dir,
     ]
     if args.merge_xy_m is not None:
         cmd.extend(["--merge-xy-m", str(args.merge_xy_m)])

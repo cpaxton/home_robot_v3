@@ -72,10 +72,16 @@ def _parse_args() -> argparse.Namespace:
         help="ZMQ port offset (must match sim server)",
     )
     parser.add_argument(
+        "--benchmark",
+        type=str,
+        default="configs/ovmm/benchmark.yaml",
+        help="Benchmark YAML for default output path (~/runs/emet/...)",
+    )
+    parser.add_argument(
         "--output-dir",
         type=str,
-        default=str(REPO / "runs" / "ovmm_find_phase"),
-        help="Directory for per-run JSON and aggregate CSV",
+        default=None,
+        help="Directory for per-run JSON and aggregate CSV (default from benchmark.yaml)",
     )
     parser.add_argument("--dry-run", action="store_true", help="List episodes and exit")
     return parser.parse_args()
@@ -111,11 +117,16 @@ def _write_csv(rows: list[dict], path: Path) -> None:
 
 
 def main() -> int:
+    from emet.eval.ovmm_benchmark_config import load_ovmm_benchmark_config
     from emet.eval.ovmm_find_phase import FindPhaseRunConfig, load_find_phase_episodes, run_episode_find_phase
 
     args = _parse_args()
+    bench = load_ovmm_benchmark_config(args.benchmark)
     backends = args.backends or ["dynagraph"]
-    episodes = load_find_phase_episodes(args.episodes)
+    episodes_path = args.episodes
+    if episodes_path == str(DEFAULT_EPISODES):
+        episodes_path = str(bench.sim_episodes_yaml)
+    episodes = load_find_phase_episodes(episodes_path)
     episodes = _filter_episodes(episodes, tiers=args.tier, episode_ids=args.episode_ids)
 
     if args.dry_run:
@@ -123,7 +134,7 @@ def main() -> int:
             print(f"{ep.id}\t{ep.tier}\t{ep.sim}\tbackends={backends}")
         return 0
 
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir or bench.paths.output_dir_sim)
     output_dir.mkdir(parents=True, exist_ok=True)
     all_rows: list[dict] = []
 
