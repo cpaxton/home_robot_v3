@@ -34,6 +34,7 @@ from emet.memory.graph_eqa.viewer_frame import viewer_xyz_world_from_observation
 
 
 def _nav_origin_xyt(obs: Any) -> list[float] | None:
+    """Extract ``navigation_origin_xyt`` from a robot observation as ``[x, y, theta]``."""
     origin = getattr(obs, "navigation_origin_xyt", None)
     if origin is None:
         return None
@@ -44,6 +45,7 @@ def _nav_origin_xyt(obs: Any) -> list[float] | None:
 
 
 def _detection_to_candidate(d: dict[str, Any]) -> Any:
+    """Map a ``frame_instances_to_detections`` row to ``GraphDetectionCandidate``."""
     from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate
 
     emb = d.get("embedding")
@@ -170,3 +172,41 @@ def update_graph_memory_from_dynamem_observation(
             graph_memory.add_observation(rgb, xyz, [label], description=desc, viewer_xyz=viewer_xyz)
     elif not instance_items:
         graph_memory.record_navigation_sample(rgb, xyz, base_xyz=viewer_xyz)
+
+
+def _base_xyz_from_robot(robot: Any) -> np.ndarray | None:
+    """Return robot base ``(x, y, z)`` for viewpoint nodes, or ``None`` on failure."""
+    try:
+        bp = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
+        if bp.size >= 2:
+            bz = float(bp[2]) if bp.size >= 3 else 0.0
+            return np.array([float(bp[0]), float(bp[1]), bz], dtype=np.float64)
+    except Exception:
+        pass
+    return None
+
+
+def update_graph_memory_ground_truth_from_observation(
+    *,
+    graph_memory: Any,
+    robot: Any,
+    obs: Any,
+    frame_step: int | None = None,
+) -> None:
+    """
+    GT mode: record each camera viewpoint without creating new graph entity nodes.
+
+    Sim ``sim_object_placements`` remain the authoritative object list; instance
+    detections attach to those nodes separately in ``DynagraphController.update``.
+    """
+    if obs.camera_pose is None:
+        return
+    if frame_step is not None and hasattr(graph_memory, "set_graph_timestep"):
+        graph_memory.set_graph_timestep(int(frame_step))
+    xyz = np.array(obs.camera_pose[:3, 3], dtype=float)
+    graph_memory.record_navigation_sample(
+        obs.rgb,
+        xyz,
+        base_xyz=_base_xyz_from_robot(robot),
+        link_viewpoint_node=False,
+    )

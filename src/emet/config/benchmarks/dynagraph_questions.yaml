@@ -1,0 +1,33 @@
+# Dynagraph benchmark question bank (real LLM EQA scoring via emet eval-dynagraph).
+# expected_tokens: all must appear in answer text (case-insensitive substring).
+# gt_body_key: optional sim_object_placements body for spatial check when cited_xyz present.
+
+environments:
+  - env: default_table
+    questions:
+      - id: colors_on_table
+        question: "What colors are the objects on the table?"
+        expected_tokens: ["red", "blue"]
+      - id: red_object
+        question: "Is there a red object visible?"
+        expected_tokens: ["red"]
+
+  - env: robocasa_seed0
+    questions:
+      - id: sink_location
+        question: "Where is the sink?"
+        expected_tokens: ["sink"]
+        gt_body_key: sink_main
+        max_xy_error_m: 1.2
+      - id: counter_contents
+        question: "What is on the counter?"
+        expected_tokens: ["counter"]
+
+  - env: molmospaces_ithor0
+    questions:
+      - id: room_furniture
+        question: "What furniture is in this room?"
+        expected_tokens: ["chair"]
+      - id: sofa_location
+        question: "Where is the sofa?"
+        expected_tokens: ["sofa"]

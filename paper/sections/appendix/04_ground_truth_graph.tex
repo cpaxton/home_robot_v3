@@ -1,0 +1,92 @@
+\section{Ground-truth scene graph construction}
+\label{app:ground_truth_graph}
+
+This appendix documents how \texttt{emet} builds ground-truth (GT) scene graphs from MuJoCo simulation metadata, associates them with voxel-map observations, and exports labeled episodes for evaluation and fine-tuning.
+
+\subsection{Session contract}
+
+MuJoCo ZMQ servers attach \texttt{emet\_session} to state messages.
+For GT Dynagraph, the critical field is \texttt{sim\_object\_placements}: a map from MuJoCo body key (e.g.\ \texttt{obj\_main}, \texttt{sink}, \texttt{counter\_main}) to a record with:
+\begin{itemize}
+  \item \texttt{cat}: human-readable semantic label (Robocasa category or fixture name).
+  \item \texttt{pos}: world XYZ in meters (MuJoCo world frame).
+  \item \texttt{quat}: optional orientation (wxyz).
+  \item \texttt{bounds}: optional axis-aligned world AABB \texttt{[[min\_xyz], [max\_xyz]]} from mesh/collision geoms.
+\end{itemize}
+Servers also publish \texttt{navigation\_origin\_xyt} so nav-relative \texttt{gps}/\texttt{compass} compose to world coordinates for Rerun and sanity checks.
+See repository docs \texttt{docs/zmq\_session\_metadata.md}.
+
+\subsection{Server-side placement construction}
+
+Implementation: \texttt{src/emet/simulation/sim\_object\_placements.py}.
+
+\textbf{Default table.} Packaged constants for table, blue cube, and red cylinder, overlaid with live MuJoCo body poses when the server holds \texttt{model}/\texttt{data}.
+
+\textbf{Robocasa.} \texttt{placements\_from\_mujoco\_fixture\_groups} scans fixture groups (sink, counter, cabinets, appliances) by collapsing \texttt{*\_main\_group\_*} body names, merges wizard manipulable objects from task \texttt{objects\_info}, and computes world AABBs via \texttt{geom\_aabb}.
+Robocasa layout anchor geoms (offset ${\sim}$10\,m from fixture bodies) are excluded from AABB aggregation so counter bounds match visible mesh height.
+
+\textbf{MolmoSpaces / generic.} Per-body MJCF scan with optional caps on large scenes.
+
+\textbf{Stretch.} GT scan resolves \texttt{robot\_sim.model} (subprocess MuJoCo), not \texttt{mjmodel}, so fixture scans succeed after Robocasa merge.
+
+\subsection{Client graph build}
+
+Implementation: \texttt{src/emet/memory/graph\_eqa/sim\_ground\_truth\_graph.py}.
+
+\texttt{upsert\_graph\_memory\_from\_placements} creates one \texttt{GraphEQAMemory} node per GT body with description \texttt{ground\_truth:\{body\_key\}}, labels from \texttt{cat}, XYZ from \texttt{pos}, and \texttt{extent\_half} from \texttt{bounds}.
+Repeated upserts with unchanged pose/labels/bounds do not inflate \texttt{support\_count}.
+\texttt{maintain()} skips GT nodes for staleness pruning.
+
+\subsection{Runtime CLI modes}
+
+\begin{table}[h]
+  \centering
+  \small
+  \caption{Dynagraph ground-truth CLI modes.}
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Flag & Graph source & Voxel / instances \\
+    \midrule
+    \texttt{--ground-truth} & \texttt{sim\_object\_placements} & Full pipeline (rotate, explore, YOLO-E) \\
+    \texttt{--compare-to-gt} & Perception + GT overlay & Full perception graph \\
+    \texttt{--export} (with GT) & GT graph + episode export & Frames + associations saved \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Fast graph-only smoke (no voxel): \texttt{scripts/dynagraph\_ground\_truth\_smoke.py}.
+
+\subsection{Bidirectional association}
+
+\textbf{Forward (instance $\rightarrow$ GT).}
+After each \texttt{update()}, YOLO-E instance centroids (from the latest voxel frame) are matched to the nearest GT node in XY within 0.75\,m.
+Matched frames refresh the GT observation RGB; optional detector label stored as \texttt{|det:...|} suffix on the node description.
+
+\textbf{Reverse (GT $\rightarrow$ instance).}
+For each GT entry with \texttt{bounds}, world AABB corners project to the head camera; instance masks with best 2D IoU (or centroid-in-box) link to \texttt{body\_key}.
+Results are stored per frame as \texttt{gt\_associations} (export sidecar JSON).
+
+This inverts the usual Dynagraph flow (perception $\rightarrow$ graph) deliberately: sim GT supplies authoritative labels while the voxel map and detectors supply sensor evidence for metrics and training pairs.
+
+\subsection{Episode export layout}
+
+Full episodes use the common \texttt{MemoryState} directory (\texttt{src/emet/memory/format.py}):
+
+\begin{verbatim}
+episode/
+  manifest.json                 # ground_truth_mode, has_sim_gt
+  sim_object_placements.json    # session GT snapshot
+  graph.json                    # nodes with body_key, bounds, extent_half
+  frames/                       # rgb, depth, pose, detections_NNNN.json
+  frames/gt_assoc_NNNN.json     # per-frame GT<->instance links
+  scene_graph_report.txt
+  gt_alignment_report.txt
+\end{verbatim}
+
+Fine-tuning targets (future loaders): oracle graphs for EQA; (image, mask, \texttt{body\_key}) from associations; contrastive detector vs.\ sim \texttt{cat} labels.
+
+\subsection{Limitations}
+
+Placements are static at server start (no mid-episode object teleport in metadata).
+Custom \texttt{--scene\_path} merges may mis-tag \texttt{environment.kind} and yield wrong default-table constants.
+Fixture grouping merges cabinet sub-bodies into one node per group; per-door GT is future work.

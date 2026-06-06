@@ -7,10 +7,13 @@
 from __future__ import annotations
 
 import os
+import re
 import time
+from pathlib import Path
 from typing import Any
 
 import click
+import numpy as np
 
 from emet.app.dynagraph_explore import dynagraph_explore_until_terminated
 from emet.app.robot_cli import create_robot_client_from_cli
@@ -18,21 +21,84 @@ from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import get_parameters
 from emet.memory.graph_eqa import format_scene_graph_pretty
-from emet.memory.headless_export import export_graph_eqa_dir
+from emet.memory.graph_eqa.sim_ground_truth_graph import (
+    ground_truth_alignment_report,
+    gt_pose_sanity_report,
+    read_sim_object_placements,
+)
+from emet.memory.headless_export import export_dynagraph_episode, export_graph_eqa_dir
 from emet.robots import apply_robot_dynav_parameter_overrides, resolve_dynav_config_yaml
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
 
 
-def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
+def _ensure_ground_truth_ready(agent: DynagraphController, *, context: str) -> None:
+    """Populate GT graph + Rerun immediately; fail fast when session has no placements."""
+    session = agent.robot.get_emet_session()
+    if session is None:
+        raise click.ClickException(
+            f"Ground-truth mode ({context}): no emet_session from the ZMQ server. "
+            "Start emet serve mujoco (default, --scene robocasa, or --scene ithor …) with the "
+            "same --port-offset as this client, then retry."
+        )
+    n_bodies = agent.refresh_ground_truth()
+    if n_bodies == 0:
+        runtime = session.get("runtime_kind", "?")
+        raise click.ClickException(
+            f"Ground-truth mode ({context}): emet_session has no sim_object_placements "
+            f"(runtime_kind={runtime!r}). Restart the sim server from this branch with the same "
+            "--port-offset — servers started before the ground-truth feature do not publish placements."
+        )
+    n_nodes = len(agent.graph_memory.get_nodes()) if agent.graph_memory is not None else 0
+    n_boxes = sum(
+        1
+        for n in (agent.graph_memory.get_nodes() if agent.graph_memory else [])
+        if getattr(n, "extent_half", None) is not None
+    )
+    click.echo(f"Ground truth: {n_bodies} sim bodies → {n_nodes} graph nodes ({n_boxes} with 3D bounds).")
+    click.echo(
+        "Rerun: «Graph (ground truth)» column — nodes at world/dynagraph/nodes, boxes at world/dynagraph/bboxes."
+    )
+    placements = read_sim_object_placements(agent.robot.get_emet_session())
+    if agent.graph_memory is not None and placements:
+        click.echo(ground_truth_alignment_report(agent.graph_memory, placements))
+    session = agent.robot.get_emet_session()
+    try:
+        from emet.utils.geometry import nav_xyt_to_world_xyt
+
+        obs = agent.robot.get_observation()
+        gps = np.asarray(obs.gps, dtype=np.float64).reshape(-1)
+        comp = np.asarray(obs.compass, dtype=np.float64).ravel()
+        local = np.array([float(gps[0]), float(gps[1]), float(comp[0]) if comp.size else 0.0])
+        robot_world = nav_xyt_to_world_xyt(local, session)
+    except Exception:
+        robot_world = None
+    click.echo(gt_pose_sanity_report(placements, robot_world_xyt=robot_world, session=session))
+
+
+def _print_dynagraph_rerun_help(
+    *,
+    enabled: bool,
+    headless: bool,
+    ground_truth: bool = False,
+    compare_to_gt: bool = False,
+) -> None:
     """Dynagraph-specific Rerun hints (web URL is printed from RerunVisualizer after rr.serve)."""
     if not enabled:
         click.echo("Rerun visualization is disabled (--no-rerun).")
         return
     if headless:
         click.echo("Rerun headless: no auto-open browser (use the URL printed when the viewer started).")
+    if ground_truth:
+        click.echo(
+            "Ground-truth mode: use «Graph (ground truth)» for labeled nodes and 3D boxes "
+            "(world/dynagraph/nodes, world/dynagraph/bboxes)."
+        )
+        return
     click.echo("Dynagraph: 3D world view + graph node list; full tree text is export/stdout only (not live Rerun).")
+    if compare_to_gt:
+        click.echo("Compare mode: green sim reference under «Sim GT (reference)» (world/dynagraph/ground_truth/).")
 
 
 @click.command()
@@ -116,20 +182,23 @@ def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
     "--input-path",
     type=click.Path(file_okay=False, dir_okay=True, path_type=str),
     default=None,
-    help="Load graph memory from a saved directory before running",
+    help="Load graph memory from a saved directory (common format) before running",
 )
 @click.option(
     "--export",
     "export_dir",
     type=click.Path(file_okay=False, dir_okay=True, path_type=str),
     default=None,
-    help="save graph backend + scene_graph_report.txt here, print summary, exit (unless combined with discord)",
+    help=(
+        "Save graph backend + scene_graph_report.txt here, print summary, and exit "
+        "(unless combined with --discord or --question). Use for headless / no-TTY runs."
+    ),
 )
 @click.option(
     "--dump-memory",
     type=click.Path(file_okay=False, dir_okay=True, path_type=str),
     default=None,
-    help="Save graph memory to this directory when the session ends",
+    help="Save graph memory to this directory when the session ends (empty line to quit)",
 )
 @click.option(
     "--cpu-only",
@@ -145,12 +214,12 @@ def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
 @click.option(
     "--no-sensor-perception",
     is_flag=True,
-    help="Do not use VLM scene labels; use voxel image_descriptions only",
+    help="Do not use VLM scene labels; use voxel image_descriptions only (legacy)",
 )
 @click.option(
     "--no-instance-graph",
     is_flag=True,
-    help="Disable YoloE instance masks for graph labels",
+    help="Disable YoloE instance masks for graph labels; use voxel VLM list_objects + legacy labeling",
 )
 @click.option(
     "--merge-xy-m",
@@ -196,6 +265,18 @@ def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
     help="Single NL GraphEQA question (batch); exits after answering unless combined with discord",
 )
 @click.option(
+    "--question-file",
+    "question_file",
+    default=None,
+    type=click.Path(exists=True),
+    help="YAML question bank; run all questions (optionally filtered by --question-env)",
+)
+@click.option(
+    "--question-env",
+    default=None,
+    help="Filter --question-file to one environment tag (e.g. robocasa_seed0)",
+)
+@click.option(
     "--print-graph",
     is_flag=True,
     help="Pretty-print GraphEQAMemory at session exit (finally); often used with interactive runs",
@@ -216,6 +297,39 @@ def _print_dynagraph_rerun_help(*, enabled: bool, headless: bool) -> None:
     default=None,
     type=str,
     help="Append raw instance detections per step to JSONL for emet tune-graph-fusion",
+)
+@click.option(
+    "--calibration-steps",
+    type=int,
+    default=0,
+    show_default=True,
+    help=(
+        "With --calibration-export: run this many agent.update() cycles after rotate-in-place "
+        "(instance detections only; skips explore-loop unless also set)"
+    ),
+)
+@click.option(
+    "--ground-truth",
+    is_flag=True,
+    help=(
+        "Sim only: build the scene graph from emet_session sim_object_placements "
+        "(Robocasa wizard, default table, or MolmoSpaces MJCF scan) instead of VLM perception. "
+        "Use with --export for headless GT smoke tests."
+    ),
+)
+@click.option(
+    "--compare-to-gt",
+    is_flag=True,
+    help=(
+        "Sim only: after building the graph from sensors (full Dynagraph --export path), "
+        "print alignment vs emet_session sim_object_placements."
+    ),
+)
+@click.option(
+    "--graph-fusion-config",
+    default=None,
+    type=click.Path(exists=True),
+    help="Override graph_object_fusion block from standalone YAML (A/B experiments)",
 )
 def main(
     robot_ip: str,
@@ -246,13 +360,36 @@ def main(
     explore_max_failures: int = 3,
     explore_timeout_s: float | None = None,
     question: str | None = None,
+    question_file: str | None = None,
+    question_env: str | None = None,
     print_graph: bool = False,
     dump_sim_ground_truth: str | None = None,
     dump_sim_gt_include_robot: bool = False,
     calibration_export: str | None = None,
+    calibration_steps: int = 0,
+    ground_truth: bool = False,
+    compare_to_gt: bool = False,
+    graph_fusion_config: str | None = None,
 ) -> None:
-    """Run Dynagraph: voxel + graph EQA with optional merge and staleness (see docs/dynagraph.md)."""
-    click.echo("Dynagraph: graph memory with DynaMem-style voxel navigation.")
+    """Run Dynagraph: graph EQA with DynaMem-style voxel navigation (see docs/dynagraph.md)."""
+    click.echo("Dynagraph: connecting to robot and starting graph-based EQA (with merge/staleness).")
+    if ground_truth and compare_to_gt:
+        raise click.UsageError(
+            "--ground-truth and --compare-to-gt are mutually exclusive. "
+            "Use --ground-truth to build the graph from sim GT, or --compare-to-gt to evaluate sensor perception."
+        )
+    if compare_to_gt and not export_dir:
+        click.echo(
+            "Note: --compare-to-gt prints a full alignment report on --export. "
+            "Interactive runs still show the GT Rerun layer; a summary prints when you quit."
+        )
+
+    if ground_truth:
+        click.echo(
+            "Ground-truth mode: graph nodes from sim_object_placements; "
+            "voxel map, rotate/explore, and instance detections still run (detections attach to GT nodes)."
+        )
+        no_sensor_perception = True
 
     if rerun and no_rerun:
         raise click.UsageError("Cannot use both --rerun and --no-rerun.")
@@ -264,6 +401,10 @@ def main(
         raise click.UsageError("--explore-loop is not supported together with --discord.")
     if discord and question:
         raise click.UsageError("Use Discord commands for questions instead of --question with --discord.")
+    if question and question_file:
+        raise click.UsageError("Use either --question or --question-file, not both.")
+    if question_file and not export_dir and not question:
+        click.echo("Note: --question-file without --export runs questions then exits (no eqa_results.json).")
 
     dynav_resolved = resolve_dynav_config_yaml(robot_backend, dynav_config)
     if dynav_resolved != dynav_config:
@@ -275,6 +416,13 @@ def main(
         raise click.UsageError("--explore-max-iters must be >= 1 when --explore-loop is set.")
     if explore_max_failures < 1:
         raise click.UsageError("--explore-max-failures must be >= 1.")
+    if calibration_steps < 0:
+        raise click.UsageError("--calibration-steps must be >= 0.")
+    if calibration_export and calibration_steps < 1 and not explore_loop and not export_dir:
+        raise click.UsageError(
+            "Use --calibration-steps with --calibration-export (or --export / --explore-loop) "
+            "so instance detections are recorded."
+        )
 
     logger.info(f"Dynagraph startup: dynav={dynav_resolved} robot={robot_backend}")
 
@@ -293,17 +441,17 @@ def main(
             "Dynagraph: local sim (robot_ip=%s); depth_source da3 -> auto (prefer ZMQ sensor depth)",
             robot_ip,
         )
-    if robot_key == "stretch" and os.environ.get("EMET_STRETCH_ROBOSUITE_ZMQ", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    ):
-        parameters["local_radius"] = max(float(parameters.get("local_radius", 0.5)), 1.4)
-        parameters["max_depth"] = max(float(parameters.get("max_depth", 2.5)), 3.8)
     parameters.setdefault("dynagraph_merge_xy_m", 0.45)
     parameters.setdefault("dynagraph_staleness_horizon", 256)
-    if parameters.get("graph_object_fusion") is None:
+    if graph_fusion_config:
+        from dataclasses import asdict
+
+        from emet.memory.graph_eqa.graph_object_fusion.config import load_graph_object_fusion_config
+
+        fc = load_graph_object_fusion_config(graph_fusion_config)
+        parameters["graph_object_fusion"] = asdict(fc)
+        logger.info(f"Dynagraph: graph_object_fusion from {graph_fusion_config}")
+    elif parameters.get("graph_object_fusion") is None:
         from dataclasses import asdict
 
         from emet.memory.graph_eqa.graph_object_fusion.config import load_graph_object_fusion_config
@@ -344,7 +492,12 @@ def main(
         )
     if hasattr(robot, "wait_for_obs"):
         robot.wait_for_obs(timeout=30.0)
-    _print_dynagraph_rerun_help(enabled=not no_rerun, headless=headless)
+    _print_dynagraph_rerun_help(
+        enabled=not no_rerun,
+        headless=headless,
+        ground_truth=ground_truth,
+        compare_to_gt=compare_to_gt,
+    )
 
     robot.move_to_nav_posture()
     if robot_key == "stretch":
@@ -363,7 +516,8 @@ def main(
     else:
         print(f"- EQA VL: single shared Qwen3.5-{ms} ({qn}) for labels + EQA")
 
-    print("- Start Dynagraph agent")
+    print("- Start Dynagraph agent (graph memory + voxel map for navigation)")
+    agent: DynagraphController | None = None
     agent = DynagraphController(
         robot,
         parameters,
@@ -372,6 +526,8 @@ def main(
         use_sensor_perception=not no_sensor_perception,
         cpu_only=cpu_only,
         use_instance_graph=not no_instance_graph,
+        ground_truth_mode=ground_truth,
+        visualize_ground_truth=compare_to_gt,
     )
     agent.start()
     if calibration_export:
@@ -392,6 +548,57 @@ def main(
         )
         click.echo(f"- Explore-loop [{reason}] done: reason={reason_lab} successes={ok} iterations_executed={nit}")
 
+    def _run_eqa_questions(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        from emet.memory.graph_eqa.question_bank import write_eqa_results
+
+        rows: list[dict[str, Any]] = []
+        eq_executor = EQAExecuter(agent)
+        robot.move_to_nav_posture()
+        robot.switch_to_navigation_mode()
+        for qspec in questions:
+            qtext = str(qspec.get("question", "")).strip()
+            if not qtext:
+                continue
+            robot.say("Answering the question " + qtext)
+            try:
+                discord_text, _imgs = eq_executor(qtext)
+            except Exception as e:
+                logger.warning(f"EQA question failed: {e}")
+                discord_text = f"EQA question failed: {e}"
+            answer = ""
+            m = re.search(r"(?i)answer:\s*(.+?)(?:\n|$)", discord_text or "")
+            if m:
+                answer = m.group(1).strip()
+            elif discord_text:
+                answer = discord_text.strip()
+            row = {
+                **qspec,
+                "question": qtext,
+                "discord_text": discord_text,
+                "answer": answer,
+            }
+            rows.append(row)
+            if discord_text.strip():
+                click.echo(discord_text)
+            else:
+                click.echo("(Empty EQA reply — check graph memory / observations.)")
+        if export_dir and rows:
+            out = write_eqa_results(Path(export_dir) / "eqa_results.json", rows)
+            click.echo(f"Wrote EQA results -> {out}")
+        return rows
+
+    def _run_calibration_capture(steps: int, *, rotate: bool) -> None:
+        if steps < 1:
+            return
+        executor = EQAExecuter(agent)
+        if rotate and not not_rotate_in_place:
+            executor.rotate_in_place()
+        click.echo(f"- Calibration capture: {steps} update steps (instance detections -> JSONL)")
+        for i in range(int(steps)):
+            agent.update()
+            if (i + 1) % 10 == 0 or i + 1 == steps:
+                click.echo(f"  calibration step {i + 1}/{steps}")
+
     def _export_session_fields() -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
         get_sess = getattr(robot, "get_emet_session", None)
         if get_sess is None:
@@ -402,6 +609,9 @@ def main(
         env = sess.get("environment")
         spawn = sess.get("spawn_floor_map")
         return (dict(env) if isinstance(env, dict) else None, dict(spawn) if isinstance(spawn, dict) else None)
+
+    if ground_truth:
+        _ensure_ground_truth_ready(agent, context="export" if export_dir else "interactive")
 
     def _save_dump() -> None:
         if not dump_memory:
@@ -449,32 +659,49 @@ def main(
             raise click.UsageError("Use either --export or --discord, not both.")
 
         if export_dir:
-            executor = EQAExecuter(agent)
-            if not not_rotate_in_place:
+            if calibration_export and calibration_steps > 0:
+                _run_calibration_capture(calibration_steps, rotate=True)
+            elif not not_rotate_in_place:
+                executor = EQAExecuter(agent)
                 executor.rotate_in_place()
-            _maybe_explore("export-path")
-            if question:
-                robot.move_to_nav_posture()
-                robot.switch_to_navigation_mode()
-                robot.say("Answering the question " + question)
-                try:
-                    discord_text, _imgs = executor(question)
-                    if not discord_text.strip():
-                        click.echo("(Empty EQA reply — check graph memory / observations.)")
-                    else:
-                        click.echo(discord_text)
-                except Exception as e:
-                    logger.warning(f"EQA question failed (export will continue): {e}")
-                    click.echo(f"EQA question failed: {e}")
+            if explore_loop:
+                _maybe_explore("export-path")
+            if question_file:
+                from emet.memory.graph_eqa.question_bank import load_question_bank
+
+                bank = load_question_bank(question_file, env_filter=question_env)
+                if not bank:
+                    raise click.ClickException(f"No questions loaded from {question_file}")
+                _run_eqa_questions(bank)
+            elif question:
+                _run_eqa_questions([{"question": question}])
             env, spawn = _export_session_fields()
-            text = export_graph_eqa_dir(
+            placements = read_sim_object_placements(robot.get_emet_session())
+            gt_report: str | None = None
+            if ground_truth and placements:
+                gt_report = ground_truth_alignment_report(agent.graph_memory, placements)
+                click.echo(gt_report)
+            elif compare_to_gt:
+                if placements:
+                    gt_report = ground_truth_alignment_report(
+                        agent.graph_memory,
+                        placements,
+                        perception_nodes_only=True,
+                    )
+                    click.echo(gt_report)
+                else:
+                    click.echo("Note: --compare-to-gt skipped (no sim_object_placements in emet_session).")
+            text = export_dynagraph_episode(
                 agent.graph_memory,
                 getattr(agent, "voxel_map", None),
                 export_dir,
-                title="Scene graph (Dynagraph export)",
+                title="Scene graph (Dynagraph GT export)" if ground_truth else "Scene graph (Dynagraph export)",
                 robot=robot_backend,
                 environment=env,
                 spawn_floor_map=spawn,
+                ground_truth_mode=ground_truth,
+                sim_object_placements=placements,
+                gt_alignment_report_text=gt_report,
             )
             click.echo(text)
             click.echo(f"Exported graph memory to {export_dir}")
@@ -499,19 +726,17 @@ def main(
             bot.push_task_to_all_channels(content=obs.rgb)
             bot.run()
 
-        elif question:
-            executor = EQAExecuter(agent)
+        elif question or question_file:
             if not not_rotate_in_place:
                 executor.rotate_in_place()
             _maybe_explore("question-only")
-            robot.move_to_nav_posture()
-            robot.switch_to_navigation_mode()
-            robot.say("Answering the question " + question)
-            discord_text, _imgs = executor(question)
-            if not discord_text.strip():
-                click.echo("(Empty EQA reply — check graph memory / observations.)")
+            if question_file:
+                from emet.memory.graph_eqa.question_bank import load_question_bank
+
+                bank = load_question_bank(question_file, env_filter=question_env)
+                _run_eqa_questions(bank)
             else:
-                click.echo(discord_text)
+                _run_eqa_questions([{"question": question}])
         else:
             executor = EQAExecuter(agent)
             if not not_rotate_in_place:
@@ -551,6 +776,20 @@ def main(
         _save_dump()
         if print_graph:
             _snapshot_graph_stdout("Dynagraph graph (snapshot on exit)")
+        if dump_memory:
+            from emet.memory.utils import print_memory_view_help_on_quit
+
+            print_memory_view_help_on_quit(dump_memory)
+        if compare_to_gt and not export_dir and agent is not None:
+            placements = read_sim_object_placements(robot.get_emet_session())
+            if placements and agent.graph_memory is not None:
+                click.echo(
+                    ground_truth_alignment_report(
+                        agent.graph_memory,
+                        placements,
+                        perception_nodes_only=True,
+                    )
+                )
 
 
 if __name__ == "__main__":

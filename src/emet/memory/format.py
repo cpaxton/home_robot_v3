@@ -34,6 +34,8 @@ FRAME_DEPTH_FILENAME = "depth.npy"  # legacy per-subdirectory name
 FRAME_POSE_FILENAME = "pose.npz"  # legacy per-subdirectory name
 GRAPH_FILENAME = "graph.json"
 SCENE_GRAPH_REPORT_TXT = "scene_graph_report.txt"
+SIM_GT_PLACEMENTS_FILENAME = "sim_object_placements.json"
+GT_ALIGNMENT_REPORT_TXT = "gt_alignment_report.txt"
 DESCRIPTIONS_FILENAME = "descriptions.json"
 USER_MESSAGES_FILENAME = "user_messages.json"
 
@@ -65,6 +67,7 @@ class FrameBlob:
     instance_scores: np.ndarray | None = None
     # Optional structured detections (YoloE + centroids); saved as detections_NNNN.json
     detections: list[dict[str, Any]] | None = None
+    gt_associations: list[dict[str, Any]] | None = None
     info: dict[str, Any] | None = None
 
 
@@ -77,6 +80,10 @@ class GraphNodeView:
     xyz: list[float]  # [x, y, z]
     obs_id: int
     description: str | None = None
+    body_key: str | None = None
+    extent_half: list[float] | None = None
+    bounds: list[list[float]] | None = None
+    detection_label: str | None = None
 
 
 @dataclass
@@ -125,6 +132,10 @@ class MemoryManifest:
     has_instance_masks: bool = False  # frames/instance_*.npy (+ classes/scores) when True
     has_detection_json: bool = False  # frames/detections_*.json per frame when True
     has_world_xyz_maps: bool = False  # optional full HxWx3 world_xyz_*.npy per frame
+    ground_truth_mode: bool = False
+    has_sim_gt: bool = False
+    sim_gt_placements_file: str | None = None
+    has_gt_associations: bool = False
 
 
 @dataclass
@@ -216,6 +227,11 @@ def _load_frame(rgb_file: Path | None, depth_file: Path | None, pose_file: Path)
     if p_det.exists():
         with open(p_det, encoding="utf-8") as f:
             detections = json.load(f)
+    gt_associations = None
+    p_gt = frames_dir / f"gt_assoc_{tag}.json"
+    if p_gt.exists():
+        with open(p_gt, encoding="utf-8") as f:
+            gt_associations = json.load(f)
 
     return FrameBlob(
         camera_pose=camera_pose,
@@ -228,6 +244,7 @@ def _load_frame(rgb_file: Path | None, depth_file: Path | None, pose_file: Path)
         instance_classes=instance_classes,
         instance_scores=instance_scores,
         detections=detections,
+        gt_associations=gt_associations,
         info=info,
     )
 
@@ -286,6 +303,7 @@ def save_memory(state: MemoryState, path: str) -> None:
     manifest.frames_inline = False  # we use frames/<i>/ layout with PNG
     manifest.has_instance_masks = any(fr.instance is not None for fr in state.frames)
     manifest.has_detection_json = any(bool(fr.detections) for fr in state.frames)
+    manifest.has_gt_associations = any(bool(fr.gt_associations) for fr in state.frames)
     manifest.has_world_xyz_maps = any(
         fr.world_xyz is not None and np.asarray(fr.world_xyz).ndim == 3 for fr in state.frames
     )
@@ -349,6 +367,10 @@ def save_memory(state: MemoryState, path: str) -> None:
                 det_path = frames_path / f"detections_{tag}.json"
                 with open(det_path, "w", encoding="utf-8") as df:
                     json.dump(_to_native(fr.detections), df, indent=2)
+            if fr.gt_associations:
+                gt_path = frames_path / f"gt_assoc_{tag}.json"
+                with open(gt_path, "w", encoding="utf-8") as gf:
+                    json.dump(_to_native(fr.gt_associations), gf, indent=2)
 
     if state.graph is not None and (len(state.graph.nodes) > 0 or len(state.graph.edges) > 0):
         graph_data = {
@@ -359,6 +381,10 @@ def save_memory(state: MemoryState, path: str) -> None:
                     "xyz": n.xyz,
                     "obs_id": n.obs_id,
                     **({"description": n.description} if getattr(n, "description", None) else {}),
+                    **({"body_key": n.body_key} if getattr(n, "body_key", None) else {}),
+                    **({"extent_half": n.extent_half} if getattr(n, "extent_half", None) else {}),
+                    **({"bounds": n.bounds} if getattr(n, "bounds", None) else {}),
+                    **({"detection_label": n.detection_label} if getattr(n, "detection_label", None) else {}),
                 }
                 for n in state.graph.nodes
             ],
@@ -439,6 +465,7 @@ def load_memory(path: str) -> MemoryState:
                         instance_classes=d.get("instance_classes"),
                         instance_scores=d.get("instance_scores"),
                         detections=d.get("detections"),
+                        gt_associations=d.get("gt_associations"),
                         info=d.get("info"),
                     )
                 )

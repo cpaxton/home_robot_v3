@@ -57,6 +57,27 @@ emet run graph-eqa --robot-ip 127.0.0.1 -N
 
 Then type questions at the prompt; the agent will explore and answer using the graph memory.
 
+### Interactive commands
+
+Shared REPL text lives in [`src/emet/app/run_interactive.py`](../src/emet/app/run_interactive.py).
+
+**GraphEQA and Dynagraph** (same prompt):
+
+| Input | Action |
+|-------|--------|
+| natural-language question | Run graph EQA |
+| `explore`, `e`, `map`, `nav` | One frontier step (no EQA call) |
+| `q`, `quit`, Enter | Exit |
+
+**DynaMem and scene-graph** (task executor):
+
+| Input | Action |
+|-------|--------|
+| `E` / `explore` / `e` / `map` / `nav` | Explore and extend the map |
+| `M` / `manip` / `pick` / … | Pick and place (prompts for object + receptacle) |
+| `L` / `list` | List scene-graph objects (scene-graph only) |
+| `Q` / `quit`, Enter | Exit |
+
 ## Testing Graph EQA in Robocasa
 
 Use [Robocasa](simulation.md#robocasa-rich-kitchen-scenes) kitchen scenes so the robot can explore and fill the graph with real objects (fruit, pots, sink, etc.), then answer questions about them.
@@ -75,13 +96,13 @@ Use [Robocasa](simulation.md#robocasa-rich-kitchen-scenes) kitchen scenes so the
 **Terminal 1** – from the project root:
 
 ```bash
-emet serve mujoco --use-robocasa
+emet serve mujoco --scene robocasa
 ```
 
 Optional: change task, style, or layout (see [simulation.md](simulation.md#run-with-robocasa)):
 
 ```bash
-emet serve mujoco --use-robocasa --robocasa-task PnPCounterToCab --robocasa-style 1 --robocasa-layout 0
+emet serve mujoco --scene robocasa --robocasa-task PnPCounterToCab --robocasa-style 1 --robocasa-layout 0
 ```
 
 Wait until the simulator window shows the kitchen scene and the robot is ready.

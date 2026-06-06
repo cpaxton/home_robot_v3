@@ -94,11 +94,13 @@ def score_nodes_vs_gt(
     gt_objects: List[Any],
     *,
     match_xy_m: float = 0.55,
+    require_label_match: bool = True,
 ) -> dict[str, float]:
     """
-  Score fused graph object nodes against GT export ``objects[]``.
+    Score fused graph object nodes against GT export ``objects[]``.
 
     Returns gt_recall, node_precision, duplication_penalty, node_count.
+    When ``require_label_match`` is false, only XY distance gates a hit (label diagnostic omitted).
     """
     if not gt_objects:
         return {
@@ -120,7 +122,7 @@ def score_nodes_vs_gt(
         glabel = str(gt.get("label", ""))
         matches = []
         for n in nodes:
-            if not _label_matches(n.labels[0] if n.labels else "", glabel):
+            if require_label_match and not _label_matches(n.labels[0] if n.labels else "", glabel):
                 continue
             nxy = np.asarray(n.xyz, dtype=np.float64).reshape(3)
             d = float(np.linalg.norm(nxy[:2] - gpos[:2]))
@@ -138,7 +140,7 @@ def score_nodes_vs_gt(
             if not isinstance(gt, dict):
                 continue
             glabel = str(gt.get("label", ""))
-            if not _label_matches(nlabel, glabel):
+            if require_label_match and not _label_matches(nlabel, glabel):
                 continue
             gpos = np.asarray(gt.get("pos_world", gt.get("pos", [0, 0, 0])), dtype=np.float64).ravel()[:3]
             if float(np.linalg.norm(gpos_n[:2] - gpos[:2])) <= match_xy_m:

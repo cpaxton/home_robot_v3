@@ -204,11 +204,6 @@ def main() -> None:
     default="mujoco",
 )
 @click.option(
-    "--use-robocasa",
-    is_flag=True,
-    help="Use Robocasa for scene generation (ignored if backend is robocasa).",
-)
-@click.option(
     "--headless",
     is_flag=True,
     help=(
@@ -231,36 +226,32 @@ def main() -> None:
     is_flag=True,
     help="Use GLX instead of EGL (use with Xvfb on WSL to get camera images)",
 )
-@click.option("--scene-path", type=click.Path(exists=True), help="Path to MuJoCo scene XML")
 @click.option(
-    "--molmospaces-scene",
+    "--scene",
     default=None,
-    metavar="NAME",
+    metavar="NAME|PATH",
     help=(
-        "MolmoSpaces scene (e.g. ithor). Runs merge via emet-molmospaces into a temp MJCF, "
-        "then starts the ZMQ server (same as ``emet serve molmospaces`` or merge-scene + serve mujoco). "
-        "Requires wrapper: install.sh --molmospaces. First-time use may need scene packages under "
-        "MLSPACES_ASSETS_DIR (you will be prompted to download unless --molmospaces-install). "
-        "Incompatible with --scene-path and --use-robocasa / robocasa backend."
+        "Scene selector: omit for default table; robocasa; MolmoSpaces catalog name (ithor, procthor-10k, …); "
+        "or path to a merged MJCF. Use --split / --index with MolmoSpaces scenes."
     ),
 )
 @click.option(
-    "--molmospaces-split",
+    "--split",
     default="train",
     type=click.Choice(["train", "val", "test"]),
-    help="Split when using --molmospaces-scene.",
+    help="Data split when --scene is a MolmoSpaces catalog name.",
 )
 @click.option(
-    "--molmospaces-index",
+    "--index",
     default=0,
     type=int,
-    help="Scene index when using --molmospaces-scene.",
+    help="Scene index when --scene is a MolmoSpaces catalog name.",
 )
 @click.option(
-    "--molmospaces-install",
+    "--install-scene-if-missing",
     is_flag=True,
     help=(
-        "If the MolmoSpaces scene archive is not on disk yet, download/link it without prompting "
+        "When --scene is MolmoSpaces: download scene archive if missing "
         "(non-interactive; same as emet-molmospaces merge-scene --install-if-missing)."
     ),
 )
@@ -307,16 +298,14 @@ def main() -> None:
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
 def serve(
     backend: str,
-    use_robocasa: bool,
     headless: bool,
     show_viewer_ui: bool,
     no_cameras: bool,
     use_glx: bool,
-    scene_path: str | None,
-    molmospaces_scene: str | None,
-    molmospaces_split: str,
-    molmospaces_index: int,
-    molmospaces_install: bool,
+    scene: str | None,
+    split: str,
+    index: int,
+    install_scene_if_missing: bool,
     seed: int,
     steps: int | None,
     debug_molmospaces_spawn: bool,
@@ -329,11 +318,10 @@ def serve(
     """Start a simulation server.
 
     Backends:
-      mujoco       MuJoCo server (default). Add --use-robocasa for Robocasa scenes.
-      robocasa     Shortcut for mujoco with Robocasa (same as ``emet serve mujoco --use-robocasa``).
-      molmospaces  MolmoSpaces merge + ZMQ server (default scene ithor; same as
-                   ``emet serve mujoco --molmospaces-scene …``). Optional scene positional:
-                   ``emet serve molmospaces procthor-10k``.
+      mujoco       MuJoCo server (default). Use --scene robocasa or --scene ithor for other scenes.
+      robocasa     Shortcut for ``--scene robocasa``.
+      molmospaces  Shortcut for ``--scene ithor`` (or pass scene name positional:
+                   ``emet serve molmospaces procthor-10k``).
 
     List Robocasa environments (requires sim extra: ``uv sync --extra sim`` or ``emet sync -e sim`` after ``emet install sim``):
       emet robocasa list
@@ -349,26 +337,31 @@ def serve(
       emet serve robocasa --robot galaxea_r1
       emet serve robocasa --robocasa-task PickPlaceCounterToCabinet
       emet serve robocasa --list-robocasa-tasks
-      emet serve mujoco --use-robocasa --port-offset 100
+      emet serve mujoco --scene robocasa --port-offset 100
       emet serve molmospaces --headless
-      emet serve molmospaces ithor --molmospaces-index 3
-      DISPLAY=:1 emet serve mujoco --molmospaces-scene ithor   # default robot: stretch
-      emet serve molmospaces --robot rby1 --headless
+      emet serve molmospaces ithor --index 3
+      DISPLAY=:1 emet serve mujoco --scene ithor   # default robot: stretch
+      emet serve mujoco --scene ithor --robot rby1 --headless
     """
     extra_args = list(extra)
-    use_robocasa_flag = use_robocasa or (backend == "robocasa")
-    if backend == "molmospaces":
-        if use_robocasa:
-            click.echo("Cannot combine --use-robocasa with molmospaces backend.", err=True)
+    scene_value = scene
+    if backend == "robocasa":
+        if scene_value and str(scene_value).strip().lower() not in ("", "robocasa"):
+            click.echo("Cannot combine serve robocasa with --scene other than robocasa.", err=True)
+            sys.exit(1)
+        scene_value = scene_value or "robocasa"
+    elif backend == "molmospaces":
+        if scene_value and str(scene_value).strip().lower() == "robocasa":
+            click.echo("Cannot combine serve molmospaces with --scene robocasa.", err=True)
             sys.exit(1)
         if list_robocasa_tasks:
-            click.echo("--list-robocasa-tasks is only for robocasa / mujoco --use-robocasa.", err=True)
+            click.echo("--list-robocasa-tasks is only for robocasa / --scene robocasa.", err=True)
             sys.exit(1)
-        if molmospaces_scene is None:
+        if scene_value is None or not str(scene_value).strip():
             if extra_args and not str(extra_args[0]).startswith("-"):
-                molmospaces_scene = str(extra_args.pop(0))
+                scene_value = str(extra_args.pop(0))
             else:
-                molmospaces_scene = "ithor"
+                scene_value = "ithor"
     if backend in ("mujoco", "robocasa", "molmospaces"):
         from emet.config.sim_launch_config import build_sim_launch_config_from_serve_cli
         from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
@@ -379,12 +372,10 @@ def serve(
 
         try:
             cfg = build_sim_launch_config_from_serve_cli(
-                molmospaces_scene=molmospaces_scene,
-                molmospaces_split=molmospaces_split,
-                molmospaces_index=molmospaces_index,
-                molmospaces_install=molmospaces_install,
-                use_robocasa=use_robocasa_flag,
-                scene_path=scene_path,
+                scene=scene_value,
+                split=split,
+                index=index,
+                install_scene_if_missing=install_scene_if_missing,
                 robot=robot,
                 headless=headless,
                 show_viewer_ui=show_viewer_ui,
@@ -1825,6 +1816,16 @@ from emet.app.tune_graph_fusion import main as _tune_graph_fusion_app  # noqa: E
 
 _tune_graph_fusion_app.short_help = "Grid-search GraphObjectFusion vs GT + calibration frames"
 main.add_command(_tune_graph_fusion_app)
+
+from emet.app.eval_calibration import main as _eval_calibration_app  # noqa: E402
+
+_eval_calibration_app.short_help = "Score calibration frames vs sim GT (spatial recall)"
+main.add_command(_eval_calibration_app)
+
+from emet.app.eval_dynagraph import main as _eval_dynagraph_app  # noqa: E402
+
+_eval_dynagraph_app.short_help = "Unified Dynagraph episode eval (explore, graph, fusion, EQA)"
+main.add_command(_eval_dynagraph_app)
 
 if __name__ == "__main__":
     main()

@@ -233,6 +233,60 @@ def build_gt_scene_payload(
     }
 
 
+def build_gt_scene_payload_from_session_placements(
+    placements: dict[str, Any],
+    *,
+    robot: str,
+    seed: int = 0,
+    layout: int = 1,
+    style: int = 1,
+    image_hw: tuple[int, int] = DEFAULT_IMAGE_HW,
+) -> dict[str, Any]:
+    """
+    Build a ``load_gt_scene_json``-compatible payload from live ``sim_object_placements``.
+
+    Uses manipulable ``*_main`` bodies so offline tuning matches the running sim episode.
+    """
+    h, w = image_hw
+    objects: list[dict[str, Any]] = []
+    for body_name, info in iter_placement_objects(placements):
+        cat = str(info.get("cat", body_name.replace("_main", "")))
+        pos = np.asarray(info.get("pos", [0.0, 0.0, 0.0]), dtype=np.float64).ravel()
+        if pos.size < 3:
+            pos = np.zeros(3, dtype=np.float64)
+        row: dict[str, Any] = {
+            "id": body_name,
+            "label": cat,
+            "label_norm": _norm_label(cat),
+            "pos_world": pos[:3].tolist(),
+        }
+        bounds = info.get("bounds")
+        if bounds is not None:
+            b = np.asarray(bounds, dtype=np.float64).reshape(2, 3)
+            mn = b[0]
+            mx = b[1]
+            c = 0.5 * (mn + mx)
+            size = mx - mn
+            row["bounds_3d"] = {
+                "center": c.tolist(),
+                "size": size.tolist(),
+                "min": mn.tolist(),
+                "max": mx.tolist(),
+            }
+        objects.append(row)
+
+    return {
+        "schema_version": GT_SCHEMA_VERSION,
+        "source": "sim_session",
+        "robot": robot,
+        "seed": int(seed),
+        "layout": int(layout),
+        "style": int(style),
+        "image_hw": [int(h), int(w)],
+        "objects": objects,
+    }
+
+
 def write_gt_scene_json(path: str | Path, payload: dict[str, Any]) -> Path:
     dest = Path(path).expanduser()
     dest.parent.mkdir(parents=True, exist_ok=True)

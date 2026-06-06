@@ -13,10 +13,16 @@ import numpy as np
 
 
 class CalibrationFrameWriter:
+    """Append-only JSONL writer for dynagraph ``--calibration-export``."""
+
     def __init__(self, path: str | Path | None) -> None:
+        """Args:
+            path: Output ``.jsonl`` path, or ``None`` to disable writing.
+        """
         self._path = Path(path).expanduser() if path else None
         if self._path is not None:
             self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._path.touch()
 
     def append(
         self,
@@ -25,6 +31,13 @@ class CalibrationFrameWriter:
         detections: list[dict[str, Any]],
         navigation_origin_xyt: list[float] | None = None,
     ) -> None:
+        """Append one calibration row (raw detections before fusion).
+
+        Args:
+            step: Controller / graph timestep index.
+            detections: Serializable detection dicts (see ``detections_to_json_rows``).
+            navigation_origin_xyt: Optional episode nav origin for offline replay.
+        """
         if self._path is None:
             return
         row: dict[str, Any] = {"step": int(step), "detections": detections}
@@ -35,7 +48,15 @@ class CalibrationFrameWriter:
 
 
 def detections_to_json_rows(dets: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """JSON-serializable detection dicts for calibration export."""
+    """Convert in-memory detection dicts to JSON-serializable calibration rows.
+
+    Args:
+        dets: Rows from ``frame_instances_to_detections`` (``label_short``, ``xyz``,
+            optional ``bbox_xyxy``, ``bounds_3d``, ``embedding``).
+
+    Returns:
+        List of plain dicts suitable for ``CalibrationFrameWriter.append``.
+    """
     out: list[dict[str, Any]] = []
     for d in dets:
         row: dict[str, Any] = {

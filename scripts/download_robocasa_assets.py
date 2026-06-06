@@ -103,7 +103,9 @@ def _load_urls_from_box_links(robocasa_pkg: Path) -> dict[str, str]:
 
 
 def _basic_fixtures_present(fixtures_dir: Path) -> bool:
-    return (fixtures_dir / "sinks" / "white_sink" / "model.xml").is_file()
+    from emet.simulation.robocasa_assets_check import BASIC_FIXTURE_SENTINELS
+
+    return any((fixtures_dir / rel).is_file() for rel in BASIC_FIXTURE_SENTINELS)
 
 
 def _lightwheel_registry_present(fixtures_dir: Path) -> bool:
@@ -155,7 +157,7 @@ def main() -> int:
 
     any_exist = False
     all_exist = True
-    for name, _url, rel, check in specs:
+    for _name, _url, rel, check in specs:
         if _asset_present(base, rel, check):
             any_exist = True
         else:

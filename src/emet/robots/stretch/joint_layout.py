@@ -60,7 +60,14 @@ def hello_stretch_config_from_joint_positions(
 
 
 def robocasa_mjcf_joint_positions_from_hello_stretch(q: np.ndarray) -> np.ndarray | None:
-    """Inverse of :func:`hello_stretch_config_from_joint_positions` for MJCF Rerun drive."""
+    """Inverse of :func:`hello_stretch_config_from_joint_positions` for MJCF Rerun drive.
+
+    Args:
+        q: HelloStretch (11-D) or Robocasa MJCF (10-D) joint vector.
+
+    Returns:
+        10-D Robocasa MJCF joint vector, or ``None`` when ``q`` has an unexpected size.
+    """
     arr = np.asarray(q, dtype=np.float64).ravel()
     if arr.size == _ROBOCASA_DOF:
         return arr.copy()

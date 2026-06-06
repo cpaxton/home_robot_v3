@@ -41,7 +41,7 @@ class GraphObjectFusionConfig:
     bounds_3d_iou_min: float = 0.08
     embedding_min_cosine: float = 0.62
     embedding_blend_alpha: float = 0.35
-    require_label_match: bool = True
+    require_label_match: bool = False
     max_candidates: int = 64
     match_xy_m: float = 0.55
 

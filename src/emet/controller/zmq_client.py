@@ -9,7 +9,6 @@
 
 # (c) 2024 Hello Robot under MIT license
 
-import os
 import sys
 import threading
 import time
@@ -31,7 +30,6 @@ from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
-    build_mujoco_ground_truth_dump_action,
     emet_session_cache_update,
     is_stretch_family,
     read_emet_session,
@@ -152,7 +150,6 @@ class StretchZmqClient(AbstractRobotClient):
         resend_all_actions: bool = False,
         publish_observations: bool = False,
         allow_missing_depth: bool = False,
-        zmq_startup_timeout: float | None = None,
     ):
         """
         Create a client to communicate with the robot over ZMQ.
@@ -189,11 +186,6 @@ class StretchZmqClient(AbstractRobotClient):
             parameters = get_parameters("default_planner.yaml")
         self._parameters = parameters
         self._allow_missing_depth = allow_missing_depth
-        if zmq_startup_timeout is not None:
-            self._zmq_startup_timeout = max(1.0, float(zmq_startup_timeout))
-        else:
-            env = os.environ.get("EMET_ZMQ_STARTUP_TIMEOUT", "").strip()
-            self._zmq_startup_timeout = max(1.0, float(env)) if env else 60.0
 
         # Variables we set here should not change
         self._iter = -1  # Tracks number of actions set, never reset this
@@ -264,40 +256,17 @@ class StretchZmqClient(AbstractRobotClient):
         self._emet_session_lock = Lock()
 
         if enable_rerun_server:
-            from emet.config.rerun_config import build_rerun_visualizer_kwargs
             from emet.visualization.rerun import RerunVisualizer
 
             if output_path is not None and not output_path.exists():
                 output_path.mkdir(parents=True, exist_ok=True)
 
-            mjcf_robot = None
-            _zmq_host = lookup_address(robot_ip, use_remote_computer) or ""
-            _local_sim = "127.0.0.1" in _zmq_host or "localhost" in _zmq_host.lower()
-            if _local_sim:
-                try:
-                    from emet.robots.stretch import StretchBackend
-
-                    spec = StretchBackend().get_robosuite_robocasa_spec()
-                    mjcf_p = getattr(spec, "mjcf_path", None)
-                    if mjcf_p and Path(str(mjcf_p)).is_file():
-                        mjcf_robot = (
-                            str(Path(str(mjcf_p)).resolve()),
-                            tuple(STRETCH_ROBOCASA_MJCF_JOINT_NAMES),
-                            int(spec.dof),
-                            str(spec.base_link_name),
-                        )
-                except Exception:
-                    mjcf_robot = None
-            rerun_kwargs = build_rerun_visualizer_kwargs(
-                self._parameters,
+            self._rerun = RerunVisualizer(
                 output_path=output_path,
-                display_robot_mesh=mjcf_robot is not None,
-                mjcf_robot=mjcf_robot,
-                cli_headless=rerun_headless,
-                cli_native_viewer=rerun_native_viewer,
-                cli_show_panels=rerun_show_panels,
+                headless=rerun_headless,
+                rerun_native_viewer=rerun_native_viewer,
+                collapse_panels=not rerun_show_panels,
             )
-            self._rerun = RerunVisualizer(**rerun_kwargs)
         else:
             from emet.visualization.rerun import NullVisualizer
 
@@ -306,8 +275,7 @@ class StretchZmqClient(AbstractRobotClient):
         self._rerun_debug = rerun_debug if enable_rerun_server else False
 
         if start_immediately:
-            if not self.start():
-                raise ConnectionError(self._zmq_startup_failure_message())
+            self.start()
 
     @property
     def parameters(self) -> Parameters:
@@ -563,16 +531,6 @@ class StretchZmqClient(AbstractRobotClient):
             return None
         # Return a valid solution to the IK problem here
         return full_body_cfg
-
-    def _zmq_startup_failure_message(self) -> str:
-        return (
-            "Timeout waiting for observations from MuJoCo ZMQ server "
-            f"(waited {self._zmq_startup_timeout:.0f}s). "
-            "Start `emet serve mujoco --use-robocasa --robot stretch` first; "
-            f"SUB ports obs={self.recv_port} state={self.recv_state_port} servo={self.recv_servo_port}. "
-            "Robocasa scene load can take 30–90s. "
-            "Increase wait: export EMET_ZMQ_STARTUP_TIMEOUT=120."
-        )
 
     def _attach_mjcf_joint_to_obs(self) -> None:
         """Copy raw Robocasa MJCF joint vector into the full obs dict for MJCF Rerun meshes."""
@@ -849,15 +807,6 @@ class StretchZmqClient(AbstractRobotClient):
             return False
         return True
 
-    def _is_simulation_robot(self) -> bool:
-        with self._obs_lock:
-            if self._obs is not None and bool(self._obs.get("is_simulation", False)):
-                return True
-        with self._state_lock:
-            if self._state is not None and bool(self._state.get("is_simulation", False)):
-                return True
-        return False
-
     def move_base_to(
         self,
         xyt: ContinuousNavigationAction | np.ndarray,
@@ -868,6 +817,7 @@ class StretchZmqClient(AbstractRobotClient):
         reliable: bool = True,
         *,
         world_frame: bool | None = None,
+        **kwargs: Any,
     ):
         """Move to xyt in global coordinates or relative coordinates.
 
@@ -878,41 +828,32 @@ class StretchZmqClient(AbstractRobotClient):
             timeout: How long to wait for the motion to complete
             verbose: Whether to print out debug information
             reliable: Whether to resend the action if it is not received
-            world_frame: When True, send ``nav_world`` (Robocasa / voxel planner world goals).
         """
         if isinstance(xyt, ContinuousNavigationAction):
-            rel_xyt = np.asarray(xyt.xyt, dtype=np.float64).reshape(3)
+            _xyt = xyt.xyt
         else:
-            rel_xyt = np.asarray(xyt, dtype=np.float64).reshape(3)
-        assert rel_xyt.size == 3, "xyt must be a vector of size 3"
-
-        # Robosuite sim: send delta with ``nav_relative`` (server composes in world frame). Hardware
-        # Stretch: pre-compose on the client and send episode-absolute goals (legacy wireless path).
-        sim_relative_on_wire = bool(relative) and self._is_simulation_robot()
-        goal_xyt = rel_xyt.copy()
-        if relative and not sim_relative_on_wire:
+            _xyt = xyt
+        assert len(_xyt) == 3, "xyt must be a vector of size 3"
+        # If it's relative, compute the relative position right now - this helps handle network issues
+        if relative:
             current_xyt = self.get_base_pose()
             if verbose:
                 print("Current pose", current_xyt)
-            goal_xyt = xyt_base_to_global(rel_xyt, current_xyt)
+            _xyt = xyt_base_to_global(_xyt, current_xyt)
             if verbose:
-                print("Goal pose in global coordinates", goal_xyt)
+                print("Goal pose in global coordinates", _xyt)
 
         if blocking and not reliable:
             logger.warning("Sending blocking commands without reliable is not recommended")
 
-        use_world = bool(world_frame) and not relative
-        if sim_relative_on_wire:
-            next_action = {"xyt": rel_xyt, "nav_relative": True, "nav_blocking": blocking}
-        else:
-            next_action = {"xyt": goal_xyt, "nav_relative": False, "nav_blocking": blocking}
-        if use_world:
-            next_action["nav_world"] = True
+        # We never send a relative motion over wireless - this is because we can run into timing issues.
+        # Instead, we always send the absolute position and let the robot handle the motions itself.
+        next_action = {"xyt": _xyt, "nav_relative": False, "nav_blocking": blocking}
         sess = self.get_emet_session()
         if sess and (sess.get("capabilities") or {}).get("teleport_base"):
             next_action["nav_teleport"] = True
         if self._rerun:
-            self._rerun.update_nav_goal(goal_xyt)
+            self._rerun.update_nav_goal(_xyt)
 
         # If we are not in navigation mode, switch to it
         # Send an action to the robot
@@ -924,29 +865,15 @@ class StretchZmqClient(AbstractRobotClient):
         if blocking:
             block_id = action["step"]
             time.sleep(0.1)
-            if sim_relative_on_wire:
-                theta_only = abs(float(rel_xyt[0])) < 1e-6 and abs(float(rel_xyt[1])) < 1e-6
-                if theta_only:
-                    # Stretch Robocasa (free-joint base): θ-only spins rarely assert ``at_goal`` in time.
-                    time.sleep(min(timeout, 4.0))
-                else:
-                    deadline = timeit.default_timer() + timeout
-                    while timeit.default_timer() < deadline:
-                        if self._last_step >= block_id and self.at_goal():
-                            break
-                        time.sleep(0.05)
-                    else:
-                        logger.warning(
-                            f"Timeout ({timeout}s) waiting for sim relative navigation step {block_id}"
-                        )
-            else:
-                wait_goal_angle = float(goal_xyt[2])
-                self._wait_for_base_motion(
-                    block_id,
-                    goal_angle=wait_goal_angle,
-                    verbose=verbose,
-                    timeout=timeout,
-                )
+            # Now, wait for the command to finish
+            self._wait_for_base_motion(
+                block_id,
+                goal_angle=_xyt[2],
+                verbose=verbose,
+                timeout=timeout,
+                # resend_action=action,
+                # resend_action=current_action,
+            )
 
     def set_velocity(self, v: float, w: float):
         """Move to xyt in global coordinates or relative coordinates.
@@ -1073,9 +1000,7 @@ class StretchZmqClient(AbstractRobotClient):
         next_action = self.send_action(next_action)
         self._wait_for_head(constants.STRETCH_NAVIGATION_Q, resend_action=next_action)
         self._wait_for_mode("navigation")
-        if not self._wait_for_arm(constants.STRETCH_NAVIGATION_Q, timeout=30.0):
-            if not self._is_simulation_robot():
-                logger.warning("move_to_nav_posture: arm/lift did not reach navigation posture")
+        self._wait_for_arm(constants.STRETCH_NAVIGATION_Q, timeout=30.0)
         assert self.in_navigation_mode()
 
     def move_to_manip_posture(self):
@@ -1213,18 +1138,10 @@ class StretchZmqClient(AbstractRobotClient):
                 arm_vel = abs(joint_velocities[HelloStretchIdx.ARM])
                 lift_vel = abs(joint_velocities[HelloStretchIdx.LIFT])
                 if arm_vel < 0.005 and lift_vel < 0.005:
-                    sim = self._is_simulation_robot()
-                    sim_lift_tol = max(self._lift_joint_tolerance, 0.55)
-                    if sim and arm_diff < self._arm_joint_tolerance and lift_diff < sim_lift_tol:
-                        return True
-                    msg = (
+                    logger.warning(
                         f"Arm/lift stopped moving before reaching target: "
                         f"arm_diff={arm_diff:.4f}, lift_diff={lift_diff:.4f}"
                     )
-                    if sim:
-                        logger.debug(msg)
-                        return True
-                    logger.warning(msg)
                     return False
             if elapsed > timeout:
                 logger.warning(
@@ -1466,25 +1383,6 @@ class StretchZmqClient(AbstractRobotClient):
         with self._send_lock:
             self.send_socket.send_pyobj(message)
 
-    def request_sim_mujoco_ground_truth_snapshot(
-        self,
-        path_on_sim_host: str,
-        *,
-        exclude_robot: bool = True,
-        as_json: bool = False,
-    ) -> None:
-        step_next = int(getattr(self, "_last_step", -1)) + 1
-        if step_next < 1:
-            step_next = max(1, int(time.time() * 1000.0) % 2_000_000_000)
-        payload = build_mujoco_ground_truth_dump_action(
-            step_next,
-            path_on_sim_host,
-            exclude_robot=exclude_robot,
-            as_json=as_json,
-        )
-        with self._send_lock:
-            self.send_socket.send_pyobj(payload)
-
     def _update_pose_graph(self, obs):
         """Update internal pose graph"""
         with self._obs_lock:
@@ -1612,15 +1510,12 @@ class StretchZmqClient(AbstractRobotClient):
         per_waypoint_timeout: float = 10.0,
         final_timeout: float = 10.0,
         relative: bool = False,
-        blocking: bool = True,
+        blocking: bool = False,
         *,
         world_frame: bool | None = None,
+        **kwargs: Any,
     ):
-        """Execute a multi-step trajectory; this is always blocking since it waits to reach each one in turn.
-
-        ``blocking`` is accepted for API compatibility with :class:`GenericZmqClient` and
-        ``controller_dynamem``; waypoint execution always blocks on the final ``move_base_to`` per point.
-        """
+        """Execute a multi-step trajectory; this is always blocking since it waits to reach each one in turn."""
 
         if isinstance(trajectory, PlanResult):
             trajectory = [pt.state for pt in trajectory.trajectory]
@@ -1632,13 +1527,7 @@ class StretchZmqClient(AbstractRobotClient):
             assert len(pt) == 3 or len(pt) == 2, (
                 "base trajectory needs to be 2-3 dimensions: x, y, and (optionally) theta"
             )
-            self.move_base_to(
-                pt,
-                relative,
-                blocking=False,
-                reliable=False,
-                world_frame=world_frame,
-            )
+            self.move_base_to(pt, relative, blocking=False, reliable=False)
             logger.debug(f"Moving to waypoint {pt}")
             last_waypoint = i == len(trajectory) - 1
             self.move_base_to(
@@ -1648,7 +1537,6 @@ class StretchZmqClient(AbstractRobotClient):
                 timeout=final_timeout if last_waypoint else per_waypoint_timeout,
                 verbose=verbose,
                 reliable=True if last_waypoint else False,
-                world_frame=world_frame,
             )
             if not last_waypoint:
                 self.wait_for_waypoint(
@@ -2103,21 +1991,23 @@ class StretchZmqClient(AbstractRobotClient):
             self._rerun_thread.start()
 
         t0 = timeit.default_timer()
-        last_log = t0
         while self._obs is None or self._state is None:
             time.sleep(0.05)
             self._bootstrap_servo_from_obs_if_needed()
-            now = timeit.default_timer()
-            if now - t0 > self._zmq_startup_timeout:
-                logger.error(colored(self._zmq_startup_failure_message(), "red"))
+            t1 = timeit.default_timer()
+            if t1 - t0 > 10.0:
+                logger.error(
+                    colored(
+                        "Timeout waiting for observations; are you connected to the robot? Check the network.",
+                        "red",
+                    )
+                )
+                logger.info(
+                    "Try making sure that the server on the robot is publishing, and that you can ping the robot IP address."
+                )
                 logger.info("Robot IP:", self.send_address)
                 self.stop()
                 return False
-            if now - last_log >= 10.0:
-                logger.info(
-                    f"Still waiting for ZMQ obs/state ({now - t0:.0f} / {self._zmq_startup_timeout:.0f}s)…"
-                )
-                last_log = now
 
         self._bootstrap_servo_from_obs_if_needed()
         if self._servo is None:
@@ -2125,8 +2015,7 @@ class StretchZmqClient(AbstractRobotClient):
             while self._servo is None:
                 time.sleep(0.05)
                 self._bootstrap_servo_from_obs_if_needed()
-                now = timeit.default_timer()
-                if now - t_servo > min(15.0, self._zmq_startup_timeout):
+                if timeit.default_timer() - t_servo > 15.0:
                     logger.warning(
                         "No servo stream yet; continuing with full observations only "
                         "(head camera for Rerun/DynaMem comes from obs port)."

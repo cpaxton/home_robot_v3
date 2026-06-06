@@ -19,6 +19,7 @@
 import click
 
 from emet.app.robot_cli import create_robot_client_from_cli
+from emet.app.run_interactive import run_graph_eqa_loop
 from emet.controller.controller_graph_eqa import GraphEQAController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import get_parameters
@@ -203,35 +204,13 @@ def main(
             if not not_rotate_in_place:
                 executor.rotate_in_place()
 
-            click.echo(
-                "Interactive mode: type a **question** for graph EQA, "
-                "**explore** (or **e**) to extend the map without the EQA model, "
-                "or Enter to quit."
-            )
-            while True:
-                question = input("GraphEQA [question | explore | Enter=quit]: ").strip()
-                if not question:
-                    break
-                robot.move_to_nav_posture()
-                robot.switch_to_navigation_mode()
-                low = question.lower()
-                if low in ("explore", "e", "map", "nav"):
-                    click.echo("- Exploring (no EQA call)…")
-                    finished, _pt = agent.execute_action("")
-                    if finished is None:
-                        click.echo("Explore step failed (no plan / blocked).")
-                    elif finished:
-                        click.echo("Explore step finished at target pose.")
-                    else:
-                        click.echo("Explore step advanced; ask a question or explore again.")
-                    continue
-                robot.say("Answering the question " + question)
-                discord_text, _imgs = executor(question)
-                # run_eqa / GraphEQAController also prints; keep a one-line confirmation for piping/logs
-                if not discord_text.strip():
-                    print("(Empty EQA reply — check graph memory / observations.)")
+            run_graph_eqa_loop(agent, executor, robot, app_name="GraphEQA")
     finally:
         _save_dump()
+        if dump_memory:
+            from emet.memory.utils import print_memory_view_help_on_quit
+
+            print_memory_view_help_on_quit(dump_memory)
 
 
 if __name__ == "__main__":

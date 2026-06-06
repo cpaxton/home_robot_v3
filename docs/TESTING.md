@@ -25,6 +25,9 @@ Use **`uv run emet …`** (or `source .venv/bin/activate` then bare `emet`) from
 | Multi-robot Dynagraph floor E2E | `uv run python src/test/app/run_dynagraph_multi_robot_e2e.py` |
 | Dynagraph unit (explore loop, graph memory) | `uv run emet test src/test/app/test_dynagraph_explore.py src/test/memory/test_graph_eqa_memory.py -v` |
 | GraphObjectFusion + GT export (fast) | `uv run emet test src/test/memory/test_graph_object_fusion.py src/test/simulation/test_mujoco_gt_objects.py -v` |
+| Dynagraph benchmark smoke (unit) | `uv run emet test src/test/app/test_dynagraph_benchmark_smoke.py -v` |
+| Dynagraph staleness / disappearance | `uv run emet test src/test/memory/test_dynagraph_staleness_disappearance.py -v` |
+| Unified Dynagraph eval CLI | `uv run emet eval-dynagraph --episode /tmp/export` |
 | Graph fusion calibration (one scene) | `emet export-sim-gt` → `emet run dynagraph --calibration-export` → `emet tune-graph-fusion` (see [dynagraph.md](dynagraph.md#object-gt-export-and-graphobjectfusion-calibration)) |
 | GraphEQA human-answer formatter | `uv run emet test src/test/memory/test_graph_eqa_human_answer.py -v` |
 | Manual Dynagraph EQA + export (Robocasa) | See [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md#single-eqa-question-manual-per-robot) |
@@ -81,7 +84,7 @@ There is **no other single “master” file** today; this page is the hub. Feat
 |-----------|----------------|-------|
 | Mocked EQA on constructed graph | [test_graph_eqa_default_scene_sim.py](../src/test/memory/test_graph_eqa_default_scene_sim.py) | Known scene; labels not from full VL pipeline |
 | Interactive Robocasa EQA | Manual — [graph_eqa.md](graph_eqa.md#testing-graph-eqa-in-robocasa) | Requires API keys / models |
-| **Dynagraph graph build + NL answer on known scene** | **Gap — see below** | Not automated yet |
+| **Dynagraph graph build + NL answer on known scene** | [`test_dynagraph_benchmark_smoke.py`](../src/test/app/test_dynagraph_benchmark_smoke.py) (unit); sim harness [`run_dynagraph_benchmark_smoke.py`](../src/test/app/run_dynagraph_benchmark_smoke.py) | Question bank + `eqa_results.json`; full sim via `RUN_DYNAGRAPH_BENCHMARK_SMOKE=1` |
 
 ### Infrastructure / CLI / controllers
 

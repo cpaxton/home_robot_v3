@@ -230,6 +230,25 @@ def test_stretch_execute_trajectory_accepts_controller_kwargs():
     assert "world_frame" in sig.parameters
 
 
+def test_stretch_execute_trajectory_accepts_controller_kwargs():
+    """controller_dynamem passes blocking=True and world_frame=True (must not TypeError)."""
+    import inspect
+
+    from emet.controller.zmq_client import StretchZmqClient
+
+    sig = inspect.signature(StretchZmqClient.execute_trajectory)
+    inspect.signature(StretchZmqClient.execute_trajectory).bind(
+        StretchZmqClient.__new__(StretchZmqClient),
+        [],
+        pos_err_threshold=0.2,
+        rot_err_threshold=0.1,
+        blocking=True,
+        world_frame=True,
+    )
+    assert "blocking" in sig.parameters
+    assert "world_frame" in sig.parameters
+
+
 def test_want_robocasa_planar_autoplace_innate_mars():
     from emet.robots.innate_mars import InnateMarsBackend
     from emet.simulation import scene_base_spawn

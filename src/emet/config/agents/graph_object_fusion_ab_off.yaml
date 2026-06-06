@@ -1,0 +1,10 @@
+graph_object_fusion:
+  enabled: false
+  spatial_merge_xy_m: 0.42
+  min_centroid_dist_m: 0.55
+  bounds_3d_iou_min: 0.08
+  embedding_min_cosine: 0.62
+  embedding_blend_alpha: 0.35
+  require_label_match: false
+  max_candidates: 64
+  match_xy_m: 0.55

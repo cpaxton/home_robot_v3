@@ -15,8 +15,8 @@ import numpy as np
 
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 from emet.memory.graph_eqa.graph_object_fusion.config import GraphObjectFusionConfig
+from emet.memory.graph_eqa.graph_object_fusion.evaluate import score_fused_graph_vs_gt
 from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate, GraphObjectFusion
-from emet.memory.graph_eqa.mujoco_align import score_nodes_vs_gt
 
 
 def load_calibration_frames_jsonl(path: str | Path) -> list[dict[str, Any]]:
@@ -91,22 +91,43 @@ def score_fused_nodes_vs_gt(
     gt: dict[str, Any],
     *,
     match_xy_m: float | None = None,
+    frames: list[dict[str, Any]] | None = None,
+    bounds_iou_min: float = 0.08,
 ) -> dict[str, float]:
     """Score fused graph object nodes against a GT scene JSON ``objects[]`` list.
+
+    Uses geometry-first association (``spatial_recall``) via ``evaluate.py``.
 
     Args:
         mem: Graph after ``replay_frames_with_fusion``.
         gt: GT export with ``objects`` entries (``label``, ``pos_world``, …).
         match_xy_m: XY association radius; defaults to ``0.55`` m.
+        frames: Optional raw calibration rows (for ``n_raw_detections``).
+        bounds_iou_min: 3D bounds IoU threshold for ``bounds3d_recall``.
 
     Returns:
-        Metrics from ``score_nodes_vs_gt`` (``gt_recall``, ``node_precision``,
-        ``duplication_penalty``, ``node_count``).
+        Metrics including ``spatial_recall``, ``label_recall``, ``node_count``,
+        and legacy ``gt_recall`` (= spatial_recall).
     """
     mxy = match_xy_m if match_xy_m is not None else 0.55
-    nodes = [n for n in mem.get_nodes() if not n.is_viewpoint]
-    gt_objects = gt.get("objects", [])
-    return score_nodes_vs_gt(nodes, gt_objects, match_xy_m=mxy)
+    n_raw = sum(len(fr.get("detections", [])) for fr in frames) if frames else None
+    metrics = score_fused_graph_vs_gt(
+        mem,
+        gt,
+        match_xy_m=mxy,
+        bounds_iou_min=bounds_iou_min,
+        n_raw_detections=n_raw,
+    )
+    n_nodes = float(metrics.get("n_fused_nodes") or 0)
+    return {
+        "spatial_recall": float(metrics["spatial_recall"]),
+        "label_recall": float(metrics["label_recall"]),
+        "bounds3d_recall": float(metrics["bounds3d_recall"]),
+        "gt_recall": float(metrics["spatial_recall"]),
+        "duplication_penalty": float(metrics.get("duplication_penalty", 0.0)),
+        "node_count": n_nodes,
+        "node_precision": float(metrics["spatial_recall"]),
+    }
 
 
 def grid_search_fusion_config(
@@ -117,8 +138,12 @@ def grid_search_fusion_config(
     embed_values: tuple[float, ...] = (0.55, 0.62, 0.70, 0.78),
     iou_values: tuple[float, ...] = (0.05, 0.08, 0.12, 0.18),
     min_recall: float = 0.85,
+    min_label_recall: float | None = None,
 ) -> tuple[GraphObjectFusionConfig, dict[str, Any], list[dict[str, Any]]]:
     """Grid-search fusion thresholds on offline calibration frames.
+
+    Objective: maximize ``spatial_recall``, then ``bounds3d_recall``, then fewer
+    duplicate nodes.
 
     Args:
         frames: Calibration JSONL rows.
@@ -126,7 +151,8 @@ def grid_search_fusion_config(
         spatial_values: Candidates for ``spatial_merge_xy_m``.
         embed_values: Candidates for ``embedding_min_cosine``.
         iou_values: Candidates for ``bounds_3d_iou_min``.
-        min_recall: Minimum ``gt_recall`` to accept a grid point.
+        min_recall: Minimum ``spatial_recall`` to accept a grid point.
+        min_label_recall: Optional minimum ``label_recall`` (taxonomy diagnostic).
 
     Returns:
         ``(best_config, report, grid_rows)`` where ``report`` has ``best`` and
@@ -146,7 +172,13 @@ def grid_search_fusion_config(
             bounds_3d_iou_min=float(iou),
         )
         mem = replay_frames_with_fusion(frames, cfg)
-        metrics = score_fused_nodes_vs_gt(mem, gt, match_xy_m=cfg.match_xy_m)
+        metrics = score_fused_nodes_vs_gt(
+            mem,
+            gt,
+            match_xy_m=cfg.match_xy_m,
+            frames=frames,
+            bounds_iou_min=float(iou),
+        )
         row = {
             "spatial_merge_xy_m": sx,
             "embedding_min_cosine": ec,
@@ -154,12 +186,15 @@ def grid_search_fusion_config(
             **metrics,
         }
         results.append(row)
-        if metrics["gt_recall"] < min_recall:
+        if metrics["spatial_recall"] < min_recall:
+            continue
+        if min_label_recall is not None and metrics["label_recall"] < min_label_recall:
             continue
         key = (
+            metrics["spatial_recall"],
+            metrics["bounds3d_recall"],
             -metrics["duplication_penalty"],
             -metrics["node_count"],
-            metrics["node_precision"],
         )
         if best_key is None or key > best_key:
             best_key = key
@@ -169,7 +204,7 @@ def grid_search_fusion_config(
     if best_cfg is None:
         best_cfg = replace(base, spatial_merge_xy_m=0.42, embedding_min_cosine=0.62, bounds_3d_iou_min=0.08)
         mem = replay_frames_with_fusion(frames, best_cfg)
-        best_metrics = score_fused_nodes_vs_gt(mem, gt)
+        best_metrics = score_fused_nodes_vs_gt(mem, gt, frames=frames)
 
     report = {
         "best": {**(best_metrics or {}), **asdict(best_cfg)},

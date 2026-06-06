@@ -41,12 +41,10 @@ def test_build_sim_launch_config_default_robot_stretch_for_molmospaces():
     )
 
     cfg = build_sim_launch_config_from_serve_cli(
-        molmospaces_scene="ithor",
-        molmospaces_split="train",
-        molmospaces_index=0,
-        molmospaces_install=False,
-        use_robocasa=False,
-        scene_path=None,
+        scene="ithor",
+        split="train",
+        index=0,
+        install_scene_if_missing=False,
         robot=None,
         headless=True,
         show_viewer_ui=False,
@@ -69,12 +67,10 @@ def test_build_sim_launch_config_explicit_rby1_for_molmospaces():
     )
 
     cfg = build_sim_launch_config_from_serve_cli(
-        molmospaces_scene="ithor",
-        molmospaces_split="train",
-        molmospaces_index=0,
-        molmospaces_install=False,
-        use_robocasa=False,
-        scene_path=None,
+        scene="ithor",
+        split="train",
+        index=0,
+        install_scene_if_missing=False,
         robot="rby1",
         headless=True,
         show_viewer_ui=False,
@@ -201,16 +197,16 @@ def test_molmospaces_help():
     assert "write-spawn-metadata" in result.stdout
 
 
-def test_serve_mujoco_help_includes_molmospaces_scene():
-    """emet serve mujoco --help documents --molmospaces-scene (merge + ZMQ in one step)."""
+def test_serve_mujoco_help_includes_scene():
+    """emet serve mujoco --help documents unified --scene (merge + ZMQ in one step)."""
     result = subprocess.run(
         [sys.executable, "-m", "emet.cli", "serve", "mujoco", "--help"],
         capture_output=True,
         text=True,
     )
     assert result.returncode == 0
-    assert "molmospaces-scene" in result.stdout
-    assert "molmospaces-install" in result.stdout
+    assert "--scene" in result.stdout
+    assert "install-scene-if-missing" in result.stdout
 
 
 def test_serve_help_lists_molmospaces_and_robocasa_backends():
@@ -234,8 +230,8 @@ def test_serve_molmospaces_help():
         text=True,
     )
     assert result.returncode == 0
-    assert "molmospaces-scene" in result.stdout
-    assert "molmospaces-split" in result.stdout
+    assert "--scene" in result.stdout
+    assert "--split" in result.stdout
 
 
 def test_serve_robocasa_help():

@@ -34,6 +34,7 @@ from emet.core.interfaces import Observations
 from emet.core.zmq_protocol import EMET_ZMQ_SESSION_KEY, read_emet_session
 from emet.mapping.scene_graph import SceneGraph
 from emet.mapping.voxel.voxel_map import SparseVoxelMapNavigationSpace
+from emet.memory.graph_eqa.sim_ground_truth_graph import ground_truth_description
 from emet.motion import HelloStretchIdx
 from emet.perception.wrapper import OvmmPerception
 from emet.utils.geometry import nav_xyt_to_world_xyt
@@ -780,14 +781,18 @@ def _pick_rerun_head_cam(obs: Any, servo: Observations | None) -> Observations |
 
     # Stretch-style: servo stream has no step metadata — prefer it when present.
     if servo_s < 0:
-        return servo
+        chosen = servo
+    elif obs_s < 0:
+        chosen = servo
+    elif servo_s > obs_s:
+        chosen = servo
+    else:
+        chosen = obs_head
 
-    if obs_s < 0:
-        return servo
-
-    if servo_s > obs_s:
-        return servo
-    return obs_head
+    # Servo RGB is low-latency; full obs carries MuJoCo-world ``camera_pose`` (matches voxel / GT).
+    if chosen is servo and obs_head is not None and obs_head.camera_pose is not None:
+        chosen = replace(chosen, camera_pose=obs_head.camera_pose)
+    return chosen
 
 
 class RerunVisualizer:
@@ -1150,8 +1155,32 @@ class RerunVisualizer:
             ),
         )
 
-    def log_dynagraph_state(self, graph_memory: Any) -> None:
+    def _log_dynagraph_boxes(
+        self,
+        *,
+        centers_xyz: list[np.ndarray],
+        half_sizes: list[list[float]],
+        labels: list[str],
+        colors: list[np.ndarray],
+        entity: str,
+    ) -> None:
+        if not centers_xyz:
+            self.clear_identity(entity)
+            return
+        log_to_rerun(
+            entity,
+            rr.Boxes3D(
+                half_sizes=half_sizes,
+                centers=[rr.components.PoseTranslation3D(c) for c in centers_xyz],
+                labels=labels,
+                colors=colors,
+                radii=0.01,
+            ),
+        )
+
+    def log_dynagraph_state(self, graph_memory: Any, *, ground_truth_mode: bool = False) -> None:
         """Log ``GraphEQAMemory`` nodes, observation images, and tree summary under ``world/dynagraph/``."""
+        _ = ground_truth_mode
         if getattr(self, "_memory_view", False):
             return
         if not self._stride_tick("_dynagraph_tick", self._dynagraph_stride):
@@ -1277,6 +1306,91 @@ class RerunVisualizer:
             )
         else:
             self.clear_identity("world/dynagraph/gallery")
+
+    def log_dynagraph_ground_truth(
+        self,
+        placements: dict[str, dict] | None,
+        *,
+        graph_memory: Any | None = None,
+    ) -> None:
+        """Log sim GT placements under ``world/dynagraph/ground_truth/`` (green markers)."""
+        if getattr(self, "_memory_view", False):
+            return
+        rr.set_time_seconds("realtime", time.time())
+        if not placements:
+            self.clear_identity("world/dynagraph/ground_truth/nodes")
+            log_to_rerun(
+                "world/dynagraph/ground_truth/summary",
+                rr.TextDocument("(no sim_object_placements)", media_type=rr.MediaType.MARKDOWN),
+            )
+            return
+
+        lines = ["### Ground truth (sim_object_placements)", ""]
+        xyz_rows: list[np.ndarray] = []
+        labels: list[str] = []
+        box_centers: list[np.ndarray] = []
+        box_half: list[list[float]] = []
+        box_labels: list[str] = []
+        for body_name in sorted(placements.keys()):
+            info = placements[body_name]
+            cat = str(info.get("cat") or body_name)
+            pos = np.asarray(info.get("pos"), dtype=np.float64).reshape(-1)[:3]
+            xyz_rows.append(pos)
+            sc = 1
+            if graph_memory is not None:
+                for n in graph_memory.get_nodes():
+                    if getattr(n, "description", None) == ground_truth_description(body_name):
+                        sc = int(getattr(n, "support_count", 1))
+                        break
+            label = f"{cat} [{body_name}]"
+            if sc != 1:
+                label = f"{label} x{sc}"
+            labels.append(label)
+            half = info.get("extent_half")
+            if half is None and info.get("bounds") is not None:
+                b = np.asarray(info["bounds"], dtype=np.float64).reshape(2, 3)
+                half = (b[1] - b[0]) / 2.0
+            if half is not None:
+                h = np.asarray(half, dtype=np.float64).reshape(3)
+                if float(np.max(h)) > 1e-6:
+                    box_centers.append(pos)
+                    box_half.append([float(h[0]), float(h[1]), float(h[2])])
+                    box_labels.append(label)
+            size_note = ""
+            if half is not None:
+                h = np.asarray(half, dtype=np.float64).reshape(3)
+                size_note = f"  size≈({2 * h[0]:.2f}×{2 * h[1]:.2f}×{2 * h[2]:.2f} m)"
+            lines.append(
+                f"- **{body_name}** ({cat}): ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}){size_note}"
+                + (f" — seen {sc}×" if sc != 1 else "")
+            )
+
+        log_to_rerun(
+            "world/dynagraph/ground_truth/summary",
+            rr.TextDocument("\n".join(lines), media_type=rr.MediaType.MARKDOWN),
+        )
+        xyz = np.stack(xyz_rows, axis=0)
+        green = np.tile(np.array([[80, 220, 100]], dtype=np.uint8), (len(xyz), 1))
+        log_to_rerun(
+            "world/dynagraph/ground_truth/nodes",
+            rr.Points3D(
+                positions=xyz,
+                radii=0.08,
+                labels=labels,
+                colors=green,
+            ),
+        )
+        if box_centers:
+            green_box = np.tile(np.array([[80, 220, 100]], dtype=np.uint8), (len(box_centers), 1))
+            self._log_dynagraph_boxes(
+                centers_xyz=box_centers,
+                half_sizes=box_half,
+                labels=box_labels,
+                colors=green_box,
+                entity="world/dynagraph/ground_truth/bboxes",
+            )
+        else:
+            self.clear_identity("world/dynagraph/ground_truth/bboxes")
 
     def log_head_camera(self, obs: Observations, *, mapping_depth: np.ndarray | None = None):
         """Log head camera pose and images.
