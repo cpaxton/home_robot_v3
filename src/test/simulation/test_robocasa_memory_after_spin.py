@@ -56,6 +56,7 @@ def test_robocasa_memory_after_spin():
     """
     proc = None
     robot = None
+    os.environ["EMET_STRETCH_ROBOSUITE_ZMQ"] = "1"
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join([str(_SRC_ROOT)] + env.get("PYTHONPATH", "").split(os.pathsep))
     if sys.platform == "linux":

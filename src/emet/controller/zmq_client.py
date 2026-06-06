@@ -36,6 +36,8 @@ from emet.core.zmq_protocol import (
 )
 from emet.motion import PlanResult
 from emet.motion.kinematics import HelloStretchIdx, HelloStretchKinematics
+from emet.robots.stretch import STRETCH_ROBOCASA_MJCF_JOINT_NAMES
+from emet.robots.stretch.joint_layout import hello_stretch_config_from_joint_positions
 from emet.utils.geometry import (
     angle_difference,
     posquat2sophus,
@@ -56,6 +58,14 @@ def _dict_first_nonempty(msg: dict[str, Any], *keys: str) -> Any:
         if k not in msg:
             continue
         v = msg[k]
+        if v is not None:
+            return v
+    return None
+
+
+def _first_nonempty(*values: Any) -> Any:
+    """First value that is not None (safe for numpy arrays)."""
+    for v in values:
         if v is not None:
             return v
     return None
@@ -521,6 +531,59 @@ class StretchZmqClient(AbstractRobotClient):
             return None
         # Return a valid solution to the IK problem here
         return full_body_cfg
+
+    def _attach_mjcf_joint_to_obs(self) -> None:
+        """Copy raw Robocasa MJCF joint vector into the full obs dict for MJCF Rerun meshes."""
+        with self._state_lock:
+            raw = None if self._state is None else self._state.get("joint_positions_mjcf")
+        if raw is None:
+            return
+        with self._obs_lock:
+            if self._obs is not None:
+                self._obs["joint_mjcf"] = np.asarray(raw, dtype=np.float64).copy()
+
+    def _bootstrap_servo_from_obs_if_needed(self) -> None:
+        """When the servo port is quiet (Robocasa), build head ``Observations`` from full obs + state."""
+        with self._obs_lock:
+            obs = self._obs
+        with self._state_lock:
+            state = self._state
+        if obs is None or state is None or obs.get("rgb") is None:
+            return
+        with self._servo_lock:
+            if self._servo is not None:
+                return
+            bp = np.asarray(state.get("base_pose", np.zeros(3)), dtype=np.float64).ravel()
+            if bp.size < 3:
+                bp = np.resize(bp, 3)
+            joint = self._coerce_stretch_joint_vector(obs.get("joint"), base_xyt=bp)
+            self._servo = Observations(
+                gps=bp[:2],
+                compass=np.array([bp[2]], dtype=np.float64),
+                rgb=obs["rgb"],
+                depth=obs.get("depth"),
+                xyz=obs.get("xyz"),
+                ee_rgb=None,
+                ee_depth=None,
+                ee_xyz=None,
+                joint=joint,
+                emet_session=read_emet_session(obs) or read_emet_session(state),
+            )
+            self._servo.camera_K = obs.get("camera_K")
+            self._servo.camera_pose = obs.get("camera_pose")
+            self._servo.ee_pose = obs.get("ee_pose")
+            self._servo.is_simulation = bool(obs.get("is_simulation", False))
+
+    @staticmethod
+    def _coerce_stretch_joint_vector(
+        q: np.ndarray | None,
+        *,
+        base_xyt: np.ndarray | None = None,
+    ) -> np.ndarray | None:
+        """Robocasa Stretch sim publishes 10 MJCF joints; StretchZmqClient expects HelloStretchIdx (11)."""
+        if q is None:
+            return None
+        return hello_stretch_config_from_joint_positions(q, base_xyt=base_xyt)
 
     def _extract_joint_pos(self, q):
         """Helper to convert from the general-purpose config including full robot state, into the command space used in just the manip controller. Extracts just lift/arm/wrist information."""
@@ -1347,6 +1410,14 @@ class StretchZmqClient(AbstractRobotClient):
                     if self._warning_on_out_of_date_state < state["step"]:
                         logger.warning(f"Dropping out-of-date state message: {state['step']} < {self._last_step}")
                         self._warning_on_out_of_date_state = state["step"]
+            jp = state.get("joint_positions")
+            if jp is not None:
+                raw = np.asarray(jp, dtype=np.float64).ravel()
+                if raw.size == len(STRETCH_ROBOCASA_MJCF_JOINT_NAMES):
+                    state["joint_positions_mjcf"] = raw.copy()
+                state["joint_positions"] = self._coerce_stretch_joint_vector(
+                    jp, base_xyt=state.get("base_pose")
+                )
             self._state = state
             self._control_mode = state["control_mode"]
             self._at_goal = state["at_goal"]
@@ -1650,8 +1721,19 @@ class StretchZmqClient(AbstractRobotClient):
                 show_point_cloud(output["xyz"], output["rgb"] / 255.0, orig=np.zeros(3))
                 shown_point_cloud = True
 
+            if output.get("joint") is not None:
+                gps = output.get("gps")
+                compass = output.get("compass")
+                base_xyt = None
+                if gps is not None and compass is not None:
+                    cc = np.asarray(compass, dtype=np.float64).ravel()
+                    base_xyt = np.array([float(gps[0]), float(gps[1]), float(cc[0])])
+                output["joint"] = self._coerce_stretch_joint_vector(output["joint"], base_xyt=base_xyt)
+
             self._update_obs(output)
+            self._attach_mjcf_joint_to_obs()
             self._update_pose_graph(output)
+            self._bootstrap_servo_from_obs_if_needed()
 
             t1 = timeit.default_timer()
             dt = t1 - t0
@@ -1694,7 +1776,10 @@ class StretchZmqClient(AbstractRobotClient):
             jp = message.get("joint_positions")
             if jp is None:
                 return
-            joint = np.asarray(jp, dtype=np.float64)
+            joint = self._coerce_stretch_joint_vector(
+                jp,
+                base_xyt=_first_nonempty(message.get("base_pose"), self._state.get("base_pose")),
+            )
             depth_scaling = float(message.get("head_cam/depth_scaling", 1.0))
             camera_K_head = _dict_first_nonempty(message, "head_camera_K", "head_cam/depth_camera_K")
             camera_pose_head = _dict_first_nonempty(message, "head_cam/pose", "camera_pose")
@@ -1906,8 +1991,9 @@ class StretchZmqClient(AbstractRobotClient):
             self._rerun_thread.start()
 
         t0 = timeit.default_timer()
-        while self._obs is None or self._state is None or self._servo is None:
-            time.sleep(0.1)
+        while self._obs is None or self._state is None:
+            time.sleep(0.05)
+            self._bootstrap_servo_from_obs_if_needed()
             t1 = timeit.default_timer()
             if t1 - t0 > 10.0:
                 logger.error(
@@ -1922,6 +2008,19 @@ class StretchZmqClient(AbstractRobotClient):
                 logger.info("Robot IP:", self.send_address)
                 self.stop()
                 return False
+
+        self._bootstrap_servo_from_obs_if_needed()
+        if self._servo is None:
+            t_servo = timeit.default_timer()
+            while self._servo is None:
+                time.sleep(0.05)
+                self._bootstrap_servo_from_obs_if_needed()
+                if timeit.default_timer() - t_servo > 15.0:
+                    logger.warning(
+                        "No servo stream yet; continuing with full observations only "
+                        "(head camera for Rerun/DynaMem comes from obs port)."
+                    )
+                    break
 
         if not self._verify_emet_robot_id_stretch():
             logger.info("Robot IP:", self.send_address)

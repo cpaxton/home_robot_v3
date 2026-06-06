@@ -518,9 +518,12 @@ class MujocoZmqServer(BaseZmqServer):
         if not self._stretch_sim_publish_ok():
             return None
         try:
-            return pose_global_to_base(self._head_camera_opencv_world(), self._initial_xyt)
+            pose = self.robot_sim.get_link_pose(STRETCH_CAMERA_FRAME)
         except (ConnectionError, ConnectionResetError, OSError):
             return None
+        # Rotate head camera frame to OpenCV optical convention for projection / Rerun.
+        pose[:3, :3] = pose[:3, :3] @ np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]])
+        return pose_global_to_base(pose, self._initial_xyt)
 
     def get_ee_camera_pose(self) -> np.ndarray:
         """Get the end effector camera pose in world coords"""

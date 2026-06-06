@@ -21,6 +21,7 @@ def _norm(s: str) -> str:
 
 
 def load_question_bank(path: str | Path, *, env_filter: str | None = None) -> list[dict[str, Any]]:
+    """Load benchmark questions from ``dynagraph_questions.yaml`` (optional env filter)."""
     full = Path(resolve_config_yaml_path(str(path)))
     raw = yaml.safe_load(full.read_text(encoding="utf-8")) or {}
     out: list[dict[str, Any]] = []
@@ -119,6 +120,7 @@ def score_eqa_results(
     *,
     episode_dir: str | Path | None = None,
 ) -> dict[str, Any]:
+    """Score a list of EQA result rows; returns accuracy and per-question details."""
     ep = Path(episode_dir) if episode_dir else None
     scored = [score_single_question(r, episode_dir=ep) for r in rows]
     n = max(1, len(scored))
@@ -133,6 +135,7 @@ def score_eqa_results(
 
 
 def write_eqa_results(path: str | Path, rows: list[dict[str, Any]]) -> Path:
+    """Write ``eqa_results.json`` in the standard ``{questions: [...]}`` format."""
     dest = Path(path)
     dest.parent.mkdir(parents=True, exist_ok=True)
     payload = {"questions": rows}

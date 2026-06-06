@@ -36,6 +36,7 @@ def _is_viewpoint_node(node: Any) -> bool:
 
 
 def graph_stats_from_memory_state(state: Any) -> dict[str, Any]:
+    """Count object vs viewpoint nodes and edges from a loaded memory state."""
     nodes = state.graph.nodes if state.graph else []
     object_nodes = [n for n in nodes if not _is_viewpoint_node(n)]
     viewpoint_nodes = [n for n in nodes if _is_viewpoint_node(n)]
@@ -49,12 +50,14 @@ def graph_stats_from_memory_state(state: Any) -> dict[str, Any]:
 
 
 def graph_stats_from_report_text(text: str) -> dict[str, float]:
+    """Parse node count from a human-readable graph report string."""
     m = re.search(r"Nodes\s*\((\d+)\)", text, re.I)
     node_count = float(m.group(1)) if m else 0.0
     return {"node_count": node_count, "edge_count": 0.0, "viewpoint_count": 0.0}
 
 
 def explore_metrics(episode_dir: Path) -> dict[str, Any]:
+    """Load floor-map exploration stats from ``floor_metrics.json`` near the export."""
     fm_path = episode_dir / FLOOR_METRICS_JSON
     if not fm_path.is_file():
         parent = episode_dir.parent / FLOOR_METRICS_JSON
@@ -99,6 +102,7 @@ def fusion_metrics(
     match_xy_m: float = 0.55,
     bounds_iou_min: float = 0.08,
 ) -> dict[str, Any]:
+    """Score raw detections and fused graph nodes vs ``gt.json`` when available."""
     from emet.memory.graph_eqa.graph_object_fusion.evaluate import (
         score_detections_vs_gt,
         score_fused_graph_vs_gt,
@@ -169,6 +173,7 @@ def fusion_metrics(
 
 
 def gt_metrics(episode_dir: Path) -> dict[str, Any]:
+    """GT placement completeness, localization error, and association recall."""
     from emet.memory.format import SIM_GT_PLACEMENTS_FILENAME
     from emet.memory.graph_eqa.sim_ground_truth_graph import (
         gt_graph_completeness,
@@ -206,6 +211,7 @@ def gt_metrics(episode_dir: Path) -> dict[str, Any]:
 
 
 def load_eqa_results(episode_dir: Path) -> list[dict[str, Any]]:
+    """Load ``eqa_results.json`` from the episode export (list or ``questions`` key)."""
     p = episode_dir / "eqa_results.json"
     if not p.is_file():
         p = episode_dir.parent / "eqa_results.json"
@@ -227,6 +233,7 @@ def compute_dynagraph_eval(
     questions_path: str | Path | None = None,
     question_env: str | None = None,
 ) -> dict[str, Any]:
+    """Unified eval bundle: explore, graph, fusion, GT, and optional EQA scores."""
     episode_dir = resolve_episode_dir(episode_dir)
     state = load_memory(str(episode_dir))
 

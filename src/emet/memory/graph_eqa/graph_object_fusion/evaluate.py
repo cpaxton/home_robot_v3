@@ -18,6 +18,8 @@ from emet.memory.graph_eqa.mujoco_align import _label_matches
 
 @dataclass
 class AssociationRow:
+    """One GT object ↔ best detection association (geometry-first scoring)."""
+
     body_key: str
     gt_label: str
     det_label: str | None
@@ -199,7 +201,17 @@ def score_detections_vs_gt(
     match_xy_m: float = 0.55,
     bounds_iou_min: float = 0.08,
 ) -> dict[str, Any]:
-    """Score raw calibration frames (no fusion replay)."""
+    """Score raw calibration frames (no fusion replay).
+
+    Args:
+        gt: Sim GT scene JSON with ``objects[]``.
+        frames: Calibration JSONL rows or equivalent ``{step, detections}`` list.
+        match_xy_m: Planar association radius (m).
+        bounds_iou_min: 3D bounds IoU threshold for ``bounds3d_recall``.
+
+    Returns:
+        Metrics dict (``spatial_recall``, ``label_recall``, ``associations``, …).
+    """
     associations = associate_detections_to_gt(
         gt,
         frames,
@@ -222,7 +234,18 @@ def score_fused_graph_vs_gt(
     bounds_iou_min: float = 0.08,
     n_raw_detections: int | None = None,
 ) -> dict[str, Any]:
-    """Score fused graph nodes using the same spatial association as raw detections."""
+    """Score fused graph nodes using the same spatial association as raw detections.
+
+    Args:
+        mem: ``GraphEQAMemory`` after fusion replay or live explore.
+        gt: Sim GT scene JSON.
+        match_xy_m: Planar association radius (m).
+        bounds_iou_min: 3D bounds IoU threshold.
+        n_raw_detections: Optional raw detection count (for duplication diagnostics).
+
+    Returns:
+        Metrics dict including ``n_fused_nodes`` and ``duplication_penalty``.
+    """
     nodes = [n for n in mem.get_nodes() if not getattr(n, "is_viewpoint", False)]
     pseudo_frames = [{"step": 0, "detections": _nodes_to_detection_dicts(nodes)}]
     associations = associate_detections_to_gt(
