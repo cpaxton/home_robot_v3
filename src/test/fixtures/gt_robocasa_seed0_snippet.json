@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "source": "fixture",
+  "robot": "innate_mars",
+  "seed": 0,
+  "layout": 1,
+  "style": 1,
+  "image_hw": [480, 640],
+  "camera": {
+    "name": "head_left",
+    "K": [[320.0, 0.0, 320.0], [0.0, 320.0, 240.0], [0.0, 0.0, 1.0]],
+    "extrinsic_cam_to_world": [
+      [1.0, 0.0, 0.0, 0.0],
+      [0.0, 1.0, 0.0, 0.0],
+      [0.0, 0.0, 1.0, 1.2],
+      [0.0, 0.0, 0.0, 1.0]
+    ],
+    "extrinsic_world_to_cam": [
+      [1.0, 0.0, 0.0, 0.0],
+      [0.0, 1.0, 0.0, 0.0],
+      [0.0, 0.0, 1.0, -1.2],
+      [0.0, 0.0, 0.0, 1.0]
+    ]
+  },
+  "objects": [
+    {
+      "id": "apple_main",
+      "label": "apple",
+      "label_norm": "apple",
+      "body_id": 10,
+      "pos_world": [1.0, -0.5, 0.9],
+      "quat_world": [1.0, 0.0, 0.0, 0.0],
+      "bounds_3d": {
+        "min": [0.95, -0.55, 0.85],
+        "max": [1.05, -0.45, 0.95],
+        "center": [1.0, -0.5, 0.9],
+        "size": [0.1, 0.1, 0.1]
+      },
+      "bbox_xyxy_head": [300, 200, 340, 240]
+    },
+    {
+      "id": "mug_main",
+      "label": "mug",
+      "label_norm": "mug",
+      "body_id": 11,
+      "pos_world": [1.2, 0.1, 0.88],
+      "quat_world": [1.0, 0.0, 0.0, 0.0],
+      "bounds_3d": {
+        "min": [1.15, 0.05, 0.83],
+        "max": [1.25, 0.15, 0.93],
+        "center": [1.2, 0.1, 0.88],
+        "size": [0.1, 0.1, 0.1]
+      }
+    }
+  ]
+}

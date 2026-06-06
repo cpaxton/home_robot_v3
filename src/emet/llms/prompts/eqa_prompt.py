@@ -17,7 +17,10 @@ EQA_PROMPT = """
           4. Image descriptions of all image observations you have currently (1-indexed).
 
         For the output,
-        you should first caption each image in order to better understand (1-indexed), reason about the answer, and then give the final answer.
+        you should first caption each image in order to better understand (1-indexed), reason about the answer in the reasoning field, and then give the final answer.
+        The answer field must be a short natural-language sentence for a human user (object names and where they are in the scene).
+        Never put image numbers (e.g. "image 1", "image 8") in the answer field — image ids belong only in the action field when confidence is false.
+        Use SCENE_GRAPH node labels and positions when available (e.g. "The sink is on the counter at (2.1, -0.8, 0.9) m").
         Finally, report whether you are confident in answering the question.
         Explain the reasoning behind the confidence level of your answer.
         Do not use just commensense knowledge to decide confidence.
@@ -109,6 +112,26 @@ EQA_PROMPT = """
                     Both the 10th and the 25th image corresponds to the unexplored space.
                     25th image contains a sink while the 10th image contains a laptop and a table.
                     Sink is usually associated with the dish washer while a laptop and a table usually means the bedroom, so we should go to image 25.
+
+        Example #5 (where-is — human answer, not image id):
+            Input:
+                Question: Where is the sink?
+                SCENE_GRAPH:
+                Node 3: sink at (2.10, -0.82, 0.91) [Image 2]
+                Node 7: range hood at (2.05, -1.10, 1.45) [Image 2]
+                IMAGE: <2 images>
+            Output:
+                Caption:
+                    Image 1 shows the counter and sink basin. Image 2 shows the same counter from another angle.
+                Reasoning:
+                    Node 3 is labeled sink; both images show the same counter run.
+                Answer:
+                    The sink is on the kitchen counter below the range hood, at about (2.1, -0.8, 0.9) m.
+                Confidence:
+                    TRUE
+                Action:
+                Confidence_reasoning:
+                    SCENE_GRAPH has a sink node and both views agree on the counter location.
 
         Example #4:
             Input:

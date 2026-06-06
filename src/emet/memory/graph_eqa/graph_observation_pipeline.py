@@ -44,7 +44,7 @@ def frameblob_to_labels_xyz(
     max_depth: float,
     detection_model: Any | None = None,
     min_points: int = 10,
-) -> list[tuple[str, np.ndarray]]:
+) -> list[tuple[str, np.ndarray, tuple[int, int, int, int]]]:
     """Run instance→centroid logic on a saved ``FrameBlob`` (numpy arrays)."""
     if fr.depth is None:
         return []
@@ -72,21 +72,36 @@ def frameblob_to_labels_xyz(
         detection_model=detection_model,
         min_points=min_points,
     )
-    return [(d["label_short"], np.asarray(d["xyz"], dtype=np.float64)) for d in dets]
+    return [
+        (
+            d["label_short"],
+            np.asarray(d["xyz"], dtype=np.float64),
+            tuple(d["bbox_xyxy"]),
+        )
+        for d in dets
+    ]
 
 
 def apply_instance_items_to_graph(
     graph_memory: GraphEQAMemory,
     rgb: np.ndarray,
-    items: list[tuple[str, np.ndarray]],
+    items: list[tuple[str, np.ndarray] | tuple[str, np.ndarray, tuple[int, int, int, int]]],
     *,
     dedup_skips: Callable[[str, np.ndarray], bool],
+    viewer_xyz: np.ndarray | None = None,
 ) -> None:
-    """Add one node per (label, xyz) with optional dedup."""
-    for label, xyz in items:
+    """Add one node per (label, xyz[, bbox_xyxy]) with optional dedup."""
+    for item in items:
+        if len(item) >= 3:
+            label, xyz, bbox_xyxy = item[0], item[1], item[2]
+        else:
+            label, xyz = item[0], item[1]
+            bbox_xyxy = None
         if dedup_skips(label, xyz):
             continue
-        graph_memory.add_observation(rgb, xyz, [label])
+        graph_memory.add_observation(
+            rgb, xyz, [label], viewer_xyz=viewer_xyz, bbox_xyxy=bbox_xyxy
+        )
 
 
 def build_detections_json_rows(

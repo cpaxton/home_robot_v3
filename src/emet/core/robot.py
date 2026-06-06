@@ -86,6 +86,16 @@ class AbstractRobotClient(ABC):
         """Latest depth passed to :meth:`set_mapping_depth_for_rerun`, or ``None``."""
         return None
 
+    def request_sim_mujoco_ground_truth_snapshot(
+        self,
+        path_on_sim_host: str,
+        *,
+        exclude_robot: bool = True,
+        as_json: bool = False,
+    ) -> None:
+        """Simulator ZMQ hook: ask ``emet serve mujoco`` to write body poses locally; noop by default."""
+        return None
+
     def start(self) -> bool:
         """Override this if there's custom startup logic that you want to add before anything else.
 

@@ -181,6 +181,25 @@ def test_robosuite_server_import():
     assert RobosuiteZmqServer is not None
 
 
+def test_stretch_execute_trajectory_accepts_controller_kwargs():
+    """controller_dynamem passes blocking=True and world_frame=True (must not TypeError)."""
+    import inspect
+
+    from emet.controller.zmq_client import StretchZmqClient
+
+    sig = inspect.signature(StretchZmqClient.execute_trajectory)
+    inspect.signature(StretchZmqClient.execute_trajectory).bind(
+        StretchZmqClient.__new__(StretchZmqClient),
+        [],
+        pos_err_threshold=0.2,
+        rot_err_threshold=0.1,
+        blocking=True,
+        world_frame=True,
+    )
+    assert "blocking" in sig.parameters
+    assert "world_frame" in sig.parameters
+
+
 def test_want_robocasa_planar_autoplace_innate_mars():
     from emet.robots.innate_mars import InnateMarsBackend
     from emet.simulation import scene_base_spawn
@@ -194,6 +213,26 @@ def test_want_robocasa_planar_autoplace_innate_mars():
         environment={"kind": "default_table"},
         robot_spec=spec,
     )
+
+
+def test_want_robocasa_freejoint_autoplace_galaxea_r1():
+    from emet.robots.galaxea_r1 import GalaxeaR1Backend
+    from emet.simulation import scene_base_spawn
+
+    spec = GalaxeaR1Backend().get_spec()
+    env = {"kind": "robocasa", "task": "PickPlaceCounterToCabinet"}
+    assert scene_base_spawn.want_robocasa_freejoint_autoplace(environment=env, robot_spec=spec)
+    assert not scene_base_spawn.want_robocasa_planar_autoplace(environment=env, robot_spec=spec)
+
+
+def test_robocasa_gen_strip_replace_includes_galaxea():
+    import inspect
+
+    from emet.simulation.stretch_mujoco import robocasa_gen
+
+    src = inspect.getsource(robocasa_gen.model_generation_wizard)
+    assert "galaxea_r1" in src
+    assert "add_galaxea_r1_to_kitchen" in src
 
 
 def test_robocasa_gen_robot_param():
