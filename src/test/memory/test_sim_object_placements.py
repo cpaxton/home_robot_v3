@@ -264,3 +264,39 @@ def test_mujoco_model_data_for_gt_scan_stretch_model_attr():
     assert out is not None
     assert "sink" in out
     assert "obj_main" in out
+
+
+def test_molmospaces_body_scan_labels_and_skips_robot():
+    import mujoco
+
+    from emet.simulation.sim_object_placements import build_sim_object_placements_for_session
+
+    xml = """
+    <mujoco><worldbody>
+      <body name="base_link" pos="0 0 0">
+        <body name="link1"><geom type="capsule" size="0.05 0.1"/></body>
+      </body>
+      <body name="Apple_1_2" pos="1 0 0.8">
+        <geom type="sphere" size="0.04"/>
+      </body>
+      <body name="Floor" pos="0 0 0">
+        <geom type="box" size="2 2 0.01"/>
+      </body>
+    </worldbody></mujoco>
+    """
+    model = mujoco.MjModel.from_xml_string(xml)
+    data = mujoco.MjData(model)
+    out = build_sim_object_placements_for_session(
+        objects_info=None,
+        environment_kind="molmospaces",
+        model=model,
+        data=data,
+        robot_root_name="base_link",
+        max_scan_bodies=128,
+    )
+    assert out is not None
+    assert "Apple_1_2" in out
+    assert "apple" in out["Apple_1_2"]["cat"].lower()
+    assert "base_link" not in out
+    assert "link1" not in out
+    assert "Floor" not in out

@@ -69,7 +69,7 @@ Robocasa kitchens (multiple layout/style seeds) and the default table scene serv
 
 \textbf{Protocol.}
 \begin{enumerate}
-  \item \texttt{emet serve mujoco --use-robocasa --headless --port-offset N} (or default table / MolmoSpaces).
+  \item \texttt{emet serve mujoco --scene robocasa --headless --port-offset N} (or default table / \texttt{--scene ithor} for MolmoSpaces).
   \item \texttt{emet run dynagraph --ground-truth --export runs/<episode\_id> --port-offset N} (rotate-in-place by default; exports graph + voxel frames + GT sidecars).
   \item Batch: \texttt{uv run python scripts/eval\_dynagraph\_ground\_truth.py --run-live --port-offset N --output metrics.json}.
   \item Compare perception: \texttt{emet run dynagraph --compare-to-gt --export runs/<id> -N}.

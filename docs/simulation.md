@@ -98,7 +98,7 @@ DynaMem supports exploration, pick-and-place, and semantic memory. Use visual se
 
 ```bash
 # Terminal 1 – MuJoCo server (Robocasa recommended for richer scenes)
-emet serve mujoco --use-robocasa
+emet serve mujoco --scene robocasa
 
 # Terminal 2 – DynaMem with visual servoing
 emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo --match-method class
@@ -213,7 +213,7 @@ uv run python scripts/download_robocasa_assets.py --yes
 
 ```bash
 emet serve robocasa
-# or: emet serve mujoco --use-robocasa
+# or: emet serve mujoco --scene robocasa
 ```
 
 If startup fails with **`Did not find style that matches "Sink025" for fixture type "sink"`**, the **LightWheel fixture pack** (`fixtures_lw`) is missing. The base fixtures zip alone is not enough for generated kitchen styles. From the project root:
@@ -250,7 +250,7 @@ List all supported env names:
 emet serve mujoco --list-robocasa-tasks
 ```
 
-Options when serving with `--use-robocasa`:
+Options when serving with `--scene robocasa`:
 
 - `--robocasa-task`: task name (default: PickPlaceCounterToCabinet). Good for “find an object” tests: **PickPlaceCounterToCabinet**, **PickPlaceCabinetToCounter**, **OpenCabinet**, **CloseCabinet**, and other `PickPlace*` envs (e.g. PickPlaceCounterToDrawer, PickPlaceCounterToSink).
 - `--robocasa-style`: style index
@@ -309,7 +309,7 @@ Scenes are MuJoCo XML files under `src/emet/assets/robot/`:
 Custom scene:
 
 ```bash
-emet serve mujoco --scene-path /path/to/your/scene.xml
+emet serve mujoco --scene /path/to/your/scene.xml
 ```
 
 ---
