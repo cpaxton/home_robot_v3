@@ -21,11 +21,24 @@ In \texttt{emet}, DA3 supplies metric depth when robots lack calibrated RGB-D (A
 
 \textbf{ViPE}~\citep{huang2025vipe} is an open video annotation engine that estimates intrinsics, trajectory, and dense near-metric depth from unconstrained monocular footage (pinhole, wide-angle, or 360$^\circ$), scaling to large in-the-wild corpora for spatial-AI training data.
 
-Hybrid systems wrap GFMs with lightweight optimization for \emph{online} mapping.
-\textbf{VGGT-SLAM 2.0}~\citep{maggio2026vggtslam2} incrementally aligns VGGT submaps with a redesigned factor graph, uses VGGT attention for loop-closure verification, and runs in real time on a ground robot---including open-set 3D object queries over the reconstructed map.
+Purely feed-forward \emph{streaming} mappers are emerging as an alternative to iterative SLAM backends and to recurrent states that forget geometry (e.g., CUT3R) or grow memory linearly with history (e.g., StreamVGGT, Stream3R).
+Hybrid GFM--SLAM systems such as \textbf{VGGT-SLAM 2.0}~\citep{maggio2026vggtslam2} retain classical factor graphs and loop closure; they can run on robots and support open-set 3D queries, but pay for global consistency with backend optimization and hand-tuned retrieval heuristics.
 
-Purely feed-forward \emph{streaming} mappers are emerging as an alternative to iterative SLAM backends.
-\textbf{LingBot-Map}~\citep{chen2026lingbotmap} maintains a compact Geometric Context Attention state---anchor frames for scale grounding, a local pose-reference window, and compressed trajectory memory---and reconstructs long monocular sequences ($>$10k frames) at roughly 20\,FPS without a separate optimization stage.
+\paragraph{LingBot-Map.}
+Among streaming feed-forward models, \textbf{LingBot-Map}~\citep{chen2026lingbotmap} is the most directly relevant to long-horizon \emph{robot} mapping.
+It replaces ad-hoc keyframe queues and pose-graph backends with a learned \emph{Geometric Context Attention} (GCA) module inside a Geometric Context Transformer (GCT): three complementary contexts mirror classical SLAM structure but are trained end-to-end.
+\emph{Anchor context} fixes the first few frames as a scale- and coordinate-grounding reference (monocular streaming cannot wait for a global batch normalize as in offline VGGT).
+A \emph{pose-reference window} keeps dense tokens from the $k$ most recent frames for local registration.
+\emph{Trajectory memory} compresses all older frames to six context tokens per frame (camera, register, anchor), augmented with video temporal positional encodings, so drift can be corrected without retaining full image tokens.
+Per-frame attention context therefore grows as $\mathcal{O}(T)$ with a small constant ($\sim$6 tokens per evicted frame) rather than $\mathcal{O}(MT)$ for causal attention over $M$ patches per frame---roughly an 80$\times$ reduction in context growth at typical patch counts---which enables $\sim$20\,FPS inference at $518\times 378$ on sequences exceeding 10{,}000 frames using a paged KV cache (FlashInfer).
+Training uses a VGGT-style base model, then swaps global attention for GCA with a progressive view curriculum (24$\rightarrow$320 frames) and context parallelism.
+On Oxford Spires, Tanks and Temples, ETH3D, and 7-Scenes, LingBot-Map reports better pose and dense reconstruction than prior streaming baselines while avoiding test-time training (TTT) or post-hoc bundle adjustment.
+For sequences beyond the $\sim$320-frame training RoPE range, the released code uses keyframe subsampling and optional \emph{windowed} mode (sliding windows with overlapping keyframes) to scale to 25{,}000+ frame indoor walkthroughs.
+Apache-2.0 weights and demo code are public (\texttt{robbyant/lingbot-map}).
+
+Relative to hybrid SLAM, LingBot-Map trades explicit loop-closure optimization and semantic queries for a single causal forward pass with bounded state---closer in spirit to ``mapping as memory management'' than to incremental BA.
+Relative to Dynagraph, it addresses the \emph{front-end} (metric-consistent depth and camera trajectory from a monocular RGB stream) rather than object-level graph lifecycle on top of voxels; the two layers are composable if LingBot-Map (or similar) supplies \texttt{depth} and \texttt{camera\_pose} to the same ZMQ observation contract \texttt{emet} already uses.
+Today \texttt{emet} fills missing depth with per-frame DA3 (Appendix~\ref{app:da3}) while sim and most platforms provide sensor depth and sim/extrinsic \texttt{camera\_pose}; adopting LingBot-Map would mean a streaming depth--pose backend, chiefly for RGB-only hardware such as Innate Mars, with open engineering questions around manipulator head motion, metric scale, and alignment to wheel odometry.
 
 Semantic mapping is beginning to merge with these geometric pipelines.
 \textbf{RADIO-ViPE}~\citep{nasser2026radiovipe} tightly couples RADIO-style vision--language embeddings with a monocular pose/depth factor graph, enabling online open-vocabulary grounding of free-form language queries to 3D regions from uncalibrated RGB video in dynamic scenes.
