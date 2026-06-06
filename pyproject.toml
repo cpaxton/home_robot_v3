@@ -119,6 +119,8 @@ dynamem = [
 # MolmoSpaces: optional extra does NOT add molmo-spaces to main env (version conflict with numpy<2).
 # Use a separate venv for the runner; see docs/molmospaces.md and install.sh --molmospaces.
 molmospaces = []
+# Phase 2 Habitat OVMM find-phase (optional; heavy deps — install when running habitat_ovmm_find).
+habitat-ovmm = []
 
 # PEP 735 dependency groups: keep package lists in sync with [project.optional-dependencies] above.
 # [tool.uv] default-groups installs these on a plain `uv sync`. Minimal/CI: `uv sync --no-default-groups`.
