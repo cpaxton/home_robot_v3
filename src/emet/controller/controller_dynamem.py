@@ -55,6 +55,7 @@ from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
 from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
 from emet.motion.algo.a_star import AStar
 from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
+from emet.perception.depth.lingbot_estimator import LingBotDepthEstimator, create_lingbot_estimator_from_parameters
 from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask, sensor_depth_usable
 from emet.perception.depth.lingbot_estimator import LingBotDepthEstimator, create_lingbot_estimator_from_parameters
 from emet.perception.detection.owl import OwlPerception
