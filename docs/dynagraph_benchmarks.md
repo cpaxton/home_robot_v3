@@ -12,6 +12,7 @@ Experiment suite aligned with the paper introduction: **explore**, **remember**,
 | Unified episode eval | `uv run emet eval-dynagraph --episode /tmp/export -o dynagraph_eval.json` |
 | Question bank EQA | `uv run emet run dynagraph --export /tmp/ep --question-file src/emet/config/benchmarks/dynagraph_questions.yaml --question-env default_table` |
 | Fusion A/B | `./scripts/run_dynagraph_fusion_ab.sh innate_mars 0 20` |
+| Full matrix | [docs/experiments/innate_mars.md](experiments/innate_mars.md) |
 | MolmoSpaces benchmark | `uv run python scripts/run_dynagraph_molmo_benchmark.py` |
 | Staleness / disappearance (unit) | `uv run emet test src/test/memory/test_dynagraph_staleness_disappearance.py -v` |
 

@@ -38,6 +38,10 @@ def attach_graph_object_fusion(
     fref: GraphObjectFusionConfigRef | None = None,
 ) -> GraphObjectFusion | None:
     fc = fusion_config_from_sources(fref=fref, parameters=parameters)
+    if not fc.enabled and fref is None:
+        p_fusion = (parameters or {}).get("graph_object_fusion")
+        if not isinstance(p_fusion, dict):
+            fc = load_graph_object_fusion_config()
     if not fc.enabled:
         return None
     graph_memory.spatial_merge_m = 0.0

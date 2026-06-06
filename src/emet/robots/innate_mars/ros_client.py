@@ -5,8 +5,7 @@
 
 """ROS 2 Innate Mars client as :class:`emet.core.robot.AbstractRobotClient`.
 
-This composes ``innate_mars_bridge.remote.api.InnateMarsClient`` (observations, cameras). Motion
-commands are not wired in the bridge yet; most will raise :class:`NotImplementedError`.
+This composes ``innate_mars_bridge.remote.api.InnateMarsClient`` (observations, cameras). Base ``xyt`` navigation is wired via the bridge Nav2 client; arm trajectories are not implemented yet.
 
 The Hello Stretch equivalent is **not** in emet: see ``stretch_ros2_bridge.remote.api.StretchClient``.
 """
@@ -51,7 +50,15 @@ class InnateMarsRosRobotClient(AbstractRobotClient):
         verbose: bool = False,
         timeout: float | None = None,
     ):
-        raise NotImplementedError("InnateMarsRosRobotClient: base motion is not published through this client yet.")
+        arr = np.asarray(list(xyt), dtype=np.float64).reshape(-1)
+        if arr.size < 3:
+            raise ValueError("xyt must have at least 3 elements (x, y, theta)")
+        return self._client.move_base_to(
+            arr[:3],
+            relative=relative,
+            blocking=blocking,
+            timeout_s=float(timeout or 120.0),
+        )
 
     def reset(self) -> None:
         self._base_control_mode = ControlMode.IDLE
@@ -98,4 +105,4 @@ class InnateMarsRosRobotClient(AbstractRobotClient):
         return np.empty((0, 3))
 
     def at_goal(self) -> bool:
-        return True
+        return bool(self._client.at_goal())

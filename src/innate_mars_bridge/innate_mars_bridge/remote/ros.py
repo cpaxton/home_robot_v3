@@ -37,6 +37,8 @@ from innate_mars_bridge.constants import (
     ODOM_FRAME,
     ODOM_TOPIC,
 )
+from innate_mars_bridge.joint_layout import pack_innate_mars_joint_positions, pack_innate_mars_joint_velocities
+from innate_mars_bridge.remote.modules.nav import MarsNavigationClient
 from innate_mars_bridge.ros.camera import RosCamera, RosCameraNoInfo
 from innate_mars_bridge.ros.utils import matrix_from_pose_msg, to_matrix, transform_to_list
 
@@ -91,6 +93,7 @@ class InnateMarsRosInterface(Node):
         self.head_right_cam.wait_for_image()
         self.ee_cam.wait_for_image()
         self.get_logger().info("InnateMarsRosInterface: all cameras ready.")
+        self.nav = MarsNavigationClient(self)
 
     def _joint_callback(self, msg: JointState):
         with self._js_lock:
@@ -106,10 +109,22 @@ class InnateMarsRosInterface(Node):
         with self._odom_lock:
             self._odom_pose = matrix_from_pose_msg(msg.pose.pose)
 
-    def get_joint_state(self):
+    def get_arm_joint_state(self):
         """Returns (positions, velocities) for joint1..joint6."""
         with self._js_lock:
             return self._joint_positions.copy(), self._joint_velocities.copy()
+
+    def get_joint_state(self):
+        """Returns 10-DoF (positions, velocities) for Emet ``RobotSpec`` layout."""
+        arm_q, arm_dq = self.get_arm_joint_state()
+        base = self.get_base_pose_xyt()
+        return (
+            pack_innate_mars_joint_positions(arm_q, base_xyt=base),
+            pack_innate_mars_joint_velocities(arm_dq),
+        )
+
+    def at_goal(self) -> bool:
+        return self.nav.at_goal()
 
     def get_base_pose_matrix(self):
         """Base pose as 4x4 matrix in odom frame (or None)."""

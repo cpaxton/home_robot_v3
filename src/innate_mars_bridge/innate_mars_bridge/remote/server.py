@@ -70,7 +70,7 @@ class ZmqServer(BaseZmqServer):
 
     @override
     def get_control_mode(self) -> str:
-        return "manipulation"
+        return "navigation" if not self.client.at_goal() else "manipulation"
 
     @override
     def get_full_observation_message(self) -> dict[str, Any]:
@@ -126,13 +126,23 @@ class ZmqServer(BaseZmqServer):
             "joint_positions": q,
             "joint_velocities": dq,
             "control_mode": self.get_control_mode(),
+            "at_goal": self.client.at_goal(),
             "step": self._last_step,
         }
 
     @override
     def handle_action(self, action: dict[str, Any]):
-        # Optional: forward actions to /mars/arm/commands or other topics
-        pass
+        if action is None:
+            return
+        if "xyt" in action:
+            blocking = bool(action.get("nav_blocking", True))
+            relative = bool(action.get("nav_relative", False))
+            self.client.move_base_to(
+                action["xyt"],
+                relative=relative,
+                blocking=blocking,
+                timeout_s=float(action.get("nav_timeout_s", 120.0)),
+            )
 
     def _rescale_color(self, color_image: np.ndarray, scale: float) -> np.ndarray:
         if scale == 1.0:
@@ -169,6 +179,8 @@ class ZmqServer(BaseZmqServer):
             EMET_ZMQ_SESSION_KEY: self._emet_session_payload(),
             "ee/pose": self.client.ee_pose,
             "robot/config": q,
+            "joint_positions": q,
+            "base_pose": self.client.base_pose_xyt,
             "step": self._last_step,
             # Head left
             "head_cam_left/color_camera_K": scale_camera_matrix(self.client.head_left_cam.get_K(), self.image_scaling),

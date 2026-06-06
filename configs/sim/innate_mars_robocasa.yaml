@@ -1,0 +1,6 @@
+# Robocasa kitchen + Innate Mars (planar autoplace, sensor depth on ZMQ).
+kind: robocasa
+robot: innate_mars
+headless: true
+port_offset: 0
+seed: 0

@@ -1,0 +1,6 @@
+# Default MuJoCo table scene + Innate Mars (RobosuiteZmqServer, stereo head).
+kind: default_mujoco
+robot: innate_mars
+headless: true
+port_offset: 0
+seed: 0
