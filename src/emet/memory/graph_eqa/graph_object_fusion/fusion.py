@@ -1,7 +1,11 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 
-"""Spatial + embedding fusion for graph instance detections."""
+"""Spatial + embedding fusion for graph instance detections.
+
+Merges repeated YoloE/instance-mask detections into a single ``GraphNode`` when
+centroids, 3D bounds, and optional embeddings agree within configured thresholds.
+"""
 
 from __future__ import annotations
 
@@ -9,12 +13,25 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory, GraphNode
 from emet.memory.graph_eqa.graph_object_fusion.config import GraphObjectFusionConfig
 
 
 @dataclass
 class GraphDetectionCandidate:
+    """One instance detection lifted from a frame before graph merge.
+
+    Attributes:
+        label: Open-vocab category string (e.g. from YoloE).
+        xyz: World centroid ``(3,)`` in meters.
+        bbox_xyxy: Optional pixel crop ``(x0, y0, x1, y1)`` in the source RGB.
+        bounds_3d: Optional axis-aligned world AABB
+            ``{min, max, center, size}`` from instance point cloud.
+        embedding: Optional visual embedding (e.g. SigLIP crop); ``None`` skips
+            the embedding gate at merge time.
+    """
+
     label: str
     xyz: np.ndarray
     bbox_xyxy: tuple[int, int, int, int] | None = None
@@ -23,6 +40,14 @@ class GraphDetectionCandidate:
 
 
 def bounds_3d_from_points(points: np.ndarray) -> dict[str, list[float]]:
+    """Build an axis-aligned world bounds dict from an ``(N, 3)`` point cloud.
+
+    Args:
+        points: Instance or crop points in world coordinates.
+
+    Returns:
+        Dict with ``min``, ``max``, ``center``, and ``size`` (edge lengths in m).
+    """
     pts = np.asarray(points, dtype=np.float64).reshape(-1, 3)
     mn = pts.min(axis=0)
     mx = pts.max(axis=0)
@@ -32,6 +57,16 @@ def bounds_3d_from_points(points: np.ndarray) -> dict[str, list[float]]:
 
 
 def bounds_3d_iou(a: dict[str, list[float]] | None, b: dict[str, list[float]] | None) -> float:
+    """Intersection-over-union of two axis-aligned 3D boxes.
+
+    Args:
+        a: First bounds dict with ``min`` and ``max`` keys (length-3 lists).
+        b: Second bounds dict with the same schema.
+
+    Returns:
+        IoU in ``[0, 1]``, or ``0.0`` when either input is ``None`` or boxes
+        do not overlap.
+    """
     if a is None or b is None:
         return 0.0
     amin = np.asarray(a["min"], dtype=np.float64).reshape(3)
@@ -52,6 +87,16 @@ def bounds_3d_iou(a: dict[str, list[float]] | None, b: dict[str, list[float]] | 
 
 
 def cosine_similarity_np(a: np.ndarray | None, b: np.ndarray | None) -> float:
+    """Cosine similarity between two 1D embedding vectors.
+
+    Args:
+        a: First embedding vector, or ``None``.
+        b: Second embedding vector, or ``None``.
+
+    Returns:
+        Dot product divided by L2 norms, or ``0.0`` when inputs are missing,
+        empty, or shape-mismatched.
+    """
     if a is None or b is None:
         return 0.0
     va = np.asarray(a, dtype=np.float64).reshape(-1)
@@ -66,10 +111,25 @@ def cosine_similarity_np(a: np.ndarray | None, b: np.ndarray | None) -> float:
 
 
 class GraphObjectFusion:
-    def __init__(self, config: GraphObjectFusionConfig | None = None):
+    """Merge instance detections into existing graph nodes by geometry (+ optional embedding).
+
+    When ``GraphObjectFusionConfig.enabled`` is true, Dynagraph routes instance
+    detections through this class instead of legacy label-only dedup /
+    ``dynagraph_merge_xy_m`` on the instance path.
+    """
+
+    def __init__(self, config: GraphObjectFusionConfig | None = None) -> None:
+        """Args:
+            config: Fusion thresholds; uses ``GraphObjectFusionConfig()`` defaults when omitted.
+        """
         self.config = config or GraphObjectFusionConfig()
 
     def _label_match(self, node: GraphNode, label: str) -> bool:
+        """Return whether ``label`` matches ``node`` per ``require_label_match``.
+
+        When ``require_label_match`` is false, always returns ``True``. Otherwise
+        requires exact or substring match against any entry in ``node.labels``.
+        """
         if not self.config.require_label_match:
             return True
         lb = label.strip().lower()
@@ -81,6 +141,12 @@ class GraphObjectFusion:
         return False
 
     def _spatial_ok(self, node: GraphNode, xyz: np.ndarray, bounds: dict[str, list[float]] | None) -> bool:
+        """Return whether ``xyz`` / ``bounds`` are close enough to ``node`` to merge.
+
+        Gates on planar distance (``spatial_merge_xy_m``), 3D centroid distance
+        (``min_centroid_dist_m``), and optional 3D bounds IoU
+        (``bounds_3d_iou_min``) when both sides have ``bounds_3d``.
+        """
         nxy = np.asarray(node.xyz, dtype=np.float64).reshape(3)
         dxy = float(np.linalg.norm(nxy[:2] - xyz[:2]))
         if dxy > self.config.spatial_merge_xy_m:
@@ -98,6 +164,10 @@ class GraphObjectFusion:
         node: GraphNode,
         embedding: np.ndarray | None,
     ) -> bool:
+        """Return whether ``embedding`` is similar enough to ``node.embedding``.
+
+        When either side has no embedding, the gate passes (spatial/bounds only).
+        """
         if embedding is None or node.embedding is None:
             return True
         return cosine_similarity_np(node.embedding, embedding) >= self.config.embedding_min_cosine
@@ -107,6 +177,18 @@ class GraphObjectFusion:
         graph_memory: GraphEQAMemory,
         candidate: GraphDetectionCandidate,
     ) -> GraphNode | None:
+        """Pick the highest-scoring existing node to merge ``candidate`` into.
+
+        Scans non-viewpoint nodes, applies label/spatial/embedding gates, and
+        ranks survivors by XY proximity, bounds IoU, and embedding cosine.
+
+        Args:
+            graph_memory: Live graph to search.
+            candidate: New detection to associate.
+
+        Returns:
+            Best matching ``GraphNode``, or ``None`` if no node passes all gates.
+        """
         xyz = np.asarray(candidate.xyz, dtype=np.float64).reshape(3)
         best: GraphNode | None = None
         best_score = -1.0
@@ -139,7 +221,17 @@ class GraphObjectFusion:
         *,
         viewer_xyz: np.ndarray | None = None,
     ) -> int:
-        """Merge into an existing node or add a new observation."""
+        """Merge ``candidate`` into the best node or create a new graph observation.
+
+        Args:
+            graph_memory: Graph to update.
+            rgb: Source RGB frame (stored on the observation when creating/merging).
+            candidate: Detection payload.
+            viewer_xyz: Optional camera/world vantage for ``seen_from`` edges.
+
+        Returns:
+            ``node_id`` of the merged or newly created object node.
+        """
         match = self.find_best_node(graph_memory, candidate)
         if match is not None:
             return graph_memory.merge_object_detection(

@@ -24,8 +24,15 @@ def hello_stretch_config_from_joint_positions(
 ) -> np.ndarray:
     """Map simulator joint positions to the 11-DoF HelloStretchIdx layout.
 
-    Robocasa Stretch MJCF publishes ``len(STRETCH_ROBOCASA_MJCF_JOINT_NAMES)`` arm/head joints
-    (no planar base in ``q``); base pose comes from ``base_xyt`` / ZMQ ``base_pose``.
+    Robocasa Stretch MJCF publishes ``len(STRETCH_ROBOCASA_MJCF_JOINT_NAMES)`` arm/head
+    joints (no planar base in ``q``); base pose comes from ``base_xyt`` / ZMQ ``base_pose``.
+
+    Args:
+        q: Joint vector from MuJoCo (10-D Robocasa layout or 11-D HelloStretch layout).
+        base_xyt: Optional ``(x, y, theta)`` base pose when ``q`` omits the base.
+
+    Returns:
+        Length-11 vector indexed by ``HelloStretchIdx``.
     """
     arr = np.asarray(q, dtype=np.float64).ravel()
     if arr.size == _HELLO_STRETCH_DOF:

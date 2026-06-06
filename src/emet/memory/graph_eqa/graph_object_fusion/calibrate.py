@@ -16,11 +16,18 @@ import numpy as np
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 from emet.memory.graph_eqa.graph_object_fusion.config import GraphObjectFusionConfig
 from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate, GraphObjectFusion
-from emet.memory.graph_eqa.mujoco_align import _norm_label, score_nodes_vs_gt
-from emet.simulation.mujoco_gt_objects import load_gt_scene_json
+from emet.memory.graph_eqa.mujoco_align import score_nodes_vs_gt
 
 
 def load_calibration_frames_jsonl(path: str | Path) -> list[dict[str, Any]]:
+    """Load per-step detection rows from a ``--calibration-export`` JSONL file.
+
+    Args:
+        path: JSONL where each line is ``{step, detections: [...]}``.
+
+    Returns:
+        Parsed rows in file order (blank lines skipped).
+    """
     rows: list[dict[str, Any]] = []
     for line in Path(path).read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -31,6 +38,15 @@ def load_calibration_frames_jsonl(path: str | Path) -> list[dict[str, Any]]:
 
 
 def detection_dict_to_candidate(d: dict[str, Any]) -> GraphDetectionCandidate:
+    """Convert one calibration JSONL detection dict to a ``GraphDetectionCandidate``.
+
+    Args:
+        d: Dict with ``label``, ``xyz``, optional ``bbox_xyxy``, ``bounds_3d``,
+            and ``embedding``.
+
+    Returns:
+        Candidate ready for ``GraphObjectFusion.apply_detection``.
+    """
     emb = d.get("embedding")
     if emb is not None:
         emb = np.asarray(emb, dtype=np.float32)
@@ -47,6 +63,15 @@ def replay_frames_with_fusion(
     frames: list[dict[str, Any]],
     config: GraphObjectFusionConfig,
 ) -> GraphEQAMemory:
+    """Replay calibration frames through fusion without loading a VLM.
+
+    Args:
+        frames: Rows from ``load_calibration_frames_jsonl``.
+        config: Fusion thresholds to evaluate.
+
+    Returns:
+        ``GraphEQAMemory`` after applying every detection in order (stub RGB).
+    """
     mem = GraphEQAMemory(defer_llm_clients=True)
     mem.spatial_merge_m = 0.0
     fusion = GraphObjectFusion(config)
@@ -67,6 +92,17 @@ def score_fused_nodes_vs_gt(
     *,
     match_xy_m: float | None = None,
 ) -> dict[str, float]:
+    """Score fused graph object nodes against a GT scene JSON ``objects[]`` list.
+
+    Args:
+        mem: Graph after ``replay_frames_with_fusion``.
+        gt: GT export with ``objects`` entries (``label``, ``pos_world``, …).
+        match_xy_m: XY association radius; defaults to ``0.55`` m.
+
+    Returns:
+        Metrics from ``score_nodes_vs_gt`` (``gt_recall``, ``node_precision``,
+        ``duplication_penalty``, ``node_count``).
+    """
     mxy = match_xy_m if match_xy_m is not None else 0.55
     nodes = [n for n in mem.get_nodes() if not n.is_viewpoint]
     gt_objects = gt.get("objects", [])
@@ -82,7 +118,20 @@ def grid_search_fusion_config(
     iou_values: tuple[float, ...] = (0.05, 0.08, 0.12, 0.18),
     min_recall: float = 0.85,
 ) -> tuple[GraphObjectFusionConfig, dict[str, Any], list[dict[str, Any]]]:
-    """Return best config, best metrics, and full grid results."""
+    """Grid-search fusion thresholds on offline calibration frames.
+
+    Args:
+        frames: Calibration JSONL rows.
+        gt: Sim GT scene JSON (``objects[]``).
+        spatial_values: Candidates for ``spatial_merge_xy_m``.
+        embed_values: Candidates for ``embedding_min_cosine``.
+        iou_values: Candidates for ``bounds_3d_iou_min``.
+        min_recall: Minimum ``gt_recall`` to accept a grid point.
+
+    Returns:
+        ``(best_config, report, grid_rows)`` where ``report`` has ``best`` and
+        ``grid`` keys.
+    """
     base = GraphObjectFusionConfig(enabled=True)
     results: list[dict[str, Any]] = []
     best_cfg: GraphObjectFusionConfig | None = None
@@ -130,6 +179,15 @@ def grid_search_fusion_config(
 
 
 def write_fusion_config_yaml(path: str | Path, config: GraphObjectFusionConfig) -> Path:
+    """Write a ``graph_object_fusion`` YAML block for dynav / agent configs.
+
+    Args:
+        path: Destination ``.yaml`` file.
+        config: Fusion settings to serialize.
+
+    Returns:
+        Resolved output path.
+    """
     dest = Path(path)
     dest.parent.mkdir(parents=True, exist_ok=True)
     body = {"graph_object_fusion": asdict(config)}

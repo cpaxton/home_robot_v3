@@ -20,6 +20,19 @@ def fusion_config_from_sources(
     parameters: dict[str, Any] | None = None,
     yaml_path: str | None = None,
 ) -> GraphObjectFusionConfig:
+    """Merge fusion settings from YAML, embodied-agent ref, and runtime parameters.
+
+    Priority (later wins): defaults → ``fref`` → ``parameters['graph_object_fusion']``.
+    When ``yaml_path`` is set, it replaces all other sources.
+
+    Args:
+        fref: Optional structured ref from embodied agent YAML.
+        parameters: Dynagraph/dynamem parameter dict from ``get_parameters``.
+        yaml_path: Standalone ``graph_object_fusion`` YAML path.
+
+    Returns:
+        Resolved ``GraphObjectFusionConfig``.
+    """
     if yaml_path:
         return load_graph_object_fusion_config(yaml_path)
     base = GraphObjectFusionConfig()
@@ -37,6 +50,19 @@ def attach_graph_object_fusion(
     *,
     fref: GraphObjectFusionConfigRef | None = None,
 ) -> GraphObjectFusion | None:
+    """Attach fusion to a graph memory instance when enabled in config.
+
+    Disables legacy ``dynagraph_merge_xy_m`` on the instance path by setting
+    ``graph_memory.spatial_merge_m = 0``.
+
+    Args:
+        graph_memory: Live ``GraphEQAMemory`` on the controller.
+        parameters: Runtime parameter dict.
+        fref: Optional embodied-agent fusion ref.
+
+    Returns:
+        ``GraphObjectFusion`` instance, or ``None`` when ``enabled`` is false.
+    """
     fc = fusion_config_from_sources(fref=fref, parameters=parameters)
     if not fc.enabled:
         return None
