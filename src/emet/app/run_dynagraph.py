@@ -30,7 +30,7 @@ def _ensure_ground_truth_ready(agent: DynagraphController, *, context: str) -> N
     if session is None:
         raise click.ClickException(
             f"Ground-truth mode ({context}): no emet_session from the ZMQ server. "
-            "Start emet serve mujoco (default, --use-robocasa, or --molmospaces-scene …) with the "
+            "Start emet serve mujoco (default, --scene robocasa, or --scene ithor …) with the "
             "same --port-offset as this client, then retry."
         )
     n_bodies = agent.refresh_ground_truth()

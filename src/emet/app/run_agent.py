@@ -266,10 +266,31 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     help="YAML sim launch profile (overrides sim_config / sim: in --agent-config). See configs/sim/*.yaml.",
 )
 @click.option(
-    "--use-robocasa",
-    "sim_use_robocasa",
+    "--scene",
+    "sim_scene",
+    default=None,
+    metavar="NAME|PATH",
+    help="With --start-sim: robocasa, MolmoSpaces name (ithor), path to MJCF, or omit for default table.",
+)
+@click.option(
+    "--split",
+    "sim_split",
+    default=None,
+    type=click.Choice(["train", "val", "test"]),
+    help="With --start-sim and MolmoSpaces --scene: data split (default train or from sim YAML).",
+)
+@click.option(
+    "--index",
+    "sim_index",
+    default=None,
+    type=int,
+    help="With --start-sim and MolmoSpaces --scene: scene index (default 0 or from sim YAML).",
+)
+@click.option(
+    "--install-scene-if-missing",
+    "sim_install_scene_if_missing",
     is_flag=True,
-    help="With --start-sim: Robocasa kitchen (same as emet serve mujoco --use-robocasa). Incompatible with --molmospaces-scene / --scene-path.",
+    help="With --start-sim and MolmoSpaces --scene: download scene assets if missing (non-interactive).",
 )
 @click.option(
     "--robocasa-task",
@@ -277,42 +298,7 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     default=None,
     type=str,
     metavar="NAME",
-    help="With --start-sim and Robocasa: task name (default from sim YAML or PickPlaceCounterToCabinet).",
-)
-@click.option(
-    "--scene-path",
-    "sim_scene_path",
-    default=None,
-    type=click.Path(),
-    metavar="PATH",
-    help="With --start-sim: load this MJCF (default MuJoCo path). Incompatible with --molmospaces-scene.",
-)
-@click.option(
-    "--molmospaces-scene",
-    "sim_molmospaces_scene",
-    default=None,
-    metavar="NAME",
-    help="With --start-sim: MolmoSpaces scene (e.g. ithor). Same as emet serve mujoco --molmospaces-scene.",
-)
-@click.option(
-    "--molmospaces-split",
-    "sim_molmospaces_split",
-    default=None,
-    type=click.Choice(["train", "val", "test"]),
-    help="With --start-sim and MolmoSpaces: data split (default train or from sim YAML).",
-)
-@click.option(
-    "--molmospaces-index",
-    "sim_molmospaces_index",
-    default=None,
-    type=int,
-    help="With --start-sim and MolmoSpaces: scene index (default 0 or from sim YAML).",
-)
-@click.option(
-    "--molmospaces-install",
-    "sim_molmospaces_install",
-    is_flag=True,
-    help="With --start-sim and MolmoSpaces: download scene assets if missing (non-interactive).",
+    help="With --start-sim and --scene robocasa: task name (default from sim YAML or PickPlaceCounterToCabinet).",
 )
 @click.option(
     "--sim-seed",
@@ -396,13 +382,11 @@ def main(
     share_memory_vllm: bool = True,
     start_sim: bool = False,
     sim_config: str | None = None,
-    sim_use_robocasa: bool = False,
+    sim_scene: str | None = None,
+    sim_split: str | None = None,
+    sim_index: int | None = None,
+    sim_install_scene_if_missing: bool = False,
     sim_robocasa_task: str | None = None,
-    sim_scene_path: str | None = None,
-    sim_molmospaces_scene: str | None = None,
-    sim_molmospaces_split: str | None = None,
-    sim_molmospaces_index: int | None = None,
-    sim_molmospaces_install: bool = False,
     sim_seed: int | None = None,
     sim_steps: int | None = None,
     sim_no_cameras: bool = False,
@@ -422,7 +406,7 @@ def main(
       emet run agent --llm qwen35-9B --offline
       emet run agent --llm gemma4-e4b --device cuda --offline   # Gemma 4 (HF any-to-any)
       emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
-      # MolmoSpaces: ``emet serve mujoco --molmospaces-scene ithor ...`` (often DISPLAY=:1 instead of --headless); same --port-offset as serve:
+      # MolmoSpaces: ``emet serve mujoco --scene ithor ...`` (often DISPLAY=:1 instead of --headless); same --port-offset as serve:
       emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml
       emet run agent --agent-config configs/agent_rby1_discord.yaml   # uses robot: from YAML
       emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml
@@ -433,7 +417,7 @@ def main(
       emet run agent --no-llm -c 'FIND blue cube'
       emet run agent --llm qwen3-vl-eqa --eqa --debug-vram   # one Qwen3-VL + VRAM milestones
       emet run agent --robot stretch --start-sim --command "describe the scene"
-      emet run agent --robot rby1 --start-sim --molmospaces-scene ithor --headless -c "describe the scene"
+      emet run agent --robot rby1 --start-sim --scene ithor --headless -c "describe the scene"
     """
     cmd_list = list(commands) if commands else None
     robot_from_cli = robot is not None and str(robot).strip() != ""
@@ -455,13 +439,11 @@ def main(
 
     sim_cli_used = any(
         [
-            sim_use_robocasa,
+            sim_scene is not None and str(sim_scene).strip() != "",
             sim_robocasa_task is not None and str(sim_robocasa_task).strip() != "",
-            sim_scene_path is not None and str(sim_scene_path).strip() != "",
-            sim_molmospaces_scene is not None and str(sim_molmospaces_scene).strip() != "",
-            sim_molmospaces_split is not None,
-            sim_molmospaces_index is not None,
-            sim_molmospaces_install,
+            sim_split is not None,
+            sim_index is not None,
+            sim_install_scene_if_missing,
             sim_seed is not None,
             sim_steps is not None,
             sim_no_cameras,
@@ -473,8 +455,7 @@ def main(
     )
     if sim_cli_used and not start_sim:
         raise click.UsageError(
-            "Sim-only flags (--use-robocasa, --molmospaces-scene, --sim-seed, "
-            "--sim-show-subprocess-output, etc.) require --start-sim."
+            "Sim-only flags (--scene, --split, --sim-seed, --sim-show-subprocess-output, etc.) require --start-sim."
         )
 
     if not offline and cmd_list:
@@ -541,13 +522,11 @@ def main(
                 try:
                     sim_cfg = apply_sim_launch_cli_overrides(
                         sim_cfg,
-                        use_robocasa=sim_use_robocasa,
+                        scene=sim_scene,
+                        split=sim_split,
+                        index=sim_index,
+                        install_scene_if_missing=True if sim_install_scene_if_missing else None,
                         robocasa_task=sim_robocasa_task,
-                        scene_path=str(sim_scene_path) if sim_scene_path else None,
-                        molmospaces_scene=sim_molmospaces_scene,
-                        molmospaces_split=sim_molmospaces_split,
-                        molmospaces_index=sim_molmospaces_index,
-                        molmospaces_install=True if sim_molmospaces_install else None,
                         headless=None,
                         show_viewer_ui=True if sim_show_viewer_ui else None,
                         no_cameras=True if sim_no_cameras else None,
@@ -576,15 +555,9 @@ def main(
                     "so the sim keeps publishing observations."
                 )
             if isinstance(sim_cfg, SimLaunchMolmospaces):
-                ms_scene = sim_cfg.scene
-            elif sim_molmospaces_scene and str(sim_molmospaces_scene).strip():
-                ms_scene = str(sim_molmospaces_scene).strip()
-            else:
-                ms_scene = None
-            if ms_scene:
                 from emet.simulation.molmospaces_config import normalize_molmospaces_robot_key
 
-                sim_robot = resolve_serve_robot(sim_cfg.robot, molmospaces_scene=ms_scene)
+                sim_robot = resolve_serve_robot(sim_cfg.robot, is_molmospaces=True)
                 sim_cfg = replace(sim_cfg, robot=sim_robot)
                 agent_norm = normalize_molmospaces_robot_key(robot)
                 sim_norm = normalize_molmospaces_robot_key(sim_robot)

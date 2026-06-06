@@ -506,7 +506,7 @@ def main(
                         "If this is a MolmoSpaces scene, ensure THOR objects are installed and "
                         "MLSPACES_ASSETS_DIR / MLSPACES_CACHE_DIR match the env used for merge "
                         "(sibling dirs; they must not be the same path). Re-run merge: "
-                        "emet molmospaces merge-scene or emet serve mujoco --molmospaces-scene ...",
+                        "emet molmospaces merge-scene or emet serve mujoco --scene ithor ...",
                     )
                     sys.exit(1)
             else:
@@ -514,7 +514,7 @@ def main(
                 if scene_model is None:
                     logger.error(
                         "Default scene with robot not found (scene_environment.xml or robot MJCF missing). "
-                        "Use --scene_path with a merged MJCF, --use-robocasa for Robocasa-generated scenes, "
+                        "Use --scene_path with a merged MJCF, --scene robocasa for Robocasa-generated scenes, "
                         "or run from repo root with assets."
                     )
                     sys.exit(1)

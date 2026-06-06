@@ -11,7 +11,7 @@
 #
 #   Terminal 1 — MolmoSpaces + ZMQ (requires emet-molmospaces; see docs/molmospaces.md):
 #     export DISPLAY=:1   # e.g. Xvfb or your desktop; avoids --headless when you have X
-#     uv run emet serve mujoco --molmospaces-scene ithor --molmospaces-split train --molmospaces-index 0
+#     uv run emet serve mujoco --scene ithor --split train --index 0
 #     # First-time assets: add --molmospaces-install (non-interactive download).
 #     # No display at all: add --headless (forces EGL off-screen).
 #

@@ -89,8 +89,8 @@ You can run DynaMem in MuJoCo simulation without a physical robot. See [Simulati
 **Terminal 1** – Start the MuJoCo server (Robocasa recommended for richer scenes):
 
 ```bash
-emet serve mujoco --use-robocasa
-# or: python -m emet.simulation.mujoco_server --use-robocasa
+emet serve mujoco --scene robocasa
+# or: python -m emet.simulation.mujoco_server --use-robocasa  # internal server flag; CLI: --scene robocasa
 ```
 
 **Terminal 2** – Run DynaMem with visual servoing (AnyGrasp requires real robot):
