@@ -64,7 +64,7 @@ Run AI apps (DynaMem, grasp, mapping) in simulation. See [Simulation docs](../do
 
 ```bash
 python -m emet.simulation.mujoco_server
-# Or with Robocasa (richer scenes): python -m emet.simulation.mujoco_server --use-robocasa
+# Or with Robocasa (richer scenes): emet serve mujoco --scene robocasa
 ```
 
 **Terminal 2** – Run an app:
@@ -73,7 +73,7 @@ python -m emet.simulation.mujoco_server
 # Visual servoing grasp (default scene has red/blue cylinders)
 python -m emet.app.grasp_object --robot_ip 127.0.0.1 --target_object "red cylinder" --parameter_file sim_planner.yaml --show_gui
 
-# DynaMem (use --use-robocasa for server for kitchen scenes)
+# DynaMem (use --scene robocasa for kitchen scenes)
 python -m emet.app.run_dynamem --robot_ip 127.0.0.1 --server_ip 127.0.0.1 -S --visual-servo --match-method class
 
 # Mapping

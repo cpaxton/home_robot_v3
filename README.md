@@ -82,8 +82,8 @@ Run DynaMem in MuJoCo simulation in a few steps:
 ./install.sh -y --sim
 
 # 2. Terminal 1 — start simulation server
-emet serve mujoco --use-robocasa
-# or: python -m emet.simulation.mujoco_server --use-robocasa
+emet serve mujoco --scene robocasa
+# or: python -m emet.simulation.mujoco_server --use-robocasa  # internal; CLI: emet serve mujoco --scene robocasa
 
 # 3. Terminal 2 — run DynaMem
 emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo --headless

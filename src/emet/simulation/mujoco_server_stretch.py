@@ -21,6 +21,10 @@ import numpy as np
 from overrides import override
 
 from emet.motion.constants import STRETCH_CAMERA_FRAME
+from emet.simulation.sim_object_placements import (
+    apply_navigation_origin_to_session,
+    attach_sim_object_placements_to_session,
+)
 from emet.simulation.stretch_mujoco import StretchMujocoSimulator
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 
@@ -266,6 +270,7 @@ class MujocoZmqServer(BaseZmqServer):
         self.simulation_rate = simulation_rate
         self.objects_info = objects_info
         self._environment_descriptor = dict(environment) if environment else None
+        self._scene_xml_path = str(scene_path).strip() if scene_path else None
         if scene_source_basename:
             self._scene_source_basename = scene_source_basename
         elif scene_path:
@@ -473,14 +478,17 @@ class MujocoZmqServer(BaseZmqServer):
         pose = self.robot_sim.get_ee_pose()
         return pose_global_to_base(pose, self._initial_xyt)
 
+    def _head_camera_opencv_world(self) -> np.ndarray:
+        """Head camera 4x4 OpenCV-style transform in MuJoCo world (ZMQ / voxel / Rerun contract)."""
+        pose = self.robot_sim.get_link_pose(STRETCH_CAMERA_FRAME)
+        pose[:3, :3] = pose[:3, :3] @ np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]])
+        return pose
+
     def get_head_camera_pose(self) -> np.ndarray:
-        """Get the camera pose in world coords"""
+        """Head camera pose in episode-relative (nav) coords."""
         if self._initial_xyt is None:
             return None
-        pose = self.robot_sim.get_link_pose(STRETCH_CAMERA_FRAME)
-        # We are going to rotate the head camera
-        pose[:3, :3] = pose[:3, :3] @ np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]])
-        return pose_global_to_base(pose, self._initial_xyt)
+        return pose_global_to_base(self._head_camera_opencv_world(), self._initial_xyt)
 
     def get_ee_camera_pose(self) -> np.ndarray:
         """Get the end effector camera pose in world coords"""
@@ -592,6 +600,8 @@ class MujocoZmqServer(BaseZmqServer):
         self._control_thread.start()
 
         self._initial_xyt = self.robot_sim.get_base_pose()
+        if self._emet_session is not None:
+            apply_navigation_origin_to_session(self._emet_session, self._initial_xyt)
 
         if robocasa:
             if self._move_back_at_start:
@@ -629,7 +639,34 @@ class MujocoZmqServer(BaseZmqServer):
         }
         if self._scene_source_basename:
             session["scene_source_basename"] = self._scene_source_basename
+        env_kind = env.get("kind") if isinstance(env, dict) else None
+        gt_model, gt_data = self._gt_model_data_for_session()
+        attach_sim_object_placements_to_session(
+            session,
+            objects_info=self.objects_info,
+            environment_kind=str(env_kind) if env_kind else None,
+            model=gt_model,
+            data=gt_data,
+            robot_root_name="base_link",
+        )
         return session
+
+    def _gt_model_data_for_session(self) -> tuple[Any, Any]:
+        """Resolve MuJoCo model/data for GT scan (subprocess sim may only expose MJCF on disk)."""
+        import mujoco
+
+        from emet.simulation.sim_object_placements import _mj_forward, mujoco_model_data_for_gt_scan
+
+        model, data = mujoco_model_data_for_gt_scan(self.robot_sim)
+        if model is not None:
+            return model, data
+        scene_path = getattr(self, "_scene_xml_path", None)
+        if scene_path and Path(str(scene_path)).is_file():
+            model = mujoco.MjModel.from_xml_path(str(scene_path))
+            data = mujoco.MjData(model)
+            _mj_forward(model, data)
+            return model, data
+        return None, None
 
     def _is_molmospaces_session(self) -> bool:
         env = self._environment_descriptor
@@ -790,8 +827,8 @@ class MujocoZmqServer(BaseZmqServer):
             "rgb": rgb,
             "depth": depth,
             "camera_K": self.head_K,
-            "camera_pose": self.get_head_camera_pose(),
-            "ee_pose": self.get_ee_pose(),
+            "camera_pose": self._head_camera_opencv_world(),
+            "ee_pose": self.robot_sim.get_ee_pose(),
             "joint": positions,
             "gps": xyt[:2],
             "compass": np.array([xyt[2]]),
@@ -890,7 +927,7 @@ class MujocoZmqServer(BaseZmqServer):
             "ee_cam/depth_image/shape": ee_depth_image.shape,
             "ee_cam/image_scaling": self.ee_image_scaling,
             "ee_cam/depth_scaling": self.ee_depth_scaling,
-            "ee_cam/pose": self.get_ee_camera_pose(),
+            "ee_cam/pose": self.robot_sim.get_link_pose("gripper_camera_color_optical_frame"),
             "ee/pose": self.get_ee_pose(),
             "head_cam/color_camera_K": scale_camera_matrix(self.head_K, self.image_scaling),
             "head_cam/depth_camera_K": scale_camera_matrix(self.head_K, self.image_scaling),
@@ -900,7 +937,7 @@ class MujocoZmqServer(BaseZmqServer):
             "head_cam/depth_image/shape": head_depth_image.shape,
             "head_cam/image_scaling": self.image_scaling,
             "head_cam/depth_scaling": self.depth_scaling,
-            "head_cam/pose": self.get_head_camera_pose(),
+            "head_cam/pose": self._head_camera_opencv_world(),
             "robot/config": positions,
             "is_simulation": True,
             "step": self._last_step,

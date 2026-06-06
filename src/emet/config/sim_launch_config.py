@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """YAML-driven MuJoCo / Robocasa / MolmoSpaces launch configs for ``emet serve mujoco`` and ``emet run agent --start-sim``."""
 
@@ -18,6 +27,44 @@ import yaml
 from emet.utils.config import resolve_config_yaml_path
 
 SimLaunchKind = Literal["default_mujoco", "robocasa", "molmospaces"]
+SceneSelectorKind = Literal["default", "robocasa", "molmospaces", "path"]
+
+
+@dataclass(frozen=True)
+class ResolvedSceneLaunch:
+    """Result of parsing ``--scene`` for ``emet serve`` / ``--start-sim``."""
+
+    kind: SceneSelectorKind
+    molmo_scene: str | None = None
+    scene_path: str | None = None
+
+
+def classify_scene_selector(scene: str | None) -> ResolvedSceneLaunch:
+    """Map ``--scene`` to a launch kind (default table, robocasa, MolmoSpaces catalog name, or MJCF path)."""
+    if scene is None or not str(scene).strip():
+        return ResolvedSceneLaunch(kind="default")
+    s = str(scene).strip()
+    low = s.lower()
+    if low in ("default", "table", "stretch_default_scene"):
+        return ResolvedSceneLaunch(kind="default")
+    if low == "robocasa":
+        return ResolvedSceneLaunch(kind="robocasa")
+    from emet.simulation.molmospaces_config import MOLMOSPACES_SCENE_NAMES
+
+    if s in MOLMOSPACES_SCENE_NAMES:
+        return ResolvedSceneLaunch(kind="molmospaces", molmo_scene=s)
+    for candidate in (Path(s), Path(s).expanduser()):
+        if candidate.is_file():
+            return ResolvedSceneLaunch(kind="path", scene_path=str(candidate.resolve()))
+    molmo_hint = ", ".join(MOLMOSPACES_SCENE_NAMES)
+    raise ValueError(
+        f"Unknown --scene {s!r}: expected robocasa, a MolmoSpaces scene name ({molmo_hint}), "
+        "default/table, or a path to an existing MJCF file."
+    )
+
+
+def is_molmospaces_scene(resolved: ResolvedSceneLaunch) -> bool:
+    return resolved.kind == "molmospaces"
 
 
 @dataclass
@@ -125,7 +172,7 @@ def load_sim_launch_from_agent_yaml(agent_config_path: str) -> SimLaunchConfig |
 def resolve_serve_robot(
     robot: str | None,
     *,
-    molmospaces_scene: str | None,
+    is_molmospaces: bool = False,
 ) -> str:
     """Resolve ``--robot`` for ``emet serve`` and ``--start-sim`` (single source of truth).
 
@@ -135,37 +182,19 @@ def resolve_serve_robot(
     """
     if robot is None or not str(robot).strip():
         return "stretch"
-    molmo = bool(molmospaces_scene and str(molmospaces_scene).strip())
-    if molmo:
+    if is_molmospaces:
         from emet.simulation.molmospaces_config import validate_molmospaces_robot
 
         return validate_molmospaces_robot(str(robot).strip())
     return str(robot).strip()
 
 
-def validate_sim_launch_serve_combo(
-    *,
-    molmospaces_scene: str | None,
-    scene_path: str | None,
-    use_robocasa: bool,
-) -> None:
-    """Same mutual-exclusion rules as ``emet serve mujoco``."""
-    if molmospaces_scene and scene_path:
-        raise ValueError("Use either --scene-path or --molmospaces-scene, not both.")
-    if molmospaces_scene and use_robocasa:
-        raise ValueError(
-            "Cannot combine --molmospaces-scene with --use-robocasa, robocasa backend, or serve robocasa."
-        )
-
-
 def build_sim_launch_config_from_serve_cli(
     *,
-    molmospaces_scene: str | None,
-    molmospaces_split: str,
-    molmospaces_index: int,
-    molmospaces_install: bool,
-    use_robocasa: bool,
-    scene_path: str | None,
+    scene: str | None,
+    split: str,
+    index: int,
+    install_scene_if_missing: bool,
     robot: str | None,
     headless: bool,
     show_viewer_ui: bool,
@@ -178,12 +207,8 @@ def build_sim_launch_config_from_serve_cli(
     robocasa_task: str,
 ) -> SimLaunchConfig:
     """Build :class:`SimLaunchConfig` the same way ``emet serve mujoco`` does (single source of truth)."""
-    validate_sim_launch_serve_combo(
-        molmospaces_scene=molmospaces_scene,
-        scene_path=scene_path,
-        use_robocasa=use_robocasa,
-    )
-    robot = resolve_serve_robot(robot, molmospaces_scene=molmospaces_scene)
+    resolved = classify_scene_selector(scene)
+    robot = resolve_serve_robot(robot, is_molmospaces=is_molmospaces_scene(resolved))
     common: dict[str, Any] = {
         "headless": headless,
         "show_viewer_ui": show_viewer_ui,
@@ -194,30 +219,31 @@ def build_sim_launch_config_from_serve_cli(
         "debug_molmospaces_spawn": debug_molmospaces_spawn,
         "port_offset": port_offset,
     }
-    if molmospaces_scene:
+    if resolved.kind == "molmospaces":
+        assert resolved.molmo_scene is not None
         return SimLaunchMolmospaces(
-            scene=molmospaces_scene,
-            split=molmospaces_split,
-            index=molmospaces_index,
-            molmospaces_install=molmospaces_install,
+            scene=resolved.molmo_scene,
+            split=split,
+            index=index,
+            molmospaces_install=install_scene_if_missing,
             robot=robot,
             **common,
         )
-    if use_robocasa:
+    if resolved.kind == "robocasa":
         return SimLaunchRobocasa(robot=robot, robocasa_task=robocasa_task or "", **common)
-    return SimLaunchDefaultMujoco(robot=robot, scene_path=scene_path, **common)
+    if resolved.kind == "path":
+        return SimLaunchDefaultMujoco(robot=robot, scene_path=resolved.scene_path, **common)
+    return SimLaunchDefaultMujoco(robot=robot, scene_path=None, **common)
 
 
 def apply_sim_launch_cli_overrides(
     cfg: SimLaunchConfig,
     *,
-    use_robocasa: bool = False,
+    scene: str | None = None,
+    split: str | None = None,
+    index: int | None = None,
+    install_scene_if_missing: bool | None = None,
     robocasa_task: str | None = None,
-    scene_path: str | None = None,
-    molmospaces_scene: str | None = None,
-    molmospaces_split: str | None = None,
-    molmospaces_index: int | None = None,
-    molmospaces_install: bool | None = None,
     headless: bool | None = None,
     show_viewer_ui: bool | None = None,
     no_cameras: bool | None = None,
@@ -228,14 +254,6 @@ def apply_sim_launch_cli_overrides(
     robot: str | None = None,
 ) -> SimLaunchConfig:
     """Apply ``emet serve mujoco``-style CLI overrides onto a resolved sim config (for ``--start-sim``)."""
-    ms = str(molmospaces_scene).strip() if molmospaces_scene else None
-    sp = str(scene_path).strip() if scene_path else None
-    if ms is not None and not ms:
-        ms = None
-    if sp is not None and not sp:
-        sp = None
-
-    validate_sim_launch_serve_combo(molmospaces_scene=ms, scene_path=sp, use_robocasa=use_robocasa)
 
     def _common_from(c: SimLaunchCommon) -> dict[str, Any]:
         return {
@@ -267,56 +285,49 @@ def apply_sim_launch_cli_overrides(
     if debug_molmospaces_spawn is not None:
         merged_common["debug_molmospaces_spawn"] = bool(debug_molmospaces_spawn)
 
-    if ms is not None:
-        raw_robot = robot if robot is not None else cfg.robot
-        robot = resolve_serve_robot(raw_robot, molmospaces_scene=ms)
-        if molmospaces_split is not None:
-            split = str(molmospaces_split).strip() or "train"
-        elif isinstance(cfg, SimLaunchMolmospaces):
-            split = str(cfg.split)
-        else:
-            split = "train"
-        if molmospaces_index is not None:
-            idx = int(molmospaces_index)
-        elif isinstance(cfg, SimLaunchMolmospaces):
-            idx = int(cfg.index)
-        else:
-            idx = 0
-        if molmospaces_install is not None:
-            inst = bool(molmospaces_install)
-        elif isinstance(cfg, SimLaunchMolmospaces):
-            inst = bool(cfg.molmospaces_install)
-        else:
-            inst = False
-        return SimLaunchMolmospaces(
-            scene=ms,
-            split=split,
-            index=idx,
-            molmospaces_install=inst,
-            robot=robot,
-            **merged_common,
-        )
-
-    if use_robocasa:
-        task = (robocasa_task or "").strip() or (
-            cfg.robocasa_task if isinstance(cfg, SimLaunchRobocasa) else "PickPlaceCounterToCabinet"
-        )
-        style = int(cfg.robocasa_style) if isinstance(cfg, SimLaunchRobocasa) else 1
-        layout = int(cfg.robocasa_layout) if isinstance(cfg, SimLaunchRobocasa) else 1
-        write_xml = bool(cfg.robocasa_write_to_xml) if isinstance(cfg, SimLaunchRobocasa) else False
-        rob = robot if robot is not None else cfg.robot
-        return SimLaunchRobocasa(
-            robot=rob,
-            robocasa_task=task,
-            robocasa_style=style,
-            robocasa_layout=layout,
-            robocasa_write_to_xml=write_xml,
-            **merged_common,
-        )
-
-    if sp is not None:
-        rob = robot if robot is not None else cfg.robot
-        return SimLaunchDefaultMujoco(robot=rob, scene_path=sp, **merged_common)
+    if scene is not None and str(scene).strip():
+        resolved = classify_scene_selector(scene)
+        is_molmo = is_molmospaces_scene(resolved)
+        rob = resolve_serve_robot(robot if robot is not None else cfg.robot, is_molmospaces=is_molmo)
+        if resolved.kind == "molmospaces":
+            assert resolved.molmo_scene is not None
+            split_val = (
+                str(split).strip()
+                if split is not None
+                else (cfg.split if isinstance(cfg, SimLaunchMolmospaces) else "train")
+            )
+            idx = int(index) if index is not None else (int(cfg.index) if isinstance(cfg, SimLaunchMolmospaces) else 0)
+            inst = (
+                bool(install_scene_if_missing)
+                if install_scene_if_missing is not None
+                else (bool(cfg.molmospaces_install) if isinstance(cfg, SimLaunchMolmospaces) else False)
+            )
+            return SimLaunchMolmospaces(
+                scene=resolved.molmo_scene,
+                split=split_val or "train",
+                index=idx,
+                molmospaces_install=inst,
+                robot=rob,
+                **merged_common,
+            )
+        if resolved.kind == "robocasa":
+            task = (robocasa_task or "").strip() or (
+                cfg.robocasa_task if isinstance(cfg, SimLaunchRobocasa) else "PickPlaceCounterToCabinet"
+            )
+            style = int(cfg.robocasa_style) if isinstance(cfg, SimLaunchRobocasa) else 1
+            layout = int(cfg.robocasa_layout) if isinstance(cfg, SimLaunchRobocasa) else 1
+            write_xml = bool(cfg.robocasa_write_to_xml) if isinstance(cfg, SimLaunchRobocasa) else False
+            return SimLaunchRobocasa(
+                robot=rob,
+                robocasa_task=task,
+                robocasa_style=style,
+                robocasa_layout=layout,
+                robocasa_write_to_xml=write_xml,
+                **merged_common,
+            )
+        if resolved.kind == "path":
+            return SimLaunchDefaultMujoco(robot=rob, scene_path=resolved.scene_path, **merged_common)
+        return SimLaunchDefaultMujoco(robot=rob, scene_path=None, **merged_common)
 
     if isinstance(cfg, SimLaunchDefaultMujoco):
         r = robot if robot is not None else cfg.robot
@@ -336,15 +347,15 @@ def apply_sim_launch_cli_overrides(
         )
     assert isinstance(cfg, SimLaunchMolmospaces)
     raw_r = robot if robot is not None else cfg.robot
-    r = resolve_serve_robot(raw_r, molmospaces_scene=cfg.scene)
-    split = str(molmospaces_split) if molmospaces_split is not None else cfg.split
-    idx = int(molmospaces_index) if molmospaces_index is not None else int(cfg.index)
-    inst = bool(molmospaces_install) if molmospaces_install is not None else bool(cfg.molmospaces_install)
+    r = resolve_serve_robot(raw_r, is_molmospaces=True)
+    split_val = str(split) if split is not None else cfg.split
+    idx = int(index) if index is not None else int(cfg.index)
+    inst = bool(install_scene_if_missing) if install_scene_if_missing is not None else bool(cfg.molmospaces_install)
     return replace(
         cfg,
         robot=r,
         scene=cfg.scene,
-        split=split,
+        split=split_val,
         index=idx,
         molmospaces_install=inst,
         **merged_common,

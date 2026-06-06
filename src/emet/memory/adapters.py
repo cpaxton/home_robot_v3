@@ -23,6 +23,7 @@ import torch
 
 from emet.memory.backend import CheckMemoryResult, LocalizeResult, MemoryBackend
 from emet.memory.format import (
+    SIM_GT_PLACEMENTS_FILENAME,
     FrameBlob,
     GraphBlob,
     GraphEdgeView,
@@ -67,6 +68,9 @@ def frame_blobs_from_voxel_map(vm: Any) -> list[FrameBlob]:
         ic = _to_numpy(getattr(obs, "instance_classes", None))
         isc = _to_numpy(getattr(obs, "instance_scores", None))
         info = getattr(obs, "info", None)
+        gt_associations = None
+        if isinstance(info, dict):
+            gt_associations = info.get("gt_associations")
         fb = FrameBlob(
             camera_pose=cp,
             base_pose=base_pose,
@@ -78,6 +82,7 @@ def frame_blobs_from_voxel_map(vm: Any) -> list[FrameBlob]:
             instance=inst,
             instance_classes=ic,
             instance_scores=isc,
+            gt_associations=gt_associations,
             info=info,
         )
         dets = build_detections_json_rows(fb, min_depth=md, max_depth=xd, detection_model=det_model)
@@ -360,8 +365,15 @@ class GraphEQABackend(MemoryBackend):
     ) -> tuple[str, str, bool, str, np.ndarray | None, Any]:
         return self._graph.query_answer(question, xyt, planner)
 
-    def save(self, path: str) -> None:
+    def save(
+        self,
+        path: str,
+        *,
+        ground_truth_mode: bool = False,
+        sim_object_placements: dict[str, Any] | None = None,
+    ) -> None:
         """Save to common directory format (graph + full voxel frame history when ``voxel_map`` is set)."""
+        from emet.memory.graph_eqa.sim_ground_truth_graph import graph_node_export_fields
 
         dir_path = Path(path)
         dir_path.mkdir(parents=True, exist_ok=True)
@@ -376,6 +388,7 @@ class GraphEQABackend(MemoryBackend):
                     xyz=list(np.ravel(n.xyz).tolist()),
                     obs_id=n.obs_id,
                     description=getattr(n, "description", None),
+                    **graph_node_export_fields(n, sim_object_placements),
                 )
                 for n in nodes
             ],
@@ -407,11 +420,18 @@ class GraphEQABackend(MemoryBackend):
                     )
                 )
 
+        has_sim_gt = bool(sim_object_placements)
         state = MemoryState(
             point_cloud=None,
             frames=frames,
             graph=graph_blob,
-            manifest=MemoryManifest(backend="graph_eqa", has_point_cloud=False),
+            manifest=MemoryManifest(
+                backend="graph_eqa",
+                has_point_cloud=False,
+                ground_truth_mode=ground_truth_mode,
+                has_sim_gt=has_sim_gt,
+                sim_gt_placements_file=SIM_GT_PLACEMENTS_FILENAME if has_sim_gt else None,
+            ),
         )
         save_memory(state, str(dir_path))
 

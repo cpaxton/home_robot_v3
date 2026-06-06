@@ -57,10 +57,11 @@ dependencies = [
     "timm>1.0.0",
     # HF stack: explicit safetensors avoids SigLIP / VLMs failing when only model.safetensors exists on the Hub.
     # Newer transformers + hub improve from_pretrained layout detection (vs stale pytorch_model.bin errors).
+    # Gemma 4 (model_type gemma4, any-to-any pipeline) requires transformers>=5.5.0.
     "huggingface_hub>=0.28.0",
     "safetensors>=0.4.5",
     "open-clip-torch>=2.32.0",
-    "transformers>=4.55.0",
+    "transformers>=5.5.0,<6.0.0",
     "retry",
     "qwen_vl_utils",
     "bitsandbytes",

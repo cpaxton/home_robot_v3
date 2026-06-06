@@ -48,7 +48,7 @@ SUPPORTED_VLLMS: dict[str, VLLMRegistryEntry] = {
     ),
     "gemma4": VLLMRegistryEntry(
         family_key="gemma4",
-        default_hf_model_id="google/gemma-3-4b-it",
+        default_hf_model_id="google/gemma-4-E4B-it",
         supports_dedup=True,
     ),
 }

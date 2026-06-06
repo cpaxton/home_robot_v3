@@ -1,6 +1,15 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
 # This source code is licensed under the LICENSE file in the root directory
 # of this source tree.
 
@@ -59,7 +68,7 @@ def test_robot_spawn_spec_from_metadata_rby1():
 def test_resolve_serve_robot_molmospaces_defaults():
     from emet.config.sim_launch_config import resolve_serve_robot
 
-    assert resolve_serve_robot(None, molmospaces_scene="ithor") == "stretch"
-    assert resolve_serve_robot("stretch", molmospaces_scene="ithor") == "stretch"
-    assert resolve_serve_robot("rby1", molmospaces_scene="ithor") == "rby1"
-    assert resolve_serve_robot(None, molmospaces_scene=None) == "stretch"
+    assert resolve_serve_robot(None, is_molmospaces=True) == "stretch"
+    assert resolve_serve_robot("stretch", is_molmospaces=True) == "stretch"
+    assert resolve_serve_robot("rby1", is_molmospaces=True) == "rby1"
+    assert resolve_serve_robot(None, is_molmospaces=False) == "stretch"

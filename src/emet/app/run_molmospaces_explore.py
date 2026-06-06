@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
 # Record exploration trajectories from a running MuJoCo ZMQ server (MolmoSpaces homes, etc.).
@@ -129,13 +138,14 @@ def sync_episode_metadata_from_zmq_session(
 )
 @click.option("--port-offset", default=0, type=int, show_default=True)
 @click.option(
-    "--molmospaces-scene",
+    "--scene",
+    "molmospaces_scene",
     default="ithor",
     show_default=True,
     help="Scene id for episode metadata (must match the running server).",
 )
-@click.option("--molmospaces-split", default="train", type=click.Choice(["train", "val", "test"]))
-@click.option("--molmospaces-index", default=0, type=int, show_default=True)
+@click.option("--split", "molmospaces_split", default="train", type=click.Choice(["train", "val", "test"]))
+@click.option("--index", "molmospaces_index", default=0, type=int, show_default=True)
 @click.option(
     "--output-dir",
     type=click.Path(file_okay=False, dir_okay=True, path_type=str),
@@ -150,7 +160,9 @@ def sync_episode_metadata_from_zmq_session(
     show_default=True,
     help="Target capture rate (sleep between frames after work).",
 )
-@click.option("--navigate-every", default=5, type=int, show_default=True, help="Issue a random base goal every N steps.")
+@click.option(
+    "--navigate-every", default=5, type=int, show_default=True, help="Issue a random base goal every N steps."
+)
 @click.option("--nav-timeout", default=90.0, type=float, show_default=True)
 @click.option(
     "--goal-x-min",
@@ -232,8 +244,8 @@ def main(
 
     Start the sim in another terminal, e.g.::
 
-        emet serve mujoco --molmospaces-scene ithor --molmospaces-split train \\
-          --molmospaces-index 0 --robot rby1 --headless
+        emet serve mujoco --scene ithor --split train \\
+          --index 0 --robot rby1 --headless
 
     Then run this command; ``--robot`` is optional if the server publishes ``emet_robot_id`` / ``emet_session``.
     """

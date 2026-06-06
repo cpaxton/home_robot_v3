@@ -538,7 +538,8 @@ def run_agent_with_robot(
                 vm.materialize_local_eqa_vllm()
                 logger.info(
                     "EQA: loaded DynaMem VLM from yaml (agent --llm is not a shareable VL client). "
-                    "To reuse one Qwen3-VL for chat+captions: --llm qwen3-vl-eqa with --eqa --share-memory-vllm."
+                    "To reuse one VL for chat+captions: --llm qwen3-vl-eqa or --llm gemma4-vl-eqa with "
+                    "--eqa --share-memory-vllm."
                 )
                 print_vram_snapshot(
                     "after_materialize_local_eqa_vllm",

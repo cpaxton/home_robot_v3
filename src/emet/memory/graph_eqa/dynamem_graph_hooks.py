@@ -120,3 +120,35 @@ def update_graph_memory_from_dynamem_observation(
         graph_memory.add_observation(rgb, xyz, labels, description=desc)
     else:
         graph_memory.record_navigation_sample(rgb, xyz, base_xyz=base_xyz)
+
+
+def _base_xyz_from_robot(robot: Any) -> np.ndarray | None:
+    try:
+        bp = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
+        if bp.size >= 2:
+            bz = float(bp[2]) if bp.size >= 3 else 0.0
+            return np.array([float(bp[0]), float(bp[1]), bz], dtype=np.float64)
+    except Exception:
+        pass
+    return None
+
+
+def update_graph_memory_ground_truth_from_observation(
+    *,
+    graph_memory: Any,
+    robot: Any,
+    obs: Any,
+    frame_step: int | None = None,
+) -> None:
+    """
+    GT mode: record each camera viewpoint without creating new graph entity nodes.
+
+    Sim ``sim_object_placements`` remain the authoritative object list; instance
+    detections attach to those nodes separately in ``DynagraphController.update``.
+    """
+    if obs.camera_pose is None:
+        return
+    if frame_step is not None and hasattr(graph_memory, "set_graph_timestep"):
+        graph_memory.set_graph_timestep(int(frame_step))
+    xyz = np.array(obs.camera_pose[:3, 3], dtype=float)
+    graph_memory.record_navigation_sample(obs.rgb, xyz, base_xyz=_base_xyz_from_robot(robot))
