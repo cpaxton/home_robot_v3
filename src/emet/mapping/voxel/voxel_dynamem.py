@@ -1493,19 +1493,17 @@ class SparseVoxelMap(SparseVoxelMapBase):
             relevant_images.append(image)
 
         # Extract answers
-        from emet.llms.prompts.eqa_prompt import EQA_PROMPT
+        from emet.llms.graph_eqa_vlm import _eqa_system_prompt
 
+        raw_answer_outputs = dynamem_vllm_call(
+            self.eqa_client,
+            commands,
+            system_prompt=_eqa_system_prompt(self.parameters),
+            max_new_tokens=self._eqa_max_tokens,
+        )
+        self._last_eqa_raw = raw_answer_outputs
         answer_outputs = (
-            dynamem_vllm_call(
-                self.eqa_client,
-                commands,
-                system_prompt=EQA_PROMPT,
-                max_new_tokens=self._eqa_max_tokens,
-            )
-            .replace("*", "")
-            .replace("/", "")
-            .replace("#", "")
-            .lower()
+            raw_answer_outputs.replace("*", "").replace("/", "").replace("#", "").lower()
         )
 
         print(commands)

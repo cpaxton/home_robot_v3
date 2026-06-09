@@ -164,32 +164,53 @@ def sqa3d_list_questions(split: str, limit: int, data_dir: Path | None) -> None:
         )
 
 
-@sqa3d_group.command("run-episode", short_help="Embodied SQA3D episode on ScanNet mesh")
+@sqa3d_group.command("run-episode", short_help="SQA3D episode on ScanNet mesh (DynaMem or Dynagraph)")
 @click.option("--question-id", required=True, type=int)
 @click.option("--split", type=click.Choice(SQA3D_SPLITS), default="val", show_default=True)
-@click.option("--method", type=click.Choice(["graph_eqa", "dynagraph"]), default="dynagraph")
+@click.option(
+    "--method",
+    type=click.Choice(["dynamem", "dynagraph"]),
+    default="dynagraph",
+    show_default=True,
+    help="dynagraph=DynaMem voxel map + GraphEQA graph EQA (default); dynamem=voxel EQA only",
+)
 @click.option("--mock-llm", is_flag=True, default=False)
-@click.option("--max-planning-steps", default=20, type=int)
+@click.option(
+    "--profile",
+    type=click.Choice(["smoke", "tuned"]),
+    default=None,
+    help="smoke=fast CI defaults; tuned=real-VLM defaults (auto when not --mock-llm)",
+)
+@click.option("--max-planning-steps", default=None, type=int, help="Default: 8 smoke / 15 tuned")
 @click.option("--eqa-vl-family", default=None, help="Override eqa.vl_family (qwen3_vl, gemma4, …)")
 @click.option("--eqa-hf-model-id", default=None, help="Override eqa.vl_hf_model_id")
 @click.option("--device", default=None, help="VLM device (cuda, cpu). Default: cuda when not --mock-llm")
 @click.option("--data-dir", type=click.Path(path_type=Path), default=None)
 @click.option("--scannet-root", type=click.Path(path_type=Path), default=None)
+@click.option(
+    "--replay-mode",
+    type=click.Choice(["auto", "sens", "mesh"]),
+    default="auto",
+    show_default=True,
+    help="auto=posed .sens RGB when on disk, else mesh; sens=require .sens; mesh=Open3D only",
+)
 @click.option("--output", "-o", type=click.Path(path_type=Path), default=None, help="Append JSONL result")
 def sqa3d_run_episode(
     question_id: int,
     split: str,
     method: str,
     mock_llm: bool,
-    max_planning_steps: int,
+    profile: str | None,
+    max_planning_steps: int | None,
     eqa_vl_family: str | None,
     eqa_hf_model_id: str | None,
     device: str | None,
     data_dir: Path | None,
     scannet_root: Path | None,
+    replay_mode: str,
     output: Path | None,
 ) -> None:
-    """Run GraphEQA / Dynagraph at the SQA3D annotated pose in a ScanNet scene."""
+    """Run DynaMem or Dynagraph at the SQA3D annotated pose in a ScanNet scene."""
     from emet.benchmarks.sqa3d.episode_metrics import append_sqa3d_jsonl
     from emet.benchmarks.sqa3d.scannet.runner import run_sqa3d_episode
 
@@ -204,6 +225,8 @@ def sqa3d_run_episode(
         eqa_vl_family=eqa_vl_family,
         eqa_hf_model_id=eqa_hf_model_id,
         device=device if device else ("cuda" if not mock_llm else None),
+        profile=profile,
+        replay_mode=replay_mode,
     )
     text = json.dumps(row.to_dict(), indent=2)
     click.echo(text)
@@ -213,7 +236,7 @@ def sqa3d_run_episode(
     click.echo(f"\nSummary: em={row.em} predicted={row.predicted_answer!r} gold={row.gold_answers}")
 
 
-@sqa3d_group.command("run-batch", short_help="Batch embodied SQA3D episodes")
+@sqa3d_group.command("run-batch", short_help="Batch SQA3D episodes")
 @click.option(
     "--question-start",
     default=0,
@@ -227,9 +250,10 @@ def sqa3d_run_episode(
     help="End index into the split question list (exclusive)",
 )
 @click.option("--split", type=click.Choice(SQA3D_SPLITS), default="val", show_default=True)
-@click.option("--method", type=click.Choice(["graph_eqa", "dynagraph"]), default="dynagraph")
+@click.option("--method", type=click.Choice(["dynamem", "dynagraph"]), default="dynagraph", show_default=True)
 @click.option("--mock-llm", is_flag=True, default=False)
-@click.option("--max-planning-steps", default=20, type=int)
+@click.option("--profile", type=click.Choice(["smoke", "tuned"]), default=None)
+@click.option("--max-planning-steps", default=None, type=int)
 @click.option("--eqa-vl-family", default=None, help="Override eqa.vl_family (default: dynav_config.yaml)")
 @click.option("--eqa-hf-model-id", default=None, help="Override eqa.vl_hf_model_id")
 @click.option("--device", default=None, help="VLM device (cuda, cpu). Default: cuda when not --mock-llm")
@@ -243,13 +267,27 @@ def sqa3d_run_episode(
     show_default=True,
     help="Skip questions whose ScanNet mesh is not on disk",
 )
+@click.option(
+    "--replay-mode",
+    type=click.Choice(["auto", "sens", "mesh"]),
+    default="auto",
+    show_default=True,
+    help="auto=posed .sens RGB when on disk, else mesh; sens=require .sens; mesh=Open3D only",
+)
+@click.option(
+    "--isolate-episodes/--no-isolate-episodes",
+    default=False,
+    show_default=True,
+    help="Real-VLM: run each episode in a fresh subprocess (frees GPU between episodes)",
+)
 def sqa3d_run_batch(
     question_start: int,
     question_end: int,
     split: str,
     method: str,
     mock_llm: bool,
-    max_planning_steps: int,
+    profile: str | None,
+    max_planning_steps: int | None,
     eqa_vl_family: str | None,
     eqa_hf_model_id: str | None,
     device: str | None,
@@ -258,6 +296,8 @@ def sqa3d_run_batch(
     output: Path,
     resume: bool,
     skip_missing_scenes: bool,
+    replay_mode: str,
+    isolate_episodes: bool,
 ) -> None:
     from emet.benchmarks.sqa3d.datasets import load_sqa3d_questions
     from emet.benchmarks.sqa3d.episode_metrics import summarize_sqa3d_episodes
@@ -268,10 +308,13 @@ def sqa3d_run_batch(
     subset = questions[question_start:question_end]
     if skip_missing_scenes:
         root = scannet_root or default_scannet_root()
-        filtered = filter_questions_with_scannet(subset, root)
+        filtered = filter_questions_with_scannet(subset, root, replay_mode=replay_mode)
         skipped = len(subset) - len(filtered)
         if skipped:
-            click.echo(f"Skipping {skipped} question(s) without ScanNet mesh under {root}")
+            click.echo(
+                f"Skipping {skipped} question(s) without ScanNet replay assets "
+                f"(replay_mode={replay_mode}) under {root}"
+            )
         subset = filtered
     if not subset:
         raise click.ClickException(
@@ -292,6 +335,9 @@ def sqa3d_run_batch(
         eqa_vl_family=eqa_vl_family,
         eqa_hf_model_id=eqa_hf_model_id,
         device=device if device else ("cuda" if not mock_llm else None),
+        profile=profile,
+        replay_mode=replay_mode,
+        isolate_episodes=isolate_episodes,
     )
     summary = summarize_sqa3d_episodes(rows)
     click.echo(json.dumps(summary, indent=2))
@@ -301,52 +347,81 @@ def sqa3d_run_batch(
 @click.option("--question-start", default=0, type=int)
 @click.option("--question-end", default=5, type=int)
 @click.option("--split", type=click.Choice(SQA3D_SPLITS), default="val", show_default=True)
-@click.option("--method", type=click.Choice(["graph_eqa", "dynagraph"]), default="dynagraph")
-@click.option("--max-planning-steps", default=10, type=int)
+@click.option("--method", type=click.Choice(["dynamem", "dynagraph"]), default="dynagraph", show_default=True)
+@click.option("--max-planning-steps", default=None, type=int)
 @click.option("--eqa-vl-family", default=None)
 @click.option("--eqa-hf-model-id", default=None)
 @click.option("--device", default=None, help="VLM device (cuda, cpu). Default: cuda")
 @click.option("--output-dir", type=click.Path(path_type=Path), default=Path("/tmp/sqa3d_real_sweep"))
 @click.option("--download/--no-download", default=True, show_default=True)
+@click.option(
+    "--with-sens",
+    is_flag=True,
+    default=False,
+    help="Also download ScanNet .sens posed RGB-D (large; ~hundreds of MB per scene)",
+)
+@click.option(
+    "--replay-mode",
+    type=click.Choice(["auto", "sens", "mesh"]),
+    default="auto",
+    show_default=True,
+)
+@click.option(
+    "--isolate-episodes/--no-isolate-episodes",
+    default=True,
+    show_default=True,
+    help="Run each episode in a fresh subprocess (recommended for real VLM; frees GPU)",
+)
 def sqa3d_run_real_sweep(
     question_start: int,
     question_end: int,
     split: str,
     method: str,
-    max_planning_steps: int,
+    max_planning_steps: int | None,
     eqa_vl_family: str | None,
     eqa_hf_model_id: str | None,
     device: str | None,
     output_dir: Path,
     download: bool,
+    with_sens: bool,
+    replay_mode: str,
+    isolate_episodes: bool,
 ) -> None:
-    """Download ScanNet meshes for the slice, run real Qwen/Gemma VLM batch, score EM@1."""
+    """Download ScanNet meshes for the slice, run real-VLM batch, score EM@1."""
     import subprocess
     import sys
 
     from emet.benchmarks.sqa3d.scannet.config import default_scannet_root
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    jsonl = output_dir / f"{method}_{split}_q{question_start}-{question_end}.jsonl"
-    eval_json = output_dir / f"{method}_{split}_q{question_start}-{question_end}_eval.json"
+    tag = f"{method}_{split}_q{question_start}-{question_end}"
+    jsonl = output_dir / f"{tag}.jsonl"
+    eval_json = output_dir / f"{tag}_eval.json"
 
     if download:
-        click.echo(f"Downloading ScanNet meshes for {split} questions [{question_start}:{question_end})...")
+        sens_note = " + .sens" if with_sens else ""
+        click.echo(
+            f"Downloading ScanNet meshes{sens_note} for {split} questions "
+            f"[{question_start}:{question_end})..."
+        )
+        dl_cmd = [
+            sys.executable,
+            "scripts/download_scannet_data.py",
+            "--accept-tos",
+            "--scenes-from-sqa3d",
+            "--split",
+            split,
+            "--question-start",
+            str(question_start),
+            "--question-end",
+            str(question_end),
+            "--scannet-root",
+            str(default_scannet_root()),
+        ]
+        if with_sens:
+            dl_cmd.append("--with-sens")
         dl = subprocess.run(
-            [
-                sys.executable,
-                "scripts/download_scannet_data.py",
-                "--accept-tos",
-                "--scenes-from-sqa3d",
-                "--split",
-                split,
-                "--question-start",
-                str(question_start),
-                "--question-end",
-                str(question_end),
-                "--scannet-root",
-                str(default_scannet_root()),
-            ],
+            dl_cmd,
             cwd=Path(__file__).resolve().parents[3],
         )
         if dl.returncode != 0:
@@ -360,6 +435,7 @@ def sqa3d_run_real_sweep(
         split=split,
         method=method,
         mock_llm=False,
+        profile="tuned",
         max_planning_steps=max_planning_steps,
         eqa_vl_family=eqa_vl_family,
         eqa_hf_model_id=eqa_hf_model_id,
@@ -369,6 +445,8 @@ def sqa3d_run_real_sweep(
         output=jsonl,
         resume=False,
         skip_missing_scenes=True,
+        replay_mode=replay_mode,
+        isolate_episodes=isolate_episodes,
     )
 
     ctx.invoke(
@@ -388,7 +466,7 @@ def sqa3d_run_real_sweep(
 @click.option("--predictions", "-p", required=True, type=click.Path(exists=True, path_type=Path))
 @click.option("--output-dir", "-o", required=True, type=click.Path(path_type=Path))
 @click.option("--split", type=click.Choice(SQA3D_SPLITS), default="val", show_default=True)
-@click.option("--method", default=None, help="Filter episodes by method (dynagraph, graph_eqa)")
+@click.option("--method", default=None, help="Filter episodes by method tag (dynamem, dynagraph)")
 @click.option("--top-k", default=12, type=int, help="Top gold labels for confusion matrix")
 @click.option("--no-plots", is_flag=True, default=False, help="Write JSON/JSONL only (no PNG)")
 def sqa3d_plot_results(

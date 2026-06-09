@@ -928,6 +928,9 @@ class GraphEQAMemory:
 
     def _graph_covers_relevant_objects(self) -> bool:
         """True when every keyword object appears in at least one graph node label."""
+        eqa_cfg = self.parameters.get("eqa", {}) if hasattr(self.parameters, "get") else {}
+        if isinstance(eqa_cfg, dict) and eqa_cfg.get("sqa3d_allow_partial_graph"):
+            return True
         if not self._relevant_objects or not self._observations:
             return True
         all_labels = " ".join(lab.lower() for o in self._observations for lab in o.labels)
