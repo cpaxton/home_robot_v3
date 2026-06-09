@@ -29,6 +29,17 @@ from emet.utils.config import resolve_config_yaml_path
 
 MemoryBackendName = Literal["dynamem", "graph_eqa", "dynagraph", "ground_truth"]
 PlanarFrame = Literal["mujoco_xy", "habitat_xz"]
+LocalizeSource = Literal[
+    "voxel",
+    "graph_near_recep",
+    "graph_near_anchor",
+    "graph_habitat_node",
+    "memory_localize_text_graph",
+    "memory_localize_text_voxel",
+    "memory_check_graph",
+    "memory_check_voxel",
+    "memory_list_objects",
+]
 
 
 @dataclass(frozen=True)
@@ -371,6 +382,15 @@ def _voxel_localize(
     return None, query
 
 
+def _memory_localize_source(memory: Any, query: str) -> LocalizeSource:
+    """Infer graph vs voxel for adapter localize/check (GraphEQA tries graph first)."""
+    return "memory_localize_text_graph" if _graph_nodes_matching(memory, query) else "memory_localize_text_voxel"
+
+
+def _memory_check_source(memory: Any, query: str) -> LocalizeSource:
+    return "memory_check_graph" if _graph_nodes_matching(memory, query) else "memory_check_voxel"
+
+
 def query_find_phase_localization(
     memory: Any,
     query: str,
@@ -383,38 +403,39 @@ def query_find_phase_localization(
     convert_nav_to_world: bool = False,
     prefer_voxel: bool = True,
     planar_frame: PlanarFrame = "mujoco_xy",
-) -> tuple[np.ndarray | None, bool, str]:
+) -> tuple[np.ndarray | None, bool, str, LocalizeSource | None]:
     """
     Query memory for FindObj/FindRec localization with query variants and fallbacks.
 
     Returns:
-        ``(world_xyz, success, query_used)`` where ``world_xyz`` is suitable for GT distance checks.
+        ``(world_xyz, success, query_used, localize_source)`` where ``world_xyz`` is suitable
+        for GT distance checks and ``localize_source`` names the winning code path (``None`` on miss).
     """
     sess = session if convert_nav_to_world else None
 
     if prefer_voxel and voxel_map is not None and hasattr(voxel_map, "localize_text"):
         xyz, q_used = _voxel_localize(voxel_map, query, placements=placements, session=sess)
         if xyz is not None:
-            return xyz, True, q_used
+            return xyz, True, q_used, "voxel"
 
     if near_recep and placements is not None and _graph_nodes_matching(memory, query):
         xyz = _pick_graph_xyz_near_recep(memory, query, placements, near_recep)
         if xyz is not None:
             converted = localize_point_to_world_xy(xyz, sess)
             xyz = converted if converted is not None else xyz
-            return xyz, True, query
+            return xyz, True, query, "graph_near_recep"
     if anchor_xyz is not None and _graph_nodes_matching(memory, query):
         xyz = _pick_graph_xyz_near_point(memory, query, anchor_xyz, frame=planar_frame)
         if xyz is not None:
             converted = localize_point_to_world_xy(xyz, sess)
             xyz = converted if converted is not None else xyz
-            return xyz, True, query
+            return xyz, True, query, "graph_near_anchor"
     for q in _query_variants(query, placements):
         if planar_frame == "habitat_xz":
             nodes = _graph_nodes_matching(memory, q)
             if nodes:
                 xyz = np.asarray(nodes[0].xyz, dtype=np.float64).reshape(3)
-                return xyz, True, q
+                return xyz, True, q, "graph_habitat_node"
         loc = memory.localize_text(q)
         if loc.success and loc.point_xyz is not None:
             xyz = localize_point_to_world_xy(loc.point_xyz, sess)
@@ -424,20 +445,20 @@ def query_find_phase_localization(
                 if nodes:
                     xyz = np.asarray(nodes[0].xyz, dtype=np.float64).reshape(3)
             if xyz is not None:
-                return xyz, True, q
+                return xyz, True, q, _memory_localize_source(memory, q)
         check = memory.check_memory_for_object(q)
         if check.confidence > 0 and check.location_xyz is not None:
             xyz = localize_point_to_world_xy(check.location_xyz, sess)
             if xyz is not None:
-                return xyz, True, q
+                return xyz, True, q, _memory_check_source(memory, q)
     for label in memory.list_objects():
         if category_matches(query, label):
             loc = memory.localize_text(label)
             if loc.success and loc.point_xyz is not None:
                 xyz = localize_point_to_world_xy(loc.point_xyz, sess)
                 if xyz is not None:
-                    return xyz, True, label
-    return None, False, query
+                    return xyz, True, label, "memory_list_objects"
+    return None, False, query, None
 
 
 def score_find_object(
@@ -848,7 +869,7 @@ def run_episode_find_phase(
 
         object_query = resolve_object_query(episode, placements)
 
-        obj_xyz, obj_ok, obj_q_used = query_find_phase_localization(
+        obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
             memory,
             object_query,
             placements=placements,
@@ -857,7 +878,7 @@ def run_episode_find_phase(
             voxel_map=vm,
             convert_nav_to_world=nav_world or run_cfg.backend == "dynamem",
         )
-        recep_xyz, recep_ok, recep_q_used = query_find_phase_localization(
+        recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
             memory,
             episode.goal_recep,
             placements=placements,
@@ -908,6 +929,8 @@ def run_episode_find_phase(
             "recep_localize_success": bool(recep_ok),
             "obj_query_used": obj_q_used,
             "recep_query_used": recep_q_used,
+            "obj_localize_source": obj_source,
+            "recep_localize_source": recep_source,
             "seed": run_cfg.seed,
             **localization_pred_fields(obj_xyz, recep_xyz),
             **find_metrics,

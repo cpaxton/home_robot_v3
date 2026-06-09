@@ -181,6 +181,8 @@ def main() -> int:
                         "find_partial_success": 0.0,
                         "pred_obj_xyz": None,
                         "pred_recep_xyz": None,
+                        "obj_localize_source": None,
+                        "recep_localize_source": None,
                     }
                 else:
                     metrics["port_offset"] = port_offset

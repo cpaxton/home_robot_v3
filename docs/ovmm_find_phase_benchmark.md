@@ -86,6 +86,7 @@ Outputs per run: `runs/ovmm_find_phase/<episode_id>_<backend>.json` plus `aggreg
 - `find_partial_success` = mean of the two (OVMM-style 2-phase partial)
 - `localization_err_obj_m`, `localization_err_recep_m`
 - `pred_obj_xyz`, `pred_recep_xyz` — predicted world XYZ (MuJoCo world or Habitat Y-up) for audit
+- `obj_localize_source`, `recep_localize_source` — winning query path (`voxel`, `graph_near_recep`, `memory_localize_text_graph`, …; `null` on miss)
 - `seed` — RNG seed when set via replicate runner or `FindPhaseRunConfig.seed`
 - Scaling: `n_graph_nodes`, `n_voxel_explored_cells`, `n_voxel_explored_area_m2`, `n_placements`, `episode_wall_s`
 - Optional GT diagnostics: `gt_graph_completeness`, `instance_gt_association_recall` (GT-oracle graph only)

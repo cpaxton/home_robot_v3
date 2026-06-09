@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 
 from emet.eval.ovmm_find_phase import (
@@ -28,6 +30,7 @@ from emet.eval.ovmm_find_phase import (
     localization_pred_fields,
     pick_find_object_gt_body,
     pred_xyz_to_json_list,
+    query_find_phase_localization,
     score_find_object,
     score_find_recep,
 )
@@ -135,6 +138,98 @@ def test_pred_xyz_to_json_list():
     fields = localization_pred_fields([0.08, -0.55, 0.6], None)
     assert fields["pred_obj_xyz"] == [0.08, -0.55, 0.6]
     assert fields["pred_recep_xyz"] is None
+
+
+@dataclass
+class _FakeNode:
+    labels: list[str]
+    xyz: list[float]
+
+
+class _FakeGraph:
+    def __init__(self, nodes: list[_FakeNode]):
+        self._nodes = nodes
+
+    def get_nodes(self):
+        return self._nodes
+
+
+class _FakeVoxel:
+    def __init__(self, xyz: list[float] | None):
+        self._xyz = xyz
+
+    def localize_text(self, text, debug=False, return_debug=False):
+        if return_debug:
+            return self._xyz, ""
+        return self._xyz
+
+
+class _FakeMemory:
+    def __init__(self, graph: _FakeGraph | None = None):
+        self._graph = graph
+
+    def localize_text(self, text):
+        from emet.memory.adapters import LocalizeResult
+
+        return LocalizeResult(point_xyz=None, success=False, extra_info={})
+
+    def check_memory_for_object(self, text):
+        from emet.memory.adapters import CheckMemoryResult
+
+        return CheckMemoryResult(confidence=0.0, location_xyz=None, extra_info={})
+
+    def list_objects(self):
+        return []
+
+
+def test_query_find_phase_localization_voxel_source():
+    memory = _FakeMemory()
+    voxel = _FakeVoxel([0.1, -0.5, 0.6])
+    xyz, ok, q_used, source = query_find_phase_localization(
+        memory,
+        "red cylinder",
+        voxel_map=voxel,
+        prefer_voxel=True,
+    )
+    assert ok is True
+    assert source == "voxel"
+    assert xyz is not None
+    assert q_used == "red cylinder"
+
+
+def test_query_find_phase_localization_graph_near_recep_source():
+    placements = {
+        "table": {"cat": "table", "pos": [0.0, -1.0, 0.24]},
+        "object2": {"cat": "red cylinder", "pos": [0.08, -0.55, 0.6]},
+    }
+    graph = _FakeGraph([_FakeNode(labels=["red cylinder"], xyz=[0.08, -0.55, 0.6])])
+    memory = _FakeMemory(graph=graph)
+    voxel = _FakeVoxel(None)
+    xyz, ok, _, source = query_find_phase_localization(
+        memory,
+        "red cylinder",
+        placements=placements,
+        near_recep="table",
+        voxel_map=voxel,
+        prefer_voxel=True,
+    )
+    assert ok is True
+    assert source == "graph_near_recep"
+    assert xyz is not None
+
+
+def test_query_find_phase_localization_miss_source_none():
+    memory = _FakeMemory()
+    voxel = _FakeVoxel(None)
+    xyz, ok, _, source = query_find_phase_localization(
+        memory,
+        "red cylinder",
+        voxel_map=voxel,
+        prefer_voxel=True,
+    )
+    assert ok is False
+    assert xyz is None
+    assert source is None
 
 
 def test_compute_find_phase_partial_success():

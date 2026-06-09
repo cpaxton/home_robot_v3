@@ -185,7 +185,7 @@ def run_habitat_find_phase_episode(
         )
 
         prefer_voxel = run_cfg.backend not in ("ground_truth",)
-        obj_xyz, obj_ok, obj_q_used = query_find_phase_localization(
+        obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
             memory,
             object_query,
             placements=placements,
@@ -195,7 +195,7 @@ def run_habitat_find_phase_episode(
             prefer_voxel=prefer_voxel,
             planar_frame="habitat_xz",
         )
-        recep_xyz, recep_ok, recep_q_used = query_find_phase_localization(
+        recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
             memory,
             episode.goal_recep,
             placements=placements,
@@ -239,6 +239,8 @@ def run_habitat_find_phase_episode(
             "recep_localize_success": bool(recep_ok),
             "obj_query_used": obj_q_used,
             "recep_query_used": recep_q_used,
+            "obj_localize_source": obj_source,
+            "recep_localize_source": recep_source,
             "seed": run_cfg.seed,
             **localization_pred_fields(obj_xyz, recep_xyz),
             **find_metrics,
