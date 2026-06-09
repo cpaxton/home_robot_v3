@@ -25,6 +25,10 @@ def load_scannet_mesh(scene_id: str, scannet_root: Path | None = None) -> o3d.ge
     mesh = o3d.io.read_triangle_mesh(str(path))
     if mesh.is_empty():
         raise ValueError(f"Empty ScanNet mesh: {path}")
+    if mesh.has_vertex_colors():
+        colors = np.asarray(mesh.vertex_colors)
+        if colors.size and float(colors.max()) > 1.0 + 1e-3:
+            mesh.vertex_colors = o3d.utility.Vector3dVector(colors / 255.0)
     if not mesh.has_vertex_normals():
         mesh.compute_vertex_normals()
     return mesh

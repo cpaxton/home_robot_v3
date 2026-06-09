@@ -9,6 +9,7 @@ from __future__ import annotations
 import numpy as np
 
 from emet.benchmarks.sqa3d.scannet.pose import camera_pose_opencv, gps_compass_from_pose
+from emet.benchmarks.sqa3d.scannet.sens import scannet_camera_to_opencv_camera_to_world
 from emet.core.interfaces import Observations
 
 
@@ -21,14 +22,18 @@ def scannet_rgb_depth_to_observations(
     intrinsics: np.ndarray,
     sensor_height: float,
     camera_tilt_deg: float,
+    camera_to_world: np.ndarray | None = None,
 ) -> Observations:
     gps, compass = gps_compass_from_pose(position, quat_xyzw)
-    camera_pose = camera_pose_opencv(
-        position,
-        quat_xyzw,
-        sensor_height=sensor_height,
-        camera_tilt_deg=camera_tilt_deg,
-    )
+    if camera_to_world is not None:
+        camera_pose = scannet_camera_to_opencv_camera_to_world(camera_to_world)
+    else:
+        camera_pose = camera_pose_opencv(
+            position,
+            quat_xyzw,
+            sensor_height=sensor_height,
+            camera_tilt_deg=camera_tilt_deg,
+        )
 
     if rgb.dtype != np.uint8:
         rgb_u8 = np.clip(rgb, 0, 255).astype(np.uint8)

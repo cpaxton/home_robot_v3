@@ -10,7 +10,9 @@ import os
 from pathlib import Path
 
 SCANNET_MESH_SUFFIX = "_vh_clean_2.ply"
+SCANNET_SENS_SUFFIX = ".sens"
 SQA3D_MIN_FILETYPES = ("_vh_clean_2.ply", ".txt")
+SQA3D_SENS_FILETYPES = ("_vh_clean_2.ply", ".txt", ".sens")
 
 
 def _xdg_cache() -> Path:
@@ -49,6 +51,10 @@ def scene_mesh_path(scene_id: str, scannet_root: Path | None = None) -> Path:
     return scene_scan_dir(scene_id, scannet_root) / f"{scene_id}{SCANNET_MESH_SUFFIX}"
 
 
+def scene_sens_path(scene_id: str, scannet_root: Path | None = None) -> Path:
+    return scene_scan_dir(scene_id, scannet_root) / f"{scene_id}{SCANNET_SENS_SUFFIX}"
+
+
 def scene_meta_txt_path(scene_id: str, scannet_root: Path | None = None) -> Path:
     return scene_scan_dir(scene_id, scannet_root) / f"{scene_id}.txt"
 
@@ -57,13 +63,38 @@ def scene_assets_present(scene_id: str, scannet_root: Path | None = None) -> boo
     return scene_mesh_path(scene_id, scannet_root).is_file()
 
 
+def scene_sens_present(scene_id: str, scannet_root: Path | None = None) -> bool:
+    return scene_sens_path(scene_id, scannet_root).is_file()
+
+
+def scene_replay_assets_present(
+    scene_id: str,
+    scannet_root: Path | None = None,
+    *,
+    replay_mode: str = "auto",
+) -> bool:
+    if not scene_assets_present(scene_id, scannet_root):
+        return False
+    if replay_mode == "mesh":
+        return True
+    if replay_mode == "sens":
+        return scene_sens_present(scene_id, scannet_root)
+    return True
+
+
 def filter_questions_with_scannet(
     questions: list,
     scannet_root: Path | None = None,
+    *,
+    replay_mode: str = "auto",
 ) -> list:
-    """Keep only questions whose ``scene_id`` mesh exists under ``SCANNET_ROOT``."""
+    """Keep questions with required ScanNet replay assets under ``SCANNET_ROOT``."""
     root = scannet_root or default_scannet_root()
-    return [q for q in questions if scene_assets_present(q.scene_id, root)]
+    return [
+        q
+        for q in questions
+        if scene_replay_assets_present(q.scene_id, root, replay_mode=replay_mode)
+    ]
 
 
 def count_scannet_scenes_on_disk(

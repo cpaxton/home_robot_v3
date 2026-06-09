@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 
 from emet.benchmarks.sqa3d.scannet.observations import scannet_rgb_depth_to_observations
-from emet.benchmarks.sqa3d.scannet.simulator import ScanNetEQASimulator
+from emet.benchmarks.sqa3d.scannet.simulator import ScanNetEQASimulator, ScanNetReplaySimulator
 from emet.core.interfaces import Observations
 from emet.core.robot import AbstractRobotClient, ControlMode
 from emet.motion import Footprint, RobotModel
@@ -23,7 +23,7 @@ from emet.utils.geometry import xyt_base_to_global
 class ScanNetRobotClient(AbstractRobotClient, RobotModel):
     """In-process ScanNet mesh agent for GraphEQA / Dynagraph on SQA3D."""
 
-    def __init__(self, simulator: ScanNetEQASimulator):
+    def __init__(self, simulator: ScanNetEQASimulator | ScanNetReplaySimulator):
         super().__init__()
         self._sim = simulator
         self._xyt = np.zeros(3, dtype=np.float64)
@@ -47,6 +47,7 @@ class ScanNetRobotClient(AbstractRobotClient, RobotModel):
             intrinsics=frame.intrinsics,
             sensor_height=self._sim.sensor_height,
             camera_tilt_deg=self._sim.camera_tilt_deg,
+            camera_to_world=getattr(frame, "camera_to_world", None),
         )
 
     def get_observation(self, max_iter: int = 5) -> Observations | None:
