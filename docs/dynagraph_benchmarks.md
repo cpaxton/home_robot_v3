@@ -76,7 +76,6 @@ Open-ended situated QA on ScanNet scenes — EM@1 scoring, not multiple choice.
 |------|---------|
 | Download annotations | `uv run python scripts/download_sqa3d_data.py --fetch-annotations` |
 | Download ScanNet mesh | `uv run python scripts/download_scannet_data.py --accept-tos --scene scene0380_00` |
-| Embodied episode | `uv run emet sqa3d run-episode --split train --question-id 220602000000 --mock-llm` |
 | Score predictions | `uv run emet eval-sqa3d -p preds.jsonl --split val` |
 | Paper figures | `uv run emet sqa3d plot-results -p preds.jsonl -o figs/` |
 | Docs | [sqa3d.md](sqa3d.md) |

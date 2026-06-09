@@ -2,7 +2,7 @@
 
 [SQA3D](https://github.com/SilongYong/SQA3D) (Situated Question Answering in 3D Scenes, ICLR 2023) evaluates embodied agents that must understand a **situation** (where they stand in a ScanNet scene) and answer an open-ended **question** about their surroundings.
 
-This repo provides **dataset loaders**, **EM@1 scoring** (official QA metric), **localization metrics**, **ScanNet mesh replay** for embodied GraphEQA / Dynagraph, and **figure export** (TP/FP/FN breakdown).
+This repo provides **dataset loaders**, **EM@1 scoring** (official QA metric), **localization metrics**, **ScanNet replay** (posed `.sens` RGB-D with mesh fallback) for embodied **DynaMem / Dynagraph**, and **figure export** (TP/FP/FN breakdown).
 
 ## Quick commands
 
@@ -16,12 +16,18 @@ This repo provides **dataset loaders**, **EM@1 scoring** (official QA metric), *
 | Score predictions | `uv run emet eval-sqa3d -p preds.jsonl --split val -o sqa3d_eval.json` |
 | Score (fixture paths) | `uv run emet eval-sqa3d -p preds.jsonl --questions-path … --annotations-path …` |
 | Download ScanNet meshes | `uv run python scripts/download_scannet_data.py --accept-tos --scene scene0380_00` |
+| Download posed RGB-D (`.sens`) | `uv run python scripts/download_scannet_data.py --accept-tos --scene scene0380_00 --with-sens` |
 | Embodied episode | `uv run emet sqa3d run-episode --split train --question-id 220602000000 --mock-llm` |
+| Embodied with real ScanNet RGB | `… run-episode … --replay-mode sens` (needs `.sens` on disk) |
+| Tuned real-VLM batch | `uv run emet sqa3d run-batch --split val --question-start 0 --question-end 10` (omit `--mock-llm`; uses `--profile tuned`) |
 | Unit tests | `uv run emet test src/test/benchmarks/sqa3d/ -v` |
 | One-command smoke | `uv run python scripts/run_sqa3d_scannet_smoke.py` |
 | Score batch JSONL | `uv run emet eval-sqa3d -p /tmp/sqa3d_batch.jsonl` (auto-detects episode format) |
 | Paper figures (TP/FP/FN) | `uv run emet sqa3d plot-results -p /tmp/sqa3d_batch.jsonl -o /tmp/sqa3d_figs` |
-| Real VLM sweep | `uv run emet sqa3d run-real-sweep --question-start 0 --question-end 10` |
+| Real VLM sweep | `uv run emet sqa3d run-real-sweep --question-start 0 --question-end 30 --replay-mode sens --no-download` |
+| GPU preflight sweep | `./scripts/run_sqa3d_gpu_sweep.sh --split val --question-start 0 --question-end 30 --replay-mode sens` |
+
+CLI reference: [cli.md](cli.md#emet-sqa3d-subcommand).
 
 ## Data layout
 
@@ -40,11 +46,16 @@ ScanNet **meshes** are downloaded separately (Terms of Use apply):
 
 | Env var | Default | Contents |
 |---------|---------|----------|
-| `SCANNET_ROOT` | `~/.cache/scannet` | `scans/<scene_id>/<scene_id>_vh_clean_2.ply` |
+| `SCANNET_ROOT` | `~/.cache/scannet` | `scans/<scene_id>/<scene_id>_vh_clean_2.ply`, optional `<scene_id>.sens` |
+
+Download helper: `scripts/download_scannet_data.py` (`--accept-tos`, `--scene`, `--scenes-from-sqa3d`, `--with-sens`, `--verify`).
 
 ```bash
-# One scene smoke (~few MB)
+# One scene smoke (~few MB mesh only)
 uv run python scripts/download_scannet_data.py --accept-tos --scene scene0380_00
+
+# Posed RGB-D for real ScanNet replay (~hundreds of MB per scene)
+uv run python scripts/download_scannet_data.py --accept-tos --scene scene0380_00 --with-sens
 
 # All scenes referenced by SQA3D val split (large — use --limit for dev)
 uv run python scripts/download_scannet_data.py --accept-tos --scenes-from-sqa3d --split val --limit 10
@@ -78,26 +89,43 @@ When you have predicted agent poses (up to 3 candidates per sample):
 
 Use `emet.benchmarks.sqa3d.summarize_localization` from Python; localization JSON is optional (`--fetch-localization`).
 
-## GraphEQA / Dynagraph integration
+## Methods (`--method`)
 
-1. Set EQA prompt variant for open answers:
+| Method | Stack | When to use |
+|--------|-------|-------------|
+| **`dynagraph`** (default) | **DynaMem** voxel map (nav + observations) + **GraphEQA** graph memory for EQA | Best of both — recommended for paper numbers |
+| **`dynamem`** | DynaMem voxel map only (`query_answer` on semantic memory) | Ablations / voxel-only baseline |
 
-   ```yaml
-   eqa:
-     prompt_variant: sqa3d
-   ```
+Both use `prompt_variant: sqa3d` in `dynav_config.yaml`. Dynagraph tuned profile keeps merge/staleness from yaml; smoke disables merge for CI speed.
 
-2. Format each sample as situation + question (`SQA3DQuestion.formatted_prompt()` or `format_sqa3d_prompt`).
+Each episode:
 
-3. Export `eqa_results.json` from an episode batch and score:
+1. Agent at SQA3D annotation pose (posed `.sens` RGB-D when available, else Open3D mesh replay).
+2. Rotate-in-place + map/graph updates.
+3. Situated EQA (`situation` + `question`).
 
-   ```bash
-   uv run emet eval-sqa3d -p runs/sqa3d_val/eqa_results.json --split val -o sqa3d_val.json
-   ```
+Score batch JSONL with `emet eval-sqa3d`.
 
 ## Embodied ScanNet replay
 
-Open3D offscreen rendering over ScanNet `_vh_clean_2.ply` meshes. The agent is placed at the SQA3D annotation pose (`position` + quaternion `rotation`), then GraphEQA / Dynagraph explores and answers with `prompt_variant: sqa3d`.
+**Replay modes** (`--replay-mode` on `run-episode`, `run-batch`, `run-real-sweep`):
+
+| Mode | Behavior |
+|------|----------|
+| **`auto`** (default) | Use posed ScanNet `.sens` RGB-D when the file is on disk and the agent stays within ~0.75 m XY of the SQA3D anchor pose; otherwise Open3D mesh rendering |
+| **`sens`** | Require `.sens`; fail fast if missing. Best match to real ScanNet appearance at the annotated pose |
+| **`mesh`** | Open3D offscreen rendering over `_vh_clean_2.ply` only (vertex-color unlit shading) |
+
+When `.sens` is active, RGB and depth come from the nearest recorded frame to the agent camera pose; `Observations.camera_pose` uses the ScanNet camera extrinsics (OpenCV convention). Navigation away from the anchor falls back to mesh in `auto` mode.
+
+Real-VLM runs use **640×480**; smoke mock uses **480×360**. The agent is placed at the SQA3D annotation pose (`position` + quaternion `rotation`), then explores and answers with `prompt_variant: sqa3d`.
+
+**Profiles**
+
+| Profile | When | Planning | Notes |
+|---------|------|----------|-------|
+| `smoke` | `--mock-llm` (default) | 8 steps, no nav | CI / fast |
+| `tuned` | real VLM (default) | 15 steps, 3 nav steps | `dynav_config.yaml` defaults |
 
 ```bash
 uv run python scripts/download_sqa3d_data.py --fetch-annotations
@@ -106,7 +134,23 @@ uv run emet sqa3d run-episode --split train --question-id 220602000000 --mock-ll
 uv run emet sqa3d run-batch --split train --question-start 0 --question-end 50 --mock-llm -o /tmp/sqa3d_smoke.jsonl
 ```
 
-`run-batch` skips questions without a local ScanNet mesh by default (`--skip-missing-scenes`). Indices are positions in the split list, not `question_id` values.
+`run-batch` skips questions without required replay assets by default (`--skip-missing-scenes`; respects `--replay-mode`). Indices are positions in the split list, not `question_id` values.
+
+**Batch vs sweep**
+
+| Command | VLM | `--isolate-episodes` default | Typical use |
+|---------|-----|------------------------------|-------------|
+| `run-batch` | mock or real (`--profile`) | **off** (single process, faster if GPU is dedicated) | CI smoke, dev slices |
+| `run-real-sweep` | real (`tuned`) | **on** (subprocess per episode) | Paper numbers on one GPU |
+
+For real VLM on a shared or tight GPU, prefer `run-real-sweep` or `run-batch --isolate-episodes`. See [sqa3d_compute.md](sqa3d_compute.md).
+
+```bash
+# Real-VLM batch with GPU isolation (same as run-real-sweep without auto-eval)
+uv run emet sqa3d run-batch --split val --question-start 0 --question-end 30 \
+  --profile tuned --replay-mode sens --isolate-episodes \
+  -o /tmp/sqa3d_batch.jsonl
+```
 
 ## Paper figures (TP / FP / FN)
 
@@ -144,6 +188,7 @@ uv run emet test src/test/benchmarks/sqa3d/ -v
 
 ## See also
 
-- [dynagraph_benchmarks.md](dynagraph_benchmarks.md) — MuJoCo / MolmoSpaces harness
+- [sqa3d_compute.md](sqa3d_compute.md) — GPU memory, isolation, multi-GPU sharding (no pricing)
+- [dynagraph_benchmarks.md](dynagraph_benchmarks.md) — Dynagraph sim harness (separate from SQA3D)
 - [habitat/README.md](habitat/README.md) — HM-EQA Habitat harness
 - Paper: `paper/sections/04_experiments.tex` (SQA3D row in evaluation plan)

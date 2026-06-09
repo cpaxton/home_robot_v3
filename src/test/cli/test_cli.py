@@ -229,8 +229,23 @@ def test_sqa3d_help():
     out = result.stdout.lower()
     assert "run-episode" in out
     assert "run-batch" in out
+    assert "run-real-sweep" in out
     assert "plot-results" in out
     assert "info" in out
+
+
+def test_sqa3d_run_real_sweep_help():
+    """run-real-sweep documents replay-mode and isolate-episodes."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "sqa3d", "run-real-sweep", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    out = result.stdout
+    assert "--replay-mode" in out
+    assert "--isolate-episodes" in out
+    assert "--with-sens" in out
 
 
 def test_eval_sqa3d_help():
