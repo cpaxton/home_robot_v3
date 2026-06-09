@@ -25,7 +25,9 @@ from emet.eval.ovmm_find_phase import (
     compute_find_phase_metrics,
     distance_to_placement_xy,
     horizontal_coords,
+    localization_pred_fields,
     pick_find_object_gt_body,
+    pred_xyz_to_json_list,
     score_find_object,
     score_find_recep,
 )
@@ -124,6 +126,15 @@ def test_distance_to_bounds_habitat_xz():
     err2 = distance_to_placement_xy([2.0, 0.5, 2.0], placement, frame="habitat_xz")
     assert abs(err2 - 0.5) < 1e-6
     assert horizontal_coords([1.0, 0.5, 2.0], frame="habitat_xz").tolist() == [1.0, 2.0]
+
+
+def test_pred_xyz_to_json_list():
+    assert pred_xyz_to_json_list(None) is None
+    assert pred_xyz_to_json_list([0.1, -0.5]) == [0.1, -0.5, 0.0]
+    assert pred_xyz_to_json_list(np.array([0.08, -0.55, 0.6])) == [0.08, -0.55, 0.6]
+    fields = localization_pred_fields([0.08, -0.55, 0.6], None)
+    assert fields["pred_obj_xyz"] == [0.08, -0.55, 0.6]
+    assert fields["pred_recep_xyz"] is None
 
 
 def test_compute_find_phase_partial_success():

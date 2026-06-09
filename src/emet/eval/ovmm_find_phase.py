@@ -58,6 +58,7 @@ class FindPhaseRunConfig:
     port_offset: int = 0
     not_rotate: bool = False
     perfect_depth: bool = True
+    seed: int | None = None
 
 
 def load_find_phase_episodes(path: str | Path) -> list[FindPhaseEpisode]:
@@ -205,6 +206,41 @@ def _pred_xyz_array(pred_xyz: np.ndarray | list | None) -> np.ndarray | None:
     if arr.size == 2:
         return np.array([float(arr[0]), float(arr[1]), 0.0], dtype=np.float64)
     return arr[:3]
+
+
+def pred_xyz_to_json_list(pred_xyz: np.ndarray | list | None) -> list[float] | None:
+    """Serialize a predicted XYZ for JSON metrics artifacts."""
+    arr = _pred_xyz_array(pred_xyz)
+    if arr is None:
+        return None
+    return [float(arr[0]), float(arr[1]), float(arr[2])]
+
+
+def localization_pred_fields(
+    obj_pred_xyz: np.ndarray | list | None,
+    recep_pred_xyz: np.ndarray | list | None,
+) -> dict[str, list[float] | None]:
+    """Pred XYZ fields included in find-phase run JSON."""
+    return {
+        "pred_obj_xyz": pred_xyz_to_json_list(obj_pred_xyz),
+        "pred_recep_xyz": pred_xyz_to_json_list(recep_pred_xyz),
+    }
+
+
+def set_find_phase_run_seed(seed: int) -> None:
+    """Best-effort RNG seeding for repeatable perception/mapping runs."""
+    import random
+
+    random.seed(seed)
+    np.random.seed(seed % (2**32 - 1))
+    try:
+        import torch
+
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except ImportError:
+        pass
 
 
 def _query_variants(query: str, placements: dict[str, dict[str, Any]] | None = None) -> list[str]:
@@ -710,6 +746,9 @@ def run_episode_find_phase(
     )
     from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
 
+    if run_cfg.seed is not None:
+        set_find_phase_run_seed(int(run_cfg.seed))
+
     repo = repo_root or Path(__file__).resolve().parents[3]
     sim_cfg = load_sim_launch_config_from_path(episode.sim)
     port_offset = int(run_cfg.port_offset)
@@ -869,6 +908,8 @@ def run_episode_find_phase(
             "recep_localize_success": bool(recep_ok),
             "obj_query_used": obj_q_used,
             "recep_query_used": recep_q_used,
+            "seed": run_cfg.seed,
+            **localization_pred_fields(obj_xyz, recep_xyz),
             **find_metrics,
             **scaling,
             **gt_metrics,

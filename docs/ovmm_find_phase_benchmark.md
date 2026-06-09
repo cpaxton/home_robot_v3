@@ -85,8 +85,27 @@ Outputs per run: `runs/ovmm_find_phase/<episode_id>_<backend>.json` plus `aggreg
 - `find_object_success`, `find_recep_success` @ `success_radius_m`
 - `find_partial_success` = mean of the two (OVMM-style 2-phase partial)
 - `localization_err_obj_m`, `localization_err_recep_m`
+- `pred_obj_xyz`, `pred_recep_xyz` — predicted world XYZ (MuJoCo world or Habitat Y-up) for audit
+- `seed` — RNG seed when set via replicate runner or `FindPhaseRunConfig.seed`
 - Scaling: `n_graph_nodes`, `n_voxel_explored_cells`, `n_voxel_explored_area_m2`, `n_placements`, `episode_wall_s`
-- Optional GT diagnostics: `gt_graph_completeness`, `instance_gt_association_recall`
+- Optional GT diagnostics: `gt_graph_completeness`, `instance_gt_association_recall` (GT-oracle graph only)
+
+### Multi-seed replication (variability audit)
+
+Perception backends are non-deterministic; use multiple seeds and inspect `pred_*_xyz`:
+
+```bash
+uv run python scripts/replicate_ovmm_find_phases.py \
+  --episode-id default_table_s0 \
+  --backend dynagraph \
+  --replicates 5 \
+  --seed-base 0 \
+  --cpu-only \
+  --output-dir ~/runs/emet/ovmm_find_phase/s0_audit
+```
+
+Writes `seed_<n>/<episode>_<backend>.json` plus `aggregate_replicates.json` (mean/std per metric).
+Each replicate uses `port_offset = port_offset_base + seed * 2` to avoid ZMQ port clashes.
 
 ## Measured results (emet sim)
 

@@ -31,9 +31,11 @@ from emet.eval.ovmm_find_phase import (
     compute_find_phase_metrics,
     create_find_phase_agent,
     get_memory_backend_for_agent,
+    localization_pred_fields,
     query_find_phase_localization,
     resolve_object_query,
     run_mapping_protocol,
+    set_find_phase_run_seed,
 )
 from emet.habitat.config import default_hm3d_scene_dir
 from emet.habitat.datasets import load_scene_init_poses
@@ -98,6 +100,9 @@ def run_habitat_find_phase_episode(
     device: str | None = "cpu",
 ) -> dict[str, Any]:
     """Run one Habitat find-phase episode with emet memory backends."""
+    if run_cfg.seed is not None:
+        set_find_phase_run_seed(int(run_cfg.seed))
+
     poses = load_scene_init_poses(init_poses_path)
     init_pose = poses.get((episode.scene, episode.floor))
     if init_pose is None:
@@ -234,6 +239,8 @@ def run_habitat_find_phase_episode(
             "recep_localize_success": bool(recep_ok),
             "obj_query_used": obj_q_used,
             "recep_query_used": recep_q_used,
+            "seed": run_cfg.seed,
+            **localization_pred_fields(obj_xyz, recep_xyz),
             **find_metrics,
             **scaling,
         }
