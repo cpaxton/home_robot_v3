@@ -116,7 +116,9 @@ Score batch JSONL with `emet eval-sqa3d`.
 | **`sens`** | Require `.sens`; fail fast if missing. Best match to real ScanNet appearance at the annotated pose |
 | **`mesh`** | Open3D offscreen rendering over `_vh_clean_2.ply` only (vertex-color unlit shading) |
 
-When `.sens` is active, RGB and depth come from the nearest recorded frame to the agent camera pose; `Observations.camera_pose` uses the ScanNet camera extrinsics (OpenCV convention). Navigation away from the anchor falls back to mesh in `auto` mode.
+When `.sens` is active, RGB and depth come from the nearest recorded frame to the agent camera pose; `Observations.camera_pose` uses the ScanNet camera extrinsics (OpenCV convention). Navigation away from the anchor falls back to mesh in `auto` mode. If the nearest sens frame is farther than **0.75 m** XY from the target camera pose, `auto` also falls back to mesh (match distance is logged as `sens_match_xy_m` in episode JSONL).
+
+**ScanNetRobotClient** (`src/emet/benchmarks/sqa3d/scannet/robot_client.py`) is the in-process `AbstractRobotClient` shim over the replay simulator. Goals are scene-frame `(x, y, yaw)`; `world_frame` is accepted for ZMQ API parity but ignored. `get_emet_session()` always returns `None`.
 
 Real-VLM runs use **640×480**; smoke mock uses **480×360**. The agent is placed at the SQA3D annotation pose (`position` + quaternion `rotation`), then explores and answers with `prompt_variant: sqa3d`.
 
@@ -191,4 +193,4 @@ uv run emet test src/test/benchmarks/sqa3d/ -v
 - [sqa3d_compute.md](sqa3d_compute.md) — GPU memory, isolation, multi-GPU sharding (no pricing)
 - [dynagraph_benchmarks.md](dynagraph_benchmarks.md) — Dynagraph sim harness (separate from SQA3D)
 - [habitat/README.md](habitat/README.md) — HM-EQA Habitat harness
-- Paper: `paper/sections/04_experiments.tex` (SQA3D row in evaluation plan)
+- Paper: `paper/sections/04_experiments.tex` (`sec:sqa3d_benchmark`), `paper/sections/05_results.tex` (`tab:sqa3d_backend_replay`)

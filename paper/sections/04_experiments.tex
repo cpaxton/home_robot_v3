@@ -6,9 +6,10 @@
 \subsection{Goals}
 
 \begin{enumerate}
-  \item \textbf{Habitat (primary):} Reproduce GraphEQA-style metrics on HM-EQA (113 questions) and an OpenEQA subset: success rate, mean planning steps, GraphEQA vs.\ Dynagraph vs.\ ablations.
-  \item \textbf{SQA3D (situated open QA):} Embodied replay on ScanNet meshes (\texttt{emet sqa3d run-episode}) and offline EM@1 scoring (\texttt{emet eval-sqa3d}); agent pose from annotations; compare GraphEQA vs.\ Dynagraph with \texttt{prompt\_variant: sqa3d}.
-  \item \textbf{Emet sim (complementary):} Robocasa kitchens and MolmoSpaces iTHOR with Stretch, Galaxea R1 (rby1), and Innate Mars (Appendix~\ref{app:innate_mars}); depth-source policy in Appendix~\ref{app:da3}; GT-supervised object finding (Section~\ref{sec:gt_experiments}) for sim-oracle benchmarks without Habitat.
+  \item \textbf{Habitat EQA (primary):} Reproduce GraphEQA-style metrics on HM-EQA (113 questions) and an OpenEQA subset: success rate, mean planning steps, GraphEQA vs.\ Dynagraph vs.\ ablations.
+  \item \textbf{SQA3D situated open QA:} Embodied ScanNet replay with EM@1 scoring (Section~\ref{sec:sqa3d_benchmark}); compare \texttt{dynamem} vs.\ \texttt{dynagraph} with \texttt{prompt\_variant: sqa3d}.
+  \item \textbf{OVMM-inspired find-phase:} FindObj / FindRec localization on Emet sim tiers S0--S2 and Habitat HM3D proxy episodes (Section~\ref{sec:ovmm_find_phase}); same memory backends as SQA3D where applicable.
+  \item \textbf{Emet sim (complementary):} Robocasa kitchens and MolmoSpaces iTHOR with Stretch, Galaxea R1 (rby1), and Innate Mars (Appendix~\ref{app:innate_mars}); depth-source policy in Appendix~\ref{app:da3}; GT-supervised object finding (Section~\ref{sec:gt_experiments}).
   \item \textbf{Dynamic episodes:} After object relocation, measure stale nodes, wrong answers, and recovery steps (Dynagraph vs.\ GraphEQA without staleness).
 \end{enumerate}
 
@@ -33,8 +34,10 @@
     \toprule
     Environment & Serve command & Role \\
     \midrule
-    Habitat + HM3D & Habitat harness & GraphEQA parity \\
-    ScanNet + SQA3D & \texttt{emet eval-sqa3d} & Situated open QA (EM@1) \\
+    Habitat + HM3D & Habitat harness & GraphEQA parity (HM-EQA / OpenEQA) \\
+    Habitat + HM3D & \texttt{eval\_habitat\_ovmm\_find\_phases.py} & OVMM find-phase proxy (Phase~2) \\
+    ScanNet + SQA3D & \texttt{emet sqa3d run-batch} & Situated open QA (EM@1) \\
+    Emet sim (S0--S2) & \texttt{eval\_ovmm\_find\_phases.py} & OVMM FindObj / FindRec \\
     Robocasa & \texttt{emet serve robocasa} & Kitchen objects, manipulation clutter \\
     MolmoSpaces iTHOR & \texttt{emet serve molmospaces} & Multi-room exploration \\
     Default table & \texttt{emet serve mujoco} & Sanity / CI-style scenes \\
@@ -79,6 +82,35 @@ Robocasa kitchens (multiple layout/style seeds) and the default table scene serv
 
 See Appendix~\ref{app:ground_truth_graph} for GT graph construction and export layout.
 
+\subsection{SQA3D situated open QA (ScanNet replay)}
+\label{sec:sqa3d_benchmark}
+
+\textit{Results pending.}
+SQA3D~\cite{sqa3d2023} evaluates \emph{situated} open-ended QA: each sample fixes agent pose in a ScanNet scene and asks a free-form question about the surroundings.
+We report \textbf{EM@1} after the official answer normalization protocol (LEO / LLaVA-3D style), not multiple-choice accuracy.
+
+\textbf{Memory backends} (same naming as OVMM find-phase where applicable):
+\texttt{dynamem} (voxel semantic memory + EQA), \texttt{dynagraph} (voxel + GraphEQA graph, default), optional GraphEQA-only ablations via \texttt{graph\_eqa} settings in yaml.
+
+\textbf{Replay.}
+Posed ScanNet \texttt{.sens} RGB-D when available (\texttt{--replay-mode sens}); otherwise Open3D mesh rendering over \texttt{\_vh\_clean\_2.ply}.
+\texttt{auto} falls back to mesh when the agent leaves the SQA3D anchor neighborhood or when the nearest sens frame exceeds 0.75\,m XY.
+Episode JSONL logs \texttt{replay\_backend}, \texttt{sens\_match\_xy\_m}, and \texttt{infra\_failure} for figure breakdowns (TP/FP/FN/infra).
+
+\textbf{Protocol.}
+\begin{enumerate}
+  \item Data: \texttt{scripts/download\_sqa3d\_data.py --fetch-annotations}; ScanNet meshes + optional \texttt{.sens} via \texttt{scripts/download\_scannet\_data.py --with-sens}.
+  \item Smoke: \texttt{emet sqa3d run-episode --mock-llm --question-id <id>}.
+  \item Real-VLM batch: \texttt{emet sqa3d run-real-sweep --split val --replay-mode sens --isolate-episodes} (GPU-isolated subprocesses; see \texttt{docs/sqa3d\_compute.md}).
+  \item Score / figures: \texttt{emet eval-sqa3d -p <batch>.jsonl}; \texttt{emet sqa3d plot-results -p <batch>.jsonl -o figs/}.
+\end{enumerate}
+
+\textbf{Metrics.}
+EM@1, EM@1 refined (diagnostic), mean planning steps, TP/FP/FN/infra outcome counts, optional per-question-type breakdown.
+Not comparable to OVMM find-phase partial success (different task: language answers vs.\ object/receptacle localization).
+
+See \texttt{docs/sqa3d.md}.
+
 \subsection{OVMM-inspired find-phase localization}
 \label{sec:ovmm_find_phase}
 
@@ -119,7 +151,7 @@ Molmo GT fixture scans may cap on large scenes; Robocasa layout $\neq$ HSSD; sta
 \subsection{Execution protocol}
 
 \begin{enumerate}
-  \item Start sim: \texttt{emet serve <backend> --robot <name> --headless --port-offset N}.
-  \item Run agent: \texttt{emet run dynagraph --robot <name> --port-offset N --export runs/<id>}.
-  \item Habitat batch runner (harness branch): dataset-driven episodes with shared metrics export.
+  \item \textbf{Emet sim:} \texttt{emet serve <backend> --robot <name> --headless --port-offset N}; \texttt{emet run dynagraph --export runs/<id>}; OVMM find-phase via \texttt{scripts/eval\_ovmm\_find\_phases.py}.
+  \item \textbf{SQA3D:} \texttt{emet sqa3d run-batch} or \texttt{run-real-sweep} $\rightarrow$ JSONL $\rightarrow$ \texttt{emet eval-sqa3d} (no live sim server).
+  \item \textbf{Habitat EQA / OVMM:} \texttt{.venv-habitat/bin/emet-habitat} batch runners; HM-EQA harness (separate branch) and \texttt{eval\_habitat\_ovmm\_find\_phases.py} for find-phase proxy.
 \end{enumerate}
