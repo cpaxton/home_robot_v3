@@ -621,18 +621,14 @@ def apply_backend_parameters(
     staleness_horizon: int | None = None,
 ) -> Any:
     """Configure dynagraph merge/staleness for backend comparison runs."""
-    if backend == "graph_eqa":
-        parameters["dynagraph_merge_xy_m"] = 0.0
-        parameters["dynagraph_staleness_horizon"] = 0
-    elif backend in ("dynagraph", "ground_truth"):
-        # Tight merge for find-phase localization (0.45 m merge inflates centroid error ~0.4 m).
-        parameters.setdefault("dynagraph_merge_xy_m", 0.15)
-        parameters.setdefault("dynagraph_staleness_horizon", 256)
-    if merge_xy_m is not None:
-        parameters["dynagraph_merge_xy_m"] = float(merge_xy_m)
-    if staleness_horizon is not None:
-        parameters["dynagraph_staleness_horizon"] = int(staleness_horizon)
-    return parameters
+    from emet.eval.benchmark_dynagraph import apply_ovmm_backend_dynagraph
+
+    return apply_ovmm_backend_dynagraph(
+        parameters,
+        backend,
+        merge_xy_m=merge_xy_m,
+        staleness_horizon=staleness_horizon,
+    )
 
 
 def create_find_phase_agent(

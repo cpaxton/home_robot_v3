@@ -1,0 +1,73 @@
+# Copyright (c) Chris Paxton
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
+from __future__ import annotations
+
+from emet.core.parameters import get_parameters
+from emet.eval.benchmark_dynagraph import (
+    apply_ovmm_backend_dynagraph,
+    apply_sqa3d_dynagraph,
+    harness_controller_options,
+    profile_settings,
+    resolve_ovmm_dynagraph_profile,
+    resolve_sqa3d_dynagraph_profile,
+)
+from emet.eval.ovmm_find_phase import apply_backend_parameters
+
+
+def test_dynav_config_matches_interactive_profile():
+    params = get_parameters("dynav_config.yaml")
+    interactive = profile_settings("interactive")
+    assert params.get("dynagraph_merge_xy_m") == interactive["dynagraph_merge_xy_m"]
+    assert params.get("dynagraph_staleness_horizon") == interactive["dynagraph_staleness_horizon"]
+
+
+def test_ovmm_and_shared_module_agree():
+    base = get_parameters("dynav_config.yaml")
+    for backend in ("graph_eqa", "dynagraph", "ground_truth"):
+        via_shared = apply_ovmm_backend_dynagraph(base, backend)
+        via_legacy = apply_backend_parameters(get_parameters("dynav_config.yaml"), backend)  # type: ignore[arg-type]
+        assert via_shared.get("dynagraph_merge_xy_m") == via_legacy.get("dynagraph_merge_xy_m")
+        assert via_shared.get("dynagraph_staleness_horizon") == via_legacy.get(
+            "dynagraph_staleness_horizon"
+        )
+
+
+def test_ovmm_find_phase_profile_tighter_than_interactive():
+    params = apply_ovmm_backend_dynagraph(get_parameters("dynav_config.yaml"), "dynagraph")
+    interactive = profile_settings("interactive")
+    assert params.get("dynagraph_merge_xy_m") < interactive["dynagraph_merge_xy_m"]
+    assert params.get("dynagraph_staleness_horizon") == interactive["dynagraph_staleness_horizon"]
+
+
+def test_sqa3d_tuned_uses_interactive_merge():
+    params = apply_sqa3d_dynagraph(get_parameters("dynav_config.yaml"), method="dynagraph", profile="tuned")
+    interactive = profile_settings("interactive")
+    assert params.get("dynagraph_merge_xy_m") == interactive["dynagraph_merge_xy_m"]
+    eqa = profile_settings("eqa")
+    assert params.get("graph_eqa_extract", {}).get("navigation_samples_max") == eqa[
+        "graph_eqa_extract"
+    ]["navigation_samples_max"]
+
+
+def test_sqa3d_smoke_disables_merge():
+    params = apply_sqa3d_dynagraph(get_parameters("dynav_config.yaml"), method="dynagraph", profile="smoke")
+    smoke = profile_settings("smoke")
+    assert params.get("dynagraph_merge_xy_m") == smoke["dynagraph_merge_xy_m"]
+    assert params.get("dynagraph_staleness_horizon") == smoke["dynagraph_staleness_horizon"]
+
+
+def test_profile_resolution():
+    assert resolve_ovmm_dynagraph_profile("graph_eqa") == "graph_eqa_baseline"
+    assert resolve_ovmm_dynagraph_profile("dynagraph") == "find_phase"
+    assert resolve_sqa3d_dynagraph_profile("dynagraph", profile="tuned") == "eqa"
+    assert resolve_sqa3d_dynagraph_profile("dynamem", profile="tuned") is None
+
+
+def test_harness_controller_docs_present():
+    ovmm = harness_controller_options("ovmm_find_phase", "dynagraph")
+    sqa3d = harness_controller_options("sqa3d", "dynagraph")
+    assert ovmm.get("use_instance_graph") is True
+    assert sqa3d.get("use_instance_graph") is False
+    assert sqa3d.get("prompt_variant") == "sqa3d"

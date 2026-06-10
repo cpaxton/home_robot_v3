@@ -92,21 +92,9 @@ def _apply_profile_parameters(
     method: SQA3DMethod,
     profile: SQA3DProfile,
 ) -> Parameters:
-    if isinstance(parameters, dict):
-        params = Parameters(**parameters)
-    else:
-        params = parameters
-    if method == "dynagraph" and profile == "smoke":
-        params["dynagraph_merge_xy_m"] = 0.0
-        params["dynagraph_staleness_horizon"] = 0
-    if profile == "tuned":
-        graph_extract = dict(params.get("graph_eqa_extract", {}) or {})
-        graph_extract["navigation_samples_max"] = min(
-            int(graph_extract.get("navigation_samples_max", 256) or 256),
-            48,
-        )
-        params.set("graph_eqa_extract", graph_extract)
-    return params
+    from emet.eval.benchmark_dynagraph import apply_sqa3d_dynagraph
+
+    return apply_sqa3d_dynagraph(parameters, method=method, profile=profile)
 
 
 def _configure_eqa_parameters(
