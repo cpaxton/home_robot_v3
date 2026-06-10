@@ -12,7 +12,7 @@ from typing import Any
 import torch
 
 from emet.core.parameters import Parameters
-from emet.llms.eqa_vl_settings import apply_eqa_vl_runtime_settings, get_eqa_vl_int
+from emet.llms.eqa_vl_settings import apply_eqa_vl_runtime_settings, get_eqa_vl_int, resolve_vl_hf_model_id
 from emet.llms.prompts.eqa_prompt import EQA_PROMPT
 from emet.benchmarks.sqa3d.prompts import SQA3D_EQA_PROMPT
 from emet.llms.prompts.hmeqa_eqa_prompt import HMEQA_EQA_PROMPT
@@ -75,13 +75,15 @@ def _get_shared_vlm(
     if fam is None:
         raise ValueError("build_graph_eqa_vlm_clients requires eqa.vl_family qwen3_vl|qwen2_5_vl|gemma4")
     dev = _resolve_device(device)
-    hf_id = eqa.get("vl_hf_model_id") or default_hf_model_id(fam)
+    hf_id = resolve_vl_hf_model_id(fam, parameters, device=dev) or default_hf_model_id(fam)
     vl_sz = str(eqa.get("vl_model_size", "4B") or "4B")
     vl_tok = int(eqa.get("vl_max_tokens", 512) or 512)
     vl_q = eqa.get("vl_quantization", "int4")
     key = (fam, hf_id, vl_sz, vl_tok, vl_q, dev)
     if _SHARED_VLM is not None and _SHARED_VLM_KEY == key:
         return _SHARED_VLM
+    if _SHARED_VLM is not None and _SHARED_VLM_KEY != key:
+        release_shared_graph_eqa_vlm()
     _SHARED_VLM = create_dynamem_vllm(
         fam,
         hf_model_id=hf_id,
@@ -112,6 +114,39 @@ class GraphEQAVLMClient:
             system_prompt=system_prompt,
             max_new_tokens=max_new,
         )
+
+
+def trim_shared_graph_eqa_vlm_cache() -> None:
+    """Release activation memory after an EQA forward without unloading weights."""
+    try:
+        import gc
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
+def release_shared_graph_eqa_vlm() -> None:
+    """Drop the process-global GraphEQA VLM so Habitat episodes do not accumulate VRAM."""
+    global _SHARED_VLM, _SHARED_VLM_KEY
+    if _SHARED_VLM is None:
+        return
+    try:
+        del _SHARED_VLM
+    except Exception:
+        pass
+    _SHARED_VLM = None
+    _SHARED_VLM_KEY = None
+    try:
+        import gc
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
 
 
 def build_graph_eqa_vlm_clients(

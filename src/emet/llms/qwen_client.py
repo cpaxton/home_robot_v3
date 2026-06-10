@@ -17,6 +17,7 @@ from termcolor import colored
 from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig, pipeline
 
 from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder, AbstractVLLMClient
+from emet.llms.repetition_stop import repetition_stopping_criteria
 from emet.utils.logger import Logger, suppress_hf_hub_http_logging
 
 _qwen35_vl_logger = Logger(__name__)
@@ -303,6 +304,13 @@ class Qwen25VLClient(AbstractVLLMClient):
         self.max_tokens = max_tokens
         self.num_beams = num_beams
         self.use_fast_attn = use_fast_attn
+        # NOTE: do NOT enable HF repetition_penalty / no_repeat_ngram_size here. The
+        # GraphEQA loop feeds prior iterations back via the HISTORY block, and HF's
+        # repetition_penalty also penalizes input tokens — so it pushes the model away
+        # from its own earlier answers and destabilizes the MCQ letter. Caption runaway
+        # is instead handled by GraphEQAMemory._salvage_answer_letter (blank-answer retry).
+        self.repetition_penalty = 1.0
+        self.no_repeat_ngram_size = 0
 
         if hf_model_id is not None:
             model_name = hf_model_id
@@ -358,12 +366,32 @@ class Qwen25VLClient(AbstractVLLMClient):
             **model_kwargs,
         }
         if device == "cuda":
-            pretrained_kw["device_map"] = "auto"
+            pretrained_kw["device_map"] = {"": 0} if quantization_config is not None else "auto"
         elif device == "mps":
             pretrained_kw["device_map"] = "mps"
-        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_name, **pretrained_kw)
-        if device == "cpu":
+        try:
+            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_name, **pretrained_kw)
+        except (ValueError, RuntimeError) as e:
+            err = str(e).lower()
+            recoverable = device == "cuda" and quantization_config is not None and (
+                "dispatched" in err or "disk" in err or "out of memory" in err or "expanded size" in err
+            )
+            if not recoverable:
+                raise
+            import warnings
+
+            from emet.utils.logger import Logger
+
+            Logger(__name__).warning("Qwen2.5-VL int4 GPU load failed (%s); retrying bf16 on CPU.", e)
+            warnings.warn(f"Qwen2.5-VL falling back to CPU bf16: {e}", UserWarning, stacklevel=2)
+            self._device = "cpu"
+            self._quantization = None
+            fallback_kw: dict[str, Any] = {"dtype": "auto"}
+            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_name, **fallback_kw)
             self.model = self.model.to("cpu")
+        else:
+            if device == "cpu":
+                self.model = self.model.to("cpu")
 
     @property
     def canonical_model_key(self) -> str:
@@ -431,8 +459,13 @@ class Qwen25VLClient(AbstractVLLMClient):
             "max_new_tokens": ntok,
             "num_beams": self.num_beams,
         }
+        if self.repetition_penalty and self.repetition_penalty != 1.0:
+            gen_kw["repetition_penalty"] = float(self.repetition_penalty)
+        if self.no_repeat_ngram_size and self.no_repeat_ngram_size > 0:
+            gen_kw["no_repeat_ngram_size"] = int(self.no_repeat_ngram_size)
         if pad_id is not None:
             gen_kw["pad_token_id"] = pad_id
+        gen_kw["stopping_criteria"] = repetition_stopping_criteria(int(inputs.input_ids.shape[1]))
         generated_ids = self.model.generate(**inputs, **gen_kw)
         generated_ids_trimmed = [
             out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids, strict=False)
@@ -583,7 +616,12 @@ class Qwen35VLClient:
             text = self.processor.apply_chat_template(messages, **_tmpl_kw)
         proc_inputs = self.processor(text=[text], padding=True, return_tensors="pt")
         proc_inputs = proc_inputs.to(self._device)
-        generated_ids = self.model.generate(**proc_inputs, max_new_tokens=cap, num_beams=self.num_beams)
+        generated_ids = self.model.generate(
+            **proc_inputs,
+            max_new_tokens=cap,
+            num_beams=self.num_beams,
+            stopping_criteria=repetition_stopping_criteria(int(proc_inputs.input_ids.shape[1])),
+        )
         return self._decode_generation(proc_inputs, generated_ids)
 
     def _qwen35_generate_multimodal(self, messages: list, _tmpl_kw: dict[str, Any], cap: int) -> str:
@@ -604,7 +642,12 @@ class Qwen35VLClient:
         ids = proc_inputs.get("input_ids")
         if ids is None or (isinstance(ids, torch.Tensor) and ids.numel() == 0):
             raise ValueError("processor returned empty input_ids (multimodal)")
-        generated_ids = self.model.generate(**proc_inputs, max_new_tokens=cap, num_beams=self.num_beams)
+        generated_ids = self.model.generate(
+            **proc_inputs,
+            max_new_tokens=cap,
+            num_beams=self.num_beams,
+            stopping_criteria=repetition_stopping_criteria(int(ids.shape[1])),
+        )
         return self._decode_generation(proc_inputs, generated_ids)
 
     def _qwen35_generate(self, messages: list, _tmpl_kw: dict[str, Any], cap: int) -> str:

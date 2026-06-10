@@ -851,9 +851,19 @@ class MujocoZmqServer(BaseZmqServer):
             self.robot_sim.set_base_velocity(v_linear=action["base_velocity"]["v"], omega=action["base_velocity"]["w"])
         elif "xyt" in action:
             relative_motion = bool(action.get("nav_relative", False))
+            nav_world = bool(action.get("nav_world", False))
             nav_teleport = bool(action.get("nav_teleport", False)) or self._use_molmospaces_nav_teleport()
+            if not nav_teleport:
+                from emet.simulation.env_flags import env_sim_nav_teleport
+
+                if env_sim_nav_teleport():
+                    nav_teleport = True
+            raw = np.asarray(action["xyt"], dtype=np.float64).reshape(-1)[:3]
+            if nav_world and not relative_motion:
+                world = raw
+            else:
+                world = self._xyt_action_to_world(raw, relative=relative_motion)
             if nav_teleport:
-                world = self._xyt_action_to_world(np.asarray(action["xyt"], dtype=np.float64), relative=relative_motion)
                 if self._teleport_base_world(world):
                     self.active = False
                     self.xyt_goal = None

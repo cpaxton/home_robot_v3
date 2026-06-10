@@ -225,3 +225,32 @@ class MaskSiglipEncoder(SiglipEncoder):
             f = F.normalize(f, dim=0).permute(1, 2, 0)
             features.append(f.detach().cpu())
         return features
+
+
+_SHARED_MASK_SIGLIP: dict[tuple[str, str], "MaskSiglipEncoder"] = {}
+
+
+def get_shared_mask_siglip_encoder(
+    version: str = "so400m",
+    device: str = "cuda",
+    feature_matching_threshold: float = 0.12,
+) -> "MaskSiglipEncoder":
+    """Return a process-wide, load-once ``MaskSiglipEncoder`` keyed by (version, device).
+
+    Batch runs (e.g. Habitat EQA) build a fresh controller per episode; without sharing,
+    SigLIP weights would reload every episode (slow + VRAM churn). Mirrors the shared
+    GraphEQA VLM client pattern.
+    """
+    key = (version or "so400m", device or "cuda")
+    enc = _SHARED_MASK_SIGLIP.get(key)
+    if enc is None:
+        enc = MaskSiglipEncoder(
+            version=key[0], device=key[1], feature_matching_threshold=feature_matching_threshold
+        )
+        _SHARED_MASK_SIGLIP[key] = enc
+    return enc
+
+
+def release_shared_mask_siglip_encoder() -> None:
+    """Drop the shared SigLIP encoder cache (free VRAM between batch runs)."""
+    _SHARED_MASK_SIGLIP.clear()

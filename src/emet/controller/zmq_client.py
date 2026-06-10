@@ -785,10 +785,19 @@ class StretchZmqClient(AbstractRobotClient):
 
         # We never send a relative motion over wireless - this is because we can run into timing issues.
         # Instead, we always send the absolute position and let the robot handle the motions itself.
-        next_action = {"xyt": _xyt, "nav_relative": False, "nav_blocking": blocking}
+        next_action: dict[str, Any] = {"xyt": _xyt, "nav_relative": False, "nav_blocking": blocking}
+        if relative:
+            next_action["nav_relative"] = True
+        elif world_frame:
+            next_action["nav_world"] = True
         sess = self.get_emet_session()
         if sess and (sess.get("capabilities") or {}).get("teleport_base"):
             next_action["nav_teleport"] = True
+        else:
+            from emet.simulation.env_flags import env_sim_nav_teleport
+
+            if env_sim_nav_teleport():
+                next_action["nav_teleport"] = True
         if self._rerun:
             self._rerun.update_nav_goal(_xyt)
 
@@ -1456,16 +1465,23 @@ class StretchZmqClient(AbstractRobotClient):
             assert len(pt) == 3 or len(pt) == 2, (
                 "base trajectory needs to be 2-3 dimensions: x, y, and (optionally) theta"
             )
-            self.move_base_to(pt, relative, blocking=False, reliable=False)
+            self.move_base_to(
+                pt,
+                relative=relative,
+                blocking=False,
+                reliable=False,
+                world_frame=world_frame,
+            )
             logger.debug(f"Moving to waypoint {pt}")
             last_waypoint = i == len(trajectory) - 1
             self.move_base_to(
                 pt,
-                relative=False,
+                relative=relative,
                 blocking=last_waypoint,
                 timeout=final_timeout if last_waypoint else per_waypoint_timeout,
                 verbose=verbose,
                 reliable=True if last_waypoint else False,
+                world_frame=world_frame,
             )
             if not last_waypoint:
                 self.wait_for_waypoint(

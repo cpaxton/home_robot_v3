@@ -165,6 +165,13 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
 
         time_heuristics = self._time_heuristic(history_soft, outside_frontier, debug=debug)
 
+        keyword_weight = self._frontier_keyword_weight()
+        keywords: list[str] = []
+        if text and keyword_weight > 0:
+            from emet.memory.graph_eqa.frontier_nodes import exploration_keywords_from_text
+
+            keywords = exploration_keywords_from_text(text)
+
         # TODO: Find good alignment heuristic, we have found few candidates but none of them has satisfactory performance
 
         ######################################
@@ -239,8 +246,37 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         #     maximum_filter(alignment_heuristics.numpy(), size=5)
         # )
 
+        from emet.memory.graph_eqa.frontier_nodes import _as_bool_numpy
+
+        unexplored = _as_bool_numpy(outside_frontier) & ~_as_bool_numpy(explored)
+
         alignments_heuristics = None
-        total_heuristics = time_heuristics
+        total_heuristics = np.asarray(time_heuristics, dtype=np.float64)
+        if keywords:
+            from emet.memory.graph_eqa.frontier_nodes import keyword_score_map
+
+            kw_scores = keyword_score_map(
+                unexplored,
+                getattr(self.voxel_map, "image_descriptions", None),
+                keywords,
+            )
+            if float(kw_scores.max()) > 0:
+                kw_norm = kw_scores / float(kw_scores.max())
+                alignments_heuristics = kw_norm
+                total_heuristics = total_heuristics + keyword_weight * kw_norm
+
+        # SigLIP activation sampling: bias frontiers toward unexplored cells adjacent to
+        # observations whose SigLIP features align with the query. Complements caption keyword
+        # overlap (which is partial and misses mislabeled objects) and works even when keyword
+        # extraction is empty. No-ops without a live SigLIP encoder (clean GraphEQA baseline).
+        sig_norm = self._siglip_activation_map(text, unexplored)
+        if sig_norm is not None:
+            siglip_weight = self._frontier_siglip_weight()
+            if siglip_weight > 0:
+                alignments_heuristics = (
+                    sig_norm if alignments_heuristics is None else np.maximum(alignments_heuristics, sig_norm)
+                )
+                total_heuristics = total_heuristics + siglip_weight * sig_norm
 
         rounded_heuristics = np.ceil(total_heuristics * 200) / 200
         max_heuristic = rounded_heuristics.max()
@@ -262,6 +298,98 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             plt.scatter(index[1], index[0], s=15, c="g")
             plt.show()
         return index, time_heuristics, alignments_heuristics, total_heuristics
+
+    def _siglip_activation_map(self, text, frontier_mask, radius_cells: int = 10, min_similarity: float = 0.20):
+        """2D SigLIP-activation heuristic over the frontier (``None`` if unavailable).
+
+        Scatters per-observed-point cosine similarity to *text* onto the 2D grid, spreads it to
+        the ``radius_cells`` neighborhood (so unexplored frontier cells next to a strong match are
+        boosted), keeps only the most-aligned region, and normalizes to ``[0, 1]``. Caption-
+        independent, so it heads toward a basket that was captioned "decorative plant".
+
+        Gated by ``min_similarity``: SigLIP cosine has a high floor (most points ~0.1), so without
+        an absolute threshold a max-normalize turns floor noise into a spurious bias that perturbs
+        the trajectory. The heuristic stays inert (returns ``None``) unless something genuinely
+        matches near the frontier, so it only redirects exploration on a real visual hint.
+        """
+        if not text:
+            return None
+        vm = self.voxel_map
+        if getattr(vm, "encoder", None) is None:
+            return None
+        if not hasattr(vm, "find_alignment_over_model"):
+            return None
+        try:
+            alignments = vm.find_alignment_over_model(text)
+        except Exception:
+            return None
+        if alignments is None:
+            return None
+        points, _, _, _ = vm.semantic_memory.get_pointcloud()
+        if points is None:
+            return None
+        a = alignments.detach().cpu().squeeze().reshape(-1).numpy()
+        pts = points.detach().cpu().numpy()
+        if pts.shape[0] == 0 or pts.shape[0] != a.shape[0]:
+            return None
+
+        from scipy.ndimage import maximum_filter
+
+        from emet.memory.graph_eqa.frontier_nodes import _as_bool_numpy
+
+        res = float(vm.grid_resolution)
+        origin = np.asarray(vm.grid_origin, dtype=float).reshape(-1)
+        mask = _as_bool_numpy(frontier_mask)
+        h, w = mask.shape
+        gi = np.floor(pts[:, 0] / res + origin[0] + 0.5).astype(np.int64)
+        gj = np.floor(pts[:, 1] / res + origin[1] + 0.5).astype(np.int64)
+        valid = (gi >= 0) & (gi < h) & (gj >= 0) & (gj < w)
+        gi, gj, av = gi[valid], gj[valid], a[valid].astype(np.float32)
+        if av.size == 0:
+            return None
+        score = np.zeros((h, w), dtype=np.float32)
+        np.maximum.at(score, (gi, gj), av)
+        score = maximum_filter(score, size=int(radius_cells))
+        score = score * mask
+        peak = float(score.max())
+        # Absolute gate: only bias the trajectory when a genuine match sits near the frontier;
+        # below the floor this is noise and should not perturb keyword/time exploration.
+        if peak < float(min_similarity):
+            return None
+        # Focus on the most-aligned frontier region (the high similarity floor would otherwise
+        # light up the whole boundary).
+        score[score < 0.6 * peak] = 0.0
+        return score / peak
+
+    def _frontier_siglip_weight(self) -> float:
+        vm = self.voxel_map
+        params = getattr(vm, "parameters", None)
+        if params is not None and hasattr(params, "get"):
+            blk = params.get("graph_eqa_frontier_nodes")
+            if not isinstance(blk, dict):
+                eqa = params.get("graph_eqa")
+                if isinstance(eqa, dict):
+                    blk = eqa.get("frontier_nodes")
+            if isinstance(blk, dict) and blk.get("siglip_score_weight") is not None:
+                return max(0.0, float(blk["siglip_score_weight"]))
+        # Default: match the keyword weight so SigLIP and caption keywords contribute equally.
+        return self._frontier_keyword_weight()
+
+    def _frontier_keyword_weight(self) -> float:
+        vm = self.voxel_map
+        params = getattr(vm, "parameters", None)
+        if params is None:
+            return 1.0
+        blk = None
+        if hasattr(params, "get"):
+            blk = params.get("graph_eqa_frontier_nodes")
+            if not isinstance(blk, dict):
+                eqa = params.get("graph_eqa")
+                if isinstance(eqa, dict):
+                    blk = eqa.get("frontier_nodes")
+        if isinstance(blk, dict) and blk.get("keyword_score_weight") is not None:
+            return max(0.0, float(blk["keyword_score_weight"]))
+        return 1.0
 
     def _time_heuristic(self, history_soft, outside_frontier, time_smooth=0.1, time_threshold=10, debug=False):
         frontier = np.asarray(outside_frontier, dtype=bool)

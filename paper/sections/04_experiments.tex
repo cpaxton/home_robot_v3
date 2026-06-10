@@ -7,7 +7,7 @@ Maintainer runbook: \texttt{docs/paper\_benchmarks.md} (commands, output paths, 
 \subsection{Goals}
 
 \begin{enumerate}
-  \item \textbf{Habitat EQA (primary):} Reproduce GraphEQA-style metrics on HM-EQA (113 questions) and an OpenEQA subset: success rate, mean planning steps, GraphEQA vs.\ Dynagraph vs.\ ablations.
+  \item \textbf{Habitat EQA (primary):} Reproduce GraphEQA-style metrics on HM-EQA (113 questions) and an OpenEQA subset: success rate, mean planning steps, GraphEQA vs.\ Dynagraph vs.\ ablations (parity checklist and official baselines: Appendix~\ref{app:habitat_eqa_parity}).
   \item \textbf{SQA3D situated open QA:} Embodied ScanNet replay with EM@1 scoring (Section~\ref{sec:sqa3d_benchmark}); compare \texttt{dynamem} vs.\ \texttt{dynagraph} with \texttt{prompt\_variant: sqa3d}.
   \item \textbf{OVMM-inspired find-phase:} FindObj / FindRec localization on Emet sim tiers S0--S2 and Habitat HM3D proxy episodes (Section~\ref{sec:ovmm_find_phase}); memory backends \texttt{dynamem}, \texttt{graph\_eqa}, \texttt{dynagraph}, and sim oracle \texttt{ground\_truth}.
   \item \textbf{Emet sim (complementary):} Robocasa kitchens and MolmoSpaces iTHOR with Stretch, Galaxea R1 (rby1), and Innate Mars (Appendix~\ref{app:innate_mars}); depth-source policy in Appendix~\ref{app:da3}; GT-supervised object finding (Section~\ref{sec:gt_experiments}).
@@ -20,10 +20,11 @@ Shared backend names (\texttt{src/emet/eval/memory\_backends.py}):
 
 \begin{itemize}
   \item \textbf{\texttt{dynamem}:} voxel semantic memory + EQA (no graph merge/staleness).
-  \item \textbf{\texttt{graph\_eqa}:} GraphEQA graph only; merge and staleness disabled (OVMM / ablations).
+  \item \textbf{\texttt{graph\_eqa}:} GraphEQA graph only; merge and staleness disabled (\texttt{emet run graph-eqa}; OVMM / ablations).
   \item \textbf{\texttt{dynagraph}:} voxel + graph with default merge/staleness (\texttt{emet run dynagraph}).
   \item \textbf{\texttt{ground\_truth}:} sim oracle graph from \texttt{sim\_object\_placements} (OVMM / GT finding upper bound).
-  \item \textbf{Ablations:} \texttt{--merge-xy-m 0}; \texttt{--staleness-horizon 0}; OK-Robot-style static prescanned map (optional).
+  \item \textbf{Ablations:} \texttt{--merge-xy-m 0}; \texttt{--staleness-horizon 0}; HM-EQA \textbf{frontier policy} (fluid voxel sampler vs.\ graph frontier nodes; Appendix~\ref{app:habitat_eqa_parity}); OK-Robot-style static prescanned map (optional).
+  \item \textbf{DynaMem voxel-only EQA} and \textbf{VLM-only} baselines where applicable.
 \end{itemize}
 
 \subsection{Benchmark configuration}
@@ -57,7 +58,7 @@ Override with \texttt{EMET\_OVMM\_OUTPUT\_SIM}, \texttt{EMET\_OVMM\_OUTPUT\_HABI
     \toprule
     Environment & Entrypoint & Role \\
     \midrule
-    Habitat + HM3D & \texttt{.venv-habitat/bin/emet-habitat} & GraphEQA parity (HM-EQA / OpenEQA) \\
+    Habitat + HM3D & \texttt{.venv-habitat/bin/emet-habitat} & GraphEQA parity (HM-EQA / OpenEQA; Appendix~\ref{app:habitat_eqa_parity}) \\
     Habitat + HM3D & \texttt{eval\_habitat\_ovmm\_find\_phases.py} & OVMM find-phase proxy (Phase~2) \\
     ScanNet + SQA3D & \texttt{emet sqa3d run-real-sweep} & Situated open QA (EM@1) \\
     Emet sim (S0--S2) & \texttt{eval\_ovmm\_find\_phases.py} & OVMM FindObj / FindRec \\

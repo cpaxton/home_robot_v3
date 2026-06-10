@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
@@ -62,10 +62,39 @@ class EpisodeMetrics:
     parsed_answer_letter: str = ""
     model_confident: bool = False
     raw_eqa_output: str = ""
+    # Debug / reproducibility (full raw EQA also in per-episode bundle ``raw_eqa.txt``).
+    choices: list[str] = field(default_factory=list)
+    formatted_answer: str = ""
+    eqa_action: str = ""
+    eqa_confidence_reasoning: str = ""
+    eqa_iterations: int = 0
+    frontier_nodes: int = 0
+    graph_nodes: int = 0
+    observations: int = 0
+    vl_family: str = ""
+    vl_hf_model_id: str = ""
+    debug_bundle_dir: str = ""
+    error: str = ""
 
     def to_dict(self) -> dict:
         """Serialize to a JSON-friendly dict (for JSONL export)."""
         return asdict(self)
+
+
+def _match_choice_text_to_letter(text: str, choices: list[str]) -> str:
+    """Map free-text (e.g. ``no``, ``off``) to A–D via HM-EQA choice strings."""
+    lowered = (text or "").strip().lower()
+    if not lowered:
+        return ""
+    for idx, choice in enumerate(choices[:4]):
+        choice_l = (choice or "").strip().lower()
+        if not choice_l:
+            continue
+        if lowered == choice_l:
+            return chr(ord("A") + idx)
+        if re.search(rf"\b{re.escape(choice_l)}\b", lowered):
+            return chr(ord("A") + idx)
+    return ""
 
 
 def extract_mcq_letter(predicted: str, choices: list[str] | None = None) -> str:
@@ -84,15 +113,44 @@ def extract_mcq_letter(predicted: str, choices: list[str] | None = None) -> str:
     compact = text.replace(" ", "").upper()
     if len(compact) == 1 and compact in "ABCD":
         return compact
-    m = re.search(r"(?:^answer\s*:\s*|^|\b)([A-D])\b", text, flags=re.IGNORECASE | re.MULTILINE)
+    m = re.search(r"^answer\s*:\s*([A-D])\b", text, flags=re.IGNORECASE | re.MULTILINE)
+    if m:
+        return m.group(1).upper()
+    m = re.search(r"(?:^|\n)\s*([A-D])\s*(?:\n|$)", text, flags=re.IGNORECASE)
     if m:
         return m.group(1).upper()
     if choices:
-        lowered = text.lower()
-        for idx, choice in enumerate(choices[:4]):
-            choice_l = choice.strip().lower()
-            if choice_l and choice_l in lowered:
-                return chr(ord("A") + idx)
+        letter = _match_choice_text_to_letter(text, choices)
+        if letter:
+            return letter
+    return ""
+
+
+def _answer_field_lines(raw: str) -> list[str]:
+    """Capture text after each line-start ``answer:`` (ignore prose like ``cannot answer``)."""
+    return [
+        m.group(1).strip()
+        for m in re.finditer(r"(?:^|\n)\s*answer\s*:\s*([^\n]*)", raw or "", flags=re.IGNORECASE)
+    ]
+
+
+def extract_mcq_letter_from_raw_eqa(raw: str, choices: list[str] | None = None) -> str:
+    """Parse MCQ letter from raw mLLM EQA output (before human-facing reformatting)."""
+    text = raw or ""
+    if not text.strip():
+        return ""
+    fields = _answer_field_lines(text)
+    if not fields:
+        return ""
+    answer_field = fields[-1]
+    if not answer_field:
+        return ""
+    letter = extract_mcq_letter(answer_field, choices)
+    if letter:
+        return letter
+    m = re.search(r"(?:^|\n)\s*answer\s*:\s*([a-d])\b", text, flags=re.IGNORECASE)
+    if m:
+        return m.group(1).upper()
     return ""
 
 

@@ -53,6 +53,9 @@ eqa:
   vl_max_tokens: 512
   vl_quantization: int4
   vl_hf_model_id: Qwen/Qwen3-VL-4B-Instruct
+  # Gemma int4 VRAM tiers (nvidia-smi memory.free MiB) when vl_hf_model_id unset and vl_family=gemma4
+  vram_mib_tier_gemma_e4b: 12000
+  vram_mib_tier_gemma_e2b: 7000
   gemini_model: gemini-2.5-flash
 
 # Object detection parameters (used when use_instance_memory is True; YoloE runs for instance segmentation)
@@ -190,7 +193,11 @@ eqa_vl:
   keyword_max_tokens: 64
   graph_keyword_max_tokens: 64
   voxel_keyword_max_tokens: 20
-  eqa_max_tokens: 1024
+  eqa_max_tokens: 512
+  eqa_max_images: 4
+  # Cap how many prior planning iterations are replayed in the prompt. Unbounded history
+  # bloats the prompt and feeds the model its own repeated outputs (caption/action loops).
+  eqa_max_history: 4
   verbose_hf: false
 
 # GraphEQA: VLM object-name extraction (JSON-only; avoids CoT in node labels)
@@ -205,6 +212,14 @@ graph_eqa_extract:
 
 # When false, generic-label frames are dropped (no graph node, no navigation sample).
 graph_eqa_record_navigation: true
+
+# GraphEQA / Dynagraph: voxel frontiers mirrored as graph nodes for EQA prompts + nav.
+graph_eqa_frontier_nodes:
+  enabled: true
+  max_nodes: 12
+  min_cluster_cells: 3
+  # Blend keyword overlap with time heuristic in voxel sample_exploration (higher = more question bias).
+  keyword_score_weight: 2.0
 
 # Live Rerun (``emet run dynamem``, ``emet run dynagraph``). See ``agents/default_rerun.yaml``.
 rerun:

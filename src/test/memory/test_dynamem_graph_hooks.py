@@ -61,6 +61,8 @@ def test_instance_detections_added_when_sensor_perception_also_enabled():
     sensor_builder.world_xyz_for_observation.return_value = np.array([1.0, 2.0, 3.0])
 
     robot = MagicMock(get_base_pose=MagicMock(return_value=np.array([0.5, 1.0, 0.0])))
+    # No HM3D semantic labeler in this scenario: exercise the instance + sensor-VLM path.
+    robot.hm3d_semantic_labeler = None
     update_graph_memory_from_dynamem_observation(
         graph_memory=gm,
         robot=robot,

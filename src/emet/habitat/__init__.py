@@ -6,13 +6,19 @@
 
 from emet.habitat.config import default_habitat_eqa_data_dir, default_hm3d_scene_dir
 from emet.habitat.datasets import HMEQAQuestion, load_hmeqa_questions, load_scene_init_poses
-from emet.habitat.metrics import EpisodeMetrics, grade_mcq_answer, write_episode_jsonl
+from emet.habitat.metrics import (
+    EpisodeMetrics,
+    extract_mcq_letter_from_raw_eqa,
+    grade_mcq_answer,
+    write_episode_jsonl,
+)
 
 __all__ = [
     "HMEQAQuestion",
     "EpisodeMetrics",
     "default_habitat_eqa_data_dir",
     "default_hm3d_scene_dir",
+    "extract_mcq_letter_from_raw_eqa",
     "grade_mcq_answer",
     "load_hmeqa_questions",
     "load_scene_init_poses",

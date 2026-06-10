@@ -113,12 +113,12 @@ def test_config_from_client_qwen3():
 
 
 def test_config_from_client_gemma4():
-    c = _StubVLLM("gemma4:google/gemma-3-4b-it:cuda")
+    c = _StubVLLM("gemma4:google/gemma-3-4b-it:cuda:int4")
     cfg = config_from_client(c)
     assert cfg.family == "gemma4"
     assert cfg.hf_model_id == "google/gemma-3-4b-it"
     assert cfg.device == "cuda"
-    assert cfg.quantization is None
+    assert cfg.quantization == "int4"
 
 
 def test_vllm_id_alias_matches_canonical():

@@ -303,21 +303,109 @@ class DynamemController(BaseController):
             sess = {"navigation_origin_xyt": self._cached_navigation_origin_xyt.tolist()}
         return nav_xyt_to_world_xyt(xyt[:3], sess)
 
+    def _sync_graph_frontier_nodes(self) -> None:
+        gm = self.graph_memory
+        if gm is None or not getattr(gm, "frontier_nodes_enabled", False):
+            return
+        from emet.memory.graph_eqa.dynamem_graph_hooks import sync_graph_frontier_nodes
+
+        question = getattr(self, "_eqa_question", None)
+        sync_graph_frontier_nodes(
+            graph_memory=gm,
+            voxel_map=self.voxel_map,
+            planner=self.planner,
+            base_xyt=self._planning_base_xyt(self.robot.get_base_pose()),
+            question=question,
+        )
+
+    def _exploration_text(self, text: str | None) -> str | None:
+        """Text used for question-guided frontier scoring (explicit query or active EQA question)."""
+        if text is not None and str(text).strip():
+            return str(text).strip()
+        q = getattr(self, "_eqa_question", None)
+        if q is not None and str(q).strip():
+            return str(q).strip()
+        return None
+
+    def _localize_point_from_graph_memory(self, text: str) -> np.ndarray | None:
+        """Resolve a nav goal from graph nodes (GT or perception) when voxel localize misses."""
+        gm = getattr(self, "graph_memory", None)
+        if gm is None or not (text or "").strip():
+            return None
+        from emet.memory.graph_eqa.graph_memory import heuristic_relevant_objects
+
+        query = text.lower().strip()
+        tokens = heuristic_relevant_objects(text)
+        best_node = None
+        best_score = -1
+        for node in gm.get_nodes():
+            if getattr(node, "is_frontier", False) or getattr(node, "is_viewpoint", False):
+                continue
+            labels = [str(label).lower() for label in (node.labels or []) if str(label).strip()]
+            if not labels:
+                continue
+            blob = " ".join(labels)
+            score = 0
+            if query in blob:
+                score += 3
+            for tok in tokens:
+                if tok.lower() in blob:
+                    score += 1
+            if score > best_score:
+                best_score = score
+                best_node = node
+        if best_node is None or best_score <= 0:
+            return None
+        return np.array([float(best_node.xyz[0]), float(best_node.xyz[1]), 1.0], dtype=float)
+
+    def _best_frontier_point_from_graph(self, text: str | None) -> np.ndarray | None:
+        """Pick the frontier graph node best matching *text* / the active EQA question."""
+        gm = getattr(self, "graph_memory", None)
+        if gm is None or not getattr(gm, "frontier_nodes_enabled", True):
+            return None
+        from emet.memory.graph_eqa.frontier_nodes import exploration_keywords_from_text, keyword_overlap_score
+
+        frontier_nodes = [n for n in gm.get_nodes() if getattr(n, "is_frontier", False)]
+        if not frontier_nodes:
+            return None
+        keywords = exploration_keywords_from_text(text)
+        if not keywords:
+            node = frontier_nodes[0]
+            return np.array([float(node.xyz[0]), float(node.xyz[1]), 1.0], dtype=float)
+        best_node = None
+        best_score = -1.0
+        for node in frontier_nodes:
+            labels = [str(lbl).strip().lower() for lbl in (node.labels or []) if str(lbl).strip()]
+            score = keyword_overlap_score(labels, keywords)
+            if score > best_score:
+                best_score = score
+                best_node = node
+        if best_node is None or best_score <= 0:
+            return None
+        return np.array([float(best_node.xyz[0]), float(best_node.xyz[1]), 1.0], dtype=float)
+
     def create_obstacle_map(self, parameters):
         """
         This function creates the MaskSiglipEncoder, Owlv2 detector, voxel map util class and voxel map navigation space util class
         """
 
-        # Initialize the encoder in different ways depending on the configuration
-        if self.manipulation_only:
+        # Initialize the encoder in different ways depending on the configuration.
+        # Dynagraph sets force_eqa_siglip_encoder so SigLIP features are computed even in
+        # manipulation_only mode (Habitat EQA), enabling open-vocab text->3D grounding.
+        force_siglip = bool(parameters.get("force_eqa_siglip_encoder", False))
+        if self.manipulation_only and not force_siglip:
             self.encoder = None
         elif self.cpu_only:
             # Assume we only have CPU, we will use CLIP ViT-B/16 for fast inference
             self.encoder = MaskClipEncoder(version="ViT-B/16", feature_matching_threshold=0.35, device=self.device)
         else:
-            # Use SIGLip-so400m for accurate inference
-            # We personally feel that Siglipv1 is better than Siglipv2, but we still include the Siglipv2 in src/emet/perception/encoders/ for future reference
-            self.encoder = MaskSiglipEncoder(version="so400m", feature_matching_threshold=0.14, device=self.device)
+            # Use SIGLip-so400m for accurate inference. Shared/load-once across episodes so
+            # batch runs (Habitat) do not reload the weights every controller construction.
+            from emet.perception.encoders.siglip_encoder import get_shared_mask_siglip_encoder
+
+            self.encoder = get_shared_mask_siglip_encoder(
+                version="so400m", device=self.device, feature_matching_threshold=0.14
+            )
 
         # You can see a clear difference in hyperparameter selection in different querying strategies
         # Running gpt4o is time consuming, so we don't want to waste more time on object detection or Siglip or voxelization
@@ -744,7 +832,12 @@ class DynamemController(BaseController):
                     graph_memory=self.graph_memory,
                 )
 
-        if self.graph_memory is not None and (self.sensor_builder is not None or self._graph_eqa_use_instance_graph):
+        has_hm3d_labeler = getattr(self.robot, "hm3d_semantic_labeler", None) is not None
+        if self.graph_memory is not None and (
+            self.sensor_builder is not None
+            or self._graph_eqa_use_instance_graph
+            or has_hm3d_labeler
+        ):
             if getattr(self, "_skip_graph_perception_updates", False):
                 from emet.memory.graph_eqa.dynamem_graph_hooks import (
                     update_graph_memory_ground_truth_from_observation,
@@ -773,6 +866,9 @@ class DynamemController(BaseController):
                     graph_object_fusion=getattr(self, "_graph_object_fusion", None),
                     calibration_writer=getattr(self, "_calibration_writer", None),
                 )
+
+        if self.graph_memory is not None:
+            self._sync_graph_frontier_nodes()
 
         # Visualize open-vocab scene graph if attached
         ovsg = self.voxel_map.get_scene_graph()
@@ -1099,19 +1195,41 @@ class DynamemController(BaseController):
         logger.debug("Target verification done (localized_point=%s)", localized_point is not None)
 
         if text is not None and text != "" and localized_point is None:
-            (
-                localized_point,
-                debug_text,
-                obs,
-                pointcloud,
-            ) = self.voxel_map.localize_text(text, debug=True, return_debug=True)
-            logger.debug("Localized target from map for query %r", text)
+            graph_point = self._localize_point_from_graph_memory(text)
+            if graph_point is not None:
+                localized_point = graph_point
+                debug_text += "## Localized target from graph memory.\n"
+                mode = "navigation"
+                logger.debug("Localized target from graph for query %r", text)
 
-        # Do Frontier based exploration
+        if text is not None and text != "" and localized_point is None:
+            det = getattr(self.voxel_map, "detection_model", None)
+            if det is not None or self.encoder is not None:
+                try:
+                    (
+                        localized_point,
+                        loc_debug,
+                        obs,
+                        pointcloud,
+                    ) = self.voxel_map.localize_text(text, debug=True, return_debug=True)
+                    if loc_debug:
+                        debug_text += str(loc_debug)
+                    logger.debug("Localized target from voxel map for query %r", text)
+                except Exception as exc:
+                    logger.debug("voxel localize_text failed for %r: %s", text, exc)
+
+        # Do Frontier based exploration (optionally biased by the active EQA question).
         if text is None or text == "" or localized_point is None:
             debug_text += "## Navigation fails, so robot starts exploring environments.\n"
-            localized_point = self.space.sample_frontier(self.planner, start_pose, text)
-            mode = "exploration"
+            frontier_text = self._exploration_text(text)
+            graph_frontier = self._best_frontier_point_from_graph(frontier_text)
+            if graph_frontier is not None:
+                localized_point = graph_frontier
+                debug_text += "## Selected frontier target from graph memory.\n"
+                mode = "exploration"
+            else:
+                localized_point = self.space.sample_frontier(self.planner, start_pose, frontier_text)
+                mode = "exploration"
 
         if obs is not None and mode == "navigation":
             obs = self.voxel_map.find_obs_id_for_text(text)
@@ -1419,11 +1537,42 @@ class DynamemController(BaseController):
 
         discord_text, relevant_images = "", []
 
+        # Early-stop: when exploration stalls (the scene graph gains no new nodes) yet the
+        # model keeps returning the same answer, further planning steps re-ask with
+        # identical inputs and cannot change the result — common when a question keyword
+        # never becomes a node label (abstract/action words) or the robot is physically
+        # stuck. Stop after ``stall_patience`` such steps. Productive exploration (a growing
+        # graph) always continues, so this never cuts a run that is still gathering evidence.
+        stall_patience = int(self.parameters.get("eqa_stall_patience", 4) or 0)
+        prev_node_count = -1
+        prev_answer = None
+        stall = 0
+
         for _cnt_step in range(max_planning_steps):
             answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(question)
             if confidence:
                 self.robot.say("The answer to " + question + " is " + answer)
                 break
+
+            if stall_patience > 0 and self.graph_memory is not None:
+                node_count = len(self.graph_memory.get_nodes())
+                cur_answer = self.graph_memory.last_eqa_parsed[1]
+                if node_count <= prev_node_count and cur_answer and cur_answer == prev_answer:
+                    stall += 1
+                else:
+                    stall = 0
+                prev_node_count = node_count
+                prev_answer = cur_answer
+                if stall >= stall_patience:
+                    logger.info(
+                        "EQA early stop after %d/%d planning steps: exploration stalled (no new graph "
+                        "nodes, stable answer %r) for %d steps; accepting the answer.",
+                        _cnt_step + 1,
+                        max_planning_steps,
+                        cur_answer,
+                        stall + 1,
+                    )
+                    break
 
         relevant_image = self._patch_images(relevant_images, patch_size=(270, 360))
         self.rerun_iter += 1
@@ -1500,6 +1649,10 @@ class DynamemController(BaseController):
         start_pose = self._planning_base_xyt(self.robot.get_base_pose())
 
         logger.debug("EQA navigate: target_point=%s", target_point)
+        if target_point is None:
+            # No usable navigation target (degenerate action parsed no image index): skip movement.
+            return answer, discord_text, relevant_images, confidence
+
         # If we want to explore non obstacles (especially frontiers), remember where we currently want to face
         obstacles, _ = self.voxel_map.get_2d_map()
         target_grid = self.voxel_map.xy_to_grid_coords((target_point[0], target_point[1]))

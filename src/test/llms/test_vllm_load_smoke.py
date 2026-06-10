@@ -54,7 +54,7 @@ def test_gemma_multimodal_minimal_generate():
     mid = os.environ.get("VLLM_LOAD_TEST_GEMMA_MODEL", "google/gemma-3-4b-it")
     from emet.llms.gemma4_vllm_client import Gemma4VLLMClient
 
-    client = Gemma4VLLMClient(hf_model_id=mid, max_tokens=16, device="cuda")
+    client = Gemma4VLLMClient(hf_model_id=mid, max_tokens=16, device="cuda", quantization="int4")
     arr = np.zeros((64, 64, 3), dtype=np.uint8)
     out = client.generate_multimodal(
         "What color is this image?",

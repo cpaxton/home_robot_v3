@@ -73,6 +73,25 @@ def _eqa_cli_options(fn):
     return fn
 
 
+def _frontier_cli_options(fn):
+    opts = [
+        click.option(
+            "--frontier-nodes/--no-frontier-nodes",
+            default=None,
+            help="Mirror voxel frontiers as graph nodes for EQA (default: dynav_config.yaml)",
+        ),
+        click.option(
+            "--frontier-keyword-weight",
+            default=None,
+            type=float,
+            help="Keyword bias on fluid frontier sampling (0 = time heuristic only)",
+        ),
+    ]
+    for opt in reversed(opts):
+        fn = opt(fn)
+    return fn
+
+
 @main.command("run-episode")
 @click.option("--dataset", type=click.Choice(["hmeqa"]), default="hmeqa")
 @click.option("--question-id", default=0, type=int)
@@ -89,6 +108,7 @@ def _eqa_cli_options(fn):
     default=None,
     help="Use HM3D semantic sensor for graph labels (default: auto if assets exist)",
 )
+@_frontier_cli_options
 @_eqa_cli_options
 def run_episode(
     dataset: str,
@@ -105,6 +125,8 @@ def run_episode(
     eqa_vl_family: str | None,
     eqa_hf_model_id: str | None,
     device: str,
+    frontier_nodes: bool | None,
+    frontier_keyword_weight: float | None,
 ) -> None:
     """Run one HM-EQA episode in Habitat-Sim."""
     if dataset != "hmeqa":
@@ -130,6 +152,8 @@ def run_episode(
             eqa_vl_family=eqa_vl_family,
             eqa_hf_model_id=eqa_hf_model_id,
             device=device,
+            frontier_nodes_enabled=frontier_nodes,
+            frontier_keyword_weight=frontier_keyword_weight,
         )
     except FileNotFoundError as exc:
         raise click.ClickException(
@@ -159,6 +183,11 @@ def run_episode(
     default=True,
     help=f"Limit to GraphEQA HM-EQA paper questions (indices 0–{HMEQA_PAPER_QUESTION_COUNT - 1})",
 )
+@click.option(
+    "--question-ids",
+    default=None,
+    help="Comma-separated explicit question ids (overrides --question-start/--question-end)",
+)
 @click.option("--resume", is_flag=True, default=False, help="Skip question ids already in --output JSONL")
 @click.option("--mock-llm", is_flag=True, default=False)
 @click.option("--max-planning-steps", default=20, type=int, help="EQA planning iterations (GraphEQA ref: 20)")
@@ -171,12 +200,14 @@ def run_episode(
     default=None,
     help="Use HM3D semantic sensor for graph labels (default: auto if assets exist)",
 )
+@_frontier_cli_options
 @_eqa_cli_options
 def run_batch(
     method: str,
     question_start: int,
     question_end: int,
     paper_subset: bool,
+    question_ids: str | None,
     resume: bool,
     mock_llm: bool,
     max_planning_steps: int,
@@ -188,6 +219,8 @@ def run_batch(
     eqa_vl_family: str | None,
     eqa_hf_model_id: str | None,
     device: str,
+    frontier_nodes: bool | None,
+    frontier_keyword_weight: float | None,
 ) -> None:
     """Run a slice of HM-EQA (GraphEQA paper: 113 questions, method=graph_eqa)."""
     from emet_habitat.runner import run_hmeqa_batch
@@ -195,7 +228,9 @@ def run_batch(
     questions_path = (data_dir / "questions.csv") if data_dir else None
     init_poses_path = (data_dir / "scene_init_poses.csv") if data_dir else None
     qs = load_hmeqa_questions(questions_path)
-    if paper_subset:
+    if question_ids:
+        ids = [int(x) for x in question_ids.split(",") if x.strip()]
+    elif paper_subset:
         paper_ids = set(hmeqa_paper_question_ids())
         end = HMEQA_PAPER_QUESTION_COUNT - 1 if question_end < 0 else min(question_end, HMEQA_PAPER_QUESTION_COUNT - 1)
         ids = [qid for qid in range(max(0, question_start), end + 1) if qid in paper_ids]
@@ -223,6 +258,8 @@ def run_batch(
             use_hm3d_semantics=use_hm3d_semantics,
             output_jsonl=output,
             resume=resume,
+            frontier_nodes_enabled=frontier_nodes,
+            frontier_keyword_weight=frontier_keyword_weight,
         )
     except FileNotFoundError as exc:
         raise click.ClickException(str(exc)) from exc
