@@ -53,6 +53,15 @@ def _parse_args() -> argparse.Namespace:
         help="Optional mirror JSON summary filename",
     )
     parser.add_argument("--no-dedupe", action="store_true", help="Keep duplicate question_id rows")
+    parser.add_argument("--split", choices=("train", "val", "test"), default=None, help="Split for coverage stats")
+    parser.add_argument("--data-dir", type=str, default=None, help="SQA3D data dir for coverage stats")
+    parser.add_argument("--scannet-root", type=str, default=None, help="ScanNet root for runnable coverage")
+    parser.add_argument(
+        "--replay-mode",
+        choices=("auto", "sens", "mesh"),
+        default="auto",
+        help="Replay mode for runnable coverage",
+    )
     return parser.parse_args()
 
 
@@ -83,6 +92,10 @@ def main() -> int:
     rows = aggregate_sqa3d_jsonl_paths(
         paths,
         dedupe=not args.no_dedupe,
+        split=args.split,
+        data_dir=Path(args.data_dir).expanduser() if args.data_dir else None,
+        scannet_root=Path(args.scannet_root).expanduser() if args.scannet_root else None,
+        replay_mode=args.replay_mode,
         output_csv=csv_path,
         output_json=json_path,
     )

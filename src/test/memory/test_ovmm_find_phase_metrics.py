@@ -23,6 +23,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from emet.eval.ovmm_find_phase import (
+    resolve_find_phase_nav_step_timeout,
     FindPhaseRunConfig,
     _query_variants,
     category_matches,
@@ -255,6 +256,14 @@ def test_find_phase_run_config_fair_defaults():
     cfg = FindPhaseRunConfig()
     assert cfg.use_sensor_perception is False
     assert cfg.prefer_voxel is True
+
+
+def test_resolve_find_phase_nav_step_timeout():
+    assert resolve_find_phase_nav_step_timeout(cpu_only=False, sim_kind="") == 15.0
+    assert resolve_find_phase_nav_step_timeout(cpu_only=True, sim_kind="") == 45.0
+    assert resolve_find_phase_nav_step_timeout(cpu_only=False, sim_kind="robocasa") == 30.0
+    assert resolve_find_phase_nav_step_timeout(cpu_only=False, sim_kind="molmospaces") == 30.0
+    assert resolve_find_phase_nav_step_timeout(cpu_only=False, sim_kind="", override=99.0) == 99.0
 
 
 @patch("emet.controller.controller_dynagraph.DynagraphController")

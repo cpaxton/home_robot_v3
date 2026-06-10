@@ -331,6 +331,10 @@ def _score_episode(
     replay_backend: str = "",
     sens_frame_index: int | None = None,
     sens_match_xy_m: float | None = None,
+    split: str = "",
+    profile: SQA3DProfile = "smoke",
+    replay_mode: ScanNetReplayMode = "auto",
+    export_dir: str = "",
 ) -> SQA3DEpisodeMetrics:
     pred_clean = clean_answer(predicted)
     gts = [clean_answer(a) for a in q.answers if a.strip()]
@@ -355,6 +359,11 @@ def _score_episode(
         replay_backend=replay_backend,
         sens_frame_index=sens_frame_index,
         sens_match_xy_m=sens_match_xy_m,
+        split=split,
+        profile=profile,
+        replay_mode=replay_mode,
+        question_type=str(getattr(q, "question_type", "") or ""),
+        export_dir=export_dir,
     )
 
 
@@ -375,6 +384,7 @@ def run_sqa3d_episode(
     profile: SQA3DProfile | None = None,
     post_rotate_updates: int | None = None,
     replay_mode: ScanNetReplayMode = "auto",
+    export_root: Path | None = None,
 ) -> SQA3DEpisodeMetrics:
     prof = _resolve_profile(mock_llm=mock_llm, profile=profile)
     if max_planning_steps is None:
@@ -444,6 +454,27 @@ def run_sqa3d_episode(
                 max_movement_step=max_movement_step,
             )
 
+        export_dir = ""
+        if export_root is not None and agent is not None:
+            from emet.benchmarks.sqa3d.export_episode import export_sqa3d_episode_artifacts
+
+            ep_path = export_sqa3d_episode_artifacts(
+                agent,
+                q,
+                method=method,
+                profile=prof,
+                replay_mode=replay_mode,
+                replay_meta=replay_meta,
+                predicted=predicted,
+                raw_eqa=raw_eqa,
+                model_confident=model_confident,
+                planning_steps=int(getattr(agent, "obs_count", 0)),
+                export_root=export_root,
+                split=split,
+                infra_failure=_is_infra_failure_text(raw_eqa, predicted),
+            )
+            export_dir = str(ep_path)
+
         return _score_episode(
             q,
             method=method,
@@ -451,7 +482,11 @@ def run_sqa3d_episode(
             raw_eqa=raw_eqa,
             model_confident=model_confident,
             planning_steps=getattr(agent, "obs_count", 0),
-            infra_failure=_is_infra_failure_text(raw_eqa),
+            infra_failure=_is_infra_failure_text(raw_eqa, predicted),
+            split=split,
+            profile=prof,
+            replay_mode=replay_mode,
+            export_dir=export_dir,
             **replay_meta,
         )
     finally:
@@ -478,6 +513,7 @@ def _run_sqa3d_batch_isolated(
     profile: SQA3DProfile,
     replay_mode: ScanNetReplayMode,
     continue_on_error: bool,
+    export_root: Path | None = None,
 ) -> list[SQA3DEpisodeMetrics]:
     """One subprocess per episode so the VLM and maps are fully released between runs."""
     import subprocess
@@ -524,6 +560,8 @@ def _run_sqa3d_batch_isolated(
             cmd.extend(["--eqa-hf-model-id", eqa_hf_model_id])
         if device is not None:
             cmd.extend(["--device", device])
+        if export_root is not None:
+            cmd.extend(["--export-root", str(export_root)])
         if output_jsonl is not None:
             cmd.extend(["--output", str(output_jsonl)])
         proc = subprocess.run(cmd, check=False)
@@ -586,6 +624,7 @@ def run_sqa3d_batch(
     profile: SQA3DProfile | None = None,
     replay_mode: ScanNetReplayMode = "auto",
     isolate_episodes: bool = False,
+    export_root: Path | None = None,
 ) -> list[SQA3DEpisodeMetrics]:
     results: list[SQA3DEpisodeMetrics] = []
     questions = load_sqa3d_questions(split, data_dir=data_dir)
@@ -607,6 +646,7 @@ def run_sqa3d_batch(
             profile=prof,
             replay_mode=replay_mode,
             continue_on_error=continue_on_error,
+            export_root=export_root,
         )
     if not mock_llm:
         parameters = get_parameters("dynav_config.yaml")
@@ -647,6 +687,7 @@ def run_sqa3d_batch(
                 device=device,
                 profile=prof,
                 replay_mode=replay_mode,
+                export_root=export_root,
             )
             results.append(row)
             if output_jsonl is not None:

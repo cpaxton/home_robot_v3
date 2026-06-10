@@ -31,6 +31,11 @@ class SQA3DEpisodeMetrics:
     replay_backend: str = ""
     sens_frame_index: int | None = None
     sens_match_xy_m: float | None = None
+    split: str = ""
+    profile: str = ""
+    replay_mode: str = ""
+    question_type: str = ""
+    export_dir: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)

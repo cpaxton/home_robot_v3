@@ -195,6 +195,12 @@ def sqa3d_list_questions(split: str, limit: int, data_dir: Path | None) -> None:
     help="auto=posed .sens RGB when on disk, else mesh; sens=require .sens; mesh=Open3D only",
 )
 @click.option("--output", "-o", type=click.Path(path_type=Path), default=None, help="Append JSONL result")
+@click.option(
+    "--export-root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Per-question export dir (memory snapshot + episode_meta.json)",
+)
 def sqa3d_run_episode(
     question_id: int,
     split: str,
@@ -209,6 +215,7 @@ def sqa3d_run_episode(
     scannet_root: Path | None,
     replay_mode: str,
     output: Path | None,
+    export_root: Path | None,
 ) -> None:
     """Run DynaMem or Dynagraph at the SQA3D annotated pose in a ScanNet scene."""
     from emet.benchmarks.sqa3d.episode_metrics import append_sqa3d_jsonl
@@ -227,6 +234,7 @@ def sqa3d_run_episode(
         device=device if device else ("cuda" if not mock_llm else None),
         profile=profile,
         replay_mode=replay_mode,
+        export_root=export_root,
     )
     text = json.dumps(row.to_dict(), indent=2)
     click.echo(text)
@@ -280,6 +288,12 @@ def sqa3d_run_episode(
     show_default=True,
     help="Real-VLM: run each episode in a fresh subprocess (frees GPU between episodes)",
 )
+@click.option(
+    "--export-root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Root for per-question exports (memory + episode_meta.json)",
+)
 def sqa3d_run_batch(
     question_start: int,
     question_end: int,
@@ -298,6 +312,7 @@ def sqa3d_run_batch(
     skip_missing_scenes: bool,
     replay_mode: str,
     isolate_episodes: bool,
+    export_root: Path | None,
 ) -> None:
     from emet.benchmarks.sqa3d.datasets import load_sqa3d_questions
     from emet.benchmarks.sqa3d.episode_metrics import summarize_sqa3d_episodes
@@ -338,6 +353,7 @@ def sqa3d_run_batch(
         profile=profile,
         replay_mode=replay_mode,
         isolate_episodes=isolate_episodes,
+        export_root=export_root,
     )
     summary = summarize_sqa3d_episodes(rows)
     click.echo(json.dumps(summary, indent=2))
@@ -346,6 +362,13 @@ def sqa3d_run_batch(
 @sqa3d_group.command("run-real-sweep", short_help="Download meshes + real-VLM batch on a question slice")
 @click.option("--question-start", default=0, type=int)
 @click.option("--question-end", default=5, type=int)
+@click.option(
+    "--all",
+    "run_all",
+    is_flag=True,
+    default=False,
+    help="Run the full split (sets question-end to split size)",
+)
 @click.option("--split", type=click.Choice(SQA3D_SPLITS), default="val", show_default=True)
 @click.option("--method", type=click.Choice(["dynamem", "dynagraph"]), default="dynagraph", show_default=True)
 @click.option("--max-planning-steps", default=None, type=int)
@@ -377,9 +400,22 @@ def sqa3d_run_batch(
     show_default=True,
     help="Run each episode in a fresh subprocess (recommended for real VLM; frees GPU)",
 )
+@click.option(
+    "--resume/--no-resume",
+    default=True,
+    show_default=True,
+    help="Skip question_ids already in JSONL",
+)
+@click.option(
+    "--export-root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Per-question artifact root (default: <output-dir>/exports/<tag>)",
+)
 def sqa3d_run_real_sweep(
     question_start: int,
     question_end: int,
+    run_all: bool,
     split: str,
     method: str,
     max_planning_steps: int | None,
@@ -391,6 +427,8 @@ def sqa3d_run_real_sweep(
     with_sens: bool,
     replay_mode: str,
     isolate_episodes: bool,
+    resume: bool,
+    export_root: Path | None,
 ) -> None:
     """Download ScanNet meshes for the slice, run real-VLM batch, score EM@1."""
     import subprocess
@@ -399,12 +437,18 @@ def sqa3d_run_real_sweep(
     from emet.benchmarks.sqa3d.benchmark_config import load_sqa3d_benchmark_config
     from emet.benchmarks.sqa3d.scannet.config import default_scannet_root
 
+    if run_all:
+        question_end = len(load_sqa3d_questions(split))
+
     if output_dir is None:
         output_dir = load_sqa3d_benchmark_config().paths.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     tag = f"{method}_{split}_q{question_start}-{question_end}"
     jsonl = output_dir / f"{tag}.jsonl"
     eval_json = output_dir / f"{tag}_eval.json"
+    if export_root is None:
+        export_root = output_dir / "exports" / tag
+    export_root.mkdir(parents=True, exist_ok=True)
 
     if download:
         sens_note = " + .sens" if with_sens else ""
@@ -419,13 +463,18 @@ def sqa3d_run_real_sweep(
             "--scenes-from-sqa3d",
             "--split",
             split,
-            "--question-start",
-            str(question_start),
-            "--question-end",
-            str(question_end),
             "--scannet-root",
             str(default_scannet_root()),
         ]
+        if not run_all:
+            dl_cmd.extend(
+                [
+                    "--question-start",
+                    str(question_start),
+                    "--question-end",
+                    str(question_end),
+                ]
+            )
         if with_sens:
             dl_cmd.append("--with-sens")
         dl = subprocess.run(
@@ -451,10 +500,11 @@ def sqa3d_run_real_sweep(
         data_dir=None,
         scannet_root=None,
         output=jsonl,
-        resume=False,
+        resume=resume,
         skip_missing_scenes=True,
         replay_mode=replay_mode,
         isolate_episodes=isolate_episodes,
+        export_root=export_root,
     )
 
     ctx.invoke(
@@ -467,7 +517,9 @@ def sqa3d_run_real_sweep(
         output=eval_json,
         require_all=False,
     )
-    click.echo(f"\nReal-VLM sweep complete:\n  episodes: {jsonl}\n  eval: {eval_json}")
+    click.echo(
+        f"\nReal-VLM sweep complete:\n  episodes: {jsonl}\n  eval: {eval_json}\n  exports: {export_root}"
+    )
 
 
 @sqa3d_group.command("plot-results", short_help="TP/FP/FN breakdown + paper figures from episode JSONL")
