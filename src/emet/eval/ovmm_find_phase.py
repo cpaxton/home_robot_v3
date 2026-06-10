@@ -72,6 +72,23 @@ class FindPhaseRunConfig:
     seed: int | None = None
     use_sensor_perception: bool = False
     prefer_voxel: bool = True
+    nav_step_timeout_s: float | None = None
+
+
+def resolve_find_phase_nav_step_timeout(
+    *,
+    cpu_only: bool,
+    sim_kind: str,
+    override: float | None = None,
+) -> float:
+    """ZMQ nav/obs wait budget for find-phase mapping (rotate + explore)."""
+    if override is not None:
+        return float(override)
+    if cpu_only:
+        return 45.0
+    if sim_kind in ("robocasa", "molmospaces"):
+        return 30.0
+    return 15.0
 
 
 def load_find_phase_episodes(path: str | Path) -> list[FindPhaseEpisode]:
@@ -781,6 +798,15 @@ def run_episode_find_phase(
     env["PYTHONPATH"] = str(repo / "src") + os.pathsep + env.get("PYTHONPATH", "")
     env.setdefault("MUJOCO_GL", "egl")
     env["PYTHONUNBUFFERED"] = "1"
+    if run_cfg.cpu_only:
+        env["CUDA_VISIBLE_DEVICES"] = ""
+
+    sim_kind = str(getattr(sim_cfg, "kind", ""))
+    nav_timeout = resolve_find_phase_nav_step_timeout(
+        cpu_only=run_cfg.cpu_only,
+        sim_kind=sim_kind,
+        override=run_cfg.nav_step_timeout_s,
+    )
 
     sim_cfg = replace(sim_cfg, port_offset=port_offset, headless=True)
     server_argv = prepare_mujoco_server_argv(sim_cfg)
@@ -810,7 +836,7 @@ def run_episode_find_phase(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        bind_timeout = 180.0 if getattr(sim_cfg, "kind", "") in ("molmospaces", "robocasa") else 120.0
+        bind_timeout = 180.0 if sim_kind in ("molmospaces", "robocasa") else 120.0
         if not wait_port(recv_port, bind_timeout):
             err_tail = ""
             if server.stderr and server.poll() is not None:
@@ -820,7 +846,9 @@ def run_episode_find_phase(
             raise RuntimeError(
                 f"sim server did not bind port {recv_port}" + (f": {err_tail[-500:]}" if err_tail else "")
             )
-        settle = 25.0 if getattr(sim_cfg, "kind", "") in ("molmospaces", "robocasa") else 15.0
+        settle = 25.0 if sim_kind in ("molmospaces", "robocasa") else 15.0
+        if run_cfg.cpu_only:
+            settle += 15.0
         time.sleep(settle)
 
         robot_kind = str(getattr(sim_cfg, "robot", "stretch"))
@@ -844,6 +872,7 @@ def run_episode_find_phase(
         parameters["encoder"] = None
         if run_cfg.perfect_depth:
             parameters["debug_perfect_sensor_depth"] = True
+        parameters["find_phase_nav_step_timeout_s"] = nav_timeout
 
         t_init0 = time.monotonic()
         agent = create_find_phase_agent(
@@ -874,7 +903,6 @@ def run_episode_find_phase(
         placements = read_sim_object_placements(session)
         memory = get_memory_backend_for_agent(agent, run_cfg.backend)
         vm = getattr(agent, "voxel_map", None)
-        sim_kind = str(getattr(sim_cfg, "kind", ""))
         nav_world = sim_kind == "robocasa"
 
         object_query = resolve_object_query(episode, placements)
