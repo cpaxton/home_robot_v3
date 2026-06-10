@@ -201,14 +201,27 @@ def append_episode_jsonl(path: Path, episode: EpisodeMetrics) -> None:
     write_episode_jsonl(path, [episode], append=True)
 
 
+def episode_run_completed(row: dict) -> bool:
+    """True when an episode row represents a finished run (not a crash/OOM stub)."""
+    if row.get("error"):
+        return False
+    steps = row.get("planning_steps")
+    if isinstance(steps, int) and steps > 0:
+        return True
+    # Legacy rows without planning_steps: treat as done when no error field.
+    return "planning_steps" not in row
+
+
 def read_completed_question_ids(path: Path) -> set[int]:
-    """Question ids already present in a JSONL results file (for ``--resume``).
+    """Question ids with completed (non-error) runs in a JSONL file (for ``--resume``).
+
+    OOM / startup failures are excluded so ``--resume`` can retry them.
 
     Args:
         path: Existing results JSONL from :func:`write_episode_jsonl`.
 
     Returns:
-        Set of ``question_id`` integers found in the file (ignores malformed lines).
+        Set of ``question_id`` integers for completed episodes (ignores malformed lines).
     """
     if not path.is_file():
         return set()
@@ -222,7 +235,7 @@ def read_completed_question_ids(path: Path) -> set[int]:
         except json.JSONDecodeError:
             continue
         qid = row.get("question_id")
-        if isinstance(qid, int):
+        if isinstance(qid, int) and episode_run_completed(row):
             done.add(qid)
     return done
 

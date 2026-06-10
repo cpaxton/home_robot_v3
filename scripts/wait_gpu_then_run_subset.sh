@@ -16,7 +16,17 @@ RESULTS="$HOME/.cache/habitat_eqa/results/subset_${TAG}_qwen2_5_vl.jsonl"
 n_target=$(awk -F, '{print NF}' <<<"$IDS")
 deadline=$(( $(date +%s) + MAX_WAIT_MIN * 60 ))
 
-count_done() { [ -f "$RESULTS" ] && grep -c '"question_id"' "$RESULTS" || echo 0; }
+count_done() {
+  [ -f "$RESULTS" ] || { echo 0; return; }
+  uv run python - <<'PY' "$RESULTS"
+import json, sys
+from pathlib import Path
+from emet.habitat.metrics import episode_run_completed
+p = Path(sys.argv[1])
+rows = [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
+print(sum(1 for r in rows if episode_run_completed(r)))
+PY
+}
 
 wait_for_gpu() {
   local ok=0 free now

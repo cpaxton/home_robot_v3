@@ -147,8 +147,10 @@ def test_compare_method_results():
 def test_read_completed_question_ids(tmp_path):
     path = tmp_path / "out.jsonl"
     path.write_text(
-        '{"question_id": 0, "correct": true}\n{"question_id": 2, "correct": false}\n',
+        '{"question_id": 0, "correct": true, "planning_steps": 5}\n'
+        '{"question_id": 2, "correct": false, "error": "CUDA OOM"}\n'
+        '{"question_id": 3, "correct": false, "planning_steps": 0}\n',
         encoding="utf-8",
     )
-    assert read_completed_question_ids(path) == {0, 2}
+    assert read_completed_question_ids(path) == {0}
     assert read_completed_question_ids(tmp_path / "missing.jsonl") == set()
