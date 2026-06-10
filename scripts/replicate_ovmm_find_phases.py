@@ -193,7 +193,10 @@ def main() -> int:
                 try:
                     metrics = run_episode_find_phase(ep, run_cfg, repo_root=REPO)
                 except Exception as exc:
+                    import traceback
+
                     print(f"FAIL seed={seed} {tag}: {exc}", file=sys.stderr)
+                    traceback.print_exc(file=sys.stderr)
                     metrics = {
                         "episode_id": ep.id,
                         "tier": ep.tier,

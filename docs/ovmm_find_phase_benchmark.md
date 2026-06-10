@@ -123,7 +123,16 @@ Each replicate uses `port_offset = port_offset_base + seed * 2` to avoid ZMQ por
 
 ## Measured results (emet sim)
 
-**Results pending** verified multi-seed runs under fair-default mode. Target reference (real OVMM paper): ~70% FindObj / ~30% FindRec — not comparable to this memory-localization harness.
+Fair-default GPU replicate (`default_table_s0`, 5 seeds, no VLM, voxel-first query):
+
+| Backend | mapping_wall_s (mean±std) | partial | obj err (m) | localize source |
+|---------|---------------------------|---------|-------------|-----------------|
+| dynagraph | 213 ± 4 s | 1.0 | 0.088 ± 0.001 | obj/recep: voxel (5/5) |
+| dynamem | 227 ± 36 s | 1.0 | 0.079 ± 0.0005 | obj/recep: voxel (4/5; seed 1 init flake) |
+
+Dynagraph/dynamem mapping ratio ≈ **1×** (not 10×). Full `--sensor-perception` mapping ≈ **2261 s** (~10× fair default).
+
+Target reference (real OVMM paper): ~70% FindObj / ~30% FindRec — not comparable to this memory-localization harness.
 
 Fair-default verification (GPU, one job at a time):
 
