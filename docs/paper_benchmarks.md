@@ -2,7 +2,7 @@
 
 Operator guide for benchmarks referenced in `paper/sections/04_experiments.tex` and `paper/sections/05_results.tex`.
 
-**LaTeX:** `./paper/build.sh` from repo root (uses local `latexmk` or Docker `texlive/texlive:latest`).  
+**LaTeX:** `./paper/build.sh` from repo root (uses local `latexmk` or Docker `texlive/texlive:latest`).
 **Results go in:** `paper/sections/05_results.tex` (tables/figures) — not committed automatically from sweeps.
 
 ## Benchmark map
@@ -10,6 +10,7 @@ Operator guide for benchmarks referenced in `paper/sections/04_experiments.tex` 
 | Track | Task | Primary metric | Config | Batch command | Aggregate → paper |
 |-------|------|----------------|--------|---------------|-------------------|
 | **OVMM find-phase (sim)** | Localize object + receptacle | Find partial success @ $r$ | `configs/ovmm/benchmark.yaml` | `scripts/eval_ovmm_find_phases.py` | `aggregate_<backends>.csv` in output dir |
+| **OVMM full (sim)** | Find + pick + place | `ovmm_full_success` / four phase rates | `configs/ovmm/benchmark.yaml` | `scripts/eval_ovmm_full.py` | `~/runs/emet/ovmm_full` |
 | **OVMM find-phase (Habitat)** | Same, HM3D proxy | Same | `configs/ovmm/benchmark.yaml` | `scripts/eval_habitat_ovmm_find_phases.py` | per-run JSON under `~/runs/emet/ovmm_habitat` |
 | **SQA3D** | Situated open QA | EM@1 | `configs/sqa3d/benchmark.yaml` | `emet sqa3d run-real-sweep` | `scripts/aggregate_sqa3d_sweep.py` → `aggregate_sqa3d.csv` |
 | **GT object finding** | Sim oracle localization | XY error, recall @ $r$ | episode exports | `emet run dynagraph --ground-truth` + `scripts/eval_dynagraph_ground_truth.py` | manual / `emet eval-dynagraph` |
@@ -77,7 +78,7 @@ uv run python scripts/eval_ovmm_find_phases.py \
 # CSV written automatically: aggregate_dynamem-graph_eqa-dynagraph-ground_truth.csv
 ```
 
-**Perception backends** (`dynamem`, `graph_eqa`, `dynagraph`): use GPU, **do not** pass `--not-rotate`.  
+**Perception backends** (`dynamem`, `graph_eqa`, `dynagraph`): use GPU, **do not** pass `--not-rotate`.
 **Oracle** (`ground_truth`): may use `--not-rotate --cpu-only`.
 
 Scale to S1/S2: `--tier S1` or `--tier S2`; see episode yaml for Molmo indices.

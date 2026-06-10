@@ -1,0 +1,23 @@
+# Full OVMM episodes (FindObj + Pick + FindRec + Place).
+# Same schema as find_phase_episodes.yaml; use distinct start/goal receps where possible.
+# See docs/ovmm_full_benchmark.md and scripts/eval_ovmm_full.py
+
+episodes:
+  - id: default_table_s0_distinct_recep
+    tier: S0
+    sim: configs/sim/default_table_stretch.yaml
+    object: red cylinder
+    start_recep: table
+    goal_recep: blue cube
+    success_radius_m: 0.30
+    explore_steps: 0
+
+  - id: robocasa_pp_s1
+    tier: S1
+    sim: configs/sim/robocasa_pick_place_stretch.yaml
+    object: obj
+    object_gt_body: obj_main
+    start_recep: counter
+    goal_recep: cab
+    success_radius_m: 0.50
+    explore_steps: 0
