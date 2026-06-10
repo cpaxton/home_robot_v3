@@ -29,6 +29,28 @@ This repo provides **dataset loaders**, **EM@1 scoring** (official QA metric), *
 
 CLI reference: [cli.md](cli.md#emet-sqa3d-subcommand).
 
+## Benchmark config
+
+Central paths and smoke/sweep defaults: `configs/sqa3d/benchmark.yaml` (mirror of `configs/ovmm/benchmark.yaml`).
+
+| Path key | Default | Env override |
+|----------|---------|--------------|
+| `output_dir` | `~/runs/emet/sqa3d` | `EMET_SQA3D_OUTPUT` |
+| `sqa3d_data` | `~/.cache/sqa3d/data` | `SQA3D_DATA_DIR` |
+| `scannet_root` | `~/.cache/scannet` | `SCANNET_ROOT` |
+
+`emet sqa3d run-real-sweep` uses `output_dir` when `--output-dir` is omitted.
+
+Aggregate JSONL sweeps to CSV (paper tables):
+
+```bash
+uv run python scripts/aggregate_sqa3d_sweep.py --input-dir ~/runs/emet/sqa3d
+# or explicit files:
+uv run python scripts/aggregate_sqa3d_sweep.py /tmp/sqa3d_*.jsonl --output-dir ~/runs/emet/sqa3d
+```
+
+Writes `aggregate_sqa3d.csv` and `aggregate_sqa3d.json` (one row per input JSONL).
+
 ## Data layout
 
 | Env var | Default | Contents |

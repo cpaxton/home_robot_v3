@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Literal
 
 from emet.benchmarks.sqa3d.datasets import get_sqa3d_question, load_sqa3d_questions
+from emet.eval.memory_backends import SQA3D_MEMORY_BACKEND
 from emet.benchmarks.sqa3d.episode_metrics import (
     SQA3DEpisodeMetrics,
     append_sqa3d_jsonl,
@@ -26,7 +27,7 @@ from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import Parameters, get_parameters
 
-SQA3DMethod = Literal["dynamem", "dynagraph"]
+SQA3DMethod = SQA3D_MEMORY_BACKEND
 SQA3DProfile = Literal["smoke", "tuned"]
 
 _INFRA_RE = re.compile(r"(?i)(cuda out of memory|out of memory|^error:)")

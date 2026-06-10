@@ -352,7 +352,12 @@ def sqa3d_run_batch(
 @click.option("--eqa-vl-family", default=None)
 @click.option("--eqa-hf-model-id", default=None)
 @click.option("--device", default=None, help="VLM device (cuda, cpu). Default: cuda")
-@click.option("--output-dir", type=click.Path(path_type=Path), default=Path("/tmp/sqa3d_real_sweep"))
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Sweep output directory (default: configs/sqa3d/benchmark.yaml → ~/runs/emet/sqa3d)",
+)
 @click.option("--download/--no-download", default=True, show_default=True)
 @click.option(
     "--with-sens",
@@ -391,8 +396,11 @@ def sqa3d_run_real_sweep(
     import subprocess
     import sys
 
+    from emet.benchmarks.sqa3d.benchmark_config import load_sqa3d_benchmark_config
     from emet.benchmarks.sqa3d.scannet.config import default_scannet_root
 
+    if output_dir is None:
+        output_dir = load_sqa3d_benchmark_config().paths.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     tag = f"{method}_{split}_q{question_start}-{question_end}"
     jsonl = output_dir / f"{tag}.jsonl"

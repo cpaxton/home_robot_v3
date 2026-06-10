@@ -1,0 +1,24 @@
+# SQA3D benchmark paths (large outputs + caches live under ~, not the git tree).
+# Override with env: EMET_SQA3D_OUTPUT, SQA3D_DATA_DIR, SCANNET_ROOT (see docs/sqa3d.md).
+
+paths:
+  output_dir: ~/runs/emet/sqa3d
+  sqa3d_data: ~/.cache/sqa3d/data
+  scannet_root: ~/.cache/scannet
+
+# Fast CI / multi-agent sanity (mock LLM)
+smoke:
+  split: val
+  question_id: 220602000000
+  method: dynagraph
+  replay_mode: auto
+  mock_llm: true
+
+# Default real-VLM sweep slice (paper dev runs)
+sweep:
+  split: val
+  question_start: 0
+  question_end: 30
+  method: dynagraph
+  replay_mode: sens
+  isolate_episodes: true

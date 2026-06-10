@@ -103,6 +103,7 @@ Episode JSONL logs \texttt{replay\_backend}, \texttt{sens\_match\_xy\_m}, and \t
   \item Smoke: \texttt{emet sqa3d run-episode --mock-llm --question-id <id>}.
   \item Real-VLM batch: \texttt{emet sqa3d run-real-sweep --split val --replay-mode sens --isolate-episodes} (GPU-isolated subprocesses; see \texttt{docs/sqa3d\_compute.md}).
   \item Score / figures: \texttt{emet eval-sqa3d -p <batch>.jsonl}; \texttt{emet sqa3d plot-results -p <batch>.jsonl -o figs/}.
+  \item Aggregate sweeps: \texttt{scripts/aggregate\_sqa3d\_sweep.py} $\rightarrow$ \texttt{aggregate\_sqa3d.csv} (paths in \texttt{configs/sqa3d/benchmark.yaml}).
 \end{enumerate}
 
 \textbf{Metrics.}
