@@ -17,87 +17,87 @@ PY_HAB="$ENV_PREFIX/bin/python"
 HEADLESS="${HABITAT_HEADLESS:-1}"
 
 ensure_micromamba() {
-  if command -v micromamba >/dev/null 2>&1; then
-    MICROMAMBA_BIN="$(command -v micromamba)"
-    return 0
-  fi
-  if [ -x "$MICROMAMBA_BIN" ]; then
-    return 0
-  fi
-  echo "Bootstrapping micromamba into $MICROMAMBA_ROOT ..."
-  mkdir -p "$MICROMAMBA_ROOT"
-  curl -fsSL "https://micro.mamba.pm/api/micromamba/linux-64/latest" -o /tmp/emet-micromamba.tar.bz2
-  tar -xjf /tmp/emet-micromamba.tar.bz2 -C "$MICROMAMBA_ROOT" bin/micromamba
-  rm -f /tmp/emet-micromamba.tar.bz2
+    if command -v micromamba >/dev/null 2>&1; then
+        MICROMAMBA_BIN="$(command -v micromamba)"
+        return 0
+    fi
+    if [ -x "$MICROMAMBA_BIN" ]; then
+        return 0
+    fi
+    echo "Bootstrapping micromamba into $MICROMAMBA_ROOT ..."
+    mkdir -p "$MICROMAMBA_ROOT"
+    curl -fsSL "https://micro.mamba.pm/api/micromamba/linux-64/latest" -o /tmp/emet-micromamba.tar.bz2
+    tar -xjf /tmp/emet-micromamba.tar.bz2 -C "$MICROMAMBA_ROOT" bin/micromamba
+    rm -f /tmp/emet-micromamba.tar.bz2
 }
 
 mm() {
-  "$MICROMAMBA_BIN" "$@"
+    "$MICROMAMBA_BIN" "$@"
 }
 
 habitat_pip_install() {
-  if command -v uv >/dev/null 2>&1; then
-    uv pip install --python "$PY_HAB" "$@"
-  else
-    "$PY_HAB" -m pip install "$@"
-  fi
+    if command -v uv >/dev/null 2>&1; then
+        uv pip install --python "$PY_HAB" "$@"
+    else
+        "$PY_HAB" -m pip install "$@"
+    fi
 }
 
 install_habitat_sim_conda() {
-  local channels=(-c conda-forge -c aihabitat-nightly)
-  local variants=(withbullet)
-  if [ "$HEADLESS" = "1" ]; then
-    variants+=(headless)
-  fi
-  echo "Installing habitat-sim (${variants[*]}) into $ENV_PREFIX ..."
-  # Nightly channel ships py3.10 builds; stable aihabitat is py3.9-only.
-  mm install -y -p "$ENV_PREFIX" "${variants[@]}" habitat-sim "${channels[@]}"
-  # Scientific stack from conda (avoid pip upgrading numpy/matplotlib under habitat-sim).
-  mm install -y -p "$ENV_PREFIX" -c conda-forge matplotlib scipy pillow numpy
+    local channels=(-c conda-forge -c aihabitat-nightly)
+    local variants=(withbullet)
+    if [ "$HEADLESS" = "1" ]; then
+        variants+=(headless)
+    fi
+    echo "Installing habitat-sim (${variants[*]}) into $ENV_PREFIX ..."
+    # Nightly channel ships py3.10 builds; stable aihabitat is py3.9-only.
+    mm install -y -p "$ENV_PREFIX" "${variants[@]}" habitat-sim "${channels[@]}"
+    # Scientific stack from conda (avoid pip upgrading numpy/matplotlib under habitat-sim).
+    mm install -y -p "$ENV_PREFIX" -c conda-forge matplotlib scipy pillow numpy
 }
 
 install_emet_packages() {
-  echo "Installing emet + emet-habitat (editable, no upstream dep resolver) ..."
-  habitat_pip_install --upgrade pip 2>/dev/null || true
-  habitat_pip_install --no-deps -e .
-  habitat_pip_install --no-deps -e packages/emet_habitat
-  habitat_pip_install -r packages/emet_habitat/requirements-pip.txt
-  # uv may skip packages it considers satisfied; verify runner import chain.
-  if ! "$PY_HAB" -c "from emet_habitat.runner import run_hmeqa_episode" 2>/dev/null; then
-    echo "  -> Retrying pip deps (runner import failed) ..."
-    habitat_pip_install --upgrade -r packages/emet_habitat/requirements-pip.txt
-  fi
+    echo "Installing emet + emet-habitat (editable, no upstream dep resolver) ..."
+    habitat_pip_install --upgrade pip 2>/dev/null || true
+    habitat_pip_install --no-deps -e .
+    habitat_pip_install --no-deps -e packages/emet_habitat
+    habitat_pip_install -r packages/emet_habitat/requirements-pip.txt
+    # uv may skip packages it considers satisfied; verify runner import chain.
+    if ! "$PY_HAB" -c "from emet_habitat.runner import run_hmeqa_episode" 2>/dev/null; then
+        echo "  -> Retrying pip deps (runner import failed) ..."
+        habitat_pip_install --upgrade -r packages/emet_habitat/requirements-pip.txt
+    fi
 }
 
 repair_if_needed() {
-  if [ ! -x "$PY_HAB" ]; then
-    return 1
-  fi
-  if ! "$PY_HAB" -c "import habitat_sim, emet, emet_habitat" 2>/dev/null; then
-    return 1
-  fi
-  if [ ! -x "$ENV_PREFIX/bin/emet-habitat" ]; then
-    return 1
-  fi
-  return 0
+    if [ ! -x "$PY_HAB" ]; then
+        return 1
+    fi
+    if ! "$PY_HAB" -c "import habitat_sim, emet, emet_habitat" 2>/dev/null; then
+        return 1
+    fi
+    if [ ! -x "$ENV_PREFIX/bin/emet-habitat" ]; then
+        return 1
+    fi
+    return 0
 }
 
 ensure_micromamba
 
 if [ ! -d "$ENV_PREFIX" ] || ! repair_if_needed; then
-  if [ -d "$ENV_PREFIX" ]; then
-    echo "Repairing incomplete $ENV_PREFIX ..."
-  else
-    echo "Creating $ENV_PREFIX (Python 3.10 + habitat-sim via micromamba) ..."
-  fi
-  if [ -d "$ENV_PREFIX" ]; then
-    rm -rf "$ENV_PREFIX"
-  fi
-  mm create -y -p "$ENV_PREFIX" python=3.10 -c conda-forge
-  install_habitat_sim_conda
-  install_emet_packages
+    if [ -d "$ENV_PREFIX" ]; then
+        echo "Repairing incomplete $ENV_PREFIX ..."
+    else
+        echo "Creating $ENV_PREFIX (Python 3.10 + habitat-sim via micromamba) ..."
+    fi
+    if [ -d "$ENV_PREFIX" ]; then
+        rm -rf "$ENV_PREFIX"
+    fi
+    mm create -y -p "$ENV_PREFIX" python=3.10 -c conda-forge
+    install_habitat_sim_conda
+    install_emet_packages
 else
-  echo "$ENV_PREFIX looks healthy."
+    echo "$ENV_PREFIX looks healthy."
 fi
 
 if ! "$PY_HAB" -c "
@@ -107,9 +107,19 @@ from emet.habitat.config import default_habitat_eqa_data_dir
 print('habitat_sim', habitat_sim.__version__)
 print('data_dir', default_habitat_eqa_data_dir())
 "; then
-  echo "ERROR: habitat_sim or emet.habitat failed to import." >&2
-  exit 1
+    echo "ERROR: habitat_sim or emet.habitat failed to import." >&2
+    exit 1
 fi
+
+# conda matplotlib/torch need the env libstdc++ (system CXXABI may be older).
+cat > "$ENV_PREFIX/bin/emet-habitat" <<'WRAP'
+#!/usr/bin/env bash
+# Generated by scripts/install_habitat.sh — do not edit.
+ENV_PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
+export LD_LIBRARY_PATH="$ENV_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+exec "$ENV_PREFIX/bin/python" -m emet_habitat.cli "$@"
+WRAP
+chmod +x "$ENV_PREFIX/bin/emet-habitat"
 
 echo ""
 echo "Habitat harness ready:"

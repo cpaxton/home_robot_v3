@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Chris Paxton
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
@@ -16,7 +25,6 @@ import numpy as np
 from emet.habitat.config import (
     default_hm3d_data_path,
     hm3d_scene_glb_path,
-    hm3d_scene_short_name,
 )
 
 _SKIP_CATEGORY_NAMES = frozenset(
@@ -158,7 +166,12 @@ def hm3d_annotated_scene_dataset_config(hm3d_root: Path | None = None, *, split:
         root / "scene_datasets" / "hm3d" / split / f"hm3d_annotated_{split}_basis.scene_dataset_config.json",
         root / "versioned_data" / "hm3d-0.2" / "hm3d" / "hm3d_annotated_basis.scene_dataset_config.json",
         root / "versioned_data" / "hm3d-0.2" / "hm3d" / split / "hm3d_annotated_basis.scene_dataset_config.json",
-        root / "versioned_data" / "hm3d-0.2" / "hm3d" / split / f"hm3d_annotated_{split}_basis.scene_dataset_config.json",
+        root
+        / "versioned_data"
+        / "hm3d-0.2"
+        / "hm3d"
+        / split
+        / f"hm3d_annotated_{split}_basis.scene_dataset_config.json",
     ]
     for path in candidates:
         if path.is_file():
@@ -174,6 +187,37 @@ def hm3d_scene_has_semantic_assets(scene_id: str, hm3d_root: Path | None = None)
     """True when ``<short_id>.semantic.glb`` exists next to the scene basis mesh."""
     glb = hm3d_scene_glb_path(scene_id, hm3d_root)
     return hm3d_semantic_glb_for_basis(glb).is_file()
+
+
+def hm3d_placements_from_semantic_scene(semantic_scene) -> dict[str, dict] | None:
+    """
+    Build find-phase GT placements from HM3D ``semantic_scene.objects``.
+
+    Positions are Habitat Y-up world coordinates. Each entry includes ``frame: habitat_yup``
+    and axis-aligned ``bounds`` for bounds-aware scoring (XZ horizontal plane).
+    """
+    if semantic_scene is None:
+        return None
+    placements: dict[str, dict] = {}
+    for obj in semantic_scene.objects:
+        idx = _instance_index_from_object_id(obj.id)
+        if idx is None:
+            continue
+        label = _clean_category_name(obj.category.name())
+        if not label or label in _SKIP_CATEGORY_NAMES:
+            continue
+        aabb = obj.aabb
+        center = np.array([float(aabb.center()[i]) for i in range(3)], dtype=np.float64)
+        mn = np.array([float(aabb.min[i]) for i in range(3)], dtype=np.float64)
+        mx = np.array([float(aabb.max[i]) for i in range(3)], dtype=np.float64)
+        body = f"hm3d_{label}_{idx}"
+        placements[body] = {
+            "cat": label,
+            "pos": center,
+            "bounds": np.stack([mn, mx]),
+            "frame": "habitat_yup",
+        }
+    return placements or None
 
 
 def hm3d_semantic_glb_for_basis(basis_glb: Path) -> Path:

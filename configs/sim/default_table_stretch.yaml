@@ -1,0 +1,6 @@
+# Default table scene + Stretch (OVMM find-phase S0 tier).
+kind: default_mujoco
+robot: stretch
+headless: true
+port_offset: 0
+seed: 0

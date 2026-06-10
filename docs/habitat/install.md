@@ -42,6 +42,10 @@ HABITAT_HEADLESS=0 ./scripts/install_habitat.sh
 uv run emet habitat info
 ```
 
+`emet-habitat` is a bash wrapper that prepends `.venv-habitat/lib` to `LD_LIBRARY_PATH`
+(conda `libstdc++` vs system `CXXABI`). Use `.venv-habitat/bin/emet-habitat`, not bare
+`python -m emet_habitat.cli`, if matplotlib import fails.
+
 `emet habitat …` and `emet run graph-eqa-habitat` delegate to `.venv-habitat/bin/emet-habitat` from the main `.venv`.
 
 ## Why not the main `.venv`?
@@ -65,5 +69,5 @@ rm -rf .venv-habitat
 
 ## Next step
 
-Download HM-EQA CSVs and HM3D scenes: [data.md](data.md).  
+Download HM-EQA CSVs and HM3D scenes: [data.md](data.md).
 HM3D train/val/minival need API tokens: **Profile → Settings → Developer Tools** ([link](https://my.matterport.com/settings/account/devtools)).

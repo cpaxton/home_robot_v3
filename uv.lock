@@ -1239,7 +1239,7 @@ requires-dist = [
     { name = "wget" },
     { name = "yacs" },
 ]
-provides-extras = ["dev", "sim", "hand-tracker", "dynamem", "molmospaces"]
+provides-extras = ["dev", "sim", "hand-tracker", "dynamem", "molmospaces", "habitat-ovmm"]
 
 [package.metadata.requires-dev]
 da3 = [{ name = "depth-anything-3", specifier = ">=0.1.1" }]

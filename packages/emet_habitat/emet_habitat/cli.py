@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Chris Paxton
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
@@ -305,6 +314,129 @@ def compare_batch(
         }
         output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         click.echo(f"wrote {output}")
+
+
+@main.command("run-ovmm-find-episode")
+@click.option(
+    "--episodes",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Episode YAML (default: configs/ovmm/habitat_find_phase_episodes.yaml)",
+)
+@click.option("--episode-id", required=True, help="Episode id from registry")
+@click.option(
+    "--backend",
+    type=click.Choice(["dynamem", "graph_eqa", "dynagraph", "ground_truth"]),
+    default="dynagraph",
+)
+@click.option("--merge-xy-m", type=float, default=None)
+@click.option("--staleness-horizon", type=int, default=None)
+@click.option("--cpu-only", is_flag=True, default=False)
+@click.option("--not-rotate", is_flag=True, default=False)
+@click.option("--hm3d-root", type=click.Path(path_type=Path), default=None)
+@click.option("--data-dir", type=click.Path(path_type=Path), default=None)
+@click.option("--output", type=click.Path(path_type=Path), default=None, help="Write JSON metrics")
+def run_ovmm_find_episode(
+    episodes: Path | None,
+    episode_id: str,
+    backend: str,
+    merge_xy_m: float | None,
+    staleness_horizon: int | None,
+    cpu_only: bool,
+    not_rotate: bool,
+    hm3d_root: Path | None,
+    data_dir: Path | None,
+    output: Path | None,
+) -> None:
+    """Run one Habitat find-phase episode (FindObj / FindRec)."""
+    from emet.eval.ovmm_find_phase import FindPhaseRunConfig
+    from emet_habitat.ovmm_find_runner import load_habitat_find_phase_episodes, run_habitat_find_phase_episode
+
+    repo = Path(__file__).resolve().parents[3]
+    ep_path = episodes or (repo / "configs" / "ovmm" / "habitat_find_phase_episodes.yaml")
+    init_poses_path = (data_dir / "scene_init_poses.csv") if data_dir else scene_init_poses_csv_path()
+    rows = load_habitat_find_phase_episodes(ep_path)
+    ep = next((e for e in rows if e.id == episode_id), None)
+    if ep is None:
+        raise click.ClickException(f"Unknown episode_id {episode_id!r} in {ep_path}")
+
+    run_cfg = FindPhaseRunConfig(
+        backend=backend,  # type: ignore[arg-type]
+        merge_xy_m=merge_xy_m,
+        staleness_horizon=staleness_horizon,
+        cpu_only=cpu_only,
+        not_rotate=not_rotate,
+    )
+    metrics = run_habitat_find_phase_episode(
+        ep,
+        run_cfg,
+        hm3d_root=hm3d_root,
+        init_poses_path=init_poses_path,
+    )
+    text = json.dumps(metrics, indent=2)
+    click.echo(text)
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(text, encoding="utf-8")
+
+
+@main.command("run-ovmm-find-batch")
+@click.option("--episodes", type=click.Path(path_type=Path), default=None)
+@click.option("--episode-id", multiple=True, help="Subset of episode ids")
+@click.option(
+    "--backend",
+    type=click.Choice(["dynamem", "graph_eqa", "dynagraph", "ground_truth"]),
+    default="dynagraph",
+)
+@click.option("--merge-xy-m", type=float, default=None)
+@click.option("--staleness-horizon", type=int, default=None)
+@click.option("--cpu-only", is_flag=True, default=False)
+@click.option("--not-rotate", is_flag=True, default=False)
+@click.option("--hm3d-root", type=click.Path(path_type=Path), default=None)
+@click.option("--data-dir", type=click.Path(path_type=Path), default=None)
+@click.option("--output-dir", type=click.Path(path_type=Path), required=True)
+def run_ovmm_find_batch(
+    episodes: Path | None,
+    episode_id: tuple[str, ...],
+    backend: str,
+    merge_xy_m: float | None,
+    staleness_horizon: int | None,
+    cpu_only: bool,
+    not_rotate: bool,
+    hm3d_root: Path | None,
+    data_dir: Path | None,
+    output_dir: Path,
+) -> None:
+    """Batch Habitat find-phase evaluation."""
+    from emet.eval.ovmm_find_phase import FindPhaseRunConfig
+    from emet_habitat.ovmm_find_runner import load_habitat_find_phase_episodes, run_habitat_find_phase_episode
+
+    repo = Path(__file__).resolve().parents[3]
+    ep_path = episodes or (repo / "configs" / "ovmm" / "habitat_find_phase_episodes.yaml")
+    init_poses_path = (data_dir / "scene_init_poses.csv") if data_dir else scene_init_poses_csv_path()
+    rows = load_habitat_find_phase_episodes(ep_path)
+    if episode_id:
+        id_set = set(episode_id)
+        rows = [e for e in rows if e.id in id_set]
+    run_cfg = FindPhaseRunConfig(
+        backend=backend,  # type: ignore[arg-type]
+        merge_xy_m=merge_xy_m,
+        staleness_horizon=staleness_horizon,
+        cpu_only=cpu_only,
+        not_rotate=not_rotate,
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for ep in rows:
+        click.echo(f"Running {ep.id} …", err=True)
+        metrics = run_habitat_find_phase_episode(
+            ep,
+            run_cfg,
+            hm3d_root=hm3d_root,
+            init_poses_path=init_poses_path,
+        )
+        out = output_dir / f"{ep.id}_{backend}.json"
+        out.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+        click.echo(f"  partial={metrics.get('find_partial_success')} -> {out}", err=True)
 
 
 if __name__ == "__main__":

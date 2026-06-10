@@ -1,8 +1,25 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Chris Paxton
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""Map Habitat-Sim sensor outputs to emet :class:`Observations`."""
+"""Map Habitat-Sim sensor outputs to emet :class:`~emet.core.interfaces.Observations`.
+
+Coordinate conventions:
+
+* Habitat agent state uses Y-up world coordinates.
+* emet ``gps`` is planar ``(x, z)`` with **x forward, y left** (Stretch nav convention).
+* ``compass`` is a single yaw (radians, CCW positive).
+* ``camera_pose`` is an OpenCV-style 4×4 camera-to-world matrix for depth unprojection.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +30,14 @@ from emet.utils.pose import convert_pose_habitat_to_opencv
 
 
 def _agent_rotation_matrix(rot) -> np.ndarray:
-    """Habitat-Sim agent rotation is a unit quaternion (w, x, y, z)."""
+    """Convert Habitat-Sim agent rotation to a 3×3 rotation matrix.
+
+    Args:
+        rot: ``quaternion.quaternion`` or length-4 array ``(w, x, y, z)``.
+
+    Returns:
+        Rotation matrix ``R`` such that ``R @ v`` maps body vectors to world.
+    """
     import quaternion as npq
 
     if isinstance(rot, npq.quaternion):
@@ -34,11 +58,24 @@ def habitat_rgb_depth_to_observations(
     semantic: np.ndarray | None = None,
     sensor_rotation_offset: np.ndarray | None = None,
 ) -> Observations:
-    """Build emet observations from Habitat agent state and RGB-D."""
+    """Build emet :class:`~emet.core.interfaces.Observations` from Habitat RGB-D.
+
+    Args:
+        rgb: ``H×W×3`` uint8 or float RGB image.
+        depth: ``H×W`` depth in meters (may include a trailing singleton dim).
+        agent_state: Habitat-Sim agent state with ``position`` and ``rotation``.
+        intrinsics: ``3×3`` pinhole camera matrix ``K``.
+        semantic: Optional ``H×W`` uint32 semantic instance id image.
+        sensor_rotation_offset: Optional ``4×4`` transform applied to agent pose
+            before converting to OpenCV camera frame (sensor mount offset).
+
+    Returns:
+        Observations with ``gps``, ``compass``, ``rgb``, ``depth``, ``camera_K``,
+        ``camera_pose``, and optional ``semantic``.
+    """
     pos = np.asarray(agent_state.position, dtype=np.float64)
     rot = agent_state.rotation
 
-    # Habitat agent rotation as 4x4 cam/world transform (agent body frame).
     hab_R = _agent_rotation_matrix(rot)
     hab_pose = np.eye(4, dtype=np.float64)
     hab_pose[:3, :3] = hab_R
@@ -49,7 +86,6 @@ def habitat_rgb_depth_to_observations(
 
     camera_pose = convert_pose_habitat_to_opencv(hab_pose)
 
-    # emet gps/compass: x forward, y left; heading positive CCW
     forward = hab_R[:, 2]
     heading = float(np.arctan2(forward[0], forward[2]))
     gps = np.array([float(pos[0]), float(pos[2])], dtype=np.float64)
