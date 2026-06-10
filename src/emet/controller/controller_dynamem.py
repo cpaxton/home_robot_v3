@@ -57,6 +57,7 @@ from emet.motion.algo.a_star import AStar
 from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
 from emet.perception.depth.lingbot_estimator import LingBotDepthEstimator, create_lingbot_estimator_from_parameters
 from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask, sensor_depth_usable
+from emet.perception.depth.lingbot_estimator import LingBotDepthEstimator, create_lingbot_estimator_from_parameters
 from emet.perception.detection.owl import OwlPerception
 from emet.perception.detection.yoloe import YoloEPerception
 
@@ -743,9 +744,7 @@ class DynamemController(BaseController):
                     graph_memory=self.graph_memory,
                 )
 
-        if self.graph_memory is not None and (
-            self.sensor_builder is not None or self._graph_eqa_use_instance_graph
-        ):
+        if self.graph_memory is not None and (self.sensor_builder is not None or self._graph_eqa_use_instance_graph):
             if getattr(self, "_skip_graph_perception_updates", False):
                 from emet.memory.graph_eqa.dynamem_graph_hooks import (
                     update_graph_memory_ground_truth_from_observation,
@@ -939,7 +938,7 @@ class DynamemController(BaseController):
         if callable(wait_obs):
             wait_obs(timeout=10.0)
         logger.info("rotate_in_place: 8× relative +45° yaw (no XY translation)")
-        for step_i in range(8):
+        for _step_i in range(8):
             self.robot.move_base_to([0.0, 0.0, np.pi / 4.0], relative=True, blocking=True)
             if not self._realtime_updates:
                 self.update()
@@ -1448,9 +1447,7 @@ class DynamemController(BaseController):
                 confidence_reasoning,
                 target_point,
                 relevant_images,
-            ) = self.voxel_map.query_answer(
-                question, self._planning_base_xyt(self.robot.get_base_pose()), self.planner
-            )
+            ) = self.voxel_map.query_answer(question, self._planning_base_xyt(self.robot.get_base_pose()), self.planner)
         except:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images = (
                 "Exception happens in LLM querying!",

@@ -1,8 +1,28 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Chris Paxton
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""``AbstractRobotClient`` shim over :class:`HabitatEQASimulator`."""
+"""``AbstractRobotClient`` shim over :class:`~emet_habitat.simulator.HabitatEQASimulator`.
+
+This client lets GraphEQA / Dynagraph controllers run unchanged against Habitat-Sim
+instead of a ZMQ MuJoCo server. Navigation uses Habitat discrete actions
+(``move_forward``, ``turn_left``, ``turn_right``) with optional navmesh path following.
+
+Typical construction (inside ``emet-habitat`` runner)::
+
+    sim = HabitatEQASimulator(scene_glb, scene_id=question.scene)
+    robot = HabitatRobotClient(sim)
+    agent = DynagraphController(robot, parameters, ...)
+"""
 
 from __future__ import annotations
 
@@ -12,21 +32,30 @@ from typing import Any
 
 import numpy as np
 
-from emet.core.interfaces import Observations
+from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.robot import AbstractRobotClient, ControlMode
 from emet.motion import Footprint, RobotModel
 from emet.utils.geometry import xyt_base_to_global
-
 from emet_habitat.observations import habitat_rgb_depth_to_observations
 from emet_habitat.simulator import HabitatEQASimulator
 
 
 class HabitatRobotClient(AbstractRobotClient, RobotModel):
-    """In-process Habitat agent for GraphEQA / Dynagraph controllers."""
+    """In-process Habitat agent implementing the emet robot client interface.
+
+    Args:
+        simulator: Open :class:`~emet_habitat.simulator.HabitatEQASimulator` for one HM3D scene.
+
+    Attributes:
+        dof: Planar DoF count (3: x, y, yaw) for navigation planners.
+        _xyt: Cached nav pose ``(x, z, heading)`` in Habitat world coordinates.
+        _v, _w: Nominal linear / angular velocity hints (used by some planners).
+    """
 
     def __init__(self, simulator: HabitatEQASimulator):
         super().__init__()
         self._sim = simulator
+        self._emet_session: dict | None = None
         self._xyt = np.zeros(3, dtype=np.float64)
         self._v = 0.3
         self._w = 0.4
@@ -35,6 +64,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         self._sync_pose_from_sim()
 
     def _sync_pose_from_sim(self) -> None:
+        """Refresh cached ``_xyt`` from the latest simulator agent state."""
         frame = self._sim.get_frame()
         obs = habitat_rgb_depth_to_observations(
             rgb=frame.rgb,
@@ -47,13 +77,23 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
 
     @property
     def hm3d_semantic_labeler(self):
+        """Optional :class:`~emet.habitat.hm3d_semantics.Hm3dSemanticLabeler` when semantics enabled."""
         return getattr(self._sim, "semantic_labeler", None)
 
     @property
     def uses_hm3d_semantics(self) -> bool:
+        """True when the simulator was constructed with HM3D semantic sensors."""
         return bool(getattr(self._sim, "uses_hm3d_semantics", False))
 
     def get_observation(self, max_iter: int = 5) -> Observations | None:
+        """Return the current head RGB-D (and optional semantic) observation.
+
+        Args:
+            max_iter: Unused; kept for API compatibility with ZMQ clients.
+
+        Returns:
+            Latest :class:`~emet.core.interfaces.Observations` from Habitat-Sim.
+        """
         frame = self._sim.get_frame()
         return habitat_rgb_depth_to_observations(
             rgb=frame.rgb,
@@ -64,10 +104,16 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         )
 
     def get_base_pose(self, timeout: float = 5.0) -> np.ndarray:
+        """Return planar base pose ``(x, z, heading)`` in Habitat world coordinates.
+
+        Args:
+            timeout: Unused; pose is read synchronously from the simulator.
+        """
         self._sync_pose_from_sim()
         return self._xyt.copy()
 
     def _greedy_to_habitat_point(self, habitat_xyz: np.ndarray, max_steps: int = 40) -> None:
+        """Greedy move/turn toward a Habitat world XYZ target (uses X/Z plane)."""
         goal_x = float(habitat_xyz[0])
         goal_z = float(habitat_xyz[2])
         for _ in range(max_steps):
@@ -86,7 +132,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
 
     def move_base_to(
         self,
-        xyt: Iterable[float] | object,
+        xyt: Iterable[float] | ContinuousNavigationAction,
         relative: bool = False,
         blocking: bool = False,
         verbose: bool = False,
@@ -94,7 +140,16 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         world_frame: bool = False,
         **kwargs: Any,
     ):
-        goal = np.asarray(list(xyt)[:3], dtype=np.float64)
+        """Navigate to ``(x, z[, yaw])`` using navmesh path following when available.
+
+        Args:
+            xyt: Goal pose in Habitat world coordinates (x, z, optional yaw).
+            relative: When True, goal is interpreted relative to current ``_xyt``.
+            blocking: Ignored (Habitat steps are synchronous).
+            verbose: Ignored.
+            timeout: Ignored.
+        """
+        goal = np.asarray(xyt, dtype=np.float64).reshape(-1)[:3]
         if relative:
             goal = xyt_base_to_global(goal, self._xyt)
         goal_theta = float(goal[2]) if len(goal) >= 3 else None
@@ -233,4 +288,9 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         return 0.5
 
     def get_emet_session(self) -> dict[str, Any] | None:
-        return None
+        """Optional session metadata (e.g. injected HM3D GT placements for find-phase)."""
+        return self._emet_session
+
+    def set_emet_session(self, session: dict | None) -> None:
+        """Attach session dict for GT graph refresh (Habitat find-phase harness)."""
+        self._emet_session = dict(session) if session is not None else None

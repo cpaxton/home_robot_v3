@@ -589,9 +589,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             logger.warning(f"Robocasa freejoint autoplace skipped ({e!r}).")
             return
         if placed is None:
-            logger.info(
-                "Robocasa freejoint autoplace: no safer (x,y,z) found; keeping MJCF default base pose."
-            )
+            logger.info("Robocasa freejoint autoplace: no safer (x,y,z) found; keeping MJCF default base pose.")
             return
         x, y, z = placed
         logger.info(

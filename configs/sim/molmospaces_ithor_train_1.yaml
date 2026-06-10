@@ -1,0 +1,10 @@
+# MolmoSpaces iTHOR FloorPlan2 (index 1) + rby1
+kind: molmospaces
+robot: rby1
+scene: ithor
+split: train
+index: 1
+molmospaces_install: false
+headless: true
+port_offset: 0
+seed: 0

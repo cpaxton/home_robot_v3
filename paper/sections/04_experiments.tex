@@ -79,6 +79,43 @@ Robocasa kitchens (multiple layout/style seeds) and the default table scene serv
 
 See Appendix~\ref{app:ground_truth_graph} for GT graph construction and export layout.
 
+\subsection{OVMM-inspired find-phase localization}
+\label{sec:ovmm_find_phase}
+
+\textit{Results pending.}
+Following OVMM~\cite{ovmm2023}, we benchmark the two phases that depend only on memory and navigation: \textbf{FindObj} (localize the target object near the start receptacle) and \textbf{FindRec} (localize the goal receptacle category).
+Pick and place are out of scope for this ablation; we report \textbf{find-phase partial success} (mean of FindObj and FindRec @\,$r$), not full manipulation overall success.
+
+\textbf{Emet sim ladder.}
+Episodes are defined in \texttt{configs/ovmm/find\_phase\_episodes.yaml} with tiers S0 (default table), S1 (Robocasa pick-place), and S2 (MolmoSpaces iTHOR indices 0--2).
+Success oracles use \texttt{sim\_object\_placements}: predicted XYZ within $r$\,m of the GT object body (FindObj) or any GT body whose category matches the goal receptacle (FindRec).
+
+\textbf{Protocol.}
+\begin{enumerate}
+  \item Batch: \texttt{uv run python scripts/eval\_ovmm\_find\_phases.py --tier S0 --backend dynamem --backend graph\_eqa --backend dynagraph}.
+  \item Fixed mapping per episode: rotate-in-place plus optional \texttt{explore\_steps} frontier steps; only the memory backend varies.
+  \item Optional oracle row: \texttt{--backend ground\_truth} isolates perception from graph structure.
+\end{enumerate}
+
+\textbf{Metrics.}
+FindObj / FindRec success, partial success, localization error (m), graph node count, voxel explored area (m$^2$), wall time, and \texttt{n\_placements} (Molmo GT cap diagnostic).
+See \texttt{docs/ovmm\_find\_phase\_benchmark.md}.
+
+\subsection{Scaling to large scenes}
+\label{sec:scaling_large_scenes}
+
+\textit{Results pending.}
+Designed to stress-test Dynagraph node growth and exploration budget on S0$\rightarrow$S2:
+
+\begin{itemize}
+  \item \textbf{Scene-size sweep:} success and \texttt{n\_graph\_nodes} vs tier and Molmo index (Fig.~\ref{fig:ovmm_scaling_success}, Fig.~\ref{fig:ovmm_scaling_nodes}).
+  \item \textbf{Exploration budget:} \texttt{explore\_steps} $\in \{0, 5, 15, 30\}$ on S2 index 0.
+  \item \textbf{Merge / staleness grid:} \texttt{--merge-xy-m} $\in \{0, 0.25, 0.45, 0.75\}$, \texttt{--staleness-horizon} $\in \{0, 128, 256, 512\}$ on S2.
+\end{itemize}
+
+\textbf{Known limits.}
+Molmo GT fixture scans may cap on large scenes; Robocasa layout $\neq$ HSSD; static placements (no mid-episode object move in Phase~1).
+
 \subsection{Execution protocol}
 
 \begin{enumerate}
