@@ -212,6 +212,7 @@ uv run emet test src/test/benchmarks/sqa3d/ -v
 
 ## See also
 
+- [paper_benchmarks.md](paper_benchmarks.md) — unified runbook for all paper tracks (SQA3D + OVMM + GT finding)
 - [sqa3d_compute.md](sqa3d_compute.md) — GPU memory, isolation, multi-GPU sharding (no pricing)
 - [dynagraph_benchmarks.md](dynagraph_benchmarks.md) — Dynagraph sim harness (separate from SQA3D)
 - [habitat/README.md](habitat/README.md) — HM-EQA Habitat harness

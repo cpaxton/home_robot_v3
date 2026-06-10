@@ -2,6 +2,8 @@
 
 Experiment suite aligned with the paper introduction: **explore**, **remember**, **update**, and **open-ended EQA** across default table, Robocasa, and MolmoSpaces.
 
+Paper operator guide (all tracks): [paper_benchmarks.md](paper_benchmarks.md).
+
 ## Quick commands
 
 | Goal | Command |
