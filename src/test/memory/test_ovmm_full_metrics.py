@@ -60,6 +60,18 @@ def test_score_place_success_near_goal_recep():
     assert out["place_err_obj_to_recep_m"] < 0.1
 
 
+def test_score_place_fails_without_improvement():
+    placements = _placements()
+    out = score_place_success(
+        placements,
+        object_gt_body="object2",
+        goal_recep="blue cube",
+        radius_m=0.3,
+        placements_before=placements,
+    )
+    assert out["place_success"] is False
+
+
 def test_compute_ovmm_full_metrics_all_true():
     out = compute_ovmm_full_metrics(
         find_object_success=True,

@@ -20,12 +20,13 @@ from typing import Any
 import numpy as np
 from overrides import override
 
-from emet.core.zmq_protocol import EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY
+from emet.core.zmq_protocol import EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY, EMET_ACTION_SIM_SET_BODY_POSE_KEY
 from emet.motion.constants import STRETCH_CAMERA_FRAME
 from emet.simulation.mujoco_ground_truth import (
     mujoco_ground_truth_write_path,
     parse_ground_truth_dump_action_field,
 )
+from emet.simulation.sim_manipulation import parse_sim_set_body_pose_action
 from emet.simulation.sim_object_placements import (
     apply_navigation_origin_to_session,
     attach_sim_object_placements_to_session,
@@ -668,6 +669,7 @@ class MujocoZmqServer(BaseZmqServer):
             "depth": self._cameras_enabled,
             "num_cameras": 2 if self._cameras_enabled else 0,
             "dof": int(spec.dof),
+            "sim_set_body_pose": True,
         }
         session: dict[str, Any] = {
             EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY: CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
@@ -709,6 +711,41 @@ class MujocoZmqServer(BaseZmqServer):
             _mj_forward(model, data)
             return model, data
         return None, None
+
+    def _refresh_emet_session_placements(self) -> None:
+        """Re-scan MuJoCo bodies into ``emet_session`` after sim-only pose edits."""
+        if self._emet_session is None:
+            return
+        gt_model, gt_data = self._gt_model_data_for_session()
+        env = self._emet_session.get("environment")
+        env_kind = env.get("kind") if isinstance(env, dict) else None
+        attach_sim_object_placements_to_session(
+            self._emet_session,
+            objects_info=self.objects_info,
+            environment_kind=str(env_kind) if env_kind else None,
+            model=gt_model,
+            data=gt_data,
+            robot_root_name="base_link",
+        )
+
+    def _patch_emet_session_body_pos(
+        self,
+        body: str,
+        pos: list[float],
+        quat: list[float] | None = None,
+    ) -> None:
+        """Update one body entry in cached session GT (Stretch sim runs MuJoCo in a subprocess)."""
+        if self._emet_session is None:
+            return
+        placements = self._emet_session.get("sim_object_placements")
+        if not isinstance(placements, dict) or body not in placements:
+            return
+        entry = placements[body]
+        if not isinstance(entry, dict):
+            return
+        entry["pos"] = [float(x) for x in pos[:3]]
+        if quat is not None:
+            entry["quat"] = [float(x) for x in quat[:4]]
 
     def _is_molmospaces_session(self) -> bool:
         env = self._environment_descriptor
@@ -789,6 +826,23 @@ class MujocoZmqServer(BaseZmqServer):
                         logger.info(f"Wrote MuJoCo ground-truth snapshot -> {out}")
                 except Exception as e:
                     logger.error("mujoco_ground_truth_dump failed for %r: %s", path_gt, e)
+
+        if EMET_ACTION_SIM_SET_BODY_POSE_KEY in action:
+            body, pos, quat = parse_sim_set_body_pose_action(action[EMET_ACTION_SIM_SET_BODY_POSE_KEY])
+            if body and pos is not None:
+                pos_arr = np.asarray(pos, dtype=np.float64).reshape(3)
+                quat_arr = np.asarray(quat, dtype=np.float64).reshape(4) if quat is not None else None
+                ok = self.robot_sim.teleport_body_pose(
+                    body,
+                    pos_arr,
+                    quat_arr,
+                    wait=True,
+                    timeout=2.0,
+                )
+                if ok:
+                    self._patch_emet_session_body_pos(body, pos, quat)
+                else:
+                    logger.warning("sim_set_body_pose failed for body %r", body)
 
         if "control_mode" in action:
             new_control_mode = action["control_mode"]

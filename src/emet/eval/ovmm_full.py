@@ -18,19 +18,18 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 
 from emet.eval.ovmm_find_phase import (
     FindPhaseEpisode,
     FindPhaseRunConfig,
+    ManipMode,
     bodies_matching_category,
     distance_to_placement_xy,
     pick_find_object_gt_body,
 )
-
-ManipMode = Literal["skip", "oracle", "attempt"]
 
 
 def _snapshot_placements(placements: dict[str, dict[str, Any]] | None) -> dict[str, dict[str, Any]]:
@@ -90,6 +89,7 @@ def score_place_success(
     object_gt_body: str | None,
     goal_recep: str,
     radius_m: float,
+    placements_before: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Place success: object GT body within ``radius_m`` of any goal-recep GT body."""
     if not placements_after or not object_gt_body or object_gt_body not in placements_after:
@@ -110,6 +110,24 @@ def score_place_success(
     obj_pos = placements_after[object_gt_body]
     errors = [distance_to_placement_xy(obj_pos["pos"], placements_after[body]) for body in recep_bodies]
     best_err = min(errors)
+
+    if placements_before and object_gt_body in placements_before:
+        before_errors = [
+            distance_to_placement_xy(placements_before[object_gt_body]["pos"], placements_before[body])
+            for body in recep_bodies
+            if body in placements_before
+        ]
+        if before_errors:
+            before_best = min(before_errors)
+            improved = best_err < before_best - 1e-4
+            within = best_err <= float(radius_m)
+            return {
+                "place_success": bool(within and improved),
+                "place_err_obj_to_recep_m": float(best_err),
+                "gt_object_body": object_gt_body,
+                "gt_recep_bodies": recep_bodies,
+            }
+
     return {
         "place_success": best_err <= float(radius_m),
         "place_err_obj_to_recep_m": float(best_err),
@@ -146,6 +164,123 @@ def _read_placements(robot: Any) -> dict[str, dict[str, Any]] | None:
 
     session = robot.get_emet_session() if robot is not None else None
     return read_sim_object_placements(session)
+
+
+def _sim_manip_supported(robot: Any) -> bool:
+    session = robot.get_emet_session() if robot is not None else None
+    if not isinstance(session, dict) or not session.get("is_simulation"):
+        return False
+    caps = session.get("capabilities") or {}
+    return bool(caps.get("sim_set_body_pose", False))
+
+
+def _robot_set_body_pose(robot: Any, body: str, pos: np.ndarray) -> None:
+    from emet.core.zmq_protocol import build_sim_set_body_pose_action
+
+    step = int(getattr(robot, "_last_step", -1)) + 1
+    if step < 1:
+        step = 1
+    action = build_sim_set_body_pose_action(step, body, pos.tolist())
+    send_action = getattr(robot, "send_action", None)
+    if callable(send_action):
+        send_action(action, reliable=True)
+    else:
+        robot.send_message(action)
+    wait_obs = getattr(robot, "wait_for_obs", None)
+    if callable(wait_obs):
+        wait_obs(timeout=5.0)
+    time.sleep(0.25)
+
+
+def _goal_place_xyz(placements: dict[str, dict[str, Any]], goal_recep: str) -> np.ndarray | None:
+    recep_bodies = bodies_matching_category(placements, goal_recep)
+    if not recep_bodies:
+        return None
+    anchor = np.asarray(placements[recep_bodies[0]]["pos"], dtype=np.float64).reshape(3).copy()
+    anchor[2] += 0.02
+    return anchor
+
+
+def _run_sim_manip_phases(
+    robot: Any,
+    episode: FindPhaseEpisode,
+    *,
+    find_metrics: dict[str, Any],
+    placements_before: dict[str, dict[str, Any]] | None,
+    gt_body: str | None,
+    mode: ManipMode,
+) -> dict[str, Any]:
+    radius_m = float(episode.success_radius_m)
+    t_manip0 = time.monotonic()
+    before_pick = _snapshot_placements(placements_before)
+    if not gt_body or gt_body not in before_pick:
+        return {
+            "manip_mode": mode,
+            "pick_attempted": True,
+            "place_attempted": False,
+            "pick_success": False,
+            "place_success": False,
+            "manip_error": "missing_gt_object_body",
+            "manip_wall_s": float(time.monotonic() - t_manip0),
+            "ovmm_full_partial": 0.0,
+            "ovmm_full_success": False,
+        }
+
+    t_pick0 = time.monotonic()
+    pick_pos = np.asarray(before_pick[gt_body]["pos"], dtype=np.float64).reshape(3).copy()
+    pick_pos[2] += 0.12
+    _robot_set_body_pose(robot, gt_body, pick_pos)
+    after_pick = _read_placements(robot) or before_pick
+    pick_scores = score_pick_success(
+        before_pick,
+        after_pick,
+        object_gt_body=gt_body,
+        start_recep=episode.start_recep,
+        radius_m=radius_m,
+    )
+    pick_wall_s = time.monotonic() - t_pick0
+
+    t_place0 = time.monotonic()
+    place_pos = _goal_place_xyz(after_pick, episode.goal_recep)
+    if place_pos is None:
+        place_scores = {
+            "place_success": False,
+            "place_err_obj_to_recep_m": None,
+            "gt_object_body": gt_body,
+            "gt_recep_bodies": [],
+        }
+    else:
+        _robot_set_body_pose(robot, gt_body, place_pos)
+        after_place = _read_placements(robot) or after_pick
+        place_scores = score_place_success(
+            after_place,
+            object_gt_body=gt_body,
+            goal_recep=episode.goal_recep,
+            radius_m=radius_m,
+            placements_before=before_pick,
+        )
+    place_wall_s = time.monotonic() - t_place0
+    manip_wall_s = time.monotonic() - t_manip0
+
+    full = compute_ovmm_full_metrics(
+        find_object_success=bool(find_metrics.get("find_object_success")),
+        find_recep_success=bool(find_metrics.get("find_recep_success")),
+        pick_success=bool(pick_scores["pick_success"]),
+        place_success=bool(place_scores["place_success"]),
+    )
+    return {
+        "manip_mode": mode,
+        "pick_attempted": True,
+        "place_attempted": place_pos is not None,
+        "pick_controller_ok": None,
+        "place_controller_ok": None,
+        "pick_wall_s": float(pick_wall_s),
+        "place_wall_s": float(place_wall_s),
+        "manip_wall_s": float(manip_wall_s),
+        **pick_scores,
+        **place_scores,
+        **full,
+    }
 
 
 def run_ovmm_manip_phases(
@@ -205,6 +340,18 @@ def run_ovmm_manip_phases(
             **full,
         }
 
+    use_sim = mode == "sim" or (mode == "attempt" and _sim_manip_supported(robot))
+    if use_sim:
+        effective = "sim" if mode == "sim" else "attempt_sim"
+        return _run_sim_manip_phases(
+            robot,
+            episode,
+            find_metrics=find_metrics,
+            placements_before=placements_before,
+            gt_body=gt_body,
+            mode=effective,  # type: ignore[arg-type]
+        )
+
     before_pick = _snapshot_placements(placements_before)
     pick_controller_ok = False
     t_pick0 = time.monotonic()
@@ -240,6 +387,7 @@ def run_ovmm_manip_phases(
         object_gt_body=gt_body,
         goal_recep=episode.goal_recep,
         radius_m=radius_m,
+        placements_before=after_pick,
     )
     place_wall_s = time.monotonic() - t_place0
     manip_wall_s = time.monotonic() - t_manip0
@@ -276,8 +424,7 @@ def augment_find_metrics_with_manip(
     object_query: str | None = None,
 ) -> dict[str, Any]:
     """Append manip-phase fields to a find-phase metrics dict."""
-    mode: ManipMode = getattr(run_cfg, "manip_mode", "skip")
-    if mode == "skip":
+    if run_cfg.manip_mode == "skip":
         return metrics
     query = object_query or str(metrics.get("object_query") or episode.object)
     manip = run_ovmm_manip_phases(

@@ -19,9 +19,10 @@ Extends the [find-phase harness](ovmm_find_phase_benchmark.md) with **Pick** and
 |------|----------|
 | `skip` | Find phases only (same as `eval_ovmm_find_phases.py`) |
 | `oracle` (default) | Pick/place success copied from find success (harness smoke / upper bound) |
-| `attempt` | Call `DynamemController.manipulate` + `place`; score from GT after each phase |
+| `sim` | MuJoCo freejoint teleport via ZMQ `sim_set_body_pose` (sim E2E) |
+| `attempt` | AnyGrasp pick/place on real robot; **auto uses sim teleport when `is_simulation`** |
 
-`attempt` needs a working pick stack (AnyGrasp socket for pick; local YoloE for place). Use `oracle` for metric plumbing and CI; use `attempt` on GPU workstations with manipulation wired.
+`attempt` needs a working AnyGrasp socket on real hardware. In sim, `attempt` and `sim` both use body teleport (no AnyGrasp).
 
 ## Quick start
 
@@ -36,12 +37,12 @@ uv run python scripts/eval_ovmm_full.py \
   --manip-mode oracle \
   --output-dir ~/runs/emet/ovmm_full/smoke
 
-# Real pick/place attempt (slow; needs manip deps)
+# Sim E2E (find + sim pick/place; GPU for perception mapping)
 uv run python scripts/eval_ovmm_full.py \
-  --tier S0 \
+  --episode-id default_table_s0_distinct_recep \
   --backend dynagraph \
   --manip-mode attempt \
-  --output-dir ~/runs/emet/ovmm_full/s0_attempt
+  --output-dir ~/runs/emet/ovmm_full/e2e
 ```
 
 Episodes: `configs/ovmm/full_episodes.yaml`. Outputs default to `~/runs/emet/ovmm_full` (`EMET_OVMM_OUTPUT_FULL` or `configs/ovmm/benchmark.yaml`).

@@ -31,7 +31,7 @@ DEFAULT_EPISODES = REPO / "configs" / "ovmm" / "full_episodes.yaml"
 from emet.eval.memory_backends import OVMM_MEMORY_BACKENDS
 
 BACKENDS = OVMM_MEMORY_BACKENDS
-MANIP_MODES = ("skip", "oracle", "attempt")
+MANIP_MODES = ("skip", "oracle", "sim", "attempt")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -57,7 +57,7 @@ def _parse_args() -> argparse.Namespace:
         "--manip-mode",
         choices=MANIP_MODES,
         default="oracle",
-        help="Pick/place phase: skip (find only), oracle (GT from find), attempt (run manip APIs)",
+        help="Pick/place: skip | oracle (GT from find) | sim (MuJoCo teleport) | attempt (AnyGrasp or sim fallback)",
     )
     parser.add_argument("--merge-xy-m", type=float, default=None)
     parser.add_argument("--staleness-horizon", type=int, default=None)

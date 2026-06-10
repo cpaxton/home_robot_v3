@@ -28,7 +28,7 @@ import yaml
 from emet.utils.config import resolve_config_yaml_path
 
 MemoryBackendName = Literal["dynamem", "graph_eqa", "dynagraph", "ground_truth"]
-ManipMode = Literal["skip", "oracle", "attempt"]
+ManipMode = Literal["skip", "oracle", "sim", "attempt"]
 PlanarFrame = Literal["mujoco_xy", "habitat_xz"]
 LocalizeSource = Literal[
     "voxel",

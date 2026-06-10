@@ -41,6 +41,21 @@ class CommandTeleportBase:
 
 
 @dataclass
+class CommandTeleportBody:
+    body: str
+    pos_x: float
+    pos_y: float
+    pos_z: float
+    use_quat: bool
+    quat_w: float
+    quat_x: float
+    quat_y: float
+    quat_z: float
+    trigger: bool
+    ok: bool = False
+
+
+@dataclass
 class CommandKeyframe:
     name: str
     trigger: bool
@@ -63,6 +78,9 @@ class StatusCommand:
     move_by: dict[str, CommandMove] = field(default_factory=dict)
     base_velocity: CommandBaseVelocity = field(default_factory=lambda: CommandBaseVelocity(0, 0, False))
     teleport_base: CommandTeleportBase = field(default_factory=lambda: CommandTeleportBase(0.0, 0.0, 0.0, False))
+    teleport_body: CommandTeleportBody = field(
+        default_factory=lambda: CommandTeleportBody("", 0.0, 0.0, 0.0, False, 1.0, 0.0, 0.0, 0.0, False, False)
+    )
     keyframe: CommandKeyframe = field(default_factory=lambda: CommandKeyframe("", False))
     coordinate_frame_arrows_viz: list[CommandCoordinateFrameArrowsViz] = field(default_factory=list)
 
@@ -106,6 +124,10 @@ class StatusCommand:
         ]:
             self.move_to.pop(actuator.name, None)
             self.move_by.pop(actuator.name, None)
+
+    def set_teleport_body(self, command: CommandTeleportBody) -> None:
+        """Snap a freejoint body to world XYZ (optional wxyz quat)."""
+        self.teleport_body = command
 
     def to_dict(self):
         return asdict(self)
