@@ -21,6 +21,6 @@ smoke:
   sim_backend: ground_truth
   full_episode_id: default_table_s0_distinct_recep
   full_backend: ground_truth
-  full_manip_mode: oracle
+  full_manip_mode: attempt
   habitat_episode_id: hm3d_lamp_bed_00006
   habitat_backend: ground_truth

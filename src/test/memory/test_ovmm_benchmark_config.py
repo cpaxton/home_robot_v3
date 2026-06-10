@@ -27,4 +27,4 @@ def test_load_ovmm_benchmark_config_expands_home():
     assert str(cfg.paths.output_dir_habitat).startswith(str(Path.home()))
     assert cfg.paths.habitat_eqa_data.name == "data"
     assert cfg.smoke_sim_episode_id == "default_table_s0"
-    assert cfg.smoke_full_manip_mode == "oracle"
+    assert cfg.smoke_full_manip_mode == "attempt"

@@ -356,7 +356,8 @@ def test_run_episode_find_phase_includes_timing_fields(
                             "emet.eval.ovmm_find_phase.get_memory_backend_for_agent",
                             return_value=MagicMock(),
                         ):
-                            result = run_episode_find_phase(episode, run_cfg)
+                            with patch("emet.utils.port_utils.kill_processes_on_port"):
+                                result = run_episode_find_phase(episode, run_cfg)
 
     for key in ("init_wall_s", "mapping_wall_s", "query_wall_s", "episode_wall_s"):
         assert key in result

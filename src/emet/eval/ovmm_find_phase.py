@@ -994,3 +994,7 @@ def run_episode_find_phase(
                 server.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 server.kill()
+        from emet.utils.port_utils import get_ports, kill_processes_on_port
+
+        for p in get_ports(port_offset):
+            kill_processes_on_port(p)
