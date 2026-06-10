@@ -231,6 +231,10 @@ def _parse_structured_eqa_answer(raw_eqa: str) -> str:
     return ""
 
 
+def _is_infra_failure_text(*texts: str) -> bool:
+    return any(_INFRA_RE.search((text or "").strip()) for text in texts)
+
+
 def _sanitize_prediction_text(text: str) -> str:
     raw = (text or "").strip()
     if not raw or _INFRA_RE.search(raw):
@@ -318,6 +322,14 @@ def _run_dynagraph_eqa(
     return predicted, raw_eqa, model_confident
 
 
+def _replay_metadata_from_sim(sim) -> dict[str, object]:
+    return {
+        "replay_backend": str(getattr(sim, "replay_backend", "") or ""),
+        "sens_frame_index": getattr(sim, "anchor_sens_frame_index", None),
+        "sens_match_xy_m": getattr(sim, "anchor_sens_match_xy_m", None),
+    }
+
+
 def _score_episode(
     q,
     *,
@@ -326,10 +338,15 @@ def _score_episode(
     raw_eqa: str,
     model_confident: bool,
     planning_steps: int,
+    infra_failure: bool = False,
+    replay_backend: str = "",
+    sens_frame_index: int | None = None,
+    sens_match_xy_m: float | None = None,
 ) -> SQA3DEpisodeMetrics:
     pred_clean = clean_answer(predicted)
     gts = [clean_answer(a) for a in q.answers if a.strip()]
     em, em_refined = answer_match(pred_clean, gts) if gts and pred_clean else (False, False)
+    infra = bool(infra_failure) or _is_infra_failure_text(raw_eqa, predicted)
     return SQA3DEpisodeMetrics(
         dataset="sqa3d",
         method=method,
@@ -345,6 +362,10 @@ def _score_episode(
         planning_steps=planning_steps,
         success=em,
         raw_eqa_output=raw_eqa[:2000],
+        infra_failure=infra,
+        replay_backend=replay_backend,
+        sens_frame_index=sens_frame_index,
+        sens_match_xy_m=sens_match_xy_m,
     )
 
 
@@ -387,8 +408,10 @@ def run_sqa3d_episode(
     use_real_vlm = not mock_llm
     agent = None
     robot = None
+    replay_meta: dict[str, object] = {}
     try:
         sim.set_sqa3d_pose(q)
+        replay_meta = _replay_metadata_from_sim(sim)
         robot = ScanNetRobotClient(sim)
         parameters = get_parameters("dynav_config.yaml")
         parameters = _apply_profile_parameters(parameters, method=method, profile=prof)
@@ -439,6 +462,8 @@ def run_sqa3d_episode(
             raw_eqa=raw_eqa,
             model_confident=model_confident,
             planning_steps=getattr(agent, "obs_count", 0),
+            infra_failure=_is_infra_failure_text(raw_eqa),
+            **replay_meta,
         )
     finally:
         sim.close()
@@ -532,6 +557,7 @@ def _run_sqa3d_batch_isolated(
                 confident=False,
                 planning_steps=0,
                 success=False,
+                infra_failure=True,
             )
             results.append(err_row)
             if output_jsonl is not None:
@@ -643,6 +669,7 @@ def run_sqa3d_batch(
                 raise
             q = get_sqa3d_question(questions, question_id=qid)
             print(f"question_id={qid} failed: {exc}", flush=True)
+            exc_text = str(exc)
             err_row = SQA3DEpisodeMetrics(
                 dataset="sqa3d",
                 method=method,
@@ -651,12 +678,13 @@ def run_sqa3d_batch(
                 question=q.question,
                 situation=q.situation,
                 gold_answers=list(q.answers),
-                predicted_answer=_sanitize_prediction_text(str(exc)),
+                predicted_answer=_sanitize_prediction_text(exc_text),
                 em=False,
                 em_refined=False,
                 confident=False,
                 planning_steps=0,
                 success=False,
+                infra_failure=_is_infra_failure_text(exc_text),
             )
             results.append(err_row)
             if output_jsonl is not None:

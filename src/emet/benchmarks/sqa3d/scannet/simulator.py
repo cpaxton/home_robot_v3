@@ -32,6 +32,7 @@ class ScanNetFrame:
     intrinsics: np.ndarray
     camera_to_world: np.ndarray | None = None
     sens_frame_index: int | None = None
+    sens_match_xy_m: float | None = None
     replay_source: str = "mesh"
 
 
@@ -187,11 +188,13 @@ class ScanNetReplaySimulator:
         scannet_root: Path | None = None,
         replay_mode: ScanNetReplayMode = "auto",
         sens_xy_radius_m: float = 0.75,
+        sens_match_max_xy_m: float = 0.75,
         **mesh_kwargs,
     ):
         self.scene_id = scene_id
         self._replay_mode = replay_mode
         self._sens_xy_radius_m = float(sens_xy_radius_m)
+        self._sens_match_max_xy_m = float(sens_match_max_xy_m)
         self._mesh = ScanNetEQASimulator(scene_id, scannet_root=scannet_root, **mesh_kwargs)
         self._sens = None
         sens_path = scene_sens_path(scene_id, scannet_root)
@@ -206,12 +209,21 @@ class ScanNetReplaySimulator:
                 f"--scene {scene_id} --with-sens"
             )
         self._anchor_xy: np.ndarray | None = None
+        self._anchor_replay_backend = "mesh"
+        self._anchor_sens_frame_index: int | None = None
+        self._anchor_sens_match_xy_m: float | None = None
 
     @property
     def replay_backend(self) -> str:
-        if self._prefer_sens():
-            return "sens"
-        return "mesh"
+        return self._anchor_replay_backend
+
+    @property
+    def anchor_sens_frame_index(self) -> int | None:
+        return self._anchor_sens_frame_index
+
+    @property
+    def anchor_sens_match_xy_m(self) -> float | None:
+        return self._anchor_sens_match_xy_m
 
     @property
     def sensor_height(self) -> float:
@@ -225,20 +237,54 @@ class ScanNetReplaySimulator:
     def step_count(self) -> int:
         return self._mesh.step_count
 
-    def _prefer_sens(self) -> bool:
+    def _sens_match_at_current_pose(self):
         if self._sens is None:
+            return None
+        return self._sens.nearest_frame_match(
+            self._mesh._position,
+            self._mesh._quat_xyzw,
+            sensor_height=self._mesh.sensor_height,
+            camera_tilt_deg=self._mesh.camera_tilt_deg,
+            xy_radius_m=self._sens_xy_radius_m,
+        )
+
+    def _sens_usable(self, match) -> bool:
+        if match is None:
             return False
-        if self._replay_mode == "mesh":
+        if self._replay_mode == "auto" and match.xy_m > self._sens_match_max_xy_m:
             return False
-        if self._anchor_xy is None:
-            return True
-        pos = self._mesh._position
-        xy_dist = float(np.linalg.norm(pos[:2] - self._anchor_xy))
-        return xy_dist <= self._sens_xy_radius_m
+        return True
+
+    def _prefer_sens(self) -> bool:
+        if self._sens is None or self._replay_mode == "mesh":
+            return False
+        if self._anchor_xy is not None:
+            pos = self._mesh._position
+            xy_dist = float(np.linalg.norm(pos[:2] - self._anchor_xy))
+            if xy_dist > self._sens_xy_radius_m:
+                return False
+        return self._sens_usable(self._sens_match_at_current_pose())
+
+    def _update_anchor_replay_info(self) -> None:
+        if self._sens is None or self._replay_mode == "mesh":
+            self._anchor_replay_backend = "mesh"
+            self._anchor_sens_frame_index = None
+            self._anchor_sens_match_xy_m = None
+            return
+        match = self._sens_match_at_current_pose()
+        if match is None or not self._sens_usable(match):
+            self._anchor_replay_backend = "mesh"
+            self._anchor_sens_frame_index = None
+            self._anchor_sens_match_xy_m = float(match.xy_m) if match is not None else None
+            return
+        self._anchor_replay_backend = "sens"
+        self._anchor_sens_frame_index = int(match.frame_index)
+        self._anchor_sens_match_xy_m = float(match.xy_m)
 
     def set_sqa3d_pose(self, question: SQA3DQuestion) -> None:
         self._mesh.set_sqa3d_pose(question)
         self._anchor_xy = np.asarray(question.position[:2], dtype=np.float64)
+        self._update_anchor_replay_info()
 
     def set_pose(
         self,

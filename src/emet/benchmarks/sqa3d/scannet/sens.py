@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -18,6 +19,13 @@ from emet.benchmarks.sqa3d.scannet.simulator import ScanNetFrame
 
 
 _GL_TO_CV = np.diag([1.0, -1.0, -1.0, 1.0])
+
+
+@dataclass(frozen=True)
+class SensFrameMatch:
+    frame_index: int
+    xy_m: float
+    pos_3d_m: float
 
 
 def scannet_camera_to_opencv_world_to_camera(camera_to_world: np.ndarray) -> np.ndarray:
@@ -141,7 +149,7 @@ class ScanNetSensLoader:
     def depth_shift(self) -> float:
         return float(self._data.depth_shift)
 
-    def nearest_frame_index(
+    def nearest_frame_match(
         self,
         position: np.ndarray,
         quat_xyzw: np.ndarray,
@@ -149,7 +157,7 @@ class ScanNetSensLoader:
         sensor_height: float,
         camera_tilt_deg: float,
         xy_radius_m: float | None = None,
-    ) -> int:
+    ) -> SensFrameMatch:
         target = target_camera_center(position, quat_xyzw, sensor_height=sensor_height, camera_tilt_deg=camera_tilt_deg)
         target_fwd = target_camera_forward_xy(
             position, quat_xyzw, sensor_height=sensor_height, camera_tilt_deg=camera_tilt_deg
@@ -169,7 +177,30 @@ class ScanNetSensLoader:
         score[~self._valid_mask] = np.inf
         score = np.where(np.isfinite(score), score, np.inf)
         valid_idx = np.flatnonzero(self._valid_mask)
-        return int(valid_idx[int(np.argmin(score[valid_idx]))])
+        idx = int(valid_idx[int(np.argmin(score[valid_idx]))])
+        delta = self._cam_centers[idx] - target
+        return SensFrameMatch(
+            frame_index=idx,
+            xy_m=float(np.linalg.norm(delta[:2])),
+            pos_3d_m=float(np.linalg.norm(delta)),
+        )
+
+    def nearest_frame_index(
+        self,
+        position: np.ndarray,
+        quat_xyzw: np.ndarray,
+        *,
+        sensor_height: float,
+        camera_tilt_deg: float,
+        xy_radius_m: float | None = None,
+    ) -> int:
+        return self.nearest_frame_match(
+            position,
+            quat_xyzw,
+            sensor_height=sensor_height,
+            camera_tilt_deg=camera_tilt_deg,
+            xy_radius_m=xy_radius_m,
+        ).frame_index
 
     def frame_at_index(
         self,
@@ -222,19 +253,21 @@ class ScanNetSensLoader:
         xy_radius_m: float | None = None,
         output_size: tuple[int, int] | None = None,
     ) -> ScanNetFrame:
-        idx = self.nearest_frame_index(
+        match = self.nearest_frame_match(
             position,
             quat_xyzw,
             sensor_height=sensor_height,
             camera_tilt_deg=camera_tilt_deg,
             xy_radius_m=xy_radius_m,
         )
-        return self.frame_at_index(
-            idx,
+        frame = self.frame_at_index(
+            match.frame_index,
             position=position,
             quat_xyzw=quat_xyzw,
             output_size=output_size,
         )
+        frame.sens_match_xy_m = match.xy_m
+        return frame
 
     def multiview_rgb_at_agent(
         self,

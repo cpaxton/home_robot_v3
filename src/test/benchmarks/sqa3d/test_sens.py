@@ -12,8 +12,11 @@ from emet.benchmarks.sqa3d.scannet.config import (
     scene_replay_assets_present,
     scene_sens_present,
 )
+from unittest.mock import MagicMock
+
 from emet.benchmarks.sqa3d.scannet.sens import (
     ScanNetSensLoader,
+    SensFrameMatch,
     _yaw_distance_rad,
     scannet_camera_to_opencv_camera_to_world,
     scannet_camera_to_opencv_world_to_camera,
@@ -95,6 +98,33 @@ def test_scene_replay_assets_present(tmp_path):
     (scan / f"{scene}.sens").write_bytes(b"\x00")
     assert scene_sens_present(scene, tmp_path)
     assert scene_replay_assets_present(scene, tmp_path, replay_mode="sens")
+
+
+def test_replay_simulator_mesh_fallback_on_poor_sens_match(tmp_path):
+    scannet_root = tmp_path / "scannet"
+    _write_box_scene(scannet_root)
+    sim = ScanNetReplaySimulator(
+        BOX_SCENE_ID,
+        scannet_root=scannet_root,
+        replay_mode="auto",
+        image_width=160,
+        image_height=120,
+        sens_match_max_xy_m=0.75,
+    )
+    mock_sens = MagicMock()
+    mock_sens.nearest_frame_match.return_value = SensFrameMatch(frame_index=3, xy_m=2.5, pos_3d_m=2.6)
+    sim._sens = mock_sens
+    try:
+        sim.set_pose((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))
+        sim._anchor_xy = np.array([0.0, 0.0])
+        sim._update_anchor_replay_info()
+        assert sim.replay_backend == "mesh"
+        assert sim.anchor_sens_match_xy_m == pytest.approx(2.5)
+        assert sim._prefer_sens() is False
+        frame = sim.get_frame()
+        assert frame.replay_source == "mesh"
+    finally:
+        sim.close()
 
 
 def test_replay_simulator_mesh_fallback_without_sens(tmp_path):

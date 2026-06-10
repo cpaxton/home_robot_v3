@@ -20,6 +20,10 @@ def test_classify_outcome():
         classify_outcome(em=False, prediction="CUDA out of memory", prediction_clean="cuda out of memory")
         == "infra"
     )
+    assert (
+        classify_outcome(em=False, prediction="", prediction_clean="", infra_failure=True)
+        == "infra"
+    )
 
 
 def test_dedupe_episodes_last():
@@ -33,6 +37,27 @@ def test_dedupe_episodes_last():
     by_id = {r["question_id"]: r["predicted_answer"] for r in out}
     assert by_id[1] == "c"
     assert by_id[2] == "b"
+
+
+def test_summarize_outcomes_infra_failure_flag():
+    episodes = [
+        {
+            "question_id": 1,
+            "scene_id": "scene0000_00",
+            "question": "What color is the door?",
+            "situation": "s",
+            "gold_answers": ["white"],
+            "predicted_answer": "",
+            "em": False,
+            "em_refined": False,
+            "infra_failure": True,
+            "method": "dynagraph",
+            "planning_steps": 0,
+        },
+    ]
+    summary = summarize_outcomes(episodes)
+    assert summary["n_infra"] == 1
+    assert summary["n_scored"] == 0
 
 
 def test_summarize_outcomes_fixture():

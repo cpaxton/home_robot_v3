@@ -81,7 +81,13 @@ def _is_abstain(prediction_clean: str) -> bool:
     return prediction_clean.strip().lower() in _ABSTAIN_TOKENS
 
 
-def classify_outcome(*, em: bool, prediction: str, prediction_clean: str) -> OutcomeKind:
+def classify_outcome(
+    *,
+    em: bool,
+    prediction: str,
+    prediction_clean: str,
+    infra_failure: bool = False,
+) -> OutcomeKind:
     """Map one episode to TP / FP / FN / infra for paper figures.
 
     - **tp**: EM@1 correct.
@@ -92,7 +98,7 @@ def classify_outcome(*, em: bool, prediction: str, prediction_clean: str) -> Out
     """
     if em:
         return "tp"
-    if _is_infra_failure(prediction):
+    if infra_failure or _is_infra_failure(prediction):
         return "infra"
     if _is_abstain(prediction_clean):
         return "fn"
@@ -144,6 +150,8 @@ def classify_episodes(
             em = bool(row.get("em"))
             em_refined = bool(row.get("em_refined", em))
         qtext = str(row.get("question", ""))
+        raw_eqa = str(row.get("raw_eqa_output", "") or "")
+        infra_failure = bool(row.get("infra_failure", False)) or _is_infra_failure(raw_eqa)
         classified.append(
             ClassifiedEpisode(
                 question_id=int(row.get("question_id", -1)),
@@ -154,7 +162,12 @@ def classify_episodes(
                 predicted_answer=pred,
                 prediction_clean=pred_clean,
                 gold_clean=gold_clean,
-                outcome=classify_outcome(em=em, prediction=pred, prediction_clean=pred_clean),
+                outcome=classify_outcome(
+                    em=em,
+                    prediction=pred,
+                    prediction_clean=pred_clean,
+                    infra_failure=infra_failure,
+                ),
                 em=em,
                 em_refined=em_refined,
                 confident=bool(row.get("confident", False)),

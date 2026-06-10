@@ -27,6 +27,10 @@ class SQA3DEpisodeMetrics:
     planning_steps: int
     success: bool
     raw_eqa_output: str = ""
+    infra_failure: bool = False
+    replay_backend: str = ""
+    sens_frame_index: int | None = None
+    sens_match_xy_m: float | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
