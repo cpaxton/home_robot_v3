@@ -14,7 +14,7 @@
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 
-"""Smoke OVMM find-phase benchmarks (unit tests + one sim + one Habitat episode)."""
+"""Smoke OVMM benchmarks (unit tests + find-phase sim + full OVMM oracle + Habitat)."""
 
 from __future__ import annotations
 
@@ -33,6 +33,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--benchmark", default="configs/ovmm/benchmark.yaml")
     parser.add_argument("--skip-unit", action="store_true")
     parser.add_argument("--skip-sim", action="store_true")
+    parser.add_argument("--skip-full", action="store_true")
     parser.add_argument("--skip-habitat", action="store_true")
     parser.add_argument("--cpu-only", action="store_true", default=True)
     return parser.parse_args()
@@ -65,6 +66,7 @@ def main() -> int:
                     "emet",
                     "test",
                     "src/test/memory/test_ovmm_find_phase_metrics.py",
+                    "src/test/memory/test_ovmm_full_metrics.py",
                     "src/test/memory/test_habitat_ovmm_find_loader.py",
                     "-q",
                 ],
@@ -97,6 +99,35 @@ def main() -> int:
             if not ok:
                 rc = 1
 
+    out_full = cfg.paths.output_dir_full / "smoke"
+    out_full.mkdir(parents=True, exist_ok=True)
+    if not args.skip_full:
+        full_episodes = load_find_phase_episodes(cfg.full_episodes_yaml)
+        full_ep = next(e for e in full_episodes if e.id == cfg.smoke_full_episode_id)
+        full_cfg = FindPhaseRunConfig(
+            backend=cfg.smoke_full_backend,  # type: ignore[arg-type]
+            cpu_only=args.cpu_only,
+            not_rotate=True,
+            port_offset=int(__import__("os").getpid() % 400 + 240),
+            manip_mode=cfg.smoke_full_manip_mode,  # type: ignore[arg-type]
+        )
+        print(
+            f"full smoke: {full_ep.id} backend={cfg.smoke_full_backend} manip={cfg.smoke_full_manip_mode}",
+            flush=True,
+        )
+        try:
+            full_metrics = run_episode_find_phase(full_ep, full_cfg, repo_root=REPO)
+        except Exception as exc:
+            print(f"full smoke FAIL: {exc}", file=sys.stderr)
+            rc = 1
+        else:
+            full_json = out_full / f"{full_ep.id}_{cfg.smoke_full_backend}.json"
+            full_json.write_text(json.dumps(full_metrics, indent=2), encoding="utf-8")
+            ok_full = bool(full_metrics.get("ovmm_full_success"))
+            print(f"full smoke ovmm_full_success={full_metrics.get('ovmm_full_success')} -> {full_json}")
+            if not ok_full:
+                rc = 1
+
     out_hab = cfg.paths.output_dir_habitat / "smoke"
     out_hab.mkdir(parents=True, exist_ok=True)
     if not args.skip_habitat:
@@ -122,7 +153,10 @@ def main() -> int:
             hab_rc = _run(cmd, timeout=300.0)
             rc = max(rc, hab_rc)
 
-    print(f"smoke done rc={rc} (outputs under {cfg.paths.output_dir_sim} and {cfg.paths.output_dir_habitat})")
+    print(
+        f"smoke done rc={rc} (outputs under {cfg.paths.output_dir_sim}, "
+        f"{cfg.paths.output_dir_full}, and {cfg.paths.output_dir_habitat})"
+    )
     return rc
 
 

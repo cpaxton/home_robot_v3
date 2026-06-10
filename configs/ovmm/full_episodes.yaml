@@ -12,6 +12,7 @@ episodes:
     success_radius_m: 0.30
     explore_steps: 0
 
+  # Robosuite has no sim_set_body_pose yet — use manip_mode oracle or skip for find-only.
   - id: robocasa_pp_s1
     tier: S1
     sim: configs/sim/robocasa_pick_place_stretch.yaml

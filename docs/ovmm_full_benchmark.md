@@ -9,7 +9,7 @@ Extends the [find-phase harness](ovmm_find_phase_benchmark.md) with **Pick** and
 | FindObj | `find_object_success` | same |
 | Pick | `pick_success` | GT: object left start recep or moved ≥ threshold |
 | FindRec | `find_recep_success` | same |
-| Place | `place_success` | GT: object near goal recep |
+| Place | `place_success` | GT: object within radius of goal recep **and closer than at manip start** (when `placements_before` is set) |
 | Aggregate | `ovmm_full_partial` | mean of active phases (2 or 4) |
 | Full task | `ovmm_full_success` | AND of all four (when manip enabled) |
 
@@ -46,6 +46,12 @@ uv run python scripts/eval_ovmm_full.py \
 ```
 
 Episodes: `configs/ovmm/full_episodes.yaml`. Outputs default to `~/runs/emet/ovmm_full` (`EMET_OVMM_OUTPUT_FULL` or `configs/ovmm/benchmark.yaml`).
+
+CI / local smoke (find-phase + full oracle + unit tests):
+
+```bash
+uv run python scripts/smoke_ovmm_benchmark.py --skip-habitat
+```
 
 ## Relation to find-phase
 

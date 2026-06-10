@@ -712,22 +712,6 @@ class MujocoZmqServer(BaseZmqServer):
             return model, data
         return None, None
 
-    def _refresh_emet_session_placements(self) -> None:
-        """Re-scan MuJoCo bodies into ``emet_session`` after sim-only pose edits."""
-        if self._emet_session is None:
-            return
-        gt_model, gt_data = self._gt_model_data_for_session()
-        env = self._emet_session.get("environment")
-        env_kind = env.get("kind") if isinstance(env, dict) else None
-        attach_sim_object_placements_to_session(
-            self._emet_session,
-            objects_info=self.objects_info,
-            environment_kind=str(env_kind) if env_kind else None,
-            model=gt_model,
-            data=gt_data,
-            robot_root_name="base_link",
-        )
-
     def _patch_emet_session_body_pos(
         self,
         body: str,
