@@ -29,6 +29,17 @@ from emet.utils.config import resolve_config_yaml_path
 
 MemoryBackendName = Literal["dynamem", "graph_eqa", "dynagraph", "ground_truth"]
 PlanarFrame = Literal["mujoco_xy", "habitat_xz"]
+LocalizeSource = Literal[
+    "voxel",
+    "graph_near_recep",
+    "graph_near_anchor",
+    "graph_habitat_node",
+    "memory_localize_text_graph",
+    "memory_localize_text_voxel",
+    "memory_check_graph",
+    "memory_check_voxel",
+    "memory_list_objects",
+]
 
 
 @dataclass(frozen=True)
@@ -58,6 +69,9 @@ class FindPhaseRunConfig:
     port_offset: int = 0
     not_rotate: bool = False
     perfect_depth: bool = True
+    seed: int | None = None
+    use_sensor_perception: bool = False
+    prefer_voxel: bool = True
 
 
 def load_find_phase_episodes(path: str | Path) -> list[FindPhaseEpisode]:
@@ -207,6 +221,41 @@ def _pred_xyz_array(pred_xyz: np.ndarray | list | None) -> np.ndarray | None:
     return arr[:3]
 
 
+def pred_xyz_to_json_list(pred_xyz: np.ndarray | list | None) -> list[float] | None:
+    """Serialize a predicted XYZ for JSON metrics artifacts."""
+    arr = _pred_xyz_array(pred_xyz)
+    if arr is None:
+        return None
+    return [float(arr[0]), float(arr[1]), float(arr[2])]
+
+
+def localization_pred_fields(
+    obj_pred_xyz: np.ndarray | list | None,
+    recep_pred_xyz: np.ndarray | list | None,
+) -> dict[str, list[float] | None]:
+    """Pred XYZ fields included in find-phase run JSON."""
+    return {
+        "pred_obj_xyz": pred_xyz_to_json_list(obj_pred_xyz),
+        "pred_recep_xyz": pred_xyz_to_json_list(recep_pred_xyz),
+    }
+
+
+def set_find_phase_run_seed(seed: int) -> None:
+    """Best-effort RNG seeding for repeatable perception/mapping runs."""
+    import random
+
+    random.seed(seed)
+    np.random.seed(seed % (2**32 - 1))
+    try:
+        import torch
+
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except ImportError:
+        pass
+
+
 def _query_variants(query: str, placements: dict[str, dict[str, Any]] | None = None) -> list[str]:
     """Expand a text query with substring tokens and matching GT category strings."""
     base = str(query or "").strip()
@@ -335,6 +384,15 @@ def _voxel_localize(
     return None, query
 
 
+def _memory_localize_source(memory: Any, query: str) -> LocalizeSource:
+    """Infer graph vs voxel for adapter localize/check (GraphEQA tries graph first)."""
+    return "memory_localize_text_graph" if _graph_nodes_matching(memory, query) else "memory_localize_text_voxel"
+
+
+def _memory_check_source(memory: Any, query: str) -> LocalizeSource:
+    return "memory_check_graph" if _graph_nodes_matching(memory, query) else "memory_check_voxel"
+
+
 def query_find_phase_localization(
     memory: Any,
     query: str,
@@ -347,38 +405,39 @@ def query_find_phase_localization(
     convert_nav_to_world: bool = False,
     prefer_voxel: bool = True,
     planar_frame: PlanarFrame = "mujoco_xy",
-) -> tuple[np.ndarray | None, bool, str]:
+) -> tuple[np.ndarray | None, bool, str, LocalizeSource | None]:
     """
     Query memory for FindObj/FindRec localization with query variants and fallbacks.
 
     Returns:
-        ``(world_xyz, success, query_used)`` where ``world_xyz`` is suitable for GT distance checks.
+        ``(world_xyz, success, query_used, localize_source)`` where ``world_xyz`` is suitable
+        for GT distance checks and ``localize_source`` names the winning code path (``None`` on miss).
     """
     sess = session if convert_nav_to_world else None
 
     if prefer_voxel and voxel_map is not None and hasattr(voxel_map, "localize_text"):
         xyz, q_used = _voxel_localize(voxel_map, query, placements=placements, session=sess)
         if xyz is not None:
-            return xyz, True, q_used
+            return xyz, True, q_used, "voxel"
 
     if near_recep and placements is not None and _graph_nodes_matching(memory, query):
         xyz = _pick_graph_xyz_near_recep(memory, query, placements, near_recep)
         if xyz is not None:
             converted = localize_point_to_world_xy(xyz, sess)
             xyz = converted if converted is not None else xyz
-            return xyz, True, query
+            return xyz, True, query, "graph_near_recep"
     if anchor_xyz is not None and _graph_nodes_matching(memory, query):
         xyz = _pick_graph_xyz_near_point(memory, query, anchor_xyz, frame=planar_frame)
         if xyz is not None:
             converted = localize_point_to_world_xy(xyz, sess)
             xyz = converted if converted is not None else xyz
-            return xyz, True, query
+            return xyz, True, query, "graph_near_anchor"
     for q in _query_variants(query, placements):
         if planar_frame == "habitat_xz":
             nodes = _graph_nodes_matching(memory, q)
             if nodes:
                 xyz = np.asarray(nodes[0].xyz, dtype=np.float64).reshape(3)
-                return xyz, True, q
+                return xyz, True, q, "graph_habitat_node"
         loc = memory.localize_text(q)
         if loc.success and loc.point_xyz is not None:
             xyz = localize_point_to_world_xy(loc.point_xyz, sess)
@@ -388,20 +447,20 @@ def query_find_phase_localization(
                 if nodes:
                     xyz = np.asarray(nodes[0].xyz, dtype=np.float64).reshape(3)
             if xyz is not None:
-                return xyz, True, q
+                return xyz, True, q, _memory_localize_source(memory, q)
         check = memory.check_memory_for_object(q)
         if check.confidence > 0 and check.location_xyz is not None:
             xyz = localize_point_to_world_xy(check.location_xyz, sess)
             if xyz is not None:
-                return xyz, True, q
+                return xyz, True, q, _memory_check_source(memory, q)
     for label in memory.list_objects():
         if category_matches(query, label):
             loc = memory.localize_text(label)
             if loc.success and loc.point_xyz is not None:
                 xyz = localize_point_to_world_xy(loc.point_xyz, sess)
                 if xyz is not None:
-                    return xyz, True, label
-    return None, False, query
+                    return xyz, True, label, "memory_list_objects"
+    return None, False, query, None
 
 
 def score_find_object(
@@ -583,6 +642,7 @@ def create_find_phase_agent(
     *,
     cpu_only: bool = False,
     compare_to_gt: bool = False,
+    use_sensor_perception: bool = False,
 ):
     """Instantiate the controller for a memory backend."""
     if backend == "dynamem":
@@ -606,6 +666,7 @@ def create_find_phase_agent(
             save_rerun=False,
             use_instance_graph=True,
             cpu_only=cpu_only,
+            use_sensor_perception=use_sensor_perception,
         )
     elif backend == "dynagraph":
         from emet.controller.controller_dynagraph import DynagraphController
@@ -616,6 +677,7 @@ def create_find_phase_agent(
             save_rerun=False,
             cpu_only=cpu_only,
             use_instance_graph=True,
+            use_sensor_perception=use_sensor_perception,
             visualize_ground_truth=compare_to_gt,
         )
     elif backend == "ground_truth":
@@ -627,6 +689,7 @@ def create_find_phase_agent(
             save_rerun=False,
             cpu_only=cpu_only,
             use_instance_graph=True,
+            use_sensor_perception=False,
             ground_truth_mode=True,
         )
     else:
@@ -710,6 +773,9 @@ def run_episode_find_phase(
     )
     from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
 
+    if run_cfg.seed is not None:
+        set_find_phase_run_seed(int(run_cfg.seed))
+
     repo = repo_root or Path(__file__).resolve().parents[3]
     sim_cfg = load_sim_launch_config_from_path(episode.sim)
     port_offset = int(run_cfg.port_offset)
@@ -738,6 +804,9 @@ def run_episode_find_phase(
     agent = None
     server = None
     t0 = time.monotonic()
+    init_wall_s = 0.0
+    mapping_wall_s = 0.0
+    query_wall_s = 0.0
     try:
         server = subprocess.Popen(
             server_cmd,
@@ -780,13 +849,16 @@ def run_episode_find_phase(
         if run_cfg.perfect_depth:
             parameters["debug_perfect_sensor_depth"] = True
 
+        t_init0 = time.monotonic()
         agent = create_find_phase_agent(
             robot,
             parameters,
             run_cfg.backend,
             cpu_only=run_cfg.cpu_only,
             compare_to_gt=run_cfg.compare_to_gt,
+            use_sensor_perception=run_cfg.use_sensor_perception,
         )
+        init_wall_s = time.monotonic() - t_init0
         if run_cfg.backend == "ground_truth":
             refresh = getattr(agent, "refresh_ground_truth", None)
             if callable(refresh):
@@ -794,11 +866,13 @@ def run_episode_find_phase(
                 if n_gt == 0:
                     raise RuntimeError("ground-truth mode: no sim_object_placements in session")
 
+        t_map0 = time.monotonic()
         n_steps = run_mapping_protocol(
             agent,
             explore_steps=episode.explore_steps,
             not_rotate=run_cfg.not_rotate,
         )
+        mapping_wall_s = time.monotonic() - t_map0
 
         session = robot.get_emet_session()
         placements = read_sim_object_placements(session)
@@ -809,7 +883,9 @@ def run_episode_find_phase(
 
         object_query = resolve_object_query(episode, placements)
 
-        obj_xyz, obj_ok, obj_q_used = query_find_phase_localization(
+        prefer_voxel = run_cfg.prefer_voxel and run_cfg.backend != "ground_truth"
+        t_query0 = time.monotonic()
+        obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
             memory,
             object_query,
             placements=placements,
@@ -817,8 +893,9 @@ def run_episode_find_phase(
             near_recep=episode.start_recep,
             voxel_map=vm,
             convert_nav_to_world=nav_world or run_cfg.backend == "dynamem",
+            prefer_voxel=prefer_voxel,
         )
-        recep_xyz, recep_ok, recep_q_used = query_find_phase_localization(
+        recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
             memory,
             episode.goal_recep,
             placements=placements,
@@ -826,6 +903,7 @@ def run_episode_find_phase(
             near_recep=episode.goal_recep,
             voxel_map=vm,
             convert_nav_to_world=nav_world or run_cfg.backend == "dynamem",
+            prefer_voxel=prefer_voxel,
         )
 
         find_metrics = compute_find_phase_metrics(
@@ -838,6 +916,7 @@ def run_episode_find_phase(
             radius_m=episode.success_radius_m,
             object_gt_body=episode.object_gt_body,
         )
+        query_wall_s = time.monotonic() - t_query0
 
         scaling = collect_scaling_diagnostics(
             agent,
@@ -865,10 +944,19 @@ def run_episode_find_phase(
             "merge_xy_m": parameters.get("dynagraph_merge_xy_m"),
             "staleness_horizon": parameters.get("dynagraph_staleness_horizon"),
             "perfect_depth": bool(run_cfg.perfect_depth),
+            "use_sensor_perception": bool(run_cfg.use_sensor_perception),
+            "prefer_voxel": bool(prefer_voxel),
+            "init_wall_s": float(init_wall_s),
+            "mapping_wall_s": float(mapping_wall_s),
+            "query_wall_s": float(query_wall_s),
             "obj_localize_success": bool(obj_ok),
             "recep_localize_success": bool(recep_ok),
             "obj_query_used": obj_q_used,
             "recep_query_used": recep_q_used,
+            "obj_localize_source": obj_source,
+            "recep_localize_source": recep_source,
+            "seed": run_cfg.seed,
+            **localization_pred_fields(obj_xyz, recep_xyz),
             **find_metrics,
             **scaling,
             **gt_metrics,

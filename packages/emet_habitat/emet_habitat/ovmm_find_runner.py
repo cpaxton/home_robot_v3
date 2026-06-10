@@ -31,9 +31,11 @@ from emet.eval.ovmm_find_phase import (
     compute_find_phase_metrics,
     create_find_phase_agent,
     get_memory_backend_for_agent,
+    localization_pred_fields,
     query_find_phase_localization,
     resolve_object_query,
     run_mapping_protocol,
+    set_find_phase_run_seed,
 )
 from emet.habitat.config import default_hm3d_scene_dir
 from emet.habitat.datasets import load_scene_init_poses
@@ -98,6 +100,9 @@ def run_habitat_find_phase_episode(
     device: str | None = "cpu",
 ) -> dict[str, Any]:
     """Run one Habitat find-phase episode with emet memory backends."""
+    if run_cfg.seed is not None:
+        set_find_phase_run_seed(int(run_cfg.seed))
+
     poses = load_scene_init_poses(init_poses_path)
     init_pose = poses.get((episode.scene, episode.floor))
     if init_pose is None:
@@ -121,6 +126,9 @@ def run_habitat_find_phase_episode(
     robot = None
     agent = None
     t0 = time.monotonic()
+    init_wall_s = 0.0
+    mapping_wall_s = 0.0
+    query_wall_s = 0.0
     try:
         sim.set_init_pose(init_pose)
         robot = HabitatRobotClient(sim)
@@ -141,13 +149,16 @@ def run_habitat_find_phase_episode(
         )
         parameters["encoder"] = None
 
+        t_init0 = time.monotonic()
         agent = create_find_phase_agent(
             robot,
             parameters,
             run_cfg.backend,
             cpu_only=run_cfg.cpu_only or device == "cpu",
             compare_to_gt=run_cfg.compare_to_gt,
+            use_sensor_perception=run_cfg.use_sensor_perception,
         )
+        init_wall_s = time.monotonic() - t_init0
         if run_cfg.backend == "ground_truth":
             refresh = getattr(agent, "refresh_ground_truth", None)
             if callable(refresh):
@@ -155,6 +166,7 @@ def run_habitat_find_phase_episode(
                 if n_gt == 0:
                     raise RuntimeError("ground-truth mode: no placements in habitat session")
 
+        t_map0 = time.monotonic()
         n_steps = run_mapping_protocol(
             agent,
             explore_steps=episode.explore_steps,
@@ -162,6 +174,7 @@ def run_habitat_find_phase_episode(
         )
         for _ in range(3):
             agent.update()
+        mapping_wall_s = time.monotonic() - t_map0
 
         memory = get_memory_backend_for_agent(agent, run_cfg.backend)
         vm = getattr(agent, "voxel_map", None)
@@ -179,8 +192,9 @@ def run_habitat_find_phase_episode(
             placements,
         )
 
-        prefer_voxel = run_cfg.backend not in ("ground_truth",)
-        obj_xyz, obj_ok, obj_q_used = query_find_phase_localization(
+        prefer_voxel = run_cfg.prefer_voxel and run_cfg.backend != "ground_truth"
+        t_query0 = time.monotonic()
+        obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
             memory,
             object_query,
             placements=placements,
@@ -190,7 +204,7 @@ def run_habitat_find_phase_episode(
             prefer_voxel=prefer_voxel,
             planar_frame="habitat_xz",
         )
-        recep_xyz, recep_ok, recep_q_used = query_find_phase_localization(
+        recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
             memory,
             episode.goal_recep,
             placements=placements,
@@ -212,6 +226,7 @@ def run_habitat_find_phase_episode(
             object_gt_body=episode.object_gt_body,
             frame="habitat_xz",
         )
+        query_wall_s = time.monotonic() - t_query0
         scaling = collect_scaling_diagnostics(
             agent,
             placements,
@@ -230,10 +245,19 @@ def run_habitat_find_phase_episode(
             "explore_steps": episode.explore_steps,
             "merge_xy_m": parameters.get("dynagraph_merge_xy_m"),
             "staleness_horizon": parameters.get("dynagraph_staleness_horizon"),
+            "use_sensor_perception": bool(run_cfg.use_sensor_perception),
+            "prefer_voxel": bool(prefer_voxel),
+            "init_wall_s": float(init_wall_s),
+            "mapping_wall_s": float(mapping_wall_s),
+            "query_wall_s": float(query_wall_s),
             "obj_localize_success": bool(obj_ok),
             "recep_localize_success": bool(recep_ok),
             "obj_query_used": obj_q_used,
             "recep_query_used": recep_q_used,
+            "obj_localize_source": obj_source,
+            "recep_localize_source": recep_source,
+            "seed": run_cfg.seed,
+            **localization_pred_fields(obj_xyz, recep_xyz),
             **find_metrics,
             **scaling,
         }

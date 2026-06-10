@@ -61,8 +61,19 @@ uv run python scripts/eval_ovmm_find_phases.py \
 |---------|------|
 | `dynamem` | Voxel semantic memory only (no graph) |
 | `graph_eqa` | GraphEQA with merge/staleness off |
-| `dynagraph` | Defaults (`merge_xy_m=0.45`, `staleness_horizon=256`) |
+| `dynagraph` | Instance graph + merge/staleness (`merge_xy_m=0.15` default in find-phase) |
 | `ground_truth` | Oracle upper bound (graph from sim GT) |
+
+### Benchmark modes (default vs optional)
+
+**Default (fair ablation):** instance-graph mapping only, **no per-frame VLM**, voxel-first query.
+
+| Setting | Default | CLI override |
+|---------|---------|--------------|
+| `use_sensor_perception` | `false` | `--sensor-perception` (full GraphEQA; ~10× slower on S0) |
+| `prefer_voxel` | `true` | `--graph-query` (graph-first localization) |
+
+Dynagraph/graph_eqa without `--sensor-perception` still build graph nodes from YOLO instance detections (same voxel frames as dynamem) but skip Qwen3-VL label extraction every `update()`. That is why older GPU runs showed ~30–40 min dynagraph vs ~6 min dynamem.
 
 ### Scaling / ablation flags
 
@@ -85,54 +96,76 @@ Outputs per run: `runs/ovmm_find_phase/<episode_id>_<backend>.json` plus `aggreg
 - `find_object_success`, `find_recep_success` @ `success_radius_m`
 - `find_partial_success` = mean of the two (OVMM-style 2-phase partial)
 - `localization_err_obj_m`, `localization_err_recep_m`
-- Scaling: `n_graph_nodes`, `n_voxel_explored_cells`, `n_voxel_explored_area_m2`, `n_placements`, `episode_wall_s`
-- Optional GT diagnostics: `gt_graph_completeness`, `instance_gt_association_recall`
+- `pred_obj_xyz`, `pred_recep_xyz` — predicted world XYZ (MuJoCo world or Habitat Y-up) for audit
+- `obj_localize_source`, `recep_localize_source` — winning query path (`voxel`, `graph_near_recep`, `memory_localize_text_graph`, …; `null` on miss)
+- `seed` — RNG seed when set via replicate runner or `FindPhaseRunConfig.seed`
+- `use_sensor_perception`, `prefer_voxel` — mode flags (see above)
+- `init_wall_s`, `mapping_wall_s`, `query_wall_s`, `episode_wall_s` — timing breakdown
+- Scaling: `n_graph_nodes`, `n_voxel_explored_cells`, `n_voxel_explored_area_m2`, `n_placements`
+- Optional GT diagnostics: `gt_graph_completeness`, `instance_gt_association_recall` (GT-oracle graph only)
+
+### Multi-seed replication (variability audit)
+
+Perception backends are non-deterministic; use multiple seeds and inspect `pred_*_xyz`:
+
+```bash
+uv run python scripts/replicate_ovmm_find_phases.py \
+  --episode-id default_table_s0 \
+  --backend dynagraph \
+  --replicates 5 \
+  --seed-base 0 \
+  --cpu-only \
+  --output-dir ~/runs/emet/ovmm_find_phase/s0_audit
+```
+
+Writes `seed_<n>/<episode>_<backend>.json` plus `aggregate_replicates.json` (mean/std per metric).
+Each replicate uses `port_offset = port_offset_base + seed * 2` to avoid ZMQ port clashes.
 
 ## Measured results (emet sim)
 
-Target reference (real-world OVMM paper): **~70% FindObj / ~30% FindRec** partial-phase rates.
-Our sim oracle and perception backends (Stretch, rotate-in-place, perfect sim depth):
+Fair-default GPU replicate (`default_table_s0`, 5 seeds, no VLM, voxel-first query):
 
-| Tier | Backend | FindObj | FindRec | Partial | Notes |
-|------|---------|---------|---------|---------|-------|
-| S0 | ground_truth | 1.0 | 1.0 | 1.0 | `--not-rotate`, @0.30 m |
-| S0 | dynagraph | target | target | target | rotate + perfect depth; err ≤0.30 m @0.30 m radius |
-| S1 | ground_truth | 1.0 | 1.0 | 1.0 | `--not-rotate`, `object_gt_body: obj_main`, @0.50 m |
-| S1 | dynagraph | target | target | target | rotate + perfect depth @0.50 m |
+| Backend | mapping_wall_s (mean±std) | partial | obj err (m) | localize source |
+|---------|---------------------------|---------|-------------|-----------------|
+| dynagraph | 213 ± 4 s | 1.0 | 0.088 ± 0.001 | obj/recep: voxel (5/5) |
+| dynamem | 227 ± 36 s | 1.0 | 0.079 ± 0.0005 | obj/recep: voxel (4/5; seed 1 init flake) |
 
-Reproduce S0 perception run:
+Dynagraph/dynamem mapping ratio ≈ **1×** (not 10×). Full `--sensor-perception` mapping ≈ **2261 s** (~10× fair default).
+
+Target reference (real OVMM paper): ~70% FindObj / ~30% FindRec — not comparable to this memory-localization harness.
+
+Fair-default verification (GPU, one job at a time):
 
 ```bash
-emet install sim --no-download-assets --no-sync
-env -u PYTHONPATH MUJOCO_GL=egl .venv/bin/python scripts/eval_ovmm_find_phases.py \
-  --episode-id default_table_s0 --backend dynagraph --cpu-only \
-  --output-dir runs/ovmm_find_phase/s0_dynagraph
+uv run python scripts/replicate_ovmm_find_phases.py \
+  --episode-id default_table_s0 \
+  --backend dynamem --backend dynagraph \
+  --replicates 5 --seed-base 0 \
+  --output-dir ~/runs/emet/ovmm_find_phase/fair_default
 ```
 
-**Do not** pass `--not-rotate` for perception backends (`dynamem`, `graph_eqa`, `dynagraph`); mapping requires rotate-in-place.
+Optional ablations:
 
+```bash
+# Graph-first query (no voxel shortcut)
+uv run python scripts/eval_ovmm_find_phases.py --episode-id default_table_s0 \
+  --backend dynagraph --graph-query \
+  --output-dir ~/runs/emet/ovmm_find_phase/graph_query
 
-| Episode | FindObj | FindRec | Partial | n_nodes | n_placements | wall_s |
-|---------|---------|---------|---------|---------|--------------|--------|
-| default_table_s0 | 1 | 1 | 1.0 | 5 | 5 | ~178 |
-| default_table_s0_blue_cube | 1 | 1 | 1.0 | 5 | 5 | ~128 |
+# Full GraphEQA perception (per-frame VLM; legacy slow column)
+uv run python scripts/eval_ovmm_find_phases.py --episode-id default_table_s0 \
+  --backend dynagraph --sensor-perception \
+  --output-dir ~/runs/emet/ovmm_find_phase/full_perception
+```
 
-Artifacts: `runs/ovmm_find_phase/s0_ladder/aggregate_ground_truth.csv`
+**Do not** pass `--not-rotate` for perception backends; mapping requires rotate-in-place.
 
-Reproduce:
+GT oracle smoke:
 
 ```bash
 uv run python scripts/eval_ovmm_find_phases.py --tier S0 \
   --backend ground_truth --not-rotate --cpu-only \
-  --output-dir runs/ovmm_find_phase/s0_ladder
-```
-
-Perception backends (dynamem / graph_eqa / dynagraph) require rotate-in-place; use GPU and expect several minutes per episode:
-
-```bash
-uv run python scripts/eval_ovmm_find_phases.py --tier S0 \
-  --backend dynamem --backend graph_eqa --backend dynagraph \
-  --output-dir runs/ovmm_find_phase/s0_perception
+  --output-dir ~/runs/emet/ovmm_find_phase/s0_gt
 ```
 
 ## S1 / S2 notes

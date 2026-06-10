@@ -61,6 +61,16 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--compare-to-gt", action="store_true", help="Dynagraph: overlay sim GT in Rerun")
     parser.add_argument("--cpu-only", action="store_true", help="Force CPU for perception models")
+    parser.add_argument(
+        "--sensor-perception",
+        action="store_true",
+        help="Enable per-frame VLM graph labeling (full GraphEQA; slow)",
+    )
+    parser.add_argument(
+        "--graph-query",
+        action="store_true",
+        help="Query graph memory first (prefer_voxel=False); default is voxel-first",
+    )
     parser.add_argument("--not-rotate", action="store_true", help="Skip rotate-in-place mapping")
     parser.add_argument(
         "--no-perfect-depth",
@@ -151,6 +161,8 @@ def main() -> int:
                 port_offset=args.port_offset,
                 not_rotate=args.not_rotate,
                 perfect_depth=not args.no_perfect_depth,
+                use_sensor_perception=args.sensor_perception,
+                prefer_voxel=not args.graph_query,
             )
             tag = f"{ep.id}_{backend}"
             print(f"Running {tag} …", file=sys.stderr)
