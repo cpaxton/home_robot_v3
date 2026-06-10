@@ -206,6 +206,11 @@ graph_eqa_extract:
 # When false, generic-label frames are dropped (no graph node, no navigation sample).
 graph_eqa_record_navigation: true
 
+# Dynagraph spatial merge + staleness (same as ``interactive`` in configs/benchmarks/dynagraph.yaml).
+# ``emet run dynagraph`` applies these via setdefault when keys are missing.
+dynagraph_merge_xy_m: 0.45
+dynagraph_staleness_horizon: 256
+
 # Live Rerun (``emet run dynamem``, ``emet run dynagraph``). See ``agents/default_rerun.yaml``.
 rerun:
   mjcf_show_visual_mesh: true

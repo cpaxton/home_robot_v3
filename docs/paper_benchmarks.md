@@ -32,6 +32,22 @@ Defined in `src/emet/eval/memory_backends.py`:
 
 Use the **same backend names** in sweep commands and paper tables.
 
+## Dynagraph profiles (shared config)
+
+Merge/staleness and short-episode caps are defined once in [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml) and applied via [`src/emet/eval/benchmark_dynagraph.py`](../src/emet/eval/benchmark_dynagraph.py). Base defaults also live in [`dynav_config.yaml`](../src/emet/config/dynav_config.yaml) (`dynagraph_merge_xy_m: 0.45`, `dynagraph_staleness_horizon: 256`) so `get_parameters` and `emet run dynagraph` agree.
+
+| Profile | merge (m) | staleness | Used by |
+|---------|-----------|-----------|---------|
+| `interactive` | 0.45 | 256 | `emet run dynagraph`, dynav YAML default |
+| `eqa` | 0.45 | 256 + nav cap 48 | SQA3D tuned (`dynagraph`) |
+| `find_phase` | 0.15 | 256 | OVMM find-phase (`dynagraph`, `ground_truth`) |
+| `graph_eqa_baseline` | 0 | 0 | OVMM `graph_eqa` row |
+| `smoke` | 0 | 0 | SQA3D mock-LLM / CI |
+
+**Task-specific (documented, not unified):** EQA prompts (`prompt_variant`: `sqa3d` vs default), and controller flags (`use_instance_graph`, `manipulation_only`) differ between OVMM localization and SQA3D open QA — see `harness:` in the YAML above.
+
+CLI overrides still work: OVMM `--merge-xy-m` / `--staleness-horizon`; SQA3D has no merge flags (uses profiles only).
+
 ## Output directories (default)
 
 | Variable | Default | Used by |

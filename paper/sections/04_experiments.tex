@@ -19,12 +19,36 @@ Maintainer runbook: \texttt{docs/paper\_benchmarks.md} (commands, output paths, 
 Shared backend names (\texttt{src/emet/eval/memory\_backends.py}):
 
 \begin{itemize}
-  \item \textbf{\texttt{dynamem}:} voxel semantic memory + EQA (no graph merge/staleness).
-  \item \textbf{\texttt{graph\_eqa}:} GraphEQA graph only; merge and staleness disabled (OVMM / ablations).
-  \item \textbf{\texttt{dynagraph}:} voxel + graph with default merge/staleness (\texttt{emet run dynagraph}).
+  \item \textbf{\texttt{dynamem}:} voxel semantic memory (+ optional EQA on SQA3D); no graph merge/staleness.
+  \item \textbf{\texttt{graph\_eqa}:} voxel + graph; merge and staleness disabled (OVMM baseline row).
+  \item \textbf{\texttt{dynagraph}:} voxel + graph with merge/staleness; profile chosen per harness (below).
   \item \textbf{\texttt{ground\_truth}:} sim oracle graph from \texttt{sim\_object\_placements} (OVMM / GT finding upper bound).
-  \item \textbf{Ablations:} \texttt{--merge-xy-m 0}; \texttt{--staleness-horizon 0}; OK-Robot-style static prescanned map (optional).
+  \item \textbf{Ablations:} \texttt{--merge-xy-m} / \texttt{--staleness-horizon} overrides; OK-Robot-style static prescanned map (optional).
 \end{itemize}
+
+\textbf{Dynagraph profiles.}
+Merge, staleness, and short-episode caps are centralized in \texttt{configs/benchmarks/dynagraph.yaml} (\texttt{emet.eval.benchmark\_dynagraph}); \texttt{dynav\_config.yaml} matches the \texttt{interactive} profile (\texttt{emet run dynagraph}).
+Paper harnesses do not fork ad-hoc merge values in runner code.
+
+\begin{table}[t]
+  \centering
+  \caption{Dynagraph profiles used in paper benchmarks (not interchangeable across tasks).}
+  \label{tab:dynagraph_profiles}
+  \small
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    Profile & merge (m) & staleness & Harness \\
+    \midrule
+    \texttt{interactive} & 0.45 & 256 & live \texttt{emet run dynagraph} \\
+    \texttt{eqa} & 0.45 & 256; nav cap 48 & SQA3D tuned \\
+    \texttt{find\_phase} & 0.15 & 256 & OVMM \texttt{dynagraph} / \texttt{ground\_truth} \\
+    \texttt{graph\_eqa\_baseline} & 0 & 0 & OVMM \texttt{graph\_eqa} \\
+    \texttt{smoke} & 0 & 0 & SQA3D mock-LLM / CI \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Task-specific controller settings (EQA \texttt{prompt\_variant}, \texttt{use\_instance\_graph}, \texttt{manipulation\_only}) are documented under \texttt{harness:} in the same YAML; OVMM localization and SQA3D open QA intentionally differ there while sharing one Dynagraph memory implementation.
 
 \subsection{Benchmark configuration}
 
@@ -81,7 +105,7 @@ Override with \texttt{EMET\_OVMM\_OUTPUT\_SIM}, \texttt{EMET\_OVMM\_OUTPUT\_HABI
     \midrule
     Habitat EQA & MC accuracy, steps to answer, exploration coverage \\
     SQA3D & EM@1, TP/FP/FN/infra, mean planning steps, \texttt{sens\_match\_xy\_m} \\
-    OVMM find-phase & FindObj / FindRec success, partial success, localization error (m) \\
+    OVMM find-phase & localization error (m); FindObj / FindRec @\,$r$; partial success \\
     GT object finding & XY error, instance$\rightarrow$GT recall, perception$\rightarrow$GT recall @\,$r$ \\
     Dynagraph sim & spatial/label recall, graph nodes, explored area \\
     \bottomrule
@@ -130,7 +154,8 @@ See \texttt{docs/paper\_benchmarks.md} and Appendix~\ref{app:ground_truth_graph}
 SQA3D~\cite{sqa3d2023} evaluates \emph{situated} open-ended QA: each sample fixes agent pose in a ScanNet scene and asks a free-form question about the surroundings.
 We report \textbf{EM@1} after the official answer normalization protocol (LEO / LLaVA-3D style), not multiple-choice accuracy.
 
-\textbf{Memory backends:} \texttt{dynamem}, \texttt{dynagraph} (default). GraphEQA-only ablations use \texttt{graph\_eqa} yaml settings where noted.
+\textbf{Memory backends:} \texttt{dynamem}, \texttt{dynagraph} (default, \texttt{eqa} profile in Table~\ref{tab:dynagraph_profiles}).
+EQA uses \texttt{prompt\_variant: sqa3d} and real VLM graph labeling; mock-LLM smoke uses the \texttt{smoke} profile (merge off).
 
 \textbf{Replay.}
 Posed ScanNet \texttt{.sens} RGB-D when available (\texttt{--replay-mode sens}); otherwise Open3D mesh rendering over \texttt{\_vh\_clean\_2.ply}.
@@ -156,31 +181,43 @@ See \texttt{docs/sqa3d.md} and \texttt{docs/paper\_benchmarks.md}.
 \label{sec:ovmm_find_phase}
 
 \textit{Results pending.}
-Following OVMM~\cite{ovmm2023}, we benchmark the two phases that depend only on memory and navigation: \textbf{FindObj} (localize the target object near the start receptacle) and \textbf{FindRec} (localize the goal receptacle category).
-Pick and place are out of scope for this ablation; we report \textbf{find-phase partial success} (mean of FindObj and FindRec @\,$r$), not full manipulation overall success.
+Following OVMM~\cite{ovmm2023}, each episode specifies ``move \emph{object} from \emph{start\_recep} to \emph{goal\_recep}.''
+Full OVMM scores four phases (FindObj, Pick, FindRec, Place); we ablate only the memory-dependent localization legs:
+\textbf{FindObj} (where is the manipulable object, disambiguated using the start receptacle) and
+\textbf{FindRec} (where is a body matching the goal receptacle category).
+Pick, place, gaze, and reactive navigation loops are out of scope.
+
+\textbf{Map-then-query (not pure memory).}
+All backends share a fixed \emph{mapping} protocol before any find-phase query:
+rotate-in-place (8$\times$45° with per-step \texttt{update()}, unless \texttt{--not-rotate}) plus optional frontier \texttt{explore\_steps} via \texttt{execute\_action("")}.
+Only then does the harness query memory---it does not interleave further exploration with FindObj/FindRec.
+Fair-default sim runs use instance detections on voxel frames without per-frame VLM labeling (\texttt{use\_sensor\_perception=false}); queries default to \textbf{voxel-first} (\texttt{prefer\_voxel=true}).
 
 \textbf{Emet sim ladder.}
 Episodes in \texttt{configs/ovmm/find\_phase\_episodes.yaml}: tiers S0 (default table), S1 (Robocasa), S2 (MolmoSpaces iTHOR indices 0--2).
-Success oracles use \texttt{sim\_object\_placements}: predicted XYZ within $r$\,m of the GT object body (FindObj) or any GT body matching the goal receptacle category (FindRec).
+GT oracles read \texttt{sim\_object\_placements}: FindObj compares predicted XYZ to the chosen object body (nearest match to \texttt{start\_recep} when multiple bodies share a category); FindRec compares to the nearest GT body matching \texttt{goal\_recep}.
+Success radius $r$ is \textbf{tiered} (not one global 0.75\,m): S0 $r{=}0.30$\,m, S1 $r{=}0.50$\,m, S2 $r{=}0.75$\,m.
+We report \textbf{localization error} (m) as the primary localization metric; binary success and \textbf{partial success} (mean of FindObj and FindRec @\,$r$) are secondary.
+Pilot S0 fair-default runs (rotate only, voxel path) yield $\sim$0.08\,m object XY error for both \texttt{dynamem} and \texttt{dynagraph}---well inside S0 $r$.
 
 \textbf{Protocol (sim).}
 \begin{enumerate}
   \item Smoke: \texttt{uv run python scripts/smoke\_ovmm\_benchmark.py --cpu-only}.
-  \item Batch: \texttt{uv run python scripts/eval\_ovmm\_find\_phases.py --tier S0 --backend dynamem --backend graph\_eqa --backend dynagraph}.
-  \item Fixed mapping per episode: rotate-in-place plus optional \texttt{explore\_steps}; only the memory backend varies.
-  \item Oracle row: \texttt{--backend ground\_truth --not-rotate} (upper bound).
+  \item Batch: \texttt{uv run python scripts/eval\_ovmm\_find\_phases.py --tier S0 --backend dynamem --backend graph\_eqa --backend dynagraph --backend ground\_truth}.
+  \item Mapping fixed per episode; only memory backend and Dynagraph profile vary (\texttt{find\_phase} / \texttt{graph\_eqa\_baseline} in Table~\ref{tab:dynagraph_profiles}).
+  \item Do \textbf{not} pass \texttt{--not-rotate} for perception backends; oracle may use \texttt{--backend ground\_truth --not-rotate --cpu-only}.
   \item Aggregate CSV: \texttt{aggregate\_<backends>.csv} in output dir $\rightarrow$ Table~\ref{tab:ovmm_find_backend_tier}.
 \end{enumerate}
 
 \textbf{Protocol (Habitat proxy).}
 \begin{enumerate}
-  \item Episodes: \texttt{configs/ovmm/habitat\_find\_phase\_episodes.yaml} (HM3D train scenes).
+  \item Episodes: \texttt{configs/ovmm/habitat\_find\_phase\_episodes.yaml} (HM3D train scenes; $r{=}0.75$\,m).
   \item Batch: \texttt{uv run python scripts/eval\_habitat\_ovmm\_find\_phases.py --backend ground\_truth --cpu-only}.
   \item Full OVMM-HSSD minival not wired; HM3D proxy validates Habitat memory $\rightarrow$ find-phase metrics before HSSD download.
 \end{enumerate}
 
 \textbf{Metrics.}
-FindObj / FindRec success, partial success, localization error (m), graph node count, voxel explored area (m$^2$), wall time, \texttt{n\_placements}.
+\texttt{localization\_err\_obj\_m}, \texttt{localization\_err\_recep\_m}, FindObj/FindRec success, partial success, \texttt{obj\_localize\_source} / \texttt{recep\_localize\_source}, graph node count, voxel explored area (m$^2$), wall time, \texttt{n\_placements}.
 See \texttt{docs/ovmm\_find\_phase\_benchmark.md} and \texttt{docs/paper\_benchmarks.md}.
 
 \subsection{Scaling to large scenes}
@@ -192,7 +229,7 @@ Designed to stress-test Dynagraph node growth and exploration budget on S0$\righ
 \begin{itemize}
   \item \textbf{Scene-size sweep:} success and \texttt{n\_graph\_nodes} vs tier and Molmo index (Fig.~\ref{fig:ovmm_scaling_success}, Fig.~\ref{fig:ovmm_scaling_nodes}).
   \item \textbf{Exploration budget:} \texttt{explore\_steps} $\in \{0, 5, 15, 30\}$ on S2 index 0.
-  \item \textbf{Merge / staleness grid:} \texttt{--merge-xy-m} $\in \{0, 0.25, 0.45, 0.75\}$, \texttt{--staleness-horizon} $\in \{0, 128, 256, 512\}$ on S2.
+  \item \textbf{Merge / staleness grid:} \texttt{--merge-xy-m} $\in \{0, 0.15, 0.25, 0.45, 0.75\}$, \texttt{--staleness-horizon} $\in \{0, 128, 256, 512\}$ on S2 (default batch uses \texttt{find\_phase} profile: 0.15\,m merge).
 \end{itemize}
 
 \textbf{Known limits.}
