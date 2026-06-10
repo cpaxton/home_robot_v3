@@ -50,6 +50,17 @@ uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d example
 3. **GraphEQAController / DynagraphController** — emet memory stack (unchanged)  
 4. **EQAExecuter** — `run_eqa` loop + multiple-choice grading  
 
+### HabitatRobotClient notes
+
+In-process shim at `packages/emet_habitat/emet_habitat/robot_client.py` (full docstrings on the class).
+
+| API | Behavior |
+|-----|----------|
+| `move_base_to` / `execute_trajectory` / `navigate_to` | Goals are Habitat **world** `(x, z, yaw)`. `world_frame` is accepted for ZMQ API parity but **ignored**. |
+| `get_emet_session` / `set_emet_session` | Optional local session dict (e.g. `sim_object_placements` for find-phase GT graph refresh). Not streamed from a server. |
+| `hm3d_semantic_labeler` / `uses_hm3d_semantics` | Present when the simulator was built with HM3D semantic sensors. |
+| Arm / gripper / head methods | Stretch-shaped **no-op stubs** so DynaMem manipulation wrappers import cleanly; EQA uses navigation only. |
+
 Observation poses use `convert_pose_habitat_to_opencv` in `src/emet/utils/pose.py`.
 
 ## Code layout

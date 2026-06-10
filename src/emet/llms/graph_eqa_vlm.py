@@ -14,6 +14,7 @@ import torch
 from emet.core.parameters import Parameters
 from emet.llms.eqa_vl_settings import apply_eqa_vl_runtime_settings, get_eqa_vl_int
 from emet.llms.prompts.eqa_prompt import EQA_PROMPT
+from emet.benchmarks.sqa3d.prompts import SQA3D_EQA_PROMPT
 from emet.llms.prompts.hmeqa_eqa_prompt import HMEQA_EQA_PROMPT
 from emet.llms.vllm_factory import create_dynamem_vllm, dynamem_vllm_call
 from emet.llms.vllm_registry import default_hf_model_id, normalize_vl_family
@@ -27,6 +28,8 @@ def _eqa_system_prompt(parameters: Parameters | dict | None) -> str:
     variant = str(eqa.get("prompt_variant", "") or "").strip().lower()
     if variant in ("hmeqa", "mcq"):
         return HMEQA_EQA_PROMPT
+    if variant in ("sqa3d", "situated"):
+        return SQA3D_EQA_PROMPT
     return EQA_PROMPT
 
 

@@ -22,7 +22,7 @@ Remove auxiliary files:
 ./paper/build.sh --clean
 ```
 
-Requires a TeX distribution with `latexmk`, `natbib`, and standard packages (on Ubuntu: `texlive-latex-extra`, `texlive-bibtex-extra`, `latexmk`).
+Requires `latexmk` + `booktabs` (via `texlive-latex-extra`, `texlive-bibtex-extra` on Ubuntu). If TeX is not installed locally, `./build.sh` falls back to **Docker** (`texlive/texlive:latest`) when `docker` is on your PATH.
 
 ## Layout
 
@@ -32,7 +32,14 @@ Requires a TeX distribution with `latexmk`, `natbib`, and standard packages (on 
 - `sections/appendix/` — robot platforms, Innate Mars, Depth Anything 3, ground-truth graph (appendix 04)
 - `references.bib` — bibliography stubs (expand before submission)
 
+## Benchmarks and results
+
+- **Run / maintain paper sweeps:** [docs/paper_benchmarks.md](../docs/paper_benchmarks.md)
+- **Experiments plan (LaTeX):** `sections/04_experiments.tex`
+- **Results tables (fill manually from CSV):** `sections/05_results.tex`
+
 ## Related work
 
 - Implementation: `emet run dynagraph` on branch `main`
 - Habitat EQA harness plan: `docs/plans/HABITAT_EQA_HARNESS.md` on branch `feature/habitat-eqa-harness`
+- SQA3D harness: `docs/sqa3d.md` on branch `feature/dynamem-offline-real-benchmark`
