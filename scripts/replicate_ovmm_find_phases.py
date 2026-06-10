@@ -39,6 +39,9 @@ SUMMARY_NUMERIC_KEYS = (
     "n_graph_nodes",
     "n_voxel_explored_cells",
     "n_voxel_explored_area_m2",
+    "init_wall_s",
+    "mapping_wall_s",
+    "query_wall_s",
     "episode_wall_s",
 )
 
@@ -68,6 +71,16 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--staleness-horizon", type=int, default=None)
     parser.add_argument("--compare-to-gt", action="store_true")
     parser.add_argument("--cpu-only", action="store_true")
+    parser.add_argument(
+        "--sensor-perception",
+        action="store_true",
+        help="Enable per-frame VLM graph labeling (full GraphEQA; slow)",
+    )
+    parser.add_argument(
+        "--graph-query",
+        action="store_true",
+        help="Query graph memory first (prefer_voxel=False)",
+    )
     parser.add_argument("--not-rotate", action="store_true")
     parser.add_argument(
         "--no-perfect-depth",
@@ -99,6 +112,16 @@ def _filter_episodes(episodes, *, tiers, episode_ids):
 
 def _seed_values(seed_base: int, replicates: int) -> list[int]:
     return [seed_base + i for i in range(replicates)]
+
+
+def _source_histogram(runs: list[dict], field: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in runs:
+        if row.get("error") is not None:
+            continue
+        key = str(row.get(field) if row.get(field) is not None else "null")
+        counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def _summarize_runs(runs: list[dict]) -> dict[str, dict[str, float | int | None]]:
@@ -161,6 +184,8 @@ def main() -> int:
                     port_offset=port_offset,
                     not_rotate=args.not_rotate,
                     perfect_depth=not args.no_perfect_depth,
+                    use_sensor_perception=args.sensor_perception,
+                    prefer_voxel=not args.graph_query,
                     seed=seed,
                 )
                 tag = f"{ep.id}_{backend}"
@@ -206,6 +231,7 @@ def main() -> int:
 
     cross_seed: list[dict] = []
     for (episode_id, backend), runs in sorted(by_group.items()):
+        ok_runs = [r for r in runs if r.get("error") is None]
         cross_seed.append(
             {
                 "episode_id": episode_id,
@@ -213,7 +239,10 @@ def main() -> int:
                 "tier": runs[0].get("tier"),
                 "seeds": [r.get("seed") for r in runs],
                 "n_replicates": len(runs),
+                "n_success": len(ok_runs),
                 "stats": _summarize_runs(runs),
+                "obj_localize_source_counts": _source_histogram(runs, "obj_localize_source"),
+                "recep_localize_source_counts": _source_histogram(runs, "recep_localize_source"),
             }
         )
 

@@ -70,6 +70,8 @@ class FindPhaseRunConfig:
     not_rotate: bool = False
     perfect_depth: bool = True
     seed: int | None = None
+    use_sensor_perception: bool = False
+    prefer_voxel: bool = True
 
 
 def load_find_phase_episodes(path: str | Path) -> list[FindPhaseEpisode]:
@@ -640,6 +642,7 @@ def create_find_phase_agent(
     *,
     cpu_only: bool = False,
     compare_to_gt: bool = False,
+    use_sensor_perception: bool = False,
 ):
     """Instantiate the controller for a memory backend."""
     if backend == "dynamem":
@@ -663,6 +666,7 @@ def create_find_phase_agent(
             save_rerun=False,
             use_instance_graph=True,
             cpu_only=cpu_only,
+            use_sensor_perception=use_sensor_perception,
         )
     elif backend == "dynagraph":
         from emet.controller.controller_dynagraph import DynagraphController
@@ -673,6 +677,7 @@ def create_find_phase_agent(
             save_rerun=False,
             cpu_only=cpu_only,
             use_instance_graph=True,
+            use_sensor_perception=use_sensor_perception,
             visualize_ground_truth=compare_to_gt,
         )
     elif backend == "ground_truth":
@@ -684,6 +689,7 @@ def create_find_phase_agent(
             save_rerun=False,
             cpu_only=cpu_only,
             use_instance_graph=True,
+            use_sensor_perception=False,
             ground_truth_mode=True,
         )
     else:
@@ -798,6 +804,9 @@ def run_episode_find_phase(
     agent = None
     server = None
     t0 = time.monotonic()
+    init_wall_s = 0.0
+    mapping_wall_s = 0.0
+    query_wall_s = 0.0
     try:
         server = subprocess.Popen(
             server_cmd,
@@ -840,13 +849,16 @@ def run_episode_find_phase(
         if run_cfg.perfect_depth:
             parameters["debug_perfect_sensor_depth"] = True
 
+        t_init0 = time.monotonic()
         agent = create_find_phase_agent(
             robot,
             parameters,
             run_cfg.backend,
             cpu_only=run_cfg.cpu_only,
             compare_to_gt=run_cfg.compare_to_gt,
+            use_sensor_perception=run_cfg.use_sensor_perception,
         )
+        init_wall_s = time.monotonic() - t_init0
         if run_cfg.backend == "ground_truth":
             refresh = getattr(agent, "refresh_ground_truth", None)
             if callable(refresh):
@@ -854,11 +866,13 @@ def run_episode_find_phase(
                 if n_gt == 0:
                     raise RuntimeError("ground-truth mode: no sim_object_placements in session")
 
+        t_map0 = time.monotonic()
         n_steps = run_mapping_protocol(
             agent,
             explore_steps=episode.explore_steps,
             not_rotate=run_cfg.not_rotate,
         )
+        mapping_wall_s = time.monotonic() - t_map0
 
         session = robot.get_emet_session()
         placements = read_sim_object_placements(session)
@@ -869,6 +883,8 @@ def run_episode_find_phase(
 
         object_query = resolve_object_query(episode, placements)
 
+        prefer_voxel = run_cfg.prefer_voxel and run_cfg.backend != "ground_truth"
+        t_query0 = time.monotonic()
         obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
             memory,
             object_query,
@@ -877,6 +893,7 @@ def run_episode_find_phase(
             near_recep=episode.start_recep,
             voxel_map=vm,
             convert_nav_to_world=nav_world or run_cfg.backend == "dynamem",
+            prefer_voxel=prefer_voxel,
         )
         recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
             memory,
@@ -886,6 +903,7 @@ def run_episode_find_phase(
             near_recep=episode.goal_recep,
             voxel_map=vm,
             convert_nav_to_world=nav_world or run_cfg.backend == "dynamem",
+            prefer_voxel=prefer_voxel,
         )
 
         find_metrics = compute_find_phase_metrics(
@@ -898,6 +916,7 @@ def run_episode_find_phase(
             radius_m=episode.success_radius_m,
             object_gt_body=episode.object_gt_body,
         )
+        query_wall_s = time.monotonic() - t_query0
 
         scaling = collect_scaling_diagnostics(
             agent,
@@ -925,6 +944,11 @@ def run_episode_find_phase(
             "merge_xy_m": parameters.get("dynagraph_merge_xy_m"),
             "staleness_horizon": parameters.get("dynagraph_staleness_horizon"),
             "perfect_depth": bool(run_cfg.perfect_depth),
+            "use_sensor_perception": bool(run_cfg.use_sensor_perception),
+            "prefer_voxel": bool(prefer_voxel),
+            "init_wall_s": float(init_wall_s),
+            "mapping_wall_s": float(mapping_wall_s),
+            "query_wall_s": float(query_wall_s),
             "obj_localize_success": bool(obj_ok),
             "recep_localize_success": bool(recep_ok),
             "obj_query_used": obj_q_used,

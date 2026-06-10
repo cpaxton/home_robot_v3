@@ -20,6 +20,15 @@ episodes:
     success_radius_m: 0.30
     explore_steps: 0
 
+  - id: default_table_s0_distinct_recep
+    tier: S0
+    sim: configs/sim/default_table_stretch.yaml
+    object: red cylinder
+    start_recep: table
+    goal_recep: blue cube
+    success_radius_m: 0.30
+    explore_steps: 0
+
   - id: robocasa_pp_s1
     tier: S1
     sim: configs/sim/robocasa_pick_place_stretch.yaml
