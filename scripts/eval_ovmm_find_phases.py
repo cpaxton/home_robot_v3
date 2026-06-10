@@ -28,7 +28,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_EPISODES = REPO / "configs" / "ovmm" / "find_phase_episodes.yaml"
 
-BACKENDS = ("dynamem", "graph_eqa", "dynagraph", "ground_truth")
+from emet.eval.memory_backends import OVMM_MEMORY_BACKENDS
+
+BACKENDS = OVMM_MEMORY_BACKENDS
 
 
 def _parse_args() -> argparse.Namespace:

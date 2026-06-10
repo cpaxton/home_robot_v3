@@ -1,6 +1,8 @@
 \section{Results}
 \label{sec:results}
 
+\textit{Fill tables from sweep aggregates; see \texttt{docs/paper\_benchmarks.md} (Maintaining paper numbers).}
+
 \subsection{OVMM find-phase memory ablation (Emet sim)}
 \label{sec:ovmm_find_results}
 
@@ -41,12 +43,35 @@
   \label{fig:ovmm_scaling_nodes}
 \end{figure}
 
+\subsection{SQA3D situated open QA (ScanNet replay)}
+\label{sec:sqa3d_results}
+
+\textit{Results pending. Placeholder table: method $\times$ replay mode on val split.}
+
+\begin{table}[t]
+  \centering
+  \caption{SQA3D EM@1 on val (subset). Not comparable to OVMM find-phase metrics.}
+  \label{tab:sqa3d_backend_replay}
+  \small
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Method & mesh & sens (auto) & sens (forced) \\
+    \midrule
+    DynaMem (\texttt{dynamem}) & -- & -- & -- \\
+    Dynagraph (\texttt{dynagraph}) & -- & -- & -- \\
+    \midrule
+    \multicolumn{4}{l}{\textit{Diagnostics: infra rate, mean \texttt{sens\_match\_xy\_m}, TP/FP/FN}} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
 \subsection{Other planned results}
 
 \textit{Results pending. Placeholder for:}
 
 \begin{itemize}
   \item Table: Habitat HM-EQA / OpenEQA (GraphEQA vs.\ Dynagraph vs.\ ablations).
+  \item Figure: SQA3D outcome breakdown (TP/FP/FN/infra) from \texttt{emet sqa3d plot-results}.
   \item Table: Emet sim (Robocasa, MolmoSpaces) across robots.
   \item Figure: exploration trajectory + graph snapshots (Rerun export).
   \item Ablations: merge only, staleness only, dynamic episode failure modes.

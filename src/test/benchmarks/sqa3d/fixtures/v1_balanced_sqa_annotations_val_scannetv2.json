@@ -1,0 +1,76 @@
+{
+  "annotations": [
+    {
+      "answer_type": "other",
+      "answers": [
+        {
+          "answer": "brown",
+          "answer_confidence": "yes",
+          "answer_id": 1
+        }
+      ],
+      "position": {
+        "x": -0.9651003385573296,
+        "y": -1.2417634435553606,
+        "z": 0
+      },
+      "question_id": 220602000000,
+      "question_type": "N/A",
+      "rotation": {
+        "_w": 0.9950041652780182,
+        "_x": 0,
+        "_y": 0,
+        "_z": 0.09983341664682724
+      },
+      "scene_id": "scene0380_00"
+    },
+    {
+      "answer_type": "yes/no",
+      "answers": [
+        {
+          "answer": "yes",
+          "answer_confidence": "yes",
+          "answer_id": 1
+        }
+      ],
+      "position": {
+        "x": -0.9651003385573296,
+        "y": -1.2417634435553606,
+        "z": 0
+      },
+      "question_id": 220602000001,
+      "question_type": "N/A",
+      "rotation": {
+        "_w": 0.9950041652780182,
+        "_x": 0,
+        "_y": 0,
+        "_z": 0.09983341664682724
+      },
+      "scene_id": "scene0380_00"
+    },
+    {
+      "answer_type": "number",
+      "answers": [
+        {
+          "answer": "two",
+          "answer_confidence": "yes",
+          "answer_id": 1
+        }
+      ],
+      "position": {
+        "x": 0.5,
+        "y": 1.0,
+        "z": 0
+      },
+      "question_id": 220602000002,
+      "question_type": "N/A",
+      "rotation": {
+        "_w": 1.0,
+        "_x": 0,
+        "_y": 0,
+        "_z": 0.0
+      },
+      "scene_id": "scene0380_00"
+    }
+  ]
+}

@@ -203,4 +203,6 @@ memory → find-phase metric path before HSSD scene download.
 
 ## Paper
 
-Experiments and results templates: `paper/sections/04_experiments.tex`, `paper/sections/05_results.tex` (OVMM find-phase + scaling subsections).
+- Unified runbook: [paper_benchmarks.md](paper_benchmarks.md)
+- Experiments plan: `paper/sections/04_experiments.tex` (`sec:ovmm_find_phase`, Table `tab:benchmark_configs`)
+- Results tables: `paper/sections/05_results.tex` (`tab:ovmm_find_backend_tier`, scaling figures)
