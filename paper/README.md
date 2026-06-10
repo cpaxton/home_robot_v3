@@ -22,7 +22,7 @@ Remove auxiliary files:
 ./paper/build.sh --clean
 ```
 
-Requires a TeX distribution with `latexmk`, `natbib`, and standard packages (on Ubuntu: `texlive-latex-extra`, `texlive-bibtex-extra`, `latexmk`).
+Requires `latexmk` + `booktabs` (via `texlive-latex-extra`, `texlive-bibtex-extra` on Ubuntu). If TeX is not installed locally, `./build.sh` falls back to **Docker** (`texlive/texlive:latest`) when `docker` is on your PATH.
 
 ## Layout
 

@@ -2,7 +2,7 @@
 
 Operator guide for benchmarks referenced in `paper/sections/04_experiments.tex` and `paper/sections/05_results.tex`.
 
-**LaTeX:** `./paper/build.sh` from repo root.  
+**LaTeX:** `./paper/build.sh` from repo root (uses local `latexmk` or Docker `texlive/texlive:latest`).  
 **Results go in:** `paper/sections/05_results.tex` (tables/figures) — not committed automatically from sweeps.
 
 ## Benchmark map
