@@ -3,8 +3,17 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
 
-"""Optional monocular depth backends (e.g. Depth Anything 3) for RGB-only robots."""
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+
+"""Optional monocular depth backends (e.g. Depth Anything 3, LingBot-Map) for RGB-only robots."""
 
 from emet.perception.depth.da3_estimator import (
     DA3DepthEstimator,
@@ -13,11 +22,16 @@ from emet.perception.depth.da3_estimator import (
     resolve_depth_map,
     resolve_depth_map_uses_observation_sensor_only,
 )
+from emet.perception.depth.lingbot_estimator import LingBotDepthEstimator, create_lingbot_estimator_from_parameters
+from emet.perception.depth.lingbot_subprocess import LingBotSubprocessClient
 
 __all__ = [
     "DA3DepthEstimator",
+    "LingBotDepthEstimator",
+    "LingBotSubprocessClient",
     "apply_da3_sky_row_mask",
     "create_da3_estimator_from_parameters",
+    "create_lingbot_estimator_from_parameters",
     "resolve_depth_map",
     "resolve_depth_map_uses_observation_sensor_only",
 ]

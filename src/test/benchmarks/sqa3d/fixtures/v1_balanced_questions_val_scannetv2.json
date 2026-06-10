@@ -1,0 +1,28 @@
+{
+  "questions": [
+    {
+      "alternative_situation": [
+        "I stand looking out of the window in thought and a radiator is right in front of me.",
+        "I am looking outside through the window behind the desk."
+      ],
+      "question": "What color is the desk to my right?",
+      "question_id": 220602000000,
+      "scene_id": "scene0380_00",
+      "situation": "I am facing a window and there is a desk on my right and a chair behind me."
+    },
+    {
+      "alternative_situation": [],
+      "question": "Is the chair behind me?",
+      "question_id": 220602000001,
+      "scene_id": "scene0380_00",
+      "situation": "I am facing a window and there is a desk on my right and a chair behind me."
+    },
+    {
+      "alternative_situation": [],
+      "question": "How many monitors are on the desk?",
+      "question_id": 220602000002,
+      "scene_id": "scene0380_00",
+      "situation": "I am at the desk facing two monitors."
+    }
+  ]
+}

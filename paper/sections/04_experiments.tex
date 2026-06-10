@@ -2,24 +2,49 @@
 \label{sec:experiments}
 
 \textit{Experimental results are pending. This section records the evaluation plan.}
+Maintainer runbook: \texttt{docs/paper\_benchmarks.md} (commands, output paths, LaTeX update checklist).
 
 \subsection{Goals}
 
 \begin{enumerate}
-  \item \textbf{Habitat (primary):} Reproduce GraphEQA-style metrics on HM-EQA (113 questions) and an OpenEQA subset: success rate, mean planning steps, GraphEQA vs.\ Dynagraph vs.\ ablations.
-  \item \textbf{Emet sim (complementary):} Robocasa kitchens and MolmoSpaces iTHOR with Stretch, Galaxea R1 (rby1), and Innate Mars (Appendix~\ref{app:innate_mars}); depth-source policy in Appendix~\ref{app:da3}; GT-supervised object finding (Section~\ref{sec:gt_experiments}) for sim-oracle benchmarks without Habitat.
+  \item \textbf{Habitat EQA (primary):} Reproduce GraphEQA-style metrics on HM-EQA (113 questions) and an OpenEQA subset: success rate, mean planning steps, GraphEQA vs.\ Dynagraph vs.\ ablations.
+  \item \textbf{SQA3D situated open QA:} Embodied ScanNet replay with EM@1 scoring (Section~\ref{sec:sqa3d_benchmark}); compare \texttt{dynamem} vs.\ \texttt{dynagraph} with \texttt{prompt\_variant: sqa3d}.
+  \item \textbf{OVMM-inspired find-phase:} FindObj / FindRec localization on Emet sim tiers S0--S2 and Habitat HM3D proxy episodes (Section~\ref{sec:ovmm_find_phase}); memory backends \texttt{dynamem}, \texttt{graph\_eqa}, \texttt{dynagraph}, and sim oracle \texttt{ground\_truth}.
+  \item \textbf{Emet sim (complementary):} Robocasa kitchens and MolmoSpaces iTHOR with Stretch, Galaxea R1 (rby1), and Innate Mars (Appendix~\ref{app:innate_mars}); depth-source policy in Appendix~\ref{app:da3}; GT-supervised object finding (Section~\ref{sec:gt_experiments}).
   \item \textbf{Dynamic episodes:} After object relocation, measure stale nodes, wrong answers, and recovery steps (Dynagraph vs.\ GraphEQA without staleness).
 \end{enumerate}
 
 \subsection{Methods compared}
 
+Shared backend names (\texttt{src/emet/eval/memory\_backends.py}):
+
 \begin{itemize}
-  \item \textbf{GraphEQA baseline:} merge and staleness disabled (\texttt{emet run graph-eqa}).
-  \item \textbf{Dynagraph:} defaults (\texttt{emet run dynagraph}).
-  \item \textbf{Ablations:} \texttt{--merge-xy-m 0}; \texttt{--staleness-horizon 0}.
-  \item \textbf{DynaMem voxel-only EQA} and \textbf{VLM-only} baselines where applicable.
-  \item \textbf{OK-Robot-style static map} (optional): prescanned voxel, no re-explore on dynamic episodes.
+  \item \textbf{\texttt{dynamem}:} voxel semantic memory + EQA (no graph merge/staleness).
+  \item \textbf{\texttt{graph\_eqa}:} GraphEQA graph only; merge and staleness disabled (OVMM / ablations).
+  \item \textbf{\texttt{dynagraph}:} voxel + graph with default merge/staleness (\texttt{emet run dynagraph}).
+  \item \textbf{\texttt{ground\_truth}:} sim oracle graph from \texttt{sim\_object\_placements} (OVMM / GT finding upper bound).
+  \item \textbf{Ablations:} \texttt{--merge-xy-m 0}; \texttt{--staleness-horizon 0}; OK-Robot-style static prescanned map (optional).
 \end{itemize}
+
+\subsection{Benchmark configuration}
+
+\begin{table}[t]
+  \centering
+  \caption{Paper benchmark configs and default output directories (\texttt{\textasciitilde} expanded at runtime).}
+  \label{tab:benchmark_configs}
+  \small
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Track & Config YAML & Default output \\
+    \midrule
+    OVMM find-phase (sim) & \texttt{configs/ovmm/benchmark.yaml} & \texttt{\textasciitilde/runs/emet/ovmm\_find\_phase} \\
+    OVMM find-phase (Habitat) & same & \texttt{\textasciitilde/runs/emet/ovmm\_habitat} \\
+    SQA3D & \texttt{configs/sqa3d/benchmark.yaml} & \texttt{\textasciitilde/runs/emet/sqa3d} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Override with \texttt{EMET\_OVMM\_OUTPUT\_SIM}, \texttt{EMET\_OVMM\_OUTPUT\_HABITAT}, \texttt{EMET\_SQA3D\_OUTPUT} (see \texttt{docs/environment\_variables.md}).
 
 \subsection{Simulation environments}
 
@@ -30,19 +55,40 @@
   \small
   \begin{tabular}{@{}lll@{}}
     \toprule
-    Environment & Serve command & Role \\
+    Environment & Entrypoint & Role \\
     \midrule
-    Habitat + HM3D & Habitat harness & GraphEQA parity \\
-    Robocasa & \texttt{emet serve robocasa} & Kitchen objects, manipulation clutter \\
-    MolmoSpaces iTHOR & \texttt{emet serve molmospaces} & Multi-room exploration \\
-    Default table & \texttt{emet serve mujoco} & Sanity / CI-style scenes \\
+    Habitat + HM3D & \texttt{.venv-habitat/bin/emet-habitat} & GraphEQA parity (HM-EQA / OpenEQA) \\
+    Habitat + HM3D & \texttt{eval\_habitat\_ovmm\_find\_phases.py} & OVMM find-phase proxy (Phase~2) \\
+    ScanNet + SQA3D & \texttt{emet sqa3d run-real-sweep} & Situated open QA (EM@1) \\
+    Emet sim (S0--S2) & \texttt{eval\_ovmm\_find\_phases.py} & OVMM FindObj / FindRec \\
+    Robocasa & \texttt{emet serve robocasa} & Kitchen objects, GT finding \\
+    MolmoSpaces iTHOR & \texttt{emet serve molmospaces} & Multi-room exploration (S2) \\
+    Default table & \texttt{emet serve mujoco} & Sanity / CI (S0) \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 \subsection{Metrics}
 
-EQA accuracy (multiple-choice or graded open answers), steps to confident answer, graph node/edge counts, explored map area, staleness efficacy after scripted scene changes, cross-robot variance.
+\begin{table}[t]
+  \centering
+  \caption{Primary metrics per paper track (not directly comparable across tracks).}
+  \label{tab:benchmark_metrics}
+  \small
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    Track & Primary metrics \\
+    \midrule
+    Habitat EQA & MC accuracy, steps to answer, exploration coverage \\
+    SQA3D & EM@1, TP/FP/FN/infra, mean planning steps, \texttt{sens\_match\_xy\_m} \\
+    OVMM find-phase & FindObj / FindRec success, partial success, localization error (m) \\
+    GT object finding & XY error, instance$\rightarrow$GT recall, perception$\rightarrow$GT recall @\,$r$ \\
+    Dynagraph sim & spatial/label recall, graph nodes, explored area \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Secondary: graph node/edge counts, voxel explored area, staleness after scripted moves, cross-robot variance.
 
 \subsection{GT-supervised object finding (Emet sim)}
 \label{sec:gt_experiments}
@@ -69,18 +115,95 @@ Robocasa kitchens (multiple layout/style seeds) and the default table scene serv
 
 \textbf{Protocol.}
 \begin{enumerate}
-  \item \texttt{emet serve mujoco --scene robocasa --headless --port-offset N} (or default table / \texttt{--scene ithor} for MolmoSpaces).
+  \item \texttt{emet serve mujoco --scene robocasa --headless --port-offset N} (or default table / MolmoSpaces).
   \item \texttt{emet run dynagraph --ground-truth --export runs/<episode\_id> --port-offset N} (rotate-in-place by default; exports graph + voxel frames + GT sidecars).
   \item Batch: \texttt{uv run python scripts/eval\_dynagraph\_ground\_truth.py --run-live --port-offset N --output metrics.json}.
   \item Compare perception: \texttt{emet run dynagraph --compare-to-gt --export runs/<id> -N}.
 \end{enumerate}
 
-See Appendix~\ref{app:ground_truth_graph} for GT graph construction and export layout.
+See \texttt{docs/paper\_benchmarks.md} and Appendix~\ref{app:ground_truth_graph}.
 
-\subsection{Execution protocol}
+\subsection{SQA3D situated open QA (ScanNet replay)}
+\label{sec:sqa3d_benchmark}
+
+\textit{Results pending.}
+SQA3D~\cite{sqa3d2023} evaluates \emph{situated} open-ended QA: each sample fixes agent pose in a ScanNet scene and asks a free-form question about the surroundings.
+We report \textbf{EM@1} after the official answer normalization protocol (LEO / LLaVA-3D style), not multiple-choice accuracy.
+
+\textbf{Memory backends:} \texttt{dynamem}, \texttt{dynagraph} (default). GraphEQA-only ablations use \texttt{graph\_eqa} yaml settings where noted.
+
+\textbf{Replay.}
+Posed ScanNet \texttt{.sens} RGB-D when available (\texttt{--replay-mode sens}); otherwise Open3D mesh rendering over \texttt{\_vh\_clean\_2.ply}.
+\texttt{auto} falls back to mesh when the agent leaves the SQA3D anchor neighborhood or when the nearest sens frame exceeds 0.75\,m XY.
+Episode JSONL logs \texttt{replay\_backend}, \texttt{sens\_match\_xy\_m}, and \texttt{infra\_failure} for figure breakdowns (TP/FP/FN/infra).
+
+\textbf{Protocol.}
+\begin{enumerate}
+  \item Data: \texttt{scripts/download\_sqa3d\_data.py --fetch-annotations}; ScanNet meshes + optional \texttt{.sens} via \texttt{scripts/download\_scannet\_data.py --with-sens}.
+  \item Smoke: \texttt{emet sqa3d run-episode --mock-llm --question-id <id>}.
+  \item Real-VLM batch: \texttt{emet sqa3d run-real-sweep --split val --replay-mode sens --isolate-episodes} (defaults in \texttt{configs/sqa3d/benchmark.yaml}; GPU notes in \texttt{docs/sqa3d\_compute.md}).
+  \item Score / figures: \texttt{emet eval-sqa3d -p <batch>.jsonl}; \texttt{emet sqa3d plot-results -p <batch>.jsonl -o figs/}.
+  \item Aggregate: \texttt{scripts/aggregate\_sqa3d\_sweep.py} $\rightarrow$ \texttt{aggregate\_sqa3d.csv} for Table~\ref{tab:sqa3d_backend_replay}.
+\end{enumerate}
+
+\textbf{Metrics.}
+EM@1, EM@1 refined (diagnostic), mean planning steps, TP/FP/FN/infra outcome counts, optional per-question-type breakdown.
+\textbf{Not comparable} to OVMM find-phase partial success (language answers vs.\ object/receptacle localization).
+
+See \texttt{docs/sqa3d.md} and \texttt{docs/paper\_benchmarks.md}.
+
+\subsection{OVMM-inspired find-phase localization}
+\label{sec:ovmm_find_phase}
+
+\textit{Results pending.}
+Following OVMM~\cite{ovmm2023}, we benchmark the two phases that depend only on memory and navigation: \textbf{FindObj} (localize the target object near the start receptacle) and \textbf{FindRec} (localize the goal receptacle category).
+Pick and place are out of scope for this ablation; we report \textbf{find-phase partial success} (mean of FindObj and FindRec @\,$r$), not full manipulation overall success.
+
+\textbf{Emet sim ladder.}
+Episodes in \texttt{configs/ovmm/find\_phase\_episodes.yaml}: tiers S0 (default table), S1 (Robocasa), S2 (MolmoSpaces iTHOR indices 0--2).
+Success oracles use \texttt{sim\_object\_placements}: predicted XYZ within $r$\,m of the GT object body (FindObj) or any GT body matching the goal receptacle category (FindRec).
+
+\textbf{Protocol (sim).}
+\begin{enumerate}
+  \item Smoke: \texttt{uv run python scripts/smoke\_ovmm\_benchmark.py --cpu-only}.
+  \item Batch: \texttt{uv run python scripts/eval\_ovmm\_find\_phases.py --tier S0 --backend dynamem --backend graph\_eqa --backend dynagraph}.
+  \item Fixed mapping per episode: rotate-in-place plus optional \texttt{explore\_steps}; only the memory backend varies.
+  \item Oracle row: \texttt{--backend ground\_truth --not-rotate} (upper bound).
+  \item Aggregate CSV: \texttt{aggregate\_<backends>.csv} in output dir $\rightarrow$ Table~\ref{tab:ovmm_find_backend_tier}.
+\end{enumerate}
+
+\textbf{Protocol (Habitat proxy).}
+\begin{enumerate}
+  \item Episodes: \texttt{configs/ovmm/habitat\_find\_phase\_episodes.yaml} (HM3D train scenes).
+  \item Batch: \texttt{uv run python scripts/eval\_habitat\_ovmm\_find\_phases.py --backend ground\_truth --cpu-only}.
+  \item Full OVMM-HSSD minival not wired; HM3D proxy validates Habitat memory $\rightarrow$ find-phase metrics before HSSD download.
+\end{enumerate}
+
+\textbf{Metrics.}
+FindObj / FindRec success, partial success, localization error (m), graph node count, voxel explored area (m$^2$), wall time, \texttt{n\_placements}.
+See \texttt{docs/ovmm\_find\_phase\_benchmark.md} and \texttt{docs/paper\_benchmarks.md}.
+
+\subsection{Scaling to large scenes}
+\label{sec:scaling_large_scenes}
+
+\textit{Results pending.}
+Designed to stress-test Dynagraph node growth and exploration budget on S0$\rightarrow$S2:
+
+\begin{itemize}
+  \item \textbf{Scene-size sweep:} success and \texttt{n\_graph\_nodes} vs tier and Molmo index (Fig.~\ref{fig:ovmm_scaling_success}, Fig.~\ref{fig:ovmm_scaling_nodes}).
+  \item \textbf{Exploration budget:} \texttt{explore\_steps} $\in \{0, 5, 15, 30\}$ on S2 index 0.
+  \item \textbf{Merge / staleness grid:} \texttt{--merge-xy-m} $\in \{0, 0.25, 0.45, 0.75\}$, \texttt{--staleness-horizon} $\in \{0, 128, 256, 512\}$ on S2.
+\end{itemize}
+
+\textbf{Known limits.}
+Molmo GT fixture scans may cap on large scenes; Robocasa layout $\neq$ HSSD; static placements (no mid-episode object move in Phase~1).
+
+\subsection{Execution protocol (summary)}
 
 \begin{enumerate}
-  \item Start sim: \texttt{emet serve <backend> --robot <name> --headless --port-offset N}.
-  \item Run agent: \texttt{emet run dynagraph --robot <name> --port-offset N --export runs/<id>}.
-  \item Habitat batch runner (harness branch): dataset-driven episodes with shared metrics export.
+  \item \textbf{Smoke all tracks:} \texttt{docs/paper\_benchmarks.md} $\rightarrow$ Quick smoke section.
+  \item \textbf{Emet sim:} \texttt{emet serve … --port-offset N}; OVMM via \texttt{eval\_ovmm\_find\_phases.py}; GT finding via \texttt{eval\_dynagraph\_ground\_truth.py}.
+  \item \textbf{SQA3D:} \texttt{emet sqa3d run-real-sweep} $\rightarrow$ JSONL $\rightarrow$ \texttt{aggregate\_sqa3d\_sweep.py} (no ZMQ sim server).
+  \item \textbf{Habitat:} \texttt{.venv-habitat/bin/emet-habitat} (EQA harness branch) and \texttt{eval\_habitat\_ovmm\_find\_phases.py}.
+  \item \textbf{Fill paper tables:} copy CSV aggregates into \texttt{paper/sections/05\_results.tex}; rebuild with \texttt{./paper/build.sh}.
 \end{enumerate}

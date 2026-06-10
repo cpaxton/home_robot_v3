@@ -28,6 +28,9 @@ Use **`uv run emet …`** (or `source .venv/bin/activate` then bare `emet`) from
 | Dynagraph benchmark smoke (unit) | `uv run emet test src/test/app/test_dynagraph_benchmark_smoke.py -v` |
 | Dynagraph staleness / disappearance | `uv run emet test src/test/memory/test_dynagraph_staleness_disappearance.py -v` |
 | Unified Dynagraph eval CLI | `uv run emet eval-dynagraph --episode /tmp/export` |
+| SQA3D benchmark (unit) | `uv run emet test src/test/benchmarks/sqa3d/ -v` |
+| SQA3D ScanNet embodied smoke | `uv run python scripts/run_sqa3d_scannet_smoke.py` |
+| SQA3D EM@1 scoring | `uv run emet eval-sqa3d -p preds.jsonl --split val` |
 | Graph fusion calibration (one scene) | `emet export-sim-gt` → `emet run dynagraph --calibration-export` → `emet tune-graph-fusion` (see [dynagraph.md](dynagraph.md#object-gt-export-and-graphobjectfusion-calibration)) |
 | GraphEQA human-answer formatter | `uv run emet test src/test/memory/test_graph_eqa_human_answer.py -v` |
 | Manual Dynagraph EQA + export (Robocasa) | See [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md#single-eqa-question-manual-per-robot) |
@@ -47,6 +50,7 @@ Environment: **`RUN_SIM_TESTS=0`** skips sim integration tests. Heavy VLLM downl
 | **MolmoSpaces** | [plans/2025-03-10_molmospaces_testing.md](plans/2025-03-10_molmospaces_testing.md), [molmospaces.md](molmospaces.md) | Wrapper venv, CLI smoke, optional integration |
 | **Multi-robot sim plumbing** | [plans/MULTI_ROBOT_TESTING.md](plans/MULTI_ROBOT_TESTING.md) | Registry, MJCF load, GenericZmqClient (partially superseded by unit tests) |
 | **CLI / install smoke** | [cli.md](cli.md#testing), [simulation.md](simulation.md#2-test-the-setup) | `emet test`, serve smoke |
+| **SQA3D + ScanNet EQA** | [sqa3d.md](sqa3d.md) | Situated QA loaders, EM@1 eval, Open3D mesh replay |
 | **Agent / LLM** | [AGENT_RUN.md](AGENT_RUN.md#testing), [llm_agent.md](llm_agent.md#testing-the-llm-agent) | Agent loop, component tests |
 | **Refactor logs (not test specs)** | [logs/README.md](logs/README.md) | Historical change notes |
 

@@ -53,6 +53,22 @@ def test_load_robocasa_yaml():
     assert "PickPlaceCounterToCabinet" in argv
 
 
+def test_load_innate_mars_default_table_yaml():
+    cfg = load_sim_launch_config_from_path("configs/sim/innate_mars.yaml")
+    assert isinstance(cfg, SimLaunchDefaultMujoco)
+    assert cfg.robot == "innate_mars"
+    argv = prepare_mujoco_server_argv(cfg)
+    assert "--robot" in argv and "innate_mars" in argv
+
+
+def test_load_innate_mars_robocasa_yaml():
+    cfg = load_sim_launch_config_from_path("configs/sim/innate_mars_robocasa.yaml")
+    assert isinstance(cfg, SimLaunchRobocasa)
+    assert cfg.robot == "innate_mars"
+    argv = prepare_mujoco_server_argv(cfg)
+    assert "--use-robocasa" in argv
+
+
 def test_decode_inline_molmospaces():
     raw = {"kind": "molmospaces", "scene": "ithor", "split": "val", "index": 2, "headless": True}
     cfg = decode_sim_launch_config(raw)

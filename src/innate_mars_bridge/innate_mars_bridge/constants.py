@@ -13,7 +13,15 @@
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 
-"""Topic and frame names for Innate Mars (maurice) robot."""
+"""Topic and frame names for Innate Mars (maurice) robot.
+
+Pinned against innate-os ``main`` (2026-06): ``maurice_cam``, ``maurice_arm``, ``maurice_nav``.
+Run ``uv run python scripts/audit_innate_os_topics.py`` on a live ROS graph to verify.
+"""
+
+# Upstream reference (https://github.com/innate-inc/innate-os)
+INNATE_OS_GIT_REF = "main"
+INNATE_OS_REPO = "https://github.com/innate-inc/innate-os"
 
 # Arm joint state (JointState: joint1..joint6)
 ARM_STATE_TOPIC = "/mars/arm/state"
@@ -40,3 +48,29 @@ HEAD_POSITION_TOPIC = "/mars/head/current_position"
 HEAD_LEFT_FRAME_ID = "camera_optical_frame"
 HEAD_RIGHT_FRAME_ID = "right_camera_optical_frame"
 EE_CAMERA_FRAME_ID = "arm_camera_optical_frame"
+
+# Nav2 (maurice_nav) — standard Nav2 action; goal topic fallback per innate-os / PAL docs
+NAVIGATE_TO_POSE_ACTION = "navigate_to_pose"
+GOAL_POSE_TOPIC = "/goal_pose"
+
+# Expected on a running Mars stack (audit script checks these)
+EXPECTED_TOPICS = (
+    ARM_STATE_TOPIC,
+    ODOM_TOPIC,
+    HEAD_LEFT_IMAGE_TOPIC,
+    HEAD_LEFT_CAMERA_INFO_TOPIC,
+    HEAD_RIGHT_IMAGE_TOPIC,
+    HEAD_RIGHT_CAMERA_INFO_TOPIC,
+    EE_IMAGE_TOPIC,
+)
+
+EXPECTED_TF_FRAMES = (
+    BASE_FOOTPRINT_FRAME,
+    ODOM_FRAME,
+    MAP_FRAME,
+    HEAD_LEFT_FRAME_ID,
+    HEAD_RIGHT_FRAME_ID,
+    EE_CAMERA_FRAME_ID,
+    "ee_link",
+    "base_link",
+)

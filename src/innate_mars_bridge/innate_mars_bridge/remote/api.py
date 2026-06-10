@@ -62,8 +62,22 @@ class InnateMarsClient:
         return self._ros.get_base_pose_matrix()
 
     def get_joint_state(self):
-        """(positions, velocities) for arm joints."""
+        """(positions, velocities) length-10 Emet joint vector (base + arm + gripper mimic)."""
         return self._ros.get_joint_state()
+
+    def move_base_to(
+        self,
+        xyt,
+        *,
+        relative: bool = False,
+        blocking: bool = True,
+        timeout_s: float = 120.0,
+    ) -> bool:
+        """Send Nav2 ``NavigateToPose`` goal (innate-os ``maurice_nav``)."""
+        return self._ros.nav.move_base_to(xyt, relative=relative, blocking=blocking, timeout_s=timeout_s)
+
+    def at_goal(self) -> bool:
+        return self._ros.at_goal()
 
     @property
     def ee_pose(self) -> np.ndarray | None:

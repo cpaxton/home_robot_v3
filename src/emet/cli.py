@@ -38,6 +38,7 @@ _EMET_RUN_APPS_WITH_ROBOT = frozenset(
         "scene-graph",
         "molmospaces-explore",
         "debug-da3-depth",
+        "debug-lingbot-depth",
     }
 )
 
@@ -1142,6 +1143,7 @@ def deploy(
             "create-and-print-memory",
             "molmospaces-explore",
             "debug-da3-depth",
+            "debug-lingbot-depth",
             "graph-eqa-habitat",
         ]
     ),
@@ -1281,6 +1283,8 @@ def run(
         sys.exit(_run_module("emet.app.create_and_print_memory", args))
     elif app == "debug-da3-depth":
         sys.exit(_run_module("emet.app.debug_da3_depth", args))
+    elif app == "debug-lingbot-depth":
+        sys.exit(_run_module("emet.app.debug_lingbot_depth", args))
     else:
         click.echo(f"Unknown app: {app}", err=True)
         sys.exit(1)
@@ -1900,6 +1904,11 @@ from emet.app.debug_da3_depth import main as _debug_da3_depth_app  # noqa: E402
 _debug_da3_depth_app.short_help = "Live DA3 depth + point cloud from ZMQ (Rerun)"
 main.add_command(_debug_da3_depth_app)
 
+from emet.app.debug_lingbot_depth import main as _debug_lingbot_depth_app  # noqa: E402
+
+_debug_lingbot_depth_app.short_help = "Live LingBot-Map depth + pose from ZMQ (Rerun)"
+main.add_command(_debug_lingbot_depth_app)
+
 from emet.app.export_sim_gt import main as _export_sim_gt_app  # noqa: E402
 
 _export_sim_gt_app.short_help = "Export Robocasa sim GT objects (3D bounds + head 2D boxes)"
@@ -1919,6 +1928,13 @@ from emet.app.eval_dynagraph import main as _eval_dynagraph_app  # noqa: E402
 
 _eval_dynagraph_app.short_help = "Unified Dynagraph episode eval (explore, graph, fusion, EQA)"
 main.add_command(_eval_dynagraph_app)
+
+from emet.app.eval_sqa3d import eval_sqa3d_main as _eval_sqa3d_app  # noqa: E402
+from emet.app.eval_sqa3d import sqa3d_group as _sqa3d_group  # noqa: E402
+
+_eval_sqa3d_app.short_help = "Score SQA3D QA predictions (EM@1)"
+main.add_command(_eval_sqa3d_app)
+main.add_command(_sqa3d_group)
 
 if __name__ == "__main__":
     main()

@@ -45,6 +45,17 @@ def _to_numpy(x: Any) -> Any:
     return np.asarray(x)
 
 
+def _split_voxel_localize_result(result: Any) -> tuple[Any, str]:
+    """Parse ``SparseVoxelMapDynamem.localize_text`` return (may be bare ``None`` or a tuple)."""
+    if result is None:
+        return None, ""
+    if isinstance(result, (list, tuple)):
+        target_point = result[0] if result else None
+        debug_text = str(result[1]) if len(result) > 1 and result[1] is not None else ""
+        return target_point, debug_text
+    return result, ""
+
+
 def frame_blobs_from_voxel_map(vm: Any) -> list[FrameBlob]:
     """Build ``FrameBlob`` list from ``voxel_map.observations`` + detection JSON cache rows."""
     from emet.memory.graph_eqa.graph_observation_pipeline import build_detections_json_rows
@@ -133,9 +144,7 @@ class DynaMemBackend(MemoryBackend):
 
     def check_memory_for_object(self, text: str) -> CheckMemoryResult:
         result = self._voxel_map.localize_text(text, debug=False, return_debug=True)
-        # localize_text returns (target_point, debug_text) or (target_point, debug_text, obs_id, point)
-        target_point = result[0] if isinstance(result, (list, tuple)) else result
-        debug_text = result[1] if len(result) > 1 else ""
+        target_point, debug_text = _split_voxel_localize_result(result)
         if target_point is None:
             return CheckMemoryResult(
                 confidence=0.0,
@@ -170,8 +179,7 @@ class DynaMemBackend(MemoryBackend):
 
     def localize_text(self, text: str) -> LocalizeResult:
         result = self._voxel_map.localize_text(text, debug=False, return_debug=True)
-        target_point = result[0] if isinstance(result, (list, tuple)) else result
-        debug_text = result[1] if len(result) > 1 else ""
+        target_point, debug_text = _split_voxel_localize_result(result)
         if target_point is None:
             return LocalizeResult(
                 point_xyz=None,

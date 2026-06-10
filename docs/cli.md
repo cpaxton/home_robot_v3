@@ -303,6 +303,74 @@ emet test src/test/mapping/test_red_cylinder_in_sim.py -k innate_mars
 
 ---
 
+### `emet sqa3d <subcommand>`
+
+Situated 3D QA on ScanNet replay (mesh or posed `.sens` RGB-D). Full guide: [sqa3d.md](sqa3d.md). GPU layout: [sqa3d_compute.md](sqa3d_compute.md).
+
+| Subcommand | Description |
+|------------|-------------|
+| `info` | Print `SQA3D_DATA_DIR` / `SCANNET_ROOT` paths and file status |
+| `verify` | Check annotations, meshes; optional `--run-embodied-smoke` |
+| `list-questions` | List questions (`--split`, `--limit`) |
+| `run-episode` | One embodied episode (Dynagraph or DynaMem) |
+| `run-batch` | Batch episodes to JSONL (`-o` required) |
+| `run-real-sweep` | Download assets (optional), real-VLM batch, score EM@1 |
+| `plot-results` | TP/FP/FN breakdown + paper figures from episode JSONL |
+
+**Shared options (embodied runs):**
+
+| Flag | Default | Notes |
+|------|---------|-------|
+| `--method` | `dynagraph` | `dynagraph` = DynaMem map + GraphEQA; `dynamem` = voxel EQA only |
+| `--profile` | `smoke` if `--mock-llm`, else `tuned` | `tuned` = 15 planning steps, real VLM |
+| `--replay-mode` | `auto` | `auto` = `.sens` when on disk near anchor, else mesh; `sens` = require `.sens`; `mesh` = Open3D only |
+| `--device` | `cuda` (real VLM) | `cpu` for fallback (slow) |
+| `--scannet-root` | `SCANNET_ROOT` | Override ScanNet cache |
+| `--data-dir` | `SQA3D_DATA_DIR` | Override SQA3D annotations |
+
+**`run-batch`:** `--question-start` / `--question-end` slice the split list (not `question_id`). `--skip-missing-scenes` (default on). `--resume` skips completed `question_id`s in the output JSONL. `--isolate-episodes` (default **off**) — one subprocess per episode to free GPU between runs.
+
+**`run-real-sweep`:** `--download` / `--no-download`, `--with-sens` (download posed RGB-D), `--output-dir` (default `/tmp/sqa3d_real_sweep`). `--isolate-episodes` default **on**. Writes `<method>_<split>_q<start>-<end>.jsonl` and `_eval.json`.
+
+**Examples:**
+```bash
+# Data + smoke
+uv run python scripts/download_sqa3d_data.py --fetch-annotations
+uv run python scripts/download_scannet_data.py --accept-tos --scene scene0380_00
+uv run emet sqa3d verify --run-embodied-smoke
+uv run emet sqa3d run-episode --split train --question-id 220602000000 --mock-llm
+
+# Posed ScanNet RGB (needs .sens on disk)
+uv run python scripts/download_scannet_data.py --accept-tos --scene scene0380_00 --with-sens
+uv run emet sqa3d run-episode --split val --question-id 220602000049 --replay-mode sens --profile tuned
+
+# Real-VLM sweep (isolated subprocesses; use dedicated GPU — see sqa3d_compute.md)
+uv run emet sqa3d run-real-sweep --split val --question-start 0 --question-end 30 \
+  --replay-mode sens --no-download --output-dir /tmp/sqa3d_sweep
+./scripts/run_sqa3d_gpu_sweep.sh --split val --question-start 0 --question-end 30 --replay-mode sens
+
+# Figures
+uv run emet sqa3d plot-results -p /tmp/sqa3d_sweep/dynagraph_val_q0-30.jsonl -o /tmp/sqa3d_figs
+```
+
+---
+
+### `emet eval-sqa3d`
+
+Score SQA3D predictions (JSONL, episode JSONL, or `eqa_results.json`) with EM@1.
+
+**Options:** `-p/--predictions` (required), `--split` (default `val`), `--data-dir`, `--questions-path`, `--annotations-path`, `-o/--output`, `--require-all`.
+
+Episode JSONL from `emet sqa3d run-batch` / `run-real-sweep` is auto-detected (no separate gold file needed for per-row scoring).
+
+**Examples:**
+```bash
+uv run emet eval-sqa3d -p /tmp/sqa3d_batch.jsonl --split val -o sqa3d_eval.json
+uv run emet eval-sqa3d -p preds.jsonl --questions-path fixtures/q.json --annotations-path fixtures/a.json
+```
+
+---
+
 ### `emet install <subcommand> [options]`
 
 Install submodules, simulation extras, or full setup.
@@ -459,6 +527,13 @@ uv run python src/test/app/run_dynagraph_multi_robot_e2e.py
 ```
 
 See [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md) for pass criteria and artefact paths.
+
+**SQA3D + ScanNet** — see [`emet sqa3d`](#emet-sqa3d-subcommand) above and [sqa3d.md](sqa3d.md):
+
+```bash
+uv run emet test src/test/benchmarks/sqa3d/ -v
+uv run python scripts/run_sqa3d_scannet_smoke.py
+```
 
 Run only CLI tests:
 

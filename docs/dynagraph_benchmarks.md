@@ -2,6 +2,8 @@
 
 Experiment suite aligned with the paper introduction: **explore**, **remember**, **update**, and **open-ended EQA** across default table, Robocasa, and MolmoSpaces.
 
+Paper operator guide (all tracks): [paper_benchmarks.md](paper_benchmarks.md).
+
 ## Quick commands
 
 | Goal | Command |
@@ -12,6 +14,7 @@ Experiment suite aligned with the paper introduction: **explore**, **remember**,
 | Unified episode eval | `uv run emet eval-dynagraph --episode /tmp/export -o dynagraph_eval.json` |
 | Question bank EQA | `uv run emet run dynagraph --export /tmp/ep --question-file src/emet/config/benchmarks/dynagraph_questions.yaml --question-env default_table` |
 | Fusion A/B | `./scripts/run_dynagraph_fusion_ab.sh innate_mars 0 20` |
+| Full matrix | [docs/experiments/innate_mars.md](experiments/innate_mars.md) |
 | MolmoSpaces benchmark | `uv run python scripts/run_dynagraph_molmo_benchmark.py` |
 | Staleness / disappearance (unit) | `uv run emet test src/test/memory/test_dynagraph_staleness_disappearance.py -v` |
 
@@ -67,8 +70,21 @@ Report: `node_count` ratio, `spatial_recall` delta, optional EQA accuracy from p
 3. MolmoSpaces sweep: `run_dynagraph_molmo_benchmark.py` with varying `--molmospaces-index`
 4. EQA: `--question-file` + `--export`; score with `emet eval-dynagraph --questions …`
 
+## SQA3D (situated ScanNet QA)
+
+Open-ended situated QA on ScanNet scenes — EM@1 scoring, not multiple choice.
+
+| Goal | Command |
+|------|---------|
+| Download annotations | `uv run python scripts/download_sqa3d_data.py --fetch-annotations` |
+| Download ScanNet mesh | `uv run python scripts/download_scannet_data.py --accept-tos --scene scene0380_00` |
+| Score predictions | `uv run emet eval-sqa3d -p preds.jsonl --split val` |
+| Paper figures | `uv run emet sqa3d plot-results -p preds.jsonl -o figs/` |
+| Docs | [sqa3d.md](sqa3d.md) |
+
 ## See also
 
+- [sqa3d.md](sqa3d.md) — SQA3D loaders and EM@1 eval
 - [TESTING.md](TESTING.md) — test index
 - [dynagraph.md](dynagraph.md) — CLI and fusion calibration
 - [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md) — floor parity harness
