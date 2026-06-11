@@ -23,7 +23,6 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from emet.eval.ovmm_find_phase import (
-    resolve_find_phase_nav_step_timeout,
     FindPhaseRunConfig,
     _query_variants,
     category_matches,
@@ -35,6 +34,7 @@ from emet.eval.ovmm_find_phase import (
     pick_find_object_gt_body,
     pred_xyz_to_json_list,
     query_find_phase_localization,
+    resolve_find_phase_nav_step_timeout,
     score_find_object,
     score_find_recep,
 )
@@ -365,7 +365,8 @@ def test_run_episode_find_phase_includes_timing_fields(
                             "emet.eval.ovmm_find_phase.get_memory_backend_for_agent",
                             return_value=MagicMock(),
                         ):
-                            result = run_episode_find_phase(episode, run_cfg)
+                            with patch("emet.utils.port_utils.kill_processes_on_port"):
+                                result = run_episode_find_phase(episode, run_cfg)
 
     for key in ("init_wall_s", "mapping_wall_s", "query_wall_s", "episode_wall_s"):
         assert key in result

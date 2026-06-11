@@ -28,6 +28,7 @@ import yaml
 from emet.utils.config import resolve_config_yaml_path
 
 MemoryBackendName = Literal["dynamem", "graph_eqa", "dynagraph", "ground_truth"]
+ManipMode = Literal["skip", "oracle", "sim", "attempt"]
 PlanarFrame = Literal["mujoco_xy", "habitat_xz"]
 LocalizeSource = Literal[
     "voxel",
@@ -72,6 +73,7 @@ class FindPhaseRunConfig:
     seed: int | None = None
     use_sensor_perception: bool = False
     prefer_voxel: bool = True
+    manip_mode: ManipMode = "skip"
     nav_step_timeout_s: float | None = None
 
 
@@ -956,7 +958,7 @@ def run_episode_find_phase(
                 "instance_gt_association_recall": instance_gt_association_recall(agent.graph_memory, placements),
             }
 
-        return {
+        metrics = {
             "episode_id": episode.id,
             "tier": episode.tier,
             "backend": run_cfg.backend,
@@ -970,6 +972,7 @@ def run_episode_find_phase(
             "perfect_depth": bool(run_cfg.perfect_depth),
             "use_sensor_perception": bool(run_cfg.use_sensor_perception),
             "prefer_voxel": bool(prefer_voxel),
+            "manip_mode": str(run_cfg.manip_mode),
             "init_wall_s": float(init_wall_s),
             "mapping_wall_s": float(mapping_wall_s),
             "query_wall_s": float(query_wall_s),
@@ -985,6 +988,19 @@ def run_episode_find_phase(
             **scaling,
             **gt_metrics,
         }
+        if run_cfg.manip_mode != "skip":
+            from emet.eval.ovmm_full import augment_find_metrics_with_manip
+
+            metrics = augment_find_metrics_with_manip(
+                agent,
+                robot,
+                episode,
+                run_cfg,
+                metrics,
+                placements=placements,
+                object_query=object_query,
+            )
+        return metrics
     finally:
         if agent is not None:
             try:
@@ -1002,3 +1018,7 @@ def run_episode_find_phase(
                 server.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 server.kill()
+        from emet.utils.port_utils import get_ports, kill_processes_on_port
+
+        for p in get_ports(port_offset):
+            kill_processes_on_port(p)

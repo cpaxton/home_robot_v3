@@ -1,20 +1,26 @@
 # OVMM find-phase benchmark paths (large outputs + caches live under ~, not the git tree).
-# Override any path with env: EMET_OVMM_OUTPUT_SIM, EMET_OVMM_OUTPUT_HABITAT,
-# HABITAT_EQA_DATA_DIR, HM3D_DATA_PATH (see docs/ovmm_find_phase_benchmark.md).
+# Override any path with env: EMET_OVMM_OUTPUT_SIM, EMET_OVMM_OUTPUT_FULL,
+# EMET_OVMM_OUTPUT_HABITAT, HABITAT_EQA_DATA_DIR, HM3D_DATA_PATH
+# (see docs/ovmm_find_phase_benchmark.md and docs/ovmm_full_benchmark.md).
 
 paths:
   output_dir_sim: ~/runs/emet/ovmm_find_phase
+  output_dir_full: ~/runs/emet/ovmm_full
   output_dir_habitat: ~/runs/emet/ovmm_habitat
   habitat_eqa_data: ~/.cache/habitat_eqa/data
   hm3d_data: ~/.cache/habitat_eqa/hm3d
 
 episodes:
   sim: configs/ovmm/find_phase_episodes.yaml
+  full: configs/ovmm/full_episodes.yaml
   habitat: configs/ovmm/habitat_find_phase_episodes.yaml
 
 # Smoke subset (fast CI / multi-agent sanity checks)
 smoke:
   sim_episode_id: default_table_s0
   sim_backend: ground_truth
+  full_episode_id: default_table_s0_distinct_recep
+  full_backend: ground_truth
+  full_manip_mode: attempt
   habitat_episode_id: hm3d_lamp_bed_00006
   habitat_backend: ground_truth

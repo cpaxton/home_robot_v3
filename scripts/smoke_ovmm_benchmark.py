@@ -14,12 +14,13 @@
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 
-"""Smoke OVMM find-phase benchmarks (unit tests + one sim + one Habitat episode)."""
+"""Smoke OVMM benchmarks (unit tests + find-phase sim + full OVMM oracle + Habitat)."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -33,7 +34,13 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--benchmark", default="configs/ovmm/benchmark.yaml")
     parser.add_argument("--skip-unit", action="store_true")
     parser.add_argument("--skip-sim", action="store_true")
+    parser.add_argument("--skip-full", action="store_true")
     parser.add_argument("--skip-habitat", action="store_true")
+    parser.add_argument(
+        "--habitat-required",
+        action="store_true",
+        help="Fail if .venv-habitat is missing (default: skip Habitat leg with a warning)",
+    )
     parser.add_argument("--cpu-only", action="store_true", default=True)
     return parser.parse_args()
 
@@ -45,6 +52,18 @@ def _run(cmd: list[str], *, timeout: float | None = None) -> int:
     except subprocess.TimeoutExpired:
         print("TIMEOUT", file=sys.stderr)
         return 124
+
+
+def _port_offset(salt: int) -> int:
+    """Spread ZMQ ports across agents; keep sim/full smokes on different offsets."""
+    return int((os.getpid() % 200) * 2 + salt)
+
+
+def _release_zmq_ports(offset: int) -> None:
+    from emet.utils.port_utils import get_ports, kill_processes_on_port
+
+    for p in get_ports(offset):
+        kill_processes_on_port(p)
 
 
 def main() -> int:
@@ -65,6 +84,7 @@ def main() -> int:
                     "emet",
                     "test",
                     "src/test/memory/test_ovmm_find_phase_metrics.py",
+                    "src/test/memory/test_ovmm_full_metrics.py",
                     "src/test/memory/test_habitat_ovmm_find_loader.py",
                     "-q",
                 ],
@@ -81,7 +101,7 @@ def main() -> int:
             backend=cfg.smoke_sim_backend,  # type: ignore[arg-type]
             cpu_only=args.cpu_only,
             not_rotate=True,
-            port_offset=int(__import__("os").getpid() % 400 + 220),
+            port_offset=_port_offset(200),
         )
         print(f"sim smoke: {ep.id} backend={cfg.smoke_sim_backend}", flush=True)
         try:
@@ -96,13 +116,52 @@ def main() -> int:
             print(f"sim smoke partial={metrics.get('find_partial_success')} -> {out_json}")
             if not ok:
                 rc = 1
+        _release_zmq_ports(_port_offset(200))
+
+    out_full = cfg.paths.output_dir_full / "smoke"
+    out_full.mkdir(parents=True, exist_ok=True)
+    if not args.skip_full:
+        full_episodes = load_find_phase_episodes(cfg.full_episodes_yaml)
+        full_ep = next(e for e in full_episodes if e.id == cfg.smoke_full_episode_id)
+        full_cfg = FindPhaseRunConfig(
+            backend=cfg.smoke_full_backend,  # type: ignore[arg-type]
+            cpu_only=args.cpu_only,
+            not_rotate=True,
+            port_offset=_port_offset(400),
+            manip_mode=cfg.smoke_full_manip_mode,  # type: ignore[arg-type]
+        )
+        print(
+            f"full smoke: {full_ep.id} backend={cfg.smoke_full_backend} manip={cfg.smoke_full_manip_mode}",
+            flush=True,
+        )
+        try:
+            full_metrics = run_episode_find_phase(full_ep, full_cfg, repo_root=REPO)
+        except Exception as exc:
+            print(f"full smoke FAIL: {exc}", file=sys.stderr)
+            rc = 1
+        else:
+            full_json = out_full / f"{full_ep.id}_{cfg.smoke_full_backend}.json"
+            full_json.write_text(json.dumps(full_metrics, indent=2), encoding="utf-8")
+            ok_full = bool(full_metrics.get("ovmm_full_success"))
+            manip_label = full_metrics.get("manip_mode", cfg.smoke_full_manip_mode)
+            print(
+                f"full smoke ovmm_full_success={full_metrics.get('ovmm_full_success')} "
+                f"manip_mode={manip_label} -> {full_json}"
+            )
+            if not ok_full:
+                rc = 1
+        _release_zmq_ports(_port_offset(400))
 
     out_hab = cfg.paths.output_dir_habitat / "smoke"
     out_hab.mkdir(parents=True, exist_ok=True)
     if not args.skip_habitat:
         if not HABITAT_BIN.is_file():
-            print("habitat smoke SKIP: run ./scripts/install_habitat.sh", file=sys.stderr)
-            rc = max(rc, 1)
+            msg = "habitat smoke SKIP: run ./scripts/install_habitat.sh"
+            if args.habitat_required:
+                print(f"{msg} (--habitat-required)", file=sys.stderr)
+                rc = max(rc, 1)
+            else:
+                print(f"{msg} (use --habitat-required to fail)", file=sys.stderr)
         else:
             cmd = [
                 str(HABITAT_BIN),
@@ -122,7 +181,10 @@ def main() -> int:
             hab_rc = _run(cmd, timeout=300.0)
             rc = max(rc, hab_rc)
 
-    print(f"smoke done rc={rc} (outputs under {cfg.paths.output_dir_sim} and {cfg.paths.output_dir_habitat})")
+    print(
+        f"smoke done rc={rc} (outputs under {cfg.paths.output_dir_sim}, "
+        f"{cfg.paths.output_dir_full}, and {cfg.paths.output_dir_habitat})"
+    )
     return rc
 
 
