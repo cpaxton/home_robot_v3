@@ -23,6 +23,8 @@ from emet.eval.ovmm_benchmark_config import load_ovmm_benchmark_config
 def test_load_ovmm_benchmark_config_expands_home():
     cfg = load_ovmm_benchmark_config()
     assert str(cfg.paths.output_dir_sim).startswith(str(Path.home()))
+    assert str(cfg.paths.output_dir_full).startswith(str(Path.home()))
     assert str(cfg.paths.output_dir_habitat).startswith(str(Path.home()))
     assert cfg.paths.habitat_eqa_data.name == "data"
     assert cfg.smoke_sim_episode_id == "default_table_s0"
+    assert cfg.smoke_full_manip_mode == "attempt"

@@ -1021,21 +1021,33 @@ class DynamemController(BaseController):
             self.robot.head_to(pan, tilt, blocking=True)
             self.update()
 
+    def _find_phase_nav_timeout(self, default: float = 10.0) -> float:
+        raw = self.parameters.get("find_phase_nav_step_timeout_s")
+        if raw is None:
+            return default
+        return float(raw)
+
     def rotate_in_place(self):
         logger.info("Rotate in place: scanning environment")
+        nav_timeout = self._find_phase_nav_timeout()
         if self.save_rerun:
             if not os.path.exists(self.log):
                 os.makedirs(self.log)
             rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")
         self.robot.move_to_nav_posture()
-        self.robot.look_front(blocking=True)
+        self.robot.look_front(blocking=True, timeout=nav_timeout)
         time.sleep(DYNAMEM_HEAD_SETTLE_S)
         wait_obs = getattr(self.robot, "wait_for_obs", None)
         if callable(wait_obs):
-            wait_obs(timeout=10.0)
+            wait_obs(timeout=nav_timeout)
         logger.info("rotate_in_place: 8× relative +45° yaw (no XY translation)")
         for _step_i in range(8):
-            self.robot.move_base_to([0.0, 0.0, np.pi / 4.0], relative=True, blocking=True)
+            self.robot.move_base_to(
+                [0.0, 0.0, np.pi / 4.0],
+                relative=True,
+                blocking=True,
+                timeout=nav_timeout,
+            )
             if not self._realtime_updates:
                 self.update()
         self.rerun_iter += 1
@@ -1100,9 +1112,10 @@ class DynamemController(BaseController):
 
         if len(res) > 0:
             logger.info("Navigation plan OK; executing trajectory")
+            nav_timeout = self._find_phase_nav_timeout()
             wait_obs = getattr(self.robot, "wait_for_obs", None)
             if wait_obs is not None:
-                wait_obs(timeout=10.0)
+                wait_obs(timeout=nav_timeout)
             if self._navigation_origin_xyt() is None:
                 logger.warning(
                     "navigation_origin_xyt missing from emet_session; sim nav may use wrong frame "

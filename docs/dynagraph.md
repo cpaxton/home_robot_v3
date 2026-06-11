@@ -28,7 +28,7 @@ Options mirror `emet run graph-eqa` (robot, Discord, Rerun export, `--no-instanc
 - **`--ground-truth`**: **sim only** — build graph nodes from `emet_session["sim_object_placements"]` instead of VLM / YoloE perception. Pair with **`--export`** for a **full episode** export (rotate, voxel frames, graph, GT sidecars). See [Ground-truth graph mode](#ground-truth-graph-mode).
 - **`--compare-to-gt`**: **sim only** — on the **full** `--export` path (sensor-built graph after rotate), print alignment vs `sim_object_placements` in session.
 
-If unset on the command line, `run_dynagraph` applies defaults (`dynagraph_merge_xy_m=0.45`, `dynagraph_staleness_horizon=256`) only when those keys are missing from the loaded parameters dict, so you can still set them in the resolved dynav YAML (see **`--dynav-config`**).
+If unset on the command line, `run_dynagraph` applies defaults (`dynagraph_merge_xy_m=0.45`, `dynagraph_staleness_horizon=256`) only when those keys are missing from the loaded parameters dict (also the defaults in `dynav_config.yaml` and the `interactive` profile in `configs/benchmarks/dynagraph.yaml`). Paper benchmarks use other profiles from that file via `emet.eval.benchmark_dynagraph` — see [paper_benchmarks.md](paper_benchmarks.md).
 
 ### **`--dynav-config`** (per-robot voxel / depth)
 

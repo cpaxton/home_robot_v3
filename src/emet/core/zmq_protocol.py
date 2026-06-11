@@ -2,6 +2,15 @@
 # All rights reserved.
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source code tree.
 #
 # Some code may be adapted from other open-source works with their respective licenses. Original
@@ -29,9 +38,13 @@ CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION = 1
 
 # Optional sim introspection: client sends ``{EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY: {...}}``.
 EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY = "mujoco_ground_truth_dump"
+# Sim OVMM full task: teleport a freejoint object body (pick/place proxy in MuJoCo).
+EMET_ACTION_SIM_SET_BODY_POSE_KEY = "sim_set_body_pose"
 
 # ZMQ recv actions that must bypass duplicate ``step`` filtering (see ``BaseZmqServer.spin_recv``).
-EMET_ZMQ_META_ACTION_KEYS: frozenset[str] = frozenset({EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY})
+EMET_ZMQ_META_ACTION_KEYS: frozenset[str] = frozenset(
+    {EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY, EMET_ACTION_SIM_SET_BODY_POSE_KEY}
+)
 
 
 def zmq_meta_action_should_bypass_duplicate_step(action: dict[str, Any]) -> bool:
@@ -56,6 +69,24 @@ def build_mujoco_ground_truth_dump_action(
         "json": bool(as_json),
     }
     return {"step": int(step), EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY: payload}
+
+
+def build_sim_set_body_pose_action(
+    step: int,
+    body: str,
+    pos: list[float] | tuple[float, float, float],
+    *,
+    quat: list[float] | tuple[float, float, float, float] | None = None,
+) -> dict[str, Any]:
+    """Build recv action to teleport a sim freejoint body (OVMM pick/place proxy)."""
+    payload: dict[str, Any] = {
+        "body": str(body),
+        "pos": [float(x) for x in pos[:3]],
+    }
+    if quat is not None:
+        payload["quat"] = [float(x) for x in quat[:4]]
+    return {"step": int(step), EMET_ACTION_SIM_SET_BODY_POSE_KEY: payload}
+
 
 # Normalized ids that count as Hello Stretch for StretchZmqClient.
 _STRETCH_FAMILY = frozenset({"stretch", "hello_stretch", "hellostretch"})

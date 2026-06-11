@@ -34,6 +34,7 @@ from emet.eval.ovmm_find_phase import (
     pick_find_object_gt_body,
     pred_xyz_to_json_list,
     query_find_phase_localization,
+    resolve_find_phase_nav_step_timeout,
     score_find_object,
     score_find_recep,
 )
@@ -257,6 +258,14 @@ def test_find_phase_run_config_fair_defaults():
     assert cfg.prefer_voxel is True
 
 
+def test_resolve_find_phase_nav_step_timeout():
+    assert resolve_find_phase_nav_step_timeout(cpu_only=False, sim_kind="") == 15.0
+    assert resolve_find_phase_nav_step_timeout(cpu_only=True, sim_kind="") == 45.0
+    assert resolve_find_phase_nav_step_timeout(cpu_only=False, sim_kind="robocasa") == 30.0
+    assert resolve_find_phase_nav_step_timeout(cpu_only=False, sim_kind="molmospaces") == 30.0
+    assert resolve_find_phase_nav_step_timeout(cpu_only=False, sim_kind="", override=99.0) == 99.0
+
+
 @patch("emet.controller.controller_dynagraph.DynagraphController")
 def test_create_find_phase_agent_dynagraph_disables_sensor_perception_by_default(mock_cls):
     mock_agent = MagicMock()
@@ -356,7 +365,8 @@ def test_run_episode_find_phase_includes_timing_fields(
                             "emet.eval.ovmm_find_phase.get_memory_backend_for_agent",
                             return_value=MagicMock(),
                         ):
-                            result = run_episode_find_phase(episode, run_cfg)
+                            with patch("emet.utils.port_utils.kill_processes_on_port"):
+                                result = run_episode_find_phase(episode, run_cfg)
 
     for key in ("init_wall_s", "mapping_wall_s", "query_wall_s", "episode_wall_s"):
         assert key in result

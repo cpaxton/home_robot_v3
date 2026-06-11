@@ -420,6 +420,7 @@ class InstanceMemoryController(BaseController):
 
         if full_sweep:
             steps += 1
+        nav_timeout = float(self.parameters.get("find_phase_nav_step_timeout_s", 10.0))
         while i < steps:
             t0 = timeit.default_timer()
             self.robot.move_base_to(
@@ -427,6 +428,7 @@ class InstanceMemoryController(BaseController):
                 relative=False,
                 blocking=True,
                 verbose=verbose,
+                timeout=nav_timeout,
             )
             t1 = timeit.default_timer()
 

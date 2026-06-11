@@ -1,6 +1,6 @@
 # OVMM find-phase benchmark (FindObj / FindRec)
 
-Memory ablation benchmark inspired by [OVMM](https://ovmm.github.io/) find phases. We score **FindObj** and **FindRec** localization against MuJoCo `sim_object_placements` ground truth—not full pick/place manipulation success.
+Memory ablation benchmark inspired by [OVMM](https://ovmm.github.io/) find phases. We score **FindObj** and **FindRec** localization against MuJoCo `sim_object_placements` ground truth—not full pick/place manipulation success. For the four-phase harness (Pick/Place), see [ovmm_full_benchmark.md](ovmm_full_benchmark.md).
 
 ## Scene tier ladder
 

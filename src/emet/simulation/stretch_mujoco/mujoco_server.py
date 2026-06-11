@@ -41,6 +41,7 @@ from emet.simulation.molmospaces_mobile_autoplace import (
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
+from emet.simulation.sim_manipulation import set_free_body_pose
 from emet.simulation.stretch_mujoco.datamodels.status_command import CommandBaseVelocity, CommandMove, StatusCommand
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_joints import StatusStretchJoints
@@ -615,6 +616,29 @@ class MujocoServer:
             else:
                 logger.warning(
                     f"teleport_base failed (no free joint on base_link?); goal=({tb.x:.3f}, {tb.y:.3f}, {tb.theta:.3f})"
+                )
+
+        if command_status.teleport_body is not None and command_status.teleport_body.trigger:
+            tb = command_status.teleport_body
+            command_status.teleport_body.trigger = False
+            quat = None
+            if tb.use_quat:
+                quat = [tb.quat_w, tb.quat_x, tb.quat_y, tb.quat_z]
+            ok = set_free_body_pose(
+                self.mjmodel,
+                self.mjdata,
+                tb.body,
+                [tb.pos_x, tb.pos_y, tb.pos_z],
+                quat,
+            )
+            command_status.teleport_body.ok = ok
+            if not ok:
+                logger.warning(
+                    "teleport_body failed for body %r goal=(%.3f, %.3f, %.3f)",
+                    tb.body,
+                    tb.pos_x,
+                    tb.pos_y,
+                    tb.pos_z,
                 )
 
         # keyframe
