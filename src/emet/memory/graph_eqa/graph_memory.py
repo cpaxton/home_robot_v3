@@ -29,6 +29,14 @@ from PIL import Image
 
 from emet.core.parameters import Parameters
 from emet.memory.graph_eqa.human_answer import format_human_eqa_answer
+from emet.memory.graph_eqa.mcq_debias import (
+    LETTERS,
+    extract_single_letter,
+    format_rotated_question,
+    letter_to_original_index,
+    match_freeform_to_choice,
+    tally_choice_votes,
+)
 
 # Min SigLIP cosine similarity for an open-vocab text query to count as "present" in the
 # observed point cloud. Matches DynaMem's verify_point default for SigLIP grounding.
@@ -242,6 +250,9 @@ class GraphEQAMemory:
         #    the voxel map's SigLIP features, decoupling grounding from brittle caption labels
         #    (e.g. a "woven basket" captioned as "decorative plant").
         self.memory_summary_enabled: bool = False
+        #  * mcq_debias_enabled: choice-rotation vote at episode end (see mcq_debias.py).
+        self.mcq_debias_enabled: bool = False
+        self.last_mcq_debias: dict[str, Any] = {}
         self._text_grounder: Callable[[str], tuple[float, np.ndarray] | None] | None = None
         self._obs_id_grounder: Callable[[str], int | None] | None = None
         self._enrich_object_hints: list[str] = []
@@ -519,7 +530,7 @@ class GraphEQAMemory:
         if isinstance(rgb, Image.Image):
             rgb = np.array(rgb)
         label = str(getattr(candidate, "label", "object"))
-        xyz_a = np.asarray(getattr(candidate, "xyz"), dtype=float).reshape(-1)[:3]
+        xyz_a = np.asarray(candidate.xyz, dtype=float).reshape(-1)[:3]
         bbox_xyxy = getattr(candidate, "bbox_xyxy", None)
         bounds_3d = getattr(candidate, "bounds_3d", None)
         embedding = getattr(candidate, "embedding", None)
@@ -544,7 +555,6 @@ class GraphEQAMemory:
                 if existing.is_viewpoint:
                     break
                 sc = int(existing.support_count) + 1
-                alpha = 0.35
                 new_xyz = (existing.xyz * (sc - 1) + xyz_a) / sc
                 merged_labels = sorted(
                     {*(str(x).strip() for x in existing.labels if str(x).strip()), label}
@@ -1351,6 +1361,79 @@ class GraphEQAMemory:
             return m.group(1)
         m = re.search(r"([A-D])", text)
         return m.group(1) if m else ""
+
+    def vote_mcq_letter(self, question: str, choices: list[str]) -> str:
+        """Debiased final MCQ letter (see mcq_debias.py).
+
+        Two stages, both letter-token-free at the selection step:
+          1. Free-form ask ("answer in a few words", no choices shown) matched to the
+             closest choice by token overlap — immune to MCQ position bias.
+          2. Fallback: choice-rotation voting — re-ask with cyclically rotated choice
+             orders, map each reply back to the original choice index, majority-vote.
+        Returns the winning original letter, or ``""`` when neither stage finds a
+        clear signal (caller keeps its main answer). Details in ``self.last_mcq_debias``.
+        """
+        self.last_mcq_debias = {}
+        if self.eqa_client is None or len(choices) < 2:
+            return ""
+        n = min(4, len(choices))
+        images = [
+            Image.fromarray(o.rgb.astype(np.uint8), mode="RGB")
+            for o in self._observations
+            if o.obs_id in set(self.last_eqa_obs_ids)
+        ]
+
+        freeform_directive = (
+            "Look at the images and answer the question in a few words. "
+            "Do not use option letters. Do not caption images. Do not explain.\n"
+            f"Question: {question}"
+        )
+        try:
+            freeform = (self.eqa_client([freeform_directive, *images]) or "").strip()
+        except Exception:
+            freeform = ""
+        ff_idx = match_freeform_to_choice(freeform, choices[:n])
+        if ff_idx is not None:
+            letter = LETTERS[ff_idx]
+            self.last_mcq_debias = {
+                "letter": letter,
+                "freeform": freeform[:300],
+                "freeform_match": letter,
+                "votes": [],
+                "prior": None,
+                "replies": [],
+            }
+            return letter
+
+        prior_index = letter_to_original_index(
+            extract_single_letter(self.last_eqa_parsed[1], n), rotation=0, n_choices=n
+        )
+        votes: list[int | None] = []
+        replies: list[str] = []
+        for r in range(n):
+            formatted = format_rotated_question(question, choices[:n], r)
+            directive = (
+                "Answer the multiple-choice question with ONLY a single letter "
+                f"(one of {', '.join(LETTERS[:n])}). Do not caption images. Do not "
+                f"explain. Output just the letter.\nQuestion: {formatted}"
+            )
+            try:
+                reply = self.eqa_client([directive, *images])
+            except Exception:
+                reply = ""
+            replies.append((reply or "").strip()[:200])
+            votes.append(letter_to_original_index(extract_single_letter(reply, n), r, n))
+        win = tally_choice_votes(votes, choices[:n], prior_index=prior_index)
+        letter = LETTERS[win] if win is not None else ""
+        self.last_mcq_debias = {
+            "letter": letter,
+            "freeform": freeform[:300],
+            "freeform_match": None,
+            "votes": [None if v is None else LETTERS[v] for v in votes],
+            "prior": None if prior_index is None else LETTERS[prior_index],
+            "replies": replies,
+        }
+        return letter
 
     def _target_point_from_image_id(self, image_id: int) -> np.ndarray | None:
         """Return (x, y, 1) for the observation's position when mLLM suggests navigating to that image."""

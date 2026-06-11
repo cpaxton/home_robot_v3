@@ -53,6 +53,9 @@ class DynagraphController(GraphEQAController):
         self._eqa_explore_when_uncovered = True
         if self.graph_memory is not None:
             self.graph_memory.memory_summary_enabled = True
+            # Counteract the small VLM's MCQ position bias (letter A under-picked
+            # ~5x) with a choice-rotation vote at episode end (mcq_debias.py).
+            self.graph_memory.mcq_debias_enabled = True
             self.graph_memory.set_text_grounder(self._siglip_text_match)
             self.graph_memory.set_obs_id_grounder(self._siglip_obs_id_for_text)
         if ground_truth_mode and self.graph_memory is not None:

@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, cast
 
@@ -24,7 +25,6 @@ from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import Parameters, get_parameters
 from emet.habitat.config import default_hm3d_scene_dir
 from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
-from emet.habitat.hmeqa_enrich_labels import enrich_labels_for_question
 from emet.habitat.episode_debug import (
     enrich_episode_metrics,
     run_tag_from_output_jsonl,
@@ -32,6 +32,7 @@ from emet.habitat.episode_debug import (
     save_error_episode_bundle,
     write_run_manifest,
 )
+from emet.habitat.hmeqa_enrich_labels import enrich_labels_for_question
 from emet.habitat.metrics import (
     EpisodeMetrics,
     append_episode_jsonl,
@@ -294,6 +295,19 @@ def run_hmeqa_episode(
         if not predicted:
             tail = discord_text.split("---")[-1].strip() if "---" in discord_text else discord_text
             predicted = extract_mcq_letter(tail, q.choices)
+        predebias_letter = ""
+        debias_votes = ""
+        if (
+            agent.graph_memory is not None
+            and getattr(agent.graph_memory, "mcq_debias_enabled", False)
+            and q.choices
+        ):
+            vote_letter = agent.graph_memory.vote_mcq_letter(q.question, q.choices)
+            debias_votes = json.dumps(getattr(agent.graph_memory, "last_mcq_debias", {}))
+            if vote_letter:
+                predebias_letter = predicted
+                predicted = vote_letter
+                parsed_letter = vote_letter
         correct = grade_mcq_answer(predicted, q.answer_letter, choices=q.choices) if predicted else False
 
         eqa_cfg = dict(parameters.get("eqa", {}) or {})
@@ -314,6 +328,10 @@ def run_hmeqa_episode(
             model_confident=model_confident,
             raw_eqa_output=raw_eqa[:8000],
         )
+        # 4000 comfortably exceeds the bounded payload (4 x 200-char replies + 300-char
+        # freeform + JSON escaping) so the stored JSON is never truncated mid-string.
+        metrics.predebias_letter = predebias_letter
+        metrics.debias_votes = debias_votes[:4000]
         enrich_episode_metrics(
             metrics,
             agent=agent,
