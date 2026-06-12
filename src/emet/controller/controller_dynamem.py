@@ -62,7 +62,6 @@ from emet.perception.detection.yoloe import YoloEPerception
 
 # from emet.perception.encoders.mobile_clip_encoder import MaskMobileClipEncoder
 from emet.perception.encoders.clip_encoder import MaskClipEncoder
-from emet.perception.encoders.siglip_encoder import MaskSiglipEncoder
 from emet.perception.wrapper import OvmmPerception
 from emet.utils.geometry import nav_xyt_to_world_xyt
 from emet.utils.logger import Logger
@@ -543,10 +542,10 @@ class DynamemController(BaseController):
         """
         if getattr(self.rerun_visualizer, "enabled", True) is False:
             return
-        from emet.visualization.rerun import spatial3d_view_robot
+        from emet.visualization.rerun import spatial3d_view_world
 
         main = rrb.Horizontal(
-            spatial3d_view_robot(),
+            spatial3d_view_world(),
             rrb.Vertical(
                 rrb.TextDocumentView(name="text", origin="robot_monologue"),
                 rrb.Spatial2DView(name="relevant image", origin="/observation_similar_to_text"),
@@ -833,9 +832,7 @@ class DynamemController(BaseController):
 
         has_hm3d_labeler = getattr(self.robot, "hm3d_semantic_labeler", None) is not None
         if self.graph_memory is not None and (
-            self.sensor_builder is not None
-            or self._graph_eqa_use_instance_graph
-            or has_hm3d_labeler
+            self.sensor_builder is not None or self._graph_eqa_use_instance_graph or has_hm3d_labeler
         ):
             if getattr(self, "_skip_graph_perception_updates", False):
                 from emet.memory.graph_eqa.dynamem_graph_hooks import (

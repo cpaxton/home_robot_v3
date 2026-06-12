@@ -96,13 +96,13 @@ def test_spatial3d_view_origins():
         spatial3d_view_world,
     )
 
-    robot_view = spatial3d_view_robot()
-    assert robot_view.origin == RERUN_SPATIAL3D_ORIGIN_ROBOT
-    assert robot_view.contents == RERUN_SPATIAL3D_CONTENTS_WORLD
-
     world_view = spatial3d_view_world()
     assert world_view.origin == RERUN_SPATIAL3D_ORIGIN_WORLD
     assert world_view.contents == RERUN_SPATIAL3D_CONTENTS_WORLD
+
+    robot_view = spatial3d_view_robot()
+    assert robot_view.origin == RERUN_SPATIAL3D_ORIGIN_ROBOT
+    assert robot_view.contents == RERUN_SPATIAL3D_CONTENTS_WORLD
 
 
 def test_build_kwargs_live_stride_defaults():

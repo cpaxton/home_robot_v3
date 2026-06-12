@@ -23,7 +23,7 @@
   - Run **`uv run python -m emet.app.<module> --help`** for the specific app (e.g. `run_dynagraph`, `run_dynamem`, `run_agent`) or **`uv run emet run <subcommand> --help`** when the top-level group exposes it.
   - If a flag might be missing from the wrapper help, check the app module’s Click options in `src/emet/app/`.
   - Never tell the user to pass a flag until `--help` lists it (or you just added it in the same change).
-- **Rerun world frame**: Log map/voxels/graph under `world/…` in navigation world coordinates. Default live `Spatial3DView` uses **`origin="world/robot"`** with **`contents="world/**"`** so the camera stays on the base (map layers co-rotate on in-place turns). Use `spatial3d_view_world()` (`origin="world"`) for a fixed world camera. See `docs/rerun.md` and `spatial3d_view_robot()` in `src/emet/visualization/rerun.py`.
+- **Rerun world frame**: Log map/voxels/graph under `world/…` in navigation world coordinates. Live `Spatial3DView` blueprint must use **`origin="world"`** (not `world/robot`) or the map appears to rotate with the base. See `docs/rerun.md` and `spatial3d_view_world()` in `src/emet/visualization/rerun.py`.
 - **Rerun flags differ by subcommand** (common mistake: `--rerun` on dynagraph/dynamem):
   - **`emet run agent`**: Rerun **off** by default → pass **`--rerun`** to enable.
   - **`emet run dynamem`**, **`emet run dynagraph`**, **`emet run scene-graph`**: Rerun **on** by default → omit flags, or **`--no-rerun`** to disable. Do **not** use **`--rerun`** unless `--help` shows it (compatibility alias may exist).

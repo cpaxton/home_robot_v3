@@ -8,7 +8,7 @@ Use it when you want GraphEQA-style prompts and task images, but also want a sim
 
 **Rerun (live Dynagraph):** Enabled **by default** (unlike `emet run agent`, which needs **`--rerun`**). Use **`--no-rerun`** to disable. Optional: **`--headless`**, **`--rerun-native`**, **`--rerun-bind`**, **`--rerun-show-panels`**. Verify flags: `uv run python -m emet.app.run_dynagraph --help`.
 
-The main **3D View** is centered on **`world/robot`** with `contents=world/**` (see [rerun.md](rerun.md)) so the camera follows the base; map layers remain visible and **co-rotate** on in-place turns. For a fixed world camera, use `spatial3d_view_world()` in custom blueprints. **Not streamed live:** full graph tree text (`print_memory` / old “Dynagraph graph” panel — use `--export` or stdout). **Graph edge lines** and **per-node crop images/mosaic** are also off by default (`rerun.dynagraph` in dynav YAML). Tune load via `rerun.voxel_map_stride`, `rerun.mjcf_mesh_stride`, etc.
+The main **3D View** uses a **fixed world origin** (`origin=world`; see [rerun.md](rerun.md)) so the voxel map (`world/point_cloud`, `world/obstacles`, `world/explored`), boxes, and dynagraph nodes do not spin when the robot turns. **Not streamed live:** full graph tree text (`print_memory` / old “Dynagraph graph” panel — use `--export` or stdout). **Graph edge lines** and **per-node crop images/mosaic** are also off by default (`rerun.dynagraph` in dynav YAML). Tune load via `rerun.voxel_map_stride`, `rerun.mjcf_mesh_stride`, etc.
 
 ## References
 
@@ -149,7 +149,7 @@ On **`--export DIR`**, the exporter writes:
 | `DIR/dynagraph/seen_from.json` | Viewpoint → object links with world XYZ |
 | `DIR/dynagraph/gallery.md` | Node table with links to crop files |
 
-The default 3D view is anchored at ``world/robot`` but includes all ``world/**`` layers (voxel point cloud, 2D obstacle/explored maps, object boxes, dynagraph nodes). Only **crop images**, **edge line strips**, and the **crop mosaic** are off by default (viewer stability).
+The default 3D view uses ``origin=world`` with ``contents=world/**`` (see [rerun.md](rerun.md)) so map layers stay fixed while ``world/robot`` moves. Do **not** default to ``origin=world/robot`` or the map co-rotates on in-place turns. Only **crop images**, **edge line strips**, and the **crop mosaic** are off by default (viewer stability).
 
 Opt back into those heavy channels in agent/dynav YAML:
 

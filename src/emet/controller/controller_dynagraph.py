@@ -116,7 +116,7 @@ class DynagraphController(GraphEQAController):
     def setup_custom_blueprint(self) -> None:
         if getattr(self.rerun_visualizer, "enabled", True) is False:
             return
-        from emet.visualization.rerun import spatial3d_view_robot
+        from emet.visualization.rerun import spatial3d_view_world
 
         gt_column = None
         if self.visualize_ground_truth:
@@ -134,7 +134,7 @@ class DynagraphController(GraphEQAController):
         if gt_column is not None:
             right_columns.append(gt_column)
         main = rrb.Horizontal(
-            spatial3d_view_robot(),
+            spatial3d_view_world(),
             rrb.Vertical(
                 rrb.TextDocumentView(name="text", origin="robot_monologue"),
                 rrb.Spatial2DView(name="relevant image", origin="/observation_similar_to_text"),
