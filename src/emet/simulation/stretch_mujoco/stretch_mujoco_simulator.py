@@ -36,6 +36,7 @@ from emet.simulation.stretch_mujoco.datamodels.status_command import (
     CommandKeyframe,
     CommandMove,
     CommandTeleportBase,
+    CommandTeleportBody,
     StatusCommand,
 )
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
@@ -516,6 +517,55 @@ class StretchMujocoSimulator:
                 is_alive=self.is_running,
             )
         )
+
+    @require_connection
+    def teleport_body_pose(
+        self,
+        body: str,
+        pos: np.ndarray | list[float],
+        quat: np.ndarray | list[float] | None = None,
+        *,
+        wait: bool = True,
+        timeout: float = 2.0,
+    ) -> bool:
+        """Snap a freejoint body to world XYZ in the MuJoCo subprocess."""
+        p = np.asarray(pos, dtype=np.float64).reshape(3)
+        use_quat = quat is not None
+        if use_quat:
+            q = np.asarray(quat, dtype=np.float64).reshape(4)
+        else:
+            q = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
+        with self._command_lock:
+            command = self.data_proxies.get_command()
+            command.set_teleport_body(
+                CommandTeleportBody(
+                    body=str(body),
+                    pos_x=float(p[0]),
+                    pos_y=float(p[1]),
+                    pos_z=float(p[2]),
+                    use_quat=bool(use_quat),
+                    quat_w=float(q[0]),
+                    quat_x=float(q[1]),
+                    quat_y=float(q[2]),
+                    quat_z=float(q[3]),
+                    trigger=True,
+                    ok=False,
+                )
+            )
+            self.data_proxies.set_command(command)
+        if not wait:
+            return True
+
+        def _consumed() -> bool:
+            return not self.data_proxies.get_command().teleport_body.trigger
+
+        if not block_until_check_succeeds(
+            wait_timeout=timeout,
+            check=_consumed,
+            is_alive=self.is_running,
+        ):
+            return False
+        return bool(self.data_proxies.get_command().teleport_body.ok)
 
     @require_connection
     def set_base_velocity(self, v_linear: float, omega: float) -> None:

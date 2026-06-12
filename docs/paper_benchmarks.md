@@ -2,7 +2,7 @@
 
 Operator guide for benchmarks referenced in `paper/sections/04_experiments.tex` and `paper/sections/05_results.tex`.
 
-**LaTeX:** `./paper/build.sh` from repo root (uses local `latexmk` or Docker `texlive/texlive:latest`).  
+**LaTeX:** `./paper/build.sh` from repo root (uses local `latexmk` or Docker `texlive/texlive:latest`).
 **Results go in:** `paper/sections/05_results.tex` (tables/figures) — not committed automatically from sweeps.
 
 ## Benchmark map
@@ -10,6 +10,7 @@ Operator guide for benchmarks referenced in `paper/sections/04_experiments.tex` 
 | Track | Task | Primary metric | Config | Batch command | Aggregate → paper |
 |-------|------|----------------|--------|---------------|-------------------|
 | **OVMM find-phase (sim)** | Localize object + receptacle | Find partial success @ $r$ | `configs/ovmm/benchmark.yaml` | `scripts/eval_ovmm_find_phases.py` | `aggregate_<backends>.csv` in output dir |
+| **OVMM full (sim)** | Find + pick + place | `ovmm_full_success` / four phase rates | `configs/ovmm/benchmark.yaml` | `scripts/eval_ovmm_full.py` | `~/runs/emet/ovmm_full` |
 | **OVMM find-phase (Habitat)** | Same, HM3D proxy | Same | `configs/ovmm/benchmark.yaml` | `scripts/eval_habitat_ovmm_find_phases.py` | per-run JSON under `~/runs/emet/ovmm_habitat` |
 | **SQA3D** | Situated open QA | EM@1 | `configs/sqa3d/benchmark.yaml` | `emet sqa3d run-real-sweep` | `scripts/aggregate_sqa3d_sweep.py` → `aggregate_sqa3d.csv` |
 | **GT object finding** | Sim oracle localization | XY error, recall @ $r$ | episode exports | `emet run dynagraph --ground-truth` + `scripts/eval_dynagraph_ground_truth.py` | manual / `emet eval-dynagraph` |
@@ -30,6 +31,22 @@ Defined in `src/emet/eval/memory_backends.py`:
 | `ground_truth` | ✓ (oracle) | — | Graph from sim GT placements |
 
 Use the **same backend names** in sweep commands and paper tables.
+
+## Dynagraph profiles (shared config)
+
+Merge/staleness and short-episode caps are defined once in [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml) and applied via [`src/emet/eval/benchmark_dynagraph.py`](../src/emet/eval/benchmark_dynagraph.py). Base defaults also live in [`dynav_config.yaml`](../src/emet/config/dynav_config.yaml) (`dynagraph_merge_xy_m: 0.45`, `dynagraph_staleness_horizon: 256`) so `get_parameters` and `emet run dynagraph` agree.
+
+| Profile | merge (m) | staleness | Used by |
+|---------|-----------|-----------|---------|
+| `interactive` | 0.45 | 256 | `emet run dynagraph`, dynav YAML default |
+| `eqa` | 0.45 | 256 + nav cap 48 | SQA3D tuned (`dynagraph`) |
+| `find_phase` | 0.15 | 256 | OVMM find-phase (`dynagraph`, `ground_truth`) |
+| `graph_eqa_baseline` | 0 | 0 | OVMM `graph_eqa` row |
+| `smoke` | 0 | 0 | SQA3D mock-LLM / CI |
+
+**Task-specific (documented, not unified):** EQA prompts (`prompt_variant`: `sqa3d` vs default), and controller flags (`use_instance_graph`, `manipulation_only`) differ between OVMM localization and SQA3D open QA — see `harness:` in the YAML above.
+
+CLI overrides still work: OVMM `--merge-xy-m` / `--staleness-horizon`; SQA3D has no merge flags (uses profiles only).
 
 ## Output directories (default)
 
@@ -77,7 +94,7 @@ uv run python scripts/eval_ovmm_find_phases.py \
 # CSV written automatically: aggregate_dynamem-graph_eqa-dynagraph-ground_truth.csv
 ```
 
-**Perception backends** (`dynamem`, `graph_eqa`, `dynagraph`): use GPU, **do not** pass `--not-rotate`.  
+**Perception backends** (`dynamem`, `graph_eqa`, `dynagraph`): use GPU, **do not** pass `--not-rotate`.
 **Oracle** (`ground_truth`): may use `--not-rotate --cpu-only`.
 
 Scale to S1/S2: `--tier S1` or `--tier S2`; see episode yaml for Molmo indices.

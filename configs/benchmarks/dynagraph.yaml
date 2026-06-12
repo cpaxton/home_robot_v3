@@ -1,0 +1,52 @@
+# Canonical Dynagraph profiles for paper benchmarks and ``emet run dynagraph``.
+# Loaded by ``emet.eval.benchmark_dynagraph``; do not duplicate merge/staleness in harness code.
+#
+# Interactive default (0.45 m merge, staleness 256) also lives in ``dynav_config.yaml`` so
+# ``get_parameters("dynav_config.yaml")`` matches ``emet run dynagraph``.
+
+profiles:
+  interactive:
+    description: "Live exploration and long-horizon runs (``emet run dynagraph`` default)."
+    dynagraph_merge_xy_m: 0.45
+    dynagraph_staleness_horizon: 256
+
+  smoke:
+    description: "No merge/staleness — fast CI regression vs GraphEQA paper row."
+    dynagraph_merge_xy_m: 0.0
+    dynagraph_staleness_horizon: 0
+
+  eqa:
+    description: "Paper EQA benchmarks (SQA3D tuned, short episodes)."
+    dynagraph_merge_xy_m: 0.45
+    dynagraph_staleness_horizon: 256
+    graph_eqa_extract:
+      navigation_samples_max: 48
+
+  find_phase:
+    description: "OVMM find-phase localization — tighter merge reduces centroid error."
+    dynagraph_merge_xy_m: 0.15
+    dynagraph_staleness_horizon: 256
+
+  graph_eqa_baseline:
+    description: "GraphEQA comparison row — merge/staleness disabled."
+    dynagraph_merge_xy_m: 0.0
+    dynagraph_staleness_horizon: 0
+
+# Harness-specific controller flags (task-dependent; not graph-memory parameters).
+harness:
+  ovmm_find_phase:
+    dynagraph:
+      use_instance_graph: true
+      manipulation_only: false
+      eqa: false
+    graph_eqa:
+      use_instance_graph: true
+      manipulation_only: false
+      eqa: false
+  sqa3d:
+    dynagraph:
+      use_instance_graph: false
+      manipulation_only: true
+      eqa: true
+      prompt_variant: sqa3d
+      sqa3d_allow_partial_graph: true

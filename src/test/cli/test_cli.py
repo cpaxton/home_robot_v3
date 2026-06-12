@@ -246,6 +246,9 @@ def test_sqa3d_run_real_sweep_help():
     assert "--replay-mode" in out
     assert "--isolate-episodes" in out
     assert "--with-sens" in out
+    assert "--all" in out
+    assert "--resume" in out
+    assert "--export-root" in out
 
 
 def test_eval_sqa3d_help():

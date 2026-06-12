@@ -28,6 +28,7 @@ import yaml
 from emet.utils.config import resolve_config_yaml_path
 
 MemoryBackendName = Literal["dynamem", "graph_eqa", "dynagraph", "ground_truth"]
+ManipMode = Literal["skip", "oracle", "sim", "attempt"]
 PlanarFrame = Literal["mujoco_xy", "habitat_xz"]
 LocalizeSource = Literal[
     "voxel",
@@ -72,6 +73,24 @@ class FindPhaseRunConfig:
     seed: int | None = None
     use_sensor_perception: bool = False
     prefer_voxel: bool = True
+    manip_mode: ManipMode = "skip"
+    nav_step_timeout_s: float | None = None
+
+
+def resolve_find_phase_nav_step_timeout(
+    *,
+    cpu_only: bool,
+    sim_kind: str,
+    override: float | None = None,
+) -> float:
+    """ZMQ nav/obs wait budget for find-phase mapping (rotate + explore)."""
+    if override is not None:
+        return float(override)
+    if cpu_only:
+        return 45.0
+    if sim_kind in ("robocasa", "molmospaces"):
+        return 30.0
+    return 15.0
 
 
 def load_find_phase_episodes(path: str | Path) -> list[FindPhaseEpisode]:
@@ -621,18 +640,14 @@ def apply_backend_parameters(
     staleness_horizon: int | None = None,
 ) -> Any:
     """Configure dynagraph merge/staleness for backend comparison runs."""
-    if backend == "graph_eqa":
-        parameters["dynagraph_merge_xy_m"] = 0.0
-        parameters["dynagraph_staleness_horizon"] = 0
-    elif backend in ("dynagraph", "ground_truth"):
-        # Tight merge for find-phase localization (0.45 m merge inflates centroid error ~0.4 m).
-        parameters.setdefault("dynagraph_merge_xy_m", 0.15)
-        parameters.setdefault("dynagraph_staleness_horizon", 256)
-    if merge_xy_m is not None:
-        parameters["dynagraph_merge_xy_m"] = float(merge_xy_m)
-    if staleness_horizon is not None:
-        parameters["dynagraph_staleness_horizon"] = int(staleness_horizon)
-    return parameters
+    from emet.eval.benchmark_dynagraph import apply_ovmm_backend_dynagraph
+
+    return apply_ovmm_backend_dynagraph(
+        parameters,
+        backend,
+        merge_xy_m=merge_xy_m,
+        staleness_horizon=staleness_horizon,
+    )
 
 
 def create_find_phase_agent(
@@ -785,6 +800,15 @@ def run_episode_find_phase(
     env["PYTHONPATH"] = str(repo / "src") + os.pathsep + env.get("PYTHONPATH", "")
     env.setdefault("MUJOCO_GL", "egl")
     env["PYTHONUNBUFFERED"] = "1"
+    if run_cfg.cpu_only:
+        env["CUDA_VISIBLE_DEVICES"] = ""
+
+    sim_kind = str(getattr(sim_cfg, "kind", ""))
+    nav_timeout = resolve_find_phase_nav_step_timeout(
+        cpu_only=run_cfg.cpu_only,
+        sim_kind=sim_kind,
+        override=run_cfg.nav_step_timeout_s,
+    )
 
     sim_cfg = replace(sim_cfg, port_offset=port_offset, headless=True)
     server_argv = prepare_mujoco_server_argv(sim_cfg)
@@ -814,7 +838,7 @@ def run_episode_find_phase(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        bind_timeout = 180.0 if getattr(sim_cfg, "kind", "") in ("molmospaces", "robocasa") else 120.0
+        bind_timeout = 180.0 if sim_kind in ("molmospaces", "robocasa") else 120.0
         if not wait_port(recv_port, bind_timeout):
             err_tail = ""
             if server.stderr and server.poll() is not None:
@@ -824,7 +848,9 @@ def run_episode_find_phase(
             raise RuntimeError(
                 f"sim server did not bind port {recv_port}" + (f": {err_tail[-500:]}" if err_tail else "")
             )
-        settle = 25.0 if getattr(sim_cfg, "kind", "") in ("molmospaces", "robocasa") else 15.0
+        settle = 25.0 if sim_kind in ("molmospaces", "robocasa") else 15.0
+        if run_cfg.cpu_only:
+            settle += 15.0
         time.sleep(settle)
 
         robot_kind = str(getattr(sim_cfg, "robot", "stretch"))
@@ -848,6 +874,7 @@ def run_episode_find_phase(
         parameters["encoder"] = None
         if run_cfg.perfect_depth:
             parameters["debug_perfect_sensor_depth"] = True
+        parameters["find_phase_nav_step_timeout_s"] = nav_timeout
 
         t_init0 = time.monotonic()
         agent = create_find_phase_agent(
@@ -878,7 +905,6 @@ def run_episode_find_phase(
         placements = read_sim_object_placements(session)
         memory = get_memory_backend_for_agent(agent, run_cfg.backend)
         vm = getattr(agent, "voxel_map", None)
-        sim_kind = str(getattr(sim_cfg, "kind", ""))
         nav_world = sim_kind == "robocasa"
 
         object_query = resolve_object_query(episode, placements)
@@ -932,7 +958,7 @@ def run_episode_find_phase(
                 "instance_gt_association_recall": instance_gt_association_recall(agent.graph_memory, placements),
             }
 
-        return {
+        metrics = {
             "episode_id": episode.id,
             "tier": episode.tier,
             "backend": run_cfg.backend,
@@ -946,6 +972,7 @@ def run_episode_find_phase(
             "perfect_depth": bool(run_cfg.perfect_depth),
             "use_sensor_perception": bool(run_cfg.use_sensor_perception),
             "prefer_voxel": bool(prefer_voxel),
+            "manip_mode": str(run_cfg.manip_mode),
             "init_wall_s": float(init_wall_s),
             "mapping_wall_s": float(mapping_wall_s),
             "query_wall_s": float(query_wall_s),
@@ -961,6 +988,19 @@ def run_episode_find_phase(
             **scaling,
             **gt_metrics,
         }
+        if run_cfg.manip_mode != "skip":
+            from emet.eval.ovmm_full import augment_find_metrics_with_manip
+
+            metrics = augment_find_metrics_with_manip(
+                agent,
+                robot,
+                episode,
+                run_cfg,
+                metrics,
+                placements=placements,
+                object_query=object_query,
+            )
+        return metrics
     finally:
         if agent is not None:
             try:
@@ -978,3 +1018,7 @@ def run_episode_find_phase(
                 server.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 server.kill()
+        from emet.utils.port_utils import get_ports, kill_processes_on_port
+
+        for p in get_ports(port_offset):
+            kill_processes_on_port(p)
