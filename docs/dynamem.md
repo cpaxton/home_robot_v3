@@ -110,7 +110,7 @@ For CPU-only: add `--cpu`. The `-S` flag skips confirmations for autonomous runs
 
 ### Debugging map drift (rotate in place, floor height)
 
-Spinning **in place** should leave **static world geometry** (floor, furniture) fixed in Rerun under `world/point_cloud` while `world/robot` yaw changes. If the cloud rotates with the robot or the floor “floats,” split **depth** vs **pose** vs **nav frame**:
+Spinning **in place** should leave **logged world geometry** (voxel map, fused points) in the navigation world frame while `gps`/`compass` yaw changes. The **default Rerun 3D view** is robot-centered (`origin=world/robot`), so the map **appears to co-rotate** with the base during in-place spins — that is expected for the viewer, not proof that fusion used the wrong frame. If you need to verify world-lock visually, use a fixed-world blueprint (`spatial3d_view_world()`; see [rerun.md](rerun.md)). If the cloud still looks wrong **in a world-fixed view**, split **depth** vs **pose** vs **nav frame**:
 
 **Rerun head points vs voxel cloud:** When DynaMem is running, **`world/head_camera/points`** is built from the **same resolved depth map** as voxel fusion (whatever `depth_source` / DA3 / `--perfect-depth` produced), not a separate raw-ZMQ-only buffer. **`world/point_cloud`** is the fused voxel representation and often looks smoother than the head channel, which shows **per-pixel** depth unprojected into the world (holes, flying pixels, ceiling strips). With **`--perfect-depth`** in sim, a **clean voxel layout** plus a **noisy-looking head PCD** usually means the fusion path matches ground-truth depth—the voxels are the clearer signal for “did we get the room right?”
 
@@ -118,7 +118,7 @@ Spinning **in place** should leave **static world geometry** (floor, furniture) 
 
 1. **Isolate depth** — `emet run dynamem ... --perfect-depth` or `EMET_DYNAMEM_PERFECT_DEPTH=1` forces observation **sensor** depth when available. If the map stabilizes, focus on DA3 / intrinsics; if not, focus on `camera_pose`, `gps`/`compass`, and `emet_session.navigation_origin_xyt`.
 
-2. **Rerun** — Scrub the **frame** timeline: compare `world/point_cloud`, `world/robot`, `world/head_camera`. World-locked features should not co-rotate with the base marker.
+2. **Rerun** — Scrub the **frame** timeline: compare `world/point_cloud`, `world/robot`, `world/head_camera`. In the default robot-centered 3D view, static room features co-rotate with the base; switch to a world-fixed view (see [rerun.md](rerun.md)) before concluding the map data is rotating in world coordinates.
 
 3. **Per-step logging** — `export EMET_DYNAMEM_MAP_DEBUG=1` prints camera translation, world `base_xyt`, `depth_source`, whether depth came from DA3 inference, and whether `navigation_origin_xyt` was on the observation.
 

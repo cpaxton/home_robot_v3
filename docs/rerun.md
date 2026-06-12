@@ -12,9 +12,9 @@ All **map and scene geometry** must be logged in the **navigation / voxel world 
 | `world/robot` | World pose (`gps` + `compass` + session origin) |
 | `world/robot/mjcf_visual/*` | **Base-relative** vertices; composed via `world/robot` transform |
 
-**Do not** set the live `Spatial3DView` blueprint `origin` to `world/robot`. That re-expresses the whole scene in the robot frame, so the map and voxels **appear to rotate** when the base turns. Use `origin="world"` with `contents="world/**"` (see `spatial3d_view_world()` in `src/emet/visualization/rerun.py`).
+The default live `Spatial3DView` uses `origin="world/robot"` with `contents="world/**"` (`spatial3d_view_robot()` in `src/emet/visualization/rerun.py`) so the 3D camera stays centered on the base. Map and voxel layers remain visible; they **co-rotate** with the robot when the base turns in place.
 
-The robot still moves under `world/robot`; only the **view coordinate system** stays fixed to world.
+For a fixed world-frame camera (map stays put while the robot moves), use `spatial3d_view_world()` (`origin="world"`, same `contents`).
 
 ## Load / stability
 

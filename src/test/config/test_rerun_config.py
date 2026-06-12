@@ -3,12 +3,20 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Tests for Draccus-based ``rerun`` YAML overlay."""
 
 from __future__ import annotations
 
-import os
 import tempfile
 from pathlib import Path
 
@@ -79,18 +87,22 @@ def test_load_from_parameters_dict():
     assert cfg.bind_all is True
 
 
-def test_spatial3d_view_world_fixed_frame():
+def test_spatial3d_view_origins():
     from emet.visualization.rerun import (
         RERUN_SPATIAL3D_CONTENTS_WORLD,
+        RERUN_SPATIAL3D_ORIGIN_ROBOT,
         RERUN_SPATIAL3D_ORIGIN_WORLD,
         spatial3d_view_robot,
         spatial3d_view_world,
     )
 
-    view = spatial3d_view_world()
-    assert view.origin == RERUN_SPATIAL3D_ORIGIN_WORLD
-    assert view.contents == RERUN_SPATIAL3D_CONTENTS_WORLD
-    assert spatial3d_view_robot().origin == RERUN_SPATIAL3D_ORIGIN_WORLD
+    robot_view = spatial3d_view_robot()
+    assert robot_view.origin == RERUN_SPATIAL3D_ORIGIN_ROBOT
+    assert robot_view.contents == RERUN_SPATIAL3D_CONTENTS_WORLD
+
+    world_view = spatial3d_view_world()
+    assert world_view.origin == RERUN_SPATIAL3D_ORIGIN_WORLD
+    assert world_view.contents == RERUN_SPATIAL3D_CONTENTS_WORLD
 
 
 def test_build_kwargs_live_stride_defaults():

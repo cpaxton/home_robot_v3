@@ -455,10 +455,10 @@ class DynamemController(BaseController):
         """
         if getattr(self.rerun_visualizer, "enabled", True) is False:
             return
-        from emet.visualization.rerun import spatial3d_view_world
+        from emet.visualization.rerun import spatial3d_view_robot
 
         main = rrb.Horizontal(
-            spatial3d_view_world(),
+            spatial3d_view_robot(),
             rrb.Vertical(
                 rrb.TextDocumentView(name="text", origin="robot_monologue"),
                 rrb.Spatial2DView(name="relevant image", origin="/observation_similar_to_text"),

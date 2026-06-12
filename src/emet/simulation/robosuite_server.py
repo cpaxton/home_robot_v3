@@ -151,6 +151,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         # After spawn / resettle, lock the base free joint while idle (no nav goal) so gravity does not
         # drop a floating base through the floor (wheels are visual-only on Galaxea / rby1).
         self._stationary_base_freejoint_qpos: np.ndarray | None = None
+        # Planar slide+yaw ``qpos`` snapshot while idle (Robocasa innate_mars / stretch merges).
+        self._stationary_planar_base_qpos: np.ndarray | None = None
         # Stationary joint-position targets mirrored each physics step onto ``data.ctrl`` (see
         # :meth:`_apply_joint_ctrl_hold_to_actuators`). Same idea as MolmoSpaces ``set_to_stationary``
         # + ``compute_control`` (see comments on that method).
@@ -627,6 +629,55 @@ class RobosuiteZmqServer(BaseZmqServer):
         qadr, _ = addrs
         self._stationary_base_freejoint_qpos = np.array(self._mjdata.qpos[qadr : qadr + 7], dtype=np.float64, copy=True)
 
+    def _planar_base_joint_names(self) -> tuple[str, str, str] | None:
+        names = getattr(self._spec, "planar_base_joint_names", None)
+        if not names or len(names) != 3:
+            return None
+        return (str(names[0]), str(names[1]), str(names[2]))
+
+    def _snapshot_stationary_planar_base_qpos(self) -> None:
+        """Remember planar slide+yaw ``qpos`` for idle sim (see :meth:`_hold_stationary_planar_base_if_idle`)."""
+        if self._mjmodel is None or self._mjdata is None:
+            self._stationary_planar_base_qpos = None
+            return
+        jn = self._planar_base_joint_names()
+        if jn is None:
+            self._stationary_planar_base_qpos = None
+            return
+        snap = np.zeros(3, dtype=np.float64)
+        for i, name in enumerate(jn):
+            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, name)
+            if jid < 0:
+                self._stationary_planar_base_qpos = None
+                return
+            qadr = int(self._mjmodel.jnt_qposadr[jid])
+            snap[i] = float(self._mjdata.qpos[qadr])
+        self._stationary_planar_base_qpos = snap
+
+    def _hold_stationary_planar_base_if_idle(self) -> None:
+        """While there is no navigation goal, pin planar base joints to the latest snapshot."""
+        if self._nav_goal_world is not None:
+            return
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        snap = self._stationary_planar_base_qpos
+        jn = self._planar_base_joint_names()
+        if snap is None or jn is None or int(snap.shape[0]) != 3:
+            return
+        for i, name in enumerate(jn):
+            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, name)
+            if jid < 0:
+                return
+            qadr = int(self._mjmodel.jnt_qposadr[jid])
+            vadr = int(self._mjmodel.jnt_dofadr[jid])
+            self._mjdata.qpos[qadr] = float(snap[i])
+            if vadr >= 0:
+                self._mjdata.qvel[vadr] = 0.0
+        aids = self._planar_base_velocity_actuator_ids()
+        if aids is not None:
+            for aid in aids:
+                self._mjdata.ctrl[aid] = 0.0
+
     def _hold_stationary_base_freejoint_if_idle(self) -> None:
         """While there is no navigation goal, pin the base free joint to the post-spawn snapshot."""
         if self._nav_goal_world is not None:
@@ -643,6 +694,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._mjdata.qpos[qadr : qadr + 7] = snap
         if vadr >= 0:
             self._mjdata.qvel[vadr : vadr + 6] = 0.0
+
+    def _hold_stationary_base_if_idle(self) -> None:
+        """Pin mobile base (free joint and/or planar slide+yaw) while not executing a nav goal."""
+        self._hold_stationary_base_freejoint_if_idle()
+        self._hold_stationary_planar_base_if_idle()
 
     def _restore_merged_base_freejoint_from_qpos0(self) -> None:
         """Put ``base_link`` free joint back to ``qpos0`` after :meth:`_stabilize_physics_state_after_load`.
@@ -839,6 +895,8 @@ class RobosuiteZmqServer(BaseZmqServer):
             return np.zeros(3)
         try:
             with self._mj_lock:
+                if self._mjmodel is not None and self._planar_base_joint_names() is not None:
+                    mujoco.mj_forward(self._mjmodel, self._mjdata)
                 xpos = self._mjdata.body(base_name).xpos
                 xmat = self._mjdata.body(base_name).xmat.reshape(3, 3)
                 theta = np.arctan2(xmat[1, 0], xmat[0, 0])
@@ -1228,17 +1286,6 @@ class RobosuiteZmqServer(BaseZmqServer):
         )
 
     @staticmethod
-    def _spawn_rel_xyt_to_world(goal_rel: np.ndarray, init_world_xyt: np.ndarray) -> np.ndarray:
-        """SE(2) compose: pose of goal in spawn frame ``goal_rel`` → world ``(x,y,theta)``."""
-        x0, y0, t0 = float(init_world_xyt[0]), float(init_world_xyt[1]), float(init_world_xyt[2])
-        gx, gy, gt = float(goal_rel[0]), float(goal_rel[1]), float(goal_rel[2])
-        ca, sa = np.cos(t0), np.sin(t0)
-        wx = x0 + ca * gx - sa * gy
-        wy = y0 + sa * gx + ca * gy
-        wt = float(np.arctan2(np.sin(t0 + gt), np.cos(t0 + gt)))
-        return np.array([wx, wy, wt], dtype=np.float64)
-
-    @staticmethod
     def _sim_nav_debug_enabled() -> bool:
         return env_sim_nav_debug()
 
@@ -1396,12 +1443,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         cy = min(max(float(wy), y0), y1)
         if abs(cx - wx) > 1e-6 or abs(cy - wy) > 1e-6:
             logger.warning(
-                "Sim navigation: clamped world goal (%.3f, %.3f) -> (%.3f, %.3f) to stay in walkable clip %s",
-                wx,
-                wy,
-                cx,
-                cy,
-                rect,
+                f"Sim navigation: clamped world goal ({wx:.3f}, {wy:.3f}) -> ({cx:.3f}, {cy:.3f}) "
+                f"to stay in walkable clip {rect}"
             )
         return cx, cy, float(np.arctan2(np.sin(wt), np.cos(wt)))
 
@@ -1505,6 +1548,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjdata.qvel[v0 : v0 + 6] = 0.0
             elif planar_aids is not None:
                 self._zero_base_free_joint_velocity()
+            self._snapshot_stationary_planar_base_qpos()
             return
 
         vx = self._nav_kp_xy * dx
@@ -1637,14 +1681,17 @@ class RobosuiteZmqServer(BaseZmqServer):
                             )
                             self._log_nav_action(nav_meta, applied="teleport_failed")
                         else:
-                            self._log_nav_action(nav_meta, applied="teleport")
+                            self._nav_goal_world = None
+                            self._zero_base_free_joint_velocity()
+                            self._sync_actuator_ctrl_from_joint_positions()
+                            self._snapshot_stationary_planar_base_qpos()
                             after = self.get_base_xyt()
                             nav_meta["base_world_after"] = [
                                 float(after[0]),
                                 float(after[1]),
                                 float(after[2]),
                             ]
-                            self._sync_actuator_ctrl_from_joint_positions()
+                            self._log_nav_action(nav_meta, applied="teleport")
                         self._nav_goal_world = None
                         self._zero_base_free_joint_velocity()
                         self._at_goal = True
@@ -1832,7 +1879,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             with self._mj_lock:
                 self._step_base_navigation_drive()
                 for _ in range(self._mj_substeps_per_tick):
-                    self._hold_stationary_base_freejoint_if_idle()
+                    self._hold_stationary_base_if_idle()
                     self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                     mujoco.mj_step(self._mjmodel, self._mjdata)
                     self._physics_steps_executed += 1
@@ -1866,7 +1913,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                     with self._mj_lock:
                         self._step_base_navigation_drive()
                         for _ in range(self._mj_substeps_per_tick):
-                            self._hold_stationary_base_freejoint_if_idle()
+                            self._hold_stationary_base_if_idle()
                             self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                             mujoco.mj_step(self._mjmodel, self._mjdata)
                             self._physics_steps_executed += 1
@@ -1990,6 +2037,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         if self._mjmodel is not None and self._mjdata is not None:
             with self._mj_lock:
                 self._snapshot_stationary_base_freejoint_pose()
+                self._snapshot_stationary_planar_base_qpos()
         if pl_debug and self._mjmodel is not None and self._mjdata is not None:
             with self._mj_lock:
                 log_post_load_diagnostics(

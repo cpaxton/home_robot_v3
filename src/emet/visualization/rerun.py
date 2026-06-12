@@ -44,24 +44,26 @@ from emet.visualization import urdf_visualizer
 logger = Logger(__name__)
 
 # Live Spatial3DView policy (see docs/rerun.md):
-# - ``origin`` MUST be ``world`` so voxels/maps stay fixed while ``world/robot`` moves.
+# - Default ``origin`` is ``world/robot`` so the 3D camera stays centered on the base.
 # - ``contents`` MUST include ``world/**`` (default ``$origin/**`` would hide map layers).
+# - Use :func:`spatial3d_view_world` when you need a fixed world frame (map does not co-rotate).
 RERUN_SPATIAL3D_ORIGIN_WORLD = "world"
-RERUN_SPATIAL3D_CONTENTS_WORLD = "world/**"
-# Legacy name kept for imports; do not use as view origin (scene appears to rotate with the base).
 RERUN_SPATIAL3D_ORIGIN_ROBOT = "world/robot"
+RERUN_SPATIAL3D_CONTENTS_WORLD = "world/**"
 
 
-def spatial3d_view_world(name: str = "3D View", **kwargs) -> rrb.Spatial3DView:
-    """Fixed world-frame 3D panel (voxel map, obstacles, graph, robot under ``world/``)."""
-    kwargs.setdefault("origin", RERUN_SPATIAL3D_ORIGIN_WORLD)
+def spatial3d_view_robot(name: str = "3D View", **kwargs) -> rrb.Spatial3DView:
+    """Robot-centered 3D panel; still shows all ``world/**`` layers (map, voxels, graph)."""
+    kwargs.setdefault("origin", RERUN_SPATIAL3D_ORIGIN_ROBOT)
     kwargs.setdefault("contents", RERUN_SPATIAL3D_CONTENTS_WORLD)
     return rrb.Spatial3DView(name=name, **kwargs)
 
 
-def spatial3d_view_robot(name: str = "3D View", **kwargs) -> rrb.Spatial3DView:
-    """Alias for :func:`spatial3d_view_world` (robot-centric view origin was removed)."""
-    return spatial3d_view_world(name=name, **kwargs)
+def spatial3d_view_world(name: str = "3D View", **kwargs) -> rrb.Spatial3DView:
+    """Fixed world-frame 3D panel (voxel map, obstacles, graph stay put while the robot moves)."""
+    kwargs.setdefault("origin", RERUN_SPATIAL3D_ORIGIN_WORLD)
+    kwargs.setdefault("contents", RERUN_SPATIAL3D_CONTENTS_WORLD)
+    return rrb.Spatial3DView(name=name, **kwargs)
 
 
 # Canonical Rerun entity paths (use these for consistent logging across live and memory view):
@@ -1053,7 +1055,7 @@ class RerunVisualizer:
             for i in range(min(num_frames, 16))  # cap at 16 panels
         ]
         main = rrb.Horizontal(
-            rrb.Spatial3DView(name="3D View", origin="world"),
+            spatial3d_view_robot(),
             rrb.Vertical(
                 *frame_views,
                 rrb.TextDocumentView(name="memory/text", origin="world/memory/text"),
@@ -1081,7 +1083,7 @@ class RerunVisualizer:
                                     and shows the simplified time panel
         """
         main = rrb.Horizontal(
-            spatial3d_view_world(),
+            spatial3d_view_robot(),
             rrb.Vertical(
                 rrb.Spatial2DView(name="head_rgb", origin="world/head_camera/rgb"),
                 rrb.Spatial2DView(name="ee_rgb", origin="world/ee_camera/rgb"),

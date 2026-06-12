@@ -193,6 +193,18 @@ emet debug-da3-depth --model-id depth-anything/DA3METRIC-LARGE --process-res 504
 
 ---
 
+### `emet mars [start|status|stop]`
+
+Deploy and manage the **Innate Mars ZMQ bridge** on a Jetson running innate-os. See [Innate Mars hardware bring-up](robots/innate_mars_hardware.md) for full recipes (`--deploy`, `--onboard-da3`, Herman connection profile).
+
+```bash
+emet mars start --ip herman --username jetson1 --deploy
+emet mars status --connection herman
+emet mars stop --connection herman
+```
+
+---
+
 ### `emet capture [options]`
 
 One-shot **ZMQ smoke test** for any robot backend: subscribe once on the observation port (default **4401**), save a labeled camera montage + per-camera JPEGs + `metadata.json` (joints, poses, GPS/compass when present). Optional **`--map`** runs a single DynaMem `update()` and opens Rerun (same depth stack as `emet run dynamem`).

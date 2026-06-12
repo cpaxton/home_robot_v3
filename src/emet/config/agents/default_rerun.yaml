@@ -11,7 +11,7 @@ rerun:
   mjcf_show_visual_mesh: true
   mjcf_show_skeleton: false
   server_memory_limit: "4GB"
-  # Map/graph in world frame; see docs/rerun.md (Spatial3DView origin must stay ``world``).
+  # Map/graph logged in world frame; default 3D view centers on ``world/robot`` (see docs/rerun.md).
   show_camera_point_clouds: false
   max_displayed_points_per_camera: 4096
   max_map_2d_points: 25000
