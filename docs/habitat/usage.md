@@ -15,8 +15,9 @@ uv run emet habitat run-episode --question-id 0 --method dynagraph --mock-llm
 # Smoke (mocked LLM)
 uv run emet run graph-eqa-habitat --dataset hmeqa --question-id 0 --mock-llm
 
-# GraphEQA with local Gemma (GPU). Default checkpoint: ``google/gemma-3-4b-it`` (fits 24GB with 6 EQA images).
-# ``--eqa-vl-family gemma4`` maps to that default; override with ``--eqa-hf-model-id google/gemma-4-e2b-it``.
+# GraphEQA with local Gemma int4 (GPU). ``--eqa-vl-family gemma4`` auto-picks
+# ``google/gemma-4-e2b-it`` when VRAM allows (best HM-EQA stability so far).
+# Opt into E4B with ``EMET_EQA_GEMMA_E4B=1`` or ``--eqa-hf-model-id google/gemma-4-E4B-it``.
 uv run emet run graph-eqa-habitat \
   --method graph_eqa \
   --question-id 0 \
@@ -70,6 +71,36 @@ Useful flags:
 | `--output` | none | Write episode JSONL |
 | `--rotate-in-place` | off | Extra rotation action in loop |
 
+## Debug artifacts (batch runs)
+
+Each `run-batch --output …/my_run.jsonl` writes:
+
+| Path | Contents |
+|------|----------|
+| `my_run.jsonl` | One JSON line per episode (scores + summary debug fields) |
+| `my_run_manifest.json` | Run config: method, VLM id, question ids, git commit, frontier flags |
+| `my_run.log` | Full stdout/stderr when using `tee` (see `scripts/run_habitat_frontier_experiments.sh`) |
+| `~/.cache/habitat_eqa/episodes/my_run/q<id>_<method>/` | Per-episode bundle (below) |
+
+Per-episode bundle (`metrics.json`, `raw_eqa.txt` full text, `eqa_history.json`, `scene_graph_report.txt`, `frontier_nodes.json`). Optional full graph checkpoint:
+
+```bash
+export HABITAT_EQA_EXPORT_GRAPH=1   # adds graph_checkpoint/ (frames, graph.json, …)
+```
+
+JSONL fields useful for triage: `parsed_answer_letter`, `frontier_nodes`, `eqa_iterations`, `eqa_action`, `debug_bundle_dir`, `error`. Re-grade a row:
+
+```bash
+python3 -c "
+import json
+from emet.habitat.metrics import extract_mcq_letter_from_raw_eqa, grade_mcq_answer
+from pathlib import Path
+row = json.loads(Path('~/.cache/habitat_eqa/results/my_run.jsonl').expanduser().read_text().splitlines()[0])
+raw = Path(row['debug_bundle_dir']) / 'raw_eqa.txt'
+print(grade_mcq_answer(extract_mcq_letter_from_raw_eqa(raw.read_text(), row['choices']), row['gold_answer_letter']))
+"
+```
+
 ## Methods
 
 | `--method` | Memory config | Paper baseline |
@@ -78,6 +109,29 @@ Useful flags:
 | `dynagraph` | Same graph settings as `graph_eqa` | Same EQA stack; exercises `DynagraphController` (rerun / `maintain()` noop here) |
 
 On HM-EQA both methods should give **the same accuracy** (within VLM sampling noise). Dynagraph is a regression check, not a competing benchmark config. Long-horizon merge/staleness (`0.45m` / `256` steps) is for real-robot Dynagraph runs, not this short Habitat harness.
+
+## Frontier exploration (fluid map vs graph nodes)
+
+Both methods use the **same voxel map** for navigation. The **fluid frontier** is the boundary of reachable free space on the 2D grid (`sample_exploration` / `sample_frontier` in `voxel_map_dynamem.py`).
+
+**Frontier v2** (default in `dynav_config.yaml`) additionally mirrors unexplored clusters as **graph frontier nodes** (`sync_frontier_nodes`) so the VLM can pick them in EQA `IMAGE_DESCRIPTIONS` and `action:` fields. See [dynagraph.md](../dynagraph.md#graph-frontier-nodes-eqa-guided).
+
+| Config | CLI | Effect |
+|--------|-----|--------|
+| Paper-style fluid only | `--no-frontier-nodes --frontier-keyword-weight 0` | Time-heuristic grid frontier (closest to upstream fluid policy) |
+| Question-biased fluid | `--no-frontier-nodes --frontier-keyword-weight 2` | Keyword overlap on grid cells, no graph nodes |
+| Frontier v2 (default) | `--frontier-nodes --frontier-keyword-weight 2` | Graph nodes + keyword bias + fluid fallback |
+
+**Ablation batch** (Q0–19, Qwen2.5-VL-3B default):
+
+```bash
+./scripts/run_habitat_frontier_ablation.sh
+uv run python scripts/summarize_frontier_ablation.py --q-start 0 --q-end 19
+```
+
+Run a single arm: `ARM=fluid_kw ./scripts/run_habitat_frontier_ablation.sh`
+
+Manifest JSONL sidecars record `graph_eqa_frontier_nodes` for each batch.
 
 ## Tests
 

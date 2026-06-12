@@ -1,0 +1,118 @@
+\section{Habitat HM-EQA harness vs.\ GraphEQA}
+\label{app:habitat_eqa_parity}
+
+This appendix records how the \texttt{emet} Habitat EQA harness (\texttt{feature/habitat-eqa-harness}) compares to the reference GraphEQA Habitat stack~\citep{saxena2024grapheqa}, what is intentionally different, and interim accuracy on our development machine.
+The harness drives \texttt{GraphEQAMemory} / \texttt{DynagraphController} inside Habitat-Sim rather than ROS + Hydra; HM-EQA uses 113 multiple-choice questions (Explore-EQA indices 0--112) with scene init poses from the public CSVs.
+
+\subsection{Official GraphEQA simulation numbers (HM-EQA)}
+
+Table~\ref{tab:grapheqa_official_hmeqa} reproduces GraphEQA Table~1 (HM-EQA column): success rate on 113 questions, mean VLM planning steps over \emph{successful} trials, and mean trajectory length over successful trials~\citep{saxena2024grapheqa}.
+Methods marked $\dagger$ are author reimplementations of Explore-EQA with newer VLMs.
+
+\begin{table}[t]
+  \centering
+  \caption{GraphEQA paper baselines on HM-EQA (113 questions, Habitat-Sim).}
+  \label{tab:grapheqa_official_hmeqa}
+  \small
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Method & Success (\%) $\uparrow$ & Planning steps $\downarrow$ & $L_\tau$ (m) $\downarrow$ \\
+    \midrule
+    Explore-EQA~\citep{ren2024exploreeqa} & 51.7 & 18.7 & 38.1 \\
+    Explore-EQA-GPT4o$\dagger$ & 46.4 & 3.4 & 6.3 \\
+    Explore-EQA-Gemini-2.5Pro$\dagger$ & 54.3 & 6.40 & 12.3 \\
+    SayPlanVision$\dagger$ & 54.8 & 2.6 & 5.3 \\
+    \textbf{GraphEQA-GPT4o} & \textbf{63.5} & 5.1 & 12.6 \\
+    GraphEQA-Llama4-Mav & 57.7 & 2.36 & 3.59 \\
+    \textbf{GraphEQA-Gemini-2.5Pro} & \textbf{67.0} & 2.94 & 7.41 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent\textbf{Reference setup.}
+GraphEQA Habitat sim uses \texttt{use\_semantic\_data: True}: ground-truth HM3D-Semantics instance masks (not Detic) feed Hydra 3DSGs; a TSDF frontier planner with task-relevant frontier enrichment; camera 120$^\circ$ HFOV at 1.5\,m height and $-30^\circ$ tilt (640$\times$480); up to 20 VLM planning iterations; and API VLMs (GPT-4o, Gemini, etc.).
+Detic segmentation is used in real-world experiments only.
+
+\subsection{Harness parity checklist}
+
+Table~\ref{tab:habitat_parity} contrasts upstream GraphEQA with our harness as of the Habitat branch.
+Items marked \emph{partial} depend on downloaded HM3D semantic assets (only a subset of train scenes ship \texttt{.semantic.glb} in practice).
+
+\begin{table}[t]
+  \centering
+  \caption{GraphEQA reference vs.\ \texttt{emet} Habitat harness (HM-EQA).}
+  \label{tab:habitat_parity}
+  \small
+  \begin{tabular}{@{}p{0.26\linewidth}p{0.30\linewidth}p{0.14\linewidth}p{0.22\linewidth}@{}}
+    \toprule
+    Component & GraphEQA (ref.) & Ours & Status \\
+    \midrule
+    HM-EQA 113-question slice & indices 0--112 & \texttt{--paper-subset} default & Match \\
+    Per-question enrich labels & \texttt{explore\_eqa\_dataset\_enrich\_labels.yaml} & bundled YAML + \texttt{seed\_object\_hints} & Match \\
+    Camera / agent & 120$^\circ$, 1.5\,m, $-30^\circ$, 640$\times$480 & \texttt{HabitatEQASimulator} & Match \\
+    Planning budget & 20 VLM steps, 10 nav substeps & CLI defaults & Match \\
+    HM3D GT semantics (sim) & all train scenes w/ data & auto if \texttt{.semantic.glb} exists & \textbf{Partial} \\
+    Scene graph & Hydra 5-layer 3DSG & \texttt{GraphEQAMemory} object graph & Different stack \\
+    Exploration planner & TSDF + enriched frontiers & fluid voxel \texttt{sample\_frontier} (+ optional graph frontier nodes) & Partial \\
+    Navigation execution & navmesh shortest path & \texttt{find\_path\_to\_xy} + greedy follow & Match \\
+    MCQ prompt / grading & HM-EQA A--D & \texttt{hmeqa} prompt variant & Match \\
+    Graph memory config & static (no merge / staleness) & merge=0, staleness=0 on HM-EQA & Match \\
+    Batch logging & per-question JSON & JSONL + \texttt{--resume} & Match \\
+    OpenEQA val split & supported & not wired & Missing \\
+    Detic fallback & real world & N/A in sim harness & N/A \\
+    VLM & GPT-4o / Gemini API & local Gemma-3-4b-it (default) & By design \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Semantics and frontier gaps (detail)}
+
+\textbf{Ground-truth semantics.}
+When GraphEQA sets \texttt{use\_semantic\_data: True}, every HM-EQA episode is assumed to have HM3D semantic annotations.
+Our harness enables the Habitat semantic sensor when \texttt{.semantic.glb} is present for the scene; on a typical cache with train semantics partially downloaded, \textbf{37/113} paper questions and \textbf{14/49} unique paper scenes had semantic assets at the time of writing---the remainder fall back to depth voxel mapping and VLM (or keyword) graph labels.
+
+\textbf{Frontier planning (fluid map vs.\ graph nodes).}
+Both DynaMem and GraphEQA share the same \emph{fluid} 2D frontier: reachable free-space edges on the voxel grid (\texttt{get\_outside\_frontier}), minus explored cells.
+\texttt{SparseVoxelMapNavigationSpace.sample\_exploration} picks a grid cell using a time-since-visit heuristic and, when \texttt{keyword\_score\_weight}$>0$, a question-keyword overlap map (\texttt{keyword\_score\_map})---no discrete graph required.
+
+\textbf{Frontier v2 (optional, default in \texttt{dynav\_config.yaml}).}
+When \texttt{graph\_eqa\_frontier\_nodes.enabled} is true, \texttt{sync\_frontier\_nodes} clusters the same unexplored mask into up to 12 \texttt{GraphEQAMemory} nodes (\texttt{is\_frontier=True}), exposes them in EQA \texttt{IMAGE\_DESCRIPTIONS}, and routes low-confidence iterations via \texttt{\_best\_frontier\_point\_from\_graph} before falling back to fluid \texttt{sample\_frontier}.
+HM-EQA CLI flags \texttt{--frontier-nodes}/\texttt{--no-frontier-nodes} and \texttt{--frontier-keyword-weight} select ablation arms (script \texttt{run\_habitat\_frontier\_ablation.sh}).
+
+\textbf{Paper-reproduction baseline.}
+Closest to upstream GraphEQA fluid exploration (no graph frontier nodes): \texttt{--no-frontier-nodes --frontier-keyword-weight 0}.
+Earlier \texttt{emet} batches that left frontier nodes enabled are \emph{frontier v2}, not a strict paper clone.
+
+Reference GraphEQA still uses a separate TSDF map and VLM \texttt{enrich\_frontiers} prompts; full parity on exploration policy remains future work.
+A navigation fix (2026-06) maps VLM \texttt{action: Image $N$} through the attached \texttt{obs\_ids} order rather than the full observation list index.
+
+\subsection{Interim \texttt{emet} results (development)}
+
+Table~\ref{tab:habitat_interim_results} lists early HM-EQA batches on a single RTX~4090 with \texttt{google/gemma-3-4b-it}, 20 planning steps, and the GraphEQA memory configuration.
+Numbers are \emph{not} comparable to Table~\ref{tab:grapheqa_official_hmeqa} until semantics coverage and frontier scoring match the reference stack and/or the same API VLM is used.
+
+\begin{table}[t]
+  \centering
+  \caption{Interim HM-EQA accuracy (rescored MCQ parser; local VLMs, RTX~4090, 20/10 step budget).}
+  \label{tab:habitat_interim_results}
+  \small
+  \begin{tabular}{@{}llcc@{}}
+    \toprule
+    Run (slice) & Config notes & $n$ & Accuracy \\
+    \midrule
+    Paper repro (gemma-3-4b-it) & Q0--9 / Q0--19 / Q0--112 & 10 / 20 / 113 & 40\% / 40\% / 40.7\% \\
+    Qwen2.5-VL-3B (fixed) & best Q0--9 slice & 10 & 50\% \\
+    Frontier v2 clean (gemma4) & graph frontier nodes on & 20 & 25\% (Q0--19) \\
+    \midrule
+    \multicolumn{4}{@{}l@{}}{\textit{Planned ablation (Q0--19, Qwen2.5-VL-3B):}} \\
+    Arm A fluid & \texttt{--no-frontier-nodes}, kw=0 & 20 & pending \\
+    Arm B fluid\_kw & \texttt{--no-frontier-nodes}, kw=2 & 20 & pending \\
+    Arm C nodes & \texttt{--frontier-nodes}, kw=2 & 20 & pending \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent\textbf{Takeaway.}
+Official GraphEQA on HM-EQA is \textbf{63.5\%} (GPT-4o) to \textbf{67.0\%} (Gemini-2.5Pro).
+Our harness reaches \textbf{$\sim$40--50\%} on small slices with local 3--4B VLMs---below API baselines but competitive with our reproduced gemma-3-4b paper batch---consistent with weaker VLMs and partial GT semantics, not broken grading (mock GraphEQA vs.\ Dynagraph match at 100\% on Q0--5).
+Frontier v2 (graph nodes on) underperformed the paper repro on Q0--19 (\textbf{25\%} vs.\ \textbf{40\%}); the ablation table isolates fluid vs.\ node-guided exploration after fixing VLM \texttt{action} $\rightarrow$ navigation index alignment.

@@ -313,6 +313,8 @@ class GraphEQABackend(MemoryBackend):
         text_lower = text.lower().strip()
         nodes = self._graph.get_nodes()
         for node in nodes:
+            if getattr(node, "is_frontier", False) or getattr(node, "is_viewpoint", False):
+                continue
             for label in node.labels:
                 if text_lower in label.lower():
                     return CheckMemoryResult(
@@ -341,6 +343,8 @@ class GraphEQABackend(MemoryBackend):
         text_lower = text.lower().strip()
         nodes = self._graph.get_nodes()
         for node in nodes:
+            if getattr(node, "is_frontier", False) or getattr(node, "is_viewpoint", False):
+                continue
             for label in node.labels:
                 if text_lower in label.lower():
                     return LocalizeResult(

@@ -172,3 +172,75 @@ def get_eqa_vl_str(parameters: Parameters | dict | None, key: str, default: str)
         return default
     s = str(v).strip()
     return s if s else default
+
+
+def _eqa_cfg(parameters: Parameters | dict | None) -> dict[str, Any]:
+    raw = _pget(parameters, "eqa", {}) or {}
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
+def _hf_id_matches_family(hf_model_id: str, family: str) -> bool:
+    from emet.llms.vllm_registry import normalize_vl_family
+
+    mid = (hf_model_id or "").lower().replace("_", ".")
+    fam = normalize_vl_family(family or "")
+    if fam == "gemma4":
+        return "gemma" in mid
+    if fam == "qwen3_vl":
+        return "qwen3" in mid
+    if fam == "qwen2_5_vl":
+        return "qwen2.5" in mid or "qwen2_5" in (hf_model_id or "").lower()
+    return True
+
+
+def resolve_vl_hf_model_id(
+    vl_family: str,
+    parameters: Parameters | dict | None,
+    *,
+    device: str = "cuda",
+    explicit_hf_id: str | None = None,
+) -> str:
+    """Pick the largest Gemma checkpoint that fits free VRAM (int4); else registry default."""
+    if explicit_hf_id and str(explicit_hf_id).strip():
+        return str(explicit_hf_id).strip()
+
+    from emet.llms.vllm_registry import default_hf_model_id, normalize_vl_family
+
+    fam = normalize_vl_family(vl_family or "")
+    eqa = _eqa_cfg(parameters)
+    cfg_fam = normalize_vl_family(str(eqa.get("vl_family", "") or ""))
+    cfg_id = eqa.get("vl_hf_model_id")
+    if (
+        cfg_id
+        and str(cfg_id).strip()
+        and (not cfg_fam or cfg_fam == fam)
+        and _hf_id_matches_family(str(cfg_id), fam)
+    ):
+        return str(cfg_id).strip()
+    if fam != "gemma4":
+        return default_hf_model_id(fam) or ""
+
+    tier_e2b = float(_pget(parameters, "eqa/vram_mib_tier_gemma_e2b", 7000))
+    tier_e4b = float(_pget(parameters, "eqa/vram_mib_tier_gemma_e4b", 20000))
+    allow_e4b = os.environ.get("EMET_EQA_GEMMA_E4B", "").strip().lower() in ("1", "true", "yes", "on")
+
+    def pick(free_mib: float | None) -> str:
+        if free_mib is None:
+            logger.warning("nvidia-smi unavailable; defaulting Gemma VLM to google/gemma-3-4b-it")
+            return "google/gemma-3-4b-it"
+        if allow_e4b and free_mib >= tier_e4b:
+            logger.info(
+                f"GPU free ~{free_mib:.0f} MiB (Gemma E4B opt-in tier >={tier_e4b:.0f} MiB): google/gemma-4-E4B-it",
+            )
+            return "google/gemma-4-E4B-it"
+        if free_mib >= tier_e2b:
+            logger.info(
+                f"GPU free ~{free_mib:.0f} MiB (Gemma E2B tier >={tier_e2b:.0f} MiB): google/gemma-4-e2b-it",
+            )
+            return "google/gemma-4-e2b-it"
+        logger.info(f"GPU free ~{free_mib:.0f} MiB: google/gemma-3-4b-it")
+        return "google/gemma-3-4b-it"
+
+    if device == "cuda":
+        return pick(get_nvidia_gpu_free_mib())
+    return pick(None)

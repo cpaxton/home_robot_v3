@@ -25,13 +25,32 @@ from emet.core.parameters import Parameters, get_parameters
 from emet.habitat.config import default_hm3d_scene_dir
 from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
 from emet.habitat.hmeqa_enrich_labels import enrich_labels_for_question
-from emet.habitat.metrics import EpisodeMetrics, append_episode_jsonl, extract_mcq_letter, grade_mcq_answer
+from emet.habitat.episode_debug import (
+    enrich_episode_metrics,
+    run_tag_from_output_jsonl,
+    save_episode_debug_bundle,
+    save_error_episode_bundle,
+    write_run_manifest,
+)
+from emet.habitat.metrics import (
+    EpisodeMetrics,
+    append_episode_jsonl,
+    extract_mcq_letter,
+    extract_mcq_letter_from_raw_eqa,
+    grade_mcq_answer,
+)
 from emet_habitat.robot_client import HabitatRobotClient
 from emet_habitat.simulator import HabitatEQASimulator
 
 
 def _release_gpu_memory() -> None:
     """Best-effort VRAM cleanup between Habitat episodes (semantic meshes + VLM)."""
+    try:
+        from emet.llms.graph_eqa_vlm import release_shared_graph_eqa_vlm
+
+        release_shared_graph_eqa_vlm()
+    except Exception:
+        pass
     try:
         import gc
 
@@ -70,28 +89,55 @@ def _apply_method_parameters(parameters: Parameters | dict, method: str) -> Para
     return params
 
 
+def _cfg_hf_id_matches_family(hf_model_id: str, family: str) -> bool:
+    from emet.llms.eqa_vl_settings import _hf_id_matches_family
+
+    return _hf_id_matches_family(hf_model_id, family)
+
+
+def _configure_frontier_parameters(
+    parameters: Parameters,
+    *,
+    frontier_nodes_enabled: bool | None = None,
+    frontier_keyword_weight: float | None = None,
+) -> None:
+    """Override ``graph_eqa_frontier_nodes`` for HM-EQA ablations."""
+    if frontier_nodes_enabled is None and frontier_keyword_weight is None:
+        return
+    blk = dict(parameters.get("graph_eqa_frontier_nodes") or {})
+    if frontier_nodes_enabled is not None:
+        blk["enabled"] = bool(frontier_nodes_enabled)
+    if frontier_keyword_weight is not None:
+        blk["keyword_score_weight"] = float(frontier_keyword_weight)
+    parameters.set("graph_eqa_frontier_nodes", blk)
+
+
 def _configure_eqa_parameters(
     parameters: Parameters,
     *,
     eqa_vl_family: str | None,
     eqa_hf_model_id: str | None,
+    device: str = "cuda",
 ) -> None:
     if eqa_vl_family is None and eqa_hf_model_id is None:
         return
+    from emet.llms.eqa_vl_settings import resolve_vl_hf_model_id
     from emet.llms.vllm_registry import default_hf_model_id, normalize_vl_family
 
     eqa = dict(parameters.get("eqa", {}) or {})
     if eqa_vl_family is not None:
         eqa["backend"] = "qwen_vl"
         eqa["vl_family"] = eqa_vl_family
+        eqa.setdefault("vl_quantization", "int4")
+        fam = normalize_vl_family(eqa_vl_family)
         if eqa_hf_model_id is None:
-            fam = normalize_vl_family(eqa_vl_family)
-            # E4B bf16 OOMs on 24GB with multi-image EQA; gemma-3-4b-it is the stable HM-EQA default.
-            # Override with --eqa-hf-model-id google/gemma-4-e2b-it for Gemma 4 checkpoints.
-            if fam == "gemma4":
-                eqa["vl_hf_model_id"] = "google/gemma-3-4b-it"
-            else:
-                eqa["vl_hf_model_id"] = default_hf_model_id(fam)
+            existing = str(eqa.get("vl_hf_model_id") or "")
+            wrong_family_id = bool(existing) and not _cfg_hf_id_matches_family(existing, fam)
+            if wrong_family_id or not existing:
+                if fam == "gemma4":
+                    eqa["vl_hf_model_id"] = resolve_vl_hf_model_id(fam, parameters, device=device)
+                else:
+                    eqa["vl_hf_model_id"] = default_hf_model_id(fam)
     if eqa_hf_model_id is not None:
         eqa["vl_hf_model_id"] = eqa_hf_model_id
     eqa.setdefault("prompt_variant", "hmeqa")
@@ -161,6 +207,10 @@ def run_hmeqa_episode(
     eqa_vl_family: str | None = None,
     eqa_hf_model_id: str | None = None,
     device: str | None = "cuda",
+    frontier_nodes_enabled: bool | None = None,
+    frontier_keyword_weight: float | None = None,
+    debug_run_tag: str | None = None,
+    save_debug_bundle: bool = True,
 ) -> EpisodeMetrics:
     questions = load_hmeqa_questions(questions_path)
     q = get_question(questions, question_id=question_id)
@@ -186,6 +236,12 @@ def run_hmeqa_episode(
             parameters,
             eqa_vl_family=eqa_vl_family,
             eqa_hf_model_id=eqa_hf_model_id,
+            device=device or "cuda",
+        )
+        _configure_frontier_parameters(
+            parameters,
+            frontier_nodes_enabled=frontier_nodes_enabled,
+            frontier_keyword_weight=frontier_keyword_weight,
         )
         agent = _make_controller(
             robot,
@@ -198,16 +254,20 @@ def run_hmeqa_episode(
             device=device,
             use_hm3d_semantics=use_hm3d_semantics,
         )
+        agent._eqa_question = q.question_formatted
         agent.start()
         if agent.graph_memory is not None:
             hints = enrich_labels_for_question(question_id, q.scene)
             if hints:
                 agent.graph_memory.seed_object_hints(hints)
+            agent.graph_memory.extract_relevant_objects(q.question_formatted)
         executor = EQAExecuter(agent)
         if rotate_in_place:
             executor.rotate_in_place()
         for _ in range(5):
             agent.update()
+            if agent.graph_memory is not None and hasattr(agent, "_sync_graph_frontier_nodes"):
+                agent._sync_graph_frontier_nodes()
 
         discord_text, _images = agent.run_eqa(
             q.question_formatted,
@@ -217,16 +277,27 @@ def run_hmeqa_episode(
         raw_eqa = ""
         parsed_letter = ""
         model_confident = False
+        formatted_answer = ""
+        eqa_action = ""
+        eqa_confidence_reasoning = ""
         if agent.graph_memory is not None:
             raw_eqa = agent.graph_memory.last_eqa_raw
-            _reasoning, answer, model_confident, _action, _cr = agent.graph_memory.last_eqa_parsed
-            parsed_letter = extract_mcq_letter(answer, q.choices)
+            _reasoning, answer, model_confident, eqa_action, eqa_confidence_reasoning = (
+                agent.graph_memory.last_eqa_parsed
+            )
+            formatted_answer = str(answer or "")
+            # Prefer raw mLLM ``answer:`` field; human formatting can replace letters with prose.
+            parsed_letter = extract_mcq_letter_from_raw_eqa(raw_eqa, q.choices)
             if not parsed_letter:
-                parsed_letter = extract_mcq_letter(raw_eqa, q.choices)
-        predicted = parsed_letter or (discord_text.split("---")[-1].strip() if "---" in discord_text else discord_text)
-        correct = grade_mcq_answer(predicted, q.answer_letter, choices=q.choices)
+                parsed_letter = extract_mcq_letter(answer, q.choices)
+        predicted = parsed_letter
+        if not predicted:
+            tail = discord_text.split("---")[-1].strip() if "---" in discord_text else discord_text
+            predicted = extract_mcq_letter(tail, q.choices)
+        correct = grade_mcq_answer(predicted, q.answer_letter, choices=q.choices) if predicted else False
 
-        return EpisodeMetrics(
+        eqa_cfg = dict(parameters.get("eqa", {}) or {})
+        metrics = EpisodeMetrics(
             dataset="hmeqa",
             method=method,
             question_id=question_id,
@@ -241,8 +312,32 @@ def run_hmeqa_episode(
             success=correct,
             parsed_answer_letter=parsed_letter,
             model_confident=model_confident,
-            raw_eqa_output=raw_eqa[:2000],
+            raw_eqa_output=raw_eqa[:8000],
         )
+        enrich_episode_metrics(
+            metrics,
+            agent=agent,
+            choices=q.choices,
+            formatted_answer=formatted_answer,
+            eqa_action=str(eqa_action or ""),
+            eqa_confidence_reasoning=str(eqa_confidence_reasoning or ""),
+            vl_family=str(eqa_cfg.get("vl_family") or eqa_vl_family or ""),
+            vl_hf_model_id=str(eqa_cfg.get("vl_hf_model_id") or eqa_hf_model_id or ""),
+        )
+        if save_debug_bundle and debug_run_tag:
+            try:
+                save_episode_debug_bundle(
+                    run_tag=debug_run_tag,
+                    metrics=metrics,
+                    agent=agent,
+                    raw_eqa_full=raw_eqa,
+                )
+            except Exception as exc:
+                print(
+                    f"question_id={question_id} debug bundle save failed (metrics kept): {exc}",
+                    flush=True,
+                )
+        return metrics
     finally:
         sim.close()
         _release_gpu_memory()
@@ -265,17 +360,40 @@ def run_hmeqa_batch(
     use_hm3d_semantics: bool | None = None,
     output_jsonl: Path | None = None,
     resume: bool = False,
+    frontier_nodes_enabled: bool | None = None,
+    frontier_keyword_weight: float | None = None,
 ) -> list[EpisodeMetrics]:
     from emet.habitat.metrics import read_completed_question_ids
 
     results: list[EpisodeMetrics] = []
     questions = load_hmeqa_questions(questions_path)
     done: set[int] = set()
+    run_tag = run_tag_from_output_jsonl(output_jsonl)
+    parameters = get_parameters("dynav_config.yaml")
+    _configure_frontier_parameters(
+        parameters,
+        frontier_nodes_enabled=frontier_nodes_enabled,
+        frontier_keyword_weight=frontier_keyword_weight,
+    )
     if output_jsonl is not None:
         if resume and output_jsonl.exists():
             done = read_completed_question_ids(output_jsonl)
         elif output_jsonl.exists():
             output_jsonl.unlink()
+        manifest = write_run_manifest(
+            output_jsonl=output_jsonl,
+            method=method,
+            question_ids=question_ids,
+            mock_llm=mock_llm,
+            max_planning_steps=max_planning_steps,
+            max_movement_step=max_movement_step,
+            eqa_vl_family=eqa_vl_family,
+            eqa_hf_model_id=eqa_hf_model_id,
+            device=device,
+            resume=resume,
+            parameters=parameters,
+        )
+        print(f"run manifest: {manifest}", flush=True)
     for qid in question_ids:
         if qid in done:
             print(f"question_id={qid} skip (already in {output_jsonl})", flush=True)
@@ -294,11 +412,19 @@ def run_hmeqa_batch(
                 eqa_hf_model_id=eqa_hf_model_id,
                 device=device,
                 use_hm3d_semantics=use_hm3d_semantics,
+                frontier_nodes_enabled=frontier_nodes_enabled,
+                frontier_keyword_weight=frontier_keyword_weight,
+                debug_run_tag=run_tag if output_jsonl is not None else None,
             )
             results.append(row)
             if output_jsonl is not None:
                 append_episode_jsonl(output_jsonl, row)
-                print(f"question_id={qid} done correct={row.correct} (appended {output_jsonl})", flush=True)
+                bundle = row.debug_bundle_dir or "(no bundle)"
+                print(
+                    f"question_id={qid} done correct={row.correct} "
+                    f"frontier_nodes={row.frontier_nodes} bundle={bundle} (appended {output_jsonl})",
+                    flush=True,
+                )
             _release_gpu_memory()
         except Exception as exc:
             if not continue_on_error:
@@ -318,7 +444,11 @@ def run_hmeqa_batch(
                 confident=False,
                 planning_steps=0,
                 success=False,
+                choices=list(q.choices or []),
+                error=str(exc),
             )
+            if output_jsonl is not None:
+                save_error_episode_bundle(run_tag=run_tag, metrics=err_row)
             results.append(err_row)
             if output_jsonl is not None:
                 append_episode_jsonl(output_jsonl, err_row)

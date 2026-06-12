@@ -30,6 +30,10 @@ from PIL import Image
 from emet.core.parameters import Parameters
 from emet.memory.graph_eqa.human_answer import format_human_eqa_answer
 
+# Min SigLIP cosine similarity for an open-vocab text query to count as "present" in the
+# observed point cloud. Matches DynaMem's verify_point default for SigLIP grounding.
+SIGLIP_PRESENT_THRESHOLD = 0.21
+
 _QUESTION_STOPWORDS = frozenset(
     {
         "is",
@@ -154,6 +158,7 @@ class GraphNode:
     extent_half: np.ndarray | None = None  # (3,) half-axis sizes in meters; None = point-like
     bbox_xyxy: tuple[int, int, int, int] | None = None  # pixel crop in obs RGB; None = full frame
     is_viewpoint: bool = False  # True = robot/camera vantage (``seen_from`` target), not a detected object
+    is_frontier: bool = False  # True = unexplored map frontier cluster (managed by sync_frontier_nodes)
     embedding: np.ndarray | None = None  # optional visual embedding (e.g. SigLIP crop)
     bounds_3d: dict[str, list[float]] | None = None  # axis-aligned world bounds {min,max,center,size}
 
@@ -220,12 +225,25 @@ class GraphEQAMemory:
         self.max_near_distance = max_near_distance
         self.last_eqa_raw: str = ""
         self.last_eqa_parsed: tuple[str, str, bool, str, str] = ("", "", False, "", "")
+        self.last_eqa_obs_ids: list[int] = []
+        self.last_eqa_nav_fallback_count: int = 0
+        # Model's own confidence before the graph-coverage gate suppresses it (for early-stop).
+        self.last_eqa_model_confident: bool = False
         self._nodes: list[GraphNode] = []
         self._edges: list[tuple[int, int, str]] = []  # (id1, id2, relation)
         self._observations: list[GraphObservation] = []
         self._next_obs_id = 1
         self._question: str | None = None
         self._relevant_objects: list[str] | None = None
+        # Dynagraph improvements (kept OFF here so GraphEQA stays a clean baseline; the
+        # DynagraphController turns them on):
+        #  * memory_summary_enabled: prepend the CONFIRMED_MEMORY block to the planner prompt.
+        #  * _text_grounder: open-vocab visual grounder (text -> (similarity, xyz)) backed by
+        #    the voxel map's SigLIP features, decoupling grounding from brittle caption labels
+        #    (e.g. a "woven basket" captioned as "decorative plant").
+        self.memory_summary_enabled: bool = False
+        self._text_grounder: Callable[[str], tuple[float, np.ndarray] | None] | None = None
+        self._obs_id_grounder: Callable[[str], int | None] | None = None
         self._enrich_object_hints: list[str] = []
         self._history_outputs: list[str] = []
 
@@ -241,8 +259,13 @@ class GraphEQAMemory:
         self._fallback_timestep: int = 0
         self.spatial_merge_m: float = 0.0
         self.staleness_horizon: int = 0
+        self.frontier_nodes_enabled: bool = True
+        self._frontier_max_nodes: int = 12
+        self._frontier_min_cluster_cells: int = 3
+        self._frontier_keyword_score_weight: float = 1.0
         self._load_navigation_settings()
         self._load_dynagraph_settings()
+        self._load_frontier_settings()
 
         if not defer_llm_clients and (self.eqa_client is None or self.image_description_client is None):
             self._init_clients()
@@ -275,6 +298,24 @@ class GraphEQAMemory:
         if d.get("dynagraph_staleness_horizon") is not None:
             self.staleness_horizon = max(0, int(d["dynagraph_staleness_horizon"]))
 
+    def _load_frontier_settings(self) -> None:
+        d = self._parameters_dict()
+        blk = d.get("graph_eqa_frontier_nodes")
+        if not isinstance(blk, dict):
+            eqa = d.get("graph_eqa")
+            if isinstance(eqa, dict):
+                blk = eqa.get("frontier_nodes")
+        if not isinstance(blk, dict):
+            return
+        if blk.get("enabled") is not None:
+            self.frontier_nodes_enabled = bool(blk["enabled"])
+        if blk.get("max_nodes") is not None:
+            self._frontier_max_nodes = max(1, int(blk["max_nodes"]))
+        if blk.get("min_cluster_cells") is not None:
+            self._frontier_min_cluster_cells = max(1, int(blk["min_cluster_cells"]))
+        if blk.get("keyword_score_weight") is not None:
+            self._frontier_keyword_score_weight = max(0.0, float(blk["keyword_score_weight"]))
+
     def set_graph_timestep(self, step: int) -> None:
         """Set the discrete time index used for ``last_seen`` and staleness (e.g. controller ``obs_count``)."""
         self._graph_timestep = int(step)
@@ -305,7 +346,11 @@ class GraphEQAMemory:
             return 0
         cur = int(current_step)
         to_drop: list[GraphNode] = [
-            n for n in self._nodes if not is_ground_truth_node(n) and cur - int(n.last_seen) > self.staleness_horizon
+            n
+            for n in self._nodes
+            if not is_ground_truth_node(n)
+            and not n.is_frontier
+            and cur - int(n.last_seen) > self.staleness_horizon
         ]
         if not to_drop:
             return 0
@@ -389,7 +434,7 @@ class GraphEQAMemory:
 
         if self.spatial_merge_m > 0:
             for idx, existing in enumerate(self._nodes):
-                if existing.is_viewpoint or is_ground_truth_node(existing):
+                if existing.is_viewpoint or existing.is_frontier or is_ground_truth_node(existing):
                     continue
                 el = [(x or "").strip().lower() for x in existing.labels if str(x).strip()]
                 if not el or el[0] != primary:
@@ -693,6 +738,144 @@ class GraphEQAMemory:
     def get_navigation_samples(self) -> list[GraphNavigationSample]:
         return list(self._nav_samples)
 
+    def _frontier_desc(self, cluster_id: str) -> str:
+        from emet.memory.graph_eqa.frontier_nodes import FRONTIER_DESC_PREFIX
+
+        return f"{FRONTIER_DESC_PREFIX}{cluster_id}"
+
+    def _find_frontier_node(self, cluster_id: str) -> GraphNode | None:
+        desc = self._frontier_desc(cluster_id)
+        for n in self._nodes:
+            if n.is_frontier and n.description == desc:
+                return n
+        return None
+
+    def _remove_frontier_nodes(self, keep_cluster_ids: set[str]) -> None:
+        from emet.memory.graph_eqa.frontier_nodes import FRONTIER_DESC_PREFIX
+
+        drop_obs: set[int] = set()
+        drop_nodes: set[int] = set()
+        for n in self._nodes:
+            if not n.is_frontier:
+                continue
+            desc = n.description or ""
+            cid = desc[len(FRONTIER_DESC_PREFIX) :] if desc.startswith(FRONTIER_DESC_PREFIX) else ""
+            if cid not in keep_cluster_ids:
+                drop_obs.add(int(n.obs_id))
+                drop_nodes.add(int(n.node_id))
+        if not drop_nodes:
+            return
+        self._nodes = [n for n in self._nodes if int(n.node_id) not in drop_nodes]
+        self._observations = [o for o in self._observations if int(o.obs_id) not in drop_obs]
+        for i, n in enumerate(self._nodes, start=1):
+            self._nodes[i - 1] = replace(n, node_id=i)
+        self._rebuild_viewpoint_index()
+        self._update_edges()
+
+    def sync_frontier_nodes(
+        self,
+        voxel_map: Any,
+        planner: Any,
+        xyt: Any,
+        *,
+        question_keywords: list[str] | None = None,
+    ) -> int:
+        """Upsert/remove frontier graph nodes from the voxel unexplored-frontier mask."""
+        if not self.frontier_nodes_enabled:
+            return sum(1 for n in self._nodes if n.is_frontier)
+
+        from emet.memory.graph_eqa.frontier_nodes import (
+            _as_bool_numpy,
+            cluster_frontier_mask,
+            hint_labels_near_grid,
+            keyword_overlap_score,
+        )
+
+        try:
+            outside = voxel_map.get_outside_frontier(xyt, planner)
+            _, explored = voxel_map.get_2d_map()
+        except Exception:
+            return sum(1 for n in self._nodes if n.is_frontier)
+
+        unexplored = _as_bool_numpy(outside) & ~_as_bool_numpy(explored)
+        clusters = cluster_frontier_mask(
+            unexplored,
+            min_cells=self._frontier_min_cluster_cells,
+        )
+        image_descriptions = getattr(voxel_map, "image_descriptions", None) or []
+        keywords = list(question_keywords or self._relevant_objects or self._enrich_object_hints or [])
+
+        scored: list[tuple[float, str, tuple[int, int], int]] = []
+        for cluster_id, grid_ij, cell_count in clusters:
+            hints = hint_labels_near_grid(grid_ij, image_descriptions)
+            kw_score = keyword_overlap_score(hints, keywords) if keywords else 0.0
+            scored.append((kw_score, cluster_id, grid_ij, cell_count))
+        scored.sort(key=lambda x: (-x[0], -x[3]))
+
+        keep_ids: set[str] = set()
+        step = self._effective_timestep()
+        placeholder_rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+
+        for _score, cluster_id, grid_ij, _count in scored[: self._frontier_max_nodes]:
+            keep_ids.add(cluster_id)
+            gi, gj = grid_ij
+            try:
+                xy = voxel_map.grid_coords_to_xy(np.array([gi, gj], dtype=float))
+            except Exception:
+                continue
+            xyz = np.array([float(xy[0]), float(xy[1]), 0.0], dtype=float)
+            hints = hint_labels_near_grid(grid_ij, image_descriptions)
+            labels = ["frontier"] + hints[:3]
+            desc = self._frontier_desc(cluster_id)
+            obs_desc = (
+                "unexplored areas; " + ", ".join(hints) if hints else "This observation corresponds to unexplored space;"
+            )
+
+            existing = self._find_frontier_node(cluster_id)
+            if existing is not None:
+                idx = next(i for i, n in enumerate(self._nodes) if n.node_id == existing.node_id)
+                self._nodes[idx] = replace(
+                    existing,
+                    xyz=xyz,
+                    labels=labels,
+                    last_seen=step,
+                    description=desc,
+                )
+                for o in self._observations:
+                    if int(o.obs_id) == int(existing.obs_id):
+                        o.xyz = xyz.copy()
+                        o.labels = list(labels)
+                        o.description = obs_desc
+                        break
+            else:
+                obs_id = self._next_obs_id
+                self._next_obs_id += 1
+                node_id = len(self._nodes) + 1
+                self._nodes.append(
+                    GraphNode(
+                        node_id=node_id,
+                        labels=labels,
+                        xyz=xyz.copy(),
+                        obs_id=obs_id,
+                        description=desc,
+                        last_seen=step,
+                        is_frontier=True,
+                    )
+                )
+                self._observations.append(
+                    GraphObservation(
+                        obs_id=obs_id,
+                        rgb=placeholder_rgb.copy(),
+                        xyz=xyz.copy(),
+                        labels=list(labels),
+                        description=obs_desc,
+                    )
+                )
+
+        self._remove_frontier_nodes(keep_ids)
+        self._update_edges()
+        return sum(1 for n in self._nodes if n.is_frontier)
+
     def _rebuild_viewpoint_index(self) -> None:
         self._viewpoint_by_obs_id = {
             int(n.obs_id): int(n.node_id) for n in self._nodes if n.is_viewpoint
@@ -752,7 +935,7 @@ class GraphEQAMemory:
     def _update_edges(self) -> None:
         """Compute spatial relations (near, on, on_floor) and ``seen_from`` viewpoint links."""
         self._edges.clear()
-        objects = [n for n in self._nodes if not n.is_viewpoint]
+        objects = [n for n in self._nodes if not n.is_viewpoint and not n.is_frontier]
         for i, na in enumerate(objects):
             if _on_floor(na.xyz):
                 self._edges.append((na.node_id, -1, "on"))  # -1 = floor
@@ -780,7 +963,12 @@ class GraphEQAMemory:
         for n in self._nodes:
             lbl = _prompt_labels(n.labels)
             sup = f" n={n.support_count}" if getattr(n, "support_count", 1) != 1 else ""
-            kind = "View" if n.is_viewpoint else "Node"
+            if n.is_frontier:
+                kind = "Frontier"
+            elif n.is_viewpoint:
+                kind = "View"
+            else:
+                kind = "Node"
             lines.append(
                 f"{kind} {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]{sup}"
             )
@@ -902,29 +1090,169 @@ class GraphEQAMemory:
         self._relevant_objects = merged[:4]
 
     def _select_relevant_obs_ids(self, max_images: int = 6) -> list[int]:
-        """Select observation IDs whose labels match relevant_objects (1-based)."""
-        if not self._relevant_objects or not self._observations:
-            return [o.obs_id for o in self._observations[:max_images]]
-        seen: set = set()
-        out: list[int] = []
+        """Select a diverse set of observation IDs for the EQA prompt (1-based).
+
+        P2 diversification: instead of "all keyword matches then fill", build a
+        prioritized pool so the VLM sees question-relevant views *and* a frontier
+        view *and* a recent view *and* spatially spread context, capped at
+        ``max_images``. Falls back to the most recent observations when there are
+        no keyword objects.
+        """
+        if not self._observations:
+            return []
+        if max_images <= 0:
+            return []
+        if not self._relevant_objects:
+            return [o.obs_id for o in self._observations[-max_images:]]
+
+        by_id = {int(o.obs_id): o for o in self._observations}
+        selected: list[int] = []
+
+        def take(oid: int) -> bool:
+            oid = int(oid)
+            if oid in selected or oid not in by_id:
+                return False
+            selected.append(oid)
+            return len(selected) >= max_images
+
+        # 0) SigLIP-matched observation per relevant object (caption-independent). Guarantees the
+        #    VLM is shown the best view of the target object even when it was captioned as
+        #    something else, instead of reasoning over whatever furniture happens to be in frame.
+        obs_grounder = getattr(self, "_obs_id_grounder", None)
+        if obs_grounder is not None:
+            for obj in self._relevant_objects:
+                try:
+                    oid = obs_grounder(obj)
+                except Exception:
+                    oid = None
+                if oid is not None and take(int(oid)):
+                    return selected
+
+        # 1) Keyword matches (question-relevant objects), most recent first.
+        keyword_hits: list[int] = []
         for obj in self._relevant_objects:
             obj_lower = obj.lower()
-            for o in self._observations:
-                if o.obs_id in seen:
+            for o in reversed(self._observations):
+                if int(o.obs_id) in keyword_hits:
                     continue
                 if any(obj_lower in lab.lower() for lab in o.labels):
-                    seen.add(o.obs_id)
-                    out.append(o.obs_id)
-                    if len(out) >= max_images:
-                        return out
-        # If few matches, add remaining up to max_images
-        for o in self._observations:
-            if o.obs_id not in seen:
-                seen.add(o.obs_id)
-                out.append(o.obs_id)
-                if len(out) >= max_images:
-                    break
-        return out
+                    keyword_hits.append(int(o.obs_id))
+        # Reserve at least one slot each for frontier + recent when budget allows.
+        reserved = 0
+        if max_images >= 3:
+            reserved = min(2, max_images - 1)
+        keyword_budget = max(1, max_images - reserved)
+        for oid in keyword_hits[:keyword_budget]:
+            if take(oid):
+                return selected
+
+        # 2) One frontier-tagged observation (encourage exploration views).
+        for o in reversed(self._observations):
+            if self._obs_is_frontier(int(o.obs_id)):
+                if take(int(o.obs_id)):
+                    return selected
+                break
+
+        # 3) Most recent observation (fresh context).
+        for o in reversed(self._observations):
+            if take(int(o.obs_id)):
+                return selected
+            break
+
+        # 4) Spatial spread: greedily add observations farthest from those chosen.
+        remaining = [int(o.obs_id) for o in self._observations if int(o.obs_id) not in selected]
+        while remaining and len(selected) < max_images:
+            best_oid = None
+            best_dist = -1.0
+            for oid in remaining:
+                cand = by_id[oid].xyz[:2]
+                if selected:
+                    d = min(
+                        float(np.linalg.norm(cand - by_id[s].xyz[:2]))
+                        for s in selected
+                        if s in by_id
+                    )
+                else:
+                    d = 0.0
+                if d > best_dist:
+                    best_dist = d
+                    best_oid = oid
+            if best_oid is None:
+                break
+            selected.append(best_oid)
+            remaining.remove(best_oid)
+
+        return selected
+
+    def set_text_grounder(
+        self, grounder: Callable[[str], tuple[float, np.ndarray] | None] | None
+    ) -> None:
+        """Register an open-vocab visual grounder: ``text -> (similarity, xyz) | None``.
+
+        Backed by the voxel map's SigLIP features so existence/location can be grounded in
+        pixels rather than the VLM's caption-derived node labels.
+        """
+        self._text_grounder = grounder
+
+    def set_obs_id_grounder(self, grounder: Callable[[str], int | None] | None) -> None:
+        """Register an open-vocab ``text -> obs_id`` selector (SigLIP-backed).
+
+        Used by image selection to force the best-aligned observation of each relevant object
+        into the VLM prompt regardless of its caption label.
+        """
+        self._obs_id_grounder = grounder
+
+    def _relevant_memory_summary(self) -> str:
+        """Surface question-relevant objects as 'confirmed memory' for the VLM.
+
+        Combines two grounding signals so the model does not have to rely on the attached
+        images (it otherwise reports 'none' for objects it cannot currently see):
+          * graph nodes whose caption-derived labels match the object, and
+          * a SigLIP visual match over all observed points (independent of captions) — this
+            catches objects that were seen but mislabeled (e.g. a woven basket captioned as
+            a "decorative plant").
+        """
+        if not self._relevant_objects:
+            return ""
+        object_nodes = [n for n in self._nodes if not n.is_frontier and not n.is_viewpoint]
+        grounder = self._text_grounder
+        present_thresh = SIGLIP_PRESENT_THRESHOLD
+        lines: list[str] = []
+        for obj in self._relevant_objects:
+            obj_l = obj.lower()
+            matches = [n for n in object_nodes if any(obj_l in lab.lower() for lab in n.labels)]
+            sig: tuple[float, np.ndarray] | None = None
+            if grounder is not None:
+                try:
+                    sig = grounder(obj)
+                except Exception:
+                    sig = None
+            parts: list[str] = []
+            if matches:
+                positions = ", ".join(f"({n.xyz[0]:.1f}, {n.xyz[1]:.1f})" for n in matches[:4])
+                parts.append(f"{len(matches)} graph node(s) at {positions}")
+            sig_present = sig is not None and float(sig[0]) >= present_thresh
+            if sig is not None:
+                sim, xyz = float(sig[0]), sig[1]
+                if sig_present:
+                    parts.append(f"SigLIP visual match sim={sim:.2f} near ({xyz[0]:.1f}, {xyz[1]:.1f})")
+                else:
+                    parts.append(f"no strong SigLIP match (sim={sim:.2f})")
+            present = bool(matches) or sig_present
+            if present:
+                lines.append(f"- {obj}: PRESENT — " + "; ".join(parts))
+            elif parts:
+                lines.append(f"- {obj}: likely NOT present — " + "; ".join(parts))
+            else:
+                lines.append(f"- {obj}: not observed during exploration")
+        if not lines:
+            return ""
+        header = (
+            "CONFIRMED_MEMORY (grounded in observed graph nodes + SigLIP visual matches; "
+            "trust these for existence/counting/location even if they are not in the "
+            "attached images):"
+        )
+        return header + "\n" + "\n".join(lines)
 
     def _graph_covers_relevant_objects(self) -> bool:
         """True when every keyword object appears in at least one graph node label."""
@@ -936,15 +1264,28 @@ class GraphEQAMemory:
         all_labels = " ".join(lab.lower() for o in self._observations for lab in o.labels)
         return all(obj.lower() in all_labels for obj in self._relevant_objects)
 
+    def _obs_is_frontier(self, obs_id: int) -> bool:
+        for n in self._nodes:
+            if int(n.obs_id) == int(obs_id) and n.is_frontier:
+                return True
+        return False
+
     def _get_image_descriptions_str(self, obs_ids: list[int]) -> str:
-        """Build IMAGE_DESCRIPTIONS string for the prompt (1-indexed image ids)."""
-        options = []
-        for i, obs in enumerate(self._observations, start=1):
+        """Build IMAGE_DESCRIPTIONS for attached EQA images only (Image 1..N)."""
+        if not obs_ids:
+            return "IMAGE_DESCRIPTIONS: (none)"
+        id_to_obs = {int(o.obs_id): o for o in self._observations}
+        options: list[str] = []
+        for img_idx, oid in enumerate(obs_ids, start=1):
+            obs = id_to_obs.get(int(oid))
+            if obs is None:
+                continue
             lbl = ", ".join(obs.labels) if obs.labels else "object"
-            line = f"{i}. {lbl} at ({obs.xyz[0]:.2f}, {obs.xyz[1]:.2f});"
-            if obs.obs_id in obs_ids:
-                idx = obs_ids.index(obs.obs_id) + 1
-                line += f" This observation is associated with Image {idx};"
+            line = f"Image {img_idx}. {lbl} at ({obs.xyz[0]:.2f}, {obs.xyz[1]:.2f});"
+            if self._obs_is_frontier(obs.obs_id):
+                line += " unexplored frontier;"
+            elif obs.description and "unexplored" in obs.description.lower():
+                line += f" {obs.description.strip()};"
             options.append(line)
         return "IMAGE_DESCRIPTIONS: " + "\n".join(options) if options else "IMAGE_DESCRIPTIONS: (none)"
 
@@ -976,21 +1317,69 @@ class GraphEQAMemory:
         confidence = "true" in confidence_text.replace(" ", "").lower()
         action = extract_between(lowered, "action:", "confidence_reasoning:")
         confidence_reasoning = extract_after(lowered, "confidence_reasoning:")
-        if not answer:
-            m = re.search(r"\banswer\s*:\s*([a-d])\b", lowered)
+        if not answer.strip():
+            m = re.search(r"answer\s*:\s*([a-d])\b", lowered)
             if m:
                 answer = m.group(1).upper()
-        if not answer:
+        if not answer.strip():
             m = re.search(r"(?:^|\n)\s*([a-d])\s*(?:\n|$)", lowered)
             if m:
                 answer = m.group(1).upper()
         return reasoning, answer, confidence, action, confidence_reasoning
+
+    def _salvage_answer_letter(self, question: str, commands: list[Any]) -> str:
+        """Terse follow-up when the main EQA output never produced an ``answer:`` field.
+
+        Reuses the attached images from ``commands`` and asks for only a letter, which
+        recovers runaway-caption episodes (the small VLM loops before emitting answer).
+        """
+        if self.eqa_client is None:
+            return ""
+        images = [c for c in commands if isinstance(c, Image.Image)]
+        directive = (
+            "Answer the multiple-choice question with ONLY a single letter (A, B, C, or D). "
+            "Do not caption images. Do not explain. Output just the letter.\n"
+            f"Question: {question}"
+        )
+        try:
+            salvage_raw = self.eqa_client([directive, *images])
+        except Exception:
+            return ""
+        text = (salvage_raw or "").strip()
+        m = re.search(r"\b([A-D])\b", text)
+        if m:
+            return m.group(1)
+        m = re.search(r"([A-D])", text)
+        return m.group(1) if m else ""
 
     def _target_point_from_image_id(self, image_id: int) -> np.ndarray | None:
         """Return (x, y, 1) for the observation's position when mLLM suggests navigating to that image."""
         for obs in self._observations:
             if obs.obs_id == image_id:
                 return np.array([obs.xyz[0], obs.xyz[1], 1.0], dtype=float)
+        return None
+
+    def _target_point_from_display_image_index(
+        self,
+        display_index: int,
+        *,
+        obs_ids: list[int],
+        nav_fallback_tail: list[GraphNavigationSample],
+    ) -> np.ndarray | None:
+        """Map 1-based ``Image N`` from the EQA prompt to a navigation waypoint."""
+        if display_index < 1:
+            return None
+        if self._observations and obs_ids:
+            if display_index > len(obs_ids):
+                return None
+            oid = int(obs_ids[display_index - 1])
+            for obs in self._observations:
+                if int(obs.obs_id) == oid:
+                    return np.array([obs.xyz[0], obs.xyz[1], 1.0], dtype=float)
+            return self._target_point_from_image_id(oid)
+        if nav_fallback_tail and display_index <= len(nav_fallback_tail):
+            nv = nav_fallback_tail[display_index - 1]
+            return np.array([nv.xyz[0], nv.xyz[1], 1.0], dtype=float)
         return None
 
     def query_answer(
@@ -1006,15 +1395,19 @@ class GraphEQAMemory:
         Returns:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
         """
+        from emet.llms.eqa_vl_settings import get_eqa_vl_int
+
         self._ensure_llm_clients()
         self.extract_relevant_objects(question)
-        obs_ids = self._select_relevant_obs_ids(max_images=6)
+        max_images = get_eqa_vl_int(self.parameters, "eqa_max_images", 4)
+        obs_ids = self._select_relevant_obs_ids(max_images=max_images)
+        self.last_eqa_obs_ids = list(obs_ids)
         graph_str = self.to_string()
         nav_fallback_tail: list[GraphNavigationSample] = []
         if self._observations:
             img_desc_str = self._get_image_descriptions_str(obs_ids)
         elif self._nav_samples:
-            nav_fallback_tail = self._nav_samples[-6:]
+            nav_fallback_tail = self._nav_samples[-max_images:]
             lines = [
                 "IMAGE_DESCRIPTIONS (navigation-only views; no object graph nodes yet):",
             ]
@@ -1028,8 +1421,17 @@ class GraphEQAMemory:
             img_desc_str = self._get_image_descriptions_str(obs_ids)
 
         commands: list[Any] = ["Question: " + question]
+        if self.memory_summary_enabled:
+            memory_summary = self._relevant_memory_summary()
+            if memory_summary:
+                commands.append(memory_summary)
         commands.append("HISTORY: ")
-        for i, h in enumerate(self._history_outputs):
+        # Only include the most recent iterations: unbounded history bloats the prompt
+        # and feeds the model its own repeated outputs, which drives caption/action loops.
+        max_history = get_eqa_vl_int(self.parameters, "eqa_max_history", 4)
+        history = self._history_outputs
+        start = max(0, len(history) - max_history) if max_history > 0 else 0
+        for i, h in enumerate(history[start:], start=start):
             commands.append("Iteration_" + str(i) + ":" + h)
         commands.append(graph_str)
         commands.append(img_desc_str)
@@ -1043,12 +1445,22 @@ class GraphEQAMemory:
             im = Image.fromarray(nv.rgb.astype(np.uint8), mode="RGB")
             relevant_images.append(im)
             commands.append(im)
+        self.last_eqa_nav_fallback_count = len(nav_fallback_tail)
 
         raw = self.eqa_client(commands)
         self.last_eqa_raw = raw
         answer_outputs = raw.replace("*", "").replace("/", "").replace("#", "").lower()
 
         reasoning, answer, confidence, action, confidence_reasoning = self.parse_answer(answer_outputs)
+        # Salvage: small VLMs sometimes run away captioning and never emit ``answer:``.
+        # Re-ask tersely for just the choice letter using the same images/question.
+        if not answer.strip():
+            salvage = self._salvage_answer_letter(question, commands)
+            if salvage:
+                answer = salvage
+                raw = (raw or "") + f"\n[salvage]\nanswer:\n{salvage}\n"
+                self.last_eqa_raw = raw
+        self.last_eqa_model_confident = bool(confidence)
         if confidence and not self._graph_covers_relevant_objects():
             confidence = False
             confidence_reasoning = (
@@ -1071,19 +1483,14 @@ class GraphEQAMemory:
 
         target_point = None
         if not confidence and action.strip():
-            # Parse action as image id (integer)
             match = re.search(r"\d+", action.strip())
             if match:
-                image_id = int(match.group())
-                # image_id from mLLM is 1-based observation index
-                if 1 <= image_id <= len(self._observations):
-                    obs = self._observations[image_id - 1]
-                    target_point = np.array([obs.xyz[0], obs.xyz[1], 1.0], dtype=float)
-                elif nav_fallback_tail and 1 <= image_id <= len(nav_fallback_tail):
-                    nv = nav_fallback_tail[image_id - 1]
-                    target_point = np.array([nv.xyz[0], nv.xyz[1], 1.0], dtype=float)
-                else:
-                    target_point = self._target_point_from_image_id(image_id)
+                display_index = int(match.group())
+                target_point = self._target_point_from_display_image_index(
+                    display_index,
+                    obs_ids=obs_ids,
+                    nav_fallback_tail=nav_fallback_tail,
+                )
             self._history_outputs.append(
                 "Answer:"
                 + raw_answer

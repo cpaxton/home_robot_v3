@@ -91,6 +91,219 @@ def test_parse_answer_not_confident():
     assert act.strip() == "3"
 
 
+def test_relevant_memory_summary_surfaces_observed_objects():
+    """CONFIRMED_MEMORY lists relevant objects present via graph nodes; flags missing ones."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([4.1, -2.3, 0.5]), ["red pillow"])
+    mem.add_observation(rgb, np.array([4.4, -2.0, 0.5]), ["red pillow"])
+    mem.add_observation(rgb, np.array([4.0, -2.5, 0.5]), ["sofa"])
+
+    mem._relevant_objects = ["red", "sofa"]
+    summary = mem._relevant_memory_summary()
+    assert "CONFIRMED_MEMORY" in summary
+    assert "red: PRESENT" in summary and "2 graph node(s)" in summary
+    assert "sofa: PRESENT" in summary
+
+    mem._relevant_objects = ["unicorn"]
+    missing = mem._relevant_memory_summary()
+    assert "unicorn: not observed during exploration" in missing
+
+
+def test_relevant_memory_summary_uses_siglip_grounder():
+    """A SigLIP visual match marks an object PRESENT even with no caption-matched node."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    # Captioned as a plant, not a basket -> no graph node will match "basket".
+    mem.add_observation(rgb, np.array([3.1, 5.0, 0.5]), ["decorative plant"])
+
+    def grounder(text):
+        if "basket" in text:
+            return (0.30, np.array([3.1, 5.0, 0.5]))  # strong visual match
+        return (0.05, np.array([0.0, 0.0, 0.0]))  # weak/no match
+
+    mem.set_text_grounder(grounder)
+
+    mem._relevant_objects = ["basket"]
+    summary = mem._relevant_memory_summary()
+    assert "basket: PRESENT" in summary
+    assert "SigLIP visual match" in summary
+
+    mem._relevant_objects = ["elephant"]
+    weak = mem._relevant_memory_summary()
+    assert "elephant: likely NOT present" in weak
+    assert "no strong SigLIP match" in weak
+
+
+def test_query_answer_caps_history_in_prompt():
+    """Only the most recent eqa_max_history iterations are sent to the VLM."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    captured = {"cmds": None}
+
+    def fake_eqa(cmds):
+        captured["cmds"] = cmds
+        return "reasoning: r\nanswer: B\nconfidence: false\naction: none\nconfidence_reasoning: x"
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "wall",
+        parameters={"eqa_vl": {"eqa_max_history": 2}},
+    )
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["wall"])
+    mem._relevant_objects = ["wall"]
+    for _ in range(5):
+        mem.query_answer("Is the wall blue? A) Yes B) No")
+    iteration_lines = [c for c in captured["cmds"] if isinstance(c, str) and c.startswith("Iteration_")]
+    assert len(iteration_lines) == 2
+    # Should be the latest two iterations (history has 4 entries before the 5th call).
+    assert iteration_lines[0].startswith("Iteration_2") and iteration_lines[1].startswith("Iteration_3")
+
+
+def test_query_answer_memory_summary_gated_by_flag():
+    """CONFIRMED_MEMORY is only sent to the VLM when memory_summary_enabled (Dynagraph)."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    captured = {"cmds": None}
+
+    def fake_eqa(cmds):
+        captured["cmds"] = cmds
+        return "reasoning: r\nanswer: B\nconfidence: false\naction: none\nconfidence_reasoning: x"
+
+    mem = GraphEQAMemory(eqa_client=fake_eqa, image_description_client=lambda _x: "sofa")
+    mem.add_observation(rgb, np.array([4.0, -2.5, 0.5]), ["sofa"])
+    mem._relevant_objects = ["sofa"]
+
+    # Baseline GraphEQA: flag off -> no CONFIRMED_MEMORY block.
+    mem.query_answer("Where is the sofa? A) x B) y")
+    assert not any(isinstance(c, str) and "CONFIRMED_MEMORY" in c for c in captured["cmds"])
+
+    # Dynagraph: flag on -> CONFIRMED_MEMORY block is included.
+    mem.memory_summary_enabled = True
+    mem._relevant_objects = ["sofa"]
+    mem.query_answer("Where is the sofa? A) x B) y")
+    assert any(isinstance(c, str) and "CONFIRMED_MEMORY" in c for c in captured["cmds"])
+
+
+def test_query_answer_records_pregate_confidence_when_gated():
+    """last_eqa_model_confident reflects the model's confidence before the coverage gate."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    raw = "reasoning: r\nanswer: B\nconfidence: true\naction: none\nconfidence_reasoning: sure"
+    mem = GraphEQAMemory(eqa_client=lambda _c: raw, image_description_client=lambda _x: "wall")
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["wall"])
+    # Relevant object never appears as a node label -> coverage gate suppresses confidence.
+    mem._relevant_objects = ["unicorn"]
+    _r, _a, gated_conf, _cr, _t, _imgs = mem.query_answer("Is there a unicorn? A) Yes B) No")
+    assert gated_conf is False
+    assert mem.last_eqa_model_confident is True
+
+
+def test_query_answer_salvages_letter_on_caption_runaway():
+    """When the main output never emits answer:, a terse retry recovers the letter."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    calls = {"n": 0}
+
+    def fake_eqa(cmds):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # Runaway: captions only, no answer field.
+            return "caption:\n" + "\n".join(f"Image {i} shows a wall." for i in range(1, 40))
+        return "B"
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "wall",
+    )
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["wall"])
+    mem._relevant_objects = ["wall"]
+    _r, _a, _c, _cr, _t, _imgs = mem.query_answer("Is the wall blue? A) Yes B) No")
+    assert calls["n"] == 2
+    assert "answer:\nb" in mem.last_eqa_raw.lower()
+
+
+def test_select_relevant_obs_ids_diversifies_views():
+    """P2: selection reserves slots for keyword, frontier, and recent/spread views."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    # Three near-duplicate lamp views, plus a distant chair, plus a recent table.
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["lamp"])
+    mem.add_observation(rgb, np.array([0.1, 0.0, 0.5]), ["lamp"])
+    mem.add_observation(rgb, np.array([0.2, 0.0, 0.5]), ["lamp"])
+    mem.add_observation(rgb, np.array([9.0, 9.0, 0.5]), ["chair"])
+    mem.add_observation(rgb, np.array([5.0, -5.0, 0.5]), ["table"])
+    mem._relevant_objects = ["lamp"]
+
+    obs_ids = mem._select_relevant_obs_ids(max_images=4)
+    assert len(obs_ids) == 4
+    assert len(set(obs_ids)) == 4
+    # At least one lamp view is included (keyword match).
+    lamp_ids = {1, 2, 3}
+    assert lamp_ids & set(obs_ids)
+    # Not monopolized by the three duplicate lamp views: spread brings in others.
+    assert not lamp_ids.issuperset(set(obs_ids))
+
+
+def test_select_relevant_obs_ids_uses_siglip_obs_grounder():
+    """Dynagraph: a registered SigLIP obs grounder forces the target view in, even when the
+    observation was captioned as something else (no keyword match)."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["couch"])
+    mem.add_observation(rgb, np.array([1.0, 0.0, 0.5]), ["rug"])
+    # obs 3 is the bed, but captioned "decorative object" -> no keyword hit for "bed".
+    mem.add_observation(rgb, np.array([1.2, 0.0, 0.5]), ["decorative object"])
+    mem.add_observation(rgb, np.array([1.4, 0.0, 0.5]), ["lamp"])
+    mem.add_observation(rgb, np.array([1.6, 0.0, 0.5]), ["chair"])
+    mem._relevant_objects = ["bed"]
+
+    # No grounder: caption-keyword selection never surfaces the (mislabeled) bed first.
+    assert mem._select_relevant_obs_ids(max_images=2)[0] != 3
+
+    # With a SigLIP grounder mapping "bed" -> obs 3, the target view is surfaced first.
+    mem.set_obs_id_grounder(lambda text: 3 if "bed" in text else None)
+    obs_ids = mem._select_relevant_obs_ids(max_images=3)
+    assert obs_ids[0] == 3
+
+
+def test_select_relevant_obs_ids_no_keywords_uses_recent():
+    """Without keyword objects, fall back to the most recent observations."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    for i in range(5):
+        mem.add_observation(rgb, np.array([float(i), 0.0, 0.5]), [f"obj{i}"])
+    mem._relevant_objects = None
+    obs_ids = mem._select_relevant_obs_ids(max_images=2)
+    assert obs_ids == [4, 5]
+
+
+def test_display_image_index_maps_to_selected_obs_ids():
+    """EQA action Image N must resolve through obs_ids order, not full observation list."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(
+        eqa_client=lambda _cmds: (
+            "reasoning: need lamp view\n"
+            "answer: b\n"
+            "confidence: false\n"
+            "action: 2\n"
+            "confidence_reasoning: check second attached image\n"
+        ),
+        image_description_client=lambda _x: "lamp",
+    )
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["table"])
+    mem.add_observation(rgb, np.array([1.0, 0.0, 0.5]), ["chair"])
+    mem.add_observation(rgb, np.array([9.0, 9.0, 0.5]), ["lamp"])
+    mem._relevant_objects = ["lamp"]
+    obs_ids = mem._select_relevant_obs_ids(max_images=3)
+    assert obs_ids[0] == 3
+    assert obs_ids[1] == 1
+
+    _r, _a, conf, _cr, target, _imgs = mem.query_answer("Where is the lamp?")
+    assert conf is False
+    assert target is not None
+    # Image 2 -> obs_ids[1] == obs 1 (table at 0,0), not observations[1] (chair at 1,0).
+    assert float(target[0]) == 0.0
+    assert float(target[1]) == 0.0
+    assert mem.last_eqa_obs_ids == obs_ids
+
+
 def test_near_heuristic():
     """_near returns True when 2D distance <= max_dist."""
     assert _near(np.array([0, 0, 0]), np.array([0.5, 0, 0]), max_dist=1.0) is True
