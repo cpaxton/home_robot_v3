@@ -126,6 +126,83 @@ class GraphEQAController(DynamemController):
                 parameters=parameters,
             )
 
+        # Baseline GraphEQA: improvements (SigLIP-grounded CONFIRMED_MEMORY + frontier
+        # coverage override) stay OFF here so this controller is a clean baseline. The
+        # DynagraphController turns them on.
+        self._eqa_explore_when_uncovered = False
+
+    def _siglip_text_match(self, text: str) -> tuple[float, np.ndarray] | None:
+        """Open-vocab visual grounding via the voxel map's SigLIP features.
+
+        Returns ``(max_cosine_similarity, xyz)`` for the best-matching observed point, or
+        ``None`` if no features exist yet. Decouples grounding from the VLM caption labels.
+        """
+        vm = getattr(self, "voxel_map", None)
+        if vm is None or not hasattr(vm, "find_alignment_over_model"):
+            return None
+        try:
+            alignments = vm.find_alignment_over_model(text)
+            if alignments is None:
+                return None
+            points, _, _, _ = vm.semantic_memory.get_pointcloud()
+            if points is None:
+                return None
+            a = alignments.detach().cpu().squeeze()
+            idx = int(a.argmax())
+            return float(a.max()), points[idx].detach().cpu().numpy()
+        except Exception:
+            return None
+
+    def _siglip_obs_id_for_text(self, text: str) -> int | None:
+        """Best-aligned observation id for *text* via the voxel map's SigLIP features.
+
+        Lets image selection surface the actual view of the target object (caption-independent)
+        instead of whatever furniture is in the most recent frames.
+        """
+        vm = getattr(self, "voxel_map", None)
+        if vm is None or not hasattr(vm, "find_obs_id_for_text"):
+            return None
+        try:
+            oid = vm.find_obs_id_for_text(text)
+            if oid is None:
+                return None
+            if hasattr(oid, "item"):
+                oid = oid.item()
+            return int(oid)
+        except Exception:
+            return None
+
+    def _siglip_guided_frontier(self, text: str) -> np.ndarray | None:
+        """Intelligent exploration: head toward the frontier nearest the most query-aligned
+        observed point (SigLIP), so the robot moves toward visually-similar regions instead
+        of revisiting seen views. Caption-independent, so it works even when the object was
+        seen but mislabeled. Returns a nav waypoint ``[x, y, 1.0]`` or ``None``.
+        """
+        sig = self._siglip_text_match(text)
+        if sig is None:
+            return None
+        _sim, xyz = sig
+        gm = getattr(self, "graph_memory", None)
+        frontier_nodes = (
+            [n for n in gm.get_nodes() if getattr(n, "is_frontier", False)] if gm is not None else []
+        )
+        best = None
+        best_d = float("inf")
+        for n in frontier_nodes:
+            d = float(np.linalg.norm(np.asarray(n.xyz[:2], dtype=float) - np.asarray(xyz[:2], dtype=float)))
+            if d < best_d:
+                best_d, best = d, n
+        if best is not None:
+            return np.array([float(best.xyz[0]), float(best.xyz[1]), 1.0], dtype=float)
+        # No frontier graph nodes: fall back to a keyword/SigLIP-biased exploration sample.
+        if hasattr(self, "space") and hasattr(self.space, "sample_frontier"):
+            fr = self.space.sample_frontier(
+                self.planner, self._planning_base_xyt(self.robot.get_base_pose()), text=text
+            )
+            if fr is not None:
+                return np.array([float(fr[0]), float(fr[1]), 1.0], dtype=float)
+        return None
+
     def _graph_dedup_skips(self, label: str, xyz: np.ndarray) -> bool:
         """Skip adding a node if we already have the same label near this XY (v1 merge)."""
         if self._graph_dedup_xy_m <= 0:
@@ -159,6 +236,9 @@ class GraphEQAController(DynamemController):
             self.look_around()
             self.robot.look_front()
             self.robot.switch_to_navigation_mode()
+
+        if self.graph_memory is not None and hasattr(self, "_sync_graph_frontier_nodes"):
+            self._sync_graph_frontier_nodes()
 
         try:
             (
@@ -225,6 +305,32 @@ class GraphEQAController(DynamemController):
         if confidence:
             return answer, discord_text, relevant_images, confidence
 
+        # Coverage: while the question-relevant objects have NOT been observed yet, prefer an
+        # unexplored, question-matched frontier over revisiting the VLM's already-seen
+        # "Navigate to Image N" target. The VLM anchors on objects it has already seen and
+        # rarely sends the robot into new rooms, so targets it never observes (e.g. a basket
+        # in an unexplored room) stay unanswerable. Once those objects are in the graph (or
+        # the VLM is confident) we follow its inspection target.
+        if (
+            not confidence
+            and self.graph_memory is not None
+            and getattr(self, "_eqa_explore_when_uncovered", False)
+        ):
+            try:
+                covered = self.graph_memory._graph_covers_relevant_objects()
+            except Exception:
+                covered = True
+            if not covered:
+                # SigLIP-guided exploration first (toward visually-similar regions), then
+                # the keyword-matched frontier-node heuristic.
+                frontier_pt = self._siglip_guided_frontier(question)
+                if frontier_pt is None:
+                    frontier_pt = self._best_frontier_point_from_graph(question)
+                if frontier_pt is not None:
+                    target_point = frontier_pt
+
+        if target_point is None and not confidence:
+            target_point = self._best_frontier_point_from_graph(question)
         if target_point is None and not confidence and hasattr(self, "space") and hasattr(
             self.space, "sample_frontier"
         ):
@@ -261,6 +367,8 @@ class GraphEQAController(DynamemController):
                 self.update()
                 if self.navigate_to_target_pose(target_point, start_pose, target_theta):
                     break
+            if self.graph_memory is not None and hasattr(self, "_sync_graph_frontier_nodes"):
+                self._sync_graph_frontier_nodes()
 
         return answer, discord_text, relevant_images, confidence
 
@@ -272,11 +380,14 @@ class GraphEQAController(DynamemController):
         max_movement_step: int = 5,
     ) -> tuple[str, list[Image.Image]]:
         """Run EQA until confident or max steps, using graph memory."""
+        self._eqa_question = question
         answer = ""
         confidence = False
         discord_text = ""
         relevant_images: list[Image.Image] = []
         for step in range(max_planning_steps):
+            if step > 0:
+                self.update()
             answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(
                 question,
                 max_movement_step=max_movement_step,
@@ -284,6 +395,14 @@ class GraphEQAController(DynamemController):
             )
             if confidence:
                 break
+            if self.graph_memory is not None and hasattr(self, "_sync_graph_frontier_nodes"):
+                self._sync_graph_frontier_nodes()
+            try:
+                from emet.llms.graph_eqa_vlm import trim_shared_graph_eqa_vlm_cache
+
+                trim_shared_graph_eqa_vlm_cache()
+            except Exception:
+                pass
         if not relevant_images:
             relevant_images = []
         # Terminal + TTS feedback (CLI users otherwise see no reply; parent DynamemController.run_eqa does this for voxel EQA).

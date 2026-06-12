@@ -159,9 +159,11 @@ def update_graph_memory_from_dynamem_observation(
             )
             return
         hm3d_labels = labeler.labels_from_frame(obs.semantic, obs.depth)
-        if hm3d_labels:
+        if hm3d_labels and sensor_builder is not None:
             xyz = sensor_builder.world_xyz_for_observation(obs)
             graph_memory.add_observation(rgb, xyz, hm3d_labels)
+            return
+        if hm3d_labels:
             return
 
     voxel_labels = None
@@ -189,6 +191,34 @@ def update_graph_memory_from_dynamem_observation(
             graph_memory.add_observation(rgb, xyz, [label], description=desc, viewer_xyz=viewer_xyz)
     elif not instance_items:
         graph_memory.record_navigation_sample(rgb, xyz, base_xyz=viewer_xyz)
+
+
+def sync_graph_frontier_nodes(
+    *,
+    graph_memory: Any,
+    voxel_map: Any,
+    planner: Any,
+    base_xyt: Any,
+    question: str | None = None,
+) -> int:
+    """Mirror voxel frontiers into graph frontier nodes (optional question-guided hints)."""
+    if graph_memory is None or not getattr(graph_memory, "frontier_nodes_enabled", False):
+        return 0
+    if not hasattr(graph_memory, "sync_frontier_nodes"):
+        return 0
+    keywords = None
+    if question:
+        from emet.memory.graph_eqa.frontier_nodes import exploration_keywords_from_text
+
+        keywords = exploration_keywords_from_text(question)
+    return int(
+        graph_memory.sync_frontier_nodes(
+            voxel_map,
+            planner,
+            base_xyt,
+            question_keywords=keywords,
+        )
+    )
 
 
 def _base_xyz_from_robot(robot: Any) -> np.ndarray | None:

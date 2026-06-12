@@ -29,7 +29,7 @@ Requires `latexmk` + `booktabs` (via `texlive-latex-extra`, `texlive-bibtex-extr
 - `main.tex` — document root (anonymous submission mode)
 - `corl_2026.sty`, `corlabbrvnat.bst` — official CoRL 2026 template files
 - `sections/` — one file per section (`00_abstract` … `06_conclusion`)
-- `sections/appendix/` — robot platforms, Innate Mars, Depth Anything 3, ground-truth graph (appendix 04)
+- `sections/appendix/` — robot platforms, Innate Mars, Depth Anything 3, ground-truth graph (04), Habitat HM-EQA parity (05)
 - `references.bib` — bibliography stubs (expand before submission)
 
 ## Benchmarks and results

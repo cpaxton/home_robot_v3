@@ -125,6 +125,13 @@ def config_from_client(client: Any) -> VLLMRunConfig:
             device=parts[2],
             quantization=parts[3] if parts[3] else None,
         )
+    if prefix == "gemma4" and len(parts) >= 4:
+        return VLLMRunConfig(
+            family="gemma4",
+            hf_model_id=parts[1],
+            device=parts[2],
+            quantization=parts[3] if parts[3] else None,
+        )
     if prefix == "gemma4" and len(parts) >= 3:
         return VLLMRunConfig(
             family="gemma4",

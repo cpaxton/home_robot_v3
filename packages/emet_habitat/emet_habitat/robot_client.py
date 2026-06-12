@@ -156,7 +156,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         blocking: bool = False,
         verbose: bool = False,
         timeout: float | None = None,
-        world_frame: bool = False,
+        world_frame: bool | None = None,
         **kwargs: Any,
     ):
         """Navigate to ``(x, z[, yaw])`` using navmesh path following when available.
@@ -245,7 +245,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         relative: bool = False,
         final_timeout: float = 60.0,
         blocking: bool = True,
-        world_frame: bool = False,
+        world_frame: bool | None = None,
         **kwargs: Any,
     ):
         """Visit each waypoint via :meth:`move_base_to` (open-loop).

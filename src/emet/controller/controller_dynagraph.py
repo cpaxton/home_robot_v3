@@ -35,7 +35,26 @@ class DynagraphController(GraphEQAController):
         self.visualize_ground_truth = visualize_ground_truth and not ground_truth_mode
         self._gt_graph_loaded = False
         self._skip_graph_perception_updates = ground_truth_mode
+        # Force a (shared) SigLIP encoder so the voxel map stores VL features for open-vocab
+        # grounding, even in Habitat's manipulation_only nav-only setup. Must be set BEFORE
+        # super().__init__ builds the voxel map.
+        params = kwargs.get("parameters")
+        if params is None and len(args) >= 2:
+            params = args[1]
+        if params is not None:
+            try:
+                params["force_eqa_siglip_encoder"] = True
+            except Exception:
+                pass
         super().__init__(*args, **kwargs)
+        # Dynagraph contribution over the GraphEQA baseline: SigLIP-grounded CONFIRMED_MEMORY
+        # (open-vocab grounding independent of caption labels) + frontier-coverage override
+        # that explores unobserved question objects instead of revisiting seen views.
+        self._eqa_explore_when_uncovered = True
+        if self.graph_memory is not None:
+            self.graph_memory.memory_summary_enabled = True
+            self.graph_memory.set_text_grounder(self._siglip_text_match)
+            self.graph_memory.set_obs_id_grounder(self._siglip_obs_id_for_text)
         if ground_truth_mode and self.graph_memory is not None:
             # Keep full rotate/explore viewpoint history (voxel frames also logged on export).
             self.graph_memory.set_navigation_samples_max(max(self.graph_memory.navigation_samples_max, 8192))
@@ -133,7 +152,11 @@ class DynagraphController(GraphEQAController):
 
     def _sync_ground_truth_from_session(self) -> int:
         """Upsert GT graph nodes and log Rerun layers; returns number of GT bodies in session."""
-        session = self.robot.get_emet_session()
+        # Sim-only: Habitat's robot client has no emet session (no GT placements).
+        get_sess = getattr(self.robot, "get_emet_session", None)
+        if get_sess is None:
+            return 0
+        session = get_sess()
         placements = read_sim_object_placements(session)
         if not placements:
             return 0

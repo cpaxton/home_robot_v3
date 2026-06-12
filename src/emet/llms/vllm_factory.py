@@ -51,6 +51,9 @@ def create_dynamem_vllm(
     if fam == "qwen2_5_vl":
         from emet.llms.qwen_client import Qwen25VLClient
 
+        # bitsandbytes int4/int8 breaks Qwen2.5-VL-3B attention (4096 vs 2560 hidden); bf16 fits 24GB.
+        if quantization in ("int4", "int8"):
+            quantization = None
         mid = hf_model_id or default_hf_model_id("qwen2_5_vl")
         return Qwen25VLClient(
             prompt=prompt,
@@ -69,6 +72,7 @@ def create_dynamem_vllm(
             hf_model_id=mid,
             max_tokens=max_tokens,
             device=device,
+            quantization=quantization,
         )
     raise ValueError(
         f"Unknown vl_family {vl_family!r}; use qwen3_vl, qwen2_5_vl, or gemma4 (see dynav_config.yaml eqa:)."

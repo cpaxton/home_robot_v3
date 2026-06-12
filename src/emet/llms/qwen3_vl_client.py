@@ -31,6 +31,7 @@ from qwen_vl_utils import process_vision_info
 from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 
 from emet.llms.base import AbstractPromptBuilder, AbstractVLLMClient
+from emet.llms.repetition_stop import repetition_stopping_criteria
 
 logger = logging.getLogger(__name__)
 
@@ -237,6 +238,7 @@ class Qwen3VLClient(AbstractVLLMClient):
         }
         if pad_id is not None:
             gen_kw["pad_token_id"] = pad_id
+        gen_kw["stopping_criteria"] = repetition_stopping_criteria(int(inputs.input_ids.shape[1]))
         generated_ids = self.model.generate(**inputs, **gen_kw)
         generated_ids_trimmed = [
             out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids, strict=False)

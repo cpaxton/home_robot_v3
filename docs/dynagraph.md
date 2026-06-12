@@ -172,6 +172,27 @@ Or set `EMET_DYNAGRAPH_RERUN_CROPS=1` / `EMET_DYNAGRAPH_RERUN_EDGES=1` (env over
 
 This is **not** a formal “100% geometric coverage guarantee.” Robocasa geometry, dilated frontiers, and planner failures can leave pockets unexplored—the flags are operational stops for scripted runs.
 
+### Graph frontier nodes (EQA-guided)
+
+When `graph_eqa_frontier_nodes.enabled` is true (default in `dynav_config.yaml`), Dynagraph / GraphEQA:
+
+1. **Clusters** unexplored voxel frontiers into graph nodes (`is_frontier=True`) after each `update()`.
+2. **Tags** them in the EQA prompt (`IMAGE_DESCRIPTIONS`) so the VLM can pick a frontier image to explore.
+3. **Biases** `sample_exploration` / `sample_frontier` toward clusters whose nearby object labels overlap the active question keywords (`keyword_score_weight`, default `2.0`).
+4. **Routes** low-confidence EQA iterations to the best-matching frontier graph node before voxel sampling.
+
+During HM-EQA / `run_eqa`, frontier nodes are re-synced **before each VLM call** and **after exploration navigation** so targets stay aligned with the growing map.
+
+```yaml
+graph_eqa_frontier_nodes:
+  enabled: true
+  max_nodes: 12
+  min_cluster_cells: 3
+  keyword_score_weight: 2.0
+```
+
+Sim smoke: `uv run python src/test/app/run_dynagraph_nav_benchmark.py --default` (GT nav + 3× `run_exploration`). Habitat sweep: `scripts/run_habitat_frontier_experiments.sh`.
+
 **Batch graph export:**
 
 ```bash
@@ -192,6 +213,10 @@ Append a pretty-print snapshot of **`GraphEQAMemory`** at session end (**`finall
 |-----|---------|
 | `dynagraph_merge_xy_m` | If `> 0`, a new observation whose **primary** label matches an existing node and whose XY distance is within this threshold **updates** that node (support count, running-mean XYZ, `last_seen`) instead of adding a new node/observation. |
 | `dynagraph_staleness_horizon` | If `> 0`, `maintain(current_step)` removes nodes with `current_step - last_seen` greater than this value, removes their observations, renumbers `node_id`, and rebuilds edges. |
+| `graph_eqa_frontier_nodes.enabled` | Sync unexplored frontier clusters into the graph for EQA prompts and question-guided exploration. |
+| `graph_eqa_frontier_nodes.max_nodes` | Cap on simultaneous frontier graph nodes. |
+| `graph_eqa_frontier_nodes.min_cluster_cells` | Minimum grid cells per frontier cluster. |
+| `graph_eqa_frontier_nodes.keyword_score_weight` | Blend weight for question-keyword overlap in voxel `sample_exploration`. |
 
 The controller passes `frame_step=self.obs_count` into the shared DynaMem→graph hook so `last_seen` stays aligned with the run’s discrete time index.
 

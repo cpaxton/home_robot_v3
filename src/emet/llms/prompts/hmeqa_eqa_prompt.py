@@ -11,7 +11,11 @@ _HMEQA_HEADER = """
         Your final Answer must be exactly one letter: A, B, C, or D (not yes/no prose).
         Always output these fields in order with lowercase labels on their own lines:
         caption:, reasoning:, answer:, confidence:, action:, confidence_reasoning:
-        The answer: line must contain only a single letter (A, B, C, or D).
+        Caption only the attached images (Image 1 .. Image N in the user message). One short phrase per image.
+        Do not caption scene-graph nodes or IMAGE_DESCRIPTIONS entries that are not attached as images.
+        After a brief caption, you must output reasoning:, answer:, confidence:, action:, and confidence_reasoning:.
+        The answer: line must contain only a single letter (A, B, C, or D). Never leave answer: blank.
+        If uncertain, still output your best-guess letter on answer: and set confidence: FALSE.
 """
 
 _HMEQA_MCQ_EXAMPLE = """
