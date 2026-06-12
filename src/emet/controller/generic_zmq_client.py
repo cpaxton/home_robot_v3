@@ -25,7 +25,6 @@ import sys
 import threading
 import time
 import timeit
-from dataclasses import replace
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -49,10 +48,75 @@ from emet.motion import constants as motion_constants
 from emet.robots.base import RobotSpec
 from emet.robots.spec_robot_model import SpecRobotModel
 from emet.simulation.env_flags import env_sim_nav_teleport, warn_sim_nav_env_flags
+from emet.utils.image import align_camera_matrix_to_image_size
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
 
 logger = Logger(__name__)
+
+
+def _decode_jpg_field(msg: dict[str, Any], *keys: str) -> np.ndarray | None:
+    """Return RGB uint8 array from the first present JPEG-compressed ZMQ field."""
+    for key in keys:
+        buf = msg.get(key)
+        if buf is None:
+            continue
+        try:
+            return compression.from_jpg(buf)
+        except Exception:
+            continue
+    return None
+
+
+def _align_camera_k_to_rgb(
+    camera_K: np.ndarray | None,
+    rgb: np.ndarray | None,
+) -> np.ndarray | None:
+    """Scale ``camera_info`` K to match decoded RGB when stream resolution differs."""
+    if camera_K is None or rgb is None or getattr(rgb, "ndim", 0) != 3:
+        return camera_K
+    k = np.asarray(camera_K, dtype=np.float64).reshape(3, 3)
+    ih, iw = int(rgb.shape[0]), int(rgb.shape[1])
+    calib_w = max(1, int(round(2.0 * float(k[0, 2]) + 1.0)))
+    calib_h = max(1, int(round(2.0 * float(k[1, 2]) + 1.0)))
+    if calib_w == iw and calib_h == ih:
+        return k
+    return align_camera_matrix_to_image_size(
+        k,
+        calib_height=calib_h,
+        calib_width=calib_w,
+        image_height=ih,
+        image_width=iw,
+    )
+
+
+def _first_present(msg: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        val = msg.get(key)
+        if val is not None:
+            return val
+    return None
+
+
+def enrich_zmq_observation_ee_fields(msg: dict[str, Any]) -> None:
+    """Fill ``ee_rgb`` / ``ee_camera_*`` on a ZMQ dict (full obs or servo; in-place)."""
+    if msg.get("ee_rgb") is None:
+        ee_rgb = _decode_jpg_field(
+            msg,
+            "ee_cam/image",
+            "ee_cam/color_image",
+            "rgb_tertiary",
+        )
+        if ee_rgb is not None:
+            msg["ee_rgb"] = ee_rgb
+    if msg.get("ee_camera_pose") is None:
+        pose = _first_present(msg, "ee_camera_pose", "ee_cam/pose", "camera_pose_tertiary")
+        if pose is not None:
+            msg["ee_camera_pose"] = np.asarray(pose, dtype=np.float64).reshape(4, 4)
+    if msg.get("ee_camera_K") is None:
+        k = _first_present(msg, "ee_camera_K", "ee_cam/color_camera_K", "camera_K_tertiary")
+        if k is not None:
+            msg["ee_camera_K"] = np.asarray(k, dtype=np.float64).reshape(3, 3)
 
 
 def _decode_servo_message_to_observations(
@@ -60,12 +124,9 @@ def _decode_servo_message_to_observations(
     state: dict[str, Any] | None,
     full_obs: dict[str, Any] | None,
 ) -> Observations | None:
-    """Build `Observations` for Rerun from RobosuiteZmqServer servo dict (head_color_image / head_depth_image)."""
-    if not msg or msg.get("head_color_image") is None:
-        return None
-    try:
-        rgb = compression.from_jpg(msg["head_color_image"])
-    except Exception:
+    """Build `Observations` for Rerun from servo dict (Stretch or Innate Mars bridge)."""
+    rgb = _decode_jpg_field(msg, "head_color_image", "head_cam_left/color_image")
+    if rgb is None:
         return None
     depth = None
     raw_d = msg.get("head_depth_image")
@@ -74,7 +135,9 @@ def _decode_servo_message_to_observations(
             depth = compression.from_jp2(raw_d) / 1000.0
         except Exception:
             depth = None
-    K = msg.get("head_camera_K")
+    K = _first_present(msg, "head_camera_K", "head_cam_left/color_camera_K")
+    if K is not None:
+        K = _align_camera_k_to_rgb(np.asarray(K, dtype=np.float64).reshape(3, 3), rgb)
     joint: np.ndarray | None = None
     if msg.get("joint_positions") is not None:
         joint = np.asarray(msg["joint_positions"], dtype=float)
@@ -104,11 +167,19 @@ def _decode_servo_message_to_observations(
     else:
         gps, compass = np.zeros(2, dtype=float), np.zeros(1, dtype=float)
 
-    cp = msg.get("camera_pose")
+    cp = _first_present(msg, "camera_pose", "head_cam_left/pose")
     if cp is None and full_obs is not None:
         cp = full_obs.get("camera_pose")
     if cp is not None:
         cp = np.asarray(cp, dtype=np.float64).reshape(4, 4)
+
+    ee_rgb = _decode_jpg_field(msg, "ee_cam/color_image", "ee_cam/image", "rgb_tertiary")
+    ee_k = _first_present(msg, "ee_cam/color_camera_K", "ee_camera_K", "camera_K_tertiary")
+    ee_pose = _first_present(msg, "ee_cam/pose", "ee_camera_pose", "camera_pose_tertiary")
+    if ee_k is not None:
+        ee_k = np.asarray(ee_k, dtype=np.float64).reshape(3, 3)
+    if ee_pose is not None:
+        ee_pose = np.asarray(ee_pose, dtype=np.float64).reshape(4, 4)
 
     step = msg.get("step")
     seq_id = int(step) if step is not None else -1
@@ -124,10 +195,43 @@ def _decode_servo_message_to_observations(
         depth=depth,
         camera_K=K,
         camera_pose=cp,
+        ee_rgb=ee_rgb,
+        ee_camera_K=ee_k,
+        ee_camera_pose=ee_pose,
         joint=joint,
         seq_id=seq_id,
         is_simulation=bool(msg.get("is_simulation", True)),
         emet_session=sess,
+    )
+
+
+def get_observation_from_zmq_dict(obs: dict[str, Any]) -> Observations | None:
+    """Build :class:`Observations` from a decoded full-observation ZMQ dict."""
+    rgb = obs.get("rgb")
+    if rgb is None:
+        return None
+    enrich_zmq_observation_ee_fields(obs)
+    joint_head = obs.get("joint_head")
+    return Observations(
+        rgb=rgb,
+        depth=obs.get("depth"),
+        camera_K=obs.get("camera_K"),
+        camera_pose=obs.get("camera_pose"),
+        head_rgb_right=obs.get("rgb_right"),
+        head_camera_K_right=obs.get("camera_K_right"),
+        head_camera_pose_right=obs.get("camera_pose_right"),
+        ee_rgb=obs.get("ee_rgb"),
+        ee_camera_K=obs.get("ee_camera_K"),
+        ee_camera_pose=obs.get("ee_camera_pose"),
+        ee_pose=obs.get("ee_pose"),
+        joint=obs.get("joint"),
+        joint_velocities=obs.get("joint_velocities"),
+        joint_head=float(joint_head) if joint_head is not None else None,
+        gps=obs.get("gps", np.zeros(2)),
+        compass=obs.get("compass", np.zeros(1)),
+        seq_id=int(obs.get("step", -1)) if obs.get("step") is not None else -1,
+        is_simulation=bool(obs.get("is_simulation", False)),
+        emet_session=read_emet_session(obs),
     )
 
 
@@ -538,8 +642,18 @@ class GenericZmqClient(AbstractRobotClient):
                 continue
             self._seq_id += 1
             output["rgb"] = compression.from_jpg(output["rgb"])
+            if output.get("camera_K") is not None:
+                output["camera_K"] = _align_camera_k_to_rgb(
+                    np.asarray(output["camera_K"], dtype=np.float64).reshape(3, 3),
+                    output["rgb"],
+                )
             if "rgb_right" in output and output["rgb_right"] is not None:
                 output["rgb_right"] = compression.from_jpg(output["rgb_right"])
+                if output.get("camera_K_right") is not None:
+                    output["camera_K_right"] = _align_camera_k_to_rgb(
+                        np.asarray(output["camera_K_right"], dtype=np.float64).reshape(3, 3),
+                        output["rgb_right"],
+                    )
             if "rgb_tertiary" in output and output["rgb_tertiary"] is not None:
                 output["rgb_tertiary"] = compression.from_jpg(output["rgb_tertiary"])
             raw_depth = output.get("depth")
@@ -552,6 +666,7 @@ class GenericZmqClient(AbstractRobotClient):
                 output["depth"] = None
             else:
                 output["depth"] = compression.from_jp2(raw_depth) / 1000
+            enrich_zmq_observation_ee_fields(output)
             with self._obs_lock:
                 self._obs = output
                 if "step" in output:
@@ -675,8 +790,18 @@ class GenericZmqClient(AbstractRobotClient):
         camera_pose = obs.get("camera_pose")
         ee_pose = obs.get("ee_pose")
         joint = obs.get("joint")
+        joint_head = obs.get("joint_head")
         gps = obs.get("gps", np.zeros(2))
         compass = obs.get("compass", np.zeros(1))
+
+        ee_rgb = obs.get("ee_rgb")
+        ee_camera_K = obs.get("ee_camera_K")
+        ee_camera_pose = obs.get("ee_camera_pose")
+        if ee_rgb is None:
+            enrich_zmq_observation_ee_fields(obs)
+            ee_rgb = obs.get("ee_rgb")
+            ee_camera_K = obs.get("ee_camera_K")
+            ee_camera_pose = obs.get("ee_camera_pose")
 
         return Observations(
             rgb=rgb,
@@ -686,9 +811,13 @@ class GenericZmqClient(AbstractRobotClient):
             head_rgb_right=obs.get("rgb_right"),
             head_camera_K_right=obs.get("camera_K_right"),
             head_camera_pose_right=obs.get("camera_pose_right"),
+            ee_rgb=ee_rgb,
+            ee_camera_K=ee_camera_K,
+            ee_camera_pose=ee_camera_pose,
             ee_pose=ee_pose,
             joint=joint,
             joint_velocities=obs.get("joint_velocities"),
+            joint_head=float(joint_head) if joint_head is not None else None,
             gps=gps,
             compass=compass,
             emet_session=read_emet_session(obs),
@@ -708,13 +837,15 @@ class GenericZmqClient(AbstractRobotClient):
         return np.asarray(obs.camera_pose, dtype=np.float64)
 
     def get_servo_observation(self) -> Observations | None:
-        """Stretch: dedicated EE / servo image stream. Generic: reuse head RGB as ``ee_rgb`` if unset."""
-        obs = self.get_observation()
+        """Low-rate head/EE stream (Stretch servo port or Innate Mars bridge 4404)."""
+        with self._obs_lock:
+            if self._servo_obs_rerun is not None:
+                return self._servo_obs_rerun
+            obs = self._obs
         if obs is None:
             return None
-        if obs.ee_rgb is not None:
-            return obs
-        return replace(obs, ee_rgb=obs.rgb)
+        decoded = get_observation_from_zmq_dict(obs) if isinstance(obs, dict) else None
+        return decoded if decoded is not None else self.get_observation()
 
     # -- Actions --------------------------------------------------------------
 

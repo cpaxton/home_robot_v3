@@ -877,6 +877,17 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         return positions, velocities, efforts
 
+    def _joint_head_qpos(self) -> float | None:
+        """Innate Mars head nod angle for MJCF ``joint_head`` replay in Rerun (radians)."""
+        if self._spec.name != "innate_mars" or self._mjmodel is None or self._mjdata is None:
+            return None
+        with self._mj_lock:
+            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, "joint_head")
+            if jid < 0:
+                return None
+            qadr = int(self._mjmodel.jnt_qposadr[jid])
+            return float(self._mjdata.qpos[qadr])
+
     def _close_renderers(self) -> None:
         with self._render_lock:
             if self._primary_renderer is not None:
@@ -1687,6 +1698,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "camera_pose": cam_pose,
             "ee_pose": np.eye(4),
             "joint": positions,
+            "joint_head": self._joint_head_qpos(),
             "gps": xyt[:2],
             "compass": np.array([xyt[2]]),
             "rgb_width": width,
@@ -1802,6 +1814,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "head_camera_K": K_servo,
             "camera_pose": cam_pose,
             "joint_positions": q,
+            "joint_head": self._joint_head_qpos(),
             "joint_velocities": dq,
             "base_pose": xyt,
             "control_mode": self.get_control_mode(),

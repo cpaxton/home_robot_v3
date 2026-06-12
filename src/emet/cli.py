@@ -1087,6 +1087,11 @@ def mars_cmd() -> None:
 @click.option("--password", "-p", default=None, help="SSH password (or EMET_ROBOT_PASSWORD)")
 @click.option("--connection", "-c", "connection_name", default=None, help="Saved connection profile")
 @click.option("--deploy", is_flag=True, help="Rsync emet_core + bridge and colcon build before start")
+@click.option(
+    "--onboard-da3",
+    is_flag=True,
+    help="Run Depth Anything 3 on the Jetson; publish depth over ZMQ (implies --deploy when set)",
+)
 @click.option("--preview", is_flag=True, help="Run preview-cameras after bridge startup")
 @click.option("--wait-s", default=20.0, show_default=True, help="Seconds to wait before status check")
 @click.option("--no-save", is_flag=True, help="Do not update saved connection profile")
@@ -1096,6 +1101,7 @@ def mars_start_cmd(
     password: str | None,
     connection_name: str | None,
     deploy: bool,
+    onboard_da3: bool,
     preview: bool,
     wait_s: float,
     no_save: bool,
@@ -1107,9 +1113,12 @@ def mars_start_cmd(
     Examples:
       emet mars start --ip herman --username jetson1
       emet mars start --ip herman --username jetson1 --deploy --preview
-      emet mars start --connection herman
+      emet mars start --connection herman --onboard-da3 --deploy
     """
     from emet.mars import mars_start
+
+    if onboard_da3 and not deploy:
+        deploy = True
 
     mars_start(
         host=host,
@@ -1119,6 +1128,7 @@ def mars_start_cmd(
         save_profile=not no_save,
         deploy=deploy,
         preview=preview,
+        onboard_da3=onboard_da3,
         wait_s=wait_s,
     )
 
@@ -2016,6 +2026,16 @@ def install_completion(shell: str | None) -> None:
     comp = comp_cls(main, {}, "emet", "_EMET_COMPLETE")
     click.echo(comp.source())
 
+
+from emet.app.capture import main as _capture_app  # noqa: E402
+
+_capture_app.short_help = "One ZMQ frame + metadata; optional single-frame DynaMem map"
+main.add_command(_capture_app)
+
+from emet.app.stream import main as _stream_app  # noqa: E402
+
+_stream_app.short_help = "Live ZMQ → Rerun (cameras, pose, mesh)"
+main.add_command(_stream_app)
 
 # Full Click options (not a thin wrapper) so `emet debug-da3-depth --help` lists all flags.
 from emet.app.debug_da3_depth import main as _debug_da3_depth_app  # noqa: E402

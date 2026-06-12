@@ -68,14 +68,18 @@ def resolve_mars_target(
     return host.strip(), user.strip(), password, workspace.rstrip("/"), emet_dir.rstrip("/")
 
 
-def _remote_bridge_launch_cmd(*, workspace: str, emet_dir: str) -> str:
+def _remote_bridge_launch_cmd(*, workspace: str, emet_dir: str, onboard_da3: bool = False) -> str:
     emet_core = f"{emet_dir}/emet_core"
+    emet_src = f"{emet_dir}/src"
+    da3_env = "export EMET_MARS_ONBOARD_DA3=1; " if onboard_da3 else ""
+    py_paths = f"{emet_core}:{emet_src}"
     return (
+        f"{da3_env}"
         f"source {emet_dir}/bridge_env.sh 2>/dev/null || "
-        f"export PYTHONPATH={emet_core}:$PYTHONPATH; "
+        f"export PYTHONPATH={py_paths}:$PYTHONPATH; "
         f"source ~/innate-os/dds/setup_dds.zsh && "
         f"source {workspace}/install/setup.zsh && "
-        f"export PYTHONPATH={emet_core}:$PYTHONPATH && "
+        f"export PYTHONPATH={py_paths}:$PYTHONPATH && "
         f"ros2 launch innate_mars_bridge server.launch.py"
     )
 
@@ -92,9 +96,10 @@ def start_bridge_on_robot(
     *,
     workspace: str = DEFAULT_INNATE_WORKSPACE,
     emet_dir: str = DEFAULT_EMET_DIR,
+    onboard_da3: bool = False,
 ) -> None:
     """Start innate_mars_bridge inside innate-os tmux (Zenoh DDS env)."""
-    launch_line = _remote_bridge_launch_cmd(workspace=workspace, emet_dir=emet_dir)
+    launch_line = _remote_bridge_launch_cmd(workspace=workspace, emet_dir=emet_dir, onboard_da3=onboard_da3)
     remote = (
         f"{_kill_bridge_remote()}; "
         "sleep 1; "
@@ -144,6 +149,7 @@ def mars_start(
     save_profile: bool = True,
     deploy: bool = False,
     preview: bool = False,
+    onboard_da3: bool = False,
     wait_s: float = 20.0,
 ) -> None:
     host, user, password, workspace, emet_dir = resolve_mars_target(
@@ -176,10 +182,11 @@ def mars_start(
             workspace=workspace,
             emet_dir=emet_dir,
             start_bridge=False,
+            with_da3=onboard_da3,
             root=_project_root(),
         )
 
-    start_bridge_on_robot(host, user, password, workspace=workspace, emet_dir=emet_dir)
+    start_bridge_on_robot(host, user, password, workspace=workspace, emet_dir=emet_dir, onboard_da3=onboard_da3)
 
     if wait_s > 0:
         print(f"Waiting {wait_s:.0f}s for bridge startup...")
@@ -203,4 +210,9 @@ def mars_start(
         subprocess.run(cmd, check=False)
 
     print(f"Bridge ZMQ: tcp://{host}:4401 (obs) 4403 (state)")
+    if onboard_da3:
+        print(
+            "Onboard DA3: enabled on Jetson (EMET_MARS_ONBOARD_DA3=1). "
+            "Workstation stream/map uses ZMQ depth — no local DA3 GPU load when depth arrives."
+        )
     print(f"Preview: uv run emet preview-cameras --source zmq --robot innate_mars --robot-ip {host}")

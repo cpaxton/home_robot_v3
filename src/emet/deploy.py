@@ -125,6 +125,15 @@ def _sftp_put_r(sftp: Any, local: Path, remote: str) -> None:
             sftp.put(str(local_entry), remote_entry)
 
 
+def build_remote_bridge_import_verify_cmd(*, remote_emet: str, remote_ws: str) -> str:
+    """Return an SSH remote command that smoke-tests bridge + emet_core imports."""
+    py_paths = f"{remote_emet.rstrip('/')}/emet_core:{remote_emet.rstrip('/')}/src"
+    ros_setup = f"source /opt/ros/humble/setup.bash && source {remote_ws.rstrip('/')}/install/setup.bash"
+    # No nested quotes: safe for zsh over SSH.
+    py_snippet = "import innate_mars_bridge.ros.camera; import emet.utils.image; import emet.core.server"
+    return f"bash -lc '{ros_setup} && export PYTHONPATH={py_paths}:$PYTHONPATH && python3 -c {py_snippet!r}'"
+
+
 def _ssh_run(
     host: str,
     user: str,
@@ -175,6 +184,7 @@ def deploy(
     workspace: str = "~/ament_ws",
     emet_dir: str = "~/emet",
     start_bridge: bool = False,
+    with_da3: bool = False,
     root: Path | None = None,
 ) -> None:
     """Sync emet_core and innate_mars_bridge to the robot and install.
@@ -187,6 +197,7 @@ def deploy(
         workspace: Remote path to ROS2 workspace (e.g. ~/ament_ws).
         emet_dir: Remote path for emet_core (e.g. ~/emet).
         start_bridge: If True, run ros2 launch innate_mars_bridge server.launch.py after deploy.
+        with_da3: If True, sync emet perception (DA3) to the robot and install torch + depth-anything-3.
         root: Project root (default: repo root containing src/emet_core and src/innate_mars_bridge).
     """
     root = root or _project_root()
@@ -222,10 +233,12 @@ def deploy(
     remote_ws_src = f"{remote_ws}/src"
     ros_setup = f"source /opt/ros/humble/setup.bash && source {remote_ws}/install/setup.bash"
     robot_reqs = root / "configs" / "robots" / "innate_mars_robot_requirements.txt"
+    da3_reqs = root / "configs" / "robots" / "innate_mars_da3_requirements.txt"
+    emet_src = root / "src" / "emet"
 
-    print("Syncing emet_core to robot...")
+    print(f"Syncing emet_core → {host}:{remote_emet_core} (rsync --delete)...")
     _rsync_to_robot(emet_core_src, remote_emet_core, host, user, password, use_paramiko)
-    print("Syncing innate_mars_bridge to robot...")
+    print(f"Syncing innate_mars_bridge → {host}:{remote_ws_src}/innate_mars_bridge...")
     _ssh_run(host, user, password, f"mkdir -p {remote_ws_src}", use_paramiko)
     _rsync_to_robot(bridge_src, f"{remote_ws_src}/innate_mars_bridge", host, user, password, use_paramiko)
 
@@ -245,13 +258,43 @@ def deploy(
             use_paramiko,
         )
 
+    if with_da3:
+        if not emet_src.is_dir():
+            raise SystemExit(f"emet package not found at {emet_src} (required for --with-da3)")
+        print("Syncing emet perception (onboard DA3) to robot...")
+        remote_emet_src = f"{remote_emet}/src/emet"
+        for sub in ("perception", "utils"):
+            local_sub = emet_src / sub
+            if local_sub.is_dir():
+                _rsync_to_robot(local_sub, f"{remote_emet_src}/{sub}", host, user, password, use_paramiko)
+        init_py = emet_src / "__init__.py"
+        if init_py.is_file():
+            _ssh_run(host, user, password, f"mkdir -p {remote_emet_src}", use_paramiko)
+            _rsync_to_robot(init_py, remote_emet_src, host, user, password, use_paramiko)
+        if da3_reqs.is_file():
+            print("Installing onboard DA3 Python deps on robot (torch + depth-anything-3; may take a while)...")
+            remote_da3_reqs = f"{remote_emet}/innate_mars_da3_requirements.txt"
+            target = _ssh_target(host, user, password)
+            req_cmd = ["rsync", "-az", str(da3_reqs), f"{target}:{remote_da3_reqs}"]
+            if password:
+                req_cmd = ["sshpass", "-p", password] + req_cmd
+            _run(req_cmd)
+            _ssh_run(
+                host,
+                user,
+                password,
+                f"bash -lc 'python3 -m pip install --user -r {remote_da3_reqs}'",
+                use_paramiko,
+            )
+
+    py_paths = f"{remote_emet_core}:{remote_emet}/src"
     _ssh_run(
         host,
         user,
         password,
         (
             f"bash -lc 'mkdir -p {remote_emet} && "
-            f'printf %s\\n "export PYTHONPATH={remote_emet_core}:\\$PYTHONPATH" '
+            f'printf %s\\n "export PYTHONPATH={py_paths}:\\$PYTHONPATH" '
             f"> {remote_emet}/bridge_env.sh'"
         ),
         use_paramiko,
@@ -260,6 +303,10 @@ def deploy(
     print("Building ROS2 workspace on robot (colcon build)...")
     build_cmd = f"bash -lc '{ros_setup} && cd {remote_ws} && colcon build --packages-select innate_mars_bridge'"
     _ssh_run(host, user, password, build_cmd, use_paramiko)
+
+    print("Verifying bridge imports emet_core on robot...")
+    verify_cmd = build_remote_bridge_import_verify_cmd(remote_emet=remote_emet, remote_ws=remote_ws)
+    _ssh_run(host, user, password, verify_cmd, use_paramiko)
 
     if start_bridge:
         from emet.mars import start_bridge_on_robot

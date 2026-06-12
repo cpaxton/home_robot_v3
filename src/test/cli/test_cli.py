@@ -298,3 +298,35 @@ def test_mars_help():
         assert result.returncode == 0, result.stderr
     assert "username" in result.stdout.lower() or "--user" in result.stdout
     assert "deploy" in result.stdout
+
+
+def test_capture_help():
+    """emet capture --help works."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "capture", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "127.0.0.1" in result.stdout
+    assert "--map" in result.stdout
+    assert "--robot" in result.stdout
+
+
+def test_stream_help():
+    """emet stream --help works."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "stream", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "127.0.0.1" in result.stdout
+    assert "--robot" in result.stdout
+    assert "--backend" in result.stdout
+    assert "dynamem" in result.stdout
+    assert "dynagraph" in result.stdout
+    assert "--map" in result.stdout
+    assert "--graph" in result.stdout
+    assert "--map-only" in result.stdout
+    assert "Rerun" in result.stdout or "rerun" in result.stdout.lower()

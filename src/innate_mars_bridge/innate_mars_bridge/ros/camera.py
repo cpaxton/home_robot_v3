@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import threading
 
+import cv2
 import numpy as np
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
@@ -26,6 +27,39 @@ from sensor_msgs.msg import CameraInfo, Image
 
 from emet.utils.image import Camera
 from innate_mars_bridge.ros.msg_numpy import image_to_numpy
+
+
+def align_camera_matrix_to_image_size(
+    K: np.ndarray,
+    *,
+    calib_height: int,
+    calib_width: int,
+    image_height: int,
+    image_width: int,
+) -> np.ndarray:
+    """Scale ``camera_info`` K to match the decoded image resolution (H×W)."""
+    if calib_height <= 0 or calib_width <= 0:
+        return np.asarray(K, dtype=np.float64).reshape(3, 3).copy()
+    sx = float(image_width) / float(calib_width)
+    sy = float(image_height) / float(calib_height)
+    out = np.asarray(K, dtype=np.float64).reshape(3, 3).copy()
+    out[0, 0] *= sx
+    out[1, 1] *= sy
+    out[0, 2] *= sx
+    out[1, 2] *= sy
+    return out
+
+
+def ros_image_encoding_to_rgb(img: np.ndarray, encoding: str) -> np.ndarray:
+    """Convert a ROS ``sensor_msgs/Image`` buffer to RGB uint8 for ``emet.utils.compression.to_jpg``."""
+    enc = (encoding or "").lower()
+    if enc in ("bgr8", "bgra8", "bgr16", "bgra16") and img.ndim == 3 and img.shape[2] >= 3:
+        return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    if enc in ("rgb8", "rgba8", "rgb16", "rgba16"):
+        return img[..., :3]
+    if enc == "mono8" and img.ndim == 2:
+        return cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+    return img
 
 
 def default_K_from_shape(height: int, width: int, fov_deg: float = 60.0) -> np.ndarray:
@@ -115,6 +149,8 @@ class RosCamera(Camera):
             img = image_to_numpy(msg)
             if msg.encoding == "16UC1":
                 img = img / 1000.0
+            else:
+                img = ros_image_encoding_to_rgb(img, msg.encoding)
             self._img = np.rot90(img, k=self.rotations)
             self._t = msg.header.stamp
 
@@ -152,7 +188,21 @@ class RosCamera(Camera):
     def get_K(self):
         if self.K is None:
             raise RuntimeError(f"Camera {self.name} intrinsics not ready")
-        return self.K.copy()
+        base = np.asarray(self.K, dtype=np.float64).reshape(3, 3).copy()
+        calib_h = self.height
+        calib_w = self.width
+        with self._lock:
+            img = self._img
+        if img is None or calib_h is None or calib_w is None:
+            return base
+        ih, iw = int(img.shape[0]), int(img.shape[1])
+        return align_camera_matrix_to_image_size(
+            base,
+            calib_height=int(calib_h),
+            calib_width=int(calib_w),
+            image_height=ih,
+            image_width=iw,
+        )
 
 
 class RosCameraNoInfo(RosCamera):
@@ -171,6 +221,7 @@ class RosCameraNoInfo(RosCamera):
         self.name = image_topic
         self.rotations = rotations
         self._img = None
+        self._encoding = ""
         self._t = Time()
         self._lock = threading.Lock()
         self.default_fov_deg = default_fov_deg
@@ -197,7 +248,10 @@ class RosCameraNoInfo(RosCamera):
             img = image_to_numpy(msg)
             if msg.encoding == "16UC1":
                 img = img / 1000.0
+            else:
+                img = ros_image_encoding_to_rgb(img, msg.encoding)
             self._img = np.rot90(img, k=self.rotations)
+            self._encoding = str(msg.encoding or "")
             self._t = msg.header.stamp
             if self.K is None and self._img is not None:
                 h, w = self._img.shape[:2]
@@ -222,8 +276,9 @@ class RosCameraNoInfo(RosCamera):
 
     def get_K(self):
         with self._lock:
-            if self.K is None and self._img is not None:
-                h, w = self._img.shape[:2]
+            img = self._img
+            if self.K is None and img is not None:
+                h, w = img.shape[:2]
                 self.K = default_K_from_shape(h, w, self.default_fov_deg)
                 self.fx = self.K[0, 0]
                 self.fy = self.K[1, 1]
@@ -231,4 +286,16 @@ class RosCameraNoInfo(RosCamera):
                 self.py = self.K[1, 2]
             if self.K is None:
                 self.K = default_K_from_shape(240, 320, self.default_fov_deg)
-            return self.K.copy()
+            base = np.asarray(self.K, dtype=np.float64).reshape(3, 3).copy()
+            if img is None:
+                return base
+            ih, iw = int(img.shape[0]), int(img.shape[1])
+        if self.height and self.width:
+            return align_camera_matrix_to_image_size(
+                base,
+                calib_height=int(self.height),
+                calib_width=int(self.width),
+                image_height=ih,
+                image_width=iw,
+            )
+        return base
