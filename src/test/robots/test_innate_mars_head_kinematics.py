@@ -95,14 +95,19 @@ def test_patch_hardware_head_cameras():
     from emet.robots.innate_mars import InnateMarsBackend
     from emet.robots.innate_mars.head_kinematics import (
         HARDWARE_HEAD_CAMERA_MOUNTS,
-        patch_innate_mars_head_cameras_for_hardware,
+        HARDWARE_HEAD_VISUAL_POS,
+        patch_innate_mars_head_visual_for_hardware,
+        patch_innate_mars_model_for_hardware_replay,
     )
 
     spec = InnateMarsBackend().get_spec()
     model = mujoco.MjModel.from_xml_path(spec.mjcf_path)
-    assert patch_innate_mars_head_cameras_for_hardware(model)
+    assert patch_innate_mars_model_for_hardware_replay(model)
     cid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "head_left")
     np.testing.assert_allclose(model.cam_pos[cid], HARDWARE_HEAD_CAMERA_MOUNTS["head_left"]["pos"], atol=1e-9)
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "head_visual")
+    np.testing.assert_allclose(model.body_pos[bid], HARDWARE_HEAD_VISUAL_POS, atol=1e-9)
+    assert patch_innate_mars_head_visual_for_hardware(model)
 
 
 def test_obs_pose_for_base_relative_mjcf_replay_zeros_planar_joints():
@@ -152,6 +157,32 @@ def test_hardware_visual_yaw_aligns_sim_mesh_forward_to_base_x():
     sim_forward = np.array([0.0, -1.0, 0.0])
     fixed = _apply_base_yaw_fix_to_points(sim_forward.reshape(1, 3), HARDWARE_MJCF_VISUAL_YAW_RAD)[0]
     np.testing.assert_allclose(fixed, np.array([1.0, 0.0, 0.0]), atol=1e-3)
+
+
+def test_enrich_obs_pose_joint_head_uses_camera_fk_on_hardware():
+    pytest.importorskip("mujoco")
+    import mujoco
+
+    from emet.core.zmq_protocol import EMET_ZMQ_SESSION_KEY
+    from emet.robots.innate_mars import InnateMarsBackend
+    from emet.robots.innate_mars.head_kinematics import (
+        enrich_obs_pose_joint_head_for_hardware_replay,
+        patch_innate_mars_model_for_hardware_replay,
+    )
+
+    spec = InnateMarsBackend().get_spec()
+    model = mujoco.MjModel.from_xml_path(spec.mjcf_path)
+    patch_innate_mars_model_for_hardware_replay(model)
+    obs = {
+        EMET_ZMQ_SESSION_KEY: {"is_simulation": False},
+        "gps": np.zeros(2),
+        "compass": np.zeros(1),
+        "joint": np.zeros(10),
+        "joint_head": 0.99,
+        "camera_pose": np.eye(4),
+    }
+    out = enrich_obs_pose_joint_head_for_hardware_replay(model, obs)
+    assert abs(float(out["joint_head"]) - 0.99) > 0.1
 
 
 def test_is_hardware_innate_mars_obs():

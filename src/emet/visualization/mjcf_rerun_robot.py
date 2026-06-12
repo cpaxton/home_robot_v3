@@ -177,12 +177,16 @@ def _apply_base_yaw_fix_to_points(V: np.ndarray, yaw_rad: float) -> np.ndarray:
     return (R @ np.asarray(V, dtype=np.float64).T).T
 
 
-def _mjcf_geom_rgba_u8(model: Any, gid: int) -> np.ndarray:
+def _mjcf_geom_rgba_u8(model: Any, gid: int, *, darken: float = 0.42) -> np.ndarray:
     rgba = np.asarray(model.geom_rgba[int(gid)], dtype=np.float64).reshape(4)
     if rgba[3] <= 1e-6:
         rgba = np.array([0.55, 0.55, 0.58, 1.0], dtype=np.float64)
-    rgb = np.clip(np.round(rgba[:3] * 255.0), 0, 255).astype(np.uint8)
+    rgb = np.clip(np.round(rgba[:3] * 255.0 * float(darken)), 0, 255).astype(np.uint8)
     return rgb
+
+
+# Semi-transparent, darkened MJCF mesh overlay in Rerun (0–1 albedo + alpha).
+MJCF_RERUN_MESH_ALBEDO_FACTOR = (0.38, 0.38, 0.40, 0.52)
 
 
 def _base_freejoint_qadr(model: Any, base_link_name: str) -> int | None:
@@ -256,11 +260,11 @@ class MjcfBodySkeletonLogger:
             return
         from emet.robots.innate_mars.head_kinematics import (
             is_hardware_innate_mars_obs,
-            patch_innate_mars_head_cameras_for_hardware,
+            patch_innate_mars_model_for_hardware_replay,
         )
 
         if is_hardware_innate_mars_obs(obs_pose):
-            patch_innate_mars_head_cameras_for_hardware(self.model)
+            patch_innate_mars_model_for_hardware_replay(self.model)
             self._hardware_cameras_patched = True
 
     def _maybe_enrich_joint_head_from_camera(self, obs_pose: dict[str, Any]) -> dict[str, Any]:
@@ -351,11 +355,11 @@ class MjcfVisualMeshLogger:
             return
         from emet.robots.innate_mars.head_kinematics import (
             is_hardware_innate_mars_obs,
-            patch_innate_mars_head_cameras_for_hardware,
+            patch_innate_mars_model_for_hardware_replay,
         )
 
         if is_hardware_innate_mars_obs(obs_pose):
-            patch_innate_mars_head_cameras_for_hardware(self.model)
+            patch_innate_mars_model_for_hardware_replay(self.model)
             self._hardware_cameras_patched = True
 
     def _maybe_enrich_joint_head_from_camera(self, obs_pose: dict[str, Any]) -> dict[str, Any]:
@@ -438,5 +442,6 @@ class MjcfVisualMeshLogger:
                     vertex_positions=V_out.astype(np.float32),
                     triangle_indices=F.flatten(),
                     vertex_colors=vertex_colors,
+                    albedo_factor=MJCF_RERUN_MESH_ALBEDO_FACTOR,
                 ),
             )

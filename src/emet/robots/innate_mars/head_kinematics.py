@@ -37,6 +37,10 @@ ROS_OPTICAL_QUAT_WXYZ = (0.5, -0.5, -0.5, 0.5)
 # are patched via :func:`patch_innate_mars_head_cameras_for_hardware`).
 HARDWARE_MJCF_VISUAL_YAW_RAD = float(np.pi / 2.0)
 
+# Sim ``head_visual`` places the STL at the neck pivot; hardware URDF cameras sit ~70 mm
+# forward (+head X). Shift the visual subtree so Rerun head mesh aligns with stereo TF (Herman 2026-06).
+HARDWARE_HEAD_VISUAL_POS: tuple[float, float, float] = (0.07, 0.01, -0.005)
+
 # Sim ``innate_mars.xml`` applies a table-forward Rz hack on stereo mounts; hardware TF uses
 # maurice.urdf optical frames. Mounts are in the MJCF ``head`` body frame, calibrated against
 # Herman TF in **base_link** frame (2026-06, ~0.5 mm vs ZMQ ``camera_pose*``).
@@ -76,6 +80,24 @@ def patch_innate_mars_head_cameras_for_hardware(model: Any) -> bool:
         model.cam_quat[cid] = np.asarray(spec["quat_wxyz"], dtype=np.float64)
         patched = True
     return patched
+
+
+def patch_innate_mars_head_visual_for_hardware(model: Any) -> bool:
+    """Shift ``head_visual`` so the head STL encloses hardware stereo cameras (not sim neck pivot)."""
+    import mujoco
+
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "head_visual")
+    if bid < 0:
+        return False
+    model.body_pos[bid] = np.asarray(HARDWARE_HEAD_VISUAL_POS, dtype=np.float64)
+    return True
+
+
+def patch_innate_mars_model_for_hardware_replay(model: Any) -> bool:
+    """Apply all hardware MJCF display patches (cameras + head visual)."""
+    c = patch_innate_mars_head_cameras_for_hardware(model)
+    v = patch_innate_mars_head_visual_for_hardware(model)
+    return c or v
 
 
 def _planar_xyt_to_matrix(xyt: np.ndarray) -> np.ndarray:
@@ -264,26 +286,14 @@ def enrich_obs_pose_joint_head_for_hardware_replay(
     *,
     n_samples: int = 21,
 ) -> dict[str, Any]:
-    """Return *obs_pose* with ``joint_head`` from ``camera_pose`` when TF/topic value is stale."""
+    """Return *obs_pose* with ``joint_head`` from ``camera_pose`` for hardware Rerun replay."""
     if not is_hardware_innate_mars_obs(obs_pose):
         return obs_pose
     if obs_pose.get("camera_pose") is None:
         return obs_pose
     inferred = infer_joint_head_from_obs_on_model(model, obs_pose, n_samples=n_samples)
-    jh = obs_pose.get("joint_head")
     enriched = dict(obs_pose)
-    if jh is None:
-        enriched["joint_head"] = inferred
-        return enriched
-    # Prefer camera FK when bridge reports ~0 but TF/optical pose implies nod.
-    if abs(float(jh)) <= 1e-3 and abs(inferred) > 1e-3:
-        enriched["joint_head"] = inferred
-        return enriched
-    # Reconcile large TF/topic error vs optical pose (pick closer camera position match).
-    metrics_tf = compare_mjcf_camera_to_zmq(obs_pose, joint_head=float(jh), use_hardware_cameras=True)
-    metrics_inf = compare_mjcf_camera_to_zmq(obs_pose, joint_head=inferred, use_hardware_cameras=True)
-    if metrics_inf["pos_err_m"] + 0.001 < metrics_tf["pos_err_m"]:
-        enriched["joint_head"] = inferred
+    enriched["joint_head"] = inferred
     return enriched
 
 

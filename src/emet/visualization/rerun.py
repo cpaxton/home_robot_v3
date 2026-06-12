@@ -654,10 +654,10 @@ class StretchURDFLogger(urdf_visualizer.URDFVisualizer):
         """Readable default when URDF/trimesh omits vertex colors."""
         name = (link_name or "").lower()
         if "camera" in name or "head" in name:
-            return np.array([90, 120, 180], dtype=np.uint8)
+            return np.array([55, 75, 110], dtype=np.uint8)
         if any(k in name for k in ("arm", "link", "wrist", "gripper", "hand")):
-            return np.array([210, 120, 60], dtype=np.uint8)
-        return np.array([150, 155, 162], dtype=np.uint8)
+            return np.array([120, 70, 35], dtype=np.uint8)
+        return np.array([85, 88, 92], dtype=np.uint8)
 
     def load_robot_mesh(self, cfg: dict = None, use_collision: bool = False):
         """
@@ -688,6 +688,7 @@ class StretchURDFLogger(urdf_visualizer.URDFVisualizer):
                     triangle_indices=mesh.faces,
                     vertex_normals=mesh.vertex_normals,
                     vertex_colors=vertex_colors,
+                    albedo_factor=(0.38, 0.38, 0.40, 0.52),
                 ),
                 static=True,
             )
@@ -972,6 +973,7 @@ class RerunVisualizer:
         self.mjcf_skeleton = None
         self.mjcf_mesh_logger = None
         self._mjcf_visual_entity_prefix = "world/robot/mjcf_visual"
+        self._show_robot_base_marker = False
         self.urdf_logger = None
         if mjcf_robot is not None and display_robot_mesh:
             mjcf_path, joint_names, dof, base_link = mjcf_robot
@@ -1509,25 +1511,28 @@ class RerunVisualizer:
         theta_w = float(wxyt[2])
         # Live streaming: static=True pins the entity to a single value in the viewer timeline.
         static_pose = bool(getattr(self, "_memory_view", False))
-        rb_arrow = rr.Arrows3D(
-            origins=[0, 0, 0],
-            vectors=[0.4, 0, 0],
-            radii=0.02,
-            labels="robot",
-            colors=[255, 0, 0, 255],
-        )
-        rr.log("world/robot/arrow", rb_arrow, static=static_pose)
-        rr.log(
-            "world/robot/blob",
-            rr.Points3D([0, 0, 0], colors=[255, 0, 0, 255], radii=0.13),
-            static=static_pose,
-        )
+        if getattr(self, "_show_robot_base_marker", False):
+            rb_arrow = rr.Arrows3D(
+                origins=[0, 0, 0],
+                vectors=[0.4, 0, 0],
+                radii=0.02,
+                labels="robot",
+                colors=[255, 0, 0, 255],
+            )
+            rr.log("world/robot/arrow", rb_arrow, static=static_pose)
+            rr.log(
+                "world/robot/blob",
+                rr.Points3D([0, 0, 0], colors=[255, 0, 0, 255], radii=0.13),
+                static=static_pose,
+            )
+        else:
+            self.clear_identity("world/robot/arrow")
+            self.clear_identity("world/robot/blob")
         rr.log(
             "world/robot",
             rr.Transform3D(
                 translation=[float(xy_w[0]), float(xy_w[1]), 0],
                 rotation=rr.RotationAxisAngle(axis=[0, 0, 1], radians=theta_w),
-                axis_length=0.7,
             ),
             static=static_pose,
         )
