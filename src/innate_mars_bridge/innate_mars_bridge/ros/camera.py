@@ -25,29 +25,8 @@ from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, Image
 
-from emet.utils.image import Camera
+from emet.utils.image import Camera, align_camera_matrix_to_image_size
 from innate_mars_bridge.ros.msg_numpy import image_to_numpy
-
-
-def align_camera_matrix_to_image_size(
-    K: np.ndarray,
-    *,
-    calib_height: int,
-    calib_width: int,
-    image_height: int,
-    image_width: int,
-) -> np.ndarray:
-    """Scale ``camera_info`` K to match the decoded image resolution (H×W)."""
-    if calib_height <= 0 or calib_width <= 0:
-        return np.asarray(K, dtype=np.float64).reshape(3, 3).copy()
-    sx = float(image_width) / float(calib_width)
-    sy = float(image_height) / float(calib_height)
-    out = np.asarray(K, dtype=np.float64).reshape(3, 3).copy()
-    out[0, 0] *= sx
-    out[1, 1] *= sy
-    out[0, 2] *= sx
-    out[1, 2] *= sy
-    return out
 
 
 def ros_image_encoding_to_rgb(img: np.ndarray, encoding: str) -> np.ndarray:

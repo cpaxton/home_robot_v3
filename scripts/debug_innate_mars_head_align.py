@@ -58,6 +58,11 @@ def main() -> int:
     parser.add_argument("--ip", "--robot-ip", default="127.0.0.1", help="ZMQ host")
     parser.add_argument("--port", type=int, default=4401)
     parser.add_argument(
+        "--show-full-rot",
+        action="store_true",
+        help="Also print full 3D rotation error (often ~180° on hardware due to optical roll; use optical_roll instead)",
+    )
+    parser.add_argument(
         "--infer-head",
         action="store_true",
         help="Print MJCF joint_head inferred from camera_pose (workstation MuJoCo)",
@@ -79,12 +84,15 @@ def main() -> int:
     print(f"ZMQ joint_head: {obs.get('joint_head')!r} rad")
 
     metrics = compare_mjcf_camera_to_zmq(obs)
-    print(
+    line = (
         f"MJCF FK vs ZMQ camera_pose (base frame): "
         f"pos_err={metrics['pos_err_m'] * 1000:.1f} mm  "
         f"gaze_err={metrics['gaze_err_deg']:.2f}°  "
-        f"rot_err={metrics['rot_err_deg']:.2f}°"
+        f"optical_roll={metrics['optical_roll_err_deg']:.2f}°"
     )
+    if args.show_full_rot:
+        line += f"  full_rot={metrics['rot_err_deg']:.2f}°"
+    print(line)
 
     if args.infer_head:
         from emet.core.zmq_protocol import read_emet_session

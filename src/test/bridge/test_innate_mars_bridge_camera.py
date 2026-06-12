@@ -11,7 +11,7 @@
 # All rights reserved.
 
 import numpy as np
-from innate_mars_bridge.ros.camera import RosCamera, align_camera_matrix_to_image_size, ros_image_encoding_to_rgb
+from innate_mars_bridge.ros.camera import RosCamera, ros_image_encoding_to_rgb
 
 from emet.controller.generic_zmq_client import _align_camera_k_to_rgb
 from emet.utils.image import align_camera_matrix_to_image_size

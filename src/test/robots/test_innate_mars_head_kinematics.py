@@ -221,6 +221,16 @@ def test_sim_replay_keeps_vanilla_mjcf_head_and_cameras():
     assert enrich_obs_pose_joint_head_for_hardware_replay(logger.model, sim_obs)["joint_head"] == 0.05
 
 
+def test_opencv_optical_roll_error_deg():
+    from emet.robots.innate_mars.head_kinematics import opencv_gaze_error_deg, opencv_optical_roll_error_deg
+
+    t0 = np.eye(4)
+    roll = np.eye(4)
+    roll[:3, :3] = np.array([[np.cos(np.pi), -np.sin(np.pi), 0], [np.sin(np.pi), np.cos(np.pi), 0], [0, 0, 1]])
+    assert opencv_gaze_error_deg(t0, roll) < 1e-6
+    assert abs(opencv_optical_roll_error_deg(t0, roll) - 180.0) < 1e-3
+
+
 def test_is_hardware_innate_mars_obs():
     from emet.core.zmq_protocol import EMET_ZMQ_SESSION_KEY
     from emet.robots.innate_mars.head_kinematics import is_hardware_innate_mars_obs

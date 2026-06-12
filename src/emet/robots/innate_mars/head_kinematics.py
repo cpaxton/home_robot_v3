@@ -174,6 +174,21 @@ def opencv_gaze_error_deg(T_a: np.ndarray, T_b: np.ndarray) -> float:
     return float(np.degrees(np.arccos(cos)))
 
 
+def opencv_optical_roll_error_deg(T_a: np.ndarray, T_b: np.ndarray) -> float:
+    """Twist about OpenCV +Z between two camera poses (degrees); meaningful when gaze aligns."""
+    Ra = np.asarray(T_a, dtype=np.float64).reshape(4, 4)[:3, :3]
+    Rb = np.asarray(T_b, dtype=np.float64).reshape(4, 4)[:3, :3]
+    za = Ra @ np.array([0.0, 0.0, 1.0], dtype=np.float64)
+    zb = Rb @ np.array([0.0, 0.0, 1.0], dtype=np.float64)
+    if float(np.dot(za, zb)) < 0.0:
+        Rb = Rb @ np.diag([1.0, 1.0, -1.0])
+    xa = Ra[:, 0]
+    xb = Rb[:, 0]
+    sin_roll = float(np.dot(np.cross(xa, xb), za))
+    cos_roll = float(np.dot(xa, xb))
+    return float(np.degrees(np.arctan2(sin_roll, cos_roll)))
+
+
 def _mjcf_camera_in_base(
     joint: np.ndarray,
     joint_head: float,
@@ -360,12 +375,14 @@ def compare_mjcf_camera_to_zmq(
     )
     pos_err = float(np.linalg.norm(t_mj[:3, 3] - target[:3, 3]))
     gaze_err_deg = opencv_gaze_error_deg(t_mj, target)
+    optical_roll_err_deg = opencv_optical_roll_error_deg(t_mj, target)
     r_err = t_mj[:3, :3].T @ target[:3, :3]
     rot_err_deg = float(np.degrees(np.arccos(np.clip((np.trace(r_err) - 1.0) / 2.0, -1.0, 1.0))))
     return {
         "joint_head_rad": jhead,
         "pos_err_m": pos_err,
         "gaze_err_deg": gaze_err_deg,
+        "optical_roll_err_deg": optical_roll_err_deg,
         "rot_err_deg": rot_err_deg,
         "use_hardware_cameras": float(hw),
     }
