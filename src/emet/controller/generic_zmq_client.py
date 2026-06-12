@@ -897,10 +897,7 @@ class GenericZmqClient(AbstractRobotClient):
             f"move_base_to: goal=[{float(xyt[0]):.3f}, {float(xyt[1]):.3f}, {float(xyt[2]):.3f}] "
             f"frame={frame_tag} blocking={blocking}"
         )
-        sess = self.get_emet_session()
-        if sess and (sess.get("capabilities") or {}).get("teleport_base"):
-            action["nav_teleport"] = True
-        elif env_sim_nav_teleport():
+        if env_sim_nav_teleport():
             warn_sim_nav_env_flags()
             action["nav_teleport"] = True
         if world_frame and self._robosuite_sim_zmq():

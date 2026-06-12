@@ -40,7 +40,7 @@ from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn, scene_base_spawn
 from emet.simulation.env_flags import env_sim_nav_debug, warn_sim_nav_env_flags
 from emet.simulation.head_look_action import apply_head_to_robosuite
-from emet.simulation.molmospaces_env import env_flag, molmospaces_nav_teleport_enabled
+from emet.simulation.molmospaces_env import molmospaces_nav_teleport_enabled
 from emet.simulation.molmospaces_mobile_autoplace import apply_molmospaces_freejoint_base_autoplace
 from emet.simulation.mujoco_ground_truth import (
     mujoco_ground_truth_write_path,
@@ -153,6 +153,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._stationary_base_freejoint_qpos: np.ndarray | None = None
         # Planar slide+yaw ``qpos`` snapshot while idle (Robocasa innate_mars / stretch merges).
         self._stationary_planar_base_qpos: np.ndarray | None = None
+        # In-place yaw animation for planar robots (avoids instant 45° snaps and broken velocity yaw).
+        self._nav_yaw_slew: dict[str, float | int] | None = None
         # Stationary joint-position targets mirrored each physics step onto ``data.ctrl`` (see
         # :meth:`_apply_joint_ctrl_hold_to_actuators`). Same idea as MolmoSpaces ``set_to_stationary``
         # + ``compute_control`` (see comments on that method).
@@ -656,7 +658,7 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     def _hold_stationary_planar_base_if_idle(self) -> None:
         """While there is no navigation goal, pin planar base joints to the latest snapshot."""
-        if self._nav_goal_world is not None:
+        if self._nav_goal_world is not None or self._nav_yaw_slew is not None:
             return
         if self._mjmodel is None or self._mjdata is None:
             return
@@ -773,15 +775,33 @@ class RobosuiteZmqServer(BaseZmqServer):
         bn = self._scene_source_basename or ""
         return bn.startswith("molmospaces_merged")
 
-    def _use_nav_teleport(self) -> bool:
-        if self._is_molmospaces_session():
-            return molmospaces_nav_teleport_enabled()
-        # Default robosuite table (innate_mars, etc.): snap base on xyt goals so rotate_in_place
-        # does not wait on wheel-drive at_goal (often never reached within 30s).
-        return env_flag("EMET_SIM_NAV_TELEPORT", default="1")
+    def _teleport_base_supported(self) -> bool:
+        """True when the merged model can snap the base (planar slide+yaw or free joint)."""
+        if self._planar_base_joint_names() is not None:
+            return True
+        return self._base_freejoint_addrs() is not None
+
+    @staticmethod
+    def _is_pure_yaw_relative(action: dict[str, Any], raw: np.ndarray) -> bool:
+        """``nav_relative`` with zero XY and non-zero yaw (``rotate_in_place`` steps)."""
+        if not action.get("nav_relative"):
+            return False
+        a = np.asarray(raw, dtype=np.float64).reshape(-1)
+        if a.size < 3:
+            return False
+        return float(np.hypot(float(a[0]), float(a[1]))) < 1e-6 and abs(float(a[2])) > 1e-6
+
+    def _resolve_nav_teleport(self, action: dict[str, Any], raw: np.ndarray) -> bool:
+        """Whether to instant-snap the base for this ``xyt`` action (else holonomic velocity drive)."""
+        # Planar robots: smooth yaw via velocity actuators (idle qpos hold keeps XY at spawn).
+        if self._is_pure_yaw_relative(action, raw) and self._planar_base_joint_names() is not None:
+            return False
+        if bool(action.get("nav_teleport", False)):
+            return True
+        return self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()
 
     def _use_molmospaces_nav_teleport(self) -> bool:
-        return self._use_nav_teleport()
+        return self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()
 
     def _build_emet_session(
         self,
@@ -804,7 +824,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         else:
             env = {"kind": "default_table"}
         caps: dict[str, Any] = {
-            "teleport_base": self._use_nav_teleport(),
+            "teleport_base": self._teleport_base_supported(),
             "nav_velocity_drive": True,
             "depth": bool(self._spec.camera_names),
             "num_cameras": len(self._spec.camera_names),
@@ -834,7 +854,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "xyt_default_non_relative": "episode_relative_xyt_then_compose_with_navigation_origin",
             "xyt_with_nav_relative": "delta_xy_in_current_world_heading",
             "client_sets_nav_world": "GenericZmqClient move_base_to(..., world_frame=True) for voxel planner goals",
-            "sim_teleport": "action.nav_teleport or EMET_SIM_NAV_TELEPORT=1 on client",
+            "sim_teleport": "action.nav_teleport or MolmoSpaces EMET_MOLMOSPACES_NAV_TELEPORT; pure yaw uses velocity drive on planar robots",
             "sim_motion_default": "velocity_drive via planar actuators (_nav_goal_world P-control)",
             "sim_debug": "EMET_SIM_NAV_DEBUG=1 for verbose per-action nav logs on server",
         }
@@ -1495,6 +1515,43 @@ class RobosuiteZmqServer(BaseZmqServer):
             for aid in aids:
                 self._mjdata.ctrl[aid] = 0.0
 
+    def _start_planar_yaw_slew(self, wx: float, wy: float, wt: float) -> None:
+        """Animate yaw on planar slide joints over several physics steps (smooth ``rotate_in_place``)."""
+        cur = self.get_base_xyt()
+        start = float(cur[2])
+        delta = float(np.arctan2(np.sin(float(wt) - start), np.cos(float(wt) - start)))
+        steps = max(8, min(40, int(abs(delta) / (np.pi / 24.0))))
+        self._nav_yaw_slew = {
+            "wx": float(wx),
+            "wy": float(wy),
+            "start": start,
+            "delta": delta,
+            "steps_total": int(steps),
+            "steps_done": 0,
+        }
+        self._at_goal = False
+
+    def _step_planar_yaw_slew(self) -> None:
+        """Advance one frame of an in-progress planar yaw slew; sets ``at_goal`` when finished."""
+        slew = self._nav_yaw_slew
+        if slew is None or self._mjmodel is None or self._mjdata is None:
+            return
+        slew["steps_done"] = int(slew["steps_done"]) + 1
+        alpha = min(1.0, float(slew["steps_done"]) / float(slew["steps_total"]))
+        wt = float(
+            np.arctan2(
+                np.sin(float(slew["start"]) + alpha * float(slew["delta"])),
+                np.cos(float(slew["start"]) + alpha * float(slew["delta"])),
+            )
+        )
+        self._teleport_planar_base_world_xyt(float(slew["wx"]), float(slew["wy"]), wt)
+        if alpha >= 1.0 - 1e-9:
+            self._nav_yaw_slew = None
+            self._zero_base_free_joint_velocity()
+            self._sync_actuator_ctrl_from_joint_positions()
+            self._snapshot_stationary_planar_base_qpos()
+            self._at_goal = True
+
     def _step_base_navigation_drive(self) -> None:
         """P controller in world XY + yaw toward ``_nav_goal_world``; clears goal and sets ``at_goal`` when close."""
         if self._mjmodel is None or self._mjdata is None:
@@ -1672,8 +1729,17 @@ class RobosuiteZmqServer(BaseZmqServer):
                     if init is None:
                         init = np.zeros(3, dtype=np.float64)
                     wx, wy, wt, nav_meta = self._resolve_nav_goal_world_xyt(action, raw, init)
-                    nav_teleport = bool(action.get("nav_teleport", False)) or self._use_molmospaces_nav_teleport()
-                    if nav_teleport:
+                    self._nav_yaw_slew = None
+                    nav_teleport = self._resolve_nav_teleport(action, raw)
+                    pure_yaw_planar = (
+                        self._is_pure_yaw_relative(action, raw) and self._planar_base_joint_names() is not None
+                    )
+                    if pure_yaw_planar and not nav_teleport:
+                        self._nav_goal_world = None
+                        self._zero_base_free_joint_velocity()
+                        self._start_planar_yaw_slew(wx, wy, wt)
+                        self._log_nav_action(nav_meta, applied="yaw_slew")
+                    elif nav_teleport:
                         if not self._teleport_base_world_xyt(wx, wy, wt):
                             logger.warning(
                                 f"Navigation xyt={action['xyt']!r}: no free joint on base_link "
@@ -1877,7 +1943,9 @@ class RobosuiteZmqServer(BaseZmqServer):
             logger.info("[mujoco_ctrl_debug] headless _sim_loop: apply logging enabled")
         while self._running:
             with self._mj_lock:
-                self._step_base_navigation_drive()
+                self._step_planar_yaw_slew()
+                if self._nav_yaw_slew is None:
+                    self._step_base_navigation_drive()
                 for _ in range(self._mj_substeps_per_tick):
                     self._hold_stationary_base_if_idle()
                     self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
@@ -1911,7 +1979,9 @@ class RobosuiteZmqServer(BaseZmqServer):
                     # Keep mj_step and viewer.sync under the same lock: sync uses mj_copyDataVisual
                     # and must not overlap Renderer / mj_forward on other ZMQ threads.
                     with self._mj_lock:
-                        self._step_base_navigation_drive()
+                        self._step_planar_yaw_slew()
+                        if self._nav_yaw_slew is None:
+                            self._step_base_navigation_drive()
                         for _ in range(self._mj_substeps_per_tick):
                             self._hold_stationary_base_if_idle()
                             self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
