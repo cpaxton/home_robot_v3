@@ -37,6 +37,9 @@ ROS_OPTICAL_QUAT_WXYZ = (0.5, -0.5, -0.5, 0.5)
 # are patched via :func:`patch_innate_mars_head_cameras_for_hardware`).
 HARDWARE_MJCF_VISUAL_YAW_RAD = float(np.pi / 2.0)
 
+# Sim ``head_visual`` body pos in ``innate_mars.xml`` (neck pivot — intentionally unchanged on sim replay).
+SIM_HEAD_VISUAL_POS: tuple[float, float, float] = (0.0, 0.015, -0.005)
+
 # Sim ``head_visual`` places the STL at the neck pivot; hardware URDF cameras sit ~70 mm
 # forward (+head X). Shift the visual subtree so Rerun head mesh aligns with stereo TF (Herman 2026-06).
 HARDWARE_HEAD_VISUAL_POS: tuple[float, float, float] = (0.07, 0.01, -0.005)
@@ -94,7 +97,11 @@ def patch_innate_mars_head_visual_for_hardware(model: Any) -> bool:
 
 
 def patch_innate_mars_model_for_hardware_replay(model: Any) -> bool:
-    """Apply all hardware MJCF display patches (cameras + head visual)."""
+    """Apply hardware-only MJCF display patches (cameras + head visual).
+
+    Sim replay must keep vanilla ``innate_mars.xml`` mounts/visuals — only call when
+    :func:`is_hardware_innate_mars_obs` is true.
+    """
     c = patch_innate_mars_head_cameras_for_hardware(model)
     v = patch_innate_mars_head_visual_for_hardware(model)
     return c or v

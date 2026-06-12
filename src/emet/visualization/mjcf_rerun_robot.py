@@ -255,7 +255,7 @@ class MjcfBodySkeletonLogger:
             static=True,
         )
 
-    def _maybe_patch_hardware_head_cameras(self, obs_pose: dict[str, Any]) -> None:
+    def _maybe_patch_model_for_hardware_replay(self, obs_pose: dict[str, Any]) -> None:
         if self._hardware_cameras_patched:
             return
         from emet.robots.innate_mars.head_kinematics import (
@@ -268,8 +268,13 @@ class MjcfBodySkeletonLogger:
             self._hardware_cameras_patched = True
 
     def _maybe_enrich_joint_head_from_camera(self, obs_pose: dict[str, Any]) -> dict[str, Any]:
-        from emet.robots.innate_mars.head_kinematics import enrich_obs_pose_joint_head_for_hardware_replay
+        from emet.robots.innate_mars.head_kinematics import (
+            enrich_obs_pose_joint_head_for_hardware_replay,
+            is_hardware_innate_mars_obs,
+        )
 
+        if not is_hardware_innate_mars_obs(obs_pose):
+            return obs_pose
         return enrich_obs_pose_joint_head_for_hardware_replay(self.model, obs_pose)
 
     def apply_and_log(self, obs_pose: dict[str, Any]) -> None:
@@ -282,7 +287,7 @@ class MjcfBodySkeletonLogger:
             obs_pose_for_base_relative_mjcf_replay,
         )
 
-        self._maybe_patch_hardware_head_cameras(obs_pose)
+        self._maybe_patch_model_for_hardware_replay(obs_pose)
         obs_pose = self._maybe_enrich_joint_head_from_camera(obs_pose)
         obs_pose = obs_pose_for_base_relative_mjcf_replay(obs_pose)
         apply_zmq_obs_to_mujoco_data(
@@ -350,7 +355,7 @@ class MjcfVisualMeshLogger:
             self._geom_mesh_cache[gid] = (verts, faces)
             self._geom_color_cache[gid] = _mjcf_geom_rgba_u8(self.model, gid)
 
-    def _maybe_patch_hardware_head_cameras(self, obs_pose: dict[str, Any]) -> None:
+    def _maybe_patch_model_for_hardware_replay(self, obs_pose: dict[str, Any]) -> None:
         if self._hardware_cameras_patched:
             return
         from emet.robots.innate_mars.head_kinematics import (
@@ -363,8 +368,13 @@ class MjcfVisualMeshLogger:
             self._hardware_cameras_patched = True
 
     def _maybe_enrich_joint_head_from_camera(self, obs_pose: dict[str, Any]) -> dict[str, Any]:
-        from emet.robots.innate_mars.head_kinematics import enrich_obs_pose_joint_head_for_hardware_replay
+        from emet.robots.innate_mars.head_kinematics import (
+            enrich_obs_pose_joint_head_for_hardware_replay,
+            is_hardware_innate_mars_obs,
+        )
 
+        if not is_hardware_innate_mars_obs(obs_pose):
+            return obs_pose
         return enrich_obs_pose_joint_head_for_hardware_replay(self.model, obs_pose)
 
     def sync_kinematics(
@@ -378,7 +388,7 @@ class MjcfVisualMeshLogger:
 
         from emet.robots.innate_mars.head_kinematics import obs_pose_for_base_relative_mjcf_replay
 
-        self._maybe_patch_hardware_head_cameras(obs_pose)
+        self._maybe_patch_model_for_hardware_replay(obs_pose)
         obs_pose = self._maybe_enrich_joint_head_from_camera(obs_pose)
         if zero_planar_base:
             obs_pose = obs_pose_for_base_relative_mjcf_replay(obs_pose)

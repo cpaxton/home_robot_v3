@@ -185,6 +185,42 @@ def test_enrich_obs_pose_joint_head_uses_camera_fk_on_hardware():
     assert abs(float(out["joint_head"]) - 0.99) > 0.1
 
 
+def test_sim_replay_keeps_vanilla_mjcf_head_and_cameras():
+    """Hardware display patches must not run on sim ZMQ session (regression guard)."""
+    pytest.importorskip("mujoco")
+    import mujoco
+
+    from emet.core.zmq_protocol import EMET_ZMQ_SESSION_KEY
+    from emet.robots.innate_mars import InnateMarsBackend
+    from emet.robots.innate_mars.head_kinematics import (
+        SIM_HEAD_VISUAL_POS,
+        enrich_obs_pose_joint_head_for_hardware_replay,
+    )
+    from emet.visualization.mjcf_rerun_robot import MjcfVisualMeshLogger
+
+    spec = InnateMarsBackend().get_spec()
+    fresh = mujoco.MjModel.from_xml_path(spec.mjcf_path)
+    cid = mujoco.mj_name2id(fresh, mujoco.mjtObj.mjOBJ_CAMERA, "head_left")
+    sim_cam_pos = fresh.cam_pos[cid].copy()
+    sim_head_visual_pos = fresh.body_pos[mujoco.mj_name2id(fresh, mujoco.mjtObj.mjOBJ_BODY, "head_visual")].copy()
+    np.testing.assert_allclose(sim_head_visual_pos, SIM_HEAD_VISUAL_POS, atol=1e-9)
+
+    sim_obs = {
+        EMET_ZMQ_SESSION_KEY: {"is_simulation": True, "runtime_kind": "robosuite_sim"},
+        "gps": np.zeros(2),
+        "compass": np.zeros(1),
+        "joint": np.zeros(10),
+        "joint_head": 0.05,
+        "camera_pose": np.eye(4),
+    }
+    logger = MjcfVisualMeshLogger(spec.mjcf_path, spec.joint_names, spec.dof, spec.base_link_name)
+    logger.sync_kinematics(sim_obs, zero_planar_base=True)
+    np.testing.assert_allclose(logger.model.cam_pos[cid], sim_cam_pos, atol=1e-9)
+    bid = mujoco.mj_name2id(logger.model, mujoco.mjtObj.mjOBJ_BODY, "head_visual")
+    np.testing.assert_allclose(logger.model.body_pos[bid], sim_head_visual_pos, atol=1e-9)
+    assert enrich_obs_pose_joint_head_for_hardware_replay(logger.model, sim_obs)["joint_head"] == 0.05
+
+
 def test_is_hardware_innate_mars_obs():
     from emet.core.zmq_protocol import EMET_ZMQ_SESSION_KEY
     from emet.robots.innate_mars.head_kinematics import is_hardware_innate_mars_obs
