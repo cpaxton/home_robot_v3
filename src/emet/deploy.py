@@ -131,7 +131,9 @@ def _ssh_run(
     password: str | None,
     remote_cmd: str,
     use_paramiko: bool | None = None,
-) -> None:
+    *,
+    check: bool = True,
+) -> int:
     if use_paramiko is None:
         use_paramiko = bool(password and not _has_sshpass())
     if use_paramiko:
@@ -149,16 +151,20 @@ def _ssh_run(
                 print(out, end="")
             if err:
                 print(err, end="", file=sys.stderr)
-            if exit_status != 0:
+            if exit_status != 0 and check:
                 sys.exit(exit_status)
+            return exit_status
         finally:
             client.close()
-        return
+        return 0
     target = _ssh_target(host, user, password)
     full_cmd = ["ssh", target, remote_cmd]
     if password:
         full_cmd = ["sshpass", "-p", password] + full_cmd
-    _run(full_cmd)
+    r = subprocess.run(full_cmd)
+    if check and r.returncode != 0:
+        sys.exit(r.returncode)
+    return r.returncode
 
 
 def deploy(
@@ -193,6 +199,10 @@ def deploy(
         host = host or conn.get("host")
         user = user or conn.get("user", "root")
         password = password if password is not None else conn.get("password")
+        if workspace == "~/ament_ws" and conn.get("workspace"):
+            workspace = str(conn["workspace"])
+        if emet_dir == "~/emet" and conn.get("emet_dir"):
+            emet_dir = str(conn["emet_dir"])
     if not host:
         raise SystemExit("No host. Use --host, or run: emet connect save <host> [--user USER]")
     user = user or "root"
@@ -206,33 +216,66 @@ def deploy(
     if not bridge_src.is_dir():
         raise SystemExit(f"innate_mars_bridge not found at {bridge_src}")
 
-    remote_emet = os.path.expanduser(emet_dir)
-    remote_ws = os.path.expanduser(workspace)
-    remote_emet_core = os.path.join(remote_emet, "emet_core")
-    remote_ws_src = os.path.join(remote_ws, "src")
+    remote_emet = emet_dir.rstrip("/")
+    remote_ws = workspace.rstrip("/")
+    remote_emet_core = f"{remote_emet}/emet_core"
+    remote_ws_src = f"{remote_ws}/src"
+    ros_setup = f"source /opt/ros/humble/setup.bash && source {remote_ws}/install/setup.bash"
+    robot_reqs = root / "configs" / "robots" / "innate_mars_robot_requirements.txt"
 
     print("Syncing emet_core to robot...")
     _rsync_to_robot(emet_core_src, remote_emet_core, host, user, password, use_paramiko)
     print("Syncing innate_mars_bridge to robot...")
     _ssh_run(host, user, password, f"mkdir -p {remote_ws_src}", use_paramiko)
-    _rsync_to_robot(bridge_src, os.path.join(remote_ws_src, "innate_mars_bridge"), host, user, password, use_paramiko)
+    _rsync_to_robot(bridge_src, f"{remote_ws_src}/innate_mars_bridge", host, user, password, use_paramiko)
 
-    print("Installing emet_core on robot (pip install -e)...")
-    _ssh_run(host, user, password, f"pip install -e {remote_emet_core}", use_paramiko)
-
-    print("Building ROS2 workspace on robot (colcon build)...")
-    _ssh_run(host, user, password, f"cd {remote_ws} && colcon build --packages-select innate_mars_bridge", use_paramiko)
-
-    if start_bridge:
-        print("Starting bridge on robot in background...")
+    if robot_reqs.is_file():
+        print("Installing bridge Python deps on robot...")
+        remote_reqs = f"{remote_emet}/innate_mars_robot_requirements.txt"
+        target = _ssh_target(host, user, password)
+        req_cmd = ["rsync", "-az", str(robot_reqs), f"{target}:{remote_reqs}"]
+        if password:
+            req_cmd = ["sshpass", "-p", password] + req_cmd
+        _run(req_cmd)
         _ssh_run(
             host,
             user,
             password,
-            f"cd {remote_ws} && source install/setup.bash && nohup ros2 launch innate_mars_bridge server.launch.py > /tmp/innate_mars_bridge.log 2>&1 &",
+            f"bash -lc 'python3 -m pip install --user -r {remote_reqs}'",
             use_paramiko,
         )
-        print("Bridge started. To view: emet view-bridge")
+
+    _ssh_run(
+        host,
+        user,
+        password,
+        (
+            f"bash -lc 'mkdir -p {remote_emet} && "
+            f'printf %s\\n "export PYTHONPATH={remote_emet_core}:\\$PYTHONPATH" '
+            f"> {remote_emet}/bridge_env.sh'"
+        ),
+        use_paramiko,
+    )
+
+    print("Building ROS2 workspace on robot (colcon build)...")
+    build_cmd = f"bash -lc '{ros_setup} && cd {remote_ws} && colcon build --packages-select innate_mars_bridge'"
+    _ssh_run(host, user, password, build_cmd, use_paramiko)
+
+    if start_bridge:
+        from emet.mars import start_bridge_on_robot
+
+        start_bridge_on_robot(
+            host,
+            user,
+            password,
+            workspace=remote_ws,
+            emet_dir=remote_emet,
+        )
+        print("Bridge started in tmux ros_nodes:emet-bridge. View: emet view-bridge")
     else:
         print("To start the bridge on the robot, SSH in and run:")
-        print(f"  cd {remote_ws} && source install/setup.bash && ros2 launch innate_mars_bridge server.launch.py")
+        print(
+            f"  source {remote_emet}/bridge_env.sh && cd {remote_ws} && "
+            f"source /opt/ros/humble/setup.bash && source install/setup.bash && "
+            f"ros2 launch innate_mars_bridge server.launch.py"
+        )

@@ -82,6 +82,10 @@ def save_connection(
     password: str | None = None,
     name: str | None = None,
     set_active: bool = True,
+    *,
+    workspace: str | None = None,
+    emet_dir: str | None = None,
+    robot: str | None = None,
 ) -> str:
     """Save a connection. Returns the name used (name or derived from host)."""
     _ensure_stretch_dir()
@@ -90,6 +94,12 @@ def save_connection(
     conn: dict[str, Any] = {"host": host.strip(), "user": user.strip()}
     if password is not None:
         conn["password"] = password
+    if workspace is not None:
+        conn["workspace"] = workspace.strip()
+    if emet_dir is not None:
+        conn["emet_dir"] = emet_dir.strip()
+    if robot is not None:
+        conn["robot"] = robot.strip()
     if "connections" not in config:
         config["connections"] = {}
     config["connections"][conn_name] = conn

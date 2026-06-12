@@ -39,10 +39,10 @@ class ZmqServer(BaseZmqServer):
     @override
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.client = InnateMarsClient(init_node=False, verbose=self.verbose)
-        # Start ROS spin in background (client holds the ROS node)
         import threading
 
+        self.client = InnateMarsClient(init_node=False, verbose=self.verbose)
+        self.client._ros.wait_for_cameras()
         self._spin_thread = threading.Thread(target=rclpy.spin, args=(self.client._ros,), daemon=True)
         self._spin_thread.start()
 
@@ -62,7 +62,6 @@ class ZmqServer(BaseZmqServer):
             },
             "environment": {"kind": "ros2", "package": "innate_mars_bridge"},
         }
-
 
     @override
     def is_running(self) -> bool:

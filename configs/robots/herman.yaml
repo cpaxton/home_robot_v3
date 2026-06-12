@@ -1,0 +1,14 @@
+# Herman — Innate Mars (Maurice) on Jetson
+# Use: emet connect save herman --user jetson1 --name herman \
+#        --robot innate_mars --workspace ~/innate-os/ros2_ws
+#
+# Bring-up (on robot): innate service start
+# Deploy: emet deploy --start-bridge
+# Verify: uv run emet preview-cameras --source zmq --robot innate_mars --robot-ip herman
+
+name: herman
+host: herman
+user: jetson1
+robot: innate_mars
+workspace: ~/innate-os/ros2_ws
+emet_dir: ~/emet

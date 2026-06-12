@@ -285,3 +285,16 @@ def test_install_completion_bash():
     )
     assert result.returncode == 0
     assert "_emet_completion" in result.stdout or "emet" in result.stdout
+
+
+def test_mars_help():
+    """emet mars --help and start --help work."""
+    for args in (["mars", "--help"], ["mars", "start", "--help"]):
+        result = subprocess.run(
+            [sys.executable, "-m", "emet.cli", *args],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+    assert "username" in result.stdout.lower() or "--user" in result.stdout
+    assert "deploy" in result.stdout

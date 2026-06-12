@@ -88,12 +88,20 @@ class InnateMarsRosInterface(Node):
             verbose=verbose,
         )
 
+        self.nav = None
+
+    def wait_for_cameras(self) -> None:
+        """Block until head stereo and EE cameras have published at least one frame."""
         self.get_logger().info("InnateMarsRosInterface: waiting for cameras...")
-        self.head_left_cam.wait_for_image()
-        self.head_right_cam.wait_for_image()
-        self.ee_cam.wait_for_image()
+        self.head_left_cam.ensure_ready()
+        self.head_right_cam.ensure_ready()
+        try:
+            self.ee_cam.ensure_ready(timeout_s=15.0)
+        except RuntimeError as exc:
+            self.get_logger().warning(f"EE camera not ready at startup ({exc}); continuing with head stereo.")
         self.get_logger().info("InnateMarsRosInterface: all cameras ready.")
-        self.nav = MarsNavigationClient(self)
+        if self.nav is None:
+            self.nav = MarsNavigationClient(self)
 
     def _joint_callback(self, msg: JointState):
         with self._js_lock:
@@ -124,6 +132,8 @@ class InnateMarsRosInterface(Node):
         )
 
     def at_goal(self) -> bool:
+        if self.nav is None:
+            return True
         return self.nav.at_goal()
 
     def get_base_pose_matrix(self):
