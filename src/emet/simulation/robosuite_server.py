@@ -975,6 +975,55 @@ class RobosuiteZmqServer(BaseZmqServer):
                     pass
                 self._primary_renderer = None
 
+    @staticmethod
+    def _configure_offscreen_gl(*, use_glx: bool = False) -> None:
+        """Prefer EGL for ZMQ ``mujoco.Renderer`` so passive-viewer GLFW does not share one GL backend."""
+        if use_glx or os.environ.get("MUJOCO_GL"):
+            return
+        os.environ["MUJOCO_GL"] = "egl"
+
+    def _ensure_offscreen_framebuffer(self, width: int, height: int) -> None:
+        """Grow MuJoCo's global offscreen buffer before ``mjr_makeContext`` (Stretch camera manager pattern)."""
+        if self._mjmodel is None:
+            return
+        vis = self._mjmodel.vis.global_
+        w, h = int(width), int(height)
+        if w > int(vis.offwidth):
+            vis.offwidth = w
+        if h > int(vis.offheight):
+            vis.offheight = h
+
+    def _get_or_create_primary_renderer(self) -> Any:
+        """Single cached ``Renderer`` / GL context (see module ``_PRIMARY_*``)."""
+        self._ensure_offscreen_framebuffer(_PRIMARY_RW, _PRIMARY_RH)
+        if self._primary_renderer is None:
+            self._primary_renderer = mujoco.Renderer(self._mjmodel, _PRIMARY_RH, _PRIMARY_RW)
+        return self._primary_renderer
+
+    def _discard_primary_renderer_unlocked(self) -> None:
+        if self._primary_renderer is not None:
+            try:
+                self._primary_renderer.close()
+            except Exception:
+                pass
+            self._primary_renderer = None
+
+    @staticmethod
+    def _is_offscreen_render_gl_error(exc: BaseException) -> bool:
+        msg = str(exc).lower()
+        return any(token in msg for token in ("framebuffer", "0x8cdd", "0x502", "offscreen"))
+
+    def _log_render_gl_hint(self, camera_name: str, exc: BaseException) -> None:
+        if getattr(self, "_render_gl_hint_logged", False):
+            return
+        self._render_gl_hint_logged = True
+        logger.warning(
+            f"MuJoCo offscreen render failed for {camera_name!r}: {exc!r}. "
+            f"MUJOCO_GL={os.environ.get('MUJOCO_GL')!r}. "
+            "Try `emet serve mujoco --headless` (forces EGL), export MUJOCO_GL=egl, "
+            "or on WSL/Xvfb use `--use-glx` with DISPLAY set."
+        )
+
     def _apply_optional_mujoco_render_flip_ud(self, img: np.ndarray) -> np.ndarray:
         """Legacy vertical flip when ``EMET_ROBOSUITE_RENDER_FLIPUD=1``.
 
@@ -992,26 +1041,28 @@ class RobosuiteZmqServer(BaseZmqServer):
         cam = self._camera_for_renderer(camera_name)
         with self._mj_lock:
             with self._render_lock:
-                if self._primary_renderer is None:
-                    self._primary_renderer = mujoco.Renderer(self._mjmodel, _PRIMARY_RH, _PRIMARY_RW)
-                renderer = self._primary_renderer
+                renderer = self._get_or_create_primary_renderer()
                 renderer.update_scene(self._mjdata, camera=cam)
                 rgb = cast(np.ndarray, renderer.render())
                 return np.asarray(rgb, dtype=np.uint8).copy()
 
-    def _render_depth_raw(self, camera_name: str) -> np.ndarray:
-        """Depth float32 for ``camera_name`` after ``update_scene`` (enable_depth_rendering)."""
+    def _render_primary_rgb_and_depth_raw(self, camera_name: str) -> tuple[np.ndarray, np.ndarray]:
+        """RGB + depth in one lock scope and one ``Renderer`` pass (avoids EGL framebuffer races)."""
         cam = self._camera_for_renderer(camera_name)
         with self._mj_lock:
             with self._render_lock:
-                renderer = self._primary_renderer
+                renderer = self._get_or_create_primary_renderer()
+                renderer.update_scene(self._mjdata, camera=cam)
+                rgb = cast(np.ndarray, renderer.render())
+                rgb = np.asarray(rgb, dtype=np.uint8).copy()
                 renderer.enable_depth_rendering()
                 try:
                     renderer.update_scene(self._mjdata, camera=cam)
                     depth = cast(np.ndarray, renderer.render())
-                    return np.asarray(depth, dtype=np.float32).copy()
+                    depth = np.asarray(depth, dtype=np.float32).copy()
                 finally:
                     renderer.disable_depth_rendering()
+                return rgb, depth
 
     def _postprocess_rgb_depth_and_K(
         self, camera_name: str, rgb: np.ndarray, depth: np.ndarray | None
@@ -1046,8 +1097,14 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     def _primary_rgb_and_depth(self, camera_name: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """RGB + depth + intrinsics ``K`` matching both buffers (primary resolution)."""
-        rgb = self._render_rgb_raw(camera_name)
-        depth = self._render_depth_raw(camera_name)
+        try:
+            rgb, depth = self._render_primary_rgb_and_depth_raw(camera_name)
+        except Exception as e:
+            if not self._is_offscreen_render_gl_error(e):
+                raise
+            with self._render_lock:
+                self._discard_primary_renderer_unlocked()
+            rgb, depth = self._render_primary_rgb_and_depth_raw(camera_name)
         rgb, depth, K = self._postprocess_rgb_depth_and_K(camera_name, rgb, depth)
         return rgb, depth, K
 
@@ -1791,6 +1848,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         try:
             rgb, depth, K = self._primary_rgb_and_depth(primary_cam)
         except Exception as e:
+            self._log_render_gl_hint(primary_cam, e)
             logger.warning(f"get_full_observation_message render failed ({primary_cam!r}): {e!r}")
             return None
 
@@ -2012,8 +2070,10 @@ class RobosuiteZmqServer(BaseZmqServer):
         robocasa: bool = False,
         headless: bool = True,
         show_viewer_ui: bool = False,
+        use_glx: bool = False,
         **kwargs,
     ) -> None:
+        self._configure_offscreen_gl(use_glx=use_glx)
         self._load_model()
         self._running = True
         pl_debug = robosuite_post_load_debug_enabled(self._debug_molmospaces_spawn)
