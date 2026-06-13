@@ -205,6 +205,40 @@ emet mars stop --connection herman
 
 ---
 
+### `emet connect [save|list|show]`
+
+SSH / deploy **connection profiles** stored in ``~/.stretch/connection.json`` (field reference: ``src/emet/utils/connection.py``).
+
+| Command | Purpose |
+|---------|--------|
+| `emet connect save HOST …` | Create or update a profile; default sets it **active** |
+| `emet connect list` | List profiles and mark which is active |
+| `emet connect show` | Print the active profile |
+
+**`emet connect save` flags**
+
+| Flag | Stored as | Notes |
+|------|-----------|--------|
+| `--user` / `-u` | `user` | SSH login (default `root`) |
+| `--password` / `-p` | `password` | Optional; else `EMET_ROBOT_PASSWORD` or SSH keys at runtime |
+| `--name` / `-n` | profile key | Default: hostname/IP |
+| `--robot` | `robot` | Emet robot id (e.g. `innate_mars`) for CLI defaults |
+| `--workspace` | `workspace` | Remote ROS2 workspace (Mars: `~/innate-os/ros2_ws`) |
+| `--emet-dir` | `emet_dir` | Remote emet install root (default `~/emet`) |
+| `--no-active` | — | Save without setting active or updating `robot_ip.txt` |
+
+**Examples:**
+```bash
+emet connect save herman --user jetson1 --name herman \
+  --robot innate_mars --workspace ~/innate-os/ros2_ws --emet-dir ~/emet
+emet connect list
+emet connect show
+```
+
+Used by `emet deploy`, `emet mars start`, `emet capture`, and `emet stream` when `--ip` / `--host` is omitted (active profile, or `--connection NAME`).
+
+---
+
 ### `emet capture [options]`
 
 One-shot **ZMQ smoke test** for any robot backend: subscribe once on the observation port (default **4401**), save a labeled camera montage + per-camera JPEGs + `metadata.json` (joints, poses, GPS/compass when present). Optional **`--map`** runs a single DynaMem `update()` and opens Rerun (same depth stack as `emet run dynamem`).

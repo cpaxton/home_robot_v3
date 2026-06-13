@@ -1021,7 +1021,11 @@ def connect_save(
     emet_dir: str | None,
     no_active: bool,
 ) -> None:
-    """Save host and user; optional password. Updates ~/.stretch/robot_ip.txt for legacy tools."""
+    """Save host and user; optional password.
+
+    When saved as active (default), also updates ``~/.stretch/robot_ip.txt`` for legacy tools.
+    Use ``--no-active`` to add/update a named profile without changing the active host.
+    """
     pwd = password or os.environ.get("EMET_ROBOT_PASSWORD")
     from emet.utils.connection import save_connection
 
