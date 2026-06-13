@@ -21,7 +21,11 @@ from emet.habitat.config import (
     hm3d_scene_glb_path,
     hm3d_scene_semantic_glb_path,
 )
-from emet.habitat.hm3d_semantics import hm3d_annotated_scene_dataset_config
+from emet.habitat.hm3d_semantics import (
+    compute_hmeqa_semantics_coverage,
+    format_hmeqa_semantics_coverage_report,
+    hm3d_annotated_scene_dataset_config,
+)
 from emet.habitat.datasets import get_question, load_hmeqa_questions
 
 EXPLORE_EQA_QUESTIONS = (
@@ -208,6 +212,23 @@ def _fetch_hm3d_semantics(
     return 0
 
 
+def _report_hmeqa_semantics(data_dir: Path, hm3d_train: Path, hm3d_data: Path) -> int:
+    try:
+        cov = compute_hmeqa_semantics_coverage(
+            hm3d_root=hm3d_train,
+            hm3d_data_root=hm3d_data,
+            questions_path=data_dir / "questions.csv",
+        )
+    except FileNotFoundError as exc:
+        print(exc, file=sys.stderr)
+        print("Run: uv run python scripts/download_habitat_eqa_data.py --fetch-csv", file=sys.stderr)
+        return 1
+    print(format_hmeqa_semantics_coverage_report(cov))
+    print("\nPaper-parity subset (GT semantics only):")
+    print(f"  question ids: {list(cov.questions_with_semantics)}")
+    return 0
+
+
 def _verify_semantics(scene_id: str, hm3d_train: Path) -> int:
     from emet.habitat.config import hm3d_scene_glb_path
 
@@ -266,6 +287,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--replace", action="store_true", help="Replace existing HM3D split data")
     parser.add_argument("--verify-question", type=int, default=None, metavar="ID")
     parser.add_argument("--verify-semantics", default=None, metavar="SCENE_ID", help="Check semantic.glb for scene")
+    parser.add_argument(
+        "--report-hmeqa-semantics",
+        action="store_true",
+        help="Summarize HM-EQA overlap with HM3D-Semantics (.semantic.glb) assets",
+    )
     args = parser.parse_args(argv)
 
     data_dir = args.data_dir or default_habitat_eqa_data_dir()
@@ -278,6 +304,7 @@ def main(argv: list[str] | None = None) -> int:
         and args.fetch_hm3d_semantics is None
         and args.verify_question is None
         and args.verify_semantics is None
+        and not args.report_hmeqa_semantics
     ):
         _print_instructions(data_dir, hm3d_data, hm3d_train)
         if (
@@ -286,6 +313,7 @@ def main(argv: list[str] | None = None) -> int:
             and args.fetch_hm3d_semantics is None
             and args.verify_question is None
             and args.verify_semantics is None
+            and not args.report_hmeqa_semantics
         ):
             return 0
 
@@ -324,6 +352,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.verify_semantics is not None:
         return _verify_semantics(args.verify_semantics, hm3d_train)
+
+    if args.report_hmeqa_semantics:
+        return _report_hmeqa_semantics(data_dir, hm3d_train, hm3d_data)
 
     return 0
 

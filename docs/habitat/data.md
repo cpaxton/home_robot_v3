@@ -34,9 +34,15 @@ uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d val       # val 
 
 # Check a specific question's scene file
 uv run python scripts/download_habitat_eqa_data.py --verify-question 0
+
+# HM3D-Semantics (GraphEQA sim — GT instance masks; separate from train meshes)
+uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d-semantics train
+uv run python scripts/download_habitat_eqa_data.py --report-hmeqa-semantics
 ```
 
 `--fetch-hm3d` uses `.venv-habitat/bin/python -m habitat_sim.utils.datasets_download`.
+
+See [HM3D-Semantics](data.md#hm3d-semantics-ground-truth-perception-in-sim) for why only ~37/113 paper questions have GT labels.
 
 ## HM-EQA CSVs
 
@@ -160,6 +166,86 @@ $HM3D_SCENE_DIR/<scene_id>/<short_id>.basis.glb
 
 Implemented in `src/emet/habitat/config.py` (`hm3d_scene_short_name`, `hm3d_scene_glb_path`).
 
+### Semantic GLB path convention
+
+When HM3D-Semantics is installed, each annotated scene also has:
+
+```
+$HM3D_SCENE_DIR/<scene_id>/<short_id>.semantic.glb
+```
+
+Example: `.../00004-VqCaAuuoeWk/VqCaAuuoeWk.semantic.glb` next to `VqCaAuuoeWk.basis.glb`.
+
+Habitat-Sim loads the annotated scene-dataset config (`hm3d_annotated_basis.scene_dataset_config.json`) and exposes a **semantic sensor** (per-pixel instance ids). Our harness maps those ids to category names (`chair`, `bed`, …) and builds **GraphEQAMemory** object nodes without running Detic or a captioning VLM on every frame.
+
+## HM3D-Semantics (ground-truth perception in sim)
+
+GraphEQA’s Habitat experiments use **`use_semantic_data: True`**: ground-truth HM3D instance masks feed the scene graph. **Detic is for real-world runs only.** See the parity appendix (`paper/sections/appendix/05_habitat_eqa_parity.tex`).
+
+### Sim vs real world
+
+| Setting | Scene graph labels | Notes |
+|---------|-------------------|--------|
+| **GraphEQA Habitat (paper)** | GT HM3D-Semantics instance masks | Oracle segmentation; benchmark stresses exploration + VLM QA |
+| **GraphEQA real world** | Detic open-vocabulary detections | Imperfect perception |
+| **Our harness (semantics on)** | GT masks when `.semantic.glb` exists | Matches paper sim assumption for that episode |
+| **Our harness (semantics off / missing file)** | VLM or keyword labels from voxels | Harder; **not** paper GraphEQA sim |
+
+When semantics are enabled, the Habitat runner sets `use_sensor_perception=False` so the EQA VLM is reserved for answering questions, not captioning every navigation frame (`packages/emet_habitat/emet_habitat/runner.py`).
+
+### Why it feels weird (and why the paper still uses it)
+
+HM-EQA is an **embodied** benchmark (navigate, explore, limited views), but GraphEQA **does not** ask the sim agent to solve open-vocabulary detection. GT masks isolate “given perfect object segmentation, how well does exploration + graph memory + VLM reasoning work?” Real deployment swaps in Detic.
+
+### Download (separate from train meshes)
+
+Train **meshes** (`--fetch-hm3d train`, ~27GB) and train **semantics** (`--fetch-hm3d-semantics train`) are separate Matterport packages. Both need API tokens:
+
+```bash
+uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d train
+uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d-semantics train
+```
+
+Verify one scene:
+
+```bash
+uv run python scripts/download_habitat_eqa_data.py --verify-semantics 00004-VqCaAuuoeWk
+```
+
+### Coverage report
+
+```bash
+uv run python scripts/download_habitat_eqa_data.py --report-hmeqa-semantics
+uv run emet habitat info   # one-line summary when CSVs exist
+```
+
+On a machine with full train + semantics downloads, expect roughly:
+
+| Pool | Annotated scenes | Notes |
+|------|------------------|--------|
+| HM3D train split | **~145 / ~800** (~18%) | HM3DSem v0.2 annotates 145 train scans ([dataset page](https://aihabitat.org/datasets/hm3d-semantics/)) |
+| HM-EQA paper (113 Q, 49 unique scenes) | **~14 / 49** scenes, **~37 / 113** questions | Overlap is small because Explore-EQA scenes were not chosen from the annotated subset |
+
+### Why are we “missing” semantics?
+
+**Two distinct cases — check the report before assuming a broken download.**
+
+1. **Download gap (fixable)**  
+   `train_scenes_with_semantics` is far below ~145 (e.g. 0–50).  
+   → Run `--fetch-hm3d-semantics train` with valid Matterport tokens.
+
+2. **Dataset gap (not fixable)**  
+   Download shows ~145 train semantic meshes, but an HM-EQA scene still has no `.semantic.glb`.  
+   → That scan was **never annotated** in HM3DSem. Matterport labeled 216 HM3D spaces total; HM-EQA uses 49 train scenes and most were not in that set. **No download command can create labels that do not exist.**
+
+**What we can do for unannotated episodes today:**
+
+- **Automatic fallback** — depth voxels + VLM/keyword graph labels (current default when `.semantic.glb` is absent).
+- **Paper-parity scoring** — restrict to annotated questions only. The report prints their ids; helper `hmeqa_annotated_question_ids()` in `src/emet/habitat/hm3d_semantics.py` returns the same list for batch scripts.
+- **Future** — optional Detic path for unannotated sim scenes (closer to real-world GraphEQA, still not identical to paper sim).
+
+Do **not** compare local HM-EQA numbers to GraphEQA Table 1 (63–67%) without noting mixed perception modes unless you score the annotated subset **and** use a comparable EQA VLM.
+
 ### Wrong paths (common mistake)
 
 | Wrong | Right |
@@ -172,6 +258,7 @@ Implemented in `src/emet/habitat/config.py` (`hm3d_scene_short_name`, `hm3d_scen
 ```bash
 uv run emet habitat info
 uv run python scripts/download_habitat_eqa_data.py --verify-question 0
+uv run python scripts/download_habitat_eqa_data.py --report-hmeqa-semantics
 ```
 
 Expected for question 0 when train is installed:

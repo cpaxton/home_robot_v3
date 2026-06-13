@@ -39,6 +39,28 @@ uv run emet habitat info
 
 Details: [data.md](data.md#on-disk-layout).
 
+## HM-EQA scene has mesh but no GT semantics
+
+Symptom: `emet habitat info` shows only **37/113** (or similar) questions with semantics; `--report-hmeqa-semantics` lists many scenes as “mesh only”.
+
+**Two different causes:**
+
+1. **Semantics pack not downloaded** — train has ~800 meshes but 0–few `*.semantic.glb` files.  
+   **Fix:** fetch the HM3D-Semantics split (same Matterport tokens as train):
+
+   ```bash
+   uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d-semantics train
+   uv run python scripts/download_habitat_eqa_data.py --report-hmeqa-semantics
+   ```
+
+   Expect **~145/800** train scenes with `*.semantic.glb` when complete.
+
+2. **Scene was never annotated by HM3DSem** — download is complete (~145 train semantic meshes) but a given HM-EQA scene still has no `.semantic.glb`. HM3DSem only annotates **216 of ~950** HM3D scans (~145 train). Explore-EQA / HM-EQA uses **49** unique train scenes; only **~14** overlap the annotated set. **This cannot be fixed by downloading** — those scans were never labeled by Matterport.
+
+   Our harness then falls back to **VLM / voxel labels** for graph building (harder than GraphEQA sim, which assumes GT masks).
+
+See [data.md — HM3D-Semantics](data.md#hm3d-semantics-ground-truth-perception-in-sim).
+
 ## Matterport download: `Unauthorized` / tiny `.tar` file
 
 Symptom: download finishes in seconds; `tarfile.ReadError: not a gzip file`; file size ~56 bytes.
