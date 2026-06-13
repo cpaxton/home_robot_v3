@@ -42,6 +42,10 @@ from emet.memory.graph_eqa.mcq_debias import (
 # observed point cloud. Matches DynaMem's verify_point default for SigLIP grounding.
 SIGLIP_PRESENT_THRESHOLD = 0.21
 
+# Min SigLIP cosine similarity for an open-vocab text query to count as "present" in the
+# observed point cloud. Matches DynaMem's verify_point default for SigLIP grounding.
+SIGLIP_PRESENT_THRESHOLD = 0.21
+
 _QUESTION_STOPWORDS = frozenset(
     {
         "is",
