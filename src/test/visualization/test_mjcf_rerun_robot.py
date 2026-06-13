@@ -1,6 +1,15 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
 # This source code is licensed under the LICENSE file in the root directory
 # of this source tree.
 
@@ -18,9 +27,9 @@ from emet.robots.innate_mars import INNATE_MARS_JOINT_NAMES
 from emet.visualization.mjcf_rerun_robot import (
     MjcfBodySkeletonLogger,
     MjcfVisualMeshLogger,
-    _T_world_from_planar_xyt,
     _body_T_world,
     _nav_world_xyt_from_obs,
+    _T_world_from_planar_xyt,
     _world_alignment_fixup_T,
     _world_xyt_from_base_body,
     apply_zmq_obs_to_mujoco_data,
@@ -76,14 +85,14 @@ def test_innate_mars_base_relative_body_transforms():
     ee = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "ee_link")
     assert bb >= 0 and ee >= 0
     Tb = _body_T_world(data, int(bb))
-    Te = _body_T_world(data, int(ee))
-    Trel = np.linalg.inv(Tb) @ Te
-    assert np.allclose(Tb @ Trel, Te, atol=1e-9)
+    T_ee = _body_T_world(data, int(ee))
+    Trel = np.linalg.inv(Tb) @ T_ee
+    assert np.allclose(Tb @ Trel, T_ee, atol=1e-9)
 
 
 @pytest.mark.skipif(not _INNATE_MJCF.is_file(), reason="innate_mars MJCF not present")
-def test_world_xyt_from_base_body_matches_planar_joints():
-    """base_x/base_y qpos are world coordinates; body xyt should match joint values."""
+def test_world_xyt_from_base_body_matches_episode_relative_gps():
+    """Planar MJCF replay uses episode-relative gps/compass for base qpos (not world joint[0:3])."""
     mujoco = pytest.importorskip("mujoco")
     import numpy as np
 
@@ -93,9 +102,7 @@ def test_world_xyt_from_base_body_matches_planar_joints():
     obs = {
         "gps": [0.0, 0.0],
         "compass": [0.0],
-        "joint": [1.5, -0.25, 0.4]
-        + [0.15, -0.1, 0.2, 0.0, 0.0, 0.0]
-        + [0.0] * (len(INNATE_MARS_JOINT_NAMES) - 9),
+        "joint": [1.5, -0.25, 0.4] + [0.15, -0.1, 0.2, 0.0, 0.0, 0.0] + [0.0] * (len(INNATE_MARS_JOINT_NAMES) - 9),
         EMET_ZMQ_SESSION_KEY: {"navigation_origin_xyt": [2.0, 3.0, 0.0]},
     }
     apply_zmq_obs_to_mujoco_data(
@@ -110,9 +117,8 @@ def test_world_xyt_from_base_body_matches_planar_joints():
     )
     mujoco.mj_forward(model, data)
     xyt = _world_xyt_from_base_body(model, data, "base_link")
-    assert abs(xyt[0] - 1.5) < 0.02
-    assert abs(xyt[1] - (-0.25)) < 0.02
-    assert abs(xyt[2] - 0.4) < 0.02
+    assert float(np.linalg.norm(xyt[:2])) < 0.02
+    assert abs(xyt[2]) < 0.02
 
 
 @pytest.mark.skipif(not _INNATE_MJCF.is_file(), reason="innate_mars MJCF not present")
@@ -126,9 +132,7 @@ def test_base_relative_mesh_matches_nav_fixup():
     obs = {
         "gps": [0.3, -0.1],
         "compass": [0.25],
-        "joint": [1.2, 0.4, 0.1]
-        + [0.15, -0.1, 0.2, 0.0, 0.0, 0.0]
-        + [0.0] * (len(INNATE_MARS_JOINT_NAMES) - 9),
+        "joint": [1.2, 0.4, 0.1] + [0.15, -0.1, 0.2, 0.0, 0.0, 0.0] + [0.0] * (len(INNATE_MARS_JOINT_NAMES) - 9),
         EMET_ZMQ_SESSION_KEY: {"navigation_origin_xyt": [2.0, 1.0, 0.5]},
     }
     apply_zmq_obs_to_mujoco_data(
@@ -153,6 +157,90 @@ def test_base_relative_mesh_matches_nav_fixup():
     p_via_parent = (T_nav @ np.r_[p_rel, 1.0])[:3]
     p_via_fixup = (T_fix @ np.r_[p_w, 1.0])[:3]
     assert np.allclose(p_via_parent, p_via_fixup, atol=1e-6)
+
+
+@pytest.mark.skipif(not _INNATE_MJCF.is_file(), reason="innate_mars MJCF not present")
+def test_planar_mjcf_base_qpos_from_gps_not_world_joints():
+    """Planar replay uses episode-relative gps, not world joint[0:3] (avoids double compose)."""
+    mujoco = pytest.importorskip("mujoco")
+    import numpy as np
+
+    model = mujoco.MjModel.from_xml_path(str(_INNATE_MJCF))
+    data = mujoco.MjData(model)
+    obs = {
+        "gps": [0.0, 0.0],
+        "compass": [0.0],
+        "joint": [3.0, -1.0, 0.2] + [0.15, -0.1, 0.2, 0.0, 0.0, 0.0] + [0.0] * (len(INNATE_MARS_JOINT_NAMES) - 9),
+        EMET_ZMQ_SESSION_KEY: {"navigation_origin_xyt": [3.0, -1.0, 0.2]},
+    }
+    apply_zmq_obs_to_mujoco_data(
+        model,
+        data,
+        obs,
+        joint_names=tuple(INNATE_MARS_JOINT_NAMES),
+        dof=len(INNATE_MARS_JOINT_NAMES),
+        base_link_name="base_link",
+        nav_origin_slot=[None],
+        free_qadr=None,
+    )
+    mujoco.mj_forward(model, data)
+    xyt = _world_xyt_from_base_body(model, data, "base_link")
+    assert float(np.linalg.norm(xyt[:2])) < 0.05
+    assert abs(xyt[2]) < 0.05
+
+
+@pytest.mark.skipif(not _INNATE_MJCF.is_file(), reason="innate_mars MJCF not present")
+def test_planar_mjcf_world_ee_matches_nav_compose():
+    """With mismatched world joints, nav-world EE still matches gps+origin compose."""
+    mujoco = pytest.importorskip("mujoco")
+    import numpy as np
+
+    model = mujoco.MjModel.from_xml_path(str(_INNATE_MJCF))
+    data = mujoco.MjData(model)
+    obs = {
+        "gps": [0.2, -0.1],
+        "compass": [0.15],
+        "joint": [5.0, 5.0, 0.0] + [0.15, -0.1, 0.2, 0.0, 0.0, 0.0] + [0.0] * (len(INNATE_MARS_JOINT_NAMES) - 9),
+        EMET_ZMQ_SESSION_KEY: {"navigation_origin_xyt": [2.0, 1.0, 0.5]},
+    }
+    apply_zmq_obs_to_mujoco_data(
+        model,
+        data,
+        obs,
+        joint_names=tuple(INNATE_MARS_JOINT_NAMES),
+        dof=len(INNATE_MARS_JOINT_NAMES),
+        base_link_name="base_link",
+        nav_origin_slot=[None],
+        free_qadr=None,
+    )
+    mujoco.mj_forward(model, data)
+    bb = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+    ee = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "ee_link")
+    T_sb = _body_T_world(data, int(bb))
+    T_ee = _body_T_world(data, int(ee))
+    T_rel = np.linalg.inv(T_sb) @ T_ee
+    wxyt = _nav_world_xyt_from_obs(obs)
+    T_nav = _T_world_from_planar_xyt(float(wxyt[0]), float(wxyt[1]), float(wxyt[2]), float(T_sb[2, 3]))
+    p_world = (T_nav @ T_rel)[:3, 3]
+    p_fixup = (_world_alignment_fixup_T(wxyt, T_sb) @ T_ee)[:3, 3]
+    assert np.allclose(p_world, p_fixup, atol=1e-5)
+
+
+@pytest.mark.skipif(not _INNATE_MJCF.is_file(), reason="innate_mars MJCF not present")
+def test_mjcf_visual_mesh_logger_nonzero_origin_base_local():
+    """sync_kinematics leaves base near episode origin when gps=0 (not at nav spawn)."""
+    pytest.importorskip("mujoco")
+    import numpy as np
+
+    log = MjcfVisualMeshLogger(_INNATE_MJCF, tuple(INNATE_MARS_JOINT_NAMES), len(INNATE_MARS_JOINT_NAMES), "base_link")
+    obs = {
+        "gps": [0.0, 0.0],
+        "compass": [0.0],
+        "joint": [3.0, -1.0, 0.2] + [0.15, -0.1, 0.2, 0.0, 0.0, 0.0] + [0.0] * (len(INNATE_MARS_JOINT_NAMES) - 9),
+        EMET_ZMQ_SESSION_KEY: {"navigation_origin_xyt": [3.0, -1.0, 0.2]},
+    }
+    xyt = log.sync_kinematics(obs)
+    assert float(np.linalg.norm(xyt[:2])) < 0.05
 
 
 def test_mjcf_visual_mesh_logger_smoke():

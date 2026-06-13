@@ -1,6 +1,15 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
 # This source code is licensed under the license found in the LICENSE file in
 # the root directory of this source tree.
 
@@ -19,6 +28,43 @@ from emet.utils.geometry import nav_xyt_to_world_xyt, xyt_base_to_global
 
 _MAX_BODIES = 72
 
+_PLANAR_YAW_NAMES = frozenset({"base_yaw", "base_theta", "joint_mobile_base_theta"})
+
+
+def _planar_base_joint_indices(joint_names: tuple[str, ...] | list[str]) -> tuple[int, int, int] | None:
+    """Return indices of slide/slide/yaw planar base joints when present (innate_mars, stretch MJCF, …)."""
+    if len(joint_names) < 3:
+        return None
+    n0, n1, n2 = str(joint_names[0]), str(joint_names[1]), str(joint_names[2])
+    x_ok = n0 in ("base_x", "joint_mobile_base_x")
+    y_ok = n1 in ("base_y", "joint_mobile_base_y")
+    if x_ok and y_ok and n2 in _PLANAR_YAW_NAMES:
+        return (0, 1, 2)
+    return None
+
+
+def _apply_planar_base_qpos_from_gps(
+    model: Any,
+    data: Any,
+    obs_pose: dict[str, Any],
+    joint_names: tuple[str, ...],
+    planar_idx: tuple[int, int, int],
+) -> None:
+    """Episode-relative planar ``qpos`` for standalone MJCF (``world/robot`` supplies world compose)."""
+    import mujoco
+
+    gps = np.asarray(obs_pose.get("gps", np.zeros(2)), dtype=np.float64).reshape(-1)[:2]
+    comp = np.asarray(obs_pose.get("compass", np.zeros(1)), dtype=np.float64).ravel()
+    theta = float(comp[0]) if comp.size else 0.0
+    vals = (float(gps[0]), float(gps[1]), theta)
+    for vi, ji in enumerate(planar_idx):
+        jname = joint_names[ji]
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jname)
+        if jid < 0:
+            continue
+        qadr = int(model.jnt_qposadr[jid])
+        data.qpos[qadr] = vals[vi]
+
 
 def apply_zmq_obs_to_mujoco_data(
     model: Any,
@@ -33,10 +79,10 @@ def apply_zmq_obs_to_mujoco_data(
 ) -> None:
     """Reset ``data.qpos`` to defaults, then fill from ZMQ-style ``gps``/``compass``/``joint``.
 
-    Planar slide/slide/yaw values in ``joint`` are replayed as-is. Absolute body poses in the
-    standalone MJCF sit in that model's world (often ``base_root`` at origin); callers align Rerun
-    with the sim by logging **base_link-relative** transforms under ``world/robot`` (see
-    :meth:`MjcfBodySkeletonLogger.apply_and_log`).
+    Free-joint robots: base free ``qpos`` from ``gps``/``compass`` composed with
+    ``navigation_origin_xyt``. Planar-base robots (no free joint): planar slide/yaw ``qpos`` from
+    episode-relative ``gps``/``compass`` only — **not** world ``joint[0:3]`` — so
+    ``world/robot`` (nav compose) is not double-applied. Arm/head joints replay from ``joint``.
     """
     import mujoco
 
@@ -65,6 +111,10 @@ def apply_zmq_obs_to_mujoco_data(
         data.qpos[qadr : qadr + 3] = [float(world_xyt[0]), float(world_xyt[1]), z0]
         data.qpos[qadr + 3 : qadr + 7] = [qw, qx, qy, qz]
 
+    planar_idx = None if free_qadr is not None else _planar_base_joint_indices(joint_names)
+    if planar_idx is not None:
+        _apply_planar_base_qpos_from_gps(model, data, obs_pose, joint_names, planar_idx)
+
     jraw = obs_pose.get("joint_mjcf")
     if jraw is None:
         jraw = obs_pose.get("joint")
@@ -79,7 +129,10 @@ def apply_zmq_obs_to_mujoco_data(
         if mapped is not None:
             jvec = mapped
 
+    skip_planar = set(planar_idx) if planar_idx is not None else set()
     for i, jname in enumerate(joint_names):
+        if i in skip_planar:
+            continue
         if i >= len(jvec):
             break
         jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jname)
@@ -328,4 +381,3 @@ class MjcfVisualMeshLogger:
                     triangle_indices=F.flatten(),
                 ),
             )
-

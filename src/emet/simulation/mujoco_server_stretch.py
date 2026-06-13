@@ -944,12 +944,17 @@ class MujocoZmqServer(BaseZmqServer):
         rgb = compression.to_jpg(rgb)
         depth = compression.to_jp2(depth)
 
+        if self._initial_xyt is None or not self._stretch_sim_publish_ok():
+            return None
         xyt = self.get_base_pose()
         if xyt is None:
             return None
-        head_cam = self.get_head_camera_pose()
-        ee = self.get_ee_pose()
-        if head_cam is None or ee is None:
+        try:
+            # ZMQ contract: camera_pose is MuJoCo world; gps/compass are episode-relative.
+            # Frame contract: src/test/simulation/test_zmq_observation_frame_contract.py
+            head_cam_world = self._head_camera_opencv_world()
+            ee_world = self.robot_sim.get_ee_pose()
+        except (ConnectionError, ConnectionResetError, OSError):
             return None
 
         # Get the other fields from an observation
@@ -957,8 +962,8 @@ class MujocoZmqServer(BaseZmqServer):
             "rgb": rgb,
             "depth": depth,
             "camera_K": self.head_K,
-            "camera_pose": head_cam,
-            "ee_pose": ee,
+            "camera_pose": head_cam_world,
+            "ee_pose": ee_world,
             "joint": positions,
             "gps": xyt[:2],
             "compass": np.array([xyt[2]]),
@@ -1055,10 +1060,13 @@ class MujocoZmqServer(BaseZmqServer):
 
         # Get position info
         positions, _, _ = self.get_joint_state()
-        ee_pose_cam = self.get_ee_camera_pose()
-        head_pose_cam = self.get_head_camera_pose()
-        ee_pose_mat = self.get_ee_pose()
-        if ee_pose_cam is None or head_pose_cam is None or ee_pose_mat is None:
+        if self._initial_xyt is None:
+            return None
+        try:
+            ee_pose_cam = self.robot_sim.get_link_pose("gripper_camera_color_optical_frame")
+            head_pose_cam = self._head_camera_opencv_world()
+            ee_pose_mat = self.robot_sim.get_ee_pose()
+        except (ConnectionError, ConnectionResetError, OSError):
             return None
 
         message = {

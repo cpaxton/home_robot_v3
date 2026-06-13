@@ -16,6 +16,17 @@ All **map and scene geometry** must be logged in the **navigation / voxel world 
 
 The robot still moves under `world/robot`; only the **view coordinate system** stays fixed to world.
 
+## ZMQ sim observation frames
+
+Sim servers (Stretch `mujoco_server_stretch`, Robosuite `robosuite_server`) publish:
+
+| Field | Frame |
+|-------|--------|
+| `gps` / `compass` | Episode-relative to `emet_session.navigation_origin_xyt` |
+| `camera_pose` | **Absolute MuJoCo world** (OpenCV cam-to-world) |
+
+MJCF Rerun replay (`mjcf_rerun_robot.apply_zmq_obs_to_mujoco_data`) drives planar-base standalone MJCF from episode-relative `gps`/`compass`; `world/robot` composes to world. Regression tests: `src/test/simulation/test_zmq_observation_frame_contract.py`, `test_robosuite_zmq_frame_contract.py`.
+
 ## Load / stability
 
 Defaults in `rerun:` YAML (`src/emet/config/agents/default_rerun.yaml`):
