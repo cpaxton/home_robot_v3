@@ -35,8 +35,14 @@ DEADLINE_H="${OVERNIGHT_DEADLINE_HOURS:-20}"
 GLOBAL_DEADLINE=$(( $(date +%s) + DEADLINE_H * 3600 ))
 NEED_MIB="${NEED_MIB:-15000}"
 
-IDS_CANONICAL="${IDS_CANONICAL:-3,14,17,28,31,35,81,94}"
-IDS_BALANCED="${IDS_BALANCED:-2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,31,32,33,34,38,39,40,41,43,44,47,48,49,57,76,80,84}"
+# q31 dropped 2026-06-12: pathological for int4 8B/9B models (3 attempts x 4h each
+# without finishing; always 20 EQA iters) and historically 0/16 correct for every
+# model — pure time sink that starves the other phases.
+# q94 dropped 2026-06-12 13:30: scene-graph node explosion (669 nodes / 645KB report
+# vs ~70 nodes typical) starves the EQA loop -> 0 iterations -> empty-answer stub ->
+# infinite retry. Root-cause fix (cap graph text in EQA prompt) tracked in plan doc.
+IDS_CANONICAL="${IDS_CANONICAL:-3,14,17,28,35,81}"
+IDS_BALANCED="${IDS_BALANCED:-2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,32,33,34,38,39,40,41,43,44,47,48,49,57,76,80,84}"
 
 log() { echo "[$(date -Is)] $*" | tee -a "$MAIN_LOG"; }
 
@@ -113,10 +119,10 @@ run_phase() {
 
 log "############ FABLE5 BAKEOFF START run_id=$RUN_ID deadline=${DEADLINE_H}h ############"
 
-# Candidates: (phase, family, hf_id). Preference order for ties = listed order (bigger first).
-CAND_PHASES=(q3vl8b gemma4e4b q25vl3b)
-CAND_FAMILY=(qwen3_vl gemma4 qwen2_5_vl)
-CAND_HF=("Qwen/Qwen3-VL-8B-Instruct" "google/gemma-4-E4B-it" "Qwen/Qwen2.5-VL-3B-Instruct")
+# Candidates: (phase, family, hf_id). Preference order for ties = listed order (best prior first).
+CAND_PHASES=(q35_9b q3vl8b gemma4e4b q25vl3b)
+CAND_FAMILY=(qwen3_5 qwen3_vl gemma4 qwen2_5_vl)
+CAND_HF=("Qwen/Qwen3.5-9B" "Qwen/Qwen3-VL-8B-Instruct" "google/gemma-4-E4B-it" "Qwen/Qwen2.5-VL-3B-Instruct")
 
 for i in "${!CAND_PHASES[@]}"; do
   run_phase "${CAND_PHASES[$i]}" "${CAND_FAMILY[$i]}" "${CAND_HF[$i]}" \

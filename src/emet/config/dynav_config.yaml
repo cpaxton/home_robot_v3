@@ -44,7 +44,8 @@ da3_stereo: false
 # --- Quality-first overrides (slower): ``da3_model_id: depth-anything/DA3METRIC-LARGE``, ``da3_process_res: 504``, ``da3_stereo: true``, ``da3_infer_every_n: 1``.
 
 # EQA (memory Q&A when using emet run agent --eqa). Default: local Qwen3-VL (one load for captions + EQA).
-# vl_family: qwen3_vl | qwen2_5_vl | gemma4 — set vl_hf_model_id to override the default checkpoint.
+# vl_family: qwen3_vl | qwen3_5 | qwen2_5_vl | gemma4 — set vl_hf_model_id to override the default checkpoint.
+# qwen3_5 = natively-multimodal Qwen3.5 (default Qwen/Qwen3.5-9B, thinking disabled).
 # Agent: ``--llm gemma4-vl-eqa --eqa`` uses eqa.vl_family (default gemma4 checkpoint: google/gemma-4-E4B-it).
 eqa:
   backend: qwen_vl

@@ -48,6 +48,17 @@ def create_dynamem_vllm(
             device=device,
             quantization=quantization,
         )
+    if fam == "qwen3_5":
+        from emet.llms.qwen3_5_client import Qwen35Client
+
+        mid = hf_model_id or default_hf_model_id("qwen3_5") or "Qwen/Qwen3.5-9B"
+        return Qwen35Client(
+            prompt=prompt,
+            hf_model_id=mid,
+            max_tokens=max_tokens,
+            device=device,
+            quantization=quantization,
+        )
     if fam == "qwen2_5_vl":
         from emet.llms.qwen_client import Qwen25VLClient
 
@@ -75,7 +86,8 @@ def create_dynamem_vllm(
             quantization=quantization,
         )
     raise ValueError(
-        f"Unknown vl_family {vl_family!r}; use qwen3_vl, qwen2_5_vl, or gemma4 (see dynav_config.yaml eqa:)."
+        f"Unknown vl_family {vl_family!r}; use qwen3_vl, qwen3_5, qwen2_5_vl, or gemma4 "
+        "(see dynav_config.yaml eqa:)."
     )
 
 

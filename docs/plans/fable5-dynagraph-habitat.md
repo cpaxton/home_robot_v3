@@ -170,14 +170,27 @@ candidates verified loading + answering in `.venv-habitat`
 
 | candidate | int4 footprint | smoke |
 |---|---|---|
+| Qwen3.5-9B (natively multimodal, Feb 2026) | ~6-7 GB weights | OK ("Black." with thinking stripped; CPU-fallback smoke during GPU contention) |
 | Qwen3-VL-8B-Instruct | full stack ~13 GB | OK (answered "black" correctly) |
 | gemma-4-E4B-it | ~5 GB weights | OK (answered "Purple" — wrong but functional) |
 | Qwen2.5-VL-3B (control) | bf16, int4-bnb broken for this arch | n/a |
 
-Orchestrator `scripts/run_fable5_bakeoff.sh`: canonical-8 per candidate
-(dynagraph + free-form debias), winner by correct count (ties prefer bigger
-model) auto-promotes to balanced-32. Tags `fable5_bake_*`; logs
-`~/.cache/habitat_eqa/overnight/bakeoff_<run_id>/`. Note: VLM vision towers
+**Qwen3.5 added 2026-06-11 17:54** (user pointed out the family is image+text->text):
+trained from scratch on interleaved multimodal tokens, model card claims it
+outperforms Qwen3-VL at the same scale on visual understanding. New `qwen3_5`
+family (`Qwen35Client` subclasses `Qwen3VLClient`, swaps in
+`Qwen3_5ForConditionalGeneration`, disables thinking via `enable_thinking=False`
++ defensive `<think>` strip). Bake-off restarted with it as preferred candidate
+(prior phases resume from jsonl). 27B int4 (~15 GB) does not fit next to the
+habitat stack; the MoE variants need even more. `fla`/`flash-attn` not installed,
+so the Gated DeltaNet runs on slower PyTorch fallback kernels (correct, just
+slower) — install both if qwen3_5 wins and throughput matters.
+
+Orchestrator `scripts/run_fable5_bakeoff.sh`: canonical-6 per candidate
+(dynagraph + free-form debias), winner by correct count (ties prefer earlier
+candidate in list) auto-promotes to balanced-31. Tags `fable5_bake_*`; logs
+`~/.cache/habitat_eqa/overnight/bakeoff_<run_id>/`. **Reproduction guide:**
+[docs/habitat/vlm_bakeoff.md](../habitat/vlm_bakeoff.md). Note: VLM vision towers
 cannot replace SigLIP for voxel grounding (no aligned text encoder; retrieval
 needs a contrastive dual encoder) — candidate upgrades there are SigLIP 2
 (drop-in) or VLM-as-frontier-scorer (<=12 candidates/iter), kept out of this
@@ -220,9 +233,64 @@ for a follow-up A/B run (see `docs/environment_variables.md`):
   `vote_mcq_letter` (4-6 images, ~5 short calls), then release. Costs ~1-3 min
   load per episode; keeps all 24 GB for the judge at answer time.
 
-## 11. Bake-off results (to fill)
+**q31 dropped from both subsets (2026-06-12 08:19).** With int4 8B/9B models the
+episode never finished: three 4h attempts (Qwen3.5-9B, fast kernels included)
+all timed out mid-episode. q31 always maxes out 20 EQA iterations and is 0/16
+correct across every historical run (3B included) — a pure time sink that
+starved the gemma/control phases overnight. Canonical set is now 7 ids
+(3,14,17,28,35,81,94), balanced set 31 ids. All candidates are compared on the
+same reduced sets, so the comparison stays fair; q31 is noted as "unanswerable
+within budget" rather than wrong.
 
-- canonical8 Qwen3-VL-8B int4: _pending_
-- canonical8 gemma-4-E4B int4: _pending_
-- canonical8 Qwen2.5-VL-3B control: _pending_
-- balanced32 winner: _pending_
+**q94 also dropped (2026-06-12 13:30) — scene-graph node explosion bug found.**
+Some scenes blow up the dynagraph graph: q94 hit 669 nodes / 335 obs
+(645 KB scene-graph report) vs ~70 nodes typical; q35 hit 885, q28 516. The
+giant graph text starves the EQA loop (0 iterations completed -> empty answer
+stub -> infinite `--resume` retry; 13 stub rows). **Root-cause fix to implement
+after the bake-off: cap scene-graph text in the EQA prompt to top-K
+question-relevant nodes** (SigLIP-ranked), plus investigate why dedup/merge
+fails in these scenes. Canonical set is now 6 ids (3,14,17,28,35,81).
+
+## 11. Bake-off results (2026-06-12)
+
+**Winner: Qwen3-VL-8B-Instruct int4** (`qwen3_vl`). Canonical-6, dynagraph + debias.
+Gold letters: q3=B, q14=D, q17=D, q28=D, q35=D, q81=D.
+
+| Model | Canonical-6 | Δ vs 3B | Per-question (q3 q14 q17 q28 q35 q81) |
+|---|---|---|---|
+| **Qwen3-VL-8B int4** | **5/6** | **+3** | ✓ ✓ ✗ ✓ ✓ ✓ |
+| Qwen3.5-9B int4 | 3/6 | +1 | ✓ ✓ ✗ ✗ ✓ ✗ |
+| Qwen2.5-VL-3B bf16 | 2/6 | — | ✗ ✓ ✗ ✗ ✗ ✓ |
+| Gemma-4-E4B int4 | 2/5 | +0 | ✓ — ✗ ✗ ✗ ✓ (q14 OOM) |
+
+**Reproduction:** [docs/habitat/vlm_bakeoff.md](../habitat/vlm_bakeoff.md)  
+**Paper:** `paper/sections/appendix/06_model_choice.tex`
+
+### Why Qwen3.5 underperformed (surprising vs benchmarks)
+
+Qwen3.5-9B reports stronger static VQA than Qwen3-VL at similar scale, yet lost
+embodied MCQ EQA 3/6 vs 5/6. The gap is task-specific, not parameter count:
+
+1. **Hallucination under confidence (q81)** — 9B asserted a sleeping child on a red bed
+   with high confidence; no person in any frame. 8B answered No correctly.
+2. **Literal counting (q28)** — 9B free-form: "one red pillow"; 8B: "two red pillows".
+3. **Debias format drift** — 9B replies "Caption:…" to the free-form debias query
+   despite "do not caption", disabling the strong matcher; falls back to rotation
+   voting with position-locked A,B,C,D pattern (same failure mode as 3B).
+4. **Shared coverage miss (q17)** — neither Qwen model saw the woven basket.
+
+Upsizing 3B→8B on the **same pipeline** recovered +3 correct — the biggest gain we
+measured; the prior 3B ceiling was model-limited on this slice, not exploration-limited.
+
+### Balanced-31 winner run
+
+Promoted 2026-06-12 18:01. Output:
+`~/.cache/habitat_eqa/results/subset_fable5_bake_winner_bal32_qwen3_vl.jsonl`  
+Early progress: 1/2 episodes (q6 ✓, q2 ✗) — full set in progress overnight.
+
+### Infrastructure notes (affect all models)
+
+- **q31 / q94 excluded** from comparison sets (timeout / graph blowup); see §11 above.
+- **Gemma q14 OOM** — deterministic after load; phase skipped when ceiling < 8B score.
+- **fla-core** required for fair Qwen3.5 wall-clock (`packages/emet_habitat/requirements-pip.txt`).
+- **TODO post-bake-off:** cap scene-graph text in EQA prompt (top-K SigLIP-ranked nodes).

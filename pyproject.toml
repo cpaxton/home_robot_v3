@@ -65,6 +65,11 @@ dependencies = [
     "retry",
     "qwen_vl_utils",
     "bitsandbytes",
+    # Qwen3.5 fast Gated DeltaNet kernels (Triton): fla-core ships fla.ops/fla.modules,
+    # flash-linear-attention the fla.layers/models split. Without these, transformers
+    # silently uses ~2x-slower PyTorch fallback ops for qwen3_5.
+    "fla-core>=0.5.0",
+    "flash-linear-attention>=0.5.0",
     "triton>=2.3.1",
     "accelerate>=1.6.0",
     "einops",

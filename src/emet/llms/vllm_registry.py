@@ -41,6 +41,11 @@ SUPPORTED_VLLMS: dict[str, VLLMRegistryEntry] = {
         default_hf_model_id="Qwen/Qwen3-VL-4B-Instruct",
         supports_dedup=True,
     ),
+    "qwen3_5": VLLMRegistryEntry(
+        family_key="qwen3_5",
+        default_hf_model_id="Qwen/Qwen3.5-9B",
+        supports_dedup=True,
+    ),
     "qwen2_5_vl": VLLMRegistryEntry(
         family_key="qwen2_5_vl",
         default_hf_model_id="Qwen/Qwen2.5-VL-3B-Instruct",
@@ -56,9 +61,11 @@ SUPPORTED_VLLMS: dict[str, VLLMRegistryEntry] = {
 
 def normalize_vl_family(family: str) -> str:
     """Map config aliases to registry keys."""
-    f = (family or "").strip().lower().replace("-", "_")
+    f = (family or "").strip().lower().replace("-", "_").replace(".", "_")
     if f in ("qwen25_vl", "qwen2_5vl"):
         return "qwen2_5_vl"
+    if f in ("qwen35", "qwen3_5_vl"):
+        return "qwen3_5"
     return f
 
 
@@ -118,7 +125,7 @@ def config_from_client(client: Any) -> VLLMRunConfig:
     key = client.canonical_model_key
     parts = key.split(":", 3)
     prefix = parts[0] if parts else ""
-    if prefix in ("qwen25_vl", "qwen3_vl") and len(parts) >= 4:
+    if prefix in ("qwen25_vl", "qwen3_vl", "qwen3_5") and len(parts) >= 4:
         return VLLMRunConfig(
             family=prefix,
             hf_model_id=parts[1],

@@ -183,6 +183,13 @@ When `graph_eqa_frontier_nodes.enabled` is true (default in `dynav_config.yaml`)
 
 During HM-EQA / `run_eqa`, frontier nodes are re-synced **before each VLM call** and **after exploration navigation** so targets stay aligned with the growing map.
 
+**VLM selection (Habitat bake-off):** default EQA family is configured in
+[`dynav_config.yaml`](../src/emet/config/dynav_config.yaml) (`eqa.vl_family`). A
+2026-06 canonical-6 comparison found **Qwen3-VL-8B int4** (5/6) outperformed both
+Qwen2.5-VL-3B (2/6) and Qwen3.5-9B (3/6) on embodied MCQ EQA; see
+[docs/habitat/vlm_bakeoff.md](habitat/vlm_bakeoff.md) and the paper appendix
+`paper/sections/appendix/06_model_choice.tex`.
+
 ```yaml
 graph_eqa_frontier_nodes:
   enabled: true

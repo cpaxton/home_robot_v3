@@ -43,6 +43,10 @@ torchvision
 torchaudio
 accelerate>=1.6.0
 bitsandbytes
+# Qwen3.5 fast Gated DeltaNet kernels (Triton; no nvcc needed). fla-core ships
+# fla.ops/fla.modules; without it transformers falls back to ~2x-slower PyTorch ops.
+fla-core>=0.5.0
+flash-linear-attention>=0.5.0
 qwen_vl_utils
 google-genai
 opencv-python-headless

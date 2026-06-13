@@ -1,0 +1,174 @@
+\section{VLM choice for embodied EQA on a single consumer GPU}
+\label{app:model_choice}
+
+Our full Habitat EQA stack --- simulator, voxel map, SigLIP grounding encoder, and the
+multimodal LLM used for captioning, answering, and answer debiasing --- must share one
+24\,GB consumer GPU. This appendix records the resulting model bake-off: which open
+vision--language models we evaluated, how they were quantized to fit, and the perhaps
+counterintuitive result that a \emph{grounding-specialized} VLM at 8B parameters
+outperforms both the prior 3B control \emph{and} a newer 9B generalist that leads
+Qwen3-VL on static VQA benchmarks~\citep{qwen35}.
+
+\subsection{Roles and memory budget}
+
+The VLM serves three roles in Dynagraph: (i) per-view captioning and scene-graph object
+labeling, (ii) the iterative EQA answer/explore decision, and (iii) the answer-debiasing
+votes (free-form answer matching with choice-rotation fallback). Grounding and
+open-vocabulary retrieval are \emph{not} VLM roles: they require a contrastive dual
+encoder, so SigLIP~\citep{zhai2023siglip} is retained regardless of VLM choice (loading
+it in bf16 halves its footprint to $\sim$1.75\,GB with pixel-feature cosine $>$0.999 vs.\
+fp32). The non-VLM stack (Habitat, voxel map, SigLIP) holds $\sim$7\,GB, leaving roughly
+13--15\,GB of headroom; 4-bit NF4 quantization~\citep{dettmers2023qlora} brings 8--9B-class
+VLMs comfortably inside it, while 27--32B-class models ($\sim$15--18\,GB at int4) do not fit
+alongside the simulator.
+
+\subsection{Candidates}
+
+\begin{table}[h]
+  \centering
+  \caption{VLM candidates for the Dynagraph EQA bake-off (single RTX 24\,GB GPU).}
+  \label{tab:vlm_candidates}
+  \small
+  \begin{tabular}{@{}lcccl@{}}
+    \toprule
+    Model & Params & Precision & Stack VRAM & Notes \\
+    \midrule
+    Qwen2.5-VL-3B~\citep{qwen25vl} & 3B & bf16 & $\sim$13\,GB & control; int4 unstable for this arch \\
+    Qwen3-VL-8B~\citep{qwen3vl} & 8B & int4 & $\sim$13\,GB & native bbox grounding \\
+    Qwen3.5-9B~\citep{qwen35} & 9B & int4 & $\sim$13\,GB & natively multimodal; hybrid DeltaNet \\
+    Gemma-4-E4B~\citep{gemma4} & 4B eff. & int4 & $\sim$12\,GB & MatFormer; no native grounding \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Two practical notes. First, Qwen3.5's hybrid linear-attention stack (3:1 Gated
+DeltaNet:attention) silently falls back to slow PyTorch kernels unless the
+\texttt{fla-core} Triton kernels are installed; without them single episodes exceeded a
+4-hour budget, and with them per-episode time returned to the $\sim$30--50 minute range
+typical of the 8B. Second, bitsandbytes int4 was numerically unstable for the
+Qwen2.5-VL-3B architecture in our stack, so the control runs in bf16.
+
+\subsection{Protocol and exclusions}
+
+All candidates ran \textbf{Dynagraph} with the same exploration budget
+(20 planning steps, frontier-node exploration, keyword weight 2) and the same
+answer-debiasing pipeline (free-form match, then choice-rotation vote). We compared models
+on a \textbf{canonical-6} HM-EQA subset (question ids 3, 14, 17, 28, 35, 81) after excluding
+two ids that broke the harness rather than the models: id~31 never completed within
+budget on int4 8--9B models (0/16 correct historically on the 3B control) and id~94
+triggered a scene-graph blowup ($\sim$670 nodes vs.\ $\sim$70 typical) that starved the
+EQA loop to zero iterations. The winner was promoted to a \textbf{balanced-31} subset (31 ids;
+same two exclusions). Reproduction commands and result paths are documented in the project
+repository under \texttt{docs/habitat/vlm\_bakeoff.md}.
+
+\subsection{Results}
+
+\begin{table}[h]
+  \centering
+  \caption{Canonical-6 HM-EQA accuracy (Dynagraph + debiasing). Gold answer letters:
+  q3=B, q14=D, q17=D, q28=D, q35=D, q81=D.}
+  \label{tab:vlm_bakeoff}
+  \small
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    Model & Correct & $\Delta$ vs.\ 3B control \\
+    \midrule
+    \textbf{Qwen3-VL-8B int4} & \textbf{5/6 (83\%)} & \textbf{+3} \\
+    Qwen3.5-9B int4 & 3/6 (50\%) & +1 \\
+    Qwen2.5-VL-3B bf16 (control) & 2/6 (33\%) & --- \\
+    Gemma-4-E4B int4 & 2/5 & +0 (q14 OOM; phase skipped) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[h]
+  \centering
+  \caption{Per-question outcomes on canonical-6 (+ = correct, -- = wrong, n/a = episode
+  not completed). Both Qwen models miss q17 (exploration never observed the target object).}
+  \label{tab:vlm_per_question}
+  \small
+  \begin{tabular}{@{}lcccccc@{}}
+    \toprule
+    Model & q3 & q14 & q17 & q28 & q35 & q81 \\
+    \midrule
+    Qwen3-VL-8B & + & + & -- & + & + & + \\
+    Qwen3.5-9B & + & + & -- & -- & + & -- \\
+    Qwen2.5-VL-3B & -- & + & -- & -- & -- & + \\
+    Gemma-4-E4B & + & n/a & -- & -- & -- & + \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Upsizing from 3B to 8B on the \emph{same} pipeline and questions recovered three
+additional correct answers (+50\% relative), establishing that the prior 3B ceiling was
+model-limited rather than exploration-limited on this slice. The balanced-31 run with the
+8B winner was in progress at submission time; we report its JSONL path in the reproduction
+doc above.
+
+\subsection{Why a newer, larger generalist loses}
+\label{app:model_choice_failures}
+
+Qwen3.5-9B is trained from scratch on interleaved image/video/text tokens and reports
+substantially stronger \emph{static} VQA and reasoning scores than Qwen3-VL at similar
+scale~\citep{qwen35}. On embodied MCQ EQA it still trailed the 8B specialist and barely
+beat the 3B control. The gap is not explained by parameter count alone (9B $>$ 8B) nor by
+aggregate benchmark rank; it reflects task-specific behaviors that HM-EQA amplifies:
+
+\paragraph{Benchmarks vs.\ embodied EQA.}
+Static VQA rewards fluent scene description and multi-step reasoning over a fixed image
+set. Our task adds (a) \emph{coverage} --- the agent must navigate to see the evidence;
+(b) \emph{literal counting and presence} --- ``how many red pillows'' and ``is the child
+sleeping'' admit no hedging; and (c) \emph{format compliance} --- our debiasing stage
+asks for a terse free-form answer without captions or option letters. Qwen3.5 excels at
+the first skill (long ``Caption: \ldots'' preambles on every debias call) but loses on
+the latter two.
+
+\paragraph{Failure modes observed on canonical-6.}
+\begin{enumerate}
+  \item \textbf{Confident visual hallucination (q81).} Qwen3.5 asserted that ``image~1
+  clearly shows a child sleeping on a red car-shaped bed'' and graded itself confident;
+  no person appears in any view. Qwen3-VL answered ``No'' on the same scene. This is the
+  largest single-question swing between the two Qwen models.
+  \item \textbf{Perception / counting (q28).} Qwen3.5's free-form reply described ``one
+  red pillow'' (gold: two); Qwen3-VL's reply stated ``two red pillows'' and matched the
+  correct choice. Both had similar exploration budgets; the difference is literal visual
+  aggregation, not MCQ letter bias.
+  \item \textbf{Debiasing path disabled by instruction drift.} Qwen3.5 prefaced debias
+  queries with ``Caption: \ldots'' despite explicit ``do not caption'' instructions, so
+  the free-form matcher rarely engaged and answers fell through to rotation voting ---
+  where Qwen3.5 showed \emph{position-locked} selection (votes A,B,C,D across four
+  rotations of one question), the same failure mode we previously measured on the 3B
+  control.
+  \item \textbf{Shared coverage failure (q17).} Neither Qwen model observed the woven
+  basket; both answered incorrectly. No answering strategy recovers missing evidence.
+\end{enumerate}
+
+Gemma-4-E4B underperformed similarly (2/5 completed episodes) and could not finish q14:
+deterministic CUDA OOM immediately after load (VRAM fully exhausted on a 12\,MiB
+allocation), whereas both Qwen models completed q14 without incident --- suggesting
+family-specific memory spikes under our Habitat+SigLIP co-residency, not a universal
+quantization limit.
+
+\paragraph{Infrastructure interaction.}
+The bake-off also surfaced a Dynagraph failure mode unrelated to model choice: certain
+scenes inflate the scene graph by an order of magnitude (669--885 nodes vs.\ $\sim$70
+typical), starving the main EQA loop. On q35 the \emph{debias vote alone} returned the
+correct answer after the main loop produced zero iterations --- an unplanned robustness
+benefit of the two-path answering design, and a reminder that prompt size from graph
+memory can dominate VLM choice independently of model quality.
+
+\subsection{Takeaways}
+
+\begin{enumerate}
+  \item \textbf{Prefer grounding-trained VLMs} (Qwen3-VL) over higher-benchmark
+  generalists (Qwen3.5) at equal VRAM when the task requires literal presence/counting
+  and tight instruction following.
+  \item \textbf{$\sim$8B int4 is the practical ceiling} on a 24\,GB GPU shared with
+  Habitat and SigLIP; upsizing from 3B bf16 to 8B int4 yielded the largest accuracy gain
+  we measured (+3/6 on canonical-6).
+  \item \textbf{Measure position bias and format compliance directly} on your MCQ pipeline
+  --- they moved end-task accuracy more than headline benchmark deltas between Qwen
+  generations.
+  \item \textbf{Install \texttt{fla-core}} for Qwen3.5 if you keep it in the loop; otherwise
+  wall-clock dominates comparisons unfairly.
+\end{enumerate}

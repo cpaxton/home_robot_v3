@@ -67,6 +67,9 @@ def test_should_not_share_different_device():
 def test_normalize_vl_family_aliases():
     assert normalize_vl_family("qwen25_vl") == "qwen2_5_vl"
     assert normalize_vl_family("Qwen3_VL") == "qwen3_vl"
+    assert normalize_vl_family("qwen3.5") == "qwen3_5"
+    assert normalize_vl_family("qwen3-5") == "qwen3_5"
+    assert normalize_vl_family("qwen35") == "qwen3_5"
 
 
 def test_default_hf_model_id_known_families():
@@ -75,7 +78,7 @@ def test_default_hf_model_id_known_families():
 
 
 def test_supported_vllms_table_has_expected_keys():
-    for k in ("qwen3_vl", "qwen2_5_vl", "gemma4"):
+    for k in ("qwen3_vl", "qwen3_5", "qwen2_5_vl", "gemma4"):
         assert k in SUPPORTED_VLLMS
         assert registry_entry(k) is not None
         assert registry_entry(k).supports_dedup is True
@@ -109,6 +112,14 @@ def test_config_from_client_qwen3():
     assert cfg.family == "qwen3_vl"
     assert cfg.hf_model_id == "Qwen/Qwen3-VL-4B-Instruct"
     assert cfg.device == "cuda"
+    assert cfg.quantization == "int4"
+
+
+def test_config_from_client_qwen3_5():
+    c = _StubVLLM("qwen3_5:Qwen/Qwen3.5-9B:cuda:int4")
+    cfg = config_from_client(c)
+    assert cfg.family == "qwen3_5"
+    assert cfg.hf_model_id == "Qwen/Qwen3.5-9B"
     assert cfg.quantization == "int4"
 
 

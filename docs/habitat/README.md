@@ -7,6 +7,7 @@ Reproduce **GraphEQA-style** HM-EQA evaluation in Habitat-Sim while driving emet
 | [install.md](install.md) | `.venv-habitat`, micromamba, `habitat-sim` from `aihabitat-nightly` |
 | [data.md](data.md) | HM-EQA CSVs, HM3D downloads, Matterport API tokens, on-disk layout |
 | [usage.md](usage.md) | CLI, `emet run graph-eqa-habitat`, methods, tests |
+| [vlm_bakeoff.md](vlm_bakeoff.md) | VLM model bake-off reproduction (canonical-6, balanced-31) |
 | [troubleshooting.md](troubleshooting.md) | Common errors (missing GLB, unauthorized download, wrong paths) |
 
 **Engineering plan:** [docs/plans/HABITAT_EQA_HARNESS.md](../plans/HABITAT_EQA_HARNESS.md)  
