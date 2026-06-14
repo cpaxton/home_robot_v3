@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Horizontal montage of robot cameras (default: head left, head right, arm) for MJCF vs ZMQ checks."""
 
@@ -69,9 +78,7 @@ def _label_strip(img_rgb: np.ndarray, label: str, banner_h: int = 28) -> np.ndar
     h, w = img_rgb.shape[:2]
     strip = np.zeros((banner_h, w, 3), dtype=np.uint8)
     strip[:] = (36, 36, 36)
-    cv2.putText(
-        strip, label[:80], (6, banner_h - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 240, 240), 1
-    )
+    cv2.putText(strip, label[:80], (6, banner_h - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 240, 240), 1)
     return np.vstack([strip, img_rgb])
 
 
@@ -85,10 +92,7 @@ def _resize_to_height(img_rgb: np.ndarray, row_height: int) -> np.ndarray:
 
 
 def build_montage(images: list[np.ndarray], labels: list[str], row_height: int = _PREVIEW_RH) -> np.ndarray:
-    parts = [
-        _label_strip(_resize_to_height(im, row_height), lb)
-        for im, lb in zip(images, labels, strict=True)
-    ]
+    parts = [_label_strip(_resize_to_height(im, row_height), lb) for im, lb in zip(images, labels, strict=True)]
     return np.hstack(parts) if parts else np.zeros((row_height + 28, 1, 3), dtype=np.uint8)
 
 
@@ -234,9 +238,7 @@ def record_head_nod_montage_sequence(
 
     model, spec, cam_names = _load_local_merged_preview(robot_key, max_cams)
 
-    angles = _nod_hinge_angles_rad(
-        model, joint_name, angle_low_rad, angle_high_rad, motion=motion, n_frames=n_frames
-    )
+    angles = _nod_hinge_angles_rad(model, joint_name, angle_low_rad, angle_high_rad, motion=motion, n_frames=n_frames)
     arm_angles: np.ndarray | None = None
     if arm_joint_name:
         if arm_joint_name == joint_name:
@@ -263,11 +265,7 @@ def record_head_nod_montage_sequence(
                 _set_hinge_joint_qpos(model, data, arm_joint_name, float(arm_angles[i]))
             mujoco.mj_forward(model, data)
             imgs = [_render_local_rgb(model, data, renderer, spec, n) for n in cam_names]
-            arm_s = (
-                f" {arm_joint_name}={float(arm_angles[i]):.3f}rad"
-                if arm_angles is not None
-                else ""
-            )
+            arm_s = f" {arm_joint_name}={float(arm_angles[i]):.3f}rad" if arm_angles is not None else ""
             labels = [f"{n}  {joint_name}={ang:.3f}rad{arm_s}" for n in cam_names]
             montage_rgb = build_montage(imgs, labels, row_height=row_height)
             png_path = out_p / f"montage_{i:04d}.png"
@@ -343,6 +341,9 @@ def _decode_obs_message(raw: dict, spec_names: list[str]) -> tuple[list[np.ndarr
 
         tertiary_buf = raw.get("rgb_tertiary")
         tertiary_name = raw.get("camera_name_tertiary")
+        if tertiary_buf is None:
+            tertiary_buf = raw.get("ee_cam/image")
+            tertiary_name = tertiary_name or "camera_arm"
         if tertiary_buf is not None:
             imgs.append(compression.from_jpg(tertiary_buf))
             labels.append(str(tertiary_name or (spec_names[2] if len(spec_names) > 2 else "tertiary")))
@@ -538,20 +539,12 @@ def main(
 
         montage = build_montage(imgs, labels, row_height=row_height)
 
-        dest = (
-            out_path
-            if out_path is not None
-            else Path.cwd() / f"robot_cam_preview_{robot_key_norm}.png"
-        )
+        dest = out_path if out_path is not None else Path.cwd() / f"robot_cam_preview_{robot_key_norm}.png"
         _save_montage_rgb(dest, montage)
         click.echo(f"Wrote {dest.resolve()} ({montage.shape[1]}×{montage.shape[0]})")
 
         if discord:
-            cap = (
-                caption.strip()
-                if caption.strip()
-                else f"Robot camera montage ({robot_key_norm}, source={source})"
-            )
+            cap = caption.strip() if caption.strip() else f"Robot camera montage ({robot_key_norm}, source={source})"
             _discord_send_file(dest, cap)
             click.echo("Posted to Discord.")
 

@@ -87,17 +87,28 @@ class InnateMarsClient:
     @property
     def head_left_camera_pose(self) -> np.ndarray | None:
         """Head left camera pose as 4x4 in base_frame."""
-        return self._ros.get_frame_pose(self._head_left_frame, base_frame=self._base_frame)
+        frame = self._ros.head_left_cam.get_frame()
+        if not frame or frame == "unknown":
+            frame = self._head_left_frame
+        return self._ros.get_frame_pose(frame, base_frame=self._base_frame)
 
     @property
     def head_right_camera_pose(self) -> np.ndarray | None:
         """Head right camera pose as 4x4 in base_frame."""
-        return self._ros.get_frame_pose(self._head_right_frame, base_frame=self._base_frame)
+        frame = self._ros.head_right_cam.get_frame()
+        if not frame or frame == "unknown":
+            frame = self._head_right_frame
+        return self._ros.get_frame_pose(frame, base_frame=self._base_frame)
 
     @property
     def ee_camera_pose(self) -> np.ndarray | None:
         """EE camera pose as 4x4 in base_frame."""
         return self._ros.get_frame_pose(self._ee_camera_frame, base_frame=self._base_frame)
+
+    @property
+    def head_joint_rad(self) -> float:
+        """Head nod angle (radians) for MJCF ``joint_head`` replay."""
+        return self._ros.get_head_joint_rad()
 
     @property
     def head_left_cam(self):

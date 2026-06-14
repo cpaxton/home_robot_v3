@@ -1,0 +1,5 @@
+# Optional onboard Depth Anything 3 deps for Mars Jetson (install with `emet deploy --with-da3`).
+# Install PyTorch for your Jetson separately if pip wheels fail — see NVIDIA Jetson PyTorch docs.
+opencv-python-headless
+depth-anything-3>=0.1.1
+# torch: install via NVIDIA wheel or `pip install torch` on aarch64 before this file

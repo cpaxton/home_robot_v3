@@ -46,9 +46,10 @@ logger = Logger(__name__)
 # Live Spatial3DView policy (see docs/rerun.md):
 # - ``origin`` MUST be ``world`` so voxels/maps stay fixed while ``world/robot`` moves.
 # - ``contents`` MUST include ``world/**`` (default ``$origin/**`` would hide map layers).
+# - ``spatial3d_view_robot()`` (origin ``world/robot``) co-rotates the map on in-place turns — opt-in only.
 RERUN_SPATIAL3D_ORIGIN_WORLD = "world"
 RERUN_SPATIAL3D_CONTENTS_WORLD = "world/**"
-# Legacy name kept for imports; do not use as view origin (scene appears to rotate with the base).
+# Do not use as default live view origin (scene appears to rotate with the base).
 RERUN_SPATIAL3D_ORIGIN_ROBOT = "world/robot"
 
 
@@ -60,8 +61,10 @@ def spatial3d_view_world(name: str = "3D View", **kwargs) -> rrb.Spatial3DView:
 
 
 def spatial3d_view_robot(name: str = "3D View", **kwargs) -> rrb.Spatial3DView:
-    """Alias for :func:`spatial3d_view_world` (robot-centric view origin was removed)."""
-    return spatial3d_view_world(name=name, **kwargs)
+    """Robot-centered 3D panel (camera on base); map/voxels **co-rotate** when the base turns."""
+    kwargs.setdefault("origin", RERUN_SPATIAL3D_ORIGIN_ROBOT)
+    kwargs.setdefault("contents", RERUN_SPATIAL3D_CONTENTS_WORLD)
+    return rrb.Spatial3DView(name=name, **kwargs)
 
 
 # Canonical Rerun entity paths (use these for consistent logging across live and memory view):
@@ -286,9 +289,7 @@ def build_dynagraph_gallery_markdown(
             label_cell = f"[{primary}](recording://{crop})"
         else:
             label_cell = primary
-        lines.append(
-            f"| {n.node_id} | {label_cell} | {int(n.obs_id)} | {xyz_s} |"
-        )
+        lines.append(f"| {n.node_id} | {label_cell} | {int(n.obs_id)} | {xyz_s} |")
     if omitted > 0:
         lines.append("")
         lines.append(f"_({omitted} more nodes omitted; see 3D view or export folder.)_")
@@ -301,9 +302,7 @@ def build_dynagraph_gallery_markdown(
         merge = f" · merged **{sc}×**" if sc != 1 else ""
         desc = getattr(n, "description", None)
         lines.append(f"### [{n.node_id}] {primary}{merge}")
-        lines.append(
-            f"**img** {int(n.obs_id)} · **xyz** ({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})"
-        )
+        lines.append(f"**img** {int(n.obs_id)} · **xyz** ({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})")
         if has_crop_images and node_has_detection_crop(n):
             lines.append(f"→ [open crop](recording://{crop}) · [3D nodes](recording://world/dynagraph/nodes)")
         elif not node_has_detection_crop(n):
@@ -653,6 +652,16 @@ class StretchURDFLogger(urdf_visualizer.URDFVisualizer):
     link_names = []
     link_poses = []
 
+    @staticmethod
+    def _link_mesh_color_rgb(link_name: str) -> np.ndarray:
+        """Readable default when URDF/trimesh omits vertex colors."""
+        name = (link_name or "").lower()
+        if "camera" in name or "head" in name:
+            return np.array([55, 75, 110], dtype=np.uint8)
+        if any(k in name for k in ("arm", "link", "wrist", "gripper", "hand")):
+            return np.array([120, 70, 35], dtype=np.uint8)
+        return np.array([85, 88, 92], dtype=np.uint8)
+
     def load_robot_mesh(self, cfg: dict = None, use_collision: bool = False):
         """
         Load robot mesh using urdf visualizer to rerun
@@ -665,12 +674,24 @@ class StretchURDFLogger(urdf_visualizer.URDFVisualizer):
         self.link_names = trimesh_list["link"]
         self.link_poses = trimesh_list["pose"]
         for i in range(len(trimesh_list["link"])):
+            mesh = trimesh_list["mesh"][i]
+            link = trimesh_list["link"][i]
+            vertex_colors = None
+            visual = getattr(mesh, "visual", None)
+            vc = getattr(visual, "vertex_colors", None) if visual is not None else None
+            if vc is not None and len(vc) == len(mesh.vertices):
+                vertex_colors = np.asarray(vc, dtype=np.uint8)[:, :3]
+            else:
+                rgb = self._link_mesh_color_rgb(link)
+                vertex_colors = np.tile(rgb, (len(mesh.vertices), 1))
             rr.log(
-                f"world/robot/mesh/{trimesh_list['link'][i]}",
+                f"world/robot/mesh/{link}",
                 rr.Mesh3D(
-                    vertex_positions=trimesh_list["mesh"][i].vertices,
-                    triangle_indices=trimesh_list["mesh"][i].faces,
-                    vertex_normals=trimesh_list["mesh"][i].vertex_normals,
+                    vertex_positions=mesh.vertices,
+                    triangle_indices=mesh.faces,
+                    vertex_normals=mesh.vertex_normals,
+                    vertex_colors=vertex_colors,
+                    albedo_factor=(0.38, 0.38, 0.40, 0.52),
                 ),
                 static=True,
             )
@@ -766,7 +787,9 @@ def _pick_rerun_head_cam(obs: Any, servo: Observations | None) -> Observations |
     """
     obs_head: Observations | None = None
     if isinstance(obs, dict) and obs.get("rgb") is not None:
-        obs_head = Observations.from_dict(obs)
+        from emet.controller.generic_zmq_client import get_observation_from_zmq_dict
+
+        obs_head = get_observation_from_zmq_dict(obs)
     elif isinstance(obs, Observations) and obs.rgb is not None:
         obs_head = obs
 
@@ -790,9 +813,30 @@ def _pick_rerun_head_cam(obs: Any, servo: Observations | None) -> Observations |
         chosen = obs_head
 
     # Servo RGB is low-latency; full obs carries MuJoCo-world ``camera_pose`` (matches voxel / GT).
-    if chosen is servo and obs_head is not None and obs_head.camera_pose is not None:
-        chosen = replace(chosen, camera_pose=obs_head.camera_pose)
+    if chosen is servo and obs_head is not None:
+        if obs_head.camera_pose is not None:
+            chosen = replace(chosen, camera_pose=obs_head.camera_pose)
+        if obs_head.camera_K is not None and getattr(chosen, "rgb", None) is not None:
+            from emet.controller.generic_zmq_client import _align_camera_k_to_rgb
+
+            k = _align_camera_k_to_rgb(obs_head.camera_K, chosen.rgb)
+            if k is not None:
+                chosen = replace(chosen, camera_K=k)
     return chosen
+
+
+def _pick_rerun_ee_cam(obs: Any, servo: Observations | None, head_cam: Observations | None) -> Observations | None:
+    """Best Observations carrying ``ee_rgb`` / ``ee_camera_*`` for Rerun EE panel."""
+    for cand in (servo, head_cam):
+        if cand is not None and getattr(cand, "ee_rgb", None) is not None:
+            return cand
+    if isinstance(obs, dict):
+        from emet.controller.generic_zmq_client import get_observation_from_zmq_dict
+
+        decoded = get_observation_from_zmq_dict(obs)
+        if decoded is not None and decoded.ee_rgb is not None:
+            return decoded
+    return None
 
 
 class RerunVisualizer:
@@ -932,6 +976,7 @@ class RerunVisualizer:
         self.mjcf_skeleton = None
         self.mjcf_mesh_logger = None
         self._mjcf_visual_entity_prefix = "world/robot/mjcf_visual"
+        self._show_robot_base_marker = False
         self.urdf_logger = None
         if mjcf_robot is not None and display_robot_mesh:
             mjcf_path, joint_names, dof, base_link = mjcf_robot
@@ -1011,7 +1056,7 @@ class RerunVisualizer:
             for i in range(min(num_frames, 16))  # cap at 16 panels
         ]
         main = rrb.Horizontal(
-            rrb.Spatial3DView(name="3D View", origin="world"),
+            spatial3d_view_world(),
             rrb.Vertical(
                 *frame_views,
                 rrb.TextDocumentView(name="memory/text", origin="world/memory/text"),
@@ -1464,32 +1509,33 @@ class RerunVisualizer:
         comp = np.asarray(obs["compass"], dtype=float).ravel()
         theta = float(comp[0]) if comp.size else 0.0
         sess = read_emet_session(obs)
-        wxyt = nav_xyt_to_world_xyt(
-            np.array([float(xy[0]), float(xy[1]), theta], dtype=np.float64), sess
-        )
+        wxyt = nav_xyt_to_world_xyt(np.array([float(xy[0]), float(xy[1]), theta], dtype=np.float64), sess)
         xy_w = np.asarray(wxyt[:2], dtype=float).reshape(-1)
         theta_w = float(wxyt[2])
         # Live streaming: static=True pins the entity to a single value in the viewer timeline.
         static_pose = bool(getattr(self, "_memory_view", False))
-        rb_arrow = rr.Arrows3D(
-            origins=[0, 0, 0],
-            vectors=[0.4, 0, 0],
-            radii=0.02,
-            labels="robot",
-            colors=[255, 0, 0, 255],
-        )
-        rr.log("world/robot/arrow", rb_arrow, static=static_pose)
-        rr.log(
-            "world/robot/blob",
-            rr.Points3D([0, 0, 0], colors=[255, 0, 0, 255], radii=0.13),
-            static=static_pose,
-        )
+        if getattr(self, "_show_robot_base_marker", False):
+            rb_arrow = rr.Arrows3D(
+                origins=[0, 0, 0],
+                vectors=[0.4, 0, 0],
+                radii=0.02,
+                labels="robot",
+                colors=[255, 0, 0, 255],
+            )
+            rr.log("world/robot/arrow", rb_arrow, static=static_pose)
+            rr.log(
+                "world/robot/blob",
+                rr.Points3D([0, 0, 0], colors=[255, 0, 0, 255], radii=0.13),
+                static=static_pose,
+            )
+        else:
+            self.clear_identity("world/robot/arrow")
+            self.clear_identity("world/robot/blob")
         rr.log(
             "world/robot",
             rr.Transform3D(
                 translation=[float(xy_w[0]), float(xy_w[1]), 0],
                 rotation=rr.RotationAxisAngle(axis=[0, 0, 1], radians=theta_w),
-                axis_length=0.7,
             ),
             static=static_pose,
         )
@@ -1511,13 +1557,14 @@ class RerunVisualizer:
         rr.log("world/ee", rr.Transform3D(translation=trans, mat3x3=rot, axis_length=0.3))
 
     def log_ee_camera(self, servo):
-        """Log end effector camera pose and images
+        """Log end effector camera pose and images (RGB-only OK; depth optional).
+
         Args:
-            servo (Servo): Servo observation dataclass
+            servo: Observation with ``ee_rgb`` (and optional ``ee_depth``).
         """
         if servo is None:
             return
-        if getattr(servo, "ee_rgb", None) is None or getattr(servo, "ee_depth", None) is None:
+        if getattr(servo, "ee_rgb", None) is None:
             return
         rr.set_time_seconds("realtime", time.time())
 
@@ -1525,7 +1572,8 @@ class RerunVisualizer:
         ee_rgb = np.ascontiguousarray(_rgb_to_uint8(servo.ee_rgb))
         log_to_rerun("world/ee_camera/rgb", rr.Image(ee_rgb, color_model=rr.ColorModel.RGB))
 
-        if self.show_camera_point_clouds:
+        ee_depth = getattr(servo, "ee_depth", None)
+        if self.show_camera_point_clouds and ee_depth is not None and getattr(servo, "ee_camera_K", None) is not None:
             ee_xyz = servo.get_ee_xyz_in_world_frame().reshape(-1, 3)
             ee_rgb = servo.ee_rgb.reshape(-1, 3)
             # Remove points below z = 0
@@ -1548,12 +1596,16 @@ class RerunVisualizer:
                     colors=np.int64(ee_rgb),
                 ),
             )
-        elif getattr(self, "_log_head_depth_live", False):
-            log_to_rerun("world/ee_camera/depth", rr.DepthImage(np.asarray(servo.ee_depth, dtype=np.float32)))
+        elif getattr(self, "_log_head_depth_live", False) and ee_depth is not None:
+            log_to_rerun("world/ee_camera/depth", rr.DepthImage(np.asarray(ee_depth, dtype=np.float32)))
         else:
             self.clear_identity("world/ee_camera/depth")
 
-        if self.show_cameras_in_3d_view:
+        if (
+            self.show_cameras_in_3d_view
+            and getattr(servo, "ee_camera_pose", None) is not None
+            and getattr(servo, "ee_camera_K", None) is not None
+        ):
             rot, trans = decompose_homogeneous_matrix(servo.ee_camera_pose)
             log_to_rerun("world/ee_camera", rr.Transform3D(translation=trans, mat3x3=rot, axis_length=0.3))
             log_to_rerun(
@@ -1694,15 +1746,14 @@ class RerunVisualizer:
             nodes = state.graph.nodes
             xyz = np.array([n.xyz for n in nodes], dtype=np.float64)
             labels = [", ".join(n.labels) if n.labels else str(n.node_id) for n in nodes]
-            node_colors = [
-                _color_for_graph_label(n.labels[0] if n.labels else str(n.node_id)) for n in nodes
-            ]
+            node_colors = [_color_for_graph_label(n.labels[0] if n.labels else str(n.node_id)) for n in nodes]
             rr.log(
                 "world/graph/nodes",
                 rr.Points3D(positions=xyz, radii=0.08, labels=labels, colors=node_colors),
                 **log_kw,
             )
             if state.graph.edges:
+
                 class _NodeAdapter:
                     def __init__(self, nv):
                         self.node_id = nv.node_id
@@ -2192,7 +2243,10 @@ class RerunVisualizer:
                 "compass": obs.compass,
                 "ee_pose": obs.ee_pose,
                 "joint": obs.joint,
+                "camera_pose": obs.camera_pose,
             }
+            if getattr(obs, "joint_head", None) is not None:
+                obs_pose["joint_head"] = obs.joint_head
             if obs.emet_session is not None:
                 obs_pose[EMET_ZMQ_SESSION_KEY] = obs.emet_session
         elif isinstance(obs, dict):
@@ -2203,7 +2257,10 @@ class RerunVisualizer:
                 "compass": head_cam.compass,
                 "ee_pose": head_cam.ee_pose,
                 "joint": head_cam.joint,
+                "camera_pose": head_cam.camera_pose,
             }
+            if getattr(head_cam, "joint_head", None) is not None:
+                obs_pose["joint_head"] = head_cam.joint_head
             if getattr(head_cam, "emet_session", None) is not None:
                 obs_pose[EMET_ZMQ_SESSION_KEY] = head_cam.emet_session
 
@@ -2214,16 +2271,15 @@ class RerunVisualizer:
             self.log_ee_frame(obs_pose)
 
             self.log_head_camera(head_cam, mapping_depth=mapping_depth)
-            self.log_ee_camera(head_cam)
+            ee_cam = _pick_rerun_ee_cam(obs, servo, head_cam)
+            self.log_ee_camera(ee_cam)
 
             if (
                 self.display_robot_mesh
                 and getattr(self, "mjcf_mesh_logger", None) is not None
                 and self._stride_tick("_mjcf_mesh_tick", self._mjcf_mesh_stride)
             ):
-                self.mjcf_mesh_logger.log_meshes_world(
-                    rr, obs_pose, entity_prefix=self._mjcf_visual_entity_prefix
-                )
+                self.mjcf_mesh_logger.log_meshes_world(rr, obs_pose, entity_prefix=self._mjcf_visual_entity_prefix)
             if self.display_robot_mesh and getattr(self, "mjcf_skeleton", None) is not None:
                 self.mjcf_skeleton.apply_and_log(obs_pose)
             elif self.display_robot_mesh and getattr(self, "urdf_logger", None) is not None:

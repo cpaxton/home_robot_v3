@@ -790,14 +790,10 @@ class StretchZmqClient(AbstractRobotClient):
             next_action["nav_relative"] = True
         elif world_frame:
             next_action["nav_world"] = True
-        sess = self.get_emet_session()
-        if sess and (sess.get("capabilities") or {}).get("teleport_base"):
-            next_action["nav_teleport"] = True
-        else:
-            from emet.simulation.env_flags import env_sim_nav_teleport
+        from emet.simulation.env_flags import env_sim_nav_teleport
 
-            if env_sim_nav_teleport():
-                next_action["nav_teleport"] = True
+        if env_sim_nav_teleport():
+            next_action["nav_teleport"] = True
         if self._rerun:
             self._rerun.update_nav_goal(_xyt)
 

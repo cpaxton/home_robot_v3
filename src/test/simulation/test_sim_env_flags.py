@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 from __future__ import annotations
 
@@ -39,3 +48,21 @@ def test_warn_sim_nav_env_flags_once(monkeypatch, capsys):
     ef.warn_sim_nav_env_flags()
     err = capsys.readouterr().err
     assert err.count("EMET_SIM_NAV_DEBUG") == 1
+
+
+def test_pure_yaw_relative_skips_teleport_on_planar_robots():
+    import numpy as np
+
+    from emet.simulation.robosuite_server import RobosuiteZmqServer
+
+    raw = np.array([0.0, 0.0, np.pi / 4.0])
+    action = {"nav_relative": True, "nav_teleport": True}
+    assert RobosuiteZmqServer._is_pure_yaw_relative(action, raw)
+    srv = object.__new__(RobosuiteZmqServer)
+    srv._planar_base_joint_names = lambda: ("base_x", "base_y", "base_yaw")
+    srv._is_molmospaces_session = lambda: False
+    assert not srv._resolve_nav_teleport(action, raw)
+    assert srv._resolve_nav_teleport(
+        {"nav_relative": True, "nav_teleport": True},
+        np.array([1.0, 0.0, 0.0]),
+    )

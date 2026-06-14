@@ -48,6 +48,7 @@ HEAD_POSITION_TOPIC = "/mars/head/current_position"
 HEAD_LEFT_FRAME_ID = "camera_optical_frame"
 HEAD_RIGHT_FRAME_ID = "right_camera_optical_frame"
 EE_CAMERA_FRAME_ID = "arm_camera_optical_frame"
+HEAD_BODY_FRAME = "head"
 
 # Nav2 (maurice_nav) — standard Nav2 action; goal topic fallback per innate-os / PAL docs
 NAVIGATE_TO_POSE_ACTION = "navigate_to_pose"

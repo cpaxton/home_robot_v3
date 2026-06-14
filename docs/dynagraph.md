@@ -149,7 +149,7 @@ On **`--export DIR`**, the exporter writes:
 | `DIR/dynagraph/seen_from.json` | Viewpoint → object links with world XYZ |
 | `DIR/dynagraph/gallery.md` | Node table with links to crop files |
 
-The default 3D view is anchored at ``world/robot`` but includes all ``world/**`` layers (voxel point cloud, 2D obstacle/explored maps, object boxes, dynagraph nodes). Only **crop images**, **edge line strips**, and the **crop mosaic** are off by default (viewer stability).
+The default 3D view uses ``origin=world`` with ``contents=world/**`` (see [rerun.md](rerun.md)) so map layers stay fixed while ``world/robot`` moves. Do **not** default to ``origin=world/robot`` or the map co-rotates on in-place turns. Only **crop images**, **edge line strips**, and the **crop mosaic** are off by default (viewer stability).
 
 Opt back into those heavy channels in agent/dynav YAML:
 

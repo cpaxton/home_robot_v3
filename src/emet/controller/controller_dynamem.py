@@ -55,7 +55,6 @@ from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
 from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
 from emet.motion.algo.a_star import AStar
 from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
-from emet.perception.depth.lingbot_estimator import LingBotDepthEstimator, create_lingbot_estimator_from_parameters
 from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask, sensor_depth_usable
 from emet.perception.depth.lingbot_estimator import LingBotDepthEstimator, create_lingbot_estimator_from_parameters
 from emet.perception.detection.owl import OwlPerception
@@ -63,7 +62,6 @@ from emet.perception.detection.yoloe import YoloEPerception
 
 # from emet.perception.encoders.mobile_clip_encoder import MaskMobileClipEncoder
 from emet.perception.encoders.clip_encoder import MaskClipEncoder
-from emet.perception.encoders.siglip_encoder import MaskSiglipEncoder
 from emet.perception.wrapper import OvmmPerception
 from emet.utils.geometry import nav_xyt_to_world_xyt
 from emet.utils.logger import Logger
@@ -728,7 +726,7 @@ class DynamemController(BaseController):
             and self._da3_last_depth is not None
             and self._da3_last_depth.shape[:2] == rgb.shape[:2]
         ):
-            depth = np.asarray(self._da3_last_depth, dtype=np.float32, copy=True)
+            depth = np.asarray(self._da3_last_depth, dtype=np.float32).copy()
             self._depth_map_from_da3_infer = True
             if self._depth_source == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
                 depth = np.asarray(sensor_depth, dtype=np.float32)
@@ -739,7 +737,7 @@ class DynamemController(BaseController):
             and self._lingbot_last_depth is not None
             and self._lingbot_last_depth.shape[:2] == rgb.shape[:2]
         ):
-            depth = np.asarray(self._lingbot_last_depth, dtype=np.float32, copy=True)
+            depth = np.asarray(self._lingbot_last_depth, dtype=np.float32).copy()
             self._depth_map_from_da3_infer = True
         else:
             depth = self._resolve_depth_map(
@@ -834,9 +832,7 @@ class DynamemController(BaseController):
 
         has_hm3d_labeler = getattr(self.robot, "hm3d_semantic_labeler", None) is not None
         if self.graph_memory is not None and (
-            self.sensor_builder is not None
-            or self._graph_eqa_use_instance_graph
-            or has_hm3d_labeler
+            self.sensor_builder is not None or self._graph_eqa_use_instance_graph or has_hm3d_labeler
         ):
             if getattr(self, "_skip_graph_perception_updates", False):
                 from emet.memory.graph_eqa.dynamem_graph_hooks import (
