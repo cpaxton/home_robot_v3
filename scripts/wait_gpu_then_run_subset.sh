@@ -11,7 +11,7 @@ MAX_WAIT_MIN="${MAX_WAIT_MIN:-360}"
 TAG="${TAG:-iter11_explore}"
 IDS="${IDS:-3,14,17,28,31,35,81,94}"
 TIMEOUT="${TIMEOUT:-2400}"
-RESULTS="$HOME/.cache/habitat_eqa/results/subset_${TAG}_qwen2_5_vl.jsonl"
+RESULTS="$HOME/.cache/habitat_eqa/results/subset_${TAG}_qwen3_vl.jsonl"
 
 n_target=$(awk -F, '{print NF}' <<<"$IDS")
 deadline=$(( $(date +%s) + MAX_WAIT_MIN * 60 ))

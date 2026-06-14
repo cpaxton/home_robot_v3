@@ -130,6 +130,17 @@ def test_help_lists_rerun_agent_flags():
     assert "--rerun-bind" in r.output
 
 
+def test_default_llm_is_qwen3_vl_eqa():
+    from emet.agent.loop import DEFAULT_AGENT_LLM
+    from emet.app.run_agent import main
+
+    assert DEFAULT_AGENT_LLM == "qwen3-vl-eqa"
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "qwen3-vl-eqa" in r.output
+
+
 def test_vl_camera_default_logic():
     """Mirror run_agent: VL model names enable camera unless --no-vl-camera."""
 
@@ -138,6 +149,7 @@ def test_vl_camera_default_logic():
         is_vl_name = "-vl-" in llm_l or "vl-" in llm_l
         return (not no_vl_camera) and (vl_include_camera or is_vl_name)
 
+    assert vl_include_effective(False, False, "qwen3-vl-eqa")
     assert vl_include_effective(False, False, "qwen35-vl-9B")
     assert vl_include_effective(False, False, "qwen25-VL-7B")
     assert not vl_include_effective(True, True, "qwen35-vl-9B")

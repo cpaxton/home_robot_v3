@@ -17,7 +17,7 @@
 #     export DISCORD_TOKEN="your-bot-token"
 #     uv run emet run agent --agent-config configs/agent_stretch_discord.yaml --rerun
 #     # (``robot: stretch`` in this file replaces ``--robot stretch`` when the flag is omitted.)
-#     uv run emet run agent --robot stretch --llm qwen35-9B --device cuda --max-tokens 1024 \
+#     uv run emet run agent --robot stretch --device cuda --max-tokens 1024 \
 #       --agent-config configs/agent_stretch_discord.yaml
 #     # Use --no-discord to skip the Discord bridge; default is to start it when DISCORD_TOKEN is set.
 #     # Local chat only (no robot): --offline

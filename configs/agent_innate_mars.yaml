@@ -18,7 +18,7 @@
 #     export DISCORD_TOKEN="your-bot-token"   # optional
 #     uv run emet run agent --agent-config configs/agent_innate_mars.yaml --rerun
 #     # (``robot: innate_mars`` in this file replaces ``--robot innate_mars`` when the flag is omitted.)
-#     uv run emet run agent --robot innate_mars --llm qwen35-9B --device cuda --max-tokens 1024 \
+#     uv run emet run agent --robot innate_mars --device cuda --max-tokens 1024 \
 #       --agent-config configs/agent_innate_mars.yaml
 #     # Use --no-discord to skip the Discord bridge; local chat only: --offline
 #

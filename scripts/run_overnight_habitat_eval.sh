@@ -88,7 +88,7 @@ run_phase() {
     return 0
   fi
 
-  local results="$HOME/.cache/habitat_eqa/results/subset_${tag}_qwen2_5_vl.jsonl"
+  local results="$HOME/.cache/habitat_eqa/results/subset_${tag}_qwen3_vl.jsonl"
   local phase_log="$LOG_DIR/${phase_name}.log"
   local n_target
   n_target=$(n_ids "$ids")
@@ -134,7 +134,7 @@ tags = {
 results_root = Path.home() / ".cache/habitat_eqa/results"
 
 def load_rows(tag):
-    p = results_root / f"subset_{tag}_qwen2_5_vl.jsonl"
+    p = results_root / f"subset_{tag}_qwen3_vl.jsonl"
     if not p.exists():
         return [], p
     rows = [json.loads(l) for l in p.read_text().splitlines() if l.strip()]

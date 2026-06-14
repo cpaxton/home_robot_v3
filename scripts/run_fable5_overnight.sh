@@ -100,7 +100,11 @@ run_phase() {
     log "SKIP phase $phase_name (SKIP_PHASES)"
     return 0
   fi
+<<<<<<< HEAD
   local results="$HOME/.cache/habitat_eqa/results/subset_${tag}_qwen2_5_vl.jsonl"
+=======
+  local results="$HOME/.cache/habitat_eqa/results/subset_${tag}_qwen3_vl.jsonl"
+>>>>>>> origin/main
   local phase_log="$LOG_DIR/${phase_name}.log"
   local n_target
   n_target=$(n_ids "$ids")
@@ -141,7 +145,11 @@ tags = {
 }
 
 def load(tag):
+<<<<<<< HEAD
     p = results_root / f"subset_{tag}_qwen2_5_vl.jsonl"
+=======
+    p = results_root / f"subset_{tag}_qwen3_vl.jsonl"
+>>>>>>> origin/main
     if not p.exists():
         return {}
     by = {}
