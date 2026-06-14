@@ -91,6 +91,6 @@ Requires `LINGBOT_MAP_CHECKPOINT` and `.venv-lingbot-map`.
 - **Sim** provides sensor depth and sim `camera_pose` for quantitative A/B.
 - **Hardware Mars** is RGB-only on ZMQ; LingBot is the intended depth+pose front-end once sim metrics look good.
 - Head/arm motion during base rotation is acceptable for the initial `rotate_in_place` demo; general manipulation may need fixed-head navigation frames.
-- **Sim nav:** default-table robosuite sim advertises `teleport_base` (set `EMET_SIM_NAV_TELEPORT=0` to force wheel drive).
+- **Sim nav:** Robocasa / innate_mars robosuite sim uses holonomic **velocity drive** by default (`teleport_base: false`). Set `EMET_SIM_NAV_TELEPORT=1` for instant base snap (CI/e2e only).
 
 See also: [Innate Mars robot doc](robots/innate_mars.md), [DA3 appendix](../paper/sections/appendix/03_depth_anything.tex).

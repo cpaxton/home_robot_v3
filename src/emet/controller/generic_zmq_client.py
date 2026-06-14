@@ -718,14 +718,33 @@ class GenericZmqClient(AbstractRobotClient):
 
     # -- Observations ---------------------------------------------------------
 
-    def wait_for_obs(self, timeout: float = 10.0) -> bool:
+    def wait_for_obs(self, timeout: float = 10.0, *, require_navigation_origin: bool | None = None) -> bool:
+        if require_navigation_origin is None:
+            require_navigation_origin = self._robosuite_sim_zmq()
         t0 = timeit.default_timer()
-        while self._obs is None:
-            time.sleep(0.05)
+        while True:
+            with self._obs_lock:
+                has_obs = self._obs is not None
+            if has_obs:
+                if not require_navigation_origin:
+                    return True
+                sess = self.get_emet_session()
+                if sess is None:
+                    pass
+                elif sess.get("runtime_kind") != "robosuite_sim":
+                    return True
+                elif sess.get("navigation_origin_xyt") is not None:
+                    return True
             if timeit.default_timer() - t0 > timeout:
-                logger.error("Timeout waiting for observations.")
+                if require_navigation_origin:
+                    logger.error(
+                        "Timeout waiting for observations with navigation_origin_xyt "
+                        "(Robocasa sim must finish autoplace before mapping/Rerun align)."
+                    )
+                else:
+                    logger.error("Timeout waiting for observations.")
                 return False
-        return True
+            time.sleep(0.05)
 
     def get_joint_positions(self, timeout: float = 5.0) -> np.ndarray | None:
         state = self._state
