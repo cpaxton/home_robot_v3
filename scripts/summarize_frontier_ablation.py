@@ -20,8 +20,8 @@ def main() -> int:
     parser.add_argument("--q-end", type=int, default=19)
     parser.add_argument(
         "--family",
-        default="qwen2_5_vl",
-        help="Filename substring filter (e.g. qwen2_5_vl)",
+        default="qwen3_vl",
+        help="Filename substring filter (e.g. qwen3_vl)",
     )
     args = parser.parse_args()
 

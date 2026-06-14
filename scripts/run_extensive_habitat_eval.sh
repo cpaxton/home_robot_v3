@@ -38,7 +38,7 @@ wait_for_gpu() {
 
 run_phase() {
   local method="$1" tag="$2"
-  local results="$HOME/.cache/habitat_eqa/results/subset_${tag}_qwen2_5_vl.jsonl"
+  local results="$HOME/.cache/habitat_eqa/results/subset_${tag}_qwen3_vl.jsonl"
   local n_target
   n_target=$(awk -F, '{print NF}' <<<"$IDS")
   count_done() {
@@ -81,7 +81,7 @@ import json
 from pathlib import Path
 
 def load(tag):
-    p = Path.home() / f".cache/habitat_eqa/results/subset_{tag}_qwen2_5_vl.jsonl"
+    p = Path.home() / f".cache/habitat_eqa/results/subset_{tag}_qwen3_vl.jsonl"
     if not p.exists():
         return {}
     return {r["question_id"]: r for r in (json.loads(l) for l in p.read_text().splitlines() if l.strip())}

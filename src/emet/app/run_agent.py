@@ -9,9 +9,10 @@
 
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
-# Agent chatbot: lightweight LLM (default Qwen 3.5) for local testing.
+# Agent chatbot: one local VLM for chat + (optional) DynaMem captions/EQA.
 # Run with: emet run agent
-# Default: connect to sim/robot at 127.0.0.1 (embodied agent). Use --offline for local LLM chat only.
+# Default: ``qwen3-vl-eqa`` (Qwen3-VL-8B int4 from dynav_config.yaml ``eqa:``).
+# Use ``--eqa --share-memory-vllm`` (default) so the voxel map reuses the same load.
 
 import os
 
@@ -27,7 +28,7 @@ import click
 from click.core import ParameterSource
 from termcolor import colored
 
-from emet.agent.loop import run_agent_with_robot
+from emet.agent.loop import DEFAULT_AGENT_LLM, run_agent_with_robot
 from emet.agent.model_debug import print_offline_model_line
 from emet.agent.prompt import DEFAULT_AGENT_NAME
 from emet.audio import AudioRecorder
@@ -39,19 +40,14 @@ from emet.utils.logger import Logger
 
 log = Logger(__name__)
 
-# Default: Qwen 3.5 9B (with expandable CUDA segments enabled above to reduce fragmentation).
-# Use ``--llm qwen35-4B`` if you still hit OOM on a single consumer GPU.
-DEFAULT_AGENT_LLM = "qwen35-9B"
-
 
 @click.command()
 @click.option(
     "--llm",
     default=DEFAULT_AGENT_LLM,
     help=f"LLM to use (default: {DEFAULT_AGENT_LLM}). Case-insensitive. "
-    "Gemma 4: gemma4-e2b / gemma4-e4b (text any-to-any), gemma4-vlm-e2b / gemma4-vlm-e4b (multimodal + camera). "
-    "Shared EQA VLM: qwen3-vl-eqa or gemma4-vl-eqa (set eqa.vl_family in agent YAML). "
-    "Legacy Gemma 3: gemma, gemma4b, gemma1b.",
+    "Default ``qwen3-vl-eqa``: one Qwen3-VL-8B int4 (dynav_config.yaml ``eqa:``) for chat + camera. "
+    "Alternatives: gemma4-vl-eqa, qwen35-vlm-*, gemma4-e2b/e4b (text), legacy gemma/gemma4b.",
     type=click.Choice(get_llm_choices(), case_sensitive=False),
 )
 @click.option(
@@ -236,7 +232,8 @@ DEFAULT_AGENT_LLM = "qwen35-9B"
     "dynamem_eqa",
     is_flag=True,
     help=(
-        "Enable DynaMem EQA on the voxel map (Qwen2.5-VL for captions + answers by default; see dynav_config.yaml eqa:). "
+        "Enable DynaMem EQA on the voxel map (reuses agent VL when --share-memory-vllm; "
+        "else loads Qwen3-VL-8B int4 from dynav_config.yaml eqa:). "
         "Heavier GPU/RAM and slower startup; default is off (query_memory falls back to localize_text)."
     ),
 )
@@ -397,7 +394,7 @@ def main(
     sim_debug_molmospaces_spawn: bool = False,
     sim_show_subprocess_output: bool = False,
 ) -> None:
-    """Run the agent as a chatbot (lightweight Qwen Coder by default for local testing).
+    """Run the agent chatbot (default: one Qwen3-VL-8B int4 for chat + optional EQA).
 
     Default: connect to 127.0.0.1 (start ``emet serve mujoco`` first). Use --offline for local chat only.
     The --prompt option applies to --offline only; embodied mode uses the agent tool prompt (JSON tool_calls).
@@ -405,10 +402,9 @@ def main(
     Examples:
       emet run agent --offline
       emet run agent --device cpu --offline
-      emet run agent --llm qwen35-9B --offline
-      emet run agent --llm gemma4-e4b --device cuda --offline   # Gemma 4 text (HF any-to-any)
-      emet run agent --llm gemma4-vlm-e4b --start-sim -c "describe the scene"  # Gemma 4 + head camera
-      emet run agent --llm gemma4-vl-eqa --eqa --agent-config dynav_config.yaml  # one Gemma 4 VLM for chat + captions
+      emet run agent --llm qwen35-9B --offline   # text-only if you need a smaller chat model
+      emet run agent --start-sim -c "describe the scene"   # default: qwen3-vl-eqa + head camera
+      emet run agent --eqa --debug-vram   # one Qwen3-VL for chat + voxel captions/EQA
       emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
       # MolmoSpaces: ``emet serve mujoco --scene ithor ...`` (often DISPLAY=:1 instead of --headless); same --port-offset as serve:
       emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml
@@ -419,7 +415,6 @@ def main(
       emet run agent --no-llm   # letter commands (E/M/Q/P)
       emet run agent --no-llm --command 'find red cylinder'
       emet run agent --no-llm -c 'FIND blue cube'
-      emet run agent --llm qwen3-vl-eqa --eqa --debug-vram   # one Qwen3-VL + VRAM milestones
       emet run agent --robot stretch --start-sim --command "describe the scene"
       emet run agent --robot rby1 --start-sim --scene ithor --headless -c "describe the scene"
     """

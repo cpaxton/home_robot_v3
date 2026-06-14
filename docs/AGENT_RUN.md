@@ -10,7 +10,7 @@
 ## Config and models
 
 - **Scene / mapping YAML**: `--agent-config` (default `dynav_config.yaml`). Use a basename under `src/emet/config/` or a path to your own YAML. Key reference: [Dynav configuration](dynav_config.md) (`map_boundary`, depth source, motion planner, EQA).
-- **Chat / tool backbone**: `--llm` (default `qwen35-9B` text). `emet run agent` sets `PYTORCH_ALLOC_CONF=expandable_segments:True` in the agent subprocess unless you already exported `PYTORCH_ALLOC_CONF` (reduces fragmentation vs SigLIP/detector). Use `qwen35-4B` if you still OOM. Vision models: `qwen25-VL-7B`, `qwen35-vl-9B`, etc. For `*VL*` models, **robot RGB is passed by default** on each new user turn; use **`--no-vl-camera`** to disable.
+- **Chat / tool backbone**: `--llm` (default `qwen3-vl-eqa`: one Qwen3-VL-8B int4 from `dynav_config.yaml` `eqa:` for chat + head camera). `emet run agent` sets `PYTORCH_ALLOC_CONF=expandable_segments:True` in the agent subprocess unless you already exported `PYTORCH_ALLOC_CONF` (reduces fragmentation vs SigLIP/detector). With **`--eqa`**, **`--share-memory-vllm`** (default) reuses that same VLM for DynaMem captions/answers. Text-only fallback: `qwen35-4B` / `qwen35-9B`. For VL models, **robot RGB is passed by default** on each new user turn; use **`--no-vl-camera`** to disable.
 - **Device / length**: `--device`, `--max-tokens` apply to embodied and `--offline` modes.
 
 ## Testing
