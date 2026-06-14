@@ -31,7 +31,10 @@ def test_robocasa_innate_mars_spawn_inside_walkable_clip_and_frame_contract():
     from emet.simulation.stretch_mujoco.robocasa_gen import model_generation_wizard
     from emet.simulation.zmq_frame_contract import assert_zmq_observation_frames_consistent
 
-    model, _xml, _ = model_generation_wizard(task="PickPlaceCounterToCabinet", layout=1, style=1, robot="innate_mars")
+    model, _xml, objects_info = model_generation_wizard(
+        task="PickPlaceCounterToCabinet", layout=1, style=1, robot="innate_mars"
+    )
+    spawn_hint = np.asarray(objects_info["_emet_spawn_hint_xyt"], dtype=np.float64).reshape(-1)[:3]
     spec = InnateMarsBackend().get_spec()
     server = RobosuiteZmqServer(
         robot_spec=spec,
@@ -40,7 +43,7 @@ def test_robocasa_innate_mars_spawn_inside_walkable_clip_and_frame_contract():
         recv_port=0,
         send_state_port=0,
         send_servo_port=0,
-        environment={"kind": "robocasa"},
+        environment={"kind": "robocasa", "spawn_hint_xyt": spawn_hint.tolist()},
     )
     server._load_model()
     server._stabilize_physics_state_after_load()
@@ -64,6 +67,12 @@ def test_robocasa_innate_mars_spawn_inside_walkable_clip_and_frame_contract():
     bx, by = float(server._initial_xyt[0]), float(server._initial_xyt[1])
     assert x0 <= bx <= x1 and y0 <= by <= y1, (
         f"spawn ({bx:.3f}, {by:.3f}) outside walkable clip x=[{x0:.3f},{x1:.3f}] y=[{y0:.3f},{y1:.3f}]"
+    )
+    hint_dxy = float(np.hypot(bx - float(spawn_hint[0]), by - float(spawn_hint[1])))
+    assert hint_dxy < 0.15, (
+        f"spawn ({bx:.3f}, {by:.3f}) moved {hint_dxy:.3f}m from robosuite hint "
+        f"({float(spawn_hint[0]):.3f}, {float(spawn_hint[1]):.3f}); "
+        "planar autoplace must respect init_robot_base_pos like Stretch"
     )
 
     rgb = np.zeros((120, 160, 3), dtype=np.uint8)

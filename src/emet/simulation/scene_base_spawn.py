@@ -2,7 +2,10 @@
 # All rights reserved.
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source code tree.
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
 
 """Spawn placement for MolmoSpaces (scene MJCF + merged mobile robot).
 
@@ -327,9 +330,7 @@ def collision_scene_xy_clip_rect(
     )
 
 
-def _erode_xy_rect(
-    rect: tuple[float, float, float, float], inset: float
-) -> tuple[float, float, float, float] | None:
+def _erode_xy_rect(rect: tuple[float, float, float, float], inset: float) -> tuple[float, float, float, float] | None:
     """Shrink a clip rectangle symmetrically; return ``None`` if it would collapse."""
     x0, x1, y0, y1 = rect
     if x1 - x0 < 2.0 * inset + 0.9 or y1 - y0 < 2.0 * inset + 0.9:
@@ -426,9 +427,7 @@ def _clamp_xy_into_rect(x: float, y: float, rect: tuple[float, float, float, flo
     return (min(max(float(x), x0), x1), min(max(float(y), y0), y1))
 
 
-def _max_xy_distance_to_rect_corners(
-    x: float, y: float, rect: tuple[float, float, float, float]
-) -> float:
+def _max_xy_distance_to_rect_corners(x: float, y: float, rect: tuple[float, float, float, float]) -> float:
     """Max Euclidean distance from *(x,y)* to one of the four corners of *rect*."""
     x0, x1, y0, y1 = rect
     corners = ((x0, y0), (x1, y0), (x0, y1), (x1, y1))
@@ -577,15 +576,11 @@ def molmospaces_placed_pose_passes_horizontal_interior_gate(
     base_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
     excl = int(base_bid) if base_bid >= 0 else -1
     mujoco.mj_forward(model, data)
-    zf = walkable_floor_z_at_xy(
-        model, data, x, y, floor_geom_name=floor_eff, exclude_body_id=excl
-    )
+    zf = walkable_floor_z_at_xy(model, data, x, y, floor_geom_name=floor_eff, exclude_body_id=excl)
     if zf is None:
         return False
     z_probe = float(zf) + 0.08
-    if horizontal_spawn_rejects_exterior_tongue(
-        model, data, x, y, z_probe, exclude_body_id=excl
-    ):
+    if horizontal_spawn_rejects_exterior_tongue(model, data, x, y, z_probe, exclude_body_id=excl):
         return False
     if require_upward_ceiling_hit:
         min_up = (
@@ -593,9 +588,7 @@ def molmospaces_placed_pose_passes_horizontal_interior_gate(
             if min_upward_clearance_m is not None
             else float(_MIN_UPWARD_CEILING_CLEARANCE_M)
         )
-        up = upward_ray_hit_distance(
-            model, data, x, y, z_probe, exclude_body_id=excl
-        )
+        up = upward_ray_hit_distance(model, data, x, y, z_probe, exclude_body_id=excl)
         if up is None or up < min_up:
             return False
     return True
@@ -759,13 +752,9 @@ def format_spawn_floor_alignment_report(
     robot_bodies = _bodies_descending_from(model, base_bid)
     ray_excl = int(base_bid)
     mujoco.mj_forward(model, data)
-    zf = walkable_floor_z_at_xy(
-        model, data, x, y, floor_geom_name=floor_eff, exclude_body_id=ray_excl
-    )
+    zf = walkable_floor_z_at_xy(model, data, x, y, floor_geom_name=floor_eff, exclude_body_id=ray_excl)
     zb = _min_robot_collision_geom_bottom_z(model, data, robot_bodies)
-    worst = worst_robot_nonfloor_contact_dist(
-        model, data, base_body_name=base_body_name, floor_geom_name=floor_eff
-    )
+    worst = worst_robot_nonfloor_contact_dist(model, data, base_body_name=base_body_name, floor_geom_name=floor_eff)
     zf_s = f"{zf:.4f}" if zf is not None else "None"
     zb_s = f"{zb:.4f}" if zb is not None else "None"
     delta_s = "n/a"
@@ -939,9 +928,7 @@ def _min_robot_collision_geom_bottom_z(
     return float(zmin)
 
 
-def support_collision_body_ids_for_base_z_placement(
-    model: mujoco.MjModel, base_body_name: str
-) -> set[int] | None:
+def support_collision_body_ids_for_base_z_placement(model: mujoco.MjModel, base_body_name: str) -> set[int] | None:
     """Body IDs for **base + swerve legs** only (exclude arms/torso for vertical *z* height probes."""
     root = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
     if root < 0:
@@ -1032,9 +1019,7 @@ def settle_free_base_z_to_floor(
     last_good_z: float | None = None
     prev_z: float | None = None
     for _ in range(max_steps):
-        if not write_freejoint_base_xyzw(
-            model, data, base_body_name=base_body_name, x=x, y=y, z=z
-        ):
+        if not write_freejoint_base_xyzw(model, data, base_body_name=base_body_name, x=x, y=y, z=z):
             break
         mujoco.mj_forward(model, data)
         worst = worst_robot_nonfloor_contact_dist(
@@ -1061,9 +1046,7 @@ def settle_free_base_z_to_floor(
             break
     if last_good_z is None:
         return None
-    write_freejoint_base_xyzw(
-        model, data, base_body_name=base_body_name, x=x, y=y, z=float(last_good_z)
-    )
+    write_freejoint_base_xyzw(model, data, base_body_name=base_body_name, x=x, y=y, z=float(last_good_z))
     mujoco.mj_forward(model, data)
     for _ in range(max_steps):
         zb = robot_placement_bottom_z(
@@ -1076,9 +1059,7 @@ def settle_free_base_z_to_floor(
         if zb is None or zb >= target_zb - 1e-4:
             break
         z_try = float(last_good_z) + step_m
-        if not write_freejoint_base_xyzw(
-            model, data, base_body_name=base_body_name, x=x, y=y, z=z_try
-        ):
+        if not write_freejoint_base_xyzw(model, data, base_body_name=base_body_name, x=x, y=y, z=z_try):
             break
         mujoco.mj_forward(model, data)
         worst = worst_robot_nonfloor_contact_dist(
@@ -1087,9 +1068,7 @@ def settle_free_base_z_to_floor(
         if worst < min_nonfloor_clearance - 1e-6:
             break
         last_good_z = z_try
-    write_freejoint_base_xyzw(
-        model, data, base_body_name=base_body_name, x=x, y=y, z=float(last_good_z)
-    )
+    write_freejoint_base_xyzw(model, data, base_body_name=base_body_name, x=x, y=y, z=float(last_good_z))
     mujoco.mj_forward(model, data)
     return float(last_good_z)
 
@@ -1128,9 +1107,7 @@ def resettle_free_base_z_at_current_xy_preserving_yaw(
     quat = tuple(float(v) for v in data.qpos[qadr + 3 : qadr + 7])
 
     floor_eff = effective_floor_geom_name(model, floor_geom_name)
-    z_floor = walkable_floor_z_at_xy(
-        model, data, x, y, floor_geom_name=floor_eff, exclude_body_id=int(base_bid)
-    )
+    z_floor = walkable_floor_z_at_xy(model, data, x, y, floor_geom_name=floor_eff, exclude_body_id=int(base_bid))
     if z_floor is None:
         return False
 
@@ -1143,9 +1120,7 @@ def resettle_free_base_z_at_current_xy_preserving_yaw(
                 stf = float(meta.molmospaces_target_foot_clearance_above_floor_m)
 
     z_start = max(float(z_floor) + float(z_air_above_floor_m), float(backup[2]) + 0.42)
-    if not write_freejoint_base_xyzw(
-        model, data, base_body_name=base_body_name, x=x, y=y, z=z_start, quat_wxyz=quat
-    ):
+    if not write_freejoint_base_xyzw(model, data, base_body_name=base_body_name, x=x, y=y, z=z_start, quat_wxyz=quat):
         return False
     mujoco.mj_forward(model, data)
 
@@ -1285,9 +1260,7 @@ def _ithor_occupancy_priority_xy(
     try:
         from emet.simulation.molmo_occupancy.ithor_map import iTHORMap
 
-        th = iTHORMap.from_mj_model_path(
-            merged_mjcf_path, camera=None, agent_radius=agent_radius, px_per_m=px_per_m
-        )
+        th = iTHORMap.from_mj_model_path(merged_mjcf_path, camera=None, agent_radius=agent_radius, px_per_m=px_per_m)
         fp = th.get_free_points()
     except Exception as e:
         logger.warning(f"MolmoSpaces occupancy map skipped ({e!r}).")
@@ -1654,16 +1627,12 @@ def _find_molmospaces_freejoint_xyz_pass(
         if z_floor is None:
             continue
         z_probe = float(z_floor) + 0.08
-        up_dist = upward_ray_hit_distance(
-            model, data, x, y, z_probe, exclude_body_id=ray_exclude
-        )
+        up_dist = upward_ray_hit_distance(model, data, x, y, z_probe, exclude_body_id=ray_exclude)
         # Open sky (no upward hit) is common in iTHOR MJCF without an explicit ceiling geom; do not
         # treat that like "void under a shelf". Reject only a *close* ceiling when a hit exists.
         if up_dist is not None and up_dist < min_upward_clearance:
             continue
-        if horizontal_spawn_rejects_exterior_tongue(
-            model, data, x, y, z_probe, exclude_body_id=ray_exclude
-        ):
+        if horizontal_spawn_rejects_exterior_tongue(model, data, x, y, z_probe, exclude_body_id=ray_exclude):
             continue
         for zm in z_margins:
             z = z_floor + float(zm)
@@ -1772,23 +1741,17 @@ def _try_spawn_at_xy_candidates(
     """Single (x,y): walkable floor, upward clearance, z margin sweep + settle (shared by fallbacks)."""
     _settle_kw = dict(settle_kw or {})
     z_air = max(8.0, 3.0 * float(model.stat.extent))
-    if not write_freejoint_base_xyzw(
-        model, data, base_body_name=base_body_name, x=float(x), y=float(y), z=z_air
-    ):
+    if not write_freejoint_base_xyzw(model, data, base_body_name=base_body_name, x=float(x), y=float(y), z=z_air):
         return None
     mujoco.mj_forward(model, data)
-    z_floor = walkable_floor_z_at_xy(
-        model, data, x, y, floor_geom_name=floor_effective, exclude_body_id=ray_exclude
-    )
+    z_floor = walkable_floor_z_at_xy(model, data, x, y, floor_geom_name=floor_effective, exclude_body_id=ray_exclude)
     if z_floor is None:
         return None
     z_probe = float(z_floor) + 0.08
     up_dist = upward_ray_hit_distance(model, data, x, y, z_probe, exclude_body_id=ray_exclude)
     if up_dist is not None and up_dist < min_upward_clearance:
         return None
-    if horizontal_spawn_rejects_exterior_tongue(
-        model, data, x, y, z_probe, exclude_body_id=ray_exclude
-    ):
+    if horizontal_spawn_rejects_exterior_tongue(model, data, x, y, z_probe, exclude_body_id=ray_exclude):
         return None
     for zm in z_margins:
         z = z_floor + float(zm)
@@ -1956,13 +1919,9 @@ def find_molmospaces_freejoint_xyz(
         spawn_dbg(f"find: clip_probe=None floor_effective={floor_effective!r} label={scene_label!r}")
 
     occ_xy, occ_map_dbg = _ithor_occupancy_priority_xy(merged_mjcf_path, environment)
-    settle_kw, zb_probe = _molmospaces_z_settle_options(
-        model, base_body_name=base_body_name, robot_key=robot_key
-    )
+    settle_kw, zb_probe = _molmospaces_z_settle_options(model, base_body_name=base_body_name, robot_key=robot_key)
 
-    def _spawn_debug_finish(
-        out: tuple[float, float, float] | None, how: str
-    ) -> tuple[float, float, float] | None:
+    def _spawn_debug_finish(out: tuple[float, float, float] | None, how: str) -> tuple[float, float, float] | None:
         _spawn_debug_emit_topdown(
             occ_map_dbg,
             clip_probe=clip_probe,
@@ -1973,10 +1932,10 @@ def find_molmospaces_freejoint_xyz(
         )
         return out
 
-    _pass_common = dict(
-        settle_kw=settle_kw,
-        zb_probe_bodies=zb_probe,
-    )
+    _pass_common = {
+        "settle_kw": settle_kw,
+        "zb_probe_bodies": zb_probe,
+    }
     placed = _find_molmospaces_freejoint_xyz_pass(
         model,
         data,
@@ -2065,9 +2024,7 @@ def find_molmospaces_freejoint_xyz(
     return _spawn_debug_finish(None, "failed_all_passes")
 
 
-def infer_planar_anchor_body_name(
-    model: mujoco.MjModel, joint_names: tuple[str, str, str]
-) -> str | None:
+def infer_planar_anchor_body_name(model: mujoco.MjModel, joint_names: tuple[str, str, str]) -> str | None:
     """Body that hosts the first planar slide joint (parent frame for slide axes)."""
     jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_names[0])
     if jid < 0:
@@ -2251,8 +2208,9 @@ def find_planar_base_xyt(
     but applies poses via :func:`write_planar_base_xyt`. For ``spawn_profile == \"robocasa\"`` we
     disable upward-ray rejection (open ceilings / cabinet tops) but **keep** the horizontal
     exterior-tongue filter so we do not pick the infinite floor outside the kitchen footprint.
-    ``spawn_hint_xyt`` is accepted for API compatibility but **not** used for ordering (Robosuite
-    placeholder base pose can disagree with the merged MJCF frame).
+    ``spawn_hint_xyt`` (world x, y, yaw from Robosuite ``init_robot_base_pos``) is tried first on
+    ``spawn_profile == \"robocasa\"`` so innate_mars matches Stretch's kitchen placement instead of
+    the walkable-clip centroid.
 
     Candidate *(x, y)* and *yaw* are **world** / kitchen-map coordinates; they are mapped to slide
     joint values using the planar anchor body (parent of the first slide), e.g. after Robocasa
@@ -2344,8 +2302,19 @@ def find_planar_base_xyt(
 
     occ_xy, _ = _ithor_occupancy_priority_xy(merged_mjcf_path, environment)
     priority_xy: list[tuple[float, float]] = []
+    hint_xy: tuple[float, float] | None = None
+    hint_yaw: float | None = None
+    if spawn_hint_xyt is not None:
+        h = np.asarray(spawn_hint_xyt, dtype=np.float64).reshape(-1)
+        if h.size >= 2:
+            hint_xy = (float(h[0]), float(h[1]))
+            priority_xy.append(hint_xy)
+            if h.size >= 3:
+                hint_yaw = float(h[2])
     if occ_xy:
         seen_xy = {(round(a, 2), round(b, 2)) for a, b in base_candidates}
+        if hint_xy is not None:
+            seen_xy.add((round(hint_xy[0], 2), round(hint_xy[1], 2)))
         for px, py in occ_xy:
             k = (round(px, 2), round(py, 2))
             if k in seen_xy:
@@ -2354,7 +2323,10 @@ def find_planar_base_xyt(
             priority_xy.append((float(px), float(py)))
 
     candidates = priority_xy + base_candidates
-    if xy_clip is not None:
+    if hint_xy is not None:
+        hx, hy = hint_xy
+        candidates.sort(key=lambda p: (p[0] - hx) ** 2 + (p[1] - hy) ** 2)
+    elif xy_clip is not None:
         cx = 0.5 * (xy_clip[0] + xy_clip[1])
         cy = 0.5 * (xy_clip[2] + xy_clip[3])
         candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
@@ -2363,6 +2335,9 @@ def find_planar_base_xyt(
         candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
 
     yaws = [float(k * math.pi / 4.0) for k in range(8)]
+    if hint_yaw is not None:
+        hy = float(hint_yaw)
+        yaws = [hy] + [y for y in yaws if abs(float(np.arctan2(np.sin(y - hy), np.cos(y - hy)))) > 0.02]
     min_upward = -1.0 if spawn_profile == "robocasa" else float(_MIN_UPWARD_CEILING_CLEARANCE_M)
     clearance_passes: tuple[tuple[float, str], ...] = (
         (0.045, "clear045"),
@@ -2407,14 +2382,10 @@ def find_planar_base_xyt(
                     continue
                 z_probe = float(z_floor) + 0.08
                 if min_upward >= 0.0:
-                    up_dist = upward_ray_hit_distance(
-                        model, data, x, y, z_probe, exclude_body_id=ray_exclude
-                    )
+                    up_dist = upward_ray_hit_distance(model, data, x, y, z_probe, exclude_body_id=ray_exclude)
                     if up_dist is not None and up_dist < min_upward:
                         continue
-                if horizontal_spawn_rejects_exterior_tongue(
-                    model, data, x, y, z_probe, exclude_body_id=ray_exclude
-                ):
+                if horizontal_spawn_rejects_exterior_tongue(model, data, x, y, z_probe, exclude_body_id=ray_exclude):
                     continue
                 worst = worst_robot_nonfloor_contact_dist(
                     model, data, base_body_name=base_body_name, floor_geom_name=floor_effective
