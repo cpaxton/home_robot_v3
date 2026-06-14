@@ -24,7 +24,7 @@ from typing import Any
 import numpy as np
 
 from emet.core.zmq_protocol import EMET_ZMQ_SESSION_KEY, read_emet_session
-from emet.utils.geometry import nav_xyt_to_world_xyt, xyt_base_to_global
+from emet.utils.geometry import nav_xyt_to_world_xyt
 
 _MAX_BODIES = 72
 
@@ -79,22 +79,21 @@ def apply_zmq_obs_to_mujoco_data(
 ) -> None:
     """Reset ``data.qpos`` to defaults, then fill from ZMQ-style ``gps``/``compass``/``joint``.
 
-    Free-joint robots: base free ``qpos`` from ``gps``/``compass`` composed with
-    ``navigation_origin_xyt``. Planar-base robots (no free joint): planar slide/yaw ``qpos`` from
-    episode-relative ``gps``/``compass`` only — **not** world ``joint[0:3]`` — so
-    ``world/robot`` (nav compose) is not double-applied. Arm/head joints replay from ``joint``.
+    Free-joint and planar-base robots: base ``qpos`` from episode-relative ``gps``/``compass``
+    only — **not** world ``joint[0:3]`` and not ``navigation_origin_xyt`` composed here — so
+    ``world/robot`` (nav compose via :meth:`log_robot_xyt`) is not double-applied. Arm/head joints
+    replay from ``joint``.
     """
     import mujoco
 
     data.qpos[:] = model.qpos0
     data.qvel[:] = 0.0
 
-    if nav_origin_slot[0] is None:
-        sess = obs_pose.get(EMET_ZMQ_SESSION_KEY)
-        if isinstance(sess, dict):
-            org = sess.get("navigation_origin_xyt")
-            if org is not None:
-                nav_origin_slot[0] = np.asarray(org, dtype=np.float64).reshape(-1)[:3].copy()
+    sess = obs_pose.get(EMET_ZMQ_SESSION_KEY)
+    if isinstance(sess, dict):
+        org = sess.get("navigation_origin_xyt")
+        if org is not None:
+            nav_origin_slot[0] = np.asarray(org, dtype=np.float64).reshape(-1)[:3].copy()
 
     if free_qadr is not None:
         qadr = free_qadr
@@ -102,13 +101,9 @@ def apply_zmq_obs_to_mujoco_data(
         comp = np.asarray(obs_pose.get("compass", np.zeros(1)), dtype=np.float64).ravel()
         theta = float(comp[0]) if comp.size else 0.0
         local_xyt = np.array([float(gps[0]), float(gps[1]), theta], dtype=np.float64)
-        if nav_origin_slot[0] is not None:
-            world_xyt = xyt_base_to_global(local_xyt, nav_origin_slot[0])
-        else:
-            world_xyt = local_xyt
         z0 = float(model.qpos0[qadr + 2])
-        qw, qx, qy, qz = _quat_wxyz_yaw(float(world_xyt[2]))
-        data.qpos[qadr : qadr + 3] = [float(world_xyt[0]), float(world_xyt[1]), z0]
+        qw, qx, qy, qz = _quat_wxyz_yaw(float(local_xyt[2]))
+        data.qpos[qadr : qadr + 3] = [float(local_xyt[0]), float(local_xyt[1]), z0]
         data.qpos[qadr + 3 : qadr + 7] = [qw, qx, qy, qz]
 
     planar_idx = None if free_qadr is not None else _planar_base_joint_indices(joint_names)

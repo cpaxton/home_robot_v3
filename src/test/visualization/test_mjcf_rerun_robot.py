@@ -274,3 +274,66 @@ def test_mjcf_visual_mesh_logger_galaxea_smoke():
     }
     log.log_meshes_world(rr, obs, entity_prefix="world/robot/mjcf_visual")
     assert log._geom_mesh_cache
+
+
+@pytest.mark.skipif(not _MJCF.is_file(), reason="galaxea_r1 MJCF not present")
+def test_galaxea_free_joint_qpos_is_episode_relative_at_spawn():
+    """Free-joint MJCF replay must not bake navigation_origin into qpos (world/robot composes)."""
+    mujoco = pytest.importorskip("mujoco")
+    import numpy as np
+
+    from emet.visualization.mjcf_rerun_robot import _base_freejoint_qadr
+
+    model = mujoco.MjModel.from_xml_path(str(_MJCF))
+    data = mujoco.MjData(model)
+    free_qadr = _base_freejoint_qadr(model, "base_link")
+    assert free_qadr is not None
+    nav_slot: list[np.ndarray | None] = [None]
+    obs = {
+        "gps": [0.0, 0.0],
+        "compass": [0.0],
+        "joint": [0.01] * 26,
+        EMET_ZMQ_SESSION_KEY: {"navigation_origin_xyt": [2.0, 3.0, 0.5]},
+    }
+    apply_zmq_obs_to_mujoco_data(
+        model,
+        data,
+        obs,
+        joint_names=tuple(R1_JOINT_NAMES),
+        dof=26,
+        base_link_name="base_link",
+        nav_origin_slot=nav_slot,
+        free_qadr=free_qadr,
+    )
+    mujoco.mj_forward(model, data)
+    xyt = _world_xyt_from_base_body(model, data, "base_link")
+    assert float(np.linalg.norm(xyt[:2])) < 0.02
+
+
+@pytest.mark.skipif(not _INNATE_MJCF.is_file(), reason="innate_mars MJCF not present")
+def test_nav_origin_slot_tracks_latest_session():
+    import numpy as np
+
+    mujoco = pytest.importorskip("mujoco")
+
+    model = mujoco.MjModel.from_xml_path(str(_INNATE_MJCF))
+    data = mujoco.MjData(model)
+    nav_slot: list[np.ndarray | None] = [np.array([1.0, 1.0, 0.0])]
+    obs = {
+        "gps": [0.0, 0.0],
+        "compass": [0.0],
+        "joint": [0.0] * len(INNATE_MARS_JOINT_NAMES),
+        EMET_ZMQ_SESSION_KEY: {"navigation_origin_xyt": [2.1, 3.2, 0.4]},
+    }
+    apply_zmq_obs_to_mujoco_data(
+        model,
+        data,
+        obs,
+        joint_names=tuple(INNATE_MARS_JOINT_NAMES),
+        dof=len(INNATE_MARS_JOINT_NAMES),
+        base_link_name="base_link",
+        nav_origin_slot=nav_slot,
+        free_qadr=None,
+    )
+    assert nav_slot[0] is not None
+    assert np.allclose(nav_slot[0], [2.1, 3.2, 0.4], atol=1e-9)

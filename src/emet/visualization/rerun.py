@@ -972,6 +972,7 @@ class RerunVisualizer:
         self._dynagraph_tick = 0
         self._mjcf_mesh_tick = 0
         self._zmq_step_tick = 0
+        self._sim_nav_ref_logged = False
 
         self.mjcf_skeleton = None
         self.mjcf_mesh_logger = None
@@ -1498,6 +1499,62 @@ class RerunVisualizer:
                 ),
             )
 
+    def log_sim_nav_reference_geometry(self, session: dict[str, Any] | None) -> None:
+        """Once per session: kitchen walkable clip + spawn origin (Robocasa has no scene mesh in Rerun)."""
+        if self._sim_nav_ref_logged or not isinstance(session, dict):
+            return
+        org = session.get("navigation_origin_xyt")
+        clip = session.get("nav_walkable_clip_eroded_xy")
+        if org is None and clip is None:
+            return
+        self._sim_nav_ref_logged = True
+        ox = oy = origin_theta = 0.0
+        if org is not None:
+            o = np.asarray(org, dtype=np.float64).reshape(-1)[:3]
+            ox, oy, origin_theta = float(o[0]), float(o[1]), float(o[2])
+            rr.log(
+                "world/sim_nav/spawn_origin",
+                rr.Points3D(
+                    positions=[[ox, oy, 0.08]],
+                    radii=0.18,
+                    colors=[[80, 200, 255, 255]],
+                    labels=["spawn / navigation_origin"],
+                ),
+                static=True,
+            )
+        if isinstance(clip, (list, tuple)) and len(clip) == 4:
+            x0, x1, y0, y1 = (float(clip[0]), float(clip[1]), float(clip[2]), float(clip[3]))
+            ring = np.array(
+                [
+                    [x0, y0, 0.02],
+                    [x1, y0, 0.02],
+                    [x1, y1, 0.02],
+                    [x0, y1, 0.02],
+                    [x0, y0, 0.02],
+                ],
+                dtype=np.float64,
+            )
+            rr.log(
+                "world/sim_nav/walkable_clip",
+                rr.LineStrips3D(
+                    strips=[ring],
+                    colors=[[120, 120, 120, 200]],
+                    radii=0.025,
+                ),
+                static=True,
+            )
+            logger.info(
+                "Rerun sim nav reference: navigation_origin=(%.2f, %.2f, %.2f) walkable_clip "
+                "x=[%.2f, %.2f] y=[%.2f, %.2f] (robot + voxels use this world frame; pan 3D view here)",
+                ox,
+                oy,
+                origin_theta,
+                x0,
+                x1,
+                y0,
+                y1,
+            )
+
     def log_robot_xyt(self, obs: Observations):
         """Log ``world/robot`` from ``gps``/``compass`` (+ ``navigation_origin_xyt`` when present).
 
@@ -1551,7 +1608,16 @@ class RerunVisualizer:
             return
         if obs["ee_pose"] is None:
             return
-        rot, trans = decompose_homogeneous_matrix(obs["ee_pose"])
+        pose = np.asarray(obs["ee_pose"], dtype=np.float64)
+        if pose.shape != (4, 4) or not np.all(np.isfinite(pose)):
+            self.clear_identity("world/ee")
+            return
+        # Robosuite ZMQ uses identity until EE FK is wired; skip so we do not show a second
+        # base-like frame at world origin while ``world/robot`` tracks the real base.
+        if np.allclose(pose, np.eye(4), atol=1e-4):
+            self.clear_identity("world/ee")
+            return
+        rot, trans = decompose_homogeneous_matrix(pose)
         rr.Arrows3D(origins=[0, 0, 0], vectors=[0.2, 0, 0], radii=0.02, labels="ee", colors=[0, 255, 0, 255])
         # log_to_rerun("world/ee/arrow", ee_arrow)
         rr.log("world/ee", rr.Transform3D(translation=trans, mat3x3=rot, axis_length=0.3))
@@ -2267,6 +2333,9 @@ class RerunVisualizer:
         rr.set_time_seconds("realtime", time.time())
         try:
             t0 = timeit.default_timer()
+            sess = read_emet_session(obs_pose)
+            if sess is not None:
+                self.log_sim_nav_reference_geometry(sess)
             self.log_robot_xyt(obs_pose)
             self.log_ee_frame(obs_pose)
 

@@ -514,6 +514,17 @@ class RobosuiteZmqServer(BaseZmqServer):
         if not guard_names and self._spec.planar_spawn_clip_guard_body_name:
             guard_names = (self._spec.planar_spawn_clip_guard_body_name,)
         guard_pad = float(self._spec.planar_spawn_clip_guard_pad_m)
+        spawn_hint: np.ndarray | None = None
+        env = self._environment_descriptor
+        if isinstance(env, dict):
+            raw_hint = env.get("spawn_hint_xyt")
+            if raw_hint is not None:
+                spawn_hint = np.asarray(raw_hint, dtype=np.float64).reshape(-1)[:3].copy()
+        if spawn_hint is None or int(spawn_hint.size) < 2:
+            spawn_hint = self.get_base_xyt().copy()
+        elif spawn_hint.size < 3:
+            cur = self.get_base_xyt()
+            spawn_hint = np.array([float(spawn_hint[0]), float(spawn_hint[1]), float(cur[2])], dtype=np.float64)
         try:
             placed = scene_base_spawn.find_planar_base_xyt(
                 self._mjmodel,
@@ -529,6 +540,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 clip_guard_body_names=guard_names,
                 clip_guard_pad_m=guard_pad,
                 robocasa_first_clearance_m=self._spec.planar_spawn_robocasa_first_clearance_m,
+                spawn_hint_xyt=spawn_hint,
             )
         except Exception as e:
             logger.warning(f"Robocasa planar autoplace skipped ({e!r}).")
@@ -538,9 +550,10 @@ class RobosuiteZmqServer(BaseZmqServer):
             return
         wx, wy, wt = placed
         self._planar_autoplace_world_xyt = np.array([float(wx), float(wy), float(wt)], dtype=np.float64)
+        hint_dxy = float(np.hypot(wx - float(spawn_hint[0]), wy - float(spawn_hint[1])))
         logger.info(
             f"Robocasa planar autoplace: moved base to x={wx:.3f} y={wy:.3f} theta={wt:.3f} "
-            f"(joints {joint_names!r}) for clearance from scene geometry."
+            f"(joints {joint_names!r}, Δxy from robosuite hint={hint_dxy:.3f}m) for clearance from scene geometry."
         )
         if self._debug_molmospaces_spawn:
             try:
