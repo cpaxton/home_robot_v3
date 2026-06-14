@@ -68,6 +68,9 @@ class EpisodeMetrics:
     eqa_action: str = ""
     eqa_confidence_reasoning: str = ""
     eqa_iterations: int = 0
+    # MCQ choice-rotation debias (dynagraph): letter before the vote + JSON vote detail.
+    predebias_letter: str = ""
+    debias_votes: str = ""
     frontier_nodes: int = 0
     graph_nodes: int = 0
     observations: int = 0
@@ -201,13 +204,25 @@ def append_episode_jsonl(path: Path, episode: EpisodeMetrics) -> None:
     write_episode_jsonl(path, [episode], append=True)
 
 
+def _eqa_produced_output(row: dict) -> bool:
+    """True when the VLM / EQA loop produced at least one answer artifact."""
+    if isinstance(row.get("eqa_iterations"), int) and row["eqa_iterations"] > 0:
+        return True
+    if (row.get("raw_eqa_output") or "").strip():
+        return True
+    if (row.get("parsed_answer_letter") or "").strip():
+        return True
+    return False
+
+
 def episode_run_completed(row: dict) -> bool:
     """True when an episode row represents a finished run (not a crash/OOM stub)."""
     if row.get("error"):
         return False
     steps = row.get("planning_steps")
     if isinstance(steps, int) and steps > 0:
-        return True
+        # Navigation-only rows (OOM during VLM load) must be retried on --resume.
+        return _eqa_produced_output(row)
     # Legacy rows without planning_steps: treat as done when no error field.
     return "planning_steps" not in row
 

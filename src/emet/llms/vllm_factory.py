@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 from emet.llms.base import AbstractVLLMClient
-from emet.llms.vllm_registry import default_hf_model_id, normalize_vl_family
+from emet.llms.vllm_registry import DEFAULT_QWEN3_VL_HF_MODEL_ID, default_hf_model_id, normalize_vl_family
 
 
 def create_dynamem_vllm(
@@ -40,8 +40,19 @@ def create_dynamem_vllm(
     if fam == "qwen3_vl":
         from emet.llms.qwen3_vl_client import Qwen3VLClient
 
-        mid = hf_model_id or default_hf_model_id("qwen3_vl") or "Qwen/Qwen3-VL-4B-Instruct"
+        mid = hf_model_id or default_hf_model_id("qwen3_vl") or DEFAULT_QWEN3_VL_HF_MODEL_ID
         return Qwen3VLClient(
+            prompt=prompt,
+            hf_model_id=mid,
+            max_tokens=max_tokens,
+            device=device,
+            quantization=quantization,
+        )
+    if fam == "qwen3_5":
+        from emet.llms.qwen3_5_client import Qwen35Client
+
+        mid = hf_model_id or default_hf_model_id("qwen3_5") or "Qwen/Qwen3.5-9B"
+        return Qwen35Client(
             prompt=prompt,
             hf_model_id=mid,
             max_tokens=max_tokens,
@@ -75,7 +86,8 @@ def create_dynamem_vllm(
             quantization=quantization,
         )
     raise ValueError(
-        f"Unknown vl_family {vl_family!r}; use qwen3_vl, qwen2_5_vl, or gemma4 (see dynav_config.yaml eqa:)."
+        f"Unknown vl_family {vl_family!r}; use qwen3_vl, qwen3_5, qwen2_5_vl, or gemma4 "
+        "(see dynav_config.yaml eqa:)."
     )
 
 

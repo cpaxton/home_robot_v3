@@ -8,6 +8,8 @@
 # license information maybe found below, if so.
 
 
+import os
+
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -17,6 +19,22 @@ from transformers import AutoModel, AutoProcessor, AutoTokenizer
 from emet.utils.logger import Logger, suppress_hf_hub_http_logging
 
 from .base_encoder import BaseImageTextEncoder
+
+# All SigLIP-family checkpoints are fixed-resolution (NOT naflex) and share the same
+# vision-tower API, so MaskSiglipEncoder's per-pixel head surgery applies to every entry.
+SIGLIP_CHECKPOINTS = {
+    # SigLIP 1
+    "base": "google/siglip-base-patch16-224",
+    "so400m": "google/siglip-so400m-patch14-384",
+    # SigLIP 2 (better text alignment + dense features)
+    "siglip2_base": "google/siglip2-base-patch16-224",
+    "siglip2_so400m": "google/siglip2-so400m-patch14-384",
+    # SigLIP 2 high-resolution variants (Siglip2Encoder registry names map here)
+    "siglip2_base_512": "google/siglip2-base-patch16-512",
+    "siglip2_large_512": "google/siglip2-large-patch16-512",
+    "siglip2_so400m_512": "google/siglip2-so400m-patch16-512",
+    "siglip2_giant": "google/siglip2-giant-opt-patch16-384",
+}
 
 logger = Logger(__name__)
 
@@ -37,6 +55,7 @@ class SiglipEncoder(BaseImageTextEncoder):
         device: str | None = None,
         version: str | None = None,
         feature_matching_threshold: float = 0.05,
+        dtype: str | None = None,
         **kwargs,
     ) -> None:
         suppress_hf_hub_http_logging()
@@ -46,21 +65,48 @@ class SiglipEncoder(BaseImageTextEncoder):
         self.normalize = normalize
         self.feature_matching_threshold = feature_matching_threshold
 
+        # Weight dtype: float32 (default), float16, or bfloat16. Halves VRAM
+        # (so400m: 3.5 GB -> 1.75 GB). All public outputs are cast back to fp32 so
+        # stored voxel features and similarity thresholds are unaffected.
+        # Do NOT use bitsandbytes int4/int8 here: MaskSiglipEncoder calls F.linear on
+        # raw weight tensors (head surgery), which packed quantized weights break.
+        if dtype is None:
+            dtype = os.environ.get("EMET_SIGLIP_DTYPE", "").strip().lower() or "float32"
+        valid_dtypes = {
+            "float32": torch.float32,
+            "float16": torch.float16,
+            "bfloat16": torch.bfloat16,
+        }
+        if dtype not in valid_dtypes:
+            raise ValueError(f"Invalid dtype {dtype}: must be one of {sorted(valid_dtypes)}")
+        self.torch_dtype = valid_dtypes[dtype]
+
         if version is None:
             version = "base"
 
-        if version == "base":
-            model_name = "google/siglip-base-patch16-224"
-        elif version == "so400m":
-            model_name = "google/siglip-so400m-patch14-384"
-        else:
-            raise ValueError(f"Invalid version {version}: must be one of 'base', 'so400m'")
+        if version not in SIGLIP_CHECKPOINTS:
+            raise ValueError(
+                f"Invalid version {version}: must be one of {sorted(SIGLIP_CHECKPOINTS)}"
+            )
+        model_name = SIGLIP_CHECKPOINTS[version]
 
         # Hub models ship as .safetensors; avoid legacy pytorch_model.bin resolution errors.
         _sf = {"use_safetensors": True}
         self.processor = AutoProcessor.from_pretrained(model_name, use_fast=False, **_sf)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name, **_sf).to(self.device)
+        self.model = AutoModel.from_pretrained(model_name, dtype=self.torch_dtype, **_sf).to(
+            self.device
+        )
+
+    def _to_model_inputs(self, inputs: dict) -> dict:
+        """Move inputs to the model device, casting float tensors to the weight dtype."""
+        out = {}
+        for k, v in inputs.items():
+            v = v.to(self.device)
+            if torch.is_floating_point(v):
+                v = v.to(self.torch_dtype)
+            out[k] = v
+        return out
 
     def encode_image(
         self,
@@ -80,8 +126,7 @@ class SiglipEncoder(BaseImageTextEncoder):
         #     logger.info("Encoding image", pil_image.size)
         # inputs = self.processor(images=pil_image, return_tensors="pt")
 
-        inputs = self.processor(images=image, return_tensors="pt")
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        inputs = self._to_model_inputs(self.processor(images=image, return_tensors="pt"))
         with torch.no_grad():
             out = self.model.get_image_features(**inputs)
         image_features = out.pooler_output if hasattr(out, "pooler_output") and out.pooler_output is not None else out
@@ -94,8 +139,7 @@ class SiglipEncoder(BaseImageTextEncoder):
     def encode_text(self, text: str) -> torch.Tensor:
         """Return feature vector for text"""
         # inputs = self.processor(text, return_tensors="pt")
-        inputs = self.tokenizer([text], padding="max_length", return_tensors="pt")
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        inputs = self._to_model_inputs(self.tokenizer([text], padding="max_length", return_tensors="pt"))
         with torch.no_grad():
             out = self.model.get_text_features(**inputs)
         text_features = out.pooler_output if hasattr(out, "pooler_output") and out.pooler_output is not None else out
@@ -115,8 +159,9 @@ class SiglipEncoder(BaseImageTextEncoder):
         pil_image = Image.fromarray(image)
 
         # Process image and text
-        inputs = self.processor(images=pil_image, text=text, return_tensors="pt", padding="max_length")
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        inputs = self._to_model_inputs(
+            self.processor(images=pil_image, text=text, return_tensors="pt", padding="max_length")
+        )
 
         # Evaluate model
         with torch.no_grad():
@@ -129,8 +174,7 @@ class SiglipEncoder(BaseImageTextEncoder):
     def encode_batch_text(self, texts: list[str]) -> torch.Tensor:
         """Return feature vector for text"""
         # inputs = self.processor(text, return_tensors="pt")
-        inputs = self.tokenizer(texts, padding="max_length", return_tensors="pt")
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        inputs = self._to_model_inputs(self.tokenizer(texts, padding="max_length", return_tensors="pt"))
         with torch.no_grad():
             out = self.model.get_text_features(**inputs)
         text_features = out.pooler_output if hasattr(out, "pooler_output") and out.pooler_output is not None else out
@@ -150,6 +194,7 @@ class MaskSiglipEncoder(SiglipEncoder):
         device: str | None = None,
         version: str | None = None,
         feature_matching_threshold: float = 0.12,
+        dtype: str | None = None,
     ) -> None:
         """
         Extract pixel-wise features from SIGLip model
@@ -159,6 +204,7 @@ class MaskSiglipEncoder(SiglipEncoder):
             device=device,
             version=version,
             feature_matching_threshold=feature_matching_threshold,
+            dtype=dtype,
         )
 
     def forward_one_block_(self, resblocks, x):
@@ -177,7 +223,8 @@ class MaskSiglipEncoder(SiglipEncoder):
         feat = self.forward_one_block_(self.model.vision_model.head.attention, feat)
         feat = self.model.vision_model.head.layernorm(feat)
         feat = feat + self.model.vision_model.head.mlp(feat)
-        feat = feat.detach().cpu()
+        # fp32 before CPU interpolate (half bilinear unsupported on CPU; voxel features stay fp32).
+        feat = feat.detach().cpu().float()
         with torch.no_grad():
             N, L, H, W = self.model.vision_model.embeddings.patch_embedding(x["pixel_values"]).shape
         feat = feat.reshape(N, H, W, L).permute(0, 3, 1, 2)
@@ -195,9 +242,9 @@ class MaskSiglipEncoder(SiglipEncoder):
             image: RGB image, shape [3, H1, W1]
             features: pixel-wise features, shape [H1, W1, 512]
         """
-        input = self.processor(images=image, padding="max_length", return_tensors="pt")
-        for i in input:
-            input[i] = input[i].to(self.device)
+        input = self._to_model_inputs(
+            self.processor(images=image, padding="max_length", return_tensors="pt")
+        )
         if image_shape is not None:
             if image.ndim == 3:
                 image = image.unsqueeze(0)
@@ -216,7 +263,7 @@ class MaskSiglipEncoder(SiglipEncoder):
             feat = self.forward_one_block_(self.model.vision_model.head.attention, feat)
             feat = self.model.vision_model.head.layernorm(feat)
             feat = feat + self.model.vision_model.head.mlp(feat)
-            feat = feat.detach().cpu()
+            feat = feat.detach().cpu().float()
             N, L, H, W = self.model.vision_model.embeddings.patch_embedding(x["pixel_values"]).shape
             feat = feat.reshape(N, H, W, L).permute(0, 3, 1, 2)
         features = []
@@ -227,7 +274,7 @@ class MaskSiglipEncoder(SiglipEncoder):
         return features
 
 
-_SHARED_MASK_SIGLIP: dict[tuple[str, str], "MaskSiglipEncoder"] = {}
+_SHARED_MASK_SIGLIP: dict[tuple[str, str, str], "MaskSiglipEncoder"] = {}
 
 
 def get_shared_mask_siglip_encoder(
@@ -240,12 +287,22 @@ def get_shared_mask_siglip_encoder(
     Batch runs (e.g. Habitat EQA) build a fresh controller per episode; without sharing,
     SigLIP weights would reload every episode (slow + VRAM churn). Mirrors the shared
     GraphEQA VLM client pattern.
+
+    ``EMET_SIGLIP_VERSION`` overrides *version* (e.g. ``siglip2_so400m``) so eval
+    scripts can A/B encoders without config edits.
     """
-    key = (version or "so400m", device or "cuda")
+    env_version = os.environ.get("EMET_SIGLIP_VERSION", "").strip()
+    if env_version:
+        version = env_version
+    dtype = os.environ.get("EMET_SIGLIP_DTYPE", "").strip().lower() or "float32"
+    key = (version or "so400m", device or "cuda", dtype)
     enc = _SHARED_MASK_SIGLIP.get(key)
     if enc is None:
         enc = MaskSiglipEncoder(
-            version=key[0], device=key[1], feature_matching_threshold=feature_matching_threshold
+            version=key[0],
+            device=key[1],
+            feature_matching_threshold=feature_matching_threshold,
+            dtype=dtype,
         )
         _SHARED_MASK_SIGLIP[key] = enc
     return enc

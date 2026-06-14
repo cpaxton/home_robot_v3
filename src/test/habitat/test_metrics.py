@@ -5,6 +5,7 @@
 from emet.habitat.metrics import (
     EpisodeMetrics,
     compare_method_results,
+    episode_run_completed,
     extract_mcq_letter,
     extract_mcq_letter_from_raw_eqa,
     grade_mcq_answer,
@@ -144,10 +145,19 @@ def test_compare_method_results():
     assert cmp["per_question"][0]["question_id"] == 0
 
 
+def test_episode_run_completed():
+    assert episode_run_completed({"planning_steps": 5, "eqa_iterations": 3})
+    assert episode_run_completed({"planning_steps": 56, "raw_eqa_output": "Answer:\nB"})
+    assert not episode_run_completed({"planning_steps": 56, "eqa_iterations": 0, "raw_eqa_output": ""})
+    assert not episode_run_completed({"planning_steps": 0, "error": "CUDA OOM"})
+    assert episode_run_completed({"correct": True})  # legacy row without planning_steps
+
+
 def test_read_completed_question_ids(tmp_path):
     path = tmp_path / "out.jsonl"
     path.write_text(
-        '{"question_id": 0, "correct": true, "planning_steps": 5}\n'
+        '{"question_id": 0, "correct": true, "planning_steps": 5, "eqa_iterations": 2}\n'
+        '{"question_id": 1, "correct": false, "planning_steps": 56, "eqa_iterations": 0}\n'
         '{"question_id": 2, "correct": false, "error": "CUDA OOM"}\n'
         '{"question_id": 3, "correct": false, "planning_steps": 0}\n',
         encoding="utf-8",

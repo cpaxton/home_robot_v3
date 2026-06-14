@@ -26,7 +26,7 @@ def test_qwen3_vl_minimal_generate():
     """Loads Qwen3-VL (tiny default or VLLM_LOAD_TEST_MODEL) and runs one text-only turn."""
     if not torch.cuda.is_available():
         pytest.skip("CUDA required for VLLM load smoke")
-    mid = os.environ.get("VLLM_LOAD_TEST_MODEL", "Qwen/Qwen3-VL-4B-Instruct")
+    mid = os.environ.get("VLLM_LOAD_TEST_MODEL", "Qwen/Qwen3-VL-8B-Instruct")
     from emet.llms.qwen3_vl_client import Qwen3VLClient
 
     client = Qwen3VLClient(

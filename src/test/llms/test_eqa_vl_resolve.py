@@ -49,6 +49,11 @@ def test_resolve_gemma_3_4b_low_tier():
     assert mid == "google/gemma-3-4b-it"
 
 
+def test_resolve_qwen3_vl_registry_default_8b():
+    mid = resolve_vl_hf_model_id("qwen3_vl", {}, device="cuda")
+    assert mid == "Qwen/Qwen3-VL-8B-Instruct"
+
+
 def test_resolve_qwen25_ignores_qwen3_config_id():
     mid = resolve_vl_hf_model_id(
         "qwen2_5_vl",

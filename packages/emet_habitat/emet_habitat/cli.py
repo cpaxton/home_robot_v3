@@ -30,6 +30,7 @@ from emet.habitat.config import (
 from emet.habitat.datasets import load_hmeqa_questions
 from emet.habitat.hmeqa_enrich_labels import HMEQA_PAPER_QUESTION_COUNT, hmeqa_paper_question_ids
 from emet.habitat.metrics import compare_method_results, summarize_episodes, write_episode_jsonl
+from emet.habitat.hm3d_semantics import compute_hmeqa_semantics_coverage, format_hmeqa_semantics_coverage_report
 
 
 @click.group()
@@ -56,6 +57,20 @@ def info_cmd() -> None:
     click.echo(f"HM3D_SCENE_DIR={default_hm3d_scene_dir()}")
     click.echo(f"questions.csv exists: {questions_csv_path().is_file()}")
     click.echo(f"scene_init_poses.csv exists: {scene_init_poses_csv_path().is_file()}")
+    if questions_csv_path().is_file():
+        try:
+            cov = compute_hmeqa_semantics_coverage()
+            click.echo(
+                "HM3D semantics (paper Q 0–112): "
+                f"{len(cov.questions_with_semantics)}/{cov.paper_question_count} questions, "
+                f"{len(cov.scenes_with_semantics)}/{cov.unique_paper_scenes} scenes "
+                f"(train annotated {cov.train_scenes_with_semantics}/{cov.train_scene_count})"
+            )
+            click.echo(
+                "  Report: uv run python scripts/download_habitat_eqa_data.py --report-hmeqa-semantics"
+            )
+        except FileNotFoundError:
+            pass
 
 
 def _eqa_cli_options(fn):
@@ -63,7 +78,7 @@ def _eqa_cli_options(fn):
         click.option(
             "--eqa-vl-family",
             default=None,
-            help="EQA VLM family: gemma4, qwen3_vl, qwen2_5_vl (default: dynav_config.yaml)",
+            help="EQA VLM family: qwen3_vl, qwen3_5, qwen2_5_vl, gemma4 (default: dynav_config.yaml eqa.vl_family)",
         ),
         click.option("--eqa-hf-model-id", default=None, help="Override HF model id (e.g. google/gemma-3-4b-it)"),
         click.option("--device", default="cuda", help="VLM device (cuda, cpu, mps)"),
@@ -252,7 +267,7 @@ def run_batch(
             hm3d_root=hm3d_root,
             questions_path=questions_path,
             init_poses_path=init_poses_path,
-            eqa_vl_family=eqa_vl_family or ("gemma4" if not mock_llm else None),
+            eqa_vl_family=eqa_vl_family,
             eqa_hf_model_id=eqa_hf_model_id,
             device=device,
             use_hm3d_semantics=use_hm3d_semantics,
@@ -320,7 +335,7 @@ def compare_batch(
             hm3d_root=hm3d_root,
             questions_path=questions_path,
             init_poses_path=init_poses_path,
-            eqa_vl_family=eqa_vl_family or ("gemma4" if not mock_llm else None),
+            eqa_vl_family=eqa_vl_family,
             eqa_hf_model_id=eqa_hf_model_id,
             device=device,
             use_hm3d_semantics=use_hm3d_semantics,

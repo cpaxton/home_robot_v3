@@ -5,8 +5,9 @@ Reproduce **GraphEQA-style** HM-EQA evaluation in Habitat-Sim while driving emet
 | Doc | Contents |
 |-----|----------|
 | [install.md](install.md) | `.venv-habitat`, micromamba, `habitat-sim` from `aihabitat-nightly` |
-| [data.md](data.md) | HM-EQA CSVs, HM3D downloads, Matterport API tokens, on-disk layout |
+| [data.md](data.md) | HM-EQA CSVs, HM3D downloads, **HM3D-Semantics**, Matterport API tokens, on-disk layout |
 | [usage.md](usage.md) | CLI, `emet run graph-eqa-habitat`, methods, tests |
+| [vlm_bakeoff.md](vlm_bakeoff.md) | VLM model bake-off reproduction (canonical-6, balanced-31) |
 | [troubleshooting.md](troubleshooting.md) | Common errors (missing GLB, unauthorized download, wrong paths) |
 
 **Engineering plan:** [docs/plans/HABITAT_EQA_HARNESS.md](../plans/HABITAT_EQA_HARNESS.md)  
@@ -32,6 +33,10 @@ uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d train
 # 4. Confirm question 0 scene is on disk
 uv run python scripts/download_habitat_eqa_data.py --verify-question 0
 uv run emet habitat info
+
+# 4b. HM3D-Semantics (GraphEQA sim perception — separate download)
+uv run python scripts/download_habitat_eqa_data.py --fetch-hm3d-semantics train
+uv run python scripts/download_habitat_eqa_data.py --report-hmeqa-semantics
 
 # 5. Smoke episode (mocked LLM; no API key)
 uv run emet run graph-eqa-habitat --mock-llm --question-id 0 --method dynagraph

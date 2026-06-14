@@ -15,24 +15,22 @@ uv run emet habitat run-episode --question-id 0 --method dynagraph --mock-llm
 # Smoke (mocked LLM)
 uv run emet run graph-eqa-habitat --dataset hmeqa --question-id 0 --mock-llm
 
-# GraphEQA with local Gemma int4 (GPU). ``--eqa-vl-family gemma4`` auto-picks
-# ``google/gemma-4-e2b-it`` when VRAM allows (best HM-EQA stability so far).
-# Opt into E4B with ``EMET_EQA_GEMMA_E4B=1`` or ``--eqa-hf-model-id google/gemma-4-E4B-it``.
+# GraphEQA with local Qwen3-VL-8B int4 (GPU). Defaults come from ``dynav_config.yaml``
+# (``eqa.vl_family: qwen3_vl``, ``Qwen/Qwen3-VL-8B-Instruct``). Override with
+# ``--eqa-vl-family`` / ``--eqa-hf-model-id`` for ablations.
 uv run emet run graph-eqa-habitat \
   --method graph_eqa \
   --question-id 0 \
   --max-planning-steps 20 \
-  --eqa-vl-family gemma4 \
   --device cuda
 
-# HM-EQA paper batch (113 questions, indices 0–112; ~2h on 4090 with gemma-3-4b-it)
+# HM-EQA paper batch (113 questions, indices 0–112; budget depends on GPU)
 .venv-habitat/bin/emet-habitat run-batch \
   --method graph_eqa \
   --paper-subset \
-  --eqa-vl-family gemma4 \
   --device cuda \
   --resume \
-  --output ~/.cache/habitat_eqa/results/graph_eqa_gemma3_paper.jsonl
+  --output ~/.cache/habitat_eqa/results/graph_eqa_qwen3_vl8b_paper.jsonl
 
 # Full Explore-EQA CSV (500 questions) — use only if you need the extended set
 # .venv-habitat/bin/emet-habitat run-batch --all-questions --question-end 499 ...

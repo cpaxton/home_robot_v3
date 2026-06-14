@@ -26,7 +26,10 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md).
 | `SQA3D_MIN_FREE_MIB` | `scripts/run_sqa3d_gpu_sweep.sh` | Minimum free GPU MiB before starting a sweep (default `14000`). See [sqa3d_compute.md](sqa3d_compute.md). |
 | `SQA3D_SCANNET_TEST_SCENE` | pytest `test_scannet_embodied_smoke` | Scene id for integration smoke (default `scene0380_00`). |
 | `RUN_SQA3D_SCANNET_TESTS` | pytest | Set `1` to run embodied ScanNet integration smoke when mesh may be missing. |
-| `EMET_EQA_VL_MODEL_SIZE` | EQA / GraphEQA VLM load | Override `eqa_vl.model_size` in `dynav_config.yaml` (e.g. `4B`, `9B`). |
+| `EMET_EQA_VL_MODEL_SIZE` | EQA / GraphEQA VLM load | Override `eqa_vl.model_size` in `dynav_config.yaml` (legacy Qwen3.5 path; default EQA uses `eqa.vl_hf_model_id` **Qwen/Qwen3-VL-8B-Instruct** int4). |
+| `EMET_SIGLIP_VERSION` | `get_shared_mask_siglip_encoder` (voxel map / dynagraph grounding) | Override the SigLIP checkpoint: `base`, `so400m` (default), `siglip2_base`, `siglip2_so400m`. A/B encoder upgrades without config edits. |
+| `EMET_SIGLIP_DTYPE` | `SiglipEncoder` / `MaskSiglipEncoder` weight load | `float32` (default), `float16`, or `bfloat16`. Halves SigLIP VRAM (so400m: 3.5 GB → 1.75 GB); outputs are cast back to fp32 so stored features/thresholds are unchanged. int4/int8 unsupported (breaks the MaskSiglip head surgery). |
+| `EMET_VLM_FRONTIER_SCORING` | Dynagraph EQA exploration (`controller_graph_eqa.py`) | Set `1` to let the EQA VLM pick the exploration frontier from candidate views (<=6 images/iteration) before the SigLIP-nearest heuristic. Only active in the dynagraph coverage-override path (`_eqa_explore_when_uncovered`); baseline `graph_eqa` is unaffected. Default off. |
 | `PYTORCH_CUDA_ALLOC_CONF` | PyTorch CUDA | Optional allocator hint (e.g. `expandable_segments:True`); set by `run_sqa3d_gpu_sweep.sh` if unset. |
 
 ## ZMQ and simulation (general)

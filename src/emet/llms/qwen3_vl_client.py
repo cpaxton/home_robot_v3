@@ -37,7 +37,17 @@ logger = logging.getLogger(__name__)
 
 
 class Qwen3VLClient(AbstractVLLMClient):
-    """Qwen3-VL multimodal client (same message contract as Qwen25VLClient)."""
+    """Qwen3-VL multimodal client (same message contract as Qwen25VLClient).
+
+    Subclass hooks (see ``Qwen35Client``): ``_MODEL_CLS`` swaps the HF model class,
+    ``_FAMILY_KEY`` namespaces ``canonical_model_key``, ``_TEMPLATE_KWARGS`` is forwarded
+    to ``apply_chat_template`` (e.g. ``enable_thinking=False``), and
+    ``_postprocess_output`` cleans raw decodes.
+    """
+
+    _MODEL_CLS: type = Qwen3VLForConditionalGeneration
+    _FAMILY_KEY: str = "qwen3_vl"
+    _TEMPLATE_KWARGS: dict[str, Any] = {}
 
     def __init__(
         self,
@@ -127,7 +137,7 @@ class Qwen3VLClient(AbstractVLLMClient):
             pretrained_kw["device_map"] = "mps"
 
         try:
-            self.model = Qwen3VLForConditionalGeneration.from_pretrained(model_name, **pretrained_kw)
+            self.model = self._MODEL_CLS.from_pretrained(model_name, **pretrained_kw)
         except (ValueError, RuntimeError) as e:
             err = str(e).lower()
             recoverable = device == "cuda" and (
@@ -154,7 +164,7 @@ class Qwen3VLClient(AbstractVLLMClient):
                 "torch_dtype": torch.bfloat16,
                 "attn_implementation": attn_implementation,
             }
-            self.model = Qwen3VLForConditionalGeneration.from_pretrained(model_name, **fallback_kw)
+            self.model = self._MODEL_CLS.from_pretrained(model_name, **fallback_kw)
             self.model = self.model.to("cpu")
         else:
             if device == "cpu":
@@ -173,7 +183,11 @@ class Qwen3VLClient(AbstractVLLMClient):
     @property
     def canonical_model_key(self) -> str:
         q = self._quantization or "none"
-        return f"qwen3_vl:{self._resolved_hf_model_id}:{self._device}:{q}"
+        return f"{self._FAMILY_KEY}:{self._resolved_hf_model_id}:{self._device}:{q}"
+
+    def _postprocess_output(self, text: str) -> str:
+        """Hook for subclasses to clean raw decoded output (default: passthrough)."""
+        return text
 
     def _process_input(self, command: Any) -> Any:
         if isinstance(command, str):
@@ -218,7 +232,9 @@ class Qwen3VLClient(AbstractVLLMClient):
             print("Qwen3-VL messages (truncated):", str(messages)[:800])
 
         t0 = timeit.default_timer()
-        text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        text = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True, **self._TEMPLATE_KWARGS
+        )
         image_inputs, video_inputs = process_vision_info(messages)
         inputs = self.processor(
             text=[text],
@@ -243,9 +259,11 @@ class Qwen3VLClient(AbstractVLLMClient):
         generated_ids_trimmed = [
             out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids, strict=False)
         ]
-        output_text = self.processor.batch_decode(
-            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )[0]
+        output_text = self._postprocess_output(
+            self.processor.batch_decode(
+                generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+            )[0]
+        )
 
         self.add_history({"role": "assistant", "content": output_text})
         t1 = timeit.default_timer()

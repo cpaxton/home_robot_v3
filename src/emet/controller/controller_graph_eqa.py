@@ -18,6 +18,9 @@
 # (https://arxiv.org/abs/2412.14480).
 
 
+import os
+import re
+
 import numpy as np
 from PIL import Image
 
@@ -28,6 +31,17 @@ from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
 from emet.memory.graph_eqa.instance_observations import (
     DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M,
 )
+
+
+def _parse_image_pick(reply: str, n_candidates: int) -> int | None:
+    """Parse a 1-based 'Image N' pick from a terse VLM reply; None when out of range."""
+    m = re.search(r"\d+", reply or "")
+    if not m:
+        return None
+    idx = int(m.group())
+    if 1 <= idx <= n_candidates:
+        return idx - 1
+    return None
 
 
 class GraphEQAController(DynamemController):
@@ -130,6 +144,12 @@ class GraphEQAController(DynamemController):
         # coverage override) stay OFF here so this controller is a clean baseline. The
         # DynagraphController turns them on.
         self._eqa_explore_when_uncovered = False
+        # Experiment flag: let the EQA VLM pick the exploration frontier from candidate
+        # views (instead of the SigLIP-nearest heuristic). Off by default for both
+        # controllers; enable per-run with EMET_VLM_FRONTIER_SCORING=1.
+        self._vlm_frontier_scoring = os.environ.get(
+            "EMET_VLM_FRONTIER_SCORING", ""
+        ).strip().lower() in ("1", "true", "yes", "on")
 
     def _siglip_text_match(self, text: str) -> tuple[float, np.ndarray] | None:
         """Open-vocab visual grounding via the voxel map's SigLIP features.
@@ -202,6 +222,49 @@ class GraphEQAController(DynamemController):
             if fr is not None:
                 return np.array([float(fr[0]), float(fr[1]), 1.0], dtype=float)
         return None
+
+    def _vlm_frontier_choice(self, question: str) -> np.ndarray | None:
+        """Ask the EQA VLM which frontier view most likely leads to the question objects.
+
+        Uses actual reasoning over candidate frontier images (<=6) instead of the
+        SigLIP-nearest heuristic. Returns a nav waypoint ``[x, y, 1.0]`` or ``None``
+        (no frontiers, no client, or unparseable reply).
+        """
+        gm = getattr(self, "graph_memory", None)
+        if gm is None or gm.eqa_client is None:
+            return None
+        candidates = []
+        for n in gm.get_nodes():
+            if not getattr(n, "is_frontier", False):
+                continue
+            obs = gm._observation_by_id(int(n.obs_id))
+            if obs is None or obs.rgb is None:
+                continue
+            candidates.append((n, obs))
+            if len(candidates) >= 6:
+                break
+        if not candidates:
+            return None
+        lines = [
+            f"Image {i}: unexplored direction at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f})"
+            for i, (n, _obs) in enumerate(candidates, start=1)
+        ]
+        directive = (
+            "You are exploring a home to answer a question. Each image shows an "
+            "unexplored direction. Which image is most likely to lead to what the "
+            "question asks about? Reply with ONLY the image number.\n"
+            f"Question: {question}\n" + "\n".join(lines)
+        )
+        images = [Image.fromarray(obs.rgb.astype(np.uint8), mode="RGB") for _n, obs in candidates]
+        try:
+            reply = gm.eqa_client([directive, *images])
+        except Exception:
+            return None
+        pick = _parse_image_pick(reply, len(candidates))
+        if pick is None:
+            return None
+        node = candidates[pick][0]
+        return np.array([float(node.xyz[0]), float(node.xyz[1]), 1.0], dtype=float)
 
     def _graph_dedup_skips(self, label: str, xyz: np.ndarray) -> bool:
         """Skip adding a node if we already have the same label near this XY (v1 merge)."""
@@ -321,9 +384,12 @@ class GraphEQAController(DynamemController):
             except Exception:
                 covered = True
             if not covered:
-                # SigLIP-guided exploration first (toward visually-similar regions), then
+                # VLM frontier pick (experiment, EMET_VLM_FRONTIER_SCORING=1), then
+                # SigLIP-guided exploration (toward visually-similar regions), then
                 # the keyword-matched frontier-node heuristic.
-                frontier_pt = self._siglip_guided_frontier(question)
+                frontier_pt = self._vlm_frontier_choice(question) if self._vlm_frontier_scoring else None
+                if frontier_pt is None:
+                    frontier_pt = self._siglip_guided_frontier(question)
                 if frontier_pt is None:
                     frontier_pt = self._best_frontier_point_from_graph(question)
                 if frontier_pt is not None:

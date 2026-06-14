@@ -19,9 +19,9 @@ Maintainer runbook: \texttt{docs/paper\_benchmarks.md} (commands, output paths, 
 Shared backend names (\texttt{src/emet/eval/memory\_backends.py}):
 
 \begin{itemize}
-  \item \textbf{\texttt{dynamem}:} voxel semantic memory + EQA (no graph merge/staleness).
+  \item \textbf{\texttt{dynamem}:} voxel semantic memory (+ optional EQA on SQA3D); no graph merge/staleness.
   \item \textbf{\texttt{graph\_eqa}:} GraphEQA graph only; merge and staleness disabled (\texttt{emet run graph-eqa}; OVMM / ablations).
-  \item \textbf{\texttt{dynagraph}:} voxel + graph with default merge/staleness (\texttt{emet run dynagraph}).
+  \item \textbf{\texttt{dynagraph}:} voxel + graph with merge/staleness; profile chosen per harness (below; \texttt{emet run dynagraph}).
   \item \textbf{\texttt{ground\_truth}:} sim oracle graph from \texttt{sim\_object\_placements} (OVMM / GT finding upper bound).
   \item \textbf{Ablations:} \texttt{--merge-xy-m 0}; \texttt{--staleness-horizon 0}; HM-EQA \textbf{frontier policy} (fluid voxel sampler vs.\ graph frontier nodes; Appendix~\ref{app:habitat_eqa_parity}); OK-Robot-style static prescanned map (optional).
   \item \textbf{DynaMem voxel-only EQA} and \textbf{VLM-only} baselines where applicable.
