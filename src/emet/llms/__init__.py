@@ -215,7 +215,7 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
             eqa_cfg = {}
         vl_family = str(eqa_cfg.get("vl_family", "gemma4") or "gemma4").strip()
         hf_id = eqa_cfg.get("vl_hf_model_id")
-        vl_sz = str(eqa_cfg.get("vl_model_size", "4B") or "4B")
+        vl_sz = str(eqa_cfg.get("vl_model_size", "8B") or "8B")
         vl_tok = int(eqa_cfg.get("vl_max_tokens", 512) or 512)
         vl_q = eqa_cfg.get("vl_quantization", "int4")
         dev = str(kwargs.get("device", "cuda"))
@@ -262,7 +262,7 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
             eqa_cfg = {}
         vl_family = str(eqa_cfg.get("vl_family", "qwen3_vl") or "qwen3_vl").strip()
         hf_id = eqa_cfg.get("vl_hf_model_id")
-        vl_sz = str(eqa_cfg.get("vl_model_size", "4B") or "4B")
+        vl_sz = str(eqa_cfg.get("vl_model_size", "8B") or "8B")
         vl_tok = int(eqa_cfg.get("vl_max_tokens", 512) or 512)
         vl_q = eqa_cfg.get("vl_quantization", "int4")
         dev = str(kwargs.get("device", "cuda"))

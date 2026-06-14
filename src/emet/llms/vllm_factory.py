@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 from emet.llms.base import AbstractVLLMClient
-from emet.llms.vllm_registry import default_hf_model_id, normalize_vl_family
+from emet.llms.vllm_registry import DEFAULT_QWEN3_VL_HF_MODEL_ID, default_hf_model_id, normalize_vl_family
 
 
 def create_dynamem_vllm(
@@ -40,7 +40,7 @@ def create_dynamem_vllm(
     if fam == "qwen3_vl":
         from emet.llms.qwen3_vl_client import Qwen3VLClient
 
-        mid = hf_model_id or default_hf_model_id("qwen3_vl") or "Qwen/Qwen3-VL-4B-Instruct"
+        mid = hf_model_id or default_hf_model_id("qwen3_vl") or DEFAULT_QWEN3_VL_HF_MODEL_ID
         return Qwen3VLClient(
             prompt=prompt,
             hf_model_id=mid,

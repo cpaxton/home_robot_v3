@@ -19,6 +19,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+# HM-EQA bake-off winner on a single 24 GB GPU (canonical-6, Dynagraph + debias).
+DEFAULT_QWEN3_VL_HF_MODEL_ID = "Qwen/Qwen3-VL-8B-Instruct"
+
 
 @dataclass(frozen=True)
 class VLLMRegistryEntry:
@@ -38,7 +41,7 @@ class VLLMRegistryEntry:
 SUPPORTED_VLLMS: dict[str, VLLMRegistryEntry] = {
     "qwen3_vl": VLLMRegistryEntry(
         family_key="qwen3_vl",
-        default_hf_model_id="Qwen/Qwen3-VL-4B-Instruct",
+        default_hf_model_id=DEFAULT_QWEN3_VL_HF_MODEL_ID,
         supports_dedup=True,
     ),
     "qwen3_5": VLLMRegistryEntry(

@@ -141,7 +141,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         run_eqa=False,
         parameters: Parameters | dict | None = None,
         eqa_backend: str = "qwen_vl",
-        eqa_vl_model_size: str = "3B",
+        eqa_vl_model_size: str = "8B",
         eqa_vl_max_tokens: int = 512,
         eqa_vl_quantization: str | None = "int4",
         eqa_vl_hf_model_id: str | None = None,
@@ -216,7 +216,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
         self._eqa_backend = str(_eqa_cfg.get("backend", eqa_backend) or "qwen_vl").strip().lower()
         self._vl_family = str(_eqa_cfg.get("vl_family", vl_family) or "qwen3_vl").strip().lower()
-        eqa_ms = str(_eqa_cfg.get("vl_model_size", eqa_vl_model_size) or "3B")
+        eqa_ms = str(_eqa_cfg.get("vl_model_size", eqa_vl_model_size) or "8B")
         eqa_hf = _eqa_cfg.get("vl_hf_model_id", eqa_vl_hf_model_id)
         eqa_quant = _eqa_cfg.get("vl_quantization", eqa_vl_quantization)
         gemini_m = str(_eqa_cfg.get("gemini_model", gemini_model) or "gemini-2.5-flash")

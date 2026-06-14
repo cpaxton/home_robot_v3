@@ -73,7 +73,10 @@ def test_normalize_vl_family_aliases():
 
 
 def test_default_hf_model_id_known_families():
-    assert "Qwen3" in (default_hf_model_id("qwen3_vl") or "")
+    from emet.llms.vllm_registry import DEFAULT_QWEN3_VL_HF_MODEL_ID
+
+    assert default_hf_model_id("qwen3_vl") == DEFAULT_QWEN3_VL_HF_MODEL_ID
+    assert "8B" in (default_hf_model_id("qwen3_vl") or "")
     assert default_hf_model_id("gemma4") is not None
 
 

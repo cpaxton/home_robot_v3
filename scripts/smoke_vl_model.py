@@ -21,7 +21,7 @@ def main() -> int:
     client = create_dynamem_vllm(
         family,
         hf_model_id=hf_id,
-        vl_model_size="3B",
+        vl_model_size="8B",
         max_tokens=32,
         device="cuda",
         quantization=quant,

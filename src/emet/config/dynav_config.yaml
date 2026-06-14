@@ -43,17 +43,18 @@ da3_stereo: false
 # da3_torch_compile: false  # experimental
 # --- Quality-first overrides (slower): ``da3_model_id: depth-anything/DA3METRIC-LARGE``, ``da3_process_res: 504``, ``da3_stereo: true``, ``da3_infer_every_n: 1``.
 
-# EQA (memory Q&A when using emet run agent --eqa). Default: local Qwen3-VL (one load for captions + EQA).
-# vl_family: qwen3_vl | qwen3_5 | qwen2_5_vl | gemma4 — set vl_hf_model_id to override the default checkpoint.
+# EQA (memory Q&A when using emet run agent --eqa / dynagraph / graph-eqa-habitat).
+# Default: Qwen3-VL-8B int4 (HM-EQA bake-off winner on 24 GB GPU; see docs/habitat/vlm_bakeoff.md).
+# vl_family: qwen3_vl | qwen3_5 | qwen2_5_vl | gemma4 — set vl_hf_model_id to override the checkpoint.
 # qwen3_5 = natively-multimodal Qwen3.5 (default Qwen/Qwen3.5-9B, thinking disabled).
-# Agent: ``--llm gemma4-vl-eqa --eqa`` uses eqa.vl_family (default gemma4 checkpoint: google/gemma-4-E4B-it).
+# Agent: ``--llm qwen3-vl-eqa --eqa`` or ``--llm gemma4-vl-eqa --eqa`` override vl_family via agent YAML.
 eqa:
   backend: qwen_vl
   vl_family: qwen3_vl
-  vl_model_size: 3B
+  vl_model_size: 8B
   vl_max_tokens: 512
   vl_quantization: int4
-  vl_hf_model_id: Qwen/Qwen3-VL-4B-Instruct
+  vl_hf_model_id: Qwen/Qwen3-VL-8B-Instruct
   # Gemma int4 VRAM tiers (nvidia-smi memory.free MiB) when vl_hf_model_id unset and vl_family=gemma4
   vram_mib_tier_gemma_e4b: 12000
   vram_mib_tier_gemma_e2b: 7000

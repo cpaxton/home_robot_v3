@@ -466,7 +466,7 @@ class DynamemController(BaseController):
             run_eqa=self.eqa,
             device=self.device,
             eqa_backend=_eqa.get("backend", "qwen_vl"),
-            eqa_vl_model_size=_eqa.get("vl_model_size", "3B"),
+            eqa_vl_model_size=_eqa.get("vl_model_size", "8B"),
             eqa_vl_max_tokens=int(_eqa.get("vl_max_tokens", 512)),
             eqa_vl_quantization=_eqa.get("vl_quantization", "int4"),
             eqa_vl_hf_model_id=_eqa.get("vl_hf_model_id"),

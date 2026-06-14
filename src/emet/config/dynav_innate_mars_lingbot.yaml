@@ -43,10 +43,10 @@ da3_stereo: false
 eqa:
   backend: qwen_vl
   vl_family: qwen3_vl
-  vl_model_size: 3B
+  vl_model_size: 8B
   vl_max_tokens: 512
   vl_quantization: int4
-  vl_hf_model_id: Qwen/Qwen3-VL-4B-Instruct
+  vl_hf_model_id: Qwen/Qwen3-VL-8B-Instruct
   gemini_model: gemini-2.5-flash
 
 detection:

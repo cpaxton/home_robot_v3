@@ -99,7 +99,7 @@ def main(images, family, hf_id, quant, target, out, self_test):
     from emet.llms.vllm_factory import create_dynamem_vllm
 
     client = create_dynamem_vllm(
-        family, hf_model_id=hf_id, vl_model_size="3B", max_tokens=256, device="cuda", quantization=quant
+        family, hf_model_id=hf_id, vl_model_size="8B", max_tokens=256, device="cuda", quantization=quant
     )
     out_dir = Path(out)
     out_dir.mkdir(parents=True, exist_ok=True)
