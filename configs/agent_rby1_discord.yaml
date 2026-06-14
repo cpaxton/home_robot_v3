@@ -24,7 +24,7 @@
 #     # optional: EMET_DISCORD_CHANNEL names the channel the bot listens on (default channel name is talk-to-stretch)
 #     uv run emet run agent --agent-config configs/agent_rby1_discord.yaml --rerun
 #     # (``robot: rby1`` in this file replaces ``--robot rby1`` when the flag is omitted.)
-#     uv run emet run agent --robot rby1 --llm qwen35-9B --device cuda --max-tokens 1024 \
+#     uv run emet run agent --robot rby1 --device cuda --max-tokens 1024 \
 #       --agent-config configs/agent_rby1_discord.yaml
 #     # Use --no-discord to skip the Discord bridge; default is to start it when DISCORD_TOKEN is set.
 #     # Vision LLM: e.g. --llm qwen35-vl-9B (camera on by default; use --no-vl-camera to disable)

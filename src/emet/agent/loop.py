@@ -47,6 +47,9 @@ from emet.utils.vram_debug import print_vram_snapshot
 
 logger = Logger(__name__)
 
+# One Qwen3-VL-8B int4 for chat + camera; with --eqa + --share-memory-vllm, DynaMem reuses the same load.
+DEFAULT_AGENT_LLM = "qwen3-vl-eqa"
+
 # Maximum follow-up LLM calls per user turn (prevents infinite loops)
 _MAX_TOOL_ROUNDS = 3
 
@@ -252,7 +255,7 @@ def run_agent_with_robot(
     input_path: str | None = None,
     discord: bool = True,
     use_llm: bool = False,
-    llm: str = "qwen35-9B",
+    llm: str = DEFAULT_AGENT_LLM,
     server_ip: str = "127.0.0.1",
     skip_confirmations: bool = True,
     explore_iter: int = 3,
@@ -360,10 +363,10 @@ def run_agent_with_robot(
     if eqa:
         print(
             colored(
-                "EQA/DynaMem: SigLIP, optional SAM3/DINO, and GraphEQA Qwen3.5-VL load lazily on the first "
-                "robot update—separate HF checkpoints from text --llm (each loads once per process). "
-                "VRAM milestones: EMET_VRAM_DEBUG=1 or --debug-vram (with --debug-models). "
-                "One Qwen3-VL for agent+captions: --llm qwen3-vl-eqa --eqa --share-memory-vllm.",
+                "EQA/DynaMem: SigLIP, optional SAM3/DINO, and (unless --share-memory-vllm) a separate "
+                "Qwen3-VL-8B int4 from dynav_config.yaml eqa: load lazily on the first robot update. "
+                "Default --llm qwen3-vl-eqa + --share-memory-vllm reuses one VLM for chat and captions. "
+                "VRAM milestones: EMET_VRAM_DEBUG=1 or --debug-vram (with --debug-models).",
                 "cyan",
             )
         )
@@ -459,7 +462,7 @@ def run_agent_with_robot(
                 pre = cuda_pre_llm_memory_notice(device=device)
                 if pre:
                     print(colored(pre, "yellow"), flush=True)
-                if "9b" in llm.lower():
+                if "9b" in llm.lower() or "8b" in llm.lower() or "vl-eqa" in llm.lower():
                     try:
                         from emet.utils.vram_debug import torch_cuda_alloc_reserved_gib
 
@@ -467,9 +470,9 @@ def run_agent_with_robot(
                         if a is not None and a > 10.0:
                             print(
                                 colored(
-                                    f"Heavy VRAM use (~{a:.1f} GiB torch) before chat LLM; "
-                                    "`--llm qwen35-9B` may CUDA-OOM on a single 24GB GPU with SigLIP/detector. "
-                                    "Prefer `--llm qwen35-4B` (default) or free GPU memory.",
+                                    f"Heavy VRAM use (~{a:.1f} GiB torch) before chat VLM; "
+                                    f"`--llm {llm}` may CUDA-OOM on a single 24GB GPU with SigLIP/detector. "
+                                    "Prefer `--llm qwen35-4B` (text-only) or free GPU memory.",
                                     "yellow",
                                 ),
                                 flush=True,
