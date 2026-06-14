@@ -156,3 +156,12 @@ def test_robocasa_wizard_matches_emet_serve():
     assert isinstance(scene_xml, str)
     assert len(scene_xml) > 100
     assert isinstance(objects_info, dict)
+    hint = objects_info.get("_emet_spawn_hint_xyt")
+    assert hint is not None and len(hint) == 3
+    bid = mujoco.mj_name2id(scene_model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+    if bid >= 0:
+        data = mujoco.MjData(scene_model)
+        mujoco.mj_forward(scene_model, data)
+        pos = data.body(bid).xpos[:2]
+        assert abs(float(pos[0]) - float(hint[0])) < 0.05
+        assert abs(float(pos[1]) - float(hint[1])) < 0.05
