@@ -107,6 +107,17 @@ def _frontier_cli_options(fn):
     return fn
 
 
+def _diagnostics_cli_options(fn):
+    opts = [
+        click.option("--export-map/--no-export-map", default=None, help="Write topdown_map.png per episode"),
+        click.option("--export-video/--no-export-video", default=None, help="Write episode_rgb.mp4 per episode"),
+        click.option("--map-stride", default=None, type=int, help="Save maps/step_NNNN.png every N updates"),
+    ]
+    for opt in reversed(opts):
+        fn = opt(fn)
+    return fn
+
+
 @main.command("run-episode")
 @click.option("--dataset", type=click.Choice(["hmeqa"]), default="hmeqa")
 @click.option("--question-id", default=0, type=int)
@@ -125,6 +136,7 @@ def _frontier_cli_options(fn):
 )
 @_frontier_cli_options
 @_eqa_cli_options
+@_diagnostics_cli_options
 def run_episode(
     dataset: str,
     question_id: int,
@@ -142,6 +154,9 @@ def run_episode(
     device: str,
     frontier_nodes: bool | None,
     frontier_keyword_weight: float | None,
+    export_map: bool | None,
+    export_video: bool | None,
+    map_stride: int | None,
 ) -> None:
     """Run one HM-EQA episode in Habitat-Sim."""
     if dataset != "hmeqa":
@@ -169,6 +184,11 @@ def run_episode(
             device=device,
             frontier_nodes_enabled=frontier_nodes,
             frontier_keyword_weight=frontier_keyword_weight,
+            debug_run_tag=f"cli_episode_q{question_id:04d}",
+            save_debug_bundle=True,
+            export_map=export_map,
+            export_video=export_video,
+            map_stride=map_stride,
         )
     except FileNotFoundError as exc:
         raise click.ClickException(
@@ -217,6 +237,7 @@ def run_episode(
 )
 @_frontier_cli_options
 @_eqa_cli_options
+@_diagnostics_cli_options
 def run_batch(
     method: str,
     question_start: int,
@@ -236,6 +257,9 @@ def run_batch(
     device: str,
     frontier_nodes: bool | None,
     frontier_keyword_weight: float | None,
+    export_map: bool | None,
+    export_video: bool | None,
+    map_stride: int | None,
 ) -> None:
     """Run a slice of HM-EQA (GraphEQA paper: 113 questions, method=graph_eqa)."""
     from emet_habitat.runner import run_hmeqa_batch
@@ -275,6 +299,9 @@ def run_batch(
             resume=resume,
             frontier_nodes_enabled=frontier_nodes,
             frontier_keyword_weight=frontier_keyword_weight,
+            export_map=export_map,
+            export_video=export_video,
+            map_stride=map_stride,
         )
     except FileNotFoundError as exc:
         raise click.ClickException(str(exc)) from exc
@@ -447,6 +474,9 @@ def run_ovmm_find_episode(
 @click.option("--hm3d-root", type=click.Path(path_type=Path), default=None)
 @click.option("--data-dir", type=click.Path(path_type=Path), default=None)
 @click.option("--output-dir", type=click.Path(path_type=Path), required=True)
+@click.option("--run-tag", default=None, help="Episode bundle tag under ~/.cache/habitat_eqa/episodes/")
+@click.option("--export-map/--no-export-map", default=None)
+@click.option("--export-video/--no-export-video", default=None)
 def run_ovmm_find_batch(
     episodes: Path | None,
     episode_id: tuple[str, ...],
@@ -458,6 +488,9 @@ def run_ovmm_find_batch(
     hm3d_root: Path | None,
     data_dir: Path | None,
     output_dir: Path,
+    run_tag: str | None,
+    export_map: bool | None,
+    export_video: bool | None,
 ) -> None:
     """Batch Habitat find-phase evaluation."""
     from emet.eval.ovmm_find_phase import FindPhaseRunConfig
@@ -478,6 +511,7 @@ def run_ovmm_find_batch(
         not_rotate=not_rotate,
     )
     output_dir.mkdir(parents=True, exist_ok=True)
+    bundle_tag = run_tag or output_dir.name
     for ep in rows:
         click.echo(f"Running {ep.id} …", err=True)
         metrics = run_habitat_find_phase_episode(
@@ -485,6 +519,9 @@ def run_ovmm_find_batch(
             run_cfg,
             hm3d_root=hm3d_root,
             init_poses_path=init_poses_path,
+            debug_run_tag=bundle_tag,
+            export_map=export_map,
+            export_video=export_video,
         )
         out = output_dir / f"{ep.id}_{backend}.json"
         out.write_text(json.dumps(metrics, indent=2), encoding="utf-8")

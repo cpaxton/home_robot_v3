@@ -2,6 +2,8 @@
 
 Operator guide for benchmarks referenced in `paper/sections/04_experiments.tex` and `paper/sections/05_results.tex`.
 
+**Unified eval runbook (overnight smoke, diagnostics, figures):** [evaluation.md](evaluation.md)
+
 **LaTeX:** `./paper/build.sh` from repo root (uses local `latexmk` or Docker `texlive/texlive:latest`).
 **Results go in:** `paper/sections/05_results.tex` (tables/figures) — not committed automatically from sweeps.
 

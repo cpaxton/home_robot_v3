@@ -32,6 +32,11 @@ from emet.habitat.episode_debug import (
     save_error_episode_bundle,
     write_run_manifest,
 )
+from emet.eval.episode_diagnostics import (
+    EpisodeDiagnosticsConfig,
+    EpisodeDiagnosticsRecorder,
+    attach_diagnostics_recorder,
+)
 from emet.habitat.hmeqa_enrich_labels import enrich_labels_for_question
 from emet.habitat.metrics import (
     EpisodeMetrics,
@@ -212,6 +217,9 @@ def run_hmeqa_episode(
     frontier_keyword_weight: float | None = None,
     debug_run_tag: str | None = None,
     save_debug_bundle: bool = True,
+    export_map: bool | None = None,
+    export_video: bool | None = None,
+    map_stride: int | None = None,
 ) -> EpisodeMetrics:
     questions = load_hmeqa_questions(questions_path)
     q = get_question(questions, question_id=question_id)
@@ -255,6 +263,13 @@ def run_hmeqa_episode(
             device=device,
             use_hm3d_semantics=use_hm3d_semantics,
         )
+        diag_cfg = EpisodeDiagnosticsConfig.from_env(
+            export_map=export_map,
+            export_video=export_video,
+            export_map_stride=map_stride if map_stride is not None else None,
+        )
+        diag_recorder = EpisodeDiagnosticsRecorder(cfg=diag_cfg)
+        attach_diagnostics_recorder(agent, diag_recorder)
         agent._eqa_question = q.question_formatted
         agent.start()
         if agent.graph_memory is not None:
@@ -349,6 +364,8 @@ def run_hmeqa_episode(
                     metrics=metrics,
                     agent=agent,
                     raw_eqa_full=raw_eqa,
+                    recorder=diag_recorder,
+                    diagnostics_cfg=diag_cfg,
                 )
             except Exception as exc:
                 print(
@@ -380,6 +397,9 @@ def run_hmeqa_batch(
     resume: bool = False,
     frontier_nodes_enabled: bool | None = None,
     frontier_keyword_weight: float | None = None,
+    export_map: bool | None = None,
+    export_video: bool | None = None,
+    map_stride: int | None = None,
 ) -> list[EpisodeMetrics]:
     from emet.habitat.metrics import read_completed_question_ids
 
@@ -433,6 +453,9 @@ def run_hmeqa_batch(
                 frontier_nodes_enabled=frontier_nodes_enabled,
                 frontier_keyword_weight=frontier_keyword_weight,
                 debug_run_tag=run_tag if output_jsonl is not None else None,
+                export_map=export_map,
+                export_video=export_video,
+                map_stride=map_stride,
             )
             results.append(row)
             if output_jsonl is not None:

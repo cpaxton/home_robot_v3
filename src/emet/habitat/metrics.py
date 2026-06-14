@@ -77,6 +77,8 @@ class EpisodeMetrics:
     vl_family: str = ""
     vl_hf_model_id: str = ""
     debug_bundle_dir: str = ""
+    topdown_map_path: str = ""
+    diagnostics_manifest_path: str = ""
     error: str = ""
 
     def to_dict(self) -> dict:

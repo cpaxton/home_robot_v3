@@ -26,6 +26,7 @@ from emet.controller.controller_dynamem import DynamemController
 from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import Parameters, get_parameters
+from emet.eval.episode_diagnostics import EpisodeDiagnosticsRecorder, attach_diagnostics_recorder
 
 SQA3DMethod = SQA3D_MEMORY_BACKEND
 SQA3DProfile = Literal["smoke", "tuned"]
@@ -430,6 +431,8 @@ def run_sqa3d_episode(
             use_real_vlm=use_real_vlm,
             device=device,
         )
+        diag_recorder = EpisodeDiagnosticsRecorder()
+        attach_diagnostics_recorder(agent, diag_recorder)
         agent.start()
         executor = EQAExecuter(agent)
         if rotate_in_place:
@@ -472,6 +475,7 @@ def run_sqa3d_episode(
                 export_root=export_root,
                 split=split,
                 infra_failure=_is_infra_failure_text(raw_eqa, predicted),
+                recorder=diag_recorder,
             )
             export_dir = str(ep_path)
 

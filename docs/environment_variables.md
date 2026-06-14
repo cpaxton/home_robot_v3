@@ -12,10 +12,15 @@ See also [MolmoSpaces](molmospaces.md) for install and CLI usage.
 
 ## Benchmarks
 
-Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md).
+Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight smoke + diagnostics:** [evaluation.md](evaluation.md).
 
 | Variable | Where used | Notes |
 |----------|------------|-------|
+| `EMET_EVAL_EXPORT_MAP` | Habitat / OVMM / SQA3D episode bundles | Write `topdown_map.png` (default on). Alias: `HABITAT_EQA_EXPORT_MAP`. |
+| `EMET_EVAL_EXPORT_VIDEO` | Same | Write `episode_rgb.mp4`. Alias: `HABITAT_EQA_EXPORT_VIDEO`. |
+| `EMET_EVAL_EXPORT_FRAMES` | Same | Save RGB frames under `frames/`. |
+| `EMET_EVAL_MAP_STRIDE` | Same | Save intermediate maps every N steps (0 = final only). Alias: `HABITAT_EQA_MAP_STRIDE`. |
+| `EMET_EVAL_EXPORT_GRAPH` | Same | Full graph checkpoint (heavy). Alias: `HABITAT_EQA_EXPORT_GRAPH`. |
 | `EMET_OVMM_OUTPUT_SIM` | `eval_ovmm_find_phases.py` | OVMM sim sweep output. Default `~/runs/emet/ovmm_find_phase` (`configs/ovmm/benchmark.yaml`). |
 | `EMET_OVMM_OUTPUT_FULL` | `eval_ovmm_full.py` | Full OVMM (find + pick/place) output. Default `~/runs/emet/ovmm_full`. |
 | `EMET_OVMM_OUTPUT_HABITAT` | `eval_habitat_ovmm_find_phases.py` | Habitat OVMM proxy output. Default `~/runs/emet/ovmm_habitat`. |

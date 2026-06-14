@@ -95,6 +95,10 @@ def write_run_manifest(
         "graph_eqa_frontier_nodes": params.get("graph_eqa_frontier_nodes"),
         "export_full_graph": os.environ.get("HABITAT_EQA_EXPORT_GRAPH", "").strip().lower()
         in ("1", "true", "yes", "on"),
+        "export_diagnostics_map": os.environ.get("EMET_EVAL_EXPORT_MAP", os.environ.get("HABITAT_EQA_EXPORT_MAP", "1"))
+        .strip()
+        .lower()
+        in ("1", "true", "yes", "on", ""),
     }
     if manifest_path.is_file():
         try:
@@ -162,12 +166,16 @@ def save_episode_debug_bundle(
     metrics: EpisodeMetrics,
     agent: Any,
     raw_eqa_full: str = "",
+    recorder: Any | None = None,
+    diagnostics_cfg: Any | None = None,
 ) -> Path:
     """
     Save per-question artifacts under ``~/.cache/habitat_eqa/episodes/<run_tag>/q<id>_<method>/``.
 
     Always writes: ``metrics.json``, ``raw_eqa.txt``, ``eqa_history.json``, ``scene_graph_report.txt``,
     ``frontier_nodes.json``. Set ``HABITAT_EQA_EXPORT_GRAPH=1`` for full ``export_graph_eqa_dir`` checkpoint.
+    When ``recorder`` is set (or env ``EMET_EVAL_EXPORT_MAP``), also writes maps / video via
+    :mod:`emet.eval.episode_diagnostics`.
     """
     episode_dir = default_episodes_root() / run_tag / f"q{metrics.question_id:04d}_{metrics.method}"
     episode_dir.mkdir(parents=True, exist_ok=True)
@@ -210,6 +218,33 @@ def save_episode_debug_bundle(
 
     if metrics.error:
         (episode_dir / "error.txt").write_text(metrics.error, encoding="utf-8")
+
+    from emet.eval.episode_diagnostics import (
+        EpisodeDiagnosticsConfig,
+        EpisodeDiagnosticsRecorder,
+        flush_episode_diagnostics,
+    )
+
+    cfg = diagnostics_cfg or EpisodeDiagnosticsConfig.from_env()
+    diag_rec = recorder
+    if diag_rec is None and any(
+        (
+            cfg.export_map,
+            cfg.export_video,
+            cfg.export_rgb_frames,
+            cfg.export_trajectory,
+            cfg.export_obstacle_grids,
+            cfg.export_object_crops,
+            cfg.export_full_graph,
+        )
+    ):
+        diag_rec = EpisodeDiagnosticsRecorder(cfg=cfg)
+    if diag_rec is not None:
+        manifest = flush_episode_diagnostics(episode_dir, agent, diag_rec)
+        if manifest.get("topdown_map"):
+            metrics.topdown_map_path = str(manifest["topdown_map"])
+        if manifest.get("diagnostics_manifest"):
+            metrics.diagnostics_manifest_path = str(manifest["diagnostics_manifest"])
 
     metrics.debug_bundle_dir = str(episode_dir)
     (episode_dir / "metrics.json").write_text(
