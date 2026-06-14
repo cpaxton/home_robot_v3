@@ -179,3 +179,24 @@ def scale_camera_matrix(K: np.ndarray, scale_factor: float) -> np.ndarray:
     K_scaled[0, 2] *= scale_factor
     K_scaled[1, 2] *= scale_factor
     return K_scaled
+
+
+def align_camera_matrix_to_image_size(
+    K: np.ndarray,
+    *,
+    calib_height: int,
+    calib_width: int,
+    image_height: int,
+    image_width: int,
+) -> np.ndarray:
+    """Scale ``camera_info`` K to match an actual decoded image (H×W)."""
+    if calib_height <= 0 or calib_width <= 0:
+        return np.asarray(K, dtype=np.float64).reshape(3, 3).copy()
+    sx = float(image_width) / float(calib_width)
+    sy = float(image_height) / float(calib_height)
+    out = np.asarray(K, dtype=np.float64).reshape(3, 3).copy()
+    out[0, 0] *= sx
+    out[1, 1] *= sy
+    out[0, 2] *= sx
+    out[1, 2] *= sy
+    return out

@@ -163,6 +163,7 @@ class Observations:
     # Proprioreception
     joint: np.ndarray | None = None  # joint positions of the robot
     joint_velocities: np.ndarray | None = None  # joint velocities of the robot
+    joint_head: float | None = None  # innate Mars head nod (MJCF ``joint_head``), radians
     relative_resting_position: np.ndarray | None = (
         None  # end-effector position relative to the desired resting position
     )

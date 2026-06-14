@@ -118,7 +118,7 @@ Spinning **in place** should leave **static world geometry** (floor, furniture) 
 
 1. **Isolate depth** — `emet run dynamem ... --perfect-depth` or `EMET_DYNAMEM_PERFECT_DEPTH=1` forces observation **sensor** depth when available. If the map stabilizes, focus on DA3 / intrinsics; if not, focus on `camera_pose`, `gps`/`compass`, and `emet_session.navigation_origin_xyt`.
 
-2. **Rerun** — Scrub the **frame** timeline: compare `world/point_cloud`, `world/robot`, `world/head_camera`. World-locked features should not co-rotate with the base marker.
+2. **Rerun** — Scrub the **frame** timeline: compare `world/point_cloud`, `world/robot`, `world/head_camera`. World-locked features should not co-rotate with the base marker (live view must use `origin=world`; see [rerun.md](rerun.md)).
 
 3. **Per-step logging** — `export EMET_DYNAMEM_MAP_DEBUG=1` prints camera translation, world `base_xyt`, `depth_source`, whether depth came from DA3 inference, and whether `navigation_origin_xyt` was on the observation.
 

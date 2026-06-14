@@ -592,9 +592,8 @@ def main(
             sys.exit(1)
 
         try:
-            # RobosuiteZmqServer renders from multiple ZMQ threads; EGL avoids GLFW issues headless.
-            # With --show-viewer-ui, leave MUJOCO_GL unset (or set MUJOCO_GL=glfw) so the passive viewer can open a window.
-            if "MUJOCO_GL" not in os.environ and not use_glx and not show_viewer_ui:
+            # RobosuiteZmqServer renders offscreen from ZMQ threads; EGL avoids GLFW/EGL framebuffer clashes.
+            if "MUJOCO_GL" not in os.environ and not use_glx:
                 os.environ["MUJOCO_GL"] = "egl"
 
             spawn_scene_disk: str | None = None
@@ -626,7 +625,12 @@ def main(
 
         try:
             try:
-                server.start(robocasa=use_robocasa, headless=headless, show_viewer_ui=show_viewer_ui)
+                server.start(
+                    robocasa=use_robocasa,
+                    headless=headless,
+                    show_viewer_ui=show_viewer_ui,
+                    use_glx=use_glx,
+                )
             finally:
                 try:
                     server.stop()

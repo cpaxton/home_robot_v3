@@ -17,12 +17,14 @@
 
 from __future__ import annotations
 
+import json
 import threading
 
 import numpy as np
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
+from std_msgs.msg import String
 from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
@@ -30,10 +32,13 @@ from tf2_ros.transform_listener import TransformListener
 from innate_mars_bridge.constants import (
     ARM_STATE_TOPIC,
     EE_IMAGE_TOPIC,
+    HEAD_BODY_FRAME,
     HEAD_LEFT_CAMERA_INFO_TOPIC,
     HEAD_LEFT_IMAGE_TOPIC,
+    HEAD_POSITION_TOPIC,
     HEAD_RIGHT_CAMERA_INFO_TOPIC,
     HEAD_RIGHT_IMAGE_TOPIC,
+    MAP_FRAME,
     ODOM_FRAME,
     ODOM_TOPIC,
 )
@@ -41,6 +46,9 @@ from innate_mars_bridge.joint_layout import pack_innate_mars_joint_positions, pa
 from innate_mars_bridge.remote.modules.nav import MarsNavigationClient
 from innate_mars_bridge.ros.camera import RosCamera, RosCameraNoInfo
 from innate_mars_bridge.ros.utils import matrix_from_pose_msg, to_matrix, transform_to_list
+
+# Prefer odom for mapping; fall back when TF trees are split across bringup nodes.
+_TF_BASE_FRAMES = (ODOM_FRAME, MAP_FRAME, "base_footprint", "base_link")
 
 
 class InnateMarsRosInterface(Node):
@@ -58,12 +66,17 @@ class InnateMarsRosInterface(Node):
         self._odom_pose = None
         self._odom_lock = threading.Lock()
 
+        self._head_lock = threading.Lock()
+        self._head_joint_rad = 0.0
+        self._head_topic_updated = False
+
         self.tf2_buffer = Buffer()
         self.tf2_listener = TransformListener(self.tf2_buffer, self)
 
         # Subscribers
         self._joint_sub = self.create_subscription(JointState, ARM_STATE_TOPIC, self._joint_callback, 10)
         self._odom_sub = self.create_subscription(Odometry, ODOM_TOPIC, self._odom_callback, 10)
+        self._head_sub = self.create_subscription(String, HEAD_POSITION_TOPIC, self._head_callback, 10)
 
         # Cameras: head left, head right (with camera_info), EE (no camera_info on hardware)
         self.head_left_cam = RosCamera(
@@ -88,12 +101,20 @@ class InnateMarsRosInterface(Node):
             verbose=verbose,
         )
 
+        self.nav = None
+
+    def wait_for_cameras(self) -> None:
+        """Block until head stereo and EE cameras have published at least one frame."""
         self.get_logger().info("InnateMarsRosInterface: waiting for cameras...")
-        self.head_left_cam.wait_for_image()
-        self.head_right_cam.wait_for_image()
-        self.ee_cam.wait_for_image()
+        self.head_left_cam.ensure_ready()
+        self.head_right_cam.ensure_ready()
+        try:
+            self.ee_cam.ensure_ready(timeout_s=15.0)
+        except RuntimeError as exc:
+            self.get_logger().warning(f"EE camera not ready at startup ({exc}); continuing with head stereo.")
         self.get_logger().info("InnateMarsRosInterface: all cameras ready.")
-        self.nav = MarsNavigationClient(self)
+        if self.nav is None:
+            self.nav = MarsNavigationClient(self)
 
     def _joint_callback(self, msg: JointState):
         with self._js_lock:
@@ -108,6 +129,51 @@ class InnateMarsRosInterface(Node):
     def _odom_callback(self, msg: Odometry):
         with self._odom_lock:
             self._odom_pose = matrix_from_pose_msg(msg.pose.pose)
+
+    def _parse_head_position_message(self, msg: String) -> float | None:
+        raw = (msg.data or "").strip()
+        if not raw:
+            return None
+        try:
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                for key in ("current_position", "position", "deg", "degrees"):
+                    if key in data:
+                        return float(data[key])
+                return None
+            if isinstance(data, (int, float)):
+                return float(data)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+        try:
+            return float(raw)
+        except ValueError:
+            return None
+
+    def _head_callback(self, msg: String):
+        deg = self._parse_head_position_message(msg)
+        if deg is None:
+            return
+        with self._head_lock:
+            self._head_joint_rad = float(-np.deg2rad(deg))
+            self._head_topic_updated = True
+
+    def _head_joint_from_tf(self) -> float | None:
+        """Fallback when ``/mars/head/current_position`` is idle: ``base_link`` → ``head`` TF."""
+        t = self.get_frame_pose(HEAD_BODY_FRAME, base_frame="base_link", timeout_s=0.05)
+        if t is None:
+            return None
+        r = np.asarray(t, dtype=np.float64).reshape(4, 4)[:3, :3]
+        theta_urdf = float(np.arctan2(-r[0, 2], r[0, 0]))
+        return float(-theta_urdf)
+
+    def get_head_joint_rad(self) -> float:
+        """Prefer ``base_link``→``head`` TF (tracks live nod); topic is fallback only."""
+        tf_rad = self._head_joint_from_tf()
+        if tf_rad is not None:
+            return float(tf_rad)
+        with self._head_lock:
+            return float(self._head_joint_rad)
 
     def get_arm_joint_state(self):
         """Returns (positions, velocities) for joint1..joint6."""
@@ -124,6 +190,8 @@ class InnateMarsRosInterface(Node):
         )
 
     def at_goal(self) -> bool:
+        if self.nav is None:
+            return True
         return self.nav.at_goal()
 
     def get_base_pose_matrix(self):
@@ -142,17 +210,20 @@ class InnateMarsRosInterface(Node):
         return np.array([x, y, theta], dtype=np.float64)
 
     def get_frame_pose(self, frame: str, base_frame: str | None = None, timeout_s: float = 1.0):
-        """Look up frame pose in base_frame. Returns 4x4 matrix or None."""
+        """Look up ``frame`` pose in ``base_frame``. Returns 4x4 cam-to-base or None."""
         from rclpy.duration import Duration
         from rclpy.time import Time
 
-        if base_frame is None:
-            base_frame = ODOM_FRAME
-        try:
-            stamped = self.tf2_buffer.lookup_transform(base_frame, frame, Time(), Duration(seconds=timeout_s))
-            trans, rot = transform_to_list(stamped)
-            return to_matrix(trans, rot)
-        except TransformException:
-            if self.verbose:
-                self.get_logger().warn(f"TF lookup failed: {base_frame} -> {frame}")
-            return None
+        bases = (base_frame,) if base_frame else _TF_BASE_FRAMES
+        last_exc: TransformException | None = None
+        for bf in bases:
+            try:
+                stamped = self.tf2_buffer.lookup_transform(bf, frame, Time(), Duration(seconds=timeout_s))
+                trans, rot = transform_to_list(stamped)
+                return to_matrix(trans, rot)
+            except TransformException as exc:
+                last_exc = exc
+                continue
+        if self.verbose and last_exc is not None:
+            self.get_logger().warn(f"TF lookup failed for {frame!r} in {list(bases)!r}: {last_exc}")
+        return None

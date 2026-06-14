@@ -1,0 +1,17 @@
+# Minimal Python deps for innate_mars_bridge on the robot (Jetson).
+# emet_core is synced to ~/emet/emet_core and used via PYTHONPATH (see deploy).
+pyzmq
+yacs
+pyyaml
+termcolor
+overrides
+schema
+Pillow
+trimesh
+numba
+omegaconf
+hydra-core
+sophuspy
+pyliblzfse
+pin
+scipy>=1.11

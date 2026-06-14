@@ -1003,9 +1003,29 @@ def connect_cmd() -> None:
 @click.option("--user", "-u", default="root", help="SSH user")
 @click.option("--password", "-p", default=None, help="Password (or set EMET_ROBOT_PASSWORD); omit to use SSH key")
 @click.option("--name", "-n", default=None, help="Profile name (default: host)")
+@click.option("--robot", default=None, help="Emet robot id (e.g. innate_mars) stored in profile")
+@click.option(
+    "--workspace",
+    default=None,
+    help="Remote ROS2 workspace on robot (e.g. ~/innate-os/ros2_ws for innate-os Mars)",
+)
+@click.option("--emet-dir", default=None, help="Remote emet_core install dir (default ~/emet)")
 @click.option("--no-active", is_flag=True, help="Do not set as active connection")
-def connect_save(host: str, user: str, password: str | None, name: str | None, no_active: bool) -> None:
-    """Save host and user; optional password. Updates ~/.stretch/robot_ip.txt for legacy tools."""
+def connect_save(
+    host: str,
+    user: str,
+    password: str | None,
+    name: str | None,
+    robot: str | None,
+    workspace: str | None,
+    emet_dir: str | None,
+    no_active: bool,
+) -> None:
+    """Save host and user; optional password.
+
+    When saved as active (default), also updates ``~/.stretch/robot_ip.txt`` for legacy tools.
+    Use ``--no-active`` to add/update a named profile without changing the active host.
+    """
     pwd = password or os.environ.get("EMET_ROBOT_PASSWORD")
     from emet.utils.connection import save_connection
 
@@ -1015,6 +1035,9 @@ def connect_save(host: str, user: str, password: str | None, name: str | None, n
         password=pwd,
         name=name,
         set_active=not no_active,
+        workspace=workspace,
+        emet_dir=emet_dir,
+        robot=robot,
     )
     click.echo(f"Saved connection '{conn_name}' (host={host}, user={user}).")
     if not no_active:
@@ -1046,8 +1069,118 @@ def connect_show() -> None:
         sys.exit(1)
     click.echo(f"host: {conn.get('host', '')}")
     click.echo(f"user: {conn.get('user', '')}")
+    if conn.get("robot"):
+        click.echo(f"robot: {conn.get('robot')}")
+    if conn.get("workspace"):
+        click.echo(f"workspace: {conn.get('workspace')}")
+    if conn.get("emet_dir"):
+        click.echo(f"emet_dir: {conn.get('emet_dir')}")
     if "password" in conn:
         click.echo("password: (set)")
+
+
+@main.group("mars", short_help="Innate Mars hardware bridge (innate-os + ZMQ)")
+def mars_cmd() -> None:
+    """Deploy and start the innate Mars ZMQ bridge on a Jetson running innate-os."""
+    pass
+
+
+@mars_cmd.command("start", short_help="Deploy (optional) and start ZMQ bridge on robot")
+@click.option("--ip", "--host", "-H", "host", default=None, help="Robot hostname or IP")
+@click.option("--username", "--user", "-u", "user", default=None, help="SSH user (e.g. jetson1)")
+@click.option("--password", "-p", default=None, help="SSH password (or EMET_ROBOT_PASSWORD)")
+@click.option("--connection", "-c", "connection_name", default=None, help="Saved connection profile")
+@click.option("--deploy", is_flag=True, help="Rsync emet_core + bridge and colcon build before start")
+@click.option(
+    "--onboard-da3",
+    is_flag=True,
+    help="Run Depth Anything 3 on the Jetson; publish depth over ZMQ (implies --deploy when set)",
+)
+@click.option("--preview", is_flag=True, help="Run preview-cameras after bridge startup")
+@click.option("--wait-s", default=20.0, show_default=True, help="Seconds to wait before status check")
+@click.option("--no-save", is_flag=True, help="Do not update saved connection profile")
+def mars_start_cmd(
+    host: str | None,
+    user: str | None,
+    password: str | None,
+    connection_name: str | None,
+    deploy: bool,
+    onboard_da3: bool,
+    preview: bool,
+    wait_s: float,
+    no_save: bool,
+) -> None:
+    """Start innate_mars_bridge on the robot (inside innate-os tmux + Zenoh).
+
+    Requires innate-os running on the robot (``innate service start``).
+
+    Examples:
+      emet mars start --ip herman --username jetson1
+      emet mars start --ip herman --username jetson1 --deploy --preview
+      emet mars start --connection herman --onboard-da3 --deploy
+    """
+    from emet.mars import mars_start
+
+    if onboard_da3 and not deploy:
+        deploy = True
+
+    mars_start(
+        host=host,
+        user=user,
+        password=password,
+        connection_name=connection_name,
+        save_profile=not no_save,
+        deploy=deploy,
+        preview=preview,
+        onboard_da3=onboard_da3,
+        wait_s=wait_s,
+    )
+
+
+@mars_cmd.command("stop", short_help="Stop ZMQ bridge on robot")
+@click.option("--ip", "--host", "-H", "host", default=None, help="Robot hostname or IP")
+@click.option("--username", "--user", "-u", "user", default=None, help="SSH user")
+@click.option("--password", "-p", default=None, help="SSH password (or EMET_ROBOT_PASSWORD)")
+@click.option("--connection", "-c", "connection_name", default=None, help="Saved connection profile")
+def mars_stop_cmd(
+    host: str | None,
+    user: str | None,
+    password: str | None,
+    connection_name: str | None,
+) -> None:
+    """Stop innate_mars_bridge on the robot."""
+    from emet.mars import resolve_mars_target, stop_bridge_on_robot
+
+    host, user, password, _, _ = resolve_mars_target(
+        host=host,
+        user=user,
+        password=password,
+        connection_name=connection_name,
+    )
+    stop_bridge_on_robot(host, user, password)
+
+
+@mars_cmd.command("status", short_help="Show bridge process and ZMQ ports on robot")
+@click.option("--ip", "--host", "-H", "host", default=None, help="Robot hostname or IP")
+@click.option("--username", "--user", "-u", "user", default=None, help="SSH user")
+@click.option("--password", "-p", default=None, help="SSH password (or EMET_ROBOT_PASSWORD)")
+@click.option("--connection", "-c", "connection_name", default=None, help="Saved connection profile")
+def mars_status_cmd(
+    host: str | None,
+    user: str | None,
+    password: str | None,
+    connection_name: str | None,
+) -> None:
+    """Print bridge process, ZMQ ports, and recent tmux log on the robot."""
+    from emet.mars import bridge_status_on_robot, resolve_mars_target
+
+    host, user, password, _, _ = resolve_mars_target(
+        host=host,
+        user=user,
+        password=password,
+        connection_name=connection_name,
+    )
+    bridge_status_on_robot(host, user, password)
 
 
 @main.command("view-bridge", short_help="View images and state from robot bridge")
@@ -1100,7 +1233,7 @@ def deploy(
 ) -> None:
     """Deploy emet_core and innate_mars_bridge to the robot via rsync and SSH.
 
-    Syncs src/emet_core and src/innate_mars_bridge to the robot, runs pip install -e
+    Syncs src/emet_core and src/innate_mars_bridge to the robot, runs pip install
     for emet_core, and colcon build for the bridge. Use emet connect save <host> first
     to set default host/user, or pass --host and --user.
 
@@ -1897,6 +2030,16 @@ def install_completion(shell: str | None) -> None:
     comp = comp_cls(main, {}, "emet", "_EMET_COMPLETE")
     click.echo(comp.source())
 
+
+from emet.app.capture import main as _capture_app  # noqa: E402
+
+_capture_app.short_help = "One ZMQ frame + metadata; optional single-frame DynaMem map"
+main.add_command(_capture_app)
+
+from emet.app.stream import main as _stream_app  # noqa: E402
+
+_stream_app.short_help = "Live ZMQ → Rerun (cameras, pose, mesh)"
+main.add_command(_stream_app)
 
 # Full Click options (not a thin wrapper) so `emet debug-da3-depth --help` lists all flags.
 from emet.app.debug_da3_depth import main as _debug_da3_depth_app  # noqa: E402

@@ -14,7 +14,7 @@ All **map and scene geometry** must be logged in the **navigation / voxel world 
 
 **Do not** set the live `Spatial3DView` blueprint `origin` to `world/robot`. That re-expresses the whole scene in the robot frame, so the map and voxels **appear to rotate** when the base turns. Use `origin="world"` with `contents="world/**"` (see `spatial3d_view_world()` in `src/emet/visualization/rerun.py`).
 
-The robot still moves under `world/robot`; only the **view coordinate system** stays fixed to world.
+The robot still moves under `world/robot`; only the **view coordinate system** stays fixed to world. Optional `spatial3d_view_robot()` keeps the camera on the base but co-rotates map layers (debug only).
 
 ## Load / stability
 
