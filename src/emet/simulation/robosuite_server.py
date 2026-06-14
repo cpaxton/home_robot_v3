@@ -741,6 +741,28 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjdata.qvel[vadr] = 0.0
         mujoco.mj_forward(self._mjmodel, self._mjdata)
 
+    def _reapply_planar_autoplace_world_xyt(self) -> bool:
+        """Snap planar base joints to :attr:`_planar_autoplace_world_xyt` (Robocasa autoplace target)."""
+        wxyt = self._planar_autoplace_world_xyt
+        names = getattr(self._spec, "planar_base_joint_names", None)
+        if wxyt is None or names is None or len(names) != 3:
+            return False
+        if self._mjmodel is None or self._mjdata is None:
+            return False
+        w = np.asarray(wxyt, dtype=np.float64).reshape(-1)[:3]
+        ok = scene_base_spawn.write_planar_base_xyt(
+            self._mjmodel,
+            self._mjdata,
+            joint_names=(str(names[0]), str(names[1]), str(names[2])),
+            world_x=float(w[0]),
+            world_y=float(w[1]),
+            world_yaw=float(w[2]),
+            base_body_name=self._spec.base_link_name,
+        )
+        if ok:
+            mujoco.mj_forward(self._mjmodel, self._mjdata)
+        return bool(ok)
+
     def _spawn_footprint_xy_margin_m(self) -> float:
         fp = self._spec.footprint
         base_margin = float(
@@ -1861,6 +1883,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             xyt = np.zeros(3)
 
         cam_pose = self._camera_pose_world(primary_cam)
+        # ZMQ contract: camera_pose MuJoCo world; gps episode-relative (test_zmq_observation_frame_contract).
 
         message = {
             "rgb": compression.to_jpg(rgb),
@@ -2113,6 +2136,11 @@ class RobosuiteZmqServer(BaseZmqServer):
                     else:
                         self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                     mujoco.mj_forward(self._mjmodel, self._mjdata)
+                else:
+                    # Robocasa innate_mars / Maurice-style merges often lack MJCF ``home``. Without
+                    # PD holds, post-load stabilize ``mj_step`` collapses the pose and planar reapply
+                    # can leave stale ``body_xpos`` until the next ``mj_forward`` (GT fixture scan).
+                    self._sync_actuator_ctrl_from_joint_positions()
         self._stabilize_physics_state_after_load()
         if self._molmospaces_autoplace_snap_qpos0:
             with self._mj_lock:
@@ -2144,23 +2172,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 update_robot_qpos0_from_data(self._mjmodel, self._mjdata, self._spec)
         elif self._planar_autoplace_snap_qpos0:
             with self._mj_lock:
-                jn = getattr(self._spec, "planar_base_joint_names", None)
-                wxyt = self._planar_autoplace_world_xyt
-                reapply_ok = False
-                if wxyt is not None and np.asarray(wxyt).size >= 3 and jn is not None and len(jn) == 3:
-                    w = np.asarray(wxyt, dtype=np.float64).reshape(-1)[:3]
-                    reapply_ok = bool(
-                        scene_base_spawn.write_planar_base_xyt(
-                            self._mjmodel,
-                            self._mjdata,
-                            joint_names=(str(jn[0]), str(jn[1]), str(jn[2])),
-                            world_x=float(w[0]),
-                            world_y=float(w[1]),
-                            world_yaw=float(w[2]),
-                            base_body_name=self._spec.base_link_name,
-                        )
-                    )
-                if not reapply_ok:
+                if not self._reapply_planar_autoplace_world_xyt():
                     self._restore_planar_base_from_qpos0()
                 update_robot_qpos0_from_data(self._mjmodel, self._mjdata, self._spec)
                 self._preserve_joint_ctrl_hold_from_ctrl()
@@ -2187,7 +2199,6 @@ class RobosuiteZmqServer(BaseZmqServer):
                 )
                 if mx is not None:
                     logger.info(f"[robosuite_load] post-stabilize 24-step probe max|qvel|={mx:.4f}")
-        self._initial_xyt = self.get_base_xyt()
         self._nav_goal_world = None
         self._at_goal = True
         spawn_floor_map = self._compute_robocasa_spawn_floor_map() if robocasa else None
@@ -2200,6 +2211,17 @@ class RobosuiteZmqServer(BaseZmqServer):
             robocasa=robocasa,
             spawn_floor_map=spawn_floor_map,
         )
+        # GT fixture scan runs ``mj_forward`` and exposes true FK from ``qpos``. Re-snap planar base
+        # afterward so navigation_origin, scene summary, and ZMQ gps match autoplace.
+        if self._planar_autoplace_snap_qpos0:
+            with self._mj_lock:
+                if not self._reapply_planar_autoplace_world_xyt():
+                    self._restore_planar_base_from_qpos0()
+                update_robot_qpos0_from_data(self._mjmodel, self._mjdata, self._spec)
+                self._preserve_joint_ctrl_hold_from_ctrl()
+        self._initial_xyt = self.get_base_xyt()
+        if self._emet_session is not None and self._initial_xyt is not None:
+            apply_navigation_origin_to_session(self._emet_session, self._initial_xyt)
         self._log_nav_startup_banner()
         if self._is_molmospaces_session() and not molmospaces_nav_teleport_enabled():
             log.info("MolmoSpaces navigation: wheel/goal drive (EMET_MOLMOSPACES_NAV_TELEPORT=0)")
