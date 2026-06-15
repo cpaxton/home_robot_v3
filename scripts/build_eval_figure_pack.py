@@ -13,6 +13,22 @@ from pathlib import Path
 
 import numpy as np
 
+# OVMM find-phase: localize object on start_recep (FindObj) and goal_recep (FindRec).
+OVMM_FIND_PHASE_TASK = (
+    "Move object from start_recep to goal_recep: FindObj scores the object on its "
+    "start receptacle; FindRec scores the goal receptacle for placement."
+)
+OVMM_METRIC_LABELS = {
+    "find_object_success": "FindObj (object on start_recep; typically easier)",
+    "find_recep_success": "FindRec (goal_recep for placement; typically harder)",
+    "find_partial_success": "mean(FindObj, FindRec)",
+}
+# Real OVMM paper reference rates (not comparable to this memory-localization harness).
+OVMM_PHASE_DIFFICULTY_NOTE = (
+    "FindObj is usually easier than FindRec (~70% vs ~30% on real OVMM). "
+    "Object-only success is partial progress; both phases are needed for pick/place."
+)
+
 
 def _load_jsonl(path: Path) -> list[dict]:
     if not path.is_file():
@@ -41,15 +57,154 @@ def _summarize_hmeqa(paths: list[Path]) -> dict:
     return out
 
 
+def _ovmm_success(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return float(value) > 0.0
+    return bool(value)
+
+
 def _summarize_ovmm(run_id: str, ovmm_root: Path) -> dict:
-    out: dict[str, object] = {"backends": {}}
+    out: dict[str, object] = {
+        "task": OVMM_FIND_PHASE_TASK,
+        "difficulty_note": OVMM_PHASE_DIFFICULTY_NOTE,
+        "primary_metric": "find_recep_success",
+        "metric_labels": OVMM_METRIC_LABELS,
+        "backends": {},
+        "episodes": [],
+    }
     for p in sorted(ovmm_root.glob(f"{run_id}_*/*.json")):
         row = json.loads(p.read_text(encoding="utf-8"))
         backend = row.get("backend", p.stem)
-        partial = bool(row.get("find_partial_success"))
-        out["backends"].setdefault(backend, {"n": 0, "partial_success": 0})
-        out["backends"][backend]["n"] += 1
-        out["backends"][backend]["partial_success"] += int(partial)
+        obj_ok = _ovmm_success(row.get("find_object_success"))
+        recep_ok = _ovmm_success(row.get("find_recep_success"))
+        partial_ok = _ovmm_success(row.get("find_partial_success"))
+        object_query = row.get("object_query", "?")
+        start_recep = row.get("start_recep", "?")
+        goal_recep = row.get("goal_recep", "?")
+        out["episodes"].append(
+            {
+                "episode_id": row.get("episode_id", p.stem),
+                "backend": backend,
+                "object_query": object_query,
+                "start_recep": start_recep,
+                "goal_recep": goal_recep,
+                "find_object_success": obj_ok,
+                "find_recep_success": recep_ok,
+                "find_partial_success": partial_ok,
+                "outcome": (
+                    "both"
+                    if obj_ok and recep_ok
+                    else "object_only"
+                    if obj_ok
+                    else "recep_only"
+                    if recep_ok
+                    else "neither"
+                ),
+                "task": f"move {object_query} from {start_recep} to {goal_recep}",
+            }
+        )
+        out["backends"].setdefault(
+            backend,
+            {
+                "n": 0,
+                "find_object_success": 0,
+                "find_recep_success": 0,
+                "partial_success": 0,
+                "find_both_success": 0,
+                "find_object_only": 0,
+                "find_recep_only": 0,
+            },
+        )
+        stats = out["backends"][backend]
+        stats["n"] += 1
+        stats["find_object_success"] += int(obj_ok)
+        stats["find_recep_success"] += int(recep_ok)
+        stats["partial_success"] += int(partial_ok)
+        if obj_ok and recep_ok:
+            stats["find_both_success"] += 1
+        elif obj_ok:
+            stats["find_object_only"] += 1
+        elif recep_ok:
+            stats["find_recep_only"] += 1
+    for stats in out["backends"].values():
+        if not isinstance(stats, dict):
+            continue
+        n = stats.get("n", 0) or 1
+        stats["find_object_success_rate"] = stats.get("find_object_success", 0) / n
+        stats["find_recep_success_rate"] = stats.get("find_recep_success", 0) / n
+        stats["find_partial_success_rate"] = stats.get("partial_success", 0) / n
+        stats["find_both_success_rate"] = stats.get("find_both_success", 0) / n
+        stats["find_object_only_rate"] = stats.get("find_object_only", 0) / n
+        stats["find_recep_only_rate"] = stats.get("find_recep_only", 0) / n
+    return out
+
+
+def _print_ovmm_digest(ovmm_summary: dict) -> None:
+    backends = ovmm_summary.get("backends", {})
+    if not backends:
+        print("OVMM: no runs found")
+        return
+    print("OVMM find-phase (FindObj easier; FindRec harder):")
+    for backend, stats in sorted(backends.items()):
+        if not isinstance(stats, dict):
+            continue
+        n = stats.get("n", 0)
+        obj = stats.get("find_object_success_rate", 0.0)
+        recep = stats.get("find_recep_success_rate", 0.0)
+        both = stats.get("find_both_success_rate", 0.0)
+        obj_only = stats.get("find_object_only_rate", 0.0)
+        print(
+            f"  {backend}: n={n} "
+            f"FindObj={obj:.0%} FindRec={recep:.0%} "
+            f"both={both:.0%} object_only={obj_only:.0%}"
+        )
+
+
+def _plot_ovmm_success_bars(ovmm_summary: dict, out_dir: Path) -> Path | None:
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return None
+
+    backends: list[str] = []
+    obj_rates: list[float] = []
+    recep_rates: list[float] = []
+    for backend, stats in ovmm_summary.get("backends", {}).items():
+        if not isinstance(stats, dict):
+            continue
+        backends.append(str(backend))
+        obj_rates.append(float(stats.get("find_object_success_rate", 0.0)))
+        recep_rates.append(float(stats.get("find_recep_success_rate", 0.0)))
+    if not backends:
+        return None
+
+    x = np.arange(len(backends))
+    width = 0.35
+    fig, ax = plt.subplots(figsize=(max(4, 2 * len(backends)), 4))
+    ax.bar(x - width / 2, obj_rates, width, label="FindObj (easier)")
+    ax.bar(x + width / 2, recep_rates, width, label="FindRec (harder)")
+    ax.set_ylabel("success rate")
+    ax.set_xticks(x)
+    ax.set_xticklabels(backends, rotation=15, ha="right")
+    ax.set_ylim(0, 1.05)
+    ax.legend(fontsize=8)
+    ax.set_title("OVMM find-phase: FindObj vs FindRec")
+    fig.text(
+        0.5,
+        0.01,
+        "FindObj is typically easier (~70% vs ~30% on real OVMM); object-only = partial.",
+        ha="center",
+        fontsize=8,
+    )
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    out = out_dir / "ovmm_findobj_findrec.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
     return out
 
 
@@ -118,12 +273,16 @@ def main() -> None:
         for v in summary["hmeqa"].get("methods", {}).values()
         if isinstance(v, dict)
     ]
-    ovmm_partial = [
-        (v.get("partial_success", 0) > 0)
+    ovmm_any_success = [
+        (
+            v.get("find_object_success", 0) > 0
+            or v.get("find_recep_success", 0) > 0
+            or v.get("partial_success", 0) > 0
+        )
         for v in summary["ovmm"].get("backends", {}).values()
         if isinstance(v, dict)
     ]
-    investigate = not (any(a > 0 for a in hmeqa_acc) or any(ovmm_partial))
+    investigate = not (any(a > 0 for a in hmeqa_acc) or any(ovmm_any_success))
     summary["status"] = "INVESTIGATE" if investigate else "OK"
     summary["investigate"] = investigate
 
@@ -140,9 +299,17 @@ def main() -> None:
     for backend, stats in summary["ovmm"].get("backends", {}).items():
         if isinstance(stats, dict):
             n = stats.get("n", 0) or 1
-            rate = stats.get("partial_success", 0) / n
-            csv_lines.append(f"ovmm,{backend},{n},find_partial_success_rate,{rate:.4f}")
+            for metric in (
+                "find_object_success_rate",
+                "find_recep_success_rate",
+                "find_partial_success_rate",
+                "find_both_success_rate",
+                "find_object_only_rate",
+            ):
+                rate = stats.get(metric, stats.get(metric.replace("_rate", ""), 0) / n)
+                csv_lines.append(f"ovmm,{backend},{n},{metric},{rate:.4f}")
     (out_dir / "summary.csv").write_text("\n".join(csv_lines) + "\n", encoding="utf-8")
+    _print_ovmm_digest(summary["ovmm"])
 
     if args.summary_only:
         return
@@ -150,6 +317,10 @@ def main() -> None:
     grid = _plot_map_grid(episodes_root, run_id, out_dir)
     if grid:
         print(f"wrote {grid}")
+
+    ovmm_bars = _plot_ovmm_success_bars(summary["ovmm"], out_dir)
+    if ovmm_bars:
+        print(f"wrote {ovmm_bars}")
 
     sqa3d_jsonls = list((Path.home() / "runs" / "emet" / "sqa3d").glob(f"{run_id}_*/*.jsonl"))
     for p in sqa3d_jsonls:

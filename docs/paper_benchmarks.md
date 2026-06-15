@@ -189,7 +189,7 @@ Edit `paper/sections/05_results.tex`:
 
 | Table label | Source |
 |-------------|--------|
-| `tab:ovmm_find_backend_tier` | `find_partial_success` column from OVMM aggregate CSV, by tier |
+| `tab:ovmm_find_backend_tier` | OVMM aggregate CSV: `find_object_success`, `find_recep_success`, `find_partial_success` by tier (FindObj typically easier than FindRec) |
 | `tab:sqa3d_backend_replay` | `em@1` from `aggregate_sqa3d.csv`, rows grouped by `method` × `replay_backend` |
 | Habitat / HM-EQA | TBD on habitat branch |
 

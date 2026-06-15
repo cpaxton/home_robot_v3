@@ -525,7 +525,14 @@ def run_ovmm_find_batch(
         )
         out = output_dir / f"{ep.id}_{backend}.json"
         out.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-        click.echo(f"  partial={metrics.get('find_partial_success')} -> {out}", err=True)
+        click.echo(
+            f"  task=move {metrics.get('object_query')} "
+            f"from {metrics.get('start_recep')} to {metrics.get('goal_recep')} | "
+            f"FindObj={metrics.get('find_object_success')} "
+            f"FindRec={metrics.get('find_recep_success')} "
+            f"partial={metrics.get('find_partial_success')} -> {out}",
+            err=True,
+        )
 
 
 if __name__ == "__main__":

@@ -93,10 +93,20 @@ uv run python scripts/build_eval_figure_pack.py --run-id eval_smoke_YYYYMMDD_HHM
 
 ## Success criteria (smoke)
 
+OVMM find-phase episodes are **pick/place localization** tasks: move `{object}` from `{start_recep}` (object on that receptacle) to `{goal_recep}`. Metrics follow the [OVMM](https://ovmm.github.io/) find phases:
+
+| Phase | JSON field | Meaning |
+|-------|------------|---------|
+| FindObj | `find_object_success` | Localized the target object on `start_recep` |
+| FindRec | `find_recep_success` | Localized the **goal** receptacle (`goal_recep`) for placement |
+| Partial | `find_partial_success` | Mean of FindObj and FindRec |
+
+**Difficulty:** FindObj is usually **easier** than FindRec (real OVMM paper: ~70% vs ~30%). Object-only success means the agent found the object on `start_recep` but not the goal receptacle — useful partial signal, not full task progress. For smoke, treat **FindRec** as the harder bar; `find_both_success_rate` in `summary.json` is the strictest aggregate.
+
 | Track | Metric | Minimum |
 |-------|--------|---------|
 | HM-EQA | MCQ accuracy (3 Qs) | **> 0%** (≥1 correct) |
-| OVMM Habitat | `find_partial_success` | **> 0** on ≥1 episode × backend |
+| OVMM Habitat | FindObj **or** FindRec (FindRec preferred) | **> 0** on ≥1 episode × backend |
 | SQA3D | EM@1 (3 Qs) | **> 0%** when phase 3 runs |
 | All | Artifacts | `topdown_map.png` + `diagnostics_manifest.json` per completed episode |
 
@@ -141,4 +151,15 @@ uv run emet sqa3d plot-results -p ~/runs/emet/sqa3d/dynagraph_val_q0-2.jsonl -o 
 
 ## Paper outputs
 
-Figures for early results: `~/runs/emet/eval_smoke/<run_id>/figures/topdown_map_grid.png`, `summary.csv`. Copy into `paper/figures/eval_smoke/` and cite in `paper/sections/05_results.tex`.
+Figure pack (`build_eval_figure_pack.py`) writes:
+
+| File | Contents |
+|------|----------|
+| `summary.json` | HM-EQA accuracy; OVMM FindObj / FindRec / both / object-only rates per backend; `status` (`OK` or `INVESTIGATE`) |
+| `summary.csv` | Long-form metrics for tables |
+| `topdown_map_grid.png` | All episode top-down maps |
+| `ovmm_findobj_findrec.png` | FindObj vs FindRec bar chart per backend |
+
+OVMM section of `summary.json` also lists per-episode `outcome`: `both`, `object_only`, `recep_only`, or `neither`.
+
+Copy into `paper/figures/eval_smoke/` and cite in `paper/sections/05_results.tex`.
