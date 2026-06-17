@@ -141,6 +141,66 @@ def _summarize_ovmm(run_id: str, ovmm_root: Path) -> dict:
     return out
 
 
+def _investigate_status(summary: dict) -> tuple[str, bool]:
+    hmeqa_acc = [
+        v.get("accuracy", 0.0)
+        for v in summary.get("hmeqa", {}).get("methods", {}).values()
+        if isinstance(v, dict)
+    ]
+    ovmm_any_success = [
+        (
+            v.get("find_object_success", 0) > 0
+            or v.get("find_recep_success", 0) > 0
+            or v.get("partial_success", 0) > 0
+        )
+        for v in summary.get("ovmm", {}).get("backends", {}).values()
+        if isinstance(v, dict)
+    ]
+    investigate = not (any(a > 0 for a in hmeqa_acc) or any(ovmm_any_success))
+    return ("INVESTIGATE" if investigate else "OK", investigate)
+
+
+def build_summary(
+    run_id: str,
+    *,
+    results_root: Path,
+    ovmm_root: Path,
+) -> dict:
+    """Aggregate HM-EQA and OVMM metrics for a smoke run."""
+    hmeqa_paths = _find_hmeqa_jsonls(run_id, results_root)
+    summary: dict = {
+        "run_id": run_id,
+        "hmeqa": _summarize_hmeqa(hmeqa_paths),
+        "ovmm": _summarize_ovmm(run_id, ovmm_root),
+    }
+    status, investigate = _investigate_status(summary)
+    summary["status"] = status
+    summary["investigate"] = investigate
+    return summary
+
+
+def write_summary_csv(summary: dict, path: Path) -> None:
+    csv_lines = ["track,method,n,success_metric,value"]
+    for method, stats in summary.get("hmeqa", {}).get("methods", {}).items():
+        if isinstance(stats, dict):
+            csv_lines.append(
+                f"hmeqa,{method},{stats.get('n', 0)},accuracy,{stats.get('accuracy', 0.0):.4f}"
+            )
+    for backend, stats in summary.get("ovmm", {}).get("backends", {}).items():
+        if isinstance(stats, dict):
+            n = stats.get("n", 0) or 1
+            for metric in (
+                "find_object_success_rate",
+                "find_recep_success_rate",
+                "find_partial_success_rate",
+                "find_both_success_rate",
+                "find_object_only_rate",
+            ):
+                rate = stats.get(metric, stats.get(metric.replace("_rate", ""), 0) / n)
+                csv_lines.append(f"ovmm,{backend},{n},{metric},{rate:.4f}")
+    path.write_text("\n".join(csv_lines) + "\n", encoding="utf-8")
+
+
 def _print_ovmm_digest(ovmm_summary: dict) -> None:
     backends = ovmm_summary.get("backends", {})
     if not backends:
@@ -261,54 +321,13 @@ def main() -> None:
     out_dir = args.output_dir or (Path.home() / "runs" / "emet" / "eval_smoke" / run_id / "figures")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    hmeqa_paths = _find_hmeqa_jsonls(run_id, results_root)
-    summary = {
-        "run_id": run_id,
-        "hmeqa": _summarize_hmeqa(hmeqa_paths),
-        "ovmm": _summarize_ovmm(run_id, ovmm_root),
-    }
-
-    hmeqa_acc = [
-        v.get("accuracy", 0.0)
-        for v in summary["hmeqa"].get("methods", {}).values()
-        if isinstance(v, dict)
-    ]
-    ovmm_any_success = [
-        (
-            v.get("find_object_success", 0) > 0
-            or v.get("find_recep_success", 0) > 0
-            or v.get("partial_success", 0) > 0
-        )
-        for v in summary["ovmm"].get("backends", {}).values()
-        if isinstance(v, dict)
-    ]
-    investigate = not (any(a > 0 for a in hmeqa_acc) or any(ovmm_any_success))
-    summary["status"] = "INVESTIGATE" if investigate else "OK"
-    summary["investigate"] = investigate
+    summary = build_summary(run_id, results_root=results_root, ovmm_root=ovmm_root)
 
     summary_path = out_dir / "summary.json"
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(summary, indent=2))
 
-    csv_lines = ["track,method,n,success_metric,value"]
-    for method, stats in summary["hmeqa"].get("methods", {}).items():
-        if isinstance(stats, dict):
-            csv_lines.append(
-                f"hmeqa,{method},{stats.get('n',0)},accuracy,{stats.get('accuracy',0.0):.4f}"
-            )
-    for backend, stats in summary["ovmm"].get("backends", {}).items():
-        if isinstance(stats, dict):
-            n = stats.get("n", 0) or 1
-            for metric in (
-                "find_object_success_rate",
-                "find_recep_success_rate",
-                "find_partial_success_rate",
-                "find_both_success_rate",
-                "find_object_only_rate",
-            ):
-                rate = stats.get(metric, stats.get(metric.replace("_rate", ""), 0) / n)
-                csv_lines.append(f"ovmm,{backend},{n},{metric},{rate:.4f}")
-    (out_dir / "summary.csv").write_text("\n".join(csv_lines) + "\n", encoding="utf-8")
+    write_summary_csv(summary, out_dir / "summary.csv")
     _print_ovmm_digest(summary["ovmm"])
 
     if args.summary_only:
