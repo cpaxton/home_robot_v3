@@ -22,9 +22,11 @@ from emet.mapping.voxel.voxel_dynamem import _apply_map_boundary_2d, _map_bounda
 from emet.visualization.map_snapshot import (
     build_map_stats,
     discord_share_map_rgb,
+    eval_topdown_map_rgb,
     format_navigation_report,
     render_topdown_map_rgb,
     share_topdown_map_rgb,
+    snapshot_eval_from_voxel_map,
     snapshot_from_voxel_map,
     world_xy_to_grid_ij,
 )
@@ -119,6 +121,45 @@ def test_share_topdown_map_crops_large_grid_to_explored_patch():
     cropped = share_topdown_map_rgb(obs, exp, go, 0.1, None, max_side=640)
     assert cropped.shape[0] < full.shape[0] or cropped.shape[1] < full.shape[1]
     assert np.array_equal(cropped, discord_share_map_rgb(obs, exp, go, 0.1, None, max_side=640))
+
+
+def test_eval_topdown_map_masks_unexplored_margin_white():
+    obs = np.zeros((128, 128), dtype=bool)
+    exp = np.zeros((128, 128), dtype=bool)
+    exp[50:60, 50:60] = True
+    obs[55, 55] = True
+    go = np.array([0.0, 0.0])
+    share = share_topdown_map_rgb(obs, exp, go, 0.1, None, max_side=640)
+    eval_map = eval_topdown_map_rgb(obs, exp, go, 0.1, None, max_side=640)
+    assert eval_map.shape[0] <= share.shape[0]
+    assert eval_map.shape[1] <= share.shape[1]
+    white = np.all(eval_map == np.uint8([248, 248, 248]), axis=-1)
+    green = np.all(eval_map == np.uint8([50, 160, 80]), axis=-1)
+    red = np.all(eval_map == np.uint8([200, 55, 55]), axis=-1)
+    assert int(green.sum()) > 0
+    assert int(red.sum()) > 0
+    assert int(white.sum()) > 0
+    dark = np.all(eval_map < np.uint8([40, 40, 40]), axis=-1)
+    assert int(dark.sum()) == 0
+
+
+def test_snapshot_eval_from_voxel_map_uses_eval_style():
+    class FakeVM:
+        grid_origin = np.array([0.0, 0.0, 0.0])
+        grid_resolution = 0.1
+
+        def get_2d_map(self):
+            obs = np.zeros((64, 64), dtype=bool)
+            exp = np.zeros((64, 64), dtype=bool)
+            exp[20:40, 20:40] = True
+            obs[30, 30] = True
+            return obs, exp
+
+    img, stats = snapshot_eval_from_voxel_map(FakeVM(), (0.0, 0.0))
+    assert img is not None
+    assert stats["map_nonempty"]
+    assert np.any(np.all(img == np.uint8([50, 160, 80]), axis=-1))
+    assert not np.any(np.all(img < np.uint8([40, 40, 40]), axis=-1))
 
 
 def test_explore_tool_returns_diagnostic_text():

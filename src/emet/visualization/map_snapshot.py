@@ -180,6 +180,64 @@ def crop_topdown_rgb_to_explored(
     return np.ascontiguousarray(rgb[i0:i1, j0:j1])
 
 
+def eval_topdown_map_rgb(
+    obstacles: Any,
+    explored: Any,
+    grid_origin_xy: np.ndarray,
+    grid_resolution: float,
+    robot_xy: np.ndarray | tuple[float, float] | None,
+    *,
+    max_side: int = 640,
+    margin_cells: int = 8,
+) -> np.ndarray:
+    """Eval/diagnostics export: crop to explored footprint, white background, only paint explored cells.
+
+    Unlike :func:`share_topdown_map_rgb`, unmapped margin pixels stay white (not dark gray) so small
+    Habitat/OVMM maps remain readable on a 1024×1024 grid.
+    """
+    obs = _to_numpy_bool_2d(obstacles)
+    exp = _to_numpy_bool_2d(explored)
+    h, w = obs.shape
+    bbox = explored_crop_indices(
+        explored,
+        robot_xy,
+        grid_origin_xy,
+        grid_resolution,
+        (h, w),
+        margin_cells=margin_cells,
+    )
+    if bbox is None:
+        return render_topdown_map_rgb(
+            obstacles,
+            explored,
+            grid_origin_xy,
+            grid_resolution,
+            robot_xy,
+            max_side=max_side,
+        )
+    i0, i1, j0, j1 = bbox
+    exp_c = exp[i0:i1, j0:j1]
+    obs_c = obs[i0:i1, j0:j1]
+    rgb = np.full((exp_c.shape[0], exp_c.shape[1], 3), 248, dtype=np.uint8)
+    free = exp_c & ~obs_c
+    rgb[free] = (50, 160, 80)
+    rgb[exp_c & obs_c] = (200, 55, 55)
+    if robot_xy is not None:
+        ri, rj = world_xy_to_grid_ij(robot_xy, grid_origin_xy, grid_resolution, (h, w))
+        ri -= i0
+        rj -= j0
+        ch, cw = rgb.shape[0], rgb.shape[1]
+        if 0 <= ri < ch and 0 <= rj < cw:
+            r = 3
+            i_lo, i_hi = max(0, ri - r), min(ch, ri + r + 1)
+            j_lo, j_hi = max(0, rj - r), min(cw, rj + r + 1)
+            rgb[i_lo:i_hi, j_lo:j_hi] = np.maximum(
+                rgb[i_lo:i_hi, j_lo:j_hi], np.uint8([255, 255, 255])
+            )
+            rgb[ri, rj] = (255, 255, 0)
+    return downsample_topdown_rgb_max_side(rgb, max_side)
+
+
 def share_topdown_map_rgb(
     obstacles: Any,
     explored: Any,
@@ -292,6 +350,27 @@ def format_navigation_report(stats: dict[str, Any], *, explore_ok: bool | None =
     elif explore_ok is False:
         parts.append("Last explore command: executor reported failure (no frontier / non-navigable start / empty map).")
     return " ".join(parts)
+
+
+def snapshot_eval_from_voxel_map(
+    voxel_map: Any,
+    robot_xy: np.ndarray | tuple[float, float] | None,
+    *,
+    max_side: int = 640,
+) -> tuple[np.ndarray | None, dict[str, Any]]:
+    """Build eval/diagnostics top-down map (white background, explored-only coloring)."""
+    if voxel_map is None or not hasattr(voxel_map, "get_2d_map"):
+        empty: dict[str, Any] = {
+            "summary_lines": ["No voxel map attached (get_voxel_map unavailable)."],
+            "map_nonempty": False,
+        }
+        return None, empty
+    obstacles, explored = voxel_map.get_2d_map()
+    go = _grid_origin_xy(getattr(voxel_map, "grid_origin", np.zeros(2)))
+    res = float(getattr(voxel_map, "grid_resolution", 0.1) or 0.1)
+    stats = build_map_stats(obstacles, explored, go, res, robot_xy)
+    img = eval_topdown_map_rgb(obstacles, explored, go, res, robot_xy, max_side=max_side)
+    return img, stats
 
 
 def snapshot_from_voxel_map(

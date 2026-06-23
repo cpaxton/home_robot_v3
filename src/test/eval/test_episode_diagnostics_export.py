@@ -70,6 +70,27 @@ def test_flush_writes_map_and_manifest(tmp_path: Path) -> None:
     assert manifest.get("topdown_map")
 
 
+def test_flush_writes_map_without_dark_unknown_padding(tmp_path: Path) -> None:
+    agent = _FakeAgent()
+    rec = EpisodeDiagnosticsRecorder(
+        cfg=EpisodeDiagnosticsConfig(
+            export_map=True,
+            export_obstacle_grids=False,
+            export_trajectory=False,
+            export_rgb_frames=False,
+            export_video=False,
+            export_object_crops=False,
+        )
+    )
+    flush_episode_diagnostics(tmp_path, agent, rec)
+    from PIL import Image
+
+    img = np.asarray(Image.open(tmp_path / "topdown_map.png"))
+    dark = np.all(img < np.uint8([40, 40, 40]), axis=-1)
+    assert int(dark.sum()) == 0
+    assert np.any(np.all(img == np.uint8([50, 160, 80]), axis=-1))
+
+
 def test_config_from_env_defaults_on() -> None:
     cfg = EpisodeDiagnosticsConfig.from_env()
     assert cfg.export_map is True

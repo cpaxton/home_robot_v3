@@ -193,10 +193,10 @@ class EpisodeDiagnosticsRecorder:
         vm = getattr(agent, "voxel_map", None)
         if vm is None:
             return None
-        from emet.visualization.map_snapshot import snapshot_from_voxel_map
+        from emet.visualization.map_snapshot import snapshot_eval_from_voxel_map
 
         xy = robot_xy_from_agent(agent)
-        img, _, _ = snapshot_from_voxel_map(vm, xy, max_side=self.cfg.max_map_side)
+        img, _ = snapshot_eval_from_voxel_map(vm, xy, max_side=self.cfg.max_map_side)
         if img is None:
             return None
         if intermediate:

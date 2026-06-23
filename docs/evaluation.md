@@ -160,6 +160,8 @@ Figure pack (`build_eval_figure_pack.py`) writes:
 | `topdown_map_grid.png` | All episode top-down maps |
 | `ovmm_findobj_findrec.png` | FindObj vs FindRec bar chart per backend |
 
+**Top-down map colors:** green = explored free space, red = explored obstacle, white = unmapped margin, yellow dot = robot. Eval exports crop to the explored footprint on a white background (not the dark-gray “unknown” fill used for Discord sharing on the full 1024×1024 grid). Maps that look mostly red within the explored blob usually mean depth marked most observed cells as obstacles (common with `explore_steps: 0` Habitat runs); mostly green means few obstacles in the explored region.
+
 OVMM section of `summary.json` also lists per-episode `outcome`: `both`, `object_only`, `recep_only`, or `neither`.
 
 Copy into `paper/figures/eval_smoke/` and cite in `paper/sections/05_results.tex`.
