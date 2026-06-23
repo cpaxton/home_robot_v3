@@ -36,6 +36,7 @@ from emet.eval.episode_diagnostics import (
     EpisodeDiagnosticsConfig,
     EpisodeDiagnosticsRecorder,
     attach_diagnostics_recorder,
+    habitat_export_voxel_history_default,
 )
 from emet.habitat.hmeqa_enrich_labels import enrich_labels_for_question
 from emet.habitat.metrics import (
@@ -237,6 +238,7 @@ def run_hmeqa_episode(
     use_real_vlm = not mock_llm
     try:
         sim.set_init_pose(init_pose)
+        spawn_record = sim.last_init_pose_record
         robot = HabitatRobotClient(sim)
         if sim.uses_hm3d_semantics:
             print(f"HM3D semantics enabled for scene {q.scene}", flush=True)
@@ -267,9 +269,12 @@ def run_hmeqa_episode(
             export_map=export_map,
             export_video=export_video,
             export_map_stride=map_stride if map_stride is not None else None,
+            export_voxel_history=habitat_export_voxel_history_default(),
         )
         diag_recorder = EpisodeDiagnosticsRecorder(cfg=diag_cfg)
         attach_diagnostics_recorder(agent, diag_recorder)
+        if spawn_record is not None:
+            agent._habitat_spawn_record = spawn_record
         agent._eqa_question = q.question_formatted
         agent.start()
         if agent.graph_memory is not None:

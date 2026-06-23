@@ -51,6 +51,8 @@ All embodied tracks can write a **consistent episode bundle** via [`src/emet/eva
 | `EMET_EVAL_EXPORT_FRAMES` | on | RGB frame PNGs |
 | `EMET_EVAL_MAP_STRIDE` | 0 | Intermediate `maps/step_NNNN.png` |
 | `EMET_EVAL_EXPORT_GRAPH` | off | Full graph checkpoint (heavy) |
+| `EMET_EVAL_EXPORT_VOXEL_HISTORY` | on (Habitat) | Per-observation `observations_history.jsonl` |
+| `EMET_EVAL_EXPORT_VOXEL_PICKLE` | off | Full `voxel_debug.pkl` (heavy) |
 
 Habitat aliases: `HABITAT_EQA_EXPORT_MAP`, `HABITAT_EQA_EXPORT_VIDEO`, `HABITAT_EQA_EXPORT_GRAPH`.
 

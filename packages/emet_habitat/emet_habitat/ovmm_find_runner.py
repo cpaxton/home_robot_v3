@@ -29,6 +29,7 @@ from emet.eval.episode_diagnostics import (
     EpisodeDiagnosticsRecorder,
     attach_diagnostics_recorder,
     flush_episode_diagnostics,
+    habitat_export_voxel_history_default,
 )
 from emet.eval.ovmm_find_phase import (
     FindPhaseEpisode,
@@ -142,6 +143,7 @@ def run_habitat_find_phase_episode(
     query_wall_s = 0.0
     try:
         sim.set_init_pose(init_pose)
+        spawn_record = sim.last_init_pose_record
         robot = HabitatRobotClient(sim)
         from emet.memory.graph_eqa.sim_ground_truth_graph import placements_to_json_dict
 
@@ -169,9 +171,15 @@ def run_habitat_find_phase_episode(
             compare_to_gt=run_cfg.compare_to_gt,
             use_sensor_perception=run_cfg.use_sensor_perception,
         )
-        diag_cfg = EpisodeDiagnosticsConfig.from_env(export_map=export_map, export_video=export_video)
+        diag_cfg = EpisodeDiagnosticsConfig.from_env(
+            export_map=export_map,
+            export_video=export_video,
+            export_voxel_history=habitat_export_voxel_history_default(),
+        )
         diag_recorder = EpisodeDiagnosticsRecorder(cfg=diag_cfg)
         attach_diagnostics_recorder(agent, diag_recorder)
+        if spawn_record is not None:
+            agent._habitat_spawn_record = spawn_record
         init_wall_s = time.monotonic() - t_init0
         if run_cfg.backend == "ground_truth":
             refresh = getattr(agent, "refresh_ground_truth", None)

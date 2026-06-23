@@ -236,6 +236,8 @@ def save_episode_debug_bundle(
             cfg.export_obstacle_grids,
             cfg.export_object_crops,
             cfg.export_full_graph,
+            cfg.export_voxel_history,
+            cfg.export_voxel_pickle,
         )
     ):
         diag_rec = EpisodeDiagnosticsRecorder(cfg=cfg)

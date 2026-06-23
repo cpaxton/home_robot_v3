@@ -21,6 +21,8 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_EVAL_EXPORT_FRAMES` | Same | Save RGB frames under `frames/`. |
 | `EMET_EVAL_MAP_STRIDE` | Same | Save intermediate maps every N steps (0 = final only). Alias: `HABITAT_EQA_MAP_STRIDE`. |
 | `EMET_EVAL_EXPORT_GRAPH` | Same | Full graph checkpoint (heavy). Alias: `HABITAT_EQA_EXPORT_GRAPH`. |
+| `EMET_EVAL_EXPORT_VOXEL_HISTORY` | Habitat episode bundles | Slim `observations_history.jsonl` from in-memory voxel frames (default on in Habitat runners). |
+| `EMET_EVAL_EXPORT_VOXEL_PICKLE` | Same | Optional full `voxel_debug.pkl` via `write_to_pickle`. |
 | `EMET_OVMM_OUTPUT_SIM` | `eval_ovmm_find_phases.py` | OVMM sim sweep output. Default `~/runs/emet/ovmm_find_phase` (`configs/ovmm/benchmark.yaml`). |
 | `EMET_OVMM_OUTPUT_FULL` | `eval_ovmm_full.py` | Full OVMM (find + pick/place) output. Default `~/runs/emet/ovmm_full`. |
 | `EMET_OVMM_OUTPUT_HABITAT` | `eval_habitat_ovmm_find_phases.py` | Habitat OVMM proxy output. Default `~/runs/emet/ovmm_habitat`. |

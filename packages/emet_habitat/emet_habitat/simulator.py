@@ -173,6 +173,30 @@ class HabitatEQASimulator:
             np.array([1.0, 0.0, 0.0], dtype=np.float32),
         )
         self._agent.set_state(state)
+        self._last_init_pose_record = {
+            "init_pose_csv": {
+                "x": float(pose.x),
+                "y": float(pose.y),
+                "z": float(pose.z),
+                "heading": float(pose.heading),
+            },
+            "init_pose_snapped": {
+                "x": float(position[0]),
+                "y": float(position[1]),
+                "z": float(position[2]),
+            },
+            "navmesh_snapped": bool(
+                np.linalg.norm(
+                    np.asarray([pose.x, pose.y, pose.z], dtype=np.float64)
+                    - np.asarray(position, dtype=np.float64)
+                )
+                > 1e-4
+            ),
+        }
+
+    @property
+    def last_init_pose_record(self) -> dict[str, object] | None:
+        return getattr(self, "_last_init_pose_record", None)
 
     def find_path_to_xy(self, goal_x: float, goal_z: float) -> np.ndarray | None:
         """Return navmesh shortest-path waypoints in Habitat coords, or None."""

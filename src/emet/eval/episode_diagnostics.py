@@ -52,6 +52,8 @@ class EpisodeDiagnosticsConfig:
     export_video: bool = True
     export_object_crops: bool = True
     export_full_graph: bool = False
+    export_voxel_history: bool = False
+    export_voxel_pickle: bool = False
     max_map_side: int = 640
     video_fps: float = 6.0
 
@@ -66,6 +68,8 @@ class EpisodeDiagnosticsConfig:
             export_video=_env_truthy("EMET_EVAL_EXPORT_VIDEO", True),
             export_object_crops=_env_truthy("EMET_EVAL_EXPORT_OBJECT_CROPS", True),
             export_full_graph=_env_truthy("EMET_EVAL_EXPORT_GRAPH", False),
+            export_voxel_history=_env_truthy("EMET_EVAL_EXPORT_VOXEL_HISTORY", False),
+            export_voxel_pickle=_env_truthy("EMET_EVAL_EXPORT_VOXEL_PICKLE", False),
         )
         for key, val in overrides.items():
             if val is not None and hasattr(cfg, key):
@@ -171,6 +175,17 @@ class EpisodeDiagnosticsRecorder:
             floor_path = _write_floor_metrics(agent, root)
             if floor_path:
                 manifest["floor_metrics"] = str(floor_path)
+            if self.cfg.export_voxel_history or self.cfg.export_voxel_pickle:
+                spawn = getattr(agent, "_habitat_spawn_record", None)
+                manifest.update(
+                    export_voxel_observation_history(
+                        agent,
+                        root,
+                        spawn_record=spawn if isinstance(spawn, dict) else None,
+                        export_jsonl=self.cfg.export_voxel_history,
+                        export_pickle=self.cfg.export_voxel_pickle,
+                    )
+                )
 
         if self.cfg.export_video:
             mp4 = _write_episode_mp4(root, fps=self.cfg.video_fps)
@@ -258,10 +273,181 @@ def flush_episode_diagnostics(
             recorder.cfg.export_obstacle_grids,
             recorder.cfg.export_object_crops,
             recorder.cfg.export_full_graph,
+            recorder.cfg.export_voxel_history,
+            recorder.cfg.export_voxel_pickle,
         )
     ):
         return {}
     return recorder.flush(episode_dir, agent=agent)
+
+def habitat_export_voxel_history_default() -> bool:
+    """Habitat runners enable voxel history unless explicitly disabled."""
+    raw = os.environ.get("EMET_EVAL_EXPORT_VOXEL_HISTORY", "").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return False
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    return True
+
+
+def export_voxel_observation_history(
+    agent: Any,
+    root: Path,
+    *,
+    spawn_record: dict[str, Any] | None = None,
+    export_jsonl: bool = True,
+    export_pickle: bool = False,
+) -> dict[str, str]:
+    """Export slim per-observation voxel debug history already held in memory."""
+    vm = getattr(agent, "voxel_map", None)
+    if vm is None:
+        return {}
+    out: dict[str, str] = {}
+    observations = list(getattr(vm, "observations", []) or [])
+    if export_jsonl and observations:
+        from emet.visualization.map_snapshot import _grid_origin_xy, world_xy_to_grid_ij
+
+        obstacles, explored = vm.get_2d_map()
+        obs_grid = _to_numpy_bool(obstacles)
+        shape_hw = (int(obs_grid.shape[0]), int(obs_grid.shape[1]))
+        res = float(getattr(vm, "grid_resolution", 0.1) or 0.1)
+        origin_xy = _grid_origin_xy(getattr(vm, "grid_origin", None))
+
+        header: dict[str, Any] = {
+            "type": "header",
+            "n_observations": len(observations),
+            "grid_resolution": res,
+            "grid_origin_xy": origin_xy.tolist(),
+            "shape_hw": list(shape_hw),
+        }
+        if spawn_record:
+            header["spawn_record"] = spawn_record
+
+        path = root / "observations_history.jsonl"
+        with path.open("w", encoding="utf-8") as fh:
+            fh.write(json.dumps(header) + "\n")
+            for obs_idx, frame in enumerate(observations):
+                row = _observation_history_row(
+                    obs_idx,
+                    frame,
+                    origin_xy=origin_xy,
+                    grid_resolution=res,
+                    shape_hw=shape_hw,
+                    world_xy_to_grid_ij=world_xy_to_grid_ij,
+                )
+                fh.write(json.dumps(row) + "\n")
+        out["observations_history"] = str(path)
+
+    if export_pickle and hasattr(vm, "write_to_pickle"):
+        pkl_path = root / "voxel_debug.pkl"
+        vm.write_to_pickle(str(pkl_path))
+        if pkl_path.is_file():
+            out["voxel_debug_pickle"] = str(pkl_path)
+
+    if spawn_record and "spawn_record" not in out:
+        spawn_path = root / "spawn_record.json"
+        spawn_path.write_text(json.dumps(spawn_record, indent=2) + "\n", encoding="utf-8")
+        out["spawn_record"] = str(spawn_path)
+    return out
+
+
+def _observation_history_row(
+    obs_idx: int,
+    frame: Any,
+    *,
+    origin_xy: np.ndarray,
+    grid_resolution: float,
+    shape_hw: tuple[int, int],
+    world_xy_to_grid_ij: Any,
+) -> dict[str, Any]:
+    camera_t = _pose_translation_xyz(frame.camera_pose)
+    base_pose = _to_numpy_f64(frame.base_pose)
+    base_xyt: list[float] | None = None
+    gps_grid_ij: list[int] | None = None
+    if base_pose is not None and base_pose.size >= 2:
+        theta = float(base_pose[2]) if base_pose.size >= 3 else 0.0
+        base_xyt = [float(base_pose[0]), float(base_pose[1]), theta]
+        gi, gj = world_xy_to_grid_ij(base_xyt[:2], origin_xy, grid_resolution, shape_hw)
+        gps_grid_ij = [gi, gj]
+
+    cam_xy = (float(camera_t[0]), float(camera_t[1]))
+    cam_xz = (float(camera_t[0]), float(camera_t[2]))
+    cam_ij_xy = list(world_xy_to_grid_ij(cam_xy, origin_xy, grid_resolution, shape_hw))
+    cam_ij_xz = list(world_xy_to_grid_ij(cam_xz, origin_xy, grid_resolution, shape_hw))
+
+    pcd = _to_numpy_f64(frame.full_world_xyz)
+    pcd_centroid_xy: list[float] | None = None
+    pcd_centroid_xz: list[float] | None = None
+    n_world_points = 0
+    if pcd is not None and pcd.ndim == 2 and pcd.shape[0] > 0 and pcd.shape[1] >= 3:
+        n_world_points = int(pcd.shape[0])
+        pcd_centroid_xy = [float(pcd[:, 0].mean()), float(pcd[:, 1].mean())]
+        pcd_centroid_xz = [float(pcd[:, 0].mean()), float(pcd[:, 2].mean())]
+
+    depth_stats = _depth_summary(frame.depth)
+    return {
+        "type": "observation",
+        "obs_idx": obs_idx,
+        "camera_pose_t": camera_t,
+        "base_pose_xyt": base_xyt,
+        "gps_grid_ij": gps_grid_ij,
+        "camera_grid_ij": cam_ij_xy,
+        "camera_grid_ij_xz": cam_ij_xz,
+        "pcd_centroid_xy": pcd_centroid_xy,
+        "pcd_centroid_xz": pcd_centroid_xz,
+        "depth_valid_frac": depth_stats["valid_frac"],
+        "depth_median_m": depth_stats["median_m"],
+        "n_world_points": n_world_points,
+        "gps_camera_grid_delta_ij": (
+            [cam_ij_xy[0] - gps_grid_ij[0], cam_ij_xy[1] - gps_grid_ij[1]]
+            if gps_grid_ij is not None
+            else None
+        ),
+    }
+
+
+def _pose_translation_xyz(pose: Any) -> list[float]:
+    arr = _to_numpy_f64(pose)
+    if arr is None:
+        return [0.0, 0.0, 0.0]
+    if arr.shape == (4, 4):
+        t = arr[:3, 3]
+    elif arr.size >= 3:
+        t = arr.reshape(-1)[:3]
+    else:
+        t = np.zeros(3, dtype=np.float64)
+    return [float(t[0]), float(t[1]), float(t[2])]
+
+
+def _to_numpy_f64(arr: Any) -> np.ndarray | None:
+    if arr is None:
+        return None
+    if hasattr(arr, "detach"):
+        arr = arr.detach()
+    if hasattr(arr, "cpu"):
+        arr = arr.cpu()
+    if hasattr(arr, "numpy"):
+        arr = arr.numpy()
+    out = np.asarray(arr, dtype=np.float64)
+    if out.size == 0:
+        return None
+    return out
+
+
+def _depth_summary(depth: Any) -> dict[str, float | None]:
+    arr = _to_numpy_f64(depth)
+    if arr is None:
+        return {"valid_frac": None, "median_m": None}
+    flat = arr.reshape(-1)
+    finite = np.isfinite(flat)
+    if not finite.any():
+        return {"valid_frac": 0.0, "median_m": None}
+    valid = flat[finite]
+    positive = valid[valid > 0.0]
+    valid_frac = float(positive.size / max(1, flat.size))
+    median_m = float(np.median(positive)) if positive.size else None
+    return {"valid_frac": valid_frac, "median_m": median_m}
+
 
 
 def _save_rgb_png(path: Path, rgb: np.ndarray) -> None:
