@@ -131,6 +131,31 @@ class GraphObjectFusion:
                 best = node
         return best
 
+    def find_fallback_node(
+        self,
+        graph_memory: GraphEQAMemory,
+        candidate: GraphDetectionCandidate,
+    ) -> GraphNode | None:
+        """Nearest-neighbor XY merge when strict spatial/embedding/bounds gates fail."""
+        radius = float(self.config.fallback_spatial_merge_xy_m)
+        if radius <= 0.0:
+            return None
+        xyz = np.asarray(candidate.xyz, dtype=np.float64).reshape(3)
+        best: GraphNode | None = None
+        best_dxy = float("inf")
+        for node in graph_memory.get_nodes():
+            if node.is_viewpoint:
+                continue
+            if not self._label_match(node, candidate.label):
+                continue
+            nxy = np.asarray(node.xyz, dtype=np.float64).reshape(3)
+            dxy = float(np.linalg.norm(nxy[:2] - xyz[:2]))
+            if dxy > radius or dxy >= best_dxy:
+                continue
+            best_dxy = dxy
+            best = node
+        return best
+
     def apply_detection(
         self,
         graph_memory: GraphEQAMemory,
@@ -141,6 +166,8 @@ class GraphObjectFusion:
     ) -> int:
         """Merge into an existing node or add a new observation."""
         match = self.find_best_node(graph_memory, candidate)
+        if match is None:
+            match = self.find_fallback_node(graph_memory, candidate)
         if match is not None:
             return graph_memory.merge_object_detection(
                 rgb,

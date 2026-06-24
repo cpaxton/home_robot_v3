@@ -45,4 +45,8 @@ def attach_graph_object_fusion(
     if not fc.enabled:
         return None
     graph_memory.spatial_merge_m = 0.0
+    if fc.fallback_spatial_merge_xy_m <= 0.0:
+        merge_xy = (parameters or {}).get("dynagraph_merge_xy_m")
+        if merge_xy is not None and float(merge_xy) > 0.0:
+            fc = GraphObjectFusionConfig(**{**asdict(fc), "fallback_spatial_merge_xy_m": float(merge_xy)})
     return GraphObjectFusion(fc)

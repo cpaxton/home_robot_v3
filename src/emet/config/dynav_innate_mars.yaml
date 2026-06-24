@@ -164,6 +164,19 @@ graph_eqa_extract:
 
 graph_eqa_record_navigation: true
 
+# GraphObjectFusion tuned for DA3 depth jitter on hardware (see graph_object_fusion_innate_mars.yaml).
+graph_object_fusion:
+  enabled: true
+  spatial_merge_xy_m: 0.48
+  min_centroid_dist_m: 0.65
+  bounds_3d_iou_min: 0.0
+  embedding_min_cosine: 0.0
+  embedding_blend_alpha: 0.35
+  require_label_match: false
+  max_candidates: 64
+  match_xy_m: 0.55
+  fallback_spatial_merge_xy_m: 0.55
+
 rerun:
   mjcf_show_visual_mesh: true
   mjcf_show_skeleton: false

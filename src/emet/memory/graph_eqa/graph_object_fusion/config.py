@@ -28,6 +28,9 @@ class GraphObjectFusionConfig:
     require_label_match: bool = False
     max_candidates: int = 64
 
+    # When strict gates fail, merge to nearest object node within this XY radius (0 = disabled).
+    fallback_spatial_merge_xy_m: float = 0.0
+
     # Scoring / calibration
     match_xy_m: float = 0.55
 
