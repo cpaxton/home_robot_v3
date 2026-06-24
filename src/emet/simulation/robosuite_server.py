@@ -39,6 +39,7 @@ from emet.core.zmq_protocol import (
 from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn, scene_base_spawn
 from emet.simulation.env_flags import env_sim_nav_debug, warn_sim_nav_env_flags
+from emet.simulation.gripper_action import apply_gripper_action_robosuite
 from emet.simulation.head_look_action import apply_head_to_robosuite
 from emet.simulation.molmospaces_env import molmospaces_nav_teleport_enabled
 from emet.simulation.molmospaces_mobile_autoplace import apply_molmospaces_freejoint_base_autoplace
@@ -56,7 +57,9 @@ from emet.simulation.robosuite_load_utils import (
     apply_home_keyframe_preserving_planar_base,
     log_post_load_diagnostics,
     probe_max_qvel_unforced_steps,
+    resolve_robot_home_keyframe_id,
     robosuite_post_load_debug_enabled,
+    robot_home_keyframe_name,
     update_robot_qpos0_from_data,
 )
 from emet.simulation.sim_object_placements import (
@@ -433,6 +436,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         with self._mj_lock:
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             self._molmospaces_autoplace_free_base_after_load()
+            self._molmospaces_planar_autoplace_after_load()
             self._robocasa_planar_autoplace_after_load()
             self._robocasa_freejoint_autoplace_after_load()
         self._planar_base_actuator_ids_cache = None
@@ -474,6 +478,97 @@ class RobosuiteZmqServer(BaseZmqServer):
             robot_key=self._spec.name,
             debug=self._debug_molmospaces_spawn,
         )
+
+    def _molmospaces_planar_autoplace_after_load(self) -> None:
+        """Reposition planar slide+yaw base on merged MolmoSpaces scenes (xlerobot, etc.)."""
+        from emet.simulation.molmospaces_spawn import want_molmospaces_autoplace
+
+        if not want_molmospaces_autoplace(
+            environment=self._environment_descriptor,
+            scene_source_basename=self._scene_source_basename,
+        ):
+            return
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        if self._base_freejoint_addrs() is not None:
+            return
+        names = getattr(self._spec, "planar_base_joint_names", None)
+        if not names or len(names) != 3:
+            return
+        if self._molmospaces_autoplace_snap_qpos0 or self._planar_autoplace_snap_qpos0:
+            return
+        base_name = self._spec.base_link_name
+        joint_names = (str(names[0]), str(names[1]), str(names[2]))
+        robot_key = str(getattr(self._spec, "name", "")).lower()
+        placed: tuple[float, float, float] | None = None
+        if robot_key in ("xlerobot", "xlerobot_dual"):
+            try:
+                placed = scene_base_spawn.try_xlerobot_molmospaces_planar_spawn(
+                    self._mjmodel,
+                    self._mjdata,
+                    base_body_name=base_name,
+                    joint_names=joint_names,
+                    merged_mjcf_path=self._scene_disk_path,
+                    environment=self._environment_descriptor,
+                )
+            except Exception as e:
+                logger.warning(f"MolmoSpaces XLeRobot occupancy spawn skipped ({e!r}).")
+                return
+            if placed is None:
+                logger.warning(
+                    "MolmoSpaces XLeRobot spawn: no occupancy placement; robot stays at MJCF origin "
+                    "(may be inside iTHOR geometry — open viewer and use Tracking camera on 'chassis')."
+                )
+                return
+        else:
+            fp = self._spec.footprint
+            base_margin = float(
+                0.5
+                * np.hypot(
+                    float(fp.length) + abs(float(fp.length_offset)),
+                    float(fp.width) + abs(float(fp.width_offset)),
+                )
+                + 0.10
+            )
+            extra_xy = float(self._spec.planar_spawn_xy_extra_margin_m)
+            margin = base_margin + extra_xy
+            clip_pad = self._spec.planar_spawn_clip_edge_pad_m
+            if clip_pad is None:
+                clip_pad = float(0.22 + 0.5 * extra_xy)
+            try:
+                logger.info(
+                    "MolmoSpaces planar autoplace: searching collision-free spawn for %r (may take ~10–30s on iTHOR)…",
+                    base_name,
+                )
+                placed = scene_base_spawn.find_planar_base_xyt(
+                    self._mjmodel,
+                    self._mjdata,
+                    base_body_name=base_name,
+                    joint_names=joint_names,
+                    spawn_profile="molmospaces",
+                    scene_label=self._scene_source_basename,
+                    merged_mjcf_path=self._scene_disk_path,
+                    environment=self._environment_descriptor,
+                    footprint_xy_margin_m=margin,
+                    clip_edge_pad_m=clip_pad,
+                    # MolmoSpaces iTHOR: skip jaw/EE clip guards (visual-only arms); speeds spawn search.
+                    clip_guard_body_names=(),
+                    clip_guard_pad_m=float(self._spec.planar_spawn_clip_guard_pad_m),
+                )
+            except Exception as e:
+                logger.warning(f"MolmoSpaces planar autoplace skipped ({e!r}).")
+                return
+            if placed is None:
+                return
+        wx, wy, wt = placed
+        logger.info(
+            f"MolmoSpaces planar autoplace: moved base to x={wx:.3f} y={wy:.3f} theta={wt:.3f} "
+            f"(joints {joint_names!r})."
+        )
+        # Do not copy slide/hinge qpos into qpos0: MuJoCo FK uses (qpos - qpos0) for those joints,
+        # so matching qpos0 to qpos would zero the base on the next mj_forward / get_base_xyt.
+        self._planar_autoplace_snap_qpos0 = True
+        self._planar_autoplace_world_xyt = np.array([float(wx), float(wy), float(wt)], dtype=np.float64)
 
     def _robocasa_planar_autoplace_after_load(self) -> None:
         """Reposition planar (slide X/Y + yaw) base away from Robocasa clutter when enabled."""
@@ -569,11 +664,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                     logger.info(f"[scene_base_spawn/post-place] {ln}")
             except Exception as e:
                 logger.warning(f"Robocasa planar spawn debug contact report failed: {e!r}")
-        for jn, _val in zip(joint_names, (wx, wy, wt), strict=True):
-            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, jn)
-            if jid >= 0:
-                qadr = int(self._mjmodel.jnt_qposadr[jid])
-                self._mjmodel.qpos0[qadr] = float(self._mjdata.qpos[qadr])
+        # See MolmoSpaces planar autoplace: do not snap slide/hinge qpos into qpos0.
         self._planar_autoplace_snap_qpos0 = True
 
     def _robocasa_freejoint_autoplace_after_load(self) -> None:
@@ -991,15 +1082,24 @@ class RobosuiteZmqServer(BaseZmqServer):
         return positions, velocities, efforts
 
     def _joint_head_qpos(self) -> float | None:
-        """Innate Mars head nod angle for MJCF ``joint_head`` replay in Rerun (radians)."""
-        if self._spec.name != "innate_mars" or self._mjmodel is None or self._mjdata is None:
+        """Head tilt for Rerun / observations (innate_mars ``joint_head`` or xlerobot ``head_tilt_joint``)."""
+        if self._mjmodel is None or self._mjdata is None:
             return None
-        with self._mj_lock:
-            jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, "joint_head")
-            if jid < 0:
-                return None
-            qadr = int(self._mjmodel.jnt_qposadr[jid])
-            return float(self._mjdata.qpos[qadr])
+        if self._spec.name == "innate_mars":
+            with self._mj_lock:
+                jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, "joint_head")
+                if jid < 0:
+                    return None
+                qadr = int(self._mjmodel.jnt_qposadr[jid])
+                return float(self._mjdata.qpos[qadr])
+        if self._spec.name == "xlerobot":
+            with self._mj_lock:
+                jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, "head_tilt_joint")
+                if jid < 0:
+                    return None
+                qadr = int(self._mjmodel.jnt_qposadr[jid])
+                return float(self._mjdata.qpos[qadr])
+        return None
 
     def _close_renderers(self) -> None:
         with self._render_lock:
@@ -1175,11 +1275,14 @@ class RobosuiteZmqServer(BaseZmqServer):
         if self._joint_ctrl_hold_client_pin is None or int(self._joint_ctrl_hold_client_pin.shape[0]) != n:
             self._joint_ctrl_hold_client_pin = np.zeros(n, dtype=np.bool_)
 
-    def _seed_joint_ctrl_hold_from_keyframe(self, key_name: str = "home") -> bool:
+    def _seed_joint_ctrl_hold_from_keyframe(self, key_name: str | None = None) -> bool:
         """Copy MJCF keyframe ``ctrl`` into :attr:`_joint_ctrl_hold` (position setpoints for PD actuators)."""
         if self._mjmodel is None or self._mjdata is None:
             return False
-        kid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_KEY, key_name)
+        if key_name is None:
+            kid = resolve_robot_home_keyframe_id(self._mjmodel, self._spec)
+        else:
+            kid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_KEY, key_name)
         if kid < 0:
             return False
         self._ensure_joint_ctrl_hold_buffers()
@@ -1245,6 +1348,24 @@ class RobosuiteZmqServer(BaseZmqServer):
         else:
             self._joint_ctrl_hold_client_pin.fill(False)
 
+    def _pin_spec_actuators_by_name(self, *actuator_names: str) -> None:
+        """Pin PD hold rows so head/gripper targets persist across physics steps."""
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        self._ensure_joint_ctrl_hold_buffers()
+        if self._joint_ctrl_hold is None or self._joint_ctrl_hold_client_pin is None:
+            return
+        for aname in actuator_names:
+            try:
+                spec_i = self._spec.actuator_names.index(aname)
+            except ValueError:
+                continue
+            aid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
+            if aid < 0 or spec_i >= int(self._joint_ctrl_hold.shape[0]):
+                continue
+            self._joint_ctrl_hold[spec_i] = float(self._mjdata.ctrl[aid])
+            self._joint_ctrl_hold_client_pin[spec_i] = True
+
     def _refresh_unpinned_joint_ctrl_hold_from_stationary(self) -> None:
         """Align unpinned :attr:`_joint_ctrl_hold` rows with ``compute_stationary_ctrl_vector`` (current ``q``)."""
         if self._mjmodel is None or self._mjdata is None or self._joint_ctrl_hold is None:
@@ -1292,14 +1413,33 @@ class RobosuiteZmqServer(BaseZmqServer):
         """Zero all velocities, align actuators with ``qpos``, and run a few dynamics steps."""
         if self._mjmodel is None or self._mjdata is None:
             return
+        if (
+            self._planar_autoplace_snap_qpos0
+            and self._is_molmospaces_session()
+            and str(getattr(self._spec, "name", "")).lower() in ("xlerobot", "xlerobot_dual")
+        ):
+            with self._mj_lock:
+                self._snapshot_stationary_planar_base_qpos()
+            logger.info(
+                "Skipping post-load stabilize for %r on MolmoSpaces (occupancy spawn).",
+                self._spec.name,
+            )
+            return
         with self._mj_lock:
+            if self._planar_autoplace_world_xyt is not None:
+                self._reapply_planar_autoplace_world_xyt()
+                self._snapshot_stationary_planar_base_qpos()
             self._mjdata.qvel.fill(0.0)
             self._preserve_joint_ctrl_hold_from_ctrl()
             mujoco.mj_forward(self._mjmodel, self._mjdata)
             for _ in range(8):
+                self._hold_stationary_base_if_idle()
                 self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                 mujoco.mj_step(self._mjmodel, self._mjdata)
             self._mjdata.qvel.fill(0.0)
+            if self._planar_autoplace_world_xyt is not None:
+                self._reapply_planar_autoplace_world_xyt()
+                self._snapshot_stationary_planar_base_qpos()
             self._preserve_joint_ctrl_hold_from_ctrl()
             mujoco.mj_forward(self._mjmodel, self._mjdata)
 
@@ -1867,8 +2007,25 @@ class RobosuiteZmqServer(BaseZmqServer):
             ht = action["head_to"]
             if isinstance(ht, (list, tuple)) and len(ht) >= 2:
                 with self._mj_lock:
-                    apply_head_to_robosuite(self._spec, self._mjmodel, self._mjdata, float(ht[0]), float(ht[1]))
-                    self._snapshot_spec_hold_from_ctrl()
+                    n = apply_head_to_robosuite(self._spec, self._mjmodel, self._mjdata, float(ht[0]), float(ht[1]))
+                    if n > 0:
+                        if self._spec.name == "xlerobot":
+                            self._pin_spec_actuators_by_name("head_pan", "head_tilt")
+                        elif self._spec.name == "innate_mars":
+                            self._pin_spec_actuators_by_name("joint_head")
+                        elif self._spec.name in ("rby1", "galaxea_r1"):
+                            self._pin_spec_actuators_by_name("torso2", "torso3")
+                        else:
+                            self._pin_spec_actuators_by_name("head_pan", "head_tilt")
+                    else:
+                        self._snapshot_spec_hold_from_ctrl()
+
+        if any(k in action for k in ("gripper", "gripper_left", "gripper_right")):
+            with self._mj_lock:
+                if self._mjmodel is not None and self._mjdata is not None:
+                    updated = apply_gripper_action_robosuite(self._spec, self._mjmodel, self._mjdata, action)
+                    if updated:
+                        self._pin_spec_actuators_by_name(*updated)
 
     @override
     def get_full_observation_message(self) -> dict[str, Any]:
@@ -1920,6 +2077,16 @@ class RobosuiteZmqServer(BaseZmqServer):
             "lidar_timestamp": None,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
         }
+        if self._spec.name == "xlerobot" and self._mjmodel is not None and self._mjdata is not None:
+            from emet.robots.xlerobot import jaw_normalized_from_angle
+            from emet.simulation.gripper_action import read_xlerobot_gripper_qpos
+
+            with self._mj_lock:
+                grips = read_xlerobot_gripper_qpos(self._spec, self._mjmodel, self._mjdata)
+            if "left" in grips:
+                message["gripper_left"] = jaw_normalized_from_angle(grips["left"])
+            if "right" in grips:
+                message["gripper_right"] = jaw_normalized_from_angle(grips["right"])
         # Extra cameras use the shared EGL renderer; after --steps the sim thread may have stopped
         # and the GL context can be invalid — skip optional views to avoid eglMakeCurrent failures.
         allow_extra_cams = bool(getattr(self, "_running", True))
@@ -2066,6 +2233,13 @@ class RobosuiteZmqServer(BaseZmqServer):
                 show_right_ui=show_viewer_ui,
             ) as viewer:
                 logger.info("MuJoCo passive viewer open (close window or Ctrl+C to stop).")
+                bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, self._spec.base_link_name)
+                if bid >= 0:
+                    viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
+                    viewer.cam.trackbodyid = bid
+                    viewer.cam.distance = 2.8
+                    viewer.cam.elevation = -25.0
+                    viewer.cam.azimuth = 120.0
                 if self._mujoco_ctrl_debug_enabled():
                     self._ctrl_debug_emit_apply_logs = True
                     logger.info("[mujoco_ctrl_debug] passive viewer: apply logging enabled")
@@ -2124,27 +2298,47 @@ class RobosuiteZmqServer(BaseZmqServer):
                         stage="after_load",
                         base_body_name=self._spec.base_link_name,
                     )
-                home_applied = apply_home_keyframe_preserving_base(
-                    self._mjmodel,
-                    self._mjdata,
-                    base_body_name=self._spec.base_link_name,
+                skip_merged_home_keyframe = (
+                    self._is_molmospaces_session()
+                    and str(getattr(self._spec, "name", "")).lower() in ("xlerobot", "xlerobot_dual")
+                    and self._planar_autoplace_snap_qpos0
                 )
-                if not home_applied:
-                    planar = getattr(self._spec, "planar_base_joint_names", None)
-                    if planar is not None and len(planar) == 3:
-                        home_applied = apply_home_keyframe_preserving_planar_base(
-                            self._mjmodel,
-                            self._mjdata,
-                            planar_joint_names=(
-                                str(planar[0]),
-                                str(planar[1]),
-                                str(planar[2]),
-                            ),
-                            base_body_name=self._spec.base_link_name,
-                        )
+                home_applied = False
+                if skip_merged_home_keyframe:
+                    logger.info(
+                        "Skipping merged MJCF home keyframe for %r (occupancy spawn + navigation arm pose; "
+                        "mj_resetDataKeyframe would reset iTHOR articulated props).",
+                        self._spec.name,
+                    )
+                else:
+                    home_applied = apply_home_keyframe_preserving_base(
+                        self._mjmodel,
+                        self._mjdata,
+                        base_body_name=self._spec.base_link_name,
+                        spec=self._spec,
+                    )
+                    if not home_applied:
+                        planar = getattr(self._spec, "planar_base_joint_names", None)
+                        if planar is not None and len(planar) == 3:
+                            home_applied = apply_home_keyframe_preserving_planar_base(
+                                self._mjmodel,
+                                self._mjdata,
+                                planar_joint_names=(
+                                    str(planar[0]),
+                                    str(planar[1]),
+                                    str(planar[2]),
+                                ),
+                                base_body_name=self._spec.base_link_name,
+                                spec=self._spec,
+                            )
                 if home_applied:
-                    logger.info("Applied MJCF keyframe 'home' (preserved robot base pose).")
-                    if not self._seed_joint_ctrl_hold_from_keyframe("home"):
+                    home_key = mujoco.mj_id2name(
+                        self._mjmodel,
+                        mujoco.mjtObj.mjOBJ_KEY,
+                        resolve_robot_home_keyframe_id(self._mjmodel, self._spec),
+                    ) or robot_home_keyframe_name(self._spec)
+                    logger.info("Applied MJCF keyframe %r (preserved robot base pose).", home_key)
+                    if not self._seed_joint_ctrl_hold_from_keyframe():
                         self._preserve_joint_ctrl_hold_from_ctrl()
                     else:
                         self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
@@ -2153,7 +2347,8 @@ class RobosuiteZmqServer(BaseZmqServer):
                     # Robocasa innate_mars / Maurice-style merges often lack MJCF ``home``. Without
                     # PD holds, post-load stabilize ``mj_step`` collapses the pose and planar reapply
                     # can leave stale ``body_xpos`` until the next ``mj_forward`` (GT fixture scan).
-                    self._sync_actuator_ctrl_from_joint_positions()
+                    if not skip_merged_home_keyframe:
+                        self._sync_actuator_ctrl_from_joint_positions()
         self._stabilize_physics_state_after_load()
         if self._molmospaces_autoplace_snap_qpos0:
             with self._mj_lock:
@@ -2185,10 +2380,16 @@ class RobosuiteZmqServer(BaseZmqServer):
                 update_robot_qpos0_from_data(self._mjmodel, self._mjdata, self._spec)
         elif self._planar_autoplace_snap_qpos0:
             with self._mj_lock:
-                if not self._reapply_planar_autoplace_world_xyt():
-                    self._restore_planar_base_from_qpos0()
-                update_robot_qpos0_from_data(self._mjmodel, self._mjdata, self._spec)
-                self._preserve_joint_ctrl_hold_from_ctrl()
+                if self._is_molmospaces_session() and str(getattr(self._spec, "name", "")).lower() in (
+                    "xlerobot",
+                    "xlerobot_dual",
+                ):
+                    self._snapshot_stationary_planar_base_qpos()
+                else:
+                    if not self._reapply_planar_autoplace_world_xyt():
+                        logger.warning("Planar autoplace re-apply failed after stabilize; robot base may be at origin.")
+                    update_robot_qpos0_from_data(self._mjmodel, self._mjdata, self._spec)
+                    self._preserve_joint_ctrl_hold_from_ctrl()
         if self._mjmodel is not None and self._mjdata is not None:
             with self._mj_lock:
                 self._snapshot_stationary_base_freejoint_pose()
@@ -2220,6 +2421,13 @@ class RobosuiteZmqServer(BaseZmqServer):
             eroded = spawn_floor_map.get("clip_eroded_xy")
             if isinstance(eroded, (list, tuple)) and len(eroded) == 4:
                 self._nav_world_clip_rect = tuple(float(v) for v in eroded)
+        if self._planar_autoplace_snap_qpos0 and (
+            self._is_molmospaces_session()
+            and str(getattr(self._spec, "name", "")).lower() in ("xlerobot", "xlerobot_dual")
+        ):
+            with self._mj_lock:
+                self._snapshot_stationary_planar_base_qpos()
+            self._initial_xyt = self.get_base_xyt()
         self._emet_session = self._build_emet_session(
             robocasa=robocasa,
             spawn_floor_map=spawn_floor_map,
@@ -2228,11 +2436,20 @@ class RobosuiteZmqServer(BaseZmqServer):
         # afterward so navigation_origin, scene summary, and ZMQ gps match autoplace.
         if self._planar_autoplace_snap_qpos0:
             with self._mj_lock:
-                if not self._reapply_planar_autoplace_world_xyt():
-                    self._restore_planar_base_from_qpos0()
-                update_robot_qpos0_from_data(self._mjmodel, self._mjdata, self._spec)
-                self._preserve_joint_ctrl_hold_from_ctrl()
-        self._initial_xyt = self.get_base_xyt()
+                if self._is_molmospaces_session() and str(getattr(self._spec, "name", "")).lower() in (
+                    "xlerobot",
+                    "xlerobot_dual",
+                ):
+                    pass
+                else:
+                    if not self._reapply_planar_autoplace_world_xyt():
+                        logger.warning(
+                            "Planar autoplace re-apply failed before session export; robot base may be at origin."
+                        )
+                    update_robot_qpos0_from_data(self._mjmodel, self._mjdata, self._spec)
+                    self._preserve_joint_ctrl_hold_from_ctrl()
+        if self._initial_xyt is None:
+            self._initial_xyt = self.get_base_xyt()
         if self._emet_session is not None and self._initial_xyt is not None:
             apply_navigation_origin_to_session(self._emet_session, self._initial_xyt)
         self._log_nav_startup_banner()

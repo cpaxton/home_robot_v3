@@ -7,12 +7,6 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
-
 """Robot backends for EMET — Stretch, Mobile ALOHA, Galaxea R1 / RB-Y1, Innate Mars, YOR."""
 
 import importlib
@@ -27,6 +21,10 @@ ROBOT_REGISTRY = {
     "rby1": "emet.robots.rby1",  # Rainbow RB-Y1 (Galaxea R1 family); MolmoSpaces id
     "rb_y1": "emet.robots.rby1",  # same, for --robot rb-y1
     "innate_mars": "emet.robots.innate_mars",
+    "xlerobot": "emet.robots.xlerobot",
+    "xlerobot_dual": "emet.robots.xlerobot",
+    "franka_fr3": "emet.robots.franka_fr3",
+    "franka": "emet.robots.franka_fr3",
     "yor": "emet.robots.yor",
 }
 
@@ -53,8 +51,8 @@ def get_robot_spec(robot: str) -> RobotSpec | None:
     return backend_cls().get_spec()
 
 
+# Global default for ``emet run dynamem --dynav-config`` (shared ``dynav_config.yaml`` unless overridden).
 DEFAULT_DYNAV_CONFIG_YAML = "dynav_config.yaml"
-"""Global default for ``emet run dynamem --dynav-config`` (shared ``dynav_config.yaml`` unless overridden)."""
 
 
 def resolve_dynav_config_yaml(robot: str, dynav_config: str) -> str:

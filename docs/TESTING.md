@@ -47,7 +47,7 @@ Environment: **`RUN_SIM_TESTS=0`** skips sim integration tests. Heavy VLLM downl
 | **Memory backends (SVM, DynaMem, GraphEQA)** | [plans/TESTING_BACKENDS.md](plans/TESTING_BACKENDS.md) | Test matrix, red-cylinder / Robocasa spin integration, backend unit tests |
 | **Dynagraph multi-robot Robocasa E2E** | [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md) | Floor-area parity (stretch / innate_mars / galaxea_r1), spawner maps, artefact paths |
 | **GraphEQA manual Robocasa** | [graph_eqa.md](graph_eqa.md#testing-graph-eqa-in-robocasa) | Interactive questions in kitchen sim (Gemini / encoder) |
-| **MolmoSpaces** | [plans/2025-03-10_molmospaces_testing.md](plans/2025-03-10_molmospaces_testing.md), [molmospaces.md](molmospaces.md) | Wrapper venv, CLI smoke, optional integration |
+| **MolmoSpaces** | [plans/2025-03-10_molmospaces_testing.md](plans/2025-03-10_molmospaces_testing.md), [molmospaces.md](molmospaces.md) | Wrapper venv, CLI smoke, optional integration; **multi-robot matrix below** |
 | **Multi-robot sim plumbing** | [plans/MULTI_ROBOT_TESTING.md](plans/MULTI_ROBOT_TESTING.md) | Registry, MJCF load, GenericZmqClient (partially superseded by unit tests) |
 | **CLI / install smoke** | [cli.md](cli.md#testing), [simulation.md](simulation.md#2-test-the-setup) | `emet test`, serve smoke |
 | **SQA3D + ScanNet EQA** | [sqa3d.md](sqa3d.md) | Situated QA loaders, EM@1 eval, Open3D mesh replay |
@@ -98,6 +98,43 @@ There is **no other single “master” file** today; this page is the hub. Feat
 | Controller smoke (SVM, DynaMem, GraphEQA, Dynagraph imports) | [test_controller_smoke.py](../src/test/controller/test_controller_smoke.py) |
 | Multi-robot registry / MJCF | [test_multi_robot.py](../src/test/simulation/test_multi_robot.py) |
 | Dynagraph explore loop helper | [test_dynagraph_explore.py](../src/test/app/test_dynagraph_explore.py) |
+
+### MolmoSpaces multi-robot (serve, merge, navigation)
+
+Robot registry and aliases: [robots/supported_robots.md](robots/supported_robots.md). MolmoSpaces install, merge, and troubleshooting: [molmospaces.md](molmospaces.md#quick-verification-developers).
+
+**Quick serve smoke** (repo root, sim + wrapper installed; first iTHOR load can take 1–2 minutes):
+
+```bash
+# Merge + ZMQ load; expect no MJCF errors and autoplace log (not stuck at origin)
+for r in stretch rby1 innate_mars xlerobot; do
+  echo "=== $r ==="
+  timeout 120 uv run emet serve mujoco --scene ithor --robot "$r" --headless
+done
+```
+
+| Robot | `--robot` | Server stack | Serve / merge tests | Nav / mapping tests |
+|-------|-----------|--------------|---------------------|---------------------|
+| **Stretch** | `stretch` | `MujocoZmqServer` (Stretch stack) | `RUN_MOLMOSPACES_TESTS=1` → [test_molmospaces_ithor_base_settle.py](../src/test/molmospaces/test_molmospaces_ithor_base_settle.py) (rby1-oriented settle; stretch uses same merge path) | `RUN_STRETCH_MOLMO_DYNAMEM=1` → [test_stretch_molmospaces_dynamem_floor_map.py](../src/test/molmospaces/test_stretch_molmospaces_dynamem_floor_map.py) |
+| **Galaxea R1** | `rby1`, `galaxea_r1` | `RobosuiteZmqServer` | [packages/emet_molmospaces/tests/test_rby1_scene.py](../packages/emet_molmospaces/tests/test_rby1_scene.py) (merge + step); `RUN_MOLMOSPACES_TESTS=1` → [test_molmospaces_ithor_base_settle.py](../src/test/molmospaces/test_molmospaces_ithor_base_settle.py) | `RUN_MULTI_ROBOT_NAVGRID=1` → [test_multi_robot_molmospaces_navgrid_similarity.py](../src/test/molmospaces/test_multi_robot_molmospaces_navgrid_similarity.py) |
+| **Innate Mars** | `innate_mars`, `maurice` | `RobosuiteZmqServer` (planar) | [test_multi_robot.py](../src/test/simulation/test_multi_robot.py) (spec/MJCF); wrapper merge: `test_merge_innate_mars_into_minimal_scene_no_double_floor` | Robocasa Dynagraph E2E: [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md); Molmo navgrid: `RUN_MULTI_ROBOT_NAVGRID=1` (above); `EMET_NAVGRID_COMPARE_ROBOTS=stretch,rby1,innate_mars` + [scripts/tier4_multi_robot_navgrid_compare.py](../scripts/tier4_multi_robot_navgrid_compare.py) |
+| **XLeRobot** | `xlerobot` | `RobosuiteZmqServer` (planar) | wrapper `test_merge_xlerobot_into_minimal_scene`, `test_merge_stretch_into_scene_with_memory` (merge `memory` + robot `njmax` guard) | `RUN_XLEROBOT_DYNAMEM=1` → [test_xlerobot_dynamem_default_table_smoke.py](../src/test/molmospaces/test_xlerobot_dynamem_default_table_smoke.py); `RUN_XLEROBOT_MOLMO_DYNAMEM=1` → [test_xlerobot_molmospaces_dynamem_floor_map.py](../src/test/molmospaces/test_xlerobot_molmospaces_dynamem_floor_map.py); `RUN_STRETCH_XLEROBOT_NAVGRID=1` → [test_stretch_xlerobot_navgrid_similarity.py](../src/test/molmospaces/test_stretch_xlerobot_navgrid_similarity.py) |
+
+**Cross-robot Dynagraph / DynaMem nav benchmark** (default table + Robocasa + MolmoSpaces tiers):
+
+```bash
+EMET_SIM_NAV_TELEPORT=1 uv run python src/test/app/run_dynagraph_nav_benchmark.py --robot xlerobot --dynamem --default --molmo
+```
+
+See [dynagraph_nav_benchmark.md](dynagraph_nav_benchmark.md). Molmo iTHOR GT query on train index 0 is **sink** (not sofa).
+
+**Dynagraph + Stretch on MolmoSpaces iTHOR** (manual): terminal A `emet serve mujoco --scene ithor --robot stretch`, terminal B `emet run dynagraph`. If you see `Timeout waiting for navigation step` while the sim teleports, check branch `fix/stretch-molmo-nav-wait` (relative `move_base_to` must not double-compose with server `nav_relative`). Rerun `world/robot` uses `gps`/`compass` + `navigation_origin_xyt`; if the base marker is frozen but the voxel map moves, confirm ZMQ obs `gps` is updating and session has `navigation_origin_xyt`.
+
+**Wrapper-only pytest** (no live iTHOR assets):
+
+```bash
+uv run pytest packages/emet_molmospaces/tests/ -q
+```
 
 ---
 

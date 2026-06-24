@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Helpers for :class:`RobosuiteZmqServer` model load: keyframe home pose and post-load diagnostics."""
 
@@ -77,13 +86,28 @@ def snap_joint_qpos_to_ctrl_for_position_actuators(model: mujoco.MjModel, data: 
     return n_written
 
 
+def robot_home_keyframe_name(spec: RobotSpec) -> str:
+    """Per-robot MJCF keyframe id (avoids clashing with scene ``home`` on MolmoSpaces merges)."""
+    return f"{spec.name}_home"
+
+
+def resolve_robot_home_keyframe_id(model: mujoco.MjModel, spec: RobotSpec) -> int:
+    """Return keyframe id for robot home pose, or -1 if missing."""
+    kid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, robot_home_keyframe_name(spec))
+    if kid >= 0:
+        return kid
+    return mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
+
+
 def apply_home_keyframe_preserving_base(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     *,
     base_body_name: str,
+    spec: RobotSpec | None = None,
+    key_name: str | None = None,
 ) -> bool:
-    """If MJCF defines keyframe ``home``, reset to it while keeping the base free-joint pose.
+    """If MJCF defines a robot home keyframe, reset to it while keeping the base free-joint pose.
 
     MolmoSpaces autoplace updates only the base; default compiled ``qpos`` can be a poor arm posture.
     ``mj_resetDataKeyframe`` applies the keyframe; we then restore the 7 base ``qpos`` values that
@@ -93,12 +117,17 @@ def apply_home_keyframe_preserving_base(
     ``model.qpos0`` for consistent resets.
 
     Returns:
-        True if the keyframe was applied, False if no ``home`` key or no base free joint.
+        True if the keyframe was applied, False if no home key or no base free joint.
     """
     addrs = freejoint_qpos_qvel_addrs(model, base_body_name)
     if addrs is None:
         return False
-    kid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
+    if key_name is not None:
+        kid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, key_name)
+    elif spec is not None:
+        kid = resolve_robot_home_keyframe_id(model, spec)
+    else:
+        kid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
     if kid < 0:
         return False
     qadr, vadr = int(addrs[0]), int(addrs[1])
@@ -123,15 +152,13 @@ def update_robot_qpos0_from_data(
     if addrs is not None:
         qadr, _ = int(addrs[0]), int(addrs[1])
         model.qpos0[qadr : qadr + 7] = data.qpos[qadr : qadr + 7]
-    else:
-        planar = getattr(spec, "planar_base_joint_names", None)
-        if planar is not None and len(planar) == 3:
-            for jname in planar:
-                jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(jname))
-                if jid >= 0:
-                    qadr = int(model.jnt_qposadr[jid])
-                    model.qpos0[qadr] = float(data.qpos[qadr])
+    planar_skip: set[str] = set()
+    planar = getattr(spec, "planar_base_joint_names", None)
+    if planar is not None and len(planar) == 3:
+        planar_skip = {str(jname) for jname in planar}
     for jname in spec.joint_names:
+        if str(jname) in planar_skip:
+            continue
         jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jname)
         if jid >= 0:
             qadr = int(model.jnt_qposadr[jid])
@@ -144,9 +171,16 @@ def apply_home_keyframe_preserving_planar_base(
     *,
     planar_joint_names: tuple[str, str, str],
     base_body_name: str,
+    spec: RobotSpec | None = None,
+    key_name: str | None = None,
 ) -> bool:
-    """Apply keyframe ``home`` while preserving planar base slide/yaw ``qpos`` (Robocasa merge robots)."""
-    kid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
+    """Apply robot home keyframe while preserving planar base slide/yaw ``qpos`` (Robocasa merge robots)."""
+    if key_name is not None:
+        kid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, key_name)
+    elif spec is not None:
+        kid = resolve_robot_home_keyframe_id(model, spec)
+    else:
+        kid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
     if kid < 0:
         return False
     saved: list[tuple[int, float]] = []
@@ -161,6 +195,9 @@ def apply_home_keyframe_preserving_planar_base(
         data.qpos[qadr] = val
     data.qvel.fill(0.0)
     snap_joint_qpos_to_ctrl_for_position_actuators(model, data)
+    # Velocity base actuators (gear≠3, e.g. xlerobot slide/yaw) still match mjTRN_JOINT; keep planar qpos.
+    for qadr, val in saved:
+        data.qpos[qadr] = val
     mujoco.mj_forward(model, data)
     return True
 
@@ -231,9 +268,7 @@ def log_post_load_diagnostics(
         logger.warning(f"[robosuite_load] spec actuators missing in MJCF: {missing}")
     if extra:
         tail = " …" if len(extra) > 20 else ""
-        logger.info(
-            f"[robosuite_load] MJCF actuators not in RobotSpec (informational): {extra[:20]}{tail}"
-        )
+        logger.info(f"[robosuite_load] MJCF actuators not in RobotSpec (informational): {extra[:20]}{tail}")
 
     try:
         from emet.simulation.molmospaces_spawn import resolve_floor_geom_name, walkable_floor_z_at_xy

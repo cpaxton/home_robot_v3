@@ -22,6 +22,8 @@
 
 Our LfD code is a [fork of LeRobot](https://github.com/hello-robot/lerobot). The original LeRobot repo can be found [here](https://github.com/huggingface/lerobot).
 
+For **MolmoBot-Data** (simulation expert trajectories, RB-Y1 / Franka FR3), see [datasets/molmobot.md](datasets/molmobot.md) and ``emet dataset molmobot …``.
+
 ## Overview of LfD process
 
 1. [Collect demonstration dataset with dex teleop](data_collection.md) (`50 episodes`)

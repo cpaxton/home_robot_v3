@@ -159,7 +159,9 @@ def _require_repo_venv_when_in_repo() -> None:
 
 def _run_module(module: str, args: list[str], env: dict | None = None) -> int:
     """Run a Python module. Returns exit code."""
-    env = env or os.environ.copy()
+    from emet.utils.pythonpath import sanitize_emet_subprocess_env
+
+    env = sanitize_emet_subprocess_env(env)
     # Prefer project .venv so the subprocess has the same deps (e.g. robocasa for mujoco server).
     venv_py = _project_venv_python()
     if venv_py is not None:
@@ -343,6 +345,9 @@ def serve(
       emet serve molmospaces ithor --index 3
       DISPLAY=:1 emet serve mujoco --scene ithor   # default robot: stretch
       emet serve mujoco --scene ithor --robot rby1 --headless
+      emet serve mujoco --scene ithor --robot xlerobot --headless
+      emet robots info xlerobot
+      emet robots preview-cameras xlerobot --source local
     """
     extra_args = list(extra)
     scene_value = scene
@@ -438,6 +443,44 @@ def _run_molmospaces_wrapper(args: list[str]) -> int:
     env = os.environ.copy()
     ensure_molmospaces_assets_dir_env(env)
     return subprocess.call(cmd, cwd=_project_root(), env=env)
+
+
+@main.group("dataset", short_help="Dataset inspect, export, and replay")
+def dataset_cmd() -> None:
+    """Learning datasets (MolmoBot-Data H5, etc.)."""
+
+
+from emet.datasets.molmobot.cli import molmobot_dataset_group  # noqa: E402
+
+dataset_cmd.add_command(molmobot_dataset_group)
+
+
+@main.group("molmobot", short_help="MolmoBot policy bridge (optional venv)")
+def molmobot_cmd() -> None:
+    """Delegate to packages/emet_molmobot when installed."""
+
+
+@molmobot_cmd.command("serve-policy")
+@click.option("--hf-repo", required=True)
+@click.option("--action-type", default="joint_pos", show_default=True)
+@click.argument("extra_args", nargs=-1)
+def molmobot_serve_policy(hf_repo: str, action_type: str, extra_args: tuple[str, ...]) -> None:
+    """Run upstream MolmoBot serve_molmo.py (requires MOLMOBOT_ROOT)."""
+    try:
+        from emet_molmobot.runner import serve_policy
+    except ImportError:
+        click.echo(
+            "Install packages/emet_molmobot editable or set PYTHONPATH. See docs/datasets/molmobot.md.",
+            err=True,
+        )
+        raise SystemExit(1) from None
+    argv = ["--hf-repo", hf_repo, "--action-type", action_type, *extra_args]
+    raise SystemExit(serve_policy(argv))
+
+
+from emet.app.robots_cli import robots_cmd
+
+main.add_command(robots_cmd)
 
 
 @main.group("molmospaces", short_help="MolmoSpaces scenes and robots (requires emet-molmospaces wrapper)")
@@ -543,11 +586,19 @@ def habitat_compare_batch(
 
 @molmospaces_cmd.command("list-robots", short_help="List supported robot IDs")
 def molmospaces_list_robots() -> None:
-    """Print MolmoSpaces robot IDs (rby1, rby1m, stretch for merge, franka_*, etc.). Default Molmo CLI robot is rby1 (Galaxea R1 family)."""
+    """Print MolmoSpaces robot IDs and emet vendored robots with MJCF (xlerobot, franka_fr3, …)."""
+    from emet.app.robots_cli import CANONICAL_ROBOT_KEYS
     from emet.simulation.molmospaces_config import DEFAULT_MOLMOSPACES_ROBOT, MOLMOSPACES_ROBOT_IDS
+    from emet.utils.assets import get_robot_mjcf_path
 
-    click.echo("Robots: " + ", ".join(MOLMOSPACES_ROBOT_IDS))
-    click.echo(f"Default: {DEFAULT_MOLMOSPACES_ROBOT}")
+    click.echo("MolmoSpaces wrapper IDs: " + ", ".join(MOLMOSPACES_ROBOT_IDS))
+    click.echo(f"MolmoSpaces default: {DEFAULT_MOLMOSPACES_ROBOT}")
+    click.echo("")
+    click.echo("Emet registry robots (use with emet serve mujoco --robot <key>):")
+    for key in CANONICAL_ROBOT_KEYS:
+        mjcf = get_robot_mjcf_path(key)
+        tag = "mjcf" if mjcf and mjcf.is_file() else "no mjcf"
+        click.echo(f"  {key} ({tag})")
 
 
 @molmospaces_cmd.command("list-scenes", short_help="List scene names and split sizes")
@@ -1328,6 +1379,8 @@ def run(
       emet run dynamem -S --port-offset 100
       emet run dynamem -S --visual-servo --match-method class --target-object apple --target-receptacle plate
       emet run molmospaces-explore --output-dir ./ep0 --steps 40
+      emet run molmospaces-explore --start-sim --robot xlerobot --scene ithor --headless \\
+        --output-dir ./ep0 --steps 40
       # --robot optional: omit to read emet_robot_id from the running ZMQ server
       emet run mapping --robot-ip 127.0.0.1
       emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
@@ -1379,6 +1432,8 @@ def run(
     elif app == "graph-eqa-habitat":
         sys.exit(_run_module("emet.app.run_graph_eqa_habitat", args))
     elif app == "molmospaces-explore":
+        if headless:
+            args.append("--headless")
         sys.exit(_run_module("emet.app.run_molmospaces_explore", args))
     elif app == "mapping":
         sys.exit(_run_module("emet.app.mapping", args))

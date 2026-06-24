@@ -146,9 +146,7 @@ ROBOSUITE_ROBOTS = [
 ]
 
 # Galaxea R1 family: use PandaMobile in Robocasa (mobile-base spawn), then strip-and-replace MJCF.
-_GALAXEA_R1_ROBOT_KEYS = frozenset(
-    {"rby1", "rby1m", "galaxea_r1", "galaxear1", "rb_y1", "rby_1"}
-)
+_GALAXEA_R1_ROBOT_KEYS = frozenset({"rby1", "rby1m", "galaxea_r1", "galaxear1", "rb_y1", "rby_1"})
 
 
 def _normalize_robot_key(robot_name: str) -> str:
@@ -162,6 +160,8 @@ def _uses_strip_placeholder_robot(robot_name: str) -> bool:
         "hello_stretch",
         "hellostretch",
         "innate_mars",
+        "xlerobot",
+        "xlerobot_dual",
         *_GALAXEA_R1_ROBOT_KEYS,
     )
 
@@ -456,8 +456,7 @@ def add_galaxea_r1_to_kitchen(
     mjcf = get_robot_mjcf_path(lookup)
     if mjcf is None or not mjcf.is_file():
         raise FileNotFoundError(
-            f"Galaxea R1 MJCF not found for {robot_key!r} (lookup {lookup!r}). "
-            "Cannot build Robocasa scene."
+            f"Galaxea R1 MJCF not found for {robot_key!r} (lookup {lookup!r}). Cannot build Robocasa scene."
         )
     root_dir = mjcf.parent.resolve()
     meshes_abs = (root_dir / "meshes").resolve()

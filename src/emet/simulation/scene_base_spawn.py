@@ -1233,6 +1233,7 @@ def _ithor_occupancy_priority_xy(
     merged_mjcf_path: str | None,
     environment: dict[str, Any] | None,
     *,
+    robot_root_body_name: str | None = None,
     agent_radius: float = 0.32,
     px_per_m: int = 120,
     max_points: int = 900,
@@ -1260,7 +1261,13 @@ def _ithor_occupancy_priority_xy(
     try:
         from emet.simulation.molmo_occupancy.ithor_map import iTHORMap
 
-        th = iTHORMap.from_mj_model_path(merged_mjcf_path, camera=None, agent_radius=agent_radius, px_per_m=px_per_m)
+        th = iTHORMap.from_mj_model_path(
+            merged_mjcf_path,
+            camera=None,
+            agent_radius=agent_radius,
+            px_per_m=px_per_m,
+            robot_root_body_name=robot_root_body_name or "base_link",
+        )
         fp = th.get_free_points()
     except Exception as e:
         logger.warning(f"MolmoSpaces occupancy map skipped ({e!r}).")
@@ -1918,7 +1925,9 @@ def find_molmospaces_freejoint_xyz(
     else:
         spawn_dbg(f"find: clip_probe=None floor_effective={floor_effective!r} label={scene_label!r}")
 
-    occ_xy, occ_map_dbg = _ithor_occupancy_priority_xy(merged_mjcf_path, environment)
+    occ_xy, occ_map_dbg = _ithor_occupancy_priority_xy(
+        merged_mjcf_path, environment, robot_root_body_name=base_body_name
+    )
     settle_kw, zb_probe = _molmospaces_z_settle_options(model, base_body_name=base_body_name, robot_key=robot_key)
 
     def _spawn_debug_finish(out: tuple[float, float, float] | None, how: str) -> tuple[float, float, float] | None:
@@ -2048,7 +2057,10 @@ def world_se2_to_planar_qpos(
     Slides move along the anchor body's local X/Y; after Robocasa merge, ``base_root`` is often
     translated and yawed, so **world** coordinates must not be written directly to the joints.
     """
-    mujoco.mj_forward(model, data)
+    try:
+        mujoco.mj_forward(model, data)
+    except mujoco.FatalError as e:
+        raise ValueError(f"mj_forward failed for planar anchor FK: {e}") from e
     bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, anchor_body_name)
     if bid < 0:
         raise ValueError(f"planar anchor body {anchor_body_name!r} not found")
@@ -2143,29 +2155,32 @@ def write_planar_base_xyt(
     bid_bl = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
     bid_a = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, anchor)
     if bid_bl >= 0 and bid_a >= 0 and qadr_x >= 0 and qadr_y >= 0 and qadr_yaw >= 0:
-        for _ in range(12):
-            mujoco.mj_forward(model, data)
-            ex = float(world_x) - float(data.body(bid_bl).xpos[0])
-            ey = float(world_y) - float(data.body(bid_bl).xpos[1])
-            if ex * ex + ey * ey < 2.25e-6:
-                break
-            R = np.asarray(data.body(bid_a).xmat, dtype=np.float64).reshape(3, 3)
-            M = R[:2, :2]
-            delta = np.array([ex, ey], dtype=np.float64)
-            try:
-                dq = np.linalg.solve(M, delta)
-            except np.linalg.LinAlgError:
-                dq, *_ = np.linalg.lstsq(M, delta, rcond=None)
-            data.qpos[qadr_x] = float(data.qpos[qadr_x]) + float(dq[0])
-            data.qpos[qadr_y] = float(data.qpos[qadr_y]) + float(dq[1])
-        for _ in range(8):
-            mujoco.mj_forward(model, data)
-            xmat = np.asarray(data.body(bid_bl).xmat, dtype=np.float64).reshape(3, 3)
-            cur = float(math.atan2(xmat[1, 0], xmat[0, 0]))
-            err = float(np.arctan2(np.sin(float(world_yaw) - cur), np.cos(float(world_yaw) - cur)))
-            if abs(err) < 5e-4:
-                break
-            data.qpos[qadr_yaw] = float(data.qpos[qadr_yaw]) + err
+        try:
+            for _ in range(12):
+                mujoco.mj_forward(model, data)
+                ex = float(world_x) - float(data.body(bid_bl).xpos[0])
+                ey = float(world_y) - float(data.body(bid_bl).xpos[1])
+                if ex * ex + ey * ey < 2.25e-6:
+                    break
+                R = np.asarray(data.body(bid_a).xmat, dtype=np.float64).reshape(3, 3)
+                M = R[:2, :2]
+                delta = np.array([ex, ey], dtype=np.float64)
+                try:
+                    dq = np.linalg.solve(M, delta)
+                except np.linalg.LinAlgError:
+                    dq, *_ = np.linalg.lstsq(M, delta, rcond=None)
+                data.qpos[qadr_x] = float(data.qpos[qadr_x]) + float(dq[0])
+                data.qpos[qadr_y] = float(data.qpos[qadr_y]) + float(dq[1])
+            for _ in range(8):
+                mujoco.mj_forward(model, data)
+                xmat = np.asarray(data.body(bid_bl).xmat, dtype=np.float64).reshape(3, 3)
+                cur = float(math.atan2(xmat[1, 0], xmat[0, 0]))
+                err = float(np.arctan2(np.sin(float(world_yaw) - cur), np.cos(float(world_yaw) - cur)))
+                if abs(err) < 5e-4:
+                    break
+                data.qpos[qadr_yaw] = float(data.qpos[qadr_yaw]) + err
+        except mujoco.FatalError:
+            return False
 
     for jn in joint_names:
         jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn)
@@ -2179,8 +2194,54 @@ def write_planar_base_xyt(
         jname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, jid_tr)
         if jname is not None and jname in joint_names:
             data.ctrl[a] = 0.0
-    mujoco.mj_forward(model, data)
+    try:
+        mujoco.mj_forward(model, data)
+    except mujoco.FatalError:
+        return False
     return True
+
+
+def try_xlerobot_molmospaces_planar_spawn(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    base_body_name: str,
+    joint_names: tuple[str, str, str],
+    merged_mjcf_path: str | None,
+    environment: dict[str, Any] | None,
+    max_points: int = 40,
+) -> tuple[float, float, float] | None:
+    """Fast MolmoSpaces spawn for XLeRobot: iTHOR occupancy XY + planar write (no full contact search).
+
+    Full :func:`find_planar_base_xyt` is too slow / singular on dual-arm iTHOR merges; this moves the
+    base onto a walkable floor cell so the robot is visible in the MuJoCo viewer and nav clients.
+    """
+    from emet.robots.xlerobot import apply_xlerobot_navigation_joint_pose
+
+    apply_xlerobot_navigation_joint_pose(model, data)
+    occ_xy, _ = _ithor_occupancy_priority_xy(
+        merged_mjcf_path,
+        environment,
+        robot_root_body_name=base_body_name,
+    )
+    if not occ_xy:
+        spawn_dbg("xlerobot_molmo_spawn: no iTHOR occupancy points")
+        return None
+    yaws = [float(k * math.pi / 4.0) for k in (0, 2, 4, 6)]
+    for px, py in occ_xy[: max(1, int(max_points))]:
+        for yaw in yaws:
+            if write_planar_base_xyt(
+                model,
+                data,
+                joint_names=joint_names,
+                world_x=float(px),
+                world_y=float(py),
+                world_yaw=float(yaw),
+                base_body_name=base_body_name,
+            ):
+                return (float(px), float(py), float(yaw))
+    spawn_dbg("xlerobot_molmo_spawn: occupancy points did not map to planar joints")
+    return None
 
 
 def find_planar_base_xyt(
@@ -2300,7 +2361,11 @@ def find_planar_base_xyt(
             seen.add(key)
             base_candidates.append((float(px), float(py)))
 
-    occ_xy, _ = _ithor_occupancy_priority_xy(merged_mjcf_path, environment)
+    occ_xy, _ = _ithor_occupancy_priority_xy(
+        merged_mjcf_path,
+        environment,
+        robot_root_body_name=base_body_name,
+    )
     priority_xy: list[tuple[float, float]] = []
     hint_xy: tuple[float, float] | None = None
     hint_yaw: float | None = None
@@ -2334,7 +2399,24 @@ def find_planar_base_xyt(
         cx, cy = float(centroid[0]), float(centroid[1])
         candidates.sort(key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
 
-    yaws = [float(k * math.pi / 4.0) for k in range(8)]
+    raw_xy_cap = os.environ.get("EMET_PLANAR_SPAWN_MAX_XY", "").strip()
+    if raw_xy_cap.isdigit():
+        max_xy_candidates = int(raw_xy_cap)
+    elif spawn_profile == "molmospaces":
+        # Dual-arm / wide-footprint robots (xlerobot) need tight caps: each (x,y,yaw) runs full contact probes.
+        max_xy_candidates = 180
+    elif spawn_profile == "robocasa":
+        max_xy_candidates = 800
+    else:
+        max_xy_candidates = 0
+    if max_xy_candidates > 0 and len(candidates) > max_xy_candidates:
+        spawn_dbg(f"planar_find: capping n_xy {len(candidates)} -> {max_xy_candidates}")
+        candidates = candidates[:max_xy_candidates]
+
+    if spawn_profile == "molmospaces":
+        yaws = [float(k * math.pi / 4.0) for k in (0, 2, 4, 6)]
+    else:
+        yaws = [float(k * math.pi / 4.0) for k in range(8)]
     if hint_yaw is not None:
         hy = float(hint_yaw)
         yaws = [hy] + [y for y in yaws if abs(float(np.arctan2(np.sin(y - hy), np.cos(y - hy)))) > 0.02]
@@ -2346,6 +2428,12 @@ def find_planar_base_xyt(
         (0.005, "clear005"),
         (-5e-5, "clear_num"),
     )
+    if spawn_profile == "molmospaces":
+        clearance_passes = (
+            (0.028, "clear028"),
+            (0.014, "clear014"),
+            (-5e-5, "clear_num"),
+        )
     if spawn_profile == "robocasa" and robocasa_first_clearance_m is not None:
         fc = float(robocasa_first_clearance_m)
         clearance_passes = (

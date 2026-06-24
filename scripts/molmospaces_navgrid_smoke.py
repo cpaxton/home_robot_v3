@@ -65,7 +65,24 @@ def wait_observation(port: int, timeout: float = 150.0) -> None:
     raise RuntimeError(f"no observation on port {port}")
 
 
-def collision_clip_from_merged_xml(merged_xml: str, *, inset: float = 0.2) -> tuple[float, float, float, float]:
+def _resolve_base_body_id(model: mujoco.MjModel, base_body_name: str | None = None) -> int:
+    if base_body_name:
+        bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
+        if bid >= 0:
+            return int(bid)
+    for name in ("base_link", "chassis", "base"):
+        bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+        if bid >= 0:
+            return int(bid)
+    return -1
+
+
+def collision_clip_from_merged_xml(
+    merged_xml: str,
+    *,
+    inset: float = 0.2,
+    base_body_name: str | None = None,
+) -> tuple[float, float, float, float]:
     from emet.mapping.navgrid_compare import inset_clip_rect
     from emet.simulation import molmospaces_spawn as _molmo_spawn_mod
 
@@ -73,7 +90,9 @@ def collision_clip_from_merged_xml(merged_xml: str, *, inset: float = 0.2) -> tu
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
     floor_geom = _molmo_spawn_mod.resolve_floor_geom_name(model)
-    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+    bid = _resolve_base_body_id(model, base_body_name)
+    if bid < 0:
+        raise RuntimeError(f"no robot base body in merged MJCF {merged_xml!r}")
     robot_bodies = _molmo_spawn_mod._bodies_descending_from(model, bid)  # noqa: SLF001
     clip = _molmo_spawn_mod.collision_scene_xy_clip_rect(
         model,

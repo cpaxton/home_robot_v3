@@ -102,13 +102,46 @@ emet serve mujoco --scene ithor --robot rby1 --headless   # Galaxea R1 on Molmo 
 
 ---
 
+### `emet dataset <subcommand>`
+
+MolmoBot-Data and other learning dataset tools. See [datasets/molmobot.md](datasets/molmobot.md).
+
+| Subcommand | Description |
+|------------|-------------|
+| `molmobot inspect` | Episode stats from H5 root or file |
+| `molmobot list-trajs` | Trajectory keys in one batch H5 |
+| `molmobot export-lerobot` | Export JSONL episodes for LeRobot preprocessing |
+| `molmobot replay` | Open-loop joint replay against ZMQ sim |
+
+---
+
+### `emet robots <subcommand>`
+
+Inspect **emet robot registry** backends (MJCF path, camera wiring, stereo pair). Complements `emet molmospaces list-robots` (wrapper static IDs).
+
+| Subcommand | Description |
+|------------|-------------|
+| `list` | All canonical robots (`stretch`, `innate_mars`, `xlerobot`, `franka_fr3`, …) with MJCF + camera names |
+| `info ROBOT` | Detailed spec vs MJCF camera ids, stereo right cam, planar base, spawn metadata |
+| `preview-cameras ROBOT` | Shortcut for `emet preview-cameras --robot ROBOT` (forwards extra flags) |
+
+**Examples:**
+```bash
+emet robots list
+emet robots info xlerobot
+emet robots preview-cameras xlerobot --source local --out /tmp/xlerobot_cams.png
+emet robots preview-cameras xlerobot --source zmq --robot-ip 127.0.0.1
+```
+
+---
+
 ### `emet molmospaces <subcommand>`
 
 MolmoSpaces scene setup, merge, passive sim, and offline maintainer tools. See [molmospaces.md](molmospaces.md), [molmospaces_spawn_metadata.md](molmospaces_spawn_metadata.md), and [simulation_modules.md](simulation_modules.md).
 
 | Subcommand | Wrapper? | Description |
 |------------|----------|-------------|
-| `list-robots` | No (core) | Static robot IDs; default **stretch** when `--robot` omitted on serve |
+| `list-robots` | No (core) | MolmoSpaces wrapper IDs **and** emet registry robots with MJCF (`xlerobot`, `franka_fr3`, …) |
 | `list-scenes` | Yes | Scene names and split sizes |
 | `install-scene` | Yes | Download/install a scene XML |
 | `merge-scene` | Yes | Merge scene + robot MJCF (`-o` required) |
@@ -341,6 +374,7 @@ Sweeps the sim **head hinge** (`joint_head` on Innate Mars) and writes **one mon
 ```bash
 emet preview-cameras
 emet preview-cameras --robot innate_mars --out /tmp/mars_cams.png
+emet preview-cameras --robot xlerobot --out /tmp/xlerobot_cams.png
 emet preview-cameras --source zmq --robot innate_mars --robot-ip 127.0.0.1
 
 emet preview-cameras --nod --nod-out-dir ./nod_caps --nod-frames 41 --nod-video ./nod.mp4
