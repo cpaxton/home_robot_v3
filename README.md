@@ -223,6 +223,8 @@ Check out additional documentation for ways to use Stretch AI:
 - [Data Collection for Learning from Demonstration](docs/data_collection.md) -- How to collect data for learning from demonstration
 - [Embodied Question Answering](docs/eqa.md) -- Allow the robot to explore the environment and answer questions from the users about the environment. For a graph-based memory alternative, see [GraphEQA](docs/graph_eqa.md).
 - [Dynagraph](docs/dynagraph.md) -- GraphEQA + voxel navigation with graph merge/staleness; Robocasa explore-loop and export ([E2E testing guide](docs/dynagraph_robocasa_e2e.md)).
+- [Known issues](docs/known_issues.md) -- Open bugs and investigation notes (e.g. stationary hardware dynagraph dedup)
+- [Paper experiments](docs/experiments/README.md) -- Master index for CoRL paper benchmarks (commands, figures, output paths)
 - [Testing index](docs/TESTING.md) -- How to run `emet test`, memory-backend smokes, and Dynagraph harnesses.
 - [Learning from Demonstration](docs/learning_from_demonstration.md)  -- How to train and evaluate policies with LfD
 - [Open-Vocabulary Mobile Manipulation](docs/ovmm.md) -- Experimental code which can handle more complex language commands

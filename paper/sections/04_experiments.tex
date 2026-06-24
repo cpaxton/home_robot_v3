@@ -2,7 +2,7 @@
 \label{sec:experiments}
 
 \textit{Experimental results are pending. This section records the evaluation plan.}
-Maintainer runbook: \texttt{docs/paper\_benchmarks.md} (commands, output paths, LaTeX update checklist).
+Maintainer index: \texttt{docs/experiments/README.md} (experiment matrix, smokes, figures); detailed runbook: \texttt{docs/paper\_benchmarks.md}.
 
 \subsection{Goals}
 
@@ -11,7 +11,7 @@ Maintainer runbook: \texttt{docs/paper\_benchmarks.md} (commands, output paths, 
   \item \textbf{SQA3D situated open QA:} Embodied ScanNet replay with EM@1 scoring (Section~\ref{sec:sqa3d_benchmark}); compare \texttt{dynamem} vs.\ \texttt{dynagraph} with \texttt{prompt\_variant: sqa3d}.
   \item \textbf{OVMM-inspired find-phase:} FindObj / FindRec localization on Emet sim tiers S0--S2 and Habitat HM3D proxy episodes (Section~\ref{sec:ovmm_find_phase}); memory backends \texttt{dynamem}, \texttt{graph\_eqa}, \texttt{dynagraph}, and sim oracle \texttt{ground\_truth}.
   \item \textbf{Emet sim (complementary):} Robocasa kitchens and MolmoSpaces iTHOR with Stretch, Galaxea R1 (rby1), and Innate Mars (Appendix~\ref{app:innate_mars}); depth-source policy in Appendix~\ref{app:da3}; GT-supervised object finding (Section~\ref{sec:gt_experiments}).
-  \item \textbf{Dynamic episodes:} After object relocation, measure stale nodes, wrong answers, and recovery steps (Dynagraph vs.\ GraphEQA without staleness).
+  \item \textbf{Dynamic exploration:} Active frontier exploration and world-change staleness on Robocasa / MolmoSpaces (Section~\ref{sec:dynamic_exploration}); metrics not comparable to OVMM or SQA3D.
 \end{enumerate}
 
 \subsection{Methods compared}
@@ -63,13 +63,15 @@ Task-specific controller settings (EQA \texttt{prompt\_variant}, \texttt{use\_in
     Track & Config YAML & Default output \\
     \midrule
     OVMM find-phase (sim) & \texttt{configs/ovmm/benchmark.yaml} & \texttt{\textasciitilde/runs/emet/ovmm\_find\_phase} \\
+    OVMM full (sim) & same & \texttt{\textasciitilde/runs/emet/ovmm\_full} \\
     OVMM find-phase (Habitat) & same & \texttt{\textasciitilde/runs/emet/ovmm\_habitat} \\
     SQA3D & \texttt{configs/sqa3d/benchmark.yaml} & \texttt{\textasciitilde/runs/emet/sqa3d} \\
+    Dynamic exploration & \texttt{configs/benchmarks/dynamic\_exploration.yaml} & \texttt{\textasciitilde/runs/emet/dynamic\_exploration} \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-Override with \texttt{EMET\_OVMM\_OUTPUT\_SIM}, \texttt{EMET\_OVMM\_OUTPUT\_HABITAT}, \texttt{EMET\_SQA3D\_OUTPUT} (see \texttt{docs/environment\_variables.md}).
+Override with \texttt{EMET\_OVMM\_OUTPUT\_SIM}, \texttt{EMET\_OVMM\_OUTPUT\_FULL}, \texttt{EMET\_OVMM\_OUTPUT\_HABITAT}, \texttt{EMET\_SQA3D\_OUTPUT}, \texttt{EMET\_DYNAMIC\_EXPLORE\_OUTPUT} (see \texttt{docs/environment\_variables.md}).
 
 \subsection{Simulation environments}
 
@@ -86,6 +88,8 @@ Override with \texttt{EMET\_OVMM\_OUTPUT\_SIM}, \texttt{EMET\_OVMM\_OUTPUT\_HABI
     Habitat + HM3D & \texttt{eval\_habitat\_ovmm\_find\_phases.py} & OVMM find-phase proxy (Phase~2) \\
     ScanNet + SQA3D & \texttt{emet sqa3d run-real-sweep} & Situated open QA (EM@1) \\
     Emet sim (S0--S2) & \texttt{eval\_ovmm\_find\_phases.py} & OVMM FindObj / FindRec \\
+    Emet sim (S0--S2) & \texttt{eval\_ovmm\_full.py} & OVMM find + pick + place \\
+    Emet sim (S1--S2) & \texttt{eval\_dynamic\_exploration.py} & Dynamic exploration (Section~\ref{sec:dynamic_exploration}) \\
     Robocasa & \texttt{emet serve robocasa} & Kitchen objects, GT finding \\
     MolmoSpaces iTHOR & \texttt{emet serve molmospaces} & Multi-room exploration (S2) \\
     Default table & \texttt{emet serve mujoco} & Sanity / CI (S0) \\
@@ -168,6 +172,7 @@ Episode JSONL logs \texttt{replay\_backend}, \texttt{sens\_match\_xy\_m}, and \t
   \item Data: \texttt{scripts/download\_sqa3d\_data.py --fetch-annotations}; ScanNet meshes + optional \texttt{.sens} via \texttt{scripts/download\_scannet\_data.py --with-sens}.
   \item Smoke: \texttt{emet sqa3d run-episode --mock-llm --question-id <id>}.
   \item Real-VLM batch: \texttt{emet sqa3d run-real-sweep --split val --replay-mode sens --isolate-episodes} (defaults in \texttt{configs/sqa3d/benchmark.yaml}; GPU notes in \texttt{docs/sqa3d\_compute.md}).
+  \item Full split (multi-GPU): \texttt{scripts/run\_sqa3d\_sharded\_sweep.sh --all --gpus 0,1,2,3} or \texttt{SQA3D\_GPUS=0,1,2,3 scripts/run\_large\_paper\_eval.sh sqa3d-val}.
   \item Score / figures: \texttt{emet eval-sqa3d -p <batch>.jsonl}; \texttt{emet sqa3d plot-results -p <batch>.jsonl -o figs/}.
   \item Aggregate: \texttt{scripts/aggregate\_sqa3d\_sweep.py} $\rightarrow$ \texttt{aggregate\_sqa3d.csv} for Table~\ref{tab:sqa3d_backend_replay}.
 \end{enumerate}
@@ -240,8 +245,9 @@ Molmo GT fixture scans may cap on large scenes; Robocasa layout $\neq$ HSSD; sta
 
 \begin{enumerate}
   \item \textbf{Smoke all tracks:} \texttt{docs/paper\_benchmarks.md} $\rightarrow$ Quick smoke section.
-  \item \textbf{Emet sim:} \texttt{emet serve … --port-offset N}; OVMM via \texttt{eval\_ovmm\_find\_phases.py}; GT finding via \texttt{eval\_dynagraph\_ground\_truth.py}.
-  \item \textbf{SQA3D:} \texttt{emet sqa3d run-real-sweep} $\rightarrow$ JSONL $\rightarrow$ \texttt{aggregate\_sqa3d\_sweep.py} (no ZMQ sim server).
+  \item \textbf{Large queue:} \texttt{scripts/run\_large\_paper\_eval.sh} (SQA3D with optional \texttt{SQA3D\_GPUS}, OVMM replicates, dynamic exploration); logs under \texttt{\textasciitilde/runs/emet/large\_eval}.
+  \item \textbf{Emet sim:} \texttt{emet serve … --port-offset N}; OVMM via \texttt{eval\_ovmm\_find\_phases.py} / \texttt{eval\_ovmm\_full.py}; dynamic exploration via \texttt{eval\_dynamic\_exploration.py}; GT finding via \texttt{eval\_dynagraph\_ground\_truth.py}.
+  \item \textbf{SQA3D:} \texttt{emet sqa3d run-real-sweep} or \texttt{run\_sqa3d\_sharded\_sweep.sh} $\rightarrow$ JSONL $\rightarrow$ \texttt{aggregate\_sqa3d\_sweep.py} (no ZMQ sim server).
   \item \textbf{Habitat:} \texttt{.venv-habitat/bin/emet-habitat} (EQA harness branch) and \texttt{eval\_habitat\_ovmm\_find\_phases.py}.
   \item \textbf{Fill paper tables:} copy CSV aggregates into \texttt{paper/sections/05\_results.tex}; rebuild with \texttt{./paper/build.sh}.
 \end{enumerate}
