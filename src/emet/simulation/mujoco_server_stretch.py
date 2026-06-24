@@ -20,13 +20,20 @@ from typing import Any
 import numpy as np
 from overrides import override
 
-from emet.core.zmq_protocol import EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY, EMET_ACTION_SIM_SET_BODY_POSE_KEY
+from emet.core.zmq_protocol import (
+    EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY,
+    EMET_ACTION_SIM_SET_BODY_POSE_KEY,
+    EMET_ACTION_SIM_SET_JOINT_QPOS_KEY,
+)
 from emet.motion.constants import STRETCH_CAMERA_FRAME
 from emet.simulation.mujoco_ground_truth import (
     mujoco_ground_truth_write_path,
     parse_ground_truth_dump_action_field,
 )
-from emet.simulation.sim_manipulation import parse_sim_set_body_pose_action
+from emet.simulation.sim_manipulation import (
+    parse_sim_set_body_pose_action,
+    parse_sim_set_joint_qpos_action,
+)
 from emet.simulation.sim_object_placements import (
     apply_navigation_origin_to_session,
     attach_sim_object_placements_to_session,
@@ -172,24 +179,18 @@ class MujocoZmqServer(BaseZmqServer):
         else:
             xyt_goal = xyt
 
-        # Get current position from mjdata
-        # TODO: remove debug print
-        # body_names = [mjmodel.body(i).name for i in range(mjmodel.nbody)]
-        # print(body_names)
-        base_pos = mjdata.body("base_link").xpos
-        print(f"Current {body_name} position: {base_pos}")
-        base_pos[0] = xyt_goal[0]
-        base_pos[1] = xyt_goal[1]
-        print(f"Setting {body_name} to {base_pos}")
-        mjdata.body("base_link").xpos = base_pos
+        from emet.simulation.sim_manipulation import set_free_body_pose
 
-        # Convert the theta into a rotation matrix
-        rotation = mjdata.body("base_link").xmat.reshape(3, 3)
-        rotation[0, 0] = np.cos(xyt_goal[2])
-        rotation[0, 1] = -np.sin(xyt_goal[2])
-        rotation[1, 0] = np.sin(xyt_goal[2])
-        rotation[1, 1] = np.cos(xyt_goal[2])
-        mjdata.body("base_link").xmat = rotation.flatten()
+        mjmodel = self.robot_sim.mjmodel
+        half = float(xyt_goal[2]) * 0.5
+        quat = np.array([np.cos(half), 0.0, 0.0, np.sin(half)], dtype=np.float64)
+        set_free_body_pose(
+            mjmodel,
+            mjdata,
+            body_name,
+            [float(xyt_goal[0]), float(xyt_goal[1]), float(mjdata.body(body_name).xpos[2])],
+            quat,
+        )
 
     def reset(self):
         """Reset the robot to the initial state."""
@@ -670,6 +671,7 @@ class MujocoZmqServer(BaseZmqServer):
             "num_cameras": 2 if self._cameras_enabled else 0,
             "dof": int(spec.dof),
             "sim_set_body_pose": True,
+            "sim_set_joint_qpos": True,
         }
         session: dict[str, Any] = {
             EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY: CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
@@ -827,6 +829,17 @@ class MujocoZmqServer(BaseZmqServer):
                     self._patch_emet_session_body_pos(body, pos, quat)
                 else:
                     logger.warning("sim_set_body_pose failed for body %r", body)
+
+        if EMET_ACTION_SIM_SET_JOINT_QPOS_KEY in action:
+            joint, value = parse_sim_set_joint_qpos_action(action[EMET_ACTION_SIM_SET_JOINT_QPOS_KEY])
+            if joint and value is not None:
+                measured = self.robot_sim.set_joint_qpos(joint, value, wait=True, timeout=2.0)
+                if measured is not None:
+                    logger.info(
+                        f"sim_set_joint_qpos: {joint!r} requested={value:.4f} measured={measured:.4f}"
+                    )
+                else:
+                    logger.warning(f"sim_set_joint_qpos failed for joint {joint!r}")
 
         if "control_mode" in action:
             new_control_mode = action["control_mode"]

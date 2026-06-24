@@ -193,6 +193,7 @@ def model_generation_wizard(
     write_to_file: str = None,
     robot_spawn_pose: dict = None,
     robot: str = "stretch",
+    seed: int | None = None,
 ) -> tuple[mujoco.MjModel, str, dict]:
     """
     Wizard/API to generate a kitchen model for a given task, layout, and style.
@@ -206,9 +207,15 @@ def model_generation_wizard(
         robot: Robot name. ``"stretch"``, ``"innate_mars"``, and Galaxea R1 family ids (``"rby1"``, etc.)
             use a PandaMobile placeholder in Robocasa, then strip-and-replace with the real MJCF.
             Robosuite-native names (e.g. ``"PandaOmron"``, ``"Tiago"``, ``"GR1"``) keep that robot in the scene.
+        seed: Robosuite env seed for ``env.reset()`` object placement (``None`` = unseeded / random).
     Returns:
         Tuple of (MjModel, xml_string, object_placements_info).
     """
+    import random
+
+    if seed is not None:
+        np.random.seed(int(seed))
+        random.seed(int(seed))
 
     if layout is None:
         layout = choose_layout()
@@ -230,6 +237,8 @@ def model_generation_wizard(
         "translucent_robot": False,
         "layout_and_style_ids": [[layout, style]],
     }
+    if seed is not None:
+        config["seed"] = int(seed)
 
     print(colored("Initializing environment...", "yellow"))
 

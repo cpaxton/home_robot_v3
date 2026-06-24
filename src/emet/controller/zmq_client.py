@@ -1910,11 +1910,13 @@ class StretchZmqClient(AbstractRobotClient):
             logger.error("StretchZmqClient.start() called after the client was shut down; create a new client.")
             return False
 
-        self._thread = threading.Thread(target=self.blocking_spin)
-        self._state_thread = threading.Thread(target=self.blocking_spin_state)
-        self._servo_thread = threading.Thread(target=self.blocking_spin_servo)
+        # daemon=True (matching GenericZmqClient): crash paths that never reach
+        # robot.stop() must not hang the process at interpreter shutdown.
+        self._thread = threading.Thread(target=self.blocking_spin, daemon=True)
+        self._state_thread = threading.Thread(target=self.blocking_spin_state, daemon=True)
+        self._servo_thread = threading.Thread(target=self.blocking_spin_servo, daemon=True)
         if self._rerun:
-            self._rerun_thread = threading.Thread(target=self.blocking_spin_rerun)  # type: ignore
+            self._rerun_thread = threading.Thread(target=self.blocking_spin_rerun, daemon=True)  # type: ignore
         self._finish = False
         self._thread.start()
         self._state_thread.start()

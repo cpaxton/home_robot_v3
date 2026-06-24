@@ -130,6 +130,8 @@ def export_graph_eqa_dir(
     ground_truth_mode: bool = False,
     sim_object_placements: dict[str, Any] | None = None,
     gt_alignment_report_text: str | None = None,
+    final_step: int | None = None,
+    save_voxel_pickle: bool = False,
 ) -> str:
     """
     Save GraphEQA memory via MemoryBackend (manifest, graph.json, frames, …) and write
@@ -137,6 +139,10 @@ def export_graph_eqa_dir(
 
     When ``ground_truth_mode`` is set, also writes ``sim_object_placements.json`` and
     optional ``gt_alignment_report.txt``.
+
+    ``final_step`` records the controller observation count in the manifest and
+    ``save_voxel_pickle`` writes ``voxel_map.pkl`` so a later run can reload the full
+    voxel map + staleness clock (lifelong checkpoint).
 
     Returns:
         The same pretty-print string written to disk (caller may print to stdout).
@@ -152,6 +158,8 @@ def export_graph_eqa_dir(
         path,
         ground_truth_mode=ground_truth_mode,
         sim_object_placements=sim_object_placements,
+        final_step=final_step,
+        save_voxel_pickle=save_voxel_pickle,
     )
     export_dynagraph_visual_assets(graph_memory, path)
     text = format_scene_graph_pretty(graph_memory, title=title)
@@ -195,6 +203,8 @@ def export_dynagraph_episode(
     ground_truth_mode: bool = False,
     sim_object_placements: dict[str, Any] | None = None,
     gt_alignment_report_text: str | None = None,
+    final_step: int | None = None,
+    save_voxel_pickle: bool = False,
 ) -> str:
     """Full Dynagraph episode export (graph + frames + optional GT sidecars)."""
     return export_graph_eqa_dir(
@@ -208,6 +218,8 @@ def export_dynagraph_episode(
         ground_truth_mode=ground_truth_mode,
         sim_object_placements=sim_object_placements,
         gt_alignment_report_text=gt_alignment_report_text,
+        final_step=final_step,
+        save_voxel_pickle=save_voxel_pickle,
     )
 
 
