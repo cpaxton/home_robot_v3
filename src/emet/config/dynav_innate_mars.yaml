@@ -171,3 +171,11 @@ rerun:
   dynagraph:
     log_crops: false
     log_edges: false
+
+# ``emet capture`` / ``emet stream`` on hardware (quiet DA3 INFO by default).
+stream:
+  verbose: false
+  status_interval_s: 5.0
+  da3_log_level: WARN
+  log_every_step_when_max_steps_le: 20
+  rerun_hold_s: 30.0
