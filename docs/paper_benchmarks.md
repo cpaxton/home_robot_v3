@@ -1,5 +1,7 @@
 # Paper benchmarks — run and maintain
 
+> **Start here:** [experiments/README.md](experiments/README.md) for the master experiment index (matrix, smokes, example figures). This file is the detailed operator runbook.
+
 Operator guide for benchmarks referenced in `paper/sections/04_experiments.tex` and `paper/sections/05_results.tex`.
 
 **Unified eval runbook (overnight smoke, diagnostics, figures):** [evaluation.md](evaluation.md)
@@ -14,12 +16,15 @@ Operator guide for benchmarks referenced in `paper/sections/04_experiments.tex` 
 | **OVMM find-phase (sim)** | Localize object + receptacle | Find partial success @ $r$ | `configs/ovmm/benchmark.yaml` | `scripts/eval_ovmm_find_phases.py` | `aggregate_<backends>.csv` in output dir |
 | **OVMM full (sim)** | Find + pick + place | `ovmm_full_success` / four phase rates | `configs/ovmm/benchmark.yaml` | `scripts/eval_ovmm_full.py` | `~/runs/emet/ovmm_full` |
 | **OVMM find-phase (Habitat)** | Same, HM3D proxy | Same | `configs/ovmm/benchmark.yaml` | `scripts/eval_habitat_ovmm_find_phases.py` | per-run JSON under `~/runs/emet/ovmm_habitat` |
-| **SQA3D** | Situated open QA | EM@1 | `configs/sqa3d/benchmark.yaml` | `emet sqa3d run-real-sweep` | `scripts/aggregate_sqa3d_sweep.py` → `aggregate_sqa3d.csv` |
+| **SQA3D** | Situated open QA | EM@1 | `configs/sqa3d/benchmark.yaml` | `emet sqa3d run-real-sweep`, `run_sqa3d_sharded_sweep.sh` | `scripts/aggregate_sqa3d_sweep.py` → `aggregate_sqa3d.csv` |
+| **Large paper queue** | All tracks above | per-track | — | `scripts/run_large_paper_eval.sh` | per-track CSV under `~/runs/emet/…` |
 | **GT object finding** | Sim oracle localization | XY error, recall @ $r$ | episode exports | `emet run dynagraph --ground-truth` + `scripts/eval_dynagraph_ground_truth.py` | manual / `emet eval-dynagraph` |
 | **Dynagraph sim** | Explore + fusion + EQA | spatial/label recall, graph size | question bank yaml | `emet eval-dynagraph`, `run_dynagraph_benchmark_smoke.py` | [dynagraph_benchmarks.md](dynagraph_benchmarks.md) |
+| **Dynamic exploration** | Frontier explore + world-change + lifelong cycles | coverage, EQA, staleness, churn | `configs/benchmarks/dynamic_exploration.yaml` | `scripts/eval_dynamic_exploration.py` | `aggregate_dynamic_exploration.csv` |
+| **Backend localization figure** | Single-scene GT vs prediction | XY error, @0.5 m hit | Robocasa seed 0 | `scripts/smoke_backend_localization_figure.py` | PNG + `smoke_results.json` |
 | **Habitat EQA** | HM-EQA / OpenEQA | MC accuracy, steps | Habitat install | `.venv-habitat/bin/emet-habitat` | separate branch (`feature/habitat-eqa-harness`) |
 
-Deep dives: [ovmm_find_phase_benchmark.md](ovmm_find_phase_benchmark.md), [sqa3d.md](sqa3d.md), [sqa3d_compute.md](sqa3d_compute.md), [dynagraph_benchmarks.md](dynagraph_benchmarks.md), [habitat/README.md](habitat/README.md).
+Deep dives: [experiments/README.md](experiments/README.md) (index), [ovmm_find_phase_benchmark.md](ovmm_find_phase_benchmark.md), [ovmm_full_benchmark.md](ovmm_full_benchmark.md), [dynamic_exploration_benchmark.md](dynamic_exploration_benchmark.md), [experiments/backend_localization.md](experiments/backend_localization.md), [sqa3d.md](sqa3d.md), [sqa3d_compute.md](sqa3d_compute.md), [dynagraph_benchmarks.md](dynagraph_benchmarks.md), [habitat/README.md](habitat/README.md).
 
 ## Shared memory backends
 
@@ -57,6 +62,7 @@ CLI overrides still work: OVMM `--merge-xy-m` / `--staleness-horizon`; SQA3D has
 | `EMET_OVMM_OUTPUT_SIM` | `~/runs/emet/ovmm_find_phase` | `eval_ovmm_find_phases.py` |
 | `EMET_OVMM_OUTPUT_HABITAT` | `~/runs/emet/ovmm_habitat` | `eval_habitat_ovmm_find_phases.py` |
 | `EMET_SQA3D_OUTPUT` | `~/runs/emet/sqa3d` | `emet sqa3d run-real-sweep`, `aggregate_sqa3d_sweep.py` |
+| `EMET_DYNAMIC_EXPLORE_OUTPUT` | `~/runs/emet/dynamic_exploration` | `scripts/eval_dynamic_exploration.py` |
 
 Caches (not under `runs/`): `SQA3D_DATA_DIR`, `SCANNET_ROOT`, `HABITAT_EQA_DATA_DIR`, `HM3D_DATA_PATH` — see [environment_variables.md](environment_variables.md).
 
@@ -100,6 +106,67 @@ uv run python scripts/eval_ovmm_find_phases.py \
 **Oracle** (`ground_truth`): may use `--not-rotate --cpu-only`.
 
 Scale to S1/S2: `--tier S1` or `--tier S2`; see episode yaml for Molmo indices.
+
+---
+
+## OVMM full (find + pick + place)
+
+**Paper:** four-phase extension of find-phase (not yet a dedicated results table).  
+**Doc:** [ovmm_full_benchmark.md](ovmm_full_benchmark.md).
+
+```bash
+uv run emet test src/test/memory/test_ovmm_full_metrics.py -q
+
+# Oracle manip smoke (fast)
+uv run python scripts/eval_ovmm_full.py \
+  --episode-id default_table_s0_distinct_recep \
+  --backend ground_truth --not-rotate --cpu-only \
+  --manip-mode oracle \
+  --output-dir ~/runs/emet/ovmm_full/smoke
+
+# Sim E2E (uses ZMQ sim_set_body_pose for pick/place)
+uv run python scripts/eval_ovmm_full.py \
+  --episode-id robocasa_pp_s1 \
+  --backend dynagraph --manip-mode sim --cpu-only
+```
+
+Shared sim body teleport: `sim_set_body_pose` (also used by Phase~2 dynamic exploration world-change).
+
+---
+
+## Dynamic exploration (Emet sim)
+
+**Paper:** Section~\ref{sec:dynamic_exploration}, Tables `tab:dynamic_explore_phase1`, `tab:dynamic_explore_world_change`.  
+**Doc:** [dynamic_exploration_benchmark.md](dynamic_exploration_benchmark.md).
+
+```bash
+# Dry-run full Phase 1 matrix
+uv run python scripts/eval_dynamic_exploration.py --dry-run
+
+# Phase 1 smoke (Robocasa seed0, K=3)
+uv run python scripts/eval_dynamic_exploration.py \
+  --phase explore --episode-id robocasa_seed0 \
+  --backend dynagraph --explore-max-iters 3 --mapping-mode explore \
+  --cpu-only --output-dir ~/runs/emet/dynamic_exploration/smoke
+
+# Rotate-only contrast row
+uv run python scripts/eval_dynamic_exploration.py \
+  --phase explore --episode-id robocasa_seed0 \
+  --mapping-mode rotate_only --backend dynagraph --cpu-only
+
+# Phase 2 world-change
+uv run python scripts/eval_dynamic_exploration.py \
+  --phase world-change --cpu-only --resume
+
+# Lifelong K-cycle checkpoint/fuzz/reload (Robocasa + Molmo iTHOR)
+uv run python scripts/eval_dynamic_exploration.py \
+  --phase lifelong --resume
+
+# Full overnight matrix
+./scripts/run_dynamic_exploration_full.sh
+```
+
+Aggregates: `aggregate_dynamic_exploration.csv`, `aggregate_dynamic_exploration_world_change.csv`, `aggregate_dynamic_exploration_lifelong.csv` under `EMET_DYNAMIC_EXPLORE_OUTPUT` (default `~/runs/emet/dynamic_exploration`).
 
 ---
 
@@ -176,6 +243,74 @@ Perception alignment: `emet run dynagraph --compare-to-gt --export runs/<id>`.
 
 ---
 
+## Large paper eval queue
+
+Orchestrator: `scripts/run_large_paper_eval.sh` (SQA3D → OVMM find → dynamic exploration; multi-GPU SQA3D via `SQA3D_GPUS`; `--resume` where supported).
+
+```bash
+# Full queue: SQA3D val+test (dynamem+dynagraph) → OVMM find replicates → dynamic exploration
+./scripts/run_large_paper_eval.sh
+
+# One phase
+./scripts/run_large_paper_eval.sh sqa3d-val
+./scripts/run_large_paper_eval.sh ovmm
+./scripts/run_large_paper_eval.sh dynamic-explore
+
+# Skip phases
+SKIP_OVMM=1 ./scripts/run_large_paper_eval.sh
+SKIP_DYNAMIC_EXPLORE=1 ./scripts/run_large_paper_eval.sh
+
+# Run OVMM on CPU while SQA3D holds the GPU (overlap manually in two terminals)
+OVMM_CPU_ONLY=1 ./scripts/run_large_paper_eval.sh ovmm
+```
+
+Logs: `~/runs/emet/large_eval/<phase>.log`. Outputs: `EMET_SQA3D_OUTPUT`, stamped `ovmm_find_phase/large_<ts>`, stamped `dynamic_exploration/large_<ts>` on `phase=all`.
+
+### Why SQA3D dominates
+
+Default `--isolate-episodes` spawns a **fresh Python process per question**, reloading the VLM (~1–2 min overhead) plus ScanNet sim + planning. That is ~2–4 min × **13.5k** questions × **2 methods** × **2 splits** ≈ **3–4 weeks** on one GPU.
+
+### Estimated wall-clock (resume on)
+
+| Phase | Runs | 1 GPU isolate | 4 GPU isolate |
+|-------|------|---------------|---------------|
+| SQA3D val (both methods) | ~6.5k | ~10–22 days | ~2.5–6 days |
+| SQA3D test (both methods) | ~7k | ~10–22 days | ~2.5–6 days |
+| OVMM find replicates | 180 | ~0.5–1.5 days (CPU) | same |
+| Dynamic explore | 50 | ~1–2 days | same |
+
+| Config | Total queue |
+|--------|-------------|
+| Default (`phase=all`, 1 GPU) | **~22–38 days** |
+| `SQA3D_GPUS=0,1,2,3` | **~6–11 days** |
+| 4 GPU + `SQA3D_NO_ISOLATE=1` | **~3–6 days** (watch VRAM) |
+| `SKIP_SQA3D_TEST=1` + 4 GPU | **~4–7 days** (val-only paper draft) |
+| `SQA3D_METHODS=dynagraph` + 4 GPU + val only | **~2–4 days** (fastest credible table) |
+
+### Speed knobs
+
+```bash
+# Best throughput (4 GPUs, full val+test, both methods)
+SQA3D_GPUS=0,1,2,3 ./scripts/run_large_paper_eval.sh
+
+# Or shard one sweep directly:
+./scripts/run_sqa3d_sharded_sweep.sh --split val --method dynagraph --all --gpus 0,1,2,3
+
+# Faster but riskier: keep VLM loaded in-process (2–3× per GPU; may OOM after hours)
+SQA3D_NO_ISOLATE=1 SQA3D_GPUS=0,1,2,3 ./scripts/run_large_paper_eval.sh sqa3d-val
+
+# Paper iteration: val dynagraph only
+SQA3D_METHODS=dynagraph SKIP_SQA3D_TEST=1 SKIP_OVMM=1 SKIP_DYNAMIC_EXPLORE=1 \
+  SQA3D_GPUS=0,1,2,3 ./scripts/run_large_paper_eval.sh sqa3d-val
+
+# Overlap: terminal A = SQA3D on GPU; terminal B = OVMM on CPU
+OVMM_CPU_ONLY=1 ./scripts/run_large_paper_eval.sh ovmm
+```
+
+Resume skips finished JSONL lines. Sharded sweeps write per-shard JSONL + `*_merged.csv` via `aggregate_sqa3d_sweep.py`.
+
+---
+
 ## Maintaining paper numbers
 
 ### 1. Run sweeps → CSV/JSON
@@ -191,6 +326,9 @@ Edit `paper/sections/05_results.tex`:
 |-------------|--------|
 | `tab:ovmm_find_backend_tier` | OVMM aggregate CSV: `find_object_success`, `find_recep_success`, `find_partial_success` by tier (FindObj typically easier than FindRec) |
 | `tab:sqa3d_backend_replay` | `em@1` from `aggregate_sqa3d.csv`, rows grouped by `method` × `replay_backend` |
+| `tab:dynamic_explore_phase1` | `aggregate_dynamic_exploration.csv` (explored_fraction, eqa_accuracy, …) |
+| `tab:dynamic_explore_world_change` | `aggregate_dynamic_exploration_world_change.csv` |
+| `tab:dynamic_explore_lifelong` | `aggregate_dynamic_exploration_lifelong.csv` (per-cycle eqa_accuracy, node counts, moves adapted/stale) |
 | Habitat / HM-EQA | TBD on habitat branch |
 
 Replace `--` placeholders; keep caption disclaimers (not comparable to official leaderboards where noted).
@@ -241,7 +379,8 @@ Merge feature branches before final paper numbers; run smokes on the integration
 
 `paper/sections/04_experiments.tex` should stay in sync with this doc:
 
-- [ ] Goals list matches active tracks (Habitat EQA, SQA3D, OVMM, GT finding, dynamic episodes)
+- [ ] Goals list matches active tracks (Habitat EQA, SQA3D, OVMM find/full, dynamic exploration, GT finding)
+- [ ] `scripts/run_large_paper_eval.sh` phases and `SQA3D_GPUS` / skip env vars match `docs/environment_variables.md`
 - [ ] Table `tab:envs` lists correct entrypoint scripts
 - [ ] Each `sec:*_benchmark` protocol matches `--help` on the cited commands
 - [ ] Metrics subsection states which metrics are **not** cross-comparable
@@ -249,5 +388,6 @@ Merge feature branches before final paper numbers; run smokes on the integration
 
 ## See also
 
+- [experiments/README.md](experiments/README.md) — master experiment index
 - [paper/README.md](../paper/README.md) — LaTeX build
 - [TESTING.md](TESTING.md) — project-wide test conventions

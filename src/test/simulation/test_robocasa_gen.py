@@ -24,6 +24,8 @@
 
 import pytest
 
+import numpy as np
+
 
 def test_stretch_model_loads():
     """Stretch MuJoCo model loads (generated XML has inertia on meshes for MuJoCo 2.x).
@@ -165,3 +167,23 @@ def test_robocasa_wizard_matches_emet_serve():
         pos = data.body(bid).xpos[:2]
         assert abs(float(pos[0]) - float(hint[0])) < 0.05
         assert abs(float(pos[1]) - float(hint[1])) < 0.05
+
+
+def test_robocasa_obj_main_placement_is_seed_deterministic():
+    """Same task/layout/style/seed → identical ``obj_main`` category and position."""
+    pytest.importorskip("robocasa")
+    from emet.simulation.stretch_mujoco.robocasa_gen import model_generation_wizard
+
+    kwargs = dict(
+        task="PickPlaceCounterToCabinet",
+        layout=1,
+        style=1,
+        robot="stretch",
+        seed=0,
+    )
+    _m0, _x0, p0 = model_generation_wizard(**kwargs)
+    _m1, _x1, p1 = model_generation_wizard(**kwargs)
+    assert "obj_main" in p0 and "obj_main" in p1
+    assert p0["obj_main"]["cat"] == p1["obj_main"]["cat"]
+    np.testing.assert_allclose(p0["obj_main"]["pos"], p1["obj_main"]["pos"], rtol=0, atol=1e-6)
+

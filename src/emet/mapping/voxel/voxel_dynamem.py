@@ -1284,9 +1284,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
         Args:
             filename (Optional[str], optional): Filename to write to. Defaults to None.
         """
-        if not os.path.exists("debug"):
-            os.mkdir("debug")
         if filename is None:
+            if not os.path.exists("debug"):
+                os.mkdir("debug")
             filename = self.log + ".pkl"
         data: dict[str, Any] = {}
         data["camera_poses"] = []
@@ -1308,7 +1308,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
             data["rgb"].append(frame.rgb)
             data["depth"].append(frame.depth)
             data["feats"].append(frame.feats)
-            for k, v in frame.info.items():
+            for k, v in (frame.info or {}).items():
                 if k not in data:
                     data[k] = []
                 data[k].append(v)

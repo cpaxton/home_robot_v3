@@ -26,14 +26,14 @@ def test_innate_mars_remote_host_uses_da3_dynav_by_default():
     assert resolved == INNATE_MARS_HW_DYNAV
 
 
-def test_innate_mars_localhost_uses_da3_dynav_by_default():
+def test_innate_mars_localhost_keeps_sensor_dynav_by_default():
     resolved = resolve_stream_dynav_config(
         "innate_mars",
         "127.0.0.1",
         DEFAULT_DYNAV_CONFIG_YAML,
         dynav_from_default=True,
     )
-    assert resolved == INNATE_MARS_HW_DYNAV
+    assert resolved == DEFAULT_DYNAV_CONFIG_YAML
 
 
 def test_explicit_dynav_not_overridden():

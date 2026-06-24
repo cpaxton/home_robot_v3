@@ -7,13 +7,10 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
+"""Factory for ``emet stream`` / ``emet capture`` mapping agents (DynaMem, GraphEQA, Dynagraph, SVM, …).
 
-"""Factory for ``emet stream --backend`` mapping agents (DynaMem, GraphEQA, Dynagraph, SVM, …)."""
+CLI profiles: :mod:`emet.app.zmq_obs`. User guide: ``docs/zmq_obs.md``.
+"""
 
 from __future__ import annotations
 
@@ -31,7 +28,7 @@ from emet.robots import (
     resolve_dynav_config_yaml,
 )
 
-StreamBackend = Literal["dynamem", "graph_eqa", "dynagraph", "ground_truth", "svm", "scene_graph"]
+StreamBackend = Literal["dynamem", "graph_eqa", "dynagraph", "ground_truth", "svm", "scene_graph", "voxel_only"]
 
 STREAM_BACKENDS: tuple[str, ...] = (
     "dynamem",
@@ -40,10 +37,15 @@ STREAM_BACKENDS: tuple[str, ...] = (
     "ground_truth",
     "svm",
     "scene_graph",
+    "voxel_only",
 )
 
 INNATE_MARS_HW_DYNAV = "dynav_innate_mars.yaml"
 _LOCALHOST_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def is_localhost_host(host: str) -> bool:
+    return host.strip().lower() in _LOCALHOST_HOSTS
 
 
 @dataclass
@@ -68,7 +70,7 @@ def resolve_stream_dynav_config(
     resolved = resolve_dynav_config_yaml(robot, dynav_config)
     if not dynav_from_default:
         return resolved
-    if _robot_key(robot) == "innate_mars":
+    if _robot_key(robot) == "innate_mars" and host.strip().lower() not in _LOCALHOST_HOSTS:
         return INNATE_MARS_HW_DYNAV
     return resolved
 
@@ -158,7 +160,7 @@ def create_dynamem_agent(
     rerun_debug: bool = False,
     allow_missing_depth: bool | None = None,
     cpu_only: bool = False,
-    map_only: bool = False,
+    voxel_only: bool = False,
 ):
     """Build a DynamemController + ZMQ client (``DynamemController`` calls ``robot.start()``)."""
     from emet.controller.controller_dynamem import RobotAgent as DynamemController
@@ -183,7 +185,7 @@ def create_dynamem_agent(
         parameters,
         save_rerun=enable_rerun,
         cpu_only=cpu_only,
-        manipulation_only=map_only,
+        manipulation_only=voxel_only,
         use_instance_memory=False,
         eqa=False,
         defer_eqa_vllm=True,
@@ -208,14 +210,14 @@ def create_dynagraph_agent(
     use_instance_graph: bool = True,
     ground_truth_mode: bool = False,
     visualize_ground_truth: bool = False,
-    map_only: bool = False,
+    voxel_only: bool = False,
 ):
     """Build a DynagraphController + ZMQ client."""
     from emet.controller.controller_dynagraph import DynagraphController
 
     dynav_resolved, parameters = _prepare_graph_style_parameters(robot, host, dynav_config)
     allow = _resolve_allow_missing_depth(robot, parameters, allow_missing_depth=allow_missing_depth, graph_style=True)
-    if map_only:
+    if voxel_only:
         use_sensor_perception = False
         use_instance_graph = False
     robot_client = _build_robot_client(
@@ -239,7 +241,7 @@ def create_dynagraph_agent(
         use_instance_graph=use_instance_graph,
         ground_truth_mode=ground_truth_mode,
         visualize_ground_truth=visualize_ground_truth,
-        manipulation_only=map_only,
+        manipulation_only=voxel_only,
     )
     return agent, dynav_resolved
 
@@ -259,14 +261,14 @@ def create_graph_eqa_agent(
     cpu_only: bool = False,
     use_sensor_perception: bool = True,
     use_instance_graph: bool = True,
-    map_only: bool = False,
+    voxel_only: bool = False,
 ):
     """Build a GraphEQAController + ZMQ client."""
     from emet.controller.controller_graph_eqa import GraphEQAController
 
     dynav_resolved, parameters = _prepare_graph_style_parameters(robot, host, dynav_config)
     allow = _resolve_allow_missing_depth(robot, parameters, allow_missing_depth=allow_missing_depth, graph_style=True)
-    if map_only:
+    if voxel_only:
         use_sensor_perception = False
         use_instance_graph = False
     robot_client = _build_robot_client(
@@ -288,7 +290,7 @@ def create_graph_eqa_agent(
         use_sensor_perception=use_sensor_perception,
         cpu_only=cpu_only,
         use_instance_graph=use_instance_graph,
-        manipulation_only=map_only,
+        manipulation_only=voxel_only,
     )
     return agent, dynav_resolved
 
@@ -351,7 +353,7 @@ def create_scene_graph_agent(
     rerun_debug: bool = False,
     allow_missing_depth: bool | None = None,
     cpu_only: bool = False,
-    map_only: bool = False,
+    voxel_only: bool = False,
 ):
     """DynaMem voxel map + open-vocabulary SceneGraphProcessor."""
     from emet.mapping.scene_graph.processor import SceneGraphProcessor
@@ -368,9 +370,9 @@ def create_scene_graph_agent(
         rerun_debug=rerun_debug,
         allow_missing_depth=allow_missing_depth,
         cpu_only=cpu_only,
-        map_only=map_only,
+        voxel_only=voxel_only,
     )
-    if map_only:
+    if voxel_only:
         return agent, dynav_resolved
     sg_config_name = "cpu_scene_graph" if cpu_only else "default_scene_graph"
     sg_device = "cpu" if cpu_only else None
@@ -397,14 +399,9 @@ def create_stream_agent(
     use_sensor_perception: bool = True,
     use_instance_graph: bool = True,
     compare_to_gt: bool = False,
-    map_only: bool = False,
     dynav_from_default: bool = True,
 ) -> StreamAgentBundle:
     """Instantiate a mapping agent for ``emet stream --backend``."""
-    effective_backend = backend
-    if map_only and backend in ("svm", "scene_graph"):
-        effective_backend = "dynamem"
-
     dynav_resolved = resolve_stream_dynav_config(robot, host, dynav_config, dynav_from_default=dynav_from_default)
     if dynav_resolved != dynav_config and dynav_from_default:
         depth_mode = str(get_parameters(dynav_resolved).get("depth_source", "sensor")).lower()
@@ -425,31 +422,32 @@ def create_stream_agent(
         "rerun_debug": rerun_debug,
         "allow_missing_depth": allow_missing_depth,
         "cpu_only": cpu_only,
-        "map_only": map_only,
     }
-    if effective_backend == "dynamem":
+    if backend == "voxel_only":
+        agent, dynav_resolved = create_dynamem_agent(**common, voxel_only=True)
+    elif backend == "dynamem":
         agent, dynav_resolved = create_dynamem_agent(**common)
-    elif effective_backend == "graph_eqa":
+    elif backend == "graph_eqa":
         agent, dynav_resolved = create_graph_eqa_agent(
             **common,
             use_sensor_perception=use_sensor_perception,
             use_instance_graph=use_instance_graph,
         )
-    elif effective_backend == "dynagraph":
+    elif backend == "dynagraph":
         agent, dynav_resolved = create_dynagraph_agent(
             **common,
             use_sensor_perception=use_sensor_perception,
             use_instance_graph=use_instance_graph,
             visualize_ground_truth=compare_to_gt,
         )
-    elif effective_backend == "ground_truth":
+    elif backend == "ground_truth":
         agent, dynav_resolved = create_dynagraph_agent(
             **common,
             use_sensor_perception=False,
-            use_instance_graph=not map_only,
+            use_instance_graph=True,
             ground_truth_mode=True,
         )
-    elif effective_backend == "svm":
+    elif backend == "svm":
         agent, dynav_resolved = create_svm_agent(
             robot=robot,
             host=host,
@@ -462,11 +460,11 @@ def create_stream_agent(
             rerun_debug=rerun_debug,
             allow_missing_depth=allow_missing_depth,
         )
-    elif effective_backend == "scene_graph":
+    elif backend == "scene_graph":
         agent, dynav_resolved = create_scene_graph_agent(**common)
     else:
         raise click.ClickException(f"Unknown stream backend {backend!r}.")
-    return StreamAgentBundle(agent=agent, dynav_resolved=dynav_resolved, backend=effective_backend)
+    return StreamAgentBundle(agent=agent, dynav_resolved=dynav_resolved, backend=backend)
 
 
 def _voxel_point_count(voxel_map: Any) -> int:
@@ -541,25 +539,11 @@ def stream_agent_update(agent: Any, backend: str) -> None:
 def resolve_stream_backend(
     *,
     backend: str | None,
-    run_map: bool,
-    run_graph: bool,
-    ground_truth: bool,
+    cameras_only: bool,
 ) -> str | None:
-    """Resolve ``--backend`` plus legacy ``--map`` / ``--graph`` / ``--ground-truth`` flags."""
-    if run_map and run_graph:
-        raise click.UsageError("Use one mapping mode: --backend, --map, or --graph (not --map and --graph).")
-    if ground_truth and backend and backend not in ("ground_truth", "dynagraph"):
-        raise click.UsageError("--ground-truth requires --backend ground_truth (or --graph with GT sim).")
-    if run_map and backend and backend != "dynamem":
-        raise click.UsageError("--map is an alias for --backend dynamem; do not combine with another --backend.")
-    if run_graph and backend and backend not in ("dynagraph", "ground_truth"):
-        raise click.UsageError("--graph is an alias for --backend dynagraph; do not combine with another --backend.")
-    if ground_truth and not backend and not run_graph:
-        return "ground_truth"
-    if run_map:
-        return "dynamem"
-    if run_graph:
-        return "ground_truth" if ground_truth else "dynagraph"
-    if ground_truth:
-        return "ground_truth"
+    """Resolve ``--backend`` vs ``--cameras-only`` for ``emet stream``."""
+    if cameras_only and backend:
+        raise click.UsageError("Use either --cameras-only or --backend <name> (not both).")
+    if cameras_only:
+        return None
     return backend

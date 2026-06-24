@@ -25,6 +25,8 @@ Options mirror `emet run graph-eqa` (robot, Discord, Rerun export, `--no-instanc
 
 - **`--merge-xy-m`**: override horizontal merge distance in meters (`dynagraph_merge_xy_m` in config; `0` disables merge).
 - **`--staleness-horizon`**: override how many **controller steps** a node can go without a reinforcing observation before `maintain()` drops it (`dynagraph_staleness_horizon`; `0` disables pruning).
+- **`--export-voxel-pickle`**: with **`--export`** / **`--dump-memory`**, additionally write **`voxel_map.pkl`** (full `SparseVoxelMapDynamem` state) into the export dir so the checkpoint restores obstacles / explored area, not just the graph.
+- **`--input-path DIR`**: resume from a previous export: restores graph nodes **with staleness state** (`last_seen`, `support_count`, extents), the controller step counter (`final_step` from `manifest.json`), and — when `DIR/voxel_map.pkl` exists — the voxel map. Used per-cycle by the lifelong dynamic exploration phase ([dynamic_exploration_benchmark.md](dynamic_exploration_benchmark.md)).
 - **`--ground-truth`**: **sim only** — build graph nodes from `emet_session["sim_object_placements"]` instead of VLM / YoloE perception. Pair with **`--export`** for a **full episode** export (rotate, voxel frames, graph, GT sidecars). See [Ground-truth graph mode](#ground-truth-graph-mode).
 - **`--compare-to-gt`**: **sim only** — on the **full** `--export` path (sensor-built graph after rotate), print alignment vs `sim_object_placements` in session.
 
@@ -226,6 +228,8 @@ Append a pretty-print snapshot of **`GraphEQAMemory`** at session end (**`finall
 | `graph_eqa_frontier_nodes.keyword_score_weight` | Blend weight for question-keyword overlap in voxel `sample_exploration`. |
 
 The controller passes `frame_step=self.obs_count` into the shared DynaMem→graph hook so `last_seen` stays aligned with the run’s discrete time index.
+
+**Stationary hardware stream:** `emet stream --backend dynagraph` on a non-moving real robot can still add graph nodes every step (DA3 depth noise + GraphObjectFusion gates). See [known_issues.md](known_issues.md#dynagraph-graph-node-explosion-on-stationary-hardware-stream).
 
 ## Human-readable EQA answers
 

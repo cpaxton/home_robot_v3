@@ -65,6 +65,64 @@
   \end{tabular}
 \end{table}
 
+\subsection{Dynamic exploration (Emet sim)}
+\label{sec:dynamic_explore_results}
+
+\textit{Results pending. Fill from \texttt{aggregate\_dynamic\_exploration.csv}, \texttt{aggregate\_dynamic\_exploration\_world\_change.csv}, and \texttt{aggregate\_dynamic\_exploration\_lifelong.csv}; see Section~\ref{sec:dynamic_exploration}.}
+
+\begin{table}[t]
+  \centering
+  \caption{Phase~1 active exploration on Robocasa (S1) and MolmoSpaces iTHOR (S2), Stretch. Not comparable to OVMM FindObj or SQA3D EM@1.}
+  \label{tab:dynamic_explore_phase1}
+  \small
+  \begin{tabular}{@{}llcccccc@{}}
+    \toprule
+    Env & Backend & Mapping & $K$ & Explored & Spat.\ recall & EQA acc & Nodes \\
+    \midrule
+    Robocasa s0 & Dynagraph & explore & 8 & -- & -- & -- & -- \\
+    Robocasa s0 & Dynagraph & rotate & 0 & -- & -- & -- & -- \\
+    Robocasa s0 & GraphEQA row & explore & 8 & -- & -- & -- & -- \\
+    Molmo idx0 & Dynagraph & explore & 15 & -- & -- & -- & -- \\
+    \midrule
+    \multicolumn{8}{l}{\textit{Full matrix: seeds/index $\{0,1,2\}$ $\times$ backends $\times$ $K \in \{8,15,30\}$ + rotate-only}} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \centering
+  \caption{Phase~2 world-change (Robocasa \texttt{obj\_main} relocation): staleness and EQA recovery.}
+  \label{tab:dynamic_explore_world_change}
+  \small
+  \begin{tabular}{@{}lccccc@{}}
+    \toprule
+    Backend & Pre EQA & Post EQA & Stale nodes & Pruned & Recovery steps \\
+    \midrule
+    Dynagraph & -- & -- & -- & -- & -- \\
+    GraphEQA row & -- & -- & -- & -- & -- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \centering
+  \caption{Lifelong $K$-cycle episodes (checkpoint $\rightarrow$ fuzz $\rightarrow$ reload): per-cycle EQA accuracy against the live world, graph size, and adaptation to moved objects. Fill from \texttt{aggregate\_dynamic\_exploration\_lifelong.csv}.}
+  \label{tab:dynamic_explore_lifelong}
+  \small
+  \begin{tabular}{@{}llccccc@{}}
+    \toprule
+    Env & Cycle & EQA acc & Object nodes & Moves adapted & Moves stale & Wall (s) \\
+    \midrule
+    Robocasa s0 & 0 & -- & -- & -- & -- & -- \\
+    Robocasa s0 & 1 & -- & -- & -- & -- & -- \\
+    Robocasa s0 & 2 & -- & -- & -- & -- & -- \\
+    Molmo idx0 & 0 & -- & -- & -- & -- & -- \\
+    Molmo idx0 & 1 & -- & -- & -- & -- & -- \\
+    Molmo idx0 & 2 & -- & -- & -- & -- & -- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
 \subsection{Other planned results}
 
 \textit{Results pending. Placeholder for:}

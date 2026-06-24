@@ -24,6 +24,7 @@ import torch
 from emet.memory.backend import CheckMemoryResult, LocalizeResult, MemoryBackend
 from emet.memory.format import (
     SIM_GT_PLACEMENTS_FILENAME,
+    VOXEL_PICKLE_FILENAME,
     FrameBlob,
     GraphBlob,
     GraphEdgeView,
@@ -377,35 +378,61 @@ class GraphEQABackend(MemoryBackend):
     ) -> tuple[str, str, bool, str, np.ndarray | None, Any]:
         return self._graph.query_answer(question, xyt, planner)
 
+    def _node_view(self, n: Any, sim_object_placements: dict[str, Any] | None) -> GraphNodeView:
+        """Serialize one GraphNode, keeping staleness/fusion state for checkpoint resume."""
+        from emet.memory.graph_eqa.sim_ground_truth_graph import graph_node_export_fields
+
+        extra = graph_node_export_fields(n, sim_object_placements)
+        if "extent_half" not in extra and getattr(n, "extent_half", None) is not None:
+            extra["extent_half"] = list(np.ravel(n.extent_half).tolist())
+        if "bounds" not in extra:
+            b3 = getattr(n, "bounds_3d", None)
+            if isinstance(b3, dict) and "min" in b3 and "max" in b3:
+                extra["bounds"] = [
+                    [float(x) for x in b3["min"]],
+                    [float(x) for x in b3["max"]],
+                ]
+        return GraphNodeView(
+            node_id=n.node_id,
+            labels=list(n.labels),
+            xyz=list(np.ravel(n.xyz).tolist()),
+            obs_id=n.obs_id,
+            description=getattr(n, "description", None),
+            last_seen=int(getattr(n, "last_seen", 0)),
+            support_count=int(getattr(n, "support_count", 1)),
+            is_viewpoint=bool(getattr(n, "is_viewpoint", False)),
+            **extra,
+        )
+
     def save(
         self,
         path: str,
         *,
         ground_truth_mode: bool = False,
         sim_object_placements: dict[str, Any] | None = None,
+        final_step: int | None = None,
+        save_voxel_pickle: bool = False,
     ) -> None:
-        """Save to common directory format (graph + full voxel frame history when ``voxel_map`` is set)."""
-        from emet.memory.graph_eqa.sim_ground_truth_graph import graph_node_export_fields
+        """Save to common directory format (graph + full voxel frame history when ``voxel_map`` is set).
 
+        ``final_step`` records the controller observation count so a reloaded graph resumes
+        the staleness clock instead of restarting at 0. ``save_voxel_pickle`` additionally
+        writes ``voxel_map.pkl`` (full DynaMem voxel state) for lifelong checkpoint resume.
+        """
         dir_path = Path(path)
         dir_path.mkdir(parents=True, exist_ok=True)
 
         nodes = self._graph.get_nodes()
         edges = self._graph.get_edges()
         graph_blob = GraphBlob(
-            nodes=[
-                GraphNodeView(
-                    node_id=n.node_id,
-                    labels=list(n.labels),
-                    xyz=list(np.ravel(n.xyz).tolist()),
-                    obs_id=n.obs_id,
-                    description=getattr(n, "description", None),
-                    **graph_node_export_fields(n, sim_object_placements),
-                )
-                for n in nodes
-            ],
+            nodes=[self._node_view(n, sim_object_placements) for n in nodes],
             edges=[GraphEdgeView(id1=e[0], id2=e[1], relation=e[2]) for e in edges],
         )
+
+        wrote_voxel_pickle = False
+        if save_voxel_pickle and self._voxel_map is not None and hasattr(self._voxel_map, "write_to_pickle"):
+            self._voxel_map.write_to_pickle(str(dir_path / VOXEL_PICKLE_FILENAME))
+            wrote_voxel_pickle = True
         frames: list[FrameBlob]
         if self._voxel_map is not None:
             frames = frame_blobs_from_voxel_map(self._voxel_map)
@@ -443,30 +470,64 @@ class GraphEQABackend(MemoryBackend):
                 ground_truth_mode=ground_truth_mode,
                 has_sim_gt=has_sim_gt,
                 sim_gt_placements_file=SIM_GT_PLACEMENTS_FILENAME if has_sim_gt else None,
+                final_step=int(final_step) if final_step is not None else None,
+                has_voxel_pickle=wrote_voxel_pickle,
             ),
         )
         save_memory(state, str(dir_path))
 
     def load(self, path: str) -> None:
-        """Load from common directory format."""
+        """Load from common directory format.
+
+        Restores per-node staleness/fusion state (``last_seen``, ``support_count``,
+        ``is_viewpoint``, ``extent_half``, ``bounds_3d``) when present. The manifest's
+        ``final_step`` is exposed as ``self.loaded_final_step`` so the controller can
+        resume its observation counter (otherwise staleness pruning drops loaded nodes).
+        """
         from emet.memory.graph_eqa.graph_memory import GraphNode, GraphObservation
 
         path_obj = Path(path)
         if not path_obj.is_dir() or not is_memory_directory(str(path)):
             raise FileNotFoundError(f"Not a memory directory: {path}")
         state = load_memory(path)
+        self.loaded_final_step: int | None = (
+            int(state.manifest.final_step)
+            if state.manifest is not None and state.manifest.final_step is not None
+            else None
+        )
         if state.graph is None:
             return
-        self._graph._nodes = [
-            GraphNode(
+
+        def _node_from_view(n: GraphNodeView) -> GraphNode:
+            extent_half = (
+                np.asarray(n.extent_half, dtype=np.float64).reshape(-1)[:3]
+                if getattr(n, "extent_half", None)
+                else None
+            )
+            bounds_3d = None
+            if getattr(n, "bounds", None):
+                mn = np.asarray(n.bounds[0], dtype=np.float64).reshape(3)
+                mx = np.asarray(n.bounds[1], dtype=np.float64).reshape(3)
+                bounds_3d = {
+                    "min": mn.tolist(),
+                    "max": mx.tolist(),
+                    "center": (0.5 * (mn + mx)).tolist(),
+                    "size": (mx - mn).tolist(),
+                }
+            return GraphNode(
                 node_id=n.node_id,
                 labels=list(n.labels),
                 xyz=np.array(n.xyz, dtype=np.float64),
                 obs_id=n.obs_id,
                 description=getattr(n, "description", None),
+                last_seen=int(n.last_seen) if getattr(n, "last_seen", None) is not None else 0,
+                support_count=int(n.support_count) if getattr(n, "support_count", None) is not None else 1,
+                extent_half=extent_half,
+                is_viewpoint=bool(getattr(n, "is_viewpoint", False)),
+                bounds_3d=bounds_3d,
             )
-            for n in state.graph.nodes
-        ]
+
+        self._graph._nodes = [_node_from_view(n) for n in state.graph.nodes]
         self._graph._edges = [(e.id1, e.id2, e.relation) for e in state.graph.edges]
         self._graph._observations = []
         for i, fr in enumerate(state.frames):
@@ -479,7 +540,16 @@ class GraphEQABackend(MemoryBackend):
             self._graph._observations.append(
                 GraphObservation(obs_id=i + 1, rgb=rgb, xyz=xyz, labels=labels, description=description)
             )
-        self._graph._next_obs_id = max((n.obs_id for n in self._graph._nodes), default=0) + 1
+        self._graph._next_obs_id = (
+            max(
+                max((n.obs_id for n in self._graph._nodes), default=0),
+                len(self._graph._observations),
+            )
+            + 1
+        )
+        self._graph._rebuild_viewpoint_index()
+        if self.loaded_final_step is not None:
+            self._graph.set_graph_timestep(self.loaded_final_step)
 
     def supports_save_load(self) -> bool:
         return True

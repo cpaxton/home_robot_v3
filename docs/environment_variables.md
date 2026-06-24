@@ -30,6 +30,8 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_OVMM_OUTPUT_FULL` | `eval_ovmm_full.py` | Full OVMM (find + pick/place) output. Default `~/runs/emet/ovmm_full`. |
 | `EMET_OVMM_OUTPUT_HABITAT` | `eval_habitat_ovmm_find_phases.py` | Habitat OVMM proxy output. Default `~/runs/emet/ovmm_habitat`. |
 | `EMET_SQA3D_OUTPUT` | `emet sqa3d run-real-sweep`, `aggregate_sqa3d_sweep.py` | Default sweep output root. Default `~/runs/emet/sqa3d` (`configs/sqa3d/benchmark.yaml`). |
+| `EMET_DYNAMIC_EXPLORE_OUTPUT` | `scripts/eval_dynamic_exploration.py` | Dynamic exploration sweep output. Default `~/runs/emet/dynamic_exploration` (`configs/benchmarks/dynamic_exploration.yaml`). |
+| `EMET_DYNAMIC_EXPLORE_DYNAGRAPH_TIMEOUT_S` | `dynamic_exploration_runner.py` | Override per-run ``emet run dynagraph`` subprocess timeout (seconds). Default scales with explore budget (~105 min for Robocasa K=3 on GPU). |
 | `SQA3D_DATA_DIR` | `emet sqa3d`, `emet eval-sqa3d` | Root for SQA3D Zenodo JSON (`sqa_task/`, optional `localization_task/`). Default `~/.cache/sqa3d/data`. See [sqa3d.md](sqa3d.md). |
 | `SCANNET_ROOT` | `emet sqa3d` embodied runs | ScanNet v2 download root (`scans/<scene_id>/…`). Default `~/.cache/scannet`. |
 | `SCANNET_DOWNLOAD_SCRIPT` | `scripts/download_scannet_data.py` | Override path to `download-scannet.py`. |
@@ -40,7 +42,24 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_SIGLIP_VERSION` | `get_shared_mask_siglip_encoder` (voxel map / dynagraph grounding) | Override the SigLIP checkpoint: `base`, `so400m` (default), `siglip2_base`, `siglip2_so400m`. A/B encoder upgrades without config edits. |
 | `EMET_SIGLIP_DTYPE` | `SiglipEncoder` / `MaskSiglipEncoder` weight load | `float32` (default), `float16`, or `bfloat16`. Halves SigLIP VRAM (so400m: 3.5 GB → 1.75 GB); outputs are cast back to fp32 so stored features/thresholds are unchanged. int4/int8 unsupported (breaks the MaskSiglip head surgery). |
 | `EMET_VLM_FRONTIER_SCORING` | Dynagraph EQA exploration (`controller_graph_eqa.py`) | Set `1` to let the EQA VLM pick the exploration frontier from candidate views (<=6 images/iteration) before the SigLIP-nearest heuristic. Only active in the dynagraph coverage-override path (`_eqa_explore_when_uncovered`); baseline `graph_eqa` is unaffected. Default off. |
-| `PYTORCH_CUDA_ALLOC_CONF` | PyTorch CUDA | Optional allocator hint (e.g. `expandable_segments:True`); set by `run_sqa3d_gpu_sweep.sh` if unset. |
+| `PYTORCH_CUDA_ALLOC_CONF` | PyTorch CUDA | Optional allocator hint (e.g. `expandable_segments:True`); set by `run_sqa3d_gpu_sweep.sh` and `run_sqa3d_sharded_sweep.sh` if unset. |
+
+### Large paper eval orchestrator
+
+Used by `scripts/run_large_paper_eval.sh` and `scripts/run_sqa3d_sharded_sweep.sh`. See [paper_benchmarks.md](paper_benchmarks.md) (Large paper eval queue).
+
+| Variable | Where used | Notes |
+|----------|------------|-------|
+| `EMET_LARGE_EVAL_LOG_DIR` | `run_large_paper_eval.sh` | Master + per-phase logs. Default `~/runs/emet/large_eval`. |
+| `EMET_SQA3D_OUTPUT` | SQA3D sweeps / sharded sweep | Same as benchmarks table above. |
+| `SQA3D_GPUS` | `run_large_paper_eval.sh` | Comma-separated CUDA ids (e.g. `0,1,2,3`) → `run_sqa3d_sharded_sweep.sh` (~linear speedup). |
+| `SQA3D_NO_ISOLATE` | `run_large_paper_eval.sh` | Set `1` for in-process batch (`--no-isolate-episodes`; faster, OOM risk). |
+| `SQA3D_METHODS` | `run_large_paper_eval.sh` | Space-separated methods (default `dynagraph dynamem`). e.g. `SQA3D_METHODS=dynagraph`. |
+| `SKIP_SQA3D_TEST` | `run_large_paper_eval.sh` | Set `1` to skip test-split SQA3D sweeps (val only). |
+| `SKIP_OVMM` | `run_large_paper_eval.sh` | Set `1` to skip OVMM find replicates. |
+| `SKIP_DYNAMIC_EXPLORE` | `run_large_paper_eval.sh` | Set `1` to skip dynamic exploration matrix. |
+| `OVMM_CPU_ONLY` | `run_large_paper_eval.sh` | Set `1` for `--cpu-only` OVMM (overlap with SQA3D on GPU in another terminal). |
+| `DYNAMIC_EXPLORE_CPU_ONLY` | `run_large_paper_eval.sh` | Set `1` for `--cpu-only` dynamic exploration runs. |
 
 ## ZMQ and simulation (general)
 
@@ -56,6 +75,8 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_ROBOSUITE_AUTOPLACE` | `scene_base_spawn` | Planar base autoplace on Robocasa / default-table merges (default `1`). `0`/`false`/`no`/`off` disables. |
 | `MUJOCO_GL` | MuJoCo rendering | e.g. `egl` for headless GPU cameras on Linux. RobosuiteZmqServer sets this automatically unless `--use-glx`. |
 | `EMET_MARS_ONBOARD_DA3` | Innate Mars bridge | Set to `1` on the Jetson when `emet mars start --onboard-da3` runs DA3 stereo onboard (see [innate_mars_hardware.md](robots/innate_mars_hardware.md)). |
+| `EMET_STREAM_VERBOSE` | `emet capture` / `emet stream` | `1`/`true` → per-step status + DA3 INFO timing (same as `--verbose`). Default off; dynav `stream.verbose` also applies. |
+| `DA3_LOG_LEVEL` | Depth Anything 3 (`depth_anything_3`) | `WARN` (default during stream when not verbose), `INFO`, `ERROR`. Dynav `stream.da3_log_level` sets default via `configure_mapping_session_logging`. |
 | `EMET_ROBOT_PASSWORD` | Deploy / Mars SSH | Optional password when not stored in the connection profile. |
 
 See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented module notes.

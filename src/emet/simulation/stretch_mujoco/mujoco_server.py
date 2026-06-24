@@ -41,7 +41,11 @@ from emet.simulation.molmospaces_mobile_autoplace import (
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
-from emet.simulation.sim_manipulation import set_free_body_pose
+from emet.simulation.sim_manipulation import (
+    get_named_joint_qpos,
+    set_free_body_pose,
+    set_named_joint_qpos,
+)
 from emet.simulation.stretch_mujoco.datamodels.status_command import CommandBaseVelocity, CommandMove, StatusCommand
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_joints import StatusStretchJoints
@@ -639,6 +643,22 @@ class MujocoServer:
                     tb.pos_x,
                     tb.pos_y,
                     tb.pos_z,
+                )
+
+        if command_status.set_joint is not None and command_status.set_joint.trigger:
+            sj = command_status.set_joint
+            command_status.set_joint.trigger = False
+            ok = set_named_joint_qpos(self.mjmodel, self.mjdata, sj.joint, sj.value)
+            command_status.set_joint.ok = ok
+            if ok:
+                measured = get_named_joint_qpos(self.mjmodel, self.mjdata, sj.joint)
+                if measured is not None:
+                    command_status.set_joint.measured = measured
+            if not ok:
+                logger.warning(
+                    "set_joint failed for joint %r value=%.4f (missing or not hinge/slide?)",
+                    sj.joint,
+                    sj.value,
                 )
 
         # keyframe

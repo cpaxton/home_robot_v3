@@ -201,6 +201,14 @@ def _print_dynagraph_rerun_help(
     help="Save graph memory to this directory when the session ends (empty line to quit)",
 )
 @click.option(
+    "--export-voxel-pickle",
+    is_flag=True,
+    help=(
+        "With --export/--dump-memory: also write voxel_map.pkl (full DynaMem voxel state) so a "
+        "later run can resume the map with --input-path (lifelong checkpoints). Large on disk."
+    ),
+)
+@click.option(
     "--cpu-only",
     is_flag=True,
     help="CPU-only: skip loading Qwen3.5 multimodal for scene labels; use voxel fallback",
@@ -349,6 +357,7 @@ def main(
     input_path: str | None = None,
     export_dir: str | None = None,
     dump_memory: str | None = None,
+    export_voxel_pickle: bool = False,
     cpu_only: bool = False,
     perfect_depth: bool = False,
     no_sensor_perception: bool = False,
@@ -625,6 +634,8 @@ def main(
             robot=robot_backend,
             environment=env,
             spawn_floor_map=spawn,
+            final_step=int(getattr(agent, "obs_count", 0)),
+            save_voxel_pickle=export_voxel_pickle,
         )
         print(f"Saved graph memory to {dump_memory}")
         print(text)
@@ -702,6 +713,8 @@ def main(
                 ground_truth_mode=ground_truth,
                 sim_object_placements=placements,
                 gt_alignment_report_text=gt_report,
+                final_step=int(getattr(agent, "obs_count", 0)),
+                save_voxel_pickle=export_voxel_pickle,
             )
             click.echo(text)
             click.echo(f"Exported graph memory to {export_dir}")
@@ -790,6 +803,14 @@ def main(
                         perception_nodes_only=True,
                     )
                 )
+        # Stop client spin threads so the process can exit cleanly in batch harnesses.
+        if agent is not None:
+            agent_stop = getattr(agent, "stop", None)
+            if callable(agent_stop):
+                agent_stop()
+        robot_stop = getattr(robot, "stop", None)
+        if callable(robot_stop):
+            robot_stop()
 
 
 if __name__ == "__main__":
