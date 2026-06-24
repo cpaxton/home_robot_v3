@@ -14,6 +14,10 @@ from typing import Any
 
 import numpy as np
 
+from emet.utils.logger import Logger
+
+logger = Logger(__name__)
+
 DIAGNOSTICS_MANIFEST = "diagnostics_manifest.json"
 
 
@@ -89,7 +93,9 @@ class EpisodeDiagnosticsRecorder:
     """Buffer RGB frames, poses, and optional stride map snapshots during an episode."""
 
     cfg: EpisodeDiagnosticsConfig = field(default_factory=EpisodeDiagnosticsConfig.from_env)
+    spawn_record: dict[str, Any] | None = None
     _frames: list[_RecordedFrame] = field(default_factory=list, init=False, repr=False)
+    _stride_snapshots: list[tuple[int, np.ndarray]] = field(default_factory=list, init=False, repr=False)
     _step: int = field(default=0, init=False, repr=False)
 
     def record_from_agent(self, agent: Any) -> None:
@@ -101,8 +107,8 @@ class EpisodeDiagnosticsRecorder:
                 obs = robot.get_observation()
                 if obs is not None and getattr(obs, "rgb", None) is not None:
                     rgb = np.asarray(obs.rgb)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(f"diagnostics RGB fetch failed: {exc}")
         self.record_step(rgb=rgb, pose=pose, agent=agent, step_idx=self._step)
         self._step += 1
 
@@ -120,7 +126,7 @@ class EpisodeDiagnosticsRecorder:
         self._frames.append(_RecordedFrame(step_idx=idx, rgb=rgb, pose=pose))
         stride = int(self.cfg.export_map_stride or 0)
         if self.cfg.export_map and stride > 0 and idx % stride == 0:
-            self._maybe_snapshot_map(agent, idx, intermediate=True)
+            self._capture_stride_snapshot(agent, idx)
 
     def flush(self, episode_dir: Path | str, agent: Any | None = None) -> dict[str, Any]:
         root = Path(episode_dir)
@@ -157,9 +163,17 @@ class EpisodeDiagnosticsRecorder:
                     )
             manifest["metadata_jsonl"] = str(meta_path)
 
+        if self._stride_snapshots:
+            maps_dir = root / "maps"
+            maps_dir.mkdir(parents=True, exist_ok=True)
+            for step_idx, img in self._stride_snapshots:
+                out = maps_dir / f"step_{step_idx:04d}.png"
+                _save_rgb_png(out, img)
+            manifest["map_stride_dir"] = str(maps_dir)
+
         if agent is not None:
             if self.cfg.export_map:
-                map_path = self._maybe_snapshot_map(agent, step_idx=-1, intermediate=False, root=root)
+                map_path = self._maybe_snapshot_map(agent, root=root)
                 if map_path:
                     manifest["topdown_map"] = str(map_path)
             if self.cfg.export_obstacle_grids:
@@ -176,12 +190,12 @@ class EpisodeDiagnosticsRecorder:
             if floor_path:
                 manifest["floor_metrics"] = str(floor_path)
             if self.cfg.export_voxel_history or self.cfg.export_voxel_pickle:
-                spawn = getattr(agent, "_habitat_spawn_record", None)
+                spawn = self.spawn_record if isinstance(self.spawn_record, dict) else None
                 manifest.update(
                     export_voxel_observation_history(
                         agent,
                         root,
-                        spawn_record=spawn if isinstance(spawn, dict) else None,
+                        spawn_record=spawn,
                         export_jsonl=self.cfg.export_voxel_history,
                         export_pickle=self.cfg.export_voxel_pickle,
                     )
@@ -197,14 +211,12 @@ class EpisodeDiagnosticsRecorder:
         manifest["diagnostics_manifest"] = str(manifest_path)
         return manifest
 
-    def _maybe_snapshot_map(
-        self,
-        agent: Any,
-        step_idx: int,
-        *,
-        intermediate: bool,
-        root: Path | None = None,
-    ) -> Path | None:
+    def _capture_stride_snapshot(self, agent: Any, step_idx: int) -> None:
+        img = self._render_eval_map_rgb(agent)
+        if img is not None:
+            self._stride_snapshots.append((int(step_idx), img))
+
+    def _render_eval_map_rgb(self, agent: Any) -> np.ndarray | None:
         vm = getattr(agent, "voxel_map", None)
         if vm is None:
             return None
@@ -212,16 +224,13 @@ class EpisodeDiagnosticsRecorder:
 
         xy = robot_xy_from_agent(agent)
         img, _ = snapshot_eval_from_voxel_map(vm, xy, max_side=self.cfg.max_map_side)
+        return img
+
+    def _maybe_snapshot_map(self, agent: Any, *, root: Path) -> Path | None:
+        img = self._render_eval_map_rgb(agent)
         if img is None:
             return None
-        if intermediate:
-            maps_dir = Path(".") / "maps"
-            maps_dir.mkdir(parents=True, exist_ok=True)
-            out = maps_dir / f"step_{step_idx:04d}.png"
-        else:
-            if root is None:
-                return None
-            out = root / "topdown_map.png"
+        out = root / "topdown_map.png"
         _save_rgb_png(out, img)
         return out
 
@@ -241,18 +250,28 @@ def robot_xy_from_agent(agent: Any) -> tuple[float, float, float] | None:
     return None
 
 
-def attach_diagnostics_recorder(agent: Any, recorder: EpisodeDiagnosticsRecorder) -> None:
-    if getattr(agent, "_diag_update_wrapped", False):
-        return
-    original = agent.update
+def bind_diagnostics_recorder(
+    agent: Any,
+    recorder: EpisodeDiagnosticsRecorder,
+    *,
+    spawn_record: dict[str, Any] | None = None,
+) -> None:
+    """Register recorder on agent step callbacks (invoked from DynamemController.update)."""
+    if spawn_record is not None:
+        recorder.spawn_record = spawn_record
+    callbacks = list(getattr(agent, "_on_step_callbacks", None) or [])
+    cb = recorder.record_from_agent
+    if cb not in callbacks:
+        callbacks.append(cb)
+    agent._on_step_callbacks = callbacks
 
-    def wrapped_update(*args: Any, **kwargs: Any) -> Any:
-        result = original(*args, **kwargs)
-        recorder.record_from_agent(agent)
-        return result
 
-    agent.update = wrapped_update  # type: ignore[method-assign]
-    agent._diag_update_wrapped = True
+def unbind_diagnostics_recorder(agent: Any, recorder: EpisodeDiagnosticsRecorder) -> None:
+    callbacks = list(getattr(agent, "_on_step_callbacks", None) or [])
+    cb = recorder.record_from_agent
+    if cb in callbacks:
+        callbacks.remove(cb)
+    agent._on_step_callbacks = callbacks
 
 
 def flush_episode_diagnostics(
@@ -504,7 +523,8 @@ def _export_object_crops(agent: Any, root: Path) -> Path | None:
         export_dynagraph_visual_assets(gm, root)
         mosaic = root / "dynagraph" / "crops_mosaic.png"
         return mosaic if mosaic.is_file() else None
-    except Exception:
+    except Exception as exc:
+        logger.warning(f"object crop export failed: {exc}")
         return None
 
 
@@ -519,7 +539,8 @@ def _export_full_graph(agent: Any, root: Path) -> Path | None:
         ckpt = root / "graph_checkpoint"
         export_graph_eqa_dir(gm, vm, str(ckpt), title="episode checkpoint")
         return ckpt
-    except Exception:
+    except Exception as exc:
+        logger.warning(f"graph checkpoint export failed: {exc}")
         return None
 
 
@@ -532,7 +553,8 @@ def _write_floor_metrics(agent: Any, root: Path) -> Path | None:
 
         metrics = compute_explored_floor_metrics(vm)
         return write_floor_metrics_json(root, metrics)
-    except Exception:
+    except Exception as exc:
+        logger.warning(f"floor metrics export failed: {exc}")
         return None
 
 
@@ -566,5 +588,6 @@ def _write_episode_mp4(root: Path, *, fps: float) -> Path | None:
                 rows_out.append(json.dumps(row))
             meta_path.write_text("\n".join(rows_out) + "\n", encoding="utf-8")
         return write_episode_rgb_mp4(root, fps=fps, filename="episode_rgb.mp4")
-    except Exception:
+    except Exception as exc:
+        logger.warning(f"episode MP4 export failed: {exc}")
         return None

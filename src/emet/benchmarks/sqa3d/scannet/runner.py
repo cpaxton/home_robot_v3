@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Literal
 
 from emet.benchmarks.sqa3d.datasets import get_sqa3d_question, load_sqa3d_questions
-from emet.eval.memory_backends import SQA3D_MEMORY_BACKEND
 from emet.benchmarks.sqa3d.episode_metrics import (
     SQA3DEpisodeMetrics,
     append_sqa3d_jsonl,
@@ -22,11 +21,16 @@ from emet.benchmarks.sqa3d.metrics import answer_match, clean_answer, extract_an
 from emet.benchmarks.sqa3d.scannet.config import default_scannet_root
 from emet.benchmarks.sqa3d.scannet.robot_client import ScanNetRobotClient
 from emet.benchmarks.sqa3d.scannet.simulator import ScanNetReplayMode, create_scannet_simulator
-from emet.controller.controller_dynamem import DynamemController
 from emet.controller.controller_dynagraph import DynagraphController
+from emet.controller.controller_dynamem import DynamemController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import Parameters, get_parameters
-from emet.eval.episode_diagnostics import EpisodeDiagnosticsRecorder, attach_diagnostics_recorder
+from emet.eval.episode_diagnostics import (
+    EpisodeDiagnosticsRecorder,
+    bind_diagnostics_recorder,
+    unbind_diagnostics_recorder,
+)
+from emet.eval.memory_backends import SQA3D_MEMORY_BACKEND
 
 SQA3DMethod = SQA3D_MEMORY_BACKEND
 SQA3DProfile = Literal["smoke", "tuned"]
@@ -407,6 +411,7 @@ def run_sqa3d_episode(
     )
     use_real_vlm = not mock_llm
     agent = None
+    diag_recorder: EpisodeDiagnosticsRecorder | None = None
     robot = None
     replay_meta: dict[str, object] = {}
     try:
@@ -432,7 +437,7 @@ def run_sqa3d_episode(
             device=device,
         )
         diag_recorder = EpisodeDiagnosticsRecorder()
-        attach_diagnostics_recorder(agent, diag_recorder)
+        bind_diagnostics_recorder(agent, diag_recorder)
         agent.start()
         executor = EQAExecuter(agent)
         if rotate_in_place:
@@ -494,6 +499,8 @@ def run_sqa3d_episode(
             **replay_meta,
         )
     finally:
+        if agent is not None and diag_recorder is not None:
+            unbind_diagnostics_recorder(agent, diag_recorder)
         sim.close()
         _teardown_agent(agent)
         del robot

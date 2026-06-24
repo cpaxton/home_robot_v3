@@ -872,6 +872,14 @@ class DynamemController(BaseController):
             self.rerun_visualizer.update_open_vocab_scene_graph(ovsg)
 
         self._rerun_refresh_monologue_panel()
+        self._run_on_step_callbacks()
+
+    def _run_on_step_callbacks(self) -> None:
+        for cb in getattr(self, "_on_step_callbacks", ()) or ():
+            try:
+                cb(self)
+            except Exception as exc:
+                logger.warning(f"on_step callback failed: {exc}")
 
     def _update_scene_graph(self) -> None:
         """Update the scene graph with the latest instances from the voxel map."""

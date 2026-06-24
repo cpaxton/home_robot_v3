@@ -20,6 +20,7 @@ from build_eval_figure_pack import (  # noqa: E402
     _print_ovmm_digest,
     _summarize_hmeqa,
     _summarize_ovmm,
+    _summarize_sqa3d,
     build_summary,
     write_summary_csv,
 )
@@ -177,18 +178,74 @@ def test_investigate_status(hmeqa_acc, ovmm_obj, ovmm_recep, expected_status):
                 }
             }
         },
+        "sqa3d": {"methods": {}},
     }
     status, investigate = _investigate_status(summary)
     assert status == expected_status
     assert investigate == (expected_status == "INVESTIGATE")
 
 
+def test_investigate_status_sqa3d_only_success():
+    summary = {
+        "hmeqa": {"methods": {}},
+        "ovmm": {"backends": {}},
+        "sqa3d": {"methods": {"dynagraph": {"n": 3, "correct": 1, "em@1": 1 / 3}}},
+    }
+    status, investigate = _investigate_status(summary)
+    assert status == "OK"
+    assert investigate is False
+
+
+def test_summarize_sqa3d_em_at_1(tmp_path: Path):
+    run_id = "eval_smoke_sqa3d"
+    out_dir = tmp_path / f"{run_id}_dynagraph"
+    out_dir.mkdir()
+    jsonl = out_dir / "dynagraph_val_q0-2.jsonl"
+    rows = [
+        {"method": "dynagraph", "em": True},
+        {"method": "dynagraph", "em": False},
+        {"method": "dynagraph", "em": False},
+    ]
+    jsonl.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    summary = _summarize_sqa3d(run_id, tmp_path)
+    assert summary["methods"]["dynagraph"]["n"] == 3
+    assert summary["methods"]["dynagraph"]["em@1"] == pytest.approx(1 / 3)
+
+
+def test_build_summary_artifact_tag_fallback(tmp_path: Path, capsys):
+    results = tmp_path / "results"
+    ovmm = tmp_path / "ovmm"
+    sqa3d = tmp_path / "sqa3d"
+    results.mkdir()
+    ovmm.mkdir()
+    sqa3d.mkdir()
+
+    tag = "custom_tag"
+    (results / f"{tag}_hmeqa_dynagraph.jsonl").write_text(
+        json.dumps({"method": "dynagraph", "correct": True}) + "\n",
+        encoding="utf-8",
+    )
+
+    summary = build_summary(
+        "missing_run_id",
+        results_root=results,
+        ovmm_root=ovmm,
+        sqa3d_root=sqa3d,
+        artifact_tag=tag,
+    )
+    assert summary["hmeqa"]["methods"]["dynagraph"]["accuracy"] == 1.0
+    err = capsys.readouterr().err
+    assert "artifact_tag" in err
+
+
 def test_build_summary_end_to_end(tmp_path: Path):
     run_id = "eval_e2e"
     results = tmp_path / "results"
     ovmm = tmp_path / "ovmm"
+    sqa3d = tmp_path / "sqa3d"
     results.mkdir()
     ovmm.mkdir()
+    sqa3d.mkdir()
 
     hmeqa = results / f"{run_id}_hmeqa_dynagraph.jsonl"
     hmeqa.write_text(
@@ -204,7 +261,12 @@ def test_build_summary_end_to_end(tmp_path: Path):
         find_partial_success=0.5,
     )
 
-    summary = build_summary(run_id, results_root=results, ovmm_root=ovmm)
+    summary = build_summary(
+        run_id,
+        results_root=results,
+        ovmm_root=ovmm,
+        sqa3d_root=sqa3d,
+    )
     assert summary["run_id"] == run_id
     assert summary["status"] == "OK"
     assert summary["hmeqa"]["methods"]["dynagraph"]["accuracy"] == 1.0
@@ -226,6 +288,7 @@ def test_write_summary_csv_includes_ovmm_phase_rates(tmp_path: Path):
                 }
             }
         },
+        "sqa3d": {"methods": {"dynagraph": {"n": 2, "em@1": 0.5}}},
     }
     out = tmp_path / "summary.csv"
     write_summary_csv(summary, out)
@@ -234,6 +297,7 @@ def test_write_summary_csv_includes_ovmm_phase_rates(tmp_path: Path):
     assert "ovmm,dynamem,2,find_object_success_rate,1.0000" in text
     assert "ovmm,dynamem,2,find_recep_success_rate,0.5000" in text
     assert "ovmm,dynamem,2,find_object_only_rate,0.5000" in text
+    assert "sqa3d,dynagraph,2,em@1,0.5000" in text
 
 
 def test_print_ovmm_digest(capsys):

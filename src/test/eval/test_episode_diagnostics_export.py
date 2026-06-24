@@ -15,7 +15,9 @@ from emet.eval.episode_diagnostics import (
     DIAGNOSTICS_MANIFEST,
     EpisodeDiagnosticsConfig,
     EpisodeDiagnosticsRecorder,
+    bind_diagnostics_recorder,
     flush_episode_diagnostics,
+    unbind_diagnostics_recorder,
 )
 
 
@@ -95,3 +97,44 @@ def test_config_from_env_defaults_on() -> None:
     cfg = EpisodeDiagnosticsConfig.from_env()
     assert cfg.export_map is True
     assert cfg.export_video is True
+
+
+def test_bind_step_callback_records_from_agent() -> None:
+    agent = _FakeAgent()
+    rec = EpisodeDiagnosticsRecorder(
+        cfg=EpisodeDiagnosticsConfig(
+            export_map=False,
+            export_trajectory=True,
+            export_rgb_frames=False,
+            export_video=False,
+        )
+    )
+    bind_diagnostics_recorder(agent, rec, spawn_record={"init_pose_csv": {"x": 0.0}})
+    assert rec.spawn_record == {"init_pose_csv": {"x": 0.0}}
+    assert rec.record_from_agent in agent._on_step_callbacks
+    for cb in agent._on_step_callbacks:
+        cb(agent)
+    assert len(rec._frames) == 1
+    unbind_diagnostics_recorder(agent, rec)
+    assert rec.record_from_agent not in getattr(agent, "_on_step_callbacks", [])
+
+
+def test_map_stride_writes_under_episode_dir(tmp_path: Path) -> None:
+    agent = _FakeAgent()
+    rec = EpisodeDiagnosticsRecorder(
+        cfg=EpisodeDiagnosticsConfig(
+            export_map=True,
+            export_map_stride=1,
+            export_obstacle_grids=False,
+            export_trajectory=False,
+            export_rgb_frames=False,
+            export_video=False,
+            export_object_crops=False,
+        )
+    )
+    rec.record_step(rgb=None, pose=(1.0, 0.5, 0.0), agent=agent, step_idx=0)
+    rec.record_step(rgb=None, pose=(1.1, 0.5, 0.0), agent=agent, step_idx=1)
+    manifest = flush_episode_diagnostics(tmp_path, agent, rec)
+    assert (tmp_path / "maps" / "step_0000.png").is_file()
+    assert (tmp_path / "maps" / "step_0001.png").is_file()
+    assert manifest.get("map_stride_dir")

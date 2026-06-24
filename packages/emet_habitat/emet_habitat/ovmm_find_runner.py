@@ -27,9 +27,10 @@ from emet.core.parameters import get_parameters
 from emet.eval.episode_diagnostics import (
     EpisodeDiagnosticsConfig,
     EpisodeDiagnosticsRecorder,
-    attach_diagnostics_recorder,
+    bind_diagnostics_recorder,
     flush_episode_diagnostics,
     habitat_export_voxel_history_default,
+    unbind_diagnostics_recorder,
 )
 from emet.eval.ovmm_find_phase import (
     FindPhaseEpisode,
@@ -46,8 +47,8 @@ from emet.eval.ovmm_find_phase import (
     set_find_phase_run_seed,
 )
 from emet.habitat.config import default_hm3d_scene_dir
-from emet.habitat.episode_debug import default_episodes_root
 from emet.habitat.datasets import load_scene_init_poses
+from emet.habitat.episode_debug import default_episodes_root
 from emet.habitat.hm3d_semantics import hm3d_placements_from_semantic_scene
 from emet_habitat.robot_client import HabitatRobotClient
 from emet_habitat.runner import _release_gpu_memory
@@ -137,6 +138,7 @@ def run_habitat_find_phase_episode(
 
     robot = None
     agent = None
+    diag_recorder: EpisodeDiagnosticsRecorder | None = None
     t0 = time.monotonic()
     init_wall_s = 0.0
     mapping_wall_s = 0.0
@@ -177,9 +179,7 @@ def run_habitat_find_phase_episode(
             export_voxel_history=habitat_export_voxel_history_default(),
         )
         diag_recorder = EpisodeDiagnosticsRecorder(cfg=diag_cfg)
-        attach_diagnostics_recorder(agent, diag_recorder)
-        if spawn_record is not None:
-            agent._habitat_spawn_record = spawn_record
+        bind_diagnostics_recorder(agent, diag_recorder, spawn_record=spawn_record)
         init_wall_s = time.monotonic() - t_init0
         if run_cfg.backend == "ground_truth":
             refresh = getattr(agent, "refresh_ground_truth", None)
@@ -298,6 +298,8 @@ def run_habitat_find_phase_episode(
             (bundle_dir / "metrics.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
         return result
     finally:
+        if agent is not None and diag_recorder is not None:
+            unbind_diagnostics_recorder(agent, diag_recorder)
         if agent is not None:
             try:
                 agent.stop()

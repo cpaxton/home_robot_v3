@@ -18,7 +18,7 @@ def episode_export_dir(export_root: Path, question_id: int, method: str = "") ->
     return Path(export_root) / suffix
 
 
-def     export_sqa3d_episode_artifacts(
+def export_sqa3d_episode_artifacts(
     agent: Any,
     q: SQA3DQuestion,
     *,

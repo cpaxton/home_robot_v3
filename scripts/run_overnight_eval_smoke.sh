@@ -12,6 +12,9 @@ cd "$ROOT"
 
 RUN_ID="${RUN_ID:-eval_smoke_$(date +%Y%m%d_%H%M%S)}"
 TAG="${TAG:-$RUN_ID}"
+if [ "$TAG" != "$RUN_ID" ]; then
+  echo "WARNING: TAG=$TAG != RUN_ID=$RUN_ID; figure pack uses RUN_ID. Set RUN_ID=$TAG or pass --artifact-tag $TAG." >&2
+fi
 NEED_MIB="${NEED_MIB:-14000}"
 TIMEOUT_HMEQA="${TIMEOUT_HMEQA:-3600}"
 TIMEOUT_OVMM="${TIMEOUT_OVMM:-2400}"
@@ -135,7 +138,11 @@ if [ "$SKIP_SQA3D" != "1" ]; then
 fi
 
 FIG_DIR="${HOME}/runs/emet/eval_smoke/${RUN_ID}/figures"
-uv run python scripts/build_eval_figure_pack.py --run-id "$RUN_ID" --output-dir "$FIG_DIR" \
+FIG_ARGS=(--run-id "$RUN_ID" --output-dir "$FIG_DIR")
+if [ "$TAG" != "$RUN_ID" ]; then
+  FIG_ARGS+=(--artifact-tag "$TAG")
+fi
+uv run python scripts/build_eval_figure_pack.py "${FIG_ARGS[@]}" \
   2>&1 | tee "${LOG_DIR}/figure_pack.log" || true
 
 echo "Done. Logs: $LOG_DIR  Figures: $FIG_DIR"

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -141,6 +142,43 @@ def _summarize_ovmm(run_id: str, ovmm_root: Path) -> dict:
     return out
 
 
+def _summarize_sqa3d(run_id: str, sqa3d_root: Path) -> dict:
+    out: dict[str, object] = {"files": [], "methods": {}}
+    for p in sorted(sqa3d_root.glob(f"{run_id}_*/*.jsonl")):
+        rows = _load_jsonl(p)
+        if not rows:
+            continue
+        out["files"].append(str(p))
+        method = str(rows[0].get("method", p.parent.name))
+        n = len(rows)
+        correct = sum(1 for r in rows if r.get("em"))
+        methods = out["methods"]
+        assert isinstance(methods, dict)
+        methods.setdefault(method, {"n": 0, "correct": 0})
+        stats = methods[method]
+        assert isinstance(stats, dict)
+        stats["n"] = int(stats.get("n", 0)) + n
+        stats["correct"] = int(stats.get("correct", 0)) + correct
+    methods = out["methods"]
+    assert isinstance(methods, dict)
+    for stats in methods.values():
+        if not isinstance(stats, dict):
+            continue
+        n = int(stats.get("n", 0) or 0)
+        stats["em@1"] = (int(stats.get("correct", 0)) / n) if n else 0.0
+    return out
+
+
+def _track_has_data(track_summary: dict) -> bool:
+    if track_summary.get("methods"):
+        return True
+    if track_summary.get("backends"):
+        return True
+    if track_summary.get("episodes"):
+        return True
+    return False
+
+
 def _investigate_status(summary: dict) -> tuple[str, bool]:
     hmeqa_acc = [
         v.get("accuracy", 0.0)
@@ -156,7 +194,16 @@ def _investigate_status(summary: dict) -> tuple[str, bool]:
         for v in summary.get("ovmm", {}).get("backends", {}).values()
         if isinstance(v, dict)
     ]
-    investigate = not (any(a > 0 for a in hmeqa_acc) or any(ovmm_any_success))
+    sqa3d_em = [
+        v.get("em@1", 0.0)
+        for v in summary.get("sqa3d", {}).get("methods", {}).values()
+        if isinstance(v, dict)
+    ]
+    investigate = not (
+        any(a > 0 for a in hmeqa_acc)
+        or any(ovmm_any_success)
+        or any(e > 0 for e in sqa3d_em)
+    )
     return ("INVESTIGATE" if investigate else "OK", investigate)
 
 
@@ -165,13 +212,49 @@ def build_summary(
     *,
     results_root: Path,
     ovmm_root: Path,
+    sqa3d_root: Path,
+    artifact_tag: str | None = None,
 ) -> dict:
-    """Aggregate HM-EQA and OVMM metrics for a smoke run."""
-    hmeqa_paths = _find_hmeqa_jsonls(run_id, results_root)
+    """Aggregate HM-EQA, OVMM, and SQA3D metrics for a smoke run."""
+    hmeqa = _summarize_hmeqa(_find_hmeqa_jsonls(run_id, results_root))
+    ovmm = _summarize_ovmm(run_id, ovmm_root)
+    sqa3d = _summarize_sqa3d(run_id, sqa3d_root)
+
+    if artifact_tag and artifact_tag != run_id:
+        if not _track_has_data(hmeqa):
+            fallback = _summarize_hmeqa(_find_hmeqa_jsonls(artifact_tag, results_root))
+            if _track_has_data(fallback):
+                print(
+                    f"WARNING: no HM-EQA files for run_id={run_id!r}; "
+                    f"using artifact_tag={artifact_tag!r}",
+                    file=sys.stderr,
+                )
+                hmeqa = fallback
+        if not _track_has_data(ovmm):
+            fallback = _summarize_ovmm(artifact_tag, ovmm_root)
+            if _track_has_data(fallback):
+                print(
+                    f"WARNING: no OVMM files for run_id={run_id!r}; "
+                    f"using artifact_tag={artifact_tag!r}",
+                    file=sys.stderr,
+                )
+                ovmm = fallback
+        if not _track_has_data(sqa3d):
+            fallback = _summarize_sqa3d(artifact_tag, sqa3d_root)
+            if _track_has_data(fallback):
+                print(
+                    f"WARNING: no SQA3D files for run_id={run_id!r}; "
+                    f"using artifact_tag={artifact_tag!r}",
+                    file=sys.stderr,
+                )
+                sqa3d = fallback
+
     summary: dict = {
         "run_id": run_id,
-        "hmeqa": _summarize_hmeqa(hmeqa_paths),
-        "ovmm": _summarize_ovmm(run_id, ovmm_root),
+        "artifact_tag": artifact_tag or run_id,
+        "hmeqa": hmeqa,
+        "ovmm": ovmm,
+        "sqa3d": sqa3d,
     }
     status, investigate = _investigate_status(summary)
     summary["status"] = status
@@ -198,6 +281,11 @@ def write_summary_csv(summary: dict, path: Path) -> None:
             ):
                 rate = stats.get(metric, stats.get(metric.replace("_rate", ""), 0) / n)
                 csv_lines.append(f"ovmm,{backend},{n},{metric},{rate:.4f}")
+    for method, stats in summary.get("sqa3d", {}).get("methods", {}).items():
+        if isinstance(stats, dict):
+            csv_lines.append(
+                f"sqa3d,{method},{stats.get('n', 0)},em@1,{stats.get('em@1', 0.0):.4f}"
+            )
     path.write_text("\n".join(csv_lines) + "\n", encoding="utf-8")
 
 
@@ -306,22 +394,48 @@ def _plot_map_grid(episodes_root: Path, run_id: str, out_dir: Path) -> Path | No
     return out
 
 
+def _artifact_glob_tag(run_id: str, artifact_tag: str | None) -> str:
+    if artifact_tag and artifact_tag != run_id:
+        return artifact_tag
+    return run_id
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument(
+        "--artifact-tag",
+        default=None,
+        help="Fallback tag for artifact globs when it differs from --run-id (e.g. overnight TAG)",
+    )
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--summary-only", action="store_true")
     args = parser.parse_args()
 
     run_id = args.run_id
+    artifact_tag = args.artifact_tag
+    if artifact_tag and artifact_tag != run_id:
+        print(
+            f"WARNING: --artifact-tag={artifact_tag!r} differs from --run-id={run_id!r}; "
+            "summary run_id stays --run-id; globs fall back to artifact-tag when empty.",
+            file=sys.stderr,
+        )
+
     habitat_root = Path.home() / ".cache" / "habitat_eqa"
     results_root = habitat_root / "results"
     episodes_root = habitat_root / "episodes"
     ovmm_root = Path.home() / "runs" / "emet" / "ovmm_habitat"
+    sqa3d_root = Path.home() / "runs" / "emet" / "sqa3d"
     out_dir = args.output_dir or (Path.home() / "runs" / "emet" / "eval_smoke" / run_id / "figures")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    summary = build_summary(run_id, results_root=results_root, ovmm_root=ovmm_root)
+    summary = build_summary(
+        run_id,
+        results_root=results_root,
+        ovmm_root=ovmm_root,
+        sqa3d_root=sqa3d_root,
+        artifact_tag=artifact_tag,
+    )
 
     summary_path = out_dir / "summary.json"
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
@@ -333,7 +447,10 @@ def main() -> None:
     if args.summary_only:
         return
 
-    grid = _plot_map_grid(episodes_root, run_id, out_dir)
+    map_tag = _artifact_glob_tag(run_id, artifact_tag)
+    grid = _plot_map_grid(episodes_root, map_tag, out_dir)
+    if grid is None and artifact_tag and artifact_tag != run_id:
+        grid = _plot_map_grid(episodes_root, run_id, out_dir)
     if grid:
         print(f"wrote {grid}")
 
@@ -341,7 +458,10 @@ def main() -> None:
     if ovmm_bars:
         print(f"wrote {ovmm_bars}")
 
-    sqa3d_jsonls = list((Path.home() / "runs" / "emet" / "sqa3d").glob(f"{run_id}_*/*.jsonl"))
+    sqa3d_glob_tag = map_tag
+    sqa3d_jsonls = list(sqa3d_root.glob(f"{sqa3d_glob_tag}_*/*.jsonl"))
+    if not sqa3d_jsonls and artifact_tag and artifact_tag != run_id:
+        sqa3d_jsonls = list(sqa3d_root.glob(f"{run_id}_*/*.jsonl"))
     for p in sqa3d_jsonls:
         try:
             from emet.benchmarks.sqa3d.analysis import generate_sqa3d_figure_bundle

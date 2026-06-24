@@ -23,6 +23,13 @@ from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.controller_graph_eqa import GraphEQAController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import Parameters, get_parameters
+from emet.eval.episode_diagnostics import (
+    EpisodeDiagnosticsConfig,
+    EpisodeDiagnosticsRecorder,
+    bind_diagnostics_recorder,
+    habitat_export_voxel_history_default,
+    unbind_diagnostics_recorder,
+)
 from emet.habitat.config import default_hm3d_scene_dir
 from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
 from emet.habitat.episode_debug import (
@@ -31,12 +38,6 @@ from emet.habitat.episode_debug import (
     save_episode_debug_bundle,
     save_error_episode_bundle,
     write_run_manifest,
-)
-from emet.eval.episode_diagnostics import (
-    EpisodeDiagnosticsConfig,
-    EpisodeDiagnosticsRecorder,
-    attach_diagnostics_recorder,
-    habitat_export_voxel_history_default,
 )
 from emet.habitat.hmeqa_enrich_labels import enrich_labels_for_question
 from emet.habitat.metrics import (
@@ -236,6 +237,8 @@ def run_hmeqa_episode(
         use_hm3d_semantics=use_hm3d_semantics,
     )
     use_real_vlm = not mock_llm
+    agent = None
+    diag_recorder: EpisodeDiagnosticsRecorder | None = None
     try:
         sim.set_init_pose(init_pose)
         spawn_record = sim.last_init_pose_record
@@ -272,9 +275,7 @@ def run_hmeqa_episode(
             export_voxel_history=habitat_export_voxel_history_default(),
         )
         diag_recorder = EpisodeDiagnosticsRecorder(cfg=diag_cfg)
-        attach_diagnostics_recorder(agent, diag_recorder)
-        if spawn_record is not None:
-            agent._habitat_spawn_record = spawn_record
+        bind_diagnostics_recorder(agent, diag_recorder, spawn_record=spawn_record)
         agent._eqa_question = q.question_formatted
         agent.start()
         if agent.graph_memory is not None:
@@ -379,6 +380,8 @@ def run_hmeqa_episode(
                 )
         return metrics
     finally:
+        if agent is not None and diag_recorder is not None:
+            unbind_diagnostics_recorder(agent, diag_recorder)
         sim.close()
         _release_gpu_memory()
 

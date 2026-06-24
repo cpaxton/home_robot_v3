@@ -54,9 +54,11 @@ All embodied tracks can write a **consistent episode bundle** via [`src/emet/eva
 | `EMET_EVAL_EXPORT_VOXEL_HISTORY` | on (Habitat) | Per-observation `observations_history.jsonl` |
 | `EMET_EVAL_EXPORT_VOXEL_PICKLE` | off | Full `voxel_debug.pkl` (heavy) |
 
-Habitat aliases: `HABITAT_EQA_EXPORT_MAP`, `HABITAT_EQA_EXPORT_VIDEO`, `HABITAT_EQA_EXPORT_GRAPH`.
+Habitat aliases: `HABITAT_EQA_EXPORT_MAP`, `HABITAT_EQA_EXPORT_VIDEO`, `HABITAT_EQA_EXPORT_GRAPH`, `HABITAT_EQA_MAP_STRIDE`.
 
-**CLI flags** (`.venv-habitat/bin/emet-habitat`): `--export-map`, `--export-video`, `--map-stride` on `run-episode` / `run-batch`; OVMM batch adds `--run-tag`.
+**Recording:** eval runners call `bind_diagnostics_recorder()` which registers a step callback on the agent. After each successful `DynamemController.update()` (navigation / mapping step), the callback buffers RGB, pose, and optional stride maps — no monkey-patching of `agent.update`.
+
+**CLI flags** (`.venv-habitat/bin/emet-habitat`): `--export-map`, `--export-video`, `--map-stride` on `run-episode` / `run-batch`; OVMM batch adds `--run-tag`. With `--map-stride N`, intermediate maps are written under `<bundle>/maps/step_NNNN.png` at episode end.
 
 ## Overnight smoke (all tracks)
 
@@ -87,10 +89,14 @@ Outputs:
 - Logs: `~/.cache/habitat_eqa/overnight/<RUN_ID>/`
 - Figures: `~/runs/emet/eval_smoke/<RUN_ID>/figures/`
 
+**`RUN_ID` vs `TAG`:** the overnight script writes artifact paths with `TAG` (defaults to `RUN_ID`). Figure aggregation uses `--run-id` (`RUN_ID`). If you override `TAG` without setting `RUN_ID` to match, the script prints a warning and passes `--artifact-tag "$TAG"` to `build_eval_figure_pack.py`. Prefer keeping them equal, or set `RUN_ID="$TAG"` when customizing tags.
+
 Post-run only:
 
 ```bash
 uv run python scripts/build_eval_figure_pack.py --run-id eval_smoke_YYYYMMDD_HHMMSS
+# When TAG differed from RUN_ID during the smoke:
+uv run python scripts/build_eval_figure_pack.py --run-id "$RUN_ID" --artifact-tag "$TAG"
 ```
 
 ## Success criteria (smoke)
@@ -112,7 +118,7 @@ OVMM find-phase episodes are **pick/place localization** tasks: move `{object}` 
 | SQA3D | EM@1 (3 Qs) | **> 0%** when phase 3 runs |
 | All | Artifacts | `topdown_map.png` + `diagnostics_manifest.json` per completed episode |
 
-If HM-EQA and OVMM metrics are all zero, `build_eval_figure_pack.py` sets `"status": "INVESTIGATE"` in `summary.json`.
+If HM-EQA, OVMM, **and** SQA3D (when present) metrics are all zero, `build_eval_figure_pack.py` sets `"status": "INVESTIGATE"` in `summary.json`.
 
 ## Per-track quick commands
 
@@ -157,8 +163,8 @@ Figure pack (`build_eval_figure_pack.py`) writes:
 
 | File | Contents |
 |------|----------|
-| `summary.json` | HM-EQA accuracy; OVMM FindObj / FindRec / both / object-only rates per backend; `status` (`OK` or `INVESTIGATE`) |
-| `summary.csv` | Long-form metrics for tables |
+| `summary.json` | HM-EQA accuracy; OVMM FindObj / FindRec / both / object-only rates per backend; SQA3D `em@1` per method; `status` (`OK` or `INVESTIGATE`) |
+| `summary.csv` | Long-form metrics for tables (includes `sqa3d` rows when phase 3 ran) |
 | `topdown_map_grid.png` | All episode top-down maps |
 | `ovmm_findobj_findrec.png` | FindObj vs FindRec bar chart per backend |
 

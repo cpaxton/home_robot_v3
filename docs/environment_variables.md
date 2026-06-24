@@ -19,6 +19,9 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_EVAL_EXPORT_MAP` | Habitat / OVMM / SQA3D episode bundles | Write `topdown_map.png` (default on). Alias: `HABITAT_EQA_EXPORT_MAP`. |
 | `EMET_EVAL_EXPORT_VIDEO` | Same | Write `episode_rgb.mp4`. Alias: `HABITAT_EQA_EXPORT_VIDEO`. |
 | `EMET_EVAL_EXPORT_FRAMES` | Same | Save RGB frames under `frames/`. |
+| `EMET_EVAL_EXPORT_OBSTACLE_GRIDS` | Same | `obstacles_2d.npy`, `explored_2d.npy`, `grid_meta.json` (default on). |
+| `EMET_EVAL_EXPORT_TRAJECTORY` | Same | `trajectory.jsonl` (default on). |
+| `EMET_EVAL_EXPORT_OBJECT_CROPS` | Same | Dynagraph object-crop mosaic when graph memory is present (default on). |
 | `EMET_EVAL_MAP_STRIDE` | Same | Save intermediate maps every N steps (0 = final only). Alias: `HABITAT_EQA_MAP_STRIDE`. |
 | `EMET_EVAL_EXPORT_GRAPH` | Same | Full graph checkpoint (heavy). Alias: `HABITAT_EQA_EXPORT_GRAPH`. |
 | `EMET_EVAL_EXPORT_VOXEL_HISTORY` | Habitat episode bundles | Slim `observations_history.jsonl` from in-memory voxel frames (default on in Habitat runners). |
