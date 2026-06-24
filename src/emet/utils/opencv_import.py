@@ -29,6 +29,9 @@ def assert_cv2_is_real_opencv() -> None:
     to a minimal ``cv2`` without ``resize`` / ``imencode``. Fix: run with ``uv run emet ...`` from
     the repo, or unset ``PYTHONPATH`` / put the project ``.venv`` site-packages first.
     """
+    from emet.utils.pythonpath import ensure_venv_site_packages_first
+
+    ensure_venv_site_packages_first()
     import cv2
 
     required_attrs = ("resize", "imencode", "INTER_AREA", "IMWRITE_JPEG_QUALITY")

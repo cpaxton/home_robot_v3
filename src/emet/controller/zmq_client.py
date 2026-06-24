@@ -767,25 +767,30 @@ class StretchZmqClient(AbstractRobotClient):
             reliable: Whether to resend the action if it is not received
         """
         if isinstance(xyt, ContinuousNavigationAction):
-            _xyt = xyt.xyt
+            rel_xyt = np.asarray(xyt.xyt, dtype=np.float64).reshape(3)
         else:
-            _xyt = xyt
-        assert len(_xyt) == 3, "xyt must be a vector of size 3"
-        # If it's relative, compute the relative position right now - this helps handle network issues
+            rel_xyt = np.asarray(xyt, dtype=np.float64).reshape(3)
+        assert rel_xyt.size == 3, "xyt must be a vector of size 3"
+        goal_xyt = rel_xyt.copy()
         if relative:
             current_xyt = self.get_base_pose()
             if verbose:
                 print("Current pose", current_xyt)
-            _xyt = xyt_base_to_global(_xyt, current_xyt)
+            goal_xyt = xyt_base_to_global(rel_xyt, current_xyt)
             if verbose:
-                print("Goal pose in global coordinates", _xyt)
+                print("Goal pose in episode coordinates", goal_xyt)
+            # Send the delta with nav_relative; server composes spawn-relative → world (Molmo) or
+            # episode frame (default table). Do not pre-compose here — that double-applies on the server.
+            action_xyt = rel_xyt
+        else:
+            action_xyt = goal_xyt
 
         if blocking and not reliable:
             logger.warning("Sending blocking commands without reliable is not recommended")
 
         # We never send a relative motion over wireless - this is because we can run into timing issues.
         # Instead, we always send the absolute position and let the robot handle the motions itself.
-        next_action: dict[str, Any] = {"xyt": _xyt, "nav_relative": False, "nav_blocking": blocking}
+        next_action: dict[str, Any] = {"xyt": action_xyt, "nav_relative": False, "nav_blocking": blocking}
         if relative:
             next_action["nav_relative"] = True
         elif world_frame:
@@ -795,7 +800,7 @@ class StretchZmqClient(AbstractRobotClient):
         if env_sim_nav_teleport():
             next_action["nav_teleport"] = True
         if self._rerun:
-            self._rerun.update_nav_goal(_xyt)
+            self._rerun.update_nav_goal(goal_xyt)
 
         # If we are not in navigation mode, switch to it
         # Send an action to the robot
@@ -810,7 +815,7 @@ class StretchZmqClient(AbstractRobotClient):
             # Now, wait for the command to finish
             self._wait_for_base_motion(
                 block_id,
-                goal_angle=_xyt[2],
+                goal_angle=float(goal_xyt[2]),
                 verbose=verbose,
                 timeout=timeout,
                 # resend_action=action,

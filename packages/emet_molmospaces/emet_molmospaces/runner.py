@@ -424,6 +424,54 @@ def _get_robot_mjcf_path(robot: str) -> Path | None:
     return p
 
 
+def _write_mjcf_temp_patch(source: Path, text: str, *, prefix: str) -> Path:
+    """Write patched MJCF next to *source* (keeps relative asset paths valid)."""
+    import tempfile
+
+    fd, out = tempfile.mkstemp(suffix=".xml", prefix=prefix, dir=source.parent)
+    os.close(fd)
+    Path(out).write_text(text)
+    return Path(out)
+
+
+def _mjcf_with_arena_memory(mjcf_path: Path, *, memory: str = "2G") -> Path:
+    """Return MJCF path whose ``<size>`` uses *memory* (MuJoCo 3.4 rejects memory + njmax on one tag).
+
+    MolmoSpaces iTHOR scenes ship ``njmax``/``nconmax``; dual-arm robots in dense scenes need a
+    larger constraint arena than the default formula provides.
+    """
+    import re
+
+    text = mjcf_path.read_text()
+    if re.search(r"<size[^>]*\bmemory=", text):
+        return mjcf_path
+    if re.search(r"<size\b", text):
+        patched = re.sub(r"<size\b[^>]*/>", f'<size memory="{memory}"/>', text, count=1)
+    else:
+        patched = re.sub(
+            r"(<mujoco[^>]*>)",
+            rf'\1\n  <size memory="{memory}"/>',
+            text,
+            count=1,
+        )
+    if patched == text:
+        return mjcf_path
+    return _write_mjcf_temp_patch(mjcf_path, patched, prefix="scene_arena_")
+
+
+def _mjcf_strip_size_tag(mjcf_path: Path) -> Path:
+    """Return MJCF without ``<size/>`` so scene ``memory`` and robot ``njmax`` are not both merged."""
+    import re
+
+    text = mjcf_path.read_text()
+    if not re.search(r"<size\b", text):
+        return mjcf_path
+    patched = re.sub(r"<size\b[^>]*/>\s*", "", text, count=1)
+    if patched == text:
+        return mjcf_path
+    return _write_mjcf_temp_patch(mjcf_path, patched, prefix="robot_size_")
+
+
 def _merge_robot_into_scene(scene_xml_path: Path, robot_mjcf_path: Path) -> Path:
     """Write a temporary MJCF that includes the scene and the robot. Uses a top-level wrapper so both
     are included as full models; MuJoCo merges multiple top-level includes. We write the merged file
@@ -431,9 +479,10 @@ def _merge_robot_into_scene(scene_xml_path: Path, robot_mjcf_path: Path) -> Path
     """
     import tempfile
 
-    scene_abs = str(scene_xml_path.resolve())
-    robot_path = robot_mjcf_path.resolve()
-    robot_abs = str(robot_path)
+    scene_for_merge = _mjcf_with_arena_memory(scene_xml_path.resolve())
+    robot_for_merge = _mjcf_strip_size_tag(robot_mjcf_path.resolve())
+    scene_abs = str(scene_for_merge.resolve())
+    robot_abs = str(robot_for_merge.resolve())
     wrapper = f'''<?xml version="1.0"?>
 <mujoco model="scene_with_robot">
   <include file="{scene_abs}"/>
@@ -441,7 +490,7 @@ def _merge_robot_into_scene(scene_xml_path: Path, robot_mjcf_path: Path) -> Path
 </mujoco>
 '''
     # Write into robot dir so included robot XML's relative paths (meshes/) resolve.
-    fd, path = tempfile.mkstemp(suffix=".xml", prefix="scene_robot_", dir=robot_path.parent)
+    fd, path = tempfile.mkstemp(suffix=".xml", prefix="scene_robot_", dir=robot_mjcf_path.parent)
     os.close(fd)
     Path(path).write_text(wrapper)
     return Path(path)

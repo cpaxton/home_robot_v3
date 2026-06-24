@@ -239,6 +239,10 @@ def main(
     steps: int | None = None,
     debug_molmospaces_spawn: bool = False,
 ):
+    from emet.utils.pythonpath import ensure_venv_site_packages_first
+
+    ensure_venv_site_packages_first()
+
     # Use EGL for offscreen rendering when headless (or no DISPLAY) to avoid GLFW X11 assertion
     # (_glfwGrabErrorHandlerX11: errorHandler == NULL) in headless/CI/no-window-manager setups
     if "MUJOCO_GL" not in os.environ and (headless or not os.environ.get("DISPLAY")):

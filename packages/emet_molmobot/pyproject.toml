@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emet-molmobot"
+version = "0.1.0"
+description = "Thin CLI wrapper to run MolmoBot policy servers alongside emet ZMQ sim."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11,<3.13"
+dependencies = []
+
+[project.scripts]
+emet-molmobot = "emet_molmobot.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]

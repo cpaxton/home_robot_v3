@@ -112,6 +112,7 @@ sim = [
     "grpcio",
     "click>=8.1.8",
     "inputs>=0.5",
+    "h5py>=3.8.0",
     # robosuite and robocasa are installed editable from third_party by: emet install sim (or scripts/install_simulation.sh)
 ]
 hand_tracker = [
@@ -146,6 +147,7 @@ sim = [
     "grpcio",
     "click>=8.1.8",
     "inputs>=0.5",
+    "h5py>=3.8.0",
     # robosuite and robocasa are installed editable from third_party by: emet install sim (or scripts/install_simulation.sh)
 ]
 hand_tracker = [

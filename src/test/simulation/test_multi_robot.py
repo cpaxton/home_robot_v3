@@ -9,6 +9,8 @@
 
 """Tests for multi-robot support: RobotSpec, GenericZmqClient, RobosuiteZmqServer."""
 
+import pytest
+
 
 def test_galaxea_r1_spec():
     """GalaxeaR1Backend.get_spec() returns a valid RobotSpec."""
@@ -46,6 +48,51 @@ def test_robot_registry():
     assert "galaxea_r1" in ROBOT_REGISTRY
     assert "rby1" in ROBOT_REGISTRY  # Rainbow RB-Y1 (Galaxea R1 family), MolmoSpaces id
     assert "rb_y1" in ROBOT_REGISTRY
+    assert "xlerobot" in ROBOT_REGISTRY
+    assert "franka_fr3" in ROBOT_REGISTRY
+
+
+def test_xlerobot_spec():
+    from emet.robots.xlerobot import XLeRobotBackend
+
+    spec = XLeRobotBackend().get_spec()
+    assert spec.name == "xlerobot"
+    assert spec.dof == 20
+    assert spec.planar_base_joint_names == ("slide_joint_x", "slide_joint_y", "hinge_joint_z")
+    assert spec.mjcf_path is not None
+
+
+def test_xlerobot_mjcf_loads():
+    import mujoco
+
+    from emet.robots.xlerobot import XLeRobotBackend
+
+    spec = XLeRobotBackend().get_spec()
+    model = mujoco.MjModel.from_xml_path(spec.mjcf_path)
+    assert model.nq == 20
+    assert model.nu == 20
+    for aname in spec.actuator_names:
+        assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, aname) >= 0
+
+
+def test_franka_fr3_spec():
+    from emet.robots.franka_fr3 import FrankaFR3Backend
+
+    spec = FrankaFR3Backend().get_spec()
+    assert spec.name == "franka_fr3"
+    assert spec.dof == 7
+    assert spec.planar_base_joint_names is None
+
+
+def test_franka_fr3_mjcf_loads():
+    import mujoco
+
+    from emet.robots.franka_fr3 import FrankaFR3Backend
+
+    spec = FrankaFR3Backend().get_spec()
+    model = mujoco.MjModel.from_xml_path(spec.mjcf_path)
+    assert model.nq == 7
+    assert model.nu == 7
 
 
 def test_galaxea_r1_mjcf_loads():
@@ -200,6 +247,24 @@ def test_stretch_execute_trajectory_accepts_controller_kwargs():
     assert "world_frame" in sig.parameters
 
 
+def test_want_robocasa_planar_autoplace_xlerobot():
+    from emet.robots.xlerobot import XLeRobotBackend
+    from emet.simulation import scene_base_spawn
+
+    spec = XLeRobotBackend().get_spec()
+    assert scene_base_spawn.want_robocasa_planar_autoplace(
+        environment={"kind": "robocasa", "task": "PickPlaceCounterToCabinet"},
+        robot_spec=spec,
+    )
+
+
+def test_robocasa_gen_xlerobot_strip_placeholder():
+    from pathlib import Path
+
+    src = Path("src/emet/simulation/stretch_mujoco/robocasa_gen.py").read_text()
+    assert '"xlerobot"' in src
+
+
 def test_want_robocasa_planar_autoplace_innate_mars():
     from emet.robots.innate_mars import InnateMarsBackend
     from emet.simulation import scene_base_spawn
@@ -226,6 +291,7 @@ def test_want_robocasa_freejoint_autoplace_galaxea_r1():
 
 
 def test_robocasa_gen_strip_replace_includes_galaxea():
+    pytest.importorskip("robocasa")
     import inspect
 
     from emet.simulation.stretch_mujoco import robocasa_gen
@@ -237,6 +303,7 @@ def test_robocasa_gen_strip_replace_includes_galaxea():
 
 def test_robocasa_gen_robot_param():
     """model_generation_wizard accepts robot parameter (import-only test)."""
+    pytest.importorskip("robocasa")
     import inspect
 
     from emet.simulation.stretch_mujoco.robocasa_gen import model_generation_wizard
@@ -281,6 +348,7 @@ def test_xml_remove_all_tags_strips_key():
 
 def test_robocasa_gen_robosuite_mapping():
     """_robosuite_robot_for maps names correctly."""
+    pytest.importorskip("robocasa")
     from emet.simulation.stretch_mujoco.robocasa_gen import _robosuite_robot_for
 
     assert _robosuite_robot_for("stretch") == "PandaMobile"

@@ -216,6 +216,36 @@ def sync_episode_metadata_from_zmq_session(
     type=float,
     help="Seconds to wait for first ZMQ obs+state (default 60, or EMET_ZMQ_STARTUP_TIMEOUT). Molmo loads can be slow.",
 )
+@click.option(
+    "--start-sim",
+    "start_sim",
+    is_flag=True,
+    help=(
+        "Start ``emet.simulation.mujoco_server`` as a subprocess before connecting. "
+        "Uses ``--scene`` / ``--split`` / ``--index`` / ``--robot`` / ``--port-offset`` "
+        "(same as ``emet serve mujoco``). Requires ``--robot``."
+    ),
+)
+@click.option(
+    "--headless",
+    is_flag=True,
+    help="With --start-sim: run MuJoCo headless (default when --start-sim unless --sim-show-viewer-ui).",
+)
+@click.option(
+    "--install-scene-if-missing",
+    is_flag=True,
+    help="With --start-sim: download MolmoSpaces scene assets if missing (non-interactive).",
+)
+@click.option(
+    "--sim-show-viewer-ui",
+    is_flag=True,
+    help="With --start-sim and without --headless: show the MuJoCo viewer (needs DISPLAY).",
+)
+@click.option(
+    "--sim-show-subprocess-output",
+    is_flag=True,
+    help="With --start-sim: inherit this terminal for sim stdout/stderr (verbose).",
+)
 def main(
     robot_ip: str,
     robot_backend: str | None,
@@ -239,20 +269,59 @@ def main(
     no_mp4: bool,
     mp4_fps: float,
     zmq_startup_timeout: float | None,
+    start_sim: bool,
+    headless: bool,
+    install_scene_if_missing: bool,
+    sim_show_viewer_ui: bool,
+    sim_show_subprocess_output: bool,
 ) -> None:
     """Explore and record posed RGB for NeRF-style datasets.
 
-    Start the sim in another terminal, e.g.::
+    One terminal (spawn sim + explore)::
+
+        emet run molmospaces-explore --start-sim --robot xlerobot --scene ithor \\
+          --headless --output-dir ./ep0 --steps 40
+
+    Or start the sim separately, then run this command; ``--robot`` is optional if the server
+    publishes ``emet_robot_id`` / ``emet_session``::
 
         emet serve mujoco --scene ithor --split train \\
           --index 0 --robot rby1 --headless
-
-    Then run this command; ``--robot`` is optional if the server publishes ``emet_robot_id`` / ``emet_session``.
     """
     zmq_to = zmq_startup_timeout
     if zmq_to is None:
         env = os.environ.get("EMET_ZMQ_STARTUP_TIMEOUT", "").strip()
         zmq_to = float(env) if env else 60.0
+
+    sim_shutdown = None
+    if start_sim:
+        from emet.config.sim_launch_config import SimLaunchMolmospaces, resolve_serve_robot
+        from emet.simulation.sim_subprocess import (
+            shutdown_mujoco_server_subprocess,
+            spawn_mujoco_server_subprocess,
+        )
+
+        if not (robot_backend or "").strip():
+            raise click.UsageError("--start-sim requires --robot (same id as the sim you want to spawn).")
+        sim_robot = resolve_serve_robot(str(robot_backend).strip(), is_molmospaces=True)
+        sim_headless = headless or not str(os.environ.get("DISPLAY", "")).strip() or not sim_show_viewer_ui
+        sim_cfg = SimLaunchMolmospaces(
+            robot=sim_robot,
+            scene=molmospaces_scene,
+            split=molmospaces_split,
+            index=int(molmospaces_index),
+            headless=sim_headless,
+            show_viewer_ui=bool(sim_show_viewer_ui and not sim_headless),
+            molmospaces_install=bool(install_scene_if_missing),
+            port_offset=int(port_offset),
+        )
+        click.echo("MolmoSpaces explore: starting MuJoCo sim subprocess (--start-sim)…", err=True)
+        spawn_mujoco_server_subprocess(
+            sim_cfg,
+            silence_sim_output=not sim_show_subprocess_output,
+        )
+        sim_shutdown = shutdown_mujoco_server_subprocess
+        robot_backend = sim_robot
 
     resolved_robot = (robot_backend or "").strip() or None
     if not resolved_robot:
@@ -265,16 +334,13 @@ def main(
         )
         if not discovered:
             raise click.UsageError(
-                "Could not read robot id from ZMQ (timeout). Start ``emet serve mujoco`` first, or pass "
-                "``--robot <name>`` explicitly (same as the server)."
+                "Could not read robot id from ZMQ (timeout). Start ``emet serve mujoco`` first, pass "
+                "``--robot <name>``, or use ``--start-sim`` to spawn the sim in-process."
             )
         resolved_robot = discovered
         click.echo(f"Using robot from ZMQ server: {resolved_robot!r} (pass --robot to override).")
 
-    click.echo(
-        "MolmoSpaces explore: connecting to ZMQ MuJoCo server… "
-        "(ensure `emet serve mujoco` is already running with the same --robot and --port-offset.)"
-    )
+    click.echo("MolmoSpaces explore: connecting to ZMQ MuJoCo server…")
     robot = create_robot_client_from_cli(
         resolved_robot,
         robot_ip,
@@ -330,34 +396,44 @@ def main(
     )
 
     try:
-        session.run(steps=steps, capture_hz=capture_hz)
-    finally:
-        extra: dict[str, str] = {}
-        if with_graph_report and graph_memory is not None:
-            rp = Path(output_dir) / "graph_report.txt"
-            session.save_graph_report(rp)
-            extra["graph_report"] = str(rp)
-        writer.finalize(extra=extra or None)
-        click.echo(f"Wrote episode to {output_dir} ({writer.frame_count} frames).")
-        click.echo(f"Progress log: {Path(output_dir) / 'explore_progress.txt'}")
-        if getattr(session, "navigation_goal_timeouts", 0) > 0:
-            n = session.navigation_goal_timeouts
-            click.echo(
-                f"Note: {n} random navigation goal(s) timed out (sim did not report at_goal in time); "
-                "capture continued. Tighten --goal-* bounds, increase --nav-timeout, or use --navigate-every.",
-                err=True,
-            )
-
-    if not no_mp4 and writer.frame_count > 0:
         try:
-            mp4_path = write_episode_rgb_mp4(output_dir, fps=mp4_fps)
-            click.echo(f"Wrote exploration video {mp4_path}")
-        except Exception as e:
-            click.echo(f"Warning: could not write MP4 ({e})", err=True)
+            session.run(steps=steps, capture_hz=capture_hz)
+        finally:
+            extra: dict[str, str] = {}
+            if with_graph_report and graph_memory is not None:
+                rp = Path(output_dir) / "graph_report.txt"
+                session.save_graph_report(rp)
+                extra["graph_report"] = str(rp)
+            writer.finalize(extra=extra or None)
+            click.echo(f"Wrote episode to {output_dir} ({writer.frame_count} frames).")
+            click.echo(f"Progress log: {Path(output_dir) / 'explore_progress.txt'}")
+            if getattr(session, "navigation_goal_timeouts", 0) > 0:
+                n = session.navigation_goal_timeouts
+                click.echo(
+                    f"Note: {n} random navigation goal(s) timed out (sim did not report at_goal in time); "
+                    "capture continued. Tighten --goal-* bounds, increase --nav-timeout, or use --navigate-every.",
+                    err=True,
+                )
 
-    if export_transforms:
-        out = export_nerfstudio_transforms(output_dir)
-        click.echo(f"Wrote {out}")
+        if not no_mp4 and writer.frame_count > 0:
+            try:
+                mp4_path = write_episode_rgb_mp4(output_dir, fps=mp4_fps)
+                click.echo(f"Wrote exploration video {mp4_path}")
+            except Exception as e:
+                click.echo(f"Warning: could not write MP4 ({e})", err=True)
+
+        if export_transforms:
+            out = export_nerfstudio_transforms(output_dir)
+            click.echo(f"Wrote {out}")
+    finally:
+        if sim_shutdown is not None:
+            sim_shutdown()
+        stop = getattr(robot, "stop", None)
+        if callable(stop):
+            try:
+                stop()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
