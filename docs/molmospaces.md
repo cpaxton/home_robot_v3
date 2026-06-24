@@ -175,9 +175,22 @@ The ZMQ server publishes a static **`emet_session`** block (scene / robot / capa
 
 ## Exploration dataset + NeRF (phase 1)
 
-Record posed RGB (and optional depth) while the robot moves in a MolmoSpaces-backed scene. This uses the **same ZMQ workflow** as above: start the MuJoCo server in one terminal, then run the explorer in another.
+Record posed RGB (and optional depth) while the robot moves in a MolmoSpaces-backed scene.
+
+### One-terminal workflow (`--start-sim`)
+
+Spawn the MuJoCo server in-process, then explore (same ports as `emet serve mujoco`):
+
+```bash
+uv run emet run molmospaces-explore --start-sim --robot xlerobot --scene ithor --headless \
+  --output-dir ./data/molmo_ep_ithor_0 --steps 120 --capture-hz 2 --export-transforms
+```
+
+`--robot` is required with `--start-sim`. Optional: `--install-scene-if-missing`, `--sim-show-subprocess-output` (sim logs), `--sim-show-viewer-ui` (needs DISPLAY). See also `emet run agent --start-sim` in [sim_configs.md](sim_configs.md).
 
 ### Two-terminal workflow
+
+Start the MuJoCo server in one terminal, then run the explorer in another.
 
 1. **Terminal A — sim** (main `uv` env, sim extras):
 

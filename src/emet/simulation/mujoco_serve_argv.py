@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Build ``emet.simulation.mujoco_server`` argv from :class:`SimLaunchConfig` (shared by CLI and ``--start-sim``)."""
 
@@ -41,7 +50,7 @@ def _merge_molmospaces_scene(
     if robot_mjcf is None or not robot_mjcf.is_file():
         raise RuntimeError(
             f"No vendored MJCF for MolmoSpaces merge (--robot {robot!r}). "
-            "Registered keys include stretch, galaxea_r1/rby1, innate_mars."
+            "Registered keys include stretch, galaxea_r1/rby1, innate_mars, xlerobot."
         )
     merged_dir = str(robot_mjcf.parent.resolve())
     fd, merged_path = tempfile.mkstemp(suffix=".xml", prefix="molmospaces_merged_", dir=merged_dir)
@@ -67,9 +76,7 @@ def _merge_molmospaces_scene(
             os.unlink(merged_path)
         except OSError:
             pass
-        raise RuntimeError(
-            "MolmoSpaces wrapper not found (install: ./install.sh --molmospaces -y or full install)."
-        )
+        raise RuntimeError("MolmoSpaces wrapper not found (install: ./install.sh --molmospaces -y or full install).")
     env = os.environ.copy()
     ensure_molmospaces_assets_dir_env(env)
     r = subprocess.run(cmd, cwd=str(repo_root), env=env)

@@ -175,6 +175,10 @@ src/emet/assets/robot/molmospaces_merged_*.xml
 src/emet/assets/robot/**/molmospaces_merged_*.xml
 src/emet/assets/robot/scene_robot_*.xml
 src/emet/assets/robot/**/scene_robot_*.xml
+src/emet/assets/robot/robot_size_*.xml
+src/emet/assets/robot/**/robot_size_*.xml
+src/emet/assets/robot/scene_arena_*.xml
+src/emet/assets/robot/**/scene_arena_*.xml
 src/emet/assets/robot/galaxea_r1/t_*.xml
 
 # Cursor / agent local plans at repo root (committed plans live under docs/plans/)

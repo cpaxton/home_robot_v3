@@ -1,6 +1,15 @@
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
 # This source code is licensed under the LICENSE file in the root directory
 # of this source tree.
 
@@ -186,7 +195,9 @@ def test_apply_home_keyframe_preserving_planar_base_with_home_keyframe():
         qadr = int(model.jnt_qposadr[jid])
         data.qpos[qadr] = 0.25 + 0.1 * i
     mujoco.mj_forward(model, data)
-    saved = [float(data.qpos[int(model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, j)])]) for j in planar]
+    saved = [
+        float(data.qpos[int(model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, j)])]) for j in planar
+    ]
     assert apply_home_keyframe_preserving_planar_base(
         model,
         data,
@@ -197,6 +208,45 @@ def test_apply_home_keyframe_preserving_planar_base_with_home_keyframe():
         jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jname)
         qadr = int(model.jnt_qposadr[jid])
         assert abs(float(data.qpos[qadr]) - val) < 1e-6
+
+
+def test_resolve_robot_home_keyframe_prefers_robot_specific_name():
+    from emet.robots.xlerobot import XLeRobotBackend
+    from emet.simulation.robosuite_load_utils import (
+        resolve_robot_home_keyframe_id,
+        robot_home_keyframe_name,
+    )
+
+    spec = XLeRobotBackend().get_spec()
+    xml = """
+    <mujoco>
+      <worldbody>
+        <body name="base_link">
+          <joint name="base_x" type="slide" axis="1 0 0"/>
+          <geom type="sphere" size="0.1"/>
+        </body>
+      </worldbody>
+      <keyframe>
+        <key name="home" qpos="0"/>
+        <key name="xlerobot_home" qpos="0"/>
+      </keyframe>
+    </mujoco>
+    """
+    model = mujoco.MjModel.from_xml_string(xml)
+    assert robot_home_keyframe_name(spec) == "xlerobot_home"
+    kid = resolve_robot_home_keyframe_id(model, spec)
+    assert mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_KEY, kid) == "xlerobot_home"
+
+
+def test_franka_fr3_home_keyframe_name():
+    from emet.robots.franka_fr3 import FrankaFR3Backend
+    from emet.simulation.robosuite_load_utils import resolve_robot_home_keyframe_id, robot_home_keyframe_name
+
+    spec = FrankaFR3Backend().get_spec()
+    model = mujoco.MjModel.from_xml_path(spec.mjcf_path)
+    assert robot_home_keyframe_name(spec) == "franka_fr3_home"
+    assert resolve_robot_home_keyframe_id(model, spec) >= 0
+    assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home") < 0
 
 
 def test_update_robot_qpos0_from_data_does_not_require_full_vector_match():
@@ -213,7 +263,7 @@ def test_update_robot_qpos0_from_data_does_not_require_full_vector_match():
     data.qpos[:] = data.qpos + 0.01
     mujoco.mj_forward(model, data)
     update_robot_qpos0_from_data(model, data, spec)
-  # at least one robot joint qpos0 should differ from blanket shift of entire vector
+    # at least one robot joint qpos0 should differ from blanket shift of entire vector
     changed = np.any(np.abs(model.qpos0 - qpos0_before) > 1e-9)
     assert changed
 

@@ -979,10 +979,20 @@ class GenericZmqClient(AbstractRobotClient):
         self.send_action(action)
 
     def open_gripper(self, gripper_name: str = "left_gripper", amount: float = 0.05) -> None:
+        if self._spec.name == "xlerobot":
+            from emet.robots.xlerobot import parse_xlerobot_gripper_side
+
+            self.gripper_to(1.0, side=parse_xlerobot_gripper_side(gripper_name))
+            return
         action = {"gripper": amount}
         self.send_action(action)
 
     def close_gripper(self, gripper_name: str = "left_gripper") -> None:
+        if self._spec.name == "xlerobot":
+            from emet.robots.xlerobot import parse_xlerobot_gripper_side
+
+            self.gripper_to(0.0, side=parse_xlerobot_gripper_side(gripper_name))
+            return
         action = {"gripper": -0.1}
         self.send_action(action)
 
@@ -1023,14 +1033,38 @@ class GenericZmqClient(AbstractRobotClient):
         return None, None, None
 
     def get_six_joints(self, _timeout: float = 5.0) -> np.ndarray:
-        """Placeholder for DynaMem's Stretch 6-DOF slice; non-Stretch robots have no universal mapping."""
+        """Placeholder for DynaMem's Stretch 6-DOF slice; xlerobot returns head pan/tilt."""
+        if self._spec.name == "xlerobot":
+            pan, tilt = self.get_pan_tilt()
+            return np.array([pan, tilt], dtype=float)
         return np.zeros(6, dtype=float)
 
     def get_pan_tilt(self) -> tuple[float, float]:
-        """Stretch head pan/tilt; mobile manipulators without that head return zeros."""
+        """Head pan/tilt in radians (xlerobot ``head_pan_joint`` / ``head_tilt_joint``)."""
+        if self._spec.name == "xlerobot":
+            q, _, _ = self.get_joint_state(timeout=2.0)
+            if q is None:
+                return (0.0, 0.0)
+            pan_i = self._joint_index.get("head_pan_joint")
+            tilt_i = self._joint_index.get("head_tilt_joint")
+            pan = float(q[pan_i]) if pan_i is not None else 0.0
+            tilt = float(q[tilt_i]) if tilt_i is not None else 0.0
+            return (pan, tilt)
         return (0.0, 0.0)
 
-    def get_gripper_position(self) -> float:
+    def get_gripper_position(self, side: str = "left") -> float:
+        if self._spec.name == "xlerobot":
+            from emet.robots.xlerobot import XLEROBOT_GRIPPER_JOINTS, jaw_normalized_from_angle
+
+            q, _, _ = self.get_joint_state(timeout=2.0)
+            if q is None:
+                return 0.0
+            key = side if side in ("left", "right") else "left"
+            jname = XLEROBOT_GRIPPER_JOINTS[key]
+            idx = self._joint_index.get(jname)
+            if idx is None:
+                return 0.0
+            return jaw_normalized_from_angle(float(q[idx]))
         q, _, _ = self.get_joint_state(timeout=2.0)
         if q is None:
             return 0.5
@@ -1094,9 +1128,30 @@ class GenericZmqClient(AbstractRobotClient):
             return False
         return self.move_base_to(xyt_a, relative=relative, blocking=blocking, timeout=kwargs.get("timeout"))
 
-    def gripper_to(self, target: float, blocking: bool = True, reliable: bool = True) -> None:
-        """Stretch-compatible gripper command (absolute opening target)."""
-        action: dict[str, Any] = {"gripper": float(target)}
+    def gripper_to(self, target: float, blocking: bool = True, reliable: bool = True, side: str = "left") -> None:
+        """Send gripper command (Stretch single gripper or xlerobot left/right jaw)."""
+        if self._spec.name == "xlerobot":
+            key = "gripper_right" if side == "right" else "gripper_left"
+            action: dict[str, Any] = {key: float(target)}
+            if blocking:
+                action["gripper_blocking"] = True
+            self.send_action(action, reliable=reliable)
+            if blocking:
+                time.sleep(0.05)
+            return
+        action = {"gripper": float(target)}
+        if blocking:
+            action["gripper_blocking"] = True
+        self.send_action(action, reliable=reliable)
+        if blocking:
+            time.sleep(0.05)
+
+    def gripper_both_to(self, target: float, blocking: bool = True, reliable: bool = True) -> None:
+        """Set both xlerobot jaws; no-op on single-gripper robots."""
+        if self._spec.name != "xlerobot":
+            self.gripper_to(target, blocking=blocking, reliable=reliable)
+            return
+        action: dict[str, Any] = {"gripper_left": float(target), "gripper_right": float(target)}
         if blocking:
             action["gripper_blocking"] = True
         self.send_action(action, reliable=reliable)

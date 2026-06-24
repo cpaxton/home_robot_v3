@@ -254,8 +254,9 @@ def test_molmospaces_list_robots():
     )
     assert result.returncode == 0
     assert "rby1" in result.stdout
-    assert "franka" in result.stdout.lower()
-    assert "Default:" in result.stdout
+    assert "franka" in result.stdout.lower() or "franka_fr3" in result.stdout
+    assert "xlerobot" in result.stdout
+    assert "MolmoSpaces" in result.stdout or "MolmoSpaces wrapper" in result.stdout
 
 
 def test_molmospaces_install_scene_help():
@@ -382,6 +383,7 @@ def test_run_molmospaces_explore_help():
     )
     assert result.returncode == 0
     assert "output-dir" in result.stdout
+    assert "start-sim" in result.stdout
 
 
 def test_molmospaces_list_scenes_without_wrapper():

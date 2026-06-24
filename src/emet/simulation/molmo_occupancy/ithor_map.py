@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Allen Institute for AI (MolmoSpaces). Apache-2.0.
 # Vendored from molmo_spaces/utils/scene_maps.py (iTHORMap + from_mj_model_path).
 # Two-pass occupancy (Pass 1: high/low visual geoms vs floor+1.5m; Pass 2: drop high bodies)
@@ -28,6 +37,12 @@ def _delete_blacklisted_bodies(spec: mujoco.MjSpec) -> int:
 
 def _handle_compile_error_and_blacklist(_error: Exception) -> None:
     return
+
+
+def _strip_spec_keyframes(spec: mujoco.MjSpec) -> None:
+    """Remove keyframes before compile after ``spec.delete(body)`` (merged MJCF + robot keys duplicate)."""
+    for key in list(spec.keys):
+        spec.delete(key)
 
 
 def _safe_model_data(spec: mujoco.MjSpec) -> tuple[mujoco.MjModel, mujoco.MjData]:
@@ -112,8 +127,18 @@ class iTHORMap(ProcTHORMap):
         z_threshold = 1.5 + (float(aabb_center[2]) + float(aabb_size[2]) / 2.0)
 
         robot_root_id = -1
+        robot_root_name: str | None = None
         if robot_root_body_name:
             robot_root_id = int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, robot_root_body_name))
+            if robot_root_id >= 0:
+                robot_root_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, robot_root_id)
+        if robot_root_name is None:
+            for candidate in ("chassis", "base_link", "base"):
+                cid = int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, candidate))
+                if cid >= 0:
+                    robot_root_id = cid
+                    robot_root_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, cid)
+                    break
 
         high_names: set[str] = set()
         low_names: set[str] = set()
@@ -137,9 +162,15 @@ class iTHORMap(ProcTHORMap):
 
         del mj_data, model
 
-        # Pass 2
+        # Pass 2 — strip robot + keyframes before scene body deletes (MjSpec duplicates included keys).
         spec = mujoco.MjSpec.from_file(model_path)
-        for body in spec.worldbody.bodies:
+        if robot_root_name:
+            for body in list(spec.worldbody.bodies):
+                if body.name == robot_root_name:
+                    spec.delete(body)
+                    break
+        _strip_spec_keyframes(spec)
+        for body in list(spec.worldbody.bodies):
             body_name = body.name
             if body_name and "ceiling" in body_name.lower():
                 spec.delete(body)
@@ -148,6 +179,7 @@ class iTHORMap(ProcTHORMap):
             elif body_name in high_names:
                 spec.delete(body)
 
+        _strip_spec_keyframes(spec)
         model, mj_data = _safe_model_data(spec)
 
         floor_ids = []
@@ -172,9 +204,7 @@ class iTHORMap(ProcTHORMap):
             h = int(round(px_per_m * aabb_size[0]))
             w = int(round(px_per_m * aabb_size[1]))
             px_per_m_eff = h / aabb_size[0]
-            renderer = MjOpenGLRenderer(
-                MjModelBindings(model), height=h, width=w, device_id=device_id
-            )
+            renderer = MjOpenGLRenderer(MjModelBindings(model), height=h, width=w, device_id=device_id)
             renderer.update(mj_data, cam)
             for glcam in renderer.scene.camera:
                 glcam.orthographic = 1
@@ -185,9 +215,7 @@ class iTHORMap(ProcTHORMap):
             assert model.cam_orthographic[cam_model.id], "Camera must be orthographic"
             w, h = model.cam_resolution[cam_model.id]
             px_per_m_eff = h / cam_model.fovy.item()
-            renderer = MjOpenGLRenderer(
-                MjModelBindings(model), height=h, width=w, device_id=device_id
-            )
+            renderer = MjOpenGLRenderer(MjModelBindings(model), height=h, width=w, device_id=device_id)
             renderer.update(mj_data, camera)
 
         cam_to_world = np.eye(4)

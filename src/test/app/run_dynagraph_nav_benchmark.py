@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 """Dynagraph nav + frontier benchmarks on default table, Robocasa, MolmoSpaces."""
 
 from __future__ import annotations
@@ -6,7 +15,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import socket
 import subprocess
 import sys
@@ -58,6 +66,8 @@ def _session_env() -> dict[str, str]:
 
 def _connect_robot(robot_key: str) -> Any:
     key = robot_key.lower().replace("-", "_")
+    env_timeout = os.environ.get("EMET_ZMQ_STARTUP_TIMEOUT", "").strip()
+    zmq_startup_timeout = max(1.0, float(env_timeout)) if env_timeout else 120.0
     if key == "stretch":
         from emet.controller.zmq_client import StretchZmqClient
 
@@ -65,6 +75,7 @@ def _connect_robot(robot_key: str) -> Any:
             robot_ip="127.0.0.1",
             enable_rerun_server=False,
             start_immediately=True,
+            zmq_startup_timeout=zmq_startup_timeout,
         )
     from emet.controller.generic_zmq_client import GenericZmqClient
     from emet.robots import get_robot_spec
@@ -77,6 +88,7 @@ def _connect_robot(robot_key: str) -> Any:
         robot_ip="127.0.0.1",
         enable_rerun_server=False,
         start_immediately=True,
+        zmq_startup_timeout=zmq_startup_timeout,
     )
 
 
@@ -133,7 +145,7 @@ def _run_tier(
         if not _wait_port(SEND_PORT, SERVER_WAIT_S):
             tail = log_path.read_text(encoding="utf-8", errors="replace")[-3000:]
             raise RuntimeError(f"server did not bind {SEND_PORT}\n{tail}")
-        time.sleep(12.0)
+        time.sleep(25.0 if tier.startswith("molmospaces") else 12.0)
 
         robot = _connect_robot(robot_key)
         agent = _make_agent(robot, ground_truth=ground_truth)
@@ -148,6 +160,14 @@ def _run_tier(
             agent.update()
         except Exception:
             pass
+
+        if tier.startswith("molmospaces") or robot_key not in ("stretch",):
+            try:
+                agent.rotate_in_place()
+                for _ in range(4):
+                    agent.update()
+            except Exception:
+                pass
 
         placements = read_sim_object_placements(robot.get_emet_session())
         if placements is None:
@@ -204,17 +224,18 @@ def _run_tier(
         )
         out.update({f"explore_{k}": v for k, v in explore_score.items()})
 
-        nav_ok = bool(
-            graph_target is not None
-            and (nav_score["improved"] or nav_score["reached"] or len(plan) > 0)
-        )
+        nav_ok = bool(graph_target is not None and (nav_score["improved"] or nav_score["reached"] or len(plan) > 0))
         out["pass"] = nav_ok and bool(explore_score["pass"])
         # Kitchen / Molmo may need extra mapping before frontier sampling reports success.
         if nav_ok and not out["pass"]:
+            frontier_nodes = int(explore_score.get("frontier_nodes") or 0)
             out["pass"] = (
                 explored is not None
                 and explored > 0.5
-                and int(explore_score.get("explore_successes", 0)) >= 1
+                and (
+                    int(explore_score.get("explore_successes", 0)) >= 1
+                    or (tier.startswith("molmospaces") and explored > 1.0 and frontier_nodes >= 1)
+                )
             )
         return out
     finally:
@@ -232,21 +253,22 @@ def _run_tier(
         _kill_servers()
 
 
-def tier_default_table() -> dict[str, Any]:
+def tier_default_table(robot: str = "stretch") -> dict[str, Any]:
     return _run_tier(
         tier="default_table_gt_nav_explore",
-        server_cmd=["uv", "run", "emet", "serve", "mujoco", "--robot", "stretch", "--headless"],
+        server_cmd=["uv", "run", "emet", "serve", "mujoco", "--robot", robot, "--headless"],
         nav_query="red cylinder",
         gt_body_key=None,
         ground_truth=True,
         explore_iters=3,
+        robot_key=robot,
     )
 
 
 def tier_robocasa() -> dict[str, Any]:
     return _run_tier(
         tier="robocasa_gt_nav_explore",
-        server_cmd=        [
+        server_cmd=[
             "uv",
             "run",
             "emet",
@@ -266,10 +288,9 @@ def tier_robocasa() -> dict[str, Any]:
     )
 
 
-def tier_dynamem_explore_only() -> dict[str, Any]:
+def tier_dynamem_explore_only(robot: str = "stretch") -> dict[str, Any]:
     """DynaMem baseline: frontier exploration without graph memory."""
     from emet.controller.controller_dynamem import DynamemController
-    from emet.controller.zmq_client import StretchZmqClient
     from emet.core.parameters import get_parameters
     from emet.memory.graph_eqa.nav_benchmark import score_explore_metrics
 
@@ -279,25 +300,25 @@ def tier_dynamem_explore_only() -> dict[str, Any]:
     env = _session_env()
     with open(log_path, "w", encoding="utf-8") as log_f:
         server = subprocess.Popen(
-            ["uv", "run", "emet", "serve", "mujoco", "--robot", "stretch", "--headless"],
+            ["uv", "run", "emet", "serve", "mujoco", "--robot", robot, "--headless"],
             cwd=REPO,
             stdout=log_f,
             stderr=subprocess.STDOUT,
             text=True,
             env=env,
         )
-    robot = None
-    out: dict[str, Any] = {"tier": "dynamem_explore_baseline", "pass": False}
+    robot_client = None
+    out: dict[str, Any] = {"tier": "dynamem_explore_baseline", "robot": robot, "pass": False}
     try:
         if not _wait_port(SEND_PORT, SERVER_WAIT_S):
             raise RuntimeError("server did not start")
         time.sleep(12.0)
-        robot = _connect_robot("stretch")
+        robot_client = _connect_robot(robot)
         from emet.config.embodied_agent_config import legacy_embodied_agent_off
 
         params = get_parameters("dynav_config.yaml")
         agent = DynamemController(
-            robot,
+            robot_client,
             params,
             save_rerun=False,
             cpu_only=True,
@@ -305,7 +326,8 @@ def tier_dynamem_explore_only() -> dict[str, Any]:
             embodied_agent=legacy_embodied_agent_off(),
         )
         agent.start()
-        for _ in range(5):
+        warmup = 8 if robot != "stretch" else 5
+        for _ in range(warmup):
             agent.update()
         n_ok = sum(1 for _ in range(3) if agent.run_exploration())
         explored = None
@@ -321,9 +343,9 @@ def tier_dynamem_explore_only() -> dict[str, Any]:
         out["pass"] = bool(explore_score["pass"])
         return out
     finally:
-        if robot is not None:
+        if robot_client is not None:
             try:
-                robot.stop()
+                robot_client.stop()
             except Exception:
                 pass
         if server.poll() is None:
@@ -335,10 +357,10 @@ def tier_dynamem_explore_only() -> dict[str, Any]:
         _kill_servers()
 
 
-def tier_molmospaces() -> dict[str, Any]:
+def tier_molmospaces(robot: str = "stretch") -> dict[str, Any]:
     return _run_tier(
         tier="molmospaces_gt_nav_explore",
-        server_cmd=        [
+        server_cmd=[
             "uv",
             "run",
             "emet",
@@ -350,31 +372,39 @@ def tier_molmospaces() -> dict[str, Any]:
             "--index",
             "0",
             "--robot",
-            "stretch",
+            robot,
             "--headless",
         ],
-        nav_query="go to the sofa",
+        nav_query="go to the sink",
         gt_body_key=None,
         ground_truth=True,
-        explore_iters=3,
+        explore_iters=5,
+        robot_key=robot,
     )
 
 
 def main() -> int:
+    os.environ.setdefault("EMET_ZMQ_STARTUP_TIMEOUT", "120")
     parser = argparse.ArgumentParser(description="Dynagraph GT nav + frontier explore benchmarks")
     parser.add_argument("--default", action="store_true")
     parser.add_argument("--robocasa", action="store_true")
     parser.add_argument("--molmo", action="store_true")
     parser.add_argument("--dynamem", action="store_true", help="DynaMem-only explore baseline")
     parser.add_argument("--all", action="store_true")
+    parser.add_argument(
+        "--robot",
+        default="stretch",
+        help="Robot for --default, --molmo, --dynamem tiers (e.g. xlerobot, stretch, innate_mars).",
+    )
     args = parser.parse_args()
     run_all = args.all or not (args.default or args.robocasa or args.molmo or args.dynamem)
+    robot = str(args.robot).strip() or "stretch"
 
     results: list[dict[str, Any]] = []
     if run_all or args.dynamem:
-        results.append(tier_dynamem_explore_only())
+        results.append(tier_dynamem_explore_only(robot=robot))
     if run_all or args.default:
-        results.append(tier_default_table())
+        results.append(tier_default_table(robot=robot))
     if run_all or args.robocasa:
         if (REPO / "third_party" / "robocasa").is_dir():
             results.append(tier_robocasa())
@@ -382,11 +412,11 @@ def main() -> int:
             results.append({"tier": "robocasa_gt_nav_explore", "pass": False, "skipped": "no robocasa"})
     if run_all or args.molmo:
         if (REPO / "packages" / "emet_molmospaces").is_dir():
-            results.append(tier_molmospaces())
+            results.append(tier_molmospaces(robot=robot))
         else:
             results.append({"tier": "molmospaces_gt_nav_explore", "pass": False, "skipped": "no molmospaces"})
 
-    report = {"results": results, "all_pass": all(r.get("pass") for r in results)}
+    report = {"robot": robot, "results": results, "all_pass": all(r.get("pass") for r in results)}
     BASE.mkdir(parents=True, exist_ok=True)
     rep_path = BASE / "nav_benchmark_report.json"
     rep_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

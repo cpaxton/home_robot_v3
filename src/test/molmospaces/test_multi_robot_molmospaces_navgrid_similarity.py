@@ -51,7 +51,7 @@ def test_multi_robot_molmospaces_navgrid_similarity():
     if build_molmospaces_wrapper_command(["merge-scene", "--help"]) is None:
         pytest.skip("MolmoSpaces wrapper missing")
 
-    robots = ["stretch", "rby1", "innate_mars"]
+    robots = ["stretch", "rby1", "innate_mars", "xlerobot"]
     port_base = max(1, int(os.environ.get("EMET_TIER4_PORT_OFFSET", "110")))
     explore_iters = max(1, int(os.environ.get("EMET_TIER4_EXPLORE_ITERS", "2")))
     min_exp = float(os.environ.get("EMET_NAVGRID_MIN_EXPLORED_IOU", "0.25"))
@@ -87,7 +87,7 @@ def test_multi_robot_molmospaces_navgrid_similarity():
         rasters[robot] = res.world_raster
 
     ref = rasters["stretch"]
-    for robot in ("rby1", "innate_mars"):
+    for robot in ("rby1", "innate_mars", "xlerobot"):
         sim = compare_world_rasters_in_shared_view(ref, rasters[robot])
         assert sim.explored_iou >= min_exp, f"{robot} explored_iou={sim.explored_iou}"
         assert sim.obstacle_iou >= min_obs, f"{robot} obstacle_iou={sim.obstacle_iou}"
