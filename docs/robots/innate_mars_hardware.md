@@ -14,10 +14,10 @@ Use when physical Mars is on the network. Requires [innate-os](https://github.co
 |------|---------|---------------|
 | 1. Topic audit | `uv run python scripts/audit_innate_os_topics.py` | Expected `/mars/*` + `/odom` present |
 | 2. Start bridge | `emet mars start --ip <host> --username jetson1` | ZMQ ports 4401–4404 listening |
-| 3. Camera smoke | `uv run emet capture --robot innate_mars --ip <IP>` (or `preview-cameras --source zmq …`) | Montage + `metadata.json` non-black; optional `--map` for one-frame Rerun map |
+| 3. Camera smoke | `uv run emet capture --robot innate_mars --ip <IP>` (or `preview-cameras --source zmq …`) | Montage + `metadata.json` non-black; optional `--backend voxel_only` for one-frame Rerun map |
 | 4. Live Rerun | `uv run emet stream --robot innate_mars --ip <IP>` | Cameras + MJCF mesh updating in Rerun |
-| 5. Live map | `uv run emet stream --robot innate_mars --ip <IP> --map --dynav-config dynav_innate_mars.yaml` | Voxel map + semantic point cloud growing in Rerun |
-| 6. Live graph | `uv run emet stream --robot innate_mars --ip <IP> --graph --dynav-config dynav_innate_mars.yaml` | Dynagraph scene graph + voxel map in Rerun |
+| 5. Live map | `uv run emet stream --robot innate_mars --ip <IP> --backend dynamem` | Voxel map + semantic point cloud growing in Rerun |
+| 6. Live graph | `uv run emet stream --robot innate_mars --ip <IP> --backend dynagraph` | Dynagraph scene graph + voxel map in Rerun (see [known_issues.md](../known_issues.md) — stationary stream may inflate node count) |
 | 7. DA3 tune | `uv run emet debug-da3-depth --robot innate_mars --robot-ip <IP>` | Depth + point cloud in Rerun; tune `da3_clip_max_m` / sky mask in `dynav_innate_mars.yaml` if needed |
 | 8. Short map | `uv run emet run dynamem --robot innate_mars --robot-ip <IP> --dynav-config dynav_innate_mars.yaml -S` | `world/semantic_memory/pointcloud` grows |
 | 9. Nav probe | Send small `xyt` via dynagraph explore or client; watch base move | `at_goal` true after goal |
@@ -58,7 +58,7 @@ Requires innate-os on the robot: `cd ~/innate-os && innate service start` (inter
   emet mars start --connection herman --deploy --onboard-da3
 
   # Workstation mapping (uses ZMQ depth; no local DA3 load):
-  uv run emet stream --map-only --connection herman
+  uv run emet stream --backend voxel_only --connection herman
   ```
 
   The bridge sets `EMET_MARS_ONBOARD_DA3=1`, runs **DA3-SMALL** stereo on head cameras, and publishes JP2 `depth` on port 4401. With `depth_source: auto`, the workstation **never loads DA3** when depth is present.

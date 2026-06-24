@@ -30,6 +30,19 @@ from emet.visualization.map_snapshot import (
 )
 
 
+def test_world_xy_to_grid_ij_respects_full_shape_when_cropping():
+    """Crop offset math: grid index from full map, then subtract crop origin."""
+    go = np.array([100.0, 100.0])
+    res = 0.05
+    full_shape = (200, 200)
+    i0, j0 = 40, 50
+    xy = np.array([0.0, 0.0], dtype=np.float64)
+    ri, rj = world_xy_to_grid_ij(xy, go, res, full_shape)
+    assert (ri, rj) == (100, 100)
+    assert ri - i0 == 60
+    assert rj - j0 == 50
+
+
 def test_world_xy_to_grid_ij_clamps():
     go = np.array([5.0, 5.0])
     i, j = world_xy_to_grid_ij((0.0, 0.0), go, 0.1, (10, 10))

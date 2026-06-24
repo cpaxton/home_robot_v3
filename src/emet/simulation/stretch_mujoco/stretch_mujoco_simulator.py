@@ -8,6 +8,7 @@
 # license information maybe found below, if so.
 
 import atexit
+import math
 import multiprocessing
 import os
 import platform
@@ -35,6 +36,7 @@ from emet.simulation.stretch_mujoco.datamodels.status_command import (
     CommandCoordinateFrameArrowsViz,
     CommandKeyframe,
     CommandMove,
+    CommandSetJoint,
     CommandTeleportBase,
     CommandTeleportBody,
     StatusCommand,
@@ -566,6 +568,43 @@ class StretchMujocoSimulator:
         ):
             return False
         return bool(self.data_proxies.get_command().teleport_body.ok)
+
+    @require_connection
+    def set_joint_qpos(
+        self,
+        joint: str,
+        value: float,
+        *,
+        wait: bool = True,
+        timeout: float = 2.0,
+    ) -> float | None:
+        """Set qpos of a named scene hinge/slide joint (doors, drawers) in the MuJoCo subprocess.
+
+        Returns the qpos measured on the live model after the write (clamped to the
+        joint range), or ``None`` on failure / when not waiting for the ack.
+        """
+        with self._command_lock:
+            command = self.data_proxies.get_command()
+            command.set_scene_joint(
+                CommandSetJoint(joint=str(joint), value=float(value), trigger=True, ok=False)
+            )
+            self.data_proxies.set_command(command)
+        if not wait:
+            return None
+
+        def _consumed() -> bool:
+            return not self.data_proxies.get_command().set_joint.trigger
+
+        if not block_until_check_succeeds(
+            wait_timeout=timeout,
+            check=_consumed,
+            is_alive=self.is_running,
+        ):
+            return None
+        ack = self.data_proxies.get_command().set_joint
+        if not ack.ok or math.isnan(ack.measured):
+            return None
+        return float(ack.measured)
 
     @require_connection
     def set_base_velocity(self, v_linear: float, omega: float) -> None:

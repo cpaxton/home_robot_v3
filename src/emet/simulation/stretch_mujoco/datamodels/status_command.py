@@ -56,6 +56,18 @@ class CommandTeleportBody:
 
 
 @dataclass
+class CommandSetJoint:
+    """Set qpos of a named scene hinge/slide joint (doors, drawers)."""
+
+    joint: str
+    value: float
+    trigger: bool
+    ok: bool = False
+    measured: float = float("nan")
+    """qpos read back from the live model after the write (NaN until consumed)."""
+
+
+@dataclass
 class CommandKeyframe:
     name: str
     trigger: bool
@@ -81,6 +93,7 @@ class StatusCommand:
     teleport_body: CommandTeleportBody = field(
         default_factory=lambda: CommandTeleportBody("", 0.0, 0.0, 0.0, False, 1.0, 0.0, 0.0, 0.0, False, False)
     )
+    set_joint: CommandSetJoint = field(default_factory=lambda: CommandSetJoint("", 0.0, False, False))
     keyframe: CommandKeyframe = field(default_factory=lambda: CommandKeyframe("", False))
     coordinate_frame_arrows_viz: list[CommandCoordinateFrameArrowsViz] = field(default_factory=list)
 
@@ -128,6 +141,10 @@ class StatusCommand:
     def set_teleport_body(self, command: CommandTeleportBody) -> None:
         """Snap a freejoint body to world XYZ (optional wxyz quat)."""
         self.teleport_body = command
+
+    def set_scene_joint(self, command: CommandSetJoint) -> None:
+        """Set qpos of a named scene hinge/slide joint."""
+        self.set_joint = command
 
     def to_dict(self):
         return asdict(self)

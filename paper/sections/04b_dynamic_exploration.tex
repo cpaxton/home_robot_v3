@@ -1,0 +1,31 @@
+\subsection{Dynamic exploration}
+\label{sec:dynamic_exploration}
+
+Static benchmarks in Section~\ref{sec:experiments} (SQA3D map-at-pose, OVMM map-then-query) do not exercise frontier exploration, graph merge lifecycle, or disappearance when the world changes.
+We evaluate these behaviors in Emet sim on Stretch with nav teleport enabled (\texttt{EMET\_SIM\_NAV\_TELEPORT=1}).
+
+\paragraph{Environments.}
+Robocasa pick-place kitchen (S1; seeds $\{0,1,2\}$) and MolmoSpaces iTHOR train scenes (S2; indices $\{0,1,2\}$).
+Dynagraph profiles follow \texttt{configs/benchmarks/dynagraph.yaml}: \texttt{interactive} (0.45\,m merge, staleness 256) vs.\ \texttt{graph\_eqa\_baseline} (merge/staleness off).
+
+\paragraph{Phase 1: Active exploration.}
+After sim startup the agent runs either rotate-in-place mapping (\texttt{explore\_max\_iters=0}, OVMM-style baseline) or frontier \texttt{explore-loop} with budgets $K \in \{8,15,30\}$.
+Per episode we export graph + voxel memory, score with \texttt{emet eval-dynagraph}, and report explored fraction/area, spatial and label recall, graph size, EQA token accuracy (question bank), and wall time.
+Metrics are \textbf{not comparable} to OVMM FindObj partial success or SQA3D EM@1.
+
+\paragraph{Phase 2: Dynamic world (Robocasa).}
+Scripted relocation of \texttt{obj\_main} via sim ZMQ (\texttt{sim\_set\_body\_pose}, shared with the OVMM full harness), then a short recovery explore ($\leq 5$ frontier steps).
+We measure stale nodes retained, pre/post EQA correctness, recovery steps, and localization error when \texttt{gt\_body\_key} is set.
+Unit-level staleness logic is covered in \texttt{test\_dynagraph\_staleness\_disappearance.py}; Phase~2 lifts this to sim.
+
+\paragraph{Lifelong episodes (checkpoint / fuzz / reload).}
+To test whether Dynagraph can serve as persistent memory for a \emph{lifelong} agent, we run $K$-cycle episodes against a single persistent sim server (Robocasa seed~0 and Molmo iTHOR~0).
+Each cycle runs in a fresh process that reloads the previous checkpoint --- graph nodes with their staleness state (\texttt{last\_seen}, observation counts, 3D extents), the voxel map (\texttt{voxel\_map.pkl}), and the controller step counter --- explores briefly (full budget on cycle~0, a reduced re-observe budget after), answers the cycle's questions, and exports the next checkpoint.
+Between cycles the world is fuzzed over ZMQ: objects are teleported (\texttt{sim\_set\_body\_pose}) and cabinet doors are opened or closed via a joint-level action (\texttt{sim\_set\_joint\_qpos}); applied moves are verified against live ground-truth placements.
+EQA answers are scored against the \emph{live} world state each cycle, since correct answers legitimately change as objects move.
+Per cycle we report EQA accuracy, graph size, and per-move adaptation: whether the memory acquires a node near the object's new location (\emph{adapted}) and whether a stale node lingers at the old one (\emph{stale}), within a 0.75\,m match radius.
+
+\paragraph{Known limits.}
+No real manipulation; Molmo GT scan caps; Stretch-only v1; Phase~2 Molmo deferred until manipulable object API is stable.
+
+Results: Table~\ref{tab:dynamic_explore_phase1}, Table~\ref{tab:dynamic_explore_world_change}, and Table~\ref{tab:dynamic_explore_lifelong}.

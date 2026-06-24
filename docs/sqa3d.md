@@ -25,6 +25,8 @@ This repo provides **dataset loaders**, **EM@1 scoring** (official QA metric), *
 | Score batch JSONL | `uv run emet eval-sqa3d -p /tmp/sqa3d_batch.jsonl` (auto-detects episode format) |
 | Paper figures (TP/FP/FN) | `uv run emet sqa3d plot-results -p /tmp/sqa3d_batch.jsonl -o /tmp/sqa3d_figs` |
 | Real VLM sweep | `uv run emet sqa3d run-real-sweep --question-start 0 --question-end 30 --replay-mode sens --no-download` |
+| Multi-GPU full split | `./scripts/run_sqa3d_sharded_sweep.sh --split val --method dynagraph --all --gpus 0,1,2,3` |
+| Large paper queue (SQA3D phase) | `SQA3D_GPUS=0,1,2,3 ./scripts/run_large_paper_eval.sh sqa3d-val` |
 | GPU preflight sweep | `./scripts/run_sqa3d_gpu_sweep.sh --split val --question-start 0 --question-end 30 --replay-mode sens` |
 
 CLI reference: [cli.md](cli.md#emet-sqa3d-subcommand).
@@ -166,8 +168,9 @@ uv run emet sqa3d run-batch --split train --question-start 0 --question-end 50 -
 |---------|-----|------------------------------|-------------|
 | `run-batch` | mock or real (`--profile`) | **off** (single process, faster if GPU is dedicated) | CI smoke, dev slices |
 | `run-real-sweep` | real (`tuned`) | **on** (subprocess per episode) | Paper numbers on one GPU |
+| `run_sqa3d_sharded_sweep.sh` | real (`tuned`) | **on** by default | Full split across multiple GPUs |
 
-For real VLM on a shared or tight GPU, prefer `run-real-sweep` or `run-batch --isolate-episodes`. See [sqa3d_compute.md](sqa3d_compute.md).
+For real VLM on a shared or tight GPU, prefer `run-real-sweep` or `run-batch --isolate-episodes`. For **full val/test splits**, use multi-GPU sharding ([sqa3d_compute.md](sqa3d_compute.md)) instead of weeks on one GPU.
 
 ```bash
 # Real-VLM batch with GPU isolation (same as run-real-sweep without auto-eval)

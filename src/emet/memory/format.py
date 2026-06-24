@@ -27,6 +27,7 @@ import numpy as np
 MEMORY_FORMAT_VERSION = 1
 MANIFEST_FILENAME = "manifest.json"
 POINT_CLOUD_FILENAME = "point_cloud.npz"
+VOXEL_PICKLE_FILENAME = "voxel_map.pkl"
 FRAMES_FILENAME = "frames.pkl"
 FRAMES_DIR = "frames"
 FRAME_RGB_FILENAME = "rgb.png"  # legacy per-subdirectory name
@@ -84,6 +85,9 @@ class GraphNodeView:
     extent_half: list[float] | None = None
     bounds: list[list[float]] | None = None
     detection_label: str | None = None
+    last_seen: int | None = None  # graph timestep when last observed (staleness)
+    support_count: int | None = None
+    is_viewpoint: bool = False
 
 
 @dataclass
@@ -136,6 +140,10 @@ class MemoryManifest:
     has_sim_gt: bool = False
     sim_gt_placements_file: str | None = None
     has_gt_associations: bool = False
+    # Controller observation step at save time; restored as obs_count / graph timestep so
+    # staleness pruning does not drop reloaded nodes (lifelong checkpoint resume).
+    final_step: int | None = None
+    has_voxel_pickle: bool = False  # voxel_map.pkl alongside (SparseVoxelMapDynamem.write_to_pickle)
 
 
 @dataclass
@@ -385,6 +393,13 @@ def save_memory(state: MemoryState, path: str) -> None:
                     **({"extent_half": n.extent_half} if getattr(n, "extent_half", None) else {}),
                     **({"bounds": n.bounds} if getattr(n, "bounds", None) else {}),
                     **({"detection_label": n.detection_label} if getattr(n, "detection_label", None) else {}),
+                    **({"last_seen": int(n.last_seen)} if getattr(n, "last_seen", None) is not None else {}),
+                    **(
+                        {"support_count": int(n.support_count)}
+                        if getattr(n, "support_count", None) is not None
+                        else {}
+                    ),
+                    **({"is_viewpoint": True} if getattr(n, "is_viewpoint", False) else {}),
                 }
                 for n in state.graph.nodes
             ],

@@ -79,6 +79,9 @@ src/emet/mapping/instance/__pycache__/
 # Local graph / explore scratch output (not committed)
 test_graph_out/
 
+# Local capture / eval scratch at repo root (default emet capture --out-dir)
+runs/
+
 # Scrapy stuff:
 .scrapy
 

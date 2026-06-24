@@ -1,13 +1,28 @@
 #!/usr/bin/env bash
-# Large paper eval: full SQA3D (val+test, dynamem+dynagraph) + OVMM find-phase ladder.
+# Large paper eval: full SQA3D (val+test, dynamem+dynagraph) + OVMM find-phase ladder
+# + optional dynamic exploration matrix (Stretch, Robocasa + Molmo).
 #
-# GPU jobs run sequentially (one VLM/isolated-episode sweep at a time).
+# SQA3D defaults to one GPU per sweep; use SQA3D_GPUS for multi-GPU sharding (~linear speedup).
 # Logs: ~/runs/emet/large_eval/<phase>.log
 #
 # Usage:
-#   ./scripts/run_large_paper_eval.sh              # full queue
-#   ./scripts/run_large_paper_eval.sh sqa3d-val    # one phase
-#   ./scripts/run_large_paper_eval.sh ovmm         # OVMM only (after SQA3D or standalone)
+#   ./scripts/run_large_paper_eval.sh                    # full queue
+#   ./scripts/run_large_paper_eval.sh sqa3d-val          # one phase
+#   ./scripts/run_large_paper_eval.sh ovmm               # OVMM find only
+#   ./scripts/run_large_paper_eval.sh dynamic-explore    # dynamic exploration only
+#
+# Speed knobs (see docs/paper_benchmarks.md):
+#   SQA3D_GPUS=0,1,2,3          shard each sweep across GPUs (~4× faster on SQA3D)
+#   SQA3D_NO_ISOLATE=1          in-process batch (2–3× faster; OOM risk on long runs)
+#   SKIP_SQA3D_TEST=1           val only (halves SQA3D wall time)
+#   SQA3D_METHODS=dynagraph      one method (halves SQA3D vs dynamem+dynagraph)
+#   SKIP_OVMM=1  SKIP_DYNAMIC_EXPLORE=1
+#   OVMM_CPU_ONLY=1             run OVMM on CPU while GPU runs SQA3D (overlap in 2 terminals)
+#
+# Rough wall-clock (resume on):
+#   1 GPU + isolate (default)     ~22–38 days total
+#   4 GPU + isolate               ~6–11 days total
+#   4 GPU + no-isolate            ~3–6 days total (monitor VRAM)
 #
 set -euo pipefail
 
@@ -15,34 +30,63 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
 
 export MUJOCO_GL=egl
+export EMET_SIM_NAV_TELEPORT=1
+export EMET_ZMQ_STARTUP_TIMEOUT=120
 export PATH="${HOME}/.local/bin:${PATH}"
 
 STAMP="$(date +%Y%m%d_%H%M)"
 LOG_DIR="${EMET_LARGE_EVAL_LOG_DIR:-$HOME/runs/emet/large_eval}"
 SQA3D_OUT="${EMET_SQA3D_OUTPUT:-$HOME/runs/emet/sqa3d}"
 OVMM_OUT="${EMET_OVMM_OUTPUT_SIM:-$HOME/runs/emet/ovmm_find_phase}/large_${STAMP}"
+DYNAMIC_EXPLORE_BASE="${EMET_DYNAMIC_EXPLORE_OUTPUT:-$HOME/runs/emet/dynamic_exploration}"
+DYNAMIC_EXPLORE_OUT="$DYNAMIC_EXPLORE_BASE"
 
 mkdir -p "$LOG_DIR" "$SQA3D_OUT" "$OVMM_OUT"
 
 log() { echo "[$(date -Is)] $*" | tee -a "$LOG_DIR/master.log"; }
+
+_sqa3d_methods() {
+  if [[ -n "${SQA3D_METHODS:-}" ]]; then
+    echo "$SQA3D_METHODS"
+  else
+    echo "dynagraph dynamem"
+  fi
+}
 
 run_sqa3d_sweep() {
   local split="$1"
   local method="$2"
   local phase="sqa3d_${split}_${method}"
   local logfile="$LOG_DIR/${phase}.log"
-  log "START $phase (split=$split method=$method)"
+  local isolate_extra=()
+  [[ "${SQA3D_NO_ISOLATE:-0}" == "1" ]] && isolate_extra=(--no-isolate-episodes)
+  log "START $phase (split=$split method=$method gpus=${SQA3D_GPUS:-0} isolate=$([[ ${SQA3D_NO_ISOLATE:-0} == 1 ]] && echo 0 || echo 1))"
   {
     echo "=== $phase start $(date -Is) ==="
-    uv run emet sqa3d run-real-sweep \
-      --all \
-      --split "$split" \
-      --method "$method" \
-      --no-download \
-      --resume \
-      --replay-mode auto \
-      --isolate-episodes \
-      --output-dir "$SQA3D_OUT"
+    if [[ -n "${SQA3D_GPUS:-}" ]]; then
+      ./scripts/run_sqa3d_sharded_sweep.sh \
+        --split "$split" \
+        --method "$method" \
+        --all \
+        --gpus "$SQA3D_GPUS" \
+        --output-dir "$SQA3D_OUT" \
+        --replay-mode auto \
+        --log-dir "$LOG_DIR/${phase}_shards" \
+        "${isolate_extra[@]}" \
+        --no-download
+    else
+      local isolate_cli=(--isolate-episodes)
+      [[ "${SQA3D_NO_ISOLATE:-0}" == "1" ]] && isolate_cli=(--no-isolate-episodes)
+      uv run emet sqa3d run-real-sweep \
+        --all \
+        --split "$split" \
+        --method "$method" \
+        --no-download \
+        --resume \
+        --replay-mode auto \
+        "${isolate_cli[@]}" \
+        --output-dir "$SQA3D_OUT"
+    fi
     echo "=== $phase done $(date -Is) exit=0 ==="
   } >>"$logfile" 2>&1
   log "DONE $phase"
@@ -117,6 +161,38 @@ run_ovmm_ladder() {
   log "DONE OVMM → $OVMM_OUT/replicates/aggregate_replicates.json"
 }
 
+run_dynamic_exploration() {
+  local logfile="$LOG_DIR/dynamic_exploration.log"
+  local cpu_flag=()
+  if [[ "${DYNAMIC_EXPLORE_CPU_ONLY:-0}" == "1" ]]; then
+    cpu_flag=(--cpu-only)
+    log "Dynamic exploration using --cpu-only"
+  fi
+  log "START dynamic exploration (48 Phase-1 + 2 Phase-2 runs; Stretch)"
+  {
+    echo "=== dynamic explore Phase 1 start $(date -Is) output=$DYNAMIC_EXPLORE_OUT ==="
+    uv run python scripts/eval_dynamic_exploration.py \
+      --phase explore \
+      --env all \
+      --backend dynagraph \
+      --backend graph_eqa \
+      --mapping-mode both \
+      --resume \
+      --output-dir "$DYNAMIC_EXPLORE_OUT" \
+      "${cpu_flag[@]}"
+    echo "=== dynamic explore Phase 2 start $(date -Is) ==="
+    uv run python scripts/eval_dynamic_exploration.py \
+      --phase world-change \
+      --backend dynagraph \
+      --backend graph_eqa \
+      --resume \
+      --output-dir "$DYNAMIC_EXPLORE_OUT" \
+      "${cpu_flag[@]}"
+    echo "=== dynamic explore done $(date -Is) exit=0 ==="
+  } >>"$logfile" 2>&1
+  log "DONE dynamic exploration → $DYNAMIC_EXPLORE_OUT/aggregate_dynamic_exploration.csv"
+}
+
 restart_val_dynagraph_if_partial() {
   local jsonl="$SQA3D_OUT/dynagraph_val_q0-3261.jsonl"
   local n_done=0
@@ -134,11 +210,17 @@ restart_val_dynagraph_if_partial() {
 
 run_sqa3d_track() {
   restart_val_dynagraph_if_partial
-  run_sqa3d_sweep val dynagraph
-  run_sqa3d_sweep val dynamem
-  wait_test_scannet
-  run_sqa3d_sweep test dynagraph
-  run_sqa3d_sweep test dynamem
+  for method in $(_sqa3d_methods); do
+    run_sqa3d_sweep val "$method"
+  done
+  if [[ "${SKIP_SQA3D_TEST:-0}" != "1" ]]; then
+    wait_test_scannet
+    for method in $(_sqa3d_methods); do
+      run_sqa3d_sweep test "$method"
+    done
+  else
+    log "SKIP_SQA3D_TEST=1 — skipping test split sweeps"
+  fi
   aggregate_sqa3d
 }
 
@@ -146,33 +228,45 @@ PHASE="${1:-all}"
 
 case "$PHASE" in
   all)
+    DYNAMIC_EXPLORE_OUT="${DYNAMIC_EXPLORE_BASE}/large_${STAMP}"
+    mkdir -p "$DYNAMIC_EXPLORE_OUT"
     log "=== Large paper eval START (phase=all) ==="
-    log "SQA3D out=$SQA3D_OUT  OVMM out=$OVMM_OUT  logs=$LOG_DIR"
+    log "SQA3D out=$SQA3D_OUT  OVMM out=$OVMM_OUT  dynamic=$DYNAMIC_EXPLORE_OUT  logs=$LOG_DIR"
     run_sqa3d_track
     if [[ "${SKIP_OVMM:-0}" != "1" ]]; then
       run_ovmm_ladder
+    fi
+    if [[ "${SKIP_DYNAMIC_EXPLORE:-0}" != "1" ]]; then
+      run_dynamic_exploration
     fi
     log "=== Large paper eval COMPLETE ==="
     ;;
   sqa3d-val)
     restart_val_dynagraph_if_partial
-    run_sqa3d_sweep val dynagraph
-    run_sqa3d_sweep val dynamem
+    for method in $(_sqa3d_methods); do
+      run_sqa3d_sweep val "$method"
+    done
     ;;
   sqa3d-test)
     wait_test_scannet
-    run_sqa3d_sweep test dynagraph
-    run_sqa3d_sweep test dynamem
+    for method in $(_sqa3d_methods); do
+      run_sqa3d_sweep test "$method"
+    done
     aggregate_sqa3d
     ;;
   ovmm)
     run_ovmm_ladder
     ;;
+  dynamic-explore)
+    DYNAMIC_EXPLORE_OUT="$DYNAMIC_EXPLORE_BASE"
+    mkdir -p "$DYNAMIC_EXPLORE_OUT"
+    run_dynamic_exploration
+    ;;
   aggregate)
     aggregate_sqa3d
     ;;
   *)
-    echo "Unknown phase: $PHASE (use: all | sqa3d-val | sqa3d-test | ovmm | aggregate)" >&2
+    echo "Unknown phase: $PHASE (use: all | sqa3d-val | sqa3d-test | ovmm | dynamic-explore | aggregate)" >&2
     exit 1
     ;;
 esac

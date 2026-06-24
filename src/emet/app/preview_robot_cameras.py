@@ -27,8 +27,10 @@ import cv2
 import mujoco
 import numpy as np
 import zmq
+from click.core import ParameterSource
 
 import emet.utils.compression as compression
+from emet.app.zmq_cli_resolve import resolve_cli_host, resolve_cli_robot
 from emet.robots import get_robot_spec
 from emet.simulation.mujoco_server import _load_default_scene_with_robot
 from emet.utils.connection import get_host_from_connection
@@ -387,6 +389,7 @@ def _zmq_frames(robot_key: str, host: str, recv_port: int, timeout_ms: int, max_
     help="Render merged default scene MJCF locally, or grab one observation over ZMQ",
 )
 @click.option("--robot-ip", "--robot_ip", "robot_ip", default="", help="ZMQ host (default: active connection)")
+@click.option("--connection", "-c", "connection_name", default=None, help="Saved connection profile (host/robot)")
 @click.option(
     "--recv-port",
     "recv_port",
@@ -443,10 +446,13 @@ def _zmq_frames(robot_key: str, host: str, recv_port: int, timeout_ms: int, max_
 @click.option("--nod-arm-low", "nod_arm_low", type=float, default=-0.2, show_default=True)
 @click.option("--nod-arm-high", "nod_arm_high", type=float, default=0.2, show_default=True)
 @click.option("--nod-fps", "nod_fps", type=float, default=12.0, show_default=True)
+@click.pass_context
 def main(
+    ctx: click.Context,
     robot_key: str,
     source: str,
     robot_ip: str,
+    connection_name: str | None,
     recv_port: int,
     timeout_ms: int,
     max_cams: int,
@@ -477,7 +483,7 @@ def main(
 
         emet preview-cameras
 
-        emet preview-cameras --source zmq --robot-ip 192.168.1.43
+        emet preview-cameras --source zmq --connection herman
 
         emet preview-cameras --discord --caption "mars cams smoke test"
 
@@ -485,7 +491,9 @@ def main(
 
         emet preview-cameras --nod --nod-arm --nod-out-dir ./nod_run --nod-frames 31
     """
-    robot_key_norm = _normalized_robot_key(robot_key)
+    ip_from_default = ctx.get_parameter_source("robot_ip") == ParameterSource.DEFAULT
+    robot_from_default = ctx.get_parameter_source("robot") == ParameterSource.DEFAULT
+    robot_key_norm = resolve_cli_robot(robot_key, connection_name, robot_from_default=robot_from_default)
 
     try:
         if nod:
@@ -534,7 +542,7 @@ def main(
         if source == "local":
             imgs, labels = _local_frames(robot_key_norm, max_cams)
         else:
-            host = _robot_host(robot_ip)
+            host = resolve_cli_host(robot_ip, connection_name, ip_from_default=ip_from_default)
             imgs, labels = _zmq_frames(robot_key_norm, host, recv_port, timeout_ms, max_cams)
 
         montage = build_montage(imgs, labels, row_height=row_height)

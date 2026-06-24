@@ -11,15 +11,6 @@
 # All rights reserved.
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source code tree.
-#
-# Some code may be adapted from other open-source works with their respective licenses. Original
-# license information maybe found below, if so.
-
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 
 """Shared keys and helpers for MuJoCo ZMQ sim ↔ agent messages."""
@@ -38,12 +29,18 @@ CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION = 1
 
 # Optional sim introspection: client sends ``{EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY: {...}}``.
 EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY = "mujoco_ground_truth_dump"
-# Sim OVMM full task: teleport a freejoint object body (pick/place proxy in MuJoCo).
+# Sim OVMM full task / benchmarks: teleport a freejoint object body (pick/place proxy in MuJoCo).
 EMET_ACTION_SIM_SET_BODY_POSE_KEY = "sim_set_body_pose"
+# Dynamic-world benchmarks: set a named scene hinge/slide joint (e.g. Robocasa cabinet door).
+EMET_ACTION_SIM_SET_JOINT_QPOS_KEY = "sim_set_joint_qpos"
 
 # ZMQ recv actions that must bypass duplicate ``step`` filtering (see ``BaseZmqServer.spin_recv``).
 EMET_ZMQ_META_ACTION_KEYS: frozenset[str] = frozenset(
-    {EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY, EMET_ACTION_SIM_SET_BODY_POSE_KEY}
+    {
+        EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY,
+        EMET_ACTION_SIM_SET_BODY_POSE_KEY,
+        EMET_ACTION_SIM_SET_JOINT_QPOS_KEY,
+    }
 )
 
 
@@ -87,6 +84,11 @@ def build_sim_set_body_pose_action(
         payload["quat"] = [float(x) for x in quat[:4]]
     return {"step": int(step), EMET_ACTION_SIM_SET_BODY_POSE_KEY: payload}
 
+
+def build_sim_set_joint_qpos_action(step: int, joint: str, value: float) -> dict[str, Any]:
+    """Build recv action to set a named scene hinge/slide joint qpos (doors, drawers)."""
+    payload: dict[str, Any] = {"joint": str(joint), "value": float(value)}
+    return {"step": int(step), EMET_ACTION_SIM_SET_JOINT_QPOS_KEY: payload}
 
 # Normalized ids that count as Hello Stretch for StretchZmqClient.
 _STRETCH_FAMILY = frozenset({"stretch", "hello_stretch", "hellostretch"})

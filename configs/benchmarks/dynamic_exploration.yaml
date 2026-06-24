@@ -1,0 +1,113 @@
+# Dynamic exploration benchmark (Robocasa S1 + MolmoSpaces iTHOR S2, Stretch).
+# Batch: scripts/eval_dynamic_exploration.py
+# Docs: docs/dynamic_exploration_benchmark.md
+
+paths:
+  output_dir: ~/runs/emet/dynamic_exploration
+
+questions:
+  yaml: src/emet/config/benchmarks/dynagraph_questions.yaml
+
+profiles:
+  dynagraph: interactive
+  graph_eqa: graph_eqa_baseline
+
+explore_budgets: [8, 15, 30]
+
+# Phase 2 recovery explore after scripted object relocation.
+world_change:
+  recovery_explore_iters: 4
+  relocate_body: obj_main
+
+episodes:
+  - id: robocasa_seed0
+    env: robocasa
+    sim: configs/sim/robocasa_pick_place_stretch.yaml
+    question_env: robocasa_seed0
+    seed: 0
+
+  - id: robocasa_seed1
+    env: robocasa
+    sim: configs/sim/robocasa_pick_place_stretch.yaml
+    question_env: robocasa_seed1
+    seed: 1
+
+  - id: robocasa_seed2
+    env: robocasa
+    sim: configs/sim/robocasa_pick_place_stretch.yaml
+    question_env: robocasa_seed2
+    seed: 2
+
+  - id: molmo_ithor0
+    env: molmospaces
+    sim: configs/sim/molmospaces_ithor_train_stretch_0.yaml
+    question_env: molmospaces_ithor0
+    molmo_index: 0
+
+  - id: molmo_ithor1
+    env: molmospaces
+    sim: configs/sim/molmospaces_ithor_train_stretch_1.yaml
+    question_env: molmospaces_ithor1
+    molmo_index: 1
+
+  - id: molmo_ithor2
+    env: molmospaces
+    sim: configs/sim/molmospaces_ithor_train_stretch_2.yaml
+    question_env: molmospaces_ithor2
+    molmo_index: 2
+
+world_change_episodes:
+  - id: robocasa_seed0_world_change
+    episode_id: robocasa_seed0
+    question_env: robocasa_seed0_world_change
+    relocate_body: obj_main
+
+# Lifelong (K-cycle) episodes: explore + answer -> save checkpoint -> fuzz the world ->
+# reload checkpoint in a fresh process -> re-observe -> answer again.
+# `questions` is one list (reused every cycle) or a list of per-cycle lists.
+# `changes[t]` is applied after cycle t's checkpoint: `moves` use sim_set_body_pose
+# (freejoint bodies), `doors` use sim_set_joint_qpos (hinge/slide joints).
+# See docs/dynamic_exploration_benchmark.md (lifelong section).
+lifelong:
+  explore_iters_first: 12
+  explore_iters_resume: 4
+  episodes:
+    - id: robocasa_seed0_lifelong
+      episode_id: robocasa_seed0
+      cycles: 3
+      questions:
+        - question: "Where in the kitchen is the small loose object that is not part of any fixture?"
+          gt_body_key: obj_main
+      changes:
+        # Joint names from the seed-0 PickPlaceCounterToCabinet kitchen (layout 1, style 1);
+        # rightdoorhinge range is [0, 3] rad (0 = closed).
+        - moves:
+            - {body: obj_main, delta: [1.5, 0.5, 0.0]}
+          doors:
+            - {joint: cab_main_main_group_rightdoorhinge, value: 1.5}
+        - moves:
+            - {body: obj_main, delta: [-2.0, -0.5, 0.0]}
+          doors:
+            - {joint: cab_main_main_group_rightdoorhinge, value: 0.0}
+
+    - id: molmo_ithor0_lifelong
+      episode_id: molmo_ithor0
+      cycles: 3
+      questions:
+        - question: "Where is the vase?"
+          gt_body_key: vase_177d512e3a9fe64690d3df0c325413fe_1_0_0
+      changes:
+        - moves:
+            - {body: vase_177d512e3a9fe64690d3df0c325413fe_1_0_0, delta: [0.8, 0.5, 0.0]}
+          doors:
+            - {joint: cabinet_9ec3f0517bfaa6873677305ad67285c7_1_1_0_joint_0, value: 1.2}
+        - moves:
+            - {body: vase_177d512e3a9fe64690d3df0c325413fe_1_0_0, delta: [-0.5, -0.8, 0.0]}
+          doors:
+            - {joint: cabinet_9ec3f0517bfaa6873677305ad67285c7_1_1_0_joint_0, value: 0.0}
+
+smoke:
+  episode_id: robocasa_seed0
+  backend: dynagraph
+  explore_max_iters: 3
+  mapping_mode: explore

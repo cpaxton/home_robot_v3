@@ -397,6 +397,7 @@ def main(
                 layout=robocasa_layout,
                 write_to_file=scene_path,
                 robot=robot,
+                seed=int(seed) if seed is not None else None,
             )
         except FileNotFoundError as e:
             _complete, basic_ok, layout_ok, lw_ok, obj_ok = diagnose_robocasa_assets()
