@@ -86,12 +86,16 @@ def _apply_method_parameters(parameters: Parameters | dict, method: str) -> Para
         params = Parameters(**parameters)
     else:
         params = parameters
-    # HM-EQA episodes are short (~20 planning steps). Use identical graph-memory
-    # settings so Dynagraph is a same-stack regression check vs GraphEQA, not a
-    # competing merge/staleness config (those apply on long real-robot runs).
+    # HM-EQA episodes are short (~20 planning steps). Keep merge/staleness at 0 so
+    # Dynagraph is a same-stack regression check vs GraphEQA, but enable fusion
+    # fallback dedup so HM3D instance labels do not explode the graph each frame.
     if method in ("graph_eqa", "dynagraph"):
         params["dynagraph_merge_xy_m"] = 0.0
         params["dynagraph_staleness_horizon"] = 0
+        if method == "dynagraph":
+            from emet.eval.benchmark_dynagraph import apply_eval_graph_fusion_parameters
+
+            apply_eval_graph_fusion_parameters(params, merge_xy_m=0.0)
     else:
         raise ValueError(f"Unknown method {method!r}; use graph_eqa or dynagraph")
     return params
@@ -290,6 +294,14 @@ def run_hmeqa_episode(
             agent.update()
             if agent.graph_memory is not None and hasattr(agent, "_sync_graph_frontier_nodes"):
                 agent._sync_graph_frontier_nodes()
+
+        from emet.eval.dynagraph_vram import prepare_dynagraph_vram_for_eqa
+        from emet.memory.graph_eqa.graph_stats import format_graph_node_breakdown
+
+        if method == "dynagraph":
+            prepare_dynagraph_vram_for_eqa(agent)
+        if agent.graph_memory is not None:
+            print(format_graph_node_breakdown(agent.graph_memory), flush=True)
 
         discord_text, _images = agent.run_eqa(
             q.question_formatted,

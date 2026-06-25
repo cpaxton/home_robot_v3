@@ -36,6 +36,10 @@ class SQA3DEpisodeMetrics:
     replay_mode: str = ""
     question_type: str = ""
     export_dir: str = ""
+    graph_nodes: int = 0
+    graph_object_nodes: int = 0
+    graph_viewpoint_nodes: int = 0
+    graph_frontier_nodes: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -74,8 +78,14 @@ def format_sqa3d_episode_line(episode: SQA3DEpisodeMetrics) -> str:
     else:
         tag = "miss"
     pred = (episode.predicted_answer or "")[:80]
+    graph = ""
+    if episode.graph_nodes:
+        graph = (
+            f" graph={episode.graph_object_nodes}obj/"
+            f"{episode.graph_viewpoint_nodes}vp/{episode.graph_frontier_nodes}fr"
+        )
     return (
-        f"question_id={episode.question_id} {tag} "
+        f"question_id={episode.question_id} {tag}{graph} "
         f"predicted={pred!r} gold={episode.gold_answers}"
     )
 

@@ -26,12 +26,15 @@ from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.controller_dynamem import DynamemController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import Parameters, get_parameters
+from emet.eval.dynagraph_vram import prepare_dynagraph_vram_for_eqa, release_gpu_memory
 from emet.eval.episode_diagnostics import (
     EpisodeDiagnosticsRecorder,
     bind_diagnostics_recorder,
     unbind_diagnostics_recorder,
 )
 from emet.eval.memory_backends import SQA3D_MEMORY_BACKEND
+
+from emet.memory.graph_eqa.graph_stats import format_graph_node_breakdown, graph_node_breakdown
 
 SQA3DMethod = SQA3D_MEMORY_BACKEND
 SQA3DProfile = Literal["smoke", "tuned"]
@@ -44,19 +47,7 @@ _EQA_ANSWER_RE = re.compile(
 
 
 def _release_gpu_memory() -> None:
-    try:
-        import gc
-
-        gc.collect()
-        import torch
-
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-            torch.cuda.empty_cache()
-            if hasattr(torch.cuda, "ipc_collect"):
-                torch.cuda.ipc_collect()
-    except Exception:
-        pass
+    release_gpu_memory()
 
 
 def _teardown_agent(agent: object | None) -> None:
@@ -297,21 +288,7 @@ def _run_dynamem_eqa(
 
 
 def _prepare_dynagraph_vram_for_eqa(agent: DynamemController) -> None:
-    """Drop SigLIP / navigation caches so GraphEQA VLM forward has headroom."""
-    from emet.perception.encoders.siglip_encoder import release_shared_mask_siglip_encoder
-
-    release_shared_mask_siglip_encoder()
-    agent.encoder = None
-    vm = getattr(agent, "voxel_map", None)
-    if vm is not None:
-        vm.encoder = None
-    _release_gpu_memory()
-    try:
-        from emet.llms.graph_eqa_vlm import trim_shared_graph_eqa_vlm_cache
-
-        trim_shared_graph_eqa_vlm_cache()
-    except Exception:
-        pass
+    prepare_dynagraph_vram_for_eqa(agent)
 
 
 def _run_dynagraph_eqa(
@@ -366,6 +343,10 @@ def _score_episode(
     profile: SQA3DProfile = "smoke",
     replay_mode: ScanNetReplayMode = "auto",
     export_dir: str = "",
+    graph_nodes: int = 0,
+    graph_object_nodes: int = 0,
+    graph_viewpoint_nodes: int = 0,
+    graph_frontier_nodes: int = 0,
 ) -> SQA3DEpisodeMetrics:
     pred_clean = clean_answer(predicted)
     gts = [clean_answer(a) for a in q.answers if a.strip()]
@@ -395,6 +376,10 @@ def _score_episode(
         replay_mode=replay_mode,
         question_type=str(getattr(q, "question_type", "") or ""),
         export_dir=export_dir,
+        graph_nodes=graph_nodes,
+        graph_object_nodes=graph_object_nodes,
+        graph_viewpoint_nodes=graph_viewpoint_nodes,
+        graph_frontier_nodes=graph_frontier_nodes,
     )
 
 
@@ -510,6 +495,10 @@ def run_sqa3d_episode(
             )
             export_dir = str(ep_path)
 
+        graph_stats = graph_node_breakdown(getattr(agent, "graph_memory", None))
+        if method == "dynagraph" and graph_stats["total"]:
+            print(format_graph_node_breakdown(agent.graph_memory), flush=True)
+
         return _score_episode(
             q,
             method=method,
@@ -522,6 +511,10 @@ def run_sqa3d_episode(
             profile=prof,
             replay_mode=replay_mode,
             export_dir=export_dir,
+            graph_nodes=graph_stats["total"],
+            graph_object_nodes=graph_stats["object"],
+            graph_viewpoint_nodes=graph_stats["viewpoint"],
+            graph_frontier_nodes=graph_stats["frontier"],
             **replay_meta,
         )
     finally:

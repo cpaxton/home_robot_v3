@@ -151,12 +151,34 @@ def update_graph_memory_from_dynamem_observation(
 
         items = hm3d_instance_items_from_obs(labeler, obs)
         if items:
-            apply_instance_items_to_graph(
-                graph_memory,
-                rgb,
-                items,
-                dedup_skips=dedup_skips or (lambda _l, _x: False),
+            fusion_enabled = graph_object_fusion is not None and getattr(
+                getattr(graph_object_fusion, "config", None),
+                "enabled",
+                False,
             )
+            if fusion_enabled:
+                crop_rgb = np.asarray(rgb)
+                for label, xyz_item, bbox in items:
+                    cand = _detection_to_candidate(
+                        {
+                            "label": str(label),
+                            "xyz": np.asarray(xyz_item, dtype=np.float64),
+                            "bbox_xyxy": bbox,
+                        }
+                    )
+                    graph_object_fusion.apply_detection(
+                        graph_memory,
+                        crop_rgb,
+                        cand,
+                        viewer_xyz=viewer_xyz,
+                    )
+            else:
+                apply_instance_items_to_graph(
+                    graph_memory,
+                    rgb,
+                    items,
+                    dedup_skips=dedup_skips or (lambda _l, _x: False),
+                )
             return
         hm3d_labels = labeler.labels_from_frame(obs.semantic, obs.depth)
         if hm3d_labels and sensor_builder is not None:
