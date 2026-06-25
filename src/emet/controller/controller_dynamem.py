@@ -819,7 +819,7 @@ class DynamemController(BaseController):
                 self.voxel_map.semantic_memory._rgb.detach().cpu() / 255.0,
                 0.03,
             )
-        if self.use_scene_graph and self.voxel_map.use_instance_memory:
+        if self.use_scene_graph and self.voxel_map.use_instance_memory and self.graph_memory is None:
             instances = self.get_voxel_map().get_instances()
             if instances:
                 self._update_scene_graph()
@@ -866,9 +866,9 @@ class DynamemController(BaseController):
         if self.graph_memory is not None:
             self._sync_graph_frontier_nodes()
 
-        # Visualize open-vocab scene graph if attached
+        # Visualize open-vocab scene graph if attached (dynagraph uses graph_memory instead).
         ovsg = self.voxel_map.get_scene_graph()
-        if ovsg is not None and ovsg.num_objects > 0:
+        if ovsg is not None and ovsg.num_objects > 0 and self.graph_memory is None:
             self.rerun_visualizer.update_open_vocab_scene_graph(ovsg)
 
         self._rerun_refresh_monologue_panel()
