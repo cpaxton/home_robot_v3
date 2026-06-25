@@ -178,17 +178,29 @@ def update_graph_memory_from_dynamem_observation(
         desc = None
         xyz = np.array(obs.camera_pose[:3, 3], dtype=float)
 
-    fusion_cfg = getattr(getattr(graph_object_fusion, "config", None), "enabled", False)
-    if fusion_cfg:
-        dedup = None
-    else:
-        dedup = dedup_skips
+    fusion_enabled = graph_object_fusion is not None and getattr(
+        getattr(graph_object_fusion, "config", None),
+        "enabled",
+        False,
+    )
 
     if labels_are_semantic_graph_hypothesis(labels):
-        for label in labels:
-            if dedup and dedup(label, xyz):
-                continue
-            graph_memory.add_observation(rgb, xyz, [label], description=desc, viewer_xyz=viewer_xyz)
+        if fusion_enabled:
+            crop_rgb = np.asarray(rgb)
+            xyz_a = np.asarray(xyz, dtype=np.float64)
+            for label in labels:
+                cand = _detection_to_candidate({"label": str(label), "xyz": xyz_a})
+                graph_object_fusion.apply_detection(
+                    graph_memory,
+                    crop_rgb,
+                    cand,
+                    viewer_xyz=viewer_xyz,
+                )
+        else:
+            for label in labels:
+                if dedup_skips and dedup_skips(label, xyz):
+                    continue
+                graph_memory.add_observation(rgb, xyz, [label], description=desc, viewer_xyz=viewer_xyz)
     elif not instance_items:
         graph_memory.record_navigation_sample(rgb, xyz, base_xyz=viewer_xyz)
 

@@ -164,6 +164,10 @@ graph_eqa_extract:
 
 graph_eqa_record_navigation: true
 
+# Align with interactive dynagraph profile (stream + ``emet run dynagraph``).
+dynagraph_merge_xy_m: 0.45
+dynagraph_staleness_horizon: 256
+
 # GraphObjectFusion tuned for DA3 depth jitter on hardware (see graph_object_fusion_innate_mars.yaml).
 graph_object_fusion:
   enabled: true
