@@ -331,6 +331,7 @@ def export_robocasa_gt_scene(
         layout=int(layout),
         style=int(style),
         robot=robot,
+        seed=int(seed),
     )
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)

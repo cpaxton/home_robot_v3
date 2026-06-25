@@ -2088,12 +2088,12 @@ def install_completion(shell: str | None) -> None:
 
 from emet.app.capture import main as _capture_app  # noqa: E402
 
-_capture_app.short_help = "One ZMQ frame + metadata; optional single-frame DynaMem map"
+_capture_app.short_help = "One ZMQ frame + metadata (shortcut: zmq_obs capture profile)"
 main.add_command(_capture_app)
 
 from emet.app.stream import main as _stream_app  # noqa: E402
 
-_stream_app.short_help = "Live ZMQ → Rerun (cameras, pose, mesh)"
+_stream_app.short_help = "Live ZMQ → Rerun (shortcut: zmq_obs stream profile)"
 main.add_command(_stream_app)
 
 # Full Click options (not a thin wrapper) so `emet debug-da3-depth --help` lists all flags.

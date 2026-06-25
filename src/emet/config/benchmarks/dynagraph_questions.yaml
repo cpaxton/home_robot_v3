@@ -23,6 +23,41 @@ environments:
         question: "What is on the counter?"
         expected_tokens: ["counter"]
 
+  - env: robocasa_seed1
+    questions:
+      - id: sink_location
+        question: "Where is the sink?"
+        expected_tokens: ["sink"]
+        gt_body_key: sink_main
+        max_xy_error_m: 1.2
+      - id: stove_location
+        question: "Where is the stove?"
+        expected_tokens: ["stove"]
+
+  - env: robocasa_seed2
+    questions:
+      - id: fridge_location
+        question: "Where is the refrigerator?"
+        expected_tokens: ["fridge", "refrigerator"]
+      - id: counter_contents
+        question: "What is on the counter?"
+        expected_tokens: ["counter"]
+
+  - env: robocasa_seed0_world_change
+    questions:
+      - id: object_pre
+        phase: pre
+        question: "Where is the pick-place object on the counter?"
+        expected_tokens: ["counter"]
+        gt_body_key: obj_main
+        max_xy_error_m: 1.0
+      - id: object_post
+        phase: post
+        question: "Where is the pick-place object now?"
+        expected_tokens: ["counter", "cabinet", "kitchen"]
+        gt_body_key: obj_main
+        max_xy_error_m: 1.5
+
   - env: molmospaces_ithor0
     questions:
       - id: room_furniture
@@ -31,3 +66,21 @@ environments:
       - id: sofa_location
         question: "Where is the sofa?"
         expected_tokens: ["sofa"]
+
+  - env: molmospaces_ithor1
+    questions:
+      - id: room_furniture
+        question: "What furniture is in this room?"
+        expected_tokens: ["chair", "table"]
+      - id: bed_location
+        question: "Where is the bed?"
+        expected_tokens: ["bed"]
+
+  - env: molmospaces_ithor2
+    questions:
+      - id: room_furniture
+        question: "What furniture is in this room?"
+        expected_tokens: ["chair", "sofa"]
+      - id: tv_location
+        question: "Where is the television?"
+        expected_tokens: ["tv", "television"]

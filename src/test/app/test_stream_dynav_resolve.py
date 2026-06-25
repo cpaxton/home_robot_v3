@@ -1,21 +1,11 @@
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
+# Copyright (c) Chris Paxton
 #
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
-#
-# Some code may be adapted from other open-source works with their respective licenses. Original
-# license information maybe found below, if so.
-
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
 """Dynav / config preset resolution for emet stream/capture."""
 
 from emet.app.stream_agent_factory import (
+    load_stream_parameters,
     resolve_stream_config_path,
     resolve_stream_dynav_config,
 )
@@ -26,6 +16,30 @@ from emet.robots import DEFAULT_DYNAV_CONFIG_YAML
 def test_default_dynav_resolves_to_unified_config():
     resolved = resolve_stream_config_path(DEFAULT_DYNAV_CONFIG_YAML, dynav_from_default=True)
     assert resolved == default_config_path()
+
+
+def test_innate_mars_remote_host_uses_auto_depth_via_overlay():
+    config_path = resolve_stream_dynav_config(
+        "innate_mars",
+        "herman",
+        DEFAULT_DYNAV_CONFIG_YAML,
+        dynav_from_default=True,
+    )
+    params, _ = load_stream_parameters("innate_mars", "herman", config_path)
+    assert config_path == default_config_path()
+    assert str(params.get("depth_source", "")).lower() in ("auto", "da3")
+
+
+def test_innate_mars_localhost_keeps_sensor_depth_when_sim():
+    config_path = resolve_stream_dynav_config(
+        "innate_mars",
+        "127.0.0.1",
+        DEFAULT_DYNAV_CONFIG_YAML,
+        dynav_from_default=True,
+    )
+    params, _ = load_stream_parameters("innate_mars", "127.0.0.1", config_path)
+    assert config_path == default_config_path()
+    assert str(params.get("depth_source", "")).lower() in ("auto", "sensor")
 
 
 def test_explicit_dynav_not_overridden():

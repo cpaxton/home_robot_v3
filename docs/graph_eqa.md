@@ -11,7 +11,7 @@ This implementation is a **re-implementation** inspired by the [GraphEQA paper](
 | **Sparse voxel map** | Base 2D/3D voxel map + optional instance memory. | Default agent (InstanceMemoryController), mapping, navigation. |
 | **DynaMem** | Voxel map + VL features + EQA, pick-and-place. | `emet run dynamem`; EQA with voxel-based memory. |
 | **Graph EQA** | Scene graph (nodes + edges) + task-relevant images. | `emet run graph-eqa`; EQA with graph-based memory. |
-| **Dynagraph** | Graph EQA + optional merge/staleness on graph nodes (same voxel nav). | `emet run dynagraph`; see [dynagraph.md](dynagraph.md). |
+| **Dynagraph** | Graph EQA + optional merge/staleness on graph nodes (same voxel nav). | `emet run dynagraph`; see [dynagraph.md](dynagraph.md). Stationary hardware stream dedup: [known_issues.md](known_issues.md). |
 
 ## When to use GraphEQA vs DynaMem EQA
 

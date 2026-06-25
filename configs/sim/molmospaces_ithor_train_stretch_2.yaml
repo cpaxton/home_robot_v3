@@ -1,0 +1,10 @@
+# MolmoSpaces iTHOR train index 2 + Stretch — requires .venv-molmospaces.
+kind: molmospaces
+robot: stretch
+scene: ithor
+split: train
+index: 2
+molmospaces_install: false
+headless: true
+port_offset: 0
+seed: 0

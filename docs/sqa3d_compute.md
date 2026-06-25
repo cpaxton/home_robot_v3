@@ -97,30 +97,40 @@ Optional allocator hint when fragmentation is an issue:
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 ```
 
-## Multi-GPU (manual sharding)
+## Multi-GPU sharding (recommended for full splits)
 
-Run **non-overlapping question slices** on separate GPUs. Use `--isolate-episodes` (or `run-real-sweep`) and distinct output JSONL paths, then merge JSONL for scoring.
+Use **`scripts/run_sqa3d_sharded_sweep.sh`** to split a sweep across GPUs (~linear speedup when each GPU is exclusive):
 
 ```bash
-# Terminal / GPU 0
-CUDA_VISIBLE_DEVICES=0 uv run emet sqa3d run-batch \
-  --split val --question-start 0 --question-end 15 \
-  --replay-mode sens --profile tuned \
-  --isolate-episodes \
-  -o /tmp/sqa3d_shard0.jsonl
+# Full val dynagraph on 4 GPUs (~4× faster than one GPU)
+./scripts/run_sqa3d_sharded_sweep.sh --split val --method dynagraph --all --gpus 0,1,2,3
 
-# Terminal / GPU 1
-CUDA_VISIBLE_DEVICES=1 uv run emet sqa3d run-batch \
-  --split val --question-start 15 --question-end 30 \
-  --replay-mode sens --profile tuned \
-  --isolate-episodes \
-  -o /tmp/sqa3d_shard1.jsonl
-
-cat /tmp/sqa3d_shard0.jsonl /tmp/sqa3d_shard1.jsonl > /tmp/sqa3d_merged.jsonl
-uv run emet eval-sqa3d -p /tmp/sqa3d_merged.jsonl --split val
+# Wired into the large paper queue:
+SQA3D_GPUS=0,1,2,3 ./scripts/run_large_paper_eval.sh sqa3d-val
 ```
 
-Resume after interruption: add `--resume` to `run-batch` (same output path).
+Each shard writes `METHOD_SPLIT_qSTART-END.jsonl`; the script merges shards and writes `*_merged.csv`.
+
+Manual slices (same idea):
+
+```bash
+CUDA_VISIBLE_DEVICES=0 uv run emet sqa3d run-real-sweep \
+  --split val --method dynagraph --question-start 0 --question-end 815 \
+  --no-download --resume --isolate-episodes --output-dir ~/runs/emet/sqa3d
+```
+
+Resume after interruption: `--resume` on each shard (same output JSONL path).
+
+## Faster in-process batch (OOM risk)
+
+`--no-isolate-episodes` loads the VLM once per sweep instead of per question (~2–3× faster) but can fragment VRAM on long runs. Try on a slice first:
+
+```bash
+uv run emet sqa3d run-real-sweep --split val --question-start 0 --question-end 100 \
+  --method dynagraph --no-isolate-episodes --no-download --resume
+```
+
+Or: `SQA3D_NO_ISOLATE=1` with `run_large_paper_eval.sh` / sharded sweep.
 
 ## Profiles (memory vs speed)
 

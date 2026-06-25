@@ -1,0 +1,11 @@
+# Default ``emet capture`` / ``emet stream`` settings (copy ``stream:`` into dynav YAML).
+#
+# Precedence: CLI (--verbose, --rerun-hold-s, --hz) overrides YAML when explicitly set;
+# otherwise YAML; then environment (EMET_STREAM_VERBOSE, DA3_LOG_LEVEL).
+#
+stream:
+  verbose: false
+  status_interval_s: 5.0
+  da3_log_level: WARN
+  log_every_step_when_max_steps_le: 20
+  rerun_hold_s: 30.0

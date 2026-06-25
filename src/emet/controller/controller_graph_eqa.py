@@ -97,7 +97,10 @@ class GraphEQAController(DynamemController):
             defer_llm_clients=True,
         )
         if graph_memory_input_path:
+            from pathlib import Path
+
             from emet.memory.backend import get_memory_backend
+            from emet.memory.format import VOXEL_PICKLE_FILENAME
 
             backend = get_memory_backend(
                 "graph_eqa",
@@ -105,6 +108,16 @@ class GraphEQAController(DynamemController):
                 voxel_map=getattr(self, "voxel_map", None),
             )
             backend.load(graph_memory_input_path)
+            voxel_pickle = Path(graph_memory_input_path) / VOXEL_PICKLE_FILENAME
+            vm = getattr(self, "voxel_map", None)
+            if voxel_pickle.exists() and vm is not None and hasattr(vm, "read_from_pickle"):
+                vm.read_from_pickle(voxel_pickle)
+            # Resume the staleness clock from the checkpoint so maintain() does not
+            # immediately prune reloaded nodes (lifelong checkpoint resume).
+            final_step = getattr(backend, "loaded_final_step", None)
+            if final_step is not None and int(final_step) > 0:
+                self.obs_count = max(int(self.obs_count), int(final_step))
+                self.graph_memory.set_graph_timestep(self.obs_count)
 
         self.use_instance_graph = use_instance_graph
         self.use_sensor_perception = use_sensor_perception

@@ -1,6 +1,6 @@
 # Innate Mars experiments (sim + hardware)
 
-Paper-aligned reproduction for **Emet sim** (MuJoCo) and **real Mars** (innate-os + `innate_mars_bridge`). See also [dynagraph_benchmarks.md](../dynagraph_benchmarks.md) and [robots/innate_mars.md](../robots/innate_mars.md).
+Paper-aligned reproduction for **Emet sim** (MuJoCo) and **real Mars** (innate-os + `innate_mars_bridge`). See also [README.md](README.md) (master experiment index), [dynagraph_benchmarks.md](../dynagraph_benchmarks.md), and [robots/innate_mars.md](../robots/innate_mars.md).
 
 ## Sim experiment matrix
 
@@ -57,6 +57,61 @@ uv run python scripts/audit_innate_os_topics.py --skip-ros
 ## Real hardware (innate-os + bridge)
 
 See [hardware bring-up checklist](../robots/innate_mars_hardware.md).
+
+### Sim vs hardware visualization (same CLI)
+
+After `git pull origin main` and `uv sync`, use the **same Rerun tools** as MuJoCo sim. Only the ZMQ host and depth preset differ:
+
+| Tool | Sim (localhost) | Hardware (`herman`) |
+|------|-----------------|---------------------|
+| Cameras montage | `emet preview-cameras --source local` | `emet preview-cameras --source zmq --connection herman` |
+| One-shot map | `emet capture --backend voxel_only` | `emet capture --connection herman --backend voxel_only` |
+| Live Rerun (cameras + MJCF mesh) | `emet stream --cameras-only` | `emet stream --cameras-only --connection herman` |
+| Live voxel map (DynaMem) | `emet stream --backend dynamem` | `emet stream --connection herman` (remote default) |
+| Live graph (Dynagraph) | `emet stream --backend dynagraph` | `emet stream --connection herman --backend dynagraph` |
+| GraphEQA baseline | `emet stream --backend graph_eqa` | `emet stream --connection herman --backend graph_eqa` |
+| Full session | `emet run dynamem --robot innate_mars` | `emet run dynamem --robot innate_mars --robot-ip herman --dynav-config dynav_innate_mars.yaml` |
+| Graph export | `emet run dynagraph --export /tmp/mars` | same with `--robot-ip herman --dynav-config dynav_innate_mars.yaml` |
+
+**Depth:** Sim ZMQ carries sensor depth → default `dynav_config.yaml`. Hardware has no ZMQ depth → `stream`/`capture` auto-select `dynav_innate_mars.yaml` (DA3 stereo) when the host is not localhost. Override with `--dynav-config` anytime.
+
+**Connection profile:** `emet connect save herman --user jetson1 --robot innate_mars` so `--connection herman` sets host + robot on `capture`, `stream`, and `preview-cameras`. Details: [zmq_obs.md](../zmq_obs.md).
+
+Rerun viewer: `http://localhost:9090?url=ws://localhost:9877` (SSH tunnel ports 9090/9877 when working over VPN). See [rerun.md](../rerun.md).
+
+### Stationary smoke (no base / head motion)
+
+Use these when the robot should stay put (mapping from current pose only):
+
+```bash
+# Bridge (if not already up)
+emet mars start --connection herman
+
+# Cameras only
+uv run emet preview-cameras --source zmq --connection herman
+
+# One ZMQ frame + single voxel-only update (no nav commands)
+uv run emet capture --connection herman --backend voxel_only --no-rerun
+
+# Repeated stationary updates (no rotate, no explore, no xyt)
+uv run emet stream --connection herman --backend voxel_only --max-steps 3 --headless
+
+uv run emet stream --connection herman --backend dynagraph --max-steps 1 --headless
+```
+
+**Known issue:** stationary `dynagraph` stream can inflate graph node count (dedup fails with DA3 depth / label noise). See [known_issues.md](../known_issues.md#dynagraph-graph-node-explosion-on-stationary-hardware-stream). Prefer `--backend voxel_only` for voxel-only hardware smoke until fixed.
+
+**Avoid (these move the head or base):**
+
+| Command | Motion |
+|---------|--------|
+| `emet run dynamem` (default) | `rotate_in_place` at start |
+| `emet run dynamem --manipulation-only` | skips rotate; still interactive |
+| `emet run dynagraph` without `-N` | `rotate_in_place` at start |
+| `emet run dynagraph --explore-loop` | frontier navigation (`xyt`) |
+| `emet run dynagraph --calibration-export` + `--export` | calibration path forces rotate even with `-N` |
+
+For interactive dynagraph without initial rotate: `emet run dynagraph -N …`. For export with updates and no rotate, prefer `emet stream --backend dynagraph --max-steps N` then export from a future `--input-path` workflow, or add `--calibration-steps` only after a code fix honors `-N` on the calibration path.
 
 ## innate-os sim harness (ROS fidelity)
 

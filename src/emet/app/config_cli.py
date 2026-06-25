@@ -1,17 +1,6 @@
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
+# Copyright (c) Chris Paxton
 #
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
-#
-# Some code may be adapted from other open-source works with their respective licenses. Original
-# license information maybe found below, if so.
-
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
 """Shared Click options for unified ``--config`` / ``--set`` across emet run apps."""
 
@@ -46,10 +35,20 @@ def _warn_deprecated_alias(old_flag: str, new_flag: str = "--config") -> None:
     )
 
 
-def emet_config_options(*, include_deprecated_aliases: bool = True) -> Callable:
+def emet_config_options(
+    *,
+    include_deprecated_aliases: bool = True,
+    include_connection: bool = True,
+) -> Callable:
     """Attach ``--config``, ``--set``, ``--connection``, and legacy aliases to a Click command."""
 
     def decorator(f: Callable) -> Callable:
+        if include_connection:
+            f = click.option(
+                "--connection",
+                default=None,
+                help="Named profile from ~/.stretch/connection.json (host + robot hints).",
+            )(f)
         if include_deprecated_aliases:
             f = click.option(
                 "--dynav-config",
@@ -64,11 +63,6 @@ def emet_config_options(*, include_deprecated_aliases: bool = True) -> Callable:
                 default=None,
                 help="Deprecated alias for --config.",
             )(f)
-        f = click.option(
-            "--connection",
-            default=None,
-            help="Named profile from ~/.stretch/connection.json (host + robot hints).",
-        )(f)
         f = click.option(
             "--set",
             "-O",

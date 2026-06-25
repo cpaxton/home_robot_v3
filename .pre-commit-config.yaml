@@ -55,7 +55,14 @@ repos:
             src/test/mapping/test_debug_navgrid_ascii\.py|
             src/test/mapping/test_navgrid_compare\.py|
             src/test/molmospaces/test_multi_robot_molmospaces_navgrid_similarity\.py|
-            src/test/molmospaces/test_stretch_molmospaces_dynamem_floor_map\.py
+            src/test/molmospaces/test_stretch_molmospaces_dynamem_floor_map\.py|
+            src/emet/app/config_cli\.py|
+            src/emet/config/loader\.py|
+            src/emet/config/runtime\.py|
+            src/test/app/test_dynagraph_robocasa_question_cli\.py|
+            src/test/app/test_stream_dynav_resolve\.py|
+            src/test/config/test_emet_config_loader\.py|
+            src/test/config/test_runtime_context\.py
           )
       - id: insert-license
         alias: insert-license-chris-paxton
@@ -79,7 +86,14 @@ repos:
             src/test/mapping/test_debug_navgrid_ascii\.py|
             src/test/mapping/test_navgrid_compare\.py|
             src/test/molmospaces/test_multi_robot_molmospaces_navgrid_similarity\.py|
-            src/test/molmospaces/test_stretch_molmospaces_dynamem_floor_map\.py
+            src/test/molmospaces/test_stretch_molmospaces_dynamem_floor_map\.py|
+            src/emet/app/config_cli\.py|
+            src/emet/config/loader\.py|
+            src/emet/config/runtime\.py|
+            src/test/app/test_dynagraph_robocasa_question_cli\.py|
+            src/test/app/test_stream_dynav_resolve\.py|
+            src/test/config/test_emet_config_loader\.py|
+            src/test/config/test_runtime_context\.py
           )$
 
   # Ruff: lint + format (line-length 120, third_party excluded in pyproject.toml and here)

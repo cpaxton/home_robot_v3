@@ -23,6 +23,8 @@ DynagraphProfileName = Literal[
     "find_phase",
     "graph_eqa_baseline",
 ]
+DYNAMIC_EXPLORE_BACKEND = Literal["dynagraph", "graph_eqa"]
+DYNAMIC_EXPLORE_BACKENDS: tuple[str, ...] = ("dynagraph", "graph_eqa")
 SQA3DRunProfile = Literal["smoke", "tuned"]
 BenchmarkHarnessName = Literal["ovmm_find_phase", "sqa3d"]
 
@@ -109,6 +111,33 @@ def resolve_sqa3d_dynagraph_profile(
     if method != "dynagraph":
         return None
     return "smoke" if profile == "smoke" else "eqa"
+
+
+def resolve_dynamic_explore_profile(backend: DYNAMIC_EXPLORE_BACKEND | str) -> DynagraphProfileName:
+    if backend == "graph_eqa":
+        return "graph_eqa_baseline"
+    if backend == "dynagraph":
+        return "interactive"
+    raise KeyError(f"Unknown dynamic exploration backend {backend!r}")
+
+
+def apply_dynamic_explore_backend(
+    parameters: Parameters | dict[str, Any],
+    backend: DYNAMIC_EXPLORE_BACKEND | str,
+    *,
+    merge_xy_m: float | None = None,
+    staleness_horizon: int | None = None,
+    path: str = DEFAULT_DYNAGRAPH_BENCHMARK_YAML,
+) -> Parameters:
+    """Configure merge/staleness for dynamic exploration backend rows."""
+    profile = resolve_dynamic_explore_profile(backend)
+    return apply_dynagraph_profile(
+        parameters,
+        profile,
+        merge_xy_m=merge_xy_m,
+        staleness_horizon=staleness_horizon,
+        path=path,
+    )
 
 
 def apply_ovmm_backend_dynagraph(

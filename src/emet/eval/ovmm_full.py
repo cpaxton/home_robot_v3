@@ -175,21 +175,9 @@ def _sim_manip_supported(robot: Any) -> bool:
 
 
 def _robot_set_body_pose(robot: Any, body: str, pos: np.ndarray) -> None:
-    from emet.core.zmq_protocol import build_sim_set_body_pose_action
+    from emet.simulation.sim_manipulation import robot_zmq_set_body_pose
 
-    step = int(getattr(robot, "_last_step", -1)) + 1
-    if step < 1:
-        step = 1
-    action = build_sim_set_body_pose_action(step, body, pos.tolist())
-    send_action = getattr(robot, "send_action", None)
-    if callable(send_action):
-        send_action(action, reliable=True)
-    else:
-        robot.send_message(action)
-    wait_obs = getattr(robot, "wait_for_obs", None)
-    if callable(wait_obs):
-        wait_obs(timeout=5.0)
-    time.sleep(0.25)
+    robot_zmq_set_body_pose(robot, body, pos)
 
 
 def _goal_place_xyz(placements: dict[str, dict[str, Any]], goal_recep: str) -> np.ndarray | None:

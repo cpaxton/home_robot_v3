@@ -268,13 +268,26 @@ emet connect list
 emet connect show
 ```
 
-Used by `emet deploy`, `emet mars start`, `emet capture`, and `emet stream` when `--ip` / `--host` is omitted (active profile, or `--connection NAME`).
+Used by `emet deploy`, `emet mars start`, `emet capture`, `emet stream`, and `emet preview-cameras` when `--ip` / `--host` is omitted (active profile, or `--connection NAME`).
 
 ---
 
+### `emet capture` / `emet stream`
+
+Both commands are **profile shortcuts** into the same runner ([`zmq_obs.md`](zmq_obs.md) · `emet.app.zmq_obs`): shared ZMQ resolution, mapping session, and backend factory. Open bugs: [`known_issues.md`](known_issues.md).
+
+| | **`emet capture`** | **`emet stream`** |
+|---|-------------------|-------------------|
+| **Artifact save** | Always (montage + `metadata.json`) | Only with `--out-dir` |
+| **Mapping** | One update when `--backend` is set | Loop at `--hz` until Ctrl+C or `--max-steps` |
+| **No `--backend`** | Save frame and exit | localhost → cameras-only Rerun; remote → `dynamem` |
+| **Rerun hold** | `--rerun-hold-s` (default 30s) after map | Continuous viewer |
+
+Full architecture, backend table, and hardware examples: **[`docs/zmq_obs.md`](zmq_obs.md)**.
+
 ### `emet capture [options]`
 
-One-shot **ZMQ smoke test** for any robot backend: subscribe once on the observation port (default **4401**), save a labeled camera montage + per-camera JPEGs + `metadata.json` (joints, poses, GPS/compass when present). Optional **`--map`** runs a single DynaMem `update()` and opens Rerun (same depth stack as `emet run dynamem`).
+One-shot **ZMQ smoke test** for any robot backend: subscribe once on the observation port (default **4401**), save a labeled camera montage + per-camera JPEGs + `metadata.json` (joints, poses, GPS/compass when present). Optional **`--backend dynamem`** or **`--backend voxel_only`** runs a single mapping `update()` and opens Rerun (same depth stack as `emet stream`).
 
 **Defaults:** `--ip 127.0.0.1`, `--robot stretch`. With a saved connection (`emet connect save …`) and no `--ip`, uses the active profile host (and `robot:` from the profile when `--robot` is omitted).
 
@@ -284,15 +297,15 @@ One-shot **ZMQ smoke test** for any robot backend: subscribe once on the observa
 | `--connection` | Saved profile name (overrides host when `--ip` omitted) |
 | `--robot` | Backend (`stretch`, `innate_mars`, `rby1`, …) |
 | `--out-dir` | Output dir (default `runs/capture/<robot>_<timestamp>/`) |
-| `--map` | One DynaMem update + Rerun (unless `--no-rerun`) |
-| `--dynav-config` | DynaMem YAML for `--map` (hardware Mars: `dynav_innate_mars.yaml`) |
+| `--backend` | After capture, one ``emet stream``-style update (any stream backend; Rerun unless `--no-rerun`) |
+| `--dynav-config` | Dynav YAML for `--backend` (hardware Mars: auto `dynav_innate_mars.yaml`) |
 
 **Examples:**
 ```bash
 emet capture
 emet capture --robot innate_mars --ip herman
-emet capture --connection herman --map --dynav-config dynav_innate_mars.yaml
-emet capture --robot stretch --map --no-rerun --out-dir /tmp/cap
+emet capture --connection herman --backend voxel_only --no-rerun
+emet capture --robot stretch --backend dynamem --no-rerun --out-dir /tmp/cap
 ```
 
 ---
@@ -301,43 +314,46 @@ emet capture --robot stretch --map --no-rerun --out-dir /tmp/cap
 
 **Live** ZMQ → Rerun viewer: head/stereo/arm cameras, base pose, and MJCF mesh (when the robot spec provides one). Runs until Ctrl+C.
 
-With **`--backend`**, runs a continuous mapping `update()` loop at **`--hz`** (default 1 Hz). Backends:
+**Mapping backends** run a continuous ``agent.update()`` loop (same controllers as ``emet run dynamem`` / ``emet run dynagraph``, without rotate/explore/nav). Use ``--backend`` with the same names as paper evals:
 
-| Backend | Memory stack |
-|---------|----------------|
-| `dynamem` | Voxel semantic map (`--map` alias) |
-| `graph_eqa` | Voxel map + GraphEQA graph |
-| `dynagraph` | Voxel map + merged graph (`--graph` alias) |
-| `ground_truth` | Sim GT graph from `emet_session` (`--ground-truth` alias) |
-| `svm` | Instance memory (SVM / `RobotAgent`) |
-| `scene_graph` | Voxel map + open-vocab scene graph |
+| `--backend` | Stack |
+|-------------|--------|
+| `dynamem` | Voxel semantic map |
+| `voxel_only` | Voxel + depth only (no SigLIP/YoloE/VLM; DA3 on hardware) |
+| `graph_eqa` | Voxel + GraphEQA graph |
+| `dynagraph` | Voxel + merged graph + VLM |
+| `ground_truth` | Sim GT graph from `emet_session` |
+| `svm` | Instance memory |
+| `scene_graph` | Voxel + open-vocab scene graph |
 
-**Defaults:** `--ip 127.0.0.1`, `--robot stretch`. For **innate_mars on a remote host** (hardware bridge), default dynav auto-resolves to `dynav_innate_mars.yaml` (`depth_source: auto` + DA3 stereo).
+| Situation | Behavior |
+|-----------|----------|
+| localhost, no `--backend` | Cameras + mesh only |
+| remote host, no `--backend` | **Defaults to `--backend dynamem`** |
+| `--cameras-only` | Cameras + mesh (no mapping), even on remote |
+
+Updates run at **`--hz`** (default 1 Hz). Other flags:
 
 | Flag | Meaning |
 |------|--------|
-| `--backend` | Mapping backend (see table above) |
-| `--map` / `--graph` | Aliases for `dynamem` / `dynagraph` |
-| `--dynav-config` | Planner/dynav YAML (hardware Mars: `dynav_innate_mars.yaml`) |
+| `--dynav-config` | Planner/dynav YAML (hardware Mars: auto `dynav_innate_mars.yaml`) |
 | `--hz` | Update rate (default 1) |
 | `--max-steps` | Stop after N updates (0 = Ctrl+C) |
-| `--ground-truth` | Alias for `--backend ground_truth` |
-| `--map-only` | Voxel/obstacle map only — skip SigLIP, YoloE, VLM, scene-graph models (**DA3 still runs** on innate_mars hardware when ZMQ has no depth) |
+| `--out-dir` | Optional: save one montage + `metadata.json` before streaming |
+| `--cameras-only` | No mapping loop |
 | `--compare-to-gt` | Dynagraph: overlay sim GT reference |
 | `--headless` | Web server only, no auto-open browser |
-| `--rerun-native` | Native Rerun app instead of browser |
 | `--rerun-bind` | Listen on 0.0.0.0 for remote viewing |
+| `--verbose` | Per-step status + DA3 INFO timing (default: quiet, status every 5s) |
 
 **Examples:**
 ```bash
-emet stream
-emet stream --backend dynamem --robot innate_mars --ip herman --dynav-config dynav_innate_mars.yaml
-emet stream --map-only --robot innate_mars --ip herman --dynav-config dynav_innate_mars.yaml
-emet stream --backend dynagraph --robot innate_mars --ip herman --dynav-config dynav_innate_mars.yaml
-emet stream --backend graph_eqa --robot stretch
-emet stream --backend ground_truth --robot stretch
-emet stream --backend scene_graph --robot stretch
-emet stream --map --connection herman   # same as --backend dynamem
+emet stream --cameras-only
+emet stream --connection herman
+emet stream --connection herman --backend voxel_only
+emet stream --connection herman --backend dynagraph
+emet stream --connection herman --backend graph_eqa
+emet stream --robot stretch --backend svm
 ```
 
 For DA3 depth debug (no voxel map), use ``emet debug-da3-depth`` instead.
@@ -352,7 +368,7 @@ Build a **labeled horizontal montage** of the robot’s MuJoCo/ZMQ cameras (for 
 - **`--source local`** (default) — Load the same **merged** model as `emet serve mujoco` (`scene_environment.xml` + robot MJCF), render with MuJoCo at 640×480, and apply the same RGB postprocess as `RobosuiteZmqServer` (per robot: `RobotSpec.robosuite_rgb_depth_ops`; innate_mars uses **`flipud`** on MuJoCo `Renderer` output; robots with empty ops may still honor optional `EMET_ROBOSUITE_RENDER_FLIPUD`).
 - **`--source zmq`** — Subscribe once on the **full observation** port (default **4401**, same as `GenericZmqClient`), decode JPEG fields, and montage. Requires a running sim or bridge. Newer `RobosuiteZmqServer` builds also attach a third JPEG (`rgb_tertiary`, `camera_name_tertiary`) when the spec lists a distinct third camera.
 
-**Common options:** `--robot`, `--out` (single PNG), `--max-cams`, `--row-height`, `--recv-port` / `--timeout-ms` (ZMQ), `--discord` (post the single montage; needs `DISCORD_TOKEN`, `EMET_DISCORD_CHANNEL`).
+**Common options:** `--robot`, `--connection` (saved profile host/robot, same as `capture`/`stream`), `--out` (single PNG), `--max-cams`, `--row-height`, `--recv-port` / `--timeout-ms` (ZMQ), `--discord` (post the single montage; needs `DISCORD_TOKEN`, `EMET_DISCORD_CHANNEL`).
 
 **Head nod capture (`--nod`, local only)**
 
@@ -376,6 +392,7 @@ emet preview-cameras
 emet preview-cameras --robot innate_mars --out /tmp/mars_cams.png
 emet preview-cameras --robot xlerobot --out /tmp/xlerobot_cams.png
 emet preview-cameras --source zmq --robot innate_mars --robot-ip 127.0.0.1
+emet preview-cameras --source zmq --connection herman
 
 emet preview-cameras --nod --nod-out-dir ./nod_caps --nod-frames 41 --nod-video ./nod.mp4
 emet preview-cameras --nod --nod-motion once --nod-low -0.12 --nod-high 0.25 --nod-frames 25
@@ -500,6 +517,10 @@ uv run emet sqa3d run-episode --split val --question-id 220602000049 --replay-mo
 uv run emet sqa3d run-real-sweep --split val --question-start 0 --question-end 30 \
   --replay-mode sens --no-download --output-dir /tmp/sqa3d_sweep
 ./scripts/run_sqa3d_gpu_sweep.sh --split val --question-start 0 --question-end 30 --replay-mode sens
+
+# Full split on multiple GPUs (~linear speedup; merges shard JSONL → CSV)
+./scripts/run_sqa3d_sharded_sweep.sh --split val --method dynagraph --all --gpus 0,1,2,3
+SQA3D_GPUS=0,1,2,3 ./scripts/run_large_paper_eval.sh sqa3d-val
 
 # Figures
 uv run emet sqa3d plot-results -p /tmp/sqa3d_sweep/dynagraph_val_q0-30.jsonl -o /tmp/sqa3d_figs

@@ -34,7 +34,8 @@ Requires `latexmk` + `booktabs` (via `texlive-latex-extra`, `texlive-bibtex-extr
 
 ## Benchmarks and results
 
-- **Run / maintain paper sweeps:** [docs/paper_benchmarks.md](../docs/paper_benchmarks.md)
+- **Paper experiments (start here):** [docs/experiments/README.md](../docs/experiments/README.md)
+- **Detailed operator runbook:** [docs/paper_benchmarks.md](../docs/paper_benchmarks.md)
 - **Experiments plan (LaTeX):** `sections/04_experiments.tex`
 - **Results tables (fill manually from CSV):** `sections/05_results.tex`
 
