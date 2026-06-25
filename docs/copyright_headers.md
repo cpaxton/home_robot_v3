@@ -5,7 +5,7 @@
 | File | Header |
 |------|--------|
 | **Pre-existing** modules (Hello Robot / upstream heritage) | `docs/license_header.txt` — Copyright (c) Hello Robot, Inc. |
-| **New files** you create in this repo | `docs/license_header_chris_paxton.txt` — Copyright (c) Chris Paxton |
+| **New files** you create in this repo | `docs/license_header_chris_paxton.txt` — Copyright (c) Chris Paxton 2026 |
 
 When you **edit** an existing file, keep its original header. Do not replace Hello Robot headers on legacy files.
 
@@ -26,7 +26,7 @@ Or use a shared regex (e.g. `scripts/tier4_.*\.py`) if you add a family of scrip
 New module (Chris Paxton):
 
 ```python
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 ```

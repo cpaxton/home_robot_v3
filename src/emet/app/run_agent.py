@@ -422,6 +422,7 @@ def main(
         dynav_config=dynav_config,
     )
     robot_from_cli = robot is not None and str(robot).strip() != ""
+    runtime = None
 
     if offline:
         resolved_robot = "stretch"
@@ -615,6 +616,9 @@ def main(
                 rerun_show_panels=rerun_show_panels,
                 rerun_debug=rerun_debug,
                 shutdown_sim_subprocess=sim_shutdown,
+                parameters=runtime.parameters if runtime is not None else None,
+                allow_missing_depth=runtime.allow_missing_depth if runtime is not None else None,
+                embodied_overlay=runtime.config.embodied_agent() if runtime is not None else None,
             )
         finally:
             if sim_shutdown is not None:
@@ -622,7 +626,11 @@ def main(
         return
 
     prompt_builder = get_prompt_builder(prompt)
-    dynav_params = get_parameters(config_path, overrides=list(config_sets) if config_sets else None)
+    dynav_params = get_parameters(
+        config_path,
+        overrides=list(config_sets) if config_sets else None,
+        robot=resolved_robot if offline else None,
+    )
     client = get_llm_client(llm, prompt_builder, device=device, parameters=dynav_params)
     if hasattr(client, "max_tokens"):
         client.max_tokens = max_tokens

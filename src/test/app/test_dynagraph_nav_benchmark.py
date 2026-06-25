@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -29,7 +29,9 @@ def test_dynagraph_nav_benchmark_all_tiers():
         timeout=3300,
         env={**os.environ, "EMET_SIM_NAV_TELEPORT": "1"},
     )
-    report_path = Path(os.environ.get("DYNAGRAPH_NAV_BENCH_BASE", "/tmp/dynagraph_nav_bench")) / "nav_benchmark_report.json"
+    report_path = (
+        Path(os.environ.get("DYNAGRAPH_NAV_BENCH_BASE", "/tmp/dynagraph_nav_bench")) / "nav_benchmark_report.json"
+    )
     assert report_path.is_file(), f"missing report at {report_path}"
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report.get("all_pass") is True, report

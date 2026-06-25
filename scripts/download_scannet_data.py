@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -136,7 +136,9 @@ def main() -> None:
     parser.add_argument("--sqa3d-data-dir", type=Path, default=None)
     parser.add_argument("--limit", type=int, default=None, help="Cap number of scenes when using --scenes-from-sqa3d")
     parser.add_argument("--question-start", type=int, default=None, help="With --scenes-from-sqa3d: slice start index")
-    parser.add_argument("--question-end", type=int, default=None, help="With --scenes-from-sqa3d: slice end index (exclusive)")
+    parser.add_argument(
+        "--question-end", type=int, default=None, help="With --scenes-from-sqa3d: slice end index (exclusive)"
+    )
     parser.add_argument(
         "--with-sens",
         action="store_true",

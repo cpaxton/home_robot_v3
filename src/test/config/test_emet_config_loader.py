@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -56,6 +56,14 @@ def test_parse_dot_override_coerces_types():
 def test_legacy_dynav_config_still_loads():
     cfg = load_config("dynav_config.yaml")
     assert cfg.mapping_dict.get("encoder") == "siglip"
+
+
+def test_load_embodied_agent_overlay_resolves_extends():
+    from emet.config.embodied_agent_config import load_embodied_agent_overlay
+
+    cfg = load_embodied_agent_overlay("configs/agent_innate_mars.yaml")
+    assert cfg.graph_eqa_memory.enabled is True
+    assert cfg.open_vocab_scene_graph.enabled is True
 
 
 def test_extends_agent_preset():

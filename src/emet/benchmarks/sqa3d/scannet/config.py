@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -90,11 +90,7 @@ def filter_questions_with_scannet(
 ) -> list:
     """Keep questions with required ScanNet replay assets under ``SCANNET_ROOT``."""
     root = scannet_root or default_scannet_root()
-    return [
-        q
-        for q in questions
-        if scene_replay_assets_present(q.scene_id, root, replay_mode=replay_mode)
-    ]
+    return [q for q in questions if scene_replay_assets_present(q.scene_id, root, replay_mode=replay_mode)]
 
 
 def count_scannet_scenes_on_disk(

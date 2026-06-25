@@ -17,13 +17,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
-
-import draccus
-import yaml
-
-from emet.utils.config import resolve_config_yaml_path
 
 
 @dataclass
@@ -79,18 +72,9 @@ def legacy_embodied_agent_off() -> EmbodiedAgentConfig:
 
 
 def load_embodied_agent_overlay(config_path: str | None) -> EmbodiedAgentConfig:
-    """Load ``embodied_agent`` subtree from a dynav-style YAML.
-
-    Missing ``embodied_agent:`` key → conservative defaults (both features off); enable in YAML when needed.
-    """
+    """Load ``embodied_agent`` via the unified config loader (``extends:`` / ``defaults:`` aware)."""
     if not config_path:
         return EmbodiedAgentConfig()
-    full_path = Path(resolve_config_yaml_path(config_path))
-    with full_path.open(encoding="utf-8") as fh:
-        raw: dict[str, Any] = yaml.safe_load(fh) or {}
-    subset = raw.get("embodied_agent")
-    if subset is None:
-        return EmbodiedAgentConfig()
-    if not isinstance(subset, dict):
-        return EmbodiedAgentConfig()
-    return draccus.decode(EmbodiedAgentConfig, subset)
+    from emet.config.loader import load_config
+
+    return load_config(config_path).embodied_agent()

@@ -1,13 +1,4 @@
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
-#
-# Some code may be adapted from other open-source works with their respective licenses. Original
-# license information maybe found below, if so.
-
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -297,11 +288,7 @@ def run_hmeqa_episode(
             predicted = extract_mcq_letter(tail, q.choices)
         predebias_letter = ""
         debias_votes = ""
-        if (
-            agent.graph_memory is not None
-            and getattr(agent.graph_memory, "mcq_debias_enabled", False)
-            and q.choices
-        ):
+        if agent.graph_memory is not None and getattr(agent.graph_memory, "mcq_debias_enabled", False) and q.choices:
             vote_letter = agent.graph_memory.vote_mcq_letter(q.question, q.choices)
             debias_votes = json.dumps(getattr(agent.graph_memory, "last_mcq_debias", {}))
             if vote_letter:

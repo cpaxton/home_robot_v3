@@ -1,13 +1,4 @@
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
-#
-# Some code may be adapted from other open-source works with their respective licenses. Original
-# license information maybe found below, if so.
-
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -132,8 +123,7 @@ def extract_mcq_letter(predicted: str, choices: list[str] | None = None) -> str:
 def _answer_field_lines(raw: str) -> list[str]:
     """Capture text after each line-start ``answer:`` (ignore prose like ``cannot answer``)."""
     return [
-        m.group(1).strip()
-        for m in re.finditer(r"(?:^|\n)\s*answer\s*:\s*([^\n]*)", raw or "", flags=re.IGNORECASE)
+        m.group(1).strip() for m in re.finditer(r"(?:^|\n)\s*answer\s*:\s*([^\n]*)", raw or "", flags=re.IGNORECASE)
     ]
 
 

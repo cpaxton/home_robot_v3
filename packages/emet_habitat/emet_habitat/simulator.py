@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -96,15 +96,9 @@ class HabitatEQASimulator:
         agent_cfg = habitat_sim.agent.AgentConfiguration()
         agent_cfg.sensor_specifications = sensor_specs
         agent_cfg.action_space = {
-            "move_forward": habitat_sim.agent.ActionSpec(
-                "move_forward", habitat_sim.agent.ActuationSpec(amount=0.25)
-            ),
-            "turn_left": habitat_sim.agent.ActionSpec(
-                "turn_left", habitat_sim.agent.ActuationSpec(amount=10.0)
-            ),
-            "turn_right": habitat_sim.agent.ActionSpec(
-                "turn_right", habitat_sim.agent.ActuationSpec(amount=10.0)
-            ),
+            "move_forward": habitat_sim.agent.ActionSpec("move_forward", habitat_sim.agent.ActuationSpec(amount=0.25)),
+            "turn_left": habitat_sim.agent.ActionSpec("turn_left", habitat_sim.agent.ActuationSpec(amount=10.0)),
+            "turn_right": habitat_sim.agent.ActionSpec("turn_right", habitat_sim.agent.ActuationSpec(amount=10.0)),
         }
 
         cfg = habitat_sim.Configuration(sim_cfg, [agent_cfg])

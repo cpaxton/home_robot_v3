@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -21,16 +21,14 @@ from emet.habitat.config import (
     hm3d_scene_glb_path,
     hm3d_scene_semantic_glb_path,
 )
+from emet.habitat.datasets import get_question, load_hmeqa_questions
 from emet.habitat.hm3d_semantics import (
     compute_hmeqa_semantics_coverage,
     format_hmeqa_semantics_coverage_report,
     hm3d_annotated_scene_dataset_config,
 )
-from emet.habitat.datasets import get_question, load_hmeqa_questions
 
-EXPLORE_EQA_QUESTIONS = (
-    "https://raw.githubusercontent.com/SaumyaSaxena/explore-eqa_semnav/master/data/questions.csv"
-)
+EXPLORE_EQA_QUESTIONS = "https://raw.githubusercontent.com/SaumyaSaxena/explore-eqa_semnav/master/data/questions.csv"
 EXPLORE_EQA_INIT_POSES = (
     "https://raw.githubusercontent.com/SaumyaSaxena/explore-eqa_semnav/master/data/scene_init_poses.csv"
 )

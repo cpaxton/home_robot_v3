@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -261,6 +261,20 @@ def apply_dot_overrides(cfg: dict[str, Any], overrides: list[str] | None) -> dic
     return result
 
 
+def finalize_resolved_config(
+    config: ResolvedEmetConfig,
+    *,
+    robot_id: str | None = None,
+    overrides: list[str] | None = None,
+) -> ResolvedEmetConfig:
+    """Deep-merge ``robots.<id>`` then apply dot overrides (``--set`` wins over overlays)."""
+    raw = copy.deepcopy(config.raw)
+    if robot_id:
+        raw = merge_robot_overlay(raw, robot_id)
+    raw = apply_dot_overrides(raw, overrides)
+    return ResolvedEmetConfig(raw=raw, source_path=config.source_path)
+
+
 def merge_robot_overlay(cfg: dict[str, Any], robot_id: str) -> dict[str, Any]:
     """Deep-merge ``robots.<robot_id>`` into live sections (mapping, zmq, agent, …)."""
     robots = cfg.get("robots")
@@ -407,12 +421,8 @@ def load_config(
         raw = _apply_extends(raw)
         raw = _apply_defaults_list(raw)
     raw = normalize_legacy_yaml(raw)
-    raw = apply_dot_overrides(raw, overrides)
-
     resolved = ResolvedEmetConfig(raw=raw, source_path=full_path)
-    if robot:
-        resolved = resolved.with_robot_overlay(robot)
-    return resolved
+    return finalize_resolved_config(resolved, robot_id=robot, overrides=overrides)
 
 
 def resolve_config_path_for_legacy_alias(path: str) -> str:

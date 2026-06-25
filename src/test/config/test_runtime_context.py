@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -89,6 +89,31 @@ def test_localhost_skips_connection_robot_without_zmq():
             )
     assert rid == "stretch"
     assert source == "default"
+
+
+def test_set_override_wins_over_robot_overlay():
+    cfg = load_config(default_config_path())
+    ctx = resolve_runtime_context(
+        cfg,
+        cli_robot="innate_mars",
+        robot_from_default=False,
+        cli_host="192.168.1.10",
+        host_from_default=False,
+        connection_name=None,
+        port_offset=0,
+        zmq_discover=False,
+        overrides=["mapping.depth_source=sensor"],
+    )
+    assert ctx.parameters.get("depth_source") == "sensor"
+    assert ctx.parameters.get("local_radius") == 0.85
+
+
+def test_get_parameters_applies_robot_from_preset():
+    from emet.core.parameters import get_parameters
+
+    params = get_parameters("configs/agent_innate_mars.yaml")
+    assert params.get("depth_source") == "auto"
+    assert params.get("local_radius") == 0.85
 
 
 def test_remote_host_uses_connection_robot_before_zmq():

@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -53,8 +53,7 @@ def test_load_scene_init_poses_graph_eqa_format(tmp_path: Path):
     """Explore-EQA CSV uses scene_floor,init_x,init_y,init_z,init_angle."""
     csv_path = tmp_path / "poses.csv"
     csv_path.write_text(
-        "scene_floor,init_x,init_y,init_z,init_angle\n"
-        "00004-VqCaAuuoeWk_1,1.0,2.0,0.0,0.5\n",
+        "scene_floor,init_x,init_y,init_z,init_angle\n00004-VqCaAuuoeWk_1,1.0,2.0,0.0,0.5\n",
         encoding="utf-8",
     )
     poses = load_scene_init_poses(csv_path)

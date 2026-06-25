@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -50,12 +50,7 @@ def test_extract_mcq_letter_does_not_match_article_a_in_prose():
 
 
 def test_extract_mcq_letter_from_raw_eqa_blank_answer_field():
-    raw = (
-        "reasoning:\nNeed more exploration.\n"
-        "answer:\n"
-        "confidence:\nFALSE\n"
-        "action:\n3\n"
-    )
+    raw = "reasoning:\nNeed more exploration.\nanswer:\nconfidence:\nFALSE\naction:\n3\n"
     assert extract_mcq_letter_from_raw_eqa(raw) == ""
     assert not grade_mcq_answer("", "B")
 

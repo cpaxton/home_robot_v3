@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from emet.app.robot_cli import discover_zmq_server_robot_id
-from emet.config.loader import ResolvedEmetConfig
+from emet.config.loader import ResolvedEmetConfig, finalize_resolved_config
 from emet.core.parameters import Parameters
 from emet.robots import apply_robot_dynav_parameter_overrides
 from emet.utils.connection import get_connection, get_host_from_connection
@@ -137,9 +137,8 @@ def build_parameters_from_config(
     host: str = "127.0.0.1",
     extra_mapping: dict[str, Any] | None = None,
 ) -> tuple[Parameters, bool]:
-    """Build :class:`Parameters` with robot overlay and legacy code overrides applied."""
-    merged_cfg = config.with_robot_overlay(robot_id)
-    mapping = merged_cfg.mapping_dict
+    """Build :class:`Parameters` from a finalized config (robot overlay already merged)."""
+    mapping = config.mapping_dict
     if extra_mapping:
         for k, v in extra_mapping.items():
             mapping[k] = v
@@ -147,7 +146,7 @@ def build_parameters_from_config(
     apply_robot_dynav_parameter_overrides(robot_id, mapping)
     apply_runtime_mapping_rules(mapping, robot_id=robot_id, host=host)
 
-    zmq_section = merged_cfg.zmq
+    zmq_section = config.zmq
     depth_mode = str(mapping.get("depth_source", "sensor")).lower()
     if zmq_section.allow_missing_depth is not None:
         allow_missing = bool(zmq_section.allow_missing_depth)
@@ -174,6 +173,7 @@ def resolve_runtime_context(
     zmq_timeout: float = 60.0,
     zmq_discover: bool = True,
     extra_mapping: dict[str, Any] | None = None,
+    overrides: list[str] | None = None,
 ) -> RuntimeContext:
     """Single entry: resolve host, robot, and mapping parameters."""
     host, host_source = resolve_host(
@@ -193,7 +193,7 @@ def resolve_runtime_context(
         zmq_discover=zmq_discover,
     )
 
-    final_config = config.with_robot_overlay(robot_id)
+    final_config = finalize_resolved_config(config, robot_id=robot_id, overrides=overrides)
     parameters, allow_missing = build_parameters_from_config(
         final_config,
         robot_id,

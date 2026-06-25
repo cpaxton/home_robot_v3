@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -108,11 +108,8 @@ def load_resolved_config(
     ctx: click.Context,
     *,
     emet_config: str,
-    config_sets: tuple[str, ...] = (),
     agent_config: str | None = None,
     dynav_config: str | None = None,
-    robot: str | None = None,
-    robot_from_default: bool = True,
 ) -> Any:
     """Load :class:`~emet.config.loader.ResolvedEmetConfig` from CLI args."""
     path = resolve_effective_config_path(
@@ -121,11 +118,7 @@ def load_resolved_config(
         agent_config=agent_config,
         dynav_config=dynav_config,
     )
-    return load_config(
-        path,
-        overrides=list(config_sets) if config_sets else None,
-        robot=robot if not robot_from_default and robot else None,
-    )
+    return load_config(path)
 
 
 def load_runtime_from_cli(
@@ -150,11 +143,8 @@ def load_runtime_from_cli(
     cfg = load_resolved_config(
         ctx,
         emet_config=emet_config,
-        config_sets=config_sets,
         agent_config=agent_config,
         dynav_config=dynav_config,
-        robot=robot,
-        robot_from_default=robot_from_default,
     )
 
     return resolve_runtime_context(
@@ -168,4 +158,5 @@ def load_runtime_from_cli(
         zmq_timeout=zmq_timeout,
         zmq_discover=zmq_discover,
         extra_mapping=extra_mapping,
+        overrides=list(config_sets) if config_sets else None,
     )

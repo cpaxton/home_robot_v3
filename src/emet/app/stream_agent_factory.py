@@ -27,7 +27,7 @@ import click
 import numpy as np
 
 from emet.app.robot_cli import create_robot_client_from_cli
-from emet.config.loader import load_config, resolve_config_path_for_legacy_alias
+from emet.config.loader import finalize_resolved_config, load_config, resolve_config_path_for_legacy_alias
 from emet.config.runtime import build_parameters_from_config
 from emet.robots import DEFAULT_DYNAV_CONFIG_YAML
 
@@ -90,7 +90,8 @@ def load_stream_parameters(
     overrides: list[str] | None = None,
 ) -> tuple[dict[str, Any], bool]:
     """Load mapping parameters with robot overlay and runtime depth rules."""
-    cfg = load_config(config_path, overrides=overrides)
+    cfg = load_config(config_path)
+    cfg = finalize_resolved_config(cfg, robot_id=_robot_key(robot), overrides=overrides)
     parameters, allow_missing = build_parameters_from_config(cfg, _robot_key(robot), host=host)
     return parameters.data, allow_missing
 

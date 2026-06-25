@@ -1,6 +1,8 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
+import numpy as np
 
 from emet.core.interfaces import Observations
 from emet.habitat.hm3d_semantics import (
@@ -8,7 +10,6 @@ from emet.habitat.hm3d_semantics import (
     _instance_index_from_object_id,
     hm3d_instance_items_from_obs,
 )
-import numpy as np
 
 
 class _FakeCategory:

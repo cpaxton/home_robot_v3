@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -67,10 +67,7 @@ def dynagraph_explore_until_terminated(
                 f"({streak}/{max_consecutive_failures} streak)"
             )
             if streak >= max_consecutive_failures:
-                _say(
-                    "Dynagraph explore-loop: stopping after consecutive failures "
-                    "(no frontier / planner blocked)."
-                )
+                _say("Dynagraph explore-loop: stopping after consecutive failures (no frontier / planner blocked).")
                 return "consecutive_failures", n_ok, i + 1
 
     _say(f"Dynagraph explore-loop: reached max_iterations ({max_iterations})")

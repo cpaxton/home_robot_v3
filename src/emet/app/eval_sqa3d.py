@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -37,7 +37,6 @@ def sqa3d_verify(split: str, scannet_smoke_scenes: str, run_embodied_smoke: bool
     """Verify SQA3D JSON, optional localization, and ScanNet mesh availability."""
     from emet.benchmarks.sqa3d.config import (
         annotations_json_path,
-        balanced_dir,
         localization_json_path,
         questions_json_path,
     )
@@ -133,9 +132,7 @@ def sqa3d_info() -> None:
         q = questions_json_path(split, data_dir)
         a = annotations_json_path(split, data_dir)
         loc = localization_json_path(split, data_dir)
-        click.echo(
-            f"  {split}: questions={q.is_file()} annotations={a.is_file()} localization={loc.is_file()}"
-        )
+        click.echo(f"  {split}: questions={q.is_file()} annotations={a.is_file()} localization={loc.is_file()}")
     click.echo(f"answer_dict={answer_dict_path(data_dir).is_file()}")
     from emet.benchmarks.sqa3d.scannet.config import default_scannet_root, scene_mesh_path
 
@@ -145,9 +142,7 @@ def sqa3d_info() -> None:
     if not balanced_dir(data_dir).is_dir():
         click.echo("\nDownload: uv run python scripts/download_sqa3d_data.py --fetch-annotations")
     if not scene_mesh_path("scene0380_00", scannet_root).is_file():
-        click.echo(
-            "ScanNet: uv run python scripts/download_scannet_data.py --accept-tos --scene scene0380_00"
-        )
+        click.echo("ScanNet: uv run python scripts/download_scannet_data.py --accept-tos --scene scene0380_00")
 
 
 @sqa3d_group.command("list-questions", short_help="List questions from a split")
@@ -158,10 +153,7 @@ def sqa3d_list_questions(split: str, limit: int, data_dir: Path | None) -> None:
     questions = load_sqa3d_questions(split, data_dir=data_dir)
     click.echo(f"split={split} n={len(questions)}")
     for q in questions[:limit]:
-        click.echo(
-            f"  id={q.question_id} scene={q.scene_id} "
-            f"answer={q.primary_answer!r} | {q.question[:72]}"
-        )
+        click.echo(f"  id={q.question_id} scene={q.scene_id} answer={q.primary_answer!r} | {q.question[:72]}")
 
 
 @sqa3d_group.command("run-episode", short_help="SQA3D episode on ScanNet mesh (DynaMem or Dynagraph)")
@@ -327,8 +319,7 @@ def sqa3d_run_batch(
         skipped = len(subset) - len(filtered)
         if skipped:
             click.echo(
-                f"Skipping {skipped} question(s) without ScanNet replay assets "
-                f"(replay_mode={replay_mode}) under {root}"
+                f"Skipping {skipped} question(s) without ScanNet replay assets (replay_mode={replay_mode}) under {root}"
             )
         subset = filtered
     if not subset:
@@ -452,10 +443,7 @@ def sqa3d_run_real_sweep(
 
     if download:
         sens_note = " + .sens" if with_sens else ""
-        click.echo(
-            f"Downloading ScanNet meshes{sens_note} for {split} questions "
-            f"[{question_start}:{question_end})..."
-        )
+        click.echo(f"Downloading ScanNet meshes{sens_note} for {split} questions [{question_start}:{question_end})...")
         dl_cmd = [
             sys.executable,
             "scripts/download_scannet_data.py",
@@ -517,9 +505,7 @@ def sqa3d_run_real_sweep(
         output=eval_json,
         require_all=False,
     )
-    click.echo(
-        f"\nReal-VLM sweep complete:\n  episodes: {jsonl}\n  eval: {eval_json}\n  exports: {export_root}"
-    )
+    click.echo(f"\nReal-VLM sweep complete:\n  episodes: {jsonl}\n  eval: {eval_json}\n  exports: {export_root}")
 
 
 @sqa3d_group.command("plot-results", short_help="TP/FP/FN breakdown + paper figures from episode JSONL")

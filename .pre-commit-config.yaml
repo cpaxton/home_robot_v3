@@ -56,6 +56,24 @@ repos:
             src/test/mapping/test_navgrid_compare\.py|
             src/test/molmospaces/test_multi_robot_molmospaces_navgrid_similarity\.py|
             src/test/molmospaces/test_stretch_molmospaces_dynamem_floor_map\.py|
+            packages/emet_habitat/|
+            src/emet/benchmarks/__init__\.py|
+            src/emet/benchmarks/sqa3d/|
+            src/emet/habitat/|
+            src/test/benchmarks/sqa3d/|
+            src/test/habitat/|
+            src/emet/eval/benchmark_dynagraph\.py|
+            src/emet/eval/memory_backends\.py|
+            src/emet/llms/graph_eqa_vlm\.py|
+            src/emet/llms/prompts/hmeqa_eqa_prompt\.py|
+            src/emet/memory/graph_eqa/(frontier_nodes|mcq_debias|nav_benchmark|sim_ground_truth_graph)\.py|
+            src/emet/simulation/(mujoco_ground_truth|mujoco_gt_objects|sim_object_placements)\.py|
+            src/emet/app/(dynagraph_explore|eval_sqa3d|export_sim_gt|run_graph_eqa_habitat|run_interactive|tune_graph_fusion)\.py|
+            src/test/molmospaces/test_xlerobot.*\.py|
+            src/test/test_stretch_teleport_command\.py|
+            src/test/(eval/test_benchmark_dynagraph|memory/test_(dynagraph_ground_truth.*|frontier_nodes|graph_eqa_human_answer|graph_nav_localize|mcq_debias|sim_ground_truth_graph|sim_object_placements)|app/test_(dynagraph_explore|dynagraph_nav_benchmark|run_interactive)|agent/test_vlm_frontier_scoring|core/test_zmq_ground_truth_action|simulation/test_mujoco_ground_truth)\.py|
+            scripts/(aggregate_sqa3d_sweep|download_habitat_eqa_data|download_scannet_data|download_sqa3d_data|dynagraph_ground_truth_smoke|eval_dynagraph_ground_truth|probe_vlm_boxes|run_sqa3d_scannet_smoke|smoke_backend_localization_figure|smoke_vl_model)\.py|
+            scripts/run_sqa3d_gpu_sweep\.sh|
             src/emet/app/config_cli\.py|
             src/emet/config/loader\.py|
             src/emet/config/runtime\.py|
@@ -87,6 +105,24 @@ repos:
             src/test/mapping/test_navgrid_compare\.py|
             src/test/molmospaces/test_multi_robot_molmospaces_navgrid_similarity\.py|
             src/test/molmospaces/test_stretch_molmospaces_dynamem_floor_map\.py|
+            packages/emet_habitat/|
+            src/emet/benchmarks/__init__\.py|
+            src/emet/benchmarks/sqa3d/|
+            src/emet/habitat/|
+            src/test/benchmarks/sqa3d/|
+            src/test/habitat/|
+            src/emet/eval/benchmark_dynagraph\.py|
+            src/emet/eval/memory_backends\.py|
+            src/emet/llms/graph_eqa_vlm\.py|
+            src/emet/llms/prompts/hmeqa_eqa_prompt\.py|
+            src/emet/memory/graph_eqa/(frontier_nodes|mcq_debias|nav_benchmark|sim_ground_truth_graph)\.py|
+            src/emet/simulation/(mujoco_ground_truth|mujoco_gt_objects|sim_object_placements)\.py|
+            src/emet/app/(dynagraph_explore|eval_sqa3d|export_sim_gt|run_graph_eqa_habitat|run_interactive|tune_graph_fusion)\.py|
+            src/test/molmospaces/test_xlerobot.*\.py|
+            src/test/test_stretch_teleport_command\.py|
+            src/test/(eval/test_benchmark_dynagraph|memory/test_(dynagraph_ground_truth.*|frontier_nodes|graph_eqa_human_answer|graph_nav_localize|mcq_debias|sim_ground_truth_graph|sim_object_placements)|app/test_(dynagraph_explore|dynagraph_nav_benchmark|run_interactive)|agent/test_vlm_frontier_scoring|core/test_zmq_ground_truth_action|simulation/test_mujoco_ground_truth)\.py|
+            scripts/(aggregate_sqa3d_sweep|download_habitat_eqa_data|download_scannet_data|download_sqa3d_data|dynagraph_ground_truth_smoke|eval_dynagraph_ground_truth|probe_vlm_boxes|run_sqa3d_scannet_smoke|smoke_backend_localization_figure|smoke_vl_model)\.py|
+            scripts/run_sqa3d_gpu_sweep\.sh|
             src/emet/app/config_cli\.py|
             src/emet/config/loader\.py|
             src/emet/config/runtime\.py|
