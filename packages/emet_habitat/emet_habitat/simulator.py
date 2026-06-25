@@ -198,6 +198,20 @@ class HabitatEQASimulator:
     def last_init_pose_record(self) -> dict[str, object] | None:
         return getattr(self, "_last_init_pose_record", None)
 
+    @property
+    def floor_y(self) -> float:
+        """Navmesh-snapped spawn Habitat ``Y`` for floor-relative voxel height."""
+        record = self.last_init_pose_record
+        if record:
+            snapped = record.get("init_pose_snapped")
+            if isinstance(snapped, dict) and "y" in snapped:
+                return float(snapped["y"])
+        return float(self._agent.get_state().position[1])
+
+    @property
+    def sensor_height(self) -> float:
+        return float(self._sensor_height)
+
     def find_path_to_xy(self, goal_x: float, goal_z: float) -> np.ndarray | None:
         """Return navmesh shortest-path waypoints in Habitat coords, or None."""
         if not self._sim.pathfinder.is_loaded:

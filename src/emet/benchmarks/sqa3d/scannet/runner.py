@@ -15,6 +15,7 @@ from emet.benchmarks.sqa3d.datasets import get_sqa3d_question, load_sqa3d_questi
 from emet.benchmarks.sqa3d.episode_metrics import (
     SQA3DEpisodeMetrics,
     append_sqa3d_jsonl,
+    format_sqa3d_episode_line,
     read_completed_sqa3d_question_ids,
 )
 from emet.benchmarks.sqa3d.metrics import answer_match, clean_answer, extract_answer_from_eqa_row
@@ -114,6 +115,7 @@ def _configure_eqa_parameters(
     eqa.setdefault("prompt_variant", "sqa3d")
     if method == "dynagraph":
         eqa["sqa3d_allow_partial_graph"] = True
+        eqa.setdefault("eqa_max_images", 3)
     if device == "cpu":
         eqa["vl_quantization"] = None
     if eqa_vl_family is not None:
@@ -186,6 +188,9 @@ def _make_agent(
             use_real_vlm=use_real_vlm,
             device=device,
         )
+        # Open-vocab SQA3D answers do not need CONFIRMED_MEMORY SigLIP passes (extra VRAM + tokens).
+        if agent.graph_memory is not None:
+            agent.graph_memory.memory_summary_enabled = False
         return agent
 
     agent = DynamemController(
@@ -291,6 +296,24 @@ def _run_dynamem_eqa(
     return predicted, raw_eqa, confident
 
 
+def _prepare_dynagraph_vram_for_eqa(agent: DynamemController) -> None:
+    """Drop SigLIP / navigation caches so GraphEQA VLM forward has headroom."""
+    from emet.perception.encoders.siglip_encoder import release_shared_mask_siglip_encoder
+
+    release_shared_mask_siglip_encoder()
+    agent.encoder = None
+    vm = getattr(agent, "voxel_map", None)
+    if vm is not None:
+        vm.encoder = None
+    _release_gpu_memory()
+    try:
+        from emet.llms.graph_eqa_vlm import trim_shared_graph_eqa_vlm_cache
+
+        trim_shared_graph_eqa_vlm_cache()
+    except Exception:
+        pass
+
+
 def _run_dynagraph_eqa(
     agent: DynamemController,
     prompt: str,
@@ -298,6 +321,7 @@ def _run_dynagraph_eqa(
     max_planning_steps: int,
     max_movement_step: int,
 ) -> tuple[str, str, bool]:
+    _prepare_dynagraph_vram_for_eqa(agent)
     discord_text, _images = agent.run_eqa(
         prompt,
         max_planning_steps=max_planning_steps,
@@ -307,9 +331,11 @@ def _run_dynagraph_eqa(
     parsed_answer = ""
     model_confident = False
     if agent.graph_memory is not None:
-        raw_eqa = agent.graph_memory.last_eqa_raw
+        raw_eqa = str(agent.graph_memory.last_eqa_raw or "")
         _reasoning, answer, model_confident, _action, _cr = agent.graph_memory.last_eqa_parsed
         parsed_answer = str(answer or "")
+    if not raw_eqa.strip() and discord_text:
+        raw_eqa = discord_text
     predicted = _extract_open_answer(raw_eqa, parsed_answer)
     if not predicted and discord_text:
         predicted = _extract_open_answer(discord_text, "")
@@ -612,7 +638,7 @@ def _run_sqa3d_batch_isolated(
                     break
             if row is not None:
                 results.append(row)
-                print(f"question_id={qid} em={row.em} (appended {output_jsonl})", flush=True)
+                print(f"{format_sqa3d_episode_line(row)} (appended {output_jsonl})", flush=True)
     return results
 
 
@@ -703,7 +729,7 @@ def run_sqa3d_batch(
             results.append(row)
             if output_jsonl is not None:
                 append_sqa3d_jsonl(output_jsonl, row)
-                print(f"question_id={qid} em={row.em} (appended {output_jsonl})", flush=True)
+                print(f"{format_sqa3d_episode_line(row)} (appended {output_jsonl})", flush=True)
             _release_gpu_memory()
         except Exception as exc:
             if not continue_on_error:

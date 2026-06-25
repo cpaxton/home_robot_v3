@@ -23,6 +23,10 @@ MC accuracy, mean planning steps; GraphEQA vs Dynagraph vs ablations.
 .venv-habitat/bin/emet-habitat  # see habitat/usage.md for sweep scripts
 ```
 
+## Frame / map diagnostics
+
+Voxel-map coordinates for Habitat are documented in [habitat/README.md](../habitat/README.md) (voxel-world section). Before using `topdown_map.png` in paper figures, audit bundles with [`scripts/audit_habitat_voxel_map.py`](../../scripts/audit_habitat_voxel_map.py) — see [evaluation.md](../evaluation.md#habitat-frame-sanity-before-trusting-map-colors).
+
 ## Related sim benchmarks (this repo, no Habitat install)
 
 - [ovmm_find_phase.md](ovmm_find_phase.md) — HM3D proxy find-phase

@@ -60,6 +60,26 @@ Habitat aliases: `HABITAT_EQA_EXPORT_MAP`, `HABITAT_EQA_EXPORT_VIDEO`, `HABITAT_
 
 **CLI flags** (`.venv-habitat/bin/emet-habitat`): `--export-map`, `--export-video`, `--map-stride` on `run-episode` / `run-batch`; OVMM batch adds `--run-tag`. With `--map-stride N`, intermediate maps are written under `<bundle>/maps/step_NNNN.png` at episode end.
 
+### Habitat frame sanity (before trusting map colors)
+
+HM-EQA depth and `gps` must share the same voxel-world frame (`src/emet/habitat/coordinates.py`). Misalignment used to produce wall-to-wall red maps or orphan “satellite” explored blobs.
+
+After an episode with `EMET_EVAL_EXPORT_VOXEL_HISTORY=1`:
+
+```bash
+uv run python scripts/audit_habitat_voxel_map.py \
+  ~/.cache/habitat_eqa/episodes/<run_tag>/q0006_dynagraph --json
+```
+
+Check:
+
+| Field | Healthy signal |
+|-------|----------------|
+| `pcd_planar_x_mismatches` | empty (no Habitat X sign flip vs `base_pose`) |
+| `explored_obstacle_frac` | not ~0.9 (false wall-to-wall obstacles) and not ~0.0 from height-band miss |
+
+Optional live regression: `RUN_HABITAT_FRAME_TESTS=1 uv run emet test src/test/eval/test_audit_habitat_voxel_map.py -k live_habitat`.
+
 ## Overnight smoke (all tracks)
 
 One script runs HM-EQA, OVMM Habitat, and SQA3D (if ScanNet verify passes), then builds figures:

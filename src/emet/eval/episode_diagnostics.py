@@ -390,9 +390,10 @@ def _observation_history_row(
         gps_grid_ij = [gi, gj]
 
     cam_xy = (float(camera_t[0]), float(camera_t[1]))
-    cam_xz = (float(camera_t[0]), float(camera_t[2]))
+    # Voxel-map world uses planar (Habitat X, Habitat Z) on axes 0/1; axis 2 is floor-relative height.
+    cam_planar = cam_xy
     cam_ij_xy = list(world_xy_to_grid_ij(cam_xy, origin_xy, grid_resolution, shape_hw))
-    cam_ij_xz = list(world_xy_to_grid_ij(cam_xz, origin_xy, grid_resolution, shape_hw))
+    cam_ij_xz = list(world_xy_to_grid_ij(cam_planar, origin_xy, grid_resolution, shape_hw))
 
     pcd = _to_numpy_f64(frame.full_world_xyz)
     pcd_centroid_xy: list[float] | None = None
@@ -401,7 +402,7 @@ def _observation_history_row(
     if pcd is not None and pcd.ndim == 2 and pcd.shape[0] > 0 and pcd.shape[1] >= 3:
         n_world_points = int(pcd.shape[0])
         pcd_centroid_xy = [float(pcd[:, 0].mean()), float(pcd[:, 1].mean())]
-        pcd_centroid_xz = [float(pcd[:, 0].mean()), float(pcd[:, 2].mean())]
+        pcd_centroid_xz = [float(pcd[:, 0].mean()), float(pcd[:, 1].mean())]
 
     depth_stats = _depth_summary(frame.depth)
     return {

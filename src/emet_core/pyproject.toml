@@ -13,7 +13,7 @@ dependencies = [
     "numpy>=1.24.4,<2",
     "scipy",
     "pyzmq",
-    "opencv-python",
+    "opencv-contrib-python",
     "sophuspy",
     "pin",
     "yacs",

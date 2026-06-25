@@ -82,6 +82,12 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         self.dof = 3
         self._sync_pose_from_sim()
 
+    def _observation_kwargs(self) -> dict:
+        return {
+            "floor_y": self._sim.floor_y,
+            "sensor_height": self._sim.sensor_height,
+        }
+
     def _sync_pose_from_sim(self) -> None:
         """Refresh cached ``_xyt`` from the latest simulator agent state."""
         frame = self._sim.get_frame()
@@ -91,6 +97,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
             agent_state=frame.agent_state,
             intrinsics=frame.intrinsics,
             semantic=frame.semantic,
+            **self._observation_kwargs(),
         )
         self._xyt = np.array([obs.gps[0], obs.gps[1], float(obs.compass[0])], dtype=np.float64)
 
@@ -120,6 +127,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
             agent_state=frame.agent_state,
             intrinsics=frame.intrinsics,
             semantic=frame.semantic,
+            **self._observation_kwargs(),
         )
 
     def get_base_pose(self, timeout: float = 5.0) -> np.ndarray:

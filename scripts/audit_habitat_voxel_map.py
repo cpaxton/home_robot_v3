@@ -113,6 +113,7 @@ def audit_bundle(bundle_dir: Path) -> dict[str, Any]:
         report["gps_camera_grid_mismatches"] = mismatches
 
         pcd_offsets = []
+        pcd_x_mismatches = []
         for row in obs_rows:
             base = row.get("base_pose_xyt")
             centroid = row.get("pcd_centroid_xz")
@@ -128,9 +129,25 @@ def audit_bundle(bundle_dir: Path) -> dict[str, Any]:
                         "base_pose_xz": [base[0], base[1]],
                         "pcd_centroid_xz": centroid,
                         "offset_m": dist,
+                        "offset_x_m": abs(dx),
+                        "offset_z_m": abs(dz),
+                    }
+                )
+            if abs(dx) > 0.5 or (
+                float(centroid[0]) * float(base[0]) < 0
+                and abs(float(base[0])) > 0.05
+                and abs(float(centroid[0])) > 0.05
+            ):
+                pcd_x_mismatches.append(
+                    {
+                        "obs_idx": row["obs_idx"],
+                        "base_x": float(base[0]),
+                        "pcd_x": float(centroid[0]),
+                        "offset_x_m": abs(dx),
                     }
                 )
         report["large_pcd_centroid_offsets_m"] = pcd_offsets
+        report["pcd_planar_x_mismatches"] = pcd_x_mismatches
     else:
         report["warning"] = "observations_history.jsonl missing; final-grid summary only"
         obs_rows = []

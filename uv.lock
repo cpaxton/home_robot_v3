@@ -15,6 +15,7 @@ overrides = [
     { name = "mujoco", specifier = ">=3.4.0" },
     { name = "numba", specifier = ">=0.58.1" },
     { name = "numpy", specifier = ">=1.24.4,<2" },
+    { name = "opencv-contrib-python", specifier = ">=4.8" },
 ]
 
 [[package]]
@@ -1068,7 +1069,7 @@ dependencies = [
     { name = "open3d" },
     { name = "openai" },
     { name = "openai-whisper" },
-    { name = "opencv-python" },
+    { name = "opencv-contrib-python" },
     { name = "overrides" },
     { name = "paramiko" },
     { name = "pin" },
@@ -1200,7 +1201,7 @@ requires-dist = [
     { name = "open3d" },
     { name = "openai", specifier = ">=1.88.0" },
     { name = "openai-whisper" },
-    { name = "opencv-python" },
+    { name = "opencv-contrib-python" },
     { name = "overrides" },
     { name = "paramiko", specifier = ">=3.0.0" },
     { name = "pin" },

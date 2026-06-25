@@ -141,6 +141,8 @@ def _answer_field_lines(raw: str) -> list[str]:
 
 def extract_mcq_letter_from_raw_eqa(raw: str, choices: list[str] | None = None) -> str:
     """Parse MCQ letter from raw mLLM EQA output (before human-facing reformatting)."""
+    from emet.memory.graph_eqa.mcq_debias import match_freeform_to_choice
+
     text = raw or ""
     if not text.strip():
         return ""
@@ -156,6 +158,10 @@ def extract_mcq_letter_from_raw_eqa(raw: str, choices: list[str] | None = None) 
     m = re.search(r"(?:^|\n)\s*answer\s*:\s*([a-d])\b", text, flags=re.IGNORECASE)
     if m:
         return m.group(1).upper()
+    if choices:
+        idx = match_freeform_to_choice(answer_field, choices)
+        if idx is not None:
+            return chr(ord("A") + idx)
     return ""
 
 

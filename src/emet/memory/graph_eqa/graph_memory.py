@@ -1534,7 +1534,13 @@ class GraphEQAMemory:
             commands.append(im)
         self.last_eqa_nav_fallback_count = len(nav_fallback_tail)
 
-        raw = self.eqa_client(commands)
+        try:
+            raw = self.eqa_client(commands)
+        except Exception as exc:
+            raw = f"Error: {exc}"
+            self.last_eqa_raw = raw
+            self.last_eqa_parsed = ("", "Unknown", False, "", str(exc))
+            raise
         self.last_eqa_raw = raw
         answer_outputs = raw.replace("*", "").replace("/", "").replace("#", "").lower()
 

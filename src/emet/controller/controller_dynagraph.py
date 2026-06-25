@@ -41,9 +41,15 @@ class DynagraphController(GraphEQAController):
         params = kwargs.get("parameters")
         if params is None and len(args) >= 2:
             params = args[1]
+        sqa3d_open_qa = False
         if params is not None:
             try:
-                params["force_eqa_siglip_encoder"] = True
+                eqa_cfg = params.get("eqa", {}) or {}
+                variant = str(eqa_cfg.get("prompt_variant", "") or "").strip().lower()
+                sqa3d_open_qa = variant in ("sqa3d", "situated")
+                # SQA3D open QA does not need SigLIP voxel features (saves ~2 GiB VRAM before EQA).
+                if not sqa3d_open_qa:
+                    params["force_eqa_siglip_encoder"] = True
             except Exception:
                 pass
         super().__init__(*args, **kwargs)
@@ -52,12 +58,16 @@ class DynagraphController(GraphEQAController):
         # that explores unobserved question objects instead of revisiting seen views.
         self._eqa_explore_when_uncovered = True
         if self.graph_memory is not None:
-            self.graph_memory.memory_summary_enabled = True
-            # Counteract the small VLM's MCQ position bias (letter A under-picked
-            # ~5x) with a choice-rotation vote at episode end (mcq_debias.py).
-            self.graph_memory.mcq_debias_enabled = True
-            self.graph_memory.set_text_grounder(self._siglip_text_match)
-            self.graph_memory.set_obs_id_grounder(self._siglip_obs_id_for_text)
+            if sqa3d_open_qa:
+                self.graph_memory.memory_summary_enabled = False
+                self.graph_memory.mcq_debias_enabled = False
+            else:
+                self.graph_memory.memory_summary_enabled = True
+                # Counteract the small VLM's MCQ position bias (letter A under-picked
+                # ~5x) with a choice-rotation vote at episode end (mcq_debias.py).
+                self.graph_memory.mcq_debias_enabled = True
+                self.graph_memory.set_text_grounder(self._siglip_text_match)
+                self.graph_memory.set_obs_id_grounder(self._siglip_obs_id_for_text)
         if ground_truth_mode and self.graph_memory is not None:
             # Keep full rotate/explore viewpoint history (voxel frames also logged on export).
             self.graph_memory.set_navigation_samples_max(max(self.graph_memory.navigation_samples_max, 8192))
