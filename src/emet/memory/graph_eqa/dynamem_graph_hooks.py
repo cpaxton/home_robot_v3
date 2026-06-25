@@ -158,7 +158,12 @@ def update_graph_memory_from_dynamem_observation(
             )
             if fusion_enabled:
                 crop_rgb = np.asarray(rgb)
-                for label, xyz_item, bbox in items:
+                for item in items:
+                    if len(item) >= 3:
+                        label, xyz_item, bbox = item[0], item[1], item[2]
+                    else:
+                        label, xyz_item = item[0], item[1]
+                        bbox = None
                     cand = _detection_to_candidate(
                         {
                             "label": str(label),
