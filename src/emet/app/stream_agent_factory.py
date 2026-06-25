@@ -497,13 +497,39 @@ def _map_stats(agent: Any, *, dynav_resolved: str) -> dict[str, Any]:
     return stats
 
 
+def _graph_node_counts(graph_memory: Any) -> dict[str, int]:
+    nodes = graph_memory.get_nodes()
+    object_n = sum(
+        1 for n in nodes if not n.is_viewpoint and not getattr(n, "is_frontier", False)
+    )
+    frontier_n = sum(1 for n in nodes if getattr(n, "is_frontier", False))
+    viewpoint_n = sum(1 for n in nodes if n.is_viewpoint)
+    total = len(nodes)
+    return {
+        "n_graph_nodes": total,
+        "n_graph_object_nodes": object_n,
+        "n_graph_frontier_nodes": frontier_n,
+        "n_graph_viewpoint_nodes": viewpoint_n,
+    }
+
+
 def stream_stats(agent: Any, backend: str, *, dynav_resolved: str) -> dict[str, Any]:
     """Status dict for periodic ``emet stream`` logging."""
     stats = _map_stats(agent, dynav_resolved=dynav_resolved)
     stats["backend"] = backend
     if backend in ("graph_eqa", "dynagraph", "ground_truth"):
         gm = getattr(agent, "graph_memory", None)
-        stats["n_graph_nodes"] = len(gm.get_nodes()) if gm is not None and hasattr(gm, "get_nodes") else 0
+        if gm is not None and hasattr(gm, "get_nodes"):
+            stats.update(_graph_node_counts(gm))
+        else:
+            stats.update(
+                {
+                    "n_graph_nodes": 0,
+                    "n_graph_object_nodes": 0,
+                    "n_graph_frontier_nodes": 0,
+                    "n_graph_viewpoint_nodes": 0,
+                }
+            )
     elif backend == "scene_graph":
         processor = getattr(agent, "_stream_scene_graph_processor", None)
         sg = processor.scene_graph if processor is not None else agent.get_voxel_map().get_scene_graph()
@@ -520,7 +546,14 @@ def format_stream_stats(stats: dict[str, Any]) -> str:
         f"{stats.get('n_voxel_explored_cells', 0)} explored cells",
     ]
     if "n_graph_nodes" in stats:
-        parts.append(f"{stats.get('n_graph_nodes', 0)} graph nodes")
+        obj = stats.get("n_graph_object_nodes", stats.get("n_graph_nodes", 0))
+        vp = stats.get("n_graph_viewpoint_nodes", 0)
+        fr = stats.get("n_graph_frontier_nodes", 0)
+        total = stats.get("n_graph_nodes", 0)
+        if vp or fr:
+            parts.append(f"graph {obj} obj / {vp} vp / {fr} fr ({total} total)")
+        else:
+            parts.append(f"{total} graph nodes")
     if "n_scene_graph_objects" in stats:
         parts.append(f"{stats.get('n_scene_graph_objects', 0)} scene-graph objects")
     if "n_instances" in stats:

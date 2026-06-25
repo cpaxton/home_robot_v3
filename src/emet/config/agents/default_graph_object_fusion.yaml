@@ -9,3 +9,4 @@ graph_object_fusion:
   require_label_match: false
   max_candidates: 64
   match_xy_m: 0.55
+  fallback_spatial_merge_xy_m: 0.45
