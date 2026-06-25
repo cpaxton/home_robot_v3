@@ -9,7 +9,9 @@
 
 ## Config and models
 
-- **Scene / mapping YAML**: `--agent-config` (default `dynav_config.yaml`). Use a basename under `src/emet/config/` or a path to your own YAML. Key reference: [Dynav configuration](dynav_config.md) (`map_boundary`, depth source, motion planner, EQA).
+- **Unified config**: `--config` / `-C` (default [`configs/emet/default.yaml`](../configs/emet/default.yaml); env **`EMET_CONFIG`**). Legacy **`--agent-config`** is a deprecated alias. Dot overrides: **`--set mapping.depth_source=auto`**. See [Unified EMET configuration](emet_config.md).
+- **Robot**: **`--robot`** optional — resolved from config, connection profile, or ZMQ (`emet_robot_id`). Must match `emet serve mujoco --robot` when both are explicit.
+- **Mapping keys**: nested under **`mapping:`** in config. Reference: [Dynav / mapping configuration](dynav_config.md).
 - **Chat / tool backbone**: `--llm` (default `qwen3-vl-eqa`: one Qwen3-VL-8B int4 from `dynav_config.yaml` `eqa:` for chat + head camera). `emet run agent` sets `PYTORCH_ALLOC_CONF=expandable_segments:True` in the agent subprocess unless you already exported `PYTORCH_ALLOC_CONF` (reduces fragmentation vs SigLIP/detector). With **`--eqa`**, **`--share-memory-vllm`** (default) reuses that same VLM for DynaMem captions/answers. Text-only fallback: `qwen35-4B` / `qwen35-9B`. For VL models, **robot RGB is passed by default** on each new user turn; use **`--no-vl-camera`** to disable.
 - **Device / length**: `--device`, `--max-tokens` apply to embodied and `--offline` modes.
 

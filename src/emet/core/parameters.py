@@ -125,6 +125,10 @@ class Parameters:
             return False
 
 
-def get_parameters(path: str):
-    """Load parameters from a path"""
-    return Parameters.load(path)
+def get_parameters(path: str, *, overrides: list[str] | None = None, robot: str | None = None):
+    """Load parameters from a path (nested or legacy flat dynav YAML)."""
+    from emet.config.loader import load_config, resolve_config_path_for_legacy_alias
+
+    resolved_path = resolve_config_path_for_legacy_alias(path)
+    cfg = load_config(resolved_path, overrides=overrides, robot=robot)
+    return Parameters(**cfg.mapping_dict)

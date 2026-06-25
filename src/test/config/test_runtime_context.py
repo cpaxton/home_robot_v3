@@ -1,0 +1,120 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+
+"""Tests for runtime context resolution."""
+
+from __future__ import annotations
+
+from unittest.mock import patch
+
+from emet.config.loader import ResolvedEmetConfig, default_config_path, load_config
+from emet.config.runtime import (
+    build_parameters_from_config,
+    resolve_robot_id,
+    resolve_runtime_context,
+)
+
+
+def test_localhost_da3_promoted_to_auto():
+    cfg = load_config(default_config_path())
+    raw = cfg.raw
+    raw.setdefault("mapping", {})["depth_source"] = "da3"
+    resolved = ResolvedEmetConfig(raw=raw)
+    params, _ = build_parameters_from_config(resolved, "stretch", host="127.0.0.1")
+    assert params.get("depth_source") == "auto"
+
+
+def test_innate_mars_allow_missing_depth_from_robot_overlay():
+    cfg = load_config(default_config_path())
+    ctx = resolve_runtime_context(
+        cfg,
+        cli_robot="innate_mars",
+        robot_from_default=False,
+        cli_host="192.168.1.10",
+        host_from_default=False,
+        connection_name=None,
+        port_offset=0,
+        zmq_discover=False,
+    )
+    assert ctx.allow_missing_depth is True
+    assert ctx.parameters.get("depth_source") == "auto"
+
+
+def test_robot_precedence_config_over_default():
+    cfg = load_config(default_config_path())
+    cfg.raw["robot"] = "rby1"
+    rid, source = resolve_robot_id(
+        None,
+        robot_from_default=True,
+        config=cfg,
+        connection_name=None,
+        host="127.0.0.1",
+        port_offset=0,
+        zmq_discover=False,
+    )
+    assert rid == "rby1"
+    assert source == "config"
+
+
+def test_robot_zmq_discovery_when_unset():
+    cfg = load_config(default_config_path())
+    with patch("emet.config.runtime.get_connection", return_value={"robot": "innate_mars", "host": "herman"}):
+        with patch("emet.config.runtime.discover_zmq_server_robot_id", return_value="stretch"):
+            rid, source = resolve_robot_id(
+                None,
+                robot_from_default=True,
+                config=cfg,
+                connection_name=None,
+                host="127.0.0.1",
+                port_offset=0,
+                zmq_discover=True,
+            )
+    assert rid == "stretch"
+    assert source == "zmq"
+
+
+def test_localhost_skips_connection_robot_without_zmq():
+    cfg = load_config(default_config_path())
+    with patch("emet.config.runtime.get_connection", return_value={"robot": "innate_mars", "host": "herman"}):
+        with patch("emet.config.runtime.discover_zmq_server_robot_id", return_value=None):
+            rid, source = resolve_robot_id(
+                None,
+                robot_from_default=True,
+                config=cfg,
+                connection_name=None,
+                host="127.0.0.1",
+                port_offset=0,
+                zmq_discover=True,
+            )
+    assert rid == "stretch"
+    assert source == "default"
+
+
+def test_remote_host_uses_connection_robot_before_zmq():
+    cfg = load_config(default_config_path())
+    with patch("emet.config.runtime.get_connection", return_value={"robot": "innate_mars", "host": "192.168.1.42"}):
+        with patch("emet.config.runtime.discover_zmq_server_robot_id") as discover:
+            rid, source = resolve_robot_id(
+                None,
+                robot_from_default=True,
+                config=cfg,
+                connection_name=None,
+                host="192.168.1.42",
+                port_offset=0,
+                zmq_discover=True,
+            )
+    assert rid == "innate_mars"
+    assert source == "connection"
+    discover.assert_not_called()

@@ -15,7 +15,7 @@ YAML files describe how to start `emet.simulation.mujoco_server` for **default M
 
 ## Linking from an agent config
 
-In any dynav-style agent YAML (the file passed to `--agent-config`):
+In any dynav-style agent YAML (the file passed to `--config` / legacy `--agent-config`):
 
 ```yaml
 sim_config: configs/sim/default_table_rby1.yaml

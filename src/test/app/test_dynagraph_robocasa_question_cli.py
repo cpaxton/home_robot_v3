@@ -1,3 +1,12 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
 # Copyright (c) Chris Paxton
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
@@ -64,6 +73,7 @@ def test_run_dynagraph_module_exposes_dynav_and_explore_flags():
     )
     assert r.returncode == 0, r.stderr
     out = r.stdout + r.stderr
+    assert "--config" in out or "-C" in out
     assert "--dynav-config" in out
     assert "--explore-loop" in out
 

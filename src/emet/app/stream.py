@@ -23,7 +23,7 @@ import time
 import click
 from click.core import ParameterSource
 
-from emet.app.capture import _resolve_host, _resolve_robot
+from emet.app.config_cli import emet_config_options, load_runtime_from_cli
 from emet.app.robot_cli import create_robot_client_from_cli
 from emet.app.stream_agent_factory import (
     STREAM_BACKENDS,
@@ -33,7 +33,6 @@ from emet.app.stream_agent_factory import (
     stream_agent_update,
     stream_stats,
 )
-from emet.robots import DEFAULT_DYNAV_CONFIG_YAML
 
 
 def _stream_zmq_only(
@@ -169,9 +168,8 @@ def _stream_with_backend(
 @click.option("--connection", "-c", "connection_name", default=None, help="Saved connection profile (host/robot)")
 @click.option(
     "--robot",
-    default="stretch",
-    show_default=True,
-    help="Robot backend (stretch, innate_mars, rby1, galaxea_r1, …)",
+    default=None,
+    help="Robot backend (optional: config, connection profile, or ZMQ discovery on localhost).",
 )
 @click.option("--port-offset", default=0, type=int, show_default=True, help="Add to default ZMQ ports (4401+)")
 @click.option(
@@ -185,13 +183,6 @@ def _stream_with_backend(
 )
 @click.option("--map", "run_map", is_flag=True, help="Alias for --backend dynamem")
 @click.option("--graph", "run_graph", is_flag=True, help="Alias for --backend dynagraph")
-@click.option(
-    "--dynav-config",
-    "--dynav_config",
-    default=DEFAULT_DYNAV_CONFIG_YAML,
-    show_default=True,
-    help="Planner/dynav YAML for mapping backends (hardware Mars: dynav_innate_mars.yaml)",
-)
 @click.option("--hz", default=1.0, show_default=True, help="Update rate when a mapping backend is active")
 @click.option("--max-steps", default=0, type=int, show_default=True, help="Stop after N updates (0 = until Ctrl+C)")
 @click.option("--cpu-only", is_flag=True, help="CPU-only models for mapping backends")
@@ -235,16 +226,16 @@ def _stream_with_backend(
     help="Accept RGB-only ZMQ frames (default for innate_mars hardware bridge)",
 )
 @click.pass_context
+@emet_config_options()
 def main(
     ctx: click.Context,
     robot_ip: str,
     connection_name: str | None,
-    robot: str,
+    robot: str | None,
     port_offset: int,
     backend: str | None,
     run_map: bool,
     run_graph: bool,
-    dynav_config: str,
     hz: float,
     max_steps: int,
     cpu_only: bool,
@@ -259,6 +250,10 @@ def main(
     rerun_debug: bool,
     rerun_bind: bool,
     allow_missing_depth: bool,
+    emet_config: str = "",
+    config_sets: tuple[str, ...] = (),
+    agent_config: str | None = None,
+    dynav_config: str | None = None,
 ) -> None:
     """Stream live ZMQ observations to Rerun until Ctrl+C.
 
@@ -296,14 +291,31 @@ def main(
     if rerun_bind:
         os.environ["RERUN_BIND_ALL"] = "1"
 
-    ip_from_default = ctx.get_parameter_source("robot_ip") == ParameterSource.DEFAULT
-    robot_from_default = ctx.get_parameter_source("robot") == ParameterSource.DEFAULT
-    host = _resolve_host(robot_ip, connection_name, ip_from_default=ip_from_default)
-    robot_key = _resolve_robot(robot, connection_name, robot_from_default=robot_from_default)
-    dynav_from_default = ctx.get_parameter_source("dynav_config") == ParameterSource.DEFAULT
+    dynav_from_default = (
+        ctx.get_parameter_source("dynav_config") == ParameterSource.DEFAULT
+        and ctx.get_parameter_source("emet_config") == ParameterSource.DEFAULT
+    )
 
-    if not allow_missing_depth and robot_key == "innate_mars":
-        allow_missing_depth = True
+    runtime = load_runtime_from_cli(
+        ctx,
+        emet_config=emet_config,
+        config_sets=config_sets,
+        agent_config=agent_config,
+        dynav_config=dynav_config,
+        robot=robot,
+        robot_ip=robot_ip,
+        connection=connection_name,
+        port_offset=port_offset,
+    )
+    host = runtime.host
+    robot_key = runtime.robot_id
+    if runtime.robot_source == "zmq":
+        click.echo(f"Using robot from ZMQ server: {robot_key!r} (pass --robot to override).")
+
+    config_path = runtime.config_path
+
+    if not allow_missing_depth:
+        allow_missing_depth = runtime.allow_missing_depth
 
     if resolved_backend:
         _stream_with_backend(
@@ -311,7 +323,7 @@ def main(
             robot_key=robot_key,
             host=host,
             port_offset=port_offset,
-            dynav_config=dynav_config,
+            dynav_config=config_path,
             headless=headless,
             rerun_native=rerun_native,
             rerun_show_panels=rerun_show_panels,

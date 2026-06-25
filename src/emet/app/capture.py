@@ -29,38 +29,15 @@ import numpy as np
 from click.core import ParameterSource
 
 import emet.utils.compression as compression
+from emet.app.config_cli import emet_config_options, load_runtime_from_cli
 from emet.app.preview_robot_cameras import (
     _decode_obs_message,
     _recv_zmq_obs,
     _save_montage_rgb,
     build_montage,
 )
-from emet.app.stream_agent_factory import create_dynamem_agent, resolve_stream_dynav_config, stream_stats
-from emet.robots import DEFAULT_DYNAV_CONFIG_YAML, get_robot_spec
-from emet.utils.connection import get_connection, get_host_from_connection
-
-
-def _resolve_host(robot_ip: str, connection_name: str | None, *, ip_from_default: bool) -> str:
-    if not ip_from_default and robot_ip.strip():
-        return robot_ip.strip()
-    if connection_name:
-        host = get_host_from_connection(connection_name)
-        if host:
-            return host.strip()
-    if ip_from_default:
-        host = get_host_from_connection()
-        if host:
-            return host.strip()
-    return robot_ip.strip() or "127.0.0.1"
-
-
-def _resolve_robot(robot: str, connection_name: str | None, *, robot_from_default: bool) -> str:
-    if not robot_from_default:
-        return robot.lower().replace("-", "_")
-    conn = get_connection(connection_name) if connection_name else get_connection()
-    if conn and conn.get("robot"):
-        return str(conn["robot"]).lower().replace("-", "_")
-    return robot.lower().replace("-", "_")
+from emet.app.stream_agent_factory import create_dynamem_agent, stream_stats
+from emet.robots import get_robot_spec
 
 
 def _json_safe(value: Any) -> Any:
@@ -145,14 +122,11 @@ def _run_map_update(
     map_only: bool = False,
     dynav_from_default: bool = True,
 ) -> dict[str, Any]:
-    dynav_resolved = resolve_stream_dynav_config(robot, host, dynav_config, dynav_from_default=dynav_from_default)
-    if dynav_resolved != dynav_config and dynav_from_default:
-        click.echo(f"Dynav: using {dynav_resolved!r} for {robot} @ {host} (hardware ZMQ has no depth → DA3/auto).")
     agent, dynav_resolved = create_dynamem_agent(
         robot=robot,
         host=host,
         port_offset=port_offset,
-        dynav_config=dynav_resolved,
+        dynav_config=dynav_config,
         enable_rerun=not no_rerun,
         headless=headless,
         cpu_only=cpu_only,
@@ -181,9 +155,8 @@ def _run_map_update(
 @click.option("--connection", "-c", "connection_name", default=None, help="Saved connection profile (host/robot)")
 @click.option(
     "--robot",
-    default="stretch",
-    show_default=True,
-    help="Robot backend (stretch, innate_mars, rby1, galaxea_r1, …)",
+    default=None,
+    help="Robot backend (optional: config, connection profile, or ZMQ discovery on localhost).",
 )
 @click.option("--port-offset", default=0, type=int, show_default=True, help="Add to default ZMQ ports (4401+)")
 @click.option("--recv-port", default=None, type=int, help="Observation SUB port (default 4401 + port-offset)")
@@ -197,13 +170,6 @@ def _run_map_update(
 @click.option(
     "--map", "run_map", is_flag=True, help="After capture, run one DynaMem update (+ Rerun unless --no-rerun)"
 )
-@click.option(
-    "--dynav-config",
-    "--dynav_config",
-    default=DEFAULT_DYNAV_CONFIG_YAML,
-    show_default=True,
-    help="DynaMem YAML when --map (use dynav_innate_mars.yaml for hardware Mars without ZMQ depth)",
-)
 @click.option("--no-rerun", is_flag=True, help="Disable Rerun when --map is set")
 @click.option("--headless", is_flag=True, help="Rerun without opening a browser (when --map)")
 @click.option("--rerun-hold-s", default=30.0, show_default=True, help="Seconds to keep Rerun open after --map")
@@ -214,22 +180,26 @@ def _run_map_update(
     help="With --map: voxel/obstacle map only (no SigLIP/YoloE/VLM; DA3 when depth missing)",
 )
 @click.pass_context
+@emet_config_options()
 def main(
     ctx: click.Context,
     robot_ip: str,
     connection_name: str | None,
-    robot: str,
+    robot: str | None,
     port_offset: int,
     recv_port: int | None,
     timeout_ms: int,
     out_dir: Path | None,
     run_map: bool,
-    dynav_config: str,
     no_rerun: bool,
     headless: bool,
     rerun_hold_s: float,
     cpu_only: bool,
     map_only: bool,
+    emet_config: str = "",
+    config_sets: tuple[str, ...] = (),
+    agent_config: str | None = None,
+    dynav_config: str | None = None,
 ) -> None:
     """Grab one ZMQ observation, save camera montage + metadata, optionally build a one-frame map.
 
@@ -241,11 +211,26 @@ def main(
       emet capture --connection herman --map --dynav-config dynav_innate_mars.yaml
       emet capture --robot stretch --map --no-rerun
     """
-    ip_from_default = ctx.get_parameter_source("robot_ip") == ParameterSource.DEFAULT
-    robot_from_default = ctx.get_parameter_source("robot") == ParameterSource.DEFAULT
-    dynav_from_default = ctx.get_parameter_source("dynav_config") == ParameterSource.DEFAULT
-    host = _resolve_host(robot_ip, connection_name, ip_from_default=ip_from_default)
-    robot_key = _resolve_robot(robot, connection_name, robot_from_default=robot_from_default)
+    dynav_from_default = (
+        ctx.get_parameter_source("dynav_config") == ParameterSource.DEFAULT
+        and ctx.get_parameter_source("emet_config") == ParameterSource.DEFAULT
+    )
+    runtime = load_runtime_from_cli(
+        ctx,
+        emet_config=emet_config,
+        config_sets=config_sets,
+        agent_config=agent_config,
+        dynav_config=dynav_config,
+        robot=robot,
+        robot_ip=robot_ip,
+        connection=connection_name,
+        port_offset=port_offset,
+    )
+    host = runtime.host
+    robot_key = runtime.robot_id
+    config_path = runtime.config_path
+    if runtime.robot_source == "zmq":
+        click.echo(f"Using robot from ZMQ server: {robot_key!r} (pass --robot to override).")
 
     spec = get_robot_spec(robot_key)
     if spec is None:
@@ -279,7 +264,7 @@ def main(
             robot=robot_key,
             host=host,
             port_offset=port_offset,
-            dynav_config=dynav_config,
+            dynav_config=config_path,
             no_rerun=no_rerun,
             headless=headless,
             rerun_hold_s=rerun_hold_s,

@@ -16,6 +16,16 @@ import pytest
 from click.testing import CliRunner
 
 
+def test_help_lists_unified_config():
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "--config" in r.output or "-C" in r.output
+    assert "--set" in r.output or "-O" in r.output
+
+
 def test_help_lists_discord_toggle():
     """Discord is on by default; --no-discord opts out."""
     from emet.app.run_agent import main
@@ -65,7 +75,7 @@ def test_command_mode_disables_discord_warns_without_no_discord(monkeypatch: pyt
     captured: list[bool] = []
 
     def stub(**kw: object) -> None:
-        captured.append(kw["discord"])  # type: ignore[index]
+        captured.append(bool(kw["discord"]))
 
     monkeypatch.setattr(ra, "run_agent_with_robot", stub)
     from emet.app.run_agent import main
@@ -74,7 +84,7 @@ def test_command_mode_disables_discord_warns_without_no_discord(monkeypatch: pyt
     r = runner.invoke(main, ["--robot", "stretch", "--no-llm", "-c", "E"])
     assert r.exit_code == 0, r.output
     assert captured == [False]
-    assert "Warning" in r.output
+    assert "Discord is disabled" in r.output
     assert "Discord" in r.output
 
 
@@ -84,7 +94,7 @@ def test_command_mode_disables_discord_no_warning_with_no_discord(monkeypatch: p
     captured: list[bool] = []
 
     def stub(**kw: object) -> None:
-        captured.append(kw["discord"])  # type: ignore[index]
+        captured.append(bool(kw["discord"]))
 
     monkeypatch.setattr(ra, "run_agent_with_robot", stub)
     from emet.app.run_agent import main

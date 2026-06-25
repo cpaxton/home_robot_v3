@@ -1,159 +1,11 @@
-# DynaMem / scene-memory parameters for: Innate Mars + ``emet run agent`` (+ Discord optional)
-#
-# Same embodied/DynaMem preset as ``agent_stretch_discord.yaml``, with ``robot: innate_mars`` and
-# DA3 depth so behavior matches the real Mars stack (no hardware depth on ZMQ). For MuJoCo-only
-# tests with sim depth, you can use ``depth_source: sensor`` and drop the ``da3_*`` keys; see
-# ``src/emet/config/dynav_innate_mars.yaml`` for the minimal dynav override. For ``emet run dynamem``,
-# use ``--dynav-config dynav_innate_mars.yaml`` when you need that preset (default is ``dynav_config.yaml``).
-#
-# ``robot`` below is used when you omit ``--robot`` on the CLI (CLI always wins if set).
-#
-# Run from repo root (paths resolve relative to cwd unless absolute).
-#
-#   Terminal 1 — sim (Mars robot id; use the same --port-offset in Terminal 2 if set):
-#     export DISPLAY=:1
-#     uv run emet serve mujoco --robot innate_mars
-#
-#   Terminal 2 — agent:
-#     export DISCORD_TOKEN="your-bot-token"   # optional
-#     uv run emet run agent --agent-config configs/agent_innate_mars.yaml --rerun
-#     # (``robot: innate_mars`` in this file replaces ``--robot innate_mars`` when the flag is omitted.)
-#     uv run emet run agent --robot innate_mars --device cuda --max-tokens 1024 \
-#       --agent-config configs/agent_innate_mars.yaml
-#     # Use --no-discord to skip the Discord bridge; local chat only: --offline
-#
-# Optional: load a saved memory dir with --input-path /path/to/logs/memory_xxx
-#
-# There is no dedicated ``sim_config`` under configs/sim/ for Mars yet; start the server manually or
-# pass ``--sim-config`` when you add a profile.
+# Innate Mars agent preset (unified nested config).
+extends: configs/emet/default.yaml
 
 robot: innate_mars
 
-# Hyperparameters for DynaMem
-
-encoder: "siglip"
-open_vocab_category_map_file: example_cat_map.json
-
-voxel_size: 0.1
-obs_min_height: 0.2
-obs_max_height: 1.5
-obs_min_density: 5
-exp_min_density: 1
-min_points_per_voxel: 15
-
-pad_obstacles: 2
-min_pad_obstacles: 1
-
-local_radius: 0.5
-add_local_every_step: False
-remove_visited_from_obstacles: False
-min_depth: 0.25
-max_depth: 2.5
-
-# Depth Anything 3 (matches ``dynav_innate_mars.yaml``; use depth_source: sensor for sim-only depth tests)
-depth_source: da3
-da3_model_id: depth-anything/DA3-SMALL
-da3_process_res: 378
-da3_clip_max_m: 4.0
-da3_ignore_sky_fraction_top: 0.16
-
-eqa:
-  backend: qwen_vl
-  vl_family: qwen3_vl
-  vl_model_size: 8B
-  vl_max_tokens: 512
-  vl_quantization: int4
-  vl_hf_model_id: Qwen/Qwen3-VL-8B-Instruct
-  gemini_model: gemini-2.5-flash
-
-detection:
-  module: "owlsam"
-  category_map_file: example_cat_map.json
-  use_detic_viz: False
-  confidence_threshold: 0.02
-
-filters:
-  smooth_kernel_size: 3
-  use_median_filter: True
-  median_filter_size: 4
-  median_filter_max_error: 0.01
-  use_derivative_filter: True
-  derivative_filter_threshold: 0.2
-
 agent:
-  realtime:
-    matching_distance: 0.5
-    temporal_threshold: 0.1
-    maximum_matched_observations: 10
-    camera_pose_match_threshold: 0.1
-  use_realtime_updates: False
-  realtime_rotation_steps: 4
-  in_place_rotation_steps: 8
-  sweep_head_on_update: False
-
-instance_memory:
-  min_instance_thickness: 0.01
-  min_instance_vol: 1e-6
-  max_instance_vol: 10.0
-  min_instance_height: 0.01
-  max_instance_height: 1.8
-  min_pixels_for_instance_view: 100
-  min_percent_for_instance_view: 0.1
-  mask_cropped_instances: False
-  use_captioning: False
-  captioner: null
-  use_association: False
-  association_distance_m: 0.15
-  move_threshold_m: 0.05
-  matching:
-    feature_match_threshold: 0.05
-
-guarantee_instance_is_reachable: True
-use_instance_memory: True
-use_scene_graph: True
-scene_graph:
-  max_near_distance: 0.3
-  min_on_height: 0.05
-  max_on_height: 0.2
-
-motion_planner:
-  step_size: 0.05
-  rotation_step_size: 0.2
-  simplify_plans: True
-  shortcut_plans: True
-  shortcut_iter: 100
-  frontier:
-    dilate_frontier_size: 2
-    dilate_obstacle_size: 0
-    default_expand_frontier_size: 12
-    min_dist: 0.1
-    step_dist: 0.2
-  goals:
-    manipulation_radius: 0.55
-
-trajectory_pos_err_threshold: 0.15
-trajectory_rot_err_threshold: 0.5
-trajectory_per_step_timeout: 3.0
-
-eqa_vl:
-  # GraphEQA + SigLIP + agent LLM: 9B often OOMs on a single 24GB card; 4B is a practical default.
-  # Override with ``9B`` or set ``EMET_EQA_VL_MODEL_SIZE``; ``get_shared_qwen35_vl_client`` falls back
-  # to smaller Qwen3.5-VL checkpoints on load OOM.
-  model_size: "4B"
-  quantization: int4
-  vram_mib_tier_9b: 20000
-  vram_mib_tier_4b: 11000
-  keyword_max_tokens: 64
-  graph_keyword_max_tokens: 64
-  voxel_keyword_max_tokens: 20
-  eqa_max_tokens: 1024
-  verbose_hf: false
-
-graph_eqa_extract:
-  max_tokens: 128
-  navigation_samples_max: 256
-
-graph_eqa_record_navigation: true
+  eqa: false
+  discord: true
 
 embodied_agent:
   open_vocab_scene_graph:
@@ -169,16 +21,6 @@ embodied_agent:
       embedding_min_cosine: 0.62
       bounds_3d_iou_min: 0.08
 
-# Live Rerun: ``emet run agent --rerun`` to enable; dynagraph/dynamem have Rerun on by default (--no-rerun to disable).
-# See ``src/emet/config/agents/default_rerun.yaml``.
-rerun:
-  mjcf_show_visual_mesh: true
-  mjcf_show_skeleton: false
-  server_memory_limit: "4GB"
-  show_camera_point_clouds: false
-  voxel_map_stride: 2
-  dynagraph_stride: 2
-  mjcf_mesh_stride: 3
-  dynagraph:
-    log_crops: false
-    log_edges: false
+mapping:
+  eqa_vl:
+    model_size: "4B"

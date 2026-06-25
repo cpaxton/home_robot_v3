@@ -31,11 +31,11 @@ from termcolor import colored
 from emet.agent.loop import DEFAULT_AGENT_LLM, run_agent_with_robot
 from emet.agent.model_debug import print_offline_model_line
 from emet.agent.prompt import DEFAULT_AGENT_NAME
+from emet.app.config_cli import emet_config_options, load_runtime_from_cli, resolve_effective_config_path
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.core import get_parameters
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices, is_vl_llm_key
-from emet.utils.config import read_top_level_robot_from_yaml
 from emet.utils.logger import Logger
 
 log = Logger(__name__)
@@ -202,18 +202,9 @@ log = Logger(__name__)
     metavar="NAME",
     default=None,
     help=(
-        "Robot backend (stretch, rby1, galaxea_r1, innate_mars). Overrides top-level ``robot`` in --agent-config when set; "
-        "if omitted, that YAML key is used (default ``stretch`` when the key is absent). Must match "
-        "``emet serve mujoco --robot`` (MolmoSpaces ``--start-sim`` uses stretch when robot is unset on both). "
-        "Always put the name immediately after --robot (e.g. --robot stretch); if you omit the name, the next "
-        "flag may be parsed as the value."
+        "Robot backend (optional: config, connection profile, or ZMQ discovery). "
+        "Overrides top-level ``robot`` in --config when set."
     ),
-)
-@click.option(
-    "--agent-config",
-    "agent_config",
-    default="dynav_config.yaml",
-    help="DynaMem / scene YAML: basename under emet/config, or path to a YAML file (cwd or absolute).",
 )
 @click.option(
     "--vl-include-camera",
@@ -347,6 +338,7 @@ log = Logger(__name__)
     ),
 )
 @click.pass_context
+@emet_config_options()
 def main(
     ctx: click.Context,
     llm: str,
@@ -374,7 +366,11 @@ def main(
     rerun_debug: bool = False,
     rerun_bind: bool = False,
     robot: str | None = None,
-    agent_config: str = "dynav_config.yaml",
+    emet_config: str = "",
+    config_sets: tuple[str, ...] = (),
+    connection: str | None = None,
+    agent_config: str | None = None,
+    dynav_config: str | None = None,
     vl_include_camera: bool = False,
     no_vl_camera: bool = False,
     dynamem_eqa: bool = False,
@@ -419,18 +415,38 @@ def main(
       emet run agent --robot rby1 --start-sim --scene ithor --headless -c "describe the scene"
     """
     cmd_list = list(commands) if commands else None
+    config_path = resolve_effective_config_path(
+        ctx,
+        emet_config=emet_config,
+        agent_config=agent_config,
+        dynav_config=dynav_config,
+    )
     robot_from_cli = robot is not None and str(robot).strip() != ""
 
-    if robot is None or str(robot).strip() == "":
-        r_yaml = read_top_level_robot_from_yaml(agent_config)
-        robot = r_yaml if r_yaml is not None else str(get_parameters(agent_config).get("robot", "stretch")).strip()
+    if offline:
+        resolved_robot = "stretch"
     else:
-        robot = str(robot).strip()
-    if not robot or robot.startswith("-"):
+        runtime = load_runtime_from_cli(
+            ctx,
+            emet_config=emet_config,
+            config_sets=config_sets,
+            agent_config=agent_config,
+            dynav_config=dynav_config,
+            robot=robot,
+            robot_ip=robot_ip,
+            connection=connection,
+            port_offset=port_offset,
+            zmq_discover=not start_sim,
+        )
+        resolved_robot = runtime.robot_id
+        robot_ip = runtime.host
+        if runtime.robot_source == "zmq":
+            log.info("Using robot from ZMQ server: %r (pass --robot to override).", resolved_robot)
+    robot = resolved_robot
+    if robot and robot.startswith("-"):
         raise click.UsageError(
             "`--robot` must be followed by a backend name (e.g. `stretch`, `rby1`, `innate_mars`). "
-            "You left it empty or the next token was parsed as the value (often another flag); "
-            "use e.g. `emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml --rerun`."
+            "You left it empty or the next token was parsed as the value (often another flag)."
         )
 
     if offline and start_sim:
@@ -506,7 +522,7 @@ def main(
 
             try:
                 sim_cfg = resolve_sim_launch_for_agent(
-                    agent_config_path=agent_config,
+                    agent_config_path=config_path,
                     sim_config_cli=sim_config,
                     port_offset_cli=port_offset,
                     default_mujoco_table_if_missing=True,
@@ -571,9 +587,7 @@ def main(
             )
             log.info("Sim is up; connecting agent.")
         log.info(
-            "Robot backend: %s (from --robot or YAML `%s`; must match `emet serve mujoco --robot`).",
-            robot,
-            agent_config,
+            f"Robot backend: {robot} (from --robot or config `{config_path}`; must match `emet serve mujoco --robot`)."
         )
         try:
             run_agent_with_robot(
@@ -589,7 +603,7 @@ def main(
                 agent_name=agent_name,
                 commands=cmd_list,
                 port_offset=port_offset,
-                agent_config=agent_config,
+                agent_config=config_path,
                 device=device,
                 max_tokens=max_tokens,
                 vl_include_camera=vl_include_effective,
@@ -608,7 +622,7 @@ def main(
         return
 
     prompt_builder = get_prompt_builder(prompt)
-    dynav_params = get_parameters(agent_config)
+    dynav_params = get_parameters(config_path, overrides=list(config_sets) if config_sets else None)
     client = get_llm_client(llm, prompt_builder, device=device, parameters=dynav_params)
     if hasattr(client, "max_tokens"):
         client.max_tokens = max_tokens

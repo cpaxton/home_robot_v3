@@ -1,0 +1,30 @@
+# Canonical unified EMET config (repo root).
+# Override path: ``EMET_CONFIG=/path/to.yaml`` or ``--config PATH``.
+# Dot overrides: ``--set mapping.depth_source=auto`` / ``-O agent.eqa=true``.
+
+defaults:
+  - mapping: package://emet/config/mapping/default.yaml
+  - agent: package://emet/config/agent/default.yaml
+  - rerun: package://emet/config/agents/default_rerun.yaml
+
+robot: null
+connection: null
+
+sim: null
+sim_config: null
+
+embodied_agent: {}
+
+robots:
+  stretch: {}
+  innate_mars:
+    mapping:
+      depth_source: auto
+      da3_stereo: true
+      local_radius: 0.85
+      max_depth: 3.2
+    zmq:
+      allow_missing_depth: true
+  rby1: {}
+  galaxea_r1: {}
+  xlerobot: {}

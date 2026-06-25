@@ -57,7 +57,7 @@ Start a simulation server.
 The positional backend is optional (`emet serve` defaults to **mujoco**). Optional scene name after `molmospaces`: `emet serve molmospaces procthor-10k`.
 
 **Options:**
-- `--robot NAME` — Simulator robot (default `stretch` for table, Robocasa, and MolmoSpaces when omitted). Use **`innate_mars`**, **`rby1`**, **`galaxea_r1`**, etc. for registry robots: loads **`scene_environment.xml`** (default table room: red cylinder, blue cube, floor) merged with that robot’s MJCF and starts the **generic ZMQ** sim (`RobosuiteZmqServer`) on ports **4401–4404**. Must match **`emet run dynamem --robot NAME`** (or `create_robot_client_from_cli`) on the client. DynaMem uses the same default **`dynav_config.yaml`** for all robots; for Innate Mars **without** ZMQ depth, add **`--dynav-config dynav_innate_mars.yaml`** (see `docs/robots/innate_mars.md`).
+- `--robot NAME` — Simulator robot (default `stretch` for table, Robocasa, and MolmoSpaces when omitted). Client apps (`emet run dynamem`, `emet run dynagraph`, `emet run agent`) may **omit `--robot`** when the running ZMQ server publishes `emet_robot_id`. Unified config: **`--config`** (default `configs/emet/default.yaml`; env **`EMET_CONFIG`**). Innate Mars depth tuning is under **`robots.innate_mars`** in that file (see [emet_config.md](emet_config.md)).
 - `--scene NAME|PATH` — Scene selector (see table below)
 - `--split` — `train` / `val` / `test` when `--scene` is a MolmoSpaces catalog name (default: `train`)
 - `--index N` — Scene index within split when `--scene` is MolmoSpaces (default: `0`)

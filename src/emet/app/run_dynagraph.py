@@ -15,11 +15,11 @@ from typing import Any
 import click
 import numpy as np
 
+from emet.app.config_cli import emet_config_options, load_runtime_from_cli
 from emet.app.dynagraph_explore import dynagraph_explore_until_terminated
 from emet.app.robot_cli import create_robot_client_from_cli
 from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.task.dynamem import EQAExecuter
-from emet.core.parameters import get_parameters
 from emet.memory.graph_eqa import format_scene_graph_pretty
 from emet.memory.graph_eqa.sim_ground_truth_graph import (
     ground_truth_alignment_report,
@@ -27,7 +27,6 @@ from emet.memory.graph_eqa.sim_ground_truth_graph import (
     read_sim_object_placements,
 )
 from emet.memory.headless_export import export_dynagraph_episode, export_graph_eqa_dir
-from emet.robots import apply_robot_dynav_parameter_overrides, resolve_dynav_config_yaml
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -102,6 +101,8 @@ def _print_dynagraph_rerun_help(
 
 
 @click.command()
+@emet_config_options()
+@click.pass_context
 @click.option(
     "--robot_ip",
     "--robot-ip",
@@ -112,9 +113,9 @@ def _print_dynagraph_rerun_help(
 @click.option(
     "--robot",
     "robot_backend",
-    default="stretch",
+    default=None,
     type=str,
-    help="Robot backend (stretch, rby1, galaxea_r1, etc.). Must match emet serve mujoco --robot.",
+    help="Robot backend (optional: config, connection profile, or ZMQ discovery).",
 )
 @click.option(
     "--not_rotate_in_place",
@@ -170,14 +171,6 @@ def _print_dynagraph_rerun_help(
     help="Bind Rerun to 0.0.0.0 for remote viewing (Tailscale, etc.).",
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
-@click.option(
-    "--dynav-config",
-    "--dynav_config",
-    type=str,
-    default="dynav_config.yaml",
-    help="Graph/voxel YAML: basename under emet/config/, cwd path, or absolute. Resolved with robot preset "
-    "(same as dynamem); use dynav_innate_mars.yaml for Innate Mars + DA3 when needed.",
-)
 @click.option(
     "--input-path",
     type=click.Path(file_okay=False, dir_okay=True, path_type=str),
@@ -332,8 +325,14 @@ def _print_dynagraph_rerun_help(
     help="Override graph_object_fusion block from standalone YAML (A/B experiments)",
 )
 def main(
+    ctx: click.Context,
     robot_ip: str,
-    robot_backend: str = "stretch",
+    robot_backend: str | None = None,
+    emet_config: str = "",
+    config_sets: tuple[str, ...] = (),
+    connection: str | None = None,
+    agent_config: str | None = None,
+    dynav_config: str | None = None,
     discord: bool = False,
     not_rotate_in_place: bool = False,
     save_rerun: bool = False,
@@ -345,7 +344,6 @@ def main(
     rerun_debug: bool = False,
     rerun_bind: bool = False,
     port_offset: int = 0,
-    dynav_config: str = "dynav_config.yaml",
     input_path: str | None = None,
     export_dir: str | None = None,
     dump_memory: str | None = None,
@@ -406,11 +404,27 @@ def main(
     if question_file and not export_dir and not question:
         click.echo("Note: --question-file without --export runs questions then exits (no eqa_results.json).")
 
-    dynav_resolved = resolve_dynav_config_yaml(robot_backend, dynav_config)
-    if dynav_resolved != dynav_config:
-        logger.info(
-            f"Dynagraph: resolved dynav {dynav_resolved!r} (CLI default was {dynav_config!r}, robot preset)"
-        )
+    runtime = load_runtime_from_cli(
+        ctx,
+        emet_config=emet_config,
+        config_sets=config_sets,
+        agent_config=agent_config,
+        dynav_config=dynav_config,
+        robot=robot_backend,
+        robot_ip=robot_ip,
+        connection=connection,
+        port_offset=port_offset,
+    )
+    robot_backend = runtime.robot_id
+    robot_ip = runtime.host
+    parameters = runtime.parameters
+    robot_key = robot_backend
+    allow_missing_depth = runtime.allow_missing_depth
+    if runtime.robot_source == "zmq":
+        click.echo(f"Using robot from ZMQ server: {robot_backend!r} (pass --robot to override).")
+    logger.info(
+        f"Dynagraph startup: config={runtime.config_path} robot={robot_backend} (source={runtime.robot_source})"
+    )
 
     if explore_loop and explore_max_iters < 1:
         raise click.UsageError("--explore-max-iters must be >= 1 when --explore-loop is set.")
@@ -424,23 +438,10 @@ def main(
             "so instance detections are recorded."
         )
 
-    logger.info(f"Dynagraph startup: dynav={dynav_resolved} robot={robot_backend}")
-
     click.echo("- Load parameters")
-    parameters = get_parameters(dynav_resolved)
-    robot_key = robot_backend.lower().replace("-", "_")
-    apply_robot_dynav_parameter_overrides(robot_backend, parameters)
     if perfect_depth:
         parameters["debug_perfect_sensor_depth"] = True
         logger.info("debug: perfect sensor depth (DA3 skipped when observation depth is present)")
-    elif robot_ip.strip() in ("127.0.0.1", "localhost", "::1") and str(
-        parameters.get("depth_source", "")
-    ).lower() == "da3":
-        parameters["depth_source"] = "auto"
-        logger.info(
-            "Dynagraph: local sim (robot_ip=%s); depth_source da3 -> auto (prefer ZMQ sensor depth)",
-            robot_ip,
-        )
     parameters.setdefault("dynagraph_merge_xy_m", 0.45)
     parameters.setdefault("dynagraph_staleness_horizon", 256)
     if graph_fusion_config:
@@ -462,14 +463,6 @@ def main(
         parameters["dynagraph_merge_xy_m"] = float(merge_xy_m)
     if staleness_horizon is not None:
         parameters["dynagraph_staleness_horizon"] = int(staleness_horizon)
-
-    depth_mode = str(parameters.get("depth_source", "sensor")).lower()
-    allow_missing_depth = depth_mode in ("da3", "auto") or robot_key in (
-        "innate_mars",
-        "galaxea_r1",
-        "rby1",
-        "stretch",
-    )
 
     robot = create_robot_client_from_cli(
         robot_backend,
