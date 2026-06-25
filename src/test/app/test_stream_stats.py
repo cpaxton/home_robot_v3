@@ -23,6 +23,21 @@ def test_format_stream_stats_graph_breakdown():
     assert "24 total" in text
 
 
+def test_format_stream_stats_includes_max_iou():
+    text = format_stream_stats(
+        {
+            "n_voxel_observations": 3,
+            "n_voxel_explored_cells": 341,
+            "n_graph_nodes": 10,
+            "n_graph_object_nodes": 4,
+            "n_graph_viewpoint_nodes": 4,
+            "n_graph_frontier_nodes": 2,
+            "max_object_bounds_iou": 0.62,
+        }
+    )
+    assert "max iou 0.62" in text
+
+
 def test_format_stream_stats_graph_legacy_total_only():
     text = format_stream_stats(
         {

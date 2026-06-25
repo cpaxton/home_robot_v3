@@ -236,6 +236,8 @@ emet mars status --connection herman
 emet mars stop --connection herman
 ```
 
+`start` and `status` print a compact one- or two-line summary (bridge state, ZMQ ports, optional ROS hint, suggested next command). Colors follow Click when stdout is a TTY; set `NO_COLOR=1` or `EMET_NO_COLOR=1` to disable.
+
 ---
 
 ### `emet connect [save|list|show]`

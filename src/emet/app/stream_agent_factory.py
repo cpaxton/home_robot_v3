@@ -505,12 +505,21 @@ def _graph_node_counts(graph_memory: Any) -> dict[str, int]:
     frontier_n = sum(1 for n in nodes if getattr(n, "is_frontier", False))
     viewpoint_n = sum(1 for n in nodes if n.is_viewpoint)
     total = len(nodes)
-    return {
+    out = {
         "n_graph_nodes": total,
         "n_graph_object_nodes": object_n,
         "n_graph_frontier_nodes": frontier_n,
         "n_graph_viewpoint_nodes": viewpoint_n,
     }
+    try:
+        from emet.memory.graph_eqa.graph_object_fusion.fusion import max_pairwise_object_bounds_iou
+
+        max_iou = max_pairwise_object_bounds_iou(graph_memory)
+        if max_iou is not None:
+            out["max_object_bounds_iou"] = max_iou
+    except Exception:
+        pass
+    return out
 
 
 def stream_stats(agent: Any, backend: str, *, dynav_resolved: str) -> dict[str, Any]:
@@ -551,7 +560,11 @@ def format_stream_stats(stats: dict[str, Any]) -> str:
         fr = stats.get("n_graph_frontier_nodes", 0)
         total = stats.get("n_graph_nodes", 0)
         if vp or fr:
-            parts.append(f"graph {obj} obj / {vp} vp / {fr} fr ({total} total)")
+            graph_part = f"graph {obj} obj / {vp} vp / {fr} fr ({total} total)"
+            max_iou = stats.get("max_object_bounds_iou")
+            if max_iou is not None:
+                graph_part += f", max iou {float(max_iou):.2f}"
+            parts.append(graph_part)
         else:
             parts.append(f"{total} graph nodes")
     if "n_scene_graph_objects" in stats:

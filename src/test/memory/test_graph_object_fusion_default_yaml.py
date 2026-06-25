@@ -21,3 +21,4 @@ def test_attach_fusion_loads_dynav_innate_mars_from_parameters_object():
     assert fusion.config.spatial_merge_xy_m == 0.48
     assert fusion.config.embedding_min_cosine == 0.0
     assert fusion.config.fallback_spatial_merge_xy_m == 0.55
+    assert fusion.config.bounds_3d_iou_merge_min == 0.40

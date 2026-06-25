@@ -29,6 +29,7 @@ from emet.memory.graph_eqa.instance_observations import (
     frame_rgb_hwc_uint8,
     instance_items_from_instance_memory,
 )
+from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate
 from emet.memory.graph_eqa.sensor_graph_builder import SensorGraphBuilder, short_labels_from_voxel_descriptions
 from emet.memory.graph_eqa.viewer_frame import viewer_xyz_world_from_observation
 
@@ -43,17 +44,33 @@ def _nav_origin_xyt(obs: Any) -> list[float] | None:
     return [float(arr[0]), float(arr[1]), float(arr[2])]
 
 
-def _detection_to_candidate(d: dict[str, Any]) -> Any:
-    from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate
+def _default_bounds_3d_for_xyz(xyz: np.ndarray, *, half_extent_m: float = 0.18) -> dict[str, list[float]]:
+    """Small axis-aligned box around a label-only detection (VLM path) for IoU dedup."""
+    c = np.asarray(xyz, dtype=np.float64).reshape(3)
+    h = float(half_extent_m)
+    mn = c - h
+    mx = c + h
+    return {
+        "min": mn.tolist(),
+        "max": mx.tolist(),
+        "center": c.tolist(),
+        "size": (mx - mn).tolist(),
+    }
 
+
+def _detection_to_candidate(d: dict[str, Any]) -> GraphDetectionCandidate:
     emb = d.get("embedding")
     if emb is not None:
         emb = np.asarray(emb, dtype=np.float32)
+    xyz = np.asarray(d["xyz"], dtype=np.float64)
+    bounds = d.get("bounds_3d")
+    if bounds is None and xyz is not None:
+        bounds = _default_bounds_3d_for_xyz(xyz)
     return GraphDetectionCandidate(
         label=str(d.get("label_short", d.get("label", "object"))),
-        xyz=np.asarray(d["xyz"], dtype=np.float64),
+        xyz=xyz,
         bbox_xyxy=tuple(d["bbox_xyxy"]) if d.get("bbox_xyxy") is not None else None,
-        bounds_3d=d.get("bounds_3d"),
+        bounds_3d=bounds,
         embedding=emb,
     )
 
@@ -203,6 +220,9 @@ def update_graph_memory_from_dynamem_observation(
                 graph_memory.add_observation(rgb, xyz, [label], description=desc, viewer_xyz=viewer_xyz)
     elif not instance_items:
         graph_memory.record_navigation_sample(rgb, xyz, base_xyz=viewer_xyz)
+
+    if fusion_enabled and graph_object_fusion is not None:
+        graph_object_fusion.consolidate_high_iou_nodes(graph_memory)
 
 
 def sync_graph_frontier_nodes(

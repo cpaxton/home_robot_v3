@@ -3,6 +3,7 @@ graph_object_fusion:
   spatial_merge_xy_m: 0.42
   min_centroid_dist_m: 0.55
   bounds_3d_iou_min: 0.08
+  bounds_3d_iou_merge_min: 0.45
   embedding_min_cosine: 0.62
   embedding_blend_alpha: 0.35
   # Labels stay on nodes for display/EQA; false = merge by spatial+3D+embedding (recommended).
