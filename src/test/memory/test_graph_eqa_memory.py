@@ -18,7 +18,7 @@ import numpy as np
 
 from emet.memory.adapters import GraphEQABackend
 from emet.memory.graph_eqa import GraphEQAMemory, labels_are_semantic_graph_hypothesis
-from emet.memory.graph_eqa.graph_memory import _near, _on_floor
+from emet.memory.graph_eqa.graph_memory import _near, _on_floor, label_matches_relevant_object
 
 
 def test_graph_memory_add_observation():
@@ -239,6 +239,28 @@ def test_select_relevant_obs_ids_diversifies_views():
     assert lamp_ids & set(obs_ids)
     # Not monopolized by the three duplicate lamp views: spread brings in others.
     assert not lamp_ids.issuperset(set(obs_ids))
+
+
+def test_select_relevant_obs_ids_spatial_spread_after_frontier_sort():
+    """Regression: frontier deprioritization must not shadow the observation index map."""
+    from emet.memory.graph_eqa.graph_memory import GraphNode, replace
+
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["lamp"])
+    mem.add_observation(rgb, np.array([4.0, 0.0, 0.5]), ["table"])
+    mem.add_observation(rgb, np.array([8.0, 0.0, 0.5]), ["chair"])
+    mem._relevant_objects = ["lamp"]
+    # Mark obs 2 as frontier on its graph node so step 2 runs and used to clobber ``by_id``.
+    nodes = mem.get_nodes()
+    for idx, node in enumerate(nodes):
+        if int(node.obs_id) == 2:
+            mem._nodes[idx] = replace(node, is_frontier=True)
+            break
+
+    obs_ids = mem._select_relevant_obs_ids(max_images=3)
+    assert len(obs_ids) == 3
+    assert len(set(obs_ids)) == 3
 
 
 def test_select_relevant_obs_ids_uses_siglip_obs_grounder():
@@ -613,3 +635,62 @@ def test_dynagraph_maintain_prunes_stale_nodes():
     assert len(mem.get_nodes()) == 1
     assert mem.get_nodes()[0].node_id == 1
     assert "chair" in mem.get_nodes()[0].labels
+
+
+def test_label_matches_relevant_object_phrase_vs_short_label():
+    assert label_matches_relevant_object("standing fan", "fan")
+    assert label_matches_relevant_object("fan", "standing fan")
+    assert label_matches_relevant_object("woven basket", "basket")
+    assert not label_matches_relevant_object("television", "fan")
+    assert label_matches_relevant_object("armchair", "chair")
+
+
+def test_record_nav_attempt_updates_node_metadata():
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory, GraphNode
+
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem._nodes = [
+        GraphNode(
+            node_id=1,
+            obs_id=3,
+            xyz=np.array([1.0, 2.0, 0.0]),
+            labels=["frontier"],
+            is_frontier=True,
+        )
+    ]
+    mem.record_nav_attempt(3, success=False, note="navmesh_no_path", dist_m=0.0, step=7)
+    node = mem.get_nodes()[0]
+    assert node.nav_attempts == 1
+    assert node.nav_failures == 1
+    assert node.last_nav_note == "navmesh_no_path"
+    assert node.last_nav_at_step == 7
+    assert "unreachable" in mem.to_string()
+
+
+def test_alternate_nav_target_skips_failed_frontier_obs():
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory, GraphNode
+
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem._nodes = [
+        GraphNode(
+            node_id=1,
+            obs_id=3,
+            xyz=np.array([1.0, 2.0, 0.0]),
+            labels=["frontier"],
+            is_frontier=True,
+            nav_failures=2,
+        ),
+        GraphNode(
+            node_id=2,
+            obs_id=5,
+            xyz=np.array([4.0, 5.0, 0.0]),
+            labels=["frontier"],
+            is_frontier=True,
+            nav_failures=0,
+        ),
+    ]
+    alt = mem.alternate_nav_target_for_failed_action("where is the basket?", 3, None, None)
+    assert alt is not None
+    assert abs(float(alt[0]) - 4.0) < 1e-6
+    assert abs(float(alt[1]) - 5.0) < 1e-6
+

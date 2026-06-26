@@ -96,7 +96,11 @@ class EpisodeDiagnosticsRecorder:
     spawn_record: dict[str, Any] | None = None
     _frames: list[_RecordedFrame] = field(default_factory=list, init=False, repr=False)
     _stride_snapshots: list[tuple[int, np.ndarray]] = field(default_factory=list, init=False, repr=False)
+    _nav_attempts: list[dict[str, Any]] = field(default_factory=list, init=False, repr=False)
     _step: int = field(default=0, init=False, repr=False)
+
+    def append_nav_attempt(self, row: dict[str, Any]) -> None:
+        self._nav_attempts.append(dict(row))
 
     def record_from_agent(self, agent: Any) -> None:
         rgb = None
@@ -201,6 +205,13 @@ class EpisodeDiagnosticsRecorder:
                     )
                 )
 
+        if self._nav_attempts:
+            nav_path = root / "nav_attempts.jsonl"
+            with nav_path.open("w", encoding="utf-8") as fh:
+                for row in self._nav_attempts:
+                    fh.write(json.dumps(row) + "\n")
+            manifest["nav_attempts_jsonl"] = str(nav_path)
+
         if self.cfg.export_video:
             mp4 = _write_episode_mp4(root, fps=self.cfg.video_fps)
             if mp4:
@@ -216,6 +227,16 @@ class EpisodeDiagnosticsRecorder:
         if img is not None:
             self._stride_snapshots.append((int(step_idx), img))
 
+    def _trajectory_poses(self) -> list[tuple[float, float, float]]:
+        out: list[tuple[float, float, float]] = []
+        for fr in self._frames:
+            if fr.pose is None:
+                continue
+            p = fr.pose
+            theta = float(p[2]) if len(p) >= 3 else 0.0
+            out.append((float(p[0]), float(p[1]), theta))
+        return out
+
     def _render_eval_map_rgb(self, agent: Any) -> np.ndarray | None:
         vm = getattr(agent, "voxel_map", None)
         if vm is None:
@@ -223,7 +244,13 @@ class EpisodeDiagnosticsRecorder:
         from emet.visualization.map_snapshot import snapshot_eval_from_voxel_map
 
         xy = robot_xy_from_agent(agent)
-        img, _ = snapshot_eval_from_voxel_map(vm, xy, max_side=self.cfg.max_map_side)
+        traj = self._trajectory_poses() if self.cfg.export_trajectory else None
+        img, _ = snapshot_eval_from_voxel_map(
+            vm,
+            xy,
+            max_side=self.cfg.max_map_side,
+            trajectory_xyt=traj,
+        )
         return img
 
     def _maybe_snapshot_map(self, agent: Any, *, root: Path) -> Path | None:
@@ -259,6 +286,7 @@ def bind_diagnostics_recorder(
     """Register recorder on agent step callbacks (invoked from DynamemController.update)."""
     if spawn_record is not None:
         recorder.spawn_record = spawn_record
+    agent._episode_diagnostics_recorder = recorder
     callbacks = list(getattr(agent, "_on_step_callbacks", None) or [])
     cb = recorder.record_from_agent
     if cb not in callbacks:
@@ -272,6 +300,8 @@ def unbind_diagnostics_recorder(agent: Any, recorder: EpisodeDiagnosticsRecorder
     if cb in callbacks:
         callbacks.remove(cb)
     agent._on_step_callbacks = callbacks
+    if getattr(agent, "_episode_diagnostics_recorder", None) is recorder:
+        agent._episode_diagnostics_recorder = None
 
 
 def flush_episode_diagnostics(

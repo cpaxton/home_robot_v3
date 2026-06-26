@@ -45,6 +45,7 @@ from emet.habitat.metrics import (
     append_episode_jsonl,
     extract_mcq_letter,
     extract_mcq_letter_from_raw_eqa,
+    should_abstain_location_mcq,
     grade_mcq_answer,
 )
 from emet_habitat.robot_client import HabitatRobotClient
@@ -105,6 +106,21 @@ def _cfg_hf_id_matches_family(hf_model_id: str, family: str) -> bool:
     from emet.llms.eqa_vl_settings import _hf_id_matches_family
 
     return _hf_id_matches_family(hf_model_id, family)
+
+
+def _configure_habitat_nav(
+    parameters: Parameters,
+    *,
+    habitat_perfect_nav: bool | None = None,
+) -> None:
+    """Habitat HM-EQA: navmesh pathing on by default; disable to exercise voxel A*."""
+    eqa = dict(parameters.get("eqa", {}) or {})
+    if habitat_perfect_nav is not None:
+        eqa["habitat_perfect_nav"] = bool(habitat_perfect_nav)
+    else:
+        eqa.setdefault("habitat_perfect_nav", True)
+    eqa.setdefault("habitat_explore_frontiers", True)
+    parameters.set("eqa", eqa)
 
 
 def _configure_frontier_parameters(
@@ -221,6 +237,7 @@ def run_hmeqa_episode(
     device: str | None = "cuda",
     frontier_nodes_enabled: bool | None = None,
     frontier_keyword_weight: float | None = None,
+    habitat_perfect_nav: bool | None = None,
     debug_run_tag: str | None = None,
     save_debug_bundle: bool = True,
     export_map: bool | None = None,
@@ -261,6 +278,7 @@ def run_hmeqa_episode(
             frontier_nodes_enabled=frontier_nodes_enabled,
             frontier_keyword_weight=frontier_keyword_weight,
         )
+        _configure_habitat_nav(parameters, habitat_perfect_nav=habitat_perfect_nav)
         agent = _make_controller(
             robot,
             parameters,
@@ -334,6 +352,7 @@ def run_hmeqa_episode(
             agent.graph_memory is not None
             and getattr(agent.graph_memory, "mcq_debias_enabled", False)
             and q.choices
+            and not should_abstain_location_mcq(raw_eqa, q.choices)
         ):
             vote_letter = agent.graph_memory.vote_mcq_letter(q.question, q.choices)
             debias_votes = json.dumps(getattr(agent.graph_memory, "last_mcq_debias", {}))
@@ -417,6 +436,7 @@ def run_hmeqa_batch(
     resume: bool = False,
     frontier_nodes_enabled: bool | None = None,
     frontier_keyword_weight: float | None = None,
+    habitat_perfect_nav: bool | None = None,
     export_map: bool | None = None,
     export_video: bool | None = None,
     map_stride: int | None = None,
@@ -433,6 +453,7 @@ def run_hmeqa_batch(
         frontier_nodes_enabled=frontier_nodes_enabled,
         frontier_keyword_weight=frontier_keyword_weight,
     )
+    _configure_habitat_nav(parameters, habitat_perfect_nav=habitat_perfect_nav)
     if output_jsonl is not None:
         if resume and output_jsonl.exists():
             done = read_completed_question_ids(output_jsonl)
@@ -472,6 +493,7 @@ def run_hmeqa_batch(
                 use_hm3d_semantics=use_hm3d_semantics,
                 frontier_nodes_enabled=frontier_nodes_enabled,
                 frontier_keyword_weight=frontier_keyword_weight,
+                habitat_perfect_nav=habitat_perfect_nav,
                 debug_run_tag=run_tag if output_jsonl is not None else None,
                 export_map=export_map,
                 export_video=export_video,

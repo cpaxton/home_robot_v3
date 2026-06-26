@@ -16,6 +16,30 @@ HAB_CLI = REPO / ".venv-habitat" / "bin" / "emet-habitat"
 
 
 @pytest.mark.skipif(not HAB_CLI.is_file(), reason="habitat venv not installed")
+def test_habitat_explore_frontiers_help():
+    r = subprocess.run(
+        [str(HAB_CLI), "explore-frontiers", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0, r.stderr
+    assert "--max-steps" in r.stdout
+
+
+@pytest.mark.skipif(not HAB_CLI.is_file(), reason="habitat venv not installed")
+def test_habitat_run_batch_help_lists_habitat_nav_flag():
+    r = subprocess.run(
+        [str(HAB_CLI), "run-batch", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0, r.stderr
+    assert "--no-habitat-perfect-nav" in r.stdout
+
+
+@pytest.mark.skipif(not HAB_CLI.is_file(), reason="habitat venv not installed")
 def test_habitat_run_batch_help_lists_diagnostics_flags():
     r = subprocess.run(
         [str(HAB_CLI), "run-batch", "--help"],

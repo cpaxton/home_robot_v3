@@ -116,6 +116,31 @@ _QUESTION_STOPWORDS = frozenset(
 )
 
 
+def _object_match_tokens(text: str) -> set[str]:
+    return {
+        tok
+        for tok in re.findall(r"[a-z0-9]+", (text or "").lower())
+        if len(tok) >= 3 and tok not in _QUESTION_STOPWORDS
+    }
+
+
+def label_matches_relevant_object(obj: str, label: str) -> bool:
+    """True when ``label`` plausibly names ``obj`` (handles ``standing fan`` vs ``fan``)."""
+    obj_l = (obj or "").strip().lower()
+    lab_l = (label or "").strip().lower()
+    if not obj_l or not lab_l:
+        return False
+    if obj_l in lab_l or lab_l in obj_l:
+        return True
+    obj_tok = _object_match_tokens(obj_l)
+    lab_tok = _object_match_tokens(lab_l)
+    if not obj_tok or not lab_tok:
+        return False
+    if obj_tok <= lab_tok or lab_tok <= obj_tok:
+        return True
+    return bool(obj_tok & lab_tok)
+
+
 def heuristic_relevant_objects(question: str, *, max_objects: int = 4) -> list[str]:
     """Cheap noun-like tokens from the question stem (before MCQ options)."""
     head = question.strip().split("?")[0]
@@ -173,6 +198,10 @@ class GraphNode:
     is_frontier: bool = False  # True = unexplored map frontier cluster (managed by sync_frontier_nodes)
     embedding: np.ndarray | None = None  # optional visual embedding (e.g. SigLIP crop)
     bounds_3d: dict[str, list[float]] | None = None  # axis-aligned world bounds {min,max,center,size}
+    nav_attempts: int = 0
+    nav_failures: int = 0
+    last_nav_note: str | None = None
+    last_nav_at_step: int = 0
 
 
 def is_ground_truth_node(node: GraphNode | None) -> bool:
@@ -238,6 +267,8 @@ class GraphEQAMemory:
         self.last_eqa_raw: str = ""
         self.last_eqa_parsed: tuple[str, str, bool, str, str] = ("", "", False, "", "")
         self.last_eqa_obs_ids: list[int] = []
+        self.last_eqa_action_obs_id: int | None = None
+        self.last_nav_result_note: str = ""
         self.last_eqa_nav_fallback_count: int = 0
         # Model's own confidence before the graph-coverage gate suppresses it (for early-stop).
         self.last_eqa_model_confident: bool = False
@@ -966,6 +997,71 @@ class GraphEQAMemory:
         for node in objects:
             self._ensure_seen_from_edge(node.node_id, int(node.obs_id))
 
+    def _node_nav_status_suffix(self, node: GraphNode) -> str:
+        failures = int(getattr(node, "nav_failures", 0) or 0)
+        if failures <= 0:
+            return ""
+        note = (getattr(node, "last_nav_note", None) or "").strip()
+        tail = f", last: {note}" if note else ""
+        return f"; unreachable ({failures} nav failure(s){tail})"
+
+    def record_nav_attempt(
+        self,
+        obs_id: int | None,
+        *,
+        success: bool,
+        note: str,
+        dist_m: float = 0.0,
+        step: int | None = None,
+    ) -> None:
+        """Update graph node(s) tied to ``obs_id`` after an EQA navigation attempt."""
+        if obs_id is None:
+            self.last_nav_result_note = note
+            return
+        oid = int(obs_id)
+        st = int(step if step is not None else self._effective_timestep())
+        moved = float(dist_m) >= 0.12
+        ok = bool(success) and moved
+        for idx, node in enumerate(self._nodes):
+            if int(node.obs_id) != oid:
+                continue
+            failures = int(getattr(node, "nav_failures", 0)) + (0 if ok else 1)
+            self._nodes[idx] = replace(
+                node,
+                nav_attempts=int(getattr(node, "nav_attempts", 0)) + 1,
+                nav_failures=failures,
+                last_nav_note=str(note or "")[:120] or None,
+                last_nav_at_step=st,
+            )
+        self.last_nav_result_note = note
+
+    def append_nav_outcome_to_last_history(self, *, dist_m: float, success: bool, note: str) -> None:
+        if not self._history_outputs:
+            return
+        status = "ok" if success else "failed"
+        self._history_outputs[-1] += (
+            f"\nNav_result: moved {float(dist_m):.2f}m ({status}; {note})"
+        )
+
+    def alternate_nav_target_for_failed_action(
+        self,
+        question: str,
+        blocked_obs_id: int,
+        planner: Any,
+        base_xyt: Any,
+    ) -> np.ndarray | None:
+        """Pick a different frontier/fluid goal when the VLM re-picks a failed image action."""
+        frontier_nodes = [
+            n
+            for n in self._nodes
+            if getattr(n, "is_frontier", False) and int(n.obs_id) != int(blocked_obs_id)
+        ]
+        if frontier_nodes:
+            frontier_nodes.sort(key=lambda n: (int(getattr(n, "nav_failures", 0)), -int(n.last_seen)))
+            pick = frontier_nodes[0]
+            return np.array([float(pick.xyz[0]), float(pick.xyz[1]), 1.0], dtype=float)
+        return None
+
     def to_string(self) -> str:
         """Serialize the scene graph to a string for mLLM prompts."""
         lines = []
@@ -984,7 +1080,7 @@ class GraphEQAMemory:
             else:
                 kind = "Node"
             lines.append(
-                f"{kind} {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]{sup}"
+                f"{kind} {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]{sup}{self._node_nav_status_suffix(n)}"
             )
         for a, b, rel in self._edges:
             b_str = "floor" if b == -1 else str(b)
@@ -1160,12 +1256,22 @@ class GraphEQAMemory:
             if take(oid):
                 return selected
 
-        # 2) One frontier-tagged observation (encourage exploration views).
-        for o in reversed(self._observations):
-            if self._obs_is_frontier(int(o.obs_id)):
-                if take(int(o.obs_id)):
-                    return selected
-                break
+        # 2) One frontier-tagged observation (prefer lowest nav_failures).
+        frontier_candidates = [
+            int(o.obs_id)
+            for o in reversed(self._observations)
+            if self._obs_is_frontier(int(o.obs_id)) and int(o.obs_id) not in selected
+        ]
+        if frontier_candidates:
+            frontier_by_id = {int(n.obs_id): n for n in self._nodes if getattr(n, "is_frontier", False)}
+            frontier_candidates.sort(
+                key=lambda oid: (
+                    int(getattr(frontier_by_id.get(oid), "nav_failures", 0)) if oid in frontier_by_id else 0,
+                    -oid,
+                )
+            )
+            if take(frontier_candidates[0]):
+                return selected
 
         # 3) Most recent observation (fresh context).
         for o in reversed(self._observations):
@@ -1234,7 +1340,11 @@ class GraphEQAMemory:
         lines: list[str] = []
         for obj in self._relevant_objects:
             obj_l = obj.lower()
-            matches = [n for n in object_nodes if any(obj_l in lab.lower() for lab in n.labels)]
+            matches = [
+                n
+                for n in object_nodes
+                if any(label_matches_relevant_object(obj, lab) for lab in n.labels)
+            ]
             sig: tuple[float, np.ndarray] | None = None
             if grounder is not None:
                 try:
@@ -1275,8 +1385,14 @@ class GraphEQAMemory:
             return True
         if not self._relevant_objects or not self._observations:
             return True
-        all_labels = " ".join(lab.lower() for o in self._observations for lab in o.labels)
-        return all(obj.lower() in all_labels for obj in self._relevant_objects)
+        for obj in self._relevant_objects:
+            if not any(
+                label_matches_relevant_object(obj, lab)
+                for o in self._observations
+                for lab in o.labels
+            ):
+                return False
+        return True
 
     def _obs_is_frontier(self, obs_id: int) -> bool:
         for n in self._nodes:
@@ -1296,6 +1412,9 @@ class GraphEQAMemory:
                 continue
             lbl = ", ".join(obs.labels) if obs.labels else "object"
             line = f"Image {img_idx}. {lbl} at ({obs.xyz[0]:.2f}, {obs.xyz[1]:.2f});"
+            node = next((n for n in self._nodes if int(n.obs_id) == int(obs.obs_id)), None)
+            if node is not None:
+                line += self._node_nav_status_suffix(node)
             if self._obs_is_frontier(obs.obs_id):
                 line += " unexplored frontier;"
             elif obs.description and "unexplored" in obs.description.lower():
@@ -1540,7 +1659,20 @@ class GraphEQAMemory:
             raw = f"Error: {exc}"
             self.last_eqa_raw = raw
             self.last_eqa_parsed = ("", "Unknown", False, "", str(exc))
-            raise
+            self._history_outputs.append(
+                "Answer:Unknown\nReasoning:"
+                + str(exc)
+                + "\nConfidence:False\nAction:\nConfidence_reasoning:"
+                + str(exc)
+            )
+            return (
+                str(exc),
+                "Unknown",
+                False,
+                str(exc),
+                None,
+                relevant_images,
+            )
         self.last_eqa_raw = raw
         answer_outputs = raw.replace("*", "").replace("/", "").replace("#", "").lower()
 
@@ -1575,10 +1707,13 @@ class GraphEQAMemory:
         reasoning = human.debug_reasoning
 
         target_point = None
+        self.last_eqa_action_obs_id = None
         if not confidence and action.strip():
             match = re.search(r"\d+", action.strip())
             if match:
                 display_index = int(match.group())
+                if self._observations and obs_ids and 1 <= display_index <= len(obs_ids):
+                    self.last_eqa_action_obs_id = int(obs_ids[display_index - 1])
                 target_point = self._target_point_from_display_image_index(
                     display_index,
                     obs_ids=obs_ids,

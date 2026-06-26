@@ -10,6 +10,7 @@ from emet.habitat.metrics import (
     extract_mcq_letter_from_raw_eqa,
     grade_mcq_answer,
     read_completed_question_ids,
+    should_abstain_location_mcq,
     summarize_episodes,
 )
 
@@ -58,6 +59,30 @@ def test_extract_mcq_letter_from_raw_eqa_blank_answer_field():
     )
     assert extract_mcq_letter_from_raw_eqa(raw) == ""
     assert not grade_mcq_answer("", "B")
+
+
+def test_location_mcq_abstains_on_visibility_no():
+    """Q17-style: location choices but model answers visibility ``No`` → no letter."""
+    raw = (
+        "Reasoning:\nI do not see a woven basket.\n"
+        "Answer:\nNo\n"
+        "Confidence:\nTRUE\n"
+    )
+    choices = [
+        "In the bedroom",
+        "On the table",
+        "Next to the sofa",
+        "Next to the armchair",
+    ]
+    assert should_abstain_location_mcq(raw, choices)
+    assert extract_mcq_letter_from_raw_eqa(raw, choices) == ""
+
+
+def test_yes_no_mcq_still_maps_no_to_b():
+    raw = "Answer:\nNo\nConfidence:\nTRUE\n"
+    choices = ["Yes", "No", "Partially", "Cannot tell"]
+    assert not should_abstain_location_mcq(raw, choices)
+    assert extract_mcq_letter_from_raw_eqa(raw, choices) == "B"
 
 
 def test_extract_mcq_letter_ignores_answer_in_prose():

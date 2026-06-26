@@ -107,6 +107,20 @@ def _frontier_cli_options(fn):
     return fn
 
 
+def _habitat_nav_cli_options(fn):
+    opts = [
+        click.option(
+            "--habitat-perfect-nav/--no-habitat-perfect-nav",
+            "habitat_perfect_nav",
+            default=None,
+            help="Habitat EQA nav: navmesh pathing (default on); off exercises voxel A*",
+        ),
+    ]
+    for opt in reversed(opts):
+        fn = opt(fn)
+    return fn
+
+
 def _diagnostics_cli_options(fn):
     opts = [
         click.option("--export-map/--no-export-map", default=None, help="Write topdown_map.png per episode"),
@@ -135,6 +149,7 @@ def _diagnostics_cli_options(fn):
     help="Use HM3D semantic sensor for graph labels (default: auto if assets exist)",
 )
 @_frontier_cli_options
+@_habitat_nav_cli_options
 @_eqa_cli_options
 @_diagnostics_cli_options
 def run_episode(
@@ -154,6 +169,7 @@ def run_episode(
     device: str,
     frontier_nodes: bool | None,
     frontier_keyword_weight: float | None,
+    habitat_perfect_nav: bool | None,
     export_map: bool | None,
     export_video: bool | None,
     map_stride: int | None,
@@ -184,6 +200,7 @@ def run_episode(
             device=device,
             frontier_nodes_enabled=frontier_nodes,
             frontier_keyword_weight=frontier_keyword_weight,
+            habitat_perfect_nav=habitat_perfect_nav,
             debug_run_tag=f"cli_episode_q{question_id:04d}",
             save_debug_bundle=True,
             export_map=export_map,
@@ -236,6 +253,7 @@ def run_episode(
     help="Use HM3D semantic sensor for graph labels (default: auto if assets exist)",
 )
 @_frontier_cli_options
+@_habitat_nav_cli_options
 @_eqa_cli_options
 @_diagnostics_cli_options
 def run_batch(
@@ -257,6 +275,7 @@ def run_batch(
     device: str,
     frontier_nodes: bool | None,
     frontier_keyword_weight: float | None,
+    habitat_perfect_nav: bool | None,
     export_map: bool | None,
     export_video: bool | None,
     map_stride: int | None,
@@ -299,6 +318,7 @@ def run_batch(
             resume=resume,
             frontier_nodes_enabled=frontier_nodes,
             frontier_keyword_weight=frontier_keyword_weight,
+            habitat_perfect_nav=habitat_perfect_nav,
             export_map=export_map,
             export_video=export_video,
             map_stride=map_stride,
@@ -457,6 +477,47 @@ def run_ovmm_find_episode(
     if output is not None:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(text, encoding="utf-8")
+
+
+@main.command("explore-frontiers")
+@click.option("--question-id", default=14, type=int, help="HM-EQA question id (selects scene + spawn)")
+@click.option("--scene-id", default=None, help="Override HM3D scene id (requires matching init pose CSV row)")
+@click.option("--max-steps", default=40, type=int, help="Exploration iterations (update + nav)")
+@click.option("--warmup-updates", default=5, type=int)
+@click.option("--seed", default=0, type=int)
+@click.option("--hm3d-root", type=click.Path(path_type=Path), default=None)
+@click.option("--output-dir", type=click.Path(path_type=Path), default=None, help="Write frontier_explore.json + trajectory")
+@click.option("--rotate-in-place/--no-rotate-in-place", default=True)
+@click.option("--no-frontier-nodes", is_flag=True, default=False, help="Disable graph frontier nodes (voxel sample only)")
+def explore_frontiers(
+    question_id: int,
+    scene_id: str | None,
+    max_steps: int,
+    warmup_updates: int,
+    seed: int,
+    hm3d_root: Path | None,
+    output_dir: Path | None,
+    rotate_in_place: bool,
+    no_frontier_nodes: bool,
+) -> None:
+    """VLM-free frontier exploration smoke (mapping + navmesh coverage only)."""
+    from emet_habitat.frontier_explore import run_frontier_exploration
+
+    if output_dir is None:
+        output_dir = Path.home() / ".cache/habitat_eqa/explore" / f"q{question_id:04d}_s{seed}"
+    result = run_frontier_exploration(
+        scene_id=scene_id,
+        question_id=question_id,
+        hm3d_root=hm3d_root,
+        max_steps=max_steps,
+        warmup_updates=warmup_updates,
+        rotate_in_place=rotate_in_place,
+        output_dir=output_dir,
+        seed=seed,
+        frontier_nodes_enabled=not no_frontier_nodes,
+    )
+    click.echo(json.dumps(result.to_dict(), indent=2))
+    click.echo(f"wrote {result.output_dir}")
 
 
 @main.command("run-ovmm-find-batch")

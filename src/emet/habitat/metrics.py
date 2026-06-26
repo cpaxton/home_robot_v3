@@ -86,6 +86,63 @@ class EpisodeMetrics:
         return asdict(self)
 
 
+_YES_NO_CHOICE_HINTS = frozenset(
+    {
+        "yes",
+        "no",
+        "true",
+        "false",
+        "partially",
+        "cannot tell",
+        "unknown",
+        "on",
+        "off",
+    }
+)
+
+
+def choices_are_location_mcq(choices: list[str] | None) -> bool:
+    """True when MCQ options are places/things, not yes/no style answers."""
+    if not choices:
+        return False
+    cleaned = [(c or "").strip().lower() for c in choices[:4] if (c or "").strip()]
+    if len(cleaned) < 2:
+        return False
+    if all(c.startswith("(do not choose") for c in cleaned):
+        return False
+    yes_no_like = sum(
+        1
+        for c in cleaned
+        if c in _YES_NO_CHOICE_HINTS or any(h in c.split() for h in ("yes", "no", "true", "false"))
+    )
+    return yes_no_like < max(1, len(cleaned) // 2)
+
+
+def answer_is_visibility_abstain(text: str) -> bool:
+    """Free-form answer that declines to pick a location (``no``, ``not seen``, …)."""
+    lowered = (text or "").strip().lower()
+    if not lowered:
+        return False
+    if lowered in {"no", "yes", "unknown", "none", "n/a", "na", "not seen", "not visible"}:
+        return True
+    return bool(
+        re.match(
+            r"^(no|yes|not\s+seen|not\s+visible|didn'?t\s+see|have\s+not\s+seen|haven'?t\s+seen)\b",
+            lowered,
+        )
+    )
+
+
+def should_abstain_location_mcq(raw: str, choices: list[str] | None) -> bool:
+    """Location MCQ + visibility-style ``answer: No`` → do not map to A–D."""
+    if not choices_are_location_mcq(choices):
+        return False
+    fields = _answer_field_lines(raw)
+    if not fields:
+        return False
+    return answer_is_visibility_abstain(fields[-1])
+
+
 def _match_choice_text_to_letter(text: str, choices: list[str]) -> str:
     """Map free-text (e.g. ``no``, ``off``) to A–D via HM-EQA choice strings."""
     lowered = (text or "").strip().lower()
@@ -151,6 +208,8 @@ def extract_mcq_letter_from_raw_eqa(raw: str, choices: list[str] | None = None) 
         return ""
     answer_field = fields[-1]
     if not answer_field:
+        return ""
+    if should_abstain_location_mcq(text, choices):
         return ""
     letter = extract_mcq_letter(answer_field, choices)
     if letter:

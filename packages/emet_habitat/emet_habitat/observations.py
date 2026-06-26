@@ -78,7 +78,9 @@ def habitat_rgb_depth_to_observations(
 
     hab_R = hab_pose[:3, :3]
     forward = hab_R[:, 2]
-    heading = float(np.arctan2(forward[0], forward[2]))
+    # Planar yaw for nav: must match Habitat ``move_forward`` (atan2 on X/Z delta), not
+    # ``atan2(forward[0], forward[2])`` which is ~90° off and breaks greedy nav.
+    heading = float(np.arctan2(-forward[2], -forward[0]))
     gps = np.array([float(pos[0]), float(pos[2])], dtype=np.float64)
     compass = np.array([heading], dtype=np.float64)
 

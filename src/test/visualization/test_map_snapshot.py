@@ -24,11 +24,13 @@ from emet.visualization.map_snapshot import (
     discord_share_map_rgb,
     eval_topdown_map_rgb,
     format_navigation_report,
+    overlay_trajectory_on_map_rgb,
     render_topdown_map_rgb,
     share_topdown_map_rgb,
     snapshot_eval_from_voxel_map,
     snapshot_from_voxel_map,
     world_xy_to_grid_ij,
+    _dedupe_trajectory_xyt,
 )
 
 
@@ -204,3 +206,24 @@ def test_explore_tool_returns_diagnostic_text():
     out = ex.func()
     assert "Explore failed" in out
     assert "2D map shape" in out
+
+
+def test_dedupe_trajectory_drops_spin_in_place():
+    raw = [(0.0, 0.0, 0.0), (0.0, 0.0, 0.5), (0.0, 0.0, 1.0), (1.0, 0.0, 0.0)]
+    deduped = _dedupe_trajectory_xyt(raw)
+    assert len(deduped) == 2
+    assert deduped[0][:2] == (0.0, 0.0)
+    assert deduped[-1][:2] == (1.0, 0.0)
+
+
+def test_eval_topdown_map_draws_trajectory_path():
+    obs = np.zeros((64, 64), dtype=bool)
+    exp = np.zeros((64, 64), dtype=bool)
+    exp[10:50, 10:50] = True
+    go = np.array([0.0, 0.0])
+    traj = [(0.5, 0.5, 0.0), (1.5, 0.5, 1.57), (2.5, 1.5, 3.14)]
+    before = eval_topdown_map_rgb(obs, exp, go, 0.1, (2.5, 1.5), max_side=640, trajectory_xyt=traj)
+    plain = eval_topdown_map_rgb(obs, exp, go, 0.1, (2.5, 1.5), max_side=640)
+    assert not np.array_equal(before, plain)
+    blue = np.all(before == np.uint8([30, 90, 230]), axis=-1)
+    assert int(blue.sum()) > 0
