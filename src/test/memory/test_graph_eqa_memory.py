@@ -18,7 +18,7 @@ import numpy as np
 
 from emet.memory.adapters import GraphEQABackend
 from emet.memory.graph_eqa import GraphEQAMemory, labels_are_semantic_graph_hypothesis
-from emet.memory.graph_eqa.graph_memory import _near, _on_floor
+from emet.memory.graph_eqa.graph_memory import _near, _on_floor, label_matches_relevant_object
 
 
 def test_graph_memory_add_observation():
@@ -613,3 +613,11 @@ def test_dynagraph_maintain_prunes_stale_nodes():
     assert len(mem.get_nodes()) == 1
     assert mem.get_nodes()[0].node_id == 1
     assert "chair" in mem.get_nodes()[0].labels
+
+
+def test_label_matches_relevant_object_phrase_vs_short_label():
+    assert label_matches_relevant_object("standing fan", "fan")
+    assert label_matches_relevant_object("fan", "standing fan")
+    assert label_matches_relevant_object("woven basket", "basket")
+    assert not label_matches_relevant_object("television", "fan")
+    assert label_matches_relevant_object("armchair", "chair")

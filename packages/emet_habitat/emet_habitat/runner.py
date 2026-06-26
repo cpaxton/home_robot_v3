@@ -45,6 +45,7 @@ from emet.habitat.metrics import (
     append_episode_jsonl,
     extract_mcq_letter,
     extract_mcq_letter_from_raw_eqa,
+    should_abstain_location_mcq,
     grade_mcq_answer,
 )
 from emet_habitat.robot_client import HabitatRobotClient
@@ -334,6 +335,7 @@ def run_hmeqa_episode(
             agent.graph_memory is not None
             and getattr(agent.graph_memory, "mcq_debias_enabled", False)
             and q.choices
+            and not should_abstain_location_mcq(raw_eqa, q.choices)
         ):
             vote_letter = agent.graph_memory.vote_mcq_letter(q.question, q.choices)
             debias_votes = json.dumps(getattr(agent.graph_memory, "last_mcq_debias", {}))

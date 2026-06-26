@@ -216,6 +216,16 @@ class EpisodeDiagnosticsRecorder:
         if img is not None:
             self._stride_snapshots.append((int(step_idx), img))
 
+    def _trajectory_poses(self) -> list[tuple[float, float, float]]:
+        out: list[tuple[float, float, float]] = []
+        for fr in self._frames:
+            if fr.pose is None:
+                continue
+            p = fr.pose
+            theta = float(p[2]) if len(p) >= 3 else 0.0
+            out.append((float(p[0]), float(p[1]), theta))
+        return out
+
     def _render_eval_map_rgb(self, agent: Any) -> np.ndarray | None:
         vm = getattr(agent, "voxel_map", None)
         if vm is None:
@@ -223,7 +233,13 @@ class EpisodeDiagnosticsRecorder:
         from emet.visualization.map_snapshot import snapshot_eval_from_voxel_map
 
         xy = robot_xy_from_agent(agent)
-        img, _ = snapshot_eval_from_voxel_map(vm, xy, max_side=self.cfg.max_map_side)
+        traj = self._trajectory_poses() if self.cfg.export_trajectory else None
+        img, _ = snapshot_eval_from_voxel_map(
+            vm,
+            xy,
+            max_side=self.cfg.max_map_side,
+            trajectory_xyt=traj,
+        )
         return img
 
     def _maybe_snapshot_map(self, agent: Any, *, root: Path) -> Path | None:

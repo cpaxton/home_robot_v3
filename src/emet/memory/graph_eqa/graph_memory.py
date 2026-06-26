@@ -116,6 +116,31 @@ _QUESTION_STOPWORDS = frozenset(
 )
 
 
+def _object_match_tokens(text: str) -> set[str]:
+    return {
+        tok
+        for tok in re.findall(r"[a-z0-9]+", (text or "").lower())
+        if len(tok) >= 3 and tok not in _QUESTION_STOPWORDS
+    }
+
+
+def label_matches_relevant_object(obj: str, label: str) -> bool:
+    """True when ``label`` plausibly names ``obj`` (handles ``standing fan`` vs ``fan``)."""
+    obj_l = (obj or "").strip().lower()
+    lab_l = (label or "").strip().lower()
+    if not obj_l or not lab_l:
+        return False
+    if obj_l in lab_l or lab_l in obj_l:
+        return True
+    obj_tok = _object_match_tokens(obj_l)
+    lab_tok = _object_match_tokens(lab_l)
+    if not obj_tok or not lab_tok:
+        return False
+    if obj_tok <= lab_tok or lab_tok <= obj_tok:
+        return True
+    return bool(obj_tok & lab_tok)
+
+
 def heuristic_relevant_objects(question: str, *, max_objects: int = 4) -> list[str]:
     """Cheap noun-like tokens from the question stem (before MCQ options)."""
     head = question.strip().split("?")[0]
@@ -1234,7 +1259,11 @@ class GraphEQAMemory:
         lines: list[str] = []
         for obj in self._relevant_objects:
             obj_l = obj.lower()
-            matches = [n for n in object_nodes if any(obj_l in lab.lower() for lab in n.labels)]
+            matches = [
+                n
+                for n in object_nodes
+                if any(label_matches_relevant_object(obj, lab) for lab in n.labels)
+            ]
             sig: tuple[float, np.ndarray] | None = None
             if grounder is not None:
                 try:
@@ -1275,8 +1304,14 @@ class GraphEQAMemory:
             return True
         if not self._relevant_objects or not self._observations:
             return True
-        all_labels = " ".join(lab.lower() for o in self._observations for lab in o.labels)
-        return all(obj.lower() in all_labels for obj in self._relevant_objects)
+        for obj in self._relevant_objects:
+            if not any(
+                label_matches_relevant_object(obj, lab)
+                for o in self._observations
+                for lab in o.labels
+            ):
+                return False
+        return True
 
     def _obs_is_frontier(self, obs_id: int) -> bool:
         for n in self._nodes:
