@@ -311,6 +311,22 @@ Resume skips finished JSONL lines. Sharded sweeps write per-shard JSONL + `*_mer
 
 ---
 
+## Habitat EQA (HM-EQA)
+
+**Full tables, JSONL tags, gap analysis, planned sweeps:** [experiments/habitat_eqa_results.md](experiments/habitat_eqa_results.md)
+
+| Comparison | Our best | Prior art | Gap |
+|------------|----------|-----------|-----|
+| Full 113 Q | 41.6% (gemma-3-4b, graph_eqa repro) | 63.5–67.0% (GraphEQA + API VLM) | ~−22 pp |
+| Matched slice | dynagraph +3 pp vs graph_eqa (bal-32 @ 3B) | — | Dynagraph helps |
+| Post-fix hold-out | 50% (8 Q, Qwen3-VL-8B) | 51.7% Explore-EQA (113 Q) | not comparable (small n) |
+
+**Next headline run:** full 113 with `Qwen/Qwen3-VL-8B-Instruct` + June 2026 fix stack (`emet-habitat run-batch --paper-subset --resume`).
+
+Install: `./scripts/install_habitat.sh`. Entrypoint: `.venv-habitat/bin/emet-habitat`. Parity: `paper/sections/appendix/05_habitat_eqa_parity.tex`.
+
+---
+
 ## Maintaining paper numbers
 
 ### 1. Run sweeps → CSV/JSON
@@ -329,7 +345,7 @@ Edit `paper/sections/05_results.tex`:
 | `tab:dynamic_explore_phase1` | `aggregate_dynamic_exploration.csv` (explored_fraction, eqa_accuracy, …) |
 | `tab:dynamic_explore_world_change` | `aggregate_dynamic_exploration_world_change.csv` |
 | `tab:dynamic_explore_lifelong` | `aggregate_dynamic_exploration_lifelong.csv` (per-cycle eqa_accuracy, node counts, moves adapted/stale) |
-| Habitat / HM-EQA | TBD on habitat branch |
+| Habitat / HM-EQA | `tab:hmeqa_vs_prior`, `tab:hmeqa_preliminary`, Appendix `tab:habitat_interim_results` | **[experiments/habitat_eqa_results.md](experiments/habitat_eqa_results.md)** (JSONL under `~/.cache/habitat_eqa/results/`) |
 
 Replace `--` placeholders; keep caption disclaimers (not comparable to official leaderboards where noted).
 
@@ -369,7 +385,7 @@ RUN_SQA3D_SCANNET_TESTS=1 uv run emet test src/test/benchmarks/sqa3d/test_scanne
 |-----------|----------------|
 | OVMM sim + Habitat proxy | `main` |
 | SQA3D ScanNet replay | `feature/dynamem-offline-real-benchmark` |
-| Habitat HM-EQA full harness | `feature/habitat-eqa-harness` |
+| Habitat HM-EQA full harness | `feature/habitat-eqa-harness` / `feature/eval-diagnostics-smoke` |
 
 Merge feature branches before final paper numbers; run smokes on the integration branch.
 
@@ -380,6 +396,7 @@ Merge feature branches before final paper numbers; run smokes on the integration
 `paper/sections/04_experiments.tex` should stay in sync with this doc:
 
 - [ ] Goals list matches active tracks (Habitat EQA, SQA3D, OVMM find/full, dynamic exploration, GT finding)
+- [ ] Habitat HM-EQA interim tables match [experiments/habitat_eqa_results.md](experiments/habitat_eqa_results.md)
 - [ ] `scripts/run_large_paper_eval.sh` phases and `SQA3D_GPUS` / skip env vars match `docs/environment_variables.md`
 - [ ] Table `tab:envs` lists correct entrypoint scripts
 - [ ] Each `sec:*_benchmark` protocol matches `--help` on the cited commands
@@ -389,5 +406,6 @@ Merge feature branches before final paper numbers; run smokes on the integration
 ## See also
 
 - [experiments/README.md](experiments/README.md) — master experiment index
+- [experiments/habitat_eqa_results.md](experiments/habitat_eqa_results.md) — HM-EQA vs prior art + planned sweeps
 - [paper/README.md](../paper/README.md) — LaTeX build
 - [TESTING.md](TESTING.md) — project-wide test conventions

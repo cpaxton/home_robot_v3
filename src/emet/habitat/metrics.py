@@ -101,6 +101,30 @@ _YES_NO_CHOICE_HINTS = frozenset(
 )
 
 
+def parse_mcq_choices_from_question(question: str) -> list[str]:
+    """Parse A–D option strings from HM-EQA ``question_formatted`` text."""
+    text = (question or "").strip()
+    if not text:
+        return []
+    choices = re.findall(
+        r"[A-D]\)\s*(.+?)(?=\s[A-D]\)|\.\s*Answer:|$)",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    return [c.strip().rstrip(".") for c in choices if c.strip()]
+
+
+def question_is_visibility_location(question: str) -> bool:
+    """True for stems like ``Did you see the woven basket anywhere?``."""
+    head = (question or "").strip().split("?")[0].lower()
+    return bool(
+        re.search(
+            r"\b(did you see|have you seen|do you see|can you see|did i see)\b",
+            head,
+        )
+    )
+
+
 def choices_are_location_mcq(choices: list[str] | None) -> bool:
     """True when MCQ options are places/things, not yes/no style answers."""
     if not choices:

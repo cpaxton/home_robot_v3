@@ -18,7 +18,13 @@ import numpy as np
 
 from emet.memory.adapters import GraphEQABackend
 from emet.memory.graph_eqa import GraphEQAMemory, labels_are_semantic_graph_hypothesis
-from emet.memory.graph_eqa.graph_memory import _near, _on_floor, label_matches_relevant_object
+from emet.memory.graph_eqa.graph_memory import (
+    _near,
+    _on_floor,
+    consolidate_relevant_keywords,
+    heuristic_relevant_phrases,
+    label_matches_relevant_object,
+)
 
 
 def test_graph_memory_add_observation():
@@ -124,15 +130,97 @@ def test_relevant_memory_summary_uses_siglip_grounder():
 
     mem.set_text_grounder(grounder)
 
-    mem._relevant_objects = ["basket"]
+    mem._relevant_phrases = ["woven basket"]
+    mem._relevant_objects = ["woven", "basket"]
     summary = mem._relevant_memory_summary()
-    assert "basket: PRESENT" in summary
-    assert "SigLIP visual match" in summary
+    assert "woven basket: PRESENT" in summary
+    assert "SigLIP phrase match" in summary
 
-    mem._relevant_objects = ["elephant"]
+    mem._relevant_phrases = ["elephant"]
     weak = mem._relevant_memory_summary()
     assert "elephant: likely NOT present" in weak
     assert "no strong SigLIP match" in weak
+
+
+def test_relevant_memory_summary_uses_siglip_phrase_cache():
+    """Cached graph-obs SigLIP alignments work after the voxel grounder is cleared."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.memory_summary_enabled = True
+    oid = mem.add_observation(rgb, np.array([3.1, 5.0, 0.5]), ["decorative plant"])
+    mem._relevant_phrases = ["woven basket"]
+    mem._siglip_phrase_cache["woven basket"] = (0.32, np.array([3.1, 5.0, 0.5]), oid)
+    mem._text_grounder = None
+
+    summary = mem._relevant_memory_summary()
+    assert "woven basket: PRESENT" in summary
+    assert "obs_id=" in summary
+    assert mem._graph_covers_relevant_objects()
+
+
+def test_heuristic_relevant_phrases_prefers_multiword():
+    phrases = heuristic_relevant_phrases("Did you see the woven basket anywhere?")
+    assert phrases[0] == "woven basket"
+    assert "anywhere" not in phrases
+
+
+def test_consolidate_relevant_keywords_drops_subsumed_tokens():
+    phrases, objects = consolidate_relevant_keywords(
+        ["woven basket"],
+        ["woven", "basket", "anywhere", "kitchen"],
+    )
+    assert phrases == ["woven basket"]
+    assert objects == ["woven basket", "kitchen"]
+
+
+def test_extract_relevant_objects_prefers_phrases():
+    mem = GraphEQAMemory(
+        defer_llm_clients=True,
+        image_description_client=lambda _x: "woven, basket, anywhere",
+    )
+    q = (
+        "Did you see the woven basket anywhere? "
+        "A) By the kitchen counter B) Between TV and living room sofas "
+        "C) Next to the dining table D) Next to the living room armchairs. Answer:"
+    )
+    mem.extract_relevant_objects(q)
+    assert mem._relevant_phrases == ["woven basket"]
+    assert mem._relevant_objects[0] == "woven basket"
+    assert "anywhere" not in mem._relevant_objects
+    assert "woven" not in mem._relevant_objects or mem._relevant_objects[0] == "woven basket"
+
+
+def test_query_answer_injects_location_mcq_hint():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    captured = {"cmds": None}
+
+    def fake_eqa(cmds):
+        captured["cmds"] = cmds
+        return "reasoning: r\nanswer: d\nconfidence: true\naction: none\nconfidence_reasoning: x"
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "basket",
+    )
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["basket"])
+    q = (
+        "Did you see the woven basket anywhere? "
+        "A) By the kitchen counter B) Between TV and living room sofas "
+        "C) Next to the dining table D) Next to the living room armchairs. Answer:"
+    )
+    mem.extract_relevant_objects(q)
+    mem.query_answer(q)
+    assert any(isinstance(c, str) and "LOCATION_MCQ" in c for c in captured["cmds"])
+
+
+def test_graph_covers_uses_phrase_not_every_token():
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem._relevant_phrases = ["woven basket"]
+    mem._relevant_objects = ["woven", "basket", "anywhere"]
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["basket"])
+    assert mem._graph_covers_relevant_objects()
 
 
 def test_query_answer_caps_history_in_prompt():

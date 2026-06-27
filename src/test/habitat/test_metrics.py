@@ -9,6 +9,8 @@ from emet.habitat.metrics import (
     extract_mcq_letter,
     extract_mcq_letter_from_raw_eqa,
     grade_mcq_answer,
+    parse_mcq_choices_from_question,
+    question_is_visibility_location,
     read_completed_question_ids,
     should_abstain_location_mcq,
     summarize_episodes,
@@ -76,6 +78,36 @@ def test_location_mcq_abstains_on_visibility_no():
     ]
     assert should_abstain_location_mcq(raw, choices)
     assert extract_mcq_letter_from_raw_eqa(raw, choices) == ""
+
+
+def test_location_mcq_salvage_answer_overrides_visibility_no():
+    raw = (
+        "Answer:\nNo\nConfidence:\nTRUE\n"
+        "[salvage-location]\nanswer:\nD\n"
+    )
+    choices = [
+        "By the kitchen counter",
+        "Between TV and living room sofas",
+        "Next to the dining table",
+        "Next to the living room armchairs",
+    ]
+    assert not should_abstain_location_mcq(raw, choices)
+    assert extract_mcq_letter_from_raw_eqa(raw, choices) == "D"
+
+
+def test_parse_mcq_choices_from_question_formatted():
+    q = (
+        "Did you see the woven basket anywhere? "
+        "A) By the kitchen counter B) Between TV and living room sofas "
+        "C) Next to the dining table D) Next to the living room armchairs. Answer:"
+    )
+    assert parse_mcq_choices_from_question(q) == [
+        "By the kitchen counter",
+        "Between TV and living room sofas",
+        "Next to the dining table",
+        "Next to the living room armchairs",
+    ]
+    assert question_is_visibility_location(q)
 
 
 def test_yes_no_mcq_still_maps_no_to_b():

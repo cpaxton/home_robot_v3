@@ -26,15 +26,25 @@ def release_gpu_memory() -> None:
 
 
 def prepare_dynagraph_vram_for_eqa(agent: Any) -> None:
-    """Drop SigLIP / navigation caches so GraphEQA VLM forward has headroom."""
-    from emet.perception.encoders.siglip_encoder import release_shared_mask_siglip_encoder
+    """Drop voxel SigLIP caches for VLM headroom; keep phrase SigLIP for CONFIRMED_MEMORY."""
+    from emet.memory.graph_eqa.graph_eqa_siglip import (
+        should_keep_siglip_for_confirmed_memory,
+        warm_graph_eqa_siglip_confirmed_memory,
+    )
 
-    release_shared_mask_siglip_encoder()
+    warm_graph_eqa_siglip_confirmed_memory(agent)
     if hasattr(agent, "encoder"):
         agent.encoder = None
     vm = getattr(agent, "voxel_map", None)
     if vm is not None:
         vm.encoder = None
+    if not should_keep_siglip_for_confirmed_memory(agent):
+        from emet.perception.encoders.siglip_encoder import release_shared_mask_siglip_encoder
+
+        release_shared_mask_siglip_encoder()
+        gm = getattr(agent, "graph_memory", None)
+        if gm is not None:
+            gm.set_confirmed_memory_siglip_encoder(None)
     release_gpu_memory()
     try:
         from emet.llms.graph_eqa_vlm import trim_shared_graph_eqa_vlm_cache
