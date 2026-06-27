@@ -826,18 +826,35 @@ def _pick_rerun_head_cam(obs: Any, servo: Observations | None) -> Observations |
     return chosen
 
 
+def _ee_rgb_has_signal(rgb: np.ndarray | None) -> bool:
+    """True when EE RGB is present and not an all-zero placeholder."""
+    if rgb is None:
+        return False
+    arr = np.asarray(rgb)
+    if arr.size == 0 or arr.ndim != 3:
+        return False
+    return bool(np.any(arr))
+
+
 def _pick_rerun_ee_cam(obs: Any, servo: Observations | None, head_cam: Observations | None) -> Observations | None:
     """Best Observations carrying ``ee_rgb`` / ``ee_camera_*`` for Rerun EE panel."""
+    candidates: list[Observations] = []
     for cand in (servo, head_cam):
         if cand is not None and getattr(cand, "ee_rgb", None) is not None:
-            return cand
+            candidates.append(cand)
     if isinstance(obs, dict):
         from emet.controller.generic_zmq_client import get_observation_from_zmq_dict
 
         decoded = get_observation_from_zmq_dict(obs)
         if decoded is not None and decoded.ee_rgb is not None:
-            return decoded
-    return None
+            candidates.append(decoded)
+    elif isinstance(obs, Observations) and getattr(obs, "ee_rgb", None) is not None:
+        candidates.append(obs)
+
+    for cand in candidates:
+        if _ee_rgb_has_signal(cand.ee_rgb) and int(np.max(cand.ee_rgb)) > 0:
+            return cand
+    return candidates[0] if candidates else None
 
 
 class RerunVisualizer:
@@ -1658,8 +1675,16 @@ class RerunVisualizer:
             return
         rr.set_time_seconds("realtime", time.time())
 
-        # EE Camera
         ee_rgb = np.ascontiguousarray(_rgb_to_uint8(servo.ee_rgb))
+        ee_k = getattr(servo, "ee_camera_K", None)
+        if ee_k is not None:
+            from emet.controller.generic_zmq_client import _align_camera_k_to_rgb
+
+            ee_k = _align_camera_k_to_rgb(np.asarray(ee_k, dtype=np.float64).reshape(3, 3), ee_rgb)
+            if ee_k is not None:
+                servo = replace(servo, ee_camera_K=ee_k)
+
+        # EE Camera
         log_to_rerun("world/ee_camera/rgb", rr.Image(ee_rgb, color_model=rr.ColorModel.RGB))
 
         ee_depth = getattr(servo, "ee_depth", None)
