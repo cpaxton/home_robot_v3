@@ -19,6 +19,9 @@ uv run python scripts/eval_dynamic_exploration.py \
   --backend dynagraph --explore-max-iters 3 --mapping-mode explore \
   --output-dir /tmp/dynamic_explore_smoke
 
+# Graph dedup spot-check: sim + explore-loop + --compare-to-gt (creates export dir before logging)
+uv run python scripts/run_dedup_sim_validate.py --export-dir /tmp/dedup_sim_validate
+
 # Phase 1: rotate-only contrast row (OVMM-style, no explore-loop)
 uv run python scripts/eval_dynamic_exploration.py \
   --phase explore --episode-id robocasa_seed0 \

@@ -36,6 +36,10 @@ class SQA3DEpisodeMetrics:
     replay_mode: str = ""
     question_type: str = ""
     export_dir: str = ""
+    graph_nodes: int = 0
+    graph_object_nodes: int = 0
+    graph_viewpoint_nodes: int = 0
+    graph_frontier_nodes: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -65,14 +69,50 @@ def read_completed_sqa3d_question_ids(path: Path) -> set[int]:
     return done
 
 
+def format_sqa3d_episode_line(episode: SQA3DEpisodeMetrics) -> str:
+    """One-line sweep progress: outcome tag, prediction, gold."""
+    if episode.infra_failure:
+        tag = "infra"
+    elif episode.em:
+        tag = "em"
+    else:
+        tag = "miss"
+    pred = (episode.predicted_answer or "")[:80]
+    graph = ""
+    if episode.graph_nodes:
+        graph = (
+            f" graph={episode.graph_object_nodes}obj/"
+            f"{episode.graph_viewpoint_nodes}vp/{episode.graph_frontier_nodes}fr"
+        )
+    return (
+        f"question_id={episode.question_id} {tag}{graph} "
+        f"predicted={pred!r} gold={episode.gold_answers}"
+    )
+
+
 def summarize_sqa3d_episodes(episodes: list[SQA3DEpisodeMetrics]) -> dict[str, float]:
     if not episodes:
-        return {"em@1": 0.0, "mean_steps": 0.0, "success_rate": 0.0, "n": 0.0}
+        return {
+            "em@1": 0.0,
+            "em@1_refined": 0.0,
+            "em@1_excl_infra": 0.0,
+            "mean_steps": 0.0,
+            "success_rate": 0.0,
+            "n": 0.0,
+            "n_infra": 0.0,
+            "n_scored": 0.0,
+        }
     n = len(episodes)
+    n_infra = sum(1 for e in episodes if e.infra_failure)
+    scored = [e for e in episodes if not e.infra_failure]
+    n_scored = len(scored)
     return {
         "em@1": sum(1 for e in episodes if e.em) / n,
         "em@1_refined": sum(1 for e in episodes if e.em_refined) / n,
+        "em@1_excl_infra": sum(1 for e in scored if e.em) / max(1, n_scored),
         "mean_steps": sum(e.planning_steps for e in episodes) / n,
         "success_rate": sum(1 for e in episodes if e.success) / n,
         "n": float(n),
+        "n_infra": float(n_infra),
+        "n_scored": float(n_scored),
     }

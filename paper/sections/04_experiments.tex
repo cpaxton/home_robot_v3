@@ -241,6 +241,29 @@ Designed to stress-test Dynagraph node growth and exploration budget on S0$\righ
 \textbf{Known limits.}
 Molmo GT fixture scans may cap on large scenes; Robocasa layout $\neq$ HSSD; static placements (no mid-episode object move in Phase~1).
 
+\subsection{Habitat HM-EQA status and planned sweeps}
+\label{sec:hmeqa_planned}
+
+\textit{Recorded numbers:} \texttt{docs/experiments/habitat\_eqa\_results.md}; paper tables in Section~\ref{sec:hmeqa_results} and Appendix~\ref{app:habitat_eqa_parity}.
+
+\textbf{Current status (June 2026).}
+The \texttt{emet-habitat} harness runs end-to-end on HM-EQA with local VLMs.
+Our best \textbf{full-benchmark} result is \textbf{41.6\%} (113 questions, graph\_eqa, gemma-3-4b-it) vs.\ \textbf{63.5--67.0\%} for GraphEQA with API VLMs (Table~\ref{tab:grapheqa_official_hmeqa}).
+Dynagraph beats our graph\_eqa baseline on matched slices (+3\,pp on letter-balanced 32 with Qwen2.5-VL-3B; +12.5\,pp on canonical-8 with MCQ debias).
+Post-fix runs with Qwen3-VL-8B score 50\% on an eight-question held-out draw (seed 20260627, excluding tuning ids)---above chance but not yet a full-benchmark headline.
+
+\textbf{Planned sweeps (priority).}
+\begin{enumerate}
+  \item Full 113-question \texttt{dynagraph} with \texttt{Qwen/Qwen3-VL-8B-Instruct} and the June 2026 fix stack (phrase \texttt{CONFIRMED\_MEMORY}, location MCQ, navmesh nav, debias).
+  \item Matched \texttt{graph\_eqa} baseline on the same 113 + VLM (isolate Dynagraph memory gains).
+  \item HM3D semantics download + on/off ablation on Q0--19.
+  \item Frontier-policy ablation: fluid only vs.\ keyword-weighted fluid vs.\ graph frontier nodes (\texttt{run\_habitat\_frontier\_ablation.sh}).
+  \item Letter-balanced 32 rerun at 8B (compare to 34.4\% @ 3B).
+  \item Optional: API VLM on canonical-8 or balanced-32 through the same harness (upper bound on VLM tier).
+\end{enumerate}
+
+Batch entrypoints: \texttt{emet-habitat run-batch}, \texttt{scripts/run\_habitat\_iter\_subset.sh}, \texttt{scripts/run\_overnight\_habitat\_eval.sh}.
+
 \subsection{Execution protocol (summary)}
 
 \begin{enumerate}

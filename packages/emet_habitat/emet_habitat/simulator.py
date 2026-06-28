@@ -167,6 +167,56 @@ class HabitatEQASimulator:
             np.array([1.0, 0.0, 0.0], dtype=np.float32),
         )
         self._agent.set_state(state)
+        self._last_init_pose_record = {
+            "init_pose_csv": {
+                "x": float(pose.x),
+                "y": float(pose.y),
+                "z": float(pose.z),
+                "heading": float(pose.heading),
+            },
+            "init_pose_snapped": {
+                "x": float(position[0]),
+                "y": float(position[1]),
+                "z": float(position[2]),
+            },
+            "navmesh_snapped": bool(
+                np.linalg.norm(
+                    np.asarray([pose.x, pose.y, pose.z], dtype=np.float64)
+                    - np.asarray(position, dtype=np.float64)
+                )
+                > 1e-4
+            ),
+        }
+
+    @property
+    def last_init_pose_record(self) -> dict[str, object] | None:
+        return getattr(self, "_last_init_pose_record", None)
+
+    @property
+    def floor_y(self) -> float:
+        """Navmesh-snapped spawn Habitat ``Y`` for floor-relative voxel height."""
+        record = self.last_init_pose_record
+        if record:
+            snapped = record.get("init_pose_snapped")
+            if isinstance(snapped, dict) and "y" in snapped:
+                return float(snapped["y"])
+        return float(self._agent.get_state().position[1])
+
+    @property
+    def sensor_height(self) -> float:
+        return float(self._sensor_height)
+
+    def snap_navmesh_xz(self, goal_x: float, goal_z: float) -> tuple[float, float, bool]:
+        """Snap ``(X, Z)`` to the navmesh; returns ``(x, z, is_navigable)``."""
+        if not self._sim.pathfinder.is_loaded:
+            return float(goal_x), float(goal_z), False
+        y = float(self._agent.get_state().position[1])
+        pt = np.array([float(goal_x), y, float(goal_z)], dtype=np.float32)
+        snapped = self._sim.pathfinder.snap_point(pt)
+        if not np.isfinite(snapped).all():
+            return float(goal_x), float(goal_z), False
+        sx, sz = float(snapped[0]), float(snapped[2])
+        return sx, sz, bool(self._sim.pathfinder.is_navigable(snapped))
 
     def find_path_to_xy(self, goal_x: float, goal_z: float) -> np.ndarray | None:
         """Return navmesh shortest-path waypoints in Habitat coords, or None."""
@@ -175,7 +225,8 @@ class HabitatEQASimulator:
         import habitat_sim
 
         start = np.array(self._agent.get_state().position, dtype=np.float32)
-        end = np.array([goal_x, start[1], goal_z], dtype=np.float32)
+        sx, sz, _ = self.snap_navmesh_xz(goal_x, goal_z)
+        end = np.array([sx, start[1], sz], dtype=np.float32)
         path = habitat_sim.nav.ShortestPath()
         path.requested_start = start
         path.requested_end = end

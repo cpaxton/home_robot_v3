@@ -140,12 +140,16 @@ def score_sqa3d_episode_jsonl(path: Path) -> dict[str, Any]:
         return {"n_questions": 0.0, "em@1": 0.0, "em@1_refined": 0.0, "questions": []}
 
     scored: list[dict[str, Any]] = []
-    em_total = em_refined_total = 0
+    em_total = em_refined_total = em_excl_infra_total = 0
+    n_infra = 0
     for row in episodes:
         qid = int(row.get("question_id", -1))
         pred = str(row.get("predicted_answer", ""))
         if pred.startswith("ERROR:"):
             pred = ""
+        infra = bool(row.get("infra_failure", False))
+        if infra:
+            n_infra += 1
         golds = [str(a) for a in row.get("gold_answers", []) if str(a).strip()]
         pred_clean = clean_answer(pred) if pred else ""
         gts = [clean_answer(a) for a in golds]
@@ -155,6 +159,8 @@ def score_sqa3d_episode_jsonl(path: Path) -> dict[str, Any]:
             em_refined = bool(row.get("em_refined", em))
         em_total += int(em)
         em_refined_total += int(em_refined)
+        if not infra:
+            em_excl_infra_total += int(em)
         scored.append(
             {
                 "question_id": qid,
@@ -164,17 +170,21 @@ def score_sqa3d_episode_jsonl(path: Path) -> dict[str, Any]:
                 "prediction": pred,
                 "em": em,
                 "em_refined": em_refined,
+                "infra_failure": infra,
                 "planning_steps": row.get("planning_steps"),
             }
         )
 
-    n = max(1, len(scored))
+    n = len(scored)
+    n_model = max(1, n - n_infra)
     return {
-        "n_questions": float(len(scored)),
-        "n_scored": float(len(scored)),
+        "n_questions": float(n),
+        "n_scored": float(n - n_infra),
+        "n_infra": float(n_infra),
         "n_missing": 0.0,
-        "em@1": em_total / n,
-        "em@1_refined": em_refined_total / n,
+        "em@1": em_total / max(1, n),
+        "em@1_refined": em_refined_total / max(1, n),
+        "em@1_excl_infra": em_excl_infra_total / n_model,
         "source": "episode_jsonl",
         "questions": scored,
     }

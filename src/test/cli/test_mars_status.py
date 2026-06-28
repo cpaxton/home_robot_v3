@@ -1,0 +1,46 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+
+from emet.mars import parse_bridge_status_output, print_bridge_status
+
+
+def test_parse_bridge_status_output_running():
+    raw = """10105 /usr/bin/python3 /home/jetson1/innate-os/ros2_ws/install/innate_mars_bridge/lib/innate_mars_bridge/server --ros-args -r __node:=innate_mars_zmq_server
+---
+LISTEN 0      100          0.0.0.0:4404       0.0.0.0:*
+LISTEN 0      100          0.0.0.0:4401       0.0.0.0:*
+LISTEN 0      100          0.0.0.0:4403       0.0.0.0:*
+---
+[server-1] [INFO] [1782397281.975882818] [innate_mars_zmq_server]: InnateMarsRosInterface: waiting for cameras...
+"""
+    status = parse_bridge_status_output("herman", "jetson1", raw)
+    assert status.pid == 10105
+    assert status.process_running
+    assert status.listening_ports >= {4401, 4403, 4404}
+    assert status.ready_for_stream
+    assert status.headline_log() is not None
+    assert "waiting for cameras" in (status.headline_log() or "").lower()
+
+
+def test_parse_bridge_status_output_not_running():
+    raw = """---
+---
+---tmux-unavailable---
+"""
+    status = parse_bridge_status_output("herman", "jetson1", raw)
+    assert not status.process_running
+    assert not status.listening_ports
+    assert not status.ready_for_stream
+
+
+def test_print_bridge_status_smoke(capsys):
+    status = parse_bridge_status_output(
+        "herman",
+        "jetson1",
+        "9999 python3 innate_mars_zmq_server\n---\nLISTEN 0 100 0.0.0.0:4401 0.0.0.0:*\n---\n",
+    )
+    print_bridge_status(status, profile="herman", show_next_steps=False)
+    out = capsys.readouterr().out
+    assert "herman" in out
+    assert "1/4" in out
+    assert "pid 9999" in out

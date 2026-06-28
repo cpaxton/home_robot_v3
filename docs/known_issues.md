@@ -8,7 +8,7 @@ Tracked bugs and investigation notes.
 
 ## Dynagraph graph node explosion on stationary hardware stream
 
-**Status:** Open (investigate) · **Seen:** 2026-06 · **Backends:** `dynagraph` (not `voxel_only`)
+**Status:** Mitigated (2026-06) · **Seen:** 2026-06 · **Backends:** `dynagraph` (not `voxel_only`)
 
 ### Symptoms
 
@@ -38,6 +38,20 @@ emet stream --connection herman --backend dynagraph --headless
 
 Sim with sensor depth may **not** show the same severity (dedup is more stable when depth is consistent).
 
+### Fix (2026-06)
+
+Three changes address stationary hardware stream growth:
+
+1. **GraphObjectFusion fallback tier** (`fallback_spatial_merge_xy_m`, default **0.45 m**, aligned with `dynagraph_merge_xy_m`). When strict spatial/embedding/bounds gates fail, instance detections merge into the nearest object node within that XY radius.
+2. **Innate Mars fusion YAML wired correctly** — `attach_graph_object_fusion` now reads `graph_object_fusion` from `Parameters` / yacs config (controllers no longer pass `None` when parameters is not a plain `dict`). [`dynav_innate_mars.yaml`](../src/emet/config/dynav_innate_mars.yaml) supplies relaxed gates (embedding off, fallback **0.55 m**).
+3. **VLM sensor labels through fusion** — Qwen-extracted labels in [`dynamem_graph_hooks.py`](../src/emet/memory/graph_eqa/dynamem_graph_hooks.py) use `apply_detection` instead of `add_observation` with dedup disabled (~8 new nodes/step before).
+
+**Stream status** now reports object / viewpoint / frontier breakdown: `graph 11 obj / 12 vp / 1 fr (24 total)` ([`stream_agent_factory.py`](../src/emet/app/stream_agent_factory.py)).
+
+**Offline regression:** [`src/test/memory/test_graph_dedup_offline.py`](../src/test/memory/test_graph_dedup_offline.py) + [`scripts/build_dedup_calibration_fixtures.py`](../scripts/build_dedup_calibration_fixtures.py). **Hardware diagnostic:** [`scripts/diagnose_stream_graph_growth.py`](../scripts/diagnose_stream_graph_growth.py).
+
+Herman smoke after fix: object nodes plateau ~10–11 after step 1 with default VLM+instance stream (was +8–9 object nodes/step).
+
 ### Why dedup is failing (hypothesis)
 
 Several merge paths exist; on stream + hardware they appear **too weak** for noisy stationary observations:
@@ -61,18 +75,19 @@ Additional contributors:
 |------|------------------|
 | Voxel map only, no graph | `emet stream --backend voxel_only` |
 | Full dynamem, no graph | `emet stream --backend dynamem` |
-| Short smoke with bounded graph steps | `--max-steps 3` (still may add nodes; does not fix dedup) |
+| Short smoke with bounded graph steps | `--max-steps 3` |
+| Instance-only graph (no VLM labels) | `emet stream --backend dynagraph --no-sensor-perception` |
 | Quieter terminal | default `stream.da3_log_level: WARN` in dynav ([zmq_obs.md](zmq_obs.md), [environment_variables.md](environment_variables.md)) |
 
 Do **not** use `emet run dynagraph` on hardware for stationary mapping — it may rotate the head / explore unless `-N` and flags are carefully set (see [experiments/innate_mars.md](experiments/innate_mars.md) and [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md)).
 
 ### Investigation directions
 
-1. **Stationary-stream profile** — skip or throttle graph perception when base pose delta &lt; ε for N steps.
-2. **Tighter fusion for DA3** — [`graph_object_fusion_innate_mars.yaml`](../src/emet/config/agents/graph_object_fusion_innate_mars.yaml) tuning or pose-stabilized unprojection before fusion.
-3. **Re-enable or unify merge** — reconcile GraphObjectFusion with `dynagraph_merge_xy_m` instead of zeroing `spatial_merge_m`.
+1. **Stationary-stream profile** — optional throttle when base pose delta &lt; ε (not required after 2026-06 fusion + VLM fixes).
+2. **Tighter fusion for DA3** — ~~[`graph_object_fusion_innate_mars.yaml`](../src/emet/config/agents/graph_object_fusion_innate_mars.yaml) tuning~~ **Done:** wired via Parameters + innate_mars dynav block.
+3. **Re-enable or unify merge** — ~~reconcile GraphObjectFusion with `dynagraph_merge_xy_m`~~ **Done:** fallback tier + innate_mars YAML (see Fix above).
 4. **Aggressive staleness** for stream-only sessions (lower horizon when `emet stream` not explore-loop).
-5. **Regression test** — sim GT graph with fixed camera should keep node count flat; hardware replay from saved `capture` metadata.
+5. **Regression test** — ~~sim GT graph with fixed camera should keep node count flat~~ **Done:** `test_graph_dedup_offline.py` + fixture generator; hardware replay from saved `capture` metadata remains optional.
 
 ### Code touchpoints
 

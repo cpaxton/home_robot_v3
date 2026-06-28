@@ -15,6 +15,7 @@ from emet.benchmarks.sqa3d.datasets import get_sqa3d_question, load_sqa3d_questi
 from emet.benchmarks.sqa3d.episode_metrics import (
     SQA3DEpisodeMetrics,
     append_sqa3d_jsonl,
+    format_sqa3d_episode_line,
     read_completed_sqa3d_question_ids,
 )
 from emet.benchmarks.sqa3d.metrics import answer_match, clean_answer, extract_answer_from_eqa_row
@@ -25,7 +26,14 @@ from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.controller_dynamem import DynamemController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import Parameters, get_parameters
+from emet.eval.dynagraph_vram import prepare_dynagraph_vram_for_eqa, release_gpu_memory
+from emet.eval.episode_diagnostics import (
+    EpisodeDiagnosticsRecorder,
+    bind_diagnostics_recorder,
+    unbind_diagnostics_recorder,
+)
 from emet.eval.memory_backends import SQA3D_MEMORY_BACKEND
+from emet.memory.graph_eqa.graph_stats import format_graph_node_breakdown, graph_node_breakdown
 
 SQA3DMethod = SQA3D_MEMORY_BACKEND
 SQA3DProfile = Literal["smoke", "tuned"]
@@ -36,19 +44,7 @@ _EQA_ANSWER_RE = re.compile(r"(?is)(?:^|\n)\s*answer:\s*(.+?)(?:\n\s*(?:confiden
 
 
 def _release_gpu_memory() -> None:
-    try:
-        import gc
-
-        gc.collect()
-        import torch
-
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-            torch.cuda.empty_cache()
-            if hasattr(torch.cuda, "ipc_collect"):
-                torch.cuda.ipc_collect()
-    except Exception:
-        pass
+    release_gpu_memory()
 
 
 def _teardown_agent(agent: object | None) -> None:
@@ -107,6 +103,7 @@ def _configure_eqa_parameters(
     eqa.setdefault("prompt_variant", "sqa3d")
     if method == "dynagraph":
         eqa["sqa3d_allow_partial_graph"] = True
+        eqa.setdefault("eqa_max_images", 3)
     if device == "cpu":
         eqa["vl_quantization"] = None
     if eqa_vl_family is not None:
@@ -179,6 +176,9 @@ def _make_agent(
             use_real_vlm=use_real_vlm,
             device=device,
         )
+        # Open-vocab SQA3D answers do not need CONFIRMED_MEMORY SigLIP passes (extra VRAM + tokens).
+        if agent.graph_memory is not None:
+            agent.graph_memory.memory_summary_enabled = False
         return agent
 
     agent = DynamemController(
@@ -284,6 +284,10 @@ def _run_dynamem_eqa(
     return predicted, raw_eqa, confident
 
 
+def _prepare_dynagraph_vram_for_eqa(agent: DynamemController) -> None:
+    prepare_dynagraph_vram_for_eqa(agent)
+
+
 def _run_dynagraph_eqa(
     agent: DynamemController,
     prompt: str,
@@ -291,6 +295,7 @@ def _run_dynagraph_eqa(
     max_planning_steps: int,
     max_movement_step: int,
 ) -> tuple[str, str, bool]:
+    _prepare_dynagraph_vram_for_eqa(agent)
     discord_text, _images = agent.run_eqa(
         prompt,
         max_planning_steps=max_planning_steps,
@@ -300,9 +305,11 @@ def _run_dynagraph_eqa(
     parsed_answer = ""
     model_confident = False
     if agent.graph_memory is not None:
-        raw_eqa = agent.graph_memory.last_eqa_raw
+        raw_eqa = str(agent.graph_memory.last_eqa_raw or "")
         _reasoning, answer, model_confident, _action, _cr = agent.graph_memory.last_eqa_parsed
         parsed_answer = str(answer or "")
+    if not raw_eqa.strip() and discord_text:
+        raw_eqa = discord_text
     predicted = _extract_open_answer(raw_eqa, parsed_answer)
     if not predicted and discord_text:
         predicted = _extract_open_answer(discord_text, "")
@@ -333,6 +340,10 @@ def _score_episode(
     profile: SQA3DProfile = "smoke",
     replay_mode: ScanNetReplayMode = "auto",
     export_dir: str = "",
+    graph_nodes: int = 0,
+    graph_object_nodes: int = 0,
+    graph_viewpoint_nodes: int = 0,
+    graph_frontier_nodes: int = 0,
 ) -> SQA3DEpisodeMetrics:
     pred_clean = clean_answer(predicted)
     gts = [clean_answer(a) for a in q.answers if a.strip()]
@@ -362,6 +373,10 @@ def _score_episode(
         replay_mode=replay_mode,
         question_type=str(getattr(q, "question_type", "") or ""),
         export_dir=export_dir,
+        graph_nodes=graph_nodes,
+        graph_object_nodes=graph_object_nodes,
+        graph_viewpoint_nodes=graph_viewpoint_nodes,
+        graph_frontier_nodes=graph_frontier_nodes,
     )
 
 
@@ -404,6 +419,7 @@ def run_sqa3d_episode(
     )
     use_real_vlm = not mock_llm
     agent = None
+    diag_recorder: EpisodeDiagnosticsRecorder | None = None
     robot = None
     replay_meta: dict[str, object] = {}
     try:
@@ -428,6 +444,8 @@ def run_sqa3d_episode(
             use_real_vlm=use_real_vlm,
             device=device,
         )
+        diag_recorder = EpisodeDiagnosticsRecorder()
+        bind_diagnostics_recorder(agent, diag_recorder)
         agent.start()
         executor = EQAExecuter(agent)
         if rotate_in_place:
@@ -470,8 +488,13 @@ def run_sqa3d_episode(
                 export_root=export_root,
                 split=split,
                 infra_failure=_is_infra_failure_text(raw_eqa, predicted),
+                recorder=diag_recorder,
             )
             export_dir = str(ep_path)
+
+        graph_stats = graph_node_breakdown(getattr(agent, "graph_memory", None))
+        if method == "dynagraph" and graph_stats["total"]:
+            print(format_graph_node_breakdown(agent.graph_memory), flush=True)
 
         return _score_episode(
             q,
@@ -485,9 +508,15 @@ def run_sqa3d_episode(
             profile=prof,
             replay_mode=replay_mode,
             export_dir=export_dir,
+            graph_nodes=graph_stats["total"],
+            graph_object_nodes=graph_stats["object"],
+            graph_viewpoint_nodes=graph_stats["viewpoint"],
+            graph_frontier_nodes=graph_stats["frontier"],
             **replay_meta,
         )
     finally:
+        if agent is not None and diag_recorder is not None:
+            unbind_diagnostics_recorder(agent, diag_recorder)
         sim.close()
         _teardown_agent(agent)
         del robot
@@ -599,7 +628,7 @@ def _run_sqa3d_batch_isolated(
                     break
             if row is not None:
                 results.append(row)
-                print(f"question_id={qid} em={row.em} (appended {output_jsonl})", flush=True)
+                print(f"{format_sqa3d_episode_line(row)} (appended {output_jsonl})", flush=True)
     return results
 
 
@@ -690,7 +719,7 @@ def run_sqa3d_batch(
             results.append(row)
             if output_jsonl is not None:
                 append_sqa3d_jsonl(output_jsonl, row)
-                print(f"question_id={qid} em={row.em} (appended {output_jsonl})", flush=True)
+                print(f"{format_sqa3d_episode_line(row)} (appended {output_jsonl})", flush=True)
             _release_gpu_memory()
         except Exception as exc:
             if not continue_on_error:

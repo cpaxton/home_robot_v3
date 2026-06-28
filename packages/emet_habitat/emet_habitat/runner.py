@@ -14,6 +14,13 @@ from emet.controller.controller_dynagraph import DynagraphController
 from emet.controller.controller_graph_eqa import GraphEQAController
 from emet.controller.task.dynamem import EQAExecuter
 from emet.core.parameters import Parameters, get_parameters
+from emet.eval.episode_diagnostics import (
+    EpisodeDiagnosticsConfig,
+    EpisodeDiagnosticsRecorder,
+    bind_diagnostics_recorder,
+    habitat_export_voxel_history_default,
+    unbind_diagnostics_recorder,
+)
 from emet.habitat.config import default_hm3d_scene_dir
 from emet.habitat.datasets import get_question, load_hmeqa_questions, load_scene_init_poses
 from emet.habitat.episode_debug import (
@@ -29,6 +36,7 @@ from emet.habitat.metrics import (
     append_episode_jsonl,
     extract_mcq_letter,
     extract_mcq_letter_from_raw_eqa,
+    should_abstain_location_mcq,
     grade_mcq_answer,
 )
 from emet_habitat.robot_client import HabitatRobotClient
@@ -70,12 +78,16 @@ def _apply_method_parameters(parameters: Parameters | dict, method: str) -> Para
         params = Parameters(**parameters)
     else:
         params = parameters
-    # HM-EQA episodes are short (~20 planning steps). Use identical graph-memory
-    # settings so Dynagraph is a same-stack regression check vs GraphEQA, not a
-    # competing merge/staleness config (those apply on long real-robot runs).
+    # HM-EQA episodes are short (~20 planning steps). Keep merge/staleness at 0 so
+    # Dynagraph is a same-stack regression check vs GraphEQA, but enable fusion
+    # fallback dedup so HM3D instance labels do not explode the graph each frame.
     if method in ("graph_eqa", "dynagraph"):
         params["dynagraph_merge_xy_m"] = 0.0
         params["dynagraph_staleness_horizon"] = 0
+        if method == "dynagraph":
+            from emet.eval.benchmark_dynagraph import apply_eval_graph_fusion_parameters
+
+            apply_eval_graph_fusion_parameters(params, merge_xy_m=0.0)
     else:
         raise ValueError(f"Unknown method {method!r}; use graph_eqa or dynagraph")
     return params
@@ -85,6 +97,21 @@ def _cfg_hf_id_matches_family(hf_model_id: str, family: str) -> bool:
     from emet.llms.eqa_vl_settings import _hf_id_matches_family
 
     return _hf_id_matches_family(hf_model_id, family)
+
+
+def _configure_habitat_nav(
+    parameters: Parameters,
+    *,
+    habitat_perfect_nav: bool | None = None,
+) -> None:
+    """Habitat HM-EQA: navmesh pathing on by default; disable to exercise voxel A*."""
+    eqa = dict(parameters.get("eqa", {}) or {})
+    if habitat_perfect_nav is not None:
+        eqa["habitat_perfect_nav"] = bool(habitat_perfect_nav)
+    else:
+        eqa.setdefault("habitat_perfect_nav", True)
+    eqa.setdefault("habitat_explore_frontiers", True)
+    parameters.set("eqa", eqa)
 
 
 def _configure_frontier_parameters(
@@ -201,8 +228,12 @@ def run_hmeqa_episode(
     device: str | None = "cuda",
     frontier_nodes_enabled: bool | None = None,
     frontier_keyword_weight: float | None = None,
+    habitat_perfect_nav: bool | None = None,
     debug_run_tag: str | None = None,
     save_debug_bundle: bool = True,
+    export_map: bool | None = None,
+    export_video: bool | None = None,
+    map_stride: int | None = None,
 ) -> EpisodeMetrics:
     questions = load_hmeqa_questions(questions_path)
     q = get_question(questions, question_id=question_id)
@@ -218,8 +249,11 @@ def run_hmeqa_episode(
         use_hm3d_semantics=use_hm3d_semantics,
     )
     use_real_vlm = not mock_llm
+    agent = None
+    diag_recorder: EpisodeDiagnosticsRecorder | None = None
     try:
         sim.set_init_pose(init_pose)
+        spawn_record = sim.last_init_pose_record
         robot = HabitatRobotClient(sim)
         if sim.uses_hm3d_semantics:
             print(f"HM3D semantics enabled for scene {q.scene}", flush=True)
@@ -235,6 +269,7 @@ def run_hmeqa_episode(
             frontier_nodes_enabled=frontier_nodes_enabled,
             frontier_keyword_weight=frontier_keyword_weight,
         )
+        _configure_habitat_nav(parameters, habitat_perfect_nav=habitat_perfect_nav)
         agent = _make_controller(
             robot,
             parameters,
@@ -246,6 +281,14 @@ def run_hmeqa_episode(
             device=device,
             use_hm3d_semantics=use_hm3d_semantics,
         )
+        diag_cfg = EpisodeDiagnosticsConfig.from_env(
+            export_map=export_map,
+            export_video=export_video,
+            export_map_stride=map_stride if map_stride is not None else None,
+            export_voxel_history=habitat_export_voxel_history_default(),
+        )
+        diag_recorder = EpisodeDiagnosticsRecorder(cfg=diag_cfg)
+        bind_diagnostics_recorder(agent, diag_recorder, spawn_record=spawn_record)
         agent._eqa_question = q.question_formatted
         agent.start()
         if agent.graph_memory is not None:
@@ -260,6 +303,14 @@ def run_hmeqa_episode(
             agent.update()
             if agent.graph_memory is not None and hasattr(agent, "_sync_graph_frontier_nodes"):
                 agent._sync_graph_frontier_nodes()
+
+        from emet.eval.dynagraph_vram import prepare_dynagraph_vram_for_eqa
+        from emet.memory.graph_eqa.graph_stats import format_graph_node_breakdown
+
+        if method == "dynagraph":
+            prepare_dynagraph_vram_for_eqa(agent)
+        if agent.graph_memory is not None:
+            print(format_graph_node_breakdown(agent.graph_memory), flush=True)
 
         discord_text, _images = agent.run_eqa(
             q.question_formatted,
@@ -288,7 +339,12 @@ def run_hmeqa_episode(
             predicted = extract_mcq_letter(tail, q.choices)
         predebias_letter = ""
         debias_votes = ""
-        if agent.graph_memory is not None and getattr(agent.graph_memory, "mcq_debias_enabled", False) and q.choices:
+        if (
+            agent.graph_memory is not None
+            and getattr(agent.graph_memory, "mcq_debias_enabled", False)
+            and q.choices
+            and not should_abstain_location_mcq(raw_eqa, q.choices)
+        ):
             vote_letter = agent.graph_memory.vote_mcq_letter(q.question, q.choices)
             debias_votes = json.dumps(getattr(agent.graph_memory, "last_mcq_debias", {}))
             if vote_letter:
@@ -336,6 +392,8 @@ def run_hmeqa_episode(
                     metrics=metrics,
                     agent=agent,
                     raw_eqa_full=raw_eqa,
+                    recorder=diag_recorder,
+                    diagnostics_cfg=diag_cfg,
                 )
             except Exception as exc:
                 print(
@@ -344,6 +402,8 @@ def run_hmeqa_episode(
                 )
         return metrics
     finally:
+        if agent is not None and diag_recorder is not None:
+            unbind_diagnostics_recorder(agent, diag_recorder)
         sim.close()
         _release_gpu_memory()
 
@@ -367,6 +427,10 @@ def run_hmeqa_batch(
     resume: bool = False,
     frontier_nodes_enabled: bool | None = None,
     frontier_keyword_weight: float | None = None,
+    habitat_perfect_nav: bool | None = None,
+    export_map: bool | None = None,
+    export_video: bool | None = None,
+    map_stride: int | None = None,
 ) -> list[EpisodeMetrics]:
     from emet.habitat.metrics import read_completed_question_ids
 
@@ -380,6 +444,7 @@ def run_hmeqa_batch(
         frontier_nodes_enabled=frontier_nodes_enabled,
         frontier_keyword_weight=frontier_keyword_weight,
     )
+    _configure_habitat_nav(parameters, habitat_perfect_nav=habitat_perfect_nav)
     if output_jsonl is not None:
         if resume and output_jsonl.exists():
             done = read_completed_question_ids(output_jsonl)
@@ -419,7 +484,11 @@ def run_hmeqa_batch(
                 use_hm3d_semantics=use_hm3d_semantics,
                 frontier_nodes_enabled=frontier_nodes_enabled,
                 frontier_keyword_weight=frontier_keyword_weight,
+                habitat_perfect_nav=habitat_perfect_nav,
                 debug_run_tag=run_tag if output_jsonl is not None else None,
+                export_map=export_map,
+                export_video=export_video,
+                map_stride=map_stride,
             )
             results.append(row)
             if output_jsonl is not None:

@@ -40,6 +40,29 @@ _HMEQA_MCQ_EXAMPLE = """
                 Action:
                 Confidence_reasoning:
                     I can see the lit lamp clearly in Image 1.
+
+        Example (visibility + location — pick WHERE, not yes/no):
+            Input:
+                Question: Did you see the woven basket anywhere?
+                A) By the kitchen counter
+                B) Between TV and living room sofas
+                C) Next to the dining table
+                D) Next to the living room armchairs
+                CONFIRMED_MEMORY: woven basket: PRESENT — 1 graph node(s) at (-6.5, 3.6)
+                IMAGE: <2 images>
+            Output:
+                Caption:
+                    Image 1 shows a living room seating area; the basket is not in frame.
+                Reasoning:
+                    CONFIRMED_MEMORY shows the woven basket was observed near (-6.5, 3.6).
+                    That location is closest to the living room armchairs (option D).
+                Answer:
+                    D
+                Confidence:
+                    TRUE
+                Action:
+                Confidence_reasoning:
+                    Graph memory confirms the basket; option D matches that area.
 """
 
 HMEQA_EQA_PROMPT = _HMEQA_HEADER + EQA_PROMPT + _HMEQA_MCQ_EXAMPLE

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,14 @@ from typing import Any, Literal
 import yaml
 
 from emet.core.parameters import get_parameters
+from emet.eval.episode_diagnostics import (
+    EpisodeDiagnosticsConfig,
+    EpisodeDiagnosticsRecorder,
+    bind_diagnostics_recorder,
+    flush_episode_diagnostics,
+    habitat_export_voxel_history_default,
+    unbind_diagnostics_recorder,
+)
 from emet.eval.ovmm_find_phase import (
     FindPhaseEpisode,
     FindPhaseRunConfig,
@@ -30,6 +39,7 @@ from emet.eval.ovmm_find_phase import (
 )
 from emet.habitat.config import default_hm3d_scene_dir
 from emet.habitat.datasets import load_scene_init_poses
+from emet.habitat.episode_debug import default_episodes_root
 from emet.habitat.hm3d_semantics import hm3d_placements_from_semantic_scene
 from emet_habitat.robot_client import HabitatRobotClient
 from emet_habitat.runner import _release_gpu_memory
@@ -89,6 +99,9 @@ def run_habitat_find_phase_episode(
     init_poses_path: Path | None = None,
     use_hm3d_semantics: bool | None = True,
     device: str | None = "cpu",
+    debug_run_tag: str | None = None,
+    export_map: bool | None = None,
+    export_video: bool | None = None,
 ) -> dict[str, Any]:
     """Run one Habitat find-phase episode with emet memory backends."""
     if run_cfg.seed is not None:
@@ -116,12 +129,14 @@ def run_habitat_find_phase_episode(
 
     robot = None
     agent = None
+    diag_recorder: EpisodeDiagnosticsRecorder | None = None
     t0 = time.monotonic()
     init_wall_s = 0.0
     mapping_wall_s = 0.0
     query_wall_s = 0.0
     try:
         sim.set_init_pose(init_pose)
+        spawn_record = sim.last_init_pose_record
         robot = HabitatRobotClient(sim)
         from emet.memory.graph_eqa.sim_ground_truth_graph import placements_to_json_dict
 
@@ -149,6 +164,13 @@ def run_habitat_find_phase_episode(
             compare_to_gt=run_cfg.compare_to_gt,
             use_sensor_perception=run_cfg.use_sensor_perception,
         )
+        diag_cfg = EpisodeDiagnosticsConfig.from_env(
+            export_map=export_map,
+            export_video=export_video,
+            export_voxel_history=habitat_export_voxel_history_default(),
+        )
+        diag_recorder = EpisodeDiagnosticsRecorder(cfg=diag_cfg)
+        bind_diagnostics_recorder(agent, diag_recorder, spawn_record=spawn_record)
         init_wall_s = time.monotonic() - t_init0
         if run_cfg.backend == "ground_truth":
             refresh = getattr(agent, "refresh_ground_truth", None)
@@ -224,7 +246,7 @@ def run_habitat_find_phase_episode(
             episode_wall_s=time.monotonic() - t0,
             n_controller_steps=n_steps,
         )
-        return {
+        result = {
             "episode_id": episode.id,
             "scene": episode.scene,
             "floor": episode.floor,
@@ -252,7 +274,23 @@ def run_habitat_find_phase_episode(
             **find_metrics,
             **scaling,
         }
+        if debug_run_tag:
+            bundle_dir = (
+                default_episodes_root()
+                / debug_run_tag
+                / f"ovmm_{episode.id}_{run_cfg.backend}"
+            )
+            manifest = flush_episode_diagnostics(bundle_dir, agent, diag_recorder)
+            result["debug_bundle_dir"] = str(bundle_dir)
+            if manifest.get("topdown_map"):
+                result["topdown_map_path"] = manifest["topdown_map"]
+            if manifest.get("diagnostics_manifest"):
+                result["diagnostics_manifest_path"] = manifest["diagnostics_manifest"]
+            (bundle_dir / "metrics.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        return result
     finally:
+        if agent is not None and diag_recorder is not None:
+            unbind_diagnostics_recorder(agent, diag_recorder)
         if agent is not None:
             try:
                 agent.stop()

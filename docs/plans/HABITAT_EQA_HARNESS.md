@@ -73,7 +73,7 @@ flowchart LR
 |-------|------|-------|
 | **A. Environment** | `.venv-habitat` or `uv` extra `habitat`; pin `habitat-sim` / `habitat-lab` compatible with HM3D | Likely **separate venv** (like MolmoSpaces) due to numpy/CUDA conflicts with main `.venv` |
 | **B. Assets** | HM3D scenes, HM-EQA JSON, OpenEQA subset, `scene_init_poses` | Document download scripts; mirror graph_eqa layout under `data/habitat_eqa/` |
-| **C. Observation bridge** | Map Habitat agent sensors → emet `Observations` (rgb, depth, gps/compass or SE(3) pose, optional semantic) | Reuse `convert_pose_habitat_to_opencv` in `src/emet/utils/pose.py` |
+| **C. Observation bridge** | Map Habitat agent sensors → emet `Observations` (rgb, depth, gps/compass or SE(3) pose, optional semantic) | [`src/emet/habitat/coordinates.py`](../../src/emet/habitat/coordinates.py): Habitat Y-up → voxel `(X, Z, Y-floor_y)`; OpenGL sensor → OpenCV cam pose |
 | **D. Control bridge** | Map DynaMem nav actions (xyt, rotate_in_place, look_at) → Habitat velocity / discrete actions | Stretch agent in Habitat or locobot-style base |
 | **E. Batch runner** | `emet run graph-eqa-habitat` or `scripts/run_hmeqa_batch.py` | Config flags: `--method graph_eqa\|dynagraph`, `--dataset hmeqa\|openeqa` |
 | **F. Metrics** | Success rate, mean planning steps, optional LLM grader for OpenEQA | Match GraphEQA paper tables for direct comparison |

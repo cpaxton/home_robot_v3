@@ -57,6 +57,8 @@ def replay_frames_with_fusion(
         for d in fr.get("detections", []):
             cand = detection_dict_to_candidate(d)
             fusion.apply_detection(mem, rgb_stub, cand, viewer_xyz=None)
+        if config.bounds_3d_iou_merge_min > 0.0:
+            fusion.consolidate_high_iou_nodes(mem)
     return mem
 
 

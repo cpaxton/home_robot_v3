@@ -427,7 +427,7 @@ def load_config(
 
 def resolve_config_path_for_legacy_alias(path: str) -> str:
     """Map legacy basenames (``dynav_config.yaml``) to unified config when available."""
-    if path in (_LEGACY_DYNAV_CONFIG, "dynav_innate_mars.yaml"):
+    if path == _LEGACY_DYNAV_CONFIG:
         default = default_config_path()
         if default != path:
             try:

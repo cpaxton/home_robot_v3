@@ -18,7 +18,13 @@ import numpy as np
 
 from emet.memory.adapters import GraphEQABackend
 from emet.memory.graph_eqa import GraphEQAMemory, labels_are_semantic_graph_hypothesis
-from emet.memory.graph_eqa.graph_memory import _near, _on_floor
+from emet.memory.graph_eqa.graph_memory import (
+    _near,
+    _on_floor,
+    consolidate_relevant_keywords,
+    heuristic_relevant_phrases,
+    label_matches_relevant_object,
+)
 
 
 def test_graph_memory_add_observation():
@@ -124,15 +130,97 @@ def test_relevant_memory_summary_uses_siglip_grounder():
 
     mem.set_text_grounder(grounder)
 
-    mem._relevant_objects = ["basket"]
+    mem._relevant_phrases = ["woven basket"]
+    mem._relevant_objects = ["woven", "basket"]
     summary = mem._relevant_memory_summary()
-    assert "basket: PRESENT" in summary
-    assert "SigLIP visual match" in summary
+    assert "woven basket: PRESENT" in summary
+    assert "SigLIP phrase match" in summary
 
-    mem._relevant_objects = ["elephant"]
+    mem._relevant_phrases = ["elephant"]
     weak = mem._relevant_memory_summary()
     assert "elephant: likely NOT present" in weak
     assert "no strong SigLIP match" in weak
+
+
+def test_relevant_memory_summary_uses_siglip_phrase_cache():
+    """Cached graph-obs SigLIP alignments work after the voxel grounder is cleared."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.memory_summary_enabled = True
+    oid = mem.add_observation(rgb, np.array([3.1, 5.0, 0.5]), ["decorative plant"])
+    mem._relevant_phrases = ["woven basket"]
+    mem._siglip_phrase_cache["woven basket"] = (0.32, np.array([3.1, 5.0, 0.5]), oid)
+    mem._text_grounder = None
+
+    summary = mem._relevant_memory_summary()
+    assert "woven basket: PRESENT" in summary
+    assert "obs_id=" in summary
+    assert mem._graph_covers_relevant_objects()
+
+
+def test_heuristic_relevant_phrases_prefers_multiword():
+    phrases = heuristic_relevant_phrases("Did you see the woven basket anywhere?")
+    assert phrases[0] == "woven basket"
+    assert "anywhere" not in phrases
+
+
+def test_consolidate_relevant_keywords_drops_subsumed_tokens():
+    phrases, objects = consolidate_relevant_keywords(
+        ["woven basket"],
+        ["woven", "basket", "anywhere", "kitchen"],
+    )
+    assert phrases == ["woven basket"]
+    assert objects == ["woven basket", "kitchen"]
+
+
+def test_extract_relevant_objects_prefers_phrases():
+    mem = GraphEQAMemory(
+        defer_llm_clients=True,
+        image_description_client=lambda _x: "woven, basket, anywhere",
+    )
+    q = (
+        "Did you see the woven basket anywhere? "
+        "A) By the kitchen counter B) Between TV and living room sofas "
+        "C) Next to the dining table D) Next to the living room armchairs. Answer:"
+    )
+    mem.extract_relevant_objects(q)
+    assert mem._relevant_phrases == ["woven basket"]
+    assert mem._relevant_objects[0] == "woven basket"
+    assert "anywhere" not in mem._relevant_objects
+    assert "woven" not in mem._relevant_objects or mem._relevant_objects[0] == "woven basket"
+
+
+def test_query_answer_injects_location_mcq_hint():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    captured = {"cmds": None}
+
+    def fake_eqa(cmds):
+        captured["cmds"] = cmds
+        return "reasoning: r\nanswer: d\nconfidence: true\naction: none\nconfidence_reasoning: x"
+
+    mem = GraphEQAMemory(
+        eqa_client=fake_eqa,
+        image_description_client=lambda _x: "basket",
+    )
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["basket"])
+    q = (
+        "Did you see the woven basket anywhere? "
+        "A) By the kitchen counter B) Between TV and living room sofas "
+        "C) Next to the dining table D) Next to the living room armchairs. Answer:"
+    )
+    mem.extract_relevant_objects(q)
+    mem.query_answer(q)
+    assert any(isinstance(c, str) and "LOCATION_MCQ" in c for c in captured["cmds"])
+
+
+def test_graph_covers_uses_phrase_not_every_token():
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem._relevant_phrases = ["woven basket"]
+    mem._relevant_objects = ["woven", "basket", "anywhere"]
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["basket"])
+    assert mem._graph_covers_relevant_objects()
 
 
 def test_query_answer_caps_history_in_prompt():
@@ -239,6 +327,28 @@ def test_select_relevant_obs_ids_diversifies_views():
     assert lamp_ids & set(obs_ids)
     # Not monopolized by the three duplicate lamp views: spread brings in others.
     assert not lamp_ids.issuperset(set(obs_ids))
+
+
+def test_select_relevant_obs_ids_spatial_spread_after_frontier_sort():
+    """Regression: frontier deprioritization must not shadow the observation index map."""
+    from emet.memory.graph_eqa.graph_memory import GraphNode, replace
+
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["lamp"])
+    mem.add_observation(rgb, np.array([4.0, 0.0, 0.5]), ["table"])
+    mem.add_observation(rgb, np.array([8.0, 0.0, 0.5]), ["chair"])
+    mem._relevant_objects = ["lamp"]
+    # Mark obs 2 as frontier on its graph node so step 2 runs and used to clobber ``by_id``.
+    nodes = mem.get_nodes()
+    for idx, node in enumerate(nodes):
+        if int(node.obs_id) == 2:
+            mem._nodes[idx] = replace(node, is_frontier=True)
+            break
+
+    obs_ids = mem._select_relevant_obs_ids(max_images=3)
+    assert len(obs_ids) == 3
+    assert len(set(obs_ids)) == 3
 
 
 def test_select_relevant_obs_ids_uses_siglip_obs_grounder():
@@ -523,6 +633,22 @@ def test_record_navigation_sample_adds_viewpoint_not_object_node():
     np.testing.assert_allclose(nodes[0].xyz, base)
 
 
+def test_viewpoint_spatial_merge_reuses_node():
+    mem = GraphEQAMemory(
+        parameters={"dynagraph_viewpoint_merge_m": 0.25},
+        eqa_client=lambda x: "",
+        image_description_client=lambda x: "",
+    )
+    rgb = np.zeros((20, 20, 3), dtype=np.uint8)
+    base_a = np.array([1.0, 2.0, 0.0])
+    base_b = np.array([1.05, 2.02, 0.01])
+    mem.record_navigation_sample(rgb, np.array([1.0, 2.0, 0.1]), base_xyz=base_a)
+    mem.record_navigation_sample(rgb, np.array([1.0, 2.0, 0.1]), base_xyz=base_b)
+    viewpoints = [n for n in mem.get_nodes() if n.is_viewpoint]
+    assert len(viewpoints) == 1
+    np.testing.assert_allclose(viewpoints[0].xyz, base_b)
+
+
 def test_record_navigation_respects_graph_eqa_record_navigation_false():
     mem = GraphEQAMemory(
         parameters={"graph_eqa_record_navigation": False},
@@ -613,3 +739,62 @@ def test_dynagraph_maintain_prunes_stale_nodes():
     assert len(mem.get_nodes()) == 1
     assert mem.get_nodes()[0].node_id == 1
     assert "chair" in mem.get_nodes()[0].labels
+
+
+def test_label_matches_relevant_object_phrase_vs_short_label():
+    assert label_matches_relevant_object("standing fan", "fan")
+    assert label_matches_relevant_object("fan", "standing fan")
+    assert label_matches_relevant_object("woven basket", "basket")
+    assert not label_matches_relevant_object("television", "fan")
+    assert label_matches_relevant_object("armchair", "chair")
+
+
+def test_record_nav_attempt_updates_node_metadata():
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory, GraphNode
+
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem._nodes = [
+        GraphNode(
+            node_id=1,
+            obs_id=3,
+            xyz=np.array([1.0, 2.0, 0.0]),
+            labels=["frontier"],
+            is_frontier=True,
+        )
+    ]
+    mem.record_nav_attempt(3, success=False, note="navmesh_no_path", dist_m=0.0, step=7)
+    node = mem.get_nodes()[0]
+    assert node.nav_attempts == 1
+    assert node.nav_failures == 1
+    assert node.last_nav_note == "navmesh_no_path"
+    assert node.last_nav_at_step == 7
+    assert "unreachable" in mem.to_string()
+
+
+def test_alternate_nav_target_skips_failed_frontier_obs():
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory, GraphNode
+
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem._nodes = [
+        GraphNode(
+            node_id=1,
+            obs_id=3,
+            xyz=np.array([1.0, 2.0, 0.0]),
+            labels=["frontier"],
+            is_frontier=True,
+            nav_failures=2,
+        ),
+        GraphNode(
+            node_id=2,
+            obs_id=5,
+            xyz=np.array([4.0, 5.0, 0.0]),
+            labels=["frontier"],
+            is_frontier=True,
+            nav_failures=0,
+        ),
+    ]
+    alt = mem.alternate_nav_target_for_failed_action("where is the basket?", 3, None, None)
+    assert alt is not None
+    assert abs(float(alt[0]) - 4.0) < 1e-6
+    assert abs(float(alt[1]) - 5.0) < 1e-6
+

@@ -68,6 +68,28 @@ def _decode_jpg_field(msg: dict[str, Any], *keys: str) -> np.ndarray | None:
     return None
 
 
+def _decode_ee_rgb_field(msg: dict[str, Any]) -> np.ndarray | None:
+    """Decode EE/wrist RGB from ZMQ dict (JPEG bytes or pre-decoded ndarray)."""
+    existing = msg.get("ee_rgb")
+    if existing is not None:
+        arr = np.asarray(existing)
+        if arr.ndim == 3 and arr.shape[-1] >= 3:
+            return np.ascontiguousarray(arr[..., :3])
+    for key in ("ee_cam/image", "ee_cam/color_image", "rgb_tertiary"):
+        val = msg.get(key)
+        if val is None:
+            continue
+        if isinstance(val, np.ndarray):
+            arr = np.asarray(val)
+            if arr.ndim == 3 and arr.shape[-1] >= 3:
+                return np.ascontiguousarray(arr[..., :3])
+        try:
+            return compression.from_jpg(val)
+        except Exception:
+            continue
+    return None
+
+
 def _align_camera_k_to_rgb(
     camera_K: np.ndarray | None,
     rgb: np.ndarray | None,
@@ -101,12 +123,7 @@ def _first_present(msg: dict[str, Any], *keys: str) -> Any:
 def enrich_zmq_observation_ee_fields(msg: dict[str, Any]) -> None:
     """Fill ``ee_rgb`` / ``ee_camera_*`` on a ZMQ dict (full obs or servo; in-place)."""
     if msg.get("ee_rgb") is None:
-        ee_rgb = _decode_jpg_field(
-            msg,
-            "ee_cam/image",
-            "ee_cam/color_image",
-            "rgb_tertiary",
-        )
+        ee_rgb = _decode_ee_rgb_field(msg)
         if ee_rgb is not None:
             msg["ee_rgb"] = ee_rgb
     if msg.get("ee_camera_pose") is None:
@@ -173,11 +190,13 @@ def _decode_servo_message_to_observations(
     if cp is not None:
         cp = np.asarray(cp, dtype=np.float64).reshape(4, 4)
 
-    ee_rgb = _decode_jpg_field(msg, "ee_cam/color_image", "ee_cam/image", "rgb_tertiary")
+    ee_rgb = _decode_ee_rgb_field(msg)
     ee_k = _first_present(msg, "ee_cam/color_camera_K", "ee_camera_K", "camera_K_tertiary")
     ee_pose = _first_present(msg, "ee_cam/pose", "ee_camera_pose", "camera_pose_tertiary")
     if ee_k is not None:
         ee_k = np.asarray(ee_k, dtype=np.float64).reshape(3, 3)
+        if ee_rgb is not None:
+            ee_k = _align_camera_k_to_rgb(ee_k, ee_rgb)
     if ee_pose is not None:
         ee_pose = np.asarray(ee_pose, dtype=np.float64).reshape(4, 4)
 
@@ -656,6 +675,7 @@ class GenericZmqClient(AbstractRobotClient):
                     )
             if "rgb_tertiary" in output and output["rgb_tertiary"] is not None:
                 output["rgb_tertiary"] = compression.from_jpg(output["rgb_tertiary"])
+            enrich_zmq_observation_ee_fields(output)
             raw_depth = output.get("depth")
             if raw_depth is None:
                 if not self._allow_missing_depth:
@@ -666,7 +686,6 @@ class GenericZmqClient(AbstractRobotClient):
                 output["depth"] = None
             else:
                 output["depth"] = compression.from_jp2(raw_depth) / 1000
-            enrich_zmq_observation_ee_fields(output)
             with self._obs_lock:
                 self._obs = output
                 if "step" in output:

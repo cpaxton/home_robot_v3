@@ -1231,7 +1231,7 @@ def mars_status_cmd(
         password=password,
         connection_name=connection_name,
     )
-    bridge_status_on_robot(host, user, password)
+    bridge_status_on_robot(host, user, password, profile=connection_name or host)
 
 
 @main.command("view-bridge", short_help="View images and state from robot bridge")

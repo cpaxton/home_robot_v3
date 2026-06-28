@@ -96,6 +96,31 @@ def _frontier_cli_options(fn):
     return fn
 
 
+def _habitat_nav_cli_options(fn):
+    opts = [
+        click.option(
+            "--habitat-perfect-nav/--no-habitat-perfect-nav",
+            "habitat_perfect_nav",
+            default=None,
+            help="Habitat EQA nav: navmesh pathing (default on); off exercises voxel A*",
+        ),
+    ]
+    for opt in reversed(opts):
+        fn = opt(fn)
+    return fn
+
+
+def _diagnostics_cli_options(fn):
+    opts = [
+        click.option("--export-map/--no-export-map", default=None, help="Write topdown_map.png per episode"),
+        click.option("--export-video/--no-export-video", default=None, help="Write episode_rgb.mp4 per episode"),
+        click.option("--map-stride", default=None, type=int, help="Save maps/step_NNNN.png every N updates"),
+    ]
+    for opt in reversed(opts):
+        fn = opt(fn)
+    return fn
+
+
 @main.command("run-episode")
 @click.option("--dataset", type=click.Choice(["hmeqa"]), default="hmeqa")
 @click.option("--question-id", default=0, type=int)
@@ -113,7 +138,9 @@ def _frontier_cli_options(fn):
     help="Use HM3D semantic sensor for graph labels (default: auto if assets exist)",
 )
 @_frontier_cli_options
+@_habitat_nav_cli_options
 @_eqa_cli_options
+@_diagnostics_cli_options
 def run_episode(
     dataset: str,
     question_id: int,
@@ -131,6 +158,10 @@ def run_episode(
     device: str,
     frontier_nodes: bool | None,
     frontier_keyword_weight: float | None,
+    habitat_perfect_nav: bool | None,
+    export_map: bool | None,
+    export_video: bool | None,
+    map_stride: int | None,
 ) -> None:
     """Run one HM-EQA episode in Habitat-Sim."""
     if dataset != "hmeqa":
@@ -158,6 +189,12 @@ def run_episode(
             device=device,
             frontier_nodes_enabled=frontier_nodes,
             frontier_keyword_weight=frontier_keyword_weight,
+            habitat_perfect_nav=habitat_perfect_nav,
+            debug_run_tag=f"cli_episode_q{question_id:04d}",
+            save_debug_bundle=True,
+            export_map=export_map,
+            export_video=export_video,
+            map_stride=map_stride,
         )
     except FileNotFoundError as exc:
         raise click.ClickException(
@@ -205,7 +242,9 @@ def run_episode(
     help="Use HM3D semantic sensor for graph labels (default: auto if assets exist)",
 )
 @_frontier_cli_options
+@_habitat_nav_cli_options
 @_eqa_cli_options
+@_diagnostics_cli_options
 def run_batch(
     method: str,
     question_start: int,
@@ -225,6 +264,10 @@ def run_batch(
     device: str,
     frontier_nodes: bool | None,
     frontier_keyword_weight: float | None,
+    habitat_perfect_nav: bool | None,
+    export_map: bool | None,
+    export_video: bool | None,
+    map_stride: int | None,
 ) -> None:
     """Run a slice of HM-EQA (GraphEQA paper: 113 questions, method=graph_eqa)."""
     from emet_habitat.runner import run_hmeqa_batch
@@ -264,6 +307,10 @@ def run_batch(
             resume=resume,
             frontier_nodes_enabled=frontier_nodes,
             frontier_keyword_weight=frontier_keyword_weight,
+            habitat_perfect_nav=habitat_perfect_nav,
+            export_map=export_map,
+            export_video=export_video,
+            map_stride=map_stride,
         )
     except FileNotFoundError as exc:
         raise click.ClickException(str(exc)) from exc
@@ -421,6 +468,47 @@ def run_ovmm_find_episode(
         output.write_text(text, encoding="utf-8")
 
 
+@main.command("explore-frontiers")
+@click.option("--question-id", default=14, type=int, help="HM-EQA question id (selects scene + spawn)")
+@click.option("--scene-id", default=None, help="Override HM3D scene id (requires matching init pose CSV row)")
+@click.option("--max-steps", default=40, type=int, help="Exploration iterations (update + nav)")
+@click.option("--warmup-updates", default=5, type=int)
+@click.option("--seed", default=0, type=int)
+@click.option("--hm3d-root", type=click.Path(path_type=Path), default=None)
+@click.option("--output-dir", type=click.Path(path_type=Path), default=None, help="Write frontier_explore.json + trajectory")
+@click.option("--rotate-in-place/--no-rotate-in-place", default=True)
+@click.option("--no-frontier-nodes", is_flag=True, default=False, help="Disable graph frontier nodes (voxel sample only)")
+def explore_frontiers(
+    question_id: int,
+    scene_id: str | None,
+    max_steps: int,
+    warmup_updates: int,
+    seed: int,
+    hm3d_root: Path | None,
+    output_dir: Path | None,
+    rotate_in_place: bool,
+    no_frontier_nodes: bool,
+) -> None:
+    """VLM-free frontier exploration smoke (mapping + navmesh coverage only)."""
+    from emet_habitat.frontier_explore import run_frontier_exploration
+
+    if output_dir is None:
+        output_dir = Path.home() / ".cache/habitat_eqa/explore" / f"q{question_id:04d}_s{seed}"
+    result = run_frontier_exploration(
+        scene_id=scene_id,
+        question_id=question_id,
+        hm3d_root=hm3d_root,
+        max_steps=max_steps,
+        warmup_updates=warmup_updates,
+        rotate_in_place=rotate_in_place,
+        output_dir=output_dir,
+        seed=seed,
+        frontier_nodes_enabled=not no_frontier_nodes,
+    )
+    click.echo(json.dumps(result.to_dict(), indent=2))
+    click.echo(f"wrote {result.output_dir}")
+
+
 @main.command("run-ovmm-find-batch")
 @click.option("--episodes", type=click.Path(path_type=Path), default=None)
 @click.option("--episode-id", multiple=True, help="Subset of episode ids")
@@ -436,6 +524,9 @@ def run_ovmm_find_episode(
 @click.option("--hm3d-root", type=click.Path(path_type=Path), default=None)
 @click.option("--data-dir", type=click.Path(path_type=Path), default=None)
 @click.option("--output-dir", type=click.Path(path_type=Path), required=True)
+@click.option("--run-tag", default=None, help="Episode bundle tag under ~/.cache/habitat_eqa/episodes/")
+@click.option("--export-map/--no-export-map", default=None)
+@click.option("--export-video/--no-export-video", default=None)
 def run_ovmm_find_batch(
     episodes: Path | None,
     episode_id: tuple[str, ...],
@@ -447,6 +538,9 @@ def run_ovmm_find_batch(
     hm3d_root: Path | None,
     data_dir: Path | None,
     output_dir: Path,
+    run_tag: str | None,
+    export_map: bool | None,
+    export_video: bool | None,
 ) -> None:
     """Batch Habitat find-phase evaluation."""
     from emet.eval.ovmm_find_phase import FindPhaseRunConfig
@@ -467,6 +561,7 @@ def run_ovmm_find_batch(
         not_rotate=not_rotate,
     )
     output_dir.mkdir(parents=True, exist_ok=True)
+    bundle_tag = run_tag or output_dir.name
     for ep in rows:
         click.echo(f"Running {ep.id} …", err=True)
         metrics = run_habitat_find_phase_episode(
@@ -474,10 +569,20 @@ def run_ovmm_find_batch(
             run_cfg,
             hm3d_root=hm3d_root,
             init_poses_path=init_poses_path,
+            debug_run_tag=bundle_tag,
+            export_map=export_map,
+            export_video=export_video,
         )
         out = output_dir / f"{ep.id}_{backend}.json"
         out.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-        click.echo(f"  partial={metrics.get('find_partial_success')} -> {out}", err=True)
+        click.echo(
+            f"  task=move {metrics.get('object_query')} "
+            f"from {metrics.get('start_recep')} to {metrics.get('goal_recep')} | "
+            f"FindObj={metrics.get('find_object_success')} "
+            f"FindRec={metrics.get('find_recep_success')} "
+            f"partial={metrics.get('find_partial_success')} -> {out}",
+            err=True,
+        )
 
 
 if __name__ == "__main__":

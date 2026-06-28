@@ -73,6 +73,12 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         self.dof = 3
         self._sync_pose_from_sim()
 
+    def _observation_kwargs(self) -> dict:
+        return {
+            "floor_y": self._sim.floor_y,
+            "sensor_height": self._sim.sensor_height,
+        }
+
     def _sync_pose_from_sim(self) -> None:
         """Refresh cached ``_xyt`` from the latest simulator agent state."""
         frame = self._sim.get_frame()
@@ -82,6 +88,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
             agent_state=frame.agent_state,
             intrinsics=frame.intrinsics,
             semantic=frame.semantic,
+            **self._observation_kwargs(),
         )
         self._xyt = np.array([obs.gps[0], obs.gps[1], float(obs.compass[0])], dtype=np.float64)
 
@@ -111,6 +118,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
             agent_state=frame.agent_state,
             intrinsics=frame.intrinsics,
             semantic=frame.semantic,
+            **self._observation_kwargs(),
         )
 
     def get_base_pose(self, timeout: float = 5.0) -> np.ndarray:
@@ -136,7 +144,8 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
             target_heading = math.atan2(dz, dx)
             dtheta = (target_heading - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
             if abs(dtheta) > 0.12:
-                self._sim.step("turn_left" if dtheta > 0 else "turn_right")
+                # Habitat discrete turns are opposite our CCW-positive compass yaw.
+                self._sim.step("turn_right" if dtheta > 0 else "turn_left")
             else:
                 self._sim.step("move_forward")
 
@@ -177,7 +186,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
                         dtheta = (goal_theta - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
                         if abs(dtheta) < 0.1:
                             break
-                        self._sim.step("turn_left" if dtheta > 0 else "turn_right")
+                        self._sim.step("turn_right" if dtheta > 0 else "turn_left")
                 self._sync_pose_from_sim()
                 return
         self._greedy_to_habitat_point(
@@ -190,7 +199,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
                 dtheta = (goal_theta - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
                 if abs(dtheta) < 0.1:
                     break
-                self._sim.step("turn_left" if dtheta > 0 else "turn_right")
+                self._sim.step("turn_right" if dtheta > 0 else "turn_left")
         self._sync_pose_from_sim()
 
     def reset(self):

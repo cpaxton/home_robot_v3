@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<mujoco model="t">
+  <include file="/home/cpaxton/src/home_robot_v4/src/emet/assets/robot/scene_environment.xml"/>
+  <include file="/home/cpaxton/src/home_robot_v4/src/emet/assets/robot/innate_mars/innate_mars.xml"/>
+</mujoco>
