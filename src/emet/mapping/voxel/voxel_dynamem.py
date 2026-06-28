@@ -133,6 +133,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         add_local_radius_every_step: bool = False,
         min_points_per_voxel: int = 10,
         use_negative_obstacles: bool = False,
+        voxel_pcd_dbscan_min_samples: int = 0,
         point_update_threshold: float = 0.9,
         detection=None,
         image_shape=(480, 360),
@@ -186,6 +187,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
             add_local_radius_every_step=add_local_radius_every_step,
             min_points_per_voxel=min_points_per_voxel,
             use_negative_obstacles=use_negative_obstacles,
+            voxel_pcd_dbscan_min_samples=voxel_pcd_dbscan_min_samples,
         )
 
         self.point_update_threshold = point_update_threshold
@@ -595,7 +597,13 @@ class SparseVoxelMap(SparseVoxelMapBase):
         np.save(os.path.join(debug_dir, "pose" + str(self.obs_count) + ".npy"), pose)
 
         # Update obstacle map
-        self.voxel_pcd.clear_points(torch.from_numpy(depth), torch.from_numpy(intrinsics), torch.from_numpy(pose))
+        dbscan_min = int(getattr(self, "_voxel_pcd_dbscan_min_samples", 0) or 0)
+        self.voxel_pcd.clear_points(
+            torch.from_numpy(depth),
+            torch.from_numpy(intrinsics),
+            torch.from_numpy(pose),
+            min_samples_clear=dbscan_min if dbscan_min > 0 else None,
+        )
 
         instance_image = None
         instance_classes = None

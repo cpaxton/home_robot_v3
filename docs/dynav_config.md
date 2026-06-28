@@ -23,7 +23,7 @@ Related docs: [Dynamem](dynamem.md), [Dynagraph](dynagraph.md), [Simulation conf
 | `map_boundary` | Optional grid-edge obstacle ring on the Dynamem 2D map |
 | `depth_source`, `da3_*` | Sensor vs Depth Anything 3 for mapping |
 | `detection`, `instance_memory` | Open-vocab detection and instance memory |
-| `filters` | Depth / map smoothing |
+| `filters` | Depth / map smoothing (median, derivative, speckle open, voxel DBSCAN) |
 | `motion_planner` | A* step size, frontier dilation, goal radii |
 | `eqa`, `eqa_vl`, `graph_eqa_*` | EQA and GraphEQA VLM settings |
 | `use_instance_memory`, `use_scene_graph` | Rerun instance boxes and scene graph |
@@ -89,6 +89,18 @@ pad_obstacles: 2          # dilation radius around detected obstacles (grid cell
 min_pad_obstacles: 1
 local_radius: 0.5         # disk marked explored around the robot
 ```
+
+### Depth / voxel post-filters (DA3 hardware)
+
+Under ``filters:`` in [`dynav_innate_mars.yaml`](../src/emet/config/dynav_innate_mars.yaml):
+
+| Key | Default (Mars HW) | Meaning |
+|-----|-------------------|--------|
+| `depth_speckle_open_kernel` | `3` | Morphological opening on valid-depth mask before unprojection; `0` = off |
+| `depth_speckle_open_iterations` | `1` | Opening repeat count |
+| `voxel_pcd_dbscan_min_samples` | `8` | Drop navigation PCD clusters smaller than this after each frame; `0` = off |
+
+Onboard Jetson DA3: ``EMET_MARS_DA3_SPECKLE_OPEN_KERNEL`` (default `3`), ``EMET_MARS_DA3_SPECKLE_OPEN_ITERATIONS``.
 
 ### Depth source
 

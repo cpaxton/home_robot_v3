@@ -55,7 +55,7 @@ from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
 from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
 from emet.motion.algo.a_star import AStar
 from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
-from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask, sensor_depth_usable
+from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask, apply_depth_speckle_filter, sensor_depth_usable
 from emet.perception.depth.lingbot_estimator import LingBotDepthEstimator, create_lingbot_estimator_from_parameters
 from emet.perception.detection.owl import OwlPerception
 from emet.perception.detection.yoloe import YoloEPerception
@@ -458,6 +458,9 @@ class DynamemController(BaseController):
             median_filter_size=parameters.get("filters/median_filter_size", 5),
             use_derivative_filter=parameters.get("filters/use_derivative_filter", False),
             derivative_filter_threshold=parameters.get("filters/derivative_filter_threshold", 0.5),
+            voxel_pcd_dbscan_min_samples=int(
+                parameters.get("filters/voxel_pcd_dbscan_min_samples", 0) or 0
+            ),
             detection=self.detection_model,
             encoder=self.encoder,
             image_shape=image_shape,
@@ -762,9 +765,21 @@ class DynamemController(BaseController):
             self.robot.set_mapping_depth_for_rerun(None)
             return
         if getattr(self, "_depth_map_from_da3_infer", False):
+            depth = np.asarray(depth, dtype=np.float32)
             sky = float(self.parameters.get("da3_ignore_sky_fraction_top", 0.0) or 0.0)
             if sky > 0.0:
-                depth = apply_da3_sky_row_mask(np.asarray(depth, dtype=np.float32), sky)
+                depth = apply_da3_sky_row_mask(depth, sky)
+            speckle_k = int(self.parameters.get("filters/depth_speckle_open_kernel", 0) or 0)
+            if speckle_k > 0:
+                depth = apply_depth_speckle_filter(
+                    depth,
+                    open_kernel=speckle_k,
+                    open_iterations=int(
+                        self.parameters.get("filters/depth_speckle_open_iterations", 1) or 1
+                    ),
+                    min_depth=float(self.parameters.get("min_depth", 0.25)),
+                    max_depth=float(self.parameters.get("max_depth", 2.5)),
+                )
         self.robot.set_mapping_depth_for_rerun(depth)
         base_xyt = None
         if obs.gps is not None and obs.compass is not None:

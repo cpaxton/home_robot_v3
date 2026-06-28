@@ -74,6 +74,10 @@ filters:
   median_filter_max_error: 0.01
   use_derivative_filter: True
   derivative_filter_threshold: 0.2
+  # Post-DA3 depth opening + 3D DBSCAN prune on navigation PCD (reduces floating Rerun blobs).
+  depth_speckle_open_kernel: 3
+  depth_speckle_open_iterations: 1
+  voxel_pcd_dbscan_min_samples: 8
 
 motion:
   moving_threshold: 0.01

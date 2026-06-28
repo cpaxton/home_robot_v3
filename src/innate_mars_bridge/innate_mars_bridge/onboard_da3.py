@@ -65,6 +65,8 @@ class OnboardDA3Depth:
             "off",
         )
         self._sky_fraction = _env_float("EMET_MARS_DA3_IGNORE_SKY_FRACTION_TOP", 0.16)
+        self._speckle_open_kernel = _env_int("EMET_MARS_DA3_SPECKLE_OPEN_KERNEL", 3)
+        self._speckle_open_iterations = _env_int("EMET_MARS_DA3_SPECKLE_OPEN_ITERATIONS", 1)
         self._last_depth: np.ndarray | None = None
         self._load_error: str | None = None
 
@@ -142,6 +144,15 @@ class OnboardDA3Depth:
             from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask
 
             depth = apply_da3_sky_row_mask(np.asarray(depth, dtype=np.float32), self._sky_fraction)
+
+        if self._speckle_open_kernel > 0:
+            from emet.perception.depth.da3_estimator import apply_depth_speckle_filter
+
+            depth = apply_depth_speckle_filter(
+                np.asarray(depth, dtype=np.float32),
+                open_kernel=self._speckle_open_kernel,
+                open_iterations=self._speckle_open_iterations,
+            )
 
         self._last_depth = np.asarray(depth, dtype=np.float32).copy()
         return self._last_depth
