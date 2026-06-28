@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #

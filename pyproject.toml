@@ -29,7 +29,7 @@ dependencies = [
     "pyzmq",
     "numpy<2",
     "numba",
-    "opencv-python",
+    "opencv-contrib-python",
     "scipy",
     "matplotlib",
     "trimesh>=3.10.0",
@@ -166,7 +166,13 @@ default-groups = ["dev", "sim", "hand_tracker", "dynamem", "da3"]
 # Robocasa 0.2 pins numpy==1.23.3 and numba==0.56.4; dynamem/SAM-2 need numpy>=1.24.4.
 # Override so both sim and dynamem resolve; numba>=0.58.1 works with numpy 1.24+ and avoids "initialization of _internal failed".
 # mujoco>=3.4.0 forces use of third_party/robocasa (which has mujoco>=3.4.0); PyPI robocasa pins mujoco==3.2.6 and would conflict.
-override-dependencies = ["numpy>=1.24.4,<2", "numba>=0.58.1", "mujoco>=3.4.0"]
+override-dependencies = [
+    "numpy>=1.24.4,<2",
+    "numba>=0.58.1",
+    "mujoco>=3.4.0",
+    # opencv-python + opencv-contrib-python together leave cv2 as a namespace stub (no aruco/imwrite).
+    "opencv-contrib-python>=4.8",
+]
 
 [tool.uv.sources]
 "SAM-2" = { path = "third_party/segment-anything-2", editable = true }

@@ -108,8 +108,84 @@ _QUESTION_STOPWORDS = frozenset(
         "area",
         "items",
         "item",
+        "anywhere",
     }
 )
+
+
+def heuristic_relevant_phrases(question: str, *, max_phrases: int = 4) -> list[str]:
+    """Multi-word object phrases from the question stem (e.g. ``woven basket``)."""
+    head = question.strip().split("?")[0].lower()
+    tokens = [
+        tok
+        for tok in re.findall(r"[a-z]+", head)
+        if len(tok) >= 3 and tok not in _QUESTION_STOPWORDS
+    ]
+    phrases: list[str] = []
+    for n in range(min(3, len(tokens)), 1, -1):
+        for i in range(len(tokens) - n + 1):
+            phrase = " ".join(tokens[i : i + n])
+            if phrase not in phrases:
+                phrases.append(phrase)
+    return phrases[:max_phrases]
+
+
+def _object_match_tokens(text: str) -> set[str]:
+    return {
+        tok
+        for tok in re.findall(r"[a-z0-9]+", (text or "").lower())
+        if len(tok) >= 3 and tok not in _QUESTION_STOPWORDS
+    }
+
+
+def label_matches_relevant_object(obj: str, label: str) -> bool:
+    """True when ``label`` plausibly names ``obj`` (handles ``standing fan`` vs ``fan``)."""
+    obj_l = (obj or "").strip().lower()
+    lab_l = (label or "").strip().lower()
+    if not obj_l or not lab_l:
+        return False
+    if obj_l in lab_l or lab_l in obj_l:
+        return True
+    obj_tok = _object_match_tokens(obj_l)
+    lab_tok = _object_match_tokens(lab_l)
+    if not obj_tok or not lab_tok:
+        return False
+    if obj_tok <= lab_tok or lab_tok <= obj_tok:
+        return True
+    return bool(obj_tok & lab_tok)
+
+
+def consolidate_relevant_keywords(
+    phrases: list[str],
+    extras: list[str],
+    *,
+    max_items: int = 4,
+) -> tuple[list[str], list[str]]:
+    """Phrase-first dedupe for CONFIRMED_MEMORY and image selection."""
+    phrase_list: list[str] = []
+    for item in phrases:
+        key = item.strip().lower()
+        if key and key not in phrase_list:
+            phrase_list.append(key)
+
+    phrase_tokens: set[str] = set()
+    for phrase in phrase_list:
+        phrase_tokens.update(_object_match_tokens(phrase))
+
+    objects: list[str] = list(phrase_list)
+    for item in extras:
+        key = item.strip().lower()
+        if not key or key in objects:
+            continue
+        if key in _QUESTION_STOPWORDS:
+            continue
+        if key in phrase_tokens:
+            continue
+        if any(key in phrase.split() for phrase in phrase_list):
+            continue
+        objects.append(key)
+
+    return phrase_list[:max_items], objects[:max_items]
 
 
 def heuristic_relevant_objects(question: str, *, max_objects: int = 4) -> list[str]:
@@ -169,6 +245,10 @@ class GraphNode:
     is_frontier: bool = False  # True = unexplored map frontier cluster (managed by sync_frontier_nodes)
     embedding: np.ndarray | None = None  # optional visual embedding (e.g. SigLIP crop)
     bounds_3d: dict[str, list[float]] | None = None  # axis-aligned world bounds {min,max,center,size}
+    nav_attempts: int = 0
+    nav_failures: int = 0
+    last_nav_note: str | None = None
+    last_nav_at_step: int = 0
 
 
 def is_ground_truth_node(node: GraphNode | None) -> bool:
@@ -234,6 +314,8 @@ class GraphEQAMemory:
         self.last_eqa_raw: str = ""
         self.last_eqa_parsed: tuple[str, str, bool, str, str] = ("", "", False, "", "")
         self.last_eqa_obs_ids: list[int] = []
+        self.last_eqa_action_obs_id: int | None = None
+        self.last_nav_result_note: str = ""
         self.last_eqa_nav_fallback_count: int = 0
         # Model's own confidence before the graph-coverage gate suppresses it (for early-stop).
         self.last_eqa_model_confident: bool = False
@@ -257,6 +339,10 @@ class GraphEQAMemory:
         self._obs_id_grounder: Callable[[str], int | None] | None = None
         self._enrich_object_hints: list[str] = []
         self._history_outputs: list[str] = []
+        self._relevant_phrases: list[str] = []
+        self._confirmed_memory_siglip_encoder: Any | None = None
+        self._obs_siglip_features: dict[int, np.ndarray] = {}
+        self._siglip_phrase_cache: dict[str, tuple[float, np.ndarray, int | None]] = {}
 
         self.log_dir = log_dir
         self.eqa_client = eqa_client
@@ -1079,6 +1165,71 @@ class GraphEQAMemory:
         for node in objects:
             self._ensure_seen_from_edge(node.node_id, int(node.obs_id))
 
+    def _node_nav_status_suffix(self, node: GraphNode) -> str:
+        failures = int(getattr(node, "nav_failures", 0) or 0)
+        if failures <= 0:
+            return ""
+        note = (getattr(node, "last_nav_note", None) or "").strip()
+        tail = f", last: {note}" if note else ""
+        return f"; unreachable ({failures} nav failure(s){tail})"
+
+    def record_nav_attempt(
+        self,
+        obs_id: int | None,
+        *,
+        success: bool,
+        note: str,
+        dist_m: float = 0.0,
+        step: int | None = None,
+    ) -> None:
+        """Update graph node(s) tied to ``obs_id`` after an EQA navigation attempt."""
+        if obs_id is None:
+            self.last_nav_result_note = note
+            return
+        oid = int(obs_id)
+        st = int(step if step is not None else self._effective_timestep())
+        moved = float(dist_m) >= 0.12
+        ok = bool(success) and moved
+        for idx, node in enumerate(self._nodes):
+            if int(node.obs_id) != oid:
+                continue
+            failures = int(getattr(node, "nav_failures", 0)) + (0 if ok else 1)
+            self._nodes[idx] = replace(
+                node,
+                nav_attempts=int(getattr(node, "nav_attempts", 0)) + 1,
+                nav_failures=failures,
+                last_nav_note=str(note or "")[:120] or None,
+                last_nav_at_step=st,
+            )
+        self.last_nav_result_note = note
+
+    def append_nav_outcome_to_last_history(self, *, dist_m: float, success: bool, note: str) -> None:
+        if not self._history_outputs:
+            return
+        status = "ok" if success else "failed"
+        self._history_outputs[-1] += (
+            f"\nNav_result: moved {float(dist_m):.2f}m ({status}; {note})"
+        )
+
+    def alternate_nav_target_for_failed_action(
+        self,
+        question: str,
+        blocked_obs_id: int,
+        planner: Any,
+        base_xyt: Any,
+    ) -> np.ndarray | None:
+        """Pick a different frontier/fluid goal when the VLM re-picks a failed image action."""
+        frontier_nodes = [
+            n
+            for n in self._nodes
+            if getattr(n, "is_frontier", False) and int(n.obs_id) != int(blocked_obs_id)
+        ]
+        if frontier_nodes:
+            frontier_nodes.sort(key=lambda n: (int(getattr(n, "nav_failures", 0)), -int(n.last_seen)))
+            pick = frontier_nodes[0]
+            return np.array([float(pick.xyz[0]), float(pick.xyz[1]), 1.0], dtype=float)
+        return None
+
     def to_string(self) -> str:
         """Serialize the scene graph to a string for mLLM prompts."""
         lines = []
@@ -1097,7 +1248,7 @@ class GraphEQAMemory:
             else:
                 kind = "Node"
             lines.append(
-                f"{kind} {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]{sup}"
+                f"{kind} {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]{sup}{self._node_nav_status_suffix(n)}"
             )
         for a, b, rel in self._edges:
             b_str = "floor" if b == -1 else str(b)
@@ -1204,17 +1355,86 @@ class GraphEQAMemory:
             "Example: Where is the pen? -> pen. Is there grey cloth on cloth hanger? -> grey cloth, cloth hanger"
         )
         out = self.image_description_client([prompt, question])
-        merged: list[str] = []
         enrich_hints = getattr(self, "_enrich_object_hints", None) or []
-        for obj in (
-            list(enrich_hints)
-            + [s.strip() for s in out.split(",") if s.strip()]
-            + heuristic_relevant_objects(question)
+        llm_parts = [s.strip() for s in out.split(",") if s.strip()]
+        phrase_seed = list(enrich_hints) + heuristic_relevant_phrases(question)
+        if enrich_hints:
+            for hint in enrich_hints:
+                h = hint.strip().lower()
+                if h and " " in h and h not in phrase_seed:
+                    phrase_seed.insert(0, h)
+        extra_seed = llm_parts + heuristic_relevant_objects(question)
+        phrases, objects = consolidate_relevant_keywords(phrase_seed, extra_seed, max_items=4)
+        self._relevant_phrases = phrases
+        self._relevant_objects = objects
+
+    def set_confirmed_memory_siglip_encoder(self, encoder: Any | None) -> None:
+        """Attach a SigLIP encoder used only for CONFIRMED_MEMORY (survives voxel encoder drop)."""
+        self._confirmed_memory_siglip_encoder = encoder
+
+    def refresh_siglip_confirmed_memory(self) -> None:
+        """Encode new graph observation RGBs and refresh phrase→best-view alignments."""
+        if not self.memory_summary_enabled:
+            return
+        enc = self._confirmed_memory_siglip_encoder
+        if enc is None:
+            return
+        from emet.memory.graph_eqa.graph_eqa_siglip import (
+            align_phrase_to_observation_features,
+            encode_observation_rgb,
+        )
+
+        for obs in self._observations:
+            oid = int(obs.obs_id)
+            if oid in self._obs_siglip_features:
+                continue
+            feat = encode_observation_rgb(enc, obs.rgb)
+            if feat is not None:
+                self._obs_siglip_features[oid] = feat
+        phrases = self._confirmed_memory_phrases()
+        for phrase in phrases:
+            match = align_phrase_to_observation_features(
+                phrase,
+                enc,
+                self._observations,
+                self._obs_siglip_features,
+            )
+            if match is not None:
+                self._siglip_phrase_cache[phrase.strip().lower()] = match
+
+    def _confirmed_memory_phrases(self) -> list[str]:
+        if self._relevant_phrases:
+            return list(self._relevant_phrases)
+        return list(self._relevant_objects or [])
+
+    def _siglip_match_for_phrase(self, phrase: str) -> tuple[float, np.ndarray, int | None] | None:
+        key = (phrase or "").strip().lower()
+        if not key:
+            return None
+        cached = self._siglip_phrase_cache.get(key)
+        if cached is not None:
+            return cached
+        grounder = self._text_grounder
+        if grounder is None:
+            return None
+        try:
+            sig = grounder(phrase)
+        except Exception:
+            return None
+        if sig is None:
+            return None
+        sim, xyz = float(sig[0]), np.asarray(sig[1], dtype=float)
+        return sim, xyz, None
+
+    def _object_present_in_graph_or_siglip(self, obj: str) -> bool:
+        if any(
+            label_matches_relevant_object(obj, lab)
+            for o in self._observations
+            for lab in o.labels
         ):
-            key = obj.strip().lower()
-            if key and key not in merged:
-                merged.append(key)
-        self._relevant_objects = merged[:4]
+            return True
+        sig = self._siglip_match_for_phrase(obj)
+        return sig is not None and float(sig[0]) >= SIGLIP_PRESENT_THRESHOLD
 
     def _select_relevant_obs_ids(self, max_images: int = 6) -> list[int]:
         """Select a diverse set of observation IDs for the EQA prompt (1-based).
@@ -1242,6 +1462,14 @@ class GraphEQAMemory:
             selected.append(oid)
             return len(selected) >= max_images
 
+        # 0a) SigLIP phrase cache from graph observation RGBs (caption-independent).
+        for phrase in self._confirmed_memory_phrases():
+            cached = self._siglip_phrase_cache.get(phrase.strip().lower())
+            if cached is None or cached[2] is None:
+                continue
+            if float(cached[0]) >= SIGLIP_PRESENT_THRESHOLD and take(int(cached[2])):
+                return selected
+
         # 0) SigLIP-matched observation per relevant object (caption-independent). Guarantees the
         #    VLM is shown the best view of the target object even when it was captioned as
         #    something else, instead of reasoning over whatever furniture happens to be in frame.
@@ -1258,11 +1486,10 @@ class GraphEQAMemory:
         # 1) Keyword matches (question-relevant objects), most recent first.
         keyword_hits: list[int] = []
         for obj in self._relevant_objects:
-            obj_lower = obj.lower()
             for o in reversed(self._observations):
                 if int(o.obs_id) in keyword_hits:
                     continue
-                if any(obj_lower in lab.lower() for lab in o.labels):
+                if any(label_matches_relevant_object(obj, lab) for lab in o.labels):
                     keyword_hits.append(int(o.obs_id))
         # Reserve at least one slot each for frontier + recent when budget allows.
         reserved = 0
@@ -1273,12 +1500,22 @@ class GraphEQAMemory:
             if take(oid):
                 return selected
 
-        # 2) One frontier-tagged observation (encourage exploration views).
-        for o in reversed(self._observations):
-            if self._obs_is_frontier(int(o.obs_id)):
-                if take(int(o.obs_id)):
-                    return selected
-                break
+        # 2) One frontier-tagged observation (prefer lowest nav_failures).
+        frontier_candidates = [
+            int(o.obs_id)
+            for o in reversed(self._observations)
+            if self._obs_is_frontier(int(o.obs_id)) and int(o.obs_id) not in selected
+        ]
+        if frontier_candidates:
+            frontier_by_id = {int(n.obs_id): n for n in self._nodes if getattr(n, "is_frontier", False)}
+            frontier_candidates.sort(
+                key=lambda oid: (
+                    int(getattr(frontier_by_id.get(oid), "nav_failures", 0)) if oid in frontier_by_id else 0,
+                    -oid,
+                )
+            )
+            if take(frontier_candidates[0]):
+                return selected
 
         # 3) Most recent observation (fresh context).
         for o in reversed(self._observations):
@@ -1339,21 +1576,18 @@ class GraphEQAMemory:
             catches objects that were seen but mislabeled (e.g. a woven basket captioned as
             a "decorative plant").
         """
-        if not self._relevant_objects:
+        if not self._confirmed_memory_phrases():
             return ""
         object_nodes = [n for n in self._nodes if not n.is_frontier and not n.is_viewpoint]
-        grounder = self._text_grounder
         present_thresh = SIGLIP_PRESENT_THRESHOLD
         lines: list[str] = []
-        for obj in self._relevant_objects:
-            obj_l = obj.lower()
-            matches = [n for n in object_nodes if any(obj_l in lab.lower() for lab in n.labels)]
-            sig: tuple[float, np.ndarray] | None = None
-            if grounder is not None:
-                try:
-                    sig = grounder(obj)
-                except Exception:
-                    sig = None
+        for obj in self._confirmed_memory_phrases():
+            matches = [
+                n
+                for n in object_nodes
+                if any(label_matches_relevant_object(obj, lab) for lab in n.labels)
+            ]
+            sig = self._siglip_match_for_phrase(obj)
             parts: list[str] = []
             if matches:
                 positions = ", ".join(f"({n.xyz[0]:.1f}, {n.xyz[1]:.1f})" for n in matches[:4])
@@ -1361,8 +1595,11 @@ class GraphEQAMemory:
             sig_present = sig is not None and float(sig[0]) >= present_thresh
             if sig is not None:
                 sim, xyz = float(sig[0]), sig[1]
+                obs_note = f", obs_id={int(sig[2])}" if sig[2] is not None else ""
                 if sig_present:
-                    parts.append(f"SigLIP visual match sim={sim:.2f} near ({xyz[0]:.1f}, {xyz[1]:.1f})")
+                    parts.append(
+                        f"SigLIP phrase match sim={sim:.2f} near ({xyz[0]:.1f}, {xyz[1]:.1f}){obs_note}"
+                    )
                 else:
                     parts.append(f"no strong SigLIP match (sim={sim:.2f})")
             present = bool(matches) or sig_present
@@ -1386,10 +1623,12 @@ class GraphEQAMemory:
         eqa_cfg = self.parameters.get("eqa", {}) if hasattr(self.parameters, "get") else {}
         if isinstance(eqa_cfg, dict) and eqa_cfg.get("sqa3d_allow_partial_graph"):
             return True
-        if not self._relevant_objects or not self._observations:
+        if not self._confirmed_memory_phrases() or not self._observations:
             return True
-        all_labels = " ".join(lab.lower() for o in self._observations for lab in o.labels)
-        return all(obj.lower() in all_labels for obj in self._relevant_objects)
+        for obj in self._confirmed_memory_phrases():
+            if not self._object_present_in_graph_or_siglip(obj):
+                return False
+        return True
 
     def _obs_is_frontier(self, obs_id: int) -> bool:
         for n in self._nodes:
@@ -1409,6 +1648,9 @@ class GraphEQAMemory:
                 continue
             lbl = ", ".join(obs.labels) if obs.labels else "object"
             line = f"Image {img_idx}. {lbl} at ({obs.xyz[0]:.2f}, {obs.xyz[1]:.2f});"
+            node = next((n for n in self._nodes if int(n.obs_id) == int(obs.obs_id)), None)
+            if node is not None:
+                line += self._node_nav_status_suffix(node)
             if self._obs_is_frontier(obs.obs_id):
                 line += " unexplored frontier;"
             elif obs.description and "unexplored" in obs.description.lower():
@@ -1454,6 +1696,22 @@ class GraphEQAMemory:
                 answer = m.group(1).upper()
         return reasoning, answer, confidence, action, confidence_reasoning
 
+    def _any_confirmed_phrase_present(self) -> bool:
+        for phrase in self._confirmed_memory_phrases():
+            if self._object_present_in_graph_or_siglip(phrase):
+                return True
+        return False
+
+    def _visibility_location_mcq_hint(self, choices: list[str]) -> str:
+        lines = "\n".join(f"  {chr(65 + i)}) {choice}" for i, choice in enumerate(choices[:4]))
+        return (
+            "LOCATION_MCQ: The options are places, not yes/no. When the question asks "
+            "'did you see … anywhere?', you must still pick the letter (A–D) for WHERE "
+            "the object was observed. Use CONFIRMED_MEMORY and IMAGE_DESCRIPTIONS even if "
+            "the attached images do not show the object. Never answer yes/no on answer:.\n"
+            f"{lines}"
+        )
+
     def _salvage_answer_letter(self, question: str, commands: list[Any]) -> str:
         """Terse follow-up when the main EQA output never produced an ``answer:`` field.
 
@@ -1479,6 +1737,39 @@ class GraphEQAMemory:
         m = re.search(r"([A-D])", text)
         return m.group(1) if m else ""
 
+    def _salvage_location_mcq_letter(
+        self,
+        question: str,
+        choices: list[str],
+        commands: list[Any],
+    ) -> str:
+        """Re-ask for a location letter when the model answered visibility yes/no."""
+        if self.eqa_client is None or len(choices) < 2:
+            return ""
+        images = [c for c in commands if isinstance(c, Image.Image)]
+        memory = self._relevant_memory_summary()
+        choice_lines = "\n".join(f"  {chr(65 + i)}) {choice}" for i, choice in enumerate(choices[:4]))
+        stem = question.split("Answer:")[0].strip()
+        directive = (
+            "The target object WAS observed during exploration (see CONFIRMED_MEMORY). "
+            "This is a WHERE-did-you-see-it multiple choice question. "
+            "Pick the single best location option letter (A, B, C, or D). "
+            "Do NOT answer yes/no. Output only:\nanswer:\n<letter>\n"
+        )
+        if memory:
+            directive += memory + "\n"
+        directive += f"Question: {stem}\nOptions:\n{choice_lines}"
+        try:
+            salvage_raw = self.eqa_client([directive, *images])
+        except Exception:
+            return ""
+        text = (salvage_raw or "").strip()
+        m = re.search(r"(?:^|\n)\s*answer\s*:\s*([a-d])\b", text, flags=re.IGNORECASE)
+        if m:
+            return m.group(1).upper()
+        m = re.search(r"\b([A-D])\b", text)
+        return m.group(1) if m else ""
+
     def vote_mcq_letter(self, question: str, choices: list[str]) -> str:
         """Debiased final MCQ letter (see mcq_debias.py).
 
@@ -1500,11 +1791,18 @@ class GraphEQAMemory:
             if o.obs_id in set(self.last_eqa_obs_ids)
         ]
 
+        from emet.habitat.metrics import choices_are_location_mcq
+
+        memory = ""
+        if self.memory_summary_enabled and choices_are_location_mcq(choices):
+            memory = self._relevant_memory_summary()
         freeform_directive = (
             "Look at the images and answer the question in a few words. "
             "Do not use option letters. Do not caption images. Do not explain.\n"
             f"Question: {question}"
         )
+        if memory:
+            freeform_directive = memory + "\n" + freeform_directive
         try:
             freeform = (self.eqa_client([freeform_directive, *images]) or "").strip()
         except Exception:
@@ -1595,10 +1893,18 @@ class GraphEQAMemory:
         Returns:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
         """
+        from emet.habitat.metrics import (
+            answer_is_visibility_abstain,
+            choices_are_location_mcq,
+            parse_mcq_choices_from_question,
+            question_is_visibility_location,
+        )
         from emet.llms.eqa_vl_settings import get_eqa_vl_int
 
         self._ensure_llm_clients()
         self.extract_relevant_objects(question)
+        if self.memory_summary_enabled:
+            self.refresh_siglip_confirmed_memory()
         max_images = get_eqa_vl_int(self.parameters, "eqa_max_images", 4)
         obs_ids = self._select_relevant_obs_ids(max_images=max_images)
         self.last_eqa_obs_ids = list(obs_ids)
@@ -1621,6 +1927,13 @@ class GraphEQAMemory:
             img_desc_str = self._get_image_descriptions_str(obs_ids)
 
         commands: list[Any] = ["Question: " + question]
+        parsed_choices = parse_mcq_choices_from_question(question)
+        if (
+            parsed_choices
+            and choices_are_location_mcq(parsed_choices)
+            and question_is_visibility_location(question)
+        ):
+            commands.append(self._visibility_location_mcq_hint(parsed_choices))
         if self.memory_summary_enabled:
             memory_summary = self._relevant_memory_summary()
             if memory_summary:
@@ -1647,7 +1960,26 @@ class GraphEQAMemory:
             commands.append(im)
         self.last_eqa_nav_fallback_count = len(nav_fallback_tail)
 
-        raw = self.eqa_client(commands)
+        try:
+            raw = self.eqa_client(commands)
+        except Exception as exc:
+            raw = f"Error: {exc}"
+            self.last_eqa_raw = raw
+            self.last_eqa_parsed = ("", "Unknown", False, "", str(exc))
+            self._history_outputs.append(
+                "Answer:Unknown\nReasoning:"
+                + str(exc)
+                + "\nConfidence:False\nAction:\nConfidence_reasoning:"
+                + str(exc)
+            )
+            return (
+                str(exc),
+                "Unknown",
+                False,
+                str(exc),
+                None,
+                relevant_images,
+            )
         self.last_eqa_raw = raw
         answer_outputs = raw.replace("*", "").replace("/", "").replace("#", "").lower()
 
@@ -1659,6 +1991,17 @@ class GraphEQAMemory:
             if salvage:
                 answer = salvage
                 raw = (raw or "") + f"\n[salvage]\nanswer:\n{salvage}\n"
+                self.last_eqa_raw = raw
+        elif (
+            parsed_choices
+            and choices_are_location_mcq(parsed_choices)
+            and answer_is_visibility_abstain(answer)
+            and self._any_confirmed_phrase_present()
+        ):
+            salvage = self._salvage_location_mcq_letter(question, parsed_choices, commands)
+            if salvage:
+                answer = salvage
+                raw = (raw or "") + f"\n[salvage-location]\nanswer:\n{salvage}\n"
                 self.last_eqa_raw = raw
         self.last_eqa_model_confident = bool(confidence)
         if confidence and not self._graph_covers_relevant_objects():
@@ -1682,10 +2025,13 @@ class GraphEQAMemory:
         reasoning = human.debug_reasoning
 
         target_point = None
+        self.last_eqa_action_obs_id = None
         if not confidence and action.strip():
             match = re.search(r"\d+", action.strip())
             if match:
                 display_index = int(match.group())
+                if self._observations and obs_ids and 1 <= display_index <= len(obs_ids):
+                    self.last_eqa_action_obs_id = int(obs_ids[display_index - 1])
                 target_point = self._target_point_from_display_image_index(
                     display_index,
                     obs_ids=obs_ids,

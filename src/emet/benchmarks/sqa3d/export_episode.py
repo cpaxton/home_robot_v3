@@ -13,8 +13,9 @@ from typing import Any
 from emet.benchmarks.sqa3d.datasets import SQA3DQuestion
 
 
-def episode_export_dir(export_root: Path, question_id: int) -> Path:
-    return Path(export_root) / str(int(question_id))
+def episode_export_dir(export_root: Path, question_id: int, method: str = "") -> Path:
+    suffix = f"sqa3d_{int(question_id)}_{method}" if method else str(int(question_id))
+    return Path(export_root) / suffix
 
 
 def export_sqa3d_episode_artifacts(
@@ -32,9 +33,10 @@ def export_sqa3d_episode_artifacts(
     export_root: Path,
     split: str = "",
     infra_failure: bool = False,
+    recorder: Any | None = None,
 ) -> Path:
     """Write per-question export: metadata JSON + memory backend snapshot."""
-    ep_dir = episode_export_dir(export_root, q.question_id)
+    ep_dir = episode_export_dir(export_root, q.question_id, method=method)
     ep_dir.mkdir(parents=True, exist_ok=True)
 
     meta = {
@@ -84,5 +86,16 @@ def export_sqa3d_episode_artifacts(
                 get_memory_backend("dynamem", voxel_map=voxel_map).save(str(memory_dir))
     except Exception as exc:
         (ep_dir / "export_error.txt").write_text(str(exc), encoding="utf-8")
+
+    try:
+        from emet.eval.episode_diagnostics import EpisodeDiagnosticsConfig, flush_episode_diagnostics
+
+        manifest = flush_episode_diagnostics(ep_dir, agent, recorder, cfg=EpisodeDiagnosticsConfig.from_env())
+        if manifest:
+            meta["diagnostics_manifest"] = manifest.get("diagnostics_manifest", "")
+            meta["topdown_map_path"] = manifest.get("topdown_map", "")
+            (ep_dir / "episode_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    except Exception as exc:
+        (ep_dir / "diagnostics_error.txt").write_text(str(exc), encoding="utf-8")
 
     return ep_dir

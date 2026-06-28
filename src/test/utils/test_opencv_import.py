@@ -24,7 +24,7 @@ def test_assert_cv2_real_opencv_passes_in_normal_env():
     import cv2
 
     if not hasattr(cv2, "resize"):
-        pytest.skip("Incomplete OpenCV install (cv2 is a stub). Fix: uv pip install --reinstall opencv-python")
+        pytest.skip("Incomplete OpenCV install (cv2 is a stub). Fix: uv pip install --reinstall opencv-contrib-python")
     assert_cv2_is_real_opencv()
 
 

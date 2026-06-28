@@ -43,12 +43,13 @@ def assert_cv2_is_real_opencv() -> None:
             "The Python module named 'cv2' is not OpenCV (or is a broken build). "
             f"Missing attributes: {missing}. cv2.__file__ = {loc!r}\n\n"
             "This usually happens when ROS or another environment prepends a different 'cv2' "
-            "ahead of opencv-python in your venv.\n\n"
+            "ahead of opencv-contrib-python in your venv.\n\n"
             "Fix:\n"
             "  • From the repo:  uv run emet serve mujoco ...   (uses project .venv first)\n"
             "  • Or:  unset PYTHONPATH   then activate .venv and run again\n"
             '  • Check:  uv run python -c "import cv2; print(cv2.__file__)"  '
             "(should be under .venv/.../cv2/)\n"
-            "  • Reinstall OpenCV in the venv:  uv pip install --reinstall opencv-python\n\n"
+            "  • Reinstall OpenCV in the venv:  uv pip install --reinstall opencv-contrib-python\n"
+            "  • Do not install opencv-python and opencv-contrib-python together (breaks cv2).\n\n"
             f"Current interpreter: {py}"
         )

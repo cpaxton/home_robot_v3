@@ -1,5 +1,7 @@
 # Dynagraph Habitat HM-EQA: results review + improvement plan
 
+> **Canonical results table (prior art vs emet, JSONL paths, planned sweeps):** [docs/experiments/habitat_eqa_results.md](../docs/experiments/habitat_eqa_results.md)
+
 Date: 2026-06-10. Branch: `feature/dynagraph-exploration`.
 Goal: improve dynagraph exploration/answering on HM-EQA in Habitat as much as possible,
 keeping `graph_eqa` as a clean baseline. VLM: Qwen2.5-VL-3B-Instruct.

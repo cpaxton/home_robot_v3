@@ -1,0 +1,195 @@
+# Evaluation runbook
+
+Canonical guide for paper-relevant benchmarks: Habitat HM-EQA, OVMM find-phase (Habitat + sim), and SQA3D. Use this doc for **overnight smoke**, **diagnostics artifacts** (maps, video, crops), and **figure export**.
+
+Deep dives:
+
+| Track | Doc |
+|-------|-----|
+| Habitat EQA | [habitat_eqa.md](habitat_eqa.md) → [habitat/](habitat/README.md) |
+| OVMM find-phase | [ovmm_find_phase_benchmark.md](ovmm_find_phase_benchmark.md), [ovmm.md](ovmm.md) |
+| SQA3D | [sqa3d.md](sqa3d.md), [sqa3d_compute.md](sqa3d_compute.md) |
+| Paper tables / LaTeX | [paper_benchmarks.md](paper_benchmarks.md) |
+| Dynagraph sim | [dynagraph_benchmarks.md](dynagraph_benchmarks.md) |
+
+## Prerequisites
+
+```bash
+uv sync
+./scripts/install_habitat.sh
+uv run python scripts/download_habitat_eqa_data.py --fetch-csv --fetch-hm3d train
+uv run python scripts/download_ovmm_benchmark_assets.py   # optional verify
+uv run python scripts/download_sqa3d_data.py --fetch-annotations
+# ScanNet (SQA3D): uv run python scripts/download_scannet_data.py --accept-tos --scenes-from-sqa3d --with-sens
+```
+
+## Shared diagnostics
+
+All embodied tracks can write a **consistent episode bundle** via [`src/emet/eval/episode_diagnostics.py`](../src/emet/eval/episode_diagnostics.py):
+
+```
+~/.cache/habitat_eqa/episodes/<run_tag>/
+  q0003_graph_eqa/              # HM-EQA
+  ovmm_hm3d_lamp_bed_00006_dynamem/
+  sqa3d_220602000049_dynagraph/
+    topdown_map.png
+    obstacles_2d.npy, explored_2d.npy, grid_meta.json
+    trajectory.jsonl
+    frames/rgb_*.png, metadata.jsonl
+    episode_rgb.mp4
+    floor_metrics.json
+    diagnostics_manifest.json
+    (track-specific: raw_eqa.txt, memory/, …)
+```
+
+**Environment variables** (see [environment_variables.md](environment_variables.md)):
+
+| Variable | Default (smoke) | Effect |
+|----------|-----------------|--------|
+| `EMET_EVAL_EXPORT_MAP` | on | `topdown_map.png` |
+| `EMET_EVAL_EXPORT_VIDEO` | on | `episode_rgb.mp4` |
+| `EMET_EVAL_EXPORT_FRAMES` | on | RGB frame PNGs |
+| `EMET_EVAL_MAP_STRIDE` | 0 | Intermediate `maps/step_NNNN.png` |
+| `EMET_EVAL_EXPORT_GRAPH` | off | Full graph checkpoint (heavy) |
+| `EMET_EVAL_EXPORT_VOXEL_HISTORY` | on (Habitat) | Per-observation `observations_history.jsonl` |
+| `EMET_EVAL_EXPORT_VOXEL_PICKLE` | off | Full `voxel_debug.pkl` (heavy) |
+
+Habitat aliases: `HABITAT_EQA_EXPORT_MAP`, `HABITAT_EQA_EXPORT_VIDEO`, `HABITAT_EQA_EXPORT_GRAPH`, `HABITAT_EQA_MAP_STRIDE`.
+
+**Recording:** eval runners call `bind_diagnostics_recorder()` which registers a step callback on the agent. After each successful `DynamemController.update()` (navigation / mapping step), the callback buffers RGB, pose, and optional stride maps — no monkey-patching of `agent.update`.
+
+**CLI flags** (`.venv-habitat/bin/emet-habitat`): `--export-map`, `--export-video`, `--map-stride` on `run-episode` / `run-batch`; OVMM batch adds `--run-tag`. With `--map-stride N`, intermediate maps are written under `<bundle>/maps/step_NNNN.png` at episode end.
+
+### Habitat frame sanity (before trusting map colors)
+
+HM-EQA depth and `gps` must share the same voxel-world frame (`src/emet/habitat/coordinates.py`). Misalignment used to produce wall-to-wall red maps or orphan “satellite” explored blobs.
+
+After an episode with `EMET_EVAL_EXPORT_VOXEL_HISTORY=1`:
+
+```bash
+uv run python scripts/audit_habitat_voxel_map.py \
+  ~/.cache/habitat_eqa/episodes/<run_tag>/q0006_dynagraph --json
+```
+
+Check:
+
+| Field | Healthy signal |
+|-------|----------------|
+| `pcd_planar_x_mismatches` | empty (no Habitat X sign flip vs `base_pose`) |
+| `explored_obstacle_frac` | not ~0.9 (false wall-to-wall obstacles) and not ~0.0 from height-band miss |
+
+Optional live regression: `RUN_HABITAT_FRAME_TESTS=1 uv run emet test src/test/eval/test_audit_habitat_voxel_map.py -k live_habitat`.
+
+## Overnight smoke (all tracks)
+
+One script runs HM-EQA, OVMM Habitat, and SQA3D (if ScanNet verify passes), then builds figures:
+
+```bash
+./scripts/run_overnight_eval_smoke.sh
+# Dry layout check (no VLM):
+MOCK_LLM=1 ./scripts/run_overnight_eval_smoke.sh
+# Skip SQA3D if ScanNet not installed:
+SKIP_SQA3D=1 ./scripts/run_overnight_eval_smoke.sh
+```
+
+**Matrix (~21 GPU episodes with real VLM):**
+
+| Phase | Benchmark | Units | Methods |
+|-------|-----------|-------|---------|
+| 1 | HM-EQA | Q `3,14,17` | `graph_eqa`, `dynagraph` |
+| 2 | OVMM Habitat | 3 HM3D proxy episodes | **`dynamem`**, `graph_eqa`, `dynagraph` |
+| 3 | SQA3D | val Q `0–2` | `dynagraph`, `dynamem` |
+
+Outputs:
+
+- JSONL: `~/.cache/habitat_eqa/results/<TAG>_hmeqa_*.jsonl`
+- OVMM JSON: `~/runs/emet/ovmm_habitat/<TAG>_*/`
+- SQA3D: `~/runs/emet/sqa3d/<TAG>_*/`
+- Bundles: `~/.cache/habitat_eqa/episodes/<TAG>_*/`
+- Logs: `~/.cache/habitat_eqa/overnight/<RUN_ID>/`
+- Figures: `~/runs/emet/eval_smoke/<RUN_ID>/figures/`
+
+**`RUN_ID` vs `TAG`:** the overnight script writes artifact paths with `TAG` (defaults to `RUN_ID`). Figure aggregation uses `--run-id` (`RUN_ID`). If you override `TAG` without setting `RUN_ID` to match, the script prints a warning and passes `--artifact-tag "$TAG"` to `build_eval_figure_pack.py`. Prefer keeping them equal, or set `RUN_ID="$TAG"` when customizing tags.
+
+Post-run only:
+
+```bash
+uv run python scripts/build_eval_figure_pack.py --run-id eval_smoke_YYYYMMDD_HHMMSS
+# When TAG differed from RUN_ID during the smoke:
+uv run python scripts/build_eval_figure_pack.py --run-id "$RUN_ID" --artifact-tag "$TAG"
+```
+
+## Success criteria (smoke)
+
+OVMM find-phase episodes are **pick/place localization** tasks: move `{object}` from `{start_recep}` (object on that receptacle) to `{goal_recep}`. Metrics follow the [OVMM](https://ovmm.github.io/) find phases:
+
+| Phase | JSON field | Meaning |
+|-------|------------|---------|
+| FindObj | `find_object_success` | Localized the target object on `start_recep` |
+| FindRec | `find_recep_success` | Localized the **goal** receptacle (`goal_recep`) for placement |
+| Partial | `find_partial_success` | Mean of FindObj and FindRec |
+
+**Difficulty:** FindObj is usually **easier** than FindRec (real OVMM paper: ~70% vs ~30%). Object-only success means the agent found the object on `start_recep` but not the goal receptacle — useful partial signal, not full task progress. For smoke, treat **FindRec** as the harder bar; `find_both_success_rate` in `summary.json` is the strictest aggregate.
+
+| Track | Metric | Minimum |
+|-------|--------|---------|
+| HM-EQA | MCQ accuracy (3 Qs) | **> 0%** (≥1 correct) |
+| OVMM Habitat | FindObj **or** FindRec (FindRec preferred) | **> 0** on ≥1 episode × backend |
+| SQA3D | EM@1 (3 Qs) | **> 0%** when phase 3 runs |
+| All | Artifacts | `topdown_map.png` + `diagnostics_manifest.json` per completed episode |
+
+If HM-EQA, OVMM, **and** SQA3D (when present) metrics are all zero, `build_eval_figure_pack.py` sets `"status": "INVESTIGATE"` in `summary.json`.
+
+## Per-track quick commands
+
+### HM-EQA (interactive QA)
+
+```bash
+.venv-habitat/bin/emet-habitat run-batch \
+  --method dynagraph --question-ids 3,14,17 \
+  --export-map --export-video --resume \
+  --output ~/.cache/habitat_eqa/results/smoke_dynagraph.jsonl
+```
+
+### OVMM find-phase (Habitat) — includes **dynamem**
+
+```bash
+.venv-habitat/bin/emet-habitat run-ovmm-find-batch \
+  --backend dynamem --run-tag smoke_ovmm \
+  --export-map --export-video \
+  --output-dir ~/runs/emet/ovmm_habitat/smoke_dynamem
+```
+
+### SQA3D
+
+```bash
+uv run emet sqa3d run-real-sweep --split val --question-start 0 --question-end 2 \
+  --method dynagraph --replay-mode sens --no-download \
+  --export-root ~/.cache/habitat_eqa/episodes/smoke_sqa3d
+uv run emet sqa3d plot-results -p ~/runs/emet/sqa3d/dynagraph_val_q0-2.jsonl -o /tmp/sqa3d_figs
+```
+
+## Method coverage
+
+| Backend | HM-EQA | OVMM Habitat | SQA3D |
+|---------|--------|--------------|-------|
+| `graph_eqa` | yes | yes | — |
+| `dynagraph` | yes | yes | yes |
+| `dynamem` | follow-up PR | **yes** | yes |
+
+## Paper outputs
+
+Figure pack (`build_eval_figure_pack.py`) writes:
+
+| File | Contents |
+|------|----------|
+| `summary.json` | HM-EQA accuracy; OVMM FindObj / FindRec / both / object-only rates per backend; SQA3D `em@1` per method; `status` (`OK` or `INVESTIGATE`) |
+| `summary.csv` | Long-form metrics for tables (includes `sqa3d` rows when phase 3 ran) |
+| `topdown_map_grid.png` | All episode top-down maps |
+| `ovmm_findobj_findrec.png` | FindObj vs FindRec bar chart per backend |
+
+**Top-down map colors:** green = explored free space, red = explored obstacle, white = unmapped margin, yellow dot = robot. Eval exports crop to the explored footprint on a white background (not the dark-gray “unknown” fill used for Discord sharing on the full 1024×1024 grid). Maps that look mostly red within the explored blob usually mean depth marked most observed cells as obstacles (common with `explore_steps: 0` Habitat runs); mostly green means few obstacles in the explored region.
+
+OVMM section of `summary.json` also lists per-episode `outcome`: `both`, `object_only`, `recep_only`, or `neither`.
+
+Copy into `paper/figures/eval_smoke/` and cite in `paper/sections/05_results.tex`.

@@ -35,12 +35,13 @@ Requires `latexmk` + `booktabs` (via `texlive-latex-extra`, `texlive-bibtex-extr
 ## Benchmarks and results
 
 - **Paper experiments (start here):** [docs/experiments/README.md](../docs/experiments/README.md)
+- **Habitat HM-EQA results vs prior art:** [docs/experiments/habitat_eqa_results.md](../docs/experiments/habitat_eqa_results.md)
 - **Detailed operator runbook:** [docs/paper_benchmarks.md](../docs/paper_benchmarks.md)
 - **Experiments plan (LaTeX):** `sections/04_experiments.tex`
-- **Results tables (fill manually from CSV):** `sections/05_results.tex`
+- **Results tables:** `sections/05_results.tex`, `sections/appendix/05_habitat_eqa_parity.tex`
 
 ## Related work
 
 - Implementation: `emet run dynagraph` on branch `main`
-- Habitat EQA harness plan: `docs/plans/HABITAT_EQA_HARNESS.md` on branch `feature/habitat-eqa-harness`
+- Habitat EQA harness: `feature/eval-diagnostics-smoke` (nav + grounding fixes); merge plan in [habitat_eqa_results.md](../docs/experiments/habitat_eqa_results.md)
 - SQA3D harness: `docs/sqa3d.md` on branch `feature/dynamem-offline-real-benchmark`

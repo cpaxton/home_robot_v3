@@ -57,6 +57,13 @@ This discards objects that are no longer visible or relevant---analogous in spir
 The controller inherits GraphEQA behavior: initial rotation-in-place scan (optional), navigate toward frontiers or graph-guided targets, \texttt{query\_answer} with confidence, repeat until answer or budget exhausted.
 Dynagraph-specific Rerun logging exposes \texttt{world/dynagraph/} for graph inspection during development.
 
+\textbf{Habitat EQA grounding (HM-EQA).}
+On the Habitat harness we add three inference-time mechanisms on top of the shared graph loop:
+(1)~\textbf{navmesh navigation} with Habitat compass/yaw conventions and frontier re-picking when goals stall;
+(2)~\textbf{phrase-level CONFIRMED\_MEMORY}---multi-word question phrases (e.g.\ ``woven basket'') drive SigLIP alignment and coverage gates instead of fragmented stopword tokens, with the SigLIP encoder retained through voxel VRAM release before EQA;
+(3)~\textbf{location multiple-choice prompts} for visibility+where questions (``Did you see \ldots\ anywhere?'') that instruct the VLM to pick a place letter (A--D) using graph memory even when the object is absent from attached images, plus a letter-only salvage pass when the model answers yes/no instead.
+MCQ choice-rotation debiasing runs at episode end for Dynagraph only.
+
 \subsection{Simulation ground-truth supervision}
 \label{sec:gt_supervision}
 
