@@ -5,14 +5,17 @@
 #
 # ``robot`` below is used when you omit ``--robot`` on the CLI (CLI always wins if set).
 #
+# Note: the ``agent:`` block *below* (realtime / exploration) is **Dynamem controller** tuning. After
+# load it lives under ``mapping.agent`` in unified config — not chat ``agent.llm`` (see ``agent:`` in
+# ``configs/emet/default.yaml`` / ``--set agent.llm=...``).
+#
 # Run from repo root (paths are resolved relative to cwd unless absolute).
-# The agent must use --robot rby1 whenever the MuJoCo server is rby1 (including MolmoSpaces: even if you
-# start serve with default --robot stretch, emet remaps MolmoSpaces to rby1 on the server).
+# Use the same robot id on serve and agent (MolmoSpaces does not remap stretch → rby1).
 #
 #   Terminal 1 — MolmoSpaces + ZMQ (requires emet-molmospaces; see docs/molmospaces.md):
 #     export DISPLAY=:1   # e.g. Xvfb or your desktop; avoids --headless when you have X
-#     uv run emet serve mujoco --scene ithor --split train --index 0
-#     # First-time assets: add --molmospaces-install (non-interactive download).
+#     uv run emet serve mujoco --scene ithor --robot rby1 --split train --index 0
+#     # First-time assets: add --install-scene-if-missing
 #     # No display at all: add --headless (forces EGL off-screen).
 #
 #   Terminal 1 — plain Galaxea / rby1 MJCF (no MolmoSpaces):
@@ -22,10 +25,10 @@
 #   Terminal 2 — agent (--robot-ip defaults to 127.0.0.1; match --port-offset with Terminal 1 if set):
 #     export DISCORD_TOKEN="your-bot-token"
 #     # optional: EMET_DISCORD_CHANNEL names the channel the bot listens on (default channel name is talk-to-stretch)
-#     uv run emet run agent --agent-config configs/agent_rby1_discord.yaml --rerun
+#     uv run emet run agent --config configs/agent_rby1_discord.yaml --rerun
 #     # (``robot: rby1`` in this file replaces ``--robot rby1`` when the flag is omitted.)
 #     uv run emet run agent --robot rby1 --device cuda --max-tokens 1024 \
-#       --agent-config configs/agent_rby1_discord.yaml
+#       --config configs/agent_rby1_discord.yaml
 #     # Use --no-discord to skip the Discord bridge; default is to start it when DISCORD_TOKEN is set.
 #     # Vision LLM: e.g. --llm qwen35-vl-9B (camera on by default; use --no-vl-camera to disable)
 #     # Local chat only (no robot): --offline

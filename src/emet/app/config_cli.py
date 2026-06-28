@@ -8,13 +8,17 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 import click
 from click.core import ParameterSource
 
 from emet.config.loader import (
+    AgentSectionConfig,
+    ResolvedEmetConfig,
     default_config_path,
+    finalize_resolved_config,
     load_config,
     resolve_config_path_for_legacy_alias,
 )
@@ -119,6 +123,70 @@ def load_resolved_config(
         dynav_config=dynav_config,
     )
     return load_config(path)
+
+
+def load_finalized_config_from_cli(
+    ctx: click.Context,
+    *,
+    emet_config: str,
+    config_sets: tuple[str, ...] = (),
+    agent_config: str | None = None,
+    dynav_config: str | None = None,
+    robot_id: str | None = None,
+) -> ResolvedEmetConfig:
+    """Load unified config with robot overlay and ``--set`` overrides applied."""
+    cfg = load_resolved_config(
+        ctx,
+        emet_config=emet_config,
+        agent_config=agent_config,
+        dynav_config=dynav_config,
+    )
+    return finalize_resolved_config(
+        cfg,
+        robot_id=robot_id,
+        overrides=list(config_sets) if config_sets else None,
+    )
+
+
+@dataclass(frozen=True)
+class ResolvedAgentCliOptions:
+    """Chat-agent options after merging YAML ``agent:`` with explicit CLI flags."""
+
+    llm: str
+    prompt: str
+    device: str
+    max_tokens: int
+    discord: bool
+    eqa: bool
+    share_memory_vllm: bool
+
+
+def resolve_agent_cli_options(
+    ctx: click.Context,
+    section: AgentSectionConfig,
+    *,
+    llm: str,
+    prompt: str,
+    device: str,
+    max_tokens: int,
+    discord: bool,
+    dynamem_eqa: bool,
+    share_memory_vllm: bool,
+) -> ResolvedAgentCliOptions:
+    """Merge ``agent:`` from config with CLI; explicit flags win over YAML (``--set`` already in *section*)."""
+
+    def _from_cli(param: str) -> bool:
+        return ctx.get_parameter_source(param) != ParameterSource.DEFAULT
+
+    return ResolvedAgentCliOptions(
+        llm=llm if _from_cli("llm") else section.llm,
+        prompt=prompt if _from_cli("prompt") else section.prompt,
+        device=device if _from_cli("device") else section.device,
+        max_tokens=max_tokens if _from_cli("max_tokens") else section.max_tokens,
+        discord=discord if _from_cli("discord") else section.discord,
+        eqa=dynamem_eqa if _from_cli("dynamem_eqa") else section.eqa,
+        share_memory_vllm=(share_memory_vllm if _from_cli("share_memory_vllm") else section.share_memory_vllm),
+    )
 
 
 def load_runtime_from_cli(

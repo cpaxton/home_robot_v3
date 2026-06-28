@@ -164,3 +164,70 @@ def test_vl_camera_default_logic():
     assert vl_include_effective(False, False, "qwen25-VL-7B")
     assert not vl_include_effective(True, True, "qwen35-vl-9B")
     assert not vl_include_effective(False, False, "qwen35-9B")
+
+
+def test_config_agent_section_eqa_when_cli_omitted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """YAML / --set agent.eqa applies when --eqa is not on the CLI."""
+    from emet.app import run_agent as ra
+
+    captured: list[bool] = []
+
+    def stub(**kw: object) -> None:
+        captured.append(bool(kw["eqa"]))
+
+    monkeypatch.setattr(ra, "run_agent_with_robot", stub)
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(
+        main,
+        ["--robot", "stretch", "--no-llm", "-c", "E", "--no-discord", "--set", "agent.eqa=true"],
+    )
+    assert r.exit_code == 0, r.output
+    assert captured == [True]
+
+
+def test_cli_eqa_overrides_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Explicit --eqa wins over agent.eqa=false in config."""
+    from emet.app import run_agent as ra
+
+    captured: list[bool] = []
+
+    def stub(**kw: object) -> None:
+        captured.append(bool(kw["eqa"]))
+
+    monkeypatch.setattr(ra, "run_agent_with_robot", stub)
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(
+        main,
+        ["--robot", "stretch", "--no-llm", "-c", "E", "--no-discord", "--set", "agent.eqa=false", "--eqa"],
+    )
+    assert r.exit_code == 0, r.output
+    assert captured == [True]
+
+
+def test_set_agent_llm_offline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Offline mode honors --set agent.llm when --llm is omitted."""
+    from emet.app import run_agent as ra
+
+    seen: list[str] = []
+
+    class _FakeClient:
+        max_tokens = 1024
+
+        def __call__(self, text: str, verbose: bool = False) -> str:
+            return "ok"
+
+    def fake_get_llm_client(llm: str, prompt_builder: object, device: str, parameters: object) -> _FakeClient:
+        seen.append(llm)
+        return _FakeClient()
+
+    monkeypatch.setattr(ra, "get_llm_client", fake_get_llm_client)
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--offline", "--set", "agent.llm=qwen35-4B"], input="\n")
+    assert r.exit_code == 0, r.output
+    assert seen == ["qwen35-4B"]

@@ -19,7 +19,7 @@ Legacy basenames (`dynav_config.yaml`, `--agent-config`, `--dynav-config`) still
 | Section | Purpose |
 |---------|---------|
 | `mapping` | DynaMem / Dynagraph voxel, depth, EQA, motion planner (was flat `dynav_config.yaml`) |
-| `agent` | Chat agent: `llm`, `eqa`, `discord`, `share_memory_vllm`, … |
+| `agent` | Chat agent: `llm`, `eqa`, `discord`, `share_memory_vllm`, … — consumed by **`emet run agent`** when the matching CLI flag is omitted |
 | `sim` / `sim_config` | MuJoCo / Robocasa / MolmoSpaces launch (see [Simulation configs](sim_configs.md)) |
 | `embodied_agent` | Open-vocab scene graph + GraphEQA memory overlays |
 | `rerun` | Live Rerun viewer options |

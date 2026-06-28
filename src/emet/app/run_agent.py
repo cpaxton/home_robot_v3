@@ -31,7 +31,13 @@ from termcolor import colored
 from emet.agent.loop import DEFAULT_AGENT_LLM, run_agent_with_robot
 from emet.agent.model_debug import print_offline_model_line
 from emet.agent.prompt import DEFAULT_AGENT_NAME
-from emet.app.config_cli import emet_config_options, load_runtime_from_cli, resolve_effective_config_path
+from emet.app.config_cli import (
+    emet_config_options,
+    load_finalized_config_from_cli,
+    load_runtime_from_cli,
+    resolve_agent_cli_options,
+    resolve_effective_config_path,
+)
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.core import get_parameters
@@ -403,10 +409,10 @@ def main(
       emet run agent --eqa --debug-vram   # one Qwen3-VL for chat + voxel captions/EQA
       emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
       # MolmoSpaces: ``emet serve mujoco --scene ithor ...`` (often DISPLAY=:1 instead of --headless); same --port-offset as serve:
-      emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml
-      emet run agent --agent-config configs/agent_rby1_discord.yaml   # uses robot: from YAML
-      emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml
-      emet run agent --robot innate_mars --agent-config configs/agent_innate_mars.yaml
+      emet run agent --robot rby1 --config configs/agent_rby1_discord.yaml
+      emet run agent --config configs/agent_rby1_discord.yaml   # uses robot: from YAML
+      emet run agent --robot stretch --config configs/agent_stretch_discord.yaml
+      emet run agent --robot innate_mars --config configs/agent_innate_mars.yaml
       emet run agent --input-path logs/memory_xxx --no-discord
       emet run agent --no-llm   # letter commands (E/M/Q/P)
       emet run agent --no-llm --command 'find red cylinder'
@@ -453,6 +459,38 @@ def main(
     if offline and start_sim:
         raise click.UsageError("Cannot combine --offline with --start-sim.")
 
+    if offline:
+        agent_config_resolved = load_finalized_config_from_cli(
+            ctx,
+            emet_config=emet_config,
+            config_sets=config_sets,
+            agent_config=agent_config,
+            dynav_config=dynav_config,
+            robot_id=resolved_robot,
+        )
+    else:
+        assert runtime is not None
+        agent_config_resolved = runtime.config
+
+    agent_opts = resolve_agent_cli_options(
+        ctx,
+        agent_config_resolved.agent_section(),
+        llm=llm,
+        prompt=prompt,
+        device=device,
+        max_tokens=max_tokens,
+        discord=discord,
+        dynamem_eqa=dynamem_eqa,
+        share_memory_vllm=share_memory_vllm,
+    )
+    llm = agent_opts.llm
+    prompt = agent_opts.prompt
+    device = agent_opts.device
+    max_tokens = agent_opts.max_tokens
+    discord = agent_opts.discord
+    dynamem_eqa = agent_opts.eqa
+    share_memory_vllm = agent_opts.share_memory_vllm
+
     sim_cli_used = any(
         [
             sim_scene is not None and str(sim_scene).strip() != "",
@@ -490,6 +528,8 @@ def main(
         os.environ["EMET_VRAM_DEBUG"] = "1"
     if debug_camera:
         os.environ["EMET_AGENT_CAMERA_DEBUG"] = "1"
+    if debug_tools:
+        os.environ["EMET_AGENT_TOOL_DEBUG"] = "1"
 
     # Embodied mode: default IP 127.0.0.1 unless --offline
     robot_effective: str | None = None

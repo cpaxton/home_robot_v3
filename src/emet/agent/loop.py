@@ -292,6 +292,11 @@ def run_agent_with_robot(
     started with ``emet run agent --start-sim`` can exit as soon as the ZMQ client disconnects
     (``run_agent`` still registers a final shutdown in ``finally`` as a safety net).
 
+    **Defaults vs CLI:** ``emet run agent`` passes ``use_llm=True`` unless ``--no-llm``, and
+    resolves ``agent_config`` from unified ``--config`` (not the legacy ``dynav_config.yaml``
+    default on this function). Direct Python callers should pass an explicit config path and
+    set ``use_llm`` explicitly.
+
     When *eqa*, *use_llm*, and *share_memory_vllm* are true (the CLI default for sharing), DynaMem defers its
     local caption VLM until after the agent LLM loads, then reuses the agent vision-language client when
     applicable; otherwise it loads the local EQA VLM from ``dynav_config.yaml``.

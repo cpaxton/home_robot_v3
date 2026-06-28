@@ -186,7 +186,7 @@ uv run emet run molmospaces-explore --start-sim --robot xlerobot --scene ithor -
   --output-dir ./data/molmo_ep_ithor_0 --steps 120 --capture-hz 2 --export-transforms
 ```
 
-`--robot` is required with `--start-sim`. Optional: `--install-scene-if-missing`, `--sim-show-subprocess-output` (sim logs), `--sim-show-viewer-ui` (needs DISPLAY). See also `emet run agent --start-sim` in [sim_configs.md](sim_configs.md).
+`--robot` is required for **`emet run molmospaces-explore --start-sim`**. For **`emet run agent --start-sim`**, `--robot` is optional (robot follows sim YAML / config / ZMQ). Optional: `--install-scene-if-missing`, `--sim-show-subprocess-output` (sim logs), `--sim-show-viewer-ui` (needs DISPLAY). See also `emet run agent --start-sim` in [sim_configs.md](sim_configs.md).
 
 ### Two-terminal workflow
 

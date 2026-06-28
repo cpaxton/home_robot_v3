@@ -169,6 +169,7 @@ Run a robot agent or app.
 
 | App | Description |
 |-----|--------------|
+| `agent` | Embodied LLM agent + tools (optional Discord, opt-in Rerun). See [AGENT_RUN.md](AGENT_RUN.md). |
 | `dynamem` | DynaMem navigation + manipulation |
 | `graph-eqa` | Graph-based EQA memory (see [graph_eqa.md](graph_eqa.md)) |
 | `dynagraph` | Graph EQA + merge/staleness ([dynagraph.md](dynagraph.md)); **`--explore-loop`**, **`--export`**, **`--question`** |
@@ -193,6 +194,8 @@ Unknown options (e.g. `--match-method`, `--rerun-debug`) are passed through to t
 
 **Examples:**
 ```bash
+emet run agent --robot stretch --robot-ip 127.0.0.1
+emet run agent --start-sim -c "describe the scene"
 emet run dynamem --robot-ip 127.0.0.1 -S
 emet run dynamem -S --visual-servo --match-method class --rerun-debug
 emet run mapping --robot-ip 127.0.0.1
@@ -650,8 +653,13 @@ Then restart your shell or `source` your config file. After that, `emet <TAB>` c
    # or for Robocasa: emet serve mujoco --scene robocasa
    ```
 
-2. **Terminal 2** — Run the agent:
+2. **Terminal 2** — Run the agent or DynaMem:
    ```bash
+   # Embodied LLM agent + tools (see AGENT_RUN.md)
+   emet run agent --robot-ip 127.0.0.1
+   # Or one terminal: emet run agent --start-sim -c "describe the scene"
+
+   # DynaMem navigation + manipulation
    emet run dynamem --robot-ip 127.0.0.1 --server-ip 127.0.0.1 -S --visual-servo
    ```
 
