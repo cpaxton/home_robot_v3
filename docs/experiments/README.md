@@ -19,7 +19,8 @@ Start here to run and reproduce benchmarks for the Dynagraph CoRL paper.
 | **SQA3D** | `tab:sqa3d_backend_replay` | [sqa3d.md](sqa3d.md) | `uv run emet sqa3d run-episode --mock-llm --question-id 220602000000` | `~/runs/emet/sqa3d/` | `emet sqa3d plot-results` → `paper/figures/sqa3d_*` |
 | **GT object finding** | `sec:gt_experiments` | [gt_object_finding.md](gt_object_finding.md) | `emet run dynagraph --ground-truth` + eval script | `runs/<export>/` | — |
 | **Innate Mars** | appendix | [innate_mars.md](innate_mars.md) | `emet run dynagraph --robot innate_mars --ground-truth` | `/tmp/mars_*` | — |
-| **Habitat EQA** | primary (separate branch) | [habitat_eqa.md](habitat_eqa.md) | `.venv-habitat/bin/emet-habitat` | per-run logs | — |
+| **Habitat EQA** | `tab:hmeqa_vs_prior`, Appendix | [habitat_eqa.md](habitat_eqa.md) · **[results](habitat_eqa_results.md)** | `.venv-habitat/bin/emet-habitat` | `~/.cache/habitat_eqa/results/` | topdown from debug bundles |
+| **Cross-track smoke** | — | **[cross_track_smoke.md](cross_track_smoke.md)** | per-track commands | `~/runs/emet/` | validate before multi-day sweeps |
 | **Large paper queue** | all tracks | [large_eval_queue.md](large_eval_queue.md) | `./scripts/run_large_paper_eval.sh` | `~/runs/emet/<track>/` | — |
 
 Shared backend names: `dynamem`, `graph_eqa`, `dynagraph`, `ground_truth` — see [paper_benchmarks.md § Shared memory backends](../paper_benchmarks.md#shared-memory-backends).

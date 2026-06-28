@@ -1,7 +1,78 @@
 \section{Results}
 \label{sec:results}
 
-\textit{Fill tables from sweep aggregates; see \texttt{docs/paper\_benchmarks.md} (Maintaining paper numbers).}
+Habitat HM-EQA numbers are in Section~\ref{sec:hmeqa_results}; other tracks remain placeholders until sweeps complete (operator index: \texttt{docs/experiments/habitat\_eqa\_results.md}).
+
+\subsection{Habitat HM-EQA (preliminary)}
+\label{sec:hmeqa_results}
+
+We report early Dynagraph numbers on HM-EQA in Habitat-Sim (\texttt{.venv-habitat/bin/emet-habitat}), using \texttt{Qwen/Qwen3-VL-8B-Instruct}, 20 planning iterations, navmesh navigation (\texttt{--habitat-perfect-nav}), graph frontier nodes, MCQ debiasing, and Dynagraph's SigLIP-grounded \texttt{CONFIRMED\_MEMORY} block.
+Table~\ref{tab:hmeqa_vs_prior} situates our numbers against GraphEQA paper baselines and our own full-benchmark reproduction; all \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless noted.
+
+\begin{table}[t]
+  \centering
+  \caption{HM-EQA accuracy: prior art vs.\ \texttt{emet} harness (113-question benchmark unless noted).}
+  \label{tab:hmeqa_vs_prior}
+  \small
+  \begin{tabular}{@{}llcc@{}}
+    \toprule
+    Method / run & VLM & $n$ & Accuracy \\
+    \midrule
+    \multicolumn{4}{@{}l@{}}{\textit{Published (GraphEQA paper, full HM3D semantics, API VLMs)}} \\
+    Explore-EQA & ref.\ stack & 113 & 51.7\% \\
+    GraphEQA & GPT-4o & 113 & 63.5\% \\
+    GraphEQA & Gemini-2.5 Pro & 113 & \textbf{67.0\%} \\
+    \midrule
+    \multicolumn{4}{@{}l@{}}{\textit{\texttt{emet} harness (local VLMs; partial semantics)}} \\
+    graph\_eqa repro & gemma-3-4b-it & 113 & 41.6\% \\
+    dynagraph & Qwen2.5-VL-3B & 32 & 34.4\% \\
+    graph\_eqa & Qwen2.5-VL-3B & 32 & 31.2\% \\
+    dynagraph + debias & Qwen2.5-VL-3B & 8 & 62.5\% \\
+    dynagraph (post-fix) & Qwen3-VL-8B & 8 & 50.0\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent\textbf{Gap to prior art.}
+Our largest comparable run (gemma-3-4b, 113 questions) trails GraphEQA-GPT-4o by $\sim$22 percentage points---consistent with weaker local VLMs, incomplete GT semantics ($\sim$37/113 scenes at last audit), and a different scene-graph stack (Appendix~\ref{app:habitat_eqa_parity}).
+Dynagraph still beats our graph\_eqa baseline on matched slices (+3\,pp on letter-balanced 32) and reaches 50\% on a held-out random eight-question subset with Qwen3-VL-8B after June 2026 grounding fixes (Table~\ref{tab:hmeqa_preliminary}).
+Full 113-question evaluation with the 8B model and current stack is \textbf{planned} (Section~\ref{sec:experiments}).
+
+These slices are \textbf{not} directly comparable to Table~\ref{tab:grapheqa_official_hmeqa} until semantics coverage and/or VLM tier align with the reference.
+
+\textbf{Engineering fixes (June 2026).}
+Before hold-out evaluation we repaired Habitat navigation (compass/yaw, navmesh pathing, frontier deprioritization), graph-memory query failures (\texttt{KeyError} in observation indexing), and HM-EQA prompt grounding: phrase-level relevant objects, SigLIP retention through \texttt{prepare\_dynagraph\_vram\_for\_eqa}, and location-MCQ directives for ``did you see \ldots\ anywhere?'' questions where the VLM previously answered \texttt{No} instead of a place letter.
+
+\begin{table}[t]
+  \centering
+  \caption{Preliminary HM-EQA accuracy (Dynagraph, Qwen3-VL-8B, RTX~4090, 20/10 step budget). Held-out ids exclude the smoke-tuning set $\{3,14,17\}$.}
+  \label{tab:hmeqa_preliminary}
+  \small
+  \begin{tabular}{@{}llcc@{}}
+    \toprule
+    Slice & Question ids & $n$ & Accuracy \\
+    \midrule
+    Smoke (nav + EQA fixes) & 3, 14, 17 & 3 & 2/3 \\
+    Q17 after phrase + location MCQ & 17 & 1 & 1/1 (gold D) \\
+    Held-out random-8 (seed 20260627) & 15, 56, 65, 68, 79, 88, 104, 105 & 8 & 4/8 (50\%) \\
+    \midrule
+    \multicolumn{4}{@{}l@{}}{\textit{Reference (same harness, smaller VLMs): see Table~\ref{tab:habitat_interim_results}}} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent\textbf{Representative episode (Q17).}
+``Did you see the woven basket anywhere?'' (gold D) failed before phrase+location fixes: exploration reached the basket ($\sim$0.66\,m) but \texttt{CONFIRMED\_MEMORY} marked token fragments as absent and the VLM answered visibility \texttt{No}, yielding an empty graded letter.
+After the fixes, the same question completes in 21 planning steps and 2 EQA iterations with \texttt{answer: D}, citing graph memory for the basket near the living-room armchairs despite the object being out of frame in attached images.
+
+\noindent\textbf{Held-out random-8 (anti-overfit check).}
+We draw eight paper questions with seed 20260627, two per gold letter A--D, excluding the tuning set $\{3,14,17\}$.
+Dynagraph scores \textbf{4/8} (50\%) with mean 50.5 planning steps---correct on Q15, Q79, Q88, and Q104; incorrect on Q56, Q65, Q68, and Q105.
+This is above random guessing (25\%) and shows the Q17 fix generalizes beyond the tuning slice, while remaining far from GraphEQA's API-VLM baselines on the full benchmark (Table~\ref{tab:hmeqa_vs_prior}).
+
+\noindent\textbf{Next experiments.}
+Priority sweeps: (1)~full 113-question dynagraph with Qwen3-VL-8B and the current fix stack; (2)~matched graph\_eqa baseline on the same VLM; (3)~semantics download + ablation; (4)~frontier-policy ablation (fluid vs.\ graph nodes); (5)~optional API-VLM upper bound on a fixed slice to isolate stack vs.\ model tier.
+Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
 
 \subsection{OVMM find-phase memory ablation (Emet sim)}
 \label{sec:ovmm_find_results}
@@ -128,7 +199,7 @@
 \textit{Results pending. Placeholder for:}
 
 \begin{itemize}
-  \item Table: Habitat HM-EQA / OpenEQA (GraphEQA vs.\ Dynagraph vs.\ ablations).
+  \item Table: full Habitat HM-EQA / OpenEQA 113-question sweep (GraphEQA vs.\ Dynagraph vs.\ ablations).
   \item Figure: SQA3D outcome breakdown (TP/FP/FN/infra) from \texttt{emet sqa3d plot-results}.
   \item Table: Emet sim (Robocasa, MolmoSpaces) across robots.
   \item Figure: exploration trajectory + graph snapshots (Rerun export).

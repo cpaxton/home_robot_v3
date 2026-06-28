@@ -44,7 +44,7 @@ setuptools.setup(
         "pyzmq",
         "numpy<2",
         "numba",
-        "opencv-python",
+        "opencv-contrib-python",
         "scipy",
         "matplotlib",
         "trimesh>=3.10.0",

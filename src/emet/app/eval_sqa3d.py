@@ -218,7 +218,7 @@ def sqa3d_run_episode(
     export_root: Path | None,
 ) -> None:
     """Run DynaMem or Dynagraph at the SQA3D annotated pose in a ScanNet scene."""
-    from emet.benchmarks.sqa3d.episode_metrics import append_sqa3d_jsonl
+    from emet.benchmarks.sqa3d.episode_metrics import append_sqa3d_jsonl, format_sqa3d_episode_line
     from emet.benchmarks.sqa3d.scannet.runner import run_sqa3d_episode
 
     row = run_sqa3d_episode(
@@ -241,7 +241,7 @@ def sqa3d_run_episode(
     if output:
         append_sqa3d_jsonl(output, row)
         click.echo(f"Appended -> {output}")
-    click.echo(f"\nSummary: em={row.em} predicted={row.predicted_answer!r} gold={row.gold_answers}")
+    click.echo(f"\nSummary: {format_sqa3d_episode_line(row)}")
 
 
 @sqa3d_group.command("run-batch", short_help="Batch SQA3D episodes")
@@ -517,8 +517,18 @@ def sqa3d_run_real_sweep(
         output=eval_json,
         require_all=False,
     )
+    eval_payload = json.loads(eval_json.read_text(encoding="utf-8"))
+    qa = eval_payload.get("qa", {})
+    n_infra = int(qa.get("n_infra", 0))
+    em_excl = qa.get("em@1_excl_infra", qa.get("em@1", 0.0))
     click.echo(
-        f"\nReal-VLM sweep complete:\n  episodes: {jsonl}\n  eval: {eval_json}\n  exports: {export_root}"
+        f"\nReal-VLM sweep complete:\n"
+        f"  episodes: {jsonl}\n"
+        f"  eval: {eval_json}\n"
+        f"  exports: {export_root}\n"
+        f"  em@1={qa.get('em@1', 0.0):.4f} "
+        f"em@1_excl_infra={em_excl:.4f} "
+        f"infra={n_infra}/{int(qa.get('n_questions', 0))}"
     )
 
 
@@ -605,10 +615,14 @@ def eval_sqa3d_main(
     if output:
         output.write_text(text + "\n", encoding="utf-8")
         click.echo(f"Wrote -> {output}")
+    n_infra = int(metrics.get("n_infra", 0))
+    em_excl = metrics.get("em@1_excl_infra", metrics["em@1"])
     click.echo(
         f"\nSummary: em@1={metrics['em@1']:.4f} "
+        f"em@1_excl_infra={em_excl:.4f} "
         f"em@1_refined={metrics['em@1_refined']:.4f} "
-        f"n={int(metrics['n_scored'])}/{int(metrics['n_questions'])}"
+        f"infra={n_infra} "
+        f"n={int(metrics.get('n_scored', metrics['n_questions']))}/{int(metrics['n_questions'])}"
     )
 
 

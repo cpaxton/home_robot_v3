@@ -180,6 +180,258 @@ def crop_topdown_rgb_to_explored(
     return np.ascontiguousarray(rgb[i0:i1, j0:j1])
 
 
+def _dedupe_trajectory_xyt(
+    trajectory_xyt: list[tuple[float, float, float] | list[float]],
+    *,
+    min_step_m: float = 0.02,
+) -> list[tuple[float, float, float]]:
+    """Drop consecutive poses closer than ``min_step_m`` (spin-in-place clutter)."""
+    out: list[tuple[float, float, float]] = []
+    for raw in trajectory_xyt:
+        if raw is None:
+            continue
+        arr = np.asarray(raw, dtype=np.float64).reshape(-1)
+        if arr.size < 2:
+            continue
+        theta = float(arr[2]) if arr.size >= 3 else 0.0
+        pose = (float(arr[0]), float(arr[1]), theta)
+        if out:
+            px, py, _ = out[-1]
+            if float(np.hypot(pose[0] - px, pose[1] - py)) < min_step_m:
+                out[-1] = pose
+                continue
+        out.append(pose)
+    return out
+
+
+def _subsample_trajectory_arrow_indices(
+    trajectory_xyt: list[tuple[float, float, float]],
+    *,
+    min_dist_m: float = 0.15,
+    max_arrows: int = 24,
+) -> list[int]:
+    """Indices for heading arrows along a trajectory (always first + last)."""
+    if not trajectory_xyt:
+        return []
+    if len(trajectory_xyt) == 1:
+        return [0]
+    picks = [0]
+    last_xy = trajectory_xyt[0][:2]
+    for idx in range(1, len(trajectory_xyt) - 1):
+        xy = trajectory_xyt[idx][:2]
+        if float(np.hypot(xy[0] - last_xy[0], xy[1] - last_xy[1])) >= min_dist_m:
+            picks.append(idx)
+            last_xy = xy
+    if picks[-1] != len(trajectory_xyt) - 1:
+        picks.append(len(trajectory_xyt) - 1)
+    if len(picks) > max_arrows:
+        stride = int(np.ceil(len(picks) / max_arrows))
+        thinned = picks[::stride]
+        if thinned[-1] != picks[-1]:
+            thinned.append(picks[-1])
+        picks = thinned
+    return picks
+
+
+def _draw_line_rgb(
+    rgb: np.ndarray,
+    i0: int,
+    j0: int,
+    i1: int,
+    j1: int,
+    color: tuple[int, int, int],
+) -> None:
+    """Bresenham line on ``rgb`` (row=i, col=j)."""
+    h, w = rgb.shape[0], rgb.shape[1]
+    di = abs(i1 - i0)
+    dj = abs(j1 - j0)
+    si = 1 if i0 < i1 else -1
+    sj = 1 if j0 < j1 else -1
+    err = di - dj
+    i, j = i0, j0
+    while True:
+        if 0 <= i < h and 0 <= j < w:
+            rgb[i, j] = np.uint8(color)
+        if i == i1 and j == j1:
+            break
+        e2 = 2 * err
+        if e2 > -dj:
+            err -= dj
+            i += si
+        if e2 < di:
+            err += di
+            j += sj
+
+
+def _draw_disk_rgb(rgb: np.ndarray, ri: int, rj: int, radius: int, color: tuple[int, int, int]) -> None:
+    h, w = rgb.shape[0], rgb.shape[1]
+    for di in range(-radius, radius + 1):
+        for dj in range(-radius, radius + 1):
+            if di * di + dj * dj > radius * radius:
+                continue
+            ii, jj = ri + di, rj + dj
+            if 0 <= ii < h and 0 <= jj < w:
+                rgb[ii, jj] = np.uint8(color)
+
+
+def _draw_heading_arrow_rgb(
+    rgb: np.ndarray,
+    ri: int,
+    rj: int,
+    theta: float,
+    grid_resolution: float,
+    *,
+    arrow_len_m: float = 0.35,
+    color: tuple[int, int, int] = (220, 50, 50),
+) -> None:
+    """Draw a small heading arrow; ``theta`` is world yaw (radians)."""
+    res = float(grid_resolution)
+    if res <= 0:
+        res = 0.1
+    length_cells = max(2.0, arrow_len_m / res)
+    ct, st = float(np.cos(theta)), float(np.sin(theta))
+    ti = int(round(ri + ct * length_cells))
+    tj = int(round(rj + st * length_cells))
+    _draw_line_rgb(rgb, ri, rj, ti, tj, color)
+    head_len = max(1.5, length_cells * 0.35)
+    for ang in (2.4, -2.4):
+        hi = int(round(ti - head_len * np.cos(theta + ang)))
+        hj = int(round(tj - head_len * np.sin(theta + ang)))
+        _draw_line_rgb(rgb, ti, tj, hi, hj, color)
+
+
+def overlay_trajectory_on_map_rgb(
+    rgb: np.ndarray,
+    trajectory_xyt: list[tuple[float, float, float] | list[float]],
+    grid_origin_xy: np.ndarray,
+    grid_resolution: float,
+    *,
+    crop_offset_ij: tuple[int, int] = (0, 0),
+    full_shape_hw: tuple[int, int] | None = None,
+    arrow_min_dist_m: float = 0.15,
+    max_arrows: int = 24,
+) -> np.ndarray:
+    """Paint deduped path + heading arrows onto an eval/share top-down RGB image."""
+    if rgb is None or not trajectory_xyt:
+        return rgb
+    path = _dedupe_trajectory_xyt(trajectory_xyt)
+    if len(path) < 1:
+        return rgb
+    out = np.ascontiguousarray(rgb)
+    h, w = out.shape[0], out.shape[1]
+    if full_shape_hw is None:
+        full_shape_hw = (h, h) if h == w else (h + int(crop_offset_ij[0]), w + int(crop_offset_ij[1]))
+    i_off, j_off = int(crop_offset_ij[0]), int(crop_offset_ij[1])
+
+    def to_ij(x: float, y: float) -> tuple[int, int]:
+        ri, rj = world_xy_to_grid_ij((x, y), grid_origin_xy, grid_resolution, full_shape_hw)
+        return ri - i_off, rj - j_off
+
+    path_color = (30, 90, 230)
+    prev: tuple[int, int] | None = None
+    for x, y, _ in path:
+        ij = to_ij(x, y)
+        if prev is not None:
+            _draw_line_rgb(out, prev[0], prev[1], ij[0], ij[1], path_color)
+        prev = ij
+
+    for idx in _subsample_trajectory_arrow_indices(
+        path, min_dist_m=arrow_min_dist_m, max_arrows=max_arrows
+    ):
+        x, y, theta = path[idx]
+        ri, rj = to_ij(x, y)
+        if 0 <= ri < h and 0 <= rj < w:
+            _draw_heading_arrow_rgb(out, ri, rj, theta, grid_resolution)
+
+    if path:
+        sx, sy, _ = path[0]
+        ex, ey, _ = path[-1]
+        si, sj = to_ij(sx, sy)
+        ei, ej = to_ij(ex, ey)
+        if 0 <= si < h and 0 <= sj < w:
+            _draw_disk_rgb(out, si, sj, 2, (40, 200, 60))
+        if (ei, ej) != (si, sj) and 0 <= ei < h and 0 <= ej < w:
+            _draw_disk_rgb(out, ei, ej, 2, (255, 140, 0))
+    return out
+
+
+def eval_topdown_map_rgb(
+    obstacles: Any,
+    explored: Any,
+    grid_origin_xy: np.ndarray,
+    grid_resolution: float,
+    robot_xy: np.ndarray | tuple[float, float] | None,
+    *,
+    max_side: int = 640,
+    margin_cells: int = 8,
+    trajectory_xyt: list[tuple[float, float, float] | list[float]] | None = None,
+) -> np.ndarray:
+    """Eval/diagnostics export: crop to explored footprint, white background, only paint explored cells.
+
+    Unlike :func:`share_topdown_map_rgb`, unmapped margin pixels stay white (not dark gray) so small
+    Habitat/OVMM maps remain readable on a 1024×1024 grid.
+    """
+    obs = _to_numpy_bool_2d(obstacles)
+    exp = _to_numpy_bool_2d(explored)
+    h, w = obs.shape
+    bbox = explored_crop_indices(
+        explored,
+        robot_xy,
+        grid_origin_xy,
+        grid_resolution,
+        (h, w),
+        margin_cells=margin_cells,
+    )
+    if bbox is None:
+        rgb = render_topdown_map_rgb(
+            obstacles,
+            explored,
+            grid_origin_xy,
+            grid_resolution,
+            robot_xy,
+            max_side=None,
+        )
+        if trajectory_xyt:
+            rgb = overlay_trajectory_on_map_rgb(
+                rgb,
+                trajectory_xyt,
+                grid_origin_xy,
+                grid_resolution,
+                full_shape_hw=(h, w),
+            )
+        return downsample_topdown_rgb_max_side(rgb, max_side)
+    i0, i1, j0, j1 = bbox
+    exp_c = exp[i0:i1, j0:j1]
+    obs_c = obs[i0:i1, j0:j1]
+    rgb = np.full((exp_c.shape[0], exp_c.shape[1], 3), 248, dtype=np.uint8)
+    free = exp_c & ~obs_c
+    rgb[free] = (50, 160, 80)
+    rgb[exp_c & obs_c] = (200, 55, 55)
+    if robot_xy is not None:
+        ri, rj = world_xy_to_grid_ij(robot_xy, grid_origin_xy, grid_resolution, (h, w))
+        ri -= i0
+        rj -= j0
+        ch, cw = rgb.shape[0], rgb.shape[1]
+        if 0 <= ri < ch and 0 <= rj < cw:
+            r = 3
+            i_lo, i_hi = max(0, ri - r), min(ch, ri + r + 1)
+            j_lo, j_hi = max(0, rj - r), min(cw, rj + r + 1)
+            rgb[i_lo:i_hi, j_lo:j_hi] = np.maximum(
+                rgb[i_lo:i_hi, j_lo:j_hi], np.uint8([255, 255, 255])
+            )
+            rgb[ri, rj] = (255, 255, 0)
+    if trajectory_xyt:
+        rgb = overlay_trajectory_on_map_rgb(
+            rgb,
+            trajectory_xyt,
+            grid_origin_xy,
+            grid_resolution,
+            crop_offset_ij=(i0, j0),
+            full_shape_hw=(h, w),
+        )
+    return downsample_topdown_rgb_max_side(rgb, max_side)
+
+
 def share_topdown_map_rgb(
     obstacles: Any,
     explored: Any,
@@ -292,6 +544,36 @@ def format_navigation_report(stats: dict[str, Any], *, explore_ok: bool | None =
     elif explore_ok is False:
         parts.append("Last explore command: executor reported failure (no frontier / non-navigable start / empty map).")
     return " ".join(parts)
+
+
+def snapshot_eval_from_voxel_map(
+    voxel_map: Any,
+    robot_xy: np.ndarray | tuple[float, float] | None,
+    *,
+    max_side: int = 640,
+    trajectory_xyt: list[tuple[float, float, float] | list[float]] | None = None,
+) -> tuple[np.ndarray | None, dict[str, Any]]:
+    """Build eval/diagnostics top-down map (white background, explored-only coloring)."""
+    if voxel_map is None or not hasattr(voxel_map, "get_2d_map"):
+        empty: dict[str, Any] = {
+            "summary_lines": ["No voxel map attached (get_voxel_map unavailable)."],
+            "map_nonempty": False,
+        }
+        return None, empty
+    obstacles, explored = voxel_map.get_2d_map()
+    go = _grid_origin_xy(getattr(voxel_map, "grid_origin", np.zeros(2)))
+    res = float(getattr(voxel_map, "grid_resolution", 0.1) or 0.1)
+    stats = build_map_stats(obstacles, explored, go, res, robot_xy)
+    img = eval_topdown_map_rgb(
+        obstacles,
+        explored,
+        go,
+        res,
+        robot_xy,
+        max_side=max_side,
+        trajectory_xyt=trajectory_xyt,
+    )
+    return img, stats
 
 
 def snapshot_from_voxel_map(

@@ -66,7 +66,15 @@ In-process shim at `packages/emet_habitat/emet_habitat/robot_client.py` (full do
 | `hm3d_semantic_labeler` / `uses_hm3d_semantics` | Present when the simulator was built with HM3D semantic sensors. |
 | Arm / gripper / head methods | Stretch-shaped **no-op stubs** so DynaMem manipulation wrappers import cleanly; EQA uses navigation only. |
 
-Observation poses use `convert_pose_habitat_to_opencv` in `src/emet/utils/pose.py`.
+### Voxel-map coordinates
+
+Depth unprojection and `gps` / `base_pose` share one **voxel-world** frame (see [`src/emet/habitat/coordinates.py`](../../src/emet/habitat/coordinates.py)):
+
+* Planar axes: Habitat `(X, Z)` — matches `Observations.gps`
+* Height axis: `Y - floor_y` where `floor_y` is the navmesh-snapped spawn height from `HabitatEQASimulator.floor_y`
+* `camera_pose` is OpenCV camera-to-voxel-world (not `convert_pose_habitat_to_opencv`, which is for Stretch z-up sims only)
+
+Before trusting top-down map colors in figures, run [`scripts/audit_habitat_voxel_map.py`](../../scripts/audit_habitat_voxel_map.py) on the episode bundle (checks planar-X alignment and obstacle fraction).
 
 ## Code layout
 

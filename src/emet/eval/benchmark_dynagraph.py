@@ -68,6 +68,32 @@ def _as_parameters(parameters: Parameters | dict[str, Any]) -> Parameters:
     return Parameters(**parameters)
 
 
+def apply_eval_graph_fusion_parameters(
+    parameters: Parameters | dict[str, Any],
+    *,
+    merge_xy_m: float | None = None,
+) -> Parameters:
+    """Enable GraphObjectFusion for eval harnesses (SQA3D / Habitat) with sane fallback merge."""
+    from dataclasses import asdict
+
+    from emet.memory.graph_eqa.graph_object_fusion.config import load_graph_object_fusion_config
+
+    params = _as_parameters(parameters)
+    merge_xy = merge_xy_m
+    if merge_xy is None:
+        raw = params.get("dynagraph_merge_xy_m")
+        merge_xy = float(raw) if raw is not None else 0.0
+    fc = load_graph_object_fusion_config()
+    fusion = asdict(fc)
+    fusion["enabled"] = True
+    if float(merge_xy) > 0.0:
+        fusion["fallback_spatial_merge_xy_m"] = float(merge_xy)
+    elif float(fusion.get("fallback_spatial_merge_xy_m", 0.0) or 0.0) <= 0.0:
+        fusion["fallback_spatial_merge_xy_m"] = 0.45
+    params.set("graph_object_fusion", fusion)
+    return params
+
+
 def apply_dynagraph_profile(
     parameters: Parameters | dict[str, Any],
     profile: DynagraphProfileName | str,
@@ -92,6 +118,10 @@ def apply_dynagraph_profile(
         params["dynagraph_merge_xy_m"] = float(merge_xy_m)
     if staleness_horizon is not None:
         params["dynagraph_staleness_horizon"] = int(staleness_horizon)
+    effective_merge = merge_xy_m
+    if effective_merge is None:
+        effective_merge = params.get("dynagraph_merge_xy_m")
+    apply_eval_graph_fusion_parameters(params, merge_xy_m=float(effective_merge) if effective_merge is not None else None)
     return params
 
 

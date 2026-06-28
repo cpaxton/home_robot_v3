@@ -16,9 +16,10 @@
 Coordinate conventions:
 
 * Habitat agent state uses Y-up world coordinates.
-* emet ``gps`` is planar ``(x, z)`` with **x forward, y left** (Stretch nav convention).
+* emet ``gps`` is planar ``(x, z)`` in Habitat horizontal axes.
 * ``compass`` is a single yaw (radians, CCW positive).
-* ``camera_pose`` is an OpenCV-style 4×4 camera-to-world matrix for depth unprojection.
+* ``camera_pose`` is an OpenCV 4×4 camera-to-world matrix for depth unprojection into
+  voxel-map world ``(X, Z, Y - floor_y)`` — see :mod:`emet.habitat.coordinates`.
 """
 
 from __future__ import annotations
@@ -26,27 +27,7 @@ from __future__ import annotations
 import numpy as np
 
 from emet.core.interfaces import Observations
-from emet.utils.pose import convert_pose_habitat_to_opencv
-
-
-def _agent_rotation_matrix(rot) -> np.ndarray:
-    """Convert Habitat-Sim agent rotation to a 3×3 rotation matrix.
-
-    Args:
-        rot: ``quaternion.quaternion`` or length-4 array ``(w, x, y, z)``.
-
-    Returns:
-        Rotation matrix ``R`` such that ``R @ v`` maps body vectors to world.
-    """
-    import quaternion as npq
-
-    if isinstance(rot, npq.quaternion):
-        return npq.as_rotation_matrix(rot).astype(np.float64)
-    coeffs = np.asarray(rot, dtype=np.float64).reshape(-1)
-    if coeffs.shape[0] == 4:
-        q = npq.quaternion(coeffs[0], coeffs[1], coeffs[2], coeffs[3])
-        return npq.as_rotation_matrix(q).astype(np.float64)
-    return coeffs.reshape(3, 3)
+from emet.habitat.coordinates import habitat_agent_pose_from_state, habitat_observation_camera_pose
 
 
 def habitat_rgb_depth_to_observations(
@@ -57,6 +38,9 @@ def habitat_rgb_depth_to_observations(
     intrinsics: np.ndarray,
     semantic: np.ndarray | None = None,
     sensor_rotation_offset: np.ndarray | None = None,
+    floor_y: float | None = None,
+    sensor_height: float = 1.5,
+    sensor_uuid: str = "depth_sensor",
 ) -> Observations:
     """Build emet :class:`~emet.core.interfaces.Observations` from Habitat RGB-D.
 
@@ -67,27 +51,36 @@ def habitat_rgb_depth_to_observations(
         intrinsics: ``3×3`` pinhole camera matrix ``K``.
         semantic: Optional ``H×W`` uint32 semantic instance id image.
         sensor_rotation_offset: Optional ``4×4`` transform applied to agent pose
-            before converting to OpenCV camera frame (sensor mount offset).
+            before building the camera pose (sensor mount offset).
+        floor_y: Navmesh-snapped spawn Habitat ``Y`` for floor-relative obstacle height.
+            Defaults to ``agent_state.position[1]`` when omitted.
+        sensor_height: Body-frame sensor mount height when ``sensor_states`` unavailable.
+        sensor_uuid: Habitat-Sim sensor uuid for ``agent_state.sensor_states``.
 
     Returns:
         Observations with ``gps``, ``compass``, ``rgb``, ``depth``, ``camera_K``,
         ``camera_pose``, and optional ``semantic``.
     """
     pos = np.asarray(agent_state.position, dtype=np.float64)
-    rot = agent_state.rotation
-
-    hab_R = _agent_rotation_matrix(rot)
-    hab_pose = np.eye(4, dtype=np.float64)
-    hab_pose[:3, :3] = hab_R
-    hab_pose[:3, 3] = pos
+    hab_pose = habitat_agent_pose_from_state(agent_state)
 
     if sensor_rotation_offset is not None:
         hab_pose = hab_pose @ np.asarray(sensor_rotation_offset, dtype=np.float64)
 
-    camera_pose = convert_pose_habitat_to_opencv(hab_pose)
+    ref_floor_y = float(pos[1]) if floor_y is None else float(floor_y)
+    camera_pose = habitat_observation_camera_pose(
+        hab_pose,
+        floor_y=ref_floor_y,
+        agent_state=agent_state,
+        sensor_uuid=sensor_uuid,
+        sensor_height=sensor_height,
+    )
 
+    hab_R = hab_pose[:3, :3]
     forward = hab_R[:, 2]
-    heading = float(np.arctan2(forward[0], forward[2]))
+    # Planar yaw for nav: must match Habitat ``move_forward`` (atan2 on X/Z delta), not
+    # ``atan2(forward[0], forward[2])`` which is ~90° off and breaks greedy nav.
+    heading = float(np.arctan2(-forward[2], -forward[0]))
     gps = np.array([float(pos[0]), float(pos[2])], dtype=np.float64)
     compass = np.array([heading], dtype=np.float64)
 

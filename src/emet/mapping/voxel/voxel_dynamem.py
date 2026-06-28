@@ -1200,10 +1200,10 @@ class SparseVoxelMap(SparseVoxelMapBase):
             self.voxel_pcd.add(world_xyz, features=feats, rgb=rgb, weights=None)
 
         if self._add_local_radius_points:
-            # TODO: just get this from camera_pose?
-            self._update_visited(camera_pose[:3, 3].to(self.map_2d_device))
-        if base_pose is not None:
-            self._update_visited(base_pose.to(self.map_2d_device))
+            if base_pose is not None:
+                self._update_visited(base_pose.to(self.map_2d_device))
+            else:
+                self._update_visited(camera_pose[:3, 3].to(self.map_2d_device))
 
         # Increment sequence counter
         self._seq += 1

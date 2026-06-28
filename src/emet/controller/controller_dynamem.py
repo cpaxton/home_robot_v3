@@ -31,6 +31,13 @@ from emet.agent.env_flags import env_agent_camera_debug, env_agent_model_debug
 from emet.audio.text_to_speech import PiperTextToSpeech
 from emet.config.embodied_agent_config import EmbodiedAgentConfig, legacy_embodied_agent_off
 from emet.controller.base_controller import BaseController
+from emet.controller.habitat_nav import (
+    NavAttemptResult,
+    goal_key_xy,
+    habitat_navmesh_navigate,
+    habitat_perfect_nav_enabled,
+    is_habitat_robot_client,
+)
 from emet.controller.generic_zmq_client import GenericZmqClient
 from emet.controller.manipulation.dynamem_manipulation.dynamem_manipulation import (
     DynamemManipulationWrapper as ManipulationWrapper,
@@ -185,6 +192,8 @@ class DynamemController(BaseController):
         self._open_vocab_sg_processor = None
         self.graph_memory = None
         self.sensor_builder = None
+        self._last_nav_attempt = None
+        self._episode_diagnostics_recorder = None
         self._graph_eqa_use_instance_graph = True
         self._graph_eqa_use_sensor_perception = True
         self._graph_dedup_xy_m = 0.0
@@ -887,6 +896,14 @@ class DynamemController(BaseController):
             self.rerun_visualizer.update_open_vocab_scene_graph(ovsg)
 
         self._rerun_refresh_monologue_panel()
+        self._run_on_step_callbacks()
+
+    def _run_on_step_callbacks(self) -> None:
+        for cb in getattr(self, "_on_step_callbacks", ()) or ():
+            try:
+                cb(self)
+            except Exception as exc:
+                logger.warning(f"on_step callback failed: {exc}")
 
     def _update_scene_graph(self) -> None:
         """Update the scene graph with the latest instances from the voxel map."""
@@ -1697,22 +1714,81 @@ class DynamemController(BaseController):
 
         return answer, discord_text, relevant_images, confidence
 
+    def _log_nav_attempt(
+        self,
+        nav_res: NavAttemptResult,
+        *,
+        target_obs_id: int | None,
+        goal_xy: np.ndarray,
+    ) -> None:
+        recorder = getattr(self, "_episode_diagnostics_recorder", None)
+        if recorder is not None and hasattr(recorder, "append_nav_attempt"):
+            recorder.append_nav_attempt(
+                {
+                    "target_obs_id": target_obs_id,
+                    "goal_xy": [float(goal_xy[0]), float(goal_xy[1])],
+                    "effective_goal_xy": (
+                        [float(nav_res.effective_goal_xy[0]), float(nav_res.effective_goal_xy[1])]
+                        if getattr(nav_res, "effective_goal_xy", None)
+                        else None
+                    ),
+                    "method": nav_res.method,
+                    "success": nav_res.success,
+                    "finished": nav_res.finished,
+                    "dist_m": nav_res.dist_m,
+                    "note": nav_res.note,
+                }
+            )
+
     def navigate_to_target_pose(
         self,
         target_pose: torch.Tensor | np.ndarray | list | tuple | None,
         start_pose: torch.Tensor | np.ndarray | list | tuple | None,
         target_theta: float | None = None,
+        *,
+        target_obs_id: int | None = None,
     ):
+        if target_pose is None:
+            nav_res = NavAttemptResult(
+                success=False,
+                finished=False,
+                dist_m=0.0,
+                method="none",
+                note="no_target",
+                target_obs_id=target_obs_id,
+            )
+            self._last_nav_attempt = nav_res
+            return False
+
         res = None
         original_target_pose = target_pose
-        if target_pose is not None:
-            # target_pose originally represents the place where the object of interest is.
-            # This line finds the pose where the robot should stop
-            target_pose = self.space.sample_navigation(start_pose, self.planner, target_pose)
+        tp = target_pose.detach().cpu().numpy() if hasattr(target_pose, "detach") else target_pose
+        tp_arr = np.asarray(tp, dtype=np.float64).reshape(-1)
+        goal_xy = np.array([float(tp_arr[0]), float(tp_arr[1])], dtype=np.float64)
 
-            # A* planning
-            if target_pose is not None:
-                res = self.planner.plan(start_pose, target_pose)
+        if habitat_perfect_nav_enabled(self.parameters) and is_habitat_robot_client(self.robot):
+            nav_res = habitat_navmesh_navigate(
+                self.robot,
+                goal_xy,
+                target_theta=target_theta,
+            )
+            nav_res.target_obs_id = target_obs_id
+            self._last_nav_attempt = nav_res
+            if nav_res.finished or nav_res.success:
+                logger.info(f"EQA habitat navmesh: {nav_res.note} dist={nav_res.dist_m:.2f}m")
+            else:
+                logger.info(f"EQA habitat navmesh failed: {nav_res.note} (dist={nav_res.dist_m:.2f}m)")
+            self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
+            blocked = getattr(self, "_habitat_blocked_goals", None)
+            if blocked is not None and not nav_res.finished and nav_res.dist_m < 0.05:
+                blocked.add(goal_key_xy(goal_xy))
+            return nav_res.finished
+
+        target_pose = self.space.sample_navigation(start_pose, self.planner, original_target_pose)
+
+        # A* planning
+        if target_pose is not None:
+            res = self.planner.plan(start_pose, target_pose)
 
         # Parse A* results into traj
         if res is not None and res.success:
@@ -1731,18 +1807,20 @@ class DynamemController(BaseController):
                 0.1,
             )
 
-        finished = True
+        finished = False
         if waypoints is not None:
-            if not len(waypoints) <= 8:
+            truncated = len(waypoints) > 8
+            if truncated:
                 waypoints = waypoints[:8]
-                finished = False
             traj = self.planner.clean_path_for_xy(waypoints)
+            finished = not truncated
             if finished and target_theta is not None:
                 traj[-1][2] = target_theta
             logger.debug("navigate_to_target_pose trajectory (%d pts): %s", len(traj), traj)
         else:
             traj = None
 
+        before_xy = np.asarray(start_pose, dtype=np.float64).reshape(-1)[:2].copy()
         # draw traj on rerun and execute it
         if traj is not None:
             origins = []
@@ -1766,7 +1844,31 @@ class DynamemController(BaseController):
                 blocking=True,
                 world_frame=True,
             )
+            after_xy = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)[:2]
+            dist_m = float(np.hypot(after_xy[0] - before_xy[0], after_xy[1] - before_xy[1]))
+            note = "ok" if finished else f"moved_{dist_m:.2f}m"
+            nav_res = NavAttemptResult(
+                success=dist_m >= 0.12 or finished,
+                finished=finished,
+                dist_m=dist_m,
+                method="voxel_astar",
+                note=note,
+                target_obs_id=target_obs_id,
+            )
+        else:
+            note = res.reason if res is not None else "sample_nav_failed"
+            logger.info("EQA voxel nav failed: %s", note)
+            nav_res = NavAttemptResult(
+                success=False,
+                finished=False,
+                dist_m=0.0,
+                method="voxel_astar",
+                note=note,
+                target_obs_id=target_obs_id,
+            )
 
+        self._last_nav_attempt = nav_res
+        self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
         return finished
 
 

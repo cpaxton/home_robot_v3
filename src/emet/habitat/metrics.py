@@ -77,11 +77,94 @@ class EpisodeMetrics:
     vl_family: str = ""
     vl_hf_model_id: str = ""
     debug_bundle_dir: str = ""
+    topdown_map_path: str = ""
+    diagnostics_manifest_path: str = ""
     error: str = ""
 
     def to_dict(self) -> dict:
         """Serialize to a JSON-friendly dict (for JSONL export)."""
         return asdict(self)
+
+
+_YES_NO_CHOICE_HINTS = frozenset(
+    {
+        "yes",
+        "no",
+        "true",
+        "false",
+        "partially",
+        "cannot tell",
+        "unknown",
+        "on",
+        "off",
+    }
+)
+
+
+def parse_mcq_choices_from_question(question: str) -> list[str]:
+    """Parse A–D option strings from HM-EQA ``question_formatted`` text."""
+    text = (question or "").strip()
+    if not text:
+        return []
+    choices = re.findall(
+        r"[A-D]\)\s*(.+?)(?=\s[A-D]\)|\.\s*Answer:|$)",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    return [c.strip().rstrip(".") for c in choices if c.strip()]
+
+
+def question_is_visibility_location(question: str) -> bool:
+    """True for stems like ``Did you see the woven basket anywhere?``."""
+    head = (question or "").strip().split("?")[0].lower()
+    return bool(
+        re.search(
+            r"\b(did you see|have you seen|do you see|can you see|did i see)\b",
+            head,
+        )
+    )
+
+
+def choices_are_location_mcq(choices: list[str] | None) -> bool:
+    """True when MCQ options are places/things, not yes/no style answers."""
+    if not choices:
+        return False
+    cleaned = [(c or "").strip().lower() for c in choices[:4] if (c or "").strip()]
+    if len(cleaned) < 2:
+        return False
+    if all(c.startswith("(do not choose") for c in cleaned):
+        return False
+    yes_no_like = sum(
+        1
+        for c in cleaned
+        if c in _YES_NO_CHOICE_HINTS or any(h in c.split() for h in ("yes", "no", "true", "false"))
+    )
+    return yes_no_like < max(1, len(cleaned) // 2)
+
+
+def answer_is_visibility_abstain(text: str) -> bool:
+    """Free-form answer that declines to pick a location (``no``, ``not seen``, …)."""
+    lowered = (text or "").strip().lower()
+    if not lowered:
+        return False
+    if lowered in {"no", "yes", "unknown", "none", "n/a", "na", "not seen", "not visible"}:
+        return True
+    return bool(
+        re.match(
+            r"^(no|yes|not\s+seen|not\s+visible|didn'?t\s+see|have\s+not\s+seen|haven'?t\s+seen)\b",
+            lowered,
+        )
+    )
+
+
+def should_abstain_location_mcq(raw: str, choices: list[str] | None) -> bool:
+    """Location MCQ + visibility-style ``answer: No`` → do not map to A–D."""
+    if not choices_are_location_mcq(choices):
+        return False
+    fields = _answer_field_lines(raw)
+    if not fields:
+        return False
+    return answer_is_visibility_abstain(fields[-1])
 
 
 def _match_choice_text_to_letter(text: str, choices: list[str]) -> str:
@@ -139,6 +222,8 @@ def _answer_field_lines(raw: str) -> list[str]:
 
 def extract_mcq_letter_from_raw_eqa(raw: str, choices: list[str] | None = None) -> str:
     """Parse MCQ letter from raw mLLM EQA output (before human-facing reformatting)."""
+    from emet.memory.graph_eqa.mcq_debias import match_freeform_to_choice
+
     text = raw or ""
     if not text.strip():
         return ""
@@ -148,12 +233,18 @@ def extract_mcq_letter_from_raw_eqa(raw: str, choices: list[str] | None = None) 
     answer_field = fields[-1]
     if not answer_field:
         return ""
+    if should_abstain_location_mcq(text, choices):
+        return ""
     letter = extract_mcq_letter(answer_field, choices)
     if letter:
         return letter
     m = re.search(r"(?:^|\n)\s*answer\s*:\s*([a-d])\b", text, flags=re.IGNORECASE)
     if m:
         return m.group(1).upper()
+    if choices:
+        idx = match_freeform_to_choice(answer_field, choices)
+        if idx is not None:
+            return chr(ord("A") + idx)
     return ""
 
 
