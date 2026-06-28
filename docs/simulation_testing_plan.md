@@ -46,6 +46,7 @@ Logs: `~/runs/emet/simulation_smoke/<RUN_ID>/` (`summary.txt` + `track{N}_*.log`
 | `MOCK_LLM` | `1` for track 5 | Set `0` for real SQA3D VLM smoke |
 | `HABITAT_GPU` | `1` | Track 1 uses CUDA + Qwen3-VL-8B; set `0` for mock-LLM Habitat only |
 | `SKIP_TRACKS` | empty | Comma list e.g. `4,7` to skip Molmo legs |
+| `TIMEOUT_DYN` | `28800` | Tracks 6–7 timeout (seconds); Robocasa world-change often exceeds 2h |
 
 ---
 
