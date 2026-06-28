@@ -138,7 +138,7 @@ class GraphEQAController(DynamemController):
 
         self._graph_object_fusion = attach_graph_object_fusion(
             self.graph_memory,
-            parameters if isinstance(parameters, dict) else None,
+            parameters,
         )
         self._calibration_writer = None
 

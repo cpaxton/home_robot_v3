@@ -131,6 +131,53 @@ class GraphObjectFusion:
                 best = node
         return best
 
+    def find_iou_merge_node(
+        self,
+        graph_memory: GraphEQAMemory,
+        candidate: GraphDetectionCandidate,
+    ) -> GraphNode | None:
+        """Merge when axis-aligned 3D bounds mostly overlap (duplicate views / depth jitter)."""
+        thr = float(self.config.bounds_3d_iou_merge_min)
+        if thr <= 0.0 or candidate.bounds_3d is None:
+            return None
+        best: GraphNode | None = None
+        best_iou = thr
+        for node in graph_memory.get_nodes():
+            if node.is_viewpoint or node.bounds_3d is None:
+                continue
+            if not self._label_match(node, candidate.label):
+                continue
+            iou = bounds_3d_iou(candidate.bounds_3d, node.bounds_3d)
+            if iou >= best_iou:
+                best_iou = iou
+                best = node
+        return best
+
+    def find_fallback_node(
+        self,
+        graph_memory: GraphEQAMemory,
+        candidate: GraphDetectionCandidate,
+    ) -> GraphNode | None:
+        """Nearest-neighbor XY merge when strict spatial/embedding/bounds gates fail."""
+        radius = float(self.config.fallback_spatial_merge_xy_m)
+        if radius <= 0.0:
+            return None
+        xyz = np.asarray(candidate.xyz, dtype=np.float64).reshape(3)
+        best: GraphNode | None = None
+        best_dxy = float("inf")
+        for node in graph_memory.get_nodes():
+            if node.is_viewpoint:
+                continue
+            if not self._label_match(node, candidate.label):
+                continue
+            nxy = np.asarray(node.xyz, dtype=np.float64).reshape(3)
+            dxy = float(np.linalg.norm(nxy[:2] - xyz[:2]))
+            if dxy > radius or dxy >= best_dxy:
+                continue
+            best_dxy = dxy
+            best = node
+        return best
+
     def apply_detection(
         self,
         graph_memory: GraphEQAMemory,
@@ -141,6 +188,10 @@ class GraphObjectFusion:
     ) -> int:
         """Merge into an existing node or add a new observation."""
         match = self.find_best_node(graph_memory, candidate)
+        if match is None:
+            match = self.find_iou_merge_node(graph_memory, candidate)
+        if match is None:
+            match = self.find_fallback_node(graph_memory, candidate)
         if match is not None:
             return graph_memory.merge_object_detection(
                 rgb,
@@ -149,3 +200,47 @@ class GraphObjectFusion:
                 viewer_xyz=viewer_xyz,
             )
         return graph_memory.merge_object_detection(rgb, candidate, merge_into_node_id=None, viewer_xyz=viewer_xyz)
+
+    def consolidate_high_iou_nodes(self, graph_memory: GraphEQAMemory) -> int:
+        """Fold object pairs whose 3D bounds mostly overlap (returns nodes absorbed)."""
+        thr = float(self.config.bounds_3d_iou_merge_min)
+        if thr <= 0.0:
+            return 0
+        objs = [
+            n
+            for n in graph_memory.get_nodes()
+            if not n.is_viewpoint and not getattr(n, "is_frontier", False) and n.bounds_3d is not None
+        ]
+        drop: set[int] = set()
+        merged = 0
+        for i, a in enumerate(objs):
+            if int(a.node_id) in drop:
+                continue
+            for b in objs[i + 1 :]:
+                if int(b.node_id) in drop:
+                    continue
+                if bounds_3d_iou(a.bounds_3d, b.bounds_3d) < thr:
+                    continue
+                keep, lose = (a, b) if int(a.support_count) >= int(b.support_count) else (b, a)
+                if graph_memory.absorb_object_node(int(lose.node_id), int(keep.node_id)):
+                    drop.add(int(lose.node_id))
+                    merged += 1
+                    if int(keep.node_id) == int(a.node_id):
+                        a = keep
+        return merged
+
+
+def max_pairwise_object_bounds_iou(graph_memory: GraphEQAMemory) -> float | None:
+    """Max 3D bounds IoU across object nodes (None when <2 bounded objects)."""
+    objs = [
+        n
+        for n in graph_memory.get_nodes()
+        if not n.is_viewpoint and not getattr(n, "is_frontier", False) and n.bounds_3d is not None
+    ]
+    if len(objs) < 2:
+        return None
+    best = 0.0
+    for i, a in enumerate(objs):
+        for b in objs[i + 1 :]:
+            best = max(best, bounds_3d_iou(a.bounds_3d, b.bounds_3d))
+    return float(best)

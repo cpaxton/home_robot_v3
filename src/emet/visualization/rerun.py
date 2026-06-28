@@ -77,7 +77,8 @@ def spatial3d_view_robot(name: str = "3D View", **kwargs) -> rrb.Spatial3DView:
 #   world/frames/current   (at each frame time) Transform3D, rgb, depth — scrub "frame" timeline for playback
 #   world/graph/nodes      Points3D (graph nodes)
 #   world/dynagraph/nodes  Points3D (Dynagraph graph nodes)
-#   world/dynagraph/bboxes Boxes3D (object AABBs from bounds_3d / extent_half)
+#   world/dynagraph/bboxes Boxes3D (object AABBs from bounds_3d / extent_half; object nodes only)
+#   world/dynagraph/frontiers Points3D (frontier clusters, no boxes)
 #   world/dynagraph/crops/<node_id>_<label>  Image (head RGB when node was created)
 #   world/dynagraph/crops_mosaic  Image (grid of node thumbnails)
 #   world/dynagraph/edges  LineStrips3D (near / on / on_floor relations)
@@ -825,18 +826,35 @@ def _pick_rerun_head_cam(obs: Any, servo: Observations | None) -> Observations |
     return chosen
 
 
+def _ee_rgb_has_signal(rgb: np.ndarray | None) -> bool:
+    """True when EE RGB is present and not an all-zero placeholder."""
+    if rgb is None:
+        return False
+    arr = np.asarray(rgb)
+    if arr.size == 0 or arr.ndim != 3:
+        return False
+    return bool(np.any(arr))
+
+
 def _pick_rerun_ee_cam(obs: Any, servo: Observations | None, head_cam: Observations | None) -> Observations | None:
     """Best Observations carrying ``ee_rgb`` / ``ee_camera_*`` for Rerun EE panel."""
+    candidates: list[Observations] = []
     for cand in (servo, head_cam):
         if cand is not None and getattr(cand, "ee_rgb", None) is not None:
-            return cand
+            candidates.append(cand)
     if isinstance(obs, dict):
         from emet.controller.generic_zmq_client import get_observation_from_zmq_dict
 
         decoded = get_observation_from_zmq_dict(obs)
         if decoded is not None and decoded.ee_rgb is not None:
-            return decoded
-    return None
+            candidates.append(decoded)
+    elif isinstance(obs, Observations) and getattr(obs, "ee_rgb", None) is not None:
+        candidates.append(obs)
+
+    for cand in candidates:
+        if _ee_rgb_has_signal(cand.ee_rgb) and int(np.max(cand.ee_rgb)) > 0:
+            return cand
+    return candidates[0] if candidates else None
 
 
 class RerunVisualizer:
@@ -1232,6 +1250,9 @@ class RerunVisualizer:
         if not self._stride_tick("_dynagraph_tick", self._dynagraph_stride):
             return
         rr.set_time_seconds("realtime", time.time())
+        # Dynagraph is the object source of truth; hide instance/scene-graph box layers in the main 3D view.
+        self.clear_identity("world/objects")
+        self.clear_identity("world/scene_graph/objects")
         nodes = graph_memory.get_nodes()
         obs_rgb = _obs_rgb_by_id(graph_memory)
         if self._dynagraph_rerun_summary:
@@ -1259,16 +1280,16 @@ class RerunVisualizer:
             else:
                 self.clear_identity("world/dynagraph/gallery")
             return
-        obj_nodes = [n for n in nodes if not getattr(n, "is_viewpoint", False)]
+        obj_nodes = [
+            n
+            for n in nodes
+            if not getattr(n, "is_viewpoint", False) and not getattr(n, "is_frontier", False)
+        ]
+        fr_nodes = [n for n in nodes if getattr(n, "is_frontier", False)]
         vp_nodes = [n for n in nodes if getattr(n, "is_viewpoint", False)]
         if obj_nodes:
-            xyz = np.array([n.xyz for n in obj_nodes], dtype=np.float64)
             labels = [format_dynagraph_node_label(n) for n in obj_nodes]
             node_colors = [_dynagraph_node_color(n, obs_rgb) for n in obj_nodes]
-            log_to_rerun(
-                "world/dynagraph/nodes",
-                rr.Points3D(positions=xyz, radii=0.08, labels=labels, colors=node_colors),
-            )
             box_centers: list = []
             box_half: list[list[float]] = []
             box_labels: list[str] = []
@@ -1293,11 +1314,31 @@ class RerunVisualizer:
                         radii=0.01,
                     ),
                 )
+                self.clear_identity("world/dynagraph/nodes")
             else:
                 self.clear_identity("world/dynagraph/bboxes")
+                xyz = np.array([n.xyz for n in obj_nodes], dtype=np.float64)
+                log_to_rerun(
+                    "world/dynagraph/nodes",
+                    rr.Points3D(positions=xyz, radii=0.08, labels=labels, colors=node_colors),
+                )
         else:
             self.clear_identity("world/dynagraph/nodes")
             self.clear_identity("world/dynagraph/bboxes")
+        if fr_nodes:
+            fxyz = np.array([n.xyz for n in fr_nodes], dtype=np.float64)
+            flabels = [format_dynagraph_node_label(n) for n in fr_nodes]
+            log_to_rerun(
+                "world/dynagraph/frontiers",
+                rr.Points3D(
+                    positions=fxyz,
+                    radii=0.05,
+                    labels=flabels,
+                    colors=[[180, 80, 255]] * len(fr_nodes),
+                ),
+            )
+        else:
+            self.clear_identity("world/dynagraph/frontiers")
         if vp_nodes:
             vxyz = np.array([n.xyz for n in vp_nodes], dtype=np.float64)
             vlabels = [format_dynagraph_node_label(n) for n in vp_nodes]
@@ -1634,8 +1675,16 @@ class RerunVisualizer:
             return
         rr.set_time_seconds("realtime", time.time())
 
-        # EE Camera
         ee_rgb = np.ascontiguousarray(_rgb_to_uint8(servo.ee_rgb))
+        ee_k = getattr(servo, "ee_camera_K", None)
+        if ee_k is not None:
+            from emet.controller.generic_zmq_client import _align_camera_k_to_rgb
+
+            ee_k = _align_camera_k_to_rgb(np.asarray(ee_k, dtype=np.float64).reshape(3, 3), ee_rgb)
+            if ee_k is not None:
+                servo = replace(servo, ee_camera_K=ee_k)
+
+        # EE Camera
         log_to_rerun("world/ee_camera/rgb", rr.Image(ee_rgb, color_model=rr.ColorModel.RGB))
 
         ee_depth = getattr(servo, "ee_depth", None)

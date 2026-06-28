@@ -135,7 +135,7 @@ For **tunable instance→graph fusion** (spatial + 3D bounds + optional SigLIP e
      --write-config src/emet/config/agents/default_graph_object_fusion.yaml
    ```
 
-Dynagraph loads [`default_graph_object_fusion.yaml`](../src/emet/config/agents/default_graph_object_fusion.yaml) into parameters when unset; enable in agent YAML under **`embodied_agent.graph_eqa_memory.graph_object_fusion`**. When fusion is on, legacy **`dynagraph_merge_xy_m`** on the instance path is disabled (VLM nodes unchanged). Implementation: [`graph_object_fusion/`](../src/emet/memory/graph_eqa/graph_object_fusion/), GT builder [`mujoco_gt_objects.py`](../src/emet/simulation/mujoco_gt_objects.py).
+Dynagraph loads [`default_graph_object_fusion.yaml`](../src/emet/config/agents/default_graph_object_fusion.yaml) into parameters when unset; enable in agent YAML under **`embodied_agent.graph_eqa_memory.graph_object_fusion`**. When fusion is on, legacy **`dynagraph_merge_xy_m`** on `add_observation` is disabled, but **`fallback_spatial_merge_xy_m`** defaults to the same value for a second merge tier (see Configuration keys). Implementation: [`graph_object_fusion/`](../src/emet/memory/graph_eqa/graph_object_fusion/), GT builder [`mujoco_gt_objects.py`](../src/emet/simulation/mujoco_gt_objects.py).
 
 #### Rerun load (crops / seen_from lines)
 
@@ -221,6 +221,7 @@ Append a pretty-print snapshot of **`GraphEQAMemory`** at session end (**`finall
 | Key | Meaning |
 |-----|---------|
 | `dynagraph_merge_xy_m` | If `> 0`, a new observation whose **primary** label matches an existing node and whose XY distance is within this threshold **updates** that node (support count, running-mean XYZ, `last_seen`) instead of adding a new node/observation. |
+| `graph_object_fusion.fallback_spatial_merge_xy_m` | When GraphObjectFusion is enabled, strict merge gates (XY, 3D centroid, bounds IoU, embedding) run first. If no node matches, a **fallback tier** merges into the nearest object node within this XY radius (ignores bounds/embedding). Defaults to **`0.45`** in [`default_graph_object_fusion.yaml`](../src/emet/config/agents/default_graph_object_fusion.yaml); when unset at attach time, [`setup.py`](../src/emet/memory/graph_eqa/graph_object_fusion/setup.py) copies **`dynagraph_merge_xy_m`** from the loaded dynav parameters. Set to **`0`** to disable fallback. Innate Mars hardware uses wider gates in [`graph_object_fusion_innate_mars.yaml`](../src/emet/config/agents/graph_object_fusion_innate_mars.yaml) (wired via [`dynav_innate_mars.yaml`](../src/emet/config/dynav_innate_mars.yaml)). |
 | `dynagraph_staleness_horizon` | If `> 0`, `maintain(current_step)` removes nodes with `current_step - last_seen` greater than this value, removes their observations, renumbers `node_id`, and rebuilds edges. |
 | `graph_eqa_frontier_nodes.enabled` | Sync unexplored frontier clusters into the graph for EQA prompts and question-guided exploration. |
 | `graph_eqa_frontier_nodes.max_nodes` | Cap on simultaneous frontier graph nodes. |

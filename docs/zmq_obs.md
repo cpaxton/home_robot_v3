@@ -166,3 +166,5 @@ By default, `emet stream` sets **`DA3_LOG_LEVEL=WARN`** and prints map status **
 | `--max-steps 3` (short run, per-step status) | |
 
 Explored cell count can fluctuate slightly step-to-step (map filtering / pose change) — watch the trend, not every tick.
+
+For **`dynagraph` / `graph_eqa`**, periodic status includes a graph breakdown, e.g. `graph 11 obj / 12 vp / 1 fr (24 total)` — **object** nodes are what matter for search/EQA; **viewpoint** (`vp`) and **frontier** (`fr`) nodes are auxiliary. See [known_issues.md](known_issues.md#dynagraph-graph-node-explosion-on-stationary-hardware-stream).

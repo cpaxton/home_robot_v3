@@ -23,10 +23,15 @@ class GraphObjectFusionConfig:
     spatial_merge_xy_m: float = 0.42
     min_centroid_dist_m: float = 0.55
     bounds_3d_iou_min: float = 0.08
+    # When 3D bounds overlap this much, merge even if strict XY/centroid gates fail (0 = off).
+    bounds_3d_iou_merge_min: float = 0.0
     embedding_min_cosine: float = 0.62
     embedding_blend_alpha: float = 0.35
     require_label_match: bool = False
     max_candidates: int = 64
+
+    # When strict gates fail, merge to nearest object node within this XY radius (0 = disabled).
+    fallback_spatial_merge_xy_m: float = 0.0
 
     # Scoring / calibration
     match_xy_m: float = 0.55

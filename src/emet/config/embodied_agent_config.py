@@ -48,6 +48,7 @@ class GraphObjectFusionConfigRef:
     require_label_match: bool = True
     max_candidates: int = 64
     match_xy_m: float = 0.55
+    fallback_spatial_merge_xy_m: float = 0.0
 
 
 @dataclass
