@@ -80,9 +80,49 @@ Check:
 
 Optional live regression: `RUN_HABITAT_FRAME_TESTS=1 uv run emet test src/test/eval/test_audit_habitat_voxel_map.py -k live_habitat`.
 
-## Overnight smoke (all tracks)
+## GPU preflight (all overnight / VLM jobs)
 
-One script runs HM-EQA, OVMM Habitat, and SQA3D (if ScanNet verify passes), then builds figures:
+Before any GPU-heavy eval, kill stale jobs and wait for headroom. Shared helpers live in [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) (sourced by overnight scripts):
+
+```bash
+./scripts/gpu_preflight.sh --kill-stale
+NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait   # default: 3× stable reads, 30s apart
+NEED_MIB=14000 ./scripts/gpu_preflight.sh --check  # exit 1 if free VRAM < threshold
+```
+
+Also sets `PYTORCH_CUDA_ALLOC_CONF` / `PYTORCH_ALLOC_CONF` to `expandable_segments:True` when scripts call `emet_export_pytorch_alloc`.
+
+**Rule:** do not chain Robocasa dynagraph smoke, full pytest with MuJoCo tests, and Habitat VLM eval in one uninterrupted GPU session — that pattern caused full-system freezes (GUI + SSH unresponsive) on a 4090 workstation. Run cross-track smoke and deep eval on **separate nights** (see below).
+
+### Cursor / agent sessions
+
+Long Habitat evals and overnight orchestrators should run via **`nohup … &`** or a dedicated terminal, not as blocking inline commands in Cursor agent turns. Native GPU teardown (Habitat-Sim, VLM unload) can crash the agent process while eval subprocesses finish — check `~/runs/emet/`, `~/.cache/habitat_eqa/results/`, and per-step logs before re-running. See [cross_track_smoke.md](experiments/cross_track_smoke.md#cursor--long-agent-sessions).
+
+## Simulation smoke battery (seven tracks)
+
+Paper-facing sequential validation: Habitat EQA → Habitat OVMM → Robocasa search → Molmo iTHOR search → SQA3D → Robocasa world-change → Molmo explore-loop. **Run before multi-day sweeps** when changing eval harnesses or sim wiring.
+
+```bash
+./scripts/run_simulation_smoke_battery.sh
+```
+
+Details: [simulation_testing_plan.md](simulation_testing_plan.md) · `paper/sections/04_experiments.tex` (*Simulation smoke battery*).
+
+## Cross-track smoke (extended overnight)
+
+Validates SQA3D, Habitat EQA, OVMM, Robocasa explore/world-change, and a safe unit-test pass before multi-day sweeps. Details: [experiments/cross_track_smoke.md](experiments/cross_track_smoke.md).
+
+```bash
+./scripts/run_overnight_cross_track_smoke.sh
+# Optional: chain deep Habitat eval (not recommended same night):
+# RUN_DEEP_EVAL=1 ./scripts/run_overnight_cross_track_smoke.sh
+```
+
+Logs: `~/runs/emet/overnight_cross_track/<RUN_ID>/`.
+
+## Overnight smoke (Habitat + OVMM + SQA3D matrix)
+
+Run **after** cross-track passes, on a clean GPU (or the next day). One script runs HM-EQA, OVMM Habitat, and SQA3D (if ScanNet verify passes), then builds figures:
 
 ```bash
 ./scripts/run_overnight_eval_smoke.sh
@@ -110,6 +150,8 @@ Outputs:
 - Figures: `~/runs/emet/eval_smoke/<RUN_ID>/figures/`
 
 **`RUN_ID` vs `TAG`:** the overnight script writes artifact paths with `TAG` (defaults to `RUN_ID`). Figure aggregation uses `--run-id` (`RUN_ID`). If you override `TAG` without setting `RUN_ID` to match, the script prints a warning and passes `--artifact-tag "$TAG"` to `build_eval_figure_pack.py`. Prefer keeping them equal, or set `RUN_ID="$TAG"` when customizing tags.
+
+The script kills stale GPU jobs at start/end and waits for `NEED_MIB` (default **14000**) before each VLM phase when `MOCK_LLM=0`.
 
 Post-run only:
 

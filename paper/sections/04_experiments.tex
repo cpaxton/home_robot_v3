@@ -119,6 +119,23 @@ Override with \texttt{EMET\_OVMM\_OUTPUT\_SIM}, \texttt{EMET\_OVMM\_OUTPUT\_FULL
 
 Secondary: graph node/edge counts, voxel explored area, staleness after scripted moves, cross-robot variance.
 
+\subsection{Simulation smoke battery (seven tracks)}
+\label{sec:sim_smoke_battery}
+
+Before multi-day GPU sweeps, run the sequential embodied smoke battery documented in \texttt{docs/simulation\_testing\_plan.md}:
+
+\begin{enumerate}
+  \item \textbf{Habitat EQA} --- HM-EQA single episode (Q17 regression; dynagraph + Qwen3-VL-8B or mock-LLM).
+  \item \textbf{Habitat OVMM} --- find-phase GT proxy on HM3D (\texttt{hm3d\_lamp\_bed\_00006}).
+  \item \textbf{Robocasa search} --- OVMM FindObj/FindRec on Robocasa S1 (\texttt{robocasa\_pp\_s1}).
+  \item \textbf{MolmoSpaces / iTHOR search} --- OVMM find-phase on iTHOR train idx~0 (\texttt{molmo\_ithor\_s2\_idx0}).
+  \item \textbf{SQA3D} --- situated open QA smoke (mock-LLM train question or val replay with VLM).
+  \item \textbf{Robocasa dynamic env} --- scripted world-change staleness (\texttt{robocasa\_seed0\_world\_change}).
+  \item \textbf{MolmoSpaces dynamic search} --- active explore-loop on \texttt{molmo\_ithor0} (Phase~1 dynamic exploration).
+\end{enumerate}
+
+Entrypoint: \texttt{./scripts/run\_simulation\_smoke\_battery.sh}. Logs under \texttt{\textasciitilde/runs/emet/simulation\_smoke/<RUN\_ID>/}. GPU preflight between tracks: \texttt{scripts/gpu\_preflight.sh}. Do not chain this battery with full pytest and deep Habitat eval in one uninterrupted GPU session on a display-attached workstation.
+
 \subsection{GT-supervised object finding (Emet sim)}
 \label{sec:gt_experiments}
 

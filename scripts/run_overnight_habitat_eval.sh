@@ -11,8 +11,11 @@
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-
-export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+# shellcheck source=gpu_preflight.sh
+source "${ROOT}/scripts/gpu_preflight.sh"
+emet_export_pytorch_alloc
+GPU_STABLE_CHECKS="${STABLE:-2}"
+GPU_WAIT_INTERVAL="${INTERVAL:-30}"
 
 RUN_ID="${RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 LOG_DIR="${LOG_DIR:-$HOME/.cache/habitat_eqa/overnight/$RUN_ID}"
@@ -64,7 +67,7 @@ wait_for_gpu() {
       log "GLOBAL deadline reached during GPU wait (need=${need_mib}MiB)"
       return 2
     fi
-    free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1 | tr -d ' ')
+    free=$(emet_gpu_free_mib)
     if [ "${free:-0}" -ge "$need_mib" ]; then
       ok=$((ok + 1))
     else
@@ -96,6 +99,8 @@ run_phase() {
   log "=== PHASE $phase_name: method=$method tag=$tag n=$n_target need_gpu=${need_mib}MiB ==="
   log "  results=$results"
   log "  log=$phase_log"
+
+  emet_kill_stale_eval_processes
 
   while [ "$(count_completed "$results")" -lt "$n_target" ]; do
     if [ "$(date +%s)" -ge "$GLOBAL_DEADLINE" ]; then
@@ -210,6 +215,8 @@ EOF
 
 log "############ OVERNIGHT EVAL START run_id=$RUN_ID ############"
 log "log_dir=$LOG_DIR deadline=${DEADLINE_H}h"
+
+emet_kill_stale_eval_processes
 
 PREFIX="overnight_${RUN_ID}"
 

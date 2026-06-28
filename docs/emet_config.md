@@ -103,6 +103,25 @@ Files like [`dynav_config.yaml`](../src/emet/config/dynav_config.yaml) (flat dyn
 
 ---
 
+## Smoke validation
+
+After config-loader or overlay changes, run:
+
+```bash
+uv run emet test src/test/config/ -q
+uv run python -c "
+from emet.core.parameters import get_parameters
+p = get_parameters('dynav_innate_mars.yaml')
+assert str(p.get('depth_source')).lower() == 'auto'
+assert (p.get('graph_object_fusion') or {}).get('bounds_3d_iou_merge_min') == 0.40
+print('config_smoke OK')
+"
+```
+
+Full cross-track tier 0 (config + eval + backends): [cross_track_smoke.md](experiments/cross_track_smoke.md#tier-0--focused-unit-tests-15-min).
+
+---
+
 ## Related docs
 
 - [Agent run](AGENT_RUN.md) — `emet run agent` flags

@@ -96,3 +96,24 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 - `src/emet/controller/controller_graph_eqa.py` — `_graph_dedup_skips`
 - `src/emet/app/stream_agent_factory.py` — `dynagraph_merge_xy_m` / `graph_object_fusion` defaults for stream
 - `src/emet/config/agents/default_graph_object_fusion.yaml`
+
+---
+
+## NVIDIA driver hang / Cursor agent crash during stacked GPU evals
+
+**Status:** Mitigated (2026-06) · **Seen:** 2026-06-28 · **Hardware:** RTX 4090 workstation (GPU drives display + CUDA)
+
+### Symptoms
+
+- Chaining Robocasa dynagraph explore → full pytest (MuJoCo-native tests) → Habitat HM-EQA with VLM in one session.
+- Full-system **live lock**: mouse moves, GUI and SSH unresponsive; journal stops mid-line.
+- Separately: **Cursor agent** (`node` MainThread) or `emet` can log `trap invalid opcode` in kernel after Habitat-Sim / VLM teardown — agent session dies but eval subprocess may have finished (check log files and JSON artifacts).
+
+### Mitigation
+
+- **One GPU-heavy job at a time** — use [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) (`--kill-stale`, `--wait`, `--check`).
+- Cross-track smoke: [`run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh) defaults **`RUN_DEEP_EVAL=0`**; run [`run_overnight_eval_smoke.sh`](../scripts/run_overnight_eval_smoke.sh) on a **separate night**.
+- Safe no-sim pytest: source `gpu_preflight.sh` and pass **`emet_pytest_no_sim_ignore_args`** (excludes unmarked MuJoCo paths under `src/test/simulation/`).
+- Long evals: **`nohup … &`** or dedicated terminal — not blocking Cursor agent inline runs.
+
+Docs: [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [cross_track_smoke.md](experiments/cross_track_smoke.md).

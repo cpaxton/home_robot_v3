@@ -263,7 +263,7 @@ def run_explore_episode_subprocess(
 def _run_eqa_single(agent: Any, robot: Any, qspec: dict[str, Any]) -> dict[str, Any]:
     import re
 
-    from emet.controller.controller_graph_eqa import EQAExecuter
+    from emet.controller.task.dynamem import EQAExecuter
 
     qtext = str(qspec.get("question", "")).strip()
     robot.move_to_nav_posture()
@@ -305,7 +305,7 @@ def run_world_change_episode(
     """Phase 2: explore → EQA pre → relocate body → recovery → EQA post → export."""
     from emet.app.dynagraph_explore import dynagraph_explore_until_terminated
     from emet.controller.controller_dynagraph import DynagraphController
-    from emet.controller.controller_graph_eqa import EQAExecuter
+    from emet.controller.task.dynamem import EQAExecuter
     from emet.core.parameters import get_parameters
     from emet.memory.graph_eqa.dynagraph_eval import compute_dynagraph_eval
     from emet.memory.graph_eqa.question_bank import load_question_bank, score_eqa_results
