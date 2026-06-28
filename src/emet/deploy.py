@@ -176,6 +176,38 @@ def _ssh_run(
     return r.returncode
 
 
+def _ssh_capture(
+    host: str,
+    user: str,
+    password: str | None,
+    remote_cmd: str,
+    use_paramiko: bool | None = None,
+) -> tuple[int, str, str]:
+    """Run remote command and return (exit_code, stdout, stderr) without printing."""
+    if use_paramiko is None:
+        use_paramiko = bool(password and not _has_sshpass())
+    if use_paramiko:
+        import paramiko
+
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(host, username=user, password=password or None, timeout=30)
+        try:
+            _, stdout, stderr = client.exec_command(remote_cmd)
+            exit_status = stdout.channel.recv_exit_status()
+            out = stdout.read().decode(errors="replace")
+            err = stderr.read().decode(errors="replace")
+            return exit_status, out, err
+        finally:
+            client.close()
+    target = _ssh_target(host, user, password)
+    full_cmd = ["ssh", target, remote_cmd]
+    if password:
+        full_cmd = ["sshpass", "-p", password] + full_cmd
+    r = subprocess.run(full_cmd, capture_output=True, text=True)
+    return r.returncode, r.stdout or "", r.stderr or ""
+
+
 def deploy(
     host: str | None = None,
     user: str | None = None,

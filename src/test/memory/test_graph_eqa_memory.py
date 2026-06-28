@@ -633,6 +633,22 @@ def test_record_navigation_sample_adds_viewpoint_not_object_node():
     np.testing.assert_allclose(nodes[0].xyz, base)
 
 
+def test_viewpoint_spatial_merge_reuses_node():
+    mem = GraphEQAMemory(
+        parameters={"dynagraph_viewpoint_merge_m": 0.25},
+        eqa_client=lambda x: "",
+        image_description_client=lambda x: "",
+    )
+    rgb = np.zeros((20, 20, 3), dtype=np.uint8)
+    base_a = np.array([1.0, 2.0, 0.0])
+    base_b = np.array([1.05, 2.02, 0.01])
+    mem.record_navigation_sample(rgb, np.array([1.0, 2.0, 0.1]), base_xyz=base_a)
+    mem.record_navigation_sample(rgb, np.array([1.0, 2.0, 0.1]), base_xyz=base_b)
+    viewpoints = [n for n in mem.get_nodes() if n.is_viewpoint]
+    assert len(viewpoints) == 1
+    np.testing.assert_allclose(viewpoints[0].xyz, base_b)
+
+
 def test_record_navigation_respects_graph_eqa_record_navigation_false():
     mem = GraphEQAMemory(
         parameters={"graph_eqa_record_navigation": False},

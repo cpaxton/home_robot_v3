@@ -350,6 +350,8 @@ class GraphEQAMemory:
         self._defer_llm_clients = defer_llm_clients
         self._nav_samples: list[GraphNavigationSample] = []
         self._viewpoint_by_obs_id: dict[int, int] = {}
+        # Reuse viewpoint nodes when the camera/base pose is within this radius (m).
+        self.viewpoint_merge_m: float = 0.15
         self._record_navigation = True
         self._nav_max = 256
         self._graph_timestep: int = 0
@@ -394,6 +396,8 @@ class GraphEQAMemory:
             self.spatial_merge_m = float(d["dynagraph_merge_xy_m"])
         if d.get("dynagraph_staleness_horizon") is not None:
             self.staleness_horizon = max(0, int(d["dynagraph_staleness_horizon"]))
+        if d.get("dynagraph_viewpoint_merge_m") is not None:
+            self.viewpoint_merge_m = max(0.0, float(d["dynagraph_viewpoint_merge_m"]))
 
     def _load_frontier_settings(self) -> None:
         d = self._parameters_dict()
@@ -705,6 +709,90 @@ class GraphEQAMemory:
                 break
         return obs_id
 
+    def absorb_object_node(self, src_node_id: int, dst_node_id: int) -> bool:
+        """Fold ``src`` object node into ``dst`` and remove ``src`` from the graph."""
+        if int(src_node_id) == int(dst_node_id):
+            return False
+        src = dst = None
+        for n in self._nodes:
+            if int(n.node_id) == int(src_node_id):
+                src = n
+            elif int(n.node_id) == int(dst_node_id):
+                dst = n
+        if src is None or dst is None:
+            return False
+        if src.is_viewpoint or dst.is_viewpoint or src.is_frontier or dst.is_frontier:
+            return False
+
+        sc_src = int(src.support_count)
+        sc_dst = int(dst.support_count)
+        total = sc_src + sc_dst
+        new_xyz = (dst.xyz * sc_dst + src.xyz * sc_src) / max(total, 1)
+
+        merged_labels = sorted(
+            {
+                *(str(x).strip() for x in dst.labels if str(x).strip()),
+                *(str(x).strip() for x in src.labels if str(x).strip()),
+            }
+        )
+        if not merged_labels:
+            merged_labels = ["object"]
+
+        new_emb = dst.embedding
+        if src.embedding is not None and dst.embedding is not None:
+            a = 0.35
+            new_emb = (1.0 - a) * np.asarray(dst.embedding, dtype=np.float32) + a * np.asarray(
+                src.embedding, dtype=np.float32
+            )
+        elif src.embedding is not None:
+            new_emb = np.asarray(src.embedding, dtype=np.float32).copy()
+
+        new_bounds = dst.bounds_3d
+        if src.bounds_3d is not None and dst.bounds_3d is not None:
+            mn = np.minimum(
+                np.asarray(dst.bounds_3d["min"], dtype=np.float64),
+                np.asarray(src.bounds_3d["min"], dtype=np.float64),
+            )
+            mx = np.maximum(
+                np.asarray(dst.bounds_3d["max"], dtype=np.float64),
+                np.asarray(src.bounds_3d["max"], dtype=np.float64),
+            )
+            c = 0.5 * (mn + mx)
+            new_bounds = {
+                "min": mn.tolist(),
+                "max": mx.tolist(),
+                "center": c.tolist(),
+                "size": (mx - mn).tolist(),
+            }
+        elif src.bounds_3d is not None:
+            new_bounds = src.bounds_3d
+
+        dst_idx = next(i for i, n in enumerate(self._nodes) if int(n.node_id) == int(dst_node_id))
+        self._nodes[dst_idx] = replace(
+            dst,
+            xyz=new_xyz,
+            labels=merged_labels,
+            support_count=total,
+            embedding=new_emb,
+            bounds_3d=new_bounds,
+            bbox_xyxy=dst.bbox_xyxy or src.bbox_xyxy,
+            last_seen=max(int(dst.last_seen), int(src.last_seen)),
+        )
+        for o in self._observations:
+            if int(o.obs_id) == int(dst.obs_id):
+                o.xyz = new_xyz.copy()
+                o.labels = list(merged_labels)
+                break
+
+        src_obs_id = int(src.obs_id)
+        self._nodes = [n for n in self._nodes if int(n.node_id) != int(src_node_id)]
+        self._observations = [o for o in self._observations if int(o.obs_id) != src_obs_id]
+        for i, n in enumerate(self._nodes, start=1):
+            self._nodes[i - 1] = replace(n, node_id=i)
+        self._rebuild_viewpoint_index()
+        self._update_edges()
+        return True
+
     def upsert_ground_truth_observation(
         self,
         body_key: str,
@@ -977,6 +1065,23 @@ class GraphEQAMemory:
             int(n.obs_id): int(n.node_id) for n in self._nodes if n.is_viewpoint
         }
 
+    def _find_nearby_viewpoint_node(self, viewer_xyz: np.ndarray) -> GraphNode | None:
+        """Nearest viewpoint within ``viewpoint_merge_m`` (stationary-stream dedup)."""
+        radius = float(self.viewpoint_merge_m)
+        if radius <= 0.0:
+            return None
+        vxyz = np.asarray(viewer_xyz, dtype=float).reshape(-1)[:3]
+        best: GraphNode | None = None
+        best_d = float("inf")
+        for n in self._nodes:
+            if not n.is_viewpoint:
+                continue
+            d = float(np.linalg.norm(np.asarray(n.xyz, dtype=float).reshape(3) - vxyz))
+            if d <= radius and d < best_d:
+                best_d = d
+                best = n
+        return best
+
     def _ensure_viewpoint_node(
         self,
         obs_id: int,
@@ -999,6 +1104,18 @@ class GraphEQAMemory:
                         last_seen=step,
                     )
                     return int(existing_id)
+        nearby = self._find_nearby_viewpoint_node(vxyz)
+        if nearby is not None:
+            for idx, n in enumerate(self._nodes):
+                if int(n.node_id) == int(nearby.node_id):
+                    self._nodes[idx] = replace(
+                        n,
+                        xyz=vxyz,
+                        labels=list(vp_labels),
+                        last_seen=step,
+                    )
+                    self._viewpoint_by_obs_id[int(obs_id)] = int(nearby.node_id)
+                    return int(nearby.node_id)
         node_id = len(self._nodes) + 1
         self._nodes.append(
             GraphNode(

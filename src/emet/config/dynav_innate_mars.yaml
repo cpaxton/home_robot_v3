@@ -167,6 +167,7 @@ graph_eqa_record_navigation: true
 # Align with interactive dynagraph profile (stream + ``emet run dynagraph``).
 dynagraph_merge_xy_m: 0.45
 dynagraph_staleness_horizon: 256
+dynagraph_viewpoint_merge_m: 0.20
 
 # GraphObjectFusion tuned for DA3 depth jitter on hardware (see graph_object_fusion_innate_mars.yaml).
 graph_object_fusion:
@@ -174,6 +175,7 @@ graph_object_fusion:
   spatial_merge_xy_m: 0.48
   min_centroid_dist_m: 0.65
   bounds_3d_iou_min: 0.0
+  bounds_3d_iou_merge_min: 0.40
   embedding_min_cosine: 0.0
   embedding_blend_alpha: 0.35
   require_label_match: false

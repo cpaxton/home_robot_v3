@@ -61,6 +61,55 @@ def test_fusion_merges_duplicate_detections():
     assert objs[0].support_count >= 2
 
 
+def test_iou_merge_overlapping_bounds_far_centroids():
+    cfg = GraphObjectFusionConfig(
+        enabled=True,
+        spatial_merge_xy_m=0.42,
+        min_centroid_dist_m=0.55,
+        bounds_3d_iou_min=0.08,
+        embedding_min_cosine=0.99,
+        fallback_spatial_merge_xy_m=0.0,
+        bounds_3d_iou_merge_min=0.45,
+    )
+    fusion = GraphObjectFusion(cfg)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.spatial_merge_m = 0.0
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+    b = {"min": [0, 0, 0], "max": [1, 1, 1]}
+    c1 = GraphDetectionCandidate(label="chair", xyz=np.array([0.5, 0.5, 0.5]), bounds_3d=b)
+    c2 = GraphDetectionCandidate(label="seat", xyz=np.array([2.0, 0.5, 0.5]), bounds_3d=b)
+    fusion.apply_detection(mem, rgb, c1)
+    fusion.apply_detection(mem, rgb, c2)
+    objs = [n for n in mem.get_nodes() if not n.is_viewpoint]
+    assert len(objs) == 1
+
+
+def test_consolidate_high_iou_existing_nodes():
+    # IoU ingest merge is separate from post-hoc consolidate (same bounds, far centroids).
+    cfg = GraphObjectFusionConfig(enabled=True, bounds_3d_iou_merge_min=0.0)
+    fusion = GraphObjectFusion(cfg)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.spatial_merge_m = 0.0
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+    b = {"min": [0, 0, 0], "max": [1, 1, 1]}
+    fusion.apply_detection(
+        mem,
+        rgb,
+        GraphDetectionCandidate(label="a", xyz=np.array([0.5, 0.5, 0.5]), bounds_3d=b),
+    )
+    fusion.apply_detection(
+        mem,
+        rgb,
+        GraphDetectionCandidate(label="b", xyz=np.array([3.0, 3.0, 0.5]), bounds_3d=b),
+    )
+    assert len([n for n in mem.get_nodes() if not n.is_viewpoint]) == 2
+    fusion.config.bounds_3d_iou_merge_min = 0.45
+    assert fusion.consolidate_high_iou_nodes(mem) == 1
+    objs = [n for n in mem.get_nodes() if not n.is_viewpoint]
+    assert len(objs) == 1
+    assert objs[0].support_count >= 2
+
+
 def test_spatial_recall_without_label_match():
     gt = {
         "objects": [

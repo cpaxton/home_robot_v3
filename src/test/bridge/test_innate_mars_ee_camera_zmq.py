@@ -23,11 +23,16 @@ from emet.controller.generic_zmq_client import (
 def test_decode_innate_mars_servo_message():
     rgb = np.full((48, 64, 3), 120, dtype=np.uint8)
     ee = np.full((48, 64, 3), 200, dtype=np.uint8)
+    # Principal point at image center so K-align-to-RGB is a no-op for this resolution.
+    ee_k = np.array(
+        [[2.0, 0.0, 31.5], [0.0, 2.0, 23.5], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
     msg = {
         "head_cam_left/color_image": compression.to_jpg(rgb),
         "head_cam_left/color_camera_K": np.eye(3, dtype=np.float64),
         "ee_cam/color_image": compression.to_jpg(ee),
-        "ee_cam/color_camera_K": np.eye(3, dtype=np.float64) * 2.0,
+        "ee_cam/color_camera_K": ee_k,
         "ee_cam/pose": np.eye(4, dtype=np.float64),
         "joint_positions": np.zeros(10, dtype=np.float64),
         "step": 3,
