@@ -1,13 +1,4 @@
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
-#
-# Some code may be adapted from other open-source works with their respective licenses. Original
-# license information maybe found below, if so.
-
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -332,9 +323,7 @@ def format_hmeqa_semantics_coverage_report(cov: HMEQASemanticsCoverage) -> str:
     q_missing = len(cov.questions_missing_glb)
     s_annot = len(cov.scenes_with_semantics)
     s_unannot = len(cov.scenes_without_semantics)
-    train_pct = (
-        100.0 * cov.train_scenes_with_semantics / cov.train_scene_count if cov.train_scene_count else 0.0
-    )
+    train_pct = 100.0 * cov.train_scenes_with_semantics / cov.train_scene_count if cov.train_scene_count else 0.0
     lines = [
         f"HM-EQA paper questions (0–{cov.paper_question_count - 1}): {cov.paper_question_count}",
         f"  with HM3D GT semantics (.semantic.glb): {q_annot}",

@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -11,10 +11,10 @@ from typing import Any
 
 import torch
 
+from emet.benchmarks.sqa3d.prompts import SQA3D_EQA_PROMPT
 from emet.core.parameters import Parameters
 from emet.llms.eqa_vl_settings import apply_eqa_vl_runtime_settings, get_eqa_vl_int, resolve_vl_hf_model_id
 from emet.llms.prompts.eqa_prompt import EQA_PROMPT
-from emet.benchmarks.sqa3d.prompts import SQA3D_EQA_PROMPT
 from emet.llms.prompts.hmeqa_eqa_prompt import HMEQA_EQA_PROMPT
 from emet.llms.vllm_factory import create_dynamem_vllm, dynamem_vllm_call
 from emet.llms.vllm_registry import default_hf_model_id, normalize_vl_family
@@ -175,7 +175,11 @@ def build_graph_eqa_vlm_clients(
 
     from emet.llms.eqa_qwen import build_shared_eqa_clients
 
-    kw = keyword_max_tokens if keyword_max_tokens is not None else get_eqa_vl_int(parameters, "graph_keyword_max_tokens", 64)
+    kw = (
+        keyword_max_tokens
+        if keyword_max_tokens is not None
+        else get_eqa_vl_int(parameters, "graph_keyword_max_tokens", 64)
+    )
     return build_shared_eqa_clients(
         parameters=parameters,
         keyword_max_tokens=kw,

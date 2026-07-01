@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -8,9 +8,8 @@ import numpy as np
 import open3d as o3d
 import pytest
 
-from emet.benchmarks.sqa3d.scannet.runner import _is_infra_failure_text, _sanitize_prediction_text
-from emet.benchmarks.sqa3d.scannet.runner import _score_episode
 from emet.benchmarks.sqa3d.datasets import SQA3DQuestion
+from emet.benchmarks.sqa3d.scannet.runner import _is_infra_failure_text, _sanitize_prediction_text, _score_episode
 from emet.benchmarks.sqa3d.scannet.simulator import ScanNetEQASimulator
 
 SCENE_ID = "scene_runner_00"

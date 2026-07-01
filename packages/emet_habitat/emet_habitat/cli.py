@@ -1,13 +1,4 @@
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
-#
-# Some code may be adapted from other open-source works with their respective licenses. Original
-# license information maybe found below, if so.
-
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -28,9 +19,9 @@ from emet.habitat.config import (
     scene_init_poses_csv_path,
 )
 from emet.habitat.datasets import load_hmeqa_questions
+from emet.habitat.hm3d_semantics import compute_hmeqa_semantics_coverage
 from emet.habitat.hmeqa_enrich_labels import HMEQA_PAPER_QUESTION_COUNT, hmeqa_paper_question_ids
 from emet.habitat.metrics import compare_method_results, summarize_episodes, write_episode_jsonl
-from emet.habitat.hm3d_semantics import compute_hmeqa_semantics_coverage, format_hmeqa_semantics_coverage_report
 
 
 @click.group()
@@ -66,9 +57,7 @@ def info_cmd() -> None:
                 f"{len(cov.scenes_with_semantics)}/{cov.unique_paper_scenes} scenes "
                 f"(train annotated {cov.train_scenes_with_semantics}/{cov.train_scene_count})"
             )
-            click.echo(
-                "  Report: uv run python scripts/download_habitat_eqa_data.py --report-hmeqa-semantics"
-            )
+            click.echo("  Report: uv run python scripts/download_habitat_eqa_data.py --report-hmeqa-semantics")
         except FileNotFoundError:
             pass
 

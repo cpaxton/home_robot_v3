@@ -10,6 +10,12 @@ Optional process-environment toggles for simulation, ZMQ clients, and MolmoSpace
 
 See also [MolmoSpaces](molmospaces.md) for install and CLI usage.
 
+## Configuration
+
+| Variable | Used by | Purpose |
+|----------|---------|---------|
+| `EMET_CONFIG` | `emet run agent`, `emet run dynagraph`, `emet run dynamem`, `emet stream`, `emet capture` | Default path to unified nested config YAML when `--config` is omitted. Default: `configs/emet/default.yaml` in the repo. See [Unified EMET configuration](emet_config.md). |
+
 ## Benchmarks
 
 Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight smoke + diagnostics:** [evaluation.md](evaluation.md).

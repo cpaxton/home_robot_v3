@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -105,8 +105,7 @@ def format_mujoco_ground_truth_text(
     lines.append("-" * 88)
     for r in rows:
         lines.append(
-            f"{r.body_id:4d}  {r.name:48s}  "
-            f"x={r.x:8.4f}  y={r.y:8.4f}  z={r.z:8.4f}  yaw_deg={r.yaw_deg:9.4f}"
+            f"{r.body_id:4d}  {r.name:48s}  x={r.x:8.4f}  y={r.y:8.4f}  z={r.z:8.4f}  yaw_deg={r.yaw_deg:9.4f}"
         )
     lines.append(f"TOTAL_BODIES_LISTED={len(rows)}")
     return "\n".join(lines) + "\n"
@@ -123,8 +122,7 @@ def format_mujoco_ground_truth_json(
     payload = {
         "generated_at_unix": time.time(),
         "bodies": [
-            {"body_id": r.body_id, "name": r.name, "x": r.x, "y": r.y, "z": r.z, "yaw_deg": r.yaw_deg}
-            for r in rows
+            {"body_id": r.body_id, "name": r.name, "x": r.x, "y": r.y, "z": r.z, "yaw_deg": r.yaw_deg} for r in rows
         ],
     }
     if header_extra:

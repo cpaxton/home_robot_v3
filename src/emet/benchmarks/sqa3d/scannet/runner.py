@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -33,7 +33,6 @@ from emet.eval.episode_diagnostics import (
     unbind_diagnostics_recorder,
 )
 from emet.eval.memory_backends import SQA3D_MEMORY_BACKEND
-
 from emet.memory.graph_eqa.graph_stats import format_graph_node_breakdown, graph_node_breakdown
 
 SQA3DMethod = SQA3D_MEMORY_BACKEND
@@ -41,9 +40,7 @@ SQA3DProfile = Literal["smoke", "tuned"]
 
 _INFRA_RE = re.compile(r"(?i)(cuda out of memory|out of memory|^error:)")
 _COORD_ANSWER_RE = re.compile(r"(?i)(approximately\s*\(|at\s*\(-?\d|i also provide relevant images)")
-_EQA_ANSWER_RE = re.compile(
-    r"(?is)(?:^|\n)\s*answer:\s*(.+?)(?:\n\s*(?:confidence|action|confidence_reasoning):|\Z)"
-)
+_EQA_ANSWER_RE = re.compile(r"(?is)(?:^|\n)\s*answer:\s*(.+?)(?:\n\s*(?:confidence|action|confidence_reasoning):|\Z)")
 
 
 def _release_gpu_memory() -> None:

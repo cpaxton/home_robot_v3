@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -58,8 +58,7 @@ def test_score_sqa3d_predictions():
 def test_load_predictions_jsonl(tmp_path: Path):
     path = tmp_path / "preds.jsonl"
     path.write_text(
-        '{"question_id": 1, "answer": "brown"}\n'
-        '{"question_id": 2, "text": "yes"}\n',
+        '{"question_id": 1, "answer": "brown"}\n{"question_id": 2, "text": "yes"}\n',
         encoding="utf-8",
     )
     preds = load_predictions(path)

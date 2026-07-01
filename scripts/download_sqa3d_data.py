@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -20,7 +20,6 @@ from emet.benchmarks.sqa3d.config import (
     annotations_json_path,
     balanced_dir,
     default_sqa3d_data_dir,
-    localization_json_path,
     questions_json_path,
 )
 from emet.benchmarks.sqa3d.datasets import load_sqa3d_questions
@@ -67,10 +66,7 @@ def _verify_split(data_dir: Path, split: str) -> None:
     print(f"split={split}: loaded {len(qs)} joined questions")
     if qs:
         q = qs[0]
-        print(
-            f"  sample id={q.question_id} scene={q.scene_id} "
-            f"answer={q.primary_answer!r}"
-        )
+        print(f"  sample id={q.question_id} scene={q.scene_id} answer={q.primary_answer!r}")
 
 
 def main() -> None:

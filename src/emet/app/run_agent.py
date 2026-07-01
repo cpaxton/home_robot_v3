@@ -31,11 +31,17 @@ from termcolor import colored
 from emet.agent.loop import DEFAULT_AGENT_LLM, run_agent_with_robot
 from emet.agent.model_debug import print_offline_model_line
 from emet.agent.prompt import DEFAULT_AGENT_NAME
+from emet.app.config_cli import (
+    emet_config_options,
+    load_finalized_config_from_cli,
+    load_runtime_from_cli,
+    resolve_agent_cli_options,
+    resolve_effective_config_path,
+)
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.core import get_parameters
 from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices, is_vl_llm_key
-from emet.utils.config import read_top_level_robot_from_yaml
 from emet.utils.logger import Logger
 
 log = Logger(__name__)
@@ -202,18 +208,9 @@ log = Logger(__name__)
     metavar="NAME",
     default=None,
     help=(
-        "Robot backend (stretch, rby1, galaxea_r1, innate_mars). Overrides top-level ``robot`` in --agent-config when set; "
-        "if omitted, that YAML key is used (default ``stretch`` when the key is absent). Must match "
-        "``emet serve mujoco --robot`` (MolmoSpaces ``--start-sim`` uses stretch when robot is unset on both). "
-        "Always put the name immediately after --robot (e.g. --robot stretch); if you omit the name, the next "
-        "flag may be parsed as the value."
+        "Robot backend (optional: config, connection profile, or ZMQ discovery). "
+        "Overrides top-level ``robot`` in --config when set."
     ),
-)
-@click.option(
-    "--agent-config",
-    "agent_config",
-    default="dynav_config.yaml",
-    help="DynaMem / scene YAML: basename under emet/config, or path to a YAML file (cwd or absolute).",
 )
 @click.option(
     "--vl-include-camera",
@@ -347,6 +344,7 @@ log = Logger(__name__)
     ),
 )
 @click.pass_context
+@emet_config_options()
 def main(
     ctx: click.Context,
     llm: str,
@@ -374,7 +372,11 @@ def main(
     rerun_debug: bool = False,
     rerun_bind: bool = False,
     robot: str | None = None,
-    agent_config: str = "dynav_config.yaml",
+    emet_config: str = "",
+    config_sets: tuple[str, ...] = (),
+    connection: str | None = None,
+    agent_config: str | None = None,
+    dynav_config: str | None = None,
     vl_include_camera: bool = False,
     no_vl_camera: bool = False,
     dynamem_eqa: bool = False,
@@ -407,10 +409,10 @@ def main(
       emet run agent --eqa --debug-vram   # one Qwen3-VL for chat + voxel captions/EQA
       emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
       # MolmoSpaces: ``emet serve mujoco --scene ithor ...`` (often DISPLAY=:1 instead of --headless); same --port-offset as serve:
-      emet run agent --robot rby1 --agent-config configs/agent_rby1_discord.yaml
-      emet run agent --agent-config configs/agent_rby1_discord.yaml   # uses robot: from YAML
-      emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml
-      emet run agent --robot innate_mars --agent-config configs/agent_innate_mars.yaml
+      emet run agent --robot rby1 --config configs/agent_rby1_discord.yaml
+      emet run agent --config configs/agent_rby1_discord.yaml   # uses robot: from YAML
+      emet run agent --robot stretch --config configs/agent_stretch_discord.yaml
+      emet run agent --robot innate_mars --config configs/agent_innate_mars.yaml
       emet run agent --input-path logs/memory_xxx --no-discord
       emet run agent --no-llm   # letter commands (E/M/Q/P)
       emet run agent --no-llm --command 'find red cylinder'
@@ -419,22 +421,75 @@ def main(
       emet run agent --robot rby1 --start-sim --scene ithor --headless -c "describe the scene"
     """
     cmd_list = list(commands) if commands else None
+    config_path = resolve_effective_config_path(
+        ctx,
+        emet_config=emet_config,
+        agent_config=agent_config,
+        dynav_config=dynav_config,
+    )
     robot_from_cli = robot is not None and str(robot).strip() != ""
+    runtime = None
 
-    if robot is None or str(robot).strip() == "":
-        r_yaml = read_top_level_robot_from_yaml(agent_config)
-        robot = r_yaml if r_yaml is not None else str(get_parameters(agent_config).get("robot", "stretch")).strip()
+    if offline:
+        resolved_robot = "stretch"
     else:
-        robot = str(robot).strip()
-    if not robot or robot.startswith("-"):
+        runtime = load_runtime_from_cli(
+            ctx,
+            emet_config=emet_config,
+            config_sets=config_sets,
+            agent_config=agent_config,
+            dynav_config=dynav_config,
+            robot=robot,
+            robot_ip=robot_ip,
+            connection=connection,
+            port_offset=port_offset,
+            zmq_discover=not start_sim,
+        )
+        resolved_robot = runtime.robot_id
+        robot_ip = runtime.host
+        if runtime.robot_source == "zmq":
+            log.info("Using robot from ZMQ server: %r (pass --robot to override).", resolved_robot)
+    robot = resolved_robot
+    if robot and robot.startswith("-"):
         raise click.UsageError(
             "`--robot` must be followed by a backend name (e.g. `stretch`, `rby1`, `innate_mars`). "
-            "You left it empty or the next token was parsed as the value (often another flag); "
-            "use e.g. `emet run agent --robot stretch --agent-config configs/agent_stretch_discord.yaml --rerun`."
+            "You left it empty or the next token was parsed as the value (often another flag)."
         )
 
     if offline and start_sim:
         raise click.UsageError("Cannot combine --offline with --start-sim.")
+
+    if offline:
+        agent_config_resolved = load_finalized_config_from_cli(
+            ctx,
+            emet_config=emet_config,
+            config_sets=config_sets,
+            agent_config=agent_config,
+            dynav_config=dynav_config,
+            robot_id=resolved_robot,
+        )
+    else:
+        assert runtime is not None
+        agent_config_resolved = runtime.config
+
+    agent_opts = resolve_agent_cli_options(
+        ctx,
+        agent_config_resolved.agent_section(),
+        llm=llm,
+        prompt=prompt,
+        device=device,
+        max_tokens=max_tokens,
+        discord=discord,
+        dynamem_eqa=dynamem_eqa,
+        share_memory_vllm=share_memory_vllm,
+    )
+    llm = agent_opts.llm
+    prompt = agent_opts.prompt
+    device = agent_opts.device
+    max_tokens = agent_opts.max_tokens
+    discord = agent_opts.discord
+    dynamem_eqa = agent_opts.eqa
+    share_memory_vllm = agent_opts.share_memory_vllm
 
     sim_cli_used = any(
         [
@@ -473,6 +528,8 @@ def main(
         os.environ["EMET_VRAM_DEBUG"] = "1"
     if debug_camera:
         os.environ["EMET_AGENT_CAMERA_DEBUG"] = "1"
+    if debug_tools:
+        os.environ["EMET_AGENT_TOOL_DEBUG"] = "1"
 
     # Embodied mode: default IP 127.0.0.1 unless --offline
     robot_effective: str | None = None
@@ -506,7 +563,7 @@ def main(
 
             try:
                 sim_cfg = resolve_sim_launch_for_agent(
-                    agent_config_path=agent_config,
+                    agent_config_path=config_path,
                     sim_config_cli=sim_config,
                     port_offset_cli=port_offset,
                     default_mujoco_table_if_missing=True,
@@ -571,9 +628,7 @@ def main(
             )
             log.info("Sim is up; connecting agent.")
         log.info(
-            "Robot backend: %s (from --robot or YAML `%s`; must match `emet serve mujoco --robot`).",
-            robot,
-            agent_config,
+            f"Robot backend: {robot} (from --robot or config `{config_path}`; must match `emet serve mujoco --robot`)."
         )
         try:
             run_agent_with_robot(
@@ -589,7 +644,7 @@ def main(
                 agent_name=agent_name,
                 commands=cmd_list,
                 port_offset=port_offset,
-                agent_config=agent_config,
+                agent_config=config_path,
                 device=device,
                 max_tokens=max_tokens,
                 vl_include_camera=vl_include_effective,
@@ -601,6 +656,9 @@ def main(
                 rerun_show_panels=rerun_show_panels,
                 rerun_debug=rerun_debug,
                 shutdown_sim_subprocess=sim_shutdown,
+                parameters=runtime.parameters if runtime is not None else None,
+                allow_missing_depth=runtime.allow_missing_depth if runtime is not None else None,
+                embodied_overlay=runtime.config.embodied_agent() if runtime is not None else None,
             )
         finally:
             if sim_shutdown is not None:
@@ -608,7 +666,11 @@ def main(
         return
 
     prompt_builder = get_prompt_builder(prompt)
-    dynav_params = get_parameters(agent_config)
+    dynav_params = get_parameters(
+        config_path,
+        overrides=list(config_sets) if config_sets else None,
+        robot=resolved_robot if offline else None,
+    )
     client = get_llm_client(llm, prompt_builder, device=device, parameters=dynav_params)
     if hasattr(client, "max_tokens"):
         client.max_tokens = max_tokens

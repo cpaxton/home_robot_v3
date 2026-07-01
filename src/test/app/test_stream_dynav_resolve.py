@@ -1,39 +1,45 @@
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
+# Copyright (c) Chris Paxton 2026
 #
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
-#
-# Some code may be adapted from other open-source works with their respective licenses. Original
-# license information maybe found below, if so.
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""Dynav preset resolution for emet stream/capture on innate_mars hardware."""
+"""Dynav / config preset resolution for emet stream/capture."""
 
 from emet.app.stream_agent_factory import (
-    INNATE_MARS_HW_DYNAV,
+    load_stream_parameters,
+    resolve_stream_config_path,
     resolve_stream_dynav_config,
 )
+from emet.config.loader import default_config_path
 from emet.robots import DEFAULT_DYNAV_CONFIG_YAML
 
 
-def test_innate_mars_remote_host_uses_da3_dynav_by_default():
-    resolved = resolve_stream_dynav_config(
+def test_default_dynav_resolves_to_unified_config():
+    resolved = resolve_stream_config_path(DEFAULT_DYNAV_CONFIG_YAML, dynav_from_default=True)
+    assert resolved == default_config_path()
+
+
+def test_innate_mars_remote_host_uses_auto_depth_via_overlay():
+    config_path = resolve_stream_dynav_config(
         "innate_mars",
         "herman",
         DEFAULT_DYNAV_CONFIG_YAML,
         dynav_from_default=True,
     )
-    assert resolved == INNATE_MARS_HW_DYNAV
+    params, _ = load_stream_parameters("innate_mars", "herman", config_path)
+    assert config_path == default_config_path()
+    assert str(params.get("depth_source", "")).lower() in ("auto", "da3")
 
 
-def test_innate_mars_localhost_keeps_sensor_dynav_by_default():
-    resolved = resolve_stream_dynav_config(
+def test_innate_mars_localhost_keeps_sensor_depth_when_sim():
+    config_path = resolve_stream_dynav_config(
         "innate_mars",
         "127.0.0.1",
         DEFAULT_DYNAV_CONFIG_YAML,
         dynav_from_default=True,
     )
-    assert resolved == DEFAULT_DYNAV_CONFIG_YAML
+    params, _ = load_stream_parameters("innate_mars", "127.0.0.1", config_path)
+    assert config_path == default_config_path()
+    assert str(params.get("depth_source", "")).lower() in ("auto", "sensor")
 
 
 def test_explicit_dynav_not_overridden():
@@ -44,3 +50,13 @@ def test_explicit_dynav_not_overridden():
         dynav_from_default=False,
     )
     assert resolved == "dynav_config.yaml"
+
+
+def test_legacy_alias_resolve_stream_dynav_compat():
+    resolved = resolve_stream_dynav_config(
+        "innate_mars",
+        "127.0.0.1",
+        DEFAULT_DYNAV_CONFIG_YAML,
+        dynav_from_default=True,
+    )
+    assert resolved == default_config_path()

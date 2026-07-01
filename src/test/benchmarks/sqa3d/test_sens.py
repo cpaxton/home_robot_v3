@@ -1,19 +1,21 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
+from pathlib import Path
+from unittest.mock import MagicMock
 
 import numpy as np
 import open3d as o3d
 import pytest
-from pathlib import Path
 from scipy.spatial.transform import Rotation as R
 
 from emet.benchmarks.sqa3d.scannet.config import (
+    default_scannet_root,
     scene_replay_assets_present,
+    scene_sens_path,
     scene_sens_present,
 )
-from unittest.mock import MagicMock
-
 from emet.benchmarks.sqa3d.scannet.sens import (
     ScanNetSensLoader,
     SensFrameMatch,
@@ -22,7 +24,6 @@ from emet.benchmarks.sqa3d.scannet.sens import (
     scannet_camera_to_opencv_world_to_camera,
     target_camera_forward_xy,
 )
-from emet.benchmarks.sqa3d.scannet.config import default_scannet_root, scene_sens_path
 from emet.benchmarks.sqa3d.scannet.simulator import ScanNetReplaySimulator
 
 BOX_SCENE_ID = "scene_fixture_00"

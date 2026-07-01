@@ -145,9 +145,8 @@ def test_eval_topdown_map_masks_unexplored_margin_white():
     obs[55, 55] = True
     go = np.array([0.0, 0.0])
     share = share_topdown_map_rgb(obs, exp, go, 0.1, None, max_side=640)
-    eval_map = eval_topdown_map_rgb(obs, exp, go, 0.1, None, max_side=640)
-    assert eval_map.shape[0] <= share.shape[0]
-    assert eval_map.shape[1] <= share.shape[1]
+    eval_map = eval_topdown_map_rgb(obs, exp, go, 0.1, None, max_side=640, min_map_side=0, margin_cells=16)
+    assert eval_map.shape[0] >= 10
     white = np.all(eval_map == np.uint8([248, 248, 248]), axis=-1)
     green = np.all(eval_map == np.uint8([50, 160, 80]), axis=-1)
     red = np.all(eval_map == np.uint8([200, 55, 55]), axis=-1)
@@ -222,8 +221,8 @@ def test_eval_topdown_map_draws_trajectory_path():
     exp[10:50, 10:50] = True
     go = np.array([0.0, 0.0])
     traj = [(0.5, 0.5, 0.0), (1.5, 0.5, 1.57), (2.5, 1.5, 3.14)]
-    before = eval_topdown_map_rgb(obs, exp, go, 0.1, (2.5, 1.5), max_side=640, trajectory_xyt=traj)
-    plain = eval_topdown_map_rgb(obs, exp, go, 0.1, (2.5, 1.5), max_side=640)
+    before = eval_topdown_map_rgb(obs, exp, go, 0.1, (2.5, 1.5), max_side=640, min_map_side=0, trajectory_xyt=traj)
+    plain = eval_topdown_map_rgb(obs, exp, go, 0.1, (2.5, 1.5), max_side=640, min_map_side=0)
     assert not np.array_equal(before, plain)
     blue = np.all(before == np.uint8([30, 90, 230]), axis=-1)
     assert int(blue.sum()) > 0

@@ -114,6 +114,34 @@ def downsample_topdown_rgb_max_side(rgb: np.ndarray, max_side: int) -> np.ndarra
     return rgb[::step, ::step].copy()
 
 
+def upscale_topdown_rgb_min_side(rgb: np.ndarray, min_side: int) -> np.ndarray:
+    """Nearest-neighbor upscale so max(H,W) >= min_side (eval exports stay readable)."""
+    if min_side <= 0:
+        return rgb
+    h, w = rgb.shape[0], rgb.shape[1]
+    m = max(h, w)
+    if m >= min_side or m == 0:
+        return rgb
+    from PIL import Image
+
+    scale = float(min_side) / float(m)
+    new_w = max(1, int(round(w * scale)))
+    new_h = max(1, int(round(h * scale)))
+    img = Image.fromarray(rgb[:, :, :3].astype(np.uint8), mode="RGB")
+    return np.asarray(img.resize((new_w, new_h), resample=Image.Resampling.NEAREST), dtype=np.uint8)
+
+
+def finalize_export_topdown_rgb(
+    rgb: np.ndarray,
+    *,
+    max_side: int = 1280,
+    min_side: int = 1024,
+) -> np.ndarray:
+    """Upscale small crops, then downsample if above max_side."""
+    out = upscale_topdown_rgb_min_side(rgb, min_side)
+    return downsample_topdown_rgb_max_side(out, max_side)
+
+
 def explored_crop_indices(
     explored: Any,
     robot_xy: np.ndarray | tuple[float, float] | None,
@@ -362,9 +390,11 @@ def eval_topdown_map_rgb(
     grid_resolution: float,
     robot_xy: np.ndarray | tuple[float, float] | None,
     *,
-    max_side: int = 640,
-    margin_cells: int = 8,
+    max_side: int = 1280,
+    min_map_side: int = 1024,
+    margin_cells: int = 24,
     trajectory_xyt: list[tuple[float, float, float] | list[float]] | None = None,
+    filter_islands: bool = False,
 ) -> np.ndarray:
     """Eval/diagnostics export: crop to explored footprint, white background, only paint explored cells.
 
@@ -373,9 +403,19 @@ def eval_topdown_map_rgb(
     """
     obs = _to_numpy_bool_2d(obstacles)
     exp = _to_numpy_bool_2d(explored)
+    if filter_islands:
+        from emet.visualization.map_grid import prune_explored_islands
+
+        exp = prune_explored_islands(
+            exp,
+            grid_origin_xy=grid_origin_xy,
+            grid_resolution=grid_resolution,
+            robot_xy=robot_xy,
+            trajectory_xyt=trajectory_xyt,
+        )
     h, w = obs.shape
     bbox = explored_crop_indices(
-        explored,
+        exp,
         robot_xy,
         grid_origin_xy,
         grid_resolution,
@@ -399,7 +439,7 @@ def eval_topdown_map_rgb(
                 grid_resolution,
                 full_shape_hw=(h, w),
             )
-        return downsample_topdown_rgb_max_side(rgb, max_side)
+        return finalize_export_topdown_rgb(rgb, max_side=max_side, min_side=min_map_side)
     i0, i1, j0, j1 = bbox
     exp_c = exp[i0:i1, j0:j1]
     obs_c = obs[i0:i1, j0:j1]
@@ -429,7 +469,102 @@ def eval_topdown_map_rgb(
             crop_offset_ij=(i0, j0),
             full_shape_hw=(h, w),
         )
-    return downsample_topdown_rgb_max_side(rgb, max_side)
+    return finalize_export_topdown_rgb(rgb, max_side=max_side, min_side=min_map_side)
+
+
+def _alpha_blend_rgb(base: np.ndarray, overlay: np.ndarray, alpha: float) -> np.ndarray:
+    """Blend ``overlay`` onto ``base`` where overlay is not white background."""
+    out = np.ascontiguousarray(base)
+    a = float(np.clip(alpha, 0.0, 1.0))
+    mask = np.any(overlay != np.uint8([248, 248, 248]), axis=-1)
+    if not mask.any():
+        return out
+    blended = (
+        (1.0 - a) * out[mask].astype(np.float32) + a * overlay[mask].astype(np.float32)
+    ).astype(np.uint8)
+    out[mask] = blended
+    return out
+
+
+def eval_topdown_overlay_rgb(
+    obstacles: Any,
+    explored: Any,
+    grid_origin_xy: np.ndarray,
+    grid_resolution: float,
+    robot_xy: np.ndarray | tuple[float, float] | None,
+    *,
+    gt_navigable: Any | None = None,
+    max_side: int = 1280,
+    min_map_side: int = 1024,
+    margin_cells: int = 24,
+    trajectory_xyt: list[tuple[float, float, float] | list[float]] | None = None,
+    filter_islands: bool = True,
+) -> np.ndarray:
+    """Composite GT navmesh (slate) + agent explored/obstacles + trajectory path."""
+    obs = _to_numpy_bool_2d(obstacles)
+    exp = _to_numpy_bool_2d(explored)
+    if filter_islands:
+        from emet.visualization.map_grid import prune_explored_islands
+
+        exp = prune_explored_islands(
+            exp,
+            grid_origin_xy=grid_origin_xy,
+            grid_resolution=grid_resolution,
+            robot_xy=robot_xy,
+            trajectory_xyt=trajectory_xyt,
+        )
+    h, w = obs.shape
+    bbox = explored_crop_indices(
+        exp,
+        robot_xy,
+        grid_origin_xy,
+        grid_resolution,
+        (h, w),
+        margin_cells=margin_cells,
+    )
+    if bbox is None:
+        agent = eval_topdown_map_rgb(
+            obs,
+            exp,
+            grid_origin_xy,
+            grid_resolution,
+            robot_xy,
+            max_side=max_side,
+            margin_cells=margin_cells,
+            trajectory_xyt=trajectory_xyt,
+            filter_islands=False,
+        )
+        return agent
+    i0, i1, j0, j1 = bbox
+    exp_c = exp[i0:i1, j0:j1]
+    obs_c = obs[i0:i1, j0:j1]
+    if gt_navigable is not None:
+        from emet.habitat.navmesh_topdown import habitat_gt_topdown_rgb
+
+        gt_c = np.asarray(gt_navigable, dtype=bool)[i0:i1, j0:j1]
+        rgb = habitat_gt_topdown_rgb(gt_c, crop_slice=None, max_side=None)
+    else:
+        rgb = np.full((exp_c.shape[0], exp_c.shape[1], 3), 248, dtype=np.uint8)
+    free = exp_c & ~obs_c
+    rgb[free] = (50, 160, 80)
+    rgb[exp_c & obs_c] = (200, 55, 55)
+    if robot_xy is not None:
+        ri, rj = world_xy_to_grid_ij(robot_xy, grid_origin_xy, grid_resolution, (h, w))
+        ri -= i0
+        rj -= j0
+        ch, cw = rgb.shape[0], rgb.shape[1]
+        if 0 <= ri < ch and 0 <= rj < cw:
+            rgb[ri, rj] = (255, 255, 0)
+    if trajectory_xyt:
+        rgb = overlay_trajectory_on_map_rgb(
+            rgb,
+            trajectory_xyt,
+            grid_origin_xy,
+            grid_resolution,
+            crop_offset_ij=(i0, j0),
+            full_shape_hw=(h, w),
+        )
+    return finalize_export_topdown_rgb(rgb, max_side=max_side, min_side=min_map_side)
 
 
 def share_topdown_map_rgb(
@@ -550,8 +685,11 @@ def snapshot_eval_from_voxel_map(
     voxel_map: Any,
     robot_xy: np.ndarray | tuple[float, float] | None,
     *,
-    max_side: int = 640,
+    max_side: int = 1280,
     trajectory_xyt: list[tuple[float, float, float] | list[float]] | None = None,
+    filter_islands: bool = False,
+    gt_navigable: Any | None = None,
+    min_map_side: int = 1024,
 ) -> tuple[np.ndarray | None, dict[str, Any]]:
     """Build eval/diagnostics top-down map (white background, explored-only coloring)."""
     if voxel_map is None or not hasattr(voxel_map, "get_2d_map"):
@@ -571,9 +709,43 @@ def snapshot_eval_from_voxel_map(
         res,
         robot_xy,
         max_side=max_side,
+        min_map_side=min_map_side,
         trajectory_xyt=trajectory_xyt,
+        filter_islands=filter_islands,
     )
+    if gt_navigable is not None:
+        stats["overlay_available"] = True
     return img, stats
+
+
+def snapshot_eval_overlay_from_voxel_map(
+    voxel_map: Any,
+    robot_xy: np.ndarray | tuple[float, float] | None,
+    *,
+    max_side: int = 1280,
+    trajectory_xyt: list[tuple[float, float, float] | list[float]] | None = None,
+    gt_navigable: Any | None = None,
+    filter_islands: bool = True,
+    min_map_side: int = 1024,
+) -> np.ndarray | None:
+    """GT navmesh + agent map + trajectory composite for diagnostics export."""
+    if voxel_map is None or not hasattr(voxel_map, "get_2d_map"):
+        return None
+    obstacles, explored = voxel_map.get_2d_map()
+    go = _grid_origin_xy(getattr(voxel_map, "grid_origin", np.zeros(2)))
+    res = float(getattr(voxel_map, "grid_resolution", 0.1) or 0.1)
+    return eval_topdown_overlay_rgb(
+        obstacles,
+        explored,
+        go,
+        res,
+        robot_xy,
+        gt_navigable=gt_navigable,
+        max_side=max_side,
+        min_map_side=min_map_side,
+        trajectory_xyt=trajectory_xyt,
+        filter_islands=filter_islands,
+    )
 
 
 def snapshot_from_voxel_map(

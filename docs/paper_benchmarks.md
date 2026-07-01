@@ -201,7 +201,8 @@ uv run python scripts/download_scannet_data.py --accept-tos --scene scene0380_00
 # Paper dev sweep (defaults from configs/sqa3d/benchmark.yaml: val 0:30, sens, isolated)
 uv run emet sqa3d run-real-sweep --no-download --replay-mode sens
 
-# Or GPU preflight wrapper:
+# Or GPU preflight wrappers:
+./scripts/gpu_preflight.sh --kill-stale
 ./scripts/run_sqa3d_gpu_sweep.sh --split val --question-start 0 --question-end 30 --replay-mode sens
 
 # Score + figures

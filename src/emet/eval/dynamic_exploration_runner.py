@@ -42,6 +42,7 @@ class DynamicExploreRunConfig:
     port_offset: int = 0
     no_sensor_perception: bool = True
     resume: bool = False
+    skip_eqa: bool = False
 
 
 def _repo_root() -> Path:
@@ -68,6 +69,7 @@ def _dynagraph_subprocess_timeout_s(
     explore_max_iters: int = 0,
     sim_kind: str = "",
     cpu_only: bool = False,
+    skip_eqa: bool = False,
 ) -> float:
     """Wall-clock budget for one ``emet run dynagraph`` subprocess.
 
@@ -83,6 +85,9 @@ def _dynagraph_subprocess_timeout_s(
         timeout_s += 900.0
     if iters == 0:
         timeout_s = max(timeout_s, 3600.0)
+    if not skip_eqa:
+        # Post-explore question bank runs real VLM EQA (Qwen3-VL load + 2+ questions).
+        timeout_s += 5400.0 if cpu_only else 3600.0
     if cpu_only:
         timeout_s *= 2.0
     return min(timeout_s, 43200.0)
@@ -128,6 +133,7 @@ def build_dynagraph_subprocess_cmd(
     explore_iters: int = 0,
     export_voxel_pickle: bool = False,
     include_explore_loop: bool = True,
+    skip_eqa: bool = False,
 ) -> list[str]:
     cmd = [
         "uv",
@@ -147,7 +153,7 @@ def build_dynagraph_subprocess_cmd(
     ]
     if export_voxel_pickle:
         cmd.append("--export-voxel-pickle")
-    if questions_yaml is not None and question_env is not None:
+    if not skip_eqa and questions_yaml is not None and question_env is not None:
         cmd.extend(
             [
                 "--question-file",
@@ -200,6 +206,7 @@ def run_explore_episode_subprocess(
         question_env=run.episode.question_env,
         explore_iters=run.explore_max_iters,
         include_explore_loop=run.mapping_mode == "explore",
+        skip_eqa=run_cfg.skip_eqa,
     )
 
     t0 = time.monotonic()
@@ -218,6 +225,7 @@ def run_explore_episode_subprocess(
                 explore_max_iters=run.explore_max_iters,
                 sim_kind=sim_kind,
                 cpu_only=run_cfg.cpu_only,
+                skip_eqa=run_cfg.skip_eqa,
             )
             with dyn_log.open("w", encoding="utf-8") as log_f:
                 proc = subprocess.run(
@@ -263,7 +271,7 @@ def run_explore_episode_subprocess(
 def _run_eqa_single(agent: Any, robot: Any, qspec: dict[str, Any]) -> dict[str, Any]:
     import re
 
-    from emet.controller.controller_graph_eqa import EQAExecuter
+    from emet.controller.task.dynamem import EQAExecuter
 
     qtext = str(qspec.get("question", "")).strip()
     robot.move_to_nav_posture()
@@ -305,7 +313,7 @@ def run_world_change_episode(
     """Phase 2: explore → EQA pre → relocate body → recovery → EQA post → export."""
     from emet.app.dynagraph_explore import dynagraph_explore_until_terminated
     from emet.controller.controller_dynagraph import DynagraphController
-    from emet.controller.controller_graph_eqa import EQAExecuter
+    from emet.controller.task.dynamem import EQAExecuter
     from emet.core.parameters import get_parameters
     from emet.memory.graph_eqa.dynagraph_eval import compute_dynagraph_eval
     from emet.memory.graph_eqa.question_bank import load_question_bank, score_eqa_results
@@ -668,6 +676,7 @@ def run_lifelong_episode(
                     input_dir=prev_ckpt,
                     explore_iters=int(explore_iters),
                     export_voxel_pickle=True,
+                    skip_eqa=run_cfg.skip_eqa or qyaml is None,
                 )
                 cycle_timeout = cycle_timeout_s
                 if cycle_timeout is None:
@@ -675,6 +684,7 @@ def run_lifelong_episode(
                         explore_max_iters=int(explore_iters),
                         sim_kind=sim_kind,
                         cpu_only=run_cfg.cpu_only,
+                        skip_eqa=run_cfg.skip_eqa or qyaml is None,
                     )
                 cycle_log = ckpt / "dynagraph.log"
                 ckpt.mkdir(parents=True, exist_ok=True)

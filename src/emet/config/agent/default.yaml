@@ -1,0 +1,8 @@
+# Default chat / tool agent options for ``emet run agent``.
+llm: qwen3-vl-eqa
+eqa: false
+share_memory_vllm: true
+discord: true
+prompt: simple
+device: cuda
+max_tokens: 1024

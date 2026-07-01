@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -61,8 +61,7 @@ def tally_choice_votes(
     to a uniform split) and ``None`` is returned so the caller keeps its main answer.
     """
     counted = Counter(
-        v for v in votes
-        if v is not None and 0 <= v < len(choices) and not PLACEHOLDER_RE.search(choices[v])
+        v for v in votes if v is not None and 0 <= v < len(choices) and not PLACEHOLDER_RE.search(choices[v])
     )
     if not counted:
         return None
@@ -75,17 +74,11 @@ def tally_choice_votes(
     return leaders[0]
 
 
-_STOPWORDS = frozenset(
-    "a an the it is are was were in at on of to and or i my your did you leave left".split()
-)
+_STOPWORDS = frozenset("a an the it is are was were in at on of to and or i my your did you leave left".split())
 
 
 def _norm_tokens(text: str) -> set[str]:
-    return {
-        t
-        for t in re.sub(r"[^a-z0-9\- ]", " ", (text or "").lower()).split()
-        if t and t not in _STOPWORDS
-    }
+    return {t for t in re.sub(r"[^a-z0-9\- ]", " ", (text or "").lower()).split() if t and t not in _STOPWORDS}
 
 
 def match_freeform_to_choice(answer: str, choices: list[str]) -> int | None:

@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -73,9 +73,7 @@ def test_scannet_embodied_smoke():
 
     scannet_root = Path(os.environ.get("SCANNET_ROOT", str(default_scannet_root())))
     target_scene = os.environ.get("SQA3D_SCANNET_TEST_SCENE", "scene0380_00")
-    if os.environ.get("RUN_SQA3D_SCANNET_TESTS", "") != "1" and not scene_assets_present(
-        target_scene, scannet_root
-    ):
+    if os.environ.get("RUN_SQA3D_SCANNET_TESTS", "") != "1" and not scene_assets_present(target_scene, scannet_root):
         pytest.skip(
             f"ScanNet mesh missing for {target_scene}; "
             "run: uv run python scripts/download_scannet_data.py --accept-tos --scene scene0380_00"

@@ -33,10 +33,11 @@ from emet.agent.env_flags import env_agent_camera_debug
 from emet.agent.model_debug import print_embodied_model_report, print_llm_invoke_line
 from emet.agent.prompt import DEFAULT_AGENT_NAME, AgentPromptBuilder, parse_tool_calls_response
 from emet.agent.tools import Tool, get_tools
-from emet.config.embodied_agent_config import load_embodied_agent_overlay
+from emet.config.embodied_agent_config import EmbodiedAgentConfig, load_embodied_agent_overlay
 from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.controller.zmq_client import StretchZmqClient
 from emet.core import get_parameters
+from emet.core.parameters import Parameters
 from emet.llms import get_llm_client
 from emet.llms.base import AbstractVLLMClient
 from emet.memory.backend import get_memory_backend
@@ -276,6 +277,9 @@ def run_agent_with_robot(
     rerun_show_panels: bool = False,
     rerun_debug: bool = False,
     shutdown_sim_subprocess: Callable[[], None] | None = None,
+    parameters: Parameters | None = None,
+    allow_missing_depth: bool | None = None,
+    embodied_overlay: EmbodiedAgentConfig | None = None,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -288,6 +292,11 @@ def run_agent_with_robot(
     started with ``emet run agent --start-sim`` can exit as soon as the ZMQ client disconnects
     (``run_agent`` still registers a final shutdown in ``finally`` as a safety net).
 
+    **Defaults vs CLI:** ``emet run agent`` passes ``use_llm=True`` unless ``--no-llm``, and
+    resolves ``agent_config`` from unified ``--config`` (not the legacy ``dynav_config.yaml``
+    default on this function). Direct Python callers should pass an explicit config path and
+    set ``use_llm`` explicitly.
+
     When *eqa*, *use_llm*, and *share_memory_vllm* are true (the CLI default for sharing), DynaMem defers its
     local caption VLM until after the agent LLM loads, then reuses the agent vision-language client when
     applicable; otherwise it loads the local EQA VLM from ``dynav_config.yaml``.
@@ -296,13 +305,17 @@ def run_agent_with_robot(
     verbose_tools = bool(tool_debug) or _env_agent_tool_debug()
 
     camera_debug = env_agent_camera_debug()
-    parameters = get_parameters(agent_config)
-    embodied_overlay = load_embodied_agent_overlay(agent_config)
+    if parameters is None:
+        parameters = get_parameters(agent_config, robot=robot)
+    if embodied_overlay is None:
+        embodied_overlay = load_embodied_agent_overlay(agent_config)
     defer_eqa_vllm = bool(eqa and use_llm and share_memory_vllm)
     _exec_kwargs = {k: v for k, v in kwargs.items() if k != "defer_eqa_vllm"}
-    depth_mode = str(parameters.get("depth_source", "sensor")).lower()
+    if allow_missing_depth is None:
+        depth_mode = str(parameters.get("depth_source", "sensor")).lower()
+        robot_key = robot.lower().replace("-", "_")
+        allow_missing_depth = depth_mode in ("da3", "auto") or robot_key == "innate_mars"
     robot_key = robot.lower().replace("-", "_")
-    allow_missing_depth = depth_mode in ("da3", "auto") or robot_key == "innate_mars"
     if robot_key == "stretch":
         # Do not start ZMQ in __init__: DynamemTaskExecutor calls agent.start() which invokes
         # robot.start() again; double-start left orphan recv threads and led to ZMQ double-free crashes.

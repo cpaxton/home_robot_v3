@@ -1,0 +1,62 @@
+---
+description: GPU preflight, overnight eval orchestrators, and safe Habitat/smoke execution for agents
+alwaysApply: true
+---
+
+# GPU and eval workflow
+
+## Preflight (before any VLM / Habitat / Robocasa GPU job)
+
+```bash
+./scripts/gpu_preflight.sh --kill-stale
+NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait   # or --check for one-shot
+```
+
+Shared helpers: [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh) — stale process cleanup, VRAM wait, `PYTORCH_CUDA_ALLOC_CONF`, and **`emet_pytest_no_sim_ignore_args`** for safe no-sim pytest.
+
+## One GPU job at a time
+
+Do **not** stack in one uninterrupted session:
+
+- Robocasa dynagraph explore (track 4)
+- Full `pytest src/test -m "not sim"` without ignore list
+- Habitat HM-EQA with Qwen3-VL-8B
+- `run_overnight_eval_smoke.sh`
+
+That sequence caused full-system freezes on an RTX 4090 workstation (GUI + SSH unresponsive; mouse still moved).
+
+| Orchestrator | Default | Notes |
+|--------------|---------|-------|
+| `run_simulation_smoke_battery.sh` | sequential | **Paper-facing** seven-track battery — see `docs/simulation_testing_plan.md` |
+| `run_overnight_cross_track_smoke.sh` | `RUN_DEEP_EVAL=0` | Extended overnight + tier 0 + safe pytest |
+| `run_overnight_eval_smoke.sh` | separate night | HM-EQA + OVMM + SQA3D matrix |
+| `run_overnight_habitat_eval.sh` | `--resume` | Multi-phase HM-EQA subsets |
+
+## Cursor agent sessions
+
+- Run **multi-hour** Habitat evals and overnight scripts via **`nohup … &`** or a dedicated terminal — not as blocking inline commands in long agent turns.
+- If the agent segfaults mid-eval, check artifacts under **`~/runs/emet/`**, **`~/.cache/habitat_eqa/results/`**, and **`/tmp/unified_smoke_*.log`** — subprocesses may have finished.
+- Tier 0 + tracks 1–3 PR smoke: see [`docs/experiments/cross_track_smoke.md`](../../docs/experiments/cross_track_smoke.md).
+
+## Cross-track smoke entrypoint
+
+```bash
+nohup ./scripts/run_overnight_cross_track_smoke.sh \
+  >> ~/runs/emet/overnight_cross_track/nohup.log 2>&1 &
+tail -f ~/runs/emet/overnight_cross_track/cross_track_*/summary.txt
+```
+
+## Unified config smoke (post–PR #68)
+
+When touching config loader or `configs/emet/default.yaml`:
+
+```bash
+uv run emet test src/test/config/ -q
+uv run python -c "
+from emet.core.parameters import get_parameters
+p = get_parameters('dynav_innate_mars.yaml')
+assert str(p.get('depth_source')).lower() == 'auto'
+"
+```
+
+See [`docs/emet_config.md`](../../docs/emet_config.md).

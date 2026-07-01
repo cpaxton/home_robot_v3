@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -15,6 +15,7 @@ import numpy as np
 
 from emet.memory.graph_eqa.mujoco_align import _norm_label
 from emet.simulation.molmo_occupancy._geom_aabb import geom_aabb
+
 GT_SCHEMA_VERSION = 1
 
 # Default render size used by robosuite server primary camera.
@@ -106,9 +107,7 @@ def aabb_corners(min_xyz: np.ndarray, max_xyz: np.ndarray) -> np.ndarray:
     )
 
 
-def bounds_3d_from_geoms(
-    model: mujoco.MjModel, data: mujoco.MjData, body_id: int
-) -> dict[str, list[float]] | None:
+def bounds_3d_from_geoms(model: mujoco.MjModel, data: mujoco.MjData, body_id: int) -> dict[str, list[float]] | None:
     gids = _body_geom_ids(model, body_id)
     if not gids:
         return None

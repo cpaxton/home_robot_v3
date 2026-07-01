@@ -20,7 +20,8 @@ Start here to run and reproduce benchmarks for the Dynagraph CoRL paper.
 | **GT object finding** | `sec:gt_experiments` | [gt_object_finding.md](gt_object_finding.md) | `emet run dynagraph --ground-truth` + eval script | `runs/<export>/` | — |
 | **Innate Mars** | appendix | [innate_mars.md](innate_mars.md) | `emet run dynagraph --robot innate_mars --ground-truth` | `/tmp/mars_*` | — |
 | **Habitat EQA** | `tab:hmeqa_vs_prior`, Appendix | [habitat_eqa.md](habitat_eqa.md) · **[results](habitat_eqa_results.md)** | `.venv-habitat/bin/emet-habitat` | `~/.cache/habitat_eqa/results/` | topdown from debug bundles |
-| **Cross-track smoke** | — | **[cross_track_smoke.md](cross_track_smoke.md)** | per-track commands | `~/runs/emet/` | validate before multi-day sweeps |
+| **Cross-track smoke** | — | **[cross_track_smoke.md](cross_track_smoke.md)** | `./scripts/run_overnight_cross_track_smoke.sh` | `~/runs/emet/overnight_cross_track/` | validate before multi-day sweeps |
+| **Simulation smoke (7-track)** | — | **[simulation_testing_plan.md](../simulation_testing_plan.md)** | `./scripts/run_simulation_smoke_battery.sh` | `~/runs/emet/simulation_smoke/` | paper-facing sequential battery |
 | **Large paper queue** | all tracks | [large_eval_queue.md](large_eval_queue.md) | `./scripts/run_large_paper_eval.sh` | `~/runs/emet/<track>/` | — |
 
 Shared backend names: `dynamem`, `graph_eqa`, `dynagraph`, `ground_truth` — see [paper_benchmarks.md § Shared memory backends](../paper_benchmarks.md#shared-memory-backends).
@@ -40,6 +41,7 @@ Paper experiment docs and CLI flags track `main`; after pulling, use the same `e
 
 ```bash
 # Unit tests (no GPU, fast)
+uv run emet test src/test/config/ -q
 uv run emet test src/test/memory/test_ovmm_find_phase_metrics.py -q
 uv run emet test src/test/benchmarks/sqa3d/ -q
 uv run emet test src/test/eval/ -q
@@ -59,9 +61,28 @@ uv run python scripts/smoke_backend_localization_figure.py --quick
 
 ## GPU hygiene
 
-Run **one GPU-heavy job at a time** (dynamic exploration, backend localization, SQA3D real sweeps). Parallel VLM loads can OOM (~15 GB each). Kill stale `emet run dynagraph` / `emet sqa3d` processes before starting a new sweep.
+Run **one GPU-heavy job at a time** (dynamic exploration, backend localization, SQA3D real sweeps, Habitat HM-EQA with VLM). Parallel VLM loads can OOM (~15 GB each) or wedge the NVIDIA driver when the same GPU drives the desktop.
+
+**Shared preflight** ([`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh)):
+
+```bash
+./scripts/gpu_preflight.sh --kill-stale          # stop stale sim/eval/agent GPU jobs
+NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait # block until VRAM free (3 stable reads)
+NEED_MIB=14000 ./scripts/gpu_preflight.sh --check # one-shot; exit 1 if insufficient
+```
+
+Overnight orchestrators source this script and call `emet_kill_stale_eval_processes` + `emet_gpu_between_steps` between phases:
+
+| Script | Purpose |
+|--------|---------|
+| [`run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh) | Five-track smoke + safe no-sim pytest (`RUN_DEEP_EVAL=0` default) |
+| [`run_overnight_eval_smoke.sh`](../scripts/run_overnight_eval_smoke.sh) | HM-EQA + OVMM + SQA3D diagnostics matrix |
+| [`run_overnight_habitat_eval.sh`](../scripts/run_overnight_habitat_eval.sh) | Multi-phase HM-EQA subsets with `--resume` |
+| [`run_sqa3d_gpu_sweep.sh`](../scripts/run_sqa3d_gpu_sweep.sh) | SQA3D slice with VRAM preflight |
 
 For backend localization, prefer `--explore-steps 0` or `--quick` (light mapping protocol) unless you need OVMM-identical rotate+explore mapping (`--full-protocol`, much slower).
+
+**Cursor / agent:** run overnight orchestrators via `nohup … &` — see [cross_track_smoke.md § Cursor sessions](cross_track_smoke.md#cursor--long-agent-sessions).
 
 ## Example figures
 
