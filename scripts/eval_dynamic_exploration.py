@@ -73,6 +73,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--resume", action="store_true", help="Skip runs whose JSON already exists")
     parser.add_argument("--cpu-only", action="store_true", help="Force CPU for perception models")
     parser.add_argument(
+        "--skip-eqa",
+        action="store_true",
+        help="Phase 1 only: run explore-loop + export without question-bank VLM EQA",
+    )
+    parser.add_argument(
         "--port-offset-base",
         type=int,
         default=int(os.getpid() % 400 + 160),
@@ -109,6 +114,10 @@ def _write_csv(rows: list[dict], path: Path) -> None:
         writer.writeheader()
         for row in rows:
             writer.writerow({k: row.get(k) for k in keys})
+
+
+def _rows_have_errors(rows: list[dict]) -> bool:
+    return any(str(row.get("error") or "").strip() for row in rows)
 
 
 def main() -> int:
@@ -180,6 +189,7 @@ def main() -> int:
                 cpu_only=args.cpu_only,
                 port_offset=args.port_offset_base + i,
                 resume=args.resume,
+                skip_eqa=args.skip_eqa,
             )
             print(f"Running {run.run_id} …", file=sys.stderr)
             payload = run_explore_episode_subprocess(run, run_cfg, cfg, output_dir=output_dir, repo_root=REPO)
@@ -191,6 +201,9 @@ def main() -> int:
         csv_path = output_dir / "aggregate_dynamic_exploration.csv"
         _write_csv(all_rows, csv_path)
         print(f"Wrote {len(all_rows)} runs to {output_dir} (CSV: {csv_path})", file=sys.stderr)
+        if _rows_have_errors(all_rows):
+            print("One or more explore runs failed (see CSV error column).", file=sys.stderr)
+            return 1
         return 0
 
     if args.phase == "lifelong":
@@ -253,6 +266,9 @@ def main() -> int:
         csv_path = output_dir / "aggregate_dynamic_exploration_lifelong.csv"
         _write_csv(all_rows, csv_path)
         print(f"Wrote {len(all_rows)} lifelong cycle rows to {output_dir} (CSV: {csv_path})", file=sys.stderr)
+        if _rows_have_errors(all_rows):
+            print("One or more lifelong runs failed (see CSV error column).", file=sys.stderr)
+            return 1
         return 0
 
     # Phase 2 world-change
@@ -298,6 +314,9 @@ def main() -> int:
     csv_path = output_dir / "aggregate_dynamic_exploration_world_change.csv"
     _write_csv(all_rows, csv_path)
     print(f"Wrote {len(all_rows)} world-change runs to {output_dir} (CSV: {csv_path})", file=sys.stderr)
+    if _rows_have_errors(all_rows):
+        print("One or more world-change runs failed (see CSV error column).", file=sys.stderr)
+        return 1
     return 0
 
 

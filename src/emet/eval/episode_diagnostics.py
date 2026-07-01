@@ -46,6 +46,28 @@ def _env_int(name: str, default: int = 0) -> int:
         return default
 
 
+def _env_map_max_side(default: int = 1280) -> int:
+    raw = os.environ.get("EMET_EVAL_MAP_MAX_SIDE", "").strip()
+    if not raw:
+        raw = os.environ.get("HABITAT_EQA_MAP_MAX_SIDE", "").strip()
+    if not raw:
+        return default
+    try:
+        return max(256, int(raw))
+    except ValueError:
+        return default
+
+
+def _env_map_min_side(default: int = 1024) -> int:
+    raw = os.environ.get("EMET_EVAL_MAP_MIN_SIDE", "").strip()
+    if not raw:
+        return default
+    try:
+        return max(128, int(raw))
+    except ValueError:
+        return default
+
+
 @dataclass
 class EpisodeDiagnosticsConfig:
     export_map: bool = True
@@ -58,7 +80,11 @@ class EpisodeDiagnosticsConfig:
     export_full_graph: bool = False
     export_voxel_history: bool = False
     export_voxel_pickle: bool = False
-    max_map_side: int = 640
+    max_map_side: int = 1280
+    min_map_side: int = 1024
+    filter_map_islands: bool = True
+    export_gt_navmesh_map: bool = True
+    export_map_overlay: bool = True
     video_fps: float = 6.0
 
     @classmethod
@@ -74,6 +100,11 @@ class EpisodeDiagnosticsConfig:
             export_full_graph=_env_truthy("EMET_EVAL_EXPORT_GRAPH", False),
             export_voxel_history=_env_truthy("EMET_EVAL_EXPORT_VOXEL_HISTORY", False),
             export_voxel_pickle=_env_truthy("EMET_EVAL_EXPORT_VOXEL_PICKLE", False),
+            max_map_side=_env_map_max_side(1280),
+            min_map_side=_env_map_min_side(1024),
+            filter_map_islands=_env_truthy("EMET_EVAL_FILTER_MAP_ISLANDS", True),
+            export_gt_navmesh_map=_env_truthy("EMET_EVAL_EXPORT_GT_MAP", True),
+            export_map_overlay=_env_truthy("EMET_EVAL_EXPORT_MAP_OVERLAY", True),
         )
         for key, val in overrides.items():
             if val is not None and hasattr(cfg, key):
@@ -94,6 +125,8 @@ class EpisodeDiagnosticsRecorder:
 
     cfg: EpisodeDiagnosticsConfig = field(default_factory=EpisodeDiagnosticsConfig.from_env)
     spawn_record: dict[str, Any] | None = None
+    habitat_pathfinder: Any | None = None
+    habitat_floor_y: float | None = None
     _frames: list[_RecordedFrame] = field(default_factory=list, init=False, repr=False)
     _stride_snapshots: list[tuple[int, np.ndarray]] = field(default_factory=list, init=False, repr=False)
     _nav_attempts: list[dict[str, Any]] = field(default_factory=list, init=False, repr=False)
@@ -176,10 +209,9 @@ class EpisodeDiagnosticsRecorder:
             manifest["map_stride_dir"] = str(maps_dir)
 
         if agent is not None:
-            if self.cfg.export_map:
-                map_path = self._maybe_snapshot_map(agent, root=root)
-                if map_path:
-                    manifest["topdown_map"] = str(map_path)
+            if self.cfg.export_map or self.cfg.export_gt_navmesh_map or self.cfg.export_map_overlay:
+                map_paths = self._maybe_snapshot_maps(agent, root=root)
+                manifest.update(map_paths)
             if self.cfg.export_obstacle_grids:
                 manifest.update(_save_obstacle_grids(agent, root))
             if self.cfg.export_object_crops:
@@ -249,9 +281,98 @@ class EpisodeDiagnosticsRecorder:
             vm,
             xy,
             max_side=self.cfg.max_map_side,
+            min_map_side=self.cfg.min_map_side,
             trajectory_xyt=traj,
+            filter_islands=self.cfg.filter_map_islands,
         )
         return img
+
+    def _habitat_gt_navigable(self, agent: Any) -> np.ndarray | None:
+        pf = self.habitat_pathfinder
+        if pf is None or not getattr(pf, "is_loaded", False):
+            return None
+        vm = getattr(agent, "voxel_map", None)
+        if vm is None or not hasattr(vm, "get_2d_map"):
+            return None
+        obstacles, explored = vm.get_2d_map()
+        from emet.habitat.navmesh_topdown import rasterize_habitat_navmesh_grid
+        from emet.visualization.map_snapshot import _grid_origin_xy
+
+        go = _grid_origin_xy(getattr(vm, "grid_origin", None))
+        res = float(getattr(vm, "grid_resolution", 0.1) or 0.1)
+        floor_y = self.habitat_floor_y
+        if floor_y is None and isinstance(self.spawn_record, dict):
+            snapped = (self.spawn_record.get("init_pose_snapped") or {})
+            if isinstance(snapped, dict) and "y" in snapped:
+                floor_y = float(snapped["y"])
+        if floor_y is None:
+            floor_y = 0.0
+        shape = (int(np.asarray(explored).shape[0]), int(np.asarray(explored).shape[1]))
+        return rasterize_habitat_navmesh_grid(
+            pf, shape, go, res, floor_y=float(floor_y)
+        )
+
+    def _maybe_snapshot_maps(self, agent: Any, *, root: Path) -> dict[str, str]:
+        out: dict[str, str] = {}
+        vm = getattr(agent, "voxel_map", None)
+        if vm is None:
+            return out
+        xy = robot_xy_from_agent(agent)
+        traj = self._trajectory_poses() if self.cfg.export_trajectory else None
+        gt_nav = None
+        if self.cfg.export_gt_navmesh_map or self.cfg.export_map_overlay:
+            gt_nav = self._habitat_gt_navigable(agent)
+
+        if self.cfg.export_map:
+            img = self._render_eval_map_rgb(agent)
+            if img is not None:
+                map_path = root / "topdown_map.png"
+                _save_rgb_png(map_path, img)
+                out["topdown_map"] = str(map_path)
+
+        if self.cfg.export_gt_navmesh_map and gt_nav is not None:
+            from emet.habitat.navmesh_topdown import habitat_gt_topdown_cropped
+            from emet.visualization.map_snapshot import _grid_origin_xy
+
+            obstacles, explored = vm.get_2d_map()
+            go = _grid_origin_xy(getattr(vm, "grid_origin", None))
+            res = float(getattr(vm, "grid_resolution", 0.1) or 0.1)
+            floor_y = float(self.habitat_floor_y or 0.0)
+            _nav_full, gt_rgb = habitat_gt_topdown_cropped(
+                self.habitat_pathfinder,
+                obstacles,
+                explored,
+                go,
+                res,
+                xy,
+                floor_y=floor_y,
+                margin_cells=8,
+                max_side=self.cfg.max_map_side,
+                min_map_side=self.cfg.min_map_side,
+                trajectory_xyt=traj,
+                filter_islands=self.cfg.filter_map_islands,
+            )
+            gt_path = root / "topdown_gt_navmesh.png"
+            _save_rgb_png(gt_path, gt_rgb)
+            out["topdown_gt_navmesh"] = str(gt_path)
+
+        if self.cfg.export_map_overlay:
+            from emet.visualization.map_snapshot import snapshot_eval_overlay_from_voxel_map
+
+            overlay = snapshot_eval_overlay_from_voxel_map(
+                vm,
+                xy,
+                max_side=self.cfg.max_map_side,
+                min_map_side=self.cfg.min_map_side,
+                trajectory_xyt=traj,
+                gt_navigable=gt_nav,
+                filter_islands=self.cfg.filter_map_islands,
+            )
+            if overlay is not None:
+                overlay_path = root / "topdown_map_overlay.png"
+                _save_rgb_png(overlay_path, overlay)
+                out["topdown_map_overlay"] = str(overlay_path)
+        return out
 
     def _maybe_snapshot_map(self, agent: Any, *, root: Path) -> Path | None:
         img = self._render_eval_map_rgb(agent)
@@ -282,10 +403,16 @@ def bind_diagnostics_recorder(
     recorder: EpisodeDiagnosticsRecorder,
     *,
     spawn_record: dict[str, Any] | None = None,
+    habitat_pathfinder: Any | None = None,
+    habitat_floor_y: float | None = None,
 ) -> None:
     """Register recorder on agent step callbacks (invoked from DynamemController.update)."""
     if spawn_record is not None:
         recorder.spawn_record = spawn_record
+    if habitat_pathfinder is not None:
+        recorder.habitat_pathfinder = habitat_pathfinder
+    if habitat_floor_y is not None:
+        recorder.habitat_floor_y = habitat_floor_y
     agent._episode_diagnostics_recorder = recorder
     callbacks = list(getattr(agent, "_on_step_callbacks", None) or [])
     cb = recorder.record_from_agent

@@ -21,6 +21,7 @@ mkdir -p "$LOG_DIR"
 NEED_MIB="${NEED_MIB:-12000}"
 MOCK_LLM="${MOCK_LLM:-1}"
 HABITAT_GPU="${HABITAT_GPU:-1}"
+DYNAMIC_GPU="${DYNAMIC_GPU:-1}"
 SKIP_TRACKS="${SKIP_TRACKS:-}"
 
 TIMEOUT_HMEQA="${TIMEOUT_HMEQA:-7200}"
@@ -58,7 +59,7 @@ run_step() {
   fi
 }
 
-log "RUN_ID=$RUN_ID LOG_DIR=$LOG_DIR MOCK_LLM=$MOCK_LLM HABITAT_GPU=$HABITAT_GPU"
+log "RUN_ID=$RUN_ID LOG_DIR=$LOG_DIR MOCK_LLM=$MOCK_LLM HABITAT_GPU=$HABITAT_GPU DYNAMIC_GPU=$DYNAMIC_GPU"
 emet_kill_stale_eval_processes
 
 FAIL=0
@@ -147,15 +148,25 @@ else
   fi
 fi
 
+dynamic_gpu_args() {
+  if [ "$DYNAMIC_GPU" = "1" ]; then
+    echo ""
+  else
+    echo "--cpu-only"
+  fi
+}
+
 # Track 6 — Robocasa dynamic env (world-change)
 if should_skip 6; then
   log "SKIP track6 (Robocasa dynamic env)"
 else
   gpu_between_tracks
+  # shellcheck disable=SC2046
   run_step track6_robocasa_dynamic_env "$TIMEOUT_DYN" \
     uv run python scripts/eval_dynamic_exploration.py \
       --phase world-change --episode-id robocasa_seed0_world_change \
-      --backend dynagraph --cpu-only \
+      --backend dynagraph --explore-max-iters 3 \
+      $(dynamic_gpu_args) \
       --output-dir "${HOME}/runs/emet/dynamic_exploration/${RUN_ID}_world_change" \
     || FAIL=1
 fi
@@ -167,11 +178,13 @@ elif [ ! -d "${ROOT}/.venv-molmospaces" ]; then
   log "SKIP track7 (no .venv-molmospaces)"
 else
   gpu_between_tracks
+  # shellcheck disable=SC2046
   run_step track7_molmo_dynamic_search "$TIMEOUT_DYN" \
     uv run python scripts/eval_dynamic_exploration.py \
       --phase explore --env molmospaces --episode-id molmo_ithor0 \
       --backend dynagraph --explore-max-iters 3 --mapping-mode explore \
-      --cpu-only \
+      --skip-eqa \
+      $(dynamic_gpu_args) \
       --output-dir "${HOME}/runs/emet/dynamic_exploration/${RUN_ID}_molmo_explore" \
     || FAIL=1
 fi
@@ -182,6 +195,12 @@ if [ "$FAIL" -eq 0 ]; then
   log "=== SIMULATION SMOKE BATTERY COMPLETE (all tracks pass) ==="
 else
   log "=== SIMULATION SMOKE BATTERY COMPLETE (failures — see logs) ==="
+fi
+
+if uv run python scripts/inspect_simulation_smoke_battery.py --run-id "$RUN_ID" --write-report >> "$SUMMARY" 2>&1; then
+  log "Inspection report: ${LOG_DIR}/inspection_report.md (semantic checks pass)"
+else
+  log "Inspection report: ${LOG_DIR}/inspection_report.md (semantic WARN/FAIL — open for metrics + artifact paths)"
 fi
 
 exit "$FAIL"

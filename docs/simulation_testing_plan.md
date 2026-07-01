@@ -18,8 +18,8 @@ Canonical **sequential smoke battery** for embodied sim + Habitat before multi-d
 | 3 | **Robocasa search** | Robocasa S1 | `eval_ovmm_find_phases.py` | OVMM FindObj/FindRec on kitchen (`robocasa_pp_s1`) |
 | 4 | **MolmoSpaces / iTHOR search** | MolmoSpaces S2 | `eval_ovmm_find_phases.py` | OVMM find-phase on iTHOR train idx 0 |
 | 5 | **SQA3D** | ScanNet replay | `emet sqa3d run-episode` | Mock-LLM EM@1 on one train question |
-| 6 | **Robocasa dynamic env** | Robocasa S1 | `eval_dynamic_exploration.py --phase world-change` | World-change episode completes; aggregate JSON written |
-| 7 | **MolmoSpaces dynamic search** | MolmoSpaces S2 | `eval_dynamic_exploration.py --phase explore` | Explore-loop episode on `molmo_ithor0` completes |
+| 6 | **Robocasa dynamic env** | Robocasa S1 | `eval_dynamic_exploration.py --phase world-change` | World-change episode completes (K=3 explore + pre/post EQA); aggregate JSON without `error` |
+| 7 | **MolmoSpaces dynamic search** | MolmoSpaces S2 | `eval_dynamic_exploration.py --phase explore --skip-eqa` | Explore-loop K=3 completes; graph export written (no post-explore VLM EQA in smoke) |
 
 Tracks 1–2 require `./scripts/install_habitat.sh` and HM3D assets. Tracks 3–6 require `emet install sim` (Robocasa). Tracks 4 and 7 require `.venv-molmospaces` (`./install.sh --molmospaces -y`). Track 5 needs ScanNet mesh for full replay (mock-LLM still validates harness wiring).
 
@@ -37,7 +37,16 @@ nohup ./scripts/run_simulation_smoke_battery.sh \
 tail -f ~/runs/emet/simulation_smoke/*/summary.txt
 ```
 
-Logs: `~/runs/emet/simulation_smoke/<RUN_ID>/` (`summary.txt` + `track{N}_*.log`).
+Logs: `~/runs/emet/simulation_smoke/<RUN_ID>/` (`summary.txt` + `track{N}_*.log` + `inspection_report.md`).
+
+After a run, inspect metrics and visual artifact paths (topdown maps, scene graphs, exports):
+
+```bash
+uv run python scripts/inspect_simulation_smoke_battery.py --run-id sim_smoke_agent_20260628 --write-report
+# open ~/runs/emet/simulation_smoke/<RUN_ID>/inspection_report.md
+```
+
+The inspector checks **semantic** pass criteria (e.g. Habitat `correct`, OVMM `find_partial_success > 0`), not just harness exit codes.
 
 | Env | Default | Effect |
 |-----|---------|--------|
@@ -45,8 +54,9 @@ Logs: `~/runs/emet/simulation_smoke/<RUN_ID>/` (`summary.txt` + `track{N}_*.log`
 | `NEED_MIB` | `12000` | Min free VRAM before GPU tracks (1, 3, 5–7 when VLM loads) |
 | `MOCK_LLM` | `1` for track 5 | Set `0` for real SQA3D VLM smoke |
 | `HABITAT_GPU` | `1` | Track 1 uses CUDA + Qwen3-VL-8B; set `0` for mock-LLM Habitat only |
+| `DYNAMIC_GPU` | `1` | Tracks 6–7 use GPU for VLM/perception; set `0` for `--cpu-only` (much slower) |
 | `SKIP_TRACKS` | empty | Comma list e.g. `4,7` to skip Molmo legs |
-| `TIMEOUT_DYN` | `28800` | Tracks 6–7 timeout (seconds); Robocasa world-change often exceeds 2h |
+| `TIMEOUT_DYN` | `28800` | Tracks 6–7 timeout (seconds); full world-change with EQA is typically 2–4h on GPU |
 
 ---
 
@@ -113,9 +123,11 @@ uv run emet sqa3d run-episode --split val --question-id 0 --method dynagraph --r
 ```bash
 uv run python scripts/eval_dynamic_exploration.py \
   --phase world-change --episode-id robocasa_seed0_world_change \
-  --backend dynagraph --cpu-only \
+  --backend dynagraph --explore-max-iters 3 \
   --output-dir ~/runs/emet/dynamic_exploration/sim_smoke_world_change
 ```
+
+Use `--cpu-only` only when no GPU is available (roughly doubles wall time).
 
 ### 7 — MolmoSpaces dynamic search (explore-loop)
 
@@ -123,9 +135,11 @@ uv run python scripts/eval_dynamic_exploration.py \
 uv run python scripts/eval_dynamic_exploration.py \
   --phase explore --env molmospaces --episode-id molmo_ithor0 \
   --backend dynagraph --explore-max-iters 3 --mapping-mode explore \
-  --cpu-only \
+  --skip-eqa \
   --output-dir ~/runs/emet/dynamic_exploration/sim_smoke_molmo_explore
 ```
+
+`--skip-eqa` omits post-explore question-bank VLM calls (smoke validates mapping only). Full paper sweeps omit `--skip-eqa`.
 
 Extended dynamic smoke (lifelong K-cycle on Molmo): `--phase lifelong --episode-id molmo_ithor0_lifelong`.
 

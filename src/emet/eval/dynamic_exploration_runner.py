@@ -42,6 +42,7 @@ class DynamicExploreRunConfig:
     port_offset: int = 0
     no_sensor_perception: bool = True
     resume: bool = False
+    skip_eqa: bool = False
 
 
 def _repo_root() -> Path:
@@ -68,6 +69,7 @@ def _dynagraph_subprocess_timeout_s(
     explore_max_iters: int = 0,
     sim_kind: str = "",
     cpu_only: bool = False,
+    skip_eqa: bool = False,
 ) -> float:
     """Wall-clock budget for one ``emet run dynagraph`` subprocess.
 
@@ -83,6 +85,9 @@ def _dynagraph_subprocess_timeout_s(
         timeout_s += 900.0
     if iters == 0:
         timeout_s = max(timeout_s, 3600.0)
+    if not skip_eqa:
+        # Post-explore question bank runs real VLM EQA (Qwen3-VL load + 2+ questions).
+        timeout_s += 5400.0 if cpu_only else 3600.0
     if cpu_only:
         timeout_s *= 2.0
     return min(timeout_s, 43200.0)
@@ -128,6 +133,7 @@ def build_dynagraph_subprocess_cmd(
     explore_iters: int = 0,
     export_voxel_pickle: bool = False,
     include_explore_loop: bool = True,
+    skip_eqa: bool = False,
 ) -> list[str]:
     cmd = [
         "uv",
@@ -147,7 +153,7 @@ def build_dynagraph_subprocess_cmd(
     ]
     if export_voxel_pickle:
         cmd.append("--export-voxel-pickle")
-    if questions_yaml is not None and question_env is not None:
+    if not skip_eqa and questions_yaml is not None and question_env is not None:
         cmd.extend(
             [
                 "--question-file",
@@ -200,6 +206,7 @@ def run_explore_episode_subprocess(
         question_env=run.episode.question_env,
         explore_iters=run.explore_max_iters,
         include_explore_loop=run.mapping_mode == "explore",
+        skip_eqa=run_cfg.skip_eqa,
     )
 
     t0 = time.monotonic()
@@ -218,6 +225,7 @@ def run_explore_episode_subprocess(
                 explore_max_iters=run.explore_max_iters,
                 sim_kind=sim_kind,
                 cpu_only=run_cfg.cpu_only,
+                skip_eqa=run_cfg.skip_eqa,
             )
             with dyn_log.open("w", encoding="utf-8") as log_f:
                 proc = subprocess.run(
@@ -668,6 +676,7 @@ def run_lifelong_episode(
                     input_dir=prev_ckpt,
                     explore_iters=int(explore_iters),
                     export_voxel_pickle=True,
+                    skip_eqa=run_cfg.skip_eqa or qyaml is None,
                 )
                 cycle_timeout = cycle_timeout_s
                 if cycle_timeout is None:
@@ -675,6 +684,7 @@ def run_lifelong_episode(
                         explore_max_iters=int(explore_iters),
                         sim_kind=sim_kind,
                         cpu_only=run_cfg.cpu_only,
+                        skip_eqa=run_cfg.skip_eqa or qyaml is None,
                     )
                 cycle_log = ckpt / "dynagraph.log"
                 ckpt.mkdir(parents=True, exist_ok=True)

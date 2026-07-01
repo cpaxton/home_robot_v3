@@ -193,6 +193,11 @@ class HabitatEQASimulator:
         return getattr(self, "_last_init_pose_record", None)
 
     @property
+    def pathfinder(self):
+        """Habitat-Sim pathfinder (navmesh), when loaded."""
+        return self._sim.pathfinder
+
+    @property
     def floor_y(self) -> float:
         """Navmesh-snapped spawn Habitat ``Y`` for floor-relative voxel height."""
         record = self.last_init_pose_record

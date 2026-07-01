@@ -33,6 +33,8 @@ All embodied tracks can write a **consistent episode bundle** via [`src/emet/eva
   ovmm_hm3d_lamp_bed_00006_dynamem/
   sqa3d_220602000049_dynagraph/
     topdown_map.png
+    topdown_gt_navmesh.png       # Habitat: navmesh GT (same crop as agent map)
+    topdown_map_overlay.png      # Habitat: GT + explored + trajectory
     obstacles_2d.npy, explored_2d.npy, grid_meta.json
     trajectory.jsonl
     frames/rgb_*.png, metadata.jsonl
@@ -46,7 +48,12 @@ All embodied tracks can write a **consistent episode bundle** via [`src/emet/eva
 
 | Variable | Default (smoke) | Effect |
 |----------|-----------------|--------|
-| `EMET_EVAL_EXPORT_MAP` | on | `topdown_map.png` |
+| `EMET_EVAL_EXPORT_MAP` | on | `topdown_map.png` (+ trajectory when `EMET_EVAL_EXPORT_TRAJECTORY=1`) |
+| `EMET_EVAL_EXPORT_GT_MAP` | on (Habitat) | `topdown_gt_navmesh.png` from HM3D navmesh |
+| `EMET_EVAL_EXPORT_MAP_OVERLAY` | on (Habitat) | `topdown_map_overlay.png` (GT + agent + trajectory) |
+| `EMET_EVAL_MAP_MAX_SIDE` | `1280` | Max map width/height in pixels (was 640) |
+| `EMET_EVAL_MAP_MIN_SIDE` | `1024` | Upscale small crops to at least this size |
+| `EMET_EVAL_FILTER_MAP_ISLANDS` | on | Drop explored blobs disconnected from robot path |
 | `EMET_EVAL_EXPORT_VIDEO` | on | `episode_rgb.mp4` |
 | `EMET_EVAL_EXPORT_FRAMES` | on | RGB frame PNGs |
 | `EMET_EVAL_MAP_STRIDE` | 0 | Intermediate `maps/step_NNNN.png` |
