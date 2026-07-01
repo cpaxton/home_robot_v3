@@ -43,7 +43,7 @@ For **graph-based EQA** on the same voxel stack (optional graph node merge and s
 
 ### Configuration and Rerun `map_topdown`
 
-Navigation and mapping hyperparameters live in **`dynav_config.yaml`** (or `--dynav-config`). See **[Dynav configuration](dynav_config.md)** for a section-by-section reference, including:
+Navigation and mapping hyperparameters live in the unified config **`mapping:`** section (default [`configs/emet/default.yaml`](../configs/emet/default.yaml); **`--config`** / **`EMET_CONFIG`**). Legacy **`--dynav-config`** is a deprecated alias. See **[Unified config](emet_config.md)** and **[Dynav / mapping configuration](dynav_config.md)** for a section-by-section reference, including:
 
 - **`map_boundary`** — optional grid-edge obstacle barrier (default **off**). To restore the legacy red frame at the map rim used for exploration safety:
 

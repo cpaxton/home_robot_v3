@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Shared mapping update loop for ``emet capture`` and ``emet stream``.
 
@@ -13,8 +22,9 @@ See ``docs/zmq_obs.md``.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 import click
 
@@ -28,11 +38,9 @@ from emet.app.stream_agent_factory import (
 from emet.config.stream_config import (
     StreamZmqObsConfig,
     apply_stream_logging_config,
-    load_stream_config_from_parameters,
     resolve_stream_verbose,
     should_log_every_step,
 )
-from emet.core import get_parameters
 
 
 @dataclass
@@ -66,6 +74,7 @@ def run_mapping_session(
     no_instance_graph: bool = False,
     compare_to_gt: bool = False,
     dynav_from_default: bool = True,
+    config_overrides: list[str] | None = None,
     rerun_hold_s: float = 0.0,
     stop_agent: bool = True,
     on_ready: Callable[[StreamAgentBundle], None] | None = None,
@@ -99,6 +108,7 @@ def run_mapping_session(
         use_instance_graph=not no_instance_graph,
         compare_to_gt=compare_to_gt,
         dynav_from_default=dynav_from_default,
+        config_overrides=config_overrides,
     )
     agent = bundle.agent
     resolved_backend = bundle.backend
@@ -122,9 +132,7 @@ def run_mapping_session(
             step += 1
             now = time.monotonic()
             final_stats = stream_stats(agent, resolved_backend, dynav_resolved=bundle.dynav_resolved)
-            if on_status is not None and (
-                log_every_step or now - last_status_t >= status_interval_s
-            ):
+            if on_status is not None and (log_every_step or now - last_status_t >= status_interval_s):
                 on_status(step, final_stats)
                 last_status_t = now
             if max_steps > 0 and step >= max_steps:

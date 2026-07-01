@@ -19,7 +19,10 @@ The main **3D View** uses a **fixed world origin** (`origin=world`; see [rerun.m
 
 ```bash
 uv run emet run dynagraph --robot-ip 127.0.0.1
+# --robot optional when sim publishes emet_robot_id on ZMQ
 ```
+
+Unified config: **`--config`** (default [`configs/emet/default.yaml`](../configs/emet/default.yaml)); overrides **`--set mapping.depth_source=auto`**. Legacy **`--dynav-config`** is deprecated. See [Unified EMET configuration](emet_config.md).
 
 Options mirror `emet run graph-eqa` (robot, Discord, Rerun export, `--no-instance-graph`, `--no-sensor-perception`, etc.). **Rerun is on by default** (`--no-rerun` to disable; `--rerun` is accepted as a no-op alias). Additional Dynagraph-specific flags:
 
@@ -32,9 +35,9 @@ Options mirror `emet run graph-eqa` (robot, Discord, Rerun export, `--no-instanc
 
 If unset on the command line, `run_dynagraph` applies defaults (`dynagraph_merge_xy_m=0.45`, `dynagraph_staleness_horizon=256`) only when those keys are missing from the loaded parameters dict (also the defaults in `dynav_config.yaml` and the `interactive` profile in `configs/benchmarks/dynagraph.yaml`). Paper benchmarks use other profiles from that file via `emet.eval.benchmark_dynagraph` — see [paper_benchmarks.md](paper_benchmarks.md).
 
-### **`--dynav-config`** (per-robot voxel / depth)
+### Config and robot resolution
 
-Same semantics as **`emet run dynamem`** (see [`run_dynamem.py`](../src/emet/app/run_dynamem.py)): passes through [`resolve_dynav_config_yaml`](../src/emet/robots/__init__.py) so presets like **`dynav_innate_mars.yaml`** apply when you use **`--robot innate_mars`** without you having to name the YAML on the CLI.
+**`--config`** loads nested YAML (`mapping`, `agent`, `robots.*`). When **`--robot`** is omitted, the client resolves robot id from config → connection profile → **ZMQ** → `stretch`. Innate Mars depth (`depth_source: auto`, DA3 fallback) comes from **`robots.innate_mars`** in the default config — no separate YAML required on the CLI.
 
 ### Robocasa (kitchen simulation)
 
@@ -45,17 +48,15 @@ Dynagraph never chooses an MJCF/Robocasa layout by itself—you run the simulato
    uv run emet serve mujoco --use-robocasa --robot stretch
    ```
    Substitute **`innate_mars`**, **`rby1`**, etc., to match assets (see [simulation.md](simulation.md)).
-2. **Terminal 2** — Dynagraph with the **same robot key** and dynav YAML if needed:
+2. **Terminal 2** — Dynagraph (robot optional if sim is already running with matching ZMQ id):
    ```bash
-   uv run emet run dynagraph --robot stretch --robot-ip 127.0.0.1
+   uv run emet run dynagraph --robot-ip 127.0.0.1
    ```
-   **Robocasa sim** (ZMQ renders depth): default **`dynav_config.yaml`** or **`--perfect-depth`** (skips DA3 when sensor depth is present). **`dynav_innate_mars.yaml`** now uses **`depth_source: auto`** (sensor in sim, DA3 on real robot when depth is missing):
+   **Robocasa sim** (ZMQ renders depth): default config uses **`depth_source: sensor`**. Innate Mars uses **`robots.innate_mars.mapping.depth_source: auto`** (sensor in sim, DA3 on hardware without depth). Optional **`--perfect-depth`** skips DA3 when sensor depth is present:
    ```bash
-   # Sim (kitchen) — recommended
    uv run emet run dynagraph --robot innate_mars --robot-ip 127.0.0.1 --perfect-depth
-
-   # Real robot (auto → DA3 when no ZMQ depth)
-   uv run emet run dynagraph --robot innate_mars --dynav-config dynav_innate_mars.yaml --robot-ip <ROBOT_IP>
+   # Real robot (same default config; connection profile or --robot innate_mars)
+   uv run emet run dynagraph --connection herman
    ```
 
 The server attaches **`navigation_origin_xyt`** in the ZMQ session; Rerun meshes and voxel fusion align when this matches the fused map frame.

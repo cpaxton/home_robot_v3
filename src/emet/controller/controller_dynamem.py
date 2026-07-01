@@ -31,6 +31,7 @@ from emet.agent.env_flags import env_agent_camera_debug, env_agent_model_debug
 from emet.audio.text_to_speech import PiperTextToSpeech
 from emet.config.embodied_agent_config import EmbodiedAgentConfig, legacy_embodied_agent_off
 from emet.controller.base_controller import BaseController
+from emet.controller.generic_zmq_client import GenericZmqClient
 from emet.controller.habitat_nav import (
     NavAttemptResult,
     goal_key_xy,
@@ -38,7 +39,6 @@ from emet.controller.habitat_nav import (
     habitat_perfect_nav_enabled,
     is_habitat_robot_client,
 )
-from emet.controller.generic_zmq_client import GenericZmqClient
 from emet.controller.manipulation.dynamem_manipulation.dynamem_manipulation import (
     DynamemManipulationWrapper as ManipulationWrapper,
 )

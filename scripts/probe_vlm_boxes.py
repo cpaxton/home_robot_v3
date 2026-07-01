@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -44,9 +44,7 @@ def parse_qwen_bboxes(text: str) -> list[tuple[str, float, float, float, float]]
     return out
 
 
-def parse_gemma_bboxes(
-    text: str, img_w: int, img_h: int
-) -> list[tuple[str, float, float, float, float]]:
+def parse_gemma_bboxes(text: str, img_w: int, img_h: int) -> list[tuple[str, float, float, float, float]]:
     """Parse Gemini-convention boxes: normalized 0-1000 ``[ymin, xmin, ymax, xmax]``."""
     out: list[tuple[str, float, float, float, float]] = []
     for m in re.finditer(r"\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]", text or ""):
@@ -108,9 +106,9 @@ def main(images, family, hf_id, quant, target, out, self_test):
         img = Image.open(path).convert("RGB")
         if family.startswith("qwen"):
             prompt = (
-                f'Locate the {target} in this image and output its bounding box in JSON '
+                f"Locate the {target} in this image and output its bounding box in JSON "
                 'format: [{"bbox_2d": [x1, y1, x2, y2], "label": "..."}]. '
-                'If it is not visible, output [].'
+                "If it is not visible, output []."
             )
         else:
             prompt = (
@@ -118,9 +116,7 @@ def main(images, family, hf_id, quant, target, out, self_test):
                 "[ymin, xmin, ymax, xmax] with coordinates normalized to 0-1000. "
                 "If it is not visible, output NONE."
             )
-        reply = client.generate_multimodal(
-            [prompt, img], system_prompt=None, max_new_tokens=128, reset_context=True
-        )
+        reply = client.generate_multimodal([prompt, img], system_prompt=None, max_new_tokens=128, reset_context=True)
         if family.startswith("qwen"):
             boxes = parse_qwen_bboxes(reply)
         else:

@@ -13,4 +13,5 @@ On a feature branch, run the full checklist in **`.cursorrules`** → **Before c
 4. **Env vars** — new `EMET_*` in changed Python → `docs/environment_variables.md` or topic env doc.
 5. **Defaults** — core `emet` CLI, `packages/emet_molmospaces/emet_molmospaces/runner.py`, and `.cursorrules` agree (MolmoSpaces default robot: **stretch**).
 6. **Tests** — update CLI help tests when adding subcommands.
-7. Trim AI slop; prefer clear failures over silent fallbacks.
+7. **Eval / GPU changes** — if touching Habitat runners, overnight scripts, or eval harnesses: confirm [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh) and [`docs/experiments/cross_track_smoke.md`](../../docs/experiments/cross_track_smoke.md) stay aligned; run tier 0 + at least one track smoke before claiming merge-ready.
+8. Trim AI slop; prefer clear failures over silent fallbacks.

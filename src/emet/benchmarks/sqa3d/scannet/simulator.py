@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -15,7 +15,7 @@ import open3d as o3d
 from scipy.spatial.transform import Rotation as R
 
 from emet.benchmarks.sqa3d.datasets import SQA3DQuestion
-from emet.benchmarks.sqa3d.scannet.config import default_scannet_root, scene_sens_path
+from emet.benchmarks.sqa3d.scannet.config import scene_sens_path
 from emet.benchmarks.sqa3d.scannet.mesh import load_scannet_mesh
 from emet.benchmarks.sqa3d.scannet.pose import agent_pose_matrix, apply_forward, apply_turn
 from emet.benchmarks.sqa3d.scannet.render import configure_scene_lighting, mesh_material

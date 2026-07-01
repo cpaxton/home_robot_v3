@@ -1,0 +1,47 @@
+# Canonical unified EMET config (repo root).
+# Override path: ``EMET_CONFIG=/path/to.yaml`` or ``--config PATH``.
+# Dot overrides: ``--set mapping.depth_source=auto`` / ``-O agent.eqa=true``.
+
+defaults:
+  - mapping: package://emet/config/mapping/default.yaml
+  - agent: package://emet/config/agent/default.yaml
+  - rerun: package://emet/config/agents/default_rerun.yaml
+
+robot: null
+connection: null
+
+sim: null
+sim_config: null
+
+embodied_agent: {}
+
+robots:
+  stretch: {}
+  innate_mars:
+    mapping:
+      depth_source: auto
+      da3_stereo: true
+      local_radius: 0.85
+      max_depth: 3.2
+      # Post-DA3 depth opening + 3D DBSCAN prune on navigation PCD (reduces floating Rerun blobs).
+      filters:
+        depth_speckle_open_kernel: 3
+        depth_speckle_open_iterations: 1
+        voxel_pcd_dbscan_min_samples: 8
+      graph_object_fusion:
+        enabled: true
+        spatial_merge_xy_m: 0.48
+        min_centroid_dist_m: 0.65
+        bounds_3d_iou_min: 0.0
+        bounds_3d_iou_merge_min: 0.40
+        embedding_min_cosine: 0.0
+        embedding_blend_alpha: 0.35
+        require_label_match: false
+        max_candidates: 64
+        match_xy_m: 0.55
+        fallback_spatial_merge_xy_m: 0.55
+    zmq:
+      allow_missing_depth: true
+  rby1: {}
+  galaxea_r1: {}
+  xlerobot: {}

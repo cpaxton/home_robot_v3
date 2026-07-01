@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -110,8 +110,9 @@ def test_keyword_score_map_biases_toward_matching_labels():
 def test_siglip_activation_map_biases_toward_aligned_observation():
     """SigLIP activation sampling boosts frontier cells near the best-aligned observation,
     independent of caption keywords. No-ops when no encoder is present (clean baseline)."""
-    import torch
     from types import SimpleNamespace
+
+    import torch
 
     from emet.mapping.voxel.voxel_map_dynamem import SparseVoxelMapNavigationSpace as NS
 

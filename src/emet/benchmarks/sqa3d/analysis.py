@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -260,10 +260,7 @@ def build_label_confusion(
         "top_k": top_k,
         "labels": top_labels + ["other", "abstain", "infra"],
         "matrix": matrix,
-        "pairs": [
-            {"gold": r.gold_clean, "pred": r.prediction_clean, "outcome": r.outcome, "em": r.em}
-            for r in rows
-        ],
+        "pairs": [{"gold": r.gold_clean, "pred": r.prediction_clean, "outcome": r.outcome, "em": r.em} for r in rows],
     }
 
 
@@ -396,9 +393,7 @@ def _render_matplotlib_figures(
     matrix = confusion.get("matrix") or {}
     labels = confusion.get("labels") or []
     gold_rows = [
-        g
-        for g in labels
-        if g in matrix and g not in ("other", "abstain", "infra") and sum(matrix[g].values()) > 0
+        g for g in labels if g in matrix and g not in ("other", "abstain", "infra") and sum(matrix[g].values()) > 0
     ][: int(confusion.get("top_k", 12))]
     pred_cols = labels
     if gold_rows and pred_cols:

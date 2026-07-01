@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -167,9 +167,7 @@ def test_vote_mcq_letter_position_locked_returns_empty():
 
 
 def test_vote_mcq_letter_no_client():
-    mem = GraphEQAMemory(
-        eqa_client=lambda x: "", image_description_client=lambda x: "", defer_llm_clients=True
-    )
+    mem = GraphEQAMemory(eqa_client=lambda x: "", image_description_client=lambda x: "", defer_llm_clients=True)
     mem.eqa_client = None
     assert mem.vote_mcq_letter("q", CHOICES) == ""
     assert mem.last_mcq_debias == {}

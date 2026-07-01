@@ -1,5 +1,16 @@
 # Example agent configs
 
+Unified nested config: see [docs/emet_config.md](../docs/emet_config.md). Default: [`configs/emet/default.yaml`](emet/default.yaml).
+
+## `agent_innate_mars.yaml`
+
+Thin preset: `extends: configs/emet/default.yaml`, `robot: innate_mars`, embodied-agent overlays.
+
+```bash
+uv run emet serve mujoco --robot innate_mars --headless   # terminal 1
+uv run emet run agent --config configs/agent_innate_mars.yaml --rerun   # terminal 2
+```
+
 ## `agent_rby1_discord.yaml`
 
 DynaMem / mapping hyperparameters for **rby1** + **`emet run agent`** + **Discord**.

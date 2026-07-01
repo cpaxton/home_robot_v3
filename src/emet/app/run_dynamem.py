@@ -11,12 +11,11 @@ import os
 
 import click
 
+from emet.app.config_cli import emet_config_options, load_runtime_from_cli
 from emet.app.robot_cli import create_robot_client_from_cli
 from emet.app.run_interactive import PickPlacePromptState, run_task_executor_loop
 from emet.controller.task.dynamem import DynamemTaskExecutor
-from emet.core.parameters import get_parameters
 from emet.llms import LLMChatWrapper, PickupPromptBuilder, get_llm_choices, get_llm_client
-from emet.robots import resolve_dynav_config_yaml
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -62,8 +61,8 @@ logger = Logger(__name__)
 @click.option(
     "--robot",
     type=str,
-    default="stretch",
-    help="Robot backend (stretch, innate_mars, rby1, galaxea_r1, …). Must match emet serve mujoco --robot.",
+    default=None,
+    help="Robot backend (optional: config, connection profile, or ZMQ discovery).",
 )
 @click.option("--target_object", type=str, default=None, help="Target object to grasp")
 @click.option("--target_receptacle", "--receptacle", type=str, default=None, help="Target receptacle to place")
@@ -153,16 +152,10 @@ logger = Logger(__name__)
     "If direct connection fails, use SSH port forwarding instead.",
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
-@click.option(
-    "--dynav-config",
-    "--dynav_config",
-    type=str,
-    default="dynav_config.yaml",
-    help="DynaMem YAML: basename under emet/config/, cwd path, or absolute path. "
-    "Default is dynav_config.yaml for all robots (same voxel / depth defaults). "
-    "For Innate Mars without ZMQ depth, pass --dynav-config dynav_innate_mars.yaml (DA3 preset).",
-)
+@emet_config_options()
+@click.pass_context
 def main(
+    ctx: click.Context,
     server_ip,
     manual_wait,
     explore_iter: int = 3,
@@ -171,7 +164,12 @@ def main(
     input_path: str | None = None,
     output_path: str | None = None,
     robot_ip: str = "",
-    robot: str = "stretch",
+    robot: str | None = None,
+    emet_config: str = "",
+    config_sets: tuple[str, ...] = (),
+    connection: str | None = None,
+    agent_config: str | None = None,
+    dynav_config: str | None = None,
     visual_servo: bool = False,
     skip_confirmations: bool = True,
     device_id: int = 0,
@@ -192,7 +190,6 @@ def main(
     rerun_debug: bool = False,
     rerun_bind: bool = False,
     port_offset: int = 0,
-    dynav_config: str = "dynav_config.yaml",
     **kwargs,
 ):
     """
@@ -202,11 +199,24 @@ def main(
         random_goals(bool): randomly sample frontier goals instead of looking for closest
     """
 
-    dynav_resolved = resolve_dynav_config_yaml(robot, dynav_config)
-    logger.info("DynaMem startup: dynav=%s robot=%s", dynav_resolved, robot)
-    if dynav_resolved != dynav_config:
-        logger.info("Resolved dynav from CLI default %r via robot preset", dynav_config)
-    parameters = get_parameters(dynav_resolved)
+    runtime = load_runtime_from_cli(
+        ctx,
+        emet_config=emet_config,
+        config_sets=config_sets,
+        agent_config=agent_config,
+        dynav_config=dynav_config,
+        robot=robot,
+        robot_ip=robot_ip or "127.0.0.1",
+        connection=connection,
+        port_offset=port_offset,
+    )
+    robot = runtime.robot_id
+    robot_ip = runtime.host
+    parameters = runtime.parameters
+    allow_missing_depth = runtime.allow_missing_depth
+    if runtime.robot_source == "zmq":
+        click.echo(f"Using robot from ZMQ server: {robot!r} (pass --robot to override).")
+    logger.info(f"DynaMem startup: config={runtime.config_path} robot={robot} (source={runtime.robot_source})")
     mb = parameters.get("map_boundary") if isinstance(parameters.get("map_boundary"), dict) else {}
     obs_barrier = int(mb.get("obstacle_barrier_cells", 0) or 0)
     logger.info(
@@ -231,9 +241,6 @@ def main(
         raise click.UsageError("Use either --rerun-native or --headless for Rerun, not both.")
 
     logger.info("Creating robot client…")
-    depth_mode = str(parameters.get("depth_source", "sensor")).lower()
-    robot_key = robot.lower().replace("-", "_")
-    allow_missing_depth = depth_mode in ("da3", "auto", "lingbot") or robot_key == "innate_mars"
     robot_client = create_robot_client_from_cli(
         robot,
         robot_ip,

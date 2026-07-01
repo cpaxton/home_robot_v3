@@ -105,7 +105,7 @@ IDS=2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,31,32,33,34,38,39,40,41,43,44,47,4
   ./scripts/run_habitat_iter_subset.sh
 ```
 
-Overnight orchestrators: `scripts/run_overnight_habitat_eval.sh`, `scripts/run_fable5_overnight.sh`, `scripts/run_extensive_habitat_eval.sh`.
+Overnight orchestrators: [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh), [`scripts/run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh), `scripts/run_overnight_eval_smoke.sh`, `scripts/run_overnight_habitat_eval.sh`, `scripts/run_fable5_overnight.sh`, `scripts/run_extensive_habitat_eval.sh`.
 
 ## Related docs
 

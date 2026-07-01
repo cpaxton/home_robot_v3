@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Unified ZMQ observation CLI: ``emet capture`` and ``emet stream``.
 
@@ -31,6 +40,7 @@ import numpy as np
 from click.core import ParameterSource
 
 import emet.utils.compression as compression
+from emet.app.config_cli import emet_config_options, load_runtime_from_cli
 from emet.app.preview_robot_cameras import (
     _decode_obs_message,
     _recv_zmq_obs,
@@ -38,12 +48,16 @@ from emet.app.preview_robot_cameras import (
     build_montage,
 )
 from emet.app.robot_cli import create_robot_client_from_cli
-from emet.app.stream_agent_factory import STREAM_BACKENDS, is_localhost_host, resolve_stream_backend, resolve_stream_dynav_config
-from emet.app.zmq_cli_resolve import resolve_cli_host, resolve_cli_robot
+from emet.app.stream_agent_factory import (
+    STREAM_BACKENDS,
+    is_localhost_host,
+    load_stream_parameters,
+    resolve_stream_backend,
+    resolve_stream_dynav_config,
+)
 from emet.app.zmq_mapping_session import echo_mapping_status, run_mapping_session
 from emet.config.stream_config import load_stream_config_from_parameters
-from emet.core import get_parameters
-from emet.robots import DEFAULT_DYNAV_CONFIG_YAML, get_robot_spec
+from emet.robots import get_robot_spec
 
 ZmqObsProfile = Literal["capture", "stream"]
 
@@ -51,12 +65,16 @@ ZmqObsProfile = Literal["capture", "stream"]
 @dataclass
 class ZmqObsRun:
     profile: ZmqObsProfile
+    ctx: click.Context
     robot_ip: str
     connection_name: str | None
-    robot: str
+    robot: str | None
     port_offset: int
     backend: str | None
-    dynav_config: str
+    emet_config: str
+    config_sets: tuple[str, ...]
+    agent_config: str | None
+    dynav_config: str | None
     cpu_only: bool
     headless: bool
     ip_from_default: bool
@@ -237,6 +255,7 @@ def _run_mapping(
     backend: str,
     robot_key: str,
     host: str,
+    config_path: str,
     allow_missing_depth: bool,
     max_steps: int,
     enable_rerun: bool,
@@ -252,10 +271,16 @@ def _run_mapping(
     dynav_resolved = resolve_stream_dynav_config(
         robot_key,
         host,
-        run.dynav_config,
+        config_path,
         dynav_from_default=run.dynav_from_default,
     )
-    stream_cfg = load_stream_config_from_parameters(get_parameters(dynav_resolved))
+    params, _ = load_stream_parameters(
+        robot_key,
+        host,
+        dynav_resolved,
+        overrides=list(run.config_sets) if run.config_sets else None,
+    )
+    stream_cfg = load_stream_config_from_parameters(params)
 
     try:
         result = run_mapping_session(
@@ -263,7 +288,7 @@ def _run_mapping(
             robot=robot_key,
             host=host,
             port_offset=run.port_offset,
-            dynav_config=run.dynav_config,
+            dynav_config=config_path,
             enable_rerun=enable_rerun,
             headless=run.headless,
             rerun_native=run.rerun_native,
@@ -277,6 +302,7 @@ def _run_mapping(
             no_instance_graph=run.no_instance_graph,
             compare_to_gt=run.compare_to_gt,
             dynav_from_default=run.dynav_from_default,
+            config_overrides=list(run.config_sets) if run.config_sets else None,
             rerun_hold_s=rerun_hold_s,
             verbose=run.verbose,
             stream_cfg=stream_cfg,
@@ -296,12 +322,26 @@ def run_zmq_obs(run: ZmqObsRun) -> None:
     if run.rerun_bind:
         os.environ["RERUN_BIND_ALL"] = "1"
 
-    host = resolve_cli_host(run.robot_ip, run.connection_name, ip_from_default=run.ip_from_default)
-    robot_key = resolve_cli_robot(run.robot, run.connection_name, robot_from_default=run.robot_from_default)
+    runtime = load_runtime_from_cli(
+        run.ctx,
+        emet_config=run.emet_config,
+        config_sets=run.config_sets,
+        agent_config=run.agent_config,
+        dynav_config=run.dynav_config,
+        robot=run.robot,
+        robot_ip=run.robot_ip,
+        connection=run.connection_name,
+        port_offset=run.port_offset,
+    )
+    host = runtime.host
+    robot_key = runtime.robot_id
+    config_path = runtime.config_path
+    if runtime.robot_source == "zmq":
+        click.echo(f"Using robot from ZMQ server: {robot_key!r} (pass --robot to override).")
 
     allow_missing_depth = run.allow_missing_depth
-    if not allow_missing_depth and robot_key == "innate_mars":
-        allow_missing_depth = True
+    if not allow_missing_depth:
+        allow_missing_depth = runtime.allow_missing_depth
 
     meta_path: Path | None = None
     meta: dict[str, Any] | None = None
@@ -347,6 +387,7 @@ def run_zmq_obs(run: ZmqObsRun) -> None:
             backend=resolved_backend,
             robot_key=robot_key,
             host=host,
+            config_path=config_path,
             allow_missing_depth=allow_missing_depth,
             max_steps=mapping_max_steps,
             enable_rerun=enable_rerun,
@@ -387,12 +428,13 @@ def _zmq_connection_options(fn):
         show_default=True,
         help="ZMQ host (sim on localhost, or robot hostname/IP)",
     )(fn)
-    fn = click.option("--connection", "-c", "connection_name", default=None, help="Saved connection profile (host + robot)")(fn)
+    fn = click.option(
+        "--connection", "-c", "connection_name", default=None, help="Saved connection profile (host + robot)"
+    )(fn)
     fn = click.option(
         "--robot",
-        default="stretch",
-        show_default=True,
-        help="Robot backend (stretch, innate_mars, rby1, galaxea_r1, …)",
+        default=None,
+        help="Robot backend (optional: config, connection profile, or ZMQ discovery on localhost).",
     )(fn)
     fn = click.option("--port-offset", default=0, type=int, show_default=True, help="Add to default ZMQ ports (4401+)")(
         fn
@@ -407,30 +449,29 @@ def _zmq_mapping_options(fn):
         default=None,
         help=_BACKEND_HELP,
     )(fn)
-    fn = click.option(
-        "--dynav-config",
-        "--dynav_config",
-        default=DEFAULT_DYNAV_CONFIG_YAML,
-        show_default=True,
-        help="Dynav YAML; innate_mars on hardware auto-selects dynav_innate_mars.yaml (DA3 depth)",
-    )(fn)
     fn = click.option("--cpu-only", is_flag=True, help="CPU-only models for mapping backends")(fn)
     fn = click.option("--headless", is_flag=True, help="Rerun web server only (no auto-open browser)")(fn)
     return fn
 
 
 def _ctx_to_run(ctx: click.Context, profile: ZmqObsProfile, **kwargs: Any) -> ZmqObsRun:
+    dynav_from_default = (
+        ctx.get_parameter_source("dynav_config") == ParameterSource.DEFAULT
+        and ctx.get_parameter_source("emet_config") == ParameterSource.DEFAULT
+    )
     return ZmqObsRun(
         profile=profile,
+        ctx=ctx,
         ip_from_default=ctx.get_parameter_source("robot_ip") == ParameterSource.DEFAULT,
         robot_from_default=ctx.get_parameter_source("robot") == ParameterSource.DEFAULT,
-        dynav_from_default=ctx.get_parameter_source("dynav_config") == ParameterSource.DEFAULT,
+        dynav_from_default=dynav_from_default,
         **kwargs,
     )
 
 
 @_zmq_connection_options
 @_zmq_mapping_options
+@emet_config_options(include_connection=False)
 @click.option("--recv-port", default=None, type=int, help="Observation SUB port (default 4401 + port-offset)")
 @click.option("--timeout-ms", default=9000, type=int, show_default=True, help="ZMQ receive timeout for artifact save")
 @click.option(
@@ -440,17 +481,18 @@ def _ctx_to_run(ctx: click.Context, profile: ZmqObsProfile, **kwargs: Any) -> Zm
     help="Output directory (default: runs/capture/<timestamp>)",
 )
 @click.option("--no-rerun", is_flag=True, help="Skip Rerun when --backend is set (capture profile)")
-@click.option("--rerun-hold-s", default=30.0, show_default=True, help="Keep Rerun open this long after a capture-profile map step")
+@click.option(
+    "--rerun-hold-s", default=30.0, show_default=True, help="Keep Rerun open this long after a capture-profile map step"
+)
 @click.command("capture")
 @click.pass_context
 def capture_main(
     ctx: click.Context,
     robot_ip: str,
     connection_name: str | None,
-    robot: str,
+    robot: str | None,
     port_offset: int,
     backend: str | None,
-    dynav_config: str,
     cpu_only: bool,
     headless: bool,
     recv_port: int | None,
@@ -458,6 +500,10 @@ def capture_main(
     out_dir: Path | None,
     no_rerun: bool,
     rerun_hold_s: float,
+    emet_config: str,
+    config_sets: tuple[str, ...],
+    agent_config: str | None,
+    dynav_config: str | None,
 ) -> None:
     """One ZMQ frame + montage/metadata on disk; optional single mapping update.
 
@@ -484,6 +530,9 @@ def capture_main(
             robot=robot,
             port_offset=port_offset,
             backend=backend,
+            emet_config=emet_config,
+            config_sets=config_sets,
+            agent_config=agent_config,
             dynav_config=dynav_config,
             cpu_only=cpu_only,
             headless=headless,
@@ -498,6 +547,7 @@ def capture_main(
 
 @_zmq_connection_options
 @_zmq_mapping_options
+@emet_config_options(include_connection=False)
 @click.option(
     "--cameras-only",
     is_flag=True,
@@ -538,10 +588,9 @@ def stream_main(
     ctx: click.Context,
     robot_ip: str,
     connection_name: str | None,
-    robot: str,
+    robot: str | None,
     port_offset: int,
     backend: str | None,
-    dynav_config: str,
     cpu_only: bool,
     headless: bool,
     cameras_only: bool,
@@ -559,6 +608,10 @@ def stream_main(
     recv_port: int | None,
     timeout_ms: int,
     out_dir: Path | None,
+    emet_config: str,
+    config_sets: tuple[str, ...],
+    agent_config: str | None,
+    dynav_config: str | None,
 ) -> None:
     """Live ZMQ → Rerun until Ctrl+C (or ``--max-steps``).
 
@@ -587,6 +640,9 @@ def stream_main(
             robot=robot,
             port_offset=port_offset,
             backend=backend,
+            emet_config=emet_config,
+            config_sets=config_sets,
+            agent_config=agent_config,
             dynav_config=dynav_config,
             cpu_only=cpu_only,
             headless=headless,

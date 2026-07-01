@@ -1,13 +1,4 @@
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the LICENSE file in the root directory
-# of this source tree.
-#
-# Some code may be adapted from other open-source works with their respective licenses. Original
-# license information maybe found below, if so.
-
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -297,7 +288,13 @@ def run_hmeqa_episode(
             export_voxel_history=habitat_export_voxel_history_default(),
         )
         diag_recorder = EpisodeDiagnosticsRecorder(cfg=diag_cfg)
-        bind_diagnostics_recorder(agent, diag_recorder, spawn_record=spawn_record)
+        bind_diagnostics_recorder(
+            agent,
+            diag_recorder,
+            spawn_record=spawn_record,
+            habitat_pathfinder=sim.pathfinder,
+            habitat_floor_y=sim.floor_y,
+        )
         agent._eqa_question = q.question_formatted
         agent.start()
         if agent.graph_memory is not None:

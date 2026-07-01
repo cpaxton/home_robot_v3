@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 import time
@@ -21,7 +20,11 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 
-from emet.eval.sim_eval_session import connect_benchmark_robot, launch_benchmark_sim_server, terminate_benchmark_sim_server
+from emet.eval.sim_eval_session import (
+    connect_benchmark_robot,
+    launch_benchmark_sim_server,
+    terminate_benchmark_sim_server,
+)
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -460,9 +463,7 @@ def render_localization_figure(
     ]
     for row in predictions:
         if row.pred_xyz is None:
-            legend_handles.append(
-                mpatches.Patch(edgecolor="gray", facecolor="none", label=f"{row.backend}: miss")
-            )
+            legend_handles.append(mpatches.Patch(edgecolor="gray", facecolor="none", label=f"{row.backend}: miss"))
             continue
         err = f"{row.err_xy_m:.2f}m" if row.err_xy_m is not None else "?"
         color = BACKEND_COLORS.get(row.backend, (0.8, 0.8, 0.8))
@@ -548,9 +549,8 @@ def main() -> int:
     out_dir = args.output_dir.expanduser()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
-
     from emet.config.sim_launch_config import load_sim_launch_config_from_path
+    from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
 
     sim_cfg_for_seed = load_sim_launch_config_from_path(args.sim)
     scene_seed = int(args.seed) if args.seed is not None else int(getattr(sim_cfg_for_seed, "seed", 0) or 0)

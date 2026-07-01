@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -21,8 +21,7 @@ def _python_can_import_habitat(py: Path) -> bool:
             [
                 str(py),
                 "-c",
-                "import habitat_sim; import emet_habitat; "
-                "from emet.habitat.config import default_habitat_eqa_data_dir",
+                "import habitat_sim; import emet_habitat; from emet.habitat.config import default_habitat_eqa_data_dir",
             ],
             capture_output=True,
             timeout=120,

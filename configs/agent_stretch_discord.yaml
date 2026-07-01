@@ -6,6 +6,9 @@
 #
 # ``robot`` below is used when you omit ``--robot`` on the CLI (CLI always wins if set).
 #
+# Note: the ``agent:`` block below is **Dynamem controller** tuning (``mapping.agent`` after load), not
+# chat ``agent.llm`` — see unified ``agent:`` in ``configs/emet/default.yaml``.
+#
 # Run from repo root (paths are resolved relative to cwd unless absolute).
 # With ``emet serve mujoco`` for Stretch (default sim robot is Stretch; Robocasa: ``--scene robocasa``).
 #
@@ -15,10 +18,10 @@
 #
 #   Terminal 2 — agent (--robot-ip defaults to 127.0.0.1; match --port-offset with Terminal 1 if set):
 #     export DISCORD_TOKEN="your-bot-token"
-#     uv run emet run agent --agent-config configs/agent_stretch_discord.yaml --rerun
+#     uv run emet run agent --config configs/agent_stretch_discord.yaml --rerun
 #     # (``robot: stretch`` in this file replaces ``--robot stretch`` when the flag is omitted.)
 #     uv run emet run agent --robot stretch --device cuda --max-tokens 1024 \
-#       --agent-config configs/agent_stretch_discord.yaml
+#       --config configs/agent_stretch_discord.yaml
 #     # Use --no-discord to skip the Discord bridge; default is to start it when DISCORD_TOKEN is set.
 #     # Local chat only (no robot): --offline
 #

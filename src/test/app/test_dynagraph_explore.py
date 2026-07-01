@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -13,9 +13,7 @@ def test_dynagraph_explore_max_iterations_all_success():
     agent = MagicMock()
     agent.run_exploration.side_effect = [True, True, True]
 
-    reason, ok, nit = dynagraph_explore_until_terminated(
-        agent, max_iterations=3, max_consecutive_failures=2
-    )
+    reason, ok, nit = dynagraph_explore_until_terminated(agent, max_iterations=3, max_consecutive_failures=2)
     assert reason == "max_iterations"
     assert ok == 3
     assert nit == 3
@@ -26,9 +24,7 @@ def test_dynagraph_explore_stops_on_consecutive_failures():
     agent = MagicMock()
     agent.run_exploration.side_effect = [False, False, False, True]
 
-    reason, ok, nit = dynagraph_explore_until_terminated(
-        agent, max_iterations=10, max_consecutive_failures=3
-    )
+    reason, ok, nit = dynagraph_explore_until_terminated(agent, max_iterations=10, max_consecutive_failures=3)
     assert reason == "consecutive_failures"
     assert ok == 0
     assert nit == 3
@@ -39,9 +35,7 @@ def test_dynagraph_explore_failure_streak_resets_after_success():
     agent = MagicMock()
     agent.run_exploration.side_effect = [False, False, True, False, False, False]
 
-    reason, ok, nit = dynagraph_explore_until_terminated(
-        agent, max_iterations=12, max_consecutive_failures=3
-    )
+    reason, ok, nit = dynagraph_explore_until_terminated(agent, max_iterations=12, max_consecutive_failures=3)
     assert reason == "consecutive_failures"
     assert ok == 1
     assert nit == 6

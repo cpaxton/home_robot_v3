@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -16,7 +16,6 @@ from scipy.spatial.transform import Rotation as R
 from emet.benchmarks.sqa3d.scannet.pose import agent_pose_matrix
 from emet.benchmarks.sqa3d.scannet.sensor_data import ScanNetSensorData
 from emet.benchmarks.sqa3d.scannet.simulator import ScanNetFrame
-
 
 _GL_TO_CV = np.diag([1.0, -1.0, -1.0, 1.0])
 
@@ -283,8 +282,12 @@ class ScanNetSensLoader:
         n_views = max(1, int(n_views))
         base_yaw = float(
             np.arctan2(
-                target_camera_forward_xy(position, quat_xyzw, sensor_height=sensor_height, camera_tilt_deg=camera_tilt_deg)[1],
-                target_camera_forward_xy(position, quat_xyzw, sensor_height=sensor_height, camera_tilt_deg=camera_tilt_deg)[0],
+                target_camera_forward_xy(
+                    position, quat_xyzw, sensor_height=sensor_height, camera_tilt_deg=camera_tilt_deg
+                )[1],
+                target_camera_forward_xy(
+                    position, quat_xyzw, sensor_height=sensor_height, camera_tilt_deg=camera_tilt_deg
+                )[0],
             )
         )
         xy = np.asarray(position[:2], dtype=np.float64)

@@ -61,11 +61,11 @@ environments:
   - env: molmospaces_ithor0
     questions:
       - id: room_furniture
-        question: "What furniture is in this room?"
-        expected_tokens: ["chair"]
-      - id: sofa_location
-        question: "Where is the sofa?"
-        expected_tokens: ["sofa"]
+        question: "What loose objects are on the kitchen counter?"
+        expected_tokens: ["bowl", "apple", "vase"]
+      - id: microwave_location
+        question: "Where is the microwave?"
+        expected_tokens: ["microwave"]
 
   - env: molmospaces_ithor1
     questions:

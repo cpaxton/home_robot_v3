@@ -18,6 +18,7 @@ Use **`uv run emet …`** (or `source .venv/bin/activate` then bare `emet`) from
 
 | Goal | Command |
 |------|---------|
+| **Simulation smoke battery (7 tracks)** | `./scripts/run_simulation_smoke_battery.sh` — see [simulation_testing_plan.md](simulation_testing_plan.md) |
 | Full suite (sim on by default) | `uv run emet test` |
 | Skip sim (faster CI-style) | `uv run emet test --no-sim` |
 | Verbose | `uv run emet test -v` |
@@ -48,6 +49,7 @@ Environment: **`RUN_SIM_TESTS=0`** skips sim integration tests. Heavy VLLM downl
 | **Dynagraph multi-robot Robocasa E2E** | [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md) | Floor-area parity (stretch / innate_mars / galaxea_r1), spawner maps, artefact paths |
 | **GraphEQA manual Robocasa** | [graph_eqa.md](graph_eqa.md#testing-graph-eqa-in-robocasa) | Interactive questions in kitchen sim (Gemini / encoder) |
 | **MolmoSpaces** | [plans/2025-03-10_molmospaces_testing.md](plans/2025-03-10_molmospaces_testing.md), [molmospaces.md](molmospaces.md) | Wrapper venv, CLI smoke, optional integration; **multi-robot matrix below** |
+| **Simulation smoke battery (paper)** | [simulation_testing_plan.md](simulation_testing_plan.md) | Seven-track sequential Habitat + Robocasa + Molmo + SQA3D validation |
 | **Multi-robot sim plumbing** | [plans/MULTI_ROBOT_TESTING.md](plans/MULTI_ROBOT_TESTING.md) | Registry, MJCF load, GenericZmqClient (partially superseded by unit tests) |
 | **CLI / install smoke** | [cli.md](cli.md#testing), [simulation.md](simulation.md#2-test-the-setup) | `emet test`, serve smoke |
 | **SQA3D + ScanNet EQA** | [sqa3d.md](sqa3d.md) | Situated QA loaders, EM@1 eval, Open3D mesh replay |

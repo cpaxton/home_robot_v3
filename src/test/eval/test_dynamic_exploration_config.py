@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from emet.eval.benchmark_dynagraph import (
     DYNAMIC_EXPLORE_BACKENDS,
     apply_dynamic_explore_backend,
@@ -105,6 +107,39 @@ def test_dynagraph_subprocess_timeout_scales_with_explore_budget():
     long = _dynagraph_subprocess_timeout_s(explore_max_iters=30, sim_kind="robocasa", cpu_only=False)
     assert short >= 3600.0
     assert long > short
+
+
+def test_dynagraph_subprocess_timeout_skip_eqa_is_shorter():
+    from emet.eval.dynamic_exploration_runner import _dynagraph_subprocess_timeout_s
+
+    with_eqa = _dynagraph_subprocess_timeout_s(
+        explore_max_iters=3, sim_kind="molmospaces", cpu_only=False, skip_eqa=False
+    )
+    skip_eqa = _dynagraph_subprocess_timeout_s(
+        explore_max_iters=3, sim_kind="molmospaces", cpu_only=False, skip_eqa=True
+    )
+    assert skip_eqa < with_eqa
+
+
+def test_build_dynagraph_subprocess_cmd_skip_eqa_omits_questions():
+    from emet.eval.dynamic_exploration_config import load_dynamic_exploration_config
+    from emet.eval.dynamic_exploration_runner import build_dynagraph_subprocess_cmd
+
+    cfg = load_dynamic_exploration_config()
+    cmd = build_dynagraph_subprocess_cmd(
+        export_dir=Path("/tmp/export"),
+        port_offset=0,
+        backend="dynagraph",
+        cfg=cfg,
+        cpu_only=False,
+        no_sensor_perception=True,
+        questions_yaml=cfg.paths.questions_yaml,
+        question_env="molmospaces_ithor0",
+        explore_iters=3,
+        skip_eqa=True,
+    )
+    assert "--question-file" not in cmd
+    assert "--explore-max-iters" in cmd
 
 
 def test_sim_set_body_pose_zmq_action():

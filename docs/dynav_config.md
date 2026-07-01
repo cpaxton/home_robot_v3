@@ -1,17 +1,20 @@
-# DynaMem / Dynav configuration (`dynav_config.yaml`)
+# DynaMem / mapping configuration (`mapping` section)
 
-DynaMem, GraphEQA, Dynagraph, and `emet run agent` load navigation and mapping parameters from a YAML file under [`src/emet/config/`](../src/emet/config/). The default basename is **`dynav_config.yaml`**. Pass a different file with:
+DynaMem, GraphEQA, Dynagraph, and `emet run agent` load navigation and mapping parameters from the unified config **`mapping:`** section. Default: [`configs/emet/default.yaml`](../configs/emet/default.yaml) (see [Unified EMET configuration](emet_config.md)).
+
+Legacy flat files still work:
 
 ```bash
-emet run dynamem --dynav-config dynav_innate_mars.yaml
-emet run agent --agent-config dynav_config.yaml
+emet run dynamem --config configs/emet/default.yaml
+emet run agent --config configs/agent_innate_mars.yaml
+# Deprecated aliases: --dynav-config, --agent-config
 ```
 
-Basenames resolve under `src/emet/config/`; absolute or repo-relative paths are also accepted (see `resolve_dynav_config_yaml`).
+Basenames like `dynav_config.yaml` resolve under `src/emet/config/` and auto-wrap under `mapping:`.
 
-Hardware Mars without ZMQ depth typically uses [`dynav_innate_mars.yaml`](../src/emet/config/dynav_innate_mars.yaml) (`depth_source: da3`). Sim with rendered depth should keep the default **`dynav_config.yaml`** (`depth_source: sensor`). See [Innate Mars / sim depth](robots/innate_mars.md).
+Innate Mars depth tuning is in **`robots.innate_mars.mapping`** (default config); [`dynav_innate_mars.yaml`](../src/emet/config/dynav_innate_mars.yaml) is a thin `extends:` alias. Sim with ZMQ depth should use **`depth_source: sensor`** (stretch default). See [Innate Mars / sim depth](robots/innate_mars.md).
 
-Related docs: [Dynamem](dynamem.md), [Dynagraph](dynagraph.md), [Simulation configs](sim_configs.md), [Agent run](AGENT_RUN.md).
+Related docs: [Unified config](emet_config.md), [Dynamem](dynamem.md), [Dynagraph](dynagraph.md), [Simulation configs](sim_configs.md), [Agent run](AGENT_RUN.md).
 
 ---
 
@@ -28,7 +31,7 @@ Related docs: [Dynamem](dynamem.md), [Dynagraph](dynagraph.md), [Simulation conf
 | `eqa`, `eqa_vl`, `graph_eqa_*` | EQA and GraphEQA VLM settings |
 | `use_instance_memory`, `use_scene_graph` | Rerun instance boxes and scene graph |
 
-The canonical source of truth is [`src/emet/config/dynav_config.yaml`](../src/emet/config/dynav_config.yaml). [`dynav_innate_mars.yaml`](../src/emet/config/dynav_innate_mars.yaml) is a maintained override copy for Mars + DA3; keep structural keys in sync when you change the default file.
+The canonical source of truth is [`configs/emet/default.yaml`](../configs/emet/default.yaml) (nested `mapping:`) with per-robot overlays under `robots.<id>.mapping`. [`dynav_innate_mars.yaml`](../src/emet/config/dynav_innate_mars.yaml) is a thin `extends:` alias only.
 
 ---
 
@@ -92,7 +95,7 @@ local_radius: 0.5         # disk marked explored around the robot
 
 ### Depth / voxel post-filters (DA3 hardware)
 
-Under ``filters:`` in [`dynav_innate_mars.yaml`](../src/emet/config/dynav_innate_mars.yaml):
+Under ``robots.innate_mars.mapping.filters`` in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (merged into flat ``filters/…`` keys at runtime):
 
 | Key | Default (Mars HW) | Meaning |
 |-----|-------------------|--------|

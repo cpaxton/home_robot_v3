@@ -5,10 +5,16 @@
 #   ./scripts/run_overnight_eval_smoke.sh
 #   MOCK_LLM=1 ./scripts/run_overnight_eval_smoke.sh   # layout check without VLM
 #   SKIP_SQA3D=1 ./scripts/run_overnight_eval_smoke.sh
+#
+# Run only after cross-track smoke (or manual GPU cleanup). Do not chain immediately
+# after Robocasa/MuJoCo pytest without a reboot or long GPU settle.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+# shellcheck source=gpu_preflight.sh
+source "${ROOT}/scripts/gpu_preflight.sh"
+emet_export_pytorch_alloc
 
 RUN_ID="${RUN_ID:-eval_smoke_$(date +%Y%m%d_%H%M%S)}"
 TAG="${TAG:-$RUN_ID}"
@@ -35,16 +41,9 @@ HMEQA_IDS="${HMEQA_IDS:-3,14,17}"
 FAMILY="${FAMILY:-qwen3_vl}"
 HF_ID="${HF_ID:-Qwen/Qwen3-VL-8B-Instruct}"
 
-wait_gpu() {
-  local need="${1:-$NEED_MIB}" ok=0 free
-  while [ "$ok" -lt 3 ]; do
-    free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ' || echo 0)
-    if [ "${free:-0}" -ge "$need" ]; then ok=$((ok+1)); else ok=0; fi
-    echo "[gpu] free=${free}MiB need=${need} stable=${ok}/3"
-    [ "$ok" -ge 3 ] && return 0
-    sleep 30
-  done
-  return 1
+gpu_between() {
+  [ "$MOCK_LLM" = "1" ] && return 0
+  emet_gpu_between_steps "$NEED_MIB"
 }
 
 run_hmeqa_method() {
@@ -112,25 +111,27 @@ if [ ! -x "$HAB" ]; then
   exit 1
 fi
 
+emet_kill_stale_eval_processes
 if [ "$MOCK_LLM" != "1" ]; then
-  wait_gpu || { echo "GPU wait failed"; exit 2; }
+  emet_gpu_preflight_check "$NEED_MIB" || exit 2
+  emet_wait_gpu_stable "$NEED_MIB" || { echo "GPU wait failed"; exit 2; }
 fi
 
 for m in graph_eqa dynagraph; do
+  gpu_between
   run_hmeqa_method "$m" || true
-  [ "$MOCK_LLM" != "1" ] && wait_gpu || true
 done
 
 for b in dynamem graph_eqa dynagraph; do
+  gpu_between
   run_ovmm_backend "$b" || true
-  [ "$MOCK_LLM" != "1" ] && wait_gpu || true
 done
 
 if [ "$SKIP_SQA3D" != "1" ]; then
   if uv run emet sqa3d verify 2>&1 | tee "${LOG_DIR}/sqa3d_verify.log"; then
     for m in dynagraph dynamem; do
+      gpu_between
       run_sqa3d_method "$m"
-      [ "$MOCK_LLM" != "1" ] && wait_gpu || true
     done
   else
     echo "SKIP SQA3D (verify failed — see ${LOG_DIR}/sqa3d_verify.log)"
@@ -145,5 +146,6 @@ fi
 uv run python scripts/build_eval_figure_pack.py "${FIG_ARGS[@]}" \
   2>&1 | tee "${LOG_DIR}/figure_pack.log" || true
 
+emet_kill_stale_eval_processes
 echo "Done. Logs: $LOG_DIR  Figures: $FIG_DIR"
 echo "Summarize: uv run python scripts/build_eval_figure_pack.py --run-id $RUN_ID --summary-only"

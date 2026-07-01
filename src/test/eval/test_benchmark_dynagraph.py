@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -29,9 +29,7 @@ def test_ovmm_and_shared_module_agree():
         via_shared = apply_ovmm_backend_dynagraph(base, backend)
         via_legacy = apply_backend_parameters(get_parameters("dynav_config.yaml"), backend)  # type: ignore[arg-type]
         assert via_shared.get("dynagraph_merge_xy_m") == via_legacy.get("dynagraph_merge_xy_m")
-        assert via_shared.get("dynagraph_staleness_horizon") == via_legacy.get(
-            "dynagraph_staleness_horizon"
-        )
+        assert via_shared.get("dynagraph_staleness_horizon") == via_legacy.get("dynagraph_staleness_horizon")
 
 
 def test_ovmm_find_phase_profile_tighter_than_interactive():
@@ -46,9 +44,10 @@ def test_sqa3d_tuned_uses_interactive_merge():
     interactive = profile_settings("interactive")
     assert params.get("dynagraph_merge_xy_m") == interactive["dynagraph_merge_xy_m"]
     eqa = profile_settings("eqa")
-    assert params.get("graph_eqa_extract", {}).get("navigation_samples_max") == eqa[
-        "graph_eqa_extract"
-    ]["navigation_samples_max"]
+    assert (
+        params.get("graph_eqa_extract", {}).get("navigation_samples_max")
+        == eqa["graph_eqa_extract"]["navigation_samples_max"]
+    )
 
 
 def test_sqa3d_smoke_disables_merge():

@@ -1,4 +1,4 @@
-# Copyright (c) Chris Paxton
+# Copyright (c) Chris Paxton 2026
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
@@ -16,14 +16,8 @@ def test_classify_outcome():
     assert classify_outcome(em=True, prediction="white", prediction_clean="white") == "tp"
     assert classify_outcome(em=False, prediction="red", prediction_clean="red") == "fp"
     assert classify_outcome(em=False, prediction="unknown", prediction_clean="unknown") == "fn"
-    assert (
-        classify_outcome(em=False, prediction="CUDA out of memory", prediction_clean="cuda out of memory")
-        == "infra"
-    )
-    assert (
-        classify_outcome(em=False, prediction="", prediction_clean="", infra_failure=True)
-        == "infra"
-    )
+    assert classify_outcome(em=False, prediction="CUDA out of memory", prediction_clean="cuda out of memory") == "infra"
+    assert classify_outcome(em=False, prediction="", prediction_clean="", infra_failure=True) == "infra"
 
 
 def test_dedupe_episodes_last():
