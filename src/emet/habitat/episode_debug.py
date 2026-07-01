@@ -230,6 +230,7 @@ def save_episode_debug_bundle(
     if diag_rec is None and any(
         (
             cfg.export_map,
+            cfg.export_map_video,
             cfg.export_video,
             cfg.export_rgb_frames,
             cfg.export_trajectory,

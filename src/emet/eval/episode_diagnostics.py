@@ -68,6 +68,16 @@ def _env_map_min_side(default: int = 1024) -> int:
         return default
 
 
+def _env_map_video_stride(default: int = 5) -> int:
+    raw = os.environ.get("EMET_EVAL_MAP_VIDEO_STRIDE", "").strip()
+    if not raw:
+        return default
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return default
+
+
 @dataclass
 class EpisodeDiagnosticsConfig:
     export_map: bool = True
@@ -85,6 +95,7 @@ class EpisodeDiagnosticsConfig:
     filter_map_islands: bool = True
     export_gt_navmesh_map: bool = True
     export_map_overlay: bool = True
+    export_map_video: bool = True
     video_fps: float = 6.0
 
     @classmethod
@@ -105,6 +116,7 @@ class EpisodeDiagnosticsConfig:
             filter_map_islands=_env_truthy("EMET_EVAL_FILTER_MAP_ISLANDS", True),
             export_gt_navmesh_map=_env_truthy("EMET_EVAL_EXPORT_GT_MAP", True),
             export_map_overlay=_env_truthy("EMET_EVAL_EXPORT_MAP_OVERLAY", True),
+            export_map_video=_env_truthy("EMET_EVAL_EXPORT_MAP_VIDEO", True),
         )
         for key, val in overrides.items():
             if val is not None and hasattr(cfg, key):
@@ -129,6 +141,9 @@ class EpisodeDiagnosticsRecorder:
     habitat_floor_y: float | None = None
     _frames: list[_RecordedFrame] = field(default_factory=list, init=False, repr=False)
     _stride_snapshots: list[tuple[int, np.ndarray]] = field(default_factory=list, init=False, repr=False)
+    _stride_overlay_snapshots: list[tuple[int, np.ndarray]] = field(
+        default_factory=list, init=False, repr=False
+    )
     _nav_attempts: list[dict[str, Any]] = field(default_factory=list, init=False, repr=False)
     _step: int = field(default=0, init=False, repr=False)
 
@@ -161,9 +176,10 @@ class EpisodeDiagnosticsRecorder:
         if idx >= self._step:
             self._step = idx + 1
         self._frames.append(_RecordedFrame(step_idx=idx, rgb=rgb, pose=pose))
-        stride = int(self.cfg.export_map_stride or 0)
-        if self.cfg.export_map and stride > 0 and idx % stride == 0:
-            self._capture_stride_snapshot(agent, idx)
+        stride = self._effective_map_stride()
+        if stride > 0 and idx % stride == 0 and agent is not None:
+            if self.cfg.export_map or self.cfg.export_map_video:
+                self._capture_stride_snapshot(agent, idx)
 
     def flush(self, episode_dir: Path | str, agent: Any | None = None) -> dict[str, Any]:
         root = Path(episode_dir)
@@ -200,13 +216,25 @@ class EpisodeDiagnosticsRecorder:
                     )
             manifest["metadata_jsonl"] = str(meta_path)
 
-        if self._stride_snapshots:
+        if self._stride_snapshots or self._stride_overlay_snapshots:
             maps_dir = root / "maps"
             maps_dir.mkdir(parents=True, exist_ok=True)
             for step_idx, img in self._stride_snapshots:
                 out = maps_dir / f"step_{step_idx:04d}.png"
                 _save_rgb_png(out, img)
+            for step_idx, img in self._stride_overlay_snapshots:
+                out = maps_dir / f"overlay_step_{step_idx:04d}.png"
+                _save_rgb_png(out, img)
             manifest["map_stride_dir"] = str(maps_dir)
+
+        if self.cfg.export_map_video:
+            map_mp4 = _write_map_exploration_mp4(
+                root,
+                fps=self.cfg.video_fps,
+                prefer_overlay=bool(self._stride_overlay_snapshots),
+            )
+            if map_mp4:
+                manifest["topdown_exploration_mp4"] = str(map_mp4)
 
         if agent is not None:
             if self.cfg.export_map or self.cfg.export_gt_navmesh_map or self.cfg.export_map_overlay:
@@ -248,16 +276,29 @@ class EpisodeDiagnosticsRecorder:
             mp4 = _write_episode_mp4(root, fps=self.cfg.video_fps)
             if mp4:
                 manifest["episode_rgb_mp4"] = str(mp4)
+                manifest["head_camera_mp4"] = str(mp4)
 
         manifest_path = root / DIAGNOSTICS_MANIFEST
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         manifest["diagnostics_manifest"] = str(manifest_path)
         return manifest
 
+    def _effective_map_stride(self) -> int:
+        stride = int(self.cfg.export_map_stride or 0)
+        if stride > 0:
+            return stride
+        if self.cfg.export_map_video:
+            return _env_map_video_stride(5)
+        return 0
+
     def _capture_stride_snapshot(self, agent: Any, step_idx: int) -> None:
-        img = self._render_eval_map_rgb(agent)
+        img = self._render_eval_map_rgb(agent, include_trajectory=True)
         if img is not None:
             self._stride_snapshots.append((int(step_idx), img))
+        if self.cfg.export_map_overlay or self.cfg.export_map_video:
+            overlay = self._render_overlay_map_rgb(agent, include_trajectory=True)
+            if overlay is not None:
+                self._stride_overlay_snapshots.append((int(step_idx), overlay))
 
     def _trajectory_poses(self) -> list[tuple[float, float, float]]:
         out: list[tuple[float, float, float]] = []
@@ -269,14 +310,14 @@ class EpisodeDiagnosticsRecorder:
             out.append((float(p[0]), float(p[1]), theta))
         return out
 
-    def _render_eval_map_rgb(self, agent: Any) -> np.ndarray | None:
+    def _render_eval_map_rgb(self, agent: Any, *, include_trajectory: bool = False) -> np.ndarray | None:
         vm = getattr(agent, "voxel_map", None)
         if vm is None:
             return None
         from emet.visualization.map_snapshot import snapshot_eval_from_voxel_map
 
         xy = robot_xy_from_agent(agent)
-        traj = self._trajectory_poses() if self.cfg.export_trajectory else None
+        traj = self._trajectory_poses() if (self.cfg.export_trajectory or include_trajectory) else None
         img, _ = snapshot_eval_from_voxel_map(
             vm,
             xy,
@@ -286,6 +327,25 @@ class EpisodeDiagnosticsRecorder:
             filter_islands=self.cfg.filter_map_islands,
         )
         return img
+
+    def _render_overlay_map_rgb(self, agent: Any, *, include_trajectory: bool = False) -> np.ndarray | None:
+        vm = getattr(agent, "voxel_map", None)
+        if vm is None:
+            return None
+        from emet.visualization.map_snapshot import snapshot_eval_overlay_from_voxel_map
+
+        xy = robot_xy_from_agent(agent)
+        traj = self._trajectory_poses() if (self.cfg.export_trajectory or include_trajectory) else None
+        gt_nav = self._habitat_gt_navigable(agent)
+        return snapshot_eval_overlay_from_voxel_map(
+            vm,
+            xy,
+            max_side=self.cfg.max_map_side,
+            min_map_side=self.cfg.min_map_side,
+            trajectory_xyt=traj,
+            gt_navigable=gt_nav,
+            filter_islands=self.cfg.filter_map_islands,
+        )
 
     def _habitat_gt_navigable(self, agent: Any) -> np.ndarray | None:
         pf = self.habitat_pathfinder
@@ -443,6 +503,7 @@ def flush_episode_diagnostics(
     if not any(
         (
             recorder.cfg.export_map,
+            recorder.cfg.export_map_video,
             recorder.cfg.export_video,
             recorder.cfg.export_rgb_frames,
             recorder.cfg.export_trajectory,
@@ -713,6 +774,32 @@ def _write_floor_metrics(agent: Any, root: Path) -> Path | None:
         return write_floor_metrics_json(root, metrics)
     except Exception as exc:
         logger.warning(f"floor metrics export failed: {exc}")
+        return None
+
+
+def _write_map_exploration_mp4(
+    root: Path,
+    *,
+    fps: float,
+    prefer_overlay: bool = True,
+) -> Path | None:
+    """Encode ``maps/overlay_step_*.png`` or ``maps/step_*.png`` to ``topdown_exploration.mp4``."""
+    maps_dir = root / "maps"
+    if not maps_dir.is_dir():
+        return None
+    pattern = "overlay_step_*.png" if prefer_overlay else "step_*.png"
+    paths = sorted(maps_dir.glob(pattern))
+    if not paths and prefer_overlay:
+        paths = sorted(maps_dir.glob("step_*.png"))
+    if len(paths) < 2:
+        return None
+    try:
+        from emet.eval.episode_video import write_png_sequence_mp4
+
+        out = root / "topdown_exploration.mp4"
+        return write_png_sequence_mp4(paths, out, fps=fps)
+    except Exception as exc:
+        logger.warning(f"map exploration MP4 export failed: {exc}")
         return None
 
 

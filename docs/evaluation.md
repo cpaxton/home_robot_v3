@@ -38,7 +38,8 @@ All embodied tracks can write a **consistent episode bundle** via [`src/emet/eva
     obstacles_2d.npy, explored_2d.npy, grid_meta.json
     trajectory.jsonl
     frames/rgb_*.png, metadata.jsonl
-    episode_rgb.mp4
+    episode_rgb.mp4              # head-camera first-person (manifest: head_camera_mp4)
+    topdown_exploration.mp4      # map timelapse (GT overlay when Habitat navmesh available)
     floor_metrics.json
     diagnostics_manifest.json
     (track-specific: raw_eqa.txt, memory/, …)
@@ -51,6 +52,8 @@ All embodied tracks can write a **consistent episode bundle** via [`src/emet/eva
 | `EMET_EVAL_EXPORT_MAP` | on | `topdown_map.png` (+ trajectory when `EMET_EVAL_EXPORT_TRAJECTORY=1`) |
 | `EMET_EVAL_EXPORT_GT_MAP` | on (Habitat) | `topdown_gt_navmesh.png` from HM3D navmesh |
 | `EMET_EVAL_EXPORT_MAP_OVERLAY` | on (Habitat) | `topdown_map_overlay.png` (GT + agent + trajectory) |
+| `EMET_EVAL_EXPORT_MAP_VIDEO` | on | `topdown_exploration.mp4` from stride map frames |
+| `EMET_EVAL_MAP_VIDEO_STRIDE` | `5` | Steps between map frames when `EMET_EVAL_MAP_STRIDE=0` |
 | `EMET_EVAL_MAP_MAX_SIDE` | `1280` | Max map width/height in pixels (was 640) |
 | `EMET_EVAL_MAP_MIN_SIDE` | `1024` | Upscale small crops to at least this size |
 | `EMET_EVAL_FILTER_MAP_ISLANDS` | on | Drop explored blobs disconnected from robot path |

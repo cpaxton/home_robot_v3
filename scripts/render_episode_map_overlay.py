@@ -176,6 +176,12 @@ def main() -> int:
     parser.add_argument("--no-filter-islands", action="store_true", help="Keep remote explored islands")
     parser.add_argument("--no-gt", action="store_true", help="Skip topdown_gt_navmesh.png")
     parser.add_argument("--no-overlay", action="store_true", help="Skip topdown_map_overlay.png")
+    parser.add_argument(
+        "--write-map-video",
+        action="store_true",
+        help="Encode maps/overlay_step_*.png or maps/step_*.png to topdown_exploration.mp4",
+    )
+    parser.add_argument("--map-video-fps", type=float, default=6.0, help="FPS for --write-map-video")
     args = parser.parse_args()
 
     try:
@@ -194,6 +200,23 @@ def main() -> int:
 
     for key, path in paths.items():
         print(f"{key}: {path}")
+
+    if args.write_map_video:
+        from emet.eval.episode_diagnostics import _write_map_exploration_mp4
+
+        mp4 = _write_map_exploration_mp4(
+            args.bundle_dir.expanduser().resolve(),
+            fps=float(args.map_video_fps),
+            prefer_overlay=True,
+        )
+        if mp4:
+            print(f"topdown_exploration: {mp4}")
+        else:
+            print(
+                "warning: no map video written (need maps/overlay_step_*.png or maps/step_*.png, ≥2 frames)",
+                file=sys.stderr,
+            )
+            return 1
     return 0
 
 

@@ -23,7 +23,10 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | Variable | Where used | Notes |
 |----------|------------|-------|
 | `EMET_EVAL_EXPORT_MAP` | Habitat / OVMM / SQA3D episode bundles | Write `topdown_map.png` (default on). Alias: `HABITAT_EQA_EXPORT_MAP`. |
-| `EMET_EVAL_EXPORT_VIDEO` | Same | Write `episode_rgb.mp4`. Alias: `HABITAT_EQA_EXPORT_VIDEO`. |
+| `EMET_EVAL_EXPORT_MAP_OVERLAY` | Habitat episode bundles | `topdown_map_overlay.png` (GT navmesh + agent map + trajectory; default on). |
+| `EMET_EVAL_EXPORT_MAP_VIDEO` | Same | `topdown_exploration.mp4` timelapse from stride map frames (default on). |
+| `EMET_EVAL_MAP_VIDEO_STRIDE` | Same | Steps between map frames when `EMET_EVAL_MAP_STRIDE=0` (default `5`). |
+| `EMET_EVAL_EXPORT_VIDEO` | Same | Write `episode_rgb.mp4` (head camera; manifest `head_camera_mp4`). Alias: `HABITAT_EQA_EXPORT_VIDEO`. |
 | `EMET_EVAL_EXPORT_FRAMES` | Same | Save RGB frames under `frames/`. |
 | `EMET_EVAL_EXPORT_OBSTACLE_GRIDS` | Same | `obstacles_2d.npy`, `explored_2d.npy`, `grid_meta.json` (default on). |
 | `EMET_EVAL_EXPORT_TRAJECTORY` | Same | `trajectory.jsonl` (default on). |
