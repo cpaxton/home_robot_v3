@@ -30,7 +30,11 @@ To use **MuJoCo rendered depth** in DynaMem (recommended in sim), keep the defau
 
 Override `da3_model_id` in that YAML (or a fork) for heavier metric checkpoints when you have GPU headroom.
 
-**DA3 voxel “walls” / sky junk:** Stereo networks often assign **finite** depth to textureless sky or bright ceiling strips; unprojection then paints tall vertical sheets into the voxel map. The packaged `dynav_innate_mars.yaml` sets **`da3_clip_max_m`** (hard cap on predicted meters) and **`da3_ignore_sky_fraction_top`** (zeros the top rows of the depth image before mapping). Tune those keys if your room lighting or camera tilt still leaves phantom obstacles; `emet debug-da3-depth` supports `--sky-fraction-top` and `--clip-depth-max-m` for the same behavior outside DynaMem.
+**DA3 voxel “walls” / sky junk:** Stereo networks often assign **finite** depth to textureless sky or bright ceiling strips; unprojection then paints tall vertical sheets into the voxel map. Mars defaults use **`da3_clip_max_m`** and **`da3_ignore_sky_fraction_top`** (in mapping defaults / robot overlay). Tune those keys if your room lighting or camera tilt still leaves phantom obstacles; `emet debug-da3-depth` supports `--sky-fraction-top` and `--clip-depth-max-m` for the same behavior outside DynaMem.
+
+**Floating mid-air blobs (opt-in filters):** Hardware DA3 can leave isolated depth speckles and small floating clusters in Rerun ``world/point_cloud``. Optional post-filters live under ``robots.innate_mars.mapping.filters`` in [`configs/emet/default.yaml`](../configs/emet/default.yaml) — **off by default** (`depth_speckle_open_kernel: 0`, `voxel_pcd_dbscan_min_samples: 0`). Enable and tune per site; see [dynav_config.md § DA3 post-filters](../dynav_config.md#depth--voxel-post-filters-da3-hardware-opt-in).
+
+**Curved / bowed walls vs sim:** Sim **sensor** depth is planar; DA3 depth is learned and lighting-dependent — flat walls may look **curvy** in the point cloud even when RGB looks fine. That is usually model/intrinsics/lighting, not the speckle filters. Compare with ``emet debug-da3-depth --depth-source sensor`` in sim, or try ``da3_model_id: depth-anything/DA3METRIC-LARGE`` on hardware.
 
 **Fast DA3 sanity check (Rerun):** With `emet serve mujoco --robot innate_mars` running, use `emet debug-da3-depth --robot innate_mars` to log left RGB, colormapped depth, and a strided point cloud under `da3/…` (same `resolve_depth_map` path as DynaMem). Add `--depth-source sensor` to compare against sim-rendered depth without running DA3.
 

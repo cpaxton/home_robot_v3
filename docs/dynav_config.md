@@ -93,19 +93,42 @@ min_pad_obstacles: 1
 local_radius: 0.5         # disk marked explored around the robot
 ```
 
-### Depth / voxel post-filters (DA3 hardware)
+### Depth / voxel post-filters (DA3 hardware, opt-in)
 
-Under ``robots.innate_mars.mapping.filters`` in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (merged into flat ``filters/…`` keys at runtime):
+Optional cleanup for **DA3-inferred** depth on Innate Mars (and any stack with ``depth_source: da3`` / ``auto`` fallback to DA3). **Defaults are off** (``0``) in [`configs/emet/default.yaml`](../configs/emet/default.yaml) — aggressive values can erode thin real structure (chair legs, door frames) or make walls look worse.
 
-| Key | Default | Meaning |
-|-----|---------|--------|
-| `depth_speckle_open_kernel` | `0` | Morphological opening on valid-depth mask before unprojection; `0` = off |
-| `depth_speckle_open_iterations` | `1` | Opening repeat count (ignored when kernel is `0`) |
-| `voxel_pcd_dbscan_min_samples` | `0` | Drop navigation PCD clusters smaller than this after each frame; `0` = off |
+| Layer | Key | Default | Meaning |
+|-------|-----|---------|--------|
+| Pre-unprojection | `depth_speckle_open_kernel` | `0` | Morphological opening on the valid-depth mask; ``0`` = off |
+| Pre-unprojection | `depth_speckle_open_iterations` | `1` | Opening repeat count (ignored when kernel is ``0``) |
+| Post-fusion PCD | `voxel_pcd_dbscan_min_samples` | `0` | Drop navigation ``voxel_pcd`` clusters smaller than this after each frame; ``0`` = off (eps ≈ ``4 × voxel_size``) |
 
-Onboard Jetson DA3: ``EMET_MARS_DA3_SPECKLE_OPEN_KERNEL`` (default `0`), ``EMET_MARS_DA3_SPECKLE_OPEN_ITERATIONS``.
+**Where:** under ``robots.innate_mars.mapping.filters`` (deep-merged into ``mapping.filters`` at runtime). Workstation stream/dynamem/dynagraph read these via the unified config; they apply in [`DynamemController.update()`](../src/emet/controller/controller_dynamem.py) only when depth came from DA3 inference (not raw ZMQ sensor depth).
 
-To reduce floating DA3 blobs on hardware, try e.g. ``depth_speckle_open_kernel: 3`` and ``voxel_pcd_dbscan_min_samples: 8`` under ``robots.innate_mars.mapping.filters`` (tune per site).
+**Enable example** (tune per site — try one knob at a time):
+
+```yaml
+# configs/emet/default.yaml (or --set overrides)
+robots:
+  innate_mars:
+    mapping:
+      filters:
+        depth_speckle_open_kernel: 3
+        depth_speckle_open_iterations: 1
+        voxel_pcd_dbscan_min_samples: 8
+```
+
+CLI without editing files:
+
+```bash
+emet stream --connection herman --backend dynagraph \
+  --set mapping.filters.depth_speckle_open_kernel=3 \
+  --set mapping.filters.voxel_pcd_dbscan_min_samples=8
+```
+
+**Onboard Jetson DA3** (when depth is computed on the robot): same speckle helper in [`onboard_da3.py`](../src/innate_mars_bridge/innate_mars_bridge/onboard_da3.py); env vars in [environment_variables.md](environment_variables.md). Redeploy bridge after changing onboard defaults.
+
+**Symptom guide:** Floating mid-air blobs in Rerun ``world/point_cloud`` → try speckle open and/or DBSCAN. **Curved / bowed flat walls** with normal RGB → usually DA3 metric quality, lighting, or intrinsics — not fixed by these filters; see [innate_mars.md](robots/innate_mars.md) and ``emet debug-da3-depth``.
 
 ### Depth source
 

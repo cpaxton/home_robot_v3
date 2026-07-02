@@ -63,7 +63,7 @@ Requires innate-os on the robot: `cd ~/innate-os && innate service start` (inter
 
   The bridge sets `EMET_MARS_ONBOARD_DA3=1`, runs **DA3-SMALL** stereo on head cameras, and publishes JP2 `depth` on port 4401. With `depth_source: auto`, the workstation **never loads DA3** when depth is present.
 
-  Tune on robot via env: `EMET_MARS_DA3_MODEL_ID`, `EMET_MARS_DA3_PROCESS_RES`, `EMET_MARS_DA3_INFER_EVERY_N` (default 2), `EMET_MARS_DA3_STEREO=1`.
+  Tune on robot via env: `EMET_MARS_DA3_MODEL_ID`, `EMET_MARS_DA3_PROCESS_RES`, `EMET_MARS_DA3_INFER_EVERY_N` (default 2), `EMET_MARS_DA3_STEREO=1`. Optional speckle filter: `EMET_MARS_DA3_SPECKLE_OPEN_KERNEL` (default `0` = off); see [dynav_config.md](../dynav_config.md#depth--voxel-post-filters-da3-hardware-opt-in).
 
 - **Timeouts:** `export EMET_ZMQ_STARTUP_TIMEOUT=120` if cameras are slow to start.
 - **Compare to sim:** Log `depth_source` and explored area; hardware has no `sim_object_placements` GT.
@@ -75,6 +75,8 @@ Requires innate-os on the robot: `cd ~/innate-os && innate service start` (inter
 | Black images | `maurice_cam` running; bridge waited for all three cameras |
 | No base motion | `maurice_nav` mode; `ros2 action list \| grep navigate` |
 | Sheared voxel map / sloped floor in Rerun | ``camera_K`` must match JPEG resolution. ``maurice_cam`` ``camera_info`` is often ~320×240 while streams are 640×480; bridge scales K to the decoded image (workstation client also auto-aligns). Restart stream after deploy. |
+| Floating mid-air points in ``world/point_cloud`` | DA3 speckle / flying pixels on hardware. Optional filters (default **off**): ``robots.innate_mars.mapping.filters`` in [`configs/emet/default.yaml`](../configs/emet/default.yaml) or ``--set mapping.filters.depth_speckle_open_kernel=3``. See [dynav_config.md](../dynav_config.md#depth--voxel-post-filters-da3-hardware-opt-in). |
+| Curved / bowed walls (RGB looks flat) | Usually DA3 + lighting/intrinsics, not stream misconfig. ``emet debug-da3-depth``; try ``DA3METRIC-LARGE`` or sensor depth in sim for A/B. [innate_mars.md](innate_mars.md). |
 | Red/blue swapped in Rerun RGB | Bridge must convert ROS ``bgr8`` → RGB before ``to_jpg`` (``innate_mars_bridge/ros/camera.py``) |
 | MJCF mesh head frozen / map vs model misaligned | **Hardware only:** ``joint_head`` inferred from ``camera_pose``; ``head_visual`` shifted forward (~70 mm). **Sim** keeps vanilla ``innate_mars.xml`` (head STL at neck pivot — may look slightly off vs cameras; arm/base replay unchanged). Hardware body gets **+90° Z** visual fix; sim does not. Meshes are dark semi-transparent; base sphere/arrow off by default. ``uv run python scripts/debug_innate_mars_head_align.py --ip <host>`` |
 | Black / missing EE (wrist) camera in Rerun | ``ros2 topic info /mars/arm/image_raw -v`` — need **Publisher count ≥ 1** (``maurice_cam`` arm stream). Bridge fills black JPEGs when absent. ``emet view-bridge`` or montage third panel shows ``ee_cam/color_image``. |

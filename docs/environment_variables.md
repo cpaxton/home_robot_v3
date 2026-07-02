@@ -81,6 +81,8 @@ Used by `scripts/run_large_paper_eval.sh` and `scripts/run_sqa3d_sharded_sweep.s
 | `EMET_ROBOSUITE_AUTOPLACE` | `scene_base_spawn` | Planar base autoplace on Robocasa / default-table merges (default `1`). `0`/`false`/`no`/`off` disables. |
 | `MUJOCO_GL` | MuJoCo rendering | e.g. `egl` for headless GPU cameras on Linux. RobosuiteZmqServer sets this automatically unless `--use-glx`. |
 | `EMET_MARS_ONBOARD_DA3` | Innate Mars bridge | Set to `1` on the Jetson when `emet mars start --onboard-da3` runs DA3 stereo onboard (see [innate_mars_hardware.md](robots/innate_mars_hardware.md)). |
+| `EMET_MARS_DA3_SPECKLE_OPEN_KERNEL` | Onboard Jetson DA3 | Morphological depth speckle filter kernel (pixels); `0` = off (default). Same helper as dynav `filters.depth_speckle_open_kernel`. |
+| `EMET_MARS_DA3_SPECKLE_OPEN_ITERATIONS` | Onboard Jetson DA3 | Speckle opening repeat count (default `1`). Ignored when kernel is `0`. |
 | `EMET_STREAM_VERBOSE` | `emet capture` / `emet stream` | `1`/`true` → per-step status + DA3 INFO timing (same as `--verbose`). Default off; dynav `stream.verbose` also applies. |
 | `DA3_LOG_LEVEL` | Depth Anything 3 (`depth_anything_3`) | `WARN` (default during stream when not verbose), `INFO`, `ERROR`. Dynav `stream.da3_log_level` sets default via `configure_mapping_session_logging`. |
 | `EMET_ROBOT_PASSWORD` | Deploy / Mars SSH | Optional password when not stored in the connection profile. |
