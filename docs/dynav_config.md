@@ -97,13 +97,15 @@ local_radius: 0.5         # disk marked explored around the robot
 
 Optional cleanup for **DA3-inferred** depth on Innate Mars (and any stack with ``depth_source: da3`` / ``auto`` fallback to DA3). **Defaults are off** (``0``) in [`configs/emet/default.yaml`](../configs/emet/default.yaml) — aggressive values can erode thin real structure (chair legs, door frames) or make walls look worse.
 
-| Layer | Key | Default | Meaning |
-|-------|-----|---------|--------|
-| Pre-unprojection | `depth_speckle_open_kernel` | `0` | Morphological opening on the valid-depth mask; ``0`` = off |
-| Pre-unprojection | `depth_speckle_open_iterations` | `1` | Opening repeat count (ignored when kernel is ``0``) |
-| Post-fusion PCD | `voxel_pcd_dbscan_min_samples` | `0` | Drop navigation ``voxel_pcd`` clusters smaller than this after each frame; ``0`` = off (eps ≈ ``4 × voxel_size``) |
+| Layer | Key | Default | Applies when |
+|-------|-----|---------|--------------|
+| Pre-unprojection | `depth_speckle_open_kernel` | `0` | DA3/LingBot **inferred** depth only (not raw ZMQ sensor depth) |
+| Pre-unprojection | `depth_speckle_open_iterations` | `1` | Same as speckle kernel; ignored when kernel is ``0`` |
+| Post-fusion PCD | `voxel_pcd_dbscan_min_samples` | `0` | **Any** depth source, each mapping frame (``0`` = off; eps ≈ ``4 × voxel_size``) |
 
-**Where:** under ``robots.innate_mars.mapping.filters`` (deep-merged into ``mapping.filters`` at runtime). Workstation stream/dynamem/dynagraph read these via the unified config; they apply in [`DynamemController.update()`](../src/emet/controller/controller_dynamem.py) only when depth came from DA3 inference (not raw ZMQ sensor depth).
+**Where:** under ``robots.innate_mars.mapping.filters`` (deep-merged into ``mapping.filters`` at runtime). Workstation stream/dynamem/dynagraph read these via the unified config.
+
+**Runtime:** Speckle open runs in [`DynamemController.update()`](../src/emet/controller/controller_dynamem.py) only when depth came from DA3/LingBot inference (``_depth_map_from_da3_infer``; skipped for raw sensor depth and ``depth_source: auto`` when usable sensor depth is present). Voxel PCD DBSCAN runs in [`SparseVoxelMap.add_observation()`](../src/emet/mapping/voxel/voxel_dynamem.py) whenever ``voxel_pcd_dbscan_min_samples > 0``, regardless of depth source.
 
 **Enable example** (tune per site — try one knob at a time):
 

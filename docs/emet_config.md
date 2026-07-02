@@ -59,7 +59,7 @@ robots:
       depth_source: auto
       da3_stereo: true
       local_radius: 0.85
-      # Optional DA3 post-filters (default off): filters.depth_speckle_open_kernel, filters.voxel_pcd_dbscan_min_samples
+      # Optional post-filters (default off): speckle on inferred depth; DBSCAN on voxel PCD (any depth source)
     zmq:
       allow_missing_depth: true
 ```

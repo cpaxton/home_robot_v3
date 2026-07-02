@@ -128,7 +128,7 @@ Spinning **in place** should leave **static world geometry** (floor, furniture) 
 
 6. **Sensor vs DA3 sky mask** — Raw **sensor** depth from `auto` or perfect-depth mode does **not** get `da3_ignore_sky_fraction_top` (that mask applies only to DA3-produced maps). Ceiling rows can add bogus vertical structure; adjust dynav height / depth clamps or use DA3 when you need that mask on inferred depth.
 
-7. **Optional DA3 post-filters (hardware)** — Speckle opening and voxel PCD DBSCAN prune floating blobs; **default off** in [`configs/emet/default.yaml`](../configs/emet/default.yaml). See [dynav_config.md](dynav_config.md#depth--voxel-post-filters-da3-hardware-opt-in).
+7. **Optional DA3 post-filters (hardware)** — Speckle opening (DA3/LingBot inferred depth only) and voxel PCD DBSCAN (any depth source) prune floating blobs; **default off** in [`configs/emet/default.yaml`](../configs/emet/default.yaml). See [dynav_config.md](dynav_config.md#depth--voxel-post-filters-da3-hardware-opt-in).
 
 See `docs/logs/pointcloud-alignment-circle-test.md` for nav vs world notes on ZMQ sim.
 
