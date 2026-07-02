@@ -77,6 +77,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         return {
             "floor_y": self._sim.floor_y,
             "sensor_height": self._sim.sensor_height,
+            "camera_tilt_deg": self._sim.camera_tilt_deg,
         }
 
     def _sync_pose_from_sim(self) -> None:

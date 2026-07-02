@@ -27,15 +27,23 @@ def _agent_state(
     *,
     heading: float = 0.0,
     camera_tilt_deg: float = -30.0,
+    sensor_height: float = 1.5,
 ) -> SimpleNamespace:
-    """Minimal Habitat-like agent state (no ``sensor_states``)."""
+    """Minimal Habitat-like agent state with yaw-only body and pitched sensor."""
     q_yaw = R.from_rotvec([0.0, float(heading), 0.0])
+    body_rot = q_yaw.as_matrix()
     q_tilt = R.from_rotvec([np.deg2rad(camera_tilt_deg), 0.0, 0.0])
-    rot_mat = (q_yaw * q_tilt).as_matrix()
+    sensor_rot = (q_yaw * q_tilt).as_matrix()
+    body_pos = np.array(position, dtype=np.float32)
+    sensor_pos = body_pos + body_rot @ np.array([0.0, sensor_height, 0.0], dtype=np.float64)
+    sensor = SimpleNamespace(
+        rotation=sensor_rot.astype(np.float32),
+        position=sensor_pos.astype(np.float32),
+    )
     return SimpleNamespace(
-        position=np.array(position, dtype=np.float32),
-        rotation=rot_mat,
-        sensor_states=None,
+        position=body_pos,
+        rotation=body_rot.astype(np.float32),
+        sensor_states={"depth_sensor": sensor, "color_sensor": sensor},
     )
 
 

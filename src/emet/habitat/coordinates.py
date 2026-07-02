@@ -112,16 +112,23 @@ def habitat_agent_to_opencv_camera_pose(
     agent_state=None,
     sensor_uuid: str = "depth_sensor",
     sensor_height: float = 1.5,
+    camera_tilt_deg: float = -30.0,
 ) -> np.ndarray:
     """OpenCV camera-to-world in Habitat Y-up (no Stretch z-up flip).
 
     Prefers Habitat-Sim ``agent_state.sensor_states`` when present; otherwise uses
-    ``hab_pose`` (agent body) with a vertical sensor mount offset.
+    ``hab_pose`` (agent body) with a vertical sensor mount offset and optional pitch.
     """
     sensor_gl = _sensor_pose_habitat(agent_state, sensor_uuid=sensor_uuid) if agent_state is not None else None
     if sensor_gl is None:
         mount = np.eye(4, dtype=np.float64)
         mount[1, 3] = float(sensor_height)
+        pitch = np.deg2rad(float(camera_tilt_deg))
+        cp, sp = float(np.cos(pitch)), float(np.sin(pitch))
+        mount[:3, :3] = np.array(
+            [[1.0, 0.0, 0.0], [0.0, cp, -sp], [0.0, sp, cp]],
+            dtype=np.float64,
+        )
         sensor_gl = np.asarray(hab_pose, dtype=np.float64) @ mount
     return opengl_camera_to_opencv_camera_to_world(sensor_gl)
 
@@ -133,6 +140,7 @@ def habitat_observation_camera_pose(
     agent_state=None,
     sensor_uuid: str = "depth_sensor",
     sensor_height: float = 1.5,
+    camera_tilt_deg: float = -30.0,
 ) -> np.ndarray:
     """OpenCV camera-to-voxel-world for :class:`~emet.core.interfaces.Observations`."""
     cam_hab = habitat_agent_to_opencv_camera_pose(
@@ -140,6 +148,7 @@ def habitat_observation_camera_pose(
         agent_state=agent_state,
         sensor_uuid=sensor_uuid,
         sensor_height=sensor_height,
+        camera_tilt_deg=camera_tilt_deg,
     )
     return habitat_to_voxel_world_transform(floor_y) @ cam_hab
 
