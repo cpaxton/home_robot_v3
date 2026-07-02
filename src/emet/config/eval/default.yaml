@@ -1,0 +1,22 @@
+# Episode diagnostics for Habitat / OVMM / SQA3D eval bundles.
+# Override: ``--set eval.export_map_video=false`` or ``EMET_EVAL_EXPORT_MAP_VIDEO=0``.
+# Precedence: CLI kwargs > env (when set) > YAML > dataclass defaults.
+
+export_map: true
+export_map_stride: 0
+export_obstacle_grids: true
+export_trajectory: true
+export_rgb_frames: true
+export_video: true
+export_object_crops: true
+export_full_graph: false
+export_voxel_history: false
+export_voxel_pickle: false
+max_map_side: 1280
+min_map_side: 1024
+filter_map_islands: true
+export_gt_navmesh_map: true
+export_map_overlay: true
+export_map_video: true
+map_video_stride: 5
+video_fps: 6.0

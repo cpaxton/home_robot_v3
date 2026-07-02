@@ -135,4 +135,10 @@ def get_parameters(path: str, *, overrides: list[str] | None = None, robot: str 
     if robot_id:
         robot_id = robot_id.lower().replace("-", "_")
     cfg = finalize_resolved_config(cfg, robot_id=robot_id, overrides=overrides)
-    return Parameters(**cfg.mapping_dict)
+    params = Parameters(**cfg.mapping_dict)
+    eval_block = cfg.raw.get("eval")
+    if isinstance(eval_block, dict):
+        import copy
+
+        params.data["eval"] = copy.deepcopy(eval_block)
+    return params

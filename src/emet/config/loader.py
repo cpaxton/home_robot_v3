@@ -19,6 +19,7 @@ from omegaconf import OmegaConf
 
 import emet
 from emet.config.embodied_agent_config import EmbodiedAgentConfig
+from emet.config.eval_config import load_eval_diagnostics_from_parameters
 from emet.config.rerun_config import RerunAgentConfig
 from emet.config.sim_launch_config import SimLaunchConfig, decode_sim_launch_config, load_sim_launch_config_from_path
 from emet.utils.config import resolve_config_yaml_path
@@ -40,6 +41,7 @@ _RESERVED_TOP_LEVEL_KEYS = frozenset(
         "sim",
         "sim_config",
         "embodied_agent",
+        "eval",
         "rerun",
         "robots",
         "zmq",
@@ -374,6 +376,9 @@ class ResolvedEmetConfig:
         if isinstance(mapping_rerun, dict):
             return draccus.decode(RerunAgentConfig, mapping_rerun)
         return RerunAgentConfig()
+
+    def eval_diagnostics(self):
+        return load_eval_diagnostics_from_parameters(self.raw)
 
     def sim_launch(self) -> SimLaunchConfig | None:
         inline = self.raw.get("sim")

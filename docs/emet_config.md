@@ -23,6 +23,7 @@ Legacy basenames (`dynav_config.yaml`, `--agent-config`, `--dynav-config`) still
 | `sim` / `sim_config` | MuJoCo / Robocasa / MolmoSpaces launch (see [Simulation configs](sim_configs.md)) |
 | `embodied_agent` | Open-vocab scene graph + GraphEQA memory overlays |
 | `rerun` | Live Rerun viewer options |
+| `eval` | Episode diagnostics exports (maps, RGB frames, MP4) for Habitat/OVMM/SQA3D bundles |
 | `robots.<id>` | Per-robot overlays merged when robot is resolved |
 | `robot` | Optional fixed robot id (CLI `--robot` wins when set) |
 | `connection` | Named profile in `~/.stretch/connection.json` |
@@ -34,6 +35,16 @@ defaults:
   - mapping: package://emet/config/mapping/default.yaml
   - agent: package://emet/config/agent/default.yaml
   - rerun: package://emet/config/agents/default_rerun.yaml
+  - eval: package://emet/config/eval/default.yaml
+```
+
+Example **`eval:`** overrides (maps + videos):
+
+```yaml
+eval:
+  export_map_video: true
+  export_video: true
+  map_video_stride: 5
 ```
 
 User presets use `extends:`:

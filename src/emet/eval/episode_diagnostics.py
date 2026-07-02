@@ -34,6 +34,20 @@ def _env_truthy(name: str, default: bool = False) -> bool:
     return raw in ("1", "true", "yes", "on")
 
 
+def _env_truthy_or_none(name: str) -> bool | None:
+    """Return None when the env var is unset (for config precedence)."""
+    raw = os.environ.get(name, "").strip().lower()
+    if not raw:
+        if name == "EMET_EVAL_EXPORT_MAP":
+            return _env_truthy_or_none("HABITAT_EQA_EXPORT_MAP")
+        if name == "EMET_EVAL_EXPORT_VIDEO":
+            return _env_truthy_or_none("HABITAT_EQA_EXPORT_VIDEO")
+        if name == "EMET_EVAL_EXPORT_GRAPH":
+            return _env_truthy_or_none("HABITAT_EQA_EXPORT_GRAPH")
+        return None
+    return raw in ("1", "true", "yes", "on")
+
+
 def _env_int(name: str, default: int = 0) -> int:
     raw = os.environ.get(name, "").strip()
     if not raw:
@@ -96,32 +110,14 @@ class EpisodeDiagnosticsConfig:
     export_gt_navmesh_map: bool = True
     export_map_overlay: bool = True
     export_map_video: bool = True
+    map_video_stride: int = 5
     video_fps: float = 6.0
 
     @classmethod
-    def from_env(cls, **overrides: Any) -> EpisodeDiagnosticsConfig:
-        cfg = cls(
-            export_map=_env_truthy("EMET_EVAL_EXPORT_MAP", True),
-            export_map_stride=_env_int("EMET_EVAL_MAP_STRIDE", 0),
-            export_obstacle_grids=_env_truthy("EMET_EVAL_EXPORT_OBSTACLE_GRIDS", True),
-            export_trajectory=_env_truthy("EMET_EVAL_EXPORT_TRAJECTORY", True),
-            export_rgb_frames=_env_truthy("EMET_EVAL_EXPORT_FRAMES", True),
-            export_video=_env_truthy("EMET_EVAL_EXPORT_VIDEO", True),
-            export_object_crops=_env_truthy("EMET_EVAL_EXPORT_OBJECT_CROPS", True),
-            export_full_graph=_env_truthy("EMET_EVAL_EXPORT_GRAPH", False),
-            export_voxel_history=_env_truthy("EMET_EVAL_EXPORT_VOXEL_HISTORY", False),
-            export_voxel_pickle=_env_truthy("EMET_EVAL_EXPORT_VOXEL_PICKLE", False),
-            max_map_side=_env_map_max_side(1280),
-            min_map_side=_env_map_min_side(1024),
-            filter_map_islands=_env_truthy("EMET_EVAL_FILTER_MAP_ISLANDS", True),
-            export_gt_navmesh_map=_env_truthy("EMET_EVAL_EXPORT_GT_MAP", True),
-            export_map_overlay=_env_truthy("EMET_EVAL_EXPORT_MAP_OVERLAY", True),
-            export_map_video=_env_truthy("EMET_EVAL_EXPORT_MAP_VIDEO", True),
-        )
-        for key, val in overrides.items():
-            if val is not None and hasattr(cfg, key):
-                setattr(cfg, key, val)
-        return cfg
+    def from_env(cls, parameters: Any = None, **overrides: Any) -> EpisodeDiagnosticsConfig:
+        from emet.config.eval_config import resolve_episode_diagnostics_config
+
+        return resolve_episode_diagnostics_config(parameters, **overrides)
 
 
 @dataclass
@@ -288,7 +284,7 @@ class EpisodeDiagnosticsRecorder:
         if stride > 0:
             return stride
         if self.cfg.export_map_video:
-            return _env_map_video_stride(5)
+            return max(1, int(self.cfg.map_video_stride or 5))
         return 0
 
     def _capture_stride_snapshot(self, agent: Any, step_idx: int) -> None:

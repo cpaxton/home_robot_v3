@@ -282,6 +282,7 @@ def run_hmeqa_episode(
             use_hm3d_semantics=use_hm3d_semantics,
         )
         diag_cfg = EpisodeDiagnosticsConfig.from_env(
+            parameters,
             export_map=export_map,
             export_video=export_video,
             export_map_stride=map_stride if map_stride is not None else None,

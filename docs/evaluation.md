@@ -66,6 +66,8 @@ All embodied tracks can write a **consistent episode bundle** via [`src/emet/eva
 
 Habitat aliases: `HABITAT_EQA_EXPORT_MAP`, `HABITAT_EQA_EXPORT_VIDEO`, `HABITAT_EQA_EXPORT_GRAPH`, `HABITAT_EQA_MAP_STRIDE`.
 
+**Unified config:** the same settings live under **`eval:`** in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (`export_map_video`, `export_video`, `map_video_stride`, …). Override with **`--set eval.export_map_video=false`** or a preset YAML block. Precedence: CLI/runner kwargs → env (when set) → YAML → defaults. See [emet_config.md](emet_config.md).
+
 **Recording:** eval runners call `bind_diagnostics_recorder()` which registers a step callback on the agent. After each successful `DynamemController.update()` (navigation / mapping step), the callback buffers RGB, pose, and optional stride maps — no monkey-patching of `agent.update`.
 
 **CLI flags** (`.venv-habitat/bin/emet-habitat`): `--export-map`, `--export-video`, `--map-stride` on `run-episode` / `run-batch`; OVMM batch adds `--run-tag`. With `--map-stride N`, intermediate maps are written under `<bundle>/maps/step_NNNN.png` at episode end.
