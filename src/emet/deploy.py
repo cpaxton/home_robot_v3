@@ -129,9 +129,9 @@ def build_remote_bridge_import_verify_cmd(*, remote_emet: str, remote_ws: str) -
     """Return an SSH remote command that smoke-tests bridge + emet_core imports."""
     py_paths = f"{remote_emet.rstrip('/')}/emet_core:{remote_emet.rstrip('/')}/src"
     ros_setup = f"source /opt/ros/humble/setup.bash && source {remote_ws.rstrip('/')}/install/setup.bash"
-    # No nested quotes: safe for zsh over SSH.
     py_snippet = "import innate_mars_bridge.ros.camera; import emet.utils.image; import emet.core.server"
-    return f"bash -lc '{ros_setup} && export PYTHONPATH={py_paths}:$PYTHONPATH && python3 -c {py_snippet!r}'"
+    # Outer bash -lc uses single quotes; pass -c argument in double quotes (no nested '…').
+    return f"bash -lc '{ros_setup} && export PYTHONPATH={py_paths}:$PYTHONPATH && python3 -c \"{py_snippet}\"'"
 
 
 def _ssh_run(
