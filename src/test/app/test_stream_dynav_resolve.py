@@ -29,8 +29,8 @@ def test_innate_mars_remote_host_uses_auto_depth_via_overlay():
     assert config_path == default_config_path()
     assert str(params.get("depth_source", "")).lower() in ("auto", "da3")
     filters = params.get("filters") or {}
-    assert int(filters.get("depth_speckle_open_kernel", 0) or 0) == 3
-    assert int(filters.get("voxel_pcd_dbscan_min_samples", 0) or 0) == 8
+    assert int(filters.get("depth_speckle_open_kernel", 0) or 0) == 0
+    assert int(filters.get("voxel_pcd_dbscan_min_samples", 0) or 0) == 0
 
 
 def test_innate_mars_localhost_keeps_sensor_depth_when_sim():

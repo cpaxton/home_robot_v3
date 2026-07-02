@@ -41,8 +41,8 @@ def test_robot_overlay_merges_innate_mars_mapping():
     assert merged["mapping"]["depth_source"] == "auto"
     assert merged["mapping"]["local_radius"] == 0.85
     filters = merged["mapping"]["filters"]
-    assert filters["depth_speckle_open_kernel"] == 3
-    assert filters["voxel_pcd_dbscan_min_samples"] == 8
+    assert filters["depth_speckle_open_kernel"] == 0
+    assert filters["voxel_pcd_dbscan_min_samples"] == 0
 
 
 def test_dot_override_wins_over_file():

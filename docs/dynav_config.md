@@ -97,13 +97,15 @@ local_radius: 0.5         # disk marked explored around the robot
 
 Under ``robots.innate_mars.mapping.filters`` in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (merged into flat ``filters/…`` keys at runtime):
 
-| Key | Default (Mars HW) | Meaning |
-|-----|-------------------|--------|
-| `depth_speckle_open_kernel` | `3` | Morphological opening on valid-depth mask before unprojection; `0` = off |
-| `depth_speckle_open_iterations` | `1` | Opening repeat count |
-| `voxel_pcd_dbscan_min_samples` | `8` | Drop navigation PCD clusters smaller than this after each frame; `0` = off |
+| Key | Default | Meaning |
+|-----|---------|--------|
+| `depth_speckle_open_kernel` | `0` | Morphological opening on valid-depth mask before unprojection; `0` = off |
+| `depth_speckle_open_iterations` | `1` | Opening repeat count (ignored when kernel is `0`) |
+| `voxel_pcd_dbscan_min_samples` | `0` | Drop navigation PCD clusters smaller than this after each frame; `0` = off |
 
-Onboard Jetson DA3: ``EMET_MARS_DA3_SPECKLE_OPEN_KERNEL`` (default `3`), ``EMET_MARS_DA3_SPECKLE_OPEN_ITERATIONS``.
+Onboard Jetson DA3: ``EMET_MARS_DA3_SPECKLE_OPEN_KERNEL`` (default `0`), ``EMET_MARS_DA3_SPECKLE_OPEN_ITERATIONS``.
+
+To reduce floating DA3 blobs on hardware, try e.g. ``depth_speckle_open_kernel: 3`` and ``voxel_pcd_dbscan_min_samples: 8`` under ``robots.innate_mars.mapping.filters`` (tune per site).
 
 ### Depth source
 

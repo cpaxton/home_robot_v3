@@ -65,7 +65,7 @@ class OnboardDA3Depth:
             "off",
         )
         self._sky_fraction = _env_float("EMET_MARS_DA3_IGNORE_SKY_FRACTION_TOP", 0.16)
-        self._speckle_open_kernel = _env_int("EMET_MARS_DA3_SPECKLE_OPEN_KERNEL", 3)
+        self._speckle_open_kernel = _env_int("EMET_MARS_DA3_SPECKLE_OPEN_KERNEL", 0)
         self._speckle_open_iterations = _env_int("EMET_MARS_DA3_SPECKLE_OPEN_ITERATIONS", 1)
         self._last_depth: np.ndarray | None = None
         self._load_error: str | None = None
