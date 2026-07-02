@@ -38,6 +38,8 @@ emet stream --connection herman --backend dynagraph --headless
 
 Sim with sensor depth may **not** show the same severity (dedup is more stable when depth is consistent).
 
+Optional **DA3 post-filters** (speckle open / voxel DBSCAN on navigation PCD) can reduce floating ``world/point_cloud`` blobs; they are **off by default** — see [dynav_config.md](dynav_config.md#depth--voxel-post-filters-da3-hardware-opt-in).
+
 ### Fix (2026-06)
 
 Three changes address stationary hardware stream growth:
