@@ -18,6 +18,7 @@
 from emet.perception.depth.da3_estimator import (
     DA3DepthEstimator,
     apply_da3_sky_row_mask,
+    apply_depth_speckle_filter,
     create_da3_estimator_from_parameters,
     resolve_depth_map,
     resolve_depth_map_uses_observation_sensor_only,
@@ -30,6 +31,7 @@ __all__ = [
     "LingBotDepthEstimator",
     "LingBotSubprocessClient",
     "apply_da3_sky_row_mask",
+    "apply_depth_speckle_filter",
     "create_da3_estimator_from_parameters",
     "create_lingbot_estimator_from_parameters",
     "resolve_depth_map",

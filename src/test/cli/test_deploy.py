@@ -22,3 +22,5 @@ def test_remote_bridge_import_verify_cmd_includes_emet_core_and_bridge():
     assert "emet.utils.image" in cmd
     assert "emet.core.server" in cmd
     assert "colcon" not in cmd
+    assert '-c "import innate_mars_bridge' in cmd
+    assert "-c 'import" not in cmd

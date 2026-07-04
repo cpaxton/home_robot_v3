@@ -157,6 +157,7 @@ class SparseVoxelMap:
         add_local_radius_every_step: bool = False,
         min_points_per_voxel: int = 10,
         use_negative_obstacles: bool = False,
+        voxel_pcd_dbscan_min_samples: int = 0,
     ):
         """
         Args:
@@ -234,6 +235,7 @@ class SparseVoxelMap:
         self.encoder = encoder
         self.map_2d_device = map_2d_device
         self._min_points_per_voxel = min_points_per_voxel
+        self._voxel_pcd_dbscan_min_samples = max(0, int(voxel_pcd_dbscan_min_samples or 0))
         self.urdf_visualizer = URDFVisualizer()
 
         # Is the 2d map stale?
