@@ -1784,7 +1784,10 @@ class DynamemController(BaseController):
                 logger.info(f"EQA habitat navmesh failed: {nav_res.note} (dist={nav_res.dist_m:.2f}m)")
             self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
             blocked = getattr(self, "_habitat_blocked_goals", None)
-            if blocked is not None and not nav_res.finished and nav_res.dist_m < 0.05:
+            if blocked is not None and (
+                nav_res.note.startswith("already_at_goal")
+                or (not nav_res.finished and nav_res.dist_m < 0.08)
+            ):
                 blocked.add(goal_key_xy(goal_xy))
             return nav_res.finished
 

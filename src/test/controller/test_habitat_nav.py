@@ -76,6 +76,56 @@ def test_habitat_navmesh_navigate_moves_robot():
     assert robot.traj is not None
 
 
+def test_habitat_navmesh_navigate_rejects_noop_when_already_at_goal():
+    robot = _FakeHabitatRobot()
+    res = habitat_navmesh_navigate(robot, np.array([0.05, 0.05]))
+    assert res.note.startswith("already_at_goal")
+    assert not res.finished
+    assert res.dist_m == 0.0
+
+
+def test_habitat_navmesh_navigate_moves_to_nearby_goal():
+    robot = _FakeHabitatRobot()
+    res = habitat_navmesh_navigate(robot, np.array([0.35, 0.0]))
+    assert res.finished
+    assert res.dist_m >= 0.08
+    assert res.note.startswith("ok")
+
+
+def test_pick_habitat_exploration_target_accepts_nearby_frontier():
+    class _Node:
+        def __init__(self, obs_id, x, z):
+            self.obs_id = obs_id
+            self.xyz = [x, z, 0.0]
+            self.is_frontier = True
+            self.nav_failures = 0
+            self.last_seen = obs_id
+
+    class _GM:
+        def get_nodes(self):
+            return [_Node(1, 0.1, 0.0), _Node(2, 4.0, 0.0)]
+
+    class _Sim:
+        def snap_navmesh_xz(self, x, z):
+            return float(x), float(z), True
+
+        def find_path_to_xy(self, x, z):
+            return np.array([[0.0, 0.0, 0.0], [float(x), 0.0, float(z)]], dtype=np.float64)
+
+    class _Robot:
+        def __init__(self):
+            self._sim = _Sim()
+            self._pose = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+
+        def get_base_pose(self):
+            return self._pose.copy()
+
+    agent = type("A", (), {"graph_memory": _GM(), "robot": _Robot(), "parameters": {"eqa": {}}})()
+    pt = pick_habitat_exploration_target(agent)
+    assert pt is not None
+    assert float(pt[0]) == 0.1
+
+
 def test_resolve_habitat_nav_goal_uses_path_end():
     class _Sim:
         def snap_navmesh_xz(self, x, z):

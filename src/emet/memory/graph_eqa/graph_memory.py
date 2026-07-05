@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -362,6 +363,7 @@ class GraphEQAMemory:
         self._frontier_max_nodes: int = 12
         self._frontier_min_cluster_cells: int = 3
         self._frontier_keyword_score_weight: float = 1.0
+        self.image_nav_min_approach_m: float = 0.35
         self._load_navigation_settings()
         self._load_dynagraph_settings()
         self._load_frontier_settings()
@@ -387,6 +389,9 @@ class GraphEQAMemory:
         blk = d.get("graph_eqa_extract")
         if isinstance(blk, dict) and blk.get("navigation_samples_max") is not None:
             self._nav_max = max(1, int(blk["navigation_samples_max"]))
+        eqa = d.get("eqa")
+        if isinstance(eqa, dict) and eqa.get("image_nav_min_approach_m") is not None:
+            self.image_nav_min_approach_m = max(0.05, float(eqa["image_nav_min_approach_m"]))
 
     def _load_dynagraph_settings(self) -> None:
         d = self._parameters_dict()
@@ -1850,12 +1855,85 @@ class GraphEQAMemory:
         }
         return letter
 
-    def _target_point_from_image_id(self, image_id: int) -> np.ndarray | None:
-        """Return (x, y, 1) for the observation's position when mLLM suggests navigating to that image."""
-        for obs in self._observations:
-            if obs.obs_id == image_id:
-                return np.array([obs.xyz[0], obs.xyz[1], 1.0], dtype=float)
+    def _node_for_obs_id(self, obs_id: int) -> GraphNode | None:
+        for n in self._nodes:
+            if int(n.obs_id) == int(obs_id):
+                return n
         return None
+
+    def _robot_planar_xy(self, robot_xyt: Any | None) -> tuple[float, float] | None:
+        if robot_xyt is None:
+            return None
+        r = np.asarray(robot_xyt, dtype=float).reshape(-1)
+        if r.size < 2:
+            return None
+        return float(r[0]), float(r[1])
+
+    def _viewpoint_xyz_for_obs(self, obs_id: int, obs: GraphObservation | None = None) -> np.ndarray | None:
+        if obs is None:
+            obs = self._observation_by_id(obs_id)
+        if obs is not None and obs.viewer_xyz is not None:
+            return np.asarray(obs.viewer_xyz, dtype=float).reshape(-1)[:3]
+        vp_id = self._viewpoint_by_obs_id.get(int(obs_id))
+        if vp_id is None:
+            return None
+        for n in self._nodes:
+            if int(n.node_id) == int(vp_id) and n.is_viewpoint:
+                return np.asarray(n.xyz, dtype=float).reshape(-1)[:3]
+        return None
+
+    def _standoff_waypoint_toward(
+        self,
+        robot_xy: tuple[float, float],
+        anchor: np.ndarray,
+        *,
+        min_approach_m: float | None = None,
+    ) -> np.ndarray:
+        """Planar waypoint toward ``anchor`` when the robot is already at the capture viewpoint."""
+        min_m = float(min_approach_m if min_approach_m is not None else self.image_nav_min_approach_m)
+        rx, ry = robot_xy
+        ax, ay = float(anchor[0]), float(anchor[1])
+        dx, dy = ax - rx, ay - ry
+        dist = math.hypot(dx, dy)
+        if dist < 1e-6:
+            return np.array([rx + min_m, ry, 1.0], dtype=float)
+        travel = dist if dist <= min_m else max(min_m, dist - min_m)
+        ux, uy = dx / dist, dy / dist
+        return np.array([rx + ux * travel, ry + uy * travel, 1.0], dtype=float)
+
+    def _navigation_waypoint_for_obs(
+        self,
+        obs_id: int,
+        robot_xyt: Any | None = None,
+    ) -> np.ndarray | None:
+        """Resolve a graph observation to a robot navigation waypoint (not raw object centroid)."""
+        obs = self._observation_by_id(obs_id)
+        if obs is None:
+            return None
+        node = self._node_for_obs_id(obs_id)
+        anchor = np.asarray(obs.xyz, dtype=float).reshape(-1)[:3]
+        robot_xy = self._robot_planar_xy(robot_xyt)
+
+        if node is not None and (node.is_frontier or node.is_viewpoint):
+            return np.array([anchor[0], anchor[1], 1.0], dtype=float)
+
+        vp_xyz = self._viewpoint_xyz_for_obs(obs_id, obs)
+        if robot_xy is not None and vp_xyz is not None:
+            d_vp = math.hypot(robot_xy[0] - float(vp_xyz[0]), robot_xy[1] - float(vp_xyz[1]))
+            if d_vp > float(self.viewpoint_merge_m):
+                return np.array([float(vp_xyz[0]), float(vp_xyz[1]), 1.0], dtype=float)
+
+        if robot_xy is not None:
+            return self._standoff_waypoint_toward(robot_xy, anchor)
+        return np.array([anchor[0], anchor[1], 1.0], dtype=float)
+
+    def _target_point_from_image_id(
+        self,
+        image_id: int,
+        robot_xyt: Any | None = None,
+    ) -> np.ndarray | None:
+        """Return ``(x, y, 1)`` nav waypoint for observation ``image_id``."""
+        return self._navigation_waypoint_for_obs(int(image_id), robot_xyt)
 
     def _target_point_from_display_image_index(
         self,
@@ -1863,6 +1941,7 @@ class GraphEQAMemory:
         *,
         obs_ids: list[int],
         nav_fallback_tail: list[GraphNavigationSample],
+        robot_xyt: Any | None = None,
     ) -> np.ndarray | None:
         """Map 1-based ``Image N`` from the EQA prompt to a navigation waypoint."""
         if display_index < 1:
@@ -1871,12 +1950,21 @@ class GraphEQAMemory:
             if display_index > len(obs_ids):
                 return None
             oid = int(obs_ids[display_index - 1])
-            for obs in self._observations:
-                if int(obs.obs_id) == oid:
-                    return np.array([obs.xyz[0], obs.xyz[1], 1.0], dtype=float)
-            return self._target_point_from_image_id(oid)
+            pt = self._navigation_waypoint_for_obs(oid, robot_xyt)
+            if pt is not None:
+                return pt
+            return self._target_point_from_image_id(oid, robot_xyt)
         if nav_fallback_tail and display_index <= len(nav_fallback_tail):
             nv = nav_fallback_tail[display_index - 1]
+            if nv.base_xyz is not None:
+                base = np.asarray(nv.base_xyz, dtype=float).reshape(-1)[:3]
+                anchor = np.asarray(nv.xyz, dtype=float).reshape(-1)[:3]
+                robot_xy = self._robot_planar_xy(robot_xyt)
+                if robot_xy is not None:
+                    d_base = math.hypot(robot_xy[0] - float(base[0]), robot_xy[1] - float(base[1]))
+                    if d_base > float(self.viewpoint_merge_m):
+                        return np.array([float(base[0]), float(base[1]), 1.0], dtype=float)
+                    return self._standoff_waypoint_toward(robot_xy, anchor)
             return np.array([nv.xyz[0], nv.xyz[1], 1.0], dtype=float)
         return None
 
@@ -2036,6 +2124,7 @@ class GraphEQAMemory:
                     display_index,
                     obs_ids=obs_ids,
                     nav_fallback_tail=nav_fallback_tail,
+                    robot_xyt=xyt,
                 )
             self._history_outputs.append(
                 "Answer:"

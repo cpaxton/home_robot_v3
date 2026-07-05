@@ -48,8 +48,29 @@ def habitat_explore_frontiers_enabled(parameters: Any) -> bool:
     return bool(eqa.get("habitat_explore_frontiers", True))
 
 
+def habitat_nav_would_be_noop(
+    robot: Any,
+    goal_xy: np.ndarray | tuple[float, float],
+    *,
+    finish_radius_m: float = 0.28,
+) -> bool:
+    """True when the robot is already within finish radius of a resolved nav goal."""
+    resolved = apply_habitat_nav_resolution(robot, goal_xy)
+    if resolved is None:
+        return False
+    travel = habitat_goal_travel_m(robot, resolved[:2])
+    return travel <= finish_radius_m
+
+
 def goal_key_xy(xy: np.ndarray | tuple[float, float]) -> tuple[float, float]:
     return (round(float(xy[0]), 2), round(float(xy[1]), 2))
+
+
+def habitat_goal_travel_m(robot: Any, goal_xy: np.ndarray | tuple[float, float]) -> float:
+    """Planar distance from robot base to ``goal_xy``."""
+    robot_xy = robot_planar_xy(robot)
+    arr = np.asarray(goal_xy, dtype=np.float64).reshape(-1)
+    return _planar_dist(robot_xy, (float(arr[0]), float(arr[1])))
 
 
 def robot_planar_xy(robot: Any) -> tuple[float, float]:
@@ -121,7 +142,6 @@ def pick_habitat_exploration_target(
     blocked = blocked or set()
     robot = getattr(agent, "robot", None)
     recent = list(recent_goals or getattr(agent, "_habitat_recent_goals", None) or [])
-    robot_xy = robot_planar_xy(robot) if robot is not None else (0.0, 0.0)
 
     def _accept(raw: np.ndarray | None) -> np.ndarray | None:
         if raw is None:
@@ -136,7 +156,7 @@ def pick_habitat_exploration_target(
             blocked.add(key)
             return None
         eff = (float(resolved[0]), float(resolved[1]))
-        if _recent_goal_penalty(eff, recent, radius_m=0.85) > 0.0:
+        if _recent_goal_penalty(eff, recent, radius_m=1.25) > 0.0:
             blocked.add(key)
             return None
         return resolved
@@ -145,6 +165,7 @@ def pick_habitat_exploration_target(
     if gm is not None:
         nodes = [n for n in gm.get_nodes() if getattr(n, "is_frontier", False)]
         if nodes:
+            robot_xy = robot_planar_xy(robot) if robot is not None else (0.0, 0.0)
             nodes.sort(key=lambda n: _frontier_explore_sort_key(n, robot_xy, recent=recent))
             for node in nodes:
                 raw = np.array([float(node.xyz[0]), float(node.xyz[1]), 1.0], dtype=float)
@@ -274,7 +295,7 @@ def habitat_navmesh_navigate(
     start_xyt: np.ndarray | None = None,
     target_theta: float | None = None,
     max_waypoints: int = 24,
-    min_success_dist_m: float = 0.12,
+    min_success_dist_m: float = 0.08,
     finish_radius_m: float = 0.28,
 ) -> NavAttemptResult:
     """Follow navmesh to ``target_xy`` (Habitat X/Z). Returns movement outcome."""
@@ -300,6 +321,18 @@ def habitat_navmesh_navigate(
         )
     eff_x, eff_z = resolved.effective_xy
     before = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)[:3].copy()
+    start_goal_m = float(np.hypot(eff_x - before[0], eff_z - before[1]))
+    finish_tol = max(min_success_dist_m, finish_radius_m)
+    if start_goal_m <= finish_tol:
+        return NavAttemptResult(
+            success=False,
+            finished=False,
+            dist_m=0.0,
+            method="habitat_navmesh",
+            note=f"already_at_goal_{start_goal_m:.2f}m",
+            goal_xy=(goal_x, goal_z),
+            effective_goal_xy=(eff_x, eff_z),
+        )
     yaw = float(target_theta if target_theta is not None else before[2])
     path_pts = sim.find_path_to_xy(eff_x, eff_z)
     path_xy: list[list[float]] | None = None
@@ -316,10 +349,14 @@ def habitat_navmesh_navigate(
     dist_m = float(np.hypot(after[0] - before[0], after[1] - before[1]))
     goal_dist = float(np.hypot(after[0] - eff_x, after[1] - eff_z))
     req_dist = float(np.hypot(after[0] - goal_x, after[1] - goal_z))
-    finished = goal_dist <= max(min_success_dist_m, finish_radius_m)
-    success = dist_m >= min_success_dist_m or finished
+    at_goal = goal_dist <= finish_tol
+    moved_enough = dist_m >= min_success_dist_m or (at_goal and start_goal_m > min_success_dist_m)
+    finished = moved_enough and at_goal
+    success = finished
     if finished:
         note = f"ok_{resolved.mode}"
+    elif at_goal and not moved_enough:
+        note = f"already_at_goal_{start_goal_m:.2f}m"
     else:
         note = f"moved_{dist_m:.2f}m_eff_{goal_dist:.2f}m_req_{req_dist:.2f}m_{resolved.mode}"
     return NavAttemptResult(

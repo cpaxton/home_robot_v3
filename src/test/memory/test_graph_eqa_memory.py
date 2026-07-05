@@ -19,6 +19,8 @@ import numpy as np
 from emet.memory.adapters import GraphEQABackend
 from emet.memory.graph_eqa import GraphEQAMemory, labels_are_semantic_graph_hypothesis
 from emet.memory.graph_eqa.graph_memory import (
+    GraphNode,
+    GraphObservation,
     _near,
     _on_floor,
     consolidate_relevant_keywords,
@@ -412,6 +414,56 @@ def test_display_image_index_maps_to_selected_obs_ids():
     assert float(target[0]) == 0.0
     assert float(target[1]) == 0.0
     assert mem.last_eqa_obs_ids == obs_ids
+
+
+def test_navigation_waypoint_prefers_viewpoint_when_far():
+    """Image-N nav should target the capture viewpoint when the robot is elsewhere."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    viewer = np.array([1.0, 2.0, 0.0], dtype=np.float64)
+    mem.add_observation(rgb, np.array([5.0, 6.0, 0.5]), ["lamp"], viewer_xyz=viewer)
+    pt = mem._navigation_waypoint_for_obs(1, np.array([9.0, 9.0, 0.0]))
+    assert pt is not None
+    assert float(pt[0]) == 1.0
+    assert float(pt[1]) == 2.0
+
+
+def test_navigation_waypoint_standoff_when_at_viewpoint():
+    """When already at the capture pose, advance toward the object anchor instead of obs.xyz."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    viewer = np.array([1.0, 2.0, 0.0], dtype=np.float64)
+    mem.add_observation(rgb, np.array([1.35, 2.0, 0.5]), ["lamp"], viewer_xyz=viewer)
+    pt = mem._navigation_waypoint_for_obs(1, np.array([1.0, 2.0, 0.0]))
+    assert pt is not None
+    assert float(pt[0]) > 1.0
+    assert abs(float(pt[1]) - 2.0) < 1e-6
+
+
+def test_navigation_waypoint_keeps_frontier_anchor():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem._nodes.append(
+        GraphNode(
+            node_id=1,
+            labels=["frontier"],
+            xyz=np.array([3.0, 4.0, 0.0]),
+            obs_id=1,
+            is_frontier=True,
+        )
+    )
+    mem._observations.append(
+        GraphObservation(
+            obs_id=1,
+            rgb=rgb,
+            xyz=np.array([3.0, 4.0, 0.0]),
+            labels=["frontier"],
+            description="frontier",
+        )
+    )
+    pt = mem._navigation_waypoint_for_obs(1, np.array([0.0, 0.0, 0.0]))
+    assert float(pt[0]) == 3.0
+    assert float(pt[1]) == 4.0
 
 
 def test_near_heuristic():

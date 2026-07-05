@@ -126,6 +126,12 @@ def _diagnostics_cli_options(fn):
 @click.option("--question-id", default=0, type=int)
 @click.option("--method", type=click.Choice(["graph_eqa", "dynagraph"]), default="dynagraph")
 @click.option("--mock-llm", is_flag=True, default=False, help="Use mocked EQA responses (smoke / CI)")
+@click.option(
+    "--mock-llm-explore",
+    is_flag=True,
+    default=False,
+    help="With --mock-llm, return confidence:false so the agent navigates each planning step",
+)
 @click.option("--max-planning-steps", default=20, type=int, help="EQA planning iterations (GraphEQA ref: 20)")
 @click.option("--max-movement-step", default=10, type=int, help="Nav substeps per planning iteration")
 @click.option("--hm3d-root", type=click.Path(path_type=Path), default=None)
@@ -146,6 +152,7 @@ def run_episode(
     question_id: int,
     method: str,
     mock_llm: bool,
+    mock_llm_explore: bool,
     max_planning_steps: int,
     max_movement_step: int,
     hm3d_root: Path | None,
@@ -166,6 +173,8 @@ def run_episode(
     """Run one HM-EQA episode in Habitat-Sim."""
     if dataset != "hmeqa":
         raise click.ClickException(f"Unsupported dataset {dataset!r}")
+    if mock_llm_explore and not mock_llm:
+        raise click.ClickException("--mock-llm-explore requires --mock-llm")
 
     questions_path = (data_dir / "questions.csv") if data_dir else None
     init_poses_path = (data_dir / "scene_init_poses.csv") if data_dir else None
@@ -177,6 +186,7 @@ def run_episode(
             question_id=question_id,
             method=method,
             mock_llm=mock_llm,
+            mock_llm_explore=mock_llm_explore,
             max_planning_steps=max_planning_steps,
             max_movement_step=max_movement_step,
             hm3d_root=hm3d_root,

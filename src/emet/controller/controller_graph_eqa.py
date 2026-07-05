@@ -30,6 +30,7 @@ from emet.controller.habitat_nav import (
     goal_key_xy,
     habitat_body_scan,
     habitat_explore_frontiers_enabled,
+    habitat_nav_would_be_noop,
     habitat_perfect_nav_enabled,
     habitat_random_walk_step,
     is_habitat_robot_client,
@@ -198,6 +199,9 @@ class GraphEQAController(DynamemController):
             return False
         if not habitat_explore_frontiers_enabled(self.parameters):
             return False
+        if target_point is not None:
+            if habitat_nav_would_be_noop(self.robot, target_point):
+                return True
         if getattr(self, "_eqa_explore_when_uncovered", False) and self.graph_memory is not None:
             try:
                 if not self.graph_memory._graph_covers_relevant_objects():
@@ -470,9 +474,7 @@ class GraphEQAController(DynamemController):
             )
             if frontier_pt is not None:
                 logger.info(
-                    "EQA habitat: frontier explore target (%.2f, %.2f)",
-                    float(frontier_pt[0]),
-                    float(frontier_pt[1]),
+                    f"EQA habitat: frontier explore target ({float(frontier_pt[0]):.2f}, {float(frontier_pt[1]):.2f})"
                 )
                 target_point = frontier_pt
 
@@ -563,6 +565,7 @@ class GraphEQAController(DynamemController):
                         )
                     )
             stuck_retries = 0
+            min_success_dist_m = 0.08
             for _ in range(max_movement_step):
                 start_pose = self._planning_base_xyt(self.robot.get_base_pose())
                 self.update()
@@ -587,7 +590,10 @@ class GraphEQAController(DynamemController):
                     )
                 if finished:
                     break
-                if nav_res is not None and not nav_res.finished and float(nav_res.dist_m) < 0.05:
+                if nav_res is not None and (
+                    nav_res.note.startswith("already_at_goal")
+                    or (not nav_res.finished and float(nav_res.dist_m) < min_success_dist_m)
+                ):
                     self._habitat_blocked_goals.add(goal_key_xy(target_point))
                     stuck_retries += 1
                     if (
@@ -602,9 +608,7 @@ class GraphEQAController(DynamemController):
                         )
                         if alt is not None and goal_key_xy(alt) != goal_key_xy(target_point):
                             logger.info(
-                                "EQA habitat: re-pick after stuck nav (%.2f, %.2f)",
-                                alt[0],
-                                alt[1],
+                                f"EQA habitat: re-pick after stuck nav ({float(alt[0]):.2f}, {float(alt[1]):.2f})"
                             )
                             target_point = alt
                             target_theta = float(

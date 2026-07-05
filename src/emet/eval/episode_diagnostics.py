@@ -296,6 +296,10 @@ class EpisodeDiagnosticsRecorder:
                 for row in self._nav_attempts:
                     fh.write(json.dumps(row) + "\n")
             manifest["nav_attempts_jsonl"] = str(nav_path)
+        else:
+            nav_path = root / "nav_attempts.jsonl"
+            if nav_path.is_file():
+                nav_path.unlink()
 
         if self.cfg.export_video:
             mp4 = _write_episode_mp4(root, cfg=self.cfg)
