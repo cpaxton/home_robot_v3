@@ -61,3 +61,12 @@ def test_dot_override_eval_export_map_video():
 def test_from_env_accepts_parameters():
     cfg = EpisodeDiagnosticsConfig.from_env({"eval": {"map_video_stride": 2}})
     assert cfg.map_video_stride == 2
+
+
+def test_resolve_video_motion_paced_from_yaml():
+    cfg = resolve_episode_diagnostics_config(
+        {"eval": {"video_motion_paced": False, "export_video_substeps": False}}
+    )
+    assert cfg.video_motion_paced is False
+    assert cfg.export_video_substeps is False
+    assert cfg.video_meters_per_frame == 0.25

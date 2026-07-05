@@ -177,6 +177,7 @@ class GraphEQAController(DynamemController):
             "EMET_VLM_FRONTIER_SCORING", ""
         ).strip().lower() in ("1", "true", "yes", "on")
         self._habitat_blocked_goals: set[tuple[float, float]] = set()
+        self._habitat_recent_goals: list[tuple[float, float]] = []
 
     def look_around(self):
         """Habitat has no head actuators — rotate the base to build coverage."""
@@ -631,6 +632,7 @@ class GraphEQAController(DynamemController):
         """Run EQA until confident or max steps, using graph memory."""
         self._eqa_question = question
         self._habitat_blocked_goals = set()
+        self._habitat_recent_goals = []
         answer = ""
         confidence = False
         discord_text = ""

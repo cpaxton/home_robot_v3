@@ -11,6 +11,7 @@ from emet.controller.habitat_nav import (
     habitat_perfect_nav_enabled,
     is_habitat_robot_client,
     navmesh_waypoints_to_xyt,
+    pick_habitat_exploration_target,
 )
 
 
@@ -36,6 +37,9 @@ def test_navmesh_waypoints_to_xyt_yaw_follows_segment():
 
 
 class _FakeSim:
+    def snap_navmesh_xz(self, x, z):
+        return float(x), float(z), True
+
     def find_path_to_xy(self, x: float, z: float):
         return np.array([[0.0, 0.0, 0.0], [float(x), 0.0, float(z)]], dtype=np.float64)
 
@@ -53,6 +57,10 @@ class _FakeHabitatRobot:
         xyt = np.asarray(xyt, dtype=np.float64).reshape(-1)
         self._pose = xyt[:3].copy()
         self.traj = [self._pose.copy()]
+
+    def execute_trajectory(self, trajectory, **kwargs):
+        for wp in trajectory:
+            self.move_base_to(wp, **kwargs)
 
 
 def test_is_habitat_robot_client_by_sim_api():
@@ -82,6 +90,83 @@ def test_resolve_habitat_nav_goal_uses_path_end():
     assert r is not None
     assert r.mode == "path_end"
     assert r.effective_xy == (1.0, 2.0)
+
+
+def test_pick_habitat_exploration_target_prefers_nearby_frontier():
+    class _Node:
+        def __init__(self, obs_id, x, z, failures=0):
+            self.obs_id = obs_id
+            self.xyz = [x, z, 0.0]
+            self.is_frontier = True
+            self.nav_failures = failures
+            self.last_seen = obs_id
+
+    class _GM:
+        def get_nodes(self):
+            return [_Node(1, 10.0, 0.0), _Node(2, 1.0, 0.0)]
+
+    class _Sim:
+        def snap_navmesh_xz(self, x, z):
+            return float(x), float(z), True
+
+        def find_path_to_xy(self, x, z):
+            return np.array([[0.0, 0.0, 0.0], [float(x), 0.0, float(z)]], dtype=np.float64)
+
+    class _Robot:
+        def __init__(self):
+            self._sim = _Sim()
+            self._pose = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+
+        def get_base_pose(self):
+            return self._pose.copy()
+
+    agent = type("A", (), {"graph_memory": _GM(), "robot": _Robot()})()
+    pt = pick_habitat_exploration_target(agent)
+    assert pt is not None
+    assert float(pt[0]) == 1.0
+    assert float(pt[1]) == 0.0
+
+
+def test_pick_habitat_exploration_target_skips_recent_goal():
+    class _Node:
+        def __init__(self, obs_id, x, z):
+            self.obs_id = obs_id
+            self.xyz = [x, z, 0.0]
+            self.is_frontier = True
+            self.nav_failures = 0
+            self.last_seen = obs_id
+
+    class _GM:
+        def get_nodes(self):
+            return [_Node(1, 1.0, 0.0), _Node(2, 4.0, 0.0)]
+
+    class _Sim:
+        def snap_navmesh_xz(self, x, z):
+            return float(x), float(z), True
+
+        def find_path_to_xy(self, x, z):
+            return np.array([[0.0, 0.0, 0.0], [float(x), 0.0, float(z)]], dtype=np.float64)
+
+    class _Robot:
+        def __init__(self):
+            self._sim = _Sim()
+            self._pose = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+
+        def get_base_pose(self):
+            return self._pose.copy()
+
+    agent = type(
+        "A",
+        (),
+        {
+            "graph_memory": _GM(),
+            "robot": _Robot(),
+            "_habitat_recent_goals": [(1.0, 0.0)],
+        },
+    )()
+    pt = pick_habitat_exploration_target(agent)
+    assert pt is not None
+    assert float(pt[0]) == 4.0
 
 
 def test_apply_habitat_nav_resolution_returns_effective_xy():

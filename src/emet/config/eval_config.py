@@ -94,6 +94,23 @@ def resolve_episode_diagnostics_config(
             if cli_overrides.get("video_fps") is not None
             else getattr(yaml_cfg, "video_fps", 6.0)
         ),
+        export_video_substeps=_bool("export_video_substeps", "EMET_EVAL_EXPORT_VIDEO_SUBSTEPS", True),
+        video_motion_paced=_bool("video_motion_paced", "EMET_EVAL_VIDEO_MOTION_PACED", True),
+        video_meters_per_frame=float(
+            cli_overrides["video_meters_per_frame"]
+            if cli_overrides.get("video_meters_per_frame") is not None
+            else getattr(yaml_cfg, "video_meters_per_frame", 0.25)
+        ),
+        video_radians_per_frame=float(
+            cli_overrides["video_radians_per_frame"]
+            if cli_overrides.get("video_radians_per_frame") is not None
+            else getattr(yaml_cfg, "video_radians_per_frame", 0.1745329252)
+        ),
+        video_crossfade_teleport_m=float(
+            cli_overrides["video_crossfade_teleport_m"]
+            if cli_overrides.get("video_crossfade_teleport_m") is not None
+            else getattr(yaml_cfg, "video_crossfade_teleport_m", 1.5)
+        ),
     )
 
     # Habitat runners pass export_voxel_history via helper when CLI unset.

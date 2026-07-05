@@ -32,8 +32,11 @@ from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.robot import AbstractRobotClient, ControlMode
 from emet.motion import Footprint, RobotModel
 from emet.utils.geometry import xyt_base_to_global
+from emet.utils.logger import Logger
 from emet_habitat.observations import habitat_rgb_depth_to_observations
 from emet_habitat.simulator import HabitatEQASimulator
+
+logger = Logger(__name__)
 
 
 class HabitatRobotClient(AbstractRobotClient, RobotModel):
@@ -71,7 +74,28 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         self._w = 0.4
         self._base_control_mode = ControlMode.NAVIGATION
         self.dof = 3
+        self._post_step_hooks: list[Any] = []
         self._sync_pose_from_sim()
+
+    def add_post_step_hook(self, hook: Any) -> None:
+        """Register ``hook(robot, frame)`` after each Habitat discrete action."""
+        if hook not in self._post_step_hooks:
+            self._post_step_hooks.append(hook)
+
+    def remove_post_step_hook(self, hook: Any) -> None:
+        if hook in self._post_step_hooks:
+            self._post_step_hooks.remove(hook)
+
+    def _sim_step(self, action: str):
+        """Run one Habitat discrete action and notify post-step hooks."""
+        frame = self._sim.step(action)
+        self._sync_pose_from_sim()
+        for hook in self._post_step_hooks:
+            try:
+                hook(self, frame)
+            except Exception as exc:
+                logger.warning(f"Habitat post-step hook failed: {exc}")
+        return frame
 
     def _observation_kwargs(self) -> dict:
         return {
@@ -131,24 +155,41 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         self._sync_pose_from_sim()
         return self._xyt.copy()
 
-    def _greedy_to_habitat_point(self, habitat_xyz: np.ndarray, max_steps: int = 40) -> None:
-        """Greedy move/turn toward a Habitat world XYZ target (uses X/Z plane)."""
+    def _greedy_to_habitat_point(
+        self,
+        habitat_xyz: np.ndarray,
+        max_steps: int | None = None,
+        *,
+        stop_radius_m: float = 0.12,
+    ) -> bool:
+        """Greedy move/turn toward a Habitat world XYZ target (uses X/Z plane).
+
+        Returns True when the robot ends within ``stop_radius_m`` of the target.
+        """
         goal_x = float(habitat_xyz[0])
         goal_z = float(habitat_xyz[2])
+        self._sync_pose_from_sim()
+        dist0 = math.hypot(goal_x - self._xyt[0], goal_z - self._xyt[1])
+        if max_steps is None:
+            # Habitat ``move_forward`` is ~0.25 m; allow turns + overshoot.
+            max_steps = max(40, int(math.ceil(dist0 / 0.2) * 4))
         for _ in range(max_steps):
             self._sync_pose_from_sim()
             dx = goal_x - self._xyt[0]
             dz = goal_z - self._xyt[1]
             dist = math.hypot(dx, dz)
-            if dist < 0.12:
-                break
+            if dist < stop_radius_m:
+                return True
             target_heading = math.atan2(dz, dx)
             dtheta = (target_heading - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
             if abs(dtheta) > 0.12:
                 # Habitat discrete turns are opposite our CCW-positive compass yaw.
-                self._sim.step("turn_right" if dtheta > 0 else "turn_left")
+                self._sim_step("turn_right" if dtheta > 0 else "turn_left")
             else:
-                self._sim.step("move_forward")
+                self._sim_step("move_forward")
+        self._sync_pose_from_sim()
+        dist = math.hypot(goal_x - self._xyt[0], goal_z - self._xyt[1])
+        return dist < stop_radius_m * 1.5
 
     def move_base_to(
         self,
@@ -180,14 +221,19 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
             path_pts = self._sim.find_path_to_xy(float(goal[0]), float(goal[1]))
             if path_pts is not None:
                 for pt in path_pts[1:]:
-                    self._greedy_to_habitat_point(pt)
+                    if not self._greedy_to_habitat_point(pt):
+                        logger.warning(
+                            "Habitat nav: stopped before reaching path waypoint "
+                            f"({float(pt[0]):.2f}, {float(pt[2]):.2f})"
+                        )
+                        break
                 if goal_theta is not None:
                     for _ in range(18):
                         self._sync_pose_from_sim()
                         dtheta = (goal_theta - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
                         if abs(dtheta) < 0.1:
                             break
-                        self._sim.step("turn_right" if dtheta > 0 else "turn_left")
+                        self._sim_step("turn_right" if dtheta > 0 else "turn_left")
                 self._sync_pose_from_sim()
                 return
         self._greedy_to_habitat_point(
@@ -200,7 +246,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
                 dtheta = (goal_theta - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
                 if abs(dtheta) < 0.1:
                     break
-                self._sim.step("turn_right" if dtheta > 0 else "turn_left")
+                self._sim_step("turn_right" if dtheta > 0 else "turn_left")
         self._sync_pose_from_sim()
 
     def reset(self):

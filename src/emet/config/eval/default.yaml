@@ -20,3 +20,8 @@ export_map_overlay: true
 export_map_video: true
 map_video_stride: 5
 video_fps: 6.0
+export_video_substeps: true
+video_motion_paced: true
+video_meters_per_frame: 0.25
+video_radians_per_frame: 0.1745329252  # 10 deg
+video_crossfade_teleport_m: 1.5

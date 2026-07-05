@@ -165,3 +165,19 @@ def test_map_stride_writes_under_episode_dir(tmp_path: Path) -> None:
     assert (tmp_path / "maps" / "step_0000.png").is_file()
     assert (tmp_path / "maps" / "step_0001.png").is_file()
     assert manifest.get("map_stride_dir")
+
+
+def test_record_habitat_substep_dedupes_identical_frames() -> None:
+    rec = EpisodeDiagnosticsRecorder(
+        cfg=EpisodeDiagnosticsConfig(
+            export_map=False,
+            export_trajectory=True,
+            export_rgb_frames=True,
+            export_video=False,
+        )
+    )
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+    pose = (1.0, 2.0, 0.5)
+    rec.record_habitat_substep(rgb=rgb, pose=pose)
+    rec.record_habitat_substep(rgb=rgb.copy(), pose=pose)
+    assert len(rec._frames) == 1

@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 
 from emet.utils.logger import Logger
+from emet.eval.episode_video import normalize_yaw_delta
 
 logger = Logger(__name__)
 
@@ -112,6 +113,11 @@ class EpisodeDiagnosticsConfig:
     export_map_video: bool = True
     map_video_stride: int = 5
     video_fps: float = 6.0
+    export_video_substeps: bool = True
+    video_motion_paced: bool = True
+    video_meters_per_frame: float = 0.25
+    video_radians_per_frame: float = 0.1745329252  # 10 deg
+    video_crossfade_teleport_m: float = 1.5
 
     @classmethod
     def from_env(cls, parameters: Any = None, **overrides: Any) -> EpisodeDiagnosticsConfig:
@@ -141,7 +147,9 @@ class EpisodeDiagnosticsRecorder:
         default_factory=list, init=False, repr=False
     )
     _nav_attempts: list[dict[str, Any]] = field(default_factory=list, init=False, repr=False)
-    _step: int = field(default=0, init=False, repr=False)
+    _planning_step: int = field(default=0, init=False, repr=False)
+    _frame_seq: int = field(default=0, init=False, repr=False)
+    _habitat_substep_hook: Any | None = field(default=None, init=False, repr=False)
 
     def append_nav_attempt(self, row: dict[str, Any]) -> None:
         self._nav_attempts.append(dict(row))
@@ -157,8 +165,24 @@ class EpisodeDiagnosticsRecorder:
                     rgb = np.asarray(obs.rgb)
             except Exception as exc:
                 logger.warning(f"diagnostics RGB fetch failed: {exc}")
-        self.record_step(rgb=rgb, pose=pose, agent=agent, step_idx=self._step)
-        self._step += 1
+        self.record_step(rgb=rgb, pose=pose, agent=agent, capture_map_stride=True)
+        self._planning_step += 1
+
+    def record_habitat_substep(self, *, rgb: np.ndarray | None, pose: tuple[float, float, float] | None) -> None:
+        """Append one RGB frame per Habitat ``sim.step`` (nav / rotate substeps)."""
+        if rgb is None and pose is None:
+            return
+        if self._frames and pose is not None and rgb is not None:
+            last = self._frames[-1]
+            if last.pose is not None and last.rgb is not None:
+                same_pose = (
+                    abs(last.pose[0] - pose[0]) < 1e-4
+                    and abs(last.pose[1] - pose[1]) < 1e-4
+                    and abs(normalize_yaw_delta(last.pose[2], pose[2])) < 1e-3
+                )
+                if same_pose and np.array_equal(last.rgb, rgb):
+                    return
+        self.record_step(rgb=rgb, pose=pose, agent=None, capture_map_stride=False)
 
     def record_step(
         self,
@@ -167,15 +191,20 @@ class EpisodeDiagnosticsRecorder:
         pose: tuple[float, float, float] | None,
         agent: Any,
         step_idx: int | None = None,
+        capture_map_stride: bool = True,
     ) -> None:
-        idx = int(self._step if step_idx is None else step_idx)
-        if idx >= self._step:
-            self._step = idx + 1
+        idx = int(self._frame_seq if step_idx is None else step_idx)
+        if step_idx is None:
+            self._frame_seq += 1
+        elif idx >= self._frame_seq:
+            self._frame_seq = idx + 1
         self._frames.append(_RecordedFrame(step_idx=idx, rgb=rgb, pose=pose))
+        if not capture_map_stride or agent is None:
+            return
         stride = self._effective_map_stride()
-        if stride > 0 and idx % stride == 0 and agent is not None:
-            if self.cfg.export_map or self.cfg.export_map_video:
-                self._capture_stride_snapshot(agent, idx)
+        stride_step = self._planning_step if step_idx is None else idx
+        if stride > 0 and stride_step % stride == 0:
+            self._capture_stride_snapshot(agent, stride_step)
 
     def flush(self, episode_dir: Path | str, agent: Any | None = None) -> dict[str, Any]:
         root = Path(episode_dir)
@@ -269,7 +298,7 @@ class EpisodeDiagnosticsRecorder:
             manifest["nav_attempts_jsonl"] = str(nav_path)
 
         if self.cfg.export_video:
-            mp4 = _write_episode_mp4(root, fps=self.cfg.video_fps)
+            mp4 = _write_episode_mp4(root, cfg=self.cfg)
             if mp4:
                 manifest["episode_rgb_mp4"] = str(mp4)
                 manifest["head_camera_mp4"] = str(mp4)
@@ -454,6 +483,36 @@ def robot_xy_from_agent(agent: Any) -> tuple[float, float, float] | None:
     return None
 
 
+def _is_habitat_robot_client(robot: Any) -> bool:
+    return robot is not None and robot.__class__.__name__ == "HabitatRobotClient"
+
+
+def _make_habitat_substep_hook(agent: Any, recorder: EpisodeDiagnosticsRecorder):
+    from emet_habitat.observations import habitat_rgb_depth_to_observations
+
+    def hook(robot: Any, frame: Any) -> None:
+        if not recorder.cfg.export_video_substeps:
+            return
+        try:
+            obs = habitat_rgb_depth_to_observations(
+                rgb=frame.rgb,
+                depth=frame.depth,
+                agent_state=frame.agent_state,
+                intrinsics=frame.intrinsics,
+                semantic=getattr(frame, "semantic", None),
+                **robot._observation_kwargs(),
+            )
+        except Exception as exc:
+            logger.warning(f"habitat substep observation failed: {exc}")
+            return
+        if obs is None or obs.rgb is None:
+            return
+        pose = (float(obs.gps[0]), float(obs.gps[1]), float(obs.compass[0]))
+        recorder.record_habitat_substep(rgb=np.asarray(obs.rgb), pose=pose)
+
+    return hook
+
+
 def bind_diagnostics_recorder(
     agent: Any,
     recorder: EpisodeDiagnosticsRecorder,
@@ -476,6 +535,14 @@ def bind_diagnostics_recorder(
         callbacks.append(cb)
     agent._on_step_callbacks = callbacks
 
+    robot = getattr(agent, "robot", None)
+    if recorder.cfg.export_video_substeps and _is_habitat_robot_client(robot):
+        hook = _make_habitat_substep_hook(agent, recorder)
+        recorder._habitat_substep_hook = hook
+        add_hook = getattr(robot, "add_post_step_hook", None)
+        if callable(add_hook):
+            add_hook(hook)
+
 
 def unbind_diagnostics_recorder(agent: Any, recorder: EpisodeDiagnosticsRecorder) -> None:
     callbacks = list(getattr(agent, "_on_step_callbacks", None) or [])
@@ -485,6 +552,13 @@ def unbind_diagnostics_recorder(agent: Any, recorder: EpisodeDiagnosticsRecorder
     agent._on_step_callbacks = callbacks
     if getattr(agent, "_episode_diagnostics_recorder", None) is recorder:
         agent._episode_diagnostics_recorder = None
+    robot = getattr(agent, "robot", None)
+    hook = recorder._habitat_substep_hook
+    if hook is not None and _is_habitat_robot_client(robot):
+        remove_hook = getattr(robot, "remove_post_step_hook", None)
+        if callable(remove_hook):
+            remove_hook(hook)
+    recorder._habitat_substep_hook = None
 
 
 def flush_episode_diagnostics(
@@ -799,13 +873,11 @@ def _write_map_exploration_mp4(
         return None
 
 
-def _write_episode_mp4(root: Path, *, fps: float) -> Path | None:
+def _write_episode_mp4(root: Path, *, cfg: EpisodeDiagnosticsConfig) -> Path | None:
     meta_path = root / "metadata.jsonl"
     if not meta_path.is_file():
         return None
     try:
-        from emet.molmospaces.episode_writer import write_episode_rgb_mp4
-
         images_dir = root / "images"
         frames = root / "frames"
         if not images_dir.is_dir() and frames.is_dir():
@@ -828,7 +900,18 @@ def _write_episode_mp4(root: Path, *, fps: float) -> Path | None:
                     row["image"] = f"images/{dst_name}"
                 rows_out.append(json.dumps(row))
             meta_path.write_text("\n".join(rows_out) + "\n", encoding="utf-8")
-        return write_episode_rgb_mp4(root, fps=fps, filename="episode_rgb.mp4")
+
+        from emet.eval.episode_video import write_episode_mp4_from_metadata
+
+        return write_episode_mp4_from_metadata(
+            root,
+            fps=cfg.video_fps,
+            filename="episode_rgb.mp4",
+            motion_paced=cfg.video_motion_paced,
+            meters_per_repeat=cfg.video_meters_per_frame,
+            radians_per_repeat=cfg.video_radians_per_frame,
+            crossfade_teleport_m=cfg.video_crossfade_teleport_m,
+        )
     except Exception as exc:
         logger.warning(f"episode MP4 export failed: {exc}")
         return None

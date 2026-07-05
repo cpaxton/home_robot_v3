@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import pickle
 import re
@@ -133,6 +134,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         add_local_radius_every_step: bool = False,
         min_points_per_voxel: int = 10,
         use_negative_obstacles: bool = False,
+        spin_obstacle_guard_m: float | None = None,
         point_update_threshold: float = 0.9,
         detection=None,
         image_shape=(480, 360),
@@ -189,6 +191,14 @@ class SparseVoxelMap(SparseVoxelMapBase):
         )
 
         self.point_update_threshold = point_update_threshold
+        guard_m = spin_obstacle_guard_m
+        if guard_m is None and parameters is not None:
+            if isinstance(parameters, dict):
+                guard_m = parameters.get("spin_obstacle_guard_m")
+            elif hasattr(parameters, "get"):
+                guard_m = parameters.get("spin_obstacle_guard_m")
+        self._spin_obstacle_guard_m = float(guard_m if guard_m is not None else 0.08)
+        self._last_obstacle_stamp_base_xy: tuple[float, float] | None = None
         self._history_soft: Tensor | None = None
         self.semantic_memory = VoxelizedPointcloud(voxel_size=semantic_memory_resolution).to(self.device)
         self.encoder = encoder
@@ -1026,6 +1036,20 @@ class SparseVoxelMap(SparseVoxelMapBase):
         else:
             return target_point, debug_text, obs_id, point
 
+    def _should_skip_obstacle_stamp_for_spin(self, base_pose: Tensor | None) -> bool:
+        """Return True when base translation is below guard (rotate-in-place spin)."""
+        guard_m = float(getattr(self, "_spin_obstacle_guard_m", 0.0) or 0.0)
+        if guard_m <= 0.0 or base_pose is None:
+            return False
+        bx, by = float(base_pose[0]), float(base_pose[1])
+        last = getattr(self, "_last_obstacle_stamp_base_xy", None)
+        if last is not None:
+            lx, ly = last
+            if math.hypot(bx - lx, by - ly) < guard_m:
+                return True
+        self._last_obstacle_stamp_base_xy = (bx, by)
+        return False
+
     def add(
         self,
         camera_pose: Tensor,
@@ -1173,23 +1197,26 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 )
                 self.instances.associate_instances_to_memory()
 
-        # Add to voxel grid
-        if feats is not None:
-            feats = feats[valid_depth].reshape(-1, feats.shape[-1])
-        rgb = rgb[valid_depth].reshape(-1, 3)
-        world_xyz = full_world_xyz.view(-1, 3)[valid_depth.flatten()]
+        skip_obstacle_stamp = self._should_skip_obstacle_stamp_for_spin(base_pose)
 
-        # TODO: weights could also be confidence, inv distance from camera, etc
-        if world_xyz.nelement() > 0:
-            n_keep = max(1, int((1 - self.point_update_threshold) * len(world_xyz)))
-            selected_indices = torch.randperm(len(world_xyz))[:n_keep]
-            if world_xyz is not None:
-                world_xyz = world_xyz[selected_indices]
+        # Add to voxel grid (skip during rotate-in-place to avoid obstacle "fans").
+        if not skip_obstacle_stamp:
             if feats is not None:
-                feats = feats[selected_indices]
-            if rgb is not None:
-                rgb = rgb[selected_indices]
-            self.voxel_pcd.add(world_xyz, features=feats, rgb=rgb, weights=None)
+                feats = feats[valid_depth].reshape(-1, feats.shape[-1])
+            rgb = rgb[valid_depth].reshape(-1, 3)
+            world_xyz = full_world_xyz.view(-1, 3)[valid_depth.flatten()]
+
+            # TODO: weights could also be confidence, inv distance from camera, etc
+            if world_xyz.nelement() > 0:
+                n_keep = max(1, int((1 - self.point_update_threshold) * len(world_xyz)))
+                selected_indices = torch.randperm(len(world_xyz))[:n_keep]
+                if world_xyz is not None:
+                    world_xyz = world_xyz[selected_indices]
+                if feats is not None:
+                    feats = feats[selected_indices]
+                if rgb is not None:
+                    rgb = rgb[selected_indices]
+                self.voxel_pcd.add(world_xyz, features=feats, rgb=rgb, weights=None)
 
         if self._add_local_radius_points:
             if base_pose is not None:

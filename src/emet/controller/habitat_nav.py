@@ -26,6 +26,7 @@ class NavAttemptResult:
     target_obs_id: int | None = None
     goal_xy: tuple[float, float] | None = None
     effective_goal_xy: tuple[float, float] | None = None
+    path_xy: list[list[float]] | None = None
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,48 @@ def goal_key_xy(xy: np.ndarray | tuple[float, float]) -> tuple[float, float]:
     return (round(float(xy[0]), 2), round(float(xy[1]), 2))
 
 
+def robot_planar_xy(robot: Any) -> tuple[float, float]:
+    """Current Habitat nav pose ``(x, z)``."""
+    pose = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
+    return float(pose[0]), float(pose[1])
+
+
+def _planar_dist(a: tuple[float, float] | np.ndarray, b: tuple[float, float] | np.ndarray) -> float:
+    return float(math.hypot(float(a[0]) - float(b[0]), float(a[1]) - float(b[1])))
+
+
+def _recent_goal_penalty(
+    xy: tuple[float, float],
+    recent: list[tuple[float, float]] | None,
+    *,
+    radius_m: float = 1.25,
+) -> float:
+    """Discourage picking a frontier on top of a goal we just visited."""
+    if not recent:
+        return 0.0
+    near = min(_planar_dist(xy, r) for r in recent)
+    if near >= radius_m:
+        return 0.0
+    return (radius_m - near) * 4.0
+
+
+def _frontier_explore_sort_key(
+    node: Any,
+    robot_xy: tuple[float, float],
+    *,
+    recent: list[tuple[float, float]] | None = None,
+) -> tuple[float, float, float, int]:
+    nx, nz = float(node.xyz[0]), float(node.xyz[1])
+    dist = _planar_dist(robot_xy, (nx, nz))
+    penalty = _recent_goal_penalty((nx, nz), recent)
+    return (
+        float(int(getattr(node, "nav_failures", 0))),
+        dist + penalty,
+        -float(int(getattr(node, "last_seen", 0))),
+        int(getattr(node, "obs_id", 0)),
+    )
+
+
 def apply_habitat_nav_resolution(
     robot: Any,
     target_xy: np.ndarray | tuple[float, float],
@@ -72,10 +115,13 @@ def pick_habitat_exploration_target(
     *,
     question: str | None = None,
     blocked: set[tuple[float, float]] | None = None,
+    recent_goals: list[tuple[float, float]] | None = None,
 ) -> np.ndarray | None:
     """Choose a frontier nav goal for Habitat (graph node, heuristic, or voxel sample)."""
     blocked = blocked or set()
     robot = getattr(agent, "robot", None)
+    recent = list(recent_goals or getattr(agent, "_habitat_recent_goals", None) or [])
+    robot_xy = robot_planar_xy(robot) if robot is not None else (0.0, 0.0)
 
     def _accept(raw: np.ndarray | None) -> np.ndarray | None:
         if raw is None:
@@ -89,18 +135,17 @@ def pick_habitat_exploration_target(
         if resolved is None:
             blocked.add(key)
             return None
+        eff = (float(resolved[0]), float(resolved[1]))
+        if _recent_goal_penalty(eff, recent, radius_m=0.85) > 0.0:
+            blocked.add(key)
+            return None
         return resolved
 
     gm = getattr(agent, "graph_memory", None)
     if gm is not None:
         nodes = [n for n in gm.get_nodes() if getattr(n, "is_frontier", False)]
         if nodes:
-            nodes.sort(
-                key=lambda n: (
-                    int(getattr(n, "nav_failures", 0)),
-                    -int(getattr(n, "last_seen", 0)),
-                )
-            )
+            nodes.sort(key=lambda n: _frontier_explore_sort_key(n, robot_xy, recent=recent))
             for node in nodes:
                 raw = np.array([float(node.xyz[0]), float(node.xyz[1]), 1.0], dtype=float)
                 pt = _accept(raw)
@@ -256,7 +301,17 @@ def habitat_navmesh_navigate(
     eff_x, eff_z = resolved.effective_xy
     before = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)[:3].copy()
     yaw = float(target_theta if target_theta is not None else before[2])
-    robot.move_base_to(np.array([eff_x, eff_z, yaw], dtype=np.float64), blocking=True)
+    path_pts = sim.find_path_to_xy(eff_x, eff_z)
+    path_xy: list[list[float]] | None = None
+    if path_pts is not None and len(path_pts) >= 2:
+        path_xy = [[float(p[0]), float(p[2])] for p in np.asarray(path_pts)]
+        waypoints = navmesh_waypoints_to_xyt(path_pts, max_waypoints=max_waypoints)
+        if len(waypoints) >= 2 and hasattr(robot, "execute_trajectory"):
+            robot.execute_trajectory(waypoints[1:], blocking=True)
+        else:
+            robot.move_base_to(np.array([eff_x, eff_z, yaw], dtype=np.float64), blocking=True)
+    else:
+        robot.move_base_to(np.array([eff_x, eff_z, yaw], dtype=np.float64), blocking=True)
     after = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)[:3]
     dist_m = float(np.hypot(after[0] - before[0], after[1] - before[1]))
     goal_dist = float(np.hypot(after[0] - eff_x, after[1] - eff_z))
@@ -275,4 +330,5 @@ def habitat_navmesh_navigate(
         note=note,
         goal_xy=(goal_x, goal_z),
         effective_goal_xy=(eff_x, eff_z),
+        path_xy=path_xy,
     )
