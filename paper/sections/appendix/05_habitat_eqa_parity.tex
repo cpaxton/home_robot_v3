@@ -1,8 +1,9 @@
 \section{Habitat HM-EQA harness vs.\ GraphEQA}
 \label{app:habitat_eqa_parity}
 
-This appendix records how the \texttt{emet} Habitat EQA harness (\texttt{feature/habitat-eqa-harness}) compares to the reference GraphEQA Habitat stack~\citep{saxena2024grapheqa}, what is intentionally different, and interim accuracy on our development machine.
+This appendix records how the \texttt{emet} Habitat EQA harness compares to the reference GraphEQA Habitat stack~\citep{saxena2024grapheqa}, what is intentionally different, and interim accuracy on our development machine.
 The harness drives \texttt{GraphEQAMemory} / \texttt{DynagraphController} inside Habitat-Sim rather than ROS + Hydra; HM-EQA uses 113 multiple-choice questions (Explore-EQA indices 0--112) with scene init poses from the public CSVs.
+OpenEQA support is a planned harness milestone (phase H in \texttt{docs/plans/HABITAT\_EQA\_HARNESS.md}); not yet wired.
 
 \subsection{Official GraphEQA simulation numbers (HM-EQA)}
 
@@ -54,11 +55,11 @@ Items marked \emph{partial} depend on downloaded HM3D semantic assets (only a su
     HM3D GT semantics (sim) & all train scenes w/ data & auto if \texttt{.semantic.glb} exists & \textbf{Partial} \\
     Scene graph & Hydra 5-layer 3DSG & \texttt{GraphEQAMemory} object graph & Different stack \\
     Exploration planner & TSDF + enriched frontiers & fluid voxel \texttt{sample\_frontier} (+ optional graph frontier nodes) & Partial \\
-    Navigation execution & navmesh shortest path & \texttt{find\_path\_to\_xy} + greedy follow & Match \\
+    Navigation execution & navmesh shortest path & \texttt{find\_path\_to\_xy} + trajectory follow; Image-$N$ viewpoint/standoff & Match \\
     MCQ prompt / grading & HM-EQA A--D & \texttt{hmeqa} prompt variant & Match \\
     Graph memory config & static (no merge / staleness) & merge=0, staleness=0 on HM-EQA & Match \\
     Batch logging & per-question JSON & JSONL + \texttt{--resume} & Match \\
-    OpenEQA val split & supported & not wired & Missing \\
+    OpenEQA val split & supported & not wired (milestone) & Missing \\
     Detic fallback & real world & N/A in sim harness & N/A \\
     VLM & GPT-4o / Gemini API & local Gemma-3-4b-it (default) & By design \\
     \bottomrule
@@ -84,7 +85,8 @@ Closest to upstream GraphEQA fluid exploration (no graph frontier nodes): \textt
 Earlier \texttt{emet} batches that left frontier nodes enabled are \emph{frontier v2}, not a strict paper clone.
 
 Reference GraphEQA still uses a separate TSDF map and VLM \texttt{enrich\_frontiers} prompts; full parity on exploration policy remains future work.
-A navigation fix (2026-06) maps VLM \texttt{action: Image $N$} through the attached \texttt{obs\_ids} order rather than the full observation list index.
+Navigation fixes (2026-06): map VLM \texttt{action: Image $N$} through attached \texttt{obs\_ids} order.
+Navigation fixes (2026-07): resolve Image-$N$ to capture viewpoint or standoff waypoint (\texttt{image\_nav\_min\_approach\_m}); block no-op goals; sort frontiers by distance.
 
 \subsection{Interim \texttt{emet} results (development)}
 

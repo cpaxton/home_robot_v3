@@ -284,11 +284,13 @@ embodied MCQ EQA 3/6 vs 5/6. The gap is task-specific, not parameter count:
 Upsizing 3B→8B on the **same pipeline** recovered +3 correct — the biggest gain we
 measured; the prior 3B ceiling was model-limited on this slice, not exploration-limited.
 
-### Balanced-31 winner run
+### Balanced-31 winner run (superseded)
 
-Promoted 2026-06-12 18:01. Output:
+Promoted 2026-06-12. Partial output:
 `~/.cache/habitat_eqa/results/subset_fable5_bake_winner_bal32_qwen3_vl.jsonl`  
-Early progress: 1/2 episodes (q6 ✓, q2 ✗) — full set in progress overnight.
+**Superseded:** incomplete overnight run; do not cite for paper. Re-run balanced-32 with Qwen3-VL-8B and the **July 2026 nav stack** (Image-N waypoints, nav success rules) per [habitat_eqa_results.md](../experiments/habitat_eqa_results.md).
+
+MCQ debias + canonical-6 bake-off numbers in this doc and [vlm_bakeoff.md](../habitat/vlm_bakeoff.md) remain valid reference points; navigation fixes may shift search-style questions.
 
 ### Infrastructure notes (affect all models)
 

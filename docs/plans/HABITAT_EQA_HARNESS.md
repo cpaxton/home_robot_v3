@@ -2,13 +2,13 @@
 
 Engineering plan for reproducing GraphEQA-style embodied question answering evaluation in Habitat-Sim, driving **emet** `GraphEQAMemory` / `DynagraphController` instead of the original GraphEQA ROS/Hydra stack.
 
-**Status:** Scaffold implemented (`src/emet/habitat/`, `packages/emet_habitat/`, `emet run graph-eqa-habitat`). Full HM3D + batch eval requires `./scripts/install_habitat.sh` and downloaded assets.
+**Status:** **HM-EQA implemented** — phases A–G below are done (`src/emet/habitat/`, `packages/emet_habitat/`, `emet run graph-eqa-habitat`, batch JSONL, diagnostics). Preliminary paper numbers exist on held-out slices; **full 113-question sweep** and **OpenEQA** remain open.
 
-**User docs:** [docs/habitat/README.md](../habitat/README.md) (install, data, Matterport API tokens, troubleshooting).
+**User docs:** [docs/habitat/README.md](../habitat/README.md) (install, data, Matterport API tokens, troubleshooting, [navigation](../habitat/usage.md#navigation-habitat-only)).
 
-**Paper dependency:** Blocks `paper/sections/05_results.tex` until Habitat runs complete.
+**Paper dependency:** Headline HM-EQA table in `paper/sections/05_results.tex` pending full 113-question post–July-2026 nav-fix sweep. Recorded numbers: [docs/experiments/habitat_eqa_results.md](../experiments/habitat_eqa_results.md).
 
-**Development branch:** `feature/habitat-eqa-harness`
+**Branch:** Harness merged to `main`; active eval work on feature branches (e.g. `feature/eval-tools`).
 
 ---
 
@@ -78,6 +78,14 @@ flowchart LR
 | **E. Batch runner** | `emet run graph-eqa-habitat` or `scripts/run_hmeqa_batch.py` | Config flags: `--method graph_eqa\|dynagraph`, `--dataset hmeqa\|openeqa` |
 | **F. Metrics** | Success rate, mean planning steps, optional LLM grader for OpenEQA | Match GraphEQA paper tables for direct comparison |
 | **G. CI** | Smoke: 1 scene, 1 question, mocked mLLM | Full eval GPU-only, not default CI |
+| **H. OpenEQA** | Meta OpenEQA val subset loader + grader + `dataset=openeqa` CLI | **Not started** — paper goal; parity appendix row still Missing |
+
+### Phase H — OpenEQA (planned)
+
+1. Download / layout OpenEQA subset per GraphEQA paper split (see upstream `grapheqa_openeqa_habitat` config).
+2. Add `dataset=openeqa` to `packages/emet_habitat/emet_habitat/cli.py` and loader under `src/emet/habitat/`.
+3. Grading: LLM grader or normalized open-answer protocol (not HM-EQA MCQ).
+4. Smoke: 1 scene, 1 question, `--mock-llm`; then small val slice before paper table.
 
 ---
 
@@ -95,7 +103,7 @@ flowchart LR
 ## Timeline relative to paper
 
 1. **Parallel track 1:** `paper/` LaTeX scaffold on `paper/dynagraph-corl`.
-2. **Parallel track 2:** This harness (phases A–F) — **blocks results section**.
+2. **Parallel track 2:** This harness (phases A–G done; H OpenEQA pending) — **blocks full Habitat results table**.
 3. **Parallel track 3:** Emet-EQA question banks for Robocasa/Molmo.
 4. **Integrate:** Habitat + emet sim results into `05_results.tex`.
 

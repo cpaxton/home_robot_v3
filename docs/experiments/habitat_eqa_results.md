@@ -4,6 +4,24 @@ Recorded numbers for the Dynagraph paper and parity appendix. **JSONL paths** li
 
 Maintainer: update this file and `paper/sections/05_results.tex` / `paper/sections/appendix/05_habitat_eqa_parity.tex` together after each sweep.
 
+## JSONL tagging (pre- vs post-nav-fix)
+
+**July 2026 nav stack** (Image-N viewpoint/standoff waypoints, navmesh trajectory follow, `already_at_goal` blocking, frontier distance sort, recent-goal penalty). Tag new runs e.g. `_postfix_nav202607` in the output filename.
+
+JSONL written **before** this stack (June 2026 phrase/location MCQ fixes only) are **not directly comparable** on search-style questions that depended on spin-in-place nav. When updating paper tables, prefer post-nav-fix sweeps or note the stack in the table caption.
+
+### July 2026 engineering (code landed; eval pending)
+
+| Fix | Effect |
+|-----|--------|
+| `_navigation_waypoint_for_obs` | VLM `action: Image N` → capture viewpoint or standoff (`eqa.image_nav_min_approach_m`, default 0.35 m) |
+| `habitat_navmesh_navigate` | Early `already_at_goal`; `execute_trajectory` on navmesh waypoints |
+| Frontier pick | Sort by distance + deprioritize recent goals |
+| `--mock-llm-explore` | Movement/diagnostics smoke without real VLM |
+| Eval diagnostics | Overlay stride maps, `topdown_exploration.mp4`, Habitat substep RGB |
+
+See [habitat/usage.md](../habitat/usage.md#navigation-habitat-only) and [plans/2026-06-03_habitat_eqa_exploration_improvements.md](../plans/2026-06-03_habitat_eqa_exploration_improvements.md).
+
 ## Prior art (GraphEQA paper, full 113 questions)
 
 Reproduced from GraphEQA Table 1 (HM-EQA column). All use Habitat-Sim, 20 VLM planning iterations, API or strong VLMs, and (for GraphEQA) **full HM3D GT semantics** → Hydra 3DSGs.
@@ -45,9 +63,9 @@ Balanced-32 ids: `2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,31,32,33,34,38,39,40
 
 Canonical-8 ids: `3,14,17,28,31,35,81,94`.
 
-### Post-fix eval (Qwen3-VL-8B, June 2026)
+### Post-fix eval (Qwen3-VL-8B, June 2026 — pre–July nav stack)
 
-Engineering: navmesh nav + compass fix, phrase-level CONFIRMED_MEMORY, SigLIP retention through EQA, location-MCQ prompts, MCQ debias.
+Engineering: navmesh nav + compass fix, phrase-level CONFIRMED_MEMORY, SigLIP retention through EQA, location-MCQ prompts, MCQ debias. **Does not include** July Image-N waypoint / nav-success rules — re-run held-out and full 113 after nav stack.
 
 | Slice | n | Accuracy | JSONL tag |
 |-------|---|----------|-----------|
@@ -74,13 +92,14 @@ We are **not** yet competitive with published GraphEQA on the full benchmark. We
 
 ## Planned experiments (priority)
 
-1. **Full 113-question dynagraph** with `Qwen/Qwen3-VL-8B-Instruct` + current fix stack (phrase memory, location MCQ, nav, debias). Headline number for paper vs Table 1 prior art.
-2. **Matched baseline:** same 113 with `graph_eqa` + same VLM (isolate Dynagraph gains at 8B).
-3. **Semantics coverage:** download remaining HM3D train `.semantic.glb`; re-run ablation with/without GT semantics on Q0–19.
-4. **Frontier ablation** (Q0–19, Qwen2.5-VL-3B): fluid only vs fluid+kw vs graph frontier nodes (`run_habitat_frontier_ablation.sh`).
-5. **Balanced-32 rerun** at Qwen3-VL-8B (compare to 11/32 @ 3B).
-6. **Optional upper bound:** API VLM on canonical-8 or balanced-32 through same harness (isolates VLM tier vs stack).
-7. **Efficiency:** early-stop when SigLIP CONFIRMED_MEMORY + graph cover all phrases (reduce mean steps from ~50 toward paper’s ~3–5 on successes).
+1. **Full 113-question dynagraph** with `Qwen/Qwen3-VL-8B-Instruct` + **July 2026 nav stack** + June fix stack (phrase memory, location MCQ, debias). Tag `_postfix_nav202607`.
+2. **Matched baseline:** same 113 with `graph_eqa` + same VLM.
+3. **Held-out random-8 re-run** (seed 20260627) with nav stack — compare to 4/8 pre-nav-fix.
+4. **Balanced-32 @ 8B** with nav stack — compare to 11/32 @ 3B.
+5. **Semantics coverage:** download remaining HM3D train `.semantic.glb`; re-run ablation with/without GT semantics on Q0–19.
+6. **Frontier ablation** (Q0–19, Qwen2.5-VL-3B): fluid only vs fluid+kw vs graph frontier nodes (`run_habitat_frontier_ablation.sh`).
+7. **Optional upper bound:** API VLM on canonical-8 or balanced-32 through same harness.
+8. **Efficiency:** early-stop when SigLIP CONFIRMED_MEMORY + graph cover all phrases.
 
 ### Commands
 

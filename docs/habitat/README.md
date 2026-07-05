@@ -11,7 +11,7 @@ Reproduce **GraphEQA-style** HM-EQA evaluation in Habitat-Sim while driving emet
 | [troubleshooting.md](troubleshooting.md) | Common errors (missing GLB, unauthorized download, wrong paths) |
 
 **Engineering plan:** [docs/plans/HABITAT_EQA_HARNESS.md](../plans/HABITAT_EQA_HARNESS.md)  
-**Branch:** `feature/habitat-eqa-harness`
+**Results log:** [docs/experiments/habitat_eqa_results.md](../experiments/habitat_eqa_results.md)
 
 ## Quick start
 

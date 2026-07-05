@@ -1,13 +1,13 @@
 \section{Experiments}
 \label{sec:experiments}
 
-\textit{Experimental results are pending. This section records the evaluation plan.}
+\textit{Experimental results are partial: Habitat HM-EQA has preliminary slices (Section~\ref{sec:hmeqa_results}); other tracks remain placeholders until sweeps complete.}
 Maintainer index: \texttt{docs/experiments/README.md} (experiment matrix, smokes, figures); detailed runbook: \texttt{docs/paper\_benchmarks.md}.
 
 \subsection{Goals}
 
 \begin{enumerate}
-  \item \textbf{Habitat EQA (primary):} Reproduce GraphEQA-style metrics on HM-EQA (113 questions) and an OpenEQA subset: success rate, mean planning steps, GraphEQA vs.\ Dynagraph vs.\ ablations (parity checklist and official baselines: Appendix~\ref{app:habitat_eqa_parity}).
+  \item \textbf{Habitat EQA (primary):} Reproduce GraphEQA-style metrics on HM-EQA (113 questions) and an OpenEQA val subset (\textbf{harness milestone; OpenEQA not yet wired}): success rate, mean planning steps, GraphEQA vs.\ Dynagraph vs.\ ablations (parity checklist and official baselines: Appendix~\ref{app:habitat_eqa_parity}).
   \item \textbf{SQA3D situated open QA:} Embodied ScanNet replay with EM@1 scoring (Section~\ref{sec:sqa3d_benchmark}); compare \texttt{dynamem} vs.\ \texttt{dynagraph} with \texttt{prompt\_variant: sqa3d}.
   \item \textbf{OVMM-inspired find-phase:} FindObj / FindRec localization on Emet sim tiers S0--S2 and Habitat HM3D proxy episodes (Section~\ref{sec:ovmm_find_phase}); memory backends \texttt{dynamem}, \texttt{graph\_eqa}, \texttt{dynagraph}, and sim oracle \texttt{ground\_truth}.
   \item \textbf{Emet sim (complementary):} Robocasa kitchens and MolmoSpaces iTHOR with Stretch, Galaxea R1 (rby1), and Innate Mars (Appendix~\ref{app:innate_mars}); depth-source policy in Appendix~\ref{app:da3}; GT-supervised object finding (Section~\ref{sec:gt_experiments}).
@@ -263,19 +263,20 @@ Molmo GT fixture scans may cap on large scenes; Robocasa layout $\neq$ HSSD; sta
 
 \textit{Recorded numbers:} \texttt{docs/experiments/habitat\_eqa\_results.md}; paper tables in Section~\ref{sec:hmeqa_results} and Appendix~\ref{app:habitat_eqa_parity}.
 
-\textbf{Current status (June 2026).}
+\textbf{Current status (July 2026).}
 The \texttt{emet-habitat} harness runs end-to-end on HM-EQA with local VLMs.
 Our best \textbf{full-benchmark} result is \textbf{41.6\%} (113 questions, graph\_eqa, gemma-3-4b-it) vs.\ \textbf{63.5--67.0\%} for GraphEQA with API VLMs (Table~\ref{tab:grapheqa_official_hmeqa}).
 Dynagraph beats our graph\_eqa baseline on matched slices (+3\,pp on letter-balanced 32 with Qwen2.5-VL-3B; +12.5\,pp on canonical-8 with MCQ debias).
 Post-fix runs with Qwen3-VL-8B score 50\% on an eight-question held-out draw (seed 20260627, excluding tuning ids)---above chance but not yet a full-benchmark headline.
+A \textbf{July 2026 navigation stack} (Image-$N$ viewpoint/standoff waypoints, navmesh trajectory execution, frontier distance sorting) landed after that held-out run; headline sweeps should use the post-nav-fix stack (tag \texttt{\_postfix\_nav202607} in JSONL).
 
 \textbf{Planned sweeps (priority).}
 \begin{enumerate}
-  \item Full 113-question \texttt{dynagraph} with \texttt{Qwen/Qwen3-VL-8B-Instruct} and the June 2026 fix stack (phrase \texttt{CONFIRMED\_MEMORY}, location MCQ, navmesh nav, debias).
+  \item Full 113-question \texttt{dynagraph} with \texttt{Qwen/Qwen3-VL-8B-Instruct} and the July 2026 nav stack + June fix stack (phrase \texttt{CONFIRMED\_MEMORY}, location MCQ, debias).
   \item Matched \texttt{graph\_eqa} baseline on the same 113 + VLM (isolate Dynagraph memory gains).
+  \item Held-out random-8 and balanced-32 \textbf{re-runs} at 8B with nav stack (compare to pre-nav-fix slices).
   \item HM3D semantics download + on/off ablation on Q0--19.
   \item Frontier-policy ablation: fluid only vs.\ keyword-weighted fluid vs.\ graph frontier nodes (\texttt{run\_habitat\_frontier\_ablation.sh}).
-  \item Letter-balanced 32 rerun at 8B (compare to 34.4\% @ 3B).
   \item Optional: API VLM on canonical-8 or balanced-32 through the same harness (upper bound on VLM tier).
 \end{enumerate}
 

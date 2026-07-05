@@ -40,8 +40,10 @@ Full 113-question evaluation with the 8B model and current stack is \textbf{plan
 
 These slices are \textbf{not} directly comparable to Table~\ref{tab:grapheqa_official_hmeqa} until semantics coverage and/or VLM tier align with the reference.
 
-\textbf{Engineering fixes (June 2026).}
+\textbf{Engineering fixes (June--July 2026).}
 Before hold-out evaluation we repaired Habitat navigation (compass/yaw, navmesh pathing, frontier deprioritization), graph-memory query failures (\texttt{KeyError} in observation indexing), and HM-EQA prompt grounding: phrase-level relevant objects, SigLIP retention through \texttt{prepare\_dynagraph\_vram\_for\_eqa}, and location-MCQ directives for ``did you see \ldots\ anywhere?'' questions where the VLM previously answered \texttt{No} instead of a place letter.
+In July 2026 we added Image-$N$ navigation waypoints (capture viewpoint or standoff toward object anchor, not raw centroid), navmesh trajectory execution with \texttt{already\_at\_goal} blocking, and frontier sorting by planar distance---reducing spin-in-place on search-style questions.
+Held-out random-8 numbers below predate the July nav stack; re-run planned before claiming full-benchmark gains.
 
 \begin{table}[t]
   \centering
@@ -68,6 +70,7 @@ After the fixes, the same question completes in 21 planning steps and 2 EQA iter
 \noindent\textbf{Held-out random-8 (anti-overfit check).}
 We draw eight paper questions with seed 20260627, two per gold letter A--D, excluding the tuning set $\{3,14,17\}$.
 Dynagraph scores \textbf{4/8} (50\%) with mean 50.5 planning steps---correct on Q15, Q79, Q88, and Q104; incorrect on Q56, Q65, Q68, and Q105.
+This run used the June phrase/location-MCQ stack but \textbf{not} the July Image-$N$ waypoint nav fixes; a re-run with the full stack is planned before updating headline claims.
 This is above random guessing (25\%) and shows the Q17 fix generalizes beyond the tuning slice, while remaining far from GraphEQA's API-VLM baselines on the full benchmark (Table~\ref{tab:hmeqa_vs_prior}).
 
 \noindent\textbf{Next experiments.}
