@@ -110,6 +110,18 @@ motion_planner:
     dilate_obstacle_size: 0
 ```
 
+### Habitat HM-EQA (`eqa:` keys)
+
+Applied by default in `packages/emet_habitat/emet_habitat/runner.py` (`_configure_habitat_nav`). Robocasa / ZMQ GraphEQA is unaffected unless you set these in config.
+
+| Key | Default (Habitat) | Purpose |
+|-----|-------------------|---------|
+| `habitat_perfect_nav` | `true` | Navmesh pathing via `habitat_navmesh_navigate` |
+| `habitat_explore_frontiers` | `true` | Frontier override when uncertain or nav would be a no-op |
+| `image_nav_min_approach_m` | `0.35` | Standoff when navigating to Image N from the capture viewpoint |
+
+CLI: `.venv-habitat/bin/emet-habitat run-episode --habitat-perfect-nav/--no-habitat-perfect-nav`. Override `image_nav_min_approach_m` in `dynav_config.yaml` under `eqa:` (see [habitat/usage.md](habitat/usage.md#navigation-habitat-only)).
+
 ### Instance memory and Rerun
 
 ```yaml

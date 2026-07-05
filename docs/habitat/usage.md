@@ -40,9 +40,15 @@ uv run emet run graph-eqa-habitat \
   --question-start 0 --question-end 5 \
   --mock-llm \
   --output ~/.cache/habitat_eqa/results/compare_mock_q0-5.json
+
+# Force navigation each planning step (mock LLM returns confidence:false)
+.venv-habitat/bin/emet-habitat run-episode \
+  --question-id 3 --method dynagraph \
+  --mock-llm --mock-llm-explore \
+  --max-planning-steps 5 --export-map --export-video
 ```
 
-`--mock-llm` uses fixed EQA responses for smoke tests and CI (no OpenAI / Gemini key).
+`--mock-llm` uses fixed EQA responses for smoke tests and CI (no OpenAI / Gemini key). With **`--mock-llm-explore`** (requires `--mock-llm`), the mock returns `confidence: false` every iteration so the agent runs the full nav loop without a real VLM — useful for movement / diagnostics smoke, not for grading accuracy.
 
 ## Direct wrapper
 
@@ -63,11 +69,17 @@ Useful flags:
 | `--question-id` | `0` | Index into `questions.csv` |
 | `--method` | `dynagraph` | `graph_eqa` or `dynagraph` |
 | `--mock-llm` | off | Smoke / CI without real LLM |
+| `--mock-llm-explore` | off | With `--mock-llm`: mock `confidence: false` so each planning step navigates |
 | `--max-planning-steps` | `3` (wrapper) / `5` (`emet run`) | Exploration budget |
+| `--max-movement-step` | `10` | Nav substeps per planning iteration |
 | `--hm3d-root` | `HM3D_SCENE_DIR` | Override train scene directory |
 | `--data-dir` | `HABITAT_EQA_DATA_DIR` | Override CSV location |
 | `--output` | none | Write episode JSONL |
 | `--rotate-in-place` | off | Extra rotation action in loop |
+| `--export-map` / `--no-export-map` | on | Per-episode top-down map bundle (see [evaluation.md](../evaluation.md)) |
+| `--export-video` / `--no-export-video` | on | Head-camera `episode_rgb.mp4` |
+| `--map-stride` | `0` | Save `maps/step_NNNN.png` every N planning steps (`0` = auto stride when map video on) |
+| `--habitat-perfect-nav` / `--no-habitat-perfect-nav` | on | Navmesh pathing vs voxel A* |
 
 ## Debug artifacts (batch runs)
 
@@ -80,7 +92,7 @@ Each `run-batch --output …/my_run.jsonl` writes:
 | `my_run.log` | Full stdout/stderr when using `tee` (see `scripts/run_habitat_frontier_experiments.sh`) |
 | `~/.cache/habitat_eqa/episodes/my_run/q<id>_<method>/` | Per-episode bundle (below) |
 
-Per-episode bundle (`metrics.json`, `raw_eqa.txt` full text, `eqa_history.json`, `scene_graph_report.txt`, `frontier_nodes.json`). With diagnostics (default on via `EMET_EVAL_EXPORT_MAP`; see [evaluation.md](../evaluation.md)): `topdown_map.png`, `obstacles_2d.npy`, `trajectory.jsonl`, `episode_rgb.mp4`, `diagnostics_manifest.json`. Optional full graph checkpoint:
+Per-episode bundle (`metrics.json`, `raw_eqa.txt` full text, `eqa_history.json`, `scene_graph_report.txt`, `frontier_nodes.json`). With diagnostics (default on via `EMET_EVAL_EXPORT_MAP`; see [evaluation.md](../evaluation.md)): `topdown_map.png`, `topdown_gt_navmesh.png`, `topdown_map_overlay.png`, `maps/overlay_step_*.png`, `topdown_exploration.mp4`, `obstacles_2d.npy`, `trajectory.jsonl`, `nav_attempts.jsonl` (includes navmesh `path_xy` when available), motion-paced `episode_rgb.mp4`, `diagnostics_manifest.json`. Optional full graph checkpoint:
 
 ```bash
 export HABITAT_EQA_EXPORT_GRAPH=1   # adds graph_checkpoint/ (frames, graph.json, …)
@@ -107,6 +119,31 @@ print(grade_mcq_answer(extract_mcq_letter_from_raw_eqa(raw.read_text(), row['cho
 | `dynagraph` | Same graph settings as `graph_eqa` | Same EQA stack; exercises `DynagraphController` (rerun / `maintain()` noop here) |
 
 On HM-EQA both methods should give **the same accuracy** (within VLM sampling noise). Dynagraph is a regression check, not a competing benchmark config. Long-horizon merge/staleness (`0.45m` / `256` steps) is for real-robot Dynagraph runs, not this short Habitat harness.
+
+## Navigation (Habitat-only)
+
+The Habitat runner enables navmesh pathing and frontier exploration by default (`packages/emet_habitat/emet_habitat/runner.py` → `_configure_habitat_nav`). These **`eqa:`** keys apply to HM-EQA only (Robocasa / ZMQ GraphEQA is unchanged unless you set them explicitly):
+
+| Key | Default (Habitat runner) | Effect |
+|-----|--------------------------|--------|
+| `habitat_perfect_nav` | `true` | Follow HM3D navmesh via `habitat_navmesh_navigate` instead of voxel A* |
+| `habitat_explore_frontiers` | `true` | When uncertain, prefer frontier targets over spin-in-place |
+| `image_nav_min_approach_m` | `0.35` | Standoff distance when navigating to an **Image N** target and the robot is already at the capture viewpoint |
+
+**Image-N routing:** when the VLM outputs `action: <image id>`, `GraphEQAMemory` resolves a **navigation waypoint** (capture viewpoint or standoff toward the object anchor), not the raw object centroid — this avoids spin-in-place at already-visited poses. See `src/emet/memory/graph_eqa/graph_memory.py` (`_navigation_waypoint_for_obs`).
+
+Override: add under `eqa:` in [`src/emet/config/dynav_config.yaml`](../../src/emet/config/dynav_config.yaml) (the Habitat runner loads this file; `setdefault` in the runner will not clobber an explicit value):
+
+```yaml
+eqa:
+  image_nav_min_approach_m: 0.5
+```
+
+Or uncomment / set in [`src/emet/config/mapping/default.yaml`](../../src/emet/config/mapping/default.yaml) when using unified config presets. The Habitat runner loads `dynav_config.yaml` directly today. See [emet_config.md](../emet_config.md).
+
+**CLI:** disable navmesh with `--no-habitat-perfect-nav`. Via `emet run graph-eqa-habitat`, extra flags (e.g. `--mock-llm-explore`, `--export-video`) forward to `emet-habitat run-episode`.
+
+**Dev helper:** `scripts/probe_habitat_eqa_exploration_need.py` scans question ids and reports which need navigation after the initial look-around (good demo picks vs spin-only questions).
 
 ## Frontier exploration (fluid map vs graph nodes)
 

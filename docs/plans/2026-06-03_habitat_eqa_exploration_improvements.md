@@ -1,7 +1,7 @@
 # HM-EQA exploration and prompting improvements
 
 **Date:** 2026-06-03  
-**Status:** In progress — P0 navigation fix + P4 ablation CLI/scripts landed 2026-06-03; ablation runs pending  
+**Status:** In progress — P0 navigation fixes landed (display-index mapping + Image-N waypoint / nav success rules); ablation runs pending  
 **Context:** Rescored Habitat runs (~40% on paper-comparable slices with local 3–4B VLMs) show infra/parser fixes were necessary but not sufficient for a clear win. Qwen2.5-VL-3B reached **50% on Q0–9**; frontier v2 regressed on Q0–19 (**5/20** vs paper **8/20**).  
 **Related:** [HABITAT_EQA_HARNESS.md](HABITAT_EQA_HARNESS.md), [docs/habitat/usage.md](../habitat/usage.md), [docs/dynagraph.md](../dynagraph.md)
 
@@ -77,11 +77,15 @@ flowchart TB
 
 Frontier v2 adds **prompt surface area and routing indirection**. Regression on Q0–19 suggests mismatches between what the VLM sees (Image 1..N), what it selects (`action`), and where the robot actually goes — not necessarily a failure of the fluid map itself.
 
-### Known bug: display index vs observation list index
+### Known bug: display index vs observation list index — **fixed**
 
-`query_answer()` attaches images in **`obs_ids` order** (keyword-selected subset, max `eqa_max_images`). `parse_answer()` navigation uses `self._observations[image_id - 1]` (full list index). If the model says “go to Image 2,” the robot may navigate to the **wrong** observation. This likely hurts frontier v2 more than paper-style runs because frontier v2 relies on correct Image-id actions.
+`query_answer()` attaches images in **`obs_ids` order** (keyword-selected subset, max `eqa_max_images`). Previously, `parse_answer()` navigation used `self._observations[image_id - 1]` (full list index). If the model said “go to Image 2,” the robot could navigate to the **wrong** observation.
 
-**Fix (P0):** resolve `action` image id through the same `obs_ids` list used for the prompt; add unit test in `test_graph_eqa_memory.py` or `test_habitat/`.
+**Fix (P0, landed):** resolve `action` image id through the same `obs_ids` list used for the prompt (`_target_point_from_display_image_index` + `last_eqa_obs_ids`); unit test `test_display_image_index_maps_to_selected_obs_ids`.
+
+### Image-N navigation waypoint (P0 follow-up, landed)
+
+Even with correct display-index mapping, navigating to raw `obs.xyz` (object centroid) caused **spin-in-place** when the robot was already at the capture pose. **`_navigation_waypoint_for_obs`** now targets the capture **viewpoint** when far, or a **standoff waypoint** toward the anchor when already at the viewpoint (`eqa.image_nav_min_approach_m`, default `0.35` m in the Habitat runner). Tests: `test_navigation_waypoint_*` in `test_graph_eqa_memory.py`.
 
 ---
 

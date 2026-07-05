@@ -40,6 +40,9 @@ uv run python scripts/download_habitat_eqa_data.py --report-hmeqa-semantics
 
 # 5. Smoke episode (mocked LLM; no API key)
 uv run emet run graph-eqa-habitat --mock-llm --question-id 0 --method dynagraph
+
+# 5b. Movement smoke (mock returns confidence:false each step; extra flags pass through to emet-habitat)
+uv run emet run graph-eqa-habitat --mock-llm --mock-llm-explore --question-id 3 --max-planning-steps 5
 ```
 
 **No Matterport access yet?** Download the free example pack to test the install only (~150MB; does **not** include HM-EQA scenes):
@@ -61,7 +64,8 @@ In-process shim at `packages/emet_habitat/emet_habitat/robot_client.py` (full do
 
 | API | Behavior |
 |-----|----------|
-| `move_base_to` / `execute_trajectory` / `navigate_to` | Goals are Habitat **world** `(x, z, yaw)`. `world_frame` is accepted for ZMQ API parity but **ignored**. |
+| `move_base_to` / `execute_trajectory` / `navigate_to` | Goals are Habitat **world** `(x, z, yaw)`. `world_frame` is accepted for ZMQ API parity but **ignored**. Navmesh paths use `execute_trajectory` when waypoints are available. |
+| `add_post_step_hook` / `remove_post_step_hook` | Optional callbacks after each discrete Habitat action; used by eval diagnostics for substep RGB frames (`export_video_substeps`). |
 | `get_emet_session` / `set_emet_session` | Optional local session dict (e.g. `sim_object_placements` for find-phase GT graph refresh). Not streamed from a server. |
 | `hm3d_semantic_labeler` / `uses_hm3d_semantics` | Present when the simulator was built with HM3D semantic sensors. |
 | Arm / gripper / head methods | Stretch-shaped **no-op stubs** so DynaMem manipulation wrappers import cleanly; EQA uses navigation only. |

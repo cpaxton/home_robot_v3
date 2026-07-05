@@ -107,6 +107,9 @@ flowchart LR
 # Smoke (mocked LLM)
 RUN_HABITAT_TESTS=1 uv run emet test src/test/habitat/ -k smoke
 
-# Single episode
+# Single episode (confident mock — fast grading smoke)
 uv run emet run graph-eqa-habitat --dataset hmeqa --scene-id 0 --question-id 0 --mock-llm
+
+# Movement smoke (mock returns confidence:false each planning step)
+.venv-habitat/bin/emet-habitat run-episode --question-id 3 --mock-llm --mock-llm-explore --max-planning-steps 5
 ```
