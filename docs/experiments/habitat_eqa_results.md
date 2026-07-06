@@ -10,7 +10,7 @@ Maintainer: update this file and `paper/sections/05_results.tex` / `paper/sectio
 
 JSONL written **before** this stack (June 2026 phrase/location MCQ fixes only) are **not directly comparable** on search-style questions that depended on spin-in-place nav. When updating paper tables, prefer post-nav-fix sweeps or note the stack in the table caption.
 
-### July 2026 engineering (code landed; eval pending)
+### July 2026 nav stack (landed + first evals complete)
 
 | Fix | Effect |
 |-----|--------|
@@ -75,31 +75,68 @@ Engineering: navmesh nav + compass fix, phrase-level CONFIRMED_MEMORY, SigLIP re
 
 Held-out ids: `15,56,65,68,79,88,104,105`. Correct: Q15, Q79, Q88, Q104. Mean planning steps: 50.5.
 
+### Post-nav-fix eval (Qwen3-VL-8B, July 2026 nav stack)
+
+Run id **`postfix_nav20260705_larger`** (2026-07-05 18:19 → 2026-07-06 00:20, ~6 h). Stack: navmesh nav, Image-N waypoints, frontier nodes (`--frontier-nodes --frontier-keyword-weight 2`), 20/10 step budget, HM-EQA prompts. Overnight log: `~/.cache/habitat_eqa/overnight/postfix_nav20260705_larger/summary.txt`.
+
+**Smoke (canonical Q3, Q14, Q17)** — both methods 100% before the larger sweep:
+
+| Method | n | Accuracy | JSONL tag |
+|--------|---|----------|-----------|
+| graph_eqa | 3 | **100%** (3/3) | `full_nav_fix_20260705_172102_hmeqa_graph_eqa.jsonl` |
+| dynagraph | 3 | **100%** (3/3) | `full_nav_fix_20260705_172102_hmeqa_dynagraph.jsonl` |
+
+**Larger sweep** (`postfix_nav20260705_larger`):
+
+| Method | Slice | n | Accuracy | JSONL tag |
+|--------|-------|---|----------|-----------|
+| graph_eqa | held-out random-8 | 8 | **87.5%** (7/8) | `subset_postfix_nav20260705_larger_holdout8_graph_eqa_qwen3_vl.jsonl` |
+| dynagraph | held-out random-8 | 8 | 37.5% (3/8) | `subset_postfix_nav20260705_larger_holdout8_dynagraph_qwen3_vl.jsonl` |
+| graph_eqa | balanced-32 | 32 | 37.5% (12/32) | `subset_overnight_postfix_nav20260705_larger_balanced32_graph_eqa_qwen3_vl.jsonl` |
+| dynagraph | balanced-32 | 32 | **40.6%** (13/32) | `subset_overnight_postfix_nav20260705_larger_balanced32_dynagraph_qwen3_vl.jsonl` |
+| graph_eqa | paper Q0–19 | 20 | 45.0% (9/20) | `subset_overnight_postfix_nav20260705_larger_paper20_graph_eqa_qwen3_vl.jsonl` |
+| dynagraph | paper Q0–19 | 20 | **50.0%** (10/20) | `subset_overnight_postfix_nav20260705_larger_paper20_dynagraph_qwen3_vl.jsonl` |
+
+Held-out ids (same seed as June): `15,56,65,68,79,88,104,105`. **graph_eqa** correct: all except Q104. **dynagraph** correct: Q15, Q65, Q88 only. Canonical-8 skipped in this run (`SKIP_PHASES=canonical8_*`).
+
+**Head-to-head (same questions, both methods):**
+
+| Slice | graph_eqa | dynagraph | both correct | graph only | dyna only |
+|-------|-----------|-----------|--------------|------------|-----------|
+| held-out-8 | 7/8 | 3/8 | 3 | 4 | 0 |
+| balanced-32 | 12/32 | 13/32 | 8 | 4 | 5 |
+| paper Q0–19 | 9/20 | 10/20 | 8 | 1 | 2 |
+
+**Takeaways:** July nav fixes strongly help **graph_eqa** on held-out search questions (7/8 vs 4/8 pre-nav dynagraph baseline on the same ids). On balanced-32 and paper-20, methods are **roughly tied** (dynagraph +1 on each). Holdout dynagraph regression (3/8) traces to dynagraph-only extras (MCQ debias flipping correct letters, CONFIRMED_MEMORY anchoring wrong objects, extra frontier exploration when graph coverage is incomplete) — not missing nav wiring (same `GraphEQAController` base). MCQ debias on dynagraph: balanced-32 +5/−4, paper-20 +3/−3 (net neutral).
+
 ### Dynagraph vs graph_eqa on same harness
 
-On every comparable slice, **dynagraph ≥ graph_eqa** (+1–3 pp on balanced-32; debias and CONFIRMED_MEMORY widen the gap on search-style questions). Mock-LLM smoke: both methods 100% on Q0–5 (grading sanity).
+On balanced-32 and paper slices at 3B/8B, **dynagraph ≥ graph_eqa** (+1–3 pp) when June fix stack (debias, CONFIRMED_MEMORY) helps. **Exception:** post-nav held-out-8 where graph_eqa leads 7/8 vs 3/8 — tune dynagraph HM-EQA extras on a follow-up branch. Mock-LLM smoke: both methods 100% on Q0–5 (grading sanity).
 
 ## Interpretation
 
 | Comparison | Gap | Likely cause |
 |------------|-----|--------------|
 | Us (41.6% / 113, gemma-3-4b) vs GraphEQA GPT-4o (63.5%) | ~−22 pp | Weaker local VLM + partial semantics + different graph stack |
-| Us (50%, hold-out-8, Qwen3-VL-8B) vs random (25%) | +25 pp | Harness works; small n |
-| Us (50%, hold-out-8) vs Explore-EQA (51.7%) | ~parity on tiny slice | Not statistically meaningful until full 113 |
-| dynagraph vs graph_eqa (same VLM) | +3 pp (bal-32) | SigLIP frontiers, CONFIRMED_MEMORY, debias |
+| Us (87.5%, hold-out-8 graph_eqa, Qwen3-VL-8B + July nav) vs random (25%) | +62.5 pp | Nav stack works on search slice; small n |
+| Us (50%, hold-out-8 dynagraph pre-nav) vs post-nav graph_eqa (87.5%) | +37.5 pp | Nav + baseline graph path >> dynagraph extras on holdout |
+| Us (40–50%, bal-32 / paper-20 @ 8B) vs Explore-EQA (51.7%) | ~parity | Need full 113 for meaningful comparison |
+| dynagraph vs graph_eqa (bal-32 @ 8B post-nav) | +3 pp (13/32 vs 12/32) | Debias/memory help on average; hurt on some holdout eps |
 
 We are **not** yet competitive with published GraphEQA on the full benchmark. We **are** above chance and Dynagraph consistently beats our GraphEQA baseline on the same code path.
 
 ## Planned experiments (priority)
 
-1. **Full 113-question dynagraph** with `Qwen/Qwen3-VL-8B-Instruct` + **July 2026 nav stack** + June fix stack (phrase memory, location MCQ, debias). Tag `_postfix_nav202607`.
-2. **Matched baseline:** same 113 with `graph_eqa` + same VLM.
-3. **Held-out random-8 re-run** (seed 20260627) with nav stack — compare to 4/8 pre-nav-fix.
-4. **Balanced-32 @ 8B** with nav stack — compare to 11/32 @ 3B.
-5. **Semantics coverage:** download remaining HM3D train `.semantic.glb`; re-run ablation with/without GT semantics on Q0–19.
-6. **Frontier ablation** (Q0–19, Qwen2.5-VL-3B): fluid only vs fluid+kw vs graph frontier nodes (`run_habitat_frontier_ablation.sh`).
-7. **Optional upper bound:** API VLM on canonical-8 or balanced-32 through same harness.
-8. **Efficiency:** early-stop when SigLIP CONFIRMED_MEMORY + graph cover all phrases.
+**Done (2026-07-05/06, `postfix_nav20260705_larger`):** held-out-8 both methods; balanced-32 both methods @ Qwen3-VL-8B; paper Q0–19 both methods; smoke Q3/14/17 @ 100%.
+
+**Next (tuning branch):**
+
+1. **Dynagraph HM-EQA tuning** — ablate `mcq_debias`, `memory_summary`, `_eqa_explore_when_uncovered` on held-out-8; re-run holdout with graph-eqa-baseline dynagraph profile before full 113.
+2. **Full 113-question** `graph_eqa` + `dynagraph` with `Qwen/Qwen3-VL-8B-Instruct` + July nav stack. Tag `_postfix_nav202607`.
+3. **Semantics coverage:** download remaining HM3D train `.semantic.glb`; re-run ablation with/without GT semantics on Q0–19.
+4. **Frontier ablation** (Q0–19): fluid only vs fluid+kw vs graph frontier nodes (`run_habitat_frontier_ablation.sh`).
+5. **Optional upper bound:** API VLM on canonical-8 or balanced-32 through same harness.
+6. **Efficiency:** early-stop when SigLIP CONFIRMED_MEMORY + graph cover all phrases.
 
 ### Commands
 
