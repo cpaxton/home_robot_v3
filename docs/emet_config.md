@@ -87,11 +87,12 @@ robots:
       depth_source: auto
       da3_stereo: true
       local_radius: 0.85
+      # Optional post-filters (default off): speckle on inferred depth; DBSCAN on voxel PCD (any depth source)
     zmq:
       allow_missing_depth: true
 ```
 
-When the runtime robot id is `innate_mars`, these keys deep-merge into `mapping` and `zmq`.
+When the runtime robot id is `innate_mars`, these keys deep-merge into `mapping` and `zmq`. See [dynav_config.md](dynav_config.md#depth--voxel-post-filters-da3-hardware-opt-in) for opt-in speckle / DBSCAN tuning.
 
 ---
 

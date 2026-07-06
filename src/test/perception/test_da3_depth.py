@@ -13,6 +13,7 @@ from emet.core.parameters import Parameters
 from emet.perception.depth.da3_estimator import (
     DA3DepthEstimator,
     apply_da3_sky_row_mask,
+    apply_depth_speckle_filter,
     create_da3_estimator_from_parameters,
     resize_depth_to_match_rgb,
     resolve_depth_map,
@@ -30,6 +31,20 @@ def test_apply_da3_sky_row_mask_zeros_top_fraction():
     assert float(out[0, 39]) == 0.0
     assert np.array_equal(apply_da3_sky_row_mask(d, 0.0), d)
 
+
+
+def test_apply_depth_speckle_filter_removes_isolated_pixel():
+    d = np.zeros((20, 20), dtype=np.float32)
+    d[5:15, 5:15] = 1.2
+    d[0, 0] = 1.5
+    out = apply_depth_speckle_filter(d, open_kernel=3, min_depth=0.1, max_depth=3.0)
+    assert float(out[0, 0]) == 0.0
+    assert np.isclose(out[10, 10], 1.2)
+
+
+def test_apply_depth_speckle_filter_disabled_when_kernel_zero():
+    d = np.ones((10, 10), dtype=np.float32)
+    assert np.array_equal(apply_depth_speckle_filter(d, open_kernel=0), d)
 
 def test_sensor_depth_usable():
     assert not sensor_depth_usable(None)
@@ -194,9 +209,11 @@ def test_dynamem_controller_resolve_depth_auto_falls_back_to_da3(monkeypatch):
 
 def test_resolve_depth_map_uses_observation_sensor_only():
     assert resolve_depth_map_uses_observation_sensor_only("sensor", None) is True
-    assert resolve_depth_map_uses_observation_sensor_only("auto", np.zeros((2, 2), np.float32)) is True
+    assert resolve_depth_map_uses_observation_sensor_only("auto", np.zeros((2, 2), np.float32)) is False
     assert resolve_depth_map_uses_observation_sensor_only("auto", None) is False
     assert resolve_depth_map_uses_observation_sensor_only("da3", np.zeros((2, 2))) is False
+    sd = np.ones((4, 4), dtype=np.float32) * 0.5
+    assert resolve_depth_map_uses_observation_sensor_only("auto", sd) is True
 
 
 def test_dynamem_resolve_depth_infer_flag_auto_uses_sensor(monkeypatch):

@@ -35,6 +35,40 @@ def sensor_depth_usable(sensor_depth: np.ndarray | None, *, min_valid_fraction: 
     return float(np.count_nonzero(valid)) / float(sd.size) >= min_valid_fraction
 
 
+def apply_depth_speckle_filter(
+    depth: np.ndarray,
+    *,
+    open_kernel: int = 3,
+    open_iterations: int = 1,
+    min_depth: float = 0.0,
+    max_depth: float = float("inf"),
+) -> np.ndarray:
+    """Morphological opening on the valid-depth mask to drop isolated DA3 speckles (HxW).
+
+    Isolated finite-depth pixels (textureless regions, flying pixels) become mid-air voxels after
+    unprojection. Opening removes blobs smaller than the kernel while preserving larger surfaces.
+    """
+    if open_kernel <= 0 or depth.ndim != 2:
+        return depth
+    k = int(open_kernel)
+    if k % 2 == 0:
+        k += 1
+    d = np.asarray(depth, dtype=np.float32)
+    valid = np.isfinite(d) & (d > min_depth) & (d < max_depth)
+    if not bool(np.any(valid)):
+        return d
+    kernel = np.ones((k, k), dtype=np.uint8)
+    opened = cv2.morphologyEx(
+        valid.astype(np.uint8),
+        cv2.MORPH_OPEN,
+        kernel,
+        iterations=max(1, int(open_iterations)),
+    )
+    out = np.array(d, copy=True)
+    out[opened == 0] = 0.0
+    return out
+
+
 def apply_da3_sky_row_mask(depth: np.ndarray, fraction_top: float) -> np.ndarray:
     """Zero the top *fraction_top* of image rows in a depth map (HxW).
 
