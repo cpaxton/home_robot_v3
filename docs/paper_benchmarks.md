@@ -49,11 +49,24 @@ Merge/staleness and short-episode caps are defined once in [`configs/benchmarks/
 | `eqa` | 0.45 | 256 + nav cap 48 | SQA3D tuned (`dynagraph`) |
 | `find_phase` | 0.15 | 256 | OVMM find-phase (`dynagraph`, `ground_truth`) |
 | `graph_eqa_baseline` | 0 | 0 | OVMM `graph_eqa` row |
-| `smoke` | 0 | 0 | SQA3D mock-LLM / CI |
+| `smoke` | 0 | 0 | HM-EQA harness profile, SQA3D mock-LLM / CI |
+| `unified_eqa` | 0 | 0 + nav cap 48 | Optional shared EQA profile (Habitat + SQA3D) |
+
+**Harness blocks** (`harness:` in the same YAML) set per-benchmark controller flags (`memory_summary`, `mcq_debias`, `explore_when_uncovered`, `use_instance_graph`, …) via `apply_dynagraph_harness()`. Tuned HM-EQA defaults (`habitat_eqa` / dynagraph): `memory_summary=true`, `mcq_debias=false`, `explore_when_uncovered=conservative`.
+
+| Harness | Profile | Dynagraph EQA extras |
+|---------|---------|----------------------|
+| `habitat_eqa` | `smoke` | memory on, debias off, conservative explore |
+| `habitat_ovmm_find` | `find_phase` | EQA off |
+| `ovmm_find_phase` | `find_phase` | Robocasa / Molmo search |
+| `sqa3d` | `eqa` | memory/debias off (open QA) |
+| `dynamic_explore` | `interactive` | full dynagraph extras |
+
+Tuning / paper battery: [`scripts/run_dynagraph_tuning_matrix.sh`](../scripts/run_dynagraph_tuning_matrix.sh), [`scripts/run_dynagraph_tuned_paper_battery.sh`](../scripts/run_dynagraph_tuned_paper_battery.sh). Figures: `render_paper_map_figures.py`, `render_graph_retrieval_panel.py`, `render_dynagraph_3d_figure.py`, `build_eval_figure_pack.py --render-retrieval-panels`.
 
 **Task-specific (documented, not unified):** EQA prompts (`prompt_variant`: `sqa3d` vs default), and controller flags (`use_instance_graph`, `manipulation_only`) differ between OVMM localization and SQA3D open QA — see `harness:` in the YAML above.
 
-CLI overrides still work: OVMM `--merge-xy-m` / `--staleness-horizon`; SQA3D has no merge flags (uses profiles only).
+CLI overrides: OVMM `--merge-xy-m` / `--staleness-horizon`; Habitat `emet-habitat` `--no-mcq-debias`, `--memory-summary`, `--explore-when-uncovered {off,on,conservative}`; env `EMET_DYNAGRAPH_*` (see [environment_variables.md](environment_variables.md)).
 
 ## Output directories (default)
 

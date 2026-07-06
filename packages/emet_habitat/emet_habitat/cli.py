@@ -22,6 +22,7 @@ from emet.habitat.datasets import load_hmeqa_questions
 from emet.habitat.hm3d_semantics import compute_hmeqa_semantics_coverage
 from emet.habitat.hmeqa_enrich_labels import HMEQA_PAPER_QUESTION_COUNT, hmeqa_paper_question_ids
 from emet.habitat.metrics import compare_method_results, summarize_episodes, write_episode_jsonl
+from emet.core.parameters import Parameters
 
 
 @click.group()
@@ -110,6 +111,47 @@ def _habitat_nav_cli_options(fn):
     return fn
 
 
+def _configure_dynagraph_harness(
+    parameters: Parameters,
+    *,
+    memory_summary: bool | None = None,
+    mcq_debias: bool | None = None,
+    explore_when_uncovered: str | None = None,
+) -> None:
+    from emet.eval.benchmark_dynagraph import apply_dynagraph_harness_overrides
+
+    apply_dynagraph_harness_overrides(
+        parameters,
+        memory_summary=memory_summary,
+        mcq_debias=mcq_debias,
+        explore_when_uncovered=explore_when_uncovered,
+    )
+
+
+def _dynagraph_harness_cli_options(fn):
+    opts = [
+        click.option(
+            "--mcq-debias/--no-mcq-debias",
+            default=None,
+            help="Dynagraph end-of-episode MCQ debias (default: harness profile)",
+        ),
+        click.option(
+            "--memory-summary/--no-memory-summary",
+            default=None,
+            help="Dynagraph CONFIRMED_MEMORY prompt block (default: harness profile)",
+        ),
+        click.option(
+            "--explore-when-uncovered",
+            type=click.Choice(["off", "on", "conservative"]),
+            default=None,
+            help="Frontier override when graph lacks question objects (default: harness profile)",
+        ),
+    ]
+    for opt in reversed(opts):
+        fn = opt(fn)
+    return fn
+
+
 def _diagnostics_cli_options(fn):
     opts = [
         click.option("--export-map/--no-export-map", default=None, help="Write topdown_map.png per episode"),
@@ -146,6 +188,7 @@ def _diagnostics_cli_options(fn):
 @_frontier_cli_options
 @_habitat_nav_cli_options
 @_eqa_cli_options
+@_dynagraph_harness_cli_options
 @_diagnostics_cli_options
 def run_episode(
     dataset: str,
@@ -169,6 +212,9 @@ def run_episode(
     export_map: bool | None,
     export_video: bool | None,
     map_stride: int | None,
+    mcq_debias: bool | None,
+    memory_summary: bool | None,
+    explore_when_uncovered: str | None,
 ) -> None:
     """Run one HM-EQA episode in Habitat-Sim."""
     if dataset != "hmeqa":
@@ -200,6 +246,9 @@ def run_episode(
             frontier_nodes_enabled=frontier_nodes,
             frontier_keyword_weight=frontier_keyword_weight,
             habitat_perfect_nav=habitat_perfect_nav,
+            memory_summary=memory_summary,
+            mcq_debias=mcq_debias,
+            explore_when_uncovered=explore_when_uncovered,
             debug_run_tag=f"cli_episode_q{question_id:04d}",
             save_debug_bundle=True,
             export_map=export_map,
@@ -254,6 +303,7 @@ def run_episode(
 @_frontier_cli_options
 @_habitat_nav_cli_options
 @_eqa_cli_options
+@_dynagraph_harness_cli_options
 @_diagnostics_cli_options
 def run_batch(
     method: str,
@@ -278,6 +328,9 @@ def run_batch(
     export_map: bool | None,
     export_video: bool | None,
     map_stride: int | None,
+    mcq_debias: bool | None,
+    memory_summary: bool | None,
+    explore_when_uncovered: str | None,
 ) -> None:
     """Run a slice of HM-EQA (GraphEQA paper: 113 questions, method=graph_eqa)."""
     from emet_habitat.runner import run_hmeqa_batch
@@ -318,6 +371,9 @@ def run_batch(
             frontier_nodes_enabled=frontier_nodes,
             frontier_keyword_weight=frontier_keyword_weight,
             habitat_perfect_nav=habitat_perfect_nav,
+            memory_summary=memory_summary,
+            mcq_debias=mcq_debias,
+            explore_when_uncovered=explore_when_uncovered,
             export_map=export_map,
             export_video=export_video,
             map_stride=map_stride,

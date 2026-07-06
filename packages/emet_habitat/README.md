@@ -26,3 +26,5 @@ Force navigation each planning step (movement / diagnostics smoke; requires `--m
 ```
 
 Requires HM3D scenes and Explore-EQA CSVs — see `docs/habitat/README.md` (`docs/habitat/data.md` for downloads).
+
+**Dynagraph harness (tuned HM-EQA):** merge/staleness + EQA flags come from `configs/benchmarks/dynagraph.yaml` (`habitat_eqa` harness). CLI ablations: `--no-mcq-debias`, `--no-memory-summary`, `--explore-when-uncovered {off,on,conservative}`. Tuning matrix: `scripts/run_dynagraph_tuning_matrix.sh`.

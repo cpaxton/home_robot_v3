@@ -6,10 +6,14 @@ from __future__ import annotations
 
 from emet.core.parameters import get_parameters
 from emet.eval.benchmark_dynagraph import (
+    apply_dynagraph_harness,
+    apply_habitat_eqa_method_parameters,
     apply_ovmm_backend_dynagraph,
     apply_sqa3d_dynagraph,
+    dynagraph_harness_flags,
     harness_controller_options,
     profile_settings,
+    resolve_harness_profile,
     resolve_ovmm_dynagraph_profile,
     resolve_sqa3d_dynagraph_profile,
 )
@@ -64,9 +68,35 @@ def test_profile_resolution():
     assert resolve_sqa3d_dynagraph_profile("dynamem", profile="tuned") is None
 
 
+def test_ovmm_graph_eqa_uses_baseline_profile():
+    params = apply_ovmm_backend_dynagraph(get_parameters("dynav_config.yaml"), "graph_eqa")
+    assert params.get("dynagraph_merge_xy_m") == 0.0
+    assert params.get("dynagraph_staleness_horizon") == 0
+
+
 def test_harness_controller_docs_present():
     ovmm = harness_controller_options("ovmm_find_phase", "dynagraph")
     sqa3d = harness_controller_options("sqa3d", "dynagraph")
+    habitat = harness_controller_options("habitat_eqa", "dynagraph")
     assert ovmm.get("use_instance_graph") is True
     assert sqa3d.get("use_instance_graph") is False
     assert sqa3d.get("prompt_variant") == "sqa3d"
+    assert habitat.get("mcq_debias") is False
+    assert habitat.get("explore_when_uncovered") == "conservative"
+
+
+def test_dynamic_explore_graph_eqa_baseline_merge():
+    from emet.eval.benchmark_dynagraph import apply_dynamic_explore_backend
+
+    params = apply_dynamic_explore_backend(get_parameters("dynav_config.yaml"), "graph_eqa")
+    assert params.get("dynagraph_merge_xy_m") == 0.0
+    flags = dynagraph_harness_flags(params)
+    assert flags["explore_when_uncovered"] == "off"
+
+
+def test_habitat_eqa_method_parameters_use_smoke_profile():
+    params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "dynagraph")
+    assert params.get("dynagraph_merge_xy_m") == 0.0
+    assert resolve_harness_profile("habitat_eqa") == "smoke"
+    flags = dynagraph_harness_flags(params)
+    assert flags["mcq_debias"] is False

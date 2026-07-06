@@ -158,6 +158,9 @@ def _make_agent(
     use_real_vlm: bool,
     device: str | None,
 ) -> DynamemController:
+    from emet.eval.benchmark_dynagraph import harness_controller_kwargs
+
+    harness_kw = harness_controller_kwargs(parameters, harness="sqa3d", method=str(method))
     if method == "dynagraph":
         agent = DynagraphController(
             robot=robot,
@@ -165,8 +168,8 @@ def _make_agent(
             save_rerun=False,
             cpu_only=not use_real_vlm,
             use_sensor_perception=use_real_vlm,
-            use_instance_graph=False,
-            manipulation_only=True,
+            use_instance_graph=bool(harness_kw.get("use_instance_graph", False)),
+            manipulation_only=bool(harness_kw.get("manipulation_only", True)),
         )
         _attach_graph_eqa_clients(
             agent,
@@ -176,9 +179,6 @@ def _make_agent(
             use_real_vlm=use_real_vlm,
             device=device,
         )
-        # Open-vocab SQA3D answers do not need CONFIRMED_MEMORY SigLIP passes (extra VRAM + tokens).
-        if agent.graph_memory is not None:
-            agent.graph_memory.memory_summary_enabled = False
         return agent
 
     agent = DynamemController(

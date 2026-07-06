@@ -11,6 +11,7 @@ import rerun as rr
 import rerun.blueprint as rrb
 
 from emet.controller.controller_graph_eqa import GraphEQAController
+from emet.eval.benchmark_dynagraph import dynagraph_harness_flags
 from emet.memory.graph_eqa.sim_ground_truth_graph import (
     read_sim_object_placements,
     upsert_graph_memory_from_placements,
@@ -53,19 +54,14 @@ class DynagraphController(GraphEQAController):
             except Exception:
                 pass
         super().__init__(*args, **kwargs)
-        # Dynagraph contribution over the GraphEQA baseline: SigLIP-grounded CONFIRMED_MEMORY
-        # (open-vocab grounding independent of caption labels) + frontier-coverage override
-        # that explores unobserved question objects instead of revisiting seen views.
-        self._eqa_explore_when_uncovered = True
+        flags = dynagraph_harness_flags(params)
+        explore_mode = str(flags.get("explore_when_uncovered", "off"))
+        self._eqa_explore_when_uncovered = explore_mode in ("on", "conservative")
+        self._eqa_explore_uncovered_habitat_frontier = explore_mode == "on"
         if self.graph_memory is not None:
-            if sqa3d_open_qa:
-                self.graph_memory.memory_summary_enabled = False
-                self.graph_memory.mcq_debias_enabled = False
-            else:
-                self.graph_memory.memory_summary_enabled = True
-                # Counteract the small VLM's MCQ position bias (letter A under-picked
-                # ~5x) with a choice-rotation vote at episode end (mcq_debias.py).
-                self.graph_memory.mcq_debias_enabled = True
+            self.graph_memory.memory_summary_enabled = bool(flags.get("memory_summary", False))
+            self.graph_memory.mcq_debias_enabled = bool(flags.get("mcq_debias", False))
+            if bool(flags.get("siglip_grounding", False)):
                 self.graph_memory.set_text_grounder(self._siglip_text_match)
                 self.graph_memory.set_obs_id_grounder(self._siglip_obs_id_for_text)
         if ground_truth_mode and self.graph_memory is not None:

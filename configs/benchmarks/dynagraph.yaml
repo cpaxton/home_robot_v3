@@ -22,6 +22,13 @@ profiles:
     graph_eqa_extract:
       navigation_samples_max: 48
 
+  unified_eqa:
+    description: "Shared EQA tuning profile (Habitat HM-EQA + SQA3D when merge can match)."
+    dynagraph_merge_xy_m: 0.0
+    dynagraph_staleness_horizon: 0
+    graph_eqa_extract:
+      navigation_samples_max: 48
+
   find_phase:
     description: "OVMM find-phase localization — tighter merge reduces centroid error."
     dynagraph_merge_xy_m: 0.15
@@ -33,20 +40,74 @@ profiles:
     dynagraph_staleness_horizon: 0
 
 # Harness-specific controller flags (task-dependent; not graph-memory parameters).
+# ``apply_dynagraph_harness`` applies ``profile`` merge/staleness then method kwargs into
+# ``parameters.dynagraph_harness`` for ``DynagraphController``.
 harness:
+  habitat_eqa:
+    profile: smoke
+    dynagraph:
+      memory_summary: true
+      mcq_debias: false
+      explore_when_uncovered: conservative
+      siglip_grounding: true
+      use_instance_graph: false
+      manipulation_only: true
+    graph_eqa:
+      use_instance_graph: false
+      manipulation_only: true
+  habitat_ovmm_find:
+    dynagraph:
+      profile: find_phase
+      eqa: false
+      use_instance_graph: true
+      manipulation_only: false
+    graph_eqa:
+      profile: graph_eqa_baseline
+      eqa: false
+      use_instance_graph: true
+      manipulation_only: false
+    ground_truth:
+      profile: find_phase
+      eqa: false
+      use_instance_graph: true
+      manipulation_only: false
   ovmm_find_phase:
     dynagraph:
+      profile: find_phase
       use_instance_graph: true
       manipulation_only: false
       eqa: false
     graph_eqa:
+      profile: graph_eqa_baseline
+      use_instance_graph: true
+      manipulation_only: false
+      eqa: false
+    ground_truth:
+      profile: find_phase
       use_instance_graph: true
       manipulation_only: false
       eqa: false
   sqa3d:
     dynagraph:
+      profile: eqa
       use_instance_graph: false
       manipulation_only: true
       eqa: true
       prompt_variant: sqa3d
       sqa3d_allow_partial_graph: true
+      memory_summary: false
+      mcq_debias: false
+      explore_when_uncovered: off
+      siglip_grounding: false
+  dynamic_explore:
+    dynagraph:
+      profile: interactive
+      memory_summary: true
+      mcq_debias: true
+      explore_when_uncovered: on
+      siglip_grounding: true
+    graph_eqa:
+      profile: graph_eqa_baseline
+      memory_summary: false
+      mcq_debias: false
+      explore_when_uncovered: off

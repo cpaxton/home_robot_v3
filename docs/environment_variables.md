@@ -53,6 +53,9 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_SIGLIP_VERSION` | `get_shared_mask_siglip_encoder` (voxel map / dynagraph grounding) | Override the SigLIP checkpoint: `base`, `so400m` (default), `siglip2_base`, `siglip2_so400m`. A/B encoder upgrades without config edits. |
 | `EMET_SIGLIP_DTYPE` | `SiglipEncoder` / `MaskSiglipEncoder` weight load | `float32` (default), `float16`, or `bfloat16`. Halves SigLIP VRAM (so400m: 3.5 GB → 1.75 GB); outputs are cast back to fp32 so stored features/thresholds are unchanged. int4/int8 unsupported (breaks the MaskSiglip head surgery). |
 | `EMET_VLM_FRONTIER_SCORING` | Dynagraph EQA exploration (`controller_graph_eqa.py`) | Set `1` to let the EQA VLM pick the exploration frontier from candidate views (<=6 images/iteration) before the SigLIP-nearest heuristic. Only active in the dynagraph coverage-override path (`_eqa_explore_when_uncovered`); baseline `graph_eqa` is unaffected. Default off. |
+| `EMET_DYNAGRAPH_MCQ_DEBIAS` | Habitat `emet-habitat` dynagraph harness | `1` / `0` override `mcq_debias` after harness profile (CLI: `--mcq-debias` / `--no-mcq-debias`). |
+| `EMET_DYNAGRAPH_MEMORY_SUMMARY` | Habitat `emet-habitat` dynagraph harness | `1` / `0` override CONFIRMED_MEMORY block (CLI: `--memory-summary` / `--no-memory-summary`). |
+| `EMET_DYNAGRAPH_EXPLORE_UNCOVERED` | Habitat `emet-habitat` dynagraph harness | `off`, `on`, or `conservative` (CLI: `--explore-when-uncovered`). Default per harness: `habitat_eqa` uses `conservative` in [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml). |
 | `PYTORCH_CUDA_ALLOC_CONF` | PyTorch CUDA | Optional allocator hint (e.g. `expandable_segments:True`); set by `run_sqa3d_gpu_sweep.sh` and `run_sqa3d_sharded_sweep.sh` if unset. |
 
 ### Large paper eval orchestrator

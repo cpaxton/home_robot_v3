@@ -123,20 +123,33 @@ On balanced-32 and paper slices at 3B/8B, **dynagraph ≥ graph_eqa** (+1–3 pp
 | Us (40–50%, bal-32 / paper-20 @ 8B) vs Explore-EQA (51.7%) | ~parity | Need full 113 for meaningful comparison |
 | dynagraph vs graph_eqa (bal-32 @ 8B post-nav) | +3 pp (13/32 vs 12/32) | Debias/memory help on average; hurt on some holdout eps |
 
-We are **not** yet competitive with published GraphEQA on the full benchmark. We **are** above chance and Dynagraph consistently beats our GraphEQA baseline on the same code path.
+We are **not** yet competitive with published GraphEQA on the full benchmark. We **are** above chance; post-nav balanced-32 favored dynagraph slightly (+1 pp) while holdout favored graph_eqa (+4 pp) before harness tuning.
+
+## Dynagraph cross-environment tuning (2026-07)
+
+Unified harness config: [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml) + `apply_dynagraph_harness()`. **Tuned `habitat_eqa` dynagraph defaults** (Qwen3-VL-8B target):
+
+| Flag | Tuned default | Rationale |
+|------|---------------|-----------|
+| `memory_summary` | on | SigLIP CONFIRMED_MEMORY helps search questions |
+| `mcq_debias` | **off** | 8B model: debias flipped correct answers on holdout (e.g. Q68 B→A) |
+| `explore_when_uncovered` | **conservative** | Keep query-time frontier override; disable habitat-only uncovered hijack |
+
+Ablation matrix: `./scripts/run_dynagraph_tuning_matrix.sh` (arms: `baseline,no_debias,no_memory,no_explore,graph_eqa_like`). Paper battery after tuning converges: `./scripts/run_dynagraph_tuned_paper_battery.sh`. Results land under `~/runs/emet/dynagraph_tuning/<RUN_ID>/`.
+
+**Eval pending** on tuned harness — update tables below after first `tuned_paper_*` or tuning-matrix run completes.
 
 ## Planned experiments (priority)
 
 **Done (2026-07-05/06, `postfix_nav20260705_larger`):** held-out-8 both methods; balanced-32 both methods @ Qwen3-VL-8B; paper Q0–19 both methods; smoke Q3/14/17 @ 100%.
 
-**Next (tuning branch):**
+**In progress (`feature/dynagraph-tuning`):**
 
-1. **Dynagraph HM-EQA tuning** — ablate `mcq_debias`, `memory_summary`, `_eqa_explore_when_uncovered` on held-out-8; re-run holdout with graph-eqa-baseline dynagraph profile before full 113.
-2. **Full 113-question** `graph_eqa` + `dynagraph` with `Qwen/Qwen3-VL-8B-Instruct` + July nav stack. Tag `_postfix_nav202607`.
-3. **Semantics coverage:** download remaining HM3D train `.semantic.glb`; re-run ablation with/without GT semantics on Q0–19.
-4. **Frontier ablation** (Q0–19): fluid only vs fluid+kw vs graph frontier nodes (`run_habitat_frontier_ablation.sh`).
-5. **Optional upper bound:** API VLM on canonical-8 or balanced-32 through same harness.
-6. **Efficiency:** early-stop when SigLIP CONFIRMED_MEMORY + graph cover all phrases.
+1. **Harness landed** — per-env flags in `dynagraph.yaml`; Habitat CLI ablations; figure scripts.
+2. **Tuning matrix** — holdout-8 + canonical-8 ablations @ Qwen3-VL-8B.
+3. **Paper battery** — seven-track smoke + Habitat/OVMM/SQA3D/Robocasa/Molmo with tuned config.
+4. **Full 113-question** sweep after holdout ≥ graph_eqa baseline.
+5. **Semantics / frontier ablations** — unchanged from prior plan.
 
 ### Commands
 
@@ -145,7 +158,11 @@ We are **not** yet competitive with published GraphEQA on the full benchmark. We
 TAG=holdout8_postfix_20260627 IDS=15,56,65,68,79,88,104,105 METHOD=dynagraph TIMEOUT=7200 \
   ./scripts/run_habitat_iter_subset.sh
 
-# Full 113 (planned)
+# Tuning matrix + tuned paper battery
+ARMS=baseline,no_debias,graph_eqa_like ./scripts/run_dynagraph_tuning_matrix.sh
+SKIP_SMOKE=1 ./scripts/run_dynagraph_tuned_paper_battery.sh
+
+# Habitat HM-EQA with tuned harness (default via apply_dynagraph_harness)
 .venv-habitat/bin/emet-habitat run-batch \
   --method dynagraph \
   --paper-subset \

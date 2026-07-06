@@ -76,23 +76,9 @@ def _mock_eqa_response(gold_letter: str, *, confident: bool = True) -> str:
 
 
 def _apply_method_parameters(parameters: Parameters | dict, method: str) -> Parameters:
-    if isinstance(parameters, dict):
-        params = Parameters(**parameters)
-    else:
-        params = parameters
-    # HM-EQA episodes are short (~20 planning steps). Keep merge/staleness at 0 so
-    # Dynagraph is a same-stack regression check vs GraphEQA, but enable fusion
-    # fallback dedup so HM3D instance labels do not explode the graph each frame.
-    if method in ("graph_eqa", "dynagraph"):
-        params["dynagraph_merge_xy_m"] = 0.0
-        params["dynagraph_staleness_horizon"] = 0
-        if method == "dynagraph":
-            from emet.eval.benchmark_dynagraph import apply_eval_graph_fusion_parameters
+    from emet.eval.benchmark_dynagraph import apply_habitat_eqa_method_parameters
 
-            apply_eval_graph_fusion_parameters(params, merge_xy_m=0.0)
-    else:
-        raise ValueError(f"Unknown method {method!r}; use graph_eqa or dynagraph")
-    return params
+    return apply_habitat_eqa_method_parameters(parameters, method)
 
 
 def _cfg_hf_id_matches_family(hf_model_id: str, family: str) -> bool:
@@ -178,8 +164,20 @@ def _make_controller(
     use_real_vlm: bool,
     device: str | None,
     use_hm3d_semantics: bool | None = None,
+    memory_summary: bool | None = None,
+    mcq_debias: bool | None = None,
+    explore_when_uncovered: str | None = None,
 ):
+    from emet.eval.benchmark_dynagraph import apply_dynagraph_harness_overrides
+
     params = _apply_method_parameters(parameters, method)
+    apply_dynagraph_harness_overrides(
+        params,
+        memory_summary=memory_summary,
+        mcq_debias=mcq_debias,
+        explore_when_uncovered=explore_when_uncovered,
+    )
+    harness_opts = dict(params.get("dynagraph_harness") or {})
     hm3d_sem = robot.uses_hm3d_semantics if use_hm3d_semantics is None else use_hm3d_semantics
     # HM3D semantic sensor supplies graph labels; reserve VLM for EQA queries only.
     graph_perception = use_real_vlm and not hm3d_sem
@@ -190,8 +188,8 @@ def _make_controller(
         "save_rerun": False if no_rerun else False,
         "cpu_only": not use_real_vlm,
         "use_sensor_perception": graph_perception,
-        "use_instance_graph": False,
-        "manipulation_only": True,
+        "use_instance_graph": bool(harness_opts.get("use_instance_graph", False)),
+        "manipulation_only": bool(harness_opts.get("manipulation_only", True)),
     }
     if method == "dynagraph":
         agent = DynagraphController(**common)
@@ -235,6 +233,9 @@ def run_hmeqa_episode(
     frontier_nodes_enabled: bool | None = None,
     frontier_keyword_weight: float | None = None,
     habitat_perfect_nav: bool | None = None,
+    memory_summary: bool | None = None,
+    mcq_debias: bool | None = None,
+    explore_when_uncovered: str | None = None,
     debug_run_tag: str | None = None,
     save_debug_bundle: bool = True,
     export_map: bool | None = None,
@@ -276,6 +277,24 @@ def run_hmeqa_episode(
             frontier_keyword_weight=frontier_keyword_weight,
         )
         _configure_habitat_nav(parameters, habitat_perfect_nav=habitat_perfect_nav)
+        import os
+
+        if memory_summary is None:
+            raw = os.environ.get("EMET_DYNAGRAPH_MEMORY_SUMMARY", "").strip().lower()
+            if raw in ("1", "true", "yes", "on"):
+                memory_summary = True
+            elif raw in ("0", "false", "no", "off"):
+                memory_summary = False
+        if mcq_debias is None:
+            raw = os.environ.get("EMET_DYNAGRAPH_MCQ_DEBIAS", "").strip().lower()
+            if raw in ("1", "true", "yes", "on"):
+                mcq_debias = True
+            elif raw in ("0", "false", "no", "off"):
+                mcq_debias = False
+        if explore_when_uncovered is None:
+            raw = os.environ.get("EMET_DYNAGRAPH_EXPLORE_UNCOVERED", "").strip().lower()
+            if raw:
+                explore_when_uncovered = raw
         agent = _make_controller(
             robot,
             parameters,
@@ -287,6 +306,9 @@ def run_hmeqa_episode(
             use_real_vlm=use_real_vlm,
             device=device,
             use_hm3d_semantics=use_hm3d_semantics,
+            memory_summary=memory_summary,
+            mcq_debias=mcq_debias,
+            explore_when_uncovered=explore_when_uncovered,
         )
         diag_cfg = EpisodeDiagnosticsConfig.from_env(
             parameters,
@@ -442,6 +464,9 @@ def run_hmeqa_batch(
     frontier_nodes_enabled: bool | None = None,
     frontier_keyword_weight: float | None = None,
     habitat_perfect_nav: bool | None = None,
+    memory_summary: bool | None = None,
+    mcq_debias: bool | None = None,
+    explore_when_uncovered: str | None = None,
     export_map: bool | None = None,
     export_video: bool | None = None,
     map_stride: int | None = None,
@@ -499,6 +524,9 @@ def run_hmeqa_batch(
                 frontier_nodes_enabled=frontier_nodes_enabled,
                 frontier_keyword_weight=frontier_keyword_weight,
                 habitat_perfect_nav=habitat_perfect_nav,
+                memory_summary=memory_summary,
+                mcq_debias=mcq_debias,
+                explore_when_uncovered=explore_when_uncovered,
                 debug_run_tag=run_tag if output_jsonl is not None else None,
                 export_map=export_map,
                 export_video=export_video,

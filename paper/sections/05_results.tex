@@ -6,7 +6,8 @@ Habitat HM-EQA numbers are in Section~\ref{sec:hmeqa_results}; other tracks rema
 \subsection{Habitat HM-EQA (preliminary)}
 \label{sec:hmeqa_results}
 
-We report early Dynagraph numbers on HM-EQA in Habitat-Sim (\texttt{.venv-habitat/bin/emet-habitat}), using \texttt{Qwen/Qwen3-VL-8B-Instruct}, 20 planning iterations, navmesh navigation (\texttt{--habitat-perfect-nav}), graph frontier nodes, MCQ debiasing, and Dynagraph's SigLIP-grounded \texttt{CONFIRMED\_MEMORY} block.
+We report early Dynagraph numbers on HM-EQA in Habitat-Sim (\texttt{.venv-habitat/bin/emet-habitat}), using \texttt{Qwen/Qwen3-VL-8B-Instruct}, 20 planning iterations, navmesh navigation (\texttt{--habitat-perfect-nav}), graph frontier nodes, and (pre-tuning) MCQ debiasing plus SigLIP \texttt{CONFIRMED\_MEMORY}.
+Cross-environment harness tuning (\texttt{configs/benchmarks/dynagraph.yaml}, \texttt{feature/dynagraph-tuning}) disables MCQ debias for 8B HM-EQA and uses \texttt{explore\_when\_uncovered=conservative}; tuned sweep numbers are \textbf{pending}.
 Table~\ref{tab:hmeqa_vs_prior} situates our numbers against GraphEQA paper baselines and our own full-benchmark reproduction; all \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless noted.
 
 \begin{table}[t]
@@ -29,6 +30,9 @@ Table~\ref{tab:hmeqa_vs_prior} situates our numbers against GraphEQA paper basel
     graph\_eqa & Qwen2.5-VL-3B & 32 & 31.2\% \\
     dynagraph + debias & Qwen2.5-VL-3B & 8 & 62.5\% \\
     dynagraph (post-fix) & Qwen3-VL-8B & 8 & 50.0\% \\
+    graph\_eqa (July nav) & Qwen3-VL-8B & 8 & 87.5\% \\
+    dynagraph (July nav) & Qwen3-VL-8B & 8 & 37.5\% \\
+    dynagraph (tuned harness) & Qwen3-VL-8B & 8 & pending \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -43,7 +47,7 @@ These slices are \textbf{not} directly comparable to Table~\ref{tab:grapheqa_off
 \textbf{Engineering fixes (June--July 2026).}
 Before hold-out evaluation we repaired Habitat navigation (compass/yaw, navmesh pathing, frontier deprioritization), graph-memory query failures (\texttt{KeyError} in observation indexing), and HM-EQA prompt grounding: phrase-level relevant objects, SigLIP retention through \texttt{prepare\_dynagraph\_vram\_for\_eqa}, and location-MCQ directives for ``did you see \ldots\ anywhere?'' questions where the VLM previously answered \texttt{No} instead of a place letter.
 In July 2026 we added Image-$N$ navigation waypoints (capture viewpoint or standoff toward object anchor, not raw centroid), navmesh trajectory execution with \texttt{already\_at\_goal} blocking, and frontier sorting by planar distance---reducing spin-in-place on search-style questions.
-Held-out random-8 numbers below predate the July nav stack; re-run planned before claiming full-benchmark gains.
+Held-out random-8 numbers below include the July nav stack (\texttt{postfix\_nav20260705\_larger}); graph\_eqa reached 7/8 while legacy dynagraph extras (debias, aggressive frontier) scored 3/8---motivating per-harness tuning.
 
 \begin{table}[t]
   \centering
@@ -56,7 +60,7 @@ Held-out random-8 numbers below predate the July nav stack; re-run planned befor
     \midrule
     Smoke (nav + EQA fixes) & 3, 14, 17 & 3 & 2/3 \\
     Q17 after phrase + location MCQ & 17 & 1 & 1/1 (gold D) \\
-    Held-out random-8 (seed 20260627) & 15, 56, 65, 68, 79, 88, 104, 105 & 8 & 4/8 (50\%) \\
+    Held-out random-8 (seed 20260627, July nav) & 15,\ldots,105 & 8 & graph 7/8; dyna 3/8 \\
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{Reference (same harness, smaller VLMs): see Table~\ref{tab:habitat_interim_results}}} \\
     \bottomrule
@@ -68,10 +72,9 @@ Held-out random-8 numbers below predate the July nav stack; re-run planned befor
 After the fixes, the same question completes in 21 planning steps and 2 EQA iterations with \texttt{answer: D}, citing graph memory for the basket near the living-room armchairs despite the object being out of frame in attached images.
 
 \noindent\textbf{Held-out random-8 (anti-overfit check).}
-We draw eight paper questions with seed 20260627, two per gold letter A--D, excluding the tuning set $\{3,14,17\}$.
-Dynagraph scores \textbf{4/8} (50\%) with mean 50.5 planning steps---correct on Q15, Q79, Q88, and Q104; incorrect on Q56, Q65, Q68, and Q105.
-This run used the June phrase/location-MCQ stack but \textbf{not} the July Image-$N$ waypoint nav fixes; a re-run with the full stack is planned before updating headline claims.
-This is above random guessing (25\%) and shows the Q17 fix generalizes beyond the tuning slice, while remaining far from GraphEQA's API-VLM baselines on the full benchmark (Table~\ref{tab:hmeqa_vs_prior}).
+Post-nav sweep \texttt{postfix\_nav20260705\_larger}: graph\_eqa \textbf{7/8}, dynagraph \textbf{3/8} on ids $\{15,56,65,68,79,88,104,105\}$; balanced-32 and paper Q0--19 were roughly tied ($\sim$40--50\%).
+Holdout dynagraph regression traced to harness extras (MCQ debias flipping correct letters, CONFIRMED\_MEMORY anchoring, frontier churn), not missing nav wiring.
+Tuned defaults: \texttt{mcq\_debias=false}, \texttt{explore\_when\_uncovered=conservative} (\texttt{scripts/run\_dynagraph\_tuning\_matrix.sh}).
 
 \noindent\textbf{Next experiments.}
 Priority sweeps: (1)~full 113-question dynagraph with Qwen3-VL-8B and the current fix stack; (2)~matched graph\_eqa baseline on the same VLM; (3)~semantics download + ablation; (4)~frontier-policy ablation (fluid vs.\ graph nodes); (5)~optional API-VLM upper bound on a fixed slice to isolate stack vs.\ model tier.
