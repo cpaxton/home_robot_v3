@@ -1,9 +1,23 @@
 # HM-EQA exploration and prompting improvements
 
-**Date:** 2026-06-03  
-**Status:** In progress — P0 navigation fix + P4 ablation CLI/scripts landed 2026-06-03; ablation runs pending  
+**Date:** 2026-06-03 (updated 2026-07-05)  
+**Status:** P0–P2 **done in code**; P3 **partial**; P4 **scripts ready, runs pending**; P5 deferred. Success criteria **not met** — need post–July-2026 nav-fix sweeps.  
 **Context:** Rescored Habitat runs (~40% on paper-comparable slices with local 3–4B VLMs) show infra/parser fixes were necessary but not sufficient for a clear win. Qwen2.5-VL-3B reached **50% on Q0–9**; frontier v2 regressed on Q0–19 (**5/20** vs paper **8/20**).  
 **Related:** [HABITAT_EQA_HARNESS.md](HABITAT_EQA_HARNESS.md), [docs/habitat/usage.md](../habitat/usage.md), [docs/dynagraph.md](../dynagraph.md)
+
+---
+
+## Status matrix (2026-07)
+
+| ID | Item | Code | Eval |
+|----|------|------|------|
+| P0 | Display index + Image-N waypoints + nav success | **Done** | Re-run slices post-nav-fix |
+| P1 | HM-EQA MCQ prompt (`prompt_variant: hmeqa`) | **Done** | — |
+| P2 | Diversified image selection (+ SigLIP for dynagraph) | **Done** | — |
+| P2-opt | Last-iter `eqa_max_images` bump | Not done | Defer |
+| P3 | Budget gating + `exploration_reason` JSONL | Partial (`_eqa_explore_when_uncovered`, stall stop) | Implement logging or defer |
+| P4 | Frontier ablation matrix | Scripts ready | **Run** `./scripts/run_habitat_frontier_ablation.sh` |
+| P5 | Two-tier VLM | Not done | Defer |
 
 ---
 
@@ -77,11 +91,15 @@ flowchart TB
 
 Frontier v2 adds **prompt surface area and routing indirection**. Regression on Q0–19 suggests mismatches between what the VLM sees (Image 1..N), what it selects (`action`), and where the robot actually goes — not necessarily a failure of the fluid map itself.
 
-### Known bug: display index vs observation list index
+### Known bug: display index vs observation list index — **fixed**
 
-`query_answer()` attaches images in **`obs_ids` order** (keyword-selected subset, max `eqa_max_images`). `parse_answer()` navigation uses `self._observations[image_id - 1]` (full list index). If the model says “go to Image 2,” the robot may navigate to the **wrong** observation. This likely hurts frontier v2 more than paper-style runs because frontier v2 relies on correct Image-id actions.
+`query_answer()` attaches images in **`obs_ids` order** (keyword-selected subset, max `eqa_max_images`). Previously, `parse_answer()` navigation used `self._observations[image_id - 1]` (full list index). If the model said “go to Image 2,” the robot could navigate to the **wrong** observation.
 
-**Fix (P0):** resolve `action` image id through the same `obs_ids` list used for the prompt; add unit test in `test_graph_eqa_memory.py` or `test_habitat/`.
+**Fix (P0, landed):** resolve `action` image id through the same `obs_ids` list used for the prompt (`_target_point_from_display_image_index` + `last_eqa_obs_ids`); unit test `test_display_image_index_maps_to_selected_obs_ids`.
+
+### Image-N navigation waypoint (P0 follow-up, landed)
+
+Even with correct display-index mapping, navigating to raw `obs.xyz` (object centroid) caused **spin-in-place** when the robot was already at the capture pose. **`_navigation_waypoint_for_obs`** now targets the capture **viewpoint** when far, or a **standoff waypoint** toward the anchor when already at the viewpoint (`eqa.image_nav_min_approach_m`, default `0.35` m in the Habitat runner). Tests: `test_navigation_waypoint_*` in `test_graph_eqa_memory.py`.
 
 ---
 
@@ -109,9 +127,9 @@ Parser fix changed only paper Q47 on the full set (−1 spurious A). Headline ra
 
 ---
 
-### P1 — HM-EQA prompt variant (Habitat-only)
+### P1 — HM-EQA prompt variant (Habitat-only) — **done**
 
-**Files:** `src/emet/llms/prompts/hmeqa_eqa_prompt.py`, `packages/emet_habitat/emet_habitat/runner.py` (or graph memory when `dataset=hmeqa`)
+**Files:** `src/emet/llms/prompts/hmeqa_eqa_prompt.py`, `packages/emet_habitat/emet_habitat/runner.py` (`prompt_variant: hmeqa`)
 
 1. Habitat runs use **MCQ-only** examples (no yes/no from base `EQA_PROMPT` examples).
 2. Explicit rule: `action` must be an integer **Image id from IMAGE_DESCRIPTIONS** (1..N) when `confidence: FALSE`.
@@ -121,7 +139,7 @@ Parser fix changed only paper Q47 on the full set (−1 spurious A). Headline ra
 
 ---
 
-### P2 — Image selection (no caption spam regression)
+### P2 — Image selection (no caption spam regression) — **done**
 
 **File:** `graph_memory.py` (`_select_relevant_obs_ids`)
 
@@ -132,7 +150,7 @@ Parser fix changed only paper Q47 on the full set (−1 spurious A). Headline ra
 
 ---
 
-### P3 — Exploration budget gating
+### P3 — Exploration budget gating — **partial**
 
 **Files:** `controller_graph_eqa.py`, `packages/emet_habitat/emet_habitat/runner.py`
 
@@ -306,7 +324,11 @@ iter7 vs iter8 differ only in the (never-fired) early-stop, yet Q14 flipped corr
 
 ## Success criteria
 
-- Qwen2.5 **Q0–19 ≥ 8/20** (match paper) with P0+P1, or explain failure mode from episode bundles.  
-- Frontier v2 **not worse** than paper arm after P0 (target ≥ 8/20 on same slice).  
-- No regression in `emet test src/test/habitat/` and graph memory unit tests.  
-- Robocasa `emet run graph-eqa` smoke unchanged when Habitat-only flags off.
+| Criterion | Status |
+|-----------|--------|
+| Qwen2.5 **Q0–19 ≥ 8/20** with P0+P1 | **Not met** — re-run after July nav fixes + frontier ablation |
+| Frontier v2 **not worse** than paper arm after P0 | **Not met / pending** — P4 ablation not executed |
+| No regression in `emet test src/test/habitat/` and graph memory unit tests | **Met** |
+| Robocasa `emet run graph-eqa` smoke unchanged when Habitat-only flags off | **Met** (spot-check on changes) |
+
+**Next:** full 113-question dynagraph + graph_eqa @ Qwen3-VL-8B with post-nav-fix stack — see [habitat_eqa_results.md](../experiments/habitat_eqa_results.md).

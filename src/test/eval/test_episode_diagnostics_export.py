@@ -93,10 +93,37 @@ def test_flush_writes_map_without_dark_unknown_padding(tmp_path: Path) -> None:
     assert np.any(np.all(img == np.uint8([50, 160, 80]), axis=-1))
 
 
+def test_flush_writes_map_video_when_stride_snapshots(tmp_path: Path) -> None:
+    pytest.importorskip("cv2")
+    agent = _FakeAgent()
+    rec = EpisodeDiagnosticsRecorder(
+        cfg=EpisodeDiagnosticsConfig(
+            export_map=True,
+            export_map_video=True,
+            export_map_stride=1,
+            export_map_overlay=True,
+            export_obstacle_grids=False,
+            export_trajectory=True,
+            export_rgb_frames=False,
+            export_video=False,
+            export_object_crops=False,
+            min_map_side=64,
+            max_map_side=128,
+        )
+    )
+    rec.record_step(rgb=None, pose=(1.0, 0.5, 0.0), agent=agent, step_idx=0)
+    rec.record_step(rgb=None, pose=(1.2, 0.6, 0.1), agent=agent, step_idx=1)
+    manifest = flush_episode_diagnostics(tmp_path, agent, rec)
+    assert (tmp_path / "maps" / "step_0000.png").is_file()
+    assert (tmp_path / "topdown_exploration.mp4").is_file()
+    assert manifest.get("topdown_exploration_mp4")
+
+
 def test_config_from_env_defaults_on() -> None:
     cfg = EpisodeDiagnosticsConfig.from_env()
     assert cfg.export_map is True
     assert cfg.export_video is True
+    assert cfg.export_map_video is True
 
 
 def test_bind_step_callback_records_from_agent() -> None:
@@ -138,3 +165,19 @@ def test_map_stride_writes_under_episode_dir(tmp_path: Path) -> None:
     assert (tmp_path / "maps" / "step_0000.png").is_file()
     assert (tmp_path / "maps" / "step_0001.png").is_file()
     assert manifest.get("map_stride_dir")
+
+
+def test_record_habitat_substep_dedupes_identical_frames() -> None:
+    rec = EpisodeDiagnosticsRecorder(
+        cfg=EpisodeDiagnosticsConfig(
+            export_map=False,
+            export_trajectory=True,
+            export_rgb_frames=True,
+            export_video=False,
+        )
+    )
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+    pose = (1.0, 2.0, 0.5)
+    rec.record_habitat_substep(rgb=rgb, pose=pose)
+    rec.record_habitat_substep(rgb=rgb.copy(), pose=pose)
+    assert len(rec._frames) == 1

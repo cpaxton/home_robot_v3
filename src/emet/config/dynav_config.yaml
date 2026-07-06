@@ -59,6 +59,10 @@ eqa:
   vram_mib_tier_gemma_e4b: 12000
   vram_mib_tier_gemma_e2b: 7000
   gemini_model: gemini-2.5-flash
+  # Habitat HM-EQA (runner setdefault when unset; see docs/habitat/usage.md):
+  # habitat_perfect_nav: true
+  # habitat_explore_frontiers: true
+  # image_nav_min_approach_m: 0.35
 
 # Object detection parameters (used when use_instance_memory is True; YoloE runs for instance segmentation)
 # Lower confidence_threshold helps detect small objects in the default MuJoCo scene (red cylinder, blue cube on table).

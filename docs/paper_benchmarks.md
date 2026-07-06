@@ -22,7 +22,7 @@ Operator guide for benchmarks referenced in `paper/sections/04_experiments.tex` 
 | **Dynagraph sim** | Explore + fusion + EQA | spatial/label recall, graph size | question bank yaml | `emet eval-dynagraph`, `run_dynagraph_benchmark_smoke.py` | [dynagraph_benchmarks.md](dynagraph_benchmarks.md) |
 | **Dynamic exploration** | Frontier explore + world-change + lifelong cycles | coverage, EQA, staleness, churn | `configs/benchmarks/dynamic_exploration.yaml` | `scripts/eval_dynamic_exploration.py` | `aggregate_dynamic_exploration.csv` |
 | **Backend localization figure** | Single-scene GT vs prediction | XY error, @0.5 m hit | Robocasa seed 0 | `scripts/smoke_backend_localization_figure.py` | PNG + `smoke_results.json` |
-| **Habitat EQA** | HM-EQA / OpenEQA | MC accuracy, steps | Habitat install | `.venv-habitat/bin/emet-habitat` | separate branch (`feature/habitat-eqa-harness`) |
+| **Habitat EQA** | HM-EQA / OpenEQA | MC accuracy, steps | Habitat install | `.venv-habitat/bin/emet-habitat` | [habitat_eqa_results.md](experiments/habitat_eqa_results.md) |
 
 Deep dives: [experiments/README.md](experiments/README.md) (index), [ovmm_find_phase_benchmark.md](ovmm_find_phase_benchmark.md), [ovmm_full_benchmark.md](ovmm_full_benchmark.md), [dynamic_exploration_benchmark.md](dynamic_exploration_benchmark.md), [experiments/backend_localization.md](experiments/backend_localization.md), [sqa3d.md](sqa3d.md), [sqa3d_compute.md](sqa3d_compute.md), [dynagraph_benchmarks.md](dynagraph_benchmarks.md), [habitat/README.md](habitat/README.md).
 
@@ -385,10 +385,19 @@ RUN_SQA3D_SCANNET_TESTS=1 uv run emet test src/test/benchmarks/sqa3d/test_scanne
 | Benchmark | Typical branch |
 |-----------|----------------|
 | OVMM sim + Habitat proxy | `main` |
-| SQA3D ScanNet replay | `feature/dynamem-offline-real-benchmark` |
-| Habitat HM-EQA full harness | `feature/habitat-eqa-harness` / `feature/eval-diagnostics-smoke` |
+| SQA3D ScanNet replay | `main` (was `feature/dynamem-offline-real-benchmark`) |
+| Habitat HM-EQA harness | `main` (merged); eval/diagnostics on feature branches e.g. `feature/eval-tools` |
 
-Merge feature branches before final paper numbers; run smokes on the integration branch.
+Run smokes on the integration branch before copying numbers into `paper/sections/05_results.tex`.
+
+### Pre-sweep checklist (Habitat)
+
+Before a headline HM-EQA sweep:
+
+1. `./scripts/gpu_preflight.sh --kill-stale` then `NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait`
+2. Tag JSONL output with stack version (e.g. `_postfix_nav202607`) — see [habitat_eqa_results.md](experiments/habitat_eqa_results.md)
+3. `uv run python scripts/download_habitat_eqa_data.py --report-hmeqa-semantics` for semantics coverage audit
+4. Movement smoke: `.venv-habitat/bin/emet-habitat run-episode --mock-llm --mock-llm-explore --question-id 3 --max-planning-steps 5`
 
 ---
 
@@ -396,8 +405,8 @@ Merge feature branches before final paper numbers; run smokes on the integration
 
 `paper/sections/04_experiments.tex` should stay in sync with this doc:
 
-- [ ] Goals list matches active tracks (Habitat EQA, SQA3D, OVMM find/full, dynamic exploration, GT finding)
-- [ ] Habitat HM-EQA interim tables match [experiments/habitat_eqa_results.md](experiments/habitat_eqa_results.md)
+- [x] Goals list matches active tracks (Habitat EQA + OpenEQA milestone, SQA3D, OVMM, dynamic exploration, GT finding) — updated 2026-07
+- [x] Habitat HM-EQA interim prose + planned sweeps match [experiments/habitat_eqa_results.md](experiments/habitat_eqa_results.md) — full 113 numbers still pending
 - [ ] `scripts/run_large_paper_eval.sh` phases and `SQA3D_GPUS` / skip env vars match `docs/environment_variables.md`
 - [ ] Table `tab:envs` lists correct entrypoint scripts
 - [ ] Each `sec:*_benchmark` protocol matches `--help` on the cited commands

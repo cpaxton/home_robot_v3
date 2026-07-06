@@ -112,10 +112,10 @@ Figures are generated locally under `~/runs/emet/` — not committed to git by d
 
 Full list: [environment_variables.md](../environment_variables.md).
 
-## Self-review notes (feature branch)
+## Self-review notes
 
-Last checked on `feature/dynamic-exploration-eval` after merge with `origin/main`:
+Last checked: **2026-07-05** on `feature/eval-tools` (Habitat nav fixes, eval diagnostics YAML, `--mock-llm-explore`).
 
-- **Tests:** `src/test/eval/` (24), `src/test/simulation/test_robocasa_gen.py` (5) — pass.
-- **Uncommitted harness work:** `--smoke` flag, scaled `EMET_DYNAMIC_EXPLORE_DYNAGRAPH_TIMEOUT_S`, Robocasa seed determinism, `scripts/smoke_backend_localization_figure.py`.
-- **GPU smoke:** full Phase 1 dynamic explore ~60–75 min; run sequentially; check `dynagraph.log` in export dir on timeout.
+- **Tests:** `src/test/eval/`, `src/test/controller/test_habitat_nav.py`, `src/test/memory/test_graph_eqa_memory.py` — pass via `uv run emet test`.
+- **Eval diagnostics:** unified `eval:` config — [evaluation.md](../evaluation.md), [emet_config.md](../emet_config.md).
+- **GPU smoke:** full Phase 1 dynamic explore ~60–75 min; Habitat full 113 ≈ multi-night on one RTX 4090; run sequentially per [evaluation.md](../evaluation.md).

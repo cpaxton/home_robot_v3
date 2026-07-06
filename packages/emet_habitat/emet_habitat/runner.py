@@ -63,13 +63,15 @@ def _release_gpu_memory() -> None:
         pass
 
 
-def _mock_eqa_response(gold_letter: str) -> str:
+def _mock_eqa_response(gold_letter: str, *, confident: bool = True) -> str:
+    conf = "true" if confident else "false"
+    mode = "smoke test" if confident else "explore harness (forces nav each planning step)"
     return (
         "reasoning: mock habitat harness\n"
         f"answer: {gold_letter}\n"
-        "confidence: true\n"
+        f"confidence: {conf}\n"
         "action:\n"
-        "confidence_reasoning: mocked for smoke test\n"
+        f"confidence_reasoning: mocked for {mode}\n"
     )
 
 
@@ -111,6 +113,7 @@ def _configure_habitat_nav(
     else:
         eqa.setdefault("habitat_perfect_nav", True)
     eqa.setdefault("habitat_explore_frontiers", True)
+    eqa.setdefault("image_nav_min_approach_m", 0.35)
     parameters.set("eqa", eqa)
 
 
@@ -169,6 +172,7 @@ def _make_controller(
     *,
     method: str,
     mock_llm: bool,
+    mock_llm_explore: bool,
     gold_letter: str,
     no_rerun: bool,
     use_real_vlm: bool,
@@ -195,7 +199,8 @@ def _make_controller(
         agent = GraphEQAController(**common)
 
     if mock_llm and agent.graph_memory is not None:
-        agent.graph_memory.eqa_client = lambda _q: _mock_eqa_response(gold_letter)
+        confident = not mock_llm_explore
+        agent.graph_memory.eqa_client = lambda _q: _mock_eqa_response(gold_letter, confident=confident)
         agent.graph_memory.image_description_client = lambda _x: "object"
     elif agent.graph_memory is not None:
         from emet.llms.graph_eqa_vlm import build_graph_eqa_vlm_clients
@@ -215,6 +220,7 @@ def run_hmeqa_episode(
     question_id: int,
     method: str = "dynagraph",
     mock_llm: bool = True,
+    mock_llm_explore: bool = False,
     max_planning_steps: int = 20,
     max_movement_step: int = 10,
     hm3d_root: Path | None = None,
@@ -275,6 +281,7 @@ def run_hmeqa_episode(
             parameters,
             method=method,
             mock_llm=mock_llm,
+            mock_llm_explore=mock_llm_explore,
             gold_letter=q.answer_letter,
             no_rerun=no_rerun,
             use_real_vlm=use_real_vlm,
@@ -282,6 +289,7 @@ def run_hmeqa_episode(
             use_hm3d_semantics=use_hm3d_semantics,
         )
         diag_cfg = EpisodeDiagnosticsConfig.from_env(
+            parameters,
             export_map=export_map,
             export_video=export_video,
             export_map_stride=map_stride if map_stride is not None else None,

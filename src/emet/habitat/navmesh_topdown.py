@@ -10,7 +10,10 @@ from typing import Any
 
 import numpy as np
 
-from emet.visualization.map_snapshot import downsample_topdown_rgb_max_side, world_xy_to_grid_ij
+from emet.visualization.map_snapshot import (
+    finalize_export_topdown_rgb,
+    world_xy_to_grid_ij,
+)
 
 
 def _pathfinder_xz_bounds(pathfinder: Any) -> tuple[np.ndarray, np.ndarray]:
@@ -85,6 +88,7 @@ def habitat_gt_topdown_rgb(
     *,
     crop_slice: tuple[int, int, int, int] | None = None,
     max_side: int | None = 1280,
+    min_map_side: int = 1024,
 ) -> np.ndarray:
     """GT navmesh layer: navigable = light slate, non-nav = white."""
     nav = np.asarray(navigable, dtype=bool)
@@ -94,7 +98,7 @@ def habitat_gt_topdown_rgb(
     rgb = np.full((nav.shape[0], nav.shape[1], 3), 248, dtype=np.uint8)
     rgb[nav] = (180, 190, 210)
     if max_side is not None:
-        return downsample_topdown_rgb_max_side(rgb, max_side)
+        return finalize_export_topdown_rgb(rgb, max_side=max_side, min_side=min_map_side)
     return rgb
 
 
@@ -109,6 +113,7 @@ def habitat_gt_topdown_cropped(
     floor_y: float,
     margin_cells: int = 8,
     max_side: int = 1280,
+    min_map_side: int = 1024,
     trajectory_xyt: list[tuple[float, float, float] | list[float]] | None = None,
     filter_islands: bool = True,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -142,7 +147,7 @@ def habitat_gt_topdown_cropped(
         margin_cells=margin_cells,
     )
     if bbox is None:
-        return nav_full, habitat_gt_topdown_rgb(nav_full, max_side=max_side)
+        return nav_full, habitat_gt_topdown_rgb(nav_full, max_side=max_side, min_map_side=min_map_side)
     i0, i1, j0, j1 = bbox
-    gt_rgb = habitat_gt_topdown_rgb(nav_full, crop_slice=bbox, max_side=max_side)
+    gt_rgb = habitat_gt_topdown_rgb(nav_full, crop_slice=bbox, max_side=max_side, min_map_side=min_map_side)
     return nav_full, gt_rgb

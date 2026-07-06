@@ -23,6 +23,7 @@ Legacy basenames (`dynav_config.yaml`, `--agent-config`, `--dynav-config`) still
 | `sim` / `sim_config` | MuJoCo / Robocasa / MolmoSpaces launch (see [Simulation configs](sim_configs.md)) |
 | `embodied_agent` | Open-vocab scene graph + GraphEQA memory overlays |
 | `rerun` | Live Rerun viewer options |
+| `eval` | Episode diagnostics exports (maps, RGB frames, MP4) for Habitat/OVMM/SQA3D bundles — see [evaluation.md](evaluation.md) |
 | `robots.<id>` | Per-robot overlays merged when robot is resolved |
 | `robot` | Optional fixed robot id (CLI `--robot` wins when set) |
 | `connection` | Named profile in `~/.stretch/connection.json` |
@@ -34,7 +35,34 @@ defaults:
   - mapping: package://emet/config/mapping/default.yaml
   - agent: package://emet/config/agent/default.yaml
   - rerun: package://emet/config/agents/default_rerun.yaml
+  - eval: package://emet/config/eval/default.yaml
 ```
+
+Example **`eval:`** overrides (maps + videos):
+
+```yaml
+eval:
+  export_map_video: true
+  export_video: true
+  map_video_stride: 5
+  export_video_substeps: true   # Habitat: one RGB frame per sim.step during nav
+  video_motion_paced: true      # repeat frames by motion delta (m / rad)
+  video_meters_per_frame: 0.25
+  video_radians_per_frame: 0.1745329252  # 10 deg
+  video_crossfade_teleport_m: 1.5
+```
+
+Example **`mapping.eqa:`** overrides for Habitat HM-EQA (runner applies these via `setdefault` when unset in `dynav_config.yaml`):
+
+```yaml
+mapping:
+  eqa:
+    habitat_perfect_nav: true
+    habitat_explore_frontiers: true
+    image_nav_min_approach_m: 0.35
+```
+
+The Habitat wrapper loads [`src/emet/config/dynav_config.yaml`](../src/emet/config/dynav_config.yaml) today; equivalent flat `eqa:` keys there override runner defaults. See [habitat/usage.md](habitat/usage.md#navigation-habitat-only). Robocasa / ZMQ GraphEQA ignores these unless you set them explicitly.
 
 User presets use `extends:`:
 
@@ -128,4 +156,5 @@ Full cross-track tier 0 (config + eval + backends): [cross_track_smoke.md](exper
 - [Agent run](AGENT_RUN.md) — `emet run agent` flags
 - [Dynav / mapping keys](dynav_config.md) — section-by-section `mapping` reference (legacy doc name; content describes `mapping.*`)
 - [Simulation configs](sim_configs.md) — `sim:` / `sim_config:`
-- [CLI reference](cli.md)
+- [Evaluation runbook](evaluation.md) — `eval:` keys, env vars, Habitat bundle layout
+- [Habitat usage](habitat/usage.md) — HM-EQA CLI, navigation `eqa:` keys

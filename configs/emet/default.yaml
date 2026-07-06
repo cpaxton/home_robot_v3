@@ -6,6 +6,7 @@ defaults:
   - mapping: package://emet/config/mapping/default.yaml
   - agent: package://emet/config/agent/default.yaml
   - rerun: package://emet/config/agents/default_rerun.yaml
+  - eval: package://emet/config/eval/default.yaml
 
 robot: null
 connection: null

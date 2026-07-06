@@ -165,6 +165,7 @@ def run_habitat_find_phase_episode(
             use_sensor_perception=run_cfg.use_sensor_perception,
         )
         diag_cfg = EpisodeDiagnosticsConfig.from_env(
+            parameters,
             export_map=export_map,
             export_video=export_video,
             export_voxel_history=habitat_export_voxel_history_default(),

@@ -13,6 +13,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import math
 import os
 import time
 from collections import Counter
@@ -376,16 +377,23 @@ class DynamemController(BaseController):
         if not frontier_nodes:
             return None
         keywords = exploration_keywords_from_text(text)
+        rx, ry = float(self.robot.get_base_pose()[0]), float(self.robot.get_base_pose()[1])
         if not keywords:
-            node = frontier_nodes[0]
+            node = min(
+                frontier_nodes,
+                key=lambda n: math.hypot(float(n.xyz[0]) - rx, float(n.xyz[1]) - ry),
+            )
             return np.array([float(node.xyz[0]), float(node.xyz[1]), 1.0], dtype=float)
         best_node = None
         best_score = -1.0
+        best_dist = float("inf")
         for node in frontier_nodes:
             labels = [str(lbl).strip().lower() for lbl in (node.labels or []) if str(lbl).strip()]
             score = keyword_overlap_score(labels, keywords)
-            if score > best_score:
+            dist = math.hypot(float(node.xyz[0]) - rx, float(node.xyz[1]) - ry)
+            if score > best_score or (score == best_score and dist < best_dist):
                 best_score = score
+                best_dist = dist
                 best_node = node
         if best_node is None or best_score <= 0:
             return None
@@ -1723,22 +1731,33 @@ class DynamemController(BaseController):
     ) -> None:
         recorder = getattr(self, "_episode_diagnostics_recorder", None)
         if recorder is not None and hasattr(recorder, "append_nav_attempt"):
-            recorder.append_nav_attempt(
-                {
-                    "target_obs_id": target_obs_id,
-                    "goal_xy": [float(goal_xy[0]), float(goal_xy[1])],
-                    "effective_goal_xy": (
-                        [float(nav_res.effective_goal_xy[0]), float(nav_res.effective_goal_xy[1])]
-                        if getattr(nav_res, "effective_goal_xy", None)
-                        else None
-                    ),
-                    "method": nav_res.method,
-                    "success": nav_res.success,
-                    "finished": nav_res.finished,
-                    "dist_m": nav_res.dist_m,
-                    "note": nav_res.note,
-                }
+            row = {
+                "target_obs_id": target_obs_id,
+                "goal_xy": [float(goal_xy[0]), float(goal_xy[1])],
+                "effective_goal_xy": (
+                    [float(nav_res.effective_goal_xy[0]), float(nav_res.effective_goal_xy[1])]
+                    if getattr(nav_res, "effective_goal_xy", None)
+                    else None
+                ),
+                "method": nav_res.method,
+                "success": nav_res.success,
+                "finished": nav_res.finished,
+                "dist_m": nav_res.dist_m,
+                "note": nav_res.note,
+            }
+            if getattr(nav_res, "path_xy", None):
+                row["path_xy"] = nav_res.path_xy
+            recorder.append_nav_attempt(row)
+        if nav_res.finished or nav_res.success:
+            eff = getattr(nav_res, "effective_goal_xy", None) or (
+                float(goal_xy[0]),
+                float(goal_xy[1]),
             )
+            key = goal_key_xy(eff)
+            recent = getattr(self, "_habitat_recent_goals", None)
+            if recent is not None:
+                recent.append(key)
+                del recent[:-8]
 
     def navigate_to_target_pose(
         self,
@@ -1780,7 +1799,10 @@ class DynamemController(BaseController):
                 logger.info(f"EQA habitat navmesh failed: {nav_res.note} (dist={nav_res.dist_m:.2f}m)")
             self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
             blocked = getattr(self, "_habitat_blocked_goals", None)
-            if blocked is not None and not nav_res.finished and nav_res.dist_m < 0.05:
+            if blocked is not None and (
+                nav_res.note.startswith("already_at_goal")
+                or (not nav_res.finished and nav_res.dist_m < 0.08)
+            ):
                 blocked.add(goal_key_xy(goal_xy))
             return nav_res.finished
 

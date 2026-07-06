@@ -31,6 +31,7 @@ def habitat_rgb_depth_to_observations(
     sensor_rotation_offset: np.ndarray | None = None,
     floor_y: float | None = None,
     sensor_height: float = 1.5,
+    camera_tilt_deg: float = -30.0,
     sensor_uuid: str = "depth_sensor",
 ) -> Observations:
     """Build emet :class:`~emet.core.interfaces.Observations` from Habitat RGB-D.
@@ -65,6 +66,7 @@ def habitat_rgb_depth_to_observations(
         agent_state=agent_state,
         sensor_uuid=sensor_uuid,
         sensor_height=sensor_height,
+        camera_tilt_deg=camera_tilt_deg,
     )
 
     hab_R = hab_pose[:3, :3]

@@ -90,3 +90,24 @@ def test_update_visited_falls_back_to_camera_without_base_pose() -> None:
     mock_update.assert_called_once()
     pose = mock_update.call_args[0][0]
     np.testing.assert_allclose(pose[:2].detach().cpu().numpy(), camera_xy.numpy())
+
+
+def test_spin_guard_skips_obstacle_stamp_at_same_base() -> None:
+    voxel_map = _make_map()
+    base_pose = torch.tensor([1.31, -3.47, 0.0], dtype=torch.float32)
+
+    with patch.object(voxel_map.voxel_pcd, "add", autospec=True) as mock_add:
+        _add_observation(voxel_map, base_pose=base_pose)
+        _add_observation(voxel_map, base_pose=base_pose)
+
+    assert mock_add.call_count == 1
+
+
+def test_spin_guard_stamps_after_base_moves() -> None:
+    voxel_map = _make_map()
+
+    with patch.object(voxel_map.voxel_pcd, "add", autospec=True) as mock_add:
+        _add_observation(voxel_map, base_pose=torch.tensor([0.0, 0.0, 0.0], dtype=torch.float32))
+        _add_observation(voxel_map, base_pose=torch.tensor([0.5, 0.0, 0.0], dtype=torch.float32))
+
+    assert mock_add.call_count == 2

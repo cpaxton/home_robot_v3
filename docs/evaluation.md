@@ -37,8 +37,12 @@ All embodied tracks can write a **consistent episode bundle** via [`src/emet/eva
     topdown_map_overlay.png      # Habitat: GT + explored + trajectory
     obstacles_2d.npy, explored_2d.npy, grid_meta.json
     trajectory.jsonl
+    nav_attempts.jsonl             # per nav attempt (goal_xy, path_xy, note, …)
     frames/rgb_*.png, metadata.jsonl
-    episode_rgb.mp4
+    episode_rgb.mp4              # head-camera first-person (manifest: head_camera_mp4)
+    topdown_exploration.mp4      # map timelapse (GT overlay when Habitat navmesh available)
+    maps/step_NNNN.png           # optional stride snapshots
+    maps/overlay_step_NNNN.png   # GT overlay stride snapshots (when export_map_overlay)
     floor_metrics.json
     diagnostics_manifest.json
     (track-specific: raw_eqa.txt, memory/, …)
@@ -51,19 +55,27 @@ All embodied tracks can write a **consistent episode bundle** via [`src/emet/eva
 | `EMET_EVAL_EXPORT_MAP` | on | `topdown_map.png` (+ trajectory when `EMET_EVAL_EXPORT_TRAJECTORY=1`) |
 | `EMET_EVAL_EXPORT_GT_MAP` | on (Habitat) | `topdown_gt_navmesh.png` from HM3D navmesh |
 | `EMET_EVAL_EXPORT_MAP_OVERLAY` | on (Habitat) | `topdown_map_overlay.png` (GT + agent + trajectory) |
+| `EMET_EVAL_EXPORT_MAP_VIDEO` | on | `topdown_exploration.mp4` from stride map frames |
+| `EMET_EVAL_MAP_VIDEO_STRIDE` | `5` | Steps between map frames when `EMET_EVAL_MAP_STRIDE=0` |
 | `EMET_EVAL_MAP_MAX_SIDE` | `1280` | Max map width/height in pixels (was 640) |
 | `EMET_EVAL_MAP_MIN_SIDE` | `1024` | Upscale small crops to at least this size |
 | `EMET_EVAL_FILTER_MAP_ISLANDS` | on | Drop explored blobs disconnected from robot path |
 | `EMET_EVAL_EXPORT_VIDEO` | on | `episode_rgb.mp4` |
+| `EMET_EVAL_EXPORT_VIDEO_SUBSTEPS` | on (Habitat) | Record RGB after each Habitat `sim.step` (nav / rotate substeps). YAML: `eval.export_video_substeps`. |
+| `EMET_EVAL_VIDEO_MOTION_PACED` | on | Motion-paced MP4 (repeat frames by planar / yaw delta). YAML: `eval.video_motion_paced`. |
 | `EMET_EVAL_EXPORT_FRAMES` | on | RGB frame PNGs |
-| `EMET_EVAL_MAP_STRIDE` | 0 | Intermediate `maps/step_NNNN.png` |
+| `EMET_EVAL_MAP_STRIDE` | 0 | Intermediate `maps/step_NNNN.png` (when >0; else `map_video_stride` drives auto stride for map video) |
 | `EMET_EVAL_EXPORT_GRAPH` | off | Full graph checkpoint (heavy) |
 | `EMET_EVAL_EXPORT_VOXEL_HISTORY` | on (Habitat) | Per-observation `observations_history.jsonl` |
 | `EMET_EVAL_EXPORT_VOXEL_PICKLE` | off | Full `voxel_debug.pkl` (heavy) |
 
+**YAML-only video pacing** (no env alias): `eval.video_meters_per_frame`, `eval.video_radians_per_frame`, `eval.video_crossfade_teleport_m`, `eval.video_fps` — see [`src/emet/config/eval/default.yaml`](../src/emet/config/eval/default.yaml).
+
 Habitat aliases: `HABITAT_EQA_EXPORT_MAP`, `HABITAT_EQA_EXPORT_VIDEO`, `HABITAT_EQA_EXPORT_GRAPH`, `HABITAT_EQA_MAP_STRIDE`.
 
-**Recording:** eval runners call `bind_diagnostics_recorder()` which registers a step callback on the agent. After each successful `DynamemController.update()` (navigation / mapping step), the callback buffers RGB, pose, and optional stride maps — no monkey-patching of `agent.update`.
+**Unified config:** the same settings live under **`eval:`** in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (`export_map_video`, `export_video`, `map_video_stride`, …). Override with **`--set eval.export_map_video=false`** or a preset YAML block. Precedence: CLI/runner kwargs → env (when set) → YAML → defaults. See [emet_config.md](emet_config.md).
+
+**Recording:** eval runners call `bind_diagnostics_recorder()` which registers a step callback on the agent. After each successful `DynamemController.update()` (navigation / mapping step), the callback buffers RGB, pose, and optional stride maps — no monkey-patching of `agent.update`. On Habitat, when `export_video_substeps` is on, `HabitatRobotClient` post-step hooks append one RGB frame per discrete sim action (smoother head-camera MP4 during navmesh following).
 
 **CLI flags** (`.venv-habitat/bin/emet-habitat`): `--export-map`, `--export-video`, `--map-stride` on `run-episode` / `run-batch`; OVMM batch adds `--run-tag`. With `--map-stride N`, intermediate maps are written under `<bundle>/maps/step_NNNN.png` at episode end.
 

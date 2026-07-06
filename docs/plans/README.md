@@ -2,6 +2,23 @@
 
 Design and refactor plan documents live here (`docs/plans/`).
 
+## Paper / eval status (2026-07)
+
+Operator index: [experiments/README.md](../experiments/README.md) · LaTeX: `paper/sections/04_experiments.tex`, `05_results.tex` · Runbook: [paper_benchmarks.md](../paper_benchmarks.md)
+
+| Doc | Status | Next eval / milestone |
+|-----|--------|------------------------|
+| [HABITAT_EQA_HARNESS.md](HABITAT_EQA_HARNESS.md) | **HM-EQA implemented** (phases A–G); OpenEQA not wired | OpenEQA harness milestone (phase H) |
+| [2026-06-03_habitat_eqa_exploration_improvements.md](2026-06-03_habitat_eqa_exploration_improvements.md) | P0–P2 done in code; P3 partial; P4 scripts ready | Frontier ablation Q0–19; full 113 @ 8B post-nav-fix |
+| [fable5-dynagraph-habitat.md](fable5-dynagraph-habitat.md) | Historical (debias, bake-off, balanced-32 @ 3B) | Re-run balanced-32 @ Qwen3-VL-8B after July nav fixes |
+| `paper/sections/*` | Habitat preliminary slices only; other tables placeholders | See [habitat_eqa_results.md](../experiments/habitat_eqa_results.md) priority queue |
+
+**July 2026 nav stack** (landed on `feature/eval-tools`): Image-N viewpoint/standoff waypoints, navmesh path following, `already_at_goal` blocking, frontier distance sort, eval diagnostics (overlay maps, substep MP4). Tag JSONL before this date as **pre-nav-fix** when comparing.
+
+---
+
+## Plan index
+
 - **[ARCHITECTURE_PLAN.md](ARCHITECTURE_PLAN.md)** – Multi-robot, multi-simulator refactor (emet rename, robots/simulators abstraction).
 - **[GRAPH_EQA_PLAN.md](GRAPH_EQA_PLAN.md)** – Plan for adding GraphEQA as a graph-based EQA memory model.
 - **[MAPPING_REFACTOR.md](MAPPING_REFACTOR.md)** – Mapping module layout, instance/memory split, and shared UI.

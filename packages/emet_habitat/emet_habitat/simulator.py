@@ -68,6 +68,7 @@ class HabitatEQASimulator:
             sim_cfg.scene_dataset_config_file = str(annotated_cfg)
 
         sensor_pos = mn.Vector3(0.0, sensor_height, 0.0)
+        sensor_tilt = mn.Vector3(np.deg2rad(camera_tilt_deg), 0.0, 0.0)
 
         rgb_spec = habitat_sim.CameraSensorSpec()
         rgb_spec.uuid = "color_sensor"
@@ -75,6 +76,7 @@ class HabitatEQASimulator:
         rgb_spec.resolution = [image_height, image_width]
         rgb_spec.position = sensor_pos
         rgb_spec.hfov = hfov_deg
+        rgb_spec.orientation = sensor_tilt
 
         depth_spec = habitat_sim.CameraSensorSpec()
         depth_spec.uuid = "depth_sensor"
@@ -82,6 +84,7 @@ class HabitatEQASimulator:
         depth_spec.resolution = [image_height, image_width]
         depth_spec.position = sensor_pos
         depth_spec.hfov = hfov_deg
+        depth_spec.orientation = sensor_tilt
 
         sensor_specs = [rgb_spec, depth_spec]
         if self._use_semantics:
@@ -91,6 +94,7 @@ class HabitatEQASimulator:
             sem_spec.resolution = [image_height, image_width]
             sem_spec.position = sensor_pos
             sem_spec.hfov = hfov_deg
+            sem_spec.orientation = sensor_tilt
             sensor_specs.append(sem_spec)
 
         agent_cfg = habitat_sim.agent.AgentConfiguration()
@@ -158,13 +162,9 @@ class HabitatEQASimulator:
             if np.isfinite(snapped).all():
                 position = np.asarray(snapped, dtype=np.float32)
         state.position = position
-        camera_tilt = np.deg2rad(self._camera_tilt_deg)
         state.rotation = hsim_utils.quat_from_angle_axis(
             float(pose.heading),
             np.array([0.0, 1.0, 0.0], dtype=np.float32),
-        ) * hsim_utils.quat_from_angle_axis(
-            float(camera_tilt),
-            np.array([1.0, 0.0, 0.0], dtype=np.float32),
         )
         self._agent.set_state(state)
         self._last_init_pose_record = {
@@ -196,6 +196,10 @@ class HabitatEQASimulator:
     def pathfinder(self):
         """Habitat-Sim pathfinder (navmesh), when loaded."""
         return self._sim.pathfinder
+
+    @property
+    def camera_tilt_deg(self) -> float:
+        return float(self._camera_tilt_deg)
 
     @property
     def floor_y(self) -> float:
