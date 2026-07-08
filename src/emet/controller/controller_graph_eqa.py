@@ -171,6 +171,7 @@ class GraphEQAController(DynamemController):
         # coverage override) stay OFF here so this controller is a clean baseline. The
         # DynagraphController turns them on.
         self._eqa_explore_when_uncovered = False
+        self._eqa_explore_uncovered_habitat_frontier = False
         # Experiment flag: let the EQA VLM pick the exploration frontier from candidate
         # views (instead of the SigLIP-nearest heuristic). Off by default for both
         # controllers; enable per-run with EMET_VLM_FRONTIER_SCORING=1.
@@ -202,7 +203,7 @@ class GraphEQAController(DynamemController):
         if target_point is not None:
             if habitat_nav_would_be_noop(self.robot, target_point):
                 return True
-        if getattr(self, "_eqa_explore_when_uncovered", False) and self.graph_memory is not None:
+        if getattr(self, "_eqa_explore_uncovered_habitat_frontier", False) and self.graph_memory is not None:
             try:
                 if not self.graph_memory._graph_covers_relevant_objects():
                     return True

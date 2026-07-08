@@ -16,17 +16,25 @@ from emet.core.parameters import Parameters
 from emet.eval.memory_backends import OVMM_MEMORY_BACKEND, SQA3D_MEMORY_BACKEND
 from emet.utils.config import resolve_config_yaml_path
 
+ExploreWhenUncoveredMode = Literal["off", "on", "conservative"]
 DynagraphProfileName = Literal[
     "interactive",
     "smoke",
     "eqa",
+    "unified_eqa",
     "find_phase",
     "graph_eqa_baseline",
 ]
 DYNAMIC_EXPLORE_BACKEND = Literal["dynagraph", "graph_eqa"]
 DYNAMIC_EXPLORE_BACKENDS: tuple[str, ...] = ("dynagraph", "graph_eqa")
 SQA3DRunProfile = Literal["smoke", "tuned"]
-BenchmarkHarnessName = Literal["ovmm_find_phase", "sqa3d"]
+BenchmarkHarnessName = Literal[
+    "habitat_eqa",
+    "habitat_ovmm_find",
+    "ovmm_find_phase",
+    "sqa3d",
+    "dynamic_explore",
+]
 
 DEFAULT_DYNAGRAPH_BENCHMARK_YAML = "configs/benchmarks/dynagraph.yaml"
 
@@ -159,15 +167,19 @@ def apply_dynamic_explore_backend(
     staleness_horizon: int | None = None,
     path: str = DEFAULT_DYNAGRAPH_BENCHMARK_YAML,
 ) -> Parameters:
-    """Configure merge/staleness for dynamic exploration backend rows."""
+    """Configure merge/staleness and harness flags for dynamic exploration backend rows."""
+    params = _as_parameters(parameters)
     profile = resolve_dynamic_explore_profile(backend)
-    return apply_dynagraph_profile(
-        parameters,
-        profile,
+    apply_dynagraph_harness(
+        params,
+        "dynamic_explore",
+        str(backend),
+        profile_override=profile,
         merge_xy_m=merge_xy_m,
         staleness_horizon=staleness_horizon,
         path=path,
     )
+    return params
 
 
 def apply_ovmm_backend_dynagraph(
@@ -177,16 +189,20 @@ def apply_ovmm_backend_dynagraph(
     merge_xy_m: float | None = None,
     staleness_horizon: int | None = None,
 ) -> Parameters:
-    """Configure dynagraph merge/staleness for OVMM find-phase backend rows."""
+    """Configure dynagraph merge/staleness and harness flags for OVMM find-phase rows."""
+    params = _as_parameters(parameters)
+    if backend == "dynamem":
+        return params
     profile = resolve_ovmm_dynagraph_profile(backend)
-    if profile is None:
-        return _as_parameters(parameters)
-    return apply_dynagraph_profile(
-        parameters,
-        profile,
+    apply_dynagraph_harness(
+        params,
+        "ovmm_find_phase",
+        str(backend),
+        profile_override=profile,
         merge_xy_m=merge_xy_m,
         staleness_horizon=staleness_horizon,
     )
+    return params
 
 
 def apply_sqa3d_dynagraph(
@@ -195,11 +211,213 @@ def apply_sqa3d_dynagraph(
     method: SQA3D_MEMORY_BACKEND | str,
     profile: SQA3DRunProfile,
 ) -> Parameters:
-    """Configure dynagraph merge/staleness for SQA3D smoke vs tuned runs."""
+    """Configure dynagraph merge/staleness and harness flags for SQA3D smoke vs tuned runs."""
+    params = _as_parameters(parameters)
     dynagraph_profile = resolve_sqa3d_dynagraph_profile(method, profile=profile)
-    if dynagraph_profile is None:
-        return _as_parameters(parameters)
-    return apply_dynagraph_profile(parameters, dynagraph_profile)
+    if dynagraph_profile is not None:
+        apply_dynagraph_profile(params, dynagraph_profile)
+    if method == "dynagraph":
+        apply_dynagraph_harness(params, "sqa3d", "dynagraph", apply_profile=False)
+    return params
+
+
+def _normalize_explore_mode(value: object) -> ExploreWhenUncoveredMode:
+    raw = str(value or "off").strip().lower()
+    if raw in ("off", "false", "0", "no"):
+        return "off"
+    if raw in ("conservative", "safe"):
+        return "conservative"
+    return "on"
+
+
+def resolve_harness_profile(
+    harness: BenchmarkHarnessName | str,
+    *,
+    path: str = DEFAULT_DYNAGRAPH_BENCHMARK_YAML,
+) -> str | None:
+    data = load_dynagraph_benchmark_yaml(path)
+    block = data.get("harness", {})
+    if not isinstance(block, dict):
+        return None
+    harness_block = block.get(harness, {})
+    if not isinstance(harness_block, dict):
+        return None
+    profile = harness_block.get("profile")
+    return str(profile) if profile is not None else None
+
+
+def _resolve_harness_profile_name(
+    harness_block: dict[str, Any],
+    method: str,
+    *,
+    profile_override: str | None = None,
+) -> str | None:
+    if profile_override is not None:
+        return str(profile_override)
+    method_block = harness_block.get(method, {})
+    if isinstance(method_block, dict) and method_block.get("profile") is not None:
+        return str(method_block["profile"])
+    if harness_block.get("profile") is not None:
+        return str(harness_block["profile"])
+    return None
+
+
+def harness_controller_kwargs(
+    parameters: Parameters | dict[str, Any],
+    *,
+    harness: BenchmarkHarnessName | str | None = None,
+    method: str | None = None,
+) -> dict[str, Any]:
+    """Controller constructor kwargs stored under ``dynagraph_harness``."""
+    params = _as_parameters(parameters)
+    block = dict(params.get("dynagraph_harness") or {})
+    if harness is not None and method is not None:
+        block = {**harness_controller_options(harness, method), **block}
+    keys = (
+        "use_instance_graph",
+        "manipulation_only",
+        "eqa",
+        "use_sensor_perception",
+    )
+    return {k: block[k] for k in keys if k in block}
+
+
+def apply_dynagraph_harness(
+    parameters: Parameters | dict[str, Any],
+    harness: BenchmarkHarnessName | str,
+    method: str,
+    *,
+    profile_override: str | None = None,
+    apply_profile: bool = True,
+    merge_xy_m: float | None = None,
+    staleness_horizon: int | None = None,
+    path: str = DEFAULT_DYNAGRAPH_BENCHMARK_YAML,
+) -> Parameters:
+    """Apply harness profile (merge/staleness) and per-method controller flags."""
+    params = _as_parameters(parameters)
+    data = load_dynagraph_benchmark_yaml(path)
+    harness_root = data.get("harness", {})
+    if not isinstance(harness_root, dict):
+        harness_root = {}
+    harness_block = harness_root.get(harness, {})
+    if not isinstance(harness_block, dict):
+        harness_block = {}
+
+    profile_name = _resolve_harness_profile_name(harness_block, method, profile_override=profile_override)
+    if apply_profile and profile_name is not None:
+        apply_dynagraph_profile(
+            params,
+            str(profile_name),
+            merge_xy_m=merge_xy_m,
+            staleness_horizon=staleness_horizon,
+            path=path,
+        )
+    elif method == "dynagraph":
+        apply_eval_graph_fusion_parameters(params, merge_xy_m=merge_xy_m)
+
+    method_opts = {
+        k: v
+        for k, v in harness_controller_options(harness, method, path=path).items()
+        if k != "profile"
+    }
+    merged = dict(params.get("dynagraph_harness") or {})
+    merged.update(method_opts)
+    merged["harness"] = str(harness)
+    merged["method"] = str(method)
+    if profile_name is not None:
+        merged["profile"] = str(profile_name)
+    params.set("dynagraph_harness", merged)
+
+    if method_opts.get("prompt_variant"):
+        eqa = dict(params.get("eqa", {}) or {})
+        eqa["prompt_variant"] = str(method_opts["prompt_variant"])
+        params.set("eqa", eqa)
+    if "sqa3d_allow_partial_graph" in method_opts:
+        eqa = dict(params.get("eqa", {}) or {})
+        eqa["sqa3d_allow_partial_graph"] = bool(method_opts["sqa3d_allow_partial_graph"])
+        params.set("eqa", eqa)
+    return params
+
+
+def apply_habitat_eqa_method_parameters(
+    parameters: Parameters | dict[str, Any],
+    method: str,
+) -> Parameters:
+    """HM-EQA harness: graph_eqa baseline row or tuned dynagraph harness."""
+    if method not in ("graph_eqa", "dynagraph"):
+        raise ValueError(f"Unknown method {method!r}; use graph_eqa or dynagraph")
+    params = _as_parameters(parameters)
+    apply_dynagraph_harness(params, "habitat_eqa", method)
+    return params
+
+
+def apply_habitat_ovmm_find_parameters(
+    parameters: Parameters | dict[str, Any],
+    backend: str,
+    *,
+    merge_xy_m: float | None = None,
+    staleness_horizon: int | None = None,
+) -> Parameters:
+    params = _as_parameters(parameters)
+    apply_dynagraph_harness(
+        params,
+        "habitat_ovmm_find",
+        str(backend),
+        merge_xy_m=merge_xy_m,
+        staleness_horizon=staleness_horizon,
+    )
+    return params
+
+
+def dynagraph_harness_flags(parameters: Parameters | dict[str, Any] | None) -> dict[str, Any]:
+    """Resolved Dynagraph EQA/controller flags for ``DynagraphController`` init."""
+    params = _as_parameters(parameters) if parameters is not None else Parameters()
+    block = dict(params.get("dynagraph_harness") or {})
+    eqa_cfg = dict(params.get("eqa", {}) or {})
+    variant = str(eqa_cfg.get("prompt_variant", "") or "").strip().lower()
+    sqa3d_open_qa = variant in ("sqa3d", "situated")
+
+    defaults: dict[str, Any] = {
+        "memory_summary": not sqa3d_open_qa,
+        "mcq_debias": not sqa3d_open_qa,
+        "explore_when_uncovered": "on" if not sqa3d_open_qa else "off",
+        "siglip_grounding": not sqa3d_open_qa,
+    }
+    if sqa3d_open_qa:
+        defaults.update(
+            memory_summary=False,
+            mcq_debias=False,
+            explore_when_uncovered="off",
+            siglip_grounding=False,
+        )
+
+    for key in ("memory_summary", "mcq_debias", "siglip_grounding"):
+        if key in block:
+            defaults[key] = bool(block[key])
+    if "explore_when_uncovered" in block:
+        defaults["explore_when_uncovered"] = _normalize_explore_mode(block["explore_when_uncovered"])
+    defaults["explore_when_uncovered"] = _normalize_explore_mode(defaults["explore_when_uncovered"])
+    return defaults
+
+
+def apply_dynagraph_harness_overrides(
+    parameters: Parameters | dict[str, Any],
+    *,
+    memory_summary: bool | None = None,
+    mcq_debias: bool | None = None,
+    explore_when_uncovered: ExploreWhenUncoveredMode | str | None = None,
+) -> Parameters:
+    """CLI/env overrides layered on top of harness defaults."""
+    params = _as_parameters(parameters)
+    block = dict(params.get("dynagraph_harness") or {})
+    if memory_summary is not None:
+        block["memory_summary"] = bool(memory_summary)
+    if mcq_debias is not None:
+        block["mcq_debias"] = bool(mcq_debias)
+    if explore_when_uncovered is not None:
+        block["explore_when_uncovered"] = _normalize_explore_mode(explore_when_uncovered)
+    params.set("dynagraph_harness", block)
+    return params
 
 
 def harness_controller_options(

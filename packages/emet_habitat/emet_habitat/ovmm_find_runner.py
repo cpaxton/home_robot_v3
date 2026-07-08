@@ -37,6 +37,7 @@ from emet.eval.ovmm_find_phase import (
     run_mapping_protocol,
     set_find_phase_run_seed,
 )
+from emet.eval.benchmark_dynagraph import apply_habitat_ovmm_find_parameters
 from emet.habitat.config import default_hm3d_scene_dir
 from emet.habitat.datasets import load_scene_init_poses
 from emet.habitat.episode_debug import default_episodes_root
@@ -147,7 +148,7 @@ def run_habitat_find_phase_episode(
             }
         )
 
-        parameters = apply_backend_parameters(
+        parameters = apply_habitat_ovmm_find_parameters(
             get_parameters("dynav_config.yaml"),
             run_cfg.backend,
             merge_xy_m=run_cfg.merge_xy_m,

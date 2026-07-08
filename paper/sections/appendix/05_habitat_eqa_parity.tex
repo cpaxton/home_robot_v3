@@ -125,7 +125,15 @@ Numbers are \emph{not} comparable to Table~\ref{tab:grapheqa_official_hmeqa} unt
     Q17 phrase+location & dynagraph & 1 & 100\% \\
     Held-out random-8 & dynagraph & 8 & 50.0\% \\
     \midrule
-    \multicolumn{4}{@{}l@{}}{\textit{Planned}} \\
+    \multicolumn{4}{@{}l@{}}{\textit{July 2026 nav stack (Qwen3-VL-8B)}} \\
+    Smoke $\{3,14,17\}$ & both methods & 3 & 100\% \\
+    Held-out random-8 & graph\_eqa & 8 & 87.5\% \\
+    Held-out random-8 & dynagraph & 8 & 37.5\% \\
+    Balanced-32 & graph\_eqa / dynagraph & 32 & 37.5\% / 40.6\% \\
+    Paper Q0--19 & graph\_eqa / dynagraph & 20 & 45.0\% / 50.0\% \\
+    \midrule
+    \multicolumn{4}{@{}l@{}}{\textit{Tuned harness (pending)}} \\
+    Held-out random-8 & dynagraph tuned & 8 & pending \\
     Full paper set & dynagraph / Qwen3-VL-8B & 113 & pending \\
     Full paper set & graph\_eqa / Qwen3-VL-8B & 113 & pending \\
     Frontier ablation Q0--19 & Qwen2.5-VL-3B & 20 & pending \\

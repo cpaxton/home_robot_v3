@@ -660,6 +660,13 @@ def create_find_phase_agent(
     use_sensor_perception: bool = False,
 ):
     """Instantiate the controller for a memory backend."""
+    from emet.eval.benchmark_dynagraph import harness_controller_kwargs
+
+    harness_kw = harness_controller_kwargs(parameters, harness="ovmm_find_phase", method=str(backend))
+    use_instance_graph = bool(
+        harness_kw.get("use_instance_graph", backend in ("graph_eqa", "dynagraph", "ground_truth"))
+    )
+    manipulation_only = bool(harness_kw.get("manipulation_only", False))
     if backend == "dynamem":
         from emet.controller.controller_dynamem import DynamemController
 
@@ -679,9 +686,10 @@ def create_find_phase_agent(
             robot,
             parameters,
             save_rerun=False,
-            use_instance_graph=True,
+            use_instance_graph=use_instance_graph,
             cpu_only=cpu_only,
             use_sensor_perception=use_sensor_perception,
+            manipulation_only=manipulation_only,
         )
     elif backend == "dynagraph":
         from emet.controller.controller_dynagraph import DynagraphController
@@ -691,8 +699,9 @@ def create_find_phase_agent(
             parameters,
             save_rerun=False,
             cpu_only=cpu_only,
-            use_instance_graph=True,
+            use_instance_graph=use_instance_graph,
             use_sensor_perception=use_sensor_perception,
+            manipulation_only=manipulation_only,
             visualize_ground_truth=compare_to_gt,
         )
     elif backend == "ground_truth":
@@ -703,8 +712,9 @@ def create_find_phase_agent(
             parameters,
             save_rerun=False,
             cpu_only=cpu_only,
-            use_instance_graph=True,
+            use_instance_graph=use_instance_graph,
             use_sensor_perception=False,
+            manipulation_only=manipulation_only,
             ground_truth_mode=True,
         )
     else:

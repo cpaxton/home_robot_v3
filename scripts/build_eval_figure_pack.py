@@ -14,6 +14,8 @@ from pathlib import Path
 
 import numpy as np
 
+REPO = Path(__file__).resolve().parents[1]
+
 # OVMM find-phase: localize object on start_recep (FindObj) and goal_recep (FindRec).
 OVMM_FIND_PHASE_TASK = (
     "Move object from start_recep to goal_recep: FindObj scores the object on its "
@@ -410,6 +412,17 @@ def main() -> None:
     )
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--summary-only", action="store_true")
+    parser.add_argument(
+        "--dynagraph-tuning-root",
+        type=Path,
+        default=Path.home() / "runs" / "emet" / "dynagraph_tuning",
+        help="Also scan tuning matrix JSONL copies under <root>/<run-id>/",
+    )
+    parser.add_argument(
+        "--render-retrieval-panels",
+        action="store_true",
+        help="Run render_graph_retrieval_panel.py on first HM-EQA JSONL",
+    )
     args = parser.parse_args()
 
     run_id = args.run_id
@@ -441,6 +454,12 @@ def main() -> None:
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(summary, indent=2))
 
+    figures_manifest: dict[str, object] = {
+        "run_id": run_id,
+        "summary_json": str(summary_path),
+        "figures": [],
+    }
+
     write_summary_csv(summary, out_dir / "summary.csv")
     _print_ovmm_digest(summary["ovmm"])
 
@@ -453,10 +472,64 @@ def main() -> None:
         grid = _plot_map_grid(episodes_root, run_id, out_dir)
     if grid:
         print(f"wrote {grid}")
+        figures_manifest["figures"].append(str(grid))
 
     ovmm_bars = _plot_ovmm_success_bars(summary["ovmm"], out_dir)
     if ovmm_bars:
         print(f"wrote {ovmm_bars}")
+        figures_manifest["figures"].append(str(ovmm_bars))
+
+    tuning_dir = args.dynagraph_tuning_root.expanduser() / run_id
+    if tuning_dir.is_dir():
+        for j in sorted(tuning_dir.glob("*.jsonl")):
+            summary.setdefault("dynagraph_tuning_jsonl", []).append(str(j))
+        maps_script = REPO / "scripts" / "render_paper_map_figures.py"
+        if maps_script.is_file():
+            import subprocess
+
+            maps_out = out_dir / "paper_maps"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(maps_script),
+                    "--run-id",
+                    run_id,
+                    "--output-dir",
+                    str(maps_out),
+                ],
+                check=False,
+            )
+            manifest_maps = maps_out / "maps_manifest.json"
+            if manifest_maps.is_file():
+                figures_manifest["paper_maps_manifest"] = str(manifest_maps)
+
+    if args.render_retrieval_panels:
+        hmeqa_files = _find_hmeqa_jsonls(run_id, results_root)
+        if not hmeqa_files and artifact_tag:
+            hmeqa_files = _find_hmeqa_jsonls(artifact_tag, results_root)
+        if hmeqa_files:
+            import subprocess
+
+            retrieval_out = out_dir / "retrieval_panels"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO / "scripts" / "render_graph_retrieval_panel.py"),
+                    "--jsonl",
+                    str(hmeqa_files[0]),
+                    "--output-dir",
+                    str(retrieval_out),
+                ],
+                check=False,
+            )
+            rm = retrieval_out / "retrieval_manifest.json"
+            if rm.is_file():
+                figures_manifest["retrieval_manifest"] = str(rm)
+
+    (out_dir / "figures_manifest.json").write_text(
+        json.dumps(figures_manifest, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     sqa3d_glob_tag = map_tag
     sqa3d_jsonls = list(sqa3d_root.glob(f"{sqa3d_glob_tag}_*/*.jsonl"))

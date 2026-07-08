@@ -44,12 +44,15 @@ Paper harnesses do not fork ad-hoc merge values in runner code.
     \texttt{eqa} & 0.45 & 256; nav cap 48 & SQA3D tuned \\
     \texttt{find\_phase} & 0.15 & 256 & OVMM \texttt{dynagraph} / \texttt{ground\_truth} \\
     \texttt{graph\_eqa\_baseline} & 0 & 0 & OVMM \texttt{graph\_eqa} \\
-    \texttt{smoke} & 0 & 0 & SQA3D mock-LLM / CI \\
+    \texttt{smoke} & 0 & 0 & HM-EQA harness / SQA3D mock \\
+    \texttt{unified\_eqa} & 0 & 0; nav cap 48 & optional shared EQA profile \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-Task-specific controller settings (EQA \texttt{prompt\_variant}, \texttt{use\_instance\_graph}, \texttt{manipulation\_only}) are documented under \texttt{harness:} in the same YAML; OVMM localization and SQA3D open QA intentionally differ there while sharing one Dynagraph memory implementation.
+Per-harness EQA flags (\texttt{memory\_summary}, \texttt{mcq\_debias}, \texttt{explore\_when\_uncovered}) live under \texttt{harness:} in the same YAML and are applied via \texttt{apply\_dynagraph\_harness()}.
+Tuned HM-EQA dynagraph: memory on, debias off, conservative explore.
+Paper figures: \texttt{render\_paper\_map\_figures.py}, \texttt{render\_graph\_retrieval\_panel.py}, \texttt{render\_dynagraph\_3d\_figure.py}.
 
 \subsection{Benchmark configuration}
 
