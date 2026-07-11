@@ -120,7 +120,11 @@ class Gemma4VLLMClient(AbstractVLLMClient):
             model_kwargs["torch_dtype"] = dtype
 
         print(f"Loading Gemma multimodal model: {hf_model_id} (quant={quantization or 'none'}, device={device})")
-        pretrained_kw: dict[str, Any] = dict(model_kwargs)
+        from emet.llms.hf_local import merge_pretrained_kwargs, resolve_pretrained_source
+        from emet.llms.vlm_device import assert_cuda_placement, env_allow_cpu_vlm, summarize_model_devices
+
+        source, local_kw = resolve_pretrained_source(hf_model_id)
+        pretrained_kw: dict[str, Any] = merge_pretrained_kwargs(dict(model_kwargs), local_kw)
         if device == "cuda":
             if quantization_config is not None:
                 pretrained_kw["device_map"] = {"": 0}
@@ -129,9 +133,9 @@ class Gemma4VLLMClient(AbstractVLLMClient):
         elif device == "mps":
             pretrained_kw["device_map"] = "mps"
 
-        self.processor = AutoProcessor.from_pretrained(hf_model_id)
+        self.processor = AutoProcessor.from_pretrained(source, **local_kw)
         try:
-            self.model = AutoModelForImageTextToText.from_pretrained(hf_model_id, **pretrained_kw)
+            self.model = AutoModelForImageTextToText.from_pretrained(source, **pretrained_kw)
         except (ValueError, RuntimeError) as e:
             err = str(e).lower()
             recoverable = device == "cuda" and quantization_config is not None and (
@@ -139,9 +143,13 @@ class Gemma4VLLMClient(AbstractVLLMClient):
             )
             if not recoverable:
                 raise
+            if not env_allow_cpu_vlm():
+                raise RuntimeError(
+                    f"Gemma VLM GPU load failed ({e}). Refusing silent CPU fallback. "
+                    "Free VRAM or set EMET_ALLOW_CPU_VLM=1."
+                ) from e
             logger.warning(
-                "Gemma VLM int4 GPU load failed (%s); retrying bf16 on CPU (slow). "
-                "Use a smaller checkpoint or reduce eqa_max_images.",
+                "Gemma VLM int4 GPU load failed (%s); EMET_ALLOW_CPU_VLM=1 — retrying bf16 on CPU (slow).",
                 e,
             )
             import warnings
@@ -149,13 +157,22 @@ class Gemma4VLLMClient(AbstractVLLMClient):
             warnings.warn(f"Gemma VLM falling back to CPU bf16 after int4 GPU failure: {e}", UserWarning, stacklevel=2)
             self._device = "cpu"
             self._quantization = None
-            self.model = AutoModelForImageTextToText.from_pretrained(hf_model_id, torch_dtype=dtype)
+            self.model = AutoModelForImageTextToText.from_pretrained(
+                source, torch_dtype=dtype, **local_kw
+            )
             self.model = self.model.to("cpu")
         else:
             if device == "cpu" and quantization_config is None:
                 self.model = self.model.to("cpu")
             elif device == "mps" and quantization_config is None:
                 self.model = self.model.to("mps")
+
+        print(f"  Gemma VLM devices: {summarize_model_devices(self.model)}", flush=True)
+        assert_cuda_placement(
+            self.model,
+            requested_device=self._device,
+            model_label=f"Gemma VLM ({hf_model_id})",
+        )
 
         try:
             from emet.utils.vram_debug import print_vram_snapshot

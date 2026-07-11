@@ -91,10 +91,13 @@ class SiglipEncoder(BaseImageTextEncoder):
         model_name = SIGLIP_CHECKPOINTS[version]
 
         # Hub models ship as .safetensors; avoid legacy pytorch_model.bin resolution errors.
-        _sf = {"use_safetensors": True}
-        self.processor = AutoProcessor.from_pretrained(model_name, use_fast=False, **_sf)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name, dtype=self.torch_dtype, **_sf).to(
+        from emet.llms.hf_local import resolve_pretrained_source
+
+        source, local_kw = resolve_pretrained_source(model_name)
+        _sf = {"use_safetensors": True, **local_kw}
+        self.processor = AutoProcessor.from_pretrained(source, use_fast=False, **_sf)
+        self.tokenizer = AutoTokenizer.from_pretrained(source, **local_kw)
+        self.model = AutoModel.from_pretrained(source, dtype=self.torch_dtype, **_sf).to(
             self.device
         )
 

@@ -52,6 +52,10 @@ class Qwen35Client(Qwen3VLClient):
         quantization: str | None = "int4",
         use_fast_attn: bool = False,
         hf_model_id: str | None = None,
+        cache_system_prefix: bool = False,
+        max_cached_prefixes: int = 1,
+        image_max_side: int = 512,
+        image_max_pixels: int = 0,
     ):
         super().__init__(
             prompt=prompt,
@@ -62,6 +66,10 @@ class Qwen35Client(Qwen3VLClient):
             device=device,
             quantization=quantization,
             use_fast_attn=use_fast_attn,
+            cache_system_prefix=cache_system_prefix,
+            max_cached_prefixes=max_cached_prefixes,
+            image_max_side=image_max_side,
+            image_max_pixels=image_max_pixels,
         )
 
     def _postprocess_output(self, text: str) -> str:

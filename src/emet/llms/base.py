@@ -176,6 +176,8 @@ class AbstractVLLMClient(AbstractLLMClient):
         command: str | list[Any],
         image: Image.Image | None = None,
         verbose: bool = False,
+        reset_context: bool = True,
+        **kwargs: Any,
     ) -> str:
         max_tok = getattr(self, "max_tokens", None)
         if image is not None:
@@ -185,7 +187,7 @@ class AbstractVLLMClient(AbstractLLMClient):
                 command,
                 system_prompt=self.system_prompt or None,
                 max_new_tokens=max_tok,
-                reset_context=True,
+                reset_context=reset_context,
                 verbose=verbose,
                 image=np.asarray(image),
             )
@@ -193,7 +195,7 @@ class AbstractVLLMClient(AbstractLLMClient):
             command,
             system_prompt=self.system_prompt or None,
             max_new_tokens=max_tok,
-            reset_context=True,
+            reset_context=reset_context,
             verbose=verbose,
             image=None,
         )

@@ -19,7 +19,25 @@ from __future__ import annotations
 from typing import Any
 
 from emet.llms.base import AbstractVLLMClient
+from emet.llms.prefix_kv_cache import env_vl_cache_system_prefix
+from emet.llms.vl_image import eqa_vl_image_kwargs
 from emet.llms.vllm_registry import DEFAULT_QWEN3_VL_HF_MODEL_ID, default_hf_model_id, normalize_vl_family
+
+
+def eqa_prefix_cache_kwargs(eqa_cfg: dict[str, Any] | None) -> dict[str, Any]:
+    """Resolve ``cache_system_prefix`` / ``max_cached_prefixes`` from ``eqa:`` config + env."""
+    cfg = eqa_cfg if isinstance(eqa_cfg, dict) else {}
+    cache = bool(cfg.get("vl_cache_system_prefix", True))
+    env_override = env_vl_cache_system_prefix()
+    if env_override is not None:
+        cache = env_override
+    max_cached = int(cfg.get("vl_max_cached_prefixes", 1) or 1)
+    return {"cache_system_prefix": cache, "max_cached_prefixes": max(1, max_cached)}
+
+
+def eqa_vl_client_kwargs(eqa_cfg: dict[str, Any] | None) -> dict[str, Any]:
+    """All VL client knobs from ``eqa:`` (prefix cache + image downsample)."""
+    return {**eqa_prefix_cache_kwargs(eqa_cfg), **eqa_vl_image_kwargs(eqa_cfg)}
 
 
 def create_dynamem_vllm(
@@ -31,6 +49,10 @@ def create_dynamem_vllm(
     device: str,
     quantization: str | None,
     prompt: str | None = None,
+    cache_system_prefix: bool = False,
+    max_cached_prefixes: int = 1,
+    image_max_side: int = 512,
+    image_max_pixels: int = 0,
 ) -> AbstractVLLMClient:
     """Construct a single local VLLM for captions + EQA (shared instance in caller).
 
@@ -47,6 +69,10 @@ def create_dynamem_vllm(
             max_tokens=max_tokens,
             device=device,
             quantization=quantization,
+            cache_system_prefix=cache_system_prefix,
+            max_cached_prefixes=max_cached_prefixes,
+            image_max_side=image_max_side,
+            image_max_pixels=image_max_pixels,
         )
     if fam == "qwen3_5":
         from emet.llms.qwen3_5_client import Qwen35Client
@@ -58,6 +84,10 @@ def create_dynamem_vllm(
             max_tokens=max_tokens,
             device=device,
             quantization=quantization,
+            cache_system_prefix=cache_system_prefix,
+            max_cached_prefixes=max_cached_prefixes,
+            image_max_side=image_max_side,
+            image_max_pixels=image_max_pixels,
         )
     if fam == "qwen2_5_vl":
         from emet.llms.qwen_client import Qwen25VLClient

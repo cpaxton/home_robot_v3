@@ -207,7 +207,7 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
         )
     if (client_type or "").strip().lower() == "gemma4-vl-eqa":
         from emet.core.parameters import get_parameters
-        from emet.llms.vllm_factory import create_dynamem_vllm
+        from emet.llms.vllm_factory import create_dynamem_vllm, eqa_vl_client_kwargs
 
         p = parameters if parameters is not None else get_parameters("dynav_config.yaml")
         eqa_cfg = p.get("eqa", {}) or {}
@@ -227,6 +227,7 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
             device=dev,
             quantization=vl_q,
             prompt=prompt,
+            **eqa_vl_client_kwargs(eqa_cfg),
         )
     if client_type.lower() in ("gemma", "gemma4b", "gemma1b"):
         if client_type == "gemma":
@@ -254,7 +255,7 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
     elif (client_type or "").strip().lower() == "qwen3-vl-eqa":
         # One Qwen3-VL load from dynav ``eqa:`` — same class as DynaMem captions so ``bind_shared_vllm_from_agent`` can dedup.
         from emet.core.parameters import get_parameters
-        from emet.llms.vllm_factory import create_dynamem_vllm
+        from emet.llms.vllm_factory import create_dynamem_vllm, eqa_vl_client_kwargs
 
         p = parameters if parameters is not None else get_parameters("dynav_config.yaml")
         eqa_cfg = p.get("eqa", {}) or {}
@@ -274,6 +275,7 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
             device=dev,
             quantization=vl_q,
             prompt=prompt,
+            **eqa_vl_client_kwargs(eqa_cfg),
         )
     elif client_type.lower().startswith("qwen35-vlm-"):
         # Shared Qwen3.5-VLM checkpoint with GraphEQA / EQA VL (avoid loading text-only qwen35-* + multimodal twice).
@@ -296,14 +298,38 @@ def get_llm_client(client_type: str, prompt: str | AbstractPromptBuilder, **kwar
     elif "qwen" in client_type:
         # Parse model size and fine-tuning from client_type
         model_size, typing_option, fine_tuning, quantization_option = process_incoming_qwen_types(client_type)
-        version = "3.5" if client_type.startswith("qwen35") else None
+        # Qwen3.5 HF checkpoints are ``Qwen3_5ForConditionalGeneration`` (natively multimodal).
+        # Do NOT load them with ``Qwen25Client`` / ``AutoModelForCausalLM`` + pipeline — that path
+        # pegs CPU (~minutes per turn) despite allocating some GPU memory.
+        if str(client_type).lower().startswith("qwen35"):
+            from emet.core.parameters import get_parameters
+            from emet.llms.qwen3_5_client import Qwen35Client
+            from emet.llms.vllm_factory import eqa_vl_image_kwargs
+
+            p = parameters if parameters is not None else get_parameters("dynav_config.yaml")
+            eqa_cfg = p.get("eqa", {}) or {}
+            if not isinstance(eqa_cfg, dict):
+                eqa_cfg = {}
+            dev = str(kwargs.get("device", "cuda"))
+            mt = int(kwargs.get("max_tokens", 256) or 256)
+            # Text tool-router: do not enable system-prefix KV cache. Qwen3.5's chat
+            # template rejects system-only prefills ("No user query found"), and the
+            # failed warm + full generate path is wasted work on every turn.
+            return Qwen35Client(
+                prompt,
+                hf_model_id=f"Qwen/Qwen3.5-{model_size}",
+                max_tokens=mt,
+                device=dev,
+                quantization=quantization_option or "int4",
+                cache_system_prefix=False,
+                **eqa_vl_image_kwargs(eqa_cfg),
+            )
         return Qwen25Client(
             prompt,
             model_size=model_size,
             fine_tuning=fine_tuning,
             model_type=typing_option,
             quantization=quantization_option,
-            version=version,
             **kwargs,
         )
     else:
