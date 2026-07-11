@@ -241,6 +241,7 @@ def run_hmeqa_episode(
     export_map: bool | None = None,
     export_video: bool | None = None,
     map_stride: int | None = None,
+    extra_instruction: str | None = None,
 ) -> EpisodeMetrics:
     questions = load_hmeqa_questions(questions_path)
     q = get_question(questions, question_id=question_id)
@@ -325,13 +326,16 @@ def run_hmeqa_episode(
             habitat_pathfinder=sim.pathfinder,
             habitat_floor_y=sim.floor_y,
         )
-        agent._eqa_question = q.question_formatted
+        from emet.eval.stack import compose_eqa_question
+
+        eqa_question = compose_eqa_question(q.question_formatted, extra_instruction)
+        agent._eqa_question = eqa_question
         agent.start()
         if agent.graph_memory is not None:
             hints = enrich_labels_for_question(question_id, q.scene)
             if hints:
                 agent.graph_memory.seed_object_hints(hints)
-            agent.graph_memory.extract_relevant_objects(q.question_formatted)
+            agent.graph_memory.extract_relevant_objects(eqa_question)
         executor = EQAExecuter(agent)
         if rotate_in_place:
             executor.rotate_in_place()
@@ -349,7 +353,7 @@ def run_hmeqa_episode(
             print(format_graph_node_breakdown(agent.graph_memory), flush=True)
 
         discord_text, _images = agent.run_eqa(
-            q.question_formatted,
+            eqa_question,
             max_planning_steps=max_planning_steps,
             max_movement_step=max_movement_step,
         )
