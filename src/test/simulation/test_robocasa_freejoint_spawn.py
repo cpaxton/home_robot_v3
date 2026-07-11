@@ -206,12 +206,13 @@ def _galaxea_pole_server_for_mock():
 
 @pytest.mark.skipif(not RUN_SIM_TESTS, reason="RUN_SIM_TESTS=0")
 @pytest.mark.timeout(120)
-@patch("emet.simulation.robosuite_server.scene_base_spawn.find_robocasa_freejoint_xyz")
+@patch("emet.simulation.molmospaces_mobile_autoplace.base_body_free_joint_qposadr", return_value=0)
+@patch("emet.simulation.molmospaces_mobile_autoplace.scene_base_spawn.find_robocasa_freejoint_xyz")
 @patch(
     "emet.simulation.robosuite_server.RobosuiteZmqServer._base_freejoint_addrs",
     return_value=(0, 6),
 )
-def test_robosuite_freejoint_autoplace_forwards_spawn_hint_kwarg(mock_freejoint, mock_find):
+def test_robosuite_freejoint_autoplace_forwards_spawn_hint_kwarg(mock_freejoint, mock_find, _mock_qadr):
     mock_find.return_value = (1.0, 2.0, 0.5)
     server = _galaxea_pole_server_for_mock()
     server._environment_descriptor = {
@@ -223,5 +224,11 @@ def test_robosuite_freejoint_autoplace_forwards_spawn_hint_kwarg(mock_freejoint,
     mock_find.reset_mock()
     server._robocasa_freejoint_autoplace_after_load()
     mock_find.assert_called_once()
-    passed = mock_find.call_args.kwargs["spawn_hint_xyt"]
-    np.testing.assert_allclose(passed[:3], [3.25, -0.83, 1.571], atol=1e-6)
+    kwargs = mock_find.call_args.kwargs
+    passed = kwargs.get("spawn_hint_xyt")
+    if passed is None:
+        env = kwargs.get("environment") or {}
+        passed = env.get("spawn_hint_xyt")
+    assert passed is not None
+    np.testing.assert_allclose(np.asarray(passed, dtype=np.float64).reshape(-1)[:3], [3.25, -0.83, 1.571], atol=1e-6)
+    assert server._molmospaces_autoplace_snap_qpos0 is True

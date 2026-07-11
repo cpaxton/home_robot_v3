@@ -251,10 +251,7 @@ def apply_robocasa_freejoint_base_autoplace(
         logger.warning(f"Robocasa freejoint autoplace skipped ({e!r}).")
         return False
     if placed is None:
-        if debug:
-            logger.info(
-                "Robocasa freejoint autoplace: find_robocasa_freejoint_xyz returned None (see spawn debug lines above)."
-            )
+        logger.info("Robocasa freejoint autoplace: no safer (x,y,z) found; keeping MJCF default base pose.")
         return False
     x, y, z = placed
     hint_dxy = ""

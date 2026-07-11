@@ -32,6 +32,7 @@ except ImportError:
 
 import emet.simulation.stretch_mujoco.config as config
 import emet.simulation.stretch_mujoco.utils as utils
+from emet.robots import get_robot_spec
 from emet.simulation.molmospaces_mobile_autoplace import (
     apply_molmospaces_freejoint_base_autoplace,
     apply_robocasa_freejoint_base_autoplace,
@@ -39,9 +40,6 @@ from emet.simulation.molmospaces_mobile_autoplace import (
     read_body_se2_xyt,
     write_base_freejoint_xyt,
 )
-from emet.utils.logger import Logger
-
-logger = Logger(__name__)
 from emet.simulation.sim_manipulation import (
     get_named_joint_qpos,
     set_free_body_pose,
@@ -60,6 +58,9 @@ from emet.simulation.stretch_mujoco.mujoco_server_camera_manager import (
 )
 from emet.simulation.stretch_mujoco.mujoco_server_sensor_manager import MujocoServerSensorManagerThreaded
 from emet.simulation.stretch_mujoco.utils import FpsCounter
+from emet.utils.logger import Logger
+
+logger = Logger(__name__)
 
 
 @dataclass
@@ -306,8 +307,6 @@ class MujocoServer:
                 debug=debug_molmospaces_spawn,
             )
             if isinstance(molmospaces_environment, dict) and molmospaces_environment.get("kind") == "robocasa":
-                from emet.robots import get_robot_spec
-
                 robot_id = str(molmospaces_environment.get("robot_id") or "stretch")
                 spec = get_robot_spec(robot_id)
                 if spec is not None:
