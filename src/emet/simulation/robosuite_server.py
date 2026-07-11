@@ -684,14 +684,22 @@ class RobosuiteZmqServer(BaseZmqServer):
                 f"Robocasa freejoint spawn debug: environment={self._environment_descriptor!r} "
                 f"base_body_name={base_name!r}"
             )
+        spawn_hint: np.ndarray | None = None
+        env = self._environment_descriptor
+        if isinstance(env, dict):
+            raw_hint = env.get("spawn_hint_xyt")
+            if raw_hint is not None:
+                spawn_hint = np.asarray(raw_hint, dtype=np.float64).reshape(-1)[:3].copy()
         try:
-            placed = scene_base_spawn.find_molmospaces_freejoint_xyz(
+            placed = scene_base_spawn.find_robocasa_freejoint_xyz(
                 self._mjmodel,
                 self._mjdata,
                 base_body_name=base_name,
+                robot_spec=self._spec,
                 scene_label=self._scene_source_basename,
                 merged_mjcf_path=self._scene_disk_path,
                 environment=self._environment_descriptor,
+                spawn_hint_xyt=spawn_hint,
             )
         except Exception as e:
             logger.warning(f"Robocasa freejoint autoplace skipped ({e!r}).")
@@ -700,9 +708,14 @@ class RobosuiteZmqServer(BaseZmqServer):
             logger.info("Robocasa freejoint autoplace: no safer (x,y,z) found; keeping MJCF default base pose.")
             return
         x, y, z = placed
+        hint_dxy = ""
+        if spawn_hint is not None and spawn_hint.size >= 2:
+            hint_dxy = (
+                f", Δxy from robosuite hint={float(np.hypot(x - float(spawn_hint[0]), y - float(spawn_hint[1]))):.3f}m"
+            )
         logger.info(
             f"Robocasa freejoint autoplace: moved base on {base_name!r} to "
-            f"({x:.3f}, {y:.3f}, {z:.3f}) for clearance from scene geometry."
+            f"({x:.3f}, {y:.3f}, {z:.3f}) for clearance from scene geometry{hint_dxy}."
         )
         if self._debug_molmospaces_spawn:
             try:

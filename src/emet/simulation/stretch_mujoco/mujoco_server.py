@@ -34,6 +34,7 @@ import emet.simulation.stretch_mujoco.config as config
 import emet.simulation.stretch_mujoco.utils as utils
 from emet.simulation.molmospaces_mobile_autoplace import (
     apply_molmospaces_freejoint_base_autoplace,
+    apply_robocasa_freejoint_base_autoplace,
     maybe_prepare_molmospaces_meshes,
     read_body_se2_xyt,
     write_base_freejoint_xyt,
@@ -304,6 +305,22 @@ class MujocoServer:
                 scene_source_basename=bn,
                 debug=debug_molmospaces_spawn,
             )
+            if isinstance(molmospaces_environment, dict) and molmospaces_environment.get("kind") == "robocasa":
+                from emet.robots import get_robot_spec
+
+                robot_id = str(molmospaces_environment.get("robot_id") or "stretch")
+                spec = get_robot_spec(robot_id)
+                if spec is not None:
+                    apply_robocasa_freejoint_base_autoplace(
+                        model,
+                        scratch,
+                        robot_spec=spec,
+                        base_body_name=spec.base_link_name,
+                        environment=molmospaces_environment,
+                        scene_source_basename=bn,
+                        merged_mjcf_path=merged_abs,
+                        debug=debug_molmospaces_spawn,
+                    )
 
         model = self.change_start_pose(model, start_translation, start_rotation_quat)
 
