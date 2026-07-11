@@ -151,11 +151,14 @@ def explored_crop_indices(
     *,
     margin_cells: int = 16,
     robot_radius_cells: int = 5,
+    trajectory_xyt: list[tuple[float, float, float] | list[float]] | None = None,
 ) -> tuple[int, int, int, int] | None:
     """Row/col slice ``(i0, i1, j0, j1)`` around explored cells (+ robot neighborhood).
 
     Same bounding box as :func:`crop_topdown_rgb_to_explored` / Discord share maps.
     Returns ``None`` when no explored cells (and no robot) are present.
+    When ``trajectory_xyt`` is set, the path corridor is included so crops stay tight
+    to where the agent actually drove.
     """
     exp = _to_numpy_bool_2d(explored)
     h, w = int(shape_hw[0]), int(shape_hw[1])
@@ -168,6 +171,28 @@ def explored_crop_indices(
         ri0, ri1 = max(0, ri - rr), min(h, ri + rr + 1)
         rj0, rj1 = max(0, rj - rr), min(w, rj + rr + 1)
         mask[ri0:ri1, rj0:rj1] = True
+    if trajectory_xyt:
+        from emet.visualization.map_grid import build_trajectory_corridor_mask
+
+        corridor = build_trajectory_corridor_mask(
+            (h, w),
+            grid_origin_xy,
+            grid_resolution,
+            robot_xy=robot_xy,
+            trajectory_xyt=trajectory_xyt,
+            radius_cells=max(2, int(robot_radius_cells)),
+        )
+        mask |= corridor
+        # Prefer a tight crop along the driven path when depth exploration is sparse.
+        exp_frac = float(exp.sum()) / float(max(1, mask.sum()))
+        if exp_frac < 0.85:
+            mask = corridor.copy()
+            if robot_xy is not None:
+                ri, rj = world_xy_to_grid_ij(robot_xy, grid_origin_xy, grid_resolution, (h, w))
+                rr = int(robot_radius_cells)
+                ri0, ri1 = max(0, ri - rr), min(h, ri + rr + 1)
+                rj0, rj1 = max(0, rj - rr), min(w, rj + rr + 1)
+                mask[ri0:ri1, rj0:rj1] = True
     ys, xs = np.where(mask)
     if ys.size == 0:
         return None
@@ -395,14 +420,31 @@ def eval_topdown_map_rgb(
     margin_cells: int = 24,
     trajectory_xyt: list[tuple[float, float, float] | list[float]] | None = None,
     filter_islands: bool = False,
+    stamp_trajectory_corridor: bool = True,
 ) -> np.ndarray:
     """Eval/diagnostics export: crop to explored footprint, white background, only paint explored cells.
 
     Unlike :func:`share_topdown_map_rgb`, unmapped margin pixels stay white (not dark gray) so small
     Habitat/OVMM maps remain readable on a 1024×1024 grid.
+
+    When ``trajectory_xyt`` is provided and ``stamp_trajectory_corridor`` is true, cells along the
+    driven path are treated as explored free space so exports do not show white gaps between sparse
+    depth-mapping blobs.
     """
     obs = _to_numpy_bool_2d(obstacles)
     exp = _to_numpy_bool_2d(explored)
+    path = _dedupe_trajectory_xyt(trajectory_xyt) if trajectory_xyt else None
+    if stamp_trajectory_corridor and path:
+        from emet.visualization.map_grid import merge_trajectory_corridor_explored
+
+        exp = merge_trajectory_corridor_explored(
+            exp,
+            obs,
+            grid_origin_xy,
+            grid_resolution,
+            robot_xy=robot_xy,
+            trajectory_xyt=path,
+        )
     if filter_islands:
         from emet.visualization.map_grid import prune_explored_islands
 
@@ -411,7 +453,7 @@ def eval_topdown_map_rgb(
             grid_origin_xy=grid_origin_xy,
             grid_resolution=grid_resolution,
             robot_xy=robot_xy,
-            trajectory_xyt=trajectory_xyt,
+            trajectory_xyt=path,
         )
     h, w = obs.shape
     bbox = explored_crop_indices(
@@ -421,6 +463,7 @@ def eval_topdown_map_rgb(
         grid_resolution,
         (h, w),
         margin_cells=margin_cells,
+        trajectory_xyt=path,
     )
     if bbox is None:
         rgb = render_topdown_map_rgb(
@@ -503,6 +546,17 @@ def eval_topdown_overlay_rgb(
     """Composite GT navmesh (slate) + agent explored/obstacles + trajectory path."""
     obs = _to_numpy_bool_2d(obstacles)
     exp = _to_numpy_bool_2d(explored)
+    path = _dedupe_trajectory_xyt(trajectory_xyt) if trajectory_xyt else None
+    from emet.visualization.map_grid import merge_trajectory_corridor_explored
+
+    exp = merge_trajectory_corridor_explored(
+        exp,
+        obs,
+        grid_origin_xy,
+        grid_resolution,
+        robot_xy=robot_xy,
+        trajectory_xyt=path,
+    )
     if filter_islands:
         from emet.visualization.map_grid import prune_explored_islands
 
@@ -511,7 +565,7 @@ def eval_topdown_overlay_rgb(
             grid_origin_xy=grid_origin_xy,
             grid_resolution=grid_resolution,
             robot_xy=robot_xy,
-            trajectory_xyt=trajectory_xyt,
+            trajectory_xyt=path,
         )
     h, w = obs.shape
     bbox = explored_crop_indices(
@@ -521,6 +575,7 @@ def eval_topdown_overlay_rgb(
         grid_resolution,
         (h, w),
         margin_cells=margin_cells,
+        trajectory_xyt=path,
     )
     if bbox is None:
         agent = eval_topdown_map_rgb(
@@ -649,11 +704,20 @@ def build_map_stats(
         on_obstacle = bool(obs[gi, gj])
         stats["base_on_obstacle_cell"] = on_obstacle
         stats["base_on_explored_cell"] = bool(exp[gi, gj])
+        if not stats["base_on_explored_cell"] and explored_cells > 0:
+            # Distance from base to nearest explored cell (m) — large values → pose frame mismatch.
+            exp_idx = np.argwhere(exp)
+            d_cells = np.hypot(exp_idx[:, 0].astype(np.float64) - gi, exp_idx[:, 1].astype(np.float64) - gj)
+            nearest_m = float(np.min(d_cells) * float(grid_resolution))
+            stats["nearest_explored_m"] = nearest_m
+        else:
+            stats["nearest_explored_m"] = 0.0 if stats["base_on_explored_cell"] else None
     else:
         stats["base_xy"] = None
         stats["base_grid_ij"] = None
         stats["base_on_obstacle_cell"] = None
         stats["base_on_explored_cell"] = None
+        stats["nearest_explored_m"] = None
     lines = [
         f"2D map shape (H,W)=({h},{w}), resolution={float(grid_resolution):.4f} m/cell.",
         f"Explored cells={explored_cells}, obstacle cells={obstacle_cells}, free explored={free_explored}.",
@@ -664,7 +728,14 @@ def build_map_stats(
         if stats.get("base_on_obstacle_cell"):
             lines.append("Base cell is marked obstacle (common if dilated map or pose inside wall).")
         elif not stats.get("base_on_explored_cell"):
-            lines.append("Base cell not yet explored (map may still be empty or frame mismatch).")
+            nearest = stats.get("nearest_explored_m")
+            if nearest is not None and explored_cells > 0:
+                lines.append(
+                    f"Base cell not yet explored (nearest explored ≈ {nearest:.2f} m — "
+                    "large gap often means gps vs world frame mismatch)."
+                )
+            else:
+                lines.append("Base cell not yet explored (map may still be empty or frame mismatch).")
     if free_explored == 0 and explored_cells == 0:
         lines.append("No explored cells yet — need motion + valid depth before exploration can score frontiers.")
     stats["summary_lines"] = lines

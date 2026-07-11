@@ -19,10 +19,15 @@ import zmq
 
 from emet.core.comms import CommsNode
 from emet.core.zmq_protocol import zmq_meta_action_should_bypass_duplicate_step
-from emet.simulation.env_flags import env_sim_nav_debug
+from emet.simulation.env_flags import env_sim_nav_debug, env_zmq_timing
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
+
+
+def _zmq_timing_enabled(verbose: bool) -> bool:
+    """Periodic SEND/RECV timing lines: only with ``--verbose`` or ``EMET_ZMQ_TIMING=1``."""
+    return bool(verbose) or env_zmq_timing()
 
 
 def _action_recv_log_line(action: dict[str, Any], step: int) -> str:
@@ -231,7 +236,7 @@ class BaseZmqServer(CommsNode, ABC):
             sum_time += dt
             steps += 1
             t0 = t1
-            if self.verbose or steps % self.report_steps == 0:
+            if _zmq_timing_enabled(self.verbose):
                 print(f"[SEND FULL STATE] time taken = {dt} avg = {sum_time / steps}")
 
             time.sleep(1e-4)
@@ -289,7 +294,7 @@ class BaseZmqServer(CommsNode, ABC):
             sum_time += dt
             steps += 1
             t0 = t1
-            if self.verbose or steps % self.fast_report_steps == 0:
+            if _zmq_timing_enabled(self.verbose):
                 logger.info(f"[RECV] time taken = {dt} avg = {sum_time / steps}")
 
             time.sleep(1e-4)
@@ -319,7 +324,7 @@ class BaseZmqServer(CommsNode, ABC):
             sum_time += dt
             steps += 1
             t0 = t1
-            if self.verbose or steps % self.fast_report_steps == 0:
+            if _zmq_timing_enabled(self.verbose):
                 logger.info(f"[SEND FAST STATE] time taken = {dt} avg = {sum_time / steps}")
 
             time.sleep(1e-4)
@@ -352,7 +357,7 @@ class BaseZmqServer(CommsNode, ABC):
             sum_time += dt
             steps += 1
             t0 = t1
-            if self.verbose or steps % self.servo_report_steps == 1:
+            if _zmq_timing_enabled(self.verbose):
                 logger.info(
                     f"[SEND SERVO STATE] time taken = {dt} avg = {sum_time / steps} rate={1 / (sum_time / steps)}"
                 )
