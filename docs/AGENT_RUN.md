@@ -4,6 +4,8 @@ Canonical entry: **`uv run emet run agent`** (or bare `emet run agent` after `uv
 
 ## Quick start
 
+**New here?** Follow the guided walkthrough: **[Your first test](first_test.md)** (table + MolmoSpaces prompts).
+
 **Two terminals** (sim already running):
 
 ```bash
@@ -11,7 +13,7 @@ Canonical entry: **`uv run emet run agent`** (or bare `emet run agent` after `uv
 uv run emet serve mujoco --robot stretch --headless
 
 # Terminal 2 — --robot-ip defaults to 127.0.0.1
-uv run emet run agent --robot stretch
+uv run emet run agent --robot stretch --no-discord --rerun
 ```
 
 **One terminal** (spawn sim in-process):
@@ -53,27 +55,73 @@ flowchart LR
 - **Legacy alias**: **`--agent-config`** (deprecated; use `--config`).
 - **Robot**: **`--robot`** optional — resolved from CLI → config `robot:` → ZMQ discovery → connection profile → `stretch`. Must match `emet serve mujoco --robot` when both are explicit. ZMQ discovery is skipped when **`--start-sim`** spawns the sim first.
 
-**Precedence for chat-agent options** (`llm`, `eqa`, `discord`, `device`, `max_tokens`, …): explicit CLI flag → **`--set agent.*`** / YAML `agent:` section → Click default.
+**Precedence for chat-agent options** (`llm`, `eqa`, `discord`, `device`, `max_tokens`, `memory_backend`, …): explicit CLI flag → **`--set agent.*`** / YAML `agent:` section → Click default.
 
 | Preset | Robot | Notes |
 |--------|-------|-------|
-| `configs/emet/default.yaml` | discover / stretch | Unified default |
+| `configs/emet/default.yaml` | discover / stretch | Unified default; **`agent.memory_backend: dynagraph`** |
 | `configs/agent_innate_mars.yaml` | innate_mars | DA3 depth overlay |
-| `configs/agent_stretch_discord.yaml` | stretch | Heavy embodied + graph preset (flat dynav-style YAML) |
+| `configs/agent_stretch_discord.yaml` | stretch | Discord + instance-graph; add **`--eqa`** for Qwen3-VL captions (recommended for intelligent “what can you see?”) |
 | `configs/agent_rby1_discord.yaml` | rby1 | Same tuning + `sim_config` for Molmo iTHOR |
+
+**Memory backend** (`--memory-backend` / `agent.memory_backend`):
+
+| Value | Controller | When to use |
+|-------|------------|-------------|
+| **`dynagraph`** (default) | `DynagraphController` | Paper stack: voxel nav + GraphEQA graph with merge/staleness |
+| `graph_eqa` | `GraphEQAController` | GraphEQA without Dynagraph lifecycle |
+| `dynamem` | `DynamemController` | Voxel + optional `embodied_agent` overlay |
 
 **Mapping keys** live under **`mapping:`** in config. Reference: [Dynav / mapping configuration](dynav_config.md).
 
 ## Models and VRAM
 
-- **Default LLM**: `qwen3-vl-eqa` (Qwen3-VL-8B int4 from mapping `eqa:` config) for chat + head camera on each user turn.
+**Intended split (keep this):**
+
+| Role | Model | Flag / default |
+|------|--------|----------------|
+| Fast tool router | `qwen35-4B` text | default `--llm` |
+| Intelligent vision / memory QA | Qwen3-VL-8B int4 | **`--eqa`** (loads from `eqa:` in mapping config) |
+
+Do **not** put the 8B VL on every chat turn as the router — that made “what can you see?” take a minute just to emit JSON. Pass **`--eqa`** so `describe_scene` / `query_memory` use the larger VLM; keep the 4B for tool selection. With default `--share-memory-vllm` and text `--llm`, the agent materializes a **separate** caption VLM (not shared with the router). Optional one-model mode: `--llm qwen3-vl-eqa --eqa` (slower routing).
+
+- **Default LLM**: `qwen35-4B` (fast tool-router). Loads as **`Qwen3_5ForConditionalGeneration`** int4 with thinking disabled — not the legacy CausalLM pipeline (that path was CPU-bound and multi-minute).
+- **`--eqa`**: loads the **larger** caption/EQA VLM (Qwen3-VL-8B int4 from `eqa:`). Needed for intelligent “what can you see?” captions and memory QA. With a VL `--llm` + `--share-memory-vllm`, reuses that one load; with text `--llm`, loads the 8B separately after the router. Works with Dynagraph instance-graph (does not disable YoloE proposals).
+- **`--eqa-eval`**: scored HM-EQA episode through the **same** `run_hmeqa_episode` as `emet-habitat` (requires `--habitat-question-id`; optional `--extra-instruction`). Does **not** use the chat tool-router — zero intentional letter loss vs the Habitat harness.
+- **Heavy shared VL** (optional): `--llm qwen3-vl-eqa --eqa` — one 8B for chat + captions (slow tool routing).
+- **Expected GPU footprint**: SigLIP + detector + `qwen35-4B` alone is lighter; **`--eqa`** adds ~8–12 GiB for the 8B int4. Shared `qwen3-vl-eqa` is typically **~10–14 GiB** total with SigLIP.
+- **CPU fallback is an error**: GPU int4 load failures no longer silently fall back to CPU bf16 (that caused multi-minute `*Thinking…*` hangs with high CPU / idle GPU). Set **`EMET_ALLOW_CPU_VLM=1`** only if you intentionally want the slow CPU path.
+- **ZMQ stream pause**: while the chat LLM loads or generates, the agent pauses ZMQ JPEG/JP2 decode threads. Loading weights with those threads spinning made HF load ~100× slower and could hang the first `*Thinking…*` turn until streams were paused.
+- **Local HF cache**: loads prefer a warm Hugging Face snapshot (no hub “download” when cached). Force offline with **`EMET_HF_LOCAL_ONLY=1`** or **`HF_HUB_OFFLINE=1`**.
 - **`PYTORCH_ALLOC_CONF`**: `emet run agent` sets `expandable_segments:True` before CUDA init unless you already exported `PYTORCH_ALLOC_CONF`.
-- **`--eqa`**: opt-in DynaMem EQA on the voxel map (heavy). With **`--share-memory-vllm`** (default), reuses the agent VLM for captions/answers instead of loading a second model.
-- **Text-only fallback**: `--llm qwen35-4B` or `qwen35-9B` when VRAM is tight.
-- **Vision**: VL models pass robot RGB by default; use **`--no-vl-camera`** to disable.
+- **Larger text**: `--llm qwen35-9B` when you want a stronger text router (still not a substitute for `--eqa` vision).
+- **Vision**: Camera→chat VL is **off by default** (use **`--vl-include-camera`** to enable). Vision questions should use `describe_scene` / `send_image` with **`--eqa`** for the smart captioner.
+- **`describe_scene`** (“what can you see?”): **caption the current head image** with the EQA VLM when `--eqa` is on, then **ground with scene-graph / map** labels if available. No auto look-around or explore — use `look_around` / `explore` / `scan_environment` for that. Without `--eqa`, Discord presets fall back to curated detector text (`describe_use_detector_fallback: true`). Always attaches **live head RGB**; usable named object crops may be attached as extras.
+- **YoloE thresholds (two knobs):** `detection.confidence_threshold` (~0.02) is for **instance/graph candidate proposals** (high recall). Raising it can hurt find/graph coverage — only change with task metrics. Chat-only tightening uses `detection.describe_confidence_threshold` (default 0.30) when `describe_use_detector_fallback: true`; that does **not** change mapping.
+- **RGB size**: ``eqa.vl_image_max_side`` (default **512**) downsamples frames before VL / `describe_scene`. Optional ``eqa.vl_image_max_pixels``. Override with ``--set eqa.vl_image_max_side=384``.
+- **`--max-tokens`**: default **256** (tool JSON is short; large values make HF generate crawl).
+- **Prefix cache**: with ``eqa.vl_cache_system_prefix`` (default on) for **VL** clients (`qwen3-vl-*`, `qwen35-vlm-*`), the agent warms the system-prompt KV after LLM load. Text ``qwen35-*`` tool-routers keep prefix cache **off** (Qwen3.5 chat template rejects system-only prefills). If VL first turns hang, try **`--no-cache-vl-prefix`**.
+- **Attention backend**: Qwen3-VL loads with **Flash-Attn 2** when `flash-attn` is installed, otherwise PyTorch **SDPA** (fast on RTX 40xx). Eager is only for `EMET_ATTN_EAGER=1`. Flash-Attn is optional and must match your torch/CUDA (often no wheel for bleeding-edge torch — SDPA is enough for most agent use).
+- **Prompt size**: the agent system prompt is ~1k+ tokens (tool list). Status `prompt=1180` is **input** length (prefill), not a decode cap. Decode budget is `--max-tokens` (default 256). Tool JSON usually finishes far earlier if the model stops; slow turns are usually prefill + per-token decode on an 8B VL.
+- **Thinking heartbeat**: while the LLM runs, terminal status lines refresh with phase/heartbeat detail (`building prompt`, `still running (Ns) — …`). Discord gets a single `*Thinking…*` line per LLM call (no phase spam / `*Running tools…*`); generate stays on the main CUDA thread.
 - **`--device`**, **`--max-tokens`**: apply to embodied and `--offline` modes.
 
-## Simulation (`--start-sim`)
+## Skill checklist (interactive)
+
+| Skill | Tool(s) | Pass criteria |
+|-------|---------|----------------|
+| Describe | `describe_scene` | Caption + optional graph grounding + **live** head photo (no motion) |
+| Turn | `rotate_base` | Explicit degrees (180 / ±90 / …) |
+| Nudge | `move_forward` | Explicit meters (~0.5 for “a bit”); clipped by obstacles |
+| Explore | `explore` | Map cells increase; `announce_action` status |
+| Find | `find_objects` | Nav toward known label or clear failure |
+| Scan | `scan_environment` | Full in-place rotate + map update |
+| Share view | `send_image` / describe attach | Live RGB OK |
+| Share map | `send_map_snapshot` | Top-down Discord/Rerun |
+| Memory QA | `query_memory` | Graph/voxel answer when mapped |
+| EQA | `--eqa` (+ optional `--llm qwen3-vl-eqa --share-memory-vllm`) | Caption + query path without a second full VL fight |
+
+Performance gates (text router): LLM tool-routing ~1–2s; `describe_scene` should be **caption + photo** (seconds, no motion). Head sweep (`look_around`) target **&lt; ~15–20s** for 4 soft pans when explicitly requested.
 
 Starts `emet.simulation.mujoco_server` as a subprocess before connecting. Uses `sim:` / `sim_config:` in the agent YAML, **`--sim-config`**, or the packaged default table when none are set.
 
@@ -97,6 +145,11 @@ Install Discord extra: `uv sync -e discord`.
 | `--debug-models` | `EMET_AGENT_MODEL_DEBUG=1` | Which models/clients are loaded (+ VRAM snapshots) |
 | `--debug-vram` | `EMET_VRAM_DEBUG=1` | nvidia-smi + torch CUDA at load milestones |
 | `--debug-camera` | `EMET_AGENT_CAMERA_DEBUG=1` | Head-camera frame stats (black-PNG diagnosis) |
+| `--thinking-status` / `--no-thinking-status` | `EMET_AGENT_THINKING_STATUS=1/0` | Status while waiting (default: on). Terminal: Thinking phases + tool chatter. Discord: one Thinking line per LLM call; for long actions (`explore`, `scan_environment`, …) also `*Exploring…*` / progress (`*Look around: sweeping head*`). |
+| — | `EMET_AGENT_MOTION_STATUS=1/0` | Fine-grained **terminal** motion progress during head sweeps / rotate-in-place / explore steps (default: on). Discord stays coarse (start + mid/end). |
+| `--cache-vl-prefix` / `--no-cache-vl-prefix` | `EMET_VL_CACHE_SYSTEM_PREFIX=1/0` | Reuse system-prompt KV on Qwen3-VL agent turns (default: on via `eqa.vl_cache_system_prefix`) |
+
+Terminal-only timing lines use a ``[HH:MM:SS]`` prefix (user turn, LLM done + duration, tools done + duration, turn total). Discord messages stay untimestamped.
 
 ## Examples
 
@@ -107,7 +160,7 @@ uv run emet run agent --llm qwen35-9B --offline
 
 # Embodied + Rerun + Discord preset
 export DISCORD_TOKEN=...
-uv run emet run agent --config configs/agent_stretch_discord.yaml --rerun
+uv run emet run agent --config configs/agent_stretch_discord.yaml --eqa --rerun
 
 # Innate Mars
 uv run emet run agent --config configs/agent_innate_mars.yaml
@@ -117,6 +170,11 @@ uv run emet run agent --input-path logs/memory_xxx --no-discord
 
 # Scripted smoke (no LLM load)
 timeout 15 uv run emet run agent --no-llm -c Q --robot stretch
+
+# Habitat HM-EQA via the **same** episode function as emet-habitat (no chat tool-router; zero intentional loss)
+uv run emet run agent --eqa-eval --habitat-question-id 17 --eqa-eval-mock-llm \
+  --extra-instruction "Answer with a single letter A–D."
+# Real VLM (GPU): omit --eqa-eval-mock-llm; requires .venv-habitat / emet_habitat
 
 # MolmoSpaces one-liner
 uv run emet run agent --robot rby1 --start-sim --scene ithor --headless -c "describe the scene"
@@ -128,4 +186,6 @@ uv run emet run agent --robot rby1 --start-sim --scene ithor --headless -c "desc
 - Config loader: `uv run emet test src/test/config/test_emet_config_loader.py`
 - VL registry: `uv run emet test src/test/llms/test_qwen_vl_registry.py`
 - CLI defaults + agent config precedence: `uv run emet test src/test/cli/test_run_agent_defaults.py`
+- Map frame / snapshot: `uv run emet test src/test/visualization/test_map_snapshot.py`
+- Shared EQA compose: `uv run emet test src/test/eval/test_eval_stack.py`
 - Manual: with sim up, `timeout 15 uv run emet run agent --no-llm -c Q --robot stretch`

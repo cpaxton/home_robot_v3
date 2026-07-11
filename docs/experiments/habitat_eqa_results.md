@@ -133,23 +133,21 @@ Unified harness config: [`configs/benchmarks/dynagraph.yaml`](../configs/benchma
 |------|---------------|-----------|
 | `memory_summary` | on | SigLIP CONFIRMED_MEMORY helps search questions |
 | `mcq_debias` | **off** | 8B model: debias flipped correct answers on holdout (e.g. Q68 B→A) |
-| `explore_when_uncovered` | **conservative** | Keep query-time frontier override; disable habitat-only uncovered hijack |
+| `explore_when_uncovered` | **off** (ablation winner) | `no_explore` arm **8/8** holdout vs 3/8 pre-tune; `conservative` partial 5/5 |
 
-Ablation matrix: `./scripts/run_dynagraph_tuning_matrix.sh` (arms: `baseline,no_debias,no_memory,no_explore,graph_eqa_like`). Paper battery after tuning converges: `./scripts/run_dynagraph_tuned_paper_battery.sh`. Results land under `~/runs/emet/dynagraph_tuning/<RUN_ID>/`.
+Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representative_sample_results.md](representative_sample_results.md). Cross-benchmark sample: `./scripts/run_representative_benchmark_sample.sh`.
 
-**Eval pending** on tuned harness — update tables below after first `tuned_paper_*` or tuning-matrix run completes.
+| Arm | holdout-8 | canonical-8 |
+|-----|-----------|-------------|
+| baseline (conservative) | 5/5* | 7/8 |
+| no_debias | 6/8 | 6/8 |
+| no_memory | 5/5* | 7/8 |
+| **no_explore** | **8/8** | 7/8 |
+| graph_eqa_like | 7/8 | 6/8 |
 
-## Planned experiments (priority)
+\*Partial JSONL on some arms from early resume.
 
-**Done (2026-07-05/06, `postfix_nav20260705_larger`):** held-out-8 both methods; balanced-32 both methods @ Qwen3-VL-8B; paper Q0–19 both methods; smoke Q3/14/17 @ 100%.
-
-**In progress (`feature/dynagraph-tuning`):**
-
-1. **Harness landed** — per-env flags in `dynagraph.yaml`; Habitat CLI ablations; figure scripts.
-2. **Tuning matrix** — holdout-8 + canonical-8 ablations @ Qwen3-VL-8B.
-3. **Paper battery** — seven-track smoke + Habitat/OVMM/SQA3D/Robocasa/Molmo with tuned config.
-4. **Full 113-question** sweep after holdout ≥ graph_eqa baseline.
-5. **Semantics / frontier ablations** — unchanged from prior plan.
+**In progress:** representative cross-benchmark sample `rep_sample_20260706` (OVMM, SQA3D, dynamic explore, figures). Full 113-question sweep next.
 
 ### Commands
 

@@ -32,7 +32,7 @@ Table~\ref{tab:hmeqa_vs_prior} situates our numbers against GraphEQA paper basel
     dynagraph (post-fix) & Qwen3-VL-8B & 8 & 50.0\% \\
     graph\_eqa (July nav) & Qwen3-VL-8B & 8 & 87.5\% \\
     dynagraph (July nav) & Qwen3-VL-8B & 8 & 37.5\% \\
-    dynagraph (tuned harness) & Qwen3-VL-8B & 8 & pending \\
+    dynagraph (tuned, explore off) & Qwen3-VL-8B & 8 & \textbf{100.0\%} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -60,7 +60,8 @@ Held-out random-8 numbers below include the July nav stack (\texttt{postfix\_nav
     \midrule
     Smoke (nav + EQA fixes) & 3, 14, 17 & 3 & 2/3 \\
     Q17 after phrase + location MCQ & 17 & 1 & 1/1 (gold D) \\
-    Held-out random-8 (seed 20260627, July nav) & 15,\ldots,105 & 8 & graph 7/8; dyna 3/8 \\
+    Held-out random-8 (seed 20260627, July nav) & 15,\ldots,105 & 8 & graph 7/8; dyna 3/8 (pre-tune) \\
+    Held-out random-8 (tuned, explore off) & 15,\ldots,105 & 8 & dyna \textbf{8/8} \\
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{Reference (same harness, smaller VLMs): see Table~\ref{tab:habitat_interim_results}}} \\
     \bottomrule

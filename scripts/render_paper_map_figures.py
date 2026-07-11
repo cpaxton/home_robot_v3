@@ -70,7 +70,7 @@ def main() -> None:
     parser.add_argument("--write-map-video", action="store_true")
     parser.add_argument("--max-bundles", type=int, default=32)
     parser.add_argument("--max-side", type=int, default=1280)
-    parser.add_argument("--min-side", type=int, default=1024)
+    parser.add_argument("--min-side", type=int, default=512, help="Upscale small crops (default 512; use 1024 for legacy exports)")
     parser.add_argument("--no-filter-islands", action="store_true")
     parser.add_argument("--with-gt", action="store_true", help="Write GT navmesh when scene id is known")
     parser.add_argument(
