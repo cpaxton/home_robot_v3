@@ -22,7 +22,6 @@ from emet.habitat.datasets import load_hmeqa_questions
 from emet.habitat.hm3d_semantics import compute_hmeqa_semantics_coverage
 from emet.habitat.hmeqa_enrich_labels import HMEQA_PAPER_QUESTION_COUNT, hmeqa_paper_question_ids
 from emet.habitat.metrics import compare_method_results, summarize_episodes, write_episode_jsonl
-from emet.core.parameters import Parameters
 
 
 @click.group()
@@ -109,23 +108,6 @@ def _habitat_nav_cli_options(fn):
     for opt in reversed(opts):
         fn = opt(fn)
     return fn
-
-
-def _configure_dynagraph_harness(
-    parameters: Parameters,
-    *,
-    memory_summary: bool | None = None,
-    mcq_debias: bool | None = None,
-    explore_when_uncovered: str | None = None,
-) -> None:
-    from emet.eval.benchmark_dynagraph import apply_dynagraph_harness_overrides
-
-    apply_dynagraph_harness_overrides(
-        parameters,
-        memory_summary=memory_summary,
-        mcq_debias=mcq_debias,
-        explore_when_uncovered=explore_when_uncovered,
-    )
 
 
 def _dynagraph_harness_cli_options(fn):

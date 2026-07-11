@@ -135,7 +135,7 @@ Unified harness config: [`configs/benchmarks/dynagraph.yaml`](../configs/benchma
 | `mcq_debias` | **off** | 8B model: debias flipped correct answers on holdout (e.g. Q68 B→A) |
 | `explore_when_uncovered` | **conservative** | Keep query-time frontier override; disable habitat-only uncovered hijack |
 
-Ablation matrix: `./scripts/run_dynagraph_tuning_matrix.sh` (arms: `baseline,no_debias,no_memory,no_explore,graph_eqa_like`). Paper battery after tuning converges: `./scripts/run_dynagraph_tuned_paper_battery.sh`. Results land under `~/runs/emet/dynagraph_tuning/<RUN_ID>/`.
+Ablation matrix: `./scripts/run_dynagraph_tuning_matrix.sh` (arms: `baseline,with_debias,no_memory,no_explore,graph_eqa_like`). Paper battery after tuning converges: `./scripts/run_dynagraph_tuned_paper_battery.sh`. Results land under `~/runs/emet/dynagraph_tuning/<RUN_ID>/`.
 
 **Eval pending** on tuned harness — update tables below after first `tuned_paper_*` or tuning-matrix run completes.
 
@@ -159,7 +159,7 @@ TAG=holdout8_postfix_20260627 IDS=15,56,65,68,79,88,104,105 METHOD=dynagraph TIM
   ./scripts/run_habitat_iter_subset.sh
 
 # Tuning matrix + tuned paper battery
-ARMS=baseline,no_debias,graph_eqa_like ./scripts/run_dynagraph_tuning_matrix.sh
+ARMS=baseline,with_debias,graph_eqa_like ./scripts/run_dynagraph_tuning_matrix.sh
 SKIP_SMOKE=1 ./scripts/run_dynagraph_tuned_paper_battery.sh
 
 # Habitat HM-EQA with tuned harness (default via apply_dynagraph_harness)

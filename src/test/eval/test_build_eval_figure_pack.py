@@ -151,6 +151,14 @@ def test_find_hmeqa_jsonls_matches_run_id(tmp_path: Path):
     ]
 
 
+def test_find_hmeqa_jsonls_matches_subset_tags(tmp_path: Path):
+    (tmp_path / "subset_tuned_paper_holdout8_qwen3_vl.jsonl").write_text("{}\n", encoding="utf-8")
+    (tmp_path / "subset_other_run_qwen3_vl.jsonl").write_text("{}\n", encoding="utf-8")
+
+    paths = _find_hmeqa_jsonls("tuned_paper", tmp_path)
+    assert [p.name for p in paths] == ["subset_tuned_paper_holdout8_qwen3_vl.jsonl"]
+
+
 @pytest.mark.parametrize(
     ("hmeqa_acc", "ovmm_obj", "ovmm_recep", "expected_status"),
     [

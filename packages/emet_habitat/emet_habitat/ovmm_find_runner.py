@@ -26,7 +26,6 @@ from emet.eval.episode_diagnostics import (
 from emet.eval.ovmm_find_phase import (
     FindPhaseEpisode,
     FindPhaseRunConfig,
-    apply_backend_parameters,
     collect_scaling_diagnostics,
     compute_find_phase_metrics,
     create_find_phase_agent,

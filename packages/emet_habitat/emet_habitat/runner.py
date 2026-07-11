@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, cast
 
@@ -277,8 +278,6 @@ def run_hmeqa_episode(
             frontier_keyword_weight=frontier_keyword_weight,
         )
         _configure_habitat_nav(parameters, habitat_perfect_nav=habitat_perfect_nav)
-        import os
-
         if memory_summary is None:
             raw = os.environ.get("EMET_DYNAGRAPH_MEMORY_SUMMARY", "").strip().lower()
             if raw in ("1", "true", "yes", "on"):

@@ -7,7 +7,7 @@
 #
 # Env:
 #   RUN_ID          default dynagraph_tune_YYYYMMDD_HHMMSS
-#   ARMS            comma list: baseline,no_debias,no_memory,no_explore,graph_eqa_like,all_off
+#   ARMS            comma list: baseline,with_debias,no_memory,no_explore,graph_eqa_like
 #   TIMEOUT         per-arm seconds (default 14400)
 #   NEED_MIB        GPU preflight (default 12000)
 set -euo pipefail
@@ -20,7 +20,7 @@ RUN_ID="${RUN_ID:-dynagraph_tune_$(date +%Y%m%d_%H%M%S)}"
 LOG_ROOT="${HOME}/runs/emet/dynagraph_tuning/${RUN_ID}"
 mkdir -p "$LOG_ROOT"
 SUMMARY="${LOG_ROOT}/summary.txt"
-ARMS="${ARMS:-baseline,no_debias,no_memory,no_explore,graph_eqa_like}"
+ARMS="${ARMS:-baseline,with_debias,no_memory,no_explore,graph_eqa_like}"
 TIMEOUT="${TIMEOUT:-14400}"
 HAB="${ROOT}/.venv-habitat/bin/emet-habitat"
 OUT="${HOME}/.cache/habitat_eqa/results"
@@ -39,8 +39,8 @@ arm_flags() {
     baseline)
       echo ""
       ;;
-    no_debias)
-      echo "--no-mcq-debias"
+    with_debias)
+      echo "--mcq-debias"
       ;;
     no_memory)
       echo "--no-memory-summary"
@@ -49,9 +49,6 @@ arm_flags() {
       echo "--explore-when-uncovered off"
       ;;
     graph_eqa_like)
-      echo "--no-mcq-debias --no-memory-summary --explore-when-uncovered off"
-      ;;
-    all_off)
       echo "--no-mcq-debias --no-memory-summary --explore-when-uncovered off"
       ;;
     *)

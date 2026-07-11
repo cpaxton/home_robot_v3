@@ -44,7 +44,15 @@ def _load_jsonl(path: Path) -> list[dict]:
 
 
 def _find_hmeqa_jsonls(run_id: str, results_root: Path) -> list[Path]:
-    return sorted(results_root.glob(f"*{run_id}*hmeqa*.jsonl"))
+    """HM-EQA JSONL under ``results_root`` (legacy ``*hmeqa*`` and ``subset_*`` tags)."""
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for pattern in (f"*{run_id}*hmeqa*.jsonl", f"subset_*{run_id}*.jsonl"):
+        for path in sorted(results_root.glob(pattern)):
+            if path not in seen:
+                seen.add(path)
+                out.append(path)
+    return sorted(out)
 
 
 def _summarize_hmeqa(paths: list[Path]) -> dict:
@@ -451,7 +459,13 @@ def main() -> None:
     )
 
     summary_path = out_dir / "summary.json"
-    summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    summary_csv_path = out_dir / "summary.csv"
+
+    def _write_summary_artifacts() -> None:
+        summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+        write_summary_csv(summary, summary_csv_path)
+
+    _write_summary_artifacts()
     print(json.dumps(summary, indent=2))
 
     figures_manifest: dict[str, object] = {
@@ -460,7 +474,6 @@ def main() -> None:
         "figures": [],
     }
 
-    write_summary_csv(summary, out_dir / "summary.csv")
     _print_ovmm_digest(summary["ovmm"])
 
     if args.summary_only:
@@ -502,6 +515,7 @@ def main() -> None:
             manifest_maps = maps_out / "maps_manifest.json"
             if manifest_maps.is_file():
                 figures_manifest["paper_maps_manifest"] = str(manifest_maps)
+        _write_summary_artifacts()
 
     if args.render_retrieval_panels:
         hmeqa_files = _find_hmeqa_jsonls(run_id, results_root)
