@@ -42,7 +42,10 @@ from emet.simulation.env_flags import env_sim_nav_debug, warn_sim_nav_env_flags
 from emet.simulation.gripper_action import apply_gripper_action_robosuite
 from emet.simulation.head_look_action import apply_head_to_robosuite
 from emet.simulation.molmospaces_env import molmospaces_nav_teleport_enabled
-from emet.simulation.molmospaces_mobile_autoplace import apply_molmospaces_freejoint_base_autoplace
+from emet.simulation.molmospaces_mobile_autoplace import (
+    apply_molmospaces_freejoint_base_autoplace,
+    apply_robocasa_freejoint_base_autoplace,
+)
 from emet.simulation.mujoco_ground_truth import (
     mujoco_ground_truth_write_path,
     parse_ground_truth_dump_action_field,
@@ -669,59 +672,21 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     def _robocasa_freejoint_autoplace_after_load(self) -> None:
         """Reposition freejoint base away from Robocasa clutter (Galaxea R1 / RB-Y1, etc.)."""
-        if not scene_base_spawn.want_robocasa_freejoint_autoplace(
-            environment=self._environment_descriptor,
-            robot_spec=self._spec,
-        ):
-            return
         if self._mjmodel is None or self._mjdata is None:
             return
         if self._base_freejoint_addrs() is None:
             return
-        base_name = self._spec.base_link_name
-        if self._debug_molmospaces_spawn:
-            logger.info(
-                f"Robocasa freejoint spawn debug: environment={self._environment_descriptor!r} "
-                f"base_body_name={base_name!r}"
-            )
-        try:
-            placed = scene_base_spawn.find_molmospaces_freejoint_xyz(
-                self._mjmodel,
-                self._mjdata,
-                base_body_name=base_name,
-                scene_label=self._scene_source_basename,
-                merged_mjcf_path=self._scene_disk_path,
-                environment=self._environment_descriptor,
-            )
-        except Exception as e:
-            logger.warning(f"Robocasa freejoint autoplace skipped ({e!r}).")
-            return
-        if placed is None:
-            logger.info("Robocasa freejoint autoplace: no safer (x,y,z) found; keeping MJCF default base pose.")
-            return
-        x, y, z = placed
-        logger.info(
-            f"Robocasa freejoint autoplace: moved base on {base_name!r} to "
-            f"({x:.3f}, {y:.3f}, {z:.3f}) for clearance from scene geometry."
-        )
-        if self._debug_molmospaces_spawn:
-            try:
-                mujoco.mj_forward(self._mjmodel, self._mjdata)
-                for ln in molmospaces_spawn.format_spawn_contact_report(
-                    self._mjmodel,
-                    self._mjdata,
-                    base_body_name=base_name,
-                    floor_geom_name="floor",
-                    max_lines=40,
-                    dist_report_threshold=0.12,
-                ):
-                    logger.info(f"[scene_base_spawn/post-place] {ln}")
-            except Exception as e:
-                logger.warning(f"Robocasa freejoint spawn debug contact report failed: {e!r}")
-        addrs = self._base_freejoint_addrs()
-        if addrs is not None:
-            qadr = int(addrs[0])
-            self._mjmodel.qpos0[qadr : qadr + 7] = self._mjdata.qpos[qadr : qadr + 7]
+        env = self._environment_descriptor if isinstance(self._environment_descriptor, dict) else None
+        if apply_robocasa_freejoint_base_autoplace(
+            self._mjmodel,
+            self._mjdata,
+            robot_spec=self._spec,
+            base_body_name=self._spec.base_link_name,
+            environment=env,
+            scene_source_basename=self._scene_source_basename,
+            merged_mjcf_path=self._scene_disk_path,
+            debug=self._debug_molmospaces_spawn,
+        ):
             self._molmospaces_autoplace_snap_qpos0 = True
 
     def _snapshot_stationary_base_freejoint_pose(self) -> None:

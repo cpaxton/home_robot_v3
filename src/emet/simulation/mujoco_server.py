@@ -441,6 +441,7 @@ def main(
 
                 from emet.robots import ROBOT_REGISTRY
                 from emet.simulation import scene_base_spawn
+                from emet.simulation.molmospaces_mobile_autoplace import apply_robocasa_freejoint_base_autoplace
 
                 robot_key = robot.lower().replace("-", "_")
                 mod_name = ROBOT_REGISTRY.get(robot_key, ROBOT_REGISTRY.get("stretch"))
@@ -456,16 +457,17 @@ def main(
                         spec = backend_cls().get_spec()
                         spawn_data = mujoco.MjData(scene_model)
                         mujoco.mj_forward(scene_model, spawn_data)
-                        fp = spec.footprint
-                        margin = float(
-                            0.5
-                            * np.hypot(
-                                float(fp.length) + abs(float(fp.length_offset)),
-                                float(fp.width) + abs(float(fp.width_offset)),
+                        if spec.sim_uses_stretch_mujoco_zmq:
+                            apply_robocasa_freejoint_base_autoplace(
+                                scene_model,
+                                spawn_data,
+                                robot_spec=spec,
+                                base_body_name=spec.base_link_name,
+                                environment=zmq_environment,
+                                scene_source_basename=scene_source_basename,
+                                debug=debug_molmospaces_spawn,
                             )
-                            + 0.10
-                            + float(getattr(spec, "planar_spawn_xy_extra_margin_m", 0.0) or 0.0)
-                        )
+                        margin = scene_base_spawn.planar_spawn_footprint_xy_margin_m(spec)
                         spawn_map = scene_base_spawn.compute_spawn_walkable_map_metrics(
                             scene_model,
                             spawn_data,

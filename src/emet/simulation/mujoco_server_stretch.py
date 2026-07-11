@@ -108,14 +108,9 @@ class MujocoZmqServer(BaseZmqServer):
     - Stretch_mujoco installation: https://github.com/hello-robot/stretch_mujoco/
     """
 
-    # Do we use a navigation controller command to move the robot back at the start of a Robocasa task?
-    _move_back_at_start: bool = True
-
     hz = CONTROL_HZ
     # How long should the controller report done before we're actually confident that we're done?
     done_t = 0.1
-
-    robocasa_start_offset = np.array([-0.3, 0, 0])
 
     # Print debug messages for control loop
     debug_control_loop = False
@@ -642,13 +637,6 @@ class MujocoZmqServer(BaseZmqServer):
         if self._emet_session is not None:
             apply_navigation_origin_to_session(self._emet_session, self._initial_xyt)
 
-        if robocasa:
-            if self._move_back_at_start:
-                # When you start, move the agent back a bit
-                # This is a hack!
-                time.sleep(1.0)
-                self.set_goal_pose(self.robocasa_start_offset, relative=True)
-
         while self.is_running():
             try:
                 self._camera_data = self.robot_sim.pull_camera_data()
@@ -835,9 +823,7 @@ class MujocoZmqServer(BaseZmqServer):
             if joint and value is not None:
                 measured = self.robot_sim.set_joint_qpos(joint, value, wait=True, timeout=2.0)
                 if measured is not None:
-                    logger.info(
-                        f"sim_set_joint_qpos: {joint!r} requested={value:.4f} measured={measured:.4f}"
-                    )
+                    logger.info(f"sim_set_joint_qpos: {joint!r} requested={value:.4f} measured={measured:.4f}")
                 else:
                     logger.warning(f"sim_set_joint_qpos failed for joint {joint!r}")
 
