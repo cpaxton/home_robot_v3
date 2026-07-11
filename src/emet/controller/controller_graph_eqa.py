@@ -84,10 +84,13 @@ class GraphEQAController(DynamemController):
         use_sensor_perception: bool = True,
         perception_client=None,
         graph_instance_dedup_xy_m: float | None = None,
+        eqa: bool | None = None,
+        defer_eqa_vllm: bool = True,
     ):
         # Instance graph: YoloE + SparseVoxelMap Frame masks; voxel ``run_eqa`` off (no per-frame VLM list_objects).
         # Legacy ``--no-instance-graph``: voxel list_objects + VLM / voxel labels for graph nodes.
-        voxel_eqa = not use_instance_graph
+        # Optional ``eqa=True`` keeps instance graph but still loads caption/EQA clients (agent --eqa).
+        voxel_eqa = (not use_instance_graph) if eqa is None else bool(eqa)
         super().__init__(
             robot=robot,
             parameters=parameters,
@@ -103,7 +106,7 @@ class GraphEQAController(DynamemController):
             manipulation_only=manipulation_only,
             cpu_only=cpu_only,
             eqa=voxel_eqa,
-            defer_eqa_vllm=True,
+            defer_eqa_vllm=bool(defer_eqa_vllm) if voxel_eqa else True,
         )
         self.graph_memory = GraphEQAMemory(
             parameters=parameters,

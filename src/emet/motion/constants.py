@@ -124,7 +124,8 @@ STRETCH_ARM_EXTENSION = 0.8
 STRETCH_ARM_LIFT = 0.8
 
 look_at_ee = np.array([-np.pi / 2, -np.pi / 4])
-look_front = np.array([0.0, -np.pi / 4])
+# Forward, slight down — room-scale view (not floor). Matches kinematics.look_front.
+look_front = np.array([0.0, math.radians(-30)])
 look_ahead = np.array([0.0, 0.0])
 look_close = np.array([0.0, math.radians(-45)])
 look_down = np.array([0.0, math.radians(-58)])
@@ -213,7 +214,8 @@ STRETCH_PREDEMO_Q = np.array(
         -np.pi / 4,
     ]
 )
-# Navigation should not be fully folded up against the arm - in case its holding something
+# Navigation should not be fully folded up against the arm - in case its holding something.
+# Head uses look_front (not look_down): agent/describe need a usable camera, not floor.
 STRETCH_NAVIGATION_Q = np.array(
     [
         0,  # x
@@ -225,9 +227,8 @@ STRETCH_NAVIGATION_Q = np.array(
         0.0,  # wrist roll
         -1.5,  # wrist pitch
         0.0,  # wrist yaw
-        0.0,
-        math.radians(-65),
-        # look_close[1],
+        look_front[0],
+        look_front[1],
     ]
 )
 

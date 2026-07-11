@@ -1,8 +1,11 @@
 # Default chat / tool agent options for ``emet run agent``.
-llm: qwen3-vl-eqa
+llm: qwen35-4B
 eqa: false
 share_memory_vllm: true
 discord: true
 prompt: simple
 device: cuda
-max_tokens: 1024
+# Tool-call JSON is short; 1024 made HF generate crawl when the model rambled.
+max_tokens: 256
+# Interactive memory stack: dynagraph (default), graph_eqa, or dynamem.
+memory_backend: dynagraph

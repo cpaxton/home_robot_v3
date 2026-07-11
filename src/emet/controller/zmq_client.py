@@ -10,6 +10,7 @@
 # (c) 2024 Hello Robot under MIT license
 
 import sys
+import os
 import threading
 import time
 import timeit
@@ -27,10 +28,12 @@ import emet.motion.conversions as conversions
 import emet.utils.compression as compression
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
+from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.robot import AbstractRobotClient
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
     emet_session_cache_update,
+    emet_session_manipulation_supported,
     is_stretch_family,
     read_emet_session,
 )
@@ -66,7 +69,7 @@ def _dict_first_nonempty(msg: dict[str, Any], *keys: str) -> Any:
 # faulthandler.enable()
 
 
-class StretchZmqClient(AbstractRobotClient):
+class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
     update_base_pose_from_full_obs: bool = False
     num_state_report_steps: int = 10000
 
@@ -169,6 +172,7 @@ class StretchZmqClient(AbstractRobotClient):
         # reset() uses _mapping_depth_lock; create before any reset() (including below).
         self._mapping_depth_lock = Lock()
         self._mapping_depth_for_rerun: np.ndarray | None = None
+        self._init_stream_pause()
         self.reset()
 
         # Load parameters
@@ -176,6 +180,9 @@ class StretchZmqClient(AbstractRobotClient):
             parameters = get_parameters("default_planner.yaml")
         self._parameters = parameters
         self._allow_missing_depth = allow_missing_depth
+
+        env = os.environ.get("EMET_ZMQ_STARTUP_TIMEOUT", "").strip()
+        self._zmq_startup_timeout = max(1.0, float(env)) if env else 60.0
 
         # Variables we set here should not change
         self._iter = -1  # Tracks number of actions set, never reset this
@@ -592,10 +599,20 @@ class StretchZmqClient(AbstractRobotClient):
             # time.sleep(0.25)
 
     def look_front(self, blocking: bool = True, timeout: float = 10.0):
-        """Let robot look to its front."""
+        """Point camera forward with a slight downward tilt (room-scale view)."""
         self.head_to(
             constants.look_front[0],
             constants.look_front[1],
+            blocking=blocking,
+            timeout=timeout,
+            reliable=True,
+        )
+
+    def look_ahead(self, blocking: bool = True, timeout: float = 10.0):
+        """Point camera forward horizontally."""
+        self.head_to(
+            constants.look_ahead[0],
+            constants.look_ahead[1],
             blocking=blocking,
             timeout=timeout,
             reliable=True,
@@ -779,25 +796,29 @@ class StretchZmqClient(AbstractRobotClient):
             goal_xyt = xyt_base_to_global(rel_xyt, current_xyt)
             if verbose:
                 print("Goal pose in episode coordinates", goal_xyt)
-            # Send the delta with nav_relative; server composes spawn-relative → world (Molmo) or
-            # episode frame (default table). Do not pre-compose here — that double-applies on the server.
-            action_xyt = rel_xyt
+            # Always send absolute episode xyt. Relative deltas + reliable=True resends
+            # re-apply the same yaw from the new pose (e.g. 3×45° during one wait) and
+            # ``_wait_for_base_motion`` never matches ``goal_angle`` → 10s timeouts on
+            # ``rotate_in_place`` / MolmoSpaces Stretch scans.
+            action_xyt = goal_xyt
         else:
             action_xyt = goal_xyt
 
         if blocking and not reliable:
             logger.warning("Sending blocking commands without reliable is not recommended")
 
-        # We never send a relative motion over wireless - this is because we can run into timing issues.
-        # Instead, we always send the absolute position and let the robot handle the motions itself.
+        # Absolute episode pose (idempotent under reliable resend). ``nav_world`` only when asked.
         next_action: dict[str, Any] = {"xyt": action_xyt, "nav_relative": False, "nav_blocking": blocking}
-        if relative:
-            next_action["nav_relative"] = True
-        elif world_frame:
+        if world_frame and not relative:
             next_action["nav_world"] = True
         from emet.simulation.env_flags import env_sim_nav_teleport
 
         if env_sim_nav_teleport():
+            next_action["nav_teleport"] = True
+        # MolmoSpaces Stretch: prefer free-joint teleport (wheel yaw is unreliable on iTHOR floors).
+        sess = self.get_emet_session()
+        caps = (sess or {}).get("capabilities") if isinstance(sess, dict) else None
+        if isinstance(caps, dict) and caps.get("teleport_base"):
             next_action["nav_teleport"] = True
         if self._rerun:
             self._rerun.update_nav_goal(goal_xyt)
@@ -849,6 +870,9 @@ class StretchZmqClient(AbstractRobotClient):
         self._emet_session_cache_step = -1
         with self._mapping_depth_lock:
             self._mapping_depth_for_rerun = None
+        # Keep pause gate across reset(); only ensure it exists after partial init.
+        if not hasattr(self, "_streams_active"):
+            self._init_stream_pause()
 
     def set_mapping_depth_for_rerun(self, depth: np.ndarray | None) -> None:
         with self._mapping_depth_lock:
@@ -860,6 +884,8 @@ class StretchZmqClient(AbstractRobotClient):
 
     def open_gripper(self, blocking: bool = True, timeout: float = 10.0, verbose: bool = False) -> bool:
         """Open the gripper based on hard-coded presets."""
+        if not self._zmq_manipulation_supported():
+            return True
         gripper_target = self._robot_model.GRIPPER_OPEN
         logger.debug("[ZMQ CLIENT] Opening gripper to", gripper_target)
         self.gripper_to(gripper_target, blocking=False)
@@ -892,6 +918,8 @@ class StretchZmqClient(AbstractRobotClient):
         verbose: bool = False,
     ) -> bool:
         """Close the gripper based on hard-coded presets."""
+        if not self._zmq_manipulation_supported():
+            return True
         gripper_target = self._robot_model.GRIPPER_CLOSED_LOOSE if loose else self._robot_model.GRIPPER_CLOSED
         print("[ZMQ CLIENT] Closing gripper to", gripper_target)
         self.gripper_to(gripper_target, blocking=False)
@@ -935,6 +963,8 @@ class StretchZmqClient(AbstractRobotClient):
         Args:
             verbose: Whether to print out debug information
         """
+        if not self._zmq_manipulation_supported():
+            return
         next_action = {"control_mode": "manipulation", "step": self._iter}
         self.send_action(next_action)
         if verbose:
@@ -943,6 +973,9 @@ class StretchZmqClient(AbstractRobotClient):
 
     def move_to_nav_posture(self) -> None:
         """Move the robot to the navigation posture. This is where the head is looking forward and the arm is tucked in."""
+        if not self._zmq_manipulation_supported():
+            self.switch_to_navigation_mode()
+            return
         next_action = {"posture": "navigation", "step": self._iter}
         next_action = self.send_action(next_action)
         self._wait_for_head(constants.STRETCH_NAVIGATION_Q, resend_action=next_action)
@@ -952,6 +985,8 @@ class StretchZmqClient(AbstractRobotClient):
 
     def move_to_manip_posture(self):
         """This is the pregrasp posture where the head is looking down and right and the arm is tucked in."""
+        if not self._zmq_manipulation_supported():
+            return
         next_action = {"posture": "manipulation", "step": self._iter}
         self.send_action(next_action)
         time.sleep(0.1)
@@ -964,7 +999,7 @@ class StretchZmqClient(AbstractRobotClient):
         self,
         q: np.ndarray,
         timeout: float = 3.0,
-        min_wait_time: float = 0.5,
+        min_wait_time: float = 0.35,
         resend_action: dict | None = None,
         block_id: int = -1,
         verbose: bool = False,
@@ -972,10 +1007,15 @@ class StretchZmqClient(AbstractRobotClient):
         """Wait for the head to move to a particular configuration."""
         t0 = timeit.default_timer()
         at_goal = False
+        at_goal_t = t0
+        last_resend_t = 0.0
+        # Config tolerances are tight (0.01 rad); MuJoCo Stretch often settles ~0.01–0.03 away.
+        # Resending every loop also keeps head_speed above head_not_moving_tolerance (1e-4).
+        pan_tol = max(float(self._head_pan_tolerance), 0.05)
+        tilt_tol = max(float(self._head_tilt_tolerance), 0.05)
+        speed_tol = max(float(self._head_not_moving_tolerance), 0.02)
+        resend_period_s = 0.4
 
-        # Wait for the head to move
-        # If the head is not moving, we are done
-        # Head must be stationary for at least min_wait_time
         prev_joint_positions = None
         prev_t = None
         while not self._finish:
@@ -989,12 +1029,6 @@ class StretchZmqClient(AbstractRobotClient):
             if joint_positions is None:
                 time.sleep(0.01)
                 continue
-
-            # if self._last_step < block_id:
-            #     # TODO: remove debug info
-            #     print("Waiting for step", block_id, "to be processed; currently on:", self._last_step)
-            #     time.sleep(0.05)
-            #     continue
 
             pan_err = np.abs(joint_positions[HelloStretchIdx.HEAD_PAN] - q[HelloStretchIdx.HEAD_PAN])
             tilt_err = np.abs(joint_positions[HelloStretchIdx.HEAD_TILT] - q[HelloStretchIdx.HEAD_TILT])
@@ -1021,25 +1055,29 @@ class StretchZmqClient(AbstractRobotClient):
                     f"Waiting for head: pan_err={float(pan_err):.4f} tilt_err={float(tilt_err):.4f} "
                     f"head_speed={float(head_speed):.5f}"
                 )
-            if head_speed > self._head_not_moving_tolerance:
+            if head_speed > speed_tol:
                 at_goal = False
-            elif pan_err < self._head_pan_tolerance and tilt_err < self._head_tilt_tolerance:
+            elif pan_err < pan_tol and tilt_err < tilt_tol:
+                if not at_goal:
+                    at_goal_t = timeit.default_timer()
                 at_goal = True
-                at_goal_t = timeit.default_timer()
             elif resend_action is not None:
-                self.send_message(resend_action)
+                now = timeit.default_timer()
+                if now - last_resend_t >= resend_period_s:
+                    self.send_message(resend_action)
+                    last_resend_t = now
             else:
                 at_goal = False
 
             if (
                 at_goal
                 and timeit.default_timer() - at_goal_t > min_wait_time
-                and head_speed < self._head_not_moving_tolerance
+                and head_speed < speed_tol
             ):
                 break
 
             t1 = timeit.default_timer()
-            if t1 - t0 > min_wait_time and head_speed < self._head_not_moving_tolerance:
+            if t1 - t0 > min_wait_time and head_speed < speed_tol:
                 if verbose:
                     logger.debug("Head settled before reaching target (stationary, min_wait elapsed).")
                 break
@@ -1311,6 +1349,10 @@ class StretchZmqClient(AbstractRobotClient):
             if self._emet_session_cache is None:
                 return None
             return dict(self._emet_session_cache)
+
+    def _zmq_manipulation_supported(self) -> bool:
+        """False for navigation-only sim backends (e.g. Habitat HM-EQA ZMQ serve)."""
+        return emet_session_manipulation_supported(self.get_emet_session())
 
     def is_up_to_date(self, no_action=False):
         """Check if the robot is up to date with the latest observation"""
@@ -1617,6 +1659,11 @@ class StretchZmqClient(AbstractRobotClient):
         shown_point_cloud = visualize
 
         while not self._finish:
+            if not self._wait_if_streams_paused():
+                return
+            # Poll so pause/stop can take effect without waiting on the next frame.
+            if self.recv_socket.poll(50) == 0:
+                continue
             output = self.recv_socket.recv_pyobj()
             if output is None:
                 continue
@@ -1681,7 +1728,7 @@ class StretchZmqClient(AbstractRobotClient):
 
     def update_servo(self, message):
         """Servo messages"""
-        if message is None or self._state is None:
+        if message is None:
             return
 
         self._note_emet_session_from_zmq_dict(message)
@@ -1709,6 +1756,8 @@ class StretchZmqClient(AbstractRobotClient):
             raw_hd = message.get("head_depth_image")
             head_depth_image = compression.from_jp2(raw_hd) / 1000 if raw_hd is not None else None
             jp = message.get("joint_positions")
+            if jp is None and self._state is not None:
+                jp = self._state.get("joint_positions")
             if jp is None:
                 return
             joint = np.asarray(jp, dtype=np.float64)
@@ -1718,13 +1767,43 @@ class StretchZmqClient(AbstractRobotClient):
             ee_pose_val = message.get("ee/pose")
             if ee_pose_val is None:
                 ee_pose_val = np.eye(4, dtype=np.float64)
+        elif message.get("rgb") is not None:
+            # Habitat / full-obs-shaped servo fallback (same keys as get_full_observation_message).
+            head_color_image = compression.from_jpg(message["rgb"])
+            raw_hd = message.get("depth")
+            head_depth_image = compression.from_jp2(raw_hd) / 1000 if raw_hd is not None else None
+            jp = message.get("joint_positions")
+            if jp is None and message.get("joint") is not None:
+                jp = message["joint"]
+            if jp is None and self._state is not None:
+                jp = self._state.get("joint_positions")
+            if jp is None:
+                return
+            joint = np.asarray(jp, dtype=np.float64)
+            depth_scaling = float(message.get("head_cam/depth_scaling", 1.0))
+            camera_K_head = _dict_first_nonempty(message, "head_camera_K", "camera_K")
+            camera_pose_head = _dict_first_nonempty(message, "camera_pose", "head_cam/pose")
+            ee_pose_val = message.get("ee_pose")
+            if ee_pose_val is None:
+                ee_pose_val = np.eye(4, dtype=np.float64)
         else:
             return
 
+        base_pose = message.get("base_pose")
+        if base_pose is None and self._state is not None:
+            base_pose = self._state.get("base_pose")
+        if base_pose is None and message.get("gps") is not None and message.get("compass") is not None:
+            gps = np.asarray(message["gps"], dtype=np.float64).reshape(-1)[:2]
+            compass = np.asarray(message["compass"], dtype=np.float64).reshape(-1)[:1]
+            base_pose = np.array([gps[0], gps[1], float(compass[0])], dtype=np.float64)
+        if base_pose is None:
+            return
+
         with self._servo_lock and self._state_lock:
+            bp = np.asarray(base_pose, dtype=np.float64).reshape(-1)
             observation = Observations(
-                gps=self._state["base_pose"][:2],
-                compass=self._state["base_pose"][2],
+                gps=bp[:2],
+                compass=np.array([float(bp[2])], dtype=np.float64) if bp.size >= 3 else np.zeros(1),
                 rgb=head_color_image,
                 depth=head_depth_image,
                 xyz=None,
@@ -1771,6 +1850,10 @@ class StretchZmqClient(AbstractRobotClient):
         steps = 0
         t0 = timeit.default_timer()
         while not self._finish:
+            if not self._wait_if_streams_paused():
+                return
+            if self.recv_servo_socket.poll(50) == 0:
+                continue
             t1 = timeit.default_timer()
             dt = t1 - t0
             output = self.recv_servo_socket.recv_pyobj()
@@ -1816,6 +1899,10 @@ class StretchZmqClient(AbstractRobotClient):
         t0 = timeit.default_timer()
 
         while not self._finish:
+            if not self._wait_if_streams_paused():
+                return
+            if self.recv_state_socket.poll(50) == 0:
+                continue
             output = self.recv_state_socket.recv_pyobj()
             self._update_state(output)
 
@@ -1833,6 +1920,8 @@ class StretchZmqClient(AbstractRobotClient):
         step_count = 0
         last_debug_t = 0
         while not self._finish:
+            if not self._wait_if_streams_paused():
+                return
             if self._rerun:
                 mapping_depth = self.peek_mapping_depth_for_rerun()
                 self._rerun.step(self._obs, self._servo, mapping_depth=mapping_depth)
@@ -1925,10 +2014,11 @@ class StretchZmqClient(AbstractRobotClient):
             self._rerun_thread.start()
 
         t0 = timeit.default_timer()
+        startup_timeout = getattr(self, "_zmq_startup_timeout", 60.0)
         while self._obs is None or self._state is None or self._servo is None:
             time.sleep(0.1)
             t1 = timeit.default_timer()
-            if t1 - t0 > 10.0:
+            if t1 - t0 > startup_timeout:
                 logger.error(
                     colored(
                         "Timeout waiting for observations; are you connected to the robot? Check the network.",
@@ -1958,7 +2048,7 @@ class StretchZmqClient(AbstractRobotClient):
         while self._state is None:
             time.sleep(0.1)
             t1 = timeit.default_timer()
-            if t1 - t0 > 10.0:
+            if t1 - t0 > startup_timeout:
                 logger.error(
                     colored(
                         "Timeout waiting for state information; are you connected to the robot? Check the network.",

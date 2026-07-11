@@ -159,6 +159,7 @@ class ResolvedAgentCliOptions:
     discord: bool
     eqa: bool
     share_memory_vllm: bool
+    memory_backend: str
 
 
 def resolve_agent_cli_options(
@@ -172,6 +173,7 @@ def resolve_agent_cli_options(
     discord: bool,
     dynamem_eqa: bool,
     share_memory_vllm: bool,
+    memory_backend: str = "dynagraph",
 ) -> ResolvedAgentCliOptions:
     """Merge ``agent:`` from config with CLI; explicit flags win over YAML (``--set`` already in *section*)."""
 
@@ -186,6 +188,9 @@ def resolve_agent_cli_options(
         discord=discord if _from_cli("discord") else section.discord,
         eqa=dynamem_eqa if _from_cli("dynamem_eqa") else section.eqa,
         share_memory_vllm=(share_memory_vllm if _from_cli("share_memory_vllm") else section.share_memory_vllm),
+        memory_backend=(
+            memory_backend if _from_cli("memory_backend") else getattr(section, "memory_backend", "dynagraph")
+        ),
     )
 
 

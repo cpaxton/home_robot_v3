@@ -28,7 +28,7 @@ from torch import Tensor
 from emet.core.parameters import Parameters
 from emet.llms import OpenaiClient
 from emet.llms.prompts import DYNAMEM_VISUAL_GROUNDING_PROMPT
-from emet.llms.vllm_factory import create_dynamem_vllm, dynamem_vllm_call
+from emet.llms.vllm_factory import create_dynamem_vllm, dynamem_vllm_call, eqa_vl_client_kwargs
 from emet.llms.vllm_registry import VLLMRunConfig, default_hf_model_id, normalize_vl_family, should_share_vllm
 from emet.utils.image import Camera, camera_xyz_to_global_xyz
 from emet.utils.morphology import binary_dilation, binary_erosion, get_edges
@@ -225,6 +225,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
         else:
             _eqa_raw = {}
         _eqa_cfg: dict[str, Any] = _eqa_raw if isinstance(_eqa_raw, dict) else {}
+        self._vl_client_kw = eqa_vl_client_kwargs(_eqa_cfg)
 
         self._eqa_backend = str(_eqa_cfg.get("backend", eqa_backend) or "qwen_vl").strip().lower()
         self._vl_family = str(_eqa_cfg.get("vl_family", vl_family) or "qwen3_vl").strip().lower()
@@ -290,6 +291,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
                         device=_vl_dev,
                         quantization=eqa_quant,
                         prompt=None,
+                        **self._vl_client_kw,
                     )
                     self.eqa_client = GeminiClient(EQA_PROMPT, model=gemini_m)
                 elif self._eqa_backend == "qwen_vl":
@@ -306,6 +308,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
                         device=_vl_dev,
                         quantization=eqa_quant,
                         prompt=None,
+                        **self._vl_client_kw,
                     )
                     self.image_description_client = shared
                     self.eqa_client = shared
@@ -361,6 +364,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 device=_vl_dev,
                 quantization=p["eqa_vl_quantization"],
                 prompt=None,
+                **self._vl_client_kw,
             )
         elif self._eqa_backend == "qwen_vl":
             if not _eqa_qwen_vl_single_client_ok(
@@ -378,6 +382,7 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 device=_vl_dev,
                 quantization=p["eqa_vl_quantization"],
                 prompt=None,
+                **self._vl_client_kw,
             )
             self.image_description_client = shared
             self.eqa_client = shared
