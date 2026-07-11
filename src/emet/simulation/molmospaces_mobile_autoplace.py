@@ -9,7 +9,8 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from emet.simulation import molmospaces_spawn
+from emet.robots.base import RobotSpec
+from emet.simulation import molmospaces_spawn, scene_base_spawn
 from emet.utils.geometry import angle_difference, xyt_base_to_global
 from emet.utils.logger import Logger
 
@@ -194,5 +195,87 @@ def apply_molmospaces_freejoint_base_autoplace(
                 logger.info(f"[molmospaces_spawn/post-place] {ln}")
         except Exception as e:
             logger.warning(f"MolmoSpaces spawn debug contact report failed: {e!r}")
+    model.qpos0[qadr : qadr + 7] = data.qpos[qadr : qadr + 7]
+    return True
+
+
+def apply_robocasa_freejoint_base_autoplace(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    robot_spec: RobotSpec,
+    base_body_name: str,
+    environment: dict[str, Any] | None,
+    scene_source_basename: str | None = None,
+    merged_mjcf_path: str | None = None,
+    debug: bool = False,
+) -> bool:
+    """If Robocasa freejoint autoplace applies, reposition the base and snap ``model.qpos0``.
+
+    Assumes *data* matches *model* and kinematics were initialized (``mj_forward``).
+
+    Returns:
+        True if placement ran and updated ``model.qpos0`` for the freejoint.
+    """
+    if not scene_base_spawn.want_robocasa_freejoint_autoplace(
+        environment=environment,
+        robot_spec=robot_spec,
+    ):
+        return False
+    qadr = base_body_free_joint_qposadr(model, base_body_name)
+    if qadr is None:
+        return False
+    spawn_hint: np.ndarray | None = None
+    if isinstance(environment, dict):
+        raw_hint = environment.get("spawn_hint_xyt")
+        if raw_hint is not None:
+            spawn_hint = np.asarray(raw_hint, dtype=np.float64).reshape(-1)[:3].copy()
+    if debug:
+        logger.info(
+            "Robocasa freejoint spawn debug: "
+            f"scene_source_basename={scene_source_basename!r} "
+            f"environment={environment!r} base_body_name={base_body_name!r}"
+        )
+    try:
+        placed = scene_base_spawn.find_robocasa_freejoint_xyz(
+            model,
+            data,
+            base_body_name=base_body_name,
+            robot_spec=robot_spec,
+            scene_label=scene_source_basename,
+            merged_mjcf_path=merged_mjcf_path,
+            environment=environment,
+            spawn_hint_xyt=spawn_hint,
+        )
+    except Exception as e:
+        logger.warning(f"Robocasa freejoint autoplace skipped ({e!r}).")
+        return False
+    if placed is None:
+        logger.info("Robocasa freejoint autoplace: no safer (x,y,z) found; keeping MJCF default base pose.")
+        return False
+    x, y, z = placed
+    hint_dxy = ""
+    if spawn_hint is not None and spawn_hint.size >= 2:
+        hint_dxy = (
+            f", Δxy from robosuite hint={float(np.hypot(x - float(spawn_hint[0]), y - float(spawn_hint[1]))):.3f}m"
+        )
+    logger.info(
+        f"Robocasa freejoint autoplace: moved base on {base_body_name!r} to "
+        f"({x:.3f}, {y:.3f}, {z:.3f}) for clearance from scene geometry{hint_dxy}."
+    )
+    if debug:
+        try:
+            mujoco.mj_forward(model, data)
+            for ln in scene_base_spawn.format_spawn_contact_report(
+                model,
+                data,
+                base_body_name=base_body_name,
+                floor_geom_name="floor",
+                max_lines=50,
+                dist_report_threshold=0.12,
+            ):
+                logger.info(f"[scene_base_spawn/post-place] {ln}")
+        except Exception as e:
+            logger.warning(f"Robocasa freejoint spawn debug contact report failed: {e!r}")
     model.qpos0[qadr : qadr + 7] = data.qpos[qadr : qadr + 7]
     return True

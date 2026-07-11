@@ -69,6 +69,7 @@ There is **no other single “master” file** today; this page is the hub. Feat
 | Explored floor vs spawner walkable (3 robots, Robocasa) | [run_dynagraph_multi_robot_e2e.py](../src/test/app/run_dynagraph_multi_robot_e2e.py) | [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md); **does not** assert graph nodes or EQA |
 | Nav world ↔ session frame | [test_nav_xyt_session.py](../src/test/utils/test_nav_xyt_session.py) | Unit |
 | **rotate_in_place** world (x,y) stays at spawn (innate_mars + Robocasa) | [test_rotate_in_place_robocasa_nav.py](../src/test/simulation/test_rotate_in_place_robocasa_nav.py) | Sim; asserts `spawn_compose` goals, not `nav_world` |
+| Robocasa freejoint spawn (Stretch / Galaxea, collision autoplace) | [test_robocasa_freejoint_spawn.py](../src/test/simulation/test_robocasa_freejoint_spawn.py) | Sim; `EMET_ROBOSUITE_AUTOPLACE` + `find_robocasa_freejoint_xyz` (no startup nav rollback) |
 | Robosuite nav frame unit (spawn compose, jump guard) | [test_robosuite_nav_world_clamp.py](../src/test/simulation/test_robosuite_nav_world_clamp.py) | Unit |
 | Floor metrics export | [test_floor_metrics.py](../src/test/memory/test_floor_metrics.py) | Unit |
 | Red cylinder localize (DynaMem, default scene) | [test_red_cylinder_in_sim.py](../src/test/mapping/test_red_cylinder_in_sim.py) | Sim; stretch + innate_mars |
