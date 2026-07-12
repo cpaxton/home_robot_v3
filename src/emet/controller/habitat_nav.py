@@ -156,6 +156,13 @@ def pick_habitat_exploration_target(
             blocked.add(key)
             return None
         eff = (float(resolved[0]), float(resolved[1]))
+        if goal_key_xy(eff) in blocked:
+            blocked.add(key)
+            return None
+        if habitat_nav_would_be_noop(robot, resolved):
+            blocked.add(goal_key_xy(eff))
+            blocked.add(key)
+            return None
         if _recent_goal_penalty(eff, recent, radius_m=1.25) > 0.0:
             blocked.add(key)
             return None
@@ -189,6 +196,110 @@ def pick_habitat_exploration_target(
             pt = _accept(raw)
             if pt is not None:
                 return pt
+    return None
+
+
+def _mujoco_accept_explore_xy(
+    raw: np.ndarray | None,
+    *,
+    blocked: set[tuple[float, float]],
+    recent: list[tuple[float, float]],
+) -> np.ndarray | None:
+    """Accept a planar explore target for non-Habitat (Molmo/Robocasa) stacks."""
+    if raw is None:
+        return None
+    arr = np.asarray(raw, dtype=np.float64).reshape(-1)
+    key = goal_key_xy(arr)
+    if key in blocked:
+        return None
+    if _recent_goal_penalty(key, recent, radius_m=1.25) > 0.0:
+        return None
+    return np.array([float(arr[0]), float(arr[1]), 1.0], dtype=float)
+
+
+def pick_uncovered_explore_target(
+    agent: Any,
+    *,
+    question: str | None = None,
+    candidates: list[np.ndarray | None] | None = None,
+    blocked: set[tuple[float, float]] | None = None,
+    recent_goals: list[tuple[float, float]] | None = None,
+) -> np.ndarray | None:
+    """Blocked/recent-aware explore target for Habitat **and** MuJoCo Dynagraph EQA.
+
+    Habitat uses navmesh resolution + noop rejection; MuJoCo uses planar blocked/recent
+    filtering then ``space.sample_frontier``.
+    """
+    blocked_set = blocked if blocked is not None else getattr(agent, "_habitat_blocked_goals", None)
+    if blocked_set is None:
+        blocked_set = set()
+    recent = list(recent_goals or getattr(agent, "_habitat_recent_goals", None) or [])
+    robot = getattr(agent, "robot", None)
+    habitat = robot is not None and is_habitat_robot_client(robot)
+
+    for cand in candidates or []:
+        if cand is None:
+            continue
+        if habitat:
+            key = goal_key_xy(cand)
+            if key in blocked_set:
+                continue
+            resolved = apply_habitat_nav_resolution(robot, cand)
+            if resolved is None:
+                blocked_set.add(key)
+                continue
+            eff_key = goal_key_xy(resolved)
+            if eff_key in blocked_set or habitat_nav_would_be_noop(robot, resolved):
+                blocked_set.add(key)
+                blocked_set.add(eff_key)
+                continue
+            if _recent_goal_penalty(eff_key, recent, radius_m=1.25) > 0.0:
+                continue
+            return resolved
+        accepted = _mujoco_accept_explore_xy(cand, blocked=blocked_set, recent=recent)
+        if accepted is not None:
+            return accepted
+
+    if habitat:
+        return pick_habitat_exploration_target(
+            agent,
+            question=question,
+            blocked=blocked_set,
+            recent_goals=recent,
+        )
+
+    # MuJoCo / Molmo: graph frontiers then voxel sample_frontier with retries.
+    gm = getattr(agent, "graph_memory", None)
+    if gm is not None:
+        nodes = [n for n in gm.get_nodes() if getattr(n, "is_frontier", False)]
+        robot_xy = robot_planar_xy(robot) if robot is not None else (0.0, 0.0)
+        nodes.sort(key=lambda n: _frontier_explore_sort_key(n, robot_xy, recent=recent))
+        for node in nodes:
+            raw = np.array([float(node.xyz[0]), float(node.xyz[1]), 1.0], dtype=float)
+            accepted = _mujoco_accept_explore_xy(raw, blocked=blocked_set, recent=recent)
+            if accepted is not None:
+                return accepted
+    if hasattr(agent, "_best_frontier_point_from_graph"):
+        accepted = _mujoco_accept_explore_xy(
+            agent._best_frontier_point_from_graph(question),
+            blocked=blocked_set,
+            recent=recent,
+        )
+        if accepted is not None:
+            return accepted
+    if hasattr(agent, "space") and hasattr(agent.space, "sample_frontier") and robot is not None:
+        start = agent._planning_base_xyt(robot.get_base_pose())
+        for _ in range(6):
+            fr = agent.space.sample_frontier(agent.planner, start, text=question)
+            if fr is None:
+                break
+            accepted = _mujoco_accept_explore_xy(
+                np.array([float(fr[0]), float(fr[1]), 1.0], dtype=float),
+                blocked=blocked_set,
+                recent=recent,
+            )
+            if accepted is not None:
+                return accepted
     return None
 
 

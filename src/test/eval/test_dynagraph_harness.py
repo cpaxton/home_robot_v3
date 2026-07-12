@@ -97,11 +97,11 @@ def test_dynagraph_controller_reads_harness_flags(mock_init: MagicMock):
     flags = dynagraph_harness_flags(params)
     explore_mode = str(flags.get("explore_when_uncovered", "off"))
     agent._eqa_explore_when_uncovered = explore_mode in ("on", "conservative")
-    agent._eqa_explore_uncovered_habitat_frontier = explore_mode == "on"
+    agent._eqa_explore_uncovered_habitat_frontier = explore_mode in ("on", "conservative")
     agent.graph_memory.memory_summary_enabled = bool(flags.get("memory_summary", False))
     agent.graph_memory.mcq_debias_enabled = bool(flags.get("mcq_debias", False))
 
     assert agent._eqa_explore_when_uncovered is True
-    assert agent._eqa_explore_uncovered_habitat_frontier is False
+    assert agent._eqa_explore_uncovered_habitat_frontier is True
     assert agent.graph_memory.memory_summary_enabled is True
     assert agent.graph_memory.mcq_debias_enabled is False

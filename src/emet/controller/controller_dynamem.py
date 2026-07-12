@@ -38,6 +38,7 @@ from emet.controller.habitat_nav import (
     habitat_navmesh_navigate,
     habitat_perfect_nav_enabled,
     is_habitat_robot_client,
+    pick_uncovered_explore_target,
 )
 from emet.controller.manipulation.dynamem_manipulation.dynamem_manipulation import (
     DynamemManipulationWrapper as ManipulationWrapper,
@@ -1848,14 +1849,25 @@ class DynamemController(BaseController):
         if text is None or text == "" or localized_point is None:
             debug_text += "## Navigation fails, so robot starts exploring environments.\n"
             frontier_text = self._exploration_text(text)
-            graph_frontier = self._best_frontier_point_from_graph(frontier_text)
-            if graph_frontier is not None:
-                localized_point = graph_frontier
-                debug_text += "## Selected frontier target from graph memory.\n"
+            explore_pt = pick_uncovered_explore_target(
+                self,
+                question=frontier_text or None,
+                blocked=getattr(self, "_habitat_blocked_goals", None),
+                recent_goals=getattr(self, "_habitat_recent_goals", None),
+            )
+            if explore_pt is not None:
+                localized_point = explore_pt
+                debug_text += "## Selected blocked-aware explore frontier.\n"
                 mode = "exploration"
             else:
-                localized_point = self.space.sample_frontier(self.planner, start_pose, frontier_text)
-                mode = "exploration"
+                graph_frontier = self._best_frontier_point_from_graph(frontier_text)
+                if graph_frontier is not None:
+                    localized_point = graph_frontier
+                    debug_text += "## Selected frontier target from graph memory.\n"
+                    mode = "exploration"
+                else:
+                    localized_point = self.space.sample_frontier(self.planner, start_pose, frontier_text)
+                    mode = "exploration"
 
         if obs is not None and mode == "navigation":
             obs = self.voxel_map.find_obs_id_for_text(text)
@@ -2335,6 +2347,25 @@ class DynamemController(BaseController):
             if recent is not None:
                 recent.append(key)
                 del recent[:-8]
+        elif (
+            str(nav_res.note or "").startswith("already_at_goal")
+            or (not nav_res.finished and float(nav_res.dist_m) < 0.08)
+            or (not nav_res.success and float(nav_res.dist_m) < 0.12)
+        ):
+            # Stuck / noop / no-progress: remember so uncovered explore does not re-pick.
+            eff = getattr(nav_res, "effective_goal_xy", None) or (
+                float(goal_xy[0]),
+                float(goal_xy[1]),
+            )
+            key = goal_key_xy(eff)
+            recent = getattr(self, "_habitat_recent_goals", None)
+            if recent is not None:
+                recent.append(key)
+                del recent[:-8]
+            blocked = getattr(self, "_habitat_blocked_goals", None)
+            if blocked is not None:
+                blocked.add(key)
+                blocked.add(goal_key_xy(goal_xy))
 
     def navigate_to_target_pose(
         self,

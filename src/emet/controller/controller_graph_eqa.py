@@ -35,6 +35,7 @@ from emet.controller.habitat_nav import (
     habitat_random_walk_step,
     is_habitat_robot_client,
     pick_habitat_exploration_target,
+    pick_uncovered_explore_target,
 )
 from emet.core.parameters import Parameters
 from emet.core.robot import AbstractRobotClient
@@ -449,6 +450,7 @@ class GraphEQAController(DynamemController):
         # rarely sends the robot into new rooms, so targets it never observes (e.g. a basket
         # in an unexplored room) stay unanswerable. Once those objects are in the graph (or
         # the VLM is confident) we follow its inspection target.
+        # Use blocked/recent-aware pick (Habitat navmesh + MuJoCo sample_frontier).
         if (
             not confidence
             and self.graph_memory is not None
@@ -459,14 +461,18 @@ class GraphEQAController(DynamemController):
             except Exception:
                 covered = True
             if not covered:
-                # VLM frontier pick (experiment, EMET_VLM_FRONTIER_SCORING=1), then
-                # SigLIP-guided exploration (toward visually-similar regions), then
-                # the keyword-matched frontier-node heuristic.
-                frontier_pt = self._vlm_frontier_choice(question) if self._vlm_frontier_scoring else None
-                if frontier_pt is None:
-                    frontier_pt = self._siglip_guided_frontier(question)
-                if frontier_pt is None:
-                    frontier_pt = self._best_frontier_point_from_graph(question)
+                candidates: list[np.ndarray | None] = []
+                if self._vlm_frontier_scoring:
+                    candidates.append(self._vlm_frontier_choice(question))
+                candidates.append(self._siglip_guided_frontier(question))
+                candidates.append(self._best_frontier_point_from_graph(question))
+                frontier_pt = pick_uncovered_explore_target(
+                    self,
+                    question=question,
+                    candidates=candidates,
+                    blocked=self._habitat_blocked_goals,
+                    recent_goals=self._habitat_recent_goals,
+                )
                 if frontier_pt is not None:
                     target_point = frontier_pt
 
@@ -475,6 +481,7 @@ class GraphEQAController(DynamemController):
                 self,
                 question=question,
                 blocked=self._habitat_blocked_goals,
+                recent_goals=self._habitat_recent_goals,
             )
             if frontier_pt is not None:
                 logger.info(
@@ -483,7 +490,12 @@ class GraphEQAController(DynamemController):
                 target_point = frontier_pt
 
         if target_point is None and not confidence:
-            target_point = self._best_frontier_point_from_graph(question)
+            target_point = pick_uncovered_explore_target(
+                self,
+                question=question,
+                blocked=self._habitat_blocked_goals,
+                recent_goals=self._habitat_recent_goals,
+            )
         if target_point is None and not confidence and hasattr(self, "space") and hasattr(
             self.space, "sample_frontier"
         ):
@@ -503,14 +515,40 @@ class GraphEQAController(DynamemController):
             resolved = apply_habitat_nav_resolution(self.robot, target_point)
             if resolved is None:
                 self._habitat_blocked_goals.add(goal_key_xy(target_point))
-                alt = pick_habitat_exploration_target(
+                alt = pick_uncovered_explore_target(
                     self,
                     question=question,
                     blocked=self._habitat_blocked_goals,
+                    recent_goals=self._habitat_recent_goals,
                 )
                 target_point = alt
             else:
-                target_point = resolved
+                eff_key = goal_key_xy(resolved)
+                if eff_key in self._habitat_blocked_goals or habitat_nav_would_be_noop(
+                    self.robot, resolved
+                ):
+                    self._habitat_blocked_goals.add(eff_key)
+                    self._habitat_blocked_goals.add(goal_key_xy(target_point))
+                    alt = pick_uncovered_explore_target(
+                        self,
+                        question=question,
+                        blocked=self._habitat_blocked_goals,
+                        recent_goals=self._habitat_recent_goals,
+                    )
+                    if alt is None:
+                        habitat_random_walk_step(self.robot)
+                        habitat_body_scan(self.robot, turns=2, on_step=self.update)
+                        if hasattr(self, "_sync_graph_frontier_nodes"):
+                            self._sync_graph_frontier_nodes()
+                        alt = pick_uncovered_explore_target(
+                            self,
+                            question=question,
+                            blocked=self._habitat_blocked_goals,
+                            recent_goals=self._habitat_recent_goals,
+                        )
+                    target_point = alt
+                else:
+                    target_point = resolved
 
         if target_point is not None and hasattr(self, "navigate_to_target_pose"):
             action_obs_id = (
@@ -609,6 +647,7 @@ class GraphEQAController(DynamemController):
                             self,
                             question=question,
                             blocked=self._habitat_blocked_goals,
+                            recent_goals=self._habitat_recent_goals,
                         )
                         if alt is not None and goal_key_xy(alt) != goal_key_xy(target_point):
                             logger.info(

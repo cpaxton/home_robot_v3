@@ -73,7 +73,7 @@ uv run emet run agent --robot stretch --start-sim --no-discord \
 
 Benchmark tracks that exercise agent-style exploration (frontier / rotate) already default to **dynagraph** profiles — see one-liners below and [simulation_testing_plan.md](simulation_testing_plan.md). Prefer `./scripts/gpu_preflight.sh` before GPU VLM evals; do not stack overnight Habitat with Robocasa dynagraph in one session.
 
-**Harness blocks** (`harness:` in the same YAML) set per-benchmark controller flags (`memory_summary`, `mcq_debias`, `explore_when_uncovered`, `use_instance_graph`, …) via `apply_dynagraph_harness()`. Tuned HM-EQA defaults (`habitat_eqa` / dynagraph): `memory_summary=true`, `mcq_debias=false`, `explore_when_uncovered=conservative`.
+**Harness blocks** (`harness:` in the same YAML) set per-benchmark controller flags (`memory_summary`, `mcq_debias`, `explore_when_uncovered`, `use_instance_graph`, …) via `apply_dynagraph_harness()`. Tuned HM-EQA defaults (`habitat_eqa` / dynagraph): `memory_summary=true`, `mcq_debias=false`, `explore_when_uncovered=conservative` (prefer Habitat/voxel frontiers **while uncovered**; not a weaker picker than `on`).
 
 | Harness | Profile | Dynagraph EQA extras |
 |---------|---------|----------------------|
