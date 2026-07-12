@@ -116,6 +116,8 @@ class HabitatEQASimulator:
         self._hfov = np.deg2rad(hfov_deg)
         self._sensor_height = sensor_height
         self._camera_tilt_deg = camera_tilt_deg
+        self._head_pan_rad = 0.0
+        self._head_tilt_rad = float(np.deg2rad(camera_tilt_deg))
         self._step_count = 0
         self.semantic_labeler: Hm3dSemanticLabeler | None = None
         if self._use_semantics:
@@ -200,6 +202,32 @@ class HabitatEQASimulator:
     @property
     def camera_tilt_deg(self) -> float:
         return float(self._camera_tilt_deg)
+
+    @property
+    def head_pan_rad(self) -> float:
+        return float(self._head_pan_rad)
+
+    @property
+    def head_tilt_rad(self) -> float:
+        return float(self._head_tilt_rad)
+
+    def set_camera_look(self, pan_rad: float, tilt_rad: float) -> None:
+        """Set Stretch-style head pan/tilt by updating Habitat sensor orientations.
+
+        Sensor ``orientation`` is Magnum Euler ``(pitch, yaw, roll)`` in radians relative
+        to the agent body. Pan maps to yaw; tilt maps to pitch (same convention as the
+        constructor ``camera_tilt_deg``).
+        """
+        pan = float(pan_rad)
+        tilt = float(tilt_rad)
+        orient = self._mn.Vector3(tilt, pan, 0.0)
+        for spec in self._agent.agent_config.sensor_specifications:
+            spec.orientation = orient
+        state = self._agent.get_state()
+        self._agent.set_state(state, infer_sensor_states=True)
+        self._head_pan_rad = pan
+        self._head_tilt_rad = tilt
+        self._camera_tilt_deg = float(np.rad2deg(tilt))
 
     @property
     def floor_y(self) -> float:

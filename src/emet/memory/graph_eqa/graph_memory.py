@@ -1798,6 +1798,89 @@ class GraphEQAMemory:
         m = re.search(r"([A-D])", text)
         return m.group(1) if m else ""
 
+    def _neighbor_label_blob_for_present_objects(self) -> str:
+        """Concatenate nearest-furniture labels around PRESENT question objects."""
+        object_nodes = [n for n in self._nodes if not n.is_frontier and not n.is_viewpoint]
+        labels: list[str] = []
+        for obj in self._confirmed_memory_phrases():
+            matches = [
+                n
+                for n in object_nodes
+                if any(label_matches_relevant_object(obj, lab) for lab in n.labels)
+            ]
+            sig = self._siglip_match_for_phrase(obj)
+            sig_present = sig is not None and float(sig[0]) >= SIGLIP_PRESENT_THRESHOLD
+            if not matches and not sig_present:
+                continue
+            if matches:
+                anchor_xyz = np.asarray(matches[0].xyz, dtype=np.float64)
+                exclude_ids = {int(n.node_id) for n in matches}
+            else:
+                assert sig is not None
+                anchor_xyz = np.asarray(sig[1], dtype=np.float64)
+                exclude_ids = set()
+            for n, _dist in self._nearest_object_neighbors(
+                anchor_xyz, exclude_node_ids=exclude_ids, max_neighbors=2, max_dist_m=3.0
+            ):
+                labels.extend(str(lab) for lab in (n.labels or []) if lab)
+        return " ".join(labels).lower()
+
+    def _location_letter_from_nearest_memory(self, choices: list[str]) -> str:
+        """Map PRESENT nearest-furniture labels onto a location MCQ letter (no VLM).
+
+        Used when the model answers yes/no or picks a room that conflicts with
+        CONFIRMED_MEMORY neighbors (e.g. woven basket nearest armchair → D).
+        """
+        from emet.habitat.metrics import choices_are_location_mcq
+
+        if not choices_are_location_mcq(choices) or not self._any_confirmed_phrase_present():
+            return ""
+        blob = self._neighbor_label_blob_for_present_objects()
+        if not blob.strip():
+            return ""
+        # Weak place words that appear in many options; prefer distinctive nouns.
+        weak = frozenset(
+            {
+                "next",
+                "near",
+                "with",
+                "from",
+                "room",
+                "living",
+                "between",
+                "the",
+                "and",
+                "by",
+                "on",
+                "at",
+                "of",
+                "to",
+                "in",
+            }
+        )
+        scores: list[int] = []
+        for ch in choices[:4]:
+            tokens = [
+                t
+                for t in re.findall(r"[a-z]+", (ch or "").lower())
+                if len(t) > 3 and t not in weak
+            ]
+            # Stem-ish: armchair matches armchairs via startswith / containment.
+            score = 0
+            for t in tokens:
+                if t in blob:
+                    score += 2
+                elif any(lab.startswith(t) or t.startswith(lab) for lab in blob.split()):
+                    score += 1
+            scores.append(score)
+        if not scores or max(scores) < 1:
+            return ""
+        best = max(scores)
+        winners = [i for i, s in enumerate(scores) if s == best]
+        if len(winners) != 1:
+            return ""
+        return chr(65 + winners[0])
+
     def _salvage_location_mcq_letter(
         self,
         question: str,
@@ -2136,23 +2219,43 @@ class GraphEQAMemory:
                 answer = salvage
                 raw = (raw or "") + f"\n[salvage]\nanswer:\n{salvage}\n"
                 self.last_eqa_raw = raw
-        elif (
-            parsed_choices
-            and choices_are_location_mcq(parsed_choices)
-            and answer_is_visibility_abstain(answer)
-            and self._any_confirmed_phrase_present()
-        ):
-            salvage = self._salvage_location_mcq_letter(question, parsed_choices, commands)
-            if salvage:
-                answer = salvage
-                raw = (raw or "") + f"\n[salvage-location]\nanswer:\n{salvage}\n"
+        elif parsed_choices and choices_are_location_mcq(parsed_choices) and self._any_confirmed_phrase_present():
+            # Prefer deterministic nearest-furniture → letter before another VLM call.
+            memory_letter = self._location_letter_from_nearest_memory(parsed_choices)
+            letter_m = re.search(r"\b([a-d])\b", (answer or "").strip().lower())
+            parsed_letter = letter_m.group(1).upper() if letter_m else ""
+            if memory_letter and (
+                answer_is_visibility_abstain(answer)
+                or not parsed_letter
+                or parsed_letter != memory_letter
+            ):
+                answer = memory_letter
+                raw = (raw or "") + f"\n[memory-location]\nanswer:\n{memory_letter}\n"
                 self.last_eqa_raw = raw
+            elif answer_is_visibility_abstain(answer):
+                salvage = self._salvage_location_mcq_letter(question, parsed_choices, commands)
+                if salvage:
+                    answer = salvage
+                    raw = (raw or "") + f"\n[salvage-location]\nanswer:\n{salvage}\n"
+                    self.last_eqa_raw = raw
         self.last_eqa_model_confident = bool(confidence)
-        if confidence and not self._graph_covers_relevant_objects():
+        covered = self._graph_covers_relevant_objects()
+        if confidence and not covered:
             confidence = False
             confidence_reasoning = (
                 confidence_reasoning
                 + " The scene graph does not yet include all question-relevant objects; explore further."
+            ).strip()
+        # Do not finalize Yes/No from absence while relevant objects are still uncovered.
+        if (
+            not covered
+            and answer_is_visibility_abstain(answer)
+            and not (parsed_choices and choices_are_location_mcq(parsed_choices))
+        ):
+            confidence = False
+            confidence_reasoning = (
+                confidence_reasoning
+                + " Yes/No from missing evidence is not final; keep exploring until objects are observed."
             ).strip()
         raw_answer = answer
         self.last_eqa_parsed = (reasoning, raw_answer, confidence, action, confidence_reasoning)

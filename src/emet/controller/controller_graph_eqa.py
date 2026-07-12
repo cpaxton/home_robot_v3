@@ -699,22 +699,31 @@ class GraphEQAController(DynamemController):
             if confidence:
                 break
             if stall_patience > 0 and self.graph_memory is not None:
-                node_count = len(self.graph_memory.get_nodes())
-                cur_answer = self.graph_memory.last_eqa_parsed[1]
-                if node_count <= prev_node_count and cur_answer and cur_answer == prev_answer:
-                    stall += 1
-                else:
+                # Never early-stop on a repeated Yes/No while question objects are still
+                # uncovered — absence is not evidence; keep exploring frontiers.
+                covers = getattr(self.graph_memory, "_graph_covers_relevant_objects", None)
+                uncovered = bool(callable(covers) and not covers())
+                if uncovered:
                     stall = 0
-                prev_node_count = node_count
-                prev_answer = cur_answer
-                if stall >= stall_patience:
-                    logger.info(
-                        "EQA early stop after %d/%d steps: graph stalled at answer %r",
-                        step + 1,
-                        max_planning_steps,
-                        cur_answer,
-                    )
-                    break
+                    prev_node_count = len(self.graph_memory.get_nodes())
+                    prev_answer = self.graph_memory.last_eqa_parsed[1]
+                else:
+                    node_count = len(self.graph_memory.get_nodes())
+                    cur_answer = self.graph_memory.last_eqa_parsed[1]
+                    if node_count <= prev_node_count and cur_answer and cur_answer == prev_answer:
+                        stall += 1
+                    else:
+                        stall = 0
+                    prev_node_count = node_count
+                    prev_answer = cur_answer
+                    if stall >= stall_patience:
+                        logger.info(
+                            "EQA early stop after %d/%d steps: graph stalled at answer %r",
+                            step + 1,
+                            max_planning_steps,
+                            cur_answer,
+                        )
+                        break
             if self.graph_memory is not None and hasattr(self, "_sync_graph_frontier_nodes"):
                 self._sync_graph_frontier_nodes()
             try:

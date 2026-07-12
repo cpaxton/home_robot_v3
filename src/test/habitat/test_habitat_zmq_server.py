@@ -20,6 +20,7 @@ except ImportError:
 def _mock_habitat_robot() -> MagicMock:
     robot = MagicMock()
     robot.get_base_pose.return_value = np.array([1.0, 2.0, 0.5], dtype=np.float64)
+    robot.get_pan_tilt.return_value = (0.0, np.deg2rad(-30.0))
     # Realistic pinhole K for 48x64 (cx≈31.5, cy≈23.5).
     camera_k = np.array([[100.0, 0.0, 31.5], [0.0, 100.0, 23.5], [0.0, 0.0, 1.0]], dtype=np.float64)
     robot.get_observation.return_value = MagicMock(
@@ -91,3 +92,30 @@ def test_habitat_zmq_handle_action_nav_world():
     args, kwargs = robot.move_base_to.call_args
     np.testing.assert_allclose(args[0], [3.0, 4.0, 0.1], atol=1e-6)
     assert kwargs.get("relative") is False
+
+
+def test_habitat_zmq_handle_action_head_to():
+    robot = _mock_habitat_robot()
+    robot.get_pan_tilt.return_value = (0.4, -0.5)
+    server = HabitatZmqServer(robot, scene_id="test-scene", port_offset=9995)
+    server.handle_action({"head_to": [0.4, -0.5], "step": 1})
+    robot.head_to.assert_called_once()
+    args, kwargs = robot.head_to.call_args
+    assert args[0] == pytest.approx(0.4)
+    assert args[1] == pytest.approx(-0.5)
+    assert server._at_goal is True
+    state = server.get_state_message()
+    assert state is not None
+    from emet.motion.kinematics import HelloStretchIdx
+
+    q = np.asarray(state["joint_positions"], dtype=np.float64)
+    assert q[HelloStretchIdx.HEAD_PAN] == pytest.approx(0.4)
+    assert q[HelloStretchIdx.HEAD_TILT] == pytest.approx(-0.5)
+
+
+def test_habitat_zmq_handle_action_joint_ack_without_xyt():
+    robot = _mock_habitat_robot()
+    server = HabitatZmqServer(robot, scene_id="test-scene", port_offset=9994)
+    server.handle_action({"joint": [0.0] * 6, "step": 2})
+    robot.move_base_to.assert_not_called()
+    assert server._at_goal is True

@@ -155,6 +155,16 @@ class HabitatZmqServer(BaseZmqServer):
             if p in ("navigation", "manipulation"):
                 self.control_mode = p
             self._at_goal = True
+        if "head_to" in action:
+            ht = action["head_to"]
+            if ht is not None and len(ht) >= 2:
+                head_to = getattr(self._robot, "head_to", None)
+                if callable(head_to):
+                    head_to(float(ht[0]), float(ht[1]), blocking=False)
+            self._at_goal = True
+        if "joint" in action and "xyt" not in action:
+            # Navigation-only Habitat backend: ack arm joint cmds so client settle loops finish.
+            self._at_goal = True
         if "xyt" not in action:
             return
         self._at_goal = False
@@ -168,6 +178,21 @@ class HabitatZmqServer(BaseZmqServer):
         self._robot.move_base_to(world_goal, relative=False, world_frame=True)
         self._last_step += 1
         self._at_goal = True
+
+    def _stretch_joint_vector(self, episode: np.ndarray) -> np.ndarray:
+        """Stretch-shaped q with episode base XYT and current head pan/tilt."""
+        from emet.motion.kinematics import HelloStretchIdx
+
+        joint = np.asarray(STRETCH_HOME_Q, dtype=np.float64).copy()
+        joint[0] = float(episode[0])
+        joint[1] = float(episode[1])
+        joint[2] = float(episode[2])
+        get_pt = getattr(self._robot, "get_pan_tilt", None)
+        if callable(get_pt):
+            pan, tilt = get_pt()
+            joint[HelloStretchIdx.HEAD_PAN] = float(pan)
+            joint[HelloStretchIdx.HEAD_TILT] = float(tilt)
+        return joint
 
     def _observation_message(self) -> dict[str, Any] | None:
         obs = self._robot.get_observation()
@@ -193,10 +218,7 @@ class HabitatZmqServer(BaseZmqServer):
         if self._initial_xyt is None:
             return None
         episode = self._episode_xyt()
-        joint = np.asarray(STRETCH_HOME_Q, dtype=np.float64).copy()
-        joint[0] = float(episode[0])
-        joint[1] = float(episode[1])
-        joint[2] = float(episode[2])
+        joint = self._stretch_joint_vector(episode)
         return {
             "rgb": rgb_jpg,
             "depth": depth_jp2,
@@ -229,8 +251,7 @@ class HabitatZmqServer(BaseZmqServer):
         if self._initial_xyt is None:
             return None
         episode = self._episode_xyt()
-        q = np.asarray(STRETCH_HOME_Q, dtype=np.float64).copy()
-        q[0], q[1], q[2] = float(episode[0]), float(episode[1]), float(episode[2])
+        q = self._stretch_joint_vector(episode)
         dq = np.zeros(self._stretch_joint_count, dtype=np.float64)
         eff = np.zeros(self._stretch_joint_count, dtype=np.float64)
         message = {
@@ -269,10 +290,7 @@ class HabitatZmqServer(BaseZmqServer):
         if self._initial_xyt is None:
             return None
         episode = self._episode_xyt()
-        joint = np.asarray(STRETCH_HOME_Q, dtype=np.float64).copy()
-        joint[0] = float(episode[0])
-        joint[1] = float(episode[1])
-        joint[2] = float(episode[2])
+        joint = self._stretch_joint_vector(episode)
         # StretchZmqClient expects robosuite/MuJoCo servo keys (head_color_image), not full-obs rgb/depth.
         return self._attach_emet_session(
             {

@@ -622,6 +622,9 @@ def main(
         visualize_ground_truth=compare_to_gt,
     )
     agent.start()
+    if explore_loop:
+        # Shorter head sweeps during scripted frontier batches (Molmo/MuJoCo smoke).
+        agent._fast_explore_lookaround = True
     if calibration_export:
         from emet.memory.graph_eqa.calibration_export import CalibrationFrameWriter
 

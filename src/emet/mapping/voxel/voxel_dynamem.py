@@ -332,19 +332,48 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
         self.history_outputs: list[str] = []
 
-    def bind_shared_vllm_from_agent(self, client: Any) -> None:
-        """Use the agent's vision-language client for DynaMem EQA image paths (when init was deferred)."""
+    def bind_shared_vllm_from_agent(self, client: Any) -> bool:
+        """Reuse the agent's VL client for DynaMem captions/EQA when it matches deferred ``eqa:`` config.
+
+        Returns True only when the client is an :class:`~emet.llms.base.AbstractVLLMClient` whose
+        :meth:`~emet.llms.base.AbstractVLLMClient.canonical_model_key` matches the pending EQA
+        run config (family, HF id, device, quant). Text routers such as ``qwen35-4B`` are VL
+        clients but **must not** steal the deferred 8B caption load — caller should then
+        :meth:`materialize_local_eqa_vllm`.
+        """
         from emet.llms.base import AbstractVLLMClient
+        from emet.llms.vllm_registry import (
+            VLLMRunConfig,
+            config_from_client,
+            default_hf_model_id,
+            should_share_vllm,
+        )
 
         if not self.run_eqa or self._eqa_pending is None:
-            return
+            return False
         if not isinstance(client, AbstractVLLMClient):
-            return
+            return False
+        p = self._eqa_pending
+        _vl_dev = self._eqa_device_resolved or ("cuda" if torch.cuda.is_available() else "cpu")
+        pending_hf = p.get("eqa_vl_hf_model_id") or default_hf_model_id(p["vl_family"])
+        pending_cfg = VLLMRunConfig(
+            str(p["vl_family"]),
+            pending_hf,
+            str(_vl_dev),
+            p.get("eqa_vl_quantization"),
+        )
+        try:
+            client_cfg = config_from_client(client)
+        except TypeError:
+            return False
+        if not should_share_vllm(client_cfg, pending_cfg):
+            return False
         self.image_description_client = client
         if self._eqa_backend == "qwen_vl":
             self.eqa_client = client
         self._eqa_pending = None
         print_vram_snapshot("voxel_dynamem_bind_shared_vllm_from_agent")
+        return True
 
     def materialize_local_eqa_vllm(self) -> None:
         """Load a dedicated local EQA VLM when defer was used but no shared VL client was bound."""

@@ -1515,7 +1515,11 @@ class DynamemController(BaseController):
         self.announce_action("Look around: sweeping head")
         tilt = float(motion_constants.look_front[1])
         # Four pans for Realsense FOV coverage (left → right-ish). Soft-wait exits on settle.
-        pans = [0.6, -0.2, -1.0, -1.8]
+        # Explore-loop / smoke: two extremes ~halves wall time (~100s → ~50s per excursion).
+        if getattr(self, "_fast_explore_lookaround", False):
+            pans = [0.6, -1.8]
+        else:
+            pans = [0.6, -0.2, -1.0, -1.8]
         n = len(pans)
         t_sweep = time.time()
         for i, pan in enumerate(pans):
@@ -2193,24 +2197,33 @@ class DynamemController(BaseController):
                 break
 
             if stall_patience > 0 and self.graph_memory is not None:
-                node_count = len(self.graph_memory.get_nodes())
-                cur_answer = self.graph_memory.last_eqa_parsed[1]
-                if node_count <= prev_node_count and cur_answer and cur_answer == prev_answer:
-                    stall += 1
-                else:
+                # Never early-stop on a repeated Yes/No while question objects are still
+                # uncovered — absence is not evidence; keep exploring frontiers.
+                covers = getattr(self.graph_memory, "_graph_covers_relevant_objects", None)
+                uncovered = bool(callable(covers) and not covers())
+                if uncovered:
                     stall = 0
-                prev_node_count = node_count
-                prev_answer = cur_answer
-                if stall >= stall_patience:
-                    logger.info(
-                        "EQA early stop after %d/%d planning steps: exploration stalled (no new graph "
-                        "nodes, stable answer %r) for %d steps; accepting the answer.",
-                        _cnt_step + 1,
-                        max_planning_steps,
-                        cur_answer,
-                        stall + 1,
-                    )
-                    break
+                    prev_node_count = len(self.graph_memory.get_nodes())
+                    prev_answer = self.graph_memory.last_eqa_parsed[1]
+                else:
+                    node_count = len(self.graph_memory.get_nodes())
+                    cur_answer = self.graph_memory.last_eqa_parsed[1]
+                    if node_count <= prev_node_count and cur_answer and cur_answer == prev_answer:
+                        stall += 1
+                    else:
+                        stall = 0
+                    prev_node_count = node_count
+                    prev_answer = cur_answer
+                    if stall >= stall_patience:
+                        logger.info(
+                            "EQA early stop after %d/%d planning steps: exploration stalled (no new graph "
+                            "nodes, stable answer %r) for %d steps; accepting the answer.",
+                            _cnt_step + 1,
+                            max_planning_steps,
+                            cur_answer,
+                            stall + 1,
+                        )
+                        break
 
         relevant_image = self._patch_images(relevant_images, patch_size=(270, 360))
         self.rerun_iter += 1

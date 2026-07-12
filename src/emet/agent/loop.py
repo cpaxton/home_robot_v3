@@ -731,8 +731,10 @@ def run_agent_with_robot(
     if use_llm and llm_client is not None and defer_eqa_vllm:
         vm = executor.agent.get_voxel_map()
         if getattr(vm, "_eqa_pending", None) is not None:
+            bound = False
             if isinstance(llm_client, AbstractVLLMClient):
-                vm.bind_shared_vllm_from_agent(llm_client)
+                bound = bool(vm.bind_shared_vllm_from_agent(llm_client))
+            if bound:
                 print_vram_snapshot(
                     "after_bind_shared_vllm_from_agent",
                     extra="DynaMem caption/EQA uses the same VL object as --llm",
@@ -747,7 +749,7 @@ def run_agent_with_robot(
                     pass
                 vm.materialize_local_eqa_vllm()
                 logger.info(
-                    "EQA: loaded DynaMem VLM from yaml (agent --llm is not a shareable VL client). "
+                    "EQA: loaded DynaMem VLM from yaml (agent --llm does not match eqa: checkpoint). "
                     "To reuse one VL for chat+captions: --llm qwen3-vl-eqa or --llm gemma4-vl-eqa with "
                     "--eqa --share-memory-vllm."
                 )

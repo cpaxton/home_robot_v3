@@ -370,6 +370,7 @@ def run_world_change_episode(
                     use_sensor_perception=not run_cfg.no_sensor_perception,
                 )
                 agent.start()
+                agent._fast_explore_lookaround = True
 
                 executor = EQAExecuter(agent)
                 executor.rotate_in_place()

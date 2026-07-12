@@ -134,6 +134,42 @@ def test_relevant_memory_summary_includes_nearest_furniture():
     assert "oven" not in summary.split("nearest:")[-1]  # far oven not among nearest
 
 
+def test_location_letter_from_nearest_memory_picks_armchair_option():
+    """Nearest armchair maps to the living-room-armchairs MCQ letter."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([-1.77, 4.11, 0.5]), ["basket", "cabinet"])
+    mem.add_observation(rgb, np.array([-0.71, 3.12, 0.5]), ["armchair"])
+    mem._relevant_phrases = ["woven basket"]
+    mem._relevant_objects = ["basket"]
+    choices = [
+        "By the kitchen counter",
+        "Between TV and living room sofas",
+        "Next to the dining table",
+        "Next to the living room armchairs",
+    ]
+    assert mem._location_letter_from_nearest_memory(choices) == "D"
+
+
+def test_query_answer_does_not_finalize_yes_no_when_uncovered():
+    """Uncovered relevant objects: Yes/No stays non-confident so exploration continues."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    raw = (
+        "reasoning: no blanket in view\nanswer: No\nconfidence: true\n"
+        "action: none\nconfidence_reasoning: none seen"
+    )
+    mem = GraphEQAMemory(eqa_client=lambda _c: raw, image_description_client=lambda _x: "sofa")
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["sofa"])
+    mem._relevant_objects = ["blanket"]
+    mem._relevant_phrases = ["blanket"]
+    mem.memory_summary_enabled = True
+    _r, _a, confidence, _cr, _pt, _imgs = mem.query_answer(
+        "Is there a blanket on the bed? A) Yes B) No C) Maybe D) Unknown. Answer:"
+    )
+    assert confidence is False
+    assert mem.last_eqa_model_confident is True
+
+
 def test_select_relevant_obs_ids_prefers_keyword_target_before_grounder():
     """HM3D keyword/label matches should be Image 1 ahead of SigLIP grounder fills."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
