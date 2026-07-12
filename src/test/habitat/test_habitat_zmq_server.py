@@ -20,13 +20,34 @@ except ImportError:
 def _mock_habitat_robot() -> MagicMock:
     robot = MagicMock()
     robot.get_base_pose.return_value = np.array([1.0, 2.0, 0.5], dtype=np.float64)
+    # Realistic pinhole K for 48x64 (cx≈31.5, cy≈23.5).
+    camera_k = np.array([[100.0, 0.0, 31.5], [0.0, 100.0, 23.5], [0.0, 0.0, 1.0]], dtype=np.float64)
     robot.get_observation.return_value = MagicMock(
         rgb=np.zeros((48, 64, 3), dtype=np.uint8),
         depth=np.ones((48, 64), dtype=np.float32) * 1.5,
-        camera_K=np.eye(3),
+        camera_K=camera_k,
         camera_pose=np.eye(4),
     )
     return robot
+
+
+def test_habitat_zmq_scales_camera_k_with_image():
+    robot = _mock_habitat_robot()
+    full_k = np.asarray(robot.get_observation().camera_K, dtype=np.float64)
+    server = HabitatZmqServer(robot, scene_id="test-scene", port_offset=9996, image_scaling=0.5)
+    with (
+        patch("emet_habitat.zmq_server.compression.to_jpg", side_effect=lambda x: x),
+        patch("emet_habitat.zmq_server.compression.to_jp2", side_effect=lambda x: x),
+    ):
+        msg = server.get_full_observation_message()
+    assert msg is not None
+    assert msg["rgb_height"] == 24
+    assert msg["rgb_width"] == 32
+    k = np.asarray(msg["camera_K"], dtype=np.float64)
+    np.testing.assert_allclose(k[0, 0], full_k[0, 0] * 0.5, atol=1e-6)
+    np.testing.assert_allclose(k[1, 1], full_k[1, 1] * 0.5, atol=1e-6)
+    np.testing.assert_allclose(k[0, 2], full_k[0, 2] * 0.5, atol=1e-6)
+    np.testing.assert_allclose(k[1, 2], full_k[1, 2] * 0.5, atol=1e-6)
 
 
 def test_habitat_zmq_full_obs_publishes_stretch_contract():

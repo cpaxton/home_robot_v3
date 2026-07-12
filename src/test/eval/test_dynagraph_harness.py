@@ -19,7 +19,7 @@ from emet.eval.benchmark_dynagraph import (
 
 def test_habitat_eqa_harness_profile_and_flags():
     params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "dynagraph")
-    assert resolve_harness_profile("habitat_eqa") == "smoke"
+    assert resolve_harness_profile("habitat_eqa") == "unified_eqa"
     assert params.get("dynagraph_merge_xy_m") == 0.0
     flags = dynagraph_harness_flags(params)
     assert flags["memory_summary"] is True

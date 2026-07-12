@@ -185,7 +185,7 @@ def _make_controller(
     common = {
         "robot": robot,
         "parameters": params,
-        "save_rerun": False if no_rerun else False,
+        "save_rerun": not no_rerun,
         "cpu_only": not use_real_vlm,
         "use_sensor_perception": graph_perception,
         "use_instance_graph": bool(harness_opts.get("use_instance_graph", False)),

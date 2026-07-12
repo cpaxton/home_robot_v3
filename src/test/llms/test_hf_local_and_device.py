@@ -87,3 +87,35 @@ def test_assert_cuda_placement_allows_cpu_when_flagged():
     m = _M()
     primary = assert_cuda_placement(m, requested_device="cuda", model_label="test", allow_cpu=True)
     assert primary.startswith("cpu")
+
+
+def test_assert_cuda_placement_inspects_all_parameters():
+    """Late CPU tensors must be caught (not only the first 64)."""
+
+    class _M(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            for i in range(70):
+                self.register_parameter(f"p{i}", torch.nn.Parameter(torch.zeros(1)))
+            # Simulate a late offloaded param: first 70 are still CPU; assert uses full scan.
+            self.tail = torch.nn.Parameter(torch.zeros(1))
+
+    m = _M()
+    m.hf_device_map = {f"p{i}": "cuda:0" for i in range(70)}
+    m.hf_device_map["tail"] = "cpu"
+    with pytest.raises(RuntimeError, match="hf_device_map|not fully on GPU"):
+        assert_cuda_placement(m, requested_device="cuda", model_label="test", allow_cpu=False)
+
+
+def test_parameter_device_counts_max_params_none_counts_all():
+    class _M(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            for i in range(70):
+                self.register_parameter(f"p{i}", torch.nn.Parameter(torch.zeros(1)))
+
+    m = _M()
+    sampled = parameter_device_counts(m, max_params=64)
+    full = parameter_device_counts(m, max_params=None)
+    assert sum(sampled.values()) == 64
+    assert sum(full.values()) == 70

@@ -96,8 +96,10 @@ def apply_eval_graph_fusion_parameters(
     fusion["enabled"] = True
     if float(merge_xy) > 0.0:
         fusion["fallback_spatial_merge_xy_m"] = float(merge_xy)
-    elif float(fusion.get("fallback_spatial_merge_xy_m", 0.0) or 0.0) <= 0.0:
-        fusion["fallback_spatial_merge_xy_m"] = 0.45
+    else:
+        # Zero-merge profiles (smoke / unified_eqa / graph_eqa_baseline) must not keep the
+        # default nonzero fallback merge from graph_object_fusion.yaml.
+        fusion["fallback_spatial_merge_xy_m"] = 0.0
     params.set("graph_object_fusion", fusion)
     return params
 

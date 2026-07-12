@@ -202,15 +202,20 @@ def _dispatch_tool_calls(
     debug: bool = False,
     verbose_tools: bool = False,
 ) -> tuple[bool, list[str], bool]:
-    """Execute a list of parsed tool_calls.
+    """Execute a list of parsed tool_calls in model-specified order.
+
+    Executor-mapped tools run immediately (not batched past a following direct
+    tool) so sequences like ``[scan_environment, describe_scene]`` capture the
+    post-scan frame.
 
     Returns (continue_running, list_of_result_strings, has_info_results).
     continue_running is False if quit was requested.
-    has_info_results is True if any tool with returns_info=True produced output.
+    has_info_results is True if any tool with returns_info=True produced output
+    (including failure messages that should be relayed to the user).
     """
-    executor_cmds: list[tuple[str, str]] = []
     results: list[str] = []
     has_info = False
+    ok = True
 
     if verbose_tools and tool_calls:
         print(colored("[tool_calls raw]", "yellow"), flush=True)
@@ -229,45 +234,44 @@ def _dispatch_tool_calls(
 
         cmds = tool.to_executor(args)
         if cmds:
-            executor_cmds.extend(cmds)
-        else:
-            try:
-                result = tool.func(**args) if args else tool.func()
-                result_str = str(result) if result is not None else "ok"
-                results.append(f"[{name}] {result_str}")
-                if tool.returns_info and result is not None and result != "":
-                    has_info = True
-                if result is not None and result != "":
-                    if verbose_tools:
-                        print(colored(f"[{name}]", "magenta"), result_str, flush=True)
-                    else:
-                        print(colored(f"[{name}]", "cyan"), result_str)
-            except Exception as e:
-                err = f"Tool {name} failed: {e}"
-                logger.warning(err)
-                print(colored(err, "red"))
+            if any(c[0] == "quit" for c in cmds):
+                if chat_log:
+                    for r in results:
+                        chat_log.log("tool", r)
+                return False, results, has_info
+            if verbose_tools:
+                print(colored("[executor]", "yellow"), json.dumps(cmds, default=str), flush=True)
+            ran_ok = executor(cmds)
+            ok = ok and ran_ok
+            cmd_names = [c[0] for c in cmds]
+            summary = f"Executor ran: {', '.join(cmd_names)} -> {'ok' if ran_ok else 'failed/interrupted'}"
+            results.append(summary)
+            if verbose_tools:
+                print(colored("[executor summary]", "magenta"), summary, flush=True)
+            continue
+
+        try:
+            result = tool.func(**args) if args else tool.func()
+            result_str = str(result) if result is not None else "ok"
+            results.append(f"[{name}] {result_str}")
+            if tool.returns_info and result is not None and result != "":
+                has_info = True
+            if result is not None and result != "":
                 if verbose_tools:
-                    import traceback
+                    print(colored(f"[{name}]", "magenta"), result_str, flush=True)
+                else:
+                    print(colored(f"[{name}]", "cyan"), result_str)
+        except Exception as e:
+            err = f"Tool {name} failed: {e}"
+            logger.warning(err)
+            print(colored(err, "red"))
+            if verbose_tools:
+                import traceback
 
-                    traceback.print_exc()
-                results.append(err)
-
-    if not executor_cmds:
-        if chat_log:
-            for r in results:
-                chat_log.log("tool", r)
-        return True, results, has_info
-
-    if any(c[0] == "quit" for c in executor_cmds):
-        return False, results, has_info
-
-    if verbose_tools:
-        print(colored("[executor]", "yellow"), json.dumps(executor_cmds, default=str), flush=True)
-    ok = executor(executor_cmds)
-    cmd_names = [c[0] for c in executor_cmds]
-    results.append(f"Executor ran: {', '.join(cmd_names)} -> {'ok' if ok else 'failed/interrupted'}")
-    if verbose_tools:
-        print(colored("[executor summary]", "magenta"), results[-1], flush=True)
+                traceback.print_exc()
+            results.append(err)
+            if tool.returns_info:
+                has_info = True
 
     if chat_log:
         for r in results:

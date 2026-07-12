@@ -44,7 +44,7 @@ profiles:
 # ``parameters.dynagraph_harness`` for ``DynagraphController``.
 harness:
   habitat_eqa:
-    profile: smoke
+    profile: unified_eqa
     dynagraph:
       memory_summary: true
       mcq_debias: false

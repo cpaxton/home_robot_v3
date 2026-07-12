@@ -318,8 +318,15 @@ class Qwen3VLClient(AbstractVLLMClient):
             return entry
         try:
             prefix_ids, past = self._encode_system_prefix(sys_txt)
+            cached_past = clone_past_key_values(past)
+            if cached_past is None:
+                logger.warning(
+                    "VL prefix cache: could not clone past_key_values; disabling prefix cache"
+                )
+                self.cache_system_prefix = False
+                return None
             entry = PrefixKVCacheEntry(
-                past_key_values=clone_past_key_values(past),
+                past_key_values=cached_past,
                 prefix_token_len=int(prefix_ids.shape[1]),
                 prefix_token_ids=prefix_ids.detach().clone(),
             )
@@ -385,28 +392,35 @@ class Qwen3VLClient(AbstractVLLMClient):
             # Text-only prefix reuse. Pass the FULL prompt ids + mask; transformers 5.x
             # crops with ``input_ids[:, past_length:]`` when mask length matches ids.
             # Pre-slicing to a suffix made that crop empty → reshape [1, 0, -1, head_dim].
-            for vision_key in (
-                "pixel_values",
-                "pixel_values_videos",
-                "image_grid_thw",
-                "video_grid_thw",
-                "second_per_grid_ts",
-            ):
-                model_inputs.pop(vision_key, None)
-            model_inputs["past_key_values"] = clone_past_key_values(past_key_values)
-            ids = model_inputs["input_ids"]
-            if (
-                "attention_mask" not in model_inputs
-                or model_inputs["attention_mask"] is None
-                or int(model_inputs["attention_mask"].shape[1]) != input_len
-            ):
-                model_inputs["attention_mask"] = torch.ones(
-                    (ids.shape[0], input_len),
-                    dtype=torch.long,
-                    device=ids.device,
-                )
-            model_inputs.pop("position_ids", None)
-            prompt_len_for_stop = input_len
+            cloned_past = clone_past_key_values(past_key_values)
+            if cloned_past is None:
+                logger.warning("VL prefix cache: clone failed; using full generate")
+                past_key_values = None
+                prefix_len = 0
+                prompt_len_for_stop = input_len
+            else:
+                for vision_key in (
+                    "pixel_values",
+                    "pixel_values_videos",
+                    "image_grid_thw",
+                    "video_grid_thw",
+                    "second_per_grid_ts",
+                ):
+                    model_inputs.pop(vision_key, None)
+                model_inputs["past_key_values"] = cloned_past
+                ids = model_inputs["input_ids"]
+                if (
+                    "attention_mask" not in model_inputs
+                    or model_inputs["attention_mask"] is None
+                    or int(model_inputs["attention_mask"].shape[1]) != input_len
+                ):
+                    model_inputs["attention_mask"] = torch.ones(
+                        (ids.shape[0], input_len),
+                        dtype=torch.long,
+                        device=ids.device,
+                    )
+                model_inputs.pop("position_ids", None)
+                prompt_len_for_stop = input_len
         else:
             past_key_values = None
             prefix_len = 0

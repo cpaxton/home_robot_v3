@@ -23,9 +23,29 @@ from emet.core.zmq_protocol import (
 from emet.motion.constants import STRETCH_HOME_Q
 from emet.simulation.sim_object_placements import apply_navigation_origin_to_session
 from emet.utils.geometry import xyt_base_to_global, xyt_global_to_base
+from emet.utils.image import align_camera_matrix_to_image_size
 from emet.utils.observation_layout import rgb_height_width_for_zmq
 from emet_habitat.habitat_serve_session import HabitatServeConfig, open_habitat_robot_for_serve
 from emet_habitat.robot_client import HabitatRobotClient
+
+
+def _scale_camera_k_to_image(
+    camera_K: np.ndarray | None,
+    *,
+    calib_height: int,
+    calib_width: int,
+    image_height: int,
+    image_width: int,
+) -> np.ndarray:
+    """Scale Habitat intrinsics to match published RGB/depth resolution."""
+    k = np.asarray(camera_K if camera_K is not None else np.eye(3), dtype=np.float64)
+    return align_camera_matrix_to_image_size(
+        k,
+        calib_height=calib_height,
+        calib_width=calib_width,
+        image_height=image_height,
+        image_width=image_width,
+    )
 
 
 class HabitatZmqServer(BaseZmqServer):
@@ -157,8 +177,16 @@ class HabitatZmqServer(BaseZmqServer):
         depth = np.asarray(obs.depth, dtype=np.float32)
         if rgb.ndim < 2 or depth.ndim < 2:
             return None
+        calib_h, calib_w = int(rgb.shape[0]), int(rgb.shape[1])
         rgb, depth = self._rescale_color_and_depth(rgb, depth, self.image_scaling)
         rgb_height, rgb_width = rgb_height_width_for_zmq(rgb)
+        camera_k = _scale_camera_k_to_image(
+            obs.camera_K,
+            calib_height=calib_h,
+            calib_width=calib_w,
+            image_height=int(rgb.shape[0]),
+            image_width=int(rgb.shape[1]),
+        )
         depth_u16 = (depth * 1000.0).astype(np.uint16)
         rgb_jpg = compression.to_jpg(rgb)
         depth_jp2 = compression.to_jp2(depth_u16)
@@ -172,7 +200,7 @@ class HabitatZmqServer(BaseZmqServer):
         return {
             "rgb": rgb_jpg,
             "depth": depth_jp2,
-            "camera_K": np.asarray(obs.camera_K, dtype=np.float64),
+            "camera_K": camera_k,
             "camera_pose": np.asarray(obs.camera_pose, dtype=np.float64),
             "ee_pose": np.eye(4, dtype=np.float64),
             "joint": joint,
@@ -228,8 +256,16 @@ class HabitatZmqServer(BaseZmqServer):
         depth = np.asarray(obs.depth, dtype=np.float32)
         if rgb.ndim < 2 or depth.ndim < 2:
             return None
+        calib_h, calib_w = int(rgb.shape[0]), int(rgb.shape[1])
         rgb, depth = self._rescale_color_and_depth(rgb, depth, self.ee_image_scaling)
         depth_u16 = (depth * 1000.0).astype(np.uint16)
+        camera_k = _scale_camera_k_to_image(
+            obs.camera_K,
+            calib_height=calib_h,
+            calib_width=calib_w,
+            image_height=int(rgb.shape[0]),
+            image_width=int(rgb.shape[1]),
+        )
         if self._initial_xyt is None:
             return None
         episode = self._episode_xyt()
@@ -242,7 +278,7 @@ class HabitatZmqServer(BaseZmqServer):
             {
                 "head_color_image": compression.to_jpg(rgb),
                 "head_depth_image": compression.to_jp2(depth_u16),
-                "head_camera_K": np.asarray(obs.camera_K, dtype=np.float64),
+                "head_camera_K": camera_k,
                 "camera_pose": np.asarray(obs.camera_pose, dtype=np.float64),
                 "joint_positions": joint,
                 "base_pose": episode.copy(),

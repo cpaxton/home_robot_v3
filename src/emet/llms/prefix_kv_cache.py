@@ -80,7 +80,8 @@ def clone_past_key_values(past_key_values: Any) -> Any:
 
         return copy.deepcopy(past_key_values)
     except Exception:
-        return past_key_values
+        # Never return the original object — generate() mutates caches in place.
+        return None
 
 
 class PrefixKVCache:

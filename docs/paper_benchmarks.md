@@ -51,8 +51,8 @@ Merge/staleness and short-episode caps are defined once in [`configs/benchmarks/
 | `eqa` | 0.45 | 256 + nav cap 48 | SQA3D tuned (`dynagraph`) |
 | `find_phase` | 0.15 | 256 | OVMM find-phase (`dynagraph`, `ground_truth`) |
 | `graph_eqa_baseline` | 0 | 0 | OVMM `graph_eqa` row |
-| `smoke` | 0 | 0 | HM-EQA harness profile, SQA3D mock-LLM / CI |
-| `unified_eqa` | 0 | 0 + nav cap 48 | Optional shared EQA profile (Habitat + SQA3D) |
+| `smoke` | 0 | 0 | SQA3D mock-LLM / CI; Habitat via explicit profile override |
+| `unified_eqa` | 0 | 0 + nav cap 48 | HM-EQA harness default (Habitat + shared EQA) |
 
 **Interactive agent exploration** (same Dynagraph memory as paper harnesses):
 
@@ -75,7 +75,7 @@ Benchmark tracks that exercise agent-style exploration (frontier / rotate) alrea
 
 | Harness | Profile | Dynagraph EQA extras |
 |---------|---------|----------------------|
-| `habitat_eqa` | `smoke` | memory on, debias off, conservative explore |
+| `habitat_eqa` | `unified_eqa` | memory on, debias off, conservative explore |
 | `habitat_ovmm_find` | `find_phase` | EQA off |
 | `ovmm_find_phase` | `find_phase` | Robocasa / Molmo search |
 | `sqa3d` | `eqa` | memory/debias off (open QA) |

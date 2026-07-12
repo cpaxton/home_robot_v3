@@ -560,7 +560,6 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
                 "required": ["degrees"],
             },
             func=rotate_base,
-            executor_commands=lambda args: [("rotate_base", str(args.get("degrees", 90)))],
             returns_info=True,
         )
     )
@@ -573,6 +572,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
             dist = float(meters)
         except (TypeError, ValueError):
             return f"Invalid meters: {meters!r}."
+        dist = float(np.clip(dist, 0.0, 1.5))
         ok = executor([("move_forward", str(dist))])
         if not ok:
             return "Move forward failed or interrupted."
@@ -597,7 +597,6 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
                 "required": ["meters"],
             },
             func=move_forward,
-            executor_commands=lambda args: [("move_forward", str(args.get("meters", 0.5)))],
             returns_info=True,
         )
     )

@@ -47,6 +47,20 @@ def test_clone_past_key_values_tuple():
     assert torch.equal(cloned[0][1], v)
 
 
+def test_clone_past_key_values_returns_none_on_deepcopy_failure(monkeypatch):
+    class UnclonableCache:
+        pass
+
+    obj = UnclonableCache()
+
+    def _boom(_x):
+        raise RuntimeError("cannot deepcopy")
+
+    monkeypatch.setattr("copy.deepcopy", _boom)
+    assert clone_past_key_values(obj) is None
+    assert clone_past_key_values(obj) is not obj
+
+
 def test_clone_past_key_values_dynamic_cache():
     from transformers.cache_utils import DynamicCache
 

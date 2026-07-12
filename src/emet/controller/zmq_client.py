@@ -45,7 +45,7 @@ from emet.utils.geometry import (
     sophus2posquat,
     xyt_base_to_global,
 )
-from emet.utils.image import pinhole_camera_from_intrinsics_and_depth
+from emet.utils.image import align_camera_matrix_to_image_size, pinhole_camera_from_intrinsics_and_depth
 from emet.utils.logger import Logger
 from emet.utils.memory import lookup_address
 from emet.utils.point_cloud import show_point_cloud
@@ -1683,7 +1683,19 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 depth = compression.from_jp2(compressed_depth) / 1000
                 output["depth"] = depth
                 dh, dw = int(depth.shape[0]), int(depth.shape[1])
-                k = np.asarray(output["camera_K"], dtype=np.float64)
+                k = np.asarray(output["camera_K"], dtype=np.float64).reshape(3, 3)
+                # Defend against servers that rescale RGB/depth but leave full-res K.
+                calib_w = max(1, int(round(2.0 * float(k[0, 2]) + 1.0)))
+                calib_h = max(1, int(round(2.0 * float(k[1, 2]) + 1.0)))
+                if calib_w != dw or calib_h != dh:
+                    k = align_camera_matrix_to_image_size(
+                        k,
+                        calib_height=calib_h,
+                        calib_width=calib_w,
+                        image_height=dh,
+                        image_width=dw,
+                    )
+                    output["camera_K"] = k
                 if camera is None or int(camera.height) != dh or int(camera.width) != dw:
                     if camera is not None:
                         logger.warning(

@@ -20,21 +20,25 @@ def env_allow_cpu_vlm() -> bool:
     return os.environ.get("EMET_ALLOW_CPU_VLM", "").strip().lower() in _TRUE
 
 
-def parameter_device_counts(model: Any, *, max_params: int = 64) -> Counter[str]:
-    """Sample parameter devices (up to ``max_params``) → counts by device string."""
+def parameter_device_counts(model: Any, *, max_params: int | None = 64) -> Counter[str]:
+    """Count parameter/buffer devices.
+
+    When ``max_params`` is set, only the first ``max_params`` tensors are sampled
+    (for short diagnostic summaries). Pass ``max_params=None`` to inspect all.
+    """
     counts: Counter[str] = Counter()
     n = 0
     for p in model.parameters():
         counts[str(p.device)] += 1
         n += 1
-        if n >= max_params:
+        if max_params is not None and n >= max_params:
             break
     # Also peek at buffers (bnb scales sometimes live as buffers)
-    if n < max_params and hasattr(model, "buffers"):
+    if (max_params is None or n < max_params) and hasattr(model, "buffers"):
         for b in model.buffers():
             counts[str(b.device)] += 1
             n += 1
-            if n >= max_params:
+            if max_params is not None and n >= max_params:
                 break
     return counts
 
@@ -64,9 +68,10 @@ def assert_cuda_placement(
 ) -> str:
     """Ensure weights live on CUDA when ``requested_device`` is cuda.
 
-    Returns the primary device string. Raises ``RuntimeError`` if any sampled
+    Returns the primary device string. Raises ``RuntimeError`` if any
     weights are on CPU/meta/disk while CUDA was requested, unless
-    ``EMET_ALLOW_CPU_VLM=1`` (or ``allow_cpu=True``).
+    ``EMET_ALLOW_CPU_VLM=1`` (or ``allow_cpu=True``). Inspects all parameters
+    and buffers (not a bounded sample).
     """
     req = (requested_device or "").strip().lower()
     primary = primary_param_device(model)
@@ -74,13 +79,26 @@ def assert_cuda_placement(
         return primary
 
     allow = env_allow_cpu_vlm() if allow_cpu is None else bool(allow_cpu)
-    counts = parameter_device_counts(model)
+    # Prefer hf_device_map when present (covers offloaded / multi-device layouts).
+    device_map = getattr(model, "hf_device_map", None)
+    if isinstance(device_map, dict) and device_map:
+        bad_map = {
+            k: v
+            for k, v in device_map.items()
+            if str(v).startswith("cpu") or str(v) in ("meta", "disk") or "disk" in str(v)
+        }
+        if bad_map and not allow:
+            raise RuntimeError(
+                f"{model_label} was requested on {requested_device!r} but hf_device_map has non-GPU "
+                f"placements ({bad_map}). Free VRAM or set EMET_ALLOW_CPU_VLM=1 for the slow CPU path."
+            )
+    counts = parameter_device_counts(model, max_params=None)
     bad = {d: n for d, n in counts.items() if d.startswith("cpu") or d in ("meta",) or "disk" in d}
     if bad and not allow:
-        detail = summarize_model_devices(model)
+        detail = ",".join(f"{dev}={n}" for dev, n in sorted(counts.items()))
         raise RuntimeError(
             f"{model_label} was requested on {requested_device!r} but weights are not fully on GPU "
-            f"(sampled devices: {detail}). This causes multi-minute CPU inference and looks like a hang. "
+            f"(devices: {detail}). This causes multi-minute CPU inference and looks like a hang. "
             "Free VRAM (close other GPU jobs), use a smaller --llm, or set EMET_ALLOW_CPU_VLM=1 to "
             "explicitly allow the slow CPU path."
         )

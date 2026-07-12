@@ -94,9 +94,21 @@ def test_dynamic_explore_graph_eqa_baseline_merge():
     assert flags["explore_when_uncovered"] == "off"
 
 
-def test_habitat_eqa_method_parameters_use_smoke_profile():
+def test_habitat_eqa_method_parameters_use_unified_eqa_profile():
     params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "dynagraph")
     assert params.get("dynagraph_merge_xy_m") == 0.0
-    assert resolve_harness_profile("habitat_eqa") == "smoke"
+    assert resolve_harness_profile("habitat_eqa") == "unified_eqa"
     flags = dynagraph_harness_flags(params)
     assert flags["mcq_debias"] is False
+    fusion = params.get("graph_object_fusion") or {}
+    assert float(fusion.get("fallback_spatial_merge_xy_m", -1)) == 0.0
+
+
+def test_zero_merge_profiles_disable_fusion_fallback():
+    from emet.eval.benchmark_dynagraph import apply_dynagraph_profile
+
+    for name in ("smoke", "unified_eqa", "graph_eqa_baseline"):
+        params = apply_dynagraph_profile(get_parameters("dynav_config.yaml"), name)
+        assert params.get("dynagraph_merge_xy_m") == 0.0
+        fusion = params.get("graph_object_fusion") or {}
+        assert float(fusion.get("fallback_spatial_merge_xy_m", -1)) == 0.0, name
