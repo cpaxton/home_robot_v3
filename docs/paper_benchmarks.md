@@ -49,10 +49,12 @@ Merge/staleness and short-episode caps are defined once in [`configs/benchmarks/
 |---------|-----------|-----------|---------|
 | `interactive` | 0.45 | 256 | `emet run dynagraph`, `emet run agent` (default), dynav YAML default |
 | `eqa` | 0.45 | 256 + nav cap 48 | SQA3D tuned (`dynagraph`) |
+| `unified_eqa` | 0.45 | 256 + nav cap 48 | **HM-EQA Dynagraph default** (Habitat + shared EQA); same merge as interactive |
 | `find_phase` | 0.15 | 256 | OVMM find-phase (`dynagraph`, `ground_truth`) |
-| `graph_eqa_baseline` | 0 | 0 | OVMM `graph_eqa` row |
-| `smoke` | 0 | 0 | SQA3D mock-LLM / CI; Habitat via explicit profile override |
-| `unified_eqa` | 0 | 0 + nav cap 48 | HM-EQA harness default (Habitat + shared EQA) |
+| `graph_eqa_baseline` | 0 | 0 | GraphEQA comparison row only (OVMM / dynamic-explore `graph_eqa`) |
+| `smoke` | 0 | 0 | CI / mock-LLM only — **not** the Dynagraph paper default |
+
+**Merge policy:** Dynagraph’s product and paper *method* rows use merge (0.45 m interactive/EQA, 0.15 m find-phase). True zero-merge is reserved for (1) GraphEQA baseline parity and (2) fast CI smoke. Do not report HM-EQA Dynagraph numbers under `smoke` / zero-merge — that disables the instance-memory behavior the system is built around.
 
 **Interactive agent exploration** (same Dynagraph memory as paper harnesses):
 

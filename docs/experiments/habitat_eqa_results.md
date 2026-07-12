@@ -149,6 +149,8 @@ Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representa
 
 **In progress:** representative cross-benchmark sample `rep_sample_20260706` (OVMM, SQA3D, dynamic explore, figures). Full 113-question sweep next.
 
+**Merge policy (2026-07-11):** HM-EQA Dynagraph (`harness.habitat_eqa` → `unified_eqa`) uses **0.45 m merge / staleness 256**, matching interactive/agent memory. Earlier “no merge” HM-EQA rows were GraphEQA-parity leftovers and under-counted Dynagraph (Q17 basket instance fragmentation). Keep `smoke` / `graph_eqa_baseline` at true zero-merge for CI and GraphEQA comparison only — do not use them as the Dynagraph method default.
+
 ### Commands
 
 ```bash
