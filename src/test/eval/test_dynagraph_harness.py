@@ -29,6 +29,36 @@ def test_habitat_eqa_harness_profile_and_flags():
     assert flags["siglip_grounding"] is True
 
 
+def test_enrich_episode_metrics_harness_fingerprint_merge_on():
+    """Episode JSONL fingerprint must record merge-on unified_eqa defaults."""
+    from types import SimpleNamespace
+
+    from emet.habitat.episode_debug import enrich_episode_metrics
+    from emet.habitat.metrics import EpisodeMetrics
+
+    params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "dynagraph")
+    agent = SimpleNamespace(parameters=params, graph_memory=None)
+    metrics = EpisodeMetrics(
+        dataset="hmeqa",
+        method="dynagraph",
+        question_id=17,
+        scene="s",
+        floor=0,
+        question="q",
+        gold_answer_letter="D",
+        predicted_answer="D",
+        correct=True,
+        confident=True,
+        planning_steps=1,
+        success=True,
+    )
+    enrich_episode_metrics(metrics, agent=agent, choices=["a", "b", "c", "d"])
+    assert float(metrics.harness.get("dynagraph_merge_xy_m")) == 0.45
+    assert float(metrics.harness.get("fallback_spatial_merge_xy_m")) == 0.45
+    assert metrics.harness.get("profile") == "unified_eqa"
+    assert metrics.harness.get("explore_when_uncovered") == "conservative"
+
+
 def test_habitat_eqa_overrides_layered():
     params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "dynagraph")
     apply_dynagraph_harness_overrides(params, mcq_debias=True, explore_when_uncovered="off")

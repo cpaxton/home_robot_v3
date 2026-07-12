@@ -118,6 +118,37 @@ def test_relevant_memory_summary_surfaces_observed_objects():
     assert "unicorn: not observed during exploration" in missing
 
 
+def test_relevant_memory_summary_includes_nearest_furniture():
+    """Location MCQ helper: PRESENT lines list nearby furniture labels."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([-1.77, 4.11, 0.5]), ["basket", "cabinet"])
+    mem.add_observation(rgb, np.array([-0.71, 3.12, 0.5]), ["armchair"])
+    mem.add_observation(rgb, np.array([10.0, 10.0, 0.5]), ["oven"])  # far away
+    mem._relevant_phrases = ["woven basket"]
+    mem._relevant_objects = ["basket"]
+    summary = mem._relevant_memory_summary()
+    assert "woven basket: PRESENT" in summary or "basket: PRESENT" in summary
+    assert "nearest:" in summary
+    assert "armchair" in summary
+    assert "oven" not in summary.split("nearest:")[-1]  # far oven not among nearest
+
+
+def test_select_relevant_obs_ids_prefers_keyword_target_before_grounder():
+    """HM3D keyword/label matches should be Image 1 ahead of SigLIP grounder fills."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["oven"])
+    mem.add_observation(rgb, np.array([1.0, 0.0, 0.5]), ["basket", "cabinet"])
+    mem.add_observation(rgb, np.array([2.0, 0.0, 0.5]), ["door"])
+    mem._relevant_objects = ["basket"]
+    mem._relevant_phrases = ["woven basket"]
+    # Grounder points at oven (wrong); keyword match for basket must still win Image 1.
+    mem.set_obs_id_grounder(lambda text: 1)
+    obs_ids = mem._select_relevant_obs_ids(max_images=3)
+    assert obs_ids[0] == 2
+
+
 def test_relevant_memory_summary_uses_siglip_grounder():
     """A SigLIP visual match marks an object PRESENT even with no caption-matched node."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)

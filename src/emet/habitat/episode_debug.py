@@ -50,6 +50,29 @@ def coerce_parameters_dict(parameters: Any) -> dict[str, Any]:
     return {}
 
 
+def harness_fingerprint_from_parameters(parameters: Any) -> dict[str, Any]:
+    """Extract merge / explore / profile fields for episode + run manifests."""
+    params = coerce_parameters_dict(parameters)
+    fusion = params.get("graph_object_fusion") or {}
+    if not isinstance(fusion, dict):
+        fusion = {}
+    block = params.get("dynagraph_harness") or {}
+    if not isinstance(block, dict):
+        block = {}
+    return {
+        "git_commit": _git_head(),
+        "dynagraph_merge_xy_m": params.get("dynagraph_merge_xy_m"),
+        "dynagraph_staleness_horizon": params.get("dynagraph_staleness_horizon"),
+        "fallback_spatial_merge_xy_m": fusion.get("fallback_spatial_merge_xy_m"),
+        "profile": block.get("profile"),
+        "memory_summary": block.get("memory_summary"),
+        "mcq_debias": block.get("mcq_debias"),
+        "explore_when_uncovered": block.get("explore_when_uncovered"),
+        "harness": block.get("harness"),
+        "method": block.get("method"),
+    }
+
+
 def run_tag_from_output_jsonl(output_jsonl: Path | None) -> str:
     if output_jsonl is None:
         return "habitat_episode"
@@ -92,6 +115,7 @@ def write_run_manifest(
         "device": device,
         "resume": resume,
         "git_commit": _git_head(),
+        "harness": harness_fingerprint_from_parameters(params),
         "graph_eqa_frontier_nodes": params.get("graph_eqa_frontier_nodes"),
         "export_full_graph": os.environ.get("HABITAT_EQA_EXPORT_GRAPH", "").strip().lower()
         in ("1", "true", "yes", "on"),
@@ -157,6 +181,15 @@ def enrich_episode_metrics(
         metrics.frontier_nodes = sum(1 for n in gm.get_nodes() if getattr(n, "is_frontier", False))
         metrics.graph_nodes = len(gm.get_nodes())
         metrics.observations = len(getattr(gm, "_observations", []) or [])
+    params = getattr(agent, "parameters", None)
+    if params is None and gm is not None:
+        params = getattr(gm, "parameters", None)
+    fp = harness_fingerprint_from_parameters(params)
+    if vl_family:
+        fp["vl_family"] = str(vl_family)
+    if vl_hf_model_id:
+        fp["vl_hf_model_id"] = str(vl_hf_model_id)
+    metrics.harness = fp
     return metrics
 
 

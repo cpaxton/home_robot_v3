@@ -1467,7 +1467,32 @@ class GraphEQAMemory:
             selected.append(oid)
             return len(selected) >= max_images
 
-        # 0a) SigLIP phrase cache from graph observation RGBs (caption-independent).
+        # Target-first: keyword / confirmed-memory label matches before SigLIP/frontier so
+        # Image 1 is the question object (HM3D semantics) when available.
+        keyword_hits: list[int] = []
+        for obj in self._relevant_objects:
+            for o in reversed(self._observations):
+                if int(o.obs_id) in keyword_hits:
+                    continue
+                if any(label_matches_relevant_object(obj, lab) for lab in o.labels):
+                    keyword_hits.append(int(o.obs_id))
+        for phrase in self._confirmed_memory_phrases():
+            for o in reversed(self._observations):
+                oid = int(o.obs_id)
+                if oid in keyword_hits:
+                    continue
+                if any(label_matches_relevant_object(phrase, lab) for lab in o.labels):
+                    keyword_hits.append(oid)
+
+        reserved = 0
+        if max_images >= 3:
+            reserved = min(2, max_images - 1)
+        keyword_budget = max(1, max_images - reserved)
+        for oid in keyword_hits[:keyword_budget]:
+            if take(oid):
+                return selected
+
+        # SigLIP phrase cache (caption-independent) for targets not already selected.
         for phrase in self._confirmed_memory_phrases():
             cached = self._siglip_phrase_cache.get(phrase.strip().lower())
             if cached is None or cached[2] is None:
@@ -1475,9 +1500,7 @@ class GraphEQAMemory:
             if float(cached[0]) >= SIGLIP_PRESENT_THRESHOLD and take(int(cached[2])):
                 return selected
 
-        # 0) SigLIP-matched observation per relevant object (caption-independent). Guarantees the
-        #    VLM is shown the best view of the target object even when it was captioned as
-        #    something else, instead of reasoning over whatever furniture happens to be in frame.
+        # SigLIP obs grounder per relevant object.
         obs_grounder = getattr(self, "_obs_id_grounder", None)
         if obs_grounder is not None:
             for obj in self._relevant_objects:
@@ -1488,24 +1511,7 @@ class GraphEQAMemory:
                 if oid is not None and take(int(oid)):
                     return selected
 
-        # 1) Keyword matches (question-relevant objects), most recent first.
-        keyword_hits: list[int] = []
-        for obj in self._relevant_objects:
-            for o in reversed(self._observations):
-                if int(o.obs_id) in keyword_hits:
-                    continue
-                if any(label_matches_relevant_object(obj, lab) for lab in o.labels):
-                    keyword_hits.append(int(o.obs_id))
-        # Reserve at least one slot each for frontier + recent when budget allows.
-        reserved = 0
-        if max_images >= 3:
-            reserved = min(2, max_images - 1)
-        keyword_budget = max(1, max_images - reserved)
-        for oid in keyword_hits[:keyword_budget]:
-            if take(oid):
-                return selected
-
-        # 2) One frontier-tagged observation (prefer lowest nav_failures).
+        # One frontier-tagged observation (prefer lowest nav_failures).
         frontier_candidates = [
             int(o.obs_id)
             for o in reversed(self._observations)
@@ -1522,13 +1528,13 @@ class GraphEQAMemory:
             if take(frontier_candidates[0]):
                 return selected
 
-        # 3) Most recent observation (fresh context).
+        # Most recent observation (fresh context).
         for o in reversed(self._observations):
             if take(int(o.obs_id)):
                 return selected
             break
 
-        # 4) Spatial spread: greedily add observations farthest from those chosen.
+        # Spatial spread: greedily add observations farthest from those chosen.
         remaining = [int(o.obs_id) for o in self._observations if int(o.obs_id) not in selected]
         while remaining and len(selected) < max_images:
             best_oid = None
@@ -1548,8 +1554,9 @@ class GraphEQAMemory:
                     best_oid = oid
             if best_oid is None:
                 break
-            selected.append(best_oid)
             remaining.remove(best_oid)
+            if take(best_oid):
+                return selected
 
         return selected
 
@@ -1571,6 +1578,30 @@ class GraphEQAMemory:
         """
         self._obs_id_grounder = grounder
 
+    def _nearest_object_neighbors(
+        self,
+        xyz: np.ndarray,
+        *,
+        exclude_node_ids: set[int] | None = None,
+        max_neighbors: int = 2,
+        max_dist_m: float = 3.0,
+    ) -> list[tuple[Any, float]]:
+        """Nearest non-frontier/viewpoint object nodes to ``xyz`` (planar XY)."""
+        exclude = exclude_node_ids or set()
+        anchor = np.asarray(xyz, dtype=np.float64).reshape(-1)[:2]
+        scored: list[tuple[Any, float]] = []
+        for n in self._nodes:
+            if getattr(n, "is_frontier", False) or getattr(n, "is_viewpoint", False):
+                continue
+            if int(n.node_id) in exclude:
+                continue
+            other = np.asarray(n.xyz, dtype=np.float64).reshape(-1)[:2]
+            dist = float(np.linalg.norm(anchor - other))
+            if dist <= max_dist_m:
+                scored.append((n, dist))
+        scored.sort(key=lambda t: t[1])
+        return scored[:max_neighbors]
+
     def _relevant_memory_summary(self) -> str:
         """Surface question-relevant objects as 'confirmed memory' for the VLM.
 
@@ -1580,6 +1611,8 @@ class GraphEQAMemory:
           * a SigLIP visual match over all observed points (independent of captions) — this
             catches objects that were seen but mislabeled (e.g. a woven basket captioned as
             a "decorative plant").
+        For PRESENT objects, also lists nearest furniture/object neighbors so location MCQs
+        can map coordinates to options (armchair / table / etc.) instead of inventing rooms.
         """
         if not self._confirmed_memory_phrases():
             return ""
@@ -1609,6 +1642,28 @@ class GraphEQAMemory:
                     parts.append(f"no strong SigLIP match (sim={sim:.2f})")
             present = bool(matches) or sig_present
             if present:
+                # Anchor for nearest-neighbor furniture (prefer graph match, else SigLIP xyz).
+                if matches:
+                    anchor_xyz = np.asarray(matches[0].xyz, dtype=np.float64)
+                    exclude_ids = {int(n.node_id) for n in matches}
+                elif sig is not None:
+                    anchor_xyz = np.asarray(sig[1], dtype=np.float64)
+                    exclude_ids = set()
+                else:
+                    anchor_xyz = None
+                    exclude_ids = set()
+                if anchor_xyz is not None:
+                    neighbors = self._nearest_object_neighbors(
+                        anchor_xyz, exclude_node_ids=exclude_ids, max_neighbors=2, max_dist_m=3.0
+                    )
+                    if neighbors:
+                        near_bits = []
+                        for n, dist in neighbors:
+                            lab = ", ".join(n.labels) if n.labels else "object"
+                            near_bits.append(
+                                f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m"
+                            )
+                        parts.append("nearest: " + "; ".join(near_bits))
                 lines.append(f"- {obj}: PRESENT — " + "; ".join(parts))
             elif parts:
                 lines.append(f"- {obj}: likely NOT present — " + "; ".join(parts))
@@ -1619,7 +1674,8 @@ class GraphEQAMemory:
         header = (
             "CONFIRMED_MEMORY (grounded in observed graph nodes + SigLIP visual matches; "
             "trust these for existence/counting/location even if they are not in the "
-            "attached images):"
+            "attached images; for location MCQs, map PRESENT coords + nearest labels to "
+            "the closest option letter):"
         )
         return header + "\n" + "\n".join(lines)
 

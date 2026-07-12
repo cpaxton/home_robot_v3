@@ -1729,8 +1729,15 @@ def test(
     venv_py = _project_venv_python()
     python = str(venv_py) if venv_py is not None else sys.executable
     src = root / "src"
-    if src.exists() and "PYTHONPATH" not in env:
-        env["PYTHONPATH"] = str(src) + os.pathsep + env.get("PYTHONPATH", "")
+    if src.exists():
+        # Prepend project src; drop ROS site-packages so ament-* pytest plugins
+        # (auto-loaded via PYTHONPATH) do not break src/test/habitat collection.
+        prev_parts = [
+            p
+            for p in env.get("PYTHONPATH", "").split(os.pathsep)
+            if p and "/opt/ros/" not in p.replace("\\", "/")
+        ]
+        env["PYTHONPATH"] = os.pathsep.join([str(src), *prev_parts])
 
     cmd = [python, "-m", "pytest"]
     if verbose:

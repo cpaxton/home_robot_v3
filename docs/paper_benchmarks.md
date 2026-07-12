@@ -83,6 +83,8 @@ Benchmark tracks that exercise agent-style exploration (frontier / rotate) alrea
 | `sqa3d` | `eqa` | memory/debias off (open QA) |
 | `dynamic_explore` | `interactive` | full dynagraph extras |
 
+**HM-EQA recovery gate (merge-on):** Before claiming Dynagraph accuracy recovery, run [`scripts/run_q17_merge_on_gate.sh`](../scripts/run_q17_merge_on_gate.sh) (≥2/3 Q17 correct under default `unified_eqa`, no explore CLI override). Episode JSONL / manifests include a **harness fingerprint** (`harness` dict: `git_commit`, `dynagraph_merge_xy_m`, `fallback_spatial_merge_xy_m`, `profile`, `explore_when_uncovered`, …) — always cite it when quoting accuracy. Explore-off (`--explore-when-uncovered off`) is an **ablation only**, not the HM-EQA Dynagraph default. Re-baseline after a green gate: [`scripts/run_merge_on_hmeqa_baseline.sh`](../scripts/run_merge_on_hmeqa_baseline.sh) (holdout8 + smoke 3,14,17).
+
 Tuning / paper battery: [`scripts/run_dynagraph_tuning_matrix.sh`](../scripts/run_dynagraph_tuning_matrix.sh), [`scripts/run_dynagraph_tuned_paper_battery.sh`](../scripts/run_dynagraph_tuned_paper_battery.sh). **Representative cross-benchmark sample:** [`scripts/run_representative_benchmark_sample.sh`](../scripts/run_representative_benchmark_sample.sh) + [`build_representative_results_tables.py`](../scripts/build_representative_results_tables.py) → [representative_sample_results.md](experiments/representative_sample_results.md). Figures: `render_paper_map_figures.py`, `render_graph_retrieval_panel.py`, `render_dynagraph_3d_figure.py`, `build_eval_figure_pack.py --render-retrieval-panels`.
 
 **Task-specific (documented, not unified):** EQA prompts (`prompt_variant`: `sqa3d` vs default), and controller flags (`use_instance_graph`, `manipulation_only`) differ between OVMM localization and SQA3D open QA — see `harness:` in the YAML above.
@@ -432,6 +434,7 @@ Before a headline HM-EQA sweep:
 2. Tag JSONL output with stack version (e.g. `_postfix_nav202607`) — see [habitat_eqa_results.md](experiments/habitat_eqa_results.md)
 3. `uv run python scripts/download_habitat_eqa_data.py --report-hmeqa-semantics` for semantics coverage audit
 4. Movement smoke: `.venv-habitat/bin/emet-habitat run-episode --mock-llm --mock-llm-explore --question-id 3 --max-planning-steps 5`
+5. Merge-on recovery gate: `./scripts/run_q17_merge_on_gate.sh` (≥2/3) and cite harness fingerprints when reporting accuracy
 
 ---
 

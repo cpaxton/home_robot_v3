@@ -71,6 +71,8 @@ class EpisodeMetrics:
     topdown_map_path: str = ""
     diagnostics_manifest_path: str = ""
     error: str = ""
+    # Harness fingerprint for reproducibility (merge / explore / git, etc.).
+    harness: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         """Serialize to a JSON-friendly dict (for JSONL export)."""

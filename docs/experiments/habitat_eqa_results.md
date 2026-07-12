@@ -151,9 +151,22 @@ Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representa
 
 **Merge policy (2026-07-11):** HM-EQA Dynagraph (`harness.habitat_eqa` → `unified_eqa`) uses **0.45 m merge / staleness 256**, matching interactive/agent memory. Earlier “no merge” HM-EQA rows were GraphEQA-parity leftovers and under-counted Dynagraph (Q17 basket instance fragmentation). Keep `smoke` / `graph_eqa_baseline` at true zero-merge for CI and GraphEQA comparison only — do not use them as the Dynagraph method default.
 
+**Accuracy quoting:** Always cite the episode **harness fingerprint** (`harness` in JSONL / `metrics.json`: merge, fallback merge, profile, explore mode, git commit). Do not treat explore-off holdout 8/8 as the Dynagraph method bar — that arm is an ablation; default is `explore_when_uncovered=conservative` with merge on.
+
+**Q17 merge-on gate:** `./scripts/run_q17_merge_on_gate.sh` — three sequential Q17 episodes under default harness; pass ≥2/3 correct (D). Artifacts under `~/runs/emet/branch_verify_*/q17_gate_*`. After pass, re-baseline with `./scripts/run_merge_on_hmeqa_baseline.sh` (holdout8 `15,56,65,68,79,88,104,105` + smoke `3,14,17`) and record `SUMMARY.json` as the merge-on Dynagraph baseline.
+
+**Gate result (2026-07-12, `q17_gate_20260712_000543`):** **2/3** pass (t1 D/41 nodes, t2 D/44, t3 B/62 fail); fingerprint `merge=0.45` / `fallback=0.45` / `profile=unified_eqa` / `explore=conservative` / commit `fd43538` (+ loc-MCQ fixes on branch).
+
 ### Commands
 
 ```bash
+# Q17 ×3 gate (merge-on defaults; fingerprint-checked)
+./scripts/run_q17_merge_on_gate.sh
+
+# Merge-on re-baseline (after gate passes; prefer nohup overnight)
+nohup ./scripts/run_merge_on_hmeqa_baseline.sh \
+  >> ~/runs/emet/branch_verify_20260711/merge_on_baseline_nohup.log 2>&1 &
+
 # Held-out random-8 (repro)
 TAG=holdout8_postfix_20260627 IDS=15,56,65,68,79,88,104,105 METHOD=dynagraph TIMEOUT=7200 \
   ./scripts/run_habitat_iter_subset.sh
