@@ -453,7 +453,12 @@ class DynamemController(BaseController):
         if not frontier_nodes:
             return None
         keywords = exploration_keywords_from_text(text)
-        rx, ry = float(self.robot.get_base_pose()[0]), float(self.robot.get_base_pose()[1])
+        robot = getattr(self, "robot", None)
+        if robot is not None and hasattr(robot, "get_base_pose"):
+            pose = robot.get_base_pose()
+            rx, ry = float(pose[0]), float(pose[1])
+        else:
+            rx, ry = 0.0, 0.0
         if not keywords:
             node = min(
                 frontier_nodes,
