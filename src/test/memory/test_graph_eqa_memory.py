@@ -151,6 +151,80 @@ def test_location_letter_from_nearest_memory_picks_armchair_option():
     assert mem._location_letter_from_nearest_memory(choices) == "D"
 
 
+def test_label_matches_trash_can_to_recycle_bin():
+    assert label_matches_relevant_object("silver trash can", "recycle bin")
+    assert label_matches_relevant_object("trash can", "garbage bin")
+
+
+def test_select_relevant_obs_ids_prefers_choice_landmarks_before_siglip():
+    """Location MCQ: refrigerator landmark beats a SigLIP dining-table view for Image 1."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["dining table", "chair"])
+    mem.add_observation(rgb, np.array([2.0, 1.0, 0.5]), ["refrigerator", "recycle bin"])
+    mem._relevant_objects = ["trash can"]
+    mem._relevant_phrases = ["silver trash can"]
+    # Fake SigLIP pointing at the dining table observation.
+    mem._siglip_phrase_cache["silver trash can"] = (0.35, np.array([0.0, 0.0, 0.5]), 1)
+    choices = [
+        "Next to the dining table",
+        "Next to the TV",
+        "Next to the kitchen sink",
+        "Next to the refrigerator",
+    ]
+    obs_ids = mem._select_relevant_obs_ids(max_images=3, choices=choices)
+    assert obs_ids[0] == 2  # refrigerator / recycle bin
+
+
+def test_location_letter_prefers_image_landmarks_over_siglip_nearest():
+    """Attached fridge view wins over SigLIP-nearest dining table for trash MCQ."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    raw = (
+        "reasoning: memory says dining table\nanswer: A\nconfidence: true\n"
+        "action: none\nconfidence_reasoning: memory"
+    )
+    mem = GraphEQAMemory(eqa_client=lambda _c: raw, image_description_client=lambda _x: "table")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["dining table"])
+    mem.add_observation(rgb, np.array([2.0, 1.0, 0.5]), ["refrigerator", "recycle bin"])
+    mem._relevant_phrases = ["silver trash can"]
+    mem._relevant_objects = ["trash can"]
+    mem._siglip_phrase_cache["silver trash can"] = (0.35, np.array([0.0, 0.0, 0.5]), 1)
+    q = (
+        "Where did I leave the silver trash can at? "
+        "A) Next to the dining table B) Next to the TV "
+        "C) Next to the kitchen sink D) Next to the refrigerator. Answer:"
+    )
+    _r, answer, confidence, _cr, _pt, _imgs = mem.query_answer(q)
+    assert answer.strip().upper().startswith("D") or "D" in answer.upper()
+    # SigLIP-only target: do not finalize until images support the letter.
+    assert confidence is False
+
+
+def test_attribute_state_skips_memory_summary_block():
+    """On/off questions should not inject CONFIRMED_MEMORY priors."""
+    captured: dict = {}
+
+    def _client(cmds):
+        captured["cmds"] = cmds
+        return (
+            "reasoning: lamp looks off\nanswer: B\nconfidence: true\n"
+            "action:\nconfidence_reasoning: image"
+        )
+
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(eqa_client=_client, image_description_client=lambda _x: "lamp")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["lamp", "sofa"])
+    mem._relevant_phrases = ["lamp sofa off"]
+    mem._relevant_objects = ["lamp"]
+    mem.query_answer(
+        "Is the lamp next to the sofa turned on or off? "
+        "A) (Do not choose) B) Off C) On D) (Do not choose). Answer:"
+    )
+    assert not any(isinstance(c, str) and "CONFIRMED_MEMORY" in c for c in captured["cmds"])
+
+
 def test_query_answer_does_not_finalize_yes_no_when_uncovered():
     """Uncovered relevant objects: Yes/No stays non-confident so exploration continues."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
