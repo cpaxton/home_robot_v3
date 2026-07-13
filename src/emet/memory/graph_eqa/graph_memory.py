@@ -218,6 +218,42 @@ def distinctive_choice_tokens(choice: str) -> list[str]:
     ]
 
 
+# Generic furniture words that appear in many options/views; do not let them beat
+# rare landmarks (refrigerator, treadmill) when ranking Image 1.
+_LANDMARK_GENERIC_TOKENS = frozenset(
+    {
+        "table",
+        "tables",
+        "chair",
+        "chairs",
+        "sofa",
+        "sofas",
+        "couch",
+        "couches",
+        "door",
+        "doors",
+        "wall",
+        "floor",
+        "room",
+        "rug",
+        "window",
+        "cabinet",
+        "cabinets",
+    }
+)
+
+# Question-object → landmark tokens that should win Image 1 over generic furniture.
+_QUESTION_LANDMARK_BOOST: dict[str, frozenset[str]] = {
+    "trash": frozenset({"refrigerator", "fridge", "sink", "kitchen", "recycle", "bin"}),
+    "garbage": frozenset({"refrigerator", "fridge", "sink", "kitchen", "recycle", "bin"}),
+    "bin": frozenset({"refrigerator", "fridge", "sink", "kitchen", "recycle"}),
+    "mat": frozenset({"treadmill", "elliptical", "bike", "bicycle", "exercise"}),
+    "towel": frozenset({"bathroom", "bath", "sink", "toilet", "shower"}),
+    "kettle": frozenset({"kitchen", "counter", "stove", "sink"}),
+    "pillow": frozenset({"sofa", "couch", "bed", "armchair"}),
+}
+
+
 def consolidate_relevant_keywords(
     phrases: list[str],
     extras: list[str],
@@ -1504,7 +1540,10 @@ class GraphEQAMemory:
         return sig is not None and float(sig[0]) >= SIGLIP_PRESENT_THRESHOLD
 
     def _select_relevant_obs_ids(
-        self, max_images: int = 6, choices: list[str] | None = None
+        self,
+        max_images: int = 6,
+        choices: list[str] | None = None,
+        attribute_question: bool = False,
     ) -> list[int]:
         """Select a diverse set of observation IDs for the EQA prompt (1-based).
 
@@ -1517,6 +1556,9 @@ class GraphEQAMemory:
         When ``choices`` are location MCQ options, prefer views whose labels match
         option landmarks (refrigerator, treadmill, …) *before* SigLIP nearest —
         false CONFIRMED_MEMORY coords must not steal Image 1.
+
+        For attribute/state questions, prefer views with lamp/light/curtain labels
+        over frontiers before answering on/off or up/down.
         """
         if not self._observations:
             return []
@@ -1560,9 +1602,39 @@ class GraphEQAMemory:
             if take(oid):
                 return selected
 
+        # Attribute/state: prefer lamp/light/curtain views over frontiers for Image 1.
+        if attribute_question:
+            attr_tokens = (
+                "lamp",
+                "light",
+                "lights",
+                "ceiling",
+                "curtain",
+                "curtains",
+                "window",
+                "fixture",
+            )
+            attr_hits: list[int] = []
+            for o in reversed(self._observations):
+                oid = int(o.obs_id)
+                if oid in selected or self._obs_is_frontier(oid):
+                    continue
+                blob = " ".join(str(lab) for lab in (o.labels or [])).lower()
+                if any(t in blob for t in attr_tokens):
+                    attr_hits.append(oid)
+            for oid in attr_hits:
+                if take(oid):
+                    return selected
+
         # Location MCQ landmarks (fridge / treadmill / …) before SigLIP-nearest dining tables.
-        if choices:
-            landmark_scored: list[tuple[int, int]] = []
+        # Demote generic furniture tokens (table/chair) and boost question-specific landmarks
+        # so "dining table" does not beat "refrigerator" for trash-can Image 1.
+        if choices and not attribute_question:
+            boost: set[str] = set()
+            for phrase in list(self._confirmed_memory_phrases()) + list(self._relevant_objects or []):
+                for tok in _object_match_tokens(phrase):
+                    boost |= set(_QUESTION_LANDMARK_BOOST.get(tok, frozenset()))
+            landmark_scored: list[tuple[float, int]] = []
             for o in self._observations:
                 oid = int(o.obs_id)
                 if oid in selected:
@@ -1570,13 +1642,24 @@ class GraphEQAMemory:
                 blob = " ".join(str(lab) for lab in (o.labels or [])).lower()
                 if not blob.strip():
                     continue
-                score = 0
+                score = 0.0
                 for ch in choices[:4]:
                     for tok in distinctive_choice_tokens(ch):
-                        if tok in blob or any(
+                        hit = tok in blob or any(
                             lab.startswith(tok) or tok.startswith(lab) for lab in blob.split()
-                        ):
-                            score += 1
+                        )
+                        if not hit:
+                            continue
+                        if tok in _LANDMARK_GENERIC_TOKENS:
+                            score += 0.25
+                        elif tok in boost:
+                            score += 4.0
+                        else:
+                            score += 1.0
+                # Also score boost tokens even if not in the choice string (recycle bin view).
+                for tok in boost:
+                    if tok in blob:
+                        score += 2.0
                 if score > 0:
                     landmark_scored.append((score, oid))
             landmark_scored.sort(key=lambda t: (-t[0], -t[1]))
@@ -2348,7 +2431,8 @@ class GraphEQAMemory:
         )
         obs_ids = self._select_relevant_obs_ids(
             max_images=max_images,
-            choices=parsed_choices if (parsed_choices and not attribute_q) else None,
+            choices=parsed_choices if parsed_choices else None,
+            attribute_question=attribute_q,
         )
         self.last_eqa_obs_ids = list(obs_ids)
         graph_str = self.to_string()

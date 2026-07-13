@@ -173,7 +173,20 @@ def test_select_relevant_obs_ids_prefers_choice_landmarks_before_siglip():
         "Next to the refrigerator",
     ]
     obs_ids = mem._select_relevant_obs_ids(max_images=3, choices=choices)
-    assert obs_ids[0] == 2  # refrigerator / recycle bin
+    assert obs_ids[0] == 2  # refrigerator / recycle bin (boosted over dining table)
+
+
+def test_select_relevant_obs_ids_attribute_prefers_lamp_over_frontier():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["frontier"])
+    # Mark obs 1 as frontier node
+    mem._nodes[0].is_frontier = True
+    mem.add_observation(rgb, np.array([1.0, 1.0, 0.5]), ["lamp", "sofa"])
+    mem._relevant_objects = ["lamp"]
+    mem._relevant_phrases = ["lamp"]
+    obs_ids = mem._select_relevant_obs_ids(max_images=2, attribute_question=True)
+    assert obs_ids[0] == 2
 
 
 def test_location_letter_prefers_image_landmarks_over_siglip_nearest():
