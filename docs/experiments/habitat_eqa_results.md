@@ -151,6 +151,17 @@ Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representa
 
 **Merge policy (2026-07-11):** HM-EQA Dynagraph (`harness.habitat_eqa` → `unified_eqa`) uses **0.45 m merge / staleness 256**, matching interactive/agent memory. Earlier “no merge” HM-EQA rows were GraphEQA-parity leftovers and under-counted Dynagraph (Q17 basket instance fragmentation). Keep `smoke` / `graph_eqa_baseline` at true zero-merge for CI and GraphEQA comparison only — do not use them as the Dynagraph method default.
 
+**Memory-confirm (2026-07-13):** Dynagraph extras that used to lose GE-only wins (false `CONFIRMED_MEMORY`, dining-table Image‑1 for trash, nearest-furniture overriding a clear VLM letter) are gated in `GraphEQAMemory` + `emet_habitat.runner`: prefer boosted choice landmarks for Image‑1, never override a clear VLM A–D with nearest-furniture alone, abstain when the target is not in attached views, and require ≥2 grounded under-equipment options before geometric letters. Cite harness fingerprint + git commit (e.g. `f1478c9` memory-confirm). **Accept-vs-fix hard cases:** Q16 (pillow/sofa labeling) and exploration-limited Q18/Q31/Q57 can still flake; Dynagraph’s static HM-EQA claim is *no GE-only memory collapse*, not 100% on every search MCQ. True world-change wins stay on the Robocasa/Molmo dynamic-exploration track.
+
+### HM-EQA slice taxonomy
+
+| Slice | n | Meaning |
+|-------|---|---------|
+| canonical-8 / balanced-32 / paper-20 | 8 / 32 / 20 | Overnight convenience (not GraphEQA paper coverage) |
+| annotated-semantics | ~37 | Paper indices with HM3DSem `.semantic.glb` — fairer perception vs GraphEQA GT path (`hmeqa_annotated_question_ids()`) |
+| paper-113 (`--paper-subset`) | **113** | GraphEQA Table 1 HM-EQA set (indices 0–112) |
+| Explore-EQA full (`--all-questions`) | up to ~500 | Beyond GraphEQA paper; stretch only |
+
 **Accuracy quoting:** Always cite the episode **harness fingerprint** (`harness` in JSONL / `metrics.json`: merge, fallback merge, profile, explore mode, git commit). Do not treat explore-off holdout 8/8 as the Dynagraph method bar — that arm is an ablation; default is `explore_when_uncovered=conservative` with merge on.
 
 **Q17 merge-on gate:** `./scripts/run_q17_merge_on_gate.sh` — three sequential Q17 episodes under default harness; pass ≥2/3 correct (D). Artifacts under `~/runs/emet/branch_verify_*/q17_gate_*`. After pass, re-baseline with `./scripts/run_merge_on_hmeqa_baseline.sh` (holdout8 `15,56,65,68,79,88,104,105` + smoke `3,14,17`) and record `SUMMARY.json` as the merge-on Dynagraph baseline.

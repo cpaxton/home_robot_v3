@@ -32,6 +32,12 @@ uv run emet run graph-eqa-habitat \
   --resume \
   --output ~/.cache/habitat_eqa/results/graph_eqa_qwen3_vl8b_paper.jsonl
 
+# Or use helpers (gpu_preflight + resume + SUMMARY):
+#   ./scripts/run_hmeqa_memory_confirm_gate.sh   # GE-only gate → optional annotated37 → paper113
+#   ./scripts/run_hmeqa_annotated37_h2h.sh       # ~37 semantics-annotated ids, both methods
+#   ./scripts/run_hmeqa_paper113_h2h.sh          # full 113 head-to-head
+# Slice taxonomy: docs/habitat/data.md and docs/experiments/habitat_eqa_results.md
+
 # Full Explore-EQA CSV (500 questions) — use only if you need the extended set
 # .venv-habitat/bin/emet-habitat run-batch --all-questions --question-end 499 ...
 
