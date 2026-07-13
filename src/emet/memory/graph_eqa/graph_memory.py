@@ -243,14 +243,17 @@ _LANDMARK_GENERIC_TOKENS = frozenset(
 )
 
 # Question-object → landmark tokens that should win Image 1 over generic furniture.
+# For trash: prefer fridge/recycle over sink — sink is often a competing MCQ option.
 _QUESTION_LANDMARK_BOOST: dict[str, frozenset[str]] = {
-    "trash": frozenset({"refrigerator", "fridge", "sink", "kitchen", "recycle", "bin"}),
-    "garbage": frozenset({"refrigerator", "fridge", "sink", "kitchen", "recycle", "bin"}),
-    "bin": frozenset({"refrigerator", "fridge", "sink", "kitchen", "recycle"}),
+    "trash": frozenset({"refrigerator", "fridge", "recycle", "bin"}),
+    "garbage": frozenset({"refrigerator", "fridge", "recycle", "bin"}),
+    "bin": frozenset({"refrigerator", "fridge", "recycle"}),
     "mat": frozenset({"treadmill", "elliptical", "bike", "bicycle", "exercise"}),
     "towel": frozenset({"bathroom", "bath", "sink", "toilet", "shower"}),
     "kettle": frozenset({"kitchen", "counter", "stove", "sink"}),
     "pillow": frozenset({"sofa", "couch", "bed", "armchair"}),
+    "fruit": frozenset({"dining"}),
+    "bowl": frozenset({"dining"}),
 }
 
 
@@ -1577,8 +1580,77 @@ class GraphEQAMemory:
             selected.append(oid)
             return len(selected) >= max_images
 
-        # Target-first: keyword / confirmed-memory label matches before SigLIP/frontier so
-        # Image 1 is the question object (HM3D semantics) when available.
+        reserved = 0
+        if max_images >= 3:
+            reserved = min(2, max_images - 1)
+        keyword_budget = max(1, max_images - reserved)
+
+        boost: set[str] = set()
+        if choices and not attribute_question:
+            for phrase in list(self._confirmed_memory_phrases()) + list(self._relevant_objects or []):
+                for tok in _object_match_tokens(phrase):
+                    boost |= set(_QUESTION_LANDMARK_BOOST.get(tok, frozenset()))
+
+        def _obs_blob(o: GraphObservation) -> str:
+            return " ".join(str(lab) for lab in (o.labels or [])).lower()
+
+        def _direct_target_match(o: GraphObservation) -> bool:
+            """True when a label matches the question object without relying only on aliases
+            that are absent from the MCQ options (recycle bin vs refrigerator)."""
+            labels = [str(lab) for lab in (o.labels or []) if lab]
+            if not labels:
+                return False
+            phrases = list(self._relevant_objects or []) + list(self._confirmed_memory_phrases())
+            choice_blob = " ".join(choices or []).lower()
+            for lab in labels:
+                for phrase in phrases:
+                    if not label_matches_relevant_object(phrase, lab):
+                        continue
+                    # Direct token overlap with the question phrase/object.
+                    if _object_match_tokens(phrase) & _object_match_tokens(lab):
+                        return True
+                    # Alias match (trash↔recycle): keep only if the label appears in options.
+                    lab_toks = _object_match_tokens(lab)
+                    if any(t in choice_blob for t in lab_toks):
+                        return True
+            return False
+
+        # Unified Image-1 ranking for location MCQs:
+        # boosted choice landmarks (fridge) > direct target (ladder) > weak aliases / generics.
+        if choices and not attribute_question:
+            scored: list[tuple[float, int]] = []
+            for o in self._observations:
+                oid = int(o.obs_id)
+                blob = _obs_blob(o)
+                if not blob.strip():
+                    continue
+                score = 0.0
+                if _direct_target_match(o):
+                    score += 10.0
+                for ch in choices[:4]:
+                    for tok in distinctive_choice_tokens(ch):
+                        hit = tok in blob or any(
+                            lab.startswith(tok) or tok.startswith(lab) for lab in blob.split()
+                        )
+                        if not hit:
+                            continue
+                        if tok in _LANDMARK_GENERIC_TOKENS:
+                            score += 0.25
+                        elif tok in boost:
+                            score += 12.0  # fridge for trash beats recycle-alias (+10)
+                        else:
+                            score += 1.0
+                for tok in boost:
+                    if tok in blob:
+                        score += 0.5  # recycle/bin mild, not enough to beat fridge
+                if score > 0:
+                    scored.append((score, oid))
+            scored.sort(key=lambda t: (-t[0], -t[1]))
+            for _score, oid in scored[:keyword_budget]:
+                if take(oid):
+                    return selected
+
+        # Target keyword / confirmed-memory label matches (non-MCQ or remaining budget).
         keyword_hits: list[int] = []
         for obj in self._relevant_objects:
             for o in reversed(self._observations):
@@ -1593,11 +1665,6 @@ class GraphEQAMemory:
                     continue
                 if any(label_matches_relevant_object(phrase, lab) for lab in o.labels):
                     keyword_hits.append(oid)
-
-        reserved = 0
-        if max_images >= 3:
-            reserved = min(2, max_images - 1)
-        keyword_budget = max(1, max_images - reserved)
         for oid in keyword_hits[:keyword_budget]:
             if take(oid):
                 return selected
@@ -1619,51 +1686,10 @@ class GraphEQAMemory:
                 oid = int(o.obs_id)
                 if oid in selected or self._obs_is_frontier(oid):
                     continue
-                blob = " ".join(str(lab) for lab in (o.labels or [])).lower()
+                blob = _obs_blob(o)
                 if any(t in blob for t in attr_tokens):
                     attr_hits.append(oid)
             for oid in attr_hits:
-                if take(oid):
-                    return selected
-
-        # Location MCQ landmarks (fridge / treadmill / …) before SigLIP-nearest dining tables.
-        # Demote generic furniture tokens (table/chair) and boost question-specific landmarks
-        # so "dining table" does not beat "refrigerator" for trash-can Image 1.
-        if choices and not attribute_question:
-            boost: set[str] = set()
-            for phrase in list(self._confirmed_memory_phrases()) + list(self._relevant_objects or []):
-                for tok in _object_match_tokens(phrase):
-                    boost |= set(_QUESTION_LANDMARK_BOOST.get(tok, frozenset()))
-            landmark_scored: list[tuple[float, int]] = []
-            for o in self._observations:
-                oid = int(o.obs_id)
-                if oid in selected:
-                    continue
-                blob = " ".join(str(lab) for lab in (o.labels or [])).lower()
-                if not blob.strip():
-                    continue
-                score = 0.0
-                for ch in choices[:4]:
-                    for tok in distinctive_choice_tokens(ch):
-                        hit = tok in blob or any(
-                            lab.startswith(tok) or tok.startswith(lab) for lab in blob.split()
-                        )
-                        if not hit:
-                            continue
-                        if tok in _LANDMARK_GENERIC_TOKENS:
-                            score += 0.25
-                        elif tok in boost:
-                            score += 4.0
-                        else:
-                            score += 1.0
-                # Also score boost tokens even if not in the choice string (recycle bin view).
-                for tok in boost:
-                    if tok in blob:
-                        score += 2.0
-                if score > 0:
-                    landmark_scored.append((score, oid))
-            landmark_scored.sort(key=lambda t: (-t[0], -t[1]))
-            for _score, oid in landmark_scored:
                 if take(oid):
                     return selected
 
@@ -1873,6 +1899,21 @@ class GraphEQAMemory:
                 return False
         return True
 
+    def _target_visible_in_obs_ids(self, obs_ids: list[int]) -> bool:
+        """True when a question target label appears on an attached Image 1..N view."""
+        if not obs_ids:
+            return False
+        by_id = {int(o.obs_id): o for o in self._observations}
+        phrases = list(self._confirmed_memory_phrases()) + list(self._relevant_objects or [])
+        for oid in obs_ids:
+            o = by_id.get(int(oid))
+            if o is None:
+                continue
+            for phrase in phrases:
+                if any(label_matches_relevant_object(phrase, lab) for lab in (o.labels or [])):
+                    return True
+        return False
+
     def _obs_is_frontier(self, obs_id: int) -> bool:
         for n in self._nodes:
             if int(n.obs_id) == int(obs_id) and n.is_frontier:
@@ -2008,7 +2049,13 @@ class GraphEQAMemory:
                 labels.extend(str(lab) for lab in (n.labels or []) if lab)
         return " ".join(labels).lower()
 
-    def _score_choices_against_label_blob(self, choices: list[str], blob: str) -> list[int]:
+    def _score_choices_against_label_blob(
+        self,
+        choices: list[str],
+        blob: str,
+        *,
+        ignore_generic: bool = False,
+    ) -> list[int]:
         """Per-option token overlap scores against a lowercase label blob."""
         blob_l = (blob or "").lower()
         scores: list[int] = []
@@ -2016,6 +2063,8 @@ class GraphEQAMemory:
             tokens = distinctive_choice_tokens(ch)
             score = 0
             for t in tokens:
+                if ignore_generic and t in _LANDMARK_GENERIC_TOKENS:
+                    continue
                 if t in blob_l:
                     score += 2
                 elif any(lab.startswith(t) or t.startswith(lab) for lab in blob_l.split()):
@@ -2069,20 +2118,38 @@ class GraphEQAMemory:
     def _location_letter_from_attached_images(
         self, choices: list[str], obs_ids: list[int]
     ) -> str:
-        """Map MCQ options onto labels of the attached Image 1..N observations."""
+        """Map MCQ options onto labels of the attached Image 1..N observations.
+
+        Prefer Image 1 landmarks; only fall back to the full attached set when Image 1
+        does not uniquely map to a choice (avoids bowl-on-table / kitchen-cabinet noise).
+        """
         from emet.habitat.metrics import choices_are_location_mcq
 
         if not choices_are_location_mcq(choices) or not obs_ids:
             return ""
         by_id = {int(o.obs_id): o for o in self._observations}
-        parts: list[str] = []
-        for oid in obs_ids:
-            o = by_id.get(int(oid))
-            if o is None:
-                continue
-            parts.extend(str(lab) for lab in (o.labels or []) if lab)
-        blob = " ".join(parts).lower()
-        return self._unique_best_choice_letter(self._score_choices_against_label_blob(choices, blob))
+
+        def _blob_for(oids: list[int]) -> str:
+            parts: list[str] = []
+            for oid in oids:
+                o = by_id.get(int(oid))
+                if o is None:
+                    continue
+                parts.extend(str(lab) for lab in (o.labels or []) if lab)
+            return " ".join(parts).lower()
+
+        primary = self._unique_best_choice_letter(
+            self._score_choices_against_label_blob(
+                choices, _blob_for(obs_ids[:1]), ignore_generic=True
+            )
+        )
+        if primary:
+            return primary
+        return self._unique_best_choice_letter(
+            self._score_choices_against_label_blob(
+                choices, _blob_for(obs_ids), ignore_generic=True
+            )
+        )
 
     def _equipment_letter_from_target_distances(self, choices: list[str]) -> str:
         """For under-equipment MCQs, pick the option whose equipment label is closest to the target."""
@@ -2116,11 +2183,13 @@ class GraphEQAMemory:
         best_letter = ""
         best_dist = float("inf")
         ties = 0
+        matched_options = 0
         for i, ch in enumerate(choices[:4]):
             tokens = distinctive_choice_tokens(ch)
             if not tokens:
                 continue
             # Find nearest graph node matching this option's equipment tokens.
+            option_hit = False
             for n in object_nodes:
                 labs = [str(lab).lower() for lab in (n.labels or []) if lab]
                 if not labs:
@@ -2130,6 +2199,7 @@ class GraphEQAMemory:
                     for t in tokens
                 ):
                     continue
+                option_hit = True
                 xy = np.asarray(n.xyz, dtype=np.float64).reshape(-1)[:2]
                 dist = float(np.linalg.norm(anchor - xy))
                 if dist < best_dist - 1e-6:
@@ -2138,7 +2208,10 @@ class GraphEQAMemory:
                     ties = 1
                 elif abs(dist - best_dist) <= 1e-6 and chr(65 + i) != best_letter:
                     ties += 1
-        if ties != 1 or best_dist == float("inf"):
+            if option_hit:
+                matched_options += 1
+        # Need ≥2 equipment options grounded in the graph (bike alone must not win).
+        if matched_options < 2 or ties != 1 or best_dist == float("inf"):
             return ""
         return best_letter
 
@@ -2525,30 +2598,29 @@ class GraphEQAMemory:
             and self._any_confirmed_phrase_present()
             and not attribute_q
         ):
-            # Prefer image/graph landmark letters; only use nearest-furniture memory when
-            # the target has a graph label match (not SigLIP-only false anchors).
+            # Geometric under-equipment (mat under treadmill) may correct VLM guesses.
+            # Image landmarks may correct memory-steered letters. Nearest-furniture memory
+            # alone must NOT override a clear VLM A–D (Q6: VLM B correct, memory A).
             img_letter = self._location_letter_from_attached_images(parsed_choices, obs_ids)
+            equip_letter = self._equipment_letter_from_target_distances(parsed_choices)
             memory_letter = self._location_letter_from_nearest_memory(parsed_choices)
             letter_m = re.search(r"\b([a-d])\b", (answer or "").strip().lower())
             parsed_letter = letter_m.group(1).upper() if letter_m else ""
+            abstain = answer_is_visibility_abstain(answer) or not parsed_letter
             preferred = ""
-            if img_letter and memory_letter and img_letter != memory_letter:
+            if equip_letter and (abstain or parsed_letter != equip_letter):
+                preferred = equip_letter
+            elif img_letter and (abstain or parsed_letter != img_letter):
                 preferred = img_letter
-            elif img_letter:
-                preferred = img_letter
-            elif memory_letter and self._any_graph_label_match_for_confirmed():
-                preferred = memory_letter
-            elif memory_letter and (answer_is_visibility_abstain(answer) or not parsed_letter):
-                preferred = memory_letter
-            if preferred and (
-                answer_is_visibility_abstain(answer)
-                or not parsed_letter
-                or parsed_letter != preferred
+            elif abstain and memory_letter and (
+                self._any_graph_label_match_for_confirmed() or not img_letter
             ):
+                preferred = memory_letter
+            if preferred and (abstain or parsed_letter != preferred):
                 answer = preferred
                 raw = (raw or "") + f"\n[memory-location]\nanswer:\n{preferred}\n"
                 self.last_eqa_raw = raw
-            elif answer_is_visibility_abstain(answer):
+            elif abstain:
                 salvage = self._salvage_location_mcq_letter(question, parsed_choices, commands)
                 if salvage:
                     answer = salvage
@@ -2609,6 +2681,43 @@ class GraphEQAMemory:
                     confidence_reasoning
                     + " Location not yet verified in attached images; explore for a clearer view."
                 ).strip()
+        # Never finalize a WHERE answer if the target object is not in attached views
+        # (guessing "dining table" / "side table" without seeing towel/fruit bowl).
+        if (
+            confidence
+            and parsed_choices
+            and choices_are_location_mcq(parsed_choices)
+            and not attribute_q
+            and not self._target_visible_in_obs_ids(obs_ids)
+        ):
+            confidence = False
+            confidence_reasoning = (
+                confidence_reasoning
+                + " Target object not visible in attached images; explore before confirming."
+            ).strip()
+        # Under-equipment MCQs: do not finalize until geometric equipment letter is known
+        # (otherwise bike vs treadmill is a coin flip from a partial gym view).
+        if (
+            confidence
+            and parsed_choices
+            and choices_are_location_mcq(parsed_choices)
+            and not attribute_q
+        ):
+            underish = sum(1 for ch in parsed_choices[:4] if "under" in (ch or "").lower())
+            if underish >= 2:
+                equip = self._equipment_letter_from_target_distances(parsed_choices)
+                if not equip:
+                    confidence = False
+                    confidence_reasoning = (
+                        confidence_reasoning
+                        + " Under-equipment location needs a clearer mat↔equipment distance before confirming."
+                    ).strip()
+                elif re.search(r"\b([a-d])\b", (answer or "").strip().lower()):
+                    letter_m = re.search(r"\b([a-d])\b", (answer or "").strip().lower())
+                    if letter_m and letter_m.group(1).upper() != equip:
+                        answer = equip
+                        raw = (raw or "") + f"\n[equipment-location]\nanswer:\n{equip}\n"
+                        self.last_eqa_raw = raw
         # Attribute/state: never finalize from memory priors (images only).
         if confidence and attribute_q and self.memory_summary_enabled:
             # Soft gate: if Image 1 is a frontier-only view, keep exploring.

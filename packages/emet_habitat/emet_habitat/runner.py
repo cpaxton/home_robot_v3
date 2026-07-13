@@ -34,6 +34,7 @@ from emet.habitat.hmeqa_enrich_labels import enrich_labels_for_question
 from emet.habitat.metrics import (
     EpisodeMetrics,
     append_episode_jsonl,
+    choices_are_location_mcq,
     extract_mcq_letter,
     extract_mcq_letter_from_raw_eqa,
     should_abstain_location_mcq,
@@ -377,12 +378,33 @@ def run_hmeqa_episode(
         if not predicted:
             tail = discord_text.split("---")[-1].strip() if "---" in discord_text else discord_text
             predicted = extract_mcq_letter(tail, q.choices)
+        # Unverified location guesses: do not score a letter when the target was never
+        # in attached views and the model did not confirm (towel/fruit-bowl false locks).
+        if (
+            agent.graph_memory is not None
+            and q.choices
+            and choices_are_location_mcq(q.choices)
+            and not model_confident
+        ):
+            obs_ids = list(getattr(agent.graph_memory, "last_eqa_obs_ids", []) or [])
+            visible_fn = getattr(agent.graph_memory, "_target_visible_in_obs_ids", None)
+            visible = bool(callable(visible_fn) and visible_fn(obs_ids))
+            if not visible:
+                equip_fn = getattr(agent.graph_memory, "_equipment_letter_from_target_distances", None)
+                equip = equip_fn(q.choices) if callable(equip_fn) else ""
+                if equip:
+                    predicted = equip
+                    parsed_letter = equip
+                else:
+                    predicted = ""
+                    parsed_letter = ""
         predebias_letter = ""
         debias_votes = ""
         if (
             agent.graph_memory is not None
             and getattr(agent.graph_memory, "mcq_debias_enabled", False)
             and q.choices
+            and predicted
             and not should_abstain_location_mcq(raw_eqa, q.choices)
         ):
             vote_letter = agent.graph_memory.vote_mcq_letter(q.question, q.choices)
