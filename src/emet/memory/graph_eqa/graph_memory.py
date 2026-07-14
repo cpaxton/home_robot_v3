@@ -38,6 +38,9 @@ from emet.memory.graph_eqa.mcq_debias import (
     match_freeform_to_choice,
     tally_choice_votes,
 )
+from emet.utils.logger import Logger
+
+_logger = Logger(__name__)
 
 # Min SigLIP cosine similarity for an open-vocab text query to count as "present" in the
 # observed point cloud. Matches DynaMem's verify_point default for SigLIP grounding.
@@ -129,11 +132,7 @@ _QUESTION_STOPWORDS = frozenset(
 def heuristic_relevant_phrases(question: str, *, max_phrases: int = 4) -> list[str]:
     """Multi-word object phrases from the question stem (e.g. ``woven basket``)."""
     head = question.strip().split("?")[0].lower()
-    tokens = [
-        tok
-        for tok in re.findall(r"[a-z]+", head)
-        if len(tok) >= 3 and tok not in _QUESTION_STOPWORDS
-    ]
+    tokens = [tok for tok in re.findall(r"[a-z]+", head) if len(tok) >= 3 and tok not in _QUESTION_STOPWORDS]
     phrases: list[str] = []
     for n in range(min(3, len(tokens)), 1, -1):
         for i in range(len(tokens) - n + 1):
@@ -211,11 +210,7 @@ def _location_mcq_weak_tokens() -> frozenset[str]:
 def distinctive_choice_tokens(choice: str) -> list[str]:
     """Content tokens from an MCQ option (for label↔option matching)."""
     weak = _location_mcq_weak_tokens()
-    return [
-        t
-        for t in re.findall(r"[a-z]+", (choice or "").lower())
-        if len(t) > 3 and t not in weak
-    ]
+    return [t for t in re.findall(r"[a-z]+", (choice or "").lower()) if len(t) > 3 and t not in weak]
 
 
 # Generic furniture words that appear in many options/views; do not let them beat
@@ -555,17 +550,13 @@ class GraphEQAMemory:
         to_drop: list[GraphNode] = [
             n
             for n in self._nodes
-            if not is_ground_truth_node(n)
-            and not n.is_frontier
-            and cur - int(n.last_seen) > self.staleness_horizon
+            if not is_ground_truth_node(n) and not n.is_frontier and cur - int(n.last_seen) > self.staleness_horizon
         ]
         if not to_drop:
             return 0
         drop_obs = {n.obs_id for n in to_drop if not n.is_viewpoint}
         drop_node_ids = {n.node_id for n in to_drop}
-        drop_node_ids |= {
-            n.node_id for n in self._nodes if n.is_viewpoint and int(n.obs_id) in drop_obs
-        }
+        drop_node_ids |= {n.node_id for n in self._nodes if n.is_viewpoint and int(n.obs_id) in drop_obs}
         self._nodes = [n for n in self._nodes if n.node_id not in drop_node_ids]
         self._observations = [o for o in self._observations if o.obs_id not in drop_obs]
         for i, n in enumerate(self._nodes, start=1):
@@ -752,9 +743,7 @@ class GraphEQAMemory:
                     break
                 sc = int(existing.support_count) + 1
                 new_xyz = (existing.xyz * (sc - 1) + xyz_a) / sc
-                merged_labels = sorted(
-                    {*(str(x).strip() for x in existing.labels if str(x).strip()), label}
-                )
+                merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), label})
                 new_emb = embedding
                 if embedding is not None and existing.embedding is not None:
                     a = float(getattr(candidate, "embedding_blend_alpha", 0.35))
@@ -1084,7 +1073,8 @@ class GraphEQAMemory:
         try:
             outside = voxel_map.get_outside_frontier(xyt, planner)
             _, explored = voxel_map.get_2d_map()
-        except Exception:
+        except Exception as e:
+            _logger.warning(f"Frontier upsert: could not read map frontiers ({e})")
             return sum(1 for n in self._nodes if n.is_frontier)
 
         unexplored = _as_bool_numpy(outside) & ~_as_bool_numpy(explored)
@@ -1118,7 +1108,9 @@ class GraphEQAMemory:
             labels = ["frontier"] + hints[:3]
             desc = self._frontier_desc(cluster_id)
             obs_desc = (
-                "unexplored areas; " + ", ".join(hints) if hints else "This observation corresponds to unexplored space;"
+                "unexplored areas; " + ", ".join(hints)
+                if hints
+                else "This observation corresponds to unexplored space;"
             )
 
             existing = self._find_frontier_node(cluster_id)
@@ -1167,9 +1159,7 @@ class GraphEQAMemory:
         return sum(1 for n in self._nodes if n.is_frontier)
 
     def _rebuild_viewpoint_index(self) -> None:
-        self._viewpoint_by_obs_id = {
-            int(n.obs_id): int(n.node_id) for n in self._nodes if n.is_viewpoint
-        }
+        self._viewpoint_by_obs_id = {int(n.obs_id): int(n.node_id) for n in self._nodes if n.is_viewpoint}
 
     def _find_nearby_viewpoint_node(self, viewer_xyz: np.ndarray) -> GraphNode | None:
         """Nearest viewpoint within ``viewpoint_merge_m`` (stationary-stream dedup)."""
@@ -1313,9 +1303,7 @@ class GraphEQAMemory:
         if not self._history_outputs:
             return
         status = "ok" if success else "failed"
-        self._history_outputs[-1] += (
-            f"\nNav_result: moved {float(dist_m):.2f}m ({status}; {note})"
-        )
+        self._history_outputs[-1] += f"\nNav_result: moved {float(dist_m):.2f}m ({status}; {note})"
 
     def alternate_nav_target_for_failed_action(
         self,
@@ -1326,9 +1314,7 @@ class GraphEQAMemory:
     ) -> np.ndarray | None:
         """Pick a different frontier/fluid goal when the VLM re-picks a failed image action."""
         frontier_nodes = [
-            n
-            for n in self._nodes
-            if getattr(n, "is_frontier", False) and int(n.obs_id) != int(blocked_obs_id)
+            n for n in self._nodes if getattr(n, "is_frontier", False) and int(n.obs_id) != int(blocked_obs_id)
         ]
         if frontier_nodes:
             frontier_nodes.sort(key=lambda n: (int(getattr(n, "nav_failures", 0)), -int(n.last_seen)))
@@ -1525,7 +1511,8 @@ class GraphEQAMemory:
             return None
         try:
             sig = grounder(phrase)
-        except Exception:
+        except Exception as e:
+            _logger.warning(f"SigLIP grounder failed for {phrase!r}: {e}")
             return None
         if sig is None:
             return None
@@ -1533,11 +1520,7 @@ class GraphEQAMemory:
         return sim, xyz, None
 
     def _object_present_in_graph_or_siglip(self, obj: str) -> bool:
-        if any(
-            label_matches_relevant_object(obj, lab)
-            for o in self._observations
-            for lab in o.labels
-        ):
+        if any(label_matches_relevant_object(obj, lab) for o in self._observations for lab in o.labels):
             return True
         sig = self._siglip_match_for_phrase(obj)
         return sig is not None and float(sig[0]) >= SIGLIP_PRESENT_THRESHOLD
@@ -1629,9 +1612,7 @@ class GraphEQAMemory:
                     score += 10.0
                 for ch in choices[:4]:
                     for tok in distinctive_choice_tokens(ch):
-                        hit = tok in blob or any(
-                            lab.startswith(tok) or tok.startswith(lab) for lab in blob.split()
-                        )
+                        hit = tok in blob or any(lab.startswith(tok) or tok.startswith(lab) for lab in blob.split())
                         if not hit:
                             continue
                         if tok in _LANDMARK_GENERIC_TOKENS:
@@ -1743,11 +1724,7 @@ class GraphEQAMemory:
             for oid in remaining:
                 cand = by_id[oid].xyz[:2]
                 if selected:
-                    d = min(
-                        float(np.linalg.norm(cand - by_id[s].xyz[:2]))
-                        for s in selected
-                        if s in by_id
-                    )
+                    d = min(float(np.linalg.norm(cand - by_id[s].xyz[:2])) for s in selected if s in by_id)
                 else:
                     d = 0.0
                 if d > best_dist:
@@ -1761,9 +1738,7 @@ class GraphEQAMemory:
 
         return selected
 
-    def set_text_grounder(
-        self, grounder: Callable[[str], tuple[float, np.ndarray] | None] | None
-    ) -> None:
+    def set_text_grounder(self, grounder: Callable[[str], tuple[float, np.ndarray] | None] | None) -> None:
         """Register an open-vocab visual grounder: ``text -> (similarity, xyz) | None``.
 
         Backed by the voxel map's SigLIP features so existence/location can be grounded in
@@ -1821,11 +1796,7 @@ class GraphEQAMemory:
         present_thresh = SIGLIP_PRESENT_THRESHOLD
         lines: list[str] = []
         for obj in self._confirmed_memory_phrases():
-            matches = [
-                n
-                for n in object_nodes
-                if any(label_matches_relevant_object(obj, lab) for lab in n.labels)
-            ]
+            matches = [n for n in object_nodes if any(label_matches_relevant_object(obj, lab) for lab in n.labels)]
             sig = self._siglip_match_for_phrase(obj)
             parts: list[str] = []
             if matches:
@@ -1836,9 +1807,7 @@ class GraphEQAMemory:
                 sim, xyz = float(sig[0]), sig[1]
                 obs_note = f", obs_id={int(sig[2])}" if sig[2] is not None else ""
                 if sig_present:
-                    parts.append(
-                        f"SigLIP phrase match sim={sim:.2f} near ({xyz[0]:.1f}, {xyz[1]:.1f}){obs_note}"
-                    )
+                    parts.append(f"SigLIP phrase match sim={sim:.2f} near ({xyz[0]:.1f}, {xyz[1]:.1f}){obs_note}")
                 else:
                     parts.append(f"no strong SigLIP match (sim={sim:.2f})")
             present = bool(matches) or sig_present
@@ -1868,9 +1837,7 @@ class GraphEQAMemory:
                         near_bits = []
                         for n, dist in neighbors:
                             lab = ", ".join(n.labels) if n.labels else "object"
-                            near_bits.append(
-                                f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m"
-                            )
+                            near_bits.append(f"{lab} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f}) {dist:.1f}m")
                         parts.append("nearest: " + "; ".join(near_bits))
                 lines.append(f"- {obj}: {status} — " + "; ".join(parts))
             elif parts:
@@ -2013,7 +1980,8 @@ class GraphEQAMemory:
         )
         try:
             salvage_raw = self.eqa_client([directive, *images])
-        except Exception:
+        except Exception as e:
+            _logger.warning(f"EQA answer salvage failed ({e})")
             return ""
         text = (salvage_raw or "").strip()
         m = re.search(r"\b([A-D])\b", text)
@@ -2027,11 +1995,7 @@ class GraphEQAMemory:
         object_nodes = [n for n in self._nodes if not n.is_frontier and not n.is_viewpoint]
         labels: list[str] = []
         for obj in self._confirmed_memory_phrases():
-            matches = [
-                n
-                for n in object_nodes
-                if any(label_matches_relevant_object(obj, lab) for lab in n.labels)
-            ]
+            matches = [n for n in object_nodes if any(label_matches_relevant_object(obj, lab) for lab in n.labels)]
             sig = self._siglip_match_for_phrase(obj)
             sig_present = sig is not None and float(sig[0]) >= SIGLIP_PRESENT_THRESHOLD
             if not matches and not sig_present:
@@ -2085,17 +2049,9 @@ class GraphEQAMemory:
         """True when at least one confirmed phrase matches a non-frontier graph/obs label."""
         object_nodes = [n for n in self._nodes if not n.is_frontier and not n.is_viewpoint]
         for obj in self._confirmed_memory_phrases():
-            if any(
-                label_matches_relevant_object(obj, lab)
-                for n in object_nodes
-                for lab in (n.labels or [])
-            ):
+            if any(label_matches_relevant_object(obj, lab) for n in object_nodes for lab in (n.labels or [])):
                 return True
-            if any(
-                label_matches_relevant_object(obj, lab)
-                for o in self._observations
-                for lab in (o.labels or [])
-            ):
+            if any(label_matches_relevant_object(obj, lab) for o in self._observations for lab in (o.labels or [])):
                 return True
         return False
 
@@ -2115,9 +2071,7 @@ class GraphEQAMemory:
         blob = " ".join(parts).lower()
         return self._unique_best_choice_letter(self._score_choices_against_label_blob(choices, blob))
 
-    def _location_letter_from_attached_images(
-        self, choices: list[str], obs_ids: list[int]
-    ) -> str:
+    def _location_letter_from_attached_images(self, choices: list[str], obs_ids: list[int]) -> str:
         """Map MCQ options onto labels of the attached Image 1..N observations.
 
         Prefer Image 1 landmarks; only fall back to the full attached set when Image 1
@@ -2139,16 +2093,12 @@ class GraphEQAMemory:
             return " ".join(parts).lower()
 
         primary = self._unique_best_choice_letter(
-            self._score_choices_against_label_blob(
-                choices, _blob_for(obs_ids[:1]), ignore_generic=True
-            )
+            self._score_choices_against_label_blob(choices, _blob_for(obs_ids[:1]), ignore_generic=True)
         )
         if primary:
             return primary
         return self._unique_best_choice_letter(
-            self._score_choices_against_label_blob(
-                choices, _blob_for(obs_ids), ignore_generic=True
-            )
+            self._score_choices_against_label_blob(choices, _blob_for(obs_ids), ignore_generic=True)
         )
 
     def _equipment_letter_from_target_distances(self, choices: list[str]) -> str:
@@ -2161,11 +2111,7 @@ class GraphEQAMemory:
         object_nodes = [n for n in self._nodes if not n.is_frontier and not n.is_viewpoint]
         anchors: list[np.ndarray] = []
         for obj in self._confirmed_memory_phrases():
-            matches = [
-                n
-                for n in object_nodes
-                if any(label_matches_relevant_object(obj, lab) for lab in n.labels)
-            ]
+            matches = [n for n in object_nodes if any(label_matches_relevant_object(obj, lab) for lab in n.labels)]
             for n in matches[:3]:
                 anchors.append(np.asarray(n.xyz, dtype=np.float64).reshape(-1)[:2])
             sig = self._siglip_match_for_phrase(obj)
@@ -2194,10 +2140,7 @@ class GraphEQAMemory:
                 labs = [str(lab).lower() for lab in (n.labels or []) if lab]
                 if not labs:
                     continue
-                if not any(
-                    any(t in lab or lab.startswith(t) or t.startswith(lab) for lab in labs)
-                    for t in tokens
-                ):
+                if not any(any(t in lab or lab.startswith(t) or t.startswith(lab) for lab in labs) for t in tokens):
                     continue
                 option_hit = True
                 xy = np.asarray(n.xyz, dtype=np.float64).reshape(-1)[:2]
@@ -2233,9 +2176,7 @@ class GraphEQAMemory:
         if equip:
             return equip
         blob = self._neighbor_label_blob_for_present_objects()
-        nearest = self._unique_best_choice_letter(
-            self._score_choices_against_label_blob(choices, blob)
-        )
+        nearest = self._unique_best_choice_letter(self._score_choices_against_label_blob(choices, blob))
         if direct and nearest and direct != nearest:
             # Conflict: trust option landmarks in the graph over nearest-furniture of a
             # possibly wrong SigLIP anchor when we lack a graph label on the target.
@@ -2268,7 +2209,8 @@ class GraphEQAMemory:
         directive += f"Question: {stem}\nOptions:\n{choice_lines}"
         try:
             salvage_raw = self.eqa_client([directive, *images])
-        except Exception:
+        except Exception as e:
+            _logger.warning(f"Location-MCQ salvage failed ({e})")
             return ""
         text = (salvage_raw or "").strip()
         m = re.search(r"(?:^|\n)\s*answer\s*:\s*([a-d])\b", text, flags=re.IGNORECASE)
@@ -2312,7 +2254,8 @@ class GraphEQAMemory:
             freeform_directive = memory + "\n" + freeform_directive
         try:
             freeform = (self.eqa_client([freeform_directive, *images]) or "").strip()
-        except Exception:
+        except Exception as e:
+            _logger.warning(f"MCQ freeform vote failed ({e})")
             freeform = ""
         ff_idx = match_freeform_to_choice(freeform, choices[:n])
         if ff_idx is not None:
@@ -2341,7 +2284,8 @@ class GraphEQAMemory:
             )
             try:
                 reply = self.eqa_client([directive, *images])
-            except Exception:
+            except Exception as e:
+                _logger.warning(f"MCQ letter vote failed ({e})")
                 reply = ""
             replies.append((reply or "").strip()[:200])
             votes.append(letter_to_original_index(extract_single_letter(reply, n), r, n))
@@ -2499,9 +2443,7 @@ class GraphEQAMemory:
             self.refresh_siglip_confirmed_memory()
         max_images = get_eqa_vl_int(self.parameters, "eqa_max_images", 4)
         parsed_choices = parse_mcq_choices_from_question(question)
-        attribute_q = question_is_attribute_state(question) or choices_are_attribute_state(
-            parsed_choices
-        )
+        attribute_q = question_is_attribute_state(question) or choices_are_attribute_state(parsed_choices)
         obs_ids = self._select_relevant_obs_ids(
             max_images=max_images,
             choices=parsed_choices if parsed_choices else None,
@@ -2527,11 +2469,7 @@ class GraphEQAMemory:
             img_desc_str = self._get_image_descriptions_str(obs_ids)
 
         commands: list[Any] = ["Question: " + question]
-        if (
-            parsed_choices
-            and choices_are_location_mcq(parsed_choices)
-            and question_is_visibility_location(question)
-        ):
+        if parsed_choices and choices_are_location_mcq(parsed_choices) and question_is_visibility_location(question):
             commands.append(self._visibility_location_mcq_hint(parsed_choices))
         # Attribute/state questions: answer from images; do not inject memory priors.
         if self.memory_summary_enabled and not attribute_q:
@@ -2598,6 +2536,9 @@ class GraphEQAMemory:
             and self._any_confirmed_phrase_present()
             and not attribute_q
         ):
+            # Location letter overrides (equip → image → abstaining memory) are intentional
+            # Dynagraph eval levers. Accuracy can move vs GE-only / no-override ablations;
+            # always report HM-EQA deltas with the harness fingerprint + git commit.
             # Geometric under-equipment (mat under treadmill) may correct VLM guesses.
             # Image landmarks may correct memory-steered letters. Nearest-furniture memory
             # alone must NOT override a clear VLM A–D (Q6: VLM B correct, memory A).
@@ -2612,9 +2553,7 @@ class GraphEQAMemory:
                 preferred = equip_letter
             elif img_letter and (abstain or parsed_letter != img_letter):
                 preferred = img_letter
-            elif abstain and memory_letter and (
-                self._any_graph_label_match_for_confirmed() or not img_letter
-            ):
+            elif abstain and memory_letter and (self._any_graph_label_match_for_confirmed() or not img_letter):
                 preferred = memory_letter
             if preferred and (abstain or parsed_letter != preferred):
                 answer = preferred
@@ -2654,8 +2593,7 @@ class GraphEQAMemory:
         }:
             confidence = False
             confidence_reasoning = (
-                confidence_reasoning
-                + " No clear letter yet; explore and refresh memory before confirming."
+                confidence_reasoning + " No clear letter yet; explore and refresh memory before confirming."
             ).strip()
         # Require a clear picture: don't confirm location letters unsupported by attached
         # image labels when memory is only SigLIP-candidate (no graph label on the target).
@@ -2678,8 +2616,7 @@ class GraphEQAMemory:
             elif parsed_letter and not img_letter:
                 confidence = False
                 confidence_reasoning = (
-                    confidence_reasoning
-                    + " Location not yet verified in attached images; explore for a clearer view."
+                    confidence_reasoning + " Location not yet verified in attached images; explore for a clearer view."
                 ).strip()
         # Never finalize a WHERE answer if the target object is not in attached views
         # (guessing "dining table" / "side table" without seeing towel/fruit bowl).
@@ -2692,17 +2629,11 @@ class GraphEQAMemory:
         ):
             confidence = False
             confidence_reasoning = (
-                confidence_reasoning
-                + " Target object not visible in attached images; explore before confirming."
+                confidence_reasoning + " Target object not visible in attached images; explore before confirming."
             ).strip()
         # Under-equipment MCQs: do not finalize until geometric equipment letter is known
         # (otherwise bike vs treadmill is a coin flip from a partial gym view).
-        if (
-            confidence
-            and parsed_choices
-            and choices_are_location_mcq(parsed_choices)
-            and not attribute_q
-        ):
+        if confidence and parsed_choices and choices_are_location_mcq(parsed_choices) and not attribute_q:
             underish = sum(1 for ch in parsed_choices[:4] if "under" in (ch or "").lower())
             if underish >= 2:
                 equip = self._equipment_letter_from_target_distances(parsed_choices)
@@ -2724,8 +2655,7 @@ class GraphEQAMemory:
             if obs_ids and self._obs_is_frontier(int(obs_ids[0])):
                 confidence = False
                 confidence_reasoning = (
-                    confidence_reasoning
-                    + " Attribute/state needs a non-frontier view of the object before confirming."
+                    confidence_reasoning + " Attribute/state needs a non-frontier view of the object before confirming."
                 ).strip()
         raw_answer = answer
         self.last_eqa_parsed = (reasoning, raw_answer, confidence, action, confidence_reasoning)
@@ -2823,7 +2753,8 @@ class GraphEQAMemory:
                         if n.obs_id == obs.obs_id:
                             n.description = desc
                             break
-            except Exception:
+            except Exception as e:
+                _logger.warning(f"fill_descriptions_from_vlm failed for obs {obs.obs_id}: {e}")
                 continue
 
     def get_observations(self) -> list[GraphObservation]:

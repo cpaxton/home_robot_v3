@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Regression tests for ordered tool dispatch and motion validation."""
 
@@ -123,3 +132,94 @@ def test_info_tool_exception_sets_has_info():
     assert ok
     assert has_info
     assert any("sensor down" in r for r in results)
+
+
+def test_send_object_image_returns_info_and_stashes():
+    import numpy as np
+
+    from emet.agent.tools import PENDING_DISCORD_IMAGE_KEY, get_tools
+
+    crop = np.zeros((8, 8, 3), dtype=np.uint8)
+    crop[:] = 40
+
+    class _Node:
+        best_crop = crop
+
+    class _SG:
+        def get_node_by_label(self, label: str):
+            return _Node() if label == "mug" else None
+
+    class _Map:
+        def get_scene_graph(self):
+            return _SG()
+
+    class _Agent:
+        def get_voxel_map(self):
+            return _Map()
+
+    class _Executor:
+        agent = _Agent()
+
+    context: dict = {"executor": _Executor(), "discord_bot": object()}
+    tools = {t.name: t for t in get_tools(context)}
+    assert tools["send_object_image"].returns_info is True
+    ok, results, has_info = _dispatch_tool_calls(
+        [{"name": "send_object_image", "arguments": {"object_label": "mug"}}],
+        tools,
+        lambda _cmds: True,
+    )
+    assert ok and has_info
+    assert PENDING_DISCORD_IMAGE_KEY in context
+    assert any("Queued crop" in r for r in results)
+
+
+def test_status_discord_path_does_not_consume_pending_image():
+    import numpy as np
+
+    from emet.agent.tools import (
+        PENDING_DISCORD_IMAGE_KEY,
+        pending_discord_image_for_send,
+        stash_discord_image,
+    )
+
+    ctx: dict = {}
+    img = np.zeros((4, 4, 3), dtype=np.uint8)
+    assert stash_discord_image(ctx, img)
+    # Thinking / status outbound must leave the stash for the final reply.
+    assert pending_discord_image_for_send(ctx, attach_pending_image=False) is None
+    assert PENDING_DISCORD_IMAGE_KEY in ctx
+    taken = pending_discord_image_for_send(ctx, attach_pending_image=True)
+    assert taken is not None
+    assert PENDING_DISCORD_IMAGE_KEY not in ctx
+
+
+def test_scan_environment_returns_info_via_func():
+    from emet.agent.loop import _FAST_REPLY_TOOLS, _should_skip_llm_summarize
+    from emet.agent.tools import get_tools
+
+    calls: list[list[tuple[str, str]]] = []
+
+    def executor(cmds):
+        calls.append(list(cmds))
+        return True
+
+    tools = {t.name: t for t in get_tools({"executor": executor})}
+    scan = tools["scan_environment"]
+    assert scan.returns_info is True
+    assert scan.executor_commands is None
+    assert "scan_environment" in _FAST_REPLY_TOOLS
+    assert "take_picture" not in _FAST_REPLY_TOOLS
+    assert "take_ee_picture" not in _FAST_REPLY_TOOLS
+
+    ok, results, has_info = _dispatch_tool_calls(
+        [{"name": "scan_environment", "arguments": {}}],
+        tools,
+        executor,
+    )
+    assert ok and has_info
+    assert calls == [[("rotate_in_place", "")]]
+    assert any("scan" in r.lower() for r in results)
+    assert _should_skip_llm_summarize(
+        [{"name": "scan_environment", "arguments": {}}],
+        results,
+    )

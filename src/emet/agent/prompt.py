@@ -42,12 +42,15 @@ Respond with ONLY a JSON object (no other text):
 {"tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": "<short reply>"}
 Use "tool_calls": [] when no action is needed.
 
-When tool_calls is non-empty and results will come back (query_*, describe_scene, explore,
-scan_environment, rotate_base, move_forward, navigation_diagnostics, send_map_snapshot,
-list_scene_relations, send_object_image), set
-"message" to "" on that first turn. After [Tool results], reply with tool_calls [] and a
+Info tools return text (and sometimes photos) for a follow-up reply. When calling any of
+query_*, describe_scene, explore, scan_environment, rotate_base, move_forward,
+navigation_diagnostics, send_map_snapshot, list_scene_relations, send_image, send_object_image,
+set "message" to "" on that first turn. After [Tool results], reply with tool_calls [] and a
 message based only on those results (do not invent objects from this prompt).
-For gesture-only tools (wave, nod_head, shake_head, avert_gaze), prefer "message": "".
+
+Action-only tools do not feed a tool-results summary (wave, nod_head, shake_head, avert_gaze,
+take_picture, take_ee_picture, go_home, hand_over, quit). Prefer "message": "" — the turn ends
+after the action. Use send_image after take_picture if the user should receive a photo.
 
 Routing hints:
 - "what can you see" / "tell me what you see" / "describe the scene" (no motion asked)
@@ -64,6 +67,8 @@ Routing hints:
 - where/what/is-there → query_scene_graph (or query_memory if graph EQA is on)
 - map stuck / explore failed → navigation_diagnostics + send_map_snapshot
 - close-up of a known object → send_object_image (not describe_scene)
+- "take a picture" / "send a photo" → send_image (live head camera to Discord); take_picture alone
+  only captures locally and does not return a caption
 
 # Examples
 User: "Where is the red cup?"
@@ -168,7 +173,24 @@ def parse_tool_calls_response(response: str) -> dict[str, Any]:
             for item in raw_tc:
                 if isinstance(item, dict) and "name" in item:
                     args = item.get("arguments")
-                    if not isinstance(args, dict):
+                    if isinstance(args, str):
+                        raw_args = args.strip()
+                        if not raw_args:
+                            args = {}
+                        else:
+                            try:
+                                parsed_args = json.loads(raw_args)
+                            except json.JSONDecodeError:
+                                _logger.warning(f"Tool {item.get('name')!r}: arguments string is not JSON; using {{}}")
+                                parsed_args = {}
+                            if isinstance(parsed_args, dict):
+                                args = parsed_args
+                            else:
+                                _logger.warning(
+                                    f"Tool {item.get('name')!r}: arguments JSON was not an object; using {{}}"
+                                )
+                                args = {}
+                    elif not isinstance(args, dict):
                         args = {}
                     tool_calls.append({"name": item["name"], "arguments": args})
         message = _normalize_message_field(data.get("message", ""))

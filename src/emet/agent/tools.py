@@ -51,6 +51,21 @@ def take_pending_discord_image(context: dict[str, Any] | None) -> np.ndarray | N
     return np.asarray(img)
 
 
+def pending_discord_image_for_send(
+    context: dict[str, Any] | None,
+    *,
+    attach_pending_image: bool = True,
+) -> np.ndarray | None:
+    """Return a stashed image only when *attach_pending_image* is True.
+
+    Status lines (*Thinking…*) pass ``attach_pending_image=False`` so the crop/photo
+    stays queued for the user-facing reply.
+    """
+    if not attach_pending_image:
+        return None
+    return take_pending_discord_image(context)
+
+
 def _graph_eqa_tool_string(query_out: tuple) -> str:
     """Format ``query_answer`` tuple for agent tools (human answer, not image ids)."""
     reasoning, answer, confidence, confidence_reasoning, _, _ = query_out[:6]
@@ -175,7 +190,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
             try:
                 return _graph_eqa_tool_string(graph_backend.query_answer(question, xyt, planner))
             except Exception as e:
-                _logger.warning("query_memory graph backend failed (%s); trying voxel memory.", e)
+                _logger.warning(f"query_memory graph backend failed ({e}); trying voxel memory.")
         memory_backend = context.get("memory_backend")
         if memory_backend is not None and hasattr(memory_backend, "query_answer"):
             try:
@@ -184,7 +199,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
             except NotImplementedError:
                 pass
             except AttributeError as e:
-                _logger.warning("query_memory backend call failed (%s); using localize_text fallback.", e)
+                _logger.warning(f"query_memory backend call failed ({e}); using localize_text fallback.")
         # Fallback: check if the object is in the voxel map via localize_text
         executor = context.get("executor")
         if executor is not None and hasattr(executor, "agent"):
@@ -446,7 +461,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
             print_camera_frame_diagnostics(
                 "describe_scene (live head RGB → Discord)",
                 image,
-                force=True,
+                force=bool(context.get("verbose_tools")) or bool(context.get("camera_debug")),
             )
         if stash_discord_image(context, image):
             text = f"{text}\n(Attaching a photo of my current view.)"
@@ -512,6 +527,15 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
+    def scan_environment() -> str:
+        executor = context.get("executor")
+        if executor is None:
+            return "Robot not connected."
+        ok = executor([("rotate_in_place", "")])
+        if ok:
+            return "Completed in-place ≈360° scan; map/memory updated."
+        return "Scan interrupted or failed."
+
     tools.append(
         Tool(
             name="scan_environment",
@@ -522,8 +546,8 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
                 "After scanning, you may call describe_scene to report the new view."
             ),
             parameters=_NO_PARAMS,
-            func=lambda: _exec("rotate_in_place", ""),
-            executor_commands=_simple_exec_mapping("rotate_in_place"),
+            func=scan_environment,
+            returns_info=True,
         )
     )
 
@@ -642,7 +666,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
                 planner = context.get("planner")
                 return _graph_eqa_tool_string(gmb.query_answer(question, xyt, planner))
             except Exception as e:
-                _logger.warning("query_scene_graph graph backend failed: %s", e)
+                _logger.warning(f"query_scene_graph graph backend failed: {e}")
         executor = context.get("executor")
         if executor is not None and hasattr(executor, "agent"):
             sg = executor.agent.get_voxel_map().get_scene_graph()
@@ -730,6 +754,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
                 "required": ["object_label"],
             },
             func=send_object_image,
+            returns_info=True,
         )
     )
 

@@ -24,6 +24,16 @@ def test_help_lists_unified_config():
     assert r.exit_code == 0
     assert "--config" in r.output or "-C" in r.output
     assert "--set" in r.output or "-O" in r.output
+    assert "default: 256" in r.output
+
+
+def test_run_agent_with_robot_max_tokens_default_matches_cli():
+    import inspect
+
+    from emet.agent.loop import run_agent_with_robot
+
+    default = inspect.signature(run_agent_with_robot).parameters["max_tokens"].default
+    assert default == 256
 
 
 def test_help_lists_discord_toggle():
