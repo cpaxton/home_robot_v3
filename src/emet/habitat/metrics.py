@@ -71,6 +71,8 @@ class EpisodeMetrics:
     topdown_map_path: str = ""
     diagnostics_manifest_path: str = ""
     error: str = ""
+    # Harness fingerprint for reproducibility (merge / explore / git, etc.).
+    harness: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         """Serialize to a JSON-friendly dict (for JSONL export)."""
@@ -114,6 +116,36 @@ def question_is_visibility_location(question: str) -> bool:
             head,
         )
     )
+
+
+def question_is_attribute_state(question: str) -> bool:
+    """True for on/off, up/down, open/closed, light-state questions (image-first, not memory)."""
+    head = (question or "").strip().split("?")[0].lower()
+    return bool(
+        re.search(
+            r"\b("
+            r"on or off|turned on|turned off|light on|lights? on|"
+            r"pulled (down|up)|open or closed|opened or closed|"
+            r"is the .+ (on|off)\b"
+            r")",
+            head,
+        )
+    )
+
+
+def choices_are_attribute_state(choices: list[str] | None) -> bool:
+    """True when options are mainly on/off / up/down style rather than places."""
+    if not choices:
+        return False
+    cleaned = [(c or "").strip().lower() for c in choices[:4] if (c or "").strip()]
+    if len(cleaned) < 2:
+        return False
+    real = [c for c in cleaned if not c.startswith("(do not choose")]
+    if len(real) < 2:
+        return False
+    attr_hints = ("on", "off", "up", "down", "open", "closed", "pulled")
+    hits = sum(1 for c in real if c in attr_hints or any(h in c.split() for h in attr_hints))
+    return hits >= max(1, len(real) // 2)
 
 
 def choices_are_location_mcq(choices: list[str] | None) -> bool:

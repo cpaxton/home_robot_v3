@@ -18,9 +18,11 @@
 #
 #   Terminal 2 — agent (--robot-ip defaults to 127.0.0.1; match --port-offset with Terminal 1 if set):
 #     export DISCORD_TOKEN="your-bot-token"
-#     uv run emet run agent --config configs/agent_stretch_discord.yaml --rerun
+#     # Default chat LLM is qwen35-4B (fast tool router). Pass --eqa for the larger Qwen3-VL-8B
+#     # caption/EQA VLM used by describe_scene / query_memory (intelligent vision answers).
+#     uv run emet run agent --config configs/agent_stretch_discord.yaml --eqa --rerun
 #     # (``robot: stretch`` in this file replaces ``--robot stretch`` when the flag is omitted.)
-#     uv run emet run agent --robot stretch --device cuda --max-tokens 1024 \
+#     uv run emet run agent --robot stretch --device cuda --eqa \
 #       --config configs/agent_stretch_discord.yaml
 #     # Use --no-discord to skip the Discord bridge; default is to start it when DISCORD_TOKEN is set.
 #     # Local chat only (no robot): --offline
@@ -62,7 +64,13 @@ detection:
   module: "owlsam"
   category_map_file: example_cat_map.json
   use_detic_viz: False
+  # Low bar: instance/graph candidate proposals (not chat captions). See docs/dynamem.md.
   confidence_threshold: 0.02
+  # Chat describe without --eqa / VL: curated detector caption after look-around.
+  describe_use_detector_fallback: true
+  describe_confidence_threshold: 0.30
+  describe_use_curated_vocab: true
+  describe_max_labels: 12
 
 # Point cloud cleanup
 filters:
@@ -164,9 +172,13 @@ embodied_agent:
     config_name: default_scene_graph
   graph_eqa_memory:
     enabled: true
-    # Instance detector graph runs only if use_sensor_perception is false; VLM path when true.
+    # Instance detector graph (no EQA VLM required). Sensor/VLM path needs --eqa.
     use_instance_graph: true
-    use_sensor_perception: true
+    use_sensor_perception: false
+
+# Interactive Dynagraph profile (merge + staleness); used when --memory-backend dynagraph.
+dynagraph_merge_xy_m: 0.45
+dynagraph_staleness_horizon: 256
 
 rerun:
   mjcf_show_visual_mesh: true

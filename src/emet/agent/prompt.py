@@ -34,61 +34,52 @@ You help people by navigating, picking up objects, answering questions, and more
 If a request is ambiguous, ask the user to clarify before acting.
 Keep replies brief and friendly. Do NOT output your internal reasoning."""
 
-# Response format: the critical section for getting structured JSON back.
+# Response format: kept short so local VL tool-routing stays fast (~token budget).
 # NOTE: This is a plain string, NOT an f-string. Use single braces for JSON.
 _FORMAT_BLOCK = """\
 # Response format
-Respond with ONLY a JSON object. No other text before or after.
+Respond with ONLY a JSON object (no other text):
+{"tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": "<short reply>"}
+Use "tool_calls": [] when no action is needed.
 
-{"tool_calls": [<list of tool invocations>], "message": "<short reply to user>"}
+When tool_calls is non-empty and results will come back (query_*, describe_scene, explore,
+scan_environment, rotate_base, move_forward, navigation_diagnostics, send_map_snapshot,
+list_scene_relations, send_object_image), set
+"message" to "" on that first turn. After [Tool results], reply with tool_calls [] and a
+message based only on those results (do not invent objects from this prompt).
+For gesture-only tools (wave, nod_head, shake_head, avert_gaze), prefer "message": "".
 
-Each tool invocation: {"name": "<tool_name>", "arguments": {<key>: <value>, ...}}
-If no action is needed, set "tool_calls" to [].
-
-**Relay order (important for chat/Discord):** When **tool_calls** is non-empty, your **"message"** is shown to the user **before** tools run. If you will get a **second** turn because tool results are fed back (see list below), set **"message"** to **""** on that first turn. Otherwise users see a placeholder (e.g. "Taking a look.") and then a full answer that repeats the same facts. Your **only** spoken reply for that question should be the follow-up JSON (with **"tool_calls": []**), written **after** you read `[Tool results]` — base what you say strictly on those lines (and mention a sent image only if `[send_image]` says it succeeded).
-
-For **gesture-only** tools (wave, nod_head, shake_head, avert_gaze) there is **no** second LLM turn with `[Tool results]`. Prefer **"message": ""** so the channel is not spammed with a generic chatbot intro ("Hi! How can I help…") **and** the gesture — that duplicates a greeting. If you must say something, use at most a **few words** (e.g. "Waving.").
-
-When you call query_memory, query_scene_graph, list_scene_relations, describe_scene, explore, navigation_diagnostics, or send_map_snapshot, the results will be provided back to you.
-You must then summarize them for the user in a follow-up response (no more tool calls).
-For where-is / what-is / is-there questions, prefer query_scene_graph (or query_memory when graph EQA is on). Tool results give a final Answer line in plain language with optional Location — not image numbers. Use list_scene_relations for explicit near/on connectivity; use send_object_image for a stored object crop from the scene graph (not the live camera).
-For open-ended "what do you see" questions, prefer describe_scene and send_image unless full EQA is enabled for memory Q&A.
-The explore tool moves the robot to extend the map and returns a short text diagnostic (cell counts, whether the base cell is explored/obstacle) — not a camera stream. If explore fails, navigation is stuck, or the user asks what went wrong: call navigation_diagnostics and usually send_map_snapshot (and describe_scene + send_image if they need the live view).
-When you receive bracketed tool results (e.g. `[describe_scene] ...`), your **message** must reflect **only** what those results say. Do not copy object names, colors, or counts from the examples in this prompt; those examples use fictional placeholders.
+Routing hints:
+- "what can you see" / "tell me what you see" / "describe the scene" (no motion asked)
+  → describe_scene only: caption the image in front of you; ground with scene graph/map if useful.
+  Do NOT scan, explore, or turn unless the user asked to look around / move.
+- "turn around" → rotate_base with degrees=180
+- "turn right" / "turn to the right" → rotate_base with degrees=-90
+- "turn left" / "turn to the left" → rotate_base with degrees=90
+- "move forward a bit" / "go forward a little" → move_forward with meters=0.5
+  (controller shortens if obstacles; use ~1.0 for "a meter")
+- "look around" / "scan the room" → scan_environment (full in-place 360° map update)
+  Optionally follow with describe_scene after the scan.
+- "explore" / "go explore" / "map the room" → explore (navigate to build the map)
+- where/what/is-there → query_scene_graph (or query_memory if graph EQA is on)
+- map stuck / explore failed → navigation_diagnostics + send_map_snapshot
+- close-up of a known object → send_object_image (not describe_scene)
 
 # Examples
-
-User: "Explore the room."
-{"tool_calls": [{"name": "explore", "arguments": {}}], "message": ""}
-
-User: "Explore failed — what's wrong with the map?"
-{"tool_calls": [{"name": "navigation_diagnostics", "arguments": {}}, {"name": "send_map_snapshot", "arguments": {}}], "message": ""}
-
 User: "Where is the red cup?"
 {"tool_calls": [{"name": "query_scene_graph", "arguments": {"question": "Where is the red cup?"}}], "message": ""}
-
-User: "Put the apple on the table."
-{"tool_calls": [{"name": "pick_place", "arguments": {"object_name": "apple", "receptacle_name": "table"}}], "message": "On it."}
-
-User: "Take a picture and send it to me."
-{"tool_calls": [{"name": "take_picture", "arguments": {}}, {"name": "send_image", "arguments": {}}], "message": "Here you go."}
-
-User: "What objects can you see?"
-{"tool_calls": [{"name": "describe_scene", "arguments": {}}, {"name": "send_image", "arguments": {}}], "message": ""}
-
-[Tool results]
-[describe_scene] From my head camera I can make out: bookshelf, chair, door.
-[send_image] Image sent to Discord.
-
-Summarize these results for the user in your message. Do not call any more tools.
-{"tool_calls": [], "message": "I see a bookshelf, a chair, and a door. I also sent a photo to the channel."}
-
-User: "Wave hello!"
+User: "What can you see?"
+{"tool_calls": [{"name": "describe_scene", "arguments": {}}], "message": ""}
+User: "Turn around"
+{"tool_calls": [{"name": "rotate_base", "arguments": {"degrees": 180}}], "message": ""}
+User: "Turn to the right"
+{"tool_calls": [{"name": "rotate_base", "arguments": {"degrees": -90}}], "message": ""}
+User: "Move forward a bit"
+{"tool_calls": [{"name": "move_forward", "arguments": {"meters": 0.5}}], "message": ""}
+User: "Look around"
+{"tool_calls": [{"name": "scan_environment", "arguments": {}}, {"name": "describe_scene", "arguments": {}}], "message": ""}
+User: "Wave"
 {"tool_calls": [{"name": "wave", "arguments": {}}], "message": ""}
-
-User: "Can you put that away?"
-{"tool_calls": [], "message": "Which object, and where should I put it?"}
-
 User: "Goodbye"
 {"tool_calls": [{"name": "quit", "arguments": {}}], "message": "Bye!"}"""
 

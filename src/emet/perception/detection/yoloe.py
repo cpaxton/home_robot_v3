@@ -94,7 +94,9 @@ class YoloEPerception(PerceptionModule):
         self.confidence = confidence_threshold if confidence_threshold is not None else 0.1
 
         if class_list is None:
-            self.class_list = CLASS_LABELS_200
+            self.class_list = list(CLASS_LABELS_200)
+        else:
+            self.class_list = list(class_list)
 
         self.device = device
         checkpoint_file = f"yoloe-v8{size}-seg.pt"

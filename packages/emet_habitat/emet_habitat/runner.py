@@ -34,6 +34,7 @@ from emet.habitat.hmeqa_enrich_labels import enrich_labels_for_question
 from emet.habitat.metrics import (
     EpisodeMetrics,
     append_episode_jsonl,
+    choices_are_location_mcq,
     extract_mcq_letter,
     extract_mcq_letter_from_raw_eqa,
     should_abstain_location_mcq,
@@ -185,7 +186,7 @@ def _make_controller(
     common = {
         "robot": robot,
         "parameters": params,
-        "save_rerun": False if no_rerun else False,
+        "save_rerun": not no_rerun,
         "cpu_only": not use_real_vlm,
         "use_sensor_perception": graph_perception,
         "use_instance_graph": bool(harness_opts.get("use_instance_graph", False)),
@@ -241,6 +242,7 @@ def run_hmeqa_episode(
     export_map: bool | None = None,
     export_video: bool | None = None,
     map_stride: int | None = None,
+    extra_instruction: str | None = None,
 ) -> EpisodeMetrics:
     questions = load_hmeqa_questions(questions_path)
     q = get_question(questions, question_id=question_id)
@@ -325,13 +327,16 @@ def run_hmeqa_episode(
             habitat_pathfinder=sim.pathfinder,
             habitat_floor_y=sim.floor_y,
         )
-        agent._eqa_question = q.question_formatted
+        from emet.eval.stack import compose_eqa_question
+
+        eqa_question = compose_eqa_question(q.question_formatted, extra_instruction)
+        agent._eqa_question = eqa_question
         agent.start()
         if agent.graph_memory is not None:
             hints = enrich_labels_for_question(question_id, q.scene)
             if hints:
                 agent.graph_memory.seed_object_hints(hints)
-            agent.graph_memory.extract_relevant_objects(q.question_formatted)
+            agent.graph_memory.extract_relevant_objects(eqa_question)
         executor = EQAExecuter(agent)
         if rotate_in_place:
             executor.rotate_in_place()
@@ -349,7 +354,7 @@ def run_hmeqa_episode(
             print(format_graph_node_breakdown(agent.graph_memory), flush=True)
 
         discord_text, _images = agent.run_eqa(
-            q.question_formatted,
+            eqa_question,
             max_planning_steps=max_planning_steps,
             max_movement_step=max_movement_step,
         )
@@ -373,12 +378,33 @@ def run_hmeqa_episode(
         if not predicted:
             tail = discord_text.split("---")[-1].strip() if "---" in discord_text else discord_text
             predicted = extract_mcq_letter(tail, q.choices)
+        # Unverified location guesses: do not score a letter when the target was never
+        # in attached views and the model did not confirm (towel/fruit-bowl false locks).
+        if (
+            agent.graph_memory is not None
+            and q.choices
+            and choices_are_location_mcq(q.choices)
+            and not model_confident
+        ):
+            obs_ids = list(getattr(agent.graph_memory, "last_eqa_obs_ids", []) or [])
+            visible_fn = getattr(agent.graph_memory, "_target_visible_in_obs_ids", None)
+            visible = bool(callable(visible_fn) and visible_fn(obs_ids))
+            if not visible:
+                equip_fn = getattr(agent.graph_memory, "_equipment_letter_from_target_distances", None)
+                equip = equip_fn(q.choices) if callable(equip_fn) else ""
+                if equip:
+                    predicted = equip
+                    parsed_letter = equip
+                else:
+                    predicted = ""
+                    parsed_letter = ""
         predebias_letter = ""
         debias_votes = ""
         if (
             agent.graph_memory is not None
             and getattr(agent.graph_memory, "mcq_debias_enabled", False)
             and q.choices
+            and predicted
             and not should_abstain_location_mcq(raw_eqa, q.choices)
         ):
             vote_letter = agent.graph_memory.vote_mcq_letter(q.question, q.choices)

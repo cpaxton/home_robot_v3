@@ -103,7 +103,8 @@ def test_pick_habitat_exploration_target_accepts_nearby_frontier():
 
     class _GM:
         def get_nodes(self):
-            return [_Node(1, 0.1, 0.0), _Node(2, 4.0, 0.0)]
+            # 0.5m is beyond Habitat noop radius (~0.28m); 0.1m would be rejected as already_at_goal.
+            return [_Node(1, 0.5, 0.0), _Node(2, 4.0, 0.0)]
 
     class _Sim:
         def snap_navmesh_xz(self, x, z):
@@ -123,7 +124,7 @@ def test_pick_habitat_exploration_target_accepts_nearby_frontier():
     agent = type("A", (), {"graph_memory": _GM(), "robot": _Robot(), "parameters": {"eqa": {}}})()
     pt = pick_habitat_exploration_target(agent)
     assert pt is not None
-    assert float(pt[0]) == 0.1
+    assert float(pt[0]) == 0.5
 
 
 def test_resolve_habitat_nav_goal_uses_path_end():
@@ -234,3 +235,138 @@ def test_apply_habitat_nav_resolution_returns_effective_xy():
     assert pt is not None
     assert float(pt[0]) == 1.0
     assert float(pt[1]) == 2.0
+
+
+def test_pick_uncovered_skips_candidate_that_path_end_snaps_into_blocked():
+    """Coverage hints that remapping into a stuck XY must not win."""
+    from emet.controller.habitat_nav import pick_uncovered_explore_target
+
+    class _Node:
+        def __init__(self, obs_id, x, z):
+            self.obs_id = obs_id
+            self.xyz = [x, z, 0.0]
+            self.is_frontier = True
+            self.nav_failures = 0
+            self.last_seen = obs_id
+
+    class _GM:
+        def get_nodes(self):
+            return [_Node(1, 7.9, 2.8), _Node(2, 4.0, 0.0)]
+
+    class _Sim:
+        def snap_navmesh_xz(self, x, z):
+            return float(x), float(z), True
+
+        def find_path_to_xy(self, x, z):
+            # Remap frontier (7.9, 2.8) onto stuck goal (-8.6, 1.2); keep other goals raw.
+            if abs(float(x) - 7.9) < 0.2 and abs(float(z) - 2.8) < 0.2:
+                return np.array([[0.0, 0.0, 0.0], [-8.6, 0.0, 1.2]], dtype=np.float64)
+            return np.array([[0.0, 0.0, 0.0], [float(x), 0.0, float(z)]], dtype=np.float64)
+
+    class _Robot:
+        def __init__(self):
+            self._sim = _Sim()
+            self._pose = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+
+        def get_base_pose(self):
+            return self._pose.copy()
+
+    blocked = {(-8.6, 1.2)}
+    agent = type(
+        "A",
+        (),
+        {
+            "graph_memory": _GM(),
+            "robot": _Robot(),
+            "_habitat_blocked_goals": blocked,
+            "_habitat_recent_goals": [],
+            "parameters": {"eqa": {}},
+            "_planning_base_xyt": lambda self, pose: pose,
+        },
+    )()
+    cand = np.array([7.9, 2.8, 1.0], dtype=float)
+    pt = pick_uncovered_explore_target(
+        agent,
+        question="bed",
+        candidates=[cand],
+        blocked=blocked,
+    )
+    assert pt is not None
+    assert abs(float(pt[0]) - (-8.6)) > 0.5
+    assert float(pt[0]) == 4.0
+
+
+def test_pick_uncovered_mujoco_skips_blocked_and_uses_sample_frontier():
+    from emet.controller.habitat_nav import pick_uncovered_explore_target
+
+    class _Node:
+        def __init__(self, x, z):
+            self.obs_id = 1
+            self.xyz = [x, z, 0.0]
+            self.is_frontier = True
+            self.nav_failures = 0
+            self.last_seen = 1
+
+    class _GM:
+        def get_nodes(self):
+            return [_Node(1.0, 0.0)]
+
+    class _Space:
+        def __init__(self):
+            self.calls = 0
+
+        def sample_frontier(self, planner, start, text=None):
+            self.calls += 1
+            return np.array([3.5, 1.0], dtype=float)
+
+    class _Robot:
+        def get_base_pose(self):
+            return np.array([0.0, 0.0, 0.0], dtype=np.float64)
+
+    space = _Space()
+    blocked = {(1.0, 0.0)}
+    agent = type(
+        "A",
+        (),
+        {
+            "graph_memory": _GM(),
+            "robot": _Robot(),  # no _sim => not Habitat
+            "space": space,
+            "planner": object(),
+            "_habitat_blocked_goals": blocked,
+            "_habitat_recent_goals": [],
+            "_planning_base_xyt": lambda self, pose: pose,
+            "_best_frontier_point_from_graph": lambda self, q: None,
+        },
+    )()
+    pt = pick_uncovered_explore_target(agent, question="fan", blocked=blocked)
+    assert pt is not None
+    assert float(pt[0]) == 3.5
+    assert space.calls >= 1
+
+
+def test_log_nav_attempt_records_already_at_goal_into_recent():
+    from emet.controller.controller_dynamem import DynamemController
+    from emet.controller.habitat_nav import NavAttemptResult
+
+    agent = DynamemController.__new__(DynamemController)
+    agent._habitat_recent_goals = []
+    agent._habitat_blocked_goals = set()
+    agent._episode_diagnostics_recorder = None
+    nav = NavAttemptResult(
+        success=False,
+        finished=False,
+        dist_m=0.0,
+        method="habitat_navmesh",
+        note="already_at_goal_0.04m",
+        goal_xy=(-8.6, 1.2),
+        effective_goal_xy=(-8.6, 1.2),
+    )
+    DynamemController._log_nav_attempt(
+        agent,
+        nav,
+        target_obs_id=None,
+        goal_xy=np.array([-8.6, 1.2], dtype=float),
+    )
+    assert (-8.6, 1.2) in agent._habitat_recent_goals
+    assert (-8.6, 1.2) in agent._habitat_blocked_goals

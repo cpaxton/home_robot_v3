@@ -360,7 +360,13 @@ class Qwen25VLClient(AbstractVLLMClient):
         _vl_tok = getattr(self.processor, "tokenizer", None)
         if _vl_tok is not None and getattr(_vl_tok, "pad_token_id", None) is None:
             _vl_tok.pad_token = _vl_tok.eos_token
-        attn_implementation = "flash_attention_2" if self.use_fast_attn else None
+        from emet.llms.attn_impl import resolve_attn_implementation
+
+        attn_implementation = resolve_attn_implementation(
+            prefer_flash=True,
+            device=device if device == "cuda" else "cpu",
+        )
+
         pretrained_kw: dict[str, Any] = {
             "attn_implementation": attn_implementation,
             **model_kwargs,
@@ -378,11 +384,19 @@ class Qwen25VLClient(AbstractVLLMClient):
             )
             if not recoverable:
                 raise
-            import warnings
-
+            from emet.llms.vlm_device import env_allow_cpu_vlm
             from emet.utils.logger import Logger
 
-            Logger(__name__).warning("Qwen2.5-VL int4 GPU load failed (%s); retrying bf16 on CPU.", e)
+            if not env_allow_cpu_vlm():
+                raise RuntimeError(
+                    f"Qwen2.5-VL GPU load failed ({e}). Refusing silent CPU fallback. "
+                    "Free VRAM or set EMET_ALLOW_CPU_VLM=1."
+                ) from e
+            import warnings
+
+            Logger(__name__).warning(
+                "Qwen2.5-VL int4 GPU load failed (%s); EMET_ALLOW_CPU_VLM=1 — retrying bf16 on CPU.", e
+            )
             warnings.warn(f"Qwen2.5-VL falling back to CPU bf16: {e}", UserWarning, stacklevel=2)
             self._device = "cpu"
             self._quantization = None
@@ -545,7 +559,13 @@ class Qwen35VLClient:
             model_kwargs["quantization_config"] = quantization_config
 
         self.processor = AutoProcessor.from_pretrained(model_name)
-        attn_implementation = "flash_attention_2" if self.use_fast_attn else None
+        from emet.llms.attn_impl import resolve_attn_implementation
+
+        attn_implementation = resolve_attn_implementation(
+            prefer_flash=True,
+            device=device if device == "cuda" else "cpu",
+        )
+
         self.model = Qwen3_5ForConditionalGeneration.from_pretrained(
             model_name,
             attn_implementation=attn_implementation,

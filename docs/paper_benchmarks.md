@@ -39,30 +39,53 @@ Defined in `src/emet/eval/memory_backends.py`:
 
 Use the **same backend names** in sweep commands and paper tables.
 
+**Detector vs semantics (methods):** YoloE/OWL at low `detection.confidence_threshold` supplies **high-recall instance/graph proposals**. Semantic answers come from the **VLM** and **memory backends**. You *can* raise the mapping threshold if eval shows net benefit; treat that as a recall/precision trade-off on OVMM/graph tasks. Chat-only tightening uses `describe_confidence_threshold` (separate knob). See [dynamem.md](dynamem.md), [graph_eqa.md](graph_eqa.md), [AGENT_RUN.md](AGENT_RUN.md).
+
 ## Dynagraph profiles (shared config)
 
 Merge/staleness and short-episode caps are defined once in [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml) and applied via [`src/emet/eval/benchmark_dynagraph.py`](../src/emet/eval/benchmark_dynagraph.py). Base defaults also live in [`dynav_config.yaml`](../src/emet/config/dynav_config.yaml) (`dynagraph_merge_xy_m: 0.45`, `dynagraph_staleness_horizon: 256`) so `get_parameters` and `emet run dynagraph` agree.
 
 | Profile | merge (m) | staleness | Used by |
 |---------|-----------|-----------|---------|
-| `interactive` | 0.45 | 256 | `emet run dynagraph`, dynav YAML default |
+| `interactive` | 0.45 | 256 | `emet run dynagraph`, `emet run agent` (default), dynav YAML default |
 | `eqa` | 0.45 | 256 + nav cap 48 | SQA3D tuned (`dynagraph`) |
+| `unified_eqa` | 0.45 | 256 + nav cap 48 | **HM-EQA Dynagraph default** (Habitat + shared EQA); same merge as interactive |
 | `find_phase` | 0.15 | 256 | OVMM find-phase (`dynagraph`, `ground_truth`) |
-| `graph_eqa_baseline` | 0 | 0 | OVMM `graph_eqa` row |
-| `smoke` | 0 | 0 | HM-EQA harness profile, SQA3D mock-LLM / CI |
-| `unified_eqa` | 0 | 0 + nav cap 48 | Optional shared EQA profile (Habitat + SQA3D) |
+| `graph_eqa_baseline` | 0 | 0 | GraphEQA comparison row only (OVMM / dynamic-explore `graph_eqa`) |
+| `smoke` | 0 | 0 | CI / mock-LLM only — **not** the Dynagraph paper default |
 
-**Harness blocks** (`harness:` in the same YAML) set per-benchmark controller flags (`memory_summary`, `mcq_debias`, `explore_when_uncovered`, `use_instance_graph`, …) via `apply_dynagraph_harness()`. Tuned HM-EQA defaults (`habitat_eqa` / dynagraph): `memory_summary=true`, `mcq_debias=false`, `explore_when_uncovered=conservative`.
+**Merge policy:** Dynagraph’s product and paper *method* rows use merge (0.45 m interactive/EQA, 0.15 m find-phase). True zero-merge is reserved for (1) GraphEQA baseline parity and (2) fast CI smoke. Do not report HM-EQA Dynagraph numbers under `smoke` / zero-merge — that disables the instance-memory behavior the system is built around.
+
+**Interactive agent exploration** (same Dynagraph memory as paper harnesses):
+
+```bash
+# Live Discord/terminal agent (default --memory-backend dynagraph); add --eqa for VL captions
+uv run emet run agent --robot stretch --config configs/agent_stretch_discord.yaml --eqa --rerun
+
+# Scored HM-EQA via the shared episode function (identical to emet-habitat; no chat router)
+uv run emet run agent --eqa-eval --habitat-question-id 17 --eqa-eval-mock-llm \
+  --extra-instruction "Answer with a single letter A–D."
+
+# Scripted skill smoke (no Discord)
+uv run emet run agent --robot stretch --start-sim --no-discord \
+  -c "describe the scene" -c "explore" -c "show me the map"
+```
+
+Benchmark tracks that exercise agent-style exploration (frontier / rotate) already default to **dynagraph** profiles — see one-liners below and [simulation_testing_plan.md](simulation_testing_plan.md). Prefer `./scripts/gpu_preflight.sh` before GPU VLM evals; do not stack overnight Habitat with Robocasa dynagraph in one session.
+
+**Harness blocks** (`harness:` in the same YAML) set per-benchmark controller flags (`memory_summary`, `mcq_debias`, `explore_when_uncovered`, `use_instance_graph`, …) via `apply_dynagraph_harness()`. Tuned HM-EQA defaults (`habitat_eqa` / dynagraph): `memory_summary=true`, `mcq_debias=false`, `explore_when_uncovered=conservative` (prefer Habitat/voxel frontiers **while uncovered**; not a weaker picker than `on`).
 
 | Harness | Profile | Dynagraph EQA extras |
 |---------|---------|----------------------|
-| `habitat_eqa` | `smoke` | memory on, debias off, conservative explore |
+| `habitat_eqa` | `unified_eqa` | memory on, debias off, conservative explore |
 | `habitat_ovmm_find` | `find_phase` | EQA off |
 | `ovmm_find_phase` | `find_phase` | Robocasa / Molmo search |
 | `sqa3d` | `eqa` | memory/debias off (open QA) |
 | `dynamic_explore` | `interactive` | full dynagraph extras |
 
-Tuning / paper battery: [`scripts/run_dynagraph_tuning_matrix.sh`](../scripts/run_dynagraph_tuning_matrix.sh), [`scripts/run_dynagraph_tuned_paper_battery.sh`](../scripts/run_dynagraph_tuned_paper_battery.sh). Figures: `render_paper_map_figures.py`, `render_graph_retrieval_panel.py`, `render_dynagraph_3d_figure.py`, `build_eval_figure_pack.py --render-retrieval-panels`.
+**HM-EQA recovery gate (merge-on):** Before claiming Dynagraph accuracy recovery, run [`scripts/run_q17_merge_on_gate.sh`](../scripts/run_q17_merge_on_gate.sh) (≥2/3 Q17 correct under default `unified_eqa`, no explore CLI override). Episode JSONL / manifests include a **harness fingerprint** (`harness` dict: `git_commit`, `dynagraph_merge_xy_m`, `fallback_spatial_merge_xy_m`, `profile`, `explore_when_uncovered`, …) — always cite it when quoting accuracy. Explore-off (`--explore-when-uncovered off`) is an **ablation only**, not the HM-EQA Dynagraph default. Re-baseline after a green gate: [`scripts/run_merge_on_hmeqa_baseline.sh`](../scripts/run_merge_on_hmeqa_baseline.sh) (holdout8 + smoke 3,14,17).
+
+Tuning / paper battery: [`scripts/run_dynagraph_tuning_matrix.sh`](../scripts/run_dynagraph_tuning_matrix.sh), [`scripts/run_dynagraph_tuned_paper_battery.sh`](../scripts/run_dynagraph_tuned_paper_battery.sh). **Representative cross-benchmark sample:** [`scripts/run_representative_benchmark_sample.sh`](../scripts/run_representative_benchmark_sample.sh) + [`build_representative_results_tables.py`](../scripts/build_representative_results_tables.py) → [representative_sample_results.md](experiments/representative_sample_results.md). Figures: `render_paper_map_figures.py`, `render_graph_retrieval_panel.py`, `render_dynagraph_3d_figure.py`, `build_eval_figure_pack.py --render-retrieval-panels`.
 
 **Task-specific (documented, not unified):** EQA prompts (`prompt_variant`: `sqa3d` vs default), and controller flags (`use_instance_graph`, `manipulation_only`) differ between OVMM localization and SQA3D open QA — see `harness:` in the YAML above.
 
@@ -411,6 +434,7 @@ Before a headline HM-EQA sweep:
 2. Tag JSONL output with stack version (e.g. `_postfix_nav202607`) — see [habitat_eqa_results.md](experiments/habitat_eqa_results.md)
 3. `uv run python scripts/download_habitat_eqa_data.py --report-hmeqa-semantics` for semantics coverage audit
 4. Movement smoke: `.venv-habitat/bin/emet-habitat run-episode --mock-llm --mock-llm-explore --question-id 3 --max-planning-steps 5`
+5. Merge-on recovery gate: `./scripts/run_q17_merge_on_gate.sh` (≥2/3) and cite harness fingerprints when reporting accuracy
 
 ---
 

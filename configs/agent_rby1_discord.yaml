@@ -25,12 +25,12 @@
 #   Terminal 2 — agent (--robot-ip defaults to 127.0.0.1; match --port-offset with Terminal 1 if set):
 #     export DISCORD_TOKEN="your-bot-token"
 #     # optional: EMET_DISCORD_CHANNEL names the channel the bot listens on (default channel name is talk-to-stretch)
-#     uv run emet run agent --config configs/agent_rby1_discord.yaml --rerun
+#     # Default chat LLM is qwen35-4B (fast tool router). Pass --eqa for Qwen3-VL-8B captions / memory QA.
+#     uv run emet run agent --config configs/agent_rby1_discord.yaml --eqa --rerun
 #     # (``robot: rby1`` in this file replaces ``--robot rby1`` when the flag is omitted.)
-#     uv run emet run agent --robot rby1 --device cuda --max-tokens 1024 \
+#     uv run emet run agent --robot rby1 --device cuda --eqa \
 #       --config configs/agent_rby1_discord.yaml
 #     # Use --no-discord to skip the Discord bridge; default is to start it when DISCORD_TOKEN is set.
-#     # Vision LLM: e.g. --llm qwen35-vl-9B (camera on by default; use --no-vl-camera to disable)
 #     # Local chat only (no robot): --offline
 #
 # Optional: load a saved memory dir with --input-path /path/to/logs/memory_xxx
@@ -74,6 +74,10 @@ detection:
   category_map_file: example_cat_map.json
   use_detic_viz: False
   confidence_threshold: 0.02
+  describe_use_detector_fallback: true
+  describe_confidence_threshold: 0.30
+  describe_use_curated_vocab: true
+  describe_max_labels: 12
 
 # Point cloud cleanup
 filters:
@@ -175,10 +179,13 @@ embodied_agent:
     config_name: default_scene_graph
   graph_eqa_memory:
     enabled: true
-    # Instance detector graph runs only if use_sensor_perception is false. When true, graph labels
-    # use the Qwen3.5-VL sensor path (look_around / explore / update), not YoloE-only shortcuts.
+    # Instance detector graph (no EQA VLM required). Sensor/VLM path needs --eqa.
     use_instance_graph: true
-    use_sensor_perception: true
+    use_sensor_perception: false
+
+# Interactive Dynagraph profile (merge + staleness); used when --memory-backend dynagraph.
+dynagraph_merge_xy_m: 0.45
+dynagraph_staleness_horizon: 256
 
 rerun:
   mjcf_show_visual_mesh: true

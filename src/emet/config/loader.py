@@ -302,13 +302,15 @@ def merge_robot_overlay(cfg: dict[str, Any], robot_id: str) -> dict[str, Any]:
 class AgentSectionConfig:
     """Chat / tool agent options (``emet run agent``)."""
 
-    llm: str = "qwen3-vl-eqa"
+    llm: str = "qwen35-4B"
     eqa: bool = False
     share_memory_vllm: bool = True
     discord: bool = True
     prompt: str = "simple"
     device: str = "cuda"
-    max_tokens: int = 1024
+    max_tokens: int = 256
+    # Interactive controller stack: dynagraph (default), graph_eqa, or dynamem.
+    memory_backend: str = "dynagraph"
 
 
 @dataclass

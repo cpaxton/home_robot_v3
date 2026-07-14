@@ -57,6 +57,26 @@ def test_help_lists_offline_and_default_robot_ip():
     assert "127.0.0.1" in r.output
 
 
+def test_help_lists_memory_backend():
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "--memory-backend" in r.output
+
+
+def test_help_lists_eqa_eval():
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "--eqa-eval" in r.output
+    assert "--extra-instruction" in r.output
+    assert "dynagraph" in r.output
+
+
 def test_help_lists_command_long_and_short():
     """Scripted runs use -c / --command (repeatable)."""
     from emet.app.run_agent import main
@@ -140,28 +160,26 @@ def test_help_lists_rerun_agent_flags():
     assert "--rerun-bind" in r.output
 
 
-def test_default_llm_is_qwen3_vl_eqa():
+def test_default_llm_is_qwen35_4b():
     from emet.agent.loop import DEFAULT_AGENT_LLM
     from emet.app.run_agent import main
 
-    assert DEFAULT_AGENT_LLM == "qwen3-vl-eqa"
+    assert DEFAULT_AGENT_LLM == "qwen35-4B"
     runner = CliRunner()
     r = runner.invoke(main, ["--help"])
     assert r.exit_code == 0
-    assert "qwen3-vl-eqa" in r.output
+    assert "qwen35-4B" in r.output
+    assert "qwen3-vl-eqa" in r.output  # still listed as a choice / in help
 
 
 def test_vl_camera_default_logic():
-    """Mirror run_agent: VL model names enable camera unless --no-vl-camera."""
+    """Camera→chat VL is opt-in (--vl-include-camera); --no-vl-camera always wins."""
 
     def vl_include_effective(no_vl_camera: bool, vl_include_camera: bool, llm: str) -> bool:
-        llm_l = llm.lower()
-        is_vl_name = "-vl-" in llm_l or "vl-" in llm_l
-        return (not no_vl_camera) and (vl_include_camera or is_vl_name)
+        return bool(vl_include_camera) and (not no_vl_camera)
 
-    assert vl_include_effective(False, False, "qwen3-vl-eqa")
-    assert vl_include_effective(False, False, "qwen35-vl-9B")
-    assert vl_include_effective(False, False, "qwen25-VL-7B")
+    assert not vl_include_effective(False, False, "qwen3-vl-eqa")
+    assert vl_include_effective(False, True, "qwen3-vl-eqa")
     assert not vl_include_effective(True, True, "qwen35-vl-9B")
     assert not vl_include_effective(False, False, "qwen35-9B")
 

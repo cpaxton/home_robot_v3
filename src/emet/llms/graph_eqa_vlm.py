@@ -16,7 +16,7 @@ from emet.core.parameters import Parameters
 from emet.llms.eqa_vl_settings import apply_eqa_vl_runtime_settings, get_eqa_vl_int, resolve_vl_hf_model_id
 from emet.llms.prompts.eqa_prompt import EQA_PROMPT
 from emet.llms.prompts.hmeqa_eqa_prompt import HMEQA_EQA_PROMPT
-from emet.llms.vllm_factory import create_dynamem_vllm, dynamem_vllm_call
+from emet.llms.vllm_factory import create_dynamem_vllm, dynamem_vllm_call, eqa_vl_client_kwargs
 from emet.llms.vllm_registry import default_hf_model_id, normalize_vl_family
 
 _SHARED_VLM: Any | None = None
@@ -92,6 +92,7 @@ def _get_shared_vlm(
         device=dev,
         quantization=vl_q,
         prompt=None,
+        **eqa_vl_client_kwargs(eqa),
     )
     _SHARED_VLM_KEY = key
     return _SHARED_VLM

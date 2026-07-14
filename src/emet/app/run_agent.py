@@ -9,10 +9,10 @@
 
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
-# Agent chatbot: one local VLM for chat + (optional) DynaMem captions/EQA.
+# Agent chatbot: local LLM for tool routing + optional DynaMem captions/EQA.
 # Run with: emet run agent
-# Default: ``qwen3-vl-eqa`` (Qwen3-VL-8B int4 from dynav_config.yaml ``eqa:``).
-# Use ``--eqa --share-memory-vllm`` (default) so the voxel map reuses the same load.
+# Default: ``qwen35-4B`` (fast text tool-router). Shared VL: ``--llm qwen3-vl-eqa``.
+# Use ``--eqa --share-memory-vllm`` with a VL --llm so the voxel map reuses the same load.
 
 import os
 
@@ -41,7 +41,7 @@ from emet.app.config_cli import (
 from emet.audio import AudioRecorder
 from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.core import get_parameters
-from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices, is_vl_llm_key
+from emet.llms import get_llm_choices, get_llm_client, get_prompt_builder, get_prompt_choices
 from emet.utils.logger import Logger
 
 log = Logger(__name__)
@@ -52,8 +52,9 @@ log = Logger(__name__)
     "--llm",
     default=DEFAULT_AGENT_LLM,
     help=f"LLM to use (default: {DEFAULT_AGENT_LLM}). Case-insensitive. "
-    "Default ``qwen3-vl-eqa``: one Qwen3-VL-8B int4 (dynav_config.yaml ``eqa:``) for chat + camera. "
-    "Alternatives: gemma4-vl-eqa, qwen35-vlm-*, gemma4-e2b/e4b (text), legacy gemma/gemma4b.",
+    "Default ``qwen35-4B``: fast text tool-router. "
+    "Shared VL for chat+EQA: ``qwen3-vl-eqa`` / ``gemma4-vl-eqa``. "
+    "Alternatives: gemma4-e2b/e4b, qwen35-vlm-*, qwen35-9B.",
     type=click.Choice(get_llm_choices(), case_sensitive=False),
 )
 @click.option(
@@ -69,7 +70,7 @@ log = Logger(__name__)
     help="Device for inference. Use 'cpu' to test without GPU (slow).",
 )
 @click.option("--voice", is_flag=True, help="Use voice input (Whisper).")
-@click.option("--max-tokens", default=1024, type=int, help="Max new tokens per reply.")
+@click.option("--max-tokens", default=256, type=int, help="Max new tokens per reply (default: 256; keep low for tool JSON).")
 @click.option(
     "--robot-ip",
     "--robot_ip",
@@ -152,6 +153,24 @@ log = Logger(__name__)
     ),
 )
 @click.option(
+    "--thinking-status/--no-thinking-status",
+    "thinking_status",
+    default=True,
+    help=(
+        "Emit *Thinking…* / *Running tools…* status while waiting on the LLM or tools (default: on). "
+        "Same as EMET_AGENT_THINKING_STATUS=1/0."
+    ),
+)
+@click.option(
+    "--cache-vl-prefix/--no-cache-vl-prefix",
+    "cache_vl_prefix",
+    default=None,
+    help=(
+        "Cache system-prompt KV for Qwen3-VL agent turns (default: eqa.vl_cache_system_prefix in config). "
+        "Same as EMET_VL_CACHE_SYSTEM_PREFIX=1/0."
+    ),
+)
+@click.option(
     "--name",
     "agent_name",
     default=DEFAULT_AGENT_NAME,
@@ -216,22 +235,36 @@ log = Logger(__name__)
     "--vl-include-camera",
     "vl_include_camera",
     is_flag=True,
-    help="Pass latest robot RGB to VL models each user turn (on by default for *VL* models).",
+    help=(
+        "Pass latest robot RGB into the chat VL model on each user turn. "
+        "Off by default — vision questions should use describe_scene / send_image (much faster)."
+    ),
 )
 @click.option(
     "--no-vl-camera",
     "no_vl_camera",
     is_flag=True,
-    help="Do not pass robot RGB to VL models (saves VRAM / faster).",
+    help="Explicitly disable camera→chat VL (default already off; kept for scripts).",
 )
 @click.option(
     "--eqa",
     "dynamem_eqa",
     is_flag=True,
     help=(
-        "Enable DynaMem EQA on the voxel map (reuses agent VL when --share-memory-vllm; "
+        "Enable EQA/caption VLM on the voxel map (reuses agent VL when --share-memory-vllm; "
         "else loads Qwen3-VL-8B int4 from dynav_config.yaml eqa:). "
         "Heavier GPU/RAM and slower startup; default is off (query_memory falls back to localize_text)."
+    ),
+)
+@click.option(
+    "--memory-backend",
+    "memory_backend",
+    type=click.Choice(["dynagraph", "graph_eqa", "dynamem"], case_sensitive=False),
+    default="dynagraph",
+    show_default=True,
+    help=(
+        "Interactive memory controller: dynagraph (default; merge/staleness), "
+        "graph_eqa (GraphEQA without dynagraph lifecycle), or dynamem (voxel + optional embodied overlay)."
     ),
 )
 @click.option(
@@ -252,6 +285,58 @@ log = Logger(__name__)
         "Uses ``sim_config`` / ``sim:`` in the agent YAML, ``--sim-config``, or (if none are set) "
         "the packaged default-table MuJoCo scene with the same ``--robot`` / YAML robot and ``--headless``."
     ),
+)
+@click.option(
+    "--start-habitat",
+    "start_habitat",
+    is_flag=True,
+    default=False,
+    help="Spawn ``emet-habitat serve`` subprocess (requires .venv-habitat)",
+)
+@click.option(
+    "--habitat-question-id",
+    type=int,
+    default=None,
+    help="With --start-habitat: HM-EQA question id (scene + init pose from CSV)",
+)
+@click.option(
+    "--habitat-scene-id",
+    default=None,
+    help="With --start-habitat: HM3D scene id when questions.csv is unavailable",
+)
+@click.option(
+    "--habitat-floor",
+    default=0,
+    type=int,
+    help="With --start-habitat: floor index for init pose CSV lookup",
+)
+@click.option(
+    "--eqa-eval",
+    "eqa_eval",
+    is_flag=True,
+    default=False,
+    help=(
+        "Run one HM-EQA episode via the shared Habitat episode function (same as emet-habitat; "
+        "no chat tool-router). Requires --habitat-question-id. Optional --extra-instruction."
+    ),
+)
+@click.option(
+    "--extra-instruction",
+    default=None,
+    type=str,
+    help="With --eqa-eval: text appended to the EQA question (identical compose path as emet-habitat).",
+)
+@click.option(
+    "--eqa-eval-output",
+    default=None,
+    type=str,
+    help="With --eqa-eval: append episode JSONL here (default under ~/.cache/habitat_eqa/results/).",
+)
+@click.option(
+    "--eqa-eval-mock-llm",
+    is_flag=True,
+    default=False,
+    help="With --eqa-eval: mock EQA VLM (wiring smoke; same as emet-habitat --mock-llm).",
 )
 @click.option(
     "--sim-config",
@@ -339,7 +424,7 @@ log = Logger(__name__)
     "sim_show_subprocess_output",
     is_flag=True,
     help=(
-        "With --start-sim: inherit this terminal for sim stdout/stderr (verbose). "
+        "With --start-sim or --start-habitat: inherit this terminal for sim stdout/stderr (verbose). "
         "Default is to discard sim logs so scripted runs stay readable."
     ),
 )
@@ -362,6 +447,8 @@ def main(
     debug_models: bool,
     debug_vram: bool,
     debug_camera: bool,
+    thinking_status: bool,
+    cache_vl_prefix: bool | None,
     agent_name: str,
     commands: tuple[str, ...],
     port_offset: int = 0,
@@ -380,8 +467,17 @@ def main(
     vl_include_camera: bool = False,
     no_vl_camera: bool = False,
     dynamem_eqa: bool = False,
+    memory_backend: str = "dynagraph",
     share_memory_vllm: bool = True,
     start_sim: bool = False,
+    start_habitat: bool = False,
+    habitat_question_id: int | None = None,
+    habitat_scene_id: str | None = None,
+    habitat_floor: int = 0,
+    eqa_eval: bool = False,
+    extra_instruction: str | None = None,
+    eqa_eval_output: str | None = None,
+    eqa_eval_mock_llm: bool = False,
     sim_config: str | None = None,
     sim_scene: str | None = None,
     sim_split: str | None = None,
@@ -396,7 +492,7 @@ def main(
     sim_debug_molmospaces_spawn: bool = False,
     sim_show_subprocess_output: bool = False,
 ) -> None:
-    """Run the agent chatbot (default: one Qwen3-VL-8B int4 for chat + optional EQA).
+    """Run the agent chatbot (default: fast ``qwen35-4B`` text tool-router).
 
     Default: connect to 127.0.0.1 (start ``emet serve mujoco`` first). Use --offline for local chat only.
     The --prompt option applies to --offline only; embodied mode uses the agent tool prompt (JSON tool_calls).
@@ -404,9 +500,11 @@ def main(
     Examples:
       emet run agent --offline
       emet run agent --device cpu --offline
-      emet run agent --llm qwen35-9B --offline   # text-only if you need a smaller chat model
-      emet run agent --start-sim -c "describe the scene"   # default: qwen3-vl-eqa + head camera
-      emet run agent --eqa --debug-vram   # one Qwen3-VL for chat + voxel captions/EQA
+      emet run agent --llm qwen35-9B --offline   # larger text-only chat model
+      emet run agent --start-sim -c "describe the scene"   # default: qwen35-4B tool router
+      emet serve habitat --habitat-scene-id Y8Y6ukxGMvn   # terminal 1; then emet run agent -c "..."
+      emet run agent --start-habitat --habitat-question-id 17 -c "describe the scene"
+      emet run agent --llm qwen3-vl-eqa --eqa --debug-vram   # one Qwen3-VL for chat + voxel captions/EQA
       emet run agent --robot rby1   # ZMQ @ 127.0.0.1; Discord if DISCORD_TOKEN set
       # MolmoSpaces: ``emet serve mujoco --scene ithor ...`` (often DISPLAY=:1 instead of --headless); same --port-offset as serve:
       emet run agent --robot rby1 --config configs/agent_rby1_discord.yaml
@@ -421,6 +519,37 @@ def main(
       emet run agent --robot rby1 --start-sim --scene ithor --headless -c "describe the scene"
     """
     cmd_list = list(commands) if commands else None
+    if eqa_eval:
+        if habitat_question_id is None:
+            raise click.UsageError("--eqa-eval requires --habitat-question-id.")
+        if start_sim:
+            raise click.UsageError("--eqa-eval uses the Habitat episode runner; do not pass --start-sim.")
+        if offline:
+            raise click.UsageError("Cannot combine --eqa-eval with --offline.")
+        import json
+        from pathlib import Path
+
+        from emet.eval.habitat_eqa_agent import run_hmeqa_via_shared_episode
+
+        method = str(memory_backend or "dynagraph").strip().lower()
+        if method not in ("dynagraph", "graph_eqa"):
+            method = "dynagraph"
+        log.info(
+            f"EQA eval mode: shared HM-EQA episode (question_id={habitat_question_id}, "
+            f"method={method}) — no chat tool-router."
+        )
+        out = Path(eqa_eval_output) if eqa_eval_output else None
+        payload = run_hmeqa_via_shared_episode(
+            question_id=int(habitat_question_id),
+            method=method,
+            mock_llm=bool(eqa_eval_mock_llm),
+            extra_instruction=extra_instruction,
+            device=str(device or "cuda"),
+            output=out,
+        )
+        print(json.dumps(payload, indent=2, default=str))
+        return
+
     config_path = resolve_effective_config_path(
         ctx,
         emet_config=emet_config,
@@ -443,7 +572,7 @@ def main(
             robot_ip=robot_ip,
             connection=connection,
             port_offset=port_offset,
-            zmq_discover=not start_sim,
+            zmq_discover=not (start_sim or start_habitat),
         )
         resolved_robot = runtime.robot_id
         robot_ip = runtime.host
@@ -456,8 +585,15 @@ def main(
             "You left it empty or the next token was parsed as the value (often another flag)."
         )
 
-    if offline and start_sim:
-        raise click.UsageError("Cannot combine --offline with --start-sim.")
+    if offline and (start_sim or start_habitat):
+        raise click.UsageError("Cannot combine --offline with --start-sim or --start-habitat.")
+    if start_sim and start_habitat:
+        raise click.UsageError("Use either --start-sim or --start-habitat, not both.")
+    if start_habitat and not habitat_question_id and not habitat_scene_id:
+        raise click.UsageError(
+            "--start-habitat requires --habitat-question-id or --habitat-scene-id "
+            "(e.g. --habitat-scene-id Y8Y6ukxGMvn)."
+        )
 
     if offline:
         agent_config_resolved = load_finalized_config_from_cli(
@@ -482,6 +618,7 @@ def main(
         discord=discord,
         dynamem_eqa=dynamem_eqa,
         share_memory_vllm=share_memory_vllm,
+        memory_backend=memory_backend,
     )
     llm = agent_opts.llm
     prompt = agent_opts.prompt
@@ -490,6 +627,7 @@ def main(
     discord = agent_opts.discord
     dynamem_eqa = agent_opts.eqa
     share_memory_vllm = agent_opts.share_memory_vllm
+    memory_backend = str(agent_opts.memory_backend or "dynagraph").strip().lower()
 
     sim_cli_used = any(
         [
@@ -509,7 +647,8 @@ def main(
     )
     if sim_cli_used and not start_sim:
         raise click.UsageError(
-            "Sim-only flags (--scene, --split, --sim-seed, --sim-show-subprocess-output, etc.) require --start-sim."
+            "MuJoCo sim-only flags (--scene, --split, --sim-seed, etc.) require --start-sim "
+            "(not --start-habitat)."
         )
 
     if not offline and cmd_list:
@@ -528,6 +667,12 @@ def main(
         os.environ["EMET_VRAM_DEBUG"] = "1"
     if debug_camera:
         os.environ["EMET_AGENT_CAMERA_DEBUG"] = "1"
+    if not thinking_status:
+        os.environ["EMET_AGENT_THINKING_STATUS"] = "0"
+    if cache_vl_prefix is False:
+        os.environ["EMET_VL_CACHE_SYSTEM_PREFIX"] = "0"
+    elif cache_vl_prefix is True:
+        os.environ["EMET_VL_CACHE_SYSTEM_PREFIX"] = "1"
     if debug_tools:
         os.environ["EMET_AGENT_TOOL_DEBUG"] = "1"
 
@@ -536,8 +681,9 @@ def main(
     if not offline:
         robot_effective = str(robot_ip or "").strip() or "127.0.0.1"
 
-    # Vision LLMs: include camera RGB on new user turns (default on for VL keys; use --no-vl-camera to disable)
-    vl_include_effective = (not no_vl_camera) and (vl_include_camera or is_vl_llm_key(llm))
+    # Vision on the *chat* VL is opt-in. Default off: tool path uses describe_scene (detector)
+    # instead of prefilling Qwen3-VL with a full camera frame (~tens of seconds saved per turn).
+    vl_include_effective = bool(vl_include_camera) and (not no_vl_camera)
 
     if robot_effective:
         if rerun_bind:
@@ -627,8 +773,25 @@ def main(
                 silence_sim_output=not sim_show_subprocess_output,
             )
             log.info("Sim is up; connecting agent.")
+        elif start_habitat:
+            from emet.habitat.habitat_subprocess import (
+                shutdown_habitat_server_subprocess,
+                spawn_habitat_server_subprocess,
+            )
+
+            sim_shutdown = shutdown_habitat_server_subprocess
+            log.info("Starting Habitat sim subprocess (--start-habitat)…")
+            spawn_habitat_server_subprocess(
+                question_id=habitat_question_id,
+                scene_id=habitat_scene_id,
+                floor=habitat_floor,
+                port_offset=port_offset,
+                silence_sim_output=not sim_show_subprocess_output,
+            )
+            robot = "stretch"
+            log.info("Habitat ZMQ server is up; connecting agent as stretch.")
         log.info(
-            f"Robot backend: {robot} (from --robot or config `{config_path}`; must match `emet serve mujoco --robot`)."
+            f"Robot backend: {robot} (from --robot or config `{config_path}`; must match the ZMQ server)."
         )
         try:
             run_agent_with_robot(
@@ -650,6 +813,7 @@ def main(
                 vl_include_camera=vl_include_effective,
                 eqa=dynamem_eqa,
                 share_memory_vllm=share_memory_vllm,
+                memory_backend=memory_backend,
                 headless=headless,
                 rerun=rerun,
                 rerun_native=rerun_native,
@@ -659,6 +823,7 @@ def main(
                 parameters=runtime.parameters if runtime is not None else None,
                 allow_missing_depth=runtime.allow_missing_depth if runtime is not None else None,
                 embodied_overlay=runtime.config.embodied_agent() if runtime is not None else None,
+                thinking_status=thinking_status,
             )
         finally:
             if sim_shutdown is not None:

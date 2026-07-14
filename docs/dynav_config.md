@@ -167,8 +167,12 @@ CLI: `.venv-habitat/bin/emet-habitat run-episode --habitat-perfect-nav/--no-habi
 use_instance_memory: True
 use_scene_graph: True
 detection:
+  # Low on purpose: high-recall proposals for instance memory / graph nodes — not chat captions.
   confidence_threshold: 0.02
+  describe_use_detector_fallback: false
 ```
+
+User-facing `describe_scene` uses VLM / graph memory (see [AGENT_RUN.md](AGENT_RUN.md)); do not interpret low-conf YoloE labels as the system answer.
 
 ---
 

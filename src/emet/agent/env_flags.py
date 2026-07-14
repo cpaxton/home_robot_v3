@@ -34,6 +34,18 @@ def env_agent_camera_debug() -> bool:
     return v in _TRUE
 
 
+def env_agent_motion_status() -> bool:
+    """Fine-grained motion progress on the terminal (head sweep / rotate steps).
+
+    Default **on**. Set ``EMET_AGENT_MOTION_STATUS=0`` to silence step-by-step lines
+    (coarse Discord announcements from ``announce_action`` still apply).
+    """
+    v = os.environ.get("EMET_AGENT_MOTION_STATUS", "").strip().lower()
+    if not v:
+        return True
+    return v in _TRUE
+
+
 def env_vram_debug() -> bool:
     """When set, print nvidia-smi + torch CUDA memory snapshots at major load milestones (see ``emet.utils.vram_debug``)."""
     v = os.environ.get("EMET_VRAM_DEBUG", "").strip().lower()

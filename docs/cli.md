@@ -196,6 +196,7 @@ Unknown options (e.g. `--match-method`, `--rerun-debug`) are passed through to t
 ```bash
 emet run agent --robot stretch --robot-ip 127.0.0.1
 emet run agent --start-sim -c "describe the scene"
+emet run agent --memory-backend dynagraph --config configs/agent_stretch_discord.yaml
 emet run dynamem --robot-ip 127.0.0.1 -S
 emet run dynamem -S --visual-servo --match-method class --rerun-debug
 emet run mapping --robot-ip 127.0.0.1

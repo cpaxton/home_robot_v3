@@ -181,6 +181,12 @@ def _diagnostics_cli_options(fn):
 @click.option("--output", type=click.Path(path_type=Path), default=None, help="Write episode JSONL")
 @click.option("--rotate-in-place/--no-rotate-in-place", default=True, help="Sweep heading before EQA")
 @click.option(
+    "--extra-instruction",
+    default=None,
+    type=str,
+    help="Optional text appended to the EQA question (same compose path as emet run agent --eqa-eval)",
+)
+@click.option(
     "--use-hm3d-semantics/--no-hm3d-semantics",
     default=None,
     help="Use HM3D semantic sensor for graph labels (default: auto if assets exist)",
@@ -202,6 +208,7 @@ def run_episode(
     data_dir: Path | None,
     output: Path | None,
     rotate_in_place: bool,
+    extra_instruction: str | None,
     use_hm3d_semantics: bool | None,
     eqa_vl_family: str | None,
     eqa_hf_model_id: str | None,
@@ -254,6 +261,7 @@ def run_episode(
             export_map=export_map,
             export_video=export_video,
             map_stride=map_stride,
+            extra_instruction=extra_instruction,
         )
     except FileNotFoundError as exc:
         raise click.ClickException(
@@ -649,6 +657,61 @@ def run_ovmm_find_batch(
             f"partial={metrics.get('find_partial_success')} -> {out}",
             err=True,
         )
+
+
+@main.command("serve")
+@click.option("--question-id", type=int, default=None, help="HM-EQA question id (loads scene + init pose)")
+@click.option("--scene-id", default=None, help="HM3D scene id for free play (e.g. Y8Y6ukxGMvn)")
+@click.option("--floor", default=0, type=int, help="Floor index when resolving init pose from CSV")
+@click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (4401–4404)")
+@click.option("--hm3d-root", type=click.Path(path_type=Path), default=None)
+@click.option("--data-dir", type=click.Path(path_type=Path), default=None, help="HABITAT_EQA_DATA_DIR override")
+@click.option(
+    "--use-hm3d-semantics/--no-hm3d-semantics",
+    default=None,
+    help="Load HM3D semantic meshes when available (default: auto)",
+)
+@click.option("--verbose", is_flag=True, default=False)
+def serve_cmd(
+    question_id: int | None,
+    scene_id: str | None,
+    floor: int,
+    port_offset: int,
+    hm3d_root: Path | None,
+    data_dir: Path | None,
+    use_hm3d_semantics: bool | None,
+    verbose: bool,
+) -> None:
+    """Start Habitat-Sim as a Stretch-compatible ZMQ server (interactive play).
+
+    Examples::
+
+        emet-habitat serve --scene-id Y8Y6ukxGMvn
+        emet-habitat serve --question-id 17
+
+    Then in another terminal::
+
+        emet run dynagraph --no-rerun --question "where is the couch?"
+        emet run agent -c "describe what you see"
+    """
+    from emet_habitat.habitat_serve_session import resolve_habitat_serve_config
+    from emet_habitat.zmq_server import run_habitat_zmq_server
+
+    questions_path = (data_dir / "questions.csv") if data_dir else None
+    init_poses_path = (data_dir / "scene_init_poses.csv") if data_dir else None
+    try:
+        cfg = resolve_habitat_serve_config(
+            question_id=question_id,
+            scene_id=scene_id,
+            floor=floor,
+            hm3d_root=hm3d_root,
+            questions_path=questions_path,
+            init_poses_path=init_poses_path,
+            use_hm3d_semantics=use_hm3d_semantics,
+        )
+    except (FileNotFoundError, KeyError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    run_habitat_zmq_server(cfg, port_offset=port_offset, verbose=verbose)
 
 
 if __name__ == "__main__":

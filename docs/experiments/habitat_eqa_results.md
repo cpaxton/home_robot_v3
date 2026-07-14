@@ -133,27 +133,51 @@ Unified harness config: [`configs/benchmarks/dynagraph.yaml`](../configs/benchma
 |------|---------------|-----------|
 | `memory_summary` | on | SigLIP CONFIRMED_MEMORY helps search questions |
 | `mcq_debias` | **off** | 8B model: debias flipped correct answers on holdout (e.g. Q68 B→A) |
-| `explore_when_uncovered` | **conservative** | Keep query-time frontier override; disable habitat-only uncovered hijack |
+| `explore_when_uncovered` | **off** (ablation winner) | `no_explore` arm **8/8** holdout vs 3/8 pre-tune; `conservative` partial 5/5 |
 
-Ablation matrix: `./scripts/run_dynagraph_tuning_matrix.sh` (arms: `baseline,no_debias,no_memory,no_explore,graph_eqa_like`). Paper battery after tuning converges: `./scripts/run_dynagraph_tuned_paper_battery.sh`. Results land under `~/runs/emet/dynagraph_tuning/<RUN_ID>/`.
+Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representative_sample_results.md](representative_sample_results.md). Cross-benchmark sample: `./scripts/run_representative_benchmark_sample.sh`.
 
-**Eval pending** on tuned harness — update tables below after first `tuned_paper_*` or tuning-matrix run completes.
+| Arm | holdout-8 | canonical-8 |
+|-----|-----------|-------------|
+| baseline (conservative) | 5/5* | 7/8 |
+| no_debias | 6/8 | 6/8 |
+| no_memory | 5/5* | 7/8 |
+| **no_explore** | **8/8** | 7/8 |
+| graph_eqa_like | 7/8 | 6/8 |
 
-## Planned experiments (priority)
+\*Partial JSONL on some arms from early resume.
 
-**Done (2026-07-05/06, `postfix_nav20260705_larger`):** held-out-8 both methods; balanced-32 both methods @ Qwen3-VL-8B; paper Q0–19 both methods; smoke Q3/14/17 @ 100%.
+**In progress:** representative cross-benchmark sample `rep_sample_20260706` (OVMM, SQA3D, dynamic explore, figures). Full 113-question sweep next.
 
-**In progress (`feature/dynagraph-tuning`):**
+**Merge policy (2026-07-11):** HM-EQA Dynagraph (`harness.habitat_eqa` → `unified_eqa`) uses **0.45 m merge / staleness 256**, matching interactive/agent memory. Earlier “no merge” HM-EQA rows were GraphEQA-parity leftovers and under-counted Dynagraph (Q17 basket instance fragmentation). Keep `smoke` / `graph_eqa_baseline` at true zero-merge for CI and GraphEQA comparison only — do not use them as the Dynagraph method default.
 
-1. **Harness landed** — per-env flags in `dynagraph.yaml`; Habitat CLI ablations; figure scripts.
-2. **Tuning matrix** — holdout-8 + canonical-8 ablations @ Qwen3-VL-8B.
-3. **Paper battery** — seven-track smoke + Habitat/OVMM/SQA3D/Robocasa/Molmo with tuned config.
-4. **Full 113-question** sweep after holdout ≥ graph_eqa baseline.
-5. **Semantics / frontier ablations** — unchanged from prior plan.
+**Memory-confirm (2026-07-13):** Dynagraph extras that used to lose GE-only wins (false `CONFIRMED_MEMORY`, dining-table Image‑1 for trash, nearest-furniture overriding a clear VLM letter) are gated in `GraphEQAMemory` + `emet_habitat.runner`: prefer boosted choice landmarks for Image‑1, never override a clear VLM A–D with nearest-furniture alone, abstain when the target is not in attached views, and require ≥2 grounded under-equipment options before geometric letters. Cite harness fingerprint + git commit (e.g. `f1478c9` memory-confirm). **Accept-vs-fix hard cases:** Q16 (pillow/sofa labeling) and exploration-limited Q18/Q31/Q57 can still flake; Dynagraph’s static HM-EQA claim is *no GE-only memory collapse*, not 100% on every search MCQ. True world-change wins stay on the Robocasa/Molmo dynamic-exploration track.
+
+### HM-EQA slice taxonomy
+
+| Slice | n | Meaning |
+|-------|---|---------|
+| canonical-8 / balanced-32 / paper-20 | 8 / 32 / 20 | Overnight convenience (not GraphEQA paper coverage) |
+| annotated-semantics | ~37 | Paper indices with HM3DSem `.semantic.glb` — fairer perception vs GraphEQA GT path (`hmeqa_annotated_question_ids()`) |
+| paper-113 (`--paper-subset`) | **113** | GraphEQA Table 1 HM-EQA set (indices 0–112) |
+| Explore-EQA full (`--all-questions`) | up to ~500 | Beyond GraphEQA paper; stretch only |
+
+**Accuracy quoting:** Always cite the episode **harness fingerprint** (`harness` in JSONL / `metrics.json`: merge, fallback merge, profile, explore mode, git commit). Do not treat explore-off holdout 8/8 as the Dynagraph method bar — that arm is an ablation; default is `explore_when_uncovered=conservative` with merge on.
+
+**Q17 merge-on gate:** `./scripts/run_q17_merge_on_gate.sh` — three sequential Q17 episodes under default harness; pass ≥2/3 correct (D). Artifacts under `~/runs/emet/branch_verify_*/q17_gate_*`. After pass, re-baseline with `./scripts/run_merge_on_hmeqa_baseline.sh` (holdout8 `15,56,65,68,79,88,104,105` + smoke `3,14,17`) and record `SUMMARY.json` as the merge-on Dynagraph baseline.
+
+**Gate result (2026-07-12, `q17_gate_20260712_000543`):** **2/3** pass (t1 D/41 nodes, t2 D/44, t3 B/62 fail); fingerprint `merge=0.45` / `fallback=0.45` / `profile=unified_eqa` / `explore=conservative` / commit `fd43538` (+ loc-MCQ fixes on branch).
 
 ### Commands
 
 ```bash
+# Q17 ×3 gate (merge-on defaults; fingerprint-checked)
+./scripts/run_q17_merge_on_gate.sh
+
+# Merge-on re-baseline (after gate passes; prefer nohup overnight)
+nohup ./scripts/run_merge_on_hmeqa_baseline.sh \
+  >> ~/runs/emet/branch_verify_20260711/merge_on_baseline_nohup.log 2>&1 &
+
 # Held-out random-8 (repro)
 TAG=holdout8_postfix_20260627 IDS=15,56,65,68,79,88,104,105 METHOD=dynagraph TIMEOUT=7200 \
   ./scripts/run_habitat_iter_subset.sh

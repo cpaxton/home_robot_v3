@@ -35,6 +35,7 @@ import zmq
 import emet.utils.compression as compression
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
+from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.robot import AbstractRobotClient, ControlMode
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
@@ -254,7 +255,7 @@ def get_observation_from_zmq_dict(obs: dict[str, Any]) -> Observations | None:
     )
 
 
-class GenericZmqClient(AbstractRobotClient):
+class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
     """ZMQ client parameterised by a RobotSpec.
 
     Provides the same ZMQ protocol as StretchZmqClient but without
@@ -316,6 +317,7 @@ class GenericZmqClient(AbstractRobotClient):
         self._started = False
         self._finish = False
         self._zmq_closed = False
+        self._init_stream_pause()
 
         self._obs: dict[str, Any] | None = None
         self._state: dict[str, Any] | None = None
@@ -592,6 +594,8 @@ class GenericZmqClient(AbstractRobotClient):
         last_debug_t = 0.0
         step_count = 0
         while not self._finish:
+            if not self._wait_if_streams_paused():
+                return
             if getattr(self._rerun, "enabled", False):
                 with self._obs_lock:
                     obs = self._obs
@@ -652,6 +656,8 @@ class GenericZmqClient(AbstractRobotClient):
 
     def _recv_loop(self) -> None:
         while not self._finish:
+            if not self._wait_if_streams_paused():
+                return
             try:
                 output = self.recv_socket.recv_pyobj(flags=zmq.NOBLOCK)
             except zmq.Again:
@@ -700,6 +706,8 @@ class GenericZmqClient(AbstractRobotClient):
 
     def _state_loop(self) -> None:
         while not self._finish:
+            if not self._wait_if_streams_paused():
+                return
             try:
                 msg = self.recv_state_socket.recv_pyobj(flags=zmq.NOBLOCK)
             except zmq.Again:
@@ -710,7 +718,7 @@ class GenericZmqClient(AbstractRobotClient):
             with self._obs_lock:
                 self._state = msg
                 if "step" in msg:
-                    self._last_step = msg["step"]
+                    self._last_step = max(self._last_step, int(msg["step"]))
                 self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
                     self._emet_session_cache,
                     self._emet_session_cache_step,
@@ -719,6 +727,8 @@ class GenericZmqClient(AbstractRobotClient):
 
     def _servo_loop(self) -> None:
         while not self._finish:
+            if not self._wait_if_streams_paused():
+                return
             try:
                 msg = self.recv_servo_socket.recv_pyobj(flags=zmq.NOBLOCK)
             except zmq.Again:
@@ -1120,6 +1130,15 @@ class GenericZmqClient(AbstractRobotClient):
         self.head_to(
             float(motion_constants.look_front[0]),
             float(motion_constants.look_front[1]),
+            blocking=blocking,
+            timeout=timeout,
+            reliable=True,
+        )
+
+    def look_ahead(self, blocking: bool = True, timeout: float = 10.0) -> None:
+        self.head_to(
+            float(motion_constants.look_ahead[0]),
+            float(motion_constants.look_ahead[1]),
             blocking=blocking,
             timeout=timeout,
             reliable=True,

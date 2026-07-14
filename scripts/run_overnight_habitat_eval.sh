@@ -39,6 +39,9 @@ GLOBAL_DEADLINE=$(( $(date +%s) + DEADLINE_H * 3600 ))
 IDS_CANONICAL="${IDS_CANONICAL:-3,14,17,28,31,35,81,94}"
 IDS_BALANCED="${IDS_BALANCED:-2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,31,32,33,34,38,39,40,41,43,44,47,48,49,57,76,80,84}"
 IDS_PAPER20="$(uv run python -c 'print(",".join(map(str,range(20))))')"
+# Semantics-annotated paper indices (~37); empty if HM3D root missing.
+IDS_ANNOTATED37="${IDS_ANNOTATED37:-$(uv run python -c 'from emet.habitat.hm3d_semantics import hmeqa_annotated_question_ids as f; print(",".join(map(str, f())))' 2>/dev/null || true)}"
+RUN_ANNOTATED37="${RUN_ANNOTATED37:-1}"
 
 log() { echo "[$(date -Is)] $*" | tee -a "$MAIN_LOG"; }
 
@@ -135,6 +138,8 @@ tags = {
     "balanced32_dynagraph": f"overnight_{run_id}_balanced32_dynagraph",
     "paper20_graph_eqa": f"overnight_{run_id}_paper20_graph_eqa",
     "paper20_dynagraph": f"overnight_{run_id}_paper20_dynagraph",
+    "annotated37_graph_eqa": f"overnight_{run_id}_annotated37_graph_eqa",
+    "annotated37_dynagraph": f"overnight_{run_id}_annotated37_dynagraph",
 }
 results_root = Path.home() / ".cache/habitat_eqa/results"
 
@@ -207,6 +212,7 @@ cat >"$LOG_DIR/manifest.json" <<EOF
   "ids_canonical": "$IDS_CANONICAL",
   "ids_balanced": "$IDS_BALANCED",
   "ids_paper20": "$IDS_PAPER20",
+  "ids_annotated37": "$IDS_ANNOTATED37",
   "timeout_per_batch_sec": $TIMEOUT,
   "gpu_stable_checks": $STABLE,
   "log_dir": "$LOG_DIR"
@@ -230,6 +236,13 @@ run_phase "balanced32_graph_eqa" graph_eqa "$IDS_BALANCED" "${PREFIX}_balanced32
 run_phase "balanced32_dynagraph" dynagraph "$IDS_BALANCED" "${PREFIX}_balanced32_dynagraph" "$NEED_DYNAGRAPH" || true
 run_phase "paper20_graph_eqa" graph_eqa "$IDS_PAPER20" "${PREFIX}_paper20_graph_eqa" "$NEED_BASELINE" || true
 run_phase "paper20_dynagraph" dynagraph "$IDS_PAPER20" "${PREFIX}_paper20_dynagraph" "$NEED_DYNAGRAPH" || true
+
+if [[ "$RUN_ANNOTATED37" == "1" && -n "${IDS_ANNOTATED37}" ]]; then
+  run_phase "annotated37_graph_eqa" graph_eqa "$IDS_ANNOTATED37" "${PREFIX}_annotated37_graph_eqa" "$NEED_BASELINE" || true
+  run_phase "annotated37_dynagraph" dynagraph "$IDS_ANNOTATED37" "${PREFIX}_annotated37_dynagraph" "$NEED_DYNAGRAPH" || true
+else
+  log "SKIP annotated37 (RUN_ANNOTATED37=$RUN_ANNOTATED37 ids_empty=$([[ -z ${IDS_ANNOTATED37:-} ]] && echo 1 || echo 0))"
+fi
 
 log "############ SUMMARY ############"
 write_summary

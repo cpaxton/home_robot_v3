@@ -200,10 +200,10 @@ def main() -> None:
         )
 
 
-@main.command(short_help="Start simulation server (mujoco, robocasa, or molmospaces)")
+@main.command(short_help="Start simulation server (mujoco, robocasa, molmospaces, or habitat)")
 @click.argument(
     "backend",
-    type=click.Choice(["mujoco", "robocasa", "molmospaces"]),
+    type=click.Choice(["mujoco", "robocasa", "molmospaces", "habitat"]),
     default="mujoco",
 )
 @click.option(
@@ -278,6 +278,34 @@ def main() -> None:
     help="Add to default ports when 4401 etc. are in use (e.g. 100 → 4501–4504)",
 )
 @click.option(
+    "--habitat-question-id",
+    type=int,
+    default=None,
+    help="Habitat only: HM-EQA question id (loads scene + init pose from CSV)",
+)
+@click.option(
+    "--habitat-scene-id",
+    default=None,
+    help="Habitat only: HM3D scene id for free play (e.g. Y8Y6ukxGMvn)",
+)
+@click.option(
+    "--habitat-floor",
+    default=0,
+    type=int,
+    help="Habitat only: floor index when resolving init pose from CSV",
+)
+@click.option(
+    "--habitat-hm3d-root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Habitat only: override HM3D scene root",
+)
+@click.option(
+    "--habitat-use-semantics/--habitat-no-semantics",
+    default=None,
+    help="Habitat only: load HM3D semantic meshes when available",
+)
+@click.option(
     "--list-robocasa-tasks",
     "list_robocasa_tasks",
     is_flag=True,
@@ -316,6 +344,11 @@ def serve(
     list_robocasa_tasks: bool,
     robocasa_task: str,
     robot: str,
+    habitat_question_id: int | None,
+    habitat_scene_id: str | None,
+    habitat_floor: int,
+    habitat_hm3d_root: Path | None,
+    habitat_use_semantics: bool | None,
     extra: tuple[str, ...],
 ) -> None:
     """Start a simulation server.
@@ -343,6 +376,8 @@ def serve(
       emet serve mujoco --scene robocasa --port-offset 100
       emet serve molmospaces --headless
       emet serve molmospaces ithor --index 3
+      emet serve habitat --habitat-scene-id Y8Y6ukxGMvn
+      emet serve habitat --habitat-question-id 17
       DISPLAY=:1 emet serve mujoco --scene ithor   # default robot: stretch
       emet serve mujoco --scene ithor --robot rby1 --headless
       emet serve mujoco --scene ithor --robot xlerobot --headless
@@ -351,6 +386,27 @@ def serve(
     """
     extra_args = list(extra)
     scene_value = scene
+    if backend == "habitat":
+        if list_robocasa_tasks:
+            click.echo("--list-robocasa-tasks is only for robocasa / --scene robocasa.", err=True)
+            sys.exit(1)
+        hab_args = ["serve", "--port-offset", str(int(port_offset))]
+        if habitat_question_id is not None:
+            hab_args.extend(["--question-id", str(int(habitat_question_id))])
+        if habitat_scene_id:
+            hab_args.extend(["--scene-id", str(habitat_scene_id)])
+        if habitat_floor:
+            hab_args.extend(["--floor", str(int(habitat_floor))])
+        if habitat_hm3d_root is not None:
+            hab_args.extend(["--hm3d-root", str(habitat_hm3d_root)])
+        if habitat_use_semantics is True:
+            hab_args.append("--use-hm3d-semantics")
+        elif habitat_use_semantics is False:
+            hab_args.append("--no-hm3d-semantics")
+        if scene_value and str(scene_value).strip() and not habitat_scene_id:
+            hab_args.extend(["--scene-id", str(scene_value).strip()])
+        hab_args.extend(extra_args)
+        sys.exit(_run_habitat_wrapper(hab_args))
     if backend == "robocasa":
         if scene_value and str(scene_value).strip().lower() not in ("", "robocasa"):
             click.echo("Cannot combine serve robocasa with --scene other than robocasa.", err=True)
@@ -530,6 +586,28 @@ def habitat_info() -> None:
 @click.option("--limit", default=10, type=int)
 def habitat_list_questions(limit: int) -> None:
     sys.exit(_run_habitat_wrapper(["list-questions", "--limit", str(limit)]))
+
+
+@habitat_cmd.command("serve", short_help="Start Habitat-Sim ZMQ server (interactive)")
+@click.option("--question-id", type=int, default=None)
+@click.option("--scene-id", default=None)
+@click.option("--floor", default=0, type=int)
+@click.option("--port-offset", default=0, type=int)
+def habitat_serve(
+    question_id: int | None,
+    scene_id: str | None,
+    floor: int,
+    port_offset: int,
+) -> None:
+    """Same as ``emet serve habitat`` — Stretch-shaped ZMQ for dynagraph / agent."""
+    args = ["serve", "--port-offset", str(port_offset)]
+    if question_id is not None:
+        args.extend(["--question-id", str(question_id)])
+    if scene_id:
+        args.extend(["--scene-id", scene_id])
+    if floor:
+        args.extend(["--floor", str(floor)])
+    sys.exit(_run_habitat_wrapper(args))
 
 
 @habitat_cmd.command("run-episode", short_help="Run one HM-EQA episode")
@@ -1651,8 +1729,15 @@ def test(
     venv_py = _project_venv_python()
     python = str(venv_py) if venv_py is not None else sys.executable
     src = root / "src"
-    if src.exists() and "PYTHONPATH" not in env:
-        env["PYTHONPATH"] = str(src) + os.pathsep + env.get("PYTHONPATH", "")
+    if src.exists():
+        # Prepend project src; drop ROS site-packages so ament-* pytest plugins
+        # (auto-loaded via PYTHONPATH) do not break src/test/habitat collection.
+        prev_parts = [
+            p
+            for p in env.get("PYTHONPATH", "").split(os.pathsep)
+            if p and "/opt/ros/" not in p.replace("\\", "/")
+        ]
+        env["PYTHONPATH"] = os.pathsep.join([str(src), *prev_parts])
 
     cmd = [python, "-m", "pytest"]
     if verbose:

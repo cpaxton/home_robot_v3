@@ -76,6 +76,29 @@ uv run python -m emet.app.ai_pickup
 
 If a command fails with **`No such option: --explore-loop`** (or other flags missing from `--help`), your shell’s `emet` likely points at another install. Run `which emet` and use **`uv run emet`** from this repo (see [Testing](docs/TESTING.md#run-from-this-repo)).
 
+## Your first test (interactive agent)
+
+**Start here** if you want to *talk* to the robot in simulation (describe the scene, `find the Z`, `is an X on a Y?`):
+
+→ **[Your first test](docs/first_test.md)** — default table (red cylinder) or MolmoSpaces iTHOR, with copy-paste prompts.
+
+```bash
+# Terminal 1
+uv run emet serve mujoco --robot stretch --headless
+
+# Terminal 2
+uv run emet run agent --robot stretch --no-discord --rerun
+# then try: describe the scene / find the red cylinder / is there a blue cube on the table?
+```
+
+MolmoSpaces home scenes (after `./install.sh --molmospaces -y` if needed):
+
+```bash
+uv run emet serve mujoco --scene ithor --split train --index 0 --robot stretch --headless --install-scene-if-missing
+uv run emet run agent --robot stretch --no-discord --rerun
+# then try: explore / find the sofa / is there a remote on the coffee table?
+```
+
 ## Quick Start (Simulation)
 
 Run DynaMem in MuJoCo simulation in a few steps:

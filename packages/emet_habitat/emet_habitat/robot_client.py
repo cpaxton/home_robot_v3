@@ -75,6 +75,8 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         self._base_control_mode = ControlMode.NAVIGATION
         self.dof = 3
         self._post_step_hooks: list[Any] = []
+        self._head_pan = 0.0
+        self._head_tilt = float(np.deg2rad(float(getattr(simulator, "camera_tilt_deg", -30.0))))
         self._sync_pose_from_sim()
 
     def add_post_step_hook(self, hook: Any) -> None:
@@ -353,8 +355,24 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         return None
 
     def get_pan_tilt(self) -> tuple[float, float]:
-        """Return fixed head pan/tilt stub ``(0, 0)``."""
-        return (0.0, 0.0)
+        """Return current head pan/tilt in radians."""
+        return (float(self._head_pan), float(self._head_tilt))
+
+    def get_joint_state(self, timeout: float = 5.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Stretch-shaped joint vector with base XYT + head pan/tilt filled in."""
+        from emet.motion.constants import STRETCH_HOME_Q
+        from emet.motion.kinematics import HelloStretchIdx
+
+        self._sync_pose_from_sim()
+        q = np.asarray(STRETCH_HOME_Q, dtype=np.float64).copy()
+        q[0] = float(self._xyt[0])
+        q[1] = float(self._xyt[1])
+        q[2] = float(self._xyt[2])
+        q[HelloStretchIdx.HEAD_PAN] = float(self._head_pan)
+        q[HelloStretchIdx.HEAD_TILT] = float(self._head_tilt)
+        dq = np.zeros_like(q)
+        tau = np.zeros_like(q)
+        return q, dq, tau
 
     def get_six_joints(self, timeout: float = 5.0) -> np.ndarray:
         """Return zero arm joint vector (no manipulator in Habitat EQA harness)."""
@@ -390,12 +408,20 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         return True
 
     def head_to(self, head_pan: float, head_tilt: float, blocking: bool = False, **kwargs) -> None:
-        """No-op head stub."""
-        return None
+        """Aim the Habitat head camera (pan/tilt radians); updates RGB/depth on next frame."""
+        pan = float(head_pan)
+        tilt = float(head_tilt)
+        self._head_pan = pan
+        self._head_tilt = tilt
+        set_look = getattr(self._sim, "set_camera_look", None)
+        if callable(set_look):
+            set_look(pan, tilt)
 
     def look_front(self, blocking: bool = True, timeout: float = 10.0) -> None:
-        """No-op look-front stub."""
-        return None
+        """Reset head to Stretch ``look_front`` pan/tilt."""
+        from emet.motion.constants import look_front
+
+        self.head_to(float(look_front[0]), float(look_front[1]), blocking=blocking)
 
     def gripper_to(self, target: float, blocking: bool = True, reliable: bool = True) -> None:
         """No-op gripper stub."""

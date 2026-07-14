@@ -6,6 +6,8 @@ Use it when you want GraphEQA-style prompts and task images, but also want a sim
 
 **CLI:** Run from the project root with **`uv run emet run dynagraph …`** (or activate `.venv` first). See [TESTING.md](TESTING.md#run-from-this-repo) if flags like **`--explore-loop`** are missing from `--help`.
 
+**Interactive agent:** `emet run agent` defaults to **`--memory-backend dynagraph`** (same controller stack + interactive merge/staleness). See [AGENT_RUN.md](AGENT_RUN.md).
+
 **Rerun (live Dynagraph):** Enabled **by default** (unlike `emet run agent`, which needs **`--rerun`**). Use **`--no-rerun`** to disable. Optional: **`--headless`**, **`--rerun-native`**, **`--rerun-bind`**, **`--rerun-show-panels`**. Verify flags: `uv run python -m emet.app.run_dynagraph --help`.
 
 The main **3D View** uses a **fixed world origin** (`origin=world`; see [rerun.md](rerun.md)) so the voxel map (`world/point_cloud`, `world/obstacles`, `world/explored`), boxes, and dynagraph nodes do not spin when the robot turns. **Not streamed live:** full graph tree text (`print_memory` / old “Dynagraph graph” panel — use `--export` or stdout). **Graph edge lines** and **per-node crop images/mosaic** are also off by default (`rerun.dynagraph` in dynav YAML). Tune load via `rerun.voxel_map_stride`, `rerun.mjcf_mesh_stride`, etc.
@@ -328,6 +330,8 @@ See [`sim_object_placements.py`](../src/emet/simulation/sim_object_placements.py
 Use sim GT **3D bounds** and head **2D bboxes** from `emet export-sim-gt`, then record live detections during a short Dynagraph run, and grid-search fusion thresholds.
 
 **Two recall numbers:** calibration scoring is **geometry-first**. `spatial_recall` counts GT bodies with any detection centroid within `match_xy_m` (default 0.55 m), regardless of YoloE label. `label_recall` additionally requires a substring match between detection and Robocasa category names — useful as a taxonomy diagnostic, but often low because YoloE returns open-vocab “best fit” strings (`cabinet`, `shelf`) while GT uses task categories (`chicken_drumstick`, `shrimp`). Low stretch `spatial_recall` on cab/counter is often a **viewpoint** issue (robot not facing manipulables), not a classifier failure.
+
+**Methods note:** YoloE’s low `detection.confidence_threshold` is a **proposal** stage for instance masks / graph candidates (favor recall). Raising it is fine when calibration/find metrics improve or hold; don’t raise it casually to “clean up chat.” Chat captions come from the VLM and graph/voxel memory (`describe_scene`, `query_memory` / GraphEQA), with an optional separate `describe_confidence_threshold`. See [dynamem.md](dynamem.md) and [graph_eqa.md](graph_eqa.md).
 
 ```bash
 # Full loop (both robots): writes /tmp/emet_fusion_tune/<robot>/ and copies tuned YAML under src/emet/config/agents/

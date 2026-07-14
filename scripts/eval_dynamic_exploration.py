@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
 import sys
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -120,6 +122,23 @@ def _rows_have_errors(rows: list[dict]) -> bool:
     return any(str(row.get("error") or "").strip() for row in rows)
 
 
+def _log(msg: str, *, runner_log: Path | None = None) -> None:
+    line = f"[{time.strftime('%Y-%m-%dT%H:%M:%S')}] {msg}"
+    print(line, file=sys.stderr, flush=True)
+    if runner_log is not None:
+        runner_log.parent.mkdir(parents=True, exist_ok=True)
+        with runner_log.open("a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+            fh.flush()
+
+
+def _append_progress(progress_path: Path, event: dict) -> None:
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+    with progress_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"ts": time.time(), **event}, default=str) + "\n")
+        fh.flush()
+
+
 def main() -> int:
     from emet.eval.dynamic_exploration_config import (
         build_explore_run_matrix,
@@ -182,7 +201,21 @@ def main() -> int:
                 print(f"{run.run_id}\t{run.episode.env}\tbackend={run.backend}")
             return 0
 
+        runner_log = output_dir / "runner.log"
+        progress_path = output_dir / "progress.jsonl"
+        _log(
+            f"Phase explore: {len(runs)} runs → {output_dir} (resume={args.resume})",
+            runner_log=runner_log,
+        )
+        _append_progress(
+            progress_path,
+            {"event": "matrix_start", "phase": "explore", "n_runs": len(runs)},
+        )
+
         all_rows: list[dict] = []
+        n_ok = 0
+        n_err = 0
+        n_skip = 0
         for i, run in enumerate(runs):
             run_cfg = DynamicExploreRunConfig(
                 backend=run.backend,
@@ -191,18 +224,81 @@ def main() -> int:
                 resume=args.resume,
                 skip_eqa=args.skip_eqa,
             )
-            print(f"Running {run.run_id} …", file=sys.stderr)
+            out_json = output_dir / f"{run.run_id}.json"
+            if args.resume and out_json.is_file():
+                n_skip += 1
+                _log(f"[{i + 1}/{len(runs)}] SKIP resume {run.run_id}", runner_log=runner_log)
+                payload = json.loads(out_json.read_text(encoding="utf-8"))
+                row = dict(payload.get("summary") or {})
+                if payload.get("metrics", {}).get("error"):
+                    row["error"] = payload["metrics"]["error"]
+                all_rows.append(row)
+                continue
+
+            _log(f"[{i + 1}/{len(runs)}] START {run.run_id}", runner_log=runner_log)
+            _append_progress(
+                progress_path,
+                {
+                    "event": "run_start",
+                    "phase": "explore",
+                    "i": i + 1,
+                    "n": len(runs),
+                    "run_id": run.run_id,
+                },
+            )
+            t0 = time.monotonic()
             payload = run_explore_episode_subprocess(run, run_cfg, cfg, output_dir=output_dir, repo_root=REPO)
+            wall = time.monotonic() - t0
             row = dict(payload.get("summary") or {})
-            if payload.get("metrics", {}).get("error"):
-                row["error"] = payload["metrics"]["error"]
+            err = payload.get("metrics", {}).get("error")
+            if err:
+                row["error"] = err
+                n_err += 1
+                _log(
+                    f"[{i + 1}/{len(runs)}] FAIL {run.run_id} wall_s={wall:.0f} error={err!s}"[:500],
+                    runner_log=runner_log,
+                )
+            else:
+                n_ok += 1
+                _log(
+                    f"[{i + 1}/{len(runs)}] OK {run.run_id} wall_s={wall:.0f} "
+                    f"eqa={row.get('eqa_accuracy')} nodes={row.get('node_count')}",
+                    runner_log=runner_log,
+                )
+            _append_progress(
+                progress_path,
+                {
+                    "event": "run_end",
+                    "phase": "explore",
+                    "i": i + 1,
+                    "n": len(runs),
+                    "run_id": run.run_id,
+                    "wall_s": wall,
+                    "error": err,
+                    "eqa_accuracy": row.get("eqa_accuracy"),
+                },
+            )
             all_rows.append(row)
 
         csv_path = output_dir / "aggregate_dynamic_exploration.csv"
         _write_csv(all_rows, csv_path)
-        print(f"Wrote {len(all_rows)} runs to {output_dir} (CSV: {csv_path})", file=sys.stderr)
+        _log(
+            f"Wrote {len(all_rows)} runs to {output_dir} (CSV: {csv_path}) "
+            f"ok={n_ok} err={n_err} resume_skip={n_skip}",
+            runner_log=runner_log,
+        )
+        _append_progress(
+            progress_path,
+            {
+                "event": "matrix_end",
+                "phase": "explore",
+                "n_ok": n_ok,
+                "n_err": n_err,
+                "n_skip": n_skip,
+            },
+        )
         if _rows_have_errors(all_rows):
-            print("One or more explore runs failed (see CSV error column).", file=sys.stderr)
+            _log("One or more explore runs failed (see CSV error column).", runner_log=runner_log)
             return 1
         return 0
 

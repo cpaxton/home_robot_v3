@@ -32,7 +32,7 @@ Table~\ref{tab:hmeqa_vs_prior} situates our numbers against GraphEQA paper basel
     dynagraph (post-fix) & Qwen3-VL-8B & 8 & 50.0\% \\
     graph\_eqa (July nav) & Qwen3-VL-8B & 8 & 87.5\% \\
     dynagraph (July nav) & Qwen3-VL-8B & 8 & 37.5\% \\
-    dynagraph (tuned harness) & Qwen3-VL-8B & 8 & pending \\
+    dynagraph (tuned, explore off) & Qwen3-VL-8B & 8 & \textbf{100.0\%} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -60,7 +60,8 @@ Held-out random-8 numbers below include the July nav stack (\texttt{postfix\_nav
     \midrule
     Smoke (nav + EQA fixes) & 3, 14, 17 & 3 & 2/3 \\
     Q17 after phrase + location MCQ & 17 & 1 & 1/1 (gold D) \\
-    Held-out random-8 (seed 20260627, July nav) & 15,\ldots,105 & 8 & graph 7/8; dyna 3/8 \\
+    Held-out random-8 (seed 20260627, July nav) & 15,\ldots,105 & 8 & graph 7/8; dyna 3/8 (pre-tune) \\
+    Held-out random-8 (tuned, explore off) & 15,\ldots,105 & 8 & dyna \textbf{8/8} \\
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{Reference (same harness, smaller VLMs): see Table~\ref{tab:habitat_interim_results}}} \\
     \bottomrule
@@ -70,6 +71,15 @@ Held-out random-8 numbers below include the July nav stack (\texttt{postfix\_nav
 \noindent\textbf{Representative episode (Q17).}
 ``Did you see the woven basket anywhere?'' (gold D) failed before phrase+location fixes: exploration reached the basket ($\sim$0.66\,m) but \texttt{CONFIRMED\_MEMORY} marked token fragments as absent and the VLM answered visibility \texttt{No}, yielding an empty graded letter.
 After the fixes, the same question completes in 21 planning steps and 2 EQA iterations with \texttt{answer: D}, citing graph memory for the basket near the living-room armchairs despite the object being out of frame in attached images.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figs/hmeqa_qualitative_sample.png}
+  \caption{Qualitative HM-EQA sample tasks under Dynagraph merge-on defaults ($0.45$\,m merge, \texttt{explore\_when\_uncovered=conservative}, Qwen3-VL-8B).
+  Each row shows the question and graded MCQ options, the determining Caption views attached to the final EQA call (Image~1--2, pose-matched to RGB), and the episode top-down map.
+  Canonical smoke ids $\{3,14,17\}$ from the merge-on baseline (\texttt{scripts/render\_hmeqa\_qualitative\_figure.py}).}
+  \label{fig:hmeqa_qualitative_sample}
+\end{figure}
 
 \noindent\textbf{Held-out random-8 (anti-overfit check).}
 Post-nav sweep \texttt{postfix\_nav20260705\_larger}: graph\_eqa \textbf{7/8}, dynagraph \textbf{3/8} on ids $\{15,56,65,68,79,88,104,105\}$; balanced-32 and paper Q0--19 were roughly tied ($\sim$40--50\%).

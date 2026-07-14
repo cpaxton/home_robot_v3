@@ -26,6 +26,30 @@ from emet.visualization.map_snapshot import format_navigation_report, snapshot_f
 
 _logger = Logger(__name__)
 
+# Agent loop reads this and attaches the ndarray to the next Discord text reply (one message).
+PENDING_DISCORD_IMAGE_KEY = "pending_discord_image"
+
+
+def stash_discord_image(context: dict[str, Any], image: np.ndarray | None) -> bool:
+    """Copy *image* into ``context`` for the agent loop to send with the user-facing reply."""
+    if image is None:
+        return False
+    arr = np.asarray(image)
+    if arr.ndim != 3 or arr.shape[-1] not in (3, 4) or arr.size == 0:
+        return False
+    context[PENDING_DISCORD_IMAGE_KEY] = arr.copy()
+    return True
+
+
+def take_pending_discord_image(context: dict[str, Any] | None) -> np.ndarray | None:
+    """Pop a stashed RGB image from *context*, or None."""
+    if not context:
+        return None
+    img = context.pop(PENDING_DISCORD_IMAGE_KEY, None)
+    if img is None:
+        return None
+    return np.asarray(img)
+
 
 def _graph_eqa_tool_string(query_out: tuple) -> str:
     """Format ``query_answer`` tuple for agent tools (human answer, not image ids)."""
@@ -86,7 +110,29 @@ class Tool:
 _NO_PARAMS: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
 
 
-def _robot_base_xy(robot: Any) -> tuple[float, float] | None:
+def _robot_base_xy(robot: Any, executor: Any | None = None) -> tuple[float, float] | None:
+    """Base XY in the voxel-map world frame (matches visited / explored stamps).
+
+    Prefer the controller's ``world_base_xy`` (gps → world via ``navigation_origin_xyt``).
+    Raw ``get_base_pose`` is episode-relative and misplaces the Discord map marker.
+    """
+    if executor is not None:
+        agent = getattr(executor, "agent", None)
+        if agent is not None and hasattr(agent, "world_base_xy"):
+            try:
+                xy = agent.world_base_xy()
+                if xy is not None:
+                    return float(xy[0]), float(xy[1])
+            except Exception:
+                pass
+        if agent is not None and hasattr(agent, "_planning_base_xyt") and robot is not None:
+            try:
+                bp = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
+                if bp.size >= 2:
+                    wxyt = agent._planning_base_xyt(bp)
+                    return float(wxyt[0]), float(wxyt[1])
+            except Exception:
+                pass
     if robot is None or not hasattr(robot, "get_base_pose"):
         return None
     try:
@@ -177,7 +223,6 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
 
     # -- send_image ----------------------------------------------------------
     def send_image() -> str:
-        discord_bot = context.get("discord_bot")
         robot = context.get("robot")
         image = None
         if robot is not None and hasattr(robot, "get_observation"):
@@ -191,21 +236,22 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
                 image,
                 force=bool(context.get("verbose_tools")) or bool(context.get("camera_debug")),
             )
-        if discord_bot is not None and image is not None:
-            if hasattr(discord_bot, "push_task_to_all_channels"):
-                # Image only: the assistant message (e.g. "Here's a picture…") is already sent by the agent loop.
-                discord_bot.push_task_to_all_channels(message=None, content=image)
-                return "Image sent to Discord."
-        if image is not None:
+        if stash_discord_image(context, image):
+            if context.get("discord_bot") is not None:
+                return "Image queued for Discord (attached to the reply)."
             return "Image captured (no Discord to send to)."
         return "No image available."
 
     tools.append(
         Tool(
             name="send_image",
-            description="Send a picture to the user (e.g. what the robot sees). Use when asked to show a photo.",
+            description=(
+                "Capture the head-camera view and attach it to the reply (Discord when connected). "
+                "Use with describe_scene for 'what do you see', or alone when asked for a photo."
+            ),
             parameters=_NO_PARAMS,
             func=send_image,
+            returns_info=True,
         )
     )
 
@@ -234,8 +280,10 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         Tool(
             name="explore",
             description=(
-                "Explore and build a map of the environment. Returns a short map diagnostic "
-                "(coverage, base cell) after the run — not a camera stream; pair with send_map_snapshot or describe_scene if stuck."
+                "Navigate to explore and build a map (moves through the space — longer than scan_environment). "
+                "Use for 'explore', 'map the room', 'go look around the house'. "
+                "For a quick in-place look, prefer scan_environment. "
+                "Returns a short map diagnostic after the run; pair with send_map_snapshot or describe_scene if stuck."
             ),
             parameters=_NO_PARAMS,
             func=explore,
@@ -249,7 +297,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         robot = context.get("robot")
         if executor is None:
             return "Robot not connected."
-        robot_xy = _robot_base_xy(robot)
+        robot_xy = _robot_base_xy(robot, executor)
         vm = _voxel_map_from_executor(executor)
         _img, stats, _ = snapshot_from_voxel_map(vm, robot_xy)
         return format_navigation_report(stats, explore_ok=None)
@@ -260,7 +308,7 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         discord_bot = context.get("discord_bot")
         if executor is None:
             return "Robot not connected."
-        robot_xy = _robot_base_xy(robot)
+        robot_xy = _robot_base_xy(robot, executor)
         vm = _voxel_map_from_executor(executor)
         img, stats, img_discord = snapshot_from_voxel_map(vm, robot_xy)
         summary = format_navigation_report(stats, explore_ok=None)
@@ -375,21 +423,45 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         obs = robot.get_observation()
         if obs is None or getattr(obs, "rgb", None) is None:
             return "No current image."
+        live_rgb = np.asarray(obs.rgb).copy()
         agent = getattr(executor, "agent", None) if executor is not None else None
-        if agent is not None and hasattr(agent, "describe_head_camera_scene_text"):
-            return agent.describe_head_camera_scene_text()
-        return (
-            "I have a camera frame but this session's controller does not expose scene description; "
-            "use send_image to show the view."
+        if agent is None or not hasattr(agent, "describe_head_camera_scene_text"):
+            stash_discord_image(context, live_rgb)
+            return (
+                "I have a camera frame but this session's controller does not expose scene description; "
+                "a photo is attached when Discord is connected."
+            )
+        text = agent.describe_head_camera_scene_text(
+            graph_memory=context.get("graph_memory"),
+            memory_backend=context.get("memory_backend"),
+            graph_memory_backend=context.get("graph_memory_backend"),
         )
+        # Always attach the *live* head camera for "what can you see" — graph crops are for
+        # send_object_image, not scene description (crops of walls/wrong nodes confuse users).
+        obs2 = robot.get_observation()
+        if obs2 is not None and getattr(obs2, "rgb", None) is not None:
+            live_rgb = np.asarray(obs2.rgb).copy()
+        image = live_rgb
+        if image is not None:
+            print_camera_frame_diagnostics(
+                "describe_scene (live head RGB → Discord)",
+                image,
+                force=True,
+            )
+        if stash_discord_image(context, image):
+            text = f"{text}\n(Attaching a photo of my current view.)"
+        return text
 
     tools.append(
         Tool(
             name="describe_scene",
             description=(
-                "Brief text about the camera view; pair with send_image to show the user a photo. "
-                "Use for 'what can you see' style questions instead of query_memory when not using full EQA. "
-                'With send_image, use an empty JSON "message" on the tool-call turn so chat/Discord only show your answer after [Tool results].'
+                "Caption what is in front of the robot right now (live head camera) and optionally "
+                "ground with known scene-graph / map labels. Does not move the robot — use "
+                "scan_environment or explore to gather more views. Queues the live head-camera photo "
+                "for Discord (not an object crop; use send_object_image for that). "
+                'Use an empty JSON "message" on the tool-call turn so chat/Discord only show your answer after '
+                "[Tool results]."
             ),
             parameters=_NO_PARAMS,
             func=describe_scene,
@@ -443,10 +515,89 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
     tools.append(
         Tool(
             name="scan_environment",
-            description="Rotate in place to scan the environment and update the map (360-degree scan). Saves memory.",
+            description=(
+                "Rotate in place through a full ≈360° scan to update the map and save memory. "
+                "Use for 'look around', 'scan the room', or a full in-place survey — not for a single "
+                "turn (use rotate_base) or a short drive (use move_forward). "
+                "After scanning, you may call describe_scene to report the new view."
+            ),
             parameters=_NO_PARAMS,
             func=lambda: _exec("rotate_in_place", ""),
             executor_commands=_simple_exec_mapping("rotate_in_place"),
+        )
+    )
+
+    def rotate_base(degrees: float = 90.0) -> str:
+        executor = context.get("executor")
+        if executor is None:
+            return "Robot not connected."
+        try:
+            deg = float(degrees)
+        except (TypeError, ValueError):
+            return f"Invalid degrees: {degrees!r}."
+        deg = float(np.clip(deg, -360.0, 360.0))
+        ok = executor([("rotate_base", str(deg))])
+        if not ok:
+            return "Rotate failed or interrupted."
+        return f"Rotated about {deg:.0f}° in place."
+
+    tools.append(
+        Tool(
+            name="rotate_base",
+            description=(
+                "Rotate the wheeled base in place by a relative yaw in degrees (positive = left/CCW, "
+                "negative = right/CW). Pass an explicit angle: turn around → 180, turn right → -90, "
+                "turn left → 90, slight turn → ±30–45. Prefer this over scan_environment for a single turn."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "degrees": {
+                        "type": "number",
+                        "description": "Relative yaw in degrees (e.g. 180, -90, 45).",
+                    }
+                },
+                "required": ["degrees"],
+            },
+            func=rotate_base,
+            returns_info=True,
+        )
+    )
+
+    def move_forward(meters: float = 0.5) -> str:
+        executor = context.get("executor")
+        if executor is None:
+            return "Robot not connected."
+        try:
+            dist = float(meters)
+        except (TypeError, ValueError):
+            return f"Invalid meters: {meters!r}."
+        dist = float(np.clip(dist, 0.0, 1.5))
+        ok = executor([("move_forward", str(dist))])
+        if not ok:
+            return "Move forward failed or interrupted."
+        return f"Moved forward (requested {dist:.2f} m; may be shorter if obstacles)."
+
+    tools.append(
+        Tool(
+            name="move_forward",
+            description=(
+                "Drive the base forward along its current heading by approximately *meters*. "
+                "Default for 'a bit' / 'a little' is 0.5. Cap near 1.5 m. The controller shortens the "
+                "step if the voxel map shows an obstacle ahead. Do not use for turning (use rotate_base)."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "meters": {
+                        "type": "number",
+                        "description": "Forward distance in meters (e.g. 0.5 for 'a bit', 1.0 for 'a meter').",
+                    }
+                },
+                "required": ["meters"],
+            },
+            func=move_forward,
+            returns_info=True,
         )
     )
 
@@ -545,7 +696,6 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
     )
 
     def send_object_image(object_label: str) -> str:
-        discord_bot = context.get("discord_bot")
         executor = context.get("executor")
         if executor is None or not hasattr(executor, "agent"):
             return "Robot not connected."
@@ -559,10 +709,11 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         if crop is None:
             return f"Object {object_label!r} has no stored crop image yet."
         image = np.asarray(crop).copy()
-        if discord_bot is not None and image is not None and hasattr(discord_bot, "push_task_to_all_channels"):
-            discord_bot.push_task_to_all_channels(message=None, content=image)
-            return f"Sent last crop image for {object_label!r} to Discord."
-        return "Crop available but Discord is not connected."
+        if stash_discord_image(context, image):
+            if context.get("discord_bot") is not None:
+                return f"Queued crop image for {object_label!r} (attached to the reply)."
+            return f"Crop available for {object_label!r} (no Discord to send to)."
+        return f"Object {object_label!r} has no stored crop image yet."
 
     tools.append(
         Tool(
