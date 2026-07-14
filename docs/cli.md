@@ -549,6 +549,24 @@ uv run emet eval-sqa3d -p preds.jsonl --questions-path fixtures/q.json --annotat
 
 ---
 
+### `emet robovista <subcommand>`
+
+Offline robot-centric MCQ-VQA on HuggingFace [`sy-xie/robovista`](https://huggingface.co/datasets/sy-xie/robovista) (474 questions, static images). **Not** embodied navigation — accuracy is **not comparable** to HM-EQA. First Hub download caches ~1.1 GB of embedded images.
+
+**Subcommands:** `info`, `run-batch`.
+
+**`run-batch` options:** `--eqa-vl-family`, `--eqa-hf-model-id`, `--device`, `--domain` (repeatable), `--ability-type` (repeatable), `--max-questions`, `--mock-llm`, `--output-dir` (default `~/runs/emet/robovista/<timestamp>/`), `--resume`.
+
+**Examples:**
+```bash
+uv run emet robovista info
+uv run emet robovista run-batch --mock-llm --max-questions 5
+uv run emet robovista run-batch --domain domestic --max-questions 50 \
+  --eqa-vl-family qwen3_vl --device cuda
+```
+
+---
+
 ### `emet install <subcommand> [options]`
 
 Install submodules, simulation extras, or full setup.

@@ -25,6 +25,17 @@ def test_grade_mcq_answer_letter():
     assert grade_mcq_answer("The lamp is off", "B", choices=["on", "off", "none", "broken"])
 
 
+def test_grade_mcq_answer_letter_e():
+    assert extract_mcq_letter("E") == "E"
+    assert extract_mcq_letter("Answer: e") == "E"
+    assert grade_mcq_answer("E", "E")
+    assert grade_mcq_answer("Answer: E", "E")
+    assert not grade_mcq_answer("D", "E")
+    choices = ["a", "b", "c", "d", "none of the above"]
+    assert extract_mcq_letter("none of the above", choices) == "E"
+    assert extract_mcq_letter_from_raw_eqa("Answer: e\nConfidence: true", choices) == "E"
+
+
 def test_extract_mcq_letter_from_raw_eqa_prefers_answer_field():
     raw = (
         "Caption:\nImage 1 shows a room.\n"

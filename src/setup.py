@@ -78,6 +78,7 @@ setuptools.setup(
         "draccus>=0.11.0",
         "timm>1.0.0",
         "huggingface_hub>=0.28.0",
+        "datasets>=3.0.0,<4.0.0",
         "safetensors>=0.4.5",
         # For mobile clip
         "open-clip-torch>=2.32.0",
