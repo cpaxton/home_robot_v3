@@ -1631,9 +1631,13 @@ class DynamemController(BaseController):
     def run_eqa_one_iter(self, question, max_movement_step: int = 5):
         answer_output = None
 
-        if not self._realtime_updates:
+        if not self._realtime_updates and not getattr(self, "_fast_explore_lookaround", False):
             self.robot.look_front()
             self.look_around()
+            self.robot.look_front()
+            self.robot.switch_to_navigation_mode()
+        elif not self._realtime_updates:
+            # Explore-loop (`_fast_explore_lookaround`) already swept / mapped; skip another ~60s look_around.
             self.robot.look_front()
             self.robot.switch_to_navigation_mode()
 

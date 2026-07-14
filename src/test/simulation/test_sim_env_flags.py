@@ -50,18 +50,31 @@ def test_warn_sim_nav_env_flags_once(monkeypatch, capsys):
     assert err.count("EMET_SIM_NAV_DEBUG") == 1
 
 
-def test_pure_yaw_relative_skips_teleport_on_planar_robots():
+def test_pure_yaw_relative_skips_teleport_on_planar_robots_without_flag():
+    import numpy as np
+
+    from emet.simulation.robosuite_server import RobosuiteZmqServer
+
+    raw = np.array([0.0, 0.0, np.pi / 4.0])
+    action = {"nav_relative": True}
+    assert RobosuiteZmqServer._is_pure_yaw_relative(action, raw)
+    srv = object.__new__(RobosuiteZmqServer)
+    srv._planar_base_joint_names = lambda: ("base_x", "base_y", "base_yaw")
+    srv._is_molmospaces_session = lambda: False
+    assert not srv._resolve_nav_teleport(action, raw)
+
+
+def test_explicit_nav_teleport_wins_over_planar_pure_yaw():
     import numpy as np
 
     from emet.simulation.robosuite_server import RobosuiteZmqServer
 
     raw = np.array([0.0, 0.0, np.pi / 4.0])
     action = {"nav_relative": True, "nav_teleport": True}
-    assert RobosuiteZmqServer._is_pure_yaw_relative(action, raw)
     srv = object.__new__(RobosuiteZmqServer)
     srv._planar_base_joint_names = lambda: ("base_x", "base_y", "base_yaw")
     srv._is_molmospaces_session = lambda: False
-    assert not srv._resolve_nav_teleport(action, raw)
+    assert srv._resolve_nav_teleport(action, raw)
     assert srv._resolve_nav_teleport(
         {"nav_relative": True, "nav_teleport": True},
         np.array([1.0, 0.0, 0.0]),

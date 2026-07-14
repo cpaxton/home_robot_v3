@@ -38,6 +38,7 @@ from emet.motion import PlanResult
 from emet.motion.kinematics import HelloStretchIdx, HelloStretchKinematics
 from emet.utils.geometry import (
     angle_difference,
+    nav_xyt_to_world_xyt,
     posquat2sophus,
     sophus2posquat,
     xyt_base_to_global,
@@ -411,6 +412,18 @@ class StretchZmqClient(AbstractRobotClient):
             "Start 'emet serve mujoco' first, then run dynamem with --robot-ip 127.0.0.1"
         )
         return None
+
+    def get_base_pose_world(self, timeout: float = 5.0) -> np.ndarray | None:
+        """Base ``(x, y, θ)`` in MuJoCo world frame (planner / ``nav_world`` goals).
+
+        ZMQ ``gps``/``base_pose`` are episode-relative to ``navigation_origin_xyt``. Dynagraph
+        trajectories use world coordinates; waits must compare in the same frame or they time out
+        after a successful teleport.
+        """
+        local = self.get_base_pose(timeout=timeout)
+        if local is None:
+            return None
+        return nav_xyt_to_world_xyt(local, self.get_emet_session())
 
     def get_pan_tilt(self):
         """Get the current pan and tilt of the head.
@@ -788,17 +801,24 @@ class StretchZmqClient(AbstractRobotClient):
         if blocking and not reliable:
             logger.warning("Sending blocking commands without reliable is not recommended")
 
-        # We never send a relative motion over wireless - this is because we can run into timing issues.
-        # Instead, we always send the absolute position and let the robot handle the motions itself.
+        # Absolute episode pose by default; ``nav_world`` when planner goals are MuJoCo world xyt.
+        use_world = bool(world_frame) and not relative
         next_action: dict[str, Any] = {"xyt": action_xyt, "nav_relative": False, "nav_blocking": blocking}
         if relative:
             next_action["nav_relative"] = True
-        elif world_frame:
+        elif use_world:
             next_action["nav_world"] = True
         from emet.simulation.env_flags import env_sim_nav_teleport
 
+        teleport = False
         if env_sim_nav_teleport():
             next_action["nav_teleport"] = True
+            teleport = True
+        sess = self.get_emet_session()
+        caps = (sess or {}).get("capabilities") if isinstance(sess, dict) else None
+        if isinstance(caps, dict) and caps.get("teleport_base"):
+            next_action["nav_teleport"] = True
+            teleport = True
         if self._rerun:
             self._rerun.update_nav_goal(goal_xyt)
 
@@ -806,20 +826,24 @@ class StretchZmqClient(AbstractRobotClient):
         # Send an action to the robot
         # Resend it to make sure it arrives, if we are not making a relative motion
         # If we are blocking, wait for the action to complete with a timeout
-        action = self.send_action(next_action, timeout=timeout, verbose=verbose, reliable=reliable)
+        wait_timeout = float(timeout)
+        if teleport and blocking:
+            # Snap is near-instant; long waits usually mean a frame mismatch, not slow driving.
+            wait_timeout = min(wait_timeout, 3.0)
+        action = self.send_action(next_action, timeout=wait_timeout, verbose=verbose, reliable=reliable)
 
         # Make sure we had time to read
         if blocking:
             block_id = action["step"]
             time.sleep(0.1)
-            # Now, wait for the command to finish
+            # goal_xyt is episode-frame when relative (composed) or absolute episode/world.
+            # For world_frame goals, yaw must be compared in world frame (see world_frame=).
             self._wait_for_base_motion(
                 block_id,
                 goal_angle=float(goal_xyt[2]),
                 verbose=verbose,
-                timeout=timeout,
-                # resend_action=action,
-                # resend_action=current_action,
+                timeout=wait_timeout,
+                world_frame=use_world,
             )
 
     def set_velocity(self, v: float, w: float):
@@ -1157,6 +1181,8 @@ class StretchZmqClient(AbstractRobotClient):
         goal_angle: float | None = None,
         goal_angle_threshold: float | None = 0.15,
         resend_action: dict | None = None,
+        *,
+        world_frame: bool = False,
     ) -> None:
         """Wait for the navigation action to finish.
 
@@ -1167,9 +1193,11 @@ class StretchZmqClient(AbstractRobotClient):
             moving_threshold(float): How far the robot must move to be considered moving
             angle_threshold(float): How far the robot must rotate to be considered moving
             min_steps_not_moving(int): How many steps the robot must not move for to be considered stopped
-            goal_angle(float): The goal angle to reach
+            goal_angle(float): The goal angle to reach (same frame as ``world_frame``)
             goal_angle_threshold(float): The threshold for the goal angle
             resend_action(dict): The action to resend if the robot is not moving. If none, do not resend.
+            world_frame: When True, read pose via :meth:`get_base_pose_world` so yaw checks match
+                ``nav_world`` / Dynagraph planner goals.
         """
         logger.info(f"Navigation: waiting for motion step {block_id} to finish (timeout={timeout}s)")
         last_pos = None
@@ -1211,7 +1239,9 @@ class StretchZmqClient(AbstractRobotClient):
                         logger.debug("Waiting for observation")
                     continue
 
-            xyt = self.get_base_pose()
+            xyt = self.get_base_pose_world() if world_frame else self.get_base_pose()
+            if xyt is None:
+                continue
             pos = xyt[:2]
             ang = xyt[2]
             obs_t = timeit.default_timer()
@@ -1247,7 +1277,7 @@ class StretchZmqClient(AbstractRobotClient):
                 logger.debug(
                     f"nav wait step={block_id} last_step={self._last_step} pos={pos} "
                     f"moved={moved_dist:.4f} angle={angle_dist:.4f} not_moving={not_moving_count} "
-                    f"at_goal_flag={self._state['at_goal']}"
+                    f"at_goal_flag={self._state['at_goal']} world_frame={world_frame}"
                 )
                 logger.debug(
                     f"nav wait min_steps={min_steps_not_moving} last_step={self._last_step} angle_ok={at_goal}"
@@ -1492,6 +1522,7 @@ class StretchZmqClient(AbstractRobotClient):
                     rate=spin_rate,
                     verbose=verbose,
                     timeout=per_waypoint_timeout,
+                    world_frame=bool(world_frame) and not relative,
                 )
 
     def wait_for_waypoint(
@@ -1502,43 +1533,54 @@ class StretchZmqClient(AbstractRobotClient):
         rot_err_threshold: float = 0.75,
         verbose: bool = False,
         timeout: float = 20.0,
+        *,
+        world_frame: bool = False,
     ) -> bool:
         """Wait until the robot has reached a configuration... but only roughly. Used for trajectory execution.
 
         Parameters:
-            xyt: se(2) base pose in world coordinates to go to
+            xyt: se(2) base pose to reach (MuJoCo world if ``world_frame``, else episode gps frame)
             rate: rate at which we should check to see if done
             pos_err_threshold: how far robot can be for this waypoint
             verbose: prints extra info out
             timeout: aborts at this point
+            world_frame: match Dynagraph / ``nav_world`` goals against :meth:`get_base_pose_world`
 
         Returns:
             success: did we reach waypoint in time"""
+        from emet.simulation.env_flags import env_sim_nav_teleport
+
         _delay = 1.0 / rate
-        xy = xyt[:2]
+        xy = np.asarray(xyt, dtype=np.float64).reshape(-1)[:2]
+        goal_yaw = float(np.asarray(xyt, dtype=np.float64).reshape(-1)[2]) if len(np.asarray(xyt).reshape(-1)) > 2 else 0.0
+        wait_timeout = float(timeout)
+        if env_sim_nav_teleport():
+            wait_timeout = min(wait_timeout, 3.0)
         if verbose:
-            print(f"Waiting for {xyt}, threshold = {pos_err_threshold}")
+            print(f"Waiting for {xyt}, threshold = {pos_err_threshold}, world_frame={world_frame}")
         # Save start time for exiting trajectory loop
         t0 = timeit.default_timer()
         while not self._finish:
             # Loop until we get there (or time out)
             t1 = timeit.default_timer()
-            curr = self.get_base_pose()
+            curr = self.get_base_pose_world() if world_frame else self.get_base_pose()
+            if curr is None:
+                time.sleep(_delay)
+                continue
             pos_err = np.linalg.norm(xy - curr[:2])
-            rot_err = np.abs(angle_difference(curr[-1], xyt[2]))
-            # TODO: code for debugging slower rotations
-            # if pos_err < pos_err_threshold and rot_err > rot_err_threshold:
-            #     print(f"{curr[-1]}, {xyt[2]}, {rot_err}")
+            rot_err = np.abs(angle_difference(curr[-1], goal_yaw))
             if verbose:
-                logger.info(f"- {curr=} target {xyt=} {pos_err=} {rot_err=}")
+                logger.info(f"- {curr=} target {xyt=} {pos_err=} {rot_err=} world_frame={world_frame}")
             if pos_err < pos_err_threshold and rot_err < rot_err_threshold:
                 # We reached the goal position
                 return True
             t2 = timeit.default_timer()
             dt = t2 - t1
-            if t2 - t0 > timeout:
+            if t2 - t0 > wait_timeout:
                 logger.warning(
-                    "[WAIT FOR WAYPOINT] WARNING! Could not reach goal in time: " + str(xyt) + " " + str(curr)
+                    "[WAIT FOR WAYPOINT] WARNING! Could not reach goal in time: "
+                    f"target={xyt} curr={curr} world_frame={world_frame} "
+                    f"pos_err={pos_err:.3f} rot_err={rot_err:.3f}"
                 )
                 return False
             time.sleep(max(0, _delay - (dt)))
