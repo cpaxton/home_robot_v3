@@ -59,7 +59,7 @@ dependencies = [
     # Newer transformers + hub improve from_pretrained layout detection (vs stale pytorch_model.bin errors).
     # Gemma 4 (model_type gemma4, any-to-any pipeline) requires transformers>=5.5.0.
     "huggingface_hub>=0.28.0",
-    "datasets>=3.0.0,<4.0.0",
+    "datasets>=4.0.0",
     "safetensors>=0.4.5",
     "open-clip-torch>=2.32.0",
     "transformers>=5.5.0,<6.0.0",
