@@ -70,8 +70,12 @@ def assert_cuda_placement(
 
     Returns the primary device string. Raises ``RuntimeError`` if any
     weights are on CPU/meta/disk while CUDA was requested, unless
-    ``EMET_ALLOW_CPU_VLM=1`` (or ``allow_cpu=True``). Inspects all parameters
-    and buffers (not a bounded sample).
+    ``EMET_ALLOW_CPU_VLM=1`` (or ``allow_cpu=True``).
+
+    When ``hf_device_map`` is present and all entries are CUDA, skip walking
+    every parameter/buffer (bitsandbytes int4 walks can stall for a long time
+    and look like a hang after the ``weights+int4`` print). Otherwise sample a
+    large bounded set of tensors.
     """
     req = (requested_device or "").strip().lower()
     primary = primary_param_device(model)
@@ -92,7 +96,18 @@ def assert_cuda_placement(
                 f"{model_label} was requested on {requested_device!r} but hf_device_map has non-GPU "
                 f"placements ({bad_map}). Free VRAM or set EMET_ALLOW_CPU_VLM=1 for the slow CPU path."
             )
-    counts = parameter_device_counts(model, max_params=None)
+        if not bad_map:
+            # Explicit CUDA-only map (e.g. {"": 0} from bitsandbytes) — trust it.
+            if not primary.startswith("cuda") and not allow:
+                raise RuntimeError(
+                    f"{model_label} primary device is {primary!r} but device={requested_device!r} "
+                    "was requested. Set EMET_ALLOW_CPU_VLM=1 only if you intentionally want CPU inference."
+                )
+            return primary
+
+    # No clean device_map: sample tensors (full walk on int4 can stall for hours).
+    sample_n = int(os.environ.get("EMET_VLM_DEVICE_CHECK_MAX_PARAMS", "512") or "512")
+    counts = parameter_device_counts(model, max_params=max(1, sample_n))
     bad = {d: n for d, n in counts.items() if d.startswith("cpu") or d in ("meta",) or "disk" in d}
     if bad and not allow:
         detail = ",".join(f"{dev}={n}" for dev, n in sorted(counts.items()))

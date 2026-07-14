@@ -228,10 +228,16 @@ class Qwen3VLClient(AbstractVLLMClient):
             f"(devices: {summarize_model_devices(self.model)})",
             flush=True,
         )
-        assert_cuda_placement(
+        print("  checking CUDA placement…", flush=True)
+        t_place0 = timeit.default_timer()
+        primary = assert_cuda_placement(
             self.model,
             requested_device=self._device,
             model_label=f"Qwen3-VL ({model_name})",
+        )
+        print(
+            f"  CUDA placement ok ({primary}) in {timeit.default_timer() - t_place0:.1f}s",
+            flush=True,
         )
 
         try:
@@ -243,6 +249,7 @@ class Qwen3VLClient(AbstractVLLMClient):
             )
         except Exception:
             pass
+        print(f"  {family} ready for inference", flush=True)
 
     @property
     def canonical_model_key(self) -> str:

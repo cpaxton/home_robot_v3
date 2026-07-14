@@ -43,6 +43,9 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_SQA3D_OUTPUT` | `emet sqa3d run-real-sweep`, `aggregate_sqa3d_sweep.py` | Default sweep output root. Default `~/runs/emet/sqa3d` (`configs/sqa3d/benchmark.yaml`). |
 | `EMET_DYNAMIC_EXPLORE_OUTPUT` | `scripts/eval_dynamic_exploration.py` | Dynamic exploration sweep output. Default `~/runs/emet/dynamic_exploration` (`configs/benchmarks/dynamic_exploration.yaml`). |
 | `EMET_DYNAMIC_EXPLORE_DYNAGRAPH_TIMEOUT_S` | `dynamic_exploration_runner.py` | Override per-run ``emet run dynagraph`` subprocess timeout (seconds). Default scales with explore budget (~105 min for Robocasa K=3 on GPU). |
+| `EMET_DYNAMIC_EXPLORE_HEARTBEAT_S` | `dynamic_exploration_runner.py` | Heartbeat interval while a dynagraph subprocess is running (default `120`). Writes to stderr + `progress.jsonl`. |
+| `EMET_DYNAMIC_EXPLORE_STALE_LOG_S` | `dynamic_exploration_runner.py` | Warn when `dynagraph.log` mtime is older than this many seconds (default `900`). Surfaces post-VLM / EQA hangs. |
+| `EMET_VLM_DEVICE_CHECK_MAX_PARAMS` | `vlm_device.assert_cuda_placement` | When `hf_device_map` is missing, cap parameter/buffer device sampling (default `512`). Avoids multi-hour stalls after int4 load. |
 | `SQA3D_DATA_DIR` | `emet sqa3d`, `emet eval-sqa3d` | Root for SQA3D Zenodo JSON (`sqa_task/`, optional `localization_task/`). Default `~/.cache/sqa3d/data`. See [sqa3d.md](sqa3d.md). |
 | `SCANNET_ROOT` | `emet sqa3d` embodied runs | ScanNet v2 download root (`scans/<scene_id>/…`). Default `~/.cache/scannet`. |
 | `SCANNET_DOWNLOAD_SCRIPT` | `scripts/download_scannet_data.py` | Override path to `download-scannet.py`. |

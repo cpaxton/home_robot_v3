@@ -650,16 +650,23 @@ def main(
         eq_executor = EQAExecuter(agent)
         robot.move_to_nav_posture()
         robot.switch_to_navigation_mode()
+        n_q = sum(1 for q in questions if str(q.get("question", "")).strip())
+        click.echo(f"- EQA question bank: {n_q} question(s)", err=True)
+        qi = 0
         for qspec in questions:
             qtext = str(qspec.get("question", "")).strip()
             if not qtext:
                 continue
+            qi += 1
+            click.echo(f"- EQA question {qi}/{n_q} start: {qtext}", err=True)
+            t_q0 = time.monotonic()
             robot.say("Answering the question " + qtext)
             try:
                 discord_text, _imgs = eq_executor(qtext)
             except Exception as e:
                 logger.warning(f"EQA question failed: {e}")
                 discord_text = f"EQA question failed: {e}"
+            q_wall = time.monotonic() - t_q0
             answer = ""
             m = re.search(r"(?i)answer:\s*(.+?)(?:\n|$)", discord_text or "")
             if m:
@@ -671,8 +678,14 @@ def main(
                 "question": qtext,
                 "discord_text": discord_text,
                 "answer": answer,
+                "eqa_wall_s": q_wall,
             }
             rows.append(row)
+            click.echo(
+                f"- EQA question {qi}/{n_q} done wall_s={q_wall:.1f} "
+                f"answer={answer[:120]!r}",
+                err=True,
+            )
             if discord_text.strip():
                 click.echo(discord_text)
             else:

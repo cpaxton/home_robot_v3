@@ -10,6 +10,7 @@ cd "$ROOT"
 # shellcheck source=gpu_preflight.sh
 source "${ROOT}/scripts/gpu_preflight.sh"
 emet_export_pytorch_alloc
+export PYTHONUNBUFFERED=1
 
 RUN_ID="${RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 OUT_DIR="${OUT_DIR:-$HOME/runs/emet/dynamic_exploration/h2h_${RUN_ID}}"
@@ -19,6 +20,7 @@ NEED_MIB="${NEED_MIB:-8000}"
 {
   echo "run_id=$RUN_ID"
   git rev-parse --short HEAD
+  echo "watch: $OUT_DIR/runner.log $OUT_DIR/progress.jsonl"
 } | tee "$OUT_DIR/META.txt"
 
 log() { echo "[$(date -Is)] $*"; }

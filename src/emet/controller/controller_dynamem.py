@@ -2196,6 +2196,12 @@ class DynamemController(BaseController):
         stall = 0
 
         for _cnt_step in range(max_planning_steps):
+            logger.info(
+                "EQA planning step %d/%d for %r",
+                _cnt_step + 1,
+                max_planning_steps,
+                question if isinstance(question, str) else str(question)[:80],
+            )
             answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(question)
             if confidence:
                 self.robot.say("The answer to " + question + " is " + answer)
@@ -2245,6 +2251,8 @@ class DynamemController(BaseController):
             self.robot.switch_to_navigation_mode()
 
         try:
+            logger.info("EQA query_answer start for %r", question if isinstance(question, str) else str(question)[:80])
+            t_qa0 = time.monotonic()
             (
                 reasoning,
                 answer,
@@ -2253,6 +2261,12 @@ class DynamemController(BaseController):
                 target_point,
                 relevant_images,
             ) = self.voxel_map.query_answer(question, self._planning_base_xyt(self.robot.get_base_pose()), self.planner)
+            logger.info(
+                "EQA query_answer done wall_s=%.1f confidence=%s answer=%r",
+                time.monotonic() - t_qa0,
+                confidence,
+                answer,
+            )
         except:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images = (
                 "Exception happens in LLM querying!",

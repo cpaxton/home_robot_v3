@@ -122,6 +122,16 @@ Each Phase 1 run writes `{export_dir}/dynagraph.log` (full ``emet run dynagraph`
 
 **Timing:** GPU Robocasa smoke (`--smoke`, K=3) is typically **60–75 min** (rotate + explore + EQA/VLM). The harness scales subprocess timeout with explore budget (~105 min for K=3); override with `EMET_DYNAMIC_EXPLORE_DYNAGRAPH_TIMEOUT_S` if needed. `--cpu-only` roughly doubles wall time.
 
+**Progress / failure logs** (under `--output-dir`):
+
+| File | Contents |
+|------|----------|
+| `runner.log` | Matrix-level start/skip/ok/fail lines with wall time |
+| `progress.jsonl` | Structured events (`matrix_start`, `run_start`/`run_end`, subprocess heartbeats, `stale_log`) |
+| `exports/<run_id>/dynagraph.log` | Full `emet run dynagraph` stdout/stderr |
+
+Heartbeats every `EMET_DYNAMIC_EXPLORE_HEARTBEAT_S` (default 120s). If `dynagraph.log` stops updating for `EMET_DYNAMIC_EXPLORE_STALE_LOG_S` (default 900s), the harness prints a `STALE_LOG` warning with a log tail — useful when EQA hangs after VLM load.
+
 ## Tests
 
 ```bash
