@@ -69,6 +69,18 @@ install_emet_packages() {
     fi
 }
 
+# Qwen3.5 Gated DeltaNet: without fla-core / flash-linear-attention, transformers
+# silently uses ~2x-slower PyTorch fallbacks and episodes can exceed multi-hour timeouts.
+verify_qwen35_fla() {
+    "$PY_HAB" -c "
+import fla.ops
+import fla.layers.gated_deltanet
+import fla.ops.gated_delta_rule
+import triton
+print('fla', getattr(__import__('fla'), '__version__', '?'), 'triton', triton.__version__)
+"
+}
+
 repair_if_needed() {
     if [ ! -x "$PY_HAB" ]; then
         return 1
@@ -98,6 +110,11 @@ if [ ! -d "$ENV_PREFIX" ] || ! repair_if_needed; then
     install_emet_packages
 else
     echo "$ENV_PREFIX looks healthy."
+    # Refresh pip deps when the env is healthy but fla was added after the last full install.
+    if ! verify_qwen35_fla >/dev/null 2>&1; then
+        echo "Qwen3.5 FLA kernels missing; installing from requirements-pip.txt ..."
+        habitat_pip_install -r packages/emet_habitat/requirements-pip.txt
+    fi
 fi
 
 if ! "$PY_HAB" -c "
@@ -110,6 +127,13 @@ print('data_dir', default_habitat_eqa_data_dir())
     echo "ERROR: habitat_sim or emet.habitat failed to import." >&2
     exit 1
 fi
+
+if ! verify_qwen35_fla; then
+    echo "ERROR: Qwen3.5 FLA kernels missing (fla-core / flash-linear-attention)." >&2
+    echo "  Re-run: uv pip install --python $PY_HAB -r packages/emet_habitat/requirements-pip.txt" >&2
+    exit 1
+fi
+echo "Qwen3.5 FLA kernels OK (gated deltanet ops importable)."
 
 # conda matplotlib/torch need the env libstdc++ (system CXXABI may be older).
 cat > "$ENV_PREFIX/bin/emet-habitat" <<'WRAP'

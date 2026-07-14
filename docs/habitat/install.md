@@ -22,7 +22,8 @@ This script:
 1. Bootstraps **micromamba** into `.micromamba/` if it is not already on `PATH`
 2. Creates **`.venv-habitat`** with **Python 3.10**
 3. Installs `habitat-sim` from **`aihabitat-nightly`** (headless + bullet by default)
-4. Installs editable **`emet`** (no-deps) + **`emet-habitat`** + pip runtime deps from `packages/emet_habitat/requirements-pip.txt`
+4. Installs editable **`emet`** (no-deps) + **`emet-habitat`** + pip runtime deps from `packages/emet_habitat/requirements-pip.txt` (includes **`fla-core`** + **`flash-linear-attention`** for Qwen3.5 Gated DeltaNet kernels)
+5. Verifies Habitat + FLA imports (`fla.ops.gated_delta_rule`); fails if kernels are missing so Qwen3.5 cannot silently fall back to multi-hour PyTorch ops
 
 No system-wide `conda` is required.
 
@@ -38,6 +39,7 @@ HABITAT_HEADLESS=0 ./scripts/install_habitat.sh
 
 ```bash
 .venv-habitat/bin/python -c "import habitat_sim; print('habitat_sim OK', habitat_sim.__version__)"
+.venv-habitat/bin/python -c "import fla.ops.gated_delta_rule, triton; print('FLA OK')"
 .venv-habitat/bin/emet-habitat info
 uv run emet habitat info
 ```
