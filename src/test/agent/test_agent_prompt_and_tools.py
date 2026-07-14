@@ -103,8 +103,42 @@ def test_tools_registry_nonempty():
     tools = get_tools({})
     assert len(tools) > 5
     names = {t.name for t in tools}
-    for expected in ("query_memory", "explore", "pick_place", "wave", "quit", "take_picture", "send_image"):
+    for expected in (
+        "query_memory",
+        "explore",
+        "scan_environment",
+        "rotate_base",
+        "move_forward",
+        "describe_scene",
+        "pick_place",
+        "wave",
+        "quit",
+        "take_picture",
+        "send_image",
+    ):
         assert expected in names, f"Missing expected tool: {expected}"
+
+
+def test_prompt_routes_turn_around_to_rotate_base():
+    from emet.agent.prompt import build_agent_system_prompt
+    from emet.agent.tools import get_tools
+
+    prompt = build_agent_system_prompt(tools=get_tools({}), name="Virgil")
+    assert "rotate_base" in prompt
+    assert "degrees\": 180" in prompt or '"degrees": 180' in prompt
+    assert "move_forward" in prompt
+    assert "meters\": 0.5" in prompt or '"meters": 0.5' in prompt
+
+
+def test_prompt_routes_look_around_to_scan():
+    from emet.agent.prompt import build_agent_system_prompt
+    from emet.agent.tools import get_tools
+
+    prompt = build_agent_system_prompt(tools=get_tools({}), name="Virgil")
+    assert "look around" in prompt.lower()
+    assert "scan_environment" in prompt
+    # Example should actually call scan, not only describe/send_image.
+    assert '"name": "scan_environment"' in prompt or '"name":"scan_environment"' in prompt
 
 
 def test_tool_schema_format():
@@ -179,14 +213,34 @@ def test_describe_scene_delegates_to_agent():
             )
 
     class MockAgent:
-        def describe_head_camera_scene_text(self):
-            return "From my head camera I can make out: table, chair."
+        def describe_head_camera_scene_text(self, **_kwargs):
+            return "From my head camera: a table and a chair."
+
+        def pick_interesting_scene_image(self, **_kwargs):
+            # Must not be used by describe_scene (crops are for send_object_image).
+            return np.ones((8, 8, 3), dtype=np.uint8) * 40, "mug"
 
     class MockExecutor:
         robot = None
         agent = MockAgent()
 
-    context = {"robot": MockRobot(), "executor": MockExecutor()}
+    class MockDiscord:
+        def __init__(self):
+            self.pushed = []
+
+        def push_task_to_all_channels(self, message=None, content=None):
+            self.pushed.append((message, content))
+
+    discord = MockDiscord()
+    context = {"robot": MockRobot(), "executor": MockExecutor(), "discord_bot": discord}
     tools = get_tools(context)
     ds = next(t for t in tools if t.name == "describe_scene")
-    assert ds.func() == "From my head camera I can make out: table, chair."
+    out = ds.func()
+    assert "table and a chair" in out
+    assert "current view" in out.lower()
+    assert "mug" not in out
+    from emet.agent.tools import PENDING_DISCORD_IMAGE_KEY
+
+    assert PENDING_DISCORD_IMAGE_KEY in context
+    assert context[PENDING_DISCORD_IMAGE_KEY].shape == (4, 4, 3)
+    assert discord.pushed == []  # image is attached by the agent loop with the reply

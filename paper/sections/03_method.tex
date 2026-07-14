@@ -81,3 +81,11 @@ Episode export (\texttt{--ground-truth --export}) writes the common \texttt{Memo
 
 Entry point: \texttt{emet run dynagraph} (\texttt{run\_dynagraph.py}, \texttt{DynagraphController}).
 Configuration: \texttt{dynav\_config.yaml} plus CLI overrides \texttt{--merge-xy-m} and \texttt{--staleness-horizon}.
+
+\subsection{Interactive agent front-end}
+
+The same Dynagraph stack is the default memory backend for the interactive tool agent (\texttt{emet run agent --memory-backend dynagraph}).
+Natural-language turns are routed by a lightweight text LLM into tools that call the controller: \texttt{explore} / \texttt{scan\_environment} for coverage, \texttt{find\_objects} for open-vocab localization, \texttt{describe\_scene} / \texttt{send\_image} / \texttt{send\_map\_snapshot} for sharing views and maps, and \texttt{query\_memory} for graph/voxel QA (optional \texttt{--eqa} for VL captions).
+Discord and the terminal share one input queue; action status is announced while long motions run.
+Scored Habitat HM-EQA uses the same episode function as \texttt{emet-habitat} via \texttt{emet run agent --eqa-eval} (optional \texttt{--extra-instruction}); the chat tool-router is not on the scored path, so letter accuracy matches the harness by construction.
+This front-end does not change Dynagraph update rules---it exposes the same memory used by Habitat and MuJoCo paper harnesses for live debugging, demos, and eval.

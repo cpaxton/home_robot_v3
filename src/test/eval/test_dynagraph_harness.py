@@ -19,13 +19,44 @@ from emet.eval.benchmark_dynagraph import (
 
 def test_habitat_eqa_harness_profile_and_flags():
     params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "dynagraph")
-    assert resolve_harness_profile("habitat_eqa") == "smoke"
-    assert params.get("dynagraph_merge_xy_m") == 0.0
+    assert resolve_harness_profile("habitat_eqa") == "unified_eqa"
+    assert params.get("dynagraph_merge_xy_m") == 0.45
+    assert params.get("dynagraph_staleness_horizon") == 256
     flags = dynagraph_harness_flags(params)
     assert flags["memory_summary"] is True
     assert flags["mcq_debias"] is False
     assert flags["explore_when_uncovered"] == "conservative"
     assert flags["siglip_grounding"] is True
+
+
+def test_enrich_episode_metrics_harness_fingerprint_merge_on():
+    """Episode JSONL fingerprint must record merge-on unified_eqa defaults."""
+    from types import SimpleNamespace
+
+    from emet.habitat.episode_debug import enrich_episode_metrics
+    from emet.habitat.metrics import EpisodeMetrics
+
+    params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "dynagraph")
+    agent = SimpleNamespace(parameters=params, graph_memory=None)
+    metrics = EpisodeMetrics(
+        dataset="hmeqa",
+        method="dynagraph",
+        question_id=17,
+        scene="s",
+        floor=0,
+        question="q",
+        gold_answer_letter="D",
+        predicted_answer="D",
+        correct=True,
+        confident=True,
+        planning_steps=1,
+        success=True,
+    )
+    enrich_episode_metrics(metrics, agent=agent, choices=["a", "b", "c", "d"])
+    assert float(metrics.harness.get("dynagraph_merge_xy_m")) == 0.45
+    assert float(metrics.harness.get("fallback_spatial_merge_xy_m")) == 0.45
+    assert metrics.harness.get("profile") == "unified_eqa"
+    assert metrics.harness.get("explore_when_uncovered") == "conservative"
 
 
 def test_habitat_eqa_overrides_layered():
@@ -66,11 +97,11 @@ def test_dynagraph_controller_reads_harness_flags(mock_init: MagicMock):
     flags = dynagraph_harness_flags(params)
     explore_mode = str(flags.get("explore_when_uncovered", "off"))
     agent._eqa_explore_when_uncovered = explore_mode in ("on", "conservative")
-    agent._eqa_explore_uncovered_habitat_frontier = explore_mode == "on"
+    agent._eqa_explore_uncovered_habitat_frontier = explore_mode in ("on", "conservative")
     agent.graph_memory.memory_summary_enabled = bool(flags.get("memory_summary", False))
     agent.graph_memory.mcq_debias_enabled = bool(flags.get("mcq_debias", False))
 
     assert agent._eqa_explore_when_uncovered is True
-    assert agent._eqa_explore_uncovered_habitat_frontier is False
+    assert agent._eqa_explore_uncovered_habitat_frontier is True
     assert agent.graph_memory.memory_summary_enabled is True
     assert agent.graph_memory.mcq_debias_enabled is False

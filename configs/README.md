@@ -26,7 +26,7 @@ export DISCORD_TOKEN="your-token"
 uv run emet serve mujoco --robot rby1 --headless   # terminal 1
 # --robot-ip defaults to 127.0.0.1; omit --vl-include-camera (on by default for *VL* LLMs)
 uv run python -m emet.app.run_agent --robot rby1 \
-  --device cuda --agent-config configs/agent_rby1_discord.yaml --discord   # terminal 2 (default --llm qwen3-vl-eqa; subprocess sets PYTORCH_ALLOC_CONF=expandable_segments:True unless preset)
+  --device cuda --agent-config configs/agent_rby1_discord.yaml --discord   # terminal 2 (default --llm qwen35-4B; subprocess sets PYTORCH_ALLOC_CONF=expandable_segments:True unless preset)
 ```
 
 Local LLM only (no sim): `uv run python -m emet.app.run_agent --offline`

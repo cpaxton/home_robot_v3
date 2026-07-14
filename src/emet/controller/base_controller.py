@@ -150,6 +150,12 @@ class BaseController(ABC):
             if verbose:
                 logger.debug("Sending arm to home...")
             self.robot.move_to_nav_posture()
+            # Stretch nav posture historically left the head near the floor; raise to look_front.
+            look_front = getattr(self.robot, "look_front", None)
+            if callable(look_front):
+                look_front(blocking=True)
+                if verbose:
+                    logger.debug("Head at look_front.")
             if verbose:
                 logger.debug("... done.")
         self.robot.switch_to_navigation_mode()
@@ -178,3 +184,56 @@ class BaseController(ABC):
             discord_text = _format_discord_action_line(msg) if discord_action_italic else msg
             discord_bot.push_task_to_all_channels(message=discord_text)
         return msg
+
+    def announce_action(self, msg: str, *, speak: bool = False, discord: bool = True) -> None:
+        """Log a live action status; optionally mirror to Discord as italics (no TTS by default).
+
+        Use for explore / look-around milestones (``*Exploring…*``, ``*Look around: sweeping head*``)
+        so chat stays informative without speaking every step. Set ``speak=True`` to also TTS.
+        Set ``discord=False`` for terminal/log-only lines (prefer :meth:`announce_motion_progress`
+        for fine-grained head-sweep / rotate steps).
+        """
+        text = (msg or "").strip()
+        if not text:
+            return
+        logger.info(text)
+        if speak:
+            try:
+                if hasattr(self.robot, "say") and callable(self.robot.say):
+                    self.robot.say(text)
+            except Exception:
+                pass
+        if discord:
+            discord_bot = getattr(self, "discord_bot", None)
+            if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
+                try:
+                    discord_bot.push_task_to_all_channels(message=_format_discord_action_line(text))
+                except Exception:
+                    pass
+        cb = getattr(self, "_progress_callback", None)
+        if callable(cb):
+            try:
+                cb(text)
+            except Exception:
+                pass
+
+    def announce_motion_progress(self, msg: str) -> None:
+        """Terminal-only fine-grained motion progress (head pans, rotate steps).
+
+        Controlled by ``EMET_AGENT_MOTION_STATUS`` (default on). Does not post to Discord —
+        use :meth:`announce_action` for chat-visible milestones.
+        """
+        from emet.agent.env_flags import env_agent_motion_status
+
+        if not env_agent_motion_status():
+            return
+        text = (msg or "").strip()
+        if not text:
+            return
+        logger.info(text)
+        cb = getattr(self, "_progress_callback", None)
+        if callable(cb):
+            try:
+                cb(text)
+            except Exception:
+                pass

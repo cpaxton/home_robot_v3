@@ -46,6 +46,34 @@ def test_qwen3_vl_minimal_generate():
     assert len(out) > 0
 
 
+@pytest.mark.timeout(900)
+def test_qwen3_vl_prefix_cache_second_turn():
+    """Two turns with the same system prompt; second call should hit prefix cache."""
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA required for VLLM load smoke")
+    mid = os.environ.get("VLLM_LOAD_TEST_MODEL", "Qwen/Qwen3-VL-8B-Instruct")
+    from emet.llms.qwen3_vl_client import Qwen3VLClient
+
+    client = Qwen3VLClient(
+        prompt=None,
+        hf_model_id=mid,
+        max_tokens=16,
+        device="cuda",
+        quantization="int4",
+        cache_system_prefix=True,
+    )
+    sys_p = "You are a terse assistant."
+    client.generate_multimodal("Say OK.", system_prompt=sys_p, max_new_tokens=8, reset_context=True)
+    assert len(client._prefix_cache) == 1
+    client.generate_multimodal(
+        "Say OK again.",
+        system_prompt=sys_p,
+        max_new_tokens=8,
+        reset_context=True,
+    )
+    assert len(client._prefix_cache) == 1
+
+
 @pytest.mark.timeout(600)
 def test_gemma_multimodal_minimal_generate():
     """Loads Gemma multimodal pipeline (default small IT checkpoint)."""

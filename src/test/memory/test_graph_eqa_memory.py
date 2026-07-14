@@ -118,6 +118,281 @@ def test_relevant_memory_summary_surfaces_observed_objects():
     assert "unicorn: not observed during exploration" in missing
 
 
+def test_relevant_memory_summary_includes_nearest_furniture():
+    """Location MCQ helper: PRESENT lines list nearby furniture labels."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([-1.77, 4.11, 0.5]), ["basket", "cabinet"])
+    mem.add_observation(rgb, np.array([-0.71, 3.12, 0.5]), ["armchair"])
+    mem.add_observation(rgb, np.array([10.0, 10.0, 0.5]), ["oven"])  # far away
+    mem._relevant_phrases = ["woven basket"]
+    mem._relevant_objects = ["basket"]
+    summary = mem._relevant_memory_summary()
+    assert "woven basket: PRESENT" in summary or "basket: PRESENT" in summary
+    assert "nearest:" in summary
+    assert "armchair" in summary
+    assert "oven" not in summary.split("nearest:")[-1]  # far oven not among nearest
+
+
+def test_location_letter_from_nearest_memory_picks_armchair_option():
+    """Nearest armchair maps to the living-room-armchairs MCQ letter."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([-1.77, 4.11, 0.5]), ["basket", "cabinet"])
+    mem.add_observation(rgb, np.array([-0.71, 3.12, 0.5]), ["armchair"])
+    mem._relevant_phrases = ["woven basket"]
+    mem._relevant_objects = ["basket"]
+    choices = [
+        "By the kitchen counter",
+        "Between TV and living room sofas",
+        "Next to the dining table",
+        "Next to the living room armchairs",
+    ]
+    assert mem._location_letter_from_nearest_memory(choices) == "D"
+
+
+def test_label_matches_trash_can_to_recycle_bin():
+    assert label_matches_relevant_object("silver trash can", "recycle bin")
+    assert label_matches_relevant_object("trash can", "garbage bin")
+
+
+def test_select_relevant_obs_ids_prefers_choice_landmarks_before_siglip():
+    """Location MCQ: refrigerator landmark beats a SigLIP dining-table view for Image 1."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["dining table", "chair"])
+    mem.add_observation(rgb, np.array([2.0, 1.0, 0.5]), ["refrigerator", "recycle bin"])
+    mem._relevant_objects = ["trash can"]
+    mem._relevant_phrases = ["silver trash can"]
+    # Fake SigLIP pointing at the dining table observation.
+    mem._siglip_phrase_cache["silver trash can"] = (0.35, np.array([0.0, 0.0, 0.5]), 1)
+    choices = [
+        "Next to the dining table",
+        "Next to the TV",
+        "Next to the kitchen sink",
+        "Next to the refrigerator",
+    ]
+    obs_ids = mem._select_relevant_obs_ids(max_images=3, choices=choices)
+    assert obs_ids[0] == 2  # refrigerator / recycle bin (boosted over dining table)
+
+
+def test_select_relevant_obs_ids_prefers_fridge_over_recycle_alias():
+    """Trash keyword→recycle-bin alias must not beat refrigerator choice landmark."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["recycle bin"])
+    mem.add_observation(rgb, np.array([1.0, 1.0, 0.5]), ["refrigerator"])
+    mem._relevant_objects = ["trash can"]
+    mem._relevant_phrases = ["silver trash can"]
+    choices = [
+        "Next to the dining table",
+        "Next to the TV",
+        "Next to the kitchen sink",
+        "Next to the refrigerator",
+    ]
+    obs_ids = mem._select_relevant_obs_ids(max_images=3, choices=choices)
+    assert obs_ids[0] == 2  # refrigerator, not recycle bin
+
+
+def test_select_relevant_obs_ids_prefers_fridge_over_sink_for_trash():
+    """Sink must not beat refrigerator for trash Image 1 (competing MCQ option)."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["sink", "microwave", "cabinet"])
+    mem.add_observation(rgb, np.array([1.0, 1.0, 0.5]), ["refrigerator", "recycle bin"])
+    mem._relevant_objects = ["trash can"]
+    mem._relevant_phrases = ["silver trash can"]
+    choices = [
+        "Next to the dining table",
+        "Next to the TV",
+        "Next to the kitchen sink",
+        "Next to the refrigerator",
+    ]
+    obs_ids = mem._select_relevant_obs_ids(max_images=3, choices=choices)
+    assert obs_ids[0] == 2
+
+
+def test_select_relevant_obs_ids_prefers_target_over_generic_choice():
+    """Ladder view must beat dining-table choice landmark for Image 1."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["table", "fireplace", "stove"])
+    mem.add_observation(rgb, np.array([1.0, 1.0, 0.5]), ["ladder", "sofa"])
+    mem._relevant_objects = ["ladder"]
+    mem._relevant_phrases = ["ladder"]
+    choices = [
+        "By the dining table",
+        "Next to the living room dressor",
+        "In the bathroom",
+        "Next to TV",
+    ]
+    obs_ids = mem._select_relevant_obs_ids(max_images=3, choices=choices)
+    assert obs_ids[0] == 2  # ladder, not table/fireplace
+
+
+def test_select_relevant_obs_ids_attribute_prefers_lamp_over_frontier():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["frontier"])
+    # Mark obs 1 as frontier node
+    mem._nodes[0].is_frontier = True
+    mem.add_observation(rgb, np.array([1.0, 1.0, 0.5]), ["lamp", "sofa"])
+    mem._relevant_objects = ["lamp"]
+    mem._relevant_phrases = ["lamp"]
+    obs_ids = mem._select_relevant_obs_ids(max_images=2, attribute_question=True)
+    assert obs_ids[0] == 2
+
+
+def test_location_letter_prefers_image_landmarks_over_siglip_nearest():
+    """Attached fridge view wins over SigLIP-nearest dining table for trash MCQ."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    raw = (
+        "reasoning: memory says dining table\nanswer: A\nconfidence: true\n"
+        "action: none\nconfidence_reasoning: memory"
+    )
+    mem = GraphEQAMemory(eqa_client=lambda _c: raw, image_description_client=lambda _x: "table")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["dining table"])
+    mem.add_observation(rgb, np.array([2.0, 1.0, 0.5]), ["refrigerator", "recycle bin"])
+    mem._relevant_phrases = ["silver trash can"]
+    mem._relevant_objects = ["trash can"]
+    mem._siglip_phrase_cache["silver trash can"] = (0.35, np.array([0.0, 0.0, 0.5]), 1)
+    q = (
+        "Where did I leave the silver trash can at? "
+        "A) Next to the dining table B) Next to the TV "
+        "C) Next to the kitchen sink D) Next to the refrigerator. Answer:"
+    )
+    _r, answer, confidence, _cr, _pt, _imgs = mem.query_answer(q)
+    assert answer.strip().upper().startswith("D") or "D" in answer.upper()
+    # SigLIP-only target: do not finalize until images support the letter.
+    assert confidence is False
+
+
+def test_query_answer_does_not_finalize_under_equipment_without_geometry():
+    """Under-X MCQs stay non-confident until mat↔equipment distance is known."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    raw = (
+        "reasoning: bike nearby\nanswer: B\nconfidence: true\n"
+        "action: none\nconfidence_reasoning: guess bike"
+    )
+    mem = GraphEQAMemory(eqa_client=lambda _c: raw, image_description_client=lambda _x: "bike")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["stationary bike", "treadmill"])
+    mem._relevant_phrases = ["exercise mat"]
+    mem._relevant_objects = ["mat"]
+    _r, _a, confidence, _cr, _pt, _imgs = mem.query_answer(
+        "Did I leave the exercise mat under any workout equipment? "
+        "A) Yes, under the elliptical machine B) Yes, under the stationary bike "
+        "C) No, it's not under any workout equipment D) Yes, under the treadmill. Answer:"
+    )
+    assert confidence is False
+
+
+def test_query_answer_does_not_finalize_location_without_target_view():
+    """Location MCQ must not confirm when the target object is absent from attached images."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    raw = (
+        "reasoning: guess dining table\nanswer: A\nconfidence: true\n"
+        "action: none\nconfidence_reasoning: guess"
+    )
+    mem = GraphEQAMemory(eqa_client=lambda _c: raw, image_description_client=lambda _x: "table")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["dining table", "chair"])
+    mem._relevant_phrases = ["striped towel"]
+    mem._relevant_objects = ["towel"]
+    _r, _a, confidence, _cr, _pt, _imgs = mem.query_answer(
+        "Where did I leave the striped towel? "
+        "A) On the dining table B) On the living room floor "
+        "C) In the bathroom D) By the kitchen sink. Answer:"
+    )
+    assert confidence is False
+    # Either graph-cover or target-visibility gate should block finalization.
+
+
+def test_memory_location_does_not_override_clear_vlm_letter():
+    """Nearest-furniture memory must not clobber a clear VLM letter (ladder→B)."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    raw = (
+        "reasoning: ladder visible in living room\nanswer: B\nconfidence: true\n"
+        "action: none\nconfidence_reasoning: images show ladder by dresser"
+    )
+    mem = GraphEQAMemory(eqa_client=lambda _c: raw, image_description_client=lambda _x: "ladder")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["ladder"])
+    mem._relevant_phrases = ["ladder"]
+    mem._relevant_objects = ["ladder"]
+    # Simulate: images give no unique landmark letter, memory would prefer A.
+    mem._location_letter_from_attached_images = lambda _choices, _obs_ids: ""  # type: ignore[method-assign]
+    mem._location_letter_from_nearest_memory = lambda _choices: "A"  # type: ignore[method-assign]
+    q = (
+        "Where is the ladder? "
+        "A) By the dining table B) Next to the living room dressor "
+        "C) In the bathroom D) Next to TV. Answer:"
+    )
+    _r, answer, _c, _cr, _pt, _imgs = mem.query_answer(q)
+    assert mem.last_eqa_parsed[1].strip().lower() == "b"
+    assert "[memory-location]" not in (mem.last_eqa_raw or "")
+    assert "B" in answer.upper() or "dresser" in answer.lower() or "ladder" in answer.lower()
+
+
+def test_attribute_state_skips_memory_summary_block():
+    """On/off questions should not inject CONFIRMED_MEMORY priors."""
+    captured: dict = {}
+
+    def _client(cmds):
+        captured["cmds"] = cmds
+        return (
+            "reasoning: lamp looks off\nanswer: B\nconfidence: true\n"
+            "action:\nconfidence_reasoning: image"
+        )
+
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(eqa_client=_client, image_description_client=lambda _x: "lamp")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["lamp", "sofa"])
+    mem._relevant_phrases = ["lamp sofa off"]
+    mem._relevant_objects = ["lamp"]
+    mem.query_answer(
+        "Is the lamp next to the sofa turned on or off? "
+        "A) (Do not choose) B) Off C) On D) (Do not choose). Answer:"
+    )
+    assert not any(isinstance(c, str) and "CONFIRMED_MEMORY" in c for c in captured["cmds"])
+
+
+def test_query_answer_does_not_finalize_yes_no_when_uncovered():
+    """Uncovered relevant objects: Yes/No stays non-confident so exploration continues."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    raw = (
+        "reasoning: no blanket in view\nanswer: No\nconfidence: true\n"
+        "action: none\nconfidence_reasoning: none seen"
+    )
+    mem = GraphEQAMemory(eqa_client=lambda _c: raw, image_description_client=lambda _x: "sofa")
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["sofa"])
+    mem._relevant_objects = ["blanket"]
+    mem._relevant_phrases = ["blanket"]
+    mem.memory_summary_enabled = True
+    _r, _a, confidence, _cr, _pt, _imgs = mem.query_answer(
+        "Is there a blanket on the bed? A) Yes B) No C) Maybe D) Unknown. Answer:"
+    )
+    assert confidence is False
+    assert mem.last_eqa_model_confident is True
+
+
+def test_select_relevant_obs_ids_prefers_keyword_target_before_grounder():
+    """HM3D keyword/label matches should be Image 1 ahead of SigLIP grounder fills."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["oven"])
+    mem.add_observation(rgb, np.array([1.0, 0.0, 0.5]), ["basket", "cabinet"])
+    mem.add_observation(rgb, np.array([2.0, 0.0, 0.5]), ["door"])
+    mem._relevant_objects = ["basket"]
+    mem._relevant_phrases = ["woven basket"]
+    # Grounder points at oven (wrong); keyword match for basket must still win Image 1.
+    mem.set_obs_id_grounder(lambda text: 1)
+    obs_ids = mem._select_relevant_obs_ids(max_images=3)
+    assert obs_ids[0] == 2
+
+
 def test_relevant_memory_summary_uses_siglip_grounder():
     """A SigLIP visual match marks an object PRESENT even with no caption-matched node."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)

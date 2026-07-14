@@ -92,3 +92,42 @@ def print_camera_frame_diagnostics(
             "Float image near black; if values should be in 0-255, dtype/range may be wrong.",
             flush=True,
         )
+    if not rgb_frame_is_usable(a):
+        print(
+            colored("  (hint)", "yellow"),
+            "Frame fails usability gate (near-white / near-black / near-constant); prefer live RGB.",
+            flush=True,
+        )
+
+
+def rgb_frame_is_usable(
+    arr: np.ndarray | None,
+    *,
+    min_std: float = 8.0,
+    max_mean_white: float = 245.0,
+    min_mean_black: float = 12.0,
+) -> bool:
+    """True when an HWC RGB crop/frame has enough contrast to be useful for Discord/chat.
+
+    Rejects near-white, near-black, and near-constant images (common bad graph crops).
+    """
+    if arr is None:
+        return False
+    a = np.asarray(arr)
+    if a.ndim != 3 or a.shape[-1] < 3 or a.size == 0:
+        return False
+    rgb = a[..., :3]
+    if rgb.dtype != np.uint8:
+        mx = float(np.nanmax(rgb)) if rgb.size else 0.0
+        if mx <= 1.0 + 1e-6:
+            rgb = (np.clip(rgb.astype(np.float32), 0.0, 1.0) * 255.0).astype(np.uint8)
+        else:
+            rgb = np.clip(rgb, 0, 255).astype(np.uint8)
+    flat = rgb.astype(np.float32).ravel()
+    mean = float(np.nanmean(flat))
+    std = float(np.nanstd(flat))
+    if mean >= max_mean_white or mean <= min_mean_black:
+        return False
+    if std < min_std:
+        return False
+    return True

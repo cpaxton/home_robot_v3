@@ -57,7 +57,9 @@ class DynagraphController(GraphEQAController):
         flags = dynagraph_harness_flags(params)
         explore_mode = str(flags.get("explore_when_uncovered", "off"))
         self._eqa_explore_when_uncovered = explore_mode in ("on", "conservative")
-        self._eqa_explore_uncovered_habitat_frontier = explore_mode == "on"
+        # Prefer Habitat frontiers while uncovered for both on and conservative.
+        # (conservative still means "only while uncovered", not a weaker picker.)
+        self._eqa_explore_uncovered_habitat_frontier = explore_mode in ("on", "conservative")
         if self.graph_memory is not None:
             self.graph_memory.memory_summary_enabled = bool(flags.get("memory_summary", False))
             self.graph_memory.mcq_debias_enabled = bool(flags.get("mcq_debias", False))

@@ -25,7 +25,8 @@ def test_defaults_compose_mapping_and_agent():
     cfg = load_config(default_config_path())
     assert cfg.mapping_dict.get("voxel_size") == 0.1
     agent = cfg.agent_section()
-    assert agent.llm == "qwen3-vl-eqa"
+    assert agent.llm == "qwen35-4B"
+    assert agent.memory_backend == "dynagraph"
 
 
 def test_legacy_flat_dynav_wraps_mapping():

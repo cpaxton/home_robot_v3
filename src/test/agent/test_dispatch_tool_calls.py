@@ -1,0 +1,125 @@
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
+
+"""Regression tests for ordered tool dispatch and motion validation."""
+
+from __future__ import annotations
+
+from emet.agent.loop import _dispatch_tool_calls
+from emet.agent.tools import Tool, get_tools
+
+
+def test_rotate_base_clips_degrees_via_func():
+    calls: list[list[tuple[str, str]]] = []
+
+    def executor(cmds):
+        calls.append(list(cmds))
+        return True
+
+    tools = {t.name: t for t in get_tools({"executor": executor})}
+    assert tools["rotate_base"].executor_commands is None
+    ok, results, has_info = _dispatch_tool_calls(
+        [{"name": "rotate_base", "arguments": {"degrees": 999}}],
+        tools,
+        executor,
+    )
+    assert ok
+    assert has_info
+    assert calls == [[("rotate_base", "360.0")]]
+    assert any("360" in r for r in results)
+
+
+def test_move_forward_caps_distance_and_rejects_invalid():
+    calls: list[list[tuple[str, str]]] = []
+
+    def executor(cmds):
+        calls.append(list(cmds))
+        return True
+
+    tools = {t.name: t for t in get_tools({"executor": executor})}
+    assert tools["move_forward"].executor_commands is None
+
+    ok, results, has_info = _dispatch_tool_calls(
+        [{"name": "move_forward", "arguments": {"meters": 9}}],
+        tools,
+        executor,
+    )
+    assert ok and has_info
+    assert calls == [[("move_forward", "1.5")]]
+    assert any("1.50" in r for r in results)
+
+    calls.clear()
+    ok, results, has_info = _dispatch_tool_calls(
+        [{"name": "move_forward", "arguments": {"meters": "nope"}}],
+        tools,
+        executor,
+    )
+    assert ok and has_info
+    assert calls == []
+    assert any("Invalid meters" in r for r in results)
+
+
+def test_scan_then_describe_preserves_order():
+    order: list[str] = []
+
+    def executor(cmds):
+        order.append(f"exec:{cmds[0][0]}")
+        return True
+
+    def describe_scene() -> str:
+        order.append("describe")
+        return "a room"
+
+    tools_by_name = {
+        "scan_environment": Tool(
+            name="scan_environment",
+            description="scan",
+            parameters={"type": "object", "properties": {}, "required": []},
+            func=lambda: "unused",
+            executor_commands=lambda _args: [("scan_environment", "")],
+        ),
+        "describe_scene": Tool(
+            name="describe_scene",
+            description="describe",
+            parameters={"type": "object", "properties": {}, "required": []},
+            func=describe_scene,
+            returns_info=True,
+        ),
+    }
+    ok, results, has_info = _dispatch_tool_calls(
+        [
+            {"name": "scan_environment", "arguments": {}},
+            {"name": "describe_scene", "arguments": {}},
+        ],
+        tools_by_name,
+        executor,
+    )
+    assert ok and has_info
+    assert order == ["exec:scan_environment", "describe"]
+    assert any("a room" in r for r in results)
+
+
+def test_info_tool_exception_sets_has_info():
+    def boom() -> str:
+        raise RuntimeError("sensor down")
+
+    tools_by_name = {
+        "describe_scene": Tool(
+            name="describe_scene",
+            description="describe",
+            parameters={"type": "object", "properties": {}, "required": []},
+            func=boom,
+            returns_info=True,
+        ),
+    }
+    ok, results, has_info = _dispatch_tool_calls(
+        [{"name": "describe_scene", "arguments": {}}],
+        tools_by_name,
+        lambda _cmds: True,
+    )
+    assert ok
+    assert has_info
+    assert any("sensor down" in r for r in results)

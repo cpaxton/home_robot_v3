@@ -7,6 +7,7 @@ from emet.core.zmq_protocol import (
     EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
     emet_session_cache_update,
     emet_session_has_current_schema,
+    emet_session_manipulation_supported,
     read_emet_robot_id_from_message_or_session,
     read_emet_session,
 )
@@ -60,3 +61,16 @@ def test_emet_session_cache_update_prefers_higher_step() -> None:
     c, st = emet_session_cache_update(c, st, s5)
     assert st == 5
     assert c is not None and c.get("environment", {}).get("scene") == "ithor"
+
+
+def test_emet_session_manipulation_supported() -> None:
+    assert emet_session_manipulation_supported(None) is True
+    assert emet_session_manipulation_supported({"runtime_kind": "stretch_mujoco_sim"}) is True
+    assert (
+        emet_session_manipulation_supported(
+            {"runtime_kind": "habitat_hmeqa", "capabilities": {"navigation": True, "manipulation": False}}
+        )
+        is False
+    )
+    assert emet_session_manipulation_supported({"capabilities": {"manipulation": True}}) is True
+    assert emet_session_manipulation_supported({"runtime_kind": "habitat_hmeqa"}) is False

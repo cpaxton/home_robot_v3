@@ -32,6 +32,14 @@ from termcolor import colored
 from emet.agent.env_flags import env_agent_camera_debug
 from emet.agent.model_debug import print_embodied_model_report, print_llm_invoke_line
 from emet.agent.prompt import DEFAULT_AGENT_NAME, AgentPromptBuilder, parse_tool_calls_response
+from emet.agent.thinking_status import (
+    env_agent_thinking_status,
+    format_action_running_status,
+    format_llm_thinking_status,
+    format_tool_running_status,
+    short_llm_label,
+)
+from emet.controller.zmq_stream_control import paused_robot_streams
 from emet.agent.tools import Tool, get_tools
 from emet.config.embodied_agent_config import EmbodiedAgentConfig, load_embodied_agent_overlay
 from emet.controller.task.dynamem import DynamemTaskExecutor
@@ -48,11 +56,77 @@ from emet.utils.vram_debug import print_vram_snapshot
 
 logger = Logger(__name__)
 
-# One Qwen3-VL-8B int4 for chat + camera; with --eqa + --share-memory-vllm, DynaMem reuses the same load.
-DEFAULT_AGENT_LLM = "qwen3-vl-eqa"
+# Fast text tool-router by default. Use ``--llm qwen3-vl-eqa`` for one shared VL (chat + EQA).
+DEFAULT_AGENT_LLM = "qwen35-4B"
 
 # Maximum follow-up LLM calls per user turn (prevents infinite loops)
 _MAX_TOOL_ROUNDS = 3
+
+# Info tools whose return text is already user-facing — skip a second VL summarize call.
+_FAST_REPLY_TOOLS = frozenset(
+    {
+        "describe_scene",
+        "send_image",
+        "list_scene_relations",
+        "navigation_diagnostics",
+        "send_map_snapshot",
+        "send_object_image",
+        "take_picture",
+        "take_ee_picture",
+    }
+)
+
+
+def terminal_timestamp(now: datetime | None = None) -> str:
+    """Local wall-clock stamp for agent TTY lines (not sent to Discord)."""
+    return (now or datetime.now()).strftime("%H:%M:%S")
+
+
+def print_terminal(msg: str, *, color: str = "cyan") -> None:
+    """Print a timestamped line to the agent terminal."""
+    print(colored(f"[{terminal_timestamp()}] {msg}", color), flush=True)
+
+
+def _format_fast_tool_reply(results: list[str]) -> str | None:
+    """Build a user reply from tool result lines without a second LLM call.
+
+    Returns None when results are empty or not suitable for a direct relay.
+    """
+    parts: list[str] = []
+    for line in results:
+        s = (line or "").strip()
+        if not s:
+            continue
+        # Strip ``[tool_name] `` prefix when present.
+        if s.startswith("[") and "]" in s:
+            body = s.split("]", 1)[1].strip()
+        else:
+            body = s
+        # Skip pure ack lines from send_image / take_picture when we already have content.
+        low = body.lower()
+        if (
+            low in ("ok", "image sent", "image sent to discord.")
+            or low.startswith("image sent")
+            or low.startswith("image queued")
+            or low.startswith("image captured")
+            or low.startswith("image ready")
+        ):
+            if parts:
+                continue
+            parts.append("I sent a photo.")
+            continue
+        if body:
+            parts.append(body)
+    if not parts:
+        return None
+    return " ".join(parts)
+
+
+def _should_skip_llm_summarize(tool_calls: list[dict], results: list[str]) -> bool:
+    names = {str(tc.get("name") or "") for tc in tool_calls}
+    if not names or not names.issubset(_FAST_REPLY_TOOLS):
+        return False
+    return _format_fast_tool_reply(results) is not None
 
 
 def _env_agent_tool_debug() -> bool:
@@ -128,15 +202,20 @@ def _dispatch_tool_calls(
     debug: bool = False,
     verbose_tools: bool = False,
 ) -> tuple[bool, list[str], bool]:
-    """Execute a list of parsed tool_calls.
+    """Execute a list of parsed tool_calls in model-specified order.
+
+    Executor-mapped tools run immediately (not batched past a following direct
+    tool) so sequences like ``[scan_environment, describe_scene]`` capture the
+    post-scan frame.
 
     Returns (continue_running, list_of_result_strings, has_info_results).
     continue_running is False if quit was requested.
-    has_info_results is True if any tool with returns_info=True produced output.
+    has_info_results is True if any tool with returns_info=True produced output
+    (including failure messages that should be relayed to the user).
     """
-    executor_cmds: list[tuple[str, str]] = []
     results: list[str] = []
     has_info = False
+    ok = True
 
     if verbose_tools and tool_calls:
         print(colored("[tool_calls raw]", "yellow"), flush=True)
@@ -155,45 +234,44 @@ def _dispatch_tool_calls(
 
         cmds = tool.to_executor(args)
         if cmds:
-            executor_cmds.extend(cmds)
-        else:
-            try:
-                result = tool.func(**args) if args else tool.func()
-                result_str = str(result) if result is not None else "ok"
-                results.append(f"[{name}] {result_str}")
-                if tool.returns_info and result is not None and result != "":
-                    has_info = True
-                if result is not None and result != "":
-                    if verbose_tools:
-                        print(colored(f"[{name}]", "magenta"), result_str, flush=True)
-                    else:
-                        print(colored(f"[{name}]", "cyan"), result_str)
-            except Exception as e:
-                err = f"Tool {name} failed: {e}"
-                logger.warning(err)
-                print(colored(err, "red"))
+            if any(c[0] == "quit" for c in cmds):
+                if chat_log:
+                    for r in results:
+                        chat_log.log("tool", r)
+                return False, results, has_info
+            if verbose_tools:
+                print(colored("[executor]", "yellow"), json.dumps(cmds, default=str), flush=True)
+            ran_ok = executor(cmds)
+            ok = ok and ran_ok
+            cmd_names = [c[0] for c in cmds]
+            summary = f"Executor ran: {', '.join(cmd_names)} -> {'ok' if ran_ok else 'failed/interrupted'}"
+            results.append(summary)
+            if verbose_tools:
+                print(colored("[executor summary]", "magenta"), summary, flush=True)
+            continue
+
+        try:
+            result = tool.func(**args) if args else tool.func()
+            result_str = str(result) if result is not None else "ok"
+            results.append(f"[{name}] {result_str}")
+            if tool.returns_info and result is not None and result != "":
+                has_info = True
+            if result is not None and result != "":
                 if verbose_tools:
-                    import traceback
+                    print(colored(f"[{name}]", "magenta"), result_str, flush=True)
+                else:
+                    print(colored(f"[{name}]", "cyan"), result_str)
+        except Exception as e:
+            err = f"Tool {name} failed: {e}"
+            logger.warning(err)
+            print(colored(err, "red"))
+            if verbose_tools:
+                import traceback
 
-                    traceback.print_exc()
-                results.append(err)
-
-    if not executor_cmds:
-        if chat_log:
-            for r in results:
-                chat_log.log("tool", r)
-        return True, results, has_info
-
-    if any(c[0] == "quit" for c in executor_cmds):
-        return False, results, has_info
-
-    if verbose_tools:
-        print(colored("[executor]", "yellow"), json.dumps(executor_cmds, default=str), flush=True)
-    ok = executor(executor_cmds)
-    cmd_names = [c[0] for c in executor_cmds]
-    results.append(f"Executor ran: {', '.join(cmd_names)} -> {'ok' if ok else 'failed/interrupted'}")
-    if verbose_tools:
-        print(colored("[executor summary]", "magenta"), results[-1], flush=True)
+                traceback.print_exc()
+            results.append(err)
+            if tool.returns_info:
+                has_info = True
 
     if chat_log:
         for r in results:
@@ -213,35 +291,115 @@ def _call_llm(
     openai_tools_param: list | None,
     debug: bool,
     image: np.ndarray | None = None,
+    reset_context: bool = True,
+    progress_callback: Callable[[str], None] | None = None,
+    heartbeat_s: float = 8.0,
+    robot: Any | None = None,
 ) -> tuple[str, float]:
-    """Call the LLM and return (raw_response, elapsed_seconds)."""
+    """Call the LLM and return (raw_response, elapsed_seconds).
+
+    Keep ``generate`` on the calling thread (CUDA-safe). When ``progress_callback`` is
+    set, a daemon only emits heartbeats — it must not run the model.
+
+    When *robot* supports ``pause_streams``, ZMQ JPEG/depth decode is paused for the
+    duration of generate (avoids multi-minute hangs after loading while streams spin).
+    """
+    with paused_robot_streams(robot):
+        return _call_llm_body(
+            llm_client,
+            text,
+            openai_tools_param,
+            debug,
+            image=image,
+            reset_context=reset_context,
+            progress_callback=progress_callback,
+            heartbeat_s=heartbeat_s,
+        )
+
+
+def _call_llm_body(
+    llm_client: Any,
+    text: str,
+    openai_tools_param: list | None,
+    debug: bool,
+    image: np.ndarray | None = None,
+    reset_context: bool = True,
+    progress_callback: Callable[[str], None] | None = None,
+    heartbeat_s: float = 8.0,
+) -> tuple[str, float]:
     t0 = timeit.default_timer()
+    phase = {"msg": "starting"}
+
+    def _on_progress(msg: str) -> None:
+        phase["msg"] = str(msg or "working")
+        if progress_callback is not None:
+            try:
+                progress_callback(phase["msg"])
+            except Exception:
+                pass
 
     def _with(verbose: bool, **call_kw: Any) -> str:
         return llm_client(text, verbose=verbose, **call_kw)
 
     def _try_chain() -> str:
+        if isinstance(llm_client, AbstractVLLMClient):
+            kw: dict[str, Any] = {
+                "system_prompt": getattr(llm_client, "system_prompt", None) or None,
+                "max_new_tokens": getattr(llm_client, "max_tokens", None),
+                "reset_context": reset_context,
+                "verbose": debug,
+                "image": image,
+            }
+            if progress_callback is not None:
+                try:
+                    return llm_client.generate_multimodal(
+                        text, progress_callback=_on_progress, **kw
+                    )
+                except TypeError:
+                    pass
+            return llm_client.generate_multimodal(text, **kw)
         if openai_tools_param is not None and image is not None:
             try:
-                return _with(debug, tools=openai_tools_param, image=image)
+                return _with(debug, tools=openai_tools_param, image=image, reset_context=reset_context)
             except TypeError:
                 pass
         if openai_tools_param is not None:
             try:
-                return _with(debug, tools=openai_tools_param)
+                return _with(debug, tools=openai_tools_param, reset_context=reset_context)
             except TypeError:
                 pass
         if image is not None:
             try:
-                return _with(debug, image=image)
+                return _with(debug, image=image, reset_context=reset_context)
             except TypeError:
                 pass
         try:
-            return _with(debug)
+            return _with(debug, reset_context=reset_context)
         except TypeError:
             return llm_client(text)
 
-    raw = _try_chain()
+    stop_beat = threading.Event()
+
+    def _heartbeat() -> None:
+        while not stop_beat.wait(timeout=heartbeat_s):
+            elapsed = timeit.default_timer() - t0
+            if progress_callback is None:
+                break
+            try:
+                progress_callback(f"still running ({elapsed:.0f}s) — {phase['msg']}")
+            except Exception:
+                pass
+
+    beat_thread: threading.Thread | None = None
+    if progress_callback is not None and heartbeat_s > 0:
+        beat_thread = threading.Thread(target=_heartbeat, name="emet-llm-heartbeat", daemon=True)
+        beat_thread.start()
+    try:
+        raw = _try_chain()
+    finally:
+        stop_beat.set()
+        if beat_thread is not None:
+            beat_thread.join(timeout=0.2)
     return raw, timeit.default_timer() - t0
 
 
@@ -271,6 +429,7 @@ def run_agent_with_robot(
     vl_include_camera: bool = False,
     eqa: bool = False,
     share_memory_vllm: bool = True,
+    memory_backend: str = "dynagraph",
     headless: bool = False,
     rerun: bool = False,
     rerun_native: bool = False,
@@ -280,6 +439,7 @@ def run_agent_with_robot(
     parameters: Parameters | None = None,
     allow_missing_depth: bool | None = None,
     embodied_overlay: EmbodiedAgentConfig | None = None,
+    thinking_status: bool | None = None,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -303,6 +463,7 @@ def run_agent_with_robot(
     """
     _configure_agent_terminal_output()
     verbose_tools = bool(tool_debug) or _env_agent_tool_debug()
+    show_thinking_status = env_agent_thinking_status() if thinking_status is None else bool(thinking_status)
 
     camera_debug = env_agent_camera_debug()
     if parameters is None:
@@ -369,6 +530,7 @@ def run_agent_with_robot(
         eqa=eqa,
         defer_eqa_vllm=defer_eqa_vllm,
         embodied_agent=embodied_overlay,
+        memory_backend=memory_backend,
         **_exec_kwargs,
     )
     print_vram_snapshot("after_dyn_av_executor_init_siglip_detector_voxel")
@@ -376,17 +538,29 @@ def run_agent_with_robot(
     if eqa:
         print(
             colored(
-                "EQA/DynaMem: SigLIP, optional SAM3/DINO, and (unless --share-memory-vllm) a separate "
+                "EQA: SigLIP, optional SAM3/DINO, and (unless --share-memory-vllm) a separate "
                 "Qwen3-VL-8B int4 from dynav_config.yaml eqa: load lazily on the first robot update. "
-                "Default --llm qwen3-vl-eqa + --share-memory-vllm reuses one VLM for chat and captions. "
+                "Default text --llm qwen35-4B is fast for tool routing; use --llm qwen3-vl-eqa + "
+                "--share-memory-vllm to reuse one VLM for chat and captions. "
                 "VRAM milestones: EMET_VRAM_DEBUG=1 or --debug-vram (with --debug-models).",
                 "cyan",
             )
         )
 
+    mb = str(memory_backend or "dynagraph").strip().lower()
+    print(colored(f"Agent memory backend: {mb}", "cyan"), flush=True)
+
     if input_path:
-        backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
-        backend.load(input_path)
+        _gm_load = getattr(executor.agent, "graph_memory", None)
+        if _gm_load is not None and mb in ("dynagraph", "graph_eqa"):
+            load_backend = get_memory_backend(
+                "graph_eqa",
+                graph_memory=_gm_load,
+                voxel_map=executor.agent.get_voxel_map(),
+            )
+        else:
+            load_backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
+        load_backend.load(input_path)
         executor._last_memory_save_path = input_path
 
     _gm = getattr(executor.agent, "graph_memory", None)
@@ -397,11 +571,11 @@ def run_agent_with_robot(
             graph_memory=_gm,
             voxel_map=executor.agent.get_voxel_map(),
         )
-    memory_backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
+    voxel_memory_backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
     context: dict[str, Any] = {
         "executor": executor,
         "robot": robot_client,
-        "memory_backend": memory_backend,
+        "memory_backend": voxel_memory_backend,
         "graph_memory": _gm,
         "graph_memory_backend": _graph_backend,
         "scene_graph_processor": getattr(executor.agent, "_open_vocab_sg_processor", None),
@@ -411,6 +585,7 @@ def run_agent_with_robot(
         "planner": getattr(executor.agent, "planner", None),
         "verbose_tools": verbose_tools,
         "camera_debug": camera_debug,
+        "agent_memory_backend": mb,
     }
 
     def update_xyt():
@@ -500,10 +675,27 @@ def run_agent_with_robot(
             )
             prompt_builder = AgentPromptBuilder(tools=tools, name=agent_name, context=context)
             print_vram_snapshot("before_agent_llm_load")
-            llm_client = get_llm_client(llm, prompt=prompt_builder, device=device, parameters=parameters)
-            print_vram_snapshot("after_agent_llm_load")
-            if hasattr(llm_client, "max_tokens"):
-                llm_client.max_tokens = max_tokens
+            # Pause ZMQ decode while loading weights — concurrent JPEG/JP2 spin makes
+            # HF load ~50–100× slower and can leave the first generate hung.
+            with paused_robot_streams(robot_client):
+                llm_client = get_llm_client(llm, prompt=prompt_builder, device=device, parameters=parameters)
+                print_vram_snapshot("after_agent_llm_load")
+                if hasattr(llm_client, "max_tokens"):
+                    llm_client.max_tokens = max_tokens
+                warm = getattr(llm_client, "warm_system_prefix_cache", None)
+                if callable(warm):
+                    try:
+                        ntok = warm()
+                        if ntok:
+                            print(
+                                colored(
+                                    f"VL system prefix cache warmed ({ntok} tokens) — first chat turn skips that prefill.",
+                                    "cyan",
+                                ),
+                                flush=True,
+                            )
+                    except Exception as warm_err:
+                        logger.warning("VL prefix cache warm failed: %s", warm_err)
             from emet.llms.openai_client import OpenaiClient
 
             if isinstance(llm_client, OpenaiClient):
@@ -539,8 +731,10 @@ def run_agent_with_robot(
     if use_llm and llm_client is not None and defer_eqa_vllm:
         vm = executor.agent.get_voxel_map()
         if getattr(vm, "_eqa_pending", None) is not None:
+            bound = False
             if isinstance(llm_client, AbstractVLLMClient):
-                vm.bind_shared_vllm_from_agent(llm_client)
+                bound = bool(vm.bind_shared_vllm_from_agent(llm_client))
+            if bound:
                 print_vram_snapshot(
                     "after_bind_shared_vllm_from_agent",
                     extra="DynaMem caption/EQA uses the same VL object as --llm",
@@ -555,7 +749,7 @@ def run_agent_with_robot(
                     pass
                 vm.materialize_local_eqa_vllm()
                 logger.info(
-                    "EQA: loaded DynaMem VLM from yaml (agent --llm is not a shareable VL client). "
+                    "EQA: loaded DynaMem VLM from yaml (agent --llm does not match eqa: checkpoint). "
                     "To reuse one VL for chat+captions: --llm qwen3-vl-eqa or --llm gemma4-vl-eqa with "
                     "--eqa --share-memory-vllm."
                 )
@@ -575,6 +769,24 @@ def run_agent_with_robot(
             openai_tool_schemas=openai_tools_param is not None,
         )
         print(colored(f"LLM enabled ({llm}). Say what you want the robot to do.", "green"))
+        if vl_include_camera:
+            print(
+                colored(
+                    "Chat VL camera: ON (--vl-include-camera). First turns will be slow (full-frame prefill).",
+                    "yellow",
+                ),
+                flush=True,
+            )
+        else:
+            print(
+                colored(
+                    "Chat VL camera: OFF (default). Vision uses describe_scene/send_image — much faster. "
+                    "Pass --vl-include-camera only if you need pixels in the chat model.",
+                    "cyan",
+                ),
+                flush=True,
+            )
+        print(colored(f"Max new tokens: {max_tokens}", "cyan"), flush=True)
     else:
         print(colored("Enter mode [E=explore / M=pick+place / Q=question / P=send picture / QUIT]:", "green"))
     if verbose_tools:
@@ -608,16 +820,41 @@ def run_agent_with_robot(
 
     chat_log.log("system", str(prompt_builder) if prompt_builder else "(no LLM)")
 
-    def _send_to_discord(text: str) -> None:
+    def _send_to_discord(text: str, *, mirror_terminal: bool = True) -> None:
         if discord_bot is None or not hasattr(discord_bot, "push_task_to_all_channels"):
             return
+        from emet.agent.tools import take_pending_discord_image
+
+        # Attach any photo queued by describe_scene / send_image to this same Discord message.
+        pending_image = take_pending_discord_image(context)
         # Mirror outbound on the terminal here so logs stay ordered with stdout (Discord queue is async).
         stripped = (text or "").strip()
-        if stripped and hasattr(discord_bot, "_print_discord_outbound"):
+        if mirror_terminal and (stripped or pending_image is not None) and hasattr(
+            discord_bot, "_print_discord_outbound"
+        ):
             for channel in discord_bot.allowed_channels:
                 ch_name = getattr(channel, "name", "?")
-                discord_bot._print_discord_outbound(ch_name, text, has_image=False)
-        discord_bot.push_task_to_all_channels(message=text, skip_terminal_mirror=bool(stripped))
+                discord_bot._print_discord_outbound(
+                    ch_name, text, has_image=pending_image is not None
+                )
+        discord_bot.push_task_to_all_channels(
+            message=text if stripped else None,
+            content=pending_image,
+            # Skip async TTY mirror when we already printed here, or when caller
+            # used print_terminal (mirror_terminal=False) for a timestamped line.
+            skip_terminal_mirror=(not mirror_terminal) or bool(stripped) or pending_image is not None,
+        )
+
+    def _emit_status(text: str, *, to_discord: bool = False) -> None:
+        """Timestamped terminal status. Discord only when *to_discord* (keep chat clean)."""
+        if not show_thinking_status or debug_llm or not (text or "").strip():
+            return
+        print_terminal(text, color="cyan")
+        if to_discord and discord_bot is not None:
+            # Avoid a second untimestamped TTY mirror from Discord outbound.
+            _send_to_discord(text, mirror_terminal=False)
+
+    llm_status_label = short_llm_label(llm, llm_client) if llm_client is not None else short_llm_label(llm)
 
     # Wait for Discord to connect before sending the greeting
     if discord_bot is not None and hasattr(discord_bot, "wait_until_ready"):
@@ -702,6 +939,7 @@ def run_agent_with_robot(
                 break
 
             chat_log.log("user", user_text)
+            print_terminal(f"user: {user_text}", color="green")
             if debug_llm:
                 print(colored(f"[DEBUG] User: {user_text!r}", "yellow"))
 
@@ -709,12 +947,23 @@ def run_agent_with_robot(
             # The LLM may call tools that return information (e.g. query_memory).
             # When that happens we feed the results back and let the LLM summarize.
             current_input = user_text
+            turn_t0 = timeit.default_timer()
             for _round in range(_MAX_TOOL_ROUNDS):
                 cam_image = None
+                followup_round = _round > 0
                 if vl_include_camera and _round == 0 and hasattr(robot_client, "get_observation"):
                     obs = robot_client.get_observation()
                     if obs is not None and getattr(obs, "rgb", None) is not None:
-                        cam_image = np.asarray(obs.rgb)
+                        from emet.llms.vl_image import downsample_rgb_hwc, eqa_vl_image_kwargs
+
+                        eqa_raw = parameters.get("eqa", {}) if parameters is not None else {}
+                        eqa_cfg = eqa_raw if isinstance(eqa_raw, dict) else {}
+                        img_kw = eqa_vl_image_kwargs(eqa_cfg)
+                        cam_image = downsample_rgb_hwc(
+                            np.asarray(obs.rgb),
+                            max_side=img_kw["image_max_side"],
+                            max_pixels=img_kw["image_max_pixels"],
+                        )
                         if verbose_tools:
                             cr = np.asarray(cam_image)
                             print(
@@ -735,16 +984,43 @@ def run_agent_with_robot(
                     has_tools=openai_tools_param is not None,
                     has_image=cam_image is not None,
                 )
+                thinking_base = format_llm_thinking_status(
+                    llm_label=llm_status_label,
+                    round_idx=_round + 1,
+                    max_rounds=_MAX_TOOL_ROUNDS,
+                    has_image=cam_image is not None,
+                    followup=followup_round,
+                )
+                # One Discord Thinking… line; phase/heartbeat details stay on the terminal.
+                _emit_status(thinking_base, to_discord=True)
+
+                def _llm_progress(phase: str, *, _base: str = thinking_base) -> None:
+                    _emit_status(f"{_base} ({phase})")
+
+                if not show_thinking_status or debug_llm:
+                    print_terminal(
+                        f"LLM start round {_round + 1}/{_MAX_TOOL_ROUNDS} "
+                        f"image={cam_image is not None} followup={followup_round}",
+                        color="cyan",
+                    )
                 raw_response, elapsed = _call_llm(
                     llm_client,
                     current_input,
                     openai_tools_param,
                     debug_llm,
                     image=cam_image,
+                    reset_context=not followup_round,
+                    progress_callback=_llm_progress if show_thinking_status else None,
+                    robot=robot_client,
                 )
 
                 if debug_llm:
                     print(colored(f"[DEBUG] Raw response ({elapsed:.2f}s):", "yellow"), raw_response[:500])
+                print_terminal(
+                    f"LLM done round {_round + 1}/{_MAX_TOOL_ROUNDS} in {elapsed:.1f}s "
+                    f"({len(raw_response or '')} chars)",
+                    color="cyan",
+                )
 
                 parsed = parse_tool_calls_response(raw_response)
                 tool_calls = parsed.get("tool_calls") or []
@@ -758,16 +1034,29 @@ def run_agent_with_robot(
                 # No tool calls — this is the final answer
                 if not tool_calls:
                     if message:
-                        print(colored(f"{agent_name}:", "blue"), message, flush=True)
+                        print_terminal(f"{agent_name}: {message}", color="blue")
                         _send_to_discord(message)
+                    print_terminal(f"turn done in {timeit.default_timer() - turn_t0:.1f}s", color="cyan")
                     break
 
                 # Print and relay the intermediate message (e.g. "Let me check my memory.")
                 if message:
-                    print(colored(f"{agent_name}:", "blue"), message, flush=True)
+                    print_terminal(f"{agent_name}: {message}", color="blue")
                     _send_to_discord(message)
 
+                tool_names = [str(tc.get("name") or "") for tc in tool_calls]
+                action_status = format_action_running_status(tool_names)
+                if action_status is not None:
+                    # Long-running motion: Discord + terminal (*Exploring…*, etc.).
+                    _emit_status(action_status, to_discord=True)
+                else:
+                    # Fast info tools: terminal-only (Discord gets the final reply).
+                    _emit_status(format_tool_running_status(tool_names))
+                if not show_thinking_status or debug_llm:
+                    print_terminal(f"tools start: {', '.join(tool_names)}", color="cyan")
+
                 # Execute tool calls
+                tools_t0 = timeit.default_timer()
                 ok, results, has_info = _dispatch_tool_calls(
                     tool_calls,
                     tools_by_name,
@@ -776,7 +1065,13 @@ def run_agent_with_robot(
                     debug=debug_llm,
                     verbose_tools=verbose_tools,
                 )
+                tools_elapsed = timeit.default_timer() - tools_t0
+                print_terminal(
+                    f"tools done in {tools_elapsed:.1f}s ({', '.join(tool_names)})",
+                    color="cyan",
+                )
                 if not ok:
+                    print_terminal(f"turn aborted after {timeit.default_timer() - turn_t0:.1f}s", color="red")
                     break
 
                 result_text = "\n".join(results)
@@ -784,11 +1079,19 @@ def run_agent_with_robot(
                     print(colored("[tool results combined]", "magenta"), result_text, sep="\n", flush=True)
 
                 if has_info:
+                    if _should_skip_llm_summarize(tool_calls, results):
+                        fast = _format_fast_tool_reply(results)
+                        if fast:
+                            print_terminal(f"{agent_name}: {fast}", color="blue")
+                            _send_to_discord(fast)
+                            chat_log.log("assistant", fast, fast_tool_reply=True)
+                            print_terminal(
+                                f"turn done in {timeit.default_timer() - turn_t0:.1f}s (fast tool reply)",
+                                color="cyan",
+                            )
+                            break
                     # Feed tool results back to LLM for summarization
                     followup = f"[Tool results]\n{result_text}\n\nSummarize these results for the user in your message. Do not call any more tools."
-                    if hasattr(llm_client, "add_history"):
-                        llm_client.add_history({"role": "assistant", "content": raw_response})
-                        llm_client.add_history({"role": "user", "content": followup})
                     current_input = followup
                     if debug_llm or verbose_tools:
                         print(
@@ -803,6 +1106,7 @@ def run_agent_with_robot(
                     if results and hasattr(llm_client, "add_history"):
                         llm_client.add_history({"role": "assistant", "content": raw_response})
                         llm_client.add_history({"role": "user", "content": f"[Tool results]\n{result_text}"})
+                    print_terminal(f"turn done in {timeit.default_timer() - turn_t0:.1f}s", color="cyan")
                     break
             if ok:
                 _print_user_turn_separator()

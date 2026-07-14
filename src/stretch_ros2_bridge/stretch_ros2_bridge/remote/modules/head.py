@@ -110,7 +110,7 @@ class StretchHeadClient(AbstractControlModule):
         self.set_pan_tilt(pan, tilt, blocking=blocking)
 
     def look_front(self, blocking: bool = True):
-        """Point camera forwards at a 45-degree downwards angle"""
+        """Point camera forwards at a slight downward angle (room-scale view)."""
         pan, tilt = self._robot_model.look_front
         self.set_pan_tilt(pan, tilt, blocking=blocking)
 

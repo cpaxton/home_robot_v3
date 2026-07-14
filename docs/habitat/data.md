@@ -226,6 +226,17 @@ On a machine with full train + semantics downloads, expect roughly:
 | HM3D train split | **~145 / ~800** (~18%) | HM3DSem v0.2 annotates 145 train scans ([dataset page](https://aihabitat.org/datasets/hm3d-semantics/)) |
 | HM-EQA paper (113 Q, 49 unique scenes) | **~14 / 49** scenes, **~37 / 113** questions | Overlap is small because Explore-EQA scenes were not chosen from the annotated subset |
 
+### Slice taxonomy (what to run / cite)
+
+| Slice | How | n | Use |
+|-------|-----|---|-----|
+| Overnight triad | `run_overnight_habitat_eval.sh` | 8 / 32 / 20 | Fast dynagraph vs graph_eqa iteration |
+| Annotated semantics | `IDS="$(uv run python -c 'from emet.habitat.hm3d_semantics import hmeqa_annotated_question_ids as f; print(",".join(map(str,f())))')"` or overnight `annotated37_*` phases | ~37 | Fairer perception vs GraphEQA GT path |
+| Paper HM-EQA | `emet-habitat run-batch --paper-subset` | **113** | GraphEQA Table 1 *n* |
+| Explore-EQA full | `emet-habitat run-batch --all-questions` | up to ~500 | Beyond GraphEQA paper (stretch) |
+
+See also [experiments/habitat_eqa_results.md](../experiments/habitat_eqa_results.md#hm-eqa-slice-taxonomy). Helpers: [`scripts/run_hmeqa_annotated37_h2h.sh`](../../scripts/run_hmeqa_annotated37_h2h.sh), [`scripts/run_hmeqa_paper113_h2h.sh`](../../scripts/run_hmeqa_paper113_h2h.sh).
+
 ### Why are we “missing” semantics?
 
 **Two distinct cases — check the report before assuming a broken download.**

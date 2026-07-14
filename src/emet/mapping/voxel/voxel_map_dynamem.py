@@ -17,10 +17,13 @@ import numpy as np
 import torch
 
 from emet.motion import Footprint
+from emet.utils.logger import Logger
 
 from .voxel import SparseVoxelMapProxy
 from .voxel_dynamem import SparseVoxelMap
 from .voxel_map import SparseVoxelMapNavigationSpace as SparseVoxelMapNavigationSpaceBase
+
+logger = Logger(__name__)
 
 
 class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
@@ -450,7 +453,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             start_pt = self.to_pt(start)
             return None
         goal = self.sample_target_point(start, point, planner, exploration=mode != "navigation")
-        print("point:", point, "goal:", goal)
+        logger.debug("sample_navigation point=%s goal=%s", point, goal)
         obstacles, explored = self.voxel_map.get_2d_map()
         plt.imshow(obstacles)
         start_pt = self.to_pt(start)

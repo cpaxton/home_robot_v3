@@ -167,3 +167,19 @@ def emet_session_cache_update(
     if cached is None or step >= cached_step:
         return dict(sess), step
     return cached, cached_step
+
+
+def emet_session_manipulation_supported(session: dict[str, Any] | None) -> bool:
+    """True when the ZMQ server advertises arm/gripper/posture control.
+
+    Navigation-only sim backends (e.g. Habitat HM-EQA serve) set ``capabilities.manipulation=false``.
+    When session is unknown, assume manipulation is available (real Stretch / full MuJoCo sim).
+    """
+    if session is None:
+        return True
+    caps = session.get("capabilities")
+    if isinstance(caps, dict) and "manipulation" in caps:
+        return bool(caps["manipulation"])
+    if session.get("runtime_kind") == "habitat_hmeqa":
+        return False
+    return True

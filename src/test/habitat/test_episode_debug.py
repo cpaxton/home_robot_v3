@@ -38,6 +38,37 @@ def test_write_run_manifest(tmp_path: Path):
     assert data["run_tag"] == "run"
     assert data["method"] == "graph_eqa"
     assert data["question_ids"] == [0, 1]
+    assert "harness" in data
+
+
+def test_enrich_episode_metrics_harness_fingerprint_merge_on():
+    from types import SimpleNamespace
+
+    from emet.core.parameters import get_parameters
+    from emet.eval.benchmark_dynagraph import apply_habitat_eqa_method_parameters
+    from emet.habitat.episode_debug import enrich_episode_metrics
+
+    params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "dynagraph")
+    agent = SimpleNamespace(parameters=params, graph_memory=None)
+    metrics = EpisodeMetrics(
+        dataset="hmeqa",
+        method="dynagraph",
+        question_id=17,
+        scene="s",
+        floor=0,
+        question="q",
+        gold_answer_letter="D",
+        predicted_answer="D",
+        correct=True,
+        confident=True,
+        planning_steps=1,
+        success=True,
+    )
+    enrich_episode_metrics(metrics, agent=agent, choices=["a", "b", "c", "d"])
+    assert float(metrics.harness.get("dynagraph_merge_xy_m")) == 0.45
+    assert float(metrics.harness.get("fallback_spatial_merge_xy_m")) == 0.45
+    assert metrics.harness.get("profile") == "unified_eqa"
+    assert metrics.harness.get("explore_when_uncovered") == "conservative"
 
 
 def test_save_episode_debug_bundle_writes_graph_report(tmp_path: Path, monkeypatch):

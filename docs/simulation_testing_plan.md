@@ -23,6 +23,8 @@ Canonical **sequential smoke battery** for embodied sim + Habitat before multi-d
 
 Tracks 1–2 require `./scripts/install_habitat.sh` and HM3D assets. Tracks 3–6 require `emet install sim` (Robocasa). Tracks 4 and 7 require `.venv-molmospaces` (`./install.sh --molmospaces -y`). Track 5 needs ScanNet mesh for full replay (mock-LLM still validates harness wiring).
 
+**Interactive agent (same Dynagraph memory):** for live skill checks outside the battery, use `emet run agent --memory-backend dynagraph` (default) against the same sim servers; see [AGENT_RUN.md](AGENT_RUN.md) skill checklist and [paper_benchmarks.md](paper_benchmarks.md).
+
 ---
 
 ## One-command battery

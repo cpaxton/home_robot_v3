@@ -34,6 +34,11 @@ def env_sim_nav_teleport() -> bool:
     return _env_truthy("EMET_SIM_NAV_TELEPORT")
 
 
+def env_zmq_timing() -> bool:
+    """Periodic ZMQ SEND/RECV timing lines (``BaseZmqServer``). Off by default; use with ``--verbose`` or set ``1``."""
+    return _env_truthy("EMET_ZMQ_TIMING")
+
+
 def warn_sim_nav_env_flags(*, force: bool = False) -> None:
     """Print yellow stderr warnings for active ``EMET_SIM_NAV_*`` env vars (once per process)."""
     global _warned_sim_nav_env

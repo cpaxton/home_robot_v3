@@ -55,6 +55,11 @@ eqa:
   vl_max_tokens: 512
   vl_quantization: int4
   vl_hf_model_id: Qwen/Qwen3-VL-8B-Instruct
+  vl_cache_system_prefix: true
+  vl_max_cached_prefixes: 1
+  # Cap RGB fed to the VL (longest side). 0 = no resize. Optional pixel budget via vl_image_max_pixels.
+  vl_image_max_side: 512
+  vl_image_max_pixels: 0
   # Gemma int4 VRAM tiers (nvidia-smi memory.free MiB) when vl_hf_model_id unset and vl_family=gemma4
   vram_mib_tier_gemma_e4b: 12000
   vram_mib_tier_gemma_e2b: 7000
@@ -64,13 +69,17 @@ eqa:
   # habitat_explore_frontiers: true
   # image_nav_min_approach_m: 0.35
 
-# Object detection parameters (used when use_instance_memory is True; YoloE runs for instance segmentation)
-# Lower confidence_threshold helps detect small objects in the default MuJoCo scene (red cylinder, blue cube on table).
+# Object detection (instance memory / graph proposals). See mapping/default.yaml for the two-knob note:
+# confidence_threshold = proposals (eval before raising); describe_* = chat-only and safe to tighten.
 detection:
   module: "owlsam"
   category_map_file: example_cat_map.json
   use_detic_viz: False
   confidence_threshold: 0.02
+  describe_use_detector_fallback: false
+  describe_confidence_threshold: 0.30
+  describe_use_curated_vocab: true
+  describe_max_labels: 12
 
 # Point cloud cleanup
 filters:

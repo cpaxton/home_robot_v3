@@ -43,6 +43,9 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_SQA3D_OUTPUT` | `emet sqa3d run-real-sweep`, `aggregate_sqa3d_sweep.py` | Default sweep output root. Default `~/runs/emet/sqa3d` (`configs/sqa3d/benchmark.yaml`). |
 | `EMET_DYNAMIC_EXPLORE_OUTPUT` | `scripts/eval_dynamic_exploration.py` | Dynamic exploration sweep output. Default `~/runs/emet/dynamic_exploration` (`configs/benchmarks/dynamic_exploration.yaml`). |
 | `EMET_DYNAMIC_EXPLORE_DYNAGRAPH_TIMEOUT_S` | `dynamic_exploration_runner.py` | Override per-run ``emet run dynagraph`` subprocess timeout (seconds). Default scales with explore budget (~105 min for Robocasa K=3 on GPU). |
+| `EMET_DYNAMIC_EXPLORE_HEARTBEAT_S` | `dynamic_exploration_runner.py` | Heartbeat interval while a dynagraph subprocess is running (default `120`). Writes to stderr + `progress.jsonl`. |
+| `EMET_DYNAMIC_EXPLORE_STALE_LOG_S` | `dynamic_exploration_runner.py` | Warn when `dynagraph.log` mtime is older than this many seconds (default `900`). Surfaces post-VLM / EQA hangs. |
+| `EMET_VLM_DEVICE_CHECK_MAX_PARAMS` | `vlm_device.assert_cuda_placement` | When `hf_device_map` is missing, cap parameter/buffer device sampling (default `512`). Avoids multi-hour stalls after int4 load. |
 | `SQA3D_DATA_DIR` | `emet sqa3d`, `emet eval-sqa3d` | Root for SQA3D Zenodo JSON (`sqa_task/`, optional `localization_task/`). Default `~/.cache/sqa3d/data`. See [sqa3d.md](sqa3d.md). |
 | `SCANNET_ROOT` | `emet sqa3d` embodied runs | ScanNet v2 download root (`scans/<scene_id>/…`). Default `~/.cache/scannet`. |
 | `SCANNET_DOWNLOAD_SCRIPT` | `scripts/download_scannet_data.py` | Override path to `download-scannet.py`. |
@@ -80,6 +83,7 @@ Used by `scripts/run_large_paper_eval.sh` and `scripts/run_sqa3d_sharded_sweep.s
 | Variable | Where used | Notes |
 |----------|------------|-------|
 | `EMET_ZMQ_STARTUP_TIMEOUT` | ZMQ clients, `emet run molmospaces-explore` | Seconds to wait for first observation (default 60). Documented in [molmospaces_environment_variables.md](molmospaces_environment_variables.md). |
+| `EMET_ZMQ_TIMING` | `BaseZmqServer` | `1` — print periodic SEND/RECV timing lines. Default off (also enabled by server `--verbose`). |
 | `EMET_NAVGRID_ASCII` | Dynamem / Dynagraph mapping | Terminal nav grid; see [dynagraph.md](dynagraph.md). |
 | `EMET_NAVGRID_MAX_SIDE` | Nav grid ASCII | Default 320. |
 | `EMET_NAVGRID_CONTEXTS` | Nav grid ASCII | Limit which hooks print. |
@@ -96,5 +100,24 @@ Used by `scripts/run_large_paper_eval.sh` and `scripts/run_sqa3d_sharded_sweep.s
 | `EMET_ROBOT_PASSWORD` | Deploy / Mars SSH | Optional password when not stored in the connection profile. |
 
 See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented module notes.
+
+## Agent (`emet run agent`)
+
+| Variable | Where used | Notes |
+|----------|------------|-------|
+| `EMET_VL_CACHE_SYSTEM_PREFIX` | `qwen3-vl-eqa` / `Qwen3VLClient` | `1`/`0` — cache system-prompt KV across agent turns (default on via `eqa.vl_cache_system_prefix`). CLI: `--cache-vl-prefix` / `--no-cache-vl-prefix`. |
+| `EMET_ALLOW_CPU_VLM` | Qwen3-VL / Gemma VLM / Qwen2.5-VL load | `1` — allow silent CPU bf16 fallback when GPU int4 load fails. **Default off**: agent refuses CPU fallback (multi-minute “Thinking…” hangs). |
+| `EMET_HF_LOCAL_ONLY` | VL / SigLIP `from_pretrained` | `1` — require local HF cache only (same idea as `HF_HUB_OFFLINE=1`). Warm cache is preferred automatically even when unset. |
+| `EMET_VL_PREFIX_GENERATE_TIMEOUT_S` | `Qwen3VLClient` | Soft warn + disable prefix cache after a slow prefix-KV generate (default `45`). |
+| `EMET_ATTN_EAGER` | `Qwen3VLClient` | `1` — force eager attention (debug). Default uses Flash-Attn 2 if installed, else PyTorch **SDPA**. |
+| `eqa.vl_image_max_side` | VL clients / `describe_scene` | Longest RGB edge before VL/detector (default `512`; `0` = no resize). Override: `--set eqa.vl_image_max_side=384`. |
+| `eqa.vl_image_max_pixels` | Same | Optional `H*W` cap after side resize (`0` = off). |
+| `EMET_AGENT_THINKING_STATUS` | Agent loop | `1`/`0` — emit `*Thinking…*` status lines (default on). CLI: `--thinking-status` / `--no-thinking-status`. Heartbeats every ~8s while the LLM is still running. |
+| `EMET_AGENT_MODEL_DEBUG` | Agent / VL clients | `1` — model stack + prefix-cache hit logs + generate phase timings. CLI: `--debug-models`. |
+| `EMET_AGENT_TOOL_DEBUG` | Agent loop | `1` — verbose tool I/O. CLI: `--debug-tools`. |
+| `EMET_AGENT_CAMERA_DEBUG` | Agent tools | `1` — head-camera frame stats. CLI: `--debug-camera`. |
+| `EMET_AGENT_MOTION_STATUS` | Controllers | `1`/`0` — fine-grained terminal progress for head sweeps / rotate-in-place / explore steps (default **on**). Discord still only gets coarse milestones (`*Look around: sweeping head*`, mid/end scan). |
+
+See [AGENT_RUN.md](AGENT_RUN.md).
 
 Add new cross-cutting `EMET_*` variables here or in a topic-specific doc and link from [simulation.md](simulation.md) / [README.md](../README.md) as appropriate.

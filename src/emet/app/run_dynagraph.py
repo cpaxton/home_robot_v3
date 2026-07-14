@@ -172,6 +172,43 @@ def _print_dynagraph_rerun_help(
 )
 @click.option("--port-offset", default=0, type=int, help="Add to default ZMQ ports (e.g. 100 → 4501-4504)")
 @click.option(
+    "--start-sim",
+    "start_sim",
+    is_flag=True,
+    default=False,
+    help="Spawn MuJoCo ZMQ server subprocess before connecting (default table / Robocasa / MolmoSpaces from config)",
+)
+@click.option(
+    "--start-habitat",
+    "start_habitat",
+    is_flag=True,
+    default=False,
+    help="Spawn ``emet-habitat serve`` subprocess (requires .venv-habitat)",
+)
+@click.option(
+    "--habitat-question-id",
+    type=int,
+    default=None,
+    help="With --start-habitat: HM-EQA question id (scene + init pose from CSV)",
+)
+@click.option(
+    "--habitat-scene-id",
+    default=None,
+    help="With --start-habitat: HM3D scene id when questions.csv is unavailable",
+)
+@click.option(
+    "--habitat-floor",
+    default=0,
+    type=int,
+    help="With --start-habitat: floor index for init pose CSV lookup",
+)
+@click.option(
+    "--sim-show-subprocess-output",
+    is_flag=True,
+    default=False,
+    help="With --start-sim or --start-habitat: inherit this terminal for sim stdout/stderr",
+)
+@click.option(
     "--input-path",
     type=click.Path(file_okay=False, dir_okay=True, path_type=str),
     default=None,
@@ -352,6 +389,12 @@ def main(
     rerun_debug: bool = False,
     rerun_bind: bool = False,
     port_offset: int = 0,
+    start_sim: bool = False,
+    start_habitat: bool = False,
+    habitat_question_id: int | None = None,
+    habitat_scene_id: str | None = None,
+    habitat_floor: int = 0,
+    sim_show_subprocess_output: bool = False,
     input_path: str | None = None,
     export_dir: str | None = None,
     dump_memory: str | None = None,
@@ -412,6 +455,13 @@ def main(
         raise click.UsageError("Use either --question or --question-file, not both.")
     if question_file and not export_dir and not question:
         click.echo("Note: --question-file without --export runs questions then exits (no eqa_results.json).")
+    if start_sim and start_habitat:
+        raise click.UsageError("Use either --start-sim or --start-habitat, not both.")
+    if start_habitat and not habitat_question_id and not habitat_scene_id:
+        raise click.UsageError(
+            "--start-habitat requires --habitat-question-id or --habitat-scene-id "
+            "(e.g. --habitat-scene-id Y8Y6ukxGMvn)."
+        )
 
     runtime = load_runtime_from_cli(
         ctx,
@@ -423,6 +473,7 @@ def main(
         robot_ip=robot_ip,
         connection=connection,
         port_offset=port_offset,
+        zmq_discover=not (start_sim or start_habitat),
     )
     robot_backend = runtime.robot_id
     robot_ip = runtime.host
@@ -472,6 +523,45 @@ def main(
         parameters["dynagraph_merge_xy_m"] = float(merge_xy_m)
     if staleness_horizon is not None:
         parameters["dynagraph_staleness_horizon"] = int(staleness_horizon)
+
+    sim_shutdown = None
+    if start_sim:
+        from dataclasses import replace
+
+        from emet.config.sim_launch_config import SimLaunchMolmospaces, resolve_serve_robot, resolve_sim_launch_for_agent
+        from emet.simulation.sim_subprocess import shutdown_mujoco_server_subprocess, spawn_mujoco_server_subprocess
+
+        sim_shutdown = shutdown_mujoco_server_subprocess
+        sim_cfg = resolve_sim_launch_for_agent(
+            agent_config_path=runtime.config_path,
+            sim_config_cli=None,
+            port_offset_cli=port_offset,
+            default_mujoco_table_if_missing=True,
+            default_robot=robot_backend,
+            default_headless=headless or not no_rerun,
+        )
+        sim_cfg = replace(sim_cfg, headless=True)
+        if isinstance(sim_cfg, SimLaunchMolmospaces):
+            sim_robot = resolve_serve_robot(sim_cfg.robot, is_molmospaces=True)
+            sim_cfg = replace(sim_cfg, robot=sim_robot)
+            robot_backend = sim_robot
+        click.echo("Dynagraph: starting MuJoCo sim subprocess (--start-sim)…", err=True)
+        spawn_mujoco_server_subprocess(sim_cfg, silence_sim_output=not sim_show_subprocess_output)
+        click.echo("Sim is up; connecting dynagraph.", err=True)
+    elif start_habitat:
+        from emet.habitat.habitat_subprocess import shutdown_habitat_server_subprocess, spawn_habitat_server_subprocess
+
+        sim_shutdown = shutdown_habitat_server_subprocess
+        click.echo("Dynagraph: starting Habitat sim subprocess (--start-habitat)…", err=True)
+        spawn_habitat_server_subprocess(
+            question_id=habitat_question_id,
+            scene_id=habitat_scene_id,
+            floor=habitat_floor,
+            port_offset=port_offset,
+            silence_sim_output=not sim_show_subprocess_output,
+        )
+        robot_backend = "stretch"
+        click.echo("Habitat ZMQ server is up; connecting dynagraph as stretch.", err=True)
 
     robot = create_robot_client_from_cli(
         robot_backend,
@@ -532,6 +622,9 @@ def main(
         visualize_ground_truth=compare_to_gt,
     )
     agent.start()
+    if explore_loop:
+        # Shorter head sweeps during scripted frontier batches (Molmo/MuJoCo smoke).
+        agent._fast_explore_lookaround = True
     if calibration_export:
         from emet.memory.graph_eqa.calibration_export import CalibrationFrameWriter
 
@@ -557,16 +650,23 @@ def main(
         eq_executor = EQAExecuter(agent)
         robot.move_to_nav_posture()
         robot.switch_to_navigation_mode()
+        n_q = sum(1 for q in questions if str(q.get("question", "")).strip())
+        click.echo(f"- EQA question bank: {n_q} question(s)", err=True)
+        qi = 0
         for qspec in questions:
             qtext = str(qspec.get("question", "")).strip()
             if not qtext:
                 continue
+            qi += 1
+            click.echo(f"- EQA question {qi}/{n_q} start: {qtext}", err=True)
+            t_q0 = time.monotonic()
             robot.say("Answering the question " + qtext)
             try:
                 discord_text, _imgs = eq_executor(qtext)
             except Exception as e:
                 logger.warning(f"EQA question failed: {e}")
                 discord_text = f"EQA question failed: {e}"
+            q_wall = time.monotonic() - t_q0
             answer = ""
             m = re.search(r"(?i)answer:\s*(.+?)(?:\n|$)", discord_text or "")
             if m:
@@ -578,8 +678,14 @@ def main(
                 "question": qtext,
                 "discord_text": discord_text,
                 "answer": answer,
+                "eqa_wall_s": q_wall,
             }
             rows.append(row)
+            click.echo(
+                f"- EQA question {qi}/{n_q} done wall_s={q_wall:.1f} "
+                f"answer={answer[:120]!r}",
+                err=True,
+            )
             if discord_text.strip():
                 click.echo(discord_text)
             else:

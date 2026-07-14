@@ -22,8 +22,9 @@
         <general ctrlrange="0 0.52" gainprm="150" biasprm="0 -100 -10" forcerange="-56 56"/>
       </default>
       <default class="head">
-        <joint axis="0 0 1" damping="1"/>
-        <position kp="10"/>
+        <!-- Real Stretch Dynamixel head is fast (~3 rad/s default). kp=10 made sim pans crawl. -->
+        <joint axis="0 0 1" damping="0.5"/>
+        <position kp="80" kv="5" forcerange="-25 25"/>
         <default class="head_pan">
           <joint range="-4.04 1.73"/>
           <position ctrlrange="-4.04 1.73"/>

@@ -11,8 +11,6 @@ import argparse
 import json
 from pathlib import Path
 
-import numpy as np
-
 try:
     from PIL import Image, ImageDraw, ImageFont
 except ImportError as exc:
@@ -45,11 +43,20 @@ def _bundle_for_row(episodes_root: Path, row: dict) -> Path | None:
 def _obs_images(bundle: Path, obs_ids: list[int]) -> list[Image.Image]:
     images: list[Image.Image] = []
     for oid in obs_ids:
-        for pattern in (f"rgb/obs_{oid:04d}.png", f"frames/obs_{oid:04d}.png", f"rgb/{oid}.png"):
+        found = False
+        for pattern in (
+            f"rgb/obs_{oid:04d}.png",
+            f"frames/obs_{oid:04d}.png",
+            f"rgb/{oid}.png",
+            f"frames/rgb_{oid:04d}.png",
+        ):
             p = bundle / pattern
             if p.is_file():
                 images.append(Image.open(p).convert("RGB"))
+                found = True
                 break
+        if found:
+            continue
         crops = bundle / "dynagraph" / "crops"
         if crops.is_dir():
             for cp in crops.glob(f"*_{oid}.*"):
@@ -81,15 +88,29 @@ def _mosaic(images: list[Image.Image], labels: list[str], title: str, tile: int 
 
 def _selected_obs_ids(bundle: Path) -> list[int]:
     hist_path = bundle / "eqa_history.json"
-    if not hist_path.is_file():
-        return []
-    hist = json.loads(hist_path.read_text(encoding="utf-8"))
-    iters = hist.get("iterations") if isinstance(hist, dict) else None
-    if not iters:
-        return []
-    last = iters[-1] if isinstance(iters, list) else {}
-    ids = last.get("selected_obs_ids") or last.get("obs_ids") or []
-    return [int(x) for x in ids]
+    if hist_path.is_file():
+        hist = json.loads(hist_path.read_text(encoding="utf-8"))
+        iters = hist.get("iterations") if isinstance(hist, dict) else None
+        if isinstance(iters, list) and iters:
+            last = iters[-1]
+            if isinstance(last, dict):
+                ids = last.get("selected_obs_ids") or last.get("obs_ids") or []
+                return [int(x) for x in ids]
+    obs_hist = bundle / "observations_history.jsonl"
+    if obs_hist.is_file():
+        ids: list[int] = []
+        for line in obs_hist.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if row.get("type") == "observation" and "obs_idx" in row:
+                ids.append(int(row["obs_idx"]))
+        if ids:
+            return ids[-6:]
+    frames = sorted((bundle / "frames").glob("rgb_*.png"))
+    if frames:
+        return list(range(max(0, len(frames) - 6), len(frames)))
+    return []
 
 
 def main() -> None:

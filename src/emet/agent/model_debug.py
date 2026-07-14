@@ -192,8 +192,9 @@ def print_embodied_model_report(
         )
         print(
             colored(
-                "describe_scene: uses the robot's **detector** (YoloE / OWL), not the text chat model. "
-                f"Current detector: {type(dm).__name__ if dm is not None else 'None'}",
+                "describe_scene: VLM caption (image_description/eqa client) when loaded, else graph/map "
+                "memory labels — not a dump of low-conf YoloE proposals. "
+                f"Detector present for mapping/graph: {type(dm).__name__ if dm is not None else 'None'}",
                 "cyan",
             ),
             flush=True,

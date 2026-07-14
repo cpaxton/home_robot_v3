@@ -93,6 +93,166 @@ def _dynagraph_subprocess_timeout_s(
     return min(timeout_s, 43200.0)
 
 
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    return float(raw)
+
+
+def _tail_text(path: Path, *, max_chars: int = 1200) -> str:
+    if not path.is_file():
+        return ""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    if len(text) <= max_chars:
+        return text
+    return text[-max_chars:]
+
+
+def _append_progress_event(progress_path: Path | None, event: dict[str, Any]) -> None:
+    if progress_path is None:
+        return
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+    row = {"ts": time.time(), **event}
+    with progress_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, default=str) + "\n")
+        fh.flush()
+
+
+def run_logged_subprocess(
+    cmd: list[str],
+    *,
+    cwd: str | Path,
+    env: dict[str, str] | None,
+    log_path: Path,
+    timeout_s: float,
+    label: str,
+    progress_path: Path | None = None,
+    heartbeat_s: float | None = None,
+    stale_log_s: float | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run a subprocess with stdout/stderr teed to ``log_path`` and heartbeats.
+
+    Heartbeat / stale-log intervals (seconds):
+    - ``EMET_DYNAMIC_EXPLORE_HEARTBEAT_S`` (default 120)
+    - ``EMET_DYNAMIC_EXPLORE_STALE_LOG_S`` (default 900) — warn when log mtime is stale
+    """
+    hb = float(heartbeat_s) if heartbeat_s is not None else _env_float("EMET_DYNAMIC_EXPLORE_HEARTBEAT_S", 120.0)
+    stale = float(stale_log_s) if stale_log_s is not None else _env_float("EMET_DYNAMIC_EXPLORE_STALE_LOG_S", 900.0)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    t0 = time.monotonic()
+    last_hb = t0
+    last_mtime = 0.0
+    stale_warned = False
+
+    print(
+        f"[dynamic-explore] START {label} timeout_s={timeout_s:.0f} log={log_path}",
+        flush=True,
+    )
+    _append_progress_event(
+        progress_path,
+        {
+            "event": "subprocess_start",
+            "label": label,
+            "timeout_s": timeout_s,
+            "log": str(log_path),
+            "cmd": cmd,
+        },
+    )
+
+    with log_path.open("w", encoding="utf-8") as log_f:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(cwd),
+            env=env,
+            stdout=log_f,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        try:
+            while True:
+                try:
+                    returncode = proc.wait(timeout=min(5.0, max(1.0, hb)))
+                    break
+                except subprocess.TimeoutExpired:
+                    now = time.monotonic()
+                    elapsed = now - t0
+                    if elapsed >= timeout_s:
+                        proc.kill()
+                        try:
+                            proc.wait(timeout=30)
+                        except subprocess.TimeoutExpired:
+                            pass
+                        tail = _tail_text(log_path)
+                        raise subprocess.TimeoutExpired(cmd, timeout_s, output=tail) from None
+
+                    mtime = log_path.stat().st_mtime if log_path.is_file() else 0.0
+                    log_age = time.time() - mtime if mtime else elapsed
+                    if now - last_hb >= hb:
+                        last_hb = now
+                        msg = (
+                            f"[dynamic-explore] HEARTBEAT {label} elapsed_s={elapsed:.0f}/"
+                            f"{timeout_s:.0f} log_age_s={log_age:.0f} pid={proc.pid}"
+                        )
+                        print(msg, flush=True)
+                        _append_progress_event(
+                            progress_path,
+                            {
+                                "event": "heartbeat",
+                                "label": label,
+                                "elapsed_s": elapsed,
+                                "timeout_s": timeout_s,
+                                "log_age_s": log_age,
+                                "pid": proc.pid,
+                            },
+                        )
+                    if stale > 0 and log_age >= stale and (mtime != last_mtime or not stale_warned):
+                        last_mtime = mtime
+                        stale_warned = True
+                        tail = _tail_text(log_path, max_chars=800)
+                        warn = (
+                            f"[dynamic-explore] STALE_LOG {label} log_age_s={log_age:.0f} "
+                            f"(threshold={stale:.0f}). Tail:\n{tail}"
+                        )
+                        print(warn, flush=True)
+                        _append_progress_event(
+                            progress_path,
+                            {
+                                "event": "stale_log",
+                                "label": label,
+                                "log_age_s": log_age,
+                                "stale_threshold_s": stale,
+                                "log_tail": tail,
+                            },
+                        )
+            wall = time.monotonic() - t0
+            print(
+                f"[dynamic-explore] END {label} returncode={returncode} wall_s={wall:.0f}",
+                flush=True,
+            )
+            _append_progress_event(
+                progress_path,
+                {
+                    "event": "subprocess_end",
+                    "label": label,
+                    "returncode": returncode,
+                    "wall_s": wall,
+                },
+            )
+            return subprocess.CompletedProcess(cmd, returncode)
+        except Exception:
+            if proc.poll() is None:
+                proc.kill()
+                try:
+                    proc.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    pass
+            raise
+
+
 def _resolve_sim_cfg(episode: DynamicExploreEpisode):
     from emet.config.sim_launch_config import (
         SimLaunchMolmospaces,
@@ -227,16 +387,22 @@ def run_explore_episode_subprocess(
                 cpu_only=run_cfg.cpu_only,
                 skip_eqa=run_cfg.skip_eqa,
             )
-            with dyn_log.open("w", encoding="utf-8") as log_f:
-                proc = subprocess.run(
+            progress_path = output_dir / "progress.jsonl"
+            try:
+                proc = run_logged_subprocess(
                     dyn_cmd,
-                    cwd=str(repo),
+                    cwd=repo,
                     env=env,
-                    stdout=log_f,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    timeout=dyn_timeout,
+                    log_path=dyn_log,
+                    timeout_s=dyn_timeout,
+                    label=run.run_id,
+                    progress_path=progress_path,
                 )
+            except subprocess.TimeoutExpired as exc:
+                tail = str(exc.output or _tail_text(dyn_log))
+                raise RuntimeError(
+                    f"dynagraph timed out after {dyn_timeout:.0f}s\n{tail[-4000:]}"
+                ) from exc
             combined = dyn_log.read_text(encoding="utf-8", errors="replace")
             if proc.returncode != 0:
                 raise RuntimeError(f"dynagraph exited {proc.returncode}\n{combined[-4000:]}")
@@ -256,10 +422,26 @@ def run_explore_episode_subprocess(
         return payload
     except Exception as exc:
         wall_s = time.monotonic() - t0
+        err = str(exc)
+        dyn_log = export_dir / "dynagraph.log"
+        if dyn_log.is_file():
+            tail = _tail_text(dyn_log, max_chars=2000)
+            if tail and tail not in err:
+                err = f"{err}\n--- dynagraph.log tail ---\n{tail}"
+        print(f"[dynamic-explore] FAIL {run.run_id} wall_s={wall_s:.0f}: {err[:400]}", flush=True)
+        _append_progress_event(
+            output_dir / "progress.jsonl",
+            {
+                "event": "run_fail",
+                "label": run.run_id,
+                "wall_s": wall_s,
+                "error": err[:2000],
+            },
+        )
         payload = {
-            "metrics": {"error": str(exc)},
+            "metrics": {"error": err},
             "summary": flatten_eval_metrics(
-                {"error": str(exc)},
+                {"error": err},
                 run_spec=run,
                 episode_wall_s=wall_s,
             ),
@@ -370,6 +552,7 @@ def run_world_change_episode(
                     use_sensor_perception=not run_cfg.no_sensor_perception,
                 )
                 agent.start()
+                agent._fast_explore_lookaround = True
 
                 executor = EQAExecuter(agent)
                 executor.rotate_in_place()
@@ -688,16 +871,22 @@ def run_lifelong_episode(
                     )
                 cycle_log = ckpt / "dynagraph.log"
                 ckpt.mkdir(parents=True, exist_ok=True)
-                with cycle_log.open("w", encoding="utf-8") as log_f:
-                    proc = subprocess.run(
+                progress_path = output_dir / "progress.jsonl"
+                try:
+                    proc = run_logged_subprocess(
                         cmd,
-                        cwd=str(repo),
+                        cwd=repo,
                         env=env,
-                        stdout=log_f,
-                        stderr=subprocess.STDOUT,
-                        text=True,
-                        timeout=cycle_timeout,
+                        log_path=cycle_log,
+                        timeout_s=cycle_timeout,
+                        label=f"{run_id}_cycle{t}",
+                        progress_path=progress_path,
                     )
+                except subprocess.TimeoutExpired as exc:
+                    tail = str(exc.output or _tail_text(cycle_log))
+                    raise RuntimeError(
+                        f"cycle {t}: dynagraph timed out after {cycle_timeout:.0f}s\n{tail[-4000:]}"
+                    ) from exc
                 combined = cycle_log.read_text(encoding="utf-8", errors="replace")
                 if proc.returncode != 0:
                     raise RuntimeError(f"cycle {t}: dynagraph exited {proc.returncode}\n{combined[-4000:]}")

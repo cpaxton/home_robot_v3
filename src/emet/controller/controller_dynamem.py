@@ -16,7 +16,6 @@
 import math
 import os
 import time
-from collections import Counter
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
@@ -39,6 +38,7 @@ from emet.controller.habitat_nav import (
     habitat_navmesh_navigate,
     habitat_perfect_nav_enabled,
     is_habitat_robot_client,
+    pick_uncovered_explore_target,
 )
 from emet.controller.manipulation.dynamem_manipulation.dynamem_manipulation import (
     DynamemManipulationWrapper as ManipulationWrapper,
@@ -50,6 +50,7 @@ from emet.controller.manipulation.dynamem_manipulation.grasper_utils import (
     process_image_for_placing,
 )
 from emet.controller.zmq_client import StretchZmqClient
+from emet.controller.zmq_stream_control import paused_robot_streams
 from emet.core.parameters import Parameters
 from emet.core.robot import AbstractRobotClient
 from emet.mapping.instance import instances_to_text
@@ -61,6 +62,7 @@ from emet.mapping.voxel import (
 from emet.mapping.voxel.voxel import _instance_memory_kwargs_from_params
 from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
 from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
+from emet.motion import constants as motion_constants
 from emet.motion.algo.a_star import AStar
 from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
 from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask, apply_depth_speckle_filter, sensor_depth_usable
@@ -98,6 +100,16 @@ INIT_HEAD_TILT = -0.65
 # After look_front / move_to_nav_posture, wait briefly so the head reaches goal and depth/RGB
 # stabilize before base motion (Stretch ZMQ + mapping).
 DYNAMEM_HEAD_SETTLE_S = 0.25
+# Head sweep: command non-blocking; exit on near-goal or settled motion.
+# Soft-wait is for client settle (not because real Stretch is slow — Dynamixel head ~3 rad/s).
+# Sim MJCF used to use head kp=10 (crawl); assets now use higher kp. Keep a short max wait anyway.
+DYNAMEM_HEAD_SWEEP_MAX_WAIT_S = 0.75
+DYNAMEM_HEAD_SWEEP_MIN_MOVE_S = 0.08
+DYNAMEM_HEAD_SWEEP_STOPPED_HOLD_S = 0.05
+DYNAMEM_HEAD_SWEEP_SPEED_TOL = 0.20
+DYNAMEM_HEAD_SWEEP_POS_DELTA_TOL = 0.04
+DYNAMEM_HEAD_SWEEP_PAN_TOL_RAD = 0.35
+DYNAMEM_HEAD_SWEEP_FRAME_SETTLE_S = 0.08
 
 
 def _finite_xyz_traj_target(traj_target_point: Any) -> bool:
@@ -142,6 +154,56 @@ _DESCRIBE_SCENE_OWL_QUERIES: tuple[str, ...] = (
     "sink",
     "robot arm",
 )
+
+# Household-ish labels for user-facing YoloE describe_scene (not full ScanNet-200).
+# Mapping still uses ScanNet-200 at a low confidence; describe uses this vocab + a higher bar.
+_DESCRIBE_SCENE_YOLOE_LABELS: tuple[str, ...] = _DESCRIBE_SCENE_OWL_QUERIES + (
+    "desk",
+    "sofa",
+    "lamp",
+    "pillow",
+    "curtain",
+    "picture",
+    "mirror",
+    "trash can",
+    "bag",
+    "phone",
+    "remote",
+    "wall",
+    "floor",
+    "ceiling",
+    "stairs",
+    "rug",
+    "blanket",
+    "towel",
+    "toilet",
+    "bathtub",
+    "oven",
+    "dishwasher",
+    "washer",
+    "dryer",
+    "fan",
+    "clock",
+    "vase",
+    "apple",
+    "banana",
+    "orange",
+    "mouse",
+    "tv stand",
+    "nightstand",
+    "dresser",
+    "wardrobe",
+    "stool",
+    "bench",
+    "fireplace",
+    "radiator",
+)
+
+# User-facing describe_scene: mapping keeps detection.confidence_threshold low for proposals;
+# chat-only filtering uses describe_confidence_threshold (safe to raise; does not affect mapping).
+_DEFAULT_DESCRIBE_CONFIDENCE = 0.30
+_DEFAULT_DESCRIBE_MAX_LABELS = 12
+_DESCRIBE_SCENE_STRUCTURE_LABELS = frozenset({"floor", "wall", "ceiling"})
 
 
 class DynamemController(BaseController):
@@ -264,6 +326,10 @@ class DynamemController(BaseController):
                 )
         self.manip_wrapper = ManipulationWrapper(self.robot, stretch_gripper_max=stretch_gripper_max, end_link=end_link)
         self.robot.move_to_nav_posture()
+        look_front = getattr(self.robot, "look_front", None)
+        if callable(look_front):
+            look_front(blocking=True)
+            time.sleep(DYNAMEM_HEAD_SETTLE_S)
 
         self.re = re
         self.save_rerun = save_rerun
@@ -310,6 +376,16 @@ class DynamemController(BaseController):
         if sess is None and self._cached_navigation_origin_xyt is not None:
             sess = {"navigation_origin_xyt": self._cached_navigation_origin_xyt.tolist()}
         return nav_xyt_to_world_xyt(xyt[:3], sess)
+
+    def world_base_xy(self) -> tuple[float, float] | None:
+        """Robot base (x, y) in the voxel-map / world frame (not raw ZMQ gps)."""
+        if self.robot is None or not hasattr(self.robot, "get_base_pose"):
+            return None
+        try:
+            wxyt = self._planning_base_xyt(self.robot.get_base_pose())
+            return float(wxyt[0]), float(wxyt[1])
+        except Exception:
+            return None
 
     def _sync_graph_frontier_nodes(self) -> None:
         gm = self.graph_memory
@@ -377,7 +453,12 @@ class DynamemController(BaseController):
         if not frontier_nodes:
             return None
         keywords = exploration_keywords_from_text(text)
-        rx, ry = float(self.robot.get_base_pose()[0]), float(self.robot.get_base_pose()[1])
+        robot = getattr(self, "robot", None)
+        if robot is not None and hasattr(robot, "get_base_pose"):
+            pose = robot.get_base_pose()
+            rx, ry = float(pose[0]), float(pose[1])
+        else:
+            rx, ry = 0.0, 0.0
         if not keywords:
             node = min(
                 frontier_nodes,
@@ -940,17 +1021,56 @@ class DynamemController(BaseController):
                         class_names[cid] = name
         return instances_to_text(instances, class_names=class_names, include_bounds=include_bounds)
 
-    def describe_head_camera_scene_text(self) -> str:
-        """Summarize the current head RGB using the controller's detector (YoloE or OWL).
+    def describe_head_camera_scene_text(
+        self,
+        *,
+        graph_memory: Any | None = None,
+        memory_backend: Any | None = None,
+        graph_memory_backend: Any | None = None,
+    ) -> str:
+        """User-facing answer for ``describe_scene`` (current view — not a motion skill).
 
-        Used by the embodied agent ``describe_scene`` tool so the model can answer
-        "what do you see" without sending an image.
+        Priority for "what can you see":
+        1. Caption the **current** head RGB (VLM when loaded).
+        2. Ground / enrich with graph/map labels already known.
+        3. Optional curated detector fallback if configured.
+        Does **not** look around or explore — use ``scan_environment`` / ``explore`` for that.
         """
+        mem_kw = {
+            "graph_memory": graph_memory,
+            "memory_backend": memory_backend,
+            "graph_memory_backend": graph_memory_backend,
+        }
+        rgb, depth = self._describe_scene_capture_rgb()
+        if isinstance(rgb, str):
+            return rgb  # error string from capture
+
+        det_cfg = self._detection_cfg()
+        if env_agent_model_debug():
+            print(
+                "[model debug] describe_scene: caption current view + ground with graph/memory; "
+                "no auto look-around "
+                f"(detector_fallback={bool(det_cfg.get('describe_use_detector_fallback', False))})",
+                flush=True,
+            )
+
+        text = self._describe_scene_try_sources(rgb, depth, det_cfg, **mem_kw)
+        if text:
+            return text
+
+        return (
+            "I don't have a captioner or mapped object labels for this view yet. "
+            "I'm sending a photo of what is in front of me — ask me to look around or explore "
+            "if you want me to map more of the room."
+        )
+
+    def _describe_scene_capture_rgb(self) -> tuple[np.ndarray, np.ndarray | None] | tuple[str, None]:
+        """Return (rgb, depth) or (error_message, None)."""
         if self.robot is None or not hasattr(self.robot, "get_observation"):
-            return "No robot view available."
+            return "No robot view available.", None
         obs = self.robot.get_observation()
         if obs is None or getattr(obs, "rgb", None) is None:
-            return "No current image."
+            return "No current image.", None
         rgb = np.asarray(obs.rgb)
         if rgb.dtype != np.uint8:
             if rgb.size and float(np.nanmax(rgb)) <= 1.0 + 1e-6:
@@ -958,72 +1078,348 @@ class DynamemController(BaseController):
             else:
                 rgb = np.clip(rgb, 0, 255).astype(np.uint8)
         if rgb.ndim != 3 or rgb.shape[2] != 3:
-            return "Head camera image has an unexpected shape."
+            return "Head camera image has an unexpected shape.", None
+
+        from emet.llms.vl_image import downsample_rgb_hwc, eqa_vl_image_kwargs
+
+        eqa_cfg: dict[str, Any] = {}
+        if isinstance(self.parameters, dict):
+            eqa_cfg = self.parameters.get("eqa", {}) or {}
+        elif self.parameters is not None and hasattr(self.parameters, "get"):
+            raw = self.parameters.get("eqa", {}) or {}
+            eqa_cfg = raw if isinstance(raw, dict) else {}
+        if not isinstance(eqa_cfg, dict):
+            eqa_cfg = {}
+        img_kw = eqa_vl_image_kwargs(eqa_cfg)
+        rgb = downsample_rgb_hwc(rgb, max_side=img_kw["image_max_side"], max_pixels=img_kw["image_max_pixels"])
 
         if env_agent_camera_debug():
             from emet.agent.camera_debug import print_camera_frame_diagnostics
 
-            print_camera_frame_diagnostics("describe_scene (head RGB, detector input)", rgb, force=True)
+            print_camera_frame_diagnostics("describe_scene (head RGB)", rgb, force=True)
 
         depth = getattr(obs, "depth", None)
         if depth is not None:
             depth = np.asarray(depth)
+        return rgb, depth
 
-        dm = self.detection_model
-        if env_agent_model_debug():
-            if dm is None:
-                print(
-                    "[model debug] describe_scene: no detection_model on controller (YoloE/OWL labels unavailable)",
-                    flush=True,
-                )
-            else:
-                print(
-                    f"[model debug] describe_scene: detector={type(dm).__name__} on head RGB "
-                    "(separate from the chat LLM; tool result is from this detector, not from the LLM's weights)",
-                    flush=True,
-                )
+    def _describe_scene_try_sources(
+        self,
+        rgb: np.ndarray,
+        depth: np.ndarray | None,
+        det_cfg: dict[str, Any],
+        *,
+        graph_memory: Any | None = None,
+        memory_backend: Any | None = None,
+        graph_memory_backend: Any | None = None,
+    ) -> str | None:
+        """Caption the current view first; ground with graph/map; optional detector fallback."""
+        # Live caption is the primary answer for "what can you see".
+        vlm_text = self._describe_scene_vlm(rgb)
+        mem_text = self._describe_scene_from_memory(
+            graph_memory=graph_memory,
+            memory_backend=memory_backend,
+            graph_memory_backend=graph_memory_backend,
+        )
+        parts = [p for p in (vlm_text, mem_text) if p]
+        if parts:
+            return " ".join(parts)
 
-        if dm is None:
-            return (
-                "I have a live camera frame but object detection is disabled for this session "
-                "(e.g. manipulation-only or voxel EQA without instances), so I cannot name objects. "
-                "Use send_image to show the view, or explore and query_memory if you need the map."
-            )
+        if bool(det_cfg.get("describe_use_detector_fallback", False)):
+            dm = self.detection_model
+            try:
+                if isinstance(dm, YoloEPerception):
+                    return self._describe_scene_yoloe(rgb, depth, dm)
+                if isinstance(dm, OwlPerception):
+                    thr = float(dm.confidence_threshold) if dm.confidence_threshold is not None else 0.2
+                    thr = max(0.12, min(thr, 0.35))
+                    return self._describe_scene_owl(rgb, dm, thr)
+            except Exception as e:
+                if env_agent_model_debug():
+                    print(f"[model debug] describe_scene detector fallback failed: {e}", flush=True)
+                return None
+        return None
 
+    def _detection_cfg(self) -> dict[str, Any]:
+        if isinstance(self.parameters, dict):
+            raw = self.parameters.get("detection", {}) or {}
+        elif self.parameters is not None and hasattr(self.parameters, "get"):
+            raw = self.parameters.get("detection", {}) or {}
+        else:
+            raw = {}
+        return raw if isinstance(raw, dict) else {}
+
+    def _describe_scene_vlm(self, rgb: np.ndarray) -> str | None:
+        """Caption current RGB with DynaMem image_description / EQA VLM when present."""
+        vm = self.get_voxel_map() if hasattr(self, "get_voxel_map") else None
+        if vm is None:
+            return None
+        client = getattr(vm, "image_description_client", None) or getattr(vm, "eqa_client", None)
+        if client is None:
+            return None
+        from emet.llms.vllm_factory import dynamem_vllm_call
+
+        pil = Image.fromarray(rgb)
+        prompt = (
+            "Describe what is visible in this robot head-camera image in one short sentence. "
+            "Name only clearly visible objects and surfaces. If the view is mostly empty floor/wall "
+            "or the robot's own body, say that. Do not invent objects that are not clearly visible."
+        )
         try:
-            if isinstance(dm, YoloEPerception):
-                return self._describe_scene_yoloe(rgb, depth, dm)
-            if isinstance(dm, OwlPerception):
-                thr = float(dm.confidence_threshold) if dm.confidence_threshold is not None else 0.2
-                thr = max(0.12, min(thr, 0.35))
-                return self._describe_scene_owl(rgb, dm, thr)
+            with paused_robot_streams(self.robot):
+                out = dynamem_vllm_call(
+                    client,
+                    [pil, prompt],
+                    system_prompt="",
+                    max_new_tokens=64,
+                )
         except Exception as e:
-            return (
-                f"I could not run detection on the camera frame ({type(e).__name__}: {e}). "
-                "Try send_image if you need the raw view."
-            )
+            if env_agent_model_debug():
+                print(f"[model debug] describe_scene VLM caption failed: {e}", flush=True)
+            return None
+        text = (out or "").strip()
+        if not text:
+            return None
+        if env_agent_model_debug():
+            print(f"[model debug] describe_scene: VLM caption ({type(client).__name__})", flush=True)
+        return f"From my head camera: {text}"
 
-        return "Unknown detector type for scene description; try send_image for a picture."
+    def _describe_scene_from_memory(
+        self,
+        *,
+        graph_memory: Any | None = None,
+        memory_backend: Any | None = None,
+        graph_memory_backend: Any | None = None,
+    ) -> str | None:
+        """Summarize known object labels from graph / memory backends (not live detector)."""
+        labels: list[str] = []
+        for backend in (graph_memory_backend, memory_backend):
+            if backend is not None and hasattr(backend, "list_objects"):
+                try:
+                    labels = [str(x) for x in (backend.list_objects() or []) if str(x).strip()]
+                except Exception:
+                    labels = []
+                if labels:
+                    break
+        if not labels and graph_memory is not None and hasattr(graph_memory, "get_nodes"):
+            for n in graph_memory.get_nodes():
+                if getattr(n, "is_viewpoint", False) or getattr(n, "is_frontier", False):
+                    continue
+                for lab in getattr(n, "labels", None) or []:
+                    s = str(lab).strip()
+                    if s:
+                        labels.append(s)
+            labels = list(dict.fromkeys(labels))
+        if not labels and hasattr(self, "get_voxel_map"):
+            vm = self.get_voxel_map()
+            get_inst = getattr(vm, "get_instances", None) if vm is not None else None
+            if callable(get_inst):
+                try:
+                    for inst in get_inst() or []:
+                        name = getattr(inst, "category_id", None)
+                        # Prefer string category if present on instance
+                        cat = getattr(inst, "category_name", None) or getattr(inst, "name", None)
+                        if cat:
+                            labels.append(str(cat))
+                except Exception:
+                    pass
+                labels = list(dict.fromkeys(labels))
+        if not labels:
+            return None
+        shown = labels[:20]
+        extra = f" (+{len(labels) - len(shown)} more)" if len(labels) > len(shown) else ""
+        if env_agent_model_debug():
+            print(
+                f"[model debug] describe_scene: memory/graph labels n={len(labels)}",
+                flush=True,
+            )
+        return (
+            "From my map/scene graph I also know about: "
+            + ", ".join(shown)
+            + extra
+            + "."
+        )
+
+    @staticmethod
+    def _normalize_scene_rgb_u8(arr: np.ndarray) -> np.ndarray:
+        out = np.asarray(arr)
+        if out.dtype != np.uint8:
+            if out.size and float(np.nanmax(out)) <= 1.0 + 1e-6:
+                out = (np.clip(out, 0.0, 1.0) * 255.0).astype(np.uint8)
+            else:
+                out = np.clip(out, 0, 255).astype(np.uint8)
+        return out
+
+    def pick_interesting_scene_image(
+        self,
+        *,
+        graph_memory: Any | None = None,
+        live_rgb: np.ndarray | None = None,
+    ) -> tuple[np.ndarray | None, str | None]:
+        """Prefer a usable graph-object crop over live head RGB for Discord / chat photos.
+
+        Returns ``(image_hwc_uint8, label_or_None)``. Label is set only for a real named
+        object crop that passes the RGB usability gate; blank/white crops fall back to live RGB.
+        """
+        from emet.agent.camera_debug import rgb_frame_is_usable
+
+        def _live() -> tuple[np.ndarray | None, str | None]:
+            if live_rgb is None:
+                return None, None
+            arr = np.asarray(live_rgb)
+            if arr.ndim != 3 or arr.shape[2] != 3:
+                return None, None
+            out = self._normalize_scene_rgb_u8(arr.copy())
+            return out, None
+
+        gm = graph_memory if graph_memory is not None else getattr(self, "graph_memory", None)
+        if gm is not None and hasattr(gm, "get_nodes") and hasattr(gm, "get_observations"):
+            from emet.visualization.rerun import dynagraph_node_rgb_crop, node_has_detection_crop
+
+            obs_rgb = {int(o.obs_id): np.asarray(o.rgb) for o in gm.get_observations()}
+            # (named_bonus, support, area, label, arr)
+            candidates: list[tuple[int, int, int, str, np.ndarray]] = []
+            for n in gm.get_nodes():
+                if getattr(n, "is_viewpoint", False) or getattr(n, "is_frontier", False):
+                    continue
+                if not node_has_detection_crop(n, obs_rgb):
+                    continue
+                crop = dynagraph_node_rgb_crop(n, obs_rgb)
+                if crop is None or getattr(crop, "size", 0) == 0:
+                    continue
+                arr = self._normalize_scene_rgb_u8(np.asarray(crop))
+                if arr.ndim != 3 or arr.shape[2] != 3:
+                    continue
+                if not rgb_frame_is_usable(arr):
+                    continue
+                raw_labels = [str(x).strip() for x in (getattr(n, "labels", None) or []) if str(x).strip()]
+                label = raw_labels[0] if raw_labels else ""
+                if not label or label.lower() in ("object", "unknown", "none"):
+                    continue  # generic / empty — do not claim "closer look at object"
+                score = int(getattr(n, "support_count", 1) or 1)
+                area = int(arr.shape[0]) * int(arr.shape[1])
+                candidates.append((1, score, area, label, arr))
+            if candidates:
+                candidates.sort(key=lambda t: (-t[0], -t[1], -t[2]))
+                _nb, _score, _area, label, arr = candidates[0]
+                return arr.copy(), label
+
+        if hasattr(self, "get_voxel_map"):
+            try:
+                vm = self.get_voxel_map()
+            except Exception:
+                vm = None
+            get_inst = getattr(vm, "get_instances", None) if vm is not None else None
+            if callable(get_inst):
+                best: tuple[int, str, np.ndarray] | None = None
+                try:
+                    for inst in get_inst() or []:
+                        view = getattr(inst, "get_best_view", lambda: None)()
+                        crop_t = getattr(view, "cropped_image", None) if view is not None else None
+                        if crop_t is None:
+                            continue
+                        from emet.mapping.instance.instance import _cropped_image_to_caption_input
+
+                        arr = _cropped_image_to_caption_input(crop_t)
+                        if arr is None or arr.size == 0:
+                            continue
+                        arr = self._normalize_scene_rgb_u8(np.asarray(arr))
+                        if not rgb_frame_is_usable(arr):
+                            continue
+                        cat = (
+                            getattr(inst, "category_name", None)
+                            or getattr(inst, "name", None)
+                            or ""
+                        )
+                        cat_s = str(cat).strip()
+                        if not cat_s or cat_s.lower() in ("object", "unknown", "none"):
+                            continue
+                        area = int(arr.shape[0]) * int(arr.shape[1])
+                        if best is None or area > best[0]:
+                            best = (area, cat_s, arr)
+                except Exception:
+                    best = None
+                if best is not None:
+                    return best[2].copy(), best[1]
+
+        return _live()
 
     def _describe_scene_yoloe(self, rgb: np.ndarray, depth: np.ndarray | None, dm: YoloEPerception) -> str:
-        _sem, _inst, task = dm.predict(rgb, depth=depth, draw_instance_predictions=False)
+        """User-facing caption from YoloE — not the low-conf ScanNet dump used for mapping."""
+        det_cfg: dict[str, Any] = {}
+        if isinstance(self.parameters, dict):
+            det_cfg = self.parameters.get("detection", {}) or {}
+        elif self.parameters is not None and hasattr(self.parameters, "get"):
+            raw = self.parameters.get("detection", {}) or {}
+            det_cfg = raw if isinstance(raw, dict) else {}
+
+        thr = float(det_cfg.get("describe_confidence_threshold", _DEFAULT_DESCRIBE_CONFIDENCE))
+        thr = max(0.15, min(thr, 0.85))
+        max_labels = int(det_cfg.get("describe_max_labels", _DEFAULT_DESCRIBE_MAX_LABELS) or _DEFAULT_DESCRIBE_MAX_LABELS)
+        max_labels = max(1, min(max_labels, 30))
+        use_curated = bool(det_cfg.get("describe_use_curated_vocab", True))
+
+        old_vocab = None
+        label_vocab: list[str]
+        if use_curated:
+            old_vocab = list(dm.class_list)
+            label_vocab = list(_DESCRIBE_SCENE_YOLOE_LABELS)
+            dm.class_list = label_vocab
+        else:
+            label_vocab = list(dm.class_list)
+        try:
+            # Pause ZMQ decode during GPU detect (same contention as chat LLM load).
+            with paused_robot_streams(self.robot):
+                _sem, _inst, task = dm.predict(
+                    rgb,
+                    depth=depth,
+                    draw_instance_predictions=False,
+                    confidence_threshold=thr,
+                )
+        finally:
+            if old_vocab is not None:
+                dm.class_list = old_vocab
+
         ic = task.get("instance_classes")
+        scores = task.get("instance_scores")
         if ic is None or len(ic) == 0:
             return (
-                "From my head camera: nothing is segmented above the current detection threshold. "
-                "The view may be empty, dark, or objects may not match the detector vocabulary. "
-                "send_image can still show the raw frame."
+                "This view looks empty or unclear to me. "
+                "Ask me to look around for a wider scan, or I can send a photo of what I see."
             )
-        class_list = dm.class_list
-        names: list[str] = []
-        for idx in np.atleast_1d(np.asarray(ic)).astype(int).ravel():
-            if 0 <= int(idx) < len(class_list):
-                names.append(class_list[int(idx)])
-        if not names:
-            return "From my head camera: detections did not map to class names. send_image can show the raw view."
-        counts = Counter(names)
-        parts = [f"{n} (×{c})" if c > 1 else n for n, c in counts.most_common()]
-        summary = ", ".join(parts)
+
+        best: dict[str, float] = {}
+        idxs = np.atleast_1d(np.asarray(ic)).astype(int).ravel()
+        scs = (
+            np.atleast_1d(np.asarray(scores, dtype=np.float64)).ravel()
+            if scores is not None
+            else np.ones(len(idxs), dtype=np.float64)
+        )
+        if len(scs) != len(idxs):
+            scs = np.ones(len(idxs), dtype=np.float64)
+        for idx, sc in zip(idxs, scs, strict=True):
+            if float(sc) < thr:
+                continue
+            i = int(idx)
+            if 0 <= i < len(label_vocab):
+                name = label_vocab[i]
+                prev = best.get(name)
+                if prev is None or float(sc) > prev:
+                    best[name] = float(sc)
+        if not best:
+            return (
+                "This view looks empty or unclear to me. "
+                "Ask me to look around for a wider scan, or I can send a photo of what I see."
+            )
+        ranked = sorted(best.items(), key=lambda kv: -kv[1])[:max_labels]
+        names = [name for name, _sc in ranked]
+        if names and set(names).issubset(_DESCRIBE_SCENE_STRUCTURE_LABELS):
+            return (
+                "Mostly empty from here — mainly "
+                + ", ".join(names)
+                + ". Ask me to look around if you want a wider view."
+            )
+        summary = ", ".join(names)
         return f"From my head camera I can make out: {summary}."
 
     def _describe_scene_owl(self, rgb: np.ndarray, dm: OwlPerception, confidence_threshold: float) -> str:
@@ -1032,8 +1428,8 @@ class DynamemController(BaseController):
         labels = res["labels"]
         if labels.numel() == 0:
             return (
-                "From my head camera: nothing matched the open-vocabulary checks above the confidence cutoff. "
-                "You can still use send_image to see the frame."
+                "This view looks empty or unclear to me. "
+                "Ask me to look around, or I can send a photo."
             )
         scores = res["scores"]
         best_by_label: dict[int, float] = {}
@@ -1046,16 +1442,104 @@ class DynamemController(BaseController):
         summary = ", ".join(picked)
         return f"From my head camera, open-vocabulary detection suggests: {summary}."
 
+    def _head_to_sweep(self, pan: float, tilt: float) -> None:
+        """Move head for a look-around pan; return once close enough or briefly settled.
+
+        Real Stretch head Dynamixels are fast; soft-wait is only to avoid blocking on joint
+        tolerance. Sim MJCF head gains were raised (was kp=10 crawl) so pans should be snappy.
+        """
+        head_to = getattr(self.robot, "head_to", None)
+        if not callable(head_to):
+            return
+        # Non-blocking; reliable=False avoids extra resends while we soft-wait.
+        head_to(float(pan), float(tilt), blocking=False, reliable=False)
+        get_js = getattr(self.robot, "get_joint_state", None)
+        if not callable(get_js):
+            time.sleep(DYNAMEM_HEAD_SWEEP_MAX_WAIT_S * 0.5)
+            return
+        try:
+            from emet.motion.kinematics import HelloStretchIdx
+        except Exception:
+            time.sleep(DYNAMEM_HEAD_SWEEP_MAX_WAIT_S * 0.5)
+            return
+
+        t0 = time.time()
+        stopped_since: float | None = None
+        last_pan: float | None = None
+        last_tilt: float | None = None
+        while time.time() - t0 < DYNAMEM_HEAD_SWEEP_MAX_WAIT_S:
+            try:
+                joints, vels, _ = get_js()
+            except Exception:
+                joints, vels = None, None
+            now = time.time()
+            elapsed = now - t0
+            if joints is None or len(joints) <= HelloStretchIdx.HEAD_TILT:
+                time.sleep(0.04)
+                continue
+
+            cur_pan = float(joints[HelloStretchIdx.HEAD_PAN])
+            cur_tilt = float(joints[HelloStretchIdx.HEAD_TILT])
+            pan_err = abs(cur_pan - float(pan))
+            tilt_err = abs(cur_tilt - float(tilt))
+            near_goal = (
+                pan_err < DYNAMEM_HEAD_SWEEP_PAN_TOL_RAD and tilt_err < DYNAMEM_HEAD_SWEEP_PAN_TOL_RAD
+            )
+            # Good enough for a sweep frame — do not wait out residual crawl.
+            if near_goal and elapsed >= DYNAMEM_HEAD_SWEEP_MIN_MOVE_S * 0.5:
+                break
+
+            speed = 0.0
+            if vels is not None and len(vels) > HelloStretchIdx.HEAD_TILT:
+                speed = abs(float(vels[HelloStretchIdx.HEAD_PAN])) + abs(
+                    float(vels[HelloStretchIdx.HEAD_TILT])
+                )
+            pos_delta = 0.0
+            if last_pan is not None and last_tilt is not None:
+                pos_delta = abs(cur_pan - last_pan) + abs(cur_tilt - last_tilt)
+            last_pan, last_tilt = cur_pan, cur_tilt
+
+            # Loose: slow creep counts as stopped so we do not burn max wait every pan.
+            moving = speed > DYNAMEM_HEAD_SWEEP_SPEED_TOL or pos_delta > DYNAMEM_HEAD_SWEEP_POS_DELTA_TOL
+            if not moving:
+                if stopped_since is None:
+                    stopped_since = now
+                if (now - stopped_since) >= DYNAMEM_HEAD_SWEEP_STOPPED_HOLD_S and (
+                    elapsed >= DYNAMEM_HEAD_SWEEP_MIN_MOVE_S
+                ):
+                    break
+            else:
+                stopped_since = None
+            time.sleep(0.04)
+
     def look_around(self):
         """
         Let the robot look around to check its surroudings.
         Rotating the robot head to compensate for the narrow field of view of realsense head camera
         """
-        logger.info("Look around: sweeping head")
-        for pan in [0.6, -0.2, -1.0, -1.8]:
-            tilt = -0.6
-            self.robot.head_to(pan, tilt, blocking=True)
+        self.announce_action("Look around: sweeping head")
+        tilt = float(motion_constants.look_front[1])
+        # Four pans for Realsense FOV coverage (left → right-ish). Soft-wait exits on settle.
+        # Explore-loop / smoke: two extremes ~halves wall time (~100s → ~50s per excursion).
+        if getattr(self, "_fast_explore_lookaround", False):
+            pans = [0.6, -1.8]
+        else:
+            pans = [0.6, -0.2, -1.0, -1.8]
+        n = len(pans)
+        t_sweep = time.time()
+        for i, pan in enumerate(pans):
+            self.announce_motion_progress(
+                f"Look around: head pan {i + 1}/{n} (pan={pan:+.1f} rad, tilt={tilt:+.2f})"
+            )
+            self._head_to_sweep(pan, tilt)
+            time.sleep(DYNAMEM_HEAD_SWEEP_FRAME_SETTLE_S)
             self.update()
+        self.announce_motion_progress(
+            f"Look around: head sweep done ({time.time() - t_sweep:.1f}s)"
+        )
+        # Return to look_front without a long blocking wait.
+        self._head_to_sweep(float(motion_constants.look_front[0]), tilt)
+        time.sleep(DYNAMEM_HEAD_SETTLE_S)
 
     def _find_phase_nav_timeout(self, default: float = 10.0) -> float:
         raw = self.parameters.get("find_phase_nav_step_timeout_s")
@@ -1064,20 +1548,23 @@ class DynamemController(BaseController):
         return float(raw)
 
     def rotate_in_place(self):
-        logger.info("Rotate in place: scanning environment")
+        self.announce_action("Looking around: rotating in place")
         nav_timeout = self._find_phase_nav_timeout()
         if self.save_rerun:
             if not os.path.exists(self.log):
                 os.makedirs(self.log)
             rr.save(self.log + "/" + "data_" + str(self.rerun_iter) + ".rrd")
         self.robot.move_to_nav_posture()
+        self.announce_motion_progress("Looking around: nav posture + look_front")
         self.robot.look_front(blocking=True, timeout=nav_timeout)
         time.sleep(DYNAMEM_HEAD_SETTLE_S)
         wait_obs = getattr(self.robot, "wait_for_obs", None)
         if callable(wait_obs):
             wait_obs(timeout=nav_timeout)
-        logger.info("rotate_in_place: 8× relative +45° yaw (no XY translation)")
-        for _step_i in range(8):
+        n_steps = 8
+        logger.info("rotate_in_place: %d× relative +45° yaw (no XY translation)", n_steps)
+        for step_i in range(n_steps):
+            self.announce_motion_progress(f"Looking around: scan step {step_i + 1}/{n_steps}")
             self.robot.move_base_to(
                 [0.0, 0.0, np.pi / 4.0],
                 relative=True,
@@ -1086,8 +1573,106 @@ class DynamemController(BaseController):
             )
             if not self._realtime_updates:
                 self.update()
+            # Discord: mid + done only (avoid 8 spam messages); terminal already has every step.
+            if step_i in (3, 7):
+                self.announce_action(f"Looking around: scan step {step_i + 1}/{n_steps}")
+        self.announce_motion_progress("Looking around: rotate-in-place done")
         self.rerun_iter += 1
         self._maybe_emit_navgrid_ascii(context="rotate_in_place")
+
+    def rotate_base_degrees(self, degrees: float) -> float:
+        """Relative in-place yaw (degrees). Positive = left/CCW. Returns commanded degrees."""
+        deg = float(np.clip(float(degrees), -360.0, 360.0))
+        if abs(deg) < 1e-3:
+            return 0.0
+        self.announce_action(f"Rotating {deg:+.0f}°")
+        nav_timeout = self._find_phase_nav_timeout()
+        if hasattr(self.robot, "move_to_nav_posture"):
+            self.robot.move_to_nav_posture()
+        self.robot.move_base_to(
+            [0.0, 0.0, float(np.deg2rad(deg))],
+            relative=True,
+            blocking=True,
+            timeout=nav_timeout,
+        )
+        if not getattr(self, "_realtime_updates", False):
+            try:
+                self.update()
+            except Exception:
+                pass
+        return deg
+
+    def clip_forward_distance_m(self, meters: float, *, step_m: float = 0.05) -> float:
+        """Shorten a forward request using the 2D obstacle map when available."""
+        requested = float(np.clip(float(meters), 0.0, 1.5))
+        if requested < 1e-3:
+            return 0.0
+        vm = self.get_voxel_map() if hasattr(self, "get_voxel_map") else None
+        if vm is None or (hasattr(vm, "is_empty") and vm.is_empty()):
+            return requested
+        try:
+            obstacles, _explored = vm.get_2d_map()
+        except Exception:
+            return requested
+        if obstacles is None:
+            return requested
+        obs_np = obstacles.cpu().numpy() if hasattr(obstacles, "cpu") else np.asarray(obstacles)
+        try:
+            xyt = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)
+        except Exception:
+            return requested
+        if xyt.size < 3:
+            return requested
+        x0, y0, th = float(xyt[0]), float(xyt[1]), float(xyt[2])
+        c, s = float(np.cos(th)), float(np.sin(th))
+        traveled = 0.0
+        step = max(0.02, float(step_m))
+        while traveled + step <= requested + 1e-9:
+            probe = traveled + step
+            xy = np.array([x0 + probe * c, y0 + probe * s], dtype=np.float64)
+            try:
+                grid = vm.xy_to_grid_coords(xy)
+            except Exception:
+                break
+            if grid is None:
+                break
+            if hasattr(grid, "detach"):
+                grid = grid.detach().cpu().numpy()
+            gi, gj = int(grid[0]), int(grid[1])
+            if gi < 0 or gj < 0 or gi >= obs_np.shape[0] or gj >= obs_np.shape[1]:
+                break
+            if bool(obs_np[gi, gj]):
+                return traveled
+            traveled = probe
+        return requested
+
+    def move_forward_meters(self, meters: float) -> float:
+        """Drive forward along current heading; clips for obstacles. Returns distance commanded."""
+        requested = float(np.clip(float(meters), 0.0, 1.5))
+        dist = self.clip_forward_distance_m(requested)
+        if dist < 0.02:
+            self.announce_action("Cannot move forward — obstacle too close or distance too small")
+            return 0.0
+        if dist + 1e-3 < requested:
+            self.announce_action(f"Moving forward {dist:.2f} m (clipped from {requested:.2f} m)")
+        else:
+            self.announce_action(f"Moving forward {dist:.2f} m")
+        nav_timeout = self._find_phase_nav_timeout()
+        if hasattr(self.robot, "move_to_nav_posture"):
+            self.robot.move_to_nav_posture()
+        # Relative body-frame: +x forward.
+        self.robot.move_base_to(
+            [float(dist), 0.0, 0.0],
+            relative=True,
+            blocking=True,
+            timeout=nav_timeout,
+        )
+        if not getattr(self, "_realtime_updates", False):
+            try:
+                self.update()
+            except Exception:
+                pass
+        return dist
 
     def _maybe_emit_navgrid_ascii(self, *, context: str = "") -> None:
         from emet.mapping.debug_navgrid_ascii import (
@@ -1099,8 +1684,7 @@ class DynamemController(BaseController):
         if not navgrid_context_allowed(context):
             return
         try:
-            xyt = self.robot.get_base_pose()
-            robot_xy = (float(xyt[0]), float(xyt[1]))
+            robot_xy = self.world_base_xy()
         except Exception:
             robot_xy = None
         try:
@@ -1147,6 +1731,7 @@ class DynamemController(BaseController):
             res = self.process_text("", start)
 
         if len(res) > 0:
+            self.announce_action("Navigating…")
             logger.info("Navigation plan OK; executing trajectory")
             nav_timeout = self._find_phase_nav_timeout()
             wait_obs = getattr(self.robot, "wait_for_obs", None)
@@ -1198,9 +1783,11 @@ class DynamemController(BaseController):
         We use the voxel_grid map created by our collector to sample free space, and then use A* planner to get there.
         """
 
+        self.announce_action("Exploring…")
         # "" means the robot has not received any text query from the user and should conduct exploration just to better know the environment
         status, _ = self.execute_action("")
         if status is None:
+            self.announce_action("Exploring… no valid frontier right now")
             logger.warning("Exploration failed (no valid plan or frontier).")
             return False
         self._maybe_emit_navgrid_ascii(context="explore")
@@ -1271,14 +1858,25 @@ class DynamemController(BaseController):
         if text is None or text == "" or localized_point is None:
             debug_text += "## Navigation fails, so robot starts exploring environments.\n"
             frontier_text = self._exploration_text(text)
-            graph_frontier = self._best_frontier_point_from_graph(frontier_text)
-            if graph_frontier is not None:
-                localized_point = graph_frontier
-                debug_text += "## Selected frontier target from graph memory.\n"
+            explore_pt = pick_uncovered_explore_target(
+                self,
+                question=frontier_text or None,
+                blocked=getattr(self, "_habitat_blocked_goals", None),
+                recent_goals=getattr(self, "_habitat_recent_goals", None),
+            )
+            if explore_pt is not None:
+                localized_point = explore_pt
+                debug_text += "## Selected blocked-aware explore frontier.\n"
                 mode = "exploration"
             else:
-                localized_point = self.space.sample_frontier(self.planner, start_pose, frontier_text)
-                mode = "exploration"
+                graph_frontier = self._best_frontier_point_from_graph(frontier_text)
+                if graph_frontier is not None:
+                    localized_point = graph_frontier
+                    debug_text += "## Selected frontier target from graph memory.\n"
+                    mode = "exploration"
+                else:
+                    localized_point = self.space.sample_frontier(self.planner, start_pose, frontier_text)
+                    mode = "exploration"
 
         if obs is not None and mode == "navigation":
             obs = self.voxel_map.find_obs_id_for_text(text)
@@ -1598,30 +2196,45 @@ class DynamemController(BaseController):
         stall = 0
 
         for _cnt_step in range(max_planning_steps):
+            logger.info(
+                "EQA planning step %d/%d for %r",
+                _cnt_step + 1,
+                max_planning_steps,
+                question if isinstance(question, str) else str(question)[:80],
+            )
             answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(question)
             if confidence:
                 self.robot.say("The answer to " + question + " is " + answer)
                 break
 
             if stall_patience > 0 and self.graph_memory is not None:
-                node_count = len(self.graph_memory.get_nodes())
-                cur_answer = self.graph_memory.last_eqa_parsed[1]
-                if node_count <= prev_node_count and cur_answer and cur_answer == prev_answer:
-                    stall += 1
-                else:
+                # Never early-stop on a repeated Yes/No while question objects are still
+                # uncovered — absence is not evidence; keep exploring frontiers.
+                covers = getattr(self.graph_memory, "_graph_covers_relevant_objects", None)
+                uncovered = bool(callable(covers) and not covers())
+                if uncovered:
                     stall = 0
-                prev_node_count = node_count
-                prev_answer = cur_answer
-                if stall >= stall_patience:
-                    logger.info(
-                        "EQA early stop after %d/%d planning steps: exploration stalled (no new graph "
-                        "nodes, stable answer %r) for %d steps; accepting the answer.",
-                        _cnt_step + 1,
-                        max_planning_steps,
-                        cur_answer,
-                        stall + 1,
-                    )
-                    break
+                    prev_node_count = len(self.graph_memory.get_nodes())
+                    prev_answer = self.graph_memory.last_eqa_parsed[1]
+                else:
+                    node_count = len(self.graph_memory.get_nodes())
+                    cur_answer = self.graph_memory.last_eqa_parsed[1]
+                    if node_count <= prev_node_count and cur_answer and cur_answer == prev_answer:
+                        stall += 1
+                    else:
+                        stall = 0
+                    prev_node_count = node_count
+                    prev_answer = cur_answer
+                    if stall >= stall_patience:
+                        logger.info(
+                            "EQA early stop after %d/%d planning steps: exploration stalled (no new graph "
+                            "nodes, stable answer %r) for %d steps; accepting the answer.",
+                            _cnt_step + 1,
+                            max_planning_steps,
+                            cur_answer,
+                            stall + 1,
+                        )
+                        break
 
         relevant_image = self._patch_images(relevant_images, patch_size=(270, 360))
         self.rerun_iter += 1
@@ -1642,6 +2255,8 @@ class DynamemController(BaseController):
             self.robot.switch_to_navigation_mode()
 
         try:
+            logger.info("EQA query_answer start for %r", question if isinstance(question, str) else str(question)[:80])
+            t_qa0 = time.monotonic()
             (
                 reasoning,
                 answer,
@@ -1650,6 +2265,12 @@ class DynamemController(BaseController):
                 target_point,
                 relevant_images,
             ) = self.voxel_map.query_answer(question, self._planning_base_xyt(self.robot.get_base_pose()), self.planner)
+            logger.info(
+                "EQA query_answer done wall_s=%.1f confidence=%s answer=%r",
+                time.monotonic() - t_qa0,
+                confidence,
+                answer,
+            )
         except:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images = (
                 "Exception happens in LLM querying!",
@@ -1762,6 +2383,25 @@ class DynamemController(BaseController):
             if recent is not None:
                 recent.append(key)
                 del recent[:-8]
+        elif (
+            str(nav_res.note or "").startswith("already_at_goal")
+            or (not nav_res.finished and float(nav_res.dist_m) < 0.08)
+            or (not nav_res.success and float(nav_res.dist_m) < 0.12)
+        ):
+            # Stuck / noop / no-progress: remember so uncovered explore does not re-pick.
+            eff = getattr(nav_res, "effective_goal_xy", None) or (
+                float(goal_xy[0]),
+                float(goal_xy[1]),
+            )
+            key = goal_key_xy(eff)
+            recent = getattr(self, "_habitat_recent_goals", None)
+            if recent is not None:
+                recent.append(key)
+                del recent[:-8]
+            blocked = getattr(self, "_habitat_blocked_goals", None)
+            if blocked is not None:
+                blocked.add(key)
+                blocked.add(goal_key_xy(goal_xy))
 
     def navigate_to_target_pose(
         self,

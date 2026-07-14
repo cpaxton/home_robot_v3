@@ -68,14 +68,19 @@ class DynamemTaskExecutor:
         defer_eqa_vllm: bool = False,
         discord_bot=None,
         embodied_agent: EmbodiedAgentConfig | None = None,
+        memory_backend: str = "dynagraph",
     ) -> None:
-        """Initialize the executor."""
+        """Initialize the executor.
+
+        *memory_backend*: ``dynagraph`` (default), ``graph_eqa``, or ``dynamem``.
+        """
         self.robot = robot
         self.parameters = parameters
         self.discord_bot = discord_bot
         self.embodied_agent = embodied_agent
         self.cpu_only = cpu_only
         self._last_memory_save_path = None  # set when memory is saved (e.g. after rotate_in_place)
+        self.memory_backend = str(memory_backend or "dynagraph").strip().lower()
         # If there is no GPU, we have to use CPU
         if not torch.cuda.is_available():
             print("Setting up to use CPU as there is no GPU!")
@@ -107,21 +112,12 @@ class DynamemTaskExecutor:
             self.semantic_sensor = None
 
         logger.debug("- Start robot agent with data collection")
-        from emet.controller.controller_dynamem import RobotAgent
-
-        self.agent = RobotAgent(
-            self.robot,
-            self.parameters,
-            self.semantic_sensor,
-            log=output_path,
+        self.agent = self._build_agent(
+            output_path=output_path,
             server_ip=server_ip,
             mllm=mllm,
-            manipulation_only=manipulation_only,
-            cpu_only=self.cpu_only,
-            use_instance_memory=self.parameters.get("use_instance_memory", True),
             eqa=eqa,
             defer_eqa_vllm=defer_eqa_vllm,
-            embodied_agent=self.embodied_agent,
         )
         self.agent.start()
 
@@ -136,6 +132,34 @@ class DynamemTaskExecutor:
 
         # Task stuff
         self.emote_task = EmoteTask(self.agent)
+
+    def _build_agent(
+        self,
+        *,
+        output_path: str | None,
+        server_ip: str | None,
+        mllm: bool,
+        eqa: bool,
+        defer_eqa_vllm: bool,
+    ):
+        """Construct Dynamem / GraphEQA / Dynagraph controller for the agent loop."""
+        from emet.eval.stack import build_memory_agent
+
+        return build_memory_agent(
+            robot=self.robot,
+            parameters=self.parameters,
+            backend=self.memory_backend,
+            harness="interactive",
+            semantic_sensor=self.semantic_sensor,
+            log=output_path,
+            server_ip=server_ip,
+            mllm=mllm,
+            manipulation_only=self.manipulation_only,
+            cpu_only=self.cpu_only,
+            eqa=eqa,
+            defer_eqa_vllm=defer_eqa_vllm,
+            embodied_agent=self.embodied_agent,
+        )
 
     def _find(self, target_object: str) -> np.ndarray:
         """Find an object. This is a helper function for the main loop.
@@ -390,6 +414,32 @@ class DynamemTaskExecutor:
                 backend.save(save_dir)
                 self._last_memory_save_path = save_dir
                 print_memory_saved_help(save_dir)
+            elif command == "rotate_base":
+                try:
+                    deg = float(args)
+                except (TypeError, ValueError):
+                    logger.error(f"rotate_base: bad degrees {args!r}")
+                    deg = 90.0
+                logger.info(f"Rotate base by {deg} degrees.")
+                if hasattr(self.agent, "rotate_base_degrees"):
+                    self.agent.rotate_base_degrees(deg)
+                else:
+                    self.robot.move_base_to(
+                        [0.0, 0.0, float(np.deg2rad(deg))],
+                        relative=True,
+                        blocking=True,
+                    )
+            elif command == "move_forward":
+                try:
+                    meters = float(args)
+                except (TypeError, ValueError):
+                    logger.error(f"move_forward: bad meters {args!r}")
+                    meters = 0.5
+                logger.info(f"Move forward {meters} m.")
+                if hasattr(self.agent, "move_forward_meters"):
+                    self.agent.move_forward_meters(meters)
+                else:
+                    self.robot.move_base_to([float(meters), 0.0, 0.0], relative=True, blocking=True)
             elif command == "go_home":
                 logger.info("[Pickup task] Going home.")
                 if self.agent.get_voxel_map().is_empty():
@@ -398,8 +448,16 @@ class DynamemTaskExecutor:
                     self.agent.go_home()
             elif command == "explore":
                 logger.info("[Pickup task] Exploring.")
-                for _ in range(self.explore_iter):
+                if hasattr(self.agent, "announce_action"):
+                    self.agent.announce_action(f"Exploring… ({self.explore_iter} steps)")
+                for i in range(self.explore_iter):
+                    if hasattr(self.agent, "announce_motion_progress"):
+                        self.agent.announce_motion_progress(f"Exploring… step {i + 1}/{self.explore_iter}")
+                    elif hasattr(self.agent, "announce_action"):
+                        self.agent.announce_action(f"Exploring… step {i + 1}/{self.explore_iter}", discord=False)
                     self.agent.run_exploration()
+                if hasattr(self.agent, "announce_motion_progress"):
+                    self.agent.announce_motion_progress("Exploring… done")
             elif command == "find":
                 logger.info(f"[Pickup task] Finding {args}.")
                 point = self._find(args)

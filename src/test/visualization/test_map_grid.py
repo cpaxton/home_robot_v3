@@ -29,6 +29,31 @@ def test_prune_explored_islands_drops_remote_blob():
     assert not pruned[5, 5]
 
 
+def test_trajectory_corridor_fills_sparse_export_gaps():
+    from emet.visualization.map_grid import build_trajectory_corridor_mask, merge_trajectory_corridor_explored
+    from emet.visualization.map_snapshot import eval_topdown_map_rgb
+
+    obs = np.zeros((64, 64), dtype=bool)
+    exp = np.zeros((64, 64), dtype=bool)
+    exp[10, 10] = True
+    exp[50, 50] = True
+    go = np.array([0.0, 0.0])
+    traj = [(1.0, 1.0, 0.0), (1.0, 4.0, 0.0), (4.0, 4.0, 0.0)]
+    corridor = build_trajectory_corridor_mask((64, 64), go, 0.1, trajectory_xyt=traj, radius_cells=2)
+    assert int(corridor.sum()) > 20
+    merged = merge_trajectory_corridor_explored(exp, obs, go, 0.1, trajectory_xyt=traj)
+    assert int(merged.sum()) > int(exp.sum())
+    without = eval_topdown_map_rgb(
+        obs, exp, go, 0.1, (4.0, 4.0), max_side=640, min_map_side=0, trajectory_xyt=traj, stamp_trajectory_corridor=False
+    )
+    with_stamp = eval_topdown_map_rgb(
+        obs, exp, go, 0.1, (4.0, 4.0), max_side=640, min_map_side=0, trajectory_xyt=traj, stamp_trajectory_corridor=True
+    )
+    white_without = np.all(without == np.uint8([248, 248, 248]), axis=-1).sum()
+    white_with = np.all(with_stamp == np.uint8([248, 248, 248]), axis=-1).sum()
+    assert white_with < white_without
+
+
 def test_eval_topdown_overlay_includes_trajectory_blue_pixels():
     from emet.visualization.map_snapshot import eval_topdown_map_rgb, eval_topdown_overlay_rgb
 

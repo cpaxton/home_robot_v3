@@ -94,9 +94,38 @@ def test_dynamic_explore_graph_eqa_baseline_merge():
     assert flags["explore_when_uncovered"] == "off"
 
 
-def test_habitat_eqa_method_parameters_use_smoke_profile():
+def test_habitat_eqa_method_parameters_use_unified_eqa_profile():
     params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "dynagraph")
-    assert params.get("dynagraph_merge_xy_m") == 0.0
-    assert resolve_harness_profile("habitat_eqa") == "smoke"
+    unified = profile_settings("unified_eqa")
+    assert resolve_harness_profile("habitat_eqa") == "unified_eqa"
+    assert params.get("dynagraph_merge_xy_m") == unified["dynagraph_merge_xy_m"] == 0.45
+    assert params.get("dynagraph_staleness_horizon") == unified["dynagraph_staleness_horizon"] == 256
     flags = dynagraph_harness_flags(params)
     assert flags["mcq_debias"] is False
+    fusion = params.get("graph_object_fusion") or {}
+    assert float(fusion.get("fallback_spatial_merge_xy_m", -1)) == 0.45
+
+
+def test_zero_merge_profiles_disable_fusion_fallback():
+    from emet.eval.benchmark_dynagraph import apply_dynagraph_profile
+
+    for name in ("smoke", "graph_eqa_baseline"):
+        params = apply_dynagraph_profile(get_parameters("dynav_config.yaml"), name)
+        assert params.get("dynagraph_merge_xy_m") == 0.0
+        fusion = params.get("graph_object_fusion") or {}
+        assert float(fusion.get("fallback_spatial_merge_xy_m", -1)) == 0.0, name
+
+
+def test_unified_eqa_enables_merge_like_interactive():
+    from emet.eval.benchmark_dynagraph import apply_dynagraph_profile
+
+    interactive = profile_settings("interactive")
+    params = apply_dynagraph_profile(get_parameters("dynav_config.yaml"), "unified_eqa")
+    assert params.get("dynagraph_merge_xy_m") == interactive["dynagraph_merge_xy_m"]
+    assert params.get("dynagraph_staleness_horizon") == interactive["dynagraph_staleness_horizon"]
+    fusion = params.get("graph_object_fusion") or {}
+    assert float(fusion.get("fallback_spatial_merge_xy_m")) == float(interactive["dynagraph_merge_xy_m"])
+    assert (
+        params.get("graph_eqa_extract", {}).get("navigation_samples_max")
+        == profile_settings("unified_eqa")["graph_eqa_extract"]["navigation_samples_max"]
+    )

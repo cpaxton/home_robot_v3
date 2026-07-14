@@ -76,6 +76,70 @@ def test_build_map_stats_summary_lines():
     assert "2D map shape" in " ".join(stats["summary_lines"])
 
 
+def test_build_map_stats_nearest_explored_when_base_off_blob():
+    """Marker far from explored blob → nearest_explored_m reports the gap (frame-mismatch signal)."""
+    obs = np.zeros((32, 32), dtype=bool)
+    exp = np.zeros((32, 32), dtype=bool)
+    exp[2:5, 2:5] = True
+    go = np.array([16.0, 16.0])
+    # Base at world (0,0) → grid (16,16); explored around (2,2) — far away
+    stats = build_map_stats(obs, exp, go, 0.1, (0.0, 0.0))
+    assert stats["base_on_explored_cell"] is False
+    assert stats["nearest_explored_m"] is not None
+    assert stats["nearest_explored_m"] > 0.5
+    assert "nearest explored" in " ".join(stats["summary_lines"]).lower()
+
+
+def test_snapshot_base_on_explored_when_robot_xy_matches_visited():
+    from emet.mapping.voxel.voxel_dynamem import SparseVoxelMap
+
+    vm = SparseVoxelMap(
+        resolution=0.1,
+        semantic_memory_resolution=0.1,
+        feature_dim=3,
+        use_instance_memory=False,
+        encoder=None,
+        device="cpu",
+        map_2d_device="cpu",
+        add_local_radius_points=True,
+        local_radius=0.5,
+    )
+    world_xy = (1.5, -2.0)
+    camera_pose = torch.eye(4, dtype=torch.float32)
+    camera_pose[0, 3] = float(world_xy[0]) + 0.4
+    camera_pose[1, 3] = float(world_xy[1])
+    camera_pose[2, 3] = 1.2
+    base_pose = torch.tensor([world_xy[0], world_xy[1], 0.0], dtype=torch.float32)
+    rgb = torch.tensor([[1.0, 0.0, 0.0]], dtype=torch.float32)
+    xyz = torch.tensor([[world_xy[0] + 0.5, world_xy[1], 0.1]], dtype=torch.float32)
+    vm.add(camera_pose, rgb, xyz=xyz, xyz_frame="world", base_pose=base_pose)
+
+    _img, stats, _ = snapshot_from_voxel_map(vm, world_xy)
+    assert stats["base_on_explored_cell"] is True
+    assert stats.get("nearest_explored_m", 0.0) == 0.0
+
+    # Episode-relative gps at origin (wrong frame) should miss the visited disk
+    _img2, stats_gps, _ = snapshot_from_voxel_map(vm, (0.0, 0.0))
+    assert stats_gps["base_on_explored_cell"] is False
+    assert stats_gps["nearest_explored_m"] is not None
+    assert stats_gps["nearest_explored_m"] > 0.5
+
+
+def test_robot_base_xy_prefers_controller_world_frame():
+    from emet.agent.tools import _robot_base_xy
+    from unittest.mock import MagicMock
+
+    robot = MagicMock()
+    robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+    agent = MagicMock()
+    agent.world_base_xy.return_value = (-2.0, -0.5)
+    executor = MagicMock()
+    executor.agent = agent
+    assert _robot_base_xy(robot, executor) == (-2.0, -0.5)
+    # Without executor, falls back to raw gps
+    assert _robot_base_xy(robot, None) == (0.0, 0.0)
+
+
 def test_format_navigation_report_explore_flag():
     stats = {"summary_lines": ["line a.", "line b."]}
     s = format_navigation_report(stats, explore_ok=False)

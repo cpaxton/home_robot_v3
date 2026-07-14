@@ -23,9 +23,12 @@ profiles:
       navigation_samples_max: 48
 
   unified_eqa:
-    description: "Shared EQA tuning profile (Habitat HM-EQA + SQA3D when merge can match)."
-    dynagraph_merge_xy_m: 0.0
-    dynagraph_staleness_horizon: 0
+    description: >
+      Shared Dynagraph EQA profile for Habitat HM-EQA (and aligned SQA3D when desired):
+      same merge/staleness as interactive/eqa so long-horizon instance memory works.
+      Zero-merge is only for smoke CI and graph_eqa_baseline paper rows.
+    dynagraph_merge_xy_m: 0.45
+    dynagraph_staleness_horizon: 256
     graph_eqa_extract:
       navigation_samples_max: 48
 
@@ -44,7 +47,7 @@ profiles:
 # ``parameters.dynagraph_harness`` for ``DynagraphController``.
 harness:
   habitat_eqa:
-    profile: smoke
+    profile: unified_eqa
     dynagraph:
       memory_summary: true
       mcq_debias: false
