@@ -77,6 +77,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         self._post_step_hooks: list[Any] = []
         self._head_pan = 0.0
         self._head_tilt = float(np.deg2rad(float(getattr(simulator, "camera_tilt_deg", -30.0))))
+        self._pending_nav: dict[str, Any] | None = None
         self._sync_pose_from_sim()
 
     def add_post_step_hook(self, hook: Any) -> None:
@@ -168,30 +169,144 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
 
         Returns True when the robot ends within ``stop_radius_m`` of the target.
         """
-        goal_x = float(habitat_xyz[0])
-        goal_z = float(habitat_xyz[2])
+        self.begin_nav_to_point(habitat_xyz, goal_theta=None, max_steps_hint=max_steps)
+        while True:
+            status = self.nav_tick(max_sim_steps=1, stop_radius_m=stop_radius_m)
+            if status != "running":
+                return status == "done"
+
+    def begin_nav_to(
+        self,
+        xyt: Iterable[float] | ContinuousNavigationAction,
+        *,
+        relative: bool = False,
+        **_kwargs: Any,
+    ) -> None:
+        """Start non-blocking navigation toward a world (or relative) goal.
+
+        Call :meth:`nav_tick` repeatedly until it returns ``done`` or ``failed``.
+        """
+        goal = np.asarray(xyt, dtype=np.float64).reshape(-1)[:3]
+        if relative:
+            goal = xyt_base_to_global(goal, self._xyt)
+        goal_theta = float(goal[2]) if len(goal) >= 3 else None
+        waypoints: list[np.ndarray] = []
+        if not relative:
+            find_path = getattr(self._sim, "find_path_to_xy", None)
+            if callable(find_path):
+                path_pts = find_path(float(goal[0]), float(goal[1]))
+                if path_pts is not None:
+                    for pt in path_pts[1:]:
+                        waypoints.append(np.asarray(pt, dtype=np.float64).reshape(-1))
+        if not waypoints:
+            waypoints.append(np.array([goal[0], 0.0, goal[1]], dtype=np.float64))
+        dist0 = 0.0
         self._sync_pose_from_sim()
-        dist0 = math.hypot(goal_x - self._xyt[0], goal_z - self._xyt[1])
+        if waypoints:
+            pt0 = waypoints[0]
+            dist0 = math.hypot(float(pt0[0]) - self._xyt[0], float(pt0[2]) - self._xyt[1])
+        self._pending_nav = {
+            "waypoints": waypoints,
+            "goal_theta": goal_theta,
+            "wp_i": 0,
+            "steps_on_wp": 0,
+            "max_steps_per_wp": max(40, int(math.ceil(dist0 / 0.2) * 4)),
+            "yaw_steps": 0,
+            "phase": "path",
+            "failed": False,
+        }
+
+    def begin_nav_to_point(
+        self,
+        habitat_xyz: np.ndarray,
+        *,
+        goal_theta: float | None = None,
+        max_steps_hint: int | None = None,
+    ) -> None:
+        """Start non-blocking greedy navigation to a single Habitat XYZ point."""
+        pt = np.asarray(habitat_xyz, dtype=np.float64).reshape(-1)
+        self._sync_pose_from_sim()
+        dist0 = math.hypot(float(pt[0]) - self._xyt[0], float(pt[2]) - self._xyt[1])
+        max_steps = max_steps_hint
         if max_steps is None:
-            # Habitat ``move_forward`` is ~0.25 m; allow turns + overshoot.
             max_steps = max(40, int(math.ceil(dist0 / 0.2) * 4))
-        for _ in range(max_steps):
-            self._sync_pose_from_sim()
-            dx = goal_x - self._xyt[0]
-            dz = goal_z - self._xyt[1]
-            dist = math.hypot(dx, dz)
-            if dist < stop_radius_m:
-                return True
-            target_heading = math.atan2(dz, dx)
-            dtheta = (target_heading - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
-            if abs(dtheta) > 0.12:
-                # Habitat discrete turns are opposite our CCW-positive compass yaw.
+        self._pending_nav = {
+            "waypoints": [pt],
+            "goal_theta": goal_theta,
+            "wp_i": 0,
+            "steps_on_wp": 0,
+            "max_steps_per_wp": int(max_steps),
+            "yaw_steps": 0,
+            "phase": "path",
+            "failed": False,
+        }
+
+    def nav_tick(self, max_sim_steps: int = 2, *, stop_radius_m: float = 0.12) -> str:
+        """Advance pending navigation by up to ``max_sim_steps`` Habitat actions.
+
+        Returns:
+            ``running`` while the goal is not finished, ``done`` on success, ``failed``
+            when a waypoint budget is exhausted before reaching the target.
+        """
+        nav = getattr(self, "_pending_nav", None)
+        if not nav or nav.get("phase") == "done":
+            if nav and nav.get("failed"):
+                return "failed"
+            return "done"
+
+        for _ in range(max(1, int(max_sim_steps))):
+            if nav["phase"] == "path":
+                if nav["wp_i"] >= len(nav["waypoints"]):
+                    if nav["goal_theta"] is not None:
+                        nav["phase"] = "yaw"
+                        nav["yaw_steps"] = 0
+                    else:
+                        nav["phase"] = "done"
+                        self._sync_pose_from_sim()
+                        return "done"
+                    continue
+                habitat_xyz = nav["waypoints"][nav["wp_i"]]
+                goal_x = float(habitat_xyz[0])
+                goal_z = float(habitat_xyz[2])
+                self._sync_pose_from_sim()
+                dx = goal_x - self._xyt[0]
+                dz = goal_z - self._xyt[1]
+                dist = math.hypot(dx, dz)
+                if dist < stop_radius_m:
+                    nav["wp_i"] += 1
+                    nav["steps_on_wp"] = 0
+                    continue
+                target_heading = math.atan2(dz, dx)
+                dtheta = (target_heading - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
+                if abs(dtheta) > 0.12:
+                    self._sim_step("turn_right" if dtheta > 0 else "turn_left")
+                else:
+                    self._sim_step("move_forward")
+                nav["steps_on_wp"] += 1
+                if nav["steps_on_wp"] > int(nav["max_steps_per_wp"]):
+                    self._sync_pose_from_sim()
+                    dist = math.hypot(goal_x - self._xyt[0], goal_z - self._xyt[1])
+                    if dist < stop_radius_m * 1.5:
+                        nav["wp_i"] += 1
+                        nav["steps_on_wp"] = 0
+                        continue
+                    nav["failed"] = True
+                    nav["phase"] = "done"
+                    logger.warning(f"Habitat nav: stopped before reaching path waypoint ({goal_x:.2f}, {goal_z:.2f})")
+                    return "failed"
+            elif nav["phase"] == "yaw":
+                goal_theta = float(nav["goal_theta"])
+                self._sync_pose_from_sim()
+                dtheta = (goal_theta - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
+                if abs(dtheta) < 0.1 or nav["yaw_steps"] >= 18:
+                    nav["phase"] = "done"
+                    self._sync_pose_from_sim()
+                    return "done"
                 self._sim_step("turn_right" if dtheta > 0 else "turn_left")
+                nav["yaw_steps"] += 1
             else:
-                self._sim_step("move_forward")
-        self._sync_pose_from_sim()
-        dist = math.hypot(goal_x - self._xyt[0], goal_z - self._xyt[1])
-        return dist < stop_radius_m * 1.5
+                return "failed" if nav.get("failed") else "done"
+        return "running"
 
     def move_base_to(
         self,
@@ -202,58 +317,32 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         timeout: float | None = None,
         world_frame: bool | None = None,
         **kwargs: Any,
-    ):
+    ) -> bool:
         """Navigate to ``(x, z[, yaw])`` using navmesh path following when available.
 
         Args:
             xyt: Goal pose in Habitat world coordinates (x, z, optional yaw).
             relative: When True, goal is interpreted relative to current ``_xyt``.
-            blocking: Ignored (Habitat steps are synchronous).
+            blocking: Ignored (Habitat steps are synchronous); always runs to completion.
             verbose: Ignored.
             timeout: Ignored.
             world_frame: Ignored; goals are already Habitat world coordinates. Kept for
                 API parity with ZMQ clients that distinguish episode vs nav-world frames.
             **kwargs: Ignored (ZMQ client compatibility).
+
+        Returns:
+            True when the final pose is within the stop radius (and yaw if requested).
         """
-        goal = np.asarray(xyt, dtype=np.float64).reshape(-1)[:3]
-        if relative:
-            goal = xyt_base_to_global(goal, self._xyt)
-        goal_theta = float(goal[2]) if len(goal) >= 3 else None
-        if not relative:
-            path_pts = self._sim.find_path_to_xy(float(goal[0]), float(goal[1]))
-            if path_pts is not None:
-                for pt in path_pts[1:]:
-                    if not self._greedy_to_habitat_point(pt):
-                        logger.warning(
-                            "Habitat nav: stopped before reaching path waypoint "
-                            f"({float(pt[0]):.2f}, {float(pt[2]):.2f})"
-                        )
-                        break
-                if goal_theta is not None:
-                    for _ in range(18):
-                        self._sync_pose_from_sim()
-                        dtheta = (goal_theta - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
-                        if abs(dtheta) < 0.1:
-                            break
-                        self._sim_step("turn_right" if dtheta > 0 else "turn_left")
-                self._sync_pose_from_sim()
-                return
-        self._greedy_to_habitat_point(
-            np.array([goal[0], 0.0, goal[1]], dtype=np.float64),
-            max_steps=80,
-        )
-        if goal_theta is not None:
-            for _ in range(18):
-                self._sync_pose_from_sim()
-                dtheta = (goal_theta - self._xyt[2] + math.pi) % (2 * math.pi) - math.pi
-                if abs(dtheta) < 0.1:
-                    break
-                self._sim_step("turn_right" if dtheta > 0 else "turn_left")
-        self._sync_pose_from_sim()
+        self.begin_nav_to(xyt, relative=relative, world_frame=world_frame, **kwargs)
+        while True:
+            status = self.nav_tick(max_sim_steps=1)
+            if status != "running":
+                return status == "done"
 
     def reset(self):
         """Reset control mode to navigation (simulator pose is unchanged)."""
         self._base_control_mode = ControlMode.NAVIGATION
+        self._pending_nav = None
 
     def start(self) -> bool:
         """No-op startup hook; returns True so controllers proceed to update."""
@@ -296,7 +385,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         blocking: bool = True,
         world_frame: bool | None = None,
         **kwargs: Any,
-    ):
+    ) -> bool:
         """Visit each waypoint via :meth:`move_base_to` (open-loop).
 
         Args:
@@ -311,22 +400,33 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
             blocking: Passed to :meth:`move_base_to` (synchronous regardless).
             world_frame: Ignored; see :meth:`move_base_to`.
             **kwargs: Ignored.
+
+        Returns:
+            True if every waypoint succeeded.
         """
+        ok = True
         for wp in trajectory:
-            self.move_base_to(
-                wp,
-                relative=relative,
-                blocking=blocking,
-                world_frame=world_frame,
+            ok = (
+                self.move_base_to(
+                    wp,
+                    relative=relative,
+                    blocking=blocking,
+                    world_frame=world_frame,
+                )
+                and ok
             )
+        return ok
 
     def get_pose_graph(self) -> np.ndarray:
         """Return an empty pose graph (no SLAM in Habitat EQA harness)."""
         return np.zeros((0, 3), dtype=np.float64)
 
     def at_goal(self) -> bool:
-        """Always True; greedy navigation does not expose goal-reached state."""
-        return True
+        """True when no pending nav is active (or last nav finished successfully)."""
+        nav = getattr(self, "_pending_nav", None)
+        if not nav:
+            return True
+        return nav.get("phase") == "done" and not nav.get("failed")
 
     def get_footprint(self) -> Footprint:
         """Stretch-shaped footprint for planner compatibility."""
@@ -401,7 +501,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
             timeout=kwargs.get("timeout"),
             world_frame=bool(kwargs.get("world_frame", False)),
         )
-        return True
+        return self.at_goal()
 
     def arm_to(self, joint_angles=None, gripper=None, head=None, blocking=True, **kwargs) -> bool:
         """No-op arm stub; returns True."""

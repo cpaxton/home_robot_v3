@@ -39,11 +39,11 @@ from emet.agent.thinking_status import (
     format_tool_running_status,
     short_llm_label,
 )
-from emet.controller.zmq_stream_control import paused_robot_streams
 from emet.agent.tools import Tool, get_tools
 from emet.config.embodied_agent_config import EmbodiedAgentConfig, load_embodied_agent_overlay
 from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.controller.zmq_client import StretchZmqClient
+from emet.controller.zmq_stream_control import paused_robot_streams
 from emet.core import get_parameters
 from emet.core.parameters import Parameters
 from emet.llms import get_llm_client
@@ -63,6 +63,8 @@ DEFAULT_AGENT_LLM = "qwen35-4B"
 _MAX_TOOL_ROUNDS = 3
 
 # Info tools whose return text is already user-facing — skip a second VL summarize call.
+# Action-only executor tools (take_picture, take_ee_picture, go_home, …) must NOT be listed
+# here alone: they never set has_info, so the fast path cannot run.
 _FAST_REPLY_TOOLS = frozenset(
     {
         "describe_scene",
@@ -71,8 +73,10 @@ _FAST_REPLY_TOOLS = frozenset(
         "navigation_diagnostics",
         "send_map_snapshot",
         "send_object_image",
-        "take_picture",
-        "take_ee_picture",
+        "scan_environment",
+        "rotate_base",
+        "move_forward",
+        "explore",
     }
 )
 
@@ -352,30 +356,31 @@ def _call_llm_body(
             }
             if progress_callback is not None:
                 try:
-                    return llm_client.generate_multimodal(
-                        text, progress_callback=_on_progress, **kw
-                    )
-                except TypeError:
-                    pass
+                    return llm_client.generate_multimodal(text, progress_callback=_on_progress, **kw)
+                except TypeError as e:
+                    logger.warning(f"LLM generate_multimodal rejected progress_callback ({e}); retrying without it")
             return llm_client.generate_multimodal(text, **kw)
         if openai_tools_param is not None and image is not None:
             try:
                 return _with(debug, tools=openai_tools_param, image=image, reset_context=reset_context)
-            except TypeError:
-                pass
+            except TypeError as e:
+                logger.warning(f"LLM call rejected tools+image+reset_context ({e}); falling back")
         if openai_tools_param is not None:
             try:
                 return _with(debug, tools=openai_tools_param, reset_context=reset_context)
-            except TypeError:
-                pass
+            except TypeError as e:
+                logger.warning(f"LLM call rejected tools+reset_context ({e}); falling back")
         if image is not None:
             try:
                 return _with(debug, image=image, reset_context=reset_context)
-            except TypeError:
-                pass
+            except TypeError as e:
+                logger.warning(f"LLM call rejected image+reset_context ({e}); falling back")
         try:
             return _with(debug, reset_context=reset_context)
-        except TypeError:
+        except TypeError as e:
+            logger.warning(
+                f"LLM call rejected reset_context ({e}); falling back to bare text call (tools/image may be dropped)"
+            )
             return llm_client(text)
 
     stop_beat = threading.Event()
@@ -425,7 +430,7 @@ def run_agent_with_robot(
     port_offset: int = 0,
     agent_config: str = "dynav_config.yaml",
     device: str = "cuda",
-    max_tokens: int = 1024,
+    max_tokens: int = 256,
     vl_include_camera: bool = False,
     eqa: bool = False,
     share_memory_vllm: bool = True,
@@ -460,6 +465,9 @@ def run_agent_with_robot(
     When *eqa*, *use_llm*, and *share_memory_vllm* are true (the CLI default for sharing), DynaMem defers its
     local caption VLM until after the agent LLM loads, then reuses the agent vision-language client when
     applicable; otherwise it loads the local EQA VLM from ``dynav_config.yaml``.
+
+    *max_tokens* defaults to **256** (same as ``emet run agent --max-tokens`` / ``agent.max_tokens``);
+    keep this low for tool-routing JSON.
     """
     _configure_agent_terminal_output()
     verbose_tools = bool(tool_debug) or _env_agent_tool_debug()
@@ -820,23 +828,29 @@ def run_agent_with_robot(
 
     chat_log.log("system", str(prompt_builder) if prompt_builder else "(no LLM)")
 
-    def _send_to_discord(text: str, *, mirror_terminal: bool = True) -> None:
+    def _send_to_discord(
+        text: str,
+        *,
+        mirror_terminal: bool = True,
+        attach_pending_image: bool = True,
+    ) -> None:
         if discord_bot is None or not hasattr(discord_bot, "push_task_to_all_channels"):
             return
-        from emet.agent.tools import take_pending_discord_image
+        from emet.agent.tools import pending_discord_image_for_send
 
-        # Attach any photo queued by describe_scene / send_image to this same Discord message.
-        pending_image = take_pending_discord_image(context)
+        # Attach any photo queued by describe_scene / send_image to user-facing replies only.
+        # Status lines (*Thinking…*) must leave the stash for the final answer.
+        pending_image = pending_discord_image_for_send(context, attach_pending_image=attach_pending_image)
         # Mirror outbound on the terminal here so logs stay ordered with stdout (Discord queue is async).
         stripped = (text or "").strip()
-        if mirror_terminal and (stripped or pending_image is not None) and hasattr(
-            discord_bot, "_print_discord_outbound"
+        if (
+            mirror_terminal
+            and (stripped or pending_image is not None)
+            and hasattr(discord_bot, "_print_discord_outbound")
         ):
             for channel in discord_bot.allowed_channels:
                 ch_name = getattr(channel, "name", "?")
-                discord_bot._print_discord_outbound(
-                    ch_name, text, has_image=pending_image is not None
-                )
+                discord_bot._print_discord_outbound(ch_name, text, has_image=pending_image is not None)
         discord_bot.push_task_to_all_channels(
             message=text if stripped else None,
             content=pending_image,
@@ -852,7 +866,8 @@ def run_agent_with_robot(
         print_terminal(text, color="cyan")
         if to_discord and discord_bot is not None:
             # Avoid a second untimestamped TTY mirror from Discord outbound.
-            _send_to_discord(text, mirror_terminal=False)
+            # Never attach pending photos to status — those are for the final reply.
+            _send_to_discord(text, mirror_terminal=False, attach_pending_image=False)
 
     llm_status_label = short_llm_label(llm, llm_client) if llm_client is not None else short_llm_label(llm)
 
@@ -1090,8 +1105,54 @@ def run_agent_with_robot(
                                 color="cyan",
                             )
                             break
-                    # Feed tool results back to LLM for summarization
-                    followup = f"[Tool results]\n{result_text}\n\nSummarize these results for the user in your message. Do not call any more tools."
+                    # Last round: do not continue into exhaustion with a silent turn —
+                    # force a no-tool summarize or relay tool text.
+                    last_round = _round >= _MAX_TOOL_ROUNDS - 1
+                    followup = (
+                        f"[Tool results]\n{result_text}\n\n"
+                        "Summarize these results for the user in your message. "
+                        "Do not call any more tools."
+                    )
+                    if last_round:
+                        print_llm_invoke_line(
+                            llm_client,
+                            has_tools=False,
+                            has_image=False,
+                        )
+                        raw_response, elapsed = _call_llm(
+                            llm_client,
+                            followup,
+                            None,  # no tools — force a final answer
+                            debug_llm,
+                            image=None,
+                            reset_context=False,
+                            progress_callback=_llm_progress if show_thinking_status else None,
+                            robot=robot_client,
+                        )
+                        parsed_final = parse_tool_calls_response(raw_response)
+                        final_msg = (parsed_final.get("message") or "").strip()
+                        if not final_msg:
+                            final_msg = _format_fast_tool_reply(results) or result_text.strip()
+                        if final_msg:
+                            print_terminal(f"{agent_name}: {final_msg}", color="blue")
+                            _send_to_discord(final_msg)
+                            chat_log.log(
+                                "assistant",
+                                final_msg,
+                                raw=raw_response,
+                                time_s=elapsed,
+                                forced_final=True,
+                            )
+                        else:
+                            fallback = "I gathered tool results but could not summarize them."
+                            print_terminal(f"{agent_name}: {fallback}", color="yellow")
+                            _send_to_discord(fallback)
+                        print_terminal(
+                            f"turn done in {timeit.default_timer() - turn_t0:.1f}s "
+                            f"(forced final after {_MAX_TOOL_ROUNDS} rounds)",
+                            color="cyan",
+                        )
+                        break
                     current_input = followup
                     if debug_llm or verbose_tools:
                         print(

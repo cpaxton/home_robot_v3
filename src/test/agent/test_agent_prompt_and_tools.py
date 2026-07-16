@@ -51,6 +51,23 @@ def test_parse_plain_json():
     assert result["message"] == "Hi!"
 
 
+def test_parse_stringified_tool_arguments():
+    """Models sometimes emit arguments as a JSON string instead of an object."""
+    from emet.agent.prompt import parse_tool_calls_response
+
+    raw = '{"tool_calls": [{"name": "rotate_base", "arguments": "{\\"degrees\\": 90}"}], "message": ""}'
+    result = parse_tool_calls_response(raw)
+    assert result["tool_calls"] == [{"name": "rotate_base", "arguments": {"degrees": 90}}]
+
+
+def test_parse_invalid_stringified_arguments_becomes_empty_dict():
+    from emet.agent.prompt import parse_tool_calls_response
+
+    raw = '{"tool_calls": [{"name": "rotate_base", "arguments": "not-json"}], "message": ""}'
+    result = parse_tool_calls_response(raw)
+    assert result["tool_calls"] == [{"name": "rotate_base", "arguments": {}}]
+
+
 def test_parse_json_with_trailing_text():
     """Trailing prose after a balanced JSON object must not break parsing or leak into message."""
     from emet.agent.prompt import parse_tool_calls_response
@@ -125,9 +142,9 @@ def test_prompt_routes_turn_around_to_rotate_base():
 
     prompt = build_agent_system_prompt(tools=get_tools({}), name="Virgil")
     assert "rotate_base" in prompt
-    assert "degrees\": 180" in prompt or '"degrees": 180' in prompt
+    assert 'degrees": 180' in prompt or '"degrees": 180' in prompt
     assert "move_forward" in prompt
-    assert "meters\": 0.5" in prompt or '"meters": 0.5' in prompt
+    assert 'meters": 0.5' in prompt or '"meters": 0.5' in prompt
 
 
 def test_prompt_routes_look_around_to_scan():
@@ -162,6 +179,17 @@ def test_prompt_includes_all_tool_names():
     prompt = build_agent_system_prompt(tools)
     for t in tools:
         assert t.name in prompt, f"Tool '{t.name}' not found in system prompt"
+
+
+def test_prompt_distinguishes_info_vs_action_tools():
+    from emet.agent.prompt import build_agent_system_prompt
+
+    prompt = build_agent_system_prompt()
+    assert "Info tools return text" in prompt
+    assert "Action-only tools do not feed a tool-results summary" in prompt
+    assert "take_picture alone" in prompt
+    assert "send_image" in prompt
+    assert "{{" not in prompt, "Prompt contains literal {{ — model will copy double braces"
 
 
 def test_prompt_has_no_double_braces():

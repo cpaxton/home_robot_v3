@@ -3,6 +3,15 @@
 #
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
+#
+# Some code may be adapted from other open-source works with their respective licenses. Original
+# license information maybe found below, if so.
+
+# Copyright (c) Hello Robot, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in the root directory
+# of this source tree.
 
 """Qwen3-VL client (Hugging Face ``Qwen3VLForConditionalGeneration``).
 
@@ -96,10 +105,7 @@ class Qwen3VLClient(AbstractVLLMClient):
         self.use_fast_attn = use_fast_attn
         # Always prefer Flash-Attn 2 when installed; otherwise PyTorch SDPA (not eager).
         # ``use_fast_attn=False`` only forces eager when EMET_ATTN_EAGER=1 (debug).
-        if (
-            not use_fast_attn
-            and os.environ.get("EMET_ATTN_EAGER", "").strip().lower() in ("1", "true", "yes", "on")
-        ):
+        if not use_fast_attn and os.environ.get("EMET_ATTN_EAGER", "").strip().lower() in ("1", "true", "yes", "on"):
             self._attn_implementation = "eager"
         else:
             self._attn_implementation = resolve_attn_implementation(prefer_flash=True, device=device)
@@ -327,9 +333,7 @@ class Qwen3VLClient(AbstractVLLMClient):
             prefix_ids, past = self._encode_system_prefix(sys_txt)
             cached_past = clone_past_key_values(past)
             if cached_past is None:
-                logger.warning(
-                    "VL prefix cache: could not clone past_key_values; disabling prefix cache"
-                )
+                logger.warning("VL prefix cache: could not clone past_key_values; disabling prefix cache")
                 self.cache_system_prefix = False
                 return None
             entry = PrefixKVCacheEntry(
@@ -339,14 +343,10 @@ class Qwen3VLClient(AbstractVLLMClient):
             )
             self._prefix_cache.put(key, entry)
             if env_agent_model_debug():
-                logger.info(
-                    "VL prefix cache: stored system prefix (%d tokens) key=%s…",
-                    entry.prefix_token_len,
-                    key[:12],
-                )
+                logger.info(f"VL prefix cache: stored system prefix ({entry.prefix_token_len} tokens) key={key[:12]}…")
             return entry
         except Exception as e:
-            logger.warning("VL prefix cache: prefill failed (%s); falling back to full generate", e)
+            logger.warning(f"VL prefix cache: prefill failed ({e}); falling back to full generate")
             return None
 
     def warm_system_prefix_cache(self, system_prompt: str | None = None) -> int | None:
@@ -465,16 +465,15 @@ class Qwen3VLClient(AbstractVLLMClient):
             elapsed = timeit.default_timer() - t0
             if elapsed > _PREFIX_GENERATE_SOFT_TIMEOUT_S:
                 logger.warning(
-                    "VL prefix cache: generate with cache took %.1fs (>%ss). Disabling prefix cache "
-                    "for subsequent turns (use --no-cache-vl-prefix to skip at startup).",
-                    elapsed,
-                    _PREFIX_GENERATE_SOFT_TIMEOUT_S,
+                    f"VL prefix cache: generate with cache took {elapsed:.1f}s "
+                    f"(>{_PREFIX_GENERATE_SOFT_TIMEOUT_S}s). Disabling prefix cache "
+                    "for subsequent turns (use --no-cache-vl-prefix to skip at startup)."
                 )
                 self.cache_system_prefix = False
                 self._prefix_cache.clear()
             return generated_ids, True
         except Exception as e:
-            logger.warning("VL prefix cache: generate with cache failed (%s); full generate", e)
+            logger.warning(f"VL prefix cache: generate with cache failed ({e}); full generate")
             self.cache_system_prefix = False
             self._prefix_cache.clear()
             return self._generate_ids(inputs, max_new_tokens=max_new_tokens), False
@@ -571,10 +570,7 @@ class Qwen3VLClient(AbstractVLLMClient):
                 )
                 trim_from_len = int(inputs.input_ids.shape[1])
                 if used_cache and env_agent_model_debug():
-                    logger.info(
-                        "VL prefix cache: hit (%d-token system prefix)",
-                        prefix_entry.prefix_token_len,
-                    )
+                    logger.info(f"VL prefix cache: hit ({prefix_entry.prefix_token_len}-token system prefix)")
             else:
                 if prefix_entry is not None and env_agent_model_debug():
                     logger.info("VL prefix cache: token mismatch; full generate")

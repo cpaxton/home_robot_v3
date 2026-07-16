@@ -29,6 +29,10 @@ def _mock_habitat_robot() -> MagicMock:
         camera_K=camera_k,
         camera_pose=np.eye(4),
     )
+    # Prefer blocking move_base_to unless a test installs stepped-nav helpers.
+    robot.begin_nav_to = None
+    robot.nav_tick = None
+    robot.at_goal.return_value = True
     return robot
 
 
@@ -66,6 +70,7 @@ def test_habitat_zmq_full_obs_publishes_stretch_contract():
     np.testing.assert_allclose(msg["gps"], [0.0, 0.0], atol=1e-6)
     np.testing.assert_allclose(msg["compass"], [0.0], atol=1e-6)
     assert msg["is_simulation"] is True
+    assert msg["last_motion_failed"] is False
 
 
 def test_habitat_zmq_servo_message_stretch_contract():
@@ -92,6 +97,7 @@ def test_habitat_zmq_handle_action_nav_world():
     args, kwargs = robot.move_base_to.call_args
     np.testing.assert_allclose(args[0], [3.0, 4.0, 0.1], atol=1e-6)
     assert kwargs.get("relative") is False
+    assert server._at_goal is True
 
 
 def test_habitat_zmq_handle_action_head_to():
@@ -119,3 +125,61 @@ def test_habitat_zmq_handle_action_joint_ack_without_xyt():
     server.handle_action({"joint": [0.0] * 6, "step": 2})
     robot.move_base_to.assert_not_called()
     assert server._at_goal is True
+
+
+def test_habitat_zmq_stepped_nav_does_not_block_and_ticks_to_goal():
+    robot = _mock_habitat_robot()
+    ticks = {"n": 0}
+
+    def begin_nav_to(goal, **_kwargs):
+        robot._goal = np.asarray(goal, dtype=np.float64)
+
+    def nav_tick(max_sim_steps: int = 2):
+        ticks["n"] += 1
+        if ticks["n"] < 3:
+            return "running"
+        return "done"
+
+    robot.begin_nav_to = begin_nav_to
+    robot.nav_tick = nav_tick
+    server = HabitatZmqServer(robot, scene_id="test-scene", port_offset=9993)
+    server.handle_action({"xyt": [3.0, 4.0, 0.1], "nav_world": True, "nav_relative": False})
+    robot.move_base_to.assert_not_called()
+    assert server._at_goal is False
+    assert server._last_motion_failed is False
+    state = server.get_state_message()
+    assert state is not None and state["at_goal"] is False
+
+    server._tick_pending_nav()
+    assert server._at_goal is False
+    server._tick_pending_nav()
+    assert server._at_goal is False
+    server._tick_pending_nav()
+    assert server._at_goal is True
+    assert server._last_motion_failed is False
+    assert ticks["n"] == 3
+
+
+def test_habitat_zmq_stepped_nav_failure_sets_last_motion_failed():
+    robot = _mock_habitat_robot()
+    robot.begin_nav_to = MagicMock()
+    robot.nav_tick = MagicMock(return_value="failed")
+    server = HabitatZmqServer(robot, scene_id="test-scene", port_offset=9992)
+    server.handle_action({"xyt": [5.0, 6.0, 0.0], "nav_world": True})
+    assert server._at_goal is False
+    server._tick_pending_nav()
+    assert server._at_goal is True
+    assert server._last_motion_failed is True
+    msg = server.get_state_message()
+    assert msg is not None
+    assert msg["last_motion_failed"] is True
+
+
+def test_habitat_zmq_close_tears_down_sockets():
+    robot = _mock_habitat_robot()
+    server = HabitatZmqServer(robot, scene_id="test-scene", port_offset=9991)
+    ctx = server.context
+    server.close()
+    assert server._running is False
+    # destroy() invalidates the context; closed() is True after destroy on pyzmq.
+    assert ctx.closed

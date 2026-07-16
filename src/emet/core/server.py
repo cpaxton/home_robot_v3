@@ -45,7 +45,11 @@ def _action_recv_log_line(action: dict[str, Any], step: int) -> str:
         parts.append(f"posture={action['posture']!r}")
     if "control_mode" in action:
         parts.append(f"control_mode={action['control_mode']!r}")
-    extra = [k for k in action if k not in ("xyt", "nav_relative", "nav_world", "nav_teleport", "head_to", "posture", "control_mode", "step")]
+    extra = [
+        k
+        for k in action
+        if k not in ("xyt", "nav_relative", "nav_world", "nav_teleport", "head_to", "posture", "control_mode", "step")
+    ]
     if extra:
         parts.append(f"keys={extra}")
     return " ".join(parts)
@@ -365,6 +369,30 @@ class BaseZmqServer(CommsNode, ABC):
             time.sleep(1e-5)
             t0 = timeit.default_timer()
 
+    def close_zmq_resources(self) -> None:
+        """Close ZMQ sockets/context without joining spin threads.
+
+        Used by single-threaded servers (e.g. Habitat) and by ``__del__`` when
+        ``start()`` never spawned background threads.
+        """
+        self._done = True
+        try:
+            if hasattr(self, "recv_socket"):
+                self.recv_socket.close(linger=0)
+            if hasattr(self, "send_socket"):
+                self.send_socket.close(linger=0)
+            if hasattr(self, "send_state_socket"):
+                self.send_state_socket.close(linger=0)
+            if hasattr(self, "send_servo_socket"):
+                self.send_servo_socket.close(linger=0)
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "context"):
+                self.context.destroy(linger=0)
+        except Exception:
+            pass
+
     def __del__(self):
         self._done = True
         time.sleep(0.15)
@@ -373,22 +401,7 @@ class BaseZmqServer(CommsNode, ABC):
         # without starting ZMQ loops. In that case ``join``/``context.term()`` can block indefinitely
         # (no background threads draining sockets).
         if getattr(self, "_send_thread", None) is None:
-            try:
-                if hasattr(self, "recv_socket"):
-                    self.recv_socket.close(linger=0)
-                if hasattr(self, "send_socket"):
-                    self.send_socket.close(linger=0)
-                if hasattr(self, "send_state_socket"):
-                    self.send_state_socket.close(linger=0)
-                if hasattr(self, "send_servo_socket"):
-                    self.send_servo_socket.close(linger=0)
-            except Exception:
-                pass
-            try:
-                if hasattr(self, "context"):
-                    self.context.destroy(linger=0)
-            except Exception:
-                pass
+            self.close_zmq_resources()
             return
 
         # Close threads

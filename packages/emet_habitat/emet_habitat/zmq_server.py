@@ -80,6 +80,7 @@ class HabitatZmqServer(BaseZmqServer):
         self._scene_id = str(scene_id)
         self._running = True
         self._at_goal = True
+        self._last_motion_failed = False
         self._last_step = 0
         self._initial_xyt: np.ndarray | None = None
         self._emet_session: dict[str, Any] | None = None
@@ -102,7 +103,11 @@ class HabitatZmqServer(BaseZmqServer):
         self._running = False
         sim = getattr(self._robot, "_sim", None)
         if sim is not None and hasattr(sim, "close"):
-            sim.close()
+            try:
+                sim.close()
+            except Exception:
+                pass
+        self.close_zmq_resources()
 
     def _sync_navigation_origin(self) -> None:
         self._robot._sync_pose_from_sim()
@@ -147,6 +152,21 @@ class HabitatZmqServer(BaseZmqServer):
             return mode
         return "navigation"
 
+    def _tick_pending_nav(self, max_sim_steps: int = 2) -> None:
+        """Advance non-blocking Habitat navigation between ZMQ publish cycles."""
+        if self._at_goal:
+            return
+        tick = getattr(self._robot, "nav_tick", None)
+        if not callable(tick):
+            # Fallback for mocks that only implement blocking move_base_to.
+            self._at_goal = True
+            return
+        status = tick(max_sim_steps=max_sim_steps)
+        if status == "running":
+            return
+        self._at_goal = True
+        self._last_motion_failed = status == "failed"
+
     def handle_action(self, action: dict[str, Any]) -> None:
         if "control_mode" in action:
             self.control_mode = str(action["control_mode"])
@@ -168,6 +188,7 @@ class HabitatZmqServer(BaseZmqServer):
         if "xyt" not in action:
             return
         self._at_goal = False
+        self._last_motion_failed = False
         raw = np.asarray(action["xyt"], dtype=np.float64).reshape(-1)[:3]
         relative = bool(action.get("nav_relative", False))
         nav_world = bool(action.get("nav_world", False))
@@ -175,9 +196,18 @@ class HabitatZmqServer(BaseZmqServer):
             world_goal = raw
         else:
             world_goal = self._xyt_action_to_world(raw, relative=relative)
-        self._robot.move_base_to(world_goal, relative=False, world_frame=True)
-        self._last_step += 1
-        self._at_goal = True
+        begin = getattr(self._robot, "begin_nav_to", None)
+        if callable(begin):
+            begin(world_goal, relative=False, world_frame=True)
+        else:
+            # Unit tests / stubs without stepped nav: keep blocking path.
+            self._robot.move_base_to(world_goal, relative=False, world_frame=True)
+            self._at_goal = True
+            at_goal = getattr(self._robot, "at_goal", None)
+            if callable(at_goal):
+                self._last_motion_failed = not bool(at_goal())
+            return
+        # Do not block here — start() ticks nav between observation publishes.
 
     def _stretch_joint_vector(self, episode: np.ndarray) -> np.ndarray:
         """Stretch-shaped q with episode base XYT and current head pan/tilt."""
@@ -231,7 +261,7 @@ class HabitatZmqServer(BaseZmqServer):
             "rgb_width": rgb_width,
             "rgb_height": rgb_height,
             "control_mode": self.get_control_mode(),
-            "last_motion_failed": False,
+            "last_motion_failed": bool(self._last_motion_failed),
             "recv_address": self.recv_address,
             "step": self._last_step,
             "at_goal": bool(self._at_goal),
@@ -262,6 +292,7 @@ class HabitatZmqServer(BaseZmqServer):
             "joint_efforts": eff,
             "control_mode": self.get_control_mode(),
             "at_goal": bool(self._at_goal),
+            "last_motion_failed": bool(self._last_motion_failed),
             "is_homed": True,
             "is_runstopped": False,
             "step": self._last_step,
@@ -302,6 +333,7 @@ class HabitatZmqServer(BaseZmqServer):
                 "base_pose": episode.copy(),
                 "control_mode": self.get_control_mode(),
                 "at_goal": bool(self._at_goal),
+                "last_motion_failed": bool(self._last_motion_failed),
                 "is_simulation": True,
                 "step": self._last_step,
                 EMET_ZMQ_ROBOT_ID_KEY: "stretch",
@@ -357,6 +389,7 @@ class HabitatZmqServer(BaseZmqServer):
         while self.is_running():
             now = time.time()
             self._poll_and_handle_action()
+            self._tick_pending_nav(max_sim_steps=2)
             if now - last_servo >= servo_period:
                 msg = self.get_servo_message()
                 if msg is not None:
@@ -384,7 +417,7 @@ def run_habitat_zmq_server(
     """Block until KeyboardInterrupt; publishes Habitat observations on ZMQ."""
     server = HabitatZmqServer.from_serve_config(cfg, port_offset=port_offset, verbose=verbose)
     print(f"Habitat ZMQ server ready (scene={cfg.scene_id!r}, robot=stretch, port_offset={port_offset}).")
-    print("Connect with: emet run dynagraph --no-rerun   or   emet run agent -c \"describe the scene\"")
+    print('Connect with: emet run dynagraph --no-rerun   or   emet run agent -c "describe the scene"')
     try:
         server.start()
     except KeyboardInterrupt:
