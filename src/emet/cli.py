@@ -2219,5 +2219,10 @@ _eval_sqa3d_app.short_help = "Score SQA3D QA predictions (EM@1)"
 main.add_command(_eval_sqa3d_app)
 main.add_command(_sqa3d_group)
 
+from emet.app.eval_robovista import robovista_group as _robovista_group  # noqa: E402
+
+_robovista_group.short_help = "RoboVista offline robot-centric MCQ-VQA"
+main.add_command(_robovista_group)
+
 if __name__ == "__main__":
     main()

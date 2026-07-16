@@ -23,6 +23,7 @@ Operator guide for benchmarks referenced in `paper/sections/04_experiments.tex` 
 | **Dynamic exploration** | Frontier explore + world-change + lifelong cycles | coverage, EQA, staleness, churn | `configs/benchmarks/dynamic_exploration.yaml` | `scripts/eval_dynamic_exploration.py` | `aggregate_dynamic_exploration.csv` |
 | **Backend localization figure** | Single-scene GT vs prediction | XY error, @0.5 m hit | Robocasa seed 0 | `scripts/smoke_backend_localization_figure.py` | PNG + `smoke_results.json` |
 | **Habitat EQA** | HM-EQA / OpenEQA | MC accuracy, steps | Habitat install | `.venv-habitat/bin/emet-habitat` | [habitat_eqa_results.md](experiments/habitat_eqa_results.md) |
+| **RoboVista** | Offline robot-centric MCQ-VQA (static images) | MC accuracy (overall + domain) | HF `sy-xie/robovista` | `emet robovista run-batch` | not comparable to HM-EQA |
 
 Deep dives: [experiments/README.md](experiments/README.md) (index), [ovmm_find_phase_benchmark.md](ovmm_find_phase_benchmark.md), [ovmm_full_benchmark.md](ovmm_full_benchmark.md), [dynamic_exploration_benchmark.md](dynamic_exploration_benchmark.md), [experiments/backend_localization.md](experiments/backend_localization.md), [sqa3d.md](sqa3d.md), [sqa3d_compute.md](sqa3d_compute.md), [dynagraph_benchmarks.md](dynagraph_benchmarks.md), [habitat/README.md](habitat/README.md).
 
@@ -361,6 +362,20 @@ Resume skips finished JSONL lines. Sharded sweeps write per-shard JSONL + `*_mer
 **Next headline run:** full 113 with `Qwen/Qwen3-VL-8B-Instruct` + June 2026 fix stack (`emet-habitat run-batch --paper-subset --resume`).
 
 Install: `./scripts/install_habitat.sh`. Entrypoint: `.venv-habitat/bin/emet-habitat`. Parity: `paper/sections/appendix/05_habitat_eqa_parity.tex`.
+
+---
+
+## RoboVista (offline MCQ-VQA)
+
+Static robot-centric VQA from HuggingFace [`sy-xie/robovista`](https://huggingface.co/datasets/sy-xie/robovista) (474 expert MCQs, A–E, six domains). Uses the same local VLMs as Habitat/SQA3D but **no navigation / graph memory**. Scores are **not comparable** to HM-EQA.
+
+```bash
+uv run emet robovista info
+uv run emet robovista run-batch --mock-llm --max-questions 5
+uv run emet robovista run-batch --domain domestic --eqa-vl-family qwen3_vl --device cuda
+```
+
+Outputs: `~/runs/emet/robovista/<run_id>/predictions.jsonl` + `summary.json` (overall + by domain / ability_type). Not part of the seven-track sim smoke battery.
 
 ---
 

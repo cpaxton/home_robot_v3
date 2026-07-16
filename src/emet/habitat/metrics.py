@@ -190,12 +190,17 @@ def should_abstain_location_mcq(raw: str, choices: list[str] | None) -> bool:
     return answer_is_visibility_abstain(fields[-1])
 
 
+# HM-EQA uses A–D; RoboVista and similar 5-way MCQs use A–E.
+MCQ_LETTER_CLASS = "A-E"
+MCQ_LETTERS = "ABCDE"
+
+
 def _match_choice_text_to_letter(text: str, choices: list[str]) -> str:
-    """Map free-text (e.g. ``no``, ``off``) to A–D via HM-EQA choice strings."""
+    """Map free-text (e.g. ``no``, ``off``) to A–E via choice strings."""
     lowered = (text or "").strip().lower()
     if not lowered:
         return ""
-    for idx, choice in enumerate(choices[:4]):
+    for idx, choice in enumerate(choices[: len(MCQ_LETTERS)]):
         choice_l = (choice or "").strip().lower()
         if not choice_l:
             continue
@@ -207,25 +212,33 @@ def _match_choice_text_to_letter(text: str, choices: list[str]) -> str:
 
 
 def extract_mcq_letter(predicted: str, choices: list[str] | None = None) -> str:
-    """Extract A–D letter from free-form model output.
+    """Extract A–E letter from free-form model output.
 
     Args:
         predicted: Raw EQA / VLM answer text.
         choices: Optional choice strings; used to match embedded choice text.
 
     Returns:
-        Uppercase letter ``A``–``D``, or ``""`` if none found.
+        Uppercase letter ``A``–``E``, or ``""`` if none found.
     """
     text = (predicted or "").strip()
     if not text:
         return ""
     compact = text.replace(" ", "").upper()
-    if len(compact) == 1 and compact in "ABCD":
+    if len(compact) == 1 and compact in MCQ_LETTERS:
         return compact
-    m = re.search(r"^answer\s*:\s*([A-D])\b", text, flags=re.IGNORECASE | re.MULTILINE)
+    m = re.search(
+        rf"^answer\s*:\s*([{MCQ_LETTER_CLASS}])\b",
+        text,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
     if m:
         return m.group(1).upper()
-    m = re.search(r"(?:^|\n)\s*([A-D])\s*(?:\n|$)", text, flags=re.IGNORECASE)
+    m = re.search(
+        rf"(?:^|\n)\s*([{MCQ_LETTER_CLASS}])\s*(?:\n|$)",
+        text,
+        flags=re.IGNORECASE,
+    )
     if m:
         return m.group(1).upper()
     if choices:
@@ -260,12 +273,16 @@ def extract_mcq_letter_from_raw_eqa(raw: str, choices: list[str] | None = None) 
     letter = extract_mcq_letter(answer_field, choices)
     if letter:
         return letter
-    m = re.search(r"(?:^|\n)\s*answer\s*:\s*([a-d])\b", text, flags=re.IGNORECASE)
+    m = re.search(
+        rf"(?:^|\n)\s*answer\s*:\s*([{MCQ_LETTER_CLASS.lower()}])\b",
+        text,
+        flags=re.IGNORECASE,
+    )
     if m:
         return m.group(1).upper()
     if choices:
         idx = match_freeform_to_choice(answer_field, choices)
-        if idx is not None:
+        if idx is not None and 0 <= idx < len(MCQ_LETTERS):
             return chr(ord("A") + idx)
     return ""
 
@@ -276,7 +293,7 @@ def grade_mcq_answer(
     *,
     choices: list[str] | None = None,
 ) -> bool:
-    """Return True if ``predicted`` matches MCQ letter ``gold_letter`` (A–D).
+    """Return True if ``predicted`` matches MCQ letter ``gold_letter`` (A–E).
 
     Args:
         predicted: Model output (letter or prose containing a letter / choice text).
@@ -284,7 +301,7 @@ def grade_mcq_answer(
         choices: Optional choice list for substring matching fallback.
     """
     gold = gold_letter.strip().upper()
-    if not gold:
+    if not gold or gold not in MCQ_LETTERS:
         return False
     letter = extract_mcq_letter(predicted, choices)
     if letter:

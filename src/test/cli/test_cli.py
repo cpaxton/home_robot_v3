@@ -234,6 +234,35 @@ def test_sqa3d_help():
     assert "info" in out
 
 
+def test_robovista_help():
+    """emet robovista --help lists info and run-batch."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "robovista", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    out = result.stdout.lower()
+    assert "info" in out
+    assert "run-batch" in out
+
+
+def test_robovista_run_batch_help():
+    """run-batch documents domain, mock-llm, and VLM flags."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "robovista", "run-batch", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    out = result.stdout
+    assert "--domain" in out
+    assert "--mock-llm" in out
+    assert "--eqa-vl-family" in out
+    assert "--max-questions" in out
+    assert "--resume" in out
+
+
 def test_sqa3d_run_real_sweep_help():
     """run-real-sweep documents replay-mode and isolate-episodes."""
     result = subprocess.run(
