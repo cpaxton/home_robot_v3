@@ -65,6 +65,8 @@ class EpisodeMetrics:
     frontier_nodes: int = 0
     graph_nodes: int = 0
     observations: int = 0
+    # Shared Dynagraph health snapshot (obj/vp/fr, singletons, prompt size, …).
+    graph_health: dict = field(default_factory=dict)
     vl_family: str = ""
     vl_hf_model_id: str = ""
     debug_bundle_dir: str = ""

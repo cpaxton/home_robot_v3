@@ -41,7 +41,7 @@ For each robot, the script:
 
 1. Starts **`emet serve mujoco --use-robocasa --robot ROBOT --headless --seed 0`**
 2. Runs **`emet run dynagraph`** with **`--explore-loop --explore-max-iters 15`**, **`--export`**, **`--no-rerun`**, **`--cpu-only`**
-3. Sets **`EMET_SIM_NAV_TELEPORT=1`** so frontier goals snap in sim (consistent coverage)
+3. Sets **`EMET_SIM_NAV_TELEPORT=1`** so frontier goals snap in sim (consistent coverage). Client waits compare **world** pose for `world_frame=True` trajectories (episode gps alone falsely times out after teleport).
 4. Wipes **`graph/`** before each run so stale **`floor_metrics.json`** cannot mask failures
 5. Writes a combined report to **`/tmp/dynagraph_e2e_compare/comparison_report.json`**
 

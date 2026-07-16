@@ -210,6 +210,9 @@ eqa_vl:
   voxel_keyword_max_tokens: 20
   eqa_max_tokens: 512
   eqa_max_images: 4
+  # Cap SCENE_GRAPH object/frontier lines in the EQA prompt (full graph still in exports).
+  # Blowups (e.g. HM-EQA q94) otherwise starve the VLM with 600+ nodes.
+  eqa_max_graph_nodes: 48
   # Cap how many prior planning iterations are replayed in the prompt. Unbounded history
   # bloats the prompt and feeds the model its own repeated outputs (caption/action loops).
   eqa_max_history: 4
@@ -227,6 +230,11 @@ graph_eqa_extract:
 
 # When false, generic-label frames are dropped (no graph node, no navigation sample).
 graph_eqa_record_navigation: true
+
+# GraphEQA / Dynagraph: drop scene-inappropriate open-vocab labels at graph attach.
+# Robocasa sessions auto-select ``kitchen`` (denies bathroom stall / toilet / … from ScanNet-200).
+graph_eqa_label_filter:
+  scene_profile: auto
 
 # GraphEQA / Dynagraph: voxel frontiers mirrored as graph nodes for EQA prompts + nav.
 graph_eqa_frontier_nodes:

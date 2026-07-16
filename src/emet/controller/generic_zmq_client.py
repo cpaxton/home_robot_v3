@@ -975,7 +975,10 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             t_clear = timeit.default_timer()
             while not self._nav_goal_reset_seen() and timeit.default_timer() - t_clear < 1.0:
                 time.sleep(0.01)
-            return self._wait_at_goal(timeout=timeout or 30.0, target_xyt=xyt)
+            wait_s = timeout or 30.0
+            if env_sim_nav_teleport():
+                wait_s = min(float(wait_s), 3.0)
+            return self._wait_at_goal(timeout=wait_s, target_xyt=xyt)
         return True
 
     def _wait_at_goal(self, timeout: float = 30.0, target_xyt: np.ndarray | None = None) -> bool:

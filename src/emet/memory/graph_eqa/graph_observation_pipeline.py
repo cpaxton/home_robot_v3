@@ -89,14 +89,24 @@ def apply_instance_items_to_graph(
     *,
     dedup_skips: Callable[[str, np.ndarray], bool],
     viewer_xyz: np.ndarray | None = None,
+    scene_profile: str | None = None,
 ) -> None:
-    """Add one node per (label, xyz[, bbox_xyxy]) with optional dedup."""
+    """Add one node per (label, xyz[, bbox_xyxy]) with optional dedup / scene label filter."""
+    from emet.memory.graph_eqa.graph_label_filter import is_graph_label_allowed
+
+    profile = scene_profile
+    if profile is None:
+        from emet.memory.graph_eqa.graph_label_filter import resolve_graph_scene_profile
+
+        profile = resolve_graph_scene_profile(parameters=getattr(graph_memory, "parameters", None))
     for item in items:
         if len(item) >= 3:
             label, xyz, bbox_xyxy = item[0], item[1], item[2]
         else:
             label, xyz = item[0], item[1]
             bbox_xyxy = None
+        if not is_graph_label_allowed(str(label), scene_profile=profile):
+            continue
         if dedup_skips(label, xyz):
             continue
         graph_memory.add_observation(

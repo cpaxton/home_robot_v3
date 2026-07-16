@@ -48,6 +48,8 @@ SKIP_DYNAMIC_EXPLORE=1 ./scripts/run_large_paper_eval.sh   # skip
 
 Env defaults (set by harness): `EMET_SIM_NAV_TELEPORT=1`, `EMET_ZMQ_STARTUP_TIMEOUT=120`, `MUJOCO_GL=egl`.
 
+**Nav frame (important):** Dynagraph plans in MuJoCo **world** coordinates (`execute_trajectory(..., world_frame=True)` / `nav_world`). ZMQ `gps`/`base_pose` are **episode-relative** to `navigation_origin_xyt`. `StretchZmqClient.wait_for_waypoint` / `_wait_for_base_motion` must compare in the world frame when `world_frame=True`; otherwise teleports succeed on the server but the client burns 10s timeouts and exploration barely moves (`explored_fraction` stays ~0.1). With teleport enabled, client waits are capped at ~3s.
+
 MolmoSpaces requires `.venv-molmospaces` (`./install.sh --molmospaces -y`).
 
 ## Config
@@ -110,7 +112,7 @@ the world is fuzzed over ZMQ and moved bodies are verified against live GT place
   scoring), per-boundary `changes`, and `explore_iters_first` / `explore_iters_resume`.
 
 Metrics per cycle in `{run_id}.json` and `aggregate_dynamic_exploration_lifelong.csv`:
-`eqa_accuracy` (scored against live GT each cycle), `object_node_count` / `total_node_count`
+`eqa_accuracy` (scored against live GT each cycle), `object_node_count` / `total_node_count`, and per-cycle **`graph_health`** (`n_object`, `singleton_frac`, `mean_support`, `failure_class`, …). Triage: `uv run python scripts/summarize_graph_health.py RUN/lifelong.json`.
 (graph churn), and per-move adaptation flags (`adapted` = node appears near the new
 position, `stale` = node lingers at the old one, within 0.75 m).
 

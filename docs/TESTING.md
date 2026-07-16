@@ -143,30 +143,18 @@ uv run pytest packages/emet_molmospaces/tests/ -q
 
 ## Known gap: graph + EQA on a known scene (Dynagraph)
 
-**Current state:** The multi-robot Dynagraph E2E proves **exploration geometry** (explored m², spawner parity). Explore-only exports often show **`Nodes (0)`** in `scene_graph_report.txt` even when **`graph/frames/detections_*.json`** contains model labels (range hood, counter, etc.). There is **no CI test** yet that:
+**Status (2026-07):** Unit coverage landed in [`test_dynagraph_known_scene_attach.py`](../src/test/memory/test_dynagraph_known_scene_attach.py) — red cylinder / blue cube instance items and fusion detections must attach as object nodes with allowlisted labels (no GPU). Full Robocasa/MuJoCo E2E with live YoloE remains a stronger integration check.
 
-1. Runs **Dynagraph** (or GraphEQA) on a **fixed known scene** (default red/blue table or Robocasa seed 0),
-2. Asserts **`GraphEQAMemory`** (or export) has **≥ N nodes** whose **primary labels** come from the **detection / description models** (not hand-injected),
-3. Runs **`--question`** (or `query_answer`) about **ground-truth objects** and checks the answer / confidence.
-
-**Related but different paths:**
-
-- **`test_scene_graph_robocasa`** — strong on **OpenVocabSceneGraph** labels and dedup; different stack than Dynagraph’s `GraphEQAMemory`.
-- **`test_graph_eqa_default_scene_sim`** — sim + graph string checks; labels are **added manually** to memory, not wired through Dynagraph’s full perception → graph hook.
-
-### Proposed next step (recommended)
-
-Add **`test_dynagraph_graph_eqa_known_scene.py`** (or extend the E2E harness) that:
+**Remaining E2E gap:** Explore-only exports can still show **`Nodes (0)`** in `scene_graph_report.txt` when detections exist but the instance→graph hook did not run. Prefer graph-health fields in Habitat `metrics.json` / dynamic-explore cycle rows (`graph_health`) and `uv run python scripts/summarize_graph_health.py …`.
 
 | Step | Detail |
 |------|--------|
-| Scene | Default MuJoCo table (**red cylinder**, **blue cube**) and/or Robocasa **seed 0** with documented fixture objects |
-| Run | `uv run emet run dynagraph --explore-loop … --question "What colors are the objects on the table?" --export /tmp/…` (or pytest driving the same APIs) |
-| Assert graph | `scene_graph_report.txt` or `GraphEQAMemory.to_string()`: **≥ 1 node**; labels match allowlist (e.g. contains *red*, *blue*, or kitchen nouns from detections JSON) |
-| Assert EQA | Answer text contains expected tokens; optional mocked EQA client for CI stability (pattern from `test_graph_eqa_default_scene_sim`) |
-| Docs | Link from [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md) and this page |
+| Unit (CI) | `uv run emet test src/test/memory/test_dynagraph_known_scene_attach.py --no-sim` |
+| Scene E2E | Default MuJoCo table or Robocasa seed 0 with `--export` + `--question` |
+| Assert graph | `graph_health.n_object ≥ 2` or allowlisted labels in `scene_graph_report.txt` |
+| Health triage | `scripts/summarize_graph_health.py` → `blowup` / `fragmentation` / `empty_graph` / `ok` |
 
-Until that exists, use **manual** `--question` runs (documented in [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md#assessing-semantic--eqa-quality)) and inspect **`detections_*.json`** + **`scene_graph_report.txt`**.
+Until full E2E is green in CI, use **manual** `--question` runs (documented in [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md#assessing-semantic--eqa-quality)) and inspect **`detections_*.json`** + **`scene_graph_report.txt`**.
 
 ---
 

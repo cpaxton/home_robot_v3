@@ -235,6 +235,22 @@ def compute_dynagraph_eval(
     if graph["node_count"] == 0.0 and report_path.is_file():
         graph.update(graph_stats_from_report_text(report_path.read_text(encoding="utf-8", errors="replace")))
 
+    graph_health: dict[str, Any] = {}
+    graph_json = episode_dir / GRAPH_FILENAME
+    if graph_json.is_file():
+        from emet.memory.graph_eqa.graph_stats import (
+            classify_graph_failure,
+            graph_health_from_checkpoint_nodes,
+        )
+
+        raw = json.loads(graph_json.read_text(encoding="utf-8"))
+        n_obs = len(raw.get("observations") or []) if raw.get("observations") is not None else None
+        graph_health = graph_health_from_checkpoint_nodes(
+            list(raw.get("nodes") or []),
+            n_obs=n_obs,
+        )
+        graph_health["failure_class"] = classify_graph_failure(graph_health)
+
     explore = explore_metrics(episode_dir)
     fusion = fusion_metrics(episode_dir, match_xy_m=match_xy_m, bounds_iou_min=bounds_iou_min)
     gt = gt_metrics(episode_dir)
@@ -255,6 +271,7 @@ def compute_dynagraph_eval(
         "episode_dir": str(episode_dir),
         "explore": explore,
         "graph": graph,
+        "graph_health": graph_health,
         "fusion": fusion,
         "gt": gt,
         "eqa": eqa_section,

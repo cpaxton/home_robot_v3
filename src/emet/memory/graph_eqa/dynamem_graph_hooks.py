@@ -23,6 +23,11 @@ import numpy as np
 
 from emet.memory.graph_eqa.calibration_export import CalibrationFrameWriter, detections_to_json_rows
 from emet.memory.graph_eqa.graph_memory import labels_are_semantic_graph_hypothesis
+from emet.memory.graph_eqa.graph_label_filter import (
+    filter_graph_labels,
+    is_graph_label_allowed,
+    resolve_graph_scene_profile,
+)
 from emet.memory.graph_eqa.graph_observation_pipeline import apply_instance_items_to_graph
 from emet.memory.graph_eqa.instance_observations import (
     frame_instances_to_detections,
@@ -105,6 +110,10 @@ def update_graph_memory_from_dynamem_observation(
         graph_memory.set_graph_timestep(int(frame_step))
 
     viewer_xyz = viewer_xyz_world_from_observation(obs, robot=robot)
+    scene_profile = resolve_graph_scene_profile(
+        robot=robot,
+        parameters=getattr(graph_memory, "parameters", None),
+    )
 
     vm = voxel_map
     instance_items: list[tuple[str, np.ndarray, tuple[int, int, int, int]]] = []
@@ -117,6 +126,14 @@ def update_graph_memory_from_dynamem_observation(
             max_depth=float(vm.max_depth),
             detection_model=detection_model,
         )
+        raw_dets = [
+            d
+            for d in raw_dets
+            if is_graph_label_allowed(
+                str(d.get("label_short", d.get("label", ""))),
+                scene_profile=scene_profile,
+            )
+        ]
         instance_items = [
             (
                 d["label_short"],
@@ -128,7 +145,11 @@ def update_graph_memory_from_dynamem_observation(
         if not instance_items and getattr(frame, "instance", None) is not None and getattr(
             vm, "use_instance_memory", False
         ):
-            instance_items = instance_items_from_instance_memory(vm, detection_model)
+            instance_items = [
+                it
+                for it in instance_items_from_instance_memory(vm, detection_model)
+                if is_graph_label_allowed(str(it[0]), scene_profile=scene_profile)
+            ]
 
         if calibration_writer is not None and raw_dets:
             calibration_writer.append(
@@ -160,6 +181,7 @@ def update_graph_memory_from_dynamem_observation(
                     instance_items,
                     dedup_skips=dedup_skips or (lambda _l, _x: False),
                     viewer_xyz=viewer_xyz,
+                    scene_profile=scene_profile,
                 )
 
     labeler = getattr(robot, "hm3d_semantic_labeler", None)
@@ -221,6 +243,8 @@ def update_graph_memory_from_dynamem_observation(
         labels = short_labels_from_voxel_descriptions(voxel_labels) if voxel_labels else ["object"]
         desc = None
         xyz = np.array(obs.camera_pose[:3, 3], dtype=float)
+
+    labels = filter_graph_labels(labels, scene_profile=scene_profile)
 
     fusion_enabled = graph_object_fusion is not None and getattr(
         getattr(graph_object_fusion, "config", None),

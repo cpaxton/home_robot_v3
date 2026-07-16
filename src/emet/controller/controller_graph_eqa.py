@@ -336,15 +336,21 @@ class GraphEQAController(DynamemController):
         return np.array([float(node.xyz[0]), float(node.xyz[1]), 1.0], dtype=float)
 
     def _graph_dedup_skips(self, label: str, xyz: np.ndarray) -> bool:
-        """Skip adding a node if we already have the same label near this XY (v1 merge)."""
-        if self._graph_dedup_xy_m <= 0:
+        """Skip adding a node if a compatible label already exists near this XY.
+
+        Uses :func:`~emet.memory.graph_eqa.graph_stats.labels_compatible_for_dedup` so
+        open-vocab drift (``mug`` vs ``coffee cup``) does not bypass XY dedup.
+        """
+        if self._graph_dedup_xy_m <= 0 or self.graph_memory is None:
             return False
-        lb = label.strip().lower()
+        from emet.memory.graph_eqa.graph_stats import labels_compatible_for_dedup
+
         for n in self.graph_memory.get_nodes():
+            if getattr(n, "is_viewpoint", False) or getattr(n, "is_frontier", False):
+                continue
             if not n.labels:
                 continue
-            nl = (n.labels[0] or "").strip().lower()
-            if nl != lb:
+            if not labels_compatible_for_dedup(label, str(n.labels[0])):
                 continue
             if float(np.linalg.norm(n.xyz[:2] - xyz[:2])) < self._graph_dedup_xy_m:
                 return True

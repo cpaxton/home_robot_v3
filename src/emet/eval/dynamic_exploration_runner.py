@@ -901,9 +901,22 @@ def run_lifelong_episode(
 
                 nodes = _load_checkpoint_object_nodes(ckpt)
                 graph_raw = {}
+                n_obs = None
                 if (ckpt / "graph.json").is_file():
                     graph_raw = json.loads((ckpt / "graph.json").read_text(encoding="utf-8"))
                 n_total_nodes = len(graph_raw.get("nodes", []))
+                if graph_raw.get("observations") is not None:
+                    n_obs = len(graph_raw.get("observations") or [])
+                from emet.memory.graph_eqa.graph_stats import (
+                    classify_graph_failure,
+                    graph_health_from_checkpoint_nodes,
+                )
+
+                health = graph_health_from_checkpoint_nodes(
+                    list(graph_raw.get("nodes") or []),
+                    n_obs=n_obs,
+                )
+                health["failure_class"] = classify_graph_failure(health)
 
                 cycle_row: dict[str, Any] = {
                     "cycle": t,
@@ -914,6 +927,7 @@ def run_lifelong_episode(
                     "eqa_accuracy": (eqa_score or {}).get("accuracy"),
                     "object_node_count": len(nodes),
                     "total_node_count": n_total_nodes,
+                    "graph_health": health,
                     "moved_body_churn": _churn_metrics_for_moves(ckpt, pending_moves),
                     "cycle_wall_s": time.monotonic() - cycle_t0,
                 }
@@ -943,6 +957,7 @@ def run_lifelong_episode(
             "summary": {
                 "eqa_accuracy_by_cycle": accs,
                 "object_node_count_by_cycle": [c.get("object_node_count") for c in cycle_results],
+                "graph_health_by_cycle": [c.get("graph_health") for c in cycle_results],
                 "n_moves_total": len(churn),
                 "n_moves_adapted": sum(1 for m in churn if m.get("adapted")),
                 "n_moves_stale": sum(1 for m in churn if m.get("stale")),

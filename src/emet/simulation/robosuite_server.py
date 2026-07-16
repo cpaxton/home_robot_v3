@@ -884,11 +884,13 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     def _resolve_nav_teleport(self, action: dict[str, Any], raw: np.ndarray) -> bool:
         """Whether to instant-snap the base for this ``xyt`` action (else holonomic velocity drive)."""
-        # Planar robots: smooth yaw via velocity actuators (idle qpos hold keeps XY at spawn).
-        if self._is_pure_yaw_relative(action, raw) and self._planar_base_joint_names() is not None:
-            return False
+        # Explicit ``nav_teleport`` (client / ``EMET_SIM_NAV_TELEPORT=1``) always wins so eval
+        # explore does not burn 10s waits on planar yaw slews that never finish in time.
         if bool(action.get("nav_teleport", False)):
             return True
+        # Without an explicit flag: planar pure-yaw uses velocity actuators (smooth rotate).
+        if self._is_pure_yaw_relative(action, raw) and self._planar_base_joint_names() is not None:
+            return False
         return self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()
 
     def _use_molmospaces_nav_teleport(self) -> bool:

@@ -15,15 +15,11 @@ fallback; enabled in `DynagraphController`, not in baseline `graph_eqa`).
    question ids you will run.
 3. **GPU** — one **exclusive** ~24 GB CUDA GPU. Co-tenant processes cause OOM stubs that
    `--resume` will retry forever if the VLM never loads.
-4. **Qwen3.5 fast kernels (optional but recommended)** — if evaluating `qwen3_5`, install
-   `fla-core` + `flash-linear-attention` in `.venv-habitat` (see
-   [`requirements-pip.txt`](../../packages/emet_habitat/requirements-pip.txt)). Without
-   them, Qwen3.5 episodes can exceed multi-hour timeouts.
-
-```bash
-# From repo root, after ./scripts/install_habitat.sh
-uv pip install --python .venv-habitat/bin/python fla-core flash-linear-attention
-```
+4. **Qwen3.5 fast kernels** — `fla-core` + `flash-linear-attention` ship in
+   [`requirements-pip.txt`](../../packages/emet_habitat/requirements-pip.txt) and are
+   verified by `./scripts/install_habitat.sh`. Without them, transformers silently uses
+   slower PyTorch Gated DeltaNet ops and Qwen3.5 episodes can exceed multi-hour timeouts.
+   Re-run the install script (or `uv pip install --python .venv-habitat/bin/python -r packages/emet_habitat/requirements-pip.txt`) if `import fla.ops.gated_delta_rule` fails.
 
 ## Question sets
 
