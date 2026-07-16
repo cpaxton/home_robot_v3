@@ -417,6 +417,7 @@ class GraphEQAMemory:
         self.last_eqa_parsed: tuple[str, str, bool, str, str] = ("", "", False, "", "")
         self.last_eqa_obs_ids: list[int] = []
         self.last_eqa_action_obs_id: int | None = None
+        self.last_eqa_prompt_node_count: int = 0
         self.last_nav_result_note: str = ""
         self.last_eqa_nav_fallback_count: int = 0
         # Model's own confidence before the graph-coverage gate suppresses it (for early-stop).
@@ -640,11 +641,13 @@ class GraphEQAMemory:
                 bbox_i = (b[0], b[1], b[2], b[3])
 
         if self.spatial_merge_m > 0:
+            from emet.memory.graph_eqa.graph_stats import labels_compatible_for_dedup
+
             for idx, existing in enumerate(self._nodes):
                 if existing.is_viewpoint or existing.is_frontier or is_ground_truth_node(existing):
                     continue
-                el = [(x or "").strip().lower() for x in existing.labels if str(x).strip()]
-                if not el or el[0] != primary:
+                el = [str(x).strip() for x in existing.labels if str(x).strip()]
+                if not el or not labels_compatible_for_dedup(primary, el[0]):
                     continue
                 ex = np.asarray(existing.xyz, dtype=float).reshape(-1)[:3]
                 if float(np.linalg.norm(ex[:2] - xyz_a[:2])) <= self.spatial_merge_m:
@@ -1336,15 +1339,79 @@ class GraphEQAMemory:
             return np.array([float(pick.xyz[0]), float(pick.xyz[1]), 1.0], dtype=float)
         return None
 
-    def to_string(self) -> str:
-        """Serialize the scene graph to a string for mLLM prompts."""
+    def _rank_nodes_for_eqa_prompt(
+        self,
+        *,
+        keywords: list[str] | None = None,
+        prefer_obs_ids: list[int] | None = None,
+    ) -> list[GraphNode]:
+        """Rank object/frontier nodes for a bounded EQA SCENE_GRAPH block.
+
+        Viewpoints are omitted from the ranked list (they bloat prompts); edges still
+        reference kept object ids. Frontiers are included and ranked after objects.
+        """
+        from emet.memory.graph_eqa.frontier_nodes import keyword_overlap_score
+
+        kws = list(keywords or self._relevant_objects or [])
+        prefer = {int(x) for x in (prefer_obs_ids or self.last_eqa_obs_ids or [])}
+        objects: list[tuple[float, GraphNode]] = []
+        frontiers: list[tuple[float, GraphNode]] = []
+        for n in self._nodes:
+            if n.is_viewpoint:
+                continue
+            kw = keyword_overlap_score(list(n.labels or []), kws) if kws else 0.0
+            support = float(getattr(n, "support_count", 1) or 1)
+            prefer_bonus = 2.0 if int(n.obs_id) in prefer else 0.0
+            score = 10.0 * kw + prefer_bonus + 0.1 * support
+            if n.is_frontier:
+                frontiers.append((score, n))
+            else:
+                objects.append((score, n))
+        objects.sort(key=lambda t: (-t[0], int(t[1].node_id)))
+        frontiers.sort(key=lambda t: (-t[0], int(t[1].node_id)))
+        return [n for _, n in objects] + [n for _, n in frontiers]
+
+    def to_string(
+        self,
+        *,
+        max_object_nodes: int | None = None,
+        question_keywords: list[str] | None = None,
+        prefer_obs_ids: list[int] | None = None,
+        record_prompt_count: bool = False,
+    ) -> str:
+        """Serialize the scene graph to a string for mLLM prompts.
+
+        When ``max_object_nodes`` is set, keep the top-K ranked object/frontier nodes
+        (keyword + support + Image-N preference) so blowups cannot starve the VLM.
+        Full untruncated serialization is the default for exports / debugging.
+        """
         lines = []
 
         def _prompt_labels(labels: list[str], max_len: int = 120) -> str:
             s = ", ".join(labels) if labels else "object"
             return s if len(s) <= max_len else s[: max_len - 3] + "..."
 
-        for n in self._nodes:
+        if max_object_nodes is not None and max_object_nodes > 0:
+            ranked = self._rank_nodes_for_eqa_prompt(
+                keywords=question_keywords,
+                prefer_obs_ids=prefer_obs_ids,
+            )
+            # Always keep at least a few frontiers if present.
+            objects = [n for n in ranked if not n.is_frontier]
+            frontiers = [n for n in ranked if n.is_frontier]
+            keep_obj = objects[: max(0, int(max_object_nodes))]
+            frontier_budget = max(0, min(len(frontiers), max(4, int(max_object_nodes) // 4)))
+            keep = keep_obj + frontiers[:frontier_budget]
+            keep_ids = {int(n.node_id) for n in keep}
+            nodes_for_prompt = keep
+        else:
+            nodes_for_prompt = list(self._nodes)
+            keep_ids = {int(n.node_id) for n in nodes_for_prompt}
+
+        if record_prompt_count:
+            self.last_eqa_prompt_node_count = len(nodes_for_prompt)
+
+        for n in nodes_for_prompt:
             lbl = _prompt_labels(n.labels)
             sup = f" n={n.support_count}" if getattr(n, "support_count", 1) != 1 else ""
             if n.is_frontier:
@@ -1354,9 +1421,14 @@ class GraphEQAMemory:
             else:
                 kind = "Node"
             lines.append(
-                f"{kind} {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) [Image {n.obs_id}]{sup}{self._node_nav_status_suffix(n)}"
+                f"{kind} {n.node_id}: {lbl} at ({n.xyz[0]:.2f}, {n.xyz[1]:.2f}, {n.xyz[2]:.2f}) "
+                f"[Image {n.obs_id}]{sup}{self._node_nav_status_suffix(n)}"
             )
         for a, b, rel in self._edges:
+            if int(a) not in keep_ids:
+                continue
+            if b != -1 and int(b) not in keep_ids:
+                continue
             b_str = "floor" if b == -1 else str(b)
             lines.append(f"  {rel}({a}, {b_str})")
         return "SCENE_GRAPH:\n" + "\n".join(lines) if lines else "SCENE_GRAPH: (empty)"
@@ -2508,7 +2580,13 @@ class GraphEQAMemory:
             attribute_question=attribute_q,
         )
         self.last_eqa_obs_ids = list(obs_ids)
-        graph_str = self.to_string()
+        max_graph_nodes = get_eqa_vl_int(self.parameters, "eqa_max_graph_nodes", 48)
+        graph_str = self.to_string(
+            max_object_nodes=max_graph_nodes if max_graph_nodes > 0 else None,
+            question_keywords=list(self._relevant_objects or []),
+            prefer_obs_ids=obs_ids,
+            record_prompt_count=True,
+        )
         nav_fallback_tail: list[GraphNavigationSample] = []
         if self._observations:
             img_desc_str = self._get_image_descriptions_str(obs_ids)

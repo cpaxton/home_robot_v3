@@ -72,11 +72,10 @@ class GraphObjectFusion:
     def _label_match(self, node: GraphNode, label: str) -> bool:
         if not self.config.require_label_match:
             return True
-        lb = label.strip().lower()
+        from emet.memory.graph_eqa.graph_stats import labels_compatible_for_dedup
+
         for x in node.labels:
-            if (x or "").strip().lower() == lb:
-                return True
-            if lb in (x or "").strip().lower():
+            if labels_compatible_for_dedup(label, str(x or "")):
                 return True
         return False
 

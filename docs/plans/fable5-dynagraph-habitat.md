@@ -297,4 +297,4 @@ MCQ debias + canonical-6 bake-off numbers in this doc and [vlm_bakeoff.md](../ha
 - **q31 / q94 excluded** from comparison sets (timeout / graph blowup); see §11 above.
 - **Gemma q14 OOM** — deterministic after load; phase skipped when ceiling < 8B score.
 - **fla-core** required for fair Qwen3.5 wall-clock (`packages/emet_habitat/requirements-pip.txt`).
-- **TODO post-bake-off:** cap scene-graph text in EQA prompt (top-K SigLIP-ranked nodes).
+- **TODO post-bake-off:** ~~cap scene-graph text in EQA prompt (top-K SigLIP-ranked nodes).~~ **Done (2026-07):** `eqa_vl.eqa_max_graph_nodes` (default 48) with keyword / support / Image‑N ranking in `GraphEQAMemory.to_string`; see [2026-07-15_dynagraph_graph_quality_dynamic_eqa.md](2026-07-15_dynagraph_graph_quality_dynamic_eqa.md).

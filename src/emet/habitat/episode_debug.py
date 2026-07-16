@@ -177,10 +177,18 @@ def enrich_episode_metrics(
     metrics.error = error
     metrics.debug_bundle_dir = debug_bundle_dir
     if gm is not None:
+        from emet.memory.graph_eqa.graph_stats import graph_health_metrics
+
         metrics.eqa_iterations = len(getattr(gm, "_history_outputs", []) or [])
         metrics.frontier_nodes = sum(1 for n in gm.get_nodes() if getattr(n, "is_frontier", False))
         metrics.graph_nodes = len(gm.get_nodes())
         metrics.observations = len(getattr(gm, "_observations", []) or [])
+        health = graph_health_metrics(gm)
+        metrics.graph_health = health
+        # Keep legacy scalars aligned with health breakdown.
+        metrics.frontier_nodes = int(health.get("n_frontier", metrics.frontier_nodes))
+        metrics.graph_nodes = int(health.get("n_total", metrics.graph_nodes))
+        metrics.observations = int(health.get("n_obs", metrics.observations))
     params = getattr(agent, "parameters", None)
     if params is None and gm is not None:
         params = getattr(gm, "parameters", None)

@@ -25,4 +25,5 @@ Operator index: [experiments/README.md](../experiments/README.md) · LaTeX: `pap
 - **[2025-03-10_molmospaces_testing.md](2025-03-10_molmospaces_testing.md)** – Testing plan for MolmoSpaces integration (CLI, runner venv, scenes, serve).
 - **[innate-mars-development.md](innate-mars-development.md)** – Innate Mars bridge, sim experiments, hardware bring-up; where to resume.
 - **[2026-06-03_habitat_eqa_exploration_improvements.md](2026-06-03_habitat_eqa_exploration_improvements.md)** – HM-EQA exploration/prompting improvements (frontier map vs nodes, navigation fix, ablation plan).
+- **[2026-07-15_dynagraph_graph_quality_dynamic_eqa.md](2026-07-15_dynagraph_graph_quality_dynamic_eqa.md)** – Graph-health metrics, prompt top-K, label dedup; dynamic EQA deferred until quality gates pass.
 - **[fable5-dynagraph-habitat.md](fable5-dynagraph-habitat.md)** – Dynagraph HM-EQA results, MCQ debiasing, VLM bake-off findings (links to [vlm_bakeoff.md](../habitat/vlm_bakeoff.md)).

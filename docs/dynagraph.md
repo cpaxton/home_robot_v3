@@ -223,15 +223,19 @@ Append a pretty-print snapshot of **`GraphEQAMemory`** at session end (**`finall
 
 | Key | Meaning |
 |-----|---------|
-| `dynagraph_merge_xy_m` | If `> 0`, a new observation whose **primary** label matches an existing node and whose XY distance is within this threshold **updates** that node (support count, running-mean XYZ, `last_seen`) instead of adding a new node/observation. |
+| `dynagraph_merge_xy_m` | If `> 0`, a new observation whose label is **compatible** with an existing node (exact / substring / shared tokens / synonym group) and whose XY distance is within this threshold **updates** that node (support count, running-mean XYZ, `last_seen`) instead of adding a new node/observation. |
 | `graph_object_fusion.fallback_spatial_merge_xy_m` | When GraphObjectFusion is enabled, strict merge gates (XY, 3D centroid, bounds IoU, embedding) run first. If no node matches, a **fallback tier** merges into the nearest object node within this XY radius (ignores bounds/embedding). Defaults to **`0.45`** in [`default_graph_object_fusion.yaml`](../src/emet/config/agents/default_graph_object_fusion.yaml); when unset at attach time, [`setup.py`](../src/emet/memory/graph_eqa/graph_object_fusion/setup.py) copies **`dynagraph_merge_xy_m`** from the loaded dynav parameters. Set to **`0`** to disable fallback. Innate Mars hardware uses wider gates in [`graph_object_fusion_innate_mars.yaml`](../src/emet/config/agents/graph_object_fusion_innate_mars.yaml) (wired via [`dynav_innate_mars.yaml`](../src/emet/config/dynav_innate_mars.yaml)). |
 | `dynagraph_staleness_horizon` | If `> 0`, `maintain(current_step)` removes nodes with `current_step - last_seen` greater than this value, removes their observations, renumbers `node_id`, and rebuilds edges. |
 | `graph_eqa_frontier_nodes.enabled` | Sync unexplored frontier clusters into the graph for EQA prompts and question-guided exploration. |
 | `graph_eqa_frontier_nodes.max_nodes` | Cap on simultaneous frontier graph nodes. |
 | `graph_eqa_frontier_nodes.min_cluster_cells` | Minimum grid cells per frontier cluster. |
 | `graph_eqa_frontier_nodes.keyword_score_weight` | Blend weight for question-keyword overlap in voxel `sample_exploration`. |
+| `eqa_vl.eqa_max_graph_nodes` | Cap object/frontier lines in the EQA `SCENE_GRAPH` prompt (default **48**). Full graph remains in exports; see [`graph_stats.py`](../src/emet/memory/graph_eqa/graph_stats.py) / `scripts/summarize_graph_health.py`. |
+| `graph_eqa_label_filter.scene_profile` | ``auto`` (default): Robocasa → ``kitchen`` deny-list for bathroom ScanNet classes; Habitat stays ``indoor``. Set ``none`` to disable. See [`graph_label_filter.py`](../src/emet/memory/graph_eqa/graph_label_filter.py). |
 
-The controller passes `frame_step=self.obs_count` into the shared DynaMem→graph hook so `last_seen` stays aligned with the run’s discrete time index.
+### Graph health (EQA + dynamic explore)
+
+Habitat episode `metrics.json` and dynamic-explore cycle rows include a shared **`graph_health`** snapshot: `n_object` / `n_viewpoint` / `n_frontier` / `n_obs`, `mean_support`, `singleton_frac`, `label_entropy`, `top_labels`, and (when EQA ran) `prompt_node_count`. Prefer **object** count over total nodes when diagnosing blowups. Triage: `uv run python scripts/summarize_graph_health.py PATH`.
 
 **Stationary hardware stream:** `emet stream --backend dynagraph` on a non-moving real robot can still add graph nodes every step (DA3 depth noise + GraphObjectFusion gates). See [known_issues.md](known_issues.md#dynagraph-graph-node-explosion-on-stationary-hardware-stream).
 

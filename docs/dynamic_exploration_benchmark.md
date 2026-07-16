@@ -112,7 +112,7 @@ the world is fuzzed over ZMQ and moved bodies are verified against live GT place
   scoring), per-boundary `changes`, and `explore_iters_first` / `explore_iters_resume`.
 
 Metrics per cycle in `{run_id}.json` and `aggregate_dynamic_exploration_lifelong.csv`:
-`eqa_accuracy` (scored against live GT each cycle), `object_node_count` / `total_node_count`
+`eqa_accuracy` (scored against live GT each cycle), `object_node_count` / `total_node_count`, and per-cycle **`graph_health`** (`n_object`, `singleton_frac`, `mean_support`, `failure_class`, …). Triage: `uv run python scripts/summarize_graph_health.py RUN/lifelong.json`.
 (graph churn), and per-move adaptation flags (`adapted` = node appears near the new
 position, `stale` = node lingers at the old one, within 0.75 m).
 

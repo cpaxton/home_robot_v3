@@ -61,8 +61,8 @@ Several merge paths exist; on stream + hardware they appear **too weak** for noi
 | Mechanism | Config / code | Limitation on stationary IRL |
 |-----------|---------------|------------------------------|
 | **GraphObjectFusion** | [`graph_object_fusion`](../src/emet/config/agents/default_graph_object_fusion.yaml) in dynav (enabled on stream via [stream_agent_factory](../src/emet/app/stream_agent_factory.py)) | Merges when XY ≤ `spatial_merge_xy_m` (0.42 m), 3D centroid ≤ `min_centroid_dist_m` (0.55 m), bounds IoU, embedding cosine ≥ 0.62. **DA3 depth jitter** and pose/camera noise can push repeated views of the same object outside these gates → **new node every step**. See [fusion.py](../src/emet/memory/graph_eqa/graph_object_fusion/fusion.py) and [dynagraph.md § Configuration keys](dynagraph.md#configuration-keys). |
-| **Label-based pre-dedup** | `graph_instance_dedup_xy_m` (default **0.4 m**; [graph_eqa.md](graph_eqa.md)) | `_graph_dedup_skips` only skips when the **same primary label** is within XY radius. VLM / detector **label drift** (`"mug"` vs `"coffee cup"`) bypasses this. See [controller_graph_eqa.py](../src/emet/controller/controller_graph_eqa.py). |
-| **Dynagraph spatial merge** | `dynagraph_merge_xy_m` (default **0.45 m** on stream; [dynagraph.md](dynagraph.md)) | `GraphEQAMemory.add_observation` merges same primary label within XY — but **`spatial_merge_m` is cleared to 0** when GraphObjectFusion is enabled ([setup.py](../src/emet/memory/graph_eqa/graph_object_fusion/setup.py)). |
+| **Label-based pre-dedup** | `graph_instance_dedup_xy_m` (default **0.4 m**; [graph_eqa.md](graph_eqa.md)) | `_graph_dedup_skips` uses :func:`~emet.memory.graph_eqa.graph_stats.labels_compatible_for_dedup` (exact / substring / shared tokens / synonym groups) so ``mug`` vs ``coffee cup`` no longer bypasses XY dedup. See [controller_graph_eqa.py](../src/emet/controller/controller_graph_eqa.py). |
+| **Dynagraph spatial merge** | `dynagraph_merge_xy_m` (default **0.45 m** on stream; [dynagraph.md](dynagraph.md)) | `GraphEQAMemory.add_observation` merges **compatible** labels within XY — but **`spatial_merge_m` is cleared to 0** when GraphObjectFusion is enabled ([setup.py](../src/emet/memory/graph_eqa/graph_object_fusion/setup.py)); fusion fallback covers that path. |
 | **Staleness prune** | `dynagraph_staleness_horizon` (default **256**) | `maintain()` does not drop nodes until they are stale for hundreds of steps — fine for explore loops, **not** for short stationary streams. |
 
 Additional contributors:
@@ -90,6 +90,7 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 3. **Re-enable or unify merge** — ~~reconcile GraphObjectFusion with `dynagraph_merge_xy_m`~~ **Done:** fallback tier + innate_mars YAML (see Fix above).
 4. **Aggressive staleness** for stream-only sessions (lower horizon when `emet stream` not explore-loop).
 5. **Regression test** — ~~sim GT graph with fixed camera should keep node count flat~~ **Done:** `test_graph_dedup_offline.py` + fixture generator; hardware replay from saved `capture` metadata remains optional.
+6. **Kitchen label filter (2026-07)** — Robocasa sessions deny bathroom ScanNet classes at graph attach (`graph_eqa_label_filter` / [`graph_label_filter.py`](../src/emet/memory/graph_eqa/graph_label_filter.py)) so ``bathroom stall`` cannot dominate kitchen graphs.
 
 ### Code touchpoints
 
