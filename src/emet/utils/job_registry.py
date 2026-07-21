@@ -412,6 +412,7 @@ def summarize_eval_cmd(cmd: str) -> tuple[str, str]:
         out = "~" + out[len(home) :]
     return script, out
 
+
 def format_scanned_header() -> str:
     return f"  {'PID':>8}  {'SCRIPT':<36}  OUT"
 

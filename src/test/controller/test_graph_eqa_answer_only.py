@@ -1,5 +1,4 @@
-# Copyright (c) Hello Robot, Inc.
-# All rights reserved.
+# Copyright (c) Chris Paxton 2026
 
 """GraphEQA answer-only mode (post-explore question bank) must skip frontier nav."""
 
@@ -85,3 +84,42 @@ def test_run_eqa_answer_only_passes_allow_navigation_false():
     assert "near the counter" in discord_text
     one_iter.assert_called_once()
     assert one_iter.call_args.kwargs.get("allow_navigation") is False
+
+
+def test_run_eqa_single_step_allows_nav_when_enabled():
+    """max_planning_steps=1 + allow_navigation=True still passes nav into one_iter."""
+    from emet.controller.controller_graph_eqa import GraphEQAController
+
+    agent = _make_agent()
+    one_iter = MagicMock(
+        return_value=("near the counter", "near the counter", [], True)
+    )
+    agent.run_eqa_one_iter = one_iter
+    GraphEQAController.run_eqa(
+        agent,
+        "Where is the sink?",
+        max_planning_steps=1,
+        allow_navigation=True,
+    )
+    assert one_iter.call_args.kwargs.get("allow_navigation") is True
+
+
+def test_run_eqa_multi_step_skips_nav_on_final_step():
+    from emet.controller.controller_graph_eqa import GraphEQAController
+
+    agent = _make_agent()
+    nav_flags: list[bool] = []
+
+    def _one_iter(*_a, allow_navigation=True, **_kw):
+        nav_flags.append(bool(allow_navigation))
+        return ("a", "a", [], False)
+
+    agent.run_eqa_one_iter = _one_iter
+    agent.update = MagicMock()
+    GraphEQAController.run_eqa(
+        agent,
+        "Where is the sink?",
+        max_planning_steps=3,
+        allow_navigation=True,
+    )
+    assert nav_flags == [True, True, False]

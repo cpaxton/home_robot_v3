@@ -388,10 +388,8 @@ class GraphEQAController(DynamemController):
             self._sync_graph_frontier_nodes()
 
         try:
-            logger.info(
-                "EQA query_answer start for %r",
-                question if isinstance(question, str) else str(question)[:80],
-            )
+            q_preview = question if isinstance(question, str) else str(question)[:80]
+            logger.info(f"EQA query_answer start for {q_preview!r}")
             t_qa0 = time.monotonic()
             (
                 reasoning,
@@ -406,10 +404,8 @@ class GraphEQAController(DynamemController):
                 self.planner,
             )
             logger.info(
-                "EQA query_answer done wall_s=%.1f confidence=%s answer=%r",
-                time.monotonic() - t_qa0,
-                confidence,
-                (answer or "")[:120],
+                f"EQA query_answer done wall_s={time.monotonic() - t_qa0:.1f} "
+                f"confidence={confidence} answer={(answer or '')[:120]!r}"
             )
         except Exception as e:
             reasoning = f"Error: {e}"
@@ -707,6 +703,8 @@ class GraphEQAController(DynamemController):
 
         Set ``allow_navigation=False`` (and typically ``max_planning_steps=1``) for
         post-explore question banks: answer from current memory without frontier chase.
+        With ``allow_navigation=True`` and ``max_planning_steps>1``, the final step
+        skips frontier chase so the loop can return after the last VLM call.
         """
         self._eqa_question = question
         self._habitat_blocked_goals = set()
@@ -720,18 +718,23 @@ class GraphEQAController(DynamemController):
         prev_answer: str | None = None
         stall = 0
         for step in range(max_planning_steps):
+            q_preview = question if isinstance(question, str) else str(question)[:80]
             logger.info(
-                "EQA planning step %d/%d for %r (allow_navigation=%s)",
-                step + 1,
-                max_planning_steps,
-                question if isinstance(question, str) else str(question)[:80],
-                allow_navigation,
+                f"EQA planning step {step + 1}/{max_planning_steps} for {q_preview!r} "
+                f"(allow_navigation={allow_navigation})"
             )
             if step > 0:
                 self.update()
-            # On the final planning step, do not start another frontier excursion —
-            # return the best answer so far (avoids hanging after the last VLM call).
-            nav_this_step = bool(allow_navigation) and (step < max_planning_steps - 1)
+            # Multi-step: skip frontier chase on the *last* planning step so we return
+            # the best answer without hanging after the final VLM call. Single-step with
+            # allow_navigation=True still navigates (legacy one-shot explore). Question
+            # banks pass allow_navigation=False explicitly.
+            if not allow_navigation:
+                nav_this_step = False
+            elif max_planning_steps <= 1:
+                nav_this_step = True
+            else:
+                nav_this_step = step < max_planning_steps - 1
             answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(
                 question,
                 max_movement_step=max_movement_step,

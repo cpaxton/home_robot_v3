@@ -713,8 +713,8 @@ def main(
             t_q0 = time.monotonic()
             try:
                 robot.say("Answering the question " + qtext)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"robot.say failed (non-fatal): {e}")
             try:
                 discord_text, _imgs = agent.run_eqa(
                     qtext,

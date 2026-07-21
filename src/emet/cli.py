@@ -1328,10 +1328,18 @@ def eval_kill_stale(no_gpu: bool, settle_sec: float | None) -> None:
     """SIGTERM→SIGKILL stale mujoco/habitat/dynagraph/uv trees; skip caller ancestry.
 
     Protects this process and its parents, plus ``EMET_GPU_PROTECT_PIDS``.
+    Patterns also match ``uv run emet {run,test,serve}`` in *other* terminals —
+    do not run this while intentional GPU work is still in progress elsewhere;
+    set ``EMET_GPU_PROTECT_PIDS`` or use ``emet eval wait`` instead.
     For port-only MuJoCo cleanup see ``emet kill-mujoco-server``.
     """
     from emet.utils.gpu_preflight import kill_stale_eval_processes
 
+    click.echo(
+        "kill-stale: matching sim/eval/uv emet trees "
+        "(other terminals' pytest/serve may match; EMET_GPU_PROTECT_PIDS to keep)",
+        err=True,
+    )
     n = kill_stale_eval_processes(
         kill_gpu_apps=not no_gpu,
         settle_s=settle_sec,
