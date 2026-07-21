@@ -115,6 +115,7 @@ Do **not** put the 8B VL on every chat turn as the router — that made “what 
 | Nudge | `move_forward` | Explicit meters (~0.5 for “a bit”); clipped by obstacles |
 | Explore | `explore` | Map cells increase; `announce_action` status |
 | Find | `find_objects` | Nav toward known label or clear failure |
+| Find after world change (Robocasa) | `find_objects` + invalidate | After ZMQ relocate, memory must not keep a confident waypoint at the **old** pose — use `scripts/smoke_dynagraph_agent_world_change_find.py` |
 | Scan | `scan_environment` | Full in-place rotate + map update |
 | Share view | `send_image` / describe attach | Live RGB OK |
 | Share map | `send_map_snapshot` | Top-down Discord/Rerun |

@@ -614,7 +614,14 @@ class GraphEQAController(DynamemController):
                     )
             stuck_retries = 0
             min_success_dist_m = 0.08
-            for _ in range(max_movement_step):
+            for move_i in range(max_movement_step):
+                logger.info(
+                    "EQA nav: step %d/%d target=(%.2f, %.2f)",
+                    move_i + 1,
+                    max_movement_step,
+                    float(target_point[0]),
+                    float(target_point[1]),
+                )
                 start_pose = self._planning_base_xyt(self.robot.get_base_pose())
                 self.update()
                 finished = self.navigate_to_target_pose(
@@ -683,6 +690,8 @@ class GraphEQAController(DynamemController):
         max_movement_step: int = 5,
     ) -> tuple[str, list[Image.Image]]:
         """Run EQA until confident or max steps, using graph memory."""
+        import time as _time
+
         self._eqa_question = question
         self._habitat_blocked_goals = set()
         self._habitat_recent_goals = []
@@ -691,10 +700,32 @@ class GraphEQAController(DynamemController):
         discord_text = ""
         relevant_images: list[Image.Image] = []
         stall_patience = int(self.parameters.get("eqa_stall_patience", 4) or 0)
+        # Wall-clock cap so a stuck nav/VLM loop cannot hold the GPU overnight.
+        # EMET_EQA_QUESTION_TIMEOUT_S overrides; 0 disables.
+        env_to = os.environ.get("EMET_EQA_QUESTION_TIMEOUT_S")
+        if env_to is not None and str(env_to).strip() != "":
+            question_timeout_s = float(env_to)
+        else:
+            question_timeout_s = float(self.parameters.get("eqa_question_timeout_s", 900) or 0)
+        t_eqa0 = _time.monotonic()
         prev_node_count = -1
         prev_answer: str | None = None
         stall = 0
         for step in range(max_planning_steps):
+            if question_timeout_s > 0 and (_time.monotonic() - t_eqa0) >= question_timeout_s:
+                logger.warning(
+                    "EQA question wall-clock timeout after %.0fs (limit=%.0fs) at step %d/%d",
+                    _time.monotonic() - t_eqa0,
+                    question_timeout_s,
+                    step,
+                    max_planning_steps,
+                )
+                if not discord_text:
+                    discord_text = (
+                        f"Answer:Unknown\nEQA timed out after {question_timeout_s:.0f}s "
+                        f"(partial answer={answer!r})"
+                    )
+                break
             if step > 0:
                 self.update()
             answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(

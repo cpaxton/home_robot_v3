@@ -172,6 +172,8 @@ override-dependencies = [
     "numba>=0.58.1",
     "mujoco>=3.4.0",
     # opencv-python + opencv-contrib-python together leave cv2 as a namespace stub (no aruco/imwrite).
+    # Prefer opencv-contrib-python; after ``uv sync`` / robocasa installs, run
+    # ``uv pip uninstall opencv-python opencv-python-headless`` if cv2 loses ``resize``.
     "opencv-contrib-python>=4.8",
 ]
 
