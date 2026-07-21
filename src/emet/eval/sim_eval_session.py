@@ -45,13 +45,9 @@ def sim_settle_s(sim_kind: str, *, cpu_only: bool) -> float:
 
 
 def terminate_server(proc: subprocess.Popen[Any]) -> None:
-    if proc.poll() is not None:
-        return
-    proc.terminate()
-    try:
-        proc.wait(timeout=15)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    from emet.utils.process_tree import terminate_process_tree
+
+    terminate_process_tree(proc, grace_s=15.0)
 
 
 @dataclass
@@ -87,8 +83,10 @@ def launch_benchmark_sim_server(
         "emet.simulation.mujoco_server",
         *prepare_mujoco_server_argv(sim_cfg),
     ]
+    from emet.utils.process_tree import popen_session
+
     stderr_target = subprocess.DEVNULL if server_stderr is None else server_stderr
-    proc = subprocess.Popen(
+    proc = popen_session(
         server_cmd,
         cwd=str(cwd or repo),
         env=env,

@@ -1,6 +1,6 @@
 # Dynagraph graph quality → dynamic EQA (follow-on)
 
-**Status:** Phase 0–2 quality work landed (2026-07) — shared `graph_health`, EQA prompt top-K (`eqa_vl.eqa_max_graph_nodes`), label-compatible dedup/merge, known-scene attach tests. **Dynamic EQA is explicitly deferred** until graph-health gates pass on HM-EQA + dynamic-explore slices.
+**Status (2026-07-16):** Phase 0–2 quality work landed earlier; **harness/VRAM/stale fixes for dynamic explore** landed on the feature branch (see below). Smoke gate: `scripts/run_dynagraph_dynamic_improve_smokes.sh`. Full dynamic EQA productization still gated on measured smoke numbers.
 
 ## Diagnosis snapshot (2026-07-15, existing artifacts)
 
@@ -35,7 +35,19 @@ Static HM-EQA and explore-then-EQA remain the primary paper tracks. Dynamic expl
 
 ## Prototype path
 
-Reuse [`dynamic_exploration_runner.py`](../../src/emet/eval/dynamic_exploration_runner.py) lifelong cycles: explore → EQA → world change → resume checkpoint. Next work is **stale-node invalidation** and **memory-summary refresh** after `_apply_lifelong_changes`, measured by `graph_health` + `moved_body_churn`.
+Reuse [`dynamic_exploration_runner.py`](../../src/emet/eval/dynamic_exploration_runner.py) lifelong cycles: explore → EQA → world change → resume checkpoint.
+
+**Landed (2026-07-16):**
+- `flatten_eval_metrics` reads `fusion.fused` / `fusion.raw` recalls
+- Phase-1 subprocess: `--benchmark-harness dynamic_explore --benchmark-method …`
+- `prepare_dynagraph_vram_for_eqa` before Qwen question bank in `emet run dynagraph`
+- World-change: age nodes near old pose → `maintain`; `n_stale_nodes_after_move` = nodes near old XY @ 0.75 m; refresh CONFIRMED_MEMORY before post-EQA
+- Lifelong: `_invalidate_checkpoint_nodes_near_moves` after fuzz
+- Kitchen deny-list adds `adapter` / `power strip` / `charger`
+
+**EQA hang fix (2026-07-20):** Smoke of 2026-07-16 completed explore + VRAM prep + Qwen load, then hung because question-bank EQA still ran up to 5 uncover-frontier nav steps; timeout only killed `uv`, leaving an orphan on a dead sim. Fix: answer-only question bank (`allow_navigation=False`, skip look-around after explore), process-group kill on timeout.
+
+**Still open:** full Phase-1 paper matrix (K∈{8,15,30} × seeds), lifelong table fill, residual wrong-label rate after filter.
 
 ## Related
 

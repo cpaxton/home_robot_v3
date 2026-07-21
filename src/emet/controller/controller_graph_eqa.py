@@ -20,6 +20,7 @@
 
 import os
 import re
+import time
 
 import numpy as np
 from PIL import Image
@@ -362,23 +363,36 @@ class GraphEQAController(DynamemController):
         max_movement_step: int = 5,
         *,
         skip_perception_prelude: bool = False,
+        allow_navigation: bool = True,
     ) -> tuple[str, str, list[Image.Image], bool]:
         """One EQA iteration using graph memory instead of voxel map.
 
         When *skip_perception_prelude* is True, skip the head sweep / look-around before the LLM call
         (used on follow-up EQA iterations after navigation so we do not re-run perception every step).
+        When *allow_navigation* is False, return after the VLM answer without frontier chase
+        (question-bank / post-explore scoring).
         """
         answer_output = None
+        # After explore-loop (``_fast_explore_lookaround``), skip another ~30--60s head sweep.
         if not self._realtime_updates and not skip_perception_prelude:
-            self.robot.look_front()
-            self.look_around()
-            self.robot.look_front()
-            self.robot.switch_to_navigation_mode()
+            if getattr(self, "_fast_explore_lookaround", False):
+                self.robot.look_front()
+                self.robot.switch_to_navigation_mode()
+            else:
+                self.robot.look_front()
+                self.look_around()
+                self.robot.look_front()
+                self.robot.switch_to_navigation_mode()
 
         if self.graph_memory is not None and hasattr(self, "_sync_graph_frontier_nodes"):
             self._sync_graph_frontier_nodes()
 
         try:
+            logger.info(
+                "EQA query_answer start for %r",
+                question if isinstance(question, str) else str(question)[:80],
+            )
+            t_qa0 = time.monotonic()
             (
                 reasoning,
                 answer,
@@ -390,6 +404,12 @@ class GraphEQAController(DynamemController):
                 question,
                 self._planning_base_xyt(self.robot.get_base_pose()),
                 self.planner,
+            )
+            logger.info(
+                "EQA query_answer done wall_s=%.1f confidence=%s answer=%r",
+                time.monotonic() - t_qa0,
+                confidence,
+                (answer or "")[:120],
             )
         except Exception as e:
             reasoning = f"Error: {e}"
@@ -447,7 +467,7 @@ class GraphEQAController(DynamemController):
             )
         discord_text += "\nI also provide relevant images here."
 
-        if confidence:
+        if confidence or not allow_navigation:
             return answer, discord_text, relevant_images, confidence
 
         # Coverage: while the question-relevant objects have NOT been observed yet, prefer an
@@ -681,8 +701,13 @@ class GraphEQAController(DynamemController):
         max_planning_steps: int = 5,
         *,
         max_movement_step: int = 5,
+        allow_navigation: bool = True,
     ) -> tuple[str, list[Image.Image]]:
-        """Run EQA until confident or max steps, using graph memory."""
+        """Run EQA until confident or max steps, using graph memory.
+
+        Set ``allow_navigation=False`` (and typically ``max_planning_steps=1``) for
+        post-explore question banks: answer from current memory without frontier chase.
+        """
         self._eqa_question = question
         self._habitat_blocked_goals = set()
         self._habitat_recent_goals = []
@@ -695,12 +720,23 @@ class GraphEQAController(DynamemController):
         prev_answer: str | None = None
         stall = 0
         for step in range(max_planning_steps):
+            logger.info(
+                "EQA planning step %d/%d for %r (allow_navigation=%s)",
+                step + 1,
+                max_planning_steps,
+                question if isinstance(question, str) else str(question)[:80],
+                allow_navigation,
+            )
             if step > 0:
                 self.update()
+            # On the final planning step, do not start another frontier excursion —
+            # return the best answer so far (avoids hanging after the last VLM call).
+            nav_this_step = bool(allow_navigation) and (step < max_planning_steps - 1)
             answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(
                 question,
                 max_movement_step=max_movement_step,
                 skip_perception_prelude=(step > 0),
+                allow_navigation=nav_this_step,
             )
             if confidence:
                 break
@@ -741,9 +777,10 @@ class GraphEQAController(DynamemController):
         if not relevant_images:
             relevant_images = []
         # Terminal + TTS feedback (CLI users otherwise see no reply; parent DynamemController.run_eqa does this for voxel EQA).
-        print("\n--- GraphEQA answer ---\n" + discord_text.strip() + "\n---\n")
+        print("\n--- GraphEQA answer ---\n" + discord_text.strip() + "\n---\n", flush=True)
         if confidence:
             try:
+                # Async TTS — never use say_sync here (can block forever if sim is gone).
                 self.robot.say("The answer to " + question + " is " + answer)
             except Exception:
                 pass

@@ -16,11 +16,13 @@
 
 """Emet CLI — start simulations, run agents, sync deps, view logs, run tests."""
 
+import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import click
 from click.core import ParameterSource
@@ -901,6 +903,443 @@ def _kill_processes_on_port(port: int) -> bool:
     return kill_processes_on_port(port)
 
 
+@main.group(
+    "jobs",
+    invoke_without_command=True,
+    short_help="List and manage queued/running eval experiments",
+)
+@click.pass_context
+def jobs_group(ctx: click.Context) -> None:
+    """Track paper evals / overnight smokes (registry + process scan).
+
+    Queue scripts register under ``~/runs/emet/jobs/`` (``EMET_JOBS_DIR``).
+
+    \b
+    Examples:
+      emet jobs
+      emet jobs list --all
+      emet jobs status JOB_ID
+      emet jobs cancel JOB_ID
+      emet jobs logs JOB_ID --tail 50
+      emet jobs run --name eqa-smoke -- ./scripts/run_….sh OUT
+    """
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(jobs_list, show_all=False, as_json=False, scan=True)
+
+
+@jobs_group.command("list", short_help="List registered jobs (default: non-terminal)")
+@click.option("--all", "show_all", is_flag=True, help="Include done/failed/cancelled.")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON array.")
+@click.option(
+    "--scan/--no-scan",
+    default=True,
+    show_default=True,
+    help="Also show unmanaged eval processes from pgrep.",
+)
+def jobs_list(show_all: bool, as_json: bool, scan: bool) -> None:
+    """List jobs from the registry; optionally scan for unmanaged eval PIDs."""
+    from emet.utils.job_registry import (
+        format_job_header,
+        format_job_row,
+        format_scanned_header,
+        format_scanned_row,
+        list_jobs,
+        scan_eval_processes,
+    )
+
+    jobs = list_jobs(include_terminal=show_all)
+    if as_json:
+        payload: dict[str, Any] = {"jobs": [j.to_dict() for j in jobs]}
+        if scan:
+            payload["unmanaged"] = [
+                {"pid": s.pid, "cmd": s.cmd, "pattern": s.matched_pattern}
+                for s in scan_eval_processes()
+                if s.pid not in {j.pid for j in jobs if j.pid is not None}
+            ]
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    if not jobs:
+        click.echo("(no registered jobs)" if show_all else "(no active registered jobs)")
+    else:
+        click.echo(format_job_header())
+        for job in jobs:
+            click.echo(format_job_row(job))
+
+    if scan:
+        registered_pids = {j.pid for j in jobs if j.pid is not None}
+        unmanaged = [s for s in scan_eval_processes() if s.pid not in registered_pids]
+        if unmanaged:
+            click.echo("")
+            click.echo(f"Unmanaged eval processes ({len(unmanaged)}, not in registry):")
+            click.echo(format_scanned_header())
+            for s in unmanaged[:40]:
+                click.echo(format_scanned_row(s))
+            if len(unmanaged) > 40:
+                click.echo(f"  … {len(unmanaged) - 40} more")
+
+
+@jobs_group.command("status", short_help="Show one job record")
+@click.argument("job_id")
+@click.option("--json", "as_json", is_flag=True, help="Emit full JSON record.")
+def jobs_status(job_id: str, as_json: bool) -> None:
+    from emet.utils.job_registry import format_job_detail, load_job, refresh_job_liveness
+
+    job = load_job(job_id)
+    if job is None:
+        click.echo(f"unknown job: {job_id}", err=True)
+        sys.exit(1)
+    job = refresh_job_liveness(job)
+    if as_json:
+        click.echo(json.dumps(job.to_dict(), indent=2))
+    else:
+        click.echo(format_job_detail(job))
+
+
+@jobs_group.command("cancel", short_help="Cancel a registered job (kill process tree)")
+@click.argument("job_id")
+@click.option("--grace-sec", type=float, default=10.0, show_default=True)
+@click.option("--json", "as_json", is_flag=True, help="Emit full JSON record.")
+def jobs_cancel(job_id: str, grace_sec: float, as_json: bool) -> None:
+    from emet.utils.job_registry import cancel_job, format_job_detail
+
+    try:
+        job = cancel_job(job_id, grace_s=grace_sec)
+    except KeyError as e:
+        click.echo(str(e), err=True)
+        sys.exit(1)
+    if as_json:
+        click.echo(json.dumps(job.to_dict(), indent=2))
+    else:
+        click.echo(f"cancelled {job.id}")
+        click.echo(format_job_detail(job))
+
+@jobs_group.command("logs", short_help="Tail a job log (log_path or out_dir/*.log)")
+@click.argument("job_id")
+@click.option("--tail", "n_tail", type=int, default=40, show_default=True)
+def jobs_logs(job_id: str, n_tail: int) -> None:
+    from emet.utils.job_registry import load_job
+
+    job = load_job(job_id)
+    if job is None:
+        click.echo(f"unknown job: {job_id}", err=True)
+        sys.exit(1)
+    candidates: list[Path] = []
+    if job.log_path:
+        candidates.append(Path(job.log_path))
+    if job.out_dir:
+        od = Path(job.out_dir)
+        for name in (
+            "queue.log",
+            "orchestrator.log",
+            "nohup.log",
+            "phase1_smoke.log",
+            "eqa_smoke.log",
+        ):
+            candidates.append(od / name)
+        candidates.extend(sorted(od.glob("*.log")))
+    path = next((p for p in candidates if p.is_file()), None)
+    if path is None:
+        click.echo("no log file found for job", err=True)
+        sys.exit(1)
+    click.echo(f"# {path}", err=True)
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    for line in lines[-max(1, n_tail) :]:
+        click.echo(line)
+
+
+@jobs_group.command("register", short_help="Register a job (for scripts)")
+@click.option("--name", required=True, help="Short job name.")
+@click.option("--cmd", default="", help="Command summary.")
+@click.option("--out-dir", type=click.Path(), default=None)
+@click.option("--log-path", type=click.Path(), default=None)
+@click.option("--repo", type=click.Path(), default=None)
+@click.option("--wait-pid", multiple=True, type=int, help="PIDs to wait on (repeatable).")
+@click.option("--pid", type=int, default=None, help="Controller PID if already running.")
+@click.option(
+    "--status",
+    type=click.Choice(["queued", "waiting", "running", "done", "failed", "cancelled"]),
+    default="queued",
+)
+def jobs_register(
+    name: str,
+    cmd: str,
+    out_dir: str | None,
+    log_path: str | None,
+    repo: str | None,
+    wait_pid: tuple[int, ...],
+    pid: int | None,
+    status: str,
+) -> None:
+    """Print the new job id on stdout (scripts should capture it)."""
+    from emet.utils.job_registry import register_job
+
+    job = register_job(
+        name=name,
+        cmd=cmd,
+        out_dir=out_dir,
+        log_path=log_path,
+        repo=repo or str(_project_root()),
+        wait_pids=list(wait_pid),
+        pid=pid,
+        status=status,  # type: ignore[arg-type]
+    )
+    click.echo(job.id)
+
+
+@jobs_group.command("update", short_help="Update job status / pid (for scripts)")
+@click.argument("job_id")
+@click.option(
+    "--status",
+    type=click.Choice(["queued", "waiting", "running", "done", "failed", "cancelled"]),
+    default=None,
+)
+@click.option("--pid", type=int, default=None)
+@click.option("--cmd", default=None)
+@click.option("--out-dir", type=click.Path(), default=None)
+@click.option("--log-path", type=click.Path(), default=None)
+@click.option("--error", default=None)
+def jobs_update(
+    job_id: str,
+    status: str | None,
+    pid: int | None,
+    cmd: str | None,
+    out_dir: str | None,
+    log_path: str | None,
+    error: str | None,
+) -> None:
+    from emet.utils.job_registry import update_job
+
+    try:
+        job = update_job(
+            job_id,
+            status=status,  # type: ignore[arg-type]
+            pid=pid,
+            cmd=cmd,
+            out_dir=out_dir,
+            log_path=log_path,
+            error=error,
+        )
+    except KeyError as e:
+        click.echo(str(e), err=True)
+        sys.exit(1)
+    click.echo(json.dumps(job.to_dict(), indent=2))
+
+
+@jobs_group.command(
+    "run",
+    context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+    short_help="Register + nohup a command as a managed job",
+)
+@click.option("--name", required=True, help="Short job name.")
+@click.option("--out-dir", type=click.Path(), default=None, help="Artifact directory.")
+@click.option(
+    "--wait-pid",
+    multiple=True,
+    type=int,
+    help="Wait for these PIDs before starting (repeatable).",
+)
+@click.option(
+    "--need-mib",
+    type=int,
+    default=None,
+    help="If set, run emet eval wait before the command.",
+)
+@click.option("--foreground", is_flag=True, help="Run in foreground (no nohup).")
+@click.pass_context
+def jobs_run(
+    ctx: click.Context,
+    name: str,
+    out_dir: str | None,
+    wait_pid: tuple[int, ...],
+    need_mib: int | None,
+    foreground: bool,
+) -> None:
+    """Register + nohup a command as a managed job.
+
+    \b
+    Example:
+      emet jobs run --name improve-eqa --need-mib 14000 -- \\
+        ./scripts/run_dynagraph_dynamic_improve_smokes.sh OUT
+    """
+    import shlex
+
+    from emet.utils.job_registry import register_job, update_job
+
+    cmd_args = list(ctx.args)
+    if cmd_args and cmd_args[0] == "--":
+        cmd_args = cmd_args[1:]
+    if not cmd_args:
+        click.echo("usage: emet jobs run --name NAME -- CMD [ARGS…]", err=True)
+        sys.exit(2)
+
+    root = _project_root()
+    out = Path(out_dir).expanduser() if out_dir else Path.home() / "runs" / "emet" / "jobs_runs" / name
+    out.mkdir(parents=True, exist_ok=True)
+    log_path = out / "job.log"
+    cmd_str = " ".join(shlex.quote(a) for a in cmd_args)
+
+    job = register_job(
+        name=name,
+        cmd=cmd_str,
+        out_dir=out,
+        log_path=log_path,
+        repo=str(root),
+        wait_pids=list(wait_pid),
+        status="queued",
+    )
+    click.echo(f"registered  {job.id}", err=True)
+    click.echo(f"name        {name}", err=True)
+    click.echo(f"out_dir     {out}", err=True)
+    click.echo(f"log         {log_path}", err=True)
+
+    wrapper = out / "job_wrapper.sh"
+    wait_lines = ""
+    for wpid in wait_pid:
+        wait_lines += f'while kill -0 {int(wpid)} 2>/dev/null; do sleep 15; done\n'
+    need_block = ""
+    if need_mib is not None:
+        need_block = (
+            f'NEED_MIB={int(need_mib)} "{root}/scripts/gpu_preflight.sh" --wait\n'
+            f'"{root}/.venv/bin/emet" eval status || true\n'
+        )
+    wrapper.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        f'cd "{root}"\n'
+        f'export EMET_JOB_ID="{job.id}"\n'
+        f'JOB_ID="{job.id}"\n'
+        f'EMET_BIN="{root}/.venv/bin/emet"\n'
+        'if [ ! -x "$EMET_BIN" ]; then EMET_BIN="emet"; fi\n'
+        f'"$EMET_BIN" jobs update "$JOB_ID" --status waiting --pid $$\n'
+        f"{wait_lines}"
+        f"{need_block}"
+        f'"$EMET_BIN" jobs update "$JOB_ID" --status running --pid $$\n'
+        "set +e\n"
+        f"{cmd_str}\n"
+        "rc=$?\n"
+        "set -e\n"
+        'if [ "$rc" -eq 0 ]; then\n'
+        f'  "$EMET_BIN" jobs update "$JOB_ID" --status done\n'
+        "else\n"
+        f'  "$EMET_BIN" jobs update "$JOB_ID" --status failed --error "exit $rc"\n'
+        "fi\n"
+        "exit $rc\n",
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o755)
+
+    if foreground:
+        update_job(job.id, status="running", pid=os.getpid())
+        rc = subprocess.call(["bash", str(wrapper)])
+        sys.exit(rc)
+
+    # Detach: start_new_session so cancel can killpg
+    with log_path.open("a", encoding="utf-8") as log_f:
+        proc = subprocess.Popen(
+            ["bash", str(wrapper)],
+            cwd=str(root),
+            stdout=log_f,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    update_job(job.id, status="queued", pid=proc.pid)
+    click.echo(f"pid         {proc.pid}", err=True)
+    click.echo(job.id)
+
+
+@main.group("eval", short_help="GPU preflight and eval process cleanup")
+def eval_group() -> None:
+    """GPU preflight and stale-process cleanup for paper evals / overnight smokes.
+
+    Prefer these over sourcing ``scripts/gpu_preflight.sh`` from an interactive shell.
+    Overnight bash scripts may still source that file; it delegates here when possible.
+
+    Examples:
+      emet eval status
+      emet eval check --need-mib 12000
+      emet eval wait --need-mib 12000
+      emet eval kill-stale
+    """
+
+
+@eval_group.command("status", short_help="Show free VRAM and GPU compute apps")
+def eval_status() -> None:
+    """Print GPU free/total MiB and nvidia-smi compute apps (read-only)."""
+    from emet.utils.gpu_preflight import format_status_lines
+
+    for line in format_status_lines():
+        click.echo(line)
+
+
+@eval_group.command("check", short_help="Exit 1 if free VRAM below threshold")
+@click.option(
+    "--need-mib",
+    type=int,
+    default=None,
+    help="Minimum free VRAM in MiB (default: NEED_MIB or 12000).",
+)
+def eval_check(need_mib: int | None) -> None:
+    """One-shot GPU memory gate (same role as ``gpu_preflight.sh --check``)."""
+    from emet.utils.gpu_preflight import check_gpu_memory, list_compute_apps
+
+    ok, msg = check_gpu_memory(need_mib)
+    click.echo(msg)
+    if not ok:
+        for app in list_compute_apps():
+            click.echo(
+                f"  pid={app.pid} {app.process_name} {app.used_memory}".rstrip(),
+                err=True,
+            )
+        sys.exit(1)
+
+
+@eval_group.command("wait", short_help="Block until free VRAM is stably above threshold")
+@click.option(
+    "--need-mib",
+    type=int,
+    default=None,
+    help="Minimum free VRAM in MiB (default: NEED_MIB or 12000).",
+)
+def eval_wait(need_mib: int | None) -> None:
+    """Wait for consecutive stable free-VRAM reads (``gpu_preflight.sh --wait``)."""
+    from emet.utils.gpu_preflight import wait_gpu_stable
+
+    ok = wait_gpu_stable(need_mib, log=lambda m: click.echo(m, err=True))
+    if not ok:
+        click.echo("WARNING: GPU wait timed out; free VRAM still below threshold", err=True)
+        sys.exit(1)
+
+
+@eval_group.command("kill-stale", short_help="Stop orphaned eval/sim/uv GPU workers")
+@click.option(
+    "--no-gpu",
+    "no_gpu",
+    is_flag=True,
+    help="Only match process patterns; do not kill nvidia-smi compute apps.",
+)
+@click.option(
+    "--settle-sec",
+    type=float,
+    default=None,
+    help="Sleep after pattern kills (default: GPU_SETTLE_SEC or 15).",
+)
+def eval_kill_stale(no_gpu: bool, settle_sec: float | None) -> None:
+    """SIGTERM→SIGKILL stale mujoco/habitat/dynagraph/uv trees; skip caller ancestry.
+
+    Protects this process and its parents, plus ``EMET_GPU_PROTECT_PIDS``.
+    For port-only MuJoCo cleanup see ``emet kill-mujoco-server``.
+    """
+    from emet.utils.gpu_preflight import kill_stale_eval_processes
+
+    n = kill_stale_eval_processes(
+        kill_gpu_apps=not no_gpu,
+        settle_s=settle_sec,
+        log=lambda m: click.echo(m, err=True),
+    )
+    click.echo(f"kill-stale done (signaled≈{n})")
+
+
 @main.command("kill-mujoco-server", short_help="Stop MuJoCo server (free ports)")
 @click.option(
     "--port",
@@ -916,6 +1355,9 @@ def _kill_processes_on_port(port: int) -> bool:
 )
 def kill_mujoco_server(port: int, kill_all: bool) -> None:
     """Stop MuJoCo simulation server(s) so ports are free.
+
+    For broader orphan cleanup (dynagraph / Habitat / ``uv run emet`` trees), use
+    ``emet eval kill-stale``.
 
     Examples:
       emet kill-mujoco-server              # kill process on port 4401

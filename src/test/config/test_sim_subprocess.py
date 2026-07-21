@@ -30,25 +30,25 @@ def test_spawn_terminates_subprocess_when_wait_fails(monkeypatch: pytest.MonkeyP
         def poll(self) -> None:
             return None
 
-        def terminate(self) -> None:
-            calls.append("terminate")
-
         def wait(self, timeout: float | None = None) -> int:
             calls.append("wait")
             return 0
 
-        def kill(self) -> None:
-            calls.append("kill")
-
     fake = FakeProc()
 
-    def fake_popen(*_a: object, **kw: object) -> FakeProc:
+    def fake_popen_session(*_a: object, **kw: object) -> FakeProc:
         calls.append("popen")
         assert kw.get("stdout") == ssub.subprocess.DEVNULL
         assert kw.get("stderr") == ssub.subprocess.DEVNULL
         return fake
 
-    monkeypatch.setattr(ssub.subprocess, "Popen", fake_popen)
+    def fake_terminate(proc: object, *, grace_s: float = 15.0) -> None:
+        calls.append("terminate")
+        assert proc is fake
+        assert grace_s == 8.0
+
+    monkeypatch.setattr("emet.utils.process_tree.popen_session", fake_popen_session)
+    monkeypatch.setattr("emet.utils.process_tree.terminate_process_tree", fake_terminate)
 
     def boom(*_a: object, **_kw: object) -> None:
         raise TimeoutError("no port")

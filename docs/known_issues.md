@@ -102,6 +102,21 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 
 ---
 
+## Orphan / zombie eval processes after timeouts
+
+**Status:** Mitigated (2026-07) · **Seen:** dynamic-exploration smoke (EQA hang left 11 GiB `emet run dynagraph` for days; 14-day `uv run emet test` with `<defunct>` child)
+
+### Cause
+- Timeouts / `terminate()` on the direct child only (`uv` or a thin wrapper) leave Python/GPU grandchildren alive.
+- Sim servers started without a process group were not reaped by parent cleanup.
+
+### Mitigation
+- Shared helpers in [`src/emet/utils/process_tree.py`](../src/emet/utils/process_tree.py): `popen_session` + `terminate_process_tree` / `kill_process_tree` (wired into dynamic exploration, sim/Habitat subprocess spawn, OVMM find-phase, sim eval sessions).
+- CLI: **`uv run emet eval kill-stale`** / `check` / `wait` / `status` ([`emet.utils.gpu_preflight`](../src/emet/utils/gpu_preflight.py)); [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates to that CLI.
+- Smoke scripts that are themselves `run_dynagraph_dynamic_*` must **not** call `kill-stale` on themselves (use `emet eval wait` only).
+
+---
+
 ## NVIDIA driver hang / Cursor agent crash during stacked GPU evals
 
 **Status:** Mitigated (2026-06) · **Seen:** 2026-06-28 · **Hardware:** RTX 4090 workstation (GPU drives display + CUDA)
@@ -114,7 +129,7 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 
 ### Mitigation
 
-- **One GPU-heavy job at a time** — use [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) (`--kill-stale`, `--wait`, `--check`).
+- **One GPU-heavy job at a time** — use **`uv run emet eval kill-stale` / `wait` / `check`** ([`emet eval`](cli.md#emet-eval-gpu-preflight--stale-cleanup); bash [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates).
 - Cross-track smoke: [`run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh) defaults **`RUN_DEEP_EVAL=0`**; run [`run_overnight_eval_smoke.sh`](../scripts/run_overnight_eval_smoke.sh) on a **separate night**.
 - Safe no-sim pytest: source `gpu_preflight.sh` and pass **`emet_pytest_no_sim_ignore_args`** (excludes unmarked MuJoCo paths under `src/test/simulation/`).
 - Long evals: **`nohup … &`** or dedicated terminal — not blocking Cursor agent inline runs.

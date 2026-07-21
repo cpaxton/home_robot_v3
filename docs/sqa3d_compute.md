@@ -18,9 +18,9 @@ Check before a sweep:
 
 ```bash
 nvidia-smi --query-gpu=index,memory.free,memory.total --format=csv
-# Or use the shared preflight helper (also used by overnight scripts):
-./scripts/gpu_preflight.sh --kill-stale
-NEED_MIB=14000 ./scripts/gpu_preflight.sh --check
+# Preferred (canonical CLI); bash scripts/gpu_preflight.sh delegates here:
+uv run emet eval kill-stale
+NEED_MIB=14000 uv run emet eval check
 ```
 
 Aim for **≥14 GiB free** on a 24 GiB card before `run-real-sweep` with 4B int4.

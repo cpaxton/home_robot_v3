@@ -36,6 +36,10 @@ _KITCHEN_DENY_EXACT: frozenset[str] = frozenset(
         "laundry detergent",
         "clothes dryer",
         "ironing board",
+        # ScanNet electronics / clutter that frequently false-positives in Robocasa kitchens
+        "adapter",
+        "power strip",
+        "charger",
     }
 )
 

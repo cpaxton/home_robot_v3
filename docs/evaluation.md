@@ -104,10 +104,24 @@ Optional live regression: `RUN_HABITAT_FRAME_TESTS=1 uv run emet test src/test/e
 Before any GPU-heavy eval, kill stale jobs and wait for headroom. Shared helpers live in [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) (sourced by overnight scripts):
 
 ```bash
+# Preferred (canonical CLI):
+uv run emet eval kill-stale
+NEED_MIB=12000 uv run emet eval wait
+NEED_MIB=14000 uv run emet eval check
+uv run emet eval status
+
+# Track queued / running experiments:
+uv run emet jobs                 # list registry + unmanaged eval PIDs
+uv run emet jobs cancel JOB_ID   # stop one managed job
+
+
+# Bash helpers still work (delegate to emet eval):
 ./scripts/gpu_preflight.sh --kill-stale
-NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait   # default: 3× stable reads, 30s apart
-NEED_MIB=14000 ./scripts/gpu_preflight.sh --check  # exit 1 if free VRAM < threshold
+NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait
+NEED_MIB=14000 ./scripts/gpu_preflight.sh --check
 ```
+
+`kill-stale` SIGTERM→SIGKILL matching sim/eval/`uv run emet` trees (skips the caller ancestry; optional `EMET_GPU_PROTECT_PIDS`). Eval code should spawn via `emet.utils.process_tree` so timeouts reap GPU grandchildren — see [known_issues.md](known_issues.md#orphan--zombie-eval-processes-after-timeouts).
 
 Also sets `PYTORCH_CUDA_ALLOC_CONF` / `PYTORCH_ALLOC_CONF` to `expandable_segments:True` when scripts call `emet_export_pytorch_alloc`.
 

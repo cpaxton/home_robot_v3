@@ -8,11 +8,20 @@ alwaysApply: true
 ## Preflight (before any VLM / Habitat / Robocasa GPU job)
 
 ```bash
-./scripts/gpu_preflight.sh --kill-stale
-NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait   # or --check for one-shot
+uv run emet eval status                # see free VRAM + compute apps
+uv run emet eval kill-stale
+NEED_MIB=12000 uv run emet eval wait   # or: uv run emet eval check
 ```
 
-Shared helpers: [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh) — stale process cleanup, VRAM wait, `PYTORCH_CUDA_ALLOC_CONF`, and **`emet_pytest_no_sim_ignore_args`** for safe no-sim pytest.
+Canonical CLI: **`emet eval {status,check,wait,kill-stale}`**. Bash [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh) delegates to it (also provides `emet_export_pytorch_alloc` and **`emet_pytest_no_sim_ignore_args`** when sourced). Prefer `emet eval` over raw `pkill` / ad-hoc kills. Verify with `uv run emet eval --help` before suggesting flags.
+
+## Experiment reliability
+
+- New eval/sim `Popen` paths must use [`emet.utils.process_tree`](../../src/emet/utils/process_tree.py) (`popen_session` + `terminate_process_tree` / `kill_process_tree`) so timeouts reap GPU grandchildren (`uv` wrappers, mujoco/habitat workers).
+- Do **not** run `emet eval kill-stale` from inside a long-running smoke that must stay alive (e.g. `run_dynagraph_dynamic_*`) — use `emet eval wait` only. Set `EMET_GPU_PROTECT_PIDS` if an orchestrator must keep a worker across cleanup.
+- After failed/hung evals: `uv run emet eval status`, then check **`~/runs/emet/`**, **`~/.cache/habitat_eqa/results/`**, and per-step logs before re-launching.
+- Track / manage long jobs with **`uv run emet jobs`** (list/cancel/logs) and prefer **`emet jobs run --name … -- CMD`** so queue state is visible; registry under `~/runs/emet/jobs/`.
+- Docs: [`docs/evaluation.md`](../../docs/evaluation.md), orphan section in [`docs/known_issues.md`](../../docs/known_issues.md).
 
 ## One GPU job at a time
 

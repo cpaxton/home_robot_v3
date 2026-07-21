@@ -73,18 +73,19 @@ Per run: start sim → `emet run dynagraph` with optional `--explore-loop --expl
 | Column | Source |
 |--------|--------|
 | `explored_fraction`, `explored_area_m2` | eval `explore` |
-| `spatial_recall`, `label_recall` | eval `fusion` |
+| `spatial_recall`, `label_recall` | eval `fusion.fused` (fallback `fusion.raw`) via `flatten_eval_metrics` |
 | `node_count`, `edge_count` | eval `graph` |
 | `eqa_accuracy` | eval `eqa` + question bank |
 | `episode_wall_s` | harness timer |
 
 Backends: `dynagraph` (interactive profile) vs `graph_eqa` (merge/staleness off via `graph_eqa_baseline`).
+Phase-1 subprocesses also pass `--benchmark-harness dynamic_explore --benchmark-method {backend}` so EQA flags (`memory_summary`, `mcq_debias`, `explore_when_uncovered`, `siglip_grounding`) match `configs/benchmarks/dynagraph.yaml`. Before the question bank, `emet run dynagraph` calls `prepare_dynagraph_vram_for_eqa` to free perception caches for Qwen3-VL.
 
 ## Phase 2 — World-change
 
-Robocasa only (v1): explore → EQA pre → ZMQ `sim_set_body_pose` on `obj_main` → recovery explore → EQA post → export.
+Robocasa only (v1): explore → EQA pre → ZMQ `sim_set_body_pose` on `obj_main` → age nodes near old pose → `maintain` → recovery explore → refresh CONFIRMED_MEMORY → EQA post → export.
 
-Metrics in `aggregate_dynamic_exploration_world_change.csv`: `answer_correct_pre/post`, `n_stale_nodes_after_move`, `n_pruned_by_maintain`, `recovery_steps`, `localization_err_m`.
+Metrics in `aggregate_dynamic_exploration_world_change.csv`: `answer_correct_pre/post`, `n_stale_nodes_after_move` (object nodes still within 0.75 m of the **old** GT pose after recovery), `n_nodes_near_new_pos` / `adapted`, `n_pruned_by_maintain`, `recovery_steps`, `localization_err_m`.
 
 Sim API: ZMQ `sim_set_body_pose` (same as [ovmm_full_benchmark.md](ovmm_full_benchmark.md)); client helper `robot_zmq_set_body_pose()` in `sim_manipulation.py`.
 

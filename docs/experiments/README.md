@@ -64,12 +64,12 @@ uv run python scripts/smoke_backend_localization_figure.py --quick
 
 Run **one GPU-heavy job at a time** (dynamic exploration, backend localization, SQA3D real sweeps, Habitat HM-EQA with VLM). Parallel VLM loads can OOM (~15 GB each) or wedge the NVIDIA driver when the same GPU drives the desktop.
 
-**Shared preflight** ([`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh)):
+**Shared preflight** ([`emet eval`](../cli.md), [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh)):
 
 ```bash
-./scripts/gpu_preflight.sh --kill-stale          # stop stale sim/eval/agent GPU jobs
-NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait # block until VRAM free (3 stable reads)
-NEED_MIB=14000 ./scripts/gpu_preflight.sh --check # one-shot; exit 1 if insufficient
+uv run emet eval kill-stale                      # stop stale sim/eval/agent GPU jobs
+NEED_MIB=12000 uv run emet eval wait             # block until VRAM free (3 stable reads)
+NEED_MIB=14000 uv run emet eval check            # one-shot; exit 1 if insufficient
 ```
 
 Overnight orchestrators source this script and call `emet_kill_stale_eval_processes` + `emet_gpu_between_steps` between phases:

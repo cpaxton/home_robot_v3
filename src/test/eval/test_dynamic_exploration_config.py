@@ -63,8 +63,30 @@ def test_flatten_eval_metrics():
     }
     row = flatten_eval_metrics(metrics, episode_wall_s=42.0)
     assert row["explored_fraction"] == 0.5
+    assert row["spatial_recall"] == 0.8
+    assert row["label_recall"] == 0.6
     assert row["eqa_accuracy"] == 1.0
     assert row["episode_wall_s"] == 42.0
+
+
+def test_flatten_eval_metrics_prefers_fused_over_raw():
+    metrics = {
+        "fusion": {
+            "raw": {"spatial_recall": 0.4, "label_recall": 0.3},
+            "fused": {"spatial_recall": 0.9, "label_recall": 0.7},
+        },
+        "eqa": {"accuracy": 0.5},
+    }
+    row = flatten_eval_metrics(metrics)
+    assert row["spatial_recall"] == 0.9
+    assert row["label_recall"] == 0.7
+
+
+def test_flatten_eval_metrics_falls_back_to_raw():
+    metrics = {"fusion": {"raw": {"spatial_recall": 0.55, "label_recall": 0.25}}}
+    row = flatten_eval_metrics(metrics)
+    assert row["spatial_recall"] == 0.55
+    assert row["label_recall"] == 0.25
 
 
 def test_load_lifelong_episodes():
@@ -140,6 +162,28 @@ def test_build_dynagraph_subprocess_cmd_skip_eqa_omits_questions():
     )
     assert "--question-file" not in cmd
     assert "--explore-max-iters" in cmd
+    assert "--benchmark-harness" in cmd
+    assert cmd[cmd.index("--benchmark-harness") + 1] == "dynamic_explore"
+    assert cmd[cmd.index("--benchmark-method") + 1] == "dynagraph"
+
+
+def test_build_dynagraph_subprocess_cmd_graph_eqa_method():
+    from emet.eval.dynamic_exploration_config import load_dynamic_exploration_config
+    from emet.eval.dynamic_exploration_runner import build_dynagraph_subprocess_cmd
+
+    cfg = load_dynamic_exploration_config()
+    cmd = build_dynagraph_subprocess_cmd(
+        export_dir=Path("/tmp/export"),
+        port_offset=0,
+        backend="graph_eqa",
+        cfg=cfg,
+        cpu_only=True,
+        no_sensor_perception=True,
+        explore_iters=0,
+        include_explore_loop=False,
+        skip_eqa=True,
+    )
+    assert cmd[cmd.index("--benchmark-method") + 1] == "graph_eqa"
 
 
 def test_sim_set_body_pose_zmq_action():

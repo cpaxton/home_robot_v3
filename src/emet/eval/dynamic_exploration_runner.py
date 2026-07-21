@@ -21,6 +21,8 @@ from typing import Any
 
 import numpy as np
 
+from emet.utils.process_tree import kill_process_tree, popen_session
+
 from emet.eval.benchmark_dynagraph import apply_dynamic_explore_backend, profile_settings
 from emet.eval.dynamic_exploration_config import (
     DynamicExploreConfig,
@@ -62,6 +64,66 @@ def count_object_nodes(memory: Any, *, label_hint: str | None = None) -> int:
             if any(hint in str(lab).lower() for lab in (getattr(n, "labels", None) or []))
         ]
     return len(nodes)
+
+
+# Match radius for world-change / lifelong churn (meters).
+_NODE_MATCH_RADIUS_M = 0.75
+
+
+def count_object_nodes_near_xy(
+    memory: Any,
+    pos_xy: list[float] | tuple[float, ...] | np.ndarray,
+    *,
+    radius_m: float = _NODE_MATCH_RADIUS_M,
+) -> int:
+    """Count non-viewpoint object nodes whose XY lies within ``radius_m`` of ``pos_xy``."""
+    if memory is None:
+        return 0
+    target = np.asarray(pos_xy[:2], dtype=np.float64)
+    count = 0
+    for n in memory.get_nodes():
+        if getattr(n, "is_viewpoint", False):
+            continue
+        xyz = np.asarray(getattr(n, "xyz", [0, 0, 0]), dtype=np.float64).reshape(-1)
+        if xyz.size >= 2 and float(np.linalg.norm(xyz[:2] - target)) <= float(radius_m):
+            count += 1
+    return count
+
+
+def _age_live_nodes_near_xy(
+    memory: Any,
+    pos_xy: list[float] | tuple[float, ...] | np.ndarray,
+    *,
+    current_step: int,
+    radius_m: float = _NODE_MATCH_RADIUS_M,
+) -> int:
+    """Force ``last_seen`` of nodes near ``pos_xy`` past the staleness horizon.
+
+    Returns the number of nodes aged. Used after scripted object moves so
+    ``maintain()`` can prune ghosts at the old location.
+    """
+    if memory is None:
+        return 0
+    horizon = int(getattr(memory, "staleness_horizon", 0) or 0)
+    if horizon <= 0:
+        return 0
+    from dataclasses import replace
+
+    target = np.asarray(pos_xy[:2], dtype=np.float64)
+    aged_step = max(0, int(current_step) - horizon - 1)
+    aged = 0
+    store = getattr(memory, "_nodes", None)
+    if not isinstance(store, list):
+        return 0
+    for idx, n in enumerate(store):
+        if getattr(n, "is_viewpoint", False) or getattr(n, "is_frontier", False):
+            continue
+        xyz = np.asarray(getattr(n, "xyz", [0, 0, 0]), dtype=np.float64).reshape(-1)
+        if xyz.size < 2 or float(np.linalg.norm(xyz[:2] - target)) > float(radius_m):
+            continue
+        store[idx] = replace(n, last_seen=aged_step)
+        aged += 1
+    return aged
 
 
 def _dynagraph_subprocess_timeout_s(
@@ -164,7 +226,7 @@ def run_logged_subprocess(
     )
 
     with log_path.open("w", encoding="utf-8") as log_f:
-        proc = subprocess.Popen(
+        proc = popen_session(
             cmd,
             cwd=str(cwd),
             env=env,
@@ -181,11 +243,7 @@ def run_logged_subprocess(
                     now = time.monotonic()
                     elapsed = now - t0
                     if elapsed >= timeout_s:
-                        proc.kill()
-                        try:
-                            proc.wait(timeout=30)
-                        except subprocess.TimeoutExpired:
-                            pass
+                        kill_process_tree(proc)
                         tail = _tail_text(log_path)
                         raise subprocess.TimeoutExpired(cmd, timeout_s, output=tail) from None
 
@@ -244,12 +302,7 @@ def run_logged_subprocess(
             )
             return subprocess.CompletedProcess(cmd, returncode)
         except Exception:
-            if proc.poll() is None:
-                proc.kill()
-                try:
-                    proc.wait(timeout=30)
-                except subprocess.TimeoutExpired:
-                    pass
+            kill_process_tree(proc)
             raise
 
 
@@ -328,6 +381,8 @@ def build_dynagraph_subprocess_cmd(
         cmd.append("--cpu-only")
     if no_sensor_perception:
         cmd.append("--no-sensor-perception")
+    # Paper dynamic_explore harness extras (memory_summary / mcq_debias / …) + profile.
+    cmd.extend(["--benchmark-harness", "dynamic_explore", "--benchmark-method", str(backend)])
     cmd.extend(_profile_cli_flags(backend, cfg))
     if include_explore_loop and explore_iters > 0:
         cmd.extend(["--explore-loop", "--explore-max-iters", str(explore_iters)])
@@ -453,14 +508,21 @@ def run_explore_episode_subprocess(
 def _run_eqa_single(agent: Any, robot: Any, qspec: dict[str, Any]) -> dict[str, Any]:
     import re
 
-    from emet.controller.task.dynamem import EQAExecuter
-
     qtext = str(qspec.get("question", "")).strip()
     robot.move_to_nav_posture()
     robot.switch_to_navigation_mode()
-    eq_executor = EQAExecuter(agent)
+    # Answer from current memory (world-change pre/post); do not start a new explore chase.
+    agent._fast_explore_lookaround = True
     try:
-        discord_text, _imgs = eq_executor(qtext)
+        discord_text, _imgs = agent.run_eqa(
+            qtext,
+            max_planning_steps=1,
+            allow_navigation=False,
+        )
+    except TypeError:
+        from emet.controller.task.dynamem import EQAExecuter
+
+        discord_text, _imgs = EQAExecuter(agent)(qtext)
     except Exception as e:
         discord_text = f"EQA question failed: {e}"
     answer = ""
@@ -522,6 +584,7 @@ def run_world_change_episode(
     t0 = time.monotonic()
     recovery_steps = 0
     n_stale_after_move = 0
+    n_nodes_near_new = 0
     n_pruned_total = 0
 
     try:
@@ -534,6 +597,8 @@ def run_world_change_episode(
             robot = connect_benchmark_robot(sim_cfg, port_offset)
             agent = None
             try:
+                from emet.eval.dynagraph_vram import prepare_dynagraph_vram_for_eqa
+
                 parameters = apply_dynamic_explore_backend(get_parameters("dynav_config.yaml"), run_cfg.backend)
                 parameters["encoder"] = None
                 parameters["debug_perfect_sensor_depth"] = True
@@ -558,10 +623,13 @@ def run_world_change_episode(
                 executor.rotate_in_place()
                 dynagraph_explore_until_terminated(agent, max_iterations=int(explore_max_iters))
 
+                prepare_dynagraph_vram_for_eqa(agent)
                 pre_row = _run_eqa_single(agent, robot, pre_q)
                 pre_score = score_eqa_results([pre_row], episode_dir=None)
 
                 session = robot.get_emet_session()
+                placements_before = read_sim_object_placements(session)
+                old_pos = list(placements_before.get(wc.relocate_body, {}).get("pos") or [0.0, 0.0, 0.0])
                 rx, ry, rz = _default_relocate_xy(session, wc.relocate_body)
                 from emet.simulation.sim_manipulation import robot_zmq_set_body_pose
 
@@ -571,11 +639,9 @@ def run_world_change_episode(
 
                 mem = agent.graph_memory
                 cur_step = int(getattr(agent, "obs_count", 0))
-                n_stale_after_move = count_object_nodes(
-                    mem,
-                    label_hint=str(pre_q.get("gt_body_key") or "obj"),
-                )
                 if mem is not None and mem.staleness_horizon > 0:
+                    # Age nodes still at the pre-move location so maintain can prune them.
+                    _age_live_nodes_near_xy(mem, old_pos, current_step=cur_step)
                     n_pruned_total += int(mem.maintain(cur_step))
 
                 recovery_iters = int(cfg.recovery_explore_iters)
@@ -585,6 +651,14 @@ def run_world_change_episode(
                     executor.rotate_in_place()
                     recovery_steps += 1
 
+                # Stale = nodes still near the old GT pose after recovery (churn @ 0.75 m).
+                n_stale_after_move = count_object_nodes_near_xy(mem, old_pos, radius_m=_NODE_MATCH_RADIUS_M)
+                n_nodes_near_new = count_object_nodes_near_xy(mem, [rx, ry], radius_m=_NODE_MATCH_RADIUS_M)
+                if mem is not None and getattr(mem, "memory_summary_enabled", False):
+                    refresh = getattr(mem, "refresh_siglip_confirmed_memory", None)
+                    if callable(refresh):
+                        refresh()
+                prepare_dynagraph_vram_for_eqa(agent)
                 post_row = _run_eqa_single(agent, robot, post_q)
                 post_score = score_eqa_results([post_row], episode_dir=None)
 
@@ -627,10 +701,13 @@ def run_world_change_episode(
                     "answer_correct_pre": bool(pre_score.get("accuracy", 0) >= 1.0),
                     "answer_correct_post": bool(post_score.get("accuracy", 0) >= 1.0),
                     "n_stale_nodes_after_move": n_stale_after_move,
+                    "n_nodes_near_new_pos": n_nodes_near_new,
+                    "adapted": bool(n_nodes_near_new > 0),
                     "n_pruned_by_maintain": n_pruned_total,
                     "recovery_steps": recovery_steps,
                     "relocate_body": wc.relocate_body,
                     "relocate_xyz": [rx, ry, rz],
+                    "old_xyz": [float(x) for x in old_pos[:3]],
                     "localization_err_m": loc_err,
                     "episode_wall_s": wall_s,
                     "pre_eqa": pre_score,
@@ -667,7 +744,6 @@ def run_world_change_episode(
 
 LIFELONG_QUESTION_ENV = "lifelong"
 _GT_NODE_DESC_PREFIX = "ground_truth:"
-_NODE_MATCH_RADIUS_M = 0.75
 
 
 def _write_cycle_questions_yaml(path: Path, questions: list[dict[str, Any]]) -> None:
@@ -731,6 +807,48 @@ def _churn_metrics_for_moves(
             }
         )
     return out
+
+
+def _invalidate_checkpoint_nodes_near_moves(
+    ckpt_dir: Path,
+    move_records: list[dict[str, Any]],
+    *,
+    radius_m: float = _NODE_MATCH_RADIUS_M,
+    staleness_horizon: int = 256,
+) -> int:
+    """Age checkpoint nodes near pre-move poses so the next cycle's ``maintain`` can prune them.
+
+    Writes ``graph.json`` in place. Returns the number of nodes aged.
+    """
+    graph_path = ckpt_dir / "graph.json"
+    if not graph_path.is_file() or not move_records:
+        return 0
+    data = json.loads(graph_path.read_text(encoding="utf-8"))
+    nodes = data.get("nodes") or []
+    if not isinstance(nodes, list):
+        return 0
+    final_step = int(data.get("final_step") or data.get("step") or 0)
+    aged_step = max(0, final_step - int(staleness_horizon) - 1)
+    aged = 0
+    for rec in move_records:
+        old_pos = rec.get("old_pos")
+        if old_pos is None:
+            continue
+        target = np.asarray(list(old_pos)[:2], dtype=np.float64)
+        for n in nodes:
+            if not isinstance(n, dict) or n.get("is_viewpoint") or n.get("is_frontier"):
+                continue
+            desc = n.get("description") or ""
+            if isinstance(desc, str) and desc.startswith(_GT_NODE_DESC_PREFIX):
+                continue
+            xyz = np.asarray(n.get("xyz", [0, 0, 0]), dtype=np.float64).reshape(-1)
+            if xyz.size < 2 or float(np.linalg.norm(xyz[:2] - target)) > float(radius_m):
+                continue
+            n["last_seen"] = aged_step
+            aged += 1
+    if aged:
+        graph_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return aged
 
 
 def _apply_lifelong_changes(
@@ -940,6 +1058,16 @@ def run_lifelong_episode(
                         port_offset=port_offset,
                     )
                     cycle_row["fuzz_applied"] = applied
+                    # Age nodes at pre-move poses in this checkpoint before the next cycle reloads it.
+                    profile_name = cfg.profiles.get(run_cfg.backend, "interactive")
+                    settings = profile_settings(profile_name)
+                    horizon = int(settings.get("dynagraph_staleness_horizon") or 256)
+                    n_aged = _invalidate_checkpoint_nodes_near_moves(
+                        ckpt,
+                        move_records,
+                        staleness_horizon=horizon,
+                    )
+                    cycle_row["n_checkpoint_nodes_aged"] = int(n_aged)
                     pending_moves = move_records
 
                 cycle_results.append(cycle_row)

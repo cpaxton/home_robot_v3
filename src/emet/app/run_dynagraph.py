@@ -369,6 +369,32 @@ def _print_dynagraph_rerun_help(
     type=click.Path(exists=True),
     help="Override graph_object_fusion block from standalone YAML (A/B experiments)",
 )
+@click.option(
+    "--benchmark-harness",
+    type=click.Choice(
+        [
+            "interactive",
+            "habitat_eqa",
+            "habitat_ovmm_find",
+            "ovmm_find_phase",
+            "sqa3d",
+            "dynamic_explore",
+        ],
+        case_sensitive=False,
+    ),
+    default=None,
+    help=(
+        "Apply configs/benchmarks/dynagraph.yaml harness profile + EQA flags "
+        "(memory_summary, mcq_debias, explore_when_uncovered, siglip_grounding) "
+        "before starting the agent. Use with --benchmark-method for paper rows."
+    ),
+)
+@click.option(
+    "--benchmark-method",
+    type=click.Choice(["dynagraph", "graph_eqa"], case_sensitive=False),
+    default=None,
+    help="Harness method row (default dynagraph when --benchmark-harness is set)",
+)
 def main(
     ctx: click.Context,
     robot_ip: str,
@@ -420,6 +446,8 @@ def main(
     ground_truth: bool = False,
     compare_to_gt: bool = False,
     graph_fusion_config: str | None = None,
+    benchmark_harness: str | None = None,
+    benchmark_method: str | None = None,
 ) -> None:
     """Run Dynagraph: graph EQA with DynaMem-style voxel navigation (see docs/dynagraph.md)."""
     click.echo("Dynagraph: connecting to robot and starting graph-based EQA (with merge/staleness).")
@@ -504,6 +532,14 @@ def main(
         logger.info("debug: perfect sensor depth (DA3 skipped when observation depth is present)")
     parameters.setdefault("dynagraph_merge_xy_m", 0.45)
     parameters.setdefault("dynagraph_staleness_horizon", 256)
+    if benchmark_harness:
+        from emet.eval.benchmark_dynagraph import apply_dynagraph_harness
+
+        method = str(benchmark_method or "dynagraph").strip().lower()
+        apply_dynagraph_harness(parameters, str(benchmark_harness).strip().lower(), method)
+        logger.info(f"Dynagraph: applied benchmark harness={benchmark_harness!r} method={method!r}")
+    elif benchmark_method:
+        raise click.UsageError("--benchmark-method requires --benchmark-harness")
     if graph_fusion_config:
         from dataclasses import asdict
 
@@ -644,14 +680,29 @@ def main(
         click.echo(f"- Explore-loop [{reason}] done: reason={reason_lab} successes={ok} iterations_executed={nit}")
 
     def _run_eqa_questions(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        from emet.eval.dynagraph_vram import prepare_dynagraph_vram_for_eqa
         from emet.memory.graph_eqa.question_bank import write_eqa_results
 
         rows: list[dict[str, Any]] = []
-        eq_executor = EQAExecuter(agent)
+        # Free perception / voxel SigLIP before Qwen3-VL load (Phase-1 dynamic explore OOM fix).
+        click.echo("- Preparing VRAM for EQA (release non-EQA GPU caches)", err=True)
+        prepare_dynagraph_vram_for_eqa(agent)
+        gm = getattr(agent, "graph_memory", None)
+        if gm is not None and getattr(gm, "memory_summary_enabled", False):
+            refresh = getattr(gm, "refresh_siglip_confirmed_memory", None)
+            if callable(refresh):
+                refresh()
+        # Question bank scores the map already built (explore/rotate). Do NOT chase frontiers
+        # again — that was the Jul-16 smoke hang (5× uncover-nav after Qwen load).
+        agent._fast_explore_lookaround = True
         robot.move_to_nav_posture()
         robot.switch_to_navigation_mode()
         n_q = sum(1 for q in questions if str(q.get("question", "")).strip())
-        click.echo(f"- EQA question bank: {n_q} question(s)", err=True)
+        click.echo(
+            f"- EQA question bank: {n_q} question(s) "
+            f"(answer-only: max_planning_steps=1, allow_navigation=False)",
+            err=True,
+        )
         qi = 0
         for qspec in questions:
             qtext = str(qspec.get("question", "")).strip()
@@ -660,9 +711,19 @@ def main(
             qi += 1
             click.echo(f"- EQA question {qi}/{n_q} start: {qtext}", err=True)
             t_q0 = time.monotonic()
-            robot.say("Answering the question " + qtext)
             try:
-                discord_text, _imgs = eq_executor(qtext)
+                robot.say("Answering the question " + qtext)
+            except Exception:
+                pass
+            try:
+                discord_text, _imgs = agent.run_eqa(
+                    qtext,
+                    max_planning_steps=1,
+                    allow_navigation=False,
+                )
+            except TypeError:
+                # Older Dynamem-only agents lack allow_navigation.
+                discord_text, _imgs = agent.run_eqa(qtext, max_planning_steps=1)
             except Exception as e:
                 logger.warning(f"EQA question failed: {e}")
                 discord_text = f"EQA question failed: {e}"
@@ -687,12 +748,12 @@ def main(
                 err=True,
             )
             if discord_text.strip():
-                click.echo(discord_text)
+                click.echo(discord_text, err=True)
             else:
-                click.echo("(Empty EQA reply — check graph memory / observations.)")
+                click.echo("(Empty EQA reply — check graph memory / observations.)", err=True)
         if export_dir and rows:
             out = write_eqa_results(Path(export_dir) / "eqa_results.json", rows)
-            click.echo(f"Wrote EQA results -> {out}")
+            click.echo(f"Wrote EQA results -> {out}", err=True)
         return rows
 
     def _run_calibration_capture(steps: int, *, rotate: bool) -> None:

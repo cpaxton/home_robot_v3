@@ -622,9 +622,57 @@ emet clean -y     # Remove without prompting
 
 ---
 
+### `emet jobs` (queued / running eval experiments)
+
+Local job registry under `~/runs/emet/jobs/` (override with `EMET_JOBS_DIR`). Queue/smoke scripts register here; unmanaged eval PIDs are still shown via process scan.
+
+| Subcommand | Role |
+|------------|------|
+| `emet jobs` / `emet jobs list` | Active registered jobs (+ unmanaged eval PIDs) |
+| `emet jobs list --all` | Include done/failed/cancelled |
+| `emet jobs status JOB_ID` | Human-readable record (`--json` for full dump) |
+| `emet jobs cancel JOB_ID` | SIGTERM→SIGKILL job process tree; mark cancelled |
+| `emet jobs logs JOB_ID [--tail N]` | Tail queue/orchestrator log |
+| `emet jobs register …` | Scripts: create a record (prints job id) |
+| `emet jobs update JOB_ID --status …` | Scripts: heartbeat / terminal status |
+| `emet jobs run --name NAME [--need-mib N] [--wait-pid P] -- CMD…` | Register + nohup wrapper |
+
+```bash
+uv run emet jobs
+uv run emet jobs list --all
+uv run emet jobs run --name dyn-improve-eqa --need-mib 14000 -- \
+  ./scripts/run_dynagraph_dynamic_improve_smokes.sh ~/runs/emet/dynamic_exploration/eqa_out
+uv run emet jobs cancel JOB_ID
+uv run emet jobs logs JOB_ID --tail 80
+```
+
+Related: [`emet eval`](#emet-eval-gpu-preflight--stale-cleanup) for GPU preflight / orphan cleanup (not the same as job cancel).
+
+### `emet eval` (GPU preflight / stale cleanup)
+
+Canonical GPU preflight for paper evals and overnight smokes (Python implementation of [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh)).
+
+| Subcommand | Role |
+|------------|------|
+| `emet eval status` | Free/total VRAM + compute apps (read-only) |
+| `emet eval check [--need-mib N]` | Exit 1 if free VRAM &lt; N (default `NEED_MIB` or 12000) |
+| `emet eval wait [--need-mib N]` | Block until free VRAM is stably above N |
+| `emet eval kill-stale [--no-gpu] [--settle-sec S]` | SIGTERM→SIGKILL orphaned eval/sim/`uv run emet` trees |
+
+Skips the caller process ancestry and any PIDs in `EMET_GPU_PROTECT_PIDS`. See [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs) and [environment_variables.md](environment_variables.md).
+
+```bash
+uv run emet eval status
+uv run emet eval kill-stale
+NEED_MIB=12000 uv run emet eval wait
+uv run emet eval check --need-mib 14000
+```
+
+Related top-level scoring apps remain: `emet eval-dynagraph`, `emet eval-calibration`, `emet eval-sqa3d`.
+
 ### `emet kill-mujoco-server [options]`
 
-Stop MuJoCo simulation server(s) so ports 4401–4404 are free.
+Stop MuJoCo simulation server(s) so ports 4401–4404 are free. For broader orphan cleanup use **`emet eval kill-stale`**.
 
 **Options:**
 - `--port N` — Kill process on port N (default: 4401)

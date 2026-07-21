@@ -1,6 +1,6 @@
 # Simulation testing plan (seven-track smoke battery)
 
-Canonical **sequential smoke battery** for embodied sim + Habitat before multi-day paper sweeps. Runs one GPU-heavy job at a time with shared preflight ([`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh)).
+Canonical **sequential smoke battery** for embodied sim + Habitat before multi-day paper sweeps. Runs one GPU-heavy job at a time with shared preflight ([`emet eval`](cli.md#emet-eval-gpu-preflight--stale-cleanup); bash [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates).
 
 **Orchestrator:** [`scripts/run_simulation_smoke_battery.sh`](../scripts/run_simulation_smoke_battery.sh)
 
@@ -18,7 +18,7 @@ Canonical **sequential smoke battery** for embodied sim + Habitat before multi-d
 | 3 | **Robocasa search** | Robocasa S1 | `eval_ovmm_find_phases.py` | OVMM FindObj/FindRec on kitchen (`robocasa_pp_s1`) |
 | 4 | **MolmoSpaces / iTHOR search** | MolmoSpaces S2 | `eval_ovmm_find_phases.py` | OVMM find-phase on iTHOR train idx 0 |
 | 5 | **SQA3D** | ScanNet replay | `emet sqa3d run-episode` | Mock-LLM EM@1 on one train question |
-| 6 | **Robocasa dynamic env** | Robocasa S1 | `eval_dynamic_exploration.py --phase world-change` | World-change episode completes (K=3 explore + pre/post EQA); aggregate JSON without `error` |
+| 6 | **Robocasa dynamic env** | Robocasa S1 | `eval_dynamic_exploration.py --phase world-change` | World-change episode completes (explore + pre/post EQA); JSON has `n_stale_nodes_after_move` / `answer_correct_pre|post` without `error`. Prefers GPU + `prepare_dynagraph_vram_for_eqa` before Qwen. |
 | 7 | **MolmoSpaces dynamic search** | MolmoSpaces S2 | `eval_dynamic_exploration.py --phase explore --skip-eqa` | Explore-loop K=3 completes; graph export written (no post-explore VLM EQA in smoke) |
 
 Tracks 1–2 require `./scripts/install_habitat.sh` and HM3D assets. Tracks 3–6 require `emet install sim` (Robocasa). Tracks 4 and 7 require `.venv-molmospaces` (`./install.sh --molmospaces -y`). Track 5 needs ScanNet mesh for full replay (mock-LLM still validates harness wiring).
@@ -67,8 +67,8 @@ The inspector checks **semantic** pass criteria (e.g. Habitat `correct`, OVMM `f
 Preflight before GPU tracks:
 
 ```bash
-./scripts/gpu_preflight.sh --kill-stale
-NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait
+uv run emet eval kill-stale
+NEED_MIB=12000 uv run emet eval wait
 ```
 
 ### 1 — Habitat EQA

@@ -60,6 +60,14 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_DYNAGRAPH_MEMORY_SUMMARY` | Habitat `emet-habitat` dynagraph harness | `1` / `0` override CONFIRMED_MEMORY block (CLI: `--memory-summary` / `--no-memory-summary`). |
 | `EMET_DYNAGRAPH_EXPLORE_UNCOVERED` | Habitat `emet-habitat` dynagraph harness | `off`, `on`, or `conservative` (CLI: `--explore-when-uncovered`). Default per harness: `habitat_eqa` uses `conservative` in [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml). |
 | `PYTORCH_CUDA_ALLOC_CONF` | PyTorch CUDA | Optional allocator hint (e.g. `expandable_segments:True`); set by `run_sqa3d_gpu_sweep.sh` and `run_sqa3d_sharded_sweep.sh` if unset. |
+| `NEED_MIB` | `emet eval check/wait`, `scripts/gpu_preflight.sh` | Min free VRAM (MiB) (default `12000`). |
+| `GPU_STABLE_CHECKS` | `emet eval wait` | Consecutive passing free-VRAM reads (default `3`). |
+| `GPU_WAIT_INTERVAL` | `emet eval wait` | Seconds between reads (default `30`). |
+| `GPU_SETTLE_SEC` | `emet eval kill-stale` | Sleep after pattern kills (default `15`). |
+| `GPU_KILL_STALE` | `emet_gpu_between_steps` | Set `0` to skip process cleanup between overnight phases. |
+| `EMET_GPU_PROTECT_PIDS` | `emet eval kill-stale` | Space-separated PIDs never killed (plus the caller process and its ancestors). |
+| `EMET_JOBS_DIR` | `emet jobs` | Directory for job registry JSON (default `~/runs/emet/jobs`). |
+| `EMET_JOB_ID` | smoke/queue scripts | If set, scripts skip creating a new registry entry (used by `emet jobs run` wrappers). |
 
 ### Large paper eval orchestrator
 

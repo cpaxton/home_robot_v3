@@ -29,16 +29,13 @@ def _repo_root() -> Path:
 
 def shutdown_habitat_server_subprocess() -> None:
     """Terminate the Habitat serve subprocess (idempotent)."""
+    from emet.utils.process_tree import terminate_process_tree
+
     global _HABITAT_PROC
     proc = _HABITAT_PROC
     if proc is None:
         return
-    if proc.poll() is None:
-        proc.terminate()
-        try:
-            proc.wait(timeout=12.0)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+    terminate_process_tree(proc, grace_s=12.0)
     _HABITAT_PROC = None
 
 
@@ -133,14 +130,15 @@ def spawn_habitat_server_subprocess(
         )
     env = dict(__import__("os").environ)
     ensure_habitat_eqa_data_dir_env(env)
+    from emet.utils.process_tree import popen_session
+
     out_err: int | None = subprocess.DEVNULL if silence_sim_output else None
-    proc = subprocess.Popen(
+    proc = popen_session(
         cmd,
         cwd=str(_repo_root()),
         stdin=subprocess.DEVNULL,
         stdout=out_err,
         stderr=out_err,
-        start_new_session=True,
         env=env,
     )
     _HABITAT_PROC = proc
