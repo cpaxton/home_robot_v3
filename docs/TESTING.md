@@ -143,7 +143,7 @@ uv run pytest packages/emet_molmospaces/tests/ -q
 
 ## Known gap: graph + EQA on a known scene (Dynagraph)
 
-**Status (2026-07):** Unit coverage landed in [`test_dynagraph_known_scene_attach.py`](../src/test/memory/test_dynagraph_known_scene_attach.py) — red cylinder / blue cube instance items and fusion detections must attach as object nodes with allowlisted labels (no GPU). Full Robocasa/MuJoCo E2E with live YoloE remains a stronger integration check.
+**Status (2026-07):** Unit coverage landed in [`test_dynagraph_known_scene_attach.py`](../src/test/memory/test_dynagraph_known_scene_attach.py) — red cylinder / blue cube instance items and fusion detections must attach as object nodes with allowlisted labels (no GPU). World-change invalidation: [`test_dynagraph_staleness_disappearance.py`](../src/test/memory/test_dynagraph_staleness_disappearance.py) + [`test_lifelong_checkpoint_invalidate.py`](../src/test/eval/test_lifelong_checkpoint_invalidate.py). Operator notes: [experiments/dynagraph_dynamic_memory.md](experiments/dynagraph_dynamic_memory.md). Full Robocasa/MuJoCo E2E with live YoloE remains a stronger integration check.
 
 **Remaining E2E gap:** Explore-only exports can still show **`Nodes (0)`** in `scene_graph_report.txt` when detections exist but the instance→graph hook did not run. Prefer graph-health fields in Habitat `metrics.json` / dynamic-explore cycle rows (`graph_health`) and `uv run python scripts/summarize_graph_health.py …`.
 

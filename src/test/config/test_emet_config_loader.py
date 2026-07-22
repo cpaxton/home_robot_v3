@@ -41,9 +41,11 @@ def test_robot_overlay_merges_innate_mars_mapping():
     merged = merge_robot_overlay(cfg.raw, "innate_mars")
     assert merged["mapping"]["depth_source"] == "auto"
     assert merged["mapping"]["local_radius"] == 0.85
+    assert merged["mapping"]["da3_clip_max_m"] == 3.5
+    assert merged["mapping"]["da3_ignore_sky_fraction_top"] == 0.14
     filters = merged["mapping"]["filters"]
-    assert filters["depth_speckle_open_kernel"] == 0
-    assert filters["voxel_pcd_dbscan_min_samples"] == 0
+    assert filters["depth_speckle_open_kernel"] == 3
+    assert filters["voxel_pcd_dbscan_min_samples"] == 6
 
 
 def test_dot_override_wins_over_file():

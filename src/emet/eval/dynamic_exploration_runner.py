@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import shutil
 import subprocess
 import time
@@ -34,6 +35,10 @@ from emet.eval.ovmm_find_phase import resolve_find_phase_nav_step_timeout
 from emet.eval.sim_eval_session import benchmark_sim_server, connect_benchmark_robot
 from emet.eval.world_fuzz import FuzzAction, apply_fuzz_actions, fuzz_actions_for_cycle
 
+LIFELONG_QUESTION_ENV = "lifelong"
+_GT_NODE_DESC_PREFIX = "ground_truth:"
+_NODE_MATCH_RADIUS_M = 0.75
+
 
 @dataclass
 class DynamicExploreRunConfig:
@@ -43,6 +48,7 @@ class DynamicExploreRunConfig:
     no_sensor_perception: bool = True
     resume: bool = False
     skip_eqa: bool = False
+    use_scene_cache: bool = True
 
 
 def _repo_root() -> Path:
@@ -122,6 +128,37 @@ def _append_progress_event(progress_path: Path | None, event: dict[str, Any]) ->
         fh.flush()
 
 
+def _kill_process_tree(proc: subprocess.Popen[str], *, label: str) -> None:
+    """Kill ``proc`` and its process group (uv wrapper + run_dynagraph + mujoco_server)."""
+    pid = proc.pid
+    if pid is None:
+        return
+    print(f"[dynamic-explore] KILL_TREE {label} pid={pid}", flush=True)
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+    try:
+        proc.wait(timeout=15)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.kill()
+        except Exception:
+            pass
+    try:
+        proc.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        pass
+
+
 def run_logged_subprocess(
     cmd: list[str],
     *,
@@ -139,9 +176,11 @@ def run_logged_subprocess(
     Heartbeat / stale-log intervals (seconds):
     - ``EMET_DYNAMIC_EXPLORE_HEARTBEAT_S`` (default 120)
     - ``EMET_DYNAMIC_EXPLORE_STALE_LOG_S`` (default 900) — warn when log mtime is stale
+    - ``EMET_DYNAMIC_EXPLORE_STALE_KILL_S`` (default 2× stale) — kill process group when log is stale
     """
     hb = float(heartbeat_s) if heartbeat_s is not None else _env_float("EMET_DYNAMIC_EXPLORE_HEARTBEAT_S", 120.0)
     stale = float(stale_log_s) if stale_log_s is not None else _env_float("EMET_DYNAMIC_EXPLORE_STALE_LOG_S", 900.0)
+    stale_kill = _env_float("EMET_DYNAMIC_EXPLORE_STALE_KILL_S", stale * 2.0 if stale > 0 else 0.0)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
     last_hb = t0
@@ -171,6 +210,7 @@ def run_logged_subprocess(
             stdout=log_f,
             stderr=subprocess.STDOUT,
             text=True,
+            start_new_session=True,
         )
         try:
             while True:
@@ -181,11 +221,7 @@ def run_logged_subprocess(
                     now = time.monotonic()
                     elapsed = now - t0
                     if elapsed >= timeout_s:
-                        proc.kill()
-                        try:
-                            proc.wait(timeout=30)
-                        except subprocess.TimeoutExpired:
-                            pass
+                        _kill_process_tree(proc, label=label)
                         tail = _tail_text(log_path)
                         raise subprocess.TimeoutExpired(cmd, timeout_s, output=tail) from None
 
@@ -209,6 +245,15 @@ def run_logged_subprocess(
                                 "pid": proc.pid,
                             },
                         )
+                    if stale_kill > 0 and log_age >= stale_kill:
+                        print(
+                            f"[dynamic-explore] STALE_KILL {label} log_age_s={log_age:.0f} "
+                            f"(threshold={stale_kill:.0f})",
+                            flush=True,
+                        )
+                        _kill_process_tree(proc, label=label)
+                        tail = _tail_text(log_path)
+                        raise subprocess.TimeoutExpired(cmd, timeout_s, output=tail) from None
                     if stale > 0 and log_age >= stale and (mtime != last_mtime or not stale_warned):
                         last_mtime = mtime
                         stale_warned = True
@@ -245,11 +290,7 @@ def run_logged_subprocess(
             return subprocess.CompletedProcess(cmd, returncode)
         except Exception:
             if proc.poll() is None:
-                proc.kill()
-                try:
-                    proc.wait(timeout=30)
-                except subprocess.TimeoutExpired:
-                    pass
+                _kill_process_tree(proc, label=label)
             raise
 
 
@@ -355,6 +396,19 @@ def run_explore_episode_subprocess(
     sim_cfg = _resolve_sim_cfg(run.episode)
     port_offset = int(run_cfg.port_offset)
     sim_cfg = replace(sim_cfg, port_offset=port_offset, headless=True)
+
+    cache_dir = None
+    explore_iters = int(run.explore_max_iters)
+    include_explore = run.mapping_mode == "explore"
+    if run_cfg.use_scene_cache:
+        from emet.eval.scene_map_cache import resolve_scene_cache_for_sim
+
+        cache_dir = resolve_scene_cache_for_sim(sim_cfg, enabled=True)
+        if cache_dir is not None:
+            # Baseline already mapped — skip rotate/explore budget.
+            explore_iters = 0
+            include_explore = False
+
     dyn_cmd = build_dynagraph_subprocess_cmd(
         export_dir=export_dir,
         port_offset=port_offset,
@@ -364,8 +418,9 @@ def run_explore_episode_subprocess(
         no_sensor_perception=run_cfg.no_sensor_perception,
         questions_yaml=cfg.paths.questions_yaml,
         question_env=run.episode.question_env,
-        explore_iters=run.explore_max_iters,
-        include_explore_loop=run.mapping_mode == "explore",
+        input_dir=cache_dir,
+        explore_iters=explore_iters,
+        include_explore_loop=include_explore,
         skip_eqa=run_cfg.skip_eqa,
     )
 
@@ -417,6 +472,18 @@ def run_explore_episode_subprocess(
         wall_s = time.monotonic() - t0
         row = flatten_eval_metrics(metrics, run_spec=run, episode_wall_s=wall_s)
         row["export_dir"] = str(export_dir)
+        row["map_source"] = "cache" if cache_dir is not None else "live"
+        if cache_dir is not None:
+            row["scene_cache_dir"] = str(cache_dir)
+        health = metrics.get("graph_health") or {}
+        failure = str(health.get("failure_class") or "")
+        row["graph_health_ok"] = failure not in ("empty_graph", "thin_graph")
+        if failure in ("empty_graph", "thin_graph"):
+            print(
+                f"[dynamic-explore] WARN {run.run_id}: graph_health={failure} "
+                f"n_object={health.get('n_object')} — instance→graph may not have attached",
+                flush=True,
+            )
         payload = {"metrics": metrics, "summary": row}
         out_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         return payload
@@ -543,6 +610,12 @@ def run_world_change_episode(
                 )
                 parameters["find_phase_nav_step_timeout_s"] = nav_timeout
 
+                cache_dir = None
+                if run_cfg.use_scene_cache:
+                    from emet.eval.scene_map_cache import resolve_scene_cache_for_sim
+
+                    cache_dir = resolve_scene_cache_for_sim(sim_cfg, enabled=True)
+
                 agent = DynagraphController(
                     robot,
                     parameters,
@@ -550,18 +623,28 @@ def run_world_change_episode(
                     cpu_only=run_cfg.cpu_only,
                     use_instance_graph=True,
                     use_sensor_perception=not run_cfg.no_sensor_perception,
+                    graph_memory_input_path=str(cache_dir) if cache_dir is not None else None,
                 )
                 agent.start()
                 agent._fast_explore_lookaround = True
 
                 executor = EQAExecuter(agent)
-                executor.rotate_in_place()
-                dynagraph_explore_until_terminated(agent, max_iterations=int(explore_max_iters))
+                if cache_dir is None:
+                    executor.rotate_in_place()
+                    dynagraph_explore_until_terminated(agent, max_iterations=int(explore_max_iters))
+                else:
+                    # Cached baseline already covers the static scene; world-change
+                    # still invalidates nodes near the relocated body below.
+                    agent.update()
 
                 pre_row = _run_eqa_single(agent, robot, pre_q)
                 pre_score = score_eqa_results([pre_row], episode_dir=None)
 
                 session = robot.get_emet_session()
+                placements_pre = read_sim_object_placements(session)
+                old_pos = None
+                if wc.relocate_body in placements_pre:
+                    old_pos = list(placements_pre[wc.relocate_body]["pos"])
                 rx, ry, rz = _default_relocate_xy(session, wc.relocate_body)
                 from emet.simulation.sim_manipulation import robot_zmq_set_body_pose
 
@@ -575,8 +658,21 @@ def run_world_change_episode(
                     mem,
                     label_hint=str(pre_q.get("gt_body_key") or "obj"),
                 )
-                if mem is not None and mem.staleness_horizon > 0:
-                    n_pruned_total += int(mem.maintain(cur_step))
+                if mem is not None:
+                    # Known move: age nodes at the old pose so maintain can prune without
+                    # waiting a full staleness_horizon of unobserved steps.
+                    if old_pos is not None and hasattr(mem, "invalidate_nodes_near"):
+                        _aged, n_inv = mem.invalidate_nodes_near(
+                            old_pos,
+                            radius_m=_NODE_MATCH_RADIUS_M,
+                            current_step=cur_step,
+                            prune=True,
+                        )
+                        n_pruned_total += int(n_inv)
+                    elif mem.staleness_horizon > 0:
+                        n_pruned_total += int(mem.maintain(cur_step))
+                    if hasattr(mem, "clear_eqa_working_memory"):
+                        mem.clear_eqa_working_memory()
 
                 recovery_iters = int(cfg.recovery_explore_iters)
                 _, _n_ok, nit = dynagraph_explore_until_terminated(agent, max_iterations=recovery_iters)
@@ -633,6 +729,8 @@ def run_world_change_episode(
                     "relocate_xyz": [rx, ry, rz],
                     "localization_err_m": loc_err,
                     "episode_wall_s": wall_s,
+                    "map_source": "cache" if cache_dir is not None else "live",
+                    "scene_cache_dir": str(cache_dir) if cache_dir is not None else None,
                     "pre_eqa": pre_score,
                     "post_eqa": post_score,
                     "eval": eval_metrics,
@@ -664,10 +762,6 @@ def run_world_change_episode(
 # ---------------------------------------------------------------------------
 # Lifelong (K-cycle) episodes: explore/answer -> checkpoint -> fuzz -> reload.
 # ---------------------------------------------------------------------------
-
-LIFELONG_QUESTION_ENV = "lifelong"
-_GT_NODE_DESC_PREFIX = "ground_truth:"
-_NODE_MATCH_RADIUS_M = 0.75
 
 
 def _write_cycle_questions_yaml(path: Path, questions: list[dict[str, Any]]) -> None:
@@ -731,6 +825,71 @@ def _churn_metrics_for_moves(
             }
         )
     return out
+
+
+def invalidate_checkpoint_nodes_near_moves(
+    ckpt_dir: Path,
+    move_records: list[dict[str, Any]],
+    *,
+    radius_m: float = _NODE_MATCH_RADIUS_M,
+) -> int:
+    """Age/remove object nodes at pre-move poses in a lifelong checkpoint ``graph.json``.
+
+    The next cycle reloads this checkpoint; without invalidation, nodes at the old
+    pose linger until ``staleness_horizon`` elapses (often longer than one explore
+    budget). Returns the number of object nodes removed.
+    """
+    graph_path = ckpt_dir / "graph.json"
+    if not graph_path.is_file() or not move_records:
+        return 0
+    data = json.loads(graph_path.read_text(encoding="utf-8"))
+    nodes = list(data.get("nodes") or [])
+    if not nodes:
+        return 0
+    old_targets: list[np.ndarray] = []
+    for rec in move_records:
+        old_pos = rec.get("old_pos")
+        if old_pos is None:
+            continue
+        old_targets.append(np.asarray(old_pos[:2], dtype=np.float64))
+    if not old_targets:
+        return 0
+
+    def _near_old(n: dict[str, Any]) -> bool:
+        if n.get("is_viewpoint") or n.get("is_frontier"):
+            return False
+        desc = n.get("description") or ""
+        if isinstance(desc, str) and desc.startswith(_GT_NODE_DESC_PREFIX):
+            return False
+        xyz = np.asarray(n.get("xyz", [0, 0, 0]), dtype=np.float64).reshape(-1)
+        if xyz.size < 2:
+            return False
+        return any(float(np.linalg.norm(xyz[:2] - t)) <= float(radius_m) for t in old_targets)
+
+    kept = [n for n in nodes if not _near_old(n)]
+    n_removed = len(nodes) - len(kept)
+    if n_removed <= 0:
+        return 0
+    # Drop observations that only supported removed object nodes (best-effort).
+    drop_obs = {
+        int(n.get("obs_id"))
+        for n in nodes
+        if _near_old(n) and n.get("obs_id") is not None and not n.get("is_viewpoint")
+    }
+    if drop_obs and isinstance(data.get("observations"), list):
+        data["observations"] = [
+            o for o in data["observations"] if int(o.get("obs_id", -1)) not in drop_obs
+        ]
+        kept = [
+            n
+            for n in kept
+            if not (n.get("is_viewpoint") and int(n.get("obs_id", -1)) in drop_obs)
+        ]
+    for i, n in enumerate(kept, start=1):
+        n["node_id"] = i
+    data["nodes"] = kept
+    graph_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return int(n_removed)
 
 
 def _apply_lifelong_changes(
@@ -847,6 +1006,14 @@ def run_lifelong_episode(
                     _write_cycle_questions_yaml(qyaml, questions)
 
                 explore_iters = le.explore_iters_first if t == 0 else le.explore_iters_resume
+                input_dir = prev_ckpt
+                if t == 0 and input_dir is None and run_cfg.use_scene_cache:
+                    from emet.eval.scene_map_cache import resolve_scene_cache_for_sim
+
+                    cache_dir = resolve_scene_cache_for_sim(sim_cfg, enabled=True)
+                    if cache_dir is not None:
+                        input_dir = cache_dir
+                        explore_iters = 0
                 cmd = build_dynagraph_subprocess_cmd(
                     export_dir=ckpt,
                     port_offset=port_offset,
@@ -856,10 +1023,11 @@ def run_lifelong_episode(
                     no_sensor_perception=run_cfg.no_sensor_perception,
                     questions_yaml=qyaml,
                     question_env=LIFELONG_QUESTION_ENV if qyaml is not None else None,
-                    input_dir=prev_ckpt,
+                    input_dir=input_dir,
                     explore_iters=int(explore_iters),
                     export_voxel_pickle=True,
                     skip_eqa=run_cfg.skip_eqa or qyaml is None,
+                    include_explore_loop=int(explore_iters) > 0,
                 )
                 cycle_timeout = cycle_timeout_s
                 if cycle_timeout is None:
@@ -940,6 +1108,10 @@ def run_lifelong_episode(
                         port_offset=port_offset,
                     )
                     cycle_row["fuzz_applied"] = applied
+                    # Patch this cycle's checkpoint so the next reload does not keep
+                    # confident nodes at pre-move poses (CONFIRMED_MEMORY / find).
+                    n_inv = invalidate_checkpoint_nodes_near_moves(ckpt, move_records)
+                    cycle_row["checkpoint_nodes_invalidated"] = int(n_inv)
                     pending_moves = move_records
 
                 cycle_results.append(cycle_row)

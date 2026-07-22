@@ -1,6 +1,6 @@
 # Dynagraph graph quality → dynamic EQA (follow-on)
 
-**Status:** Phase 0–2 quality work landed (2026-07) — shared `graph_health`, EQA prompt top-K (`eqa_vl.eqa_max_graph_nodes`), label-compatible dedup/merge, known-scene attach tests. **Dynamic EQA is explicitly deferred** until graph-health gates pass on HM-EQA + dynamic-explore slices.
+**Status:** Phase 0–2 quality work landed (2026-07) — shared `graph_health`, EQA prompt top-K (`eqa_vl.eqa_max_graph_nodes`), label-compatible dedup/merge, known-scene attach tests. **World-change invalidation landed (2026-07-20):** `GraphEQAMemory.invalidate_nodes_near` + `clear_eqa_working_memory` in Phase 2; lifelong checkpoint `graph.json` patched after fuzz. Dynamic mid-episode EQA (answer *while* the world changes without a scripted invalidate) remains a stress harness, not a separate product milestone.
 
 ## Diagnosis snapshot (2026-07-15, existing artifacts)
 

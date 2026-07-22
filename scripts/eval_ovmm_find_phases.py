@@ -73,6 +73,17 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--not-rotate", action="store_true", help="Skip rotate-in-place mapping")
     parser.add_argument(
+        "--explore-steps",
+        type=int,
+        default=None,
+        help="Override episode explore_steps (frontier navigations after rotate)",
+    )
+    parser.add_argument(
+        "--no-scene-cache",
+        action="store_true",
+        help="Ignore prebuilt scene map cache (always live rotate/explore)",
+    )
+    parser.add_argument(
         "--no-perfect-depth",
         action="store_true",
         help="Disable sim perfect sensor depth (default: use ZMQ depth for mapping)",
@@ -163,6 +174,8 @@ def main() -> int:
                 perfect_depth=not args.no_perfect_depth,
                 use_sensor_perception=args.sensor_perception,
                 prefer_voxel=not args.graph_query,
+                explore_steps_override=args.explore_steps,
+                use_scene_cache=not args.no_scene_cache,
             )
             tag = f"{ep.id}_{backend}"
             print(f"Running {tag} …", file=sys.stderr)

@@ -97,3 +97,39 @@ def test_run_logged_subprocess_timeout(tmp_path: Path):
             heartbeat_s=0.5,
             stale_log_s=3600.0,
         )
+
+
+def test_run_logged_subprocess_kills_process_group(tmp_path: Path):
+    """Timeout must kill the whole session so uv-wrapped children cannot leak."""
+    import os
+    import time
+
+    marker = tmp_path / "child.pid"
+    log_path = tmp_path / "pg.log"
+    # Session-leader child writes its pid then sleeps; must die on timeout.
+    code = (
+        "import os, time, pathlib\n"
+        f"pathlib.Path({str(marker)!r}).write_text(str(os.getpid()))\n"
+        "time.sleep(60)\n"
+    )
+    with pytest.raises(subprocess.TimeoutExpired):
+        run_logged_subprocess(
+            [sys.executable, "-c", code],
+            cwd=tmp_path,
+            env=None,
+            log_path=log_path,
+            timeout_s=1.5,
+            label="pg_kill_test",
+            progress_path=None,
+            heartbeat_s=0.3,
+            stale_log_s=3600.0,
+        )
+    time.sleep(0.3)
+    assert marker.is_file()
+    child_pid = int(marker.read_text().strip())
+    try:
+        os.kill(child_pid, 0)
+        alive = True
+    except ProcessLookupError:
+        alive = False
+    assert not alive, f"child pid {child_pid} still alive after process-group kill"

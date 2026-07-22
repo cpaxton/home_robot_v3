@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,7 +41,30 @@ LocalizeSource = Literal[
     "memory_check_graph",
     "memory_check_voxel",
     "memory_list_objects",
+    "gt_placement",
 ]
+
+_HEX_TOKEN_RE = re.compile(r"^[0-9a-f]{8,}$", re.IGNORECASE)
+_NUMERIC_TOKEN_RE = re.compile(r"^\d+$")
+
+
+def semantic_label_from_instance(name: str) -> str:
+    """Strip Molmo/iTHOR instance hashes from a body or category string.
+
+    Examples::
+
+        bowl_6befd62f08fd322391939c2b44d3f839_1_1_0 -> bowl
+        bowl 6befd62f08fd322391939c2b44d3f839 1 0 0 -> bowl
+        kitchen cabinet door -> kitchen cabinet door
+    """
+    raw = str(name or "").strip()
+    if not raw:
+        return ""
+    tokens = re.split(r"[\s_]+", raw)
+    keep = [t for t in tokens if t and not _HEX_TOKEN_RE.match(t) and not _NUMERIC_TOKEN_RE.match(t)]
+    if keep:
+        return " ".join(keep)
+    return tokens[0] if tokens else raw
 
 
 @dataclass(frozen=True)
@@ -75,6 +99,8 @@ class FindPhaseRunConfig:
     prefer_voxel: bool = True
     manip_mode: ManipMode = "skip"
     nav_step_timeout_s: float | None = None
+    explore_steps_override: int | None = None
+    use_scene_cache: bool = True
 
 
 def resolve_find_phase_nav_step_timeout(
@@ -125,10 +151,23 @@ def resolve_object_query(
     episode: FindPhaseEpisode,
     placements: dict[str, dict[str, Any]] | None,
 ) -> str:
-    """Resolve memory/GT object query; optional ``object_gt_body`` overrides from sim GT."""
+    """Resolve memory/GT object query; optional ``object_gt_body`` overrides from sim GT.
+
+    Returns a *semantic* label suitable for voxel/graph text localization (instance hashes
+    from Molmo/iTHOR body names are stripped).
+    """
+    raw = episode.object
     if episode.object_gt_body and placements and episode.object_gt_body in placements:
-        return str(placements[episode.object_gt_body].get("cat") or episode.object)
-    return episode.object
+        raw = str(placements[episode.object_gt_body].get("cat") or episode.object)
+    cleaned = semantic_label_from_instance(raw)
+    # Prefer the episode's human label when cleaning collapses to a useless stub like "obj".
+    if cleaned.lower() in {"", "obj", "object", "body"} and episode.object:
+        alt = semantic_label_from_instance(episode.object)
+        if alt.lower() not in {"", "obj", "object", "body"}:
+            return alt
+        if episode.object.lower() not in {"obj", "object"}:
+            return episode.object
+    return cleaned or str(raw)
 
 
 def category_matches(query: str, cat: str | None) -> bool:
@@ -281,9 +320,14 @@ def _query_variants(query: str, placements: dict[str, dict[str, Any]] | None = N
     variants: list[str] = []
     if base:
         variants.append(base)
-    low = base.lower()
+    cleaned = semantic_label_from_instance(base)
+    if cleaned and cleaned.lower() != base.lower():
+        variants.append(cleaned)
+    low = (cleaned or base).lower()
     for token in low.replace("_", " ").split():
         if len(token) >= 2 and token not in {v.lower() for v in variants}:
+            if _HEX_TOKEN_RE.match(token) or _NUMERIC_TOKEN_RE.match(token):
+                continue
             variants.append(token)
     if placements:
         for info in placements.values():
@@ -291,8 +335,9 @@ def _query_variants(query: str, placements: dict[str, dict[str, Any]] | None = N
             if not cat:
                 continue
             cat_low = cat.lower()
-            if low and (low in cat_low or cat_low in low):
-                variants.append(cat)
+            cat_clean = semantic_label_from_instance(cat)
+            if low and (low in cat_low or cat_low in low or low in cat_clean.lower()):
+                variants.append(cat_clean or cat)
     seen: set[str] = set()
     out: list[str] = []
     for v in variants:
@@ -658,15 +703,22 @@ def create_find_phase_agent(
     cpu_only: bool = False,
     compare_to_gt: bool = False,
     use_sensor_perception: bool = False,
+    graph_memory_input_path: str | None = None,
 ):
-    """Instantiate the controller for a memory backend."""
+    """Instantiate the controller for a memory backend.
+
+    When ``graph_memory_input_path`` is set, GraphEQA / Dynagraph reload the
+    exported scene map (graph + voxel). Dynamem loads ``voxel_map.pkl`` only.
+    """
     from emet.eval.benchmark_dynagraph import harness_controller_kwargs
+    from emet.memory.format import VOXEL_PICKLE_FILENAME
 
     harness_kw = harness_controller_kwargs(parameters, harness="ovmm_find_phase", method=str(backend))
     use_instance_graph = bool(
         harness_kw.get("use_instance_graph", backend in ("graph_eqa", "dynagraph", "ground_truth"))
     )
     manipulation_only = bool(harness_kw.get("manipulation_only", False))
+    input_path = str(graph_memory_input_path) if graph_memory_input_path else None
     if backend == "dynamem":
         from emet.controller.controller_dynamem import DynamemController
 
@@ -679,6 +731,11 @@ def create_find_phase_agent(
             eqa=False,
             defer_eqa_vllm=True,
         )
+        if input_path:
+            voxel_pickle = Path(input_path) / VOXEL_PICKLE_FILENAME
+            vm = getattr(agent, "voxel_map", None)
+            if voxel_pickle.is_file() and vm is not None and hasattr(vm, "read_from_pickle"):
+                vm.read_from_pickle(str(voxel_pickle))
     elif backend == "graph_eqa":
         from emet.controller.controller_graph_eqa import GraphEQAController
 
@@ -690,6 +747,7 @@ def create_find_phase_agent(
             cpu_only=cpu_only,
             use_sensor_perception=use_sensor_perception,
             manipulation_only=manipulation_only,
+            graph_memory_input_path=input_path,
         )
     elif backend == "dynagraph":
         from emet.controller.controller_dynagraph import DynagraphController
@@ -703,6 +761,7 @@ def create_find_phase_agent(
             use_sensor_perception=use_sensor_perception,
             manipulation_only=manipulation_only,
             visualize_ground_truth=compare_to_gt,
+            graph_memory_input_path=input_path,
         )
     elif backend == "ground_truth":
         from emet.controller.controller_dynagraph import DynagraphController
@@ -716,6 +775,7 @@ def create_find_phase_agent(
             use_sensor_perception=False,
             manipulation_only=manipulation_only,
             ground_truth_mode=True,
+            graph_memory_input_path=input_path,
         )
     else:
         raise ValueError(f"unknown backend {backend!r}")
@@ -886,6 +946,16 @@ def run_episode_find_phase(
             parameters["debug_perfect_sensor_depth"] = True
         parameters["find_phase_nav_step_timeout_s"] = nav_timeout
 
+        cache_dir = None
+        map_source = "live"
+        # Perception backends benefit from a prebuilt map; GT oracle uses placements.
+        if run_cfg.use_scene_cache and run_cfg.backend != "ground_truth":
+            from emet.eval.scene_map_cache import resolve_scene_cache_for_sim
+
+            cache_dir = resolve_scene_cache_for_sim(sim_cfg, enabled=True)
+            if cache_dir is not None:
+                map_source = "cache"
+
         t_init0 = time.monotonic()
         agent = create_find_phase_agent(
             robot,
@@ -894,6 +964,7 @@ def run_episode_find_phase(
             cpu_only=run_cfg.cpu_only,
             compare_to_gt=run_cfg.compare_to_gt,
             use_sensor_perception=run_cfg.use_sensor_perception,
+            graph_memory_input_path=str(cache_dir) if cache_dir is not None else None,
         )
         init_wall_s = time.monotonic() - t_init0
         if run_cfg.backend == "ground_truth":
@@ -904,10 +975,20 @@ def run_episode_find_phase(
                     raise RuntimeError("ground-truth mode: no sim_object_placements in session")
 
         t_map0 = time.monotonic()
+        explore_steps = (
+            int(run_cfg.explore_steps_override)
+            if run_cfg.explore_steps_override is not None
+            else int(episode.explore_steps)
+        )
+        not_rotate = bool(run_cfg.not_rotate)
+        if cache_dir is not None:
+            # Baseline already mapped; skip rotate/explore.
+            explore_steps = 0
+            not_rotate = True
         n_steps = run_mapping_protocol(
             agent,
-            explore_steps=episode.explore_steps,
-            not_rotate=run_cfg.not_rotate,
+            explore_steps=explore_steps,
+            not_rotate=not_rotate,
         )
         mapping_wall_s = time.monotonic() - t_map0
 
@@ -921,26 +1002,74 @@ def run_episode_find_phase(
 
         prefer_voxel = run_cfg.prefer_voxel and run_cfg.backend != "ground_truth"
         t_query0 = time.monotonic()
-        obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
-            memory,
-            object_query,
-            placements=placements,
-            session=session,
-            near_recep=episode.start_recep,
-            voxel_map=vm,
-            convert_nav_to_world=nav_world or run_cfg.backend == "dynamem",
-            prefer_voxel=prefer_voxel,
-        )
-        recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
-            memory,
-            episode.goal_recep,
-            placements=placements,
-            session=session,
-            near_recep=episode.goal_recep,
-            voxel_map=vm,
-            convert_nav_to_world=nav_world or run_cfg.backend == "dynamem",
-            prefer_voxel=prefer_voxel,
-        )
+        if run_cfg.backend == "ground_truth":
+            # Oracle: localize directly from sim placements (upper bound for FindObj/FindRec).
+            obj_xyz = None
+            obj_ok = False
+            obj_q_used = object_query
+            obj_source: LocalizeSource | None = None
+            body = episode.object_gt_body
+            if body and body in placements:
+                obj_xyz = np.asarray(placements[body]["pos"][:3], dtype=np.float64)
+                obj_ok = True
+                obj_source = "gt_placement"
+                obj_q_used = str(placements[body].get("cat") or body)
+            else:
+                obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
+                    memory,
+                    object_query,
+                    placements=placements,
+                    session=session,
+                    near_recep=episode.start_recep,
+                    voxel_map=vm,
+                    convert_nav_to_world=nav_world,
+                    prefer_voxel=False,
+                )
+            recep_xyz = None
+            recep_ok = False
+            recep_q_used = episode.goal_recep
+            recep_source = None
+            # Prefer a GT body whose category matches the goal receptacle.
+            for bname, meta in placements.items():
+                cat = str(meta.get("cat") or meta.get("label") or bname).lower()
+                if episode.goal_recep.lower() in cat or cat in episode.goal_recep.lower():
+                    recep_xyz = np.asarray(meta["pos"][:3], dtype=np.float64)
+                    recep_ok = True
+                    recep_source = "gt_placement"
+                    recep_q_used = cat
+                    break
+            if not recep_ok:
+                recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
+                    memory,
+                    episode.goal_recep,
+                    placements=placements,
+                    session=session,
+                    near_recep=episode.goal_recep,
+                    voxel_map=vm,
+                    convert_nav_to_world=nav_world,
+                    prefer_voxel=False,
+                )
+        else:
+            obj_xyz, obj_ok, obj_q_used, obj_source = query_find_phase_localization(
+                memory,
+                object_query,
+                placements=placements,
+                session=session,
+                near_recep=episode.start_recep,
+                voxel_map=vm,
+                convert_nav_to_world=nav_world or run_cfg.backend == "dynamem",
+                prefer_voxel=prefer_voxel,
+            )
+            recep_xyz, recep_ok, recep_q_used, recep_source = query_find_phase_localization(
+                memory,
+                episode.goal_recep,
+                placements=placements,
+                session=session,
+                near_recep=episode.goal_recep,
+                voxel_map=vm,
+                convert_nav_to_world=nav_world or run_cfg.backend == "dynamem",
+                prefer_voxel=prefer_voxel,
+            )
 
         find_metrics = compute_find_phase_metrics(
             obj_pred_xyz=obj_xyz,
@@ -976,7 +1105,9 @@ def run_episode_find_phase(
             "object_query": object_query,
             "start_recep": episode.start_recep,
             "goal_recep": episode.goal_recep,
-            "explore_steps": episode.explore_steps,
+            "explore_steps": explore_steps,
+            "map_source": map_source,
+            "scene_cache_dir": str(cache_dir) if cache_dir is not None else None,
             "merge_xy_m": parameters.get("dynagraph_merge_xy_m"),
             "staleness_horizon": parameters.get("dynagraph_staleness_horizon"),
             "perfect_depth": bool(run_cfg.perfect_depth),

@@ -323,6 +323,7 @@ def flatten_eval_metrics(
     graph = metrics.get("graph") or {}
     fusion = metrics.get("fusion") or {}
     eqa = metrics.get("eqa") or {}
+    health = metrics.get("graph_health") or {}
     row: dict[str, Any] = {
         "explored_fraction": explore.get("explored_fraction"),
         "explored_area_m2": explore.get("explored_area_m2"),
@@ -332,6 +333,9 @@ def flatten_eval_metrics(
         "edge_count": graph.get("edge_count"),
         "eqa_accuracy": eqa.get("accuracy"),
         "n_frames": metrics.get("n_frames"),
+        "graph_health_n_object": health.get("n_object"),
+        "graph_health_failure_class": health.get("failure_class"),
+        "graph_health_singleton_frac": health.get("singleton_frac"),
     }
     if run_spec is not None:
         row.update(
