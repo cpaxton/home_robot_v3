@@ -24,11 +24,17 @@ robots:
       da3_stereo: true
       local_radius: 0.85
       max_depth: 3.2
-      # Post-DA3 speckle open + voxel DBSCAN prune (opt-in; 0 = off). Was 3/8 on Mars but eroded real structure.
+      # Cap DA3 far outliers (effective clip was ~max_depth+1 ≈ 4.2 without this).
+      da3_clip_max_m: 3.5
+      # Drop textureless sky / ceiling rows that become phantom vertical sheets.
+      da3_ignore_sky_fraction_top: 0.14
+      # Mild post-DA3 cleanup for herman spurious mid-air points. Disable with 0 if thin
+      # furniture is over-pruned (was fully off; 3/8 historically eroded real structure).
       filters:
-        depth_speckle_open_kernel: 0
+        depth_speckle_open_kernel: 3
         depth_speckle_open_iterations: 1
-        voxel_pcd_dbscan_min_samples: 0
+        voxel_pcd_dbscan_min_samples: 6
+        derivative_filter_threshold: 0.15
       graph_object_fusion:
         enabled: true
         spatial_merge_xy_m: 0.48
