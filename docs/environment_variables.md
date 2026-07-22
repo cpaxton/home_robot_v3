@@ -45,6 +45,12 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_DYNAMIC_EXPLORE_DYNAGRAPH_TIMEOUT_S` | `dynamic_exploration_runner.py` | Override per-run ``emet run dynagraph`` subprocess timeout (seconds). Default scales with explore budget (~105 min for Robocasa K=3 on GPU). |
 | `EMET_DYNAMIC_EXPLORE_HEARTBEAT_S` | `dynamic_exploration_runner.py` | Heartbeat interval while a dynagraph subprocess is running (default `120`). Writes to stderr + `progress.jsonl`. |
 | `EMET_DYNAMIC_EXPLORE_STALE_LOG_S` | `dynamic_exploration_runner.py` | Warn when `dynagraph.log` mtime is older than this many seconds (default `900`). Surfaces post-VLM / EQA hangs. |
+| `EMET_DYNAMIC_EXPLORE_STALE_KILL_S` | `dynamic_exploration_runner.py` | Kill the dynagraph **process group** when the log is stale this long (default `2×` `STALE_LOG_S`). Prevents leaked GPU holders after wrapper-only `kill`. |
+| `EMET_EQA_QUESTION_TIMEOUT_S` | `controller_graph_eqa.run_eqa` | Per-question wall-clock cap for GraphEQA planning/nav loops (default `900`; `0` disables). |
+| `EMET_SCENE_MAP_CACHE_DIR` | `scene_map_cache.py` | Root for prebuilt scene maps (graph + voxel). Default `~/.cache/emet/scene_maps`. |
+| `EMET_USE_SCENE_MAP_CACHE` | OVMM find / dynamic explore | Load cached baseline and skip rotate/explore when present (default `1`). Set `0` or pass `--no-scene-cache`. |
+| `EMET_SCENE_MAP_HF_REPO` | `scene_map_cache_hub.py` | HuggingFace dataset repo id for push/pull (e.g. `org/emet-scene-maps`). |
+| `EMET_SCENE_MAP_CACHE_AUTO_PULL` | `ensure_cached_map` | On local miss, try HF pull when repo is set (default `1`). |
 | `EMET_VLM_DEVICE_CHECK_MAX_PARAMS` | `vlm_device.assert_cuda_placement` | When `hf_device_map` is missing, cap parameter/buffer device sampling (default `512`). Avoids multi-hour stalls after int4 load. |
 | `SQA3D_DATA_DIR` | `emet sqa3d`, `emet eval-sqa3d` | Root for SQA3D Zenodo JSON (`sqa_task/`, optional `localization_task/`). Default `~/.cache/sqa3d/data`. See [sqa3d.md](sqa3d.md). |
 | `SCANNET_ROOT` | `emet sqa3d` embodied runs | ScanNet v2 download root (`scans/<scene_id>/…`). Default `~/.cache/scannet`. |

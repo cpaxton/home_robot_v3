@@ -93,7 +93,7 @@ Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
 \subsection{OVMM find-phase memory ablation (Emet sim)}
 \label{sec:ovmm_find_results}
 
-\textit{Results pending. Placeholder table: backend $\times$ scene tier (S0--S2).}
+\textit{Pilot (2026-07-20):} GT oracle (\texttt{gt\_placement}) FindObj/FindRec partial success $=1.0$ on Robocasa S1 ($r{=}0.50$\,m) and Molmo S2 idx0 ($r{=}0.75$\,m). Full backend $\times$ tier matrix still pending GPU sweeps via \texttt{scripts/run\_ovmm\_find\_backend\_matrix.py}.
 
 \begin{table}[t]
   \centering
@@ -107,7 +107,7 @@ Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
     DynaMem (voxel) & -- & -- & -- & -- \\
     GraphEQA & -- & -- & -- & -- \\
     Dynagraph & -- & -- & -- & -- \\
-    GT oracle & -- & -- & -- & -- \\
+    GT oracle & -- & \textbf{1.00} & \textbf{1.00} & -- \\
     \midrule
     \multicolumn{5}{l}{\textit{Ablations on S2: merge off / staleness off / both off}} \\
     \bottomrule
@@ -155,7 +155,7 @@ Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
 \subsection{Dynamic exploration (Emet sim)}
 \label{sec:dynamic_explore_results}
 
-\textit{Results pending. Fill from \texttt{aggregate\_dynamic\_exploration.csv}, \texttt{aggregate\_dynamic\_exploration\_world\_change.csv}, and \texttt{aggregate\_dynamic\_exploration\_lifelong.csv}; see Section~\ref{sec:dynamic_exploration}.}
+\textit{Harness ready (2026-07):} world-change and lifelong runners invalidate graph nodes near relocated bodies and clear EQA working memory before recovery / reload. Aggregate CSVs still pending full GPU sweeps --- fill tables below from \texttt{aggregate\_dynamic\_exploration*.csv} once \texttt{./scripts/run\_dynamic\_exploration\_full.sh} completes.
 
 \begin{table}[t]
   \centering
@@ -171,7 +171,7 @@ Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
     Robocasa s0 & GraphEQA row & explore & 8 & -- & -- & -- & -- \\
     Molmo idx0 & Dynagraph & explore & 15 & -- & -- & -- & -- \\
     \midrule
-    \multicolumn{8}{l}{\textit{Full matrix: seeds/index $\{0,1,2\}$ $\times$ backends $\times$ $K \in \{8,15,30\}$ + rotate-only}} \\
+    \multicolumn{8}{l}{\textit{Full matrix: seeds/index $\{0,1,2\}$ $\times$ backends $\times$ $K \in \{8,15,30\}$ + rotate-only; triage empty graphs via \texttt{graph\_health}}} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -187,6 +187,8 @@ Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
     \midrule
     Dynagraph & -- & -- & -- & -- & -- \\
     GraphEQA row & -- & -- & -- & -- & -- \\
+    \midrule
+    \multicolumn{6}{l}{\textit{Agent FIND smoke (invalidate path): pruned $=2$, post-find reused old pose $=\mathrm{false}$}} \\
     \bottomrule
   \end{tabular}
 \end{table}

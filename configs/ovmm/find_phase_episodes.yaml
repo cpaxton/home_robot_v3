@@ -32,7 +32,7 @@ episodes:
   - id: robocasa_pp_s1
     tier: S1
     sim: configs/sim/robocasa_pick_place_stretch.yaml
-    object: obj
+    object: jar
     object_gt_body: obj_main
     start_recep: counter
     goal_recep: cab
@@ -42,12 +42,12 @@ episodes:
   - id: robocasa_pp_s1_explore5
     tier: S1
     sim: configs/sim/robocasa_pick_place_stretch.yaml
-    object: obj
+    object: jar
     object_gt_body: obj_main
     start_recep: counter
     goal_recep: cab
     success_radius_m: 0.50
-    explore_steps: 5
+    explore_steps: 8
 
   - id: molmo_ithor_s2_idx0
     tier: S2

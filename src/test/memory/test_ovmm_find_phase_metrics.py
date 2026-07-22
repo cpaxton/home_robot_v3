@@ -55,6 +55,35 @@ def test_category_matches_substring():
     assert not category_matches("sofa", "table")
 
 
+def test_semantic_label_strips_instance_hash():
+    from emet.eval.ovmm_find_phase import semantic_label_from_instance
+
+    assert semantic_label_from_instance("bowl_6befd62f08fd322391939c2b44d3f839_1_1_0") == "bowl"
+    assert semantic_label_from_instance("bowl 6befd62f08fd322391939c2b44d3f839 1 0 0") == "bowl"
+    assert semantic_label_from_instance("kitchen cabinet door") == "kitchen cabinet door"
+
+
+def test_resolve_object_query_prefers_clean_cat():
+    from emet.eval.ovmm_find_phase import FindPhaseEpisode, resolve_object_query
+
+    ep = FindPhaseEpisode(
+        id="t",
+        tier="S2",
+        sim="x.yaml",
+        object="bowl",
+        start_recep="cabinet",
+        goal_recep="microwave",
+        object_gt_body="bowl_hash_1",
+    )
+    placements = {
+        "bowl_hash_1": {
+            "cat": "bowl 6befd62f08fd322391939c2b44d3f839 1 0 0",
+            "pos": [0.0, 0.0, 0.0],
+        }
+    }
+    assert resolve_object_query(ep, placements) == "bowl"
+
+
 def test_pick_find_object_prefers_start_recep():
     placements = {
         "apple_a": {"cat": "apple", "pos": [1.0, 0.0, 0.5]},
@@ -274,6 +303,7 @@ def test_create_find_phase_agent_dynagraph_disables_sensor_perception_by_default
     create_find_phase_agent(robot, {}, "dynagraph")
     mock_cls.assert_called_once()
     assert mock_cls.call_args.kwargs["use_sensor_perception"] is False
+    assert mock_cls.call_args.kwargs.get("graph_memory_input_path") is None
     mock_agent.start.assert_called_once()
 
 

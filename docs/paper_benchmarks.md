@@ -100,8 +100,9 @@ CLI overrides: OVMM `--merge-xy-m` / `--staleness-horizon`; Habitat `emet-habita
 | `EMET_OVMM_OUTPUT_HABITAT` | `~/runs/emet/ovmm_habitat` | `eval_habitat_ovmm_find_phases.py` |
 | `EMET_SQA3D_OUTPUT` | `~/runs/emet/sqa3d` | `emet sqa3d run-real-sweep`, `aggregate_sqa3d_sweep.py` |
 | `EMET_DYNAMIC_EXPLORE_OUTPUT` | `~/runs/emet/dynamic_exploration` | `scripts/eval_dynamic_exploration.py` |
+| `EMET_SCENE_MAP_CACHE_DIR` | `~/.cache/emet/scene_maps` | Prebuilt graph+voxel baselines (`build_scene_map_cache.py`) |
 
-Caches (not under `runs/`): `SQA3D_DATA_DIR`, `SCANNET_ROOT`, `HABITAT_EQA_DATA_DIR`, `HM3D_DATA_PATH` — see [environment_variables.md](environment_variables.md).
+Caches (not under `runs/`): `SQA3D_DATA_DIR`, `SCANNET_ROOT`, `HABITAT_EQA_DATA_DIR`, `HM3D_DATA_PATH`, scene maps under `EMET_SCENE_MAP_CACHE_DIR` — see [environment_variables.md](environment_variables.md).
 
 ---
 
@@ -174,13 +175,16 @@ Shared sim body teleport: `sim_set_body_pose` (also used by Phase~2 dynamic expl
 ## Dynamic exploration (Emet sim)
 
 **Paper:** Section~\ref{sec:dynamic_exploration}, Tables `tab:dynamic_explore_phase1`, `tab:dynamic_explore_world_change`.  
-**Doc:** [dynamic_exploration_benchmark.md](dynamic_exploration_benchmark.md).
+**Doc:** [dynamic_exploration_benchmark.md](dynamic_exploration_benchmark.md) · [experiments/dynagraph_dynamic_memory.md](experiments/dynagraph_dynamic_memory.md).
 
 ```bash
+# Optional: prebuild scene maps so P1 / OVMM skip live explore (once per scene)
+env -u PYTHONPATH uv run python scripts/build_scene_map_cache.py
+
 # Dry-run full Phase 1 matrix
 uv run python scripts/eval_dynamic_exploration.py --dry-run
 
-# Phase 1 smoke (Robocasa seed0, K=3)
+# Phase 1 smoke (Robocasa seed0, K=3; uses scene cache when present)
 uv run python scripts/eval_dynamic_exploration.py \
   --phase explore --episode-id robocasa_seed0 \
   --backend dynagraph --explore-max-iters 3 --mapping-mode explore \

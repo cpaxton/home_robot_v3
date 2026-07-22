@@ -37,7 +37,7 @@ uv run python scripts/eval_dynamic_exploration.py --smoke --dry-run
 uv run python scripts/eval_dynamic_exploration.py --smoke \
   --output-dir ~/runs/emet/dynamic_exploration/smoke
 
-# Phase 2 world-change
+# Phase 2 world-change (invalidates nodes near old pose before recovery explore)
 uv run python scripts/eval_dynamic_exploration.py \
   --phase world-change --episode-id robocasa_seed0_world_change \
   --backend dynagraph --cpu-only
@@ -46,9 +46,30 @@ uv run python scripts/eval_dynamic_exploration.py \
 uv run python scripts/eval_dynamic_exploration.py \
   --phase lifelong --episode-id robocasa_seed0_lifelong \
   --backend dynagraph --cpu-only
+
+# Agent FIND after world change (closed-loop memory refresh)
+uv run python scripts/smoke_dynagraph_agent_world_change_find.py --cpu-only
+
+# OVMM find backend matrix (Robocasa S1 + Molmo S2)
+uv run python scripts/run_ovmm_find_backend_matrix.py --cpu-only --backends ground_truth
 ```
 
 `--smoke` is equivalent to `--phase explore --env robocasa --episode-id robocasa_seed0 --backend dynagraph --explore-max-iters 3 --mapping-mode explore`.
+
+**World-change memory update:** after `sim_set_body_pose`, the runner calls `GraphEQAMemory.invalidate_nodes_near` + `clear_eqa_working_memory` so post-move EQA / find do not reuse CONFIRMED_MEMORY at the old pose. Lifelong fuzz patches the cycle checkpoint the same way before the next reload.
+
+## Scene map cache (skip live explore)
+
+Prebuild each scene once (perfect-depth rotate + frontier explore); OVMM find and dynamic-explore P1 / world-change / lifelong cycle-0 load `graph.json` + `voxel_map.pkl` and skip mapping. Operator notes: [dynagraph_dynamic_memory.md](dynagraph_dynamic_memory.md).
+
+```bash
+# Build Robocasa + Molmo baselines → ~/.cache/emet/scene_maps/
+NEED_MIB=8000 ./scripts/gpu_preflight.sh --wait
+env -u PYTHONPATH uv run python scripts/build_scene_map_cache.py
+
+# Consumers use the cache by default; force live mapping with:
+#   EMET_USE_SCENE_MAP_CACHE=0   or   --no-scene-cache
+```
 
 ## Full matrix
 

@@ -93,21 +93,23 @@ min_pad_obstacles: 1
 local_radius: 0.5         # disk marked explored around the robot
 ```
 
-### Depth / voxel post-filters (DA3 hardware, opt-in)
+### Depth / voxel post-filters (DA3 hardware)
 
-Optional cleanup for **DA3-inferred** depth on Innate Mars (and any stack with ``depth_source: da3`` / ``auto`` fallback to DA3). **Defaults are off** (``0``) in [`configs/emet/default.yaml`](../configs/emet/default.yaml) — aggressive values can erode thin real structure (chair legs, door frames) or make walls look worse.
+Cleanup for **DA3-inferred** depth on Innate Mars (and any stack with ``depth_source: da3`` / ``auto`` fallback to DA3). **Mars robot overlay** enables mild defaults in [`configs/emet/default.yaml`](../configs/emet/default.yaml) (`speckle=3`, `dbscan=6`, plus `da3_clip_max_m` / `da3_ignore_sky_fraction_top`). Base mapping package defaults remain ``0`` (off). Stronger values can erode thin real structure (chair legs, door frames).
 
-| Layer | Key | Default | Applies when |
-|-------|-----|---------|--------------|
-| Pre-unprojection | `depth_speckle_open_kernel` | `0` | DA3/LingBot **inferred** depth only (not raw ZMQ sensor depth) |
+| Layer | Key | Mars default | Applies when |
+|-------|-----|--------------|--------------|
+| Pre-unprojection | `depth_speckle_open_kernel` | `3` | DA3/LingBot **inferred** depth only (not raw ZMQ sensor depth) |
 | Pre-unprojection | `depth_speckle_open_iterations` | `1` | Same as speckle kernel; ignored when kernel is ``0`` |
-| Post-fusion PCD | `voxel_pcd_dbscan_min_samples` | `0` | **Any** depth source, each mapping frame (``0`` = off; eps ≈ ``4 × voxel_size``) |
+| Post-fusion PCD | `voxel_pcd_dbscan_min_samples` | `6` | **Any** depth source, each mapping frame (``0`` = off; eps ≈ ``4 × voxel_size``) |
+| DA3 mask | `da3_clip_max_m` | `3.5` | Cap far DA3 outliers before unprojection |
+| DA3 mask | `da3_ignore_sky_fraction_top` | `0.14` | Ignore top image rows (sky / bright ceiling) |
 
-**Where:** under ``robots.innate_mars.mapping.filters`` (deep-merged into ``mapping.filters`` at runtime). Workstation stream/dynamem/dynagraph read these via the unified config.
+**Where:** under ``robots.innate_mars.mapping`` / ``…filters`` (deep-merged into ``mapping`` at runtime). Workstation stream/dynamem/dynagraph read these via the unified config.
 
 **Runtime:** Speckle open runs in [`DynamemController.update()`](../src/emet/controller/controller_dynamem.py) only when depth came from DA3/LingBot inference (``_depth_map_from_da3_infer``; skipped for raw sensor depth and ``depth_source: auto`` when usable sensor depth is present). Voxel PCD DBSCAN runs in [`SparseVoxelMap.add_observation()`](../src/emet/mapping/voxel/voxel_dynamem.py) whenever ``voxel_pcd_dbscan_min_samples > 0``, regardless of depth source.
 
-**Enable example** (tune per site — try one knob at a time):
+**Disable / tighten** (tune per site — try one knob at a time):
 
 ```yaml
 # configs/emet/default.yaml (or --set overrides)
@@ -115,17 +117,21 @@ robots:
   innate_mars:
     mapping:
       filters:
-        depth_speckle_open_kernel: 3
-        depth_speckle_open_iterations: 1
-        voxel_pcd_dbscan_min_samples: 8
+        depth_speckle_open_kernel: 0   # off
+        voxel_pcd_dbscan_min_samples: 0
 ```
 
 CLI without editing files:
 
 ```bash
+# stronger prune
 emet stream --connection herman --backend dynagraph \
-  --set mapping.filters.depth_speckle_open_kernel=3 \
   --set mapping.filters.voxel_pcd_dbscan_min_samples=8
+
+# disable filters
+emet stream --connection herman --backend dynagraph \
+  --set mapping.filters.depth_speckle_open_kernel=0 \
+  --set mapping.filters.voxel_pcd_dbscan_min_samples=0
 ```
 
 **Onboard Jetson DA3** (when depth is computed on the robot): same speckle helper in [`onboard_da3.py`](../src/innate_mars_bridge/innate_mars_bridge/onboard_da3.py); env vars in [environment_variables.md](environment_variables.md). Redeploy bridge after changing onboard defaults.

@@ -537,6 +537,92 @@ class GraphEQAMemory:
         self._fallback_timestep += 1
         return self._fallback_timestep
 
+    def clear_eqa_working_memory(self) -> None:
+        """Drop cached EQA / CONFIRMED_MEMORY state after a known world change.
+
+        Forces the next planner call to re-ground from the live graph instead of
+        reusing provisional memory summaries and Image-N selections from before
+        objects moved.
+        """
+        self.last_eqa_raw = ""
+        self.last_eqa_parsed = ("", "", False, "", "")
+        self.last_eqa_obs_ids = []
+        self.last_eqa_action_obs_id = None
+        self.last_eqa_prompt_node_count = 0
+        self.last_eqa_nav_fallback_count = 0
+        self.last_eqa_model_confident = False
+
+    def invalidate_nodes_near(
+        self,
+        xyz: np.ndarray | list[float] | tuple[float, ...],
+        *,
+        radius_m: float = 0.75,
+        current_step: int | None = None,
+        prune: bool = True,
+    ) -> tuple[int, int]:
+        """Age object nodes near ``xyz`` so staleness pruning can drop them.
+
+        Used after scripted body relocations (dynamic world-change / lifelong fuzz)
+        when the old pose is known. Nodes keep their identity until ``maintain``
+        runs (or immediately when ``prune=True``).
+
+        Returns:
+            ``(n_aged, n_pruned)``.
+        """
+        if not self._nodes:
+            return 0, 0
+        target = np.asarray(xyz, dtype=np.float64).reshape(-1)
+        if target.size < 2:
+            return 0, 0
+        cur = int(current_step if current_step is not None else self._effective_timestep())
+        horizon = max(0, int(self.staleness_horizon))
+        aged_last_seen = cur - horizon - 1 if horizon > 0 else cur - 10_000
+        radius = float(radius_m)
+        n_aged = 0
+        for i, n in enumerate(self._nodes):
+            if is_ground_truth_node(n) or n.is_frontier or n.is_viewpoint:
+                continue
+            node_xy = np.asarray(n.xyz, dtype=np.float64).reshape(-1)
+            if node_xy.size < 2:
+                continue
+            if float(np.linalg.norm(node_xy[:2] - target[:2])) > radius:
+                continue
+            self._nodes[i] = replace(n, last_seen=int(aged_last_seen))
+            n_aged += 1
+        n_pruned = 0
+        if prune and n_aged > 0:
+            if horizon > 0:
+                n_pruned = int(self.maintain(cur))
+            else:
+                # Staleness disabled: still drop explicitly invalidated object nodes.
+                n_pruned = int(self._drop_nodes_near(target, radius_m=radius))
+        return n_aged, n_pruned
+
+    def _drop_nodes_near(self, xyz: np.ndarray, *, radius_m: float) -> int:
+        """Remove non-GT object nodes within ``radius_m`` of ``xyz`` (xy)."""
+        target = np.asarray(xyz, dtype=np.float64).reshape(-1)
+        to_drop = [
+            n
+            for n in self._nodes
+            if not is_ground_truth_node(n)
+            and not n.is_frontier
+            and not n.is_viewpoint
+            and float(np.linalg.norm(np.asarray(n.xyz, dtype=np.float64).reshape(-1)[:2] - target[:2]))
+            <= float(radius_m)
+        ]
+        if not to_drop:
+            return 0
+        drop_obs = {n.obs_id for n in to_drop}
+        drop_node_ids = {n.node_id for n in to_drop}
+        drop_node_ids |= {n.node_id for n in self._nodes if n.is_viewpoint and int(n.obs_id) in drop_obs}
+        self._nodes = [n for n in self._nodes if n.node_id not in drop_node_ids]
+        self._observations = [o for o in self._observations if o.obs_id not in drop_obs]
+        for i, n in enumerate(self._nodes, start=1):
+            self._nodes[i - 1] = replace(n, node_id=i)
+        self._rebuild_viewpoint_index()
+        self._update_edges()
+        return len(to_drop)
+
     def maintain(self, current_step: int) -> int:
         """
         Drop stale nodes (and their observations) when ``staleness_horizon`` > 0,

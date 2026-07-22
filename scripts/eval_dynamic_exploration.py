@@ -81,8 +81,10 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--port-offset-base",
+        "--port-offset",
         type=int,
         default=int(os.getpid() % 400 + 160),
+        dest="port_offset_base",
         help="Base ZMQ port offset (incremented per run)",
     )
     parser.add_argument(
@@ -96,6 +98,11 @@ def _parse_args() -> argparse.Namespace:
         "--smoke",
         action="store_true",
         help="Single short run from benchmark YAML ``smoke:`` block (Phase 1 explore by default)",
+    )
+    parser.add_argument(
+        "--no-scene-cache",
+        action="store_true",
+        help="Ignore prebuilt scene map cache (always live rotate/explore)",
     )
     return parser.parse_args()
 
@@ -223,6 +230,7 @@ def main() -> int:
                 port_offset=args.port_offset_base + i,
                 resume=args.resume,
                 skip_eqa=args.skip_eqa,
+                use_scene_cache=not args.no_scene_cache,
             )
             out_json = output_dir / f"{run.run_id}.json"
             if args.resume and out_json.is_file():
@@ -330,6 +338,7 @@ def main() -> int:
                     cpu_only=args.cpu_only,
                     port_offset=args.port_offset_base + i * len(backends) + j,
                     resume=args.resume,
+                    use_scene_cache=not args.no_scene_cache,
                 )
                 tag = f"{le.id}_{backend}"
                 print(f"Running {tag} (lifelong, {le.cycles} cycles) …", file=sys.stderr)
@@ -393,6 +402,7 @@ def main() -> int:
                 cpu_only=args.cpu_only,
                 port_offset=args.port_offset_base + i * len(backends) + j,
                 resume=args.resume,
+                use_scene_cache=not args.no_scene_cache,
             )
             tag = f"{wc.id}_{backend}"
             print(f"Running {tag} (world-change) …", file=sys.stderr)
