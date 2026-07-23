@@ -140,7 +140,8 @@ class Qwen3VLClient(AbstractVLLMClient):
         self.max_tokens = max_tokens
         self.num_beams = num_beams
         self.use_fast_attn = use_fast_attn
-        # Always prefer Flash-Attn 2 when installed; otherwise PyTorch SDPA (not eager).
+        # Prefer Flash-Attn 2; default policy **fails** if it is missing on CUDA
+        # (see ``resolve_attn_implementation`` / ``EMET_ALLOW_SDPA_ATTN``).
         # ``use_fast_attn=False`` only forces eager when EMET_ATTN_EAGER=1 (debug).
         if not use_fast_attn and os.environ.get("EMET_ATTN_EAGER", "").strip().lower() in ("1", "true", "yes", "on"):
             self._attn_implementation = "eager"

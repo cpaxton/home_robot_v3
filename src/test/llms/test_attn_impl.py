@@ -4,25 +4,15 @@
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 
+import builtins
+
+import pytest
+
+from emet.llms import attn_impl as m
 from emet.llms.attn_impl import resolve_attn_implementation
 
 
-def test_resolve_attn_cpu_is_eager():
-    assert resolve_attn_implementation(prefer_flash=True, device="cpu") == "eager"
-
-
-def test_resolve_attn_cuda_prefers_sdpa_without_flash(monkeypatch):
-    import emet.llms.attn_impl as m
-
-    monkeypatch.setattr(
-        m,
-        "resolve_attn_implementation",
-        m.resolve_attn_implementation,
-    )
-
-    # Force flash import path to fail by patching the helpers used inside.
-    import builtins
-
+def _block_flash(monkeypatch):
     real_import = builtins.__import__
 
     def _no_flash(name, *args, **kwargs):
@@ -31,14 +21,37 @@ def test_resolve_attn_cuda_prefers_sdpa_without_flash(monkeypatch):
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", _no_flash)
+    monkeypatch.setattr(m, "flash_attn_2_available", lambda: False)
 
-    # transformers.utils.is_flash_attn_2_available may exist — patch if imported path runs
-    try:
-        import transformers.utils as tu
 
-        monkeypatch.setattr(tu, "is_flash_attn_2_available", lambda: False, raising=False)
-    except Exception:
-        pass
+def test_resolve_attn_cpu_is_eager():
+    assert resolve_attn_implementation(prefer_flash=True, device="cpu") == "eager"
 
+
+def test_resolve_attn_cuda_requires_flash_by_default(monkeypatch):
+    _block_flash(monkeypatch)
+    monkeypatch.delenv("EMET_ALLOW_SDPA_ATTN", raising=False)
+    monkeypatch.delenv("EMET_REQUIRE_FLASH_ATTN", raising=False)
+    with pytest.raises(RuntimeError, match="Flash-Attn 2 is required"):
+        resolve_attn_implementation(prefer_flash=True, device="cuda")
+
+
+def test_resolve_attn_cuda_sdpa_when_allowed(monkeypatch):
+    _block_flash(monkeypatch)
+    monkeypatch.setenv("EMET_ALLOW_SDPA_ATTN", "1")
+    monkeypatch.delenv("EMET_REQUIRE_FLASH_ATTN", raising=False)
     assert resolve_attn_implementation(prefer_flash=True, device="cuda") == "sdpa"
     assert resolve_attn_implementation(prefer_flash=False, device="cuda") == "sdpa"
+
+
+def test_resolve_attn_require_flash_false(monkeypatch):
+    _block_flash(monkeypatch)
+    monkeypatch.delenv("EMET_ALLOW_SDPA_ATTN", raising=False)
+    assert resolve_attn_implementation(prefer_flash=True, device="cuda", require_flash=False) == "sdpa"
+
+
+def test_resolve_attn_env_require_off(monkeypatch):
+    _block_flash(monkeypatch)
+    monkeypatch.setenv("EMET_REQUIRE_FLASH_ATTN", "0")
+    monkeypatch.delenv("EMET_ALLOW_SDPA_ATTN", raising=False)
+    assert resolve_attn_implementation(prefer_flash=True, device="cuda") == "sdpa"

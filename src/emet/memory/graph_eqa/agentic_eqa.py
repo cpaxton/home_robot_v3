@@ -630,7 +630,14 @@ class AgenticEQAExecutor:
             try:
                 gm._ensure_llm_clients()
             except Exception as e:
-                _logger.warning(f"agentic: LLM client init failed (router falls back): {e}")
+                # Router / keyword extract need a real VLM. Do not limp along with silent fallback.
+                if self._router_enabled:
+                    raise RuntimeError(
+                        "Agentic EQA VLM router is enabled but LLM clients failed to load. "
+                        "Fix the VLM install (CUDA + flash-attn / bitsandbytes) or set "
+                        "EMET_EQA_AGENTIC_ROUTER=0 for deterministic tools only."
+                    ) from e
+                _logger.warning(f"agentic: LLM client init failed (fallback-only mode): {e}")
         # Always start with inspect to seed hypotheses.
         self.handle_tool("inspect_graph", {})
         for r in range(self.max_rounds):

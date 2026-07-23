@@ -109,6 +109,7 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 ### Cause (two layers)
 1. **SigLIP + Qwen VRAM pressure:** Dynagraph kept SigLIP on GPU for CONFIRMED_MEMORY while loading Qwen3-VL-8B int4. Weight load ~125 s; first text `generate` never finished → `STALE_KILL`.
 2. **MuJoCo EGL + vision prefill:** After SigLIP release, text generate completed (~100 s) but vision EQA (`prompt≈4500`, `max_new=512`) ran with no log growth for ~30 min until `STALE_KILL`. Isolated 4-image EQA finishes in ~3.5 s; the full path still called `look_front` / nav posture over ZMQ while the VLM ran on the same GPU.
+3. **Silent SDPA fallback:** when `flash-attn` was missing, CUDA VL loads quietly used PyTorch SDPA. Habitat MCQ still finished (~4–5 min/ep), but Robocasa multi-image `query_answer` (`prompt≈4500`, 4 RGB) decoded at ~0.02 tok/s (~45 s/token) and looked “stuck” at low GPU util.
 
 ### Mitigation
 - [`prepare_dynagraph_vram_for_eqa`](../src/emet/eval/dynagraph_vram.py) warms SigLIP phrase caches then **always releases** SigLIP before the EQA VLM.
@@ -118,6 +119,7 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 - `[vl] generate heartbeat` every 30 s (`EMET_VL_GENERATE_HEARTBEAT_S`) + `[vl] decode started` when prefill ends.
 - `EMET_EQA_ANSWER_MAX_NEW_TOKENS` (default `256`) caps answer-only decode length.
 - Improve smoke raises `EMET_DYNAMIC_EXPLORE_STALE_*` / `EMET_EQA_QUESTION_TIMEOUT_S`.
+- CUDA VL loads **require Flash-Attn 2** by default ([`attn_impl.py`](../src/emet/llms/attn_impl.py)); missing package raises instead of silent SDPA. Escape hatch: `EMET_ALLOW_SDPA_ATTN=1`.
 
 ### Repro / check
 - `EMET_AGENT_MODEL_DEBUG=1 timeout 600 uv run python scripts/debug_eqa_vlm_hang.py --with-image --eqa-prompt --n-images 4`

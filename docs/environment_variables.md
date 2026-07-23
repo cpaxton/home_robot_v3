@@ -128,7 +128,9 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_ALLOW_CPU_VLM` | Qwen3-VL / Gemma VLM / Qwen2.5-VL load | `1` — allow silent CPU bf16 fallback when GPU int4 load fails. **Default off**: agent refuses CPU fallback (multi-minute “Thinking…” hangs). |
 | `EMET_HF_LOCAL_ONLY` | VL / SigLIP `from_pretrained` | `1` — require local HF cache only (same idea as `HF_HUB_OFFLINE=1`). Warm cache is preferred automatically even when unset. |
 | `EMET_VL_PREFIX_GENERATE_TIMEOUT_S` | `Qwen3VLClient` | Soft warn + disable prefix cache after a slow prefix-KV generate (default `45`). |
-| `EMET_ATTN_EAGER` | `Qwen3VLClient` | `1` — force eager attention (debug). Default uses Flash-Attn 2 if installed, else PyTorch **SDPA**. |
+| `EMET_ATTN_EAGER` | `Qwen3VLClient` | `1` — force eager attention (debug). |
+| `EMET_REQUIRE_FLASH_ATTN` | `attn_impl.resolve_attn_implementation` | `1`/`0` — require Flash-Attn 2 on CUDA VL loads. **Default on** when unset (fail loud instead of silent SDPA). |
+| `EMET_ALLOW_SDPA_ATTN` | same | `1` — permit PyTorch SDPA when flash-attn is missing (slower; long multi-image EQA can crawl). Overrides the default require-flash policy. |
 | `eqa.vl_image_max_side` | VL clients / `describe_scene` | Longest RGB edge before VL/detector (default `512`; `0` = no resize). Override: `--set eqa.vl_image_max_side=384`. |
 | `eqa.vl_image_max_pixels` | Same | Optional `H*W` cap after side resize (`0` = off). |
 | `EMET_AGENT_THINKING_STATUS` | Agent loop | `1`/`0` — emit `*Thinking…*` status lines (default on). CLI: `--thinking-status` / `--no-thinking-status`. Heartbeats every ~8s while the LLM is still running. |
