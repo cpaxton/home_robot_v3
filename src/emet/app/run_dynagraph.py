@@ -633,16 +633,16 @@ def main(
 
     parameters["encoder"] = None
 
+    eqa_cfg = parameters.get("eqa", {}) or {}
     ev = parameters.get("eqa_vl", {}) or {}
-    ms = ev.get("model_size")
-    qn = ev.get("quantization", "int4")
-    if ms is None or str(ms).lower() == "null":
-        print(
-            "- EQA VL: one Qwen3.5 load sized by VRAM tiers (see eqa_vl/vram_mib_tier_* in dynav YAML),",
-            f"quantization={qn}",
-        )
+    vl_family = str(eqa_cfg.get("vl_family", "") or "").strip() or "qwen3_vl"
+    vl_hf = str(eqa_cfg.get("vl_hf_model_id", "") or "").strip()
+    vl_q = eqa_cfg.get("vl_quantization", ev.get("quantization", "int4"))
+    if vl_hf:
+        print(f"- EQA VL: shared {vl_family} ({vl_hf}, quant={vl_q}) for labels + EQA")
     else:
-        print(f"- EQA VL: single shared Qwen3.5-{ms} ({qn}) for labels + EQA")
+        ms = ev.get("model_size")
+        print(f"- EQA VL: shared {vl_family} (size={ms!r}, quant={vl_q}) for labels + EQA")
 
     print("- Start Dynagraph agent (graph memory + voxel map for navigation)")
     agent: DynagraphController | None = None
@@ -682,8 +682,22 @@ def main(
     def _run_eqa_questions(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         from emet.eval.dynagraph_vram import prepare_dynagraph_vram_for_eqa
         from emet.memory.graph_eqa.question_bank import write_eqa_results
+        from emet.utils.port_utils import release_zmq_ports
 
         rows: list[dict[str, Any]] = []
+        # Answer-only: drop MuJoCo/EGL before Qwen load. Sharing the GPU left vision
+        # generate stuck at ~5% util with no decode progress until STALE_KILL.
+        try:
+            freed = release_zmq_ports(int(port_offset or 0))
+            if freed:
+                click.echo(
+                    f"- Released sim ZMQ ports before EQA: {freed}",
+                    err=True,
+                )
+            else:
+                click.echo("- No sim ZMQ listeners to release before EQA", err=True)
+        except Exception as e:
+            logger.warning(f"release_zmq_ports before EQA failed (non-fatal): {e}")
         # Free perception / voxel SigLIP before Qwen3-VL load (Phase-1 dynamic explore OOM fix).
         click.echo("- Preparing VRAM for EQA (release non-EQA GPU caches)", err=True)
         prepare_dynagraph_vram_for_eqa(agent)
@@ -694,9 +708,8 @@ def main(
                 refresh()
         # Question bank scores the map already built (explore/rotate). Do NOT chase frontiers
         # again — that was the Jul-16 smoke hang (5× uncover-nav after Qwen load).
+        # Also skip robot posture / say: ZMQ head waits contend with Qwen on the same GPU.
         agent._fast_explore_lookaround = True
-        robot.move_to_nav_posture()
-        robot.switch_to_navigation_mode()
         n_q = sum(1 for q in questions if str(q.get("question", "")).strip())
         click.echo(
             f"- EQA question bank: {n_q} question(s) "
@@ -711,10 +724,6 @@ def main(
             qi += 1
             click.echo(f"- EQA question {qi}/{n_q} start: {qtext}", err=True)
             t_q0 = time.monotonic()
-            try:
-                robot.say("Answering the question " + qtext)
-            except Exception as e:
-                logger.debug(f"robot.say failed (non-fatal): {e}")
             try:
                 discord_text, _imgs = agent.run_eqa(
                     qtext,

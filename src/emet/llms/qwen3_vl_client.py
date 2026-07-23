@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import time
 import timeit
 from collections.abc import Callable
 from typing import Any
@@ -54,6 +56,41 @@ logger = logging.getLogger(__name__)
 
 # Soft timeout for prefix-KV generate before falling back to full generate (seconds).
 _PREFIX_GENERATE_SOFT_TIMEOUT_S = float(os.environ.get("EMET_VL_PREFIX_GENERATE_TIMEOUT_S", "45") or 45)
+# Heartbeat while ``model.generate`` runs (incl. long vision prefill) so eval harnesses
+# that watch log mtime do not STALE_KILL a live forward.
+_GENERATE_HEARTBEAT_S = float(os.environ.get("EMET_VL_GENERATE_HEARTBEAT_S", "30") or 30)
+
+
+def _generate_with_heartbeat(
+    generate_fn: Callable[[], Any],
+    *,
+    input_len: int,
+    max_new: int,
+    has_vision: bool,
+    heartbeat_s: float | None = None,
+) -> Any:
+    """Run ``generate_fn`` while printing periodic ``[vl] generate heartbeat`` lines."""
+    interval = float(_GENERATE_HEARTBEAT_S if heartbeat_s is None else heartbeat_s)
+    if interval <= 0:
+        return generate_fn()
+    stop = threading.Event()
+    t0 = time.monotonic()
+
+    def _beat() -> None:
+        while not stop.wait(interval):
+            print(
+                f"[vl] generate heartbeat elapsed={time.monotonic() - t0:.0f}s "
+                f"prompt={input_len} max_new={max_new} vision={has_vision}",
+                flush=True,
+            )
+
+    thr = threading.Thread(target=_beat, name="vl-generate-heartbeat", daemon=True)
+    thr.start()
+    try:
+        return generate_fn()
+    finally:
+        stop.set()
+        thr.join(timeout=1.0)
 
 
 class Qwen3VLClient(AbstractVLLMClient):
@@ -547,39 +584,55 @@ class Qwen3VLClient(AbstractVLLMClient):
                 "Refusing CPU generate (set EMET_ALLOW_CPU_VLM=1 to override)."
             )
 
-        prefix_entry: PrefixKVCacheEntry | None = None
         used_cache = False
         trim_from_len = int(inputs.input_ids.shape[1])
         _progress(
             f"generate prompt={input_len} max_new={ntok} on {model_dev}"
             + (" prefix_cache" if (self.cache_system_prefix and sys_txt and not has_vision) else "")
         )
+        print(
+            f"[vl] generate start prompt={input_len} max_new={ntok} device={model_dev} "
+            f"vision={has_vision}",
+            flush=True,
+        )
         t_gen0 = timeit.default_timer()
-        if self.cache_system_prefix and sys_txt and not has_vision:
-            prefix_entry = self._ensure_prefix_cached(sys_txt)
-            if prefix_entry is not None and self._prefix_ids_align(inputs.input_ids, prefix_entry):
-                _progress(
-                    f"generate prompt={input_len} (cached_prefix={prefix_entry.prefix_token_len}) "
-                    f"max_new={ntok} on {model_dev}"
-                )
-                generated_ids, used_cache = self._generate_ids_with_prefix_guard(
-                    inputs,
-                    max_new_tokens=ntok,
-                    past_key_values=prefix_entry.past_key_values,
-                    prefix_len=prefix_entry.prefix_token_len,
-                )
-                trim_from_len = int(inputs.input_ids.shape[1])
-                if used_cache and env_agent_model_debug():
-                    logger.info(f"VL prefix cache: hit ({prefix_entry.prefix_token_len}-token system prefix)")
-            else:
+
+        def _do_generate() -> torch.Tensor:
+            nonlocal used_cache, trim_from_len
+            if self.cache_system_prefix and sys_txt and not has_vision:
+                prefix_entry = self._ensure_prefix_cached(sys_txt)
+                if prefix_entry is not None and self._prefix_ids_align(inputs.input_ids, prefix_entry):
+                    _progress(
+                        f"generate prompt={input_len} (cached_prefix={prefix_entry.prefix_token_len}) "
+                        f"max_new={ntok} on {model_dev}"
+                    )
+                    generated, used_cache = self._generate_ids_with_prefix_guard(
+                        inputs,
+                        max_new_tokens=ntok,
+                        past_key_values=prefix_entry.past_key_values,
+                        prefix_len=prefix_entry.prefix_token_len,
+                    )
+                    trim_from_len = int(inputs.input_ids.shape[1])
+                    if used_cache and env_agent_model_debug():
+                        logger.info(
+                            f"VL prefix cache: hit ({prefix_entry.prefix_token_len}-token system prefix)"
+                        )
+                    return generated
                 if prefix_entry is not None and env_agent_model_debug():
                     logger.info("VL prefix cache: token mismatch; full generate")
-                generated_ids = self._generate_ids(inputs, max_new_tokens=ntok)
-        else:
+                return self._generate_ids(inputs, max_new_tokens=ntok)
             if has_vision and self.cache_system_prefix and env_agent_model_debug():
                 logger.info("VL prefix cache: skipped (vision inputs present)")
-            generated_ids = self._generate_ids(inputs, max_new_tokens=ntok)
+            return self._generate_ids(inputs, max_new_tokens=ntok)
+
+        generated_ids = _generate_with_heartbeat(
+            _do_generate,
+            input_len=input_len,
+            max_new=ntok,
+            has_vision=has_vision,
+        )
         gen_s = timeit.default_timer() - t_gen0
+        print(f"[vl] generate finished in {gen_s:.1f}s", flush=True)
 
         if verbose and used_cache:
             print("VL prefix cache: used cached system KV")

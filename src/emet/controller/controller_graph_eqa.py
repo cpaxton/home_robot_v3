@@ -766,10 +766,13 @@ class GraphEQAController(DynamemController):
                 nav_this_step = True
             else:
                 nav_this_step = step < max_planning_steps - 1
+            # Answer-only banks must not touch the robot (look_front / EGL) while the
+            # VLM is loading or generating — MuJoCo+Qwen on one GPU made vision
+            # prefill look hung until STALE_KILL (~30 min, no log growth).
             answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(
                 question,
                 max_movement_step=max_movement_step,
-                skip_perception_prelude=(step > 0),
+                skip_perception_prelude=(step > 0) or (not allow_navigation),
                 allow_navigation=nav_this_step,
             )
             if confidence:

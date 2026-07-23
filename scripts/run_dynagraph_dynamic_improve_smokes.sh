@@ -39,6 +39,12 @@ log "OUT=$OUT job_id=${JOB_ID:-none}"
 # Do not --kill-stale here: it can reap this orchestrator when launched under nohup.
 NEED_MIB="${NEED_MIB:-12000}" ./scripts/gpu_preflight.sh --wait
 
+# Vision EQA prefill can exceed the default 30 min STALE_KILL when MuJoCo shares the GPU.
+# Heartbeats keep the log fresh; still raise thresholds so a slow-but-alive generate survives.
+export EMET_DYNAMIC_EXPLORE_STALE_LOG_S="${EMET_DYNAMIC_EXPLORE_STALE_LOG_S:-1800}"
+export EMET_DYNAMIC_EXPLORE_STALE_KILL_S="${EMET_DYNAMIC_EXPLORE_STALE_KILL_S:-3600}"
+export EMET_EQA_QUESTION_TIMEOUT_S="${EMET_EQA_QUESTION_TIMEOUT_S:-2400}"
+
 log "Phase-1 smoke K=3 start"
 uv run python scripts/eval_dynamic_exploration.py --smoke \
   --output-dir "$OUT/phase1_smoke" \

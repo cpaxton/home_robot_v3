@@ -312,5 +312,33 @@ def get_shared_mask_siglip_encoder(
 
 
 def release_shared_mask_siglip_encoder() -> None:
-    """Drop the shared SigLIP encoder cache (free VRAM between batch runs)."""
+    """Drop the shared SigLIP encoder cache and free CUDA weights."""
+    encoders = list(_SHARED_MASK_SIGLIP.values())
     _SHARED_MASK_SIGLIP.clear()
+    for enc in encoders:
+        model = getattr(enc, "model", None)
+        if model is not None:
+            try:
+                if hasattr(model, "to"):
+                    model.to("cpu")
+            except Exception:
+                pass
+            try:
+                del model
+            except Exception:
+                pass
+        try:
+            enc.model = None  # type: ignore[attr-defined]
+        except Exception:
+            pass
+    del encoders
+    try:
+        import gc
+
+        gc.collect()
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass

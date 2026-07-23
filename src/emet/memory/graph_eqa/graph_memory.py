@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import math
+import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -2595,9 +2596,17 @@ class GraphEQAMemory:
         )
         from emet.llms.eqa_vl_settings import get_eqa_vl_int
 
+        import time as _time
+
+        _t0 = _time.monotonic()
+        _logger.info("query_answer: ensure_llm_clients…")
         self._ensure_llm_clients()
+        _logger.info("query_answer: extract_relevant_objects…")
         self.extract_relevant_objects(question)
         if self.memory_summary_enabled:
+            # Encoder may already be dropped by prepare_dynagraph_vram_for_eqa; refresh
+            # is a no-op without it (uses cached phrase features when present).
+            _logger.info("query_answer: refresh_siglip_confirmed_memory…")
             self.refresh_siglip_confirmed_memory()
         max_images = get_eqa_vl_int(self.parameters, "eqa_max_images", 4)
         parsed_choices = parse_mcq_choices_from_question(question)
@@ -2662,8 +2671,22 @@ class GraphEQAMemory:
             commands.append(im)
         self.last_eqa_nav_fallback_count = len(nav_fallback_tail)
 
+        _logger.info(
+            f"query_answer: calling eqa_client (n_images={len(relevant_images)} "
+            f"n_cmd={len(commands)} prep_s={_time.monotonic() - _t0:.1f})…"
+        )
         try:
-            raw = self.eqa_client(commands)
+            t_vl = _time.monotonic()
+            # Cap decode length for post-explore banks (full 512 made hung prefills worse).
+            ans_cap = int(os.environ.get("EMET_EQA_ANSWER_MAX_NEW_TOKENS", "256") or 256)
+            eqa_kw: dict[str, Any] = {}
+            if ans_cap > 0:
+                eqa_kw["max_new_tokens"] = ans_cap
+            raw = self.eqa_client(commands, **eqa_kw)
+            _logger.info(
+                f"query_answer: eqa_client done wall_s={_time.monotonic() - t_vl:.1f} "
+                f"out_chars={len(raw or '')}"
+            )
         except Exception as exc:
             raw = f"Error: {exc}"
             self.last_eqa_raw = raw
