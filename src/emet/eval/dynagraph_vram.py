@@ -40,19 +40,19 @@ def _vram_free_mib() -> float | None:
         return None
 
 
-def prepare_dynagraph_vram_for_eqa(agent: Any) -> None:
-    """Free GPU headroom before the EQA VLM forward.
-
-    Snapshot SigLIP CONFIRMED_MEMORY features into graph-memory caches, then
-    **always** drop SigLIP + voxel encoders. Keeping SigLIP loaded next to
-    Qwen3-VL-8B int4 was starving activations: overnight smokes loaded the VLM
-    in ~125s then hung after ``ready for inference`` until STALE_KILL.
-    """
+def warm_siglip_confirmed_memory(agent: Any) -> None:
+    """Snapshot SigLIP CONFIRMED_MEMORY features; keep encoder attached for agentic verify."""
     from emet.memory.graph_eqa.graph_eqa_siglip import warm_graph_eqa_siglip_confirmed_memory
+
+    warm_graph_eqa_siglip_confirmed_memory(agent)
+    logger.info("warm_siglip_confirmed_memory: CONFIRMED_MEMORY features warmed")
+
+
+def release_siglip_for_vlm(agent: Any) -> None:
+    """Drop SigLIP / voxel encoders immediately before the EQA VLM forward."""
     from emet.perception.encoders.siglip_encoder import release_shared_mask_siglip_encoder
 
     free0 = _vram_free_mib()
-    warm_graph_eqa_siglip_confirmed_memory(agent)
     if hasattr(agent, "encoder"):
         agent.encoder = None
     vm = getattr(agent, "voxel_map", None)
@@ -72,9 +72,24 @@ def prepare_dynagraph_vram_for_eqa(agent: Any) -> None:
     free1 = _vram_free_mib()
     if free0 is not None and free1 is not None:
         logger.info(
-            "prepare_dynagraph_vram_for_eqa: free VRAM %.0f → %.0f MiB (SigLIP released after warm)",
+            "release_siglip_for_vlm: free VRAM %.0f → %.0f MiB",
             free0,
             free1,
         )
     else:
-        logger.info("prepare_dynagraph_vram_for_eqa: SigLIP released after CONFIRMED_MEMORY warm")
+        logger.info("release_siglip_for_vlm: SigLIP released before VLM")
+
+
+def prepare_dynagraph_vram_for_eqa(agent: Any) -> None:
+    """Free GPU headroom before the EQA VLM forward.
+
+    Snapshot SigLIP CONFIRMED_MEMORY features into graph-memory caches, then
+    **always** drop SigLIP + voxel encoders. Keeping SigLIP loaded next to
+    Qwen3-VL-8B int4 was starving activations: overnight smokes loaded the VLM
+    in ~125s then hung after ``ready for inference`` until STALE_KILL.
+
+    For agentic verify loops, call :func:`warm_siglip_confirmed_memory` before
+    navigate/verify and :func:`release_siglip_for_vlm` only before submit_answer.
+    """
+    warm_siglip_confirmed_memory(agent)
+    release_siglip_for_vlm(agent)

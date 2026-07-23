@@ -62,6 +62,14 @@ eqa:
   # Cap RGB fed to the VL (longest side). 0 = no resize. Optional pixel budget via vl_image_max_pixels.
   vl_image_max_side: 512
   vl_image_max_pixels: 0
+  # Agentic explore/navigate/verify/answer loop (post-explore + world-change EQA).
+  agentic_verify: false
+  agentic_max_tool_rounds: 6
+  agentic_max_nav_steps: 3
+  agentic_verify_min_sim: 0.28
+  # VLM router picks tools via the shared JSON tool-calling contract; false = deterministic fallback only.
+  agentic_vlm_router: true
+  collect_agentic_trace: false
   # Gemma int4 VRAM tiers (nvidia-smi memory.free MiB) when vl_hf_model_id unset and vl_family=gemma4
   vram_mib_tier_gemma_e4b: 12000
   vram_mib_tier_gemma_e2b: 7000

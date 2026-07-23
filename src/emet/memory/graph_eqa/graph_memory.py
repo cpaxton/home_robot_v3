@@ -49,6 +49,31 @@ SIGLIP_PRESENT_THRESHOLD = 0.21
 # Stronger bar before SigLIP-only evidence may override the VLM or finalize confidence.
 SIGLIP_CONFIRM_THRESHOLD = 0.28
 
+
+@dataclass(frozen=True)
+class NavHypothesis:
+    """Ranked navigation target for agentic EQA (graph / CONFIRMED_MEMORY / SigLIP)."""
+
+    phrase: str
+    obs_id: int
+    xyz: np.ndarray
+    score: float
+    source: str  # "graph" | "confirmed" | "siglip"
+
+
+@dataclass(frozen=True)
+class VerifyResult:
+    """SigLIP (+ optional graph-label) verification of a phrase at an observation."""
+
+    status: str  # "PRESENT" | "CANDIDATE" | "ABSENT"
+    sim: float
+    obs_id: int
+    phrase: str
+    ok: bool = False
+    text_feat: np.ndarray | None = None
+    img_feat: np.ndarray | None = None
+
+
 # Expand HM-EQA object phrases onto common caption synonyms (trash can ↔ recycle bin).
 _OBJECT_LABEL_ALIASES: dict[str, frozenset[str]] = {
     "trash": frozenset({"recycle", "bin", "garbage", "waste", "rubbish"}),
@@ -1652,6 +1677,137 @@ class GraphEQAMemory:
             )
             if match is not None:
                 self._siglip_phrase_cache[phrase.strip().lower()] = match
+
+    def hypothesize_nav_targets(self, question: str, max_k: int = 3) -> list[NavHypothesis]:
+        """Rank navigation targets: graph label match > CONFIRMED PRESENT > SigLIP candidate."""
+        if not self._observations:
+            return []
+        phrases = list(self._confirmed_memory_phrases()) + list(self._relevant_objects or [])
+        if not phrases and question:
+            self.extract_relevant_objects(question)
+            phrases = list(self._confirmed_memory_phrases()) + list(self._relevant_objects or [])
+        if not phrases:
+            return []
+        scored: list[NavHypothesis] = []
+        seen: set[int] = set()
+        for phrase in phrases:
+            for o in self._observations:
+                oid = int(o.obs_id)
+                if oid in seen:
+                    continue
+                if any(label_matches_relevant_object(phrase, lab) for lab in (o.labels or [])):
+                    seen.add(oid)
+                    scored.append(
+                        NavHypothesis(
+                            phrase=phrase,
+                            obs_id=oid,
+                            xyz=np.asarray(o.xyz, dtype=float).reshape(-1)[:3].copy(),
+                            score=10.0,
+                            source="graph",
+                        )
+                    )
+        for phrase in phrases:
+            sig = self._siglip_match_for_phrase(phrase)
+            if sig is None:
+                continue
+            sim, xyz, oid = float(sig[0]), np.asarray(sig[1], dtype=float), sig[2]
+            if oid is None:
+                continue
+            oid = int(oid)
+            if oid in seen:
+                continue
+            if sim >= SIGLIP_CONFIRM_THRESHOLD:
+                source, score = "confirmed", 5.0 + sim
+            elif sim >= SIGLIP_PRESENT_THRESHOLD:
+                source, score = "siglip", 1.0 + sim
+            else:
+                continue
+            seen.add(oid)
+            scored.append(
+                NavHypothesis(
+                    phrase=phrase,
+                    obs_id=oid,
+                    xyz=xyz.reshape(-1)[:3].copy(),
+                    score=float(score),
+                    source=source,
+                )
+            )
+        scored.sort(key=lambda h: (-h.score, -h.obs_id))
+        return scored[: max(1, int(max_k))]
+
+    def verify_phrase_at_obs(
+        self,
+        phrase: str,
+        obs_id: int,
+        rgb: np.ndarray | None = None,
+        *,
+        min_sim: float | None = None,
+    ) -> VerifyResult:
+        """SigLIP-verify *phrase* against observation *obs_id* (optional live *rgb*)."""
+        thresh = float(min_sim if min_sim is not None else SIGLIP_CONFIRM_THRESHOLD)
+        oid = int(obs_id)
+        text = (phrase or "").strip()
+        obs = self._observation_by_id(oid)
+        if obs is None and rgb is None:
+            return VerifyResult(status="ABSENT", sim=0.0, obs_id=oid, phrase=text, ok=False)
+
+        label_hit = False
+        if obs is not None and text:
+            label_hit = any(label_matches_relevant_object(text, lab) for lab in (obs.labels or []))
+
+        enc = self._confirmed_memory_siglip_encoder
+        text_feat: np.ndarray | None = None
+        img_feat: np.ndarray | None = None
+        sim = 0.0
+        if enc is not None and text:
+            try:
+                from emet.memory.graph_eqa.graph_eqa_siglip import (
+                    _feature_vector,
+                    encode_observation_rgb,
+                )
+
+                text_feat = _feature_vector(enc.encode_text(text))
+                if rgb is not None:
+                    img_feat = encode_observation_rgb(enc, np.asarray(rgb, dtype=np.uint8))
+                elif oid in self._obs_siglip_features:
+                    img_feat = np.asarray(self._obs_siglip_features[oid], dtype=np.float32)
+                elif obs is not None:
+                    img_feat = encode_observation_rgb(enc, obs.rgb)
+                    if img_feat is not None:
+                        self._obs_siglip_features[oid] = img_feat
+                if text_feat is not None and img_feat is not None:
+                    sim = float(np.dot(text_feat, img_feat))
+            except Exception as e:
+                _logger.warning(f"verify_phrase_at_obs SigLIP failed: {e}")
+
+        if sim >= thresh:
+            status, ok = "PRESENT", True
+        elif sim >= SIGLIP_PRESENT_THRESHOLD or label_hit:
+            status, ok = "CANDIDATE", False
+        else:
+            status, ok = "ABSENT", False
+        return VerifyResult(
+            status=status,
+            sim=float(sim),
+            obs_id=oid,
+            phrase=text,
+            ok=ok,
+            text_feat=text_feat,
+            img_feat=img_feat,
+        )
+
+    def select_obs_ids_for_verified_answer(
+        self,
+        verified_obs_id: int,
+        max_images: int = 1,
+    ) -> list[int]:
+        """Prefer the verified observation; cap at *max_images*."""
+        if max_images <= 0:
+            return []
+        oid = int(verified_obs_id)
+        if self._observation_by_id(oid) is None:
+            return []
+        return [oid][:max_images]
 
     def _confirmed_memory_phrases(self) -> list[str]:
         if self._relevant_phrases:

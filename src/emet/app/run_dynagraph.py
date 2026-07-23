@@ -685,37 +685,42 @@ def main(
         from emet.utils.port_utils import release_zmq_ports
 
         rows: list[dict[str, Any]] = []
-        # Answer-only: drop MuJoCo/EGL before Qwen load. Sharing the GPU left vision
-        # generate stuck at ~5% util with no decode progress until STALE_KILL.
-        try:
-            freed = release_zmq_ports(int(port_offset or 0))
-            if freed:
-                click.echo(
-                    f"- Released sim ZMQ ports before EQA: {freed}",
-                    err=True,
-                )
-            else:
-                click.echo("- No sim ZMQ listeners to release before EQA", err=True)
-        except Exception as e:
-            logger.warning(f"release_zmq_ports before EQA failed (non-fatal): {e}")
+        from emet.memory.graph_eqa.agentic_eqa import agentic_verify_enabled
+
+        agentic = agentic_verify_enabled(agent)
+        # Answer-only: drop MuJoCo/EGL before Qwen load. Agentic verify keeps sim up for nav.
+        if not agentic:
+            try:
+                freed = release_zmq_ports(int(port_offset or 0))
+                if freed:
+                    click.echo(
+                        f"- Released sim ZMQ ports before EQA: {freed}",
+                        err=True,
+                    )
+                else:
+                    click.echo("- No sim ZMQ listeners to release before EQA", err=True)
+            except Exception as e:
+                logger.warning(f"release_zmq_ports before EQA failed (non-fatal): {e}")
         # Free perception / voxel SigLIP before Qwen3-VL load (Phase-1 dynamic explore OOM fix).
-        click.echo("- Preparing VRAM for EQA (release non-EQA GPU caches)", err=True)
-        prepare_dynagraph_vram_for_eqa(agent)
+        # Agentic verify keeps SigLIP until submit_answer; warm only (no release yet).
+        if agentic:
+            click.echo("- Warming SigLIP for agentic verify (sim stays up)", err=True)
+            from emet.eval.dynagraph_vram import warm_siglip_confirmed_memory
+
+            warm_siglip_confirmed_memory(agent)
+        else:
+            click.echo("- Preparing VRAM for EQA (release non-EQA GPU caches)", err=True)
+            prepare_dynagraph_vram_for_eqa(agent)
         gm = getattr(agent, "graph_memory", None)
         if gm is not None and getattr(gm, "memory_summary_enabled", False):
             refresh = getattr(gm, "refresh_siglip_confirmed_memory", None)
             if callable(refresh):
                 refresh()
-        # Question bank scores the map already built (explore/rotate). Do NOT chase frontiers
-        # again — that was the Jul-16 smoke hang (5× uncover-nav after Qwen load).
-        # Also skip robot posture / say: ZMQ head waits contend with Qwen on the same GPU.
+        # Question bank: answer-only by default; agentic_verify navigates+verifies in-loop.
         agent._fast_explore_lookaround = True
         n_q = sum(1 for q in questions if str(q.get("question", "")).strip())
-        click.echo(
-            f"- EQA question bank: {n_q} question(s) "
-            f"(answer-only: max_planning_steps=1, allow_navigation=False)",
-            err=True,
-        )
+        mode = "agentic verify" if agentic else "answer-only: max_planning_steps=1, allow_navigation=False"
+        click.echo(f"- EQA question bank: {n_q} question(s) ({mode})", err=True)
         qi = 0
         for qspec in questions:
             qtext = str(qspec.get("question", "")).strip()
@@ -725,14 +730,25 @@ def main(
             click.echo(f"- EQA question {qi}/{n_q} start: {qtext}", err=True)
             t_q0 = time.monotonic()
             try:
-                discord_text, _imgs = agent.run_eqa(
-                    qtext,
-                    max_planning_steps=1,
-                    allow_navigation=False,
-                )
-            except TypeError:
-                # Older Dynamem-only agents lack allow_navigation.
-                discord_text, _imgs = agent.run_eqa(qtext, max_planning_steps=1)
+                if agentic:
+                    from emet.memory.graph_eqa.agentic_eqa import run_agentic_eqa
+
+                    discord_text, _imgs = run_agentic_eqa(
+                        agent,
+                        qtext,
+                        trace_path=(Path(export_dir) / "agentic_trace.jsonl") if export_dir else None,
+                        trace_meta={"gt_body_key": str(qspec.get("gt_body_key") or "")},
+                    )
+                else:
+                    try:
+                        discord_text, _imgs = agent.run_eqa(
+                            qtext,
+                            max_planning_steps=1,
+                            allow_navigation=False,
+                        )
+                    except TypeError:
+                        # Older Dynamem-only agents lack allow_navigation.
+                        discord_text, _imgs = agent.run_eqa(qtext, max_planning_steps=1)
             except Exception as e:
                 logger.warning(f"EQA question failed: {e}")
                 discord_text = f"EQA question failed: {e}"

@@ -17,7 +17,12 @@
 # GraphEQA (Saxena et al., https://arxiv.org/abs/2412.14480). No code copied
 # from the closed-source graph_eqa repository.
 
-from .graph_memory import GraphEQAMemory, labels_are_semantic_graph_hypothesis
+from .graph_memory import (
+    GraphEQAMemory,
+    NavHypothesis,
+    VerifyResult,
+    labels_are_semantic_graph_hypothesis,
+)
 from .human_answer import (
     HumanEQAResult,
     format_eqa_tool_response,
@@ -51,6 +56,8 @@ from .sim_ground_truth_graph import (
 __all__ = [
     "DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M",
     "GraphEQAMemory",
+    "NavHypothesis",
+    "VerifyResult",
     "HumanEQAResult",
     "format_eqa_tool_response",
     "format_human_eqa_answer",

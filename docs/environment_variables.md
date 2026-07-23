@@ -48,6 +48,9 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_DYNAMIC_EXPLORE_STALE_KILL_S` | `dynamic_exploration_runner.py` | Kill the dynagraph **process group** when the log is stale this long (default `2×` `STALE_LOG_S`). Prevents leaked GPU holders after wrapper-only `kill`. |
 | `EMET_VL_GENERATE_HEARTBEAT_S` | `qwen3_vl_client.py` | Print `[vl] generate heartbeat` this often while `model.generate` runs (default `30`; `0` disables). Keeps eval log mtime fresh during long vision prefill. |
 | `EMET_EQA_ANSWER_MAX_NEW_TOKENS` | `graph_memory.query_answer` | Cap `max_new_tokens` for the answer VLM call (default `256`; `0` uses client default). |
+| `EMET_EQA_AGENTIC_VERIFY` | GraphEQA / dynagraph EQA | `1`/`0` — enable unified explore/navigate/verify/answer loop (`eqa.agentic_verify`). |
+| `EMET_EQA_AGENTIC_ROUTER` | `AgenticEQAExecutor` | `1`/`0` — override `eqa.agentic_vlm_router`: let the shared Qwen3-VL pick tools via JSON tool calls (`0` = deterministic fallback only, for reproducible evals). |
+| `EMET_EQA_TRACE` | `AgenticEQAExecutor` | `1` — append `agentic_trace.jsonl` (SigLIP embeds + GT) for offline tuning via `scripts/tune_agentic_verify.py`. |
 | `EMET_EQA_QUESTION_TIMEOUT_S` | `controller_graph_eqa.run_eqa` | Per-question wall-clock cap for GraphEQA planning/nav loops (default `900`; `0` disables). |
 | `EMET_SCENE_MAP_CACHE_DIR` | `scene_map_cache.py` | Root for prebuilt scene maps (graph + voxel). Default `~/.cache/emet/scene_maps`. |
 | `EMET_USE_SCENE_MAP_CACHE` | OVMM find / dynamic explore | Load cached baseline and skip rotate/explore when present (default `1`). Set `0` or pass `--no-scene-cache`. |

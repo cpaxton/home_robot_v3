@@ -12,6 +12,33 @@ Deep dives:
 | Paper tables / LaTeX | [paper_benchmarks.md](paper_benchmarks.md) |
 | Dynagraph sim | [dynagraph_benchmarks.md](dynagraph_benchmarks.md) |
 
+## Agentic GraphEQA verify + offline tuning
+
+Post-explore / world-change EQA can run a unified **explore → navigate → SigLIP verify → answer**
+loop (`eqa.agentic_verify` / `EMET_EQA_AGENTIC_VERIFY=1`). Improve smokes enable this by default
+and write `agentic_trace.jsonl` (SigLIP embeds + sim GT) under each export dir when
+`EMET_EQA_TRACE=1`.
+
+Tool picks come from the shared Qwen3-VL via text-only JSON tool-calling turns (same
+`{"tool_calls": ...}` contract as the Discord agent; the fixed system prompt gets prefix
+KV-cache hits). `eqa.agentic_vlm_router: false` or `EMET_EQA_AGENTIC_ROUTER=0` disables the
+VLM router and uses the deterministic fallback policy only (reproducible evals); parse
+failures always fall back. Explore mode (`run_agentic_eqa(agent, question=None, goal=...)`)
+drives `explore_frontier`/`look_around` and ends with a `finish` coverage summary once
+frontiers or the nav budget are exhausted. Trace rows record `picked_by`,
+`router_parse_ok`, `router_raw_reply_chars`, and `router_tool_calls` so the tuner can
+compare VLM-router vs fallback quality.
+
+```bash
+# After a run that produced traces:
+uv run python scripts/tune_agentic_verify.py ~/runs/emet/dynamic_exploration/<run> \
+  -o /tmp/agentic_tune_report.json
+```
+
+The tuner sweeps verify thresholds (precision/recall/F1 vs `gt_present`) and budget knees
+(accuracy vs `max_tool_rounds`). Nav-distance candidates are correlational only — confirm with
+a real smoke. Contract tests: `uv run emet test src/test/eval/test_agentic_eqa_verification.py`.
+
 ## Prerequisites
 
 ```bash

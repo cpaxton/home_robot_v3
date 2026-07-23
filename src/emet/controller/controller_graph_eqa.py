@@ -712,7 +712,15 @@ class GraphEQAController(DynamemController):
         post-explore question banks: answer from current memory without frontier chase.
         With ``allow_navigation=True`` and ``max_planning_steps>1``, the final step
         skips frontier chase so the loop can return after the last VLM call.
+
+        When ``eqa.agentic_verify`` (or ``EMET_EQA_AGENTIC_VERIFY=1``) is set, uses the
+        unified agentic explore/navigate/verify/answer loop instead.
         """
+        from emet.memory.graph_eqa.agentic_eqa import agentic_verify_enabled, run_agentic_eqa
+
+        if agentic_verify_enabled(self):
+            return run_agentic_eqa(self, question)
+
         import time as _time
 
         self._eqa_question = question

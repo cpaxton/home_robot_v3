@@ -519,24 +519,47 @@ def run_explore_episode_subprocess(
         return payload
 
 
-def _run_eqa_single(agent: Any, robot: Any, qspec: dict[str, Any]) -> dict[str, Any]:
+def _run_eqa_single(
+    agent: Any,
+    robot: Any,
+    qspec: dict[str, Any],
+    *,
+    trace_path: Any | None = None,
+) -> dict[str, Any]:
     import re
+    from pathlib import Path
 
     qtext = str(qspec.get("question", "")).strip()
     robot.move_to_nav_posture()
     robot.switch_to_navigation_mode()
-    # Answer from current memory (world-change pre/post); do not start a new explore chase.
     agent._fast_explore_lookaround = True
-    try:
-        discord_text, _imgs = agent.run_eqa(
-            qtext,
-            max_planning_steps=1,
-            allow_navigation=False,
-        )
-    except TypeError:
-        from emet.controller.task.dynamem import EQAExecuter
+    from emet.memory.graph_eqa.agentic_eqa import agentic_verify_enabled, run_agentic_eqa
 
-        discord_text, _imgs = EQAExecuter(agent)(qtext)
+    try:
+        if agentic_verify_enabled(agent):
+            # Keep sim connected for navigate/verify; do not release ZMQ mid-loop.
+            discord_text, _imgs = run_agentic_eqa(
+                agent,
+                qtext,
+                trace_path=Path(trace_path) if trace_path else None,
+                trace_meta={
+                    "gt_body_key": str(qspec.get("gt_body_key") or ""),
+                    "phase": str(qspec.get("phase") or ""),
+                },
+            )
+        else:
+            # Answer from current memory (world-change pre/post); do not start a new explore chase.
+            try:
+                discord_text, _imgs = agent.run_eqa(
+                    qtext,
+                    max_planning_steps=1,
+                    allow_navigation=False,
+                )
+            except TypeError:
+                # Older Dynamem-only agents lack allow_navigation.
+                from emet.controller.task.dynamem import EQAExecuter
+
+                discord_text, _imgs = EQAExecuter(agent)(qtext)
     except Exception as e:
         discord_text = f"EQA question failed: {e}"
     answer = ""
@@ -611,7 +634,14 @@ def run_world_change_episode(
             robot = connect_benchmark_robot(sim_cfg, port_offset)
             agent = None
             try:
-                from emet.eval.dynagraph_vram import prepare_dynagraph_vram_for_eqa
+                from emet.eval.dynagraph_vram import prepare_dynagraph_vram_for_eqa, warm_siglip_confirmed_memory
+                from emet.memory.graph_eqa.agentic_eqa import agentic_verify_enabled
+
+                def _prep_vram_for_eqa() -> None:
+                    if agentic_verify_enabled(agent):
+                        warm_siglip_confirmed_memory(agent)
+                    else:
+                        prepare_dynagraph_vram_for_eqa(agent)
 
                 parameters = apply_dynamic_explore_backend(get_parameters("dynav_config.yaml"), run_cfg.backend)
                 parameters["encoder"] = None
@@ -649,8 +679,13 @@ def run_world_change_episode(
                     # still invalidates nodes near the relocated body below.
                     agent.update()
 
-                prepare_dynagraph_vram_for_eqa(agent)
-                pre_row = _run_eqa_single(agent, robot, pre_q)
+                _prep_vram_for_eqa()
+                pre_row = _run_eqa_single(
+                    agent,
+                    robot,
+                    pre_q,
+                    trace_path=export_dir / "agentic_trace.jsonl",
+                )
                 pre_score = score_eqa_results([pre_row], episode_dir=None)
 
                 session = robot.get_emet_session()
@@ -706,8 +741,13 @@ def run_world_change_episode(
                     refresh = getattr(mem, "refresh_siglip_confirmed_memory", None)
                     if callable(refresh):
                         refresh()
-                prepare_dynagraph_vram_for_eqa(agent)
-                post_row = _run_eqa_single(agent, robot, post_q)
+                _prep_vram_for_eqa()
+                post_row = _run_eqa_single(
+                    agent,
+                    robot,
+                    post_q,
+                    trace_path=export_dir / "agentic_trace.jsonl",
+                )
                 post_score = score_eqa_results([post_row], episode_dir=None)
 
                 from emet.memory.headless_export import export_dynagraph_episode

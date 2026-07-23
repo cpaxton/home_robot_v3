@@ -40,3 +40,14 @@ def test_prepare_dynagraph_vram_warms_then_releases_siglip():
     assert agent.graph_memory._confirmed_memory_siglip_encoder is None
     assert agent.graph_memory._obs_siglip_features
     assert "woven basket" in agent.graph_memory._siglip_phrase_cache
+
+
+def test_warm_keeps_encoder_release_drops():
+    from emet.eval.dynagraph_vram import release_siglip_for_vlm, warm_siglip_confirmed_memory
+
+    agent = _FakeAgent()
+    warm_siglip_confirmed_memory(agent)
+    assert agent.encoder is not None or agent.graph_memory._confirmed_memory_siglip_encoder is not None
+    release_siglip_for_vlm(agent)
+    assert agent.encoder is None
+    assert agent.graph_memory._confirmed_memory_siglip_encoder is None

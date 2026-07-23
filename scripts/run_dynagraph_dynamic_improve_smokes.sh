@@ -44,6 +44,10 @@ NEED_MIB="${NEED_MIB:-12000}" ./scripts/gpu_preflight.sh --wait
 export EMET_DYNAMIC_EXPLORE_STALE_LOG_S="${EMET_DYNAMIC_EXPLORE_STALE_LOG_S:-1800}"
 export EMET_DYNAMIC_EXPLORE_STALE_KILL_S="${EMET_DYNAMIC_EXPLORE_STALE_KILL_S:-3600}"
 export EMET_EQA_QUESTION_TIMEOUT_S="${EMET_EQA_QUESTION_TIMEOUT_S:-2400}"
+# Unified agentic explore/navigate/verify/answer + offline-tuning traces.
+export EMET_EQA_AGENTIC_VERIFY="${EMET_EQA_AGENTIC_VERIFY:-1}"
+export EMET_EQA_TRACE="${EMET_EQA_TRACE:-1}"
+export EMET_EQA_ANSWER_MAX_NEW_TOKENS="${EMET_EQA_ANSWER_MAX_NEW_TOKENS:-64}"
 
 log "Phase-1 smoke K=3 start"
 uv run python scripts/eval_dynamic_exploration.py --smoke \
