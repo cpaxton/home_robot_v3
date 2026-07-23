@@ -1,0 +1,26 @@
+{
+  "classic": {
+    "n": 4,
+    "correct": 3,
+    "accuracy": 0.75,
+    "mean_planning_steps": 60.0,
+    "per": [
+      {"q": 15, "correct": true, "pred": "D", "gold": "D", "planning_steps": 66},
+      {"q": 68, "correct": true, "pred": "B", "gold": "B", "planning_steps": 58},
+      {"q": 105, "correct": false, "pred": "B", "gold": "A", "planning_steps": 57},
+      {"q": 17, "correct": true, "pred": "D", "gold": "D", "planning_steps": 59}
+    ]
+  },
+  "agentic": {
+    "n": 4,
+    "correct": 4,
+    "accuracy": 1.0,
+    "mean_planning_steps": 19.25,
+    "per": [
+      {"q": 15, "correct": true, "pred": "D", "gold": "D", "planning_steps": 30},
+      {"q": 68, "correct": true, "pred": "B", "gold": "B", "planning_steps": 16},
+      {"q": 105, "correct": true, "pred": "A", "gold": "A", "planning_steps": 15},
+      {"q": 17, "correct": true, "pred": "D", "gold": "D", "planning_steps": 16}
+    ]
+  }
+}

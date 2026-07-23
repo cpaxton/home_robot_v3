@@ -1,0 +1,58 @@
+\section{Agentic EQA tools}
+\label{app:agentic_tools}
+
+This appendix documents the scored HM-EQA / Dynagraph \emph{agentic verify} tool set (\texttt{emet.memory.graph\_eqa.agentic\_tools}), distinct from the interactive Discord/chat agent tools.
+When \texttt{eqa.agentic\_verify} (or \texttt{EMET\_EQA\_AGENTIC\_VERIFY=1}) is set, \texttt{GraphEQAController.run\_eqa} runs \texttt{AgenticEQAExecutor} instead of the classic planning/\texttt{query\_answer} loop (Section~\ref{sec:eqa_loops}).
+
+\subsection{Protocol}
+
+\paragraph{System prompt.}
+A fixed identity + tool catalog + JSON response-format block (byte-stable across rounds for prefix KV caching).
+The model must reply with only:
+\begin{verbatim}
+{"tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
+\end{verbatim}
+Rules encoded in the prompt: verify before answering; if a hypothesis was ABSENT, explore or look around rather than re-picking it; one or two tool calls per turn.
+
+\paragraph{State message.}
+Each round appends a compact state string: question (answer mode), remaining round/nav budgets, graph object/frontier counts, ranked hypotheses, and a tried/ABSENT list so failed locations are not reused.
+
+\paragraph{Automatic capture.}
+After motion tools succeed, the executor captures a fresh observation and updates voxel + graph memory without exposing a separate \texttt{capture\_and\_update} tool to the VLM.
+
+\paragraph{Router vs.\ heuristic.}
+With \texttt{agentic\_vlm\_router} / \texttt{EMET\_EQA\_AGENTIC\_ROUTER=1}, a text-only routing call proposes tool JSON.
+With the router off (default in our Habitat H2H), a deterministic heuristic selects among the same tools (prefer untried hypotheses $\rightarrow$ navigate $\rightarrow$ verify $\rightarrow$ submit; else explore / look around).
+
+\subsection{Answer-mode tools}
+
+\begin{description}
+  \item[\texttt{inspect\_graph}] Refresh question keywords and ranked navigation hypotheses from the scene graph and SigLIP memory.
+    Use when the hypothesis list looks stale or empty.
+    Parameters: none.
+  \item[\texttt{explore\_frontier}] Navigate to an unexplored frontier to grow the map and graph.
+    Optional string \texttt{toward} biases frontier choice toward a phrase (e.g.\ the question object).
+  \item[\texttt{navigate\_to\_obs}] Navigate to a graph observation by integer \texttt{obs\_id} (a hypothesis location).
+  \item[\texttt{look\_around}] In-place head sweep / rotate to refresh map and graph without translating.
+    Parameters: none.
+  \item[\texttt{verify\_siglip}] Cheap visual check: does string \texttt{phrase} match the current camera view or stored view \texttt{obs\_id} (default $-1$ = current best hypothesis)?
+    Returns \texttt{PRESENT} / \texttt{CANDIDATE} / \texttt{ABSENT} with a similarity score.
+    \texttt{PRESENT} unlocks \texttt{submit\_answer}.
+  \item[\texttt{submit\_answer}] Submit the final answer (MCQ letter or short phrase).
+    Rejected until a \texttt{verify\_siglip} \texttt{PRESENT} result (or the round budget is nearly exhausted).
+    Optional string \texttt{answer}.
+\end{description}
+
+\subsection{Explore-mode tools}
+
+When no question is provided (map-building explore), \texttt{submit\_answer} is replaced by:
+
+\begin{description}
+  \item[\texttt{finish}] End exploration with an optional one-sentence \texttt{summary}.
+    Allowed once frontiers are exhausted or the exploration budget is used.
+\end{description}
+
+\subsection{Budgets and configuration}
+
+Typical knobs (YAML \texttt{eqa.*} / env overrides): max agentic rounds, max nav steps per episode, SigLIP verify similarity floor (\texttt{verify\_min\_sim}), and trace collection (\texttt{EMET\_EQA\_TRACE}).
+Habitat H2H entrypoint: \texttt{scripts/run\_hmeqa\_agentic\_h2h.sh}.

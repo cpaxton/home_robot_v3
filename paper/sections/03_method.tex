@@ -53,16 +53,33 @@ If \texttt{dynagraph\_staleness\_horizon} $> 0$ (default 256 controller steps), 
 This discards objects that are no longer visible or relevant---analogous in spirit to map pruning in dynamic memory systems, but on the discrete object graph used for EQA.
 
 \subsection{Exploration and EQA loop}
+\label{sec:eqa_loops}
 
-The controller inherits GraphEQA behavior: initial rotation-in-place scan (optional), navigate toward frontiers or graph-guided targets, \texttt{query\_answer} with confidence, repeat until answer or budget exhausted.
+After map and graph updates, Dynagraph answers questions with one of two controllers that share the same memory substrate.
 Dynagraph-specific Rerun logging exposes \texttt{world/dynagraph/} for graph inspection during development.
 
+\paragraph{Classic planning loop.}
+The default path inherits GraphEQA-style iteration: optional rotation-in-place scan, navigate toward frontiers or graph-guided Image-$N$ waypoints, call \texttt{query\_answer} (graph + task-relevant RGB) for a letter/confidence, and repeat until confident or the planning budget is exhausted.
+Each iteration is a monolithic VLM call that jointly decides whether to answer or where to go next; there is no explicit verify gate before committing an answer.
+
+\paragraph{Agentic verify loop.}
+Optionally (\texttt{eqa.agentic\_verify} / \texttt{EMET\_EQA\_AGENTIC\_VERIFY}), \texttt{run\_eqa} switches to a bounded tool-calling loop (\texttt{AgenticEQAExecutor}).
+A fixed system prompt lists a small tool set; each round the model emits JSON tool calls, the controller executes them (navigation updates map/graph automatically), and state messages summarize remaining budget plus tried/ABSENT hypotheses so the agent does not re-pick failed locations.
+The intended policy is navigate $\rightarrow$ \textbf{verify\_siglip} $\rightarrow$ \textbf{submit\_answer} only after a PRESENT check (or near budget exhaustion).
+An optional text-only \textbf{router} VLM proposes tool calls; with the router off, a deterministic heuristic still drives the same tools (used in our Habitat H2H for speed and stability).
+Full tool schemas and response format live in Appendix~\ref{app:agentic_tools}.
+
+\paragraph{Tools (summary).}
+In answer mode the agent may call: \texttt{inspect\_graph} (refresh ranked hypotheses), \texttt{explore\_frontier} (grow coverage, optional phrase bias), \texttt{navigate\_to\_obs} (go to a graph \texttt{obs\_id}), \texttt{look\_around} (in-place scan), \texttt{verify\_siglip} (PRESENT / CANDIDATE / ABSENT with similarity), and \texttt{submit\_answer} (MCQ letter or short phrase; gated on PRESENT).
+Explore-only mode replaces \texttt{submit\_answer} with \texttt{finish}.
+These EQA tools are distinct from the interactive Discord/chat agent tools in Section~\ref{sec:interactive_agent}.
+
 \textbf{Habitat EQA grounding (HM-EQA).}
-On the Habitat harness we add three inference-time mechanisms on top of the shared graph loop:
+On the Habitat harness we add three inference-time mechanisms on top of either loop:
 (1)~\textbf{navmesh navigation} with Habitat compass/yaw conventions and frontier re-picking when goals stall;
 (2)~\textbf{phrase-level CONFIRMED\_MEMORY}---multi-word question phrases (e.g.\ ``woven basket'') drive SigLIP alignment and coverage gates instead of fragmented stopword tokens, with the SigLIP encoder retained through voxel VRAM release before EQA;
 (3)~\textbf{location multiple-choice prompts} for visibility+where questions (``Did you see \ldots\ anywhere?'') that instruct the VLM to pick a place letter (A--D) using graph memory even when the object is absent from attached images, plus a letter-only salvage pass when the model answers yes/no instead.
-MCQ choice-rotation debiasing runs at episode end for Dynagraph only.
+MCQ choice-rotation debiasing runs at episode end for Dynagraph only (classic path; typically off in tuned HM-EQA profiles).
 
 \subsection{Simulation ground-truth supervision}
 \label{sec:gt_supervision}
@@ -83,9 +100,11 @@ Entry point: \texttt{emet run dynagraph} (\texttt{run\_dynagraph.py}, \texttt{Dy
 Configuration: \texttt{dynav\_config.yaml} plus CLI overrides \texttt{--merge-xy-m} and \texttt{--staleness-horizon}.
 
 \subsection{Interactive agent front-end}
+\label{sec:interactive_agent}
 
 The same Dynagraph stack is the default memory backend for the interactive tool agent (\texttt{emet run agent --memory-backend dynagraph}).
-Natural-language turns are routed by a lightweight text LLM into tools that call the controller: \texttt{explore} / \texttt{scan\_environment} for coverage, \texttt{find\_objects} for open-vocab localization, \texttt{describe\_scene} / \texttt{send\_image} / \texttt{send\_map\_snapshot} for sharing views and maps, and \texttt{query\_memory} for graph/voxel QA (optional \texttt{--eqa} for VL captions).
+Natural-language turns are routed by a lightweight text LLM into \emph{chat} tools that call the controller: \texttt{explore} / \texttt{scan\_environment} for coverage, \texttt{find\_objects} for open-vocab localization, \texttt{describe\_scene} / \texttt{send\_image} / \texttt{send\_map\_snapshot} for sharing views and maps, and \texttt{query\_memory} for graph/voxel QA (optional \texttt{--eqa} for VL captions).
 Discord and the terminal share one input queue; action status is announced while long motions run.
-Scored Habitat HM-EQA uses the same episode function as \texttt{emet-habitat} via \texttt{emet run agent --eqa-eval} (optional \texttt{--extra-instruction}); the chat tool-router is not on the scored path, so letter accuracy matches the harness by construction.
+Scored Habitat HM-EQA uses the same episode function as \texttt{emet-habitat} via \texttt{emet run agent --eqa-eval} (optional \texttt{--extra-instruction}).
+The Discord/chat tool-router is not on the scored path; when agentic verify is enabled, scoring uses the EQA tool loop of Section~\ref{sec:eqa_loops} instead.
 This front-end does not change Dynagraph update rules---it exposes the same memory used by Habitat and MuJoCo paper harnesses for live debugging, demos, and eval.

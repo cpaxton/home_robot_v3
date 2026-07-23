@@ -1,0 +1,62 @@
+{
+  "figure": "figs/hmeqa_agentic_coverage.png",
+  "label": "fig:hmeqa_agentic_coverage",
+  "panel_question_ids": [15, 104, 68],
+  "note": "Letter outcomes match holdout8_summary.json. Classic explored_cells for the figure come from remapped classic episodes (isolated --debug-run-tag) after the shared Habitat cache was overwritten by the agentic arm; planning_steps below are the scored H2H values.",
+  "per_question": {
+    "15": {
+      "classic": {
+        "correct": true,
+        "pred": "D",
+        "gold": "D",
+        "planning_steps": 64,
+        "observations": 44,
+        "explored_cells_figure": 687
+      },
+      "agentic": {
+        "correct": true,
+        "pred": "D",
+        "gold": "D",
+        "planning_steps": 30,
+        "observations": 21,
+        "explored_cells_figure": 196
+      }
+    },
+    "104": {
+      "classic": {
+        "correct": false,
+        "pred": "A",
+        "gold": "D",
+        "planning_steps": 57,
+        "observations": 22,
+        "explored_cells_figure": 1585
+      },
+      "agentic": {
+        "correct": true,
+        "pred": "D",
+        "gold": "D",
+        "planning_steps": 22,
+        "observations": 10,
+        "explored_cells_figure": 201
+      }
+    },
+    "68": {
+      "classic": {
+        "correct": true,
+        "pred": "B",
+        "gold": "B",
+        "planning_steps": 58,
+        "observations": 24,
+        "explored_cells_figure": 1113
+      },
+      "agentic": {
+        "correct": true,
+        "pred": "B",
+        "gold": "B",
+        "planning_steps": 16,
+        "observations": 14,
+        "explored_cells_figure": 1775
+      }
+    }
+  }
+}

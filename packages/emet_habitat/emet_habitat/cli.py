@@ -157,6 +157,13 @@ def _diagnostics_cli_options(fn):
         click.option("--export-map/--no-export-map", default=None, help="Write topdown_map.png per episode"),
         click.option("--export-video/--no-export-video", default=None, help="Write episode_rgb.mp4 per episode"),
         click.option("--map-stride", default=None, type=int, help="Save maps/step_NNNN.png every N updates"),
+        click.option(
+            "--debug-run-tag",
+            default=None,
+            type=str,
+            help="Episode bundle parent tag under ~/.cache/habitat_eqa/episodes/ "
+            "(default: cli_episode_qNNNN). Use distinct tags for H2H arms so maps do not overwrite.",
+        ),
     ]
     for opt in reversed(opts):
         fn = opt(fn)
@@ -219,6 +226,7 @@ def run_episode(
     export_map: bool | None,
     export_video: bool | None,
     map_stride: int | None,
+    debug_run_tag: str | None,
     mcq_debias: bool | None,
     memory_summary: bool | None,
     explore_when_uncovered: str | None,
@@ -231,6 +239,7 @@ def run_episode(
 
     questions_path = (data_dir / "questions.csv") if data_dir else None
     init_poses_path = (data_dir / "scene_init_poses.csv") if data_dir else None
+    run_tag = (debug_run_tag or "").strip() or f"cli_episode_q{question_id:04d}"
 
     from emet_habitat.runner import run_hmeqa_episode
 
@@ -256,7 +265,7 @@ def run_episode(
             memory_summary=memory_summary,
             mcq_debias=mcq_debias,
             explore_when_uncovered=explore_when_uncovered,
-            debug_run_tag=f"cli_episode_q{question_id:04d}",
+            debug_run_tag=run_tag,
             save_debug_bundle=True,
             export_map=export_map,
             export_video=export_video,

@@ -1,0 +1,49 @@
+{
+  "experiment": "hmeqa_classic_vs_agentic",
+  "git_commit": "777e17a",
+  "date": "2026-07-23",
+  "vlm": "Qwen/Qwen3-VL-8B-Instruct",
+  "method": "dynagraph",
+  "harness": {
+    "explore_when_uncovered": "off",
+    "mcq_debias": false,
+    "memory_summary": true,
+    "agentic_router": false
+  },
+  "arms": {
+    "classic": {"EMET_EQA_AGENTIC_VERIFY": "0"},
+    "agentic": {
+      "EMET_EQA_AGENTIC_VERIFY": "1",
+      "EMET_EQA_AGENTIC_ROUTER": "0"
+    }
+  },
+  "slices": {
+    "holdout4": {
+      "ids": [15, 68, 105, 17],
+      "summary": "holdout4_summary.json",
+      "run_dir": "~/runs/emet/hmeqa_agentic_h2h_20260723_170804"
+    },
+    "holdout8": {
+      "ids": [15, 56, 65, 68, 79, 88, 104, 105],
+      "summary": "holdout8_summary.json",
+      "run_dir": "~/runs/emet/hmeqa_agentic_h2h8_20260723_174307",
+      "paper_table": "tab:agentic_h2h",
+      "paper_bars_fig": "fig:hmeqa_agentic_h2h",
+      "paper_coverage_fig": "fig:hmeqa_agentic_coverage"
+    }
+  },
+  "reproduce": {
+    "entrypoint": "scripts/run_hmeqa_agentic_h2h.sh",
+    "summarize": "scripts/summarize_hmeqa_agentic_h2h.py",
+    "coverage_figure": "scripts/render_hmeqa_agentic_coverage_figure.py",
+    "docs": [
+      "paper/data/README.md",
+      "docs/experiments/habitat_eqa_results.md"
+    ],
+    "notes": [
+      "Use distinct --debug-run-tag (or OUT/bundles snapshots) so classic/agentic maps do not overwrite.",
+      "Letter accuracy and planning_steps in *_summary.json are the scored H2H episodes.",
+      "coverage_panel_metrics.json explored_cells may come from remapped classic maps used only for the figure when the shared Habitat cache was overwritten."
+    ]
+  }
+}
