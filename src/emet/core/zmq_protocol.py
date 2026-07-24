@@ -33,6 +33,9 @@ EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY = "mujoco_ground_truth_dump"
 EMET_ACTION_SIM_SET_BODY_POSE_KEY = "sim_set_body_pose"
 # Dynamic-world benchmarks: set a named scene hinge/slide joint (e.g. Robocasa cabinet door).
 EMET_ACTION_SIM_SET_JOINT_QPOS_KEY = "sim_set_joint_qpos"
+# Kinematic pick/place: weld a freejoint body to an EE body (sim-only).
+EMET_ACTION_SIM_ATTACH_BODY_KEY = "sim_attach_body"
+EMET_ACTION_SIM_DETACH_BODY_KEY = "sim_detach_body"
 
 # ZMQ recv actions that must bypass duplicate ``step`` filtering (see ``BaseZmqServer.spin_recv``).
 EMET_ZMQ_META_ACTION_KEYS: frozenset[str] = frozenset(
@@ -40,6 +43,8 @@ EMET_ZMQ_META_ACTION_KEYS: frozenset[str] = frozenset(
         EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY,
         EMET_ACTION_SIM_SET_BODY_POSE_KEY,
         EMET_ACTION_SIM_SET_JOINT_QPOS_KEY,
+        EMET_ACTION_SIM_ATTACH_BODY_KEY,
+        EMET_ACTION_SIM_DETACH_BODY_KEY,
     }
 )
 
@@ -89,6 +94,29 @@ def build_sim_set_joint_qpos_action(step: int, joint: str, value: float) -> dict
     """Build recv action to set a named scene hinge/slide joint qpos (doors, drawers)."""
     payload: dict[str, Any] = {"joint": str(joint), "value": float(value)}
     return {"step": int(step), EMET_ACTION_SIM_SET_JOINT_QPOS_KEY: payload}
+
+
+def build_sim_attach_body_action(
+    step: int,
+    body: str,
+    ee_body: str,
+    *,
+    offset_pos: list[float] | tuple[float, float, float] | None = None,
+) -> dict[str, Any]:
+    """Build recv action to kinematically attach a freejoint body to an end-effector body."""
+    payload: dict[str, Any] = {"body": str(body), "ee_body": str(ee_body)}
+    if offset_pos is not None:
+        payload["offset_pos"] = [float(x) for x in offset_pos[:3]]
+    return {"step": int(step), EMET_ACTION_SIM_ATTACH_BODY_KEY: payload}
+
+
+def build_sim_detach_body_action(step: int, body: str | None = None) -> dict[str, Any]:
+    """Build recv action to detach one attached body, or all when ``body`` is None."""
+    payload: dict[str, Any] = {}
+    if body is not None:
+        payload["body"] = str(body)
+    return {"step": int(step), EMET_ACTION_SIM_DETACH_BODY_KEY: payload}
+
 
 # Normalized ids that count as Hello Stretch for StretchZmqClient.
 _STRETCH_FAMILY = frozenset({"stretch", "hello_stretch", "hellostretch"})

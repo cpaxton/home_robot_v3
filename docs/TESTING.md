@@ -19,6 +19,8 @@ Use **`uv run emet …`** (or `source .venv/bin/activate` then bare `emet`) from
 | Goal | Command |
 |------|---------|
 | **Simulation smoke battery (7 tracks)** | `./scripts/run_simulation_smoke_battery.sh` — see [simulation_testing_plan.md](simulation_testing_plan.md) |
+| Motion planning (offline) | `uv run emet test src/test/motion/algo/test_rrt.py src/test/motion/test_arm_rrt.py src/test/motion/test_voxel_obstacle_planning.py -q` — see [motion_planning.md](motion_planning.md) |
+| **No-NN sim pick/place** | `EMET_SIM_NAV_TELEPORT=1 uv run python scripts/scripted_sim_pick_place.py --start-sim --sim configs/sim/default_table_rby1.yaml --manip-mode kinematic` — GT+MuJoCo only ([motion_planning.md](motion_planning.md#no-neural-nets-smoke-sim-only)) |
 | Full suite (sim on by default) | `uv run emet test` |
 | Skip sim (faster CI-style) | `uv run emet test --no-sim` |
 | Verbose | `uv run emet test -v` |
@@ -45,6 +47,7 @@ Environment: **`RUN_SIM_TESTS=0`** skips sim integration tests. Heavy VLLM downl
 
 | Topic | Doc | What it covers |
 |-------|-----|----------------|
+| **Motion planning (base + arm)** | [motion_planning.md](motion_planning.md) | RRT / A\* on voxel maps, kinematic arm RRT-Connect, offline tests |
 | **Memory backends (SVM, DynaMem, GraphEQA)** | [plans/TESTING_BACKENDS.md](plans/TESTING_BACKENDS.md) | Test matrix, red-cylinder / Robocasa spin integration, backend unit tests |
 | **Dynagraph multi-robot Robocasa E2E** | [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md) | Floor-area parity (stretch / innate_mars / galaxea_r1), spawner maps, artefact paths |
 | **GraphEQA manual Robocasa** | [graph_eqa.md](graph_eqa.md#testing-graph-eqa-in-robocasa) | Interactive questions in kitchen sim (Gemini / encoder) |
@@ -66,6 +69,7 @@ There is **no other single “master” file** today; this page is the hub. Feat
 
 | Validates | Test / harness | Notes |
 |-----------|----------------|-------|
+| Offline RRT / arm RRT on voxel-shaped grids | [test_voxel_obstacle_planning.py](../src/test/motion/test_voxel_obstacle_planning.py), [test_arm_rrt.py](../src/test/motion/test_arm_rrt.py) | Unit; [motion_planning.md](motion_planning.md) |
 | Explored floor vs spawner walkable (3 robots, Robocasa) | [run_dynagraph_multi_robot_e2e.py](../src/test/app/run_dynagraph_multi_robot_e2e.py) | [dynagraph_robocasa_e2e.md](dynagraph_robocasa_e2e.md); **does not** assert graph nodes or EQA |
 | Nav world ↔ session frame | [test_nav_xyt_session.py](../src/test/utils/test_nav_xyt_session.py) | Unit |
 | **rotate_in_place** world (x,y) stays at spawn (innate_mars + Robocasa) | [test_rotate_in_place_robocasa_nav.py](../src/test/simulation/test_rotate_in_place_robocasa_nav.py) | Sim; asserts `spawn_compose` goals, not `nav_world` |

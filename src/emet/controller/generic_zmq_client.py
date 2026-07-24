@@ -33,9 +33,9 @@ import numpy as np
 import zmq
 
 import emet.utils.compression as compression
+from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
-from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.robot import AbstractRobotClient, ControlMode
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
@@ -1006,9 +1006,60 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         return True
 
     def set_joint_positions(self, positions: dict[str, float]) -> None:
-        """Send a joint position command using actuator names."""
-        action = {"joint": list(positions.values())}
-        self.send_action(action)
+        """Send joint targets keyed by actuator name (dense vector in ``actuator_names`` order)."""
+        self.set_actuator_positions(positions)
+
+    def set_actuator_positions(
+        self,
+        positions: dict[str, float] | list[float] | np.ndarray,
+        *,
+        reliable: bool = True,
+    ) -> None:
+        """Send a full or partial actuator command aligned to ``RobotSpec.actuator_names``.
+
+        Dict keys must be actuator names. Missing keys keep the last held / unspecified
+        server-side behavior for those indices when using a dense list — prefer dicts that
+        include every actuator you care about, or pass a dense list of length ``dof``.
+        """
+        names = list(self._spec.actuator_names)
+        if isinstance(positions, dict):
+            # Build dense vector: use provided values; fill gaps from last joint state if available.
+            fill: dict[str, float] = {}
+            q, _, _ = self.get_joint_state(timeout=0.5)
+            if q is not None and len(q) >= len(names):
+                for i, n in enumerate(names):
+                    fill[n] = float(q[i])
+            vec = []
+            for n in names:
+                if n in positions:
+                    vec.append(float(positions[n]))
+                elif n in fill:
+                    vec.append(float(fill[n]))
+                else:
+                    vec.append(0.0)
+        else:
+            arr = np.asarray(positions, dtype=float).reshape(-1)
+            if arr.size != len(names):
+                raise ValueError(f"joint vector length {arr.size} != actuators {len(names)}")
+            vec = [float(x) for x in arr]
+        self.send_action({"joint": vec}, reliable=reliable)
+
+    def execute_joint_trajectory(
+        self,
+        waypoints: list[dict[str, float]] | list[list[float]],
+        *,
+        dt: float = 0.05,
+        blocking: bool = True,
+        reliable: bool = True,
+    ) -> bool:
+        """Stream actuator waypoints (dicts or dense lists). Returns True if all sends succeed."""
+        if not waypoints:
+            return True
+        for wp in waypoints:
+            self.set_actuator_positions(wp, reliable=reliable)
+            if blocking and dt > 0:
+                time.sleep(float(dt))
+        return True
 
     def open_gripper(self, gripper_name: str = "left_gripper", amount: float = 0.05) -> None:
         if self._spec.name == "xlerobot":

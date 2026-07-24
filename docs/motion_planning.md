@@ -1,0 +1,143 @@
+# Motion planning
+
+How EMET plans **base** and **arm** motion. Both share the same planners under [`emet.motion.algo`](../src/emet/motion/algo/) and (for collision) the agent **voxel / 2D obstacle map** — not CuRobo and not Molmo / MuJoCo mesh geometry for agent-time collision.
+
+| Layer | Space | Default planner | Collision |
+|-------|--------|-----------------|-----------|
+| **Base nav** | XYT on `SparseVoxelMapNavigationSpace` | `a_star` or `rrt_connect` (config) | Footprint vs `get_2d_map()` obstacles |
+| **Arm (kinematic manip)** | Joint space (torso + arm) | `rrt_connect` | Link XY vs same 2D obstacle grid (`VoxelMapArmCollisionChecker`) |
+
+Related: [dynamem.md](dynamem.md) (voxel maps), [molmospaces.md](molmospaces.md#mobile-manipulation-sim-teleport--kinematic) (sim pick/place modes), [llm_agent.md](llm_agent.md) (tuning `motion_planner` on real Stretch), [TESTING.md](TESTING.md).
+
+---
+
+## Package layout
+
+```
+src/emet/motion/
+  algo/           # RRT, RRT-Connect, A*, Shortcut, SimplifyXYT
+  base/           # ConfigurationSpace, Planner, PlanResult
+  arm_rrt.py      # Joint-space RRT-Connect wrapper for kinematic manip
+  voxel_arm_collision.py
+  mujoco_arm_ik.py
+  utils/simple_env.py   # 2D box obstacle toy env (unit tests)
+
+src/emet/mapping/voxel/
+  voxel_map.py    # SparseVoxelMapNavigationSpace (base XYT + footprint)
+```
+
+Entry points:
+
+- Base: `get_planner(algo, space, validate_fn)` → used by Dynamem / instance-memory controllers.
+- Arm: `plan_arm_joint_path(...)` in [`arm_rrt.py`](../src/emet/motion/arm_rrt.py), called from [`KinematicPickPlaceExecutor`](../src/emet/controller/manipulation/kinematic_pick_place.py).
+
+---
+
+## Base navigation (voxel map)
+
+1. Build / update the sparse voxel map from RGB-D.
+2. `SparseVoxelMapNavigationSpace` samples free XYT and checks the robot **footprint** against dilated obstacles (`is_valid`).
+3. Planner (`motion_planner.algorithm` in dynav / mapping YAML): typically **`a_star`** or **`rrt_connect`**, optionally wrapped in `Shortcut` / `SimplifyXYT`.
+
+Config block (see [dynav_config.md](dynav_config.md)):
+
+```yaml
+motion_planner:
+  step_size: 0.05
+  rotation_step_size: 0.1
+  algorithm: "rrt_connect"   # rrt | rrt_connect | a_star
+  shortcut_plans: false
+  simplify_plans: false
+```
+
+Preset files: `src/emet/config/default_planner.yaml`, `a_star_planner.yaml`, `sim_planner.yaml`.
+
+**Important:** A\* is wired to `space.voxel_map.get_2d_map()` (navigable = explored ∧ ¬obstacle). RRT\* uses the same `is_valid` footprint check.
+
+---
+
+## Arm kinematic planning (RRT-Connect)
+
+Used when `agent.manip_mode: kinematic` (or `EMET_MANIP_MODE=kinematic`) on robots that advertise `kinematic_manip` (e.g. rby1).
+
+Pipeline per EE target:
+
+1. Sync base freejoint + joints into an offline MuJoCo model.
+2. **Position IK** → goal joint vector `q_goal`.
+3. **Joint-space path** `q_start → q_goal`:
+   - Default **`rrt_connect`** (`agent.manip_planner` / `EMET_MANIP_PLANNER`).
+   - Optional `linear` interpolation.
+   - On RRT failure, falls back to linear (still rejected if voxel collision is on).
+4. Stream actuator waypoints over ZMQ; optional **`sim_attach_body`** for grasp.
+
+| Knob | Values | Default |
+|------|--------|---------|
+| `agent.manip_mode` / `EMET_MANIP_MODE` | `teleport` \| `kinematic` | `teleport` |
+| `agent.manip_collision` / `EMET_MANIP_COLLISION` | `none` \| `voxel` | `none` |
+| `agent.manip_planner` / `EMET_MANIP_PLANNER` | `rrt_connect` \| `rrt` \| `linear` | `rrt_connect` |
+
+### Voxel collision for the arm
+
+[`VoxelMapArmCollisionChecker`](../src/emet/motion/voxel_arm_collision.py) samples named link XY after FK and queries the **same** 2D obstacle grid as base nav.
+
+Grid indexing matches `GridParams` / `SparseVoxelMap`:
+
+```text
+grid_i = floor(world_x / resolution + grid_origin[0])
+grid_j = floor(world_y / resolution + grid_origin[1])
+```
+
+`from_voxel_map(voxel_map)` reads `get_2d_map()` and prefers `voxel_map.grid.grid_origin` (cell indices). Synthetic tests may use `convention="world_offset"` (origin in meters).
+
+---
+
+## Offline tests (no sim / no GPU)
+
+```bash
+# Core planners (2D toy env)
+uv run emet test src/test/motion/algo/test_rrt.py -q
+
+# Arm RRT helpers + resolve
+uv run emet test src/test/motion/test_arm_rrt.py -q
+
+# Voxel-map-shaped grids: base RRT around wall; arm RRT vs linear; from_voxel_map convention
+uv run emet test src/test/motion/test_voxel_obstacle_planning.py -q
+
+# IK smoke + TAMP packing / attach protocol helpers
+uv run emet test src/test/motion/test_rby1_mujoco_arm_ik.py src/test/motion/test_kinematic_tamp_helpers.py -q
+```
+
+| Test file | What it proves |
+|-----------|----------------|
+| `test_rrt.py` | RRT / RRT-Connect / Shortcut on `SimpleEnv` |
+| `test_arm_rrt.py` | Config resolve; 2D wall; arm joint RRT without map |
+| `test_voxel_obstacle_planning.py` | `GridParams` indexing; `from_voxel_map`; base RRT on fake SVM; arm RRT avoids wall that blocks linear |
+| `test_rby1_mujoco_arm_ik.py` | Offline MuJoCo position IK |
+| `test_svm.py` (mapping) | Heavier: real pickle map + `plan_to_instance` / frontier (optional data) |
+
+## No-neural-nets smoke (sim only)
+
+GT placements + MuJoCo — **no** LLM / VLM / SigLIP / YOLO. Script: [`scripts/scripted_sim_pick_place.py`](../scripts/scripted_sim_pick_place.py).
+
+```bash
+# Teleport (oracle GT snap) — table + rby1
+uv run python scripts/scripted_sim_pick_place.py --start-sim \
+  --sim configs/sim/default_table_rby1.yaml --manip-mode teleport \
+  --object "red cylinder" --receptacle "blue cube"
+
+# Kinematic (IK + RRT-Connect + attach)
+EMET_SIM_NAV_TELEPORT=1 uv run python scripts/scripted_sim_pick_place.py --start-sim \
+  --sim configs/sim/default_table_rby1.yaml --manip-mode kinematic \
+  --object "red cylinder" --receptacle "blue cube"
+```
+
+Expect `OK: measured object move…` and `displacement_m` ≳ 0.05. Offline planner unit tests (no sim): see [Offline tests](#offline-tests-no-sim--no-gpu) above.
+
+---
+
+## What we deliberately do not use for agent collision
+
+- **CuRobo** on Molmo / GT MJCF — geometry would not match the real robot’s map.
+- **MuJoCo contact** for agent pick/place success — kinematic attach is a sim proxy; teleport remains the OVMM oracle.
+
+Collision awareness for planning should stay on the **agent voxel map** so sim and hardware share one world model.

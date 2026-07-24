@@ -54,7 +54,7 @@ def test_rrt_simple_env(start, goal, obs, visualize: bool = False):
     """Test just pure RRT stuff"""
     env = SimpleEnv(obs)
     planner = RRT(env.get_space(), env.validate)
-    return _run_simple_env(planner, env, start, goal, visualize)
+    _run_simple_env(planner, env, start, goal, visualize)
 
 
 @pytest.mark.parametrize(
@@ -102,7 +102,7 @@ def test_rrt_connect_simple_env(start, goal, obs, visualize: bool = False):
     """Test the connect code"""
     env = SimpleEnv(obs)
     planner = RRTConnect(env.get_space(), env.validate)
-    return _run_simple_env(planner, env, start, goal, visualize)
+    _run_simple_env(planner, env, start, goal, visualize)
 
 
 if __name__ == "__main__":

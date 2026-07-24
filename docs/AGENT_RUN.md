@@ -179,6 +179,16 @@ uv run emet run agent --eqa-eval --habitat-question-id 17 --eqa-eval-mock-llm \
 
 # MolmoSpaces one-liner
 uv run emet run agent --robot rby1 --start-sim --scene ithor --headless -c "describe the scene"
+
+# MolmoSpaces + rby1 mobile manip (sim teleport pick/place when server advertises sim_set_body_pose)
+uv run emet run agent --robot rby1 --start-sim --scene ithor --headless --no-discord \
+  -c "pick up the bowl and place it on the microwave"
+
+# No LLM / no models: scripted agent tool_calls + teleport only
+uv run python scripts/scripted_sim_pick_place.py --start-sim
+uv run python scripts/scripted_sim_pick_place.py --start-sim \
+  --sim configs/sim/molmospaces_ithor_train_0.yaml \
+  --object bowl --receptacle microwave
 ```
 
 ## Testing

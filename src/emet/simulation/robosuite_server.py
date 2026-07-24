@@ -32,6 +32,10 @@ from emet.core.server import BaseZmqServer
 from emet.core.zmq_protocol import (
     CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
     EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY,
+    EMET_ACTION_SIM_ATTACH_BODY_KEY,
+    EMET_ACTION_SIM_DETACH_BODY_KEY,
+    EMET_ACTION_SIM_SET_BODY_POSE_KEY,
+    EMET_ACTION_SIM_SET_JOINT_QPOS_KEY,
     EMET_ZMQ_ROBOT_ID_KEY,
     EMET_ZMQ_SESSION_KEY,
     EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
@@ -64,6 +68,14 @@ from emet.simulation.robosuite_load_utils import (
     robosuite_post_load_debug_enabled,
     robot_home_keyframe_name,
     update_robot_qpos0_from_data,
+)
+from emet.simulation.sim_manipulation import (
+    parse_sim_attach_body_action,
+    parse_sim_detach_body_action,
+    parse_sim_set_body_pose_action,
+    parse_sim_set_joint_qpos_action,
+    set_free_body_pose,
+    set_named_joint_qpos,
 )
 from emet.simulation.sim_object_placements import (
     apply_navigation_origin_to_session,
@@ -145,6 +157,8 @@ class RobosuiteZmqServer(BaseZmqServer):
             str(scene_disk_path).strip() if scene_disk_path and str(scene_disk_path).strip() else None
         )
         self._physics_steps_executed = 0
+        # body_name -> {ee_body, offset_local (3,)} for kinematic pick/place attach.
+        self._kinematic_attachments: dict[str, dict[str, Any]] = {}
         # After MolmoSpaces autoplace, ``qpos0`` holds the chosen free-joint pose; see
         # :meth:`_restore_merged_base_freejoint_from_qpos0` after physics stabilize.
         self._molmospaces_autoplace_snap_qpos0 = False
@@ -766,6 +780,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         if vadr >= 0:
             self._mjdata.qvel[vadr : vadr + 6] = 0.0
 
+    def _mj_step_once(self) -> None:
+        """One MuJoCo step then snap kinematic attachments (if any)."""
+        mujoco.mj_step(self._mjmodel, self._mjdata)
+        self._snap_kinematic_attachments()
+
     def _hold_stationary_base_if_idle(self) -> None:
         """Pin mobile base (free joint and/or planar slide+yaw) while not executing a nav goal."""
         self._hold_stationary_base_freejoint_if_idle()
@@ -922,6 +941,9 @@ class RobosuiteZmqServer(BaseZmqServer):
             "depth": bool(self._spec.camera_names),
             "num_cameras": len(self._spec.camera_names),
             "dof": int(self._spec.dof),
+            "sim_set_body_pose": True,
+            "sim_set_joint_qpos": True,
+            "kinematic_manip": True,
         }
         session: dict[str, Any] = {
             EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY: CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
@@ -968,6 +990,41 @@ class RobosuiteZmqServer(BaseZmqServer):
         if self._emet_session is not None:
             message[EMET_ZMQ_SESSION_KEY] = self._emet_session
         return message
+
+    def _patch_emet_session_body_pos(
+        self,
+        body: str,
+        pos: list[float],
+        quat: list[float] | None = None,
+    ) -> None:
+        """Update one body entry in cached session GT after ``sim_set_body_pose``."""
+        if self._emet_session is None:
+            return
+        placements = self._emet_session.get("sim_object_placements")
+        if not isinstance(placements, dict) or body not in placements:
+            return
+        entry = placements[body]
+        if not isinstance(entry, dict):
+            return
+        entry["pos"] = [float(x) for x in pos[:3]]
+        if quat is not None:
+            entry["quat"] = [float(x) for x in quat[:4]]
+
+    def _snap_kinematic_attachments(self) -> None:
+        """Keep attached freejoint bodies glued to their EE (kinematic grasp)."""
+        if not self._kinematic_attachments or self._mjmodel is None or self._mjdata is None:
+            return
+        for body, info in list(self._kinematic_attachments.items()):
+            ee = str(info.get("ee_body") or "")
+            offset = np.asarray(info.get("offset_local"), dtype=np.float64).reshape(3)
+            ee_id = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, ee)
+            if ee_id < 0:
+                continue
+            R = np.asarray(self._mjdata.body(ee_id).xmat, dtype=np.float64).reshape(3, 3)
+            ee_pos = np.asarray(self._mjdata.body(ee_id).xpos, dtype=np.float64).reshape(3)
+            world = ee_pos + R @ offset
+            if set_free_body_pose(self._mjmodel, self._mjdata, body, world):
+                self._patch_emet_session_body_pos(body, world.tolist())
 
     def get_scene_summary(self) -> str:
         """Return a short text summary of the scene: robot, position, and notable objects."""
@@ -1886,6 +1943,66 @@ class RobosuiteZmqServer(BaseZmqServer):
                 except Exception as e:
                     logger.error("mujoco_ground_truth_dump failed for %r: %s", path_gt, e)
 
+        if EMET_ACTION_SIM_SET_BODY_POSE_KEY in action:
+            body, pos, quat = parse_sim_set_body_pose_action(action[EMET_ACTION_SIM_SET_BODY_POSE_KEY])
+            if body and pos is not None and self._mjmodel is not None and self._mjdata is not None:
+                with self._mj_lock:
+                    ok = set_free_body_pose(
+                        self._mjmodel,
+                        self._mjdata,
+                        body,
+                        pos,
+                        quat,
+                    )
+                if ok:
+                    self._patch_emet_session_body_pos(body, pos, quat)
+                    logger.info(f"sim_set_body_pose: {body!r} -> {pos}")
+                else:
+                    logger.warning(f"sim_set_body_pose failed for body {body!r}")
+
+        if EMET_ACTION_SIM_SET_JOINT_QPOS_KEY in action:
+            joint, value = parse_sim_set_joint_qpos_action(action[EMET_ACTION_SIM_SET_JOINT_QPOS_KEY])
+            if joint and value is not None and self._mjmodel is not None and self._mjdata is not None:
+                with self._mj_lock:
+                    ok = set_named_joint_qpos(self._mjmodel, self._mjdata, joint, value)
+                if ok:
+                    logger.info(f"sim_set_joint_qpos: {joint!r} requested={value:.4f}")
+                else:
+                    logger.warning(f"sim_set_joint_qpos failed for joint {joint!r}")
+
+        if EMET_ACTION_SIM_ATTACH_BODY_KEY in action:
+            body, ee, offset = parse_sim_attach_body_action(action[EMET_ACTION_SIM_ATTACH_BODY_KEY])
+            if body and ee and self._mjmodel is not None and self._mjdata is not None:
+                with self._mj_lock:
+                    mujoco.mj_forward(self._mjmodel, self._mjdata)
+                    ee_id = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, ee)
+                    body_id = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, body)
+                    if ee_id < 0 or body_id < 0:
+                        logger.warning(f"sim_attach_body: missing ee={ee!r} or body={body!r}")
+                    else:
+                        R = np.asarray(self._mjdata.body(ee_id).xmat, dtype=np.float64).reshape(3, 3)
+                        ee_pos = np.asarray(self._mjdata.body(ee_id).xpos, dtype=np.float64).reshape(3)
+                        body_pos = np.asarray(self._mjdata.body(body_id).xpos, dtype=np.float64).reshape(3)
+                        if offset is not None:
+                            offset_local = np.asarray(offset, dtype=np.float64).reshape(3)
+                        else:
+                            offset_local = R.T @ (body_pos - ee_pos)
+                        self._kinematic_attachments[body] = {
+                            "ee_body": ee,
+                            "offset_local": offset_local,
+                        }
+                        self._snap_kinematic_attachments()
+                        logger.info(f"sim_attach_body: {body!r} -> ee={ee!r}")
+
+        if EMET_ACTION_SIM_DETACH_BODY_KEY in action:
+            body = parse_sim_detach_body_action(action[EMET_ACTION_SIM_DETACH_BODY_KEY])
+            if body:
+                self._kinematic_attachments.pop(body, None)
+                logger.info(f"sim_detach_body: {body!r}")
+            else:
+                self._kinematic_attachments.clear()
+                logger.info("sim_detach_body: cleared all")
+
         if "control_mode" in action:
             self.control_mode = action["control_mode"]
 
@@ -1949,6 +2066,8 @@ class RobosuiteZmqServer(BaseZmqServer):
                             self._nav_goal_world = None
                             self._zero_base_free_joint_velocity()
                             self._sync_actuator_ctrl_from_joint_positions()
+                            # Freejoint robots must refresh the idle snap or hold reverts teleport.
+                            self._snapshot_stationary_base_freejoint_pose()
                             self._snapshot_stationary_planar_base_qpos()
                             after = self.get_base_xyt()
                             nav_meta["base_world_after"] = [
@@ -2088,8 +2207,16 @@ class RobosuiteZmqServer(BaseZmqServer):
         if self._mjdata is None:
             return None
         q, dq, eff = self.get_joint_state()
+        base_xyz = None
+        try:
+            with self._mj_lock:
+                xpos = self._mjdata.body(self._spec.base_link_name).xpos
+                base_xyz = [float(xpos[0]), float(xpos[1]), float(xpos[2])]
+        except Exception:
+            base_xyz = None
         message = {
             "base_pose": self.get_base_pose(),
+            "base_xyz": base_xyz,
             "ee_pose": np.eye(4),
             "joint_positions": q,
             "joint_velocities": dq,
@@ -2177,7 +2304,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 for _ in range(self._mj_substeps_per_tick):
                     self._hold_stationary_base_if_idle()
                     self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
-                    mujoco.mj_step(self._mjmodel, self._mjdata)
+                    self._mj_step_once()
                     self._physics_steps_executed += 1
                     if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
                         break
@@ -2220,7 +2347,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                         for _ in range(self._mj_substeps_per_tick):
                             self._hold_stationary_base_if_idle()
                             self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
-                            mujoco.mj_step(self._mjmodel, self._mjdata)
+                            self._mj_step_once()
                             self._physics_steps_executed += 1
                             if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
                                 break

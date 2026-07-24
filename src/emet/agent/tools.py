@@ -394,7 +394,9 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
     tools.append(
         Tool(
             name="pick_place",
-            description="Pick up an object and place it on a receptacle.",
+            description="Pick up an object and place it on a receptacle. "
+            "In MuJoCo sim (including MolmoSpaces + rby1), this uses freejoint body teleport "
+            "when the server advertises sim_set_body_pose.",
             parameters={
                 "type": "object",
                 "properties": {

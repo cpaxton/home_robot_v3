@@ -329,6 +329,8 @@ python -m emet.app.chat --voice --talk --robot_ip 192.168.1.69
 
 #### Motion Planning
 
+See **[motion_planning.md](motion_planning.md)** for the full picture (base XYT on the voxel map, kinematic arm RRT-Connect, offline tests).
+
 The robot uses a motion planner to avoid obstacles on its feature-rich 3D map of the environment. If you are having trouble, you may want to tune the [config file](../src/emet/config/default_planner.yaml) until it works. Some advice below.
 
 You can find the motion planning block in the config file:

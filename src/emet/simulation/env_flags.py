@@ -39,6 +39,30 @@ def env_zmq_timing() -> bool:
     return _env_truthy("EMET_ZMQ_TIMING")
 
 
+def env_manip_mode() -> str:
+    """Agent pick/place backend: ``teleport`` (default) or ``kinematic`` (IK + attach)."""
+    raw = os.environ.get("EMET_MANIP_MODE", "").strip().lower()
+    if raw in ("teleport", "kinematic"):
+        return raw
+    return ""
+
+
+def env_manip_collision() -> str:
+    """Arm collision filter: ``none``, ``voxel`` (default when unset → empty = defer to config)."""
+    raw = os.environ.get("EMET_MANIP_COLLISION", "").strip().lower()
+    if raw in ("none", "voxel"):
+        return raw
+    return ""
+
+
+def env_manip_planner() -> str:
+    """Kinematic arm path planner: ``rrt_connect`` (default), ``rrt``, or ``linear``."""
+    raw = os.environ.get("EMET_MANIP_PLANNER", "").strip().lower()
+    if raw in ("rrt_connect", "rrt", "linear"):
+        return raw
+    return ""
+
+
 def warn_sim_nav_env_flags(*, force: bool = False) -> None:
     """Print yellow stderr warnings for active ``EMET_SIM_NAV_*`` env vars (once per process)."""
     global _warned_sim_nav_env

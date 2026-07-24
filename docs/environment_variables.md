@@ -124,6 +124,9 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 
 | Variable | Where used | Notes |
 |----------|------------|-------|
+| `EMET_MANIP_MODE` | `DynamemTaskExecutor` / `resolve_agent_manip_mode` | `teleport` (default) or `kinematic` (IK + attach). Overrides `agent.manip_mode`. See [molmospaces.md](molmospaces.md) mobile manipulation. |
+| `EMET_MANIP_COLLISION` | kinematic pick/place | `none` (default) or `voxel` (2D obstacle map). Overrides `agent.manip_collision`. |
+| `EMET_MANIP_PLANNER` | kinematic pick/place | `rrt_connect` (default), `rrt`, or `linear`. Joint-space path after IK. Overrides `agent.manip_planner`. |
 | `EMET_VL_CACHE_SYSTEM_PREFIX` | `qwen3-vl-eqa` / `Qwen3VLClient` | `1`/`0` — cache system-prompt KV across agent turns (default on via `eqa.vl_cache_system_prefix`). CLI: `--cache-vl-prefix` / `--no-cache-vl-prefix`. |
 | `EMET_ALLOW_CPU_VLM` | Qwen3-VL / Gemma VLM / Qwen2.5-VL load | `1` — allow silent CPU bf16 fallback when GPU int4 load fails. **Default off**: agent refuses CPU fallback (multi-minute “Thinking…” hangs). |
 | `EMET_HF_LOCAL_ONLY` | VL / SigLIP `from_pretrained` | `1` — require local HF cache only (same idea as `HF_HUB_OFFLINE=1`). Warm cache is preferred automatically even when unset. |
