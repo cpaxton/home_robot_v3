@@ -11,6 +11,7 @@ from innate_mars_bridge.constants import (
     INNATE_OS_REPO,
     NAVIGATE_TO_POSE_ACTION,
     ODOM_TOPIC,
+    SPIN_ACTION,
 )
 
 
@@ -28,6 +29,7 @@ def test_innate_os_pin_documented():
 
 def test_nav2_action_name():
     assert NAVIGATE_TO_POSE_ACTION == "navigate_to_pose"
+    assert SPIN_ACTION == "spin"
 
 
 def test_tf_frames_include_cameras():

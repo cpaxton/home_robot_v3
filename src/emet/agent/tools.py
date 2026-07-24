@@ -178,6 +178,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
 
     Prefer :func:`get_tools` (routes through :func:`emet.agent.skills.build_skill_pack`).
     """
+    from emet.agent.env_flags import env_base_rotate_only
+
     tools: list[Tool] = []
 
     # -- query_memory --------------------------------------------------------
@@ -470,12 +472,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         Tool(
             name="describe_scene",
             description=(
-                "Caption what is in front of the robot right now (live head camera) and optionally "
-                "ground with known scene-graph / map labels. Does not move the robot — use "
-                "scan_environment or explore to gather more views. Queues the live head-camera photo "
-                "for Discord (not an object crop; use send_object_image for that). "
-                'Use an empty JSON "message" on the tool-call turn so chat/Discord only show your answer after '
-                "[Tool results]."
+                "Caption what is in front of the robot *right now* (live head camera) and optionally "
+                "ground with known scene-graph / map labels. Does NOT move or reorient the robot — "
+                "this alone is not a 'closer look'. For 'are you sure' / 'look closer' / confirm, "
+                "first call rotate_base / move_forward / scan_environment (as allowed), then this tool. "
+                "Queues the live head-camera photo for Discord (not an object crop; use send_object_image "
+                "for that). Use an empty JSON \"message\" on the tool-call turn so chat/Discord only show "
+                "your answer after [Tool results]."
             ),
             parameters=_NO_PARAMS,
             func=describe_scene,
@@ -562,6 +565,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         ok = executor([("rotate_base", str(deg))])
         if not ok:
             return "Rotate failed or interrupted."
+        context["last_rotate_degrees"] = deg
         return f"Rotated about {deg:.0f}° in place."
 
     tools.append(
@@ -570,14 +574,17 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             description=(
                 "Rotate the wheeled base in place by a relative yaw in degrees (positive = left/CCW, "
                 "negative = right/CW). Pass an explicit angle: turn around → 180, turn right → -90, "
-                "turn left → 90, slight turn → ±30–45. Prefer this over scan_environment for a single turn."
+                "turn left → 90, slight turn → ±30–45. "
+                "'rotate back' / 'turn back' means NEGATE the previous rotate (e.g. after +45 use -45) "
+                "— NOT 180 (that is 'turn around'). "
+                "For 'look at / face / go toward X' when you have a named object, prefer face_toward."
             ),
             parameters={
                 "type": "object",
                 "properties": {
                     "degrees": {
                         "type": "number",
-                        "description": "Relative yaw in degrees (e.g. 180, -90, 45).",
+                        "description": "Relative yaw in degrees (e.g. 180, -90, 45, or -last for 'back').",
                     }
                 },
                 "required": ["degrees"],
@@ -587,7 +594,69 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def move_forward(meters: float = 0.5) -> str:
+    def face_toward(object_label: str) -> str:
+        """Yaw in place to face a scene-graph / voxel object (no XY drive)."""
+        import math
+
+        from emet.agent.face_toward import resolve_object_xy, yaw_to_face_xy
+
+        executor = context.get("executor")
+        robot = context.get("robot")
+        label = (object_label or "").strip()
+        if not label:
+            return "Need an object label to face (e.g. 'aquarium', 'shelf')."
+        if executor is None or robot is None or not hasattr(robot, "get_base_pose"):
+            return "Robot not connected."
+        agent = getattr(executor, "agent", None)
+        xy, source = resolve_object_xy(agent, label)
+        if xy is None:
+            return (
+                f"I don't have a map location for {label!r} yet — "
+                "I can rotate_base blindly or describe_scene from here."
+            )
+        try:
+            pose = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
+        except Exception as e:
+            return f"Could not read base pose: {e}"
+        if pose.size < 3:
+            return "Base pose incomplete."
+        delta_rad, _bearing = yaw_to_face_xy(pose[:3], xy)
+        deg = float(math.degrees(delta_rad))
+        if abs(deg) < 3.0:
+            return f"Already roughly facing {label!r} ({source})."
+        deg = float(np.clip(deg, -180.0, 180.0))
+        ok = executor([("rotate_base", str(deg))])
+        if not ok:
+            return f"Tried to face {label!r} ({source}) but rotate failed."
+        context["last_rotate_degrees"] = deg
+        return f"Turned about {deg:+.0f}° to face {label!r} ({source})."
+
+    tools.append(
+        Tool(
+            name="face_toward",
+            description=(
+                "Rotate in place to face a named object from the scene graph / map "
+                "(computes yaw toward its remembered XY). Use for 'look at the aquarium', "
+                "'face the shelf', 'turn toward the TV'. Does NOT drive closer — follow with "
+                "describe_scene. Prefer this over a blind rotate_base(±45) when the object is known. "
+                "If the object is unknown, fall back to rotate_base or ask."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "object_label": {
+                        "type": "string",
+                        "description": "Object name to face (e.g. aquarium, shelf, cardboard box).",
+                    }
+                },
+                "required": ["object_label"],
+            },
+            func=face_toward,
+            returns_info=True,
+        )
+    )
+
+    def move_forward(meters: float = 0.1) -> str:
         executor = context.get("executor")
         if executor is None:
             return "Robot not connected."
@@ -596,25 +665,46 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         except (TypeError, ValueError):
             return f"Invalid meters: {meters!r}."
         dist = float(np.clip(dist, 0.0, 1.5))
+        # Prefer controller path so every nudge (including 0.1 m) is map-clipped.
+        agent = getattr(executor, "agent", None)
+        if agent is not None and hasattr(agent, "move_forward_meters"):
+            commanded = float(agent.move_forward_meters(dist))
+            if commanded < 0.02:
+                return (
+                    "Did not move — the map has no clear free path that far "
+                    "(empty map, obstacle too close, or need scan_environment first)."
+                )
+            if commanded + 1e-3 < dist:
+                return (
+                    f"Moved forward {commanded:.2f} m "
+                    f"(map-clipped from {dist:.2f} m so I don't hit anything)."
+                )
+            return f"Moved forward {commanded:.2f} m (map clear along path)."
         ok = executor([("move_forward", str(dist))])
         if not ok:
             return "Move forward failed or interrupted."
-        return f"Moved forward (requested {dist:.2f} m; may be shorter if obstacles)."
+        return f"Moved forward (requested {dist:.2f} m; map-clipped by the controller if needed)."
 
     tools.append(
         Tool(
             name="move_forward",
             description=(
                 "Drive the base forward along its current heading by approximately *meters*. "
-                "Default for 'a bit' / 'a little' is 0.5. Cap near 1.5 m. The controller shortens the "
-                "step if the voxel map shows an obstacle ahead. Do not use for turning (use rotate_base)."
+                "Always uses the 2D obstacle map (including 0.1 m nudges): shortens or refuses "
+                "if the path is blocked or the map is empty — call scan_environment first if the "
+                "map has no explored cells. If the user did not say how far, do NOT call this tool — "
+                "ask how far first. Use meters=0.1 for 'a bit' / 'a little' / 'nudge'; ~0.5 for half "
+                "a meter; ~1.0 for a meter. Cap near 1.5 m. Do not use for turning (use rotate_base)."
             ),
             parameters={
                 "type": "object",
                 "properties": {
                     "meters": {
                         "type": "number",
-                        "description": "Forward distance in meters (e.g. 0.5 for 'a bit', 1.0 for 'a meter').",
+                        "description": (
+                            "Forward distance in meters (required). "
+                            "0.1 for a small nudge / 'a bit'; 0.5 for half a meter; 1.0 for a meter."
+                        ),
                     }
                 },
                 "required": ["meters"],
@@ -625,23 +715,99 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     )
 
     # -- camera --------------------------------------------------------------
+    def take_picture() -> str:
+        executor = context.get("executor")
+        robot = context.get("robot")
+        if executor is not None:
+            executor([("take_picture", "")])
+        image = None
+        if robot is not None and hasattr(robot, "get_observation"):
+            obs = robot.get_observation()
+            if obs is not None and getattr(obs, "rgb", None) is not None:
+                image = np.asarray(obs.rgb).copy()
+        if stash_discord_image(context, image):
+            return "Head-camera photo queued for Discord."
+        return "Took a head-camera picture locally (no frame to attach)."
+
     tools.append(
         Tool(
             name="take_picture",
-            description="Take a picture with the main camera. Does NOT send it — use send_image after to send.",
+            description=(
+                "Capture the head camera locally. Prefer send_image or describe_scene when the user "
+                "should see or hear a description — those attach a photo / caption to Discord."
+            ),
             parameters=_NO_PARAMS,
-            func=lambda: _exec("take_picture", ""),
-            executor_commands=_simple_exec_mapping("take_picture"),
+            func=take_picture,
+            returns_info=True,
         )
     )
+
+    def take_ee_picture() -> str:
+        robot = context.get("robot")
+        image = None
+        if robot is not None and hasattr(robot, "get_servo_observation"):
+            try:
+                obs = robot.get_servo_observation()
+                ee = getattr(obs, "ee_rgb", None) if obs is not None else None
+                if ee is not None:
+                    image = np.asarray(ee).copy()
+            except Exception as e:
+                _logger.warning(f"take_ee_picture: servo obs failed ({e})")
+        if stash_discord_image(context, image):
+            return (
+                "Wrist-camera photo queued (arm was not moved — no IK aim). "
+                "For 'take a closer look' use describe_scene with the head camera instead."
+            )
+        return (
+            "Wrist / EE camera frame not available, and aiming the arm at an object "
+            "(IK) is not supported in this agent. Use describe_scene or send_image "
+            "(head camera) to look closer."
+        )
 
     tools.append(
         Tool(
             name="take_ee_picture",
-            description="Take a picture with the end-effector (wrist) camera.",
+            description=(
+                "Capture the wrist/end-effector camera only (no arm motion). "
+                "Do NOT use for 'closer look' / 'inspect X' — that would require pointing the arm "
+                "at the object with IK, which is not supported here. Use describe_scene (head camera "
+                "+ caption) or send_image instead. On Innate Mars the wrist stream is often missing."
+            ),
             parameters=_NO_PARAMS,
-            func=lambda: _exec("take_ee_picture", ""),
-            executor_commands=_simple_exec_mapping("take_ee_picture"),
+            func=take_ee_picture,
+            returns_info=True,
+        )
+    )
+
+    # -- arm aim (stub / TODO) ------------------------------------------------
+    def aim_arm_at(object_label: str) -> str:
+        # See TODO.md — Arm IK “closer look”.
+        return (
+            f"aim_arm_at({object_label!r}) is not implemented yet (needs arm IK + wrist aim; "
+            "tracked in TODO.md). I will not call take_ee_picture without aiming. "
+            "Use describe_scene / send_image with the head camera for now."
+        )
+
+    tools.append(
+        Tool(
+            name="aim_arm_at",
+            description=(
+                "STUB: Point the arm / wrist camera at a named object using IK, then the user "
+                "can inspect it. Not implemented yet — do not pretend it moved the arm. "
+                "For 'closer look' / 'inspect X' prefer describe_scene (head camera) until IK lands."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "object_label": {
+                        "type": "string",
+                        "description": "Object or region to aim at (e.g. cables, red cup).",
+                    }
+                },
+                "required": ["object_label"],
+            },
+            func=aim_arm_at,
+            returns_info=True,
         )
     )
 
@@ -767,6 +933,45 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             executor_commands=_simple_exec_mapping("quit"),
         )
     )
+
+    if env_base_rotate_only():
+        # Keep tool names in the pack so the LLM does not invent calls; stubs return a clear refusal.
+        blocked = frozenset(
+            {
+                "explore",
+                "find_objects",
+                "move_forward",
+                "go_home",
+                "pick_place",
+                "hand_over",
+            }
+        )
+        stub_msg = (
+            "I can't drive or translate right now (EMET_BASE_ROTATE_ONLY — tethered / plugged in). "
+            "I can rotate in place, scan the room, or describe what I see. "
+            "Unset EMET_BASE_ROTATE_ONLY when the robot is free to move."
+        )
+
+        def _make_stub(orig: Tool) -> Tool:
+            def _fn(**_kwargs: Any) -> str:
+                return stub_msg
+
+            return Tool(
+                name=orig.name,
+                description=(
+                    f"{orig.description} [DISABLED: EMET_BASE_ROTATE_ONLY — do not call; "
+                    "ask the user or use rotate_base / scan_environment / describe_scene.]"
+                ),
+                parameters=orig.parameters,
+                func=_fn,
+                returns_info=True,
+            )
+
+        tools = [_make_stub(t) if t.name in blocked else t for t in tools]
+        _logger.warning(
+            f"EMET_BASE_ROTATE_ONLY=1: {len(blocked)} drive/manip tools stubbed "
+            "(rotate_base / scan_environment / describe still available)."
+        )
 
     return tools
 

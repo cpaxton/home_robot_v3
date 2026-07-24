@@ -1586,7 +1586,8 @@ class DynamemController(BaseController):
         if abs(deg) < 1e-3:
             return 0.0
         self.announce_action(f"Rotating {deg:+.0f}°")
-        nav_timeout = self._find_phase_nav_timeout()
+        # Scale wait with angle (180° Spin ~5s); floor above find-phase default so large yaws finish.
+        nav_timeout = max(float(self._find_phase_nav_timeout()), abs(deg) / 45.0 * 5.0 + 8.0)
         if hasattr(self.robot, "move_to_nav_posture"):
             self.robot.move_to_nav_posture()
         self.robot.move_base_to(
@@ -1602,31 +1603,53 @@ class DynamemController(BaseController):
                 pass
         return deg
 
-    def clip_forward_distance_m(self, meters: float, *, step_m: float = 0.05) -> float:
-        """Shorten a forward request using the 2D obstacle map when available."""
+    def clip_forward_distance_m(
+        self,
+        meters: float,
+        *,
+        step_m: float = 0.05,
+        clearance_m: float = 0.05,
+        require_map: bool = True,
+    ) -> float:
+        """Shorten a forward request using the 2D obstacle map.
+
+        Always consults the voxel map before driving — including small nudges (0.1 m).
+        When *require_map* is True (default), returns ``0.0`` if the map is empty or has
+        no explored/obstacle cells yet so we never drive blind into furniture.
+        Stops *clearance_m* before the first occupied cell.
+        """
         requested = float(np.clip(float(meters), 0.0, 1.5))
         if requested < 1e-3:
             return 0.0
         vm = self.get_voxel_map() if hasattr(self, "get_voxel_map") else None
         if vm is None or (hasattr(vm, "is_empty") and vm.is_empty()):
-            return requested
+            return 0.0 if require_map else requested
         try:
-            obstacles, _explored = vm.get_2d_map()
+            obstacles, explored = vm.get_2d_map()
         except Exception:
-            return requested
+            return 0.0 if require_map else requested
         if obstacles is None:
-            return requested
+            return 0.0 if require_map else requested
         obs_np = obstacles.cpu().numpy() if hasattr(obstacles, "cpu") else np.asarray(obstacles)
+        exp_np = None
+        if explored is not None:
+            exp_np = explored.cpu().numpy() if hasattr(explored, "cpu") else np.asarray(explored)
+        n_obs = int(np.count_nonzero(obs_np))
+        n_exp = int(np.count_nonzero(exp_np)) if exp_np is not None else 0
+        if require_map and n_obs == 0 and n_exp == 0:
+            # Fresh session / no depth yet — same as Discord "Explored cells=0".
+            return 0.0
         try:
             xyt = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)
         except Exception:
-            return requested
+            return 0.0 if require_map else requested
         if xyt.size < 3:
-            return requested
+            return 0.0 if require_map else requested
         x0, y0, th = float(xyt[0]), float(xyt[1]), float(xyt[2])
         c, s = float(np.cos(th)), float(np.sin(th))
         traveled = 0.0
         step = max(0.02, float(step_m))
+        clear = max(0.0, float(clearance_m))
         while traveled + step <= requested + 1e-9:
             probe = traveled + step
             xy = np.array([x0 + probe * c, y0 + probe * s], dtype=np.float64)
@@ -1642,7 +1665,7 @@ class DynamemController(BaseController):
             if gi < 0 or gj < 0 or gi >= obs_np.shape[0] or gj >= obs_np.shape[1]:
                 break
             if bool(obs_np[gi, gj]):
-                return traveled
+                return max(0.0, traveled - clear)
             traveled = probe
         return requested
 
@@ -1651,12 +1674,14 @@ class DynamemController(BaseController):
         requested = float(np.clip(float(meters), 0.0, 1.5))
         dist = self.clip_forward_distance_m(requested)
         if dist < 0.02:
-            self.announce_action("Cannot move forward — obstacle too close or distance too small")
+            self.announce_action(
+                "Cannot move forward — need map free space (scan first) or obstacle too close"
+            )
             return 0.0
         if dist + 1e-3 < requested:
-            self.announce_action(f"Moving forward {dist:.2f} m (clipped from {requested:.2f} m)")
+            self.announce_action(f"Moving forward {dist:.2f} m (map-clipped from {requested:.2f} m)")
         else:
-            self.announce_action(f"Moving forward {dist:.2f} m")
+            self.announce_action(f"Moving forward {dist:.2f} m (map clear)")
         nav_timeout = self._find_phase_nav_timeout()
         if hasattr(self.robot, "move_to_nav_posture"):
             self.robot.move_to_nav_posture()

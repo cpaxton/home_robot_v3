@@ -1,9 +1,10 @@
 # Home Robot v2 / Emet – Cursor code rules
 
 ## Copyright (new files)
-- **New** source/tests you add: `# Copyright (c) Chris Paxton 2026` (use the current year).
-- **Never** put `Copyright (c) Hello Robot, Inc.` on new files. Leave existing Hello Robot headers alone when editing old files.
-- See **`.cursor/rules/copyright.mdc`**.
+- **All new files** (modules, tests under `src/test/`, scripts, bridge code): `# Copyright (c) Chris Paxton <year>` + Apache stub — **never** Hello Robot.
+- **Do not** copy Hello Robot headers from adjacent files when adding a new test/module (common slip).
+- Leave existing Hello Robot headers on old files unchanged unless asked to relicense.
+- Details: **`.cursor/rules/copyright.mdc`** (alwaysApply).
 
 ## Testing (uv)
 - **Setup**: Use **uv**. Install deps including dev (pytest, pytest-timeout): `uv sync` (default groups include `dev`, `sim`, `hand_tracker`, `dynamem`, `da3`). Minimal install: `uv sync --no-default-groups`.
@@ -25,6 +26,12 @@
 - Default nested YAML: **`configs/emet/default.yaml`**. Override with **`--config`** / **`-C`** or env **`EMET_CONFIG`**. Dot overrides: **`--set mapping.depth_source=auto`**, **`-O agent.eqa=true`**.
 - Legacy flat files (`dynav_config.yaml`, `dynav_innate_mars.yaml`) still load; `dynav_innate_mars.yaml` is a thin **`extends:`** stub — innate_mars tuning lives under **`robots.innate_mars`** in the default config. See **`docs/emet_config.md`** and **`docs/AGENT_RUN.md`**.
 - **`get_parameters("dynav_innate_mars.yaml")`** must resolve robot overlay (e.g. `depth_source=auto`, `graph_object_fusion.bounds_3d_iou_merge_min=0.40`). Smoke: `uv run emet test src/test/config/`.
+
+## Agent modes (CHAT vs EQA_EPISODE)
+- Shared skill library (`emet.agent.skills`); **two** orchestrators — do **not** conflate Discord chat with Habitat agentic EQA.
+- **CHAT** = `emet run agent` (Discord / terminal): `describe_scene`, `explore`, emotes, … — user turns. **`--eqa`** only loads the caption VLM; it is **not** the episode loop.
+- **EQA_EPISODE** = Habitat / dynagraph when `eqa.agentic_verify`: `navigate_to_obs`, `verify_siglip`, `submit_answer` / `finish`. Keep EQA tool **names** stable (traces).
+- Details + pack membership: **`.cursor/rules/agent-modes.mdc`**, `docs/AGENT_RUN.md` (Skill library vs orchestrator modes). Tests: `uv run emet test src/test/agent/test_skill_packs.py`.
 
 ## GPU / eval workflow (agent behavior)
 - **One GPU-heavy job at a time** on the workstation GPU (often shared with Xorg/gnome-shell). Before Habitat HM-EQA, SQA3D real sweeps, Robocasa explore, or dynagraph with VLM: run **`uv run emet eval status`**, then **`uv run emet eval kill-stale`**, then **`NEED_MIB=12000 uv run emet eval wait`** (or **`emet eval check`** for a one-shot gate). Bash: `./scripts/gpu_preflight.sh` still works (delegates to `emet eval`). Prefer **`emet eval`** over raw `pkill` / ad-hoc process kills.
@@ -74,7 +81,9 @@
   4. **Env vars:** new `EMET_*` toggles in changed Python must be listed in `docs/environment_variables.md` or a topic env doc (e.g. `docs/molmospaces_environment_variables.md`).
   5. **Defaults alignment:** core `emet` CLI, `packages/emet_molmospaces/emet_molmospaces/runner.py`, and these rules must agree (MolmoSpaces default robot: **stretch**).
   6. **Tests:** add/update CLI help tests when adding subcommands.
-  7. Trim "AI slop"—unnecessary try/except, vague comments, over-defensive checks. Prefer clear failures and declared deps over silent fallbacks.
+  7. **Agent modes:** if changing skill packs / agentic EQA tools, keep CHAT vs EQA_EPISODE disjoint; run `src/test/agent/test_skill_packs.py`; see `.cursor/rules/agent-modes.mdc`.
+  8. **Copyright:** new files must be Chris Paxton — never Hello Robot (`.cursor/rules/copyright.mdc`).
+  9. Trim "AI slop"—unnecessary try/except, vague comments, over-defensive checks. Prefer clear failures and declared deps over silent fallbacks.
 
 ## Simulation
 - Default `./install.sh` profile is **full** (sim on when `third_party/robocasa` exists; use `--no-sim` or `--profile=minimal` for lightweight/CI). MolmoSpaces wrapper venv is still created when `packages/emet_molmospaces` exists unless `--no-molmospaces`.

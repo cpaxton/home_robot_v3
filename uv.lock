@@ -1090,6 +1090,7 @@ dependencies = [
     { name = "draccus" },
     { name = "einops" },
     { name = "fla-core" },
+    { name = "flash-attn" },
     { name = "flash-linear-attention" },
     { name = "gitpython" },
     { name = "google-genai" },
@@ -1215,6 +1216,7 @@ requires-dist = [
     { name = "draccus", specifier = ">=0.11.0" },
     { name = "einops" },
     { name = "fla-core", specifier = ">=0.5.0" },
+    { name = "flash-attn", specifier = ">=2.7.0" },
     { name = "flash-linear-attention", specifier = ">=0.5.0" },
     { name = "gitpython" },
     { name = "google-genai" },
@@ -1445,6 +1447,16 @@ sdist = { url = "https://files.pythonhosted.org/packages/03/14/2aabd37839b9f3c6a
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f4/03/96e6820d176256353670b41ca56dabbbebe129674b4f4ad7b54a152b7b36/fla_core-0.5.0-py3-none-any.whl", hash = "sha256:5c826ff32daf6b629658e3e4f6125d87cf8c32eea937e3be9ba85f51951d809a", size = 595276, upload-time = "2026-04-21T20:25:37.698Z" },
 ]
+
+[[package]]
+name = "flash-attn"
+version = "2.8.3.post1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "einops" },
+    { name = "torch" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/01/7a/92a46e7cd6bbb4d7b2855a457c3b855df54a97af5656d98fc92e58e61065/flash_attn-2.8.3.post1.tar.gz", hash = "sha256:55d5103ed846da8b56e0797acf4bde07dee4b1c7e8907fcfc6699c203030c348", size = 8451657, upload-time = "2026-06-11T04:35:21.318Z" }
 
 [[package]]
 name = "flash-linear-attention"

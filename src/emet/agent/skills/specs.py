@@ -178,6 +178,8 @@ CHAT_EXCLUSIVE_TOOL_NAMES: frozenset[str] = frozenset(
         "list_scene_relations",
         "quit",
         "explore",
+        "aim_arm_at",
+        "face_toward",
     }
 )
 

@@ -43,24 +43,53 @@ Respond with ONLY a JSON object (no other text):
 Use "tool_calls": [] when no action is needed.
 
 Info tools return text (and sometimes photos) for a follow-up reply. When calling any of
-query_*, describe_scene, explore, scan_environment, rotate_base, move_forward,
+query_*, describe_scene, explore, scan_environment, rotate_base, face_toward, move_forward,
 navigation_diagnostics, send_map_snapshot, list_scene_relations, send_image, send_object_image,
 set "message" to "" on that first turn. After [Tool results], reply with tool_calls [] and a
 message based only on those results (do not invent objects from this prompt).
 
 Action-only tools do not feed a tool-results summary (wave, nod_head, shake_head, avert_gaze,
-take_picture, take_ee_picture, go_home, hand_over, quit). Prefer "message": "" — the turn ends
-after the action. Use send_image after take_picture if the user should receive a photo.
+go_home, hand_over, quit). Prefer "message": "" — the turn ends after the action.
+For photos the user should *see*, use send_image or describe_scene (not take_picture /
+take_ee_picture alone — those only capture locally and produce no Discord reply).
+Never use take_ee_picture for "closer look" / "inspect X": aiming the wrist at an object
+needs arm IK / pointing (stub: aim_arm_at — see TODO.md). Prefer moving/reorienting the
+*base* for a new view, then describe_scene (head camera).
 
 Routing hints:
 - "what can you see" / "tell me what you see" / "describe the scene" (no motion asked)
   → describe_scene only: caption the image in front of you; ground with scene graph/map if useful.
   Do NOT scan, explore, or turn unless the user asked to look around / move.
+- "look at X" / "face X" / "turn toward X" / "go toward X" / "go look at X"
+  → Prefer face_toward with object_label=X, THEN describe_scene (do not blind-rotate ±45°).
+    If drive is available and they clearly want distance ("go to", "drive closer"): move_forward
+    (map-clipped) and/or find_objects — but face_toward first when only yaw is needed.
+    If face_toward says the object is unknown: describe_scene from here or ask which object.
+- "are you sure that's X" / "is that really a TV" / "take a closer look" / "look closer" /
+  "confirm" / "double-check" / "inspect the cables"
+  → You must CHANGE the viewpoint before describing. describe_scene alone from the same pose
+    is NOT a closer look (EQA would navigate/look_around then verify).
+  Preferred tool sequence (message "" on the tool turn — do not claim "closer look" until after results):
+    1) If a named object is given and known: face_toward then describe_scene (or send_object_image).
+    2) If XY drive is available: move_forward with meters=0.1–0.3 (map-clipped) and/or
+       face_toward / rotate_base toward the object, THEN describe_scene.
+    3) If only rotate-in-place is allowed (EMET_BASE_ROTATE_ONLY): face_toward when possible,
+       else rotate_base (±30–90°) and/or scan_environment, THEN describe_scene — and say you
+       reoriented in place (could not drive closer while tethered). Do NOT default to +45° left
+       unless that direction is meaningful.
+    4) Optional: send_object_image if the object is already in the scene graph.
+  Do NOT call take_ee_picture / take_picture / aim_arm_at as a substitute for motion.
 - "turn around" → rotate_base with degrees=180
+- "rotate back" / "turn back" / "undo that turn" → rotate_base with the NEGATIVE of the last
+  yaw you commanded (after +45 use -45; after -90 use +90). Do NOT use 180 for "back".
+  If you do not remember the last angle, ask or use a small opposite nudge (±30–45).
 - "turn right" / "turn to the right" → rotate_base with degrees=-90
 - "turn left" / "turn to the left" → rotate_base with degrees=90
-- "move forward a bit" / "go forward a little" → move_forward with meters=0.5
-  (controller shortens if obstacles; use ~1.0 for "a meter")
+- Bare "move forward" / "can you move forward" / "go forward" with NO distance given
+  → do NOT call move_forward; tool_calls [] and ask how far (suggest 0.1 m, 0.5 m, or 1 m).
+- "move forward a bit" / "go forward a little" / "nudge forward" → move_forward with meters=0.1
+  (always map-clipped; refuses if the map is empty — scan_environment first if needed;
+  use ~0.5 for "half a meter", ~1.0 for "a meter")
 - "look around" / "scan the room" → scan_environment (full in-place 360° map update)
   Optionally follow with describe_scene after the scan.
 - "explore" / "go explore" / "map the room" → explore (navigate to build the map)
@@ -77,10 +106,20 @@ User: "What can you see?"
 {"tool_calls": [{"name": "describe_scene", "arguments": {}}], "message": ""}
 User: "Turn around"
 {"tool_calls": [{"name": "rotate_base", "arguments": {"degrees": 180}}], "message": ""}
+User: "Rotate back"   (previous turn was +45°)
+{"tool_calls": [{"name": "rotate_base", "arguments": {"degrees": -45}}], "message": ""}
 User: "Turn to the right"
 {"tool_calls": [{"name": "rotate_base", "arguments": {"degrees": -90}}], "message": ""}
 User: "Move forward a bit"
-{"tool_calls": [{"name": "move_forward", "arguments": {"meters": 0.5}}], "message": ""}
+{"tool_calls": [{"name": "move_forward", "arguments": {"meters": 0.1}}], "message": ""}
+User: "Can you move forward?"
+{"tool_calls": [], "message": "Sure — how far? (e.g. 0.1 m, 0.5 m, or 1 m)"}
+User: "Look at the aquarium"
+{"tool_calls": [{"name": "face_toward", "arguments": {"object_label": "aquarium"}}, {"name": "describe_scene", "arguments": {}}], "message": ""}
+User: "Are you sure that's a TV?"
+{"tool_calls": [{"name": "face_toward", "arguments": {"object_label": "TV"}}, {"name": "describe_scene", "arguments": {}}], "message": ""}
+User: "Take a closer look at the cables"
+{"tool_calls": [{"name": "face_toward", "arguments": {"object_label": "cables"}}, {"name": "describe_scene", "arguments": {}}], "message": ""}
 User: "Look around"
 {"tool_calls": [{"name": "scan_environment", "arguments": {}}, {"name": "describe_scene", "arguments": {}}], "message": ""}
 User: "Wave"
@@ -98,11 +137,29 @@ def build_agent_system_prompt(
 
     If tools is None, derives from get_tools(context or {}).
     """
+    from emet.agent.env_flags import env_base_rotate_only
+
     if tools is None:
         tools = get_tools(context or {})
     identity = _IDENTITY_TEMPLATE.format(name=name)
     tools_block = get_tool_descriptions_for_prompt(tools)
-    return f"{identity}\n\n{tools_block}\n\n{_FORMAT_BLOCK}"
+    prompt = f"{identity}\n\n{tools_block}\n\n{_FORMAT_BLOCK}"
+    if env_base_rotate_only():
+        prompt += (
+            "\n\n# Base motion safety (EMET_BASE_ROTATE_ONLY)\n"
+            "XY drive is DISABLED (robot tethered / plugged in). "
+            "Do NOT call explore, move_forward, find_objects, go_home, pick_place, or hand_over. "
+            "If the user asks to drive or move forward, reply with tool_calls [] and explain you can "
+            "only rotate in place, scan, or describe until drive is re-enabled. "
+            "Allowed motion: rotate_base, face_toward, scan_environment.\n"
+            "For 'look at X' / 'go toward X' / 'are you sure' / 'closer look': use face_toward "
+            "when the object is named, THEN describe_scene. Do NOT default to rotate_base +45° left. "
+            "Never pretend you drove closer. "
+            "Example: "
+            '{"tool_calls": [{"name": "face_toward", "arguments": {"object_label": "aquarium"}}, '
+            '{"name": "describe_scene", "arguments": {}}], "message": ""}'
+        )
+    return prompt
 
 
 def _fence_inner_json(text: str) -> str | None:

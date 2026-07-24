@@ -123,12 +123,13 @@ Do **not** put the 8B VL on every chat turn as the router — that made “what 
 |-------|---------|----------------|
 | Describe | `describe_scene` | Caption + optional graph grounding + **live** head photo (no motion) |
 | Turn | `rotate_base` | Explicit degrees (180 / ±90 / …) |
-| Nudge | `move_forward` | Explicit meters (~0.5 for “a bit”); clipped by obstacles |
+| Nudge | `move_forward` | Explicit meters (~0.1 for “a bit”); **map-clipped** (refuses if map empty); bare “move forward” → ask how far |
 | Explore | `explore` | Map cells increase; `announce_action` status |
 | Find | `find_objects` | Nav toward known label or clear failure |
 | Find after world change (Robocasa) | `find_objects` + invalidate | After ZMQ relocate, memory must not keep a confident waypoint at the **old** pose — use `scripts/smoke_dynagraph_agent_world_change_find.py` |
 | Scan | `scan_environment` | Full in-place rotate + map update |
 | Share view | `send_image` / describe attach | Live RGB OK |
+| Aim wrist (stub) | `aim_arm_at` | Not implemented (IK) — see [TODO.md](../TODO.md); use describe_scene |
 | Share map | `send_map_snapshot` | Top-down Discord/Rerun |
 | Memory QA | `query_memory` | Graph/voxel answer when mapped |
 | EQA | `--eqa` (+ optional `--llm qwen3-vl-eqa --share-memory-vllm`) | Caption + query path without a second full VL fight |

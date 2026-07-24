@@ -52,6 +52,8 @@ HEAD_BODY_FRAME = "head"
 
 # Nav2 (maurice_nav) — standard Nav2 action; goal topic fallback per innate-os / PAL docs
 NAVIGATE_TO_POSE_ACTION = "navigate_to_pose"
+# In-place yaw (no map TF required). Prefer for relative rotate_base when localization is down.
+SPIN_ACTION = "spin"
 GOAL_POSE_TOPIC = "/goal_pose"
 
 # Expected on a running Mars stack (audit script checks these)

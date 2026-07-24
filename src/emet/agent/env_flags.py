@@ -50,3 +50,15 @@ def env_vram_debug() -> bool:
     """When set, print nvidia-smi + torch CUDA memory snapshots at major load milestones (see ``emet.utils.vram_debug``)."""
     v = os.environ.get("EMET_VRAM_DEBUG", "").strip().lower()
     return v in _TRUE
+
+
+def env_base_rotate_only() -> bool:
+    """Hardware safety: allow in-place yaw only (no XY drive).
+
+    Set ``EMET_BASE_ROTATE_ONLY=1`` when the robot is plugged in / tethered so
+    ``explore`` / ``move_forward`` / absolute nav goals cannot translate the base.
+    Relative ``[0, 0, yaw]`` moves (``rotate_base``, ``rotate_in_place``,
+    ``scan_environment``) still work.
+    """
+    v = os.environ.get("EMET_BASE_ROTATE_ONLY", "").strip().lower()
+    return v in _TRUE
