@@ -22,6 +22,36 @@ Use when physical Mars is on the network. Requires [innate-os](https://github.co
 | 8. Short map | `uv run emet run dynamem --robot innate_mars --robot-ip <IP> --dynav-config dynav_innate_mars.yaml -S` | `world/semantic_memory/pointcloud` grows |
 | 9. Nav probe | Send small `xyt` via dynagraph explore or client; watch base move | `at_goal` true after goal |
 | 10. Dynagraph export | `uv run emet run dynagraph --robot innate_mars --robot-ip <IP> --dynav-config dynav_innate_mars.yaml --export runs/mars_hw_001` | `floor_metrics.json` + graph export |
+| 11. Discord chat + explore | See [Discord chat + explore](#discord-chat--explore-herman) below | Bot replies; base moves on “explore …” |
+
+## Discord chat + explore (Herman)
+
+Chat with the robot over **Discord** (text + photos/maps) while it explores. Voice / robot TTS are not required.
+
+**Prereqs:** steps 1–2 (bridge up), ideally 3–4 (cameras), and Nav2 for base motion (step 9). Prefer **`--onboard-da3`** on the bridge so the workstation GPU is free for the chat LLM + caption VLM.
+
+```bash
+# Discord extra once: uv sync  (discord group) or see docs/discord_bot.md
+export DISCORD_TOKEN=...
+
+uv run emet run agent \
+  --connection herman \
+  --config configs/agent_innate_mars.yaml \
+  --rerun \
+  --name Herman
+```
+
+Preset enables Discord + EQA captions (`agent.eqa: true`). Optional: `--no-rerun` if you only care about Discord.
+
+| Prompt (in Discord) | Expected |
+|---------------------|----------|
+| “what do you see?” / “describe the scene” | Caption + live head photo (`describe_scene`) |
+| “explore the house” / “look around” | Nav + mapping; Discord may show `*Exploring…*` progress |
+| “where is the couch?” | Memory / graph answer after some mapping |
+
+**Turn-blocking explore:** tool calls (including `explore`) run to completion before the next Discord/terminal message is handled. Messages typed mid-explore **queue** and run when explore finishes — not a live interrupt. Progress italics can still post during long tools.
+
+**Not this path:** Habitat/eval **agentic GraphEQA** (`eqa.agentic_verify` / PR #77) is for scored EQA episodes, not Discord house chat. Canonical agent docs: [AGENT_RUN.md](../AGENT_RUN.md). Bot setup: [discord_bot.md](../discord_bot.md).
 
 ## Workstation shortcut
 

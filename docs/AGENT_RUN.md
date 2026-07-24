@@ -60,7 +60,7 @@ flowchart LR
 | Preset | Robot | Notes |
 |--------|-------|-------|
 | `configs/emet/default.yaml` | discover / stretch | Unified default; **`agent.memory_backend: dynagraph`** |
-| `configs/agent_innate_mars.yaml` | innate_mars | DA3 depth overlay |
+| `configs/agent_innate_mars.yaml` | innate_mars | Discord + EQA captions; DA3 depth overlay; use `--connection herman` |
 | `configs/agent_stretch_discord.yaml` | stretch | Discord + instance-graph; add **`--eqa`** for Qwen3-VL captions (recommended for intelligent “what can you see?”) |
 | `configs/agent_rby1_discord.yaml` | rby1 | Same tuning + `sim_config` for Molmo iTHOR |
 
@@ -163,8 +163,15 @@ uv run emet run agent --llm qwen35-9B --offline
 export DISCORD_TOKEN=...
 uv run emet run agent --config configs/agent_stretch_discord.yaml --eqa --rerun
 
-# Innate Mars
-uv run emet run agent --config configs/agent_innate_mars.yaml
+# Innate Mars (Herman) — Discord chat + explore (bridge must be up)
+export DISCORD_TOKEN=...
+uv run emet run agent \
+  --connection herman \
+  --config configs/agent_innate_mars.yaml \
+  --rerun \
+  --name Herman
+# Hardware checklist: docs/robots/innate_mars_hardware.md#discord-chat--explore-herman
+# Note: explore is turn-blocking — Discord messages queue until the tool finishes.
 
 # Load saved memory
 uv run emet run agent --input-path logs/memory_xxx --no-discord

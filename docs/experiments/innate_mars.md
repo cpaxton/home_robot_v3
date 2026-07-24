@@ -72,6 +72,7 @@ After `git pull origin main` and `uv sync`, use the **same Rerun tools** as MuJo
 | GraphEQA baseline | `emet stream --backend graph_eqa` | `emet stream --connection herman --backend graph_eqa` |
 | Full session | `emet run dynamem --robot innate_mars` | `emet run dynamem --robot innate_mars --robot-ip herman --dynav-config dynav_innate_mars.yaml` |
 | Graph export | `emet run dynagraph --export /tmp/mars` | same with `--robot-ip herman --dynav-config dynav_innate_mars.yaml` |
+| Discord chat + explore | (sim: `--robot innate_mars --start-sim`) | `emet run agent --connection herman --config configs/agent_innate_mars.yaml --name Herman` (needs `DISCORD_TOKEN`; see [hardware Discord section](../robots/innate_mars_hardware.md#discord-chat--explore-herman)) |
 
 **Depth:** Sim ZMQ carries sensor depth → default `dynav_config.yaml`. Hardware has no ZMQ depth → `stream`/`capture` auto-select `dynav_innate_mars.yaml` (DA3 stereo) when the host is not localhost. Override with `--dynav-config` anytime.
 
