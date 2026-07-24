@@ -69,6 +69,9 @@ _ACTION_STATUS_LABELS: dict[str, str] = {
     "explore": "Exploring",
     "scan_environment": "Looking around",
     "rotate_base": "Turning",
+    "face_toward": "Turning toward",
+    "describe_scene": "Looking",
+    "send_image": "Looking",
     "move_forward": "Moving forward",
     "find_objects": "Searching",
     "go_home": "Going home",
@@ -80,14 +83,27 @@ _ACTION_STATUS_LABELS: dict[str, str] = {
 def format_action_running_status(tool_names: list[str], detail: str | None = None) -> str | None:
     """Italic action status for Discord/TTY (``*Exploring…*``, optional detail).
 
+    When several action tools are queued (e.g. rotate then describe), joins labels so
+    Discord does not only show the first (``*Turning, then looking…*``).
+
     Returns None when none of *tool_names* are long-running action tools (caller may
     fall back to :func:`format_tool_running_status` for the terminal only).
     """
     names = [n for n in tool_names if n]
-    label = next((_ACTION_STATUS_LABELS[n] for n in names if n in _ACTION_STATUS_LABELS), None)
-    if label is None:
+    labels: list[str] = []
+    for n in names:
+        lab = _ACTION_STATUS_LABELS.get(n)
+        if lab and lab not in labels:
+            labels.append(lab)
+    if not labels:
         return None
-    base = f"*{label}…*"
+    if len(labels) == 1:
+        phrase = labels[0]
+    elif len(labels) == 2:
+        phrase = f"{labels[0]}, then {labels[1].lower()}"
+    else:
+        phrase = ", then ".join([labels[0]] + [x.lower() for x in labels[1:]])
+    base = f"*{phrase}…*"
     if detail and str(detail).strip():
         return f"{base} {str(detail).strip()}"
     return base
@@ -95,3 +111,11 @@ def format_action_running_status(tool_names: list[str], detail: str | None = Non
 
 def is_action_status_tool(name: str) -> bool:
     return str(name or "") in _ACTION_STATUS_LABELS
+
+
+def format_single_action_status(tool_name: str) -> str | None:
+    """Per-tool Discord status while tools run sequentially (``*Looking…*``)."""
+    lab = _ACTION_STATUS_LABELS.get(str(tool_name or ""))
+    if not lab:
+        return None
+    return f"*{lab}…*"

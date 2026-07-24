@@ -143,19 +143,29 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 
 ## NVIDIA driver hang / Cursor agent crash during stacked GPU evals
 
-**Status:** Mitigated (2026-06) · **Seen:** 2026-06-28 · **Hardware:** RTX 4090 workstation (GPU drives display + CUDA)
+**Status:** Mitigated (2026-06) · **Seen:** 2026-06-28, 2026-07-24 · **Hardware:** RTX 4090 workstation (GPU drives display + CUDA)
 
-### Symptoms
+There are **two distinct segfault modes**. Do not conflate them.
 
-- Chaining Robocasa dynagraph explore → full pytest (MuJoCo-native tests) → Habitat HM-EQA with VLM in one session.
-- Full-system **live lock**: mouse moves, GUI and SSH unresponsive; journal stops mid-line.
-- Separately: **Cursor agent** (`node` MainThread) or `emet` can log `trap invalid opcode` in kernel after Habitat-Sim / VLM teardown — agent session dies but eval subprocess may have finished (check log files and JSON artifacts).
+### Mode A — Habitat episode `libcuda` SIGSEGV (`exit=139`)
+
+- **What dies:** `emet-habitat run-episode` / Habitat venv Python. Orchestrator logs `FAIL … exit=139` / `dumped core`.
+- **Kernel:** `python[…]: segfault … in libcuda.so.*` during Qwen3-VL **vision** generate while Habitat-Sim **EGL** shares the GPU.
+- **Hot scenes (2026-07-24):** `00167-yogvKWUrdnw` (q104/q105); flaky on `00094-WT4QWwXrMzs` (q68). Empty `agentic_qN.jsonl` is a crash, not a scored miss.
+- **Stack:** Habitat torch `+cu130` + `EMET_ALLOW_SDPA_ATTN=1` + int4 bitsandbytes + windowless EGL on a display GPU. Partial fence: `torch.cuda.synchronize()` before multimodal generate; failures remain flaky.
+- Details / H2H abort flags: keep Habitat checkout docs in sync ([agentic_scale](experiments/agentic_scale.md) on the Habitat results branch).
+
+### Mode B — Cursor agent / `emet` null-IP SIGSEGV
+
+- Chaining Robocasa dynagraph explore → full pytest (MuJoCo-native tests) → Habitat HM-EQA with VLM in one session can **live-lock** the machine (mouse moves; GUI/SSH dead).
+- Separately: **Cursor agent** dies when a turn runs or probes Habitat / tears down GPU context. Kernel: `emet[…]: segfault at 0` (null IP) or `trap invalid opcode` — agent session dies even if a detached **`emet jobs`** child finished (check `~/runs/emet/` + registry before re-launch).
+- Empty `nvidia-smi` does **not** prove EGL/CUDA is healthy.
 
 ### Mitigation
 
 - **One GPU-heavy job at a time** — use **`uv run emet eval kill-stale` / `wait` / `check`** ([`emet eval`](cli.md#emet-eval-gpu-preflight--stale-cleanup); bash [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates).
 - Cross-track smoke: [`run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh) defaults **`RUN_DEEP_EVAL=0`**; run [`run_overnight_eval_smoke.sh`](../scripts/run_overnight_eval_smoke.sh) on a **separate night**.
 - Safe no-sim pytest: source `gpu_preflight.sh` and pass **`emet_pytest_no_sim_ignore_args`** (excludes unmarked MuJoCo paths under `src/test/simulation/`).
-- Long evals: **`nohup … &`** or dedicated terminal — not blocking Cursor agent inline runs.
+- Long evals: **`uv run emet jobs run --name … -- CMD`**, **`nohup … &`**, or a dedicated terminal — **not** blocking Cursor agent inline runs.
 
 Docs: [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [cross_track_smoke.md](experiments/cross_track_smoke.md).

@@ -19,6 +19,12 @@ loop (`eqa.agentic_verify` / `EMET_EQA_AGENTIC_VERIFY=1`). Improve smokes enable
 and write `agentic_trace.jsonl` (SigLIP embeds + sim GT) under each export dir when
 `EMET_EQA_TRACE=1`.
 
+**Modes (same skills library, different packs):** Discord / terminal house chat is
+``AgentMode.CHAT`` (`emet run agent`). Scored verify/explore is ``AgentMode.EQA_EPISODE``
+(`build_agentic_eqa_tools` / `AgenticEQAExecutor`). Shared skill membership lives in
+[`src/emet/agent/skills/`](../src/emet/agent/skills/). Habitat MCQ scoring never routes through
+Discord chat turns; use `run_eqa` / `emet-habitat` / `--eqa-eval`. See [AGENT_RUN.md](AGENT_RUN.md#skill-library-vs-orchestrator-modes).
+
 Tool picks come from the shared Qwen3-VL via text-only JSON tool-calling turns (same
 `{"tool_calls": ...}` contract as the Discord agent; the fixed system prompt gets prefix
 KV-cache hits). `eqa.agentic_vlm_router: false` or `EMET_EQA_AGENTIC_ROUTER=0` disables the
