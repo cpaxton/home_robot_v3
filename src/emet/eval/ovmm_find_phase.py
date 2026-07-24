@@ -857,6 +857,7 @@ def run_episode_find_phase(
         read_sim_object_placements,
     )
     from emet.simulation.mujoco_serve_argv import prepare_mujoco_server_argv
+    from emet.utils.process_tree import popen_session, terminate_process_tree
 
     if run_cfg.seed is not None:
         set_find_phase_run_seed(int(run_cfg.seed))
@@ -902,7 +903,7 @@ def run_episode_find_phase(
     mapping_wall_s = 0.0
     query_wall_s = 0.0
     try:
-        server = subprocess.Popen(
+        server = popen_session(
             server_cmd,
             env=env,
             stdout=subprocess.DEVNULL,
@@ -1154,11 +1155,7 @@ def run_episode_find_phase(
             except Exception:
                 pass
         if server is not None:
-            server.terminate()
-            try:
-                server.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                server.kill()
+            terminate_process_tree(server, grace_s=10.0)
         from emet.utils.port_utils import get_ports, kill_processes_on_port
 
         for p in get_ports(port_offset):

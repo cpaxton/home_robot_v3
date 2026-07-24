@@ -72,7 +72,7 @@ uv run emet run agent --robot stretch --start-sim --no-discord \
   -c "describe the scene" -c "explore" -c "show me the map"
 ```
 
-Benchmark tracks that exercise agent-style exploration (frontier / rotate) already default to **dynagraph** profiles — see one-liners below and [simulation_testing_plan.md](simulation_testing_plan.md). Prefer `./scripts/gpu_preflight.sh` before GPU VLM evals; do not stack overnight Habitat with Robocasa dynagraph in one session.
+Benchmark tracks that exercise agent-style exploration (frontier / rotate) already default to **dynagraph** profiles — see one-liners below and [simulation_testing_plan.md](simulation_testing_plan.md). Prefer `uv run emet eval kill-stale` / `wait` before GPU VLM evals; do not stack overnight Habitat with Robocasa dynagraph in one session.
 
 **Harness blocks** (`harness:` in the same YAML) set per-benchmark controller flags (`memory_summary`, `mcq_debias`, `explore_when_uncovered`, `use_instance_graph`, …) via `apply_dynagraph_harness()`. Tuned HM-EQA defaults (`habitat_eqa` / dynagraph): `memory_summary=true`, `mcq_debias=false`, `explore_when_uncovered=conservative` (prefer Habitat/voxel frontiers **while uncovered**; not a weaker picker than `on`).
 
@@ -243,7 +243,7 @@ uv run python scripts/download_scannet_data.py --accept-tos --scene scene0380_00
 uv run emet sqa3d run-real-sweep --no-download --replay-mode sens
 
 # Or GPU preflight wrappers:
-./scripts/gpu_preflight.sh --kill-stale
+uv run emet eval kill-stale
 ./scripts/run_sqa3d_gpu_sweep.sh --split val --question-start 0 --question-end 30 --replay-mode sens
 
 # Score + figures
@@ -449,7 +449,7 @@ Run smokes on the integration branch before copying numbers into `paper/sections
 
 Before a headline HM-EQA sweep:
 
-1. `./scripts/gpu_preflight.sh --kill-stale` then `NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait`
+1. `uv run emet eval kill-stale` then `NEED_MIB=12000 uv run emet eval wait`
 2. Tag JSONL output with stack version (e.g. `_postfix_nav202607`) — see [habitat_eqa_results.md](experiments/habitat_eqa_results.md)
 3. `uv run python scripts/download_habitat_eqa_data.py --report-hmeqa-semantics` for semantics coverage audit
 4. Movement smoke: `.venv-habitat/bin/emet-habitat run-episode --mock-llm --mock-llm-explore --question-id 3 --max-planning-steps 5`

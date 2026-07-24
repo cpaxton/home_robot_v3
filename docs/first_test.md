@@ -156,7 +156,7 @@ Then try: `is there a lamp next to the bed?` / `where is the microwave?`
 | **Cap generation** | Default `--max-tokens 256`. Do not raise this for interactive tool use. |
 | **First LLM call still costs** | ~2k-token tool system prompt; later turns reuse prefix KV cache. |
 | **Disable Discord noise** | `--no-discord` (or unset `DISCORD_TOKEN`) |
-| **GPU busy** | `./scripts/gpu_preflight.sh --kill-stale` then `NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait` |
+| **GPU busy** | `uv run emet eval kill-stale` then `NEED_MIB=12000 uv run emet eval wait` |
 | **Wrong `emet` binary** | Always `uv run emet …` from this repo |
 | **Restart after pulling speed fixes** | Kill the old `run_agent` process so new defaults apply |
 

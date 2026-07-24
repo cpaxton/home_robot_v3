@@ -32,7 +32,8 @@ uv run emet run graph-eqa-habitat \
   --resume \
   --output ~/.cache/habitat_eqa/results/graph_eqa_qwen3_vl8b_paper.jsonl
 
-# Or use helpers (gpu_preflight + resume + SUMMARY):
+# Preflight: uv run emet eval kill-stale && NEED_MIB=12000 uv run emet eval wait
+# Or use helpers (resume + SUMMARY; they source gpu_preflight.sh which delegates to emet eval):
 #   ./scripts/run_hmeqa_memory_confirm_gate.sh   # GE-only gate → optional annotated37 → paper113
 #   ./scripts/run_hmeqa_annotated37_h2h.sh       # ~37 semantics-annotated ids, both methods
 #   ./scripts/run_hmeqa_paper113_h2h.sh          # full 113 head-to-head

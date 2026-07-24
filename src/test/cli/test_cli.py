@@ -34,7 +34,62 @@ def test_cli_help():
     assert "install" in result.stdout
     assert "show" in result.stdout
     assert "test" in result.stdout
+    assert "eval" in result.stdout
+    assert "jobs" in result.stdout
     assert "debug-da3-depth" in result.stdout
+
+
+def test_eval_group_help():
+    """emet eval --help lists GPU preflight subcommands."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "eval", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "status" in result.stdout
+    assert "check" in result.stdout
+    assert "wait" in result.stdout
+    assert "kill-stale" in result.stdout
+
+
+def test_jobs_group_help():
+    """emet jobs --help lists management subcommands."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "jobs", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "list" in result.stdout
+    assert "cancel" in result.stdout
+    assert "register" in result.stdout
+    assert "run" in result.stdout
+
+
+def test_jobs_list_runs(tmp_path):
+    import os
+
+    env = os.environ.copy()
+    env["EMET_JOBS_DIR"] = str(tmp_path / "jobs")
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "jobs", "list", "--no-scan"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode == 0
+
+
+def test_eval_status_runs():
+    """emet eval status is read-only and exits 0 even without a GPU."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "eval", "status"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "GPU:" in result.stdout
 
 
 def test_cli_version():

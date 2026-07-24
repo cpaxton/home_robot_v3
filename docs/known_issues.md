@@ -102,6 +102,45 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 
 ---
 
+## EQA hangs after “Qwen3-VL ready for inference”
+
+**Status:** Mitigated (2026-07-22) · **Seen:** overnight improve/paper-cell smokes (`STALE_KILL` ~30 min after VLM load; no metrics)
+
+### Cause (two layers)
+1. **SigLIP + Qwen VRAM pressure:** Dynagraph kept SigLIP on GPU for CONFIRMED_MEMORY while loading Qwen3-VL-8B int4. Weight load ~125 s; first text `generate` never finished → `STALE_KILL`.
+2. **MuJoCo EGL + vision prefill:** After SigLIP release, text generate completed (~100 s) but vision EQA (`prompt≈4500`, `max_new=512`) ran with no log growth for ~30 min until `STALE_KILL`. Isolated 4-image EQA finishes in ~3.5 s; the full path still called `look_front` / nav posture over ZMQ while the VLM ran on the same GPU.
+3. **Silent SDPA fallback:** when `flash-attn` was missing, CUDA VL loads quietly used PyTorch SDPA. Habitat MCQ still finished (~4–5 min/ep), but Robocasa multi-image `query_answer` (`prompt≈4500`, 4 RGB) decoded at ~0.02 tok/s (~45 s/token) and looked “stuck” at low GPU util.
+
+### Mitigation
+- [`prepare_dynagraph_vram_for_eqa`](../src/emet/eval/dynagraph_vram.py) warms SigLIP phrase caches then **always releases** SigLIP before the EQA VLM.
+- [`release_shared_mask_siglip_encoder`](../src/emet/perception/encoders/siglip_encoder.py) moves weights to CPU and empties the CUDA cache.
+- Answer-only EQA skips robot head/posture I/O (`allow_navigation=False` → `skip_perception_prelude`).
+- Before EQA, [`release_zmq_ports`](../src/emet/utils/port_utils.py) kills MuJoCo **LISTEN** sockets on the session ports so EGL is not sharing the GPU with Qwen (must not use plain `lsof -i:PORT`, which also matches the dynagraph client and SIGTERMs it — exit 241).
+- `[vl] generate heartbeat` every 30 s (`EMET_VL_GENERATE_HEARTBEAT_S`) + `[vl] decode started` when prefill ends.
+- `EMET_EQA_ANSWER_MAX_NEW_TOKENS` (default `256`) caps answer-only decode length.
+- Improve smoke raises `EMET_DYNAMIC_EXPLORE_STALE_*` / `EMET_EQA_QUESTION_TIMEOUT_S`.
+- CUDA VL loads **require Flash-Attn 2** by default ([`attn_impl.py`](../src/emet/llms/attn_impl.py)); missing package raises instead of silent SDPA. Escape hatch: `EMET_ALLOW_SDPA_ATTN=1`.
+
+### Repro / check
+- `EMET_AGENT_MODEL_DEBUG=1 timeout 600 uv run python scripts/debug_eqa_vlm_hang.py --with-image --eqa-prompt --n-images 4`
+
+---
+
+## Orphan / zombie eval processes after timeouts
+
+**Status:** Mitigated (2026-07) · **Seen:** dynamic-exploration smoke (EQA hang left 11 GiB `emet run dynagraph` for days; 14-day `uv run emet test` with `<defunct>` child)
+
+### Cause
+- Timeouts / `terminate()` on the direct child only (`uv` or a thin wrapper) leave Python/GPU grandchildren alive.
+- Sim servers started without a process group were not reaped by parent cleanup.
+
+### Mitigation
+- Shared helpers in [`src/emet/utils/process_tree.py`](../src/emet/utils/process_tree.py): `popen_session` + `terminate_process_tree` / `kill_process_tree` (wired into dynamic exploration, sim/Habitat subprocess spawn, OVMM find-phase, sim eval sessions).
+- CLI: **`uv run emet eval kill-stale`** / `check` / `wait` / `status` ([`emet.utils.gpu_preflight`](../src/emet/utils/gpu_preflight.py)); [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates to that CLI.
+- Smoke scripts that are themselves `run_dynagraph_dynamic_*` must **not** call `kill-stale` on themselves (use `emet eval wait` only).
+
+---
+
 ## NVIDIA driver hang / Cursor agent crash during stacked GPU evals
 
 **Status:** Mitigated (2026-06) · **Seen:** 2026-06-28 · **Hardware:** RTX 4090 workstation (GPU drives display + CUDA)
@@ -114,7 +153,7 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 
 ### Mitigation
 
-- **One GPU-heavy job at a time** — use [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) (`--kill-stale`, `--wait`, `--check`).
+- **One GPU-heavy job at a time** — use **`uv run emet eval kill-stale` / `wait` / `check`** ([`emet eval`](cli.md#emet-eval-gpu-preflight--stale-cleanup); bash [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates).
 - Cross-track smoke: [`run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh) defaults **`RUN_DEEP_EVAL=0`**; run [`run_overnight_eval_smoke.sh`](../scripts/run_overnight_eval_smoke.sh) on a **separate night**.
 - Safe no-sim pytest: source `gpu_preflight.sh` and pass **`emet_pytest_no_sim_ignore_args`** (excludes unmarked MuJoCo paths under `src/test/simulation/`).
 - Long evals: **`nohup … &`** or dedicated terminal — not blocking Cursor agent inline runs.

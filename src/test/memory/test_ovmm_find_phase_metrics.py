@@ -323,11 +323,13 @@ def test_create_find_phase_agent_graph_eqa_disables_sensor_perception_by_default
 @patch("emet.eval.ovmm_find_phase.run_mapping_protocol")
 @patch("emet.eval.ovmm_find_phase.create_find_phase_agent")
 @patch("emet.app.robot_cli.create_robot_client_from_cli")
-@patch("subprocess.Popen")
+@patch("emet.utils.process_tree.terminate_process_tree")
+@patch("emet.utils.process_tree.popen_session")
 @patch("emet.config.sim_launch_config.load_sim_launch_config_from_path")
 def test_run_episode_find_phase_includes_timing_fields(
     mock_load_sim,
     mock_popen,
+    _mock_terminate,
     mock_robot_client,
     mock_create_agent,
     mock_mapping,
@@ -341,6 +343,7 @@ def test_run_episode_find_phase_includes_timing_fields(
     mock_load_sim.return_value = SimLaunchDefaultMujoco(robot="stretch", port_offset=0)
     mock_proc = MagicMock()
     mock_proc.poll.return_value = None
+    mock_proc.pid = 424242
     mock_popen.return_value = mock_proc
 
     mock_robot = MagicMock()

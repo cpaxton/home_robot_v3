@@ -142,10 +142,13 @@ webcam_calibration_images/
 *.png
 *.jpg
 *.jpeg
-# Allow images in docs and robot assets (repo content)
+# Allow images in docs, paper figures, and robot assets (repo content)
 !docs/**/*.png
 !docs/**/*.jpg
 !docs/**/*.jpeg
+!paper/figs/**/*.png
+!paper/figs/**/*.jpg
+!paper/figs/**/*.jpeg
 !src/emet/assets/**/*.png
 !src/emet/assets/**/*.jpg
 !src/emet/assets/**/*.jpeg
@@ -155,6 +158,8 @@ policy/
 
 # Data collection folder
 data/
+!paper/data/
+!paper/data/**
 log/
 logs/
 dynamem_log/

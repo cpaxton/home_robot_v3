@@ -33,16 +33,13 @@ def _repo_root() -> Path:
 
 def shutdown_mujoco_server_subprocess() -> None:
     """Terminate the sim subprocess started by :func:`spawn_mujoco_server_subprocess` (idempotent)."""
+    from emet.utils.process_tree import terminate_process_tree
+
     global _SIM_PROC
     p = _SIM_PROC
     if p is None:
         return
-    if p.poll() is None:
-        p.terminate()
-        try:
-            p.wait(timeout=8.0)
-        except subprocess.TimeoutExpired:
-            p.kill()
+    terminate_process_tree(p, grace_s=8.0)
     _SIM_PROC = None
 
 
@@ -130,14 +127,15 @@ def spawn_mujoco_server_subprocess(
 
     argv = prepare_mujoco_server_argv(cfg)
     cmd = [sys.executable, "-m", "emet.simulation.mujoco_server", *argv]
+    from emet.utils.process_tree import popen_session
+
     out_err: int | None = subprocess.DEVNULL if silence_sim_output else None
-    proc = subprocess.Popen(
+    proc = popen_session(
         cmd,
         cwd=str(_repo_root()),
         stdin=subprocess.DEVNULL,
         stdout=out_err,
         stderr=out_err,
-        start_new_session=True,
     )
     _SIM_PROC = proc
     atexit.register(_shutdown_sim_process)

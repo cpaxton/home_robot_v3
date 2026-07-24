@@ -11,13 +11,18 @@ from pathlib import Path
 
 import pytest
 
-from emet.eval.dynamic_exploration_runner import count_object_nodes, run_logged_subprocess
+from emet.eval.dynamic_exploration_runner import (
+    count_object_nodes,
+    count_object_nodes_near_xy,
+    run_logged_subprocess,
+)
 
 
 @dataclass
 class _FakeNode:
     labels: list[str] = field(default_factory=list)
     is_viewpoint: bool = False
+    xyz: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
 
 
 class _FakeMemory:
@@ -59,6 +64,19 @@ def test_count_object_nodes_label_hint_no_match():
 
 def test_count_object_nodes_none_memory():
     assert count_object_nodes(None) == 0
+
+
+def test_count_object_nodes_near_xy():
+    mem = _FakeMemory(
+        [
+            _FakeNode(labels=["mug"], xyz=[0.0, 0.0, 0.9]),
+            _FakeNode(labels=["far"], xyz=[5.0, 5.0, 0.9]),
+            _FakeNode(labels=["vp"], xyz=[0.1, 0.1, 0.9], is_viewpoint=True),
+        ]
+    )
+    assert count_object_nodes_near_xy(mem, [0.0, 0.0], radius_m=0.75) == 1
+    assert count_object_nodes_near_xy(mem, [5.0, 5.0], radius_m=0.75) == 1
+    assert count_object_nodes_near_xy(None, [0.0, 0.0]) == 0
 
 
 def test_run_logged_subprocess_writes_progress(tmp_path: Path):

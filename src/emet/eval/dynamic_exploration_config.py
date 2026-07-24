@@ -313,6 +313,27 @@ def build_explore_run_matrix(
     return runs
 
 
+def _fusion_recall_fields(fusion: dict[str, Any]) -> tuple[Any, Any]:
+    """Prefer fused-graph recall, then raw detections, then legacy top-level keys.
+
+    ``compute_dynagraph_eval`` nests recalls under ``fusion.fused`` / ``fusion.raw``;
+    older callers may still place them on ``fusion`` itself.
+    """
+    fused = fusion.get("fused") if isinstance(fusion.get("fused"), dict) else {}
+    raw = fusion.get("raw") if isinstance(fusion.get("raw"), dict) else {}
+    spatial = fused.get("spatial_recall")
+    if spatial is None:
+        spatial = raw.get("spatial_recall")
+    if spatial is None:
+        spatial = fusion.get("spatial_recall")
+    label = fused.get("label_recall")
+    if label is None:
+        label = raw.get("label_recall")
+    if label is None:
+        label = fusion.get("label_recall")
+    return spatial, label
+
+
 def flatten_eval_metrics(
     metrics: dict[str, Any],
     *,
@@ -323,12 +344,13 @@ def flatten_eval_metrics(
     graph = metrics.get("graph") or {}
     fusion = metrics.get("fusion") or {}
     eqa = metrics.get("eqa") or {}
+    spatial_recall, label_recall = _fusion_recall_fields(fusion if isinstance(fusion, dict) else {})
     health = metrics.get("graph_health") or {}
     row: dict[str, Any] = {
         "explored_fraction": explore.get("explored_fraction"),
         "explored_area_m2": explore.get("explored_area_m2"),
-        "spatial_recall": fusion.get("spatial_recall"),
-        "label_recall": fusion.get("label_recall"),
+        "spatial_recall": spatial_recall,
+        "label_recall": label_recall,
         "node_count": graph.get("node_count"),
         "edge_count": graph.get("edge_count"),
         "eqa_accuracy": eqa.get("accuracy"),

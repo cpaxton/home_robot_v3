@@ -168,6 +168,26 @@ Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representa
 
 **Gate result (2026-07-12, `q17_gate_20260712_000543`):** **2/3** pass (t1 D/41 nodes, t2 D/44, t3 B/62 fail); fingerprint `merge=0.45` / `fallback=0.45` / `profile=unified_eqa` / `explore=conservative` / commit `fd43538` (+ loc-MCQ fixes on branch).
 
+## Classic vs agentic-verify Dynagraph (2026-07-23)
+
+Same Dynagraph memory / Habitat harness (`explore_when_uncovered=off`, no MCQ debias, memory-summary on, Qwen3-VL-8B). Only difference: `EMET_EQA_AGENTIC_VERIFY` (agentic uses tool loop with router off).
+
+Entrypoint: [`scripts/run_hmeqa_agentic_h2h.sh`](../../scripts/run_hmeqa_agentic_h2h.sh). Coverage figure: [`scripts/render_hmeqa_agentic_coverage_figure.py`](../../scripts/render_hmeqa_agentic_coverage_figure.py). Use distinct `--debug-run-tag` / `OUT/bundles/{arm}_qN` snapshots so arms do not overwrite `~/.cache/habitat_eqa/episodes/`.
+
+| Slice | Classic | Agentic | Mean steps (C → A) | Artifacts |
+|-------|---------|---------|--------------------|-----------|
+| Holdout-4 `{15,68,105,17}` | 3/4 (75%) | **4/4 (100%)** | 60.0 → **19.3** | `~/runs/emet/hmeqa_agentic_h2h_20260723_170804` |
+| Holdout-8 `{15,56,65,68,79,88,104,105}` | 5/8 (62.5%) | **8/8 (100%)** | 60.3 → **18.3** | `~/runs/emet/hmeqa_agentic_h2h8_20260723_174307` |
+
+Holdout-8 classic misses recovered by agentic: **Q56** (A→C), **Q65** (C→A), **Q104** (A→D). Paper: §Classic vs agentic verify; figures `paper/figs/hmeqa_agentic_h2h.png`, `paper/figs/hmeqa_agentic_coverage.png`.
+
+```bash
+# Holdout-8 H2H (prefer nohup; one GPU job)
+nohup env EMET_ALLOW_SDPA_ATTN=1 HOLDOUT_IDS=15,56,65,68,79,88,104,105 \
+  ./scripts/run_hmeqa_agentic_h2h.sh \
+  >> ~/runs/emet/hmeqa_agentic_h2h8_nohup.log 2>&1 &
+```
+
 ### Commands
 
 ```bash
@@ -202,7 +222,7 @@ IDS=2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,31,32,33,34,38,39,40,41,43,44,47,4
   ./scripts/run_habitat_iter_subset.sh
 ```
 
-Overnight orchestrators: [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh), [`scripts/run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh), `scripts/run_overnight_eval_smoke.sh`, `scripts/run_overnight_habitat_eval.sh`, `scripts/run_fable5_overnight.sh`, `scripts/run_extensive_habitat_eval.sh`.
+Overnight orchestrators: **`uv run emet eval`** (preflight; [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates), [`scripts/run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh), `scripts/run_overnight_eval_smoke.sh`, `scripts/run_overnight_habitat_eval.sh`, `scripts/run_fable5_overnight.sh`, `scripts/run_extensive_habitat_eval.sh`.
 
 ## Related docs
 

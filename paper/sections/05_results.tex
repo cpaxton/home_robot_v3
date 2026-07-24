@@ -87,8 +87,54 @@ Holdout dynagraph regression traced to harness extras (MCQ debias flipping corre
 Tuned defaults: \texttt{mcq\_debias=false}, \texttt{explore\_when\_uncovered=conservative} (\texttt{scripts/run\_dynagraph\_tuning\_matrix.sh}).
 
 \noindent\textbf{Next experiments.}
-Priority sweeps: (1)~full 113-question dynagraph with Qwen3-VL-8B and the current fix stack; (2)~matched graph\_eqa baseline on the same VLM; (3)~semantics download + ablation; (4)~frontier-policy ablation (fluid vs.\ graph nodes); (5)~optional API-VLM upper bound on a fixed slice to isolate stack vs.\ model tier.
+Priority sweeps: (1)~full 113-question dynagraph with Qwen3-VL-8B and the current fix stack; (2)~matched graph\_eqa baseline on the same VLM; (3)~classic vs.\ agentic verify on holdout-8 / larger slices (Section~\ref{sec:agentic_results}); (4)~semantics download + ablation; (5)~frontier-policy ablation (fluid vs.\ graph nodes); (6)~optional API-VLM upper bound on a fixed slice to isolate stack vs.\ model tier.
 Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
+
+\subsection{Classic vs.\ agentic verify (preliminary)}
+\label{sec:agentic_results}
+
+We compare the classic GraphEQA planning loop to the agentic verify tool loop on the same Dynagraph profile (Qwen3-VL-8B; \texttt{explore\_when\_uncovered=off}; agentic router off; Section~\ref{sec:agentic_h2h}).
+On the anti-overfit holdout-8 ($\{15,56,65,68,79,88,104,105\}$), agentic reaches \textbf{8/8} vs.\ classic \textbf{5/8}, with mean planning steps cut from 60.3 to 18.3 (Table~\ref{tab:agentic_h2h}; Figure~\ref{fig:hmeqa_agentic_h2h}).
+Agentic recovers all three classic misses (Q56, Q65, Q104).
+A earlier holdout-4 gate showed the same pattern (3/4$\rightarrow$4/4; 60$\rightarrow$19 steps).
+
+\begin{table}[t]
+  \centering
+  \caption{Classic vs.\ agentic-verify Dynagraph on HM-EQA (Qwen3-VL-8B; \texttt{explore\_when\_uncovered=off}; agentic router off).}
+  \label{tab:agentic_h2h}
+  \small
+  \begin{tabular}{@{}llccc@{}}
+    \toprule
+    Slice & Controller & Correct / $n$ & Accuracy & Mean planning steps \\
+    \midrule
+    Holdout-4 & Classic planning & 3/4 & 75\% & 60.0 \\
+    Holdout-4 & Agentic verify & \textbf{4/4} & \textbf{100\%} & \textbf{19.3} \\
+    \midrule
+    Holdout-8 & Classic planning & 5/8 & 62.5\% & 60.3 \\
+    Holdout-8 & Agentic verify & \textbf{8/8} & \textbf{100\%} & \textbf{18.3} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.85\linewidth]{figs/hmeqa_agentic_h2h.png}
+  \caption{Holdout-8 classic vs.\ agentic-verify Dynagraph: accuracy (left) and mean planning steps (right).}
+  \label{fig:hmeqa_agentic_h2h}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figs/hmeqa_agentic_coverage.png}
+  \caption{Top-down coverage for matched HM-EQA questions: classic planning (left) vs.\ agentic verify (right).
+  Overlay shows Habitat navmesh, explored voxels, and trajectory; captions report letter accuracy, planning steps, and explored cell count.
+  Rows: Q15 (both correct; efficiency), Q104 (classic miss $\rightarrow$ agentic correct), Q68 (both correct).}
+  \label{fig:hmeqa_agentic_coverage}
+\end{figure}
+
+\noindent\textbf{Coverage maps.}
+Figure~\ref{fig:hmeqa_agentic_coverage} renders side-by-side episode overlays from per-arm debug bundles (\texttt{scripts/render\_hmeqa\_agentic\_coverage\_figure.py}).
+Distinct \texttt{--debug-run-tag}s (or \texttt{OUT/bundles/\{arm\}\_qN} snapshots) are required so H2H arms do not overwrite \texttt{\textasciitilde/.cache/habitat\_eqa/episodes/}.
 
 \subsection{OVMM find-phase memory ablation (Emet sim)}
 \label{sec:ovmm_find_results}

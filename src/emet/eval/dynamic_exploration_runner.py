@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import os
-import signal
 import shutil
 import subprocess
 import time
@@ -21,6 +20,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from emet.utils.process_tree import popen_session, terminate_process_tree
 
 from emet.eval.benchmark_dynagraph import apply_dynamic_explore_backend, profile_settings
 from emet.eval.dynamic_exploration_config import (
@@ -68,6 +69,27 @@ def count_object_nodes(memory: Any, *, label_hint: str | None = None) -> int:
             if any(hint in str(lab).lower() for lab in (getattr(n, "labels", None) or []))
         ]
     return len(nodes)
+
+
+
+def count_object_nodes_near_xy(
+    memory: Any,
+    pos_xy: list[float] | tuple[float, ...] | np.ndarray,
+    *,
+    radius_m: float = _NODE_MATCH_RADIUS_M,
+) -> int:
+    """Count non-viewpoint object nodes whose XY lies within ``radius_m`` of ``pos_xy``."""
+    if memory is None:
+        return 0
+    target = np.asarray(pos_xy[:2], dtype=np.float64)
+    count = 0
+    for n in memory.get_nodes():
+        if getattr(n, "is_viewpoint", False):
+            continue
+        xyz = np.asarray(getattr(n, "xyz", [0, 0, 0]), dtype=np.float64).reshape(-1)
+        if xyz.size >= 2 and float(np.linalg.norm(xyz[:2] - target)) <= float(radius_m):
+            count += 1
+    return count
 
 
 def _dynagraph_subprocess_timeout_s(
@@ -134,29 +156,7 @@ def _kill_process_tree(proc: subprocess.Popen[str], *, label: str) -> None:
     if pid is None:
         return
     print(f"[dynamic-explore] KILL_TREE {label} pid={pid}", flush=True)
-    try:
-        os.killpg(pid, signal.SIGTERM)
-    except (ProcessLookupError, PermissionError, OSError):
-        try:
-            proc.terminate()
-        except Exception:
-            pass
-    try:
-        proc.wait(timeout=15)
-        return
-    except subprocess.TimeoutExpired:
-        pass
-    try:
-        os.killpg(pid, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError, OSError):
-        try:
-            proc.kill()
-        except Exception:
-            pass
-    try:
-        proc.wait(timeout=30)
-    except subprocess.TimeoutExpired:
-        pass
+    terminate_process_tree(proc, grace_s=15.0)
 
 
 def run_logged_subprocess(
@@ -203,7 +203,7 @@ def run_logged_subprocess(
     )
 
     with log_path.open("w", encoding="utf-8") as log_f:
-        proc = subprocess.Popen(
+        proc = popen_session(
             cmd,
             cwd=str(cwd),
             env=env,
@@ -369,6 +369,8 @@ def build_dynagraph_subprocess_cmd(
         cmd.append("--cpu-only")
     if no_sensor_perception:
         cmd.append("--no-sensor-perception")
+    # Paper dynamic_explore harness extras (memory_summary / mcq_debias / …) + profile.
+    cmd.extend(["--benchmark-harness", "dynamic_explore", "--benchmark-method", str(backend)])
     cmd.extend(_profile_cli_flags(backend, cfg))
     if include_explore_loop and explore_iters > 0:
         cmd.extend(["--explore-loop", "--explore-max-iters", str(explore_iters)])
@@ -517,17 +519,47 @@ def run_explore_episode_subprocess(
         return payload
 
 
-def _run_eqa_single(agent: Any, robot: Any, qspec: dict[str, Any]) -> dict[str, Any]:
+def _run_eqa_single(
+    agent: Any,
+    robot: Any,
+    qspec: dict[str, Any],
+    *,
+    trace_path: Any | None = None,
+) -> dict[str, Any]:
     import re
-
-    from emet.controller.task.dynamem import EQAExecuter
+    from pathlib import Path
 
     qtext = str(qspec.get("question", "")).strip()
     robot.move_to_nav_posture()
     robot.switch_to_navigation_mode()
-    eq_executor = EQAExecuter(agent)
+    agent._fast_explore_lookaround = True
+    from emet.memory.graph_eqa.agentic_eqa import agentic_verify_enabled, run_agentic_eqa
+
     try:
-        discord_text, _imgs = eq_executor(qtext)
+        if agentic_verify_enabled(agent):
+            # Keep sim connected for navigate/verify; do not release ZMQ mid-loop.
+            discord_text, _imgs = run_agentic_eqa(
+                agent,
+                qtext,
+                trace_path=Path(trace_path) if trace_path else None,
+                trace_meta={
+                    "gt_body_key": str(qspec.get("gt_body_key") or ""),
+                    "phase": str(qspec.get("phase") or ""),
+                },
+            )
+        else:
+            # Answer from current memory (world-change pre/post); do not start a new explore chase.
+            try:
+                discord_text, _imgs = agent.run_eqa(
+                    qtext,
+                    max_planning_steps=1,
+                    allow_navigation=False,
+                )
+            except TypeError:
+                # Older Dynamem-only agents lack allow_navigation.
+                from emet.controller.task.dynamem import EQAExecuter
+
+                discord_text, _imgs = EQAExecuter(agent)(qtext)
     except Exception as e:
         discord_text = f"EQA question failed: {e}"
     answer = ""
@@ -589,6 +621,7 @@ def run_world_change_episode(
     t0 = time.monotonic()
     recovery_steps = 0
     n_stale_after_move = 0
+    n_nodes_near_new = 0
     n_pruned_total = 0
 
     try:
@@ -601,6 +634,15 @@ def run_world_change_episode(
             robot = connect_benchmark_robot(sim_cfg, port_offset)
             agent = None
             try:
+                from emet.eval.dynagraph_vram import prepare_dynagraph_vram_for_eqa, warm_siglip_confirmed_memory
+                from emet.memory.graph_eqa.agentic_eqa import agentic_verify_enabled
+
+                def _prep_vram_for_eqa() -> None:
+                    if agentic_verify_enabled(agent):
+                        warm_siglip_confirmed_memory(agent)
+                    else:
+                        prepare_dynagraph_vram_for_eqa(agent)
+
                 parameters = apply_dynamic_explore_backend(get_parameters("dynav_config.yaml"), run_cfg.backend)
                 parameters["encoder"] = None
                 parameters["debug_perfect_sensor_depth"] = True
@@ -637,7 +679,13 @@ def run_world_change_episode(
                     # still invalidates nodes near the relocated body below.
                     agent.update()
 
-                pre_row = _run_eqa_single(agent, robot, pre_q)
+                _prep_vram_for_eqa()
+                pre_row = _run_eqa_single(
+                    agent,
+                    robot,
+                    pre_q,
+                    trace_path=export_dir / "agentic_trace.jsonl",
+                )
                 pre_score = score_eqa_results([pre_row], episode_dir=None)
 
                 session = robot.get_emet_session()
@@ -681,7 +729,25 @@ def run_world_change_episode(
                     executor.rotate_in_place()
                     recovery_steps += 1
 
-                post_row = _run_eqa_single(agent, robot, post_q)
+                # Stale = nodes still near the old GT pose after recovery (churn @ 0.75 m).
+                if old_pos is not None:
+                    n_stale_after_move = count_object_nodes_near_xy(
+                        mem, old_pos, radius_m=_NODE_MATCH_RADIUS_M
+                    )
+                n_nodes_near_new = count_object_nodes_near_xy(
+                    mem, [rx, ry], radius_m=_NODE_MATCH_RADIUS_M
+                )
+                if mem is not None and getattr(mem, "memory_summary_enabled", False):
+                    refresh = getattr(mem, "refresh_siglip_confirmed_memory", None)
+                    if callable(refresh):
+                        refresh()
+                _prep_vram_for_eqa()
+                post_row = _run_eqa_single(
+                    agent,
+                    robot,
+                    post_q,
+                    trace_path=export_dir / "agentic_trace.jsonl",
+                )
                 post_score = score_eqa_results([post_row], episode_dir=None)
 
                 from emet.memory.headless_export import export_dynagraph_episode
@@ -723,10 +789,13 @@ def run_world_change_episode(
                     "answer_correct_pre": bool(pre_score.get("accuracy", 0) >= 1.0),
                     "answer_correct_post": bool(post_score.get("accuracy", 0) >= 1.0),
                     "n_stale_nodes_after_move": n_stale_after_move,
+                    "n_nodes_near_new_pos": n_nodes_near_new,
+                    "adapted": bool(n_nodes_near_new > 0),
                     "n_pruned_by_maintain": n_pruned_total,
                     "recovery_steps": recovery_steps,
                     "relocate_body": wc.relocate_body,
                     "relocate_xyz": [rx, ry, rz],
+                    "old_xyz": [float(x) for x in old_pos[:3]] if old_pos is not None else None,
                     "localization_err_m": loc_err,
                     "episode_wall_s": wall_s,
                     "map_source": "cache" if cache_dir is not None else "live",

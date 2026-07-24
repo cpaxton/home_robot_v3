@@ -20,6 +20,7 @@
 
 import os
 import re
+import time
 
 import numpy as np
 from PIL import Image
@@ -362,23 +363,34 @@ class GraphEQAController(DynamemController):
         max_movement_step: int = 5,
         *,
         skip_perception_prelude: bool = False,
+        allow_navigation: bool = True,
     ) -> tuple[str, str, list[Image.Image], bool]:
         """One EQA iteration using graph memory instead of voxel map.
 
         When *skip_perception_prelude* is True, skip the head sweep / look-around before the LLM call
         (used on follow-up EQA iterations after navigation so we do not re-run perception every step).
+        When *allow_navigation* is False, return after the VLM answer without frontier chase
+        (question-bank / post-explore scoring).
         """
         answer_output = None
+        # After explore-loop (``_fast_explore_lookaround``), skip another ~30--60s head sweep.
         if not self._realtime_updates and not skip_perception_prelude:
-            self.robot.look_front()
-            self.look_around()
-            self.robot.look_front()
-            self.robot.switch_to_navigation_mode()
+            if getattr(self, "_fast_explore_lookaround", False):
+                self.robot.look_front()
+                self.robot.switch_to_navigation_mode()
+            else:
+                self.robot.look_front()
+                self.look_around()
+                self.robot.look_front()
+                self.robot.switch_to_navigation_mode()
 
         if self.graph_memory is not None and hasattr(self, "_sync_graph_frontier_nodes"):
             self._sync_graph_frontier_nodes()
 
         try:
+            q_preview = question if isinstance(question, str) else str(question)[:80]
+            logger.info(f"EQA query_answer start for {q_preview!r}")
+            t_qa0 = time.monotonic()
             (
                 reasoning,
                 answer,
@@ -390,6 +402,10 @@ class GraphEQAController(DynamemController):
                 question,
                 self._planning_base_xyt(self.robot.get_base_pose()),
                 self.planner,
+            )
+            logger.info(
+                f"EQA query_answer done wall_s={time.monotonic() - t_qa0:.1f} "
+                f"confidence={confidence} answer={(answer or '')[:120]!r}"
             )
         except Exception as e:
             reasoning = f"Error: {e}"
@@ -447,7 +463,7 @@ class GraphEQAController(DynamemController):
             )
         discord_text += "\nI also provide relevant images here."
 
-        if confidence:
+        if confidence or not allow_navigation:
             return answer, discord_text, relevant_images, confidence
 
         # Coverage: while the question-relevant objects have NOT been observed yet, prefer an
@@ -688,8 +704,23 @@ class GraphEQAController(DynamemController):
         max_planning_steps: int = 5,
         *,
         max_movement_step: int = 5,
+        allow_navigation: bool = True,
     ) -> tuple[str, list[Image.Image]]:
-        """Run EQA until confident or max steps, using graph memory."""
+        """Run EQA until confident or max steps, using graph memory.
+
+        Set ``allow_navigation=False`` (and typically ``max_planning_steps=1``) for
+        post-explore question banks: answer from current memory without frontier chase.
+        With ``allow_navigation=True`` and ``max_planning_steps>1``, the final step
+        skips frontier chase so the loop can return after the last VLM call.
+
+        When ``eqa.agentic_verify`` (or ``EMET_EQA_AGENTIC_VERIFY=1``) is set, uses the
+        unified agentic explore/navigate/verify/answer loop instead.
+        """
+        from emet.memory.graph_eqa.agentic_eqa import agentic_verify_enabled, run_agentic_eqa
+
+        if agentic_verify_enabled(self):
+            return run_agentic_eqa(self, question)
+
         import time as _time
 
         self._eqa_question = question
@@ -726,12 +757,31 @@ class GraphEQAController(DynamemController):
                         f"(partial answer={answer!r})"
                     )
                 break
+            q_preview = question if isinstance(question, str) else str(question)[:80]
+            logger.info(
+                f"EQA planning step {step + 1}/{max_planning_steps} for {q_preview!r} "
+                f"(allow_navigation={allow_navigation})"
+            )
             if step > 0:
                 self.update()
+            # Multi-step: skip frontier chase on the *last* planning step so we return
+            # the best answer without hanging after the final VLM call. Single-step with
+            # allow_navigation=True still navigates (legacy one-shot explore). Question
+            # banks pass allow_navigation=False explicitly.
+            if not allow_navigation:
+                nav_this_step = False
+            elif max_planning_steps <= 1:
+                nav_this_step = True
+            else:
+                nav_this_step = step < max_planning_steps - 1
+            # Answer-only banks must not touch the robot (look_front / EGL) while the
+            # VLM is loading or generating — MuJoCo+Qwen on one GPU made vision
+            # prefill look hung until STALE_KILL (~30 min, no log growth).
             answer, discord_text, relevant_images, confidence = self.run_eqa_one_iter(
                 question,
                 max_movement_step=max_movement_step,
-                skip_perception_prelude=(step > 0),
+                skip_perception_prelude=(step > 0) or (not allow_navigation),
+                allow_navigation=nav_this_step,
             )
             if confidence:
                 break
@@ -772,9 +822,10 @@ class GraphEQAController(DynamemController):
         if not relevant_images:
             relevant_images = []
         # Terminal + TTS feedback (CLI users otherwise see no reply; parent DynamemController.run_eqa does this for voxel EQA).
-        print("\n--- GraphEQA answer ---\n" + discord_text.strip() + "\n---\n")
+        print("\n--- GraphEQA answer ---\n" + discord_text.strip() + "\n---\n", flush=True)
         if confidence:
             try:
+                # Async TTS — never use say_sync here (can block forever if sim is gone).
                 self.robot.say("The answer to " + question + " is " + answer)
             except Exception:
                 pass

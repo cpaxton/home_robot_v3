@@ -26,6 +26,7 @@ from emet.memory.graph_eqa.graph_observation_pipeline import apply_instance_item
 def test_kitchen_denies_bathroom_stall_allows_range_hood():
     assert not is_graph_label_allowed("bathroom stall", scene_profile="kitchen")
     assert not is_graph_label_allowed("Toilet Paper Dispenser", scene_profile="kitchen")
+    assert not is_graph_label_allowed("adapter", scene_profile="kitchen")
     assert is_graph_label_allowed("range hood", scene_profile="kitchen")
     assert is_graph_label_allowed("cabinet", scene_profile="kitchen")
     # Habitat homes keep bathroom labels.

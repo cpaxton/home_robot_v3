@@ -1,0 +1,13 @@
+---
+description: Copyright header for new source files — Chris Paxton, not Hello Robot
+alwaysApply: true
+---
+
+# Copyright for new code
+
+- **New files** you create in this repo must use:
+  `# Copyright (c) Chris Paxton 2026`
+  (year = current year when the file is created).
+- **Do not** add `Copyright (c) Hello Robot, Inc.` (or Hello Robot license boilerplate) to new files.
+- When **editing existing** Hello Robot–copyrighted files, leave their headers unchanged unless the user asks to relicense.
+- Prefer a short one-line header for new modules/tests; do not paste the old multi-block Hello Robot LICENSE preamble on new files.

@@ -12,6 +12,33 @@ Deep dives:
 | Paper tables / LaTeX | [paper_benchmarks.md](paper_benchmarks.md) |
 | Dynagraph sim | [dynagraph_benchmarks.md](dynagraph_benchmarks.md) |
 
+## Agentic GraphEQA verify + offline tuning
+
+Post-explore / world-change EQA can run a unified **explore → navigate → SigLIP verify → answer**
+loop (`eqa.agentic_verify` / `EMET_EQA_AGENTIC_VERIFY=1`). Improve smokes enable this by default
+and write `agentic_trace.jsonl` (SigLIP embeds + sim GT) under each export dir when
+`EMET_EQA_TRACE=1`.
+
+Tool picks come from the shared Qwen3-VL via text-only JSON tool-calling turns (same
+`{"tool_calls": ...}` contract as the Discord agent; the fixed system prompt gets prefix
+KV-cache hits). `eqa.agentic_vlm_router: false` or `EMET_EQA_AGENTIC_ROUTER=0` disables the
+VLM router and uses the deterministic fallback policy only (reproducible evals); parse
+failures always fall back. Explore mode (`run_agentic_eqa(agent, question=None, goal=...)`)
+drives `explore_frontier`/`look_around` and ends with a `finish` coverage summary once
+frontiers or the nav budget are exhausted. Trace rows record `picked_by`,
+`router_parse_ok`, `router_raw_reply_chars`, and `router_tool_calls` so the tuner can
+compare VLM-router vs fallback quality.
+
+```bash
+# After a run that produced traces:
+uv run python scripts/tune_agentic_verify.py ~/runs/emet/dynamic_exploration/<run> \
+  -o /tmp/agentic_tune_report.json
+```
+
+The tuner sweeps verify thresholds (precision/recall/F1 vs `gt_present`) and budget knees
+(accuracy vs `max_tool_rounds`). Nav-distance candidates are correlational only — confirm with
+a real smoke. Contract tests: `uv run emet test src/test/eval/test_agentic_eqa_verification.py`.
+
 ## Prerequisites
 
 ```bash
@@ -104,10 +131,24 @@ Optional live regression: `RUN_HABITAT_FRAME_TESTS=1 uv run emet test src/test/e
 Before any GPU-heavy eval, kill stale jobs and wait for headroom. Shared helpers live in [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) (sourced by overnight scripts):
 
 ```bash
+# Preferred (canonical CLI):
+uv run emet eval kill-stale
+NEED_MIB=12000 uv run emet eval wait
+NEED_MIB=14000 uv run emet eval check
+uv run emet eval status
+
+# Track queued / running experiments:
+uv run emet jobs                 # list registry + unmanaged eval PIDs
+uv run emet jobs cancel JOB_ID   # stop one managed job
+
+
+# Bash helpers still work (delegate to emet eval):
 ./scripts/gpu_preflight.sh --kill-stale
-NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait   # default: 3× stable reads, 30s apart
-NEED_MIB=14000 ./scripts/gpu_preflight.sh --check  # exit 1 if free VRAM < threshold
+NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait
+NEED_MIB=14000 ./scripts/gpu_preflight.sh --check
 ```
+
+`kill-stale` SIGTERM→SIGKILL matching sim/eval/`uv run emet` trees (skips the caller ancestry; optional `EMET_GPU_PROTECT_PIDS`). Eval code should spawn via `emet.utils.process_tree` so timeouts reap GPU grandchildren — see [known_issues.md](known_issues.md#orphan--zombie-eval-processes-after-timeouts).
 
 Also sets `PYTORCH_CUDA_ALLOC_CONF` / `PYTORCH_ALLOC_CONF` to `expandable_segments:True` when scripts call `emet_export_pytorch_alloc`.
 

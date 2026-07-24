@@ -57,14 +57,14 @@ Logs: `~/runs/emet/overnight_cross_track/<RUN_ID>/` (`summary.txt` + per-step `*
 **Before starting:** ensure sim deps (`emet install sim`) and Habitat wrapper (`.venv-habitat/bin/emet-habitat`). Optional preflight:
 
 ```bash
-./scripts/gpu_preflight.sh --kill-stale
-NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait
+uv run emet eval kill-stale
+NEED_MIB=12000 uv run emet eval wait
 ```
 
 Deep Habitat eval (HM-EQA + OVMM + SQA3D matrix) — **run on a separate night**, not chained after track 4:
 
 ```bash
-./scripts/gpu_preflight.sh --kill-stale
+uv run emet eval kill-stale
 ./scripts/run_overnight_eval_smoke.sh
 ```
 
@@ -161,7 +161,7 @@ uv run emet sqa3d run-episode --split train --mock-llm --question-id 22060200000
 Requires `emet install sim`. ~60–75 min with real VLM.
 
 ```bash
-./scripts/gpu_preflight.sh --kill-stale
+uv run emet eval kill-stale
 uv run python scripts/eval_dynamic_exploration.py --smoke \
   --output-dir ~/runs/emet/dynamic_exploration/smoke_cross_track_v3
 ```
@@ -169,7 +169,7 @@ uv run python scripts/eval_dynamic_exploration.py --smoke \
 ### Track 5 — World-change (after track 4)
 
 ```bash
-./scripts/gpu_preflight.sh --kill-stale
+uv run emet eval kill-stale
 uv run python scripts/eval_dynamic_exploration.py \
   --phase world-change --episode-id robocasa_seed0_world_change \
   --backend dynagraph \

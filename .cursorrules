@@ -1,5 +1,10 @@
 # Home Robot v2 / Emet – Cursor code rules
 
+## Copyright (new files)
+- **New** source/tests you add: `# Copyright (c) Chris Paxton 2026` (use the current year).
+- **Never** put `Copyright (c) Hello Robot, Inc.` on new files. Leave existing Hello Robot headers alone when editing old files.
+- See **`.cursor/rules/copyright.mdc`**.
+
 ## Testing (uv)
 - **Setup**: Use **uv**. Install deps including dev (pytest, pytest-timeout): `uv sync` (default groups include `dev`, `sim`, `hand_tracker`, `dynamem`, `da3`). Minimal install: `uv sync --no-default-groups`.
 - **Canonical run**: From repo root, run **`uv run emet test`** (or just `emet test` — emet re-execs under `uv run` when in project). This uses `[tool.pytest.ini_options]` in pyproject.toml (testpaths = `src/test`).
@@ -22,17 +27,20 @@
 - **`get_parameters("dynav_innate_mars.yaml")`** must resolve robot overlay (e.g. `depth_source=auto`, `graph_object_fusion.bounds_3d_iou_merge_min=0.40`). Smoke: `uv run emet test src/test/config/`.
 
 ## GPU / eval workflow (agent behavior)
-- **One GPU-heavy job at a time** on the workstation GPU (often shared with Xorg/gnome-shell). Before Habitat HM-EQA, SQA3D real sweeps, Robocasa explore, or dynagraph with VLM: run **`./scripts/gpu_preflight.sh --kill-stale`** then **`NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait`** (or **`--check`** for a one-shot gate).
+- **One GPU-heavy job at a time** on the workstation GPU (often shared with Xorg/gnome-shell). Before Habitat HM-EQA, SQA3D real sweeps, Robocasa explore, or dynagraph with VLM: run **`uv run emet eval status`**, then **`uv run emet eval kill-stale`**, then **`NEED_MIB=12000 uv run emet eval wait`** (or **`emet eval check`** for a one-shot gate). Bash: `./scripts/gpu_preflight.sh` still works (delegates to `emet eval`). Prefer **`emet eval`** over raw `pkill` / ad-hoc process kills.
 - **Do not chain** Robocasa dynagraph smoke → full pytest (MuJoCo-native paths) → Habitat VLM eval in one session — that pattern caused NVIDIA driver hangs (GUI + SSH dead). Cross-track smoke defaults **`RUN_DEEP_EVAL=0`**; run **`run_overnight_eval_smoke.sh`** on a **separate night**. See **`docs/evaluation.md`** and **`docs/experiments/cross_track_smoke.md`**.
 - **Long Habitat / overnight evals:** prefer **`nohup ./scripts/run_simulation_smoke_battery.sh … &`** or **`nohup ./scripts/run_overnight_cross_track_smoke.sh … &`** — **not** long inline GPU runs inside a Cursor agent turn (agent/node can trap/segfault after heavy native teardown; eval subprocess may still complete — check **`~/runs/emet/simulation_smoke/`**, **`~/.cache/habitat_eqa/results/`** logs).
 - **Paper simulation battery:** seven sequential tracks — **`docs/simulation_testing_plan.md`**, **`./scripts/run_simulation_smoke_battery.sh`** (Habitat EQA → Habitat OVMM → Robocasa search → Molmo search → SQA3D → Robocasa dynamic env → Molmo dynamic search).
 - Full **`pytest -m "not sim"`** must pass **`emet_pytest_no_sim_ignore_args`** from **`scripts/gpu_preflight.sh`** (excludes unmarked MuJoCo/Habitat sim tests under `src/test/simulation/`, etc.).
+- **Orphans / hung evals:** new sim/eval `Popen` must use **`emet.utils.process_tree`**; after hangs run **`emet eval status`** before re-launch. Do not call **`emet eval kill-stale`** from inside a smoke that must stay alive (use **`wait`** only). Details: **`.cursor/rules/gpu-eval-workflow.mdc`**, **`docs/known_issues.md`**.
+- **Long experiments:** prefer **`uv run emet jobs run --name … -- CMD`** (or scripts that call **`emet jobs register`**) so **`emet jobs` / `emet jobs cancel` / `emet jobs logs`** can manage them; registry in **`~/runs/emet/jobs/`**.
 
 ## User-facing commands (agent behavior)
 - **Before suggesting shell commands** to the user, **run them yourself** when the workspace and environment allow (from repo root: `uv run emet …`, `uv run python …`, smoke `timeout … emet serve …`, etc.). Confirm paths, flags, and typical stderr; then report what actually happened instead of only pasting commands for the user to discover errors.
 - **Before sending code that wires config → constructors** (e.g. `build_rerun_visualizer_kwargs` → `RerunVisualizer`), run a smoke import/instantiate or a unit test that asserts kwargs match `inspect.signature(...)`; do not rely on pytest alone if you did not run it.
 - **Verify CLI flags before every suggested command** (do not guess from memory or from other subcommands):
   - Run **`uv run python -m emet.app.<module> --help`** for the specific app (e.g. `run_dynagraph`, `run_dynamem`, `run_agent`) or **`uv run emet run <subcommand> --help`** when the top-level group exposes it.
+  - For GPU preflight: **`uv run emet eval --help`** / **`status`** before suggesting `kill-stale` / `wait` / `check`.
   - If a flag might be missing from the wrapper help, check the app module’s Click options in `src/emet/app/`.
   - Never tell the user to pass a flag until `--help` lists it (or you just added it in the same change).
 - **Rerun world frame**: Log map/voxels/graph under `world/…` in navigation world coordinates. Live `Spatial3DView` blueprint must use **`origin="world"`** (not `world/robot`) or the map appears to rotate with the base. See `docs/rerun.md` and `spatial3d_view_world()` in `src/emet/visualization/rerun.py`.

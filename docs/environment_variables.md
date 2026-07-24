@@ -46,6 +46,11 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_DYNAMIC_EXPLORE_HEARTBEAT_S` | `dynamic_exploration_runner.py` | Heartbeat interval while a dynagraph subprocess is running (default `120`). Writes to stderr + `progress.jsonl`. |
 | `EMET_DYNAMIC_EXPLORE_STALE_LOG_S` | `dynamic_exploration_runner.py` | Warn when `dynagraph.log` mtime is older than this many seconds (default `900`). Surfaces post-VLM / EQA hangs. |
 | `EMET_DYNAMIC_EXPLORE_STALE_KILL_S` | `dynamic_exploration_runner.py` | Kill the dynagraph **process group** when the log is stale this long (default `2×` `STALE_LOG_S`). Prevents leaked GPU holders after wrapper-only `kill`. |
+| `EMET_VL_GENERATE_HEARTBEAT_S` | `qwen3_vl_client.py` | Print `[vl] generate heartbeat` this often while `model.generate` runs (default `30`; `0` disables). Keeps eval log mtime fresh during long vision prefill. |
+| `EMET_EQA_ANSWER_MAX_NEW_TOKENS` | `graph_memory.query_answer` | Cap `max_new_tokens` for the answer VLM call (default `256`; `0` uses client default). |
+| `EMET_EQA_AGENTIC_VERIFY` | GraphEQA / dynagraph EQA | `1`/`0` — enable unified explore/navigate/verify/answer loop (`eqa.agentic_verify`). |
+| `EMET_EQA_AGENTIC_ROUTER` | `AgenticEQAExecutor` | `1`/`0` — override `eqa.agentic_vlm_router`: let the shared Qwen3-VL pick tools via JSON tool calls (`0` = deterministic fallback only, for reproducible evals). |
+| `EMET_EQA_TRACE` | `AgenticEQAExecutor` | `1` — append `agentic_trace.jsonl` (SigLIP embeds + GT) for offline tuning via `scripts/tune_agentic_verify.py`. |
 | `EMET_EQA_QUESTION_TIMEOUT_S` | `controller_graph_eqa.run_eqa` | Per-question wall-clock cap for GraphEQA planning/nav loops (default `900`; `0` disables). |
 | `EMET_SCENE_MAP_CACHE_DIR` | `scene_map_cache.py` | Root for prebuilt scene maps (graph + voxel). Default `~/.cache/emet/scene_maps`. |
 | `EMET_USE_SCENE_MAP_CACHE` | OVMM find / dynamic explore | Load cached baseline and skip rotate/explore when present (default `1`). Set `0` or pass `--no-scene-cache`. |
@@ -66,6 +71,14 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_DYNAGRAPH_MEMORY_SUMMARY` | Habitat `emet-habitat` dynagraph harness | `1` / `0` override CONFIRMED_MEMORY block (CLI: `--memory-summary` / `--no-memory-summary`). |
 | `EMET_DYNAGRAPH_EXPLORE_UNCOVERED` | Habitat `emet-habitat` dynagraph harness | `off`, `on`, or `conservative` (CLI: `--explore-when-uncovered`). Default per harness: `habitat_eqa` uses `conservative` in [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml). |
 | `PYTORCH_CUDA_ALLOC_CONF` | PyTorch CUDA | Optional allocator hint (e.g. `expandable_segments:True`); set by `run_sqa3d_gpu_sweep.sh` and `run_sqa3d_sharded_sweep.sh` if unset. |
+| `NEED_MIB` | `emet eval check/wait`, `scripts/gpu_preflight.sh` | Min free VRAM (MiB) (default `12000`). |
+| `GPU_STABLE_CHECKS` | `emet eval wait` | Consecutive passing free-VRAM reads (default `3`). |
+| `GPU_WAIT_INTERVAL` | `emet eval wait` | Seconds between reads (default `30`). |
+| `GPU_SETTLE_SEC` | `emet eval kill-stale` | Sleep after pattern kills (default `15`). |
+| `GPU_KILL_STALE` | `emet_gpu_between_steps` | Set `0` to skip process cleanup between overnight phases. |
+| `EMET_GPU_PROTECT_PIDS` | `emet eval kill-stale` | Space-separated PIDs never killed (plus the caller process and its ancestors). |
+| `EMET_JOBS_DIR` | `emet jobs` | Directory for job registry JSON (default `~/runs/emet/jobs`). |
+| `EMET_JOB_ID` | smoke/queue scripts | If set, scripts skip creating a new registry entry (used by `emet jobs run` wrappers). |
 
 ### Large paper eval orchestrator
 
@@ -115,7 +128,9 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_ALLOW_CPU_VLM` | Qwen3-VL / Gemma VLM / Qwen2.5-VL load | `1` — allow silent CPU bf16 fallback when GPU int4 load fails. **Default off**: agent refuses CPU fallback (multi-minute “Thinking…” hangs). |
 | `EMET_HF_LOCAL_ONLY` | VL / SigLIP `from_pretrained` | `1` — require local HF cache only (same idea as `HF_HUB_OFFLINE=1`). Warm cache is preferred automatically even when unset. |
 | `EMET_VL_PREFIX_GENERATE_TIMEOUT_S` | `Qwen3VLClient` | Soft warn + disable prefix cache after a slow prefix-KV generate (default `45`). |
-| `EMET_ATTN_EAGER` | `Qwen3VLClient` | `1` — force eager attention (debug). Default uses Flash-Attn 2 if installed, else PyTorch **SDPA**. |
+| `EMET_ATTN_EAGER` | `Qwen3VLClient` | `1` — force eager attention (debug). |
+| `EMET_REQUIRE_FLASH_ATTN` | `attn_impl.resolve_attn_implementation` | `1`/`0` — require Flash-Attn 2 on CUDA VL loads. **Default on** when unset (fail loud instead of silent SDPA). |
+| `EMET_ALLOW_SDPA_ATTN` | same | `1` — permit PyTorch SDPA when flash-attn is missing (slower; long multi-image EQA can crawl). Overrides the default require-flash policy. |
 | `eqa.vl_image_max_side` | VL clients / `describe_scene` | Longest RGB edge before VL/detector (default `512`; `0` = no resize). Override: `--set eqa.vl_image_max_side=384`. |
 | `eqa.vl_image_max_pixels` | Same | Optional `H*W` cap after side resize (`0` = off). |
 | `EMET_AGENT_THINKING_STATUS` | Agent loop | `1`/`0` — emit `*Thinking…*` status lines (default on). CLI: `--thinking-status` / `--no-thinking-status`. Heartbeats every ~8s while the LLM is still running. |
