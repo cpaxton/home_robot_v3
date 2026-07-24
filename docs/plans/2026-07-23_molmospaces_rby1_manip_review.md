@@ -23,9 +23,8 @@
 5. **Nav target vs GT category match (accepted):** teleport still resolves by category substring; OVMM episodes set `object_gt_body`. Improve later with nearest-to-`point` disambiguation.
 6. **Uncapped Molmo scan (accepted):** larger session payloads; needed for apple/etc.
 
-## Motion planning next steps
+## Motion planning status (2026-07-24)
 
-1. **Done (seed):** MuJoCo position IK [`mujoco_arm_ik.py`](../src/emet/motion/mujoco_arm_ik.py) + rby1 tests.
-2. **Next:** stream IK joint solutions through `GenericZmqClient` (actuator-ordered `joint` vector) on default-table or Molmo rby1.
-3. **Then:** collide-aware planner — prefer MolmoSpaces CuRobo RPC from `.venv-molmospaces` rather than reimplementing in core emet.
-4. **Wire:** agent `pick_place` mode `teleport | ik_reach | curobo` (config/env).
+1. **Done:** MuJoCo position IK, joint streaming, `sim_attach_body`, voxel-map arm RRT, agent `manip_mode` teleport|kinematic.
+2. **Blockers fixed:** pick_place success via `_last_exec_ok`; GT manip without nav point; kinematic→teleport fallback when caps missing.
+3. **Later:** CuRobo RPC from `.venv-molmospaces`; nearest-to-`point` GT disambiguation.

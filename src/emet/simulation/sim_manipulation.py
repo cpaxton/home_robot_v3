@@ -265,6 +265,22 @@ def prefer_kinematic_manip(
     return bool(caps.get("kinematic_manip", False))
 
 
+def can_use_sim_gt_manip(
+    robot: Any,
+    *,
+    manip_mode: str = "teleport",
+    visual_servo: bool = False,
+) -> bool:
+    """True when pick/place can run from session GT (kinematic or teleport) without visual nav.
+
+    If ``manip_mode=kinematic`` but the server lacks ``kinematic_manip``, still True when
+    teleport (``sim_set_body_pose``) is available so the agent can fall back.
+    """
+    if prefer_kinematic_manip(robot, manip_mode=manip_mode, visual_servo=visual_servo):
+        return True
+    return prefer_sim_teleport_manip(robot, visual_servo=visual_servo)
+
+
 def _read_robot_placements(robot: Any) -> dict[str, dict[str, Any]] | None:
     from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
 

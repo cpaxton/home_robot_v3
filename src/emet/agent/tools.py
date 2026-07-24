@@ -386,17 +386,20 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
         executor = context.get("executor")
         if executor is None:
             return "Robot not connected."
-        ok = executor([("pickup", object_name), ("place", receptacle_name)])
+        keep_going = executor([("pickup", object_name), ("place", receptacle_name)])
+        task_ok = keep_going and bool(getattr(executor, "_last_exec_ok", True))
         return (
-            f"Pick and place ({object_name} -> {receptacle_name}) done." if ok else "Pick/place failed or interrupted."
+            f"Pick and place ({object_name} -> {receptacle_name}) done."
+            if task_ok
+            else "Pick/place failed or interrupted."
         )
 
     tools.append(
         Tool(
             name="pick_place",
             description="Pick up an object and place it on a receptacle. "
-            "In MuJoCo sim (including MolmoSpaces + rby1), this uses freejoint body teleport "
-            "when the server advertises sim_set_body_pose.",
+            "In MuJoCo sim (MolmoSpaces + rby1), uses GT teleport or kinematic IK+attach "
+            "(agent.manip_mode / EMET_MANIP_MODE) when the server advertises sim_set_body_pose.",
             parameters={
                 "type": "object",
                 "properties": {

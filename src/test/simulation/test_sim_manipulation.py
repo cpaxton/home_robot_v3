@@ -59,6 +59,8 @@ def test_set_free_body_pose_via_molmo_child_if_available():
 
 def test_robot_sim_body_pose_teleport_supported_caps():
     from emet.simulation.sim_manipulation import (
+        can_use_sim_gt_manip,
+        prefer_kinematic_manip,
         prefer_sim_teleport_manip,
         robot_sim_body_pose_teleport_supported,
     )
@@ -78,3 +80,18 @@ def test_robot_sim_body_pose_teleport_supported_caps():
     robot = _R({"is_simulation": True, "capabilities": {"sim_set_body_pose": True}})
     assert prefer_sim_teleport_manip(robot, visual_servo=False)
     assert not prefer_sim_teleport_manip(robot, visual_servo=True)
+
+    # kinematic without server cap → not prefer_kinematic, but can still use teleport GT
+    assert not prefer_kinematic_manip(robot, manip_mode="kinematic", visual_servo=False)
+    assert can_use_sim_gt_manip(robot, manip_mode="kinematic", visual_servo=False)
+
+    kin = _R(
+        {
+            "is_simulation": True,
+            "capabilities": {"sim_set_body_pose": True, "kinematic_manip": True},
+        }
+    )
+    assert prefer_kinematic_manip(kin, manip_mode="kinematic", visual_servo=False)
+    assert can_use_sim_gt_manip(kin, manip_mode="kinematic", visual_servo=False)
+    assert not prefer_kinematic_manip(kin, manip_mode="kinematic", visual_servo=True)
+    assert not can_use_sim_gt_manip(kin, manip_mode="kinematic", visual_servo=True)
