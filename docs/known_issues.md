@@ -143,19 +143,26 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 
 ## NVIDIA driver hang / Cursor agent crash during stacked GPU evals
 
-**Status:** Mitigated (2026-06) · **Seen:** 2026-06-28 · **Hardware:** RTX 4090 workstation (GPU drives display + CUDA)
+**Status:** Mitigated (2026-06) · **Seen:** 2026-06-28, 2026-07-24 · **Hardware:** RTX 4090 workstation (GPU drives display + CUDA)
 
 ### Symptoms
 
 - Chaining Robocasa dynagraph explore → full pytest (MuJoCo-native tests) → Habitat HM-EQA with VLM in one session.
 - Full-system **live lock**: mouse moves, GUI and SSH unresponsive; journal stops mid-line.
-- Separately: **Cursor agent** (`node` MainThread) or `emet` can log `trap invalid opcode` in kernel after Habitat-Sim / VLM teardown — agent session dies but eval subprocess may have finished (check log files and JSON artifacts).
+- Separately: **Cursor agent** dies when the agent tool tree runs Habitat / tears down GPU context. Kernel often shows `emet[…]: segfault at 0` (null IP) or `trap invalid opcode` after Habitat-Sim / VLM / EGL teardown — agent session dies even if a detached `emet jobs` child would have finished.
+- **Not** explained by a busy GPU: crashes and HM-EQA failsets have happened with `nvidia-smi` showing only Xorg/gnome-shell and ~full free VRAM.
+
+### Habitat EGL failure with “idle” GPU (2026-07-24)
+
+- Failset log: `Platform::WindowlessEglApplication::tryCreateContext(): unable to find CUDA device 0 among 2 EGL devices` / `WindowlessContext: Unable to create windowless context` on every classic episode while NVML reported free VRAM.
+- Later the same machine ran agentic H2H successfully after `/dev/nvidia*` refresh — treat repeated EGL errors as driver/EGL map breakage, not “need more kill-stale”.
+- H2H orchestrator aborts after consecutive EGL failures (`EGL_FAIL_ABORT`, default 2). Diagnose with **`uv run emet eval diagnose`**.
 
 ### Mitigation
 
-- **One GPU-heavy job at a time** — use **`uv run emet eval kill-stale` / `wait` / `check`** ([`emet eval`](cli.md#emet-eval-gpu-preflight--stale-cleanup); bash [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates).
+- **One GPU-heavy job at a time** — use **`uv run emet eval kill-stale` / `wait` / `check` / `diagnose`** ([`emet eval`](cli.md#emet-eval-gpu-preflight--stale-cleanup); bash [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates).
 - Cross-track smoke: [`run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh) defaults **`RUN_DEEP_EVAL=0`**; run [`run_overnight_eval_smoke.sh`](../scripts/run_overnight_eval_smoke.sh) on a **separate night**.
 - Safe no-sim pytest: source `gpu_preflight.sh` and pass **`emet_pytest_no_sim_ignore_args`** (excludes unmarked MuJoCo paths under `src/test/simulation/`).
-- Long evals: **`nohup … &`** or dedicated terminal — not blocking Cursor agent inline runs.
+- Long evals: **`uv run emet jobs run --name … -- CMD`** (or dedicated terminal) — **not** blocking Cursor agent inline runs; do not hard-kill Habitat mid-episode from the agent (use **`emet jobs cancel`**).
 
-Docs: [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [cross_track_smoke.md](experiments/cross_track_smoke.md).
+Docs: [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [cross_track_smoke.md](experiments/cross_track_smoke.md), [`.cursor/rules/gpu-eval-workflow.mdc`](../.cursor/rules/gpu-eval-workflow.mdc).

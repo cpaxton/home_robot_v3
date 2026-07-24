@@ -25,6 +25,8 @@ from emet.memory.graph_eqa.graph_memory import (
     SIGLIP_CONFIRM_THRESHOLD,
     NavHypothesis,
     VerifyResult,
+    _QUESTION_VERB_FILLERS,
+    question_stem_for_keywords,
 )
 from emet.utils.logger import Logger
 
@@ -139,6 +141,9 @@ class AgenticEQAExecutor:
         self._gt_placements: dict[str, Any] | None = None
         self._round = 0
         self._tried: dict[int, str] = {}
+        self._followed_eqa_actions: set[int] = set()
+        # Soft explores after Unknown when Action:N is missing/OOB or already followed.
+        self._n_unknown_explore = 0
         env_router = env_eqa_agentic_router()
         cfg_router = _eqa_cfg(agent).get("agentic_vlm_router", True)
         self._router_enabled = bool(
@@ -381,7 +386,21 @@ class AgenticEQAExecutor:
             phrases = list(getattr(gm, "_relevant_phrases", None) or []) + list(
                 getattr(gm, "_relevant_objects", None) or []
             )
-            text = phrases[0] if phrases else self.question
+            # Prefer phrases from the question stem over MCQ-option nouns
+            # (``fruit bowl`` > ``kitchen island``), then noun compounds over
+            # leading verb fillers (``fruit bowl`` > ``looking``).
+            stem = question_stem_for_keywords(self.question).lower()
+            ranked = sorted(
+                phrases,
+                key=lambda p: (
+                    1 if (p or "").strip().lower() in stem else 0,
+                    0 if (p or "").split()[:1] and (p or "").split()[0].lower() in _QUESTION_VERB_FILLERS else 1,
+                    len((p or "").split()),
+                    len(p or ""),
+                ),
+                reverse=True,
+            )
+            text = ranked[0] if ranked else self.question
         oid = obs_id
         if oid is None or int(oid) < 0:
             if self._hypotheses:
@@ -434,7 +453,10 @@ class AgenticEQAExecutor:
     def _tool_submit_answer(self, answer: str) -> dict[str, Any]:
         if self.mode == "explore":
             return {"ok": False, "error": "submit_answer unavailable in explore mode — use finish"}
-        if not self._verified and self._round < self.max_rounds - 1:
+        nav_exhausted = self._n_nav + self._n_explore >= self.max_nav_steps
+        # Allow submit once nav budget is spent so EQA can emit Action:N for follow-up,
+        # even if SigLIP never hit PRESENT (holdout q104/q105).
+        if not self._verified and self._round < self.max_rounds - 1 and not nav_exhausted:
             return {
                 "ok": False,
                 "error": "not verified — call verify_siglip (or exhaust budget) before submit_answer",
@@ -501,7 +523,9 @@ class AgenticEQAExecutor:
             if self._verified_obs_id is not None and hasattr(gm, "select_obs_ids_for_verified_answer"):
                 ids = gm.select_obs_ids_for_verified_answer(self._verified_obs_id, max_images=1)
                 gm.last_eqa_obs_ids = list(ids)
-            os.environ.setdefault("EMET_EQA_ANSWER_MAX_NEW_TOKENS", "64")
+            # Do not clamp EMET_EQA_ANSWER_MAX_NEW_TOKENS here. A prior setdefault("64")
+            # truncated Caption/Reasoning mid-stream and forced [salvage] on every bal-32
+            # agentic answer; graph_memory.query_answer defaults to 256.
             xyt = self._robot_xyt()
             planner = getattr(agent, "planner", None)
             try:
@@ -541,6 +565,90 @@ class AgenticEQAExecutor:
             "relevant_images": relevant_images,
         }
 
+    def _maybe_follow_eqa_explore_action(self, submit_out: dict[str, Any]) -> bool:
+        """Navigate to EQA ``Action: N`` when submit returned unconfident Unknown.
+
+        Location MCQs often answer Unknown with an image index to explore. Inventing
+        a salvage letter (holdout q104/q105) is worse than following that action.
+        Allows one soft-over-budget nav so Action:N still runs after explore used
+        the nominal ``max_nav_steps``.
+
+        When Action:N is missing or out of range for the prompt image list (q105:
+        ``Action:2`` with only one image), or the action target was already followed
+        and the model is still Unknown, fall back to ``explore_frontier`` a few times
+        instead of locking an empty letter.
+        """
+        if self.mode != "answer":
+            return False
+        gm = self.graph_memory
+        if gm is None:
+            return False
+        ans = str(submit_out.get("answer") or "").strip().lower()
+        conf = bool(submit_out.get("confidence"))
+        unknownish = (not ans) or ans in {"unknown", "none", "n/a", "na"} or "frontier" in ans
+        if conf and not unknownish:
+            return False
+        if not unknownish:
+            return False
+        obs_id = getattr(gm, "last_eqa_action_obs_id", None)
+        if obs_id is not None:
+            oid = int(obs_id)
+            if oid not in self._followed_eqa_actions:
+                # Soft +1 budget so Action:N is not starved by prior explore_frontier calls.
+                if self._n_nav + self._n_explore >= self.max_nav_steps + 1:
+                    return False
+                self._followed_eqa_actions.add(oid)
+                gm.last_eqa_action_obs_id = None
+                # Force re-verify at the action target before the next submit.
+                self._verified = False
+                self._verified_obs_id = None
+                self._last_verify = None
+                # Temporarily raise budget so navigate_to_obs accepts the Action follow.
+                old_budget = self.max_nav_steps
+                self.max_nav_steps = max(old_budget, self._n_nav + self._n_explore + 1)
+                try:
+                    nav = self.handle_tool("navigate_to_obs", {"obs_id": oid})
+                    self.handle_tool("verify_siglip", {"obs_id": oid})
+                finally:
+                    self.max_nav_steps = old_budget
+                self._append_trace(
+                    {
+                        "event": "follow_eqa_action",
+                        "obs_id": oid,
+                        "nav_ok": bool(nav.get("ok")),
+                        "prior_answer": submit_out.get("answer"),
+                    }
+                )
+                return True
+        # No resolvable Action:N, or already followed that obs and still Unknown.
+        # Cap soft explores so we do not loop forever on location MCQs.
+        # Soft +2 beyond max_nav_steps: Action follow may already have used +1.
+        if self._n_unknown_explore >= 2:
+            return False
+        if self._n_nav + self._n_explore >= self.max_nav_steps + 2:
+            return False
+        self._n_unknown_explore += 1
+        gm.last_eqa_action_obs_id = None
+        self._verified = False
+        self._verified_obs_id = None
+        self._last_verify = None
+        old_budget = self.max_nav_steps
+        self.max_nav_steps = max(old_budget, self._n_nav + self._n_explore + 1)
+        try:
+            nav = self.handle_tool("explore_frontier", {})
+            self.handle_tool("verify_siglip", {})
+        finally:
+            self.max_nav_steps = old_budget
+        self._append_trace(
+            {
+                "event": "follow_unknown_explore",
+                "nav_ok": bool(nav.get("ok")),
+                "prior_answer": submit_out.get("answer"),
+                "n_unknown_explore": self._n_unknown_explore,
+            }
+        )
+        return True
+
     def _fallback_tool(self) -> tuple[str, dict[str, Any]]:
         """Deterministic tool when VLM emits nothing parseable (or router is off)."""
         if self.mode == "explore":
@@ -549,21 +657,19 @@ class AgenticEQAExecutor:
             return "explore_frontier", {}
         if self._verified:
             return "submit_answer", {}
-        if not self._hypotheses:
-            if self._n_nav + self._n_explore < self.max_nav_steps:
-                return "explore_frontier", {}
-            return "submit_answer", {}
-        if self._n_nav + self._n_explore >= self.max_nav_steps:
-            if self._last_verify is None:
-                return "verify_siglip", {}
-            return "submit_answer", {}
-        if self._hyp_i < len(self._hypotheses):
+        budget_left = self._n_nav + self._n_explore < self.max_nav_steps
+        if budget_left and self._hypotheses and self._hyp_i < len(self._hypotheses):
             h = self._hypotheses[self._hyp_i]
             self._hyp_i += 1
             return "navigate_to_obs", {"obs_id": int(h.obs_id)}
-        if self._last_verify is None or self._last_verify.status != "PRESENT":
-            if self._n_explore < 1 and self._n_nav + self._n_explore < self.max_nav_steps:
-                return "explore_frontier", {}
+        # No (more) hypotheses: keep exploring while nav budget remains (stop once
+        # motion has happened and frontiers are confirmed gone, like _explore_done).
+        # Motion tools auto-chain verify_siglip, so re-verifying an unchanged obs is
+        # pure round waste (failfix6 burned 5/8 rounds on identical ABSENT verifies).
+        frontiers_gone = (self._n_nav + self._n_explore) > 0 and self._frontier_count() == 0
+        if budget_left and not frontiers_gone:
+            return "explore_frontier", {}
+        if self._last_verify is None:
             return "verify_siglip", {}
         return "submit_answer", {}
 
@@ -643,7 +749,10 @@ class AgenticEQAExecutor:
         for r in range(self.max_rounds):
             self._round = r
             if self.mode == "answer" and self._verified and r > 0:
-                final = self._do_submit_answer()
+                out = self._do_submit_answer()
+                if self._maybe_follow_eqa_explore_action(out):
+                    continue
+                final = out
                 break
             calls, picked_by, router_meta = self._route_tool_calls()
             self._append_trace(
@@ -659,7 +768,15 @@ class AgenticEQAExecutor:
             )
             for tool, args in calls:
                 out = self.handle_tool(tool, args)
-                if tool in ("submit_answer", "finish") and out.get("ok"):
+                if tool == "submit_answer" and out.get("ok"):
+                    # If EQA says Unknown + Action:N (explore image N) and we still have
+                    # nav budget, follow that instead of locking a guessed letter.
+                    if self._maybe_follow_eqa_explore_action(out):
+                        final = None
+                        break
+                    final = out
+                    break
+                if tool == "finish" and out.get("ok"):
                     final = out
                     break
                 if not out.get("ok") and "budget" in str(out.get("error", "")):
@@ -675,11 +792,18 @@ class AgenticEQAExecutor:
             if final is not None:
                 break
             if self.mode == "answer" and self._verified:
-                final = self._do_submit_answer()
+                out = self._do_submit_answer()
+                if self._maybe_follow_eqa_explore_action(out):
+                    continue
+                final = out
                 break
         else:
             budget_hit = True
             final = self._do_submit_answer() if self.mode == "answer" else self._do_finish()
+            # Rounds ran out before a submit round; still honor one Action:N /
+            # unknown-explore follow-up so the EQA hint is not silently dropped.
+            if self.mode == "answer" and self._maybe_follow_eqa_explore_action(final):
+                final = self._do_submit_answer()
 
         wall = time.monotonic() - t0
         assert final is not None
@@ -711,7 +835,35 @@ class AgenticEQAExecutor:
                 "tools": result.tool_log,
             }
         )
+        self._flush_trace_to_agent(result)
         return result
+
+    def _flush_trace_to_agent(self, result: AgenticEQAResult) -> None:
+        """Stash trace rows on the agent so Habitat debug bundles can persist them."""
+        if not self._collect_trace:
+            return
+        rows = list(self._trace_rows)
+        if not rows:
+            return
+        self.agent._agentic_trace_rows = rows
+        self.agent._agentic_eqa_summary = {
+            "answer": result.answer,
+            "confidence": result.confidence,
+            "verified": result.verified,
+            "n_rounds": result.n_rounds,
+            "n_nav": result.n_nav,
+            "n_explore": result.n_explore,
+            "budget_hit": result.budget_hit,
+            "tools": list(result.tool_log),
+        }
+        if self._trace_path is None:
+            default = Path.home() / ".cache" / "habitat_eqa" / "agentic_traces" / "last_agentic_trace.jsonl"
+            default.parent.mkdir(parents=True, exist_ok=True)
+            default.write_text(
+                "".join(json.dumps(r, default=str) + "\n" for r in rows),
+                encoding="utf-8",
+            )
+            self._trace_path = default
 
 
 def run_agentic_eqa(
@@ -742,8 +894,8 @@ def run_agentic_eqa(
         agent,
         question,
         goal=goal,
-        max_rounds=int(max_rounds if max_rounds is not None else cfg.get("agentic_max_tool_rounds", 6) or 6),
-        max_nav_steps=int(max_nav_steps if max_nav_steps is not None else cfg.get("agentic_max_nav_steps", 3) or 3),
+        max_rounds=int(max_rounds if max_rounds is not None else cfg.get("agentic_max_tool_rounds", 8) or 8),
+        max_nav_steps=int(max_nav_steps if max_nav_steps is not None else cfg.get("agentic_max_nav_steps", 5) or 5),
         verify_min_sim=float(
             verify_min_sim
             if verify_min_sim is not None

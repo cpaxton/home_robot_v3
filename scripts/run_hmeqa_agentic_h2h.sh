@@ -2,12 +2,26 @@
 # Habitat HM-EQA holdout: classic Dynagraph vs agentic-verify Dynagraph.
 # Comparable MCQ slice (same IDs as prior paper/branch numbers).
 #
-# Usage:
-#   nohup ./scripts/run_hmeqa_agentic_h2h.sh [OUT_DIR] >> ~/runs/emet/hmeqa_agentic_h2h_nohup.log 2>&1 &
+# Usage (prefer emet jobs):
+#   uv run emet jobs run --name hmeqa-h2h --need-mib 12000 -- \
+#     env EMET_ALLOW_SDPA_ATTN=1 HOLDOUT_IDS=… ./scripts/run_hmeqa_agentic_h2h.sh OUT_DIR
+#
+# Resume (skip non-empty ${arm}_q*.jsonl; rebuild aggregate jsonl):
+#   RESUME=1 ARMS=classic,agentic ./scripts/run_hmeqa_agentic_h2h.sh OUT_DIR
 #
 # Arms:
 #   classic  — EMET_EQA_AGENTIC_VERIFY=0 (Habitat planning loop; prior holdout numbers)
 #   agentic  — EMET_EQA_AGENTIC_VERIFY=1 EMET_EQA_AGENTIC_ROUTER=0 (nav→SigLIP verify→answer)
+#
+# Env:
+#   ARMS=classic,agentic   which arms to run (comma-separated)
+#   RESUME=1               skip finished per-qid jsonl; do not truncate arm logs/jsonl
+#   SKIP_KILL_STALE=1      skip gpu_preflight --kill-stale (keep live robot/agent jobs)
+#   SKIP_GPU_WAIT=1        skip gpu_preflight --wait (e.g. NVML mismatch; Torch still sees CUDA)
+#   EGL_FAIL_ABORT=2       abort after this many consecutive Habitat EGL/CUDA-map failures
+#                          (0 = never). Pattern: WindowlessContext / unable to find CUDA device.
+#   NATIVE_CRASH_ABORT=1   stop after a fatal native signal (default: 1). Writes
+#                          native_crash_*.log and leaves prior episode artifacts intact.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -17,9 +31,69 @@ EMET_HABITAT="${EMET_HABITAT:-$ROOT/.venv-habitat/bin/emet-habitat}"
 # Small first: holdout-4 gate; override HOLDOUT_IDS for full-8.
 HOLDOUT_IDS="${HOLDOUT_IDS:-15,68,105,17}"
 TIMEOUT="${TIMEOUT:-7200}"
+ARMS="${ARMS:-classic,agentic}"
+RESUME="${RESUME:-0}"
+SKIP_KILL_STALE="${SKIP_KILL_STALE:-0}"
+SKIP_GPU_WAIT="${SKIP_GPU_WAIT:-0}"
+EGL_FAIL_ABORT="${EGL_FAIL_ABORT:-2}"
+NATIVE_CRASH_ABORT="${NATIVE_CRASH_ABORT:-1}"
 log() { echo "[$(date -Iseconds)] $*" | tee -a "$OUT/orchestrator.log"; }
 
-# Count IDs for progress (classic + agentic = 2 * n).
+_egl_fail_streak=0
+arm_log_has_egl_failure() {
+  local elog="$1"
+  [[ -f "$elog" ]] || return 1
+  # Tail only — avoid matching older episodes after resume.
+  tail -n 80 "$elog" | grep -Eqi \
+    'unable to find CUDA device|WindowlessContext: Unable to create windowless context'
+}
+
+native_crash_signal() {
+  case "$1" in
+    132) echo "SIGILL" ;;
+    134) echo "SIGABRT" ;;
+    135) echo "SIGBUS" ;;
+    136) echo "SIGFPE" ;;
+    137) echo "SIGKILL (possible OOM)" ;;
+    139) echo "SIGSEGV" ;;
+    *) return 1 ;;
+  esac
+}
+
+write_native_crash_capsule() {
+  local arm="$1"
+  local qid="$2"
+  local rc="$3"
+  local elog="$4"
+  local signal_name="$5"
+  local capsule="$OUT/native_crash_${arm}_q${qid}.log"
+  {
+    echo "timestamp=$(date -Iseconds)"
+    echo "arm=$arm"
+    echo "question_id=$qid"
+    echo "exit_code=$rc"
+    echo "signal=$signal_name"
+    echo "head=$(git rev-parse --short HEAD)"
+    echo "command=$EMET_HABITAT run-episode --question-id $qid"
+    echo
+    echo "----- episode log tail -----"
+    tail -n 160 "$elog" 2>/dev/null || true
+    echo
+    echo "----- process snapshot -----"
+    ps -eo pid,ppid,pgid,stat,etime,args | grep -E '[e]met-habitat|[h]abitat|[q]wen|[p]ython' || true
+  } >"$capsule"
+  log "native crash capsule → $capsule"
+}
+
+gpu_wait() {
+  if [[ "$SKIP_GPU_WAIT" == "1" ]]; then
+    log "SKIP_GPU_WAIT=1 — not running gpu_preflight --wait"
+    return 0
+  fi
+  NEED_MIB="${NEED_MIB:-12000}" ./scripts/gpu_preflight.sh --wait
+}
+
+# Count IDs for progress (only requested arms).
 _IFS_SAVE=$IFS
 IFS=',' read -r -a _PROGRESS_IDS <<<"$HOLDOUT_IDS"
 IFS=$_IFS_SAVE
@@ -28,8 +102,51 @@ for _qid in "${_PROGRESS_IDS[@]}"; do
   _qid="$(echo "$_qid" | tr -d '[:space:]')"
   [[ -n "$_qid" ]] && PROGRESS_N_IDS=$((PROGRESS_N_IDS + 1))
 done
-PROGRESS_TOTAL=$((PROGRESS_N_IDS * 2))
+_ARM_COUNT=0
+IFS=',' read -r -a _PROGRESS_ARMS <<<"$ARMS"
+IFS=$_IFS_SAVE
+for _arm in "${_PROGRESS_ARMS[@]}"; do
+  _arm="$(echo "$_arm" | tr -d '[:space:]')"
+  case "$_arm" in
+    classic|agentic) _ARM_COUNT=$((_ARM_COUNT + 1)) ;;
+    "") ;;
+    *) log "ERROR: unknown arm '$_arm' (want classic or agentic)"; exit 1 ;;
+  esac
+done
+PROGRESS_TOTAL=$((PROGRESS_N_IDS * _ARM_COUNT))
 PROGRESS_DONE=0
+
+rebuild_arm_jsonl() {
+  local name="$1"
+  local out="$OUT/${name}.jsonl"
+  : >"$out"
+  local qid
+  for qid in "${_PROGRESS_IDS[@]}"; do
+    qid="$(echo "$qid" | tr -d '[:space:]')"
+    [[ -n "$qid" ]] || continue
+    local ep="$OUT/${name}_q${qid}.jsonl"
+    if [[ -s "$ep" ]]; then
+      cat "$ep" >>"$out"
+    fi
+  done
+}
+
+count_done_units() {
+  local n=0
+  local arm qid
+  for arm in "${_PROGRESS_ARMS[@]}"; do
+    arm="$(echo "$arm" | tr -d '[:space:]')"
+    [[ -n "$arm" ]] || continue
+    for qid in "${_PROGRESS_IDS[@]}"; do
+      qid="$(echo "$qid" | tr -d '[:space:]')"
+      [[ -n "$qid" ]] || continue
+      if [[ -s "$OUT/${arm}_q${qid}.jsonl" ]]; then
+        n=$((n + 1))
+      fi
+    done
+  done
+  echo "$n"
+}
 
 jobs_heartbeat() {
   # Write OUT/progress.json always; also update emet jobs if EMET_JOB_ID is set.
@@ -86,7 +203,7 @@ print(row.get('debug_bundle_dir') or '')
   for f in topdown_map.png topdown_map_overlay.png topdown_gt_navmesh.png \
            explored_2d.npy obstacles_2d.npy grid_meta.json trajectory.jsonl \
            spawn_record.json metrics.json diagnostics_manifest.json floor_metrics.json \
-           topdown_exploration.mp4; do
+           topdown_exploration.mp4 agentic_trace.jsonl agentic_summary.json; do
     [[ -e "$src/$f" ]] && cp -a "$src/$f" "$dst/"
   done
   [[ -d "$src/maps" ]] && rm -rf "$dst/maps" && cp -a "$src/maps" "$dst/maps"
@@ -107,33 +224,53 @@ if ! uv run python -c "from emet.llms.attn_impl import flash_attn_2_available; r
   log "WARNING: running with EMET_ALLOW_SDPA_ATTN=1 (no flash-attn)"
 fi
 
-log "OUT=$OUT HEAD=$(git rev-parse --short HEAD) ids=$HOLDOUT_IDS total_units=$PROGRESS_TOTAL"
-jobs_heartbeat "init" "-" 0 "$PROGRESS_TOTAL"
-NEED_MIB="${NEED_MIB:-12000}" ./scripts/gpu_preflight.sh --wait
-./scripts/gpu_preflight.sh --kill-stale || true
+log "OUT=$OUT HEAD=$(git rev-parse --short HEAD) ids=$HOLDOUT_IDS total_units=$PROGRESS_TOTAL arms=$ARMS resume=$RESUME"
+if [[ "$RESUME" == "1" ]]; then
+  PROGRESS_DONE="$(count_done_units)"
+  rebuild_arm_jsonl classic
+  rebuild_arm_jsonl agentic
+  log "RESUME: restored aggregates; already done $PROGRESS_DONE/$PROGRESS_TOTAL units"
+fi
+jobs_heartbeat "init" "-" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
+gpu_wait
+if [[ "$SKIP_KILL_STALE" == "1" ]]; then
+  log "SKIP_KILL_STALE=1 — not running gpu_preflight --kill-stale"
+else
+  ./scripts/gpu_preflight.sh --kill-stale || true
+fi
 
 run_arm() {
   local name="$1"
   shift
   local out="$OUT/${name}.jsonl"
   local elog="$OUT/${name}.log"
-  : >"$out"
-  : >"$elog"
+  if [[ "$RESUME" == "1" ]]; then
+    rebuild_arm_jsonl "$name"
+    # Append to existing arm log rather than wiping prior episode traces.
+    : >>"$elog"
+  else
+    : >"$out"
+    : >"$elog"
+  fi
   log "START arm=$name ($*)"
   jobs_heartbeat "$name" "-" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
-  IFS=',' read -r -a ids <<<"$HOLDOUT_IDS"
-  for qid in "${ids[@]}"; do
+  local qid
+  for qid in "${_PROGRESS_IDS[@]}"; do
     qid="$(echo "$qid" | tr -d '[:space:]')"
     [[ -n "$qid" ]] || continue
-    NEED_MIB="${NEED_MIB:-12000}" ./scripts/gpu_preflight.sh --wait
-    ep="$OUT/${name}_q${qid}.jsonl"
+    local ep="$OUT/${name}_q${qid}.jsonl"
+    if [[ "$RESUME" == "1" && -s "$ep" ]]; then
+      log "SKIP $name q$qid (resume: non-empty $ep)"
+      continue
+    fi
+    gpu_wait
     : >"$ep"
     tag="h2h_${name}_q$(printf '%04d' "$qid")"
     log "----- $name q$qid (bundle tag=$tag) -----"
     jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
     set +e
     # shellcheck disable=SC2086
-    env "$@" timeout "$TIMEOUT" "$EMET_HABITAT" run-episode \
+    env PYTHONFAULTHANDLER=1 "$@" timeout "$TIMEOUT" "$EMET_HABITAT" run-episode \
       --question-id "$qid" \
       --method dynagraph \
       --explore-when-uncovered off \
@@ -146,22 +283,60 @@ run_arm() {
     set -e
     if [[ "$rc" -ne 0 ]]; then
       log "FAIL $name q$qid exit=$rc"
+      if signal_name="$(native_crash_signal "$rc")"; then
+        write_native_crash_capsule "$name" "$qid" "$rc" "$elog" "$signal_name"
+        if [[ "$NATIVE_CRASH_ABORT" != "0" ]]; then
+          log "ABORT: $signal_name in episode process. Do not retry in this batch; inspect the crash capsule and use emet jobs status/logs after driver recovery."
+          jobs_heartbeat "native-crash" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
+          exit "$rc"
+        fi
+      fi
+      if arm_log_has_egl_failure "$elog"; then
+        _egl_fail_streak=$((_egl_fail_streak + 1))
+        log "EGL/CUDA-map failure streak=${_egl_fail_streak} (abort after ${EGL_FAIL_ABORT}; empty nvidia-smi ≠ EGL OK)"
+        if [[ "${EGL_FAIL_ABORT}" =~ ^[0-9]+$ && "${EGL_FAIL_ABORT}" -gt 0 && "${_egl_fail_streak}" -ge "${EGL_FAIL_ABORT}" ]]; then
+          log "ABORT: Habitat EGL broken (WindowlessContext / unable to find CUDA device). Fix driver/EGL or reboot; do not keep retrying in Cursor."
+          exit 3
+        fi
+      else
+        _egl_fail_streak=0
+      fi
+    else
+      _egl_fail_streak=0
     fi
     if [[ -s "$ep" ]]; then
-      cat "$ep" >>"$out"
+      # Re-append only this episode into aggregate (rebuild keeps order).
+      rebuild_arm_jsonl "$name"
     fi
     snapshot_bundle "$name" "$qid" "$ep"
     PROGRESS_DONE=$((PROGRESS_DONE + 1))
     jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
   done
+  rebuild_arm_jsonl "$name"
   log "DONE arm=$name"
 }
 
-run_arm classic EMET_EQA_AGENTIC_VERIFY=0
-run_arm agentic \
-  EMET_EQA_AGENTIC_VERIFY=1 \
-  EMET_EQA_AGENTIC_ROUTER=0 \
-  EMET_EQA_TRACE=1
+_arm_list=()
+IFS=',' read -r -a _arm_list <<<"$ARMS"
+for _arm in "${_arm_list[@]}"; do
+  _arm="$(echo "$_arm" | tr -d '[:space:]')"
+  [[ -n "$_arm" ]] || continue
+  case "$_arm" in
+    classic)
+      run_arm classic EMET_EQA_AGENTIC_VERIFY=0
+      ;;
+    agentic)
+      run_arm agentic \
+        EMET_EQA_AGENTIC_VERIFY=1 \
+        EMET_EQA_AGENTIC_ROUTER=0 \
+        EMET_EQA_TRACE=1
+      ;;
+    *)
+      log "ERROR: unknown arm '$_arm' (want classic or agentic)"
+      exit 1
+      ;;
+  esac
+done
 
 uv run python scripts/summarize_hmeqa_agentic_h2h.py "$OUT" | tee -a "$OUT/orchestrator.log"
 

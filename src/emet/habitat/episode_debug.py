@@ -231,6 +231,20 @@ def save_episode_debug_bundle(
     raw = raw_eqa_full or metrics.raw_eqa_output
     (episode_dir / "raw_eqa.txt").write_text(raw, encoding="utf-8")
 
+    # Agentic tool-loop traces (EMET_EQA_TRACE=1 → AgenticEQAExecutor._flush_trace_to_agent).
+    trace_rows = getattr(agent, "_agentic_trace_rows", None) or []
+    if trace_rows:
+        (episode_dir / "agentic_trace.jsonl").write_text(
+            "".join(json.dumps(r, default=str) + "\n" for r in trace_rows),
+            encoding="utf-8",
+        )
+    summary = getattr(agent, "_agentic_eqa_summary", None)
+    if isinstance(summary, dict) and summary:
+        (episode_dir / "agentic_summary.json").write_text(
+            json.dumps(summary, indent=2, default=str) + "\n",
+            encoding="utf-8",
+        )
+
     if gm is not None:
         from emet.memory.graph_eqa.pretty_print import format_scene_graph_pretty
 

@@ -334,6 +334,197 @@ def test_A4_no_submit_without_verify_or_budget():
     assert "verify" in str(out).lower() or "not verified" in str(out).lower() or out.get("ok") is False
 
 
+def test_follow_eqa_action_after_unknown_submit():
+    """Unconfident Unknown + Action:obs must navigate instead of accepting the letter."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    order: list[str] = []
+    agent = MagicMock()
+    agent.parameters = {"eqa": {"agentic_verify": True}}
+    agent.graph_memory = MagicMock()
+    agent.graph_memory.last_eqa_action_obs_id = 11
+    agent.graph_memory._navigation_waypoint_for_obs.return_value = np.array([1.0, 0.0, 1.0])
+    agent.robot = MagicMock()
+    agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
+    agent.robot.get_observation.return_value = None
+
+    def _nav(*_a, **_k):
+        order.append("nav")
+        return True
+
+    def _update(*_a, **_k):
+        order.append("update")
+
+    def _verify(*_a, **_k):
+        order.append("verify")
+        return MagicMock(
+            status="PRESENT",
+            sim=0.9,
+            ok=True,
+            obs_id=11,
+            phrase="clock",
+            text_feat=None,
+            img_feat=None,
+        )
+
+    agent.navigate_to_target_pose = _nav
+    agent.update = _update
+    agent.graph_memory.verify_phrase_at_obs = _verify
+    agent.run_exploration = MagicMock(return_value=True)
+    agent._siglip_guided_frontier = MagicMock(return_value=None)
+    agent._best_frontier_point_from_graph = MagicMock(return_value=None)
+
+    ex = AgenticEQAExecutor(
+        agent,
+        question="Where is the clock?",
+        max_rounds=4,
+        max_nav_steps=3,
+        router=False,
+    )
+    # Even on the last round / after explore used the budget, Action:N must still run.
+    ex._round = 3
+    ex._n_explore = 3
+    followed = ex._maybe_follow_eqa_explore_action(
+        {"ok": True, "answer": "Unknown", "confidence": False}
+    )
+    assert followed is True
+    assert "nav" in order and "verify" in order
+    assert 11 in ex._followed_eqa_actions
+    assert agent.graph_memory.last_eqa_action_obs_id is None
+    # Same Action obs already followed → soft explore_frontier instead of locking Unknown.
+    agent.graph_memory.last_eqa_action_obs_id = 11
+    order.clear()
+    assert ex._maybe_follow_eqa_explore_action({"ok": True, "answer": "Unknown", "confidence": False}) is True
+    assert ex._n_unknown_explore == 1
+    assert agent.run_exploration.called
+
+
+def test_unknown_without_action_obs_explores():
+    """Action:N OOB / missing obs id must soft-explore instead of accepting empty Unknown."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {"agentic_verify": True}}
+    agent.graph_memory = MagicMock()
+    agent.graph_memory.last_eqa_action_obs_id = None
+    agent.robot = MagicMock()
+    agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
+    agent.robot.get_observation.return_value = None
+    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.update = MagicMock()
+    agent.run_exploration = MagicMock(return_value=True)
+    agent._siglip_guided_frontier = MagicMock(return_value=None)
+    agent._best_frontier_point_from_graph = MagicMock(return_value=None)
+    agent.graph_memory.verify_phrase_at_obs = MagicMock(
+        return_value=MagicMock(
+            status="ABSENT",
+            sim=0.1,
+            ok=True,
+            obs_id=7,
+            phrase="bowl",
+            text_feat=None,
+            img_feat=None,
+        )
+    )
+    ex = AgenticEQAExecutor(agent, question="Where is the bowl?", max_rounds=6, max_nav_steps=4, router=False)
+    ex._n_explore = 4
+    assert ex._maybe_follow_eqa_explore_action({"ok": True, "answer": "Unknown", "confidence": False}) is True
+    assert ex._n_unknown_explore == 1
+    assert agent.run_exploration.called
+
+
+def test_submit_allowed_when_nav_budget_exhausted():
+    """Nav exhausted → submit_answer ok without PRESENT (so Action:N can be followed)."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {}
+    agent.graph_memory = MagicMock()
+    agent.graph_memory.query_answer.return_value = ("r", "Unknown", False, "cr", None, [])
+    agent.graph_memory.last_eqa_action_obs_id = 2
+    ex = AgenticEQAExecutor(agent, question="Where?", max_rounds=6, max_nav_steps=2, router=False)
+    ex._verified = False
+    ex._round = 1
+    ex._n_explore = 2
+    out = ex.handle_tool("submit_answer", {})
+    assert out.get("ok") is True
+    assert str(out.get("answer") or "").lower() == "unknown"
+
+
+def test_fallback_explores_remaining_budget_instead_of_verify_loop():
+    """Hypotheses consumed + budget left → explore, not repeat verify (failfix6 burned 5 rounds)."""
+    _require_agentic()
+    from types import SimpleNamespace
+
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {}
+    agent.graph_memory = MagicMock()
+    agent.graph_memory.get_nodes.return_value = [SimpleNamespace(is_frontier=True, is_viewpoint=False)]
+    ex = AgenticEQAExecutor(agent, question="Where is the clock?", max_rounds=8, max_nav_steps=6, router=False)
+    ex._hypotheses = [MagicMock(obs_id=1), MagicMock(obs_id=2)]
+    ex._hyp_i = 2
+    ex._n_nav = 2
+    ex._n_explore = 1
+    ex._last_verify = MagicMock(status="ABSENT")
+    tool, _args = ex._fallback_tool()
+    assert tool == "explore_frontier"
+
+
+def test_fallback_submits_when_budget_exhausted_after_verify():
+    """Budget spent + a verify result on record → submit_answer, never re-verify."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {}
+    agent.graph_memory = MagicMock()
+    ex = AgenticEQAExecutor(agent, question="Where is the clock?", max_rounds=8, max_nav_steps=3, router=False)
+    ex._hypotheses = [MagicMock(obs_id=1)]
+    ex._hyp_i = 1
+    ex._n_nav = 2
+    ex._n_explore = 1
+    ex._last_verify = MagicMock(status="ABSENT")
+    tool, _args = ex._fallback_tool()
+    assert tool == "submit_answer"
+
+
+def test_verify_phrase_prefers_question_stem_over_mcq_option():
+    """Default verify phrase must come from the stem (fruit bowl), not an option (kitchen island)."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = MagicMock()
+    gm._relevant_phrases = []
+    gm._relevant_objects = ["kitchen island", "fruit bowl"]
+    seen: list[str] = []
+
+    def _verify(phrase, _oid, rgb=None, min_sim=0.0):
+        seen.append(phrase)
+        return MagicMock(
+            status="ABSENT", sim=0.1, ok=True, obs_id=5, phrase=phrase, text_feat=None, img_feat=None
+        )
+
+    gm.verify_phrase_at_obs = _verify
+    agent.graph_memory = gm
+    agent.robot = None
+    ex = AgenticEQAExecutor(
+        agent,
+        question="I'm looking for the fruit bowl. A) On the kitchen island B) On the dining table. Answer:",
+        max_rounds=4,
+        router=False,
+    )
+    out = ex.handle_tool("verify_siglip", {"obs_id": 5})
+    assert out.get("ok") is True
+    assert seen == ["fruit bowl"]
+
+
 def test_A5_siglip_alive_during_verify_released_before_vlm():
     """A5: warm keeps encoder; release_siglip_for_vlm drops it before answer VLM."""
     _require_vram_split()
@@ -767,3 +958,33 @@ def test_D2_budget_knee():
     assert knee is not None
     assert knee["max_rounds_cap"] >= 2
 
+
+def test_agentic_submit_does_not_clamp_answer_max_tokens(monkeypatch):
+    """Bal-32 regression: agentic must not setdefault EMET_EQA_ANSWER_MAX_NEW_TOKENS=64."""
+    _require_agentic()
+    import os
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    monkeypatch.delenv("EMET_EQA_ANSWER_MAX_NEW_TOKENS", raising=False)
+
+    agent = MagicMock()
+    gm = MagicMock()
+    agent.graph_memory = gm
+    agent.planner = None
+    agent.robot = None
+
+    def _qa(question, xyt, planner):
+        # Env must remain unset so graph_memory default (256) applies.
+        assert "EMET_EQA_ANSWER_MAX_NEW_TOKENS" not in os.environ
+        return ("", "B", True, "", None, [])
+
+    gm.query_answer.side_effect = _qa
+    gm.select_obs_ids_for_verified_answer = MagicMock(return_value=[1])
+
+    ex = AgenticEQAExecutor(agent, "Where is the lamp?", router=False, collect_trace=False)
+    ex._verified = True
+    ex._verified_obs_id = 1
+    out = ex._do_submit_answer()
+    assert out["ok"] is True
+    assert out["answer"] == "B"
+    assert "EMET_EQA_ANSWER_MAX_NEW_TOKENS" not in os.environ

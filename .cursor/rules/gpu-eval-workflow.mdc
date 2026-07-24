@@ -8,19 +8,28 @@ alwaysApply: true
 ## Preflight (before any VLM / Habitat / Robocasa GPU job)
 
 ```bash
-uv run emet eval status                # see free VRAM + compute apps
-uv run emet eval kill-stale
+uv run emet eval status                # free VRAM + compute apps (read-only)
+uv run emet eval diagnose              # empty nvidia-smi ≠ Habitat EGL OK
+uv run emet eval kill-stale            # only if no intentional GPU job is live
 NEED_MIB=12000 uv run emet eval wait   # or: uv run emet eval check
 ```
 
-Canonical CLI: **`emet eval {status,check,wait,kill-stale}`**. Bash [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh) delegates to it (also provides `emet_export_pytorch_alloc` and **`emet_pytest_no_sim_ignore_args`** when sourced). Prefer `emet eval` over raw `pkill` / ad-hoc kills. Verify with `uv run emet eval --help` before suggesting flags.
+Canonical CLI: **`emet eval {status,diagnose,check,wait,kill-stale}`**. Bash [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh) delegates to it (also provides `emet_export_pytorch_alloc` and **`emet_pytest_no_sim_ignore_args`** when sourced). Prefer `emet eval` over raw `pkill` / ad-hoc kills. Verify with `uv run emet eval --help` before suggesting flags.
+
+### Empty `nvidia-smi` is not proof of safety
+
+- Free VRAM / no compute apps does **not** mean Habitat Magnum EGL can create a `WindowlessContext`.
+- HM-EQA can fail every episode with `unable to find CUDA device 0 among N EGL devices` while the GPU looks idle (seen 2026-07-24 morning failset).
+- Empty `CUDA_VISIBLE_DEVICES` hides the GPU from Torch/Habitat even when `nvidia-smi` still shows the card.
+- After a hard kill of Habitat mid-episode, driver/EGL can stay wedged until settle or reboot — use **`emet jobs cancel`**, not raw `kill -9` on `emet-habitat`.
 
 ## Experiment reliability
 
 - New eval/sim `Popen` paths must use [`emet.utils.process_tree`](../../src/emet/utils/process_tree.py) (`popen_session` + `terminate_process_tree` / `kill_process_tree`) so timeouts reap GPU grandchildren (`uv` wrappers, mujoco/habitat workers).
 - Do **not** run `emet eval kill-stale` from inside a long-running smoke that must stay alive (e.g. `run_dynagraph_dynamic_*`) — use `emet eval wait` only. Set `EMET_GPU_PROTECT_PIDS` if an orchestrator must keep a worker across cleanup.
-- After failed/hung evals: `uv run emet eval status`, then check **`~/runs/emet/`**, **`~/.cache/habitat_eqa/results/`**, and per-step logs before re-launching.
-- Docs: [`docs/evaluation.md`](../../docs/evaluation.md), orphan section in [`docs/known_issues.md`](../../docs/known_issues.md).
+- Do **not** run `kill-stale` while a managed `emet jobs` Habitat job is queued/waiting/running.
+- After failed/hung evals: `uv run emet eval status` / `diagnose`, then check **`~/runs/emet/`**, **`~/.cache/habitat_eqa/results/`**, and per-step logs before re-launching.
+- Docs: [`docs/evaluation.md`](../../docs/evaluation.md), orphan / agent-crash section in [`docs/known_issues.md`](../../docs/known_issues.md).
 
 ## `emet jobs` (required for long GPU / paper runs)
 
@@ -58,11 +67,17 @@ That sequence caused full-system freezes on an RTX 4090 workstation (GUI + SSH u
 | `run_overnight_eval_smoke.sh` | separate night | HM-EQA + OVMM + SQA3D matrix |
 | `run_overnight_habitat_eval.sh` | `--resume` | Multi-phase HM-EQA subsets |
 
-## Cursor agent sessions
+## Cursor agent sessions (crashes)
 
-- Run **multi-hour** Habitat evals and overnight scripts via **`uv run emet jobs run --name … -- CMD`** (or a dedicated terminal) — **not** as blocking inline commands in long agent turns.
-- Monitor progress/ETA with **`emet jobs`** / **`emet jobs status`**, not only `tail` on orchestrator logs.
-- If the agent segfaults mid-eval, check artifacts under **`~/runs/emet/`**, **`~/.cache/habitat_eqa/results/`**, and **`/tmp/unified_smoke_*.log`** — subprocesses may have finished.
+**Root cause of “Cursor agent keeps crashing” here is usually not a busy GPU.** Kernel logs show `emet[…]: segfault at 0` (null IP) or `trap invalid opcode` after Habitat-Sim / VLM / EGL teardown. That fault kills the agent tool host even when `nvidia-smi` only lists Xorg.
+
+Rules:
+
+- Launch Habitat / HM-EQA / overnight scripts **only** via **`uv run emet jobs run --name … -- CMD`** (or a dedicated terminal). Never as blocking inline agent shell commands that load Habitat or tear down GPU contexts.
+- Do **not** run “quick” Habitat smoke episodes inside the agent turn to “verify EGL”, then `kill` them — hard mid-episode kills are a common precursor to the next `emet` segfault.
+- Monitor with **`emet jobs` / `emet jobs status` / `emet jobs logs`**, not long `AwaitShell` on GPU work.
+- After an agent crash: `sudo dmesg -T | rg 'segfault|invalid opcode'` · `uv run emet eval diagnose` · `uv run emet jobs` · check `~/runs/emet/` — the detached job may still be running or only half-started.
+- H2H scripts abort after consecutive EGL failures (`EGL_FAIL_ABORT`, default 2) instead of burning the full failset.
 - Tier 0 + tracks 1–3 PR smoke: see [`docs/experiments/cross_track_smoke.md`](../../docs/experiments/cross_track_smoke.md).
 
 ## Cross-track smoke entrypoint

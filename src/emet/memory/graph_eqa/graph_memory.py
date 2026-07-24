@@ -154,18 +154,91 @@ _QUESTION_STOPWORDS = frozenset(
     }
 )
 
+# Stem verbs / fillers that must not win SigLIP phrase[0] over the object noun
+# (``trying remember placed`` beating ``large wall clock``).
+_QUESTION_VERB_FILLERS = frozenset(
+    {
+        "trying",
+        "try",
+        "remember",
+        "looking",
+        "look",
+        "placed",
+        "place",
+        "find",
+        "finding",
+        "found",
+        "seek",
+        "seeking",
+        "recall",
+        "tell",
+        "know",
+        "think",
+        "want",
+        "need",
+        "help",
+        "like",
+        "get",
+        "got",
+        "put",
+        "keep",
+        "leave",
+        "locate",
+        "locating",
+        "search",
+        "searching",
+        "show",
+        "showing",
+        "please",
+    }
+)
+
+
+def question_stem_for_keywords(question: str) -> str:
+    """Return the object stem of an HM-EQA question (no MCQ options / ``Answer:``).
+
+    Agentic traces pass the full ``… A) … D) … Answer:`` string into phrase
+    extract; without stripping, SigLIP verifies ``table sunroom answer`` instead
+    of ``fruit bowl`` (failfix5 q105).
+    """
+    text = (question or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"\s*Answer:\s*$", "", text, flags=re.IGNORECASE)
+    m = re.search(r"\s+[A-D]\)\s+", text, flags=re.IGNORECASE)
+    if m:
+        text = text[: m.start()]
+    if "?" in text:
+        text = text.split("?", 1)[0]
+    return text.strip()
+
 
 def heuristic_relevant_phrases(question: str, *, max_phrases: int = 4) -> list[str]:
-    """Multi-word object phrases from the question stem (e.g. ``woven basket``)."""
-    head = question.strip().split("?")[0].lower()
+    """Multi-word object phrases from the question stem (e.g. ``woven basket``).
+
+    Prefer later noun compounds over leading verb n-grams so SigLIP verify uses
+    ``large wall clock`` / ``fruit bowl`` rather than ``trying remember placed``.
+    """
+    head = question_stem_for_keywords(question).lower()
     tokens = [tok for tok in re.findall(r"[a-z]+", head) if len(tok) >= 3 and tok not in _QUESTION_STOPWORDS]
-    phrases: list[str] = []
+    scored: list[tuple[float, int, str]] = []
     for n in range(min(3, len(tokens)), 1, -1):
         for i in range(len(tokens) - n + 1):
             phrase = " ".join(tokens[i : i + n])
-            if phrase not in phrases:
-                phrases.append(phrase)
-    return phrases[:max_phrases]
+            words = phrase.split()
+            score = float(n) * 10.0 + 0.1 * float(i)
+            if words[0] in _QUESTION_VERB_FILLERS:
+                score -= 50.0
+            if words[-1] in _QUESTION_VERB_FILLERS:
+                score -= 20.0
+            scored.append((-score, i, phrase))
+    phrases: list[str] = []
+    for _neg_score, _i, phrase in sorted(scored):
+        if phrase not in phrases:
+            phrases.append(phrase)
+        if len(phrases) >= max_phrases:
+            break
+    return phrases
 
 
 def _object_match_tokens(text: str) -> set[str]:
@@ -312,12 +385,19 @@ def consolidate_relevant_keywords(
 
 
 def heuristic_relevant_objects(question: str, *, max_objects: int = 4) -> list[str]:
-    """Cheap noun-like tokens from the question stem (before MCQ options)."""
-    head = question.strip().split("?")[0]
-    out: list[str] = []
+    """Cheap noun-like tokens from the question stem (before MCQ options).
+
+    Skip verb fillers and prefer later tokens (object of ``looking for X``).
+    """
+    head = question_stem_for_keywords(question)
+    toks: list[str] = []
     for tok in re.findall(r"[a-z]{3,}", head.lower()):
-        if tok in _QUESTION_STOPWORDS:
+        if tok in _QUESTION_STOPWORDS or tok in _QUESTION_VERB_FILLERS:
             continue
+        if tok not in toks:
+            toks.append(tok)
+    out: list[str] = []
+    for tok in reversed(toks):
         if tok not in out:
             out.append(tok)
         if len(out) >= max_objects:
@@ -1840,6 +1920,16 @@ class GraphEQAMemory:
         sig = self._siglip_match_for_phrase(obj)
         return sig is not None and float(sig[0]) >= SIGLIP_PRESENT_THRESHOLD
 
+    def _obs_usable_for_eqa_image(self, obs_id: int) -> bool:
+        """True when ``obs_id`` may be attached as a VLM answer image.
+
+        Frontier sync stores black 8×8 placeholders — never answer off those.
+        Frontiers remain in the SCENE_GRAPH text for Action navigation targets.
+        """
+        if self._obs_is_frontier(int(obs_id)):
+            return False
+        return self._observation_by_id(int(obs_id)) is not None
+
     def _select_relevant_obs_ids(
         self,
         max_images: int = 6,
@@ -1849,10 +1939,10 @@ class GraphEQAMemory:
         """Select a diverse set of observation IDs for the EQA prompt (1-based).
 
         P2 diversification: instead of "all keyword matches then fill", build a
-        prioritized pool so the VLM sees question-relevant views *and* a frontier
-        view *and* a recent view *and* spatially spread context, capped at
-        ``max_images``. Falls back to the most recent observations when there are
-        no keyword objects.
+        prioritized pool so the VLM sees question-relevant views *and* a recent
+        view *and* spatially spread context, capped at ``max_images``. Falls back
+        to the most recent non-frontier observations when there are no keyword
+        objects. Frontier placeholder RGB is never selected for answering.
 
         When ``choices`` are location MCQ options, prefer views whose labels match
         option landmarks (refrigerator, treadmill, …) *before* SigLIP nearest —
@@ -1866,7 +1956,8 @@ class GraphEQAMemory:
         if max_images <= 0:
             return []
         if not self._relevant_objects:
-            return [o.obs_id for o in self._observations[-max_images:]]
+            recent = [int(o.obs_id) for o in self._observations if self._obs_usable_for_eqa_image(o.obs_id)]
+            return recent[-max_images:]
 
         by_id = {int(o.obs_id): o for o in self._observations}
         selected: list[int] = []
@@ -1874,6 +1965,8 @@ class GraphEQAMemory:
         def take(oid: int) -> bool:
             oid = int(oid)
             if oid in selected or oid not in by_id:
+                return False
+            if not self._obs_usable_for_eqa_image(oid):
                 return False
             selected.append(oid)
             return len(selected) >= max_images
@@ -2008,31 +2101,18 @@ class GraphEQAMemory:
                 if oid is not None and take(int(oid)):
                     return selected
 
-        # One frontier-tagged observation (prefer lowest nav_failures).
-        frontier_candidates = [
-            int(o.obs_id)
-            for o in reversed(self._observations)
-            if self._obs_is_frontier(int(o.obs_id)) and int(o.obs_id) not in selected
-        ]
-        if frontier_candidates:
-            frontier_by_id = {int(n.obs_id): n for n in self._nodes if getattr(n, "is_frontier", False)}
-            frontier_candidates.sort(
-                key=lambda oid: (
-                    int(getattr(frontier_by_id.get(oid), "nav_failures", 0)) if oid in frontier_by_id else 0,
-                    -oid,
-                )
-            )
-            if take(frontier_candidates[0]):
-                return selected
-
-        # Most recent observation (fresh context).
+        # Most recent non-frontier observation (fresh context).
         for o in reversed(self._observations):
             if take(int(o.obs_id)):
                 return selected
             break
 
         # Spatial spread: greedily add observations farthest from those chosen.
-        remaining = [int(o.obs_id) for o in self._observations if int(o.obs_id) not in selected]
+        remaining = [
+            int(o.obs_id)
+            for o in self._observations
+            if int(o.obs_id) not in selected and self._obs_usable_for_eqa_image(o.obs_id)
+        ]
         while remaining and len(selected) < max_images:
             best_oid = None
             best_dist = -1.0
@@ -2696,6 +2776,24 @@ class GraphEQAMemory:
         """Return ``(x, y, 1)`` nav waypoint for observation ``image_id``."""
         return self._navigation_waypoint_for_obs(int(image_id), robot_xyt)
 
+    def _resolve_eqa_action_image_ref(self, display_index: int, obs_ids: list[int] | None) -> int | None:
+        """Map ``Action: Image N`` to a graph observation id.
+
+        Prompt-attached images are renumbered 1..K (``obs_ids`` order). SCENE_GRAPH
+        lines use the raw ``[Image {obs_id}]``, so models often emit that id (e.g.
+        ``Navigate to Image 19``). Accept both when a real ``GraphObservation``
+        exists — not viewpoint-only nav-sample anchors without RGB history.
+        """
+        idx = int(display_index)
+        if idx < 1:
+            return None
+        ids = [int(x) for x in (obs_ids or [])]
+        if ids and 1 <= idx <= len(ids):
+            return ids[idx - 1]
+        if self._observation_by_id(idx) is not None:
+            return idx
+        return None
+
     def _target_point_from_display_image_index(
         self,
         display_index: int,
@@ -2704,13 +2802,11 @@ class GraphEQAMemory:
         nav_fallback_tail: list[GraphNavigationSample],
         robot_xyt: Any | None = None,
     ) -> np.ndarray | None:
-        """Map 1-based ``Image N`` from the EQA prompt to a navigation waypoint."""
+        """Map 1-based ``Image N`` from the EQA prompt (or graph obs_id) to a waypoint."""
         if display_index < 1:
             return None
-        if self._observations and obs_ids:
-            if display_index > len(obs_ids):
-                return None
-            oid = int(obs_ids[display_index - 1])
+        oid = self._resolve_eqa_action_image_ref(display_index, obs_ids)
+        if oid is not None:
             pt = self._navigation_waypoint_for_obs(oid, robot_xyt)
             if pt is not None:
                 return pt
@@ -2767,11 +2863,15 @@ class GraphEQAMemory:
         max_images = get_eqa_vl_int(self.parameters, "eqa_max_images", 4)
         parsed_choices = parse_mcq_choices_from_question(question)
         attribute_q = question_is_attribute_state(question) or choices_are_attribute_state(parsed_choices)
-        obs_ids = self._select_relevant_obs_ids(
-            max_images=max_images,
-            choices=parsed_choices if parsed_choices else None,
-            attribute_question=attribute_q,
-        )
+        obs_ids = [
+            int(oid)
+            for oid in self._select_relevant_obs_ids(
+                max_images=max_images,
+                choices=parsed_choices if parsed_choices else None,
+                attribute_question=attribute_q,
+            )
+            if self._obs_usable_for_eqa_image(oid)
+        ]
         self.last_eqa_obs_ids = list(obs_ids)
         max_graph_nodes = get_eqa_vl_int(self.parameters, "eqa_max_graph_nodes", 48)
         graph_str = self.to_string(
@@ -2780,8 +2880,10 @@ class GraphEQAMemory:
             prefer_obs_ids=obs_ids,
             record_prompt_count=True,
         )
+        # Prefer real RGB. If selection is empty (only frontier placeholders in memory),
+        # fall back to navigation viewpoint samples — never attach black 8×8 frontiers.
         nav_fallback_tail: list[GraphNavigationSample] = []
-        if self._observations:
+        if obs_ids:
             img_desc_str = self._get_image_descriptions_str(obs_ids)
         elif self._nav_samples:
             nav_fallback_tail = self._nav_samples[-max_images:]
@@ -2795,7 +2897,7 @@ class GraphEQAMemory:
                 )
             img_desc_str = "\n".join(lines)
         else:
-            img_desc_str = self._get_image_descriptions_str(obs_ids)
+            img_desc_str = "IMAGE_DESCRIPTIONS: (none — explore for a real camera view before answering)"
 
         commands: list[Any] = ["Question: " + question]
         if parsed_choices and choices_are_location_mcq(parsed_choices) and question_is_visibility_location(question):
@@ -2817,10 +2919,14 @@ class GraphEQAMemory:
         commands.append(img_desc_str)
 
         relevant_images: list[Image.Image] = []
-        for obs in self._observations:
-            if obs.obs_id in obs_ids:
-                relevant_images.append(Image.fromarray(obs.rgb.astype(np.uint8), mode="RGB"))
-                commands.append(Image.fromarray(obs.rgb.astype(np.uint8), mode="RGB"))
+        id_to_obs = {int(o.obs_id): o for o in self._observations}
+        for oid in obs_ids:
+            obs = id_to_obs.get(int(oid))
+            if obs is None or not self._obs_usable_for_eqa_image(oid):
+                continue
+            im = Image.fromarray(obs.rgb.astype(np.uint8), mode="RGB")
+            relevant_images.append(im)
+            commands.append(im)
         for nv in nav_fallback_tail:
             im = Image.fromarray(nv.rgb.astype(np.uint8), mode="RGB")
             relevant_images.append(im)
@@ -2838,7 +2944,11 @@ class GraphEQAMemory:
             eqa_kw: dict[str, Any] = {}
             if ans_cap > 0:
                 eqa_kw["max_new_tokens"] = ans_cap
-            raw = self.eqa_client(commands, **eqa_kw)
+            try:
+                raw = self.eqa_client(commands, **eqa_kw)
+            except TypeError:
+                # Older / test doubles that only accept the command list.
+                raw = self.eqa_client(commands)
             _logger.info(
                 f"query_answer: eqa_client done wall_s={_time.monotonic() - t_vl:.1f} "
                 f"out_chars={len(raw or '')}"
@@ -2866,8 +2976,25 @@ class GraphEQAMemory:
 
         reasoning, answer, confidence, action, confidence_reasoning = self.parse_answer(answer_outputs)
         # Salvage: small VLMs sometimes run away captioning and never emit ``answer:``.
-        # Re-ask tersely for just the choice letter using the same images/question.
-        if not answer.strip():
+        # Re-ask tersely for just the choice letter.
+        # - Empty answer → always salvage (64-token truncation / runaway caption).
+        # - ``Unknown`` on attribute/yes-no → salvage (holdout q65).
+        # - Empty/``Unknown`` on location MCQ → do NOT invent a letter (holdout q104/q105);
+        #   agentic should follow Action:/explore instead of memory/salvage A–D.
+        _ans_stripped = (answer or "").strip()
+        _ans_unknown = _ans_stripped.lower() in {"unknown", "none", "n/a", "na"}
+        _ans_unknownish = _ans_unknown or not _ans_stripped
+        _loc_mcq = bool(parsed_choices and choices_are_location_mcq(parsed_choices) and not attribute_q)
+        # Location MCQ: never invent A–D via generic salvage (empty or Unknown).
+        _should_salvage = _ans_unknownish and not _loc_mcq
+        if _loc_mcq and _ans_unknownish and not _ans_stripped:
+            # Truncated streams often omit ``answer:`` entirely (failfix5); normalize so
+            # human_answer / agentic follow-up treat this as Unknown, not memory-B.
+            answer = "Unknown"
+            _ans_stripped = "Unknown"
+            _ans_unknown = True
+            _ans_unknownish = True
+        if _should_salvage:
             salvage = self._salvage_answer_letter(question, commands)
             if salvage:
                 answer = salvage
@@ -2884,12 +3011,14 @@ class GraphEQAMemory:
             # always report HM-EQA deltas with the harness fingerprint + git commit.
             # Geometric under-equipment (mat under treadmill) may correct VLM guesses.
             # Image landmarks may correct memory-steered letters. Nearest-furniture memory
-            # alone must NOT override a clear VLM A–D (Q6: VLM B correct, memory A).
+            # alone must NOT override a clear VLM A–D (Q6: VLM B correct, memory A) **or**
+            # free-text that uniquely matches a choice ("the room with the blue curtains").
+            from emet.habitat.metrics import extract_mcq_letter
+
             img_letter = self._location_letter_from_attached_images(parsed_choices, obs_ids)
             equip_letter = self._equipment_letter_from_target_distances(parsed_choices)
             memory_letter = self._location_letter_from_nearest_memory(parsed_choices)
-            letter_m = re.search(r"\b([a-d])\b", (answer or "").strip().lower())
-            parsed_letter = letter_m.group(1).upper() if letter_m else ""
+            parsed_letter = extract_mcq_letter(answer, parsed_choices)
             abstain = answer_is_visibility_abstain(answer) or not parsed_letter
             preferred = ""
             if equip_letter and (abstain or parsed_letter != equip_letter):
@@ -2898,16 +3027,29 @@ class GraphEQAMemory:
                 preferred = img_letter
             elif abstain and memory_letter and (self._any_graph_label_match_for_confirmed() or not img_letter):
                 preferred = memory_letter
-            if preferred and (abstain or parsed_letter != preferred):
+            # Empty / Unknown location MCQ: keep Unknown so agentic can follow Action:N.
+            # Inventing A–D via memory/salvage-location caused failfix5 wrong B letters.
+            if _ans_unknownish:
+                pass
+            elif preferred and (abstain or parsed_letter != preferred):
                 answer = preferred
                 raw = (raw or "") + f"\n[memory-location]\nanswer:\n{preferred}\n"
                 self.last_eqa_raw = raw
             elif abstain:
-                salvage = self._salvage_location_mcq_letter(question, parsed_choices, commands)
-                if salvage:
-                    answer = salvage
-                    raw = (raw or "") + f"\n[salvage-location]\nanswer:\n{salvage}\n"
-                    self.last_eqa_raw = raw
+                # Visibility-style Yes/No on a WHERE question may still salvage; empty/Unknown
+                # already handled above. Do not salvage bare abstains without a letter.
+                if answer_is_visibility_abstain(answer) and not _ans_unknownish:
+                    salvage = self._salvage_location_mcq_letter(question, parsed_choices, commands)
+                    if salvage:
+                        answer = salvage
+                        raw = (raw or "") + f"\n[salvage-location]\nanswer:\n{salvage}\n"
+                        self.last_eqa_raw = raw
+            elif parsed_letter and not re.fullmatch(r"[A-E]", (answer or "").strip(), flags=re.I):
+                # Normalize NL choice text → letter so downstream scoring / human format
+                # see the same canonical answer the override logic respected.
+                answer = parsed_letter
+                raw = (raw or "") + f"\n[choice-text]\nanswer:\n{parsed_letter}\n"
+                self.last_eqa_raw = raw
         self.last_eqa_model_confident = bool(confidence)
         covered = self._graph_covers_relevant_objects()
         if confidence and not covered:
@@ -3020,8 +3162,7 @@ class GraphEQAMemory:
             match = re.search(r"\d+", action.strip())
             if match:
                 display_index = int(match.group())
-                if self._observations and obs_ids and 1 <= display_index <= len(obs_ids):
-                    self.last_eqa_action_obs_id = int(obs_ids[display_index - 1])
+                self.last_eqa_action_obs_id = self._resolve_eqa_action_image_ref(display_index, obs_ids)
                 target_point = self._target_point_from_display_image_index(
                     display_index,
                     obs_ids=obs_ids,

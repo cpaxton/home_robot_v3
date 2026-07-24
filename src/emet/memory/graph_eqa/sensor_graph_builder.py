@@ -384,6 +384,29 @@ def _graph_extract_config(parameters: Parameters | dict | None) -> tuple[int, st
     return mt, str(sys_p), suf
 
 
+def _skip_vlm_label_extract(parameters: Parameters | dict | None) -> bool:
+    """True when per-frame vision-VLM label extract should be skipped.
+
+    Opt-in only. A prior experiment tied this to ``EMET_EQA_AGENTIC_VERIFY`` to
+    avoid libcuda SIGSEGVs after Habitat nav, but that left agentic HM-EQA with
+    ``n_object=0`` on scenes without HM3D semantics / voxel captions (holdout
+    q104/q105). Use ``EMET_GRAPH_EQA_EXTRACT_VLM=0`` or
+    ``graph_eqa_extract.enabled: false`` when you intentionally want detector /
+    voxel labels only.
+    """
+    import os
+
+    env_ext = os.environ.get("EMET_GRAPH_EQA_EXTRACT_VLM", "").strip().lower()
+    if env_ext in ("0", "false", "no", "off"):
+        return True
+    if parameters is None:
+        return False
+    block = parameters.get("graph_eqa_extract") if not isinstance(parameters, dict) else parameters.get("graph_eqa_extract")
+    if isinstance(block, dict) and block.get("enabled") is False:
+        return True
+    return False
+
+
 class SensorGraphBuilder:
     """
     Produces object labels (VLM) and a world-frame anchor xyz from Observations.
@@ -438,6 +461,11 @@ class SensorGraphBuilder:
         voxel_labels: list[str] | None = None,
     ) -> tuple[list[str], str | None]:
         """Short labels for graph nodes; optional long raw VLM text as ``description`` (not used as labels)."""
+        if _skip_vlm_label_extract(self._parameters):
+            if voxel_labels:
+                return short_labels_from_voxel_descriptions(voxel_labels), None
+            return ["object"], None
+
         client = self._client()
         if client is None:
             if voxel_labels:

@@ -48,6 +48,7 @@ def test_eval_group_help():
     )
     assert result.returncode == 0
     assert "status" in result.stdout
+    assert "diagnose" in result.stdout
     assert "check" in result.stdout
     assert "wait" in result.stdout
     assert "kill-stale" in result.stdout

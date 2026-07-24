@@ -1303,6 +1303,7 @@ def eval_group() -> None:
 
     Examples:
       emet eval status
+      emet eval diagnose
       emet eval check --need-mib 12000
       emet eval wait --need-mib 12000
       emet eval kill-stale
@@ -1316,6 +1317,28 @@ def eval_status() -> None:
 
     for line in format_status_lines():
         click.echo(line)
+
+
+@eval_group.command(
+    "diagnose",
+    short_help="Explain GPU/EGL readiness (empty nvidia-smi ≠ Habitat OK)",
+)
+def eval_diagnose() -> None:
+    """Read-only Habitat/HM-EQA readiness notes for agents.
+
+    Empty compute apps does **not** prove Magnum EGL can create a WindowlessContext.
+    Also flags empty ``CUDA_VISIBLE_DEVICES``, missing ``.venv-habitat``, and recent
+    ``emet`` segfault hints from dmesg when readable.
+    """
+    from pathlib import Path
+
+    from emet.utils.gpu_preflight import diagnose_eval_environment
+
+    ok, lines = diagnose_eval_environment(repo_root=str(Path.cwd()))
+    for line in lines:
+        click.echo(line)
+    if not ok:
+        sys.exit(1)
 
 
 @eval_group.command("check", short_help="Exit 1 if free VRAM below threshold")

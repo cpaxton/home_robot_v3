@@ -659,14 +659,16 @@ Canonical GPU preflight for paper evals and overnight smokes (Python implementat
 | Subcommand | Role |
 |------------|------|
 | `emet eval status` | Free/total VRAM + compute apps (read-only) |
+| `emet eval diagnose` | Habitat/HM-EQA readiness notes: empty apps ≠ EGL OK; flags empty `CUDA_VISIBLE_DEVICES`, missing `.venv-habitat`, recent `emet` segfault hints |
 | `emet eval check [--need-mib N]` | Exit 1 if free VRAM &lt; N (default `NEED_MIB` or 12000) |
 | `emet eval wait [--need-mib N]` | Block until free VRAM is stably above N |
 | `emet eval kill-stale [--no-gpu] [--settle-sec S]` | SIGTERM→SIGKILL orphaned eval/sim/`uv run emet` trees |
 
-Skips the caller process ancestry and any PIDs in `EMET_GPU_PROTECT_PIDS`. See [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs) and [environment_variables.md](environment_variables.md).
+Skips the caller process ancestry and any PIDs in `EMET_GPU_PROTECT_PIDS`. See [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [known_issues.md](known_issues.md#nvidia-driver-hang--cursor-agent-crash-during-stacked-gpu-evals), and [environment_variables.md](environment_variables.md).
 
 ```bash
 uv run emet eval status
+uv run emet eval diagnose
 uv run emet eval kill-stale
 NEED_MIB=12000 uv run emet eval wait
 uv run emet eval check --need-mib 14000

@@ -160,12 +160,17 @@ def test_query_answer_image_descriptions_tag_frontier():
     )
     vm = _StubVoxelMap()
     mem.sync_frontier_nodes(vm, _StubPlanner(), [0, 0, 0])
+    frontier_ids = [int(o.obs_id) for o in mem.get_observations() if mem._obs_is_frontier(o.obs_id)]
+    assert frontier_ids
+    # Descriptions may still tag frontiers for debug / SCENE_GRAPH Action targets.
+    s = mem._get_image_descriptions_str(frontier_ids)
+    assert "unexplored" in s.lower()
+    assert s.count("Image ") == len(frontier_ids)
+    assert "Image 4." not in s
+    # Answer-image selection must never attach placeholder frontiers.
     mem.extract_relevant_objects("explore the room")
     obs_ids = mem._select_relevant_obs_ids(max_images=3)
-    s = mem._get_image_descriptions_str(obs_ids)
-    assert "unexplored" in s.lower()
-    assert s.count("Image ") == len(obs_ids)
-    assert "Image 4." not in s
+    assert not any(mem._obs_is_frontier(oid) for oid in obs_ids)
 
     obs = mem.get_observations()[0]
     pt = mem._target_point_from_image_id(obs.obs_id)
