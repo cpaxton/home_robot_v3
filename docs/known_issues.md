@@ -145,12 +145,24 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 
 **Status:** Mitigated (2026-06) · **Seen:** 2026-06-28, 2026-07-24 · **Hardware:** RTX 4090 workstation (GPU drives display + CUDA)
 
-### Symptoms
+There are **two distinct segfault modes**. Do not conflate them.
 
-- Chaining Robocasa dynagraph explore → full pytest (MuJoCo-native tests) → Habitat HM-EQA with VLM in one session.
-- Full-system **live lock**: mouse moves, GUI and SSH unresponsive; journal stops mid-line.
-- Separately: **Cursor agent** dies when the agent tool tree runs Habitat / tears down GPU context. Kernel often shows `emet[…]: segfault at 0` (null IP) or `trap invalid opcode` after Habitat-Sim / VLM / EGL teardown — agent session dies even if a detached `emet jobs` child would have finished.
-- **Not** explained by a busy GPU: crashes and HM-EQA failsets have happened with `nvidia-smi` showing only Xorg/gnome-shell and ~full free VRAM.
+### Mode A — Habitat episode `libcuda` SIGSEGV (`exit=139`)
+
+- **What dies:** `emet-habitat run-episode` / `.venv-habitat` Python. Orchestrator logs `FAIL … exit=139` and `timeout: the monitored command dumped core`.
+- **Kernel:** `python[…]: segfault at 43/44 … in libcuda.so.*` (same IP offset across repeats).
+- **When:** Qwen3-VL **vision** `generate` (look-around / mid-episode) while Habitat-Sim **EGL** still owns the same GPU. Worst scenes: `00167-yogvKWUrdnw` (q104/q105); also flaky on `00094-WT4QWwXrMzs` (q68).
+- **Artifacts:** empty `OUT/agentic_qN.jsonl` (touched then never written). Job may continue to later IDs unless `NATIVE_CRASH_ABORT=1` (default).
+- **Stack that triggers it:** Habitat torch `+cu130` + `EMET_ALLOW_SDPA_ATTN=1` (no flash-attn wheel) + int4 bitsandbytes + windowless EGL on a display GPU.
+- **Partial mitigations:** `torch.cuda.synchronize()` before multimodal generate in `qwen3_vl_client`; H2H aborts on native crash (`NATIVE_CRASH_ABORT`); optional `EMET_GRAPH_EQA_EXTRACT_VLM=0` if mid-nav extract forces the race (do **not** auto-tie this to agentic verify — that caused `n_object=0` on q104/q105). Failures remain **flaky**.
+- **See:** [agentic_scale.md](experiments/agentic_scale.md#fail-set-regressions-found-2026-07-24).
+
+### Mode B — Cursor agent / `emet` null-IP SIGSEGV
+
+- **What dies:** the Cursor agent process (`emet[…]: segfault at 0` null IP, or `trap invalid opcode`) when a turn runs or probes Habitat / tears down GPU context.
+- **What survives:** a detached **`emet jobs`** child often keeps running — check registry + `OUT/` before re-launching.
+- Also: full-system **live lock** when chaining Robocasa dynagraph explore → full pytest (MuJoCo-native) → Habitat HM-EQA with VLM in one session (mouse moves; GUI/SSH dead).
+- **Not** explained by a busy GPU: Mode A/B and EGL map failures have happened with `nvidia-smi` showing only Xorg/gnome-shell and ~full free VRAM.
 
 ### Habitat EGL failure with “idle” GPU (2026-07-24)
 
@@ -164,5 +176,6 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 - Cross-track smoke: [`run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh) defaults **`RUN_DEEP_EVAL=0`**; run [`run_overnight_eval_smoke.sh`](../scripts/run_overnight_eval_smoke.sh) on a **separate night**.
 - Safe no-sim pytest: source `gpu_preflight.sh` and pass **`emet_pytest_no_sim_ignore_args`** (excludes unmarked MuJoCo paths under `src/test/simulation/`).
 - Long evals: **`uv run emet jobs run --name … -- CMD`** (or dedicated terminal) — **not** blocking Cursor agent inline runs; do not hard-kill Habitat mid-episode from the agent (use **`emet jobs cancel`**).
+- On Mode A: leave `NATIVE_CRASH_ABORT=1`, inspect `native_crash_*.log` + `journalctl -k` for `libcuda`; retry the failed qid only after `emet eval diagnose` / free GPU — do not treat empty jsonl as a scored miss without a crash capsule.
 
 Docs: [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [cross_track_smoke.md](experiments/cross_track_smoke.md), [`.cursor/rules/gpu-eval-workflow.mdc`](../.cursor/rules/gpu-eval-workflow.mdc).
