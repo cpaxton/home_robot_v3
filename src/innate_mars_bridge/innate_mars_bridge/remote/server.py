@@ -191,7 +191,9 @@ class ZmqServer(BaseZmqServer):
         if action is None:
             return
         if "xyt" in action:
-            blocking = bool(action.get("nav_blocking", True))
+            # Default non-blocking so ZMQ recv can ack ``step`` while Nav2/Spin runs.
+            # Clients that need a finish signal wait on ``at_goal`` (see GenericZmqClient).
+            blocking = bool(action.get("nav_blocking", False))
             relative = bool(action.get("nav_relative", False))
             self.client.move_base_to(
                 action["xyt"],

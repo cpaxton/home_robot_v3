@@ -33,6 +33,7 @@ import numpy as np
 import zmq
 
 import emet.utils.compression as compression
+from emet.agent.env_flags import env_base_rotate_only
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
@@ -940,14 +941,43 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             action["nav_relative"] = True
         elif world_frame:
             action["nav_world"] = True
+        # Never block the robot recv thread on Nav2/Spin — that delays step ack and makes
+        # ``send_action(reliable=True)`` wait for the entire motion (Discord appears hung).
+        # Client waits on ``at_goal`` below instead (same pattern as Stretch ``nav_blocking``).
+        wait_s = float(timeout) if timeout is not None else 30.0
+        if env_sim_nav_teleport():
+            warn_sim_nav_env_flags()
+            action["nav_teleport"] = True
+            wait_s = min(wait_s, 3.0)
+        action["nav_blocking"] = False
+        action["nav_timeout_s"] = wait_s
         frame_tag = "nav_relative" if relative else ("nav_world" if world_frame else "episode_compose")
         logger.info(
             f"move_base_to: goal=[{float(xyt[0]):.3f}, {float(xyt[1]):.3f}, {float(xyt[2]):.3f}] "
             f"frame={frame_tag} blocking={blocking}"
         )
-        if env_sim_nav_teleport():
-            warn_sim_nav_env_flags()
-            action["nav_teleport"] = True
+        if env_base_rotate_only():
+            xy_eps = 0.02
+            if relative:
+                if abs(float(xyt[0])) > xy_eps or abs(float(xyt[1])) > xy_eps:
+                    logger.warning(
+                        "EMET_BASE_ROTATE_ONLY: refusing relative XY translation "
+                        f"[{float(xyt[0]):.3f}, {float(xyt[1]):.3f}] (yaw-only allowed)."
+                    )
+                    return False
+            else:
+                try:
+                    cur = np.asarray(self.get_base_pose(), dtype=float).reshape(-1)
+                except Exception:
+                    cur = None
+                if cur is not None and cur.size >= 2:
+                    dxy = float(np.linalg.norm(xyt[:2] - cur[:2]))
+                    if dxy > xy_eps:
+                        logger.warning(
+                            "EMET_BASE_ROTATE_ONLY: refusing absolute XY move "
+                            f"(Δxy={dxy:.3f} m from current base; yaw-only allowed)."
+                        )
+                        return False
         if world_frame and self._robosuite_sim_zmq():
             sess = read_emet_session(self._obs) or read_emet_session(self._state)
             org = None if sess is None else sess.get("navigation_origin_xyt")
@@ -975,9 +1005,6 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             t_clear = timeit.default_timer()
             while not self._nav_goal_reset_seen() and timeit.default_timer() - t_clear < 1.0:
                 time.sleep(0.01)
-            wait_s = timeout or 30.0
-            if env_sim_nav_teleport():
-                wait_s = min(float(wait_s), 3.0)
             return self._wait_at_goal(timeout=wait_s, target_xyt=xyt)
         return True
 

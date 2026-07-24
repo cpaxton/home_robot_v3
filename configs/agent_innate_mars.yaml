@@ -1,10 +1,14 @@
 # Innate Mars agent preset (unified nested config).
+# Discord house chat + explore: see docs/robots/innate_mars_hardware.md
+#   export DISCORD_TOKEN=...
+#   uv run emet run agent --connection herman --config configs/agent_innate_mars.yaml --name Herman
 extends: configs/emet/default.yaml
 
 robot: innate_mars
 
 agent:
-  eqa: false
+  # Load Qwen3-VL captioner for describe_scene / memory QA (Discord “what do you see?”).
+  eqa: true
   discord: true
 
 embodied_agent:
@@ -22,5 +26,6 @@ embodied_agent:
       bounds_3d_iou_min: 0.08
 
 mapping:
+  # Dynagraph/eval VL sizing (separate from agent --eqa / mapping.eqa captioner).
   eqa_vl:
     model_size: "4B"

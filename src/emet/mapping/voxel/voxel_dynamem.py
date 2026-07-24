@@ -1733,11 +1733,25 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
         obs_ids = self.voxel_pcd._obs_counts
         xyz, _, _, _ = self.voxel_pcd.get_pointcloud()
-        grid_coord = list(
-            self.xy_to_grid_coords(torch.mean(xyz[obs_ids == obs_ids.max()], dim=0)[:2].int().cpu().numpy())
-        )
-        for i in range(len(grid_coord)):
-            grid_coord[i] = int(grid_coord[i])
+        grid_coord = [0, 0]
+        try:
+            if (
+                xyz is not None
+                and getattr(xyz, "numel", lambda: len(xyz))() > 0
+                and obs_ids is not None
+                and getattr(obs_ids, "numel", lambda: int(np.size(obs_ids)))() > 0
+            ):
+                # Empty clouds happen on first frames / failed depth — do not call .max() on empty.
+                max_id = obs_ids.max()
+                sel = xyz[obs_ids == max_id]
+                if sel.numel() > 0:
+                    xy = torch.mean(sel, dim=0)[:2].int().cpu().numpy()
+                    grid_coord = list(self.xy_to_grid_coords(xy))
+                    for i in range(len(grid_coord)):
+                        grid_coord[i] = int(grid_coord[i])
+        except Exception as e:
+            logger.warning(f"list_objects_in_an_image: grid coord from cloud failed ({e})")
+            grid_coord = [0, 0]
 
         if len(objects) == 0:
             self.image_descriptions.append((["object"], grid_coord))

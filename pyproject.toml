@@ -72,6 +72,9 @@ dependencies = [
     "fla-core>=0.5.0",
     "flash-linear-attention>=0.5.0",
     "triton>=2.3.1",
+    # Flash-Attn 2 for Qwen3-VL / CUDA VL loads (emet.llms.attn_impl). Needs a wheel matching
+    # this env's torch+CUDA; without it set EMET_ALLOW_SDPA_ATTN=1 for the slower SDPA path.
+    "flash-attn>=2.7.0",
     "accelerate>=1.6.0",
     "einops",
     "protobuf",
