@@ -1,6 +1,7 @@
 # Agentic HM-EQA scale experiments
 
-Branch: **`exp/agentic-hmeqa-scale`** (cut from `main` after PR #77 merge).
+Results branch: **`exp/agentic-hmeqa-bal32-results`** (off `main` after scale-doc PR #79).
+Live Wave 1 run: `~/runs/emet/hmeqa_agentic_bal32_20260723_212307`.
 
 Goal: test whether classic vs agentic-verify Dynagraph gains hold past holdout-8.
 
@@ -8,8 +9,8 @@ Goal: test whether classic vs agentic-verify Dynagraph gains hold past holdout-8
 
 | Wave | What | Status |
 |------|------|--------|
-| 0 | Flash-Attn in `.venv-habitat`; bundle-tag smoke; this doc | done (SDPA fallback) |
-| 1 | **Balanced-32** classic vs agentic H2H (primary) | running |
+| 0 | Flash-Attn in `.venv-habitat`; bundle-tag smoke; scale doc (#79) | done (SDPA fallback) |
+| 1 | **Balanced-32** classic vs agentic H2H (primary) | **running** → this PR when DONE |
 | 2 | Paper-20 **or** annotated-semantics H2H (one night) | after go/no-go |
 | 3 | Full 113 classic dynagraph + `graph_eqa`; agentic 113 only if Wave 1–2 support claim | later |
 
