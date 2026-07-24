@@ -19,7 +19,7 @@ Start here to run and reproduce benchmarks for the Dynagraph CoRL paper.
 | **SQA3D** | `tab:sqa3d_backend_replay` | [sqa3d.md](sqa3d.md) | `uv run emet sqa3d run-episode --mock-llm --question-id 220602000000` | `~/runs/emet/sqa3d/` | `emet sqa3d plot-results` → `paper/figures/sqa3d_*` |
 | **GT object finding** | `sec:gt_experiments` | [gt_object_finding.md](gt_object_finding.md) | `emet run dynagraph --ground-truth` + eval script | `runs/<export>/` | — |
 | **Innate Mars** | appendix | [innate_mars.md](innate_mars.md) | `emet run dynagraph --robot innate_mars --ground-truth` | `/tmp/mars_*` | — |
-| **Habitat EQA** | `tab:hmeqa_vs_prior`, Appendix | [habitat_eqa.md](habitat_eqa.md) · **[results](habitat_eqa_results.md)** | `.venv-habitat/bin/emet-habitat` | `~/.cache/habitat_eqa/results/` | topdown from debug bundles |
+| **Habitat EQA** | `tab:hmeqa_vs_prior`, Appendix | [habitat_eqa.md](habitat_eqa.md) · **[results](habitat_eqa_results.md)** · [agentic scale](agentic_scale.md) | `.venv-habitat/bin/emet-habitat` | `~/.cache/habitat_eqa/results/` | topdown from debug bundles |
 | **Representative sample (all tracks)** | — | [representative_sample_results.md](representative_sample_results.md) | `./scripts/run_representative_benchmark_sample.sh` | `~/runs/emet/representative_sample/` | ablation chart, maps, retrieval panels |
 | **Cross-track smoke** | — | **[cross_track_smoke.md](cross_track_smoke.md)** | `./scripts/run_overnight_cross_track_smoke.sh` | `~/runs/emet/overnight_cross_track/` | validate before multi-day sweeps |
 | **Simulation smoke (7-track)** | — | **[simulation_testing_plan.md](../simulation_testing_plan.md)** | `./scripts/run_simulation_smoke_battery.sh` | `~/runs/emet/simulation_smoke/` | paper-facing sequential battery |
