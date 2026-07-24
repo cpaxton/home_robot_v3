@@ -170,6 +170,11 @@ def update_job(
     log_path: str | Path | None = None,
     error: str | None = None,
     meta_update: dict[str, Any] | None = None,
+    units_done: int | None = None,
+    units_total: int | None = None,
+    phase: str | None = None,
+    current_id: str | None = None,
+    write_progress_json: bool = True,
 ) -> JobRecord:
     job = load_job(job_id)
     if job is None:
@@ -187,9 +192,22 @@ def update_job(
         job.log_path = str(log_path)
     if error is not None:
         job.error = str(error)
+    progress_meta: dict[str, Any] = {}
+    if units_done is not None:
+        progress_meta["units_done"] = int(units_done)
+    if units_total is not None:
+        progress_meta["units_total"] = int(units_total)
+    if phase is not None:
+        progress_meta["phase"] = str(phase)
+    if current_id is not None:
+        progress_meta["current_id"] = str(current_id)
     if meta_update:
         job.meta.update(meta_update)
+    if progress_meta:
+        job.meta.update(progress_meta)
     save_job(job)
+    if write_progress_json and job.out_dir and progress_meta:
+        write_progress_file(job.out_dir, **progress_meta)
     return job
 
 
@@ -328,22 +346,157 @@ def _format_age(created_at: float, *, now: float | None = None) -> str:
     return f"{age_m / 60.0:.1f}h"
 
 
+def _format_duration(seconds: float | None) -> str:
+    if seconds is None or seconds < 0 or seconds != seconds:  # NaN
+        return "-"
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    if seconds < 3600:
+        return f"{seconds / 60.0:.0f}m"
+    return f"{seconds / 3600.0:.1f}h"
+
+
+@dataclass(frozen=True)
+class JobProgress:
+    """Derived progress / ETA for a job (from meta and/or out_dir/progress.json)."""
+
+    units_done: int | None = None
+    units_total: int | None = None
+    phase: str | None = None
+    current_id: str | None = None
+    elapsed_s: float = 0.0
+    rate_s_per_unit: float | None = None
+    eta_s: float | None = None
+    source: str = "none"
+
+    @property
+    def fraction(self) -> float | None:
+        if self.units_done is None or self.units_total is None or self.units_total <= 0:
+            return None
+        return min(1.0, max(0.0, float(self.units_done) / float(self.units_total)))
+
+
+def progress_json_path(out_dir: str | Path | None) -> Path | None:
+    if not out_dir:
+        return None
+    return Path(out_dir).expanduser() / "progress.json"
+
+
+def read_progress_file(out_dir: str | Path | None) -> dict[str, Any]:
+    path = progress_json_path(out_dir)
+    if path is None or not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_progress_file(out_dir: str | Path, **fields: Any) -> Path:
+    """Atomically write ``out_dir/progress.json`` (merge with existing keys)."""
+    root = Path(out_dir).expanduser()
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / "progress.json"
+    cur = read_progress_file(root)
+    cur.update({k: v for k, v in fields.items() if v is not None})
+    cur["updated_at"] = _now()
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(cur, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(path)
+    return path
+
+
+def _coerce_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def compute_job_progress(job: JobRecord, *, now: float | None = None) -> JobProgress:
+    """Merge ``job.meta`` progress with optional ``out_dir/progress.json`` (file wins on conflict)."""
+    now_t = now if now is not None else _now()
+    file_prog = read_progress_file(job.out_dir)
+    meta = dict(job.meta or {})
+    # File overlays meta so heartbeats on disk work even without jobs update.
+    merged: dict[str, Any] = {**meta, **file_prog}
+    units_done = _coerce_int(merged.get("units_done"))
+    units_total = _coerce_int(merged.get("units_total"))
+    phase = merged.get("phase")
+    phase_s = str(phase).strip() if phase is not None and str(phase).strip() else None
+    current = merged.get("current_id")
+    current_s = str(current).strip() if current is not None and str(current).strip() else None
+    elapsed = max(0.0, now_t - float(job.created_at))
+    rate: float | None = None
+    eta: float | None = None
+    if units_done is not None and units_done > 0 and elapsed > 0:
+        rate = elapsed / float(units_done)
+        if units_total is not None and units_total >= units_done:
+            eta = rate * float(units_total - units_done)
+    source = "none"
+    if file_prog and meta:
+        source = "meta+file"
+    elif file_prog:
+        source = "file"
+    elif any(k in meta for k in ("units_done", "units_total", "phase", "current_id")):
+        source = "meta"
+    return JobProgress(
+        units_done=units_done,
+        units_total=units_total,
+        phase=phase_s,
+        current_id=current_s,
+        elapsed_s=elapsed,
+        rate_s_per_unit=rate,
+        eta_s=eta,
+        source=source,
+    )
+
+
+def format_progress_brief(prog: JobProgress) -> str:
+    """Compact progress for list rows, e.g. ``8/64 classic q17 ~2.4h``."""
+    if prog.units_done is None and prog.units_total is None and not prog.phase:
+        return "-"
+    parts: list[str] = []
+    if prog.units_done is not None and prog.units_total is not None:
+        parts.append(f"{prog.units_done}/{prog.units_total}")
+    elif prog.units_done is not None:
+        parts.append(f"{prog.units_done}/?")
+    if prog.phase:
+        parts.append(str(prog.phase))
+    if prog.current_id:
+        parts.append(f"q{prog.current_id}" if str(prog.current_id).isdigit() else str(prog.current_id))
+    if prog.eta_s is not None and prog.units_total is not None:
+        parts.append(f"ETA {_format_duration(prog.eta_s)}")
+    elif prog.rate_s_per_unit is not None:
+        parts.append(f"{_format_duration(prog.rate_s_per_unit)}/u")
+    return " ".join(parts) if parts else "-"
+
+
 def format_job_header() -> str:
-    return f"{'ID':<26}  {'STATUS':<10}  {'PID':>8}  {'AGE':>6}  {'NAME':<22}  OUT"
+    return (
+        f"{'ID':<26}  {'STATUS':<10}  {'PID':>8}  {'AGE':>6}  {'NAME':<18}  "
+        f"{'PROGRESS':<28}  OUT"
+    )
 
 
 def format_job_row(job: JobRecord) -> str:
     pid_s = "-" if job.pid is None else str(job.pid)
-    name = _ellipsize(job.name, 22)
-    out = _ellipsize(job.out_dir or "-", 52)
+    name = _ellipsize(job.name, 18)
+    out = _ellipsize(job.out_dir or "-", 40)
+    prog = format_progress_brief(compute_job_progress(job))
+    prog_s = _ellipsize(prog, 28)
     return (
         f"{job.id:<26}  {job.status:<10}  {pid_s:>8}  {_format_age(job.created_at):>6}  "
-        f"{name:<22}  {out}"
+        f"{name:<18}  {prog_s:<28}  {out}"
     )
 
 
 def format_job_detail(job: JobRecord) -> str:
     """Human-readable multi-line status (not JSON)."""
+    prog = compute_job_progress(job)
     lines = [
         f"id:        {job.id}",
         f"name:      {job.name}",
@@ -353,6 +506,12 @@ def format_job_detail(job: JobRecord) -> str:
         f"out_dir:   {job.out_dir or '-'}",
         f"log_path:  {job.log_path or '-'}",
     ]
+    if prog.source != "none":
+        lines.append(f"progress:  {format_progress_brief(prog)}")
+        if prog.rate_s_per_unit is not None:
+            lines.append(f"rate:      {_format_duration(prog.rate_s_per_unit)}/unit")
+        if prog.eta_s is not None:
+            lines.append(f"eta:       {_format_duration(prog.eta_s)}")
     if job.wait_pids:
         lines.append(f"wait_pids: {', '.join(str(p) for p in job.wait_pids)}")
     if job.error:
@@ -361,6 +520,15 @@ def format_job_detail(job: JobRecord) -> str:
         lines.append(f"cmd:       {_ellipsize(job.cmd, 120)}")
     if job.repo:
         lines.append(f"repo:      {job.repo}")
+    if job.meta:
+        # Avoid dumping huge blobs; show progress-related keys first.
+        interesting = {
+            k: job.meta[k]
+            for k in ("units_done", "units_total", "phase", "current_id", "note")
+            if k in job.meta
+        }
+        if interesting:
+            lines.append(f"meta:      {interesting}")
     return "\n".join(lines)
 
 

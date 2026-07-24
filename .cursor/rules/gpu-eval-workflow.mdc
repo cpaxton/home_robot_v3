@@ -20,8 +20,25 @@ Canonical CLI: **`emet eval {status,check,wait,kill-stale}`**. Bash [`scripts/gp
 - New eval/sim `Popen` paths must use [`emet.utils.process_tree`](../../src/emet/utils/process_tree.py) (`popen_session` + `terminate_process_tree` / `kill_process_tree`) so timeouts reap GPU grandchildren (`uv` wrappers, mujoco/habitat workers).
 - Do **not** run `emet eval kill-stale` from inside a long-running smoke that must stay alive (e.g. `run_dynagraph_dynamic_*`) — use `emet eval wait` only. Set `EMET_GPU_PROTECT_PIDS` if an orchestrator must keep a worker across cleanup.
 - After failed/hung evals: `uv run emet eval status`, then check **`~/runs/emet/`**, **`~/.cache/habitat_eqa/results/`**, and per-step logs before re-launching.
-- Track / manage long jobs with **`uv run emet jobs`** (list/cancel/logs) and prefer **`emet jobs run --name … -- CMD`** so queue state is visible; registry under `~/runs/emet/jobs/`.
 - Docs: [`docs/evaluation.md`](../../docs/evaluation.md), orphan section in [`docs/known_issues.md`](../../docs/known_issues.md).
+
+## `emet jobs` (required for long GPU / paper runs)
+
+**Always** launch multi-episode Habitat/HM-EQA, overnight batteries, and paper sweeps through the job registry — not bare `nohup` when avoidable:
+
+```bash
+uv run emet jobs run --name hmeqa-agentic-bal32 --need-mib 12000 -- \
+  env EMET_ALLOW_SDPA_ATTN=1 ./scripts/run_hmeqa_agentic_h2h.sh …
+uv run emet jobs                 # list + PROGRESS/ETA columns
+uv run emet jobs status JOB_ID   # detail + derived ETA (--json includes progress)
+uv run emet jobs logs JOB_ID --tail 80
+uv run emet jobs cancel JOB_ID
+```
+
+- Registry: `~/runs/emet/jobs/` (`EMET_JOBS_DIR`). Wrapper sets `EMET_JOB_ID`.
+- Progress: scripts should `emet jobs update JOB_ID --units-done N --units-total M --phase … --current-id …` and/or write `OUT/progress.json` (see `emet.utils.job_registry`).
+- If a job was started unmanaged: `emet jobs register` + point `--out-dir` at the run so `progress.json` / DONE are visible.
+- Implementation: [`src/emet/utils/job_registry.py`](../../src/emet/utils/job_registry.py), CLI in [`docs/cli.md`](../../docs/cli.md).
 
 ## One GPU job at a time
 
@@ -43,16 +60,18 @@ That sequence caused full-system freezes on an RTX 4090 workstation (GUI + SSH u
 
 ## Cursor agent sessions
 
-- Run **multi-hour** Habitat evals and overnight scripts via **`nohup … &`** or a dedicated terminal — not as blocking inline commands in long agent turns.
+- Run **multi-hour** Habitat evals and overnight scripts via **`uv run emet jobs run --name … -- CMD`** (or a dedicated terminal) — **not** as blocking inline commands in long agent turns.
+- Monitor progress/ETA with **`emet jobs`** / **`emet jobs status`**, not only `tail` on orchestrator logs.
 - If the agent segfaults mid-eval, check artifacts under **`~/runs/emet/`**, **`~/.cache/habitat_eqa/results/`**, and **`/tmp/unified_smoke_*.log`** — subprocesses may have finished.
 - Tier 0 + tracks 1–3 PR smoke: see [`docs/experiments/cross_track_smoke.md`](../../docs/experiments/cross_track_smoke.md).
 
 ## Cross-track smoke entrypoint
 
 ```bash
-nohup ./scripts/run_overnight_cross_track_smoke.sh \
-  >> ~/runs/emet/overnight_cross_track/nohup.log 2>&1 &
-tail -f ~/runs/emet/overnight_cross_track/cross_track_*/summary.txt
+uv run emet jobs run --name overnight-cross-track --need-mib 12000 -- \
+  ./scripts/run_overnight_cross_track_smoke.sh
+uv run emet jobs logs JOB_ID --tail 40
+# or: tail -f ~/runs/emet/overnight_cross_track/cross_track_*/summary.txt
 ```
 
 ## Unified config smoke (post–PR #68)

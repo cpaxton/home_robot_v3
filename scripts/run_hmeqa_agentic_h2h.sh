@@ -19,6 +19,46 @@ HOLDOUT_IDS="${HOLDOUT_IDS:-15,68,105,17}"
 TIMEOUT="${TIMEOUT:-7200}"
 log() { echo "[$(date -Iseconds)] $*" | tee -a "$OUT/orchestrator.log"; }
 
+# Count IDs for progress (classic + agentic = 2 * n).
+_IFS_SAVE=$IFS
+IFS=',' read -r -a _PROGRESS_IDS <<<"$HOLDOUT_IDS"
+IFS=$_IFS_SAVE
+PROGRESS_N_IDS=0
+for _qid in "${_PROGRESS_IDS[@]}"; do
+  _qid="$(echo "$_qid" | tr -d '[:space:]')"
+  [[ -n "$_qid" ]] && PROGRESS_N_IDS=$((PROGRESS_N_IDS + 1))
+done
+PROGRESS_TOTAL=$((PROGRESS_N_IDS * 2))
+PROGRESS_DONE=0
+
+jobs_heartbeat() {
+  # Write OUT/progress.json always; also update emet jobs if EMET_JOB_ID is set.
+  local phase="$1"
+  local qid="$2"
+  local done="$3"
+  local total="$4"
+  uv run python -c "
+from emet.utils.job_registry import write_progress_file
+write_progress_file(
+    r'''$OUT''',
+    units_done=int('$done'),
+    units_total=int('$total'),
+    phase='$phase',
+    current_id='$qid',
+)
+" 2>/dev/null || true
+  if [[ -n "${EMET_JOB_ID:-}" ]]; then
+    uv run emet jobs update "$EMET_JOB_ID" \
+      --status running \
+      --units-done "$done" \
+      --units-total "$total" \
+      --phase "$phase" \
+      --current-id "$qid" \
+      --out-dir "$OUT" \
+      >/dev/null 2>&1 || true
+  fi
+}
+
 snapshot_bundle() {
   # Copy map artifacts out of the shared Habitat cache so H2H arms do not overwrite.
   local arm="$1"
@@ -67,7 +107,8 @@ if ! uv run python -c "from emet.llms.attn_impl import flash_attn_2_available; r
   log "WARNING: running with EMET_ALLOW_SDPA_ATTN=1 (no flash-attn)"
 fi
 
-log "OUT=$OUT HEAD=$(git rev-parse --short HEAD) ids=$HOLDOUT_IDS"
+log "OUT=$OUT HEAD=$(git rev-parse --short HEAD) ids=$HOLDOUT_IDS total_units=$PROGRESS_TOTAL"
+jobs_heartbeat "init" "-" 0 "$PROGRESS_TOTAL"
 NEED_MIB="${NEED_MIB:-12000}" ./scripts/gpu_preflight.sh --wait
 ./scripts/gpu_preflight.sh --kill-stale || true
 
@@ -79,6 +120,7 @@ run_arm() {
   : >"$out"
   : >"$elog"
   log "START arm=$name ($*)"
+  jobs_heartbeat "$name" "-" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
   IFS=',' read -r -a ids <<<"$HOLDOUT_IDS"
   for qid in "${ids[@]}"; do
     qid="$(echo "$qid" | tr -d '[:space:]')"
@@ -88,6 +130,7 @@ run_arm() {
     : >"$ep"
     tag="h2h_${name}_q$(printf '%04d' "$qid")"
     log "----- $name q$qid (bundle tag=$tag) -----"
+    jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
     set +e
     # shellcheck disable=SC2086
     env "$@" timeout "$TIMEOUT" "$EMET_HABITAT" run-episode \
@@ -108,6 +151,8 @@ run_arm() {
       cat "$ep" >>"$out"
     fi
     snapshot_bundle "$name" "$qid" "$ep"
+    PROGRESS_DONE=$((PROGRESS_DONE + 1))
+    jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
   done
   log "DONE arm=$name"
 }
@@ -132,5 +177,11 @@ if [[ -d "$ROOT/paper/figs" && -f "$OUT/figures/hmeqa_agentic_coverage.png" ]]; 
   cp -a "$OUT/figures/hmeqa_agentic_h2h.png" "$ROOT/paper/figs/hmeqa_agentic_h2h.png" || true
 fi
 
+jobs_heartbeat "done" "-" "$PROGRESS_TOTAL" "$PROGRESS_TOTAL"
+if [[ -n "${EMET_JOB_ID:-}" ]]; then
+  uv run emet jobs update "$EMET_JOB_ID" --status done \
+    --units-done "$PROGRESS_TOTAL" --units-total "$PROGRESS_TOTAL" \
+    --phase done --out-dir "$OUT" >/dev/null 2>&1 || true
+fi
 echo DONE > "$OUT/DONE"
 log "All done → $OUT"

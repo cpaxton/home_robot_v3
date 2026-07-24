@@ -34,13 +34,16 @@ Same letter-balanced set as overnight scripts:
 ## Commands
 
 ```bash
-# Wave 1 (prefer nohup; one GPU job)
+# Wave 1 (prefer emet jobs; one GPU job)
 OUT=~/runs/emet/hmeqa_agentic_bal32_$(date +%Y%m%d_%H%M%S)
-nohup env EMET_ALLOW_SDPA_ATTN=1 \
+uv run emet jobs run --name hmeqa-agentic-bal32 --need-mib 12000 -- \
+  env EMET_ALLOW_SDPA_ATTN=1 \
   HOLDOUT_IDS=2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,31,32,33,34,38,39,40,41,43,44,47,48,49,57,76,80,84 \
   COVERAGE_QIDS=15,104,68 \
-  ./scripts/run_hmeqa_agentic_h2h.sh "$OUT" \
-  >> ~/runs/emet/hmeqa_agentic_bal32_nohup.log 2>&1 &
+  ./scripts/run_hmeqa_agentic_h2h.sh "$OUT"
+
+uv run emet jobs                 # progress / ETA
+uv run emet jobs logs JOB_ID --tail 40
 
 # After DONE: minimal paper data
 uv run python scripts/summarize_hmeqa_agentic_h2h.py "$OUT"

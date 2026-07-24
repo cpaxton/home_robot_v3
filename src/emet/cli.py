@@ -983,7 +983,13 @@ def jobs_list(show_all: bool, as_json: bool, scan: bool) -> None:
 @click.argument("job_id")
 @click.option("--json", "as_json", is_flag=True, help="Emit full JSON record.")
 def jobs_status(job_id: str, as_json: bool) -> None:
-    from emet.utils.job_registry import format_job_detail, load_job, refresh_job_liveness
+    from emet.utils.job_registry import (
+        compute_job_progress,
+        format_job_detail,
+        format_progress_brief,
+        load_job,
+        refresh_job_liveness,
+    )
 
     job = load_job(job_id)
     if job is None:
@@ -991,7 +997,20 @@ def jobs_status(job_id: str, as_json: bool) -> None:
         sys.exit(1)
     job = refresh_job_liveness(job)
     if as_json:
-        click.echo(json.dumps(job.to_dict(), indent=2))
+        payload = job.to_dict()
+        prog = compute_job_progress(job)
+        payload["progress"] = {
+            "units_done": prog.units_done,
+            "units_total": prog.units_total,
+            "phase": prog.phase,
+            "current_id": prog.current_id,
+            "elapsed_s": prog.elapsed_s,
+            "rate_s_per_unit": prog.rate_s_per_unit,
+            "eta_s": prog.eta_s,
+            "source": prog.source,
+            "brief": format_progress_brief(prog),
+        }
+        click.echo(json.dumps(payload, indent=2))
     else:
         click.echo(format_job_detail(job))
 
@@ -1087,7 +1106,7 @@ def jobs_register(
     click.echo(job.id)
 
 
-@jobs_group.command("update", short_help="Update job status / pid (for scripts)")
+@jobs_group.command("update", short_help="Update job status / pid / progress (for scripts)")
 @click.argument("job_id")
 @click.option(
     "--status",
@@ -1099,6 +1118,15 @@ def jobs_register(
 @click.option("--out-dir", type=click.Path(), default=None)
 @click.option("--log-path", type=click.Path(), default=None)
 @click.option("--error", default=None)
+@click.option("--units-done", type=int, default=None, help="Completed work units (for ETA).")
+@click.option("--units-total", type=int, default=None, help="Total work units (for ETA).")
+@click.option("--phase", default=None, help="Current phase label (e.g. classic, agentic).")
+@click.option("--current-id", default=None, help="Current unit id (e.g. question id).")
+@click.option(
+    "--meta",
+    multiple=True,
+    help="Extra meta KEY=VALUE (repeatable). Progress keys also accepted here.",
+)
 def jobs_update(
     job_id: str,
     status: str | None,
@@ -1107,8 +1135,21 @@ def jobs_update(
     out_dir: str | None,
     log_path: str | None,
     error: str | None,
+    units_done: int | None,
+    units_total: int | None,
+    phase: str | None,
+    current_id: str | None,
+    meta: tuple[str, ...],
 ) -> None:
     from emet.utils.job_registry import update_job
+
+    meta_update: dict = {}
+    for item in meta:
+        if "=" not in item:
+            click.echo(f"ignore --meta {item!r} (want KEY=VALUE)", err=True)
+            continue
+        k, v = item.split("=", 1)
+        meta_update[k.strip()] = v.strip()
 
     try:
         job = update_job(
@@ -1119,6 +1160,11 @@ def jobs_update(
             out_dir=out_dir,
             log_path=log_path,
             error=error,
+            meta_update=meta_update or None,
+            units_done=units_done,
+            units_total=units_total,
+            phase=phase,
+            current_id=current_id,
         )
     except KeyError as e:
         click.echo(str(e), err=True)

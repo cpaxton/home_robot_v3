@@ -630,18 +630,22 @@ Local job registry under `~/runs/emet/jobs/` (override with `EMET_JOBS_DIR`). Qu
 |------------|------|
 | `emet jobs` / `emet jobs list` | Active registered jobs (+ unmanaged eval PIDs) |
 | `emet jobs list --all` | Include done/failed/cancelled |
-| `emet jobs status JOB_ID` | Human-readable record (`--json` for full dump) |
+| `emet jobs status JOB_ID` | Human-readable record + progress/ETA (`--json` includes derived `progress`) |
 | `emet jobs cancel JOB_ID` | SIGTERM→SIGKILL job process tree; mark cancelled |
 | `emet jobs logs JOB_ID [--tail N]` | Tail queue/orchestrator log |
 | `emet jobs register …` | Scripts: create a record (prints job id) |
-| `emet jobs update JOB_ID --status …` | Scripts: heartbeat / terminal status |
-| `emet jobs run --name NAME [--need-mib N] [--wait-pid P] -- CMD…` | Register + nohup wrapper |
+| `emet jobs update JOB_ID --status …` | Heartbeat / terminal status; optional `--units-done/--units-total/--phase/--current-id` |
+| `emet jobs run --name NAME [--need-mib N] [--wait-pid P] -- CMD…` | Register + nohup wrapper (sets `EMET_JOB_ID`) |
+
+`emet jobs list` shows a **PROGRESS** column (units, phase, current id, ETA) from job meta and/or `OUT/progress.json`. Prefer this over bare `nohup` for multi-hour GPU evals.
 
 ```bash
 uv run emet jobs
 uv run emet jobs list --all
 uv run emet jobs run --name dyn-improve-eqa --need-mib 14000 -- \
   ./scripts/run_dynagraph_dynamic_improve_smokes.sh ~/runs/emet/dynamic_exploration/eqa_out
+uv run emet jobs status JOB_ID
+uv run emet jobs update JOB_ID --units-done 8 --units-total 64 --phase classic --current-id 17
 uv run emet jobs cancel JOB_ID
 uv run emet jobs logs JOB_ID --tail 80
 ```

@@ -137,10 +137,13 @@ NEED_MIB=12000 uv run emet eval wait
 NEED_MIB=14000 uv run emet eval check
 uv run emet eval status
 
-# Track queued / running experiments:
-uv run emet jobs                 # list registry + unmanaged eval PIDs
+# Track queued / running experiments (required for long GPU runs):
+uv run emet jobs                 # list + progress/ETA columns
+uv run emet jobs status JOB_ID   # detail + derived ETA
 uv run emet jobs cancel JOB_ID   # stop one managed job
 
+# Launch (prefer over bare nohup):
+uv run emet jobs run --name my-eval --need-mib 12000 -- ./scripts/…
 
 # Bash helpers still work (delegate to emet eval):
 ./scripts/gpu_preflight.sh --kill-stale
@@ -156,7 +159,7 @@ Also sets `PYTORCH_CUDA_ALLOC_CONF` / `PYTORCH_ALLOC_CONF` to `expandable_segmen
 
 ### Cursor / agent sessions
 
-Long Habitat evals and overnight orchestrators should run via **`nohup … &`** or a dedicated terminal, not as blocking inline commands in Cursor agent turns. Native GPU teardown (Habitat-Sim, VLM unload) can crash the agent process while eval subprocesses finish — check `~/runs/emet/`, `~/.cache/habitat_eqa/results/`, and per-step logs before re-running. See [cross_track_smoke.md](experiments/cross_track_smoke.md#cursor--long-agent-sessions).
+Long Habitat evals and overnight orchestrators should run via **`uv run emet jobs run --name … -- CMD`** (or a dedicated terminal), not as blocking inline Cursor agent commands and not as unmanaged bare `nohup` when avoidable. Monitor with **`emet jobs`** / **`emet jobs status`** (progress + ETA from meta / `OUT/progress.json`). Native GPU teardown (Habitat-Sim, VLM unload) can crash the agent process while eval subprocesses finish — check `~/runs/emet/`, `~/.cache/habitat_eqa/results/`, and per-step logs before re-running. See [cross_track_smoke.md](experiments/cross_track_smoke.md#cursor--long-agent-sessions) and [cli.md](cli.md#emet-jobs-queued--running-eval-experiments).
 
 ## Simulation smoke battery (seven tracks)
 

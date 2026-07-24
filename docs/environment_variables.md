@@ -78,7 +78,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `GPU_KILL_STALE` | `emet_gpu_between_steps` | Set `0` to skip process cleanup between overnight phases. |
 | `EMET_GPU_PROTECT_PIDS` | `emet eval kill-stale` | Space-separated PIDs never killed (plus the caller process and its ancestors). |
 | `EMET_JOBS_DIR` | `emet jobs` | Directory for job registry JSON (default `~/runs/emet/jobs`). |
-| `EMET_JOB_ID` | smoke/queue scripts | If set, scripts skip creating a new registry entry (used by `emet jobs run` wrappers). |
+| `EMET_JOB_ID` | smoke/queue scripts | If set by `emet jobs run`, scripts heartbeat via `emet jobs update` (and skip creating a new registry entry). Also write `OUT/progress.json` for ETA even without a job id. |
 
 ### Large paper eval orchestrator
 
