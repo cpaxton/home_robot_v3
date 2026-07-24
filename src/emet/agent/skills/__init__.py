@@ -12,6 +12,7 @@ from emet.agent.skills.modes import AgentMode
 from emet.agent.skills.registry import build_skill_pack
 from emet.agent.skills.specs import (
     CHAT_EXCLUSIVE_TOOL_NAMES,
+    CHAT_SKILL_SPECS,
     EQA_EXCLUSIVE_TOOL_NAMES,
     EQA_SKILL_SPECS,
     SHARED_SKILL_ALIASES,
@@ -23,6 +24,7 @@ from emet.agent.skills.specs import (
 __all__ = [
     "AgentMode",
     "CHAT_EXCLUSIVE_TOOL_NAMES",
+    "CHAT_SKILL_SPECS",
     "EQA_EXCLUSIVE_TOOL_NAMES",
     "EQA_SKILL_SPECS",
     "SHARED_SKILL_ALIASES",

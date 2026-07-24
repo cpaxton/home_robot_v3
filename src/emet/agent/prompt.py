@@ -88,7 +88,9 @@ Routing hints:
 - Bare "move forward" / "can you move forward" / "go forward" with NO distance given
   → do NOT call move_forward; tool_calls [] and ask how far (suggest 0.1 m, 0.5 m, or 1 m).
 - "move forward a bit" / "go forward a little" / "nudge forward" → move_forward with meters=0.1
-  (always map-clipped; refuses if the map is empty — scan_environment first if needed;
+  (map-clipped; a local_radius free disk around the base is seeded if the map is still empty.
+  If the tool asks whether to scan/rotate, reply with tool_calls [] and that question —
+  do NOT auto-call scan_environment or rotate_base without the user agreeing.
   use ~0.5 for "half a meter", ~1.0 for "a meter")
 - "look around" / "scan the room" → scan_environment (full in-place 360° map update)
   Optionally follow with describe_scene after the scan.

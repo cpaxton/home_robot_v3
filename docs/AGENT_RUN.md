@@ -54,8 +54,8 @@ One shared skill library (`emet.agent.skills`); two tool packs:
 
 | Orchestrator mode | Entry | Pack | Stop / answer |
 |-------------------|-------|------|----------------|
-| **CHAT** | `emet run agent` (Discord / terminal) | `describe_scene`, `explore`, `scan_environment`, Discord send_*, … | User turns; explore is turn-blocking |
-| **EQA_EPISODE** | Dynagraph / Habitat `run_eqa` when `eqa.agentic_verify` | `navigate_to_obs`, `explore_frontier`, `look_around`, `verify_siglip`, `submit_answer` / `finish` | Verify-gated answer or explore `finish` |
+| **CHAT** | `emet run agent` (Discord / terminal) | `describe_scene`, `explore`, `scan_environment`, Discord send_*, … (metadata in `CHAT_SKILL_SPECS`; funcs bind in `build_chat_tools`) | User turns; explore is turn-blocking |
+| **EQA_EPISODE** | Dynagraph / Habitat `run_eqa` when `eqa.agentic_verify` | `navigate_to_obs`, `explore_frontier`, `look_around`, `verify_siglip`, `submit_answer` / `finish` (`EQA_SKILL_SPECS`) | Verify-gated answer or explore `finish` |
 
 `--eqa-eval` still bypasses the chat tool-router and uses the Habitat harness episode path (not CHAT). Do not expect Discord chat turns to score Habitat MCQ. See [evaluation.md](evaluation.md#agentic-grapheqa-verify--offline-tuning).
 
@@ -123,7 +123,7 @@ Do **not** put the 8B VL on every chat turn as the router — that made “what 
 |-------|---------|----------------|
 | Describe | `describe_scene` | Caption + optional graph grounding + **live** head photo (no motion) |
 | Turn | `rotate_base` | Explicit degrees (180 / ±90 / …) |
-| Nudge | `move_forward` | Explicit meters (~0.1 for “a bit”); **map-clipped** (refuses if map empty); bare “move forward” → ask how far |
+| Nudge | `move_forward` | Explicit meters (~0.1 for “a bit”); **map-clipped** (seeds `local_radius` disk if empty; asks to scan/rotate if still blocked); bare “move forward” → ask how far |
 | Explore | `explore` | Map cells increase; `announce_action` status |
 | Find | `find_objects` | Nav toward known label or clear failure |
 | Find after world change (Robocasa) | `find_objects` + invalidate | After ZMQ relocate, memory must not keep a confident waypoint at the **old** pose — use `scripts/smoke_dynagraph_agent_world_change_find.py` |

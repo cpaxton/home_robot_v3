@@ -54,7 +54,7 @@ def test_clip_forward_distance_hits_obstacle():
     assert clipped == pytest.approx(0.05)
 
 
-def test_clip_forward_refuses_empty_map():
+def test_clip_forward_refuses_empty_map_without_seed():
     agent = DynamemController.__new__(DynamemController)
     agent.robot = SimpleNamespace(get_base_pose=lambda: np.array([0.0, 0.0, 0.0]))
 
@@ -81,6 +81,49 @@ def test_clip_forward_refuses_empty_map():
 
     agent.get_voxel_map = lambda: BlankVM()
     assert agent.clip_forward_distance_m(0.1) == 0.0
+
+
+def test_clip_forward_seeds_local_radius_disk():
+    """Empty cloud + _update_visited → short nudge inside explored disk, not beyond."""
+    agent = DynamemController.__new__(DynamemController)
+    agent.robot = SimpleNamespace(get_base_pose=lambda: np.array([0.0, 0.0, 0.0]))
+    obstacles = np.zeros((40, 40), dtype=bool)
+    explored = np.zeros((40, 40), dtype=bool)
+    seeded = {"done": False}
+
+    class SeedableVM:
+        def is_empty(self):
+            return True
+
+        def _update_visited(self, pose):
+            # Disk around cell (20, 20): ±4 cells (~0.2 m at 0.05 m/cell in this mock).
+            explored[16:25, 16:25] = True
+            seeded["done"] = True
+
+        def get_2d_map(self):
+            return obstacles, explored
+
+        def xy_to_grid_coords(self, xy):
+            x = float(np.asarray(xy).reshape(-1)[0])
+            j = 20 + int(round(x / 0.05))
+            return np.array([20, j])
+
+    agent.get_voxel_map = lambda: SeedableVM()
+    clipped = agent.clip_forward_distance_m(0.5, step_m=0.05, clearance_m=0.0)
+    assert seeded["done"] is True
+    # Explored j in [16, 24]; from j=20 forward max j=24 → 0.20 m
+    assert clipped == pytest.approx(0.20)
+
+
+def test_move_forward_tool_asks_when_cannot_drive():
+    agent = MagicMock()
+    agent.move_forward_meters = MagicMock(return_value=0.0)
+    executor = MagicMock()
+    executor.agent = agent
+    tools_ctx = {t.name: t for t in get_tools({"executor": executor})}
+    msg = tools_ctx["move_forward"].func(meters=0.3)
+    assert "scan" in msg.lower() or "rotate" in msg.lower()
+    assert "?" in msg
 
 
 def test_rotate_base_degrees_calls_relative_move():

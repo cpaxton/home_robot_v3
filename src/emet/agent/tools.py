@@ -671,8 +671,10 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             commanded = float(agent.move_forward_meters(dist))
             if commanded < 0.02:
                 return (
-                    "Did not move — the map has no clear free path that far "
-                    "(empty map, obstacle too close, or need scan_environment first)."
+                    "I don't have enough explored map to drive that way yet "
+                    "(empty map, local free disk too small, or obstacle too close). "
+                    "Want me to scan_environment or rotate_base in place first so I can see "
+                    "what's ahead?"
                 )
             if commanded + 1e-3 < dist:
                 return (
@@ -690,11 +692,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             name="move_forward",
             description=(
                 "Drive the base forward along its current heading by approximately *meters*. "
-                "Always uses the 2D obstacle map (including 0.1 m nudges): shortens or refuses "
-                "if the path is blocked or the map is empty — call scan_environment first if the "
-                "map has no explored cells. If the user did not say how far, do NOT call this tool — "
-                "ask how far first. Use meters=0.1 for 'a bit' / 'a little' / 'nudge'; ~0.5 for half "
-                "a meter; ~1.0 for a meter. Cap near 1.5 m. Do not use for turning (use rotate_base)."
+                "Uses the 2D map (including a local_radius explored disk around the base when "
+                "depth is still empty): shortens or refuses if blocked or the path leaves "
+                "explored space. If refused, ask the user whether to scan_environment / "
+                "rotate_base — do NOT auto-scan. If the user did not say how far, do NOT call "
+                "this tool — ask how far first. Use meters=0.1 for 'a bit' / 'a little' / "
+                "'nudge'; ~0.5 for half a meter; ~1.0 for a meter. Cap near 1.5 m. "
+                "Do not use for turning (use rotate_base)."
             ),
             parameters={
                 "type": "object",
@@ -933,6 +937,23 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             executor_commands=_simple_exec_mapping("quit"),
         )
     )
+
+    from emet.agent.skills.specs import CHAT_EXCLUSIVE_TOOL_NAMES, CHAT_SKILL_SPECS
+
+    by_name = {s.name: s for s in CHAT_SKILL_SPECS}
+    registered = {t.name for t in tools}
+    expected = set(CHAT_EXCLUSIVE_TOOL_NAMES)
+    if registered != expected:
+        missing = sorted(expected - registered)
+        extra = sorted(registered - expected)
+        raise RuntimeError(
+            f"CHAT tool pack drift vs CHAT_SKILL_SPECS: missing={missing} extra={extra}"
+        )
+    for t in tools:
+        spec = by_name[t.name]
+        t.description = spec.description
+        t.parameters = spec.parameters
+        t.returns_info = spec.returns_info
 
     if env_base_rotate_only():
         # Keep tool names in the pack so the LLM does not invent calls; stubs return a clear refusal.

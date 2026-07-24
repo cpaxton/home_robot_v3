@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 
 from emet.agent.skills import (
     CHAT_EXCLUSIVE_TOOL_NAMES,
+    CHAT_SKILL_SPECS,
     EQA_EXCLUSIVE_TOOL_NAMES,
     SHARED_SKILL_ALIASES,
     AgentMode,
@@ -46,6 +47,15 @@ def test_chat_pack_excludes_eqa_only_tools():
     assert "describe_scene" in names
     assert "verify_siglip" not in names
     assert "submit_answer" not in names
+
+
+def test_chat_tools_match_skill_specs():
+    specs = {s.name: s for s in CHAT_SKILL_SPECS}
+    for tool in get_tools({}):
+        spec = specs[tool.name]
+        assert tool.description == spec.description
+        assert tool.parameters == spec.parameters
+        assert tool.returns_info is spec.returns_info
 
 
 def test_build_skill_pack_chat_matches_get_tools():

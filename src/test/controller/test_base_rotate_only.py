@@ -9,6 +9,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
 
 
 def test_base_rotate_only_stubs_drive_tools(monkeypatch):
@@ -48,3 +49,24 @@ def test_move_base_to_refuses_xy_when_rotate_only(monkeypatch):
     assert not client.send_action.called
 
     assert client.move_base_to([5.0, 5.0, 0.0], relative=False, blocking=False) is False
+
+
+def test_move_base_to_blocking_uses_client_at_goal_wait(monkeypatch):
+    """Server nav must stay non-blocking; blocking=True waits via _wait_at_goal (Discord hang fix)."""
+    monkeypatch.delenv("EMET_BASE_ROTATE_ONLY", raising=False)
+    from emet.controller.generic_zmq_client import GenericZmqClient
+
+    client = MagicMock(spec=GenericZmqClient)
+    client.send_action = MagicMock()
+    client._nav_goal_reset_seen = MagicMock(return_value=True)
+    client._wait_at_goal = MagicMock(return_value=True)
+    client._robosuite_sim_zmq = MagicMock(return_value=False)
+    client.move_base_to = GenericZmqClient.move_base_to.__get__(client, GenericZmqClient)
+
+    assert client.move_base_to([0.0, 0.0, 0.5], relative=True, blocking=True, timeout=12.0) is True
+    sent = client.send_action.call_args[0][0]
+    assert sent.get("nav_blocking") is False
+    assert sent.get("nav_timeout_s") == pytest.approx(12.0)
+    client._wait_at_goal.assert_called_once()
+    wait_kwargs = client._wait_at_goal.call_args.kwargs
+    assert wait_kwargs.get("timeout") == pytest.approx(12.0)

@@ -1603,6 +1603,41 @@ class DynamemController(BaseController):
                 pass
         return deg
 
+    def _seed_local_radius_explored(self, vm) -> bool:
+        """Stamp ``local_radius`` explored disk at the current base (Stretch-style turn-around hack).
+
+        Returns True if the map reports any explored cells afterward.
+        """
+        if vm is None or not hasattr(vm, "_update_visited"):
+            return False
+        try:
+            xyt = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)
+        except Exception:
+            return False
+        if xyt.size < 2:
+            return False
+        try:
+            import torch
+
+            pose = torch.as_tensor(xyt[:3], dtype=torch.float32)
+            device = getattr(vm, "map_2d_device", None)
+            if device is not None:
+                pose = pose.to(device)
+            vm._update_visited(pose)
+            # Invalidate 2D cache so the next get_2d_map includes _visited.
+            if hasattr(vm, "_map2d"):
+                vm._map2d = None
+        except Exception:
+            return False
+        try:
+            obstacles, explored = vm.get_2d_map()
+        except Exception:
+            return False
+        if explored is None:
+            return False
+        exp_np = explored.cpu().numpy() if hasattr(explored, "cpu") else np.asarray(explored)
+        return int(np.count_nonzero(exp_np)) > 0
+
     def clip_forward_distance_m(
         self,
         meters: float,
@@ -1614,31 +1649,45 @@ class DynamemController(BaseController):
         """Shorten a forward request using the 2D obstacle map.
 
         Always consults the voxel map before driving — including small nudges (0.1 m).
-        When *require_map* is True (default), returns ``0.0`` if the map is empty or has
-        no explored/obstacle cells yet so we never drive blind into furniture.
-        Stops *clearance_m* before the first occupied cell.
+        When *require_map* is True (default), paths must stay on explored cells. If the map
+        has no explored cells yet, stamps the configured ``local_radius`` disk at the base
+        (same Stretch-style turn-around seed) and retries — never drives into unknown space
+        beyond that disk. Stops *clearance_m* before the first occupied cell.
         """
         requested = float(np.clip(float(meters), 0.0, 1.5))
         if requested < 1e-3:
             return 0.0
         vm = self.get_voxel_map() if hasattr(self, "get_voxel_map") else None
-        if vm is None or (hasattr(vm, "is_empty") and vm.is_empty()):
+        if vm is None:
             return 0.0 if require_map else requested
-        try:
-            obstacles, explored = vm.get_2d_map()
-        except Exception:
-            return 0.0 if require_map else requested
-        if obstacles is None:
-            return 0.0 if require_map else requested
-        obs_np = obstacles.cpu().numpy() if hasattr(obstacles, "cpu") else np.asarray(obstacles)
-        exp_np = None
-        if explored is not None:
-            exp_np = explored.cpu().numpy() if hasattr(explored, "cpu") else np.asarray(explored)
-        n_obs = int(np.count_nonzero(obs_np))
+
+        def _load_maps():
+            try:
+                obstacles, explored = vm.get_2d_map()
+            except Exception:
+                return None, None
+            if obstacles is None:
+                return None, None
+            obs_np = obstacles.cpu().numpy() if hasattr(obstacles, "cpu") else np.asarray(obstacles)
+            exp_np = None
+            if explored is not None:
+                exp_np = explored.cpu().numpy() if hasattr(explored, "cpu") else np.asarray(explored)
+            return obs_np, exp_np
+
+        obs_np, exp_np = _load_maps()
+        empty_cloud = bool(hasattr(vm, "is_empty") and vm.is_empty())
+        n_obs = int(np.count_nonzero(obs_np)) if obs_np is not None else 0
         n_exp = int(np.count_nonzero(exp_np)) if exp_np is not None else 0
-        if require_map and n_obs == 0 and n_exp == 0:
-            # Fresh session / no depth yet — same as Discord "Explored cells=0".
-            return 0.0
+        if require_map and (obs_np is None or (empty_cloud and n_exp == 0) or (n_obs == 0 and n_exp == 0)):
+            if self._seed_local_radius_explored(vm):
+                obs_np, exp_np = _load_maps()
+                n_obs = int(np.count_nonzero(obs_np)) if obs_np is not None else 0
+                n_exp = int(np.count_nonzero(exp_np)) if exp_np is not None else 0
+            if obs_np is None or (n_obs == 0 and n_exp == 0):
+                return 0.0
+        elif obs_np is None:
+            return 0.0 if require_map else requested
+
         try:
             xyt = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)
         except Exception:
@@ -1666,6 +1715,9 @@ class DynamemController(BaseController):
                 break
             if bool(obs_np[gi, gj]):
                 return max(0.0, traveled - clear)
+            if require_map and exp_np is not None and not bool(exp_np[gi, gj]):
+                # Do not leave the explored (incl. local_radius) disk into unknown space.
+                return traveled
             traveled = probe
         return requested
 
@@ -1675,7 +1727,7 @@ class DynamemController(BaseController):
         dist = self.clip_forward_distance_m(requested)
         if dist < 0.02:
             self.announce_action(
-                "Cannot move forward — need map free space (scan first) or obstacle too close"
+                "Cannot move forward — need explored free space (scan?) or obstacle too close"
             )
             return 0.0
         if dist + 1e-3 < requested:
