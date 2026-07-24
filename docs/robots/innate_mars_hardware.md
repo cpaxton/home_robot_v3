@@ -51,7 +51,7 @@ Preset enables Discord + EQA captions (`agent.eqa: true`). Optional: `--no-rerun
 
 **Turn-blocking explore:** tool calls (including `explore`) run to completion before the next Discord/terminal message is handled. Messages typed mid-explore **queue** and run when explore finishes — not a live interrupt. Progress italics can still post during long tools.
 
-**Not this path:** Habitat/eval **agentic GraphEQA** (`eqa.agentic_verify` / PR #77) is for scored EQA episodes, not Discord house chat. Canonical agent docs: [AGENT_RUN.md](../AGENT_RUN.md). Bot setup: [discord_bot.md](../discord_bot.md).
+**Not this path:** Habitat/eval **EQA_EPISODE** agentic GraphEQA (`eqa.agentic_verify`) is a different orchestrator mode from Discord **CHAT** — see [AGENT_RUN.md modes](../AGENT_RUN.md#skill-library-vs-orchestrator-modes) and [evaluation.md](../evaluation.md#agentic-grapheqa-verify--offline-tuning). Canonical agent docs: [AGENT_RUN.md](../AGENT_RUN.md). Bot setup: [discord_bot.md](../discord_bot.md).
 
 ## Workstation shortcut
 

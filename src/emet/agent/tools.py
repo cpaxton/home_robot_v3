@@ -173,11 +173,10 @@ def _simple_exec_mapping(cmd: str) -> Callable[[dict[str, Any]], list[tuple[str,
     return lambda args: [(cmd, "")]
 
 
-def get_tools(context: dict[str, Any]) -> list[Tool]:
-    """Return list of tools available given context (executor, robot, discord_bot, memory_backend).
+def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
+    """Build the Discord/terminal CHAT tool pack for *context*.
 
-    This is the single source of truth for agent capabilities. The prompt builder and tool-calling
-    interface derive their tool lists from this function.
+    Prefer :func:`get_tools` (routes through :func:`emet.agent.skills.build_skill_pack`).
     """
     tools: list[Tool] = []
 
@@ -770,6 +769,18 @@ def get_tools(context: dict[str, Any]) -> list[Tool]:
     )
 
     return tools
+
+
+def get_tools(context: dict[str, Any]) -> list[Tool]:
+    """Return the CHAT-mode tool pack (Discord / terminal embodied agent).
+
+    Assembles via :func:`emet.agent.skills.build_skill_pack` (:class:`~emet.agent.skills.AgentMode.CHAT`).
+    EQA episode tools are a separate pack — see
+    :func:`emet.memory.graph_eqa.agentic_tools.build_agentic_eqa_tools`.
+    """
+    from emet.agent.skills import AgentMode, build_skill_pack
+
+    return build_skill_pack(AgentMode.CHAT, context)
 
 
 # ---------------------------------------------------------------------------
