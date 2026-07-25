@@ -23,7 +23,7 @@ import math
 import os
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -43,8 +43,11 @@ from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
 
-# Min SigLIP cosine similarity for an open-vocab text query to count as "present" in the
-# observed point cloud. Matches DynaMem's verify_point default for SigLIP grounding.
+# Min SigLIP cosine for open-vocab text vs **voxel point** features (DynaMem
+# ``verify_point``). Higher precision than image-space scoring. Agentic RGB /
+# dense-patch verify uses a lower high-recall bar — see
+# ``SIGLIP_IMAGE_PRESENT_THRESHOLD`` in ``agentic_eqa.py`` and
+# docs/experiments/agentic_scale.md § SigLIP role.
 SIGLIP_PRESENT_THRESHOLD = 0.21
 # Stronger bar before SigLIP-only evidence may override the VLM or finalize confidence.
 SIGLIP_CONFIRM_THRESHOLD = 0.28
@@ -59,6 +62,23 @@ class NavHypothesis:
     xyz: np.ndarray
     score: float
     source: str  # "graph" | "confirmed" | "siglip"
+    answerability_gain: float = 0.0
+    belief_reduction: float = 0.0
+    revisit_change_value: float = 0.0
+    path_cost: float = 0.0
+    failure_risk: float = 0.0
+
+
+@dataclass(frozen=True)
+class RelationBelief:
+    """Timestamped uncertain context relation."""
+
+    source_id: int
+    target_id: int
+    relation: str
+    confidence: float
+    last_evidence_step: int
+    contradiction_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -453,6 +473,13 @@ class GraphNode:
     nav_failures: int = 0
     last_nav_note: str | None = None
     last_nav_at_step: int = 0
+    belief_confidence: float = 0.5
+    position_covariance: np.ndarray | None = None
+    position_history: list[dict[str, Any]] = field(default_factory=list)
+    identity_key: str | None = None
+    change_events: list[dict[str, Any]] = field(default_factory=list)
+    expected_absence_count: int = 0
+    last_absence_step: int = -1
 
 
 def is_ground_truth_node(node: GraphNode | None) -> bool:
@@ -488,6 +515,36 @@ def _on(p_lower: np.ndarray, p_upper: np.ndarray, z_thresh: float = 0.15) -> boo
 
 def _on_floor(p: np.ndarray, floor_z: float = 0.05) -> bool:
     return float(p[2]) <= floor_z
+
+
+_ROOM_WORDS = frozenset(
+    {
+        "room",
+        "kitchen",
+        "bedroom",
+        "bathroom",
+        "living room",
+        "dining room",
+        "hallway",
+        "office",
+        "garage",
+        "sunroom",
+    }
+)
+
+
+def _node_is_room(node: GraphNode) -> bool:
+    text = " ".join(node.labels).lower()
+    return any(word in text for word in _ROOM_WORDS)
+
+
+def _inside_bounds(point: np.ndarray, bounds: dict[str, list[float]] | None) -> bool:
+    if not bounds or "min" not in bounds or "max" not in bounds:
+        return False
+    xyz = np.asarray(point, dtype=float).reshape(-1)[:3]
+    lower = np.asarray(bounds["min"], dtype=float).reshape(-1)[:3]
+    upper = np.asarray(bounds["max"], dtype=float).reshape(-1)[:3]
+    return bool(np.all(xyz >= lower) and np.all(xyz <= upper))
 
 
 class GraphEQAMemory:
@@ -526,6 +583,8 @@ class GraphEQAMemory:
         self.last_eqa_model_confident: bool = False
         self._nodes: list[GraphNode] = []
         self._edges: list[tuple[int, int, str]] = []  # (id1, id2, relation)
+        self._relation_beliefs: dict[tuple[int, int, str], RelationBelief] = {}
+        self._change_events: list[dict[str, Any]] = []
         self._observations: list[GraphObservation] = []
         self._next_obs_id = 1
         self._question: str | None = None
@@ -629,6 +688,141 @@ class GraphEQAMemory:
     def set_graph_timestep(self, step: int) -> None:
         """Set the discrete time index used for ``last_seen`` and staleness (e.g. controller ``obs_count``)."""
         self._graph_timestep = int(step)
+
+    def _position_update(
+        self,
+        node: GraphNode,
+        measured_xyz: np.ndarray,
+        *,
+        step: int,
+    ) -> tuple[np.ndarray, np.ndarray, list[dict[str, Any]], list[dict[str, Any]], float]:
+        """Update a track without averaging a contradictory relocation into its centroid."""
+        measured = np.asarray(measured_xyz, dtype=float).reshape(-1)[:3]
+        current = np.asarray(node.xyz, dtype=float).reshape(-1)[:3]
+        history = list(node.position_history)
+        if not history:
+            history.append(
+                {
+                    "step": int(node.last_seen),
+                    "xyz": current.tolist(),
+                    "confidence": float(node.belief_confidence),
+                }
+            )
+        distance = float(np.linalg.norm(measured - current))
+        relocation_bar = max(0.45, float(self.spatial_merge_m) * 1.5)
+        changes = list(node.change_events)
+        confidence = min(0.99, float(node.belief_confidence) + 0.08)
+        if distance > relocation_bar:
+            event = {
+                "type": "position_contradiction",
+                "node_id": int(node.node_id),
+                "step": int(step),
+                "from_xyz": current.tolist(),
+                "to_xyz": measured.tolist(),
+                "displacement_m": distance,
+                "confidence": min(0.99, distance / max(relocation_bar, 1e-6)),
+            }
+            changes.append(event)
+            self._change_events.append(event)
+            updated = measured.copy()
+            confidence = max(0.2, float(node.belief_confidence) * 0.7)
+        else:
+            support = max(1, int(node.support_count))
+            updated = (current * support + measured) / (support + 1)
+        history.append(
+            {
+                "step": int(step),
+                "xyz": measured.tolist(),
+                "confidence": confidence,
+            }
+        )
+        samples = np.asarray([entry["xyz"] for entry in history[-20:]], dtype=float)
+        covariance = (
+            np.cov(samples.T)
+            if samples.shape[0] >= 2
+            else np.zeros((3, 3), dtype=float)
+        )
+        return updated, covariance, history[-64:], changes[-32:], confidence
+
+    def observe_visible_labels(
+        self,
+        labels: list[str],
+        viewer_xyz: np.ndarray | None,
+        *,
+        step: int | None = None,
+        viewpoint_tolerance_m: float = 0.75,
+        absence_confirmations: int = 2,
+    ) -> list[dict[str, Any]]:
+        """Conservatively detect disappeared objects from repeated same-view contradictions.
+
+        A node is expected only when the camera revisits approximately the viewpoint
+        that originally saw it. This avoids treating out-of-FOV objects as absent.
+        Ground-truth placements are never consulted.
+        """
+        if viewer_xyz is None:
+            return []
+        now = self._effective_timestep() if step is None else int(step)
+        viewer = np.asarray(viewer_xyz, dtype=float).reshape(-1)[:3]
+        visible = [str(label) for label in labels if str(label).strip()]
+        events: list[dict[str, Any]] = []
+        for index, node in enumerate(self._nodes):
+            if node.is_viewpoint or node.is_frontier or is_ground_truth_node(node):
+                continue
+            original = self._observation_by_id(int(node.obs_id))
+            expected_view = getattr(original, "viewer_xyz", None) if original is not None else None
+            if expected_view is None:
+                continue
+            distance = float(
+                np.linalg.norm(
+                    np.asarray(expected_view, dtype=float).reshape(-1)[:2]
+                    - viewer[:2]
+                )
+            )
+            if distance > float(viewpoint_tolerance_m):
+                continue
+            seen = any(
+                label_matches_relevant_object(node.labels[0], label)
+                for label in visible
+            )
+            if seen:
+                self._nodes[index] = replace(
+                    node,
+                    expected_absence_count=0,
+                    belief_confidence=min(0.99, float(node.belief_confidence) + 0.1),
+                )
+                continue
+            consecutive = (
+                int(node.expected_absence_count) + 1
+                if int(node.last_absence_step) < 0 or now - int(node.last_absence_step) <= 2
+                else 1
+            )
+            changes = list(node.change_events)
+            if consecutive >= int(absence_confirmations):
+                event = {
+                    "type": "expected_object_missing",
+                    "node_id": int(node.node_id),
+                    "obs_id": int(node.obs_id),
+                    "step": now,
+                    "last_xyz": np.asarray(node.xyz, dtype=float).tolist(),
+                    "viewpoint_distance_m": distance,
+                    "confirmations": consecutive,
+                    "confidence": min(0.95, 0.45 + 0.2 * consecutive),
+                }
+                if not changes or changes[-1].get("type") != event["type"]:
+                    changes.append(event)
+                    self._change_events.append(event)
+                    events.append(event)
+            self._nodes[index] = replace(
+                node,
+                expected_absence_count=consecutive,
+                last_absence_step=now,
+                belief_confidence=max(0.05, float(node.belief_confidence) * 0.65),
+                change_events=changes[-32:],
+            )
+        return events
+
+    def get_change_events(self) -> list[dict[str, Any]]:
+        return [dict(event) for event in self._change_events]
 
     def set_navigation_samples_max(self, n: int) -> None:
         """Raise or lower the cap on stored navigation viewpoint samples (default from config)."""
@@ -836,7 +1030,9 @@ class GraphEQAMemory:
                 ex = np.asarray(existing.xyz, dtype=float).reshape(-1)[:3]
                 if float(np.linalg.norm(ex[:2] - xyz_a[:2])) <= self.spatial_merge_m:
                     sc = int(existing.support_count) + 1
-                    new_xyz = (existing.xyz * (sc - 1) + xyz_a) / sc
+                    new_xyz, covariance, history, changes, belief_confidence = (
+                        self._position_update(existing, xyz_a, step=step)
+                    )
                     merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), *labels_norm})
                     new_desc = description if description else existing.description
                     merged_bbox = bbox_i if bbox_i is not None else existing.bbox_xyxy
@@ -848,6 +1044,10 @@ class GraphEQAMemory:
                         support_count=sc,
                         description=new_desc,
                         bbox_xyxy=merged_bbox,
+                        position_covariance=covariance,
+                        position_history=history,
+                        change_events=changes,
+                        belief_confidence=belief_confidence,
                     )
                     for o in self._observations:
                         if o.obs_id == existing.obs_id:
@@ -879,6 +1079,21 @@ class GraphEQAMemory:
             support_count=1,
             extent_half=ext,
             bbox_xyxy=bbox_i,
+            belief_confidence=0.55,
+            position_covariance=np.zeros((3, 3), dtype=float),
+            position_history=[
+                {
+                    "step": int(step),
+                    "xyz": xyz_a.tolist(),
+                    "confidence": 0.55,
+                }
+            ],
+            identity_key=(
+                description[len(GT_BODY_DESC_PREFIX) :]
+                if isinstance(description, str)
+                and description.startswith(GT_BODY_DESC_PREFIX)
+                else f"{re.sub(r'[^a-z0-9]+', '-', primary).strip('-')}:{obs_id}"
+            ),
         )
         self._nodes.append(node)
         self._observations.append(
@@ -938,7 +1153,9 @@ class GraphEQAMemory:
                 if existing.is_viewpoint:
                     break
                 sc = int(existing.support_count) + 1
-                new_xyz = (existing.xyz * (sc - 1) + xyz_a) / sc
+                new_xyz, covariance, history, changes, belief_confidence = (
+                    self._position_update(existing, xyz_a, step=step)
+                )
                 merged_labels = sorted({*(str(x).strip() for x in existing.labels if str(x).strip()), label})
                 new_emb = embedding
                 if embedding is not None and existing.embedding is not None:
@@ -970,6 +1187,10 @@ class GraphEQAMemory:
                     bbox_xyxy=bbox_i if bbox_i is not None else existing.bbox_xyxy,
                     embedding=new_emb,
                     bounds_3d=new_bounds,
+                    position_covariance=covariance,
+                    position_history=history,
+                    change_events=changes,
+                    belief_confidence=belief_confidence,
                 )
                 for o in self._observations:
                     if o.obs_id == existing.obs_id:
@@ -1018,7 +1239,11 @@ class GraphEQAMemory:
         sc_src = int(src.support_count)
         sc_dst = int(dst.support_count)
         total = sc_src + sc_dst
-        new_xyz = (dst.xyz * sc_dst + src.xyz * sc_src) / max(total, 1)
+        new_xyz, covariance, history, changes, belief_confidence = self._position_update(
+            dst,
+            np.asarray(src.xyz, dtype=float),
+            step=max(int(dst.last_seen), int(src.last_seen)),
+        )
 
         merged_labels = sorted(
             {
@@ -1068,6 +1293,10 @@ class GraphEQAMemory:
             bounds_3d=new_bounds,
             bbox_xyxy=dst.bbox_xyxy or src.bbox_xyxy,
             last_seen=max(int(dst.last_seen), int(src.last_seen)),
+            position_covariance=covariance,
+            position_history=history,
+            change_events=changes,
+            belief_confidence=belief_confidence,
         )
         for o in self._observations:
             if int(o.obs_id) == int(dst.obs_id):
@@ -1438,9 +1667,10 @@ class GraphEQAMemory:
         return None
 
     def _update_edges(self) -> None:
-        """Compute spatial relations (near, on, on_floor) and ``seen_from`` viewpoint links."""
+        """Compute spatial/context relations and timestamp their uncertain evidence."""
         self._edges.clear()
         objects = [n for n in self._nodes if not n.is_viewpoint and not n.is_frontier]
+        viewpoints = [n for n in self._nodes if n.is_viewpoint]
         for i, na in enumerate(objects):
             if _on_floor(na.xyz):
                 self._edges.append((na.node_id, -1, "on"))  # -1 = floor
@@ -1452,10 +1682,71 @@ class GraphEQAMemory:
                         self._edges.append((na.node_id, nb.node_id, "near"))
                 if _on(na.xyz, nb.xyz):
                     self._edges.append((na.node_id, nb.node_id, "on"))
+                    self._edges.append((nb.node_id, na.node_id, "supports"))
                 elif _on(nb.xyz, na.xyz):
                     self._edges.append((nb.node_id, na.node_id, "on"))
+                    self._edges.append((na.node_id, nb.node_id, "supports"))
+                if _node_is_room(na) and _inside_bounds(nb.xyz, na.bounds_3d):
+                    self._edges.append((na.node_id, nb.node_id, "contains"))
+                elif _node_is_room(nb) and _inside_bounds(na.xyz, nb.bounds_3d):
+                    self._edges.append((nb.node_id, na.node_id, "contains"))
         for node in objects:
             self._ensure_seen_from_edge(node.node_id, int(node.obs_id))
+            if viewpoints:
+                nearest = min(
+                    viewpoints,
+                    key=lambda view: float(
+                        np.linalg.norm(
+                            np.asarray(view.xyz, dtype=float)[:2]
+                            - np.asarray(node.xyz, dtype=float)[:2]
+                        )
+                    ),
+                )
+                distance = float(
+                    np.linalg.norm(
+                        np.asarray(nearest.xyz, dtype=float)[:2]
+                        - np.asarray(node.xyz, dtype=float)[:2]
+                    )
+                )
+                failure_risk = float(node.nav_failures) / max(1, int(node.nav_attempts))
+                if distance <= max(2.0, self.max_near_distance) and failure_risk < 0.8:
+                    self._edges.append((node.node_id, nearest.node_id, "accessible_from"))
+
+        step = self._effective_timestep()
+        prior = self._relation_beliefs
+        current: dict[tuple[int, int, str], RelationBelief] = {}
+        confidence_by_relation = {
+            "seen_from": 0.95,
+            "contains": 0.85,
+            "supports": 0.80,
+            "on": 0.75,
+            "near": 0.65,
+            "accessible_from": 0.60,
+        }
+        for edge in self._edges:
+            old = prior.get(edge)
+            current[edge] = RelationBelief(
+                source_id=edge[0],
+                target_id=edge[1],
+                relation=edge[2],
+                confidence=max(
+                    confidence_by_relation.get(edge[2], 0.5),
+                    float(old.confidence) if old is not None else 0.0,
+                ),
+                last_evidence_step=step,
+                contradiction_count=old.contradiction_count if old is not None else 0,
+            )
+        for edge, old in prior.items():
+            if edge in current:
+                continue
+            decayed = float(old.confidence) * 0.5
+            if decayed >= 0.1:
+                current[edge] = replace(
+                    old,
+                    confidence=decayed,
+                    contradiction_count=int(old.contradiction_count) + 1,
+                )
+        self._relation_beliefs = current
 
     def _node_nav_status_suffix(self, node: GraphNode) -> str:
         failures = int(getattr(node, "nav_failures", 0) or 0)
@@ -1759,8 +2050,94 @@ class GraphEQAMemory:
             if match is not None:
                 self._siglip_phrase_cache[phrase.strip().lower()] = match
 
-    def hypothesize_nav_targets(self, question: str, max_k: int = 3) -> list[NavHypothesis]:
-        """Rank navigation targets: graph label match > CONFIRMED PRESENT > SigLIP candidate."""
+    def _node_for_obs(self, obs_id: int) -> GraphNode | None:
+        return next(
+            (
+                node
+                for node in self._nodes
+                if int(node.obs_id) == int(obs_id) and not node.is_viewpoint
+            ),
+            None,
+        )
+
+    def _answerability_gain_for_obs(self, question: str, obs_id: int, phrase: str) -> float:
+        obs = self._observation_by_id(int(obs_id))
+        labels = list(obs.labels or []) if obs is not None else []
+        target_hit = any(label_matches_relevant_object(phrase, label) for label in labels)
+        try:
+            from emet.habitat.metrics import parse_mcq_choices_from_question
+
+            choices = parse_mcq_choices_from_question(question)
+        except Exception:
+            choices = []
+        if not choices:
+            return 1.0 if target_hit else 0.25
+        landmark_hit = any(
+            label_matches_relevant_object(choice, label)
+            for choice in choices
+            for label in labels
+        )
+        if target_hit and landmark_hit:
+            return 1.0
+        if target_hit or landmark_hit:
+            return 0.55
+        return 0.15
+
+    def _information_gain_score(
+        self,
+        hypothesis: NavHypothesis,
+        question: str,
+        robot_xyt: np.ndarray | None,
+    ) -> NavHypothesis:
+        node = self._node_for_obs(hypothesis.obs_id)
+        answerability = self._answerability_gain_for_obs(
+            question,
+            hypothesis.obs_id,
+            hypothesis.phrase,
+        )
+        confidence = float(node.belief_confidence) if node is not None else 0.2
+        belief_reduction = max(0.0, 1.0 - confidence)
+        age = max(0, self._effective_timestep() - int(node.last_seen)) if node is not None else 0
+        horizon = max(1, int(self.staleness_horizon) or 100)
+        change_bonus = min(1.0, age / horizon)
+        if node is not None and node.change_events:
+            change_bonus = min(1.5, change_bonus + 0.5)
+        path_cost = 0.0
+        if robot_xyt is not None and np.asarray(robot_xyt).size >= 2:
+            path_cost = float(
+                np.linalg.norm(
+                    np.asarray(hypothesis.xyz, dtype=float)[:2]
+                    - np.asarray(robot_xyt, dtype=float).reshape(-1)[:2]
+                )
+            )
+        failure_risk = 0.0
+        if node is not None and int(node.nav_attempts) > 0:
+            failure_risk = float(node.nav_failures) / int(node.nav_attempts)
+        total = (
+            float(hypothesis.score)
+            + 2.0 * answerability
+            + 1.2 * belief_reduction
+            + 0.8 * change_bonus
+            - 0.35 * path_cost
+            - 2.0 * failure_risk
+        )
+        return replace(
+            hypothesis,
+            score=total,
+            answerability_gain=answerability,
+            belief_reduction=belief_reduction,
+            revisit_change_value=change_bonus,
+            path_cost=path_cost,
+            failure_risk=failure_risk,
+        )
+
+    def hypothesize_nav_targets(
+        self,
+        question: str,
+        max_k: int = 3,
+        robot_xyt: np.ndarray | None = None,
+    ) -> list[NavHypothesis]:
+        """Rank target/context/frontier views by information gain and travel risk."""
         if not self._observations:
             return []
         phrases = list(self._confirmed_memory_phrases()) + list(self._relevant_objects or [])
@@ -1813,7 +2190,28 @@ class GraphEQAMemory:
                     source=source,
                 )
             )
-        scored.sort(key=lambda h: (-h.score, -h.obs_id))
+        for node in self._nodes:
+            if not node.is_frontier or int(node.obs_id) in seen:
+                continue
+            context_hit = any(
+                label_matches_relevant_object(phrase, label)
+                for phrase in phrases
+                for label in node.labels
+            )
+            scored.append(
+                NavHypothesis(
+                    phrase=phrases[0],
+                    obs_id=int(node.obs_id),
+                    xyz=np.asarray(node.xyz, dtype=float).copy(),
+                    score=0.75 if context_hit else 0.25,
+                    source="frontier",
+                )
+            )
+        scored = [
+            self._information_gain_score(hypothesis, question, robot_xyt)
+            for hypothesis in scored
+        ]
+        scored.sort(key=lambda h: (-h.score, h.path_cost, -h.obs_id))
         return scored[: max(1, int(max_k))]
 
     def verify_phrase_at_obs(
@@ -2844,6 +3242,8 @@ class GraphEQAMemory:
         Returns:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
         """
+        import time as _time
+
         from emet.habitat.metrics import (
             answer_is_visibility_abstain,
             choices_are_attribute_state,
@@ -2853,8 +3253,6 @@ class GraphEQAMemory:
             question_is_visibility_location,
         )
         from emet.llms.eqa_vl_settings import get_eqa_vl_int
-
-        import time as _time
 
         _t0 = _time.monotonic()
         _logger.info("query_answer: ensure_llm_clients…")

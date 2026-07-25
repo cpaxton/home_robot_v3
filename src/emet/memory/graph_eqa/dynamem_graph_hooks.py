@@ -22,19 +22,19 @@ from typing import Any
 import numpy as np
 
 from emet.memory.graph_eqa.calibration_export import CalibrationFrameWriter, detections_to_json_rows
-from emet.memory.graph_eqa.graph_memory import labels_are_semantic_graph_hypothesis
 from emet.memory.graph_eqa.graph_label_filter import (
     filter_graph_labels,
     is_graph_label_allowed,
     resolve_graph_scene_profile,
 )
+from emet.memory.graph_eqa.graph_memory import labels_are_semantic_graph_hypothesis
+from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate
 from emet.memory.graph_eqa.graph_observation_pipeline import apply_instance_items_to_graph
 from emet.memory.graph_eqa.instance_observations import (
     frame_instances_to_detections,
     frame_rgb_hwc_uint8,
     instance_items_from_instance_memory,
 )
-from emet.memory.graph_eqa.graph_object_fusion.fusion import GraphDetectionCandidate
 from emet.memory.graph_eqa.sensor_graph_builder import SensorGraphBuilder, short_labels_from_voxel_descriptions
 from emet.memory.graph_eqa.viewer_frame import viewer_xyz_world_from_observation
 
@@ -118,6 +118,7 @@ def update_graph_memory_from_dynamem_observation(
     vm = voxel_map
     instance_items: list[tuple[str, np.ndarray, tuple[int, int, int, int]]] = []
     raw_dets: list[dict[str, Any]] = []
+    visible_labels: list[str] = []
     if use_instance_graph and getattr(vm, "observations", None) and len(vm.observations) > 0:
         frame = vm.observations[-1]
         raw_dets = frame_instances_to_detections(
@@ -142,6 +143,7 @@ def update_graph_memory_from_dynamem_observation(
             )
             for d in raw_dets
         ]
+        visible_labels.extend(str(item[0]) for item in instance_items)
         if not instance_items and getattr(frame, "instance", None) is not None and getattr(
             vm, "use_instance_memory", False
         ):
@@ -190,6 +192,7 @@ def update_graph_memory_from_dynamem_observation(
 
         items = hm3d_instance_items_from_obs(labeler, obs)
         if items:
+            visible_labels.extend(str(item[0]) for item in items)
             fusion_enabled = graph_object_fusion is not None and getattr(
                 getattr(graph_object_fusion, "config", None),
                 "enabled",
@@ -223,13 +226,32 @@ def update_graph_memory_from_dynamem_observation(
                     items,
                     dedup_skips=dedup_skips or (lambda _l, _x: False),
                 )
+            if hasattr(graph_memory, "observe_visible_labels"):
+                graph_memory.observe_visible_labels(
+                    visible_labels,
+                    viewer_xyz,
+                    step=frame_step,
+                )
             return
         hm3d_labels = labeler.labels_from_frame(obs.semantic, obs.depth)
+        visible_labels.extend(str(label) for label in hm3d_labels)
         if hm3d_labels and sensor_builder is not None:
             xyz = sensor_builder.world_xyz_for_observation(obs)
             graph_memory.add_observation(rgb, xyz, hm3d_labels)
+            if hasattr(graph_memory, "observe_visible_labels"):
+                graph_memory.observe_visible_labels(
+                    visible_labels,
+                    viewer_xyz,
+                    step=frame_step,
+                )
             return
         if hm3d_labels:
+            if hasattr(graph_memory, "observe_visible_labels"):
+                graph_memory.observe_visible_labels(
+                    visible_labels,
+                    viewer_xyz,
+                    step=frame_step,
+                )
             return
 
     voxel_labels = None
@@ -245,6 +267,7 @@ def update_graph_memory_from_dynamem_observation(
         xyz = np.array(obs.camera_pose[:3, 3], dtype=float)
 
     labels = filter_graph_labels(labels, scene_profile=scene_profile)
+    visible_labels.extend(str(label) for label in labels)
 
     fusion_enabled = graph_object_fusion is not None and getattr(
         getattr(graph_object_fusion, "config", None),
@@ -274,6 +297,12 @@ def update_graph_memory_from_dynamem_observation(
 
     if fusion_enabled and graph_object_fusion is not None:
         graph_object_fusion.consolidate_high_iou_nodes(graph_memory)
+    if hasattr(graph_memory, "observe_visible_labels"):
+        graph_memory.observe_visible_labels(
+            visible_labels,
+            viewer_xyz,
+            step=frame_step,
+        )
 
 
 def sync_graph_frontier_nodes(

@@ -161,14 +161,52 @@ def choices_are_attribute_state(choices: list[str] | None) -> bool:
     return hits >= max(1, len(real) // 2)
 
 
+def choices_are_count_mcq(choices: list[str] | None) -> bool:
+    """True when options are cardinalities (``One``/``Two``/``None``/…)."""
+    if not choices:
+        return False
+    cleaned = [(c or "").strip().lower() for c in choices[:4] if (c or "").strip()]
+    if len(cleaned) < 2:
+        return False
+    real = [c for c in cleaned if not c.startswith("(do not choose")]
+    if len(real) < 2:
+        return False
+    count_exact = frozenset(
+        {
+            "none",
+            "zero",
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+        }
+    )
+    hits = sum(1 for c in real if c in count_exact or re.fullmatch(r"\d+", c))
+    return hits >= max(2, (len(real) + 1) // 2)
+
+
 def choices_are_location_mcq(choices: list[str] | None) -> bool:
-    """True when MCQ options are places/things, not yes/no style answers."""
+    """True when MCQ options are places/things, not yes/no or count answers."""
     if not choices:
         return False
     cleaned = [(c or "").strip().lower() for c in choices[:4] if (c or "").strip()]
     if len(cleaned) < 2:
         return False
     if all(c.startswith("(do not choose") for c in cleaned):
+        return False
+    if choices_are_count_mcq(choices):
         return False
     yes_no_like = sum(
         1

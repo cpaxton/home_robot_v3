@@ -136,6 +136,10 @@ A earlier holdout-4 gate showed the same pattern (3/4$\rightarrow$4/4; 60$\right
 Figure~\ref{fig:hmeqa_agentic_coverage} renders side-by-side episode overlays from per-arm debug bundles (\texttt{scripts/render\_hmeqa\_agentic\_coverage\_figure.py}).
 Distinct \texttt{--debug-run-tag}s (or \texttt{OUT/bundles/\{arm\}\_qN} snapshots) are required so H2H arms do not overwrite \texttt{\textasciitilde/.cache/habitat\_eqa/episodes/}.
 
+\noindent\textbf{Scale / verify-gate caveat.}
+Balanced-32 H2H (in progress) does not yet reproduce the holdout-8 accuracy gap; many agentic submits historically lacked SigLIP \texttt{PRESENT}.
+Appendix~\ref{app:agentic_verify_gate} documents the high-recall SigLIP role and the planned detector$\rightarrow$crop hybrid bakeoff.
+
 \subsection{OVMM find-phase memory ablation (Emet sim)}
 \label{sec:ovmm_find_results}
 

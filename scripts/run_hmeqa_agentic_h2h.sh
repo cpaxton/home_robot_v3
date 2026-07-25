@@ -20,11 +20,27 @@
 #   SKIP_GPU_WAIT=1        skip gpu_preflight --wait (e.g. NVML mismatch; Torch still sees CUDA)
 #   EGL_FAIL_ABORT=2       abort after this many consecutive Habitat EGL/CUDA-map failures
 #                          (0 = never). Pattern: WindowlessContext / unable to find CUDA device.
-#   NATIVE_CRASH_ABORT=1   stop after a fatal native signal (default: 1). Writes
-#                          native_crash_*.log and leaves prior episode artifacts intact.
+#   NATIVE_CRASH_POLICY=skip  skip|abort (default skip). skip settles + retries then
+#                          continues; abort stops the batch on first native crash.
+#   NATIVE_CRASH_ABORT=1   deprecated alias for NATIVE_CRASH_POLICY=abort.
+#   NATIVE_CRASH_RETRIES=1   retries of the same qid after a native crash (skip policy).
+#   NATIVE_CRASH_SETTLE_SEC=60  sleep after native crash before retry/next.
+#   NATIVE_CRASH_STREAK_ABORT=2  under skip: abort after N consecutive native crashes
+#                          (early exit when harness/driver is wedged; 0 = never).
+#   EMET_SKIP_CPU_AFFINITY=0  pin this process away from turbo P-cores (default on).
+#                          Auto-excludes logical CPUs with cpuinfo_max_freq >=
+#                          EMET_EXCLUDE_CPU_MIN_MHZ (default 6000). On the i9-14900KF
+#                          that is CPUs 8-11 (both 6.0 GHz P-cores) — do NOT use
+#                          taskset -c 0-7,10-31 (still leaves CPUs 10-11 online).
+#   EPISODE_COOLDOWN_SEC=20  sleep + sync between episodes (0 disables). Reduces
+#                          stacked Habitat/VLM teardown pressure that can hard-freeze.
+#   EPISODE_GPU_WAIT=1     re-run gpu_preflight --wait between episodes (default 1).
 #
+# Prefer: uv run emet hmeqa h2h|resume  (dogfood CLI over hand-rolled env/taskset).
 # Recovery after an agent/session death (from *this* checkout — not a sibling tree):
 #   bash scripts/status_log.sh tail
+#   uv run emet eval recover --need-mib 12000
+#   uv run emet hmeqa resume
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -41,13 +57,102 @@ RESUME="${RESUME:-0}"
 SKIP_KILL_STALE="${SKIP_KILL_STALE:-0}"
 SKIP_GPU_WAIT="${SKIP_GPU_WAIT:-0}"
 EGL_FAIL_ABORT="${EGL_FAIL_ABORT:-2}"
-NATIVE_CRASH_ABORT="${NATIVE_CRASH_ABORT:-1}"
+if [[ "${NATIVE_CRASH_ABORT:-}" == "1" ]]; then
+  NATIVE_CRASH_POLICY="${NATIVE_CRASH_POLICY:-abort}"
+else
+  NATIVE_CRASH_POLICY="${NATIVE_CRASH_POLICY:-skip}"
+fi
+NATIVE_CRASH_RETRIES="${NATIVE_CRASH_RETRIES:-1}"
+NATIVE_CRASH_SETTLE_SEC="${NATIVE_CRASH_SETTLE_SEC:-60}"
+NATIVE_CRASH_STREAK_ABORT="${NATIVE_CRASH_STREAK_ABORT:-2}"
+EMET_SKIP_CPU_AFFINITY="${EMET_SKIP_CPU_AFFINITY:-0}"
+EMET_EXCLUDE_CPU_MIN_MHZ="${EMET_EXCLUDE_CPU_MIN_MHZ:-6000}"
+EPISODE_COOLDOWN_SEC="${EPISODE_COOLDOWN_SEC:-20}"
+EPISODE_GPU_WAIT="${EPISODE_GPU_WAIT:-1}"
 log() { echo "[$(date -Iseconds)] $*" | tee -a "$OUT/orchestrator.log"; }
 
 status_open "$OUT" "hmeqa-h2h"
-STATUS_RESUME_CMD="uv run emet jobs run --name hmeqa-h2h-resume --need-mib 12000 -- \
-env EMET_ALLOW_SDPA_ATTN=1 RESUME=1 ARMS=$ARMS HOLDOUT_IDS=$HOLDOUT_IDS \
-./scripts/run_hmeqa_agentic_h2h.sh $OUT"
+STATUS_RESUME_CMD="uv run emet eval recover --need-mib 12000 && uv run emet hmeqa resume $OUT"
+
+apply_eval_cpu_affinity() {
+  if [[ "$EMET_SKIP_CPU_AFFINITY" == "1" ]]; then
+    log "SKIP CPU affinity (EMET_SKIP_CPU_AFFINITY=1)"
+    return 0
+  fi
+  if ! EMET_EXCLUDE_CPU_MIN_MHZ="$EMET_EXCLUDE_CPU_MIN_MHZ" \
+      uv run emet eval affinity --apply --pid "$$"; then
+    log "ERROR: cpu affinity failed (fail-closed)"
+    status_close BLOCKED "cpu affinity could not exclude turbo cores" \
+      "fix host cpufreq sysfs or set EMET_SKIP_CPU_AFFINITY=1 only if intentional; then $STATUS_RESUME_CMD"
+    exit 2
+  fi
+  log "CPU affinity applied (exclude >=${EMET_EXCLUDE_CPU_MIN_MHZ} MHz turbo)"
+}
+
+episode_cooldown() {
+  local why="${1:-between episodes}"
+  if [[ "${EPISODE_COOLDOWN_SEC}" =~ ^[0-9]+$ && "${EPISODE_COOLDOWN_SEC}" -gt 0 ]]; then
+    log "episode cooldown ${EPISODE_COOLDOWN_SEC}s ($why)"
+    sync || true
+    sleep "$EPISODE_COOLDOWN_SEC"
+  fi
+}
+
+note_host_freeze_if_any() {
+  # Unclean reboot mid-episode: empty current jsonl + classic.log trailing NULs.
+  local progress="$OUT/progress.json"
+  [[ -f "$progress" ]] || return 0
+  local phase qid
+  phase="$(uv run python -c "import json; print(json.load(open(r'''$progress''')).get('phase') or '')" 2>/dev/null || true)"
+  qid="$(uv run python -c "import json; print(json.load(open(r'''$progress''')).get('current_id') or '')" 2>/dev/null || true)"
+  [[ -n "$phase" && -n "$qid" && "$qid" != "-" ]] || return 0
+  case "$phase" in
+    classic|agentic) ;;
+    *) return 0 ;;
+  esac
+  local ep="$OUT/${phase}_q${qid}.jsonl"
+  [[ -e "$ep" && ! -s "$ep" ]] || return 0
+  local elog="$OUT/${phase}.log"
+  local has_nuls=0
+  if [[ -f "$elog" ]]; then
+    has_nuls="$(uv run python -c "
+from pathlib import Path
+b=Path(r'''$elog''').read_bytes()
+print(1 if b.endswith(b'\\x00'*8) or (len(b)>64 and b[-64:].count(0)>32) else 0)
+" 2>/dev/null || echo 0)"
+  fi
+  local capsule="$OUT/host_freeze_${phase}_q${qid}.log"
+  [[ -f "$capsule" ]] && return 0
+  {
+    echo "timestamp=$(date -Iseconds)"
+    echo "kind=host-freeze-or-hard-reboot"
+    echo "arm=$phase"
+    echo "question_id=$qid"
+    echo "evidence=empty ${phase}_q${qid}.jsonl + progress mid-episode"
+    echo "log_trailing_nuls=$has_nuls"
+    echo "head=$(git rev-parse --short HEAD)"
+    echo "uptime=$(uptime -p 2>/dev/null || true)"
+    echo "boot=$(who -b 2>/dev/null || true)"
+    echo
+    echo "----- progress.json -----"
+    cat "$progress" 2>/dev/null || true
+    echo
+    echo "----- episode log tail -----"
+    if [[ -f "$elog" ]]; then
+      uv run python -c "
+from pathlib import Path
+b=Path(r'''$elog''').read_bytes()
+i=len(b)-1
+while i>=0 and b[i]==0: i-=1
+print(b[max(0,i-4000):i+1].decode('utf-8','replace'))
+" 2>/dev/null || tail -n 80 "$elog"
+    fi
+  } >"$capsule"
+  log "host-freeze capsule → $capsule (empty $ep; will re-run on resume)"
+  status_note CRASH \
+    "prior host freeze/reboot during $phase q$qid — artifacts preserved; empty jsonl will re-run" \
+    "inspect $capsule; then resume with affinity baked into this script: $STATUS_RESUME_CMD"
+}
 
 _egl_fail_streak=0
 arm_log_has_egl_failure() {
@@ -125,6 +230,8 @@ for _arm in "${_PROGRESS_ARMS[@]}"; do
 done
 PROGRESS_TOTAL=$((PROGRESS_N_IDS * _ARM_COUNT))
 PROGRESS_DONE=0
+PROGRESS_FAILED=0
+_native_crash_streak=0
 
 rebuild_arm_jsonl() {
   local name="$1"
@@ -164,14 +271,16 @@ jobs_heartbeat() {
   local qid="$2"
   local done="$3"
   local total="$4"
+  local failed="${5:-$PROGRESS_FAILED}"
   uv run python -c "
-from emet.utils.job_registry import write_progress_file
-write_progress_file(
+from emet.eval.harness import update_eval_progress
+update_eval_progress(
     r'''$OUT''',
     units_done=int('$done'),
     units_total=int('$total'),
     phase='$phase',
     current_id='$qid',
+    units_failed=int('$failed'),
 )
 " 2>/dev/null || true
   if [[ -n "${EMET_JOB_ID:-}" ]]; then
@@ -239,7 +348,9 @@ if ! uv run python -c "from emet.llms.attn_impl import flash_attn_2_available; r
 fi
 
 log "OUT=$OUT HEAD=$(git rev-parse --short HEAD) ids=$HOLDOUT_IDS total_units=$PROGRESS_TOTAL arms=$ARMS resume=$RESUME"
+apply_eval_cpu_affinity
 if [[ "$RESUME" == "1" ]]; then
+  note_host_freeze_if_any
   PROGRESS_DONE="$(count_done_units)"
   rebuild_arm_jsonl classic
   rebuild_arm_jsonl agentic
@@ -281,39 +392,79 @@ run_arm() {
       log "SKIP $name q$qid (resume: non-empty $ep)"
       continue
     fi
-    gpu_wait
-    : >"$ep"
-    tag="h2h_${name}_q$(printf '%04d' "$qid")"
-    log "----- $name q$qid (bundle tag=$tag) -----"
-    jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
-    STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL $name q$qid"
-    status_note RUNNING "episode $name q$qid started (timeout ${TIMEOUT}s)" \
-      "nothing — episode in flight (~4 min each). Re-check: bash scripts/status_log.sh tail"
-    set +e
-    # shellcheck disable=SC2086
-    env PYTHONFAULTHANDLER=1 "$@" timeout "$TIMEOUT" "$EMET_HABITAT" run-episode \
-      --question-id "$qid" \
-      --method dynagraph \
-      --explore-when-uncovered off \
-      --no-mcq-debias \
-      --memory-summary \
-      --debug-run-tag "$tag" \
-      --output "$ep" \
-      >>"$elog" 2>&1
-    rc=$?
-    set -e
-    if [[ "$rc" -ne 0 ]]; then
-      log "FAIL $name q$qid exit=$rc"
+    if [[ "$EPISODE_GPU_WAIT" == "1" ]]; then
+      gpu_wait
+    fi
+    local attempt=0
+    local max_attempts=1
+    if [[ "${NATIVE_CRASH_RETRIES}" =~ ^[0-9]+$ ]]; then
+      max_attempts=$((1 + NATIVE_CRASH_RETRIES))
+    fi
+    local episode_ok=0
+    while [[ "$attempt" -lt "$max_attempts" ]]; do
+      attempt=$((attempt + 1))
+      : >"$ep"
+      tag="h2h_${name}_q$(printf '%04d' "$qid")"
+      log "----- $name q$qid attempt=${attempt}/${max_attempts} (bundle tag=$tag) -----"
+      jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
+      STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL $name q$qid"
+      status_note RUNNING "episode $name q$qid started (timeout ${TIMEOUT}s)" \
+        "nothing — episode in flight (~4 min each). Re-check: bash scripts/status_log.sh tail"
+      set +e
+      # shellcheck disable=SC2086
+      env PYTHONFAULTHANDLER=1 "$@" timeout --kill-after=30s "$TIMEOUT" "$EMET_HABITAT" run-episode \
+        --question-id "$qid" \
+        --method dynagraph \
+        --explore-when-uncovered off \
+        --no-mcq-debias \
+        --memory-summary \
+        --debug-run-tag "$tag" \
+        --output "$ep" \
+        >>"$elog" 2>&1
+      rc=$?
+      set -e
+      if [[ "$rc" -eq 0 && -s "$ep" ]]; then
+        episode_ok=1
+        _egl_fail_streak=0
+        _native_crash_streak=0
+        break
+      fi
+      log "FAIL $name q$qid exit=$rc attempt=${attempt}/${max_attempts}"
       if signal_name="$(native_crash_signal "$rc")"; then
         write_native_crash_capsule "$name" "$qid" "$rc" "$elog" "$signal_name"
-        if [[ "$NATIVE_CRASH_ABORT" != "0" ]]; then
-          log "ABORT: $signal_name in episode process. Do not retry in this batch; inspect the crash capsule and use emet jobs status/logs after driver recovery."
+        uv run python -c "
+from emet.eval.harness import write_crash_marker
+write_crash_marker(r'''$OUT''', '$name', '$qid', returncode=int('$rc'), signal_name='$signal_name')
+" 2>/dev/null || true
+        _native_crash_streak=$((_native_crash_streak + 1))
+        if [[ "$NATIVE_CRASH_POLICY" == "abort" ]]; then
+          log "ABORT: $signal_name (NATIVE_CRASH_POLICY=abort)"
           jobs_heartbeat "native-crash" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
           status_close CRASH \
             "$signal_name in $name q$qid — batch aborted at $PROGRESS_DONE/$PROGRESS_TOTAL units" \
-            "1) read $OUT/native_crash_${name}_q${qid}.log  2) sudo dmesg -T | rg -i 'segfault|invalid opcode'  3) uv run emet eval diagnose  4) only then resume: $STATUS_RESUME_CMD"
+            "1) read $OUT/native_crash_${name}_q${qid}.log  2) uv run emet eval recover  3) $STATUS_RESUME_CMD"
           exit "$rc"
         fi
+        if [[ "${NATIVE_CRASH_STREAK_ABORT}" =~ ^[0-9]+$ && "${NATIVE_CRASH_STREAK_ABORT}" -gt 0 && "${_native_crash_streak}" -ge "${NATIVE_CRASH_STREAK_ABORT}" ]]; then
+          log "ABORT: native crash streak=${_native_crash_streak} (early exit; harness likely wedged)"
+          jobs_heartbeat "crash-streak" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
+          status_close CRASH \
+            "native crash streak=${_native_crash_streak} at $name q$qid — aborted at $PROGRESS_DONE/$PROGRESS_TOTAL" \
+            "uv run emet eval recover --need-mib 12000; then $STATUS_RESUME_CMD"
+          exit "$rc"
+        fi
+        log "native crash settle ${NATIVE_CRASH_SETTLE_SEC}s (policy=skip streak=${_native_crash_streak})"
+        sync || true
+        sleep "${NATIVE_CRASH_SETTLE_SEC}"
+        gpu_wait || true
+        if [[ "$attempt" -lt "$max_attempts" ]]; then
+          log "retrying $name q$qid after native crash"
+          continue
+        fi
+        PROGRESS_FAILED=$((PROGRESS_FAILED + 1))
+        status_note FAIL "episode $name q$qid $signal_name — skipped (empty jsonl; resume can retry)" \
+          "batch continues. Capsule: $OUT/native_crash_${name}_q${qid}.log"
+        break
       fi
       if arm_log_has_egl_failure "$elog"; then
         _egl_fail_streak=$((_egl_fail_streak + 1))
@@ -328,21 +479,26 @@ run_arm() {
       else
         _egl_fail_streak=0
       fi
-      status_note FAIL "episode $name q$qid exit=$rc (non-fatal, continuing)" \
-        "nothing yet — batch continues. Review later: tail -n 40 $OUT/${name}.log"
-    else
-      _egl_fail_streak=0
-    fi
+      if [[ "$attempt" -ge "$max_attempts" ]]; then
+        PROGRESS_FAILED=$((PROGRESS_FAILED + 1))
+        status_note FAIL "episode $name q$qid exit=$rc (non-fatal, continuing)" \
+          "nothing yet — batch continues. Review later: tail -n 40 $OUT/${name}.log"
+      fi
+    done
     if [[ -s "$ep" ]]; then
-      # Re-append only this episode into aggregate (rebuild keeps order).
       rebuild_arm_jsonl "$name"
+      snapshot_bundle "$name" "$qid" "$ep"
+      PROGRESS_DONE=$((PROGRESS_DONE + 1))
+      jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
+      STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL $name q$qid"
+      status_note OK "episode $name q$qid finished" \
+        "nothing — job alive and advancing"
+      sync || true
+      episode_cooldown "post $name q$qid"
+    else
+      jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
+      episode_cooldown "post-fail $name q$qid"
     fi
-    snapshot_bundle "$name" "$qid" "$ep"
-    PROGRESS_DONE=$((PROGRESS_DONE + 1))
-    jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
-    STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL $name q$qid"
-    status_note OK "episode $name q$qid finished" \
-      "nothing — job alive and advancing"
   done
   rebuild_arm_jsonl "$name"
   log "DONE arm=$name"
@@ -384,14 +540,23 @@ if [[ -d "$ROOT/paper/figs" && -f "$OUT/figures/hmeqa_agentic_coverage.png" ]]; 
   cp -a "$OUT/figures/hmeqa_agentic_h2h.png" "$ROOT/paper/figs/hmeqa_agentic_h2h.png" || true
 fi
 
-jobs_heartbeat "done" "-" "$PROGRESS_TOTAL" "$PROGRESS_TOTAL"
+CRASHED_QIDS="$(find "$OUT" -maxdepth 1 -name '*_q*.CRASH' -printf '%f\n' 2>/dev/null | sed 's/\.CRASH$//' | paste -sd, - || true)"
+if [[ -n "${CRASHED_QIDS:-}" ]]; then
+  log "CRASHED_QIDS=${CRASHED_QIDS} (units_failed=${PROGRESS_FAILED}; scored=${PROGRESS_DONE}/${PROGRESS_TOTAL})"
+fi
+
+jobs_heartbeat "done" "-" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
 if [[ -n "${EMET_JOB_ID:-}" ]]; then
   uv run emet jobs update "$EMET_JOB_ID" --status done \
-    --units-done "$PROGRESS_TOTAL" --units-total "$PROGRESS_TOTAL" \
+    --units-done "$PROGRESS_DONE" --units-total "$PROGRESS_TOTAL" \
     --phase done --out-dir "$OUT" >/dev/null 2>&1 || true
 fi
 echo DONE > "$OUT/DONE"
-log "All done → $OUT"
-STATUS_PROGRESS="$PROGRESS_TOTAL/$PROGRESS_TOTAL done"
-status_close DONE "all $PROGRESS_TOTAL units finished; summary + figures written" \
-  "review $OUT/orchestrator.log and $OUT/figures/, then uv run python scripts/hmeqa_significance.py $OUT"
+log "All done → $OUT (scored ${PROGRESS_DONE}/${PROGRESS_TOTAL}, failed ${PROGRESS_FAILED})"
+STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL done"
+status_close DONE "scored $PROGRESS_DONE/$PROGRESS_TOTAL units (failed=${PROGRESS_FAILED}); summary + figures written" \
+  "review $OUT/orchestrator.log and $OUT/figures/, then uv run emet hmeqa summarize $OUT"
+if [[ "$PROGRESS_DONE" -eq 0 && "$PROGRESS_FAILED" -gt 0 ]]; then
+  exit 1
+fi
+exit 0

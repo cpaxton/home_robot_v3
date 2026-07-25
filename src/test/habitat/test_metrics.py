@@ -41,6 +41,14 @@ def test_on_the_place_choices_are_location_not_attribute():
     assert choices_are_attribute_state(["turned on", "turned off", "open", "closed"])
 
 
+def test_count_choices_are_not_location_mcq():
+    from emet.habitat.metrics import choices_are_count_mcq
+
+    counts = ["Three", "One", "None", "Two"]
+    assert choices_are_count_mcq(counts)
+    assert not choices_are_location_mcq(counts)
+
+
 def test_grade_mcq_answer_letter_e():
     assert extract_mcq_letter("E") == "E"
     assert extract_mcq_letter("Answer: e") == "E"

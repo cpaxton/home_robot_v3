@@ -21,8 +21,6 @@ from typing import Any
 
 import numpy as np
 
-from emet.utils.process_tree import popen_session, terminate_process_tree
-
 from emet.eval.benchmark_dynagraph import apply_dynamic_explore_backend, profile_settings
 from emet.eval.dynamic_exploration_config import (
     DynamicExploreConfig,
@@ -35,6 +33,7 @@ from emet.eval.dynamic_exploration_config import (
 from emet.eval.ovmm_find_phase import resolve_find_phase_nav_step_timeout
 from emet.eval.sim_eval_session import benchmark_sim_server, connect_benchmark_robot
 from emet.eval.world_fuzz import FuzzAction, apply_fuzz_actions, fuzz_actions_for_cycle
+from emet.utils.process_tree import popen_session, terminate_process_tree
 
 LIFELONG_QUESTION_ENV = "lifelong"
 _GT_NODE_DESC_PREFIX = "ground_truth:"
@@ -707,18 +706,9 @@ def run_world_change_episode(
                     label_hint=str(pre_q.get("gt_body_key") or "obj"),
                 )
                 if mem is not None:
-                    # Known move: age nodes at the old pose so maintain can prune without
-                    # waiting a full staleness_horizon of unobserved steps.
-                    if old_pos is not None and hasattr(mem, "invalidate_nodes_near"):
-                        _aged, n_inv = mem.invalidate_nodes_near(
-                            old_pos,
-                            radius_m=_NODE_MATCH_RADIUS_M,
-                            current_step=cur_step,
-                            prune=True,
-                        )
-                        n_pruned_total += int(n_inv)
-                    elif mem.staleness_horizon > 0:
-                        n_pruned_total += int(mem.maintain(cur_step))
+                    # The relocation is hidden from memory. Re-observation hooks produce
+                    # expected-object-missing / position-contradiction events; GT is used
+                    # only below for benchmark scoring, never to invalidate policy state.
                     if hasattr(mem, "clear_eqa_working_memory"):
                         mem.clear_eqa_working_memory()
 
@@ -781,6 +771,24 @@ def run_world_change_episode(
                         pred_xy = np.asarray(cited[:2], dtype=np.float64)
                         loc_err = float(np.linalg.norm(pred_xy - gt_xy))
 
+                autonomous_events = (
+                    mem.get_change_events()
+                    if mem is not None and hasattr(mem, "get_change_events")
+                    else []
+                )
+                from emet.eval.dynamic_change_metrics import score_hidden_relocations
+
+                change_metrics = score_hidden_relocations(
+                    autonomous_events,
+                    [
+                        {
+                            "target": wc.relocate_body,
+                            "old_pos": old_pos,
+                            "verified_pos": [rx, ry, rz],
+                            "step": cur_step,
+                        }
+                    ],
+                )
                 payload = {
                     "run_id": run_id,
                     "phase": "world-change",
@@ -792,6 +800,8 @@ def run_world_change_episode(
                     "n_nodes_near_new_pos": n_nodes_near_new,
                     "adapted": bool(n_nodes_near_new > 0),
                     "n_pruned_by_maintain": n_pruned_total,
+                    "autonomous_change_events": autonomous_events,
+                    "change_detection_metrics": change_metrics,
                     "recovery_steps": recovery_steps,
                     "relocate_body": wc.relocate_body,
                     "relocate_xyz": [rx, ry, rz],
@@ -1154,6 +1164,17 @@ def run_lifelong_episode(
                     n_obs=n_obs,
                 )
                 health["failure_class"] = classify_graph_failure(health)
+                autonomous_events = [
+                    dict(event)
+                    for node in nodes
+                    for event in (node.get("change_events") or [])
+                ]
+                from emet.eval.dynamic_change_metrics import score_hidden_relocations
+
+                change_metrics = score_hidden_relocations(
+                    autonomous_events,
+                    pending_moves,
+                )
 
                 cycle_row: dict[str, Any] = {
                     "cycle": t,
@@ -1166,6 +1187,8 @@ def run_lifelong_episode(
                     "total_node_count": n_total_nodes,
                     "graph_health": health,
                     "moved_body_churn": _churn_metrics_for_moves(ckpt, pending_moves),
+                    "autonomous_change_events": autonomous_events,
+                    "change_detection_metrics": change_metrics,
                     "cycle_wall_s": time.monotonic() - cycle_t0,
                 }
 
@@ -1177,10 +1200,10 @@ def run_lifelong_episode(
                         port_offset=port_offset,
                     )
                     cycle_row["fuzz_applied"] = applied
-                    # Patch this cycle's checkpoint so the next reload does not keep
-                    # confident nodes at pre-move poses (CONFIRMED_MEMORY / find).
-                    n_inv = invalidate_checkpoint_nodes_near_moves(ckpt, move_records)
-                    cycle_row["checkpoint_nodes_invalidated"] = int(n_inv)
+                    # Keep the pre-change checkpoint intact: the next policy cycle must
+                    # discover the hidden relocation from contradictory observations.
+                    cycle_row["checkpoint_nodes_invalidated"] = 0
+                    cycle_row["change_detection_mode"] = "autonomous_observation"
                     pending_moves = move_records
 
                 cycle_results.append(cycle_row)

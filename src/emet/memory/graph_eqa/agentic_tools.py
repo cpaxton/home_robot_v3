@@ -30,11 +30,16 @@ Respond with ONLY a JSON object (no other text):
 {"tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
 
 Rules:
-- Verify before answering: call verify_siglip at the location you believe holds the target,
-  and only call submit_answer after a PRESENT verification (or when the state says budget
-  is nearly exhausted).
+- Interactive loop: (1) explore / inspect for candidate places, (2) navigate in and
+  verify_siglip once on the new view (cheap proposal + VLM assess), (3) when the state
+  says answerable/verified → submit_answer; else move to another candidate. Never
+  re-verify the same observation / view.
+- SigLIP/OWL are high-recall proposals only — PRESENT is not proof and does not unlock
+  submit. The multimodal VLM assess on the fresh RGB decides answerability.
+- Only call submit_answer after verified/answerable (or when the state says budget
+  is exhausted).
 - If the graph hypothesis was ABSENT at its old location, the object moved: explore_frontier
-  or look_around to find it, then verify again.
+  or look_around to find it, then verify the new view.
 - Never re-pick a hypothesis marked tried/ABSENT in the state.
 - One or two tool calls per turn.
 
@@ -43,7 +48,7 @@ State: hypothesis obs_id=7 'sink' from graph, not tried
 {"tool_calls": [{"name": "navigate_to_obs", "arguments": {"obs_id": 7}}], "message": ""}
 State: just arrived at obs 7
 {"tool_calls": [{"name": "verify_siglip", "arguments": {"phrase": "sink", "obs_id": 7}}], "message": ""}
-State: verify PRESENT sim=0.31
+State: VLM assess answerable=true verified=true
 {"tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
 State: no hypotheses, 3 unexplored frontiers
 {"tool_calls": [{"name": "explore_frontier", "arguments": {"toward": "sink"}}], "message": ""}"""
@@ -51,8 +56,8 @@ State: no hypotheses, 3 unexplored frontiers
 _EQA_IDENTITY = """\
 You are a robot exploring a home. You maintain a 3D map and an object scene graph that
 update automatically after every motion. Your job is to answer a question about the scene
-(or to explore and map it). Move to where the answer can be seen, verify with the
-verify_siglip tool, and only then answer. Do NOT output reasoning — only the JSON."""
+(or to explore and map it). Move to where the answer can be seen, run verify_siglip
+(cheap check + VLM assess), and only then answer. Do NOT output reasoning — only the JSON."""
 
 
 def build_agentic_eqa_tools(executor: AgenticEQAExecutor) -> list[Tool]:
@@ -123,9 +128,9 @@ def build_agentic_eqa_tools(executor: AgenticEQAExecutor) -> list[Tool]:
         Tool(
             name="verify_siglip",
             description=(
-                "Cheap visual check: does 'phrase' match the current camera view / stored view "
-                "obs_id? Returns PRESENT / CANDIDATE / ABSENT with a similarity score. PRESENT "
-                "unlocks submit_answer."
+                "Cheap visual check + multimodal VLM assess: does 'phrase' match the current "
+                "camera view / stored view obs_id? Returns PRESENT / CANDIDATE / ABSENT as a "
+                "proposal; only VLM answerable unlocks submit_answer."
             ),
             parameters={
                 "type": "object",
@@ -165,8 +170,8 @@ def build_agentic_eqa_tools(executor: AgenticEQAExecutor) -> list[Tool]:
             Tool(
                 name="submit_answer",
                 description=(
-                    "Submit the final answer (MCQ letter or short phrase). Rejected until a "
-                    "verify_siglip PRESENT (or the round budget is exhausted)."
+                    "Submit the final answer (MCQ letter or short phrase). Rejected until VLM "
+                    "assess marks the view answerable (or the round budget is exhausted)."
                 ),
                 parameters={
                     "type": "object",
@@ -207,11 +212,16 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         lines.append(f"Goal: {executor.goal or 'explore and map the environment'}")
     else:
         lines.append(f"Question: {executor.question}")
+        if getattr(executor, "_target_phrase", ""):
+            lines.append(
+                f"Target: {executor._target_phrase} (type={getattr(executor, '_question_type', 'other')})"
+            )
     lines.append(_graph_stats_line(gm))
     lines.append(
         f"Round {executor._round + 1}/{executor.max_rounds}; "
         f"nav used {executor._n_nav + executor._n_explore}/{executor.max_nav_steps}; "
-        f"verified={executor._verified}"
+        f"verified={executor._verified}; "
+        f"policy={getattr(executor._evidence_policy, 'state', None)}"
     )
     if executor._hypotheses:
         lines.append("Hypotheses:")
@@ -227,6 +237,13 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     if executor._last_verify is not None:
         lv = executor._last_verify
         lines.append(f"Last verify: {lv.status} sim={float(lv.sim):.3f} obs_id={int(lv.obs_id)}")
+    last_vlm = getattr(executor, "_last_vlm_assess", None)
+    if last_vlm:
+        lines.append(
+            "Last VLM assess: "
+            f"answerable={last_vlm.get('answerable')} present={last_vlm.get('present')} "
+            f"obs_id={last_vlm.get('obs_id')} reason={last_vlm.get('reason')!r}"
+        )
     if executor.max_rounds - executor._round <= 2:
         lines.append("Budget nearly exhausted: answer/finish on your best evidence soon.")
     return "\n".join(lines)

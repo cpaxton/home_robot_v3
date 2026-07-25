@@ -130,6 +130,34 @@ def list_jobs(*, include_terminal: bool = False) -> list[JobRecord]:
     return out
 
 
+_GPU_JOB_HINT = re.compile(
+    r"emet-habitat|run_hmeqa|hmeqa|habitat|qwen|vlm|mujoco|robocasa|dynagraph|"
+    r"dynamem|sqa3d|ovmm|need.mib|--need-mib|EMET_ALLOW_SDPA",
+    re.IGNORECASE,
+)
+
+
+def looks_like_gpu_job(job: JobRecord) -> bool:
+    """Heuristic: Habitat/VLM/MuJoCo/HM-EQA-style commands share one GPU."""
+    blob = f"{job.name} {job.cmd}"
+    return bool(_GPU_JOB_HINT.search(blob))
+
+
+def active_gpu_job_pids(*, exclude_job_id: str | None = None) -> list[int]:
+    """PIDs of non-terminal GPU-like jobs (for ``--gpu-exclusive`` waits)."""
+    pids: list[int] = []
+    for job in list_jobs(include_terminal=False):
+        if exclude_job_id and job.id == exclude_job_id:
+            continue
+        if job.status not in ("queued", "waiting", "running"):
+            continue
+        if not looks_like_gpu_job(job):
+            continue
+        if job.pid is not None and pid_alive(job.pid):
+            pids.append(int(job.pid))
+    return pids
+
+
 def register_job(
     *,
     name: str,
@@ -529,6 +557,568 @@ def format_job_detail(job: JobRecord) -> str:
         }
         if interesting:
             lines.append(f"meta:      {interesting}")
+    return "\n".join(lines)
+
+
+_ACTIVE_REPORT_STATUSES: frozenset[str] = frozenset({"queued", "waiting", "running"})
+_EPISODE_JSONL_RE = re.compile(
+    r"^(?P<arm>classic|agentic|graph_eqa|dynagraph)_(?:q)?(?P<qid>\d+)\.jsonl$",
+    re.IGNORECASE,
+)
+_HOLDOUT_IDS_RE = re.compile(r"HOLDOUT_IDS=([0-9,\s]+)")
+_IDS_FLAG_RE = re.compile(r"--ids\s+([0-9,\s]+)")
+
+
+@dataclass
+class EpisodeScore:
+    """One scored HM-EQA / H2H episode jsonl row."""
+
+    arm: str
+    question_id: int
+    correct: bool | None = None
+    predicted: str | None = None
+    gold: str | None = None
+    planning_steps: int | None = None
+    confident: bool | None = None  # EQA VLM Confidence: (legacy alias of eqa_confident)
+    verified: bool | None = None  # agentic verify / VLM-assess gate
+    answerable: bool | None = None  # agentic policy ANSWER (from summary/trace)
+    path: str | None = None
+
+    @property
+    def result_label(self) -> str:
+        if self.correct is True:
+            return "ok"
+        if self.correct is False:
+            return "FAIL"
+        return "?"
+
+    @property
+    def eqa_confident(self) -> bool | None:
+        return self.confident
+
+    def conf_cell(self) -> str:
+        """Compact verify-gate + EQA self-report for the report table."""
+        parts: list[str] = []
+        if self.verified is not None:
+            parts.append(f"v={'Y' if self.verified else 'N'}")
+        if self.answerable is not None and self.answerable != self.verified:
+            parts.append(f"a={'Y' if self.answerable else 'N'}")
+        if self.confident is not None:
+            parts.append(f"e={'Y' if self.confident else 'N'}")
+        return " ".join(parts) if parts else "-"
+
+
+def _load_agentic_summary_flags(
+    out_dir: Path,
+    arm: str,
+    qid: int,
+    *,
+    debug_bundle_dir: str | None = None,
+) -> tuple[bool | None, bool | None]:
+    """Return (verified, answerable) from ``bundles/{arm}_q{qid}/agentic_summary.json``."""
+    candidates: list[Path] = []
+    if debug_bundle_dir:
+        candidates.append(Path(str(debug_bundle_dir)).expanduser() / "agentic_summary.json")
+    candidates.extend(
+        [
+            out_dir / "bundles" / f"{arm}_q{qid}" / "agentic_summary.json",
+            out_dir / "bundles" / f"{arm}_q{qid:04d}" / "agentic_summary.json",
+        ]
+    )
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        verified = data.get("verified") if isinstance(data.get("verified"), bool) else None
+        answerable = data.get("answerable") if isinstance(data.get("answerable"), bool) else None
+        return verified, answerable
+    return None, None
+
+
+def resolve_report_job(job_id: str | None = None) -> JobRecord | None:
+    """Resolve a job for ``emet jobs report``.
+
+    With no id: prefer a single active (running/waiting/queued) job; if several,
+    pick running first then most recently updated. If none active, fall back to
+    the most recently updated terminal job that has an ``out_dir``.
+    """
+    if job_id:
+        job = load_job(job_id)
+        return refresh_job_liveness(job) if job is not None else None
+
+    active = [refresh_job_liveness(j) for j in list_jobs(include_terminal=False)]
+    active = [j for j in active if j.status in _ACTIVE_REPORT_STATUSES]
+    if active:
+        rank = {"running": 0, "waiting": 1, "queued": 2}
+        active.sort(key=lambda j: (rank.get(j.status, 9), -j.updated_at))
+        return active[0]
+
+    terminal = [
+        refresh_job_liveness(j)
+        for j in list_jobs(include_terminal=True)
+        if j.status in TERMINAL_STATUSES and j.out_dir
+    ]
+    if not terminal:
+        return None
+    terminal.sort(key=lambda j: j.updated_at, reverse=True)
+    return terminal[0]
+
+
+def parse_planned_question_ids(job: JobRecord) -> list[int]:
+    """Best-effort planned QID list from cmd / orchestrator.log / progress."""
+    blobs: list[str] = [job.cmd or ""]
+    if job.out_dir:
+        orch = Path(job.out_dir).expanduser() / "orchestrator.log"
+        if orch.is_file():
+            try:
+                blobs.append(orch.read_text(encoding="utf-8", errors="replace")[:8000])
+            except OSError:
+                pass
+        prog = read_progress_file(job.out_dir)
+        ids_raw = prog.get("ids") or prog.get("holdout_ids")
+        if isinstance(ids_raw, str):
+            blobs.append(f"HOLDOUT_IDS={ids_raw}")
+        elif isinstance(ids_raw, list):
+            return [int(x) for x in ids_raw]
+
+    for blob in blobs:
+        for cre in (_HOLDOUT_IDS_RE, _IDS_FLAG_RE):
+            m = cre.search(blob)
+            if not m:
+                continue
+            ids: list[int] = []
+            for part in m.group(1).split(","):
+                part = part.strip()
+                if part.isdigit():
+                    ids.append(int(part))
+            if ids:
+                return ids
+    return []
+
+
+def collect_episode_scores(out_dir: str | Path | None) -> list[EpisodeScore]:
+    """Load non-empty ``{arm}_q{id}.jsonl`` scores under an H2H OUT dir."""
+    if not out_dir:
+        return []
+    root = Path(out_dir).expanduser()
+    if not root.is_dir():
+        return []
+    scores: list[EpisodeScore] = []
+    for path in sorted(root.glob("*_q*.jsonl")):
+        m = _EPISODE_JSONL_RE.match(path.name)
+        if not m:
+            continue
+        try:
+            if path.stat().st_size <= 0:
+                continue
+            line = next(
+                (
+                    ln
+                    for ln in path.read_text(encoding="utf-8", errors="replace").splitlines()
+                    if ln.strip()
+                ),
+                "",
+            )
+            if not line:
+                continue
+            row = json.loads(line)
+        except (OSError, json.JSONDecodeError, StopIteration, TypeError, ValueError):
+            continue
+        qid = int(row.get("question_id") or m.group("qid"))
+        arm = str(m.group("arm")).lower()
+        pred = row.get("predicted_answer") or row.get("parsed_answer_letter") or row.get("formatted_answer")
+        gold = row.get("gold_answer_letter") or row.get("gt_answer") or row.get("answer_gt")
+        steps = row.get("planning_steps")
+        eqa_conf = row.get("confident")
+        if not isinstance(eqa_conf, bool):
+            eqa_conf = row.get("model_confident") if isinstance(row.get("model_confident"), bool) else None
+        verified, answerable = _load_agentic_summary_flags(
+            root,
+            arm,
+            qid,
+            debug_bundle_dir=str(row["debug_bundle_dir"]) if row.get("debug_bundle_dir") else None,
+        )
+        scores.append(
+            EpisodeScore(
+                arm=arm,
+                question_id=qid,
+                correct=row.get("correct") if isinstance(row.get("correct"), bool) else None,
+                predicted=str(pred).strip() if pred not in (None, "") else None,
+                gold=str(gold).strip() if gold not in (None, "") else None,
+                planning_steps=int(steps) if isinstance(steps, (int, float)) else None,
+                confident=eqa_conf if isinstance(eqa_conf, bool) else None,
+                verified=verified,
+                answerable=answerable,
+                path=str(path),
+            )
+        )
+    scores.sort(key=lambda s: (s.arm, s.question_id))
+    return scores
+
+
+def list_crash_markers(out_dir: str | Path | None) -> list[str]:
+    if not out_dir:
+        return []
+    root = Path(out_dir).expanduser()
+    if not root.is_dir():
+        return []
+    names: list[str] = []
+    for path in sorted(root.glob("*")):
+        n = path.name
+        if n.endswith(".CRASH") or n.startswith("native_crash_") or n.startswith("host_freeze_"):
+            names.append(n)
+    return names
+
+
+def job_report_dict(job: JobRecord) -> dict[str, Any]:
+    """Structured payload for ``emet jobs report --json``."""
+    prog = compute_job_progress(job)
+    episodes = collect_episode_scores(job.out_dir)
+    planned = parse_planned_question_ids(job)
+    scored_ids = {e.question_id for e in episodes}
+    remaining = [q for q in planned if q not in scored_ids]
+    n_ok = sum(1 for e in episodes if e.correct is True)
+    n_fail = sum(1 for e in episodes if e.correct is False)
+    return {
+        "id": job.id,
+        "name": job.name,
+        "status": job.status,
+        "out_dir": job.out_dir,
+        "progress": {
+            "units_done": prog.units_done,
+            "units_total": prog.units_total,
+            "phase": prog.phase,
+            "current_id": prog.current_id,
+            "eta_s": prog.eta_s,
+            "rate_s_per_unit": prog.rate_s_per_unit,
+            "brief": format_progress_brief(prog),
+        },
+        "planned_ids": planned,
+        "remaining_ids": remaining,
+        "n_correct": n_ok,
+        "n_incorrect": n_fail,
+        "n_scored": len(episodes),
+        "crashes": list_crash_markers(job.out_dir),
+        "episodes": [asdict(e) for e in episodes],
+    }
+
+
+def format_job_report(job: JobRecord) -> str:
+    """Operator-facing progress + per-episode score table (default ``emet jobs report``)."""
+    prog = compute_job_progress(job)
+    episodes = collect_episode_scores(job.out_dir)
+    planned = parse_planned_question_ids(job)
+    scored_ids = {e.question_id for e in episodes}
+    remaining = [q for q in planned if q not in scored_ids]
+    crashes = list_crash_markers(job.out_dir)
+    n_ok = sum(1 for e in episodes if e.correct is True)
+    n_fail = sum(1 for e in episodes if e.correct is False)
+
+    done_s = (
+        f"{prog.units_done}/{prog.units_total}"
+        if prog.units_done is not None and prog.units_total is not None
+        else (str(prog.units_done) if prog.units_done is not None else f"{len(episodes)}/?")
+    )
+    eta_s = f"ETA {_format_duration(prog.eta_s)}" if prog.eta_s is not None else ""
+    rate_s = (
+        f"~{_format_duration(prog.rate_s_per_unit)}/ep"
+        if prog.rate_s_per_unit is not None
+        else ""
+    )
+    headline_bits = [f"{done_s} done", job.status]
+    if eta_s:
+        headline_bits.append(eta_s)
+    if rate_s:
+        headline_bits.append(rate_s)
+    if n_ok or n_fail:
+        headline_bits.append(f"scored {n_ok} ok / {n_fail} fail")
+
+    lines = [
+        "  ".join(headline_bits),
+        f"job:  {job.id}  ({job.name})",
+        f"out:  {job.out_dir or '-'}",
+    ]
+    if prog.phase or prog.current_id:
+        cur = ""
+        if prog.current_id:
+            cur = f" q{prog.current_id}" if str(prog.current_id).isdigit() else f" {prog.current_id}"
+        lines.append(f"now:  {prog.phase or '-'}{cur}")
+
+    if episodes:
+        lines.append("")
+        lines.append(f"{'Q':>4}  {'arm':<8}  {'result':<5}  {'pred/gold':<10}  {'steps':>5}  conf")
+        for e in episodes:
+            pg = f"{e.predicted or '—'}/{e.gold or '—'}"
+            steps = "-" if e.planning_steps is None else str(e.planning_steps)
+            lines.append(
+                f"{e.question_id:>4}  {e.arm:<8}  {e.result_label:<5}  {pg:<10}  {steps:>5}  {e.conf_cell()}"
+            )
+        if any(e.verified is not None or e.confident is not None for e in episodes):
+            lines.append("conf: v=verify-gate  e=EQA Confidence: (a=answerable only if ≠ v)")
+    else:
+        lines.append("")
+        lines.append("(no scored episode jsonl yet)")
+
+    lines.append("")
+    if remaining:
+        lines.append("next: " + ", ".join(str(q) for q in remaining))
+    elif planned and len(scored_ids) >= len(planned):
+        lines.append("next: (all planned ids scored)")
+    elif prog.current_id and str(prog.current_id) not in {str(q) for q in scored_ids}:
+        lines.append(f"next: {prog.current_id} (in flight)")
+    else:
+        lines.append("next: -")
+
+    if crashes:
+        lines.append("crashes: " + ", ".join(crashes))
+    else:
+        lines.append("crashes: none")
+    return "\n".join(lines)
+
+
+def _episode_row_for_qid(out_dir: str | Path | None, qid: int, arm: str | None = None) -> dict[str, Any] | None:
+    """First non-empty jsonl row for a question id under an H2H OUT dir."""
+    if not out_dir:
+        return None
+    root = Path(out_dir).expanduser()
+    if not root.is_dir():
+        return None
+    matches: list[Path] = []
+    for path in sorted(root.glob("*_q*.jsonl")):
+        m = _EPISODE_JSONL_RE.match(path.name)
+        if not m or int(m.group("qid")) != int(qid):
+            continue
+        if arm and str(m.group("arm")).lower() != arm.lower():
+            continue
+        matches.append(path)
+    # Prefer agentic arm when no explicit arm requested.
+    matches.sort(key=lambda p: (0 if p.name.lower().startswith("agentic") else 1, p.name))
+    for path in matches:
+        try:
+            if path.stat().st_size <= 0:
+                continue
+            line = next(
+                (ln for ln in path.read_text(encoding="utf-8", errors="replace").splitlines() if ln.strip()),
+                "",
+            )
+            if not line:
+                continue
+            row = json.loads(line)
+            row.setdefault("_jsonl_path", str(path))
+            return row
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            continue
+    return None
+
+
+def _find_agentic_trace(out_dir: str | Path | None, qid: int, row: dict[str, Any] | None) -> Path | None:
+    """Locate ``agentic_trace.jsonl`` for a question from the episode row or caches."""
+    candidates: list[Path] = []
+    if row:
+        bundle = row.get("debug_bundle_dir")
+        if bundle:
+            candidates.append(Path(bundle).expanduser() / "agentic_trace.jsonl")
+    if out_dir:
+        root = Path(out_dir).expanduser()
+        candidates.append(root / "bundles" / f"agentic_q{qid}" / "agentic_trace.jsonl")
+        candidates.extend(sorted(root.glob(f"bundles/agentic_q{qid}/**/agentic_trace.jsonl")))
+    cache = Path.home() / ".cache" / "habitat_eqa" / "episodes"
+    if cache.is_dir():
+        candidates.append(cache / f"h2h_agentic_q{qid:04d}" / f"q{qid:04d}_dynagraph" / "agentic_trace.jsonl")
+        candidates.extend(sorted(cache.glob(f"*q{qid:04d}*/**/agentic_trace.jsonl")))
+    for path in candidates:
+        if path.is_file() and path.stat().st_size > 0:
+            return path
+    return None
+
+
+def _load_trace_rows(path: Path | None) -> list[dict[str, Any]]:
+    if path is None or not path.is_file():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rows.append(json.loads(line))
+        except (json.JSONDecodeError, TypeError, ValueError):
+            continue
+    return rows
+
+
+def analyze_agentic_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Derive verify/abstain/stale-view signals from an agentic trace."""
+    tool_counts: dict[str, int] = {}
+    for r in rows:
+        key = str(r.get("tool") or r.get("event") or "?")
+        tool_counts[key] = tool_counts.get(key, 0) + 1
+
+    verifies = [r for r in rows if r.get("tool") == "verify_siglip"]
+    verify_obs = [r.get("obs_id") for r in verifies if r.get("obs_id") is not None]
+    capture_obs = [
+        r.get("obs_id") for r in rows if r.get("tool") == "capture_and_update" and r.get("obs_id") is not None
+    ]
+    phrases = sorted({str(r.get("phrase")) for r in verifies if r.get("phrase")})
+    det_scores = [float(r["detector_score"]) for r in verifies if isinstance(r.get("detector_score"), (int, float))]
+    abstains = [str(r.get("reason") or "") for r in rows if r.get("tool") == "abstain_unverified"]
+    fallback_submits = sum(
+        1 for r in rows if r.get("tool") == "submit_answer" and r.get("picked_by") == "fallback"
+    )
+    seen: set[Any] = set()
+    dup_verify_obs = sorted({o for o in verify_obs if o in seen or seen.add(o)})  # type: ignore[func-returns-value]
+
+    return {
+        "n_rows": len(rows),
+        "tool_counts": tool_counts,
+        "phrases": phrases,
+        "n_verify": len(verifies),
+        "answerable_any": any(bool(v.get("answerable")) for v in verifies),
+        "max_detector_score": max(det_scores) if det_scores else None,
+        "capture_obs": capture_obs,
+        "verify_obs": verify_obs,
+        "duplicate_verify_obs": dup_verify_obs,
+        "abstain_reasons": abstains,
+        "fallback_submits": fallback_submits,
+    }
+
+
+def question_report_dict(job: JobRecord, qid: int, arm: str | None = None) -> dict[str, Any]:
+    """Structured per-question payload for ``emet jobs report --question X --json``."""
+    row = _episode_row_for_qid(job.out_dir, qid, arm=arm)
+    trace_path = _find_agentic_trace(job.out_dir, qid, row)
+    trace = analyze_agentic_trace(_load_trace_rows(trace_path)) if trace_path else None
+    payload: dict[str, Any] = {
+        "id": job.id,
+        "question_id": qid,
+        "found": row is not None,
+        "trace_path": str(trace_path) if trace_path else None,
+    }
+    if row is not None:
+        pred = row.get("predicted_answer") or row.get("parsed_answer_letter") or row.get("formatted_answer")
+        arm_name = str(row.get("method") or row.get("arm") or arm or "agentic").lower()
+        # Prefer arm from jsonl filename when present on the row helper.
+        jsonl_path = row.get("_jsonl_path")
+        if jsonl_path:
+            m = _EPISODE_JSONL_RE.match(Path(str(jsonl_path)).name)
+            if m:
+                arm_name = str(m.group("arm")).lower()
+        verified, answerable = _load_agentic_summary_flags(
+            Path(job.out_dir).expanduser() if job.out_dir else Path("."),
+            arm_name,
+            qid,
+            debug_bundle_dir=str(row["debug_bundle_dir"]) if row.get("debug_bundle_dir") else None,
+        )
+        eqa_conf = row.get("confident")
+        if not isinstance(eqa_conf, bool):
+            eqa_conf = row.get("model_confident") if isinstance(row.get("model_confident"), bool) else None
+        conf_score = EpisodeScore(
+            arm=arm_name,
+            question_id=qid,
+            confident=eqa_conf if isinstance(eqa_conf, bool) else None,
+            verified=verified,
+            answerable=answerable,
+        )
+        payload["episode"] = {
+            "arm": row.get("method") or row.get("arm"),
+            "scene": row.get("scene"),
+            "question": row.get("question"),
+            "choices": row.get("choices"),
+            "predicted": str(pred).strip() if pred not in (None, "") else None,
+            "gold": row.get("gold_answer_letter"),
+            "correct": row.get("correct"),
+            "confident": eqa_conf if isinstance(eqa_conf, bool) else None,
+            "verified": verified,
+            "answerable": answerable,
+            "conf_detail": conf_score.conf_cell(),
+            "planning_steps": row.get("planning_steps"),
+            "observations": row.get("observations"),
+            "graph_nodes": row.get("graph_nodes"),
+            "eqa_action": row.get("eqa_action"),
+            "eqa_iterations": row.get("eqa_iterations"),
+            "error": row.get("error") or None,
+            "confidence_reasoning": row.get("eqa_confidence_reasoning") or None,
+            "jsonl_path": row.get("_jsonl_path"),
+        }
+    if trace is not None:
+        payload["trace"] = trace
+    return payload
+
+
+def format_question_report(job: JobRecord, qid: int, arm: str | None = None) -> str:
+    """Human-readable per-question deep dive (episode row + agentic trace signals)."""
+    data = question_report_dict(job, qid, arm=arm)
+    lines = [f"q{qid}  job {job.id}  ({job.name})"]
+    if not data["found"]:
+        lines.append(f"(no scored jsonl for q{qid} under {job.out_dir or '-'})")
+        if data.get("trace_path"):
+            lines.append(f"trace: {data['trace_path']}")
+        else:
+            lines.append("trace: (none)")
+        return "\n".join(lines)
+
+    ep = data["episode"]
+    result = "ok" if ep["correct"] is True else ("FAIL" if ep["correct"] is False else "?")
+    pg = f"{ep['predicted'] or '—'}/{ep['gold'] or '—'}"
+    conf_s = ep.get("conf_detail") or str(ep.get("confident"))
+    lines.append(f"result: {result}  pred/gold {pg}  steps {ep['planning_steps']}  conf {conf_s}")
+    if ep.get("verified") is not None or ep.get("confident") is not None:
+        lines.append(
+            f"gate: verified={ep.get('verified')} answerable={ep.get('answerable')}  "
+            f"eqa_Confidence={ep.get('confident')}"
+        )
+    if ep.get("arm") or ep.get("scene"):
+        lines.append(f"arm/scene: {ep.get('arm') or '-'} / {ep.get('scene') or '-'}")
+    if ep.get("question"):
+        lines.append(f"Q: {str(ep['question'])[:200]}")
+    if ep.get("choices"):
+        lines.append(f"choices: {ep['choices']}")
+    if ep.get("error"):
+        lines.append(f"error: {ep['error']}")
+    if ep.get("confidence_reasoning"):
+        lines.append(f"reason: {str(ep['confidence_reasoning'])[:220]}")
+
+    trace = data.get("trace")
+    if not trace:
+        lines.append("")
+        lines.append("trace: (none found)")
+        return "\n".join(lines)
+
+    lines.append("")
+    lines.append(f"trace: {data['trace_path']}")
+    lines.append(f"tools: {trace['tool_counts']}")
+    if trace["phrases"]:
+        lines.append(f"verify phrases: {trace['phrases']}")
+    md = trace["max_detector_score"]
+    lines.append(
+        f"verifies: {trace['n_verify']}  answerable_any={trace['answerable_any']}  "
+        f"max_detector={md:.3f}" if md is not None else
+        f"verifies: {trace['n_verify']}  answerable_any={trace['answerable_any']}  max_detector=-"
+    )
+    lines.append(f"capture_obs: {trace['capture_obs']}")
+    lines.append(f"verify_obs:  {trace['verify_obs']}")
+
+    flags: list[str] = []
+    if trace["duplicate_verify_obs"]:
+        flags.append(f"stale re-verify obs {trace['duplicate_verify_obs']}")
+    if trace["fallback_submits"] >= 3:
+        flags.append(f"{trace['fallback_submits']} fallback submit picks")
+    if trace["n_verify"] and not trace["answerable_any"]:
+        flags.append("never answerable (presence≠sufficiency or weak detect)")
+    if len(trace["phrases"]) == 1 and any(
+        w in trace["phrases"][0].lower() for w in ("already", "sets ", "how many")
+    ):
+        flags.append(f"suspect verify phrase {trace['phrases'][0]!r}")
+    if flags:
+        lines.append("RED FLAGS: " + "; ".join(flags))
+    else:
+        lines.append("red flags: none")
+
+    if trace["abstain_reasons"]:
+        lines.append("abstain: " + " | ".join(trace["abstain_reasons"][-2:]))
     return "\n".join(lines)
 
 

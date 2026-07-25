@@ -1,0 +1,29 @@
+% Copyright (c) Chris Paxton 2026
+\section{Bonus: agentic verify-gate diagnostics}
+\label{app:agentic_verify_gate}
+
+Holdout-8 agentic wins (Section~\ref{sec:agentic_results}) used a short deterministic tour that often \emph{submitted without} SigLIP \texttt{PRESENT}.
+On larger slices the same gate matters: image-space SigLIP cosine on Habitat RGB saturates near $0.12$--$0.14$ (offline calib on saved episode frames), well below the DynaMem voxel bar of $0.21$.
+We therefore treat SigLIP as a \textbf{high-recall / high-false-positive proposal} for ``check here,'' not as a high-precision confirmer (Appendix~\ref{app:agentic_tools}; \texttt{docs/experiments/agentic\_scale.md}).
+Image-space scores use three bands: \texttt{ABSENT}~$< 0.10$ (true-negative \emph{for this view}), \texttt{CANDIDATE}~$[0.10, 0.12)$, \texttt{PRESENT}~$\geq 0.12$.
+
+\paragraph{Intended loop.}
+(1)~Explore / inspect for candidates;
+(2)~move in and score the \emph{new} view once;
+(3)~assess---escalate or answer---never re-verify the same observation.
+
+\paragraph{Hybrid confirmer and evidence policy.}
+We retain MaskSigLIP for voxel grounding and as a cheap FP-leaning scorer, and add open-vocabulary OWLv2/YoloE and optional detector-crop$\rightarrow$SigLIP channels.
+The policy is an explicit \textsc{Search}$\rightarrow$\textsc{Approach}$\rightarrow$\textsc{Verify}$\rightarrow$\textsc{Assess}$\rightarrow$\textsc{Replan}$\rightarrow$\textsc{Answer} loop.
+It records channel-specific evidence and provenance, rejects stale-view verification, and separates target presence from answer sufficiency.
+A scene-disjoint decision dataset stores only causal trace prefixes and view-level semantic-sensor visibility (mask area, bounding box, occlusion proxy, and range), rather than using target distance as visibility.
+
+\paragraph{Preliminary offline bakeoff.}
+On 24 saved verify views, mean per-view latency was 49.8\,ms for SigLIP, 32.4\,ms for SigLIP2, 60.6\,ms for OWLv2, and 234.6\,ms for YoloE.
+The legacy bundles did not retain semantic masks, so this pass has no true view labels and must not be interpreted as detector precision/recall.
+We selected OWLv2 for the subsequent labeled live probe based on this latency result; threshold and accuracy claims are deferred to scene-disjoint labeled data.
+
+\paragraph{Status.}
+The detector hybrid, typed evidence policy, graph information-gain ranking, and selective-risk reporting are wired into the H2H path.
+Balanced-32 remains gated on a 4--8 episode probe with nonzero fused verified-answer rate and zero forced submits.
+Numbers in Section~\ref{sec:agentic_results} should be read as classic vs.\ tool-loop efficiency on holdout-8, not as proof that visual confirmation succeeded.

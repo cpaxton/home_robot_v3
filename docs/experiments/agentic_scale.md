@@ -24,6 +24,35 @@ Goal: test whether classic vs agentic-verify Dynagraph gains hold past holdout-8
 - Classic: `EMET_EQA_AGENTIC_VERIFY=0`
 - Always use distinct `--debug-run-tag` / `OUT/bundles/{arm}_qN` (see `scripts/run_hmeqa_agentic_h2h.sh`)
 
+## SigLIP role in agentic verify (design)
+
+SigLIP is a **high-recall / high-false-positive** open-vocab scorer that **supports** verification — it is **not** a high-precision “object confirmed” oracle.
+
+| Channel | Typical Habitat RGB range | Role |
+|---------|---------------------------|------|
+| Full-frame / dense patch (image) | three-band: **ABSENT &lt; 0.10**, **CANDIDATE [0.10, 0.12)**, **PRESENT ≥ 0.12** | High-recall proposal; ABSENT = true-negative *for this view* (move on), not scene-level absence |
+| Voxel per-point (DynaMem `verify_point`) | bar **0.21** / confirm **0.28** | Stronger when dense map features exist; still not letter-level truth |
+
+**Explicit evidence policy:** `SEARCH → APPROACH → VERIFY → ASSESS → REPLAN → ANSWER`. `VERIFY` accepts exactly one fresh observation produced by `APPROACH`; stale router requests are rejected. `EvidenceRecord` retains full-frame, dense, voxel, detector, detector-crop, graph-label, geometry, and optional VLM channels. Image SigLIP / OWLv2 `PRESENT` is only a **proposal**. Answerability is **VLM-first**: text Qwen picks `target_phrase` once; multimodal Qwen assess on fresh RGB + inventory sets `answerable` / `ANSWER`. Cheap fusion never opens the submit gate alone. Non-advancing captures (`NO_NEW_OBS`) and one VLM assess per `obs_id` block re-verify spam.
+
+**Do not:** treat ABSENT as proof of absence; use image-space 0.21 as a hard PRESENT bar (unreachable on HM-EQA RGB); force-submit after failed verifies and call that “verified”; open submit from OWL/SigLIP alone. Prefer `EMET_EQA_AGENTIC_REQUIRE_VERIFIED=1` while tuning so unverified exhaust **abstains**. Offline frame calib: `scripts/calibrate_agentic_verify_frames.py`; threshold sweeps: `scripts/tune_agentic_verify.py`.
+
+**Hybrid bakeoff (2026-07-25):** the reproducible saved-frame pass scored 24 verify views with SigLIP, SigLIP2, OWLv2, YoloE, and detector→crop→SigLIP. Mean per-view latency was 49.8, 32.4, 60.6, and 234.6 ms respectively. Those legacy frames have no semantic-sensor masks (`n_labeled=0`), so this is a latency/score-distribution result, **not** a precision claim. OWLv2 is the live-probe backend. New traces attach HM3D semantic view visibility, pixel fraction, bbox, and range so scene-disjoint PR curves become valid.
+
+Artifacts and commands:
+
+```bash
+uv run python scripts/build_agentic_decision_dataset.py ~/.cache/habitat_eqa/episodes \
+  -o ~/runs/emet/hmeqa_decisions.jsonl
+uv run python scripts/run_agentic_verifier_bakeoff.py ~/runs/emet/hmeqa_decisions.jsonl \
+  -o ~/runs/emet/hmeqa_verifier_bakeoff --methods siglip1,siglip2,owlv2,yoloe \
+  --detector-crop-siglip
+uv run python scripts/summarize_agentic_ladder.py RUN_DIR \
+  --require-balanced32-gate
+```
+
+The balanced-32 gate requires at least four probe episodes, nonzero fused verified-answer rate, and zero forced submits.
+
 ## Balanced-32 IDs
 
 Same letter-balanced set as overnight scripts:
@@ -35,13 +64,11 @@ Same letter-balanced set as overnight scripts:
 ## Commands
 
 ```bash
-# Wave 1 (prefer emet jobs; one GPU job)
+# Wave 1 (emet owns jobs, GPU exclusivity, affinity, and crash policy)
 OUT=~/runs/emet/hmeqa_agentic_bal32_$(date +%Y%m%d_%H%M%S)
-uv run emet jobs run --name hmeqa-agentic-bal32 --need-mib 12000 -- \
-  env EMET_ALLOW_SDPA_ATTN=1 \
-  HOLDOUT_IDS=2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,31,32,33,34,38,39,40,41,43,44,47,48,49,57,76,80,84 \
-  COVERAGE_QIDS=15,104,68 \
-  ./scripts/run_hmeqa_agentic_h2h.sh "$OUT"
+uv run emet hmeqa h2h "$OUT" --arms classic,agentic \
+  --ids 2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,31,32,33,34,38,39,40,41,43,44,47,48,49,57,76,80,84 \
+  --agentic-verifier owlv2 --require-verified
 
 uv run emet jobs                 # progress / ETA
 uv run emet jobs logs JOB_ID --tail 40
@@ -87,6 +114,7 @@ Holdout-8 overnight was **agentic 8/8 vs classic 5/8**. Re-running agentic after
 1. **NL choice text → false abstain → wrong `[memory-location]`** (q56): VLM answered “The room with the blue curtains” (=C) but letter parse only looked for bare `A–D`, so nearest-furniture memory overwrote to **A**. Fix: use `extract_mcq_letter(answer, choices)` before override; normalize matched choice text to a letter (`[choice-text]`).
 2. **`Answer: Unknown` skipped salvage** (q65): non-empty Unknown blocked the empty-answer salvage path that night’s 64-token truncations used. Fix: treat Unknown/none as emptyish for salvage.
 3. **`libcuda` SIGSEGV** (orchestrator `exit=139`; kernel `segfault … in libcuda.so`): Habitat-Sim EGL + Qwen3-VL **vision** generate on one GPU. Hot scenes: `00167-yogvKWUrdnw` (q104/q105), flaky on `00094-WT4QWwXrMzs` (q68). Log ends with `timeout: the monitored command dumped core`; `agentic_qN.jsonl` stays empty. Mitigations: `torch.cuda.synchronize()` before multimodal generate in `qwen3_vl_client`; H2H `NATIVE_CRASH_ABORT=1` (default) stops the batch and writes `native_crash_<arm>_q<ID>.log`. Still flaky under `EMET_ALLOW_SDPA_ATTN=1` + int4. Distinct from Cursor/`emet` null-IP crashes — see [known_issues.md](../known_issues.md#nvidia-driver-hang--cursor-agent-crash-during-stacked-gpu-evals).
+4. **Host hard freeze** (2026-07-25 bal-32 classic q48 at 26/64): whole machine dies mid-VLM decode; journal stops with no Xid/oops; empty jsonl + NUL-padded log. Incomplete `taskset -c 0-7,10-31` still left the second 6.0 GHz P-core (CPUs 10–11) online. H2H now auto-excludes all ≥6000 MHz CPUs via `emet.utils.cpu_affinity` and defaults `EPISODE_COOLDOWN_SEC=20`. See [known_issues.md Mode C](../known_issues.md#mode-c--host-hard-freeze--forced-reboot-2026-07-25) and repo-root `segfault.md`.
 4. **Empty letters + `n_object=0` on q104/q105 (failfix4):** an experiment tied `EMET_EQA_AGENTIC_VERIFY=1` to skipping per-frame VLM graph label extract. On scenes without HM3D semantics that left only `["object"]` → nav samples/frontiers; answer prompts attached black 8×8 frontier placeholders; location MCQ abstain → `pred=""`. **failfix5** (`20260724_144029_f7ace2`): `n_object=8/8`, non-empty letters, 33× `max_new=128` vision extracts — but letters still wrong (B/B vs gold D/A). Checked-in: `paper/data/hmeqa_agentic_h2h/failset104105_summary.json`. Guards: never answer off frontier placeholders; phrase ranking for SigLIP; Action Image N via graph `obs_id`; agentic verify must not auto-disable label VLM.
 5. **failfix5 wrong B letters (grounding):** truncated VLM (no `answer:`) → empty → `[memory-location]` invented B; agentic full MCQ string made SigLIP phrases like `table sunroom answer` instead of `fruit bowl`. Fix: `question_stem_for_keywords()` strips `A)…Answer:` before phrase/object heuristics; location MCQ empty/Unknown skips memory-location and salvage-location invent (normalize empty → `Unknown`).
 6. **failfix6 round waste (fallback policy):** with the router off, `_fallback_tool` allowed only one `explore_frontier` ever, so once nav hypotheses were consumed it re-ran an identical ABSENT `verify_siglip` for 5/8 rounds and the final submit came from the `budget_hit` path, which skipped the Action:N follow entirely. The default verify phrase also ranked MCQ-option nouns (`kitchen island`) above stem phrases (`fruit bowl`) because VLM keyword extract feeds option nouns into `_relevant_objects`. Fixes: fallback explores while nav budget remains (stop when motion happened and frontiers are gone), submits as soon as budget is spent and a verify is on record; `budget_hit` submit honors one Action:N/unknown-explore follow-up; verify phrase ranking prefers phrases occurring in the question stem. Guards in `src/test/eval/test_agentic_eqa_verification.py` (`test_fallback_*`, `test_verify_phrase_prefers_question_stem_over_mcq_option`).

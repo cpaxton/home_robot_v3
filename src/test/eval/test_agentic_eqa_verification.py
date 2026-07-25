@@ -286,6 +286,8 @@ def test_A3_agentic_loop_nav_before_answer():
 
     def _update(*_a, **_k):
         order.append("update")
+        agent.graph_memory._observations = [MagicMock(obs_id=8)]
+        agent.graph_memory._obs_usable_for_eqa_image.return_value = True
 
     def _verify(*_a, **_k):
         order.append("verify")
@@ -769,18 +771,22 @@ def test_T3_multi_tool_reply_ordered_submit_gated():
     agent.robot.get_observation.return_value = None
 
     ex = AgenticEQAExecutor(agent, "Where is the sink?", max_rounds=4)
+    ex._fresh_obs_ids.add(7)
     calls, _picked_by, meta = ex._route_tool_calls()
     assert meta["tool_calls"] == ["verify_siglip", "submit_answer"]
     outs = [ex.handle_tool(n, a) for n, a in calls]
     assert outs[0]["ok"] is True
-    assert outs[0]["status"] == "ABSENT"
+    assert outs[0]["status"] == "CANDIDATE"
     assert outs[1]["ok"] is False
     assert "verif" in str(outs[1].get("error", "")).lower()
     assert 7 in ex._tried
 
 
 def test_T4_router_env_off_fallback_only(monkeypatch):
-    """T4: EMET_EQA_AGENTIC_ROUTER=0 → VLM client never called; fallback still answers."""
+    """T4: EMET_EQA_AGENTIC_ROUTER=0 → no tool-router VLM; fallback still answers.
+
+    Target extract / view assess may still call eqa_client (VLM-first gate).
+    """
     _require_agentic()
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
@@ -790,7 +796,9 @@ def test_T4_router_env_off_fallback_only(monkeypatch):
     agent.parameters = {}
     gm = agent.graph_memory
     gm.memory_summary_enabled = False
-    client = MagicMock(return_value='{"tool_calls": [{"name": "look_around", "arguments": {}}]}')
+    client = MagicMock(
+        return_value='{"target_phrase":"sink","question_type":"location","notes":""}'
+    )
     gm.eqa_client = client
     gm.hypothesize_nav_targets.return_value = [
         MagicMock(obs_id=7, xyz=np.array([1.0, 2.0, 0.0]), phrase="sink", score=0.9, source="graph")
@@ -817,11 +825,30 @@ def test_T4_router_env_off_fallback_only(monkeypatch):
     gm.verify_phrase_at_obs = _verify
     gm.query_answer = _answer
 
+    class _Assess:
+        target = "sink"
+        present = True
+        answerable = True
+        need_more_views = False
+        suggested_answer = "A"
+        reason = "sink in view"
+        raw = "{}"
+
+    monkeypatch.setattr(
+        "emet.eval.agentic_vlm_assess.assess_view_with_vlm",
+        lambda *a, **k: _Assess(),
+    )
+
     ex = AgenticEQAExecutor(agent, "Where is the sink?", max_rounds=4, max_nav_steps=2)
     assert ex._router_enabled is False
-    ex.run()
-    client.assert_not_called()
+    result = ex.run()
+    # No tool-routing system prompt (identity + Response format block).
+    for call in client.call_args_list:
+        sp = str((call.kwargs or {}).get("system_prompt") or "")
+        assert "Response format" not in sp
+        assert "tool_calls" not in sp
     assert order.index("nav") < order.index("verify") < order.index("answer")
+    assert result.answer == "A"
 
 
 def test_T5_state_message_marks_tried_hypotheses():
@@ -1058,3 +1085,337 @@ def test_agentic_submit_does_not_clamp_answer_max_tokens(monkeypatch):
     assert out["ok"] is True
     assert out["answer"] == "B"
     assert "EMET_EQA_ANSWER_MAX_NEW_TOKENS" not in os.environ
+
+
+def test_require_verified_abstains_when_never_present(monkeypatch):
+    """Policy (1): with require_verified, budget exhaust without PRESENT → Unknown."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {"agentic_verify": True}}
+    agent.graph_memory = MagicMock()
+    agent.graph_memory.eqa_client = None
+    agent.graph_memory.memory_summary_enabled = False
+    agent.graph_memory.hypothesize_nav_targets.return_value = []
+    agent.graph_memory.get_nodes.return_value = []
+    agent.voxel_map = None
+    agent.robot = MagicMock()
+    agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
+    agent.robot.get_observation.return_value = None
+
+    agent.graph_memory.verify_phrase_at_obs.return_value = MagicMock(
+        status="ABSENT",
+        sim=0.05,
+        ok=False,
+        obs_id=1,
+        phrase="towel",
+        text_feat=None,
+        img_feat=None,
+    )
+    # Seed one obs so verify has an id.
+    agent.graph_memory._observations = [MagicMock(obs_id=1)]
+    agent.graph_memory.last_eqa_obs_ids = [1]
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where is the striped towel?",
+        router=False,
+        require_verified=True,
+        max_rounds=3,
+        max_nav_steps=0,
+        collect_trace=False,
+    )
+    result = ex.run()
+    assert result.verified is False
+    assert "Unknown" in result.answer
+    assert result.confidence is False
+
+
+def test_presence_without_answerability_does_not_auto_submit(monkeypatch):
+    """Fused presence on a location MCQ must abstain, not force a letter."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, AgenticState
+    from emet.memory.graph_eqa.agentic_policy import EvidenceRecord
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {"agentic_verify": True, "agentic_require_verified": True}}
+    agent.graph_memory = MagicMock()
+    agent.graph_memory.eqa_client = None
+    agent.graph_memory.memory_summary_enabled = False
+    agent.graph_memory.hypothesize_nav_targets.return_value = []
+    agent.graph_memory.get_nodes.return_value = []
+    agent.voxel_map = None
+    agent.robot = MagicMock()
+    agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
+    agent.robot.get_observation.return_value = None
+    agent.graph_memory._observations = [MagicMock(obs_id=1, labels=["basket"])]
+    agent.graph_memory.last_eqa_obs_ids = [1]
+    agent.graph_memory._observation_by_id = MagicMock(
+        return_value=MagicMock(obs_id=1, labels=["basket"])
+    )
+
+    question = (
+        "Did you see the woven basket anywhere? "
+        "A) By the kitchen counter B) Between TV and living room sofas "
+        "C) Next to the dining table D) Next to the living room armchairs"
+    )
+    ex = AgenticEQAExecutor(
+        agent,
+        question,
+        router=False,
+        require_verified=True,
+        max_rounds=2,
+        max_nav_steps=0,
+        collect_trace=True,
+    )
+    ex._evidence_policy.register_hypothesis("graph:1", "woven basket", prior_probability=0.5)
+    ex._evidence_policy.choose("graph:1")
+    ex._evidence_policy.approached(1)
+    ex._evidence_policy.add_evidence(
+        EvidenceRecord(
+            hypothesis_id="graph:1",
+            obs_id=1,
+            phrase="woven basket",
+            detector_score=0.5,
+            detector_backend="owlv2",
+            graph_label_match=True,
+        )
+    )
+    assessment = ex._evidence_policy.assess(relation_sufficient=False)
+    assert assessment.verified is True
+    assert assessment.answerable is False
+    assert ex._evidence_policy.state == AgenticState.REPLAN
+    ex._verified = True
+    ex._verified_obs_id = 1
+    ex._n_nav = 0
+    ex._round = 1
+
+    out = ex._tool_submit_answer("")
+    assert out.get("ok") is True
+    assert "Unknown" in str(out.get("answer") or out.get("discord_text") or "")
+    assert out.get("verified") is False
+    assert any(row.get("tool") == "abstain_unverified" for row in ex._trace_rows)
+    assert not any(
+        row.get("tool") == "submit_answer" and row.get("event") != "tool_pick"
+        for row in ex._trace_rows
+    )
+
+
+def test_voxel_sim_upgrades_full_frame_absent_to_present():
+    """Policy (2): dense voxel cosine >= 0.21 upgrades PRESENT (DynaMem space)."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    import torch
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.verify_phrase_at_obs.return_value = MagicMock(
+        status="ABSENT",
+        sim=0.04,
+        ok=False,
+        obs_id=7,
+        phrase="bookshelf",
+        text_feat=None,
+        img_feat=None,
+    )
+    vm = MagicMock()
+    # one point belonging to obs 7 with high alignment
+    vm.find_alignment_over_model.return_value = torch.tensor([[0.01, 0.25, 0.02]])
+    sm = MagicMock()
+    sm._obs_counts = torch.tensor([3, 7, 7])
+    vm.semantic_memory = sm
+    agent.voxel_map = vm
+    agent.robot = MagicMock()
+    agent.robot.get_observation.return_value = None
+    # Avoid MagicMock rgb / accidental dense encode in unit tests.
+    gm._observation_by_id = MagicMock(return_value=None)
+
+    ex = AgenticEQAExecutor(agent, "Where is the large bookshelf?", router=False, collect_trace=True)
+    ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
+    out = ex._tool_verify_siglip("large bookshelf", 7)
+    assert out["status"] == "PRESENT"
+    # Voxel PRESENT is a cheap proposal; submit unlock requires VLM assess.
+    assert out["verified"] is False
+    assert out["answerable"] is False
+    assert out["verify_channel"] == "voxel_obs"
+    assert float(out["sim"]) >= 0.21
+
+
+def test_never_reverify_same_view():
+    """Interactive rule: second verify_siglip on the same obs_id is SKIPPED_SAME_VIEW."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    agent.voxel_map = None
+    agent.robot = MagicMock()
+    agent.robot.get_observation.return_value = None
+    gm._observation_by_id = MagicMock(return_value=None)
+    gm.verify_phrase_at_obs.return_value = MagicMock(
+        status="ABSENT",
+        sim=0.02,
+        ok=False,
+        obs_id=5,
+        phrase="towel",
+        text_feat=None,
+        img_feat=None,
+    )
+    ex = AgenticEQAExecutor(agent, "Where is the towel?", router=False, collect_trace=True)
+    ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
+    first = ex._tool_verify_siglip("towel", 5)
+    assert first["ok"] is True
+    assert first["status"] == "ABSENT"
+    second = ex._tool_verify_siglip("towel", 5)
+    assert second["ok"] is False
+    assert second["status"] == "SKIPPED_SAME_VIEW"
+    assert gm.verify_phrase_at_obs.call_count == 1
+
+
+def test_fallback_skips_already_tried_hypothesis():
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    agent.graph_memory = MagicMock()
+    agent.graph_memory.get_nodes.return_value = []
+    agent.voxel_map = None
+    ex = AgenticEQAExecutor(
+        agent, "Where?", router=False, collect_trace=False, max_nav_steps=3, require_verified=True
+    )
+    ex._hypotheses = [
+        MagicMock(obs_id=1, xyz=np.zeros(3), phrase="a", score=1.0, source="graph"),
+        MagicMock(obs_id=2, xyz=np.zeros(3), phrase="b", score=0.9, source="graph"),
+    ]
+    ex._tried[1] = "verify ABSENT sim=0.01"
+    tool, args = ex._fallback_tool()
+    assert tool == "navigate_to_obs"
+    assert int(args["obs_id"]) == 2
+
+
+def test_image_verify_three_band_absent_candidate_present():
+    """Image SigLIP: <0.10 ABSENT, [0.10,0.12) CANDIDATE, >=0.12 PRESENT."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    def _run(sim: float):
+        agent = MagicMock()
+        agent.parameters = {"eqa": {}}
+        gm = MagicMock()
+        agent.graph_memory = gm
+        agent.voxel_map = None
+        agent.robot = MagicMock()
+        agent.robot.get_observation.return_value = None
+        gm._observation_by_id = MagicMock(return_value=None)
+        gm.verify_phrase_at_obs.return_value = MagicMock(
+            status="ABSENT",
+            sim=sim,
+            ok=False,
+            obs_id=1,
+            phrase="towel",
+            text_feat=None,
+            img_feat=None,
+        )
+        ex = AgenticEQAExecutor(agent, "Where is the towel?", router=False, collect_trace=False)
+        ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
+        return ex._tool_verify_siglip("towel", 1)
+
+    assert _run(0.05)["status"] == "ABSENT"
+    assert _run(0.05)["verified"] is False
+    mid = _run(0.105)
+    assert mid["status"] == "CANDIDATE"
+    assert mid["verified"] is False
+    hi = _run(0.13)
+    assert hi["status"] == "PRESENT"
+    # Image SigLIP is a proposal channel; it cannot establish fused verification alone.
+    assert hi["verified"] is False
+    assert hi["fused_verified"] is False
+
+
+def test_vlm_assess_unlocks_verified_submit_gate(monkeypatch):
+    """Multimodal VLM answerable=True is what sets verified / ANSWER — not OWL."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, AgenticState
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    agent.voxel_map = None
+    agent.robot = MagicMock()
+    agent.robot.get_observation.return_value = MagicMock(
+        rgb=np.zeros((4, 4, 3), dtype=np.uint8)
+    )
+    gm._observation_by_id = MagicMock(return_value=None)
+    gm.verify_phrase_at_obs.return_value = MagicMock(
+        status="ABSENT",
+        sim=0.04,
+        ok=False,
+        obs_id=9,
+        phrase="utensils",
+        text_feat=None,
+        img_feat=None,
+    )
+    gm.eqa_client = MagicMock()
+
+    class _Assess:
+        target = "utensils"
+        present = True
+        answerable = True
+        need_more_views = False
+        suggested_answer = "A"
+        reason = "place settings visible on table"
+        raw = "{}"
+
+        def to_dict(self):
+            return {}
+
+    monkeypatch.setattr(
+        "emet.eval.agentic_vlm_assess.assess_view_with_vlm",
+        lambda *a, **k: _Assess(),
+    )
+    monkeypatch.setattr(
+        "emet.eval.agentic_vlm_assess.build_inventory_brief",
+        lambda **k: "brief",
+    )
+
+    ex = AgenticEQAExecutor(agent, "Where are the utensils?", router=False, collect_trace=True)
+    ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
+    ex._target_phrase = "utensils"
+    out = ex._tool_verify_siglip("utensils", 9)
+    assert out["verified"] is True
+    assert out["answerable"] is True
+    assert ex._evidence_policy.state == AgenticState.ANSWER
+    assert any(r.get("tool") == "vlm_assess" and r.get("answerable") for r in ex._trace_rows)
+
+
+def test_capture_rejects_non_advancing_obs():
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.memory_summary_enabled = False
+    gm._observations = []
+
+    def _update():
+        if not gm._observations:
+            gm._observations = [MagicMock(obs_id=1)]
+
+    agent.update = MagicMock(side_effect=_update)
+
+    ex = AgenticEQAExecutor(agent, "Where?", router=False, collect_trace=True)
+    first = ex._tool_capture_and_update()
+    assert first["ok"] is True
+    assert int(first["obs_id"]) == 1
+    second = ex._tool_capture_and_update()
+    assert second["ok"] is False
+    assert second["status"] == "NO_NEW_OBS"

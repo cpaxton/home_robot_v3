@@ -8,13 +8,18 @@ alwaysApply: true
 ## Preflight (before any VLM / Habitat / Robocasa GPU job)
 
 ```bash
+uv run emet eval recover --need-mib 12000   # status + diagnose + wait (preferred)
+# or stepwise:
 uv run emet eval status                # free VRAM + compute apps (read-only)
 uv run emet eval diagnose              # empty nvidia-smi ≠ Habitat EGL OK
 uv run emet eval kill-stale            # only if no intentional GPU job is live
 NEED_MIB=12000 uv run emet eval wait   # or: uv run emet eval check
+uv run emet eval affinity              # turbo-exclusion mask (jobs --cpu-safe applies it)
 ```
 
-Canonical CLI: **`emet eval {status,diagnose,check,wait,kill-stale}`**. Bash [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh) delegates to it (also provides `emet_export_pytorch_alloc` and **`emet_pytest_no_sim_ignore_args`** when sourced). Prefer `emet eval` over raw `pkill` / ad-hoc kills. Verify with `uv run emet eval --help` before suggesting flags.
+Prefer **`emet hmeqa resume`** / **`emet hmeqa h2h`** over hand-built `taskset` + script env. See **`.cursor/rules/dogfood-emet-cli.mdc`**.
+
+Canonical CLI: **`emet eval {status,diagnose,check,wait,kill-stale,affinity,recover}`**. Bash [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh) delegates to it (also provides `emet_export_pytorch_alloc` and **`emet_pytest_no_sim_ignore_args`** when sourced). Prefer `emet eval` over raw `pkill` / ad-hoc kills. Verify with `uv run emet eval --help` before suggesting flags.
 
 ### Empty `nvidia-smi` is not proof of safety
 

@@ -51,6 +51,8 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_EQA_AGENTIC_VERIFY` | GraphEQA / dynagraph EQA | `1`/`0` — enable unified explore/navigate/verify/answer loop (`eqa.agentic_verify`). Does **not** disable per-frame graph label VLM (that caused `n_object=0` on HM-EQA holdout q104/q105). |
 | `EMET_GRAPH_EQA_EXTRACT_VLM` | `SensorGraphBuilder` | `0`/`false` — opt-out of per-frame vision-VLM graph label extract (voxel/detector labels only). Default: extract enabled. Use only if mid-nav Habitat+Qwen `libcuda` faults force it. |
 | `EMET_EQA_AGENTIC_ROUTER` | `AgenticEQAExecutor` | `1`/`0` — override `eqa.agentic_vlm_router`: let the shared Qwen3-VL pick tools via JSON tool calls (`0` = deterministic fallback only, for reproducible evals). |
+| `EMET_EQA_AGENTIC_REQUIRE_VERIFIED` | `AgenticEQAExecutor` | `1` — refuse unverified `submit_answer` (incl. fallback / round exhaust); abstain with `Unknown` instead of guessing. SigLIP is high-recall FP-leaning support for verify — see [agentic_scale.md](experiments/agentic_scale.md#siglip-role-in-agentic-verify-design). |
+| `EMET_EQA_AGENTIC_VERIFIER` | `AgenticEQAExecutor` | Hybrid presence backend: `none`/`siglip` (default), `owlv2`, or `yoloe`. The detector score and detector-crop→SigLIP score remain separate evidence channels; no single image cosine sets fused verification. |
 | `EMET_EQA_TRACE` | `AgenticEQAExecutor` | `1` — append `agentic_trace.jsonl` (SigLIP embeds + GT) for offline tuning via `scripts/tune_agentic_verify.py`. |
 | `EMET_EQA_QUESTION_TIMEOUT_S` | `controller_graph_eqa.run_eqa` | Per-question wall-clock cap for GraphEQA planning/nav loops (default `900`; `0` disables). |
 | `EMET_SCENE_MAP_CACHE_DIR` | `scene_map_cache.py` | Root for prebuilt scene maps (graph + voxel). Default `~/.cache/emet/scene_maps`. |
@@ -80,8 +82,18 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_GPU_PROTECT_PIDS` | `emet eval kill-stale` | Space-separated PIDs never killed (plus the caller process and its ancestors). |
 | `EMET_JOBS_DIR` | `emet jobs` | Directory for job registry JSON (default `~/runs/emet/jobs`). |
 | `EMET_JOB_ID` | smoke/queue scripts | If set by `emet jobs run`, scripts heartbeat via `emet jobs update` (and skip creating a new registry entry). Also write `OUT/progress.json` for ETA even without a job id. |
-| `EGL_FAIL_ABORT` | `scripts/run_hmeqa_agentic_h2h.sh` | Abort after N consecutive Habitat EGL/CUDA-map failures (`WindowlessContext` / `unable to find CUDA device`). Default `2`; `0` = never. |
-| `NATIVE_CRASH_ABORT` | `scripts/run_hmeqa_agentic_h2h.sh` | Stop the H2H batch after an episode dies from `SIGILL`, `SIGABRT`, `SIGBUS`, `SIGFPE`, `SIGKILL` (often OOM), or `SIGSEGV` (default `1`). Writes `native_crash_<arm>_q<ID>.log` with the episode-log tail and process snapshot; set `0` only for deliberate crash-rate measurement. |
+| `EGL_FAIL_ABORT` | `scripts/run_hmeqa_agentic_h2h.sh` / `emet hmeqa` | Abort after N consecutive Habitat EGL/CUDA-map failures (`WindowlessContext` / `unable to find CUDA device`). Default `2`; `0` = never. |
+| `NATIVE_CRASH_POLICY` | H2H / `emet hmeqa --crash-policy` | `skip` (default): settle + retry + continue; `abort`: stop batch on first native crash. |
+| `NATIVE_CRASH_ABORT` | H2H (deprecated) | `1` → same as `NATIVE_CRASH_POLICY=abort`. |
+| `NATIVE_CRASH_RETRIES` | H2H | Retries of the same qid after a native crash under `skip` (default `1`). |
+| `NATIVE_CRASH_SETTLE_SEC` | H2H | Sleep after native crash before retry/next (default `60`). |
+| `NATIVE_CRASH_STREAK_ABORT` | H2H / `emet hmeqa --streak-abort` | Under `skip`, abort after N **consecutive** native crashes (default `2`; early exit when harness is wedged). `0` = never. |
+| `EMET_SKIP_CPU_AFFINITY` | H2H / `emet eval affinity` | Set `1` to skip pinning away from turbo P-cores (default: affinity **on** / fail-closed). |
+| `EMET_EXCLUDE_CPU_MIN_MHZ` | `emet.utils.cpu_affinity` / `emet eval affinity` | Exclude logical CPUs whose sysfs `cpuinfo_max_freq` is ≥ this many MHz (default `6000`). On the i9-14900KF that removes CPUs **8–11**. Do **not** use `taskset -c 0-7,10-31`. |
+| `EMET_CPU_EXCLUDE` / `EMET_CPU_ALLOW` | `emet.utils.cpu_affinity` | Optional extra exclude list, or explicit allow list (csv / ranges). |
+| `EPISODE_COOLDOWN_SEC` | H2H / `emet hmeqa --cooldown` | Seconds to `sync` + sleep after each episode (default `20`; `0` disables). |
+| `EPISODE_GPU_WAIT` | H2H | Re-run `gpu_preflight --wait` before each episode (default `1`). |
+| `EMET_HMEQA_OUT` | `emet hmeqa resume\|status` | Override OUT resolution when no path argument is given. |
 
 ### Large paper eval orchestrator
 
