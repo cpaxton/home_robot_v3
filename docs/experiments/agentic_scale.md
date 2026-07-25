@@ -56,6 +56,15 @@ cp "$OUT/h2h_summary.json" paper/data/hmeqa_agentic_h2h/balanced32_summary.json
 - Bundle-tag smoke: `h2h_smoke_classic_q0015` → `~/.cache/habitat_eqa/episodes/h2h_smoke_classic_q0015/q0015_dynagraph/` (Q15 classic correct, 60 steps).
 - **Flash-Attn in `.venv-habitat`:** blocked — system CUDA toolkit is 12.4 while Habitat torch is `2.12.0+cu130`. Main `.venv` already has flash-attn 2.8.3. Habitat H2Hs use `EMET_ALLOW_SDPA_ATTN=1` until toolkit/torch align (or a prebuilt cu130 wheel is available).
 
+## Segfault modes (2026-07-24)
+
+Do **not** conflate:
+
+1. **Episode `libcuda` SIGSEGV (`exit=139`)** — Habitat EGL + Qwen3-VL vision generate. Hot: q104/q105 (`yogvKWUrdnw`), flaky q68. Empty `agentic_qN.jsonl` + `dumped core` in the episode log. Prefer `emet jobs`; abort/retry via Habitat H2H `NATIVE_CRASH_ABORT`.
+2. **Cursor / `emet` null-IP SIGSEGV** — agent turn touches Habitat/GPU teardown; detached job may still finish.
+
+Full write-up: [known_issues.md](../known_issues.md#nvidia-driver-hang--cursor-agent-crash-during-stacked-gpu-evals). Keep the Habitat results-branch `docs/experiments/agentic_scale.md` as the detailed failset log.
+
 ## Related
 
 - Holdout results: [habitat_eqa_results.md](habitat_eqa_results.md) (Classic vs agentic-verify)
