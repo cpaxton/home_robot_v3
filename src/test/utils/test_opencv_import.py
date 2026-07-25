@@ -29,7 +29,13 @@ def test_assert_cv2_real_opencv_passes_in_normal_env():
 
 
 def test_assert_cv2_raises_on_stub(monkeypatch):
+    # ensure_venv_site_packages_first normally recovers real OpenCV from the venv;
+    # disable that so a stub cv2 still fails the attribute check.
     stub = types.ModuleType("cv2")
     monkeypatch.setitem(sys.modules, "cv2", stub)
+    monkeypatch.setattr(
+        "emet.utils.pythonpath.ensure_venv_site_packages_first",
+        lambda: None,
+    )
     with pytest.raises(ImportError, match="not OpenCV"):
         assert_cv2_is_real_opencv()

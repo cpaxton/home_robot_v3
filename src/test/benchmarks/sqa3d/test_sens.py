@@ -101,7 +101,9 @@ def test_scene_replay_assets_present(tmp_path):
     assert scene_replay_assets_present(scene, tmp_path, replay_mode="sens")
 
 
-def test_replay_simulator_mesh_fallback_on_poor_sens_match(tmp_path):
+@pytest.mark.sim
+@pytest.mark.timeout(120)
+def test_replay_simulator_mesh_fallback_on_poor_sens_match(tmp_path, open3d_offscreen: None):
     scannet_root = tmp_path / "scannet"
     _write_box_scene(scannet_root)
     sim = ScanNetReplaySimulator(
@@ -128,7 +130,9 @@ def test_replay_simulator_mesh_fallback_on_poor_sens_match(tmp_path):
         sim.close()
 
 
-def test_replay_simulator_mesh_fallback_without_sens(tmp_path):
+@pytest.mark.sim
+@pytest.mark.timeout(120)
+def test_replay_simulator_mesh_fallback_without_sens(tmp_path, open3d_offscreen: None):
     scannet_root = tmp_path / "scannet"
     _write_box_scene(scannet_root)
     sim = ScanNetReplaySimulator(
@@ -149,7 +153,8 @@ def test_replay_simulator_mesh_fallback_without_sens(tmp_path):
 
 
 def test_replay_simulator_sens_mode_requires_file(tmp_path):
+    # Must raise before Open3D OffscreenRenderer (missing GL SIGSEGVs the process).
     scannet_root = tmp_path / "scannet"
-    _write_box_scene(scannet_root)
+    (scannet_root / "scans" / BOX_SCENE_ID).mkdir(parents=True)
     with pytest.raises(FileNotFoundError, match="\\.sens"):
         ScanNetReplaySimulator(BOX_SCENE_ID, scannet_root=scannet_root, replay_mode="sens")

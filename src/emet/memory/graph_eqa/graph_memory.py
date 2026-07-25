@@ -65,7 +65,8 @@ class NavHypothesis:
 class VerifyResult:
     """SigLIP (+ optional graph-label) verification of a phrase at an observation."""
 
-    status: str  # "PRESENT" | "CANDIDATE" | "ABSENT"
+    # "UNAVAILABLE" means the encoder was gone (released for the VLM), not evidence of absence.
+    status: str  # "PRESENT" | "CANDIDATE" | "ABSENT" | "UNAVAILABLE"
     sim: float
     obs_id: int
     phrase: str
@@ -1864,6 +1865,11 @@ class GraphEQAMemory:
             status, ok = "PRESENT", True
         elif sim >= SIGLIP_PRESENT_THRESHOLD or label_hit:
             status, ok = "CANDIDATE", False
+        elif text and img_feat is None and text_feat is None:
+            # SigLIP is released before submit_answer to free VRAM for the VLM, so any
+            # verify after the first submit computes no features. Reporting that as
+            # ABSENT looks like real negative evidence in traces and to the loop.
+            status, ok = "UNAVAILABLE", False
         else:
             status, ok = "ABSENT", False
         return VerifyResult(
@@ -2985,8 +2991,14 @@ class GraphEQAMemory:
         _ans_unknown = _ans_stripped.lower() in {"unknown", "none", "n/a", "na"}
         _ans_unknownish = _ans_unknown or not _ans_stripped
         _loc_mcq = bool(parsed_choices and choices_are_location_mcq(parsed_choices) and not attribute_q)
-        # Location MCQ: never invent A–D via generic salvage (empty or Unknown).
-        _should_salvage = _ans_unknownish and not _loc_mcq
+        # A stream that never reached ``answer:`` was cut off mid-caption (the 256-token
+        # decode budget is spent on multi-image Caption/Reasoning). Re-asking the same VLM
+        # with the same images recovers the letter it never got to emit; that is different
+        # from inventing one out of nearest-furniture memory, which q104/q105 banned.
+        _answer_field_emitted = bool(re.search(r"answer\s*:", answer_outputs))
+        _truncated_before_answer = _ans_unknownish and not _answer_field_emitted
+        # Location MCQ: never invent A–D from memory, but do recover a truncated stream.
+        _should_salvage = _ans_unknownish and (not _loc_mcq or _truncated_before_answer)
         if _loc_mcq and _ans_unknownish and not _ans_stripped:
             # Truncated streams often omit ``answer:`` entirely (failfix5); normalize so
             # human_answer / agentic follow-up treat this as Unknown, not memory-B.

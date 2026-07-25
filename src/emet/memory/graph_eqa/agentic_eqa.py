@@ -377,6 +377,18 @@ class AgenticEQAExecutor:
         self._append_trace({"tool": "capture_and_update", "ok": True})
         return {"ok": True}
 
+    def _latest_obs_id(self) -> int | None:
+        """Newest non-frontier observation id (the frame just captured), if any."""
+        gm = self.graph_memory
+        observations = list(getattr(gm, "_observations", None) or [])
+        for obs in reversed(observations):
+            oid = int(obs.obs_id)
+            usable = getattr(gm, "_obs_usable_for_eqa_image", None)
+            if usable is not None and not usable(oid):
+                continue
+            return oid
+        return None
+
     def _tool_verify_siglip(self, phrase: str, obs_id: int | None) -> dict[str, Any]:
         gm = self.graph_memory
         if gm is None:
@@ -403,6 +415,12 @@ class AgenticEQAExecutor:
             text = ranked[0] if ranked else self.question
         oid = obs_id
         if oid is None or int(oid) < 0:
+            # No obs_id means "verify what the robot is looking at now". Motion tools call
+            # this right after capture_and_update, so the newest observation is the frame
+            # just taken; falling back to a hypothesis re-verified the same stale obs every
+            # round while the robot explored the far side of the scene (q104/q105).
+            oid = self._latest_obs_id()
+        if oid is None:
             if self._hypotheses:
                 oid = int(self._hypotheses[min(self._hyp_i, len(self._hypotheses) - 1)].obs_id)
             elif getattr(gm, "last_eqa_obs_ids", None):
@@ -441,6 +459,8 @@ class AgenticEQAExecutor:
             row["target_xyz"] = [float(x) for x in np.asarray(hyp.xyz).reshape(-1)[:3]]
             row["source"] = hyp.source
             self._attach_gt(row, hyp.xyz)
+        else:
+            row["source"] = "current_view"
         self._append_trace(row)
         return {
             "ok": True,
@@ -563,6 +583,68 @@ class AgenticEQAExecutor:
             "discord_text": discord_text,
             "confidence": bool(confidence),
             "relevant_images": relevant_images,
+        }
+
+    @staticmethod
+    def _answer_unknownish(answer: Any) -> bool:
+        ans = str(answer or "").strip().lower()
+        return (not ans) or ans in {"unknown", "none", "n/a", "na"} or "frontier" in ans
+
+    def _finalize_unknown_location_letter(self, submit_out: dict[str, Any]) -> dict[str, Any]:
+        """Last-chance VLM letter when Action:/explore is done and answer is still Unknown.
+
+        Mid-episode we keep Unknown so the loop can follow ``Action:N`` / frontiers
+        (memory invent caused failfix5 B/B). Once that path is exhausted, an empty
+        letter is worse than a terse image re-ask — same helper as truncated-stream
+        salvage, not nearest-furniture memory.
+        """
+        if self.mode != "answer" or not self._answer_unknownish(submit_out.get("answer")):
+            return submit_out
+        gm = self.graph_memory
+        if gm is None or not hasattr(gm, "_salvage_location_mcq_letter"):
+            return submit_out
+        from emet.habitat.metrics import (
+            choices_are_location_mcq,
+            parse_mcq_choices_from_question,
+            question_is_attribute_state,
+        )
+
+        choices = parse_mcq_choices_from_question(self.question)
+        if (
+            not choices
+            or question_is_attribute_state(self.question)
+            or not choices_are_location_mcq(choices)
+        ):
+            return submit_out
+        images = list(submit_out.get("relevant_images") or [])
+        if not images:
+            # Fall back to whatever the last query_answer attached, if still around.
+            for attr in ("last_eqa_images", "last_relevant_images"):
+                cand = getattr(gm, attr, None)
+                if cand:
+                    images = list(cand)
+                    break
+        letter = str(gm._salvage_location_mcq_letter(self.question, choices, images) or "").strip()
+        if not letter:
+            return submit_out
+        prior = submit_out.get("answer")
+        self._append_trace(
+            {
+                "event": "final_location_salvage",
+                "letter": letter,
+                "prior_answer": prior,
+                "n_unknown_explore": self._n_unknown_explore,
+                "n_images": len(images),
+            }
+        )
+        return {
+            **submit_out,
+            "answer": letter,
+            "discord_text": (
+                f"Answer:{letter}\n[final-location-salvage]\nprior:{prior}\n"
+                f"{submit_out.get('discord_text') or ''}"
+            ).strip(),
+            "confidence": False,
         }
 
     def _maybe_follow_eqa_explore_action(self, submit_out: dict[str, Any]) -> bool:
@@ -807,6 +889,7 @@ class AgenticEQAExecutor:
 
         wall = time.monotonic() - t0
         assert final is not None
+        final = self._finalize_unknown_location_letter(final)
         result = AgenticEQAResult(
             discord_text=str(final.get("discord_text") or f"Answer:{final.get('answer', 'Unknown')}"),
             answer=str(final.get("answer") or "Unknown"),

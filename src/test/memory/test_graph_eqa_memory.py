@@ -432,13 +432,69 @@ def test_location_unknown_does_not_salvage_letter():
     assert mem.last_eqa_action_obs_id is not None
 
 
-def test_location_truncated_empty_does_not_memory_location_letter():
-    """failfix5: truncated stream with no answer: must not invent [memory-location] B."""
+def test_location_truncated_stream_salvages_letter():
+    """Dogfood q104/q105: a stream cut off before ``answer:`` must be re-asked.
+
+    Distinct from an explicit ``Answer: Unknown`` (which stays Unknown): here the
+    256-token decode budget ran out mid-caption, so the model never got to answer.
+    """
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     calls = {"n": 0}
 
     def _client(cmds, **_kw):
         calls["n"] += 1
+        if calls["n"] == 1:
+            # Truncated mid-sentence: no "answer:" field ever emitted.
+            return (
+                "Caption:\nImage 1 shows an outdoor area with a brick path, door, "
+                "doormat, glass door, greenery, outdoor furniture, pool, potted plant,"
+            )
+        return "D"
+
+    mem = GraphEQAMemory(eqa_client=_client, image_description_client=lambda _x: "wall")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["wall"])
+    mem._relevant_phrases = ["wall clock"]
+    mem._relevant_objects = ["wall clock"]
+    q = (
+        "I'm trying to remember where I placed the large wall clock. Where is it? "
+        "A) In the dining area B) In the kitchen C) In the sunroom "
+        "D) In the living area near the fireplace. Answer:"
+    )
+    _r, _answer, _c, _cr, _pt, _imgs = mem.query_answer(q)
+    assert calls["n"] >= 2
+    assert "[salvage]" in (mem.last_eqa_raw or "")
+    assert mem.last_eqa_parsed[1].strip().upper() == "D"
+    # Recovery must come from the VLM re-ask, never from nearest-furniture geometry.
+    assert "[memory-location]" not in (mem.last_eqa_raw or "")
+
+
+def test_verify_reports_unavailable_when_siglip_released():
+    """submit_answer frees SigLIP for the VLM; later verifies are not evidence of absence."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    oid = mem.add_observation(np.zeros((4, 4, 3), dtype=np.uint8), np.array([1.0, 1.0, 0.5]), ["wall"])
+    mem.set_confirmed_memory_siglip_encoder(None)
+
+    result = mem.verify_phrase_at_obs("fruit bowl", int(oid))
+    assert result.status == "UNAVAILABLE"
+    assert result.ok is False
+    assert result.sim == 0.0
+
+
+def test_location_truncated_empty_does_not_memory_location_letter():
+    """failfix5: truncated stream with no answer: must not invent [memory-location] B.
+
+    The nearest-furniture memory letter stays banned. Recovery is allowed only through
+    a neutral VLM re-ask, so when that re-ask also declines the answer stays Unknown.
+    """
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    calls = {"n": 0}
+
+    def _client(cmds, **_kw):
+        calls["n"] += 1
+        if calls["n"] > 1:
+            # Neutral re-ask still cannot tell — must not fall back to memory "B".
+            return "I cannot tell from these images."
         # No ``answer:`` field — matches truncated Caption/Reasoning mid-choice.
         return (
             "Caption:\nkitchen and dining table.\n"
@@ -463,10 +519,8 @@ def test_location_truncated_empty_does_not_memory_location_letter():
         "D) In the living area near the fireplace. Answer:"
     )
     _r, answer, confidence, _cr, _pt, _imgs = mem.query_answer(q)
-    assert calls["n"] == 1
     assert "[memory-location]" not in (mem.last_eqa_raw or "")
     assert "[salvage-location]" not in (mem.last_eqa_raw or "")
-    assert "[salvage]" not in (mem.last_eqa_raw or "")
     assert not confidence
     assert answer.strip().lower() == "unknown"
     assert mem.last_eqa_parsed[1].strip().lower() == "unknown"

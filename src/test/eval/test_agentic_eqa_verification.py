@@ -435,7 +435,39 @@ def test_unknown_without_action_obs_explores():
     assert agent.run_exploration.called
 
 
-def test_submit_allowed_when_nav_budget_exhausted():
+def test_finalize_unknown_location_letter_salvages_after_explore():
+    """After Action/explore is exhausted, force a VLM letter — not empty Unknown (q105)."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {}
+    agent.graph_memory = MagicMock()
+    agent.graph_memory._salvage_location_mcq_letter.return_value = "A"
+    img = Image.new("RGB", (8, 8), color=(10, 20, 30))
+    ex = AgenticEQAExecutor(
+        agent,
+        question=(
+            "Where is the fruit bowl?\nA) kitchen island\nB) dining table\n"
+            "C) coffee table\nD) sunroom"
+        ),
+        max_rounds=4,
+        max_nav_steps=2,
+        router=False,
+    )
+    ex._n_unknown_explore = 2
+    out = ex._finalize_unknown_location_letter(
+        {"ok": True, "answer": "Unknown", "confidence": False, "relevant_images": [img]}
+    )
+    assert out["answer"] == "A"
+    assert "final-location-salvage" in out["discord_text"]
+    agent.graph_memory._salvage_location_mcq_letter.assert_called_once()
+    # Non-location / already-letter answers are left alone.
+    keep = ex._finalize_unknown_location_letter(
+        {"ok": True, "answer": "B", "confidence": False, "relevant_images": [img]}
+    )
+    assert keep["answer"] == "B"
+
     """Nav exhausted → submit_answer ok without PRESENT (so Action:N can be followed)."""
     _require_agentic()
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
@@ -523,6 +555,44 @@ def test_verify_phrase_prefers_question_stem_over_mcq_option():
     out = ex.handle_tool("verify_siglip", {"obs_id": 5})
     assert out.get("ok") is True
     assert seen == ["fruit bowl"]
+
+
+def test_verify_without_obs_id_uses_latest_observation():
+    """Dogfood q104/q105: post-explore verify checked the stale hypothesis every round.
+
+    ``verify_siglip`` with no ``obs_id`` means "what am I looking at now", so it must
+    target the frame just captured, not the nav hypothesis seeded at round 0.
+    """
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = MagicMock()
+    gm._relevant_phrases = ["fruit bowl"]
+    gm._relevant_objects = ["fruit bowl"]
+    gm._observations = [MagicMock(obs_id=10), MagicMock(obs_id=42)]
+    gm._obs_usable_for_eqa_image = lambda _oid: True
+    verified_ids: list[int] = []
+
+    def _verify(phrase, oid, rgb=None, min_sim=0.0):
+        verified_ids.append(int(oid))
+        return MagicMock(
+            status="ABSENT", sim=0.05, ok=False, obs_id=int(oid), phrase=phrase,
+            text_feat=None, img_feat=None,
+        )
+
+    gm.verify_phrase_at_obs = _verify
+    agent.graph_memory = gm
+    agent.robot = None
+    ex = AgenticEQAExecutor(agent, question="I'm looking for the fruit bowl.", max_rounds=4, router=False)
+    # Stale hypothesis from round 0; the robot has since explored and captured obs 42.
+    ex._hypotheses = [
+        MagicMock(obs_id=10, xyz=np.array([1.0, 2.0, 0.0]), phrase="fruit bowl", score=0.9, source="graph")
+    ]
+
+    ex.handle_tool("verify_siglip", {})
+    assert verified_ids == [42]
 
 
 def test_A5_siglip_alive_during_verify_released_before_vlm():
