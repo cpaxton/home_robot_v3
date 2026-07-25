@@ -36,6 +36,7 @@ from emet.agent.thinking_status import (
     env_agent_thinking_status,
     format_action_running_status,
     format_llm_thinking_status,
+    format_single_action_status,
     format_tool_running_status,
     short_llm_label,
 )
@@ -75,8 +76,12 @@ _FAST_REPLY_TOOLS = frozenset(
         "send_object_image",
         "scan_environment",
         "rotate_base",
+        "face_toward",
         "move_forward",
         "explore",
+        "take_picture",
+        "take_ee_picture",
+        "aim_arm_at",
     }
 )
 
@@ -128,7 +133,17 @@ def _format_fast_tool_reply(results: list[str]) -> str | None:
 
 def _should_skip_llm_summarize(tool_calls: list[dict], results: list[str]) -> bool:
     names = {str(tc.get("name") or "") for tc in tool_calls}
-    if not names or not names.issubset(_FAST_REPLY_TOOLS):
+    if not names:
+        return False
+    # Unavailable / stub refusals are already user-facing — relay without a second LLM call.
+    if results and all(
+        ("can't drive" in (r or "").lower())
+        or ("don't have a working" in (r or "").lower())
+        or ("tethered" in (r or "").lower() and "rotate-only" in (r or "").lower())
+        for r in results
+    ):
+        return _format_fast_tool_reply(results) is not None
+    if not names.issubset(_FAST_REPLY_TOOLS):
         return False
     return _format_fast_tool_reply(results) is not None
 
@@ -205,6 +220,7 @@ def _dispatch_tool_calls(
     chat_log: ChatLog | None = None,
     debug: bool = False,
     verbose_tools: bool = False,
+    on_tool_start: Callable[[str], None] | None = None,
 ) -> tuple[bool, list[str], bool]:
     """Execute a list of parsed tool_calls in model-specified order.
 
@@ -229,11 +245,36 @@ def _dispatch_tool_calls(
     for tc in tool_calls:
         name = tc.get("name", "")
         args = tc.get("arguments") or {}
+        if on_tool_start is not None and name:
+            try:
+                on_tool_start(str(name))
+            except Exception:
+                pass
         tool = tools_by_name.get(name)
         if tool is None:
-            msg = f"Unknown tool: {name}"
-            logger.warning(msg)
+            from emet.agent.env_flags import env_base_rotate_only
+
+            drive_like = name in {
+                "explore",
+                "find_objects",
+                "move_forward",
+                "go_home",
+                "pick_place",
+                "hand_over",
+            }
+            if env_base_rotate_only() and drive_like:
+                msg = (
+                    f"[{name}] I can't drive right now (rotate-only / tethered). "
+                    "I can rotate in place, scan, or describe — or tell me when I'm free to roll."
+                )
+            else:
+                msg = (
+                    f"[{name}] I don't have a working '{name}' action in this session. "
+                    "Try rephrasing, or ask what I can do."
+                )
+            logger.warning(f"Unknown or unavailable tool: {name}")
             results.append(msg)
+            has_info = True
             continue
 
         cmds = tool.to_executor(args)
@@ -1075,13 +1116,19 @@ def run_agent_with_robot(
                 tool_names = [str(tc.get("name") or "") for tc in tool_calls]
                 action_status = format_action_running_status(tool_names)
                 if action_status is not None:
-                    # Long-running motion: Discord + terminal (*Exploring…*, etc.).
+                    # Long-running motion: Discord + terminal (*Turning, then looking…*, etc.).
                     _emit_status(action_status, to_discord=True)
                 else:
                     # Fast info tools: terminal-only (Discord gets the final reply).
                     _emit_status(format_tool_running_status(tool_names))
                 if not show_thinking_status or debug_llm:
                     print_terminal(f"tools start: {', '.join(tool_names)}", color="cyan")
+
+                def _on_tool_start(tool_name: str) -> None:
+                    # Update Discord as each tool begins so rotate+describe is not stuck on *Turning…*.
+                    one = format_single_action_status(tool_name)
+                    if one is not None:
+                        _emit_status(one, to_discord=True)
 
                 # Execute tool calls
                 tools_t0 = timeit.default_timer()
@@ -1092,6 +1139,7 @@ def run_agent_with_robot(
                     chat_log=chat_log,
                     debug=debug_llm,
                     verbose_tools=verbose_tools,
+                    on_tool_start=_on_tool_start if show_thinking_status else None,
                 )
                 tools_elapsed = timeit.default_timer() - tools_t0
                 print_terminal(
@@ -1176,10 +1224,28 @@ def run_agent_with_robot(
                         )
                     continue
                 else:
-                    # Action-only tools: assistant message was already printed and sent to Discord above.
+                    # Action-only tools: intermediate message may already have been sent.
                     if results and hasattr(llm_client, "add_history"):
                         llm_client.add_history({"role": "assistant", "content": raw_response})
                         llm_client.add_history({"role": "user", "content": f"[Tool results]\n{result_text}"})
+                    if not (message or "").strip():
+                        # Never leave Discord/terminal silent after a tool-only turn.
+                        names = [str(n) for n in tool_names if n]
+                        if names == ["take_ee_picture"] or set(names) == {"take_ee_picture"}:
+                            fallback = (
+                                "Wrist camera alone isn't a closer look (I'd need to aim the arm "
+                                "with IK, which I can't do here). Want me to describe_scene with "
+                                "the head camera instead?"
+                            )
+                        elif names == ["take_picture"] or set(names) == {"take_picture"}:
+                            fallback = (
+                                "I took a head-camera picture. Say if you want me to send it or describe the scene."
+                            )
+                        else:
+                            fallback = f"Done ({', '.join(names)})." if names else "Done."
+                        print_terminal(f"{agent_name}: {fallback}", color="blue")
+                        _send_to_discord(fallback)
+                        chat_log.log("assistant", fallback, silent_action_fallback=True)
                     print_terminal(f"turn done in {timeit.default_timer() - turn_t0:.1f}s", color="cyan")
                     break
             if ok:

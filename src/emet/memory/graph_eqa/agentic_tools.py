@@ -14,12 +14,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from emet.agent.skills import AgentMode, build_skill_pack
 from emet.agent.tools import Tool, get_tool_descriptions_for_prompt
 
 if TYPE_CHECKING:
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
-
-_NO_PARAMS: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
 
 # Response format block. Constant string (with the tools block) so the routing
 # system prompt is byte-identical across rounds and question banks — required
@@ -56,129 +55,9 @@ verify_siglip tool, and only then answer. Do NOT output reasoning — only the J
 
 
 def build_agentic_eqa_tools(executor: AgenticEQAExecutor) -> list[Tool]:
-    """Tools the routing VLM may call. All funcs dispatch through executor.handle_tool."""
-    mode = getattr(executor, "mode", "answer")
-
-    def _dispatch(name: str):
-        def _fn(**kwargs: Any) -> str:
-            out = executor.handle_tool(name, kwargs)
-            return str(out)
-
-        return _fn
-
-    tools: list[Tool] = [
-        Tool(
-            name="inspect_graph",
-            description=(
-                "Refresh question keywords and ranked navigation hypotheses from the scene graph "
-                "and SigLIP memory. Use when hypotheses look stale or empty."
-            ),
-            parameters=_NO_PARAMS,
-            func=_dispatch("inspect_graph"),
-            returns_info=True,
-        ),
-        Tool(
-            name="explore_frontier",
-            description=(
-                "Navigate to an unexplored frontier to grow the map and graph. Optional 'toward' "
-                "biases frontier choice toward a phrase (e.g. the question object). Map and graph "
-                "update automatically afterward."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "toward": {
-                        "type": "string",
-                        "description": "Optional object phrase to bias the frontier pick toward.",
-                    }
-                },
-                "required": [],
-            },
-            func=_dispatch("explore_frontier"),
-        ),
-        Tool(
-            name="navigate_to_obs",
-            description=(
-                "Navigate to a graph observation by obs_id (a hypothesis location). Map and graph "
-                "update automatically on arrival."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "obs_id": {"type": "integer", "description": "Graph observation id to navigate to."}
-                },
-                "required": ["obs_id"],
-            },
-            func=_dispatch("navigate_to_obs"),
-        ),
-        Tool(
-            name="look_around",
-            description=(
-                "Scan in place (head sweep / rotate) to refresh the map and graph at the current "
-                "pose without navigating."
-            ),
-            parameters=_NO_PARAMS,
-            func=_dispatch("look_around"),
-        ),
-        Tool(
-            name="verify_siglip",
-            description=(
-                "Cheap visual check: does 'phrase' match the current camera view / stored view "
-                "obs_id? Returns PRESENT / CANDIDATE / ABSENT with a similarity score. PRESENT "
-                "unlocks submit_answer."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "phrase": {"type": "string", "description": "Object phrase to verify (e.g. 'sink')."},
-                    "obs_id": {
-                        "type": "integer",
-                        "description": "Observation id to verify against (-1 = current best hypothesis).",
-                    },
-                },
-                "required": ["phrase"],
-            },
-            func=_dispatch("verify_siglip"),
-            returns_info=True,
-        ),
-    ]
-    if mode == "explore":
-        tools.append(
-            Tool(
-                name="finish",
-                description=(
-                    "End exploration with a short summary of what was mapped. Only allowed once "
-                    "frontiers are exhausted or the exploration budget is used."
-                ),
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "summary": {"type": "string", "description": "One-sentence summary of the mapped area."}
-                    },
-                    "required": [],
-                },
-                func=_dispatch("finish"),
-            )
-        )
-    else:
-        tools.append(
-            Tool(
-                name="submit_answer",
-                description=(
-                    "Submit the final answer (MCQ letter or short phrase). Rejected until a "
-                    "verify_siglip PRESENT (or the round budget is exhausted)."
-                ),
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "answer": {"type": "string", "description": "Final answer letter or phrase."}
-                    },
-                    "required": [],
-                },
-                func=_dispatch("submit_answer"),
-            )
-        )
-    return tools
+    """EQA_EPISODE tool pack. Schemas/names come from :mod:`emet.agent.skills`; funcs dispatch via ``handle_tool``."""
+    submode = getattr(executor, "mode", "answer")
+    return build_skill_pack(AgentMode.EQA_EPISODE, executor, eqa_submode=submode)
 
 
 def build_graph_eqa_system_prompt(tools: list[Tool]) -> str:

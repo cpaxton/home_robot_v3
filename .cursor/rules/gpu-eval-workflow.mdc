@@ -13,7 +13,14 @@ uv run emet eval kill-stale
 NEED_MIB=12000 uv run emet eval wait   # or: uv run emet eval check
 ```
 
-Canonical CLI: **`emet eval {status,check,wait,kill-stale}`**. Bash [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh) delegates to it (also provides `emet_export_pytorch_alloc` and **`emet_pytest_no_sim_ignore_args`** when sourced). Prefer `emet eval` over raw `pkill` / ad-hoc kills. Verify with `uv run emet eval --help` before suggesting flags.
+Canonical CLI: **`emet eval {status,check,wait,kill-stale}`**. Bash [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh) delegates to it (also provides `emet_export_pytorch_alloc` and **`emet_pytest_no_sim_ignore_args`** when sourced). Prefer `emet eval` over raw `pkill` / ad-hoc kills. Verify with `uv run emet eval --help` before suggesting flags. (The `emet eval diagnose` subcommand + `emet jobs` progress/ETA live on the eval branch `exp/agentic-hmeqa-*`, not here — do not suggest them on this branch until merged.)
+
+### Empty `nvidia-smi` is not proof of safety
+
+- Free VRAM / no compute apps does **not** mean Habitat Magnum EGL can create a `WindowlessContext`.
+- HM-EQA can fail every episode with `unable to find CUDA device 0 among N EGL devices` while the GPU looks idle (seen 2026-07-24).
+- Empty `CUDA_VISIBLE_DEVICES` hides the GPU from Torch/Habitat even when `nvidia-smi` still shows the card.
+- After a hard kill of Habitat mid-episode, driver/EGL can stay wedged until settle or reboot — use **`emet jobs cancel`**, not raw `kill -9` on `emet-habitat`.
 
 ## Experiment reliability
 
@@ -41,10 +48,19 @@ That sequence caused full-system freezes on an RTX 4090 workstation (GUI + SSH u
 | `run_overnight_eval_smoke.sh` | separate night | HM-EQA + OVMM + SQA3D matrix |
 | `run_overnight_habitat_eval.sh` | `--resume` | Multi-phase HM-EQA subsets |
 
-## Cursor agent sessions
+## Cursor agent sessions (segfaults)
 
-- Run **multi-hour** Habitat evals and overnight scripts via **`nohup … &`** or a dedicated terminal — not as blocking inline commands in long agent turns.
-- If the agent segfaults mid-eval, check artifacts under **`~/runs/emet/`**, **`~/.cache/habitat_eqa/results/`**, and **`/tmp/unified_smoke_*.log`** — subprocesses may have finished.
+**"Cursor keeps crashing" here is usually not a busy GPU.** Two distinct modes (see [`docs/known_issues.md`](../../docs/known_issues.md)):
+
+- **Mode A — episode `libcuda` SIGSEGV (`exit=139`):** `emet-habitat run-episode` dies during Qwen3-VL vision generate while Habitat-Sim EGL shares the GPU. Orchestrator logs `FAIL … exit=139` / `dumped core`; kernel shows `python[…]: segfault … in libcuda.so`. The per-qid jsonl is **empty** — that is a crash, not a scored miss. Hot scenes: q104/q105 (`yogvKWUrdnw`), flaky q68.
+- **Mode B — agent / `emet` null-IP SIGSEGV:** the Cursor agent process itself dies (`emet[…]: segfault at 0`, or `trap invalid opcode`) when a turn runs or probes Habitat / tears down a GPU context. A detached `emet jobs` / `nohup` child often keeps running.
+
+Rules:
+
+- Launch Habitat / HM-EQA / overnight scripts **only** via **`uv run emet jobs run --name … -- CMD`**, **`nohup … &`**, or a dedicated terminal — never as blocking inline agent shell commands that load Habitat or tear down GPU contexts.
+- Do **not** run "quick" Habitat smoke episodes inside the agent turn to "verify EGL", then `kill` them — hard mid-episode kills precede the next `emet` segfault.
+- H2H scripts abort after consecutive EGL failures (`EGL_FAIL_ABORT`, default 2) and after a fatal native signal (`NATIVE_CRASH_ABORT`, default 1, writes `native_crash_*.log`) instead of burning the full failset.
+- After a crash: `sudo dmesg -T | rg 'segfault|invalid opcode|libcuda'` · `uv run emet eval status` · `uv run emet jobs` · check **`~/runs/emet/`**, **`~/.cache/habitat_eqa/results/`**, **`/tmp/unified_smoke_*.log`** — the detached job may still be running or only half-started.
 - Tier 0 + tracks 1–3 PR smoke: see [`docs/experiments/cross_track_smoke.md`](../../docs/experiments/cross_track_smoke.md).
 
 ## Cross-track smoke entrypoint

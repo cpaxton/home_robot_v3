@@ -22,6 +22,40 @@ Use when physical Mars is on the network. Requires [innate-os](https://github.co
 | 8. Short map | `uv run emet run dynamem --robot innate_mars --robot-ip <IP> --dynav-config dynav_innate_mars.yaml -S` | `world/semantic_memory/pointcloud` grows |
 | 9. Nav probe | Send small `xyt` via dynagraph explore or client; watch base move | `at_goal` true after goal |
 | 10. Dynagraph export | `uv run emet run dynagraph --robot innate_mars --robot-ip <IP> --dynav-config dynav_innate_mars.yaml --export runs/mars_hw_001` | `floor_metrics.json` + graph export |
+| 11. Discord chat + explore | See [Discord chat + explore](#discord-chat--explore-herman) below | Bot replies; base moves on “explore …” |
+
+## Discord chat + explore (Herman)
+
+Chat with the robot over **Discord** (text + photos/maps) while it explores. Voice / robot TTS are not required.
+
+**Prereqs:** steps 1–2 (bridge up), ideally 3–4 (cameras), and Nav2 for base motion (step 9). Prefer **`--onboard-da3`** on the bridge so the workstation GPU is free for the chat LLM + caption VLM.
+
+```bash
+# Discord extra once: uv sync  (discord group) or see docs/discord_bot.md
+export DISCORD_TOKEN=...
+
+uv run emet run agent \
+  --connection herman \
+  --config configs/agent_innate_mars.yaml \
+  --rerun \
+  --name Herman
+```
+
+Preset enables Discord + EQA captions (`agent.eqa: true`). Optional: `--no-rerun` if you only care about Discord.
+
+| Prompt (in Discord) | Expected |
+|---------------------|----------|
+| “what do you see?” / “describe the scene” | Caption + live head photo (`describe_scene`) |
+| “explore the house” / “look around” | Nav + mapping; Discord may show `*Exploring…*` progress |
+| “where is the couch?” | Memory / graph answer after some mapping |
+
+**Turn-blocking explore:** tool calls (including `explore`) run to completion before the next Discord/terminal message is handled. Messages typed mid-explore **queue** and run when explore finishes — not a live interrupt. Progress italics can still post during long tools.
+
+**Plugged in / tethered (no drive):** set ``EMET_BASE_ROTATE_ONLY=1`` so the agent may only yaw in place (`rotate_base`, `scan_environment`) plus perceive (`describe_scene`, send_*). Absolute XY nav and `explore` are refused.
+
+**ZMQ nav wait:** `GenericZmqClient.move_base_to` always sends `nav_blocking=false` so the robot recv thread is not stuck in Nav2/Spin (that made Discord look hung). When the agent requests `blocking=True`, the **client** waits on `at_goal` / `nav_timeout_s` instead.
+
+**Not this path:** Habitat/eval **EQA_EPISODE** agentic GraphEQA (`eqa.agentic_verify`) is a different orchestrator mode from Discord **CHAT** — see [AGENT_RUN.md modes](../AGENT_RUN.md#skill-library-vs-orchestrator-modes) and [evaluation.md](../evaluation.md#agentic-grapheqa-verify--offline-tuning). Canonical agent docs: [AGENT_RUN.md](../AGENT_RUN.md). Bot setup: [discord_bot.md](../discord_bot.md).
 
 ## Workstation shortcut
 
@@ -73,7 +107,7 @@ Requires innate-os on the robot: `cd ~/innate-os && innate service start` (inter
 | Symptom | Check |
 |---------|--------|
 | Black images | `maurice_cam` running; bridge waited for all three cameras |
-| No base motion | `maurice_nav` mode; `ros2 action list \| grep navigate` |
+| No base motion / “Turning…” but robot still | Bridge uses `NavigateToPose` in the `map` frame. If `map→odom` TF is missing (`slam_toolbox` unconfigured / AMCL not publishing), goals hang then time out. Check: `ros2 run tf2_ros tf2_echo map odom` (must print transforms). In-place yaw can still work via Nav2 `/spin` (bridge prefers Spin for relative yaw-only). Restore localization, or `emet deploy` after bridge Spin fix. Verify: `ros2 action list \| grep -E 'navigate\|spin'`. |
 | Sheared voxel map / sloped floor in Rerun | ``camera_K`` must match JPEG resolution. ``maurice_cam`` ``camera_info`` is often ~320×240 while streams are 640×480; bridge scales K to the decoded image (workstation client also auto-aligns). Restart stream after deploy. |
 | Floating mid-air points in ``world/point_cloud`` | DA3 speckle / flying pixels on hardware. Mars defaults enable mild filters (`depth_speckle_open_kernel: 3`, `voxel_pcd_dbscan_min_samples: 6`) in [`configs/emet/default.yaml`](../configs/emet/default.yaml). Disable with ``--set mapping.filters.depth_speckle_open_kernel=0`` if real structure is eroded. See [dynav_config.md](../dynav_config.md#depth--voxel-post-filters-da3-hardware-opt-in). |
 | Curved / bowed walls (RGB looks flat) | Usually DA3 + lighting/intrinsics, not stream misconfig. ``emet debug-da3-depth``; try ``DA3METRIC-LARGE`` or sensor depth in sim for A/B. [innate_mars.md](innate_mars.md). |

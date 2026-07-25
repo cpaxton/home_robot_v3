@@ -1,9 +1,10 @@
 # Home Robot v2 / Emet – Cursor code rules
 
 ## Copyright (new files)
-- **New** source/tests you add: `# Copyright (c) Chris Paxton 2026` (use the current year).
-- **Never** put `Copyright (c) Hello Robot, Inc.` on new files. Leave existing Hello Robot headers alone when editing old files.
-- See **`.cursor/rules/copyright.mdc`**.
+- **All new files** (modules, tests under `src/test/`, scripts, bridge code): `# Copyright (c) Chris Paxton <year>` + Apache stub — **never** Hello Robot.
+- **Do not** copy Hello Robot headers from adjacent files when adding a new test/module (common slip).
+- Leave existing Hello Robot headers on old files unchanged unless asked to relicense.
+- Details: **`.cursor/rules/copyright.mdc`** (alwaysApply).
 
 ## Testing (uv)
 - **Setup**: Use **uv**. Install deps including dev (pytest, pytest-timeout): `uv sync` (default groups include `dev`, `sim`, `hand_tracker`, `dynamem`, `da3`). Minimal install: `uv sync --no-default-groups`.
@@ -26,10 +27,17 @@
 - Legacy flat files (`dynav_config.yaml`, `dynav_innate_mars.yaml`) still load; `dynav_innate_mars.yaml` is a thin **`extends:`** stub — innate_mars tuning lives under **`robots.innate_mars`** in the default config. See **`docs/emet_config.md`** and **`docs/AGENT_RUN.md`**.
 - **`get_parameters("dynav_innate_mars.yaml")`** must resolve robot overlay (e.g. `depth_source=auto`, `graph_object_fusion.bounds_3d_iou_merge_min=0.40`). Smoke: `uv run emet test src/test/config/`.
 
+## Agent modes (CHAT vs EQA_EPISODE)
+- Shared skill library (`emet.agent.skills`); **two** orchestrators — do **not** conflate Discord chat with Habitat agentic EQA.
+- **CHAT** = `emet run agent` (Discord / terminal): `describe_scene`, `explore`, emotes, … — user turns. **`--eqa`** only loads the caption VLM; it is **not** the episode loop.
+- **EQA_EPISODE** = Habitat / dynagraph when `eqa.agentic_verify`: `navigate_to_obs`, `verify_siglip`, `submit_answer` / `finish`. Keep EQA tool **names** stable (traces).
+- Details + pack membership: **`.cursor/rules/agent-modes.mdc`**, `docs/AGENT_RUN.md` (Skill library vs orchestrator modes). Tests: `uv run emet test src/test/agent/test_skill_packs.py`.
+
 ## GPU / eval workflow (agent behavior)
 - **One GPU-heavy job at a time** on the workstation GPU (often shared with Xorg/gnome-shell). Before Habitat HM-EQA, SQA3D real sweeps, Robocasa explore, or dynagraph with VLM: run **`uv run emet eval status`**, then **`uv run emet eval kill-stale`**, then **`NEED_MIB=12000 uv run emet eval wait`** (or **`emet eval check`** for a one-shot gate). Bash: `./scripts/gpu_preflight.sh` still works (delegates to `emet eval`). Prefer **`emet eval`** over raw `pkill` / ad-hoc process kills.
 - **Do not chain** Robocasa dynagraph smoke → full pytest (MuJoCo-native paths) → Habitat VLM eval in one session — that pattern caused NVIDIA driver hangs (GUI + SSH dead). Cross-track smoke defaults **`RUN_DEEP_EVAL=0`**; run **`run_overnight_eval_smoke.sh`** on a **separate night**. See **`docs/evaluation.md`** and **`docs/experiments/cross_track_smoke.md`**.
-- **Long Habitat / overnight evals:** prefer **`nohup ./scripts/run_simulation_smoke_battery.sh … &`** or **`nohup ./scripts/run_overnight_cross_track_smoke.sh … &`** — **not** long inline GPU runs inside a Cursor agent turn (agent/node can trap/segfault after heavy native teardown; eval subprocess may still complete — check **`~/runs/emet/simulation_smoke/`**, **`~/.cache/habitat_eqa/results/`** logs).
+- **Long Habitat / overnight evals:** prefer **`uv run emet jobs run --name … -- CMD`**, **`nohup ./scripts/run_simulation_smoke_battery.sh … &`**, or a dedicated terminal — **not** long inline GPU runs inside a Cursor agent turn (agent/node can trap/segfault after heavy native teardown; eval subprocess may still complete — check **`~/runs/emet/simulation_smoke/`**, **`~/.cache/habitat_eqa/results/`** logs).
+- **Two segfault modes (do not conflate; see `docs/known_issues.md`):** **Mode A** = Habitat episode `libcuda` SIGSEGV (`exit=139`, `dumped core`) during Qwen3-VL vision generate while EGL shares the GPU — the per-qid jsonl is left **empty** (a crash, not a scored miss; hot scenes q104/q105 `yogvKWUrdnw`, flaky q68). **Mode B** = the Cursor agent / `emet` process dies (`segfault at 0` null IP, or `trap invalid opcode`) after touching Habitat/GPU teardown, while a detached `emet jobs`/`nohup` child keeps running. **Empty `nvidia-smi` ≠ EGL healthy.** HM-EQA H2H scripts self-guard via **`EGL_FAIL_ABORT`** (default 2) and **`NATIVE_CRASH_ABORT`** (default 1, writes `native_crash_*.log`).
 - **Paper simulation battery:** seven sequential tracks — **`docs/simulation_testing_plan.md`**, **`./scripts/run_simulation_smoke_battery.sh`** (Habitat EQA → Habitat OVMM → Robocasa search → Molmo search → SQA3D → Robocasa dynamic env → Molmo dynamic search).
 - Full **`pytest -m "not sim"`** must pass **`emet_pytest_no_sim_ignore_args`** from **`scripts/gpu_preflight.sh`** (excludes unmarked MuJoCo/Habitat sim tests under `src/test/simulation/`, etc.).
 - **Orphans / hung evals:** new sim/eval `Popen` must use **`emet.utils.process_tree`**; after hangs run **`emet eval status`** before re-launch. Do not call **`emet eval kill-stale`** from inside a smoke that must stay alive (use **`wait`** only). Details: **`.cursor/rules/gpu-eval-workflow.mdc`**, **`docs/known_issues.md`**.
@@ -74,7 +82,9 @@
   4. **Env vars:** new `EMET_*` toggles in changed Python must be listed in `docs/environment_variables.md` or a topic env doc (e.g. `docs/molmospaces_environment_variables.md`).
   5. **Defaults alignment:** core `emet` CLI, `packages/emet_molmospaces/emet_molmospaces/runner.py`, and these rules must agree (MolmoSpaces default robot: **stretch**).
   6. **Tests:** add/update CLI help tests when adding subcommands.
-  7. Trim "AI slop"—unnecessary try/except, vague comments, over-defensive checks. Prefer clear failures and declared deps over silent fallbacks.
+  7. **Agent modes:** if changing skill packs / agentic EQA tools, keep CHAT vs EQA_EPISODE disjoint; run `src/test/agent/test_skill_packs.py`; see `.cursor/rules/agent-modes.mdc`.
+  8. **Copyright:** new files must be Chris Paxton — never Hello Robot (`.cursor/rules/copyright.mdc`).
+  9. Trim "AI slop"—unnecessary try/except, vague comments, over-defensive checks. Prefer clear failures and declared deps over silent fallbacks.
 
 ## Simulation
 - Default `./install.sh` profile is **full** (sim on when `third_party/robocasa` exists; use `--no-sim` or `--profile=minimal` for lightweight/CI). MolmoSpaces wrapper venv is still created when `packages/emet_molmospaces` exists unless `--no-molmospaces`.

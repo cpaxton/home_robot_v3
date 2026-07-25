@@ -18,6 +18,7 @@ import torch
 from PIL import Image
 from termcolor import colored
 
+from emet.agent.env_flags import env_base_rotate_only
 from emet.config.embodied_agent_config import EmbodiedAgentConfig
 from emet.controller.operations import GraspObjectOperation
 from emet.controller.task.emote import EmoteTask
@@ -33,6 +34,19 @@ if TYPE_CHECKING:
     from emet.controller.controller_dynamem import RobotAgent
 
 logger = Logger(__name__)
+
+# Executor commands that translate the base (blocked when EMET_BASE_ROTATE_ONLY=1).
+_BASE_DRIVE_COMMANDS = frozenset(
+    {
+        "explore",
+        "find",
+        "move_forward",
+        "go_home",
+        "pickup",
+        "place",
+        "hand_over",
+    }
+)
 
 
 def compute_tilt(camera_xyz, target_xyz):
@@ -392,16 +406,20 @@ class DynamemTaskExecutor:
         """Take a picture of the end effector."""
 
         obs = self.robot.get_servo_observation()
+        ee = None if obs is None else getattr(obs, "ee_rgb", None)
+        if ee is None:
+            logger.warning("take_ee_picture: no ee_rgb on servo observation (common on Mars).")
+            return
+        arr = np.asarray(ee)
         if channel is None:
-            # Just save it to the disk
             now = datetime.datetime.now()
             filename = f"stretch_image_{now.strftime('%Y-%m-%d_%H-%M-%S')}.png"
-            Image.fromarray(obs.ee_rgb).save(filename)
+            Image.fromarray(arr).save(filename)
         else:
             self.discord_bot.send_message(
                 channel=channel,
                 message="End effector camera:",
-                content=numpy_image_to_bytes(obs.ee_rgb),
+                content=numpy_image_to_bytes(arr),
             )
 
     def _hand_over(self) -> None:
@@ -452,6 +470,13 @@ class DynamemTaskExecutor:
         while i < len(response):
             command, args = response[i]
             logger.info(f"Command: {i} {command} {args}")
+            if env_base_rotate_only() and command in _BASE_DRIVE_COMMANDS:
+                logger.warning(
+                    f"EMET_BASE_ROTATE_ONLY: skipping command {command!r} "
+                    "(yaw-only / in-place scan allowed; no XY drive)."
+                )
+                i += 1
+                continue
             if command == "say":
                 # Use TTS to say the text
                 logger.info(f"Saying: {args}")
