@@ -311,6 +311,12 @@ class AgentSectionConfig:
     max_tokens: int = 256
     # Interactive controller stack: dynagraph (default), graph_eqa, or dynamem.
     memory_backend: str = "dynagraph"
+    # Sim pick/place: teleport (GT body snap) or kinematic (IK + joint traj + attach).
+    manip_mode: str = "teleport"
+    # Arm collision filter for kinematic mode: none | voxel (agent map).
+    manip_collision: str = "none"
+    # Joint-space path between IK start/goal: rrt_connect | rrt | linear.
+    manip_planner: str = "rrt_connect"
 
 
 @dataclass
