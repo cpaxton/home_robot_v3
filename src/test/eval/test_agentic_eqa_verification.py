@@ -1060,6 +1060,7 @@ def test_agentic_submit_does_not_clamp_answer_max_tokens(monkeypatch):
     """Bal-32 regression: agentic must not setdefault EMET_EQA_ANSWER_MAX_NEW_TOKENS=64."""
     _require_agentic()
     import os
+
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
     monkeypatch.delenv("EMET_EQA_ANSWER_MAX_NEW_TOKENS", raising=False)
@@ -1205,8 +1206,9 @@ def test_presence_without_answerability_does_not_auto_submit(monkeypatch):
 def test_voxel_sim_upgrades_full_frame_absent_to_present():
     """Policy (2): dense voxel cosine >= 0.21 upgrades PRESENT (DynaMem space)."""
     _require_agentic()
-    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
     import torch
+
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
     agent = MagicMock()
     agent.parameters = {"eqa": {}}
@@ -1393,6 +1395,35 @@ def test_vlm_assess_unlocks_verified_submit_gate(monkeypatch):
     assert out["answerable"] is True
     assert ex._evidence_policy.state == AgenticState.ANSWER
     assert any(r.get("tool") == "vlm_assess" and r.get("answerable") for r in ex._trace_rows)
+
+
+def test_not_present_streak_sets_escape_floor():
+    """q104/q105: repeated 'not visible' views must push the next frontier away."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import (
+        ESCAPE_MIN_TRAVEL_M,
+        NOT_PRESENT_ESCAPE_STREAK,
+        AgenticEQAExecutor,
+    )
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    agent.graph_memory = MagicMock()
+    agent.voxel_map = None
+    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=False)
+
+    for _ in range(NOT_PRESENT_ESCAPE_STREAK - 1):
+        ex._update_escape_streak(present=False)
+    assert ex._escape_min_travel_m() == 0.0
+
+    ex._update_escape_streak(present=False)
+    assert ex._escape_min_travel_m() == ESCAPE_MIN_TRAVEL_M
+    assert agent._explore_min_travel_m == ESCAPE_MIN_TRAVEL_M
+
+    # Seeing the target again clears the floor so we can close in on it.
+    ex._update_escape_streak(present=True)
+    assert ex._escape_min_travel_m() == 0.0
+    assert agent._explore_min_travel_m == 0.0
 
 
 def test_capture_rejects_non_advancing_obs():

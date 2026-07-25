@@ -51,6 +51,12 @@ SIGLIP_IMAGE_ABSENT_THRESHOLD = 0.10
 _TRUE = frozenset({"1", "true", "yes", "on"})
 _FALSE = frozenset({"0", "false", "no", "off"})
 
+# Region escape: after this many consecutive "target not visible" view assessments,
+# require the next frontier to be at least ESCAPE_MIN_TRAVEL_M away so the robot
+# leaves the area instead of re-scanning it (holdout q104/q105 circled their spawn).
+NOT_PRESENT_ESCAPE_STREAK = 2
+ESCAPE_MIN_TRAVEL_M = 3.0
+
 # Routing turns are text-only JSON; a two-call reply with arguments needs more than 64 tokens.
 ROUTER_MAX_NEW_TOKENS = 128
 
@@ -181,6 +187,7 @@ class AgenticEQAExecutor:
         self._target_phrase: str = ""
         self._question_type: str = "other"
         self._last_vlm_assess: dict[str, Any] | None = None
+        self._not_present_streak = 0
         self._evidence_policy = EvidencePolicy()
         self._presence_detector: Any | None = None
         self._presence_detector_initialized = False
@@ -349,8 +356,12 @@ class AgenticEQAExecutor:
         try:
             from emet.controller.habitat_nav import pick_uncovered_explore_target
 
+            escape_m = self._escape_min_travel_m()
             candidates: list[np.ndarray | None] = []
-            if hasattr(agent, "_siglip_guided_frontier"):
+            # SigLIP guidance aims at the frontier nearest the best-matching *already
+            # observed* point, so while escaping it just pulls us back into the area we
+            # already rejected. Let region utility choose instead.
+            if escape_m <= 0.0 and hasattr(agent, "_siglip_guided_frontier"):
                 candidates.append(agent._siglip_guided_frontier(bias))
             if hasattr(agent, "_best_frontier_point_from_graph"):
                 candidates.append(agent._best_frontier_point_from_graph(bias))
@@ -360,6 +371,7 @@ class AgenticEQAExecutor:
                 candidates=candidates,
                 blocked=getattr(agent, "_habitat_blocked_goals", None),
                 recent_goals=getattr(agent, "_habitat_recent_goals", None),
+                min_travel_m=escape_m,
             )
         except Exception as e:
             _logger.warning(f"explore_frontier pick failed: {e}")
@@ -740,6 +752,20 @@ class AgenticEQAExecutor:
         self._question_type = te.question_type
         self._append_trace({"event": "vlm_target_extract", "source": "vlm", **te.to_dict()})
 
+    def _escape_min_travel_m(self) -> float:
+        """Distance the next frontier must clear once the target keeps not showing up."""
+        if self._not_present_streak < NOT_PRESENT_ESCAPE_STREAK:
+            return 0.0
+        return ESCAPE_MIN_TRAVEL_M
+
+    def _update_escape_streak(self, *, present: bool) -> None:
+        """Track consecutive not-visible views and publish the escape floor to the picker."""
+        if present:
+            self._not_present_streak = 0
+        else:
+            self._not_present_streak += 1
+        self.agent._explore_min_travel_m = self._escape_min_travel_m()
+
     def _run_vlm_view_assess(
         self,
         *,
@@ -801,6 +827,7 @@ class AgenticEQAExecutor:
         if vlm_assessment is not None and vlm_assessment.answerable:
             self._verified = True
             self._verified_obs_id = oid
+        self._update_escape_streak(present=assessment.present)
         payload = {
             "tool": "vlm_assess",
             "obs_id": oid,
@@ -813,6 +840,8 @@ class AgenticEQAExecutor:
             "reason": assessment.reason,
             "policy_state": str(self._evidence_policy.state),
             "verified": self._verified,
+            "not_present_streak": self._not_present_streak,
+            "explore_min_travel_m": self._escape_min_travel_m(),
             "inventory": inventory,
         }
         self._last_vlm_assess = payload
@@ -1553,6 +1582,9 @@ class AgenticEQAExecutor:
     def run(self) -> AgenticEQAResult:
         t0 = time.monotonic()
         final: dict[str, Any] | None = None
+        # Agents are reused across episodes; do not inherit a previous escape floor.
+        self._not_present_streak = 0
+        self.agent._explore_min_travel_m = 0.0
         budget_hit = False
         # Deferred clients: build the shared VLM now — keyword extraction in inspect_graph
         # and the tool router both need it (text-only turns coexist with warm SigLIP).

@@ -467,6 +467,8 @@ class GraphNode:
     bbox_xyxy: tuple[int, int, int, int] | None = None  # pixel crop in obs RGB; None = full frame
     is_viewpoint: bool = False  # True = robot/camera vantage (``seen_from`` target), not a detected object
     is_frontier: bool = False  # True = unexplored map frontier cluster (managed by sync_frontier_nodes)
+    frontier_cell_count: int = 0  # frontier only: unexplored cells in this cluster (area gain)
+    frontier_keyword_score: float = 0.0  # frontier only: question-keyword affinity of nearby hints
     embedding: np.ndarray | None = None  # optional visual embedding (e.g. SigLIP crop)
     bounds_3d: dict[str, list[float]] | None = None  # axis-aligned world bounds {min,max,center,size}
     nav_attempts: int = 0
@@ -1521,7 +1523,7 @@ class GraphEQAMemory:
         step = self._effective_timestep()
         placeholder_rgb = np.zeros((8, 8, 3), dtype=np.uint8)
 
-        for _score, cluster_id, grid_ij, _count in scored[: self._frontier_max_nodes]:
+        for kw_score, cluster_id, grid_ij, cell_count in scored[: self._frontier_max_nodes]:
             keep_ids.add(cluster_id)
             gi, gj = grid_ij
             try:
@@ -1547,6 +1549,8 @@ class GraphEQAMemory:
                     labels=labels,
                     last_seen=step,
                     description=desc,
+                    frontier_cell_count=int(cell_count),
+                    frontier_keyword_score=float(kw_score),
                 )
                 for o in self._observations:
                     if int(o.obs_id) == int(existing.obs_id):
@@ -1567,6 +1571,8 @@ class GraphEQAMemory:
                         description=desc,
                         last_seen=step,
                         is_frontier=True,
+                        frontier_cell_count=int(cell_count),
+                        frontier_keyword_score=float(kw_score),
                     )
                 )
                 self._observations.append(
