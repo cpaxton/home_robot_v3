@@ -58,6 +58,7 @@ uv run emet install menu  # Rich plan wizard (after: uv sync)
 uv sync                                    # default groups: dev, sim, hand_tracker, dynamem, da3
 uv sync --no-default-groups                # base package only (no pytest/MuJoCo/SAM-2/…)
 uv sync --no-group dynamem                 # skip SAM-2 (e.g. submodule not checked out)
+uv sync --group flash-attn                 # add Flash-Attn 2 (compiles CUDA kernels; SDPA otherwise)
 ```
 
 The script installs system deps (e.g. `portaudio`, `espeak`, `ffmpeg`) and runs `uv sync` for you. For reproducible installs, a `uv.lock` is included; `uv sync` uses it automatically.
