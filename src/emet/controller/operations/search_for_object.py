@@ -67,9 +67,10 @@ class ManagedSearchOperation(ManagedOperation):
         # Compute the feature vector for the object if not saved
         if self._object_class_feature is None:
             self._object_class_feature = self.agent.encode_text(self.object_class)
-        emb = instance.get_image_embedding(aggregation_method=self.aggregation_method, normalize=True).to(
-            self._object_class_feature.device
-        )
+        emb = instance.get_image_embedding(aggregation_method=self.aggregation_method, normalize=True)
+        if emb is None or not isinstance(emb, torch.Tensor):
+            return False
+        emb = emb.to(self._object_class_feature.device)
         activation = torch.cosine_similarity(emb, self._object_class_feature, dim=-1)
         print(f" - Found instance {instance.global_id} with similarity {activation} to {self.object_class}.")
         if verbose:

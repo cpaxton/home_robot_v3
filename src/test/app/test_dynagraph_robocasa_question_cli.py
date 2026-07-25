@@ -69,6 +69,7 @@ def test_run_dynagraph_module_exposes_dynav_and_explore_flags():
     assert "--explore-loop" in out
 
 
+@pytest.mark.sim
 @pytest.mark.skipif(not RUN_SIM_TESTS, reason="RUN_SIM_TESTS=0")
 @pytest.mark.timeout(900)
 def test_dynagraph_robocasa_question_export_innate_mars():
@@ -81,13 +82,14 @@ def test_dynagraph_robocasa_question_export_innate_mars():
     EXPORT_BASE.mkdir(parents=True, exist_ok=True)
 
     _kill_servers()
+    # Top-level Click CLI uses ``serve robocasa`` (or ``--scene robocasa``); ``--use-robocasa``
+    # remains a low-level mujoco_server flag only.
     server_cmd = [
         "uv",
         "run",
         "emet",
         "serve",
-        "mujoco",
-        "--use-robocasa",
+        "robocasa",
         "--robot",
         "innate_mars",
         "--headless",

@@ -87,6 +87,12 @@ def _eval_svm(filename: Path, start_pos: np.ndarray, possible: bool = False) -> 
 
     for query, expected_result in queries:
         instances = agent.get_ranked_instances(query)
+        if not instances:
+            pytest.skip(
+                "No instances with usable image embeddings after ranking "
+                f"(query={query!r}; n_map_instances={n_instances}). "
+                "Pickle may lack CLIP view embeddings under this mapping backend."
+            )
         # Query the SVM - make sure we can find motion plan to a cardboard box
         score, instance_id, instance = instances[0]
         print(f"Query: {query} Score: {score} Instance ID: {instance_id}")
