@@ -50,6 +50,9 @@ class StatusStretchJoints:
     wrist_pitch: PositionVelocity
     wrist_roll: PositionVelocity
     gripper: PositionVelocity
+    # Numeric form of sim_to_real_time_ratio_msg: sim seconds per wall-clock second.
+    # Optional so older status dicts still deserialize; None until the FPS counter has a sample.
+    sim_to_real_ratio: float | None = None
 
     def __getitem__(self, name: str):
         """For backward compatibility: allows access with the square brackets []"""
@@ -83,4 +86,5 @@ class StatusStretchJoints:
             PositionVelocity.default(),
             PositionVelocity.default(),
             PositionVelocity.default(),
+            None,
         )

@@ -202,7 +202,15 @@ uv run python scripts/scripted_sim_pick_place.py --start-sim \
 uv run python scripts/scripted_sim_pick_place.py --start-sim \
   --sim configs/sim/molmospaces_ithor_train_0.yaml \
   --manip-mode kinematic --object bowl --receptacle microwave
+
+# Grasp-oracle + explore + manip (rby1 kinematic or stretch teleport)
+EMET_SIM_NAV_TELEPORT=1 uv run python scripts/scripted_molmo_grasp_mp.py --start-sim \
+  --sim configs/sim/molmospaces_ithor_train_0.yaml --object bowl --cpu-only
+EMET_SIM_NAV_TELEPORT=1 uv run python scripts/scripted_molmo_grasp_mp.py --start-sim \
+  --sim configs/sim/molmospaces_ithor_train_stretch_0.yaml --object bowl --cpu-only
 ```
+
+Oracle service: `uv run emet grasp-oracle --bind tcp://127.0.0.1:5558` (see [motion_planning.md](motion_planning.md#molmospaces-grasp-oracle-multi-robot)).
 
 OVMM full episode: `molmo_ithor_rby1_s2_bowl_pp` in `configs/ovmm/full_episodes.yaml` — see [ovmm_full_benchmark.md](ovmm_full_benchmark.md).
 

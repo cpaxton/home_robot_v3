@@ -428,3 +428,26 @@ def robot_zmq_detach_body(robot: Any, body: str | None = None) -> None:
         step = 1
     action = build_sim_detach_body_action(step, body)
     _send_meta_action(robot, action)
+
+
+def sim_teleport_to_grasp_pose(
+    robot: Any,
+    body: str,
+    grasp_xyz_world: np.ndarray | list[float],
+    *,
+    lift_m: float = 0.12,
+    verify: bool = True,
+) -> bool:
+    """Teleport object to grasp XYZ then lift (oracle-driven teleport pick for Stretch etc.)."""
+    if not robot_sim_body_pose_teleport_supported(robot):
+        return False
+    target = np.asarray(grasp_xyz_world, dtype=np.float64).reshape(3).copy()
+    robot_zmq_set_body_pose(robot, body, target)
+    if verify and not _verify_body_near(robot, body, target, tol_m=0.08):
+        return False
+    lifted = target.copy()
+    lifted[2] += float(lift_m)
+    robot_zmq_set_body_pose(robot, body, lifted)
+    if verify and not _verify_body_near(robot, body, lifted, tol_m=0.08):
+        return False
+    return True

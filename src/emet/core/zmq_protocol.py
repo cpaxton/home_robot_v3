@@ -22,6 +22,49 @@ from typing import Any
 # Published on observation and state dicts so the client can detect Stretch vs rby1, etc.
 EMET_ZMQ_ROBOT_ID_KEY = "emet_robot_id"
 
+# Sim state only: sim seconds produced per wall-clock second. Clients stretch motion wait
+# timeouts by its inverse, since a sim slower than real time needs more wall clock per motion.
+EMET_ZMQ_SIM_TIME_RATIO_KEY = "sim_to_real_ratio"
+# Cap on wall-clock stretch when the sim is extremely slow (avoids multi-hour waits on a hung sim).
+EMET_ZMQ_SIM_WAIT_SCALE_MAX = 10.0
+
+
+def motion_wait_timeout_scale(sim_to_real_ratio: float | None) -> float:
+    """Wall-clock multiplier for motion waits given sim seconds per wall second.
+
+    Missing / non-positive / non-finite ratios return ``1.0`` (hardware and early-sim behavior).
+    Slow sims (ratio < 1) scale waits by ``1/ratio``, clamped to ``EMET_ZMQ_SIM_WAIT_SCALE_MAX``.
+    Fast sims (ratio > 1) do not shrink waits below 1.0 — callers keep their real-robot budgets.
+    """
+    if sim_to_real_ratio is None:
+        return 1.0
+    try:
+        ratio = float(sim_to_real_ratio)
+    except (TypeError, ValueError):
+        return 1.0
+    if not (ratio > 0.0) or ratio != ratio:  # NaN check
+        return 1.0
+    if ratio >= 1.0:
+        return 1.0
+    return min(EMET_ZMQ_SIM_WAIT_SCALE_MAX, 1.0 / ratio)
+
+
+def read_sim_to_real_ratio(msg: dict[str, Any] | None) -> float | None:
+    """Return ``sim_to_real_ratio`` from a state/obs dict, or ``None`` if absent/invalid."""
+    if msg is None:
+        return None
+    raw = msg.get(EMET_ZMQ_SIM_TIME_RATIO_KEY)
+    if raw is None:
+        return None
+    try:
+        ratio = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not (ratio > 0.0) or ratio != ratio:
+        return None
+    return ratio
+
+
 # Frozen per-process metadata on every outbound ZMQ dict (obs / state / servo). See docs/zmq_session_metadata.md.
 EMET_ZMQ_SESSION_KEY = "emet_session"
 EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY = "schema_version"

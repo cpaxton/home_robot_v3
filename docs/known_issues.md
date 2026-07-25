@@ -158,8 +158,9 @@ There are **two distinct segfault modes**. Do not conflate them.
 ### Mode B — Cursor agent / `emet` null-IP SIGSEGV
 
 - Chaining Robocasa dynagraph explore → full pytest (MuJoCo-native tests) → Habitat HM-EQA with VLM in one session can **live-lock** the machine (mouse moves; GUI/SSH dead).
-- Separately: **Cursor agent** dies when a turn runs or probes Habitat / tears down GPU context. Kernel: `emet[…]: segfault at 0` (null IP) or `trap invalid opcode` — agent session dies even if a detached **`emet jobs`** child finished (check `~/runs/emet/` + registry before re-launch).
+- Separately: **Cursor agent** dies when a turn runs or probes Habitat / tears down GPU context. Kernel: `emet[…]: segfault at 0` (null IP) or `trap invalid opcode` in `node` — agent session dies even if a detached **`emet jobs`** child finished (check `~/runs/emet/` + registry before re-launch).
 - Empty `nvidia-smi` does **not** prove EGL/CUDA is healthy.
+- **Recovery log:** append incidents to repo-root [`segfault.md`](../segfault.md) (newest entry at bottom; `tail -n 80 segfault.md`). See [`.cursor/rules/segfault-log.mdc`](../.cursor/rules/segfault-log.mdc).
 
 ### Mitigation
 
@@ -168,4 +169,4 @@ There are **two distinct segfault modes**. Do not conflate them.
 - Safe no-sim pytest: source `gpu_preflight.sh` and pass **`emet_pytest_no_sim_ignore_args`** (excludes unmarked MuJoCo paths under `src/test/simulation/`).
 - Long evals: **`uv run emet jobs run --name … -- CMD`**, **`nohup … &`**, or a dedicated terminal — **not** blocking Cursor agent inline runs.
 
-Docs: [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [cross_track_smoke.md](experiments/cross_track_smoke.md).
+Docs: [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [cross_track_smoke.md](experiments/cross_track_smoke.md), [segfault.md](../segfault.md).

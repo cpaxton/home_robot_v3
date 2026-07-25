@@ -35,5 +35,5 @@ uv run emet jobs cancel JOB_ID   # not raw kill -9 on emet-habitat
 - Never block an agent turn on Habitat/VLM or multi-hour GPU work; use `emet jobs run` / `nohup` and poll `emet jobs` status/logs — do not long-`AwaitShell` on GPU work.
 - Do not run a "quick" Habitat smoke inside a turn to verify EGL, then `kill` it — hard mid-episode kills precede the next `emet` segfault. **Empty `nvidia-smi` ≠ EGL healthy.**
 - HM-EQA H2H scripts self-guard via `EGL_FAIL_ABORT` (default 2) and `NATIVE_CRASH_ABORT` (default 1, writes `native_crash_*.log`). Leave these on; treat empty per-qid jsonl as a crash to retry after the GPU recovers, not a miss.
-- After a crash: `sudo dmesg -T | rg 'segfault|invalid opcode|libcuda'` · `uv run emet eval status` · `uv run emet jobs` · check `~/runs/emet/`, `~/.cache/habitat_eqa/results/`.
+- After a crash: append evidence + recovery checklist to repo-root **`segfault.md`** (`tail -n 80`), then `journalctl -k` / `dmesg` · `uv run emet eval status` · `uv run emet jobs` · check `~/runs/emet/`. See `.cursor/rules/segfault-log.mdc`.
 - Details: `docs/cli.md` (`emet jobs` / `emet eval`), `docs/evaluation.md`, `docs/known_issues.md`, `.cursor/rules/gpu-eval-workflow.mdc`.

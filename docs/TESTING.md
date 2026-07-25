@@ -21,6 +21,7 @@ Use **`uv run emet …`** (or `source .venv/bin/activate` then bare `emet`) from
 | **Simulation smoke battery (7 tracks)** | `./scripts/run_simulation_smoke_battery.sh` — see [simulation_testing_plan.md](simulation_testing_plan.md) |
 | Motion planning (offline) | `uv run emet test src/test/motion/algo/test_rrt.py src/test/motion/test_arm_rrt.py src/test/motion/test_voxel_obstacle_planning.py -q` — see [motion_planning.md](motion_planning.md) |
 | **No-NN sim pick/place** | `EMET_SIM_NAV_TELEPORT=1 uv run python scripts/scripted_sim_pick_place.py --start-sim --sim configs/sim/default_table_rby1.yaml --manip-mode kinematic` — GT+MuJoCo only ([motion_planning.md](motion_planning.md#no-neural-nets-smoke-sim-only)) |
+| **Molmo grasp oracle MP** | `uv run emet test src/test/perception/grasps/ src/test/motion/test_arm_manip_profile.py -q`; optional smoke `scripts/scripted_molmo_grasp_mp.py` ([motion_planning.md](motion_planning.md#molmospaces-grasp-oracle-multi-robot)) |
 | Full suite (sim on by default) | `uv run emet test` |
 | Skip sim (faster CI-style) | `uv run emet test --no-sim` |
 | Verbose | `uv run emet test -v` |

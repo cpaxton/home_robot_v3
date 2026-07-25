@@ -19,12 +19,13 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from emet.motion.arm_rrt import plan_arm_joint_path, resolve_agent_manip_planner
-from emet.motion.mujoco_arm_ik import (
-    RBY1_LEFT_ARM_JOINTS,
-    RBY1_LEFT_EE_BODY,
-    solve_position_ik,
+from emet.motion.arm_manip_profile import (
+    ArmManipProfile,
+    home_arm_q_array,
+    robot_id_from_client,
 )
+from emet.motion.arm_rrt import plan_arm_joint_path, resolve_agent_manip_planner
+from emet.motion.mujoco_arm_ik import solve_position_ik_multiseed
 from emet.motion.voxel_arm_collision import VoxelMapArmCollisionChecker
 from emet.simulation.sim_manipulation import (
     resolve_sim_object_body,
@@ -46,6 +47,26 @@ class KinematicPickPlaceResult:
     message: str
 
 
+def _targets_from_grasp_T(
+    grasp_T_world: np.ndarray,
+    *,
+    pregrasp_standoff_m: float = 0.12,
+    lift_m: float = 0.12,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return (pregrasp_xyz, grasp_xyz, lift_xyz) from a world grasp pose."""
+    T = np.asarray(grasp_T_world, dtype=np.float64).reshape(4, 4)
+    grasp = T[:3, 3].copy()
+    approach = -T[:3, 2]
+    n = float(np.linalg.norm(approach))
+    if n < 1e-9:
+        approach = np.array([0.0, 0.0, 1.0])
+    else:
+        approach = approach / n
+    pregrasp = grasp + approach * float(pregrasp_standoff_m)
+    lift = grasp + np.array([0.0, 0.0, float(lift_m)])
+    return pregrasp, grasp, lift
+
+
 class KinematicPickPlaceExecutor:
     """Navigate (optional) → IK pregrasp/grasp → attach → lift → place → detach."""
 
@@ -54,6 +75,7 @@ class KinematicPickPlaceExecutor:
         robot: Any,
         *,
         arm: str = "left",
+        profile: ArmManipProfile | None = None,
         manip_collision: str = "none",
         manip_planner: str = "rrt_connect",
         voxel_map: Any | None = None,
@@ -62,9 +84,15 @@ class KinematicPickPlaceExecutor:
         lift_m: float = 0.12,
         place_z_offset_m: float = 0.02,
         rrt_max_iter: int = 400,
+        ik_tol_m: float = 0.035,
+        ik_max_iters: int = 150,
+        pregrasp_standoff_m: float = 0.12,
     ) -> None:
         self.robot = robot
         self.arm = str(arm).lower()
+        if profile is None:
+            profile = ArmManipProfile.for_robot(robot_id_from_client(robot), arm=self.arm)
+        self.profile = profile
         self.manip_collision = str(manip_collision).lower()
         self.manip_planner = resolve_agent_manip_planner(config_mode=manip_planner)
         self.voxel_map = voxel_map
@@ -73,21 +101,16 @@ class KinematicPickPlaceExecutor:
         self.lift_m = float(lift_m)
         self.place_z_offset_m = float(place_z_offset_m)
         self.rrt_max_iter = int(rrt_max_iter)
-        if self.arm == "right":
-            from emet.motion.mujoco_arm_ik import RBY1_RIGHT_ARM_JOINTS, RBY1_RIGHT_EE_BODY
-
-            self.arm_joint_names = RBY1_RIGHT_ARM_JOINTS
-            self.ee_body = RBY1_RIGHT_EE_BODY
-            self.link_bodies = [f"right_arm_link{i}" for i in range(3, 7)]
-        else:
-            self.arm_joint_names = RBY1_LEFT_ARM_JOINTS
-            self.ee_body = RBY1_LEFT_EE_BODY
-            self.link_bodies = [f"left_arm_link{i}" for i in range(3, 7)]
-        # Include torso for reach on table / Molmo benches.
-        self.joint_names = tuple(f"torso_joint{i}" for i in range(1, 5)) + tuple(self.arm_joint_names)
+        self.ik_tol_m = float(ik_tol_m)
+        self.ik_max_iters = int(ik_max_iters)
+        self.pregrasp_standoff_m = float(pregrasp_standoff_m)
+        self.ee_body = self.profile.ee_body
+        self.joint_names = self.profile.joint_names
+        self.link_bodies = list(self.profile.link_bodies)
         self._model: mujoco.MjModel | None = None
         self._data: mujoco.MjData | None = None
         self._collision: VoxelMapArmCollisionChecker | None = None
+        self._last_cmd_q: np.ndarray | None = None
 
     def _ensure_model(self) -> bool:
         if self._model is not None:
@@ -95,10 +118,8 @@ class KinematicPickPlaceExecutor:
         spec = getattr(self.robot, "_spec", None) or getattr(self.robot, "get_robot_spec", lambda: None)()
         mjcf = getattr(spec, "mjcf_path", None) if spec is not None else None
         if not mjcf:
-            # Fall back to rby1 asset
-            from emet.robots.rby1 import Rby1Backend
-
-            mjcf = Rby1Backend().get_spec().mjcf_path
+            logger.error("KinematicPickPlace: robot spec missing mjcf_path")
+            return False
         path = Path(str(mjcf))
         if not path.is_file():
             logger.error(f"KinematicPickPlace: MJCF not found: {path}")
@@ -118,14 +139,12 @@ class KinematicPickPlaceExecutor:
         spec = getattr(self.robot, "_spec", None)
         if spec is not None and getattr(spec, "actuator_names", None):
             return list(spec.actuator_names)
-        from emet.robots.galaxea_r1 import R1_ACTUATOR_NAMES
-
-        return list(R1_ACTUATOR_NAMES)
+        return list(self.profile.actuator_names)
 
     def _sync_base_freejoint(self) -> None:
         """Align IK model freejoint with live robot base (world XY/Z + yaw)."""
         assert self._model is not None and self._data is not None
-        jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, "base_freejoint")
+        jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, self.profile.base_freejoint_name)
         if jid < 0:
             return
         qadr = int(self._model.jnt_qposadr[jid])
@@ -223,54 +242,53 @@ class KinematicPickPlaceExecutor:
         self.robot.set_actuator_positions(hold)
 
     def _command_home_posture(self, settle_s: float = 1.5) -> None:
-        """Drive actuators toward MJCF ``home`` keyframe (torso up, arms mid)."""
-        from emet.robots.galaxea_r1 import R1_ACTUATOR_NAMES
-
-        # Matches galaxea_r1.xml key name="home" ctrl vector (26 actuators).
-        home_ctrl = [
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0.5,
-            -0.5,
-            0,
-            0,
-            0,
-            0.04,
-            0.04,
-            0,
-            0.5,
-            -0.5,
-            0,
-            0,
-            0,
-            0.04,
-            0.04,
-        ]
+        """Drive actuators toward profile home ctrl."""
         names = self._actuator_names()
-        cmd = {n: float(home_ctrl[i]) for i, n in enumerate(R1_ACTUATOR_NAMES) if i < len(home_ctrl) and n in names}
+        home_ctrl = self.profile.home_cmd
+        cmd = {
+            n: float(home_ctrl[i])
+            for i, n in enumerate(self.profile.actuator_names)
+            if i < len(home_ctrl) and n in names
+        }
         if cmd:
             self.robot.set_actuator_positions(cmd)
             time.sleep(float(settle_s))
+        self._last_cmd_q = home_arm_q_array(self.profile)
 
     def _plan_and_execute_ee(self, target_xyz_world: np.ndarray) -> tuple[bool, float]:
         assert self._model is not None and self._data is not None
-        self._sync_qpos_from_robot()
         from emet.motion.mujoco_arm_ik import joint_qpos_addrs
 
+        # Base from live robot; arm/torso prefer last commanded IK goal (PD lags after stream).
+        self._sync_base_freejoint()
         qadr = joint_qpos_addrs(self._model, self.joint_names)
-        # If live arms look collapsed (EE far below base), seed mid-range before IK.
+        live_seed: np.ndarray | None = None
+        q_live, _, _ = self.robot.get_joint_state(timeout=2.0)
+        names = self._actuator_names()
+        if q_live is not None and len(q_live) >= len(names):
+            # Build live torso+arm vector in joint_names order for alternate seed.
+            live_map: dict[str, float] = {}
+            for i, aname in enumerate(names):
+                jname = self._actuator_to_joint_name(aname)
+                if jname:
+                    live_map[jname] = float(q_live[i])
+            if all(n in live_map for n in self.joint_names):
+                live_seed = np.array([live_map[n] for n in self.joint_names], dtype=np.float64)
+
+        if self._last_cmd_q is not None and len(self._last_cmd_q) == len(qadr):
+            for a, v in zip(qadr, self._last_cmd_q, strict=True):
+                self._data.qpos[a] = float(v)
+        elif live_seed is not None:
+            for a, v in zip(qadr, live_seed, strict=True):
+                self._data.qpos[a] = float(v)
+        else:
+            self._sync_qpos_from_robot()
+
+        # If arms look collapsed (EE far below base), force midrange via multiseed.
         ee_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, self.ee_body)
         base_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
         if ee_id >= 0 and base_id >= 0:
+            mujoco.mj_forward(self._model, self._data)
             ee_z = float(self._data.body(ee_id).xpos[2])
             base_z = float(self._data.body(base_id).xpos[2])
             if ee_z < base_z - 0.2:
@@ -279,17 +297,25 @@ class KinematicPickPlaceExecutor:
                     if jid >= 0 and self._model.jnt_limited[jid]:
                         lo, hi = float(self._model.jnt_range[jid][0]), float(self._model.jnt_range[jid][1])
                         self._data.qpos[int(self._model.jnt_qposadr[jid])] = 0.5 * (lo + hi)
-                mujoco.mj_forward(self._model, self._data)
 
+        mujoco.mj_forward(self._model, self._data)
         q0 = np.array([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
-        result = solve_position_ik(
+        alt_seeds = [s for s in (live_seed, self._last_cmd_q) if s is not None]
+        # Drop duplicates of current q0
+        seeds = []
+        for s in alt_seeds:
+            if np.linalg.norm(np.asarray(s, dtype=np.float64).reshape(-1) - q0) > 1e-3:
+                seeds.append(s)
+        result = solve_position_ik_multiseed(
             self._model,
             self._data,
             ee_body=self.ee_body,
             joint_names=self.joint_names,
             target_pos=target_xyz_world,
-            tol_m=0.025,
-            max_iters=100,
+            seeds=seeds,
+            try_midrange=True,
+            tol_m=self.ik_tol_m,
+            max_iters=self.ik_max_iters,
         )
         if not result.success:
             return False, result.pos_error_m
@@ -317,6 +343,7 @@ class KinematicPickPlaceExecutor:
         if plan.waypoints:
             self._stream_arm_q(plan.waypoints[-1])
             time.sleep(max(0.25, self.traj_dt * 3))
+        self._last_cmd_q = q1.copy()
         return True, result.pos_error_m
 
     def _placements(self) -> dict[str, dict[str, Any]] | None:
@@ -329,6 +356,7 @@ class KinematicPickPlaceExecutor:
         object_query: str,
         *,
         object_gt_body: str | None = None,
+        grasp_T_world: np.ndarray | None = None,
     ) -> KinematicPickPlaceResult:
         """Pregrasp → grasp → attach → lift (no place)."""
         if not self._ensure_model():
@@ -343,8 +371,14 @@ class KinematicPickPlaceExecutor:
             self._set_gripper(open_=True)
         except Exception:
             pass
-        pregrasp = obj_pos + np.array([0.0, 0.0, 0.15])
-        grasp = obj_pos + np.array([0.0, 0.0, 0.02])
+        if grasp_T_world is not None:
+            pregrasp, grasp, lift = _targets_from_grasp_T(
+                grasp_T_world, pregrasp_standoff_m=self.pregrasp_standoff_m, lift_m=self.lift_m
+            )
+        else:
+            pregrasp = obj_pos + np.array([0.0, 0.0, 0.15])
+            grasp = obj_pos + np.array([0.0, 0.0, 0.02])
+            lift = grasp + np.array([0.0, 0.0, self.lift_m])
         ok, g_err = self._plan_and_execute_ee(pregrasp)
         if not ok:
             return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "pregrasp_ik_failed")
@@ -356,7 +390,6 @@ class KinematicPickPlaceExecutor:
         except Exception:
             pass
         robot_zmq_attach_body(self.robot, body, self.ee_body)
-        lift = grasp + np.array([0.0, 0.0, self.lift_m])
         ok, _ = self._plan_and_execute_ee(lift)
         if not ok:
             robot_zmq_detach_body(self.robot, body)
@@ -410,6 +443,7 @@ class KinematicPickPlaceExecutor:
         receptacle_query: str,
         *,
         object_gt_body: str | None = None,
+        grasp_T_world: np.ndarray | None = None,
     ) -> KinematicPickPlaceResult:
         if not self._ensure_model():
             return KinematicPickPlaceResult(False, None, self.ee_body, None, None, "mjcf_missing")
@@ -433,8 +467,14 @@ class KinematicPickPlaceExecutor:
         except Exception as e:
             logger.debug(f"open_gripper: {e}")
 
-        pregrasp = obj_pos + np.array([0.0, 0.0, 0.15])
-        grasp = obj_pos + np.array([0.0, 0.0, 0.02])
+        if grasp_T_world is not None:
+            pregrasp, grasp, lift = _targets_from_grasp_T(
+                grasp_T_world, pregrasp_standoff_m=self.pregrasp_standoff_m, lift_m=self.lift_m
+            )
+        else:
+            pregrasp = obj_pos + np.array([0.0, 0.0, 0.15])
+            grasp = obj_pos + np.array([0.0, 0.0, 0.02])
+            lift = grasp + np.array([0.0, 0.0, self.lift_m])
         ok, g_err = self._plan_and_execute_ee(pregrasp)
         if not ok:
             return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "pregrasp_ik_failed")
@@ -448,7 +488,6 @@ class KinematicPickPlaceExecutor:
             logger.debug(f"close_gripper: {e}")
 
         robot_zmq_attach_body(self.robot, body, self.ee_body)
-        lift = grasp + np.array([0.0, 0.0, self.lift_m])
         ok, _ = self._plan_and_execute_ee(lift)
         if not ok:
             robot_zmq_detach_body(self.robot, body)
@@ -473,7 +512,6 @@ class KinematicPickPlaceExecutor:
         retreat = place + np.array([0.0, 0.0, 0.15])
         self._plan_and_execute_ee(retreat)
 
-        # Final place error from session GT
         pl2 = self._placements() or pl
         if body in pl2:
             final = np.asarray(pl2[body]["pos"], dtype=np.float64).reshape(3)

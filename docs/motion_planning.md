@@ -133,6 +133,37 @@ EMET_SIM_NAV_TELEPORT=1 uv run python scripts/scripted_sim_pick_place.py --start
 
 Expect `OK: measured object move…` and `displacement_m` ≳ 0.05. Offline planner unit tests (no sim): see [Offline tests](#offline-tests-no-sim--no-gpu) above.
 
+## MolmoSpaces grasp oracle (multi-robot)
+
+Fake grasp predictor over ZMQ using on-disk MolmoSpaces NPZ grasps (`~/.cache/molmospaces/assets/grasps`). Robot-agnostic world-frame poses; execution dispatches by server caps:
+
+| Cap | Executor |
+|-----|----------|
+| `kinematic_manip` | [`KinematicPickPlaceExecutor`](../src/emet/controller/manipulation/kinematic_pick_place.py) + [`ArmManipProfile`](../src/emet/motion/arm_manip_profile.py) (rby1 / galaxea_r1) |
+| `sim_set_body_pose` only | Teleport object to grasp XYZ ([`sim_teleport_to_grasp_pose`](../src/emet/simulation/sim_manipulation.py)) — Stretch etc. |
+
+```bash
+# Unit (no sim)
+uv run emet test src/test/perception/grasps/ src/test/motion/test_arm_manip_profile.py -q
+
+# Oracle process (optional; smoke script spawns it)
+uv run emet grasp-oracle --bind tcp://127.0.0.1:5558
+
+# rby1 kinematic smoke
+EMET_SIM_NAV_TELEPORT=1 MUJOCO_GL=egl \
+  uv run python scripts/scripted_molmo_grasp_mp.py --start-sim \
+  --sim configs/sim/molmospaces_ithor_train_0.yaml \
+  --port-offset 194 --object bowl --cpu-only
+
+# stretch teleport (same oracle)
+EMET_SIM_NAV_TELEPORT=1 MUJOCO_GL=egl \
+  uv run python scripts/scripted_molmo_grasp_mp.py --start-sim \
+  --sim configs/sim/molmospaces_ithor_train_stretch_0.yaml \
+  --port-offset 195 --object bowl --cpu-only
+```
+
+See also [molmospaces.md](molmospaces.md#mobile-manipulation-sim-teleport--kinematic).
+
 ---
 
 ## What we deliberately do not use for agent collision

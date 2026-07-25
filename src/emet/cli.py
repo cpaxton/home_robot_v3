@@ -461,6 +461,38 @@ def serve(
         sys.exit(1)
 
 
+@main.command("grasp-oracle", short_help="Fake MolmoSpaces grasp predictor (ZMQ REP)")
+@click.option(
+    "--bind",
+    default="tcp://127.0.0.1:5558",
+    show_default=True,
+    help="ZMQ REP bind address for grasp predict requests.",
+)
+@click.option(
+    "--grasps-dir",
+    type=click.Path(path_type=Path, file_okay=False),
+    default=None,
+    help="MolmoSpaces grasps root (default: $MLSPACES_ASSETS_DIR/grasps).",
+)
+@click.option(
+    "--tcp-frame",
+    default="droid",
+    show_default=True,
+    type=click.Choice(["droid", "rum"]),
+    help="Gripper TCP frame correction applied to object-local grasps.",
+)
+def grasp_oracle_cmd(bind: str, grasps_dir: Path | None, tcp_frame: str) -> None:
+    """Serve MolmoSpaces NPZ grasps over ZMQ (robot-agnostic fake grasp predictor).
+
+    Example::
+
+      emet grasp-oracle --bind tcp://127.0.0.1:5558
+    """
+    from emet.perception.grasps.zmq_server import serve_grasp_oracle
+
+    serve_grasp_oracle(bind=bind, grasps_dir=grasps_dir, tcp_frame=tcp_frame)
+
+
 @main.group("robocasa", short_help="Robocasa simulation helpers (requires sim extra)")
 def robocasa_cmd() -> None:
     """List Robocasa environments or run the server. Requires: emet install sim, then uv sync."""
@@ -1014,6 +1046,7 @@ def jobs_cancel(job_id: str, grace_sec: float, as_json: bool) -> None:
         click.echo(f"cancelled {job.id}")
         click.echo(format_job_detail(job))
 
+
 @jobs_group.command("logs", short_help="Tail a job log (log_path or out_dir/*.log)")
 @click.argument("job_id")
 @click.option("--tail", "n_tail", type=int, default=40, show_default=True)
@@ -1196,7 +1229,7 @@ def jobs_run(
     wrapper = out / "job_wrapper.sh"
     wait_lines = ""
     for wpid in wait_pid:
-        wait_lines += f'while kill -0 {int(wpid)} 2>/dev/null; do sleep 15; done\n'
+        wait_lines += f"while kill -0 {int(wpid)} 2>/dev/null; do sleep 15; done\n"
     need_block = ""
     if need_mib is not None:
         need_block = (
@@ -2183,9 +2216,7 @@ def test(
         # Prepend project src; drop ROS site-packages so ament-* pytest plugins
         # (auto-loaded via PYTHONPATH) do not break src/test/habitat collection.
         prev_parts = [
-            p
-            for p in env.get("PYTHONPATH", "").split(os.pathsep)
-            if p and "/opt/ros/" not in p.replace("\\", "/")
+            p for p in env.get("PYTHONPATH", "").split(os.pathsep) if p and "/opt/ros/" not in p.replace("\\", "/")
         ]
         env["PYTHONPATH"] = os.pathsep.join([str(src), *prev_parts])
 

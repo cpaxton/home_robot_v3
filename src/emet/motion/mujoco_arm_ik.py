@@ -52,6 +52,40 @@ def joint_dof_addrs(model: mujoco.MjModel, joint_names: list[str] | tuple[str, .
     return addrs
 
 
+def _apply_joint_seed(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    joint_names: list[str] | tuple[str, ...],
+    seed_q: np.ndarray | list[float] | None,
+    *,
+    mode: str = "values",
+) -> None:
+    """Write a seed into ``data.qpos`` for ``joint_names``.
+
+    ``mode``:
+      - ``values``: use ``seed_q`` (len == joints)
+      - ``midrange``: midpoint of each limited joint range
+      - ``keep``: leave current qpos for these joints unchanged
+    """
+    qadr = joint_qpos_addrs(model, joint_names)
+    if mode == "keep":
+        return
+    if mode == "midrange":
+        for i, name in enumerate(joint_names):
+            jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(name))
+            if jid >= 0 and model.jnt_limited[jid]:
+                lo, hi = float(model.jnt_range[jid][0]), float(model.jnt_range[jid][1])
+                data.qpos[qadr[i]] = 0.5 * (lo + hi)
+        return
+    if seed_q is None:
+        return
+    qq = np.asarray(seed_q, dtype=np.float64).reshape(-1)
+    if len(qq) != len(qadr):
+        raise ValueError(f"seed_q length {len(qq)} != joints {len(qadr)}")
+    for i, a in enumerate(qadr):
+        data.qpos[a] = float(qq[i])
+
+
 def solve_position_ik(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -105,6 +139,73 @@ def solve_position_ik(
     cur = np.asarray(data.body(body_id).xpos, dtype=np.float64).reshape(3)
     err = float(np.linalg.norm(target - cur))
     return MujocoArmIkResult(err <= float(tol_m), data.qpos.copy(), err, it + 1)
+
+
+def solve_position_ik_multiseed(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    ee_body: str,
+    joint_names: list[str] | tuple[str, ...],
+    target_pos: np.ndarray | list[float],
+    seeds: list[np.ndarray | list[float] | None] | None = None,
+    try_midrange: bool = True,
+    max_iters: int = 120,
+    tol_m: float = 0.025,
+    damping: float = 1e-2,
+    step: float = 0.5,
+) -> MujocoArmIkResult:
+    """Try several joint seeds; keep the best successful (or lowest-error) solution.
+
+    Always restores non-controlled qpos from the caller's pre-call state. Controlled
+    joints are left at the best IK solution when returning.
+    """
+    qadr = joint_qpos_addrs(model, joint_names)
+    qpos0 = data.qpos.copy()
+    seed_list: list[tuple[str, np.ndarray | list[float] | None]] = []
+    # Current configuration first (caller usually synced / last-commanded).
+    seed_list.append(("current", np.array([float(data.qpos[a]) for a in qadr], dtype=np.float64)))
+    if seeds:
+        for i, s in enumerate(seeds):
+            if s is None:
+                continue
+            seed_list.append((f"seed{i}", s))
+    if try_midrange:
+        seed_list.append(("midrange", None))
+
+    best: MujocoArmIkResult | None = None
+    best_qpos = qpos0
+    for label, seed in seed_list:
+        data.qpos[:] = qpos0
+        if label == "midrange":
+            _apply_joint_seed(model, data, joint_names, None, mode="midrange")
+        elif label != "current":
+            _apply_joint_seed(model, data, joint_names, seed, mode="values")
+        # label == current: already restored qpos0
+        mujoco.mj_forward(model, data)
+        result = solve_position_ik(
+            model,
+            data,
+            ee_body=ee_body,
+            joint_names=joint_names,
+            target_pos=target_pos,
+            max_iters=max_iters,
+            tol_m=tol_m,
+            damping=damping,
+            step=step,
+        )
+        if best is None or result.pos_error_m < best.pos_error_m:
+            best = result
+            best_qpos = data.qpos.copy()
+        if result.success:
+            data.qpos[:] = best_qpos
+            mujoco.mj_forward(model, data)
+            return MujocoArmIkResult(True, best_qpos, result.pos_error_m, result.iterations)
+
+    assert best is not None
+    data.qpos[:] = best_qpos
+    mujoco.mj_forward(model, data)
+    return MujocoArmIkResult(False, best_qpos, best.pos_error_m, best.iterations)
 
 
 def plan_cartesian_ik_path(

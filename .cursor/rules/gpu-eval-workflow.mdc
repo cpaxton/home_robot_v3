@@ -53,14 +53,14 @@ That sequence caused full-system freezes on an RTX 4090 workstation (GUI + SSH u
 **"Cursor keeps crashing" here is usually not a busy GPU.** Two distinct modes (see [`docs/known_issues.md`](../../docs/known_issues.md)):
 
 - **Mode A — episode `libcuda` SIGSEGV (`exit=139`):** `emet-habitat run-episode` dies during Qwen3-VL vision generate while Habitat-Sim EGL shares the GPU. Orchestrator logs `FAIL … exit=139` / `dumped core`; kernel shows `python[…]: segfault … in libcuda.so`. The per-qid jsonl is **empty** — that is a crash, not a scored miss. Hot scenes: q104/q105 (`yogvKWUrdnw`), flaky q68.
-- **Mode B — agent / `emet` null-IP SIGSEGV:** the Cursor agent process itself dies (`emet[…]: segfault at 0`, or `trap invalid opcode`) when a turn runs or probes Habitat / tears down a GPU context. A detached `emet jobs` / `nohup` child often keeps running.
+- **Mode B — agent / `emet` null-IP SIGSEGV:** the Cursor agent process itself dies (`emet[…]: segfault at 0`, or `trap invalid opcode` in `node`) when a turn runs or probes Habitat / tears down a GPU context. A detached `emet jobs` / `nohup` child often keeps running.
 
 Rules:
 
 - Launch Habitat / HM-EQA / overnight scripts **only** via **`uv run emet jobs run --name … -- CMD`**, **`nohup … &`**, or a dedicated terminal — never as blocking inline agent shell commands that load Habitat or tear down GPU contexts.
 - Do **not** run "quick" Habitat smoke episodes inside the agent turn to "verify EGL", then `kill` them — hard mid-episode kills precede the next `emet` segfault.
 - H2H scripts abort after consecutive EGL failures (`EGL_FAIL_ABORT`, default 2) and after a fatal native signal (`NATIVE_CRASH_ABORT`, default 1, writes `native_crash_*.log`) instead of burning the full failset.
-- After a crash: `sudo dmesg -T | rg 'segfault|invalid opcode|libcuda'` · `uv run emet eval status` · `uv run emet jobs` · check **`~/runs/emet/`**, **`~/.cache/habitat_eqa/results/`**, **`/tmp/unified_smoke_*.log`** — the detached job may still be running or only half-started.
+- After a crash: append evidence + recovery checklist to repo-root [`segfault.md`](../../segfault.md) (see [segfault-log](segfault-log.mdc)), then `journalctl -k` / `dmesg` · `uv run emet eval status` · `uv run emet jobs` · check **`~/runs/emet/`**, **`~/.cache/habitat_eqa/results/`**, **`/tmp/unified_smoke_*.log`** — the detached job may still be running or only half-started.
 - Tier 0 + tracks 1–3 PR smoke: see [`docs/experiments/cross_track_smoke.md`](../../docs/experiments/cross_track_smoke.md).
 
 ## Cross-track smoke entrypoint
