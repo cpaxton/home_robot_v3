@@ -67,9 +67,48 @@ That sequence caused full-system freezes on an RTX 4090 workstation (GUI + SSH u
 | `run_overnight_eval_smoke.sh` | separate night | HM-EQA + OVMM + SQA3D matrix |
 | `run_overnight_habitat_eval.sh` | `--resume` | Multi-phase HM-EQA subsets |
 
+## Record before risky behaviors (especially sim / GPU)
+
+The Cursor agent process frequently dies mid-turn (V8 / Node `invalid opcode`, or `emet` null-IP SIGSEGV after Habitat/VLM teardown). **Assume the session will die.** Before any risky action, leave enough state that a cold session can recover from only:
+
+```bash
+tail -n 12 ~/runs/emet/STATUS.log
+ls -l ~/runs/emet/latest
+# plus, for investigations: segfault.md (or the active experiment note)
+```
+
+**Risky behaviors that require a record first:**
+
+- Launching or resuming Habitat / HM-EQA / OVMM / SQA3D / overnight batteries
+- Any MuJoCo / Robocasa / MolmoSpaces serve or dynagraph explore that loads the GPU
+- Loading a VLM (Qwen3-VL, etc.) or running a Habitat smoke “just to check EGL”
+- `emet eval kill-stale`, `emet jobs cancel`, hard affinity / `taskset` experiments
+- BIOS / CPU / driver recovery steps after a native crash
+
+**What to record (minimum):**
+
+1. Job id + OUT path + git commit
+2. Exact launch / resume command (copy-pasteable, including env flags)
+3. Progress (units done / total, current arm + qid)
+4. What **not** to do next (`kill-stale` while job alive, hard-kill Habitat, double-launch)
+
+**How:**
+
+- Prefer orchestrators that source [`scripts/status_log.sh`](../../scripts/status_log.sh) (`status_open` / `status_note` / `status_close`) so every state change ends in a **`next:`** line.
+- For crash investigations, keep a durable note (e.g. repo-root `segfault.md`) with the same fields plus diagnosis. Update it **before** the next risky step, not after.
+- Add `status_open` / `status_note` / `status_close` to any new long-running eval script. See [`docs/evaluation.md`](../../docs/evaluation.md#first-command-after-an-agent-death-tail-runsemetstatuslog).
+
 ## Cursor agent sessions (crashes)
 
-**Root cause of “Cursor agent keeps crashing” here is usually not a busy GPU.** Kernel logs show `emet[…]: segfault at 0` (null IP) or `trap invalid opcode` after Habitat-Sim / VLM / EGL teardown. That fault kills the agent tool host even when `nvidia-smi` only lists Xorg.
+**Root cause of “Cursor agent keeps crashing” here is usually not a busy GPU.** Kernel logs show `emet[…]: segfault at 0` (null IP) or `trap invalid opcode` after Habitat-Sim / VLM / EGL teardown. Also seen: V8 `Illegal instruction` in the Cursor `agent`/`node` binary itself. That fault kills the agent tool host even when `nvidia-smi` only lists Xorg.
+
+**First command when a session comes back after a crash:**
+
+```bash
+tail -n 12 ~/runs/emet/STATUS.log # state + literal next command
+ls -l ~/runs/emet/latest # newest run's OUT dir
+uv run emet jobs         # detached job may still be alive
+```
 
 Rules:
 

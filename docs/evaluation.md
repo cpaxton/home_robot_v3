@@ -161,6 +161,36 @@ Also sets `PYTORCH_CUDA_ALLOC_CONF` / `PYTORCH_ALLOC_CONF` to `expandable_segmen
 
 Long Habitat evals and overnight orchestrators should run via **`uv run emet jobs run --name … -- CMD`** (or a dedicated terminal), not as blocking inline Cursor agent commands and not as unmanaged bare `nohup` when avoidable. Monitor with **`emet jobs`** / **`emet jobs status`** (progress + ETA from meta / `OUT/progress.json`). Native GPU teardown (Habitat-Sim, VLM unload) can crash the agent process while eval subprocesses finish — check `~/runs/emet/`, `~/.cache/habitat_eqa/results/`, and per-step logs before re-running. See [cross_track_smoke.md](experiments/cross_track_smoke.md#cursor--long-agent-sessions) and [cli.md](cli.md#emet-jobs-queued--running-eval-experiments).
 
+### First command after an agent death: `tail ~/runs/emet/STATUS.log`
+
+```bash
+tail -n 12 ~/runs/emet/STATUS.log   # what happened + the literal next command
+ls -l ~/runs/emet/latest            # symlink to the newest run's OUT dir
+```
+
+Orchestrators that source [`scripts/status_log.sh`](../scripts/status_log.sh) append one self-contained record per state change (`START`, `RUNNING`, `OK`, `FAIL`, `CRASH`, `EGL`, `EXIT`, `DONE`, `BLOCKED`), mirrored to `OUT/STATUS.log`. Each record ends with a **`next:`** line, so the tail is the recovery instruction — no run-dir archaeology and no reconstructing flags from shell history:
+
+```text
+=== 2026-07-25T10:39:37-04:00  hmeqa-bal32-rerun  CRASH  5/64 classic q14
+    out:  /home/cpaxton/runs/emet/hmeqa_agentic_bal32_20260725_101519
+    job:  20260725_101522_3b3b11  (uv run emet jobs status 20260725_101522_3b3b11)
+    what: SIGSEGV in classic q14 — batch aborted at 5/64 units
+    next: 1) read …/native_crash_classic_q14.log  2) sudo dmesg -T | rg -i 'segfault|invalid opcode'  3) uv run emet eval diagnose  4) only then resume: uv run emet jobs run …
+```
+
+An `EXIT` record is written by a bash `EXIT` trap when the orchestrator dies without a final state (SIGKILL, driver hang, unhandled error); it carries the run's `STATUS_RESUME_CMD`. `DONE`/`CRASH`/`EGL`/`BLOCKED` disarm the trap. To add this to another orchestrator:
+
+```bash
+source "$ROOT/scripts/status_log.sh"
+status_open "$OUT" my-eval
+STATUS_RESUME_CMD="RESUME=1 ./scripts/my_eval.sh $OUT"
+STATUS_PROGRESS="3/40 phase-2"
+status_note RUNNING "phase 2 started" "nothing — wait"
+status_close DONE "all units finished" "review $OUT/summary.txt"
+```
+
+Override the shared path with `EMET_STATUS_LOG` (see [environment_variables.md](environment_variables.md#large-paper-eval-orchestrator)).
+
 ## Simulation smoke battery (seven tracks)
 
 Paper-facing sequential validation: Habitat EQA → Habitat OVMM → Robocasa search → Molmo iTHOR search → SQA3D → Robocasa world-change → Molmo explore-loop. **Run before multi-day sweeps** when changing eval harnesses or sim wiring.

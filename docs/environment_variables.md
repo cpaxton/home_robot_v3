@@ -99,6 +99,7 @@ Used by `scripts/run_large_paper_eval.sh` and `scripts/run_sqa3d_sharded_sweep.s
 | `SKIP_DYNAMIC_EXPLORE` | `run_large_paper_eval.sh` | Set `1` to skip dynamic exploration matrix. |
 | `OVMM_CPU_ONLY` | `run_large_paper_eval.sh` | Set `1` for `--cpu-only` OVMM (overlap with SQA3D on GPU in another terminal). |
 | `DYNAMIC_EXPLORE_CPU_ONLY` | `run_large_paper_eval.sh` | Set `1` for `--cpu-only` dynamic exploration runs. |
+| `EMET_STATUS_LOG` | `scripts/status_log.sh` (sourced by orchestrators) | Shared tail-able status log. Default `~/runs/emet/STATUS.log`; the `latest` symlink is created next to it. Each run also writes `OUT/STATUS.log`. See [evaluation.md](evaluation.md#first-command-after-an-agent-death-tail-runsemetstatuslog). |
 
 ## ZMQ and simulation (general)
 

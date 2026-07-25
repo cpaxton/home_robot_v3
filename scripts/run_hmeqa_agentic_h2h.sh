@@ -22,9 +22,14 @@
 #                          (0 = never). Pattern: WindowlessContext / unable to find CUDA device.
 #   NATIVE_CRASH_ABORT=1   stop after a fatal native signal (default: 1). Writes
 #                          native_crash_*.log and leaves prior episode artifacts intact.
+#
+# Recovery after an agent/session death (no run-dir archaeology needed):
+#   tail -n 12 ~/runs/emet/STATUS.log
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+# shellcheck source=scripts/status_log.sh
+source "$ROOT/scripts/status_log.sh"
 OUT="${1:-$HOME/runs/emet/hmeqa_agentic_h2h_$(date +%Y%m%d_%H%M%S)}"
 mkdir -p "$OUT/figures" "$OUT/bundles"
 EMET_HABITAT="${EMET_HABITAT:-$ROOT/.venv-habitat/bin/emet-habitat}"
@@ -38,6 +43,11 @@ SKIP_GPU_WAIT="${SKIP_GPU_WAIT:-0}"
 EGL_FAIL_ABORT="${EGL_FAIL_ABORT:-2}"
 NATIVE_CRASH_ABORT="${NATIVE_CRASH_ABORT:-1}"
 log() { echo "[$(date -Iseconds)] $*" | tee -a "$OUT/orchestrator.log"; }
+
+status_open "$OUT" "hmeqa-h2h"
+STATUS_RESUME_CMD="uv run emet jobs run --name hmeqa-h2h-resume --need-mib 12000 -- \
+env EMET_ALLOW_SDPA_ATTN=1 RESUME=1 ARMS=$ARMS HOLDOUT_IDS=$HOLDOUT_IDS \
+./scripts/run_hmeqa_agentic_h2h.sh $OUT"
 
 _egl_fail_streak=0
 arm_log_has_egl_failure() {
@@ -212,6 +222,8 @@ print(row.get('debug_bundle_dir') or '')
 
 if [[ ! -x "$EMET_HABITAT" ]]; then
   log "Missing emet-habitat at $EMET_HABITAT"
+  status_close BLOCKED "no emet-habitat at $EMET_HABITAT" \
+    "install the Habitat venv: ./scripts/install_habitat.sh"
   exit 1
 fi
 
@@ -219,6 +231,8 @@ fi
 if ! uv run python -c "from emet.llms.attn_impl import flash_attn_2_available; raise SystemExit(0 if flash_attn_2_available() else 1)"; then
   if [[ "${EMET_ALLOW_SDPA_ATTN:-}" != "1" ]]; then
     log "Flash-Attn 2 not installed. Set EMET_ALLOW_SDPA_ATTN=1 to run on SDPA, or wait for flash-attn install."
+    status_close BLOCKED "flash-attn 2 missing and EMET_ALLOW_SDPA_ATTN unset" \
+      "re-launch with EMET_ALLOW_SDPA_ATTN=1, or install flash-attn first"
     exit 2
   fi
   log "WARNING: running with EMET_ALLOW_SDPA_ATTN=1 (no flash-attn)"
@@ -232,6 +246,10 @@ if [[ "$RESUME" == "1" ]]; then
   log "RESUME: restored aggregates; already done $PROGRESS_DONE/$PROGRESS_TOTAL units"
 fi
 jobs_heartbeat "init" "-" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
+STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL init"
+status_note START \
+  "arms=$ARMS ids=$HOLDOUT_IDS head=$(git rev-parse --short HEAD) resume=$RESUME" \
+  "nothing — wait for the job. Progress: uv run emet jobs; log: tail -n 12 ~/runs/emet/STATUS.log"
 gpu_wait
 if [[ "$SKIP_KILL_STALE" == "1" ]]; then
   log "SKIP_KILL_STALE=1 — not running gpu_preflight --kill-stale"
@@ -268,6 +286,9 @@ run_arm() {
     tag="h2h_${name}_q$(printf '%04d' "$qid")"
     log "----- $name q$qid (bundle tag=$tag) -----"
     jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
+    STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL $name q$qid"
+    status_note RUNNING "episode $name q$qid started (timeout ${TIMEOUT}s)" \
+      "nothing — episode in flight (~4 min each). Re-check: tail -n 12 ~/runs/emet/STATUS.log"
     set +e
     # shellcheck disable=SC2086
     env PYTHONFAULTHANDLER=1 "$@" timeout "$TIMEOUT" "$EMET_HABITAT" run-episode \
@@ -288,6 +309,9 @@ run_arm() {
         if [[ "$NATIVE_CRASH_ABORT" != "0" ]]; then
           log "ABORT: $signal_name in episode process. Do not retry in this batch; inspect the crash capsule and use emet jobs status/logs after driver recovery."
           jobs_heartbeat "native-crash" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
+          status_close CRASH \
+            "$signal_name in $name q$qid — batch aborted at $PROGRESS_DONE/$PROGRESS_TOTAL units" \
+            "1) read $OUT/native_crash_${name}_q${qid}.log  2) sudo dmesg -T | rg -i 'segfault|invalid opcode'  3) uv run emet eval diagnose  4) only then resume: $STATUS_RESUME_CMD"
           exit "$rc"
         fi
       fi
@@ -296,11 +320,16 @@ run_arm() {
         log "EGL/CUDA-map failure streak=${_egl_fail_streak} (abort after ${EGL_FAIL_ABORT}; empty nvidia-smi ≠ EGL OK)"
         if [[ "${EGL_FAIL_ABORT}" =~ ^[0-9]+$ && "${EGL_FAIL_ABORT}" -gt 0 && "${_egl_fail_streak}" -ge "${EGL_FAIL_ABORT}" ]]; then
           log "ABORT: Habitat EGL broken (WindowlessContext / unable to find CUDA device). Fix driver/EGL or reboot; do not keep retrying in Cursor."
+          status_close EGL \
+            "Habitat EGL broken (streak=${_egl_fail_streak}) — batch aborted at $PROGRESS_DONE/$PROGRESS_TOTAL units" \
+            "uv run emet eval diagnose; empty nvidia-smi is NOT proof EGL works — reboot or settle the driver, then resume: $STATUS_RESUME_CMD"
           exit 3
         fi
       else
         _egl_fail_streak=0
       fi
+      status_note FAIL "episode $name q$qid exit=$rc (non-fatal, continuing)" \
+        "nothing yet — batch continues. Review later: tail -n 40 $OUT/${name}.log"
     else
       _egl_fail_streak=0
     fi
@@ -311,6 +340,9 @@ run_arm() {
     snapshot_bundle "$name" "$qid" "$ep"
     PROGRESS_DONE=$((PROGRESS_DONE + 1))
     jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
+    STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL $name q$qid"
+    status_note OK "episode $name q$qid finished" \
+      "nothing — job alive and advancing"
   done
   rebuild_arm_jsonl "$name"
   log "DONE arm=$name"
@@ -360,3 +392,6 @@ if [[ -n "${EMET_JOB_ID:-}" ]]; then
 fi
 echo DONE > "$OUT/DONE"
 log "All done → $OUT"
+STATUS_PROGRESS="$PROGRESS_TOTAL/$PROGRESS_TOTAL done"
+status_close DONE "all $PROGRESS_TOTAL units finished; summary + figures written" \
+  "review $OUT/orchestrator.log and $OUT/figures/, then uv run python scripts/hmeqa_significance.py $OUT"
