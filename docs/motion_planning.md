@@ -133,6 +133,22 @@ EMET_SIM_NAV_TELEPORT=1 uv run python scripts/scripted_sim_pick_place.py --start
 
 Expect `OK: measured object move…` and `displacement_m` ≳ 0.05. Offline planner unit tests (no sim): see [Offline tests](#offline-tests-no-sim--no-gpu) above.
 
+## Agent tool stub (no LLM)
+
+CI-safe proof that the CHAT agent tool path drives manip / kinematic MP **without** loading an LLM or VLM. Inject a canned `tool_calls` list through [`_dispatch_tool_calls`](../src/emet/agent/loop.py) (e.g. `find_objects` then `pick_place` → `find` / `pickup`+`place`). Test: [`src/test/agent/test_agent_manip_tool_sequence.py`](../src/test/agent/test_agent_manip_tool_sequence.py).
+
+```bash
+uv run emet test src/test/agent/test_agent_manip_tool_sequence.py -q
+```
+
+Manual no-LLM letter path (put both args on the same line so the loop does not call `input()`):
+
+```bash
+emet run agent --no-llm -c "M bowl table"
+```
+
+Scripted MuJoCo smokes above still bypass the agent loop; use the stub test for agent↔MP wiring, and the scripts for behavior under sim.
+
 ## Task search (no-NN TAMP)
 
 Deterministic beam-style search over `approach → grasp → place` (no Qwen / chat agent). Grasp candidates are ranked by offline position IK before execution. Paper figures (PNG + PDF) are written under `~/runs/emet/tamp_pick_place/<stamp>/` by default.

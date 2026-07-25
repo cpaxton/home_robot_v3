@@ -92,6 +92,7 @@ repos:
             src/test/motion/test_(arm_manip_profile|arm_rrt|kinematic_tamp_helpers|rby1_mujoco_arm_ik|voxel_obstacle_planning)\.py|
             src/test/perception/grasps/.*\.py|
             src/test/controller/task/.*\.py|
+            src/test/agent/test_agent_manip_tool_sequence\.py|
             src/test/visualization/test_manip_figures\.py
           )
       - id: insert-license
@@ -121,6 +122,7 @@ repos:
             src/test/motion/test_(arm_manip_profile|arm_rrt|kinematic_tamp_helpers|rby1_mujoco_arm_ik|voxel_obstacle_planning)\.py|
             src/test/perception/grasps/.*\.py|
             src/test/controller/task/.*\.py|
+            src/test/agent/test_agent_manip_tool_sequence\.py|
             src/test/visualization/test_manip_figures\.py|
             src/test/agent/test_dynagraph_import_cycle\.py|
             src/test/utils/test_observation_zmq_camera_layout\.py|
