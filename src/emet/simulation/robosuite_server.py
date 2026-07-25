@@ -39,6 +39,7 @@ from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
     EMET_ZMQ_SESSION_KEY,
     EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
+    EMET_ZMQ_SIM_TIME_RATIO_KEY,
 )
 from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn, scene_base_spawn
@@ -157,6 +158,9 @@ class RobosuiteZmqServer(BaseZmqServer):
             str(scene_disk_path).strip() if scene_disk_path and str(scene_disk_path).strip() else None
         )
         self._physics_steps_executed = 0
+        from emet.simulation.stretch_mujoco.utils import FpsCounter
+
+        self._physics_fps_counter = FpsCounter()
         # body_name -> {ee_body, offset_local (3,)} for kinematic pick/place attach.
         self._kinematic_attachments: dict[str, dict[str, Any]] = {}
         # After MolmoSpaces autoplace, ``qpos0`` holds the chosen free-joint pose; see
@@ -783,6 +787,7 @@ class RobosuiteZmqServer(BaseZmqServer):
     def _mj_step_once(self) -> None:
         """One MuJoCo step then snap kinematic attachments (if any)."""
         mujoco.mj_step(self._mjmodel, self._mjdata)
+        self._physics_fps_counter.tick(sim_time=float(self._mjdata.time))
         self._snap_kinematic_attachments()
 
     def _hold_stationary_base_if_idle(self) -> None:
@@ -935,6 +940,9 @@ class RobosuiteZmqServer(BaseZmqServer):
             env = {"kind": "robocasa"}
         else:
             env = {"kind": "default_table"}
+        robot_name = str(getattr(self._spec, "name", "") or "").lower()
+        # Only robots with an ArmManipProfile (rby1 / galaxea_r1) support kinematic pick/place.
+        kinematic_ok = robot_name in ("rby1", "galaxea_r1")
         caps: dict[str, Any] = {
             "teleport_base": self._teleport_base_supported(),
             "nav_velocity_drive": True,
@@ -943,7 +951,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "dof": int(self._spec.dof),
             "sim_set_body_pose": True,
             "sim_set_joint_qpos": True,
-            "kinematic_manip": True,
+            "kinematic_manip": kinematic_ok,
         }
         session: dict[str, Any] = {
             EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY: CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
@@ -2227,6 +2235,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "is_runstopped": False,
             "is_simulation": True,
             "step": self._last_step,
+            EMET_ZMQ_SIM_TIME_RATIO_KEY: self._physics_fps_counter.sim_to_real_ratio,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
         }
         return self._attach_emet_session(message)

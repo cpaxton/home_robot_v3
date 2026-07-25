@@ -67,7 +67,60 @@ the tree.
    safety bound, not the normal completion mechanism.~~ Base `x_vel`/`theta_vel` now fill joint
    velocity slots; nav wait exits on `at_goal` + idle.
 5. ~~Add focused unit tests for absent, `None`, normal, slow, malformed, and clamped ratios.~~
-6. Run focused non-GPU tests (`uv run emet test src/test/core/test_zmq_protocol.py`). MuJoCo behavior
-   smoke outside the agent process if needed.
+6. ~~Run focused non-GPU tests (`uv run emet test src/test/core/test_zmq_protocol.py`).~~
+   Re-verified 2026-07-25 11:43 with the broader TAMP unit set (exit 0).
 7. Review all staged/unstaged files before honoring the pending request to commit and push the current
    feature branch. Never push `main`.
+
+## 2026-07-25 ~11:42 EDT — agent segfault mid TAMP docs/tests
+
+### Evidence
+
+- Terminal / Cursor UI: `Segmentation fault (core dumped)` while the agent was mid “Run Everything”
+  on branch `feature/molmospaces-rby1-agent-manip` (PR #83 context in UI).
+- Kernel (`journalctl` / `dmesg` for 11:20–11:50): **no** new `segfault` / `invalid opcode` /
+  `libcuda` lines. Matches Mode B (agent/runtime), not Mode A episode crash — same family as the
+  10:30 `node` invalid-opcode incident; this turn left no fresh kernel trap line.
+- `/tmp/tamp_unit.log` from the crashed turn: pytest reached `[100%]` (dots only; summary truncated).
+- Post-recovery: GPU **23731 MiB free / 24564**; compute apps none.
+- `emet jobs`: `20260725_114158_32d3a0` **waiting** (`hmeqa-bal32-aff`) — unrelated; do not kill
+  unless intentional.
+
+### Work in flight at crash (tree intact — do not discard)
+
+Uncommitted TAMP / manip stack (still present):
+
+| Path | Role |
+|------|------|
+| `src/emet/controller/task/tamp/` | beam-style `approach → grasp → place` search |
+| `scripts/scripted_tamp_pick_place.py` | table+rby1 kinematic smoke + figures |
+| `src/emet/visualization/manip_figures.py` | paper PNG/PDF figures |
+| `src/test/controller/task/`, `src/test/visualization/test_manip_figures.py` | unit tests |
+| `docs/motion_planning.md` | “Task search (no-NN TAMP)” section |
+| manip/sim/rerun/profile edits | kinematic pick-place, arm profile, sim manip, Rerun |
+
+`docs/cli.md` habitat row is already on the branch (not dirty). Prior ZMQ `sim_to_real_ratio`
+wait-scaling work is in-tree and covered by `src/test/core/test_zmq_protocol.py`.
+
+### Verified after recovery
+
+```bash
+uv run emet test \
+  src/test/controller/task/test_task_search.py \
+  src/test/visualization/test_manip_figures.py \
+  src/test/motion/test_arm_manip_profile.py \
+  src/test/simulation/test_sim_manipulation.py \
+  src/test/core/test_zmq_protocol.py -q
+# exit 0 — 20 dots
+```
+
+### NEXT — recovery checklist
+
+1. ~~Re-run focused unit tests (above).~~ Done, exit 0.
+2. Do **not** re-probe MuJoCo EGL / Habitat inline in this agent turn.
+3. Optional behavior smoke (dedicated terminal / `emet jobs`, not agent-inline):
+   `EMET_SIM_NAV_TELEPORT=1 MUJOCO_GL=egl uv run python scripts/scripted_tamp_pick_place.py …`
+   only when the user wants sim proof.
+4. When the user asks: review full dirty tree, commit on **this feature branch only**, push
+   `feature/molmospaces-rby1-agent-manip` — never `main`.
+5. Leave waiting `hmeqa-bal32-aff` alone unless the user wants it cancelled.

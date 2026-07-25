@@ -1280,11 +1280,7 @@ class RerunVisualizer:
             else:
                 self.clear_identity("world/dynagraph/gallery")
             return
-        obj_nodes = [
-            n
-            for n in nodes
-            if not getattr(n, "is_viewpoint", False) and not getattr(n, "is_frontier", False)
-        ]
+        obj_nodes = [n for n in nodes if not getattr(n, "is_viewpoint", False) and not getattr(n, "is_frontier", False)]
         fr_nodes = [n for n in nodes if getattr(n, "is_frontier", False)]
         vp_nodes = [n for n in nodes if getattr(n, "is_viewpoint", False)]
         if obj_nodes:
@@ -1747,6 +1743,34 @@ class RerunVisualizer:
         """
         Log robot mesh transforms using urdf visualizer"""
         self.urdf_logger.log_transforms(obs)
+
+    def log_manip_ee_path(self, xyz: list | np.ndarray, *, entity: str = "world/manip/ee_path") -> None:
+        """Log a planned / executed EE polyline in the world frame (optional live debug)."""
+        pts = np.asarray(xyz, dtype=np.float64).reshape(-1, 3)
+        if pts.size == 0:
+            return
+        if not self._memory_view:
+            rr.set_time_seconds("realtime", time.time())
+        rr.log(entity, rr.LineStrips3D([pts], radii=0.008, colors=[(30, 144, 255)]))
+
+    def log_manip_targets(self, targets: dict[str, np.ndarray | list[float]]) -> None:
+        """Log named manipulation target points under ``world/manip/targets``."""
+        if not targets:
+            return
+        if not self._memory_view:
+            rr.set_time_seconds("realtime", time.time())
+        pts = []
+        labels = []
+        for name, xyz in targets.items():
+            pts.append(np.asarray(xyz, dtype=np.float64).reshape(3))
+            labels.append(str(name))
+        rr.log(
+            "world/manip/targets",
+            rr.Points3D(pts, radii=0.02, colors=[(255, 140, 0)] * len(pts), labels=labels),
+        )
+
+    def log_manip_plan_text(self, text: str) -> None:
+        self.log_text("task/plan", text)
 
     def log_memory_state(
         self,

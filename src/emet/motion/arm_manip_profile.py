@@ -146,8 +146,20 @@ def home_arm_q_array(profile: ArmManipProfile) -> np.ndarray:
     return np.asarray(q, dtype=np.float64)
 
 
+def has_arm_manip_profile(robot_id: str, *, arm: str = "left") -> bool:
+    """True when :meth:`ArmManipProfile.for_robot` would succeed."""
+    try:
+        ArmManipProfile.for_robot(robot_id, arm=arm)
+        return True
+    except KeyError:
+        return False
+
+
 def robot_id_from_client(robot: object) -> str:
-    """Best-effort robot id from GenericZmqClient / Stretch client."""
+    """Best-effort robot id from GenericZmqClient / Stretch client.
+
+    Raises ``ValueError`` when the id cannot be resolved (do not guess ``rby1``).
+    """
     spec = getattr(robot, "_spec", None)
     if spec is not None and getattr(spec, "name", None):
         return str(spec.name)
@@ -155,4 +167,18 @@ def robot_id_from_client(robot: object) -> str:
         v = getattr(robot, attr, None)
         if v:
             return str(v)
-    return "rby1"
+    get_sess = getattr(robot, "get_emet_session", None)
+    if callable(get_sess):
+        try:
+            sess = get_sess() or {}
+        except Exception:
+            sess = {}
+        if isinstance(sess, dict):
+            for key in ("emet_robot_id", "robot_id"):
+                v = sess.get(key)
+                if v:
+                    return str(v)
+            caps_rid = (sess.get("capabilities") or {}).get("emet_robot_id")
+            if caps_rid:
+                return str(caps_rid)
+    raise ValueError("cannot resolve robot id from client (missing _spec / session emet_robot_id)")

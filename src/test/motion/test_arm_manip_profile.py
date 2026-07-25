@@ -24,6 +24,24 @@ def test_unknown_robot_raises():
         ArmManipProfile.for_robot("stretch")
 
 
+def test_robot_id_from_client_requires_id():
+    from emet.motion.arm_manip_profile import robot_id_from_client
+
+    class _Bare:
+        pass
+
+    with pytest.raises(ValueError, match="cannot resolve"):
+        robot_id_from_client(_Bare())
+
+
+def test_home_cmd_matches_actuator_count():
+    from emet.robots.galaxea_r1 import R1_ACTUATOR_NAMES
+
+    p = ArmManipProfile.for_robot("rby1", arm="left")
+    assert len(p.home_cmd) == len(R1_ACTUATOR_NAMES)
+    assert len(p.actuator_names) == len(R1_ACTUATOR_NAMES)
+
+
 class _FakeRobot:
     def __init__(self, caps: dict):
         self._caps = caps

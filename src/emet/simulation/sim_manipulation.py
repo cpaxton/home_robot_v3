@@ -251,7 +251,13 @@ def prefer_kinematic_manip(
     manip_mode: str,
     visual_servo: bool = False,
 ) -> bool:
-    """True when agent should run IK + attach pick/place (not teleport / visual-servo)."""
+    """True when agent should run IK + attach pick/place (not teleport / visual-servo).
+
+    Requires both the server ``kinematic_manip`` capability **and** a registered
+    :class:`~emet.motion.arm_manip_profile.ArmManipProfile` for the robot id.
+    Robosuite may advertise the cap broadly; profile gating prevents KeyError on
+    innate_mars / xlerobot / stretch.
+    """
     if visual_servo or str(manip_mode).lower() != "kinematic":
         return False
     get_sess = getattr(robot, "get_emet_session", None)
@@ -261,8 +267,19 @@ def prefer_kinematic_manip(
     if not isinstance(session, dict) or not session.get("is_simulation"):
         return False
     caps = session.get("capabilities") or {}
-    # Require explicit kinematic_manip (rby1/robosuite). Teleport is a separate path.
-    return bool(caps.get("kinematic_manip", False))
+    if not caps.get("kinematic_manip", False):
+        return False
+    from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY, read_emet_robot_id_from_message_or_session
+    from emet.motion.arm_manip_profile import has_arm_manip_profile, robot_id_from_client
+
+    rid = None
+    try:
+        rid = robot_id_from_client(robot)
+    except ValueError:
+        rid = read_emet_robot_id_from_message_or_session(session) or session.get(EMET_ZMQ_ROBOT_ID_KEY)
+    if not rid or not has_arm_manip_profile(str(rid)):
+        return False
+    return True
 
 
 def can_use_sim_gt_manip(

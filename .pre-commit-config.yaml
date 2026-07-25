@@ -83,11 +83,16 @@ repos:
             src/test/config/test_runtime_context\.py|
             scripts/scripted_sim_pick_place\.py|
             scripts/scripted_molmo_grasp_mp\.py|
+            scripts/scripted_tamp_pick_place\.py|
             src/emet/controller/manipulation/kinematic_pick_place\.py|
+            src/emet/controller/task/tamp/.*\.py|
+            src/emet/visualization/manip_figures\.py|
             src/emet/motion/(arm_manip_profile|arm_rrt|mujoco_arm_ik|voxel_arm_collision)\.py|
             src/emet/perception/grasps/.*\.py|
             src/test/motion/test_(arm_manip_profile|arm_rrt|kinematic_tamp_helpers|rby1_mujoco_arm_ik|voxel_obstacle_planning)\.py|
-            src/test/perception/grasps/.*\.py
+            src/test/perception/grasps/.*\.py|
+            src/test/controller/task/.*\.py|
+            src/test/visualization/test_manip_figures\.py
           )
       - id: insert-license
         alias: insert-license-chris-paxton
@@ -107,11 +112,16 @@ repos:
             scripts/tier4_.*\.py|
             scripts/scripted_sim_pick_place\.py|
             scripts/scripted_molmo_grasp_mp\.py|
+            scripts/scripted_tamp_pick_place\.py|
             src/emet/controller/manipulation/kinematic_pick_place\.py|
+            src/emet/controller/task/tamp/.*\.py|
+            src/emet/visualization/manip_figures\.py|
             src/emet/motion/(arm_manip_profile|arm_rrt|mujoco_arm_ik|voxel_arm_collision)\.py|
             src/emet/perception/grasps/.*\.py|
             src/test/motion/test_(arm_manip_profile|arm_rrt|kinematic_tamp_helpers|rby1_mujoco_arm_ik|voxel_obstacle_planning)\.py|
             src/test/perception/grasps/.*\.py|
+            src/test/controller/task/.*\.py|
+            src/test/visualization/test_manip_figures\.py|
             src/test/agent/test_dynagraph_import_cycle\.py|
             src/test/utils/test_observation_zmq_camera_layout\.py|
             src/test/core/test_parameters_setdefault\.py|

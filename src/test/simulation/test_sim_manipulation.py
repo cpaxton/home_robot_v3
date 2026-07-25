@@ -85,9 +85,19 @@ def test_robot_sim_body_pose_teleport_supported_caps():
     assert not prefer_kinematic_manip(robot, manip_mode="kinematic", visual_servo=False)
     assert can_use_sim_gt_manip(robot, manip_mode="kinematic", visual_servo=False)
 
+    # Cap alone is not enough — need a registered ArmManipProfile (rby1 / galaxea_r1).
+    kin_no_id = _R(
+        {
+            "is_simulation": True,
+            "capabilities": {"sim_set_body_pose": True, "kinematic_manip": True},
+        }
+    )
+    assert not prefer_kinematic_manip(kin_no_id, manip_mode="kinematic", visual_servo=False)
+
     kin = _R(
         {
             "is_simulation": True,
+            "emet_robot_id": "rby1",
             "capabilities": {"sim_set_body_pose": True, "kinematic_manip": True},
         }
     )
@@ -95,3 +105,13 @@ def test_robot_sim_body_pose_teleport_supported_caps():
     assert can_use_sim_gt_manip(kin, manip_mode="kinematic", visual_servo=False)
     assert not prefer_kinematic_manip(kin, manip_mode="kinematic", visual_servo=True)
     assert not can_use_sim_gt_manip(kin, manip_mode="kinematic", visual_servo=True)
+
+    mars = _R(
+        {
+            "is_simulation": True,
+            "emet_robot_id": "innate_mars",
+            "capabilities": {"sim_set_body_pose": True, "kinematic_manip": True},
+        }
+    )
+    assert not prefer_kinematic_manip(mars, manip_mode="kinematic", visual_servo=False)
+    assert can_use_sim_gt_manip(mars, manip_mode="kinematic", visual_servo=False)

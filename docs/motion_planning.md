@@ -133,6 +133,25 @@ EMET_SIM_NAV_TELEPORT=1 uv run python scripts/scripted_sim_pick_place.py --start
 
 Expect `OK: measured object move…` and `displacement_m` ≳ 0.05. Offline planner unit tests (no sim): see [Offline tests](#offline-tests-no-sim--no-gpu) above.
 
+## Task search (no-NN TAMP)
+
+Deterministic beam-style search over `approach → grasp → place` (no Qwen / chat agent). Grasp candidates are ranked by offline position IK before execution. Paper figures (PNG + PDF) are written under `~/runs/emet/tamp_pick_place/<stamp>/` by default.
+
+```bash
+# Offline (no sim)
+uv run emet test src/test/controller/task/test_task_search.py src/test/visualization/test_manip_figures.py -q
+
+# Table + rby1 kinematic smoke + figures
+EMET_SIM_NAV_TELEPORT=1 MUJOCO_GL=egl \
+  uv run python scripts/scripted_tamp_pick_place.py --start-sim \
+  --sim configs/sim/default_table_rby1.yaml \
+  --object "red cylinder" --receptacle "blue cube" --cpu-only --skip-oracle
+```
+
+Figures: `topdown`, `ee_path_xz`, `joint_traj`, `plan_tree` (matplotlib / Agg). Optional live debug overlays live under `world/manip/…` in Rerun when a visualizer is attached; **figures are the paper path**.
+
+**Known limitation:** MuJoCo IK is currently **position-only** — grasp orientation from the Molmo oracle sets the approach standoff axis but is not enforced at the EE.
+
 ## MolmoSpaces grasp oracle (multi-robot)
 
 Fake grasp predictor over ZMQ using on-disk MolmoSpaces NPZ grasps (`~/.cache/molmospaces/assets/grasps`). Robot-agnostic world-frame poses; execution dispatches by server caps:
