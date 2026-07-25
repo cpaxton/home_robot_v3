@@ -99,7 +99,8 @@ Used by `scripts/run_large_paper_eval.sh` and `scripts/run_sqa3d_sharded_sweep.s
 | `SKIP_DYNAMIC_EXPLORE` | `run_large_paper_eval.sh` | Set `1` to skip dynamic exploration matrix. |
 | `OVMM_CPU_ONLY` | `run_large_paper_eval.sh` | Set `1` for `--cpu-only` OVMM (overlap with SQA3D on GPU in another terminal). |
 | `DYNAMIC_EXPLORE_CPU_ONLY` | `run_large_paper_eval.sh` | Set `1` for `--cpu-only` dynamic exploration runs. |
-| `EMET_STATUS_LOG` | `scripts/status_log.sh` (sourced by orchestrators) | Shared tail-able status log. Default `~/runs/emet/STATUS.log`; the `latest` symlink is created next to it. Each run also writes `OUT/STATUS.log`. See [evaluation.md](evaluation.md#first-command-after-an-agent-death-tail-runsemetstatuslog). |
+| `EMET_STATUS_LOG` | `scripts/status_log.sh` (sourced by orchestrators) | Per-checkout tail-able status log path. Default `~/runs/emet/status/<repo_basename>/STATUS.log` (not a flat shared file — sibling trees like `home_robot_v3` / `v4` must not interleave). Each run also writes `OUT/STATUS.log`. Recovery: `bash scripts/status_log.sh tail`. See [evaluation.md](evaluation.md#first-command-after-an-agent-death-bash-scriptsstatus_logsh-tail). |
+| `EMET_STATUS_DIR` | `scripts/status_log.sh` | Directory holding `STATUS.log` + `latest` symlink. Default `~/runs/emet/status/<repo_basename>`. Ignored when `EMET_STATUS_LOG` is set. |
 
 ## ZMQ and simulation (general)
 

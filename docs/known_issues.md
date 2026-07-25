@@ -161,7 +161,7 @@ There are **two distinct segfault modes**. Do not conflate them.
 
 - **What dies:** the Cursor agent process (`emet[…]: segfault at 0` null IP, or `trap invalid opcode`) when a turn runs or probes Habitat / tears down GPU context. Also seen as V8 `Illegal instruction` in the `agent`/`node` binary itself (`traps: MainThread[…] trap invalid opcode … in node`).
 - **What survives:** a detached **`emet jobs`** child often keeps running — check registry + `OUT/` before re-launching.
-- **First command on the way back:** **`tail -n 12 ~/runs/emet/STATUS.log`** — the last record says what state the run reached and the literal next command ([evaluation.md](evaluation.md#first-command-after-an-agent-death-tail-runsemetstatuslog)). `ls -l ~/runs/emet/latest` points at the newest `OUT/`.
+- **First command on the way back (from the owning checkout):** **`bash scripts/status_log.sh tail`** — the last record says what state the run reached and the literal next command ([evaluation.md](evaluation.md#first-command-after-an-agent-death-bash-scriptsstatus_logsh-tail)). Do not `tail ~/runs/emet/STATUS.log` (flat path is shared across sibling checkouts). `bash scripts/status_log.sh latest` points at that checkout's newest `OUT/`.
 - Also: full-system **live lock** when chaining Robocasa dynagraph explore → full pytest (MuJoCo-native) → Habitat HM-EQA with VLM in one session (mouse moves; GUI/SSH dead).
 - **Not** explained by a busy GPU: Mode A/B and EGL map failures have happened with `nvidia-smi` showing only Xorg/gnome-shell and ~full free VRAM.
 

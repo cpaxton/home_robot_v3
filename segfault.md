@@ -5,10 +5,15 @@ Last updated: 2026-07-25 11:10 EDT
 ## Recover first (do this before anything else)
 
 ```bash
-tail -n 12 ~/runs/emet/STATUS.log   # state + literal next command
-ls -l ~/runs/emet/latest            # newest OUT dir
-uv run emet jobs                    # is a managed job still alive?
+cd ~/src/home_robot_v4                 # owning checkout — not v2/v3
+bash scripts/status_log.sh tail        # state + literal next command
+bash scripts/status_log.sh latest      # newest OUT for this checkout
+uv run emet jobs                       # is a managed job still alive?
 ```
+
+Do **not** `tail ~/runs/emet/STATUS.log` — that flat path is shared with sibling trees
+(`home_robot_v2` / `v3` / `v4`) and would mix recovery instructions across agents.
+Per-repo log: `~/runs/emet/status/home_robot_v4/STATUS.log`.
 
 If `STATUS.log` says `RUNNING` / `OK` and `emet jobs` still shows the job, **do not relaunch** — the detached job may still be fine after the Cursor agent died.
 
@@ -31,7 +36,7 @@ Do **not** run `emet eval kill-stale` while a managed HM-EQA job is still intend
 | Capsule | `$OUT/native_crash_classic_q14.log` |
 | Orchestrator log | `$OUT/orchestrator.log` |
 | Progress JSON | `$OUT/progress.json` → `{"units_done":5,"units_total":64,"phase":"native-crash","current_id":"14"}` |
-| Status seed | `~/runs/emet/STATUS.log` (backfilled CRASH record; see `next:`) |
+| Status seed | `~/runs/emet/status/home_robot_v4/STATUS.log` (backfilled CRASH; see `next:`) |
 
 GPU after abort (checked ~10:53): idle, Xorg/gnome-shell only, ~40C / ~24W. No Xid / ECC / OOM.
 
@@ -58,7 +63,7 @@ uv run emet jobs run --name hmeqa-bal32-aff --need-mib 12000 -- \
 ### After resume is launched
 
 ```bash
-tail -n 12 ~/runs/emet/STATUS.log
+bash scripts/status_log.sh tail
 uv run emet jobs status <NEW_JOB_ID>
 uv run emet jobs logs <NEW_JOB_ID> --tail 40
 ```
@@ -174,6 +179,7 @@ session can recover from **only** this file + `STATUS.log`:
 3. What just failed (signal, capsule path, one-line stack top).
 4. What **not** to do (`kill-stale`, hard-kill Habitat, relaunch while job alive).
 
-Prefer writing through `scripts/status_log.sh` so `tail ~/runs/emet/STATUS.log`
-carries the same `next:` instruction; keep this markdown as the durable
-investigation narrative.
+Prefer writing through `scripts/status_log.sh` so
+`bash scripts/status_log.sh tail` (per-repo under
+`~/runs/emet/status/<repo>/`) carries the same `next:` instruction; keep this
+markdown as the durable investigation narrative.

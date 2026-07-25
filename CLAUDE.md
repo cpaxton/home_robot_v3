@@ -24,6 +24,6 @@ uv run emet jobs cancel JOB_ID
 - Registry: `~/runs/emet/jobs/` (`EMET_JOBS_DIR`).
 - Wrapper sets `EMET_JOB_ID`. Orchestrators should call `emet jobs update … --units-done/--units-total/--phase/--current-id` and/or write `OUT/progress.json`.
 - Never block a Cursor/Claude turn on Habitat/VLM or multi-hour GPU work; use `emet jobs run` and poll status/logs. Agent crashes here are usually `emet` segfaults after Habitat/EGL teardown — not a hidden CUDA process.
-- After an agent death: **`tail -n 12 ~/runs/emet/STATUS.log`** (literal `next:` command), then `emet jobs` / `~/runs/emet/`.
+- After an agent death: **`bash scripts/status_log.sh tail`** from the owning checkout (literal `next:` command; do not use a flat `~/runs/emet/STATUS.log` shared across v2/v3/v4), then `emet jobs` / `~/runs/emet/`.
 - **Record before risky sim/GPU steps** (launch, resume, `kill-stale`, affinity experiments): leave job id, OUT, commit, and copy-paste resume via `scripts/status_log.sh` / `segfault.md`. See `.cursor/rules/gpu-eval-workflow.mdc`.
 - Details: `docs/cli.md` (`emet jobs` / `emet eval`), `docs/evaluation.md`, `docs/known_issues.md`, `.cursor/rules/gpu-eval-workflow.mdc`.
