@@ -21,8 +21,8 @@ Reference: https://github.com/userguide-galaxea/URDF
 from pathlib import Path
 
 from emet.robots.base import RobotBackend, RobotSpec
-from emet.simulation.molmospaces_spawn_metadata import robot_spawn_spec_from_metadata
 from emet.robots.footprint import Footprint
+from emet.simulation.molmospaces_spawn_metadata import robot_spawn_spec_from_metadata
 
 _ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets" / "robot" / "galaxea_r1"
 _MJCF_PATH = str(_ASSETS_DIR / "galaxea_r1.xml")
@@ -114,10 +114,7 @@ class GalaxeaR1Backend(RobotBackend):
     def create_client(self, robot_ip: str, **kwargs):
         from emet.controller.generic_zmq_client import GenericZmqClient
 
-        # Match StretchZmqClient: defer ZMQ recv until RobotAgent.start() so we do not block here twice
-        # (and so a slow model load in DynamemTaskExecutor does not consume the wait before the sim is up).
-        opts = dict(kwargs)
-        return GenericZmqClient(robot_spec=self.get_spec(), robot_ip=robot_ip, **opts)
+        return GenericZmqClient(robot_spec=self.get_spec(), robot_ip=robot_ip, **kwargs)
 
     def create_model(self, **kwargs):
         raise NotImplementedError(
