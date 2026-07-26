@@ -546,18 +546,42 @@ if [[ -n "${CRASHED_QIDS:-}" ]]; then
   log "CRASHED_QIDS=${CRASHED_QIDS} (units_failed=${PROGRESS_FAILED}; scored=${PROGRESS_DONE}/${PROGRESS_TOTAL})"
 fi
 
-jobs_heartbeat "done" "-" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
+# Disk truth: skipped native crashes leave empty per-qid jsonl. Do not write
+# OUT/DONE or mark the job done until every unit scored — resume retries empties.
+PROGRESS_DONE="$(count_done_units)"
+jobs_heartbeat "final" "-" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
+STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL final"
+_incomplete=0
+if [[ "$PROGRESS_DONE" -lt "$PROGRESS_TOTAL" ]]; then
+  _incomplete=1
+fi
+_job_status="done"
+_final_state="DONE"
+_final_rc=0
+if [[ "$_incomplete" -eq 1 ]]; then
+  _job_status="failed"
+  _final_state="INCOMPLETE"
+  _final_rc=1
+elif [[ "$PROGRESS_DONE" -eq 0 && "$PROGRESS_FAILED" -gt 0 ]]; then
+  _job_status="failed"
+  _final_state="FAIL"
+  _final_rc=1
+fi
 if [[ -n "${EMET_JOB_ID:-}" ]]; then
-  uv run emet jobs update "$EMET_JOB_ID" --status done \
+  uv run emet jobs update "$EMET_JOB_ID" --status "$_job_status" \
     --units-done "$PROGRESS_DONE" --units-total "$PROGRESS_TOTAL" \
-    --phase done --out-dir "$OUT" >/dev/null 2>&1 || true
+    --phase "${_final_state,,}" --out-dir "$OUT" >/dev/null 2>&1 || true
 fi
-echo DONE > "$OUT/DONE"
-log "All done → $OUT (scored ${PROGRESS_DONE}/${PROGRESS_TOTAL}, failed ${PROGRESS_FAILED})"
-STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL done"
-status_close DONE "scored $PROGRESS_DONE/$PROGRESS_TOTAL units (failed=${PROGRESS_FAILED}); summary + figures written" \
-  "review $OUT/orchestrator.log and $OUT/figures/, then uv run emet hmeqa summarize $OUT"
-if [[ "$PROGRESS_DONE" -eq 0 && "$PROGRESS_FAILED" -gt 0 ]]; then
-  exit 1
+if [[ "$_incomplete" -eq 0 && "$_final_rc" -eq 0 ]]; then
+  echo DONE > "$OUT/DONE"
+  log "All done → $OUT (scored ${PROGRESS_DONE}/${PROGRESS_TOTAL}, failed ${PROGRESS_FAILED})"
+  status_close DONE "scored $PROGRESS_DONE/$PROGRESS_TOTAL units (failed=${PROGRESS_FAILED}); summary + figures written" \
+    "review $OUT/orchestrator.log and $OUT/figures/, then uv run emet hmeqa summarize $OUT"
+else
+  rm -f "$OUT/DONE"
+  log "INCOMPLETE → $OUT (scored ${PROGRESS_DONE}/${PROGRESS_TOTAL}, failed ${PROGRESS_FAILED}) — not writing DONE; resume to fill gaps"
+  status_close "$_final_state" \
+    "scored $PROGRESS_DONE/$PROGRESS_TOTAL units (failed=${PROGRESS_FAILED}); missing empty per-qid jsonl" \
+    "$STATUS_RESUME_CMD"
 fi
-exit 0
+exit "$_final_rc"
