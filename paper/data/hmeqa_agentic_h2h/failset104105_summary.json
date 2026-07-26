@@ -1,0 +1,82 @@
+{
+  "slice": "failset_104_105",
+  "ids": [104, 105],
+  "date": "2026-07-24",
+  "git_commit": "76d1abc+",
+  "note": "Infrastructure regressions fixed on failfix5 (n_object>0, non-empty letters, VLM label extract). Letter accuracy not restored to holdout-8 paper numbers on this short agentic budget.",
+  "broken_failfix4": {
+    "run_dir": "~/runs/emet/hmeqa_agentic_failfix4_104105_20260724_141115",
+    "job_id": "20260724_141117_5acf0a",
+    "root_cause": "Uncommitted EMET_EQA_AGENTIC_VERIFY auto-skip of per-frame VLM label extract → n_object=0 + black frontier placeholders in answer prompt",
+    "agentic": {
+      "n": 2,
+      "correct": 0,
+      "accuracy": 0.0,
+      "mean_planning_steps": 40.5,
+      "per": [
+        {
+          "q": 104,
+          "correct": false,
+          "pred": "",
+          "gold": "D",
+          "planning_steps": 33,
+          "observations": 1,
+          "n_object": 0
+        },
+        {
+          "q": 105,
+          "correct": false,
+          "pred": "",
+          "gold": "A",
+          "planning_steps": 48,
+          "observations": 6,
+          "n_object": 0
+        }
+      ]
+    }
+  },
+  "fixed_failfix5": {
+    "run_dir": "~/runs/emet/hmeqa_agentic_failfix5_104105_20260724_144027",
+    "job_id": "20260724_144029_f7ace2",
+    "fixes": [
+      "Restore VLM label extract under agentic verify (opt-out only via EMET_GRAPH_EQA_EXTRACT_VLM=0)",
+      "Never attach frontier 8x8 placeholder RGB for answer images",
+      "Prefer object noun phrases for SigLIP verify",
+      "Resolve Action: Image N via graph obs_id as well as prompt-local index"
+    ],
+    "agentic": {
+      "n": 2,
+      "correct": 0,
+      "accuracy": 0.0,
+      "mean_planning_steps": 16.5,
+      "vl_label_extract_calls_max_new_128": 33,
+      "per": [
+        {
+          "q": 104,
+          "correct": false,
+          "pred": "B",
+          "gold": "D",
+          "planning_steps": 16,
+          "observations": 15,
+          "n_object": 8
+        },
+        {
+          "q": 105,
+          "correct": false,
+          "pred": "B",
+          "gold": "A",
+          "planning_steps": 17,
+          "observations": 15,
+          "n_object": 8
+        }
+      ]
+    }
+  },
+  "paper_holdout8_agentic_reference": {
+    "summary": "holdout8_summary.json",
+    "per": [
+      {"q": 104, "correct": true, "pred": "D", "gold": "D", "planning_steps": 22, "observations": 10},
+      {"q": 105, "correct": true, "pred": "A", "gold": "A", "planning_steps": 15, "observations": 10}
+    ]
+  }
+}

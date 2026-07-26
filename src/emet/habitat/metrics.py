@@ -136,7 +136,11 @@ def question_is_attribute_state(question: str) -> bool:
 
 
 def choices_are_attribute_state(choices: list[str] | None) -> bool:
-    """True when options are mainly on/off / up/down style rather than places."""
+    """True when options are mainly on/off / up/down style rather than places.
+
+    Do not treat location prepositions as attributes: ``On the kitchen island``
+    must stay a location MCQ (holdout q105), not trigger Unknown→letter salvage.
+    """
     if not choices:
         return False
     cleaned = [(c or "").strip().lower() for c in choices[:4] if (c or "").strip()]
@@ -145,19 +149,64 @@ def choices_are_attribute_state(choices: list[str] | None) -> bool:
     real = [c for c in cleaned if not c.startswith("(do not choose")]
     if len(real) < 2:
         return False
-    attr_hints = ("on", "off", "up", "down", "open", "closed", "pulled")
-    hits = sum(1 for c in real if c in attr_hints or any(h in c.split() for h in attr_hints))
+    # Whole-choice / short state phrases only — not "on the …" place options.
+    attr_exact = frozenset({"on", "off", "up", "down", "open", "closed", "pulled"})
+    attr_phrase = re.compile(
+        r"^(?:turned\s+)?(?:on|off)$|"
+        r"^pulled\s+(?:up|down)$|"
+        r"^(?:wide\s+)?(?:open|closed)$|"
+        r"^lights?\s+(?:on|off)$"
+    )
+    hits = sum(1 for c in real if c in attr_exact or bool(attr_phrase.match(c)))
     return hits >= max(1, len(real) // 2)
 
 
+def choices_are_count_mcq(choices: list[str] | None) -> bool:
+    """True when options are cardinalities (``One``/``Two``/``None``/…)."""
+    if not choices:
+        return False
+    cleaned = [(c or "").strip().lower() for c in choices[:4] if (c or "").strip()]
+    if len(cleaned) < 2:
+        return False
+    real = [c for c in cleaned if not c.startswith("(do not choose")]
+    if len(real) < 2:
+        return False
+    count_exact = frozenset(
+        {
+            "none",
+            "zero",
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+        }
+    )
+    hits = sum(1 for c in real if c in count_exact or re.fullmatch(r"\d+", c))
+    return hits >= max(2, (len(real) + 1) // 2)
+
+
 def choices_are_location_mcq(choices: list[str] | None) -> bool:
-    """True when MCQ options are places/things, not yes/no style answers."""
+    """True when MCQ options are places/things, not yes/no or count answers."""
     if not choices:
         return False
     cleaned = [(c or "").strip().lower() for c in choices[:4] if (c or "").strip()]
     if len(cleaned) < 2:
         return False
     if all(c.startswith("(do not choose") for c in cleaned):
+        return False
+    if choices_are_count_mcq(choices):
         return False
     yes_no_like = sum(
         1

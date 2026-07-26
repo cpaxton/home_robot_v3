@@ -66,7 +66,9 @@ def test_score_episode_marks_infra_from_raw_eqa():
     assert row.sens_match_xy_m == pytest.approx(0.2)
 
 
-def test_capture_rotate_views_returns_to_start(tmp_path: Path):
+@pytest.mark.sim
+@pytest.mark.timeout(120)
+def test_capture_rotate_views_returns_to_start(tmp_path: Path, open3d_offscreen: None):
     scannet_root = tmp_path / "scannet"
     _write_box_scene(scannet_root)
     sim = ScanNetEQASimulator(SCENE_ID, scannet_root=scannet_root, image_width=160, image_height=120)

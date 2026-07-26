@@ -139,6 +139,8 @@ The Habitat runner enables navmesh pathing and frontier exploration by default (
 
 **Image-N routing:** when the VLM outputs `action: <image id>`, `GraphEQAMemory` resolves a **navigation waypoint** (capture viewpoint or standoff toward the object anchor), not the raw object centroid — this avoids spin-in-place at already-visited poses. See `src/emet/memory/graph_eqa/graph_memory.py` (`_navigation_waypoint_for_obs`).
 
+**Mapping overrides (HM-EQA only):** `_configure_habitat_mapping` loosens dynav clamps that starve open-plan exploration (`max_depth=4.5`, `pad_obstacles=1`, `filters.smooth_kernel_size=1`). Real-robot / Robocasa dynav defaults are unchanged. Frontier graph nodes also snap to a **reachable cell adjacent to the cluster** (not the arc centroid), so explore goals sit on the free-space rim instead of mid-floor.
+
 Override: add under `eqa:` in [`src/emet/config/dynav_config.yaml`](../../src/emet/config/dynav_config.yaml) (the Habitat runner loads this file; `setdefault` in the runner will not clobber an explicit value):
 
 ```yaml

@@ -53,23 +53,26 @@ def recompute_sim(text_feat: list[float] | None, img_feat: list[float] | None) -
 def evaluate_threshold(
     verify: list[dict[str, Any]],
     threshold: float,
-) -> dict[str, float]:
-    """Precision/recall/F1 of PRESENT decision vs gt_present when labeled."""
+    *,
+    score_key: str = "sim",
+) -> dict[str, Any]:
+    """Precision/recall/F1 for one channel vs true view visibility when labeled."""
     tp = fp = tn = fn = 0
     labeled = 0
     for row in verify:
-        sim = row.get("sim")
-        if row.get("text_feat") and row.get("img_feat"):
+        sim = row.get(score_key)
+        if score_key == "sim" and row.get("text_feat") and row.get("img_feat"):
             recomputed = recompute_sim(row["text_feat"], row["img_feat"])
             if recomputed is not None:
                 sim = recomputed
         if sim is None:
             continue
         pred_present = float(sim) >= float(threshold)
-        if "gt_present" not in row:
+        gt_value = row.get("gt_in_view", row.get("gt_present"))
+        if gt_value is None:
             continue
         labeled += 1
-        gt = bool(row["gt_present"])
+        gt = bool(gt_value)
         if pred_present and gt:
             tp += 1
         elif pred_present and not gt:
@@ -83,6 +86,7 @@ def evaluate_threshold(
     f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
     return {
         "threshold": float(threshold),
+        "score_key": score_key,
         "n_labeled": float(labeled),
         "precision": prec,
         "recall": rec,
@@ -97,18 +101,54 @@ def evaluate_threshold(
 def sweep_verify_thresholds(
     traces: list[dict[str, Any]],
     thresholds: list[float] | None = None,
-) -> list[dict[str, float]]:
+    *,
+    score_key: str = "sim",
+) -> list[dict[str, Any]]:
     verify = verify_rows(traces)
     if thresholds is None:
-        thresholds = [round(0.15 + 0.01 * i, 2) for i in range(26)]  # 0.15..0.40
-    return [evaluate_threshold(verify, t) for t in thresholds]
+        thresholds = [round(0.15 + 0.01 * i, 2) for i in range(26)]
+    return [evaluate_threshold(verify, t, score_key=score_key) for t in thresholds]
 
 
-def best_threshold(sweep: list[dict[str, float]]) -> dict[str, float] | None:
+def sweep_verify_channels(
+    traces: list[dict[str, Any]],
+    thresholds: list[float] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Evaluate channels independently; never collapse heterogeneous score spaces."""
+    channels = (
+        "full_frame_sim",
+        "dense_sim",
+        "voxel_sim",
+        "detector_score",
+        "crop_siglip_sim",
+    )
+    verify = verify_rows(traces)
+    return {
+        channel: [
+            evaluate_threshold(verify, threshold, score_key=channel)
+            for threshold in (
+                thresholds
+                or [round(0.08 + 0.005 * i, 3) for i in range(15)]
+            )
+        ]
+        for channel in channels
+        if any(row.get(channel) is not None for row in verify)
+    }
+
+
+def best_threshold(sweep: list[dict[str, Any]]) -> dict[str, Any] | None:
     labeled = [r for r in sweep if r.get("n_labeled", 0) > 0]
     if not labeled:
         return None
-    return max(labeled, key=lambda r: (r["f1"], r["precision"], -abs(r["threshold"] - 0.28)))
+    reference = 0.28 if all(row.get("score_key") == "sim" for row in labeled) else 0.12
+    return max(
+        labeled,
+        key=lambda r: (
+            r["f1"],
+            r["precision"],
+            -abs(r["threshold"] - reference),
+        ),
+    )
 
 
 def simulate_early_stop_accuracy(
@@ -156,8 +196,6 @@ def simulate_early_stop_accuracy(
             continue
         if "correct" in summary:
             correct += int(bool(summary["correct"]))
-        elif summary.get("confidence"):
-            correct += 1
         rounds_sum += float(stop_round if stop_round is not None else summary.get("n_rounds", 0) or 0)
     return {
         "threshold": float(threshold),
@@ -197,7 +235,7 @@ def nav_distance_report(traces: list[dict[str, Any]]) -> dict[str, Any]:
     present_after = 0
     for vr in verifies:
         if vr.get("decision") == "PRESENT" or (
-            vr.get("sim") is not None and float(vr["sim"]) >= 0.28
+            vr.get("sim") is not None and float(vr["sim"]) >= 0.12
         ):
             present_after += 1
     return {
@@ -242,6 +280,7 @@ def tune_from_traces(
     return {
         "best_threshold": best,
         "threshold_sweep": sweep,
+        "channel_sweeps": sweep_verify_channels(traces),
         "budget_sweep": budget,
         "budget_knee": knee,
         "nav_report": nav_distance_report(traces),

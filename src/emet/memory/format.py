@@ -88,6 +88,13 @@ class GraphNodeView:
     last_seen: int | None = None  # graph timestep when last observed (staleness)
     support_count: int | None = None
     is_viewpoint: bool = False
+    belief_confidence: float | None = None
+    position_covariance: list[list[float]] | None = None
+    position_history: list[dict[str, Any]] | None = None
+    identity_key: str | None = None
+    change_events: list[dict[str, Any]] | None = None
+    expected_absence_count: int = 0
+    last_absence_step: int = -1
 
 
 @dataclass
@@ -97,6 +104,9 @@ class GraphEdgeView:
     id1: int
     id2: int
     relation: str
+    confidence: float | None = None
+    last_evidence_step: int | None = None
+    contradiction_count: int = 0
 
 
 @dataclass
@@ -400,10 +410,67 @@ def save_memory(state: MemoryState, path: str) -> None:
                         else {}
                     ),
                     **({"is_viewpoint": True} if getattr(n, "is_viewpoint", False) else {}),
+                    **(
+                        {"belief_confidence": float(n.belief_confidence)}
+                        if getattr(n, "belief_confidence", None) is not None
+                        else {}
+                    ),
+                    **(
+                        {"position_covariance": n.position_covariance}
+                        if getattr(n, "position_covariance", None) is not None
+                        else {}
+                    ),
+                    **(
+                        {"position_history": n.position_history}
+                        if getattr(n, "position_history", None)
+                        else {}
+                    ),
+                    **(
+                        {"identity_key": n.identity_key}
+                        if getattr(n, "identity_key", None)
+                        else {}
+                    ),
+                    **(
+                        {"change_events": n.change_events}
+                        if getattr(n, "change_events", None)
+                        else {}
+                    ),
+                    **(
+                        {"expected_absence_count": int(n.expected_absence_count)}
+                        if getattr(n, "expected_absence_count", 0)
+                        else {}
+                    ),
+                    **(
+                        {"last_absence_step": int(n.last_absence_step)}
+                        if getattr(n, "last_absence_step", -1) >= 0
+                        else {}
+                    ),
                 }
                 for n in state.graph.nodes
             ],
-            "edges": [{"id1": e.id1, "id2": e.id2, "relation": e.relation} for e in state.graph.edges],
+            "edges": [
+                {
+                    "id1": e.id1,
+                    "id2": e.id2,
+                    "relation": e.relation,
+                    **(
+                        {"confidence": float(e.confidence)}
+                        if getattr(e, "confidence", None) is not None
+                        else {}
+                    ),
+                    **(
+                        {"last_evidence_step": int(e.last_evidence_step)}
+                        if getattr(e, "last_evidence_step", None) is not None
+                        else {}
+                    ),
+                    **(
+                        {"contradiction_count": int(e.contradiction_count)}
+                        if getattr(e, "contradiction_count", 0)
+                        else {}
+                    ),
+                }
+                for e in state.graph.edges
+            ],
         }
         with open(path / GRAPH_FILENAME, "w") as f:
             json.dump(graph_data, f, indent=2)

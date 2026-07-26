@@ -25,7 +25,11 @@ from emet.core.parameters import Parameters, get_parameters
 from emet.habitat.config import default_hm3d_scene_dir
 from emet.habitat.datasets import SceneInitPose, get_question, load_hmeqa_questions, load_scene_init_poses
 from emet_habitat.robot_client import HabitatRobotClient
-from emet_habitat.runner import _configure_frontier_parameters, _configure_habitat_nav
+from emet_habitat.runner import (
+    _configure_frontier_parameters,
+    _configure_habitat_mapping,
+    _configure_habitat_nav,
+)
 from emet_habitat.simulator import HabitatEQASimulator
 
 
@@ -133,6 +137,7 @@ def run_frontier_exploration(
 
     parameters = get_parameters("dynav_config.yaml")
     _configure_habitat_nav(parameters, habitat_perfect_nav=True)
+    _configure_habitat_mapping(parameters)
     _configure_frontier_parameters(parameters, frontier_nodes_enabled=frontier_nodes_enabled)
     parameters.set("force_eqa_siglip_encoder", False)
 

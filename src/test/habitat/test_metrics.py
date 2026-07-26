@@ -4,6 +4,8 @@
 
 from emet.habitat.metrics import (
     EpisodeMetrics,
+    choices_are_attribute_state,
+    choices_are_location_mcq,
     compare_method_results,
     episode_run_completed,
     extract_mcq_letter,
@@ -23,6 +25,28 @@ def test_grade_mcq_answer_letter():
     assert not grade_mcq_answer("C", "B")
     assert extract_mcq_letter("Answer: c") == "C"
     assert grade_mcq_answer("The lamp is off", "B", choices=["on", "off", "none", "broken"])
+
+
+def test_on_the_place_choices_are_location_not_attribute():
+    """Holdout q105: 'On the kitchen island' must not count as on/off attribute."""
+    place = [
+        "On the kitchen island",
+        "On the dining table",
+        "On the coffee table",
+        "In the sunroom",
+    ]
+    assert choices_are_location_mcq(place)
+    assert not choices_are_attribute_state(place)
+    assert choices_are_attribute_state(["On", "Off", "Unknown", "(Do not choose)"])
+    assert choices_are_attribute_state(["turned on", "turned off", "open", "closed"])
+
+
+def test_count_choices_are_not_location_mcq():
+    from emet.habitat.metrics import choices_are_count_mcq
+
+    counts = ["Three", "One", "None", "Two"]
+    assert choices_are_count_mcq(counts)
+    assert not choices_are_location_mcq(counts)
 
 
 def test_grade_mcq_answer_letter_e():

@@ -54,7 +54,10 @@ class Rby1Backend(RobotBackend):
     def create_client(self, robot_ip: str, **kwargs):
         from emet.controller.generic_zmq_client import GenericZmqClient
 
+        # Match Stretch / Galaxea: defer ZMQ recv until RobotAgent.start() so create_client
+        # does not block waiting for a sim that is not up yet.
         opts = dict(kwargs)
+        opts.setdefault("start_immediately", False)
         return GenericZmqClient(robot_spec=self.get_spec(), robot_ip=robot_ip, **opts)
 
     def create_model(self, **kwargs):

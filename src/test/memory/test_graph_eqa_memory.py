@@ -335,6 +335,197 @@ def test_memory_location_does_not_override_clear_vlm_letter():
     assert "B" in answer.upper() or "dresser" in answer.lower() or "ladder" in answer.lower()
 
 
+def test_memory_location_does_not_override_vlm_choice_text():
+    """Holdout q56 regression: NL answer matching choice C must not become memory A."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    raw = (
+        "Caption:\nImage 1 shows a large black bookshelf and blue curtains.\n"
+        "Reasoning:\nMatches option C.\n"
+        "Answer:\nThe room with the blue curtains.\n"
+        "Confidence:\nTRUE\n"
+        "Action:\nNone\n"
+        "Confidence_reasoning:\nImage 1 shows blue curtains.\n"
+    )
+
+    def _client(cmds, **_kw):
+        return raw
+
+    mem = GraphEQAMemory(eqa_client=_client, image_description_client=lambda _x: "bookshelf")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["bookshelf", "chair"])
+    mem._relevant_phrases = ["bookshelf"]
+    mem._relevant_objects = ["bookshelf"]
+    mem._location_letter_from_attached_images = lambda _choices, _obs_ids: ""  # type: ignore[method-assign]
+    mem._location_letter_from_nearest_memory = lambda _choices: "A"  # type: ignore[method-assign]
+    q = (
+        "I need to retrieve a book from the shelf. Which room has the large bookshelf? "
+        "A) The room with the white curtains B) The room with the yellow curtains "
+        "C) The room with the blue curtains D) The room with the red curtains. Answer:"
+    )
+    _r, _answer, _c, _cr, _pt, _imgs = mem.query_answer(q)
+    assert "[memory-location]" not in (mem.last_eqa_raw or "")
+    assert mem.last_eqa_parsed[1].strip().upper() == "C"
+    assert "[choice-text]" in (mem.last_eqa_raw or "")
+
+
+def test_unknown_answer_triggers_letter_salvage():
+    """Attribute/holdout q65 regression: answer Unknown must salvage a letter."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    calls = {"n": 0}
+
+    def _client(cmds, **_kw):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return (
+                "Caption:\nAC on ceiling.\nReasoning:\ncannot tell.\n"
+                "Answer:\nUnknown\nConfidence:\nFALSE\nAction:\n1\n"
+                "Confidence_reasoning:\nno status visible\n"
+            )
+        # Salvage turn — terse letter only.
+        return "A"
+
+    mem = GraphEQAMemory(eqa_client=_client, image_description_client=lambda _x: "ac")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["air conditioner"])
+    mem._relevant_phrases = ["air conditioner"]
+    mem._relevant_objects = ["air conditioner"]
+    q = (
+        "Is the air conditioner turned on? "
+        "A) On B) Off C) Unknown D) (Do not choose). Answer:"
+    )
+    _r, _answer, _c, _cr, _pt, _imgs = mem.query_answer(q)
+    assert calls["n"] >= 2
+    assert "[salvage]" in (mem.last_eqa_raw or "")
+    assert mem.last_eqa_parsed[1].strip().upper() == "A"
+
+
+def test_location_unknown_does_not_salvage_letter():
+    """Holdout q104/q105: location Unknown must not invent A–D; keep Action explore."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    calls = {"n": 0}
+
+    def _client(cmds, **_kw):
+        calls["n"] += 1
+        return (
+            "Caption:\nno clock in view.\nReasoning:\nneed another room.\n"
+            "Answer:\nUnknown\nConfidence:\nFALSE\nAction:\n1\n"
+            "Confidence_reasoning:\nobject not visible\n"
+        )
+
+    mem = GraphEQAMemory(eqa_client=_client, image_description_client=lambda _x: "wall")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["wall"])
+    mem._relevant_phrases = ["clock"]
+    mem._relevant_objects = ["clock"]
+    # Include "On the …" options (q105) — must not be misclassified as attribute/on-off.
+    q = (
+        "I'm looking for the fruit bowl. "
+        "A) On the kitchen island B) On the dining table "
+        "C) On the coffee table D) In the sunroom. Answer:"
+    )
+    _r, answer, confidence, _cr, _pt, _imgs = mem.query_answer(q)
+    assert calls["n"] == 1
+    assert "[salvage]" not in (mem.last_eqa_raw or "")
+    assert "[salvage-location]" not in (mem.last_eqa_raw or "")
+    assert not confidence
+    assert answer.strip().lower() in {"unknown", ""}
+    assert mem.last_eqa_action_obs_id is not None
+
+
+def test_location_truncated_stream_salvages_letter():
+    """Dogfood q104/q105: a stream cut off before ``answer:`` must be re-asked.
+
+    Distinct from an explicit ``Answer: Unknown`` (which stays Unknown): here the
+    256-token decode budget ran out mid-caption, so the model never got to answer.
+    """
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    calls = {"n": 0}
+
+    def _client(cmds, **_kw):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # Truncated mid-sentence: no "answer:" field ever emitted.
+            return (
+                "Caption:\nImage 1 shows an outdoor area with a brick path, door, "
+                "doormat, glass door, greenery, outdoor furniture, pool, potted plant,"
+            )
+        return "D"
+
+    mem = GraphEQAMemory(eqa_client=_client, image_description_client=lambda _x: "wall")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["wall"])
+    mem._relevant_phrases = ["wall clock"]
+    mem._relevant_objects = ["wall clock"]
+    q = (
+        "I'm trying to remember where I placed the large wall clock. Where is it? "
+        "A) In the dining area B) In the kitchen C) In the sunroom "
+        "D) In the living area near the fireplace. Answer:"
+    )
+    _r, _answer, _c, _cr, _pt, _imgs = mem.query_answer(q)
+    assert calls["n"] >= 2
+    assert "[salvage]" in (mem.last_eqa_raw or "")
+    assert mem.last_eqa_parsed[1].strip().upper() == "D"
+    # Recovery must come from the VLM re-ask, never from nearest-furniture geometry.
+    assert "[memory-location]" not in (mem.last_eqa_raw or "")
+
+
+def test_verify_reports_unavailable_when_siglip_released():
+    """submit_answer frees SigLIP for the VLM; later verifies are not evidence of absence."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    oid = mem.add_observation(np.zeros((4, 4, 3), dtype=np.uint8), np.array([1.0, 1.0, 0.5]), ["wall"])
+    mem.set_confirmed_memory_siglip_encoder(None)
+
+    result = mem.verify_phrase_at_obs("fruit bowl", int(oid))
+    assert result.status == "UNAVAILABLE"
+    assert result.ok is False
+    assert result.sim == 0.0
+
+
+def test_location_truncated_empty_does_not_memory_location_letter():
+    """failfix5: truncated stream with no answer: must not invent [memory-location] B.
+
+    The nearest-furniture memory letter stays banned. Recovery is allowed only through
+    a neutral VLM re-ask, so when that re-ask also declines the answer stays Unknown.
+    """
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    calls = {"n": 0}
+
+    def _client(cmds, **_kw):
+        calls["n"] += 1
+        if calls["n"] > 1:
+            # Neutral re-ask still cannot tell — must not fall back to memory "B".
+            return "I cannot tell from these images."
+        # No ``answer:`` field — matches truncated Caption/Reasoning mid-choice.
+        return (
+            "Caption:\nkitchen and dining table.\n"
+            "Reasoning:\nthe dining area (A) and kitchen (B) are candidates. The sunroom (C) "
+            "and living area near the fireplace (\n"
+            "Confidence:\nFALSE\n"
+            "Action:\n1\n"
+            "Confidence_reasoning:\nneed more views\n"
+        )
+
+    mem = GraphEQAMemory(eqa_client=_client, image_description_client=lambda _x: "clock")
+    mem.memory_summary_enabled = True
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["dining table", "cabinet"])
+    mem._relevant_phrases = ["large wall clock"]
+    mem._relevant_objects = ["clock"]
+    mem._any_confirmed_phrase_present = lambda: True  # type: ignore[method-assign]
+    mem._location_letter_from_attached_images = lambda _c, _o: ""  # type: ignore[method-assign]
+    mem._location_letter_from_nearest_memory = lambda _c: "B"  # type: ignore[method-assign]
+    q = (
+        "I'm trying to remember where I placed the large wall clock. Where is it? "
+        "A) In the dining area B) In the kitchen C) In the sunroom "
+        "D) In the living area near the fireplace. Answer:"
+    )
+    _r, answer, confidence, _cr, _pt, _imgs = mem.query_answer(q)
+    assert "[memory-location]" not in (mem.last_eqa_raw or "")
+    assert "[salvage-location]" not in (mem.last_eqa_raw or "")
+    assert not confidence
+    assert answer.strip().lower() == "unknown"
+    assert mem.last_eqa_parsed[1].strip().lower() == "unknown"
+
+
 def test_attribute_state_skips_memory_summary_block():
     """On/off questions should not inject CONFIRMED_MEMORY priors."""
     captured: dict = {}
@@ -439,6 +630,41 @@ def test_heuristic_relevant_phrases_prefers_multiword():
     phrases = heuristic_relevant_phrases("Did you see the woven basket anywhere?")
     assert phrases[0] == "woven basket"
     assert "anywhere" not in phrases
+
+
+def test_heuristic_relevant_phrases_prefers_object_over_verb_stem():
+    """Holdout q104/q105: do not verify SigLIP on ``trying remember placed``."""
+    clock = heuristic_relevant_phrases(
+        "I'm trying to remember where I placed the large wall clock. Where is it?"
+    )
+    assert clock[0] == "large wall clock"
+    bowl = heuristic_relevant_phrases("I'm looking for the fruit bowl.")
+    assert bowl[0] == "fruit bowl"
+    from emet.memory.graph_eqa.graph_memory import heuristic_relevant_objects
+
+    objs = heuristic_relevant_objects(
+        "I'm trying to remember where I placed the large wall clock. Where is it?"
+    )
+    assert "clock" in objs
+    assert "trying" not in objs
+    assert "remember" not in objs
+
+
+def test_heuristic_phrases_strip_mcq_options():
+    """Agentic full question string must not yield ``table sunroom answer``."""
+    from emet.memory.graph_eqa.graph_memory import heuristic_relevant_objects, question_stem_for_keywords
+
+    full = (
+        "I'm looking for the fruit bowl. "
+        "A) On the kitchen island B) On the dining table "
+        "C) On the coffee table D) In the sunroom. Answer:"
+    )
+    assert "fruit bowl" in question_stem_for_keywords(full).lower()
+    assert "sunroom" not in question_stem_for_keywords(full).lower()
+    phrases = heuristic_relevant_phrases(full)
+    assert phrases[0] == "fruit bowl"
+    assert "sunroom" not in " ".join(phrases)
+    assert "answer" not in heuristic_relevant_objects(full)
 
 
 def test_consolidate_relevant_keywords_drops_subsumed_tokens():
@@ -607,8 +833,8 @@ def test_select_relevant_obs_ids_diversifies_views():
 
 
 def test_select_relevant_obs_ids_spatial_spread_after_frontier_sort():
-    """Regression: frontier deprioritization must not shadow the observation index map."""
-    from emet.memory.graph_eqa.graph_memory import GraphNode, replace
+    """Frontier placeholders are excluded from answer images; others still diversify."""
+    from emet.memory.graph_eqa.graph_memory import replace
 
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     mem = GraphEQAMemory(defer_llm_clients=True)
@@ -616,7 +842,7 @@ def test_select_relevant_obs_ids_spatial_spread_after_frontier_sort():
     mem.add_observation(rgb, np.array([4.0, 0.0, 0.5]), ["table"])
     mem.add_observation(rgb, np.array([8.0, 0.0, 0.5]), ["chair"])
     mem._relevant_objects = ["lamp"]
-    # Mark obs 2 as frontier on its graph node so step 2 runs and used to clobber ``by_id``.
+    # Mark obs 2 as frontier — must never be attached for answering.
     nodes = mem.get_nodes()
     for idx, node in enumerate(nodes):
         if int(node.obs_id) == 2:
@@ -624,8 +850,21 @@ def test_select_relevant_obs_ids_spatial_spread_after_frontier_sort():
             break
 
     obs_ids = mem._select_relevant_obs_ids(max_images=3)
-    assert len(obs_ids) == 3
-    assert len(set(obs_ids)) == 3
+    assert 2 not in obs_ids
+    assert len(set(obs_ids)) == len(obs_ids)
+    assert set(obs_ids) <= {1, 3}
+
+
+def test_select_relevant_obs_ids_never_returns_frontier_placeholders():
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["frontier"])
+    mem._nodes[0].is_frontier = True
+    mem.add_observation(rgb, np.array([1.0, 1.0, 0.5]), ["sofa"])
+    mem._relevant_objects = ["clock"]
+    obs_ids = mem._select_relevant_obs_ids(max_images=3)
+    assert obs_ids == [2]
+    assert all(not mem._obs_is_frontier(oid) for oid in obs_ids)
 
 
 def test_select_relevant_obs_ids_uses_siglip_obs_grounder():
@@ -689,6 +928,86 @@ def test_display_image_index_maps_to_selected_obs_ids():
     assert float(target[0]) == 0.0
     assert float(target[1]) == 0.0
     assert mem.last_eqa_obs_ids == obs_ids
+
+
+def test_action_image_ref_accepts_graph_obs_id():
+    """SCENE_GRAPH ``[Image 19]`` must resolve even when prompt only has Images 1..K."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.add_observation(rgb, np.array([0.0, 0.0, 0.5]), ["sofa"])
+    # Simulate a frontier (or distant) observation with a large obs_id like HM-EQA.
+    mem._observations.append(
+        GraphObservation(
+            obs_id=19,
+            rgb=rgb,
+            xyz=np.array([5.0, 5.0, 0.5]),
+            labels=["frontier"],
+            description="unexplored",
+        )
+    )
+    assert mem._resolve_eqa_action_image_ref(1, [1]) == 1
+    assert mem._resolve_eqa_action_image_ref(19, [1]) == 19
+    assert mem._resolve_eqa_action_image_ref(99, [1]) is None
+
+
+def test_query_answer_never_attaches_frontier_placeholder_rgb():
+    """Holdout q104/q105 failfix4: answering off black 8×8 frontiers must not happen."""
+    from emet.memory.graph_eqa.graph_memory import GraphNavigationSample, GraphNode, replace
+
+    real_rgb = np.full((40, 40, 3), 120, dtype=np.uint8)
+    black = np.zeros((8, 8, 3), dtype=np.uint8)
+    captured: dict = {"n_imgs": 0, "shapes": []}
+
+    def _eqa(cmds):
+        imgs = [c for c in cmds if hasattr(c, "size")]
+        captured["n_imgs"] = len(imgs)
+        captured["shapes"] = [tuple(np.asarray(im).shape) for im in imgs]
+        return (
+            "reasoning: need real view\n"
+            "answer: unknown\n"
+            "confidence: false\n"
+            "action: 19\n"
+            "confidence_reasoning: explore graph image 19\n"
+        )
+
+    mem = GraphEQAMemory(eqa_client=_eqa, image_description_client=lambda _x: "sofa")
+    mem.add_observation(black, np.array([0.0, 0.0, 0.5]), ["frontier"])
+    mem._nodes[0] = replace(mem._nodes[0], is_frontier=True)
+    # Frontier-only graph would previously attach the placeholder; nav samples must win.
+    mem._nav_samples.append(
+        GraphNavigationSample(rgb=real_rgb, xyz=np.array([1.0, 2.0, 0.5]), base_xyz=np.array([0.0, 0.0, 0.0]))
+    )
+    mem._observations.append(
+        GraphObservation(
+            obs_id=19,
+            rgb=black,
+            xyz=np.array([5.0, 5.0, 0.5]),
+            labels=["frontier"],
+            description="unexplored",
+        )
+    )
+    mem._nodes.append(
+        GraphNode(
+            node_id=99,
+            labels=["frontier"],
+            xyz=np.array([5.0, 5.0, 0.5]),
+            obs_id=19,
+            is_frontier=True,
+        )
+    )
+    _r, _a, conf, _cr, _tp, imgs = mem.query_answer(
+        "I'm looking for the fruit bowl. A) On the kitchen island B) On the dining table "
+        "C) On the coffee table D) In the sunroom. Answer:"
+    )
+    assert conf is False
+    assert mem.last_eqa_obs_ids == []
+    assert mem.last_eqa_nav_fallback_count == 1
+    assert captured["n_imgs"] == 1
+    assert captured["shapes"] == [(40, 40, 3)]
+    assert len(imgs) == 1
+    assert tuple(np.asarray(imgs[0]).shape) == (40, 40, 3)
+    # Action:19 is a graph obs_id, not prompt-local Image 19.
+    assert mem.last_eqa_action_obs_id == 19
 
 
 def test_navigation_waypoint_prefers_viewpoint_when_far():

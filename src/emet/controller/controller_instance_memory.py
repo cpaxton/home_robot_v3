@@ -302,6 +302,8 @@ class InstanceMemoryController(BaseController):
         for instance in self.get_voxel_map().get_instances():
             ins = instance.get_instance_id()
             emb = instance.get_image_embedding(aggregation_method=aggregation_method, normalize=normalize)
+            if emb is None or not isinstance(emb, torch.Tensor):
+                continue
             activation = self.encoder.compute_score(emb, encoded_text)
             if activation.item() > best_activation:
                 best_activation = activation.item()
@@ -352,6 +354,8 @@ class InstanceMemoryController(BaseController):
         for instance in self.get_voxel_map().get_instances():
             ins = instance.get_instance_id()
             emb = instance.get_image_embedding(aggregation_method=aggregation_method, normalize=normalize)
+            if emb is None or not isinstance(emb, torch.Tensor):
+                continue
 
             # TODO: this is hacky - should probably just not support other encoders this way
             # if hasattr(self.encoder, "classify"):
@@ -1214,7 +1218,10 @@ class InstanceMemoryController(BaseController):
 
     def is_match_by_feature(self, instance, goal):
         object_class_feature = self.encode_text(goal).cpu()
-        emb = instance.get_image_embedding(aggregation_method="mean", normalize=True).cpu()
+        emb = instance.get_image_embedding(aggregation_method="mean", normalize=True)
+        if emb is None or not isinstance(emb, torch.Tensor):
+            return False
+        emb = emb.cpu()
         activation = torch.cosine_similarity(emb, object_class_feature, dim=-1)
         if activation > self.feature_match_threshold:
             print(f" - Found instance {instance.global_id} with similarity {activation} to {goal}.")
@@ -1336,9 +1343,13 @@ class InstanceMemoryController(BaseController):
         goal_emb = self.encode_text(goal)
         ranked_matches = []
         for i, instance in enumerate(instances):
-            img_emb = instance.get_image_embedding(aggregation_method="mean", normalize=self.normalize_embeddings).to(
-                goal_emb.device
+            emb = instance.get_image_embedding(
+                aggregation_method="mean", normalize=self.normalize_embeddings
             )
+            # Pickles / incomplete instance views can yield None (or a list of Nones).
+            if emb is None or not isinstance(emb, torch.Tensor):
+                continue
+            img_emb = emb.to(goal_emb.device)
             score = torch.matmul(goal_emb, img_emb.T).item()
             ranked_matches.append((score, i, instance))
         ranked_matches.sort(reverse=True)

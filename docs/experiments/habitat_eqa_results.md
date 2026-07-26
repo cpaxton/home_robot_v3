@@ -168,24 +168,27 @@ Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representa
 
 **Gate result (2026-07-12, `q17_gate_20260712_000543`):** **2/3** pass (t1 D/41 nodes, t2 D/44, t3 B/62 fail); fingerprint `merge=0.45` / `fallback=0.45` / `profile=unified_eqa` / `explore=conservative` / commit `fd43538` (+ loc-MCQ fixes on branch).
 
-## Classic vs agentic-verify Dynagraph (2026-07-23)
+## Classic vs agentic-verify Dynagraph (2026-07-23 → 2026-07-26)
 
-Same Dynagraph memory / Habitat harness (`explore_when_uncovered=off`, no MCQ debias, memory-summary on, Qwen3-VL-8B). Only difference: `EMET_EQA_AGENTIC_VERIFY` (agentic uses tool loop with router off).
+Same Dynagraph memory / Habitat harness (`explore_when_uncovered=off`, no MCQ debias, memory-summary on, Qwen3-VL-8B). Agentic uses the tool loop; scored runs used **router off** (`EMET_EQA_AGENTIC_ROUTER=0`), owlv2 proposals, allow-unverified.
 
-Entrypoint: [`scripts/run_hmeqa_agentic_h2h.sh`](../../scripts/run_hmeqa_agentic_h2h.sh). Coverage figure: [`scripts/render_hmeqa_agentic_coverage_figure.py`](../../scripts/render_hmeqa_agentic_coverage_figure.py). Use distinct `--debug-run-tag` / `OUT/bundles/{arm}_qN` snapshots so arms do not overwrite `~/.cache/habitat_eqa/episodes/`.
+Entrypoint: prefer **`uv run emet hmeqa overnight`** / **`emet hmeqa h2h`** ([`scripts/run_hmeqa_agentic_h2h.sh`](../../scripts/run_hmeqa_agentic_h2h.sh)). Coverage figure: [`scripts/render_hmeqa_agentic_coverage_figure.py`](../../scripts/render_hmeqa_agentic_coverage_figure.py). Use distinct `--debug-run-tag` / `OUT/bundles/{arm}_qN` snapshots so arms do not overwrite `~/.cache/habitat_eqa/episodes/`.
 
 | Slice | Classic | Agentic | Mean steps (C → A) | Artifacts |
 |-------|---------|---------|--------------------|-----------|
 | Holdout-4 `{15,68,105,17}` | 3/4 (75%) | **4/4 (100%)** | 60.0 → **19.3** | `~/runs/emet/hmeqa_agentic_h2h_20260723_170804` |
 | Holdout-8 `{15,56,65,68,79,88,104,105}` | 5/8 (62.5%) | **8/8 (100%)** | 60.3 → **18.3** | `~/runs/emet/hmeqa_agentic_h2h8_20260723_174307` |
+| Balanced-32 (2026-07-26 r2) | 9/32 (28.1%) | **11/32 (34.4%)** | 48.7 → **17.8** | `~/runs/emet/hmeqa_agentic_bal32r2_20260726_105946` |
+| Balanced-32 overnight replicate | 10/32 (31.2%) | **12/32 (37.5%)** | 47.7 → **16.5** | `~/runs/emet/hmeqa_overnight_20260726_022227/bal32` |
 
-Holdout-8 classic misses recovered by agentic: **Q56** (A→C), **Q65** (C→A), **Q104** (A→D). Paper: §Classic vs agentic verify; figures `paper/figs/hmeqa_agentic_h2h.png`, `paper/figs/hmeqa_agentic_coverage.png`.
+Holdout-8 classic misses recovered by agentic: **Q56** (A→C), **Q65** (C→A), **Q104** (A→D). Balanced-32: McNemar on letters **not significant** (p≈0.73); planning-step reduction is (Wilcoxon p≈4e-7). Paper: §Classic vs agentic verify; figures `paper/figs/hmeqa_agentic_h2h.png`, `paper/figs/hmeqa_agentic_coverage.png` (holdout-8 panels). Summaries: `paper/data/hmeqa_agentic_h2h/`.
 
 ```bash
-# Holdout-8 H2H (prefer nohup; one GPU job)
-nohup env EMET_ALLOW_SDPA_ATTN=1 HOLDOUT_IDS=15,56,65,68,79,88,104,105 \
-  ./scripts/run_hmeqa_agentic_h2h.sh \
-  >> ~/runs/emet/hmeqa_agentic_h2h8_nohup.log 2>&1 &
+uv run emet eval recover --need-mib 12000
+uv run emet hmeqa overnight
+# probe:
+uv run emet hmeqa h2h ~/runs/emet/hmeqa_graph_probe --arms agentic \
+  --ids 12,17,18,56 --agentic-verifier owlv2 --require-verified
 ```
 
 ### Commands
