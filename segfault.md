@@ -26,7 +26,26 @@ uv run emet eval status
 
 ---
 
-### q104 soft-recent smoke (launching 2026-07-25 22:53)
+### q104 soft-recent smoke — PASSED (2026-07-25 23:00)
+
+| Field | Value |
+|-------|-------|
+| Job | `20260725_225326_893b65` done |
+| OUT | `~/runs/emet/hmeqa_agentic_q104_softrecent_20260725_225212` |
+| Frontier | **4 non-null** / 2 null (was 6/6 null); 4 `frontier_picks/iter_*.png` |
+| Score | still 0/1 empty pred (verify gate) — explore fix only |
+| Next | resume bal-32 |
+
+### bal-32 resume (launching)
+
+| Field | Value |
+|-------|-------|
+| OUT | `~/runs/emet/hmeqa_agentic_bal32_20260725_101519` |
+| Progress | classic 14/32, agentic 4/10 @ 52/64 — resume fills empties |
+| Commit | soft-recent + INCOMPLETE DONE gate |
+| Do not | kill-stale; second GPU job |
+
+
 
 | Field | Value |
 |-------|-------|
