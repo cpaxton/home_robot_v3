@@ -300,8 +300,47 @@ def _transform_bounds_3d(bounds: dict[str, Any] | None, transform: np.ndarray) -
     }
 
 
+def _transform_xyz_list_field(value: Any, transform: np.ndarray) -> Any:
+    """Transform a length-3 xyz list/array; return ``value`` unchanged if not xyz-like."""
+    if value is None:
+        return value
+    try:
+        arr = np.asarray(value, dtype=np.float64).reshape(-1)
+    except (TypeError, ValueError):
+        return value
+    if arr.size < 3:
+        return value
+    out = transform_points_xyz(arr[:3].reshape(1, 3), transform)[0]
+    if isinstance(value, list):
+        return out.tolist()
+    return out
+
+
+def _transform_change_event(event: dict[str, Any], transform: np.ndarray) -> dict[str, Any]:
+    """Copy a belief/change event dict with spatial fields mapped by ``transform``."""
+    out = dict(event)
+    for key in ("xyz", "from_xyz", "to_xyz", "last_xyz"):
+        if key in out:
+            out[key] = _transform_xyz_list_field(out[key], transform)
+    return out
+
+
+def _transform_position_covariance(cov: Any, transform: np.ndarray) -> np.ndarray | None:
+    if cov is None:
+        return None
+    c = np.asarray(cov, dtype=np.float64)
+    if c.shape != (3, 3):
+        return c
+    r = np.asarray(transform, dtype=np.float64).reshape(4, 4)[:3, :3]
+    return r @ c @ r.T
+
+
 def apply_se2_to_graph(graph_memory: Any, transform: np.ndarray) -> int:
     """Transform graph node / observation XYZ (and AABB bounds) by ``transform``.
+
+    Also remaps belief sidecars from main (``position_history``, ``change_events``,
+    ``position_covariance``) so a --refine-start fudge stays consistent with the
+    new uncertain-track fields.
 
     Returns the number of object/viewpoint nodes updated.
     """
@@ -317,7 +356,32 @@ def apply_se2_to_graph(graph_memory: Any, transform: np.ndarray) -> int:
     for n in nodes:
         xyz = transform_points_xyz(np.asarray(n.xyz, dtype=np.float64).reshape(1, 3), t)[0]
         bounds = _transform_bounds_3d(getattr(n, "bounds_3d", None), t)
-        new_nodes.append(replace(n, xyz=xyz, bounds_3d=bounds))
+        history = [
+            _transform_change_event(dict(entry), t) for entry in (getattr(n, "position_history", None) or [])
+        ]
+        changes = [
+            _transform_change_event(dict(entry), t) for entry in (getattr(n, "change_events", None) or [])
+        ]
+        cov = _transform_position_covariance(getattr(n, "position_covariance", None), t)
+        extent = getattr(n, "extent_half", None)
+        if bounds is not None and bounds.get("size") is not None:
+            size = np.asarray(bounds["size"], dtype=np.float64).reshape(3)
+            extent = 0.5 * size
+        kwargs: dict[str, Any] = {
+            "xyz": xyz,
+            "bounds_3d": bounds,
+        }
+        # Only pass fields that exist on this GraphNode version (frozen replace).
+        fields = getattr(type(n), "__dataclass_fields__", {})
+        if "position_history" in fields:
+            kwargs["position_history"] = history
+        if "change_events" in fields:
+            kwargs["change_events"] = changes
+        if "position_covariance" in fields:
+            kwargs["position_covariance"] = cov
+        if "extent_half" in fields and extent is not None:
+            kwargs["extent_half"] = np.asarray(extent, dtype=np.float64).reshape(3)
+        new_nodes.append(replace(n, **kwargs))
         n_updated += 1
     if hasattr(graph_memory, "_nodes"):
         graph_memory._nodes = new_nodes
@@ -332,9 +396,17 @@ def apply_se2_to_graph(graph_memory: Any, transform: np.ndarray) -> int:
             if getattr(o, "viewer_xyz", None) is not None:
                 o.viewer_xyz = transform_points_xyz(np.asarray(o.viewer_xyz, dtype=np.float64).reshape(1, 3), t)[0]
 
+    mem_events = getattr(graph_memory, "_change_events", None)
+    if isinstance(mem_events, list) and mem_events:
+        graph_memory._change_events = [_transform_change_event(dict(e), t) for e in mem_events]
+
     rebuild = getattr(graph_memory, "_rebuild_viewpoint_index", None)
     if callable(rebuild):
         rebuild()
+    # Spatial relations (near/on/contains) depend on node XYZ; rebuild when available.
+    update_edges = getattr(graph_memory, "_update_edges", None)
+    if callable(update_edges):
+        update_edges()
     return n_updated
 
 

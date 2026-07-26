@@ -181,3 +181,38 @@ def test_apply_se2_to_memory_updates_bounds():
     np.testing.assert_allclose(box.xyz[:2], [1.5, 1.0], atol=1e-6)
     assert box.bounds_3d is not None
     np.testing.assert_allclose(box.bounds_3d["min"][:2], [1.4, 0.9], atol=1e-6)
+
+
+def test_apply_se2_transforms_belief_history():
+    """Main added position_history / change_events; refine must move those xyz too."""
+    from dataclasses import replace
+
+    mem = _make_memory()
+    mem.add_observation(_rgb(), np.array([1.0, 0.0, 0.5]), ["mug"])
+    for i, n in enumerate(mem._nodes):
+        if n.labels and n.labels[0] == "mug":
+            mem._nodes[i] = replace(
+                n,
+                position_history=[{"step": 1, "xyz": [1.0, 0.0, 0.5], "confidence": 0.6}],
+                change_events=[
+                    {
+                        "type": "position_contradiction",
+                        "from_xyz": [0.8, 0.0, 0.5],
+                        "to_xyz": [1.0, 0.0, 0.5],
+                    }
+                ],
+                position_covariance=np.diag([0.04, 0.01, 0.0]),
+            )
+            break
+    mem._change_events = [
+        {"type": "expected_object_missing", "last_xyz": [1.0, 0.0, 0.5]},
+    ]
+    t = se2_matrix(0.25, -0.1, 0.0)
+    apply_se2_to_graph(mem, t)
+    mug = next(n for n in mem.get_nodes() if n.labels and n.labels[0] == "mug")
+    np.testing.assert_allclose(mug.position_history[0]["xyz"][:2], [1.25, -0.1], atol=1e-6)
+    np.testing.assert_allclose(mug.change_events[0]["from_xyz"][:2], [1.05, -0.1], atol=1e-6)
+    np.testing.assert_allclose(mug.change_events[0]["to_xyz"][:2], [1.25, -0.1], atol=1e-6)
+    # Pure translation: covariance unchanged.
+    np.testing.assert_allclose(mug.position_covariance, np.diag([0.04, 0.01, 0.0]), atol=1e-8)
+    np.testing.assert_allclose(mem._change_events[0]["last_xyz"][:2], [1.25, -0.1], atol=1e-6)
