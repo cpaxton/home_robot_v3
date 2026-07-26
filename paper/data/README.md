@@ -11,6 +11,7 @@ Use these JSON files to rebuild tables/figures and to re-run the Habitat H2H.
 | `holdout8_summary.json` | Scored holdout-8 letters / steps (paper Table) |
 | `holdout4_summary.json` | Earlier gate (n=4) |
 | `balanced32_summary.json` | Balanced-32 H2H (2026-07-26: classic 9/32, agentic 11/32; steps win) |
+| `balanced32_overnight_replicate.json` | Independent overnight bal-32 (classic 10/32, agentic 12/32) |
 | `failset104105_summary.json` | q104/q105 infra regression (empty pred / `n_object=0`) before vs after fix |
 | `coverage_panel_metrics.json` | Per-question metrics for `figs/hmeqa_agentic_coverage.png` |
 
@@ -23,6 +24,10 @@ Use these JSON files to rebuild tables/figures and to re-run the Habitat H2H.
 uv run python scripts/summarize_hmeqa_agentic_h2h.py \
   --from-summary paper/data/hmeqa_agentic_h2h/holdout8_summary.json \
   --output paper/figs/hmeqa_agentic_h2h.png
+# Balanced-32 bars (do not overwrite holdout-8 fig)
+uv run python scripts/summarize_hmeqa_agentic_h2h.py \
+  --from-summary paper/data/hmeqa_agentic_h2h/balanced32_summary.json \
+  --output paper/figs/hmeqa_agentic_h2h_bal32.png
 ```
 
 If `--from-summary` is unavailable, copy a run dir that already has `classic.jsonl` / `agentic.jsonl`, or regenerate (below).
