@@ -192,6 +192,9 @@ src/emet/assets/robot/galaxea_r1/t_*.xml
 # Cursor / agent local plans at repo root (committed plans live under docs/plans/)
 /*.plan.md
 
+# Local agent crash recovery notes (prefer scripts/status_log.sh; do not commit)
+/segfault.md
+
 # Maintainer diagnostic merged MJCF (not vendored assets)
 src/emet/assets/robot/**/diag_*.xml
 src/emet/assets/robot/**/*_spawn_measure.xml
