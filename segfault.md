@@ -26,6 +26,18 @@ uv run emet eval status
 
 ---
 
+### q104 soft-recent smoke (launching 2026-07-25 22:53)
+
+| Field | Value |
+|-------|-------|
+| OUT | `~/runs/emet/hmeqa_agentic_q104_softrecent_20260725_225212` |
+| Commit | `dd9c622` |
+| Arms | agentic only, ids=104 |
+| Expect | non-null `frontier_xyz` in trace; `bundles/agentic_q104/frontier_picks/iter_*.png` |
+| Do not | kill-stale; second GPU job; hard-kill Habitat |
+| After | if OK → `emet hmeqa resume ~/runs/emet/hmeqa_agentic_bal32_20260725_101519` |
+
+
 ### Holdout-8 updated agentic (launching)
 
 | Field | Value |
