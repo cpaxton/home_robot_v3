@@ -11,7 +11,7 @@
 #
 # Arms:
 #   classic  — EMET_EQA_AGENTIC_VERIFY=0 (Habitat planning loop; prior holdout numbers)
-#   agentic  — EMET_EQA_AGENTIC_VERIFY=1 EMET_EQA_AGENTIC_ROUTER=0 (nav→SigLIP verify→answer)
+#   agentic  — EMET_EQA_AGENTIC_VERIFY=1 (+ optional router / verifier / require-verified)
 #
 # Env:
 #   ARMS=classic,agentic   which arms to run (comma-separated)
@@ -35,6 +35,9 @@
 #   EPISODE_COOLDOWN_SEC=20  sleep + sync between episodes (0 disables). Reduces
 #                          stacked Habitat/VLM teardown pressure that can hard-freeze.
 #   EPISODE_GPU_WAIT=1     re-run gpu_preflight --wait between episodes (default 1).
+#   EMET_EQA_AGENTIC_ROUTER=0|1  honor for agentic arm (default 0). paper-router /
+#                          emet hmeqa overnight pass 1; do not hardcode over the env.
+#   EMET_EQA_AGENTIC_VERIFIER / EMET_EQA_AGENTIC_REQUIRE_VERIFIED  passed through.
 #
 # Prefer: uv run emet hmeqa h2h|resume  (dogfood CLI over hand-rolled env/taskset).
 # Recovery after an agent/session death (from *this* checkout — not a sibling tree):
@@ -530,9 +533,12 @@ for _arm in "${_arm_list[@]}"; do
       run_arm classic EMET_EQA_AGENTIC_VERIFY=0
       ;;
     agentic)
+      # Honor caller env (emet hmeqa --preset paper-router / overnight). Default
+      # router off matches the historical holdout-8 / bal-32 scored policy.
+      _router="${EMET_EQA_AGENTIC_ROUTER:-0}"
       run_arm agentic \
         EMET_EQA_AGENTIC_VERIFY=1 \
-        EMET_EQA_AGENTIC_ROUTER=0 \
+        "EMET_EQA_AGENTIC_ROUTER=${_router}" \
         EMET_EQA_TRACE=1
       ;;
     *)
@@ -550,10 +556,15 @@ uv run python scripts/render_hmeqa_agentic_coverage_figure.py "$OUT" \
   --output "$OUT/figures/hmeqa_agentic_coverage.png" \
   | tee -a "$OUT/orchestrator.log" || log "WARN: coverage figure failed"
 
-# Also copy into paper/figs when present.
-if [[ -d "$ROOT/paper/figs" && -f "$OUT/figures/hmeqa_agentic_coverage.png" ]]; then
-  cp -a "$OUT/figures/hmeqa_agentic_coverage.png" "$ROOT/paper/figs/hmeqa_agentic_coverage.png" || true
-  cp -a "$OUT/figures/hmeqa_agentic_h2h.png" "$ROOT/paper/figs/hmeqa_agentic_h2h.png" || true
+# Optional: copy figures into paper/figs (opt-in — bal-32 runs must not overwrite
+# the holdout-8 paper bars/coverage panels).
+if [[ "${COPY_PAPER_FIGS:-0}" == "1" && -d "$ROOT/paper/figs" ]]; then
+  if [[ -f "$OUT/figures/hmeqa_agentic_coverage.png" ]]; then
+    cp -a "$OUT/figures/hmeqa_agentic_coverage.png" "$ROOT/paper/figs/hmeqa_agentic_coverage.png" || true
+  fi
+  if [[ -f "$OUT/figures/hmeqa_agentic_h2h.png" ]]; then
+    cp -a "$OUT/figures/hmeqa_agentic_h2h.png" "$ROOT/paper/figs/hmeqa_agentic_h2h.png" || true
+  fi
 fi
 
 CRASHED_QIDS="$(find "$OUT" -maxdepth 1 -name '*_q*.CRASH' -printf '%f\n' 2>/dev/null | sed 's/\.CRASH$//' | paste -sd, - || true)"

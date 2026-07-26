@@ -10,7 +10,7 @@ Use these JSON files to rebuild tables/figures and to re-run the Habitat H2H.
 | `manifest.json` | Slice IDs, harness flags, git commit, reproduce entrypoints |
 | `holdout8_summary.json` | Scored holdout-8 letters / steps (paper Table) |
 | `holdout4_summary.json` | Earlier gate (n=4) |
-| `balanced32_summary.json` | Wave 1 balanced-32 H2H (may be `status: in_progress` until agentic DONE) |
+| `balanced32_summary.json` | Balanced-32 H2H (2026-07-26: classic 9/32, agentic 11/32; steps win) |
 | `failset104105_summary.json` | q104/q105 infra regression (empty pred / `n_object=0`) before vs after fix |
 | `coverage_panel_metrics.json` | Per-question metrics for `figs/hmeqa_agentic_coverage.png` |
 
@@ -50,10 +50,17 @@ diff -u paper/data/hmeqa_agentic_h2h/holdout8_summary.json \
 | Classic | 5/8 | 62.5% | 60.25 |
 | Agentic | 8/8 | 100% | 18.25 |
 
-### Balanced-32 (Wave 1)
+### Balanced-32
 
-See `hmeqa_agentic_h2h/balanced32_summary.json` and `hmeqa_agentic_h2h/README.md`. Classic-only snapshot at first land: **12/31 (~39%)**, mean steps ~52; agentic pending resume job.
+See `hmeqa_agentic_h2h/balanced32_summary.json` and `hmeqa_agentic_h2h/README.md`.
 
-VLM: `Qwen/Qwen3-VL-8B-Instruct`. Harness: Dynagraph, `explore_when_uncovered=off`, no MCQ debias, memory-summary on, agentic router off.
+| Arm | Correct | Accuracy | Mean planning steps |
+|-----|---------|----------|---------------------|
+| Classic | 9/32 | 28.1% | 48.7 |
+| Agentic | 11/32 | 34.4% | 17.8 |
+
+McNemar on letters is not significant (p≈0.73); planning-step reduction is (Wilcoxon p≈4e-7). Independent overnight replicate: classic 10/32, agentic 12/32. Historical salvage-bug Wave 1 (classic 12/32, agentic 9/32) is superseded — do not cite.
+
+VLM: `Qwen/Qwen3-VL-8B-Instruct`. Harness: Dynagraph, `explore_when_uncovered=off`, no MCQ debias, memory-summary on, agentic **router off**, owlv2 proposals, allow-unverified.
 
 More context: [docs/experiments/habitat_eqa_results.md](../../docs/experiments/habitat_eqa_results.md) (Classic vs agentic-verify section), [docs/experiments/agentic_scale.md](../../docs/experiments/agentic_scale.md).

@@ -1,7 +1,7 @@
 # Agentic HM-EQA scale experiments
 
-Results branch: **`exp/agentic-hmeqa-bal32-results`** (off `main` after scale-doc PR #79).
-Live Wave 1 run: `~/runs/emet/hmeqa_agentic_bal32_20260723_212307`.
+Results branch: **`exp/agentic-hmeqa-bal32-results`** (PR #81).
+Balanced-32 of record: `~/runs/emet/hmeqa_agentic_bal32r2_20260726_105946`.
 
 Goal: test whether classic vs agentic-verify Dynagraph gains hold past holdout-8.
 
@@ -10,19 +10,21 @@ Goal: test whether classic vs agentic-verify Dynagraph gains hold past holdout-8
 | Wave | What | Status |
 |------|------|--------|
 | 0 | Flash-Attn in `.venv-habitat`; bundle-tag smoke; scale doc (#79) | done (SDPA fallback) |
-| 1 | **Balanced-32** classic vs agentic H2H (primary) | **DONE — agentic miss** (12/32 classic vs 9/32 agentic) |
-| 1b | Fail-set ablation after answer-token fix (holdout-8 + classic_only) | next |
-| 2 | Paper-20 **or** annotated-semantics H2H (one night) | blocked until 1b recovers |
-| 3 | Full 113 classic dynagraph + `graph_eqa`; agentic 113 only if Wave 1–2 support claim | later |
+| 1 | **Balanced-32** classic vs agentic H2H (primary) | **DONE** — agentic **11/32** vs classic **9/32** (McNemar n.s.; steps win) |
+| 1b | Fail-set / explore / verify-gate fixes (q104/q105, carve, soft-recent) | done (landed on branch) |
+| 2 | Paper-20 **or** annotated-semantics H2H (one night) | optional — accuracy gap on n=32 is small |
+| 3 | Full 113 classic dynagraph + `graph_eqa`; agentic 113 only if claiming letter win | later (efficiency claim already supported) |
 
 ## Harness (all Habitat H2Hs)
 
 - Method: `dynagraph`
 - VLM: `Qwen/Qwen3-VL-8B-Instruct`
 - `explore_when_uncovered=off`, `--no-mcq-debias`, `--memory-summary`
-- Agentic: `EMET_EQA_AGENTIC_VERIFY=1`, `EMET_EQA_AGENTIC_ROUTER=0`
+- Agentic: `EMET_EQA_AGENTIC_VERIFY=1`; scored bal-32 used `EMET_EQA_AGENTIC_ROUTER=0` (H2H now honors env; default still 0)
 - Classic: `EMET_EQA_AGENTIC_VERIFY=0`
+- Dogfood: `uv run emet hmeqa overnight` or `emet hmeqa h2h --preset paper-router`
 - Always use distinct `--debug-run-tag` / `OUT/bundles/{arm}_qN` (see `scripts/run_hmeqa_agentic_h2h.sh`)
+- Do **not** set `COPY_PAPER_FIGS=1` on bal-32 (overwrites holdout-8 paper figures)
 
 ## SigLIP role in agentic verify (design)
 
@@ -66,32 +68,29 @@ Same letter-balanced set as overnight scripts:
 ## Commands
 
 ```bash
-# Wave 1 (emet owns jobs, GPU exclusivity, affinity, and crash policy)
+# Preferred: overnight ladder (holdout gate → bal-32) or direct H2H
+uv run emet eval recover --need-mib 12000
+uv run emet hmeqa overnight
+# or:
 OUT=~/runs/emet/hmeqa_agentic_bal32_$(date +%Y%m%d_%H%M%S)
-uv run emet hmeqa h2h "$OUT" --arms classic,agentic \
-  --ids 2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,31,32,33,34,38,39,40,41,43,44,47,48,49,57,76,80,84 \
-  --agentic-verifier owlv2 --require-verified
+uv run emet hmeqa h2h "$OUT" --preset paper-router --job-name hmeqa-bal32
 
-uv run emet jobs                 # progress / ETA
-uv run emet jobs logs JOB_ID --tail 40
+uv run emet jobs
+uv run emet hmeqa resume "$OUT" --preset paper-router
 
-# Resume after crash (skip non-empty per-qid jsonl; finish missing + agentic):
-uv run emet jobs run --name hmeqa-bal32-finish --need-mib 12000 --out-dir "$OUT" -- \
-  env EMET_ALLOW_SDPA_ATTN=1 RESUME=1 ARMS=classic,agentic SKIP_KILL_STALE=1 \
-  HOLDOUT_IDS=2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,31,32,33,34,38,39,40,41,43,44,47,48,49,57,76,80,84 \
-  ./scripts/run_hmeqa_agentic_h2h.sh "$OUT"
-
-# After DONE: minimal paper data
+# After DONE: minimal paper data (+ significance)
 uv run python scripts/summarize_hmeqa_agentic_h2h.py "$OUT"
+uv run python scripts/hmeqa_significance.py "$OUT"
 cp "$OUT/h2h_summary.json" paper/data/hmeqa_agentic_h2h/balanced32_summary.json
 ```
 
 ## Go / no-go (after Wave 1)
 
-- **Result (2026-07-24):** classic **12/32**, agentic **9/32**, mean steps 52.5 vs 18.0.
-- Root cause for agentic miss: submit path forced `EMET_EQA_ANSWER_MAX_NEW_TOKENS=64` → **32/32 `[salvage]`** answers; classic used 256. Classic-only losses: **11,14,28,39,47**.
-- If agentic **accuracy ≤ classic** on bal-32 → stop; diagnose before any 113 agentic. **Triggered — tune before Wave 2.**
-- If agentic **wins or ties** with clearly lower mean planning steps → Wave 2 or Wave 3 classic 113.
+- **Result (2026-07-26, bal-32r2):** classic **9/32**, agentic **11/32**, mean steps **48.7 → 17.8**. McNemar p≈0.73 (letter gap n.s.); Wilcoxon steps p≈4e-7.
+- **Replicate (overnight bal-32):** classic **10/32**, agentic **12/32** — same pattern.
+- **Historical (2026-07-24 salvage bug):** classic 12/32, agentic 9/32 under forced 64-token answers — superseded; do not cite as current method.
+- **Go for efficiency claim** (agentic uses ~3× fewer planning steps on matched Dynagraph). **No-go for letter-accuracy claim** on n=32 without a larger / semantics-richer slice.
+- Wave 2/3 agentic-113 for *accuracy* remains optional until a clearer letter win; classic-113 for the paper baseline is still useful.
 
 ## Fail-set ablation (Wave 1b)
 

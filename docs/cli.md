@@ -700,9 +700,9 @@ Dogfood entrypoints for classic vs agentic-verify Dynagraph. Prefer these over h
 
 Default crash policy is **skip** (settle + retry, continue). **`--streak-abort 2`** (default) aborts early after consecutive native crashes so a wedged driver does not burn the full batch.
 
-**`--preset paper-router`** (on `h2h` / `resume`): sets owlv2 + allow-unverified + agentic-router where flags were left at Click defaults; explicit flags still win. Probe runs should omit the preset and keep `--require-verified`.
+**`--preset paper-router`** (on `h2h` / `resume`): sets owlv2 + allow-unverified + agentic-router where flags were left at Click defaults; explicit flags still win. Probe runs should omit the preset and keep `--require-verified`. `run_hmeqa_agentic_h2h.sh` honors `EMET_EQA_AGENTIC_ROUTER` (default `0`); scored 2026-07-26 bal-32 used router off because the script previously hardcoded it.
 
-**`emet hmeqa overnight`** defaults to paper-router policy (owlv2, allow-unverified, router on). Inner phases call `run_hmeqa_agentic_h2h.sh` directly (no nested jobs). `scripts/run_hmeqa_overnight_ladder.sh` is a thin shim to this command.
+**`emet hmeqa overnight`** defaults to paper-router policy (owlv2, allow-unverified, router on). Inner phases call `run_hmeqa_agentic_h2h.sh` directly (no nested jobs). `scripts/run_hmeqa_overnight_ladder.sh` is a thin shim to this command. Set `COPY_PAPER_FIGS=1` only when regenerating **holdout-8** paper figures (default off so bal-32 cannot overwrite them).
 
 Agentic validation uses `scripts/summarize_agentic_ladder.py`: it reports accuracy, selective risk/coverage, fused-verify precision, visibility at verify, path length, hypothesis count, abstention, false confirmation, and forced submits. Balanced-32 is blocked unless a 4+ episode probe has a nonzero fused verified-answer rate and zero forced submits.
 

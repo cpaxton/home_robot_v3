@@ -5,32 +5,47 @@ Minimal checked-in summaries only (no RGB / voxels / traces).
 | File | Slice | Status |
 |------|-------|--------|
 | `holdout4_summary.json` | n=4 gate | complete |
-| `holdout8_summary.json` | n=8 paper table | complete |
-| `balanced32_summary.json` | Wave 1 scale (n=32) | complete — agentic 9/32 < classic 12/32 |
+| `holdout8_summary.json` | n=8 paper table | complete — classic 5/8, agentic **8/8** |
+| `balanced32_summary.json` | n=32 of record | complete — classic **9/32**, agentic **11/32**; router off; steps win |
+| `balanced32_overnight_replicate.json` | n=32 replicate | complete — classic **10/32**, agentic **12/32** |
 | `failset104105_summary.json` | q104/q105 infra regression | failfix5 fixed `n_object`/empty-pred; letters still wrong |
 | `coverage_panel_metrics.json` | coverage figure metrics | holdout-8 |
 | `manifest.json` | IDs, harness, run dirs | |
 
-## Balanced-32 (live)
+## Balanced-32 (2026-07-26)
 
-Run dir: `~/runs/emet/hmeqa_agentic_bal32_20260723_212307`  
-Job: `emet jobs status 20260724_005904_6db975`
+Run of record: `~/runs/emet/hmeqa_agentic_bal32r2_20260726_105946`  
+Job: `20260726_105950_99aa96` @ commit `8c9a388`
 
-When `OUT/DONE` appears:
+| Arm | Correct | Accuracy | Mean planning steps |
+|-----|---------|----------|---------------------|
+| Classic | 9/32 | 28.1% | 48.7 |
+| Agentic | 11/32 | 34.4% | 17.8 |
+
+McNemar p≈0.73 (not significant). Wilcoxon on steps p≈4e-7 (agentic cheaper).  
+Independent overnight replicate (`hmeqa_overnight_20260726_022227/bal32`): classic 10/32, agentic 12/32.
+
+Policy actually scored: owlv2 proposals + allow-unverified + **`EMET_EQA_AGENTIC_ROUTER=0`** (H2H previously hardcoded router off; fixed to honor env for future runs).
+
+Historical salvage-bug Wave 1 (`hmeqa_agentic_bal32_20260723_212307`): classic 12/32, agentic 9/32 — do not cite as current method.
 
 ```bash
-OUT=~/runs/emet/hmeqa_agentic_bal32_20260723_212307
+OUT=~/runs/emet/hmeqa_agentic_bal32r2_20260726_105946
 uv run python scripts/summarize_hmeqa_agentic_h2h.py "$OUT"
-# Merge status fields if desired, then:
+uv run python scripts/hmeqa_significance.py "$OUT"
 cp "$OUT/h2h_summary.json" paper/data/hmeqa_agentic_h2h/balanced32_summary.json
+# Holdout paper figs only (opt-in):
+COPY_PAPER_FIGS=1 …  # or rebuild from holdout8_summary.json
 ```
 
-## Holdout-8 headline
+## Holdout-8 headline (paper table)
 
 | Arm | Correct | Accuracy | Mean planning steps |
 |-----|---------|----------|---------------------|
 | Classic | 5/8 | 62.5% | 60.25 |
 | Agentic | 8/8 | 100% | 18.25 |
+
+Paper figures `figs/hmeqa_agentic_h2h.png` / `hmeqa_agentic_coverage.png` are **holdout-8** (Q15/Q104/Q68 panels). Do not overwrite from bal-32 runs.
 
 ## Failset q104/q105 (infra)
 
