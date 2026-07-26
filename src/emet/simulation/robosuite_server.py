@@ -1980,27 +1980,44 @@ class RobosuiteZmqServer(BaseZmqServer):
 
         if EMET_ACTION_SIM_ATTACH_BODY_KEY in action:
             body, ee, offset = parse_sim_attach_body_action(action[EMET_ACTION_SIM_ATTACH_BODY_KEY])
-            if body and ee and self._mjmodel is not None and self._mjdata is not None:
-                with self._mj_lock:
-                    mujoco.mj_forward(self._mjmodel, self._mjdata)
-                    ee_id = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, ee)
-                    body_id = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, body)
-                    if ee_id < 0 or body_id < 0:
-                        logger.warning(f"sim_attach_body: missing ee={ee!r} or body={body!r}")
-                    else:
-                        R = np.asarray(self._mjdata.body(ee_id).xmat, dtype=np.float64).reshape(3, 3)
-                        ee_pos = np.asarray(self._mjdata.body(ee_id).xpos, dtype=np.float64).reshape(3)
-                        body_pos = np.asarray(self._mjdata.body(body_id).xpos, dtype=np.float64).reshape(3)
-                        if offset is not None:
-                            offset_local = np.asarray(offset, dtype=np.float64).reshape(3)
+            if not body or not ee:
+                logger.warning(f"sim_attach_body: parse failed raw={action.get(EMET_ACTION_SIM_ATTACH_BODY_KEY)!r}")
+            elif self._mjmodel is None or self._mjdata is None:
+                logger.warning("sim_attach_body: model/data not loaded")
+            else:
+                try:
+                    with self._mj_lock:
+                        mujoco.mj_forward(self._mjmodel, self._mjdata)
+                        ee_id = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, ee)
+                        body_id = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, body)
+                        if ee_id < 0 or body_id < 0:
+                            logger.warning(
+                                f"sim_attach_body: missing ee={ee!r}(id={ee_id}) or body={body!r}(id={body_id})"
+                            )
                         else:
-                            offset_local = R.T @ (body_pos - ee_pos)
-                        self._kinematic_attachments[body] = {
-                            "ee_body": ee,
-                            "offset_local": offset_local,
-                        }
-                        self._snap_kinematic_attachments()
-                        logger.info(f"sim_attach_body: {body!r} -> ee={ee!r}")
+                            R = np.asarray(self._mjdata.body(ee_id).xmat, dtype=np.float64).reshape(3, 3)
+                            ee_pos = np.asarray(self._mjdata.body(ee_id).xpos, dtype=np.float64).reshape(3)
+                            body_pos = np.asarray(self._mjdata.body(body_id).xpos, dtype=np.float64).reshape(3)
+                            if offset is not None:
+                                offset_local = np.asarray(offset, dtype=np.float64).reshape(3)
+                            else:
+                                offset_local = R.T @ (body_pos - ee_pos)
+                            self._kinematic_attachments[body] = {
+                                "ee_body": ee,
+                                "offset_local": offset_local,
+                            }
+                            world = ee_pos + R @ offset_local
+                            if not set_free_body_pose(self._mjmodel, self._mjdata, body, world):
+                                logger.warning(f"sim_attach_body: set_free_body_pose failed for {body!r}")
+                            else:
+                                self._patch_emet_session_body_pos(body, world.tolist())
+                            self._snap_kinematic_attachments()
+                            logger.info(
+                                f"sim_attach_body: {body!r} -> ee={ee!r} "
+                                f"|offset|={float(np.linalg.norm(offset_local)):.3f}"
+                            )
+                except Exception:
+                    logger.exception(f"sim_attach_body failed for body={body!r} ee={ee!r}")
 
         if EMET_ACTION_SIM_DETACH_BODY_KEY in action:
             body = parse_sim_detach_body_action(action[EMET_ACTION_SIM_DETACH_BODY_KEY])

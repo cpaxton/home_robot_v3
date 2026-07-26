@@ -278,10 +278,11 @@ def main() -> int:
             from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
 
             # Approach object on table (freejoint robots need EMET_SIM_NAV_TELEPORT for reliable snap).
+            # Stand off farther than the base footprint so teleport does not embed the chassis in the table.
             if obj_body and before is not None:
                 os.environ.setdefault("EMET_SIM_NAV_TELEPORT", "1")
                 approach = np.array(
-                    [float(before[0]), float(before[1]) + 0.28, -np.pi / 2],
+                    [float(before[0]), float(before[1]) + 0.55, -np.pi / 2],
                     dtype=np.float64,
                 )
                 print(f"Approaching object: move_base_to {approach.tolist()} (nav_teleport)", flush=True)

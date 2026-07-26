@@ -289,16 +289,26 @@ class KinematicPickPlaceExecutor:
         self.robot.set_actuator_positions(hold)
 
     def _command_home_posture(self, settle_s: float = 1.5) -> None:
+        """Drive torso/arms/grippers to the profile home (skip base steer/wheel actuators).
+
+        Base freejoint / planar holds are owned by the sim server after nav teleport; pinning
+        wheel velocity actuators to 0 from the client can fight that hold and destabilize limbs.
+        """
         names = self._actuator_names()
         home_ctrl = self.profile.home_cmd
+        skip_base = {"steer1", "wheel1", "steer2", "wheel2", "steer3", "wheel3"}
         cmd = {
             n: float(home_ctrl[i])
             for i, n in enumerate(self.profile.actuator_names)
-            if i < len(home_ctrl) and n in names
+            if i < len(home_ctrl) and n in names and n not in skip_base
         }
         if cmd:
-            self.robot.set_actuator_positions(cmd)
-            self._sleep(float(settle_s))
+            # Repeated holds: a single send after nav teleport often loses to contact transients.
+            deadline = time.time() + max(float(settle_s), 0.5)
+            while time.time() < deadline:
+                self.robot.set_actuator_positions(cmd)
+                self._sleep(0.05)
+            self._sleep(0.25)
         self._last_cmd_q = home_arm_q_array(self.profile)
 
     def _plan_and_execute_ee(self, target_xyz_world: np.ndarray) -> tuple[bool, float]:
@@ -433,15 +443,18 @@ class KinematicPickPlaceExecutor:
         ok, g_err = self._plan_and_execute_ee(grasp)
         if not ok:
             return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "grasp_ik_failed")
+        self._sleep(0.4)
         try:
             self._set_gripper(open_=False)
         except Exception:
             pass
-        robot_zmq_attach_body(self.robot, body, self.ee_body)
+        # Snap + attach in one ZMQ action so physics cannot drop the freejoint in between.
+        robot_zmq_attach_body(self.robot, body, self.ee_body, snap_pos=grasp)
         ok, _ = self._plan_and_execute_ee(lift)
         if not ok:
             robot_zmq_detach_body(self.robot, body)
             return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "lift_ik_failed")
+        self._sleep(0.25)
         if not self._verify_grasp_lift(body, lift, pre_pos=pre_pos):
             robot_zmq_detach_body(self.robot, body)
             return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "attach_verify_failed")

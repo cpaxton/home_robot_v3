@@ -424,8 +424,18 @@ def robot_zmq_attach_body(
     ee_body: str,
     *,
     offset_pos: np.ndarray | list[float] | None = None,
+    snap_pos: np.ndarray | list[float] | None = None,
 ) -> None:
-    from emet.core.zmq_protocol import build_sim_attach_body_action
+    """Attach *body* to *ee_body*, optionally teleporting first in the same ZMQ action.
+
+    When *snap_pos* is set, ``sim_set_body_pose`` is bundled with ``sim_attach_body`` so
+    physics cannot drop the freejoint between the two commands.
+    """
+    from emet.core.zmq_protocol import (
+        EMET_ACTION_SIM_SET_BODY_POSE_KEY,
+        build_sim_attach_body_action,
+        build_sim_set_body_pose_action,
+    )
 
     step = int(getattr(robot, "_last_step", -1)) + 1
     if step < 1:
@@ -434,6 +444,12 @@ def robot_zmq_attach_body(
     if offset_pos is not None:
         off = [float(x) for x in np.asarray(offset_pos, dtype=np.float64).reshape(3)]
     action = build_sim_attach_body_action(step, body, ee_body, offset_pos=off)
+    if snap_pos is not None:
+        # handle_action applies set_body_pose before attach when both keys are present.
+        pose_action = build_sim_set_body_pose_action(
+            step, body, [float(x) for x in np.asarray(snap_pos, dtype=np.float64).reshape(3)]
+        )
+        action[EMET_ACTION_SIM_SET_BODY_POSE_KEY] = pose_action[EMET_ACTION_SIM_SET_BODY_POSE_KEY]
     _send_meta_action(robot, action)
 
 
