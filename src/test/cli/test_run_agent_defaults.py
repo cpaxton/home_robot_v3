@@ -76,6 +76,16 @@ def test_help_lists_memory_backend():
     assert "--memory-backend" in r.output
 
 
+def test_help_lists_lifelong_input_and_refine():
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "--input-path" in r.output
+    assert "--refine-start" in r.output
+
+
 def test_help_lists_eqa_eval():
     from emet.app.run_agent import main
 

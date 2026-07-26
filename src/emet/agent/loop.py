@@ -520,6 +520,7 @@ def run_agent_with_robot(
     if embodied_overlay is None:
         embodied_overlay = load_embodied_agent_overlay(agent_config)
     defer_eqa_vllm = bool(eqa and use_llm and share_memory_vllm)
+    refine_start = bool(kwargs.pop("refine_start", False))
     _exec_kwargs = {k: v for k, v in kwargs.items() if k != "defer_eqa_vllm"}
     if allow_missing_depth is None:
         depth_mode = str(parameters.get("depth_source", "sensor")).lower()
@@ -600,17 +601,39 @@ def run_agent_with_robot(
     print(colored(f"Agent memory backend: {mb}", "cyan"), flush=True)
 
     if input_path:
-        _gm_load = getattr(executor.agent, "graph_memory", None)
-        if _gm_load is not None and mb in ("dynagraph", "graph_eqa"):
-            load_backend = get_memory_backend(
-                "graph_eqa",
-                graph_memory=_gm_load,
-                voxel_map=executor.agent.get_voxel_map(),
-            )
-        else:
-            load_backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
-        load_backend.load(input_path)
+        from emet.memory.lifelong import load_lifelong_checkpoint
+
+        # Optional short live scan before load so --refine-start can fudge imperfect spawn.
+        if refine_start and hasattr(executor.agent, "update"):
+            try:
+                executor.agent.update()
+            except Exception as exc:
+                print(colored(f"lifelong: pre-load scan skipped ({exc})", "yellow"), flush=True)
+        load_info = load_lifelong_checkpoint(
+            executor.agent,
+            input_path,
+            refine_start=refine_start,
+        )
         executor._last_memory_save_path = input_path
+        refine = load_info.get("refine")
+        refine_msg = ""
+        if refine is not None:
+            if refine.accepted:
+                refine_msg = (
+                    f"; refined xy={refine.translation_xy_m:.3f}m "
+                    f"yaw={np.degrees(refine.yaw_rad):.1f}°"
+                )
+            else:
+                refine_msg = f"; refine skipped/rejected ({refine.reason})"
+        print(
+            colored(
+                f"Lifelong checkpoint loaded: graph={load_info.get('graph_loaded')} "
+                f"voxel_pkl={load_info.get('voxel_pickle_loaded')} "
+                f"final_step={load_info.get('final_step')}{refine_msg}",
+                "cyan",
+            ),
+            flush=True,
+        )
 
     _gm = getattr(executor.agent, "graph_memory", None)
     _graph_backend = None

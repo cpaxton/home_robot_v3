@@ -1,0 +1,183 @@
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
+"""Unit tests for lifelong checkpoint load and local start-pose refine."""
+
+from __future__ import annotations
+
+import numpy as np
+
+from emet.memory.adapters import GraphEQABackend
+from emet.memory.format import VOXEL_PICKLE_FILENAME
+from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+from emet.memory.lifelong import (
+    apply_se2_to_graph,
+    apply_se2_to_memory,
+    load_lifelong_checkpoint,
+    refine_start_pose,
+    save_lifelong_checkpoint,
+    se2_matrix,
+    transform_points_xyz,
+)
+
+PARAMS = {
+    "dynagraph_merge_xy_m": 0.0,
+    "dynagraph_staleness_horizon": 8,
+}
+
+
+def _rgb() -> np.ndarray:
+    return np.zeros((4, 4, 3), dtype=np.uint8)
+
+
+def _make_memory() -> GraphEQAMemory:
+    return GraphEQAMemory(parameters=dict(PARAMS), defer_llm_clients=True)
+
+
+def test_se2_apply_moves_graph_nodes():
+    mem = _make_memory()
+    mem.set_graph_timestep(5)
+    mem.add_observation(_rgb(), np.array([1.0, 0.0, 0.5]), ["mug"])
+    t = se2_matrix(0.3, -0.1, np.deg2rad(15.0))
+    n = apply_se2_to_graph(mem, t)
+    assert n >= 1
+    nodes = [x for x in mem.get_nodes() if not x.is_viewpoint]
+    assert len(nodes) == 1
+    expected = transform_points_xyz(np.array([[1.0, 0.0, 0.5]]), t)[0]
+    np.testing.assert_allclose(nodes[0].xyz, expected, atol=1e-6)
+
+
+def test_refine_recovers_small_fudge():
+    # Structured cloud (two walls) — closer to a real map than isotropic noise.
+    xs = np.linspace(-1.0, 1.0, 80)
+    ys = np.linspace(-1.0, 1.0, 80)
+    wall_x = np.column_stack([np.full_like(ys, -1.0), ys, np.zeros_like(ys)])
+    wall_y = np.column_stack([xs, np.full_like(xs, 1.0), np.zeros_like(xs)])
+    floor = np.column_stack([np.repeat(xs[::4], 5), np.tile(ys[::16], xs[::4].size), np.zeros(xs[::4].size * 5)])
+    saved = np.concatenate([wall_x, wall_y, floor], axis=0)
+    dx, dy, dyaw = 0.25, -0.12, np.deg2rad(12.0)
+    t_gt = se2_matrix(dx, dy, dyaw)
+    live = transform_points_xyz(saved, t_gt)
+
+    result = refine_start_pose(
+        saved,
+        live,
+        min_points=64,
+        max_xy_m=0.75,
+        max_yaw_rad=0.5,
+        grid_xy_step_m=0.1,
+        grid_yaw_step_rad=0.1,
+    )
+    assert result.accepted, result.reason
+    assert result.translation_xy_m < 0.45
+    assert abs(result.yaw_rad) < 0.4
+    aligned = transform_points_xyz(saved, result.transform)
+    err = float(np.mean(np.linalg.norm(aligned - live, axis=1)))
+    assert err < 0.05, f"mean point error {err:.4f} m"
+
+
+def test_refine_rejects_large_translation():
+    xs = np.linspace(-1.0, 1.0, 60)
+    ys = np.linspace(-1.0, 1.0, 60)
+    saved = np.concatenate(
+        [
+            np.column_stack([np.full_like(ys, -1.0), ys, np.zeros_like(ys)]),
+            np.column_stack([xs, np.full_like(xs, 1.0), np.zeros_like(xs)]),
+        ],
+        axis=0,
+    )
+    live = transform_points_xyz(saved, se2_matrix(2.5, 0.0, 0.0))
+    result = refine_start_pose(
+        saved,
+        live,
+        min_points=64,
+        max_xy_m=0.75,
+        max_yaw_rad=0.5,
+        min_fitness=0.4,
+        max_rmse_m=0.25,
+    )
+    assert not result.accepted, result
+    np.testing.assert_allclose(result.transform, np.eye(4), atol=1e-8)
+
+
+def test_load_lifelong_checkpoint_restores_final_step(tmp_path):
+    mem = _make_memory()
+    mem.set_graph_timestep(40)
+    mem.add_observation(_rgb(), np.array([1.0, 2.0, 0.5]), ["mug"])
+    path = tmp_path / "ckpt"
+    GraphEQABackend(mem).save(str(path), final_step=42)
+
+    class _Ctrl:
+        def __init__(self):
+            self.graph_memory = _make_memory()
+            self.obs_count = 0
+            self.voxel_map = None
+
+        def get_voxel_map(self):
+            return None
+
+    ctrl = _Ctrl()
+    info = load_lifelong_checkpoint(ctrl, path, refine_start=False)
+    assert info["graph_loaded"] is True
+    assert info["final_step"] == 42
+    assert ctrl.obs_count == 42
+    assert ctrl.graph_memory._graph_timestep == 42
+    nodes = [n for n in ctrl.graph_memory.get_nodes() if not n.is_viewpoint]
+    assert len(nodes) == 1
+    assert nodes[0].labels == ["mug"]
+
+
+def test_save_lifelong_writes_voxel_flag_when_requested(tmp_path):
+    mem = _make_memory()
+    mem.add_observation(_rgb(), np.array([0.5, 0.5, 0.2]), ["bowl"])
+
+    class _FakeVoxel:
+        def write_to_pickle(self, filename: str) -> None:
+            from pathlib import Path
+
+            Path(filename).write_bytes(b"fake-pkl")
+
+    class _Ctrl:
+        def __init__(self):
+            self.graph_memory = mem
+            self.obs_count = 7
+            self.voxel_map = _FakeVoxel()
+
+        def get_voxel_map(self):
+            return self.voxel_map
+
+    out = tmp_path / "out"
+    save_lifelong_checkpoint(_Ctrl(), out, save_voxel_pickle=True)
+    assert (out / "manifest.json").is_file()
+    assert (out / "graph.json").is_file()
+    assert (out / VOXEL_PICKLE_FILENAME).is_file()
+
+
+def test_apply_se2_to_memory_updates_bounds():
+    mem = _make_memory()
+    mem.add_observation(
+        _rgb(),
+        np.array([1.0, 1.0, 0.5]),
+        ["box"],
+        extent_half=np.array([0.1, 0.1, 0.1]),
+    )
+    from dataclasses import replace
+
+    for i, n in enumerate(mem._nodes):
+        if n.labels and n.labels[0] == "box":
+            mem._nodes[i] = replace(
+                n,
+                bounds_3d={
+                    "min": [0.9, 0.9, 0.4],
+                    "max": [1.1, 1.1, 0.6],
+                    "center": [1.0, 1.0, 0.5],
+                    "size": [0.2, 0.2, 0.2],
+                },
+            )
+    t = se2_matrix(0.5, 0.0, 0.0)
+    apply_se2_to_memory(graph_memory=mem, voxel_map=None, transform=t)
+    box = next(n for n in mem.get_nodes() if n.labels and n.labels[0] == "box")
+    np.testing.assert_allclose(box.xyz[:2], [1.5, 1.0], atol=1e-6)
+    assert box.bounds_3d is not None
+    np.testing.assert_allclose(box.bounds_3d["min"][:2], [1.4, 0.9], atol=1e-6)

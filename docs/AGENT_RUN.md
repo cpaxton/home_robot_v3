@@ -59,6 +59,16 @@ One shared skill library (`emet.agent.skills`); two tool packs:
 
 `--eqa-eval` still bypasses the chat tool-router and uses the Habitat harness episode path (not CHAT). Do not expect Discord chat turns to score Habitat MCQ. See [evaluation.md](evaluation.md#agentic-grapheqa-verify--offline-tuning).
 
+### Lifelong reload
+
+CHAT can resume a prior dynagraph export (same layout as `emet run dynagraph --export` + `--export-voxel-pickle`):
+
+1. **Assume pose is OK** — load graph + `voxel_map.pkl` + `manifest.final_step` into the controller (shared helper `emet.memory.lifelong`).
+2. **Optional fudge** — `--refine-start` takes one live frame (if available), estimates a **small** SE(2) alignment of the saved cloud to the live cloud, and applies it to graph + voxel. Large / low-quality alignments are **rejected**; the assumed pose is kept.
+3. **Roam** — use existing CHAT tools (`scan_environment`, `explore`). Scan/save writes a full lifelong checkpoint (graph + voxel pickle), not DynaMem-only.
+
+Geometric smoke (no GPU): `uv run python scripts/smoke_lifelong_pose_refine.py`.
+
 ## Config
 
 - **Default path**: [`configs/emet/default.yaml`](../configs/emet/default.yaml). Override with **`--config`** / **`-C`** or env **`EMET_CONFIG`**.
@@ -185,8 +195,14 @@ uv run emet run agent \
 # Hardware checklist: docs/robots/innate_mars_hardware.md#discord-chat--explore-herman
 # Note: explore is turn-blocking — Discord messages queue until the tool finishes.
 
-# Load saved memory
+# Load saved memory (graph + voxel_map.pkl when present; restores staleness clock)
 uv run emet run agent --input-path logs/memory_xxx --no-discord
+
+# Same, but estimate a small SE(2) fudge vs a live frame (imperfect spawn). On failure, keep assumed pose.
+uv run emet run agent --input-path logs/memory_xxx --refine-start --no-discord
+
+# Geometric refine smoke (no GPU): recover a known xy/yaw fudge
+uv run python scripts/smoke_lifelong_pose_refine.py
 
 # Scripted smoke (no LLM load)
 timeout 15 uv run emet run agent --no-llm -c Q --robot stretch

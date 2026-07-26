@@ -88,7 +88,16 @@ log = Logger(__name__)
     "--input-path",
     type=click.Path(),
     default=None,
-    help="Memory directory to load when using --robot-ip.",
+    help="Memory directory to load when using --robot-ip (graph + voxel_map.pkl for dynagraph).",
+)
+@click.option(
+    "--refine-start/--no-refine-start",
+    default=False,
+    show_default=True,
+    help=(
+        "With --input-path: after an optional live frame, estimate a small SE(2) fudge "
+        "aligning the saved map to the live cloud. On failure, keep the assumed pose."
+    ),
 )
 @click.option(
     "--discord/--no-discord",
@@ -440,6 +449,7 @@ def main(
     robot_ip: str,
     offline: bool,
     input_path: str | None,
+    refine_start: bool,
     discord: bool,
     no_llm: bool,
     debug_llm: bool,
@@ -798,6 +808,7 @@ def main(
                 robot_ip=robot_effective,
                 robot=robot,
                 input_path=input_path,
+                refine_start=refine_start,
                 discord=discord,
                 use_llm=not no_llm,
                 llm=llm,
