@@ -50,6 +50,7 @@ from emet.simulation.mujoco_ground_truth import (
     mujoco_ground_truth_write_path,
     parse_ground_truth_dump_action_field,
 )
+from emet.simulation.fall_detection import FallOverMonitor
 from emet.simulation.mujoco_stationary_control import (
     DefaultMujocoStationaryControl,
     MujocoStationaryControl,
@@ -178,6 +179,16 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._ctrl_debug_initial_logs_remaining: int = 0
         self._ctrl_debug_periodic_counter: int = 0
         self._ctrl_debug_emit_apply_logs: bool = False
+        self._fall_monitor = FallOverMonitor(
+            base_body_name=str(getattr(self._spec, "base_link_name", None) or "base_link"),
+            log=logger,
+        )
+
+    def _maybe_report_fall_over(self) -> None:
+        """Red error if the base tipped over (Robocasa / MolmoSpaces free-joint bases)."""
+        if self._mjmodel is None or self._mjdata is None:
+            return
+        self._fall_monitor.maybe_report(self._mjmodel, self._mjdata)
 
     @staticmethod
     def _mujoco_ctrl_debug_enabled() -> bool:
@@ -2179,6 +2190,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                     self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                     mujoco.mj_step(self._mjmodel, self._mjdata)
                     self._physics_steps_executed += 1
+                    self._maybe_report_fall_over()
                     if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
                         break
             if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
@@ -2222,6 +2234,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                             self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
                             mujoco.mj_step(self._mjmodel, self._mjdata)
                             self._physics_steps_executed += 1
+                            self._maybe_report_fall_over()
                             if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
                                 break
                         viewer.sync()
