@@ -21,6 +21,8 @@
   <worldbody>
     <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
     <geom name="floor" size="0 0 0.05" type="plane" material="floor" contype="1" conaffinity="1"/>
+    <!-- Fixed 3rd-person view for manip MP4 smokes (EMET_SIM_THIRD_PERSON=1). Looks at table/objects. -->
+    <camera name="third_person" pos="1.55 0.85 1.55" xyaxes="-0.65 0.76 0  -0.42 -0.36 0.83" fovy="50"/>
     <body name="table" pos="0 -1 .24">
       <geom type="box" size=".6 .5 .24" mass="1" material="wood" contype="1" conaffinity="1"/>
     </body>

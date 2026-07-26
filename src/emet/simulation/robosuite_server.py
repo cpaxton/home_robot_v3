@@ -2222,6 +2222,21 @@ class RobosuiteZmqServer(BaseZmqServer):
                     message["camera_name_tertiary"] = tertiary
                 except Exception as e:
                     logger.debug(f"Tertiary RGB failed for {tertiary}: {e!r}")
+        # Optional world third-person cam (scene_environment.xml); gated — extra EGL render.
+        from emet.simulation.env_flags import env_sim_third_person, env_sim_third_person_camera
+
+        if env_sim_third_person() and allow_extra_cams and self._mjmodel is not None:
+            tp_name = env_sim_third_person_camera()
+            try:
+                cid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_CAMERA, tp_name)
+                if cid >= 0:
+                    rgb_tp, _k_tp = self._primary_rgb_only_with_K(tp_name)
+                    message["third_person_image"] = compression.to_jpg(rgb_tp)
+                    message["third_person_camera"] = tp_name
+                else:
+                    logger.debug(f"third_person camera {tp_name!r} missing from MJCF")
+            except Exception as e:
+                logger.debug(f"third_person RGB failed for {tp_name!r}: {e!r}")
         message = self._attach_emet_session(message)
         with self._render_lock:
             self._last_full_obs_for_servo = message

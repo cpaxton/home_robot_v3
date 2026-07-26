@@ -63,6 +63,17 @@ def env_manip_planner() -> str:
     return ""
 
 
+def env_sim_third_person() -> bool:
+    """Include ``third_person_image`` in full ZMQ observations (extra MuJoCo render)."""
+    return _env_truthy("EMET_SIM_THIRD_PERSON")
+
+
+def env_sim_third_person_camera() -> str:
+    """MuJoCo camera name for third-person recording (default ``third_person``)."""
+    raw = os.environ.get("EMET_SIM_THIRD_PERSON_CAMERA", "").strip()
+    return raw or "third_person"
+
+
 def warn_sim_nav_env_flags(*, force: bool = False) -> None:
     """Print yellow stderr warnings for active ``EMET_SIM_NAV_*`` env vars (once per process)."""
     global _warned_sim_nav_env

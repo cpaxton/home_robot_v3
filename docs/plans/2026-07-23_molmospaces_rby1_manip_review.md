@@ -51,4 +51,19 @@ Logs: `~/runs/emet/manip_smoke/20260726/`.
 ### Next
 
 - Fix Molmo approach / nav-world vs MuJoCo base frame so pregrasp IK is in reach.
-- Keep Molmo/OVMM/TAMP rungs for a follow-up night (not required for this minimal ladder).
+- Keep Molmo/OVMM full eval for a follow-up night.
+
+## Multi-option TAMP + frontier + Dynamem (2026-07-26 evening)
+
+| Step | Result | Notes |
+|------|--------|-------|
+| Offline multi-option units (grasp decoys + sealed frontier) | PASS | `test_task_search.py`, `test_multi_frontier_goals_pick_reachable_reject_sealed` |
+| TAMP sim multi-option (`--plant-infeasible-grasps`) | PASS | chosen_grasp=2, decoys unreachable, `disp=0.1586` (`tamp_multi_option_p242.log` + figures dir) |
+| Frontier multi-option base MP | PASS | sealed wall decoy rejected; reachable goal chosen (offline) |
+| Dynamem kinematic pickup/place (no LLM) | PASS | `manip_mode=kinematic`, `last_exec_ok`, `disp≈0.141` (`dynamem_kinematic_p243.log`) |
+| Explore→manip voxel_map handoff | PASS | `manip_collision=voxel` builds `VoxelMapArmCollisionChecker` (`explore_voxel_handoff_unit.log`) |
+| Config `agent.manip_*` | Present | [`src/emet/config/agent/default.yaml`](../../src/emet/config/agent/default.yaml) via `load_config().agent_section()` |
+
+### TAMP ranking fix
+
+IK ranking now syncs the offline MJCF base freejoint to the **approach** XYT before scoring grasps (spawn-pose ranking marked all candidates unreachable).

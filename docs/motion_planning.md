@@ -18,8 +18,10 @@ src/emet/motion/
   algo/           # RRT, RRT-Connect, A*, Shortcut, SimplifyXYT
   base/           # ConfigurationSpace, Planner, PlanResult
   arm_rrt.py      # Joint-space RRT-Connect wrapper for kinematic manip
+  arm_manip_profile.py  # Per-robot EE / joint / home profiles (rby1, galaxea)
   voxel_arm_collision.py
   mujoco_arm_ik.py
+  base_goal_rank.py     # Rank XY goals by plan feasibility (multi-option smoke)
   utils/simple_env.py   # 2D box obstacle toy env (unit tests)
 
 src/emet/mapping/voxel/
@@ -151,18 +153,39 @@ Scripted MuJoCo smokes above still bypass the agent loop; use the stub test for 
 
 ## Task search (no-NN TAMP)
 
-Deterministic beam-style search over `approach → grasp → place` (no Qwen / chat agent). Grasp candidates are ranked by offline position IK before execution. Paper figures (PNG + PDF) are written under `~/runs/emet/tamp_pick_place/<stamp>/` by default.
+Deterministic beam-style search over `approach → grasp → place` (no Qwen / chat agent). Grasp candidates are ranked by offline position IK **at the approach base pose** before execution. Multi-option smoke plants IK-unreachable decoys first so ranking must skip them.
 
 ```bash
-# Offline (no sim)
+# Offline (no sim) — includes decoy-skip unit tests (plant helper: tamp/smoke_grasps.py)
 uv run emet test src/test/controller/task/test_task_search.py src/test/visualization/test_manip_figures.py -q
 
-# Table + rby1 kinematic smoke + figures
+# Multi-option table + rby1 kinematic smoke + figures
 EMET_SIM_NAV_TELEPORT=1 MUJOCO_GL=egl \
   uv run python scripts/scripted_tamp_pick_place.py --start-sim \
   --sim configs/sim/default_table_rby1.yaml \
-  --object "red cylinder" --receptacle "blue cube" --cpu-only --skip-oracle
+  --object "red cylinder" --receptacle "blue cube" \
+  --plant-infeasible-grasps --cpu-only --skip-oracle
+
+# Same + third-person MP4 (action/goal overlays)
+EMET_SIM_NAV_TELEPORT=1 MUJOCO_GL=egl \
+  uv run python scripts/scripted_tamp_pick_place.py --start-sim \
+  --sim configs/sim/default_table_rby1.yaml \
+  --object "red cylinder" --receptacle "blue cube" \
+  --plant-infeasible-grasps --cpu-only --skip-oracle --record-mp4
+# → <figures-dir>/third_person.mp4
 ```
+
+Expect `chosen_grasp` on a `reachable=True` candidate (not decoy index 0), `execute success=True`, and `displacement_m` ≳ 0.05. Figures under `~/runs/emet/tamp_pick_place/<stamp>/` (or `--figures-dir`). With `--record-mp4`, the sim also streams a fixed world camera (`third_person` in [`scene_environment.xml`](../src/emet/assets/robot/scene_environment.xml)); banners show current action + goal.
+
+### Frontier multi-option (explore)
+
+Offline multi-option smoke for base nav (not yet wired into live `plan_to_frontier` / `explore_frontier`): score several XY goals, reject those sealed behind obstacles, commit to a reachable one.
+
+```bash
+uv run emet test src/test/motion/test_voxel_obstacle_planning.py::test_multi_frontier_goals_pick_reachable_reject_sealed -q
+```
+
+Helper: [`rank_xy_goals_by_plan`](../src/emet/motion/base_goal_rank.py).
 
 Figures: `topdown`, `ee_path_xz`, `joint_traj`, `plan_tree` (matplotlib / Agg). Optional live debug overlays live under `world/manip/…` in Rerun when a visualizer is attached; **figures are the paper path**.
 

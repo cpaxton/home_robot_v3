@@ -45,7 +45,11 @@ def _T_from_placement(info: dict[str, Any]) -> np.ndarray:
     from emet.perception.grasps.molmo_grasp_library import pose_matrix_from_pos_quat
 
     pos = info["pos"]
-    quat = info.get("quat") or [1.0, 0.0, 0.0, 0.0]
+    quat = info.get("quat")
+    if quat is None:
+        quat = [1.0, 0.0, 0.0, 0.0]
+    else:
+        quat = np.asarray(quat, dtype=np.float64).reshape(-1)[:4].tolist()
     return pose_matrix_from_pos_quat(pos, quat)
 
 
@@ -98,6 +102,16 @@ def main() -> int:
     parser.add_argument("--object", type=str, default="red cylinder")
     parser.add_argument("--receptacle", type=str, default="blue cube")
     parser.add_argument("--asset-id", type=str, default=None)
+    parser.add_argument(
+        "--any-object",
+        action="store_true",
+        help="Pick the first freejoint GT body (ignore --object category filter when resolving).",
+    )
+    parser.add_argument(
+        "--plant-infeasible-grasps",
+        action="store_true",
+        help="Prepend IK-unreachable decoy grasps so ranking must skip them (multi-option TAMP).",
+    )
     parser.add_argument("--manip-mode", type=str, default="auto", choices=["auto", "kinematic", "teleport"])
     parser.add_argument("--oracle-bind", type=str, default="tcp://127.0.0.1:5558")
     parser.add_argument("--cpu-only", action="store_true")
@@ -108,14 +122,23 @@ def main() -> int:
         default=None,
         help="Output dir for PNG/PDF (default ~/runs/emet/tamp_pick_place/<stamp>)",
     )
+    parser.add_argument(
+        "--record-mp4",
+        action="store_true",
+        help="Record third-person MuJoCo view to MP4 (sets EMET_SIM_THIRD_PERSON=1 on the sim).",
+    )
+    parser.add_argument("--video-fps", type=float, default=12.0, help="MP4 sample rate when --record-mp4.")
     parser.add_argument("--verbose-sim", action="store_true")
     args = parser.parse_args()
 
     os.chdir(REPO)
     sys.path.insert(0, str(REPO / "src"))
 
+    if args.record_mp4:
+        os.environ["EMET_SIM_THIRD_PERSON"] = "1"
     from emet.config.sim_launch_config import load_sim_launch_config_from_path
     from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+    from emet.controller.task.tamp.smoke_grasps import plant_mixed_grasp_poses
     from emet.controller.task.tamp.task_search import execute_task_plan, plan_pick_place
     from emet.eval.ovmm_find_phase import bodies_matching_category
     from emet.eval.sim_eval_session import (
@@ -177,12 +200,21 @@ def main() -> int:
             def predict(self, **kwargs):
                 return []
 
+        object_query = None if args.any_object else args.object
         body, info, poses = _find_graspable_body(
             robot,
-            object_query=args.object,
+            object_query=object_query,
             asset_id=args.asset_id,
             oracle_client=client or _SynthClient(),
         )
+        if args.plant_infeasible_grasps:
+            # Decoys first — ranking must not pick index 0.
+            com = np.asarray(info["pos"], dtype=np.float64).reshape(3)
+            poses = plant_mixed_grasp_poses(com + np.array([0.0, 0.0, 0.02]), n_infeasible=2)
+            print(
+                f"planted mixed grasps: n={len(poses)} (decoys first, reachable asset={poses[-1].asset_id!r})",
+                flush=True,
+            )
         pl = read_sim_object_placements(robot.get_emet_session()) or {}
         receps = bodies_matching_category(pl, args.receptacle) or []
         recep_body = receps[0] if receps else None
@@ -197,22 +229,83 @@ def main() -> int:
 
         plan = plan_pick_place(
             robot,
-            object_query=args.object,
+            object_query=args.object if not args.any_object else str(info.get("cat") or body),
             receptacle_query=args.receptacle,
             grasp_poses=poses,
             object_gt_body=body,
             receptacle_gt_body=recep_body,
             executor=exe,
+            approach_standoff_m=0.55,
         )
         print(f"plan success={plan.success} chosen_grasp={plan.chosen_grasp_index} msg={plan.message!r}")
         for line in plan.expanded_nodes:
             print(f"  {line}")
+        if plan.grasp_scores:
+            print("grasp_scores:", flush=True)
+            for idx, err, ok in plan.grasp_scores:
+                print(f"  [{idx}] err={err:.3f} reachable={ok}", flush=True)
+        if args.plant_infeasible_grasps:
+            if not plan.grasp_scores:
+                print("FAIL: expected IK grasp ranking scores", file=sys.stderr)
+                return 1
+            if not any(ok for _i, _e, ok in plan.grasp_scores):
+                print("FAIL: no reachable grasp in scores", file=sys.stderr)
+                return 1
+            if not any(not ok for _i, _e, ok in plan.grasp_scores):
+                print("FAIL: expected at least one infeasible decoy", file=sys.stderr)
+                return 1
+            if plan.chosen_grasp_index is None or plan.chosen_grasp_index < 2:
+                # plant_mixed puts 2 decoys at 0,1 and reachable at 2
+                print(
+                    f"FAIL: chosen_grasp={plan.chosen_grasp_index} should be reachable index (>=2)",
+                    file=sys.stderr,
+                )
+                return 1
         if not plan.success:
             return 1
 
         if exe is None and mode == "kinematic":
             exe = KinematicPickPlaceExecutor(robot, manip_collision="none", traj_dt=0.05)
-        plan = execute_task_plan(robot, plan, executor=exe, grasp_poses=poses, manip_mode=mode)
+
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        fig_dir = Path(args.figures_dir) if args.figures_dir else Path.home() / "runs/emet/tamp_pick_place" / stamp
+        fig_dir.mkdir(parents=True, exist_ok=True)
+
+        video = None
+        if args.record_mp4:
+            from emet.visualization.manip_video import ManipVideoRecorder
+
+            video = ManipVideoRecorder(
+                robot,
+                fig_dir / "third_person.mp4",
+                fps=float(args.video_fps),
+                title="tamp pick-place",
+            )
+            video.set_status(
+                "plan",
+                goal=f"{body} → {recep_body}",
+                detail=f"chosen_grasp={plan.chosen_grasp_index}",
+            )
+            video.start()
+
+        plan = execute_task_plan(
+            robot,
+            plan,
+            executor=exe,
+            grasp_poses=poses,
+            manip_mode=mode,
+            video_recorder=video,
+        )
+        if video is not None:
+            mp4 = video.stop()
+            if mp4 is not None:
+                print(f"mp4 -> {mp4}", flush=True)
+            else:
+                print(
+                    "WARN: --record-mp4 produced no frames (is EMET_SIM_THIRD_PERSON reaching the server?)",
+                    file=sys.stderr,
+                )
+
         base_path.append(np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(3))
         print(f"execute success={plan.success} msg={plan.message!r}", flush=True)
 
@@ -222,8 +315,6 @@ def main() -> int:
             disp = float(np.linalg.norm(after - before))
             print(f"displacement_m={disp:.4f}")
 
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        fig_dir = Path(args.figures_dir) if args.figures_dir else Path.home() / "runs/emet/tamp_pick_place" / stamp
         grasp_xy = None
         if plan.chosen_grasp_index is not None and plan.chosen_grasp_index < len(poses):
             grasp_xy = poses[plan.chosen_grasp_index].position[:2]

@@ -250,6 +250,7 @@ def get_observation_from_zmq_dict(obs: dict[str, Any]) -> Observations | None:
         joint_head=float(joint_head) if joint_head is not None else None,
         gps=obs.get("gps", np.zeros(2)),
         compass=obs.get("compass", np.zeros(1)),
+        third_person_image=obs.get("third_person_image"),
         seq_id=int(obs.get("step", -1)) if obs.get("step") is not None else -1,
         is_simulation=bool(obs.get("is_simulation", False)),
         emet_session=read_emet_session(obs),
@@ -682,6 +683,11 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                     )
             if "rgb_tertiary" in output and output["rgb_tertiary"] is not None:
                 output["rgb_tertiary"] = compression.from_jpg(output["rgb_tertiary"])
+            if "third_person_image" in output and output["third_person_image"] is not None:
+                try:
+                    output["third_person_image"] = compression.from_jpg(output["third_person_image"])
+                except Exception:
+                    output["third_person_image"] = None
             enrich_zmq_observation_ee_fields(output)
             raw_depth = output.get("depth")
             if raw_depth is None:

@@ -138,6 +138,63 @@ def test_rrt_connect_base_avoids_voxel_wall():
         assert world_free(node.state)
 
 
+def _sealed_wall_map(*, size: int = 60, res: float = 0.1) -> FakeSparseVoxelMap:
+    """Thick vertical wall with no gap — right side unreachable from the left.
+
+    Wall is several meters thick so RRT step_size cannot jump over free cells.
+    """
+    obs = np.zeros((size, size), dtype=bool)
+    mid = size // 2
+    obs[mid - 4 : mid + 5, :] = True  # ~0.9 m thick at res=0.1
+    return FakeSparseVoxelMap(obs, resolution=res)
+
+
+def test_multi_frontier_goals_pick_reachable_reject_sealed():
+    """Multi-option frontier MP: sealed-wall decoy fails; open-side goal is chosen."""
+    from emet.motion.base_goal_rank import choose_first_reachable, rank_xy_goals_by_plan
+
+    fake = _sealed_wall_map(size=60, res=0.1)
+    go = fake.grid.grid_origin[:2].cpu().numpy()
+    res = fake.resolution
+    obs = fake.obstacles
+    h, w = obs.shape
+
+    def world_free(xy: np.ndarray) -> bool:
+        xy = np.asarray(xy, dtype=np.float64).reshape(-1)
+        gi, gj = world_xy_to_grid(float(xy[0]), float(xy[1]), grid_origin=go, resolution=res, convention="grid_params")
+        # Out-of-map must be invalid or RRT skirts the wall in unbounded free space.
+        if gi < 0 or gj < 0 or gi >= h or gj >= w:
+            return False
+        return not bool(obs[gi, gj])
+
+    start = np.asarray(fake.grid.grid_coords_to_xy(torch.tensor([15.0, 30.0])), dtype=np.float64).reshape(2)
+    # Decoy first: free cell on the far side of the sealed wall (no path).
+    decoy = np.asarray(fake.grid.grid_coords_to_xy(torch.tensor([45.0, 30.0])), dtype=np.float64).reshape(2)
+    # Reachable: another free cell on the start side.
+    good = np.asarray(fake.grid.grid_coords_to_xy(torch.tensor([12.0, 40.0])), dtype=np.float64).reshape(2)
+    assert world_free(start) and world_free(decoy) and world_free(good)
+
+    # Bound the planner to the map so it cannot leave the grid.
+    corner0 = np.asarray(fake.grid.grid_coords_to_xy(torch.tensor([0.0, 0.0])), dtype=np.float64).reshape(2)
+    corner1 = np.asarray(fake.grid.grid_coords_to_xy(torch.tensor([59.0, 59.0])), dtype=np.float64).reshape(2)
+    mins = np.minimum(corner0, corner1)
+    maxs = np.maximum(corner0, corner1)
+
+    scores = rank_xy_goals_by_plan(
+        start,
+        [decoy, good],
+        is_valid=world_free,
+        planner="rrt_connect",
+        max_iter=800,
+        seed=1,
+        bounds=(mins, maxs),
+    )
+    assert any(i == 0 and not ok for i, ok, _r in scores), scores
+    assert any(i == 1 and ok for i, ok, _r in scores), scores
+    chosen = choose_first_reachable(scores)
+    assert chosen == 1, scores
+
+
 def test_arm_rrt_avoids_voxel_wall_linear_collides():
     """Joint-space RRT-Connect with VoxelMapArmCollisionChecker: linear hits wall, RRT does not."""
     from emet.motion.mujoco_arm_ik import solve_position_ik

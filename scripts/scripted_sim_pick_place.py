@@ -176,10 +176,24 @@ def main() -> int:
     )
     parser.add_argument("--cpu-only", action="store_true", help="Hide GPUs in sim subprocess env.")
     parser.add_argument("--verbose-sim", action="store_true", help="Print sim server stderr.")
+    parser.add_argument(
+        "--record-mp4",
+        action="store_true",
+        help="Record third-person MuJoCo view to MP4 (sets EMET_SIM_THIRD_PERSON=1).",
+    )
+    parser.add_argument("--video-fps", type=float, default=12.0, help="MP4 sample rate when --record-mp4.")
+    parser.add_argument(
+        "--video-out",
+        type=str,
+        default=None,
+        help="MP4 path (default ~/runs/emet/manip_smoke/<stamp>/third_person.mp4).",
+    )
     args = parser.parse_args()
 
     os.chdir(REPO)
 
+    if args.record_mp4:
+        os.environ["EMET_SIM_THIRD_PERSON"] = "1"
     from emet.simulation.env_flags import env_manip_mode
     from emet.simulation.sim_manipulation import resolve_agent_manip_mode
 
@@ -290,16 +304,76 @@ def main() -> int:
                 time.sleep(0.5)
                 print(f"base_after_approach={np.asarray(robot.get_base_pose()).tolist()}", flush=True)
 
+            video = None
+            if args.record_mp4:
+                from datetime import datetime
+
+                from emet.visualization.manip_video import ManipVideoRecorder
+
+                out = (
+                    Path(args.video_out)
+                    if args.video_out
+                    else Path.home()
+                    / "runs/emet/manip_smoke"
+                    / datetime.now().strftime("%Y%m%d_%H%M%S")
+                    / "third_person.mp4"
+                )
+                video = ManipVideoRecorder(
+                    robot,
+                    out,
+                    fps=float(args.video_fps),
+                    title="kinematic pick-place",
+                )
+                video.set_status(
+                    "pick_and_place",
+                    goal=f"{args.object} → {args.receptacle}",
+                    detail=f"body={obj_body!r}",
+                )
+                video.start()
+
             exe = KinematicPickPlaceExecutor(robot, manip_collision="none")
             result = exe.pick_and_place(args.object, args.receptacle, object_gt_body=obj_body)
+            if video is not None:
+                video.set_status("done", detail=result.message)
+                video.capture_once()
+                mp4 = video.stop()
+                if mp4 is not None:
+                    print(f"mp4 -> {mp4}", flush=True)
             print(
                 f"kinematic result success={result.success} msg={result.message!r} "
                 f"grasp_err={result.grasp_err_m} place_err={result.place_err_m}"
             )
             ok = bool(result.success)
         else:
-            ok = run_scripted_tool_calls(robot, tool_calls)
+            video = None
+            if args.record_mp4:
+                from datetime import datetime
 
+                from emet.visualization.manip_video import ManipVideoRecorder
+
+                out = (
+                    Path(args.video_out)
+                    if args.video_out
+                    else Path.home()
+                    / "runs/emet/manip_smoke"
+                    / datetime.now().strftime("%Y%m%d_%H%M%S")
+                    / "third_person.mp4"
+                )
+                video = ManipVideoRecorder(
+                    robot,
+                    out,
+                    fps=float(args.video_fps),
+                    title="teleport pick-place",
+                )
+                video.set_status("pick_place", goal=f"{args.object} → {args.receptacle}")
+                video.start()
+            ok = run_scripted_tool_calls(robot, tool_calls)
+            if video is not None:
+                video.set_status("done")
+                video.capture_once()
+                mp4 = video.stop()
+                if mp4 is not None:
+                    print(f"mp4 -> {mp4}", flush=True)
         # Re-resolve after manip (session placements patched in place)
         after = _placement_pos(robot, obj_body) if obj_body else None
         print(f"pos_after={None if after is None else after.tolist()}")
