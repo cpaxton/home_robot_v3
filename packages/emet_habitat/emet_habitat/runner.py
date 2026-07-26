@@ -104,6 +104,21 @@ def _configure_habitat_nav(
     parameters.set("eqa", eqa)
 
 
+def _configure_habitat_mapping(parameters: Parameters) -> None:
+    """Exploration-friendly mapping defaults for HM-EQA open floorplans.
+
+    Default dynav clamps (``max_depth=2.5``, ``pad_obstacles=2``,
+    ``smooth_kernel_size=3``) keep the reachable frontier hugging a ~2.5 m ring
+    and seal thin corridors under dilation + morphological opening. Loosen for
+    Habitat only — real-robot dynav defaults stay unchanged.
+    """
+    parameters.set("max_depth", 4.5)
+    parameters.set("pad_obstacles", 1)
+    filters = dict(parameters.get("filters") or {})
+    filters["smooth_kernel_size"] = 1
+    parameters.set("filters", filters)
+
+
 def _configure_frontier_parameters(
     parameters: Parameters,
     *,
@@ -279,6 +294,7 @@ def run_hmeqa_episode(
             frontier_keyword_weight=frontier_keyword_weight,
         )
         _configure_habitat_nav(parameters, habitat_perfect_nav=habitat_perfect_nav)
+        _configure_habitat_mapping(parameters)
         import os
 
         if memory_summary is None:
@@ -524,6 +540,7 @@ def run_hmeqa_batch(
         frontier_keyword_weight=frontier_keyword_weight,
     )
     _configure_habitat_nav(parameters, habitat_perfect_nav=habitat_perfect_nav)
+    _configure_habitat_mapping(parameters)
     if output_jsonl is not None:
         if resume and output_jsonl.exists():
             done = read_completed_question_ids(output_jsonl)

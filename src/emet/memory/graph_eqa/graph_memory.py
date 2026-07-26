@@ -1500,6 +1500,9 @@ class GraphEQAMemory:
         try:
             outside = voxel_map.get_outside_frontier(xyt, planner)
             _, explored = voxel_map.get_2d_map()
+            reachable = None
+            if hasattr(voxel_map, "get_reachable_map"):
+                reachable = _as_bool_numpy(voxel_map.get_reachable_map(xyt, planner))
         except Exception as e:
             _logger.warning(f"Frontier upsert: could not read map frontiers ({e})")
             return sum(1 for n in self._nodes if n.is_frontier)
@@ -1508,6 +1511,7 @@ class GraphEQAMemory:
         clusters = cluster_frontier_mask(
             unexplored,
             min_cells=self._frontier_min_cluster_cells,
+            reachable=reachable,
         )
         image_descriptions = getattr(voxel_map, "image_descriptions", None) or []
         keywords = list(question_keywords or self._relevant_objects or self._enrich_object_hints or [])

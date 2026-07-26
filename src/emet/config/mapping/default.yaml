@@ -23,8 +23,6 @@ map_boundary:
   history_penalty_cells: 0
 
 local_radius: 0.5  # Area around the robot to mark as explored (kind of a hack)
-# Skip depth obstacle stamping when the base moves less than this (rotate-in-place scan).
-spin_obstacle_guard_m: 0.08
 add_local_every_step: False
 remove_visited_from_obstacles: False
 min_depth: 0.25

@@ -323,3 +323,94 @@ Prefer writing through `scripts/status_log.sh` so
 `bash scripts/status_log.sh tail` (per-repo under
 `~/runs/emet/status/<repo>/`) carries the same `next:` instruction; keep this
 markdown as the durable investigation narrative.
+
+### q104 explore-fix (launching 2026-07-25T23:49:14-04:00)
+
+| Field | Value |
+|-------|-------|
+| OUT | `/home/cpaxton/runs/emet/hmeqa_agentic_q104_explorefix_20260725_234914` |
+| Commit | `888c069` |
+| Fixes | reachable-adjacent frontier snap; habitat max_depth=4.5/pad=1/smooth=1; look-around on NO_NEW_OBS |
+| Arms | agentic only, ids=104 |
+| Expect | explored_area grows; frontier picks on rim not mid-floor; fewer NO_NEW_OBS |
+| Do not | kill-stale; second GPU job; hard-kill Habitat |
+| Monitor | `uv run emet jobs` / `emet hmeqa status /home/cpaxton/runs/emet/hmeqa_agentic_q104_explorefix_20260725_234914` |
+
+
+### q104 explore-fix — FAIL on exploration (2026-07-25 23:55)
+
+| Field | Value |
+|-------|-------|
+| Job | `20260725_235021_0c17be` done |
+| OUT | `~/runs/emet/hmeqa_agentic_q104_explorefix_20260725_234914` |
+| Score | agentic **1/1 correct=D** (allow-unverified) — not an explore win |
+| explored_area_m2 | **1.27 identical** to softrecent (md5 match) |
+| Motion | trajectory path ~0.5 m, mostly spin; nav_attempts: already_at_goal |
+| Frontier picks | still mid-green; look_around_on_no_new_obs fired 2×; NO_NEW_OBS 5/7 |
+| Do not | claim explore fixed; resume bal-32 |
+| Next | fix Habitat `pick_uncovered` / navmesh snap so goals leave spawn blob |
+
+
+### q104 floor-area rerun (launching 2026-07-26T00:22:30-04:00)
+
+| Field | Value |
+|-------|-------|
+| OUT | `/home/cpaxton/runs/emet/hmeqa_agentic_q104_floorarea_20260726_002230` |
+| Commit | `888c069` |
+| Why | explorefix bundle export crashed (frontier_picks SameFileError) → maps/explored_2d were STALE from 22:15; explore verdict unknown |
+| New | floor_area.jsonl + floor_area_growth.png per episode; same-file copy skip |
+| Expect | fresh explored_2d + per-step area curve to judge growth |
+| Do not | kill-stale; second GPU job |
+
+
+### q104 floor-area rerun — EXPLORATION CONFIRMED (2026-07-26 00:27)
+
+| Field | Value |
+|-------|-------|
+| Job | `20260726_002233_976c0a` done, correct=D |
+| OUT | `~/runs/emet/hmeqa_agentic_q104_floorarea_20260726_002230` |
+| Explored | **8.84 m² final, peak 13.2** (old stale claim of 1.27 was a bundle-export bug) |
+| Motion | 6.5 m path, 27 unique poses (was 0.5 m) |
+| Fixed | frontier_picks SameFileError aborted bundle export → maps/explored were stale from 22:15 |
+| New | per-step `floor_area.jsonl` + `floor_area_growth.png` in every episode bundle |
+| Open issue | explored area **non-monotone** (5.4→0.8→13.2→9.1) — DynaMem frustum culling erases coverage; frontier regenerates near robot → NO_NEW_OBS churn |
+
+
+### q104 spin-no-erase validation (launching 2026-07-26T01:19:12-04:00)
+
+| Field | Value |
+|-------|-------|
+| OUT | `/home/cpaxton/runs/emet/hmeqa_agentic_q104_spinfix_20260726_011912` |
+| HEAD | `888c069` (+ uncommitted voxel/frontier/spin fixes) |
+| Why | prior floorarea confirmed explore but **non-monotone** area (spin cleared without re-add) |
+| Arms | agentic only, ids=104, allow-unverified |
+| Expect | `floor_area.jsonl` mostly monotone; no opening-scan erase; frontier picks leave spawn |
+| Do not | kill-stale; second GPU job; hard-kill Habitat |
+| Monitor | `uv run emet jobs` / `emet hmeqa status /home/cpaxton/runs/emet/hmeqa_agentic_q104_spinfix_20260726_011912` |
+
+
+### q104 clear-logic validation (launching 2026-07-26T02:05:58-04:00)
+
+| Field | Value |
+|-------|-------|
+| OUT | `/home/cpaxton/runs/emet/hmeqa_agentic_q104_clearfix_20260726_020558` |
+| HEAD | `888c069` (+ uncommitted clear_points fix: strict-past carve + 2x2 + validity mask) |
+| Why | validate static floor no longer shrinks; expect monotone `floor_area.jsonl` |
+| Arms | agentic only, ids=104, allow-unverified |
+| Expect | no 5.4→0.8 / 13→8 / mid-episode map collapse; explored mostly monotone |
+| Do not | kill-stale; second GPU job; hard-kill Habitat |
+| Monitor | `uv run emet jobs` / `emet hmeqa status /home/cpaxton/runs/emet/hmeqa_agentic_q104_clearfix_20260726_020558` |
+
+
+| Job | `20260726_020704_b9edb3` |
+
+### q104 clear-logic validation — PASS (2026-07-26 02:11)
+
+| Field | Value |
+|-------|-------|
+| Job | `20260726_020704_b9edb3` done, correct=D |
+| OUT | `~/runs/emet/hmeqa_agentic_q104_clearfix_20260726_020558` |
+| Explored | **5.2 → 36.3 m² at step 20** (final floor_metrics **37.0 m²**); free floor 3.8 → 26.4 |
+| Curve | monotone through last live stride sample (0/5/10/15/20) |
+| Note | maps `step_0025+` in the shared episode cache were **stale leftovers** from earlier runs (timestamps 00:27 / 22:15); not a 20→25 reset. Flush now wipes old stride PNGs. |
+

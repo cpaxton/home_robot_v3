@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import logging
-import math
 import os
 import pickle
 import re
@@ -134,7 +133,6 @@ class SparseVoxelMap(SparseVoxelMapBase):
         add_local_radius_every_step: bool = False,
         min_points_per_voxel: int = 10,
         use_negative_obstacles: bool = False,
-        spin_obstacle_guard_m: float | None = None,
         voxel_pcd_dbscan_min_samples: int = 0,
         point_update_threshold: float = 0.9,
         detection=None,
@@ -193,14 +191,6 @@ class SparseVoxelMap(SparseVoxelMapBase):
         )
 
         self.point_update_threshold = point_update_threshold
-        guard_m = spin_obstacle_guard_m
-        if guard_m is None and parameters is not None:
-            if isinstance(parameters, dict):
-                guard_m = parameters.get("spin_obstacle_guard_m")
-            elif hasattr(parameters, "get"):
-                guard_m = parameters.get("spin_obstacle_guard_m")
-        self._spin_obstacle_guard_m = float(guard_m if guard_m is not None else 0.08)
-        self._last_obstacle_stamp_base_xy: tuple[float, float] | None = None
         self._history_soft: Tensor | None = None
         self.semantic_memory = VoxelizedPointcloud(voxel_size=semantic_memory_resolution).to(self.device)
         self.encoder = encoder
@@ -604,6 +594,31 @@ class SparseVoxelMap(SparseVoxelMapBase):
         else:
             return obstacles, explored, history_soft
 
+    def _depth_validity_mask(self, depth: Tensor) -> Tensor:
+        """Pixels safe for both insertion and free-space carving.
+
+        Clear and add must share this mask: a depth sample rejected as too noisy /
+        edge-like for mapping must never be treated as evidence that geometry moved.
+        """
+        if not isinstance(depth, torch.Tensor):
+            depth = torch.as_tensor(depth, dtype=torch.float32)
+        depth = depth.float()
+        valid = (
+            torch.isfinite(depth)
+            & (depth > float(self.min_depth))
+            & (depth < float(self.max_depth))
+        )
+        if self.use_derivative_filter:
+            edges = get_edges(depth, threshold=self.derivative_filter_threshold)
+            valid = valid & ~edges
+        if self.use_median_filter:
+            median_depth = torch.from_numpy(
+                median_filter(depth.detach().cpu().numpy(), size=int(self.median_filter_size))
+            ).to(device=depth.device, dtype=depth.dtype)
+            median_filter_error = (depth - median_depth).abs()
+            valid = valid & (median_filter_error < float(self.median_filter_max_error))
+        return valid.bool()
+
     def process_rgbd_images(
         self,
         rgb: np.ndarray,
@@ -640,13 +655,29 @@ class SparseVoxelMap(SparseVoxelMapBase):
         np.save(os.path.join(debug_dir, "intrinsics" + str(self.obs_count) + ".npy"), intrinsics)
         np.save(os.path.join(debug_dir, "pose" + str(self.obs_count) + ".npy"), pose)
 
-        # Update obstacle map
+        base_pose_t: Tensor | None = None
+        if base_xyt is not None:
+            b = np.asarray(base_xyt, dtype=np.float64).ravel()
+            if b.size >= 2:
+                th = float(b[2]) if b.size >= 3 else 0.0
+                dev = torch.device(self.map_2d_device)
+                base_pose_t = torch.tensor([float(b[0]), float(b[1]), th], dtype=torch.float32, device=dev)
+
+        # Same validity mask for clear and add: never carve free space from pixels we
+        # would refuse to insert (edges / median outliers / OOR depth).
+        depth_t = torch.as_tensor(depth, dtype=torch.float32)
+        depth_is_valid = self._depth_validity_mask(depth_t)
+
+        # Update obstacle map. Clearing and adding are two halves of one refresh pass;
+        # they must always run together or the map loses geometry nothing re-adds.
         dbscan_min = int(getattr(self, "_voxel_pcd_dbscan_min_samples", 0) or 0)
         self.voxel_pcd.clear_points(
-            torch.from_numpy(depth),
+            depth_t,
             torch.from_numpy(intrinsics),
             torch.from_numpy(pose),
+            depth_is_valid=depth_is_valid,
             min_samples_clear=dbscan_min if dbscan_min > 0 else None,
+            max_depth=self.max_depth,
         )
 
         instance_image = None
@@ -662,14 +693,6 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 instance_scores = torch.from_numpy(task_obs["instance_scores"].astype(np.float32))
             except Exception as e:
                 logger.warning("Instance detection failed in process_rgbd_images: %s", e)
-
-        base_pose_t: Tensor | None = None
-        if base_xyt is not None:
-            b = np.asarray(base_xyt, dtype=np.float64).ravel()
-            if b.size >= 2:
-                th = float(b[2]) if b.size >= 3 else 0.0
-                dev = torch.device(self.map_2d_device)
-                base_pose_t = torch.tensor([float(b[0]), float(b[1]), th], dtype=torch.float32, device=dev)
 
         self.add(
             camera_pose=torch.Tensor(pose),
@@ -718,7 +741,12 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
         # Update semantic memory (skipped when encoder is None, e.g. manipulation_only mapping)
         self.semantic_memory.clear_points(
-            depth, torch.from_numpy(intrinsics), torch.from_numpy(pose), min_samples_clear=10
+            depth,
+            torch.from_numpy(intrinsics),
+            torch.from_numpy(pose),
+            depth_is_valid=valid_depth,
+            min_samples_clear=10,
+            max_depth=self.max_depth,
         )
 
         if self.encoder is not None:
@@ -1078,20 +1106,6 @@ class SparseVoxelMap(SparseVoxelMapBase):
         else:
             return target_point, debug_text, obs_id, point
 
-    def _should_skip_obstacle_stamp_for_spin(self, base_pose: Tensor | None) -> bool:
-        """Return True when base translation is below guard (rotate-in-place spin)."""
-        guard_m = float(getattr(self, "_spin_obstacle_guard_m", 0.0) or 0.0)
-        if guard_m <= 0.0 or base_pose is None:
-            return False
-        bx, by = float(base_pose[0]), float(base_pose[1])
-        last = getattr(self, "_last_obstacle_stamp_base_xy", None)
-        if last is not None:
-            lx, ly = last
-            if math.hypot(bx - lx, by - ly) < guard_m:
-                return True
-        self._last_obstacle_stamp_base_xy = (bx, by)
-        return False
-
     def add(
         self,
         camera_pose: Tensor,
@@ -1239,26 +1253,23 @@ class SparseVoxelMap(SparseVoxelMapBase):
                 )
                 self.instances.associate_instances_to_memory()
 
-        skip_obstacle_stamp = self._should_skip_obstacle_stamp_for_spin(base_pose)
+        # Add to voxel grid
+        if feats is not None:
+            feats = feats[valid_depth].reshape(-1, feats.shape[-1])
+        rgb = rgb[valid_depth].reshape(-1, 3)
+        world_xyz = full_world_xyz.view(-1, 3)[valid_depth.flatten()]
 
-        # Add to voxel grid (skip during rotate-in-place to avoid obstacle "fans").
-        if not skip_obstacle_stamp:
+        # TODO: weights could also be confidence, inv distance from camera, etc
+        if world_xyz.nelement() > 0:
+            n_keep = max(1, int((1 - self.point_update_threshold) * len(world_xyz)))
+            selected_indices = torch.randperm(len(world_xyz))[:n_keep]
+            if world_xyz is not None:
+                world_xyz = world_xyz[selected_indices]
             if feats is not None:
-                feats = feats[valid_depth].reshape(-1, feats.shape[-1])
-            rgb = rgb[valid_depth].reshape(-1, 3)
-            world_xyz = full_world_xyz.view(-1, 3)[valid_depth.flatten()]
-
-            # TODO: weights could also be confidence, inv distance from camera, etc
-            if world_xyz.nelement() > 0:
-                n_keep = max(1, int((1 - self.point_update_threshold) * len(world_xyz)))
-                selected_indices = torch.randperm(len(world_xyz))[:n_keep]
-                if world_xyz is not None:
-                    world_xyz = world_xyz[selected_indices]
-                if feats is not None:
-                    feats = feats[selected_indices]
-                if rgb is not None:
-                    rgb = rgb[selected_indices]
-                self.voxel_pcd.add(world_xyz, features=feats, rgb=rgb, weights=None)
+                feats = feats[selected_indices]
+            if rgb is not None:
+                rgb = rgb[selected_indices]
+            self.voxel_pcd.add(world_xyz, features=feats, rgb=rgb, weights=None)
 
         if self._add_local_radius_points:
             if base_pose is not None:
@@ -1325,7 +1336,14 @@ class SparseVoxelMap(SparseVoxelMapBase):
             if feats is not None:
                 feats = self.fix_data_type(feats)
             base_pose = self.fix_data_type(base_pose)
-            self.voxel_pcd.clear_points(depth, intrinsics, camera_pose)
+            depth_is_valid = self._depth_validity_mask(depth) if depth is not None else None
+            self.voxel_pcd.clear_points(
+                depth,
+                intrinsics,
+                camera_pose,
+                depth_is_valid=depth_is_valid,
+                max_depth=self.max_depth,
+            )
             self.add(
                 camera_pose=camera_pose,
                 xyz=xyz,
@@ -1746,24 +1764,49 @@ class SparseVoxelMap(SparseVoxelMapBase):
 
         print(objects)
 
-    def get_outside_frontier(self, xyt, planner):
-        """
-        This function selects the edges of currently reachable space.
+    def get_reachable_map(self, xyt, planner, *, local_fallback_cells: int = 8):
+        """Boolean grid of planner-reachable free cells from ``xyt``.
+
+        When flood-fill fails (start cell buried under dilation / pose noise), fall
+        back to a **local** free-explored disk around the robot — never the entire
+        explored mask (that puts frontier centroids mid-room).
         """
         obstacles, explored = self.get_2d_map()
         if len(xyt) == 3:
             xyt = xyt[:2]
-        reachable_points = planner.get_reachable_points(planner.to_pt(xyt))
-        if not reachable_points:
-            # Start cell and neighbors are all occupied / unknown: flood-fill returns nothing.
-            # Fall back to all explored free space so exploration still has a frontier mask.
-            reachable_map = (~obstacles & explored).to(torch.bool)
-        else:
+        start_pt = planner.to_pt(xyt)
+        reachable_points = planner.get_reachable_points(start_pt)
+        reachable_map = torch.zeros_like(obstacles, dtype=torch.bool)
+        if reachable_points:
             reachable_xs, reachable_ys = zip(*reachable_points, strict=False)
             reachable_xs = torch.tensor(reachable_xs, device=obstacles.device, dtype=torch.long)
             reachable_ys = torch.tensor(reachable_ys, device=obstacles.device, dtype=torch.long)
-            reachable_map = torch.zeros_like(obstacles, dtype=torch.bool)
             reachable_map[reachable_xs, reachable_ys] = True
+            return reachable_map
 
+        # Local disk of explored free space around the start (grid coords).
+        free = (~obstacles & explored).to(torch.bool)
+        if isinstance(start_pt, (list, tuple)):
+            si, sj = int(start_pt[0]), int(start_pt[1])
+        else:
+            si, sj = int(start_pt[0]), int(start_pt[1])
+        h, w = free.shape
+        r = max(1, int(local_fallback_cells))
+        i0, i1 = max(0, si - r), min(h, si + r + 1)
+        j0, j1 = max(0, sj - r), min(w, sj + r + 1)
+        yy, xx = torch.meshgrid(
+            torch.arange(i0, i1, device=free.device),
+            torch.arange(j0, j1, device=free.device),
+            indexing="ij",
+        )
+        disk = (yy - si).to(torch.float32).pow(2) + (xx - sj).to(torch.float32).pow(2) <= float(r * r)
+        reachable_map[i0:i1, j0:j1] = free[i0:i1, j0:j1] & disk
+        return reachable_map
+
+    def get_outside_frontier(self, xyt, planner):
+        """
+        This function selects the edges of currently reachable space.
+        """
+        reachable_map = self.get_reachable_map(xyt, planner)
         edges = get_edges(reachable_map)
         return edges & ~reachable_map

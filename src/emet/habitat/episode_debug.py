@@ -264,7 +264,10 @@ def save_episode_debug_bundle(
             shutil.copy2(png, picks_dst / png.name)
     for png_s in getattr(agent, "_frontier_pick_panels", None) or []:
         png = Path(str(png_s))
-        if png.is_file():
+        # Panels may already live in picks_dst (agentic executor writes there
+        # directly); copying a file onto itself raises SameFileError and would
+        # abort the rest of the bundle export (maps, trajectory, floor metrics).
+        if png.is_file() and png.resolve() != (picks_dst / png.name).resolve():
             shutil.copy2(png, picks_dst / png.name)
 
     if gm is not None:

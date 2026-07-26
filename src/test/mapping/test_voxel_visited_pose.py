@@ -92,7 +92,8 @@ def test_update_visited_falls_back_to_camera_without_base_pose() -> None:
     np.testing.assert_allclose(pose[:2].detach().cpu().numpy(), camera_xy.numpy())
 
 
-def test_spin_guard_skips_obstacle_stamp_at_same_base() -> None:
+def test_every_observation_stamps_obstacles_from_a_stationary_base() -> None:
+    """A rotate-in-place scan is the main way the agent maps a room, so it must stamp."""
     voxel_map = _make_map()
     base_pose = torch.tensor([1.31, -3.47, 0.0], dtype=torch.float32)
 
@@ -100,10 +101,10 @@ def test_spin_guard_skips_obstacle_stamp_at_same_base() -> None:
         _add_observation(voxel_map, base_pose=base_pose)
         _add_observation(voxel_map, base_pose=base_pose)
 
-    assert mock_add.call_count == 1
+    assert mock_add.call_count == 2
 
 
-def test_spin_guard_stamps_after_base_moves() -> None:
+def test_every_observation_stamps_obstacles_after_base_moves() -> None:
     voxel_map = _make_map()
 
     with patch.object(voxel_map.voxel_pcd, "add", autospec=True) as mock_add:

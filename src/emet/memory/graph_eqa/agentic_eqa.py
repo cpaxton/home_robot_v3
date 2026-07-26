@@ -408,6 +408,19 @@ class AgenticEQAExecutor:
                     if after is not None:
                         frontier_xyz = np.asarray(after, dtype=float).reshape(-1)[:3]
         cap = self._tool_capture_and_update()
+        look_retry = False
+        # After a successful explore nav, a mid-floor / already-mapped goal often yields
+        # NO_NEW_OBS. Spin in place so we still peel new coverage from this pose.
+        if (
+            ok
+            and not cap.get("ok")
+            and str(cap.get("status") or "") == "NO_NEW_OBS"
+        ):
+            look_retry = True
+            look = self._tool_look_around()
+            look_cap = look.get("capture") if isinstance(look, dict) else None
+            if isinstance(look_cap, dict) and look_cap.get("ok"):
+                cap = look_cap
         if cap.get("ok") and cap.get("obs_id") is not None:
             self._policy_approached(hypothesis_id, int(cap["obs_id"]))
         panel_path = self._save_frontier_pick_panel(
@@ -422,6 +435,7 @@ class AgenticEQAExecutor:
             else None,
             "source": pick_source,
             "pick_panel": str(panel_path) if panel_path else None,
+            "look_around_on_no_new_obs": look_retry,
         }
         self._attach_gt(row, frontier_xyz)
         self._append_trace(row)

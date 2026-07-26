@@ -322,11 +322,26 @@ print(row.get('debug_bundle_dir') or '')
   for f in topdown_map.png topdown_map_overlay.png topdown_gt_navmesh.png \
            explored_2d.npy obstacles_2d.npy grid_meta.json trajectory.jsonl \
            spawn_record.json metrics.json diagnostics_manifest.json floor_metrics.json \
-           topdown_exploration.mp4 agentic_trace.jsonl agentic_summary.json; do
+           floor_area.jsonl floor_area_growth.png \
+           topdown_exploration.mp4 episode_rgb.mp4 agentic_trace.jsonl agentic_summary.json; do
     [[ -e "$src/$f" ]] && cp -a "$src/$f" "$dst/"
   done
   [[ -d "$src/maps" ]] && rm -rf "$dst/maps" && cp -a "$src/maps" "$dst/maps"
   [[ -d "$src/frontier_picks" ]] && rm -rf "$dst/frontier_picks" && cp -a "$src/frontier_picks" "$dst/frontier_picks"
+  # Head-camera frames are large; symlink the full dir + copy a few keyframes.
+  if [[ -d "$src/frames" ]]; then
+    ln -sfn "$src/frames" "$dst/frames_all"
+    mkdir -p "$dst/frames"
+    # Evenly spaced samples for quick feh browsing without opening 360 files.
+    mapfile -t _rgbs < <(ls "$src/frames"/rgb_*.png 2>/dev/null | sort)
+    if ((${#_rgbs[@]} > 0)); then
+      _n=${#_rgbs[@]}
+      for _k in 0 1 2 3 4 5; do
+        _idx=$(( _k * (_n - 1) / 5 ))
+        cp -n "${_rgbs[$_idx]}" "$dst/frames/" 2>/dev/null || true
+      done
+    fi
+  fi
   log "snapshot $arm q$qid → $dst"
 }
 

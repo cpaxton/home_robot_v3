@@ -14,6 +14,7 @@ from emet.memory.graph_eqa.frontier_nodes import (
     exploration_keywords_from_text,
     keyword_overlap_score,
     keyword_score_map,
+    reachable_waypoint_for_cluster,
 )
 
 
@@ -62,6 +63,47 @@ def test_cluster_frontier_mask_filters_small_components():
     assert clusters[0][2] >= 3
 
 
+def test_reachable_waypoint_for_cluster_prefers_adjacent_not_centroid():
+    """Ring/arc centroids land mid-floor; waypoints must sit on the reachable rim."""
+    reachable = np.zeros((20, 20), dtype=bool)
+    reachable[5:15, 5:15] = True
+    frontier = np.zeros((20, 20), dtype=bool)
+    # Full ring around the reachable block — geometric centroid is ~(9.5, 9.5) mid-floor.
+    frontier[4, 5:15] = True
+    frontier[15, 5:15] = True
+    frontier[5:15, 4] = True
+    frontier[5:15, 15] = True
+    cells = np.argwhere(frontier)
+    wp = reachable_waypoint_for_cluster(cells, reachable)
+    assert wp is not None
+    assert reachable[wp[0], wp[1]]
+    # Must touch the frontier (8-adjacent to at least one frontier cell).
+    fr, fc = wp
+    assert any(
+        frontier[fr + dr, fc + dc]
+        for dr in (-1, 0, 1)
+        for dc in (-1, 0, 1)
+        if (dr, dc) != (0, 0) and 0 <= fr + dr < 20 and 0 <= fc + dc < 20
+    )
+    # Not the mid-floor centroid.
+    assert wp != (10, 10)
+
+
+def test_cluster_frontier_mask_snaps_to_reachable_when_provided():
+    reachable = np.zeros((16, 16), dtype=bool)
+    reachable[4:12, 4:12] = True
+    frontier = np.zeros((16, 16), dtype=bool)
+    frontier[3, 4:12] = True  # top edge outside reachable
+    clusters = cluster_frontier_mask(frontier, min_cells=3, reachable=reachable)
+    assert len(clusters) == 1
+    gi, gj = clusters[0][1]
+    assert reachable[gi, gj]
+    assert gi == 4  # just inside the reachable block
+    # Without reachable, goal is the arc centroid (outside / mid-edge).
+    raw = cluster_frontier_mask(frontier, min_cells=3, reachable=None)
+    assert raw[0][1][0] == 3
+
+
 def test_sync_frontier_nodes_creates_and_removes():
     mem = GraphEQAMemory(
         eqa_client=lambda x: "",
@@ -83,6 +125,43 @@ def test_sync_frontier_nodes_creates_and_removes():
     n1 = mem.sync_frontier_nodes(vm, planner, [0, 0, 0])
     assert n1 == 0
     assert not any(n.is_frontier for n in mem.get_nodes())
+
+
+def test_sync_frontier_nodes_snaps_xyz_to_reachable_adjacent():
+    """With get_reachable_map, frontier node xyz must not be the mid-arc centroid."""
+
+    class _ReachableStub(_StubVoxelMap):
+        def get_outside_frontier(self, xyt, planner):
+            mask = np.zeros(self.shape, dtype=bool)
+            # Arc along top of a reachable block — centroid y would be mid-row of arc.
+            mask[2, 2:8] = True
+            return mask
+
+        def get_2d_map(self, return_history_id: bool = False, kernel: int = 5):
+            explored = np.zeros(self.shape, dtype=bool)
+            return None, explored
+
+        def get_reachable_map(self, xyt, planner, *, local_fallback_cells: int = 8):
+            reachable = np.zeros(self.shape, dtype=bool)
+            reachable[3:9, 2:8] = True
+            return reachable
+
+    mem = GraphEQAMemory(
+        eqa_client=lambda x: "",
+        image_description_client=lambda x: "",
+        parameters={"graph_eqa_frontier_nodes": {"enabled": True, "max_nodes": 4, "min_cluster_cells": 2}},
+    )
+    vm = _ReachableStub()
+    mem.sync_frontier_nodes(vm, _StubPlanner(), [0, 0, 0])
+    frontiers = [n for n in mem.get_nodes() if n.is_frontier]
+    assert frontiers
+    # Goal cell snapped onto reachable row 3, not frontier-arc row 2.
+    gi = int(round(float(frontiers[0].xyz[0]) / 0.25))
+    gj = int(round(float(frontiers[0].xyz[1]) / 0.25))
+    assert gi == 3
+    assert 2 <= gj < 8
+    reachable = vm.get_reachable_map(None, None)
+    assert reachable[gi, gj]
 
 
 def test_keyword_overlap_score():

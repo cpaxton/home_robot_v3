@@ -147,6 +147,7 @@ class EpisodeDiagnosticsRecorder:
         default_factory=list, init=False, repr=False
     )
     _nav_attempts: list[dict[str, Any]] = field(default_factory=list, init=False, repr=False)
+    _floor_area_series: list[dict[str, Any]] = field(default_factory=list, init=False, repr=False)
     _planning_step: int = field(default=0, init=False, repr=False)
     _frame_seq: int = field(default=0, init=False, repr=False)
     _habitat_substep_hook: Any | None = field(default=None, init=False, repr=False)
@@ -243,6 +244,13 @@ class EpisodeDiagnosticsRecorder:
 
         if self._stride_snapshots or self._stride_overlay_snapshots:
             maps_dir = root / "maps"
+            # Shared Habitat episode dirs are reused across qid re-runs; wipe stale
+            # stride PNGs so older longer episodes cannot masquerade as a mid-run reset.
+            if maps_dir.is_dir():
+                for stale in maps_dir.glob("step_*.png"):
+                    stale.unlink(missing_ok=True)
+                for stale in maps_dir.glob("overlay_step_*.png"):
+                    stale.unlink(missing_ok=True)
             maps_dir.mkdir(parents=True, exist_ok=True)
             for step_idx, img in self._stride_snapshots:
                 out = maps_dir / f"step_{step_idx:04d}.png"
@@ -290,6 +298,16 @@ class EpisodeDiagnosticsRecorder:
                     )
                 )
 
+        if self._floor_area_series:
+            fa_path = root / "floor_area.jsonl"
+            with fa_path.open("w", encoding="utf-8") as fh:
+                for row in self._floor_area_series:
+                    fh.write(json.dumps(row) + "\n")
+            manifest["floor_area_jsonl"] = str(fa_path)
+            plot_path = _plot_floor_area_growth(self._floor_area_series, root)
+            if plot_path:
+                manifest["floor_area_plot"] = str(plot_path)
+
         if self._nav_attempts:
             nav_path = root / "nav_attempts.jsonl"
             with nav_path.open("w", encoding="utf-8") as fh:
@@ -328,6 +346,45 @@ class EpisodeDiagnosticsRecorder:
             overlay = self._render_overlay_map_rgb(agent, include_trajectory=True)
             if overlay is not None:
                 self._stride_overlay_snapshots.append((int(step_idx), overlay))
+        self._capture_floor_area(agent, step_idx)
+
+    def _capture_floor_area(self, agent: Any, step_idx: int) -> None:
+        """Track explored + free-floor area per stride step (proof coverage grows).
+
+        ``explored`` is the DynaMem 2D explored mask (any voxel mass ∪ visited disk).
+        ``free_floor`` is ``explored & ~obstacles`` — the walkable floor footprint we
+        actually care about for exploration growth (walls/furniture excluded).
+        """
+        vm = getattr(agent, "voxel_map", None)
+        if vm is None or not hasattr(vm, "get_2d_map"):
+            return
+        try:
+            obstacles, explored = vm.get_2d_map()[:2]
+            res = float(getattr(vm, "grid_resolution", 0.1))
+            explored_b = np.asarray(explored, dtype=bool)
+            obstacles_b = (
+                np.asarray(obstacles, dtype=bool)
+                if obstacles is not None
+                else np.zeros_like(explored_b, dtype=bool)
+            )
+            free_floor = explored_b & ~obstacles_b
+            explored_cells = int(explored_b.sum())
+            free_floor_cells = int(free_floor.sum())
+            obstacle_cells = int(obstacles_b.sum())
+        except Exception as exc:
+            logger.warning(f"floor-area capture failed at step {step_idx}: {exc}")
+            return
+        cell_area = res * res
+        self._floor_area_series.append(
+            {
+                "step": int(step_idx),
+                "explored_cells": explored_cells,
+                "explored_area_m2": explored_cells * cell_area,
+                "free_floor_cells": free_floor_cells,
+                "free_floor_area_m2": free_floor_cells * cell_area,
+                "obstacle_cells": obstacle_cells,
+            }
+        )
 
     def _trajectory_poses(self) -> list[tuple[float, float, float]]:
         out: list[tuple[float, float, float]] = []
@@ -834,6 +891,63 @@ def _export_full_graph(agent: Any, root: Path) -> Path | None:
         return ckpt
     except Exception as exc:
         logger.warning(f"graph checkpoint export failed: {exc}")
+        return None
+
+
+def _plot_floor_area_growth(series: list[dict[str, Any]], root: Path) -> Path | None:
+    """Render explored + free-floor area vs step so map growth (or stalls) is obvious."""
+    if len(series) < 2:
+        return None
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        steps = [int(r["step"]) for r in series]
+        explored = [float(r["explored_area_m2"]) for r in series]
+        free = [
+            float(r["free_floor_area_m2"]) if "free_floor_area_m2" in r else float("nan")
+            for r in series
+        ]
+        has_free = any(np.isfinite(v) for v in free)
+        fig, ax = plt.subplots(figsize=(6.5, 3.6), dpi=120)
+        ax.plot(
+            steps,
+            explored,
+            marker="o",
+            markersize=3,
+            linewidth=1.5,
+            color="tab:green",
+            label="explored (any)",
+        )
+        if has_free:
+            ax.plot(
+                steps,
+                free,
+                marker="s",
+                markersize=3,
+                linewidth=1.5,
+                color="tab:blue",
+                label="free floor (explored ∩ ¬obstacle)",
+            )
+        ax.set_xlabel("planning step")
+        ax.set_ylabel("area (m²)")
+        e0, e1 = explored[0], explored[-1]
+        title = f"explored: {e0:.1f} → {e1:.1f} m² (Δ{e1 - e0:+.1f})"
+        if has_free and np.isfinite(free[0]) and np.isfinite(free[-1]):
+            f0, f1 = float(free[0]), float(free[-1])
+            title += f"\nfree floor: {f0:.1f} → {f1:.1f} m² (Δ{f1 - f0:+.1f})"
+        ax.set_title(title)
+        ax.legend(loc="best", fontsize=8)
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+        out = root / "floor_area_growth.png"
+        fig.savefig(out)
+        plt.close(fig)
+        return out
+    except Exception as exc:
+        logger.warning(f"floor-area plot failed: {exc}")
         return None
 
 
