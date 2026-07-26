@@ -691,9 +691,11 @@ Dogfood entrypoints for classic vs agentic-verify Dynagraph. Prefer these over h
 | Command | Purpose |
 |---------|---------|
 | `emet hmeqa h2h [OUT] [--resume] [--arms …] [--ids …] [--agentic-verifier none\|owlv2\|yoloe] [--require-verified] [--crash-policy skip\|abort] [--streak-abort N]` | Launch via `emet jobs run --need-mib` (cpu-safe + gpu-exclusive) |
-| `emet hmeqa resume [OUT]` | Resolve latest OUT from status symlink if omitted; `RESUME=1` |
+| `emet hmeqa resume [OUT]` | Resolve latest OUT from status symlink if omitted; `RESUME=1` (retries empty per-qid jsonl) |
 | `emet hmeqa status [OUT]` | Progress + scored counts + crash capsules |
 | `emet hmeqa summarize [OUT]` | `scripts/summarize_hmeqa_agentic_h2h.py` |
+
+`OUT/DONE` is written only when every arm×id unit has a non-empty scored jsonl. Partial batches (skipped native crashes, etc.) exit nonzero, mark the job `failed` / `INCOMPLETE`, and leave `STATUS` pointing at resume — not summarize.
 
 Default crash policy is **skip** (settle + retry, continue). **`--streak-abort 2`** (default) aborts early after consecutive native crashes so a wedged driver does not burn the full batch.
 Agentic validation uses `scripts/summarize_agentic_ladder.py`: it reports accuracy, selective risk/coverage, fused-verify precision, visibility at verify, path length, hypothesis count, abstention, false confirmation, and forced submits. Balanced-32 is blocked unless a 4+ episode probe has a nonzero fused verified-answer rate and zero forced submits.
