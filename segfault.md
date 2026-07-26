@@ -44,6 +44,8 @@ uv run emet eval status
 | Progress | classic 14/32, agentic 4/10 @ 52/64 — resume fills empties |
 | Commit | soft-recent + INCOMPLETE DONE gate |
 | Do not | kill-stale; second GPU job |
+| Job | `20260725_230214_8e1494` (`hmeqa-bal32-resume`) |
+| Monitor | `uv run emet jobs status 20260725_230214_8e1494` |
 
 
 
