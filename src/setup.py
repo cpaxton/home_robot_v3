@@ -88,6 +88,7 @@ setuptools.setup(
         "qwen_vl_utils",
         "bitsandbytes",
         "triton >= 2.3.1",
+        "flash-attn>=2.7.0",
         "accelerate >= 1.6.0",
         "einops",
         "protobuf",

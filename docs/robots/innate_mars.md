@@ -58,7 +58,12 @@ Prerequisites: project env with default groups (includes **dynamem** and **da3**
 
    With Rerun enabled (default), open the viewer (browser or native) as for other `emet run dynamem` sessions—for example `http://localhost:9090?url=ws://localhost:9877` when the log shows the websocket URL. Use `--no-rerun` for headless mapping.
 
-3. **LLM agent + same memory stack:** use [`configs/agent_innate_mars.yaml`](../../configs/agent_innate_mars.yaml) (`depth_source: da3` and `robot: innate_mars`); see the comments in that file for `emet run agent --agent-config …` examples.
+3. **LLM agent + Discord (same memory stack):** use [`configs/agent_innate_mars.yaml`](../../configs/agent_innate_mars.yaml) (`robot: innate_mars`, Discord + EQA on). Hardware: [Discord chat + explore](innate_mars_hardware.md#discord-chat--explore-herman). Example:
+
+   ```bash
+   export DISCORD_TOKEN=...
+   uv run emet run agent --connection herman --config configs/agent_innate_mars.yaml --name Herman
+   ```
 
 4. **Optional integration test** (slow; GPU recommended; caches weights after first run):
 

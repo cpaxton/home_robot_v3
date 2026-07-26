@@ -4,6 +4,10 @@
 import math
 
 import numpy as np
+import pytest
+
+pytest.importorskip("geometry_msgs")
+pytest.importorskip("nav_msgs")
 
 from innate_mars_bridge.remote.modules.nav_geometry import xyt_to_pose_stamped
 

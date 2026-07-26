@@ -14,12 +14,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from emet.agent.skills import AgentMode, build_skill_pack
 from emet.agent.tools import Tool, get_tool_descriptions_for_prompt
 
 if TYPE_CHECKING:
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
-
-_NO_PARAMS: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
 
 # Response format block. Constant string (with the tools block) so the routing
 # system prompt is byte-identical across rounds and question banks — required
@@ -59,129 +58,9 @@ update automatically after every motion. Your job is to answer a question about 
 
 
 def build_agentic_eqa_tools(executor: AgenticEQAExecutor) -> list[Tool]:
-    """Tools the routing VLM may call. All funcs dispatch through executor.handle_tool."""
-    mode = getattr(executor, "mode", "answer")
-
-    def _dispatch(name: str):
-        def _fn(**kwargs: Any) -> str:
-            out = executor.handle_tool(name, kwargs)
-            return str(out)
-
-        return _fn
-
-    tools: list[Tool] = [
-        Tool(
-            name="inspect_graph",
-            description=(
-                "Refresh question keywords and ranked navigation hypotheses from the scene graph "
-                "and SigLIP memory. Use when hypotheses look stale or empty."
-            ),
-            parameters=_NO_PARAMS,
-            func=_dispatch("inspect_graph"),
-            returns_info=True,
-        ),
-        Tool(
-            name="explore_frontier",
-            description=(
-                "Navigate to an unexplored frontier to grow the map and graph. Optional 'toward' "
-                "biases frontier choice toward a phrase (e.g. the question object). Map and graph "
-                "update automatically afterward."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "toward": {
-                        "type": "string",
-                        "description": "Optional object phrase to bias the frontier pick toward.",
-                    }
-                },
-                "required": [],
-            },
-            func=_dispatch("explore_frontier"),
-        ),
-        Tool(
-            name="navigate_to_obs",
-            description=(
-                "Navigate to a graph observation by obs_id (a hypothesis location). Map and graph "
-                "update automatically on arrival."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "obs_id": {"type": "integer", "description": "Graph observation id to navigate to."}
-                },
-                "required": ["obs_id"],
-            },
-            func=_dispatch("navigate_to_obs"),
-        ),
-        Tool(
-            name="look_around",
-            description=(
-                "Scan in place (head sweep / rotate) to refresh the map and graph at the current "
-                "pose without navigating."
-            ),
-            parameters=_NO_PARAMS,
-            func=_dispatch("look_around"),
-        ),
-        Tool(
-            name="verify_siglip",
-            description=(
-                "Cheap visual check + multimodal VLM assess: does 'phrase' match the current "
-                "camera view / stored view obs_id? Returns PRESENT / CANDIDATE / ABSENT as a "
-                "proposal; only VLM answerable unlocks submit_answer."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "phrase": {"type": "string", "description": "Object phrase to verify (e.g. 'sink')."},
-                    "obs_id": {
-                        "type": "integer",
-                        "description": "Observation id to verify against (-1 = current best hypothesis).",
-                    },
-                },
-                "required": ["phrase"],
-            },
-            func=_dispatch("verify_siglip"),
-            returns_info=True,
-        ),
-    ]
-    if mode == "explore":
-        tools.append(
-            Tool(
-                name="finish",
-                description=(
-                    "End exploration with a short summary of what was mapped. Only allowed once "
-                    "frontiers are exhausted or the exploration budget is used."
-                ),
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "summary": {"type": "string", "description": "One-sentence summary of the mapped area."}
-                    },
-                    "required": [],
-                },
-                func=_dispatch("finish"),
-            )
-        )
-    else:
-        tools.append(
-            Tool(
-                name="submit_answer",
-                description=(
-                    "Submit the final answer (MCQ letter or short phrase). Rejected until VLM "
-                    "assess marks the view answerable (or the round budget is exhausted)."
-                ),
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "answer": {"type": "string", "description": "Final answer letter or phrase."}
-                    },
-                    "required": [],
-                },
-                func=_dispatch("submit_answer"),
-            )
-        )
-    return tools
+    """EQA_EPISODE tool pack. Schemas/names come from :mod:`emet.agent.skills`; funcs dispatch via ``handle_tool``."""
+    submode = getattr(executor, "mode", "answer")
+    return build_skill_pack(AgentMode.EQA_EPISODE, executor, eqa_submode=submode)
 
 
 def build_graph_eqa_system_prompt(tools: list[Tool]) -> str:
@@ -210,16 +89,11 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         lines.append(f"Goal: {executor.goal or 'explore and map the environment'}")
     else:
         lines.append(f"Question: {executor.question}")
-        if getattr(executor, "_target_phrase", ""):
-            lines.append(
-                f"Target: {executor._target_phrase} (type={getattr(executor, '_question_type', 'other')})"
-            )
     lines.append(_graph_stats_line(gm))
     lines.append(
         f"Round {executor._round + 1}/{executor.max_rounds}; "
         f"nav used {executor._n_nav + executor._n_explore}/{executor.max_nav_steps}; "
-        f"verified={executor._verified}; "
-        f"policy={getattr(executor._evidence_policy, 'state', None)}"
+        f"verified={executor._verified}"
     )
     if executor._hypotheses:
         lines.append("Hypotheses:")
@@ -234,20 +108,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         lines.append("Hypotheses: (none — explore or look_around first)")
     if executor._last_verify is not None:
         lv = executor._last_verify
-        lines.append(
-            f"Last verify (proposal): {lv.status} sim={float(lv.sim):.3f} "
-            f"obs_id={int(lv.obs_id)}"
-        )
-    last_vlm = getattr(executor, "_last_vlm_assess", None)
-    if last_vlm:
-        sug = last_vlm.get("suggested_answer")
-        lines.append(
-            "Last Qwen assess: "
-            f"answerable={last_vlm.get('answerable')} present={last_vlm.get('present')} "
-            f"need_more_views={last_vlm.get('need_more_views')} "
-            f"suggested={sug!r} obs_id={last_vlm.get('obs_id')} "
-            f"reason={last_vlm.get('reason')!r}"
-        )
+        lines.append(f"Last verify: {lv.status} sim={float(lv.sim):.3f} obs_id={int(lv.obs_id)}")
     if executor.max_rounds - executor._round <= 2:
         lines.append("Budget nearly exhausted: answer/finish on your best evidence soon.")
     return "\n".join(lines)

@@ -1,0 +1,35 @@
+---
+description: CHAT vs EQA_EPISODE agent modes — shared skills, disjoint tool packs, do not conflate
+globs: src/emet/agent/**/*.py,src/emet/memory/graph_eqa/agentic*.py,src/test/agent/**/*.py,docs/AGENT_RUN.md,docs/evaluation.md,configs/agent_*.yaml
+alwaysApply: false
+---
+
+# Agent modes (CHAT vs EQA_EPISODE)
+
+One skill library (`emet.agent.skills`); **two orchestrators**. Do not merge them or expect Discord chat to score Habitat MCQ.
+
+| Mode | Entry | Pack builder | Stop |
+|------|-------|--------------|------|
+| **CHAT** | `emet run agent` (Discord / terminal) | `get_tools` → `build_skill_pack(CHAT)` | User turns |
+| **EQA_EPISODE** | Habitat / dynagraph when `eqa.agentic_verify` | `build_agentic_eqa_tools` → `build_skill_pack(EQA_EPISODE)` | Verify-gated `submit_answer` / explore `finish` |
+
+## Shared contract
+
+- JSON `{"tool_calls":[...],"message":...}` + `parse_tool_calls_response`
+- Conceptual aliases (different **names** — do **not** rename EQA tools; traces depend on them):
+  - scan: CHAT `scan_environment` ↔ EQA `look_around`
+  - explore: CHAT `explore` ↔ EQA `explore_frontier`
+
+## Keep packs disjoint
+
+- **CHAT-only**: `describe_scene`, Discord `send_*`, emotes, `rotate_base`, `quit`, … (`CHAT_EXCLUSIVE_TOOL_NAMES`)
+- **EQA-only**: `navigate_to_obs`, `verify_siglip`, `submit_answer` / `finish`, `inspect_graph` (`EQA_EXCLUSIVE_TOOL_NAMES`)
+- Membership tests: `src/test/agent/test_skill_packs.py`
+
+## Common confusions
+
+- **`--eqa` on chat** = caption/VLM for `describe_scene` — **not** the Habitat agentic episode loop
+- **`--eqa-eval`** = Habitat harness path; bypasses the chat tool-router
+- Chat “are you sure?” / “look at X” ≈ `face_toward` + `describe_scene` (not blind ±45°); EQA would `navigate_to_obs` + `verify_siglip`
+
+Docs: [AGENT_RUN.md](../../docs/AGENT_RUN.md#skill-library-vs-orchestrator-modes), [evaluation.md](../../docs/evaluation.md#agentic-grapheqa-verify--offline-tuning).

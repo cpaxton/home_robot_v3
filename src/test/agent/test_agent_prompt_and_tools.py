@@ -125,6 +125,7 @@ def test_tools_registry_nonempty():
         "explore",
         "scan_environment",
         "rotate_base",
+        "face_toward",
         "move_forward",
         "describe_scene",
         "pick_place",
@@ -136,6 +137,26 @@ def test_tools_registry_nonempty():
         assert expected in names, f"Missing expected tool: {expected}"
 
 
+def test_prompt_routes_rotate_back_not_around():
+    from emet.agent.prompt import build_agent_system_prompt
+    from emet.agent.tools import get_tools
+
+    prompt = build_agent_system_prompt(tools=get_tools({}), name="Virgil")
+    assert "Rotate back" in prompt
+    assert "Do NOT use 180" in prompt
+    assert '"degrees": -45' in prompt or '"degrees":-45' in prompt
+
+
+def test_prompt_routes_look_at_to_face_toward():
+    from emet.agent.prompt import build_agent_system_prompt
+    from emet.agent.tools import get_tools
+
+    prompt = build_agent_system_prompt(tools=get_tools({}), name="Virgil")
+    assert "face_toward" in prompt
+    assert "Look at the aquarium" in prompt
+    assert '"object_label": "aquarium"' in prompt or '"object_label":"aquarium"' in prompt
+
+
 def test_prompt_routes_turn_around_to_rotate_base():
     from emet.agent.prompt import build_agent_system_prompt
     from emet.agent.tools import get_tools
@@ -144,7 +165,9 @@ def test_prompt_routes_turn_around_to_rotate_base():
     assert "rotate_base" in prompt
     assert 'degrees": 180' in prompt or '"degrees": 180' in prompt
     assert "move_forward" in prompt
-    assert 'meters": 0.5' in prompt or '"meters": 0.5' in prompt
+    assert 'meters": 0.1' in prompt or '"meters": 0.1' in prompt
+    assert "ask how far" in prompt.lower()
+    assert "Can you move forward" in prompt
 
 
 def test_prompt_routes_look_around_to_scan():

@@ -111,6 +111,9 @@ Do **not** `tail ~/runs/emet/STATUS.log` — sibling checkouts share `~/runs/eme
 
 **Root cause of “Cursor agent keeps crashing” here is usually not a busy GPU.** Kernel logs show `emet[…]: segfault at 0` (null IP) or `trap invalid opcode` after Habitat-Sim / VLM / EGL teardown. Also seen: V8 `Illegal instruction` in the Cursor `agent`/`node` binary itself. That fault kills the agent tool host even when `nvidia-smi` only lists Xorg.
 
+Also distinguish **Mode A** (episode `libcuda` SIGSEGV / empty jsonl / `exit=139`) from **Mode B** (agent/`emet` null-IP segfault while a detached `emet jobs` child may keep running). See [`docs/known_issues.md`](../../docs/known_issues.md).
+
+
 **First command when a session comes back after a crash (from the owning checkout):**
 
 ```bash

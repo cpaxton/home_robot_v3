@@ -208,8 +208,8 @@ def test_scan_environment_returns_info_via_func():
     assert scan.returns_info is True
     assert scan.executor_commands is None
     assert "scan_environment" in _FAST_REPLY_TOOLS
-    assert "take_picture" not in _FAST_REPLY_TOOLS
-    assert "take_ee_picture" not in _FAST_REPLY_TOOLS
+    assert "go_home" not in _FAST_REPLY_TOOLS
+    assert "hand_over" not in _FAST_REPLY_TOOLS
 
     ok, results, has_info = _dispatch_tool_calls(
         [{"name": "scan_environment", "arguments": {}}],
@@ -223,3 +223,17 @@ def test_scan_environment_returns_info_via_func():
         [{"name": "scan_environment", "arguments": {}}],
         results,
     )
+
+
+def test_dispatch_unknown_tool_returns_user_facing_info():
+    from emet.agent.loop import _dispatch_tool_calls, _format_fast_tool_reply, _should_skip_llm_summarize
+
+    ok, results, has_info = _dispatch_tool_calls(
+        [{"name": "move_forward", "arguments": {"meters": 0.5}}],
+        {},
+        executor=lambda _cmds: True,
+    )
+    assert ok and has_info
+    assert any("don't have a working" in r.lower() or "can't drive" in r.lower() for r in results)
+    assert _should_skip_llm_summarize([{"name": "move_forward"}], results)
+    assert _format_fast_tool_reply(results)
