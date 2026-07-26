@@ -1,6 +1,29 @@
 # Segfault investigation log
 
-Last updated: 2026-07-25 22:46 EDT
+Last updated: 2026-07-26 10:58 
+
+
+### Fresh bal-32 #2 under paper-router (significance re-check) — 2026-07-26 10:58
+
+| Field | Value |
+|-------|-------|
+| Goal | Second independent bal-32 classic vs agentic under the policy that went 8/8 on holdout (overnight `hmeqa_overnight_20260726_022227` gave classic 10/32 vs agentic 12/32, McNemar p≈0.75 — not significant) |
+| Policy | `--preset paper-router` (owlv2 + allow-unverified + agentic-router=1) |
+| Launch | `uv run emet hmeqa h2h ~/runs/emet/hmeqa_agentic_bal32r2_<stamp> --preset paper-router --job-name hmeqa-bal32r2` |
+| Resume | `uv run emet hmeqa resume <OUT> --preset paper-router` |
+| Do not | kill-stale while job live; hard-kill Habitat mid-episode |
+| Next | `uv run emet jobs` · `uv run emet hmeqa status <OUT>` · compare vs `hmeqa_overnight_20260726_022227/bal32` |
+
+### Re-run overnight ladder (Qwen router + letter anti-hijack) — 2026-07-26 09:38 
+
+| Field | Value |
+|-------|-------|
+| Goal | Fresh holdout-8 → bal-32 after VLM-first submit fixes (working tree) |
+| Policy | owlv2 + allow-unverified + **agentic-router=1** |
+| Script | `scripts/run_hmeqa_overnight_ladder.sh` |
+| Launch | `uv run emet jobs run --name hmeqa-overnight-router --need-mib 12000 -- ./scripts/run_hmeqa_overnight_ladder.sh` |
+| Do not | kill-stale while job live; hard-kill Habitat mid-episode |
+| Next | `bash scripts/status_log.sh tail` · `uv run emet jobs` · `uv run emet hmeqa status OUT` |
 
 ### Host freeze during q104 frontier-viz debug (2026-07-25 ~22:32 → reboot 22:42)
 
@@ -414,3 +437,21 @@ markdown as the durable investigation narrative.
 | Curve | monotone through last live stride sample (0/5/10/15/20) |
 | Note | maps `step_0025+` in the shared episode cache were **stale leftovers** from earlier runs (timestamps 00:27 / 22:15); not a 20→25 reset. Flush now wipes old stride PNGs. |
 
+
+### Overnight ladder (job 20260726_022333_7b5326)
+
+BASE: `/home/cpaxton/runs/emet/hmeqa_overnight_20260726_022227`
+
+| Field | Value |
+|-------|-------|
+| Script | `scripts/run_hmeqa_overnight_ladder.sh` |
+| Phase 1 | holdout-8 `15,56,65,68,79,88,104,105` classic+agentic |
+| Gate | if agentic << classic or n&lt;6 → one agentic-only retune |
+| Phase 2 | fresh bal-32 classic+agentic |
+| Policy | owlv2 + **allow-unverified** + no-router (explore fix; verify abstain was broken) |
+| Do not | kill-stale; second GPU job; hard-kill Habitat |
+| Monitor | `uv run emet jobs` / `bash scripts/status_log.sh tail` |
+
+
+| Job | `20260726_022333_7b5326` |
+| BASE | `/home/cpaxton/runs/emet/hmeqa_overnight_20260726_022227` |

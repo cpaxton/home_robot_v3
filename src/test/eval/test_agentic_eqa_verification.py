@@ -1340,8 +1340,106 @@ def test_image_verify_three_band_absent_candidate_present():
     assert hi["fused_verified"] is False
 
 
+def test_vlm_assess_unlocks_even_when_siglip_absent(monkeypatch):
+    """Qwen answerable unlocks submit; SigLIP ABSENT is proposal info, not a hard block."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, AgenticState
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    agent.voxel_map = None
+    agent.robot = MagicMock()
+    agent.robot.get_observation.return_value = MagicMock(
+        rgb=np.zeros((4, 4, 3), dtype=np.uint8)
+    )
+    gm._observation_by_id = MagicMock(return_value=None)
+    gm.verify_phrase_at_obs.return_value = MagicMock(
+        status="ABSENT",
+        sim=0.04,
+        ok=False,
+        obs_id=9,
+        phrase="utensils",
+        text_feat=None,
+        img_feat=None,
+    )
+    gm.eqa_client = MagicMock()
+
+    class _Assess:
+        target = "utensils"
+        present = True
+        answerable = True
+        need_more_views = False
+        suggested_answer = "A"
+        reason = "place settings visible on table"
+        raw = "{}"
+
+        def to_dict(self):
+            return {}
+
+    monkeypatch.setattr(
+        "emet.eval.agentic_vlm_assess.assess_view_with_vlm",
+        lambda *a, **k: _Assess(),
+    )
+    monkeypatch.setattr(
+        "emet.eval.agentic_vlm_assess.build_inventory_brief",
+        lambda **k: "brief",
+    )
+
+    ex = AgenticEQAExecutor(agent, "Where are the utensils?", router=False, collect_trace=True)
+    ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
+    ex._target_phrase = "utensils"
+    out = ex._tool_verify_siglip("utensils", 9)
+    assert out["status"] == "ABSENT"
+    assert out["verified"] is True
+    assert out["answerable"] is True
+    assert ex._evidence_policy.state == AgenticState.ANSWER
+    vlm_rows = [r for r in ex._trace_rows if r.get("tool") == "vlm_assess"]
+    assert vlm_rows[-1].get("suggested_answer") == "A"
+    assert vlm_rows[-1].get("proposal_status") == "ABSENT"
+
+
+def test_submit_keeps_qwen_letter_when_query_echoes_xyz():
+    """Graph XYZ echo must not overwrite Qwen's MCQ letter."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    gm = MagicMock()
+    agent.graph_memory = gm
+    agent.planner = None
+    agent.robot = None
+    gm.query_answer.return_value = (
+        "",
+        "The fan is at approximately (9.15, 1.71, 0.84) m.",
+        False,
+        "",
+        None,
+        [],
+    )
+    gm.select_obs_ids_for_verified_answer = MagicMock(return_value=[1])
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where is the fan? A) Living room B) Bedroom C) Next to the bed D) Kitchen",
+        router=False,
+        collect_trace=True,
+    )
+    ex._verified = True
+    ex._verified_obs_id = 1
+    ex._last_vlm_assess = {"suggested_answer": "C"}
+    out = ex._do_submit_answer()
+    assert out["answer"] == "C"
+    submit = next(r for r in ex._trace_rows if r.get("tool") == "submit_answer")
+    assert submit["answer_source"] == "vlm_suggested"
+
+    out2 = ex._do_submit_answer(prefer_answer="D")
+    assert out2["answer"] == "D"
+
+
 def test_vlm_assess_unlocks_verified_submit_gate(monkeypatch):
-    """Multimodal VLM answerable=True is what sets verified / ANSWER — not OWL."""
+    """Qwen answerable=True is what sets verified / ANSWER — not OWL/SigLIP alone."""
     _require_agentic()
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, AgenticState
 

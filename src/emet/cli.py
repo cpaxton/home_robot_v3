@@ -1590,7 +1590,32 @@ def hmeqa_group() -> None:
       emet hmeqa resume
       emet hmeqa status
       emet hmeqa h2h --out OUT --resume --ids 15,68,105,17
+      emet hmeqa overnight
+      emet hmeqa h2h --preset paper-router --ids 15,56,65,68
     """
+
+
+def _hmeqa_apply_preset(
+    ctx: click.Context,
+    *,
+    preset: str | None,
+    agentic_verifier: str,
+    require_verified: bool,
+    agentic_router: bool,
+) -> tuple[str, bool, bool]:
+    """Apply ``paper-router`` only where Click defaults were left untouched."""
+    if (preset or "").strip().lower() != "paper-router":
+        return agentic_verifier, require_verified, agentic_router
+    from emet.eval.harness import apply_paper_router_preset
+
+    return apply_paper_router_preset(
+        agentic_verifier=agentic_verifier,
+        require_verified=require_verified,
+        agentic_router=agentic_router,
+        verifier_source=ctx.get_parameter_source("agentic_verifier"),
+        verified_source=ctx.get_parameter_source("require_verified"),
+        router_source=ctx.get_parameter_source("agentic_router"),
+    )
 
 
 @hmeqa_group.command("status", short_help="Show OUT progress, crashes, scored counts")
@@ -1736,10 +1761,18 @@ def _hmeqa_launch(
     show_default=True,
     help="Use VLM tool routing (fallback policy is deterministic).",
 )
+@click.option(
+    "--preset",
+    type=click.Choice(["paper-router"]),
+    default=None,
+    help="paper-router: owlv2 + allow-unverified + agentic-router (explicit flags still win).",
+)
 @click.option("--job-name", default="hmeqa-h2h", show_default=True)
 @click.option("--need-mib", type=int, default=12000, show_default=True)
 @click.option("--foreground", is_flag=True)
+@click.pass_context
 def hmeqa_h2h(
+    ctx: click.Context,
     out_dir: str | None,
     resume: bool,
     arms: str,
@@ -1751,12 +1784,20 @@ def hmeqa_h2h(
     agentic_verifier: str,
     require_verified: bool,
     agentic_router: bool,
+    preset: str | None,
     job_name: str,
     need_mib: int,
     foreground: bool,
 ) -> None:
-    from emet.eval.harness import DEFAULT_BAL32_IDS, resolve_hmeqa_out
+    from emet.eval.harness import DEFAULT_BAL32_IDS
 
+    agentic_verifier, require_verified, agentic_router = _hmeqa_apply_preset(
+        ctx,
+        preset=preset,
+        agentic_verifier=agentic_verifier,
+        require_verified=require_verified,
+        agentic_router=agentic_router,
+    )
     if out_dir:
         out = Path(out_dir).expanduser().resolve()
     else:
@@ -1798,10 +1839,18 @@ def hmeqa_h2h(
 )
 @click.option("--require-verified/--allow-unverified", default=True, show_default=True)
 @click.option("--agentic-router/--no-agentic-router", default=False, show_default=True)
+@click.option(
+    "--preset",
+    type=click.Choice(["paper-router"]),
+    default=None,
+    help="paper-router: owlv2 + allow-unverified + agentic-router (explicit flags still win).",
+)
 @click.option("--job-name", default="hmeqa-h2h-resume", show_default=True)
 @click.option("--need-mib", type=int, default=12000, show_default=True)
 @click.option("--foreground", is_flag=True)
+@click.pass_context
 def hmeqa_resume(
+    ctx: click.Context,
     out_dir: str | None,
     arms: str,
     holdout_ids: str | None,
@@ -1812,6 +1861,7 @@ def hmeqa_resume(
     agentic_verifier: str,
     require_verified: bool,
     agentic_router: bool,
+    preset: str | None,
     job_name: str,
     need_mib: int,
     foreground: bool,
@@ -1823,6 +1873,13 @@ def hmeqa_resume(
         write_host_freeze_capsule,
     )
 
+    agentic_verifier, require_verified, agentic_router = _hmeqa_apply_preset(
+        ctx,
+        preset=preset,
+        agentic_verifier=agentic_verifier,
+        require_verified=require_verified,
+        agentic_router=agentic_router,
+    )
     out = resolve_hmeqa_out(out_dir)
     freeze = detect_host_freeze(out)
     if freeze:
@@ -1854,6 +1911,158 @@ def hmeqa_resume(
         need_mib=need_mib,
         foreground=foreground,
     )
+
+
+@hmeqa_group.command("overnight", short_help="Holdout-8 → gate → bal-32 via one emet jobs run")
+@click.option(
+    "--base",
+    "base_dir",
+    default=None,
+    help="Overnight base dir (default: ~/runs/emet/hmeqa_overnight_<stamp>).",
+)
+@click.option("--holdout-ids", default=None, help="Default: paper holdout-8.")
+@click.option("--bal32-ids", default=None, help="Default: balanced-32.")
+@click.option("--gate-min-acc", type=float, default=0.25, show_default=True)
+@click.option("--skip-bal32", is_flag=True, help="Stop after holdout (+ optional retune).")
+@click.option(
+    "--agentic-verifier",
+    type=click.Choice(["none", "owlv2", "yoloe"]),
+    default="owlv2",
+    show_default=True,
+)
+@click.option(
+    "--require-verified/--allow-unverified",
+    default=False,
+    show_default=True,
+    help="Overnight default: allow-unverified (require-verified abstains too often on bal-32).",
+)
+@click.option(
+    "--agentic-router/--no-agentic-router",
+    default=True,
+    show_default=True,
+    help="Overnight default: VLM tool routing on.",
+)
+@click.option("--cooldown", type=int, default=20, show_default=True)
+@click.option("--crash-policy", type=click.Choice(["skip", "abort"]), default="skip", show_default=True)
+@click.option("--streak-abort", type=int, default=2, show_default=True)
+@click.option("--egl-fail-abort", type=int, default=2, show_default=True)
+@click.option("--job-name", default="hmeqa-overnight", show_default=True)
+@click.option("--need-mib", type=int, default=12000, show_default=True)
+@click.option("--foreground", is_flag=True)
+def hmeqa_overnight(
+    base_dir: str | None,
+    holdout_ids: str | None,
+    bal32_ids: str | None,
+    gate_min_acc: float,
+    skip_bal32: bool,
+    agentic_verifier: str,
+    require_verified: bool,
+    agentic_router: bool,
+    cooldown: int,
+    crash_policy: str,
+    streak_abort: int,
+    egl_fail_abort: int,
+    job_name: str,
+    need_mib: int,
+    foreground: bool,
+) -> None:
+    """Launch (or run in-process) the overnight holdout→bal32 ladder.
+
+    When already inside ``emet jobs`` (``EMET_JOB_ID`` set), runs the orchestrator
+    in-process so nested jobs are not created. Otherwise wraps one ``emet jobs run``.
+    """
+    import shlex
+
+    from emet.eval.harness import DEFAULT_BAL32_IDS, DEFAULT_HOLDOUT8_IDS
+    from emet.eval.hmeqa_overnight import run_overnight
+
+    if base_dir:
+        base = Path(base_dir).expanduser().resolve()
+    else:
+        env_base = os.environ.get("OVERNIGHT_BASE", "").strip()
+        if env_base:
+            base = Path(env_base).expanduser().resolve()
+        else:
+            stamp = time.strftime("%Y%m%d_%H%M%S")
+            base = Path.home() / "runs" / "emet" / f"hmeqa_overnight_{stamp}"
+    base.mkdir(parents=True, exist_ok=True)
+
+    ids_h = holdout_ids or os.environ.get("HOLDOUT8_IDS", "").strip() or DEFAULT_HOLDOUT8_IDS
+    ids_b = bal32_ids or os.environ.get("BAL32_IDS", "").strip() or DEFAULT_BAL32_IDS
+
+    # Already under a job (shim / outer jobs run) — do not nest.
+    if os.environ.get("EMET_JOB_ID", "").strip():
+        click.echo(f"overnight in-process (EMET_JOB_ID set): BASE={base}", err=True)
+        rc = run_overnight(
+            base=base,
+            holdout_ids=ids_h,
+            bal32_ids=ids_b,
+            gate_min_acc=gate_min_acc,
+            skip_bal32=skip_bal32,
+            agentic_verifier=agentic_verifier,
+            require_verified=require_verified,
+            agentic_router=agentic_router,
+            cooldown=cooldown,
+            crash_policy=crash_policy,
+            streak_abort=streak_abort,
+            egl_fail_abort=egl_fail_abort,
+        )
+        sys.exit(rc)
+
+    root = _project_root()
+    inner_parts = [
+        sys.executable,
+        "-m",
+        "emet.eval.hmeqa_overnight",
+        "--base",
+        str(base),
+        "--holdout-ids",
+        ids_h,
+        "--bal32-ids",
+        ids_b,
+        "--gate-min-acc",
+        str(gate_min_acc),
+        "--agentic-verifier",
+        agentic_verifier,
+        "--cooldown",
+        str(int(cooldown)),
+        "--crash-policy",
+        crash_policy,
+        "--streak-abort",
+        str(int(streak_abort)),
+        "--egl-fail-abort",
+        str(int(egl_fail_abort)),
+    ]
+    if skip_bal32:
+        inner_parts.append("--skip-bal32")
+    if require_verified:
+        inner_parts.append("--require-verified")
+    else:
+        inner_parts.append("--allow-unverified")
+    if agentic_router:
+        inner_parts.append("--agentic-router")
+    else:
+        inner_parts.append("--no-agentic-router")
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "emet.cli",
+        "jobs",
+        "run",
+        "--name",
+        job_name,
+        "--need-mib",
+        str(int(need_mib)),
+        "--out-dir",
+        str(base),
+    ]
+    if foreground:
+        cmd.append("--foreground")
+    cmd.extend(["--", "bash", "-lc", " ".join(shlex.quote(p) for p in inner_parts)])
+    click.echo(f"launching overnight via emet jobs: BASE={base}", err=True)
+    rc = subprocess.call(cmd, cwd=str(root))
+    sys.exit(rc)
 
 
 @main.command("kill-mujoco-server", short_help="Stop MuJoCo server (free ports)")

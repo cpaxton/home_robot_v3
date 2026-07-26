@@ -12,9 +12,10 @@ import os
 import signal
 import subprocess
 import time
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Literal, Mapping, Sequence
+from typing import Any, Literal
 
 from emet.utils.cpu_affinity import (
     apply_affinity,
@@ -402,7 +403,93 @@ def settle_after_crash(
     time.sleep(sec)
 
 
+DEFAULT_HOLDOUT8_IDS = "15,56,65,68,79,88,104,105"
+
 DEFAULT_BAL32_IDS = (
     "2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,31,"
     "32,33,34,38,39,40,41,43,44,47,48,49,57,76,80,84"
 )
+
+# Paper-router overnight defaults (Dynagraph + Qwen router; OWL proposals only).
+PAPER_ROUTER_PRESET: dict[str, Any] = {
+    "agentic_verifier": "owlv2",
+    "require_verified": False,
+    "agentic_router": True,
+}
+
+
+def evaluate_holdout_gate(
+    summary: Mapping[str, Any],
+    *,
+    min_agentic_acc: float = 0.25,
+) -> dict[str, Any]:
+    """Decide whether holdout-8 needs an agentic-only retune before bal-32.
+
+    Retune when agentic under-scores (n < 6), trails classic by >0.125 accuracy,
+    or falls below ``min_agentic_acc``. Always returns ``proceed_bal32=True`` —
+    overnight still collects bal-32 data even after a weak holdout.
+    """
+    classic = dict(summary.get("classic") or {})
+    agentic = dict(summary.get("agentic") or {})
+    c_acc = classic.get("accuracy")
+    a_acc = agentic.get("accuracy")
+    a_n = int(agentic.get("n") or 0)
+    need_retune = False
+    reason = "ok"
+    if a_n < 6:
+        need_retune = True
+        reason = f"agentic under-scored n={a_n}"
+    elif (
+        a_acc is not None
+        and c_acc is not None
+        and float(a_acc) + 1e-9 < float(c_acc) - 0.125
+    ):
+        need_retune = True
+        reason = f"agentic {float(a_acc):.3f} << classic {float(c_acc):.3f}"
+    elif a_acc is not None and float(a_acc) < float(min_agentic_acc):
+        need_retune = True
+        reason = f"agentic {float(a_acc):.3f} < min {float(min_agentic_acc)}"
+    return {
+        "classic": classic,
+        "agentic": agentic,
+        "need_retune": need_retune,
+        "reason": reason,
+        "proceed_bal32": True,
+        "min_agentic_acc": float(min_agentic_acc),
+    }
+
+
+def _is_click_default(src: object) -> bool:
+    """True when a Click parameter was left at its default (or source unknown)."""
+    if src is None:
+        return True
+    if isinstance(src, str):
+        return src.upper() == "DEFAULT"
+    try:
+        from click.core import ParameterSource as _PS
+
+        return src == _PS.DEFAULT
+    except ImportError:  # pragma: no cover
+        return False
+
+
+def apply_paper_router_preset(
+    *,
+    agentic_verifier: str,
+    require_verified: bool,
+    agentic_router: bool,
+    verifier_source: object = None,
+    verified_source: object = None,
+    router_source: object = None,
+) -> tuple[str, bool, bool]:
+    """Apply paper-router defaults only where the caller left Click defaults."""
+    v = agentic_verifier
+    rv = require_verified
+    ar = agentic_router
+    if _is_click_default(verifier_source):
+        v = str(PAPER_ROUTER_PRESET["agentic_verifier"])
+    if _is_click_default(verified_source):
+        rv = bool(PAPER_ROUTER_PRESET["require_verified"])
+    if _is_click_default(router_source):
+        ar = bool(PAPER_ROUTER_PRESET["agentic_router"])
+    return v, rv, ar

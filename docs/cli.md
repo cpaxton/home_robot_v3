@@ -690,23 +690,31 @@ Dogfood entrypoints for classic vs agentic-verify Dynagraph. Prefer these over h
 
 | Command | Purpose |
 |---------|---------|
-| `emet hmeqa h2h [OUT] [--resume] [--arms …] [--ids …] [--agentic-verifier none\|owlv2\|yoloe] [--require-verified] [--crash-policy skip\|abort] [--streak-abort N]` | Launch via `emet jobs run --need-mib` (cpu-safe + gpu-exclusive) |
-| `emet hmeqa resume [OUT]` | Resolve latest OUT from status symlink if omitted; `RESUME=1` (retries empty per-qid jsonl) |
+| `emet hmeqa h2h [OUT] [--resume] [--arms …] [--ids …] [--preset paper-router] [--agentic-verifier none\|owlv2\|yoloe] [--require-verified\|--allow-unverified] [--agentic-router] [--crash-policy skip\|abort] [--streak-abort N]` | Launch via `emet jobs run --need-mib` (cpu-safe + gpu-exclusive) |
+| `emet hmeqa resume [OUT] [--preset paper-router]` | Resolve latest OUT from status symlink if omitted; `RESUME=1` (retries empty per-qid jsonl) |
+| `emet hmeqa overnight [--base DIR] [--skip-bal32] [--gate-min-acc 0.25]` | Holdout-8 → optional agentic retune → bal-32 in **one** `emet jobs` run (paper-router defaults) |
 | `emet hmeqa status [OUT]` | Progress + scored counts + crash capsules |
 | `emet hmeqa summarize [OUT]` | `scripts/summarize_hmeqa_agentic_h2h.py` |
 
 `OUT/DONE` is written only when every arm×id unit has a non-empty scored jsonl. Partial batches (skipped native crashes, etc.) exit nonzero, mark the job `failed` / `INCOMPLETE`, and leave `STATUS` pointing at resume — not summarize.
 
 Default crash policy is **skip** (settle + retry, continue). **`--streak-abort 2`** (default) aborts early after consecutive native crashes so a wedged driver does not burn the full batch.
+
+**`--preset paper-router`** (on `h2h` / `resume`): sets owlv2 + allow-unverified + agentic-router where flags were left at Click defaults; explicit flags still win. Probe runs should omit the preset and keep `--require-verified`.
+
+**`emet hmeqa overnight`** defaults to paper-router policy (owlv2, allow-unverified, router on). Inner phases call `run_hmeqa_agentic_h2h.sh` directly (no nested jobs). `scripts/run_hmeqa_overnight_ladder.sh` is a thin shim to this command.
+
 Agentic validation uses `scripts/summarize_agentic_ladder.py`: it reports accuracy, selective risk/coverage, fused-verify precision, visibility at verify, path length, hypothesis count, abstention, false confirmation, and forced submits. Balanced-32 is blocked unless a 4+ episode probe has a nonzero fused verified-answer rate and zero forced submits.
 
 ```bash
 uv run emet eval recover --need-mib 12000
+uv run emet hmeqa overnight
+# or a probe:
 uv run emet hmeqa h2h ~/runs/emet/hmeqa_graph_probe --arms agentic \
   --ids 12,17,18,56 --agentic-verifier owlv2 --require-verified
 uv run python scripts/summarize_agentic_ladder.py ~/runs/emet/hmeqa_graph_probe \
   --require-balanced32-gate
-uv run emet hmeqa resume
+uv run emet hmeqa resume --preset paper-router
 uv run emet hmeqa status
 uv run emet jobs
 ```

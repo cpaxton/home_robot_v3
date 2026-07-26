@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -39,14 +40,23 @@ from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
 
-# Image-space SigLIP is a **high-recall / high-FP** gate (see agentic_scale.md).
+# Image-space SigLIP is a **high-recall / high-FP** proposal (see agentic_scale.md).
 # Three bands on Habitat RGB (offline calib: real hits cluster ~0.10–0.14):
-#   >= PRESENT (0.12)  → PRESENT  (cheap proposal — VLM assess unlocks submit)
-#   >= ABSENT  (0.10)  → CANDIDATE (uncertain — try another view or escalate)
+#   >= PRESENT (0.12)  → PRESENT
+#   >= ABSENT  (0.10)  → CANDIDATE
 #   <  ABSENT  (0.10)  → ABSENT   (true-negative for *this* view — move on)
 # Do not treat ABSENT as proof the object is gone from the scene.
+# Qwen (vlm_assess / router) decides answerability and whether to explore vs submit;
+# SigLIP only appears in the state as a cheap proposal.
 SIGLIP_IMAGE_PRESENT_THRESHOLD = 0.12
 SIGLIP_IMAGE_ABSENT_THRESHOLD = 0.10
+
+# query_answer sometimes echoes graph XYZ ("The fan is at approximately (x,y,z) m")
+# instead of an MCQ letter — keep Qwen's letter when that happens.
+_COORD_DUMP_RE = re.compile(
+    r"approximately\s*\([^)]+\)\s*m|\bat approximately\b.*\bm\b",
+    re.IGNORECASE | re.DOTALL,
+)
 
 _TRUE = frozenset({"1", "true", "yes", "on"})
 _FALSE = frozenset({"0", "false", "no", "off"})
@@ -888,7 +898,11 @@ class AgenticEQAExecutor:
         obs_id: int,
         proposal: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
-        """Multimodal answerability gate. One assess per obs_id."""
+        """Multimodal answerability gate. One assess per obs_id.
+
+        Qwen looks at pixels + inventory and decides whether this view is enough.
+        SigLIP/OWL stay proposals in the inventory — they do not hard-block unlock.
+        """
         oid = int(obs_id)
         if oid in self._vlm_assessed_obs_ids:
             return {
@@ -938,10 +952,17 @@ class AgenticEQAExecutor:
             )
         except (RuntimeError, ValueError) as exc:
             _logger.warning(f"evidence-policy VLM assess rejected: {exc}")
+        # Qwen answerable → unlock. Cheap SigLIP ABSENT is information for the router /
+        # need_more_views, not a second hard gate on top of the VLM.
         if vlm_assessment is not None and vlm_assessment.answerable:
             self._verified = True
             self._verified_obs_id = oid
         self._update_escape_streak(present=assessment.present)
+        proposal_status = str(
+            (proposal or {}).get("decision")
+            or getattr(self._last_verify, "status", "")
+            or ""
+        ).upper()
         payload = {
             "tool": "vlm_assess",
             "obs_id": oid,
@@ -954,6 +975,7 @@ class AgenticEQAExecutor:
             "reason": assessment.reason,
             "policy_state": str(self._evidence_policy.state),
             "verified": self._verified,
+            "proposal_status": proposal_status or None,
             "not_present_streak": self._not_present_streak,
             "explore_min_travel_m": self._escape_min_travel_m(),
             "inventory": inventory,
@@ -1228,7 +1250,8 @@ class AgenticEQAExecutor:
             "contradiction_channels": (
                 list(assessment.contradiction_channels) if assessment is not None else []
             ),
-            "fused_verified": bool(assessment.verified) if assessment is not None else False,
+            # Submit unlock (VLM answerable on a non-ABSENT view), not cheap-channel alone.
+            "fused_verified": bool(self._verified),
             "answerable": bool(self._evidence_policy.state == AgenticState.ANSWER),
             "vlm_assess": vlm_out,
             "present_bar": (
@@ -1268,7 +1291,7 @@ class AgenticEQAExecutor:
             "verified": self._verified,
             "obs_id": int(result.obs_id),
             "verify_channel": verify_channel,
-            "fused_verified": bool(assessment.verified) if assessment is not None else False,
+            "fused_verified": bool(self._verified),
             "answerable": bool(self._evidence_policy.state == AgenticState.ANSWER),
             "presence_probability": (
                 assessment.presence_probability if assessment is not None else None
@@ -1392,6 +1415,60 @@ class AgenticEQAExecutor:
             "verified": False,
         }
 
+    @staticmethod
+    def _looks_like_coordinate_dump(text: str) -> bool:
+        """True for nearest-furniture XYZ dumps (``The fan is at approximately (x,y,z) m``)."""
+        return bool(_COORD_DUMP_RE.search(text or ""))
+
+    def _mcq_letter_from_text(self, text: str) -> str:
+        """Extract a canonical A–D letter when the question is MCQ-shaped."""
+        from emet.habitat.metrics import extract_mcq_letter, parse_mcq_choices_from_question
+
+        raw = (text or "").strip()
+        if not raw:
+            return ""
+        choices = parse_mcq_choices_from_question(self.question)
+        letter = extract_mcq_letter(raw, choices or None)
+        if letter:
+            return letter
+        if len(raw) == 1 and raw.upper() in "ABCDE":
+            return raw.upper()
+        return ""
+
+    def _resolve_submit_answer_text(
+        self,
+        *,
+        prefer_answer: str,
+        query_answer: str,
+    ) -> tuple[str, str]:
+        """Keep Qwen's MCQ letter when ``query_answer`` collapses to graph XYZ prose.
+
+        Dynagraph may put meter coordinates in the EQA prompt; small VLMs sometimes
+        echo those instead of A–D. If the router or view-assess already gave a letter,
+        do not let that echo overwrite it. Otherwise trust ``query_answer`` (also Qwen).
+        """
+        prefer = (prefer_answer or "").strip()
+        qa = (query_answer or "").strip()
+        suggested = ""
+        if self._last_vlm_assess:
+            suggested = str(self._last_vlm_assess.get("suggested_answer") or "").strip()
+
+        prefer_letter = self._mcq_letter_from_text(prefer)
+        if prefer_letter:
+            return prefer_letter, "prefer"
+
+        suggested_letter = self._mcq_letter_from_text(suggested)
+        if suggested_letter and self._looks_like_coordinate_dump(qa):
+            return suggested_letter, "vlm_suggested"
+
+        if qa:
+            return qa, "query"
+        if prefer:
+            return prefer, "prefer"
+        if suggested:
+            return suggested, "vlm_suggested"
+        return "Unknown", "query"
+
     def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
         from emet.eval.dynagraph_vram import release_siglip_for_vlm
 
@@ -1401,7 +1478,9 @@ class AgenticEQAExecutor:
         discord_text = ""
         confidence = False
         relevant_images: list[Any] = []
-        answer = (prefer_answer or "").strip()
+        prefer = (prefer_answer or "").strip()
+        query_ans = ""
+        answer_source = "prefer"
         if gm is not None and hasattr(gm, "query_answer"):
             # Prefer verified single-image selection for the prompt.
             if self._verified_obs_id is not None and hasattr(gm, "select_obs_ids_for_verified_answer"):
@@ -1421,17 +1500,36 @@ class AgenticEQAExecutor:
                     _tp,
                     relevant_images,
                 ) = gm.query_answer(self.question, xyt, planner)
-                answer = (ans or answer or "").strip()
-                discord_text = f"Answer:{answer}\nConfidence:{confidence}"
+                query_ans = (ans or "").strip()
             except Exception as e:
                 discord_text = f"Answer:Unknown\nEQA failed: {e}"
-                answer = "Unknown"
-        elif answer:
-            discord_text = f"Answer:{answer}"
+                query_ans = "Unknown"
+                confidence = False
+            answer, answer_source = self._resolve_submit_answer_text(
+                prefer_answer=prefer,
+                query_answer=query_ans,
+            )
+            # Letter from VLM assess / tool arg is the decision we want to score; do not
+            # inherit False confidence from a coordinate-dump query_answer path.
+            if answer_source in ("prefer", "vlm_suggested") and self._mcq_letter_from_text(answer):
+                confidence = bool(self._verified) or bool(confidence)
+            discord_text = (
+                f"Answer:{answer}\nConfidence:{confidence}"
+                f"\n[submit_source:{answer_source}]"
+            )
+            if query_ans and query_ans != answer:
+                discord_text += f"\n[query_answer:{query_ans[:160]}]"
+        elif prefer:
+            answer, answer_source = self._resolve_submit_answer_text(
+                prefer_answer=prefer,
+                query_answer="",
+            )
+            discord_text = f"Answer:{answer}\n[submit_source:{answer_source}]"
             confidence = bool(self._verified)
         else:
             discord_text = "Answer:Unknown\nNo graph memory"
             answer = "Unknown"
+            answer_source = "query"
         self._append_trace(
             {
                 "tool": "submit_answer",
@@ -1439,6 +1537,14 @@ class AgenticEQAExecutor:
                 "confidence": bool(confidence),
                 "verified": self._verified,
                 "verified_obs_id": self._verified_obs_id,
+                "answer_source": answer_source,
+                "query_answer": query_ans or None,
+                "prefer_answer": prefer or None,
+                "vlm_suggested": (
+                    None
+                    if self._last_vlm_assess is None
+                    else self._last_vlm_assess.get("suggested_answer")
+                ),
                 "answerable": self._evidence_policy.state == AgenticState.ANSWER,
                 "answerability_probability": (
                     self._evidence_policy.beliefs[
@@ -1608,38 +1714,49 @@ class AgenticEQAExecutor:
     def _fallback_tool(self) -> tuple[str, dict[str, Any]]:
         """Deterministic tool when VLM emits nothing parseable (or router is off).
 
-        Interactive loop (never re-verify the same view):
-          (1) explore / inspect → hypotheses (potential answers)
-          (2) navigate to an untried hyp → capture → verify once (+ VLM assess)
-          (3) assess: VLM answerable → submit; else next hyp / explore; exhausted → submit or abstain
+        Thin scaffold only — prefer the VLM router. Interactive loop:
+          (1) explore / inspect → hypotheses
+          (2) navigate → capture → verify (+ Qwen assess)
+          (3) Qwen answerable → submit with its suggested letter; else keep exploring
         """
         if self.mode == "explore":
             if self._explore_done():
                 return "finish", {}
             return "explore_frontier", {}
-        # (3) assess — VLM answerable → answer
-        if self._evidence_policy.state == AgenticState.ANSWER:
-            return "submit_answer", {}
+        # (3) Qwen said this view is enough
+        if self._evidence_policy.state == AgenticState.ANSWER and self._verified:
+            prefer = ""
+            if self._last_vlm_assess:
+                prefer = str(self._last_vlm_assess.get("suggested_answer") or "").strip()
+            return "submit_answer", ({"answer": prefer} if prefer else {})
+        # If Qwen asked for more views, honor that before burning the budget on submit.
         budget_left = self._n_nav + self._n_explore < self.max_nav_steps
+        need_more = bool(
+            self._last_vlm_assess and self._last_vlm_assess.get("need_more_views")
+        )
+        frontiers_gone = (self._n_nav + self._n_explore) > 0 and self._frontier_count() == 0
+        if need_more and budget_left and not frontiers_gone:
+            return "explore_frontier", {}
         # (2) move in to an untried hypothesis (verify is chained after nav)
         if budget_left:
             h = self._next_untried_hypothesis()
             if h is not None:
                 return "navigate_to_obs", {"obs_id": int(h.obs_id)}
         # (1) keep exploring for new views while budget remains
-        frontiers_gone = (self._n_nav + self._n_explore) > 0 and self._frontier_count() == 0
         if budget_left and not frontiers_gone:
             return "explore_frontier", {}
         # One first-look verify only if we have a fresh untried current view.
         latest = self._latest_obs_id()
         if self._last_verify is None and latest is not None and not self._obs_already_verified(latest):
             return "verify_siglip", {"obs_id": int(latest)}
-        # (3) assess without confirmation — abstain path if require_verified
         if self._require_verified and not self._verified:
             if budget_left and not frontiers_gone:
                 return "explore_frontier", {}
             return "submit_answer", {}
-        return "submit_answer", {}
+        prefer = ""
+        if self._last_vlm_assess:
+            prefer = str(self._last_vlm_assess.get("suggested_answer") or "").strip()
+        return "submit_answer", ({"answer": prefer} if prefer else {})
 
     def _ensure_router_prompt(self) -> None:
         """Build the tool registry + fixed system prompt once (stable string → prefix-cache hits)."""

@@ -69,6 +69,7 @@ def test_hmeqa_group_help():
     assert "resume" in result.stdout
     assert "status" in result.stdout
     assert "summarize" in result.stdout
+    assert "overnight" in result.stdout
 
 
 def test_hmeqa_h2h_help_lists_evidence_policy_flags():
@@ -81,6 +82,20 @@ def test_hmeqa_h2h_help_lists_evidence_policy_flags():
     assert "agentic-verifier" in result.stdout
     assert "require-verified" in result.stdout
     assert "agentic-router" in result.stdout
+    assert "paper-router" in result.stdout
+
+
+def test_hmeqa_overnight_help():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "hmeqa", "overnight", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "skip-bal32" in result.stdout
+    assert "gate-min-acc" in result.stdout
+    assert "agentic-router" in result.stdout
+    assert "owlv2" in result.stdout
 
 
 def test_jobs_group_help():
