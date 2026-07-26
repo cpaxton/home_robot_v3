@@ -643,7 +643,10 @@ def run_agent_with_robot(
             colored(
                 f"Lifelong checkpoint loaded: graph={load_info.get('graph_loaded')} "
                 f"voxel_pkl={load_info.get('voxel_pickle_loaded')} "
-                f"final_step={load_info.get('final_step')}{refine_msg}",
+                f"final_step={load_info.get('final_step')} "
+                f"voxel_pts={load_info.get('voxel_points')} "
+                f"semantic_pts={load_info.get('semantic_points')} "
+                f"rerun={load_info.get('rerun_refreshed')}{refine_msg}",
                 "green",
             ),
             flush=True,

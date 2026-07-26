@@ -641,7 +641,109 @@ def load_lifelong_checkpoint(
         **(refine_kwargs or {}),
     )
     info["refine"] = refine
+
+    # Point counts for the load banner / debugging empty Rerun.
+    info["voxel_points"] = 0
+    info["semantic_points"] = 0
+    if vm is not None:
+        vp = getattr(vm, "voxel_pcd", None)
+        if vp is not None and getattr(vp, "_points", None) is not None:
+            info["voxel_points"] = int(vp._points.shape[0])
+        sm = getattr(vm, "semantic_memory", None)
+        if sm is not None and getattr(sm, "_points", None) is not None:
+            info["semantic_points"] = int(sm._points.shape[0])
+
+    refresh = refresh_rerun_after_memory_load(controller)
+    info["rerun_refreshed"] = bool(refresh.get("ok"))
+    if info["voxel_pickle_loaded"] and info["voxel_points"] == 0 and info["semantic_points"] == 0:
+        logger.warning(
+            "lifelong: voxel_map.pkl loaded but point clouds are empty — Rerun will look blank"
+        )
+    elif refresh.get("ok"):
+        logger.info(
+            f"lifelong: Rerun refreshed "
+            f"(voxel_pts={info['voxel_points']} semantic_pts={info['semantic_points']})"
+        )
     return info
+
+
+def _controller_robot_xy(controller: Any) -> tuple[float, float] | None:
+    robot = getattr(controller, "robot", None)
+    if robot is None or not hasattr(robot, "get_base_pose"):
+        return None
+    try:
+        pose = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
+        if pose.size >= 2:
+            return (float(pose[0]), float(pose[1]))
+    except Exception:
+        return None
+    return None
+
+
+def refresh_rerun_after_memory_load(controller: Any) -> dict[str, Any]:
+    """Push restored voxel map + dynagraph into Rerun after ``--input-path`` load.
+
+    Live ``update()`` normally feeds Rerun; a pickle restore skips that path, so the
+    viewer stays empty until the next scan unless we force a refresh here.
+    """
+    out: dict[str, Any] = {"ok": False, "voxel": False, "semantic": False, "graph": False}
+    viz = getattr(controller, "rerun_visualizer", None)
+    if viz is None or getattr(viz, "enabled", True) is False:
+        return out
+    if not hasattr(viz, "update_voxel_map") and not hasattr(viz, "log_dynagraph_state"):
+        return out
+
+    vm = None
+    if hasattr(controller, "get_voxel_map"):
+        vm = controller.get_voxel_map()
+    elif hasattr(controller, "voxel_map"):
+        vm = controller.voxel_map
+    space = getattr(controller, "space", None)
+    robot_xy = _controller_robot_xy(controller)
+
+    try:
+        if (
+            space is not None
+            and vm is not None
+            and getattr(getattr(vm, "voxel_pcd", None), "_points", None) is not None
+            and hasattr(viz, "update_voxel_map")
+        ):
+            viz.update_voxel_map(space=space, robot_base_xy=robot_xy, force=True)
+            out["voxel"] = True
+        sm = getattr(vm, "semantic_memory", None) if vm is not None else None
+        if (
+            sm is not None
+            and getattr(sm, "_points", None) is not None
+            and hasattr(viz, "log_custom_pointcloud")
+        ):
+            rgb = getattr(sm, "_rgb", None)
+            pts = sm._points
+            if hasattr(pts, "detach"):
+                pts_np = pts.detach().cpu()
+                rgb_np = rgb.detach().cpu() / 255.0 if rgb is not None else None
+            else:
+                pts_np = pts
+                rgb_np = np.asarray(rgb) / 255.0 if rgb is not None else None
+            if rgb_np is not None:
+                viz.log_custom_pointcloud(
+                    "world/semantic_memory/pointcloud",
+                    pts_np,
+                    rgb_np,
+                    0.03,
+                )
+                out["semantic"] = True
+        gm = getattr(controller, "graph_memory", None)
+        if gm is not None and hasattr(viz, "log_dynagraph_state"):
+            viz.log_dynagraph_state(
+                gm,
+                ground_truth_mode=bool(getattr(controller, "ground_truth_mode", False)),
+                force=True,
+            )
+            out["graph"] = True
+        out["ok"] = bool(out["voxel"] or out["semantic"] or out["graph"])
+    except Exception as exc:
+        logger.warning(f"lifelong: Rerun refresh after load failed ({exc})")
+    return out
 
 
 def save_lifelong_checkpoint(controller: Any, path: str | Path, *, save_voxel_pickle: bool = True) -> str:

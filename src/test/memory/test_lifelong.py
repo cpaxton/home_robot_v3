@@ -250,3 +250,56 @@ def test_apply_se2_to_namedtuple_voxel_frames():
     np.testing.assert_allclose(out.camera_pose[:2, 3], [1.5, 2.0], atol=1e-6)
     np.testing.assert_allclose(out.base_pose[:2], [1.5, 2.0], atol=1e-6)
     np.testing.assert_allclose(out.xyz[0, :2], [1.5, 2.0], atol=1e-6)
+
+
+def test_refresh_rerun_after_memory_load_calls_force():
+    from emet.memory.lifelong import refresh_rerun_after_memory_load
+
+    calls: list[str] = []
+
+    class _Viz:
+        enabled = True
+
+        def update_voxel_map(self, *, space, robot_base_xy=None, force=False):
+            calls.append(f"voxel force={force}")
+
+        def log_custom_pointcloud(self, *args, **kwargs):
+            calls.append("semantic")
+
+        def log_dynagraph_state(self, gm, *, ground_truth_mode=False, force=False):
+            calls.append(f"graph force={force}")
+
+    class _Pts:
+        def __init__(self, n):
+            self._points = np.zeros((n, 3))
+            self._rgb = np.zeros((n, 3))
+
+        @property
+        def shape(self):
+            return self._points.shape
+
+    class _SM(_Pts):
+        pass
+
+    class _VM:
+        def __init__(self):
+            self.voxel_pcd = _Pts(10)
+            self.semantic_memory = _SM(12)
+
+    class _Ctrl:
+        def __init__(self):
+            self.rerun_visualizer = _Viz()
+            self.space = object()
+            self.voxel_map = _VM()
+            self.graph_memory = object()
+            self.robot = None
+
+        def get_voxel_map(self):
+            return self.voxel_map
+
+    out = refresh_rerun_after_memory_load(_Ctrl())
+    assert out["ok"] is True
+    assert out["voxel"] is True
+    assert out["graph"] is True
+    assert "voxel force=True" in calls
+    assert "graph force=True" in calls

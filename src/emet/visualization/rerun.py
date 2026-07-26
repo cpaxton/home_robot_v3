@@ -1242,12 +1242,17 @@ class RerunVisualizer:
             ),
         )
 
-    def log_dynagraph_state(self, graph_memory: Any, *, ground_truth_mode: bool = False) -> None:
-        """Log ``GraphEQAMemory`` nodes, observation images, and tree summary under ``world/dynagraph/``."""
+    def log_dynagraph_state(
+        self, graph_memory: Any, *, ground_truth_mode: bool = False, force: bool = False
+    ) -> None:
+        """Log ``GraphEQAMemory`` nodes, observation images, and tree summary under ``world/dynagraph/``.
+
+        ``force=True`` bypasses ``dynagraph_stride`` (lifelong checkpoint resume).
+        """
         _ = ground_truth_mode
         if getattr(self, "_memory_view", False):
             return
-        if not self._stride_tick("_dynagraph_tick", self._dynagraph_stride):
+        if not force and not self._stride_tick("_dynagraph_tick", self._dynagraph_stride):
             return
         rr.set_time_seconds("realtime", time.time())
         # Dynagraph is the object source of truth; hide instance/scene-graph box layers in the main 3D view.
@@ -2007,14 +2012,18 @@ class RerunVisualizer:
         obstacle_radius=0.05,
         world_radius=0.03,
         robot_base_xy: np.ndarray | tuple[float, float] | None = None,
+        *,
+        force: bool = False,
     ):
         """Log voxel map and send it to Rerun visualizer.
 
         Builds a minimal MemoryState from space and calls log_memory_state.
         Also logs a top-down RGB to ``world/map_snapshot/topdown`` (same path as
         ``send_map_snapshot``) so the blueprint ``map_topdown`` view stays live.
+
+        ``force=True`` bypasses ``voxel_map_stride`` (used after lifelong checkpoint load).
         """
-        if not self._stride_tick("_voxel_map_tick", self._voxel_map_stride):
+        if not force and not self._stride_tick("_voxel_map_tick", self._voxel_map_stride):
             return
         rr.set_time_seconds("realtime", time.time())
         self.log_topdown_map_snapshot(space.voxel_map, robot_base_xy)
