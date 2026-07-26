@@ -367,6 +367,8 @@ class GraphEQABackend(MemoryBackend):
     def list_objects(self) -> list[str]:
         labels = []
         for node in self._graph.get_nodes():
+            if getattr(node, "is_frontier", False) or getattr(node, "is_viewpoint", False):
+                continue
             labels.extend(node.labels)
         return list(dict.fromkeys(labels))
 

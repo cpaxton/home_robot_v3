@@ -15,6 +15,7 @@ from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
 from emet.memory.graph_eqa.graph_stats import (
     classify_graph_failure,
     format_graph_node_breakdown,
+    format_graph_size_report,
     graph_health_from_checkpoint_nodes,
     graph_health_metrics,
     graph_node_breakdown,
@@ -41,6 +42,24 @@ def test_graph_node_breakdown_counts():
     b = graph_node_breakdown(gm)
     assert b == {"total": 3, "object": 1, "viewpoint": 1, "frontier": 1}
     assert "1 obj" in format_graph_node_breakdown(gm)
+    report = format_graph_size_report(gm, verbose=False)
+    assert "graph size:" in report
+    assert "1 obj" in report
+    assert "1 vp" in report
+    assert "1 fr" in report
+
+
+def test_graph_eqa_list_objects_skips_viewpoint_and_frontier():
+    from emet.memory.adapters import GraphEQABackend
+
+    gm = SimpleNamespace(
+        get_nodes=lambda: [
+            _FakeNode(labels=["mug"]),
+            _FakeNode(viewpoint=True, labels=["view img 3"]),
+            _FakeNode(frontier=True, labels=["frontier"]),
+        ]
+    )
+    assert GraphEQABackend(gm).list_objects() == ["mug"]
 
 
 def test_graph_health_metrics_singletons_and_prompt():

@@ -20,6 +20,7 @@ from typing import Any
 import numpy as np
 
 from emet.agent.camera_debug import print_camera_frame_diagnostics
+from emet.memory.graph_eqa.graph_stats import format_graph_size_report
 from emet.memory.graph_eqa.human_answer import HumanEQAResult, format_eqa_tool_response
 from emet.utils.logger import Logger
 from emet.visualization.map_snapshot import format_navigation_report, snapshot_from_voxel_map
@@ -28,6 +29,18 @@ _logger = Logger(__name__)
 
 # Agent loop reads this and attaches the ndarray to the next Discord text reply (one message).
 PENDING_DISCORD_IMAGE_KEY = "pending_discord_image"
+
+
+def _graph_size_line(context: dict[str, Any], *, verbose: bool = True) -> str:
+    """Compact graph growth line from chat context (empty if no graph)."""
+    gm = context.get("graph_memory")
+    if gm is None:
+        executor = context.get("executor")
+        agent = getattr(executor, "agent", None) if executor is not None else None
+        gm = getattr(agent, "graph_memory", None)
+    if gm is None:
+        return ""
+    return format_graph_size_report(gm, verbose=verbose)
 
 
 def stash_discord_image(context: dict[str, Any], image: np.ndarray | None) -> bool:
@@ -290,6 +303,10 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         _img, stats, _ = snapshot_from_voxel_map(vm, robot_xy)
         summary = format_navigation_report(stats, explore_ok=ok)
         head = "Explore finished." if ok else "Explore failed or interrupted."
+        gsize = _graph_size_line(context)
+        if gsize:
+            _logger.info(gsize)
+            return f"{head} {summary} [{gsize}]"
         return f"{head} {summary}"
 
     tools.append(
@@ -466,6 +483,10 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             )
         if stash_discord_image(context, image):
             text = f"{text}\n(Attaching a photo of my current view.)"
+        gsize = _graph_size_line(context)
+        if gsize:
+            _logger.info(gsize)
+            text = f"{text}\n[{gsize}]"
         return text
 
     tools.append(
@@ -534,9 +555,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         if executor is None:
             return "Robot not connected."
         ok = executor([("rotate_in_place", "")])
-        if ok:
-            return "Completed in-place ≈360° scan; map/memory updated."
-        return "Scan interrupted or failed."
+        if not ok:
+            return "Scan interrupted or failed."
+        gsize = _graph_size_line(context)
+        if gsize:
+            _logger.info(gsize)
+            return f"Completed in-place ≈360° scan; map/memory updated. [{gsize}]"
+        return "Completed in-place ≈360° scan; map/memory updated."
 
     tools.append(
         Tool(

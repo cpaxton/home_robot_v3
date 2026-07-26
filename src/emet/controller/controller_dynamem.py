@@ -1241,7 +1241,7 @@ class DynamemController(BaseController):
                 flush=True,
             )
         return (
-            "From my map/scene graph I also know about: "
+            f"From my map/scene graph ({len(labels)} object labels) I also know about: "
             + ", ".join(shown)
             + extra
             + "."

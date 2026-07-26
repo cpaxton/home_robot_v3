@@ -648,6 +648,11 @@ def run_agent_with_robot(
             ),
             flush=True,
         )
+        _gm_loaded = getattr(executor.agent, "graph_memory", None)
+        if _gm_loaded is not None:
+            from emet.memory.graph_eqa.graph_stats import format_graph_size_report
+
+            print(colored(format_graph_size_report(_gm_loaded), "cyan"), flush=True)
 
     _gm = getattr(executor.agent, "graph_memory", None)
     _graph_backend = None
