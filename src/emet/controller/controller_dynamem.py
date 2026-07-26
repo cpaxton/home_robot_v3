@@ -325,11 +325,18 @@ class DynamemController(BaseController):
                     "observations None so nothing is published on the observation socket."
                 )
         self.manip_wrapper = ManipulationWrapper(self.robot, stretch_gripper_max=stretch_gripper_max, end_link=end_link)
+        logger.info(
+            "Agent init: nav posture + look_front "
+            "(head timeout warnings on a slow sim are OK; lifelong --input-path load starts after this)"
+        )
         self.robot.move_to_nav_posture()
         look_front = getattr(self.robot, "look_front", None)
         if callable(look_front):
-            look_front(blocking=True)
+            # Prefer a short wait: MuJoCo Stretch often settles ~0.03–0.04 rad off target and
+            # the default 10s look_front timeout looks like a hang before --input-path load.
+            look_front(blocking=True, timeout=3.0)
             time.sleep(DYNAMEM_HEAD_SETTLE_S)
+        logger.info("Agent init: robot ready")
 
         self.re = re
         self.save_rerun = save_rerun

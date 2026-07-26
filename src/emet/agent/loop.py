@@ -603,12 +603,26 @@ def run_agent_with_robot(
     if input_path:
         from emet.memory.lifelong import load_lifelong_checkpoint
 
-        # Optional short live scan before load so --refine-start can fudge imperfect spawn.
+        print(
+            colored(f"Lifelong: starting checkpoint load from {input_path}", "cyan"),
+            flush=True,
+        )
+        # Optional short live frame before load so --refine-start can fudge imperfect spawn.
+        # Dynamem/Dynagraph update() is a single get_observation (no head sweep).
         if refine_start and hasattr(executor.agent, "update"):
+            print(
+                colored(
+                    "Lifelong: capturing one live frame for --refine-start (no head sweep)…",
+                    "cyan",
+                ),
+                flush=True,
+            )
             try:
                 executor.agent.update()
+                print(colored("Lifelong: live frame captured.", "cyan"), flush=True)
             except Exception as exc:
                 print(colored(f"lifelong: pre-load scan skipped ({exc})", "yellow"), flush=True)
+        print(colored("Lifelong: reading graph / voxel_map.pkl (may take a few seconds)…", "cyan"), flush=True)
         load_info = load_lifelong_checkpoint(
             executor.agent,
             input_path,
@@ -630,7 +644,7 @@ def run_agent_with_robot(
                 f"Lifelong checkpoint loaded: graph={load_info.get('graph_loaded')} "
                 f"voxel_pkl={load_info.get('voxel_pickle_loaded')} "
                 f"final_step={load_info.get('final_step')}{refine_msg}",
-                "cyan",
+                "green",
             ),
             flush=True,
         )

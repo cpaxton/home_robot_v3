@@ -587,6 +587,9 @@ def load_lifelong_checkpoint(
     live_before = voxel_semantic_xyz(vm) if refine_start else None
     if live_before is not None:
         live_before = live_before.copy()
+        logger.info(f"lifelong: live cloud for refine has {live_before.shape[0]} points")
+    elif refine_start:
+        logger.warning("lifelong: no live cloud before load; --refine-start will likely skip")
 
     info: dict[str, Any] = {
         "path": str(path_obj),
@@ -598,6 +601,7 @@ def load_lifelong_checkpoint(
     }
 
     if gm is not None:
+        logger.info(f"lifelong: loading graph from {path_obj}")
         backend = get_memory_backend("graph_eqa", graph_memory=gm, voxel_map=vm)
         backend.load(str(path_obj))
         info["graph_loaded"] = True
@@ -609,20 +613,26 @@ def load_lifelong_checkpoint(
             if hasattr(gm, "set_graph_timestep"):
                 gm.set_graph_timestep(int(getattr(controller, "obs_count", final_step)))
     elif vm is not None:
+        logger.info(f"lifelong: loading dynamem backend from {path_obj}")
         backend = get_memory_backend("dynamem", voxel_map=vm)
         backend.load(str(path_obj))
         info["graph_loaded"] = False
 
     voxel_pickle = path_obj / VOXEL_PICKLE_FILENAME
     if voxel_pickle.is_file() and vm is not None and hasattr(vm, "read_from_pickle"):
+        size_mb = voxel_pickle.stat().st_size / (1024 * 1024)
+        logger.info(f"lifelong: reading {voxel_pickle.name} ({size_mb:.1f} MiB)…")
         vm.read_from_pickle(str(voxel_pickle))
         info["voxel_pickle_loaded"] = True
+        logger.info("lifelong: voxel_map.pkl loaded")
 
     saved_xyz = voxel_semantic_xyz(vm)
     if saved_xyz is not None:
         saved_xyz = saved_xyz.copy()
     info["saved_xyz"] = saved_xyz
 
+    if refine_start:
+        logger.info("lifelong: running local SE(2) refine…")
     refine = maybe_refine_loaded_memory(
         controller,
         saved_xyz=saved_xyz,
