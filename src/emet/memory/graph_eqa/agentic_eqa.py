@@ -188,6 +188,8 @@ class AgenticEQAExecutor:
         self._question_type: str = "other"
         self._last_vlm_assess: dict[str, Any] | None = None
         self._not_present_streak = 0
+        self._frontier_pick_waypoints: list[tuple[float, float]] = []
+        self._frontier_pick_dir: Path | None = None
         self._evidence_policy = EvidencePolicy()
         self._presence_detector: Any | None = None
         self._presence_detector_initialized = False
@@ -353,6 +355,7 @@ class AgenticEQAExecutor:
         bias = (toward or "").strip() or self.query_text
         agent = self.agent
         frontier_xyz = None
+        pick_source = "pick_uncovered"
         try:
             from emet.controller.habitat_nav import pick_uncovered_explore_target
 
@@ -382,10 +385,10 @@ class AgenticEQAExecutor:
             bias,
         )
         ok = False
+        start = self._robot_xyt()
+        if start is None:
+            start = np.array([0.0, 0.0, 0.0])
         if frontier_xyz is not None and hasattr(agent, "navigate_to_target_pose"):
-            start = self._robot_xyt()
-            if start is None:
-                start = np.array([0.0, 0.0, 0.0])
             try:
                 ok = bool(agent.navigate_to_target_pose(frontier_xyz, start, None))
             except TypeError:
@@ -394,16 +397,31 @@ class AgenticEQAExecutor:
         elif hasattr(agent, "run_exploration"):
             ok = bool(agent.run_exploration())
             self._n_explore += 1
+            pick_source = "run_exploration_fallback"
+            # Recover a goal for viz/trace when the uncovered picker returned None.
+            if frontier_xyz is None:
+                recent = list(getattr(agent, "_habitat_recent_goals", None) or [])
+                if recent:
+                    frontier_xyz = np.array([float(recent[-1][0]), float(recent[-1][1]), 1.0])
+                else:
+                    after = self._robot_xyt()
+                    if after is not None:
+                        frontier_xyz = np.asarray(after, dtype=float).reshape(-1)[:3]
         cap = self._tool_capture_and_update()
         if cap.get("ok") and cap.get("obs_id") is not None:
             self._policy_approached(hypothesis_id, int(cap["obs_id"]))
+        panel_path = self._save_frontier_pick_panel(
+            frontier_xyz,
+            robot_xyt_before=start,
+        )
         row = {
             "tool": "explore_frontier",
             "ok": ok,
             "frontier_xyz": [float(x) for x in np.asarray(frontier_xyz).reshape(-1)[:3]]
             if frontier_xyz is not None
             else None,
-            "source": "pick_uncovered",
+            "source": pick_source,
+            "pick_panel": str(panel_path) if panel_path else None,
         }
         self._attach_gt(row, frontier_xyz)
         self._append_trace(row)
@@ -765,6 +783,88 @@ class AgenticEQAExecutor:
         else:
             self._not_present_streak += 1
         self.agent._explore_min_travel_m = self._escape_min_travel_m()
+
+    def _frontier_pick_out_dir(self) -> Path:
+        """Directory for numbered pick panels (episode bundle when available)."""
+        if getattr(self, "_frontier_pick_dir", None):
+            out = Path(self._frontier_pick_dir)
+            out.mkdir(parents=True, exist_ok=True)
+            return out
+        ep = getattr(self.agent, "_episode_debug_dir", None) or os.environ.get("EMET_EQA_EPISODE_DIR")
+        if ep:
+            out = Path(str(ep)).expanduser() / "frontier_picks"
+        elif self._trace_path is not None:
+            out = self._trace_path.parent / "frontier_picks"
+        else:
+            out = Path.home() / ".cache" / "habitat_eqa" / "frontier_picks"
+        out.mkdir(parents=True, exist_ok=True)
+        self._frontier_pick_dir = out
+        self.agent._frontier_pick_dir = str(out)
+        return out
+
+    def _save_frontier_pick_panel(
+        self,
+        frontier_xyz: Any,
+        *,
+        robot_xyt_before: np.ndarray | None = None,
+    ) -> Path | None:
+        """Write a numbered frontier-pick panel into the episode bundle (best-effort)."""
+        if frontier_xyz is None:
+            return None
+        try:
+            arr = np.asarray(frontier_xyz, dtype=float).reshape(-1)
+            if arr.size < 2:
+                return None
+            pick = (float(arr[0]), float(arr[1]))
+            self._frontier_pick_waypoints.append(pick)
+
+            voxel_map = getattr(self.agent, "voxel_map", None)
+            if voxel_map is None or not hasattr(voxel_map, "get_2d_map"):
+                return None
+            obstacles, explored = voxel_map.get_2d_map()
+            go = getattr(voxel_map, "grid_origin", np.array([0.0, 0.0]))
+            if hasattr(go, "detach"):
+                go = go.detach().cpu().numpy()
+            go = np.asarray(go, dtype=np.float64).reshape(-1)[:2]
+            res = float(getattr(voxel_map, "grid_resolution", 0.1) or 0.1)
+
+            robot_xy = None
+            if robot_xyt_before is not None:
+                r = np.asarray(robot_xyt_before, dtype=float).reshape(-1)
+                if r.size >= 2:
+                    robot_xy = (float(r[0]), float(r[1]))
+
+            from emet.visualization.frontier_pick_viz import (
+                frontier_mask_from_explored,
+                render_frontier_pick_rgb,
+                save_frontier_pick_rgb,
+            )
+
+            n = len(self._frontier_pick_waypoints)
+            dist_m = 0.0
+            if robot_xy is not None:
+                dist_m = float(np.hypot(pick[0] - robot_xy[0], pick[1] - robot_xy[1]))
+            title = f"iteration {n - 1} — pick {dist_m:.1f} m ahead ({n} waypoints)"
+            rgb = render_frontier_pick_rgb(
+                obstacles,
+                explored,
+                frontier=frontier_mask_from_explored(explored, obstacles),
+                robot_xy=robot_xy,
+                chosen_xy=pick,
+                waypoints=list(self._frontier_pick_waypoints),
+                grid_origin_xy=go,
+                grid_resolution=res,
+                title=title,
+            )
+            out_dir = self._frontier_pick_out_dir()
+            path = save_frontier_pick_rgb(rgb, out_dir / f"iter_{n - 1:02d}.png")
+            paths = list(getattr(self.agent, "_frontier_pick_panels", []) or [])
+            paths.append(str(path))
+            self.agent._frontier_pick_panels = paths
+            return path
+        except Exception as e:
+            _logger.warning(f"frontier pick panel failed: {e}")
+            return None
 
     def _run_vlm_view_assess(
         self,
@@ -1584,7 +1684,14 @@ class AgenticEQAExecutor:
         final: dict[str, Any] | None = None
         # Agents are reused across episodes; do not inherit a previous escape floor.
         self._not_present_streak = 0
+        self._frontier_pick_waypoints = []
+        self._frontier_pick_dir = None
         self.agent._explore_min_travel_m = 0.0
+        # Resolve panel dir early so HM-EQA bundles get picks even without trace_path.
+        try:
+            self._frontier_pick_out_dir()
+        except Exception:
+            pass
         budget_hit = False
         # Deferred clients: build the shared VLM now — keyword extraction in inspect_graph
         # and the tool router both need it (text-only turns coexist with warm SigLIP).

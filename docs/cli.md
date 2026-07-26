@@ -630,8 +630,8 @@ Local job registry under `~/runs/emet/jobs/` (override with `EMET_JOBS_DIR`). Qu
 |------------|------|
 | `emet jobs` / `emet jobs list` | Active registered jobs (+ unmanaged eval PIDs) |
 | `emet jobs list --all` | Include done/failed/cancelled |
-| `emet jobs status JOB_ID` | Human-readable record + progress/ETA (`--json` includes derived `progress`) |
-| `emet jobs report [JOB_ID]` | Progress + per-episode score table (defaults to running/waiting job). `conf` shows `v=` verify-gate and `e=` EQA `Confidence:` (often `e=N` even on correct letters) |
+| `emet jobs status JOB_ID` | Human-readable record + progress/ETA + **viz paths** under `OUT/bundles/` / `figures/` (`--json` includes derived `progress`) |
+| `emet jobs report [JOB_ID]` | Progress + per-episode score table + viz/feh hints (defaults to running/waiting job). `conf` shows `v=` verify-gate and `e=` EQA `Confidence:` (often `e=N` even on correct letters) |
 | `emet jobs report [JOB_ID] --question ID [--arm agentic]` | Per-episode deep dive: question, pred/gold, verify vs EQA confidence, verify phrases + detector scores, stale re-verify / fallback-submit red flags, abstain reasons |
 | `emet jobs cancel JOB_ID` | SIGTERM→SIGKILL job process tree; mark cancelled |
 | `emet jobs logs JOB_ID [--tail N]` | Tail queue/orchestrator log |

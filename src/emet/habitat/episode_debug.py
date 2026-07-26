@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -244,6 +245,27 @@ def save_episode_debug_bundle(
             json.dumps(summary, indent=2, default=str) + "\n",
             encoding="utf-8",
         )
+
+    # Numbered frontier-pick panels written during explore_frontier.
+    picks_dst = episode_dir / "frontier_picks"
+    picks_dst.mkdir(parents=True, exist_ok=True)
+    src_dirs: list[Path] = []
+    for key in ("_frontier_pick_dir", "_episode_debug_dir"):
+        raw = getattr(agent, key, None)
+        if not raw:
+            continue
+        p = Path(str(raw)).expanduser()
+        if key == "_episode_debug_dir":
+            p = p / "frontier_picks"
+        if p.is_dir() and p.resolve() != picks_dst.resolve():
+            src_dirs.append(p)
+    for src in src_dirs:
+        for png in sorted(src.glob("iter_*.png")):
+            shutil.copy2(png, picks_dst / png.name)
+    for png_s in getattr(agent, "_frontier_pick_panels", None) or []:
+        png = Path(str(png_s))
+        if png.is_file():
+            shutil.copy2(png, picks_dst / png.name)
 
     if gm is not None:
         from emet.memory.graph_eqa.pretty_print import format_scene_graph_pretty

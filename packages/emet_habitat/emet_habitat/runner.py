@@ -353,6 +353,20 @@ def run_hmeqa_episode(
         if agent.graph_memory is not None:
             print(format_graph_node_breakdown(agent.graph_memory), flush=True)
 
+        # Open the episode bundle dir *before* EQA so agentic frontier-pick panels
+        # land under frontier_picks/ instead of only in ~/.cache.
+        if save_debug_bundle and debug_run_tag:
+            from emet.habitat.episode_debug import default_episodes_root
+
+            ep_dir = (
+                default_episodes_root()
+                / debug_run_tag
+                / f"q{int(question_id):04d}_{method}"
+            )
+            ep_dir.mkdir(parents=True, exist_ok=True)
+            agent._episode_debug_dir = str(ep_dir)
+            (ep_dir / "frontier_picks").mkdir(exist_ok=True)
+
         discord_text, _images = agent.run_eqa(
             eqa_question,
             max_planning_steps=max_planning_steps,

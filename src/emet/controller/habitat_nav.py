@@ -187,8 +187,9 @@ def pick_habitat_exploration_target(
             blocked.add(goal_key_xy(eff))
             blocked.add(key)
             return None
+        # Recent is a soft skip only — permanently blocking emptied the frontier
+        # set on HM-EQA q104 (every explore_frontier logged frontier_xyz=null).
         if _recent_goal_penalty(eff, recent, radius_m=1.25) > 0.0:
-            blocked.add(key)
             return None
         return resolved
 

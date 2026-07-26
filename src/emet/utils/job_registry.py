@@ -522,6 +522,95 @@ def format_job_row(job: JobRecord) -> str:
     )
 
 
+@dataclass
+class VizArtifactDir:
+    """One image-bearing directory under a job OUT (for status/report)."""
+
+    rel: str
+    n_png: int
+    kind: str  # frontier_picks | maps | figures | topdown | other
+
+
+def discover_out_viz_artifacts(out_dir: str | Path | None) -> list[VizArtifactDir]:
+    """Find PNG dirs under an H2H / eval OUT (bundles, figures, frontier_picks)."""
+    if not out_dir:
+        return []
+    root = Path(out_dir).expanduser()
+    if not root.is_dir():
+        return []
+    found: list[VizArtifactDir] = []
+
+    def _add(path: Path, kind: str) -> None:
+        if not path.is_dir():
+            return
+        n = sum(1 for _ in path.glob("*.png"))
+        # Also count top-level topdown PNGs living beside maps/.
+        if kind == "topdown":
+            n = sum(1 for p in path.glob("topdown*.png"))
+            if n <= 0:
+                return
+            try:
+                rel = str(path.relative_to(root))
+            except ValueError:
+                rel = str(path)
+            found.append(VizArtifactDir(rel=rel, n_png=n, kind=kind))
+            return
+        if n <= 0 and kind not in ("frontier_picks",):
+            return
+        try:
+            rel = str(path.relative_to(root))
+        except ValueError:
+            rel = str(path)
+        found.append(VizArtifactDir(rel=rel, n_png=n, kind=kind))
+
+    bundles = root / "bundles"
+    if bundles.is_dir():
+        for bundle in sorted(p for p in bundles.iterdir() if p.is_dir()):
+            _add(bundle / "frontier_picks", "frontier_picks")
+            _add(bundle / "maps", "maps")
+            _add(bundle, "topdown")
+    _add(root / "figures", "figures")
+    # Prefer frontier_picks → maps → figures → topdown in display order.
+    kind_rank = {"frontier_picks": 0, "maps": 1, "figures": 2, "topdown": 3, "other": 9}
+    found.sort(key=lambda a: (kind_rank.get(a.kind, 9), a.rel))
+    return found
+
+
+def format_viz_artifact_lines(out_dir: str | Path | None) -> list[str]:
+    """Lines for ``emet jobs status`` / ``report`` pointing at feh-able image dirs."""
+    arts = discover_out_viz_artifacts(out_dir)
+    if not arts:
+        if out_dir and Path(str(out_dir)).expanduser().is_dir():
+            return [
+                "viz:       (no PNGs under bundles/ or figures/ yet)",
+                "           tip: feh needs a glob — OUT/ itself is mostly logs/jsonl",
+            ]
+        return []
+    root = Path(str(out_dir)).expanduser()
+    lines: list[str] = []
+    for i, a in enumerate(arts):
+        prefix = "viz:       " if i == 0 else "           "
+        if a.kind == "topdown":
+            lines.append(f"{prefix}{a.rel}/topdown*.png  ({a.n_png} png)")
+        else:
+            lines.append(f"{prefix}{a.rel}/  ({a.n_png} png, {a.kind})")
+    # Prefer frontier picks, else step maps, else whatever has PNGs.
+    preferred = next((a for a in arts if a.kind == "frontier_picks" and a.n_png > 0), None)
+    if preferred is None:
+        preferred = next((a for a in arts if a.kind == "maps" and a.n_png > 0), None)
+    if preferred is None:
+        preferred = next((a for a in arts if a.n_png > 0), None)
+    if preferred is not None:
+        if preferred.kind == "frontier_picks":
+            glob = "iter_*.png"
+        elif preferred.kind == "topdown":
+            glob = "topdown*.png"
+        else:
+            glob = "*.png"
+        lines.append(f"feh:       feh {root / preferred.rel}/{glob}")
+    return lines
+
+
 def format_job_detail(job: JobRecord) -> str:
     """Human-readable multi-line status (not JSON)."""
     prog = compute_job_progress(job)
@@ -534,6 +623,7 @@ def format_job_detail(job: JobRecord) -> str:
         f"out_dir:   {job.out_dir or '-'}",
         f"log_path:  {job.log_path or '-'}",
     ]
+    lines.extend(format_viz_artifact_lines(job.out_dir))
     if prog.source != "none":
         lines.append(f"progress:  {format_progress_brief(prog)}")
         if prog.rate_s_per_unit is not None:
@@ -841,6 +931,14 @@ def format_job_report(job: JobRecord) -> str:
         f"job:  {job.id}  ({job.name})",
         f"out:  {job.out_dir or '-'}",
     ]
+    for viz_line in format_viz_artifact_lines(job.out_dir):
+        # Re-indent status-style "viz:" / "feh:" lines for the report layout.
+        if viz_line.startswith("viz:"):
+            lines.append("viz:  " + viz_line[len("viz:"):].lstrip())
+        elif viz_line.startswith("feh:"):
+            lines.append("feh:  " + viz_line[len("feh:"):].lstrip())
+        else:
+            lines.append("      " + viz_line.strip())
     if prog.phase or prog.current_id:
         cur = ""
         if prog.current_id:

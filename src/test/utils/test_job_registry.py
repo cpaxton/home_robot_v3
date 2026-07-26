@@ -224,6 +224,41 @@ def test_format_job_report_episode_table(tmp_path, monkeypatch):
     assert payload["episodes"][0]["verified"] is True
 
 
+def test_format_job_detail_lists_viz_paths(tmp_path, monkeypatch):
+    monkeypatch.setenv("EMET_JOBS_DIR", str(tmp_path / "jobs"))
+    out = tmp_path / "hmeqa"
+    picks = out / "bundles" / "agentic_q104" / "frontier_picks"
+    maps = out / "bundles" / "agentic_q104" / "maps"
+    picks.mkdir(parents=True)
+    maps.mkdir(parents=True)
+    (picks / "iter_00.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (picks / "iter_01.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (maps / "step_0000.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (out / "bundles" / "agentic_q104" / "topdown_map.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (out / "figures").mkdir()
+    (out / "figures" / "hmeqa_agentic_h2h.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    job = jr.JobRecord(
+        id="jviz",
+        name="frontierviz",
+        status="done",
+        out_dir=str(out),
+    )
+    detail = jr.format_job_detail(job)
+    assert "frontier_picks" in detail
+    assert "2 png" in detail
+    assert "feh:" in detail
+    assert "iter_*.png" in detail
+    report = jr.format_job_report(job)
+    assert "frontier_picks" in report
+    assert "feh:" in report
+    arts = jr.discover_out_viz_artifacts(out)
+    kinds = {a.kind for a in arts}
+    assert "frontier_picks" in kinds
+    assert "maps" in kinds
+    assert "figures" in kinds
+    assert "topdown" in kinds
+
+
 def test_episode_conf_cell_formats_gate_and_eqa():
     cell = jr.EpisodeScore(
         arm="agentic", question_id=1, confident=False, verified=True

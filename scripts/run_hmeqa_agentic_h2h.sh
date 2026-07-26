@@ -326,6 +326,7 @@ print(row.get('debug_bundle_dir') or '')
     [[ -e "$src/$f" ]] && cp -a "$src/$f" "$dst/"
   done
   [[ -d "$src/maps" ]] && rm -rf "$dst/maps" && cp -a "$src/maps" "$dst/maps"
+  [[ -d "$src/frontier_picks" ]] && rm -rf "$dst/frontier_picks" && cp -a "$src/frontier_picks" "$dst/frontier_picks"
   log "snapshot $arm q$qid → $dst"
 }
 
