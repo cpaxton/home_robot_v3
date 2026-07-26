@@ -26,6 +26,16 @@ uv run emet eval status
 
 ---
 
+
+### STOPPED 2026-07-25 23:09 — user cancel bal-32; debug q104/105 frontier
+
+| Field | Value |
+|-------|-------|
+| Cancelled | `20260725_230214_8e1494` at **54/64** agentic q40 |
+| Bal-32 live | classic 14/32 (11 empty); agentic **8/22** (7 empty); **verified=2/22**; many free-form XYZ answers |
+| Do not | relaunch Habitat / resume bal-32 until frontier mid-floor pick is fixed |
+| Frontier bug | picks land in **already-explored open floor** (panel waypoint mid-green); selectable `n_frontier≈2`; viz blue ≠ planner-reachable frontier; frequent `NO_NEW_OBS` after 4 m nav |
+
 ### q104 soft-recent smoke — PASSED (2026-07-25 23:00)
 
 | Field | Value |
