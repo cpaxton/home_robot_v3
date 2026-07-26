@@ -1,6 +1,30 @@
 # Segfault investigation log
 
-Last updated: 2026-07-25 17:12 EDT
+Last updated: 2026-07-25 22:46 EDT
+
+### Host freeze during q104 frontier-viz debug (2026-07-25 ~22:32 → reboot 22:42)
+
+| Field | Value |
+|-------|-------|
+| Class | **Host hard freeze** (journal ends mid-warp; no OOM/Xid/hung_task; `last` marks sessions `crash`) |
+| Trigger window | After q104 frontierviz **DONE** at 22:15:53 — Warp GUI `crash_report` events from 22:15:59; syslog lasts until ~22:32 then reboot 22:42 |
+| Job at freeze | `20260725_221017_11296e` already finished (not mid-episode) |
+| OUT | `~/runs/emet/hmeqa_agentic_q104_frontierviz_20260725_221014` — agentic **0/1**, pred empty, `require_verified` abstain; **all** `explore_frontier` had `frontier_xyz=null` |
+| Root explore bug | `pick_habitat_exploration_target` permanently `blocked.add` on soft-recent goals → empty frontier set. Fix: soft-skip only (`5ab8d1d`) |
+| GPU now | idle ~23.5 GiB free; no registered jobs |
+| Do not | relaunch q104 unless validating soft-recent; `kill-stale` not needed |
+| Next | optional q104 re-smoke with pick panels; then `emet hmeqa resume` bal-32 `~/runs/emet/hmeqa_agentic_bal32_20260725_101519` (classic 14/32, agentic 4/10 @ 52/64) |
+
+```bash
+bash scripts/status_log.sh tail
+uv run emet jobs
+uv run emet eval status
+# validate fix (optional):
+# uv run emet jobs run --name hmeqa-q104-softrecent --need-mib 12000 -- \
+#   env EMET_ALLOW_SDPA_ATTN=1 ./scripts/run_hmeqa_agentic_h2h.sh --ids 104 --arms agentic
+```
+
+---
 
 ### Holdout-8 updated agentic (launching)
 
