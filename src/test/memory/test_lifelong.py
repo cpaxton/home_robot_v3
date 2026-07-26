@@ -216,3 +216,37 @@ def test_apply_se2_transforms_belief_history():
     # Pure translation: covariance unchanged.
     np.testing.assert_allclose(mug.position_covariance, np.diag([0.04, 0.01, 0.0]), atol=1e-8)
     np.testing.assert_allclose(mem._change_events[0]["last_xyz"][:2], [1.25, -0.1], atol=1e-6)
+
+
+def test_apply_se2_to_namedtuple_voxel_frames():
+    """SparseVoxelMap stores immutable Frame namedtuples — refine must use _replace."""
+    from collections import namedtuple
+
+    from emet.memory.lifelong import apply_se2_to_voxel_map
+
+    Frame = namedtuple(
+        "Frame",
+        ["camera_pose", "base_pose", "xyz", "full_world_xyz"],
+    )
+    cam = np.eye(4, dtype=np.float64)
+    cam[:3, 3] = [1.0, 2.0, 0.5]
+    fr = Frame(
+        camera_pose=cam,
+        base_pose=np.array([1.0, 2.0, 0.1], dtype=np.float64),
+        xyz=np.array([[1.0, 2.0, 0.5]], dtype=np.float64),
+        full_world_xyz=np.array([[1.1, 2.1, 0.5]], dtype=np.float64),
+    )
+
+    class _VM:
+        def __init__(self):
+            self.observations = [fr]
+            self.semantic_memory = None
+            self.voxel_pcd = None
+
+    vm = _VM()
+    t = se2_matrix(0.5, 0.0, 0.0)
+    assert apply_se2_to_voxel_map(vm, t) is True
+    out = vm.observations[0]
+    np.testing.assert_allclose(out.camera_pose[:2, 3], [1.5, 2.0], atol=1e-6)
+    np.testing.assert_allclose(out.base_pose[:2], [1.5, 2.0], atol=1e-6)
+    np.testing.assert_allclose(out.xyz[0, :2], [1.5, 2.0], atol=1e-6)

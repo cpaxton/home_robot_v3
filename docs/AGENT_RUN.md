@@ -61,7 +61,7 @@ One shared skill library (`emet.agent.skills`); two tool packs:
 
 ### Lifelong reload
 
-CHAT can resume a prior dynagraph export (same layout as `emet run dynagraph --export` + `--export-voxel-pickle`):
+CHAT can resume a prior dynagraph export (same layout as `emet run dynagraph --export`, which writes `voxel_map.pkl` by default):
 
 1. **Assume pose is OK** — load graph + `voxel_map.pkl` + `manifest.final_step` into the controller (shared helper `emet.memory.lifelong`).
 2. **Optional fudge** — `--refine-start` takes one live frame (if available), estimates a **small** SE(2) alignment of the saved cloud to the live cloud, and applies it to graph + voxel. Large / low-quality alignments are **rejected**; the assumed pose is kept.

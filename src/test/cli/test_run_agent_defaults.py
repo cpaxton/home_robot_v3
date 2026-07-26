@@ -83,7 +83,19 @@ def test_help_lists_lifelong_input_and_refine():
     r = runner.invoke(main, ["--help"])
     assert r.exit_code == 0
     assert "--input-path" in r.output
+    assert "--input_path" in r.output
     assert "--refine-start" in r.output
+
+
+def test_input_path_underscore_alias_accepted():
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    # Parse-only: offline+quit should not need a memory dir to exist for Click option accept.
+    r = runner.invoke(main, ["--offline", "--input_path", "/tmp/does-not-need-exist", "-c", "Q"])
+    # Offline ignores input-path; we only assert the option is recognized (not "No such option").
+    assert "No such option: --input_path" not in (r.output or "")
+    assert "No such option" not in (r.output or "") or r.exit_code == 0
 
 
 def test_help_lists_eqa_eval():

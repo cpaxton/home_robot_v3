@@ -410,6 +410,67 @@ def apply_se2_to_graph(graph_memory: Any, transform: np.ndarray) -> int:
     return n_updated
 
 
+def _transform_frame_base_pose(raw_bp: Any, transform: np.ndarray) -> Any:
+    """Map a Frame ``base_pose`` (4×4 or planar xyt) by ``transform``."""
+    shape = getattr(raw_bp, "shape", None)
+    if shape is not None and tuple(shape) == (4, 4):
+        out = transform_pose_matrix(raw_bp, transform)
+        if hasattr(raw_bp, "detach"):
+            import torch
+
+            return torch.as_tensor(out, device=raw_bp.device, dtype=raw_bp.dtype)
+        return out
+    bp = np.asarray(raw_bp, dtype=np.float64).reshape(-1)
+    if bp.size < 3:
+        return raw_bp
+    # DynaMem stores planar (x, y, theta)
+    xy = transform_points_xyz(np.array([[bp[0], bp[1], 0.0]]), transform)[0]
+    _, dyaw = se3_translation_xy_yaw(transform)
+    out = np.array([xy[0], xy[1], float(bp[2]) + dyaw], dtype=np.float64)
+    if hasattr(raw_bp, "detach"):
+        import torch
+
+        return torch.as_tensor(out, device=raw_bp.device, dtype=raw_bp.dtype)
+    return out
+
+
+def _transform_frame_xyz_field(val: Any, transform: np.ndarray) -> Any:
+    if val is None:
+        return None
+    arr_np = _as_numpy_xyz(val) if getattr(val, "ndim", 0) == 2 else None
+    if arr_np is None:
+        arr = np.asarray(val, dtype=np.float64)
+        if arr.ndim == 1 and arr.size >= 3:
+            out = transform_points_xyz(arr.reshape(1, 3), transform)[0]
+        elif arr.ndim == 2 and arr.shape[1] >= 3:
+            out = transform_points_xyz(arr[:, :3], transform)
+        else:
+            return val
+    else:
+        out = transform_points_xyz(arr_np, transform)
+    if hasattr(val, "detach"):
+        import torch
+
+        return torch.as_tensor(out, device=val.device, dtype=val.dtype)
+    return out
+
+
+def _replace_or_set_frame(fr: Any, **updates: Any) -> Any:
+    """Return an updated Frame. SparseVoxelMap uses immutable ``namedtuple`` Frames."""
+    if hasattr(fr, "_replace"):
+        # namedtuple / dataclass replace — only known fields
+        fields = getattr(fr, "_fields", None)
+        if fields is not None:
+            updates = {k: v for k, v in updates.items() if k in fields}
+        return fr._replace(**updates)
+    for key, value in updates.items():
+        try:
+            setattr(fr, key, value)
+        except AttributeError:
+            continue
+    return fr
+
+
 def apply_se2_to_voxel_map(voxel_map: Any, transform: np.ndarray) -> bool:
     """In-place transform of DynaMem / SparseVoxelMap clouds and observation poses."""
     if voxel_map is None:
@@ -448,33 +509,29 @@ def apply_se2_to_voxel_map(voxel_map: Any, transform: np.ndarray) -> bool:
 
     observations = getattr(voxel_map, "observations", None)
     if observations:
+        new_obs = []
         for fr in observations:
+            updates: dict[str, Any] = {}
             if getattr(fr, "camera_pose", None) is not None:
-                fr.camera_pose = transform_pose_matrix(fr.camera_pose, t)
+                cam = transform_pose_matrix(fr.camera_pose, t)
+                if hasattr(fr.camera_pose, "detach"):
+                    import torch
+
+                    cam = torch.as_tensor(cam, device=fr.camera_pose.device, dtype=fr.camera_pose.dtype)
+                updates["camera_pose"] = cam
             if getattr(fr, "base_pose", None) is not None:
-                raw_bp = fr.base_pose
-                shape = getattr(raw_bp, "shape", None)
-                if shape is not None and tuple(shape) == (4, 4):
-                    fr.base_pose = transform_pose_matrix(raw_bp, t)
-                else:
-                    bp = np.asarray(raw_bp, dtype=np.float64).reshape(-1)
-                    if bp.size >= 3:
-                        # DynaMem stores planar (x, y, theta)
-                        xy = transform_points_xyz(np.array([[bp[0], bp[1], 0.0]]), t)[0]
-                        _, dyaw = se3_translation_xy_yaw(t)
-                        fr.base_pose = np.array(
-                            [xy[0], xy[1], float(bp[2]) + dyaw],
-                            dtype=np.float64,
-                        )
+                updates["base_pose"] = _transform_frame_base_pose(fr.base_pose, t)
             for attr in ("xyz", "full_world_xyz", "world_xyz"):
                 val = getattr(fr, attr, None)
                 if val is None:
                     continue
-                arr = np.asarray(val, dtype=np.float64)
-                if arr.ndim == 1 and arr.size >= 3:
-                    setattr(fr, attr, transform_points_xyz(arr.reshape(1, 3), t)[0])
-                elif arr.ndim == 2 and arr.shape[1] >= 3:
-                    setattr(fr, attr, transform_points_xyz(arr[:, :3], t))
+                updates[attr] = _transform_frame_xyz_field(val, t)
+            new_obs.append(_replace_or_set_frame(fr, **updates) if updates else fr)
+        # Prefer writing back a list (namedtuple Frames); some maps keep a mutable list.
+        try:
+            voxel_map.observations = new_obs
+        except AttributeError:
+            observations[:] = new_obs
 
     return True
 

@@ -86,6 +86,7 @@ log = Logger(__name__)
 )
 @click.option(
     "--input-path",
+    "--input_path",
     type=click.Path(),
     default=None,
     help="Memory directory to load when using --robot-ip (graph + voxel_map.pkl for dynagraph).",
