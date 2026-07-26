@@ -36,6 +36,7 @@ def test_cli_help():
     assert "test" in result.stdout
     assert "eval" in result.stdout
     assert "jobs" in result.stdout
+    assert "hmeqa" in result.stdout
     assert "debug-da3-depth" in result.stdout
 
 
@@ -48,9 +49,53 @@ def test_eval_group_help():
     )
     assert result.returncode == 0
     assert "status" in result.stdout
+    assert "diagnose" in result.stdout
     assert "check" in result.stdout
     assert "wait" in result.stdout
     assert "kill-stale" in result.stdout
+    assert "affinity" in result.stdout
+    assert "recover" in result.stdout
+
+
+def test_hmeqa_group_help():
+    """emet hmeqa --help lists H2H helpers."""
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "hmeqa", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "h2h" in result.stdout
+    assert "resume" in result.stdout
+    assert "status" in result.stdout
+    assert "summarize" in result.stdout
+    assert "overnight" in result.stdout
+
+
+def test_hmeqa_h2h_help_lists_evidence_policy_flags():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "hmeqa", "h2h", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "agentic-verifier" in result.stdout
+    assert "require-verified" in result.stdout
+    assert "agentic-router" in result.stdout
+    assert "paper-router" in result.stdout
+
+
+def test_hmeqa_overnight_help():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "hmeqa", "overnight", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "skip-bal32" in result.stdout
+    assert "gate-min-acc" in result.stdout
+    assert "agentic-router" in result.stdout
+    assert "owlv2" in result.stdout
 
 
 def test_jobs_group_help():
@@ -65,6 +110,28 @@ def test_jobs_group_help():
     assert "cancel" in result.stdout
     assert "register" in result.stdout
     assert "run" in result.stdout
+    assert "report" in result.stdout
+
+
+def test_jobs_report_help():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "jobs", "report", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "JOB_ID" in result.stdout or "job" in result.stdout.lower()
+
+
+def test_jobs_run_help_lists_safety_flags():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "jobs", "run", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "cpu-safe" in result.stdout
+    assert "gpu-exclusive" in result.stdout
 
 
 def test_jobs_list_runs(tmp_path):

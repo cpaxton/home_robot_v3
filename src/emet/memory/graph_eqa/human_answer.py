@@ -58,6 +58,8 @@ def _format_xyz(xyz: np.ndarray) -> str:
 
 
 def _extract_keywords(question: str) -> list[str]:
+    from emet.memory.graph_eqa.graph_memory import question_stem_for_keywords
+
     stop = {
         "a",
         "an",
@@ -83,7 +85,8 @@ def _extract_keywords(question: str) -> list[str]:
         "kitchen",
         "scene",
     }
-    words = re.findall(r"[a-z0-9]+", question.lower())
+    stem = question_stem_for_keywords(question)
+    words = re.findall(r"[a-z0-9]+", stem.lower())
     return [w for w in words if len(w) > 2 and w not in stop]
 
 
@@ -170,6 +173,17 @@ def format_human_eqa_answer(
     debug_reasoning = (reasoning or "").strip()
     if confidence_reasoning and not confidence:
         debug_reasoning = f"{debug_reasoning}\n{confidence_reasoning}".strip()
+
+    # Keep explicit abstains — Action:N / "image 2" in confidence_reasoning must not
+    # rewrite Unknown into a frontier XYZ phrase (holdout q104 scoring).
+    _abstain = user_answer.lower() in {"unknown", "none", "n/a", "na"}
+    if _abstain and not confidence:
+        return HumanEQAResult(
+            user_answer=user_answer,
+            location_hint=None,
+            confidence_summary="not confident",
+            debug_reasoning=debug_reasoning,
+        )
 
     image_id = _infer_image_id(user_answer, debug_reasoning)
     location_hint: str | None = None

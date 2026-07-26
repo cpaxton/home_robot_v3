@@ -193,6 +193,30 @@ class GraphEQAController(DynamemController):
             return
         super().look_around()
 
+    def _best_frontier_point_from_graph(self, text: str | None) -> np.ndarray | None:
+        """Use graph information gain/risk scoring before the nearest-frontier fallback."""
+        gm = getattr(self, "graph_memory", None)
+        if gm is not None and hasattr(gm, "hypothesize_nav_targets"):
+            pose = self._planning_base_xyt(self.robot.get_base_pose())
+            try:
+                hypotheses = gm.hypothesize_nav_targets(
+                    text or "",
+                    max_k=12,
+                    robot_xyt=pose,
+                )
+            except TypeError:
+                hypotheses = gm.hypothesize_nav_targets(text or "", max_k=12)
+            frontier = next(
+                (hypothesis for hypothesis in hypotheses if hypothesis.source == "frontier"),
+                None,
+            )
+            if frontier is not None:
+                return np.array(
+                    [float(frontier.xyz[0]), float(frontier.xyz[1]), 1.0],
+                    dtype=float,
+                )
+        return super()._best_frontier_point_from_graph(text)
+
     def _habitat_should_prefer_frontier(
         self,
         *,

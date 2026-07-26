@@ -8,17 +8,23 @@ alwaysApply: true
 ## Preflight (before any VLM / Habitat / Robocasa GPU job)
 
 ```bash
-uv run emet eval status                # see free VRAM + compute apps
-uv run emet eval kill-stale
+uv run emet eval recover --need-mib 12000   # status + diagnose + wait (preferred)
+# or stepwise:
+uv run emet eval status                # free VRAM + compute apps (read-only)
+uv run emet eval diagnose              # empty nvidia-smi ≠ Habitat EGL OK
+uv run emet eval kill-stale            # only if no intentional GPU job is live
 NEED_MIB=12000 uv run emet eval wait   # or: uv run emet eval check
+uv run emet eval affinity              # turbo-exclusion mask (jobs --cpu-safe applies it)
 ```
 
-Canonical CLI: **`emet eval {status,check,wait,kill-stale}`**. Bash [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh) delegates to it (also provides `emet_export_pytorch_alloc` and **`emet_pytest_no_sim_ignore_args`** when sourced). Prefer `emet eval` over raw `pkill` / ad-hoc kills. Verify with `uv run emet eval --help` before suggesting flags. (The `emet eval diagnose` subcommand + `emet jobs` progress/ETA live on the eval branch `exp/agentic-hmeqa-*`, not here — do not suggest them on this branch until merged.)
+Prefer **`emet hmeqa resume`** / **`emet hmeqa h2h`** over hand-built `taskset` + script env. See **`.cursor/rules/dogfood-emet-cli.mdc`**.
+
+Canonical CLI: **`emet eval {status,diagnose,check,wait,kill-stale,affinity,recover}`**. Bash [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh) delegates to it (also provides `emet_export_pytorch_alloc` and **`emet_pytest_no_sim_ignore_args`** when sourced). Prefer `emet eval` over raw `pkill` / ad-hoc kills. Verify with `uv run emet eval --help` before suggesting flags.
 
 ### Empty `nvidia-smi` is not proof of safety
 
 - Free VRAM / no compute apps does **not** mean Habitat Magnum EGL can create a `WindowlessContext`.
-- HM-EQA can fail every episode with `unable to find CUDA device 0 among N EGL devices` while the GPU looks idle (seen 2026-07-24).
+- HM-EQA can fail every episode with `unable to find CUDA device 0 among N EGL devices` while the GPU looks idle (seen 2026-07-24 morning failset).
 - Empty `CUDA_VISIBLE_DEVICES` hides the GPU from Torch/Habitat even when `nvidia-smi` still shows the card.
 - After a hard kill of Habitat mid-episode, driver/EGL can stay wedged until settle or reboot — use **`emet jobs cancel`**, not raw `kill -9` on `emet-habitat`.
 
@@ -26,9 +32,27 @@ Canonical CLI: **`emet eval {status,check,wait,kill-stale}`**. Bash [`scripts/gp
 
 - New eval/sim `Popen` paths must use [`emet.utils.process_tree`](../../src/emet/utils/process_tree.py) (`popen_session` + `terminate_process_tree` / `kill_process_tree`) so timeouts reap GPU grandchildren (`uv` wrappers, mujoco/habitat workers).
 - Do **not** run `emet eval kill-stale` from inside a long-running smoke that must stay alive (e.g. `run_dynagraph_dynamic_*`) — use `emet eval wait` only. Set `EMET_GPU_PROTECT_PIDS` if an orchestrator must keep a worker across cleanup.
-- After failed/hung evals: `uv run emet eval status`, then check **`~/runs/emet/`**, **`~/.cache/habitat_eqa/results/`**, and per-step logs before re-launching.
-- Track / manage long jobs with **`uv run emet jobs`** (list/cancel/logs) and prefer **`emet jobs run --name … -- CMD`** so queue state is visible; registry under `~/runs/emet/jobs/`.
-- Docs: [`docs/evaluation.md`](../../docs/evaluation.md), orphan section in [`docs/known_issues.md`](../../docs/known_issues.md).
+- Do **not** run `kill-stale` while a managed `emet jobs` Habitat job is queued/waiting/running.
+- After failed/hung evals: `uv run emet eval status` / `diagnose`, then check **`~/runs/emet/`**, **`~/.cache/habitat_eqa/results/`**, and per-step logs before re-launching.
+- Docs: [`docs/evaluation.md`](../../docs/evaluation.md), orphan / agent-crash section in [`docs/known_issues.md`](../../docs/known_issues.md).
+
+## `emet jobs` (required for long GPU / paper runs)
+
+**Always** launch multi-episode Habitat/HM-EQA, overnight batteries, and paper sweeps through the job registry — not bare `nohup` when avoidable:
+
+```bash
+uv run emet jobs run --name hmeqa-agentic-bal32 --need-mib 12000 -- \
+  env EMET_ALLOW_SDPA_ATTN=1 ./scripts/run_hmeqa_agentic_h2h.sh …
+uv run emet jobs                 # list + PROGRESS/ETA columns
+uv run emet jobs status JOB_ID   # detail + derived ETA (--json includes progress)
+uv run emet jobs logs JOB_ID --tail 80
+uv run emet jobs cancel JOB_ID
+```
+
+- Registry: `~/runs/emet/jobs/` (`EMET_JOBS_DIR`). Wrapper sets `EMET_JOB_ID`.
+- Progress: scripts should `emet jobs update JOB_ID --units-done N --units-total M --phase … --current-id …` and/or write `OUT/progress.json` (see `emet.utils.job_registry`).
+- If a job was started unmanaged: `emet jobs register` + point `--out-dir` at the run so `progress.json` / DONE are visible.
+- Implementation: [`src/emet/utils/job_registry.py`](../../src/emet/utils/job_registry.py), CLI in [`docs/cli.md`](../../docs/cli.md).
 
 ## One GPU job at a time
 
@@ -48,27 +72,74 @@ That sequence caused full-system freezes on an RTX 4090 workstation (GUI + SSH u
 | `run_overnight_eval_smoke.sh` | separate night | HM-EQA + OVMM + SQA3D matrix |
 | `run_overnight_habitat_eval.sh` | `--resume` | Multi-phase HM-EQA subsets |
 
-## Cursor agent sessions (segfaults)
+## Record before risky behaviors (especially sim / GPU)
 
-**"Cursor keeps crashing" here is usually not a busy GPU.** Two distinct modes (see [`docs/known_issues.md`](../../docs/known_issues.md)):
+The Cursor agent process frequently dies mid-turn (V8 / Node `invalid opcode`, or `emet` null-IP SIGSEGV after Habitat/VLM teardown). **Assume the session will die.** Before any risky action, leave enough state that a cold session can recover from only:
 
-- **Mode A — episode `libcuda` SIGSEGV (`exit=139`):** `emet-habitat run-episode` dies during Qwen3-VL vision generate while Habitat-Sim EGL shares the GPU. Orchestrator logs `FAIL … exit=139` / `dumped core`; kernel shows `python[…]: segfault … in libcuda.so`. The per-qid jsonl is **empty** — that is a crash, not a scored miss. Hot scenes: q104/q105 (`yogvKWUrdnw`), flaky q68.
-- **Mode B — agent / `emet` null-IP SIGSEGV:** the Cursor agent process itself dies (`emet[…]: segfault at 0`, or `trap invalid opcode`) when a turn runs or probes Habitat / tears down a GPU context. A detached `emet jobs` / `nohup` child often keeps running.
+```bash
+# From the checkout that owns the job (v4 ≠ v3 ≠ v2):
+bash scripts/status_log.sh tail   # state + literal next command
+bash scripts/status_log.sh path   # ~/runs/emet/status/<repo>/STATUS.log
+bash scripts/status_log.sh latest # that checkout's newest OUT dir
+# plus, for investigations: segfault.md (or the active experiment note)
+```
+
+Do **not** `tail ~/runs/emet/STATUS.log` — sibling checkouts share `~/runs/emet/` and would overwrite each other's recovery instructions. Default path is **`~/runs/emet/status/<repo_basename>/STATUS.log`**.
+
+**Risky behaviors that require a record first:**
+
+- Launching or resuming Habitat / HM-EQA / OVMM / SQA3D / overnight batteries
+- Any MuJoCo / Robocasa / MolmoSpaces serve or dynagraph explore that loads the GPU
+- Loading a VLM (Qwen3-VL, etc.) or running a Habitat smoke “just to check EGL”
+- `emet eval kill-stale`, `emet jobs cancel`, hard affinity / `taskset` experiments
+- BIOS / CPU / driver recovery steps after a native crash
+
+**What to record (minimum):**
+
+1. Job id + OUT path + git commit
+2. Exact launch / resume command (copy-pasteable, including env flags)
+3. Progress (units done / total, current arm + qid)
+4. What **not** to do next (`kill-stale` while job alive, hard-kill Habitat, double-launch)
+
+**How:**
+
+- Prefer orchestrators that source [`scripts/status_log.sh`](../../scripts/status_log.sh) (`status_open` / `status_note` / `status_close`) so every state change ends in a **`next:`** line.
+- For crash investigations, keep a durable note (e.g. repo-root `segfault.md`) with the same fields plus diagnosis. Update it **before** the next risky step, not after.
+- Add `status_open` / `status_note` / `status_close` to any new long-running eval script. See [`docs/evaluation.md`](../../docs/evaluation.md#first-command-after-an-agent-death-tail-runsemetstatuslog).
+
+## Cursor agent sessions (crashes)
+
+**Root cause of “Cursor agent keeps crashing” here is usually not a busy GPU.** Kernel logs show `emet[…]: segfault at 0` (null IP) or `trap invalid opcode` after Habitat-Sim / VLM / EGL teardown. Also seen: V8 `Illegal instruction` in the Cursor `agent`/`node` binary itself. That fault kills the agent tool host even when `nvidia-smi` only lists Xorg.
+
+Also distinguish **Mode A** (episode `libcuda` SIGSEGV / empty jsonl / `exit=139`) from **Mode B** (agent/`emet` null-IP segfault while a detached `emet jobs` child may keep running). See [`docs/known_issues.md`](../../docs/known_issues.md).
+
+
+**First command when a session comes back after a crash (from the owning checkout):**
+
+```bash
+bash scripts/status_log.sh tail  # state + literal next command
+bash scripts/status_log.sh latest
+uv run emet jobs                 # detached job may still be alive
+```
+
+Do **not** `tail ~/runs/emet/STATUS.log` (flat shared path across sibling repos).
 
 Rules:
 
-- Launch Habitat / HM-EQA / overnight scripts **only** via **`uv run emet jobs run --name … -- CMD`**, **`nohup … &`**, or a dedicated terminal — never as blocking inline agent shell commands that load Habitat or tear down GPU contexts.
-- Do **not** run "quick" Habitat smoke episodes inside the agent turn to "verify EGL", then `kill` them — hard mid-episode kills precede the next `emet` segfault.
-- H2H scripts abort after consecutive EGL failures (`EGL_FAIL_ABORT`, default 2) and after a fatal native signal (`NATIVE_CRASH_ABORT`, default 1, writes `native_crash_*.log`) instead of burning the full failset.
-- After a crash: `sudo dmesg -T | rg 'segfault|invalid opcode|libcuda'` · `uv run emet eval status` · `uv run emet jobs` · check **`~/runs/emet/`**, **`~/.cache/habitat_eqa/results/`**, **`/tmp/unified_smoke_*.log`** — the detached job may still be running or only half-started.
+- Launch Habitat / HM-EQA / overnight scripts **only** via **`uv run emet jobs run --name … -- CMD`** (or a dedicated terminal). Never as blocking inline agent shell commands that load Habitat or tear down GPU contexts.
+- Do **not** run “quick” Habitat smoke episodes inside the agent turn to “verify EGL”, then `kill` them — hard mid-episode kills are a common precursor to the next `emet` segfault.
+- Monitor with **`emet jobs` / `emet jobs status` / `emet jobs logs`**, not long `AwaitShell` on GPU work.
+- After an agent crash: `sudo dmesg -T | rg 'segfault|invalid opcode'` · `uv run emet eval diagnose` · `uv run emet jobs` · check `~/runs/emet/` — the detached job may still be running or only half-started.
+- H2H scripts abort after consecutive EGL failures (`EGL_FAIL_ABORT`, default 2) instead of burning the full failset.
 - Tier 0 + tracks 1–3 PR smoke: see [`docs/experiments/cross_track_smoke.md`](../../docs/experiments/cross_track_smoke.md).
 
 ## Cross-track smoke entrypoint
 
 ```bash
-nohup ./scripts/run_overnight_cross_track_smoke.sh \
-  >> ~/runs/emet/overnight_cross_track/nohup.log 2>&1 &
-tail -f ~/runs/emet/overnight_cross_track/cross_track_*/summary.txt
+uv run emet jobs run --name overnight-cross-track --need-mib 12000 -- \
+  ./scripts/run_overnight_cross_track_smoke.sh
+uv run emet jobs logs JOB_ID --tail 40
+# or: tail -f ~/runs/emet/overnight_cross_track/cross_track_*/summary.txt
 ```
 
 ## Unified config smoke (post–PR #68)

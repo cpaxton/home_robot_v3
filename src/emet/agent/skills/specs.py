@@ -96,9 +96,9 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="verify_siglip",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "Cheap visual check: does 'phrase' match the current camera view / stored view "
-            "obs_id? Returns PRESENT / CANDIDATE / ABSENT with a similarity score. PRESENT "
-            "unlocks submit_answer."
+            "Cheap visual check + multimodal VLM assess: does 'phrase' match the current "
+            "camera view / stored view obs_id? Returns PRESENT / CANDIDATE / ABSENT as a "
+            "proposal; only VLM answerable unlocks submit_answer."
         ),
         parameters={
             "type": "object",
@@ -117,8 +117,8 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="submit_answer",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "Submit the final answer (MCQ letter or short phrase). Rejected until a "
-            "verify_siglip PRESENT (or the round budget is exhausted)."
+            "Submit the final answer (MCQ letter or short phrase). Rejected until VLM "
+            "assess marks the view answerable (or the round budget is exhausted)."
         ),
         parameters={
             "type": "object",

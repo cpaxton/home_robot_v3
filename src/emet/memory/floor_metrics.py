@@ -54,21 +54,25 @@ def compute_explored_floor_metrics(
         grid_origin_xy = [float(grid_origin[0]), float(grid_origin[1])]
 
     explored_2d: np.ndarray | None = None
+    obstacles_2d: np.ndarray | None = None
     obstacle_cell_count = 0
     if vm is not None and hasattr(vm, "get_2d_map"):
         try:
             obstacles, explored = vm.get_2d_map()
             explored_2d = _to_numpy_bool_2d(explored)
-            obs = _to_numpy_bool_2d(obstacles)
-            if obs is not None:
-                obstacle_cell_count = int(obs.sum())
+            obstacles_2d = _to_numpy_bool_2d(obstacles)
+            if obstacles_2d is not None:
+                obstacle_cell_count = int(obstacles_2d.sum())
         except Exception:
             explored_2d = None
+            obstacles_2d = None
 
     if explored_2d is None:
         return {
             "explored_cell_count": 0,
             "explored_area_m2": 0.0,
+            "free_floor_cell_count": 0,
+            "free_floor_area_m2": 0.0,
             "obstacle_cell_count": obstacle_cell_count,
             "grid_resolution_m": grid_resolution,
             "grid_origin_xy": grid_origin_xy,
@@ -81,6 +85,14 @@ def compute_explored_floor_metrics(
     cell_count = int(explored_2d.sum())
     cell_area = grid_resolution * grid_resolution
     area_m2 = float(cell_count * cell_area)
+
+    # Free floor = explored cells that are not obstacles (walkable footprint).
+    if obstacles_2d is not None and obstacles_2d.shape == explored_2d.shape:
+        free = explored_2d & ~obstacles_2d
+        free_floor_cells = int(free.sum())
+    else:
+        free_floor_cells = cell_count
+    free_floor_area_m2 = float(free_floor_cells * cell_area)
 
     bounds_world: list[list[float]] | None = None
     rows, cols = np.where(explored_2d)
@@ -97,6 +109,8 @@ def compute_explored_floor_metrics(
     return {
         "explored_cell_count": cell_count,
         "explored_area_m2": area_m2,
+        "free_floor_cell_count": free_floor_cells,
+        "free_floor_area_m2": free_floor_area_m2,
         "obstacle_cell_count": obstacle_cell_count,
         "grid_resolution_m": grid_resolution,
         "grid_origin_xy": grid_origin_xy,
@@ -174,6 +188,12 @@ def format_floor_metrics_summary(metrics: dict[str, Any]) -> str:
             f"(grid_resolution={res:.3f} m/cell)"
         )
     ]
+    free_cells = metrics.get("free_floor_cell_count")
+    free_area = metrics.get("free_floor_area_m2")
+    if free_cells is not None and free_area is not None:
+        lines.append(
+            f"free floor (explored ∩ ¬obstacle): {free_cells} cells, {float(free_area):.3f} m²"
+        )
     spawn = metrics.get("spawn_floor_map") or {}
     if spawn.get("scene_walkable_area_m2") is not None:
         sa = float(spawn["scene_walkable_area_m2"])

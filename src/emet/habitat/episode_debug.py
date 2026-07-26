@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -230,6 +231,44 @@ def save_episode_debug_bundle(
 
     raw = raw_eqa_full or metrics.raw_eqa_output
     (episode_dir / "raw_eqa.txt").write_text(raw, encoding="utf-8")
+
+    # Agentic tool-loop traces (EMET_EQA_TRACE=1 → AgenticEQAExecutor._flush_trace_to_agent).
+    trace_rows = getattr(agent, "_agentic_trace_rows", None) or []
+    if trace_rows:
+        (episode_dir / "agentic_trace.jsonl").write_text(
+            "".join(json.dumps(r, default=str) + "\n" for r in trace_rows),
+            encoding="utf-8",
+        )
+    summary = getattr(agent, "_agentic_eqa_summary", None)
+    if isinstance(summary, dict) and summary:
+        (episode_dir / "agentic_summary.json").write_text(
+            json.dumps(summary, indent=2, default=str) + "\n",
+            encoding="utf-8",
+        )
+
+    # Numbered frontier-pick panels written during explore_frontier.
+    picks_dst = episode_dir / "frontier_picks"
+    picks_dst.mkdir(parents=True, exist_ok=True)
+    src_dirs: list[Path] = []
+    for key in ("_frontier_pick_dir", "_episode_debug_dir"):
+        raw = getattr(agent, key, None)
+        if not raw:
+            continue
+        p = Path(str(raw)).expanduser()
+        if key == "_episode_debug_dir":
+            p = p / "frontier_picks"
+        if p.is_dir() and p.resolve() != picks_dst.resolve():
+            src_dirs.append(p)
+    for src in src_dirs:
+        for png in sorted(src.glob("iter_*.png")):
+            shutil.copy2(png, picks_dst / png.name)
+    for png_s in getattr(agent, "_frontier_pick_panels", None) or []:
+        png = Path(str(png_s))
+        # Panels may already live in picks_dst (agentic executor writes there
+        # directly); copying a file onto itself raises SameFileError and would
+        # abort the rest of the bundle export (maps, trajectory, floor metrics).
+        if png.is_file() and png.resolve() != (picks_dst / png.name).resolve():
+            shutil.copy2(png, picks_dst / png.name)
 
     if gm is not None:
         from emet.memory.graph_eqa.pretty_print import format_scene_graph_pretty

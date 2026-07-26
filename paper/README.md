@@ -49,6 +49,9 @@ Requires `latexmk` + `booktabs` (via `texlive-latex-extra`, `texlive-bibtex-extr
 uv run python scripts/summarize_hmeqa_agentic_h2h.py \
   --from-summary paper/data/hmeqa_agentic_h2h/holdout8_summary.json \
   --output paper/figs/hmeqa_agentic_h2h.png
+uv run python scripts/summarize_hmeqa_agentic_h2h.py \
+  --from-summary paper/data/hmeqa_agentic_h2h/balanced32_summary.json \
+  --output paper/figs/hmeqa_agentic_h2h_bal32.png
 ```
 
 Full Habitat re-run (maps + coverage figure): see `paper/data/README.md`.

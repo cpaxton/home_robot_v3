@@ -30,7 +30,7 @@ Logs: `~/runs/emet/simulation_smoke/<RUN_ID>/`.
 
 ## Cursor / long agent sessions
 
-Multi-hour Habitat evals and overnight orchestrators should run **outside** blocking Cursor agent turns (`nohup … &` or a dedicated terminal). Heavy GPU + native teardown can kill the Cursor agent while eval subprocesses finish — check log files and artifact paths before re-running.
+Multi-hour Habitat evals and overnight orchestrators should run via **`emet jobs run`** (or a dedicated terminal), not as blocking Cursor agent turns. Empty `nvidia-smi` does **not** mean Habitat EGL is healthy; agent crashes here are usually `emet` segfaults after Habitat/VLM teardown — see [known_issues.md](../known_issues.md#nvidia-driver-hang--cursor-agent-crash-during-stacked-gpu-evals) and `emet eval diagnose`. After a crash, check log files and artifact paths before re-running.
 
 ## Orchestrator (recommended — extended overnight)
 

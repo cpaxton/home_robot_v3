@@ -630,23 +630,31 @@ Local job registry under `~/runs/emet/jobs/` (override with `EMET_JOBS_DIR`). Qu
 |------------|------|
 | `emet jobs` / `emet jobs list` | Active registered jobs (+ unmanaged eval PIDs) |
 | `emet jobs list --all` | Include done/failed/cancelled |
-| `emet jobs status JOB_ID` | Human-readable record (`--json` for full dump) |
+| `emet jobs status JOB_ID` | Human-readable record + progress/ETA + **viz paths** under `OUT/bundles/` / `figures/` (`--json` includes derived `progress`) |
+| `emet jobs report [JOB_ID]` | Progress + per-episode score table + viz/feh hints (defaults to running/waiting job). `conf` shows `v=` verify-gate and `e=` EQA `Confidence:` (often `e=N` even on correct letters) |
+| `emet jobs report [JOB_ID] --question ID [--arm agentic]` | Per-episode deep dive: question, pred/gold, verify vs EQA confidence, verify phrases + detector scores, stale re-verify / fallback-submit red flags, abstain reasons |
 | `emet jobs cancel JOB_ID` | SIGTERM→SIGKILL job process tree; mark cancelled |
 | `emet jobs logs JOB_ID [--tail N]` | Tail queue/orchestrator log |
 | `emet jobs register …` | Scripts: create a record (prints job id) |
-| `emet jobs update JOB_ID --status …` | Scripts: heartbeat / terminal status |
-| `emet jobs run --name NAME [--need-mib N] [--wait-pid P] -- CMD…` | Register + nohup wrapper |
+| `emet jobs update JOB_ID --status …` | Heartbeat / terminal status; optional `--units-done/--units-total/--phase/--current-id` |
+| `emet jobs run --name NAME [--need-mib N] [--cpu-safe/--no-cpu-safe] [--gpu-exclusive/--no-gpu-exclusive] [--wait-pid P] -- CMD…` | Register + nohup wrapper (sets `EMET_JOB_ID`). With `--need-mib`, **cpu-safe** and **gpu-exclusive** default **on**. |
+
+`emet jobs list` shows a **PROGRESS** column (units, phase, current id, ETA) from job meta and/or `OUT/progress.json`. Prefer this over bare `nohup` for multi-hour GPU evals.
 
 ```bash
 uv run emet jobs
+uv run emet jobs report              # defaults to running job; scores from OUT/*_q*.jsonl
+uv run emet jobs report --question 88 # per-episode trace: phrases, verify scores, red flags
 uv run emet jobs list --all
 uv run emet jobs run --name dyn-improve-eqa --need-mib 14000 -- \
   ./scripts/run_dynagraph_dynamic_improve_smokes.sh ~/runs/emet/dynamic_exploration/eqa_out
+uv run emet jobs status JOB_ID
+uv run emet jobs update JOB_ID --units-done 8 --units-total 64 --phase classic --current-id 17
 uv run emet jobs cancel JOB_ID
 uv run emet jobs logs JOB_ID --tail 80
 ```
 
-Related: [`emet eval`](#emet-eval-gpu-preflight--stale-cleanup) for GPU preflight / orphan cleanup (not the same as job cancel).
+Related: [`emet eval`](#emet-eval-gpu-preflight--stale-cleanup) for GPU preflight / orphan cleanup (not the same as job cancel); [`emet hmeqa`](#emet-hmeqa-hm-eqa-h2h) for classic vs agentic launches.
 
 ### `emet eval` (GPU preflight / stale cleanup)
 
@@ -655,20 +663,61 @@ Canonical GPU preflight for paper evals and overnight smokes (Python implementat
 | Subcommand | Role |
 |------------|------|
 | `emet eval status` | Free/total VRAM + compute apps (read-only) |
+| `emet eval diagnose` | Habitat/HM-EQA readiness notes: empty apps ≠ EGL OK; flags empty `CUDA_VISIBLE_DEVICES`, missing `.venv-habitat`, recent `emet` segfault hints |
 | `emet eval check [--need-mib N]` | Exit 1 if free VRAM &lt; N (default `NEED_MIB` or 12000) |
 | `emet eval wait [--need-mib N]` | Block until free VRAM is stably above N |
 | `emet eval kill-stale [--no-gpu] [--settle-sec S]` | SIGTERM→SIGKILL orphaned eval/sim/`uv run emet` trees |
+| `emet eval affinity [--apply] [--pid P] [--json]` | Show/apply turbo-CPU exclusion mask |
+| `emet eval recover [--need-mib N]` | `status` + `diagnose` + `wait` one-shot (post-crash / post-reboot) |
 
-Skips the caller process ancestry and any PIDs in `EMET_GPU_PROTECT_PIDS`. See [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs) and [environment_variables.md](environment_variables.md).
+Skips the caller process ancestry and any PIDs in `EMET_GPU_PROTECT_PIDS`. See [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [known_issues.md](known_issues.md#nvidia-driver-hang--cursor-agent-crash-during-stacked-gpu-evals), and [environment_variables.md](environment_variables.md).
 
 ```bash
 uv run emet eval status
+uv run emet eval diagnose
+uv run emet eval affinity
+uv run emet eval recover --need-mib 12000
 uv run emet eval kill-stale
 NEED_MIB=12000 uv run emet eval wait
 uv run emet eval check --need-mib 14000
 ```
 
 Related top-level scoring apps remain: `emet eval-dynagraph`, `emet eval-calibration`, `emet eval-sqa3d`.
+
+### `emet hmeqa` (HM-EQA H2H)
+
+Dogfood entrypoints for classic vs agentic-verify Dynagraph. Prefer these over hand-rolled `env … taskset … ./scripts/run_hmeqa_agentic_h2h.sh`.
+
+| Command | Purpose |
+|---------|---------|
+| `emet hmeqa h2h [OUT] [--resume] [--arms …] [--ids …] [--preset paper-router] [--agentic-verifier none\|owlv2\|yoloe] [--require-verified\|--allow-unverified] [--agentic-router] [--crash-policy skip\|abort] [--streak-abort N]` | Launch via `emet jobs run --need-mib` (cpu-safe + gpu-exclusive) |
+| `emet hmeqa resume [OUT] [--preset paper-router]` | Resolve latest OUT from status symlink if omitted; `RESUME=1` (retries empty per-qid jsonl) |
+| `emet hmeqa overnight [--base DIR] [--skip-bal32] [--gate-min-acc 0.25]` | Holdout-8 → optional agentic retune → bal-32 in **one** `emet jobs` run (paper-router defaults) |
+| `emet hmeqa status [OUT]` | Progress + scored counts + crash capsules |
+| `emet hmeqa summarize [OUT]` | `scripts/summarize_hmeqa_agentic_h2h.py` |
+
+`OUT/DONE` is written only when every arm×id unit has a non-empty scored jsonl. Partial batches (skipped native crashes, etc.) exit nonzero, mark the job `failed` / `INCOMPLETE`, and leave `STATUS` pointing at resume — not summarize.
+
+Default crash policy is **skip** (settle + retry, continue). **`--streak-abort 2`** (default) aborts early after consecutive native crashes so a wedged driver does not burn the full batch.
+
+**`--preset paper-router`** (on `h2h` / `resume`): sets owlv2 + allow-unverified + agentic-router where flags were left at Click defaults; explicit flags still win. Probe runs should omit the preset and keep `--require-verified`. `run_hmeqa_agentic_h2h.sh` honors `EMET_EQA_AGENTIC_ROUTER` (default `0`); scored 2026-07-26 bal-32 used router off because the script previously hardcoded it.
+
+**`emet hmeqa overnight`** defaults to paper-router policy (owlv2, allow-unverified, router on). Inner phases call `run_hmeqa_agentic_h2h.sh` directly (no nested jobs). `scripts/run_hmeqa_overnight_ladder.sh` is a thin shim to this command. Set `COPY_PAPER_FIGS=1` only when regenerating **holdout-8** paper figures (default off so bal-32 cannot overwrite them).
+
+Agentic validation uses `scripts/summarize_agentic_ladder.py`: it reports accuracy, selective risk/coverage, fused-verify precision, visibility at verify, path length, hypothesis count, abstention, false confirmation, and forced submits. Balanced-32 is blocked unless a 4+ episode probe has a nonzero fused verified-answer rate and zero forced submits.
+
+```bash
+uv run emet eval recover --need-mib 12000
+uv run emet hmeqa overnight
+# or a probe:
+uv run emet hmeqa h2h ~/runs/emet/hmeqa_graph_probe --arms agentic \
+  --ids 12,17,18,56 --agentic-verifier owlv2 --require-verified
+uv run python scripts/summarize_agentic_ladder.py ~/runs/emet/hmeqa_graph_probe \
+  --require-balanced32-gate
+uv run emet hmeqa resume --preset paper-router
+uv run emet hmeqa status
+uv run emet jobs
+```
 
 ### `emet kill-mujoco-server [options]`
 

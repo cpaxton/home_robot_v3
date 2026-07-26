@@ -260,7 +260,9 @@ class AStar(Planner):
         """
 
         self.reset()
-        start_pt = self.get_unoccupied_neighbor(start_pt)
+        # Obstacle dilation + pose noise often marks the robot cell occupied;
+        # search farther than the default 4-cell ring before giving up.
+        start_pt = self.get_unoccupied_neighbor(start_pt, max_ring=8)
         if start_pt is None:
             return set()
 

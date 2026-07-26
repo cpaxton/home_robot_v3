@@ -80,7 +80,8 @@ repos:
             src/test/app/test_dynagraph_robocasa_question_cli\.py|
             src/test/app/test_stream_dynav_resolve\.py|
             src/test/config/test_emet_config_loader\.py|
-            src/test/config/test_runtime_context\.py
+            src/test/config/test_runtime_context\.py|
+            src/test/eval/test_status_log\.py
           )
       - id: insert-license
         alias: insert-license-chris-paxton
@@ -129,7 +130,8 @@ repos:
             src/test/app/test_dynagraph_robocasa_question_cli\.py|
             src/test/app/test_stream_dynav_resolve\.py|
             src/test/config/test_emet_config_loader\.py|
-            src/test/config/test_runtime_context\.py
+            src/test/config/test_runtime_context\.py|
+            src/test/eval/test_status_log\.py
           )$
 
   # Ruff: lint + format (line-length 120, third_party excluded in pyproject.toml and here)
@@ -174,7 +176,11 @@ repos:
     rev: v6.2.1
     hooks:
       - id: beautysh
-        exclude: ^third_party/
+        exclude: |
+          (?x)^(
+            third_party/|
+            scripts/run_hmeqa_agentic_h2h\.sh
+          )
         additional_dependencies: ["setuptools>=61,<74"]
 
   # Spell check (project only)

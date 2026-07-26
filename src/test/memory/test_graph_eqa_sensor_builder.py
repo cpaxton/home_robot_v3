@@ -117,6 +117,60 @@ def test_sensor_graph_builder_fallback_labels():
     assert b.labels_from_observation(obs, voxel_labels=["apple"]) == ["apple"]
 
 
+def test_extract_vlm_opt_out_skips_label_client(monkeypatch):
+    """``EMET_GRAPH_EQA_EXTRACT_VLM=0`` uses voxel labels only (no vision generate)."""
+    monkeypatch.setenv("EMET_GRAPH_EQA_EXTRACT_VLM", "0")
+    monkeypatch.setenv("EMET_EQA_AGENTIC_VERIFY", "1")
+    called = {"n": 0}
+
+    def _client(_cmds):
+        called["n"] += 1
+        return '{"objects":[{"name":"chair"}]}'
+
+    b = SensorGraphBuilder(cpu_only=False, perception_client=_client)
+    pose = np.eye(4)
+    obs = Observations(
+        gps=np.zeros(2),
+        compass=np.zeros(1),
+        rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+        depth=np.ones((8, 8), dtype=np.float32),
+        camera_K=np.eye(3),
+        camera_pose=pose,
+    )
+    labs, desc = b.labels_and_description_from_observation(obs, voxel_labels=["sofa"])
+    assert called["n"] == 0
+    assert labs == ["sofa"]
+    assert desc is None
+
+
+def test_agentic_verify_still_runs_vlm_label_extract(monkeypatch):
+    """Agentic verify must not disable graph label VLM (otherwise n_object stays 0)."""
+    from emet.memory.graph_eqa.sensor_graph_builder import _skip_vlm_label_extract
+
+    monkeypatch.setenv("EMET_EQA_AGENTIC_VERIFY", "1")
+    monkeypatch.delenv("EMET_GRAPH_EQA_EXTRACT_VLM", raising=False)
+    assert _skip_vlm_label_extract(None) is False
+    called = {"n": 0}
+
+    def _client(_cmds):
+        called["n"] += 1
+        return '{"objects":[{"name":"wall clock"}]}'
+
+    b = SensorGraphBuilder(cpu_only=False, perception_client=_client)
+    pose = np.eye(4)
+    obs = Observations(
+        gps=np.zeros(2),
+        compass=np.zeros(1),
+        rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+        depth=np.ones((8, 8), dtype=np.float32),
+        camera_K=np.eye(3),
+        camera_pose=pose,
+    )
+    labs, _desc = b.labels_and_description_from_observation(obs)
+    assert called["n"] == 1
+    assert labs == ["wall clock"]
+
+
 def test_short_labels_from_voxel_descriptions_splits_noise():
     long_line = "a" * 100 + ", cup"
     labs = short_labels_from_voxel_descriptions([long_line])
