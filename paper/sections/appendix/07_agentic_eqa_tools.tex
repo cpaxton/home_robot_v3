@@ -13,6 +13,7 @@ The model must reply with only:
 {"tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
 \end{verbatim}
 Rules encoded in the prompt: verify before answering; if a hypothesis was ABSENT, explore or look around rather than re-picking it; one or two tool calls per turn.
+SigLIP is intentionally high-recall (high false positive) support for choosing where to look---not a precision oracle (Appendix~\ref{app:agentic_verify_gate}).
 
 \paragraph{State message.}
 Each round appends a compact state string: question (answer mode), remaining round/nav budgets, graph object/frontier counts, ranked hypotheses, and a tried/ABSENT list so failed locations are not reused.

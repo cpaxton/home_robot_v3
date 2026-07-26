@@ -401,6 +401,17 @@ class GraphEQABackend(MemoryBackend):
             last_seen=int(getattr(n, "last_seen", 0)),
             support_count=int(getattr(n, "support_count", 1)),
             is_viewpoint=bool(getattr(n, "is_viewpoint", False)),
+            belief_confidence=float(getattr(n, "belief_confidence", 0.5)),
+            position_covariance=(
+                np.asarray(n.position_covariance, dtype=float).tolist()
+                if getattr(n, "position_covariance", None) is not None
+                else None
+            ),
+            position_history=list(getattr(n, "position_history", []) or []),
+            identity_key=getattr(n, "identity_key", None),
+            change_events=list(getattr(n, "change_events", []) or []),
+            expected_absence_count=int(getattr(n, "expected_absence_count", 0)),
+            last_absence_step=int(getattr(n, "last_absence_step", -1)),
             **extra,
         )
 
@@ -424,9 +435,32 @@ class GraphEQABackend(MemoryBackend):
 
         nodes = self._graph.get_nodes()
         edges = self._graph.get_edges()
+        relation_beliefs = getattr(self._graph, "_relation_beliefs", {})
         graph_blob = GraphBlob(
             nodes=[self._node_view(n, sim_object_placements) for n in nodes],
-            edges=[GraphEdgeView(id1=e[0], id2=e[1], relation=e[2]) for e in edges],
+            edges=[
+                GraphEdgeView(
+                    id1=e[0],
+                    id2=e[1],
+                    relation=e[2],
+                    confidence=(
+                        float(relation_beliefs[e].confidence)
+                        if e in relation_beliefs
+                        else None
+                    ),
+                    last_evidence_step=(
+                        int(relation_beliefs[e].last_evidence_step)
+                        if e in relation_beliefs
+                        else None
+                    ),
+                    contradiction_count=(
+                        int(relation_beliefs[e].contradiction_count)
+                        if e in relation_beliefs
+                        else 0
+                    ),
+                )
+                for e in edges
+            ],
         )
 
         wrote_voxel_pickle = False
@@ -484,7 +518,11 @@ class GraphEQABackend(MemoryBackend):
         ``final_step`` is exposed as ``self.loaded_final_step`` so the controller can
         resume its observation counter (otherwise staleness pruning drops loaded nodes).
         """
-        from emet.memory.graph_eqa.graph_memory import GraphNode, GraphObservation
+        from emet.memory.graph_eqa.graph_memory import (
+            GraphNode,
+            GraphObservation,
+            RelationBelief,
+        )
 
         path_obj = Path(path)
         if not path_obj.is_dir() or not is_memory_directory(str(path)):
@@ -525,10 +563,43 @@ class GraphEQABackend(MemoryBackend):
                 extent_half=extent_half,
                 is_viewpoint=bool(getattr(n, "is_viewpoint", False)),
                 bounds_3d=bounds_3d,
+                belief_confidence=float(getattr(n, "belief_confidence", 0.5) or 0.5),
+                position_covariance=(
+                    np.asarray(n.position_covariance, dtype=np.float64)
+                    if getattr(n, "position_covariance", None) is not None
+                    else None
+                ),
+                position_history=list(getattr(n, "position_history", None) or []),
+                identity_key=getattr(n, "identity_key", None),
+                change_events=list(getattr(n, "change_events", None) or []),
+                expected_absence_count=int(
+                    getattr(n, "expected_absence_count", 0) or 0
+                ),
+                last_absence_step=int(
+                    getattr(n, "last_absence_step", -1)
+                    if getattr(n, "last_absence_step", None) is not None
+                    else -1
+                ),
             )
 
         self._graph._nodes = [_node_from_view(n) for n in state.graph.nodes]
         self._graph._edges = [(e.id1, e.id2, e.relation) for e in state.graph.edges]
+        self._graph._relation_beliefs = {
+            (int(edge.id1), int(edge.id2), str(edge.relation)): RelationBelief(
+                source_id=int(edge.id1),
+                target_id=int(edge.id2),
+                relation=str(edge.relation),
+                confidence=float(edge.confidence or 0.5),
+                last_evidence_step=int(edge.last_evidence_step or 0),
+                contradiction_count=int(edge.contradiction_count or 0),
+            )
+            for edge in state.graph.edges
+        }
+        self._graph._change_events = [
+            dict(event)
+            for node in self._graph._nodes
+            for event in node.change_events
+        ]
         self._graph._observations = []
         for i, fr in enumerate(state.frames):
             xyz = np.array([0.0, 0.0, 0.0], dtype=np.float64)

@@ -62,6 +62,51 @@ def test_run_eqa_one_iter_skips_nav_when_disallowed():
     agent.robot.look_front.assert_called()
 
 
+def test_agentic_verify_defaults_off_for_discord_herman():
+    """Discord / Herman must keep classic run_eqa unless operator opts in."""
+    from emet.memory.graph_eqa.agentic_eqa import agentic_verify_enabled
+
+    agent = _make_agent()
+    agent.parameters = {}
+    assert agentic_verify_enabled(agent) is False
+    agent.parameters = {"eqa": {"agentic_verify": False}}
+    assert agentic_verify_enabled(agent) is False
+
+
+def test_run_eqa_uses_classic_path_when_agentic_off(monkeypatch):
+    """GraphEQAController.run_eqa must not enter agentic loop by default."""
+    from emet.controller.controller_graph_eqa import GraphEQAController
+    import emet.memory.graph_eqa.agentic_eqa as agentic_eqa
+
+    agent = _make_agent()
+    agent.parameters = {"eqa": {"agentic_verify": False}}
+    called = {"agentic": 0}
+
+    def _boom(*_a, **_k):
+        called["agentic"] += 1
+        raise AssertionError("agentic path must not run when agentic_verify is off")
+
+    monkeypatch.setattr(agentic_eqa, "run_agentic_eqa", _boom)
+    one_iter = MagicMock(
+        return_value=(
+            "near the counter",
+            "near the counter\nI also provide relevant images here.",
+            [],
+            False,
+        )
+    )
+    agent.run_eqa_one_iter = one_iter
+    discord_text, _imgs = GraphEQAController.run_eqa(
+        agent,
+        "Where is the sink?",
+        max_planning_steps=1,
+        allow_navigation=False,
+    )
+    assert called["agentic"] == 0
+    assert "near the counter" in discord_text
+    one_iter.assert_called_once()
+
+
 def test_run_eqa_answer_only_passes_allow_navigation_false():
     from emet.controller.controller_graph_eqa import GraphEQAController
 

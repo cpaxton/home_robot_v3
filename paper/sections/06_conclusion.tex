@@ -3,6 +3,6 @@
 
 We introduced Dynagraph, a dynamic scene-graph memory system for exploring robot agents that combines DynaMem voxel navigation with GraphEQA-style graph memory and explicit merge/staleness lifecycle rules.
 The open-source \texttt{emet} implementation enables the same EQA loop across MuJoCo, Robocasa, and MolmoSpaces, with a Habitat harness that now runs end-to-end HM-EQA episodes on held-out question slices.
-An optional agentic verify controller (tool-calling navigate / SigLIP verify / submit) is a first-class ablation against the classic planning loop on the same memory.
+An optional agentic verify controller (tool-calling navigate / verify proposals / VLM assess / submit) is a first-class ablation against the classic planning loop on the same memory; holdout-8 favors agentic letters, while balanced-32 mainly supports a search-efficiency claim.
 
 Future work includes completing the full 113-question Habitat sweep against GraphEQA API baselines, scaling classic vs.\ agentic verify beyond holdout gates, releasing curated EQA question sets for Robocasa/Molmo, tighter comparison to DREAM-style continuous map pruning, and real-robot home episodes.

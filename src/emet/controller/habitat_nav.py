@@ -103,16 +103,40 @@ def _frontier_explore_sort_key(
     robot_xy: tuple[float, float],
     *,
     recent: list[tuple[float, float]] | None = None,
-) -> tuple[float, float, float, int]:
+    grid_resolution_m: float = 0.1,
+    min_travel_m: float = 0.0,
+) -> tuple[float, float, int]:
+    """Rank a frontier node by region utility (area gain per unit travel).
+
+    Nearest-first creep left the robot circling its spawn area while whole rooms
+    stayed unexplored (holdout q104/q105). Nodes without cluster metadata score on
+    proximity alone, so non-Habitat backends keep their previous ordering.
+    """
+    from emet.memory.graph_eqa.frontier_regions import frontier_region_utility, region_from_node
+
+    utility = frontier_region_utility(
+        region_from_node(node),
+        robot_xy,
+        grid_resolution_m=grid_resolution_m,
+        recent=recent,
+        min_travel_m=min_travel_m,
+    )
     nx, nz = float(node.xyz[0]), float(node.xyz[1])
-    dist = _planar_dist(robot_xy, (nx, nz))
-    penalty = _recent_goal_penalty((nx, nz), recent)
     return (
-        float(int(getattr(node, "nav_failures", 0))),
-        dist + penalty,
-        -float(int(getattr(node, "last_seen", 0))),
+        -utility,
+        _planar_dist(robot_xy, (nx, nz)),
         int(getattr(node, "obs_id", 0)),
     )
+
+
+def explore_grid_resolution_m(agent: Any, default: float = 0.1) -> float:
+    voxel_map = getattr(agent, "voxel_map", None)
+    return float(getattr(voxel_map, "grid_resolution", default) or default)
+
+
+def explore_min_travel_m(agent: Any) -> float:
+    """Escape floor set by the EQA loop after repeated 'target not visible' views."""
+    return float(getattr(agent, "_explore_min_travel_m", 0.0) or 0.0)
 
 
 def apply_habitat_nav_resolution(
@@ -163,8 +187,9 @@ def pick_habitat_exploration_target(
             blocked.add(goal_key_xy(eff))
             blocked.add(key)
             return None
+        # Recent is a soft skip only — permanently blocking emptied the frontier
+        # set on HM-EQA q104 (every explore_frontier logged frontier_xyz=null).
         if _recent_goal_penalty(eff, recent, radius_m=1.25) > 0.0:
-            blocked.add(key)
             return None
         return resolved
 
@@ -173,7 +198,15 @@ def pick_habitat_exploration_target(
         nodes = [n for n in gm.get_nodes() if getattr(n, "is_frontier", False)]
         if nodes:
             robot_xy = robot_planar_xy(robot) if robot is not None else (0.0, 0.0)
-            nodes.sort(key=lambda n: _frontier_explore_sort_key(n, robot_xy, recent=recent))
+            nodes.sort(
+                key=lambda n: _frontier_explore_sort_key(
+                    n,
+                    robot_xy,
+                    recent=recent,
+                    grid_resolution_m=explore_grid_resolution_m(agent),
+                    min_travel_m=explore_min_travel_m(agent),
+                )
+            )
             for node in nodes:
                 raw = np.array([float(node.xyz[0]), float(node.xyz[1]), 1.0], dtype=float)
                 pt = _accept(raw)
@@ -224,11 +257,13 @@ def pick_uncovered_explore_target(
     candidates: list[np.ndarray | None] | None = None,
     blocked: set[tuple[float, float]] | None = None,
     recent_goals: list[tuple[float, float]] | None = None,
+    min_travel_m: float = 0.0,
 ) -> np.ndarray | None:
     """Blocked/recent-aware explore target for Habitat **and** MuJoCo Dynagraph EQA.
 
     Habitat uses navmesh resolution + noop rejection; MuJoCo uses planar blocked/recent
-    filtering then ``space.sample_frontier``.
+    filtering then ``space.sample_frontier``. ``min_travel_m`` rejects candidates that do
+    not leave the current area (set once the verifier keeps reporting the target absent).
     """
     blocked_set = blocked if blocked is not None else getattr(agent, "_habitat_blocked_goals", None)
     if blocked_set is None:
@@ -236,9 +271,14 @@ def pick_uncovered_explore_target(
     recent = list(recent_goals or getattr(agent, "_habitat_recent_goals", None) or [])
     robot = getattr(agent, "robot", None)
     habitat = robot is not None and is_habitat_robot_client(robot)
+    if min_travel_m <= 0.0:
+        min_travel_m = explore_min_travel_m(agent)
+    robot_xy = robot_planar_xy(robot) if robot is not None else (0.0, 0.0)
 
     for cand in candidates or []:
         if cand is None:
+            continue
+        if min_travel_m > 0.0 and _planar_dist((float(cand[0]), float(cand[1])), robot_xy) < min_travel_m:
             continue
         if habitat:
             key = goal_key_xy(cand)
@@ -273,7 +313,15 @@ def pick_uncovered_explore_target(
     if gm is not None:
         nodes = [n for n in gm.get_nodes() if getattr(n, "is_frontier", False)]
         robot_xy = robot_planar_xy(robot) if robot is not None else (0.0, 0.0)
-        nodes.sort(key=lambda n: _frontier_explore_sort_key(n, robot_xy, recent=recent))
+        nodes.sort(
+            key=lambda n: _frontier_explore_sort_key(
+                n,
+                robot_xy,
+                recent=recent,
+                grid_resolution_m=explore_grid_resolution_m(agent),
+                min_travel_m=explore_min_travel_m(agent),
+            )
+        )
         for node in nodes:
             raw = np.array([float(node.xyz[0]), float(node.xyz[1]), 1.0], dtype=float)
             accepted = _mujoco_accept_explore_xy(raw, blocked=blocked_set, recent=recent)

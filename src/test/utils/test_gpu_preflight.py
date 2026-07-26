@@ -103,3 +103,33 @@ def test_format_status_lines(monkeypatch):
     lines = gp.format_status_lines()
     assert lines[0].startswith("GPU:")
     assert "8000" in lines[0]
+
+
+def test_habitat_egl_error_in_text():
+    assert gp.habitat_egl_error_in_text(
+        "Platform::WindowlessEglApplication::tryCreateContext(): "
+        "unable to find CUDA device 0 among 2 EGL devices in total"
+    )
+    assert gp.habitat_egl_error_in_text(
+        "WindowlessContext: Unable to create windowless context"
+    )
+    assert not gp.habitat_egl_error_in_text("episode finished correctly")
+
+
+def test_diagnose_flags_empty_cuda_visible(monkeypatch, tmp_path):
+    hab = tmp_path / ".venv-habitat" / "bin" / "emet-habitat"
+    hab.parent.mkdir(parents=True)
+    hab.write_text("#!/bin/sh\n")
+    hab.chmod(0o755)
+    monkeypatch.setattr(
+        gp,
+        "gpu_memory_info",
+        lambda: gp.GpuMemoryInfo(free_mib=20000, total_mib=24564),
+    )
+    monkeypatch.setattr(gp, "list_compute_apps", lambda: [])
+    monkeypatch.setattr(gp, "recent_emet_segfault_hint", lambda: None)
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
+    ok, lines = gp.diagnose_eval_environment(repo_root=str(tmp_path))
+    assert ok is False
+    assert any("CUDA_VISIBLE_DEVICES is empty" in ln for ln in lines)
+    assert any("empty nvidia-smi compute apps" in ln for ln in lines)

@@ -83,9 +83,9 @@ Phase-1 subprocesses also pass `--benchmark-harness dynamic_explore --benchmark-
 
 ## Phase 2 — World-change
 
-Robocasa only (v1): explore → EQA pre → ZMQ `sim_set_body_pose` on `obj_main` → age nodes near old pose → `maintain` → recovery explore → refresh CONFIRMED_MEMORY → EQA post → export.
+Robocasa only (v1): explore → EQA pre → hidden ZMQ relocation of `obj_main` → recovery explore → autonomous contradiction/change detection → refresh CONFIRMED_MEMORY → EQA post → export. The harness no longer ages or deletes nodes using the known old GT pose; GT moves are retained only for post-hoc scoring.
 
-Metrics in `aggregate_dynamic_exploration_world_change.csv`: `answer_correct_pre/post`, `n_stale_nodes_after_move` (object nodes still within 0.75 m of the **old** GT pose after recovery), `n_nodes_near_new_pos` / `adapted`, `n_pruned_by_maintain`, `recovery_steps`, `localization_err_m`.
+Metrics in `aggregate_dynamic_exploration_world_change.csv`: `answer_correct_pre/post`, `n_stale_nodes_after_move` (object nodes still within 0.75 m of the **old** GT pose after recovery), `n_nodes_near_new_pos` / `adapted`, `recovery_steps`, and `localization_err_m`. Per-run JSON additionally reports autonomous detection precision/recall, delay, relocation error, false invalidations, and raw change events.
 
 Sim API: ZMQ `sim_set_body_pose` (same as [ovmm_full_benchmark.md](ovmm_full_benchmark.md)); client helper `robot_zmq_set_body_pose()` in `sim_manipulation.py`.
 
@@ -96,14 +96,19 @@ in a **fresh subprocess** that reloads the previous checkpoint (`--input-path`),
 briefly, answers the cycle's questions, and exports checkpoint `cycle_t`. Between cycles
 the world is fuzzed over ZMQ and moved bodies are verified against live GT placements.
 
-- **Checkpoints** (`exports/{run_id}/cycle_t/`): `graph.json` now persists `last_seen`,
-  `support_count`, `is_viewpoint`, `extent_half`, `bounds_3d` per node; `manifest.json`
+- **Checkpoints** (`exports/{run_id}/cycle_t/`): `graph.json` persists `last_seen`,
+  `support_count`, `is_viewpoint`, `extent_half`, `bounds_3d`, belief confidence,
+  pose covariance/history, persistent identity key, expected-absence counters, and
+  change events per node. Relation confidence/timestamps/contradictions also persist; `manifest.json`
   records the final controller step (`final_step`); `voxel_map.pkl` restores obstacles /
   explored area (enable on any dynagraph run with `--export-voxel-pickle`). On reload the
   controller resumes `obs_count` so staleness `maintain()` does not prune the resumed graph.
 - **Fuzzing** (`src/emet/eval/world_fuzz.py`): scripted per-cycle `moves:` (body + `delta`
   or absolute `pos`) and `doors:` (joint + qpos value) from the `lifelong:` config section;
   seeded-random mode picks freejoint bodies from GT placements and `*doorhinge*` joints.
+  The next checkpoint is not patched from those move records: the active policy must
+  discover the hidden change from a position contradiction or repeated missing-object
+  evidence after revisiting the original viewpoint.
 - **Sim API**: object teleports use ZMQ `sim_set_body_pose`; door/drawer joints use the
   ZMQ `sim_set_joint_qpos` action (`robot_zmq_set_joint_qpos()` in `sim_manipulation.py`,
   Stretch server only). The physics subprocess acks with the qpos measured on the live
@@ -114,8 +119,10 @@ the world is fuzzed over ZMQ and moved bodies are verified against live GT place
 
 Metrics per cycle in `{run_id}.json` and `aggregate_dynamic_exploration_lifelong.csv`:
 `eqa_accuracy` (scored against live GT each cycle), `object_node_count` / `total_node_count`, and per-cycle **`graph_health`** (`n_object`, `singleton_frac`, `mean_support`, `failure_class`, …). Triage: `uv run python scripts/summarize_graph_health.py RUN/lifelong.json`.
-(graph churn), and per-move adaptation flags (`adapted` = node appears near the new
-position, `stale` = node lingers at the old one, within 0.75 m).
+Per-cycle JSON includes autonomous change events and hidden-relocation precision/recall,
+detection delay, relocation error, and false invalidation. Aggregate analysis can derive
+stale-memory half-life and change-conditioned answer accuracy with
+`emet.eval.dynamic_change_metrics`.
 
 ## Resume
 

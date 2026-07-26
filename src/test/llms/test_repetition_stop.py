@@ -10,7 +10,11 @@ from __future__ import annotations
 
 import torch
 
-from emet.llms.repetition_stop import RepetitionStop, repetition_stopping_criteria
+from emet.llms.repetition_stop import (
+    DecodeProgressStop,
+    RepetitionStop,
+    repetition_stopping_criteria,
+)
 
 
 def _ids(prompt, gen):
@@ -50,5 +54,6 @@ def test_prompt_repetition_is_ignored():
 
 def test_helper_returns_stopping_criteria_list():
     crit = repetition_stopping_criteria(5)
-    assert len(crit) == 1
-    assert isinstance(crit[0], RepetitionStop)
+    assert len(crit) == 2
+    assert isinstance(crit[0], DecodeProgressStop)
+    assert isinstance(crit[1], RepetitionStop)

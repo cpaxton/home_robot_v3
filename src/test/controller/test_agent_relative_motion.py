@@ -19,13 +19,24 @@ from emet.controller.controller_dynamem import DynamemController
 
 
 def test_rotate_base_and_move_forward_tools_registered():
-    tools = {t.name: t for t in get_tools({})}
+    calls: list[list[tuple[str, str]]] = []
+
+    def executor(cmds):
+        calls.append(list(cmds))
+        return True
+
+    tools = {t.name: t for t in get_tools({"executor": executor})}
     assert "rotate_base" in tools
     assert "move_forward" in tools
     # Relative motion tools run via func (map-aware), not executor_commands mapping.
     assert tools["rotate_base"].to_executor({"degrees": 180}) == []
     assert tools["move_forward"].to_executor({"meters": 0.5}) == []
     assert tools["move_forward"].returns_info is True
+    assert tools["rotate_base"].func is not None
+    assert tools["move_forward"].func is not None
+    assert "180" in tools["rotate_base"].func(degrees=180)
+    assert "0.50" in tools["move_forward"].func(meters=0.5)
+    assert calls == [[("rotate_base", "180.0")], [("move_forward", "0.5")]]
 
 
 def test_clip_forward_distance_hits_obstacle():

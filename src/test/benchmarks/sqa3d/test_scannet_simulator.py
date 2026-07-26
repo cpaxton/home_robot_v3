@@ -40,7 +40,9 @@ def test_pose_turn_and_forward():
     assert planar_heading_rad(quat_xyzw_to_rotation(quat)) == pytest.approx(np.pi / 2, abs=0.05)
 
 
-def test_scannet_simulator_renders(tmp_path: Path):
+@pytest.mark.sim
+@pytest.mark.timeout(120)
+def test_scannet_simulator_renders(tmp_path: Path, open3d_offscreen: None):
     scannet_root = tmp_path / "scannet"
     _write_box_scene(scannet_root)
     sim = ScanNetEQASimulator(SCENE_ID, scannet_root=scannet_root, image_width=160, image_height=120)
@@ -67,7 +69,9 @@ def test_scannet_simulator_renders(tmp_path: Path):
         sim.close()
 
 
-def test_scannet_embodied_smoke():
+@pytest.mark.sim
+@pytest.mark.timeout(300)
+def test_scannet_embodied_smoke(open3d_offscreen: None):
     from emet.benchmarks.sqa3d.scannet.config import default_scannet_root, scene_assets_present
     from emet.benchmarks.sqa3d.scannet.runner import run_sqa3d_episode
 

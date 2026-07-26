@@ -293,32 +293,130 @@ class VoxelizedPointcloud:
         else:
             raise ValueError("Must specify either bounds or both point and radius to remove points")
 
-    def clear_points(self, depth, intrinsics, pose, depth_is_valid=None, min_samples_clear=None):
-        if self._points is not None:
-            xys = project_points(self._points.detach().cpu(), intrinsics, pose).int()
-            xys = xys[:, [1, 0]]
-            proj_depth = get_depth_values(self._points.detach().cpu(), pose)
-            H, W = depth.shape
+    def clear_points(
+        self,
+        depth,
+        intrinsics,
+        pose,
+        depth_is_valid=None,
+        min_samples_clear=None,
+        max_depth: float = 2.5,
+        free_space_margin_m: float = 0.1,
+    ):
+        """Remove mapped points only when free-space evidence is strong.
 
-            # Some points are projected to (i, j) on image plane and i, j might be smaller than 0 or greater than image size
-            # which will lead to Index Error.
-            valid_xys = xys.clone()
-            valid_xys[(xys[:, 0] < 0) | (xys[:, 0] >= H) | (xys[:, 1] < 0) | (xys[:, 1] >= W)] = 0
-            indices = (
-                (xys[:, 0] < 0)
-                | (xys[:, 0] >= H)
-                | (xys[:, 1] < 0)
-                | (xys[:, 1] >= W)
-                # the points are projected to the image frame but is blocked by some obstacles
-                | (depth[valid_xys[:, 0], valid_xys[:, 1]] < (proj_depth - 0.1))
-                # the points are projected to the image frame but they are behind camera
-                | (depth[valid_xys[:, 0], valid_xys[:, 1]] < 0.01)
-                | (proj_depth < 0.01)
-                # depth is too large
-                | (proj_depth > 2.5)
+        A static mesh must not vanish because we re-observe the same surface, or
+        because one truncated pixel at a depth discontinuity reads farther than the
+        stored voxel. Carving requires the full 2×2 neighborhood of the projected
+        continuous pixel to agree that the ray sees *strictly past* the point
+        (``obs_depth > proj_depth + margin``), and every neighbor must be a valid
+        depth sample (same validity mask used for insertion when provided).
+        """
+        if self._points is None:
+            return
+
+        if not isinstance(depth, torch.Tensor):
+            depth = torch.as_tensor(depth, dtype=torch.float32)
+        else:
+            depth = depth.detach().cpu().float()
+        if depth.ndim != 2:
+            raise ValueError(f"depth must be HxW, got shape {tuple(depth.shape)}")
+
+        if depth_is_valid is not None:
+            if not isinstance(depth_is_valid, torch.Tensor):
+                depth_is_valid = torch.as_tensor(depth_is_valid, dtype=torch.bool)
+            else:
+                depth_is_valid = depth_is_valid.detach().cpu().bool()
+            if depth_is_valid.shape != depth.shape:
+                raise ValueError(
+                    f"depth_is_valid shape {tuple(depth_is_valid.shape)} != depth {tuple(depth.shape)}"
+                )
+
+        pts_cpu = self._points.detach().cpu()
+        # project_points returns (u=col, v=row); keep float for neighborhood sampling.
+        uv = project_points(pts_cpu, intrinsics, pose)
+        cols_f = uv[:, 0]
+        rows_f = uv[:, 1]
+        proj_depth = get_depth_values(pts_cpu, pose)
+        H, W = int(depth.shape[0]), int(depth.shape[1])
+        max_depth_f = float(max_depth)
+        margin = float(free_space_margin_m)
+
+        # Keep unless every valid neighbor agrees the ray sees past this point.
+        keep = torch.ones(pts_cpu.shape[0], dtype=torch.bool)
+        # Interior enough for a full 2×2 stencil without clamping into wrong pixels.
+        in_stencil = (rows_f >= 0.0) & (rows_f < float(H - 1)) & (cols_f >= 0.0) & (cols_f < float(W - 1))
+        in_range = (proj_depth > 0.01) & (proj_depth <= max_depth_f)
+        candidates = in_stencil & in_range
+
+        if candidates.any():
+            idx = candidates.nonzero(as_tuple=False).squeeze(1)
+            r0 = rows_f[idx].floor().long()
+            c0 = cols_f[idx].floor().long()
+            r1 = r0 + 1
+            c1 = c0 + 1
+            corners = (
+                (r0, c0),
+                (r0, c1),
+                (r1, c0),
+                (r1, c1),
             )
+            # Start assuming free; any weak/invalid/occluding/same-surface neighbor blocks carving.
+            free_evidence = torch.ones(idx.shape[0], dtype=torch.bool)
+            for rr, cc in corners:
+                d = depth[rr, cc]
+                if depth_is_valid is not None:
+                    valid = depth_is_valid[rr, cc]
+                else:
+                    valid = (
+                        torch.isfinite(d)
+                        & (d >= 0.01)
+                        & (d <= max_depth_f)
+                    )
+                # Invalid / non-finite → no carve.
+                # Depth at or nearer than the stored point (± margin) means the surface is
+                # still there (or occluded) — never free-space evidence.
+                # Only a reading strictly past the point supports carving.
+                supports_free = (
+                    valid
+                    & torch.isfinite(d)
+                    & (d >= 0.01)
+                    & (d <= max_depth_f)
+                    & (d > (proj_depth[idx] + margin))
+                )
+                free_evidence = free_evidence & supports_free
 
-            indices = indices.to(self._points.device)
+            # Delete only where free_evidence is True.
+            keep[idx] = ~free_evidence
+
+        keep = keep.to(self._points.device)
+        self._points = self._points[keep]
+        if self._features is not None:
+            self._features = self._features[keep]
+        if self._weights is not None:
+            self._weights = self._weights[keep]
+        if self._rgb is not None:
+            self._rgb = self._rgb[keep]
+        if self._obs_counts is not None:
+            self._obs_counts = self._obs_counts[keep]
+
+        if (
+            self._points is not None
+            and len(self._points) > 0
+            and min_samples_clear is not None
+            and min_samples_clear > 0
+        ):
+            dbscan = DBSCAN(eps=self.voxel_size * 4, min_samples=min_samples_clear)
+            cluster_vertices = torch.cat(
+                (
+                    self._points.detach().cpu(),
+                    self._obs_counts.detach().cpu().reshape(-1, 1) * 1000,
+                ),
+                -1,
+            ).numpy()
+            clusters = dbscan.fit(cluster_vertices)
+            labels = clusters.labels_
+            indices = labels != -1
             self._points = self._points[indices]
             if self._features is not None:
                 self._features = self._features[indices]
@@ -328,33 +426,6 @@ class VoxelizedPointcloud:
                 self._rgb = self._rgb[indices]
             if self._obs_counts is not None:
                 self._obs_counts = self._obs_counts[indices]
-
-            if (
-                self._points is not None
-                and len(self._points) > 0
-                and min_samples_clear is not None
-                and min_samples_clear > 0
-            ):
-                dbscan = DBSCAN(eps=self.voxel_size * 4, min_samples=min_samples_clear)
-                cluster_vertices = torch.cat(
-                    (
-                        self._points.detach().cpu(),
-                        self._obs_counts.detach().cpu().reshape(-1, 1) * 1000,
-                    ),
-                    -1,
-                ).numpy()
-                clusters = dbscan.fit(cluster_vertices)
-                labels = clusters.labels_
-                indices = labels != -1
-                self._points = self._points[indices]
-                if self._features is not None:
-                    self._features = self._features[indices]
-                if self._weights is not None:
-                    self._weights = self._weights[indices]
-                if self._rgb is not None:
-                    self._rgb = self._rgb[indices]
-                if self._obs_counts is not None:
-                    self._obs_counts = self._obs_counts[indices]
 
     def add(
         self,

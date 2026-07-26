@@ -290,11 +290,11 @@ Preliminary numbers: Section~\ref{sec:agentic_results}; tool semantics: Appendix
 \begin{enumerate}
   \item Full 113-question \texttt{dynagraph} with \texttt{Qwen/Qwen3-VL-8B-Instruct} and the July 2026 nav stack + June fix stack (phrase \texttt{CONFIRMED\_MEMORY}, location MCQ, debias).
   \item Matched \texttt{graph\_eqa} baseline on the same 113 + VLM (isolate Dynagraph memory gains).
-  \item Classic vs.\ agentic verify on holdout-8 and balanced-32 / full 113 (same Dynagraph profile).
+  \item Classic vs.\ agentic verify on holdout-8 and balanced-32 (\textbf{done}; efficiency claim) / full 113 if claiming letter win.
   \item Held-out random-8 and balanced-32 \textbf{re-runs} at 8B with nav stack (compare to pre-nav-fix slices).
   \item HM3D semantics download + on/off ablation on Q0--19.
   \item Frontier-policy ablation: fluid only vs.\ keyword-weighted fluid vs.\ graph frontier nodes (\texttt{run\_habitat\_frontier\_ablation.sh}).
-  \item Optional: API VLM on canonical-8 or balanced-32 through the same harness (upper bound on VLM tier); agentic with router on vs.\ off.
+  \item Optional: API VLM on canonical-8 or balanced-32 through the same harness (upper bound on VLM tier); agentic with router on vs.\ off (\texttt{emet hmeqa h2h --preset paper-router}).
 \end{enumerate}
 
 Batch entrypoints: \texttt{emet-habitat run-batch}, \texttt{scripts/run\_habitat\_iter\_subset.sh}, \texttt{scripts/run\_overnight\_habitat\_eval.sh}, \texttt{scripts/run\_hmeqa\_agentic\_h2h.sh}.

@@ -195,19 +195,21 @@ class ScanNetReplaySimulator:
         self._replay_mode = replay_mode
         self._sens_xy_radius_m = float(sens_xy_radius_m)
         self._sens_match_max_xy_m = float(sens_match_max_xy_m)
-        self._mesh = ScanNetEQASimulator(scene_id, scannet_root=scannet_root, **mesh_kwargs)
-        self._sens = None
+        # Validate .sens before Open3D OffscreenRenderer — missing GL/EGL SIGSEGVs
+        # the interpreter instead of raising, which kills the whole pytest process.
         sens_path = scene_sens_path(scene_id, scannet_root)
-        if replay_mode in ("auto", "sens") and sens_path.is_file():
-            from emet.benchmarks.sqa3d.scannet.sens import ScanNetSensLoader
-
-            self._sens = ScanNetSensLoader(sens_path)
-        if replay_mode == "sens" and self._sens is None:
+        if replay_mode == "sens" and not sens_path.is_file():
             raise FileNotFoundError(
                 f"ScanNet .sens not found for {scene_id}: {sens_path}\n"
                 "Download: uv run python scripts/download_scannet_data.py --accept-tos "
                 f"--scene {scene_id} --with-sens"
             )
+        self._mesh = ScanNetEQASimulator(scene_id, scannet_root=scannet_root, **mesh_kwargs)
+        self._sens = None
+        if replay_mode in ("auto", "sens") and sens_path.is_file():
+            from emet.benchmarks.sqa3d.scannet.sens import ScanNetSensLoader
+
+            self._sens = ScanNetSensLoader(sens_path)
         self._anchor_xy: np.ndarray | None = None
         self._anchor_replay_backend = "mesh"
         self._anchor_sens_frame_index: int | None = None

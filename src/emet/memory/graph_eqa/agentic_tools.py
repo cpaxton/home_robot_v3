@@ -29,11 +29,14 @@ Respond with ONLY a JSON object (no other text):
 {"tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
 
 Rules:
-- Verify before answering: call verify_siglip at the location you believe holds the target,
-  and only call submit_answer after a PRESENT verification (or when the state says budget
-  is nearly exhausted).
-- If the graph hypothesis was ABSENT at its old location, the object moved: explore_frontier
-  or look_around to find it, then verify again.
+- Interactive loop: (1) explore / inspect for candidate places, (2) navigate in and
+  verify_siglip once on the new view (cheap proposal + Qwen assess), (3) when Qwen
+  says answerable → submit_answer with the MCQ letter; else move / explore. Never
+  re-verify the same observation / view.
+- SigLIP/OWL are proposals shown in state — not proof. Trust Qwen's assess and router.
+- Pass the MCQ letter (A–D) in submit_answer.arguments.answer.
+- If a hypothesis was ABSENT at its old location, explore_frontier or look_around,
+  then verify a new view.
 - Never re-pick a hypothesis marked tried/ABSENT in the state.
 - One or two tool calls per turn.
 
@@ -42,7 +45,7 @@ State: hypothesis obs_id=7 'sink' from graph, not tried
 {"tool_calls": [{"name": "navigate_to_obs", "arguments": {"obs_id": 7}}], "message": ""}
 State: just arrived at obs 7
 {"tool_calls": [{"name": "verify_siglip", "arguments": {"phrase": "sink", "obs_id": 7}}], "message": ""}
-State: verify PRESENT sim=0.31
+State: VLM assess answerable=true verified=true
 {"tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
 State: no hypotheses, 3 unexplored frontiers
 {"tool_calls": [{"name": "explore_frontier", "arguments": {"toward": "sink"}}], "message": ""}"""
@@ -50,8 +53,8 @@ State: no hypotheses, 3 unexplored frontiers
 _EQA_IDENTITY = """\
 You are a robot exploring a home. You maintain a 3D map and an object scene graph that
 update automatically after every motion. Your job is to answer a question about the scene
-(or to explore and map it). Move to where the answer can be seen, verify with the
-verify_siglip tool, and only then answer. Do NOT output reasoning — only the JSON."""
+(or to explore and map it). Move to where the answer can be seen, run verify_siglip
+(cheap check + VLM assess), and only then answer. Do NOT output reasoning — only the JSON."""
 
 
 def build_agentic_eqa_tools(executor: AgenticEQAExecutor) -> list[Tool]:

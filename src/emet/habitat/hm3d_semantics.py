@@ -104,6 +104,58 @@ class Hm3dSemanticLabeler:
                 break
         return labels
 
+    def visibility_for_phrase(
+        self,
+        semantic: np.ndarray,
+        phrase: str,
+        depth: np.ndarray | None = None,
+        *,
+        min_pixels: int = 1,
+    ) -> dict[str, object]:
+        """Return view-level semantic visibility for an open-vocabulary phrase.
+
+        This is stronger supervision than proximity-to-GT: it labels whether a
+        matching HM3D semantic instance is actually rendered in this camera view,
+        together with its visible pixel fraction, bounding box, and median range.
+        """
+        from emet.memory.graph_eqa.graph_memory import label_matches_relevant_object
+
+        sem = np.asarray(semantic)
+        if sem.ndim == 3:
+            sem = sem[..., 0]
+        valid = np.ones(sem.shape, dtype=bool)
+        depth_m = None
+        if depth is not None:
+            depth_m = np.asarray(depth, dtype=np.float32)
+            if depth_m.ndim == 3:
+                depth_m = depth_m[..., 0]
+            valid &= (depth_m > 0.05) & (depth_m < 8.0) & np.isfinite(depth_m)
+
+        matching_ids = [
+            int(instance_id)
+            for instance_id, label in self.instance_to_label.items()
+            if label_matches_relevant_object(phrase, label)
+        ]
+        mask = valid & np.isin(sem, matching_ids)
+        pixel_count = int(mask.sum())
+        image_pixels = int(valid.sum())
+        bbox = None
+        median_depth_m = None
+        if pixel_count >= int(min_pixels):
+            ys, xs = np.nonzero(mask)
+            bbox = [int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1]
+            if depth_m is not None:
+                median_depth_m = float(np.median(depth_m[mask]))
+        return {
+            "gt_view_label_available": True,
+            "gt_in_view": bool(pixel_count >= int(min_pixels)),
+            "gt_visible_pixels": pixel_count,
+            "gt_visible_fraction": (pixel_count / image_pixels) if image_pixels else 0.0,
+            "gt_bbox_xyxy": bbox,
+            "gt_median_depth_m": median_depth_m,
+            "gt_matching_instance_ids": matching_ids,
+        }
+
 
 def hm3d_instance_items_from_obs(
     labeler: Hm3dSemanticLabeler,

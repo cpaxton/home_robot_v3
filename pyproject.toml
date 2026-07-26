@@ -256,5 +256,6 @@ testpaths = ["src/test"]
 addopts = "-ra -q -m \"not vllm_load\""
 markers = [
     "timeout: timeout for test in seconds (pytest-timeout)",
+    "sim: needs a native simulator/GL context (MuJoCo, Open3D offscreen); excluded by -m \"not sim\" and RUN_SIM_TESTS=0",
     "vllm_load: downloads and loads HF VLM weights; run with: pytest -m vllm_load -o addopts='-ra -v' (see docs/plans/TESTING_VLLM_LOAD.md)",
 ]

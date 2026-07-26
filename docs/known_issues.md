@@ -149,24 +149,42 @@ There are **two distinct segfault modes**. Do not conflate them.
 
 ### Mode A — Habitat episode `libcuda` SIGSEGV (`exit=139`)
 
-- **What dies:** `emet-habitat run-episode` / Habitat venv Python. Orchestrator logs `FAIL … exit=139` / `dumped core`.
-- **Kernel:** `python[…]: segfault … in libcuda.so.*` during Qwen3-VL **vision** generate while Habitat-Sim **EGL** shares the GPU.
-- **Hot scenes (2026-07-24):** `00167-yogvKWUrdnw` (q104/q105); flaky on `00094-WT4QWwXrMzs` (q68). Empty `agentic_qN.jsonl` is a crash, not a scored miss.
-- **Stack:** Habitat torch `+cu130` + `EMET_ALLOW_SDPA_ATTN=1` + int4 bitsandbytes + windowless EGL on a display GPU. Partial fence: `torch.cuda.synchronize()` before multimodal generate; failures remain flaky.
-- Details / H2H abort flags: keep Habitat checkout docs in sync ([agentic_scale](experiments/agentic_scale.md) on the Habitat results branch).
+- **What dies:** `emet-habitat run-episode` / `.venv-habitat` Python. Orchestrator logs `FAIL … exit=139` and `timeout: the monitored command dumped core`.
+- **Kernel:** `python[…]: segfault at 43/44 … in libcuda.so.*` (same IP offset across repeats).
+- **When:** Qwen3-VL **vision** `generate` (look-around / mid-episode) while Habitat-Sim **EGL** still owns the same GPU. Worst scenes: `00167-yogvKWUrdnw` (q104/q105); also flaky on `00094-WT4QWwXrMzs` (q68).
+- **Artifacts:** empty `OUT/agentic_qN.jsonl` (touched then never written). Job may continue to later IDs unless `NATIVE_CRASH_ABORT=1` (default).
+- **Stack that triggers it:** Habitat torch `+cu130` + `EMET_ALLOW_SDPA_ATTN=1` (no flash-attn wheel) + int4 bitsandbytes + windowless EGL on a display GPU.
+- **Partial mitigations:** `torch.cuda.synchronize()` before multimodal generate in `qwen3_vl_client`; H2H default **`NATIVE_CRASH_POLICY=skip`** (settle + retry + continue) with **`NATIVE_CRASH_STREAK_ABORT=2`** (early abort when consecutive native crashes imply a wedged harness); optional `EMET_GRAPH_EQA_EXTRACT_VLM=0` if mid-nav extract forces the race (do **not** auto-tie this to agentic verify — that caused `n_object=0` on q104/q105). Failures remain **flaky**. Prefer **`emet hmeqa resume`** after **`emet eval recover`**.
+- **See:** [agentic_scale.md](experiments/agentic_scale.md#fail-set-regressions-found-2026-07-24).
 
 ### Mode B — Cursor agent / `emet` null-IP SIGSEGV
 
-- Chaining Robocasa dynagraph explore → full pytest (MuJoCo-native tests) → Habitat HM-EQA with VLM in one session can **live-lock** the machine (mouse moves; GUI/SSH dead).
-- Separately: **Cursor agent** dies when a turn runs or probes Habitat / tears down GPU context. Kernel: `emet[…]: segfault at 0` (null IP) or `trap invalid opcode` in `node` — agent session dies even if a detached **`emet jobs`** child finished (check `~/runs/emet/` + registry before re-launch).
-- Empty `nvidia-smi` does **not** prove EGL/CUDA is healthy.
-- **Recovery log:** append incidents to repo-root [`segfault.md`](../segfault.md) (newest entry at bottom; `tail -n 80 segfault.md`). See [`.cursor/rules/segfault-log.mdc`](../.cursor/rules/segfault-log.mdc).
+- **What dies:** the Cursor agent process (`emet[…]: segfault at 0` null IP, or `trap invalid opcode`) when a turn runs or probes Habitat / tears down GPU context. Also seen as V8 `Illegal instruction` in the `agent`/`node` binary itself (`traps: MainThread[…] trap invalid opcode … in node`).
+- **What survives:** a detached **`emet jobs`** child often keeps running — check registry + `OUT/` before re-launching.
+- **First command on the way back (from the owning checkout):** **`bash scripts/status_log.sh tail`** — the last record says what state the run reached and the literal next command ([evaluation.md](evaluation.md#first-command-after-an-agent-death-bash-scriptsstatus_logsh-tail)). Do not `tail ~/runs/emet/STATUS.log` (flat path is shared across sibling checkouts). `bash scripts/status_log.sh latest` points at that checkout's newest `OUT/`.
+- Also: full-system **live lock** when chaining Robocasa dynagraph explore → full pytest (MuJoCo-native) → Habitat HM-EQA with VLM in one session (mouse moves; GUI/SSH dead).
+- **Not** explained by a busy GPU: Mode A/B and EGL map failures have happened with `nvidia-smi` showing only Xorg/gnome-shell and ~full free VRAM.
+
+### Habitat EGL failure with “idle” GPU (2026-07-24)
+
+- Failset log: `Platform::WindowlessEglApplication::tryCreateContext(): unable to find CUDA device 0 among 2 EGL devices` / `WindowlessContext: Unable to create windowless context` on every classic episode while NVML reported free VRAM.
+- Later the same machine ran agentic H2H successfully after `/dev/nvidia*` refresh — treat repeated EGL errors as driver/EGL map breakage, not “need more kill-stale”.
+- H2H orchestrator aborts after consecutive EGL failures (`EGL_FAIL_ABORT`, default 2). Diagnose with **`uv run emet eval diagnose`**.
+
+### Mode C — Host hard freeze / forced reboot (2026-07-25)
+
+- **What dies:** the whole machine (GUI + SSH dead; journal ends mid-line with no oops/Xid). After reboot, `uptime` is minutes and the previous boot’s last timestamp matches the in-flight episode.
+- **Seen:** bal-32 classic **q48**, planning step 4, mid-VLM decode (`[vl] decode tokens=161`). `classic_q48.jsonl` empty; `classic.log` ends with trailing NUL bytes (unclean write). Job `hmeqa-bal32-aff` → `failed` / `exited without DONE`. Progress was **26/64**, not a clean native SIGSEGV.
+- **Affinity pitfall:** excluding only CPUs **8–9** is incomplete on this i9-14900KF — CPUs **10–11** are the second 6.0 GHz P-core. `taskset -c 0-7,10-31` still schedules onto turbo silicon. H2H now auto-pins via [`emet.utils.cpu_affinity`](../src/emet/utils/cpu_affinity.py) (exclude ≥6000 MHz → keep `0-7,12-31`) plus `EPISODE_COOLDOWN_SEC` between episodes.
+- **Also:** do not queue MuJoCo/EGL jobs from a sibling checkout while Habitat HM-EQA is live (even with `wait_pids`) — a freeze kills the waiter too and multiplies GPU/driver stress after reboot.
 
 ### Mitigation
 
-- **One GPU-heavy job at a time** — use **`uv run emet eval kill-stale` / `wait` / `check`** ([`emet eval`](cli.md#emet-eval-gpu-preflight--stale-cleanup); bash [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates).
+- **One GPU-heavy job at a time** — use **`uv run emet eval kill-stale` / `wait` / `check` / `diagnose`** ([`emet eval`](cli.md#emet-eval-gpu-preflight--stale-cleanup); bash [`scripts/gpu_preflight.sh`](../scripts/gpu_preflight.sh) delegates).
 - Cross-track smoke: [`run_overnight_cross_track_smoke.sh`](../scripts/run_overnight_cross_track_smoke.sh) defaults **`RUN_DEEP_EVAL=0`**; run [`run_overnight_eval_smoke.sh`](../scripts/run_overnight_eval_smoke.sh) on a **separate night**.
 - Safe no-sim pytest: source `gpu_preflight.sh` and pass **`emet_pytest_no_sim_ignore_args`** (excludes unmarked MuJoCo paths under `src/test/simulation/`).
-- Long evals: **`uv run emet jobs run --name … -- CMD`**, **`nohup … &`**, or a dedicated terminal — **not** blocking Cursor agent inline runs.
+- Long evals: **`uv run emet jobs run --name … -- CMD`** (or dedicated terminal) — **not** blocking Cursor agent inline runs; do not hard-kill Habitat mid-episode from the agent (use **`emet jobs cancel`**).
+- On Mode A: leave `NATIVE_CRASH_ABORT=1`, inspect `native_crash_*.log` + `journalctl -k` for `libcuda`; retry the failed qid only after `emet eval diagnose` / free GPU — do not treat empty jsonl as a scored miss without a crash capsule.
+- On Mode C: after reboot, `bash scripts/status_log.sh tail`, confirm GPU idle, resume with H2H’s built-in affinity (no manual incomplete `taskset`); empty mid-episode jsonl is re-run by `RESUME=1`.
 
-Docs: [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [cross_track_smoke.md](experiments/cross_track_smoke.md), [segfault.md](../segfault.md).
+Docs: [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [cross_track_smoke.md](experiments/cross_track_smoke.md), [`.cursor/rules/gpu-eval-workflow.mdc`](../.cursor/rules/gpu-eval-workflow.mdc).

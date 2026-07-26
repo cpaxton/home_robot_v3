@@ -329,6 +329,118 @@ def format_status_lines() -> list[str]:
     return lines
 
 
+# Magnum/Habitat-Sim headless failure (seen when CUDA↔EGL device map is broken).
+HABITAT_EGL_FAIL_PATTERNS: tuple[str, ...] = (
+    "unable to find CUDA device",
+    "WindowlessContext: Unable to create windowless context",
+)
+
+
+def habitat_egl_error_in_text(text: str) -> bool:
+    """True if log text looks like Habitat-Sim EGL/CUDA device-map failure."""
+    if not text:
+        return False
+    lower = text.lower()
+    return any(p.lower() in lower for p in HABITAT_EGL_FAIL_PATTERNS)
+
+
+def recent_emet_segfault_hint() -> str | None:
+    """Best-effort dmesg scan for ``emet`` / python segfaults (may need privileges)."""
+    try:
+        proc = subprocess.run(
+            ["dmesg", "--ctime", "--color=never"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    blob = (proc.stdout or "") + (proc.stderr or "")
+    if not blob.strip():
+        return None
+    hits = [
+        ln.strip()
+        for ln in blob.splitlines()
+        if re.search(r"segfault|invalid opcode", ln, re.IGNORECASE)
+        and re.search(r"\b(emet|python)", ln, re.IGNORECASE)
+    ]
+    if not hits:
+        return None
+    return hits[-1]
+
+
+def diagnose_eval_environment(
+    *,
+    repo_root: str | None = None,
+) -> tuple[bool, list[str]]:
+    """Read-only preflight for Habitat/HM-EQA agents (no sim import).
+
+    Returns ``(ok, lines)``. ``ok`` is False when NVML is missing, CUDA is hidden,
+    or a recent ``emet`` segfault hint is present — empty nvidia-smi apps alone
+    still yields ok=True with an explicit warning (EGL can still be broken).
+    """
+    lines = list(format_status_lines())
+    ok = True
+    root = repo_root or os.environ.get("EMET_REPO_ROOT", "").strip() or os.getcwd()
+    hab = os.path.join(root, ".venv-habitat", "bin", "emet-habitat")
+    if os.path.isfile(hab) and os.access(hab, os.X_OK):
+        lines.append(f"Habitat wrapper: {hab}")
+    else:
+        ok = False
+        lines.append(f"ERROR: missing executable Habitat wrapper at {hab}")
+
+    cvd = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if cvd is None:
+        lines.append("CUDA_VISIBLE_DEVICES: (unset)")
+    else:
+        lines.append(f"CUDA_VISIBLE_DEVICES={cvd!r}")
+        if cvd.strip() == "":
+            ok = False
+            lines.append(
+                "ERROR: CUDA_VISIBLE_DEVICES is empty — Torch/Habitat see no GPU; "
+                "HM-EQA will fail even if nvidia-smi looks fine."
+            )
+        else:
+            lines.append(
+                "WARN: CUDA_VISIBLE_DEVICES remaps CUDA indices; Magnum EGL may still "
+                "enumerate all devices → 'unable to find CUDA device 0 among N EGL devices'."
+            )
+
+    display = os.environ.get("DISPLAY")
+    lines.append(f"DISPLAY={display!r}" if display is not None else "DISPLAY: (unset)")
+
+    apps = list_compute_apps()
+    if not apps:
+        lines.append(
+            "NOTE: empty nvidia-smi compute apps ≠ Habitat EGL healthy. "
+            "Morning HM-EQA failsets have failed with WindowlessContext/"
+            "'unable to find CUDA device 0' while VRAM looked free."
+        )
+
+    seg = recent_emet_segfault_hint()
+    if seg:
+        ok = False
+        lines.append(f"ERROR: recent kernel segfault hint: {seg}")
+        lines.append(
+            "Cursor agent sessions die when ``emet``/Habitat-Sim segfaults in the "
+            "agent tool process tree. Prefer ``emet jobs run``; after a crash use "
+            "``emet jobs`` / ``~/runs/emet/`` — do not hard-kill Habitat mid-episode."
+        )
+    else:
+        lines.append(
+            "Segfault scan: no recent emet/python segfault in dmesg "
+            "(or dmesg unavailable without privileges)."
+        )
+
+    lines.append(
+        "Agent rules: never run Habitat/VLM as blocking Cursor commands; "
+        "launch with ``emet jobs run``; cancel with ``emet jobs cancel`` "
+        "(not raw kill); do not ``kill-stale`` while a managed job is starting."
+    )
+    return ok, lines
+
+
 def check_gpu_memory(need_mib: int | None = None) -> tuple[bool, str]:
     """Return (ok, message). ok False if nvidia-smi missing or free < need."""
     need = env_need_mib() if need_mib is None else int(need_mib)

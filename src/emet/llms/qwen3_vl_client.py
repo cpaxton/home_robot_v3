@@ -554,6 +554,13 @@ class Qwen3VLClient(AbstractVLLMClient):
 
         t0 = timeit.default_timer()
         _progress("building prompt")
+        # Habitat-Sim EGL + Torch CUDA on one GPU can SIGSEGV in libcuda without a
+        # sync boundary before vision generate (seen on HM-EQA scene yogvKWUrdnw).
+        if torch.cuda.is_available():
+            try:
+                torch.cuda.synchronize()
+            except Exception:
+                pass
         t_prep0 = timeit.default_timer()
         inputs = self._processor_inputs(messages, add_generation_prompt=True)
         prep_s = timeit.default_timer() - t_prep0

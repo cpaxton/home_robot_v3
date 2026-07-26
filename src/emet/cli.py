@@ -21,6 +21,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -950,6 +951,7 @@ def jobs_group(ctx: click.Context) -> None:
     Examples:
       emet jobs
       emet jobs list --all
+      emet jobs report
       emet jobs status JOB_ID
       emet jobs cancel JOB_ID
       emet jobs logs JOB_ID --tail 50
@@ -1015,7 +1017,13 @@ def jobs_list(show_all: bool, as_json: bool, scan: bool) -> None:
 @click.argument("job_id")
 @click.option("--json", "as_json", is_flag=True, help="Emit full JSON record.")
 def jobs_status(job_id: str, as_json: bool) -> None:
-    from emet.utils.job_registry import format_job_detail, load_job, refresh_job_liveness
+    from emet.utils.job_registry import (
+        compute_job_progress,
+        format_job_detail,
+        format_progress_brief,
+        load_job,
+        refresh_job_liveness,
+    )
 
     job = load_job(job_id)
     if job is None:
@@ -1023,9 +1031,71 @@ def jobs_status(job_id: str, as_json: bool) -> None:
         sys.exit(1)
     job = refresh_job_liveness(job)
     if as_json:
-        click.echo(json.dumps(job.to_dict(), indent=2))
+        payload = job.to_dict()
+        prog = compute_job_progress(job)
+        payload["progress"] = {
+            "units_done": prog.units_done,
+            "units_total": prog.units_total,
+            "phase": prog.phase,
+            "current_id": prog.current_id,
+            "elapsed_s": prog.elapsed_s,
+            "rate_s_per_unit": prog.rate_s_per_unit,
+            "eta_s": prog.eta_s,
+            "source": prog.source,
+            "brief": format_progress_brief(prog),
+        }
+        click.echo(json.dumps(payload, indent=2))
     else:
         click.echo(format_job_detail(job))
+
+
+@jobs_group.command(
+    "report",
+    short_help="Progress + per-episode scores (defaults to running job)",
+)
+@click.argument("job_id", required=False, default=None)
+@click.option(
+    "--question",
+    "-q",
+    "question_id",
+    type=int,
+    default=None,
+    help="Deep-dive one question id: episode row + agentic trace (phrases, verify scores, stale re-verifies).",
+)
+@click.option("--arm", default=None, help="Restrict --question to one arm (classic/agentic).")
+@click.option("--json", "as_json", is_flag=True, help="Emit structured JSON.")
+def jobs_report(job_id: str | None, question_id: int | None, arm: str | None, as_json: bool) -> None:
+    """Scorecard for an H2H / eval OUT dir.
+
+    With no JOB_ID, picks the active running/waiting job (most recent if several),
+    else the newest finished job with an ``out_dir``. Pass ``--question ID`` for a
+    per-episode trace analysis.
+    """
+    from emet.utils.job_registry import (
+        format_job_report,
+        format_question_report,
+        job_report_dict,
+        question_report_dict,
+        resolve_report_job,
+    )
+
+    job = resolve_report_job(job_id)
+    if job is None:
+        if job_id:
+            click.echo(f"unknown job: {job_id}", err=True)
+        else:
+            click.echo("no job to report (registry empty)", err=True)
+        sys.exit(1)
+    if question_id is not None:
+        if as_json:
+            click.echo(json.dumps(question_report_dict(job, question_id, arm=arm), indent=2))
+        else:
+            click.echo(format_question_report(job, question_id, arm=arm))
+        return
+    if as_json:
+        click.echo(json.dumps(job_report_dict(job), indent=2))
+    else:
+        click.echo(format_job_report(job))
 
 
 @jobs_group.command("cancel", short_help="Cancel a registered job (kill process tree)")
@@ -1120,7 +1190,7 @@ def jobs_register(
     click.echo(job.id)
 
 
-@jobs_group.command("update", short_help="Update job status / pid (for scripts)")
+@jobs_group.command("update", short_help="Update job status / pid / progress (for scripts)")
 @click.argument("job_id")
 @click.option(
     "--status",
@@ -1132,6 +1202,15 @@ def jobs_register(
 @click.option("--out-dir", type=click.Path(), default=None)
 @click.option("--log-path", type=click.Path(), default=None)
 @click.option("--error", default=None)
+@click.option("--units-done", type=int, default=None, help="Completed work units (for ETA).")
+@click.option("--units-total", type=int, default=None, help="Total work units (for ETA).")
+@click.option("--phase", default=None, help="Current phase label (e.g. classic, agentic).")
+@click.option("--current-id", default=None, help="Current unit id (e.g. question id).")
+@click.option(
+    "--meta",
+    multiple=True,
+    help="Extra meta KEY=VALUE (repeatable). Progress keys also accepted here.",
+)
 def jobs_update(
     job_id: str,
     status: str | None,
@@ -1140,8 +1219,21 @@ def jobs_update(
     out_dir: str | None,
     log_path: str | None,
     error: str | None,
+    units_done: int | None,
+    units_total: int | None,
+    phase: str | None,
+    current_id: str | None,
+    meta: tuple[str, ...],
 ) -> None:
     from emet.utils.job_registry import update_job
+
+    meta_update: dict = {}
+    for item in meta:
+        if "=" not in item:
+            click.echo(f"ignore --meta {item!r} (want KEY=VALUE)", err=True)
+            continue
+        k, v = item.split("=", 1)
+        meta_update[k.strip()] = v.strip()
 
     try:
         job = update_job(
@@ -1152,6 +1244,11 @@ def jobs_update(
             out_dir=out_dir,
             log_path=log_path,
             error=error,
+            meta_update=meta_update or None,
+            units_done=units_done,
+            units_total=units_total,
+            phase=phase,
+            current_id=current_id,
         )
     except KeyError as e:
         click.echo(str(e), err=True)
@@ -1178,6 +1275,16 @@ def jobs_update(
     default=None,
     help="If set, run emet eval wait before the command.",
 )
+@click.option(
+    "--cpu-safe/--no-cpu-safe",
+    default=None,
+    help="Pin job away from turbo P-cores (default: on when --need-mib is set).",
+)
+@click.option(
+    "--gpu-exclusive/--no-gpu-exclusive",
+    default=None,
+    help="Wait for other active Habitat/VLM/MuJoCo jobs (default: on when --need-mib is set).",
+)
 @click.option("--foreground", is_flag=True, help="Run in foreground (no nohup).")
 @click.pass_context
 def jobs_run(
@@ -1186,6 +1293,8 @@ def jobs_run(
     out_dir: str | None,
     wait_pid: tuple[int, ...],
     need_mib: int | None,
+    cpu_safe: bool | None,
+    gpu_exclusive: bool | None,
     foreground: bool,
 ) -> None:
     """Register + nohup a command as a managed job.
@@ -1197,7 +1306,7 @@ def jobs_run(
     """
     import shlex
 
-    from emet.utils.job_registry import register_job, update_job
+    from emet.utils.job_registry import active_gpu_job_pids, register_job, update_job
 
     cmd_args = list(ctx.args)
     if cmd_args and cmd_args[0] == "--":
@@ -1212,13 +1321,23 @@ def jobs_run(
     log_path = out / "job.log"
     cmd_str = " ".join(shlex.quote(a) for a in cmd_args)
 
+    use_cpu_safe = bool(cpu_safe) if cpu_safe is not None else (need_mib is not None)
+    use_gpu_excl = bool(gpu_exclusive) if gpu_exclusive is not None else (need_mib is not None)
+
+    wait_pids = list(wait_pid)
+    if use_gpu_excl:
+        for extra in active_gpu_job_pids():
+            if extra not in wait_pids:
+                wait_pids.append(extra)
+                click.echo(f"gpu-exclusive: will wait for pid {extra}", err=True)
+
     job = register_job(
         name=name,
         cmd=cmd_str,
         out_dir=out,
         log_path=log_path,
         repo=str(root),
-        wait_pids=list(wait_pid),
+        wait_pids=wait_pids,
         status="queued",
     )
     click.echo(f"registered  {job.id}", err=True)
@@ -1228,13 +1347,21 @@ def jobs_run(
 
     wrapper = out / "job_wrapper.sh"
     wait_lines = ""
-    for wpid in wait_pid:
+    for wpid in wait_pids:
         wait_lines += f"while kill -0 {int(wpid)} 2>/dev/null; do sleep 15; done\n"
     need_block = ""
     if need_mib is not None:
         need_block = (
-            f'NEED_MIB={int(need_mib)} "{root}/scripts/gpu_preflight.sh" --wait\n'
-            f'"{root}/.venv/bin/emet" eval status || true\n'
+            f'NEED_MIB={int(need_mib)} "$EMET_BIN" eval wait --need-mib {int(need_mib)}\n'
+            f'"$EMET_BIN" eval status || true\n'
+        )
+    cpu_block = ""
+    if use_cpu_safe:
+        cpu_block = (
+            '"$EMET_BIN" eval affinity --apply --pid $$ || {\n'
+            '  echo "ERROR: cpu-safe affinity failed (fail-closed)" >&2\n'
+            "  exit 2\n"
+            "}\n"
         )
     wrapper.write_text(
         "#!/usr/bin/env bash\n"
@@ -1247,6 +1374,7 @@ def jobs_run(
         f'"$EMET_BIN" jobs update "$JOB_ID" --status waiting --pid $$\n'
         f"{wait_lines}"
         f"{need_block}"
+        f"{cpu_block}"
         f'"$EMET_BIN" jobs update "$JOB_ID" --status running --pid $$\n'
         "set +e\n"
         f"{cmd_str}\n"
@@ -1290,6 +1418,7 @@ def eval_group() -> None:
 
     Examples:
       emet eval status
+      emet eval diagnose
       emet eval check --need-mib 12000
       emet eval wait --need-mib 12000
       emet eval kill-stale
@@ -1303,6 +1432,28 @@ def eval_status() -> None:
 
     for line in format_status_lines():
         click.echo(line)
+
+
+@eval_group.command(
+    "diagnose",
+    short_help="Explain GPU/EGL readiness (empty nvidia-smi ≠ Habitat OK)",
+)
+def eval_diagnose() -> None:
+    """Read-only Habitat/HM-EQA readiness notes for agents.
+
+    Empty compute apps does **not** prove Magnum EGL can create a WindowlessContext.
+    Also flags empty ``CUDA_VISIBLE_DEVICES``, missing ``.venv-habitat``, and recent
+    ``emet`` segfault hints from dmesg when readable.
+    """
+    from pathlib import Path
+
+    from emet.utils.gpu_preflight import diagnose_eval_environment
+
+    ok, lines = diagnose_eval_environment(repo_root=str(Path.cwd()))
+    for line in lines:
+        click.echo(line)
+    if not ok:
+        sys.exit(1)
 
 
 @eval_group.command("check", short_help="Exit 1 if free VRAM below threshold")
@@ -1379,6 +1530,564 @@ def eval_kill_stale(no_gpu: bool, settle_sec: float | None) -> None:
         log=lambda m: click.echo(m, err=True),
     )
     click.echo(f"kill-stale done (signaled≈{n})")
+
+
+@eval_group.command("affinity", short_help="Show or apply turbo-CPU exclusion mask")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON summary.")
+@click.option("--apply", "do_apply", is_flag=True, help="Pin current process (or --pid).")
+@click.option("--pid", type=int, default=None, help="Target PID (default: this process).")
+@click.option(
+    "--fail-open",
+    is_flag=True,
+    help="Do not exit non-zero if turbo CPUs remain after apply.",
+)
+def eval_affinity(as_json: bool, do_apply: bool, pid: int | None, fail_open: bool) -> None:
+    """Exclude logical CPUs whose max freq is ≥ ``EMET_EXCLUDE_CPU_MIN_MHZ`` (default 6000)."""
+    from emet.eval.harness import affinity_summary_dict, apply_eval_affinity
+
+    if do_apply:
+        try:
+            summary = apply_eval_affinity(pid=pid, fail_closed=not fail_open)
+        except RuntimeError as exc:
+            click.echo(f"ERROR: {exc}", err=True)
+            sys.exit(2)
+        if as_json:
+            click.echo(json.dumps(summary, indent=2))
+        else:
+            click.echo(
+                f"affinity pid={summary.get('pid')} mask={summary.get('applied')} "
+                f"turbo_excluded={summary.get('turbo_cpus')}"
+            )
+        return
+
+    summary = affinity_summary_dict()
+    if as_json:
+        click.echo(json.dumps(summary, indent=2))
+    else:
+        click.echo(
+            f"taskset {summary['taskset']}  (exclude>={summary['exclude_min_mhz']} MHz turbo={summary['turbo_cpus']})"
+        )
+
+
+@eval_group.command("recover", short_help="status + diagnose + wait (post-crash preflight)")
+@click.option(
+    "--need-mib",
+    type=int,
+    default=None,
+    help="Minimum free VRAM in MiB (default: NEED_MIB or 12000).",
+)
+@click.option(
+    "--skip-wait",
+    is_flag=True,
+    help="Only status+diagnose; do not block on free VRAM.",
+)
+def eval_recover(need_mib: int | None, skip_wait: bool) -> None:
+    """One-shot recovery gate after agent death / host reboot / failed HM-EQA job."""
+    from emet.eval.harness import affinity_summary_dict
+    from emet.utils.gpu_preflight import (
+        diagnose_eval_environment,
+        format_status_lines,
+        wait_gpu_stable,
+    )
+
+    for line in format_status_lines():
+        click.echo(line)
+    ok, lines = diagnose_eval_environment(repo_root=str(_project_root()))
+    for line in lines:
+        click.echo(line)
+    aff = affinity_summary_dict()
+    click.echo(
+        f"affinity: prefer taskset {aff['taskset']} "
+        f"(turbo {aff['turbo_cpus']} excluded by emet jobs --cpu-safe / emet hmeqa)"
+    )
+    if not ok:
+        sys.exit(1)
+    if skip_wait:
+        return
+    if not wait_gpu_stable(need_mib, log=lambda m: click.echo(m, err=True)):
+        click.echo("WARNING: GPU wait timed out; free VRAM still below threshold", err=True)
+        sys.exit(1)
+    click.echo("recover: GPU ready — next: emet hmeqa resume  (or emet jobs)")
+
+
+@main.group("hmeqa", short_help="HM-EQA classic vs agentic H2H helpers")
+def hmeqa_group() -> None:
+    """Dogfood entrypoints for Habitat HM-EQA head-to-head runs.
+
+    Prefer these over hand-built ``env … taskset … ./scripts/run_hmeqa_*.sh`` lines.
+
+    \b
+    Examples:
+      emet eval recover --need-mib 12000
+      emet hmeqa resume
+      emet hmeqa status
+      emet hmeqa h2h --out OUT --resume --ids 15,68,105,17
+      emet hmeqa overnight
+      emet hmeqa h2h --preset paper-router --ids 15,56,65,68
+    """
+
+
+def _hmeqa_apply_preset(
+    ctx: click.Context,
+    *,
+    preset: str | None,
+    agentic_verifier: str,
+    require_verified: bool,
+    agentic_router: bool,
+) -> tuple[str, bool, bool]:
+    """Apply ``paper-router`` only where Click defaults were left untouched."""
+    if (preset or "").strip().lower() != "paper-router":
+        return agentic_verifier, require_verified, agentic_router
+    from emet.eval.harness import apply_paper_router_preset
+
+    return apply_paper_router_preset(
+        agentic_verifier=agentic_verifier,
+        require_verified=require_verified,
+        agentic_router=agentic_router,
+        verifier_source=ctx.get_parameter_source("agentic_verifier"),
+        verified_source=ctx.get_parameter_source("require_verified"),
+        router_source=ctx.get_parameter_source("agentic_router"),
+    )
+
+
+@hmeqa_group.command("status", short_help="Show OUT progress, crashes, scored counts")
+@click.argument("out_dir", required=False)
+def hmeqa_status(out_dir: str | None) -> None:
+    from emet.eval.harness import count_crash_markers, resolve_hmeqa_out
+
+    out = resolve_hmeqa_out(out_dir)
+    click.echo(f"OUT={out}")
+    progress = out / "progress.json"
+    if progress.is_file():
+        click.echo(progress.read_text(encoding="utf-8").rstrip())
+    else:
+        click.echo("(no progress.json)")
+    scored_c = len([p for p in out.glob("classic_q*.jsonl") if p.stat().st_size > 0])
+    scored_a = len([p for p in out.glob("agentic_q*.jsonl") if p.stat().st_size > 0])
+    crashes = count_crash_markers(out)
+    click.echo(f"scored classic={scored_c} agentic={scored_a} crash_markers={crashes}")
+    for cap in sorted(out.glob("native_crash_*.log")) + sorted(out.glob("host_freeze_*.log")):
+        click.echo(f"capsule {cap.name}")
+
+
+@hmeqa_group.command("summarize", short_help="Run summarize_hmeqa_agentic_h2h.py on OUT")
+@click.argument("out_dir", required=False)
+def hmeqa_summarize(out_dir: str | None) -> None:
+    from emet.eval.harness import resolve_hmeqa_out
+
+    out = resolve_hmeqa_out(out_dir)
+    script = _project_root() / "scripts" / "summarize_hmeqa_agentic_h2h.py"
+    rc = subprocess.call([sys.executable, str(script), str(out)], cwd=str(_project_root()))
+    sys.exit(rc)
+
+
+def _hmeqa_launch(
+    *,
+    out: Path,
+    resume: bool,
+    arms: str,
+    ids: str,
+    coverage_qids: str,
+    cooldown: int,
+    crash_policy: str,
+    streak_abort: int,
+    agentic_verifier: str,
+    require_verified: bool,
+    agentic_router: bool,
+    job_name: str,
+    need_mib: int,
+    foreground: bool,
+) -> None:
+    """Register H2H via ``emet jobs run`` (cpu-safe + gpu-exclusive defaults)."""
+    import shlex
+
+    root = _project_root()
+    script = root / "scripts" / "run_hmeqa_agentic_h2h.sh"
+    env_parts = [
+        "EMET_ALLOW_SDPA_ATTN=1",
+        "EMET_EQA_TRACE=1",
+        f"ARMS={arms}",
+        f"HOLDOUT_IDS={ids}",
+        f"COVERAGE_QIDS={coverage_qids}",
+        f"EPISODE_COOLDOWN_SEC={int(cooldown)}",
+        f"NATIVE_CRASH_POLICY={crash_policy}",
+        f"NATIVE_CRASH_STREAK_ABORT={int(streak_abort)}",
+        f"EMET_EQA_AGENTIC_VERIFIER={agentic_verifier}",
+        f"EMET_EQA_AGENTIC_REQUIRE_VERIFIED={int(require_verified)}",
+        f"EMET_EQA_AGENTIC_ROUTER={int(agentic_router)}",
+    ]
+    if resume:
+        env_parts.append("RESUME=1")
+    inner = "env " + " ".join(env_parts) + " " + shlex.quote(str(script)) + " " + shlex.quote(str(out))
+    # Re-enter CLI so jobs run applies mutex/affinity wrapper.
+    cmd = [
+        sys.executable,
+        "-m",
+        "emet.cli",
+        "jobs",
+        "run",
+        "--name",
+        job_name,
+        "--need-mib",
+        str(int(need_mib)),
+        "--out-dir",
+        str(out),
+    ]
+    if foreground:
+        cmd.append("--foreground")
+    cmd.extend(["--", "bash", "-lc", inner])
+    click.echo(f"launching via emet jobs: OUT={out} resume={int(resume)} arms={arms}", err=True)
+    rc = subprocess.call(cmd, cwd=str(root))
+    sys.exit(rc)
+
+
+@hmeqa_group.command("h2h", short_help="Launch classic vs agentic H2H via emet jobs")
+@click.argument("out_dir", required=False)
+@click.option("--resume", is_flag=True, help="Skip non-empty per-qid jsonl.")
+@click.option("--arms", default="classic,agentic", show_default=True)
+@click.option(
+    "--ids",
+    "holdout_ids",
+    default=None,
+    help="Comma-separated question ids (default: bal-32 list).",
+)
+@click.option("--coverage-qids", default="15,28,47", show_default=True)
+@click.option("--cooldown", type=int, default=20, show_default=True, help="EPISODE_COOLDOWN_SEC")
+@click.option(
+    "--crash-policy",
+    type=click.Choice(["skip", "abort"]),
+    default="skip",
+    show_default=True,
+    help="skip=continue after settle; abort=stop batch on first native crash.",
+)
+@click.option(
+    "--streak-abort",
+    type=int,
+    default=2,
+    show_default=True,
+    help="Under skip: abort after N consecutive native crashes (0=never).",
+)
+@click.option(
+    "--agentic-verifier",
+    type=click.Choice(["none", "owlv2", "yoloe"]),
+    default="none",
+    show_default=True,
+    help="Hybrid presence backend for the agentic arm.",
+)
+@click.option(
+    "--require-verified/--allow-unverified",
+    default=True,
+    show_default=True,
+    help="Abstain instead of force-submitting without fused evidence.",
+)
+@click.option(
+    "--agentic-router/--no-agentic-router",
+    default=False,
+    show_default=True,
+    help="Use VLM tool routing (fallback policy is deterministic).",
+)
+@click.option(
+    "--preset",
+    type=click.Choice(["paper-router"]),
+    default=None,
+    help="paper-router: owlv2 + allow-unverified + agentic-router (explicit flags still win).",
+)
+@click.option("--job-name", default="hmeqa-h2h", show_default=True)
+@click.option("--need-mib", type=int, default=12000, show_default=True)
+@click.option("--foreground", is_flag=True)
+@click.pass_context
+def hmeqa_h2h(
+    ctx: click.Context,
+    out_dir: str | None,
+    resume: bool,
+    arms: str,
+    holdout_ids: str | None,
+    coverage_qids: str,
+    cooldown: int,
+    crash_policy: str,
+    streak_abort: int,
+    agentic_verifier: str,
+    require_verified: bool,
+    agentic_router: bool,
+    preset: str | None,
+    job_name: str,
+    need_mib: int,
+    foreground: bool,
+) -> None:
+    from emet.eval.harness import DEFAULT_BAL32_IDS
+
+    agentic_verifier, require_verified, agentic_router = _hmeqa_apply_preset(
+        ctx,
+        preset=preset,
+        agentic_verifier=agentic_verifier,
+        require_verified=require_verified,
+        agentic_router=agentic_router,
+    )
+    if out_dir:
+        out = Path(out_dir).expanduser().resolve()
+    else:
+        stamp = time.strftime("%Y%m%d_%H%M%S")
+        out = Path.home() / "runs" / "emet" / f"hmeqa_agentic_h2h_{stamp}"
+    out.mkdir(parents=True, exist_ok=True)
+    ids = holdout_ids or DEFAULT_BAL32_IDS
+    _hmeqa_launch(
+        out=out,
+        resume=resume,
+        arms=arms,
+        ids=ids,
+        coverage_qids=coverage_qids,
+        cooldown=cooldown,
+        crash_policy=crash_policy,
+        streak_abort=streak_abort,
+        agentic_verifier=agentic_verifier,
+        require_verified=require_verified,
+        agentic_router=agentic_router,
+        job_name=job_name,
+        need_mib=need_mib,
+        foreground=foreground,
+    )
+
+
+@hmeqa_group.command("resume", short_help="Resume latest (or given) H2H OUT under safe defaults")
+@click.argument("out_dir", required=False)
+@click.option("--arms", default="classic,agentic", show_default=True)
+@click.option("--ids", "holdout_ids", default=None, help="Override ids (default: from STATUS / bal-32).")
+@click.option("--coverage-qids", default="15,28,47", show_default=True)
+@click.option("--cooldown", type=int, default=30, show_default=True)
+@click.option("--crash-policy", type=click.Choice(["skip", "abort"]), default="skip", show_default=True)
+@click.option("--streak-abort", type=int, default=2, show_default=True)
+@click.option(
+    "--agentic-verifier",
+    type=click.Choice(["none", "owlv2", "yoloe"]),
+    default="none",
+    show_default=True,
+)
+@click.option("--require-verified/--allow-unverified", default=True, show_default=True)
+@click.option("--agentic-router/--no-agentic-router", default=False, show_default=True)
+@click.option(
+    "--preset",
+    type=click.Choice(["paper-router"]),
+    default=None,
+    help="paper-router: owlv2 + allow-unverified + agentic-router (explicit flags still win).",
+)
+@click.option("--job-name", default="hmeqa-h2h-resume", show_default=True)
+@click.option("--need-mib", type=int, default=12000, show_default=True)
+@click.option("--foreground", is_flag=True)
+@click.pass_context
+def hmeqa_resume(
+    ctx: click.Context,
+    out_dir: str | None,
+    arms: str,
+    holdout_ids: str | None,
+    coverage_qids: str,
+    cooldown: int,
+    crash_policy: str,
+    streak_abort: int,
+    agentic_verifier: str,
+    require_verified: bool,
+    agentic_router: bool,
+    preset: str | None,
+    job_name: str,
+    need_mib: int,
+    foreground: bool,
+) -> None:
+    from emet.eval.harness import (
+        DEFAULT_BAL32_IDS,
+        detect_host_freeze,
+        resolve_hmeqa_out,
+        write_host_freeze_capsule,
+    )
+
+    agentic_verifier, require_verified, agentic_router = _hmeqa_apply_preset(
+        ctx,
+        preset=preset,
+        agentic_verifier=agentic_verifier,
+        require_verified=require_verified,
+        agentic_router=agentic_router,
+    )
+    out = resolve_hmeqa_out(out_dir)
+    freeze = detect_host_freeze(out)
+    if freeze:
+        cap = write_host_freeze_capsule(out, freeze)
+        click.echo(f"host-freeze capsule → {cap}", err=True)
+    ids = holdout_ids or DEFAULT_BAL32_IDS
+    # Prefer HOLDOUT from orchestrator.log if present
+    orch = out / "orchestrator.log"
+    if holdout_ids is None and orch.is_file():
+        import re as _re
+
+        text = orch.read_text(encoding="utf-8", errors="replace")
+        m = _re.search(r"ids=([0-9,]+)", text)
+        if m:
+            ids = m.group(1)
+    _hmeqa_launch(
+        out=out,
+        resume=True,
+        arms=arms,
+        ids=ids,
+        coverage_qids=coverage_qids,
+        cooldown=cooldown,
+        crash_policy=crash_policy,
+        streak_abort=streak_abort,
+        agentic_verifier=agentic_verifier,
+        require_verified=require_verified,
+        agentic_router=agentic_router,
+        job_name=job_name,
+        need_mib=need_mib,
+        foreground=foreground,
+    )
+
+
+@hmeqa_group.command("overnight", short_help="Holdout-8 → gate → bal-32 via one emet jobs run")
+@click.option(
+    "--base",
+    "base_dir",
+    default=None,
+    help="Overnight base dir (default: ~/runs/emet/hmeqa_overnight_<stamp>).",
+)
+@click.option("--holdout-ids", default=None, help="Default: paper holdout-8.")
+@click.option("--bal32-ids", default=None, help="Default: balanced-32.")
+@click.option("--gate-min-acc", type=float, default=0.25, show_default=True)
+@click.option("--skip-bal32", is_flag=True, help="Stop after holdout (+ optional retune).")
+@click.option(
+    "--agentic-verifier",
+    type=click.Choice(["none", "owlv2", "yoloe"]),
+    default="owlv2",
+    show_default=True,
+)
+@click.option(
+    "--require-verified/--allow-unverified",
+    default=False,
+    show_default=True,
+    help="Overnight default: allow-unverified (require-verified abstains too often on bal-32).",
+)
+@click.option(
+    "--agentic-router/--no-agentic-router",
+    default=True,
+    show_default=True,
+    help="Overnight default: VLM tool routing on.",
+)
+@click.option("--cooldown", type=int, default=20, show_default=True)
+@click.option("--crash-policy", type=click.Choice(["skip", "abort"]), default="skip", show_default=True)
+@click.option("--streak-abort", type=int, default=2, show_default=True)
+@click.option("--egl-fail-abort", type=int, default=2, show_default=True)
+@click.option("--job-name", default="hmeqa-overnight", show_default=True)
+@click.option("--need-mib", type=int, default=12000, show_default=True)
+@click.option("--foreground", is_flag=True)
+def hmeqa_overnight(
+    base_dir: str | None,
+    holdout_ids: str | None,
+    bal32_ids: str | None,
+    gate_min_acc: float,
+    skip_bal32: bool,
+    agentic_verifier: str,
+    require_verified: bool,
+    agentic_router: bool,
+    cooldown: int,
+    crash_policy: str,
+    streak_abort: int,
+    egl_fail_abort: int,
+    job_name: str,
+    need_mib: int,
+    foreground: bool,
+) -> None:
+    """Launch (or run in-process) the overnight holdout→bal32 ladder.
+
+    When already inside ``emet jobs`` (``EMET_JOB_ID`` set), runs the orchestrator
+    in-process so nested jobs are not created. Otherwise wraps one ``emet jobs run``.
+    """
+    import shlex
+
+    from emet.eval.harness import DEFAULT_BAL32_IDS, DEFAULT_HOLDOUT8_IDS
+    from emet.eval.hmeqa_overnight import run_overnight
+
+    if base_dir:
+        base = Path(base_dir).expanduser().resolve()
+    else:
+        env_base = os.environ.get("OVERNIGHT_BASE", "").strip()
+        if env_base:
+            base = Path(env_base).expanduser().resolve()
+        else:
+            stamp = time.strftime("%Y%m%d_%H%M%S")
+            base = Path.home() / "runs" / "emet" / f"hmeqa_overnight_{stamp}"
+    base.mkdir(parents=True, exist_ok=True)
+
+    ids_h = holdout_ids or os.environ.get("HOLDOUT8_IDS", "").strip() or DEFAULT_HOLDOUT8_IDS
+    ids_b = bal32_ids or os.environ.get("BAL32_IDS", "").strip() or DEFAULT_BAL32_IDS
+
+    # Already under a job (shim / outer jobs run) — do not nest.
+    if os.environ.get("EMET_JOB_ID", "").strip():
+        click.echo(f"overnight in-process (EMET_JOB_ID set): BASE={base}", err=True)
+        rc = run_overnight(
+            base=base,
+            holdout_ids=ids_h,
+            bal32_ids=ids_b,
+            gate_min_acc=gate_min_acc,
+            skip_bal32=skip_bal32,
+            agentic_verifier=agentic_verifier,
+            require_verified=require_verified,
+            agentic_router=agentic_router,
+            cooldown=cooldown,
+            crash_policy=crash_policy,
+            streak_abort=streak_abort,
+            egl_fail_abort=egl_fail_abort,
+        )
+        sys.exit(rc)
+
+    root = _project_root()
+    inner_parts = [
+        sys.executable,
+        "-m",
+        "emet.eval.hmeqa_overnight",
+        "--base",
+        str(base),
+        "--holdout-ids",
+        ids_h,
+        "--bal32-ids",
+        ids_b,
+        "--gate-min-acc",
+        str(gate_min_acc),
+        "--agentic-verifier",
+        agentic_verifier,
+        "--cooldown",
+        str(int(cooldown)),
+        "--crash-policy",
+        crash_policy,
+        "--streak-abort",
+        str(int(streak_abort)),
+        "--egl-fail-abort",
+        str(int(egl_fail_abort)),
+    ]
+    if skip_bal32:
+        inner_parts.append("--skip-bal32")
+    if require_verified:
+        inner_parts.append("--require-verified")
+    else:
+        inner_parts.append("--allow-unverified")
+    if agentic_router:
+        inner_parts.append("--agentic-router")
+    else:
+        inner_parts.append("--no-agentic-router")
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "emet.cli",
+        "jobs",
+        "run",
+        "--name",
+        job_name,
+        "--need-mib",
+        str(int(need_mib)),
+        "--out-dir",
+        str(base),
+    ]
+    if foreground:
+        cmd.append("--foreground")
+    cmd.extend(["--", "bash", "-lc", " ".join(shlex.quote(p) for p in inner_parts)])
+    click.echo(f"launching overnight via emet jobs: BASE={base}", err=True)
+    rc = subprocess.call(cmd, cwd=str(root))
+    sys.exit(rc)
 
 
 @main.command("kill-mujoco-server", short_help="Stop MuJoCo server (free ports)")

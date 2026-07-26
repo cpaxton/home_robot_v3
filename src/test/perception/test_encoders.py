@@ -43,7 +43,19 @@ def test_get_encoder():
 @pytest.mark.parametrize("encoder_name", encoders)
 def test_get_encoder_all(encoder_name):
     print(f"Testing encoder: {encoder_name}")
-    encoder = get_encoder(encoder_name, {})
+    try:
+        encoder = get_encoder(encoder_name, {})
+    except Exception as e:
+        # DINOv3 weights are gated on Hugging Face; skip when the env has no access.
+        err = f"{type(e).__name__}: {e}"
+        if encoder_name == "dinov3" and (
+            "GatedRepo" in err
+            or "403" in err
+            or "gated" in err.lower()
+            or "huggingface.co" in err.lower()
+        ):
+            pytest.skip(f"DINOv3 weights unavailable in this environment: {e}")
+        raise
     assert encoder is not None
 
     with pytest.raises(ValueError):
