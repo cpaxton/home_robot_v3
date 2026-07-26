@@ -463,6 +463,7 @@ def run_agent_with_robot(
     llm: str = DEFAULT_AGENT_LLM,
     server_ip: str = "127.0.0.1",
     skip_confirmations: bool = True,
+    confirm_nav: bool | None = None,
     explore_iter: int = 3,
     debug_llm: bool = False,
     tool_debug: bool = False,
@@ -521,6 +522,12 @@ def run_agent_with_robot(
         embodied_overlay = load_embodied_agent_overlay(agent_config)
     defer_eqa_vllm = bool(eqa and use_llm and share_memory_vllm)
     refine_start = bool(kwargs.pop("refine_start", False))
+    from emet.agent.env_flags import env_confirm_nav
+
+    if confirm_nav is None:
+        confirm_nav = env_confirm_nav()
+    else:
+        confirm_nav = bool(confirm_nav)
     _exec_kwargs = {k: v for k, v in kwargs.items() if k != "defer_eqa_vllm"}
     if allow_missing_depth is None:
         depth_mode = str(parameters.get("depth_source", "sensor")).lower()
@@ -585,6 +592,21 @@ def run_agent_with_robot(
     )
     print_vram_snapshot("after_dyn_av_executor_init_siglip_detector_voxel")
 
+    # Motion-plan confirm gate (real-robot safety). Scripted ``commands`` auto-accept.
+    executor.agent.confirm_navigation = bool(confirm_nav)
+    executor.agent._nav_confirm_auto_yes = bool(commands)
+    if confirm_nav:
+        mode = "auto-yes (scripted -c)" if commands else "y/n terminal" + (
+            "+Discord" if discord else ""
+        )
+        print(
+            colored(
+                f"Nav confirm ON ({mode}): plans show on the 2D map; reply y/n before the base moves.",
+                "yellow",
+            ),
+            flush=True,
+        )
+
     if eqa:
         print(
             colored(
@@ -642,6 +664,7 @@ def run_agent_with_robot(
         print(
             colored(
                 f"Lifelong checkpoint loaded: graph={load_info.get('graph_loaded')} "
+                f"nodes={load_info.get('graph_nodes')} "
                 f"voxel_pkl={load_info.get('voxel_pickle_loaded')} "
                 f"final_step={load_info.get('final_step')} "
                 f"voxel_pts={load_info.get('voxel_points')} "
@@ -719,6 +742,7 @@ def run_agent_with_robot(
         context["discord_bot"] = discord_bot
         executor.discord_bot = discord_bot
         executor.agent.discord_bot = discord_bot
+        executor.agent._nav_confirm_input_queue = unified_input_queue
         bot_thread = threading.Thread(target=discord_bot.run, daemon=True)
         bot_thread.start()
         print(colored("Discord bot started (DISCORD_TOKEN). Messages will be handled.", "green"))

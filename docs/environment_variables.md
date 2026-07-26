@@ -157,6 +157,7 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_AGENT_CAMERA_DEBUG` | Agent tools | `1` — head-camera frame stats. CLI: `--debug-camera`. |
 | `EMET_BASE_ROTATE_ONLY` | ZMQ client + agent tools + Dynamem executor | `1` — **yaw-only / in-place scan** (no XY drive). Blocks `explore` / `move_forward` / `find` / absolute nav; keeps `rotate_base`, `scan_environment`, `describe_scene`. Use when Mars is plugged in / tethered. |
 | `EMET_AGENT_MOTION_STATUS` | Controllers | `1`/`0` — fine-grained terminal progress for head sweeps / rotate-in-place / explore steps (default **on**). Discord still only gets coarse milestones (`*Look around: sweeping head*`, mid/end scan). |
+| `EMET_CONFIRM_NAV` | Agent / DynamemController | `1` — before executing a motion plan, show the path on the 2D map (Rerun `world/nav/plan_map` + Discord PNG) and wait for **y/n** (terminal or Discord). Same as `emet run agent --confirm-nav`. Recommended on the real robot. Scripted `-c` runs auto-accept. |
 
 See [AGENT_RUN.md](AGENT_RUN.md).
 

@@ -120,12 +120,97 @@ def test_load_lifelong_checkpoint_restores_final_step(tmp_path):
     ctrl = _Ctrl()
     info = load_lifelong_checkpoint(ctrl, path, refine_start=False)
     assert info["graph_loaded"] is True
+    assert info["graph_nodes"] >= 1
     assert info["final_step"] == 42
+    assert info["verify"]["ok"] is True
     assert ctrl.obs_count == 42
     assert ctrl.graph_memory._graph_timestep == 42
     nodes = [n for n in ctrl.graph_memory.get_nodes() if not n.is_viewpoint]
     assert len(nodes) == 1
     assert nodes[0].labels == ["mug"]
+
+
+def test_load_restores_frontier_flag_from_label_heuristic(tmp_path):
+    """Old exports omit is_frontier; label 'frontier' must still restore as frontier."""
+    import json
+
+    mem = _make_memory()
+    mem.add_observation(_rgb(), np.array([0.0, 0.0, 0.0]), ["mug"])
+    path = tmp_path / "ckpt"
+    GraphEQABackend(mem).save(str(path), final_step=3)
+    graph_path = path / "graph.json"
+    data = json.loads(graph_path.read_text(encoding="utf-8"))
+    data["nodes"].append(
+        {
+            "node_id": 99,
+            "labels": ["frontier"],
+            "xyz": [1.0, 1.0, 0.0],
+            "obs_id": 1,
+            "last_seen": 3,
+            "support_count": 1,
+        }
+    )
+    graph_path.write_text(json.dumps(data), encoding="utf-8")
+
+    class _Ctrl:
+        def __init__(self):
+            self.graph_memory = _make_memory()
+            self.obs_count = 0
+            self.voxel_map = None
+
+        def get_voxel_map(self):
+            return None
+
+    ctrl = _Ctrl()
+    info = load_lifelong_checkpoint(ctrl, path, refine_start=False)
+    assert info["verify"]["ok"] is True
+    frontiers = [n for n in ctrl.graph_memory.get_nodes() if n.is_frontier]
+    assert len(frontiers) >= 1
+    assert frontiers[0].labels[0] == "frontier"
+
+
+def test_verify_lifelong_restore_raises_on_empty_graph(tmp_path):
+    import json
+
+    import pytest
+
+    from emet.memory.lifelong import verify_lifelong_restore
+
+    path = tmp_path / "ckpt"
+    path.mkdir()
+    (path / "manifest.json").write_text(
+        '{"has_graph": true, "has_voxel_pickle": false, "version": 1, "backend": "graph_eqa"}',
+        encoding="utf-8",
+    )
+    (path / "graph.json").write_text(
+        json.dumps(
+            {
+                "nodes": [{"node_id": 1, "labels": ["mug"], "xyz": [0, 0, 0], "obs_id": 1}],
+                "edges": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class _Ctrl:
+        graph_memory = type("G", (), {"get_nodes": lambda self: []})()
+        voxel_map = None
+
+        def get_voxel_map(self):
+            return None
+
+    with pytest.raises(RuntimeError, match="graph nodes"):
+        verify_lifelong_restore(
+            _Ctrl(),
+            path,
+            {
+                "graph_loaded": True,
+                "voxel_pickle_loaded": False,
+                "voxel_points": 0,
+                "semantic_points": 0,
+            },
+            strict=True,
+        )
 
 
 def test_save_lifelong_writes_voxel_flag_when_requested(tmp_path):

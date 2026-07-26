@@ -243,6 +243,12 @@ class DynamemController(BaseController):
         self.rerun_visualizer = getattr(self.robot, "_rerun", None) or NullVisualizer()
         # Last navigation / EQA markdown for Rerun ``robot_monologue``; ``update()`` appends live status.
         self._rerun_monologue_base = ""
+        # Human gate before execute_trajectory (CLI ``--confirm-nav`` / ``EMET_CONFIRM_NAV``).
+        self.confirm_navigation = False
+        self.nav_confirm_timeout_s: float | None = None
+        self._nav_confirm_input_queue = None
+        self._nav_confirm_auto_yes = False
+        self._last_nav_plan = None
         self.setup_custom_blueprint()
 
         self.mllm = mllm
@@ -1815,8 +1821,33 @@ class DynamemController(BaseController):
             res = self.process_text("", start)
 
         if len(res) > 0:
-            self.announce_action("Navigating…")
-            logger.info("Navigation plan OK; executing trajectory")
+            plan_meta = getattr(self, "_last_nav_plan", None) or {}
+            announce = plan_meta.get("announce") or "Navigating…"
+            if not str(announce).lower().startswith("navigat"):
+                announce = f"Navigating… {announce}"
+            # Confirm before posture/exec so operators can reject wall-hugging plans.
+            object_xyz = None
+            if len(res) >= 2 and np.isnan(np.asarray(res[-2], dtype=np.float64)).all():
+                object_xyz = res[-1]
+            from emet.controller.nav_confirm import confirm_navigation_plan
+
+            if not confirm_navigation_plan(self, res, meta=plan_meta, object_xyz=object_xyz):
+                return None, None
+            self.announce_action(announce)
+            n_exec = sum(
+                1
+                for p in res
+                if np.isfinite(np.asarray(p, dtype=np.float64).reshape(-1)[:2]).all()
+            )
+            logger.info(
+                "Navigation plan OK; executing %d waypoints "
+                "(localize=%s mode=%s path≈%.2fm chunked=%s)",
+                n_exec,
+                plan_meta.get("localize_source", "?"),
+                plan_meta.get("mode", "?"),
+                float(plan_meta.get("path_m") or 0.0),
+                bool(plan_meta.get("chunked")),
+            )
             nav_timeout = self._find_phase_nav_timeout()
             wait_obs = getattr(self.robot, "wait_for_obs", None)
             if wait_obs is not None:
@@ -1884,15 +1915,21 @@ class DynamemController(BaseController):
 
         logger.debug("process_text: %r", text)
 
-        self.rerun_visualizer.clear_identity("world/object")
-        self.rerun_visualizer.clear_identity("world/xyt_goal")
-        self.rerun_visualizer.clear_identity("world/robot_start_pose")
-        self.rerun_visualizer.clear_identity("world/direction")
+        clear_nav = getattr(self.rerun_visualizer, "clear_nav_plan", None)
+        if callable(clear_nav):
+            clear_nav()
+        else:
+            self.rerun_visualizer.clear_identity("world/object")
+            self.rerun_visualizer.clear_identity("world/xyt_goal")
+            self.rerun_visualizer.clear_identity("world/robot_start_pose")
+            self.rerun_visualizer.clear_identity("world/direction")
         self.rerun_visualizer.clear_identity("robot_monologue")
         self.rerun_visualizer.clear_identity("/observation_similar_to_text")
+        self._last_nav_plan = None
 
         debug_text = ""
         mode = "navigation"
+        localize_source = ""
         obs = None
         localized_point = None
         waypoints = None
@@ -1906,11 +1943,13 @@ class DynamemController(BaseController):
                 similarity_threshold=self.encoder.feature_matching_threshold,
             ):
                 localized_point = traj_target_point
-                debug_text += "## Last visual grounding results looks fine so directly use it.\n"
+                localize_source = "saved_traj+verify"
+                debug_text += "## Reusing prior plan target (SigLIP neighborhood OK).\n"
             elif hasattr(self.encoder, "feature_matching_threshold") and _finite_xyz_traj_target(traj_target_point):
                 # Short queries ("red object") often fail SigLIP neighborhood re-check; still navigate to last grounding.
                 localized_point = traj_target_point
-                debug_text += "## Reusing saved trajectory target; semantic re-check was not decisive.\n"
+                localize_source = "saved_traj"
+                debug_text += "## Reusing prior plan target; semantic re-check was not decisive.\n"
 
         logger.debug("Target verification done (localized_point=%s)", localized_point is not None)
 
@@ -1918,9 +1957,10 @@ class DynamemController(BaseController):
             graph_point = self._localize_point_from_graph_memory(text)
             if graph_point is not None:
                 localized_point = graph_point
+                localize_source = "graph"
                 debug_text += "## Localized target from graph memory.\n"
                 mode = "navigation"
-                logger.debug("Localized target from graph for query %r", text)
+                logger.info("Localized %r from graph memory at %s", text, np.asarray(graph_point).reshape(-1)[:3])
 
         if text is not None and text != "" and localized_point is None:
             det = getattr(self.voxel_map, "detection_model", None)
@@ -1932,15 +1972,18 @@ class DynamemController(BaseController):
                         obs,
                         pointcloud,
                     ) = self.voxel_map.localize_text(text, debug=True, return_debug=True)
+                    if localized_point is not None:
+                        localize_source = "voxel"
+                        debug_text += "## Localized target from voxel semantic memory.\n"
                     if loc_debug:
                         debug_text += str(loc_debug)
-                    logger.debug("Localized target from voxel map for query %r", text)
+                    logger.info("Localized %r from voxel map: %s", text, localized_point is not None)
                 except Exception as exc:
                     logger.debug("voxel localize_text failed for %r: %s", text, exc)
 
         # Do Frontier based exploration (optionally biased by the active EQA question).
         if text is None or text == "" or localized_point is None:
-            debug_text += "## Navigation fails, so robot starts exploring environments.\n"
+            debug_text += "## No object localization; falling back to frontier exploration.\n"
             frontier_text = self._exploration_text(text)
             explore_pt = pick_uncovered_explore_target(
                 self,
@@ -1950,16 +1993,19 @@ class DynamemController(BaseController):
             )
             if explore_pt is not None:
                 localized_point = explore_pt
+                localize_source = "frontier_uncovered"
                 debug_text += "## Selected blocked-aware explore frontier.\n"
                 mode = "exploration"
             else:
                 graph_frontier = self._best_frontier_point_from_graph(frontier_text)
                 if graph_frontier is not None:
                     localized_point = graph_frontier
+                    localize_source = "frontier_graph"
                     debug_text += "## Selected frontier target from graph memory.\n"
                     mode = "exploration"
                 else:
                     localized_point = self.space.sample_frontier(self.planner, start_pose, frontier_text)
+                    localize_source = "frontier_space" if localized_point is not None else ""
                     mode = "exploration"
 
         if obs is not None and mode == "navigation":
@@ -1974,6 +2020,7 @@ class DynamemController(BaseController):
                     pass
 
         if localized_point is None:
+            logger.warning("process_text: no localized point for query %r", text)
             return []
 
         # TODO: Do we really need this line?
@@ -1988,18 +2035,19 @@ class DynamemController(BaseController):
         oz = float(_lp[2]) if _lp.size > 2 else 1.5
         if not np.isfinite(oz) or abs(oz) < 1e-9:
             oz = 1.5
-        self.rerun_visualizer.log_custom_pointcloud(
-            "world/object",
-            [ox, oy, oz],
-            torch.Tensor([1, 0, 0]),
-            0.12,
-        )
 
         point = self.space.sample_navigation(start_pose, self.planner, localized_point)
 
-        logger.debug("Navigation endpoint: %s", point)
+        logger.info(
+            "Nav endpoint sample: localize=%s target_xy=(%.2f, %.2f) base_goal=%s",
+            localize_source or "?",
+            ox,
+            oy,
+            None if point is None else np.asarray(point).reshape(-1)[:3],
+        )
 
         waypoints = None
+        n_planned = 0
 
         if point is None:
             res = None
@@ -2009,18 +2057,20 @@ class DynamemController(BaseController):
 
         if res is not None and res.success:
             waypoints = [pt.state for pt in res.trajectory]
+            n_planned = len(waypoints)
         elif res is not None:
             waypoints = None
             logger.warning("Planner failure: %s", res.reason)
 
-        if point is not None:
-            self.rerun_visualizer.update_nav_goal(np.asarray(point, dtype=np.float64))
-
         # If we are navigating to some object of interest, send (x, y, z) of
         # the object so that we can make sure the robot looks at the object after navigation
         traj = []
+        chunked = False
+        full_traj_for_viz = None
         if waypoints is not None:
             finished = len(waypoints) <= 8 and mode == "navigation"
+            chunked = not finished
+            full_traj_for_viz = self.planner.clean_path_for_xy(list(waypoints))
             if finished:
                 self.space.traj = None
             else:
@@ -2033,7 +2083,12 @@ class DynamemController(BaseController):
                 if isinstance(localized_point, torch.Tensor):
                     localized_point = localized_point.tolist()
                 traj.append(localized_point)
-            logger.debug("Planned trajectory (%d waypoints): %s", len(traj), traj)
+            logger.info(
+                "Planned trajectory: %d exec / %d planned waypoints (finished_chunk=%s)",
+                len([p for p in traj if np.isfinite(np.asarray(p, dtype=np.float64).reshape(-1)[:2]).all()]),
+                n_planned,
+                finished,
+            )
 
         # Talk about what you are doing, as the robot.
         if self.robot is not None:
@@ -2046,24 +2101,51 @@ class DynamemController(BaseController):
             debug_text = "### The goal is to navigate to " + text + ".\n" + debug_text
         else:
             debug_text = "### I have not received any text query from human user.\n ### So, I plan to explore the environment with Frontier-based exploration.\n"
+        debug_text += (
+            f"\n### Plan: mode=`{mode}` localize=`{localize_source or 'n/a'}` "
+            f"planned_wps={n_planned} chunked={chunked}\n"
+        )
         debug_text = "# Robot's monologue: \n" + debug_text
         self._rerun_monologue_base = debug_text
         self._rerun_refresh_monologue_panel()
 
-        if traj is not None:
+        log_plan = getattr(self.rerun_visualizer, "log_nav_plan", None)
+        if callable(log_plan) and traj:
+            self._last_nav_plan = log_plan(
+                traj,
+                full_traj=full_traj_for_viz,
+                start_xyt=start_pose,
+                goal_xyt=point,
+                object_xyz=[ox, oy, oz],
+                mode=mode,
+                localize_source=localize_source,
+                query=text or "",
+                n_planned=n_planned or None,
+                chunked=chunked,
+            )
+        elif traj:
+            # NullVisualizer / older stubs: keep minimal legacy arrows.
             origins = []
             vectors = []
-            for idx in range(len(traj)):
-                if idx != len(traj) - 1:
-                    origins.append([traj[idx][0], traj[idx][1], 1.5])
-                    vectors.append([traj[idx + 1][0] - traj[idx][0], traj[idx + 1][1] - traj[idx][1], 0])
-            self.rerun_visualizer.log_arrow3D("world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1)
-            self.rerun_visualizer.log_custom_pointcloud(
-                "world/robot_start_pose",
-                [start_pose[0], start_pose[1], 1.5],
-                torch.Tensor([0, 0, 1]),
-                0.1,
-            )
+            for idx in range(len(traj) - 1):
+                a = np.asarray(traj[idx], dtype=np.float64).reshape(-1)
+                b = np.asarray(traj[idx + 1], dtype=np.float64).reshape(-1)
+                if a.size < 2 or b.size < 2 or not np.isfinite(a[:2]).all() or not np.isfinite(b[:2]).all():
+                    continue
+                origins.append([float(a[0]), float(a[1]), 1.5])
+                vectors.append([float(b[0] - a[0]), float(b[1] - a[1]), 0.0])
+            if origins:
+                self.rerun_visualizer.log_arrow3D(
+                    "world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1
+                )
+            self._last_nav_plan = {
+                "mode": mode,
+                "localize_source": localize_source,
+                "n_planned": n_planned,
+                "chunked": chunked,
+                "path_m": 0.0,
+                "announce": f"Navigating via {localize_source or mode}: {n_planned} wps",
+            }
 
         return traj
 
@@ -2558,34 +2640,81 @@ class DynamemController(BaseController):
             )
 
         finished = False
+        n_planned = 0
+        truncated = False
+        full_traj_for_viz = None
         if waypoints is not None:
+            n_planned = len(waypoints)
             truncated = len(waypoints) > 8
+            full_traj_for_viz = self.planner.clean_path_for_xy(list(waypoints))
             if truncated:
                 waypoints = waypoints[:8]
             traj = self.planner.clean_path_for_xy(waypoints)
             finished = not truncated
             if finished and target_theta is not None:
                 traj[-1][2] = target_theta
-            logger.debug("navigate_to_target_pose trajectory (%d pts): %s", len(traj), traj)
+            logger.info(
+                "navigate_to_target_pose: %d exec / %d planned waypoints (finished=%s)",
+                len(traj),
+                n_planned,
+                finished,
+            )
         else:
             traj = None
 
         before_xy = np.asarray(start_pose, dtype=np.float64).reshape(-1)[:2].copy()
         # draw traj on rerun and execute it
         if traj is not None:
-            origins = []
-            vectors = []
-            for idx in range(len(traj)):
-                if idx != len(traj) - 1:
+            log_plan = getattr(self.rerun_visualizer, "log_nav_plan", None)
+            if callable(log_plan):
+                self._last_nav_plan = log_plan(
+                    traj,
+                    full_traj=full_traj_for_viz,
+                    start_xyt=start_pose,
+                    goal_xyt=target_pose,
+                    object_xyz=original_target_pose,
+                    mode="navigation",
+                    localize_source="eqa_target",
+                    n_planned=n_planned or None,
+                    chunked=truncated,
+                )
+            else:
+                origins = []
+                vectors = []
+                for idx in range(len(traj) - 1):
                     origins.append([traj[idx][0], traj[idx][1], 1.5])
-                    vectors.append([traj[idx + 1][0] - traj[idx][0], traj[idx + 1][1] - traj[idx][1], 0])
-            self.rerun_visualizer.log_arrow3D("world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1)
-            self.rerun_visualizer.log_custom_pointcloud(
-                "world/robot_start_pose",
-                [start_pose[0], start_pose[1], 1.5],
-                torch.Tensor([0, 0, 1]),
-                0.1,
-            )
+                    vectors.append(
+                        [traj[idx + 1][0] - traj[idx][0], traj[idx + 1][1] - traj[idx][1], 0]
+                    )
+                self.rerun_visualizer.log_arrow3D(
+                    "world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1
+                )
+                self.rerun_visualizer.log_custom_pointcloud(
+                    "world/robot_start_pose",
+                    [start_pose[0], start_pose[1], 1.5],
+                    torch.Tensor([0, 0, 1]),
+                    0.1,
+                )
+
+            from emet.controller.nav_confirm import confirm_navigation_plan
+
+            if not confirm_navigation_plan(
+                self,
+                traj,
+                meta=getattr(self, "_last_nav_plan", None) or {},
+                object_xyz=original_target_pose,
+            ):
+                nav_res = NavAttemptResult(
+                    success=False,
+                    finished=False,
+                    dist_m=0.0,
+                    method="voxel_astar",
+                    note="user_rejected_plan",
+                    target_obs_id=target_obs_id,
+                )
+                self._last_nav_attempt = nav_res
+                self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
+                return False
 
             self.robot.execute_trajectory(
                 traj,

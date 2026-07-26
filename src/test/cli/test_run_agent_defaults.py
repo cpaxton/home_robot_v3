@@ -192,6 +192,16 @@ def test_help_lists_rerun_agent_flags():
     assert "--rerun-bind" in r.output
 
 
+def test_help_lists_confirm_nav():
+    from emet.app.run_agent import main
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["--help"])
+    assert r.exit_code == 0
+    assert "--confirm-nav" in r.output
+    assert "EMET_CONFIRM_NAV" in r.output
+
+
 def test_default_llm_is_qwen35_4b():
     from emet.agent.loop import DEFAULT_AGENT_LLM
     from emet.app.run_agent import main

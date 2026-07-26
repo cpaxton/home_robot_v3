@@ -88,6 +88,7 @@ class GraphNodeView:
     last_seen: int | None = None  # graph timestep when last observed (staleness)
     support_count: int | None = None
     is_viewpoint: bool = False
+    is_frontier: bool = False
     belief_confidence: float | None = None
     position_covariance: list[list[float]] | None = None
     position_history: list[dict[str, Any]] | None = None
@@ -410,6 +411,7 @@ def save_memory(state: MemoryState, path: str) -> None:
                         else {}
                     ),
                     **({"is_viewpoint": True} if getattr(n, "is_viewpoint", False) else {}),
+                    **({"is_frontier": True} if getattr(n, "is_frontier", False) else {}),
                     **(
                         {"belief_confidence": float(n.belief_confidence)}
                         if getattr(n, "belief_confidence", None) is not None

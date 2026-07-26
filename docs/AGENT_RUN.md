@@ -156,6 +156,7 @@ Common flags (require **`--start-sim`**): `--scene`, `--split`, `--index`, `--in
 |---------|---------|------------------|
 | **Rerun** | **Off** (unlike `emet run dynamem` / `dynagraph`) | Pass **`--rerun`**; optional **`--headless`**, **`--rerun-native`**, **`--rerun-bind`**. Viewer: `http://localhost:9090?url=ws://localhost:9877` |
 | **Discord** | **On** when `DISCORD_TOKEN` is set | **`--no-discord`** to skip; warning if token missing. Terminal and Discord share one input queue when both run. |
+| **Nav confirm** | **Off** | **`--confirm-nav`** or **`EMET_CONFIRM_NAV=1`**. Before the base moves, shows the plan on the 2D map (Rerun + Discord PNG) and waits for **y/n** (terminal or Discord). Recommended on the real robot. Scripted `-c` auto-accepts. |
 
 Install Discord extra: `uv sync -e discord`.
 
@@ -170,6 +171,7 @@ Install Discord extra: `uv sync -e discord`.
 | `--debug-camera` | `EMET_AGENT_CAMERA_DEBUG=1` | Head-camera frame stats (black-PNG diagnosis) |
 | `--thinking-status` / `--no-thinking-status` | `EMET_AGENT_THINKING_STATUS=1/0` | Status while waiting (default: on). Terminal: Thinking phases + tool chatter. Discord: one Thinking line per LLM call; for long actions (`explore`, `scan_environment`, …) also `*Exploring…*` / progress (`*Look around: sweeping head*`). |
 | — | `EMET_AGENT_MOTION_STATUS=1/0` | Fine-grained **terminal** motion progress during head sweeps / rotate-in-place / explore steps (default: on). Discord stays coarse (start + mid/end). |
+| `--confirm-nav` / `--no-confirm-nav` | `EMET_CONFIRM_NAV=1` | Gate motion plans behind y/n + map preview (see table above) |
 | `--cache-vl-prefix` / `--no-cache-vl-prefix` | `EMET_VL_CACHE_SYSTEM_PREFIX=1/0` | Reuse system-prompt KV on Qwen3-VL agent turns (default: on via `eqa.vl_cache_system_prefix`) |
 
 Terminal-only timing lines use a ``[HH:MM:SS]`` prefix (user turn, LLM done + duration, tools done + duration, turn total). Discord messages stay untimestamped.
@@ -184,6 +186,10 @@ uv run emet run agent --llm qwen35-9B --offline
 # Embodied + Rerun + Discord preset
 export DISCORD_TOKEN=...
 uv run emet run agent --config configs/agent_stretch_discord.yaml --eqa --rerun
+
+# Real robot: preview motion plans on the map, confirm y/n (terminal or Discord)
+uv run emet run agent --robot stretch --robot-ip <IP> --confirm-nav --rerun
+# or: EMET_CONFIRM_NAV=1 uv run emet run agent --robot stretch --robot-ip <IP> --rerun
 
 # Innate Mars (Herman) — Discord chat + explore (bridge must be up)
 export DISCORD_TOKEN=...

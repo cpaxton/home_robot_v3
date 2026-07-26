@@ -554,6 +554,111 @@ def apply_se2_to_memory(
     }
 
 
+def checkpoint_expected_counts(path: str | Path) -> dict[str, Any]:
+    """Read expected graph/voxel sizes from an on-disk memory directory (no MuJoCo)."""
+    import json
+
+    path_obj = Path(path)
+    out: dict[str, Any] = {
+        "n_graph_nodes": 0,
+        "has_graph": False,
+        "has_voxel_pickle": False,
+        "final_step": None,
+        "voxel_pickle_bytes": 0,
+    }
+    manifest_path = path_obj / "manifest.json"
+    if manifest_path.is_file():
+        man = json.loads(manifest_path.read_text(encoding="utf-8"))
+        out["has_graph"] = bool(man.get("has_graph"))
+        out["has_voxel_pickle"] = bool(man.get("has_voxel_pickle"))
+        if man.get("final_step") is not None:
+            out["final_step"] = int(man["final_step"])
+    graph_path = path_obj / "graph.json"
+    if graph_path.is_file():
+        graph = json.loads(graph_path.read_text(encoding="utf-8"))
+        nodes = graph.get("nodes") or []
+        out["n_graph_nodes"] = int(len(nodes))
+        out["has_graph"] = out["has_graph"] or bool(nodes)
+    voxel_pickle = path_obj / VOXEL_PICKLE_FILENAME
+    if voxel_pickle.is_file():
+        out["has_voxel_pickle"] = True
+        out["voxel_pickle_bytes"] = int(voxel_pickle.stat().st_size)
+    return out
+
+
+def verify_lifelong_restore(
+    controller: Any,
+    path: str | Path,
+    info: dict[str, Any],
+    *,
+    strict: bool = True,
+) -> dict[str, Any]:
+    """Confirm graph + voxel memory match the checkpoint; raise if restore clearly failed.
+
+    ``strict=True`` (default) raises ``RuntimeError`` when the checkpoint has content but the
+    controller does not after load. Soft mode only logs errors.
+    """
+    expected = checkpoint_expected_counts(path)
+    gm = getattr(controller, "graph_memory", None)
+    n_nodes = 0
+    if gm is not None and hasattr(gm, "get_nodes"):
+        n_nodes = int(len(gm.get_nodes()))
+    n_obs = 0
+    if gm is not None:
+        obs = getattr(gm, "_observations", None) or getattr(gm, "observations", None)
+        if obs is not None:
+            try:
+                n_obs = int(len(obs))
+            except TypeError:
+                n_obs = 0
+    voxel_pts = int(info.get("voxel_points") or 0)
+    semantic_pts = int(info.get("semantic_points") or 0)
+
+    report = {
+        **expected,
+        "restored_graph_nodes": n_nodes,
+        "restored_graph_obs": n_obs,
+        "restored_voxel_points": voxel_pts,
+        "restored_semantic_points": semantic_pts,
+        "ok": True,
+        "errors": [],
+    }
+
+    if expected["n_graph_nodes"] > 0 and n_nodes == 0:
+        report["errors"].append(
+            f"checkpoint has {expected['n_graph_nodes']} graph nodes but controller has 0 after load"
+        )
+    elif expected["n_graph_nodes"] > 0 and n_nodes < max(1, expected["n_graph_nodes"] // 2):
+        report["errors"].append(
+            f"checkpoint has {expected['n_graph_nodes']} graph nodes but only {n_nodes} restored"
+        )
+
+    if expected["has_voxel_pickle"] and expected["voxel_pickle_bytes"] > 10_000:
+        if voxel_pts == 0 and semantic_pts == 0:
+            report["errors"].append(
+                f"checkpoint has {VOXEL_PICKLE_FILENAME} "
+                f"({expected['voxel_pickle_bytes'] / 1e6:.1f} MiB) but voxel/semantic clouds are empty"
+            )
+
+    if not info.get("graph_loaded") and expected["has_graph"] and expected["n_graph_nodes"] > 0:
+        report["errors"].append("checkpoint has a graph but graph_loaded=False")
+    if expected["has_voxel_pickle"] and not info.get("voxel_pickle_loaded"):
+        report["errors"].append(f"checkpoint has {VOXEL_PICKLE_FILENAME} but voxel_pickle_loaded=False")
+
+    report["ok"] = len(report["errors"]) == 0
+    if report["errors"]:
+        msg = "Lifelong restore verification failed: " + "; ".join(report["errors"])
+        if strict:
+            raise RuntimeError(msg)
+        logger.error(msg)
+    else:
+        logger.info(
+            f"lifelong restore OK: graph_nodes={n_nodes}/{expected['n_graph_nodes']} "
+            f"obs={n_obs} voxel_pts={voxel_pts} semantic_pts={semantic_pts}"
+        )
+    return report
+
+
 def load_lifelong_checkpoint(
     controller: Any,
     path: str | Path,
@@ -604,7 +709,9 @@ def load_lifelong_checkpoint(
         logger.info(f"lifelong: loading graph from {path_obj}")
         backend = get_memory_backend("graph_eqa", graph_memory=gm, voxel_map=vm)
         backend.load(str(path_obj))
-        info["graph_loaded"] = True
+        n_after = len(gm.get_nodes()) if hasattr(gm, "get_nodes") else 0
+        info["graph_loaded"] = n_after > 0
+        info["graph_nodes"] = int(n_after)
         final_step = getattr(backend, "loaded_final_step", None)
         if final_step is not None and int(final_step) > 0:
             info["final_step"] = int(final_step)
@@ -612,11 +719,13 @@ def load_lifelong_checkpoint(
                 controller.obs_count = max(int(controller.obs_count), int(final_step))
             if hasattr(gm, "set_graph_timestep"):
                 gm.set_graph_timestep(int(getattr(controller, "obs_count", final_step)))
+        logger.info(f"lifelong: graph restore → {n_after} nodes, final_step={info.get('final_step')}")
     elif vm is not None:
         logger.info(f"lifelong: loading dynamem backend from {path_obj}")
         backend = get_memory_backend("dynamem", voxel_map=vm)
         backend.load(str(path_obj))
         info["graph_loaded"] = False
+        info["graph_nodes"] = 0
 
     voxel_pickle = path_obj / VOXEL_PICKLE_FILENAME
     if voxel_pickle.is_file() and vm is not None and hasattr(vm, "read_from_pickle"):
@@ -664,6 +773,8 @@ def load_lifelong_checkpoint(
             f"lifelong: Rerun refreshed "
             f"(voxel_pts={info['voxel_points']} semantic_pts={info['semantic_points']})"
         )
+
+    info["verify"] = verify_lifelong_restore(controller, path_obj, info, strict=True)
     return info
 
 
