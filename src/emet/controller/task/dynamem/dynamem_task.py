@@ -242,7 +242,11 @@ class DynamemTaskExecutor:
         point: np.ndarray | None = None,
         skip_confirmations: bool = False,
     ) -> bool:
-        """Pick up an object. Returns True on success (Stretch path always True)."""
+        """Pick up an object. Returns True on success (Stretch path always True).
+
+        Stretch visual-servo / AnyGrasp still returns True unconditionally — see TODO.md
+        (Stretch / AnyGrasp ``_pickup`` / ``_place`` always return True).
+        """
         from emet.simulation.sim_manipulation import (
             prefer_kinematic_manip,
             prefer_sim_teleport_manip,
@@ -323,7 +327,11 @@ class DynamemTaskExecutor:
         return True
 
     def _place(self, target_receptacle: str, point: np.ndarray | None) -> bool:
-        """Place an object. Returns True on success (Stretch path always True)."""
+        """Place an object. Returns True on success (Stretch path always True).
+
+        Stretch ``agent.place`` still returns True unconditionally — see TODO.md
+        (Stretch / AnyGrasp ``_pickup`` / ``_place`` always return True).
+        """
         from emet.simulation.sim_manipulation import (
             prefer_kinematic_manip,
             prefer_sim_teleport_manip,

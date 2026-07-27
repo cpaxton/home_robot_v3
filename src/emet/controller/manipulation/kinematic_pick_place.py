@@ -429,8 +429,8 @@ class KinematicPickPlaceExecutor:
         pre_pos = obj_pos.copy()
         try:
             self._set_gripper(open_=True)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"KinematicPickPlace: open gripper before grasp failed: {e}")
         if grasp_T_world is not None:
             pregrasp, grasp, lift = _targets_from_grasp_T(
                 grasp_T_world, pregrasp_standoff_m=self.pregrasp_standoff_m, lift_m=self.lift_m
@@ -449,8 +449,8 @@ class KinematicPickPlaceExecutor:
         self._sleep(0.4)
         try:
             self._set_gripper(open_=False)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"KinematicPickPlace: close gripper at grasp failed: {e}")
         # Snap + attach in one ZMQ action so physics cannot drop the freejoint in between.
         robot_zmq_attach_body(self.robot, body, self.ee_body, snap_pos=grasp)
         ok, _ = self._plan_and_execute_ee(lift)
@@ -482,6 +482,7 @@ class KinematicPickPlaceExecutor:
         receps = bodies_matching_category(pl, receptacle_query)
         if not receps:
             return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "recep_not_in_gt")
+        # First category match only — see TODO.md (GT body / receptacle disambiguation).
         recep_pos = np.asarray(pl[receps[0]]["pos"], dtype=np.float64).reshape(3)
         place = recep_pos + np.array([0.0, 0.0, self.place_z_offset_m])
         preplace = place + np.array([0.0, 0.0, 0.12])
@@ -495,8 +496,8 @@ class KinematicPickPlaceExecutor:
         robot_zmq_detach_body(self.robot, body)
         try:
             self._set_gripper(open_=True)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"KinematicPickPlace: open gripper after place failed: {e}")
         self._plan_and_execute_ee(place + np.array([0.0, 0.0, 0.15]))
         ok_place, p_err = self._verify_place_xy(body, recep_pos[:2])
         if not ok_place:
