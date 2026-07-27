@@ -14,13 +14,13 @@ graph labels + SigLIP hits + frontiers
         → motion → capture → verify proposal → vlm_assess → …
 ```
 
-- **Evidence cards** (router state): `obs_id`, phrase, `source`, xyz, optional labels /
-  raw `siglip_sim`, `[tried]` / `nav_visits`. No composite nav-utility score and no
-  “prefer #1 score” decree — the VLM chooses among listed cards. Frontier cards use
-  phrase ``unexplored frontier`` (not the question object) so lexical match cannot
-  invent fake object hits outdoors.
-- **Navigate clamp:** `navigate_to_obs` rejects obs_ids not in the current evidence
-  list when cards are present (`OBS_NOT_IN_EVIDENCE`).
+- **Investigate vs explore:** router chooses `investigate(obs_id)` for a closer look
+  at graph/siglip place cards, or `explore_frontier` when no place is worth it.
+  Cards show `investigated=N`, `closest=`, `recent:` for this query. After
+  close+ABSENT, pick another place or explore — not outdoor spam via
+  `toward=place_name`.
+- **Evidence cards** (router state): split Investigate / Explore; frontiers use
+  phrase ``unexplored frontier``. Navigate clamp / investigate rejects bad ids.
 - **Recall key** (internal only): source tier `graph > confirmed/siglip > frontier`,
   keyword/MCQ-landmark hit, planar distance tiebreak; pack so graph+frontier can
   coexist in top-K. Fallback (`EMET_EQA_AGENTIC_ROUTER=0`) walks that order.

@@ -16,9 +16,12 @@ from typing import TYPE_CHECKING, Any
 
 from emet.agent.skills import AgentMode, build_skill_pack
 from emet.agent.tools import Tool, get_tool_descriptions_for_prompt
+from emet.utils.logger import Logger
 
 if TYPE_CHECKING:
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+_logger = Logger(__name__)
 
 # Response format block. Constant string (with the tools block) so the routing
 # system prompt is byte-identical across rounds and question banks — required
@@ -29,37 +32,33 @@ Respond with ONLY a JSON object (no other text):
 {"tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
 
 Rules:
-- Interactive loop: (1) explore / inspect for candidate places, (2) navigate in —
-  the runtime captures, updates voxel+graph, and runs verify_siglip on the new view,
-  (3) when Qwen says answerable → submit_answer with the MCQ letter; else move /
-  explore. Never re-verify the same observation / view.
-- SigLIP/OWL are proposals shown in state — not proof. Trust Qwen's assess and router.
-- Pass the MCQ letter (A–D) in submit_answer.arguments.answer.
-- Evidence cards list candidate obs_id values. Pick among them from the evidence;
-  do not treat retrieval order as a command. navigate_to_obs only accepts listed ids.
-- source=graph / confirmed / siglip cards are place or object evidence. source=frontier
-  cards are unexplored coverage goals (phrase is not an object sighting) — prefer a
-  graph place card when looking for a named object; use explore_frontier to grow map.
-- If a hypothesis was ABSENT / STALLED_NAV_LOOP / [tried] in the state, do NOT
-  navigate_to_obs that obs_id again — explore_frontier or look_around instead.
-- If state says NAV_LOOP, treat that as a bug signal: switch to explore_frontier.
+- Each turn choose explicitly: INVESTIGATE a place card OR EXPLORE for coverage
+  (then verify/assess runs at the station after investigate).
+- investigate(obs_id): closer look at a listed Investigate card (graph/confirmed/siglip).
+  Do not investigate frontiers — those are Explore-only.
+- explore_frontier: map growth when no place is worth a closer look, or after
+  close+ABSENT on the places you tried. toward= is weak coverage bias ONLY —
+  never a substitute for investigate(obs_id).
+- After close+ABSENT on a card (see investigated=/recent= on the card), pick a
+  *different* Investigate card or explore — do not spam the same place.
+- SigLIP/OWL are proposals in state — not proof. Trust Qwen assess for answerability.
+- Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.
 - One or two tool calls per turn.
 
 # Examples
-State: evidence obs_id=3 phrase='sink' source=graph; obs_id=12 phrase='unexplored frontier' source=frontier
-{"tool_calls": [{"name": "navigate_to_obs", "arguments": {"obs_id": 3}}], "message": ""}
+State: Investigate obs_id=3 phrase='sink' source=graph investigated=0; Explore frontier obs_id=12
+{"tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}
+State: Investigate obs_id=3 … investigated=1 closest=0.3m [close] recent: r2@0.3m verify=ABSENT assess=absent
+{"tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
 State: Last verify PRESENT; VLM assess answerable=true verified=true
 {"tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
-State: no hypotheses, 3 unexplored frontiers
-{"tool_calls": [{"name": "explore_frontier", "arguments": {"toward": "sink"}}], "message": ""}
-State: NAV_LOOP on obs_id=16
-{"tool_calls": [{"name": "explore_frontier", "arguments": {"toward": "large wall clock"}}], "message": ""}"""
+State: Investigate (none); Explore frontiers available
+{"tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}"""
 
 _EQA_IDENTITY = """\
-You are a robot exploring a home. You maintain a 3D map and an object scene graph that
-update automatically after every motion. Your job is to answer a question about the scene
-(or to explore and map it). Move to where the answer can be seen, run verify_siglip
-(cheap check + VLM assess), and only then answer. Do NOT output reasoning — only the JSON."""
+You are a robot answering questions about a home. You maintain a 3D map and scene graph.
+Decide each turn: investigate a promising place for a closer look, or explore to grow
+coverage when places are exhausted or none look good. Do NOT output reasoning — only JSON."""
 
 
 def build_agentic_eqa_tools(executor: AgenticEQAExecutor) -> list[Tool]:
@@ -81,7 +80,9 @@ def _graph_stats_line(gm: Any) -> str:
 
 
 def build_state_message(executor: AgenticEQAExecutor) -> str:
-    """Per-round user message: goal + graph stats + annotated hypotheses + verify + budgets."""
+    """Per-round user message: goal + graph stats + Investigate/Explore cards + budgets."""
+    from emet.memory.graph_eqa.agentic_eqa import INVESTIGATE_SOURCES
+
     gm = executor.graph_memory
     lines: list[str] = []
     if getattr(executor, "mode", "answer") == "explore":
@@ -89,7 +90,6 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     else:
         lines.append(f"Question: {executor.question}")
     lines.append(_graph_stats_line(gm))
-    # Compact memory / graph text so the router is not blind vs classic query_answer.
     if gm is not None:
         used_spatial = False
         if getattr(gm, "_spatial_rag_enabled", lambda: False)():
@@ -112,7 +112,8 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
                 if compact:
                     lines.append(compact)
                     used_spatial = True
-            except Exception:
+            except Exception as e:
+                _logger.warning(f"spatial RAG for router state failed: {e}")
                 used_spatial = False
         if not used_spatial:
             mem_fn = getattr(gm, "_relevant_memory_summary", None)
@@ -122,7 +123,6 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
                 except Exception:
                     mem = None
                 if mem:
-                    # Cap so tool-router context stays small.
                     snippet = str(mem).strip()
                     if len(snippet) > 900:
                         snippet = snippet[:900].rstrip() + "…"
@@ -151,27 +151,47 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         last = loop_flags[-1]
         lines.append(
             f"NAV_LOOP: obs_id={last.get('obs_id')} visits={last.get('visits')} "
-            f"status={last.get('status')} — do not re-navigate; explore_frontier"
+            f"status={last.get('status')} — pick another investigate card or explore_frontier"
         )
-    if executor._hypotheses:
-        lines.append("Evidence (candidate places — pick among listed obs_id values):")
-        for h in executor._hypotheses:
-            tried = executor._tried.get(int(h.obs_id))
-            visits = int(getattr(executor, "_nav_to_obs_counts", {}).get(int(h.obs_id), 0))
-            mark = f" [tried: {tried}]" if tried else ""
-            if visits:
-                mark += f" [nav_visits={visits}]"
-            labels = _hyp_labels(executor, int(h.obs_id))
+    lines.append(
+        "Choose: investigate(obs_id) for a closer look at a place, "
+        "OR explore_frontier if no place is worth it / places are exhausted."
+    )
+    inv = [h for h in executor._hypotheses if str(h.source) in INVESTIGATE_SOURCES]
+    exp = [h for h in executor._hypotheses if str(h.source) not in INVESTIGATE_SOURCES]
+    ledger = getattr(executor, "_place_inspect", {}) or {}
+    if inv:
+        lines.append("Investigate (place cards — use investigate):")
+        for h in inv:
+            oid = int(h.obs_id)
+            labels = _hyp_labels(executor, oid)
             label_bit = f" labels={labels}" if labels else ""
             sim = getattr(h, "siglip_sim", None)
-            sim_bit = f" siglip_sim={float(sim):.3f}" if sim is not None else ""
+            sim_bit = ""
+            if isinstance(sim, (int, float)):
+                sim_bit = f" siglip_sim={float(sim):.3f}"
+            rec = ledger.get(oid)
+            bits = rec.card_bits() if rec is not None else "investigated=0 closest=none recent=none"
+            tried = executor._tried.get(oid)
+            if tried:
+                bits += f" [tried: {tried}]"
             lines.append(
-                f"- obs_id={int(h.obs_id)} phrase={h.phrase!r} source={h.source} "
+                f"- obs_id={oid} phrase={h.phrase!r} source={h.source} "
                 f"xyz=({float(h.xyz[0]):.1f},{float(h.xyz[1]):.1f})"
-                f"{label_bit}{sim_bit}{mark}"
+                f"{label_bit}{sim_bit} {bits}"
             )
     else:
-        lines.append("Evidence: (none — explore or look_around first)")
+        lines.append("Investigate: (none — explore or look_around first)")
+    if exp:
+        lines.append("Explore (frontiers — coverage only; not investigate targets):")
+        for h in exp:
+            oid = int(h.obs_id)
+            lines.append(
+                f"- obs_id={oid} phrase={h.phrase!r} source={h.source} "
+                f"xyz=({float(h.xyz[0]):.1f},{float(h.xyz[1]):.1f})"
+            )
+    else:
+        lines.append("Explore: (no frontier cards in recall)")
     if executor._last_verify is not None:
         lv = executor._last_verify
         lines.append(f"Last verify: {lv.status} sim={float(lv.sim):.3f} obs_id={int(lv.obs_id)}")

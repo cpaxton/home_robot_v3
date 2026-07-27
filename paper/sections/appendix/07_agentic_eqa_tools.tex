@@ -15,17 +15,19 @@ The model must reply with only:
 Rules encoded in the prompt: explore / navigate for candidate views; trust VLM assess over detector proposals; if a place was ABSENT / stalled / tried, do not re-navigate that \texttt{obs\_id}; one or two tool calls per turn.
 SigLIP/OWL are intentionally high-recall (high false positive) support for choosing where to look---not a precision oracle (Appendix~\ref{app:agentic_verify_gate}).
 
-\paragraph{State message (evidence cards).}
-Each round appends a compact state string: question (answer mode), remaining round/nav budgets, graph object/frontier counts, and a small set of \textbf{evidence cards} for candidate places (\texttt{obs\_id}, phrase, source, $xyz$, optional labels / raw SigLIP similarity, tried / nav-visit marks).
-The router is not given a composite navigation-utility score; retrieval only decides which cards fit in context ($K{=}6$ by default via \texttt{EMET\_EQA\_HYP\_RECALL\_K}).
+\paragraph{State message (Investigate / Explore cards).}
+Each round appends question, budgets, graph counts, and split card lists: \textbf{Investigate} (graph / confirmed / SigLIP) with per-query \texttt{investigated=$N$}, closest approach, and recent station outcomes; \textbf{Explore} (frontiers, coverage only).
+Retrieval only decides which cards fit in context ($K{=}6$ by default via \texttt{EMET\_EQA\_HYP\_RECALL\_K}); the router is not given a composite navigation-utility score.
 Visited frontier nodes are retired from the graph so they are not re-offered as frontiers.
 
 \paragraph{Automatic capture.}
 After motion tools succeed, the executor captures a fresh observation and updates voxel + graph memory without exposing a separate \texttt{capture\_and\_update} tool to the VLM.
 
-\paragraph{Router vs.\ heuristic.}
-With \texttt{agentic\_vlm\_router} / \texttt{EMET\_EQA\_AGENTIC\_ROUTER=1}, a text-only routing call proposes tool JSON among the recalled cards (and explore / look / submit).
-With the router off (default in our Habitat H2H of record), a deterministic heuristic selects among the same tools (prefer untried recalled cards $\rightarrow$ navigate $\rightarrow$ verify+assess $\rightarrow$ submit; else explore / look around).
+\paragraph{Investigate vs.\ explore.}
+The router chooses explicitly: \texttt{investigate(obs\_id)} for a closer look at a listed place card (graph / confirmed / SigLIP), or \texttt{explore\_frontier} to grow coverage when no place is worth pursuing (or after close ABSENT looks).
+State splits \textbf{Investigate} and \textbf{Explore} cards; Investigate lines show per-query \texttt{investigated=$N$}, closest approach, and recent station verify/assess outcomes.
+\texttt{navigate\_to\_obs} remains an alias of \texttt{investigate}.
+Optional \texttt{toward} on explore is coverage bias only---not a substitute for investigating a place card.
 
 \subsection{Answer-mode tools}
 
@@ -33,12 +35,12 @@ With the router off (default in our Habitat H2H of record), a deterministic heur
   \item[\texttt{inspect\_graph}] Refresh question keywords and retrieve up to $K$ place evidence cards from the scene graph, SigLIP hits, and frontier waypoints (diversified source packing).
     Use when the evidence list looks stale or empty.
     Parameters: none.
-  \item[\texttt{explore\_frontier}] Navigate to an unexplored frontier to grow the map and graph.
-    Optional string \texttt{toward} biases frontier choice toward a phrase (e.g.\ the question object).
-    Agentic prefers a VLM pick among a small pool of reachable frontier RGBs when available; otherwise uncovered / graph heuristics.
+  \item[\texttt{explore\_frontier}] Grow map coverage when no Investigate place is worth a closer look (or after close ABSENT).
+    Optional \texttt{toward} is weak coverage bias only---not investigate.
+    Agentic prefers a VLM pick among reachable frontier RGBs when available.
     Successful visits retire nearby frontier graph nodes.
-  \item[\texttt{navigate\_to\_obs}] Navigate to a listed evidence \texttt{obs\_id}.
-    Visiting a frontier card retires that frontier from the graph.
+  \item[\texttt{investigate}] Closer look at a listed Investigate \texttt{obs\_id}: approach object standoff, look around, verify/assess at the station; updates per-query investigate count / closest / recent on the card.
+  \item[\texttt{navigate\_to\_obs}] Alias for \texttt{investigate}.
   \item[\texttt{look\_around}] In-place head sweep / rotate to refresh map and graph without translating.
     Parameters: none.
   \item[\texttt{verify\_siglip}] Cheap visual check: does string \texttt{phrase} match the current camera view or stored view \texttt{obs\_id} (default $-1$ = latest fresh view)?

@@ -73,8 +73,64 @@ NAV_SAME_OBS_LOOP_LIMIT = 2
 # Hyp recall: how many evidence cards to show the router / walk in fallback.
 DEFAULT_HYP_RECALL_K = 6
 
+# Investigate vs explore: place-card sources worth a closer look.
+INVESTIGATE_SOURCES = frozenset({"graph", "confirmed", "siglip"})
+PLACE_INSPECT_RECENT_K = 3
+
 # Routing turns are text-only JSON; a two-call reply with arguments needs more than 64 tokens.
 ROUTER_MAX_NEW_TOKENS = 128
+
+
+@dataclass
+class PlaceInspectVisit:
+    """One completed investigate() station look for a place card this query."""
+
+    round: int
+    closest_m: float
+    verify: str = ""
+    assess_present: bool | None = None
+    assess_answerable: bool | None = None
+    suggested: str = ""
+
+
+@dataclass
+class PlaceInspectRecord:
+    """Per-place investigate history for the current question episode."""
+
+    investigate_count: int = 0
+    closest_m: float | None = None
+    recent: list[PlaceInspectVisit] = field(default_factory=list)
+    last_verify: str = ""
+    last_assess_present: bool | None = None
+    last_assess_answerable: bool | None = None
+    last_suggested: str = ""
+
+    @property
+    def approached_close(self) -> bool:
+        return self.closest_m is not None and float(self.closest_m) <= 1.0
+
+    def card_bits(self) -> str:
+        """Compact state-card suffix for the router."""
+        if self.investigate_count <= 0:
+            return "investigated=0 closest=none recent=none"
+        close = "[close]" if self.approached_close else "[not_close]"
+        closest = f"{float(self.closest_m):.1f}m" if self.closest_m is not None else "none"
+        recent_bits: list[str] = []
+        for v in self.recent[-PLACE_INSPECT_RECENT_K:]:
+            bit = f"r{int(v.round)}@{float(v.closest_m):.1f}m"
+            if v.verify:
+                bit += f" verify={v.verify}"
+            if v.assess_present is False:
+                bit += " assess=absent"
+            elif v.assess_present is True:
+                bit += " assess=present"
+            if v.assess_answerable:
+                bit += " answerable"
+            if v.suggested:
+                bit += f" sug={v.suggested}"
+            recent_bits.append(bit)
+        recent = "; ".join(reversed(recent_bits)) if recent_bits else "none"
+        return f"investigated={self.investigate_count} closest={closest} {close} recent: {recent}"
 
 
 def env_eqa_agentic_verify() -> bool | None:
@@ -197,9 +253,11 @@ class AgenticEQAExecutor:
         self._n_explore = 0
         self._tool_log: list[str] = []
         self._trace_rows: list[dict[str, Any]] = []
-        # obs_id → successful navigate_to_obs attempts (loop detection for the router).
+        # obs_id → successful navigate/investigate attempts (loop detection for the router).
         self._nav_to_obs_counts: dict[int, int] = {}
         self._nav_loop_flags: list[dict[str, Any]] = []
+        # Per place-card investigate history for this question (count / closest / recent).
+        self._place_inspect: dict[int, PlaceInspectRecord] = {}
         self._last_capture_status: str | None = None
         self._collect_trace = bool(collect_trace) if collect_trace is not None else (
             env_eqa_collect_trace() or bool(_eqa_cfg(agent).get("collect_agentic_trace", False))
@@ -307,8 +365,8 @@ class AgenticEQAExecutor:
             return self._tool_inspect_graph()
         if name == "explore_frontier":
             return self._tool_explore_frontier(str(args.get("toward") or ""))
-        if name == "navigate_to_obs":
-            return self._tool_navigate_to_obs(int(args.get("obs_id", -1)))
+        if name in ("investigate", "navigate_to_obs"):
+            return self._tool_investigate(int(args.get("obs_id", -1)), tool_name=name)
         if name == "look_around":
             return self._tool_look_around()
         if name == "capture_and_update":
@@ -498,7 +556,90 @@ class AgenticEQAExecutor:
             "verify": verify_out,
         }
 
-    def _tool_navigate_to_obs(self, obs_id: int) -> dict[str, Any]:
+    def _investigate_hypotheses(self) -> list[NavHypothesis]:
+        return [h for h in self._hypotheses if str(h.source) in INVESTIGATE_SOURCES]
+
+    def _explore_hypotheses(self) -> list[NavHypothesis]:
+        return [h for h in self._hypotheses if str(h.source) not in INVESTIGATE_SOURCES]
+
+    def _place_anchor_xy(self, obs_id: int, hyp: NavHypothesis | None) -> tuple[float, float] | None:
+        if hyp is not None:
+            xyz = np.asarray(hyp.xyz, dtype=float).reshape(-1)
+            if xyz.size >= 2:
+                return float(xyz[0]), float(xyz[1])
+        gm = self.graph_memory
+        if gm is not None and hasattr(gm, "_observation_by_id"):
+            obs = gm._observation_by_id(int(obs_id))
+            if obs is not None:
+                xyz = np.asarray(obs.xyz, dtype=float).reshape(-1)
+                if xyz.size >= 2:
+                    return float(xyz[0]), float(xyz[1])
+        return None
+
+    def _dist_to_anchor_m(self, obs_id: int, hyp: NavHypothesis | None) -> float | None:
+        anchor = self._place_anchor_xy(obs_id, hyp)
+        robot = self._robot_xyt()
+        if anchor is None or robot is None:
+            return None
+        return float(np.hypot(float(robot[0]) - anchor[0], float(robot[1]) - anchor[1]))
+
+    def _record_place_inspect(
+        self,
+        obs_id: int,
+        *,
+        closest_m: float | None,
+        verify_out: dict[str, Any] | None,
+    ) -> PlaceInspectRecord:
+        oid = int(obs_id)
+        rec = self._place_inspect.get(oid) or PlaceInspectRecord()
+        dist = float(closest_m) if closest_m is not None else (
+            float(rec.closest_m) if rec.closest_m is not None else 99.0
+        )
+        if rec.closest_m is None or dist < float(rec.closest_m):
+            rec.closest_m = dist
+        verify_status = ""
+        if isinstance(verify_out, dict):
+            verify_status = str(
+                verify_out.get("status") or verify_out.get("decision") or ""
+            )
+        assess = self._last_vlm_assess if isinstance(self._last_vlm_assess, dict) else {}
+        present = assess.get("present") if assess else None
+        answerable = assess.get("answerable") if assess else None
+        suggested = str(assess.get("suggested_answer") or "") if assess else ""
+        if present is None and isinstance(verify_out, dict):
+            present = verify_out.get("present")
+            answerable = verify_out.get("answerable")
+        visit = PlaceInspectVisit(
+            round=int(self._round),
+            closest_m=dist,
+            verify=verify_status,
+            assess_present=bool(present) if present is not None else None,
+            assess_answerable=bool(answerable) if answerable is not None else None,
+            suggested=suggested,
+        )
+        rec.investigate_count += 1
+        rec.recent.append(visit)
+        if len(rec.recent) > PLACE_INSPECT_RECENT_K:
+            rec.recent = rec.recent[-PLACE_INSPECT_RECENT_K:]
+        rec.last_verify = verify_status
+        rec.last_assess_present = visit.assess_present
+        rec.last_assess_answerable = visit.assess_answerable
+        rec.last_suggested = suggested
+        self._place_inspect[oid] = rec
+        return rec
+
+    def _place_close_and_absent(self, obs_id: int) -> bool:
+        rec = self._place_inspect.get(int(obs_id))
+        if rec is None or not rec.approached_close or rec.investigate_count <= 0:
+            return False
+        if rec.last_assess_answerable:
+            return False
+        if rec.last_assess_present is False:
+            return True
+        return str(rec.last_verify).upper() in {"ABSENT", "SKIPPED_SAME_VIEW"}
+
+    def _tool_investigate(self, obs_id: int, *, tool_name: str = "investigate") -> dict[str, Any]:
+        """Closer look at a place card: approach, look around, verify/assess, update ledger."""
         if self._n_nav + self._n_explore >= self.max_nav_steps:
             return {"ok": False, "error": "nav budget exhausted"}
         gm = self.graph_memory
@@ -506,40 +647,67 @@ class AgenticEQAExecutor:
         if gm is None or not hasattr(agent, "navigate_to_target_pose"):
             return {"ok": False, "error": "nav unavailable"}
         oid = int(obs_id)
+        trace_tool = "investigate" if tool_name == "investigate" else "navigate_to_obs"
         prior_visits = int(self._nav_to_obs_counts.get(oid, 0))
-        # Already scored / stalled on this hyp — do not burn another nav round.
-        if (
-            prior_visits >= NAV_SAME_OBS_LOOP_LIMIT
-            or self._obs_already_verified(oid)
-            or (
-                oid in self._tried
-                and str(self._tried.get(oid) or "").startswith("STALLED_NAV_LOOP")
-            )
-        ):
+        # Visit limit / scored / stalled — not bare "nav failed". Also stop when
+        # place ledger says we already stood close and the target was absent.
+        if self._hypothesis_nav_blocked(oid) or self._place_close_and_absent(oid):
             flag = {
                 "obs_id": oid,
                 "visits": prior_visits,
                 "status": "NAV_LOOP_BLOCKED",
                 "prior": self._tried.get(oid),
+                "place_inspect": (
+                    self._place_inspect[oid].card_bits()
+                    if oid in self._place_inspect
+                    else None
+                ),
             }
             self._nav_loop_flags.append(flag)
-            self._append_trace({"tool": "navigate_to_obs", "ok": False, **flag})
+            self._append_trace({"tool": trace_tool, "ok": False, **flag})
             return {
                 "ok": False,
                 "error": (
-                    f"nav loop on obs_id={oid} (visits={prior_visits}, "
-                    f"prior={self._tried.get(oid)!r}); explore_frontier or look_around"
+                    f"investigate blocked on obs_id={oid} (visits={prior_visits}, "
+                    f"close+absent={self._place_close_and_absent(oid)}); "
+                    "pick another investigate card or explore_frontier"
                 ),
                 "status": "NAV_LOOP_BLOCKED",
                 "obs_id": oid,
             }
-        hyp = next((h for h in self._hypotheses if int(h.obs_id) == oid), None)
-        # Router must pick among recalled evidence cards when any are listed.
+        inv = self._investigate_hypotheses()
+        hyp = next((h for h in inv if int(h.obs_id) == oid), None)
+        if hyp is None:
+            hyp = next((h for h in self._hypotheses if int(h.obs_id) == oid), None)
+            if hyp is not None and str(hyp.source) not in INVESTIGATE_SOURCES:
+                listed = sorted({int(h.obs_id) for h in inv})
+                self._append_trace(
+                    {
+                        "tool": trace_tool,
+                        "ok": False,
+                        "obs_id": oid,
+                        "status": "NOT_INVESTIGATE_CARD",
+                        "listed_obs_ids": listed,
+                    }
+                )
+                return {
+                    "ok": False,
+                    "error": (
+                        f"obs_id={oid} is an explore frontier, not an investigate place; "
+                        f"use investigate on {listed} or explore_frontier"
+                    ),
+                    "status": "NOT_INVESTIGATE_CARD",
+                    "obs_id": oid,
+                    "listed_obs_ids": listed,
+                }
         if hyp is None and self._hypotheses:
-            listed = sorted({int(h.obs_id) for h in self._hypotheses})
+            listed = sorted(
+                {int(h.obs_id) for h in inv}
+                or {int(h.obs_id) for h in self._hypotheses}
+            )
             self._append_trace(
                 {
-                    "tool": "navigate_to_obs",
+                    "tool": trace_tool,
                     "ok": False,
                     "obs_id": oid,
                     "status": "OBS_NOT_IN_EVIDENCE",
@@ -549,15 +717,13 @@ class AgenticEQAExecutor:
             return {
                 "ok": False,
                 "error": (
-                    f"obs_id={oid} is not in the current evidence list "
-                    f"{listed}; pick a listed obs_id or explore_frontier"
+                    f"obs_id={oid} is not in the Investigate list {listed}; "
+                    "investigate a listed place or explore_frontier"
                 ),
                 "status": "OBS_NOT_IN_EVIDENCE",
                 "obs_id": oid,
                 "listed_obs_ids": listed,
             }
-        # Place-card labels (e.g. "kitchen island") are nav hints; verify the question
-        # target (e.g. "fruit bowl"), not the MCQ location option string.
         phrase = self._target_phrase or self.query_text
         source = hyp.source if hyp is not None else "graph"
         hypothesis_id = self._begin_policy_approach(source, oid, phrase)
@@ -567,7 +733,9 @@ class AgenticEQAExecutor:
             return {"ok": False, "error": f"no waypoint for obs_id={obs_id}"}
         start = xyt if xyt is not None else np.array([0.0, 0.0, 0.0])
         try:
-            finished = bool(agent.navigate_to_target_pose(target, start, None, target_obs_id=oid))
+            finished = bool(
+                agent.navigate_to_target_pose(target, start, None, target_obs_id=oid)
+            )
         except TypeError:
             finished = bool(agent.navigate_to_target_pose(target, start, None))
         self._n_nav += 1
@@ -580,7 +748,7 @@ class AgenticEQAExecutor:
         if not finished:
             self._tried.setdefault(oid, "nav failed")
         row = {
-            "tool": "navigate_to_obs",
+            "tool": trace_tool,
             "obs_id": oid,
             "target_xyz": [float(x) for x in np.asarray(target).reshape(-1)[:3]],
             "nav_success": bool(finished),
@@ -590,60 +758,91 @@ class AgenticEQAExecutor:
         }
         self._attach_gt(row, target)
         self._append_trace(row)
-        # Frontier waypoints are not evidence — retire after a successful visit.
-        if finished and (
-            str(source) == "frontier"
-            or (hasattr(gm, "_obs_is_frontier") and gm._obs_is_frontier(oid))
-        ):
-            self._retire_visited_frontier(frontier_obs_id=oid, frontier_xyz=target)
-        cap = self._tool_capture_and_update()
-        look_retry = False
-        # Parity with explore_frontier: already-mapped pose often yields NO_NEW_OBS;
-        # spin so voxel+graph can register a new observation from this station.
-        if (
-            finished
-            and not cap.get("ok")
-            and str(cap.get("status") or "") == "NO_NEW_OBS"
-        ):
-            look_retry = True
-            look = self._tool_look_around(verify=False)
-            look_cap = look.get("capture") if isinstance(look, dict) else None
-            if isinstance(look_cap, dict) and look_cap.get("ok"):
-                cap = look_cap
-        verify_out = None
-        if cap.get("ok") and cap.get("obs_id") is not None:
-            self._policy_approached(hypothesis_id, int(cap["obs_id"]))
-            if self.mode == "answer":
-                verify_out = self._verify_after_motion(phrase=phrase)
-        else:
-            # Capture still stalled: score *this* view once so ABSENT/CANDIDATE updates
-            # planner state, then mark the hyp so the router cannot re-pick it forever.
-            verify_out = self._verify_stalled_nav_view(oid, phrase=phrase)
-            flag = {
-                "obs_id": oid,
-                "visits": self._nav_to_obs_counts[oid],
-                "status": "STALLED_NAV_LOOP",
-                "look_around_on_no_new_obs": look_retry,
-                "verify_status": (verify_out or {}).get("status")
-                if isinstance(verify_out, dict)
-                else None,
+        if not finished:
+            return {
+                "ok": False,
+                "target_xyz": row["target_xyz"],
+                "capture": None,
+                "verify": None,
             }
-            self._nav_loop_flags.append(flag)
-            self._tried[oid] = (
-                f"STALLED_NAV_LOOP verify={flag.get('verify_status') or 'none'}"
-            )
-            self._append_trace({"event": "nav_loop", **flag})
-            _logger.warning(
-                f"agentic nav loop: obs_id={oid} visits={flag['visits']} "
-                f"look_retry={look_retry} verify={flag.get('verify_status')}"
-            )
+
+        cap = self._tool_capture_and_update()
+        look = self._tool_look_around(verify=False)
+        look_cap = look.get("capture") if isinstance(look, dict) else None
+        if isinstance(look_cap, dict) and look_cap.get("ok"):
+            cap = look_cap
+        station_oid = None
+        # Only a successful capture advance counts as a new station view.
+        if isinstance(cap, dict) and cap.get("ok") and cap.get("obs_id") is not None:
+            station_oid = int(cap["obs_id"])
+            self._fresh_obs_ids.add(station_oid)
+            self._tried.pop(station_oid, None)
+            scored = getattr(self._evidence_policy, "_globally_scored_obs_ids", None)
+            if isinstance(scored, set):
+                scored.discard(station_oid)
+            self._vlm_assessed_obs_ids.discard(station_oid)
+            self._policy_approached(hypothesis_id, station_oid)
+
+        verify_out = None
+        if self.mode == "answer":
+            if station_oid is not None:
+                verify_out = self.handle_tool(
+                    "verify_siglip",
+                    {"phrase": self._siglip_phrase(phrase), "obs_id": station_oid},
+                )
+            else:
+                # Arrived but capture did not advance — score once, then block re-nav.
+                verify_out = self._verify_stalled_nav_view(oid, phrase=phrase)
+                flag = {
+                    "obs_id": oid,
+                    "visits": self._nav_to_obs_counts[oid],
+                    "status": "STALLED_NAV_LOOP",
+                    "look_around_on_no_new_obs": True,
+                    "verify_status": (verify_out or {}).get("status")
+                    if isinstance(verify_out, dict)
+                    else None,
+                }
+                self._nav_loop_flags.append(flag)
+                self._tried[oid] = (
+                    f"STALLED_NAV_LOOP verify={flag.get('verify_status') or 'none'}"
+                )
+                self._append_trace({"event": "nav_loop", **flag})
+                _logger.warning(
+                    f"agentic nav loop: obs_id={oid} visits={flag['visits']} "
+                    f"verify={flag.get('verify_status')}"
+                )
+
+        closest = self._dist_to_anchor_m(oid, hyp)
+        rec = self._record_place_inspect(oid, closest_m=closest, verify_out=verify_out)
+        self._append_trace(
+            {
+                "event": "station_inspect",
+                "tool": trace_tool,
+                "obs_id": oid,
+                "station_obs_id": station_oid,
+                "closest_m": closest,
+                "place_inspect": rec.card_bits(),
+                "verify_status": (
+                    (verify_out or {}).get("status")
+                    or (verify_out or {}).get("decision")
+                    if isinstance(verify_out, dict)
+                    else None
+                ),
+            }
+        )
         return {
-            "ok": bool(finished),
+            "ok": True,
             "target_xyz": row["target_xyz"],
             "capture": cap,
             "verify": verify_out,
-            "look_around_on_no_new_obs": look_retry,
+            "look_around_on_no_new_obs": True,
+            "place_inspect": rec.card_bits(),
+            "station_obs_id": station_oid,
         }
+
+    def _tool_navigate_to_obs(self, obs_id: int) -> dict[str, Any]:
+        """Compat alias — ``navigate_to_obs`` shares the investigate approach path."""
+        return self._tool_investigate(int(obs_id), tool_name="navigate_to_obs")
 
     def _tool_look_around(self, *, verify: bool = True) -> dict[str, Any]:
         agent = self.agent
@@ -900,8 +1099,21 @@ class AgenticEQAExecutor:
         return None
 
     def _obs_already_verified(self, obs_id: int) -> bool:
-        """True when this obs was already verified — do not score it again."""
-        return int(obs_id) in self._tried or int(obs_id) in self._evidence_policy.scored_obs_ids
+        """True when this obs was already SigLIP-scored — do not score it again.
+
+        Bare ``\"nav failed\"`` in ``_tried`` is a transient planner miss, not a
+        verify score; callers may still navigate/verify that obs_id.
+        """
+        oid = int(obs_id)
+        if oid in self._evidence_policy.scored_obs_ids:
+            return True
+        tried = str(self._tried.get(oid) or "")
+        if not tried or tried == "nav failed":
+            return False
+        if tried.startswith("STALLED_NAV_LOOP") or tried.startswith("verify "):
+            return True
+        # Legacy / unknown tried markers — preserve no-reverify.
+        return True
 
     def _begin_policy_approach(self, source: str, obs_id: int, phrase: str) -> str:
         if self._evidence_policy.state == AgenticState.REPLAN:
@@ -923,22 +1135,36 @@ class AgenticEQAExecutor:
             _logger.warning(f"evidence-policy approach rejected: {exc}")
 
     def _next_untried_hypothesis(self) -> NavHypothesis | None:
-        while self._hyp_i < len(self._hypotheses):
-            h = self._hypotheses[self._hyp_i]
-            self._hyp_i += 1
-            if not self._obs_already_verified(int(h.obs_id)):
+        """Prefer Investigate cards not yet close+ABSENT; skip exhausted places."""
+        for h in self._investigate_hypotheses():
+            oid = int(h.obs_id)
+            if self._obs_already_verified(oid):
+                continue
+            if self._place_close_and_absent(oid) or self._hypothesis_nav_blocked(oid):
+                continue
+            rec = self._place_inspect.get(oid)
+            if rec is None or not rec.approached_close:
                 return h
+        for h in self._investigate_hypotheses():
+            oid = int(h.obs_id)
+            if self._obs_already_verified(oid):
+                continue
+            if self._place_close_and_absent(oid) or self._hypothesis_nav_blocked(oid):
+                continue
+            return h
         return None
 
     def _hypothesis_nav_blocked(self, obs_id: int) -> bool:
-        """True if navigate_to_obs would refuse this id (loop / stall / already verified)."""
+        """True if investigate must refuse this id (visit limit / stall / close+absent)."""
         oid = int(obs_id)
-        if self._obs_already_verified(oid):
+        if self._place_close_and_absent(oid):
             return True
         if int(self._nav_to_obs_counts.get(oid, 0)) >= NAV_SAME_OBS_LOOP_LIMIT:
             return True
         tried = str(self._tried.get(oid) or "")
-        return tried.startswith("STALLED_NAV_LOOP")
+        if tried.startswith("STALLED_NAV_LOOP"):
+            return True
+        return False
 
     def _retire_visited_frontier(
         self,
@@ -2145,7 +2371,7 @@ class AgenticEQAExecutor:
         if budget_left:
             h = self._next_untried_hypothesis()
             if h is not None:
-                return "navigate_to_obs", {"obs_id": int(h.obs_id)}
+                return "investigate", {"obs_id": int(h.obs_id)}
         # (1) keep exploring for new views while budget remains
         if budget_left and not frontiers_gone:
             return "explore_frontier", {}
@@ -2290,7 +2516,7 @@ class AgenticEQAExecutor:
                     break
                 # Router re-picked a stalled hyp — force explore so we do not burn the round.
                 if (
-                    tool == "navigate_to_obs"
+                    tool in ("navigate_to_obs", "investigate")
                     and not out.get("ok")
                     and str(out.get("status") or "") == "NAV_LOOP_BLOCKED"
                     and self.mode == "answer"
