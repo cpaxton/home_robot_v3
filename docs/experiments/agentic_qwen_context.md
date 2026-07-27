@@ -2,6 +2,36 @@
 
 """Classic vs agentic Qwen context surfaces (HM-EQA letter accuracy).
 
+## Approach (current)
+
+Agentic EQA is **VLM-first** for decide/answer; local heuristics only **retrieve** what
+fits in the text router context.
+
+```text
+graph labels + SigLIP hits + frontiers
+        → recall top-K evidence cards (diversify; K=EMET_EQA_HYP_RECALL_K, default 6)
+        → router (or ROUTER=0 fallback) picks tool among cards / explore / submit
+        → motion → capture → verify proposal → vlm_assess → …
+```
+
+- **Evidence cards** (router state): `obs_id`, phrase, `source`, xyz, optional labels /
+  raw `siglip_sim`, `[tried]` / `nav_visits`. No composite nav-utility score and no
+  “prefer #1 score” decree — the VLM chooses among listed cards.
+- **Recall key** (internal only): source tier `graph > confirmed/siglip > frontier`,
+  keyword/MCQ-landmark hit, planar distance tiebreak; pack so graph+frontier can
+  coexist in top-K. Fallback (`EMET_EQA_AGENTIC_ROUTER=0`) walks that order.
+- **Visited frontiers leave the graph** (`retire_frontier_obs` / near-xy + sync) —
+  a visited frontier is not a frontier anymore.
+- **Explore:** agentic `explore_frontier` prefers `_vlm_frontier_choice` (≤6 reachable
+  frontier RGBs) before uncovered heuristics; `agentic_max_nav_steps` default 8.
+- **Detectors** (SigLIP/OWL/YoloE): proposals in state only; do not unlock submit.
+- **Inspect episodes:** `uv run emet hmeqa inspect OUT --qid N [--open rgb]`.
+
+Paper method text: `paper/sections/03_method.tex` (§ Exploration and EQA loop);
+tools appendix: `paper/sections/appendix/07_agentic_eqa_tools.tex`.
+Env: [`environment_variables.md`](../environment_variables.md) (`EMET_EQA_HYP_RECALL_K`,
+router / verify flags). Scale ladder: [`agentic_scale.md`](agentic_scale.md).
+
 ## Working theory
 
 Agentic letter misses often come from **thinner or mis-scored context**, not only
@@ -16,7 +46,7 @@ correct agentic ``vlm_suggested`` letter could lose to truncated ``[salvage]``.
 | Call | Images | Graph / memory text |
 |------|--------|---------------------|
 | Classic ``query_answer`` | up to ``eqa_max_images`` (4) via ``_select_relevant_obs_ids`` | ``SCENE_GRAPH`` (~48 nodes) or spatial REGION blocks + Dynagraph ``CONFIRMED_MEMORY`` + HISTORY |
-| Agentic router ``build_state_message`` | none | counts + hypotheses; with spatial RAG, compact REGION text |
+| Agentic router ``build_state_message`` | none | counts + **evidence cards** (obs_id/phrase/source/xyz; optional siglip_sim); with spatial RAG, compact REGION text |
 | Agentic ``vlm_assess`` | 1 full-frame RGB | ≤12 inventory labels (no full SCENE_GRAPH) |
 | Agentic ``submit_answer`` → ``query_answer`` | verified obs forced as Image 1 when ``force_obs_ids`` set; fill remaining | same as classic |
 
@@ -194,3 +224,13 @@ Second independent draw (seed ``20260727``, paper-113 minus smoke + paper holdou
 - **Code:** agentic ``explore_frontier`` now prefers ``_vlm_frontier_choice`` (utility-rank
   reachable frontier RGBs ≤6, VLM picks image). ``agentic_max_nav_steps`` **5→8**.
 - Classic coverage path still gated by ``EMET_VLM_FRONTIER_SCORING`` (default off).
+
+### Fix5 — evidence-card recall + frontier retirement (in progress)
+
+Design (landed in code; see **Approach (current)** above): hyp list is RAG-style
+evidence for the router; visited frontiers leave the graph; no score-margin override.
+
+- Job ``hmeqa-holdout8-fix5`` / ``20260727_152205_7367e0``
+- OUT ``~/runs/emet/hmeqa_holdout8_fix5_20260727_152201``
+- Paper-router, agentic-only; paper holdout-8 ids
+- Critical check when done: ``emet hmeqa inspect … --qid 105`` (coverage / goal choice)

@@ -1,5 +1,13 @@
 # The Stretch AI Agent
 
+> **Canonical agent docs for emet today:** [AGENT_RUN.md](AGENT_RUN.md) (Discord / CHAT vs
+> Habitat `EQA_EPISODE`), [evaluation.md](evaluation.md#agentic-grapheqa-verify--offline-tuning)
+> (agentic GraphEQA tool loop), and
+> [experiments/agentic_qwen_context.md](experiments/agentic_qwen_context.md#approach-current)
+> (evidence-card recall, VLM-first assess, frontier retirement). This page is the historical
+> Stretch AI pickup/chat walkthrough; prefer those links for the current Dynagraph agentic
+> approach.
+
 *What is an AI agent?* In our case, it's a program that uses a large language model (LLM) to generate instructions for the robot. The LLM takes in text input and generates a list of API calls that the robot should make to accomplish a task.
 
 Stretch AI contains the tools to talk to your robot and have it perform tasks like exploration, mapping, and pick-and-place. In this document, we'll walk through how it works and how to test out different components of the system.

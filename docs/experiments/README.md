@@ -1,8 +1,10 @@
 # Paper experiments — master index
 
 Start here to run and reproduce benchmarks for the Dynagraph CoRL paper.
+Repo-wide docs outline (agent / sim / CLI / hardware): [README § Documentation map](../../README.md#documentation-map).
 
 - **Detailed operator runbook:** [paper_benchmarks.md](../paper_benchmarks.md) (full commands, LaTeX table mapping, large-queue timing).
+- **Agentic approach (HM-EQA):** [agentic_qwen_context.md](agentic_qwen_context.md#approach-current)
 - **LaTeX plan:** `paper/sections/04_experiments.tex`
 - **Results tables:** `paper/sections/05_results.tex` (fill manually from sweep CSV/JSON)
 

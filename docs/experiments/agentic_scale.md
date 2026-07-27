@@ -21,8 +21,9 @@ Goal: test whether classic vs agentic-verify Dynagraph gains hold past holdout-8
 - VLM: `Qwen/Qwen3-VL-8B-Instruct`
 - `explore_when_uncovered=off`, `--no-mcq-debias`, `--memory-summary`
 - Agentic: `EMET_EQA_AGENTIC_VERIFY=1`; scored bal-32 used `EMET_EQA_AGENTIC_ROUTER=0` (H2H now honors env; default still 0)
+- Hyp recall: evidence cards (`EMET_EQA_HYP_RECALL_K`, default 6); visited frontiers retired from the graph — see [agentic_qwen_context.md](agentic_qwen_context.md#approach-current)
 - Classic: `EMET_EQA_AGENTIC_VERIFY=0`
-- Dogfood: `uv run emet hmeqa overnight` or `emet hmeqa h2h --preset paper-router`
+- Dogfood: `uv run emet hmeqa overnight` or `emet hmeqa h2h --preset paper-router`; inspect with `emet hmeqa inspect OUT --qid N`
 - Always use distinct `--debug-run-tag` / `OUT/bundles/{arm}_qN` (see `scripts/run_hmeqa_agentic_h2h.sh`)
 - Do **not** set `COPY_PAPER_FIGS=1` on bal-32 (overwrites holdout-8 paper figures)
 

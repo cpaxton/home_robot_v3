@@ -14,10 +14,11 @@ Deep dives:
 
 ## Agentic GraphEQA verify + offline tuning
 
-Post-explore / world-change EQA can run a unified **explore → navigate → SigLIP verify → answer**
-loop (`eqa.agentic_verify` / `EMET_EQA_AGENTIC_VERIFY=1`). Improve smokes enable this by default
-and write `agentic_trace.jsonl` (SigLIP embeds + sim GT) under each export dir when
-`EMET_EQA_TRACE=1`.
+Post-explore / world-change EQA can run a bounded **tool loop** (`eqa.agentic_verify` /
+`EMET_EQA_AGENTIC_VERIFY=1`): recall place evidence → navigate / explore → SigLIP
+**proposal** → VLM assess → submit (or explore `finish`). Improve smokes enable this by
+default and write `agentic_trace.jsonl` (SigLIP embeds + sim GT) under each export dir when
+`EMET_EQA_TRACE=1`. Detectors do not unlock submit; answerability is VLM-first.
 
 **Modes (same skills library, different packs):** Discord / terminal house chat is
 ``AgentMode.CHAT`` (`emet run agent`). Scored verify/explore is ``AgentMode.EQA_EPISODE``
@@ -27,13 +28,17 @@ Discord chat turns; use `run_eqa` / `emet-habitat` / `--eqa-eval`. See [AGENT_RU
 
 Tool picks come from the shared Qwen3-VL via text-only JSON tool-calling turns (same
 `{"tool_calls": ...}` contract as the Discord agent; the fixed system prompt gets prefix
-KV-cache hits). `eqa.agentic_vlm_router: false` or `EMET_EQA_AGENTIC_ROUTER=0` disables the
-VLM router and uses the deterministic fallback policy only (reproducible evals); parse
-failures always fall back. Explore mode (`run_agentic_eqa(agent, question=None, goal=...)`)
+KV-cache hits). Each round the router sees a small set of **evidence cards** recalled from
+the graph / SigLIP / frontiers (`EMET_EQA_HYP_RECALL_K`, default 6) — retrieval only; the
+VLM decides among listed `obs_id`s. Visited frontier nodes are retired from the graph.
+`eqa.agentic_vlm_router: false` or `EMET_EQA_AGENTIC_ROUTER=0` disables the VLM router and
+uses the deterministic fallback policy only (walks recalled cards; reproducible evals);
+parse failures always fall back. Explore mode (`run_agentic_eqa(agent, question=None, goal=...)`)
 drives `explore_frontier`/`look_around` and ends with a `finish` coverage summary once
 frontiers or the nav budget are exhausted. Trace rows record `picked_by`,
 `router_parse_ok`, `router_raw_reply_chars`, and `router_tool_calls` so the tuner can
-compare VLM-router vs fallback quality.
+compare VLM-router vs fallback quality. Approach notes:
+[agentic_qwen_context.md](experiments/agentic_qwen_context.md#approach-current).
 
 ```bash
 # After a run that produced traces:
