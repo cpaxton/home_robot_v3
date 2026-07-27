@@ -21,8 +21,8 @@ Reference: https://github.com/userguide-galaxea/URDF
 from pathlib import Path
 
 from emet.robots.base import RobotBackend, RobotSpec
-from emet.simulation.molmospaces_spawn_metadata import robot_spawn_spec_from_metadata
 from emet.robots.footprint import Footprint
+from emet.simulation.molmospaces_spawn_metadata import robot_spawn_spec_from_metadata
 
 _ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets" / "robot" / "galaxea_r1"
 _MJCF_PATH = str(_ASSETS_DIR / "galaxea_r1.xml")

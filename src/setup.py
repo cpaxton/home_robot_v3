@@ -88,7 +88,6 @@ setuptools.setup(
         "qwen_vl_utils",
         "bitsandbytes",
         "triton >= 2.3.1",
-        "flash-attn>=2.7.0",
         "accelerate >= 1.6.0",
         "einops",
         "protobuf",
@@ -133,6 +132,10 @@ setuptools.setup(
         "hand_tracker": [
             "mediapipe",
             "webcam",
+        ],
+        # Opt-in: no PyPI wheels, so this compiles CUDA kernels against the installed torch.
+        "flash-attn": [
+            "flash-attn>=2.7.0",
         ],
     },
 )

@@ -21,13 +21,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from emet.robots.base import RobotBackend, RobotSpec
-from emet.simulation.molmospaces_spawn_metadata import robot_spawn_spec_from_metadata
 from emet.robots.footprint import Footprint
 from emet.robots.galaxea_r1 import (
     R1_ACTUATOR_NAMES,
     R1_CAMERA_NAMES,
     R1_JOINT_NAMES,
 )
+from emet.simulation.molmospaces_spawn_metadata import robot_spawn_spec_from_metadata
 
 # Same MJCF as Galaxea R1 (Rainbow RB-Y1 = Galaxea R1 hardware).
 _assets_dir = Path(__file__).resolve().parents[2] / "assets" / "robot" / "galaxea_r1"

@@ -56,7 +56,11 @@ def test_rby1_mjcf_loads():
 
 
 def test_rby1_create_client():
-    """Rby1Backend.create_client returns GenericZmqClient."""
+    """create_client returns GenericZmqClient and honors start_immediately=False.
+
+    Entry points (agent loop, run_dynagraph, run_dynamem) defer the ZMQ wait so a slow model
+    load does not consume it; construction must not connect or start recv threads.
+    """
     pytest.importorskip("emet.robots.rby1")
     from emet.controller.generic_zmq_client import GenericZmqClient
     from emet.robots.rby1 import Rby1Backend
@@ -65,14 +69,6 @@ def test_rby1_create_client():
     client = backend.create_client("127.0.0.1", start_immediately=False, enable_rerun_server=False)
     assert isinstance(client, GenericZmqClient)
     assert client._spec.name == "rby1"
-
-
-def test_rby1_create_client_defers_zmq_start_by_default():
-    """Avoid blocking ZMQ wait in __init__ (RobotAgent.start() connects once after model setup)."""
-    pytest.importorskip("emet.robots.rby1")
-    from emet.robots.rby1 import Rby1Backend
-
-    client = Rby1Backend().create_client("127.0.0.1", enable_rerun_server=False)
     assert not client._recv_threads_started
     assert not client._started
 

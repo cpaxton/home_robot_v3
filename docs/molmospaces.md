@@ -169,6 +169,51 @@ Passive `emet molmospaces serve` only steps physics in the wrapper’s MuJoCo. T
 
 Use `--port-offset` on both server and agent if default ZMQ ports are busy. **Stretch** uses the Stretch MuJoCo ZMQ stack; registry robots (**rby1**, **galaxea_r1**, **innate_mars**, …) use **`GenericZmqClient`**, matching `emet run dynamem --robot <name>`.
 
+### Mobile manipulation (sim teleport + kinematic)
+
+For agentic pick/place on MolmoSpaces benches, prefer **`--robot rby1`** (MolmoSpaces-native mobile platform).
+
+| Mode | Config / env | Behavior |
+|------|----------------|----------|
+| **teleport** (default) | `agent.manip_mode: teleport` or `EMET_MANIP_MODE=teleport` | ZMQ **`sim_set_body_pose`** GT freejoint snap — same proxy as OVMM `manip_mode=sim`. Not contact/arm simulation. |
+| **kinematic** | `agent.manip_mode: kinematic` or `EMET_MANIP_MODE=kinematic` | MuJoCo position IK + joint streaming + **`sim_attach_body`** / detach (object welded to EE). Requires server capability `kinematic_manip` (robosuite/rby1). |
+| **voxel collision** (optional) | `agent.manip_collision: voxel` or `EMET_MANIP_COLLISION=voxel` | Reject / avoid IK waypoints whose link XY hit the agent **2D obstacle map** (same world model as A* nav — not CuRobo / not Molmo MJCF). |
+| **path planner** | `agent.manip_planner: rrt_connect` (default) or `EMET_MANIP_PLANNER` | After IK, plan `q_start→q_goal` with **RRT-Connect** (reuse of `emet.motion.algo`); `linear` falls back to joint interpolation. |
+
+Stretch visual-servo remains separate when enabled on Stretch.
+
+**Arm IK + RRT:** [`emet.motion.mujoco_arm_ik`](../src/emet/motion/mujoco_arm_ik.py), [`emet.motion.arm_rrt`](../src/emet/motion/arm_rrt.py); executor: [`kinematic_pick_place.py`](../src/emet/controller/manipulation/kinematic_pick_place.py). Full motion-planning overview: [motion_planning.md](motion_planning.md). Unit smoke: `uv run emet test src/test/motion/test_rby1_mujoco_arm_ik.py src/test/motion/test_kinematic_tamp_helpers.py src/test/motion/test_arm_rrt.py src/test/motion/test_voxel_obstacle_planning.py`.
+
+```bash
+uv run emet serve mujoco --scene ithor --split train --index 0 --robot rby1 --headless
+uv run emet run agent --robot rby1 --robot-ip 127.0.0.1 --no-discord \
+  -c "pick up the bowl and place it on the microwave"
+```
+
+No LLM (scripted tool + teleport or kinematic):
+
+```bash
+# Teleport
+uv run python scripts/scripted_sim_pick_place.py --start-sim \
+  --sim configs/sim/molmospaces_ithor_train_0.yaml \
+  --object bowl --receptacle microwave
+
+# Kinematic (IK + attach)
+uv run python scripts/scripted_sim_pick_place.py --start-sim \
+  --sim configs/sim/molmospaces_ithor_train_0.yaml \
+  --manip-mode kinematic --object bowl --receptacle microwave
+
+# Grasp-oracle + explore + manip (rby1 kinematic or stretch teleport)
+EMET_SIM_NAV_TELEPORT=1 uv run python scripts/scripted_molmo_grasp_mp.py --start-sim \
+  --sim configs/sim/molmospaces_ithor_train_0.yaml --object bowl --cpu-only
+EMET_SIM_NAV_TELEPORT=1 uv run python scripts/scripted_molmo_grasp_mp.py --start-sim \
+  --sim configs/sim/molmospaces_ithor_train_stretch_0.yaml --object bowl --cpu-only
+```
+
+Oracle service: `uv run emet grasp-oracle --bind tcp://127.0.0.1:5558` (see [motion_planning.md](motion_planning.md#molmospaces-grasp-oracle-multi-robot)).
+
+OVMM full episode: `molmo_ithor_rby1_s2_bowl_pp` in `configs/ovmm/full_episodes.yaml` — see [ovmm_full_benchmark.md](ovmm_full_benchmark.md).
+
 **iTHOR spawn occupancy (ZMQ server):** For **`ithor`** scenes, free-joint XY search prefers points sampled from the same orthographic occupancy map (Molmo-style) before falling back to annulus/grid heuristics. Set **`EMET_MOLMOSPACES_OCC_MAP=0`** (or `false`) to disable. **`EMET_MOLMOSPACES_OCC_SEED`** seeds the occupancy free-point subsample (default `0`). Full list: [molmospaces_environment_variables.md](molmospaces_environment_variables.md).
 
 The ZMQ server publishes a static **`emet_session`** block (scene / robot / capabilities) on every message; see [zmq_session_metadata.md](zmq_session_metadata.md). `emet run molmospaces-explore` prefers this metadata for `episode.json` when the server reports a MolmoSpaces environment.

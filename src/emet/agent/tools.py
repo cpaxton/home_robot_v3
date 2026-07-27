@@ -535,15 +535,20 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         executor = context.get("executor")
         if executor is None:
             return "Robot not connected."
-        ok = executor([("pickup", object_name), ("place", receptacle_name)])
+        keep_going = executor([("pickup", object_name), ("place", receptacle_name)])
+        task_ok = keep_going and bool(getattr(executor, "_last_exec_ok", True))
         return (
-            f"Pick and place ({object_name} -> {receptacle_name}) done." if ok else "Pick/place failed or interrupted."
+            f"Pick and place ({object_name} -> {receptacle_name}) done."
+            if task_ok
+            else "Pick/place failed or interrupted."
         )
 
     tools.append(
         Tool(
             name="pick_place",
-            description="Pick up an object and place it on a receptacle.",
+            description="Pick up an object and place it on a receptacle. "
+            "In MuJoCo sim (MolmoSpaces + rby1), uses GT teleport or kinematic IK+attach "
+            "(agent.manip_mode / EMET_MANIP_MODE) when the server advertises sim_set_body_pose.",
             parameters={
                 "type": "object",
                 "properties": {
@@ -664,7 +669,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "this alone is not a 'closer look'. For 'are you sure' / 'look closer' / confirm, "
                 "first call rotate_base / move_forward / scan_environment (as allowed), then this tool. "
                 "Queues the live head-camera photo for Discord (not an object crop; use send_object_image "
-                "for that). Use an empty JSON \"message\" on the tool-call turn so chat/Discord only show "
+                'for that). Use an empty JSON "message" on the tool-call turn so chat/Discord only show '
                 "your answer after [Tool results]."
             ),
             parameters=_NO_PARAMS,
@@ -868,10 +873,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                     "what's ahead?"
                 )
             if commanded + 1e-3 < dist:
-                return (
-                    f"Moved forward {commanded:.2f} m "
-                    f"(map-clipped from {dist:.2f} m so I don't hit anything)."
-                )
+                return f"Moved forward {commanded:.2f} m (map-clipped from {dist:.2f} m so I don't hit anything)."
             return f"Moved forward {commanded:.2f} m (map clear along path)."
         ok = executor([("move_forward", str(dist))])
         if not ok:
@@ -1080,8 +1082,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                     xyz = np.asarray(getattr(n, "xyz", [0, 0, 0]), dtype=float).reshape(-1)
                     if xyz.size >= 3:
                         lines.append(
-                            f"  [{getattr(n, 'node_id', '?')}] {lbl} "
-                            f"xyz=({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})"
+                            f"  [{getattr(n, 'node_id', '?')}] {lbl} xyz=({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})"
                         )
                     else:
                         lines.append(f"  [{getattr(n, 'node_id', '?')}] {lbl}")
@@ -1091,10 +1092,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 if edges:
                     lines.append(f"Relations ({len(edges)}):")
                     id_to_lbl = {
-                        int(getattr(n, "node_id", -1)): (
-                            (getattr(n, "labels", None) or ["?"])[0]
-                        )
-                        for n in nodes
+                        int(getattr(n, "node_id", -1)): ((getattr(n, "labels", None) or ["?"])[0]) for n in nodes
                     }
                     for a, b, rel in edges[:40]:
                         a_l = id_to_lbl.get(int(a), str(a))
@@ -1179,9 +1177,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     if registered != expected:
         missing = sorted(expected - registered)
         extra = sorted(registered - expected)
-        raise RuntimeError(
-            f"CHAT tool pack drift vs CHAT_SKILL_SPECS: missing={missing} extra={extra}"
-        )
+        raise RuntimeError(f"CHAT tool pack drift vs CHAT_SKILL_SPECS: missing={missing} extra={extra}")
     for t in tools:
         spec = by_name[t.name]
         t.description = spec.description

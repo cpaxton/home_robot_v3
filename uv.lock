@@ -1090,7 +1090,6 @@ dependencies = [
     { name = "draccus" },
     { name = "einops" },
     { name = "fla-core" },
-    { name = "flash-attn" },
     { name = "flash-linear-attention" },
     { name = "gitpython" },
     { name = "google-genai" },
@@ -1161,6 +1160,9 @@ dev = [
 dynamem = [
     { name = "sam-2" },
 ]
+flash-attn = [
+    { name = "flash-attn" },
+]
 hand-tracker = [
     { name = "mediapipe" },
     { name = "webcam" },
@@ -1190,6 +1192,9 @@ dev = [
 dynamem = [
     { name = "sam-2" },
 ]
+flash-attn = [
+    { name = "flash-attn" },
+]
 hand-tracker = [
     { name = "mediapipe" },
     { name = "webcam" },
@@ -1216,7 +1221,7 @@ requires-dist = [
     { name = "draccus", specifier = ">=0.11.0" },
     { name = "einops" },
     { name = "fla-core", specifier = ">=0.5.0" },
-    { name = "flash-attn", specifier = ">=2.7.0" },
+    { name = "flash-attn", marker = "extra == 'flash-attn'", specifier = ">=2.7.0" },
     { name = "flash-linear-attention", specifier = ">=0.5.0" },
     { name = "gitpython" },
     { name = "google-genai" },
@@ -1286,7 +1291,7 @@ requires-dist = [
     { name = "wget" },
     { name = "yacs" },
 ]
-provides-extras = ["dev", "sim", "hand-tracker", "dynamem", "molmospaces", "habitat-ovmm"]
+provides-extras = ["dev", "sim", "hand-tracker", "dynamem", "flash-attn", "molmospaces", "habitat-ovmm"]
 
 [package.metadata.requires-dev]
 da3 = [{ name = "depth-anything-3", specifier = ">=0.1.1" }]
@@ -1300,6 +1305,7 @@ dev = [
     { name = "ruff", specifier = ">=0.8.0" },
 ]
 dynamem = [{ name = "sam-2", editable = "third_party/segment-anything-2" }]
+flash-attn = [{ name = "flash-attn", specifier = ">=2.7.0" }]
 hand-tracker = [
     { name = "mediapipe" },
     { name = "webcam" },

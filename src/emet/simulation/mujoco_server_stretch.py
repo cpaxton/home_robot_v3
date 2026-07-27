@@ -55,6 +55,7 @@ from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
     EMET_ZMQ_SESSION_KEY,
     EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
+    EMET_ZMQ_SIM_TIME_RATIO_KEY,
 )
 from emet.motion import HelloStretchIdx
 from emet.motion.control.goto_controller import GotoVelocityController
@@ -467,6 +468,11 @@ class MujocoZmqServer(BaseZmqServer):
         # Head tilt joint
         positions[HelloStretchIdx.HEAD_TILT] = status["head_tilt"].pos
         velocities[HelloStretchIdx.HEAD_TILT] = status["head_tilt"].vel
+
+        # Base SE(2) from status (used by clients to detect "still moving" without wall-clock pose deltas).
+        base = status["base"]
+        velocities[HelloStretchIdx.BASE_X] = float(getattr(base, "x_vel", 0.0) or 0.0)
+        velocities[HelloStretchIdx.BASE_THETA] = float(getattr(base, "theta_vel", 0.0) or 0.0)
 
         if self.in_manipulation_mode:
             # Get current base xyt
@@ -1001,6 +1007,7 @@ class MujocoZmqServer(BaseZmqServer):
             "is_homed": True,
             "is_runstopped": False,
             "step": self._last_step,
+            EMET_ZMQ_SIM_TIME_RATIO_KEY: getattr(self._status, "sim_to_real_ratio", None),
             EMET_ZMQ_ROBOT_ID_KEY: self.get_robot_spec().name,
         }
         return self._attach_emet_session(message)

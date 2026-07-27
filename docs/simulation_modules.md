@@ -18,6 +18,7 @@ Related user docs: [simulation.md](simulation.md), [molmospaces.md](molmospaces.
 | [`robocasa_objaverse_bbox`](../src/emet/simulation/robocasa_objaverse_bbox.py) | Post-process objaverse MJCFs to add `reg_bbox` geoms (wraps Robocasa `calc_object_bb_reg`). |
 | [`molmospaces_spawn_metadata`](../src/emet/simulation/molmospaces_spawn_metadata.py) | Runtime load of per-robot `molmospaces_spawn.json`. |
 | [`write_molmospaces_spawn_metadata`](../src/emet/app/write_molmospaces_spawn_metadata.py) | Offline measure + write spawn JSON (see [molmospaces_spawn_metadata.md](molmospaces_spawn_metadata.md)). |
+| [`chase_camera`](../src/emet/simulation/chase_camera.py) | FREE chase cam off `base_link` for `--record-mp4` / `EMET_SIM_THIRD_PERSON` (raised lookat; avoids torso clip). |
 
 Runtime wiring: [`robosuite_server.py`](../src/emet/simulation/robosuite_server.py), [`mujoco_serve_argv.py`](../src/emet/simulation/mujoco_serve_argv.py), [`scene_base_spawn.py`](../src/emet/simulation/scene_base_spawn.py).
 

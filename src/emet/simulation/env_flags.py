@@ -39,6 +39,41 @@ def env_zmq_timing() -> bool:
     return _env_truthy("EMET_ZMQ_TIMING")
 
 
+def env_manip_mode() -> str:
+    """Agent pick/place backend: ``teleport`` (default) or ``kinematic`` (IK + attach)."""
+    raw = os.environ.get("EMET_MANIP_MODE", "").strip().lower()
+    if raw in ("teleport", "kinematic"):
+        return raw
+    return ""
+
+
+def env_manip_collision() -> str:
+    """Arm collision filter: ``none``, ``aabb`` (table solids), ``voxel`` (2D map)."""
+    raw = os.environ.get("EMET_MANIP_COLLISION", "").strip().lower()
+    if raw in ("none", "voxel", "aabb"):
+        return raw
+    return ""
+
+
+def env_manip_planner() -> str:
+    """Kinematic arm path planner: ``rrt_connect`` (default), ``rrt``, or ``linear``."""
+    raw = os.environ.get("EMET_MANIP_PLANNER", "").strip().lower()
+    if raw in ("rrt_connect", "rrt", "linear"):
+        return raw
+    return ""
+
+
+def env_sim_third_person() -> bool:
+    """Include ``third_person_image`` in full ZMQ observations (extra MuJoCo render)."""
+    return _env_truthy("EMET_SIM_THIRD_PERSON")
+
+
+def env_sim_third_person_camera() -> str:
+    """Optional body name to follow for chase cam (default falls through to ``base_link``)."""
+    raw = os.environ.get("EMET_SIM_THIRD_PERSON_CAMERA", "").strip()
+    return raw or "third_person"
+
+
 def warn_sim_nav_env_flags(*, force: bool = False) -> None:
     """Print yellow stderr warnings for active ``EMET_SIM_NAV_*`` env vars (once per process)."""
     global _warned_sim_nav_env

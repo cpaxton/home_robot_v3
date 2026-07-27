@@ -149,7 +149,7 @@ Scale to S1/S2: `--tier S1` or `--tier S2`; see episode yaml for Molmo indices.
 
 ## OVMM full (find + pick + place)
 
-**Paper:** four-phase extension of find-phase (not yet a dedicated results table).  
+**Paper:** four-phase extension of find-phase (not yet a dedicated results table).
 **Doc:** [ovmm_full_benchmark.md](ovmm_full_benchmark.md).
 
 ```bash
@@ -166,15 +166,20 @@ uv run python scripts/eval_ovmm_full.py \
 uv run python scripts/eval_ovmm_full.py \
   --episode-id robocasa_pp_s1 \
   --backend dynagraph --manip-mode sim --cpu-only
+
+# MolmoSpaces + rby1
+uv run python scripts/eval_ovmm_full.py \
+  --episode-id molmo_ithor_rby1_s2_bowl_pp \
+  --backend ground_truth --manip-mode sim --not-rotate --cpu-only
 ```
 
-Shared sim body teleport: `sim_set_body_pose` (also used by Phase~2 dynamic exploration world-change).
+Shared sim body teleport: `sim_set_body_pose` (also used by Phase~2 dynamic exploration world-change). Robosuite (rby1) advertises the same capability as Stretch MuJoCo.
 
 ---
 
 ## Dynamic exploration (Emet sim)
 
-**Paper:** Section~\ref{sec:dynamic_exploration}, Tables `tab:dynamic_explore_phase1`, `tab:dynamic_explore_world_change`.  
+**Paper:** Section~\ref{sec:dynamic_exploration}, Tables `tab:dynamic_explore_phase1`, `tab:dynamic_explore_world_change`.
 **Doc:** [dynamic_exploration_benchmark.md](dynamic_exploration_benchmark.md) · [experiments/dynagraph_dynamic_memory.md](experiments/dynagraph_dynamic_memory.md).
 
 ```bash

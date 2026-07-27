@@ -51,6 +51,11 @@ If you implement a bridge that speaks the same ZMQ observation protocol:
 1. Set `is_simulation` to `false` and pick a `runtime_kind` that is not `*_sim`.
 2. Populate `capabilities` honestly (e.g. `teleport_base: false` unless you implement teleport semantics).
 3. Include `schema_version: 1` and `emet_robot_id` consistent with top-level `emet_robot_id`.
+4. Omit sim-only top-level keys such as ``sim_to_real_ratio``.
+
+## Top-level sim state: ``sim_to_real_ratio``
+
+Stretch MuJoCo ZMQ **state** messages may include top-level ``sim_to_real_ratio`` (float): simulated seconds produced per wall-clock second. Clients use it to stretch motion-wait timeouts when the sim runs slower than real time (`motion_wait_timeout_scale` in [`zmq_protocol.py`](../src/emet/core/zmq_protocol.py)). Hardware and older servers omit the key; absence must leave real-robot wait budgets unchanged. Cap is ``EMET_ZMQ_SIM_WAIT_SCALE_MAX`` (10×).
 
 ## Client API
 

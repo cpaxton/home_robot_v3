@@ -9,8 +9,8 @@
 
 # (c) 2024 Hello Robot under MIT license
 
-import sys
 import os
+import sys
 import threading
 import time
 import timeit
@@ -26,16 +26,18 @@ from termcolor import colored
 import emet.motion.constants as constants
 import emet.motion.conversions as conversions
 import emet.utils.compression as compression
+from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
-from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.robot import AbstractRobotClient
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
     emet_session_cache_update,
     emet_session_manipulation_supported,
     is_stretch_family,
+    motion_wait_timeout_scale,
     read_emet_session,
+    read_sim_to_real_ratio,
 )
 from emet.motion import PlanResult
 from emet.motion.kinematics import HelloStretchIdx, HelloStretchKinematics
@@ -844,7 +846,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         # Send an action to the robot
         # Resend it to make sure it arrives, if we are not making a relative motion
         # If we are blocking, wait for the action to complete with a timeout
-        wait_timeout = float(timeout)
+        wait_timeout = self._scaled_motion_timeout(timeout)
         if teleport and blocking:
             # Snap is near-instant; long waits usually mean a frame mismatch, not slow driving.
             wait_timeout = min(wait_timeout, 3.0)
@@ -1026,6 +1028,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         verbose: bool = False,
     ) -> None:
         """Wait for the head to move to a particular configuration."""
+        timeout = self._scaled_motion_timeout(timeout)
         t0 = timeit.default_timer()
         at_goal = False
         at_goal_t = t0
@@ -1090,11 +1093,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             else:
                 at_goal = False
 
-            if (
-                at_goal
-                and timeit.default_timer() - at_goal_t > min_wait_time
-                and head_speed < speed_tol
-            ):
+            if at_goal and timeit.default_timer() - at_goal_t > min_wait_time and head_speed < speed_tol:
                 break
 
             t1 = timeit.default_timer()
@@ -1122,8 +1121,9 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         Returns:
             bool: Whether the arm successfully moved to the target configuration
         """
+        timeout = self._scaled_motion_timeout(timeout)
         t0 = timeit.default_timer()
-        min_time = 2.5
+        min_time = min(2.5, timeout * 0.25)
         while not self._finish:
             joint_positions, joint_velocities, _ = self.get_joint_state()
             if joint_positions is None:
@@ -1234,6 +1234,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             world_frame: When True, read pose via :meth:`get_base_pose_world` so yaw checks match
                 ``nav_world`` / Dynagraph planner goals.
         """
+        timeout = self._scaled_motion_timeout(timeout)
         logger.info(f"Navigation: waiting for motion step {block_id} to finish (timeout={timeout}s)")
         last_pos = None
         last_ang = None
@@ -1248,6 +1249,10 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         t0 = timeit.default_timer()
         deadline = timeit.default_timer() + timeout  # wall-clock: always exit after timeout
         close_to_goal = False
+        # Prefer published joint speeds when available so slow sims do not look "stuck moving"
+        # under wall-clock pose deltas, and so we can exit as soon as the base is actually idle.
+        base_lin_tol = max(float(moving_threshold), 0.01)
+        base_ang_tol = max(float(angle_threshold), 0.02)
 
         while not self._finish:
             # Minor delay at the end - give it time to get new messages
@@ -1282,7 +1287,9 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             obs_t = timeit.default_timer()
 
             if not self.at_goal():
+                # Still driving: keep waiting until goal flag or wall-clock deadline.
                 t0 = timeit.default_timer()
+                not_moving_count = 0
                 continue
 
             moved_dist = np.linalg.norm(pos - last_pos) if last_pos is not None else float("inf")
@@ -1296,7 +1303,15 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             moved_speed = moved_dist / (obs_t - last_obs_t) if last_obs_t is not None else float("inf")
             angle_speed = angle_dist / (obs_t - last_obs_t) if last_obs_t is not None else float("inf")
 
-            not_moving = last_pos is not None and moved_speed < moving_threshold and angle_speed < angle_threshold
+            base_speeds = self._base_joint_speeds()
+            if base_speeds is not None:
+                base_lin, base_ang = base_speeds
+                vel_idle = base_lin < base_lin_tol and base_ang < base_ang_tol
+            else:
+                vel_idle = False
+
+            pose_idle = last_pos is not None and moved_speed < moving_threshold and angle_speed < angle_threshold
+            not_moving = vel_idle or pose_idle
             if not_moving:
                 not_moving_count += 1
             else:
@@ -1312,14 +1327,17 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 logger.debug(
                     f"nav wait step={block_id} last_step={self._last_step} pos={pos} "
                     f"moved={moved_dist:.4f} angle={angle_dist:.4f} not_moving={not_moving_count} "
-                    f"at_goal_flag={self._state['at_goal']} world_frame={world_frame}"
+                    f"at_goal_flag={self._state['at_goal']} world_frame={world_frame} "
+                    f"vel_idle={vel_idle}"
                 )
                 logger.debug(
                     f"nav wait min_steps={min_steps_not_moving} last_step={self._last_step} angle_ok={at_goal}"
                 )
                 if goal_angle is not None:
                     logger.debug(f"Goal angle {goal_angle} angle dist to goal {angle_dist_to_goal}")
-            if self._last_step >= block_id and at_goal and not_moving_count > min_steps_not_moving:
+            # Complete on goal + idle. With published base joint speeds, fewer idle polls are enough.
+            idle_needed = 1 if (vel_idle and at_goal) else min_steps_not_moving
+            if self._last_step >= block_id and at_goal and not_moving_count > idle_needed:
                 if verbose:
                     logger.debug(f"Navigation at goal for step {block_id}")
                 break
@@ -1441,6 +1459,37 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             if self._state is None:
                 return False
             return self._state["at_goal"]
+
+    def _sim_to_real_ratio(self) -> float | None:
+        """Latest published sim/wall ratio from state, or ``None`` on hardware / early sim."""
+        with self._state_lock:
+            return read_sim_to_real_ratio(self._state)
+
+    def _scaled_motion_timeout(self, timeout: float) -> float:
+        """Stretch wall-clock motion waits when the sim runs slower than real time.
+
+        Hardware (no ``sim_to_real_ratio`` key) is unchanged. Fast sims do not shrink budgets.
+        """
+        scale = motion_wait_timeout_scale(self._sim_to_real_ratio())
+        return float(timeout) * scale
+
+    def _base_joint_speeds(self) -> tuple[float, float] | None:
+        """Return (linear-ish, angular) joint-space speeds from the latest state, if available."""
+        with self._state_lock:
+            if self._state is None:
+                return None
+            dq = self._state.get("joint_velocities")
+        if dq is None:
+            return None
+        try:
+            v = np.asarray(dq, dtype=np.float64).reshape(-1)
+        except (TypeError, ValueError):
+            return None
+        if v.size <= HelloStretchIdx.BASE_THETA:
+            return None
+        lin = float(np.linalg.norm(v[HelloStretchIdx.BASE_X : HelloStretchIdx.BASE_THETA]))
+        ang = float(abs(v[HelloStretchIdx.BASE_THETA]))
+        return lin, ang
 
     def get_observation(self, max_iter: int = 5):
         """Get the current observation. This uses the FULL observation track. Expected to be syncd with RGBD."""
@@ -1577,7 +1626,6 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                     return False
         return True
 
-
     def wait_for_waypoint(
         self,
         xyt: np.ndarray,
@@ -1605,8 +1653,10 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
         _delay = 1.0 / rate
         xy = np.asarray(xyt, dtype=np.float64).reshape(-1)[:2]
-        goal_yaw = float(np.asarray(xyt, dtype=np.float64).reshape(-1)[2]) if len(np.asarray(xyt).reshape(-1)) > 2 else 0.0
-        wait_timeout = float(timeout)
+        goal_yaw = (
+            float(np.asarray(xyt, dtype=np.float64).reshape(-1)[2]) if len(np.asarray(xyt).reshape(-1)) > 2 else 0.0
+        )
+        wait_timeout = self._scaled_motion_timeout(timeout)
         if env_sim_nav_teleport():
             wait_timeout = min(wait_timeout, 3.0)
         if verbose:

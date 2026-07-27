@@ -286,10 +286,23 @@ def _dispatch_tool_calls(
                 return False, results, has_info
             if verbose_tools:
                 print(colored("[executor]", "yellow"), json.dumps(cmds, default=str), flush=True)
-            ran_ok = executor(cmds)
-            ok = ok and ran_ok
+            keep_going = executor(cmds)
+            if not keep_going:
+                # Quit (or stop) — abort the agent turn.
+                ok = False
+                cmd_names = [c[0] for c in cmds]
+                summary = f"Executor ran: {', '.join(cmd_names)} -> quit/stop"
+                results.append(summary)
+                if verbose_tools:
+                    print(colored("[executor summary]", "magenta"), summary, flush=True)
+                if chat_log:
+                    for r in results:
+                        chat_log.log("tool", r)
+                return False, results, has_info
+            # Keep going; surface pickup/place failures via _last_exec_ok without quitting.
+            task_ok = bool(getattr(executor, "_last_exec_ok", True))
             cmd_names = [c[0] for c in cmds]
-            summary = f"Executor ran: {', '.join(cmd_names)} -> {'ok' if ran_ok else 'failed/interrupted'}"
+            summary = f"Executor ran: {', '.join(cmd_names)} -> {'ok' if task_ok else 'failed'}"
             results.append(summary)
             if verbose_tools:
                 print(colored("[executor summary]", "magenta"), summary, flush=True)
@@ -596,9 +609,7 @@ def run_agent_with_robot(
     executor.agent.confirm_navigation = bool(confirm_nav)
     executor.agent._nav_confirm_auto_yes = bool(commands)
     if confirm_nav:
-        mode = "auto-yes (scripted -c)" if commands else "y/n terminal" + (
-            "+Discord" if discord else ""
-        )
+        mode = "auto-yes (scripted -c)" if commands else "y/n terminal" + ("+Discord" if discord else "")
         print(
             colored(
                 f"Nav confirm ON ({mode}): plans show on the 2D map; reply y/n before the base moves.",
@@ -655,10 +666,7 @@ def run_agent_with_robot(
         refine_msg = ""
         if refine is not None:
             if refine.accepted:
-                refine_msg = (
-                    f"; refined xy={refine.translation_xy_m:.3f}m "
-                    f"yaw={np.degrees(refine.yaw_rad):.1f}°"
-                )
+                refine_msg = f"; refined xy={refine.translation_xy_m:.3f}m yaw={np.degrees(refine.yaw_rad):.1f}°"
             else:
                 refine_msg = f"; refine skipped/rejected ({refine.reason})"
         print(
