@@ -53,6 +53,7 @@ Start a simulation server.
 | `mujoco` | MuJoCo ZMQ simulation (default) |
 | `robocasa` | Shortcut for `mujoco --scene robocasa` (kitchen scenes) |
 | `molmospaces` | Shortcut for `mujoco --scene ithor` (merge Molmo scene + robot, then ZMQ) |
+| `habitat` | Habitat-Sim EQA ZMQ (requires `.venv-habitat`) |
 
 The positional backend is optional (`emet serve` defaults to **mujoco**). Optional scene name after `molmospaces`: `emet serve molmospaces procthor-10k`.
 
@@ -160,6 +161,22 @@ emet molmospaces serve --scene ithor --viewer   # default robot: stretch
 ```
 
 For **agent + tools**, use **`emet serve mujoco --scene ithor …`** (ZMQ) instead of passive `emet molmospaces serve`.
+
+### `emet grasp-oracle`
+
+Fake MolmoSpaces grasp predictor (ZMQ REP). Loads NPZ/JSON under `$MLSPACES_ASSETS_DIR/grasps` and returns world-frame 4×4 poses. Robot-agnostic; used by [`scripts/scripted_molmo_grasp_mp.py`](../scripts/scripted_molmo_grasp_mp.py).
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--bind` | `tcp://127.0.0.1:5558` | ZMQ REP bind address |
+| `--grasps-dir` | `$MLSPACES_ASSETS_DIR/grasps` | Grasp asset root |
+| `--tcp-frame` | `droid` | Gripper TCP correction (`droid` / `rum`) |
+
+```bash
+uv run emet grasp-oracle --bind tcp://127.0.0.1:5558
+```
+
+See [motion_planning.md](motion_planning.md#molmospaces-grasp-oracle-multi-robot).
 
 ---
 

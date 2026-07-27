@@ -21,17 +21,19 @@
       <joint damping="5" armature="0.01"/>
       <position kp="200" kv="20" ctrlrange="-1.5708 1.5708"/>
     </default>
+    <!-- Position-PD generals: need biastype=affine so biasprm couples to q/qvel.
+         force = gain[0]*ctrl + bias[0] + bias[1]*q + bias[2]*qvel ≈ kp*(ctrl - q) - kd*qvel. -->
     <default class="torso">
       <joint damping="20" stiffness="0.02" armature="0.01" frictionloss="0.5"/>
-      <general gainprm="300" biasprm="0 -150 -50" forcerange="-100 100"/>
+      <general biastype="affine" gainprm="150 0 0" biasprm="0 -150 -50" forcerange="-100 100"/>
     </default>
     <default class="arm_proximal">
       <joint damping="8" armature="0.005" frictionloss="0.3"/>
-      <general gainprm="200" biasprm="0 -100 -30" forcerange="-40 40"/>
+      <general biastype="affine" gainprm="100 0 0" biasprm="0 -100 -30" forcerange="-40 40"/>
     </default>
     <default class="arm_distal">
       <joint damping="3" armature="0.002" frictionloss="0.1"/>
-      <general gainprm="80" biasprm="0 -40 -10" forcerange="-7 7"/>
+      <general biastype="affine" gainprm="40 0 0" biasprm="0 -40 -10" forcerange="-7 7"/>
     </default>
     <default class="gripper">
       <joint damping="1" armature="0.001"/>

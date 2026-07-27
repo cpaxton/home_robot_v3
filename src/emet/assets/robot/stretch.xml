@@ -27,7 +27,9 @@
       </default>
       <default class="head">
         <!-- Real Stretch Dynamixel head is fast (~3 rad/s default). kp=10 made sim pans crawl. -->
-        <joint axis="0 0 1" damping="0.5"/>
+        <!-- armature models the Dynamixel gearbox inertia; without it kp=80 limit-cycles at
+             ~25 rad/s and the head never reaches its target (see lift/telescope classes). -->
+        <joint axis="0 0 1" damping="0.5" armature="0.01"/>
         <position kp="80" kv="5" forcerange="-25 25"/>
         <default class="head_pan">
           <joint range="-4.04 1.73"/>

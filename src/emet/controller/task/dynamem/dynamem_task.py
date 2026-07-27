@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import cv2
 import numpy as np
@@ -93,6 +93,29 @@ class DynamemTaskExecutor:
         self.embodied_agent = embodied_agent
         self.cpu_only = cpu_only
         self._last_memory_save_path = None  # set when memory is saved (e.g. after rotate_in_place)
+        self._last_sim_picked_body: str | None = None  # GT body after sim-teleport pickup
+        self._last_exec_ok = True  # False if last __call__ had pickup/place failure
+        self._manip_mode = "teleport"
+        self._manip_collision = "none"
+        self._manip_planner = "rrt_connect"
+        agent_cfg: dict = {}
+        if hasattr(parameters, "get"):
+            raw = parameters.get("agent")
+            if isinstance(raw, dict):
+                agent_cfg = raw
+        elif isinstance(parameters, dict):
+            agent_cfg = parameters.get("agent") or {}
+            if not isinstance(agent_cfg, dict):
+                agent_cfg = {}
+        self._manip_mode = str(agent_cfg.get("manip_mode") or "teleport")
+        self._manip_collision = str(agent_cfg.get("manip_collision") or "none")
+        self._manip_planner = str(agent_cfg.get("manip_planner") or "rrt_connect")
+        from emet.motion.arm_rrt import resolve_agent_manip_planner
+        from emet.simulation.sim_manipulation import resolve_agent_manip_collision, resolve_agent_manip_mode
+
+        self._manip_mode = resolve_agent_manip_mode(config_mode=self._manip_mode, visual_servo=bool(visual_servo))
+        self._manip_collision = resolve_agent_manip_collision(config_mode=self._manip_collision)
+        self._manip_planner = resolve_agent_manip_planner(config_mode=self._manip_planner)
         self.memory_backend = str(memory_backend or "dynagraph").strip().lower()
         # If there is no GPU, we have to use CPU
         if not torch.cuda.is_available():
@@ -197,17 +220,78 @@ class DynamemTaskExecutor:
         self.robot.move_base_to(xyt, blocking=True)
         return point
 
+    def _can_sim_gt_manip(self) -> bool:
+        from emet.simulation.sim_manipulation import can_use_sim_gt_manip
+
+        return can_use_sim_gt_manip(
+            self.robot,
+            manip_mode=self._manip_mode,
+            visual_servo=self.visual_servo,
+        )
+
+    def _voxel_map_for_manip(self) -> Any | None:
+        agent = getattr(self, "agent", None)
+        if agent is None:
+            return None
+        get_vm = getattr(agent, "get_voxel_map", None)
+        return get_vm() if callable(get_vm) else getattr(agent, "voxel_map", None)
+
     def _pickup(
         self,
         target_object: str,
         point: np.ndarray | None = None,
         skip_confirmations: bool = False,
-    ) -> None:
-        """Pick up an object.
+    ) -> bool:
+        """Pick up an object. Returns True on success (Stretch path always True).
 
-        Args:
-            target_object: The object to pick up.
+        Stretch visual-servo / AnyGrasp still returns True unconditionally — see TODO.md
+        (Stretch / AnyGrasp ``_pickup`` / ``_place`` always return True).
         """
+        from emet.simulation.sim_manipulation import (
+            prefer_kinematic_manip,
+            prefer_sim_teleport_manip,
+            sim_teleport_pickup,
+        )
+
+        if prefer_kinematic_manip(self.robot, manip_mode=self._manip_mode, visual_servo=self.visual_servo):
+            from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+
+            exe = KinematicPickPlaceExecutor(
+                self.robot,
+                manip_collision=self._manip_collision,
+                manip_planner=self._manip_planner,
+                voxel_map=self._voxel_map_for_manip(),
+            )
+            self._kinematic_executor = exe
+            result = exe.grasp_only(target_object)
+            if result.success:
+                self._last_sim_picked_body = result.object_body
+                logger.info(f"Kinematic grasp: {target_object!r} body={result.object_body!r} err={result.grasp_err_m}")
+                self.robot.say("Picked up the " + str(target_object) + ".")
+                return True
+            self._last_sim_picked_body = None
+            logger.error(f"Kinematic grasp failed: {result.message}")
+            self.robot.say("I could not pick up the " + str(target_object) + ".")
+            return False
+
+        # Teleport (default) or fallback when kinematic was requested but server lacks caps.
+        if prefer_sim_teleport_manip(self.robot, visual_servo=self.visual_servo):
+            if self._manip_mode == "kinematic":
+                logger.warning("manip_mode=kinematic but server lacks kinematic_manip; falling back to teleport.")
+            body = sim_teleport_pickup(self.robot, target_object)
+            if body:
+                self._last_sim_picked_body = body
+                logger.info(f"Sim teleport pickup: {target_object!r} body={body!r}")
+                self.robot.say("Picked up the " + str(target_object) + ".")
+                return True
+            self._last_sim_picked_body = None
+            logger.error(
+                f"Sim teleport pickup failed for {target_object!r} "
+                "(no matching freejoint GT body, or pose verify failed)."
+            )
+            self.robot.say("I could not pick up the " + str(target_object) + ".")
+            return False
+
         self.robot.switch_to_manipulation_mode()
         camera_xyz = self.robot.get_head_pose()[:3, 3]
         if point is not None:
@@ -240,6 +324,76 @@ class DynamemTaskExecutor:
             print("Using self.agent to grasp object:", target_object)
             self.agent.manipulate(target_object, theta, skip_confirmation=skip_confirmations)
         self.robot.look_front()
+        return True
+
+    def _place(self, target_receptacle: str, point: np.ndarray | None) -> bool:
+        """Place an object. Returns True on success (Stretch path always True).
+
+        Stretch ``agent.place`` still returns True unconditionally — see TODO.md
+        (Stretch / AnyGrasp ``_pickup`` / ``_place`` always return True).
+        """
+        from emet.simulation.sim_manipulation import (
+            prefer_kinematic_manip,
+            prefer_sim_teleport_manip,
+            sim_teleport_place,
+        )
+
+        if prefer_kinematic_manip(self.robot, manip_mode=self._manip_mode, visual_servo=self.visual_servo):
+            exe = getattr(self, "_kinematic_executor", None)
+            if exe is None:
+                from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+
+                exe = KinematicPickPlaceExecutor(
+                    self.robot,
+                    manip_collision=self._manip_collision,
+                    manip_planner=self._manip_planner,
+                    voxel_map=self._voxel_map_for_manip(),
+                )
+                self._kinematic_executor = exe
+            result = exe.place_only(target_receptacle, object_gt_body=self._last_sim_picked_body)
+            if result.success:
+                logger.info(
+                    f"Kinematic place: body={result.object_body!r} onto {target_receptacle!r} err={result.place_err_m}"
+                )
+                self.robot.say("Placing object on the " + str(target_receptacle) + ".")
+                self._last_sim_picked_body = None
+                return True
+            logger.error(f"Kinematic place failed: {result.message}")
+            self.robot.say("I could not place the object on the " + str(target_receptacle) + ".")
+            return False
+
+        if prefer_sim_teleport_manip(self.robot, visual_servo=self.visual_servo):
+            if self._manip_mode == "kinematic":
+                logger.warning("manip_mode=kinematic but server lacks kinematic_manip; falling back to teleport.")
+            ok = sim_teleport_place(
+                self.robot,
+                target_receptacle,
+                object_gt_body=self._last_sim_picked_body,
+            )
+            if ok:
+                logger.info(f"Sim teleport place: body={self._last_sim_picked_body!r} onto {target_receptacle!r}")
+                self.robot.say("Placing object on the " + str(target_receptacle) + ".")
+                self._last_sim_picked_body = None
+                return True
+            logger.error(
+                f"Sim teleport place failed for receptacle {target_receptacle!r} "
+                f"(held body={self._last_sim_picked_body!r})."
+            )
+            self.robot.say("I could not place the object on the " + str(target_receptacle) + ".")
+            return False
+
+        self.robot.switch_to_manipulation_mode()
+        camera_xyz = self.robot.get_head_pose()[:3, 3]
+        if point is not None:
+            theta = compute_tilt(camera_xyz, point)
+        else:
+            theta = -0.6
+
+        self.robot.say("Placing object on the " + str(target_receptacle) + ".")
+        # If you run this stack with visual servo, run it locally
+        self.agent.place(target_receptacle, init_tilt=theta, local=self.visual_servo)
+        self.robot.move_to_nav_posture()
+        return True
 
     def _take_picture(self, channel=None) -> None:
         """Take a picture with the head camera. Optionally send it to Discord."""
@@ -275,24 +429,6 @@ class DynamemTaskExecutor:
                 content=numpy_image_to_bytes(arr),
             )
 
-    def _place(self, target_receptacle: str, point: np.ndarray | None) -> None:
-        """Place an object.
-
-        Args:
-            target_receptacle: The receptacle to place the object in.
-        """
-        self.robot.switch_to_manipulation_mode()
-        camera_xyz = self.robot.get_head_pose()[:3, 3]
-        if point is not None:
-            theta = compute_tilt(camera_xyz, point)
-        else:
-            theta = -0.6
-
-        self.robot.say("Placing object on the " + str(target_receptacle) + ".")
-        # If you run this stack with visual servo, run it locally
-        self.agent.place(target_receptacle, init_tilt=theta, local=self.visual_servo)
-        self.robot.move_to_nav_posture()
-
     def _hand_over(self) -> None:
         """Create a task to find a person, navigate to them, and extend the arm toward them"""
         logger.alert("[Pickup task] Hand Over")
@@ -316,9 +452,13 @@ class DynamemTaskExecutor:
             response: A list of tuples, where the first element is the command and the second is the argument.
 
         Returns:
-            True if we should keep going, False if we should stop.
+            True if we should keep going, False if we should stop (quit).
+
+        Task success for the last batch is in ``_last_exec_ok`` (False if pickup/place
+        failed). Agent loop uses that for tool summaries without treating failure as quit.
         """
         i = 0
+        self._last_exec_ok = True
 
         if response is None or len(response) == 0:
             logger.error("No commands to execute!")
@@ -356,7 +496,6 @@ class DynamemTaskExecutor:
             elif command == "pickup":
                 logger.info(f"[Pickup task] Pickup: {args}")
                 target_object = args
-                next_command, next_args = response[i]
 
                 # Navigation
 
@@ -371,28 +510,37 @@ class DynamemTaskExecutor:
                 else:
                     point = None
 
-                # Pick up
-
+                # Pick up (sim GT kinematic/teleport can run without a nav point).
+                pickup_ok = True
                 if self.skip_confirmations:
-                    if point is not None:
-                        self._pickup(target_object, point=point)
+                    if point is not None or self._can_sim_gt_manip():
+                        if point is None:
+                            logger.info(f"Nav find missed {args!r}; running sim GT pickup without visual nav point.")
+                        pickup_ok = self._pickup(target_object, point=point)
                     else:
                         logger.error("Could not find the object.")
                         self.robot.say("I could not find the " + str(args) + ".")
-                        i += 1
-                        continue
+                        pickup_ok = False
                 else:
                     if input("Do you want to run picking? [Y/n]: ").upper() != "N":
-                        self._pickup(target_object, point=point)
+                        pickup_ok = self._pickup(target_object, point=point)
                     else:
                         logger.info("Skip picking!")
                         i += 1
                         continue
 
+                if not pickup_ok:
+                    self._last_exec_ok = False
+                    i += 1
+                    # Do not run a following place in the same command batch.
+                    if i < len(response) and response[i][0] == "place":
+                        logger.error("Skipping place after failed pickup.")
+                        i += 1
+                    continue
+
             elif command == "place":
                 logger.info(f"[Pickup task] Place: {args}")
                 target_object = args
-                next_command, next_args = response[i]
 
                 # Navigation
 
@@ -407,22 +555,26 @@ class DynamemTaskExecutor:
                     point = None
 
                 # Placing
-
+                place_ok = True
                 if self.skip_confirmations:
-                    if point is not None:
-                        self._place(target_object, point=point)
+                    if point is not None or self._can_sim_gt_manip():
+                        if point is None:
+                            logger.info(f"Nav find missed {args!r}; running sim GT place without visual nav point.")
+                        place_ok = self._place(target_object, point=point)
                     else:
                         logger.error("Could not find the object.")
                         self.robot.say("I could not find the " + str(args) + ".")
-                        i += 1
-                        continue
+                        place_ok = False
                 else:
                     if input("Do you want to run placement? [Y/n]: ").upper() != "N":
-                        self._place(target_object, point=point)
+                        place_ok = self._place(target_object, point=point)
                     else:
                         logger.info("Skip placing!")
                         i += 1
                         continue
+
+                if not place_ok:
+                    self._last_exec_ok = False
             elif command == "hand_over":
                 self._hand_over()
             elif command == "wave":
