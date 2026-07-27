@@ -128,7 +128,9 @@ def question_is_attribute_state(question: str) -> bool:
             r"\b("
             r"on or off|turned on|turned off|light on|lights? on|"
             r"pulled (down|up)|open or closed|opened or closed|"
-            r"is the .+ (on|off)\b"
+            r"is the .+ (on|off)\b|"
+            # Holdout q65: "Did I leave the air conditioning … on?"
+            r"leave .+ on\b|left .+ on\b"
             r")",
             head,
         )
@@ -155,7 +157,10 @@ def choices_are_attribute_state(choices: list[str] | None) -> bool:
         r"^(?:turned\s+)?(?:on|off)$|"
         r"^pulled\s+(?:up|down)$|"
         r"^(?:wide\s+)?(?:open|closed)$|"
-        r"^lights?\s+(?:on|off)$"
+        r"^lights?\s+(?:on|off)$|"
+        # Holdout q65: "No, it is off" / "Yes, it is on"
+        r"^(?:yes|no)[, ]+it(?:'s| is) (?:on|off)$|"
+        r"^it(?:'s| is) (?:on|off)$"
     )
     hits = sum(1 for c in real if c in attr_exact or bool(attr_phrase.match(c)))
     return hits >= max(1, len(real) // 2)
@@ -207,6 +212,8 @@ def choices_are_location_mcq(choices: list[str] | None) -> bool:
     if all(c.startswith("(do not choose") for c in cleaned):
         return False
     if choices_are_count_mcq(choices):
+        return False
+    if choices_are_attribute_state(choices):
         return False
     yes_no_like = sum(
         1

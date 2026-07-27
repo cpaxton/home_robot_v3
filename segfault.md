@@ -20,10 +20,10 @@ Last updated: 2026-07-26 10:58
 |-------|-------|
 | Goal | Fresh holdout-8 → bal-32 after VLM-first submit fixes (working tree) |
 | Policy | owlv2 + allow-unverified + **agentic-router=1** |
-| Script | `scripts/run_hmeqa_overnight_ladder.sh` |
-| Launch | `uv run emet jobs run --name hmeqa-overnight-router --need-mib 12000 -- ./scripts/run_hmeqa_overnight_ladder.sh` |
+| Script | `emet hmeqa overnight` |
+| Launch | `uv run emet hmeqa overnight` |
 | Do not | kill-stale while job live; hard-kill Habitat mid-episode |
-| Next | `bash scripts/status_log.sh tail` · `uv run emet jobs` · `uv run emet hmeqa status OUT` |
+| Next | `uv run emet status tail` · `uv run emet jobs` · `uv run emet hmeqa status OUT` |
 
 ### Host freeze during q104 frontier-viz debug (2026-07-25 ~22:32 → reboot 22:42)
 
@@ -39,7 +39,7 @@ Last updated: 2026-07-26 10:58
 | Next | optional q104 re-smoke with pick panels; then `emet hmeqa resume` bal-32 `~/runs/emet/hmeqa_agentic_bal32_20260725_101519` (classic 14/32, agentic 4/10 @ 52/64) |
 
 ```bash
-bash scripts/status_log.sh tail
+uv run emet status tail
 uv run emet jobs
 uv run emet eval status
 # validate fix (optional):
@@ -130,7 +130,7 @@ uv run emet eval status
 
 ```bash
 cd ~/src/home_robot_v4
-bash scripts/status_log.sh tail
+uv run emet status tail
 uv run emet jobs   # should be empty
 uv run emet hmeqa summarize /home/cpaxton/runs/emet/hmeqa_graph_probe_20260725
 ```
@@ -178,8 +178,8 @@ Note: HM-EQA has no `voxel_map.pkl` scene caches (those are Robocasa/Molmo). Tun
 
 ```bash
 cd ~/src/home_robot_v4                 # owning checkout — not v2/v3
-bash scripts/status_log.sh tail        # state + literal next command
-bash scripts/status_log.sh latest      # newest OUT for this checkout
+uv run emet status tail        # state + literal next command
+uv run emet status latest      # newest OUT for this checkout
 uv run emet jobs                       # is a managed job still alive?
 ```
 
@@ -224,7 +224,7 @@ Default crash policy is **skip** with **streak-abort=2** (early exit if consecut
 ### After resume is launched
 
 ```bash
-bash scripts/status_log.sh tail
+uv run emet status tail
 uv run emet jobs status <NEW_JOB_ID>
 uv run emet jobs logs <NEW_JOB_ID> --tail 40
 ```
@@ -343,7 +343,7 @@ session can recover from **only** this file + `STATUS.log`:
    incomplete `taskset` that leaves any 6 GHz core online, queue MuJoCo beside Habitat).
 
 Prefer writing through `scripts/status_log.sh` so
-`bash scripts/status_log.sh tail` (per-repo under
+`uv run emet status tail` (per-repo under
 `~/runs/emet/status/<repo>/`) carries the same `next:` instruction; keep this
 markdown as the durable investigation narrative.
 
@@ -444,13 +444,13 @@ BASE: `/home/cpaxton/runs/emet/hmeqa_overnight_20260726_022227`
 
 | Field | Value |
 |-------|-------|
-| Script | `scripts/run_hmeqa_overnight_ladder.sh` |
+| Script | `emet hmeqa overnight` |
 | Phase 1 | holdout-8 `15,56,65,68,79,88,104,105` classic+agentic |
 | Gate | if agentic << classic or n&lt;6 → one agentic-only retune |
 | Phase 2 | fresh bal-32 classic+agentic |
 | Policy | owlv2 + **allow-unverified** + no-router (explore fix; verify abstain was broken) |
 | Do not | kill-stale; second GPU job; hard-kill Habitat |
-| Monitor | `uv run emet jobs` / `bash scripts/status_log.sh tail` |
+| Monitor | `uv run emet jobs` / `uv run emet status tail` |
 
 
 | Job | `20260726_022333_7b5326` |

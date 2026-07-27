@@ -1071,9 +1071,10 @@ def test_agentic_submit_does_not_clamp_answer_max_tokens(monkeypatch):
     agent.planner = None
     agent.robot = None
 
-    def _qa(question, xyt, planner):
+    def _qa(question, xyt, planner, *, force_obs_ids=None):
         # Env must remain unset so graph_memory default (256) applies.
         assert "EMET_EQA_ANSWER_MAX_NEW_TOKENS" not in os.environ
+        assert force_obs_ids == [1]
         return ("", "B", True, "", None, [])
 
     gm.query_answer.side_effect = _qa
@@ -1086,6 +1087,8 @@ def test_agentic_submit_does_not_clamp_answer_max_tokens(monkeypatch):
     assert out["ok"] is True
     assert out["answer"] == "B"
     assert "EMET_EQA_ANSWER_MAX_NEW_TOKENS" not in os.environ
+    gm.query_answer.assert_called()
+    assert gm.query_answer.call_args.kwargs.get("force_obs_ids") == [1]
 
 
 def test_require_verified_abstains_when_never_present(monkeypatch):
@@ -1548,3 +1551,186 @@ def test_capture_rejects_non_advancing_obs():
     second = ex._tool_capture_and_update()
     assert second["ok"] is False
     assert second["status"] == "NO_NEW_OBS"
+
+
+def test_sync_scored_answer_appends_agentic_submit_for_habitat_scoring():
+    """Habitat scores last_eqa_raw — agentic letter must win over salvage."""
+    _require_agentic()
+    from emet.habitat.metrics import extract_mcq_letter_from_raw_eqa
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, AgenticEQAResult
+
+    agent = MagicMock()
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.last_eqa_raw = "Caption:\n...\n[salvage]\nanswer:\nA\n"
+    gm.last_eqa_parsed = ("r", "A", False, "", "")
+    gm.last_eqa_obs_ids = [20]
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "How many red pillows? A)1 B)3 C)4 D)2",
+        router=False,
+        collect_trace=True,
+    )
+    result = AgenticEQAResult(
+        discord_text="Answer:D",
+        answer="D",
+        confidence=True,
+        relevant_images=[],
+        tool_log=["submit_answer"],
+        verified=True,
+        verified_obs_id=20,
+        n_rounds=1,
+        n_nav=1,
+        n_explore=0,
+        wall_s=1.0,
+        budget_hit=False,
+    )
+    ex._sync_scored_answer_to_graph_memory(result, {"answer_source": "vlm_suggested"})
+    assert "[agentic_submit]" in gm.last_eqa_raw
+    assert gm.last_eqa_parsed[1] == "D"
+    letter = extract_mcq_letter_from_raw_eqa(
+        gm.last_eqa_raw,
+        ["1", "3", "4", "2"],
+    )
+    assert letter == "D"
+    assert any(r.get("event") == "sync_scored_answer" for r in ex._trace_rows)
+
+
+def test_navigate_no_new_obs_looks_around_verifies_and_flags_loop():
+    """Router-on must not spin navigate_to_obs on the same id without planner updates."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import NAV_SAME_OBS_LOOP_LIMIT, AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_tools import build_state_message
+    from emet.memory.graph_eqa.graph_memory import VerifyResult
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.memory_summary_enabled = False
+    gm._observations = [MagicMock(obs_id=16, labels=["cabinet"])]
+    gm._navigation_waypoint_for_obs = MagicMock(return_value=np.array([1.0, 2.0, 1.0]))
+    gm.record_nav_attempt = MagicMock()
+    gm.hypothesize_nav_targets = MagicMock(return_value=[])
+    gm.verify_phrase_at_obs = MagicMock(
+        return_value=VerifyResult(
+            status="ABSENT", sim=0.05, obs_id=16, phrase="wall clock", ok=False
+        )
+    )
+    gm._observation_by_id = MagicMock(return_value=gm._observations[0])
+    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.look_around = MagicMock()
+    agent.update = MagicMock()  # never advances obs id
+    agent.robot = None
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where is the large wall clock? A) dining B) kitchen C) sunroom D) living",
+        router=True,
+        collect_trace=True,
+        max_nav_steps=5,
+    )
+    ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
+    ex._voxel_max_sim_for_obs = lambda *_a, **_k: None  # type: ignore[method-assign]
+    ex._target_phrase = "large wall clock"
+
+    out = ex._tool_navigate_to_obs(16)
+    assert out["look_around_on_no_new_obs"] is True
+    agent.look_around.assert_called()
+    assert out.get("capture", {}).get("status") == "NO_NEW_OBS"
+    assert 16 in ex._tried
+    assert str(ex._tried[16]).startswith("STALLED_NAV_LOOP")
+    assert any(r.get("event") == "nav_loop" for r in ex._trace_rows)
+    assert gm.verify_phrase_at_obs.called
+
+    state = build_state_message(ex)
+    assert "NAV_LOOP" in state
+
+    blocked = ex._tool_navigate_to_obs(16)
+    assert blocked.get("status") == "NAV_LOOP_BLOCKED"
+    assert blocked.get("ok") is False
+    assert NAV_SAME_OBS_LOOP_LIMIT >= 2
+
+
+def test_capture_advancing_obs_refreshes_hypotheses():
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.memory_summary_enabled = False
+    gm._observations = [MagicMock(obs_id=1, labels=["a"])]
+    gm.hypothesize_nav_targets = MagicMock(
+        return_value=[
+            NavHypothesis(
+                phrase="clock",
+                obs_id=2,
+                xyz=np.array([0.0, 0.0, 0.0]),
+                score=1.0,
+                source="graph",
+            )
+        ]
+    )
+
+    def _update():
+        gm._observations = [
+            MagicMock(obs_id=1, labels=["a"]),
+            MagicMock(obs_id=2, labels=["clock"]),
+        ]
+
+    agent.update = MagicMock(side_effect=_update)
+    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=True)
+    out = ex._tool_capture_and_update()
+    assert out["ok"] is True
+    assert int(out["obs_id"]) == 2
+    assert gm.hypothesize_nav_targets.called
+    assert len(ex._hypotheses) == 1
+    assert int(ex._hypotheses[0].obs_id) == 2
+
+
+def test_capture_content_refresh_counts_as_new_evidence():
+    """Spatial merge keeps obs_id but refreshed RGB must unlock verify for the planner."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.spatial_merge_m = 0.45
+    rgb0 = np.zeros((8, 8, 3), dtype=np.uint8)
+    rgb1 = np.full((8, 8, 3), 180, dtype=np.uint8)
+    xyz = np.array([1.0, 0.0, 0.5], dtype=float)
+    oid = mem.add_observation(rgb0, xyz, ["clock"])
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    agent.graph_memory = mem
+
+    def _update():
+        mem.add_observation(rgb1, xyz + np.array([0.01, 0.0, 0.0]), ["clock"])
+
+    agent.update = MagicMock(side_effect=_update)
+    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=True)
+    out = ex._tool_capture_and_update()
+    assert out["ok"] is True
+    assert out.get("status") == "CONTENT_REFRESHED"
+    assert int(out["obs_id"]) == int(oid)
+    assert int(oid) in ex._fresh_obs_ids
+
+
+def test_siglip_phrase_prefers_target_over_full_question():
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    agent.graph_memory = MagicMock()
+    q = "I'm looking for the fruit bowl. A) On the kitchen island B) On the dining table. Answer:"
+    ex = AgenticEQAExecutor(agent, q, router=False, collect_trace=False)
+    ex._target_phrase = "fruit bowl"
+    assert ex._siglip_phrase(q) == "fruit bowl"
+    assert ex._siglip_phrase("") == "fruit bowl"
+    assert ex._siglip_phrase("fruit bowl") == "fruit bowl"

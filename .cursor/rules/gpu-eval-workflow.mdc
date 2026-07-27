@@ -17,7 +17,7 @@ NEED_MIB=12000 uv run emet eval wait   # or: uv run emet eval check
 uv run emet eval affinity              # turbo-exclusion mask (jobs --cpu-safe applies it)
 ```
 
-Prefer **`emet hmeqa resume`** / **`emet hmeqa h2h`** over hand-built `taskset` + script env. See **`.cursor/rules/dogfood-emet-cli.mdc`**.
+Prefer **`emet habitat safe-start`** then **`emet hmeqa resume`** / **`emet hmeqa h2h`** over hand-built `taskset` + script env. See **`.cursor/rules/dogfood-emet-cli.mdc`**.
 
 Canonical CLI: **`emet eval {status,diagnose,check,wait,kill-stale,affinity,recover}`**. Bash [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh) delegates to it (also provides `emet_export_pytorch_alloc` and **`emet_pytest_no_sim_ignore_args`** when sourced). Prefer `emet eval` over raw `pkill` / ad-hoc kills. Verify with `uv run emet eval --help` before suggesting flags.
 
@@ -78,13 +78,13 @@ The Cursor agent process frequently dies mid-turn (V8 / Node `invalid opcode`, o
 
 ```bash
 # From the checkout that owns the job (v4 ≠ v3 ≠ v2):
-bash scripts/status_log.sh tail   # state + literal next command
-bash scripts/status_log.sh path   # ~/runs/emet/status/<repo>/STATUS.log
-bash scripts/status_log.sh latest # that checkout's newest OUT dir
+uv run emet status tail   # state + literal next command
+uv run emet status path   # ~/runs/emet/status/<repo>/STATUS.log
+uv run emet status latest # that checkout's newest OUT dir
 # plus, for investigations: segfault.md (or the active experiment note)
 ```
 
-Do **not** `tail ~/runs/emet/STATUS.log` — sibling checkouts share `~/runs/emet/` and would overwrite each other's recovery instructions. Default path is **`~/runs/emet/status/<repo_basename>/STATUS.log`**.
+Do **not** `tail ~/runs/emet/STATUS.log` — sibling checkouts share `~/runs/emet/` and would overwrite each other's recovery instructions. Prefer **`emet status tail`**. Default path is **`~/runs/emet/status/<repo_basename>/STATUS.log`**.
 
 **Risky behaviors that require a record first:**
 
@@ -117,8 +117,8 @@ Also distinguish **Mode A** (episode `libcuda` SIGSEGV / empty jsonl / `exit=139
 **First command when a session comes back after a crash (from the owning checkout):**
 
 ```bash
-bash scripts/status_log.sh tail  # state + literal next command
-bash scripts/status_log.sh latest
+uv run emet status tail  # state + literal next command
+uv run emet status latest
 uv run emet jobs                 # detached job may still be alive
 ```
 

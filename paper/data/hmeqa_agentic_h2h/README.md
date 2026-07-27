@@ -31,8 +31,8 @@ Historical salvage-bug Wave 1 (`hmeqa_agentic_bal32_20260723_212307`): classic 1
 
 ```bash
 OUT=~/runs/emet/hmeqa_agentic_bal32r2_20260726_105946
-uv run python scripts/summarize_hmeqa_agentic_h2h.py "$OUT"
-uv run python scripts/hmeqa_significance.py "$OUT"
+uv run emet hmeqa summarize "$OUT"
+uv run emet hmeqa significance "$OUT"
 cp "$OUT/h2h_summary.json" paper/data/hmeqa_agentic_h2h/balanced32_summary.json
 # Holdout paper figs only (opt-in):
 COPY_PAPER_FIGS=1 …  # or rebuild from holdout8_summary.json

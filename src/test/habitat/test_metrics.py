@@ -41,6 +41,21 @@ def test_on_the_place_choices_are_location_not_attribute():
     assert choices_are_attribute_state(["turned on", "turned off", "open", "closed"])
 
 
+def test_q65_ac_on_off_is_attribute_not_location():
+    """Holdout q65: leave-AC-on? with 'it is off/on' choices must not location-salvage."""
+    from emet.habitat.metrics import question_is_attribute_state
+
+    q = (
+        "Did I leave the air conditioning in the living room on? "
+        "A) No, it is off B) (Do not choose this option) "
+        "C) Yes, it is on D) (Do not choose this option). Answer:"
+    )
+    choices = parse_mcq_choices_from_question(q)
+    assert question_is_attribute_state(q)
+    assert choices_are_attribute_state(choices)
+    assert not choices_are_location_mcq(choices)
+
+
 def test_count_choices_are_not_location_mcq():
     from emet.habitat.metrics import choices_are_count_mcq
 

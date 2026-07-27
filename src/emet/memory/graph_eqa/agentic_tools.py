@@ -29,26 +29,26 @@ Respond with ONLY a JSON object (no other text):
 {"tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
 
 Rules:
-- Interactive loop: (1) explore / inspect for candidate places, (2) navigate in and
-  verify_siglip once on the new view (cheap proposal + Qwen assess), (3) when Qwen
-  says answerable → submit_answer with the MCQ letter; else move / explore. Never
-  re-verify the same observation / view.
+- Interactive loop: (1) explore / inspect for candidate places, (2) navigate in —
+  the runtime captures, updates voxel+graph, and runs verify_siglip on the new view,
+  (3) when Qwen says answerable → submit_answer with the MCQ letter; else move /
+  explore. Never re-verify the same observation / view.
 - SigLIP/OWL are proposals shown in state — not proof. Trust Qwen's assess and router.
 - Pass the MCQ letter (A–D) in submit_answer.arguments.answer.
-- If a hypothesis was ABSENT at its old location, explore_frontier or look_around,
-  then verify a new view.
-- Never re-pick a hypothesis marked tried/ABSENT in the state.
+- If a hypothesis was ABSENT / STALLED_NAV_LOOP / [tried] in the state, do NOT
+  navigate_to_obs that obs_id again — explore_frontier or look_around instead.
+- If state says NAV_LOOP, treat that as a bug signal: switch to explore_frontier.
 - One or two tool calls per turn.
 
 # Examples
 State: hypothesis obs_id=7 'sink' from graph, not tried
 {"tool_calls": [{"name": "navigate_to_obs", "arguments": {"obs_id": 7}}], "message": ""}
-State: just arrived at obs 7
-{"tool_calls": [{"name": "verify_siglip", "arguments": {"phrase": "sink", "obs_id": 7}}], "message": ""}
-State: VLM assess answerable=true verified=true
+State: Last verify PRESENT; VLM assess answerable=true verified=true
 {"tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
 State: no hypotheses, 3 unexplored frontiers
-{"tool_calls": [{"name": "explore_frontier", "arguments": {"toward": "sink"}}], "message": ""}"""
+{"tool_calls": [{"name": "explore_frontier", "arguments": {"toward": "sink"}}], "message": ""}
+State: NAV_LOOP on obs_id=16
+{"tool_calls": [{"name": "explore_frontier", "arguments": {"toward": "large wall clock"}}], "message": ""}"""
 
 _EQA_IDENTITY = """\
 You are a robot exploring a home. You maintain a 3D map and an object scene graph that
@@ -84,16 +84,78 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     else:
         lines.append(f"Question: {executor.question}")
     lines.append(_graph_stats_line(gm))
+    # Compact memory / graph text so the router is not blind vs classic query_answer.
+    if gm is not None:
+        used_spatial = False
+        if getattr(gm, "_spatial_rag_enabled", lambda: False)():
+            try:
+                from emet.memory.graph_eqa.spatial_rag import (
+                    format_regions_compact,
+                    select_spatial_regions,
+                )
+
+                rag = select_spatial_regions(
+                    list(getattr(gm, "_nodes", []) or []),
+                    keywords=list(getattr(gm, "_relevant_objects", None) or []),
+                    prefer_obs_ids=list(getattr(gm, "last_eqa_obs_ids", []) or []),
+                    radius_m=float(gm._spatial_rag_float("spatial_rag_radius_m", 2.5)),
+                    max_regions=int(gm._spatial_rag_int("spatial_rag_max_regions", 6)),
+                    max_nodes=int(gm._spatial_rag_int("spatial_rag_max_nodes", 48)),
+                    max_frontiers=4,
+                )
+                compact = format_regions_compact(rag, max_chars=900)
+                if compact:
+                    lines.append(compact)
+                    used_spatial = True
+            except Exception:
+                used_spatial = False
+        if not used_spatial:
+            mem_fn = getattr(gm, "_relevant_memory_summary", None)
+            if callable(mem_fn) and bool(getattr(gm, "memory_summary_enabled", False)):
+                try:
+                    mem = mem_fn()
+                except Exception:
+                    mem = None
+                if mem:
+                    # Cap so tool-router context stays small.
+                    snippet = str(mem).strip()
+                    if len(snippet) > 900:
+                        snippet = snippet[:900].rstrip() + "…"
+                    lines.append(snippet)
+            top_labels: list[str] = []
+            for obs in list(getattr(gm, "_observations", []) or [])[-24:]:
+                for lab in list(getattr(obs, "labels", []) or [])[:3]:
+                    s = str(lab).strip()
+                    if s and s.lower() != "frontier" and s not in top_labels:
+                        top_labels.append(s)
+                    if len(top_labels) >= 16:
+                        break
+                if len(top_labels) >= 16:
+                    break
+            if top_labels:
+                lines.append("Recent labels: " + ", ".join(top_labels))
     lines.append(
         f"Round {executor._round + 1}/{executor.max_rounds}; "
         f"nav used {executor._n_nav + executor._n_explore}/{executor.max_nav_steps}; "
         f"verified={executor._verified}"
     )
+    if getattr(executor, "_last_capture_status", None):
+        lines.append(f"Last capture: {executor._last_capture_status}")
+    loop_flags = list(getattr(executor, "_nav_loop_flags", None) or [])
+    if loop_flags:
+        last = loop_flags[-1]
+        lines.append(
+            f"NAV_LOOP: obs_id={last.get('obs_id')} visits={last.get('visits')} "
+            f"status={last.get('status')} — do not re-navigate; explore_frontier"
+        )
     if executor._hypotheses:
         lines.append("Hypotheses:")
         for h in executor._hypotheses[:5]:
             tried = executor._tried.get(int(h.obs_id))
+            visits = int(getattr(executor, "_nav_to_obs_counts", {}).get(int(h.obs_id), 0))
             mark = f" [tried: {tried}]" if tried else ""
+            if visits:
+                mark += f" [nav_visits={visits}]"
             lines.append(
                 f"- obs_id={int(h.obs_id)} phrase={h.phrase!r} source={h.source} "
                 f"xyz=({float(h.xyz[0]):.1f},{float(h.xyz[1]):.1f}) score={float(h.score):.2f}{mark}"

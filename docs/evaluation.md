@@ -167,13 +167,13 @@ Also sets `PYTORCH_CUDA_ALLOC_CONF` / `PYTORCH_ALLOC_CONF` to `expandable_segmen
 
 Long Habitat evals and overnight orchestrators should run via **`uv run emet jobs run --name … -- CMD`** (or a dedicated terminal), not as blocking inline Cursor agent commands and not as unmanaged bare `nohup` when avoidable. Monitor with **`emet jobs`** / **`emet jobs status`** (progress + ETA from meta / `OUT/progress.json`). Native GPU teardown (Habitat-Sim, VLM unload) can crash the agent process while eval subprocesses finish — check `~/runs/emet/`, `~/.cache/habitat_eqa/results/`, and per-step logs before re-running. See [cross_track_smoke.md](experiments/cross_track_smoke.md#cursor--long-agent-sessions) and [cli.md](cli.md#emet-jobs-queued--running-eval-experiments).
 
-### First command after an agent death: `bash scripts/status_log.sh tail`
+### First command after an agent death: `uv run emet status tail`
 
 ```bash
 # From the checkout that owns the job (home_robot_v4 ≠ v3 ≠ v2):
-bash scripts/status_log.sh tail     # what happened + the literal next command
-bash scripts/status_log.sh path     # ~/runs/emet/status/<repo>/STATUS.log
-bash scripts/status_log.sh latest   # symlink to that checkout's newest OUT dir
+uv run emet status tail     # what happened + the literal next command
+uv run emet status path     # ~/runs/emet/status/<repo>/STATUS.log
+uv run emet status latest   # symlink to that checkout's newest OUT dir
 ```
 
 Do **not** `tail ~/runs/emet/STATUS.log` — that flat path is shared across sibling checkouts and would interleave recovery instructions from other agents. The default is namespaced:

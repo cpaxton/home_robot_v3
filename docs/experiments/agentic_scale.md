@@ -51,8 +51,7 @@ uv run python scripts/build_agentic_decision_dataset.py ~/.cache/habitat_eqa/epi
 uv run python scripts/run_agentic_verifier_bakeoff.py ~/runs/emet/hmeqa_decisions.jsonl \
   -o ~/runs/emet/hmeqa_verifier_bakeoff --methods siglip1,siglip2,owlv2,yoloe \
   --detector-crop-siglip
-uv run python scripts/summarize_agentic_ladder.py RUN_DIR \
-  --require-balanced32-gate
+uv run emet hmeqa ladder RUN_DIR --require-balanced32-gate
 ```
 
 The balanced-32 gate requires at least four probe episodes, nonzero fused verified-answer rate, and zero forced submits.
@@ -79,8 +78,8 @@ uv run emet jobs
 uv run emet hmeqa resume "$OUT" --preset paper-router
 
 # After DONE: minimal paper data (+ significance)
-uv run python scripts/summarize_hmeqa_agentic_h2h.py "$OUT"
-uv run python scripts/hmeqa_significance.py "$OUT"
+uv run emet hmeqa summarize "$OUT"
+uv run emet hmeqa significance "$OUT"
 cp "$OUT/h2h_summary.json" paper/data/hmeqa_agentic_h2h/balanced32_summary.json
 ```
 
@@ -140,6 +139,7 @@ Full write-up: [known_issues.md](../known_issues.md#nvidia-driver-hang--cursor-a
 
 ## Related
 
+- Qwen context (classic vs agentic): [agentic_qwen_context.md](agentic_qwen_context.md)
 - Holdout results: [habitat_eqa_results.md](habitat_eqa_results.md) (Classic vs agentic-verify)
 - Minimal checked-in summaries: [`paper/data/hmeqa_agentic_h2h/`](../../paper/data/hmeqa_agentic_h2h/), [`paper/data/README.md`](../../paper/data/README.md)
 - Do not chain Robocasa + full pytest + Habitat VLM in one session.

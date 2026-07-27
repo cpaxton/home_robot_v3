@@ -474,10 +474,13 @@ uv run emet test src/test/mapping/test_red_cylinder_in_sim.py -k innate_mars
 emet test
 emet test -v
 emet test --no-sim                    # skip sim tests (faster)
+emet test agent-regression            # Discord / Herman / agent pack (no sim)
 emet test src/test/cli/test_cli.py
 emet test -k test_serve
 emet test src/test/mapping/test_red_cylinder_in_sim.py -k innate_mars
 ```
+
+`emet test agent-regression` expands to the fixed no-sim pack used as the Discord/Herman gate (see `.cursor/rules/agent-discord-regression.mdc`).
 
 ---
 
@@ -657,7 +660,7 @@ uv run emet jobs cancel JOB_ID
 uv run emet jobs logs JOB_ID --tail 80
 ```
 
-Related: [`emet eval`](#emet-eval-gpu-preflight--stale-cleanup) for GPU preflight / orphan cleanup (not the same as job cancel); [`emet hmeqa`](#emet-hmeqa-hm-eqa-h2h) for classic vs agentic launches.
+Related: [`emet eval`](#emet-eval-gpu-preflight--stale-cleanup) for GPU preflight / orphan cleanup (not the same as job cancel); [`emet hmeqa`](#emet-hmeqa-hm-eqa-h2h) for classic vs agentic launches; [`emet status`](#emet-status-recovery-log) after an agent death.
 
 ### `emet eval` (GPU preflight / stale cleanup)
 
@@ -685,7 +688,44 @@ NEED_MIB=12000 uv run emet eval wait
 uv run emet eval check --need-mib 14000
 ```
 
+### `emet habitat` (Habitat-Sim / HM-EQA wrapper)
+
+Requires `./scripts/install_habitat.sh` (``.venv-habitat``). **Never** run `run-episode` / EGL probes as blocking Cursor agent commands — use `safe-start` then `emet jobs` / `emet hmeqa`.
+
+| Command | Purpose |
+|---------|---------|
+| `emet habitat info` | Data paths + asset status |
+| `emet habitat safe-start [--need-mib N] [--question-id Q] [--smoke-episode]` | `eval recover` + **jobs-wrapped** `emet-habitat egl-probe` (no VLM). Optional mock-llm episode after. |
+| `emet habitat egl-probe --force-inline` | Inline EGL only (dedicated terminal); agents are redirected to `safe-start` |
+| `emet habitat list-questions` / `serve` / `run-episode` | Wrapper passthrough (prefer jobs for anything that loads Habitat) |
+
+```bash
+uv run emet habitat safe-start --need-mib 4000
+uv run emet jobs
+uv run emet jobs logs JOB --tail 40
+# then HM-EQA:
+uv run emet hmeqa h2h --preset paper-router …
+```
+
 Related top-level scoring apps remain: `emet eval-dynagraph`, `emet eval-calibration`, `emet eval-sqa3d`.
+
+### `emet status` (recovery log)
+
+Per-checkout `STATUS.log` helpers (wraps `scripts/status_log.sh`). Prefer these after an agent death.
+
+| Command | Purpose |
+|---------|---------|
+| `emet status tail [N]` | Last N lines of this checkout's STATUS.log |
+| `emet status path` | Print STATUS.log path |
+| `emet status latest` | Resolve `latest` OUT symlink |
+
+```bash
+uv run emet status tail
+uv run emet status path
+uv run emet status latest
+```
+
+Orchestrators still *source* `scripts/status_log.sh` to write records.
 
 ### `emet hmeqa` (HM-EQA H2H)
 
@@ -698,6 +738,9 @@ Dogfood entrypoints for classic vs agentic-verify Dynagraph. Prefer these over h
 | `emet hmeqa overnight [--base DIR] [--skip-bal32] [--gate-min-acc 0.25]` | Holdout-8 → optional agentic retune → bal-32 in **one** `emet jobs` run (paper-router defaults) |
 | `emet hmeqa status [OUT]` | Progress + scored counts + crash capsules |
 | `emet hmeqa summarize [OUT]` | `scripts/summarize_hmeqa_agentic_h2h.py` |
+| `emet hmeqa significance [OUT] [--from-summary …] [--json …]` | Paired McNemar / Wilcoxon / bootstrap on classic vs agentic |
+| `emet hmeqa failures [OUT] [--from-summary …] [--json …]` | Offline classic_only / context-gap attribution (+ traces) |
+| `emet hmeqa ladder RUN_DIR… [-o …] [--require-balanced32-gate]` | Probe/holdout ladder metrics + optional balanced-32 gate |
 
 `OUT/DONE` is written only when every arm×id unit has a non-empty scored jsonl. Partial batches (skipped native crashes, etc.) exit nonzero, mark the job `failed` / `INCOMPLETE`, and leave `STATUS` pointing at resume — not summarize.
 
@@ -705,9 +748,9 @@ Default crash policy is **skip** (settle + retry, continue). **`--streak-abort 2
 
 **`--preset paper-router`** (on `h2h` / `resume`): sets owlv2 + allow-unverified + agentic-router where flags were left at Click defaults; explicit flags still win. Probe runs should omit the preset and keep `--require-verified`. `run_hmeqa_agentic_h2h.sh` honors `EMET_EQA_AGENTIC_ROUTER` (default `0`); scored 2026-07-26 bal-32 used router off because the script previously hardcoded it.
 
-**`emet hmeqa overnight`** defaults to paper-router policy (owlv2, allow-unverified, router on). Inner phases call `run_hmeqa_agentic_h2h.sh` directly (no nested jobs). `scripts/run_hmeqa_overnight_ladder.sh` is a thin shim to this command. Set `COPY_PAPER_FIGS=1` only when regenerating **holdout-8** paper figures (default off so bal-32 cannot overwrite them).
+**`emet hmeqa overnight`** defaults to paper-router policy (owlv2, allow-unverified, router on). Inner phases call `run_hmeqa_agentic_h2h.sh` directly (no nested jobs). Set `COPY_PAPER_FIGS=1` only when regenerating **holdout-8** paper figures (default off so bal-32 cannot overwrite them).
 
-Agentic validation uses `scripts/summarize_agentic_ladder.py`: it reports accuracy, selective risk/coverage, fused-verify precision, visibility at verify, path length, hypothesis count, abstention, false confirmation, and forced submits. Balanced-32 is blocked unless a 4+ episode probe has a nonzero fused verified-answer rate and zero forced submits.
+**`emet hmeqa ladder`** reports accuracy, selective risk/coverage, fused-verify precision, visibility at verify, path length, hypothesis count, abstention, false confirmation, and forced submits. Balanced-32 is blocked unless a 4+ episode probe has a nonzero fused verified-answer rate and zero forced submits.
 
 ```bash
 uv run emet eval recover --need-mib 12000
@@ -715,10 +758,12 @@ uv run emet hmeqa overnight
 # or a probe:
 uv run emet hmeqa h2h ~/runs/emet/hmeqa_graph_probe --arms agentic \
   --ids 12,17,18,56 --agentic-verifier owlv2 --require-verified
-uv run python scripts/summarize_agentic_ladder.py ~/runs/emet/hmeqa_graph_probe \
-  --require-balanced32-gate
+uv run emet hmeqa ladder ~/runs/emet/hmeqa_graph_probe --require-balanced32-gate
+uv run emet hmeqa significance ~/runs/emet/hmeqa_agentic_bal32_...
+uv run emet hmeqa failures ~/runs/emet/hmeqa_agentic_bal32_...
 uv run emet hmeqa resume --preset paper-router
 uv run emet hmeqa status
+uv run emet status tail
 uv run emet jobs
 ```
 

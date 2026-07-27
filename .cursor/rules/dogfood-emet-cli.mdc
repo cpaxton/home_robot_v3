@@ -3,9 +3,12 @@
 When launching, recovering, or monitoring Habitat / HM-EQA / GPU paper runs:
 
 - Prefer **`uv run emet …`** over ad-hoc `env … taskset … nohup ./scripts/…` lines.
-- Recovery: `emet eval recover --need-mib 12000` then `emet hmeqa resume` (or `emet hmeqa status`).
-- Launch H2H: `emet hmeqa h2h --out OUT --resume …` (uses `emet jobs run --need-mib` with `--cpu-safe` / `--gpu-exclusive`).
+- **Before Habitat/HM-EQA:** `uv run emet habitat safe-start` (recover + jobs-wrapped EGL probe). Never inline `emet-habitat` / `run-episode` in a Cursor agent turn.
+- Recovery: `emet eval recover --need-mib 12000` then `emet hmeqa resume` (or `emet hmeqa status`). After agent death: **`emet status tail`** (not a flat `~/runs/emet/STATUS.log`).
+- Launch H2H: `emet hmeqa h2h --out OUT --resume …` (uses `emet jobs run --need-mib` with `--cpu-safe` / `--gpu-exclusive`). Overnight ladder: **`emet hmeqa overnight`** (no separate overnight-ladder script).
+- Post-run: `emet hmeqa summarize` / `emet hmeqa significance` / `emet hmeqa ladder`.
 - Monitor: `emet jobs` / `emet jobs status` / `emet jobs report` / `emet jobs logs` — not long blocking agent shells on Habitat.
 - Affinity: `emet eval affinity` (never hand-roll incomplete `taskset -c 0-7,10-31`).
+- Agent/Discord gate: `emet test agent-regression`.
 - Thin bash under `scripts/` may remain as implementation detail; **operator/agent docs and STATUS `next:` lines must show `emet` commands**.
 - When adding a new long GPU workflow, expose it as an `emet` subcommand (or extend `emet jobs` / `emet hmeqa` / `emet eval`) and document it in `docs/cli.md` before telling users to run a raw script.

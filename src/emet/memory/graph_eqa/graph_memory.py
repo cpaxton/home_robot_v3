@@ -579,6 +579,8 @@ class GraphEQAMemory:
         self.last_eqa_obs_ids: list[int] = []
         self.last_eqa_action_obs_id: int | None = None
         self.last_eqa_prompt_node_count: int = 0
+        self.last_eqa_prompt_regions: int = 0
+        self.last_eqa_spatial_rag: dict[str, Any] | None = None
         self.last_nav_result_note: str = ""
         self.last_eqa_nav_fallback_count: int = 0
         # Model's own confidence before the graph-coverage gate suppresses it (for early-stop).
@@ -608,6 +610,9 @@ class GraphEQAMemory:
         self._relevant_phrases: list[str] = []
         self._confirmed_memory_siglip_encoder: Any | None = None
         self._obs_siglip_features: dict[int, np.ndarray] = {}
+        # obs_id → content revision (bumped when merge refreshes RGB/candidate evidence).
+        self._obs_revisions: dict[int, int] = {}
+        self._last_obs_content_update_id: int | None = None
         self._siglip_phrase_cache: dict[str, tuple[float, np.ndarray, int | None]] = {}
 
         self.log_dir = log_dir
@@ -852,6 +857,8 @@ class GraphEQAMemory:
         self.last_eqa_obs_ids = []
         self.last_eqa_action_obs_id = None
         self.last_eqa_prompt_node_count = 0
+        self.last_eqa_prompt_regions = 0
+        self.last_eqa_spatial_rag = None
         self.last_eqa_nav_fallback_count = 0
         self.last_eqa_model_confident = False
 
@@ -977,6 +984,61 @@ class GraphEQAMemory:
                 "GraphEQA memory requires emet.llms for EQA. Install GPU extras (torch, transformers)."
             ) from e
 
+    def obs_revision(self, obs_id: int) -> int:
+        """Content generation for *obs_id* (advances when candidate RGB is refreshed)."""
+        return int(self._obs_revisions.get(int(obs_id), 0))
+
+    def _bump_obs_revision(self, obs_id: int) -> int:
+        oid = int(obs_id)
+        nxt = int(self._obs_revisions.get(oid, 0)) + 1
+        self._obs_revisions[oid] = nxt
+        self._last_obs_content_update_id = oid
+        # Stale SigLIP features would disagree with the refreshed RGB candidate.
+        self._obs_siglip_features.pop(oid, None)
+        return nxt
+
+    def refresh_observation_candidate(
+        self,
+        obs_id: int,
+        rgb: np.ndarray | Image.Image,
+        *,
+        xyz: np.ndarray | None = None,
+        labels: list[str] | None = None,
+        description: str | None = None,
+        viewer_xyz: np.ndarray | None = None,
+    ) -> bool:
+        """Update the stored RGB/candidate for an existing graph observation.
+
+        Graph nodes keep a stable ``obs_id`` under spatial merge; revisits must still
+        refresh the evidence image (and invalidate caches) so verify/EQA see the
+        better view rather than the first frame forever.
+        """
+        if isinstance(rgb, Image.Image):
+            rgb = np.array(rgb)
+        rgb_a = np.asarray(rgb)
+        oid = int(obs_id)
+        viewer_a: np.ndarray | None = None
+        if viewer_xyz is not None:
+            viewer_a = np.asarray(viewer_xyz, dtype=float).reshape(-1)[:3].copy()
+        xyz_a = None
+        if xyz is not None:
+            xyz_a = np.asarray(xyz, dtype=float).reshape(-1)[:3].copy()
+        for o in self._observations:
+            if int(o.obs_id) != oid:
+                continue
+            o.rgb = rgb_a.copy()
+            if xyz_a is not None:
+                o.xyz = xyz_a
+            if labels is not None:
+                o.labels = list(labels)
+            if description:
+                o.description = description
+            if viewer_a is not None:
+                o.viewer_xyz = viewer_a
+            self._bump_obs_revision(oid)
+            return True
+        return False
+
     def add_observation(
         self,
         rgb: np.ndarray | Image.Image,
@@ -1051,15 +1113,15 @@ class GraphEQAMemory:
                         change_events=changes,
                         belief_confidence=belief_confidence,
                     )
-                    for o in self._observations:
-                        if o.obs_id == existing.obs_id:
-                            o.xyz = new_xyz
-                            o.labels = merged_labels
-                            if new_desc and not o.description:
-                                o.description = new_desc
-                            if viewer_a is not None:
-                                o.viewer_xyz = viewer_a
-                            break
+                    # Keep the graph node's candidate image in sync with this revisit.
+                    self.refresh_observation_candidate(
+                        int(existing.obs_id),
+                        rgb,
+                        xyz=new_xyz,
+                        labels=merged_labels,
+                        description=new_desc if new_desc else None,
+                        viewer_xyz=viewer_a,
+                    )
                     if viewer_a is not None:
                         self._ensure_viewpoint_node(int(existing.obs_id), viewer_a)
                     self._update_edges()
@@ -1108,6 +1170,8 @@ class GraphEQAMemory:
                 viewer_xyz=viewer_a,
             )
         )
+        self._obs_revisions[int(obs_id)] = 1
+        self._last_obs_content_update_id = int(obs_id)
         if viewer_a is not None:
             self._ensure_viewpoint_node(obs_id, viewer_a)
         self._update_edges()
@@ -1194,13 +1258,13 @@ class GraphEQAMemory:
                     change_events=changes,
                     belief_confidence=belief_confidence,
                 )
-                for o in self._observations:
-                    if o.obs_id == existing.obs_id:
-                        o.xyz = new_xyz
-                        o.labels = merged_labels
-                        if viewer_a is not None:
-                            o.viewer_xyz = viewer_a
-                        break
+                self.refresh_observation_candidate(
+                    int(existing.obs_id),
+                    rgb,
+                    xyz=new_xyz,
+                    labels=merged_labels,
+                    viewer_xyz=viewer_a,
+                )
                 if viewer_a is not None:
                     self._ensure_viewpoint_node(int(existing.obs_id), viewer_a)
                 self._update_edges()
@@ -1399,11 +1463,11 @@ class GraphEQAMemory:
                 continue
             new_desc = f"{desc}{det_tag}" if det_tag else desc
             self._nodes[idx] = replace(existing, last_seen=step, description=new_desc)
-            for o in self._observations:
-                if o.obs_id == existing.obs_id:
-                    o.rgb = rgb_a.copy()
-                    o.description = new_desc
-                    break
+            self.refresh_observation_candidate(
+                int(existing.obs_id),
+                rgb_a,
+                description=new_desc,
+            )
             self._update_edges()
             return True
         return False
@@ -1851,6 +1915,44 @@ class GraphEQAMemory:
         frontiers.sort(key=lambda t: (-t[0], int(t[1].node_id)))
         return [n for _, n in objects] + [n for _, n in frontiers]
 
+    def _eqa_cfg_value(self, key: str, default: Any = None) -> Any:
+        """Read ``eqa.<key>`` from Parameters or a nested dict."""
+        params = self.parameters
+        if params is None:
+            return default
+        if isinstance(params, dict):
+            eqa = params.get("eqa")
+            if isinstance(eqa, dict) and key in eqa:
+                return eqa.get(key, default)
+            return params.get(f"eqa/{key}", params.get(key, default))
+        if hasattr(params, "get"):
+            return params.get(f"eqa/{key}", default)
+        return default
+
+    def _spatial_rag_enabled(self) -> bool:
+        """True when eqa.spatial_rag or EMET_EQA_SPATIAL_RAG requests REGION prompts."""
+        env = os.environ.get("EMET_EQA_SPATIAL_RAG", "").strip().lower()
+        if env in ("1", "true", "yes", "on"):
+            return True
+        if env in ("0", "false", "no", "off"):
+            return False
+        raw = self._eqa_cfg_value("spatial_rag", False)
+        if isinstance(raw, str):
+            return raw.strip().lower() in ("1", "true", "yes", "on")
+        return bool(raw)
+
+    def _spatial_rag_float(self, key: str, default: float) -> float:
+        try:
+            return float(self._eqa_cfg_value(key, default))
+        except Exception:
+            return default
+
+    def _spatial_rag_int(self, key: str, default: int) -> int:
+        try:
+            return int(self._eqa_cfg_value(key, default))
+        except Exception:
+            return default
+
     def to_string(
         self,
         *,
@@ -1863,6 +1965,8 @@ class GraphEQAMemory:
 
         When ``max_object_nodes`` is set, keep the top-K ranked object/frontier nodes
         (keyword + support + Image-N preference) so blowups cannot starve the VLM.
+        With ``eqa.spatial_rag`` / ``EMET_EQA_SPATIAL_RAG``, emit compact REGION blocks
+        around keyword / preferred-obs neighborhoods instead of a flat node dump.
         Full untruncated serialization is the default for exports / debugging.
         """
         lines = []
@@ -1870,6 +1974,58 @@ class GraphEQAMemory:
         def _prompt_labels(labels: list[str], max_len: int = 120) -> str:
             s = ", ".join(labels) if labels else "object"
             return s if len(s) <= max_len else s[: max_len - 3] + "..."
+
+        if (
+            max_object_nodes is not None
+            and max_object_nodes > 0
+            and self._spatial_rag_enabled()
+        ):
+            from emet.memory.graph_eqa.spatial_rag import (
+                format_regions_for_prompt,
+                select_spatial_regions,
+            )
+
+            radius = self._spatial_rag_float("spatial_rag_radius_m", 2.5)
+            max_regions = self._spatial_rag_int("spatial_rag_max_regions", 6)
+            max_nodes = self._spatial_rag_int(
+                "spatial_rag_max_nodes",
+                int(max_object_nodes) if max_object_nodes else 48,
+            )
+            frontier_budget = max(4, int(max_object_nodes) // 4)
+            rag = select_spatial_regions(
+                list(self._nodes),
+                keywords=question_keywords or list(self._relevant_objects or []),
+                prefer_obs_ids=prefer_obs_ids or self.last_eqa_obs_ids,
+                radius_m=radius,
+                max_regions=max_regions,
+                max_nodes=max_nodes,
+                max_frontiers=frontier_budget,
+            )
+            if rag.regions:
+                text = format_regions_for_prompt(rag)
+                keep_ids = set(rag.kept_node_ids)
+                for n in rag.frontier_nodes:
+                    keep_ids.add(int(n.node_id))
+                edge_lines: list[str] = []
+                for a, b, rel in self._edges:
+                    if int(a) not in keep_ids:
+                        continue
+                    if b != -1 and int(b) not in keep_ids:
+                        continue
+                    b_str = "floor" if b == -1 else str(b)
+                    edge_lines.append(f"  {rel}({a}, {b_str})")
+                if edge_lines:
+                    text = text + "\n" + "\n".join(edge_lines)
+                if record_prompt_count:
+                    self.last_eqa_prompt_node_count = len(keep_ids)
+                    self.last_eqa_prompt_regions = len(rag.regions)
+                    self.last_eqa_spatial_rag = {
+                        "n_regions": len(rag.regions),
+                        "n_nodes": len(keep_ids),
+                        "seed_node_ids": list(rag.seed_node_ids),
+                        "radius_m": radius,
+                    }
+                return text
 
         if max_object_nodes is not None and max_object_nodes > 0:
             ranked = self._rank_nodes_for_eqa_prompt(
@@ -1890,6 +2046,8 @@ class GraphEQAMemory:
 
         if record_prompt_count:
             self.last_eqa_prompt_node_count = len(nodes_for_prompt)
+            self.last_eqa_prompt_regions = 0
+            self.last_eqa_spatial_rag = None
 
         for n in nodes_for_prompt:
             lbl = _prompt_labels(n.labels)
@@ -3244,10 +3402,18 @@ class GraphEQAMemory:
         question: str,
         xyt: Any | np.ndarray | list | None = None,
         planner: Any = None,
+        *,
+        force_obs_ids: list[int] | None = None,
     ) -> tuple[str, str, bool, str, np.ndarray | None, list[Image.Image]]:
         """
         Answer the question using the scene graph and task-relevant images.
         Same return contract as voxel_dynamem.SparseVoxelMap.query_answer.
+
+        Args:
+            force_obs_ids: When set (agentic verified submit), use these observation
+                ids as Image 1..K instead of re-running diversified selection. Remaining
+                slots may still be filled from ``_select_relevant_obs_ids`` when
+                ``len(force_obs_ids) < eqa_max_images``.
 
         Returns:
             reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
@@ -3277,15 +3443,34 @@ class GraphEQAMemory:
         max_images = get_eqa_vl_int(self.parameters, "eqa_max_images", 4)
         parsed_choices = parse_mcq_choices_from_question(question)
         attribute_q = question_is_attribute_state(question) or choices_are_attribute_state(parsed_choices)
-        obs_ids = [
-            int(oid)
-            for oid in self._select_relevant_obs_ids(
-                max_images=max_images,
-                choices=parsed_choices if parsed_choices else None,
-                attribute_question=attribute_q,
-            )
-            if self._obs_usable_for_eqa_image(oid)
-        ]
+        forced: list[int] = []
+        if force_obs_ids:
+            for oid in force_obs_ids:
+                oi = int(oid)
+                if oi in forced:
+                    continue
+                if self._obs_usable_for_eqa_image(oi):
+                    forced.append(oi)
+                if len(forced) >= max_images:
+                    break
+        if forced and len(forced) >= max_images:
+            obs_ids = forced[:max_images]
+        else:
+            selected = [
+                int(oid)
+                for oid in self._select_relevant_obs_ids(
+                    max_images=max_images,
+                    choices=parsed_choices if parsed_choices else None,
+                    attribute_question=attribute_q,
+                )
+                if self._obs_usable_for_eqa_image(oid)
+            ]
+            if forced:
+                # Verified (or caller-pinned) view stays Image 1; fill remaining slots.
+                rest = [oid for oid in selected if oid not in set(forced)]
+                obs_ids = (forced + rest)[:max_images]
+            else:
+                obs_ids = selected
         self.last_eqa_obs_ids = list(obs_ids)
         max_graph_nodes = get_eqa_vl_int(self.parameters, "eqa_max_graph_nodes", 48)
         graph_str = self.to_string(
