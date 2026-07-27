@@ -1828,6 +1828,38 @@ def test_hyp_recall_diversifies_graph_and_frontier():
     assert "graph" in sources
     assert "frontier" in sources
     assert any(int(h.obs_id) == int(oid) for h in hyps)
+    # Frontiers must not inherit the question object as phrase (q105 failure mode).
+    for h in hyps:
+        if h.source == "frontier":
+            assert "sink" not in str(h.phrase).lower()
+            assert "frontier" in str(h.phrase).lower()
+
+
+def test_navigate_rejects_obs_not_in_evidence():
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.graph_memory._navigation_waypoint_for_obs = MagicMock(
+        return_value=np.array([1.0, 2.0, 0.0])
+    )
+    ex = AgenticEQAExecutor(agent, question="Where is the sink?", max_rounds=4, router=False)
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="kitchen island",
+            obs_id=13,
+            xyz=np.array([-16.5, -1.1, 0.7]),
+            score=10.0,
+            source="graph",
+        )
+    ]
+    out = ex._tool_navigate_to_obs(17)
+    assert out["ok"] is False
+    assert out.get("status") == "OBS_NOT_IN_EVIDENCE"
+    assert agent.navigate_to_target_pose.call_count == 0
 
 
 def test_visited_frontier_retired_from_graph():

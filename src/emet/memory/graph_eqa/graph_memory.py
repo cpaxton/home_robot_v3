@@ -2409,9 +2409,11 @@ class GraphEQAMemory:
         for node in self._nodes:
             if not node.is_frontier or int(node.obs_id) in seen:
                 continue
+            # Do NOT attach the question object as the frontier phrase — that made
+            # every frontier look like a "fruit bowl" hit and drowned graph places.
             scored.append(
                 NavHypothesis(
-                    phrase=phrases[0],
+                    phrase="unexplored frontier",
                     obs_id=int(node.obs_id),
                     xyz=np.asarray(node.xyz, dtype=float).copy(),
                     score=0.0,

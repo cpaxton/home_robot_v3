@@ -534,6 +534,28 @@ class AgenticEQAExecutor:
                 "obs_id": oid,
             }
         hyp = next((h for h in self._hypotheses if int(h.obs_id) == oid), None)
+        # Router must pick among recalled evidence cards when any are listed.
+        if hyp is None and self._hypotheses:
+            listed = sorted({int(h.obs_id) for h in self._hypotheses})
+            self._append_trace(
+                {
+                    "tool": "navigate_to_obs",
+                    "ok": False,
+                    "obs_id": oid,
+                    "status": "OBS_NOT_IN_EVIDENCE",
+                    "listed_obs_ids": listed,
+                }
+            )
+            return {
+                "ok": False,
+                "error": (
+                    f"obs_id={oid} is not in the current evidence list "
+                    f"{listed}; pick a listed obs_id or explore_frontier"
+                ),
+                "status": "OBS_NOT_IN_EVIDENCE",
+                "obs_id": oid,
+                "listed_obs_ids": listed,
+            }
         phrase = hyp.phrase if hyp is not None else self.query_text
         source = hyp.source if hyp is not None else "graph"
         hypothesis_id = self._begin_policy_approach(source, oid, phrase)

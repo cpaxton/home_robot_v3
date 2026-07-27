@@ -36,14 +36,17 @@ Rules:
 - SigLIP/OWL are proposals shown in state — not proof. Trust Qwen's assess and router.
 - Pass the MCQ letter (A–D) in submit_answer.arguments.answer.
 - Evidence cards list candidate obs_id values. Pick among them from the evidence;
-  do not treat retrieval order as a command.
+  do not treat retrieval order as a command. navigate_to_obs only accepts listed ids.
+- source=graph / confirmed / siglip cards are place or object evidence. source=frontier
+  cards are unexplored coverage goals (phrase is not an object sighting) — prefer a
+  graph place card when looking for a named object; use explore_frontier to grow map.
 - If a hypothesis was ABSENT / STALLED_NAV_LOOP / [tried] in the state, do NOT
   navigate_to_obs that obs_id again — explore_frontier or look_around instead.
 - If state says NAV_LOOP, treat that as a bug signal: switch to explore_frontier.
 - One or two tool calls per turn.
 
 # Examples
-State: evidence obs_id=3 phrase='sink' source=graph; obs_id=12 phrase='sink' source=frontier
+State: evidence obs_id=3 phrase='sink' source=graph; obs_id=12 phrase='unexplored frontier' source=frontier
 {"tool_calls": [{"name": "navigate_to_obs", "arguments": {"obs_id": 3}}], "message": ""}
 State: Last verify PRESENT; VLM assess answerable=true verified=true
 {"tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}

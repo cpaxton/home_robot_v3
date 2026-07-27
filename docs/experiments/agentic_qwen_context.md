@@ -16,7 +16,11 @@ graph labels + SigLIP hits + frontiers
 
 - **Evidence cards** (router state): `obs_id`, phrase, `source`, xyz, optional labels /
   raw `siglip_sim`, `[tried]` / `nav_visits`. No composite nav-utility score and no
-  “prefer #1 score” decree — the VLM chooses among listed cards.
+  “prefer #1 score” decree — the VLM chooses among listed cards. Frontier cards use
+  phrase ``unexplored frontier`` (not the question object) so lexical match cannot
+  invent fake object hits outdoors.
+- **Navigate clamp:** `navigate_to_obs` rejects obs_ids not in the current evidence
+  list when cards are present (`OBS_NOT_IN_EVIDENCE`).
 - **Recall key** (internal only): source tier `graph > confirmed/siglip > frontier`,
   keyword/MCQ-landmark hit, planar distance tiebreak; pack so graph+frontier can
   coexist in top-K. Fallback (`EMET_EQA_AGENTIC_ROUTER=0`) walks that order.
@@ -225,12 +229,26 @@ Second independent draw (seed ``20260727``, paper-113 minus smoke + paper holdou
   reachable frontier RGBs ≤6, VLM picks image). ``agentic_max_nav_steps`` **5→8**.
 - Classic coverage path still gated by ``EMET_VLM_FRONTIER_SCORING`` (default off).
 
-### Fix5 — evidence-card recall + frontier retirement (in progress)
+### Fix5 — evidence-card recall + frontier retirement (done)
 
 Design (landed in code; see **Approach (current)** above): hyp list is RAG-style
 evidence for the router; visited frontiers leave the graph; no score-margin override.
 
 - Job ``hmeqa-holdout8-fix5`` / ``20260727_152205_7367e0``
 - OUT ``~/runs/emet/hmeqa_holdout8_fix5_20260727_152201``
-- Paper-router, agentic-only; paper holdout-8 ids
-- Critical check when done: ``emet hmeqa inspect … --qid 105`` (coverage / goal choice)
+- Paper-router, agentic-only; paper holdout-8 → **6/8** (miss **q56**, **q105**)
+
+**q105 postmortem:** round-0 cards already had ``kitchen island`` obs=13 first, then
+five frontiers all labeled ``phrase='fruit bowl'`` (bug: frontiers inherited
+``phrases[0]``). Router ignored the graph card, ``explore_frontier`` outdoors, and
+``navigate_to_obs`` to off-list ids 17/15. Trajectory stayed
+``x∈[-20.3,-17.3]``; never assessed a kitchen bowl view. Budget XYZ → salvage B.
+
+### Fix6 — frontier phrase + navigate clamp (queued)
+
+- Frontiers now phrase ``unexplored frontier`` (not the question object)
+- ``navigate_to_obs`` rejects ids not in current evidence (``OBS_NOT_IN_EVIDENCE``)
+- Prompt: graph/siglip = object evidence; frontier = coverage only
+- Job ``hmeqa-q105-fix6`` / ``20260727_154934_36c724`` (after merge ``origin/main``)
+- OUT ``~/runs/emet/hmeqa_holdout8_fix6_q105_20260727_154930`` (paper-router, id 105)
+- Uncommitted fix6 still in working tree (frontier phrase + nav clamp)
