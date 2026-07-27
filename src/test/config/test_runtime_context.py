@@ -132,3 +132,36 @@ def test_remote_host_uses_connection_robot_before_zmq():
     assert rid == "innate_mars"
     assert source == "connection"
     discover.assert_not_called()
+
+
+def test_resolve_host_connection_wins_when_robot_ip_is_default():
+    """``emet run`` must not inject default ``--robot_ip`` or connection profiles lose."""
+    from emet.config.runtime import resolve_host
+
+    with patch(
+        "emet.config.runtime.get_host_from_connection",
+        return_value="192.168.1.43",
+    ):
+        host, source = resolve_host(
+            "127.0.0.1",
+            host_from_default=True,
+            connection_name="herman",
+        )
+    assert host == "192.168.1.43"
+    assert source == "connection"
+
+
+def test_resolve_host_explicit_cli_beats_connection():
+    from emet.config.runtime import resolve_host
+
+    with patch(
+        "emet.config.runtime.get_host_from_connection",
+        return_value="192.168.1.43",
+    ):
+        host, source = resolve_host(
+            "10.0.0.9",
+            host_from_default=False,
+            connection_name="herman",
+        )
+    assert host == "10.0.0.9"
+    assert source == "cli"

@@ -164,11 +164,12 @@ trajectory_pos_err_threshold: 0.15
 trajectory_rot_err_threshold: 0.5
 trajectory_per_step_timeout: 3.0
 
-# Embodied overlay: open-vocab 3D scene graph + GraphEQA memory (re-enabled; uses extra GPU VRAM).
-# If you hit CUDA OOM again: use ``--llm qwen35-4B``, or set ``enabled: false`` below for one/both blocks.
+# Embodied overlay: GraphEQA / Dynagraph tuning only.
+# Object-graph plug-in is selected by agent.memory_backend (default dynagraph) — do not
+# enable open_vocab alongside GraphEQA (coerced away with a warning if both are true).
 embodied_agent:
   open_vocab_scene_graph:
-    enabled: true
+    enabled: false
     config_name: default_scene_graph
   graph_eqa_memory:
     enabled: true

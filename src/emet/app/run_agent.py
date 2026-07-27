@@ -280,12 +280,17 @@ log = Logger(__name__)
 @click.option(
     "--memory-backend",
     "memory_backend",
-    type=click.Choice(["dynagraph", "graph_eqa", "dynamem"], case_sensitive=False),
+    type=click.Choice(
+        ["dynagraph", "graph_eqa", "dynamem", "open_vocab"],
+        case_sensitive=False,
+    ),
     default="dynagraph",
     show_default=True,
     help=(
-        "Interactive memory controller: dynagraph (default; merge/staleness), "
-        "graph_eqa (GraphEQA without dynagraph lifecycle), or dynamem (voxel + optional embodied overlay)."
+        "Object-graph plug-in on the voxel map (mutually exclusive): "
+        "dynagraph (default; GraphEQAMemory + merge/staleness), "
+        "graph_eqa (GraphEQA baseline, no Dynagraph lifecycle), "
+        "open_vocab (SAM3/OWL scene graph only), or dynamem (voxels only)."
     ),
 )
 @click.option(

@@ -1058,7 +1058,23 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     )
 
     def list_scene_relations() -> str:
+        """Prefer Dynagraph / GraphEQAMemory; fall back to open-vocab only if that is empty."""
         executor = context.get("executor")
+        gm = context.get("graph_memory")
+        if gm is None and executor is not None and hasattr(executor, "agent"):
+            gm = getattr(executor.agent, "graph_memory", None)
+        if gm is not None and hasattr(gm, "get_nodes"):
+            nodes = [n for n in gm.get_nodes() if not getattr(n, "is_viewpoint", False)]
+            if nodes:
+                try:
+                    from emet.memory.graph_eqa.pretty_print import format_scene_graph_pretty
+
+                    return format_scene_graph_pretty(gm, title="Dynagraph / GraphEQA scene graph")
+                except Exception:
+                    if hasattr(gm, "to_string"):
+                        return gm.to_string()
+                    if hasattr(gm, "print_memory"):
+                        return gm.print_memory()
         if executor is None or not hasattr(executor, "agent"):
             return "Robot not connected."
         agent = executor.agent
@@ -1066,54 +1082,20 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         if hasattr(agent, "get_voxel_map"):
             sg = agent.get_voxel_map().get_scene_graph()
         if sg is not None and getattr(sg, "num_objects", 0) > 0:
-            return sg.to_string()
-        # Lifelong / Dynagraph primarily persist GraphEQA — fall back so "what objects
-        # / relations" still works after --input-path when open-vocab is empty.
-        gm = context.get("graph_memory") or getattr(agent, "graph_memory", None)
-        if gm is not None and hasattr(gm, "get_nodes"):
-            nodes = [n for n in gm.get_nodes() if not getattr(n, "is_viewpoint", False)]
-            if nodes:
-                lines = [f"[GraphEQA scene graph — open-vocab relations empty] Objects ({len(nodes)}):"]
-                for n in nodes[:40]:
-                    labels = getattr(n, "labels", None) or []
-                    lbl = ", ".join(str(x) for x in labels[:3]) if labels else "(no labels)"
-                    xyz = np.asarray(getattr(n, "xyz", [0, 0, 0]), dtype=float).reshape(-1)
-                    if xyz.size >= 3:
-                        lines.append(
-                            f"  [{getattr(n, 'node_id', '?')}] {lbl} "
-                            f"xyz=({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})"
-                        )
-                    else:
-                        lines.append(f"  [{getattr(n, 'node_id', '?')}] {lbl}")
-                if len(nodes) > 40:
-                    lines.append(f"  … ({len(nodes) - 40} more)")
-                edges = gm.get_edges() if hasattr(gm, "get_edges") else []
-                if edges:
-                    lines.append(f"Relations ({len(edges)}):")
-                    id_to_lbl = {
-                        int(getattr(n, "node_id", -1)): (
-                            (getattr(n, "labels", None) or ["?"])[0]
-                        )
-                        for n in nodes
-                    }
-                    for a, b, rel in edges[:40]:
-                        a_l = id_to_lbl.get(int(a), str(a))
-                        b_l = "floor" if int(b) < 0 else id_to_lbl.get(int(b), str(b))
-                        lines.append(f"  {a_l} --{rel}--> {b_l}")
-                return "\n".join(lines)
+            return f"[Open-vocab scene graph]\n{sg.to_string()}"
         return (
-            "No open-vocab scene graph data yet "
-            "(and no GraphEQA objects loaded). Explore or scan first, or reload a "
-            "checkpoint that includes open_vocab_scene_graph/."
+            "No scene graph data yet. Explore or scan first, or reload a checkpoint "
+            "that includes graph.json (dynagraph) or open_vocab_scene_graph/."
         )
 
     tools.append(
         Tool(
             name="list_scene_relations",
             description=(
-                "List objects and spatial relations (near, on, on_floor). Prefers the open-vocabulary "
-                "3D scene graph; if that is empty after lifelong load, falls back to the GraphEQA graph. "
-                "Use for 'what objects are in the room' and structured connectivity questions."
+                "List objects and spatial relations (near, on, on_floor, supports). "
+                "Uses the Dynagraph / GraphEQA memory plug-in when present; otherwise the "
+                "open-vocab scene graph. Use for 'what objects are in the room' and "
+                "structured connectivity questions."
             ),
             parameters=_NO_PARAMS,
             func=list_scene_relations,

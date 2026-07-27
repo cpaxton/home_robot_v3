@@ -19,7 +19,11 @@ from PIL import Image
 from termcolor import colored
 
 from emet.agent.env_flags import env_base_rotate_only
-from emet.config.embodied_agent_config import EmbodiedAgentConfig
+from emet.config.embodied_agent_config import (
+    EmbodiedAgentConfig,
+    coerce_embodied_agent_for_memory_backend,
+    normalize_memory_backend,
+)
 from emet.controller.operations import GraspObjectOperation
 from emet.controller.task.emote import EmoteTask
 from emet.controller.task.pickup.hand_over_task import HandOverTask
@@ -85,15 +89,17 @@ class DynamemTaskExecutor:
     ) -> None:
         """Initialize the executor.
 
-        *memory_backend*: ``dynagraph`` (default), ``graph_eqa``, or ``dynamem``.
+        *memory_backend*: ``dynagraph`` (default), ``graph_eqa``, ``dynamem``, or ``open_vocab``.
         """
         self.robot = robot
         self.parameters = parameters
         self.discord_bot = discord_bot
-        self.embodied_agent = embodied_agent
         self.cpu_only = cpu_only
         self._last_memory_save_path = None  # set when memory is saved (e.g. after rotate_in_place)
-        self.memory_backend = str(memory_backend or "dynagraph").strip().lower()
+        self.memory_backend = normalize_memory_backend(memory_backend)
+        self.embodied_agent = coerce_embodied_agent_for_memory_backend(
+            embodied_agent, self.memory_backend
+        )
         # If there is no GPU, we have to use CPU
         if not torch.cuda.is_available():
             print("Setting up to use CPU as there is no GPU!")
@@ -438,7 +444,12 @@ class DynamemTaskExecutor:
                 save_dir = getattr(getattr(self.agent, "voxel_map", None), "log", None) or getattr(
                     self.agent, "log", "saved_memory"
                 )
-                save_lifelong_checkpoint(self.agent, save_dir, save_voxel_pickle=True)
+                save_lifelong_checkpoint(
+                    self.agent,
+                    save_dir,
+                    save_voxel_pickle=True,
+                    memory_backend=self.memory_backend,
+                )
                 self._last_memory_save_path = save_dir
                 print_memory_saved_help(save_dir)
             elif command == "rotate_base":

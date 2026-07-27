@@ -85,13 +85,16 @@ Geometric smoke (no GPU): `uv run python scripts/smoke_lifelong_pose_refine.py`.
 | `configs/agent_stretch_discord.yaml` | stretch | Discord + instance-graph; add **`--eqa`** for Qwen3-VL captions (recommended for intelligent “what can you see?”) |
 | `configs/agent_rby1_discord.yaml` | rby1 | Same tuning + `sim_config` for Molmo iTHOR |
 
-**Memory backend** (`--memory-backend` / `agent.memory_backend`):
+**Memory backend** (`--memory-backend` / `agent.memory_backend`) — **mutually exclusive** object-graph plug-in on the voxel map:
 
-| Value | Controller | When to use |
-|-------|------------|-------------|
-| **`dynagraph`** (default) | `DynagraphController` | Paper stack: voxel nav + GraphEQA graph with merge/staleness |
-| `graph_eqa` | `GraphEQAController` | GraphEQA without Dynagraph lifecycle |
-| `dynamem` | `DynamemController` | Voxel + optional `embodied_agent` overlay |
+| Value | Controller | Object graph |
+|-------|------------|--------------|
+| **`dynagraph`** (default) | `DynagraphController` | Dynagraph memory (GraphEQAMemory + merge/staleness) — Discord / paper method |
+| `graph_eqa` | `GraphEQAController` | GraphEQAMemory only (paper baseline; no Dynagraph lifecycle) |
+| `open_vocab` | `DynamemController` | OpenVocabSceneGraph only (`emet run scene-graph`) |
+| `dynamem` | `DynamemController` | Voxels only (no graph plug-in) |
+
+Nested `embodied_agent.*.enabled` flags are **coerced** from this enum so OpenVocab and GraphEQA are never both live. Tuning (instance graph, fusion, OV config name) still lives under `embodied_agent:`.
 
 **Mapping keys** live under **`mapping:`** in config. Reference: [Dynav / mapping configuration](dynav_config.md).
 
@@ -142,7 +145,7 @@ Do **not** put the 8B VL on every chat turn as the router — that made “what 
 | Aim wrist (stub) | `aim_arm_at` | Not implemented (IK) — see [TODO.md](../TODO.md); use describe_scene |
 | Share map | `send_map_snapshot` | Top-down Discord/Rerun (optionally overlays last motion plan) |
 | Nav stuck | `navigation_diagnostics` | Map counts + last-plan / base clearance; pair with `send_map_snapshot` |
-| Objects / relations | `list_scene_relations` | Open-vocab SG when present; else GraphEQA graph (lifelong load) |
+| Objects / relations | `list_scene_relations` | Dynagraph / GraphEQA memory; open-vocab only if that plug-in is active |
 | Memory QA | `query_memory` | Graph/voxel answer when mapped |
 | EQA | `--eqa` (+ optional `--llm qwen3-vl-eqa --share-memory-vllm`) | Caption + query path without a second full VL fight |
 
@@ -203,14 +206,14 @@ uv run emet run agent \
 # Hardware checklist: docs/robots/innate_mars_hardware.md#discord-chat--explore-herman
 # Note: explore is turn-blocking — Discord messages queue until the tool finishes.
 
-# Load saved memory (graph + voxel_map.pkl + open_vocab_scene_graph/ when present; restores staleness clock)
+# Load saved Dynagraph memory (graph.json + voxel_map.pkl; restores staleness clock)
 uv run emet run agent --input-path logs/memory_xxx --no-discord
 
 # Same, but estimate a small SE(2) fudge vs a live frame (imperfect spawn). On failure, keep assumed pose.
 uv run emet run agent --input-path logs/memory_xxx --refine-start --no-discord
 
-# Lifelong dirs store **both** GraphEQA (`graph.json`) and open-vocab (`open_vocab_scene_graph/`) when the
-# embodied overlay has open-vocab enabled and objects were observed. Reload banner shows `open_vocab=True/False`.
+# Lifelong dirs store the **active** plug-in only: dynagraph/graph_eqa → ``graph.json`` (+ voxels);
+# ``open_vocab`` → ``open_vocab_scene_graph/``. Legacy dual dirs still load; the inactive sidecar is ignored.
 
 # Geometric refine smoke (no GPU): recover a known xy/yaw fudge
 uv run python scripts/smoke_lifelong_pose_refine.py
