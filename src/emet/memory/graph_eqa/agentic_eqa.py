@@ -556,7 +556,9 @@ class AgenticEQAExecutor:
                 "obs_id": oid,
                 "listed_obs_ids": listed,
             }
-        phrase = hyp.phrase if hyp is not None else self.query_text
+        # Place-card labels (e.g. "kitchen island") are nav hints; verify the question
+        # target (e.g. "fruit bowl"), not the MCQ location option string.
+        phrase = self._target_phrase or self.query_text
         source = hyp.source if hyp is not None else "graph"
         hypothesis_id = self._begin_policy_approach(source, oid, phrase)
         xyt = self._robot_xyt()

@@ -3412,12 +3412,23 @@ class GraphEQAMemory:
         obs_id: int,
         robot_xyt: Any | None = None,
     ) -> np.ndarray | None:
-        """Resolve a graph observation to a robot navigation waypoint (not raw object centroid)."""
+        """Resolve a graph observation to a robot navigation waypoint (not raw object centroid).
+
+        Frontiers / viewpoints: go to the stored planar anchor.
+        Semantic objects: if the object is far from its capture viewer, approach the
+        object (standoff) — returning to the historical camera pose alone does not get
+        a closer look (HM-EQA q105: kitchen-island card → spawn viewpoint).
+        When the object is near the capture pose, prefer the viewer then standoff
+        (classic Image-N revisit).
+        """
         obs = self._observation_by_id(obs_id)
         if obs is None:
             return None
         node = self._node_for_obs_id(obs_id)
         anchor = np.asarray(obs.xyz, dtype=float).reshape(-1)[:3]
+        if node is not None and not (node.is_frontier or node.is_viewpoint):
+            # Prefer merged node centroid when present.
+            anchor = np.asarray(node.xyz, dtype=float).reshape(-1)[:3]
         robot_xy = self._robot_planar_xy(robot_xyt)
 
         if node is not None and (node.is_frontier or node.is_viewpoint):
@@ -3425,9 +3436,21 @@ class GraphEQAMemory:
 
         vp_xyz = self._viewpoint_xyz_for_obs(obs_id, obs)
         if robot_xy is not None and vp_xyz is not None:
-            d_vp = math.hypot(robot_xy[0] - float(vp_xyz[0]), robot_xy[1] - float(vp_xyz[1]))
-            if d_vp > float(self.viewpoint_merge_m):
-                return np.array([float(vp_xyz[0]), float(vp_xyz[1]), 1.0], dtype=float)
+            d_obj_vp = math.hypot(
+                float(anchor[0]) - float(vp_xyz[0]),
+                float(anchor[1]) - float(vp_xyz[1]),
+            )
+            # Object essentially at the photo pose → Image-N: go to viewer, then standoff.
+            if d_obj_vp <= max(1.0, float(self.image_nav_min_approach_m) * 2.0):
+                d_vp = math.hypot(
+                    robot_xy[0] - float(vp_xyz[0]),
+                    robot_xy[1] - float(vp_xyz[1]),
+                )
+                if d_vp > float(self.viewpoint_merge_m):
+                    return np.array([float(vp_xyz[0]), float(vp_xyz[1]), 1.0], dtype=float)
+                return self._standoff_waypoint_toward(robot_xy, anchor)
+            # Object far from capture pose → approach the object, not the old camera.
+            return self._standoff_waypoint_toward(robot_xy, anchor)
 
         if robot_xy is not None:
             return self._standoff_waypoint_toward(robot_xy, anchor)

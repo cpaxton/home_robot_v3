@@ -1010,16 +1010,35 @@ def test_query_answer_never_attaches_frontier_placeholder_rgb():
     assert mem.last_eqa_action_obs_id == 19
 
 
-def test_navigation_waypoint_prefers_viewpoint_when_far():
-    """Image-N nav should target the capture viewpoint when the robot is elsewhere."""
+def test_navigation_waypoint_prefers_viewpoint_when_object_near_viewer():
+    """Image-N nav: when object ≈ capture pose and robot is elsewhere, go to the viewer."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     mem = GraphEQAMemory(defer_llm_clients=True)
     viewer = np.array([1.0, 2.0, 0.0], dtype=np.float64)
-    mem.add_observation(rgb, np.array([5.0, 6.0, 0.5]), ["lamp"], viewer_xyz=viewer)
+    # Object near the camera pose (classic Image-N revisit).
+    mem.add_observation(rgb, np.array([1.2, 2.1, 0.5]), ["lamp"], viewer_xyz=viewer)
     pt = mem._navigation_waypoint_for_obs(1, np.array([9.0, 9.0, 0.0]))
     assert pt is not None
     assert float(pt[0]) == 1.0
     assert float(pt[1]) == 2.0
+
+
+def test_navigation_waypoint_approaches_object_when_far_from_viewer():
+    """When object centroid is far from capture pose, approach the object (not spawn)."""
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    viewer = np.array([-17.86, -0.66, 0.0], dtype=np.float64)  # spawn-like
+    obj = np.array([-16.54, -1.14, 0.77], dtype=np.float64)  # kitchen island
+    mem.add_observation(rgb, obj, ["kitchen island", "cabinet"], viewer_xyz=viewer)
+    robot = np.array([-17.75, 1.58, 0.0])  # after outdoor explore
+    pt = mem._navigation_waypoint_for_obs(1, robot)
+    assert pt is not None
+    # Must move toward the object, not back to the capture viewpoint.
+    assert float(pt[0]) > -17.5
+    assert abs(float(pt[0]) - float(viewer[0])) > 0.3
+    dist_to_obj = float(np.linalg.norm(pt[:2] - obj[:2]))
+    dist_viewer_to_obj = float(np.linalg.norm(viewer[:2] - obj[:2]))
+    assert dist_to_obj < dist_viewer_to_obj
 
 
 def test_navigation_waypoint_standoff_when_at_viewpoint():
