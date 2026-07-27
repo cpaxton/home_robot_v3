@@ -264,3 +264,5 @@ returned to the capture pose first. Trajectory never entered the kitchen
 - Semantic objects far from their capture pose → standoff toward object
 - Objects near capture pose → keep Image-N viewer-then-standoff
 - Post-nav verify uses question target phrase (fruit bowl), not place-card label
+- Job ``hmeqa-q105-fix7`` / ``20260727_160106_a28281``
+- OUT ``~/runs/emet/hmeqa_holdout8_fix7_q105_20260727_160103``
