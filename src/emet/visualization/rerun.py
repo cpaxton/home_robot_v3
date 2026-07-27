@@ -1283,9 +1283,7 @@ class RerunVisualizer:
             ),
         )
 
-    def log_dynagraph_state(
-        self, graph_memory: Any, *, ground_truth_mode: bool = False, force: bool = False
-    ) -> None:
+    def log_dynagraph_state(self, graph_memory: Any, *, ground_truth_mode: bool = False, force: bool = False) -> None:
         """Log ``GraphEQAMemory`` nodes, observation images, and tree summary under ``world/dynagraph/``.
 
         ``force=True`` bypasses ``dynagraph_stride`` (lifelong checkpoint resume).
@@ -1326,11 +1324,7 @@ class RerunVisualizer:
             else:
                 self.clear_identity("world/dynagraph/gallery")
             return
-        obj_nodes = [
-            n
-            for n in nodes
-            if not getattr(n, "is_viewpoint", False) and not getattr(n, "is_frontier", False)
-        ]
+        obj_nodes = [n for n in nodes if not getattr(n, "is_viewpoint", False) and not getattr(n, "is_frontier", False)]
         fr_nodes = [n for n in nodes if getattr(n, "is_frontier", False)]
         vp_nodes = [n for n in nodes if getattr(n, "is_viewpoint", False)]
         if obj_nodes:
@@ -1793,6 +1787,34 @@ class RerunVisualizer:
         """
         Log robot mesh transforms using urdf visualizer"""
         self.urdf_logger.log_transforms(obs)
+
+    def log_manip_ee_path(self, xyz: list | np.ndarray, *, entity: str = "world/manip/ee_path") -> None:
+        """Log a planned / executed EE polyline in the world frame (optional live debug)."""
+        pts = np.asarray(xyz, dtype=np.float64).reshape(-1, 3)
+        if pts.size == 0:
+            return
+        if not self._memory_view:
+            rr.set_time_seconds("realtime", time.time())
+        rr.log(entity, rr.LineStrips3D([pts], radii=0.008, colors=[(30, 144, 255)]))
+
+    def log_manip_targets(self, targets: dict[str, np.ndarray | list[float]]) -> None:
+        """Log named manipulation target points under ``world/manip/targets``."""
+        if not targets:
+            return
+        if not self._memory_view:
+            rr.set_time_seconds("realtime", time.time())
+        pts = []
+        labels = []
+        for name, xyz in targets.items():
+            pts.append(np.asarray(xyz, dtype=np.float64).reshape(3))
+            labels.append(str(name))
+        rr.log(
+            "world/manip/targets",
+            rr.Points3D(pts, radii=0.02, colors=[(255, 140, 0)] * len(pts), labels=labels),
+        )
+
+    def log_manip_plan_text(self, text: str) -> None:
+        self.log_text("task/plan", text)
 
     def log_memory_state(
         self,
@@ -2423,7 +2445,9 @@ class RerunVisualizer:
         path_m = float(nav_path_length_xy(pts)) if pts.shape[0] >= 2 else 0.0
         full_path_m = float(nav_path_length_xy(full_pts)) if full_pts is not None and full_pts.shape[0] >= 2 else path_m
         n_wps = int(pts.shape[0])
-        planned = int(n_planned) if n_planned is not None else (int(full_pts.shape[0]) if full_pts is not None else n_wps)
+        planned = (
+            int(n_planned) if n_planned is not None else (int(full_pts.shape[0]) if full_pts is not None else n_wps)
+        )
         summary = {
             "n_waypoints": n_wps,
             "n_planned": planned,
@@ -2435,9 +2459,7 @@ class RerunVisualizer:
             "query": query or "",
         }
 
-        if full_pts is not None and full_pts.shape[0] >= 2 and (
-            full_pts.shape[0] > n_wps or chunked
-        ):
+        if full_pts is not None and full_pts.shape[0] >= 2 and (full_pts.shape[0] > n_wps or chunked):
             log_to_rerun(
                 "world/nav/plan_full",
                 rr.LineStrips3D(
@@ -2552,8 +2574,7 @@ class RerunVisualizer:
         )
         if n_wps >= 1:
             lines.append(
-                f"- **first→last xy**: "
-                f"({pts[0, 0]:.2f}, {pts[0, 1]:.2f}) → ({pts[-1, 0]:.2f}, {pts[-1, 1]:.2f})"
+                f"- **first→last xy**: ({pts[0, 0]:.2f}, {pts[0, 1]:.2f}) → ({pts[-1, 0]:.2f}, {pts[-1, 1]:.2f})"
             )
         log_to_rerun(
             "world/nav/summary",

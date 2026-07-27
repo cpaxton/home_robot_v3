@@ -446,7 +446,9 @@ def build_sim_object_placements_for_session(
                 ),
             )
         else:
-            cap = max_scan_bodies if environment_kind == "molmospaces" else None
+            # MolmoSpaces kitchens have 100+ named bodies; a low cap drops manipulable
+            # freejoint objects (apple, …) needed for OVMM full / agent teleport pick.
+            cap = None if environment_kind == "molmospaces" else max_scan_bodies
             scanned = placements_from_mujoco_model(
                 model,
                 data,

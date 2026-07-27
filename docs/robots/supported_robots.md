@@ -17,7 +17,7 @@ emet molmospaces list-robots
 
 ## Mobile manipulation (learning experiments)
 
-These robots have vendored MJCF, merge into MolmoSpaces scenes, and run on the ZMQ stack for navigation / exploration recording:
+These robots have vendored MJCF, merge into MolmoSpaces scenes, and run on the ZMQ stack for navigation / exploration recording. **Agentic sim pick/place** on MolmoSpaces uses **rby1** + ZMQ `sim_set_body_pose` (teleport); see [molmospaces.md](../molmospaces.md) and [ovmm_full_benchmark.md](../ovmm_full_benchmark.md).
 
 | Robot | Aliases | Base type | MolmoSpaces | RoboCasa | ZMQ client | Recording |
 |-------|---------|-----------|-------------|----------|------------|-----------|

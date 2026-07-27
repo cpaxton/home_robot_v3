@@ -36,7 +36,15 @@ uv run python scripts/eval_ovmm_full.py \
 uv run python scripts/eval_ovmm_full.py \
   --episode-id robocasa_pp_s1 \
   --backend dynagraph --manip-mode sim --cpu-only
+
+# MolmoSpaces + rby1 teleport manip
+uv run python scripts/eval_ovmm_full.py \
+  --episode-id molmo_ithor_rby1_s2_bowl_pp \
+  --backend ground_truth --manip-mode sim --not-rotate --cpu-only \
+  --output-dir ~/runs/emet/ovmm_full/molmo_rby1_smoke
 ```
+
+Uses ZMQ `sim_set_body_pose` for pick/place (same API as dynamic exploration world-change). Robosuite (rby1) and Stretch MuJoCo both advertise the capability.
 
 Uses ZMQ `sim_set_body_pose` for pick/place (same API as dynamic exploration world-change).
 

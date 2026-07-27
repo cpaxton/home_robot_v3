@@ -1,0 +1,28 @@
+---
+description: Append Cursor/agent segfault incidents to repo-root segfault.md for recovery via tail
+alwaysApply: true
+---
+
+# Segfault recovery log (`segfault.md`)
+
+After any Cursor agent / `emet` / `node` crash (`Segmentation fault`, `invalid opcode`, null IP), **append** a self-contained entry to repo-root [`segfault.md`](../../segfault.md) before continuing work.
+
+## Why
+
+Agent sessions die mid-edit. The next turn must recover from disk, not chat memory. `tail -n 80 segfault.md` is the recovery handoff.
+
+## On crash (do this first)
+
+1. Capture kernel evidence: `journalctl -k --since "…" | rg -i 'segfault|invalid opcode|libcuda|emet|node'` (or `sudo dmesg -T | rg …`).
+2. Classify Mode A vs B ([`docs/known_issues.md`](../../docs/known_issues.md), [gpu-eval-workflow](gpu-eval-workflow.mdc)):
+   - **Mode A:** Python / `libcuda`, child `exit=139`.
+   - **Mode B:** `node` or `emet` with `invalid opcode` / `segfault at 0`.
+3. `uv run emet eval status` and `uv run emet jobs` — do not assume GPU work died with the agent.
+4. Append to `segfault.md` (newest at bottom): evidence, classification, GPU/job state, unfinished edits, **NEXT** checklist.
+5. Resume from that checklist. Prefer no inline MuJoCo EGL / Habitat probes in the recovery turn.
+
+## Do not
+
+- Treat empty `nvidia-smi` as “safe to re-probe EGL.”
+- Discard mixed in-progress trees after a crash.
+- Rely on chat history alone when `segfault.md` exists.

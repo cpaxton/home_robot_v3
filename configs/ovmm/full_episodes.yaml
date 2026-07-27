@@ -12,7 +12,7 @@ episodes:
     success_radius_m: 0.30
     explore_steps: 0
 
-  # Robosuite has no sim_set_body_pose yet — use manip_mode oracle or skip for find-only.
+  # Stretch MuJoCo and robosuite (rby1) both advertise sim_set_body_pose for manip_mode=sim.
   - id: robocasa_pp_s1
     tier: S1
     sim: configs/sim/robocasa_pick_place_stretch.yaml
@@ -21,4 +21,15 @@ episodes:
     start_recep: counter
     goal_recep: cab
     success_radius_m: 0.50
+    explore_steps: 0
+
+  # MolmoSpaces iTHOR + rby1: GT placements name mesh child …_1_1_0; teleport walks to freejoint …_1_0_0.
+  - id: molmo_ithor_rby1_s2_bowl_pp
+    tier: S2
+    sim: configs/sim/molmospaces_ithor_train_0.yaml
+    object: bowl
+    object_gt_body: bowl_6befd62f08fd322391939c2b44d3f839_1_1_0
+    start_recep: cabinet
+    goal_recep: microwave
+    success_radius_m: 0.75
     explore_steps: 0

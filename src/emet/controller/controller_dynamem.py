@@ -569,9 +569,7 @@ class DynamemController(BaseController):
             median_filter_size=parameters.get("filters/median_filter_size", 5),
             use_derivative_filter=parameters.get("filters/use_derivative_filter", False),
             derivative_filter_threshold=parameters.get("filters/derivative_filter_threshold", 0.5),
-            voxel_pcd_dbscan_min_samples=int(
-                parameters.get("filters/voxel_pcd_dbscan_min_samples", 0) or 0
-            ),
+            voxel_pcd_dbscan_min_samples=int(parameters.get("filters/voxel_pcd_dbscan_min_samples", 0) or 0),
             detection=self.detection_model,
             encoder=self.encoder,
             image_shape=image_shape,
@@ -896,9 +894,7 @@ class DynamemController(BaseController):
                 depth = apply_depth_speckle_filter(
                     depth,
                     open_kernel=speckle_k,
-                    open_iterations=int(
-                        self.parameters.get("filters/depth_speckle_open_iterations", 1) or 1
-                    ),
+                    open_iterations=int(self.parameters.get("filters/depth_speckle_open_iterations", 1) or 1),
                     min_depth=float(self.parameters.get("min_depth", 0.25)),
                     max_depth=float(self.parameters.get("max_depth", 2.5)),
                 )
@@ -1240,7 +1236,6 @@ class DynamemController(BaseController):
             if callable(get_inst):
                 try:
                     for inst in get_inst() or []:
-                        name = getattr(inst, "category_id", None)
                         # Prefer string category if present on instance
                         cat = getattr(inst, "category_name", None) or getattr(inst, "name", None)
                         if cat:
@@ -1350,11 +1345,7 @@ class DynamemController(BaseController):
                         arr = self._normalize_scene_rgb_u8(np.asarray(arr))
                         if not rgb_frame_is_usable(arr):
                             continue
-                        cat = (
-                            getattr(inst, "category_name", None)
-                            or getattr(inst, "name", None)
-                            or ""
-                        )
+                        cat = getattr(inst, "category_name", None) or getattr(inst, "name", None) or ""
                         cat_s = str(cat).strip()
                         if not cat_s or cat_s.lower() in ("object", "unknown", "none"):
                             continue
@@ -1379,7 +1370,9 @@ class DynamemController(BaseController):
 
         thr = float(det_cfg.get("describe_confidence_threshold", _DEFAULT_DESCRIBE_CONFIDENCE))
         thr = max(0.15, min(thr, 0.85))
-        max_labels = int(det_cfg.get("describe_max_labels", _DEFAULT_DESCRIBE_MAX_LABELS) or _DEFAULT_DESCRIBE_MAX_LABELS)
+        max_labels = int(
+            det_cfg.get("describe_max_labels", _DEFAULT_DESCRIBE_MAX_LABELS) or _DEFAULT_DESCRIBE_MAX_LABELS
+        )
         max_labels = max(1, min(max_labels, 30))
         use_curated = bool(det_cfg.get("describe_use_curated_vocab", True))
 
@@ -1451,10 +1444,7 @@ class DynamemController(BaseController):
         res = dm.predict(rgb, texts, confidence_threshold=confidence_threshold)
         labels = res["labels"]
         if labels.numel() == 0:
-            return (
-                "This view looks empty or unclear to me. "
-                "Ask me to look around, or I can send a photo."
-            )
+            return "This view looks empty or unclear to me. Ask me to look around, or I can send a photo."
         scores = res["scores"]
         best_by_label: dict[int, float] = {}
         for lab, sc in zip(labels.cpu().tolist(), scores.cpu().tolist(), strict=True):
@@ -1506,18 +1496,14 @@ class DynamemController(BaseController):
             cur_tilt = float(joints[HelloStretchIdx.HEAD_TILT])
             pan_err = abs(cur_pan - float(pan))
             tilt_err = abs(cur_tilt - float(tilt))
-            near_goal = (
-                pan_err < DYNAMEM_HEAD_SWEEP_PAN_TOL_RAD and tilt_err < DYNAMEM_HEAD_SWEEP_PAN_TOL_RAD
-            )
+            near_goal = pan_err < DYNAMEM_HEAD_SWEEP_PAN_TOL_RAD and tilt_err < DYNAMEM_HEAD_SWEEP_PAN_TOL_RAD
             # Good enough for a sweep frame — do not wait out residual crawl.
             if near_goal and elapsed >= DYNAMEM_HEAD_SWEEP_MIN_MOVE_S * 0.5:
                 break
 
             speed = 0.0
             if vels is not None and len(vels) > HelloStretchIdx.HEAD_TILT:
-                speed = abs(float(vels[HelloStretchIdx.HEAD_PAN])) + abs(
-                    float(vels[HelloStretchIdx.HEAD_TILT])
-                )
+                speed = abs(float(vels[HelloStretchIdx.HEAD_PAN])) + abs(float(vels[HelloStretchIdx.HEAD_TILT]))
             pos_delta = 0.0
             if last_pan is not None and last_tilt is not None:
                 pos_delta = abs(cur_pan - last_pan) + abs(cur_tilt - last_tilt)
@@ -1552,15 +1538,11 @@ class DynamemController(BaseController):
         n = len(pans)
         t_sweep = time.time()
         for i, pan in enumerate(pans):
-            self.announce_motion_progress(
-                f"Look around: head pan {i + 1}/{n} (pan={pan:+.1f} rad, tilt={tilt:+.2f})"
-            )
+            self.announce_motion_progress(f"Look around: head pan {i + 1}/{n} (pan={pan:+.1f} rad, tilt={tilt:+.2f})")
             self._head_to_sweep(pan, tilt)
             time.sleep(DYNAMEM_HEAD_SWEEP_FRAME_SETTLE_S)
             self.update()
-        self.announce_motion_progress(
-            f"Look around: head sweep done ({time.time() - t_sweep:.1f}s)"
-        )
+        self.announce_motion_progress(f"Look around: head sweep done ({time.time() - t_sweep:.1f}s)")
         # Return to look_front without a long blocking wait.
         self._head_to_sweep(float(motion_constants.look_front[0]), tilt)
         time.sleep(DYNAMEM_HEAD_SETTLE_S)
@@ -1750,9 +1732,7 @@ class DynamemController(BaseController):
         requested = float(np.clip(float(meters), 0.0, 1.5))
         dist = self.clip_forward_distance_m(requested)
         if dist < 0.02:
-            self.announce_action(
-                "Cannot move forward — need explored free space (scan?) or obstacle too close"
-            )
+            self.announce_action("Cannot move forward — need explored free space (scan?) or obstacle too close")
             return 0.0
         if dist + 1e-3 < requested:
             self.announce_action(f"Moving forward {dist:.2f} m (map-clipped from {requested:.2f} m)")
@@ -1848,11 +1828,7 @@ class DynamemController(BaseController):
                 continue
             xy = (float(arr[0]), float(arr[1]))
             # Always keep the first waypoint when it matches start (robot may sit in tight clearance).
-            is_start = (
-                start_xy is not None
-                and abs(xy[0] - start_xy[0]) < 1e-3
-                and abs(xy[1] - start_xy[1]) < 1e-3
-            )
+            is_start = start_xy is not None and abs(xy[0] - start_xy[0]) < 1e-3 and abs(xy[1] - start_xy[1]) < 1e-3
             if not is_start and not planner.is_explored_xy(xy):
                 reject = "rejected_unexplored"
                 break
@@ -1925,14 +1901,9 @@ class DynamemController(BaseController):
                 return None, None
             self._record_nav_plan_fields(confirmed=True, outcome="executing")
             self.announce_action(announce)
-            n_exec = sum(
-                1
-                for p in res
-                if np.isfinite(np.asarray(p, dtype=np.float64).reshape(-1)[:2]).all()
-            )
+            n_exec = sum(1 for p in res if np.isfinite(np.asarray(p, dtype=np.float64).reshape(-1)[:2]).all())
             logger.info(
-                "Navigation plan OK; executing %d waypoints "
-                "(localize=%s mode=%s path≈%.2fm chunked=%s)",
+                "Navigation plan OK; executing %d waypoints (localize=%s mode=%s path≈%.2fm chunked=%s)",
                 n_exec,
                 plan_meta.get("localize_source", "?"),
                 plan_meta.get("mode", "?"),
@@ -2137,7 +2108,66 @@ class DynamemController(BaseController):
         if not np.isfinite(oz) or abs(oz) < 1e-9:
             oz = 1.5
 
-        point = self.space.sample_navigation(start_pose, self.planner, localized_point)
+        waypoints = None
+        n_planned = 0
+        res = None
+        point = None
+
+        # Exploration: top-K frontiers → one multi-goal A* (skip sealed / unreachable).
+        # Object nav stays single-goal.
+        if mode == "exploration" and isinstance(self.planner, AStar):
+            from emet.motion.frontier_goals import collect_explore_frontier_candidates
+
+            frontier_text = self._exploration_text(text)
+            cands = collect_explore_frontier_candidates(
+                self,
+                question=frontier_text or None,
+                k=8,
+                blocked=getattr(self, "_habitat_blocked_goals", None),
+                recent_goals=getattr(self, "_habitat_recent_goals", None),
+                seeds=[localized_point],
+            )
+            object_xys: list[np.ndarray] = []
+            nav_goals: list[np.ndarray] = []
+            for cand in cands:
+                g = self.space.sample_navigation(start_pose, self.planner, cand)
+                if g is None:
+                    continue
+                object_xys.append(np.asarray(cand, dtype=np.float64).reshape(-1))
+                nav_goals.append(np.asarray(g, dtype=np.float64).reshape(-1))
+
+            if len(nav_goals) >= 2:
+                res = self.planner.plan(start_pose, nav_goals[0], goals=nav_goals)
+                gi = getattr(res, "goal_index", None) if res is not None else None
+                if res is not None and res.success and gi is not None and 0 <= int(gi) < len(nav_goals):
+                    gi_i = int(gi)
+                    point = nav_goals[gi_i]
+                    localized_point = object_xys[gi_i]
+                    _lp = np.asarray(localized_point, dtype=np.float64).reshape(-1)
+                    ox, oy = float(_lp[0]), float(_lp[1])
+                    oz = float(_lp[2]) if _lp.size > 2 else 1.5
+                    if not np.isfinite(oz) or abs(oz) < 1e-9:
+                        oz = 1.5
+                    localize_source = f"{localize_source or 'frontier'}_multi_goal"
+                    logger.info(
+                        "Multi-goal explore: %d candidates, chose index=%d xy=(%.2f, %.2f)",
+                        len(nav_goals),
+                        gi_i,
+                        ox,
+                        oy,
+                    )
+                elif res is not None and not res.success:
+                    logger.warning("Multi-goal explore plan failed: %s", res.reason)
+                    res = None
+            elif len(nav_goals) == 1:
+                point = nav_goals[0]
+                localized_point = object_xys[0]
+                _lp = np.asarray(localized_point, dtype=np.float64).reshape(-1)
+                ox, oy = float(_lp[0]), float(_lp[1])
+                res = self.planner.plan(start_pose, point)
+
+        if point is None and res is None:
+            point = self.space.sample_navigation(start_pose, self.planner, localized_point)
 
         logger.info(
             "Nav endpoint sample: localize=%s target_xy=(%.2f, %.2f) base_goal=%s",
@@ -2147,14 +2177,11 @@ class DynamemController(BaseController):
             None if point is None else np.asarray(point).reshape(-1)[:3],
         )
 
-        waypoints = None
-        n_planned = 0
-
-        if point is None:
-            res = None
-            logger.warning("No navigation endpoint sampled (planner may fail).")
-        else:
-            res = self.planner.plan(start_pose, point)
+        if res is None:
+            if point is None:
+                logger.warning("No navigation endpoint sampled (planner may fail).")
+            else:
+                res = self.planner.plan(start_pose, point)
 
         if res is not None and res.success:
             waypoints = [pt.state for pt in res.trajectory]
@@ -2276,9 +2303,7 @@ class DynamemController(BaseController):
                 origins.append([float(a[0]), float(a[1]), 1.5])
                 vectors.append([float(b[0] - a[0]), float(b[1] - a[1]), 0.0])
             if origins:
-                self.rerun_visualizer.log_arrow3D(
-                    "world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1
-                )
+                self.rerun_visualizer.log_arrow3D("world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1)
             path_clrs = [
                 self.planner.clearance_at_xy(np.asarray(p).reshape(-1)[:2])
                 for p in traj
@@ -2759,8 +2784,7 @@ class DynamemController(BaseController):
             self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
             blocked = getattr(self, "_habitat_blocked_goals", None)
             if blocked is not None and (
-                nav_res.note.startswith("already_at_goal")
-                or (not nav_res.finished and nav_res.dist_m < 0.08)
+                nav_res.note.startswith("already_at_goal") or (not nav_res.finished and nav_res.dist_m < 0.08)
             ):
                 blocked.add(goal_key_xy(goal_xy))
             return nav_res.finished
@@ -2853,12 +2877,8 @@ class DynamemController(BaseController):
                 vectors = []
                 for idx in range(len(traj) - 1):
                     origins.append([traj[idx][0], traj[idx][1], 1.5])
-                    vectors.append(
-                        [traj[idx + 1][0] - traj[idx][0], traj[idx + 1][1] - traj[idx][1], 0]
-                    )
-                self.rerun_visualizer.log_arrow3D(
-                    "world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1
-                )
+                    vectors.append([traj[idx + 1][0] - traj[idx][0], traj[idx + 1][1] - traj[idx][1], 0])
+                self.rerun_visualizer.log_arrow3D("world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1)
                 self.rerun_visualizer.log_custom_pointcloud(
                     "world/robot_start_pose",
                     [start_pose[0], start_pose[1], 1.5],

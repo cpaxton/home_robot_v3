@@ -24,6 +24,8 @@ Extends the [find-phase harness](ovmm_find_phase_benchmark.md) with **Pick** and
 
 `attempt` needs a working AnyGrasp socket on real hardware. In sim, `attempt` and `sim` both use body teleport (no AnyGrasp).
 
+**Servers:** Stretch MuJoCo and robosuite (e.g. **rby1** / MolmoSpaces merges) advertise `capabilities.sim_set_body_pose`. Molmo iTHOR objects are freejoint roots (`…_1_0_0`) with mesh children (`…_1_1_0`); teleport resolves the freejoint ancestor when the GT body is the child.
+
 ## Quick start
 
 ```bash
@@ -43,6 +45,14 @@ uv run python scripts/eval_ovmm_full.py \
   --backend dynagraph \
   --manip-mode attempt \
   --output-dir ~/runs/emet/ovmm_full/e2e
+
+# MolmoSpaces iTHOR + rby1 (teleport manip; needs .venv-molmospaces + iTHOR assets)
+uv run python scripts/eval_ovmm_full.py \
+  --episode-id molmo_ithor_rby1_s2_bowl_pp \
+  --backend ground_truth \
+  --not-rotate --cpu-only \
+  --manip-mode sim \
+  --output-dir ~/runs/emet/ovmm_full/molmo_rby1_smoke
 ```
 
 Episodes: `configs/ovmm/full_episodes.yaml`. Outputs default to `~/runs/emet/ovmm_full` (`EMET_OVMM_OUTPUT_FULL` or `configs/ovmm/benchmark.yaml`).

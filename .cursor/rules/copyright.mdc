@@ -21,3 +21,7 @@ Use the **current calendar year** when creating the file.
 - **Never** copy the multi-block Hello Robot / “All rights reserved” / LICENSE preamble from a neighboring file onto a new file — that is the most common mistake when scaffolding tests next to old modules.
 - Existing Hello Robot headers on **old** files: leave them alone unless the user asks to relicense.
 - Prefer this short Chris Paxton + Apache stub; do not invent alternate copyright holders.
+
+## Pre-commit
+
+`scripts/insert_license_header.py` stamps the stub on any Python file that has **no** license marker in its first 15 lines, and skips files that already declare one (legacy Hello Robot, vendored SPDX, upstream attribution). New files need **no** config entry — do not add path allowlists. See [`docs/copyright_headers.md`](../../docs/copyright_headers.md).

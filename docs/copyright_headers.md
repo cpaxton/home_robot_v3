@@ -11,15 +11,19 @@ When you **edit** an existing file, keep its original header. Do not replace Hel
 
 ## Pre-commit
 
-- Default `insert-license` applies the Hello Robot header.
-- `insert-license (Chris Paxton)` applies the Chris Paxton header only to paths listed in `.pre-commit-config.yaml` under that hook.
+The `insert license header (Chris Paxton)` hook runs [`scripts/insert_license_header.py`](../scripts/insert_license_header.py). It decides from **file content**, not from a path list:
 
-When adding a **new** Python file, add its path to:
+- A file whose first 15 lines contain `Copyright` or `SPDX-License-Identifier` is left untouched — legacy Hello Robot headers, vendored SPDX notices, and upstream attributions all survive unchanged.
+- Any other Python file gets the Chris Paxton stub, inserted below a shebang or encoding line.
+- Empty files are skipped.
 
-1. The **exclude** list on the Hello Robot `insert-license` hook, and
-2. The **files** list on `insert-license (Chris Paxton)`.
+**New files need no configuration.** Just create the file; the hook stamps the right header.
 
-Or use a shared regex (e.g. `scripts/tier4_.*\.py`) if you add a family of scripts.
+Vendored trees are excluded by path in `.pre-commit-config.yaml` (`third_party/`, `scripts/scannet/`, `src/emet/simulation/molmo_occupancy/`) because their upstream license lives in a `NOTICE` rather than a per-file header.
+
+Behavior is covered by [`src/test/utils/test_insert_license_header.py`](../src/test/utils/test_insert_license_header.py), including a repo-wide guard against a file carrying both a Hello Robot and a Chris Paxton header.
+
+> Earlier versions of this hook used two mirrored path allowlists (one per header). Keeping them in sync failed silently: a new file missing from both lists was stamped **Hello Robot**, which the project copyright rule forbids. Do not reintroduce path-based selection.
 
 ## Examples
 

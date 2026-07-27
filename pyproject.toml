@@ -72,9 +72,6 @@ dependencies = [
     "fla-core>=0.5.0",
     "flash-linear-attention>=0.5.0",
     "triton>=2.3.1",
-    # Flash-Attn 2 for Qwen3-VL / CUDA VL loads (emet.llms.attn_impl). Needs a wheel matching
-    # this env's torch+CUDA; without it set EMET_ALLOW_SDPA_ATTN=1 for the slower SDPA path.
-    "flash-attn>=2.7.0",
     "accelerate>=1.6.0",
     "einops",
     "protobuf",
@@ -126,6 +123,12 @@ hand_tracker = [
 dynamem = [
     "SAM-2",
 ]
+# Flash-Attn 2 for Qwen3-VL / CUDA VL loads (emet.llms.attn_impl). Opt-in: PyPI has no wheels, so
+# installing compiles CUDA kernels against this env's torch and needs a matching CUDA toolkit.
+# Without it, set EMET_ALLOW_SDPA_ATTN=1 for the slower SDPA path.
+flash-attn = [
+    "flash-attn>=2.7.0",
+]
 # MolmoSpaces: optional extra does NOT add molmo-spaces to main env (version conflict with numpy<2).
 # Use a separate venv for the runner; see docs/molmospaces.md and install.sh --molmospaces.
 molmospaces = []
@@ -164,12 +167,19 @@ dynamem = [
 da3 = [
     "depth-anything-3>=0.1.1",
 ]
+# Not in default-groups: `uv sync --group flash-attn` when the CUDA toolkit matches torch.
+flash-attn = [
+    "flash-attn>=2.7.0",
+]
 
 [tool.uv]
 default-groups = ["dev", "sim", "hand_tracker", "dynamem", "da3"]
 # Robocasa 0.2 pins numpy==1.23.3 and numba==0.56.4; dynamem/SAM-2 need numpy>=1.24.4.
 # Override so both sim and dynamem resolve; numba>=0.58.1 works with numpy 1.24+ and avoids "initialization of _internal failed".
 # mujoco>=3.4.0 forces use of third_party/robocasa (which has mujoco>=3.4.0); PyPI robocasa pins mujoco==3.2.6 and would conflict.
+# flash-attn ships only an sdist whose setup.py imports torch, so it cannot build in an
+# isolated env; build it against the project's torch instead.
+no-build-isolation-package = ["flash-attn"]
 override-dependencies = [
     "numpy>=1.24.4,<2",
     "numba>=0.58.1",

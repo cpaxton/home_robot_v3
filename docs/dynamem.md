@@ -33,7 +33,7 @@ Besides these commands, Dynamem also provides exploration module
 - `explore()`
 
 ## Navigation and exploration
-Dynamem stores (two) voxelized pointcloud for navigation and exploration. The first pointcloud is used to generate obstacle map for running A* path planning while another is used to store vision language features for visual grounding and generate value map for exploration.
+Dynamem stores (two) voxelized pointcloud for navigation and exploration. The first pointcloud is used to generate obstacle map for running A* path planning while another is used to store vision language features for visual grounding and generate value map for exploration. Planners, configs, and offline tests: [motion_planning.md](motion_planning.md).
 
 In [Dynamem paper](https://arxiv.org/pdf/2411.04999), three ways to query semantic memory for visual grounding are introduced, in this stack we only set up querying with vision language feature similarity and querying with the hybrid of mLLMs and vision language feature similarity. The first strategy is faster while the second has better performance. By default the stack will chose VL feature similarity to do visual grounding.
 
