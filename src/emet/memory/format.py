@@ -35,6 +35,8 @@ FRAME_DEPTH_FILENAME = "depth.npy"  # legacy per-subdirectory name
 FRAME_POSE_FILENAME = "pose.npz"  # legacy per-subdirectory name
 GRAPH_FILENAME = "graph.json"
 SCENE_GRAPH_REPORT_TXT = "scene_graph_report.txt"
+# Open-vocab SceneGraphProcessor dump (coexists with GraphEQA graph.json in lifelong dirs).
+OPEN_VOCAB_SCENE_GRAPH_DIR = "open_vocab_scene_graph"
 SIM_GT_PLACEMENTS_FILENAME = "sim_object_placements.json"
 GT_ALIGNMENT_REPORT_TXT = "gt_alignment_report.txt"
 DESCRIPTIONS_FILENAME = "descriptions.json"
@@ -155,6 +157,7 @@ class MemoryManifest:
     # staleness pruning does not drop reloaded nodes (lifelong checkpoint resume).
     final_step: int | None = None
     has_voxel_pickle: bool = False  # voxel_map.pkl alongside (SparseVoxelMapDynamem.write_to_pickle)
+    has_open_vocab_scene_graph: bool = False  # open_vocab_scene_graph/ sidecar
 
 
 @dataclass
@@ -168,7 +171,8 @@ class MemoryState:
         frames/rgb_0001.png     -- RGB image per frame (zero-padded index)
         frames/depth_0001.npy   -- depth per frame
         frames/pose_0001.npz    -- camera_pose, base_pose, camera_K per frame
-        graph.json              -- optional; nodes + edges
+        graph.json              -- optional; GraphEQA nodes + edges
+        open_vocab_scene_graph/ -- optional; OpenVocabSceneGraph (scene_graph.json, crops, …)
         descriptions.json       -- optional; text per observation
         user_messages.json      -- optional; user text messages (identity, location, timestamp)
     """

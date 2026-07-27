@@ -388,3 +388,84 @@ def test_refresh_rerun_after_memory_load_calls_force():
     assert out["graph"] is True
     assert "voxel force=True" in calls
     assert "graph force=True" in calls
+
+
+def test_lifelong_saves_and_loads_open_vocab_scene_graph(tmp_path):
+    from emet.mapping.scene_graph.open_vocab_scene_graph import OpenVocabSceneGraph, SceneGraphNode
+    from emet.memory.format import OPEN_VOCAB_SCENE_GRAPH_DIR
+    from emet.memory.lifelong import load_lifelong_checkpoint, save_lifelong_checkpoint
+
+    sg = OpenVocabSceneGraph()
+    node = SceneGraphNode(node_id=1, labels=["aerosol"], label_counts={"aerosol": 3}, observation_count=3)
+    node.center = np.array([1.0, 2.0, 0.5], dtype=np.float64)
+    sg.nodes[1] = node
+    sg._next_id = 2
+
+    class _Proc:
+        scene_graph = sg
+
+    class _VM:
+        def __init__(self):
+            self._proc = _Proc()
+
+        def get_scene_graph(self):
+            return self._proc.scene_graph
+
+        def set_scene_graph_processor(self, proc):
+            self._proc = proc
+
+    class _Ctrl:
+        def __init__(self):
+            self.graph_memory = _make_memory()
+            self.graph_memory.set_graph_timestep(3)
+            self.graph_memory.add_observation(_rgb(), np.array([0.5, 0.5, 0.2]), ["mug"])
+            self.obs_count = 3
+            self.voxel_map = _VM()
+            self._open_vocab_sg_processor = _Proc()
+
+        def get_voxel_map(self):
+            return self.voxel_map
+
+    path = tmp_path / "both"
+    save_lifelong_checkpoint(_Ctrl(), path, save_voxel_pickle=False)
+    assert (path / OPEN_VOCAB_SCENE_GRAPH_DIR / "scene_graph.json").is_file()
+    assert (path / "graph.json").is_file()
+    man = (path / "manifest.json").read_text(encoding="utf-8")
+    assert "has_open_vocab_scene_graph" in man
+
+    class _EmptyProc:
+        def __init__(self):
+            self.scene_graph = OpenVocabSceneGraph()
+
+    class _CtrlLoad:
+        def __init__(self):
+            self.graph_memory = _make_memory()
+            self.obs_count = 0
+            self.voxel_map = _VM()
+            self.voxel_map._proc = _EmptyProc()
+            self._open_vocab_sg_processor = self.voxel_map._proc
+
+        def get_voxel_map(self):
+            return self.voxel_map
+
+    ctrl = _CtrlLoad()
+    info = load_lifelong_checkpoint(ctrl, path, refine_start=False)
+    assert info["graph_loaded"] is True
+    assert info["open_vocab_loaded"] is True
+    restored = ctrl.get_voxel_map().get_scene_graph()
+    assert restored.num_objects == 1
+    assert "aerosol" in restored.nodes[1].labels
+    np.testing.assert_allclose(restored.nodes[1].center, [1.0, 2.0, 0.5], atol=1e-6)
+
+
+def test_apply_se2_moves_open_vocab_centers():
+    from emet.mapping.scene_graph.open_vocab_scene_graph import OpenVocabSceneGraph, SceneGraphNode
+    from emet.memory.lifelong import apply_se2_to_open_vocab_scene_graph
+
+    sg = OpenVocabSceneGraph()
+    node = SceneGraphNode(node_id=0, labels=["box"], label_counts={"box": 1}, observation_count=1)
+    node.center = np.array([1.0, 0.0, 0.2], dtype=np.float64)
+    sg.nodes[0] = node
+    n = apply_se2_to_open_vocab_scene_graph(sg, se2_matrix(0.5, -0.25, 0.0))
+    assert n == 1
+    np.testing.assert_allclose(node.center[:2], [1.5, -0.25], atol=1e-6)

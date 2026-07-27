@@ -23,9 +23,23 @@ from emet.motion import ConfigurationSpace, Planner, PlanResult
 from emet.motion import Node as BaseNode
 from emet.motion.algo.node import TreeNode as Node
 
+# Soft fallback when skfmm has no zero contour (empty obstacle set in explored).
+_DEFAULT_CLEARANCE_M = 10.0
+
 
 def neighbors(pt: tuple[int, int]) -> list[tuple[int, int]]:
     return [(pt[0] + dx, pt[1] + dy) for dx in range(-1, 2) for dy in range(-1, 2) if (dx, dy) != (0, 0)]
+
+
+def unwrap_yaw(prev: float, target: float) -> float:
+    """Return ``target`` unwrapped so the turn from ``prev`` is in ``(-pi, pi]``."""
+    delta = float(np.arctan2(np.sin(target - prev), np.cos(target - prev)))
+    return float(prev + delta)
+
+
+def default_min_clearance_m(footprint_width_m: float, *, margin_m: float = 0.05) -> float:
+    """Half footprint width plus a small margin (Stretch width 0.34 → ~0.22 m)."""
+    return 0.5 * float(footprint_width_m) + float(margin_m)
 
 
 class AStar(Planner):
@@ -35,42 +49,128 @@ class AStar(Planner):
         self,
         space: ConfigurationSpace,
         validate_fn: Callable = None,
+        *,
+        min_clearance_m: float | None = 0.22,
+        clearance_cost_weight: float = 1.0,
+        grid_resolution_m: float | None = None,
     ):
-        """Create A* planner with configuration"""
+        """Create A* planner with configuration.
+
+        Args:
+            min_clearance_m: Hard-reject cells closer than this to obstacles (meters).
+                ``None`` or ``<= 0`` disables the hard gate (soft cost may still apply).
+            clearance_cost_weight: Soft cost ``weight / clearance_m`` so paths prefer open space.
+            grid_resolution_m: Meters per grid cell for EDT. Inferred from the voxel map when omitted.
+        """
         if validate_fn is None:
             validate_fn = space.is_valid
         super().__init__(space, validate_fn)
+        self.min_clearance_m = float(min_clearance_m) if min_clearance_m is not None else 0.0
+        self.clearance_cost_weight = float(clearance_cost_weight)
+        self._grid_resolution_override = grid_resolution_m
+        self._clearance_m: np.ndarray | None = None
+        self._navigable: np.ndarray | None = None
         self.reset()
         if validate_fn is not None:
             self.validate = validate_fn  # type:ignore
         else:
             self.validate = self.space.is_valid  # type:ignore
 
+    def _grid_resolution(self) -> float:
+        if self._grid_resolution_override is not None:
+            return float(self._grid_resolution_override)
+        vm = getattr(self.space, "voxel_map", None)
+        if vm is not None:
+            res = getattr(vm, "grid_resolution", None)
+            if res is not None:
+                return float(res)
+        return 0.05
+
     def compute_theta(self, cur_x, cur_y, end_x, end_y):
-        theta = 0
-        if end_x == cur_x and end_y >= cur_y:
-            theta = np.pi / 2
-        elif end_x == cur_x and end_y < cur_y:
-            theta = -np.pi / 2
-        else:
-            theta = np.arctan((end_y - cur_y) / (end_x - cur_x))
-            if end_x < cur_x:
-                theta = theta + np.pi
-            # move theta into [-pi, pi] range, for this function specifically,
-            # (theta -= 2 * pi) or (theta += 2 * pi) is enough
-            if theta > np.pi:
-                theta = theta - 2 * np.pi
-            if theta < np.pi:
-                theta = theta + 2 * np.pi
-        return theta
+        """Heading of the segment from (cur) to (end), in ``(-pi, pi]``."""
+        return float(np.arctan2(float(end_y) - float(cur_y), float(end_x) - float(cur_x)))
 
     def reset(self):
         obs, exp = self.space.voxel_map.get_2d_map()
-        self._navigable = ~obs & exp
+        if hasattr(obs, "cpu"):
+            obs = obs.cpu().numpy()
+        if hasattr(exp, "cpu"):
+            exp = exp.cpu().numpy()
+        obs = np.asarray(obs, dtype=bool)
+        exp = np.asarray(exp, dtype=bool)
+        self._navigable = (~obs) & exp
+        self._clearance_m = self._build_clearance_field(obs, exp)
+        if self.min_clearance_m > 0 and self._clearance_m is not None:
+            # Hard gate: treat low-clearance free cells as non-navigable for search.
+            self._navigable = self._navigable & (self._clearance_m >= self.min_clearance_m)
         self.start_time = time.time()
 
+    def _build_clearance_field(self, obs: np.ndarray, exp: np.ndarray) -> np.ndarray:
+        """EDT clearance in meters from obstacles within explored free space."""
+        h, w = obs.shape
+        clearance = np.full((h, w), _DEFAULT_CLEARANCE_M, dtype=np.float64)
+        if not np.any(exp):
+            return clearance
+        # Zero contour at obstacles; distance grows into free explored cells.
+        phi = np.ones((h, w), dtype=np.float64)
+        phi[obs] = 0.0
+        # Mask anything we should not plan through (unexplored).
+        masked = np.ma.masked_array(phi, mask=~exp)
+        try:
+            import skfmm
+
+            if not np.any(obs & exp):
+                # No obstacle contour in explored → leave large clearance on free cells.
+                clearance[exp & ~obs] = _DEFAULT_CLEARANCE_M
+                clearance[obs] = 0.0
+                return clearance
+            # skfmm needs a zero contour present in the unmasked region.
+            dist_cells = skfmm.distance(masked, dx=1)
+            res = self._grid_resolution()
+            if np.ma.isMaskedArray(dist_cells):
+                filled = np.ma.filled(dist_cells, _DEFAULT_CLEARANCE_M / max(res, 1e-6))
+            else:
+                filled = np.asarray(dist_cells, dtype=np.float64)
+            clearance = filled * res
+            clearance[obs] = 0.0
+            clearance[~exp] = 0.0
+        except Exception:
+            # Fallback: binary free vs obs only (no soft preference).
+            clearance[exp & ~obs] = _DEFAULT_CLEARANCE_M
+            clearance[obs] = 0.0
+            clearance[~exp] = 0.0
+        return clearance
+
+    def clearance_at_xy(self, xy: tuple[float, float] | list[float] | np.ndarray) -> float:
+        """Clearance in meters at a world XY (0 if out of map / unexplored)."""
+        if self._clearance_m is None:
+            self.reset()
+        pt = self.to_pt((float(xy[0]), float(xy[1])))
+        return self.clearance_at_pt(pt)
+
+    def clearance_at_pt(self, pt: tuple[int, int]) -> float:
+        if self._clearance_m is None:
+            return _DEFAULT_CLEARANCE_M
+        i, j = int(pt[0]), int(pt[1])
+        h, w = self._clearance_m.shape
+        if not (0 <= i < h and 0 <= j < w):
+            return 0.0
+        return float(self._clearance_m[i, j])
+
+    def is_explored_xy(self, xy: tuple[float, float] | list[float] | np.ndarray) -> bool:
+        obs, exp = self.space.voxel_map.get_2d_map()
+        if hasattr(exp, "cpu"):
+            exp = exp.cpu().numpy()
+        exp = np.asarray(exp, dtype=bool)
+        pt = self.to_pt((float(xy[0]), float(xy[1])))
+        i, j = int(pt[0]), int(pt[1])
+        h, w = exp.shape
+        if not (0 <= i < h and 0 <= j < w):
+            return False
+        return bool(exp[i, j])
+
     def point_is_occupied(self, x: int, y: int) -> bool:
-        """Checks if a point is occupied.
+        """Checks if a point is occupied (obstacle, unexplored, or below min clearance).
 
         Args:
             x: The x coordinate.
@@ -79,6 +179,9 @@ class AStar(Planner):
         Returns:
             Whether the point is occupied.
         """
+        h, w = self._navigable.shape
+        if not (0 <= x < h and 0 <= y < w):
+            return True
         return not bool(self._navigable[x][y])
 
     def to_pt(self, xy: tuple[float, float]) -> tuple[int, int]:
@@ -117,12 +220,15 @@ class AStar(Planner):
         """
         return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
 
+    def _clearance_soft_cost(self, pt: tuple[int, int]) -> float:
+        if self.clearance_cost_weight <= 0 or self._clearance_m is None:
+            return 0.0
+        c = self.clearance_at_pt(pt)
+        return self.clearance_cost_weight / max(c, 1e-3)
+
     def compute_obstacle_punishment(self, a: tuple[int, int], weight: int, avoid: int) -> float:
+        """Legacy local 3x3 obstacle penalty (kept for tests / fallbacks). Prefer clearance field."""
         obstacle_punishment = 0
-        # it is a trick, if we compute euclidean dis between a and every obstacle,
-        # this single compute_obstacle_punishment will be O(n) complexity
-        # so we just check a square of size (2*avoid) * (2*avoid)
-        # centered at a, which is O(1) complexity
         for i in range(-avoid, avoid + 1):
             for j in range(-avoid, avoid + 1):
                 if self.point_is_occupied(a[0] + i, a[1] + j):
@@ -131,13 +237,12 @@ class AStar(Planner):
                     obstacle_punishment = max((weight / max(obs_dis, 1)), obstacle_punishment)
         return obstacle_punishment
 
-    # A* heuristic
     def compute_heuristic(self, a: tuple[int, int], b: tuple[int, int], weight=6, avoid=3) -> float:
-        return (
-            self.compute_dis(a, b)
-            + weight * self.compute_obstacle_punishment(a, weight, avoid)
-            + self.compute_obstacle_punishment(b, weight, avoid)
-        )
+        # Soft clearance cost on both ends; hard gate already in point_is_occupied.
+        return self.compute_dis(a, b) + self._clearance_soft_cost(a) + self._clearance_soft_cost(b)
+
+    def step_cost(self, current: tuple[int, int], nxt: tuple[int, int]) -> float:
+        return self.compute_dis(current, nxt) + self._clearance_soft_cost(nxt)
 
     def is_in_line_of_sight(self, start_pt: tuple[int, int], end_pt: tuple[int, int]) -> bool:
         """Checks if there is a line-of-sight between two points.
@@ -182,16 +287,28 @@ class AStar(Planner):
             return False
         return ((c[1] - b[1]) / (c[0] - b[0])) == ((b[1] - a[1]) / (b[0] - a[0]))
 
-    def clean_path_for_xy(self, waypoints):
+    def clean_path_for_xy(self, waypoints, start_yaw: float | None = None):
+        """Simplify path and assign continuous yaw via shortest-turn unwrap from start heading."""
         goal = waypoints[-1]
+        if start_yaw is None:
+            g0 = np.asarray(waypoints[0], dtype=np.float64).reshape(-1)
+            start_yaw = float(g0[2]) if g0.size >= 3 and np.isfinite(g0[2]) else 0.0
         waypts = [self.to_pt(waypoint) for waypoint in waypoints]
         waypts = self.clean_path(waypts)
-        waypoints = [self.to_xy(waypt) for waypt in waypts]
+        waypoints_xy = [self.to_xy(waypt) for waypt in waypts]
         traj = []
-        for i in range(len(waypoints) - 1):
-            theta = self.compute_theta(waypoints[i][0], waypoints[i][1], waypoints[i + 1][0], waypoints[i + 1][1])
-            traj.append([waypoints[i][0], waypoints[i][1], float(theta)])
-        traj.append([waypoints[-1][0], waypoints[-1][1], goal[-1]])
+        prev_yaw = float(start_yaw)
+        for i in range(len(waypoints_xy) - 1):
+            theta = self.compute_theta(
+                waypoints_xy[i][0], waypoints_xy[i][1], waypoints_xy[i + 1][0], waypoints_xy[i + 1][1]
+            )
+            theta = unwrap_yaw(prev_yaw, theta)
+            traj.append([waypoints_xy[i][0], waypoints_xy[i][1], float(theta)])
+            prev_yaw = theta
+        goal_arr = np.asarray(goal, dtype=np.float64).reshape(-1)
+        goal_yaw = float(goal_arr[2]) if goal_arr.size >= 3 and np.isfinite(goal_arr[2]) else prev_yaw
+        goal_yaw = unwrap_yaw(prev_yaw, goal_yaw)
+        traj.append([waypoints_xy[-1][0], waypoints_xy[-1][1], float(goal_yaw)])
         return traj
 
     def clean_path(self, path) -> list[tuple[int, int]]:
@@ -310,10 +427,10 @@ class AStar(Planner):
             for nxt in neighbors(current):
                 if self.point_is_occupied(nxt[0], nxt[1]):
                     continue
-                new_cost = cost_so_far[current] + self.compute_heuristic(current, nxt)
+                new_cost = cost_so_far[current] + self.step_cost(current, nxt)
                 if nxt not in cost_so_far or new_cost < cost_so_far[nxt]:
                     cost_so_far[nxt] = new_cost
-                    priority = new_cost + self.compute_heuristic(end_pt, nxt)
+                    priority = new_cost + self.compute_dis(end_pt, nxt)
                     heapq.heappush(q, (priority, nxt))  # type: ignore
                     came_from[nxt] = current
 
@@ -363,18 +480,24 @@ class AStar(Planner):
                 print("A* fails, check obstacle map")
             return PlanResult(False, reason="A* fails, check obstacle map")
         trajectory: list[BaseNode] = []
+        start_yaw = float(start[2]) if len(start) > 2 else 0.0
+        prev_yaw = start_yaw
         for i in range(len(waypoints) - 1):
             theta = self.compute_theta(waypoints[i][0], waypoints[i][1], waypoints[i + 1][0], waypoints[i + 1][1])
+            theta = unwrap_yaw(prev_yaw, theta)
             if i > 0:
                 parent = trajectory[-1]
             else:
                 parent = None
             trajectory.append(Node(np.array([waypoints[i][0], waypoints[i][1], float(theta)]), parent=parent))
+            prev_yaw = theta
         if len(trajectory) <= 0:
             parent = None
         else:
             parent = trajectory[-1]
-        trajectory.append(Node(np.array([waypoints[-1][0], waypoints[-1][1], goal[-1]]), parent=parent))
+        goal_yaw = float(goal[-1]) if len(goal) > 2 else prev_yaw
+        goal_yaw = unwrap_yaw(prev_yaw, goal_yaw)
+        trajectory.append(Node(np.array([waypoints[-1][0], waypoints[-1][1], float(goal_yaw)]), parent=parent))
 
         # Save the nodes for this planner
         self.nodes = trajectory

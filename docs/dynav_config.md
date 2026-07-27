@@ -27,7 +27,7 @@ Related docs: [Unified config](emet_config.md), [Dynamem](dynamem.md), [Dynagrap
 | `depth_source`, `da3_*` | Sensor vs Depth Anything 3 for mapping |
 | `detection`, `instance_memory` | Open-vocab detection and instance memory |
 | `filters` | Depth / map smoothing (median, derivative, speckle open, voxel DBSCAN) |
-| `motion_planner` | A* step size, frontier dilation, goal radii |
+| `motion_planner` | Clearance-aware A* (`min_clearance_m`, `clearance_cost_weight`), frontier dilation, goal radii |
 | `eqa`, `eqa_vl`, `graph_eqa_*` | EQA and GraphEQA VLM settings |
 | `use_instance_memory`, `use_scene_graph` | Rerun instance boxes and scene graph |
 
@@ -148,12 +148,25 @@ depth_source: sensor      # sim default: ZMQ depth
 
 ### Motion planner / exploration frontier
 
+Dynamem navigation uses **clearance-aware A*** (EDT distance to obstacles), not thicker
+`dilate_obstacle_size`, as the primary nav-safety lever:
+
 ```yaml
 motion_planner:
+  # min_clearance_m: null  # default ≈ 0.5 * footprint.width + 0.05 (~0.22 m for Stretch)
+  clearance_cost_weight: 1.0  # soft cost so paths prefer open space
   frontier:
     dilate_frontier_size: 2
-    dilate_obstacle_size: 0
+    dilate_obstacle_size: 0  # leave alone; raising this blocks narrow corridors
 ```
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `min_clearance_m` | footprint-derived (~0.22 m) | Hard-reject cells closer than this to obstacles during A* |
+| `clearance_cost_weight` | `1.0` | Soft `weight / clearance_m` preference for room center |
+| `frontier.dilate_obstacle_size` | `0` | Binary padding for frontier *goal sampling* only — do not raise this as the main wall-hug fix |
+
+On Stretch, `execute_trajectory` also **aborts the chunk** when an intermediate `wait_for_waypoint` times out (remaining waypoints are skipped). Agent tools (`find_objects` / `explore` / `navigation_diagnostics`) surface the resulting outcomes.
 
 ### Habitat HM-EQA (`eqa:` keys)
 

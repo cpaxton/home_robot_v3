@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 
-from emet.memory.format import VOXEL_PICKLE_FILENAME, is_memory_directory
+from emet.memory.format import OPEN_VOCAB_SCENE_GRAPH_DIR, VOXEL_PICKLE_FILENAME, is_memory_directory
 from emet.utils.logger import Logger
 from emet.utils.point_cloud import ransac_transform
 
@@ -545,13 +545,164 @@ def apply_se2_to_memory(
     """Apply one SE(2)/SE(3) transform to both graph and voxel memory."""
     n_nodes = apply_se2_to_graph(graph_memory, transform) if graph_memory is not None else 0
     voxel_ok = apply_se2_to_voxel_map(voxel_map, transform) if voxel_map is not None else False
+    ov_n = 0
+    sg = None
+    if voxel_map is not None and hasattr(voxel_map, "get_scene_graph"):
+        sg = voxel_map.get_scene_graph()
+    if sg is not None:
+        ov_n = apply_se2_to_open_vocab_scene_graph(sg, transform)
     xy_m, yaw = se3_translation_xy_yaw(transform)
     return {
         "nodes_updated": int(n_nodes),
         "voxel_transformed": bool(voxel_ok),
+        "open_vocab_nodes_updated": int(ov_n),
         "translation_xy_m": float(xy_m),
         "yaw_rad": float(yaw),
     }
+
+
+def _voxel_map_from_controller(controller: Any) -> Any | None:
+    if hasattr(controller, "get_voxel_map"):
+        return controller.get_voxel_map()
+    return getattr(controller, "voxel_map", None)
+
+
+def open_vocab_scene_graph_from_controller(controller: Any) -> Any | None:
+    """Return the live OpenVocabSceneGraph if attached, else None."""
+    vm = _voxel_map_from_controller(controller)
+    if vm is not None and hasattr(vm, "get_scene_graph"):
+        sg = vm.get_scene_graph()
+        if sg is not None:
+            return sg
+    proc = getattr(controller, "_open_vocab_sg_processor", None)
+    if proc is not None:
+        return getattr(proc, "scene_graph", None)
+    return None
+
+
+def apply_se2_to_open_vocab_scene_graph(scene_graph: Any, transform: np.ndarray) -> int:
+    """Transform open-vocab node centers / point clouds in place. Returns nodes touched."""
+    nodes = getattr(scene_graph, "nodes", None)
+    if not nodes:
+        return 0
+    t = np.asarray(transform, dtype=np.float64).reshape(4, 4)
+    n_updated = 0
+    for node in nodes.values():
+        touched = False
+        center = getattr(node, "center", None)
+        if center is not None:
+            c = np.asarray(center, dtype=np.float64).reshape(-1)
+            if c.size >= 3 and np.isfinite(c[:3]).all():
+                node.center = transform_points_xyz(c[:3].reshape(1, 3), t)[0]
+                touched = True
+        pts = getattr(node, "point_cloud", None)
+        if pts is not None:
+            import torch
+
+            if hasattr(pts, "detach"):
+                arr = pts.detach().cpu().numpy()
+            else:
+                arr = np.asarray(pts)
+            if arr.ndim == 2 and arr.shape[0] > 0 and arr.shape[1] >= 3:
+                out = transform_points_xyz(arr[:, :3], t)
+                if hasattr(pts, "detach"):
+                    node.point_cloud = torch.as_tensor(out, dtype=pts.dtype)
+                else:
+                    node.point_cloud = out
+                touched = True
+                # Recompute AABB if present.
+                if getattr(node, "bounds", None) is not None and hasattr(node, "point_cloud"):
+                    pc = node.point_cloud
+                    if hasattr(pc, "min"):
+                        node.bounds = torch.stack([pc.min(dim=0).values, pc.max(dim=0).values], dim=0)
+        if touched:
+            n_updated += 1
+    if n_updated and hasattr(scene_graph, "update_edges"):
+        try:
+            scene_graph.update_edges()
+        except Exception:
+            pass
+    return n_updated
+
+
+def _patch_manifest_open_vocab(path: Path, *, present: bool) -> None:
+    import json
+
+    from emet.memory.format import MANIFEST_FILENAME
+
+    man_path = path / MANIFEST_FILENAME
+    if not man_path.is_file():
+        return
+    try:
+        data = json.loads(man_path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    data["has_open_vocab_scene_graph"] = bool(present)
+    man_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def save_open_vocab_scene_graph_sidecar(controller_or_sg: Any, path: str | Path) -> bool:
+    """Write ``open_vocab_scene_graph/`` under *path* when an OV graph with objects exists."""
+    path_obj = Path(path)
+    sg = controller_or_sg
+    if not hasattr(sg, "save") or not hasattr(sg, "num_objects"):
+        sg = open_vocab_scene_graph_from_controller(controller_or_sg)
+    if sg is None or int(getattr(sg, "num_objects", 0) or 0) <= 0:
+        _patch_manifest_open_vocab(path_obj, present=False)
+        return False
+    out = path_obj / OPEN_VOCAB_SCENE_GRAPH_DIR
+    out.mkdir(parents=True, exist_ok=True)
+    sg.save(str(out))
+    # Keep a dedicated report so we do not overwrite GraphEQA scene_graph_report.txt.
+    try:
+        (out / "open_vocab_report.txt").write_text(sg.to_string() + "\n", encoding="utf-8")
+    except Exception:
+        pass
+    _patch_manifest_open_vocab(path_obj, present=True)
+    logger.info(f"lifelong: saved open-vocab scene graph ({sg.num_objects} objects) → {out}")
+    return True
+
+
+class _OpenVocabHolder:
+    """Minimal processor stand-in so ``voxel_map.get_scene_graph()`` works after load."""
+
+    def __init__(self, scene_graph: Any):
+        self.scene_graph = scene_graph
+
+
+def load_open_vocab_scene_graph_sidecar(controller: Any, path: str | Path) -> bool:
+    """Restore ``open_vocab_scene_graph/`` into the controller voxel map when present."""
+    path_obj = Path(path) / OPEN_VOCAB_SCENE_GRAPH_DIR
+    sg_json = path_obj / "scene_graph.json"
+    if not sg_json.is_file():
+        return False
+    from emet.mapping.scene_graph.open_vocab_scene_graph import OpenVocabSceneGraph
+
+    loaded = OpenVocabSceneGraph.load(str(path_obj))
+    n = int(getattr(loaded, "num_objects", 0) or 0)
+    proc = getattr(controller, "_open_vocab_sg_processor", None)
+    if proc is not None and getattr(proc, "scene_graph", None) is not None:
+        live = proc.scene_graph
+        live.nodes = loaded.nodes
+        live.edges = loaded.edges
+        live._next_id = loaded._next_id
+        target = live
+    else:
+        holder = _OpenVocabHolder(loaded)
+        controller._open_vocab_sg_processor = holder
+        vm = _voxel_map_from_controller(controller)
+        if vm is not None and hasattr(vm, "set_scene_graph_processor"):
+            vm.set_scene_graph_processor(holder)
+        target = loaded
+    logger.info(f"lifelong: restored open-vocab scene graph ({n} objects) from {path_obj}")
+    # Optional Rerun refresh for OV graph.
+    viz = getattr(controller, "rerun_visualizer", None)
+    if viz is not None and hasattr(viz, "update_open_vocab_scene_graph") and n > 0:
+        try:
+            viz.update_open_vocab_scene_graph(target)
+        except Exception as exc:
+            logger.debug(f"lifelong: open-vocab Rerun update skipped ({exc})")
+    return n > 0
 
 
 def checkpoint_expected_counts(path: str | Path) -> dict[str, Any]:
@@ -700,6 +851,7 @@ def load_lifelong_checkpoint(
         "path": str(path_obj),
         "graph_loaded": False,
         "voxel_pickle_loaded": False,
+        "open_vocab_loaded": False,
         "final_step": None,
         "saved_xyz": None,
         "refine": None,
@@ -734,6 +886,8 @@ def load_lifelong_checkpoint(
         vm.read_from_pickle(str(voxel_pickle))
         info["voxel_pickle_loaded"] = True
         logger.info("lifelong: voxel_map.pkl loaded")
+
+    info["open_vocab_loaded"] = load_open_vocab_scene_graph_sidecar(controller, path_obj)
 
     saved_xyz = voxel_semantic_xyz(vm)
     if saved_xyz is not None:
@@ -887,6 +1041,7 @@ def save_lifelong_checkpoint(controller: Any, path: str | Path, *, save_voxel_pi
             vm.write_to_pickle(str(path_obj / VOXEL_PICKLE_FILENAME))
     else:
         raise RuntimeError("Controller has no graph_memory or voxel_map to save")
+    save_open_vocab_scene_graph_sidecar(controller, path_obj)
     return str(path_obj)
 
 

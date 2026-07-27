@@ -666,6 +666,7 @@ def run_agent_with_robot(
                 f"Lifelong checkpoint loaded: graph={load_info.get('graph_loaded')} "
                 f"nodes={load_info.get('graph_nodes')} "
                 f"voxel_pkl={load_info.get('voxel_pickle_loaded')} "
+                f"open_vocab={load_info.get('open_vocab_loaded')} "
                 f"final_step={load_info.get('final_step')} "
                 f"voxel_pts={load_info.get('voxel_points')} "
                 f"semantic_pts={load_info.get('semantic_points')} "

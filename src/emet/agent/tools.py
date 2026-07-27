@@ -54,6 +54,93 @@ def stash_discord_image(context: dict[str, Any], image: np.ndarray | None) -> bo
     return True
 
 
+def _agent_from_context(context: dict[str, Any]) -> Any | None:
+    executor = context.get("executor")
+    if executor is not None and hasattr(executor, "agent"):
+        return executor.agent
+    return context.get("agent")
+
+
+def format_last_nav_plan_summary(agent: Any | None) -> str:
+    """Compact last-plan line for explore/find/diagnostics tool returns."""
+    if agent is None:
+        return ""
+    meta = getattr(agent, "_last_nav_plan", None)
+    if not isinstance(meta, dict) or not meta:
+        return ""
+    parts: list[str] = []
+    src = meta.get("localize_source") or meta.get("mode")
+    if src:
+        parts.append(f"localize={src}")
+    n = meta.get("n_planned")
+    if n is None:
+        n = meta.get("n_waypoints")
+    if n is not None:
+        parts.append(f"planned_wps={n}")
+    path_m = meta.get("path_m") or meta.get("full_path_m")
+    if path_m:
+        try:
+            parts.append(f"path≈{float(path_m):.2f}m")
+        except (TypeError, ValueError):
+            pass
+    min_c = meta.get("min_clearance_m")
+    if min_c is not None:
+        try:
+            parts.append(f"min_clearance={float(min_c):.2f}m")
+        except (TypeError, ValueError):
+            pass
+    outcome = meta.get("outcome")
+    if outcome:
+        parts.append(f"outcome={outcome}")
+    if meta.get("confirmed") is True:
+        parts.append("confirmed=yes")
+    elif meta.get("confirmed") is False or outcome == "user_cancelled":
+        parts.append("user_cancelled")
+    if not parts:
+        return ""
+    return "Last plan: " + ", ".join(parts) + "."
+
+
+def format_nav_outcome_head(outcome: str | None, *, ok: bool | None, verb: str) -> str:
+    """Human head line for explore/find tool returns from ``_last_nav_plan`` outcome."""
+    if outcome == "user_cancelled":
+        return f"{verb} cancelled by user (confirm-nav)."
+    if outcome == "aborted_waypoint_timeout":
+        return f"{verb} aborted: waypoint timeout (near wall or unreachable heading)."
+    if outcome in {"rejected_low_clearance", "rejected_unexplored"}:
+        return f"{verb} plan rejected ({outcome})."
+    if ok is True:
+        return f"{verb} finished."
+    if ok is False:
+        return f"{verb} failed or interrupted."
+    return f"{verb} did not complete."
+
+
+def format_base_clearance_hint(agent: Any | None) -> str:
+    """Whether the base currently sits under the configured min clearance."""
+    if agent is None:
+        return ""
+    planner = getattr(agent, "planner", None)
+    if planner is None or not hasattr(planner, "clearance_at_xy"):
+        return ""
+    robot = getattr(agent, "robot", None)
+    if robot is None or not hasattr(robot, "get_base_pose"):
+        return ""
+    try:
+        pose = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
+        if pose.size < 2:
+            return ""
+        if getattr(planner, "_clearance_m", None) is None:
+            planner.reset()
+        c = float(planner.clearance_at_xy(pose[:2]))
+        req = float(getattr(agent, "_min_clearance_m", getattr(planner, "min_clearance_m", 0.0)) or 0.0)
+        if req > 0 and c < req:
+            return f"Base clearance {c:.2f}m is below min_clearance_m={req:.2f}m (near obstacle)."
+        return f"Base clearance ≈ {c:.2f}m (min required {req:.2f}m)."
+    except Exception:
+        return ""
+
+
 def take_pending_discord_image(context: dict[str, Any] | None) -> np.ndarray | None:
     """Pop a stashed RGB image from *context*, or None."""
     if not context:
@@ -298,16 +385,22 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         if executor is None:
             return "Robot not connected."
         ok = executor([("explore", "")])
+        agent = _agent_from_context(context)
         robot_xy = _robot_base_xy(robot)
         vm = _voxel_map_from_executor(executor)
         _img, stats, _ = snapshot_from_voxel_map(vm, robot_xy)
         summary = format_navigation_report(stats, explore_ok=ok)
-        head = "Explore finished." if ok else "Explore failed or interrupted."
+        plan_line = format_last_nav_plan_summary(agent)
+        outcome = (getattr(agent, "_last_nav_plan", None) or {}).get("outcome") if agent else None
+        head = format_nav_outcome_head(outcome, ok=ok, verb="Explore")
+        parts = [head, summary]
+        if plan_line:
+            parts.append(plan_line)
         gsize = _graph_size_line(context)
         if gsize:
             _logger.info(gsize)
-            return f"{head} {summary} [{gsize}]"
-        return f"{head} {summary}"
+            parts.append(f"[{gsize}]")
+        return " ".join(parts)
 
     tools.append(
         Tool(
@@ -316,7 +409,9 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "Navigate to explore and build a map (moves through the space — longer than scan_environment). "
                 "Use for 'explore', 'map the room', 'go look around the house'. "
                 "For a quick in-place look, prefer scan_environment. "
-                "Returns a short map diagnostic after the run; pair with send_map_snapshot or describe_scene if stuck."
+                "Returns map diagnostics plus last-plan summary (localize source, waypoint count, min clearance, "
+                "and outcomes such as user_cancelled / aborted_waypoint_timeout / rejected_low_clearance when "
+                "--confirm-nav or safety filters fire). Pair with send_map_snapshot or describe_scene if stuck."
             ),
             parameters=_NO_PARAMS,
             func=explore,
@@ -330,10 +425,18 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         robot = context.get("robot")
         if executor is None:
             return "Robot not connected."
+        agent = _agent_from_context(context)
         robot_xy = _robot_base_xy(robot, executor)
         vm = _voxel_map_from_executor(executor)
         _img, stats, _ = snapshot_from_voxel_map(vm, robot_xy)
-        return format_navigation_report(stats, explore_ok=None)
+        parts = [format_navigation_report(stats, explore_ok=None)]
+        plan_line = format_last_nav_plan_summary(agent)
+        if plan_line:
+            parts.append(plan_line)
+        clr = format_base_clearance_hint(agent)
+        if clr:
+            parts.append(clr)
+        return " ".join(parts)
 
     def send_map_snapshot() -> str:
         executor = context.get("executor")
@@ -341,10 +444,34 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         discord_bot = context.get("discord_bot")
         if executor is None:
             return "Robot not connected."
+        agent = _agent_from_context(context)
         robot_xy = _robot_base_xy(robot, executor)
         vm = _voxel_map_from_executor(executor)
-        img, stats, img_discord = snapshot_from_voxel_map(vm, robot_xy)
+        traj = None
+        meta = getattr(agent, "_last_nav_plan", None) if agent is not None else None
+        if isinstance(meta, dict):
+            traj = meta.get("traj") or meta.get("waypoints") or meta.get("path")
+        if traj is None and agent is not None:
+            # Prefer last logged plan from Rerun helper fields if present.
+            traj = getattr(agent, "_last_nav_traj", None)
+        img = None
+        img_discord = None
+        if traj is not None:
+            try:
+                from emet.controller.nav_confirm import render_nav_plan_map_rgb
+
+                img = render_nav_plan_map_rgb(vm, robot_xy, traj)
+                img_discord = img
+            except Exception as e:
+                _logger.debug("nav plan overlay failed: %s", e)
+        if img is None:
+            img, stats, img_discord = snapshot_from_voxel_map(vm, robot_xy)
+        else:
+            _img2, stats, _ = snapshot_from_voxel_map(vm, robot_xy)
         summary = format_navigation_report(stats, explore_ok=None)
+        plan_line = format_last_nav_plan_summary(agent)
+        if plan_line:
+            summary = f"{summary} {plan_line}"
         if img is None:
             return f"No map image available. {summary}"
         viz = None
@@ -370,6 +497,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             parts.append("Top-down map image sent to Discord (cropped to explored region).")
         if rerun_logged:
             parts.append("Top-down map logged to Rerun at world/map_snapshot/topdown (cropped to explored region).")
+        if traj is not None:
+            parts.append("Last motion plan overlaid on map.")
         return " ".join(parts)
 
     tools.append(
@@ -377,7 +506,9 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             name="navigation_diagnostics",
             description=(
                 "Text summary of the current 2D voxel map: explored vs obstacle cell counts, base pose in grid, "
-                "and hints if the map is empty or the base sits on an obstacle cell. Use after failed explore/find or when the user asks why navigation failed."
+                "last motion-plan summary (localize / waypoints / min clearance / confirm-nav or abort outcomes), "
+                "and whether the base sits under min_clearance_m of obstacles. "
+                "Use after failed explore/find or when the user asks why navigation failed."
             ),
             parameters=_NO_PARAMS,
             func=navigation_diagnostics,
@@ -389,9 +520,9 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         Tool(
             name="send_map_snapshot",
             description=(
-                "Render a top-down RGB view of obstacles vs explored space (cropped to the explored region plus margin) "
-                "and send to Discord if configured; also logs the same crop to Rerun at world/map_snapshot/topdown "
-                "when the live Rerun visualizer is enabled."
+                "Render a top-down RGB view of obstacles vs explored space (cropped to the explored region plus margin), "
+                "optionally overlaying the last motion plan, and send to Discord if configured; also logs the same crop "
+                "to Rerun at world/map_snapshot/topdown when the live Rerun visualizer is enabled."
             ),
             parameters=_NO_PARAMS,
             func=send_map_snapshot,
@@ -433,17 +564,52 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     )
 
     # -- find_objects --------------------------------------------------------
+    def find_objects(text: str) -> str:
+        executor = context.get("executor")
+        if executor is None:
+            return "Robot not connected."
+        ok = executor([("find", text)])
+        agent = _agent_from_context(context)
+        plan_line = format_last_nav_plan_summary(agent)
+        outcome = (getattr(agent, "_last_nav_plan", None) or {}).get("outcome") if agent else None
+        head = format_nav_outcome_head(outcome, ok=ok, verb="Find")
+        parts = [head]
+        if text:
+            parts.append(f"Query={text!r}.")
+        if plan_line:
+            parts.append(plan_line)
+        clr = format_base_clearance_hint(agent)
+        if clr:
+            parts.append(clr)
+        if outcome in {
+            "user_cancelled",
+            "aborted_waypoint_timeout",
+            "rejected_low_clearance",
+            "rejected_unexplored",
+        }:
+            parts.append(
+                "Do not immediately re-call find_objects; ask the user or use "
+                "navigation_diagnostics / send_map_snapshot / scan_environment first."
+            )
+        return " ".join(parts)
+
     tools.append(
         Tool(
             name="find_objects",
-            description="Find and navigate to an object or location in the environment by name.",
+            description=(
+                "Find and navigate to an object or location by name. Returns last-plan summary "
+                "(localize source, waypoints, min clearance) and outcomes such as user_cancelled / "
+                "aborted_waypoint_timeout / rejected_low_clearance when --confirm-nav or safety filters fire. "
+                "On cancel/abort/reject, do not blindly retry — use navigation_diagnostics or ask the user."
+            ),
             parameters={
                 "type": "object",
                 "properties": {"text": {"type": "string", "description": "Object or location name to find."}},
                 "required": ["text"],
             },
-            func=lambda text: _exec("find", text),
+            func=find_objects,
             executor_commands=lambda args: [("find", args.get("text", ""))],
+            returns_info=True,
         )
     )
 
@@ -895,17 +1061,59 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         executor = context.get("executor")
         if executor is None or not hasattr(executor, "agent"):
             return "Robot not connected."
-        sg = executor.agent.get_voxel_map().get_scene_graph()
-        if sg is None or sg.num_objects == 0:
-            return "No open-vocab scene graph data yet."
-        return sg.to_string()
+        agent = executor.agent
+        sg = None
+        if hasattr(agent, "get_voxel_map"):
+            sg = agent.get_voxel_map().get_scene_graph()
+        if sg is not None and getattr(sg, "num_objects", 0) > 0:
+            return sg.to_string()
+        # Lifelong / Dynagraph primarily persist GraphEQA — fall back so "what objects
+        # / relations" still works after --input-path when open-vocab is empty.
+        gm = context.get("graph_memory") or getattr(agent, "graph_memory", None)
+        if gm is not None and hasattr(gm, "get_nodes"):
+            nodes = [n for n in gm.get_nodes() if not getattr(n, "is_viewpoint", False)]
+            if nodes:
+                lines = [f"[GraphEQA scene graph — open-vocab relations empty] Objects ({len(nodes)}):"]
+                for n in nodes[:40]:
+                    labels = getattr(n, "labels", None) or []
+                    lbl = ", ".join(str(x) for x in labels[:3]) if labels else "(no labels)"
+                    xyz = np.asarray(getattr(n, "xyz", [0, 0, 0]), dtype=float).reshape(-1)
+                    if xyz.size >= 3:
+                        lines.append(
+                            f"  [{getattr(n, 'node_id', '?')}] {lbl} "
+                            f"xyz=({xyz[0]:.2f}, {xyz[1]:.2f}, {xyz[2]:.2f})"
+                        )
+                    else:
+                        lines.append(f"  [{getattr(n, 'node_id', '?')}] {lbl}")
+                if len(nodes) > 40:
+                    lines.append(f"  … ({len(nodes) - 40} more)")
+                edges = gm.get_edges() if hasattr(gm, "get_edges") else []
+                if edges:
+                    lines.append(f"Relations ({len(edges)}):")
+                    id_to_lbl = {
+                        int(getattr(n, "node_id", -1)): (
+                            (getattr(n, "labels", None) or ["?"])[0]
+                        )
+                        for n in nodes
+                    }
+                    for a, b, rel in edges[:40]:
+                        a_l = id_to_lbl.get(int(a), str(a))
+                        b_l = "floor" if int(b) < 0 else id_to_lbl.get(int(b), str(b))
+                        lines.append(f"  {a_l} --{rel}--> {b_l}")
+                return "\n".join(lines)
+        return (
+            "No open-vocab scene graph data yet "
+            "(and no GraphEQA objects loaded). Explore or scan first, or reload a "
+            "checkpoint that includes open_vocab_scene_graph/."
+        )
 
     tools.append(
         Tool(
             name="list_scene_relations",
             description=(
-                "List objects and spatial relations (near, on, on_floor) from the open-vocabulary 3D scene graph. "
-                "Use for 'what is connected to what' and structured connectivity questions."
+                "List objects and spatial relations (near, on, on_floor). Prefers the open-vocabulary "
+                "3D scene graph; if that is empty after lifelong load, falls back to the GraphEQA graph. "
+                "Use for 'what objects are in the room' and structured connectivity questions."
             ),
             parameters=_NO_PARAMS,
             func=list_scene_relations,

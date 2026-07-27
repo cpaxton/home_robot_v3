@@ -63,7 +63,7 @@ from emet.mapping.voxel.voxel import _instance_memory_kwargs_from_params
 from emet.memory.graph_eqa import GraphEQAMemory, SensorGraphBuilder
 from emet.memory.graph_eqa.instance_observations import DEFAULT_GRAPH_INSTANCE_DEDUP_XY_M
 from emet.motion import constants as motion_constants
-from emet.motion.algo.a_star import AStar
+from emet.motion.algo.a_star import AStar, default_min_clearance_m
 from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
 from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask, apply_depth_speckle_filter, sensor_depth_usable
 from emet.perception.depth.lingbot_estimator import LingBotDepthEstimator, create_lingbot_estimator_from_parameters
@@ -599,7 +599,18 @@ class DynamemController(BaseController):
             dilate_frontier_size=parameters.get("motion_planner/frontier/dilate_frontier_size", 2),
             dilate_obstacle_size=parameters.get("motion_planner/frontier/dilate_obstacle_size", 0),
         )
-        self.planner = AStar(self.space)
+        _min_c = parameters.get("motion_planner/min_clearance_m", None)
+        if _min_c is None:
+            _fp = getattr(self.space, "_footprint", None) or getattr(self.voxel_map, "_footprint", None)
+            _width = float(getattr(_fp, "width", 0.34) or 0.34)
+            _min_c = default_min_clearance_m(_width)
+        self._min_clearance_m = float(_min_c)
+        self._clearance_cost_weight = float(parameters.get("motion_planner/clearance_cost_weight", 1.0))
+        self.planner = AStar(
+            self.space,
+            min_clearance_m=self._min_clearance_m,
+            clearance_cost_weight=self._clearance_cost_weight,
+        )
 
         cfg = self.embodied_agent
         if cfg.open_vocab_scene_graph.enabled and not self.manipulation_only:
@@ -1789,6 +1800,84 @@ class DynamemController(BaseController):
         except Exception as exc:
             logger.warning(f"Navgrid ASCII render skipped: {exc}")
 
+    def _filter_unsafe_nav_traj(
+        self,
+        traj: list,
+        *,
+        start_xyt: np.ndarray | list[float] | None = None,
+    ) -> tuple[list, str | None, float | None]:
+        """Drop low-clearance / unexplored waypoints before confirm/exec.
+
+        Returns:
+            (filtered_traj, reject_reason, min_clearance_m). reject_reason is set when the
+            executable chunk would be empty after filtering (same as planner failure).
+        """
+        if not traj:
+            return [], "no_plan", None
+        planner = getattr(self, "planner", None)
+        if planner is None:
+            return list(traj), None, None
+        if getattr(planner, "_clearance_m", None) is None:
+            try:
+                planner.reset()
+            except Exception:
+                pass
+
+        min_c = float(getattr(self, "_min_clearance_m", getattr(planner, "min_clearance_m", 0.0)) or 0.0)
+        # Preserve trailing [nan, object_xyz] marker if present.
+        object_tail: list = []
+        body = list(traj)
+        if len(body) >= 2:
+            mid = np.asarray(body[-2], dtype=np.float64).reshape(-1)
+            if mid.size >= 2 and np.isnan(mid[:2]).all():
+                object_tail = body[-2:]
+                body = body[:-2]
+
+        start_xy = None
+        if start_xyt is not None:
+            s = np.asarray(start_xyt, dtype=np.float64).reshape(-1)
+            if s.size >= 2 and np.isfinite(s[:2]).all():
+                start_xy = (float(s[0]), float(s[1]))
+
+        kept: list = []
+        reject: str | None = None
+        clearances: list[float] = []
+        for raw in body:
+            arr = np.asarray(raw, dtype=np.float64).reshape(-1)
+            if arr.size < 2 or not np.isfinite(arr[:2]).all():
+                continue
+            xy = (float(arr[0]), float(arr[1]))
+            # Always keep the first waypoint when it matches start (robot may sit in tight clearance).
+            is_start = (
+                start_xy is not None
+                and abs(xy[0] - start_xy[0]) < 1e-3
+                and abs(xy[1] - start_xy[1]) < 1e-3
+            )
+            if not is_start and not planner.is_explored_xy(xy):
+                reject = "rejected_unexplored"
+                break
+            c = float(planner.clearance_at_xy(xy))
+            clearances.append(c)
+            if not is_start and min_c > 0 and c < min_c:
+                reject = "rejected_low_clearance"
+                break
+            kept.append(raw if isinstance(raw, list) else arr.tolist())
+
+        min_along = float(min(clearances)) if clearances else None
+        if not kept:
+            return [], reject or "rejected_low_clearance", min_along
+        if reject is not None and len(kept) <= 1 and start_xy is not None:
+            # Only start survived → nothing useful to execute.
+            return [], reject, min_along
+        if object_tail:
+            kept.extend(object_tail)
+        return kept, None, min_along
+
+    def _record_nav_plan_fields(self, **fields: Any) -> None:
+        meta = dict(getattr(self, "_last_nav_plan", None) or {})
+        meta.update(fields)
+        self._last_nav_plan = meta
+
     def execute_action(
         self,
         text: str,
@@ -1832,7 +1921,9 @@ class DynamemController(BaseController):
             from emet.controller.nav_confirm import confirm_navigation_plan
 
             if not confirm_navigation_plan(self, res, meta=plan_meta, object_xyz=object_xyz):
+                self._record_nav_plan_fields(outcome="user_cancelled", confirmed=False)
                 return None, None
+            self._record_nav_plan_fields(confirmed=True, outcome="executing")
             self.announce_action(announce)
             n_exec = sum(
                 1
@@ -1865,28 +1956,38 @@ class DynamemController(BaseController):
             # We will append a nan and point coordinates of the target object on the trajectory to denote that the robot is reaching the target point
             if len(res) >= 2 and np.isnan(res[-2]).all():
                 if len(res) > 2:
-                    self.robot.execute_trajectory(
+                    exec_ok = self.robot.execute_trajectory(
                         res[:-2],
                         pos_err_threshold=self.pos_err_threshold,
                         rot_err_threshold=self.rot_err_threshold,
                         blocking=True,
                         world_frame=True,
                     )
+                    if exec_ok is False:
+                        self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
+                        logger.warning("Navigation aborted: waypoint timeout during execute_trajectory")
+                        return None, None
 
                 self.robot.look_front()
                 self.update()
+                self._record_nav_plan_fields(outcome="ok")
                 return True, res[-1]
             # The robot has not reached the object. Next it should look around and continue navigation
             else:
-                self.robot.execute_trajectory(
+                exec_ok = self.robot.execute_trajectory(
                     res,
                     pos_err_threshold=self.pos_err_threshold,
                     rot_err_threshold=self.rot_err_threshold,
                     blocking=True,
                     world_frame=True,
                 )
+                if exec_ok is False:
+                    self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
+                    logger.warning("Navigation aborted: waypoint timeout during execute_trajectory")
+                    return None, None
                 self.robot.look_front()
                 self.update()
+                self._record_nav_plan_fields(outcome="ok_chunk")
                 return False, None
         else:
             logger.warning("No plan from process_text; try again.")
@@ -2070,24 +2171,48 @@ class DynamemController(BaseController):
         if waypoints is not None:
             finished = len(waypoints) <= 8 and mode == "navigation"
             chunked = not finished
-            full_traj_for_viz = self.planner.clean_path_for_xy(list(waypoints))
+            full_traj_for_viz = self.planner.clean_path_for_xy(
+                list(waypoints), start_yaw=float(start_pose[2]) if len(start_pose) > 2 else 0.0
+            )
             if finished:
                 self.space.traj = None
             else:
                 self.space.traj = waypoints[8:] + [[np.nan, np.nan, np.nan], localized_point]
             if not finished:
                 waypoints = waypoints[:8]
-            traj = self.planner.clean_path_for_xy(waypoints)
+            traj = self.planner.clean_path_for_xy(
+                waypoints, start_yaw=float(start_pose[2]) if len(start_pose) > 2 else 0.0
+            )
             if finished:
                 traj.append([np.nan, np.nan, np.nan])
                 if isinstance(localized_point, torch.Tensor):
                     localized_point = localized_point.tolist()
                 traj.append(localized_point)
+            traj, reject_reason, min_clr = self._filter_unsafe_nav_traj(traj, start_xyt=start_pose)
+            if reject_reason is not None or not traj:
+                logger.warning(
+                    "Nav plan rejected after safety filter: %s (min_clearance=%s)",
+                    reject_reason,
+                    min_clr,
+                )
+                self._last_nav_plan = {
+                    "mode": mode,
+                    "localize_source": localize_source,
+                    "n_planned": n_planned,
+                    "chunked": chunked,
+                    "path_m": 0.0,
+                    "min_clearance_m": min_clr,
+                    "outcome": reject_reason or "rejected_low_clearance",
+                    "announce": f"Plan rejected ({reject_reason or 'unsafe'})",
+                    "traj": [],
+                }
+                return []
             logger.info(
-                "Planned trajectory: %d exec / %d planned waypoints (finished_chunk=%s)",
+                "Planned trajectory: %d exec / %d planned waypoints (finished_chunk=%s min_clearance=%.3f)",
                 len([p for p in traj if np.isfinite(np.asarray(p, dtype=np.float64).reshape(-1)[:2]).all()]),
                 n_planned,
                 finished,
+                float(min_clr) if min_clr is not None else float("nan"),
             )
 
         # Talk about what you are doing, as the robot.
@@ -2123,6 +2248,22 @@ class DynamemController(BaseController):
                 n_planned=n_planned or None,
                 chunked=chunked,
             )
+            # Attach clearance / safety fields for agent tools.
+            try:
+                clr = self.planner.clearance_at_xy(start_pose[:2])
+                path_clrs = [
+                    self.planner.clearance_at_xy(np.asarray(p).reshape(-1)[:2])
+                    for p in traj
+                    if np.isfinite(np.asarray(p, dtype=np.float64).reshape(-1)[:2]).all()
+                ]
+                self._record_nav_plan_fields(
+                    min_clearance_m=float(min(path_clrs)) if path_clrs else None,
+                    base_clearance_m=float(clr),
+                    min_clearance_required_m=float(getattr(self, "_min_clearance_m", 0.0)),
+                    traj=list(traj),
+                )
+            except Exception:
+                pass
         elif traj:
             # NullVisualizer / older stubs: keep minimal legacy arrows.
             origins = []
@@ -2138,13 +2279,21 @@ class DynamemController(BaseController):
                 self.rerun_visualizer.log_arrow3D(
                     "world/direction", origins, vectors, torch.Tensor([0, 1, 0]), 0.1
                 )
+            path_clrs = [
+                self.planner.clearance_at_xy(np.asarray(p).reshape(-1)[:2])
+                for p in traj
+                if np.isfinite(np.asarray(p, dtype=np.float64).reshape(-1)[:2]).all()
+            ]
             self._last_nav_plan = {
                 "mode": mode,
                 "localize_source": localize_source,
                 "n_planned": n_planned,
                 "chunked": chunked,
                 "path_m": 0.0,
+                "min_clearance_m": float(min(path_clrs)) if path_clrs else None,
+                "min_clearance_required_m": float(getattr(self, "_min_clearance_m", 0.0)),
                 "announce": f"Navigating via {localize_source or mode}: {n_planned} wps",
+                "traj": list(traj),
             }
 
         return traj
@@ -2646,19 +2795,39 @@ class DynamemController(BaseController):
         if waypoints is not None:
             n_planned = len(waypoints)
             truncated = len(waypoints) > 8
-            full_traj_for_viz = self.planner.clean_path_for_xy(list(waypoints))
+            full_traj_for_viz = self.planner.clean_path_for_xy(
+                list(waypoints), start_yaw=float(start_pose[2]) if len(start_pose) > 2 else 0.0
+            )
             if truncated:
                 waypoints = waypoints[:8]
-            traj = self.planner.clean_path_for_xy(waypoints)
+            traj = self.planner.clean_path_for_xy(
+                waypoints, start_yaw=float(start_pose[2]) if len(start_pose) > 2 else 0.0
+            )
             finished = not truncated
             if finished and target_theta is not None:
                 traj[-1][2] = target_theta
-            logger.info(
-                "navigate_to_target_pose: %d exec / %d planned waypoints (finished=%s)",
-                len(traj),
-                n_planned,
-                finished,
-            )
+            traj, reject_reason, min_clr = self._filter_unsafe_nav_traj(traj, start_xyt=start_pose)
+            if reject_reason is not None or not traj:
+                logger.warning(
+                    "navigate_to_target_pose rejected after safety filter: %s",
+                    reject_reason,
+                )
+                self._last_nav_plan = {
+                    "mode": "navigation",
+                    "localize_source": "eqa_target",
+                    "n_planned": n_planned,
+                    "chunked": truncated,
+                    "min_clearance_m": min_clr,
+                    "outcome": reject_reason or "rejected_low_clearance",
+                }
+                traj = None
+            else:
+                logger.info(
+                    "navigate_to_target_pose: %d exec / %d planned waypoints (finished=%s)",
+                    len(traj),
+                    n_planned,
+                    finished,
+                )
         else:
             traj = None
 
@@ -2678,6 +2847,7 @@ class DynamemController(BaseController):
                     n_planned=n_planned or None,
                     chunked=truncated,
                 )
+                self._record_nav_plan_fields(traj=list(traj))
             else:
                 origins = []
                 vectors = []
@@ -2704,6 +2874,7 @@ class DynamemController(BaseController):
                 meta=getattr(self, "_last_nav_plan", None) or {},
                 object_xyz=original_target_pose,
             ):
+                self._record_nav_plan_fields(outcome="user_cancelled", confirmed=False)
                 nav_res = NavAttemptResult(
                     success=False,
                     finished=False,
@@ -2716,13 +2887,26 @@ class DynamemController(BaseController):
                 self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
                 return False
 
-            self.robot.execute_trajectory(
+            exec_ok = self.robot.execute_trajectory(
                 traj,
                 pos_err_threshold=self.pos_err_threshold,
                 rot_err_threshold=self.rot_err_threshold,
                 blocking=True,
                 world_frame=True,
             )
+            if exec_ok is False:
+                self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
+                nav_res = NavAttemptResult(
+                    success=False,
+                    finished=False,
+                    dist_m=0.0,
+                    method="voxel_astar",
+                    note="aborted_waypoint_timeout",
+                    target_obs_id=target_obs_id,
+                )
+                self._last_nav_attempt = nav_res
+                self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
+                return False
             after_xy = np.asarray(self.robot.get_base_pose(), dtype=np.float64).reshape(-1)[:2]
             dist_m = float(np.hypot(after_xy[0] - before_xy[0], after_xy[1] - before_xy[1]))
             note = "ok" if finished else f"moved_{dist_m:.2f}m"

@@ -134,13 +134,15 @@ Do **not** put the 8B VL on every chat turn as the router — that made “what 
 | Describe | `describe_scene` | Caption + optional graph grounding + **live** head photo (no motion) |
 | Turn | `rotate_base` | Explicit degrees (180 / ±90 / …) |
 | Nudge | `move_forward` | Explicit meters (~0.1 for “a bit”); **map-clipped** (seeds `local_radius` disk if empty; asks to scan/rotate if still blocked); bare “move forward” → ask how far |
-| Explore | `explore` | Map cells increase; `announce_action` status |
-| Find | `find_objects` | Nav toward known label or clear failure |
+| Explore | `explore` | Map cells increase; tool return includes map diagnostic + last-plan summary (clearance / confirm / abort outcomes) |
+| Find | `find_objects` | Nav toward known label or clear failure; surfaces `user_cancelled` / `aborted_waypoint_timeout` / `rejected_*` instead of silent success |
 | Find after world change (Robocasa) | `find_objects` + invalidate | After ZMQ relocate, memory must not keep a confident waypoint at the **old** pose — use `scripts/smoke_dynagraph_agent_world_change_find.py` |
 | Scan | `scan_environment` | Full in-place rotate + map update |
 | Share view | `send_image` / describe attach | Live RGB OK |
 | Aim wrist (stub) | `aim_arm_at` | Not implemented (IK) — see [TODO.md](../TODO.md); use describe_scene |
-| Share map | `send_map_snapshot` | Top-down Discord/Rerun |
+| Share map | `send_map_snapshot` | Top-down Discord/Rerun (optionally overlays last motion plan) |
+| Nav stuck | `navigation_diagnostics` | Map counts + last-plan / base clearance; pair with `send_map_snapshot` |
+| Objects / relations | `list_scene_relations` | Open-vocab SG when present; else GraphEQA graph (lifelong load) |
 | Memory QA | `query_memory` | Graph/voxel answer when mapped |
 | EQA | `--eqa` (+ optional `--llm qwen3-vl-eqa --share-memory-vllm`) | Caption + query path without a second full VL fight |
 
@@ -156,7 +158,7 @@ Common flags (require **`--start-sim`**): `--scene`, `--split`, `--index`, `--in
 |---------|---------|------------------|
 | **Rerun** | **Off** (unlike `emet run dynamem` / `dynagraph`) | Pass **`--rerun`**; optional **`--headless`**, **`--rerun-native`**, **`--rerun-bind`**. Viewer: `http://localhost:9090?url=ws://localhost:9877` |
 | **Discord** | **On** when `DISCORD_TOKEN` is set | **`--no-discord`** to skip; warning if token missing. Terminal and Discord share one input queue when both run. |
-| **Nav confirm** | **Off** | **`--confirm-nav`** or **`EMET_CONFIRM_NAV=1`**. Before the base moves, shows the plan on the 2D map (Rerun + Discord PNG) and waits for **y/n** (terminal or Discord). Recommended on the real robot. Scripted `-c` auto-accepts. |
+| **Nav confirm** | **Off** | **`--confirm-nav`** or **`EMET_CONFIRM_NAV=1`**. Before the base moves, shows the plan on the 2D map (Rerun + Discord PNG) and waits for **y/n** (terminal or Discord). Recommended on the real robot. Scripted `-c` auto-accepts. Cancel / waypoint-timeout / low-clearance rejects appear in `find_objects` / `explore` tool returns so the LLM does not invent success. |
 
 Install Discord extra: `uv sync -e discord`.
 
@@ -201,11 +203,14 @@ uv run emet run agent \
 # Hardware checklist: docs/robots/innate_mars_hardware.md#discord-chat--explore-herman
 # Note: explore is turn-blocking — Discord messages queue until the tool finishes.
 
-# Load saved memory (graph + voxel_map.pkl when present; restores staleness clock)
+# Load saved memory (graph + voxel_map.pkl + open_vocab_scene_graph/ when present; restores staleness clock)
 uv run emet run agent --input-path logs/memory_xxx --no-discord
 
 # Same, but estimate a small SE(2) fudge vs a live frame (imperfect spawn). On failure, keep assumed pose.
 uv run emet run agent --input-path logs/memory_xxx --refine-start --no-discord
+
+# Lifelong dirs store **both** GraphEQA (`graph.json`) and open-vocab (`open_vocab_scene_graph/`) when the
+# embodied overlay has open-vocab enabled and objects were observed. Reload banner shows `open_vocab=True/False`.
 
 # Geometric refine smoke (no GPU): recover a known xy/yaw fudge
 uv run python scripts/smoke_lifelong_pose_refine.py
