@@ -214,6 +214,7 @@ Unknown options (e.g. `--match-method`, `--rerun-debug`) are passed through to t
 emet run agent --robot stretch --robot-ip 127.0.0.1
 emet run agent --start-sim -c "describe the scene"
 emet run agent --memory-backend dynagraph --config configs/agent_stretch_discord.yaml
+emet run agent --confirm-nav --rerun   # preview plan on map; y/n before base moves (real robot)
 emet run dynamem --robot-ip 127.0.0.1 -S
 emet run dynamem -S --visual-servo --match-method class --rerun-debug
 emet run mapping --robot-ip 127.0.0.1
@@ -221,6 +222,8 @@ emet run grasp --target-object "red cylinder" --parameter-file sim_planner.yaml
 emet run timing --robot-ip 192.168.1.15 --headless
 emet run debug-da3-depth --robot innate_mars --depth-source sensor
 ```
+
+Agent-specific flags (also see [AGENT_RUN.md](AGENT_RUN.md)): **`--confirm-nav`** / **`EMET_CONFIRM_NAV=1`** — show motion plan on the 2D map and wait for y/n (Discord posts the map PNG).
 
 ---
 

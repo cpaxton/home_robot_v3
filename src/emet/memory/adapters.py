@@ -367,6 +367,8 @@ class GraphEQABackend(MemoryBackend):
     def list_objects(self) -> list[str]:
         labels = []
         for node in self._graph.get_nodes():
+            if getattr(node, "is_frontier", False) or getattr(node, "is_viewpoint", False):
+                continue
             labels.extend(node.labels)
         return list(dict.fromkeys(labels))
 
@@ -401,6 +403,7 @@ class GraphEQABackend(MemoryBackend):
             last_seen=int(getattr(n, "last_seen", 0)),
             support_count=int(getattr(n, "support_count", 1)),
             is_viewpoint=bool(getattr(n, "is_viewpoint", False)),
+            is_frontier=bool(getattr(n, "is_frontier", False)),
             belief_confidence=float(getattr(n, "belief_confidence", 0.5)),
             position_covariance=(
                 np.asarray(n.position_covariance, dtype=float).tolist()
@@ -552,9 +555,16 @@ class GraphEQABackend(MemoryBackend):
                     "center": (0.5 * (mn + mx)).tolist(),
                     "size": (mx - mn).tolist(),
                 }
+            labels = list(n.labels)
+            # Old checkpoints omitted is_frontier; recover from the canonical frontier label.
+            is_frontier = bool(getattr(n, "is_frontier", False))
+            if not is_frontier and labels:
+                primary = str(labels[0]).strip().lower()
+                if primary == "frontier" or primary.startswith("frontier:"):
+                    is_frontier = True
             return GraphNode(
                 node_id=n.node_id,
-                labels=list(n.labels),
+                labels=labels,
                 xyz=np.array(n.xyz, dtype=np.float64),
                 obs_id=n.obs_id,
                 description=getattr(n, "description", None),
@@ -562,6 +572,7 @@ class GraphEQABackend(MemoryBackend):
                 support_count=int(n.support_count) if getattr(n, "support_count", None) is not None else 1,
                 extent_half=extent_half,
                 is_viewpoint=bool(getattr(n, "is_viewpoint", False)),
+                is_frontier=is_frontier,
                 bounds_3d=bounds_3d,
                 belief_confidence=float(getattr(n, "belief_confidence", 0.5) or 0.5),
                 position_covariance=(

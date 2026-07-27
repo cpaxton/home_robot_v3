@@ -126,6 +126,7 @@ Used by `scripts/run_large_paper_eval.sh` and `scripts/run_sqa3d_sharded_sweep.s
 | `EMET_ROBOSUITE_POST_LOAD_DEBUG` | `robosuite_load_utils` | Post-load velocity / contact diagnostics after `RobosuiteZmqServer` startup. Set `1`/`true`/`yes`/`on`. |
 | `EMET_MUJOCO_CTRL_DEBUG` | `robosuite_server` | Log stationary `ctrl` apply cycles (first N steps, then periodic). Set `1`/`true`/`yes`/`on`. |
 | `EMET_MUJOCO_CTRL_DEBUG_VERBOSE` | `robosuite_server` | Full per-actuator `ctrl` lines (use with `EMET_MUJOCO_CTRL_DEBUG=1`). |
+| `EMET_SIM_FALL_TILT_DEG` | `fall_detection` | Max base tilt from upright (degrees) before a red **SIM ROBOT FALLEN OVER** error. Default `55`. |
 | `EMET_ROBOSUITE_AUTOPLACE` | `scene_base_spawn` | Planar base autoplace on Robocasa / default-table merges (default `1`). `0`/`false`/`no`/`off` disables. |
 | `MUJOCO_GL` | MuJoCo rendering | e.g. `egl` for headless GPU cameras on Linux. RobosuiteZmqServer sets this automatically unless `--use-glx`. |
 | `EMET_MARS_ONBOARD_DA3` | Innate Mars bridge | Set to `1` on the Jetson when `emet mars start --onboard-da3` runs DA3 stereo onboard (see [innate_mars_hardware.md](robots/innate_mars_hardware.md)). |
@@ -165,6 +166,7 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_AGENT_CAMERA_DEBUG` | Agent tools | `1` — head-camera frame stats. CLI: `--debug-camera`. |
 | `EMET_BASE_ROTATE_ONLY` | ZMQ client + agent tools + Dynamem executor | `1` — **yaw-only / in-place scan** (no XY drive). Blocks `explore` / `move_forward` / `find` / absolute nav; keeps `rotate_base`, `scan_environment`, `describe_scene`. Use when Mars is plugged in / tethered. |
 | `EMET_AGENT_MOTION_STATUS` | Controllers | `1`/`0` — fine-grained terminal progress for head sweeps / rotate-in-place / explore steps (default **on**). Discord still only gets coarse milestones (`*Look around: sweeping head*`, mid/end scan). |
+| `EMET_CONFIRM_NAV` | Agent / DynamemController | `1` — before executing a motion plan, show the path on the 2D map (Rerun `world/nav/plan_map` + Discord PNG) and wait for **y/n** (terminal or Discord). Same as `emet run agent --confirm-nav`. Recommended on the real robot. Scripted `-c` runs auto-accept. |
 
 See [AGENT_RUN.md](AGENT_RUN.md).
 

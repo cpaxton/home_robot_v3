@@ -231,11 +231,13 @@ def _print_dynagraph_rerun_help(
     help="Save graph memory to this directory when the session ends (empty line to quit)",
 )
 @click.option(
-    "--export-voxel-pickle",
-    is_flag=True,
+    "--export-voxel-pickle/--no-export-voxel-pickle",
+    default=True,
+    show_default=True,
     help=(
-        "With --export/--dump-memory: also write voxel_map.pkl (full DynaMem voxel state) so a "
-        "later run can resume the map with --input-path (lifelong checkpoints). Large on disk."
+        "With --export/--dump-memory: write voxel_map.pkl (full DynaMem voxel state) so a "
+        "later run can resume the map with --input-path (lifelong checkpoints). On by default; "
+        "use --no-export-voxel-pickle to skip if disk size is a concern (~tens of MB per scan)."
     ),
 )
 @click.option(
@@ -424,7 +426,7 @@ def main(
     input_path: str | None = None,
     export_dir: str | None = None,
     dump_memory: str | None = None,
-    export_voxel_pickle: bool = False,
+    export_voxel_pickle: bool = True,
     cpu_only: bool = False,
     perfect_depth: bool = False,
     no_sensor_perception: bool = False,

@@ -5,6 +5,7 @@ Strike through or move to a PR when done.
 
 ## Embodied agent / Herman
 
+- [ ] **One open-vocab scene graph (not two builders)**: CHAT currently has **GraphEQAMemory** (instance/sensor → `graph.json`, what `describe_scene` / lifelong load use) *and* a separate **OpenVocabSceneGraph** / `SceneGraphProcessor` (SAM3/OWL → `list_scene_relations` / `open_vocab_scene_graph/`). Lifelong now saves/loads both and tools fall back, but it is strange — the product intent is a single open-vocab scene graph that maps, answers, and relates. Consolidate so Discord “what objects / relations” and memory QA share one graph (or make OV the primary and retire the duplicate path).
 - [ ] **Arm IK “closer look”**: point the wrist / EE camera at a named object (or image region), then capture.
   - Stub tool today: `aim_arm_at` in chat pack (returns not-implemented + suggests `describe_scene`).
   - Needs: Mars/Stretch IK + wrist frame + safety (collision, joint limits); then `take_ee_picture` only *after* aim.
@@ -18,6 +19,7 @@ Strike through or move to a PR when done.
 
 - [x] Map-clip `move_forward` (including 0.1 m); refuse when map empty/blank.
 - [x] Empty cloud guard in `list_objects_in_an_image` (navigate crash).
+- [x] Clearance-aware A* + abort on waypoint timeout (prefer open space; do not raise `dilate_obstacle_size` as the primary fix).
 
 ## Docs / ops
 

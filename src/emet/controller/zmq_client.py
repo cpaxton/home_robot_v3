@@ -1571,8 +1571,13 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         *,
         world_frame: bool | None = None,
         **kwargs: Any,
-    ):
-        """Execute a multi-step trajectory; this is always blocking since it waits to reach each one in turn."""
+    ) -> bool:
+        """Execute a multi-step trajectory; this is always blocking since it waits to reach each one in turn.
+
+        Returns:
+            True if every waypoint was reached (or the final blocking move finished).
+            False if an intermediate ``wait_for_waypoint`` timed out — remaining waypoints are skipped.
+        """
 
         if isinstance(trajectory, PlanResult):
             trajectory = [pt.state for pt in trajectory.trajectory]
@@ -1603,7 +1608,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 world_frame=world_frame,
             )
             if not last_waypoint:
-                self.wait_for_waypoint(
+                ok = self.wait_for_waypoint(
                     pt,
                     pos_err_threshold=pos_err_threshold,
                     rot_err_threshold=rot_err_threshold,
@@ -1612,6 +1617,14 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                     timeout=per_waypoint_timeout,
                     world_frame=bool(world_frame) and not relative,
                 )
+                if not ok:
+                    logger.warning(
+                        "execute_trajectory: aborting remaining waypoints after timeout at index %d/%d",
+                        i,
+                        len(trajectory) - 1,
+                    )
+                    return False
+        return True
 
     def wait_for_waypoint(
         self,

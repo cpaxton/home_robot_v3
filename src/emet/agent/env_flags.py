@@ -34,6 +34,16 @@ def env_agent_camera_debug() -> bool:
     return v in _TRUE
 
 
+def env_confirm_nav() -> bool:
+    """Require y/n (terminal or Discord) before executing motion plans.
+
+    Set ``EMET_CONFIRM_NAV=1`` (or use ``emet run agent --confirm-nav``). Recommended on
+    the real robot so operators can reject wall-hugging A* paths.
+    """
+    v = os.environ.get("EMET_CONFIRM_NAV", "").strip().lower()
+    return v in _TRUE
+
+
 def env_agent_motion_status() -> bool:
     """Fine-grained motion progress on the terminal (head sweep / rotate steps).
 

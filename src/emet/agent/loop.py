@@ -476,6 +476,7 @@ def run_agent_with_robot(
     llm: str = DEFAULT_AGENT_LLM,
     server_ip: str = "127.0.0.1",
     skip_confirmations: bool = True,
+    confirm_nav: bool | None = None,
     explore_iter: int = 3,
     debug_llm: bool = False,
     tool_debug: bool = False,
@@ -533,6 +534,13 @@ def run_agent_with_robot(
     if embodied_overlay is None:
         embodied_overlay = load_embodied_agent_overlay(agent_config)
     defer_eqa_vllm = bool(eqa and use_llm and share_memory_vllm)
+    refine_start = bool(kwargs.pop("refine_start", False))
+    from emet.agent.env_flags import env_confirm_nav
+
+    if confirm_nav is None:
+        confirm_nav = env_confirm_nav()
+    else:
+        confirm_nav = bool(confirm_nav)
     _exec_kwargs = {k: v for k, v in kwargs.items() if k != "defer_eqa_vllm"}
     if allow_missing_depth is None:
         depth_mode = str(parameters.get("depth_source", "sensor")).lower()
@@ -597,6 +605,19 @@ def run_agent_with_robot(
     )
     print_vram_snapshot("after_dyn_av_executor_init_siglip_detector_voxel")
 
+    # Motion-plan confirm gate (real-robot safety). Scripted ``commands`` auto-accept.
+    executor.agent.confirm_navigation = bool(confirm_nav)
+    executor.agent._nav_confirm_auto_yes = bool(commands)
+    if confirm_nav:
+        mode = "auto-yes (scripted -c)" if commands else "y/n terminal" + ("+Discord" if discord else "")
+        print(
+            colored(
+                f"Nav confirm ON ({mode}): plans show on the 2D map; reply y/n before the base moves.",
+                "yellow",
+            ),
+            flush=True,
+        )
+
     if eqa:
         print(
             colored(
@@ -613,17 +634,60 @@ def run_agent_with_robot(
     print(colored(f"Agent memory backend: {mb}", "cyan"), flush=True)
 
     if input_path:
-        _gm_load = getattr(executor.agent, "graph_memory", None)
-        if _gm_load is not None and mb in ("dynagraph", "graph_eqa"):
-            load_backend = get_memory_backend(
-                "graph_eqa",
-                graph_memory=_gm_load,
-                voxel_map=executor.agent.get_voxel_map(),
+        from emet.memory.lifelong import load_lifelong_checkpoint
+
+        print(
+            colored(f"Lifelong: starting checkpoint load from {input_path}", "cyan"),
+            flush=True,
+        )
+        # Optional short live frame before load so --refine-start can fudge imperfect spawn.
+        # Dynamem/Dynagraph update() is a single get_observation (no head sweep).
+        if refine_start and hasattr(executor.agent, "update"):
+            print(
+                colored(
+                    "Lifelong: capturing one live frame for --refine-start (no head sweep)…",
+                    "cyan",
+                ),
+                flush=True,
             )
-        else:
-            load_backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
-        load_backend.load(input_path)
+            try:
+                executor.agent.update()
+                print(colored("Lifelong: live frame captured.", "cyan"), flush=True)
+            except Exception as exc:
+                print(colored(f"lifelong: pre-load scan skipped ({exc})", "yellow"), flush=True)
+        print(colored("Lifelong: reading graph / voxel_map.pkl (may take a few seconds)…", "cyan"), flush=True)
+        load_info = load_lifelong_checkpoint(
+            executor.agent,
+            input_path,
+            refine_start=refine_start,
+        )
         executor._last_memory_save_path = input_path
+        refine = load_info.get("refine")
+        refine_msg = ""
+        if refine is not None:
+            if refine.accepted:
+                refine_msg = f"; refined xy={refine.translation_xy_m:.3f}m yaw={np.degrees(refine.yaw_rad):.1f}°"
+            else:
+                refine_msg = f"; refine skipped/rejected ({refine.reason})"
+        print(
+            colored(
+                f"Lifelong checkpoint loaded: graph={load_info.get('graph_loaded')} "
+                f"nodes={load_info.get('graph_nodes')} "
+                f"voxel_pkl={load_info.get('voxel_pickle_loaded')} "
+                f"open_vocab={load_info.get('open_vocab_loaded')} "
+                f"final_step={load_info.get('final_step')} "
+                f"voxel_pts={load_info.get('voxel_points')} "
+                f"semantic_pts={load_info.get('semantic_points')} "
+                f"rerun={load_info.get('rerun_refreshed')}{refine_msg}",
+                "green",
+            ),
+            flush=True,
+        )
+        _gm_loaded = getattr(executor.agent, "graph_memory", None)
+        if _gm_loaded is not None:
+            from emet.memory.graph_eqa.graph_stats import format_graph_size_report
+
+            print(colored(format_graph_size_report(_gm_loaded), "cyan"), flush=True)
 
     _gm = getattr(executor.agent, "graph_memory", None)
     _graph_backend = None
@@ -687,6 +751,7 @@ def run_agent_with_robot(
         context["discord_bot"] = discord_bot
         executor.discord_bot = discord_bot
         executor.agent.discord_bot = discord_bot
+        executor.agent._nav_confirm_input_queue = unified_input_queue
         bot_thread = threading.Thread(target=discord_bot.run, daemon=True)
         bot_thread.start()
         print(colored("Discord bot started (DISCORD_TOKEN). Messages will be handled.", "green"))

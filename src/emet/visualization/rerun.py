@@ -91,6 +91,47 @@ def spatial3d_view_robot(name: str = "3D View", **kwargs) -> rrb.Spatial3DView:
 #   world/ee               Transform3D (end-effector pose)
 #   world/xyz              Arrows3D (axes, static)
 #   world/map_box          Boxes3D (static)
+#   world/nav/plan         LineStrips3D (current A* / motion plan polyline)
+#   world/nav/plan_full    LineStrips3D (full A* before 8-wp exec chunk)
+#   world/nav/waypoints    Points3D (plan waypoints)
+#   world/nav/arrows       Arrows3D (segment directions)
+#   world/nav/summary      TextDocument (localize source + plan stats)
+#   world/direction        Arrows3D (legacy alias; prefer world/nav/*)
+
+
+def finite_nav_waypoints(
+    traj: list | np.ndarray | None,
+    *,
+    z: float = 0.12,
+) -> np.ndarray:
+    """Return ``(N, 3)`` finite plan waypoints; skip NaN finish markers used by DynaMem."""
+    if traj is None:
+        return np.zeros((0, 3), dtype=np.float64)
+    rows: list[list[float]] = []
+    for raw in traj:
+        arr = np.asarray(raw, dtype=np.float64).reshape(-1)
+        if arr.size < 2:
+            continue
+        if not np.isfinite(arr[0]) or not np.isfinite(arr[1]):
+            continue
+        zz = float(z)
+        if arr.size >= 3 and np.isfinite(arr[2]) and abs(float(arr[2])) > 1e-6:
+            # Keep object-look markers above the floor; planar xyt stays at z.
+            if abs(float(arr[2])) > 0.5:
+                zz = float(arr[2])
+        rows.append([float(arr[0]), float(arr[1]), zz])
+    if not rows:
+        return np.zeros((0, 3), dtype=np.float64)
+    return np.asarray(rows, dtype=np.float64)
+
+
+def nav_path_length_xy(pts: np.ndarray) -> float:
+    """Planar path length (meters) along ``(N, >=2)`` waypoints."""
+    arr = np.asarray(pts, dtype=np.float64)
+    if arr.ndim != 2 or arr.shape[0] < 2 or arr.shape[1] < 2:
+        return 0.0
+    deltas = np.diff(arr[:, :2], axis=0)
+    return float(np.linalg.norm(deltas, axis=1).sum())
 
 
 def decompose_homogeneous_matrix(homogeneous_matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -1242,12 +1283,15 @@ class RerunVisualizer:
             ),
         )
 
-    def log_dynagraph_state(self, graph_memory: Any, *, ground_truth_mode: bool = False) -> None:
-        """Log ``GraphEQAMemory`` nodes, observation images, and tree summary under ``world/dynagraph/``."""
+    def log_dynagraph_state(self, graph_memory: Any, *, ground_truth_mode: bool = False, force: bool = False) -> None:
+        """Log ``GraphEQAMemory`` nodes, observation images, and tree summary under ``world/dynagraph/``.
+
+        ``force=True`` bypasses ``dynagraph_stride`` (lifelong checkpoint resume).
+        """
         _ = ground_truth_mode
         if getattr(self, "_memory_view", False):
             return
-        if not self._stride_tick("_dynagraph_tick", self._dynagraph_stride):
+        if not force and not self._stride_tick("_dynagraph_tick", self._dynagraph_stride):
             return
         rr.set_time_seconds("realtime", time.time())
         # Dynagraph is the object source of truth; hide instance/scene-graph box layers in the main 3D view.
@@ -2031,14 +2075,18 @@ class RerunVisualizer:
         obstacle_radius=0.05,
         world_radius=0.03,
         robot_base_xy: np.ndarray | tuple[float, float] | None = None,
+        *,
+        force: bool = False,
     ):
         """Log voxel map and send it to Rerun visualizer.
 
         Builds a minimal MemoryState from space and calls log_memory_state.
         Also logs a top-down RGB to ``world/map_snapshot/topdown`` (same path as
         ``send_map_snapshot``) so the blueprint ``map_topdown`` view stays live.
+
+        ``force=True`` bypasses ``voxel_map_stride`` (used after lifelong checkpoint load).
         """
-        if not self._stride_tick("_voxel_map_tick", self._voxel_map_stride):
+        if not force and not self._stride_tick("_voxel_map_tick", self._voxel_map_stride):
             return
         rr.set_time_seconds("realtime", time.time())
         self.log_topdown_map_snapshot(space.voxel_map, robot_base_xy)
@@ -2357,6 +2405,188 @@ class RerunVisualizer:
         # rr.set_time_seconds("realtime", ts + timeout)
         # log_to_rerun("world/xyt_goal", rr.Clear(recursive=True))
         # rr.set_time_seconds("realtime", ts)
+
+    def clear_nav_plan(self) -> None:
+        """Clear motion-plan overlays under ``world/nav`` and legacy ``world/direction``."""
+        self.clear_identity("world/nav")
+        self.clear_identity("world/direction")
+        self.clear_identity("world/robot_start_pose")
+        self.clear_identity("world/xyt_goal")
+        self.clear_identity("world/object")
+        self.clear_identity("world/target_pose")
+
+    def log_nav_plan(
+        self,
+        traj: list | np.ndarray | None,
+        *,
+        full_traj: list | np.ndarray | None = None,
+        start_xyt: list | np.ndarray | None = None,
+        goal_xyt: list | np.ndarray | None = None,
+        object_xyz: list | np.ndarray | None = None,
+        mode: str = "navigation",
+        localize_source: str = "",
+        query: str = "",
+        n_planned: int | None = None,
+        chunked: bool = False,
+        z: float = 0.12,
+    ) -> dict[str, Any]:
+        """Log the current motion plan in the world frame for Rerun + return summary stats.
+
+        Draws a floor-level polyline (``world/nav/plan``), waypoint dots, segment arrows,
+        and a short markdown summary. Skips NaN finish-marker rows used by DynaMem.
+        When ``full_traj`` is set (full A* before the 8-waypoint exec chunk), also logs
+        ``world/nav/plan_full`` in a dimmer color so long plans are visible.
+        """
+        if not self._memory_view:
+            rr.set_time_seconds("realtime", time.time())
+
+        pts = finite_nav_waypoints(traj, z=z)
+        full_pts = finite_nav_waypoints(full_traj, z=z + 0.02) if full_traj is not None else None
+        path_m = float(nav_path_length_xy(pts)) if pts.shape[0] >= 2 else 0.0
+        full_path_m = float(nav_path_length_xy(full_pts)) if full_pts is not None and full_pts.shape[0] >= 2 else path_m
+        n_wps = int(pts.shape[0])
+        planned = (
+            int(n_planned) if n_planned is not None else (int(full_pts.shape[0]) if full_pts is not None else n_wps)
+        )
+        summary = {
+            "n_waypoints": n_wps,
+            "n_planned": planned,
+            "path_m": path_m,
+            "full_path_m": full_path_m,
+            "chunked": bool(chunked),
+            "mode": mode,
+            "localize_source": localize_source or "",
+            "query": query or "",
+        }
+
+        if full_pts is not None and full_pts.shape[0] >= 2 and (full_pts.shape[0] > n_wps or chunked):
+            log_to_rerun(
+                "world/nav/plan_full",
+                rr.LineStrips3D(
+                    strips=[full_pts],
+                    colors=[[80, 120, 200, 180]],
+                    radii=0.025,
+                ),
+            )
+        else:
+            self.clear_identity("world/nav/plan_full")
+
+        if n_wps >= 2:
+            log_to_rerun(
+                "world/nav/plan",
+                rr.LineStrips3D(
+                    strips=[pts],
+                    colors=[[40, 220, 120, 255]],
+                    radii=0.04,
+                ),
+            )
+            origins = pts[:-1]
+            vectors = pts[1:] - pts[:-1]
+            log_to_rerun(
+                "world/nav/arrows",
+                rr.Arrows3D(
+                    origins=origins,
+                    vectors=vectors,
+                    colors=[[40, 220, 120, 220]],
+                    radii=0.03,
+                ),
+            )
+            # Legacy path used by older blueprints / scripts.
+            log_to_rerun(
+                "world/direction",
+                rr.Arrows3D(
+                    origins=origins,
+                    vectors=vectors,
+                    colors=[[0, 255, 0, 200]],
+                    radii=0.05,
+                ),
+            )
+        else:
+            self.clear_identity("world/nav/plan")
+            self.clear_identity("world/nav/arrows")
+            self.clear_identity("world/direction")
+
+        if n_wps >= 1:
+            log_to_rerun(
+                "world/nav/waypoints",
+                rr.Points3D(
+                    pts,
+                    colors=[[255, 200, 40, 255]],
+                    radii=0.06,
+                    labels=[f"wp{i}" for i in range(n_wps)],
+                ),
+            )
+        else:
+            self.clear_identity("world/nav/waypoints")
+
+        if start_xyt is not None:
+            s = np.asarray(start_xyt, dtype=np.float64).reshape(-1)
+            if s.size >= 2 and np.isfinite(s[:2]).all():
+                log_to_rerun(
+                    "world/robot_start_pose",
+                    rr.Points3D(
+                        [[float(s[0]), float(s[1]), float(z)]],
+                        colors=[[40, 80, 255, 255]],
+                        radii=0.1,
+                        labels=["start"],
+                    ),
+                )
+
+        if goal_xyt is not None:
+            g = np.asarray(goal_xyt, dtype=np.float64).reshape(-1)
+            if g.size >= 2 and np.isfinite(g[:2]).all():
+                yaw = float(g[2]) if g.size >= 3 and np.isfinite(g[2]) else 0.0
+                self.update_nav_goal(np.array([float(g[0]), float(g[1]), yaw], dtype=np.float64))
+
+        if object_xyz is not None:
+            o = np.asarray(object_xyz, dtype=np.float64).reshape(-1)
+            if o.size >= 2 and np.isfinite(o[:2]).all():
+                oz = float(o[2]) if o.size >= 3 and np.isfinite(o[2]) and abs(float(o[2])) > 1e-9 else 1.5
+                log_to_rerun(
+                    "world/object",
+                    rr.Points3D(
+                        [[float(o[0]), float(o[1]), oz]],
+                        colors=[[255, 40, 40, 255]],
+                        radii=0.12,
+                        labels=["target"],
+                    ),
+                )
+
+        chunk_note = (
+            f"executing first {n_wps} of {planned} waypoints (chunked)"
+            if chunked and planned > n_wps
+            else ("final approach" if not chunked else f"{n_wps} waypoints")
+        )
+        lines = [
+            "## Motion plan",
+            f"- **mode**: `{mode}`",
+            f"- **localize**: `{localize_source or 'n/a'}`",
+        ]
+        if query:
+            lines.append(f"- **query**: `{query}`")
+        lines.extend(
+            [
+                f"- **waypoints**: {n_wps}" + (f" / {planned} planned" if planned != n_wps else ""),
+                f"- **exec path**: {path_m:.2f} m",
+                f"- **full path**: {full_path_m:.2f} m",
+                f"- **chunk**: {chunk_note}",
+            ]
+        )
+        if n_wps >= 1:
+            lines.append(
+                f"- **first→last xy**: ({pts[0, 0]:.2f}, {pts[0, 1]:.2f}) → ({pts[-1, 0]:.2f}, {pts[-1, 1]:.2f})"
+            )
+        log_to_rerun(
+            "world/nav/summary",
+            rr.TextDocument("\n".join(lines), media_type=rr.MediaType.MARKDOWN),
+        )
+        summary["announce"] = (
+            f"Navigating via {localize_source or mode}: {n_wps}"
+            + (f"/{planned}" if planned != n_wps else "")
+            + f" wps · {full_path_m:.1f}m"
+            + (" (chunk)" if chunked and planned > n_wps else "")
+        )
+        return summary
 
     def step(self, obs, servo, *, mapping_depth: np.ndarray | None = None):
         """Log streaming robot/sensor data.

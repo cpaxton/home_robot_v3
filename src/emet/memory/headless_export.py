@@ -177,6 +177,18 @@ def export_graph_eqa_dir(
     report_path = out / SCENE_GRAPH_REPORT_TXT
     report_path.write_text(text, encoding="utf-8")
 
+    # Lifelong / Discord tools also use the open-vocab SG; persist it beside GraphEQA.
+    try:
+        from emet.memory.lifelong import save_open_vocab_scene_graph_sidecar
+
+        sg = None
+        if voxel_map is not None and hasattr(voxel_map, "get_scene_graph"):
+            sg = voxel_map.get_scene_graph()
+        if sg is not None:
+            save_open_vocab_scene_graph_sidecar(sg, out)
+    except Exception:
+        pass
+
     if sim_object_placements:
         from emet.memory.graph_eqa.sim_ground_truth_graph import placements_to_json_dict
 

@@ -33,6 +33,7 @@ except ImportError:
 import emet.simulation.stretch_mujoco.config as config
 import emet.simulation.stretch_mujoco.utils as utils
 from emet.robots import get_robot_spec
+from emet.simulation.fall_detection import FallOverMonitor
 from emet.simulation.molmospaces_mobile_autoplace import (
     apply_molmospaces_freejoint_base_autoplace,
     apply_robocasa_freejoint_base_autoplace,
@@ -336,6 +337,7 @@ class MujocoServer:
         self.base_controller = BaseController(self)
 
         self.physics_fps_counter = FpsCounter()
+        self._fall_monitor = FallOverMonitor(base_body_name="base_link")
 
         self.sensor_manager = MujocoServerSensorManagerThreaded(
             sensor_hz=15,
@@ -523,6 +525,9 @@ class MujocoServer:
         self.physics_fps_counter.tick(sim_time=data.time)
         self.pull_status()
         self.push_command(self.data_proxies.get_command())
+        monitor = getattr(self, "_fall_monitor", None)
+        if monitor is not None:
+            monitor.maybe_report(model, data)
 
     def pull_status(self):
         """

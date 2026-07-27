@@ -353,6 +353,8 @@ def build_dynagraph_subprocess_cmd(
     ]
     if export_voxel_pickle:
         cmd.append("--export-voxel-pickle")
+    else:
+        cmd.append("--no-export-voxel-pickle")
     if not skip_eqa and questions_yaml is not None and question_env is not None:
         cmd.extend(
             [

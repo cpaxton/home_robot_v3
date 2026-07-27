@@ -8,6 +8,7 @@ Related user docs: [simulation.md](simulation.md), [molmospaces.md](molmospaces.
 
 | Module | Purpose |
 |--------|---------|
+| [`fall_detection`](../src/emet/simulation/fall_detection.py) | Detect tipped/fallen base from MuJoCo `xmat` (body +Z · world +Z); red error in Stretch + Robosuite ZMQ servers. |
 | [`mujoco_stationary_control`](../src/emet/simulation/mujoco_stationary_control.py) | Build full-length stationary `ctrl` from joint transmissions + spec hold buffer (used by Stretch and registry robots). |
 | [`robosuite_stationary_control`](../src/emet/simulation/robosuite_stationary_control.py) | Re-export shim → use `mujoco_stationary_control`. |
 | [`robosuite_load_utils`](../src/emet/simulation/robosuite_load_utils.py) | Post-load helpers for `RobosuiteZmqServer`: home keyframe, free-joint addrs, diagnostics. |
