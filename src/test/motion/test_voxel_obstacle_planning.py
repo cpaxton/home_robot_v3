@@ -214,7 +214,49 @@ def test_multi_goal_classifies_all_in_one_search():
     assert choose_first_reachable(scores) == 1
 
 
-@pytest.mark.sim
+def test_astar_plan_goals_kwarg_sets_goal_index():
+    """Live Dynamem path: AStar.plan(..., goals=) rejects sealed decoy, exposes goal_index."""
+    from emet.motion.algo.a_star import AStar
+
+    class _Space:
+        def __init__(self, fake: FakeSparseVoxelMap):
+            self.voxel_map = fake
+            self._fake = fake
+
+        def to_pt(self, xy):
+            xy = np.asarray(xy, dtype=np.float64).reshape(-1)
+            go = self._fake.grid.grid_origin[:2].cpu().numpy()
+            res = float(self._fake.resolution)
+            return world_xy_to_grid(
+                float(xy[0]), float(xy[1]), grid_origin=go, resolution=res, convention="grid_params"
+            )
+
+        def to_xy(self, pt):
+            return np.asarray(
+                self._fake.grid.grid_coords_to_xy(torch.tensor([float(pt[0]), float(pt[1])])),
+                dtype=np.float64,
+            ).reshape(2)
+
+        def is_valid(self, *_a, **_k):
+            return True
+
+    fake = _sealed_wall_map(size=60, res=0.1)
+    space = _Space(fake)
+    planner = AStar(space, min_clearance_m=0.0, clearance_cost_weight=0.0, grid_resolution_m=0.1)
+    start = np.asarray(fake.grid.grid_coords_to_xy(torch.tensor([15.0, 30.0])), dtype=np.float64).reshape(2)
+    decoy = np.asarray(fake.grid.grid_coords_to_xy(torch.tensor([45.0, 30.0])), dtype=np.float64).reshape(2)
+    good = np.asarray(fake.grid.grid_coords_to_xy(torch.tensor([12.0, 40.0])), dtype=np.float64).reshape(2)
+    start3 = np.array([start[0], start[1], 0.0])
+    decoy3 = np.array([decoy[0], decoy[1], 0.0])
+    good3 = np.array([good[0], good[1], 1.0])
+    res = planner.plan(start3, decoy3, goals=[decoy3, good3], verbose=False)
+    assert res.success, res.reason
+    assert res.goal_index == 1
+    end = np.asarray(res.trajectory[-1].state, dtype=np.float64).reshape(-1)
+    assert abs(float(end[0]) - float(good[0])) < 0.2
+    assert abs(float(end[1]) - float(good[1])) < 0.2
+
+
 def test_arm_rrt_avoids_voxel_wall_linear_collides():
     """Joint-space RRT-Connect with VoxelMapArmCollisionChecker: linear hits wall, RRT does not."""
     import mujoco

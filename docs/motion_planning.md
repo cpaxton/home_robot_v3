@@ -181,11 +181,14 @@ Expect `chosen_grasp` on a `reachable=True` candidate (not decoy index 0), `exec
 
 Base multi-goal planning: one shared A*/Dijkstra on the navigable grid toward a set of XY goals; nearest reachable wins (sealed / unreachable goals are ignored). Prefer this over K independent RRT ranks.
 
+**Live Dynamem explore** (`mode=exploration`): collects top-K frontier XYs via [`collect_explore_frontier_candidates`](../src/emet/motion/frontier_goals.py) (graph frontiers + voxel heuristics), maps each with `sample_navigation`, then calls `AStar.plan(start, goals=[...])`. Object-localize / navigation mode stays single-goal. Habitat navmesh explore is unchanged (helper returns `[]` for Habitat clients).
+
 ```bash
 uv run emet test src/test/motion/test_voxel_obstacle_planning.py::test_multi_frontier_goals_pick_reachable_reject_sealed -q
+uv run emet test src/test/motion/test_frontier_goals.py src/test/motion/test_voxel_obstacle_planning.py::test_astar_plan_goals_kwarg_sets_goal_index --no-sim -q
 ```
 
-API: [`plan_xy_multi_goal`](../src/emet/motion/base_goal_rank.py) / `AStar.plan(..., goals=[...])`.
+API: [`plan_xy_multi_goal`](../src/emet/motion/base_goal_rank.py) / `AStar.plan(..., goals=[...])` (sets `PlanResult.goal_index`).
 
 Figures: `topdown`, `ee_path_xz`, `joint_traj`, `plan_tree` (matplotlib / Agg). Optional live debug overlays live under `world/manip/…` in Rerun when a visualizer is attached; **figures are the paper path**.
 

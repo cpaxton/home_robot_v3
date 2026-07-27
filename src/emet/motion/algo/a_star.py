@@ -503,6 +503,7 @@ class AStar(Planner):
         """
         self.reset()
         chosen_goal = goal
+        chosen_index: int | None = None
         if goals is not None:
             goal_list = list(goals)
             if not goal_list:
@@ -513,7 +514,8 @@ class AStar(Planner):
                 if verbose:
                     print("A* multi-goal fails, check obstacle map")
                 return PlanResult(False, reason="A* multi-goal fails, check obstacle map")
-            chosen_goal = goal_list[gi]
+            chosen_index = int(gi)
+            chosen_goal = goal_list[chosen_index]
         else:
             waypoints = self.run_astar(start[:2], goal[:2])
 
@@ -544,4 +546,4 @@ class AStar(Planner):
         # Save the nodes for this planner
         self.nodes = trajectory
 
-        return PlanResult(True, trajectory=trajectory)
+        return PlanResult(True, trajectory=trajectory, goal_index=chosen_index)
