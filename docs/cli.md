@@ -740,6 +740,8 @@ Dogfood entrypoints for classic vs agentic-verify Dynagraph. Prefer these over h
 | `emet hmeqa summarize [OUT]` | `scripts/summarize_hmeqa_agentic_h2h.py` |
 | `emet hmeqa significance [OUT] [--from-summary …] [--json …]` | Paired McNemar / Wilcoxon / bootstrap on classic vs agentic |
 | `emet hmeqa failures [OUT] [--from-summary …] [--json …]` | Offline classic_only / context-gap attribution (+ traces) |
+| `emet hmeqa inspect [OUT] --qid N [--open rgb\|frames\|images\|frontier\|maps\|video]` | Episode score + assess/explore + copy-paste `feh`/`mpv` paths |
+| `emet hmeqa inspect [OUT] --misses` | List incorrect scored episodes |
 | `emet hmeqa ladder RUN_DIR… [-o …] [--require-balanced32-gate]` | Probe/holdout ladder metrics + optional balanced-32 gate |
 
 `OUT/DONE` is written only when every arm×id unit has a non-empty scored jsonl. Partial batches (skipped native crashes, etc.) exit nonzero, mark the job `failed` / `INCOMPLETE`, and leave `STATUS` pointing at resume — not summarize.
@@ -761,6 +763,8 @@ uv run emet hmeqa h2h ~/runs/emet/hmeqa_graph_probe --arms agentic \
 uv run emet hmeqa ladder ~/runs/emet/hmeqa_graph_probe --require-balanced32-gate
 uv run emet hmeqa significance ~/runs/emet/hmeqa_agentic_bal32_...
 uv run emet hmeqa failures ~/runs/emet/hmeqa_agentic_bal32_...
+uv run emet hmeqa inspect ~/runs/emet/hmeqa_holdout8_fix4_... --misses
+uv run emet hmeqa inspect ~/runs/emet/hmeqa_holdout8_fix4_... --qid 105 --open rgb
 uv run emet hmeqa resume --preset paper-router
 uv run emet hmeqa status
 uv run emet status tail

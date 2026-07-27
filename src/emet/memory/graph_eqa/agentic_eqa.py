@@ -70,6 +70,9 @@ ESCAPE_MIN_TRAVEL_M = 3.0
 # Same hyp obs_id navigated this many times without a fresh graph obs → stall / break loop.
 NAV_SAME_OBS_LOOP_LIMIT = 2
 
+# Hyp recall: how many evidence cards to show the router / walk in fallback.
+DEFAULT_HYP_RECALL_K = 6
+
 # Routing turns are text-only JSON; a two-call reply with arguments needs more than 64 tokens.
 ROUTER_MAX_NEW_TOKENS = 128
 
@@ -90,6 +93,17 @@ def env_eqa_agentic_router() -> bool | None:
     if v in _FALSE:
         return False
     return None
+
+
+def env_eqa_hyp_recall_k() -> int:
+    """Top-K evidence cards for agentic hyp recall (default 6)."""
+    raw = os.environ.get("EMET_EQA_HYP_RECALL_K", "").strip()
+    if not raw:
+        return DEFAULT_HYP_RECALL_K
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return DEFAULT_HYP_RECALL_K
 
 
 def env_eqa_collect_trace() -> bool:
@@ -321,19 +335,14 @@ class AgenticEQAExecutor:
         try:
             hypotheses = gm.hypothesize_nav_targets(
                 self.query_text,
-                max_k=3,
+                max_k=env_eqa_hyp_recall_k(),
                 robot_xyt=self._robot_xyt(),
             )
         except TypeError:
-            hypotheses = gm.hypothesize_nav_targets(self.query_text, max_k=3)
-        self._hypotheses = list(hypotheses)
-        self._hyp_i = 0
-        for h in self._hypotheses:
-            self._evidence_policy.register_hypothesis(
-                f"{h.source}:{int(h.obs_id)}",
-                h.phrase,
-                prior_probability=max(0.05, min(0.95, float(h.score))),
+            hypotheses = gm.hypothesize_nav_targets(
+                self.query_text, max_k=env_eqa_hyp_recall_k()
             )
+        self._set_hypotheses(hypotheses)
         out = {
             "ok": True,
             "n_hypotheses": len(self._hypotheses),
@@ -342,15 +351,12 @@ class AgenticEQAExecutor:
                     "phrase": h.phrase,
                     "obs_id": int(h.obs_id),
                     "xyz": [float(x) for x in np.asarray(h.xyz).reshape(-1)[:3]],
-                    "score": float(h.score),
                     "source": h.source,
-                    "answerability_gain": float(getattr(h, "answerability_gain", 0.0)),
-                    "belief_reduction": float(getattr(h, "belief_reduction", 0.0)),
-                    "revisit_change_value": float(
-                        getattr(h, "revisit_change_value", 0.0)
+                    "siglip_sim": (
+                        float(h.siglip_sim)
+                        if getattr(h, "siglip_sim", None) is not None
+                        else None
                     ),
-                    "path_cost": float(getattr(h, "path_cost", 0.0)),
-                    "failure_risk": float(getattr(h, "failure_risk", 0.0)),
                 }
                 for h in self._hypotheses
             ],
@@ -433,6 +439,8 @@ class AgenticEQAExecutor:
             except TypeError:
                 ok = bool(agent.navigate_to_target_pose(frontier_xyz, start))
             self._n_explore += 1
+            if ok:
+                self._retire_visited_frontier(frontier_xyz=frontier_xyz)
         elif hasattr(agent, "run_exploration"):
             ok = bool(agent.run_exploration())
             self._n_explore += 1
@@ -446,6 +454,8 @@ class AgenticEQAExecutor:
                     after = self._robot_xyt()
                     if after is not None:
                         frontier_xyz = np.asarray(after, dtype=float).reshape(-1)[:3]
+            if ok and frontier_xyz is not None:
+                self._retire_visited_frontier(frontier_xyz=frontier_xyz)
         cap = self._tool_capture_and_update()
         look_retry = False
         # After a successful explore nav, a mid-floor / already-mapped goal often yields
@@ -556,6 +566,12 @@ class AgenticEQAExecutor:
         }
         self._attach_gt(row, target)
         self._append_trace(row)
+        # Frontier waypoints are not evidence — retire after a successful visit.
+        if finished and (
+            str(source) == "frontier"
+            or (hasattr(gm, "_obs_is_frontier") and gm._obs_is_frontier(oid))
+        ):
+            self._retire_visited_frontier(frontier_obs_id=oid, frontier_xyz=target)
         cap = self._tool_capture_and_update()
         look_retry = False
         # Parity with explore_frontier: already-mapped pose often yields NO_NEW_OBS;
@@ -792,25 +808,59 @@ class AgenticEQAExecutor:
         return {"ok": True, "obs_id": fresh}
 
     def _refresh_hypotheses_from_graph(self) -> None:
-        """Re-score nav hypotheses after voxel/graph grew — no VLM extract."""
+        """Re-retrieve nav evidence cards after voxel/graph grew — no VLM extract."""
         gm = self.graph_memory
         if gm is None or not hasattr(gm, "hypothesize_nav_targets"):
             return
         try:
             hypotheses = gm.hypothesize_nav_targets(
                 self.query_text,
-                max_k=3,
+                max_k=env_eqa_hyp_recall_k(),
                 robot_xyt=self._robot_xyt(),
             )
         except TypeError:
-            hypotheses = gm.hypothesize_nav_targets(self.query_text, max_k=3)
-        self._hypotheses = list(hypotheses)
+            hypotheses = gm.hypothesize_nav_targets(
+                self.query_text, max_k=env_eqa_hyp_recall_k()
+            )
+        self._set_hypotheses(hypotheses)
+
+    def _set_hypotheses(self, hypotheses: list[NavHypothesis]) -> None:
+        """Install recalled hyps: drop visited frontiers; prefer untried in order."""
+        filtered: list[NavHypothesis] = []
+        for h in hypotheses:
+            oid = int(h.obs_id)
+            if str(h.source) == "frontier" and (
+                int(self._nav_to_obs_counts.get(oid, 0)) >= 1
+                or self._hypothesis_nav_blocked(oid)
+            ):
+                continue
+            filtered.append(h)
+        # Anti-echo: untried / low visits first, then tried graph/siglip for context.
+        untried: list[NavHypothesis] = []
+        tried: list[NavHypothesis] = []
+        for h in filtered:
+            oid = int(h.obs_id)
+            if self._hypothesis_nav_blocked(oid) or int(
+                self._nav_to_obs_counts.get(oid, 0)
+            ) >= 1:
+                if str(h.source) != "frontier":
+                    tried.append(h)
+            else:
+                untried.append(h)
+        packed = untried + tried
+        self._hypotheses = packed
         self._hyp_i = 0
+        _SOURCE_PRIOR = {
+            "graph": 0.55,
+            "confirmed": 0.5,
+            "siglip": 0.4,
+            "frontier": 0.2,
+        }
         for h in self._hypotheses:
             self._evidence_policy.register_hypothesis(
                 f"{h.source}:{int(h.obs_id)}",
                 h.phrase,
-                prior_probability=max(0.05, min(0.95, float(h.score))),
+                prior_probability=_SOURCE_PRIOR.get(str(h.source), 0.3),
             )
 
     def _latest_obs_id(self) -> int | None:
@@ -855,6 +905,55 @@ class AgenticEQAExecutor:
             if not self._obs_already_verified(int(h.obs_id)):
                 return h
         return None
+
+    def _hypothesis_nav_blocked(self, obs_id: int) -> bool:
+        """True if navigate_to_obs would refuse this id (loop / stall / already verified)."""
+        oid = int(obs_id)
+        if self._obs_already_verified(oid):
+            return True
+        if int(self._nav_to_obs_counts.get(oid, 0)) >= NAV_SAME_OBS_LOOP_LIMIT:
+            return True
+        tried = str(self._tried.get(oid) or "")
+        return tried.startswith("STALLED_NAV_LOOP")
+
+    def _retire_visited_frontier(
+        self,
+        *,
+        frontier_obs_id: int | None = None,
+        frontier_xyz: Any = None,
+    ) -> None:
+        """Visited frontiers are not frontiers — drop them from the graph."""
+        gm = self.graph_memory
+        if gm is None:
+            return
+        if frontier_obs_id is not None and hasattr(gm, "retire_frontier_obs"):
+            try:
+                gm.retire_frontier_obs(int(frontier_obs_id))
+            except Exception as e:
+                _logger.warning(f"retire_frontier_obs({frontier_obs_id}) failed: {e}")
+        if frontier_xyz is not None and hasattr(gm, "retire_frontier_near_xy"):
+            try:
+                gm.retire_frontier_near_xy(frontier_xyz, radius_m=1.25)
+            except Exception as e:
+                _logger.warning(f"retire_frontier_near_xy failed: {e}")
+        # Mirror voxel mask → graph so remaining clusters stay accurate.
+        agent = self.agent
+        vm = getattr(agent, "voxel_map", None)
+        planner = getattr(agent, "planner", None) or getattr(agent, "_planner", None)
+        xyt = self._robot_xyt()
+        if vm is not None and planner is not None and xyt is not None:
+            try:
+                from emet.memory.graph_eqa.dynamem_graph_hooks import sync_graph_frontier_nodes
+
+                sync_graph_frontier_nodes(
+                    graph_memory=gm,
+                    voxel_map=vm,
+                    planner=planner,
+                    base_xyt=xyt,
+                    question=self.query_text,
+                )
+            except Exception as e:
+                _logger.warning(f"sync_graph_frontier_nodes after visit failed: {e}")
 
     def _dense_max_sim_for_rgb(self, phrase: str, rgb: np.ndarray | None) -> float | None:
         """Max patch-token SigLIP cosine for *phrase* vs *rgb* (MaskSigLIP space).

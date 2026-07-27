@@ -118,6 +118,11 @@ Fixes in ``agentic_eqa`` (keep spatial RAG off):
 - Stall path: one forced verify on the current view, mark ``STALLED_NAV_LOOP``,
   block re-nav to that id, surface ``NAV_LOOP`` in router state.
 - Fresh graph obs → cheap hypothesis refresh for the planner.
+- Hypotheses are **recall evidence cards** (obs_id / phrase / source / xyz; optional
+  raw SigLIP sim). Composite nav-utility score is not shown to the router and is
+  not a decision override. Visited frontier nodes are retired from the graph
+  (``retire_frontier_obs`` / sync). ``EMET_EQA_HYP_RECALL_K`` (default 6) caps
+  how many cards are retrieved.
 ## Overnight holdout re-baseline
 
 **Goal reminder:** one ``emet`` agent that does useful work across mobile-manipulation

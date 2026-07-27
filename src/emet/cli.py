@@ -1830,6 +1830,7 @@ def hmeqa_group() -> None:
       emet hmeqa status
       emet hmeqa h2h --out OUT --resume --ids 15,68,105,17
       emet hmeqa overnight
+      emet hmeqa inspect OUT --qid 105 --open rgb
       emet hmeqa significance OUT
       emet hmeqa ladder RUN_DIR --require-balanced32-gate
       emet hmeqa h2h --preset paper-router --ids 15,56,65,68
@@ -1968,6 +1969,78 @@ def hmeqa_failures(
     if json_out is not None:
         argv.extend(["--json", str(json_out)])
     sys.exit(failures_main(argv))
+
+
+@hmeqa_group.command(
+    "inspect",
+    short_help="Episode score + assess/explore + feh/mpv paths (replaces one-off JSON dumps)",
+)
+@click.argument("out_dir", required=False)
+@click.option("--qid", type=int, default=None, help="Question id to inspect.")
+@click.option("--arm", default="agentic", show_default=True, help="classic or agentic.")
+@click.option(
+    "--misses",
+    is_flag=True,
+    help="List incorrect scored episodes (no --qid needed).",
+)
+@click.option(
+    "--open",
+    "open_kind",
+    type=click.Choice(["rgb", "frames", "images", "frontier", "maps", "video"]),
+    default=None,
+    help="Launch feh/mpv on that media set (requires DISPLAY).",
+)
+@click.option("--json", "as_json", is_flag=True, help="Print full JSON payload.")
+def hmeqa_inspect(
+    out_dir: str | None,
+    qid: int | None,
+    arm: str,
+    misses: bool,
+    open_kind: str | None,
+    as_json: bool,
+) -> None:
+    """Summarize one episode (or list misses) and print copy-paste viewer commands.
+
+    \b
+    Examples:
+      emet hmeqa inspect OUT --qid 105
+      emet hmeqa inspect OUT --misses
+      emet hmeqa inspect OUT --qid 105 --open rgb
+    """
+    from emet.eval.harness import resolve_hmeqa_out
+    from emet.eval.hmeqa_inspect import (
+        format_inspect_text,
+        inspect_episode,
+        list_scored_episodes,
+        open_media,
+    )
+
+    out = resolve_hmeqa_out(out_dir)
+    if misses:
+        rows = list_scored_episodes(out, arm=arm)
+        bad = [r for r in rows if not r.get("correct")]
+        if as_json:
+            click.echo(json.dumps({"out_dir": str(out), "misses": bad}, indent=2))
+        else:
+            click.echo(f"OUT={out}  arm={arm}  scored={len(rows)}  misses={len(bad)}")
+            for r in bad:
+                q = (str(r.get("question") or ""))[:90]
+                click.echo(f"  q{r.get('qid')} pred={r.get('predicted')} gold={r.get('gold')}  {q}")
+        if qid is None:
+            return
+    if qid is None:
+        raise click.UsageError("provide --qid N (or --misses alone)")
+    payload = inspect_episode(out, qid, arm=arm)
+    if as_json:
+        click.echo(json.dumps(payload, indent=2, default=str))
+    else:
+        click.echo(format_inspect_text(payload))
+    if open_kind:
+        try:
+            pid = open_media(open_kind, payload.get("media") or {})
+        except (FileNotFoundError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(f"opened {open_kind} (pid={pid})")
 
 
 @hmeqa_group.command(

@@ -868,6 +868,10 @@ def test_T5_state_message_marks_tried_hypotheses():
     msg = build_state_message(ex)
     assert "Question: Where is the mug?" in msg
     assert "obs_id=7" in msg
+    assert "Evidence" in msg
+    assert "#1 best" not in msg
+    assert "highest-score" not in msg
+    assert "score=" not in msg.split("Evidence", 1)[-1]
     assert "tried: verify ABSENT" in msg
 
 
@@ -1734,3 +1738,160 @@ def test_siglip_phrase_prefers_target_over_full_question():
     assert ex._siglip_phrase(q) == "fruit bowl"
     assert ex._siglip_phrase("") == "fruit bowl"
     assert ex._siglip_phrase("fruit bowl") == "fruit bowl"
+
+
+def test_router_prompt_has_no_score_prefer_or_obs7_demo():
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_tools import (
+        build_agentic_eqa_tools,
+        build_graph_eqa_system_prompt,
+        build_state_message,
+    )
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    agent.graph_memory = MagicMock()
+    agent.graph_memory.memory_summary_enabled = False
+    agent.graph_memory._observations = []
+    ex = AgenticEQAExecutor(agent, "Where is the sink?", router=True, collect_trace=True)
+    prompt = build_graph_eqa_system_prompt(build_agentic_eqa_tools(ex))
+    assert 'navigate_to_obs", "arguments": {"obs_id": 7}' not in prompt
+    assert "highest-score" not in prompt
+    assert "obs_id=3" in prompt
+
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="sink",
+            obs_id=3,
+            xyz=np.array([1.0, 0.0, 0.0]),
+            score=300.0,
+            source="graph",
+        ),
+        NavHypothesis(
+            phrase="sink",
+            obs_id=12,
+            xyz=np.array([2.0, 1.0, 0.0]),
+            score=0.0,
+            source="frontier",
+        ),
+    ]
+    msg = build_state_message(ex)
+    assert "Evidence" in msg
+    assert "source=graph" in msg
+    assert "source=frontier" in msg
+    assert "#1 best" not in msg
+    assert "score=" not in msg.split("Evidence", 1)[-1]
+
+
+def test_hyp_recall_diversifies_graph_and_frontier():
+    _require_agentic()
+    from emet.memory.graph_eqa import GraphEQAMemory
+    from emet.memory.graph_eqa.graph_memory import GraphNode
+
+    gm = GraphEQAMemory(
+        defer_llm_clients=True,
+        parameters={"graph_eqa_frontier_nodes": {"enabled": True}},
+    )
+    gm._relevant_objects = ["sink"]
+    gm._relevant_phrases = ["sink"]
+    oid = gm.add_observation(
+        np.zeros((4, 4, 3), dtype=np.uint8), np.array([2.0, 0.0, 0.5]), ["sink"]
+    )
+    # Synthetic frontier node (as sync_frontier_nodes would create).
+    f_obs = gm._next_obs_id
+    gm._next_obs_id += 1
+    gm._nodes.append(
+        GraphNode(
+            node_id=len(gm._nodes) + 1,
+            labels=["frontier"],
+            xyz=np.array([-5.0, 1.0, 0.0]),
+            obs_id=f_obs,
+            is_frontier=True,
+            description="frontier_cluster:test",
+        )
+    )
+    from emet.memory.graph_eqa.graph_memory import GraphObservation
+
+    gm._observations.append(
+        GraphObservation(
+            obs_id=f_obs,
+            rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+            xyz=np.array([-5.0, 1.0, 0.0]),
+            labels=["frontier"],
+            description="unexplored",
+        )
+    )
+    hyps = gm.hypothesize_nav_targets("Where is the sink?", max_k=6)
+    sources = {h.source for h in hyps}
+    assert "graph" in sources
+    assert "frontier" in sources
+    assert any(int(h.obs_id) == int(oid) for h in hyps)
+
+
+def test_visited_frontier_retired_from_graph():
+    _require_agentic()
+    from emet.memory.graph_eqa import GraphEQAMemory
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_tools import build_state_message
+    from emet.memory.graph_eqa.graph_memory import GraphNode, GraphObservation, NavHypothesis
+
+    gm = GraphEQAMemory(
+        defer_llm_clients=True,
+        parameters={"graph_eqa_frontier_nodes": {"enabled": True}},
+    )
+    f_obs = gm._next_obs_id
+    gm._next_obs_id += 1
+    gm._nodes.append(
+        GraphNode(
+            node_id=1,
+            labels=["frontier"],
+            xyz=np.array([1.0, 2.0, 0.0]),
+            obs_id=f_obs,
+            is_frontier=True,
+            description="frontier_cluster:visit_me",
+        )
+    )
+    gm._observations.append(
+        GraphObservation(
+            obs_id=f_obs,
+            rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+            xyz=np.array([1.0, 2.0, 0.0]),
+            labels=["frontier"],
+            description="unexplored",
+        )
+    )
+    assert gm.retire_frontier_obs(f_obs) is True
+    assert not any(n.is_frontier for n in gm.get_nodes())
+    assert gm._observation_by_id(f_obs) is None
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    agent.graph_memory = gm
+    agent.voxel_map = None
+    ex = AgenticEQAExecutor(agent, "Where is the sink?", router=True, collect_trace=True)
+    # Safety net: visited frontier hyp filtered even if somehow recalled.
+    ex._nav_to_obs_counts[99] = 1
+    ex._set_hypotheses(
+        [
+            NavHypothesis(
+                phrase="sink",
+                obs_id=99,
+                xyz=np.array([0.0, 0.0, 0.0]),
+                score=0.0,
+                source="frontier",
+            ),
+            NavHypothesis(
+                phrase="sink",
+                obs_id=3,
+                xyz=np.array([1.0, 0.0, 0.0]),
+                score=300.0,
+                source="graph",
+            ),
+        ]
+    )
+    assert all(int(h.obs_id) != 99 for h in ex._hypotheses)
+    msg = build_state_message(ex)
+    assert "obs_id=99" not in msg
+    assert "obs_id=3" in msg

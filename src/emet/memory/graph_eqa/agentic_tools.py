@@ -35,14 +35,16 @@ Rules:
   explore. Never re-verify the same observation / view.
 - SigLIP/OWL are proposals shown in state — not proof. Trust Qwen's assess and router.
 - Pass the MCQ letter (A–D) in submit_answer.arguments.answer.
+- Evidence cards list candidate obs_id values. Pick among them from the evidence;
+  do not treat retrieval order as a command.
 - If a hypothesis was ABSENT / STALLED_NAV_LOOP / [tried] in the state, do NOT
   navigate_to_obs that obs_id again — explore_frontier or look_around instead.
 - If state says NAV_LOOP, treat that as a bug signal: switch to explore_frontier.
 - One or two tool calls per turn.
 
 # Examples
-State: hypothesis obs_id=7 'sink' from graph, not tried
-{"tool_calls": [{"name": "navigate_to_obs", "arguments": {"obs_id": 7}}], "message": ""}
+State: evidence obs_id=3 phrase='sink' source=graph; obs_id=12 phrase='sink' source=frontier
+{"tool_calls": [{"name": "navigate_to_obs", "arguments": {"obs_id": 3}}], "message": ""}
 State: Last verify PRESENT; VLM assess answerable=true verified=true
 {"tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
 State: no hypotheses, 3 unexplored frontiers
@@ -149,22 +151,47 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
             f"status={last.get('status')} — do not re-navigate; explore_frontier"
         )
     if executor._hypotheses:
-        lines.append("Hypotheses:")
-        for h in executor._hypotheses[:5]:
+        lines.append("Evidence (candidate places — pick among listed obs_id values):")
+        for h in executor._hypotheses:
             tried = executor._tried.get(int(h.obs_id))
             visits = int(getattr(executor, "_nav_to_obs_counts", {}).get(int(h.obs_id), 0))
             mark = f" [tried: {tried}]" if tried else ""
             if visits:
                 mark += f" [nav_visits={visits}]"
+            labels = _hyp_labels(executor, int(h.obs_id))
+            label_bit = f" labels={labels}" if labels else ""
+            sim = getattr(h, "siglip_sim", None)
+            sim_bit = f" siglip_sim={float(sim):.3f}" if sim is not None else ""
             lines.append(
                 f"- obs_id={int(h.obs_id)} phrase={h.phrase!r} source={h.source} "
-                f"xyz=({float(h.xyz[0]):.1f},{float(h.xyz[1]):.1f}) score={float(h.score):.2f}{mark}"
+                f"xyz=({float(h.xyz[0]):.1f},{float(h.xyz[1]):.1f})"
+                f"{label_bit}{sim_bit}{mark}"
             )
     else:
-        lines.append("Hypotheses: (none — explore or look_around first)")
+        lines.append("Evidence: (none — explore or look_around first)")
     if executor._last_verify is not None:
         lv = executor._last_verify
         lines.append(f"Last verify: {lv.status} sim={float(lv.sim):.3f} obs_id={int(lv.obs_id)}")
     if executor.max_rounds - executor._round <= 2:
         lines.append("Budget nearly exhausted: answer/finish on your best evidence soon.")
     return "\n".join(lines)
+
+
+def _hyp_labels(executor: AgenticEQAExecutor, obs_id: int) -> list[str]:
+    gm = executor.graph_memory
+    if gm is None:
+        return []
+    obs = None
+    if hasattr(gm, "_observation_by_id"):
+        try:
+            obs = gm._observation_by_id(int(obs_id))
+        except Exception:
+            obs = None
+    if obs is None:
+        return []
+    out: list[str] = []
+    for lab in list(getattr(obs, "labels", None) or [])[:4]:
+        s = str(lab).strip()
+        if s and s.lower() != "frontier":
+            out.append(s)
+    return out

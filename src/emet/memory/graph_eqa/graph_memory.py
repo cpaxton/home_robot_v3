@@ -53,20 +53,34 @@ SIGLIP_PRESENT_THRESHOLD = 0.21
 SIGLIP_CONFIRM_THRESHOLD = 0.28
 
 
+# Source tiers for hyp *recall* only (not a VLM decision policy).
+_RECALL_SOURCE_TIER: dict[str, float] = {
+    "graph": 300.0,
+    "confirmed": 200.0,
+    "siglip": 100.0,
+    "frontier": 0.0,
+}
+
+
 @dataclass(frozen=True)
 class NavHypothesis:
-    """Ranked navigation target for agentic EQA (graph / CONFIRMED_MEMORY / SigLIP)."""
+    """Retrieved navigation evidence card (graph / CONFIRMED_MEMORY / SigLIP / frontier).
+
+    ``score`` is an internal recall rank key for top-K packing and ROUTER=0 fallback
+    order — not a policy signal for the VLM router.
+    """
 
     phrase: str
     obs_id: int
     xyz: np.ndarray
     score: float
-    source: str  # "graph" | "confirmed" | "siglip"
+    source: str  # "graph" | "confirmed" | "siglip" | "frontier"
     answerability_gain: float = 0.0
     belief_reduction: float = 0.0
     revisit_change_value: float = 0.0
     path_cost: float = 0.0
     failure_risk: float = 0.0
+    siglip_sim: float | None = None
 
 
 @dataclass(frozen=True)
@@ -2251,25 +2265,25 @@ class GraphEQAMemory:
             return 0.55
         return 0.15
 
-    def _information_gain_score(
+    def _recall_rank_score(
         self,
         hypothesis: NavHypothesis,
         question: str,
         robot_xyt: np.ndarray | None,
     ) -> NavHypothesis:
-        node = self._node_for_obs(hypothesis.obs_id)
+        """Cheap recall key for top-K packing (not a VLM decision policy)."""
         answerability = self._answerability_gain_for_obs(
             question,
             hypothesis.obs_id,
             hypothesis.phrase,
         )
-        confidence = float(node.belief_confidence) if node is not None else 0.2
-        belief_reduction = max(0.0, 1.0 - confidence)
-        age = max(0, self._effective_timestep() - int(node.last_seen)) if node is not None else 0
-        horizon = max(1, int(self.staleness_horizon) or 100)
-        change_bonus = min(1.0, age / horizon)
-        if node is not None and node.change_events:
-            change_bonus = min(1.5, change_bonus + 0.5)
+        # Map answerability to a small recall boost (landmark/target label hits).
+        if answerability >= 1.0:
+            hit_boost = 20.0
+        elif answerability >= 0.55:
+            hit_boost = 10.0
+        else:
+            hit_boost = 0.0
         path_cost = 0.0
         if robot_xyt is not None and np.asarray(robot_xyt).size >= 2:
             path_cost = float(
@@ -2278,34 +2292,65 @@ class GraphEQAMemory:
                     - np.asarray(robot_xyt, dtype=float).reshape(-1)[:2]
                 )
             )
-        failure_risk = 0.0
-        if node is not None and int(node.nav_attempts) > 0:
-            failure_risk = float(node.nav_failures) / int(node.nav_attempts)
-        total = (
-            float(hypothesis.score)
-            + 2.0 * answerability
-            + 1.2 * belief_reduction
-            + 0.8 * change_bonus
-            - 0.35 * path_cost
-            - 2.0 * failure_risk
-        )
+        tier = float(_RECALL_SOURCE_TIER.get(str(hypothesis.source), 0.0))
+        # Path is a weak tiebreak only (cm-scale in the key).
+        total = tier + hit_boost - 0.01 * path_cost
         return replace(
             hypothesis,
             score=total,
             answerability_gain=answerability,
-            belief_reduction=belief_reduction,
-            revisit_change_value=change_bonus,
+            belief_reduction=0.0,
+            revisit_change_value=0.0,
             path_cost=path_cost,
-            failure_risk=failure_risk,
+            failure_risk=0.0,
         )
+
+    @staticmethod
+    def _pack_diversified_hypotheses(
+        scored: list[NavHypothesis],
+        max_k: int,
+    ) -> list[NavHypothesis]:
+        """Pack top-K with source diversity (graph + frontier when both exist)."""
+        k = max(1, int(max_k))
+        if not scored:
+            return []
+        picked: list[NavHypothesis] = []
+        seen: set[int] = set()
+
+        def _take_from(sources: tuple[str, ...]) -> None:
+            for h in scored:
+                oid = int(h.obs_id)
+                if oid in seen:
+                    continue
+                if str(h.source) in sources:
+                    picked.append(h)
+                    seen.add(oid)
+                    return
+
+        # Seed diversity: one graph, one siglip/confirmed, one frontier when present.
+        _take_from(("graph",))
+        _take_from(("confirmed", "siglip"))
+        _take_from(("frontier",))
+        for h in scored:
+            if len(picked) >= k:
+                break
+            oid = int(h.obs_id)
+            if oid not in seen:
+                picked.append(h)
+                seen.add(oid)
+        return picked[:k]
 
     def hypothesize_nav_targets(
         self,
         question: str,
-        max_k: int = 3,
+        max_k: int = 6,
         robot_xyt: np.ndarray | None = None,
     ) -> list[NavHypothesis]:
-        """Rank target/context/frontier views by information gain and travel risk."""
+        """Retrieve a small diversified set of nav evidence cards for the router/fallback.
+
+        Ranking is **recall only** (source tier + keyword/landmark hit + distance
+        tiebreak). The VLM router decides where to go among the returned cards.
+        """
         if not self._observations:
             return []
         phrases = list(self._confirmed_memory_phrases()) + list(self._relevant_objects or [])
@@ -2321,6 +2366,8 @@ class GraphEQAMemory:
                 oid = int(o.obs_id)
                 if oid in seen:
                     continue
+                if self._obs_is_frontier(oid):
+                    continue
                 if any(label_matches_relevant_object(phrase, lab) for lab in (o.labels or [])):
                     seen.add(oid)
                     scored.append(
@@ -2328,7 +2375,7 @@ class GraphEQAMemory:
                             phrase=phrase,
                             obs_id=oid,
                             xyz=np.asarray(o.xyz, dtype=float).reshape(-1)[:3].copy(),
-                            score=10.0,
+                            score=0.0,
                             source="graph",
                         )
                     )
@@ -2340,12 +2387,12 @@ class GraphEQAMemory:
             if oid is None:
                 continue
             oid = int(oid)
-            if oid in seen:
+            if oid in seen or self._obs_is_frontier(oid):
                 continue
             if sim >= SIGLIP_CONFIRM_THRESHOLD:
-                source, score = "confirmed", 5.0 + sim
+                source = "confirmed"
             elif sim >= SIGLIP_PRESENT_THRESHOLD:
-                source, score = "siglip", 1.0 + sim
+                source = "siglip"
             else:
                 continue
             seen.add(oid)
@@ -2354,33 +2401,77 @@ class GraphEQAMemory:
                     phrase=phrase,
                     obs_id=oid,
                     xyz=xyz.reshape(-1)[:3].copy(),
-                    score=float(score),
+                    score=0.0,
                     source=source,
+                    siglip_sim=float(sim),
                 )
             )
         for node in self._nodes:
             if not node.is_frontier or int(node.obs_id) in seen:
                 continue
-            context_hit = any(
-                label_matches_relevant_object(phrase, label)
-                for phrase in phrases
-                for label in node.labels
-            )
             scored.append(
                 NavHypothesis(
                     phrase=phrases[0],
                     obs_id=int(node.obs_id),
                     xyz=np.asarray(node.xyz, dtype=float).copy(),
-                    score=0.75 if context_hit else 0.25,
+                    score=0.0,
                     source="frontier",
                 )
             )
+            seen.add(int(node.obs_id))
         scored = [
-            self._information_gain_score(hypothesis, question, robot_xyt)
+            self._recall_rank_score(hypothesis, question, robot_xyt)
             for hypothesis in scored
         ]
         scored.sort(key=lambda h: (-h.score, h.path_cost, -h.obs_id))
-        return scored[: max(1, int(max_k))]
+        return self._pack_diversified_hypotheses(scored, max_k)
+
+
+    def retire_frontier_obs(self, obs_id: int) -> bool:
+        """Drop a frontier node after visit — visited space is not a frontier."""
+        oid = int(obs_id)
+        drop_nodes: set[int] = set()
+        for n in self._nodes:
+            if n.is_frontier and int(n.obs_id) == oid:
+                drop_nodes.add(int(n.node_id))
+        if not drop_nodes:
+            return False
+        self._nodes = [n for n in self._nodes if int(n.node_id) not in drop_nodes]
+        self._observations = [o for o in self._observations if int(o.obs_id) != oid]
+        for i, n in enumerate(self._nodes, start=1):
+            self._nodes[i - 1] = replace(n, node_id=i)
+        self._rebuild_viewpoint_index()
+        self._update_edges()
+        return True
+
+    def retire_frontier_near_xy(
+        self,
+        xy: Any,
+        *,
+        radius_m: float = 1.25,
+    ) -> int:
+        """Retire frontier nodes within ``radius_m`` of a visited explore goal."""
+        try:
+            pt = np.asarray(xy, dtype=float).reshape(-1)[:2]
+        except Exception:
+            return 0
+        if pt.size < 2:
+            return 0
+        r2 = float(radius_m) ** 2
+        drop_obs: list[int] = []
+        for n in self._nodes:
+            if not n.is_frontier:
+                continue
+            nxy = np.asarray(n.xyz, dtype=float).reshape(-1)[:2]
+            if nxy.size < 2:
+                continue
+            if float(np.sum((nxy - pt) ** 2)) <= r2:
+                drop_obs.append(int(n.obs_id))
+        n_dropped = 0
+        for oid in drop_obs:
+            if self.retire_frontier_obs(oid):
+                n_dropped += 1
+        return n_dropped
 
     def verify_phrase_at_obs(
         self,
