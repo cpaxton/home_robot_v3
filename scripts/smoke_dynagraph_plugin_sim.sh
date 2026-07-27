@@ -62,6 +62,7 @@ mkdir -p "$ROBO"
 echo "=== Robocasa dynagraph rotate_in_place ===" | tee -a "$OUT/summary.txt"
 uv run emet run agent \
   --robot stretch \
+  --robot-ip 127.0.0.1 \
   --start-sim --scene robocasa --headless \
   --no-llm --no-discord \
   --memory-backend dynagraph \
@@ -80,6 +81,7 @@ MOLMO="$OUT/molmo"
 mkdir -p "$MOLMO"
 echo "=== Molmo ithor dynagraph rotate_in_place ===" | tee -a "$OUT/summary.txt"
 uv run emet run agent \
+  --robot-ip 127.0.0.1 \
   --start-sim --scene ithor --split train --index 0 --headless \
   --no-llm --no-discord \
   --memory-backend dynagraph \
