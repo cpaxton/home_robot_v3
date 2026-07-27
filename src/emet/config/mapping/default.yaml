@@ -190,6 +190,10 @@ motion_planner:
   simplify_plans: True
   shortcut_plans: True
   shortcut_iter: 100
+  # Clearance-aware A* (prefer open space; hard min from robot footprint when null).
+  # Do NOT raise dilate_obstacle_size as the primary nav-safety fix — use these instead.
+  # min_clearance_m: null  # default: 0.5 * footprint.width + 0.05 (~0.22 m for Stretch)
+  clearance_cost_weight: 1.0
   # Parameters for frontier exploration using the motion planner.
   frontier:
     dilate_frontier_size: 2  # Used to shrink the frontier back from the edges of the world

@@ -176,7 +176,14 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
         name="explore",
         modes=frozenset({AgentMode.CHAT}),
-        description="Navigate to explore and build a map (moves through the space — longer than scan_environment). Use for 'explore', 'map the room', 'go look around the house'. For a quick in-place look, prefer scan_environment. Returns a short map diagnostic after the run; pair with send_map_snapshot or describe_scene if stuck.",
+        description=(
+            "Navigate to explore and build a map (moves through the space — longer than scan_environment). "
+            "Use for 'explore', 'map the room', 'go look around the house'. "
+            "For a quick in-place look, prefer scan_environment. "
+            "Returns map diagnostics plus last-plan summary (localize source, waypoint count, min clearance, "
+            "and outcomes such as user_cancelled / aborted_waypoint_timeout / rejected_low_clearance when "
+            "--confirm-nav or safety filters fire). Pair with send_map_snapshot or describe_scene if stuck."
+        ),
         parameters={
             "type": "object",
             "properties": {},
@@ -187,7 +194,12 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
         name="navigation_diagnostics",
         modes=frozenset({AgentMode.CHAT}),
-        description="Text summary of the current 2D voxel map: explored vs obstacle cell counts, base pose in grid, and hints if the map is empty or the base sits on an obstacle cell. Use after failed explore/find or when the user asks why navigation failed.",
+        description=(
+            "Text summary of the current 2D voxel map: explored vs obstacle cell counts, base pose in grid, "
+            "last motion-plan summary (localize / waypoints / min clearance / confirm-nav or abort outcomes), "
+            "and whether the base sits under min_clearance_m of obstacles. "
+            "Use after failed explore/find or when the user asks why navigation failed."
+        ),
         parameters={
             "type": "object",
             "properties": {},
@@ -198,7 +210,11 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
         name="send_map_snapshot",
         modes=frozenset({AgentMode.CHAT}),
-        description="Render a top-down RGB view of obstacles vs explored space (cropped to the explored region plus margin) and send to Discord if configured; also logs the same crop to Rerun at world/map_snapshot/topdown when the live Rerun visualizer is enabled.",
+        description=(
+            "Render a top-down RGB view of obstacles vs explored space (cropped to the explored region plus margin), "
+            "optionally overlaying the last motion plan, and send to Discord if configured; also logs the same crop "
+            "to Rerun at world/map_snapshot/topdown when the live Rerun visualizer is enabled."
+        ),
         parameters={
             "type": "object",
             "properties": {},
@@ -228,7 +244,12 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
         name="find_objects",
         modes=frozenset({AgentMode.CHAT}),
-        description="Find and navigate to an object or location in the environment by name.",
+        description=(
+            "Find and navigate to an object or location by name. Returns last-plan summary "
+            "(localize source, waypoints, min clearance) and outcomes such as user_cancelled / "
+            "aborted_waypoint_timeout / rejected_low_clearance when --confirm-nav or safety filters fire. "
+            "On cancel/abort/reject, do not blindly retry — use navigation_diagnostics or ask the user."
+        ),
         parameters={
             "type": "object",
             "properties": {
@@ -239,6 +260,7 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
             },
             "required": ["text"],
         },
+        returns_info=True,
     ),
     SkillSpec(
         name="describe_scene",
@@ -442,7 +464,11 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
         name="list_scene_relations",
         modes=frozenset({AgentMode.CHAT}),
-        description="List objects and spatial relations (near, on, on_floor) from the open-vocabulary 3D scene graph. Use for 'what is connected to what' and structured connectivity questions.",
+        description=(
+            "List objects and spatial relations (near, on, on_floor). Prefers the open-vocabulary "
+            "3D scene graph; if that is empty after lifelong load, falls back to the GraphEQA graph. "
+            "Use for 'what objects are in the room' and structured connectivity questions."
+        ),
         parameters={
             "type": "object",
             "properties": {},

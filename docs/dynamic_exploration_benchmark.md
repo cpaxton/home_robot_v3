@@ -101,7 +101,8 @@ the world is fuzzed over ZMQ and moved bodies are verified against live GT place
   pose covariance/history, persistent identity key, expected-absence counters, and
   change events per node. Relation confidence/timestamps/contradictions also persist; `manifest.json`
   records the final controller step (`final_step`); `voxel_map.pkl` restores obstacles /
-  explored area (enable on any dynagraph run with `--export-voxel-pickle`). On reload the
+  explored area (written by default on dynagraph ``--export``; opt out with
+  ``--no-export-voxel-pickle``). On reload the
   controller resumes `obs_count` so staleness `maintain()` does not prune the resumed graph.
 - **Fuzzing** (`src/emet/eval/world_fuzz.py`): scripted per-cycle `moves:` (body + `delta`
   or absolute `pos`) and `doors:` (joint + qpos value) from the `lifelong:` config section;

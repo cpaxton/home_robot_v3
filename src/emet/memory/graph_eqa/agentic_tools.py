@@ -70,15 +70,9 @@ def build_graph_eqa_system_prompt(tools: list[Tool]) -> str:
 
 
 def _graph_stats_line(gm: Any) -> str:
-    try:
-        nodes = list(gm.get_nodes()) if gm is not None else []
-    except Exception:
-        nodes = []
-    n_obj = sum(
-        1 for n in nodes if not getattr(n, "is_frontier", False) and not getattr(n, "is_viewpoint", False)
-    )
-    n_frontier = sum(1 for n in nodes if getattr(n, "is_frontier", False))
-    return f"Graph: {n_obj} object nodes, {n_frontier} frontier nodes."
+    from emet.memory.graph_eqa.graph_stats import format_graph_size_report
+
+    return format_graph_size_report(gm, verbose=False)
 
 
 def build_state_message(executor: AgenticEQAExecutor) -> str:

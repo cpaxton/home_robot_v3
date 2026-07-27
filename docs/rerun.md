@@ -37,6 +37,23 @@ Defaults in `rerun:` YAML (`src/emet/config/agents/default_rerun.yaml`):
 
 Increase strides or disable MJCF mesh if the viewer still OOMs/crashes.
 
+## Motion plans
+
+When the agent plans a path (find / navigate / explore), Rerun logs under ``world/nav/``:
+
+| Entity | Content |
+|--------|---------|
+| ``world/nav/plan`` | Green ``LineStrips3D`` polyline of the **executed** waypoint chunk |
+| ``world/nav/plan_full`` | Dimmer blue full A* path when longer than the 8-waypoint exec chunk |
+| ``world/nav/waypoints`` | Waypoint dots (``wp0`` …) |
+| ``world/nav/arrows`` | Segment directions |
+| ``world/nav/summary`` | Markdown: localize source (graph / voxel / frontier / …), path length, chunked? |
+| ``world/object`` / ``world/xyt_goal`` | Target object + base goal pose |
+
+DynaMem still executes at most **8 waypoints per chunk**; if the A* path is longer you will see ``(chunk)`` in Discord/terminal and another plan after the next look-around. That behavior is planner execution, not lifelong memory restore.
+
+With ``emet run agent --confirm-nav`` (or ``EMET_CONFIRM_NAV=1``), each plan also posts a 2D crop to Discord / ``world/nav/plan_map`` and waits for **y/n** before ``execute_trajectory``.
+
 ## 2D camera panels
 
 Blueprint ``head_rgb`` / ``ee_rgb`` panels use origin ``world/head_camera/rgb`` and ``world/ee_camera/rgb`` (not the parent ``world/head_camera`` entity). The parent path also receives optional ``DepthImage`` streams; binding the panel to the parent made Rerun show depth colormap instead of RGB. Live head depth is off by default; set ``EMET_RERUN_HEAD_DEPTH=1`` to log ``world/head_camera/depth``.

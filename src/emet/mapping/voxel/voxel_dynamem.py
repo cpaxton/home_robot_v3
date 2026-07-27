@@ -1300,6 +1300,9 @@ class SparseVoxelMap(SparseVoxelMapBase):
         if isinstance(pickle_file_name, str):
             pickle_file_name = Path(pickle_file_name)
         assert pickle_file_name.exists(), f"No file found at {pickle_file_name}"
+        # Clear any pre-load live frames so restore is the checkpoint, not a merge.
+        if hasattr(self, "reset"):
+            self.reset()
         with pickle_file_name.open("rb") as f:
             data = pickle.load(f)
         for i, (

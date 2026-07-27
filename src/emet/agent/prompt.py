@@ -97,6 +97,9 @@ Routing hints:
 - "explore" / "go explore" / "map the room" → explore (navigate to build the map)
 - where/what/is-there → query_scene_graph (or query_memory if graph EQA is on)
 - map stuck / explore failed → navigation_diagnostics + send_map_snapshot
+- find/explore tool result says cancelled / aborted_waypoint_timeout / rejected_low_clearance /
+  rejected_unexplored → do NOT immediately re-call the same find_objects. Ask the user, or call
+  navigation_diagnostics / send_map_snapshot / scan_environment first, then retry only if safe.
 - close-up of a known object → send_object_image (not describe_scene)
 - "take a picture" / "send a photo" → send_image (live head camera to Discord); take_picture alone
   only captures locally and does not return a caption

@@ -86,9 +86,30 @@ log = Logger(__name__)
 )
 @click.option(
     "--input-path",
+    "--input_path",
     type=click.Path(),
     default=None,
-    help="Memory directory to load when using --robot-ip.",
+    help="Memory directory to load when using --robot-ip (graph + voxel_map.pkl for dynagraph).",
+)
+@click.option(
+    "--refine-start/--no-refine-start",
+    default=False,
+    show_default=True,
+    help=(
+        "With --input-path: after an optional live frame, estimate a small SE(2) fudge "
+        "aligning the saved map to the live cloud. On failure, keep the assumed pose."
+    ),
+)
+@click.option(
+    "--confirm-nav/--no-confirm-nav",
+    "confirm_nav",
+    default=None,
+    help=(
+        "Before executing a motion plan: show the path on the 2D map (Rerun + Discord image) "
+        "and wait for y/n (terminal or Discord). Recommended on the real robot. "
+        "Default off; set EMET_CONFIRM_NAV=1 to enable without the flag. "
+        "Scripted ``-c`` / ``--command`` runs auto-accept (no prompt)."
+    ),
 )
 @click.option(
     "--discord/--no-discord",
@@ -440,6 +461,8 @@ def main(
     robot_ip: str,
     offline: bool,
     input_path: str | None,
+    refine_start: bool,
+    confirm_nav: bool | None,
     discord: bool,
     no_llm: bool,
     debug_llm: bool,
@@ -798,6 +821,8 @@ def main(
                 robot_ip=robot_effective,
                 robot=robot,
                 input_path=input_path,
+                refine_start=refine_start,
+                confirm_nav=confirm_nav,
                 discord=discord,
                 use_llm=not no_llm,
                 llm=llm,

@@ -24,7 +24,6 @@ from emet.controller.operations import GraspObjectOperation
 from emet.controller.task.emote import EmoteTask
 from emet.controller.task.pickup.hand_over_task import HandOverTask
 from emet.core import AbstractRobotClient, Parameters
-from emet.memory.backend import get_memory_backend
 from emet.memory.utils import print_memory_saved_help
 from emet.perception import create_semantic_sensor
 from emet.utils.image import numpy_image_to_bytes
@@ -434,9 +433,12 @@ class DynamemTaskExecutor:
             elif command == "rotate_in_place":
                 logger.info("Rotate in place to scan environments.")
                 self.agent.rotate_in_place()
-                backend = get_memory_backend("dynamem", voxel_map=self.agent.get_voxel_map())
-                save_dir = getattr(self.agent.voxel_map, "log", "saved_memory")
-                backend.save(save_dir)
+                from emet.memory.lifelong import save_lifelong_checkpoint
+
+                save_dir = getattr(getattr(self.agent, "voxel_map", None), "log", None) or getattr(
+                    self.agent, "log", "saved_memory"
+                )
+                save_lifelong_checkpoint(self.agent, save_dir, save_voxel_pickle=True)
                 self._last_memory_save_path = save_dir
                 print_memory_saved_help(save_dir)
             elif command == "rotate_base":

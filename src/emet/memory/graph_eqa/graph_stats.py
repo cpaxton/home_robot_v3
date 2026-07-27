@@ -71,6 +71,27 @@ def format_graph_node_breakdown(graph_memory: Any | None) -> str:
     )
 
 
+def format_graph_size_report(graph_memory: Any | None, *, verbose: bool = True) -> str:
+    """Growth diagnostic for CHAT / lifelong load (object count is the main signal).
+
+    Example: ``graph size: 42 obj / 8 vp / 2 fr (52 total), 31 obs, singleton=61%, …``.
+    """
+    h = graph_health_metrics(graph_memory)
+    line = (
+        f"graph size: {h['n_object']} obj / {h['n_viewpoint']} vp / {h['n_frontier']} fr "
+        f"({h['n_total']} total), {h['n_obs']} obs"
+    )
+    if int(h["n_object"]) > 0:
+        line += (
+            f", singleton={float(h['singleton_frac']):.0%}, "
+            f"mean_support={float(h['mean_support']):.1f}"
+        )
+    if verbose and h.get("top_labels"):
+        tops = ", ".join(f"{t['label']}×{t['count']}" for t in h["top_labels"][:5])
+        line += f"; top: {tops}"
+    return line
+
+
 def _normalize_label(label: str) -> str:
     return re.sub(r"\s+", " ", (label or "").strip().lower())
 
