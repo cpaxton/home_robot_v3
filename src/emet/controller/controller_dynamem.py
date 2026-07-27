@@ -1236,7 +1236,6 @@ class DynamemController(BaseController):
             if callable(get_inst):
                 try:
                     for inst in get_inst() or []:
-                        name = getattr(inst, "category_id", None)
                         # Prefer string category if present on instance
                         cat = getattr(inst, "category_name", None) or getattr(inst, "name", None)
                         if cat:
