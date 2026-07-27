@@ -1010,39 +1010,35 @@ def test_query_answer_never_attaches_frontier_placeholder_rgb():
     assert mem.last_eqa_action_obs_id == 19
 
 
-def test_navigation_waypoint_prefers_viewpoint_when_object_near_viewer():
-    """Image-N nav: when object ≈ capture pose and robot is elsewhere, go to the viewer."""
+def test_navigation_waypoint_always_approaches_object_anchor():
+    """Ignore capture viewer_xyz — always approach the object / node centroid."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     mem = GraphEQAMemory(defer_llm_clients=True)
-    viewer = np.array([1.0, 2.0, 0.0], dtype=np.float64)
-    # Object near the camera pose (classic Image-N revisit).
-    mem.add_observation(rgb, np.array([1.2, 2.1, 0.5]), ["lamp"], viewer_xyz=viewer)
-    pt = mem._navigation_waypoint_for_obs(1, np.array([9.0, 9.0, 0.0]))
-    assert pt is not None
-    assert float(pt[0]) == 1.0
-    assert float(pt[1]) == 2.0
-
-
-def test_navigation_waypoint_approaches_object_when_far_from_viewer():
-    """When object centroid is far from capture pose, approach the object (not spawn)."""
-    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
-    mem = GraphEQAMemory(defer_llm_clients=True)
-    viewer = np.array([-17.86, -0.66, 0.0], dtype=np.float64)  # spawn-like
-    obj = np.array([-16.54, -1.14, 0.77], dtype=np.float64)  # kitchen island
+    viewer = np.array([-17.86, -0.66, 0.0], dtype=np.float64)
+    obj = np.array([-16.54, -1.14, 0.77], dtype=np.float64)
     mem.add_observation(rgb, obj, ["kitchen island", "cabinet"], viewer_xyz=viewer)
-    robot = np.array([-17.75, 1.58, 0.0])  # after outdoor explore
+    robot = np.array([-17.75, 1.58, 0.0])
     pt = mem._navigation_waypoint_for_obs(1, robot)
     assert pt is not None
-    # Must move toward the object, not back to the capture viewpoint.
-    assert float(pt[0]) > -17.5
-    assert abs(float(pt[0]) - float(viewer[0])) > 0.3
-    dist_to_obj = float(np.linalg.norm(pt[:2] - obj[:2]))
-    dist_viewer_to_obj = float(np.linalg.norm(viewer[:2] - obj[:2]))
-    assert dist_to_obj < dist_viewer_to_obj
+    # Closer to object than to the historical capture pose.
+    assert float(np.linalg.norm(pt[:2] - obj[:2])) < float(
+        np.linalg.norm(pt[:2] - viewer[:2])
+    )
+    # Even when object ≈ viewer, still approach the object, not teleport to viewer.
+    mem2 = GraphEQAMemory(defer_llm_clients=True)
+    mem2.add_observation(
+        rgb, np.array([1.2, 2.1, 0.5]), ["lamp"], viewer_xyz=np.array([1.0, 2.0, 0.0])
+    )
+    pt2 = mem2._navigation_waypoint_for_obs(1, np.array([9.0, 9.0, 0.0]))
+    assert pt2 is not None
+    assert float(pt2[0]) != 1.0 or float(pt2[1]) != 2.0
+    assert float(np.linalg.norm(pt2[:2] - np.array([1.2, 2.1]))) < float(
+        np.linalg.norm(np.array([9.0, 9.0]) - np.array([1.2, 2.1]))
+    )
 
 
-def test_navigation_waypoint_standoff_when_at_viewpoint():
-    """When already at the capture pose, advance toward the object anchor instead of obs.xyz."""
+def test_navigation_waypoint_standoff_when_near_object():
+    """When already near the object, advance toward the anchor (standoff)."""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     mem = GraphEQAMemory(defer_llm_clients=True)
     viewer = np.array([1.0, 2.0, 0.0], dtype=np.float64)
@@ -1053,7 +1049,7 @@ def test_navigation_waypoint_standoff_when_at_viewpoint():
     assert abs(float(pt[1]) - 2.0) < 1e-6
 
 
-def test_navigation_waypoint_keeps_frontier_anchor():
+def test_navigation_waypoint_approaches_frontier_anchor():
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     mem = GraphEQAMemory(defer_llm_clients=True)
     mem._nodes.append(
@@ -1075,8 +1071,9 @@ def test_navigation_waypoint_keeps_frontier_anchor():
         )
     )
     pt = mem._navigation_waypoint_for_obs(1, np.array([0.0, 0.0, 0.0]))
-    assert float(pt[0]) == 3.0
-    assert float(pt[1]) == 4.0
+    # Standoff toward (3,4) — closer to frontier than start, not stuck at origin.
+    assert float(np.linalg.norm(pt[:2])) > 2.0
+    assert float(np.linalg.norm(pt[:2] - np.array([3.0, 4.0]))) < 1.0
 
 
 def test_near_heuristic():

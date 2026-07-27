@@ -3395,7 +3395,11 @@ class GraphEQAMemory:
         *,
         min_approach_m: float | None = None,
     ) -> np.ndarray:
-        """Planar waypoint toward ``anchor`` when the robot is already at the capture viewpoint."""
+        """Planar goal: move toward ``anchor``, stopping ``min_approach_m`` short of it.
+
+        Habitat/navmesh snaps the goal to the nearest navigable cell; we only pick the
+        geometric approach point (closest sensible XY to the object / frontier).
+        """
         min_m = float(min_approach_m if min_approach_m is not None else self.image_nav_min_approach_m)
         rx, ry = robot_xy
         ax, ay = float(anchor[0]), float(anchor[1])
@@ -3412,49 +3416,24 @@ class GraphEQAMemory:
         obs_id: int,
         robot_xyt: Any | None = None,
     ) -> np.ndarray | None:
-        """Resolve a graph observation to a robot navigation waypoint (not raw object centroid).
+        """Closest approachable planar goal for this observation.
 
-        Frontiers / viewpoints: go to the stored planar anchor.
-        Semantic objects: if the object is far from its capture viewer, approach the
-        object (standoff) — returning to the historical camera pose alone does not get
-        a closer look (HM-EQA q105: kitchen-island card → spawn viewpoint).
-        When the object is near the capture pose, prefer the viewer then standoff
-        (classic Image-N revisit).
+        Always aim at the object/frontier/node anchor (node centroid when present).
+        With a robot pose, stop a short standoff short of the anchor; navmesh snapping
+        happens downstream. Capture ``viewer_xyz`` is evidence provenance, not a goal.
         """
         obs = self._observation_by_id(obs_id)
         if obs is None:
             return None
         node = self._node_for_obs_id(obs_id)
-        anchor = np.asarray(obs.xyz, dtype=float).reshape(-1)[:3]
-        if node is not None and not (node.is_frontier or node.is_viewpoint):
-            # Prefer merged node centroid when present.
+        if node is not None:
             anchor = np.asarray(node.xyz, dtype=float).reshape(-1)[:3]
+        else:
+            anchor = np.asarray(obs.xyz, dtype=float).reshape(-1)[:3]
         robot_xy = self._robot_planar_xy(robot_xyt)
-
-        if node is not None and (node.is_frontier or node.is_viewpoint):
-            return np.array([anchor[0], anchor[1], 1.0], dtype=float)
-
-        vp_xyz = self._viewpoint_xyz_for_obs(obs_id, obs)
-        if robot_xy is not None and vp_xyz is not None:
-            d_obj_vp = math.hypot(
-                float(anchor[0]) - float(vp_xyz[0]),
-                float(anchor[1]) - float(vp_xyz[1]),
-            )
-            # Object essentially at the photo pose → Image-N: go to viewer, then standoff.
-            if d_obj_vp <= max(1.0, float(self.image_nav_min_approach_m) * 2.0):
-                d_vp = math.hypot(
-                    robot_xy[0] - float(vp_xyz[0]),
-                    robot_xy[1] - float(vp_xyz[1]),
-                )
-                if d_vp > float(self.viewpoint_merge_m):
-                    return np.array([float(vp_xyz[0]), float(vp_xyz[1]), 1.0], dtype=float)
-                return self._standoff_waypoint_toward(robot_xy, anchor)
-            # Object far from capture pose → approach the object, not the old camera.
-            return self._standoff_waypoint_toward(robot_xy, anchor)
-
         if robot_xy is not None:
             return self._standoff_waypoint_toward(robot_xy, anchor)
-        return np.array([anchor[0], anchor[1], 1.0], dtype=float)
+        return np.array([float(anchor[0]), float(anchor[1]), 1.0], dtype=float)
 
     def _target_point_from_image_id(
         self,
@@ -3501,16 +3480,11 @@ class GraphEQAMemory:
             return self._target_point_from_image_id(oid, robot_xyt)
         if nav_fallback_tail and display_index <= len(nav_fallback_tail):
             nv = nav_fallback_tail[display_index - 1]
-            if nv.base_xyz is not None:
-                base = np.asarray(nv.base_xyz, dtype=float).reshape(-1)[:3]
-                anchor = np.asarray(nv.xyz, dtype=float).reshape(-1)[:3]
-                robot_xy = self._robot_planar_xy(robot_xyt)
-                if robot_xy is not None:
-                    d_base = math.hypot(robot_xy[0] - float(base[0]), robot_xy[1] - float(base[1]))
-                    if d_base > float(self.viewpoint_merge_m):
-                        return np.array([float(base[0]), float(base[1]), 1.0], dtype=float)
-                    return self._standoff_waypoint_toward(robot_xy, anchor)
-            return np.array([nv.xyz[0], nv.xyz[1], 1.0], dtype=float)
+            anchor = np.asarray(nv.xyz, dtype=float).reshape(-1)[:3]
+            robot_xy = self._robot_planar_xy(robot_xyt)
+            if robot_xy is not None:
+                return self._standoff_waypoint_toward(robot_xy, anchor)
+            return np.array([float(anchor[0]), float(anchor[1]), 1.0], dtype=float)
         return None
 
     def query_answer(

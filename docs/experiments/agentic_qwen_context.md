@@ -253,16 +253,11 @@ five frontiers all labeled ``phrase='fruit bowl'`` (bug: frontiers inherited
 - OUT ``~/runs/emet/hmeqa_holdout8_fix6_q105_20260727_154930`` (paper-router, id 105)
 - Uncommitted fix6 still in working tree (frontier phrase + nav clamp)
 
-### Fix7 — approach object, not capture viewpoint (q105)
+### Fix7 — always approach the object anchor
 
-Fix6 router *did* pick ``kitchen island`` obs=14, but
-``_navigation_waypoint_for_obs`` returned the **spawn viewer** (``-17.86,-0.66``)
-because the object centroid was far from ``viewer_xyz`` and the old policy always
-returned to the capture pose first. Trajectory never entered the kitchen
-(``x≥-17.67`` only). Winning ROUTER=0 runs targeted ``≈(-16.86,-1.02)``.
+``_navigation_waypoint_for_obs`` no longer uses capture ``viewer_xyz`` as a goal.
+One rule: aim at the node/object/frontier anchor; with a robot pose, stop a short
+standoff short of it (navmesh snaps downstream). Capture pose is provenance only.
 
-- Semantic objects far from their capture pose → standoff toward object
-- Objects near capture pose → keep Image-N viewer-then-standoff
-- Post-nav verify uses question target phrase (fruit bowl), not place-card label
-- Job ``hmeqa-q105-fix7`` / ``20260727_160106_a28281``
+- Job ``hmeqa-q105-fix7`` / ``20260727_160106_a28281`` (partial special-case mid-flight)
 - OUT ``~/runs/emet/hmeqa_holdout8_fix7_q105_20260727_160103``
