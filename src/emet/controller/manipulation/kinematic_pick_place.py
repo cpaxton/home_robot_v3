@@ -4,8 +4,8 @@
 
 """Kinematic pick-and-place skill graph for registry robots (rby1) in MuJoCo.
 
-Uses MuJoCo position IK + ZMQ joint streaming + sim kinematic attach. Optional voxel-map
-collision filter (same world model as base nav). Not CuRobo / not contact physics.
+Uses MuJoCo position IK + ZMQ joint streaming + sim kinematic attach. Optional collision
+filters: voxel-map (2D nav obstacles) or AABB table solids. Not CuRobo / not contact physics.
 
 Note: IK is currently **position-only**; grasp orientation from the oracle is used for
 approach standoff but not enforced at the EE.
@@ -22,6 +22,7 @@ from typing import Any
 import mujoco
 import numpy as np
 
+from emet.motion.aabb_arm_collision import AabbArmCollisionChecker
 from emet.motion.arm_manip_profile import (
     ArmManipProfile,
     home_arm_q_array,
@@ -118,7 +119,7 @@ class KinematicPickPlaceExecutor:
         self.link_bodies = list(self.profile.link_bodies)
         self._model: mujoco.MjModel | None = None
         self._data: mujoco.MjData | None = None
-        self._collision: VoxelMapArmCollisionChecker | None = None
+        self._collision: VoxelMapArmCollisionChecker | AabbArmCollisionChecker | None = None
         self._last_cmd_q: np.ndarray | None = None
         self.last_plan_waypoints: list[np.ndarray] = []
         self.last_ee_path_world: list[np.ndarray] = []
@@ -199,6 +200,8 @@ class KinematicPickPlaceExecutor:
                 link_bodies=self.link_bodies,
                 inflate_cells=1,
             )
+        elif self.manip_collision == "aabb":
+            self._collision = AabbArmCollisionChecker.for_default_table(link_bodies=self.link_bodies)
         return True
 
     def _actuator_names(self) -> list[str]:

@@ -240,7 +240,7 @@ def resolve_agent_manip_collision(*, config_mode: str | None = None) -> str:
     if env_c:
         return env_c
     mode = str(config_mode or "none").strip().lower()
-    if mode in ("none", "voxel"):
+    if mode in ("none", "voxel", "aabb"):
         return mode
     return "none"
 

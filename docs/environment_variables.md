@@ -144,8 +144,12 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_MANIP_MODE` | `DynamemTaskExecutor` / `resolve_agent_manip_mode` | `teleport` (default) or `kinematic` (IK + attach). Overrides `agent.manip_mode`. See [molmospaces.md](molmospaces.md) mobile manipulation. |
 | `EMET_MANIP_COLLISION` | kinematic pick/place | `none` (default) or `voxel` (2D obstacle map). Overrides `agent.manip_collision`. |
 | `EMET_MANIP_PLANNER` | kinematic pick/place | `rrt_connect` (default), `rrt`, or `linear`. Joint-space path after IK. Overrides `agent.manip_planner`. |
-| `EMET_SIM_THIRD_PERSON` | `robosuite_server` full obs | When `1`, render scene camera ``third_person`` into `third_person_image` (extra EGL cost). Used by `--record-mp4` smokes. |
-| `EMET_SIM_THIRD_PERSON_CAMERA` | same | Override MuJoCo camera name (default `third_person` in `scene_environment.xml`). |
+| `EMET_SIM_THIRD_PERSON` | `robosuite_server` full obs | When `1`, render a **base chase** view into `third_person_image` (extra EGL cost). Used by `--record-mp4` smokes. |
+| `EMET_SIM_THIRD_PERSON_CAMERA` | same | Optional body name to follow (default: robot `base_link`). |
+| `EMET_SIM_THIRD_PERSON_DISTANCE` | chase cam | Orbit distance in meters (default `5.5`). |
+| `EMET_SIM_THIRD_PERSON_AZIMUTH` | chase cam | Azimuth **offset** from behind the base `+X` axis, degrees (default `125` = side/rear iso). |
+| `EMET_SIM_THIRD_PERSON_ELEVATION` | chase cam | Orbit elevation degrees (default `-28`). |
+| `EMET_SIM_THIRD_PERSON_LOOKAT_Z` | chase cam | Lookat height above base origin, meters (default `0.75`). |
 | `EMET_VL_CACHE_SYSTEM_PREFIX` | `qwen3-vl-eqa` / `Qwen3VLClient` | `1`/`0` — cache system-prompt KV across agent turns (default on via `eqa.vl_cache_system_prefix`). CLI: `--cache-vl-prefix` / `--no-cache-vl-prefix`. |
 | `EMET_ALLOW_CPU_VLM` | Qwen3-VL / Gemma VLM / Qwen2.5-VL load | `1` — allow silent CPU bf16 fallback when GPU int4 load fails. **Default off**: agent refuses CPU fallback (multi-minute “Thinking…” hangs). |
 | `EMET_HF_LOCAL_ONLY` | VL / SigLIP `from_pretrained` | `1` — require local HF cache only (same idea as `HF_HUB_OFFLINE=1`). Warm cache is preferred automatically even when unset. |

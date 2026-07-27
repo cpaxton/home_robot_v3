@@ -21,7 +21,7 @@ src/emet/motion/
   arm_manip_profile.py  # Per-robot EE / joint / home profiles (rby1, galaxea)
   voxel_arm_collision.py
   mujoco_arm_ik.py
-  base_goal_rank.py     # Rank XY goals by plan feasibility (multi-option smoke)
+  base_goal_rank.py     # Multi-goal base XY on navigable grid (one A*/Dijkstra)
   utils/simple_env.py   # 2D box obstacle toy env (unit tests)
 
 src/emet/mapping/voxel/
@@ -113,7 +113,7 @@ uv run emet test src/test/motion/test_rby1_mujoco_arm_ik.py src/test/motion/test
 |-----------|----------------|
 | `test_rrt.py` | RRT / RRT-Connect / Shortcut on `SimpleEnv` |
 | `test_arm_rrt.py` | Config resolve; 2D wall; arm joint RRT without map |
-| `test_voxel_obstacle_planning.py` | `GridParams` indexing; `from_voxel_map`; base RRT on fake SVM; arm RRT avoids wall that blocks linear |
+| `test_voxel_obstacle_planning.py` | `GridParams` indexing; `from_voxel_map`; base RRT on fake SVM; arm RRT avoids wall; multi-goal A* rejects sealed frontier |
 | `test_rby1_mujoco_arm_ik.py` | Offline MuJoCo position IK |
 | `test_svm.py` (mapping) | Heavier: real pickle map + `plan_to_instance` / frontier (optional data) |
 
@@ -175,17 +175,17 @@ EMET_SIM_NAV_TELEPORT=1 MUJOCO_GL=egl \
 # → <figures-dir>/third_person.mp4
 ```
 
-Expect `chosen_grasp` on a `reachable=True` candidate (not decoy index 0), `execute success=True`, and `displacement_m` ≳ 0.05. Figures under `~/runs/emet/tamp_pick_place/<stamp>/` (or `--figures-dir`). With `--record-mp4`, the sim also streams a fixed world camera (`third_person` in [`scene_environment.xml`](../src/emet/assets/robot/scene_environment.xml)); banners show current action + goal.
+Expect `chosen_grasp` on a `reachable=True` candidate (not decoy index 0), `execute success=True`, and `displacement_m` ≳ 0.05. Figures under `~/runs/emet/tamp_pick_place/<stamp>/` (or `--figures-dir`). With `--record-mp4`, the sim streams a **chase camera** off ``base_link`` (FREE cam, lookat raised above the chassis so the view does not cut through the torso); banners show current action + goal. Tune with ``EMET_SIM_THIRD_PERSON_{DISTANCE,AZIMUTH,ELEVATION,LOOKAT_Z}``.
 
 ### Frontier multi-option (explore)
 
-Offline multi-option smoke for base nav (not yet wired into live `plan_to_frontier` / `explore_frontier`): score several XY goals, reject those sealed behind obstacles, commit to a reachable one.
+Base multi-goal planning: one shared A*/Dijkstra on the navigable grid toward a set of XY goals; nearest reachable wins (sealed / unreachable goals are ignored). Prefer this over K independent RRT ranks.
 
 ```bash
 uv run emet test src/test/motion/test_voxel_obstacle_planning.py::test_multi_frontier_goals_pick_reachable_reject_sealed -q
 ```
 
-Helper: [`rank_xy_goals_by_plan`](../src/emet/motion/base_goal_rank.py).
+API: [`plan_xy_multi_goal`](../src/emet/motion/base_goal_rank.py) / `AStar.plan(..., goals=[...])`.
 
 Figures: `topdown`, `ee_path_xz`, `joint_traj`, `plan_tree` (matplotlib / Agg). Optional live debug overlays live under `world/manip/…` in Rerun when a visualizer is attached; **figures are the paper path**.
 

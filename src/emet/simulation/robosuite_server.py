@@ -1262,6 +1262,41 @@ class RobosuiteZmqServer(BaseZmqServer):
         rgb, _, K = self._postprocess_rgb_depth_and_K(camera_name, rgb, None)
         return rgb, K
 
+    def _render_third_person_chase_rgb(self) -> np.ndarray | None:
+        """Chase-cam RGB off ``base_link`` (or spec base), not a mesh-embedded fixed camera.
+
+        Uses a FREE camera with lookat raised above the base origin so the view sits
+        behind/above the chassis and does not cut through torso meshes (TRACKING
+        lookat-at-base-origin does).
+        """
+        if self._mjmodel is None or self._mjdata is None:
+            return None
+        from emet.simulation.chase_camera import (
+            apply_chase_frustum_near,
+            build_base_chase_camera,
+        )
+        from emet.simulation.env_flags import env_sim_third_person_camera
+
+        body = str(getattr(self._spec, "base_link_name", None) or "base_link")
+        # Optional override names a *body* to follow; camera names like ``third_person``
+        # fall through to base_link.
+        override = env_sim_third_person_camera()
+        if override and override not in ("third_person", "auto", "chase"):
+            bid_try = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, override)
+            if bid_try >= 0:
+                body = override
+        bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, body)
+        if bid < 0:
+            return None
+        with self._mj_lock:
+            with self._render_lock:
+                renderer = self._get_or_create_primary_renderer()
+                cam = build_base_chase_camera(self._mjmodel, self._mjdata, int(bid))
+                renderer.update_scene(self._mjdata, camera=cam)
+                apply_chase_frustum_near(renderer.scene, near=0.05)
+                rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
+        return self._apply_optional_mujoco_render_flip_ud(rgb)
+
     def _primary_rgb_and_depth(self, camera_name: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """RGB + depth + intrinsics ``K`` matching both buffers (primary resolution)."""
         try:
@@ -2222,21 +2257,17 @@ class RobosuiteZmqServer(BaseZmqServer):
                     message["camera_name_tertiary"] = tertiary
                 except Exception as e:
                     logger.debug(f"Tertiary RGB failed for {tertiary}: {e!r}")
-        # Optional world third-person cam (scene_environment.xml); gated — extra EGL render.
-        from emet.simulation.env_flags import env_sim_third_person, env_sim_third_person_camera
+        # Chase cam tracking base_link (MjvCamera TRACKING) — not a fixed world/MJCF cam.
+        from emet.simulation.env_flags import env_sim_third_person
 
-        if env_sim_third_person() and allow_extra_cams and self._mjmodel is not None:
-            tp_name = env_sim_third_person_camera()
+        if env_sim_third_person() and allow_extra_cams:
             try:
-                cid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_CAMERA, tp_name)
-                if cid >= 0:
-                    rgb_tp, _k_tp = self._primary_rgb_only_with_K(tp_name)
+                rgb_tp = self._render_third_person_chase_rgb()
+                if rgb_tp is not None:
                     message["third_person_image"] = compression.to_jpg(rgb_tp)
-                    message["third_person_camera"] = tp_name
-                else:
-                    logger.debug(f"third_person camera {tp_name!r} missing from MJCF")
+                    message["third_person_camera"] = "chase:base_link"
             except Exception as e:
-                logger.debug(f"third_person RGB failed for {tp_name!r}: {e!r}")
+                logger.debug(f"third_person chase RGB failed: {e!r}")
         message = self._attach_emet_session(message)
         with self._render_lock:
             self._last_full_obs_for_servo = message

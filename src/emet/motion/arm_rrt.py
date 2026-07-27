@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import mujoco
 import numpy as np
@@ -20,7 +21,6 @@ from emet.motion.algo import get_planner
 from emet.motion.algo.shortcut import Shortcut
 from emet.motion.base import ConfigurationSpace
 from emet.motion.mujoco_arm_ik import interpolate_arm_waypoints, joint_qpos_addrs
-from emet.motion.voxel_arm_collision import VoxelMapArmCollisionChecker
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -68,12 +68,12 @@ def make_arm_validate_fn(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     joint_names: Sequence[str],
-    collision: VoxelMapArmCollisionChecker | None,
+    collision: Any | None = None,
     *,
     mins: np.ndarray | None = None,
     maxs: np.ndarray | None = None,
 ) -> Callable[[np.ndarray], bool]:
-    """Return a validate(q) that checks joint bounds + optional voxel link collision."""
+    """Return a validate(q) that checks joint bounds + optional link collision."""
     qadr = joint_qpos_addrs(model, joint_names)
     if mins is None or maxs is None:
         mins, maxs = joint_limits_from_model(model, joint_names)
@@ -102,7 +102,7 @@ def plan_arm_joint_path(
     joint_names: Sequence[str],
     q_start: np.ndarray,
     q_goal: np.ndarray,
-    collision: VoxelMapArmCollisionChecker | None = None,
+    collision: Any | None = None,
     planner: str = "rrt_connect",
     max_iter: int = 400,
     step_size: float = 0.15,

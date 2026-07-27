@@ -875,6 +875,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             joint_head=float(joint_head) if joint_head is not None else None,
             gps=gps,
             compass=compass,
+            third_person_image=obs.get("third_person_image"),
             emet_session=read_emet_session(obs),
         )
 

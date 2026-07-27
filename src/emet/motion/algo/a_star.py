@@ -339,24 +339,66 @@ class AStar(Planner):
         # return [start_xy] + [self.to_xy(pt) for pt in path[1:-1]] + [end_xy]
         return [start_xy] + [self.to_xy(pt) for pt in path[1:]]
 
-    def plan(self, start, goal, verbose: bool = True) -> PlanResult:
-        """plan from start to goal. creates a new tree.
+    def run_astar_multi_goal(
+        self,
+        start_xy: tuple[float, float],
+        goals_xy: list[tuple[float, float]],
+        *,
+        stop_at_first: bool = True,
+    ):
+        """One shared A*/Dijkstra search toward a set of goal XYs.
 
-        Based on Caelan Garrett's code (MIT licensed):
-        https://github.com/caelan/motion-planners/blob/master/motion_planners/rrt.py
+        Returns ``(waypoints_xy, goal_index)`` or ``(None, None)`` if no goal is reachable.
         """
-        # assert len(start) == self.space.dof, "invalid start dimensions"
-        # assert len(goal) == self.space.dof, "invalid goal dimensions"
-        # self.start_time = time.time()
+        from emet.motion.base_goal_rank import plan_grid_multi_goal
+
+        start_pt = self.get_unoccupied_neighbor(self.to_pt(start_xy), max_ring=8)
+        if start_pt is None:
+            return None, None
+
+        goal_ijs: list[tuple[int, int] | None] = []
+        snapped_goals: list[tuple[float, float]] = []
+        for gxy in goals_xy:
+            gpt = self.get_unoccupied_neighbor(self.to_pt(gxy), start_pt)
+            goal_ijs.append(gpt)
+            snapped_goals.append(gxy)
+
+        result = plan_grid_multi_goal(
+            start_pt,
+            goal_ijs,
+            navigable=self._navigable,
+            stop_at_first=stop_at_first,
+        )
+        if not result.success or result.goal_index is None:
+            return None, None
+
+        path_xy = [start_xy] + [self.to_xy(pt) for pt in result.path_ij[1:-1]]
+        gi = int(result.goal_index)
+        path_xy.append(snapped_goals[gi])
+        return path_xy, gi
+
+    def plan(self, start, goal, verbose: bool = True, goals=None, **kwargs) -> PlanResult:
+        """Plan from start to ``goal``, or to the nearest of ``goals`` (multi-goal).
+
+        When ``goals`` is a non-empty sequence of XY(T) states, runs one shared grid
+        search and returns a trajectory to the nearest reachable goal (final theta from
+        that goal if provided).
+        """
         self.reset()
-        # if not self.space.is_valid(goal):
-        #     if verbose:
-        #         print("[Planner] invalid goal")
-        #     return PlanResult(False, reason="[Planner] invalid goal")
-        # Add start to the tree
-        # print('Start running A* ', time.time() - self.start_time, ' seconds after path planning starts')
-        waypoints = self.run_astar(start[:2], goal[:2])
-        # print('Finish running A* ', time.time() - self.start_time, ' seconds after path planning starts')
+        chosen_goal = goal
+        if goals is not None:
+            goal_list = list(goals)
+            if not goal_list:
+                return PlanResult(False, reason="no_goals")
+            goals_xy = [(float(g[0]), float(g[1])) for g in goal_list]
+            waypoints, gi = self.run_astar_multi_goal(start[:2], goals_xy, stop_at_first=True)
+            if waypoints is None or gi is None:
+                if verbose:
+                    print("A* multi-goal fails, check obstacle map")
+                return PlanResult(False, reason="A* multi-goal fails, check obstacle map")
+            chosen_goal = goal_list[gi]
+        else:
+            waypoints = self.run_astar(start[:2], goal[:2])
 
         if waypoints is None:
             if verbose:
@@ -374,10 +416,12 @@ class AStar(Planner):
             parent = None
         else:
             parent = trajectory[-1]
-        trajectory.append(Node(np.array([waypoints[-1][0], waypoints[-1][1], goal[-1]]), parent=parent))
+        final_theta = (
+            float(chosen_goal[2]) if len(chosen_goal) > 2 else float(trajectory[-1].state[2]) if trajectory else 0.0
+        )
+        trajectory.append(Node(np.array([waypoints[-1][0], waypoints[-1][1], final_theta]), parent=parent))
 
         # Save the nodes for this planner
         self.nodes = trajectory
 
-        # print('Finish computing theta ', time.time() - self.start_time, ' seconds after path planning starts')
         return PlanResult(True, trajectory=trajectory)

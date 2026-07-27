@@ -11,6 +11,8 @@ from typing import Any
 
 import numpy as np
 
+from emet.controller.task.tamp.grasp_frames import top_down_grasp_T
+
 
 def plant_mixed_grasp_poses(
     reachable_xyz: np.ndarray | Sequence[float],
@@ -18,7 +20,7 @@ def plant_mixed_grasp_poses(
     n_infeasible: int = 2,
     infeasible_offset: np.ndarray | Sequence[float] | None = None,
 ) -> list[Any]:
-    """Build grasp candidates with infeasible poses first, then a reachable COM-style grasp.
+    """Build grasp candidates with infeasible poses first, then a reachable top-down grasp.
 
     Used by the multi-option TAMP smoke so naive ``chosen=0`` would pick a decoy.
     """
@@ -32,10 +34,7 @@ def plant_mixed_grasp_poses(
         offset = np.asarray(infeasible_offset, dtype=np.float64).reshape(3)
     poses: list[Any] = []
     for i in range(max(1, int(n_infeasible))):
-        T = np.eye(4, dtype=np.float64)
-        T[:3, 3] = good + offset * (1.0 + 0.15 * i)
+        T = top_down_grasp_T(good + offset * (1.0 + 0.15 * i))
         poses.append(GraspPose(T_world=T, score=0.1, asset_id=f"decoy_{i}"))
-    T_ok = np.eye(4, dtype=np.float64)
-    T_ok[:3, 3] = good
-    poses.append(GraspPose(T_world=T_ok, score=1.0, asset_id="reachable_com"))
+    poses.append(GraspPose(T_world=top_down_grasp_T(good), score=1.0, asset_id="reachable_topdown"))
     return poses

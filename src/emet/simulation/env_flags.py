@@ -48,9 +48,9 @@ def env_manip_mode() -> str:
 
 
 def env_manip_collision() -> str:
-    """Arm collision filter: ``none``, ``voxel`` (default when unset → empty = defer to config)."""
+    """Arm collision filter: ``none``, ``aabb`` (table solids), ``voxel`` (2D map)."""
     raw = os.environ.get("EMET_MANIP_COLLISION", "").strip().lower()
-    if raw in ("none", "voxel"):
+    if raw in ("none", "voxel", "aabb"):
         return raw
     return ""
 
@@ -69,7 +69,7 @@ def env_sim_third_person() -> bool:
 
 
 def env_sim_third_person_camera() -> str:
-    """MuJoCo camera name for third-person recording (default ``third_person``)."""
+    """Optional body name to follow for chase cam (default falls through to ``base_link``)."""
     raw = os.environ.get("EMET_SIM_THIRD_PERSON_CAMERA", "").strip()
     return raw or "third_person"
 

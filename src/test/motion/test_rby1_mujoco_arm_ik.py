@@ -10,6 +10,7 @@ from pathlib import Path
 
 import mujoco
 import numpy as np
+import pytest
 
 from emet.motion.mujoco_arm_ik import (
     RBY1_LEFT_ARM_JOINTS,
@@ -19,6 +20,8 @@ from emet.motion.mujoco_arm_ik import (
     solve_position_ik,
 )
 from emet.robots.rby1 import Rby1Backend
+
+pytestmark = pytest.mark.sim
 
 
 def _rby1_mjcf() -> Path:
