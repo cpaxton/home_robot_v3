@@ -2,40 +2,33 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""Unit tests for scripts/hmeqa_significance.py (no GPU)."""
+"""Unit tests for emet.eval.hmeqa_significance (no GPU)."""
 
 from __future__ import annotations
 
-import importlib.util
+import os
+
+# Before importing significance (scipy): avoid OpenBLAS fork+subprocess SIGSEGV.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+
 import json
 from pathlib import Path
 
 import pytest
 
-_SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "hmeqa_significance.py"
+from emet.eval import hmeqa_significance as sig
 
 
-def _load_mod():
-    spec = importlib.util.spec_from_file_location("hmeqa_significance", _SCRIPT)
-    assert spec is not None and spec.loader is not None
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-@pytest.fixture(scope="module")
-def sig():
-    return _load_mod()
-
-
-def test_wilson_ci_bounds(sig):
+def test_wilson_ci_bounds():
     lo, hi = sig._wilson_ci(5, 8)
     assert lo is not None and hi is not None
     assert 0.0 <= lo < 5 / 8 < hi <= 1.0
     assert sig._wilson_ci(0, 0) == (None, None)
 
 
-def test_mcnemar_identical_arms_p_one(sig):
+def test_mcnemar_identical_arms_p_one():
     pairs = [
         {"classic_correct": True, "agentic_correct": True},
         {"classic_correct": False, "agentic_correct": False},
@@ -48,7 +41,7 @@ def test_mcnemar_identical_arms_p_one(sig):
     assert m["p_value"] == 1.0
 
 
-def test_mcnemar_discordant_tallies(sig):
+def test_mcnemar_discordant_tallies():
     # 1 classic-only, 3 agentic-only → discordant=4, agentic favored
     pairs = [
         {"classic_correct": True, "agentic_correct": False},  # classic_only
@@ -68,7 +61,7 @@ def test_mcnemar_discordant_tallies(sig):
     assert 0.0 < m["p_value"] <= 1.0
 
 
-def test_paired_rows_join_on_shared_ids(sig):
+def test_paired_rows_join_on_shared_ids():
     classic = {
         1: {"correct": True, "planning_steps": 10, "predicted_answer": "A"},
         2: {"correct": False, "planning_steps": 20, "predicted_answer": "B"},
@@ -85,7 +78,7 @@ def test_paired_rows_join_on_shared_ids(sig):
     assert pairs[1]["classic_correct"] is False and pairs[1]["agentic_correct"] is True
 
 
-def test_analyze_pairs_end_to_end(sig, tmp_path: Path):
+def test_analyze_pairs_end_to_end(tmp_path: Path):
     pairs = [
         {
             "question_id": 1,
@@ -151,7 +144,7 @@ def test_analyze_pairs_end_to_end(sig, tmp_path: Path):
     assert again["mcnemar"]["discordant"] == 2
 
 
-def test_analyze_run_dir_jsonl(sig, tmp_path: Path):
+def test_analyze_run_dir_jsonl(tmp_path: Path):
     for arm, rows in (
         (
             "classic",

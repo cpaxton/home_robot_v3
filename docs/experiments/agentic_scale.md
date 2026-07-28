@@ -21,8 +21,9 @@ Goal: test whether classic vs agentic-verify Dynagraph gains hold past holdout-8
 - VLM: `Qwen/Qwen3-VL-8B-Instruct`
 - `explore_when_uncovered=off`, `--no-mcq-debias`, `--memory-summary`
 - Agentic: `EMET_EQA_AGENTIC_VERIFY=1`; scored bal-32 used `EMET_EQA_AGENTIC_ROUTER=0` (H2H now honors env; default still 0)
+- Hyp recall: evidence cards (`EMET_EQA_HYP_RECALL_K`, default 6); visited frontiers retired from the graph — see [agentic_qwen_context.md](agentic_qwen_context.md#approach-current)
 - Classic: `EMET_EQA_AGENTIC_VERIFY=0`
-- Dogfood: `uv run emet hmeqa overnight` or `emet hmeqa h2h --preset paper-router`
+- Dogfood: `uv run emet hmeqa overnight` or `emet hmeqa h2h --preset paper-router`; inspect with `emet hmeqa inspect OUT --qid N`
 - Always use distinct `--debug-run-tag` / `OUT/bundles/{arm}_qN` (see `scripts/run_hmeqa_agentic_h2h.sh`)
 - Do **not** set `COPY_PAPER_FIGS=1` on bal-32 (overwrites holdout-8 paper figures)
 
@@ -51,8 +52,7 @@ uv run python scripts/build_agentic_decision_dataset.py ~/.cache/habitat_eqa/epi
 uv run python scripts/run_agentic_verifier_bakeoff.py ~/runs/emet/hmeqa_decisions.jsonl \
   -o ~/runs/emet/hmeqa_verifier_bakeoff --methods siglip1,siglip2,owlv2,yoloe \
   --detector-crop-siglip
-uv run python scripts/summarize_agentic_ladder.py RUN_DIR \
-  --require-balanced32-gate
+uv run emet hmeqa ladder RUN_DIR --require-balanced32-gate
 ```
 
 The balanced-32 gate requires at least four probe episodes, nonzero fused verified-answer rate, and zero forced submits.
@@ -79,8 +79,8 @@ uv run emet jobs
 uv run emet hmeqa resume "$OUT" --preset paper-router
 
 # After DONE: minimal paper data (+ significance)
-uv run python scripts/summarize_hmeqa_agentic_h2h.py "$OUT"
-uv run python scripts/hmeqa_significance.py "$OUT"
+uv run emet hmeqa summarize "$OUT"
+uv run emet hmeqa significance "$OUT"
 cp "$OUT/h2h_summary.json" paper/data/hmeqa_agentic_h2h/balanced32_summary.json
 ```
 
@@ -140,6 +140,7 @@ Full write-up: [known_issues.md](../known_issues.md#nvidia-driver-hang--cursor-a
 
 ## Related
 
+- Qwen context (classic vs agentic): [agentic_qwen_context.md](agentic_qwen_context.md)
 - Holdout results: [habitat_eqa_results.md](habitat_eqa_results.md) (Classic vs agentic-verify)
 - Minimal checked-in summaries: [`paper/data/hmeqa_agentic_h2h/`](../../paper/data/hmeqa_agentic_h2h/), [`paper/data/README.md`](../../paper/data/README.md)
 - Do not chain Robocasa + full pytest + Habitat VLM in one session.

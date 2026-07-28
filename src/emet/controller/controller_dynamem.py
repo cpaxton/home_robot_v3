@@ -608,6 +608,9 @@ class DynamemController(BaseController):
             self.space,
             min_clearance_m=self._min_clearance_m,
             clearance_cost_weight=self._clearance_cost_weight,
+            start_escape_max_ring=int(
+                parameters.get("motion_planner/start_escape_max_ring", 8)
+            ),
         )
         # Frontier / explore memory: mark goals blocked after waypoint timeout so
         # multi-goal A* skips stuck frontiers instead of re-picking them.

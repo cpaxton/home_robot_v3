@@ -41,7 +41,7 @@
 #
 # Prefer: uv run emet hmeqa h2h|resume  (dogfood CLI over hand-rolled env/taskset).
 # Recovery after an agent/session death (from *this* checkout — not a sibling tree):
-#   bash scripts/status_log.sh tail
+#   uv run emet status tail
 #   uv run emet eval recover --need-mib 12000
 #   uv run emet hmeqa resume
 set -euo pipefail
@@ -379,7 +379,7 @@ jobs_heartbeat "init" "-" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
 STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL init"
 status_note START \
   "arms=$ARMS ids=$HOLDOUT_IDS head=$(git rev-parse --short HEAD) resume=$RESUME" \
-  "nothing — wait for the job. Progress: uv run emet jobs; log: bash scripts/status_log.sh tail"
+  "nothing — wait for the job. Progress: uv run emet jobs; log: uv run emet status tail"
 gpu_wait
 if [[ "$SKIP_KILL_STALE" == "1" ]]; then
   log "SKIP_KILL_STALE=1 — not running gpu_preflight --kill-stale"
@@ -428,7 +428,7 @@ run_arm() {
       jobs_heartbeat "$name" "$qid" "$PROGRESS_DONE" "$PROGRESS_TOTAL"
       STATUS_PROGRESS="$PROGRESS_DONE/$PROGRESS_TOTAL $name q$qid"
       status_note RUNNING "episode $name q$qid started (timeout ${TIMEOUT}s)" \
-        "nothing — episode in flight (~4 min each). Re-check: bash scripts/status_log.sh tail"
+        "nothing — episode in flight (~4 min each). Re-check: uv run emet status tail"
       set +e
       # shellcheck disable=SC2086
       env PYTHONFAULTHANDLER=1 "$@" timeout --kill-after=30s "$TIMEOUT" "$EMET_HABITAT" run-episode \

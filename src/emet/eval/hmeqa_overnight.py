@@ -198,7 +198,7 @@ def run_overnight(
         base,
         "RUNNING",
         f"overnight ladder: holdout-8 then gated bal-32 @ {head}",
-        "uv run emet jobs; bash scripts/status_log.sh tail — do not kill-stale while live",
+        "uv run emet jobs; uv run emet status tail — do not kill-stale while live",
         progress="holdout8 starting",
     )
 

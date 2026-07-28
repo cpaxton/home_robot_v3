@@ -38,23 +38,21 @@ def test_context_relations_have_timestamped_beliefs():
     assert any(edge[2] == "accessible_from" for edge in memory.get_edges())
 
 
-def test_information_gain_ranking_reports_components():
+def test_recall_ranking_prefers_landmark_graph_hit():
+    """Recall ranks graph+landmark higher than path-penalized duplicate; no policy remix."""
     memory = GraphEQAMemory(defer_llm_clients=True)
     memory._relevant_phrases = ["basket"]
+    memory._relevant_objects = ["basket"]
     first = memory.add_observation(_rgb(), np.array([1.0, 0.0, 0.5]), ["basket", "dining table"])
     second = memory.add_observation(_rgb(), np.array([0.2, 0.0, 0.5]), ["basket"])
-    second_node = memory._node_for_obs(second)
-    assert second_node is not None
-    second_node.nav_attempts = 2
-    second_node.nav_failures = 2
     ranked = memory.hypothesize_nav_targets(
         "Where is the basket? A) by dining table B) by sofa Answer:",
         max_k=2,
         robot_xyt=np.array([0.0, 0.0, 0.0]),
     )
     assert ranked[0].obs_id == first
+    assert ranked[0].source == "graph"
     assert ranked[0].answerability_gain >= ranked[1].answerability_gain
-    assert ranked[1].failure_risk == 1.0
     assert ranked[0].path_cost > 0.0
 
 

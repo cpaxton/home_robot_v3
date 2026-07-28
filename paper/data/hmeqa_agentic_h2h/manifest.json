@@ -118,7 +118,8 @@
     "entrypoint": "scripts/run_hmeqa_agentic_h2h.sh",
     "cli": "uv run emet hmeqa h2h|resume|overnight",
     "summarize": "scripts/summarize_hmeqa_agentic_h2h.py",
-    "significance": "scripts/hmeqa_significance.py",
+    "significance": "uv run emet hmeqa significance",
+    "ladder": "uv run emet hmeqa ladder",
     "coverage_figure": "scripts/render_hmeqa_agentic_coverage_figure.py",
     "docs": [
       "paper/data/README.md",
