@@ -56,6 +56,23 @@ def resolve_pretrained_source(model_id: str, *, prefer_local: bool | None = None
 
     try:
         path = snapshot_download(mid, local_files_only=True)
+        # Incomplete snapshots can still resolve (refs present, few files). Require a
+        # processor/tokenizer marker or weight index before forcing local_files_only.
+        markers = (
+            "preprocessor_config.json",
+            "processor_config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "model.safetensors.index.json",
+            "model.safetensors",
+            "pytorch_model.bin",
+        )
+        if not any(os.path.exists(os.path.join(path, name)) for name in markers):
+            if force_local:
+                raise FileNotFoundError(
+                    f"HF cache for {mid!r} at {path} is incomplete (no processor/weights markers)"
+                )
+            return mid, {}
         return path, {"local_files_only": True}
     except Exception:
         if force_local:

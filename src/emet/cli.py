@@ -2182,6 +2182,8 @@ def _hmeqa_launch(
     job_name: str,
     need_mib: int,
     foreground: bool,
+    eqa_hf_model_id: str | None = None,
+    eqa_vl_family: str | None = None,
 ) -> None:
     """Register H2H via ``emet jobs run`` (cpu-safe + gpu-exclusive defaults)."""
     import shlex
@@ -2201,6 +2203,10 @@ def _hmeqa_launch(
         f"EMET_EQA_AGENTIC_REQUIRE_VERIFIED={int(require_verified)}",
         f"EMET_EQA_AGENTIC_ROUTER={int(agentic_router)}",
     ]
+    if eqa_hf_model_id:
+        env_parts.append(f"EQA_HF_MODEL_ID={shlex.quote(eqa_hf_model_id)}")
+    if eqa_vl_family:
+        env_parts.append(f"EQA_VL_FAMILY={shlex.quote(eqa_vl_family)}")
     if resume:
         env_parts.append("RESUME=1")
     inner = "env " + " ".join(env_parts) + " " + shlex.quote(str(script)) + " " + shlex.quote(str(out))
@@ -2277,6 +2283,16 @@ def _hmeqa_launch(
     default=None,
     help="paper-router: owlv2 + allow-unverified + agentic-router (explicit flags still win).",
 )
+@click.option(
+    "--eqa-hf-model-id",
+    default=None,
+    help="Override HF VLM id (sets EQA_HF_MODEL_ID → emet-habitat --eqa-hf-model-id).",
+)
+@click.option(
+    "--eqa-vl-family",
+    default=None,
+    help="Override VL family (sets EQA_VL_FAMILY → emet-habitat --eqa-vl-family).",
+)
 @click.option("--job-name", default="hmeqa-h2h", show_default=True)
 @click.option("--need-mib", type=int, default=12000, show_default=True)
 @click.option("--foreground", is_flag=True)
@@ -2295,6 +2311,8 @@ def hmeqa_h2h(
     require_verified: bool,
     agentic_router: bool,
     preset: str | None,
+    eqa_hf_model_id: str | None,
+    eqa_vl_family: str | None,
     job_name: str,
     need_mib: int,
     foreground: bool,
@@ -2330,6 +2348,8 @@ def hmeqa_h2h(
         job_name=job_name,
         need_mib=need_mib,
         foreground=foreground,
+        eqa_hf_model_id=eqa_hf_model_id,
+        eqa_vl_family=eqa_vl_family,
     )
 
 
@@ -2355,6 +2375,16 @@ def hmeqa_h2h(
     default=None,
     help="paper-router: owlv2 + allow-unverified + agentic-router (explicit flags still win).",
 )
+@click.option(
+    "--eqa-hf-model-id",
+    default=None,
+    help="Override HF VLM id (sets EQA_HF_MODEL_ID → emet-habitat --eqa-hf-model-id).",
+)
+@click.option(
+    "--eqa-vl-family",
+    default=None,
+    help="Override VL family (sets EQA_VL_FAMILY → emet-habitat --eqa-vl-family).",
+)
 @click.option("--job-name", default="hmeqa-h2h-resume", show_default=True)
 @click.option("--need-mib", type=int, default=12000, show_default=True)
 @click.option("--foreground", is_flag=True)
@@ -2372,6 +2402,8 @@ def hmeqa_resume(
     require_verified: bool,
     agentic_router: bool,
     preset: str | None,
+    eqa_hf_model_id: str | None,
+    eqa_vl_family: str | None,
     job_name: str,
     need_mib: int,
     foreground: bool,
@@ -2420,6 +2452,8 @@ def hmeqa_resume(
         job_name=job_name,
         need_mib=need_mib,
         foreground=foreground,
+        eqa_hf_model_id=eqa_hf_model_id,
+        eqa_vl_family=eqa_vl_family,
     )
 
 

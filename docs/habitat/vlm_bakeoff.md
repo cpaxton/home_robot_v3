@@ -46,8 +46,22 @@ uv run python scripts/smoke_vl_model.py gemma4 google/gemma-4-E4B-it int4
 uv run python scripts/smoke_vl_model.py qwen2_5_vl Qwen/Qwen2.5-VL-3B-Instruct
 ```
 
-Supported `vl_family` values: `qwen3_vl`, `qwen3_5`, `qwen2_5_vl`, `gemma4` (see
+Supported `vl_family` values: `qwen3_vl`, `qwen3_5`, `qwen2_5_vl`, `gemma4`, `internvl` (see
 `src/emet/llms/vllm_registry.py`).
+
+## Wave: InternVL3-14B (mid-size candidate)
+
+Qwen3-VL has no 14B; InternVL3 does (`OpenGVLab/InternVL3-14B-hf`, HF-native). Peak-smoke
+before Habitat:
+
+```bash
+uv run python scripts/smoke_vl_model.py internvl OpenGVLab/InternVL3-14B-hf int4
+# with VRAM trace:
+uv run python scripts/smoke_vl_peak.py --family internvl OpenGVLab/InternVL3-14B-hf int4 OUT
+```
+
+Abort Habitat if peak leaves &lt; ~8 GiB free. Wire-up: `emet.llms.internvl_client` /
+`vl_family=internvl`.
 
 ## Run one candidate on canonical-6
 
@@ -142,6 +156,32 @@ Debias audit fields on each row: `predebias_letter`, `debias_votes` (JSON string
 Balanced-31 with the 8B winner was **in progress** at last update; check
 `subset_fable5_bake_winner_bal32_qwen3_vl.jsonl`.
 
+## Wave: larger VLM (32B int4 candidate)
+
+Default production VLM remains **Qwen3-VL-8B-Instruct int4**. During live 8B HM-EQA on an
+RTX 4090 we see ~13 GiB used / ~11 GiB free, so **Qwen3-VL-32B-Instruct int4** is a
+*candidate with OOM risk*, not ruled out a priori (paper appendix `06_model_choice.tex`).
+
+Ladder (dogfood `emet`; **do not** start bal-32 until holdout-4 is healthy):
+
+```bash
+# 1) Smoke — no Habitat. Record peak VRAM; abort on OOM.
+uv run python scripts/smoke_vl_model.py qwen3_vl Qwen/Qwen3-VL-32B-Instruct int4
+
+# 2) Holdout-4 agentic only (paper-router). Prefer emet jobs via the CLI:
+uv run emet eval recover --need-mib 12000
+uv run emet hmeqa h2h --preset paper-router --arms agentic --ids 15,68,105,17 \
+  --eqa-hf-model-id Qwen/Qwen3-VL-32B-Instruct --job-name hmeqa-hold4-32b
+# Equivalent env into the script:
+#   EQA_HF_MODEL_ID=Qwen/Qwen3-VL-32B-Instruct EQA_VL_FAMILY=qwen3_vl
+```
+
+**Abort rules:** OOM; EGL fail streak; episode wall ≫ 2× the 8B baseline → stop.
+Optional holdout-8 only after holdout-4 looks OK; bal-32 only after that.
+Fallbacks: larger `gemma4` HF id from `vllm_registry`, or `qwen3_5` ~27B only if `fla`
+kernels are healthy. See also [agentic_scale.md](../experiments/agentic_scale.md)
+(“Wave: larger VLM”).
+
 ## Related docs
 
 - [usage.md](usage.md) — general Habitat EQA CLI
@@ -149,3 +189,4 @@ Balanced-31 with the 8B winner was **in progress** at last update; check
   analysis, debiasing, excluded questions, infrastructure bugs
 - [docs/dynagraph.md](../dynagraph.md) — Dynagraph vs GraphEQA
 - Paper appendix: `paper/sections/appendix/06_model_choice.tex`
+- [agentic_scale.md](../experiments/agentic_scale.md) — H2H ladder + larger-VLM recipe

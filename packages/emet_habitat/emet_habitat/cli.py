@@ -100,9 +100,9 @@ def _eqa_cli_options(fn):
         click.option(
             "--eqa-vl-family",
             default=None,
-            help="EQA VLM family: qwen3_vl, qwen3_5, qwen2_5_vl, gemma4 (default: dynav_config.yaml eqa.vl_family)",
+            help="EQA VLM family: qwen3_vl, qwen3_5, qwen2_5_vl, gemma4, internvl (default: dynav_config.yaml eqa.vl_family)",
         ),
-        click.option("--eqa-hf-model-id", default=None, help="Override HF model id (e.g. google/gemma-3-4b-it)"),
+        click.option("--eqa-hf-model-id", default=None, help="Override HF model id (e.g. OpenGVLab/InternVL3-14B-hf)"),
         click.option("--device", default="cuda", help="VLM device (cuda, cpu, mps)"),
     ]
     for opt in reversed(opts):
