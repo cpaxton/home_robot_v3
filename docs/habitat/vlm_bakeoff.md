@@ -46,8 +46,22 @@ uv run python scripts/smoke_vl_model.py gemma4 google/gemma-4-E4B-it int4
 uv run python scripts/smoke_vl_model.py qwen2_5_vl Qwen/Qwen2.5-VL-3B-Instruct
 ```
 
-Supported `vl_family` values: `qwen3_vl`, `qwen3_5`, `qwen2_5_vl`, `gemma4` (see
+Supported `vl_family` values: `qwen3_vl`, `qwen3_5`, `qwen2_5_vl`, `gemma4`, `internvl` (see
 `src/emet/llms/vllm_registry.py`).
+
+## Wave: InternVL3-14B (mid-size candidate)
+
+Qwen3-VL has no 14B; InternVL3 does (`OpenGVLab/InternVL3-14B-hf`, HF-native). Peak-smoke
+before Habitat:
+
+```bash
+uv run python scripts/smoke_vl_model.py internvl OpenGVLab/InternVL3-14B-hf int4
+# with VRAM trace:
+uv run python scripts/smoke_vl_peak.py --family internvl OpenGVLab/InternVL3-14B-hf int4 OUT
+```
+
+Abort Habitat if peak leaves &lt; ~8 GiB free. Wire-up: `emet.llms.internvl_client` /
+`vl_family=internvl`.
 
 ## Run one candidate on canonical-6
 

@@ -5,6 +5,8 @@
 """Smoke-load an EQA VL model and run one tiny multimodal generate.
 
 Usage: python scripts/smoke_vl_model.py <family> <hf_model_id> [quantization]
+
+Families: qwen3_vl, qwen3_5, qwen2_5_vl, gemma4, internvl
 """
 
 import sys
