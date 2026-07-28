@@ -609,6 +609,10 @@ class DynamemController(BaseController):
             min_clearance_m=self._min_clearance_m,
             clearance_cost_weight=self._clearance_cost_weight,
         )
+        # Frontier / explore memory: mark goals blocked after waypoint timeout so
+        # multi-goal A* skips stuck frontiers instead of re-picking them.
+        self._habitat_blocked_goals: set[tuple[float, float]] = set()
+        self._habitat_recent_goals: list[tuple[float, float]] = []
 
         cfg = self.embodied_agent
         if cfg.open_vocab_scene_graph.enabled and not self.manipulation_only:
@@ -1822,6 +1826,7 @@ class DynamemController(BaseController):
         kept: list = []
         reject: str | None = None
         clearances: list[float] = []
+        prev_xy: tuple[float, float] | None = None
         for raw in body:
             arr = np.asarray(raw, dtype=np.float64).reshape(-1)
             if arr.size < 2 or not np.isfinite(arr[:2]).all():
@@ -1837,7 +1842,17 @@ class DynamemController(BaseController):
             if not is_start and min_c > 0 and c < min_c:
                 reject = "rejected_low_clearance"
                 break
+            # Mid-segment samples: reject chords that scrape low-clearance cells
+            # between two individually-safe waypoints (post-simplify hazard).
+            if prev_xy is not None and not is_start and hasattr(planner, "to_pt"):
+                try:
+                    if not planner.is_in_line_of_sight(planner.to_pt(prev_xy), planner.to_pt(xy)):
+                        reject = "rejected_low_clearance_segment"
+                        break
+                except Exception:
+                    pass
             kept.append(raw if isinstance(raw, list) else arr.tolist())
+            prev_xy = xy
 
         min_along = float(min(clearances)) if clearances else None
         if not kept:
@@ -1848,6 +1863,40 @@ class DynamemController(BaseController):
         if object_tail:
             kept.extend(object_tail)
         return kept, None, min_along
+
+    def _mark_nav_goal_blocked(self, *, reason: str = "aborted_waypoint_timeout") -> None:
+        """Remember the last nav goal so explore multi-goal A* skips it next time."""
+        blocked = getattr(self, "_habitat_blocked_goals", None)
+        if blocked is None:
+            self._habitat_blocked_goals = set()
+            blocked = self._habitat_blocked_goals
+        recent = getattr(self, "_habitat_recent_goals", None)
+        if recent is None:
+            self._habitat_recent_goals = []
+            recent = self._habitat_recent_goals
+
+        meta = dict(getattr(self, "_last_nav_plan", None) or {})
+        candidates: list[tuple[float, float]] = []
+        for key in ("goal_xyt", "object_xyz", "effective_goal_xy"):
+            raw = meta.get(key)
+            if raw is None:
+                continue
+            arr = np.asarray(raw, dtype=np.float64).reshape(-1)
+            if arr.size >= 2 and np.isfinite(arr[:2]).all():
+                candidates.append((float(arr[0]), float(arr[1])))
+        traj = meta.get("traj") or []
+        for p in reversed(list(traj)):
+            arr = np.asarray(p, dtype=np.float64).reshape(-1)
+            if arr.size >= 2 and np.isfinite(arr[:2]).all():
+                candidates.append((float(arr[0]), float(arr[1])))
+                break
+        for xy in candidates:
+            key = goal_key_xy(xy)
+            blocked.add(key)
+            recent.append(key)
+        del recent[:-16]
+        self._record_nav_plan_fields(outcome=reason, blocked_after_abort=True)
+        logger.warning(f"Nav abort ({reason}): marked {len(candidates)} goal key(s) blocked for replan/explore skip")
 
     def _record_nav_plan_fields(self, **fields: Any) -> None:
         meta = dict(getattr(self, "_last_nav_plan", None) or {})
@@ -1936,6 +1985,7 @@ class DynamemController(BaseController):
                     )
                     if exec_ok is False:
                         self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
+                        self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")
                         logger.warning("Navigation aborted: waypoint timeout during execute_trajectory")
                         return None, None
 
@@ -1954,6 +2004,7 @@ class DynamemController(BaseController):
                 )
                 if exec_ok is False:
                     self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
+                    self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")
                     logger.warning("Navigation aborted: waypoint timeout during execute_trajectory")
                     return None, None
                 self.robot.look_front()
@@ -2916,6 +2967,7 @@ class DynamemController(BaseController):
             )
             if exec_ok is False:
                 self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
+                self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")
                 nav_res = NavAttemptResult(
                     success=False,
                     finished=False,

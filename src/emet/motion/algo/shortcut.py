@@ -53,29 +53,28 @@ class Shortcut(Planner):
             # Sample two indices
             idx0 = np.random.randint(len(res.trajectory) - 3)
             idx1 = np.random.randint(idx0 + 1, len(res.trajectory))
-            # print("connect", idx0, idx1)
             node_a = res.trajectory[idx0]
             node_b = res.trajectory[idx1]
-            # Extend between them
+            # Extend between them — every mid-config must validate (prefer no
+            # shortcut over an unsafe chord through collision).
             previous_node = node_a
             success = False
+            goal = np.asarray(node_b.state, dtype=np.float64).reshape(-1)
             for qi in self.space.extend(node_a.state, node_b.state):
-                if np.all(qi == node_b.state):
+                qi_arr = np.asarray(qi, dtype=np.float64).reshape(-1)
+                if not self.validate(qi_arr):
+                    success = False
+                    break
+                if np.allclose(qi_arr, goal, atol=1e-9, rtol=0.0):
                     success = True
                     break
-                if not self.validate(qi):
-                    break
-                else:
-                    self.nodes.append(TreeNode(qi, parent=previous_node))
-                    previous_node = self.nodes[-1]
+                self.nodes.append(TreeNode(qi_arr, parent=previous_node))
+                previous_node = self.nodes[-1]
             else:
-                success = True
+                # Generator finished without yielding an exact goal — only accept
+                # if the final extend point reached the goal under tolerance.
+                success = False
             if success:
-                # Finish by connecting the two
-                # print("Connection success", idx1)
                 node_b.parent = previous_node
         new_trajectory = res.trajectory[-1].backup()
-        # print("Plan =")
-        # for i, pt in enumerate(new_trajectory):
-        #     print(i, pt.state)
         return PlanResult(True, new_trajectory, planner=self)

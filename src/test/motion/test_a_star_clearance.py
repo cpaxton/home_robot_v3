@@ -118,3 +118,80 @@ def test_hard_min_clearance_rejects_wall_hug_cells():
     assert planner.point_is_occupied(10, 2)
     mid_y = 15
     assert not planner.point_is_occupied(10, mid_y)
+
+
+def _l_obstacle_map(nx: int = 40, ny: int = 40) -> tuple[np.ndarray, np.ndarray]:
+    """Open room with an L-shaped obstacle that invites corner-cutting chords."""
+    obs = np.zeros((nx, ny), dtype=bool)
+    exp = np.ones((nx, ny), dtype=bool)
+    # Vertical bar + horizontal bar meeting near (20, 20).
+    obs[18:23, 5:21] = True
+    obs[10:23, 18:23] = True
+    return obs, exp
+
+
+def test_los_rejects_chord_through_obstacle_corner():
+    """Direct chord across an L-corner must fail even if endpoints are free."""
+    obs, exp = _l_obstacle_map()
+    space = _FakeSpace(_FakeVoxelMap(obs, exp, resolution=0.1))
+    planner = AStar(space, min_clearance_m=0.15, clearance_cost_weight=0.0, grid_resolution_m=0.1)
+    planner.reset()
+    # Endpoints sit in free space on either side of the L.
+    a, b = (12, 12), (28, 12)
+    assert not planner.point_is_occupied(*a)
+    assert not planner.point_is_occupied(*b)
+    assert not planner.is_in_line_of_sight(a, b)
+    assert not planner.is_clearance_line_of_sight(a, b)
+
+
+def test_clean_path_keeps_detour_instead_of_cutting_corner():
+    """clean_path must not collapse a detour into a chord through the L obstacle."""
+    obs, exp = _l_obstacle_map()
+    space = _FakeSpace(_FakeVoxelMap(obs, exp, resolution=0.1))
+    planner = AStar(space, min_clearance_m=0.15, clearance_cost_weight=1.0, grid_resolution_m=0.1)
+    planner.reset()
+    # Detour south of the vertical bar (y < 5) then up — every consecutive
+    # pair must be free; coarse jumps that skip the wall are invalid inputs.
+    detour = [
+        (12, 12),
+        (12, 3),
+        (16, 3),
+        (20, 3),
+        (24, 3),
+        (28, 3),
+        (28, 12),
+    ]
+    for pt in detour:
+        assert not planner.point_is_occupied(*pt), pt
+    for i in range(len(detour) - 1):
+        assert planner.is_in_line_of_sight(detour[i], detour[i + 1]), (detour[i], detour[i + 1])
+    cleaned = planner.clean_path(detour)
+    assert cleaned[0][:2] == detour[0]
+    assert cleaned[-1][:2] == detour[-1]
+    for i in range(len(cleaned) - 1):
+        assert planner.is_in_line_of_sight(cleaned[i][:2], cleaned[i + 1][:2])
+    # Collapsing start→goal in one hop would cut the corner — must not happen.
+    assert not planner.is_in_line_of_sight(detour[0], detour[-1])
+    assert len(cleaned) >= 3
+
+
+def test_clean_path_for_xy_clearance_holds_along_segments():
+    obs, exp = _l_obstacle_map()
+    space = _FakeSpace(_FakeVoxelMap(obs, exp, resolution=0.1))
+    planner = AStar(space, min_clearance_m=0.15, clearance_cost_weight=1.0, grid_resolution_m=0.1)
+    start = (1.25, 1.25, 0.0)
+    goal = (2.85, 1.25, 0.0)
+    res = planner.plan(start, goal, verbose=False)
+    assert res.success, getattr(res, "reason", None)
+    traj = planner.clean_path_for_xy(
+        [np.asarray(n.state).reshape(-1).tolist() for n in res.trajectory],
+        start_yaw=0.0,
+    )
+    min_c = float(planner.min_clearance_m)
+    for p in traj:
+        xy = (float(p[0]), float(p[1]))
+        assert planner.clearance_at_xy(xy) + 1e-6 >= min_c
+    for i in range(len(traj) - 1):
+        a = planner.to_pt((traj[i][0], traj[i][1]))
+        b = planner.to_pt((traj[i + 1][0], traj[i + 1][1]))
+        assert planner.is_in_line_of_sight(a, b)
