@@ -1925,6 +1925,77 @@ class GraphEQAMemory:
             self.refresh_room_clusters()
         return format_rooms_compact(self._room_clusters, max_chars=max_chars)
 
+    def stamp_vlm_room_at_robot(self, robot_xy: Any, room: str | None) -> str:
+        """Stamp VLM ``current_room`` onto the nearest cluster; return stamped name or unknown."""
+        from emet.memory.graph_eqa.agentic_tools import normalize_current_room
+        from emet.memory.graph_eqa.room_clusters import stamp_room_at_xy
+
+        name = normalize_current_room(room)
+        if name == "unknown" or robot_xy is None:
+            return "unknown"
+        if not self._room_clusters:
+            self.refresh_room_clusters()
+        try:
+            xy = (float(robot_xy[0]), float(robot_xy[1]))
+        except Exception:
+            return "unknown"
+        self._room_clusters = stamp_room_at_xy(
+            self._room_clusters,
+            xy,
+            name,
+            max_dist_m=self._room_assign_max_m(),
+        )
+        self.last_room_clusters = list(self._room_clusters)
+        return name
+
+    def nearby_object_observations(
+        self,
+        robot_xy: Any,
+        *,
+        k: int = 3,
+        max_dist_m: float = 5.0,
+    ) -> list[dict[str, Any]]:
+        """Nearest object observations with RGB for multimodal router room context."""
+        if robot_xy is None or k <= 0:
+            return []
+        try:
+            rxy = np.asarray(robot_xy, dtype=float).reshape(-1)[:2]
+        except Exception:
+            return []
+        scored: list[tuple[float, dict[str, Any]]] = []
+        for obs in list(getattr(self, "_observations", None) or []):
+            rgb = getattr(obs, "rgb", None)
+            if not isinstance(rgb, np.ndarray) or rgb.ndim != 3:
+                continue
+            labels = [str(x).strip() for x in list(getattr(obs, "labels", None) or []) if str(x).strip()]
+            if any(lab.lower() == "frontier" for lab in labels) and len(labels) <= 1:
+                continue
+            xyz = getattr(obs, "xyz", None)
+            if xyz is None:
+                continue
+            try:
+                oxy = np.asarray(xyz, dtype=float).reshape(-1)[:2]
+                dist = float(np.linalg.norm(oxy - rxy))
+            except Exception:
+                continue
+            if dist > float(max_dist_m):
+                continue
+            phrase = labels[0] if labels else f"obs_{int(obs.obs_id)}"
+            scored.append(
+                (
+                    dist,
+                    {
+                        "obs_id": int(obs.obs_id),
+                        "dist_m": round(dist, 2),
+                        "labels": labels[:6],
+                        "phrase": phrase,
+                        "rgb": np.asarray(rgb),
+                    },
+                )
+            )
+        scored.sort(key=lambda t: t[0])
+        return [item for _, item in scored[: int(k)]]
+
     def _node_nav_status_suffix(self, node: GraphNode) -> str:
         failures = int(getattr(node, "nav_failures", 0) or 0)
         if failures <= 0:

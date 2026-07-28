@@ -32,10 +32,11 @@ Respond with ONLY a JSON object (no other text):
 {"current_room": "<room>", "tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
 
 Rules:
-- Always set current_room to where the robot is NOW (from Investigate cards /
-  Recent labels / REGION text / Recent actions) — not the destination.
-  Prefer: patio, outdoor, kitchen, living_room, dining_room, bedroom, bathroom,
-  hallway, garage, unknown.
+- Always set current_room to where the robot is NOW from the room-context images
+  (current view + nearby object images with distances) and Investigate cards —
+  not the destination. Prefer: patio, outdoor, kitchen, living_room, dining_room,
+  bedroom, bathroom, hallway, garage, unknown.
+- Grass / yard / outdoor furniture → outdoor or patio (never invent dining from chairs).
 - Each turn choose explicitly: INVESTIGATE a place card OR EXPLORE for coverage
   (then verify/assess runs at the station after investigate).
 - investigate(obs_id): closer look at a listed Investigate card (graph/confirmed/siglip).
@@ -223,6 +224,11 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         lines.append(f"Current room (graph): {graph_room}")
     if last_room:
         lines.append(f"Current room (router): {last_room}")
+    n_room_imgs = int(getattr(executor, "_last_router_n_images", 0) or 0)
+    if n_room_imgs > 0:
+        lines.append(
+            f"Room context images: {n_room_imgs} attached (current view + nearby objects; use for current_room)."
+        )
     if gm is not None:
         rooms_fn = getattr(gm, "format_rooms_line", None)
         if callable(rooms_fn):

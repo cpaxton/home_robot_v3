@@ -654,8 +654,8 @@ Local job registry under `~/runs/emet/jobs/` (override with `EMET_JOBS_DIR`). Qu
 | `emet jobs` / `emet jobs list` | Active registered jobs (+ unmanaged eval PIDs) |
 | `emet jobs list --all` | Include done/failed/cancelled |
 | `emet jobs status JOB_ID` | Human-readable record + progress/ETA + **viz paths** under `OUT/bundles/` / `figures/` (`--json` includes derived `progress`) |
-| `emet jobs report [JOB_ID]` | Progress + per-episode score table + viz/feh hints (defaults to running/waiting job). `conf` shows `v=` verify-gate and `e=` EQA `Confidence:` (often `e=N` even on correct letters) |
-| `emet jobs report [JOB_ID] --question ID [--arm agentic]` | Per-episode deep dive: hyp cards, router pick chain, investigate/station/explore outcomes (targets, `closest_m`, place ledger, `NAV_LOOP_BLOCKED`), assess present/absent + reasons, salvage letter, verify phrases/scores, red flags (stale re-verify, close-ABSENT, nav-loop spin, explore-heavy) |
+| `emet jobs report [JOB_ID]` | Progress + per-episode score table + viz/feh hints (defaults to running/waiting job). `conf` shows `v=` verify-gate and `e=` EQA `Confidence:` (often `e=N` even on correct letters). `--fail-only` lists incorrect rows; `--out-dir PATH` reports without a registry id |
+| `emet jobs report [JOB_ID] --question ID [--arm agentic]` | Per-episode deep dive with sections: **rooms** (merged/vlm/graph timeline, `Rooms:` line, MCQ targets, mismatch/redirects), router picks, investigate/station/explore, assess, verify, red flags. Flags: `--rooms` (rooms focus), `-s/--section`, `--brief`, `-v/--verbose`, `--json` |
 | `emet jobs cancel JOB_ID` | SIGTERM→SIGKILL job process tree; mark cancelled |
 | `emet jobs logs JOB_ID [--tail N]` | Tail queue/orchestrator log |
 | `emet jobs register …` | Scripts: create a record (prints job id) |
@@ -667,7 +667,10 @@ Local job registry under `~/runs/emet/jobs/` (override with `EMET_JOBS_DIR`). Qu
 ```bash
 uv run emet jobs
 uv run emet jobs report              # defaults to running job; scores from OUT/*_q*.jsonl
-uv run emet jobs report --question 88 # per-episode trace: phrases, verify scores, red flags
+uv run emet jobs report --fail-only
+uv run emet jobs report --question 104 --rooms   # room timeline / Rooms: line audit
+uv run emet jobs report --out-dir ~/runs/emet/hmeqa_… -q 104 -v
+uv run emet jobs report --question 88 # full per-episode trace
 uv run emet jobs list --all
 uv run emet jobs run --name dyn-improve-eqa --need-mib 14000 -- \
   ./scripts/run_dynagraph_dynamic_improve_smokes.sh ~/runs/emet/dynamic_exploration/eqa_out

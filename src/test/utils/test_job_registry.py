@@ -260,9 +260,7 @@ def test_format_job_detail_lists_viz_paths(tmp_path, monkeypatch):
 
 
 def test_episode_conf_cell_formats_gate_and_eqa():
-    cell = jr.EpisodeScore(
-        arm="agentic", question_id=1, confident=False, verified=True
-    ).conf_cell()
+    cell = jr.EpisodeScore(arm="agentic", question_id=1, confident=False, verified=True).conf_cell()
     assert cell == "v=Y e=N"
     assert jr.EpisodeScore(arm="classic", question_id=2, confident=True).conf_cell() == "e=Y"
     assert jr.EpisodeScore(arm="agentic", question_id=3).conf_cell() == "-"
@@ -271,6 +269,24 @@ def test_episode_conf_cell_formats_gate_and_eqa():
 def test_analyze_agentic_trace_flags_stale_and_phrase():
     rows = [
         {"tool": "inspect_graph", "picked_by": "loop"},
+        {
+            "event": "router_room",
+            "round": 0,
+            "current_room": "patio",
+            "current_room_vlm": "outdoor",
+            "current_room_graph": "patio",
+            "rooms_line": "Rooms: patio(3), kitchen(8)",
+            "question_target_rooms": ["dining_room", "kitchen", "living_room"],
+            "prefer_explore_reason": "room_mismatch",
+            "tool_calls": ["investigate"],
+        },
+        {
+            "event": "prefer_explore_redirect",
+            "round": 0,
+            "from": "investigate",
+            "to": "explore_frontier",
+            "from_args": {"obs_id": 13},
+        },
         {
             "hypotheses": [
                 {
@@ -319,17 +335,34 @@ def test_analyze_agentic_trace_flags_stale_and_phrase():
             "source": "vlm_frontier",
             "frontier_xyz": [-19.0, -3.0, 1.0],
         },
-        {"tool": "vlm_assess", "round": 0, "obs_id": 12, "present": False, "answerable": False,
-         "phrase": "fruit bowl", "reason": "not visible"},
+        {
+            "tool": "vlm_assess",
+            "round": 0,
+            "obs_id": 12,
+            "present": False,
+            "answerable": False,
+            "phrase": "fruit bowl",
+            "reason": "not visible",
+        },
         {"tool": "capture_and_update", "ok": True, "obs_id": 17},
-        {"tool": "verify_siglip", "obs_id": 17, "phrase": "sets utensils already",
-         "answerable": False, "detector_score": 0.06},
+        {
+            "tool": "verify_siglip",
+            "obs_id": 17,
+            "phrase": "sets utensils already",
+            "answerable": False,
+            "detector_score": 0.06,
+        },
         {"tool": "submit_answer", "event": "tool_pick", "picked_by": "fallback"},
         {"tool": "submit_answer", "event": "tool_pick", "picked_by": "fallback"},
         {"tool": "submit_answer", "event": "tool_pick", "picked_by": "fallback"},
         {"tool": "capture_and_update", "ok": True, "obs_id": 17},
-        {"tool": "verify_siglip", "obs_id": 17, "phrase": "sets utensils already",
-         "answerable": False, "detector_score": 0.03},
+        {
+            "tool": "verify_siglip",
+            "obs_id": 17,
+            "phrase": "sets utensils already",
+            "answerable": False,
+            "detector_score": 0.03,
+        },
         {"event": "final_location_salvage", "letter": "B", "prior_answer": "unknown", "n_images": 4},
         {"tool": "abstain_unverified", "reason": "require_verified and no fused verification"},
     ]
@@ -348,6 +381,13 @@ def test_analyze_agentic_trace_flags_stale_and_phrase():
     assert a["salvage"]["letter"] == "B"
     assert a["n_explore"] == 1
     assert a["n_station_inspect"] == 1
+    rooms = a["rooms"]
+    assert rooms["n_turns"] == 1
+    assert rooms["n_mismatch"] == 1
+    assert rooms["n_vlm_graph_disagree"] == 1
+    assert rooms["rooms_line"] == "Rooms: patio(3), kitchen(8)"
+    assert rooms["question_target_rooms"] == ["dining_room", "kitchen", "living_room"]
+    assert rooms["n_prefer_explore_redirect"] == 1
 
 
 def test_format_question_report_reads_row_and_trace(tmp_path, monkeypatch):
@@ -363,6 +403,10 @@ def test_format_question_report_reads_row_and_trace(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     (bundle / "agentic_trace.jsonl").write_text(
+        '{"event":"router_room","round":0,"current_room":"kitchen",'
+        '"current_room_vlm":"kitchen","current_room_graph":"kitchen",'
+        '"rooms_line":"Rooms: kitchen(4)","question_target_rooms":["kitchen"],'
+        '"prefer_explore_reason":"","tool_calls":["investigate"]}\n'
         '{"hypotheses":[{"obs_id":9,"source":"graph","phrase":"table","xyz":[1,2,1]}]}\n'
         '{"tool":"investigate","event":"tool_pick","picked_by":"vlm",'
         '"router_tool_calls":["investigate"],"args":{"obs_id":9}}\n'
@@ -375,6 +419,7 @@ def test_format_question_report_reads_row_and_trace(tmp_path, monkeypatch):
         '{"tool":"abstain_unverified","reason":"require_verified exhausted"}\n',
         encoding="utf-8",
     )
+    (bundle / "topdown_map.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     job = jr.register_job(name="holdout8", status="running", out_dir=out)
     text = jr.format_question_report(job, 88)
     assert "q88" in text
@@ -382,13 +427,64 @@ def test_format_question_report_reads_row_and_trace(tmp_path, monkeypatch):
     assert "sets utensils already" in text
     assert "RED FLAGS" in text
     assert "stale re-verify obs [9]" in text
-    assert "router:" in text
+    assert "── rooms ──" in text
+    assert "Rooms: kitchen(4)" in text
+    assert "── router ──" in text
     assert "station r0" in text
     assert "close look" in text
+    assert "topdown_map.png" in text
+    rooms_only = jr.format_question_report(job, 88, rooms_focus=True)
+    assert "── rooms ──" in rooms_only
+    assert "── nav ──" not in rooms_only
     payload = jr.question_report_dict(job, 88)
     assert payload["found"] is True
     assert payload["trace"]["duplicate_verify_obs"] == [9]
     assert payload["trace"]["close_absent"] is True
+    assert payload["trace"]["rooms"]["rooms_line"] == "Rooms: kitchen(4)"
+    assert any("topdown_map.png" in p for p in payload["maps"])
 
     missing = jr.format_question_report(job, 999)
     assert "no scored jsonl for q999" in missing
+
+
+def test_find_agentic_trace_prefers_out_bundle(tmp_path):
+    out = tmp_path / "hmeqa"
+    bundle = out / "bundles" / "agentic_q104"
+    bundle.mkdir(parents=True)
+    cache = tmp_path / "cache" / "h2h_agentic_q0104" / "q0104_dynagraph"
+    cache.mkdir(parents=True)
+    (bundle / "agentic_trace.jsonl").write_text('{"event":"router_room","current_room":"patio"}\n', encoding="utf-8")
+    (cache / "agentic_trace.jsonl").write_text('{"tool":"summary"}\n', encoding="utf-8")
+    row = {"debug_bundle_dir": str(cache)}
+    found = jr._find_agentic_trace(out, 104, row)
+    assert found is not None
+    assert "bundles/agentic_q104" in str(found)
+
+
+def test_format_job_report_fail_only(tmp_path, monkeypatch):
+    monkeypatch.setenv("EMET_JOBS_DIR", str(tmp_path / "jobs"))
+    out = tmp_path / "hmeqa"
+    out.mkdir()
+    (out / "agentic_q1.jsonl").write_text(
+        '{"question_id":1,"correct":true,"predicted_answer":"A","gold_answer_letter":"A",'
+        '"planning_steps":10,"confident":true}\n',
+        encoding="utf-8",
+    )
+    (out / "agentic_q2.jsonl").write_text(
+        '{"question_id":2,"correct":false,"predicted_answer":"B","gold_answer_letter":"D",'
+        '"planning_steps":20,"confident":false}\n',
+        encoding="utf-8",
+    )
+    job = jr.register_job(name="t", status="done", out_dir=out)
+    full = jr.format_job_report(job)
+    assert "  1  " in full and "  2  " in full
+    assert "0%" not in full or "50%" in full
+    fails = jr.format_job_report(job, fail_only=True)
+    assert "fails only" in fails
+    assert "  2  " in fails
+    assert "ok" not in fails.split("fails only")[-1].split("conf:")[0] or "FAIL" in fails
+    # ok row should not appear in the fail-only table body
+    assert "pred/gold" in fails
+    body = fails.split("pred/gold", 1)[1]
+    assert "A/A" not in body
+    assert "B/D" in body

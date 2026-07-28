@@ -54,6 +54,21 @@ def test_two_xy_blobs_two_clusters():
     assert "living_room" in names
 
 
+def test_stamp_room_at_xy_updates_nearest():
+    from emet.memory.graph_eqa.room_clusters import stamp_room_at_xy
+
+    nodes = [
+        _node(1, 0.0, 0.0, labels=["chair"]),
+        _node(2, 0.3, 0.0, labels=["table"]),
+        _node(3, 8.0, 0.0, labels=["chair"]),
+    ]
+    clusters = cluster_object_nodes(nodes, link_radius_m=2.0)
+    assert all(c.room_name == "unknown" for c in clusters)
+    stamped = stamp_room_at_xy(clusters, (0.1, 0.0), "outdoor")
+    near = min(stamped, key=lambda c: (c.centroid_xy[0] - 0.1) ** 2 + c.centroid_xy[1] ** 2)
+    assert near.room_name == "outdoor"
+
+
 def test_near_edge_merges_far_nodes():
     nodes = [
         _node(1, 0.0, 0.0, labels=["chair"]),
@@ -84,8 +99,24 @@ def test_patio_labels_name_outdoor_cluster():
 def test_object_hints_hypothesize_kitchen():
     from emet.memory.graph_eqa.room_clusters import hypothesize_room_name
 
-    assert hypothesize_room_name(["stove", "fridge"]) == "kitchen"
-    assert hypothesize_room_name(["sofa", "tv"]) == "living_room"
+    # Explicit room words only — furniture classes do not invent rooms.
+    assert hypothesize_room_name(["kitchen island"]) == "kitchen"
+    assert hypothesize_room_name(["living room sofa"]) == "living_room"
+    assert hypothesize_room_name(["stove", "fridge"]) == "unknown"
+
+
+def test_lawn_furniture_not_dining_room():
+    """Chairs/tables never invent dining; outdoor labels stay outdoor/patio via explicit words."""
+    from emet.memory.graph_eqa.room_clusters import hypothesize_room_name, merge_room_estimates
+
+    assert hypothesize_room_name(["chair", "table", "grass"]) == "unknown"
+    assert hypothesize_room_name(["chair", "table"]) == "unknown"
+    assert hypothesize_room_name(["dining table", "chair"]) == "dining_room"
+    assert hypothesize_room_name(["brick patio"]) == "patio"
+    assert hypothesize_room_name(["outdoor chair"]) == "outdoor"
+    # VLM-first merge: VLM outdoor beats graph dining.
+    assert merge_room_estimates("outdoor", "dining_room") == "outdoor"
+    assert merge_room_estimates("unknown", "patio") == "patio"
 
 
 def test_room_mismatch_vs_location_mcq():
@@ -171,7 +202,8 @@ def test_paint_room_labels_on_export_rgb():
     assert "kitchen" in line
     assert merge_room_estimates("unknown", "patio") == "patio"
     assert merge_room_estimates("kitchen", "unknown") == "kitchen"
-    assert merge_room_estimates("living_room", "kitchen") == "kitchen"
+    assert merge_room_estimates("living_room", "kitchen") == "living_room"
+    assert merge_room_estimates("outdoor", "dining_room") == "outdoor"
 
 
 def test_graph_memory_room_at_robot():

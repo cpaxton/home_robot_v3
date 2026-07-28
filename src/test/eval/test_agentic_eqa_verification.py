@@ -2080,7 +2080,7 @@ def test_router_room_mismatch_sets_prefer_explore():
     gm.memory_summary_enabled = False
     gm._nodes = [MagicMock(is_frontier=True, obs_id=99)]
     gm.graph_room_at_robot = MagicMock(return_value="unknown")
-    gm.format_rooms_line = MagicMock(return_value="")
+    gm.format_rooms_line = MagicMock(return_value="Rooms: patio(3), kitchen(8)")
     reply = (
         '{"current_room": "brick patio", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}'
     )
@@ -2091,6 +2091,7 @@ def test_router_room_mismatch_sets_prefer_explore():
         _CLOCK_LOCATION_Q,
         max_rounds=3,
         max_nav_steps=4,
+        collect_trace=True,
     )
     ex._hypotheses = [
         NavHypothesis(
@@ -2106,9 +2107,18 @@ def test_router_room_mismatch_sets_prefer_explore():
     assert calls == [("explore_frontier", {})]
     assert meta.get("current_room") == "patio"
     assert meta.get("prefer_explore_room_mismatch") is True
+    assert meta.get("rooms_line") == "Rooms: patio(3), kitchen(8)"
+    assert "kitchen" in meta.get("question_target_rooms", [])
+    assert "living_room" in meta.get("question_target_rooms", [])
+    assert "dining_room" in meta.get("question_target_rooms", [])
     assert ex._last_room_estimate == "patio"
     assert ex._prefer_explore is True
     assert ex._prefer_explore_reason == "room_mismatch"
+    room_rows = [r for r in ex._trace_rows if r.get("event") == "router_room"]
+    assert len(room_rows) == 1
+    assert room_rows[0].get("rooms_line") == "Rooms: patio(3), kitchen(8)"
+    assert room_rows[0].get("question_target_rooms") == meta.get("question_target_rooms")
+    assert room_rows[0].get("prefer_explore_reason") == "room_mismatch"
     msg = build_state_message(ex)
     assert "Current room (router): patio" in msg
     assert "does not match rooms named" in msg

@@ -5,16 +5,16 @@
 """Graph-derived room / region clusters for GraphEQA.
 
 Partitions object nodes into connected components using ``near`` edges and a
-planar link radius, then hypothesizes a room name from object labels (not a
-Hydra Places layer). Room names are ordinary labels — patio/outdoor are rooms
-like kitchen, not a separate policy class.
+planar link radius. Room *names* come from VLM stamps (router ``current_room``)
+and explicit room words in labels — not furniture-class heuristics
+(chair/table → dining).
 """
 
 from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -24,7 +24,7 @@ from emet.memory.graph_eqa.agentic_tools import normalize_current_room
 DEFAULT_ROOM_LINK_RADIUS_M = 2.0
 DEFAULT_ROOM_ASSIGN_MAX_M = 3.0
 
-# Object-label cues → hypothesized room (majority vote with normalize_current_room).
+# Only for MCQ/target parsing (fireplace → living_room). Not used to name clusters.
 _OBJECT_ROOM_HINTS: dict[str, str] = {
     "stove": "kitchen",
     "oven": "kitchen",
@@ -33,25 +33,17 @@ _OBJECT_ROOM_HINTS: dict[str, str] = {
     "microwave": "kitchen",
     "dishwasher": "kitchen",
     "counter": "kitchen",
-    "cabinet": "kitchen",
     "sink": "kitchen",
     "sofa": "living_room",
     "couch": "living_room",
     "tv": "living_room",
     "television": "living_room",
     "fireplace": "living_room",
-    "coffee": "living_room",
-    "armchair": "living_room",
     "dining": "dining_room",
-    "table": "dining_room",
-    "chair": "dining_room",
     "bed": "bedroom",
-    "nightstand": "bedroom",
-    "wardrobe": "bedroom",
     "toilet": "bathroom",
     "bathtub": "bathroom",
     "shower": "bathroom",
-    "vanity": "bathroom",
     "grill": "patio",
     "lawn": "outdoor",
     "grass": "outdoor",
@@ -117,42 +109,24 @@ def _is_object_node(node: Any) -> bool:
 
 
 def hypothesize_room_name(labels: Sequence[str]) -> str:
-    """Hypothesize a canonical room name from object / place labels in a cluster."""
+    """Cold-start name from *explicit* room words in labels only (no furniture→room).
+
+    Examples: ``kitchen island`` → kitchen, ``brick patio`` → patio.
+    ``chair`` / ``table`` / ``stove`` alone → unknown (VLM stamp later).
+    """
     votes: Counter[str] = Counter()
     for lab in labels:
         name = normalize_current_room(lab)
         if name != "unknown":
-            votes[name] += 2  # explicit room words weigh more
+            votes[name] += 2
         blob = str(lab).lower().replace("-", " ")
         for tok in blob.split():
             tname = normalize_current_room(tok)
             if tname != "unknown":
                 votes[tname] += 1
-            hint = _OBJECT_ROOM_HINTS.get(tok)
-            if hint:
-                votes[normalize_current_room(hint)] += 1
-        for key, hint in _OBJECT_ROOM_HINTS.items():
-            if " " in key and key in blob:
-                votes[normalize_current_room(hint)] += 1
     if not votes:
         return "unknown"
-    best = votes.most_common()
-    top_count = best[0][1]
-    tied = [n for n, c in best if c == top_count]
-    for prefer in (
-        "kitchen",
-        "living_room",
-        "dining_room",
-        "bedroom",
-        "bathroom",
-        "patio",
-        "outdoor",
-        "hallway",
-        "garage",
-    ):
-        if prefer in tied:
-            return prefer
-    return best[0][0]
+    return votes.most_common(1)[0][0]
 
 
 # Back-compat alias used by older tests / imports.
@@ -308,6 +282,32 @@ def estimate_room_at_xy(
     return normalize_current_room(best.room_name)
 
 
+def stamp_room_at_xy(
+    clusters: Sequence[RoomCluster],
+    robot_xy: tuple[float, float] | Sequence[float],
+    room: str | None,
+    *,
+    max_dist_m: float = DEFAULT_ROOM_ASSIGN_MAX_M,
+) -> list[RoomCluster]:
+    """Set nearest cluster's ``room_name`` from a VLM stamp (immutable list copy)."""
+    name = normalize_current_room(room)
+    if name == "unknown" or not clusters:
+        return list(clusters)
+    xy = (float(robot_xy[0]), float(robot_xy[1]))
+    best_i = -1
+    best_d = float("inf")
+    for i, c in enumerate(clusters):
+        d = _planar_dist(xy, c.centroid_xy)
+        if d < best_d:
+            best_d = d
+            best_i = i
+    if best_i < 0 or best_d > float(max_dist_m):
+        return list(clusters)
+    out = list(clusters)
+    out[best_i] = replace(out[best_i], room_name=name)
+    return out
+
+
 def format_rooms_compact(clusters: Sequence[RoomCluster], *, max_chars: int = 200) -> str:
     """Short ``Rooms: kitchen(12), patio(5), …`` line for router / memory prompts."""
     if not clusters:
@@ -323,12 +323,12 @@ def format_rooms_compact(clusters: Sequence[RoomCluster], *, max_chars: int = 20
 
 
 def merge_room_estimates(vlm_room: str | None, graph_room: str | None) -> str:
-    """Prefer a known graph estimate over VLM; else fall back to VLM / unknown."""
+    """Prefer a known VLM estimate; fall back to graph/stamp when VLM is unknown."""
     g = normalize_current_room(graph_room)
     v = normalize_current_room(vlm_room)
-    if g != "unknown":
-        return g
-    return v
+    if v != "unknown":
+        return v
+    return g
 
 
 def paint_room_labels(
@@ -391,14 +391,12 @@ def paint_room_labels(
         if not (0 <= py < eh and 0 <= px < ew):
             continue
         label = str(c.room_name if c.room_name != "unknown" else f"region_{c.cluster_id}").replace("_", " ")
-        # Anchor roughly at centroid center.
         try:
             bbox = draw.textbbox((0, 0), label, font=font)
             tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         except Exception:
             tw, th = 8 * len(label), int(font_size)
         tx, ty = px - tw // 2, py - th // 2
-        # Opaque pill behind text for contrast on observed RGB.
         pad = 3
         draw.rectangle(
             [tx - pad, ty - pad, tx + tw + pad, ty + th + pad],

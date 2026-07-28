@@ -182,6 +182,10 @@ def test_jobs_report_help():
     )
     assert result.returncode == 0
     assert "JOB_ID" in result.stdout or "job" in result.stdout.lower()
+    assert "--rooms" in result.stdout
+    assert "--out-dir" in result.stdout
+    assert "--fail-only" in result.stdout
+    assert "--question" in result.stdout
 
 
 def test_jobs_run_help_lists_safety_flags():

@@ -691,8 +691,7 @@ def habitat_safe_start(
     wrap = build_habitat_wrapper_command(probe_args)
     if wrap is None:
         click.echo(
-            "Habitat wrapper not found. From the project root run:\n"
-            "  ./scripts/install_habitat.sh\n",
+            "Habitat wrapper not found. From the project root run:\n  ./scripts/install_habitat.sh\n",
             err=True,
         )
         sys.exit(1)
@@ -738,8 +737,7 @@ def habitat_safe_start(
         click.echo(launched.stdout.rstrip("\n"), err=True)
     if launched.returncode != 0:
         click.echo(
-            f"EGL probe job launch failed (rc={launched.returncode}). "
-            "Check: uv run emet jobs",
+            f"EGL probe job launch failed (rc={launched.returncode}). Check: uv run emet jobs",
             err=True,
         )
         sys.exit(launched.returncode)
@@ -1307,42 +1305,90 @@ def jobs_status(job_id: str, as_json: bool) -> None:
     "question_id",
     type=int,
     default=None,
-    help="Deep-dive one question id: episode row + agentic trace (phrases, verify scores, stale re-verifies).",
+    help="Deep-dive one question id: episode row + agentic trace (rooms, router, verify, flags).",
 )
 @click.option("--arm", default=None, help="Restrict --question to one arm (classic/agentic).")
+@click.option(
+    "--out-dir",
+    "out_dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=str),
+    default=None,
+    help="Report this OUT dir directly (no job id / registry lookup).",
+)
+@click.option(
+    "--rooms",
+    "rooms_focus",
+    is_flag=True,
+    help="With --question: focus on room timeline (summary + rooms + flags).",
+)
+@click.option(
+    "--section",
+    "-s",
+    "sections",
+    multiple=True,
+    help="With --question: include sections (summary,rooms,router,nav,assess,verify,flags). Repeatable.",
+)
+@click.option("--verbose", "-v", is_flag=True, help="With --question: full assess reasons + per-turn Rooms lines.")
+@click.option("--brief", is_flag=True, help="With --question: summary + rooms + router + flags only.")
+@click.option("--fail-only", is_flag=True, help="Scorecard: list incorrect episodes only.")
 @click.option("--json", "as_json", is_flag=True, help="Emit structured JSON.")
-def jobs_report(job_id: str | None, question_id: int | None, arm: str | None, as_json: bool) -> None:
+def jobs_report(
+    job_id: str | None,
+    question_id: int | None,
+    arm: str | None,
+    out_dir: str | None,
+    rooms_focus: bool,
+    sections: tuple[str, ...],
+    verbose: bool,
+    brief: bool,
+    fail_only: bool,
+    as_json: bool,
+) -> None:
     """Scorecard for an H2H / eval OUT dir.
 
     With no JOB_ID, picks the active running/waiting job (most recent if several),
     else the newest finished job with an ``out_dir``. Pass ``--question ID`` for a
-    per-episode trace analysis.
+    per-episode trace analysis. Use ``--rooms`` to audit graph/VLM room names.
     """
     from emet.utils.job_registry import (
         format_job_report,
         format_question_report,
+        job_record_for_out_dir,
         job_report_dict,
         question_report_dict,
         resolve_report_job,
     )
 
-    job = resolve_report_job(job_id)
+    if out_dir:
+        job = job_record_for_out_dir(out_dir)
+    else:
+        job = resolve_report_job(job_id)
     if job is None:
         if job_id:
             click.echo(f"unknown job: {job_id}", err=True)
         else:
-            click.echo("no job to report (registry empty)", err=True)
+            click.echo("no job to report (registry empty; try --out-dir)", err=True)
         sys.exit(1)
     if question_id is not None:
         if as_json:
             click.echo(json.dumps(question_report_dict(job, question_id, arm=arm), indent=2))
         else:
-            click.echo(format_question_report(job, question_id, arm=arm))
+            click.echo(
+                format_question_report(
+                    job,
+                    question_id,
+                    arm=arm,
+                    sections=list(sections) if sections else None,
+                    rooms_focus=rooms_focus,
+                    verbose=verbose,
+                    brief=brief,
+                )
+            )
         return
     if as_json:
         click.echo(json.dumps(job_report_dict(job), indent=2))
     else:
-        click.echo(format_job_report(job))
+        click.echo(format_job_report(job, fail_only=fail_only))
 
 
 @jobs_group.command("cancel", short_help="Cancel a registered job (kill process tree)")

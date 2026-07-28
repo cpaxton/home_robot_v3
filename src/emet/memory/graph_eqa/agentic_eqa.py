@@ -38,7 +38,11 @@ from emet.memory.graph_eqa.graph_memory import (
     label_matches_relevant_object,
     question_stem_for_keywords,
 )
-from emet.memory.graph_eqa.room_clusters import merge_room_estimates, room_mismatches_question
+from emet.memory.graph_eqa.room_clusters import (
+    merge_room_estimates,
+    question_target_rooms,
+    room_mismatches_question,
+)
 from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
@@ -184,6 +188,17 @@ def env_eqa_agentic_router() -> bool | None:
     return None
 
 
+def env_eqa_router_room_images() -> int:
+    """Nearby object images for multimodal router (0 = text-only; default 3)."""
+    raw = os.environ.get("EMET_EQA_ROUTER_ROOM_IMAGES", "").strip()
+    if not raw:
+        return 3
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 3
+
+
 def env_eqa_hyp_recall_k() -> int:
     """Top-K evidence cards for agentic hyp recall (default 6)."""
     raw = os.environ.get("EMET_EQA_HYP_RECALL_K", "").strip()
@@ -301,6 +316,8 @@ class AgenticEQAExecutor:
         self._last_room_estimate: str = "unknown"
         self._graph_room_estimate: str = "unknown"
         self._room_estimates: list[str] = []
+        self._last_router_n_images: int = 0
+        self._last_router_ms: float | None = None
         self._last_capture_status: str | None = None
         self._collect_trace = (
             bool(collect_trace)
@@ -2678,8 +2695,86 @@ class AgenticEQAExecutor:
             self._tool_names = {t.name for t in self._tools}
             self._system_prompt = build_graph_eqa_system_prompt(self._tools)
 
+    def _live_rgb(self) -> np.ndarray | None:
+        robot = getattr(self.agent, "robot", None)
+        if robot is not None and hasattr(robot, "get_observation"):
+            try:
+                live_obs = robot.get_observation()
+                if live_obs is not None and getattr(live_obs, "rgb", None) is not None:
+                    return np.asarray(live_obs.rgb)
+            except Exception:
+                pass
+        gm = self.graph_memory
+        if gm is not None:
+            obs_list = list(getattr(gm, "_observations", None) or [])
+            for obs in reversed(obs_list):
+                rgb = getattr(obs, "rgb", None)
+                if isinstance(rgb, np.ndarray) and rgb.ndim == 3:
+                    return np.asarray(rgb)
+        return None
+
+    def _room_visual_pack(self) -> tuple[list[Any], list[dict[str, Any]], str]:
+        """Live RGB + nearby object RGBs for multimodal router room judgment.
+
+        Returns (payload_parts, nearby_meta, caption_prefix). ``EMET_EQA_ROUTER_ROOM_IMAGES=0``
+        disables images (text-only / speed baseline).
+        """
+        from PIL import Image
+
+        k = env_eqa_router_room_images()
+        nearby_meta: list[dict[str, Any]] = []
+        if k <= 0:
+            self._last_router_n_images = 0
+            return [], nearby_meta, ""
+
+        parts: list[Any] = []
+        captions: list[str] = []
+        live = self._live_rgb()
+        if live is not None:
+            parts.append(Image.fromarray(np.asarray(live, dtype=np.uint8)))
+            captions.append("Image 1: current robot view")
+
+        gm = self.graph_memory
+        xyt = self._robot_xyt()
+        if gm is not None and hasattr(gm, "nearby_object_observations") and xyt is not None:
+            try:
+                nearby = gm.nearby_object_observations(xyt, k=k, max_dist_m=5.0)
+            except Exception as e:
+                _logger.warning(f"nearby_object_observations failed: {e}")
+                nearby = []
+            if not isinstance(nearby, list):
+                nearby = []
+            for item in nearby:
+                if not isinstance(item, dict):
+                    continue
+                rgb = item.get("rgb")
+                if not isinstance(rgb, np.ndarray):
+                    continue
+                parts.append(Image.fromarray(np.asarray(rgb, dtype=np.uint8)))
+                idx = len(parts)
+                cap = (
+                    f"Image {idx}: nearby obs_id={item.get('obs_id')} "
+                    f"phrase={item.get('phrase')!r} labels={item.get('labels')} "
+                    f"dist={item.get('dist_m')}m"
+                )
+                captions.append(cap)
+                nearby_meta.append(
+                    {
+                        "obs_id": item.get("obs_id"),
+                        "dist_m": item.get("dist_m"),
+                        "phrase": item.get("phrase"),
+                        "labels": item.get("labels"),
+                    }
+                )
+
+        self._last_router_n_images = len(parts)
+        prefix = ""
+        if captions:
+            prefix = "Room context images (use for current_room):\n" + "\n".join(captions) + "\n\n"
+        return parts, nearby_meta, prefix
+
     def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict[str, Any]]:
-        """One routing turn: state message → VLM → parsed tool calls (or deterministic fallback).
+        """One routing turn: state (+ optional room images) → VLM → tool calls.
 
         Returns (tool_calls, picked_by, router_meta) where router_meta feeds the offline tuner.
         """
@@ -2690,12 +2785,24 @@ class AgenticEQAExecutor:
             tool, args = self._fallback_tool()
             return [(tool, args)], "fallback", meta
         self._ensure_router_prompt()
+        img_parts, nearby_meta, img_prefix = self._room_visual_pack()
         state = build_state_message(self)
+        user_text = f"{img_prefix}{state}" if img_prefix else state
+        payload: list[Any] = [user_text, *img_parts] if img_parts else [user_text]
+        t_router0 = time.monotonic()
         try:
-            reply = client([state], system_prompt=self._system_prompt, max_new_tokens=ROUTER_MAX_NEW_TOKENS)
+            reply = client(
+                payload,
+                system_prompt=self._system_prompt,
+                max_new_tokens=ROUTER_MAX_NEW_TOKENS,
+            )
         except TypeError:
             try:
-                reply = client([f"{self._system_prompt}\n\n{state}"])
+                reply = client(
+                    [f"{self._system_prompt}\n\n{user_text}", *img_parts]
+                    if img_parts
+                    else [f"{self._system_prompt}\n\n{user_text}"]
+                )
             except Exception as e:
                 _logger.warning(f"agentic router VLM call failed: {e}")
                 tool, args = self._fallback_tool()
@@ -2704,15 +2811,25 @@ class AgenticEQAExecutor:
             _logger.warning(f"agentic router VLM call failed: {e}")
             tool, args = self._fallback_tool()
             return [(tool, args)], "fallback", meta
+        router_ms = (time.monotonic() - t_router0) * 1000.0
+        self._last_router_ms = router_ms
         text = str(reply or "")
         meta["raw_reply_chars"] = len(text)
+        meta["router_ms"] = round(router_ms, 1)
+        meta["n_room_images"] = int(self._last_router_n_images)
+        meta["nearby_obs"] = nearby_meta
         parsed = parse_tool_calls_response(text)
         vlm_room = normalize_current_room(parsed.get("current_room"))
         graph_room = "unknown"
+        xyt = self._robot_xyt()
         if gm is not None:
+            if vlm_room != "unknown" and hasattr(gm, "stamp_vlm_room_at_robot"):
+                try:
+                    gm.stamp_vlm_room_at_robot(xyt, vlm_room)
+                except Exception as e:
+                    _logger.warning(f"stamp_vlm_room_at_robot failed: {e}")
             room_fn = getattr(gm, "graph_room_at_robot", None)
             if callable(room_fn):
-                xyt = self._robot_xyt()
                 try:
                     graph_room = normalize_current_room(room_fn(xyt))
                 except Exception as e:
@@ -2727,12 +2844,23 @@ class AgenticEQAExecutor:
         meta["current_room"] = room
         meta["current_room_vlm"] = vlm_room
         meta["current_room_graph"] = graph_room
+        rooms_line = ""
+        if gm is not None:
+            rooms_fn = getattr(gm, "format_rooms_line", None)
+            if callable(rooms_fn):
+                try:
+                    rooms_line = str(rooms_fn() or "").strip()
+                except Exception as e:
+                    _logger.warning(f"format_rooms_line for router_room trace failed: {e}")
+                    rooms_line = ""
+        target_rooms = sorted(question_target_rooms(self.question))
+        meta["rooms_line"] = rooms_line
+        meta["question_target_rooms"] = target_rooms
         if room_mismatches_question(room, self.question):
             self._prefer_explore = True
             self._prefer_explore_reason = "room_mismatch"
             meta["prefer_explore_room_mismatch"] = True
         elif self._prefer_explore_reason == "room_mismatch":
-            # Current room now matches question targets — drop the leave-room nudge.
             self._prefer_explore = False
             self._prefer_explore_reason = ""
         calls: list[tuple[str, dict[str, Any]]] = []
@@ -2753,8 +2881,13 @@ class AgenticEQAExecutor:
                 "current_room": room,
                 "current_room_vlm": vlm_room,
                 "current_room_graph": graph_room,
+                "rooms_line": rooms_line,
+                "question_target_rooms": target_rooms,
                 "prefer_explore_reason": str(self._prefer_explore_reason or ""),
                 "tool_calls": list(meta["tool_calls"]),
+                "router_ms": meta["router_ms"],
+                "n_room_images": meta["n_room_images"],
+                "nearby_obs": nearby_meta,
             }
         )
         return calls, "vlm", meta
@@ -2774,6 +2907,8 @@ class AgenticEQAExecutor:
         self._last_room_estimate = "unknown"
         self._graph_room_estimate = "unknown"
         self._room_estimates = []
+        self._last_router_n_images = 0
+        self._last_router_ms = None
         gm0 = self.graph_memory
         if gm0 is not None and hasattr(gm0, "clear_retracted_nav_claims"):
             gm0.clear_retracted_nav_claims()
