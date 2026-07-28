@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from emet.controller.habitat_nav import (
@@ -12,6 +14,7 @@ from emet.controller.habitat_nav import (
     is_habitat_robot_client,
     navmesh_waypoints_to_xyt,
     pick_habitat_exploration_target,
+    sample_habitat_navmesh_approach_xy,
 )
 
 
@@ -61,6 +64,21 @@ class _FakeHabitatRobot:
     def execute_trajectory(self, trajectory, **kwargs):
         for wp in trajectory:
             self.move_base_to(wp, **kwargs)
+
+
+def test_sample_habitat_navmesh_approach_returns_reachable_xy():
+    sim = _FakeSim()
+    xy = sample_habitat_navmesh_approach_xy(
+        sim,
+        anchor_xy=(0.0, 0.0),
+        robot_xy=(-2.0, 0.0),
+        approach_index=0,
+        radius_inner_m=0.5,
+        radius_outer_m=1.5,
+        n_draws=32,
+    )
+    assert xy is not None
+    assert math.hypot(xy[0], xy[1]) >= 0.4
 
 
 def test_is_habitat_robot_client_by_sim_api():

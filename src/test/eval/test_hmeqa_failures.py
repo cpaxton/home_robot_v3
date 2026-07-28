@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
-from emet.eval.hmeqa_failures import classify_pair
+from pathlib import Path
+
+from emet.eval.hmeqa_failures import _trace_path_for_row, classify_pair
 
 
 def test_classify_scored_vs_submit_mismatch():
@@ -79,3 +81,26 @@ def test_classify_empty_abstain():
         },
     )
     assert row["bucket"] == "empty_or_abstain"
+
+
+def test_trace_path_prefers_newest_mtime(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    root = home / ".cache" / "habitat_eqa" / "episodes" / "h2h_agentic_q0042"
+    older = root / "run_a" / "agentic_trace.jsonl"
+    newer = root / "run_b" / "agentic_trace.jsonl"
+    older.parent.mkdir(parents=True)
+    newer.parent.mkdir(parents=True)
+    older.write_text('{"tool":"explore_frontier"}\n', encoding="utf-8")
+    newer.write_text('{"tool":"submit_answer"}\n', encoding="utf-8")
+    # Ensure newer mtime even on coarse filesystems.
+    import os
+    import time
+
+    os.utime(older, (time.time() - 100, time.time() - 100))
+    os.utime(newer, (time.time(), time.time()))
+    got = _trace_path_for_row({}, 42)
+    assert got == newer.resolve() or got == newer
+    assert got is not None
+    assert got.name == "agentic_trace.jsonl"
+    assert got.parent.name == "run_b"

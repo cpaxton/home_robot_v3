@@ -1912,6 +1912,49 @@ def test_investigate_records_place_inspect_on_card():
     msg = build_state_message(ex)
     assert "investigated=1" in msg
     assert "recent:" in msg
+    assert "Recent actions:" in msg
+    assert any("investigate" in a and "obs=15" in a for a in ex._recent_actions)
+    assert any("verify=" in a for a in ex._recent_actions)
+
+
+def test_state_message_includes_recent_action_history():
+    """Router state surfaces the last few investigate/explore outcomes (anti-loop)."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, RECENT_ACTIONS_K
+    from emet.memory.graph_eqa.agentic_tools import build_state_message
+
+    agent = MagicMock()
+    agent.parameters = {}
+    ex = AgenticEQAExecutor(agent, "Where is the mug?", max_rounds=4)
+    ex._round = 2
+    ex._record_recent_action(
+        "investigate",
+        {"obs_id": 3},
+        {
+            "ok": True,
+            "obs_id": 3,
+            "approach_index": 1,
+            "verify": {"status": "ABSENT"},
+            "place_inspect": "investigated=1 closest=0.4m approaches=1/4 coverage=open",
+        },
+    )
+    ex._record_recent_action("explore_frontier", {"toward": "kitchen"}, {"ok": True})
+    # Internal tools must not pollute the ring buffer.
+    ex._record_recent_action("verify_siglip", {}, {"ok": True, "status": "ABSENT"})
+    ex._record_recent_action("inspect_graph", {}, {"ok": True})
+
+    assert len(ex._recent_actions) == 2
+    assert "r2 investigate obs=3 ap=1 verify=ABSENT closest=0.4m" in ex._recent_actions[0]
+    assert "explore_frontier toward='kitchen' ok" in ex._recent_actions[1]
+
+    msg = build_state_message(ex)
+    assert "Recent actions:" in msg
+    assert "investigate obs=3" in msg
+    assert "explore_frontier" in msg
+
+    for i in range(RECENT_ACTIONS_K + 3):
+        ex._record_recent_action("explore_frontier", {}, {"ok": True})
+    assert len(ex._recent_actions) == RECENT_ACTIONS_K
 
 
 def test_navigate_rejects_obs_not_in_evidence():
@@ -2008,16 +2051,22 @@ def test_visited_frontier_retired_from_graph():
     assert "obs_id=3" in msg
 
 
-def test_nav_failed_allows_retry_until_visit_limit():
-    """Transient planner miss must not permanently NAV_LOOP_BLOCK the evidence card."""
+def test_nav_failed_allows_retry_until_approaches_exhausted():
+    """Transient planner misses rotate approach samples; block only when exhausted."""
     _require_agentic()
-    from emet.memory.graph_eqa.agentic_eqa import NAV_SAME_OBS_LOOP_LIMIT, AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_eqa import PLACE_APPROACH_SAMPLES, AgenticEQAExecutor
     from emet.memory.graph_eqa.graph_memory import NavHypothesis
 
     agent = MagicMock()
     agent.parameters = {"eqa": {}}
     gm = MagicMock()
     agent.graph_memory = gm
+    # Distinct targets so we can see approach rotation.
+    gm._navigation_approach_waypoint_for_obs = MagicMock(
+        side_effect=lambda oid, xyt=None, approach_index=0, n_approaches=4: np.array(
+            [float(approach_index), 2.0, 1.0]
+        )
+    )
     gm._navigation_waypoint_for_obs = MagicMock(return_value=np.array([1.0, 2.0, 1.0]))
     gm.record_nav_attempt = MagicMock()
     gm._obs_is_frontier = MagicMock(return_value=False)
@@ -2030,7 +2079,7 @@ def test_nav_failed_allows_retry_until_visit_limit():
         "Where is the sink? A) kitchen B) bath",
         router=True,
         collect_trace=True,
-        max_nav_steps=8,
+        max_nav_steps=12,
     )
     ex._target_phrase = "sink"
     ex._hypotheses = [
@@ -2042,20 +2091,121 @@ def test_nav_failed_allows_retry_until_visit_limit():
             source="graph",
         )
     ]
-    out1 = ex._tool_navigate_to_obs(7)
-    assert out1["ok"] is False
-    assert ex._tried.get(7) == "nav failed"
-    assert not str(ex._tried.get(7) or "").startswith("STALLED_NAV_LOOP")
-    assert not ex._hypothesis_nav_blocked(7)
-
-    # Second failed attempt hits visit limit and blocks further nav.
-    out2 = ex._tool_navigate_to_obs(7)
-    assert out2["ok"] is False
-    assert ex._nav_to_obs_counts.get(7, 0) >= NAV_SAME_OBS_LOOP_LIMIT
+    targets = []
+    for _ in range(PLACE_APPROACH_SAMPLES):
+        out = ex._tool_navigate_to_obs(7)
+        assert out["ok"] is False
+        assert out.get("status") != "NAV_LOOP_BLOCKED"
+        targets.append(out.get("approach_index"))
+    assert targets == list(range(PLACE_APPROACH_SAMPLES))
     assert ex._hypothesis_nav_blocked(7)
     blocked = ex._tool_navigate_to_obs(7)
     assert blocked.get("status") == "NAV_LOOP_BLOCKED"
+    assert agent.navigate_to_target_pose.call_count == PLACE_APPROACH_SAMPLES
+
+
+def test_investigate_samples_new_approach_after_close_absent():
+    """Re-investigate after close+ABSENT uses the next orbit sample, not NAV_LOOP_BLOCK."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis, VerifyResult
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.memory_summary_enabled = False
+    gm._observations = [MagicMock(obs_id=15, labels=["kitchen island"])]
+    gm._navigation_approach_waypoint_for_obs = MagicMock(
+        side_effect=lambda oid, xyt=None, approach_index=0, n_approaches=4, **kw: np.array(
+            [-16.8 + 0.5 * float(approach_index), -1.0, 1.0]
+        )
+    )
+    gm._navigation_waypoint_for_obs = MagicMock(return_value=np.array([-16.8, -1.0, 1.0]))
+    gm.place_coverage_for_obs = MagicMock(
+        return_value=type("C", (), {"status": "open", "local_frontier_cells": 5, "complete": False})()
+    )
+    gm.record_nav_attempt = MagicMock()
+    gm._observation_by_id = MagicMock(return_value=gm._observations[0])
+    gm._obs_is_frontier = MagicMock(return_value=False)
+    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.look_around = MagicMock()
+    agent.robot = MagicMock()
+    agent.robot.get_base_pose = MagicMock(return_value=np.array([-16.8, -1.0, 0.0]))
+    agent.voxel_map = None
+    agent.planner = None
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "I'm looking for the fruit bowl. A) kitchen island B) dining",
+        router=True,
+        collect_trace=True,
+        max_nav_steps=8,
+    )
+    ex._target_phrase = "fruit bowl"
+    ex._robot_xyt = lambda: np.array([-16.8, -1.0, 0.0])  # type: ignore[method-assign]
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="kitchen island",
+            obs_id=15,
+            xyz=np.array([-16.54, -1.14, 0.7]),
+            score=10.0,
+            source="graph",
+        )
+    ]
+    n_cap = {"i": 20}
+
+    def _update():
+        n_cap["i"] += 1
+        gm._observations = [MagicMock(obs_id=n_cap["i"], labels=["kitchen"])]
+
+    agent.update = MagicMock(side_effect=_update)
+    gm.verify_phrase_at_obs = MagicMock(
+        return_value=VerifyResult(
+            status="ABSENT", sim=0.05, obs_id=21, phrase="fruit bowl", ok=False
+        )
+    )
+
+    out1 = ex.handle_tool("investigate", {"obs_id": 15})
+    assert out1.get("ok") is True
+    assert out1.get("approach_index") == 0
+    assert "more_views" in str(out1.get("place_inspect") or "")
+    assert "coverage=open" in str(out1.get("place_inspect") or "")
+    assert not ex._hypothesis_nav_blocked(15)
+
+    out2 = ex.handle_tool("investigate", {"obs_id": 15})
+    assert out2.get("ok") is True
+    assert out2.get("approach_index") == 1
+    t1 = out1["target_xyz"][:2]
+    t2 = out2["target_xyz"][:2]
+    assert t1 != t2
     assert agent.navigate_to_target_pose.call_count == 2
+
+
+def test_coverage_closed_does_not_exhaust_while_approaches_remain():
+    """Coverage is informational; only the approach budget gates re-investigate."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, PlaceInspectRecord
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    agent.graph_memory = MagicMock()
+    agent.voxel_map = None
+    ex = AgenticEQAExecutor(agent, "Where is the sink?", router=True)
+    rec = PlaceInspectRecord(
+        investigate_count=1,
+        closest_m=0.4,
+        coverage="closed",
+        local_frontier_cells=0,
+        tried_approaches=[0],
+    )
+    ex._place_inspect[3] = rec
+    assert ex._place_approaches_exhausted(3) is False
+    assert "coverage=closed" in rec.card_bits()
+    assert "more_views" in rec.card_bits()
+    rec.tried_approaches = [0, 1, 2, 3]
+    assert ex._place_approaches_exhausted(3) is True
+    assert "views_exhausted" in rec.card_bits()
 
 def test_hypothesize_frontiers_without_object_phrases():
     """Cold start / failed extract still returns frontier evidence cards."""

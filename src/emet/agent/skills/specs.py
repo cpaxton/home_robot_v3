@@ -78,10 +78,13 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="investigate",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "INVESTIGATE: get a closer look at a listed place card (graph/confirmed/siglip "
-            "obs_id). Navigates toward the object, looks around, verifies/assesses at the "
-            "station, and records how close you looked. Use when a place might answer the "
-            "question; after close+ABSENT pick a different card or explore_frontier."
+            "INVESTIGATE: closer look at a listed place card (graph/confirmed/siglip "
+            "obs_id). Navigates to a random navigable floor sample in an annulus around "
+            "the object (prefers frontier-adjacent), looks around, verifies/assesses. "
+            "Cards show coverage=open|closed from object-footprint ∩ unexplored frontier. "
+            "Re-call while coverage=open / more_views; when coverage=closed or "
+            "views_exhausted, pick another card or explore_frontier. Optional "
+            "approach_index selects a sample slot (0..N-1)."
         ),
         parameters={
             "type": "object",
@@ -89,7 +92,14 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
                 "obs_id": {
                     "type": "integer",
                     "description": "Investigate-list observation id (not a frontier card).",
-                }
+                },
+                "approach_index": {
+                    "type": "integer",
+                    "description": (
+                        "Optional orbit sample 0..3 around the place. Omit to auto-pick "
+                        "the next unused approach."
+                    ),
+                },
             },
             "required": ["obs_id"],
         },
@@ -102,7 +112,13 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         ),
         parameters={
             "type": "object",
-            "properties": {"obs_id": {"type": "integer", "description": "Place-card observation id."}},
+            "properties": {
+                "obs_id": {"type": "integer", "description": "Place-card observation id."},
+                "approach_index": {
+                    "type": "integer",
+                    "description": "Optional approach sample; same as investigate.",
+                },
+            },
             "required": ["obs_id"],
         },
     ),

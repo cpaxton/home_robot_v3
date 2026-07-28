@@ -17,7 +17,7 @@ NEED_MIB=12000 uv run emet eval wait   # or: uv run emet eval check
 uv run emet eval affinity              # turbo-exclusion mask (jobs --cpu-safe applies it)
 ```
 
-Prefer **`emet habitat safe-start`** then **`emet hmeqa resume`** / **`emet hmeqa h2h`** over hand-built `taskset` + script env. See **`.cursor/rules/dogfood-emet-cli.mdc`**.
+Prefer **`emet habitat safe-start`** (detached probe), wait until that job is **`done`**, then **`emet hmeqa resume`** / **`emet hmeqa h2h`** — not hand-built `taskset` + script env. See **`.cursor/rules/dogfood-emet-cli.mdc`**.
 
 Canonical CLI: **`emet eval {status,diagnose,check,wait,kill-stale,affinity,recover}`**. Bash [`scripts/gpu_preflight.sh`](../../scripts/gpu_preflight.sh) delegates to it (also provides `emet_export_pytorch_alloc` and **`emet_pytest_no_sim_ignore_args`** when sourced). Prefer `emet eval` over raw `pkill` / ad-hoc kills. Verify with `uv run emet eval --help` before suggesting flags.
 

@@ -37,18 +37,19 @@ Rules:
 - investigate(obs_id): closer look at a listed Investigate card (graph/confirmed/siglip).
   Do not investigate frontiers — those are Explore-only.
 - explore_frontier: map growth when no place is worth a closer look, or after
-  close+ABSENT on the places you tried. toward= is weak coverage bias ONLY —
+  places look fruitless. toward= is weak coverage bias ONLY —
   never a substitute for investigate(obs_id).
-- After close+ABSENT on a card (see investigated=/recent= on the card), pick a
-  *different* Investigate card or explore — do not spam the same place.
+- Use Recent actions to avoid repeating a stuck investigate/explore loop.
 - SigLIP/OWL are proposals in state — not proof. Trust Qwen assess for answerability.
 - Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.
 - One or two tool calls per turn.
 
 # Examples
-State: Investigate obs_id=3 phrase='sink' source=graph investigated=0; Explore frontier obs_id=12
+State: Investigate obs_id=3 phrase='sink' source=graph investigated=0 approaches=0/4 coverage=open
 {"tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}
-State: Investigate obs_id=3 … investigated=1 closest=0.3m [close] recent: r2@0.3m verify=ABSENT assess=absent
+State: Recent actions: r0 investigate obs=3 verify=ABSENT; Investigate still has approaches left
+{"tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}
+State: Recent actions: r0–r2 investigate same obs ABSENT; Explore frontiers available
 {"tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
 State: Last verify PRESENT; VLM assess answerable=true verified=true
 {"tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
@@ -144,6 +145,9 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         f"nav used {executor._n_nav + executor._n_explore}/{executor.max_nav_steps}; "
         f"verified={executor._verified}"
     )
+    recent_actions = list(getattr(executor, "_recent_actions", None) or [])
+    if recent_actions:
+        lines.append("Recent actions: " + " | ".join(recent_actions))
     if getattr(executor, "_last_capture_status", None):
         lines.append(f"Last capture: {executor._last_capture_status}")
     loop_flags = list(getattr(executor, "_nav_loop_flags", None) or [])
@@ -160,10 +164,16 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     inv = [h for h in executor._hypotheses if str(h.source) in INVESTIGATE_SOURCES]
     exp = [h for h in executor._hypotheses if str(h.source) not in INVESTIGATE_SOURCES]
     ledger = getattr(executor, "_place_inspect", {}) or {}
+    refresh = getattr(executor, "_refresh_place_coverage", None)
     if inv:
         lines.append("Investigate (place cards — use investigate):")
         for h in inv:
             oid = int(h.obs_id)
+            if callable(refresh):
+                try:
+                    refresh(oid)
+                except Exception:
+                    pass
             labels = _hyp_labels(executor, oid)
             label_bit = f" labels={labels}" if labels else ""
             sim = getattr(h, "siglip_sim", None)
@@ -171,7 +181,9 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
             if isinstance(sim, (int, float)):
                 sim_bit = f" siglip_sim={float(sim):.3f}"
             rec = ledger.get(oid)
-            bits = rec.card_bits() if rec is not None else "investigated=0 closest=none recent=none"
+            bits = rec.card_bits() if rec is not None else (
+                "investigated=0 closest=none approaches=0/4 coverage=unknown recent=none"
+            )
             tried = executor._tried.get(oid)
             if tried:
                 bits += f" [tried: {tried}]"

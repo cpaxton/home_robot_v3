@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import time
@@ -68,7 +69,11 @@ NOT_PRESENT_ESCAPE_STREAK = 2
 ESCAPE_MIN_TRAVEL_M = 3.0
 
 # Same hyp obs_id navigated this many times without a fresh graph obs → stall / break loop.
+# Multi-view investigate samples up to PLACE_APPROACH_SAMPLES distinct bearings first.
 NAV_SAME_OBS_LOOP_LIMIT = 2
+
+# Distinct planar approach samples around a place card (re-investigate = next bearing).
+PLACE_APPROACH_SAMPLES = 4
 
 # Hyp recall: how many evidence cards to show the router / walk in fallback.
 DEFAULT_HYP_RECALL_K = 6
@@ -76,6 +81,8 @@ DEFAULT_HYP_RECALL_K = 6
 # Investigate vs explore: place-card sources worth a closer look.
 INVESTIGATE_SOURCES = frozenset({"graph", "confirmed", "siglip"})
 PLACE_INSPECT_RECENT_K = 3
+# Compact tool outcomes shown to the VLM router (avoid re-picking stuck loops).
+RECENT_ACTIONS_K = 6
 
 # Routing turns are text-only JSON; a two-call reply with arguments needs more than 64 tokens.
 ROUTER_MAX_NEW_TOKENS = 128
@@ -91,6 +98,7 @@ class PlaceInspectVisit:
     assess_present: bool | None = None
     assess_answerable: bool | None = None
     suggested: str = ""
+    approach_index: int | None = None
 
 
 @dataclass
@@ -104,20 +112,39 @@ class PlaceInspectRecord:
     last_assess_present: bool | None = None
     last_assess_answerable: bool | None = None
     last_suggested: str = ""
+    tried_approaches: list[int] = field(default_factory=list)
+    tried_xy: list[tuple[float, float]] = field(default_factory=list)
+    coverage: str = "unknown"  # open | closed | unknown
+    local_frontier_cells: int = 0
 
     @property
     def approached_close(self) -> bool:
         return self.closest_m is not None and float(self.closest_m) <= 1.0
 
+    @property
+    def approaches_left(self) -> int:
+        tried = {int(i) for i in self.tried_approaches}
+        return max(0, PLACE_APPROACH_SAMPLES - len(tried))
+
+    @property
+    def coverage_complete(self) -> bool:
+        return self.coverage == "closed"
+
     def card_bits(self) -> str:
-        """Compact state-card suffix for the router."""
+        """Compact state-card suffix for the router (includes local frontier completeness)."""
+        ap = f"approaches={len(self.tried_approaches)}/{PLACE_APPROACH_SAMPLES}"
+        cov = f"coverage={self.coverage}"
+        if self.coverage == "open":
+            cov += f" local_frontier={int(self.local_frontier_cells)}"
         if self.investigate_count <= 0:
-            return "investigated=0 closest=none recent=none"
+            return f"investigated=0 closest=none {ap} {cov} recent=none"
         close = "[close]" if self.approached_close else "[not_close]"
         closest = f"{float(self.closest_m):.1f}m" if self.closest_m is not None else "none"
         recent_bits: list[str] = []
         for v in self.recent[-PLACE_INSPECT_RECENT_K:]:
             bit = f"r{int(v.round)}@{float(v.closest_m):.1f}m"
+            if v.approach_index is not None:
+                bit += f" ap={int(v.approach_index)}"
             if v.verify:
                 bit += f" verify={v.verify}"
             if v.assess_present is False:
@@ -130,7 +157,14 @@ class PlaceInspectRecord:
                 bit += f" sug={v.suggested}"
             recent_bits.append(bit)
         recent = "; ".join(reversed(recent_bits)) if recent_bits else "none"
-        return f"investigated={self.investigate_count} closest={closest} {close} recent: {recent}"
+        if self.approaches_left > 0:
+            more = " more_views"
+        else:
+            more = " views_exhausted"
+        return (
+            f"investigated={self.investigate_count} closest={closest} {close} "
+            f"{ap} {cov}{more} recent: {recent}"
+        )
 
 
 def env_eqa_agentic_verify() -> bool | None:
@@ -252,6 +286,8 @@ class AgenticEQAExecutor:
         self._n_nav = 0
         self._n_explore = 0
         self._tool_log: list[str] = []
+        # Compact per-turn outcomes for the router state message (loops / stuck).
+        self._recent_actions: list[str] = []
         self._trace_rows: list[dict[str, Any]] = []
         # obs_id → successful navigate/investigate attempts (loop detection for the router).
         self._nav_to_obs_counts: dict[int, int] = {}
@@ -362,25 +398,105 @@ class AgenticEQAExecutor:
         name = (name or "").strip().lower()
         self._tool_log.append(name)
         if name == "inspect_graph":
-            return self._tool_inspect_graph()
-        if name == "explore_frontier":
-            return self._tool_explore_frontier(str(args.get("toward") or ""))
-        if name in ("investigate", "navigate_to_obs"):
-            return self._tool_investigate(int(args.get("obs_id", -1)), tool_name=name)
-        if name == "look_around":
-            return self._tool_look_around()
-        if name == "capture_and_update":
-            return self._tool_capture_and_update()
-        if name == "verify_siglip":
-            return self._tool_verify_siglip(
+            out = self._tool_inspect_graph()
+        elif name == "explore_frontier":
+            out = self._tool_explore_frontier(str(args.get("toward") or ""))
+        elif name in ("investigate", "navigate_to_obs"):
+            raw_ap = args.get("approach_index", args.get("approach"))
+            approach_index = None
+            if raw_ap is not None and str(raw_ap).strip() != "":
+                try:
+                    approach_index = int(raw_ap)
+                except (TypeError, ValueError):
+                    approach_index = None
+            out = self._tool_investigate(
+                int(args.get("obs_id", -1)),
+                tool_name=name,
+                approach_index=approach_index,
+            )
+        elif name == "look_around":
+            out = self._tool_look_around()
+        elif name == "capture_and_update":
+            out = self._tool_capture_and_update()
+        elif name == "verify_siglip":
+            out = self._tool_verify_siglip(
                 str(args.get("phrase") or ""),
                 int(args.get("obs_id", -1)) if args.get("obs_id") is not None else None,
             )
-        if name == "submit_answer":
-            return self._tool_submit_answer(str(args.get("answer") or ""))
-        if name == "finish":
-            return self._tool_finish(str(args.get("summary") or ""))
-        return {"ok": False, "error": f"unknown tool {name!r}"}
+        elif name == "submit_answer":
+            out = self._tool_submit_answer(str(args.get("answer") or ""))
+        elif name == "finish":
+            out = self._tool_finish(str(args.get("summary") or ""))
+        else:
+            out = {"ok": False, "error": f"unknown tool {name!r}"}
+        self._record_recent_action(name, args, out if isinstance(out, dict) else {})
+        return out
+
+    def _record_recent_action(
+        self,
+        name: str,
+        args: dict[str, Any],
+        out: dict[str, Any],
+    ) -> None:
+        """Append a one-line tool outcome for the next router state message."""
+        # Internal / chained tools stay off the history (noise for the VLM).
+        if name in {
+            "capture_and_update",
+            "verify_siglip",
+            "inspect_graph",
+            "look_around",
+        }:
+            return
+        bits: list[str] = [f"r{int(self._round)} {name}"]
+        if name in ("investigate", "navigate_to_obs"):
+            oid = args.get("obs_id", out.get("obs_id"))
+            if oid is not None:
+                bits.append(f"obs={int(oid)}")
+            ap = out.get("approach_index")
+            if ap is not None:
+                bits.append(f"ap={int(ap)}")
+            if out.get("ok"):
+                st = ""
+                ver = out.get("verify")
+                if isinstance(ver, dict):
+                    st = str(ver.get("status") or ver.get("decision") or "")
+                elif ver is not None:
+                    st = str(getattr(ver, "status", "") or "")
+                oid_i = int(oid) if oid is not None else None
+                rec = self._place_inspect.get(oid_i) if oid_i is not None else None
+                if not st and rec is not None:
+                    st = str(rec.last_verify or "")
+                if st:
+                    bits.append(f"verify={st}")
+                closest = None
+                if rec is not None and rec.closest_m is not None:
+                    closest = f"{float(rec.closest_m):.1f}m"
+                else:
+                    pi = str(out.get("place_inspect") or "")
+                    if "closest=" in pi:
+                        closest = pi.split("closest=", 1)[1].split()[0]
+                if closest and closest != "none":
+                    bits.append(f"closest={closest}")
+            else:
+                bits.append(f"fail={str(out.get('status') or out.get('error') or 'err')[:40]}")
+        elif name == "explore_frontier":
+            toward = str(args.get("toward") or "").strip()
+            if toward:
+                bits.append(f"toward={toward[:40]!r}")
+            bits.append("ok" if out.get("ok") else "fail")
+        elif name == "submit_answer":
+            ans = str(args.get("answer") or out.get("final_answer") or "").strip()
+            if ans:
+                bits.append(f"answer={ans[:16]}")
+            bits.append("ok" if out.get("ok") else "fail")
+        elif name == "finish":
+            bits.append("ok" if out.get("ok") else "fail")
+        else:
+            bits.append("ok" if out.get("ok") else "fail")
+        line = " ".join(bits)
+        self._recent_actions.append(line)
+        if len(self._recent_actions) > RECENT_ACTIONS_K:
+            self._recent_actions = self._recent_actions[-RECENT_ACTIONS_K:]
 
     def _tool_inspect_graph(self) -> dict[str, Any]:
         gm = self.graph_memory
@@ -589,6 +705,7 @@ class AgenticEQAExecutor:
         *,
         closest_m: float | None,
         verify_out: dict[str, Any] | None,
+        approach_index: int | None = None,
     ) -> PlaceInspectRecord:
         oid = int(obs_id)
         rec = self._place_inspect.get(oid) or PlaceInspectRecord()
@@ -609,6 +726,10 @@ class AgenticEQAExecutor:
         if present is None and isinstance(verify_out, dict):
             present = verify_out.get("present")
             answerable = verify_out.get("answerable")
+        if approach_index is not None:
+            ap = int(approach_index) % PLACE_APPROACH_SAMPLES
+            if ap not in rec.tried_approaches:
+                rec.tried_approaches.append(ap)
         visit = PlaceInspectVisit(
             round=int(self._round),
             closest_m=dist,
@@ -616,6 +737,7 @@ class AgenticEQAExecutor:
             assess_present=bool(present) if present is not None else None,
             assess_answerable=bool(answerable) if answerable is not None else None,
             suggested=suggested,
+            approach_index=int(approach_index) if approach_index is not None else None,
         )
         rec.investigate_count += 1
         rec.recent.append(visit)
@@ -628,6 +750,28 @@ class AgenticEQAExecutor:
         self._place_inspect[oid] = rec
         return rec
 
+    def _place_approaches_exhausted(self, obs_id: int) -> bool:
+        """True when the fixed approach sample budget is spent."""
+        rec = self._place_inspect.get(int(obs_id))
+        if rec is None:
+            return False
+        return int(rec.approaches_left) <= 0
+
+    def _next_approach_index(
+        self, obs_id: int, *, prefer: int | None = None
+    ) -> int | None:
+        """Next unused approach sample index, or None if count-exhausted."""
+        rec = self._place_inspect.get(int(obs_id))
+        tried = {int(i) for i in (rec.tried_approaches if rec is not None else [])}
+        if prefer is not None:
+            p = int(prefer) % PLACE_APPROACH_SAMPLES
+            if p not in tried:
+                return p
+        for i in range(PLACE_APPROACH_SAMPLES):
+            if i not in tried:
+                return i
+        return None
+
     def _place_close_and_absent(self, obs_id: int) -> bool:
         rec = self._place_inspect.get(int(obs_id))
         if rec is None or not rec.approached_close or rec.investigate_count <= 0:
@@ -638,8 +782,192 @@ class AgenticEQAExecutor:
             return True
         return str(rec.last_verify).upper() in {"ABSENT", "SKIPPED_SAME_VIEW"}
 
-    def _tool_investigate(self, obs_id: int, *, tool_name: str = "investigate") -> dict[str, Any]:
-        """Closer look at a place card: approach, look around, verify/assess, update ledger."""
+    def _voxel_planner(self) -> tuple[Any | None, Any | None]:
+        agent = self.agent
+        voxel_map = getattr(agent, "voxel_map", None)
+        planner = getattr(agent, "planner", None) or getattr(agent, "_planner", None)
+        return voxel_map, planner
+
+    def _refresh_place_coverage(self, obs_id: int) -> PlaceInspectRecord:
+        """Update Investigate-card coverage= from footprint ∩ unexplored frontier."""
+        oid = int(obs_id)
+        rec = self._place_inspect.get(oid) or PlaceInspectRecord()
+        gm = self.graph_memory
+        voxel_map, planner = self._voxel_planner()
+        cov = None
+        if gm is not None and hasattr(gm, "place_coverage_for_obs"):
+            try:
+                cov = gm.place_coverage_for_obs(
+                    oid,
+                    voxel_map=voxel_map,
+                    planner=planner,
+                    robot_xyt=self._robot_xyt(),
+                )
+            except Exception as e:
+                _logger.warning(f"place coverage refresh failed: {e}")
+                cov = None
+        if cov is not None:
+            rec.coverage = str(getattr(cov, "status", "unknown") or "unknown")
+            rec.local_frontier_cells = int(getattr(cov, "local_frontier_cells", 0) or 0)
+        self._place_inspect[oid] = rec
+        return rec
+
+    def _mark_approach_tried(
+        self,
+        obs_id: int,
+        approach_index: int,
+        *,
+        target_xy: tuple[float, float] | None = None,
+    ) -> None:
+        oid = int(obs_id)
+        rec = self._place_inspect.get(oid) or PlaceInspectRecord()
+        ap = int(approach_index) % PLACE_APPROACH_SAMPLES
+        if ap not in rec.tried_approaches:
+            rec.tried_approaches.append(ap)
+        if target_xy is not None:
+            xy = (float(target_xy[0]), float(target_xy[1]))
+            if all(
+                math.hypot(xy[0] - p[0], xy[1] - p[1]) > 0.25 for p in rec.tried_xy
+            ):
+                rec.tried_xy.append(xy)
+        self._place_inspect[oid] = rec
+
+    def _investigate_target_xyz(
+        self, obs_id: int, approach_index: int
+    ) -> np.ndarray | None:
+        gm = self.graph_memory
+        if gm is None:
+            return None
+        xyt = self._robot_xyt()
+        voxel_map, planner = self._voxel_planner()
+        rec = self._place_inspect.get(int(obs_id))
+        avoid = list(rec.tried_xy) if rec is not None else None
+
+        def _as_xy(raw: Any) -> np.ndarray | None:
+            if raw is None:
+                return None
+            try:
+                arr = np.asarray(raw, dtype=float).reshape(-1)
+            except (TypeError, ValueError):
+                return None
+            if arr.size < 2 or not np.isfinite(arr[:2]).all():
+                return None
+            return np.array([float(arr[0]), float(arr[1]), 1.0], dtype=float)
+
+        # Habitat: prefer navmesh-reachable approaches (can sit through doorways).
+        try:
+            from emet.controller.habitat_nav import (
+                habitat_perfect_nav_enabled,
+                is_habitat_robot_client,
+                sample_habitat_navmesh_approach_xy,
+            )
+
+            agent = self.agent
+            params = getattr(agent, "parameters", None)
+            robot = getattr(agent, "robot", None)
+            if (
+                params is not None
+                and robot is not None
+                and habitat_perfect_nav_enabled(params)
+                and is_habitat_robot_client(robot)
+            ):
+                sim = getattr(robot, "_sim", None)
+                anchor = None
+                if hasattr(gm, "_obs_nav_anchor"):
+                    anchor = gm._obs_nav_anchor(int(obs_id))
+                if sim is not None and anchor is not None:
+                    robot_xy = None
+                    if xyt is not None:
+                        robot_xy = (float(xyt[0]), float(xyt[1]))
+                    r_in = max(
+                        0.35,
+                        float(getattr(gm, "image_nav_min_approach_m", 0.35) or 0.35),
+                    )
+                    got = sample_habitat_navmesh_approach_xy(
+                        sim,
+                        anchor_xy=(float(anchor[0]), float(anchor[1])),
+                        robot_xy=robot_xy,
+                        approach_index=int(approach_index),
+                        radius_inner_m=r_in,
+                        avoid_xy=avoid,
+                    )
+                    if got is not None:
+                        return np.array([float(got[0]), float(got[1]), 1.0], dtype=float)
+        except Exception as e:
+            _logger.debug(f"habitat navmesh approach unavailable: {e}")
+
+        fn = getattr(gm, "_navigation_approach_waypoint_for_obs", None)
+        if callable(fn):
+            try:
+                got = _as_xy(
+                    fn(
+                        int(obs_id),
+                        xyt,
+                        approach_index=int(approach_index),
+                        n_approaches=PLACE_APPROACH_SAMPLES,
+                        avoid_xy=avoid,
+                        voxel_map=voxel_map,
+                        planner=planner,
+                    )
+                )
+            except TypeError:
+                try:
+                    got = _as_xy(fn(int(obs_id), xyt, approach_index=int(approach_index)))
+                except TypeError:
+                    got = None
+            if got is not None:
+                return got
+        if hasattr(gm, "_navigation_waypoint_for_obs"):
+            return _as_xy(gm._navigation_waypoint_for_obs(int(obs_id), xyt))
+        return None
+
+    def _maybe_retract_claim_after_station(
+        self,
+        obs_id: int,
+        *,
+        closest_m: float | None,
+        verify_out: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        """If a close look says ABSENT for phrase P, stop advertising P at that obs."""
+        gm = self.graph_memory
+        if gm is None or not hasattr(gm, "retract_phrase_claim_at_obs"):
+            return None
+        if closest_m is None or float(closest_m) > 1.0:
+            return None
+        if not isinstance(verify_out, dict):
+            return None
+        status = str(
+            verify_out.get("status") or verify_out.get("decision") or ""
+        ).upper()
+        if status != "ABSENT":
+            return None
+        phrase = str(
+            verify_out.get("phrase")
+            or self._target_phrase
+            or ""
+        ).strip()
+        if not phrase:
+            return None
+        out = gm.retract_phrase_claim_at_obs(int(obs_id), phrase)
+        self._append_trace(
+            {
+                "event": "retract_claim",
+                "obs_id": int(obs_id),
+                "phrase": str(out.get("phrase") or phrase),
+                "closest_m": float(closest_m),
+                **{k: out.get(k) for k in ("stripped_obs", "stripped_nodes", "ok")},
+            }
+        )
+        return out
+
+    def _tool_investigate(
+        self,
+        obs_id: int,
+        *,
+        tool_name: str = "investigate",
+        approach_index: int | None = None,
+    ) -> dict[str, Any]:
+        """Closer look at a place card: sample an approach, look around, verify/assess."""
         if self._n_nav + self._n_explore >= self.max_nav_steps:
             return {"ok": False, "error": "nav budget exhausted"}
         gm = self.graph_memory
@@ -649,9 +977,10 @@ class AgenticEQAExecutor:
         oid = int(obs_id)
         trace_tool = "investigate" if tool_name == "investigate" else "navigate_to_obs"
         prior_visits = int(self._nav_to_obs_counts.get(oid, 0))
-        # Visit limit / scored / stalled — not bare "nav failed". Also stop when
-        # place ledger says we already stood close and the target was absent.
-        if self._hypothesis_nav_blocked(oid) or self._place_close_and_absent(oid):
+        next_ap = self._next_approach_index(oid, prefer=approach_index)
+        # Exhausted orbit samples / stall — not bare "nav failed". Close+ABSENT alone
+        # no longer blocks while unused approach bearings remain.
+        if next_ap is None or self._hypothesis_nav_blocked(oid):
             flag = {
                 "obs_id": oid,
                 "visits": prior_visits,
@@ -662,6 +991,7 @@ class AgenticEQAExecutor:
                     if oid in self._place_inspect
                     else None
                 ),
+                "approaches_exhausted": True,
             }
             self._nav_loop_flags.append(flag)
             self._append_trace({"tool": trace_tool, "ok": False, **flag})
@@ -669,8 +999,7 @@ class AgenticEQAExecutor:
                 "ok": False,
                 "error": (
                     f"investigate blocked on obs_id={oid} (visits={prior_visits}, "
-                    f"close+absent={self._place_close_and_absent(oid)}); "
-                    "pick another investigate card or explore_frontier"
+                    f"approaches exhausted); pick another investigate card or explore_frontier"
                 ),
                 "status": "NAV_LOOP_BLOCKED",
                 "obs_id": oid,
@@ -728,7 +1057,7 @@ class AgenticEQAExecutor:
         source = hyp.source if hyp is not None else "graph"
         hypothesis_id = self._begin_policy_approach(source, oid, phrase)
         xyt = self._robot_xyt()
-        target = gm._navigation_waypoint_for_obs(oid, xyt)
+        target = self._investigate_target_xyz(oid, next_ap)
         if target is None:
             return {"ok": False, "error": f"no waypoint for obs_id={obs_id}"}
         start = xyt if xyt is not None else np.array([0.0, 0.0, 0.0])
@@ -740,6 +1069,12 @@ class AgenticEQAExecutor:
             finished = bool(agent.navigate_to_target_pose(target, start, None))
         self._n_nav += 1
         self._nav_to_obs_counts[oid] = prior_visits + 1
+        # Consume this sample even on planner miss so the next call draws a new XY.
+        tgt_xy = (
+            float(np.asarray(target).reshape(-1)[0]),
+            float(np.asarray(target).reshape(-1)[1]),
+        )
+        self._mark_approach_tried(oid, next_ap, target_xy=tgt_xy)
         nav_res = getattr(agent, "_last_nav_attempt", None)
         dist_m = float(getattr(nav_res, "dist_m", 0.0) or 0.0) if nav_res else 0.0
         note = str(getattr(nav_res, "note", "") or "") if nav_res else ""
@@ -750,6 +1085,7 @@ class AgenticEQAExecutor:
         row = {
             "tool": trace_tool,
             "obs_id": oid,
+            "approach_index": int(next_ap),
             "target_xyz": [float(x) for x in np.asarray(target).reshape(-1)[:3]],
             "nav_success": bool(finished),
             "nav_dist_m": dist_m,
@@ -762,6 +1098,7 @@ class AgenticEQAExecutor:
             return {
                 "ok": False,
                 "target_xyz": row["target_xyz"],
+                "approach_index": int(next_ap),
                 "capture": None,
                 "verify": None,
             }
@@ -801,6 +1138,7 @@ class AgenticEQAExecutor:
                     "verify_status": (verify_out or {}).get("status")
                     if isinstance(verify_out, dict)
                     else None,
+                    "approach_index": int(next_ap),
                 }
                 self._nav_loop_flags.append(flag)
                 self._tried[oid] = (
@@ -813,7 +1151,18 @@ class AgenticEQAExecutor:
                 )
 
         closest = self._dist_to_anchor_m(oid, hyp)
-        rec = self._record_place_inspect(oid, closest_m=closest, verify_out=verify_out)
+        rec = self._record_place_inspect(
+            oid,
+            closest_m=closest,
+            verify_out=verify_out,
+            approach_index=next_ap,
+        )
+        rec = self._refresh_place_coverage(oid)
+        self._maybe_retract_claim_after_station(
+            oid,
+            closest_m=closest,
+            verify_out=verify_out if isinstance(verify_out, dict) else None,
+        )
         self._append_trace(
             {
                 "event": "station_inspect",
@@ -821,6 +1170,9 @@ class AgenticEQAExecutor:
                 "obs_id": oid,
                 "station_obs_id": station_oid,
                 "closest_m": closest,
+                "approach_index": int(next_ap),
+                "coverage": rec.coverage,
+                "local_frontier_cells": rec.local_frontier_cells,
                 "place_inspect": rec.card_bits(),
                 "verify_status": (
                     (verify_out or {}).get("status")
@@ -833,10 +1185,12 @@ class AgenticEQAExecutor:
         return {
             "ok": True,
             "target_xyz": row["target_xyz"],
+            "approach_index": int(next_ap),
             "capture": cap,
             "verify": verify_out,
             "look_around_on_no_new_obs": True,
             "place_inspect": rec.card_bits(),
+            "coverage": rec.coverage,
             "station_obs_id": station_oid,
         }
 
@@ -1135,34 +1489,38 @@ class AgenticEQAExecutor:
             _logger.warning(f"evidence-policy approach rejected: {exc}")
 
     def _next_untried_hypothesis(self) -> NavHypothesis | None:
-        """Prefer Investigate cards not yet close+ABSENT; skip exhausted places."""
+        """Prefer Investigate cards with unused approach samples left."""
         for h in self._investigate_hypotheses():
             oid = int(h.obs_id)
             if self._obs_already_verified(oid):
                 continue
-            if self._place_close_and_absent(oid) or self._hypothesis_nav_blocked(oid):
+            if self._place_approaches_exhausted(oid) or self._hypothesis_nav_blocked(oid):
                 continue
             rec = self._place_inspect.get(oid)
-            if rec is None or not rec.approached_close:
+            if rec is None or not rec.approached_close or rec.approaches_left > 0:
                 return h
         for h in self._investigate_hypotheses():
             oid = int(h.obs_id)
             if self._obs_already_verified(oid):
                 continue
-            if self._place_close_and_absent(oid) or self._hypothesis_nav_blocked(oid):
+            if self._place_approaches_exhausted(oid) or self._hypothesis_nav_blocked(oid):
                 continue
             return h
         return None
 
     def _hypothesis_nav_blocked(self, obs_id: int) -> bool:
-        """True if investigate must refuse this id (visit limit / stall / close+absent)."""
+        """True if investigate must refuse this id (approaches/coverage exhausted / stall)."""
         oid = int(obs_id)
-        if self._place_close_and_absent(oid):
+        if self._place_approaches_exhausted(oid):
             return True
-        if int(self._nav_to_obs_counts.get(oid, 0)) >= NAV_SAME_OBS_LOOP_LIMIT:
+        if self._next_approach_index(oid) is None:
             return True
         tried = str(self._tried.get(oid) or "")
         if tried.startswith("STALLED_NAV_LOOP"):
+            return True
+        # Hard cap so planner thrashing cannot consume the whole nav budget.
+        max_attempts = PLACE_APPROACH_SAMPLES + NAV_SAME_OBS_LOOP_LIMIT
+        if int(self._nav_to_obs_counts.get(oid, 0)) >= max_attempts:
             return True
         return False
 
@@ -2448,6 +2806,10 @@ class AgenticEQAExecutor:
         self._frontier_pick_waypoints = []
         self._frontier_pick_dir = None
         self.agent._explore_min_travel_m = 0.0
+        self._recent_actions = []
+        gm0 = self.graph_memory
+        if gm0 is not None and hasattr(gm0, "clear_retracted_nav_claims"):
+            gm0.clear_retracted_nav_claims()
         # Resolve panel dir early so HM-EQA bundles get picks even without trace_path.
         try:
             self._frontier_pick_out_dir()

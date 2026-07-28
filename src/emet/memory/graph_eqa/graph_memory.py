@@ -386,6 +386,45 @@ _QUESTION_LANDMARK_BOOST: dict[str, frozenset[str]] = {
 }
 
 
+def location_mcq_landmark_phrases(
+    question: str,
+    *,
+    max_landmarks: int = 4,
+) -> list[str]:
+    """Landmark phrases from location-MCQ options (e.g. ``kitchen island``).
+
+    Stem heuristics ignore choices, and enrich labels are often empty for a scene —
+    without these seeds, hyp recall never builds Investigate cards for option places
+    even when the graph already has matching labels.
+    """
+    try:
+        from emet.habitat.metrics import (
+            choices_are_location_mcq,
+            parse_mcq_choices_from_question,
+        )
+    except ImportError:
+        return []
+    choices = parse_mcq_choices_from_question(question or "")
+    if not choices or not choices_are_location_mcq(choices):
+        return []
+    out: list[str] = []
+    lead = re.compile(
+        r"^(?:on|in|at|by|near|under|beside|behind|inside|outside|"
+        r"between|next\s+to)\s+(?:the\s+)?",
+        re.IGNORECASE,
+    )
+    for ch in choices[:4]:
+        text = lead.sub("", str(ch or "").strip()).strip().lower()
+        text = re.sub(r"\s+", " ", text)
+        if len(text) < 3 or text in _QUESTION_STOPWORDS:
+            continue
+        if text not in out:
+            out.append(text)
+        if len(out) >= max_landmarks:
+            break
+    return out
+
+
 def consolidate_relevant_keywords(
     phrases: list[str],
     extras: list[str],
@@ -648,6 +687,9 @@ class GraphEQAMemory:
         self._frontier_min_cluster_cells: int = 3
         self._frontier_keyword_score_weight: float = 1.0
         self.image_nav_min_approach_m: float = 0.35
+        # (obs_id, normalized_phrase) claims retracted after close+ABSENT verify —
+        # keep the place node, but stop offering that stem-object hyp card.
+        self._retracted_nav_claims: set[tuple[int, str]] = set()
         self._load_navigation_settings()
         self._load_dynagraph_settings()
         self._load_frontier_settings()
@@ -2187,14 +2229,23 @@ class GraphEQAMemory:
         out = self.image_description_client([prompt, question])
         enrich_hints = getattr(self, "_enrich_object_hints", None) or []
         llm_parts = [s.strip() for s in out.split(",") if s.strip()]
-        phrase_seed = list(enrich_hints) + heuristic_relevant_phrases(question)
+        mcq_landmarks = location_mcq_landmark_phrases(question)
+        phrase_seed = (
+            list(enrich_hints)
+            + heuristic_relevant_phrases(question)
+            + list(mcq_landmarks)
+        )
         if enrich_hints:
             for hint in enrich_hints:
                 h = hint.strip().lower()
                 if h and " " in h and h not in phrase_seed:
                     phrase_seed.insert(0, h)
-        extra_seed = llm_parts + heuristic_relevant_objects(question)
-        phrases, objects = consolidate_relevant_keywords(phrase_seed, extra_seed, max_items=4)
+        extra_seed = llm_parts + heuristic_relevant_objects(question) + list(mcq_landmarks)
+        # Location MCQs need stem object + option landmarks in the same recall set.
+        max_items = 8 if mcq_landmarks else 4
+        phrases, objects = consolidate_relevant_keywords(
+            phrase_seed, extra_seed, max_items=max_items
+        )
         self._relevant_phrases = phrases
         self._relevant_objects = objects
 
@@ -2351,20 +2402,31 @@ class GraphEQAMemory:
         Ranking is **recall only** (source tier + keyword/landmark hit + distance
         tiebreak). The VLM router decides where to go among the returned cards.
         """
-        if not self._observations:
+        if not self._observations and not any(
+            getattr(n, "is_frontier", False) for n in self._nodes
+        ):
             return []
         phrases = list(self._confirmed_memory_phrases()) + list(self._relevant_objects or [])
         if not phrases and question:
             self.extract_relevant_objects(question)
             phrases = list(self._confirmed_memory_phrases()) + list(self._relevant_objects or [])
-        if not phrases:
-            return []
+        # Always merge location-MCQ landmarks (even if extract already ran thin).
+        for landmark in location_mcq_landmark_phrases(question):
+            if landmark not in phrases:
+                phrases.append(landmark)
         scored: list[NavHypothesis] = []
         seen: set[int] = set()
+        retracted = getattr(self, "_retracted_nav_claims", None) or set()
+
+        def _claim_blocked(oid: int, phrase: str) -> bool:
+            key = (int(oid), str(phrase or "").strip().lower())
+            return key in retracted
+
+        # Object / SigLIP cards need phrases; frontiers are still valid cold-start evidence.
         for phrase in phrases:
             for o in self._observations:
                 oid = int(o.obs_id)
-                if oid in seen:
+                if oid in seen or _claim_blocked(oid, phrase):
                     continue
                 if self._obs_is_frontier(oid):
                     continue
@@ -2379,6 +2441,24 @@ class GraphEQAMemory:
                             source="graph",
                         )
                     )
+            # Also match graph nodes (centroid) when observations lack the label string.
+            for node in self._nodes:
+                if getattr(node, "is_frontier", False) or getattr(node, "is_viewpoint", False):
+                    continue
+                oid = int(node.obs_id)
+                if oid in seen or _claim_blocked(oid, phrase):
+                    continue
+                if any(label_matches_relevant_object(phrase, lab) for lab in (node.labels or [])):
+                    seen.add(oid)
+                    scored.append(
+                        NavHypothesis(
+                            phrase=phrase,
+                            obs_id=oid,
+                            xyz=np.asarray(node.xyz, dtype=float).reshape(-1)[:3].copy(),
+                            score=0.0,
+                            source="graph",
+                        )
+                    )
         for phrase in phrases:
             sig = self._siglip_match_for_phrase(phrase)
             if sig is None:
@@ -2387,7 +2467,7 @@ class GraphEQAMemory:
             if oid is None:
                 continue
             oid = int(oid)
-            if oid in seen or self._obs_is_frontier(oid):
+            if oid in seen or self._obs_is_frontier(oid) or _claim_blocked(oid, phrase):
                 continue
             if sim >= SIGLIP_CONFIRM_THRESHOLD:
                 source = "confirmed"
@@ -2421,6 +2501,8 @@ class GraphEQAMemory:
                 )
             )
             seen.add(int(node.obs_id))
+        if not scored:
+            return []
         scored = [
             self._recall_rank_score(hypothesis, question, robot_xyt)
             for hypothesis in scored
@@ -2445,6 +2527,72 @@ class GraphEQAMemory:
         self._rebuild_viewpoint_index()
         self._update_edges()
         return True
+
+    def retract_phrase_claim_at_obs(
+        self,
+        obs_id: int,
+        phrase: str,
+        *,
+        strip_matching_labels: bool = True,
+    ) -> dict[str, Any]:
+        """Stop offering a disproved stem-object claim without deleting the place.
+
+        After a close look verifies ABSENT for ``phrase`` at ``obs_id``, blacklist
+        that (obs, phrase) for hyp recall and optionally strip matching labels from
+        the observation / node. Location-MCQ *place* landmarks should not call this
+        for the place name itself (the island is real; only the object was missing).
+        """
+        oid = int(obs_id)
+        key_phrase = str(phrase or "").strip().lower()
+        if not key_phrase:
+            return {"ok": False, "error": "empty phrase", "obs_id": oid}
+        if not hasattr(self, "_retracted_nav_claims"):
+            self._retracted_nav_claims = set()
+        self._retracted_nav_claims.add((oid, key_phrase))
+        stripped_obs = 0
+        stripped_nodes = 0
+        if strip_matching_labels:
+            for o in self._observations:
+                if int(o.obs_id) != oid:
+                    continue
+                before = list(o.labels or [])
+                kept = [
+                    lab
+                    for lab in before
+                    if not label_matches_relevant_object(key_phrase, lab)
+                ]
+                if len(kept) != len(before):
+                    o.labels = kept if kept else ["object"]
+                    stripped_obs += 1
+            for i, n in enumerate(self._nodes):
+                if int(n.obs_id) != oid:
+                    continue
+                if getattr(n, "is_frontier", False) or getattr(n, "is_viewpoint", False):
+                    continue
+                before = list(n.labels or [])
+                kept = [
+                    lab
+                    for lab in before
+                    if not label_matches_relevant_object(key_phrase, lab)
+                ]
+                if len(kept) != len(before):
+                    self._nodes[i] = replace(
+                        n,
+                        labels=kept if kept else ["object"],
+                    )
+                    stripped_nodes += 1
+        return {
+            "ok": True,
+            "obs_id": oid,
+            "phrase": key_phrase,
+            "stripped_obs": stripped_obs,
+            "stripped_nodes": stripped_nodes,
+            "n_retracted": len(self._retracted_nav_claims),
+        }
+
+    def clear_retracted_nav_claims(self) -> None:
+        """Drop claim blacklist (e.g. new question)."""
+        self._retracted_nav_claims = set()
 
     def retire_frontier_near_xy(
         self,
@@ -3411,6 +3559,175 @@ class GraphEQAMemory:
         ux, uy = dx / dist, dy / dist
         return np.array([rx + ux * travel, ry + uy * travel, 1.0], dtype=float)
 
+    def _obs_nav_anchor(self, obs_id: int) -> np.ndarray | None:
+        obs = self._observation_by_id(obs_id)
+        if obs is None:
+            return None
+        node = self._node_for_obs_id(obs_id)
+        if node is not None:
+            return np.asarray(node.xyz, dtype=float).reshape(-1)[:3]
+        return np.asarray(obs.xyz, dtype=float).reshape(-1)[:3]
+
+    def place_footprint_for_obs(self, obs_id: int) -> Any:
+        """Planar footprint for coverage / annulus sampling (``PlaceFootprint`` or None)."""
+        from emet.memory.graph_eqa.place_approaches import (
+            footprint_from_node,
+            footprint_from_xyz,
+        )
+
+        node = self._node_for_obs_id(int(obs_id))
+        fp = footprint_from_node(node)
+        if fp is not None:
+            return fp
+        anchor = self._obs_nav_anchor(int(obs_id))
+        return footprint_from_xyz(anchor) if anchor is not None else None
+
+    def place_coverage_for_obs(
+        self,
+        obs_id: int,
+        *,
+        voxel_map: Any | None = None,
+        planner: Any | None = None,
+        robot_xyt: Any | None = None,
+    ) -> Any:
+        """Local frontier completeness for a place card (``PlaceCoverage``)."""
+        from emet.memory.graph_eqa.place_approaches import (
+            count_frontier_in_footprint,
+            coverage_from_frontier_count,
+            make_grid_converters,
+        )
+
+        fp = self.place_footprint_for_obs(int(obs_id))
+        if fp is None or voxel_map is None or not hasattr(voxel_map, "get_2d_map"):
+            return coverage_from_frontier_count(None)
+        converters = make_grid_converters(voxel_map)
+        if converters is None:
+            return coverage_from_frontier_count(None)
+        xy_to_ij, _ij_to_xy, res = converters
+        try:
+            from emet.memory.graph_eqa.frontier_nodes import _as_bool_numpy
+
+            xyt = robot_xyt
+            if xyt is None:
+                return coverage_from_frontier_count(None)
+            if planner is not None and hasattr(voxel_map, "get_outside_frontier"):
+                outside = voxel_map.get_outside_frontier(xyt, planner)
+                _, explored = voxel_map.get_2d_map()
+                frontier = _as_bool_numpy(outside) & ~_as_bool_numpy(explored)
+            else:
+                obstacles, explored = voxel_map.get_2d_map()
+                exp = _as_bool_numpy(explored)
+                obs = _as_bool_numpy(obstacles)
+                from scipy.ndimage import binary_dilation
+
+                frontier = binary_dilation(exp) & ~exp & ~obs
+            n = count_frontier_in_footprint(
+                fp, frontier, xy_to_ij=xy_to_ij, resolution_m=res
+            )
+            return coverage_from_frontier_count(n)
+        except Exception as e:
+            _logger.warning(f"place_coverage_for_obs({obs_id}) failed: {e}")
+            return coverage_from_frontier_count(None)
+
+    def _orbit_approach_samples(
+        self,
+        anchor: np.ndarray,
+        robot_xy: tuple[float, float] | None,
+        *,
+        n: int = 4,
+        radius_m: float | None = None,
+    ) -> list[np.ndarray]:
+        """Legacy evenly spaced bearings (fallback when voxel sampling is unavailable)."""
+        n_ap = max(1, int(n))
+        radius = float(
+            radius_m
+            if radius_m is not None
+            else max(0.85, float(self.image_nav_min_approach_m) + 0.5)
+        )
+        ax, ay = float(anchor[0]), float(anchor[1])
+        if robot_xy is not None:
+            rx, ry = robot_xy
+            base = math.atan2(ry - ay, rx - ax)
+            first = self._standoff_waypoint_toward(robot_xy, anchor)
+        else:
+            base = 0.0
+            first = np.array([ax + radius, ay, 1.0], dtype=float)
+        samples: list[np.ndarray] = [np.asarray(first, dtype=float).reshape(-1)[:3].copy()]
+        for k in range(1, n_ap):
+            bearing = base + (2.0 * math.pi * float(k) / float(n_ap))
+            samples.append(
+                np.array(
+                    [ax + radius * math.cos(bearing), ay + radius * math.sin(bearing), 1.0],
+                    dtype=float,
+                )
+            )
+        return samples
+
+    def _navigation_approach_waypoint_for_obs(
+        self,
+        obs_id: int,
+        robot_xyt: Any | None = None,
+        *,
+        approach_index: int = 0,
+        n_approaches: int = 4,
+        avoid_xy: list[tuple[float, float]] | None = None,
+        voxel_map: Any | None = None,
+        planner: Any | None = None,
+    ) -> np.ndarray | None:
+        """Sample a planar approach around the observation (annulus when map available)."""
+        from emet.memory.graph_eqa.place_approaches import (
+            make_grid_converters,
+            sample_annulus_approach_xy,
+        )
+
+        anchor = self._obs_nav_anchor(int(obs_id))
+        if anchor is None:
+            return None
+        robot_xy = self._robot_planar_xy(robot_xyt)
+        if voxel_map is not None and hasattr(voxel_map, "get_2d_map"):
+            converters = make_grid_converters(voxel_map)
+            if converters is not None:
+                xy_to_ij, ij_to_xy, _res = converters
+                try:
+                    from emet.memory.graph_eqa.frontier_nodes import _as_bool_numpy
+
+                    obstacles, explored = voxel_map.get_2d_map()
+                    obstacles_b = _as_bool_numpy(obstacles)
+                    reachable = None
+                    frontier = None
+                    if robot_xyt is not None and planner is not None:
+                        if hasattr(voxel_map, "get_reachable_map"):
+                            reachable = _as_bool_numpy(
+                                voxel_map.get_reachable_map(robot_xyt, planner)
+                            )
+                        if hasattr(voxel_map, "get_outside_frontier"):
+                            outside = voxel_map.get_outside_frontier(robot_xyt, planner)
+                            frontier = _as_bool_numpy(outside) & ~_as_bool_numpy(explored)
+                    xy = sample_annulus_approach_xy(
+                        anchor_xy=(float(anchor[0]), float(anchor[1])),
+                        robot_xy=robot_xy,
+                        obstacles=obstacles_b,
+                        reachable=reachable,
+                        frontier=frontier,
+                        footprint=self.place_footprint_for_obs(int(obs_id)),
+                        xy_to_ij=xy_to_ij,
+                        ij_to_xy=ij_to_xy,
+                        avoid_xy=avoid_xy,
+                        radius_inner_m=max(0.35, float(self.image_nav_min_approach_m)),
+                        approach_index=int(approach_index),
+                    )
+                    if xy is not None:
+                        return np.array([float(xy[0]), float(xy[1]), 1.0], dtype=float)
+                except Exception as e:
+                    _logger.warning(
+                        f"annulus approach sample for obs_id={obs_id} failed: {e}"
+                    )
+        samples = self._orbit_approach_samples(
+            anchor, robot_xy, n=max(1, int(n_approaches))
+        )
+        idx = int(approach_index) % len(samples)
+        return samples[idx]
+
     def _navigation_waypoint_for_obs(
         self,
         obs_id: int,
@@ -3422,14 +3739,9 @@ class GraphEQAMemory:
         With a robot pose, stop a short standoff short of the anchor; navmesh snapping
         happens downstream. Capture ``viewer_xyz`` is evidence provenance, not a goal.
         """
-        obs = self._observation_by_id(obs_id)
-        if obs is None:
+        anchor = self._obs_nav_anchor(int(obs_id))
+        if anchor is None:
             return None
-        node = self._node_for_obs_id(obs_id)
-        if node is not None:
-            anchor = np.asarray(node.xyz, dtype=float).reshape(-1)[:3]
-        else:
-            anchor = np.asarray(obs.xyz, dtype=float).reshape(-1)[:3]
         robot_xy = self._robot_planar_xy(robot_xyt)
         if robot_xy is not None:
             return self._standoff_waypoint_toward(robot_xy, anchor)

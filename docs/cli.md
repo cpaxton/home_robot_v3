@@ -655,7 +655,7 @@ Local job registry under `~/runs/emet/jobs/` (override with `EMET_JOBS_DIR`). Qu
 | `emet jobs list --all` | Include done/failed/cancelled |
 | `emet jobs status JOB_ID` | Human-readable record + progress/ETA + **viz paths** under `OUT/bundles/` / `figures/` (`--json` includes derived `progress`) |
 | `emet jobs report [JOB_ID]` | Progress + per-episode score table + viz/feh hints (defaults to running/waiting job). `conf` shows `v=` verify-gate and `e=` EQA `Confidence:` (often `e=N` even on correct letters) |
-| `emet jobs report [JOB_ID] --question ID [--arm agentic]` | Per-episode deep dive: question, pred/gold, verify vs EQA confidence, verify phrases + detector scores, stale re-verify / fallback-submit red flags, abstain reasons |
+| `emet jobs report [JOB_ID] --question ID [--arm agentic]` | Per-episode deep dive: hyp cards, router pick chain, investigate/station/explore outcomes (targets, `closest_m`, place ledger, `NAV_LOOP_BLOCKED`), assess present/absent + reasons, salvage letter, verify phrases/scores, red flags (stale re-verify, close-ABSENT, nav-loop spin, explore-heavy) |
 | `emet jobs cancel JOB_ID` | SIGTERM→SIGKILL job process tree; mark cancelled |
 | `emet jobs logs JOB_ID [--tail N]` | Tail queue/orchestrator log |
 | `emet jobs register …` | Scripts: create a record (prints job id) |
@@ -712,15 +712,15 @@ Requires `./scripts/install_habitat.sh` (``.venv-habitat``). **Never** run `run-
 | Command | Purpose |
 |---------|---------|
 | `emet habitat info` | Data paths + asset status |
-| `emet habitat safe-start [--need-mib N] [--question-id Q] [--smoke-episode]` | `eval recover` + **jobs-wrapped** `emet-habitat egl-probe` (no VLM). Optional mock-llm episode after. |
+| `emet habitat safe-start [--need-mib N] [--question-id Q] [--smoke-episode]` | `eval recover` + **detached** jobs-wrapped `emet-habitat egl-probe` (no VLM). Exit 0 = queued, not EGL OK. Optional mock-llm episode also queued (waits behind probe). |
 | `emet habitat egl-probe --force-inline` | Inline EGL only (dedicated terminal); agents are redirected to `safe-start` |
 | `emet habitat list-questions` / `serve` / `run-episode` | Wrapper passthrough (prefer jobs for anything that loads Habitat) |
 
 ```bash
 uv run emet habitat safe-start --need-mib 4000
-uv run emet jobs
+uv run emet jobs status JOB   # wait until done
 uv run emet jobs logs JOB --tail 40
-# then HM-EQA:
+# only after probe status=done and logs show EGL OK:
 uv run emet hmeqa h2h --preset paper-router …
 ```
 

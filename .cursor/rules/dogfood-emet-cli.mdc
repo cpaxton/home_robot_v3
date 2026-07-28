@@ -3,7 +3,7 @@
 When launching, recovering, or monitoring Habitat / HM-EQA / GPU paper runs:
 
 - Prefer **`uv run emet …`** over ad-hoc `env … taskset … nohup ./scripts/…` lines.
-- **Before Habitat/HM-EQA:** `uv run emet habitat safe-start` (recover + jobs-wrapped EGL probe). Never inline `emet-habitat` / `run-episode` in a Cursor agent turn.
+- **Before Habitat/HM-EQA:** `uv run emet habitat safe-start` (recover + detached jobs-wrapped EGL probe). Exit 0 = queued only — wait for `emet jobs status` `done` + logs OK before `hmeqa`. Never inline `emet-habitat` / `run-episode` in a Cursor agent turn.
 - Recovery: `emet eval recover --need-mib 12000` then `emet hmeqa resume` (or `emet hmeqa status`). After agent death: **`emet status tail`** (not a flat `~/runs/emet/STATUS.log`).
 - Launch H2H: `emet hmeqa h2h --out OUT --resume …` (uses `emet jobs run --need-mib` with `--cpu-safe` / `--gpu-exclusive`). Overnight ladder: **`emet hmeqa overnight`** (no separate overnight-ladder script).
 - Post-run: `emet hmeqa summarize` / `emet hmeqa significance` / `emet hmeqa ladder`.

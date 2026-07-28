@@ -676,6 +676,65 @@ def test_consolidate_relevant_keywords_drops_subsumed_tokens():
     assert objects == ["woven basket", "kitchen"]
 
 
+def test_location_mcq_landmark_phrases_strips_prepositions():
+    from emet.memory.graph_eqa.graph_memory import location_mcq_landmark_phrases
+
+    q = (
+        "I'm looking for the fruit bowl. "
+        "A) On the kitchen island B) On the dining table "
+        "C) On the coffee table D) In the sunroom. Answer:"
+    )
+    landmarks = location_mcq_landmark_phrases(q)
+    assert "kitchen island" in landmarks
+    assert "dining table" in landmarks
+    assert "sunroom" in landmarks
+    assert all(not p.startswith("on ") for p in landmarks)
+
+
+def test_hypothesize_includes_mcq_landmark_graph_cards():
+    """Location options seed Investigate cards even when extract is stem-only."""
+    mem = GraphEQAMemory(
+        defer_llm_clients=True,
+        image_description_client=lambda _x: "fruit bowl",
+    )
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(rgb, np.array([-16.5, -1.1, 0.7]), ["kitchen island", "cabinet"])
+    mem._relevant_objects = ["fruit bowl"]
+    mem._relevant_phrases = ["fruit bowl"]
+    mem._question = "seeded"
+    q = (
+        "I'm looking for the fruit bowl. "
+        "A) On the kitchen island B) On the dining table "
+        "C) On the coffee table D) In the sunroom. Answer:"
+    )
+    hyps = mem.hypothesize_nav_targets(q, max_k=6)
+    graph = [h for h in hyps if h.source == "graph"]
+    assert any(
+        "kitchen" in str(h.phrase).lower() for h in graph
+    ), [(h.phrase, h.source, h.obs_id) for h in hyps]
+
+
+def test_retract_stem_claim_drops_hyp_keeps_place_node():
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    oid = mem.add_observation(
+        rgb, np.array([-17.4, -1.8, 0.5]), ["large wall clock", "wall"]
+    )
+    mem._relevant_objects = ["large wall clock"]
+    mem._relevant_phrases = ["large wall clock"]
+    q = "Where is the large wall clock? A) dining B) kitchen C) sunroom D) living. Answer:"
+    before = mem.hypothesize_nav_targets(q, max_k=6)
+    assert any(int(h.obs_id) == int(oid) for h in before)
+    out = mem.retract_phrase_claim_at_obs(int(oid), "large wall clock")
+    assert out["ok"] is True
+    after = mem.hypothesize_nav_targets(q, max_k=6)
+    assert not any(
+        int(h.obs_id) == int(oid) and "clock" in str(h.phrase).lower() for h in after
+    )
+    # Node still exists (place geometry kept).
+    assert any(int(n.obs_id) == int(oid) for n in mem._nodes)
+
+
 def test_extract_relevant_objects_prefers_phrases():
     mem = GraphEQAMemory(
         defer_llm_clients=True,
@@ -687,10 +746,14 @@ def test_extract_relevant_objects_prefers_phrases():
         "C) Next to the dining table D) Next to the living room armchairs. Answer:"
     )
     mem.extract_relevant_objects(q)
-    assert mem._relevant_phrases == ["woven basket"]
+    assert mem._relevant_phrases[0] == "woven basket"
     assert mem._relevant_objects[0] == "woven basket"
     assert "anywhere" not in mem._relevant_objects
     assert "woven" not in mem._relevant_objects or mem._relevant_objects[0] == "woven basket"
+    # Location MCQ landmarks are seeded alongside the stem object.
+    blob = " ".join(mem._relevant_phrases + mem._relevant_objects)
+    assert "kitchen counter" in blob
+    assert "dining table" in blob
 
 
 def test_query_answer_injects_location_mcq_hint():
@@ -1074,6 +1137,30 @@ def test_navigation_waypoint_approaches_frontier_anchor():
     # Standoff toward (3,4) — closer to frontier than start, not stuck at origin.
     assert float(np.linalg.norm(pt[:2])) > 2.0
     assert float(np.linalg.norm(pt[:2] - np.array([3.0, 4.0]))) < 1.0
+
+
+def test_orbit_approach_samples_are_spread_around_anchor():
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    anchor = np.array([-16.54, -1.14, 0.7])
+    robot = (-17.75, 1.58)
+    samples = mem._orbit_approach_samples(anchor, robot, n=4, radius_m=1.0)
+    assert len(samples) == 4
+    first = mem._standoff_waypoint_toward(robot, anchor)
+    assert float(np.linalg.norm(samples[0][:2] - first[:2])) < 1e-6
+    dists = [float(np.linalg.norm(s[:2] - anchor[:2])) for s in samples[1:]]
+    assert all(0.85 <= d <= 1.15 for d in dists)
+    xy = [tuple(np.round(s[:2], 3)) for s in samples]
+    assert len(set(xy)) == 4
+    rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+    mem.add_observation(rgb, anchor, ["kitchen island"])
+    p0 = mem._navigation_approach_waypoint_for_obs(
+        1, np.array([robot[0], robot[1], 0.0]), approach_index=0, n_approaches=4
+    )
+    p2 = mem._navigation_approach_waypoint_for_obs(
+        1, np.array([robot[0], robot[1], 0.0]), approach_index=2, n_approaches=4
+    )
+    assert p0 is not None and p2 is not None
+    assert float(np.linalg.norm(p0[:2] - p2[:2])) > 0.5
 
 
 def test_near_heuristic():

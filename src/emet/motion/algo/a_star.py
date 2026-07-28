@@ -53,7 +53,7 @@ class AStar(Planner):
         min_clearance_m: float | None = 0.22,
         clearance_cost_weight: float = 1.0,
         grid_resolution_m: float | None = None,
-        start_escape_max_ring: int = 4,
+        start_escape_max_ring: int = 8,
     ):
         """Create A* planner with configuration.
 
@@ -66,7 +66,7 @@ class AStar(Planner):
             grid_resolution_m: Meters per grid cell for EDT. Inferred from the voxel map when omitted.
             start_escape_max_ring: When the start cell is marked occupied (pose noise /
                 obstacle dilation), search this many Chebyshev rings for a free start.
-                Prefer setting via ``motion_planner.start_escape_max_ring`` in dynav config.
+                Default 8 matches ``motion_planner.start_escape_max_ring`` in dynav config.
         """
         if validate_fn is None:
             validate_fn = space.is_valid

@@ -54,16 +54,67 @@ def test_world_xy_to_grid_ij_clamps():
     assert 0 <= j < 10
 
 
-def test_render_topdown_nonzero_with_explored():
-    obs = np.zeros((16, 16), dtype=bool)
-    exp = np.zeros((16, 16), dtype=bool)
-    exp[4:12, 4:12] = True
-    obs[8, 8] = True
-    go = np.array([8.0, 8.0])
-    rgb = render_topdown_map_rgb(obs, exp, go, 0.1, robot_xy=(0.0, 0.0), max_side=256)
+def test_eval_topdown_with_cell_rgb_returns_image():
+    from emet.visualization.map_snapshot import eval_topdown_map_rgb
+
+    obs = np.zeros((24, 24), dtype=bool)
+    exp = np.zeros((24, 24), dtype=bool)
+    exp[4:20, 4:20] = True
+    obs[10:14, 10:14] = True
+    cell = np.zeros((24, 24, 3), dtype=np.uint8)
+    cell[4:20, 4:20] = (40, 120, 200)
+    go = np.array([12.0, 12.0])
+    rgb = eval_topdown_map_rgb(
+        obs,
+        exp,
+        go,
+        0.1,
+        robot_xy=(0.0, 0.0),
+        max_side=256,
+        min_map_side=64,
+        cell_rgb=cell,
+        stamp_trajectory_corridor=False,
+    )
     assert rgb.dtype == np.uint8
-    assert rgb.shape[2] == 3
+    assert rgb.ndim == 3 and rgb.shape[2] == 3
     assert rgb.max() > 0
+
+
+def test_compose_observed_topdown_tints_obstacles():
+    from emet.visualization.map_snapshot import _compose_observed_topdown_rgb
+
+    obs = np.zeros((8, 8), dtype=bool)
+    exp = np.ones((8, 8), dtype=bool)
+    obs[3:5, 3:5] = True
+    cell = np.full((8, 8, 3), 100, dtype=np.uint8)
+    rgb = _compose_observed_topdown_rgb(obs, exp, cell_rgb=cell, obstacle_tint_alpha=0.5)
+    free = rgb[0, 0]
+    blocked = rgb[3, 3]
+    assert int(blocked[0]) > int(free[0])
+    assert int(blocked[1]) < int(free[1])
+
+
+def test_average_rgb_2d_from_mock_voxel():
+    from emet.visualization.map_snapshot import average_rgb_2d_from_voxel_map
+
+    class _VM:
+        grid_origin = np.array([5.0, 5.0])
+        grid_resolution = 0.1
+        grid_size = [10, 10]
+
+        def get_xyz_rgb(self):
+            # World (0,0) → grid floor(0/0.1+5)=(5,5)
+            xyz = np.array([[0.0, 0.0, 0.1], [0.02, 0.0, 0.1]], dtype=np.float64)
+            rgb = np.array([[255.0, 0.0, 0.0], [0.0, 0.0, 255.0]], dtype=np.float64)
+            return xyz, rgb
+
+    out = average_rgb_2d_from_voxel_map(_VM())
+    assert out is not None
+    assert out.shape == (10, 10, 3)
+    # Mean of red+blue at the shared cell → purple-ish
+    assert out[5, 5, 0] == 127 or out[5, 5, 0] == 128
+    assert out[5, 5, 2] == 127 or out[5, 5, 2] == 128
+    assert out[0, 0].sum() == 0
 
 
 def test_build_map_stats_summary_lines():
@@ -288,5 +339,6 @@ def test_eval_topdown_map_draws_trajectory_path():
     before = eval_topdown_map_rgb(obs, exp, go, 0.1, (2.5, 1.5), max_side=640, min_map_side=0, trajectory_xyt=traj)
     plain = eval_topdown_map_rgb(obs, exp, go, 0.1, (2.5, 1.5), max_side=640, min_map_side=0)
     assert not np.array_equal(before, plain)
-    blue = np.all(before == np.uint8([30, 90, 230]), axis=-1)
-    assert int(blue.sum()) > 0
+    # Path is alpha-blended toward blue (30, 90, 230); look for bluish pixels.
+    bluish = (before[:, :, 2].astype(np.int16) - before[:, :, 0].astype(np.int16)) > 40
+    assert int(bluish.sum()) > 0

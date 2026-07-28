@@ -627,7 +627,7 @@ def habitat_info() -> None:
     "--smoke-episode",
     is_flag=True,
     default=False,
-    help="After EGL OK, also queue a mock-llm dynagraph episode via emet jobs",
+    help="Also queue a mock-llm dynagraph episode (gpu-exclusive waits behind the probe)",
 )
 @click.option(
     "--force-inline",
@@ -643,14 +643,17 @@ def habitat_safe_start(
     force_inline: bool,
     job_name: str,
 ) -> None:
-    """Recover GPU state, then prove Magnum EGL works — never inline by default.
+    """Recover GPU state, then queue a detached Habitat EGL probe (never inline by default).
 
     Empty ``nvidia-smi`` ≠ Habitat OK. This path::
 
-        emet eval recover → emet jobs run → emet-habitat egl-probe
+        emet eval recover → emet jobs run (detached) → emet-habitat egl-probe
 
-    Agents should use this before ``emet hmeqa h2h`` / overnight. Do **not** pass
-    ``--force-inline`` from a Cursor agent session.
+    Detach is intentional: Habitat teardown often SIGSEGVs Cursor agent hosts.
+    This command returning 0 only means the probe job was **queued**, not that EGL
+    succeeded. Wait until ``emet jobs status JOB`` is ``done`` and logs look OK
+    before ``emet hmeqa h2h`` / overnight. Do **not** pass ``--force-inline`` from
+    a Cursor agent session.
     """
     import shlex
 
@@ -722,20 +725,34 @@ def habitat_safe_start(
         "-lc",
         inner,
     ]
-    click.echo(f"launching EGL probe via emet jobs: OUT={out_dir}", err=True)
-    rc = subprocess.call(jobs_cmd, cwd=str(root))
-    if rc != 0:
+    click.echo(f"queuing detached EGL probe via emet jobs: OUT={out_dir}", err=True)
+    launched = subprocess.run(
+        jobs_cmd,
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+    )
+    if launched.stderr:
+        click.echo(launched.stderr.rstrip("\n"), err=True)
+    if launched.stdout:
+        click.echo(launched.stdout.rstrip("\n"), err=True)
+    if launched.returncode != 0:
         click.echo(
-            f"EGL probe job launch failed (rc={rc}). Check: uv run emet jobs",
+            f"EGL probe job launch failed (rc={launched.returncode}). "
+            "Check: uv run emet jobs",
             err=True,
         )
-        sys.exit(rc)
+        sys.exit(launched.returncode)
 
+    probe_job = _jobs_run_id_from_output(launched.stdout)
+    job_ref = probe_job or "JOB"
     click.echo(
-        "EGL probe queued/finished under jobs. Next:\n"
-        "  uv run emet jobs\n"
-        "  uv run emet jobs logs JOB --tail 40\n"
-        "If OK, launch HM-EQA with:\n"
+        "EGL probe job queued (detached — not finished yet).\n"
+        f"  OUT={out_dir}\n"
+        f"  uv run emet jobs status {job_ref}\n"
+        f"  uv run emet jobs logs {job_ref} --tail 40\n"
+        "Do NOT launch HM-EQA until status is done and logs show EGL OK.\n"
+        "Only then:\n"
         "  uv run emet hmeqa h2h --preset paper-router …\n"
         "  # or: uv run emet hmeqa overnight",
         err=True,
@@ -779,9 +796,41 @@ def habitat_safe_start(
             "-lc",
             smoke_inner,
         ]
-        click.echo(f"launching mock-llm smoke via emet jobs: OUT={smoke_out}", err=True)
-        sys.exit(subprocess.call(smoke_cmd, cwd=str(root)))
+        click.echo(
+            f"queuing mock-llm smoke behind probe (gpu-exclusive): OUT={smoke_out}",
+            err=True,
+        )
+        smoke = subprocess.run(
+            smoke_cmd,
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+        )
+        if smoke.stderr:
+            click.echo(smoke.stderr.rstrip("\n"), err=True)
+        if smoke.stdout:
+            click.echo(smoke.stdout.rstrip("\n"), err=True)
+        if smoke.returncode != 0:
+            sys.exit(smoke.returncode)
+        smoke_job = _jobs_run_id_from_output(smoke.stdout)
+        smoke_ref = smoke_job or "SMOKE_JOB"
+        click.echo(
+            "Smoke episode also queued (detached). Wait for probe done, then smoke done:\n"
+            f"  uv run emet jobs status {smoke_ref}\n"
+            f"  uv run emet jobs logs {smoke_ref} --tail 40\n"
+            "Still do not launch HM-EQA until the EGL probe job is done + OK.",
+            err=True,
+        )
+        sys.exit(0)
     sys.exit(0)
+
+
+def _jobs_run_id_from_output(stdout: str | None) -> str | None:
+    """Best-effort parse of ``emet jobs run`` stdout (last non-empty line is job id)."""
+    if not stdout:
+        return None
+    lines = [ln.strip() for ln in stdout.splitlines() if ln.strip()]
+    return lines[-1] if lines else None
 
 
 def _timestamp() -> str:

@@ -31,6 +31,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_EVAL_VIDEO_MOTION_PACED` | Same | Motion-paced MP4 encoding (default on). YAML: `eval.video_motion_paced`. |
 | `EMET_EVAL_EXPORT_FRAMES` | Same | Save RGB frames under `frames/`. |
 | `EMET_EVAL_EXPORT_OBSTACLE_GRIDS` | Same | `obstacles_2d.npy`, `explored_2d.npy`, `grid_meta.json` (default on). |
+| `EMET_HABITAT_PAD_OBSTACLES` | `emet_habitat.runner._configure_habitat_mapping` | Habitat-only obstacle dilation radius in grid cells (default `0` = off, temporary doorway-entry probe). Non-zero also restores `filters.smooth_kernel_size=1`. |
 | `EMET_EVAL_EXPORT_TRAJECTORY` | Same | `trajectory.jsonl` (default on). |
 | `EMET_EVAL_EXPORT_OBJECT_CROPS` | Same | Dynagraph object-crop mosaic when graph memory is present (default on). |
 | `EMET_EVAL_MAP_STRIDE` | Same | Save intermediate maps every N steps (0 = final only). Alias: `HABITAT_EQA_MAP_STRIDE`. |

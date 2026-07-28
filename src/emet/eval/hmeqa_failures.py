@@ -46,10 +46,12 @@ def _trace_path_for_row(row: dict[str, Any], qid: int) -> Path | None:
         p = Path(bundle) / "agentic_trace.jsonl"
         if p.is_file():
             return p
-    # Common Habitat cache layout
+    # Common Habitat cache layout — prefer newest mtime when several bundles exist.
     cand = Path.home() / ".cache" / "habitat_eqa" / "episodes" / f"h2h_agentic_q{qid:04d}"
     matches = list(cand.glob("*/agentic_trace.jsonl")) if cand.is_dir() else []
-    return matches[0] if matches else None
+    if not matches:
+        return None
+    return max(matches, key=lambda p: p.stat().st_mtime)
 
 
 def _summarize_trace(path: Path | None) -> dict[str, Any]:

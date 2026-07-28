@@ -6,7 +6,7 @@ Follow **`.cursorrules`** and **`.cursor/rules/`** for full project conventions.
 
 Do **not** start multi-hour Habitat, HM-EQA H2H, overnight batteries, or paper sweeps with unmanaged bare `nohup` when avoidable. Never as a blocking inline command in an agent turn — native GPU/EGL teardown crashes the agent process even when a detached child would have finished.
 
-**Before Habitat:** `uv run emet habitat safe-start` (recover + jobs-wrapped EGL probe, no VLM). Then `emet hmeqa h2h` / `overnight` via jobs.
+**Before Habitat:** `uv run emet habitat safe-start` (recover + detached jobs-wrapped EGL probe, no VLM). Wait until that job is `done` + logs OK, then `emet hmeqa h2h` / `overnight` via jobs.
 
 ```bash
 uv run emet eval status

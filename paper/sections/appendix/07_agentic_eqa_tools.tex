@@ -24,8 +24,8 @@ Visited frontier nodes are retired from the graph so they are not re-offered as 
 After motion tools succeed, the executor captures a fresh observation and updates voxel + graph memory without exposing a separate \texttt{capture\_and\_update} tool to the VLM.
 
 \paragraph{Investigate vs.\ explore.}
-The router chooses explicitly: \texttt{investigate(obs\_id)} for a closer look at a listed place card (graph / confirmed / SigLIP), or \texttt{explore\_frontier} to grow coverage when no place is worth pursuing (or after close ABSENT looks).
-State splits \textbf{Investigate} and \textbf{Explore} cards; Investigate lines show per-query \texttt{investigated=$N$}, closest approach, and recent station verify/assess outcomes.
+The router chooses explicitly: \texttt{investigate(obs\_id)} for a closer look at a listed place card (graph / confirmed / SigLIP), or \texttt{explore\_frontier} to grow coverage when place approaches are exhausted or no place is worth pursuing.
+State splits \textbf{Investigate} and \textbf{Explore} cards; Investigate lines show per-query \texttt{investigated=$N$}, \texttt{approaches=$k$/$N$}, \texttt{coverage=open|closed} (object footprint $\cap$ unexplored frontier), closest approach, and recent station verify/assess outcomes.
 \texttt{navigate\_to\_obs} remains an alias of \texttt{investigate}.
 Optional \texttt{toward} on explore is coverage bias only---not a substitute for investigating a place card.
 
@@ -39,7 +39,7 @@ Optional \texttt{toward} on explore is coverage bias only---not a substitute for
     Optional \texttt{toward} is weak coverage bias only---not investigate.
     Agentic prefers a VLM pick among reachable frontier RGBs when available.
     Successful visits retire nearby frontier graph nodes.
-  \item[\texttt{investigate}] Closer look at a listed Investigate \texttt{obs\_id}: approach object standoff, look around, verify/assess at the station; updates per-query investigate count / closest / recent on the card.
+  \item[\texttt{investigate}] Closer look at a listed Investigate \texttt{obs\_id}: sample a navigable floor pose in an annulus around the object (prefer frontier-adjacent), look around, verify/assess; card shows \texttt{coverage=open|closed} from footprint$\cap$frontier and \texttt{approaches=$k$/$N$}.
   \item[\texttt{navigate\_to\_obs}] Alias for \texttt{investigate}.
   \item[\texttt{look\_around}] In-place head sweep / rotate to refresh map and graph without translating.
     Parameters: none.

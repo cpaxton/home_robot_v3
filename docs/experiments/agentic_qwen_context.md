@@ -15,12 +15,18 @@ graph labels + SigLIP hits + frontiers
 ```
 
 - **Investigate vs explore:** router chooses `investigate(obs_id)` for a closer look
-  at graph/siglip place cards, or `explore_frontier` when no place is worth it.
-  Cards show `investigated=N`, `closest=`, `recent:` for this query. After
-  close+ABSENT, pick another place or explore — not outdoor spam via
-  `toward=place_name`.
+  at graph/siglip place cards, or `explore_frontier` when approaches are exhausted /
+  no place is worth it. Cards show `investigated=N`, `approaches=k/N`,
+  `coverage=open|closed` (object footprint ∩ unexplored frontier — informational),
+  `closest=`, `recent:`. Re-`investigate` samples a new annulus floor pose (Habitat:
+  navmesh-reachable) until the approach budget is spent — then another place or explore.
+- **Close+ABSENT retract:** if verify says ABSENT for phrase P at a close station, stop
+  offering P at that obs (blacklist + strip matching labels). Does not delete the node.
 - **Evidence cards** (router state): split Investigate / Explore; frontiers use
-  phrase ``unexplored frontier``. Navigate clamp / investigate rejects bad ids.
+  phrase ``unexplored frontier``. Location-MCQ option landmarks (e.g. kitchen island)
+  are always seeded into hyp phrases so place cards appear when the graph has matching
+  labels — not only when VLM extract / enrich happens to mention them.
+  Navigate clamp / investigate rejects bad ids.
 - **Recall key** (internal only): source tier `graph > confirmed/siglip > frontier`,
   keyword/MCQ-landmark hit, planar distance tiebreak; pack so graph+frontier can
   coexist in top-K. Fallback (`EMET_EQA_AGENTIC_ROUTER=0`) walks that order.
@@ -50,7 +56,7 @@ correct agentic ``vlm_suggested`` letter could lose to truncated ``[salvage]``.
 | Call | Images | Graph / memory text |
 |------|--------|---------------------|
 | Classic ``query_answer`` | up to ``eqa_max_images`` (4) via ``_select_relevant_obs_ids`` | ``SCENE_GRAPH`` (~48 nodes) or spatial REGION blocks + Dynagraph ``CONFIRMED_MEMORY`` + HISTORY |
-| Agentic router ``build_state_message`` | none | counts + **evidence cards** (obs_id/phrase/source/xyz; optional siglip_sim); with spatial RAG, compact REGION text |
+| Agentic router ``build_state_message`` | none | counts + **evidence cards** (obs_id/phrase/source/xyz; optional siglip_sim); **Recent actions** (last ~6 investigate/explore outcomes) to avoid stuck loops; with spatial RAG, compact REGION text |
 | Agentic ``vlm_assess`` | 1 full-frame RGB | ≤12 inventory labels (no full SCENE_GRAPH) |
 | Agentic ``submit_answer`` → ``query_answer`` | verified obs forced as Image 1 when ``force_obs_ids`` set; fill remaining | same as classic |
 

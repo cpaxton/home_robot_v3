@@ -79,6 +79,16 @@ def test_habitat_safe_start_help():
     assert "need-mib" in result.stdout
     assert "force-inline" in result.stdout
     assert "smoke-episode" in result.stdout
+    assert "queued" in result.stdout.lower() or "detach" in result.stdout.lower()
+
+
+def test_jobs_run_id_from_output():
+    from emet.cli import _jobs_run_id_from_output
+
+    assert _jobs_run_id_from_output(None) is None
+    assert _jobs_run_id_from_output("") is None
+    assert _jobs_run_id_from_output("registered  abc\njob_20260101_abc\n") == "job_20260101_abc"
+    assert _jobs_run_id_from_output("only-id\n") == "only-id"
 
 
 def test_hmeqa_group_help():
