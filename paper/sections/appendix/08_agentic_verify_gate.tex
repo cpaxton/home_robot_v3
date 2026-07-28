@@ -24,6 +24,20 @@ The legacy bundles did not retain semantic masks, so this pass has no true view 
 We selected OWLv2 for the subsequent labeled live probe based on this latency result; threshold and accuracy claims are deferred to scene-disjoint labeled data.
 
 \paragraph{Status.}
-The detector hybrid, typed evidence policy, hyp \emph{recall} (evidence cards; not composite utility as a decision policy), frontier retirement after visit, and selective-risk reporting are wired into the H2H path.
-Balanced-32 remains gated on a 4--8 episode probe with nonzero fused verified-answer rate and zero forced submits.
-Numbers in Section~\ref{sec:agentic_results} should be read as classic vs.\ tool-loop \emph{efficiency} (holdout-8 letters + balanced-32 steps), not as proof that detector confirmation alone succeeded.
+The detector hybrid, typed evidence policy, hyp \emph{recall} (evidence cards; not composite utility as a decision policy), frontier retirement after visit, station-obs filtering, explore-after-close-ABSENT, and selective-risk reporting are wired into the H2H path.
+Numbers in Section~\ref{sec:agentic_results} should be read as classic vs.\ tool-loop comparison (holdout-8 matched letters + balanced-32 composite), not as proof that detector confirmation alone succeeded.
+
+\paragraph{Policy timeline (balanced-32).}
+\begin{itemize}
+  \item \textbf{2026-07-26 matched H2H} (router off, owlv2, allow-unverified): classic 9/32, agentic 11/32, mean steps $48.7\rightarrow 17.8$ (archived as \texttt{balanced32\_router\_off\_agentic\_archive.json}).
+  \item \textbf{2026-07-27 paper-router + explore} (router on + station filter + prefer-explore after ABSENT): agentic \textbf{16/32}, mean steps 32.7; classic retained from the matched H2H (composite of-record).
+  \item Cross-policy McNemar $p{\approx}0.09$; Wilcoxon on steps still favors agentic.
+\end{itemize}
+
+\paragraph{Holdout policy variance.}
+Under the same paper-router + explore stack, holdout-8 agentic scored \textbf{5/8} (misses 56/65/105) vs.\ the paper headline router-off \textbf{8/8}.
+Misses include early \texttt{vlm\_suggested} wrong letters and truncated-EQA salvage letter re-asks---VLM / salvage variance, not a harness regression.
+Keep 8/8 as the matched same-policy table; treat 5/8 as appendix/docs variance only.
+
+\paragraph{Empty-pred / infra.}
+Short failsets on q43 / q104--105 previously produced empty predictions when object fusion or navmesh approaches failed; infra fixes restore non-empty preds, but letter correctness remains VLM-limited on those ids.

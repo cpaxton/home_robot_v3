@@ -1,15 +1,35 @@
 {
   "status": "complete",
   "slice": "balanced32",
-  "date": "2026-07-26",
-  "run_dir": "/home/cpaxton/runs/emet/hmeqa_agentic_bal32r2_20260726_105946",
-  "job_id": "20260726_105950_99aa96",
-  "git_commit": "8c9a388",
+  "date": "2026-07-27",
+  "composite": true,
+  "classic_run": {
+    "run_dir": "/home/cpaxton/runs/emet/hmeqa_agentic_bal32r2_20260726_105946",
+    "job_id": "20260726_105950_99aa96",
+    "git_commit": "8c9a388",
+    "policy": {
+      "agentic_verifier": "owlv2",
+      "require_verified": false,
+      "agentic_router": false,
+      "note": "H2H script historically forced EMET_EQA_AGENTIC_ROUTER=0 even when CLI paper-router set router=1; numbers are router-off + owlv2 proposals + allow-unverified."
+    }
+  },
+  "agentic_run": {
+    "run_dir": "/home/cpaxton/runs/emet/hmeqa_bal32_explore_20260727_215036",
+    "job_id": "20260727_215142_5e4dd3",
+    "git_commit": "e7d0eb20",
+    "policy": {
+      "agentic_verifier": "owlv2",
+      "require_verified": false,
+      "agentic_router": true,
+      "note": "paper-router + station-obs filter + explore-after-close-ABSENT; agentic-only arm"
+    }
+  },
   "policy": {
+    "note": "COMPOSITE: classic from router-off H2H 2026-07-26; agentic from paper-router+explore 2026-07-27. Not a same-commit matched H2H. McNemar/Wilcoxon are cross-policy.",
     "agentic_verifier": "owlv2",
     "require_verified": false,
-    "agentic_router": false,
-    "note": "H2H script historically forced EMET_EQA_AGENTIC_ROUTER=0 even when CLI paper-router set router=1; numbers are router-off + owlv2 proposals + allow-unverified."
+    "agentic_router": "mixed"
   },
   "ids": [
     2,
@@ -45,7 +65,535 @@
     80,
     84
   ],
-  "note": "Paper-router intent (owlv2, allow-unverified); router was off in H2H script. classic 9/32 agentic 11/32; McNemar p\u22480.73; steps 48.7\u219217.8 (Wilcoxon p\u22484e-7). Replicate overnight bal32: 10/32 vs 12/32. Prior salvage-bug Wave1: classic 12/32 agentic 9/32.",
+  "note": "classic 9/32 (28.1%) steps=48.7 (router off); agentic 16/32 (50.0%) steps=32.7 (paper-router on + explore). Prior matched H2H agentic was 11/32 archived in balanced32_router_off_agentic_archive.json. McNemar p=0.09229 (cross-policy); Wilcoxon steps p=1.757e-05.",
+  "classic": {
+    "n": 32,
+    "correct": 9,
+    "accuracy": 0.28125,
+    "mean_planning_steps": 48.65625,
+    "per": [
+      {
+        "q": 2,
+        "correct": false,
+        "pred": "D",
+        "gold": "C",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 6,
+        "correct": true,
+        "pred": "B",
+        "gold": "B",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 8,
+        "correct": false,
+        "pred": "D",
+        "gold": "C",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 11,
+        "correct": true,
+        "pred": "D",
+        "gold": "D",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 12,
+        "correct": false,
+        "pred": "B",
+        "gold": "D",
+        "planning_steps": 19,
+        "observations": null
+      },
+      {
+        "q": 14,
+        "correct": false,
+        "pred": "A",
+        "gold": "D",
+        "planning_steps": 51,
+        "observations": null
+      },
+      {
+        "q": 15,
+        "correct": true,
+        "pred": "D",
+        "gold": "D",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 16,
+        "correct": false,
+        "pred": "",
+        "gold": "C",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 17,
+        "correct": false,
+        "pred": "A",
+        "gold": "D",
+        "planning_steps": 58,
+        "observations": null
+      },
+      {
+        "q": 18,
+        "correct": false,
+        "pred": "",
+        "gold": "D",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 21,
+        "correct": true,
+        "pred": "A",
+        "gold": "A",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 25,
+        "correct": false,
+        "pred": "D",
+        "gold": "C",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 27,
+        "correct": false,
+        "pred": "",
+        "gold": "B",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 28,
+        "correct": true,
+        "pred": "D",
+        "gold": "D",
+        "planning_steps": 19,
+        "observations": null
+      },
+      {
+        "q": 29,
+        "correct": false,
+        "pred": "B",
+        "gold": "C",
+        "planning_steps": 55,
+        "observations": null
+      },
+      {
+        "q": 31,
+        "correct": false,
+        "pred": "B",
+        "gold": "D",
+        "planning_steps": 33,
+        "observations": null
+      },
+      {
+        "q": 32,
+        "correct": false,
+        "pred": "A",
+        "gold": "C",
+        "planning_steps": 53,
+        "observations": null
+      },
+      {
+        "q": 33,
+        "correct": false,
+        "pred": "",
+        "gold": "A",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 34,
+        "correct": true,
+        "pred": "B",
+        "gold": "B",
+        "planning_steps": 51,
+        "observations": null
+      },
+      {
+        "q": 38,
+        "correct": false,
+        "pred": "",
+        "gold": "C",
+        "planning_steps": 63,
+        "observations": null
+      },
+      {
+        "q": 39,
+        "correct": true,
+        "pred": "C",
+        "gold": "C",
+        "planning_steps": 27,
+        "observations": null
+      },
+      {
+        "q": 40,
+        "correct": true,
+        "pred": "B",
+        "gold": "B",
+        "planning_steps": 19,
+        "observations": null
+      },
+      {
+        "q": 41,
+        "correct": false,
+        "pred": "D",
+        "gold": "B",
+        "planning_steps": 43,
+        "observations": null
+      },
+      {
+        "q": 43,
+        "correct": false,
+        "pred": "",
+        "gold": "B",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 44,
+        "correct": false,
+        "pred": "A",
+        "gold": "B",
+        "planning_steps": 25,
+        "observations": null
+      },
+      {
+        "q": 47,
+        "correct": false,
+        "pred": "B",
+        "gold": "A",
+        "planning_steps": 49,
+        "observations": null
+      },
+      {
+        "q": 48,
+        "correct": false,
+        "pred": "A",
+        "gold": "B",
+        "planning_steps": 23,
+        "observations": null
+      },
+      {
+        "q": 49,
+        "correct": true,
+        "pred": "A",
+        "gold": "A",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 57,
+        "correct": false,
+        "pred": "",
+        "gold": "A",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 76,
+        "correct": false,
+        "pred": "B",
+        "gold": "A",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 80,
+        "correct": false,
+        "pred": "C",
+        "gold": "A",
+        "planning_steps": 57,
+        "observations": null
+      },
+      {
+        "q": 84,
+        "correct": false,
+        "pred": "",
+        "gold": "A",
+        "planning_steps": 57,
+        "observations": null
+      }
+    ]
+  },
+  "agentic": {
+    "n": 32,
+    "correct": 16,
+    "accuracy": 0.5,
+    "mean_planning_steps": 32.65625,
+    "per": [
+      {
+        "q": 2,
+        "correct": false,
+        "pred": "D",
+        "gold": "C",
+        "planning_steps": 31,
+        "observations": 17
+      },
+      {
+        "q": 6,
+        "correct": true,
+        "pred": "B",
+        "gold": "B",
+        "planning_steps": 21,
+        "observations": 12
+      },
+      {
+        "q": 8,
+        "correct": true,
+        "pred": "C",
+        "gold": "C",
+        "planning_steps": 48,
+        "observations": 29
+      },
+      {
+        "q": 11,
+        "correct": false,
+        "pred": "C",
+        "gold": "D",
+        "planning_steps": 49,
+        "observations": 88
+      },
+      {
+        "q": 12,
+        "correct": true,
+        "pred": "D",
+        "gold": "D",
+        "planning_steps": 21,
+        "observations": 27
+      },
+      {
+        "q": 14,
+        "correct": false,
+        "pred": "A",
+        "gold": "D",
+        "planning_steps": 47,
+        "observations": 37
+      },
+      {
+        "q": 15,
+        "correct": true,
+        "pred": "D",
+        "gold": "D",
+        "planning_steps": 14,
+        "observations": 32
+      },
+      {
+        "q": 16,
+        "correct": false,
+        "pred": "B",
+        "gold": "C",
+        "planning_steps": 21,
+        "observations": 41
+      },
+      {
+        "q": 17,
+        "correct": false,
+        "pred": "A",
+        "gold": "D",
+        "planning_steps": 49,
+        "observations": 58
+      },
+      {
+        "q": 18,
+        "correct": true,
+        "pred": "D",
+        "gold": "D",
+        "planning_steps": 56,
+        "observations": 72
+      },
+      {
+        "q": 21,
+        "correct": true,
+        "pred": "A",
+        "gold": "A",
+        "planning_steps": 21,
+        "observations": 19
+      },
+      {
+        "q": 25,
+        "correct": true,
+        "pred": "C",
+        "gold": "C",
+        "planning_steps": 21,
+        "observations": 16
+      },
+      {
+        "q": 27,
+        "correct": true,
+        "pred": "B",
+        "gold": "B",
+        "planning_steps": 49,
+        "observations": 19
+      },
+      {
+        "q": 28,
+        "correct": false,
+        "pred": "C",
+        "gold": "D",
+        "planning_steps": 21,
+        "observations": 14
+      },
+      {
+        "q": 29,
+        "correct": false,
+        "pred": "B",
+        "gold": "C",
+        "planning_steps": 49,
+        "observations": 23
+      },
+      {
+        "q": 31,
+        "correct": false,
+        "pred": "C",
+        "gold": "D",
+        "planning_steps": 21,
+        "observations": 22
+      },
+      {
+        "q": 32,
+        "correct": false,
+        "pred": "B",
+        "gold": "C",
+        "planning_steps": 21,
+        "observations": 7
+      },
+      {
+        "q": 33,
+        "correct": false,
+        "pred": "B",
+        "gold": "A",
+        "planning_steps": 14,
+        "observations": 19
+      },
+      {
+        "q": 34,
+        "correct": true,
+        "pred": "B",
+        "gold": "B",
+        "planning_steps": 29,
+        "observations": 16
+      },
+      {
+        "q": 38,
+        "correct": true,
+        "pred": "C",
+        "gold": "C",
+        "planning_steps": 21,
+        "observations": 34
+      },
+      {
+        "q": 39,
+        "correct": false,
+        "pred": "B",
+        "gold": "C",
+        "planning_steps": 21,
+        "observations": 33
+      },
+      {
+        "q": 40,
+        "correct": true,
+        "pred": "B",
+        "gold": "B",
+        "planning_steps": 30,
+        "observations": 52
+      },
+      {
+        "q": 41,
+        "correct": false,
+        "pred": "D",
+        "gold": "B",
+        "planning_steps": 49,
+        "observations": 29
+      },
+      {
+        "q": 43,
+        "correct": false,
+        "pred": "",
+        "gold": "B",
+        "planning_steps": 21,
+        "observations": 27
+      },
+      {
+        "q": 44,
+        "correct": false,
+        "pred": "C",
+        "gold": "B",
+        "planning_steps": 21,
+        "observations": 17
+      },
+      {
+        "q": 47,
+        "correct": false,
+        "pred": "D",
+        "gold": "A",
+        "planning_steps": 30,
+        "observations": 36
+      },
+      {
+        "q": 48,
+        "correct": true,
+        "pred": "B",
+        "gold": "B",
+        "planning_steps": 22,
+        "observations": 43
+      },
+      {
+        "q": 49,
+        "correct": true,
+        "pred": "A",
+        "gold": "A",
+        "planning_steps": 21,
+        "observations": 27
+      },
+      {
+        "q": 57,
+        "correct": true,
+        "pred": "A",
+        "gold": "A",
+        "planning_steps": 40,
+        "observations": 21
+      },
+      {
+        "q": 76,
+        "correct": false,
+        "pred": "B",
+        "gold": "A",
+        "planning_steps": 49,
+        "observations": 33
+      },
+      {
+        "q": 80,
+        "correct": true,
+        "pred": "A",
+        "gold": "A",
+        "planning_steps": 63,
+        "observations": 58
+      },
+      {
+        "q": 84,
+        "correct": true,
+        "pred": "A",
+        "gold": "A",
+        "planning_steps": 54,
+        "observations": 75
+      }
+    ]
+  },
   "contingency": {
     "classic_only": [
       11,
@@ -53,11 +601,16 @@
       39
     ],
     "agentic_only": [
+      8,
       12,
-      14,
-      17,
       18,
-      29
+      25,
+      27,
+      38,
+      48,
+      57,
+      80,
+      84
     ]
   },
   "significance": {
@@ -73,39 +626,39 @@
       "mean_planning_steps": 48.65625
     },
     "agentic": {
-      "correct": 11,
+      "correct": 16,
       "n": 32,
-      "accuracy": 0.34375,
+      "accuracy": 0.5,
       "wilson_ci95": [
-        0.20410233354328552,
-        0.5168922649121406
+        0.3363061431685939,
+        0.6636938568314061
       ],
-      "mean_planning_steps": 17.75
+      "mean_planning_steps": 32.65625
     },
-    "accuracy_diff_agentic_minus_classic": 0.0625,
+    "accuracy_diff_agentic_minus_classic": 0.21875,
     "mcnemar": {
       "both_correct": 6,
       "classic_only": 3,
-      "agentic_only": 5,
-      "both_wrong": 18,
-      "discordant": 8,
-      "p_value": 0.7265625
+      "agentic_only": 10,
+      "both_wrong": 13,
+      "discordant": 13,
+      "p_value": 0.09228515625
     },
     "bootstrap_acc_diff": {
       "n_boot": 5000,
       "seed": 0,
-      "observed": 0.0625,
-      "mean": 0.0613,
+      "observed": 0.21875,
+      "mean": 0.21805,
       "ci95": [
-        -0.09375,
-        0.21875
+        0.03125,
+        0.40625
       ]
     },
     "wilcoxon_steps": {
       "n": 32,
-      "statistic": 528.0,
-      "p_value": 3.816535643075055e-07,
-      "mean_diff": 30.90625,
+      "statistic": 485.0,
+      "p_value": 1.7566926847431924e-05,
+      "mean_diff": 16.0,
       "alternative": "classic_steps > agentic_steps"
     },
     "per": [
@@ -114,7 +667,7 @@
         "classic_correct": false,
         "agentic_correct": false,
         "classic_steps": 57,
-        "agentic_steps": 17,
+        "agentic_steps": 31,
         "classic_pred": "D",
         "agentic_pred": "D",
         "gold": "C"
@@ -124,7 +677,7 @@
         "classic_correct": true,
         "agentic_correct": true,
         "classic_steps": 57,
-        "agentic_steps": 14,
+        "agentic_steps": 21,
         "classic_pred": "B",
         "agentic_pred": "B",
         "gold": "B"
@@ -132,11 +685,11 @@
       {
         "question_id": 8,
         "classic_correct": false,
-        "agentic_correct": false,
+        "agentic_correct": true,
         "classic_steps": 57,
-        "agentic_steps": 19,
+        "agentic_steps": 48,
         "classic_pred": "D",
-        "agentic_pred": "",
+        "agentic_pred": "C",
         "gold": "C"
       },
       {
@@ -144,9 +697,9 @@
         "classic_correct": true,
         "agentic_correct": false,
         "classic_steps": 57,
-        "agentic_steps": 19,
+        "agentic_steps": 49,
         "classic_pred": "D",
-        "agentic_pred": "",
+        "agentic_pred": "C",
         "gold": "D"
       },
       {
@@ -154,7 +707,7 @@
         "classic_correct": false,
         "agentic_correct": true,
         "classic_steps": 19,
-        "agentic_steps": 14,
+        "agentic_steps": 21,
         "classic_pred": "B",
         "agentic_pred": "D",
         "gold": "D"
@@ -162,11 +715,11 @@
       {
         "question_id": 14,
         "classic_correct": false,
-        "agentic_correct": true,
+        "agentic_correct": false,
         "classic_steps": 51,
-        "agentic_steps": 19,
+        "agentic_steps": 47,
         "classic_pred": "A",
-        "agentic_pred": "D",
+        "agentic_pred": "A",
         "gold": "D"
       },
       {
@@ -184,19 +737,19 @@
         "classic_correct": false,
         "agentic_correct": false,
         "classic_steps": 57,
-        "agentic_steps": 14,
+        "agentic_steps": 21,
         "classic_pred": "",
-        "agentic_pred": "",
+        "agentic_pred": "B",
         "gold": "C"
       },
       {
         "question_id": 17,
         "classic_correct": false,
-        "agentic_correct": true,
+        "agentic_correct": false,
         "classic_steps": 58,
-        "agentic_steps": 18,
+        "agentic_steps": 49,
         "classic_pred": "A",
-        "agentic_pred": "D",
+        "agentic_pred": "A",
         "gold": "D"
       },
       {
@@ -204,7 +757,7 @@
         "classic_correct": false,
         "agentic_correct": true,
         "classic_steps": 57,
-        "agentic_steps": 19,
+        "agentic_steps": 56,
         "classic_pred": "",
         "agentic_pred": "D",
         "gold": "D"
@@ -214,7 +767,7 @@
         "classic_correct": true,
         "agentic_correct": true,
         "classic_steps": 57,
-        "agentic_steps": 14,
+        "agentic_steps": 21,
         "classic_pred": "A",
         "agentic_pred": "A",
         "gold": "A"
@@ -222,21 +775,21 @@
       {
         "question_id": 25,
         "classic_correct": false,
-        "agentic_correct": false,
+        "agentic_correct": true,
         "classic_steps": 57,
-        "agentic_steps": 17,
+        "agentic_steps": 21,
         "classic_pred": "D",
-        "agentic_pred": "",
+        "agentic_pred": "C",
         "gold": "C"
       },
       {
         "question_id": 27,
         "classic_correct": false,
-        "agentic_correct": false,
+        "agentic_correct": true,
         "classic_steps": 57,
-        "agentic_steps": 18,
+        "agentic_steps": 49,
         "classic_pred": "",
-        "agentic_pred": "",
+        "agentic_pred": "B",
         "gold": "B"
       },
       {
@@ -244,19 +797,19 @@
         "classic_correct": true,
         "agentic_correct": false,
         "classic_steps": 19,
-        "agentic_steps": 14,
+        "agentic_steps": 21,
         "classic_pred": "D",
-        "agentic_pred": "A",
+        "agentic_pred": "C",
         "gold": "D"
       },
       {
         "question_id": 29,
         "classic_correct": false,
-        "agentic_correct": true,
+        "agentic_correct": false,
         "classic_steps": 55,
-        "agentic_steps": 17,
+        "agentic_steps": 49,
         "classic_pred": "B",
-        "agentic_pred": "C",
+        "agentic_pred": "B",
         "gold": "C"
       },
       {
@@ -264,9 +817,9 @@
         "classic_correct": false,
         "agentic_correct": false,
         "classic_steps": 33,
-        "agentic_steps": 15,
+        "agentic_steps": 21,
         "classic_pred": "B",
-        "agentic_pred": "B",
+        "agentic_pred": "C",
         "gold": "D"
       },
       {
@@ -274,7 +827,7 @@
         "classic_correct": false,
         "agentic_correct": false,
         "classic_steps": 53,
-        "agentic_steps": 15,
+        "agentic_steps": 21,
         "classic_pred": "A",
         "agentic_pred": "B",
         "gold": "C"
@@ -284,9 +837,9 @@
         "classic_correct": false,
         "agentic_correct": false,
         "classic_steps": 57,
-        "agentic_steps": 19,
+        "agentic_steps": 14,
         "classic_pred": "",
-        "agentic_pred": "",
+        "agentic_pred": "B",
         "gold": "A"
       },
       {
@@ -294,7 +847,7 @@
         "classic_correct": true,
         "agentic_correct": true,
         "classic_steps": 51,
-        "agentic_steps": 14,
+        "agentic_steps": 29,
         "classic_pred": "B",
         "agentic_pred": "B",
         "gold": "B"
@@ -302,11 +855,11 @@
       {
         "question_id": 38,
         "classic_correct": false,
-        "agentic_correct": false,
+        "agentic_correct": true,
         "classic_steps": 63,
-        "agentic_steps": 26,
+        "agentic_steps": 21,
         "classic_pred": "",
-        "agentic_pred": "",
+        "agentic_pred": "C",
         "gold": "C"
       },
       {
@@ -314,7 +867,7 @@
         "classic_correct": true,
         "agentic_correct": false,
         "classic_steps": 27,
-        "agentic_steps": 14,
+        "agentic_steps": 21,
         "classic_pred": "C",
         "agentic_pred": "B",
         "gold": "C"
@@ -324,7 +877,7 @@
         "classic_correct": true,
         "agentic_correct": true,
         "classic_steps": 19,
-        "agentic_steps": 14,
+        "agentic_steps": 30,
         "classic_pred": "B",
         "agentic_pred": "B",
         "gold": "B"
@@ -334,7 +887,7 @@
         "classic_correct": false,
         "agentic_correct": false,
         "classic_steps": 43,
-        "agentic_steps": 24,
+        "agentic_steps": 49,
         "classic_pred": "D",
         "agentic_pred": "D",
         "gold": "B"
@@ -344,7 +897,7 @@
         "classic_correct": false,
         "agentic_correct": false,
         "classic_steps": 57,
-        "agentic_steps": 18,
+        "agentic_steps": 21,
         "classic_pred": "",
         "agentic_pred": "",
         "gold": "B"
@@ -354,7 +907,7 @@
         "classic_correct": false,
         "agentic_correct": false,
         "classic_steps": 25,
-        "agentic_steps": 14,
+        "agentic_steps": 21,
         "classic_pred": "A",
         "agentic_pred": "C",
         "gold": "B"
@@ -364,19 +917,19 @@
         "classic_correct": false,
         "agentic_correct": false,
         "classic_steps": 49,
-        "agentic_steps": 16,
+        "agentic_steps": 30,
         "classic_pred": "B",
-        "agentic_pred": "B",
+        "agentic_pred": "D",
         "gold": "A"
       },
       {
         "question_id": 48,
         "classic_correct": false,
-        "agentic_correct": false,
+        "agentic_correct": true,
         "classic_steps": 23,
-        "agentic_steps": 15,
+        "agentic_steps": 22,
         "classic_pred": "A",
-        "agentic_pred": "A",
+        "agentic_pred": "B",
         "gold": "B"
       },
       {
@@ -384,7 +937,7 @@
         "classic_correct": true,
         "agentic_correct": true,
         "classic_steps": 57,
-        "agentic_steps": 14,
+        "agentic_steps": 21,
         "classic_pred": "A",
         "agentic_pred": "A",
         "gold": "A"
@@ -392,11 +945,11 @@
       {
         "question_id": 57,
         "classic_correct": false,
-        "agentic_correct": false,
+        "agentic_correct": true,
         "classic_steps": 57,
         "agentic_steps": 40,
         "classic_pred": "",
-        "agentic_pred": "",
+        "agentic_pred": "A",
         "gold": "A"
       },
       {
@@ -404,7 +957,7 @@
         "classic_correct": false,
         "agentic_correct": false,
         "classic_steps": 57,
-        "agentic_steps": 18,
+        "agentic_steps": 49,
         "classic_pred": "B",
         "agentic_pred": "B",
         "gold": "A"
@@ -412,568 +965,35 @@
       {
         "question_id": 80,
         "classic_correct": false,
-        "agentic_correct": false,
+        "agentic_correct": true,
         "classic_steps": 57,
-        "agentic_steps": 18,
+        "agentic_steps": 63,
         "classic_pred": "C",
-        "agentic_pred": "D",
+        "agentic_pred": "A",
         "gold": "A"
       },
       {
         "question_id": 84,
         "classic_correct": false,
-        "agentic_correct": false,
+        "agentic_correct": true,
         "classic_steps": 57,
-        "agentic_steps": 27,
+        "agentic_steps": 54,
         "classic_pred": "",
-        "agentic_pred": "",
+        "agentic_pred": "A",
         "gold": "A"
       }
     ],
     "source": {
-      "out_dir": "/home/cpaxton/runs/emet/hmeqa_agentic_bal32r2_20260726_105946",
+      "from_summary": true,
       "classic_n": 32,
       "agentic_n": 32
     }
   },
-  "classic": {
-    "n": 32,
-    "correct": 9,
-    "accuracy": 0.28125,
-    "mean_planning_steps": 48.65625,
-    "per": [
-      {
-        "q": 2,
-        "correct": false,
-        "pred": "D",
-        "gold": "C",
-        "planning_steps": 57,
-        "observations": 36
-      },
-      {
-        "q": 6,
-        "correct": true,
-        "pred": "B",
-        "gold": "B",
-        "planning_steps": 57,
-        "observations": 38
-      },
-      {
-        "q": 8,
-        "correct": false,
-        "pred": "D",
-        "gold": "C",
-        "planning_steps": 57,
-        "observations": 38
-      },
-      {
-        "q": 11,
-        "correct": true,
-        "pred": "D",
-        "gold": "D",
-        "planning_steps": 57,
-        "observations": 88
-      },
-      {
-        "q": 12,
-        "correct": false,
-        "pred": "B",
-        "gold": "D",
-        "planning_steps": 19,
-        "observations": 24
-      },
-      {
-        "q": 14,
-        "correct": false,
-        "pred": "A",
-        "gold": "D",
-        "planning_steps": 51,
-        "observations": 71
-      },
-      {
-        "q": 15,
-        "correct": true,
-        "pred": "D",
-        "gold": "D",
-        "planning_steps": 57,
-        "observations": 65
-      },
-      {
-        "q": 16,
-        "correct": false,
-        "pred": "",
-        "gold": "C",
-        "planning_steps": 57,
-        "observations": 97
-      },
-      {
-        "q": 17,
-        "correct": false,
-        "pred": "A",
-        "gold": "D",
-        "planning_steps": 58,
-        "observations": 80
-      },
-      {
-        "q": 18,
-        "correct": false,
-        "pred": "",
-        "gold": "D",
-        "planning_steps": 57,
-        "observations": 82
-      },
-      {
-        "q": 21,
-        "correct": true,
-        "pred": "A",
-        "gold": "A",
-        "planning_steps": 57,
-        "observations": 36
-      },
-      {
-        "q": 25,
-        "correct": false,
-        "pred": "D",
-        "gold": "C",
-        "planning_steps": 57,
-        "observations": 35
-      },
-      {
-        "q": 27,
-        "correct": false,
-        "pred": "",
-        "gold": "B",
-        "planning_steps": 57,
-        "observations": 33
-      },
-      {
-        "q": 28,
-        "correct": true,
-        "pred": "D",
-        "gold": "D",
-        "planning_steps": 19,
-        "observations": 14
-      },
-      {
-        "q": 29,
-        "correct": false,
-        "pred": "B",
-        "gold": "C",
-        "planning_steps": 55,
-        "observations": 26
-      },
-      {
-        "q": 31,
-        "correct": false,
-        "pred": "B",
-        "gold": "D",
-        "planning_steps": 33,
-        "observations": 26
-      },
-      {
-        "q": 32,
-        "correct": false,
-        "pred": "A",
-        "gold": "C",
-        "planning_steps": 53,
-        "observations": 35
-      },
-      {
-        "q": 33,
-        "correct": false,
-        "pred": "",
-        "gold": "A",
-        "planning_steps": 57,
-        "observations": 35
-      },
-      {
-        "q": 34,
-        "correct": true,
-        "pred": "B",
-        "gold": "B",
-        "planning_steps": 51,
-        "observations": 32
-      },
-      {
-        "q": 38,
-        "correct": false,
-        "pred": "",
-        "gold": "C",
-        "planning_steps": 63,
-        "observations": 67
-      },
-      {
-        "q": 39,
-        "correct": true,
-        "pred": "C",
-        "gold": "C",
-        "planning_steps": 27,
-        "observations": 53
-      },
-      {
-        "q": 40,
-        "correct": true,
-        "pred": "B",
-        "gold": "B",
-        "planning_steps": 19,
-        "observations": 38
-      },
-      {
-        "q": 41,
-        "correct": false,
-        "pred": "D",
-        "gold": "B",
-        "planning_steps": 43,
-        "observations": 27
-      },
-      {
-        "q": 43,
-        "correct": false,
-        "pred": "",
-        "gold": "B",
-        "planning_steps": 57,
-        "observations": 39
-      },
-      {
-        "q": 44,
-        "correct": false,
-        "pred": "A",
-        "gold": "B",
-        "planning_steps": 25,
-        "observations": 22
-      },
-      {
-        "q": 47,
-        "correct": false,
-        "pred": "B",
-        "gold": "A",
-        "planning_steps": 49,
-        "observations": 83
-      },
-      {
-        "q": 48,
-        "correct": false,
-        "pred": "A",
-        "gold": "B",
-        "planning_steps": 23,
-        "observations": 44
-      },
-      {
-        "q": 49,
-        "correct": true,
-        "pred": "A",
-        "gold": "A",
-        "planning_steps": 57,
-        "observations": 72
-      },
-      {
-        "q": 57,
-        "correct": false,
-        "pred": "",
-        "gold": "A",
-        "planning_steps": 57,
-        "observations": 27
-      },
-      {
-        "q": 76,
-        "correct": false,
-        "pred": "B",
-        "gold": "A",
-        "planning_steps": 57,
-        "observations": 38
-      },
-      {
-        "q": 80,
-        "correct": false,
-        "pred": "C",
-        "gold": "A",
-        "planning_steps": 57,
-        "observations": 96
-      },
-      {
-        "q": 84,
-        "correct": false,
-        "pred": "",
-        "gold": "A",
-        "planning_steps": 57,
-        "observations": 90
-      }
-    ]
-  },
-  "agentic": {
-    "n": 32,
+  "prior_matched_h2h_agentic": {
     "correct": 11,
+    "n": 32,
     "accuracy": 0.34375,
     "mean_planning_steps": 17.75,
-    "per": [
-      {
-        "q": 2,
-        "correct": false,
-        "pred": "D",
-        "gold": "C",
-        "planning_steps": 17,
-        "observations": 19
-      },
-      {
-        "q": 6,
-        "correct": true,
-        "pred": "B",
-        "gold": "B",
-        "planning_steps": 14,
-        "observations": 11
-      },
-      {
-        "q": 8,
-        "correct": false,
-        "pred": "",
-        "gold": "C",
-        "planning_steps": 19,
-        "observations": 25
-      },
-      {
-        "q": 11,
-        "correct": false,
-        "pred": "",
-        "gold": "D",
-        "planning_steps": 19,
-        "observations": 57
-      },
-      {
-        "q": 12,
-        "correct": true,
-        "pred": "D",
-        "gold": "D",
-        "planning_steps": 14,
-        "observations": 21
-      },
-      {
-        "q": 14,
-        "correct": true,
-        "pred": "D",
-        "gold": "D",
-        "planning_steps": 19,
-        "observations": 37
-      },
-      {
-        "q": 15,
-        "correct": true,
-        "pred": "D",
-        "gold": "D",
-        "planning_steps": 14,
-        "observations": 24
-      },
-      {
-        "q": 16,
-        "correct": false,
-        "pred": "",
-        "gold": "C",
-        "planning_steps": 14,
-        "observations": 33
-      },
-      {
-        "q": 17,
-        "correct": true,
-        "pred": "D",
-        "gold": "D",
-        "planning_steps": 18,
-        "observations": 51
-      },
-      {
-        "q": 18,
-        "correct": true,
-        "pred": "D",
-        "gold": "D",
-        "planning_steps": 19,
-        "observations": 54
-      },
-      {
-        "q": 21,
-        "correct": true,
-        "pred": "A",
-        "gold": "A",
-        "planning_steps": 14,
-        "observations": 18
-      },
-      {
-        "q": 25,
-        "correct": false,
-        "pred": "",
-        "gold": "C",
-        "planning_steps": 17,
-        "observations": 18
-      },
-      {
-        "q": 27,
-        "correct": false,
-        "pred": "",
-        "gold": "B",
-        "planning_steps": 18,
-        "observations": 23
-      },
-      {
-        "q": 28,
-        "correct": false,
-        "pred": "A",
-        "gold": "D",
-        "planning_steps": 14,
-        "observations": 16
-      },
-      {
-        "q": 29,
-        "correct": true,
-        "pred": "C",
-        "gold": "C",
-        "planning_steps": 17,
-        "observations": 23
-      },
-      {
-        "q": 31,
-        "correct": false,
-        "pred": "B",
-        "gold": "D",
-        "planning_steps": 15,
-        "observations": 20
-      },
-      {
-        "q": 32,
-        "correct": false,
-        "pred": "B",
-        "gold": "C",
-        "planning_steps": 15,
-        "observations": 19
-      },
-      {
-        "q": 33,
-        "correct": false,
-        "pred": "",
-        "gold": "A",
-        "planning_steps": 19,
-        "observations": 20
-      },
-      {
-        "q": 34,
-        "correct": true,
-        "pred": "B",
-        "gold": "B",
-        "planning_steps": 14,
-        "observations": 15
-      },
-      {
-        "q": 38,
-        "correct": false,
-        "pred": "",
-        "gold": "C",
-        "planning_steps": 26,
-        "observations": 49
-      },
-      {
-        "q": 39,
-        "correct": false,
-        "pred": "B",
-        "gold": "C",
-        "planning_steps": 14,
-        "observations": 41
-      },
-      {
-        "q": 40,
-        "correct": true,
-        "pred": "B",
-        "gold": "B",
-        "planning_steps": 14,
-        "observations": 39
-      },
-      {
-        "q": 41,
-        "correct": false,
-        "pred": "D",
-        "gold": "B",
-        "planning_steps": 24,
-        "observations": 18
-      },
-      {
-        "q": 43,
-        "correct": false,
-        "pred": "",
-        "gold": "B",
-        "planning_steps": 18,
-        "observations": 21
-      },
-      {
-        "q": 44,
-        "correct": false,
-        "pred": "C",
-        "gold": "B",
-        "planning_steps": 14,
-        "observations": 13
-      },
-      {
-        "q": 47,
-        "correct": false,
-        "pred": "B",
-        "gold": "A",
-        "planning_steps": 16,
-        "observations": 32
-      },
-      {
-        "q": 48,
-        "correct": false,
-        "pred": "A",
-        "gold": "B",
-        "planning_steps": 15,
-        "observations": 33
-      },
-      {
-        "q": 49,
-        "correct": true,
-        "pred": "A",
-        "gold": "A",
-        "planning_steps": 14,
-        "observations": 27
-      },
-      {
-        "q": 57,
-        "correct": false,
-        "pred": "",
-        "gold": "A",
-        "planning_steps": 40,
-        "observations": 14
-      },
-      {
-        "q": 76,
-        "correct": false,
-        "pred": "B",
-        "gold": "A",
-        "planning_steps": 18,
-        "observations": 23
-      },
-      {
-        "q": 80,
-        "correct": false,
-        "pred": "D",
-        "gold": "A",
-        "planning_steps": 18,
-        "observations": 33
-      },
-      {
-        "q": 84,
-        "correct": false,
-        "pred": "",
-        "gold": "A",
-        "planning_steps": 27,
-        "observations": 56
-      }
-    ]
-  },
-  "replicate": {
-    "overnight_bal32": "/home/cpaxton/runs/emet/hmeqa_overnight_20260726_022227/bal32",
-    "classic": "10/32",
-    "agentic": "12/32",
-    "mcnemar_p": 0.75390625
-  },
-  "historical_salvage_bug": {
-    "run_dir": "/home/cpaxton/runs/emet/hmeqa_agentic_bal32_20260723_212307",
-    "classic": "12/32",
-    "agentic": "9/32",
-    "cause": "EMET_EQA_ANSWER_MAX_NEW_TOKENS=64 setdefault \u2192 all [salvage]"
+    "archive": "balanced32_router_off_agentic_archive.json"
   }
 }

@@ -38,6 +38,9 @@
 #   EMET_EQA_AGENTIC_ROUTER=0|1  honor for agentic arm (default 0). paper-router /
 #                          emet hmeqa overnight pass 1; do not hardcode over the env.
 #   EMET_EQA_AGENTIC_VERIFIER / EMET_EQA_AGENTIC_REQUIRE_VERIFIED  passed through.
+#   EQA_HF_MODEL_ID / EQA_VL_FAMILY / EQA_VL_QUANTIZATION  → emet-habitat
+#                          --eqa-hf-model-id / --eqa-vl-family / (quant via config env).
+#                          Used for larger-VLM ladder (e.g. Qwen3-VL-32B-Instruct).
 #
 # Prefer: uv run emet hmeqa h2h|resume  (dogfood CLI over hand-rolled env/taskset).
 # Recovery after an agent/session death (from *this* checkout — not a sibling tree):
@@ -72,7 +75,26 @@ EMET_SKIP_CPU_AFFINITY="${EMET_SKIP_CPU_AFFINITY:-0}"
 EMET_EXCLUDE_CPU_MIN_MHZ="${EMET_EXCLUDE_CPU_MIN_MHZ:-6000}"
 EPISODE_COOLDOWN_SEC="${EPISODE_COOLDOWN_SEC:-20}"
 EPISODE_GPU_WAIT="${EPISODE_GPU_WAIT:-1}"
+EQA_HF_MODEL_ID="${EQA_HF_MODEL_ID:-}"
+EQA_VL_FAMILY="${EQA_VL_FAMILY:-}"
+EQA_VL_QUANTIZATION="${EQA_VL_QUANTIZATION:-}"
 log() { echo "[$(date -Iseconds)] $*" | tee -a "$OUT/orchestrator.log"; }
+
+# Extra flags for emet-habitat run-episode (larger-VLM ladder).
+EQA_EXTRA_ARGS=()
+if [[ -n "$EQA_VL_FAMILY" ]]; then
+  EQA_EXTRA_ARGS+=(--eqa-vl-family "$EQA_VL_FAMILY")
+fi
+if [[ -n "$EQA_HF_MODEL_ID" ]]; then
+  EQA_EXTRA_ARGS+=(--eqa-hf-model-id "$EQA_HF_MODEL_ID")
+fi
+# Quantization is usually int4 via dynav defaults; expose for documentation / future CLI.
+if [[ -n "$EQA_VL_QUANTIZATION" ]]; then
+  log "NOTE: EQA_VL_QUANTIZATION=$EQA_VL_QUANTIZATION (set eqa.vl_quantization via EMET_CONFIG/--set if needed; run-episode has no dedicated flag)"
+fi
+if [[ ${#EQA_EXTRA_ARGS[@]} -gt 0 ]]; then
+  log "EQA model overrides: ${EQA_EXTRA_ARGS[*]}"
+fi
 
 status_open "$OUT" "hmeqa-h2h"
 STATUS_RESUME_CMD="uv run emet eval recover --need-mib 12000 && uv run emet hmeqa resume $OUT"
@@ -439,6 +461,7 @@ run_arm() {
         --memory-summary \
         --debug-run-tag "$tag" \
         --output "$ep" \
+        "${EQA_EXTRA_ARGS[@]}" \
         >>"$elog" 2>&1
       rc=$?
       set -e
