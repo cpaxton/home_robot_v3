@@ -538,9 +538,7 @@ def overlay_trajectory_on_map_rgb(
             _draw_line_rgb(out, prev[0], prev[1], ij[0], ij[1], path_color, alpha=a)
         prev = ij
 
-    for idx in _subsample_trajectory_arrow_indices(
-        path, min_dist_m=arrow_min_dist_m, max_arrows=max_arrows
-    ):
+    for idx in _subsample_trajectory_arrow_indices(path, min_dist_m=arrow_min_dist_m, max_arrows=max_arrows):
         x, y, theta = path[idx]
         ri, rj = to_ij(x, y)
         if 0 <= ri < h and 0 <= rj < w:
@@ -572,6 +570,7 @@ def eval_topdown_map_rgb(
     filter_islands: bool = False,
     stamp_trajectory_corridor: bool = True,
     cell_rgb: np.ndarray | None = None,
+    room_clusters: list[Any] | None = None,
 ) -> np.ndarray:
     """Eval/diagnostics export: crop to explored footprint; observed RGB + red obstacle tint.
 
@@ -585,6 +584,8 @@ def eval_topdown_map_rgb(
     When ``trajectory_xyt`` is provided and ``stamp_trajectory_corridor`` is true, cells along the
     driven path are treated as explored free space so exports do not show white gaps between sparse
     depth-mapping blobs.
+
+    Optional ``room_clusters`` paints hypothesized room names at centroids (pre-resize).
     """
     obs = _to_numpy_bool_2d(obstacles)
     exp = _to_numpy_bool_2d(explored)
@@ -620,6 +621,7 @@ def eval_topdown_map_rgb(
         margin_cells=margin_cells,
         trajectory_xyt=path,
     )
+    crop_ij = (0, 0)
     if bbox is None:
         rgb = render_topdown_map_rgb(
             obstacles,
@@ -638,39 +640,51 @@ def eval_topdown_map_rgb(
                 grid_resolution,
                 full_shape_hw=(h, w),
             )
-        return finalize_export_topdown_rgb(rgb, max_side=max_side, min_side=min_map_side)
-    i0, i1, j0, j1 = bbox
-    exp_c = exp[i0:i1, j0:j1]
-    obs_c = obs[i0:i1, j0:j1]
-    cell_c = None
-    if cell_rgb is not None:
-        cr = np.asarray(cell_rgb)
-        if cr.shape[:2] == (h, w):
-            cell_c = cr[i0:i1, j0:j1]
-    rgb = _compose_observed_topdown_rgb(obs_c, exp_c, cell_rgb=cell_c)
-    if robot_xy is not None:
-        ri, rj = world_xy_to_grid_ij(robot_xy, grid_origin_xy, grid_resolution, (h, w))
-        ri -= i0
-        rj -= j0
-        ch, cw = rgb.shape[0], rgb.shape[1]
-        if 0 <= ri < ch and 0 <= rj < cw:
-            r = 3
-            i_lo, i_hi = max(0, ri - r), min(ch, ri + r + 1)
-            j_lo, j_hi = max(0, rj - r), min(cw, rj + r + 1)
-            # Soft highlight so observed RGB still shows under the marker.
-            hi = rgb[i_lo:i_hi, j_lo:j_hi].astype(np.float32)
-            rgb[i_lo:i_hi, j_lo:j_hi] = np.clip(
-                0.35 * hi + 0.65 * np.float32([255, 255, 255]), 0, 255
-            ).astype(np.uint8)
-            rgb[ri, rj] = (255, 220, 0)
-    if trajectory_xyt:
-        rgb = overlay_trajectory_on_map_rgb(
+    else:
+        i0, i1, j0, j1 = bbox
+        crop_ij = (i0, j0)
+        exp_c = exp[i0:i1, j0:j1]
+        obs_c = obs[i0:i1, j0:j1]
+        cell_c = None
+        if cell_rgb is not None:
+            cr = np.asarray(cell_rgb)
+            if cr.shape[:2] == (h, w):
+                cell_c = cr[i0:i1, j0:j1]
+        rgb = _compose_observed_topdown_rgb(obs_c, exp_c, cell_rgb=cell_c)
+        if robot_xy is not None:
+            ri, rj = world_xy_to_grid_ij(robot_xy, grid_origin_xy, grid_resolution, (h, w))
+            ri -= i0
+            rj -= j0
+            ch, cw = rgb.shape[0], rgb.shape[1]
+            if 0 <= ri < ch and 0 <= rj < cw:
+                r = 3
+                i_lo, i_hi = max(0, ri - r), min(ch, ri + r + 1)
+                j_lo, j_hi = max(0, rj - r), min(cw, rj + r + 1)
+                # Soft highlight so observed RGB still shows under the marker.
+                hi = rgb[i_lo:i_hi, j_lo:j_hi].astype(np.float32)
+                rgb[i_lo:i_hi, j_lo:j_hi] = np.clip(0.35 * hi + 0.65 * np.float32([255, 255, 255]), 0, 255).astype(
+                    np.uint8
+                )
+                rgb[ri, rj] = (255, 220, 0)
+        if trajectory_xyt:
+            rgb = overlay_trajectory_on_map_rgb(
+                rgb,
+                trajectory_xyt,
+                grid_origin_xy,
+                grid_resolution,
+                crop_offset_ij=(i0, j0),
+                full_shape_hw=(h, w),
+            )
+    if room_clusters:
+        from emet.memory.graph_eqa.room_clusters import paint_room_labels
+
+        rgb = paint_room_labels(
             rgb,
-            trajectory_xyt,
-            grid_origin_xy,
-            grid_resolution,
-            crop_offset_ij=(i0, j0),
+            room_clusters,
+            grid_origin_xy=grid_origin_xy,
+            grid_resolution=grid_resolution,
             full_shape_hw=(h, w),
+            crop_offset_ij=crop_ij,
         )
     return finalize_export_topdown_rgb(rgb, max_side=max_side, min_side=min_map_side)
 
@@ -682,9 +696,7 @@ def _alpha_blend_rgb(base: np.ndarray, overlay: np.ndarray, alpha: float) -> np.
     mask = np.any(overlay != np.uint8([248, 248, 248]), axis=-1)
     if not mask.any():
         return out
-    blended = (
-        (1.0 - a) * out[mask].astype(np.float32) + a * overlay[mask].astype(np.float32)
-    ).astype(np.uint8)
+    blended = ((1.0 - a) * out[mask].astype(np.float32) + a * overlay[mask].astype(np.float32)).astype(np.uint8)
     out[mask] = blended
     return out
 
@@ -928,6 +940,7 @@ def snapshot_eval_from_voxel_map(
     filter_islands: bool = False,
     gt_navigable: Any | None = None,
     min_map_side: int = 1024,
+    room_clusters: list[Any] | None = None,
 ) -> tuple[np.ndarray | None, dict[str, Any]]:
     """Build eval/diagnostics top-down map (observed RGB + red obstacle tint)."""
     if voxel_map is None or not hasattr(voxel_map, "get_2d_map"):
@@ -952,10 +965,12 @@ def snapshot_eval_from_voxel_map(
         trajectory_xyt=trajectory_xyt,
         filter_islands=filter_islands,
         cell_rgb=cell_rgb,
+        room_clusters=room_clusters,
     )
     if gt_navigable is not None:
         stats["overlay_available"] = True
     stats["cell_rgb"] = cell_rgb is not None
+    stats["n_room_clusters"] = len(room_clusters or [])
     return img, stats
 
 

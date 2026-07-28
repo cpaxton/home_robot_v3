@@ -117,7 +117,7 @@ emet run graph-eqa --robot-ip 127.0.0.1
 ```
 
 - By default, the robot does an **initial rotation-in-place** to scan the room and build the first graph nodes from what the camera sees.
-- Object nodes are also grouped into **room clusters** (`near` edges + planar link radius; see `emet.memory.graph_eqa.room_clusters`) so agentic routing can show `Current room (graph)` / a compact `Rooms:` line and seed outdoor rule-out without a Hydra Places layer.
+- Object nodes are also grouped into **room clusters** (`near` edges + planar link radius + hypothesized names from object cues; see `emet.memory.graph_eqa.room_clusters`) so agentic routing can show `Current room (graph)` / a compact `Rooms:` line, paint labels on saved top-down maps, and prefer explore when the current room mismatches rooms named in the question (uniform leave-wrong-room — not an outdoor special case).
 - To skip the initial scan: `emet run graph-eqa --robot-ip 127.0.0.1 -N`
 - To save Rerun logs: add `--save_rerun` (or `--SR`).
 - CPU-only: the app uses the same encoder as DynaMem; if you need CPU, you may need to set config/CLI options that disable GPU-heavy models (see [simulation.md](simulation.md) for DynaMem CPU notes).

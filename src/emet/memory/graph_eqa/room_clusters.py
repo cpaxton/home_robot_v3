@@ -5,9 +5,9 @@
 """Graph-derived room / region clusters for GraphEQA.
 
 Partitions object nodes into connected components using ``near`` edges and a
-planar link radius, then names each component with the same vocabulary as the
-agentic router ``current_room`` field. Not a Hydra Places layer — deterministic
-CC grouping only.
+planar link radius, then hypothesizes a room name from object labels (not a
+Hydra Places layer). Room names are ordinary labels — patio/outdoor are rooms
+like kitchen, not a separate policy class.
 """
 
 from __future__ import annotations
@@ -17,10 +17,52 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from emet.memory.graph_eqa.agentic_tools import normalize_current_room, room_is_outdoor
+import numpy as np
+
+from emet.memory.graph_eqa.agentic_tools import normalize_current_room
 
 DEFAULT_ROOM_LINK_RADIUS_M = 2.0
 DEFAULT_ROOM_ASSIGN_MAX_M = 3.0
+
+# Object-label cues → hypothesized room (majority vote with normalize_current_room).
+_OBJECT_ROOM_HINTS: dict[str, str] = {
+    "stove": "kitchen",
+    "oven": "kitchen",
+    "fridge": "kitchen",
+    "refrigerator": "kitchen",
+    "microwave": "kitchen",
+    "dishwasher": "kitchen",
+    "counter": "kitchen",
+    "cabinet": "kitchen",
+    "sink": "kitchen",
+    "sofa": "living_room",
+    "couch": "living_room",
+    "tv": "living_room",
+    "television": "living_room",
+    "fireplace": "living_room",
+    "coffee": "living_room",
+    "armchair": "living_room",
+    "dining": "dining_room",
+    "table": "dining_room",
+    "chair": "dining_room",
+    "bed": "bedroom",
+    "nightstand": "bedroom",
+    "wardrobe": "bedroom",
+    "toilet": "bathroom",
+    "bathtub": "bathroom",
+    "shower": "bathroom",
+    "vanity": "bathroom",
+    "grill": "patio",
+    "lawn": "outdoor",
+    "grass": "outdoor",
+    "fence": "outdoor",
+    "deck": "patio",
+    "porch": "patio",
+    "patio": "patio",
+    "garden": "outdoor",
+    "yard": "outdoor",
+    "brick": "patio",
+}
 
 
 @dataclass(frozen=True)
@@ -33,7 +75,6 @@ class RoomCluster:
     centroid_xy: tuple[float, float]
     room_name: str
     area_proxy: float = 0.0
-    is_outdoor: bool = False
 
 
 class _UnionFind:
@@ -75,28 +116,94 @@ def _is_object_node(node: Any) -> bool:
     return not bool(getattr(node, "is_frontier", False)) and not bool(getattr(node, "is_viewpoint", False))
 
 
-def name_cluster_from_labels(labels: Sequence[str]) -> str:
-    """Majority vote of normalized room tokens from object labels."""
+def hypothesize_room_name(labels: Sequence[str]) -> str:
+    """Hypothesize a canonical room name from object / place labels in a cluster."""
     votes: Counter[str] = Counter()
     for lab in labels:
         name = normalize_current_room(lab)
         if name != "unknown":
-            votes[name] += 1
-        # Also try each whitespace token (e.g. "brick patio chair").
-        for tok in str(lab).lower().replace("-", " ").split():
+            votes[name] += 2  # explicit room words weigh more
+        blob = str(lab).lower().replace("-", " ")
+        for tok in blob.split():
             tname = normalize_current_room(tok)
             if tname != "unknown":
                 votes[tname] += 1
+            hint = _OBJECT_ROOM_HINTS.get(tok)
+            if hint:
+                votes[normalize_current_room(hint)] += 1
+        for key, hint in _OBJECT_ROOM_HINTS.items():
+            if " " in key and key in blob:
+                votes[normalize_current_room(hint)] += 1
     if not votes:
         return "unknown"
-    # Prefer outdoor/patio over generic indoor when tied with outdoor signal.
     best = votes.most_common()
     top_count = best[0][1]
     tied = [n for n, c in best if c == top_count]
-    for prefer in ("patio", "outdoor", "kitchen", "living_room"):
+    for prefer in (
+        "kitchen",
+        "living_room",
+        "dining_room",
+        "bedroom",
+        "bathroom",
+        "patio",
+        "outdoor",
+        "hallway",
+        "garage",
+    ):
         if prefer in tied:
             return prefer
     return best[0][0]
+
+
+# Back-compat alias used by older tests / imports.
+name_cluster_from_labels = hypothesize_room_name
+
+
+def question_target_rooms(question: str) -> set[str]:
+    """Canonical rooms the question is about (MCQ landmarks + room words in stem)."""
+    targets: set[str] = set()
+    q = str(question or "")
+    try:
+        from emet.memory.graph_eqa.graph_memory import location_mcq_landmark_phrases
+
+        for lm in location_mcq_landmark_phrases(q):
+            name = normalize_current_room(lm)
+            if name != "unknown":
+                targets.add(name)
+            for tok in str(lm).lower().replace("-", " ").split():
+                t = normalize_current_room(tok)
+                if t != "unknown":
+                    targets.add(t)
+                hint = _OBJECT_ROOM_HINTS.get(tok)
+                if hint:
+                    targets.add(normalize_current_room(hint))
+    except Exception:
+        pass
+    try:
+        from emet.memory.graph_eqa.graph_memory import question_stem_for_keywords
+
+        stem = question_stem_for_keywords(q)
+    except Exception:
+        stem = q
+    for tok in str(stem).lower().replace("-", " ").split():
+        t = normalize_current_room(tok)
+        if t != "unknown":
+            targets.add(t)
+    return {t for t in targets if t != "unknown"}
+
+
+def room_mismatches_question(current_room: str | None, question: str) -> bool:
+    """True when current room is known and not among question target rooms.
+
+    Uniform explore nudge (leave the wrong room) — no outdoor special case.
+    """
+    current = normalize_current_room(current_room)
+    if current == "unknown":
+        return False
+    targets = question_target_rooms(question)
+    if not targets:
+        return False
+    return current not in targets
 
 
 def cluster_object_nodes(
@@ -147,12 +254,11 @@ def cluster_object_nodes(
             ys.append(y)
         cx = sum(xs) / len(xs)
         cy = sum(ys) / len(ys)
-        # Bounding-box area proxy (m²) for size ranking in compact summaries.
         if len(xs) >= 2:
             area = max(0.01, (max(xs) - min(xs)) * (max(ys) - min(ys)))
         else:
             area = 0.01
-        room_name = name_cluster_from_labels(labels)
+        room_name = hypothesize_room_name(labels)
         clusters.append(
             RoomCluster(
                 cluster_id=int(root),
@@ -161,11 +267,9 @@ def cluster_object_nodes(
                 centroid_xy=(float(cx), float(cy)),
                 room_name=room_name,
                 area_proxy=float(area),
-                is_outdoor=room_is_outdoor(room_name),
             )
         )
 
-    # Stable display order: larger first, then cluster_id; renumber 1..N.
     clusters.sort(key=lambda c: (-c.area_proxy, -len(c.node_ids), c.cluster_id))
     out: list[RoomCluster] = []
     for i, c in enumerate(clusters, start=1):
@@ -177,7 +281,6 @@ def cluster_object_nodes(
                 centroid_xy=c.centroid_xy,
                 room_name=c.room_name,
                 area_proxy=c.area_proxy,
-                is_outdoor=c.is_outdoor,
             )
         )
     return out
@@ -226,3 +329,44 @@ def merge_room_estimates(vlm_room: str | None, graph_room: str | None) -> str:
     if g != "unknown":
         return g
     return v
+
+
+def paint_room_labels(
+    rgb: np.ndarray,
+    clusters: Sequence[RoomCluster],
+    *,
+    grid_origin_xy: np.ndarray | Sequence[float],
+    grid_resolution: float,
+    full_shape_hw: tuple[int, int],
+    crop_offset_ij: tuple[int, int] = (0, 0),
+) -> np.ndarray:
+    """Draw hypothesized room names at centroids on a cropped top-down RGB array."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    from emet.visualization.map_snapshot import world_xy_to_grid_ij
+
+    arr = np.asarray(rgb, dtype=np.uint8)
+    if arr.ndim != 3 or arr.shape[2] < 3 or not clusters:
+        return arr
+    img = Image.fromarray(arr[:, :, :3].copy(), mode="RGB")
+    draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.load_default()
+    except Exception:
+        font = None
+    h_full, w_full = int(full_shape_hw[0]), int(full_shape_hw[1])
+    i0, j0 = int(crop_offset_ij[0]), int(crop_offset_ij[1])
+    ch, cw = img.size[1], img.size[0]
+    go = np.asarray(grid_origin_xy, dtype=float).reshape(-1)[:2]
+    res = float(grid_resolution) or 0.1
+    for c in clusters:
+        ri, rj = world_xy_to_grid_ij(c.centroid_xy, go, res, (h_full, w_full))
+        py = ri - i0
+        px = rj - j0
+        if not (0 <= py < ch and 0 <= px < cw):
+            continue
+        label = str(c.room_name if c.room_name != "unknown" else f"region_{c.cluster_id}").replace("_", " ")
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            draw.text((px + dx, py + dy), label, fill=(0, 0, 0), font=font)
+        draw.text((px, py), label, fill=(255, 240, 80), font=font)
+    return np.asarray(img, dtype=np.uint8)

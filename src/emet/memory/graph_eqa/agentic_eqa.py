@@ -28,8 +28,6 @@ from emet.memory.graph_eqa.agentic_tools import (
     build_graph_eqa_system_prompt,
     build_state_message,
     normalize_current_room,
-    question_implies_indoor,
-    room_is_outdoor,
 )
 from emet.memory.graph_eqa.graph_memory import (
     _QUESTION_VERB_FILLERS,
@@ -40,7 +38,7 @@ from emet.memory.graph_eqa.graph_memory import (
     label_matches_relevant_object,
     question_stem_for_keywords,
 )
-from emet.memory.graph_eqa.room_clusters import merge_room_estimates
+from emet.memory.graph_eqa.room_clusters import merge_room_estimates, room_mismatches_question
 from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
@@ -297,10 +295,9 @@ class AgenticEQAExecutor:
         self._place_inspect: dict[int, PlaceInspectRecord] = {}
         # Capture stations from investigate — not place cards (avoids patio station-chase).
         self._station_obs_ids: set[int] = set()
-        # After close+ABSENT, prefer one explore before the next investigate.
+        # After close+ABSENT or wrong-room mismatch, prefer one explore before the next investigate.
         self._prefer_explore: bool = False
-        # Outdoor room estimate + indoor question → prefer explore (patio rule-out).
-        self._prefer_explore_outdoor: bool = False
+        self._prefer_explore_reason: str = ""
         self._last_room_estimate: str = "unknown"
         self._graph_room_estimate: str = "unknown"
         self._room_estimates: list[str] = []
@@ -671,7 +668,7 @@ class AgenticEQAExecutor:
         self._append_trace(row)
         if ok:
             self._prefer_explore = False
-            self._prefer_explore_outdoor = False
+            self._prefer_explore_reason = ""
         return {
             "ok": ok,
             "capture": cap,
@@ -756,7 +753,7 @@ class AgenticEQAExecutor:
         # Close look disproved the stem object — grow the map before chasing new cards.
         if dist <= 1.0 and (verify_status.upper() == "ABSENT" or visit.assess_present is False):
             self._prefer_explore = True
-            self._prefer_explore_outdoor = False
+            self._prefer_explore_reason = "absent"
         return rec
 
     def _place_approaches_exhausted(self, obs_id: int) -> bool:
@@ -2730,11 +2727,14 @@ class AgenticEQAExecutor:
         meta["current_room"] = room
         meta["current_room_vlm"] = vlm_room
         meta["current_room_graph"] = graph_room
-        outdoor_signal = room_is_outdoor(room) or room_is_outdoor(vlm_room) or room_is_outdoor(graph_room)
-        if outdoor_signal and question_implies_indoor(self.question):
+        if room_mismatches_question(room, self.question):
             self._prefer_explore = True
-            self._prefer_explore_outdoor = True
-            meta["prefer_explore_outdoor"] = True
+            self._prefer_explore_reason = "room_mismatch"
+            meta["prefer_explore_room_mismatch"] = True
+        elif self._prefer_explore_reason == "room_mismatch":
+            # Current room now matches question targets — drop the leave-room nudge.
+            self._prefer_explore = False
+            self._prefer_explore_reason = ""
         calls: list[tuple[str, dict[str, Any]]] = []
         for tc in parsed.get("tool_calls", []):
             name = str(tc.get("name") or "").strip().lower()
@@ -2753,7 +2753,7 @@ class AgenticEQAExecutor:
                 "current_room": room,
                 "current_room_vlm": vlm_room,
                 "current_room_graph": graph_room,
-                "prefer_explore_outdoor": bool(self._prefer_explore_outdoor),
+                "prefer_explore_reason": str(self._prefer_explore_reason or ""),
                 "tool_calls": list(meta["tool_calls"]),
             }
         )
@@ -2770,7 +2770,7 @@ class AgenticEQAExecutor:
         self._recent_actions = []
         self._station_obs_ids = set()
         self._prefer_explore = False
-        self._prefer_explore_outdoor = False
+        self._prefer_explore_reason = ""
         self._last_room_estimate = "unknown"
         self._graph_room_estimate = "unknown"
         self._room_estimates = []
@@ -2812,7 +2812,7 @@ class AgenticEQAExecutor:
                 final = out
                 break
             calls, picked_by, router_meta = self._route_tool_calls()
-            # Close+ABSENT → force one explore so the VLM cannot skip coverage growth.
+            # Wrong-room / close+ABSENT → force explore so the VLM cannot skip coverage growth.
             if (
                 self._prefer_explore
                 and self.mode == "answer"

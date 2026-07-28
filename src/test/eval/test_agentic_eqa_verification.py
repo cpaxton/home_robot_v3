@@ -2056,8 +2056,19 @@ def test_normalize_current_room_aliases():
     assert not question_implies_indoor("What color is the sky?")
 
 
-def test_router_outdoor_indoor_sets_prefer_explore():
-    """Patio + indoor question → prefer_explore + outdoor state nudge."""
+_CLOCK_LOCATION_Q = "\n".join(
+    [
+        "Where is the wall clock?",
+        "A) dining area",
+        "B) kitchen",
+        "C) sunroom",
+        "D) living area near the fireplace",
+    ]
+)
+
+
+def test_router_room_mismatch_sets_prefer_explore():
+    """Wrong room vs MCQ targets → prefer_explore + room-mismatch nudge."""
     _require_agentic()
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
     from emet.memory.graph_eqa.agentic_tools import build_state_message
@@ -2077,7 +2088,7 @@ def test_router_outdoor_indoor_sets_prefer_explore():
 
     ex = AgenticEQAExecutor(
         agent,
-        "Where is the wall clock?",
+        _CLOCK_LOCATION_Q,
         max_rounds=3,
         max_nav_steps=4,
     )
@@ -2094,15 +2105,102 @@ def test_router_outdoor_indoor_sets_prefer_explore():
     assert picked_by == "vlm"
     assert calls == [("explore_frontier", {})]
     assert meta.get("current_room") == "patio"
-    assert meta.get("prefer_explore_outdoor") is True
+    assert meta.get("prefer_explore_room_mismatch") is True
     assert ex._last_room_estimate == "patio"
     assert ex._prefer_explore is True
-    assert ex._prefer_explore_outdoor is True
+    assert ex._prefer_explore_reason == "room_mismatch"
     msg = build_state_message(ex)
     assert "Current room (router): patio" in msg
-    assert "outdoor/patio looks ruled out" in msg
+    assert "does not match rooms named" in msg
     tool, _args = ex._fallback_tool()
     assert tool == "explore_frontier"
+
+
+def test_prefer_explore_redirect_blocks_wrong_room_investigate():
+    """Graph patio + location MCQ: VLM investigate is forced to explore_frontier."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = agent.graph_memory
+    gm.memory_summary_enabled = False
+    gm._nodes = [MagicMock(is_frontier=True, obs_id=99)]
+    gm.get_nodes = MagicMock(return_value=gm._nodes)
+    gm.graph_room_at_robot = MagicMock(return_value="patio")
+    gm.format_rooms_line = MagicMock(return_value="Rooms: patio(1)")
+    reply = (
+        '{"current_room": "unknown", "tool_calls": '
+        '[{"name": "investigate", "arguments": {"obs_id": 7}}], "message": ""}'
+    )
+    gm.eqa_client = MagicMock(return_value=reply)
+    agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
+
+    ex = AgenticEQAExecutor(
+        agent,
+        _CLOCK_LOCATION_Q,
+        max_rounds=2,
+        max_nav_steps=4,
+        collect_trace=True,
+    )
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="patio chair",
+            obs_id=7,
+            xyz=np.array([0.0, 0.0, 0.5]),
+            score=1.0,
+            source="graph",
+        ),
+        NavHypothesis(
+            phrase="unexplored frontier",
+            obs_id=99,
+            xyz=np.array([5.0, 0.0, 0.0]),
+            score=0.2,
+            source="frontier",
+        ),
+    ]
+    calls, picked_by, meta = ex._route_tool_calls()
+    assert meta.get("current_room_graph") == "patio"
+    assert ex._prefer_explore_reason == "room_mismatch"
+    assert calls[0][0] == "investigate"
+    if (
+        ex._prefer_explore
+        and calls
+        and calls[0][0] in ("investigate", "navigate_to_obs")
+        and ex._n_nav + ex._n_explore < ex.max_nav_steps
+        and ex._frontier_count() > 0
+    ):
+        calls = [("explore_frontier", {"toward": ex.query_text})]
+        picked_by = f"{picked_by}+prefer_explore"
+    assert calls[0][0] == "explore_frontier"
+    assert "prefer_explore" in picked_by
+
+
+def test_room_mismatch_clears_when_room_matches():
+    """Once merged room is a question target, drop room_mismatch prefer_explore."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = agent.graph_memory
+    gm.memory_summary_enabled = False
+    gm._nodes = [MagicMock(is_frontier=True, obs_id=99)]
+    gm.graph_room_at_robot = MagicMock(return_value="kitchen")
+    gm.format_rooms_line = MagicMock(return_value="Rooms: kitchen(2)")
+    reply = '{"current_room": "kitchen", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}'
+    gm.eqa_client = MagicMock(return_value=reply)
+    agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
+
+    ex = AgenticEQAExecutor(agent, _CLOCK_LOCATION_Q, max_rounds=2, max_nav_steps=4)
+    ex._prefer_explore = True
+    ex._prefer_explore_reason = "room_mismatch"
+    _calls, _picked, meta = ex._route_tool_calls()
+    assert meta.get("current_room") == "kitchen"
+    assert meta.get("prefer_explore_room_mismatch") is None
+    assert ex._prefer_explore is False
+    assert ex._prefer_explore_reason == ""
 
 
 def test_navigate_rejects_obs_not_in_evidence():

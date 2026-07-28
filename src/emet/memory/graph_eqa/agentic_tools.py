@@ -46,8 +46,9 @@ Rules:
 - Use Recent actions to avoid repeating a stuck investigate/explore loop.
 - After a close look verifies ABSENT, prefer explore_frontier once to grow
   coverage before investigating a new capture-station card.
-- If Current room is patio/outdoor and the question is about an indoor object
-  (clock, kitchen, living room, …), prefer explore_frontier to leave outdoors.
+- If Current room does not match rooms named in the question / MCQ options
+  (e.g. you are in patio but options are kitchen / living / dining), prefer
+  explore_frontier to leave that room and grow coverage elsewhere.
 - SigLIP/OWL are proposals in state — not proof. Trust Qwen assess for answerability.
 - Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.
 - One or two tool calls per turn.
@@ -56,9 +57,9 @@ Rules:
 State: Investigate obs_id=3 phrase='sink' source=graph investigated=0 approaches=0/4 coverage=open
 {"current_room": "kitchen", "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}
 State: Recent actions: r0 investigate obs=3 verify=ABSENT; Prefer explore_frontier
+{"current_room": "kitchen", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
+State: Current room patio; question rooms kitchen/living/dining — Prefer explore_frontier
 {"current_room": "patio", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
-State: Recent actions: r0–r2 investigate same obs ABSENT; Explore frontiers available
-{"current_room": "outdoor", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
 State: Last verify PRESENT; VLM assess answerable=true verified=true
 {"current_room": "living_room", "tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
 State: Investigate (none); Explore frontiers available
@@ -289,10 +290,11 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     if recent_actions:
         lines.append("Recent actions: " + " | ".join(recent_actions))
     if getattr(executor, "_prefer_explore", False):
-        if getattr(executor, "_prefer_explore_outdoor", False):
+        reason = str(getattr(executor, "_prefer_explore_reason", "") or "")
+        if reason == "room_mismatch":
             lines.append(
-                "Prefer explore_frontier: outdoor/patio looks ruled out for this "
-                "indoor question — leave outdoors and grow indoor coverage."
+                "Prefer explore_frontier: current room does not match rooms named "
+                "in the question — leave this room and grow coverage elsewhere."
             )
         else:
             lines.append(

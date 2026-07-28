@@ -79,7 +79,36 @@ def test_patio_labels_name_outdoor_cluster():
     clusters = cluster_object_nodes(nodes, link_radius_m=2.0)
     assert len(clusters) == 1
     assert clusters[0].room_name == "patio"
-    assert clusters[0].is_outdoor is True
+
+
+def test_object_hints_hypothesize_kitchen():
+    from emet.memory.graph_eqa.room_clusters import hypothesize_room_name
+
+    assert hypothesize_room_name(["stove", "fridge"]) == "kitchen"
+    assert hypothesize_room_name(["sofa", "tv"]) == "living_room"
+
+
+def test_room_mismatch_vs_location_mcq():
+    from emet.memory.graph_eqa.room_clusters import (
+        question_target_rooms,
+        room_mismatches_question,
+    )
+
+    q = "\n".join(
+        [
+            "Where is the wall clock?",
+            "A) dining area",
+            "B) kitchen",
+            "C) sunroom",
+            "D) living area near the fireplace",
+        ]
+    )
+    targets = question_target_rooms(q)
+    assert "kitchen" in targets
+    assert "living_room" in targets or "dining_room" in targets
+    assert room_mismatches_question("patio", q) is True
+    assert room_mismatches_question("kitchen", q) is False
+    assert room_mismatches_question("unknown", q) is False
 
 
 def test_estimate_room_at_xy_nearest_blob():
@@ -157,9 +186,18 @@ def test_router_graph_patio_sets_prefer_explore_when_vlm_unknown():
     gm.eqa_client = MagicMock(return_value=reply)
     agent.robot.get_base_pose.return_value = np.array([0.0, 0.0, 0.0])
 
+    q = "\n".join(
+        [
+            "Where is the wall clock?",
+            "A) dining area",
+            "B) kitchen",
+            "C) sunroom",
+            "D) living area near the fireplace",
+        ]
+    )
     ex = AgenticEQAExecutor(
         agent,
-        "Where is the wall clock?",
+        q,
         max_rounds=3,
         max_nav_steps=4,
     )
@@ -178,10 +216,10 @@ def test_router_graph_patio_sets_prefer_explore_when_vlm_unknown():
     assert meta.get("current_room_graph") == "patio"
     assert meta.get("current_room_vlm") == "unknown"
     assert meta.get("current_room") == "patio"
-    assert meta.get("prefer_explore_outdoor") is True
+    assert meta.get("prefer_explore_room_mismatch") is True
     assert ex._prefer_explore is True
-    assert ex._prefer_explore_outdoor is True
+    assert ex._prefer_explore_reason == "room_mismatch"
     msg = build_state_message(ex)
     assert "Current room (graph): patio" in msg
     assert "Rooms: patio(3)" in msg
-    assert "outdoor/patio looks ruled out" in msg
+    assert "does not match rooms named" in msg
