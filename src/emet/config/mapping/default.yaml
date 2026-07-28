@@ -63,7 +63,7 @@ eqa:
   # Agentic explore/navigate/verify/answer loop (post-explore + world-change EQA).
   agentic_verify: false
   agentic_max_tool_rounds: 8
-  agentic_max_nav_steps: 5
+  agentic_max_nav_steps: 8
   agentic_verify_min_sim: 0.28
   # VLM router picks tools via the shared JSON tool-calling contract; false = deterministic fallback only.
   agentic_vlm_router: true
@@ -194,6 +194,8 @@ motion_planner:
   # Do NOT raise dilate_obstacle_size as the primary nav-safety fix — use these instead.
   # min_clearance_m: null  # default: 0.5 * footprint.width + 0.05 (~0.22 m for Stretch)
   clearance_cost_weight: 1.0
+  # When start cell is occupied (pose noise / dilation), Chebyshev escape rings.
+  start_escape_max_ring: 8
   # Parameters for frontier exploration using the motion planner.
   frontier:
     dilate_frontier_size: 2  # Used to shrink the frontier back from the edges of the world
@@ -232,6 +234,10 @@ eqa_vl:
   # Cap how many prior planning iterations are replayed in the prompt. Unbounded history
   # bloats the prompt and feeds the model its own repeated outputs (caption/action loops).
   eqa_max_history: 4
+  spatial_rag: false
+  spatial_rag_radius_m: 2.5
+  spatial_rag_max_regions: 6
+  spatial_rag_max_nodes: 48
   verbose_hf: false
 
 # GraphEQA: VLM object-name extraction (JSON-only; avoids CoT in node labels)

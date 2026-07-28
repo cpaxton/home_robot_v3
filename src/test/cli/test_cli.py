@@ -57,6 +57,40 @@ def test_eval_group_help():
     assert "recover" in result.stdout
 
 
+def test_habitat_group_help_lists_safe_start():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "habitat", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "safe-start" in result.stdout
+    assert "egl-probe" in result.stdout
+    assert "info" in result.stdout
+
+
+def test_habitat_safe_start_help():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "habitat", "safe-start", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "need-mib" in result.stdout
+    assert "force-inline" in result.stdout
+    assert "smoke-episode" in result.stdout
+    assert "queued" in result.stdout.lower() or "detach" in result.stdout.lower()
+
+
+def test_jobs_run_id_from_output():
+    from emet.cli import _jobs_run_id_from_output
+
+    assert _jobs_run_id_from_output(None) is None
+    assert _jobs_run_id_from_output("") is None
+    assert _jobs_run_id_from_output("registered  abc\njob_20260101_abc\n") == "job_20260101_abc"
+    assert _jobs_run_id_from_output("only-id\n") == "only-id"
+
+
 def test_hmeqa_group_help():
     """emet hmeqa --help lists H2H helpers."""
     result = subprocess.run(
@@ -70,6 +104,9 @@ def test_hmeqa_group_help():
     assert "status" in result.stdout
     assert "summarize" in result.stdout
     assert "overnight" in result.stdout
+    assert "significance" in result.stdout
+    assert "ladder" in result.stdout
+    assert "failures" in result.stdout
 
 
 def test_hmeqa_h2h_help_lists_evidence_policy_flags():
@@ -96,6 +133,30 @@ def test_hmeqa_overnight_help():
     assert "gate-min-acc" in result.stdout
     assert "agentic-router" in result.stdout
     assert "owlv2" in result.stdout
+
+
+def test_status_group_help():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "status", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "tail" in result.stdout
+    assert "path" in result.stdout
+    assert "latest" in result.stdout
+
+
+def test_test_help_mentions_agent_regression():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "test", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    # Click may soft-wrap "agent-regression" across lines
+    compact = result.stdout.replace("\n", "").replace(" ", "")
+    assert "agent-regression" in compact or ("agent-" in result.stdout and "regression" in result.stdout)
 
 
 def test_jobs_group_help():

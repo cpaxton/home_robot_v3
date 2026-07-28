@@ -62,15 +62,21 @@ Dynagraph-specific Rerun logging exposes \texttt{world/dynagraph/} for graph ins
 The default path inherits GraphEQA-style iteration: optional rotation-in-place scan, navigate toward frontiers or graph-guided Image-$N$ waypoints, call \texttt{query\_answer} (graph + task-relevant RGB) for a letter/confidence, and repeat until confident or the planning budget is exhausted.
 Each iteration is a monolithic VLM call that jointly decides whether to answer or where to go next; there is no explicit verify gate before committing an answer.
 
-\paragraph{Agentic verify loop.}
+\paragraph{Agentic tool loop.}
 Optionally (\texttt{eqa.agentic\_verify} / \texttt{EMET\_EQA\_AGENTIC\_VERIFY}), \texttt{run\_eqa} switches to a bounded tool-calling loop (\texttt{AgenticEQAExecutor}).
-A fixed system prompt lists a small tool set; each round the model emits JSON tool calls, the controller executes them (navigation updates map/graph automatically), and state messages summarize remaining budget plus tried/ABSENT hypotheses so the agent does not re-pick failed locations.
-The intended policy is navigate $\rightarrow$ \textbf{verify\_siglip} $\rightarrow$ \textbf{submit\_answer} only after a PRESENT check (or near budget exhaustion).
-An optional text-only \textbf{router} VLM proposes tool calls; with the router off, a deterministic heuristic still drives the same tools (used in our Habitat H2H for speed and stability).
+A fixed system prompt lists a small tool set; each round the model emits JSON tool calls, the controller executes them (navigation updates map/graph automatically), and a compact state message summarizes remaining budget plus \emph{evidence cards} for candidate places so the agent does not re-pick failed locations.
+Cheap open-vocab detectors (SigLIP / OWLv2 / YoloE) act only as \textbf{high-recall proposals} in state; answerability and the final letter are \textbf{VLM-first} (\texttt{vlm\_assess} on a fresh RGB, then \texttt{submit\_answer}).
+An optional text-only \textbf{router} VLM proposes tool calls among recalled cards; with the router off, a deterministic heuristic walks the same recalled list (used in our Habitat H2H of record for speed and stability).
 Full tool schemas and response format live in Appendix~\ref{app:agentic_tools}.
 
+\paragraph{Hypothesis recall (not a second policy).}
+\texttt{inspect\_graph} / post-capture refresh retrieves up to $K$ place cards (\texttt{EMET\_EQA\_HYP\_RECALL\_K}, default 6) from graph label hits, SigLIP hits, and frontier waypoints.
+Retrieval uses a short source-tier + keyword/landmark key with planar distance as a weak tiebreak and packs diversified top-$K$ (graph and frontier when both exist); an internal rank key may order fallback walks but is \textbf{not} shown to the router as a utility score.
+Each card is evidence: \texttt{obs\_id}, phrase, source, $xyz$, optional labels / raw SigLIP similarity, plus tried / nav-visit marks.
+Visited \textbf{frontier} nodes are retired from the graph (they are no longer frontiers) so they cannot reappear as candidates.
+
 \paragraph{Tools (summary).}
-In answer mode the agent may call: \texttt{inspect\_graph} (refresh ranked hypotheses), \texttt{explore\_frontier} (grow coverage, optional phrase bias), \texttt{navigate\_to\_obs} (go to a graph \texttt{obs\_id}), \texttt{look\_around} (in-place scan), \texttt{verify\_siglip} (PRESENT / CANDIDATE / ABSENT with similarity), and \texttt{submit\_answer} (MCQ letter or short phrase; gated on PRESENT).
+In answer mode the agent may call: \texttt{inspect\_graph} (refresh evidence cards), \texttt{explore\_frontier} (grow coverage; agentic prefers a VLM pick among a small pool of reachable frontier RGBs, else uncovered / graph heuristics), \texttt{navigate\_to\_obs} (go to a listed \texttt{obs\_id}), \texttt{look\_around} (in-place scan), \texttt{verify\_siglip} (PRESENT / CANDIDATE / ABSENT proposal with similarity), and \texttt{submit\_answer} (MCQ letter; unlocked when VLM assess says answerable, not by detector PRESENT alone).
 Explore-only mode replaces \texttt{submit\_answer} with \texttt{finish}.
 These EQA tools are distinct from the interactive Discord/chat agent tools in Section~\ref{sec:interactive_agent}.
 

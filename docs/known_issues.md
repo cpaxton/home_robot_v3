@@ -161,7 +161,7 @@ There are **two distinct segfault modes**. Do not conflate them.
 
 - **What dies:** the Cursor agent process (`emet[…]: segfault at 0` null IP, or `trap invalid opcode`) when a turn runs or probes Habitat / tears down GPU context. Also seen as V8 `Illegal instruction` in the `agent`/`node` binary itself (`traps: MainThread[…] trap invalid opcode … in node`).
 - **What survives:** a detached **`emet jobs`** child often keeps running — check registry + `OUT/` before re-launching.
-- **First command on the way back (from the owning checkout):** **`bash scripts/status_log.sh tail`** — the last record says what state the run reached and the literal next command ([evaluation.md](evaluation.md#first-command-after-an-agent-death-bash-scriptsstatus_logsh-tail)). Do not `tail ~/runs/emet/STATUS.log` (flat path is shared across sibling checkouts). `bash scripts/status_log.sh latest` points at that checkout's newest `OUT/`.
+- **First command on the way back (from the owning checkout):** **`uv run emet status tail`** — the last record says what state the run reached and the literal next command ([evaluation.md](evaluation.md#first-command-after-an-agent-death-uv-run-emet-status-tail)). Do not `tail ~/runs/emet/STATUS.log` (flat path is shared across sibling checkouts). `uv run emet status latest` points at that checkout's newest `OUT/`.
 - Also: full-system **live lock** when chaining Robocasa dynagraph explore → full pytest (MuJoCo-native) → Habitat HM-EQA with VLM in one session (mouse moves; GUI/SSH dead).
 - **Not** explained by a busy GPU: Mode A/B and EGL map failures have happened with `nvidia-smi` showing only Xorg/gnome-shell and ~full free VRAM.
 
@@ -185,6 +185,6 @@ There are **two distinct segfault modes**. Do not conflate them.
 - Safe no-sim pytest: source `gpu_preflight.sh` and pass **`emet_pytest_no_sim_ignore_args`** (excludes unmarked MuJoCo paths under `src/test/simulation/`).
 - Long evals: **`uv run emet jobs run --name … -- CMD`** (or dedicated terminal) — **not** blocking Cursor agent inline runs; do not hard-kill Habitat mid-episode from the agent (use **`emet jobs cancel`**).
 - On Mode A: leave `NATIVE_CRASH_ABORT=1`, inspect `native_crash_*.log` + `journalctl -k` for `libcuda`; retry the failed qid only after `emet eval diagnose` / free GPU — do not treat empty jsonl as a scored miss without a crash capsule.
-- On Mode C: after reboot, `bash scripts/status_log.sh tail`, confirm GPU idle, resume with H2H’s built-in affinity (no manual incomplete `taskset`); empty mid-episode jsonl is re-run by `RESUME=1`.
+- On Mode C: after reboot, `uv run emet status tail`, confirm GPU idle, resume with H2H’s built-in affinity (no manual incomplete `taskset`); empty mid-episode jsonl is re-run by `RESUME=1`.
 
 Docs: [evaluation.md](evaluation.md#gpu-preflight-all-overnight--vlm-jobs), [cross_track_smoke.md](experiments/cross_track_smoke.md), [`.cursor/rules/gpu-eval-workflow.mdc`](../.cursor/rules/gpu-eval-workflow.mdc).

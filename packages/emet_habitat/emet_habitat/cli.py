@@ -63,6 +63,38 @@ def info_cmd() -> None:
             pass
 
 
+@main.command("egl-probe")
+@click.option("--question-id", default=0, type=int, help="HM-EQA question whose scene to open")
+@click.option("--json", "as_json", is_flag=True, default=False, help="Print one JSON object")
+def egl_probe_cmd(question_id: int, as_json: bool) -> None:
+    """Open Habitat WindowlessContext + one RGB frame (no VLM).
+
+    Prefer launching via ``emet habitat safe-start`` (jobs-wrapped) from Cursor —
+    never as a blocking agent shell that can segfault the IDE host.
+    """
+    from emet_habitat.egl_probe import run_egl_probe
+
+    result = run_egl_probe(question_id=int(question_id))
+    payload = {
+        "ok": result.ok,
+        "message": result.message,
+        "scene_glb": result.scene_glb,
+        "rgb_shape": list(result.rgb_shape) if result.rgb_shape else None,
+        "error": result.error,
+    }
+    if as_json:
+        click.echo(json.dumps(payload))
+    else:
+        click.echo(result.message)
+        if result.scene_glb:
+            click.echo(f"scene_glb={result.scene_glb}")
+        if result.rgb_shape:
+            click.echo(f"rgb_shape={result.rgb_shape}")
+        if result.error:
+            click.echo(result.error, err=True)
+    sys.exit(0 if result.ok else 2)
+
+
 def _eqa_cli_options(fn):
     opts = [
         click.option(

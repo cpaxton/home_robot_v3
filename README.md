@@ -20,6 +20,8 @@
 
 Much of the code is licensed under the Apache 2.0 license. See the [LICENSE](LICENSE) file for more information. Parts of it are derived from the Meta [HomeRobot](https://github.com/facebookresearch/home-robot) project and are licensed under the [MIT license](META_LICENSE).
 
+**Docs:** see the [Documentation map](#documentation-map) below for an outline of `docs/` (what to edit when updating agentic EQA, eval, sim, paper tracks, etc.).
+
 ## Installation (Astral uv)
 
 This project installs with [Astral uv](https://docs.astral.sh/uv/) (no conda required).
@@ -235,25 +237,89 @@ At Hello Robot, people have successfully commanded the robot to pick up a variet
 
 Find out more about the LLM-based AI agent in its [documentation](docs/llm_agent.md). And once you're ready to learn more about Stretch AI, you can try out the [variety of applications (apps)](docs/apps.md) that demonstrate various capabilities.
 
-## Next Steps
+## Documentation map
 
-Check out additional documentation for ways to use Stretch AI:
+Use this outline when updating docs or finding the right page. Prefer editing the **canonical** doc in each row; satellite pages should link back rather than duplicate policy.
 
-- [Simulation](docs/simulation.md) -- Run DynaMem, grasp, and mapping in MuJoCo without a physical robot
-- [Innate Mars](docs/robots/innate_mars.md) -- Maurice-style robot: bridge, MuJoCo asset, DA3 depth
-- [LLM Agent](docs/llm_agent.md) -- How to use the LLM agent for language-directed pick and place
-- [Add a New LLM Task](docs/adding_a_new_task.md) -- How to add a new task that can be called by an LLM
-- [DynaMem](docs/dynamem.md) -- Open-vocabulary mobile manipulation; works in simulation and headless (connect Rerun at `http://<server>:9090?url=ws://<server>:9877`)
-- [Data Collection for Learning from Demonstration](docs/data_collection.md) -- How to collect data for learning from demonstration
-- [Embodied Question Answering](docs/eqa.md) -- Allow the robot to explore the environment and answer questions from the users about the environment. For a graph-based memory alternative, see [GraphEQA](docs/graph_eqa.md).
-- [Dynagraph](docs/dynagraph.md) -- GraphEQA + voxel navigation with graph merge/staleness; Robocasa explore-loop and export ([E2E testing guide](docs/dynagraph_robocasa_e2e.md)).
-- [Known issues](docs/known_issues.md) -- Open bugs and investigation notes (e.g. stationary hardware dynagraph dedup)
-- [Paper experiments](docs/experiments/README.md) -- Master index for CoRL paper benchmarks (commands, figures, output paths)
-- [Testing index](docs/TESTING.md) -- How to run `emet test`, memory-backend smokes, and Dynagraph harnesses.
-- [Learning from Demonstration](docs/learning_from_demonstration.md)  -- How to train and evaluate policies with LfD
-- [Open-Vocabulary Mobile Manipulation](docs/ovmm.md) -- Experimental code which can handle more complex language commands
-- [Apps](docs/apps.md) -- List of many different apps that you can run
-- [Simple API](docs/simple_api.md) -- How to use the simple API to control the robot over wireless
+### Start here
+
+| Doc | When to use |
+|-----|-------------|
+| [first_test.md](docs/first_test.md) | Interactive agent in sim (table or MolmoSpaces); copy-paste prompts |
+| [cli.md](docs/cli.md) | `emet serve` / `run` / `test` / `eval` / `jobs` / `hmeqa` flags (verify with `--help`) |
+| [emet_config.md](docs/emet_config.md) | Nested YAML (`configs/emet/default.yaml`), `--set` / `-O`, robot overlays |
+| [TESTING.md](docs/TESTING.md) | `uv run emet test`, memory-backend smokes, Dynagraph harnesses |
+| [known_issues.md](docs/known_issues.md) | Open bugs, Habitat EGL / agent segfault notes |
+
+### Memory, EQA, and agents
+
+| Doc | When to use |
+|-----|-------------|
+| [dynamem.md](docs/dynamem.md) | Voxel map / open-vocab manipulation (`emet run dynamem`) |
+| [graph_eqa.md](docs/graph_eqa.md) | GraphEQA memory + classic planning loop |
+| [dynagraph.md](docs/dynagraph.md) | Dynagraph (GraphEQA + voxels + merge/staleness); Robocasa explore |
+| [eqa.md](docs/eqa.md) | Embodied QA overview (older Stretch path + pointers) |
+| [AGENT_RUN.md](docs/AGENT_RUN.md) | Discord/CHAT vs Habitat `EQA_EPISODE`; skill packs |
+| [llm_agent.md](docs/llm_agent.md) | Historical Stretch LLM pickup walkthrough → points at modern agent docs |
+| [adding_a_new_task.md](docs/adding_a_new_task.md) | Register a new LLM-callable task |
+| [discord_bot.md](docs/discord_bot.md) | Discord bridge for the interactive agent |
+
+**Agentic HM-EQA (paper / Habitat):** approach and failure notes live under experiments —
+
+- [agentic_qwen_context.md](docs/experiments/agentic_qwen_context.md) — **current approach** (evidence-card recall, VLM-first assess, frontier retirement)
+- [agentic_scale.md](docs/experiments/agentic_scale.md) — holdout / bal-32 scale ladder
+- [evaluation.md](docs/evaluation.md) — agentic tool loop + overnight / GPU runbook
+
+### Simulation and visualization
+
+| Doc | When to use |
+|-----|-------------|
+| [simulation.md](docs/simulation.md) | MuJoCo / Robocasa overview |
+| [simulation_modules.md](docs/simulation_modules.md) | Module map under `src/emet/simulation/` |
+| [molmospaces.md](docs/molmospaces.md) | iTHOR merge + `emet serve molmospaces` |
+| [sim_configs.md](docs/sim_configs.md) | Sim-oriented YAML / planner params |
+| [rerun.md](docs/rerun.md) | Rerun world frame, flags per subcommand |
+| [zmq_obs.md](docs/zmq_obs.md) / [zmq_session_metadata.md](docs/zmq_session_metadata.md) | ZMQ observation contract + session GT metadata |
+| [dynagraph_robocasa_e2e.md](docs/dynagraph_robocasa_e2e.md) | Dynagraph Robocasa end-to-end testing |
+
+Env toggles: [environment_variables.md](docs/environment_variables.md), [molmospaces_environment_variables.md](docs/molmospaces_environment_variables.md).
+
+### Evaluation and paper
+
+| Doc | When to use |
+|-----|-------------|
+| [experiments/README.md](docs/experiments/README.md) | **Master index** — all paper tracks, smokes, output dirs |
+| [paper_benchmarks.md](docs/paper_benchmarks.md) | Operator runbook ↔ LaTeX table mapping |
+| [evaluation.md](docs/evaluation.md) | Cross-track overnight, `emet eval` / `emet jobs`, agentic verify |
+| [habitat_eqa.md](docs/habitat_eqa.md) + [habitat/](docs/habitat/README.md) | HM-EQA harness install / data / troubleshooting |
+| [simulation_testing_plan.md](docs/simulation_testing_plan.md) | Seven-track paper sim smoke battery |
+| [ovmm.md](docs/ovmm.md) / [ovmm_find_phase_benchmark.md](docs/ovmm_find_phase_benchmark.md) | OVMM find-phase / full |
+| [sqa3d.md](docs/sqa3d.md) / [sqa3d_compute.md](docs/sqa3d_compute.md) | SQA3D replay + compute notes |
+| [dynagraph_benchmarks.md](docs/dynagraph_benchmarks.md) | Dynagraph-specific bench helpers |
+| [dynamic_exploration_benchmark.md](docs/dynamic_exploration_benchmark.md) | Dynamic exploration phases |
+
+Paper LaTeX: `paper/main.tex` → `paper/sections/` (method § EQA loops; appendix agentic tools).
+
+### Robots and hardware
+
+| Doc | When to use |
+|-----|-------------|
+| [robots/supported_robots.md](docs/robots/supported_robots.md) | Registry of embodiments |
+| [robots/innate_mars.md](docs/robots/innate_mars.md) | Innate Mars bridge / sim / DA3 |
+| [start_with_docker_plus_virtenv.md](docs/start_with_docker_plus_virtenv.md) | Stretch GPU client + robot install |
+| [update.md](docs/update.md) | Updating code on the robot |
+| [jetson.md](docs/jetson.md) | Jetson notes |
+| [simple_api.md](docs/simple_api.md) | Lightweight wireless control API |
+
+### Apps, LfD, install extras
+
+| Doc | When to use |
+|-----|-------------|
+| [apps.md](docs/apps.md) | Catalog of `emet.app.*` demos |
+| [data_collection.md](docs/data_collection.md) / [learning_from_demonstration.md](docs/learning_from_demonstration.md) | LfD collect → train |
+| [install_details.md](docs/install_details.md) / [docker.md](docs/docker.md) | Deeper install / image builds |
+| [debug.md](docs/debug.md) | Headless, Rerun, common failures |
+| [plans/](docs/plans/README.md) | Design / investigation notes (not user runbooks) |
 
 ## Development
 

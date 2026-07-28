@@ -21,6 +21,7 @@
 import os
 import re
 import time
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -28,6 +29,7 @@ from PIL import Image
 from emet.controller.controller_dynamem import DynamemController
 from emet.controller.habitat_nav import (
     apply_habitat_nav_resolution,
+    explore_grid_resolution_m,
     goal_key_xy,
     habitat_body_scan,
     habitat_explore_frontiers_enabled,
@@ -37,6 +39,7 @@ from emet.controller.habitat_nav import (
     is_habitat_robot_client,
     pick_habitat_exploration_target,
     pick_uncovered_explore_target,
+    robot_planar_xy,
 )
 from emet.core.parameters import Parameters
 from emet.core.robot import AbstractRobotClient
@@ -177,9 +180,8 @@ class GraphEQAController(DynamemController):
         # DynagraphController turns them on.
         self._eqa_explore_when_uncovered = False
         self._eqa_explore_uncovered_habitat_frontier = False
-        # Experiment flag: let the EQA VLM pick the exploration frontier from candidate
-        # views (instead of the SigLIP-nearest heuristic). Off by default for both
-        # controllers; enable per-run with EMET_VLM_FRONTIER_SCORING=1.
+        # Experiment flag: classic coverage path only. Agentic explore always calls
+        # ``_vlm_frontier_choice`` when present. Enable classic with EMET_VLM_FRONTIER_SCORING=1.
         self._vlm_frontier_scoring = os.environ.get(
             "EMET_VLM_FRONTIER_SCORING", ""
         ).strip().lower() in ("1", "true", "yes", "on")
@@ -317,31 +319,67 @@ class GraphEQAController(DynamemController):
                 return np.array([float(fr[0]), float(fr[1]), 1.0], dtype=float)
         return None
 
-    def _vlm_frontier_choice(self, question: str) -> np.ndarray | None:
+    def _vlm_frontier_choice(self, question: str, *, max_candidates: int = 6) -> np.ndarray | None:
         """Ask the EQA VLM which frontier view most likely leads to the question objects.
 
-        Uses actual reasoning over candidate frontier images (<=6) instead of the
-        SigLIP-nearest heuristic. Returns a nav waypoint ``[x, y, 1.0]`` or ``None``
-        (no frontiers, no client, or unparseable reply).
+        Samples up to ``max_candidates`` **reachable** frontier nodes that have RGB
+        (ranked by region utility, not raw graph order), then asks the VLM which
+        image to pursue. Returns a nav waypoint ``[x, y, 1.0]`` or ``None``.
         """
         gm = getattr(self, "graph_memory", None)
         if gm is None or gm.eqa_client is None:
             return None
-        candidates = []
+        from emet.memory.graph_eqa.frontier_regions import (
+            frontier_region_utility,
+            region_from_node,
+        )
+
+        robot = getattr(self, "robot", None)
+        habitat = robot is not None and is_habitat_robot_client(robot)
+        robot_xy = robot_planar_xy(robot) if robot is not None else (0.0, 0.0)
+        blocked = set(getattr(self, "_habitat_blocked_goals", None) or set())
+        recent = list(getattr(self, "_habitat_recent_goals", None) or [])
+        grid_m = explore_grid_resolution_m(self)
+        scored: list[tuple[float, float, Any, Any, np.ndarray]] = []
         for n in gm.get_nodes():
             if not getattr(n, "is_frontier", False):
                 continue
             obs = gm._observation_by_id(int(n.obs_id))
             if obs is None or obs.rgb is None:
                 continue
-            candidates.append((n, obs))
-            if len(candidates) >= 6:
-                break
-        if not candidates:
+            raw = np.array([float(n.xyz[0]), float(n.xyz[1]), 1.0], dtype=float)
+            waypoint = raw
+            if habitat:
+                key = goal_key_xy(raw)
+                if key in blocked:
+                    continue
+                resolved = apply_habitat_nav_resolution(robot, raw)
+                if resolved is None:
+                    blocked.add(key)
+                    continue
+                eff_key = goal_key_xy(resolved)
+                if eff_key in blocked or habitat_nav_would_be_noop(robot, resolved):
+                    blocked.add(key)
+                    blocked.add(eff_key)
+                    continue
+                waypoint = resolved
+            util = frontier_region_utility(
+                region_from_node(n),
+                robot_xy,
+                grid_resolution_m=grid_m,
+                recent=recent,
+            )
+            dist = float(
+                np.hypot(float(waypoint[0]) - robot_xy[0], float(waypoint[1]) - robot_xy[1])
+            )
+            scored.append((util, dist, n, obs, waypoint))
+        if not scored:
             return None
+        scored.sort(key=lambda t: (-t[0], t[1]))
+        candidates = scored[: max(1, int(max_candidates))]
         lines = [
             f"Image {i}: unexplored direction at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f})"
-            for i, (n, _obs) in enumerate(candidates, start=1)
+            for i, (_u, _d, n, _obs, _wp) in enumerate(candidates, start=1)
         ]
         directive = (
             "You are exploring a home to answer a question. Each image shows an "
@@ -349,7 +387,10 @@ class GraphEQAController(DynamemController):
             "question asks about? Reply with ONLY the image number.\n"
             f"Question: {question}\n" + "\n".join(lines)
         )
-        images = [Image.fromarray(obs.rgb.astype(np.uint8), mode="RGB") for _n, obs in candidates]
+        images = [
+            Image.fromarray(obs.rgb.astype(np.uint8), mode="RGB")
+            for _u, _d, _n, obs, _wp in candidates
+        ]
         try:
             reply = gm.eqa_client([directive, *images])
         except Exception:
@@ -357,8 +398,7 @@ class GraphEQAController(DynamemController):
         pick = _parse_image_pick(reply, len(candidates))
         if pick is None:
             return None
-        node = candidates[pick][0]
-        return np.array([float(node.xyz[0]), float(node.xyz[1]), 1.0], dtype=float)
+        return np.asarray(candidates[pick][4], dtype=float).reshape(-1)[:3].copy()
 
     def _graph_dedup_skips(self, label: str, xyz: np.ndarray) -> bool:
         """Skip adding a node if a compatible label already exists near this XY.
