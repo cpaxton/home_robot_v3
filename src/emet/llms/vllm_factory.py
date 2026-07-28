@@ -115,8 +115,23 @@ def create_dynamem_vllm(
             device=device,
             quantization=quantization,
         )
+    if fam == "internvl":
+        from emet.llms.internvl_client import DEFAULT_INTERNVL_HF_MODEL_ID, InternVLClient
+
+        mid = hf_model_id or default_hf_model_id("internvl") or DEFAULT_INTERNVL_HF_MODEL_ID
+        return InternVLClient(
+            prompt=prompt,
+            hf_model_id=mid,
+            max_tokens=max_tokens,
+            device=device,
+            quantization=quantization,
+            cache_system_prefix=cache_system_prefix,
+            max_cached_prefixes=max_cached_prefixes,
+            image_max_side=image_max_side,
+            image_max_pixels=image_max_pixels,
+        )
     raise ValueError(
-        f"Unknown vl_family {vl_family!r}; use qwen3_vl, qwen3_5, qwen2_5_vl, or gemma4 "
+        f"Unknown vl_family {vl_family!r}; use qwen3_vl, qwen3_5, qwen2_5_vl, gemma4, or internvl "
         "(see dynav_config.yaml eqa:)."
     )
 
