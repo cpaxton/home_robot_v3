@@ -271,6 +271,56 @@ def test_episode_conf_cell_formats_gate_and_eqa():
 def test_analyze_agentic_trace_flags_stale_and_phrase():
     rows = [
         {"tool": "inspect_graph", "picked_by": "loop"},
+        {
+            "hypotheses": [
+                {
+                    "obs_id": 13,
+                    "source": "graph",
+                    "phrase": "kitchen island",
+                    "xyz": [-16.5, -1.1, 1.0],
+                }
+            ],
+            "n_hypotheses": 1,
+        },
+        {
+            "tool": "investigate",
+            "event": "tool_pick",
+            "picked_by": "vlm",
+            "router_tool_calls": ["investigate"],
+            "args": {"obs_id": 13},
+        },
+        {
+            "tool": "investigate",
+            "round": 0,
+            "obs_id": 13,
+            "nav_success": True,
+            "target_xyz": [-16.86, -1.02, 1.0],
+        },
+        {
+            "tool": "investigate",
+            "event": "station_inspect",
+            "round": 0,
+            "obs_id": 13,
+            "closest_m": 0.41,
+            "place_inspect": "investigated=1 closest=0.4m [close] recent: r0@0.4m verify=ABSENT",
+        },
+        {
+            "tool": "investigate",
+            "round": 1,
+            "obs_id": 13,
+            "ok": False,
+            "status": "NAV_LOOP_BLOCKED",
+        },
+        {"tool": "nav_loop_redirect", "round": 1},
+        {
+            "tool": "explore_frontier",
+            "round": 1,
+            "ok": True,
+            "source": "vlm_frontier",
+            "frontier_xyz": [-19.0, -3.0, 1.0],
+        },
+        {"tool": "vlm_assess", "round": 0, "obs_id": 12, "present": False, "answerable": False,
+         "phrase": "fruit bowl", "reason": "not visible"},
         {"tool": "capture_and_update", "ok": True, "obs_id": 17},
         {"tool": "verify_siglip", "obs_id": 17, "phrase": "sets utensils already",
          "answerable": False, "detector_score": 0.06},
@@ -280,6 +330,7 @@ def test_analyze_agentic_trace_flags_stale_and_phrase():
         {"tool": "capture_and_update", "ok": True, "obs_id": 17},
         {"tool": "verify_siglip", "obs_id": 17, "phrase": "sets utensils already",
          "answerable": False, "detector_score": 0.03},
+        {"event": "final_location_salvage", "letter": "B", "prior_answer": "unknown", "n_images": 4},
         {"tool": "abstain_unverified", "reason": "require_verified and no fused verification"},
     ]
     a = jr.analyze_agentic_trace(rows)
@@ -289,6 +340,14 @@ def test_analyze_agentic_trace_flags_stale_and_phrase():
     assert a["fallback_submits"] == 3
     assert a["phrases"] == ["sets utensils already"]
     assert a["max_detector_score"] == 0.06
+    assert a["hypotheses"][0]["phrase"] == "kitchen island"
+    assert a["router_picks"] == ["investigate(obs=13)"]
+    assert a["n_nav_loop_blocked"] >= 2
+    assert a["close_absent"] is True
+    assert a["min_closest_m"] == 0.41
+    assert a["salvage"]["letter"] == "B"
+    assert a["n_explore"] == 1
+    assert a["n_station_inspect"] == 1
 
 
 def test_format_question_report_reads_row_and_trace(tmp_path, monkeypatch):
@@ -304,6 +363,11 @@ def test_format_question_report_reads_row_and_trace(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     (bundle / "agentic_trace.jsonl").write_text(
+        '{"hypotheses":[{"obs_id":9,"source":"graph","phrase":"table","xyz":[1,2,1]}]}\n'
+        '{"tool":"investigate","event":"tool_pick","picked_by":"vlm",'
+        '"router_tool_calls":["investigate"],"args":{"obs_id":9}}\n'
+        '{"tool":"investigate","event":"station_inspect","round":0,"obs_id":9,'
+        '"closest_m":0.35,"place_inspect":"investigated=1 closest=0.4m [close] verify=ABSENT"}\n'
         '{"tool":"verify_siglip","obs_id":9,"phrase":"sets utensils already",'
         '"answerable":false,"detector_score":0.06}\n'
         '{"tool":"verify_siglip","obs_id":9,"phrase":"sets utensils already",'
@@ -318,9 +382,13 @@ def test_format_question_report_reads_row_and_trace(tmp_path, monkeypatch):
     assert "sets utensils already" in text
     assert "RED FLAGS" in text
     assert "stale re-verify obs [9]" in text
+    assert "router:" in text
+    assert "station r0" in text
+    assert "close look" in text
     payload = jr.question_report_dict(job, 88)
     assert payload["found"] is True
     assert payload["trace"]["duplicate_verify_obs"] == [9]
+    assert payload["trace"]["close_absent"] is True
 
     missing = jr.format_question_report(job, 999)
     assert "no scored jsonl for q999" in missing

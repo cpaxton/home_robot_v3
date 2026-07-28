@@ -53,14 +53,20 @@ class AStar(Planner):
         min_clearance_m: float | None = 0.22,
         clearance_cost_weight: float = 1.0,
         grid_resolution_m: float | None = None,
+        start_escape_max_ring: int = 8,
     ):
         """Create A* planner with configuration.
 
         Args:
+            space: Navigation configuration space.
+            validate_fn: Optional validity check (defaults to ``space.is_valid``).
             min_clearance_m: Hard-reject cells closer than this to obstacles (meters).
                 ``None`` or ``<= 0`` disables the hard gate (soft cost may still apply).
             clearance_cost_weight: Soft cost ``weight / clearance_m`` so paths prefer open space.
             grid_resolution_m: Meters per grid cell for EDT. Inferred from the voxel map when omitted.
+            start_escape_max_ring: When the start cell is marked occupied (pose noise /
+                obstacle dilation), search this many Chebyshev rings for a free start.
+                Default 8 matches ``motion_planner.start_escape_max_ring`` in dynav config.
         """
         if validate_fn is None:
             validate_fn = space.is_valid
@@ -70,6 +76,7 @@ class AStar(Planner):
         self._grid_resolution_override = grid_resolution_m
         self._clearance_m: np.ndarray | None = None
         self._navigable: np.ndarray | None = None
+        self.start_escape_max_ring = max(1, int(start_escape_max_ring))
         self.reset()
         if validate_fn is not None:
             self.validate = validate_fn  # type:ignore
@@ -378,8 +385,10 @@ class AStar(Planner):
 
         self.reset()
         # Obstacle dilation + pose noise often marks the robot cell occupied;
-        # search farther than the default 4-cell ring before giving up.
-        start_pt = self.get_unoccupied_neighbor(start_pt, max_ring=8)
+        # ring radius comes from motion_planner.start_escape_max_ring (config).
+        start_pt = self.get_unoccupied_neighbor(
+            start_pt, max_ring=self.start_escape_max_ring
+        )
         if start_pt is None:
             return set()
 

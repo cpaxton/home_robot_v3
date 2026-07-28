@@ -617,6 +617,253 @@ def habitat_info() -> None:
     sys.exit(_run_habitat_wrapper(["info"]))
 
 
+@habitat_cmd.command(
+    "safe-start",
+    short_help="Preflight + jobs-wrapped Habitat EGL probe (safe for Cursor agents)",
+)
+@click.option("--need-mib", default=4000, type=int, show_default=True, help="VRAM free for EGL probe")
+@click.option("--question-id", default=0, type=int, show_default=True)
+@click.option(
+    "--smoke-episode",
+    is_flag=True,
+    default=False,
+    help="Also queue a mock-llm dynagraph episode (gpu-exclusive waits behind the probe)",
+)
+@click.option(
+    "--force-inline",
+    is_flag=True,
+    default=False,
+    help="Run probe in this process (dangerous in Cursor — can segfault the agent host)",
+)
+@click.option("--job-name", default="habitat-egl-probe", show_default=True)
+def habitat_safe_start(
+    need_mib: int,
+    question_id: int,
+    smoke_episode: bool,
+    force_inline: bool,
+    job_name: str,
+) -> None:
+    """Recover GPU state, then queue a detached Habitat EGL probe (never inline by default).
+
+    Empty ``nvidia-smi`` ≠ Habitat OK. This path::
+
+        emet eval recover → emet jobs run (detached) → emet-habitat egl-probe
+
+    Detach is intentional: Habitat teardown often SIGSEGVs Cursor agent hosts.
+    This command returning 0 only means the probe job was **queued**, not that EGL
+    succeeded. Wait until ``emet jobs status JOB`` is ``done`` and logs look OK
+    before ``emet hmeqa h2h`` / overnight. Do **not** pass ``--force-inline`` from
+    a Cursor agent session.
+    """
+    import shlex
+
+    root = _project_root()
+    # 1) Preflight (read-only diagnose + wait for VRAM).
+    recover_cmd = [
+        sys.executable,
+        "-m",
+        "emet.cli",
+        "eval",
+        "recover",
+        "--need-mib",
+        str(int(need_mib)),
+    ]
+    click.echo(f"preflight: {' '.join(recover_cmd)}", err=True)
+    rc = subprocess.call(recover_cmd, cwd=str(root))
+    if rc != 0:
+        click.echo(
+            "preflight failed — fix GPU/EGL (see emet eval diagnose) before Habitat",
+            err=True,
+        )
+        sys.exit(rc)
+
+    probe_args = ["egl-probe", "--question-id", str(int(question_id)), "--json"]
+    if force_inline:
+        click.echo(
+            "WARNING: --force-inline runs Habitat in this process; "
+            "Cursor agent hosts often die on Habitat/VLM teardown SIGSEGV.",
+            err=True,
+        )
+        sys.exit(_run_habitat_wrapper(probe_args))
+
+    from emet.habitat.wrapper_config import build_habitat_wrapper_command, ensure_habitat_eqa_data_dir_env
+
+    wrap = build_habitat_wrapper_command(probe_args)
+    if wrap is None:
+        click.echo(
+            "Habitat wrapper not found. From the project root run:\n"
+            "  ./scripts/install_habitat.sh\n",
+            err=True,
+        )
+        sys.exit(1)
+
+    # Preserve HABITAT_EQA_DATA_DIR for the job child.
+    env_prefix = []
+    env = os.environ.copy()
+    ensure_habitat_eqa_data_dir_env(env)
+    data_dir = env.get("HABITAT_EQA_DATA_DIR")
+    if data_dir:
+        env_prefix.append(f"HABITAT_EQA_DATA_DIR={shlex.quote(data_dir)}")
+
+    inner = "env " + " ".join(env_prefix + [shlex.quote(c) for c in wrap])
+    out_dir = Path(os.path.expanduser("~/runs/emet")) / f"habitat_egl_probe_{_timestamp()}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    jobs_cmd = [
+        sys.executable,
+        "-m",
+        "emet.cli",
+        "jobs",
+        "run",
+        "--name",
+        job_name,
+        "--need-mib",
+        str(int(need_mib)),
+        "--out-dir",
+        str(out_dir),
+        "--",
+        "bash",
+        "-lc",
+        inner,
+    ]
+    click.echo(f"queuing detached EGL probe via emet jobs: OUT={out_dir}", err=True)
+    launched = subprocess.run(
+        jobs_cmd,
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+    )
+    if launched.stderr:
+        click.echo(launched.stderr.rstrip("\n"), err=True)
+    if launched.stdout:
+        click.echo(launched.stdout.rstrip("\n"), err=True)
+    if launched.returncode != 0:
+        click.echo(
+            f"EGL probe job launch failed (rc={launched.returncode}). "
+            "Check: uv run emet jobs",
+            err=True,
+        )
+        sys.exit(launched.returncode)
+
+    probe_job = _jobs_run_id_from_output(launched.stdout)
+    job_ref = probe_job or "JOB"
+    click.echo(
+        "EGL probe job queued (detached — not finished yet).\n"
+        f"  OUT={out_dir}\n"
+        f"  uv run emet jobs status {job_ref}\n"
+        f"  uv run emet jobs logs {job_ref} --tail 40\n"
+        "Do NOT launch HM-EQA until status is done and logs show EGL OK.\n"
+        "Only then:\n"
+        "  uv run emet hmeqa h2h --preset paper-router …\n"
+        "  # or: uv run emet hmeqa overnight",
+        err=True,
+    )
+
+    if smoke_episode:
+        smoke_name = f"{job_name}-smoke"
+        smoke_out = Path(os.path.expanduser("~/runs/emet")) / f"habitat_mock_smoke_{_timestamp()}"
+        smoke_out.mkdir(parents=True, exist_ok=True)
+        smoke_wrap = build_habitat_wrapper_command(
+            [
+                "run-episode",
+                "--question-id",
+                str(int(question_id)),
+                "--method",
+                "dynagraph",
+                "--mock-llm",
+                "--max-planning-steps",
+                "2",
+                "--output",
+                str(smoke_out / "smoke.jsonl"),
+            ]
+        )
+        if smoke_wrap is None:
+            sys.exit(1)
+        smoke_inner = "env " + " ".join(env_prefix + [shlex.quote(c) for c in smoke_wrap])
+        smoke_cmd = [
+            sys.executable,
+            "-m",
+            "emet.cli",
+            "jobs",
+            "run",
+            "--name",
+            smoke_name,
+            "--need-mib",
+            str(max(int(need_mib), 8000)),
+            "--out-dir",
+            str(smoke_out),
+            "--",
+            "bash",
+            "-lc",
+            smoke_inner,
+        ]
+        click.echo(
+            f"queuing mock-llm smoke behind probe (gpu-exclusive): OUT={smoke_out}",
+            err=True,
+        )
+        smoke = subprocess.run(
+            smoke_cmd,
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+        )
+        if smoke.stderr:
+            click.echo(smoke.stderr.rstrip("\n"), err=True)
+        if smoke.stdout:
+            click.echo(smoke.stdout.rstrip("\n"), err=True)
+        if smoke.returncode != 0:
+            sys.exit(smoke.returncode)
+        smoke_job = _jobs_run_id_from_output(smoke.stdout)
+        smoke_ref = smoke_job or "SMOKE_JOB"
+        click.echo(
+            "Smoke episode also queued (detached). Wait for probe done, then smoke done:\n"
+            f"  uv run emet jobs status {smoke_ref}\n"
+            f"  uv run emet jobs logs {smoke_ref} --tail 40\n"
+            "Still do not launch HM-EQA until the EGL probe job is done + OK.",
+            err=True,
+        )
+        sys.exit(0)
+    sys.exit(0)
+
+
+def _jobs_run_id_from_output(stdout: str | None) -> str | None:
+    """Best-effort parse of ``emet jobs run`` stdout (last non-empty line is job id)."""
+    if not stdout:
+        return None
+    lines = [ln.strip() for ln in stdout.splitlines() if ln.strip()]
+    return lines[-1] if lines else None
+
+
+def _timestamp() -> str:
+    from datetime import datetime
+
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+@habitat_cmd.command("egl-probe", short_help="Delegate to emet-habitat egl-probe (prefer safe-start)")
+@click.option("--question-id", default=0, type=int)
+@click.option("--json", "as_json", is_flag=True, default=False)
+@click.option(
+    "--force-inline",
+    is_flag=True,
+    default=False,
+    help="Required to run in-process; otherwise redirects to safe-start",
+)
+def habitat_egl_probe(question_id: int, as_json: bool, force_inline: bool) -> None:
+    """Thin alias. Agents should use ``emet habitat safe-start`` instead."""
+    if not force_inline:
+        click.echo(
+            "Refusing inline Habitat EGL probe (segfaults Cursor agent hosts). "
+            "Use: uv run emet habitat safe-start\n"
+            "Or pass --force-inline only from a dedicated terminal.",
+            err=True,
+        )
+        sys.exit(2)
+    args = ["egl-probe", "--question-id", str(int(question_id))]
+    if as_json:
+        args.append("--json")
+    sys.exit(_run_habitat_wrapper(args))
+
+
 @habitat_cmd.command("list-questions", short_help="List HM-EQA questions from CSV")
 @click.option("--limit", default=10, type=int)
 def habitat_list_questions(limit: int) -> None:
@@ -1409,6 +1656,47 @@ def jobs_run(
     click.echo(job.id)
 
 
+@main.group("status", short_help="Per-checkout STATUS.log helpers (after agent death)")
+def status_group() -> None:
+    """Tail-able recovery log for long GPU / HM-EQA runs.
+
+    Prefer ``emet status tail`` over ``bash scripts/status_log.sh``. Orchestrators
+    still *source* ``scripts/status_log.sh`` to write records.
+
+    \b
+    Examples:
+      emet status tail
+      emet status path
+      emet status latest
+    """
+
+
+def _status_log_script() -> Path:
+    return _active_project_root() / "scripts" / "status_log.sh"
+
+
+@status_group.command("tail", short_help="Show last N STATUS.log lines")
+@click.argument("n", required=False, default="12")
+def status_tail(n: str) -> None:
+    script = _status_log_script()
+    if not script.is_file():
+        click.echo(f"missing {script}", err=True)
+        sys.exit(1)
+    sys.exit(subprocess.call(["bash", str(script), "tail", str(n)], cwd=str(script.parent.parent)))
+
+
+@status_group.command("path", short_help="Print STATUS.log path for this checkout")
+def status_path() -> None:
+    script = _status_log_script()
+    sys.exit(subprocess.call(["bash", str(script), "path"], cwd=str(script.parent.parent)))
+
+
+@status_group.command("latest", short_help="Resolve latest OUT symlink for this checkout")
+def status_latest() -> None:
+    script = _status_log_script()
+    sys.exit(subprocess.call(["bash", str(script), "latest"], cwd=str(script.parent.parent)))
+
+
 @main.group("eval", short_help="GPU preflight and eval process cleanup")
 def eval_group() -> None:
     """GPU preflight and stale-process cleanup for paper evals / overnight smokes.
@@ -1623,7 +1911,11 @@ def hmeqa_group() -> None:
       emet hmeqa status
       emet hmeqa h2h --out OUT --resume --ids 15,68,105,17
       emet hmeqa overnight
+      emet hmeqa inspect OUT --qid 105 --open rgb
+      emet hmeqa significance OUT
+      emet hmeqa ladder RUN_DIR --require-balanced32-gate
       emet hmeqa h2h --preset paper-router --ids 15,56,65,68
+      emet status tail
     """
 
 
@@ -1679,6 +1971,199 @@ def hmeqa_summarize(out_dir: str | None) -> None:
     script = _project_root() / "scripts" / "summarize_hmeqa_agentic_h2h.py"
     rc = subprocess.call([sys.executable, str(script), str(out)], cwd=str(_project_root()))
     sys.exit(rc)
+
+
+@hmeqa_group.command(
+    "significance",
+    short_help="Paired McNemar / Wilcoxon / bootstrap on classic vs agentic H2H",
+)
+@click.argument("out_dir", required=False)
+@click.option(
+    "--from-summary",
+    "from_summary",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Load h2h_summary JSON instead of OUT/*.jsonl",
+)
+@click.option(
+    "--json",
+    "json_out",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Write full result JSON (default: OUT/significance.json when out_dir set)",
+)
+@click.option("--n-boot", default=5000, show_default=True, type=int)
+@click.option("--seed", default=0, show_default=True, type=int)
+def hmeqa_significance(
+    out_dir: str | None,
+    from_summary: Path | None,
+    json_out: Path | None,
+    n_boot: int,
+    seed: int,
+) -> None:
+    """Dogfood wrapper around ``emet.eval.hmeqa_significance``."""
+    from emet.eval.hmeqa_significance import main as significance_main
+
+    argv: list[str] = []
+    if out_dir:
+        argv.append(out_dir)
+    if from_summary is not None:
+        argv.extend(["--from-summary", str(from_summary)])
+    if json_out is not None:
+        argv.extend(["--json", str(json_out)])
+    argv.extend(["--n-boot", str(n_boot), "--seed", str(seed)])
+    sys.exit(significance_main(argv))
+
+
+@hmeqa_group.command(
+    "failures",
+    short_help="Attribute classic vs agentic letter failures (context gaps)",
+)
+@click.argument("out_dir", required=False)
+@click.option(
+    "--from-summary",
+    "from_summary",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Optional h2h_summary JSON (enrich with OUT traces when out_dir set)",
+)
+@click.option(
+    "--json",
+    "json_out",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Write failure_report.json (default: OUT/failure_report.json)",
+)
+def hmeqa_failures(
+    out_dir: str | None,
+    from_summary: Path | None,
+    json_out: Path | None,
+) -> None:
+    """Offline classic_only / context-gap attribution from H2H OUT + traces."""
+    from emet.eval.hmeqa_failures import main as failures_main
+
+    argv: list[str] = []
+    if out_dir:
+        argv.append(out_dir)
+    if from_summary is not None:
+        argv.extend(["--from-summary", str(from_summary)])
+    if json_out is not None:
+        argv.extend(["--json", str(json_out)])
+    sys.exit(failures_main(argv))
+
+
+@hmeqa_group.command(
+    "inspect",
+    short_help="Episode score + assess/explore + feh/mpv paths (replaces one-off JSON dumps)",
+)
+@click.argument("out_dir", required=False)
+@click.option("--qid", type=int, default=None, help="Question id to inspect.")
+@click.option("--arm", default="agentic", show_default=True, help="classic or agentic.")
+@click.option(
+    "--misses",
+    is_flag=True,
+    help="List incorrect scored episodes (no --qid needed).",
+)
+@click.option(
+    "--open",
+    "open_kind",
+    type=click.Choice(["rgb", "frames", "images", "frontier", "maps", "video"]),
+    default=None,
+    help="Launch feh/mpv on that media set (requires DISPLAY).",
+)
+@click.option("--json", "as_json", is_flag=True, help="Print full JSON payload.")
+def hmeqa_inspect(
+    out_dir: str | None,
+    qid: int | None,
+    arm: str,
+    misses: bool,
+    open_kind: str | None,
+    as_json: bool,
+) -> None:
+    """Summarize one episode (or list misses) and print copy-paste viewer commands.
+
+    \b
+    Examples:
+      emet hmeqa inspect OUT --qid 105
+      emet hmeqa inspect OUT --misses
+      emet hmeqa inspect OUT --qid 105 --open rgb
+    """
+    from emet.eval.harness import resolve_hmeqa_out
+    from emet.eval.hmeqa_inspect import (
+        format_inspect_text,
+        inspect_episode,
+        list_scored_episodes,
+        open_media,
+    )
+
+    out = resolve_hmeqa_out(out_dir)
+    if misses:
+        rows = list_scored_episodes(out, arm=arm)
+        bad = [r for r in rows if not r.get("correct")]
+        if as_json:
+            click.echo(json.dumps({"out_dir": str(out), "misses": bad}, indent=2))
+        else:
+            click.echo(f"OUT={out}  arm={arm}  scored={len(rows)}  misses={len(bad)}")
+            for r in bad:
+                q = (str(r.get("question") or ""))[:90]
+                click.echo(f"  q{r.get('qid')} pred={r.get('predicted')} gold={r.get('gold')}  {q}")
+        if qid is None:
+            return
+    if qid is None:
+        raise click.UsageError("provide --qid N (or --misses alone)")
+    payload = inspect_episode(out, qid, arm=arm)
+    if as_json:
+        click.echo(json.dumps(payload, indent=2, default=str))
+    else:
+        click.echo(format_inspect_text(payload))
+    if open_kind:
+        try:
+            pid = open_media(open_kind, payload.get("media") or {})
+        except (FileNotFoundError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(f"opened {open_kind} (pid={pid})")
+
+
+@hmeqa_group.command(
+    "ladder",
+    short_help="Summarize probe/holdout ladder runs; optional balanced-32 gate",
+)
+@click.argument("run_dirs", nargs=-1, required=True, type=click.Path(path_type=Path))
+@click.option("-o", "--output", type=click.Path(path_type=Path), default=None)
+@click.option(
+    "--require-balanced32-gate",
+    is_flag=True,
+    help="Exit 2 unless probe has verified answers and zero forced submits",
+)
+def hmeqa_ladder(
+    run_dirs: tuple[Path, ...],
+    output: Path | None,
+    require_balanced32_gate: bool,
+) -> None:
+    """Summarize agentic ladder metrics (accuracy, selective risk, fused verify, …)."""
+    from emet.eval.agentic_metrics import (
+        balanced32_gate,
+        summarize_policy_metrics,
+        summarize_run,
+    )
+
+    reports = [summarize_run(path) for path in run_dirs]
+    combined_episodes = [episode for report in reports for episode in report["episodes"]]
+    combined = {
+        "runs": reports,
+        "summary": summarize_policy_metrics(combined_episodes),
+    }
+    passed, reasons = balanced32_gate(combined)
+    combined["balanced32_gate"] = {"passed": passed, "reasons": reasons}
+    text = json.dumps(combined, indent=2) + "\n"
+    if output is not None:
+        output = output.expanduser().resolve()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(text, encoding="utf-8")
+    click.echo(text, nl=False)
+    if require_balanced32_gate and not passed:
+        sys.exit(2)
+    sys.exit(0)
 
 
 def _hmeqa_launch(
@@ -2876,6 +3361,23 @@ def show(path: str, web: bool) -> None:
         sys.exit(1)
 
 
+_AGENT_REGRESSION_PATHS: tuple[str, ...] = (
+    "src/test/agent/test_agent_prompt_and_tools.py",
+    "src/test/agent/test_dispatch_tool_calls.py",
+    "src/test/agent/test_run_agent_loop_mock.py",
+    "src/test/agent/test_call_llm.py",
+    "src/test/agent/test_thinking_status.py",
+    "src/test/agent/test_dynagraph_import_cycle.py",
+    "src/test/agent/test_manual_find_command.py",
+    "src/test/cli/test_run_agent_defaults.py",
+    "src/test/app/test_stream_dynav_resolve.py",
+    "src/test/controller/test_graph_eqa_answer_only.py",
+    "src/test/eval/test_agentic_eqa_verification.py",
+    "src/test/memory/test_memory_backends_smoke.py",
+    "src/test/memory/test_graph_eqa_beliefs.py",
+)
+
+
 @main.command(
     short_help="Run pytest (use uv: uv run emet test)",
     context_settings={**_CONTEXT_SETTINGS, "ignore_unknown_options": True},
@@ -2905,6 +3407,7 @@ def test(
       uv run emet test
       uv run emet test -v
       uv run emet test --no-sim           # skip sim tests (faster)
+      uv run emet test agent-regression   # Discord / Herman / agent pack (no sim)
       uv run emet test -v src/test/memory/test_memory_backends_smoke.py
       uv run emet test src/test/mapping/test_red_cylinder_in_sim.py -k innate_mars
       uv run emet test -k test_red_cylinder
@@ -2913,6 +3416,14 @@ def test(
     root = _project_root()
     os.chdir(root)
     env = os.environ.copy()
+    args = list(pytest_args)
+    quiet = False
+    if args and args[0] == "agent-regression":
+        rest = args[1:]
+        args = ["-q", *_AGENT_REGRESSION_PATHS, "-m", "not sim", *rest]
+        no_sim_tests = True
+        quiet = True
+        no_cov = True
     if no_sim_tests:
         env["RUN_SIM_TESTS"] = "0"
     else:
@@ -2930,7 +3441,7 @@ def test(
         env["PYTHONPATH"] = os.pathsep.join([str(src), *prev_parts])
 
     cmd = [python, "-m", "pytest"]
-    if verbose:
+    if verbose and not quiet:
         cmd.append("-v")
     if not no_cov and (root / "pyproject.toml").exists():
         try:
@@ -2939,8 +3450,8 @@ def test(
             cmd.extend(["--cov=emet", "--cov-report=term-missing"])
         except ImportError:
             pass
-    cmd.extend(list(pytest_args))
-    if not pytest_args:
+    cmd.extend(args)
+    if not args:
         # pytest uses testpaths from pyproject.toml ([tool.pytest.ini_options] testpaths = ["src/test"])
         pass
     sys.exit(subprocess.call(cmd, env=env, cwd=root))

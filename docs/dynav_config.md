@@ -178,7 +178,7 @@ Applied by default in `packages/emet_habitat/emet_habitat/runner.py` (`_configur
 | `habitat_explore_frontiers` | `true` | Frontier override when uncertain or nav would be a no-op |
 | `image_nav_min_approach_m` | `0.35` | Standoff when navigating to Image N from the capture viewpoint |
 
-Mapping (also Habitat-only via `_configure_habitat_mapping`): `max_depth=4.5`, `pad_obstacles=1`, `filters.smooth_kernel_size=1` so open-plan frontiers are not starved by the default dynav clamps. Frontier nodes snap to a reachable-adjacent cell rather than the arc centroid.
+Mapping (also Habitat-only via `_configure_habitat_mapping`): `max_depth=4.5`, and temporarily **`pad_obstacles=0`** / **`filters.smooth_kernel_size=0`** (no morphological obstacle dilation) so doorways stay open for approach sampling. Override with `EMET_HABITAT_PAD_OBSTACLES` (grid cells). Frontier nodes snap to a reachable-adjacent cell rather than the arc centroid.
 
 CLI: `.venv-habitat/bin/emet-habitat run-episode --habitat-perfect-nav/--no-habitat-perfect-nav`. Override `image_nav_min_approach_m` in `dynav_config.yaml` under `eqa:` (see [habitat/usage.md](habitat/usage.md#navigation-habitat-only)).
 

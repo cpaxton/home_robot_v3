@@ -31,6 +31,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_EVAL_VIDEO_MOTION_PACED` | Same | Motion-paced MP4 encoding (default on). YAML: `eval.video_motion_paced`. |
 | `EMET_EVAL_EXPORT_FRAMES` | Same | Save RGB frames under `frames/`. |
 | `EMET_EVAL_EXPORT_OBSTACLE_GRIDS` | Same | `obstacles_2d.npy`, `explored_2d.npy`, `grid_meta.json` (default on). |
+| `EMET_HABITAT_PAD_OBSTACLES` | `emet_habitat.runner._configure_habitat_mapping` | Habitat-only obstacle dilation radius in grid cells (default `0` = off, temporary doorway-entry probe). Non-zero also restores `filters.smooth_kernel_size=1`. |
 | `EMET_EVAL_EXPORT_TRAJECTORY` | Same | `trajectory.jsonl` (default on). |
 | `EMET_EVAL_EXPORT_OBJECT_CROPS` | Same | Dynagraph object-crop mosaic when graph memory is present (default on). |
 | `EMET_EVAL_MAP_STRIDE` | Same | Save intermediate maps every N steps (0 = final only). Alias: `HABITAT_EQA_MAP_STRIDE`. |
@@ -51,6 +52,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_EQA_AGENTIC_VERIFY` | GraphEQA / dynagraph EQA | `1`/`0` — enable unified explore/navigate/verify/answer loop (`eqa.agentic_verify`). Does **not** disable per-frame graph label VLM (that caused `n_object=0` on HM-EQA holdout q104/q105). |
 | `EMET_GRAPH_EQA_EXTRACT_VLM` | `SensorGraphBuilder` | `0`/`false` — opt-out of per-frame vision-VLM graph label extract (voxel/detector labels only). Default: extract enabled. Use only if mid-nav Habitat+Qwen `libcuda` faults force it. |
 | `EMET_EQA_AGENTIC_ROUTER` | `AgenticEQAExecutor` | `1`/`0` — override `eqa.agentic_vlm_router`: let the shared Qwen3-VL pick tools via JSON tool calls (`0` = deterministic fallback only, for reproducible evals). |
+| `EMET_EQA_HYP_RECALL_K` | `AgenticEQAExecutor` | Top-K evidence cards recalled for the agentic router / fallback (default `6`). Retrieval only — the VLM decides among listed `obs_id`s. |
 | `EMET_EQA_AGENTIC_REQUIRE_VERIFIED` | `AgenticEQAExecutor` | `1` — refuse unverified `submit_answer` (incl. fallback / round exhaust); abstain with `Unknown` instead of guessing. SigLIP is high-recall FP-leaning support for verify — see [agentic_scale.md](experiments/agentic_scale.md#siglip-role-in-agentic-verify-design). |
 | `EMET_EQA_AGENTIC_VERIFIER` | `AgenticEQAExecutor` | Hybrid presence backend: `none`/`siglip` (default), `owlv2`, or `yoloe`. The detector score and detector-crop→SigLIP score remain separate evidence channels; no single image cosine sets fused verification. |
 | `EMET_EQA_TRACE` | `AgenticEQAExecutor` | `1` — append `agentic_trace.jsonl` (SigLIP embeds + GT) for offline tuning via `scripts/tune_agentic_verify.py`. |
@@ -69,7 +71,7 @@ Paper benchmark runbook: [paper_benchmarks.md](paper_benchmarks.md). **Overnight
 | `EMET_EQA_VL_MODEL_SIZE` | EQA / GraphEQA VLM load | Override `eqa_vl.model_size` in `dynav_config.yaml` (legacy Qwen3.5 path; default EQA uses `eqa.vl_hf_model_id` **Qwen/Qwen3-VL-8B-Instruct** int4). |
 | `EMET_SIGLIP_VERSION` | `get_shared_mask_siglip_encoder` (voxel map / dynagraph grounding) | Override the SigLIP checkpoint: `base`, `so400m` (default), `siglip2_base`, `siglip2_so400m`. A/B encoder upgrades without config edits. |
 | `EMET_SIGLIP_DTYPE` | `SiglipEncoder` / `MaskSiglipEncoder` weight load | `float32` (default), `float16`, or `bfloat16`. Halves SigLIP VRAM (so400m: 3.5 GB → 1.75 GB); outputs are cast back to fp32 so stored features/thresholds are unchanged. int4/int8 unsupported (breaks the MaskSiglip head surgery). |
-| `EMET_VLM_FRONTIER_SCORING` | Dynagraph EQA exploration (`controller_graph_eqa.py`) | Set `1` to let the EQA VLM pick the exploration frontier from candidate views (<=6 images/iteration) before the SigLIP-nearest heuristic. Only active in the dynagraph coverage-override path (`_eqa_explore_when_uncovered`); baseline `graph_eqa` is unaffected. Default off. |
+| `EMET_VLM_FRONTIER_SCORING` | Dynagraph classic EQA (`controller_graph_eqa.py` coverage path) | Set `1` to let the EQA VLM pick the exploration frontier from reachable candidate views (≤6 images/iteration, utility-ranked) before the SigLIP-nearest heuristic in `run_eqa_one_iter`. **Agentic** `explore_frontier` always tries `_vlm_frontier_choice` when the method exists (no env gate). Baseline `graph_eqa` coverage path still defaults off. |
 | `EMET_DYNAGRAPH_MCQ_DEBIAS` | Habitat `emet-habitat` dynagraph harness | `1` / `0` override `mcq_debias` after harness profile (CLI: `--mcq-debias` / `--no-mcq-debias`). |
 | `EMET_DYNAGRAPH_MEMORY_SUMMARY` | Habitat `emet-habitat` dynagraph harness | `1` / `0` override CONFIRMED_MEMORY block (CLI: `--memory-summary` / `--no-memory-summary`). |
 | `EMET_DYNAGRAPH_EXPLORE_UNCOVERED` | Habitat `emet-habitat` dynagraph harness | `off`, `on`, or `conservative` (CLI: `--explore-when-uncovered`). Default per harness: `habitat_eqa` uses `conservative` in [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml). |
@@ -111,7 +113,7 @@ Used by `scripts/run_large_paper_eval.sh` and `scripts/run_sqa3d_sharded_sweep.s
 | `SKIP_DYNAMIC_EXPLORE` | `run_large_paper_eval.sh` | Set `1` to skip dynamic exploration matrix. |
 | `OVMM_CPU_ONLY` | `run_large_paper_eval.sh` | Set `1` for `--cpu-only` OVMM (overlap with SQA3D on GPU in another terminal). |
 | `DYNAMIC_EXPLORE_CPU_ONLY` | `run_large_paper_eval.sh` | Set `1` for `--cpu-only` dynamic exploration runs. |
-| `EMET_STATUS_LOG` | `scripts/status_log.sh` (sourced by orchestrators) | Per-checkout tail-able status log path. Default `~/runs/emet/status/<repo_basename>/STATUS.log` (not a flat shared file — sibling trees like `home_robot_v3` / `v4` must not interleave). Each run also writes `OUT/STATUS.log`. Recovery: `bash scripts/status_log.sh tail`. See [evaluation.md](evaluation.md#first-command-after-an-agent-death-bash-scriptsstatus_logsh-tail). |
+| `EMET_STATUS_LOG` | `scripts/status_log.sh` (sourced by orchestrators) | Per-checkout tail-able status log path. Default `~/runs/emet/status/<repo_basename>/STATUS.log` (not a flat shared file — sibling trees like `home_robot_v3` / `v4` must not interleave). Each run also writes `OUT/STATUS.log`. Recovery: `uv run emet status tail`. See [evaluation.md](evaluation.md#first-command-after-an-agent-death-uv-run-emet-status-tail). |
 | `EMET_STATUS_DIR` | `scripts/status_log.sh` | Directory holding `STATUS.log` + `latest` symlink. Default `~/runs/emet/status/<repo_basename>`. Ignored when `EMET_STATUS_LOG` is set. |
 
 ## ZMQ and simulation (general)

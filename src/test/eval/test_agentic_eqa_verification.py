@@ -869,6 +869,10 @@ def test_T5_state_message_marks_tried_hypotheses():
     assert "Question: Where is the mug?" in msg
     assert "obs_id=7" in msg
     assert "tried: verify ABSENT" in msg
+    assert "Investigate" in msg
+    assert "#1 best" not in msg
+    assert "highest-score" not in msg
+    assert "score=" not in msg.split("Investigate", 1)[-1]
 
 
 def test_T6_explore_mode_finish_gated():
@@ -1071,9 +1075,10 @@ def test_agentic_submit_does_not_clamp_answer_max_tokens(monkeypatch):
     agent.planner = None
     agent.robot = None
 
-    def _qa(question, xyt, planner):
+    def _qa(question, xyt, planner, *, force_obs_ids=None):
         # Env must remain unset so graph_memory default (256) applies.
         assert "EMET_EQA_ANSWER_MAX_NEW_TOKENS" not in os.environ
+        assert force_obs_ids == [1]
         return ("", "B", True, "", None, [])
 
     gm.query_answer.side_effect = _qa
@@ -1086,6 +1091,8 @@ def test_agentic_submit_does_not_clamp_answer_max_tokens(monkeypatch):
     assert out["ok"] is True
     assert out["answer"] == "B"
     assert "EMET_EQA_ANSWER_MAX_NEW_TOKENS" not in os.environ
+    gm.query_answer.assert_called()
+    assert gm.query_answer.call_args.kwargs.get("force_obs_ids") == [1]
 
 
 def test_require_verified_abstains_when_never_present(monkeypatch):
@@ -1297,7 +1304,7 @@ def test_fallback_skips_already_tried_hypothesis():
     ]
     ex._tried[1] = "verify ABSENT sim=0.01"
     tool, args = ex._fallback_tool()
-    assert tool == "navigate_to_obs"
+    assert tool == "investigate"
     assert int(args["obs_id"]) == 2
 
 
@@ -1548,3 +1555,784 @@ def test_capture_rejects_non_advancing_obs():
     second = ex._tool_capture_and_update()
     assert second["ok"] is False
     assert second["status"] == "NO_NEW_OBS"
+
+
+def test_sync_scored_answer_appends_agentic_submit_for_habitat_scoring():
+    """Habitat scores last_eqa_raw — agentic letter must win over salvage."""
+    _require_agentic()
+    from emet.habitat.metrics import extract_mcq_letter_from_raw_eqa
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, AgenticEQAResult
+
+    agent = MagicMock()
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.last_eqa_raw = "Caption:\n...\n[salvage]\nanswer:\nA\n"
+    gm.last_eqa_parsed = ("r", "A", False, "", "")
+    gm.last_eqa_obs_ids = [20]
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "How many red pillows? A)1 B)3 C)4 D)2",
+        router=False,
+        collect_trace=True,
+    )
+    result = AgenticEQAResult(
+        discord_text="Answer:D",
+        answer="D",
+        confidence=True,
+        relevant_images=[],
+        tool_log=["submit_answer"],
+        verified=True,
+        verified_obs_id=20,
+        n_rounds=1,
+        n_nav=1,
+        n_explore=0,
+        wall_s=1.0,
+        budget_hit=False,
+    )
+    ex._sync_scored_answer_to_graph_memory(result, {"answer_source": "vlm_suggested"})
+    assert "[agentic_submit]" in gm.last_eqa_raw
+    assert gm.last_eqa_parsed[1] == "D"
+    letter = extract_mcq_letter_from_raw_eqa(
+        gm.last_eqa_raw,
+        ["1", "3", "4", "2"],
+    )
+    assert letter == "D"
+    assert any(r.get("event") == "sync_scored_answer" for r in ex._trace_rows)
+
+
+def test_navigate_no_new_obs_looks_around_verifies_and_flags_loop():
+    """Router-on must not spin navigate_to_obs on the same id without planner updates."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import NAV_SAME_OBS_LOOP_LIMIT, AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_tools import build_state_message
+    from emet.memory.graph_eqa.graph_memory import VerifyResult
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.memory_summary_enabled = False
+    gm._observations = [MagicMock(obs_id=16, labels=["cabinet"])]
+    gm._navigation_waypoint_for_obs = MagicMock(return_value=np.array([1.0, 2.0, 1.0]))
+    gm.record_nav_attempt = MagicMock()
+    gm.hypothesize_nav_targets = MagicMock(return_value=[])
+    gm.verify_phrase_at_obs = MagicMock(
+        return_value=VerifyResult(
+            status="ABSENT", sim=0.05, obs_id=16, phrase="wall clock", ok=False
+        )
+    )
+    gm._observation_by_id = MagicMock(return_value=gm._observations[0])
+    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.look_around = MagicMock()
+    agent.update = MagicMock()  # never advances obs id
+    agent.robot = None
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where is the large wall clock? A) dining B) kitchen C) sunroom D) living",
+        router=True,
+        collect_trace=True,
+        max_nav_steps=5,
+    )
+    ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
+    ex._voxel_max_sim_for_obs = lambda *_a, **_k: None  # type: ignore[method-assign]
+    ex._target_phrase = "large wall clock"
+
+    out = ex._tool_navigate_to_obs(16)
+    assert out["look_around_on_no_new_obs"] is True
+    agent.look_around.assert_called()
+    assert out.get("capture", {}).get("status") == "NO_NEW_OBS"
+    assert 16 in ex._tried
+    assert str(ex._tried[16]).startswith("STALLED_NAV_LOOP")
+    assert any(r.get("event") == "nav_loop" for r in ex._trace_rows)
+    assert gm.verify_phrase_at_obs.called
+
+    state = build_state_message(ex)
+    assert "NAV_LOOP" in state
+
+    blocked = ex._tool_navigate_to_obs(16)
+    assert blocked.get("status") == "NAV_LOOP_BLOCKED"
+    assert blocked.get("ok") is False
+    assert NAV_SAME_OBS_LOOP_LIMIT >= 2
+
+
+def test_capture_advancing_obs_refreshes_hypotheses():
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.memory_summary_enabled = False
+    gm._observations = [MagicMock(obs_id=1, labels=["a"])]
+    gm.hypothesize_nav_targets = MagicMock(
+        return_value=[
+            NavHypothesis(
+                phrase="clock",
+                obs_id=2,
+                xyz=np.array([0.0, 0.0, 0.0]),
+                score=1.0,
+                source="graph",
+            )
+        ]
+    )
+
+    def _update():
+        gm._observations = [
+            MagicMock(obs_id=1, labels=["a"]),
+            MagicMock(obs_id=2, labels=["clock"]),
+        ]
+
+    agent.update = MagicMock(side_effect=_update)
+    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=True)
+    out = ex._tool_capture_and_update()
+    assert out["ok"] is True
+    assert int(out["obs_id"]) == 2
+    assert gm.hypothesize_nav_targets.called
+    assert len(ex._hypotheses) == 1
+    assert int(ex._hypotheses[0].obs_id) == 2
+
+
+def test_capture_content_refresh_counts_as_new_evidence():
+    """Spatial merge keeps obs_id but refreshed RGB must unlock verify for the planner."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import GraphEQAMemory
+
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.spatial_merge_m = 0.45
+    rgb0 = np.zeros((8, 8, 3), dtype=np.uint8)
+    rgb1 = np.full((8, 8, 3), 180, dtype=np.uint8)
+    xyz = np.array([1.0, 0.0, 0.5], dtype=float)
+    oid = mem.add_observation(rgb0, xyz, ["clock"])
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    agent.graph_memory = mem
+
+    def _update():
+        mem.add_observation(rgb1, xyz + np.array([0.01, 0.0, 0.0]), ["clock"])
+
+    agent.update = MagicMock(side_effect=_update)
+    ex = AgenticEQAExecutor(agent, "Where is the clock?", router=False, collect_trace=True)
+    out = ex._tool_capture_and_update()
+    assert out["ok"] is True
+    assert out.get("status") == "CONTENT_REFRESHED"
+    assert int(out["obs_id"]) == int(oid)
+    assert int(oid) in ex._fresh_obs_ids
+
+
+def test_siglip_phrase_prefers_target_over_full_question():
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    agent.graph_memory = MagicMock()
+    q = "I'm looking for the fruit bowl. A) On the kitchen island B) On the dining table. Answer:"
+    ex = AgenticEQAExecutor(agent, q, router=False, collect_trace=False)
+    ex._target_phrase = "fruit bowl"
+    assert ex._siglip_phrase(q) == "fruit bowl"
+    assert ex._siglip_phrase("") == "fruit bowl"
+    assert ex._siglip_phrase("fruit bowl") == "fruit bowl"
+
+
+def test_router_prompt_has_no_score_prefer_or_obs7_demo():
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_tools import (
+        build_agentic_eqa_tools,
+        build_graph_eqa_system_prompt,
+        build_state_message,
+    )
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    agent.graph_memory = MagicMock()
+    agent.graph_memory.memory_summary_enabled = False
+    agent.graph_memory._observations = []
+    ex = AgenticEQAExecutor(agent, "Where is the sink?", router=True, collect_trace=True)
+    prompt = build_graph_eqa_system_prompt(build_agentic_eqa_tools(ex))
+    assert "investigate" in prompt
+    assert 'navigate_to_obs", "arguments": {"obs_id": 7}' not in prompt
+    assert "highest-score" not in prompt
+    assert "obs_id=3" in prompt
+
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="sink",
+            obs_id=3,
+            xyz=np.array([1.0, 0.0, 0.0]),
+            score=300.0,
+            source="graph",
+        ),
+        NavHypothesis(
+            phrase="unexplored frontier",
+            obs_id=12,
+            xyz=np.array([2.0, 1.0, 0.0]),
+            score=0.0,
+            source="frontier",
+        ),
+    ]
+    msg = build_state_message(ex)
+    assert "Investigate" in msg
+    assert "Explore" in msg
+    assert "investigated=0" in msg
+    assert "source=graph" in msg
+    assert "source=frontier" in msg
+    assert "#1 best" not in msg
+    assert "score=" not in msg.split("Investigate", 1)[-1]
+
+
+def test_hyp_recall_diversifies_graph_and_frontier():
+    _require_agentic()
+    from emet.memory.graph_eqa import GraphEQAMemory
+    from emet.memory.graph_eqa.graph_memory import GraphNode
+
+    gm = GraphEQAMemory(
+        defer_llm_clients=True,
+        parameters={"graph_eqa_frontier_nodes": {"enabled": True}},
+    )
+    gm._relevant_objects = ["sink"]
+    gm._relevant_phrases = ["sink"]
+    oid = gm.add_observation(
+        np.zeros((4, 4, 3), dtype=np.uint8), np.array([2.0, 0.0, 0.5]), ["sink"]
+    )
+    # Synthetic frontier node (as sync_frontier_nodes would create).
+    f_obs = gm._next_obs_id
+    gm._next_obs_id += 1
+    gm._nodes.append(
+        GraphNode(
+            node_id=len(gm._nodes) + 1,
+            labels=["frontier"],
+            xyz=np.array([-5.0, 1.0, 0.0]),
+            obs_id=f_obs,
+            is_frontier=True,
+            description="frontier_cluster:test",
+        )
+    )
+    from emet.memory.graph_eqa.graph_memory import GraphObservation
+
+    gm._observations.append(
+        GraphObservation(
+            obs_id=f_obs,
+            rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+            xyz=np.array([-5.0, 1.0, 0.0]),
+            labels=["frontier"],
+            description="unexplored",
+        )
+    )
+    hyps = gm.hypothesize_nav_targets("Where is the sink?", max_k=6)
+    sources = {h.source for h in hyps}
+    assert "graph" in sources
+    assert "frontier" in sources
+    assert any(int(h.obs_id) == int(oid) for h in hyps)
+    # Frontiers must not inherit the question object as phrase (q105 failure mode).
+    for h in hyps:
+        if h.source == "frontier":
+            assert "sink" not in str(h.phrase).lower()
+            assert "frontier" in str(h.phrase).lower()
+
+
+def test_investigate_records_place_inspect_on_card():
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_tools import build_state_message
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis, VerifyResult
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.memory_summary_enabled = False
+    gm._observations = [MagicMock(obs_id=15, labels=["kitchen island"])]
+    gm._navigation_waypoint_for_obs = MagicMock(return_value=np.array([-16.8, -1.0, 1.0]))
+    gm.record_nav_attempt = MagicMock()
+    gm.verify_phrase_at_obs = MagicMock(
+        return_value=VerifyResult(
+            status="ABSENT", sim=0.05, obs_id=15, phrase="fruit bowl", ok=False
+        )
+    )
+    gm._observation_by_id = MagicMock(return_value=gm._observations[0])
+    gm._obs_is_frontier = MagicMock(return_value=False)
+    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.look_around = MagicMock()
+    agent.update = MagicMock()
+    agent.robot = MagicMock()
+    agent.robot.get_base_pose = MagicMock(return_value=np.array([-16.8, -1.0, 0.0]))
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "I'm looking for the fruit bowl. A) kitchen island B) dining",
+        router=True,
+        collect_trace=True,
+        max_nav_steps=5,
+    )
+    ex._target_phrase = "fruit bowl"
+    ex._robot_xyt = lambda: np.array([-16.8, -1.0, 0.0])  # type: ignore[method-assign]
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="kitchen island",
+            obs_id=15,
+            xyz=np.array([-16.54, -1.14, 0.7]),
+            score=10.0,
+            source="graph",
+        )
+    ]
+    # Capture advances to station obs so verify runs (not STALLED).
+    def _update():
+        gm._observations = [MagicMock(obs_id=20, labels=["kitchen"])]
+
+    agent.update = MagicMock(side_effect=_update)
+    gm.verify_phrase_at_obs = MagicMock(
+        return_value=VerifyResult(
+            status="ABSENT", sim=0.05, obs_id=20, phrase="fruit bowl", ok=False
+        )
+    )
+
+    out = ex.handle_tool("investigate", {"obs_id": 15})
+    assert out.get("ok") is True
+    assert 15 in ex._place_inspect
+    assert ex._place_inspect[15].investigate_count >= 1
+    assert any(r.get("event") == "station_inspect" for r in ex._trace_rows)
+    # Capture refresh may clear hyps via empty hypothesize mock — restore card for state.
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="kitchen island",
+            obs_id=15,
+            xyz=np.array([-16.54, -1.14, 0.7]),
+            score=10.0,
+            source="graph",
+        )
+    ]
+    msg = build_state_message(ex)
+    assert "investigated=1" in msg
+    assert "recent:" in msg
+    assert "Recent actions:" in msg
+    assert any("investigate" in a and "obs=15" in a for a in ex._recent_actions)
+    assert any("verify=" in a for a in ex._recent_actions)
+
+
+def test_state_message_includes_recent_action_history():
+    """Router state surfaces the last few investigate/explore outcomes (anti-loop)."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, RECENT_ACTIONS_K
+    from emet.memory.graph_eqa.agentic_tools import build_state_message
+
+    agent = MagicMock()
+    agent.parameters = {}
+    ex = AgenticEQAExecutor(agent, "Where is the mug?", max_rounds=4)
+    ex._round = 2
+    ex._record_recent_action(
+        "investigate",
+        {"obs_id": 3},
+        {
+            "ok": True,
+            "obs_id": 3,
+            "approach_index": 1,
+            "verify": {"status": "ABSENT"},
+            "place_inspect": "investigated=1 closest=0.4m approaches=1/4 coverage=open",
+        },
+    )
+    ex._record_recent_action("explore_frontier", {"toward": "kitchen"}, {"ok": True})
+    # Internal tools must not pollute the ring buffer.
+    ex._record_recent_action("verify_siglip", {}, {"ok": True, "status": "ABSENT"})
+    ex._record_recent_action("inspect_graph", {}, {"ok": True})
+
+    assert len(ex._recent_actions) == 2
+    assert "r2 investigate obs=3 ap=1 verify=ABSENT closest=0.4m" in ex._recent_actions[0]
+    assert "explore_frontier toward='kitchen' ok" in ex._recent_actions[1]
+
+    msg = build_state_message(ex)
+    assert "Recent actions:" in msg
+    assert "investigate obs=3" in msg
+    assert "explore_frontier" in msg
+
+    for i in range(RECENT_ACTIONS_K + 3):
+        ex._record_recent_action("explore_frontier", {}, {"ok": True})
+    assert len(ex._recent_actions) == RECENT_ACTIONS_K
+
+
+def test_station_obs_excluded_from_investigate_cards():
+    """Capture stations must not become the next investigate target (patio chase)."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_tools import build_state_message
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {}
+    ex = AgenticEQAExecutor(agent, "Where is the fruit bowl?", router=True)
+    place = NavHypothesis(
+        phrase="kitchen island",
+        obs_id=38,
+        xyz=np.array([-16.5, -1.1, 0.7]),
+        score=1.0,
+        source="graph",
+    )
+    station = NavHypothesis(
+        phrase="dining table",
+        obs_id=55,
+        xyz=np.array([-15.7, -2.0, 0.5]),
+        score=1.0,
+        source="graph",
+    )
+    frontier = NavHypothesis(
+        phrase="unexplored frontier",
+        obs_id=49,
+        xyz=np.array([-17.0, 0.5, 0.0]),
+        score=0.2,
+        source="frontier",
+    )
+    ex._station_obs_ids.add(55)
+    ex._set_hypotheses([place, station, frontier])
+    assert {int(h.obs_id) for h in ex._hypotheses} == {38, 49}
+    assert all(int(h.obs_id) != 55 for h in ex._investigate_hypotheses())
+
+    blocked = ex.handle_tool("investigate", {"obs_id": 55})
+    assert blocked.get("ok") is False
+    assert blocked.get("status") == "STATION_OBS_NOT_PLACE"
+
+
+def test_prefer_explore_after_close_absent():
+    """Close+ABSENT sets prefer_explore; fallback and state nudge coverage growth."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_tools import build_state_message
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm._nodes = [MagicMock(is_frontier=True, obs_id=99)]
+    ex = AgenticEQAExecutor(agent, "Where is the fruit bowl?", router=False, max_nav_steps=4)
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="kitchen island",
+            obs_id=38,
+            xyz=np.array([-16.5, -1.1, 0.7]),
+            score=1.0,
+            source="graph",
+        ),
+        NavHypothesis(
+            phrase="unexplored frontier",
+            obs_id=99,
+            xyz=np.array([-15.0, 0.0, 0.0]),
+            score=0.2,
+            source="frontier",
+        ),
+    ]
+    ex._record_place_inspect(
+        38,
+        closest_m=0.4,
+        verify_out={"status": "ABSENT", "phrase": "fruit bowl"},
+        approach_index=0,
+    )
+    assert ex._prefer_explore is True
+    msg = build_state_message(ex)
+    assert "Prefer explore_frontier" in msg
+    tool, _args = ex._fallback_tool()
+    assert tool == "explore_frontier"
+    ex._prefer_explore = False
+    # Simulate successful explore clearing the nudge.
+    ex._prefer_explore = True
+    ex._n_explore = 0
+    # Direct clear path used by explore tool:
+    ex._prefer_explore = False
+    assert ex._prefer_explore is False
+
+
+def test_navigate_rejects_obs_not_in_evidence():
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.graph_memory = MagicMock()
+    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.graph_memory._navigation_waypoint_for_obs = MagicMock(
+        return_value=np.array([1.0, 2.0, 0.0])
+    )
+    ex = AgenticEQAExecutor(agent, question="Where is the sink?", max_rounds=4, router=False)
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="kitchen island",
+            obs_id=13,
+            xyz=np.array([-16.5, -1.1, 0.7]),
+            score=10.0,
+            source="graph",
+        )
+    ]
+    out = ex._tool_navigate_to_obs(17)
+    assert out["ok"] is False
+    assert out.get("status") == "OBS_NOT_IN_EVIDENCE"
+    assert agent.navigate_to_target_pose.call_count == 0
+
+
+def test_visited_frontier_retired_from_graph():
+    _require_agentic()
+    from emet.memory.graph_eqa import GraphEQAMemory
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_tools import build_state_message
+    from emet.memory.graph_eqa.graph_memory import GraphNode, GraphObservation, NavHypothesis
+
+    gm = GraphEQAMemory(
+        defer_llm_clients=True,
+        parameters={"graph_eqa_frontier_nodes": {"enabled": True}},
+    )
+    f_obs = gm._next_obs_id
+    gm._next_obs_id += 1
+    gm._nodes.append(
+        GraphNode(
+            node_id=1,
+            labels=["frontier"],
+            xyz=np.array([1.0, 2.0, 0.0]),
+            obs_id=f_obs,
+            is_frontier=True,
+            description="frontier_cluster:visit_me",
+        )
+    )
+    gm._observations.append(
+        GraphObservation(
+            obs_id=f_obs,
+            rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+            xyz=np.array([1.0, 2.0, 0.0]),
+            labels=["frontier"],
+            description="unexplored",
+        )
+    )
+    assert gm.retire_frontier_obs(f_obs) is True
+    assert not any(n.is_frontier for n in gm.get_nodes())
+    assert gm._observation_by_id(f_obs) is None
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    agent.graph_memory = gm
+    agent.voxel_map = None
+    ex = AgenticEQAExecutor(agent, "Where is the sink?", router=True, collect_trace=True)
+    # Safety net: visited frontier hyp filtered even if somehow recalled.
+    ex._nav_to_obs_counts[99] = 1
+    ex._set_hypotheses(
+        [
+            NavHypothesis(
+                phrase="sink",
+                obs_id=99,
+                xyz=np.array([0.0, 0.0, 0.0]),
+                score=0.0,
+                source="frontier",
+            ),
+            NavHypothesis(
+                phrase="sink",
+                obs_id=3,
+                xyz=np.array([1.0, 0.0, 0.0]),
+                score=300.0,
+                source="graph",
+            ),
+        ]
+    )
+    assert all(int(h.obs_id) != 99 for h in ex._hypotheses)
+    msg = build_state_message(ex)
+    assert "obs_id=99" not in msg
+    assert "obs_id=3" in msg
+
+
+def test_nav_failed_allows_retry_until_approaches_exhausted():
+    """Transient planner misses rotate approach samples; block only when exhausted."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import PLACE_APPROACH_SAMPLES, AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    # Distinct targets so we can see approach rotation.
+    gm._navigation_approach_waypoint_for_obs = MagicMock(
+        side_effect=lambda oid, xyt=None, approach_index=0, n_approaches=4: np.array(
+            [float(approach_index), 2.0, 1.0]
+        )
+    )
+    gm._navigation_waypoint_for_obs = MagicMock(return_value=np.array([1.0, 2.0, 1.0]))
+    gm.record_nav_attempt = MagicMock()
+    gm._obs_is_frontier = MagicMock(return_value=False)
+    agent.navigate_to_target_pose = MagicMock(return_value=False)
+    agent.update = MagicMock()
+    agent.robot = None
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "Where is the sink? A) kitchen B) bath",
+        router=True,
+        collect_trace=True,
+        max_nav_steps=12,
+    )
+    ex._target_phrase = "sink"
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="sink",
+            obs_id=7,
+            xyz=np.array([1.0, 2.0, 0.5]),
+            score=1.0,
+            source="graph",
+        )
+    ]
+    targets = []
+    for _ in range(PLACE_APPROACH_SAMPLES):
+        out = ex._tool_navigate_to_obs(7)
+        assert out["ok"] is False
+        assert out.get("status") != "NAV_LOOP_BLOCKED"
+        targets.append(out.get("approach_index"))
+    assert targets == list(range(PLACE_APPROACH_SAMPLES))
+    assert ex._hypothesis_nav_blocked(7)
+    blocked = ex._tool_navigate_to_obs(7)
+    assert blocked.get("status") == "NAV_LOOP_BLOCKED"
+    assert agent.navigate_to_target_pose.call_count == PLACE_APPROACH_SAMPLES
+
+
+def test_investigate_samples_new_approach_after_close_absent():
+    """Re-investigate after close+ABSENT uses the next orbit sample, not NAV_LOOP_BLOCK."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis, VerifyResult
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm.memory_summary_enabled = False
+    gm._observations = [MagicMock(obs_id=15, labels=["kitchen island"])]
+    gm._navigation_approach_waypoint_for_obs = MagicMock(
+        side_effect=lambda oid, xyt=None, approach_index=0, n_approaches=4, **kw: np.array(
+            [-16.8 + 0.5 * float(approach_index), -1.0, 1.0]
+        )
+    )
+    gm._navigation_waypoint_for_obs = MagicMock(return_value=np.array([-16.8, -1.0, 1.0]))
+    gm.place_coverage_for_obs = MagicMock(
+        return_value=type("C", (), {"status": "open", "local_frontier_cells": 5, "complete": False})()
+    )
+    gm.record_nav_attempt = MagicMock()
+    gm._observation_by_id = MagicMock(return_value=gm._observations[0])
+    gm._obs_is_frontier = MagicMock(return_value=False)
+    agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent.look_around = MagicMock()
+    agent.robot = MagicMock()
+    agent.robot.get_base_pose = MagicMock(return_value=np.array([-16.8, -1.0, 0.0]))
+    agent.voxel_map = None
+    agent.planner = None
+
+    ex = AgenticEQAExecutor(
+        agent,
+        "I'm looking for the fruit bowl. A) kitchen island B) dining",
+        router=True,
+        collect_trace=True,
+        max_nav_steps=8,
+    )
+    ex._target_phrase = "fruit bowl"
+    ex._robot_xyt = lambda: np.array([-16.8, -1.0, 0.0])  # type: ignore[method-assign]
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="kitchen island",
+            obs_id=15,
+            xyz=np.array([-16.54, -1.14, 0.7]),
+            score=10.0,
+            source="graph",
+        )
+    ]
+    n_cap = {"i": 20}
+
+    def _update():
+        n_cap["i"] += 1
+        gm._observations = [MagicMock(obs_id=n_cap["i"], labels=["kitchen"])]
+
+    agent.update = MagicMock(side_effect=_update)
+    gm.verify_phrase_at_obs = MagicMock(
+        return_value=VerifyResult(
+            status="ABSENT", sim=0.05, obs_id=21, phrase="fruit bowl", ok=False
+        )
+    )
+
+    out1 = ex.handle_tool("investigate", {"obs_id": 15})
+    assert out1.get("ok") is True
+    assert out1.get("approach_index") == 0
+    assert "more_views" in str(out1.get("place_inspect") or "")
+    assert "coverage=open" in str(out1.get("place_inspect") or "")
+    assert not ex._hypothesis_nav_blocked(15)
+
+    out2 = ex.handle_tool("investigate", {"obs_id": 15})
+    assert out2.get("ok") is True
+    assert out2.get("approach_index") == 1
+    t1 = out1["target_xyz"][:2]
+    t2 = out2["target_xyz"][:2]
+    assert t1 != t2
+    assert agent.navigate_to_target_pose.call_count == 2
+
+
+def test_coverage_closed_does_not_exhaust_while_approaches_remain():
+    """Coverage is informational; only the approach budget gates re-investigate."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor, PlaceInspectRecord
+
+    agent = MagicMock()
+    agent.parameters = {"eqa": {}}
+    agent.graph_memory = MagicMock()
+    agent.voxel_map = None
+    ex = AgenticEQAExecutor(agent, "Where is the sink?", router=True)
+    rec = PlaceInspectRecord(
+        investigate_count=1,
+        closest_m=0.4,
+        coverage="closed",
+        local_frontier_cells=0,
+        tried_approaches=[0],
+    )
+    ex._place_inspect[3] = rec
+    assert ex._place_approaches_exhausted(3) is False
+    assert "coverage=closed" in rec.card_bits()
+    assert "more_views" in rec.card_bits()
+    rec.tried_approaches = [0, 1, 2, 3]
+    assert ex._place_approaches_exhausted(3) is True
+    assert "views_exhausted" in rec.card_bits()
+
+def test_hypothesize_frontiers_without_object_phrases():
+    """Cold start / failed extract still returns frontier evidence cards."""
+    _require_agentic()
+    from emet.memory.graph_eqa import GraphEQAMemory
+    from emet.memory.graph_eqa.graph_memory import GraphNode, GraphObservation
+
+    gm = GraphEQAMemory(
+        defer_llm_clients=True,
+        parameters={"graph_eqa_frontier_nodes": {"enabled": True}},
+    )
+    gm._relevant_objects = []
+    gm._relevant_phrases = []
+    f_obs = gm._next_obs_id
+    gm._next_obs_id += 1
+    gm._nodes.append(
+        GraphNode(
+            node_id=1,
+            labels=["frontier"],
+            xyz=np.array([3.0, 1.0, 0.0]),
+            obs_id=f_obs,
+            is_frontier=True,
+            description="frontier_cluster:cold",
+        )
+    )
+    gm._observations.append(
+        GraphObservation(
+            obs_id=f_obs,
+            rgb=np.zeros((8, 8, 3), dtype=np.uint8),
+            xyz=np.array([3.0, 1.0, 0.0]),
+            labels=["frontier"],
+            description="unexplored",
+        )
+    )
+    # Skip extract_relevant_objects so phrases stay empty.
+    gm.extract_relevant_objects = lambda *_a, **_k: None  # type: ignore[method-assign]
+    hyps = gm.hypothesize_nav_targets("???", max_k=4)
+    assert hyps
+    assert all(h.source == "frontier" for h in hyps)
+    assert all("frontier" in h.phrase.lower() for h in hyps)

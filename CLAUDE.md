@@ -6,6 +6,8 @@ Follow **`.cursorrules`** and **`.cursor/rules/`** for full project conventions.
 
 Do **not** start multi-hour Habitat, HM-EQA H2H, overnight batteries, or paper sweeps with unmanaged bare `nohup` when avoidable. Never as a blocking inline command in an agent turn — native GPU/EGL teardown crashes the agent process even when a detached child would have finished.
 
+**Before Habitat:** `uv run emet habitat safe-start` (recover + detached jobs-wrapped EGL probe, no VLM). Wait until that job is `done` + logs OK, then `emet hmeqa h2h` / `overnight` via jobs.
+
 ```bash
 uv run emet eval status
 uv run emet eval diagnose   # empty nvidia-smi ≠ Habitat EGL OK
@@ -24,8 +26,8 @@ uv run emet jobs cancel JOB_ID
 - Registry: `~/runs/emet/jobs/` (`EMET_JOBS_DIR`).
 - Wrapper sets `EMET_JOB_ID`. Orchestrators should call `emet jobs update … --units-done/--units-total/--phase/--current-id` and/or write `OUT/progress.json`.
 - Never block a Cursor/Claude turn on Habitat/VLM or multi-hour GPU work; use `emet jobs run` and poll status/logs. Agent crashes here are usually `emet` segfaults after Habitat/EGL teardown — not a hidden CUDA process.
-- After an agent death: **`bash scripts/status_log.sh tail`** from the owning checkout (literal `next:` command; do not use a flat `~/runs/emet/STATUS.log` shared across v2/v3/v4), then `emet jobs` / `~/runs/emet/`.
-- **Record before risky sim/GPU steps** (launch, resume, `kill-stale`, affinity experiments): leave job id, OUT, commit, and copy-paste resume via `scripts/status_log.sh` / `segfault.md`. See `.cursor/rules/gpu-eval-workflow.mdc`.
+- After an agent death: **`uv run emet status tail`** from the owning checkout (literal `next:` command; do not use a flat `~/runs/emet/STATUS.log` shared across v2/v3/v4), then `emet jobs` / `~/runs/emet/`.
+- **Record before risky sim/GPU steps** (launch, resume, `kill-stale`, affinity experiments): leave job id, OUT, commit, and copy-paste resume via `emet status` / `scripts/status_log.sh` / `segfault.md`. See `.cursor/rules/gpu-eval-workflow.mdc`.
 
 ## Two segfault modes (do not conflate)
 

@@ -147,6 +147,8 @@ motion_planner:
     num_steps: 8
     min_angle: 0.1
   shortcut_iter: 100
+  # When start cell is occupied (pose noise / dilation), Chebyshev escape rings.
+  start_escape_max_ring: 8
   # Parameters for frontier exploration using the motion planner.
   frontier:
     dilate_frontier_size: 2  # Used to shrink the frontier back from the edges of the world

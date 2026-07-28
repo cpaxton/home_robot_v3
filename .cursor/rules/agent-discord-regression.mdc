@@ -18,7 +18,7 @@ When changing GraphEQA, agentic EQA, agent tools/loop, or Discord wiring:
 1. **Do not** flip `eqa.agentic_verify` (or `EMET_EQA_AGENTIC_VERIFY`) on by default. Discord/Herman and classic `run_eqa` must stay on the non-agentic path unless the operator opts in.
 2. Before claiming the change is done, run:
    ```bash
-   ./scripts/run_agent_regression.sh
+   uv run emet test agent-regression
    ```
    That pack covers Discord tool/image paths, `emet run agent` CLI defaults, Herman connection resolve, classic GraphEQA answer-only, and memory backend smoke — **no** Habitat GPU.
 3. Shared surfaces that break robots in the wild: `emet.agent.tools.get_tools` / `query_memory`, `emet.agent.loop.run_agent_with_robot`, `GraphEQAController.run_eqa`, Discord pending-image stash, `configs/robots/herman.yaml` / stream resolve.

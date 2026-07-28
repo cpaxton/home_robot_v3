@@ -13,9 +13,10 @@
 #
 # Recovery (from the checkout that owns the job — never from a sibling tree):
 #
-#   bash scripts/status_log.sh tail
-#   bash scripts/status_log.sh path
-#   bash scripts/status_log.sh latest
+#   uv run emet status tail
+#   uv run emet status path
+#   uv run emet status latest
+#   (or: bash scripts/status_log.sh {tail|path|latest})
 #
 # Every record ends with a "next:" line holding the literal command to run.
 #

@@ -56,31 +56,69 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="explore_frontier",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "Navigate to an unexplored frontier to grow the map and graph. Optional 'toward' "
-            "biases frontier choice toward a phrase (e.g. the question object). Map and graph "
-            "update automatically afterward."
+            "EXPLORE: grow map coverage when no Investigate place card is worth a closer look "
+            "(or all close looks were ABSENT). Optional 'toward' is weak coverage bias only — "
+            "not a substitute for investigate(obs_id). Prefer investigate on graph/siglip cards first."
         ),
         parameters={
             "type": "object",
             "properties": {
                 "toward": {
                     "type": "string",
-                    "description": "Optional object phrase to bias the frontier pick toward.",
+                    "description": (
+                        "Optional coverage bias phrase (question object). Does NOT navigate to a "
+                        "place card — use investigate(obs_id) for that."
+                    ),
                 }
             },
             "required": [],
         },
     ),
     SkillSpec(
-        name="navigate_to_obs",
+        name="investigate",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "Navigate to a graph observation by obs_id (a hypothesis location). Map and graph "
-            "update automatically on arrival."
+            "INVESTIGATE: closer look at a listed place card (graph/confirmed/siglip "
+            "obs_id). Navigates to a random navigable floor sample in an annulus around "
+            "the object (prefers frontier-adjacent), looks around, verifies/assesses. "
+            "Cards show coverage=open|closed from object-footprint ∩ unexplored frontier. "
+            "Re-call while coverage=open / more_views; when coverage=closed or "
+            "views_exhausted, pick another card or explore_frontier. Optional "
+            "approach_index selects a sample slot (0..N-1)."
         ),
         parameters={
             "type": "object",
-            "properties": {"obs_id": {"type": "integer", "description": "Graph observation id to navigate to."}},
+            "properties": {
+                "obs_id": {
+                    "type": "integer",
+                    "description": "Investigate-list observation id (not a frontier card).",
+                },
+                "approach_index": {
+                    "type": "integer",
+                    "description": (
+                        "Optional orbit sample 0..3 around the place. Omit to auto-pick "
+                        "the next unused approach."
+                    ),
+                },
+            },
+            "required": ["obs_id"],
+        },
+    ),
+    SkillSpec(
+        name="navigate_to_obs",
+        modes=frozenset({AgentMode.EQA_EPISODE}),
+        description=(
+            "Alias for investigate(obs_id). Prefer calling investigate explicitly."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "obs_id": {"type": "integer", "description": "Place-card observation id."},
+                "approach_index": {
+                    "type": "integer",
+                    "description": "Optional approach sample; same as investigate.",
+                },
+            },
             "required": ["obs_id"],
         },
     ),
@@ -511,6 +549,7 @@ EQA_EXCLUSIVE_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "inspect_graph",
         "explore_frontier",
+        "investigate",
         "navigate_to_obs",
         "look_around",
         "verify_siglip",

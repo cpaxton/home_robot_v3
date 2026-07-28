@@ -109,13 +109,30 @@ def _configure_habitat_mapping(parameters: Parameters) -> None:
 
     Default dynav clamps (``max_depth=2.5``, ``pad_obstacles=2``,
     ``smooth_kernel_size=3``) keep the reachable frontier hugging a ~2.5 m ring
-    and seal thin corridors under dilation + morphological opening. Loosen for
-    Habitat only — real-robot dynav defaults stay unchanged.
+    and seal thin corridors under dilation + morphological opening. Habitat-only
+    overrides — real-robot dynav defaults stay unchanged.
+
+    Temporary (2026-07): obstacle dilation is **off** (``pad_obstacles=0``,
+    ``smooth_kernel_size=0``) so investigate/explore approach samples can sit on
+    the indoor side of doorways instead of only the patio-side free ring.
+    Override with ``EMET_HABITAT_PAD_OBSTACLES`` (grid cells; default ``0``).
     """
+    import os
+
     parameters.set("max_depth", 4.5)
-    parameters.set("pad_obstacles", 1)
+    pad_raw = os.environ.get("EMET_HABITAT_PAD_OBSTACLES", "0").strip()
+    try:
+        pad = max(0, int(pad_raw))
+    except ValueError:
+        pad = 0
+    parameters.set("pad_obstacles", pad)
+    # min_pad is unused by SparseVoxelMap.from_parameters / Dynamem ctor today, but
+    # keep it consistent so future readers do not re-inflate Habitat maps.
+    parameters.set("min_pad_obstacles", 0 if pad == 0 else max(1, pad))
     filters = dict(parameters.get("filters") or {})
-    filters["smooth_kernel_size"] = 1
+    # Morphological open/close on explored (and obstacles in classic SparseVoxelMap)
+    # also acts like soft dilation — disable while probing doorway entry.
+    filters["smooth_kernel_size"] = 0 if pad == 0 else int(filters.get("smooth_kernel_size") or 1)
     parameters.set("filters", filters)
 
 

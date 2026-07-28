@@ -65,6 +65,123 @@ def world_xy_to_grid_ij(
     return i, j
 
 
+def average_rgb_2d_from_voxel_map(voxel_map: Any) -> np.ndarray | None:
+    """Per-XY-cell mean observed RGB from the voxel point cloud (HxWx3 uint8).
+
+    Empty cells are ``0``. Matches :func:`world_xy_to_grid_ij` indexing used by
+    eval/share top-down exports.
+    """
+    if voxel_map is None:
+        return None
+    try:
+        if hasattr(voxel_map, "get_xyz_rgb"):
+            xyz, rgb = voxel_map.get_xyz_rgb()
+        elif hasattr(voxel_map, "get_pointcloud"):
+            xyz, _, _, rgb = voxel_map.get_pointcloud()
+        else:
+            return None
+    except Exception:
+        return None
+    if xyz is None or rgb is None:
+        return None
+    if isinstance(xyz, torch.Tensor):
+        xyz = xyz.detach().cpu().numpy()
+    if isinstance(rgb, torch.Tensor):
+        rgb = rgb.detach().cpu().numpy()
+    xyz = np.asarray(xyz, dtype=np.float64)
+    rgb = np.asarray(rgb, dtype=np.float64)
+    if xyz.ndim != 2 or xyz.shape[0] == 0 or xyz.shape[1] < 2:
+        return None
+    if rgb.ndim != 2 or rgb.shape[0] != xyz.shape[0] or rgb.shape[1] < 3:
+        return None
+    # Point colors may be 0–1 float or 0–255.
+    if float(np.nanmax(rgb)) <= 1.5:
+        rgb = rgb * 255.0
+    go = _grid_origin_xy(getattr(voxel_map, "grid_origin", np.zeros(2)))
+    res = float(getattr(voxel_map, "grid_resolution", 0.1) or 0.1)
+    if res <= 0:
+        res = 1e-6
+    gs = getattr(voxel_map, "grid_size", None)
+    if gs is None:
+        obstacles, explored = voxel_map.get_2d_map()[:2]
+        h, w = int(np.asarray(obstacles).shape[0]), int(np.asarray(obstacles).shape[1])
+    else:
+        if isinstance(gs, torch.Tensor):
+            gs = gs.detach().cpu().numpy().reshape(-1)
+        else:
+            gs = np.asarray(gs).reshape(-1)
+        h, w = int(gs[0]), int(gs[1])
+    g = xyz[:, :2] / res + go.reshape(1, 2)
+    ii = np.floor(g[:, 0]).astype(np.int64)
+    jj = np.floor(g[:, 1]).astype(np.int64)
+    valid = (ii >= 0) & (ii < h) & (jj >= 0) & (jj < w)
+    if not np.any(valid):
+        return np.zeros((h, w, 3), dtype=np.uint8)
+    ii = ii[valid]
+    jj = jj[valid]
+    cols = rgb[valid, :3]
+    flat = ii * w + jj
+    n = h * w
+    sums = np.zeros((n, 3), dtype=np.float64)
+    counts = np.zeros(n, dtype=np.float64)
+    np.add.at(sums, flat, cols)
+    np.add.at(counts, flat, 1.0)
+    out = np.zeros((h, w, 3), dtype=np.uint8)
+    hit = counts > 0
+    means = np.zeros((n, 3), dtype=np.float64)
+    means[hit] = sums[hit] / counts[hit, None]
+    out.reshape(-1, 3)[hit] = np.clip(means[hit], 0, 255).astype(np.uint8)
+    return out
+
+
+def _tint_obstacles_red(rgb: np.ndarray, obstacles: np.ndarray, *, alpha: float = 0.5) -> np.ndarray:
+    """Alpha-blend pure red onto obstacle / impassable cells."""
+    out = np.ascontiguousarray(rgb)
+    mask = np.asarray(obstacles, dtype=bool)
+    if mask.shape[:2] != out.shape[:2] or not mask.any():
+        return out
+    a = float(np.clip(alpha, 0.0, 1.0))
+    red = np.array([220.0, 40.0, 40.0], dtype=np.float32)
+    base = out[mask].astype(np.float32)
+    out[mask] = np.clip((1.0 - a) * base + a * red, 0, 255).astype(np.uint8)
+    return out
+
+
+def _compose_observed_topdown_rgb(
+    obstacles: Any,
+    explored: Any,
+    *,
+    cell_rgb: np.ndarray | None = None,
+    background: tuple[int, int, int] = (248, 248, 248),
+    explored_fallback: tuple[int, int, int] = (210, 210, 218),
+    obstacle_tint_alpha: float = 0.5,
+) -> np.ndarray:
+    """Base top-down: average observed RGB, explored fallback gray, red-tint obstacles."""
+    obs = _to_numpy_bool_2d(obstacles)
+    exp = _to_numpy_bool_2d(explored)
+    if obs.shape != exp.shape:
+        raise ValueError(f"obstacles shape {obs.shape} != explored shape {exp.shape}")
+    h, w = obs.shape
+    rgb = np.full((h, w, 3), background, dtype=np.uint8)
+    if cell_rgb is not None:
+        cr = np.asarray(cell_rgb)
+        if cr.shape[:2] == (h, w) and cr.ndim == 3 and cr.shape[2] >= 3:
+            has = np.any(cr[..., :3] > 0, axis=-1)
+            rgb[has] = cr[has, :3].astype(np.uint8)
+            # Explored cells with no projected color still show footprint.
+            bare = exp & ~has
+            rgb[bare] = np.uint8(explored_fallback)
+        else:
+            rgb[exp] = np.uint8(explored_fallback)
+    else:
+        # Legacy semantic colors when no point-cloud RGB is available.
+        free = exp & ~obs
+        rgb[free] = (50, 160, 80)
+        rgb[exp & obs] = (200, 55, 55)
+        return rgb
+    return _tint_obstacles_red(rgb, obs, alpha=obstacle_tint_alpha)
+
+
 def render_topdown_map_rgb(
     obstacles: Any,
     explored: Any,
@@ -73,22 +190,30 @@ def render_topdown_map_rgb(
     robot_xy: np.ndarray | tuple[float, float] | None = None,
     *,
     max_side: int | None = 640,
+    cell_rgb: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Render obstacles / explored / optional robot pose as uint8 HxWx3 (top-down, grid indices = image rows/cols)."""
+    """Render obstacles / explored / optional robot pose as uint8 HxWx3 (top-down, grid indices = image rows/cols).
+
+    When ``cell_rgb`` is provided, paint mean observed color per cell and tint
+    impassable cells red at 50% alpha; otherwise keep the classic green/red scheme
+    (Discord / Rerun share path).
+    """
     obs = _to_numpy_bool_2d(obstacles)
     exp = _to_numpy_bool_2d(explored)
     if obs.shape != exp.shape:
         raise ValueError(f"obstacles shape {obs.shape} != explored shape {exp.shape}")
     h, w = obs.shape
-    rgb = np.zeros((h, w, 3), dtype=np.uint8)
-    # Unknown: dark gray
-    rgb[:, :] = (28, 28, 36)
-    # Explored free
-    free = exp & ~obs
-    rgb[free] = (50, 160, 80)
-    # Obstacles
-    rgb[obs] = (200, 55, 55)
-    # Explored obstacle (rare): keep obstacle color
+    if cell_rgb is not None:
+        rgb = _compose_observed_topdown_rgb(obs, exp, cell_rgb=cell_rgb)
+    else:
+        rgb = np.zeros((h, w, 3), dtype=np.uint8)
+        # Unknown: dark gray
+        rgb[:, :] = (28, 28, 36)
+        # Explored free
+        free = exp & ~obs
+        rgb[free] = (50, 160, 80)
+        # Obstacles
+        rgb[obs] = (200, 55, 55)
     if robot_xy is not None:
         ri, rj = world_xy_to_grid_ij(robot_xy, grid_origin_xy, grid_resolution, (h, w))
         r = 3
@@ -293,6 +418,8 @@ def _draw_line_rgb(
     i1: int,
     j1: int,
     color: tuple[int, int, int],
+    *,
+    alpha: float = 1.0,
 ) -> None:
     """Bresenham line on ``rgb`` (row=i, col=j)."""
     h, w = rgb.shape[0], rgb.shape[1]
@@ -302,9 +429,15 @@ def _draw_line_rgb(
     sj = 1 if j0 < j1 else -1
     err = di - dj
     i, j = i0, j0
+    a = float(np.clip(alpha, 0.0, 1.0))
+    col = np.asarray(color, dtype=np.float32)
     while True:
         if 0 <= i < h and 0 <= j < w:
-            rgb[i, j] = np.uint8(color)
+            if a >= 0.999:
+                rgb[i, j] = np.uint8(color)
+            else:
+                base = rgb[i, j].astype(np.float32)
+                rgb[i, j] = np.clip((1.0 - a) * base + a * col, 0, 255).astype(np.uint8)
         if i == i1 and j == j1:
             break
         e2 = 2 * err
@@ -316,15 +449,29 @@ def _draw_line_rgb(
             j += sj
 
 
-def _draw_disk_rgb(rgb: np.ndarray, ri: int, rj: int, radius: int, color: tuple[int, int, int]) -> None:
+def _draw_disk_rgb(
+    rgb: np.ndarray,
+    ri: int,
+    rj: int,
+    radius: int,
+    color: tuple[int, int, int],
+    *,
+    alpha: float = 1.0,
+) -> None:
     h, w = rgb.shape[0], rgb.shape[1]
+    a = float(np.clip(alpha, 0.0, 1.0))
+    col = np.asarray(color, dtype=np.float32)
     for di in range(-radius, radius + 1):
         for dj in range(-radius, radius + 1):
             if di * di + dj * dj > radius * radius:
                 continue
             ii, jj = ri + di, rj + dj
             if 0 <= ii < h and 0 <= jj < w:
-                rgb[ii, jj] = np.uint8(color)
+                if a >= 0.999:
+                    rgb[ii, jj] = np.uint8(color)
+                else:
+                    base = rgb[ii, jj].astype(np.float32)
+                    rgb[ii, jj] = np.clip((1.0 - a) * base + a * col, 0, 255).astype(np.uint8)
 
 
 def _draw_heading_arrow_rgb(
@@ -336,6 +483,7 @@ def _draw_heading_arrow_rgb(
     *,
     arrow_len_m: float = 0.35,
     color: tuple[int, int, int] = (220, 50, 50),
+    alpha: float = 1.0,
 ) -> None:
     """Draw a small heading arrow; ``theta`` is world yaw (radians)."""
     res = float(grid_resolution)
@@ -345,12 +493,12 @@ def _draw_heading_arrow_rgb(
     ct, st = float(np.cos(theta)), float(np.sin(theta))
     ti = int(round(ri + ct * length_cells))
     tj = int(round(rj + st * length_cells))
-    _draw_line_rgb(rgb, ri, rj, ti, tj, color)
+    _draw_line_rgb(rgb, ri, rj, ti, tj, color, alpha=alpha)
     head_len = max(1.5, length_cells * 0.35)
     for ang in (2.4, -2.4):
         hi = int(round(ti - head_len * np.cos(theta + ang)))
         hj = int(round(tj - head_len * np.sin(theta + ang)))
-        _draw_line_rgb(rgb, ti, tj, hi, hj, color)
+        _draw_line_rgb(rgb, ti, tj, hi, hj, color, alpha=alpha)
 
 
 def overlay_trajectory_on_map_rgb(
@@ -363,6 +511,7 @@ def overlay_trajectory_on_map_rgb(
     full_shape_hw: tuple[int, int] | None = None,
     arrow_min_dist_m: float = 0.15,
     max_arrows: int = 24,
+    alpha: float = 0.72,
 ) -> np.ndarray:
     """Paint deduped path + heading arrows onto an eval/share top-down RGB image."""
     if rgb is None or not trajectory_xyt:
@@ -381,11 +530,12 @@ def overlay_trajectory_on_map_rgb(
         return ri - i_off, rj - j_off
 
     path_color = (30, 90, 230)
+    a = float(np.clip(alpha, 0.0, 1.0))
     prev: tuple[int, int] | None = None
     for x, y, _ in path:
         ij = to_ij(x, y)
         if prev is not None:
-            _draw_line_rgb(out, prev[0], prev[1], ij[0], ij[1], path_color)
+            _draw_line_rgb(out, prev[0], prev[1], ij[0], ij[1], path_color, alpha=a)
         prev = ij
 
     for idx in _subsample_trajectory_arrow_indices(
@@ -394,7 +544,7 @@ def overlay_trajectory_on_map_rgb(
         x, y, theta = path[idx]
         ri, rj = to_ij(x, y)
         if 0 <= ri < h and 0 <= rj < w:
-            _draw_heading_arrow_rgb(out, ri, rj, theta, grid_resolution)
+            _draw_heading_arrow_rgb(out, ri, rj, theta, grid_resolution, alpha=a)
 
     if path:
         sx, sy, _ = path[0]
@@ -402,9 +552,9 @@ def overlay_trajectory_on_map_rgb(
         si, sj = to_ij(sx, sy)
         ei, ej = to_ij(ex, ey)
         if 0 <= si < h and 0 <= sj < w:
-            _draw_disk_rgb(out, si, sj, 2, (40, 200, 60))
+            _draw_disk_rgb(out, si, sj, 2, (40, 200, 60), alpha=min(1.0, a + 0.15))
         if (ei, ej) != (si, sj) and 0 <= ei < h and 0 <= ej < w:
-            _draw_disk_rgb(out, ei, ej, 2, (255, 140, 0))
+            _draw_disk_rgb(out, ei, ej, 2, (255, 140, 0), alpha=min(1.0, a + 0.15))
     return out
 
 
@@ -421,8 +571,13 @@ def eval_topdown_map_rgb(
     trajectory_xyt: list[tuple[float, float, float] | list[float]] | None = None,
     filter_islands: bool = False,
     stamp_trajectory_corridor: bool = True,
+    cell_rgb: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Eval/diagnostics export: crop to explored footprint, white background, only paint explored cells.
+    """Eval/diagnostics export: crop to explored footprint; observed RGB + red obstacle tint.
+
+    Base layer is mean observed RGB per XY cell when ``cell_rgb`` is set (else classic
+    green/red). Impassable cells get a 50% red tint; trajectory / robot markers are
+    drawn on top with alpha.
 
     Unlike :func:`share_topdown_map_rgb`, unmapped margin pixels stay white (not dark gray) so small
     Habitat/OVMM maps remain readable on a 1024×1024 grid.
@@ -473,6 +628,7 @@ def eval_topdown_map_rgb(
             grid_resolution,
             robot_xy,
             max_side=None,
+            cell_rgb=cell_rgb,
         )
         if trajectory_xyt:
             rgb = overlay_trajectory_on_map_rgb(
@@ -486,10 +642,12 @@ def eval_topdown_map_rgb(
     i0, i1, j0, j1 = bbox
     exp_c = exp[i0:i1, j0:j1]
     obs_c = obs[i0:i1, j0:j1]
-    rgb = np.full((exp_c.shape[0], exp_c.shape[1], 3), 248, dtype=np.uint8)
-    free = exp_c & ~obs_c
-    rgb[free] = (50, 160, 80)
-    rgb[exp_c & obs_c] = (200, 55, 55)
+    cell_c = None
+    if cell_rgb is not None:
+        cr = np.asarray(cell_rgb)
+        if cr.shape[:2] == (h, w):
+            cell_c = cr[i0:i1, j0:j1]
+    rgb = _compose_observed_topdown_rgb(obs_c, exp_c, cell_rgb=cell_c)
     if robot_xy is not None:
         ri, rj = world_xy_to_grid_ij(robot_xy, grid_origin_xy, grid_resolution, (h, w))
         ri -= i0
@@ -499,10 +657,12 @@ def eval_topdown_map_rgb(
             r = 3
             i_lo, i_hi = max(0, ri - r), min(ch, ri + r + 1)
             j_lo, j_hi = max(0, rj - r), min(cw, rj + r + 1)
-            rgb[i_lo:i_hi, j_lo:j_hi] = np.maximum(
-                rgb[i_lo:i_hi, j_lo:j_hi], np.uint8([255, 255, 255])
-            )
-            rgb[ri, rj] = (255, 255, 0)
+            # Soft highlight so observed RGB still shows under the marker.
+            hi = rgb[i_lo:i_hi, j_lo:j_hi].astype(np.float32)
+            rgb[i_lo:i_hi, j_lo:j_hi] = np.clip(
+                0.35 * hi + 0.65 * np.float32([255, 255, 255]), 0, 255
+            ).astype(np.uint8)
+            rgb[ri, rj] = (255, 220, 0)
     if trajectory_xyt:
         rgb = overlay_trajectory_on_map_rgb(
             rgb,
@@ -542,8 +702,9 @@ def eval_topdown_overlay_rgb(
     margin_cells: int = 24,
     trajectory_xyt: list[tuple[float, float, float] | list[float]] | None = None,
     filter_islands: bool = True,
+    cell_rgb: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Composite GT navmesh (slate) + agent explored/obstacles + trajectory path."""
+    """Composite GT navmesh (slate) + observed RGB / obstacles + trajectory path."""
     obs = _to_numpy_bool_2d(obstacles)
     exp = _to_numpy_bool_2d(explored)
     path = _dedupe_trajectory_xyt(trajectory_xyt) if trajectory_xyt else None
@@ -588,28 +749,34 @@ def eval_topdown_overlay_rgb(
             margin_cells=margin_cells,
             trajectory_xyt=trajectory_xyt,
             filter_islands=False,
+            cell_rgb=cell_rgb,
         )
         return agent
     i0, i1, j0, j1 = bbox
     exp_c = exp[i0:i1, j0:j1]
     obs_c = obs[i0:i1, j0:j1]
+    cell_c = None
+    if cell_rgb is not None:
+        cr = np.asarray(cell_rgb)
+        if cr.shape[:2] == (h, w):
+            cell_c = cr[i0:i1, j0:j1]
     if gt_navigable is not None:
         from emet.habitat.navmesh_topdown import habitat_gt_topdown_rgb
 
         gt_c = np.asarray(gt_navigable, dtype=bool)[i0:i1, j0:j1]
         rgb = habitat_gt_topdown_rgb(gt_c, crop_slice=None, max_side=None)
+        agent = _compose_observed_topdown_rgb(obs_c, exp_c, cell_rgb=cell_c)
+        # Soft-composite agent observed map over GT navmesh (obstacle tint already in agent).
+        rgb = _alpha_blend_rgb(rgb, agent, 0.72)
     else:
-        rgb = np.full((exp_c.shape[0], exp_c.shape[1], 3), 248, dtype=np.uint8)
-    free = exp_c & ~obs_c
-    rgb[free] = (50, 160, 80)
-    rgb[exp_c & obs_c] = (200, 55, 55)
+        rgb = _compose_observed_topdown_rgb(obs_c, exp_c, cell_rgb=cell_c)
     if robot_xy is not None:
         ri, rj = world_xy_to_grid_ij(robot_xy, grid_origin_xy, grid_resolution, (h, w))
         ri -= i0
         rj -= j0
         ch, cw = rgb.shape[0], rgb.shape[1]
         if 0 <= ri < ch and 0 <= rj < cw:
-            rgb[ri, rj] = (255, 255, 0)
+            rgb[ri, rj] = (255, 220, 0)
     if trajectory_xyt:
         rgb = overlay_trajectory_on_map_rgb(
             rgb,
@@ -762,7 +929,7 @@ def snapshot_eval_from_voxel_map(
     gt_navigable: Any | None = None,
     min_map_side: int = 1024,
 ) -> tuple[np.ndarray | None, dict[str, Any]]:
-    """Build eval/diagnostics top-down map (white background, explored-only coloring)."""
+    """Build eval/diagnostics top-down map (observed RGB + red obstacle tint)."""
     if voxel_map is None or not hasattr(voxel_map, "get_2d_map"):
         empty: dict[str, Any] = {
             "summary_lines": ["No voxel map attached (get_voxel_map unavailable)."],
@@ -773,6 +940,7 @@ def snapshot_eval_from_voxel_map(
     go = _grid_origin_xy(getattr(voxel_map, "grid_origin", np.zeros(2)))
     res = float(getattr(voxel_map, "grid_resolution", 0.1) or 0.1)
     stats = build_map_stats(obstacles, explored, go, res, robot_xy)
+    cell_rgb = average_rgb_2d_from_voxel_map(voxel_map)
     img = eval_topdown_map_rgb(
         obstacles,
         explored,
@@ -783,9 +951,11 @@ def snapshot_eval_from_voxel_map(
         min_map_side=min_map_side,
         trajectory_xyt=trajectory_xyt,
         filter_islands=filter_islands,
+        cell_rgb=cell_rgb,
     )
     if gt_navigable is not None:
         stats["overlay_available"] = True
+    stats["cell_rgb"] = cell_rgb is not None
     return img, stats
 
 
@@ -799,12 +969,13 @@ def snapshot_eval_overlay_from_voxel_map(
     filter_islands: bool = True,
     min_map_side: int = 1024,
 ) -> np.ndarray | None:
-    """GT navmesh + agent map + trajectory composite for diagnostics export."""
+    """GT navmesh + observed RGB / obstacles + trajectory composite for diagnostics export."""
     if voxel_map is None or not hasattr(voxel_map, "get_2d_map"):
         return None
     obstacles, explored = voxel_map.get_2d_map()
     go = _grid_origin_xy(getattr(voxel_map, "grid_origin", np.zeros(2)))
     res = float(getattr(voxel_map, "grid_resolution", 0.1) or 0.1)
+    cell_rgb = average_rgb_2d_from_voxel_map(voxel_map)
     return eval_topdown_overlay_rgb(
         obstacles,
         explored,
@@ -816,6 +987,7 @@ def snapshot_eval_overlay_from_voxel_map(
         min_map_side=min_map_side,
         trajectory_xyt=trajectory_xyt,
         filter_islands=filter_islands,
+        cell_rgb=cell_rgb,
     )
 
 

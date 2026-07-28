@@ -105,6 +105,8 @@ motion_planner:
   simplify_plans: True
   shortcut_plans: True
   shortcut_iter: 100
+  # When start cell is occupied (pose noise / dilation), Chebyshev escape rings.
+  start_escape_max_ring: 8
   frontier:
     dilate_frontier_size: 2
     dilate_obstacle_size: 0

@@ -409,6 +409,74 @@ def resolve_habitat_nav_goal(sim: Any, goal_x: float, goal_z: float) -> Resolved
     return ResolvedNavGoal(request_xy=req, effective_xy=eff, mode=mode)
 
 
+def sample_habitat_navmesh_approach_xy(
+    sim: Any,
+    *,
+    anchor_xy: tuple[float, float],
+    robot_xy: tuple[float, float] | None,
+    approach_index: int = 0,
+    radius_inner_m: float = 0.45,
+    radius_outer_m: float = 1.60,
+    n_draws: int = 24,
+    avoid_xy: list[tuple[float, float]] | None = None,
+    avoid_m: float = 0.55,
+) -> tuple[float, float] | None:
+    """Sample a navmesh-reachable approach near ``anchor``.
+
+    Used by agentic investigate under Habitat perfect-nav so goals can sit on the
+    navmesh (including through doorways) even when the voxel free ring is sparse.
+    """
+    if sim is None:
+        return None
+    ax, ay = float(anchor_xy[0]), float(anchor_xy[1])
+    seed = (int(round(ax * 100)) * 1009 + int(round(ay * 100)) * 9176 + int(approach_index) * 131) & 0xFFFFFFFF
+    rng = random.Random(seed)
+    r_in = max(0.2, float(radius_inner_m))
+    r_out = max(r_in + 0.15, float(radius_outer_m))
+
+    def _too_close(x: float, y: float) -> bool:
+        if not avoid_xy:
+            return False
+        return any(math.hypot(x - ox, y - oy) < float(avoid_m) for ox, oy in avoid_xy)
+
+    best: tuple[float, float, float] | None = None  # score, x, y
+    for _ in range(max(8, int(n_draws))):
+        ang = rng.uniform(0.0, 2.0 * math.pi)
+        rad = math.sqrt(rng.uniform(r_in * r_in, r_out * r_out))
+        x = ax + rad * math.cos(ang)
+        y = ay + rad * math.sin(ang)
+        if _too_close(x, y):
+            continue
+        resolved = resolve_habitat_nav_goal(sim, x, y)
+        if resolved is None:
+            continue
+        ex, ey = resolved.effective_xy
+        if _too_close(ex, ey):
+            continue
+        # Prefer snaps that stay close to the requested approach (not path_end far away).
+        snap_err = math.hypot(ex - x, ey - y)
+        score = -snap_err - 0.35 * math.hypot(ex - ax, ey - ay) + rng.random() * 0.05
+        if best is None or score > best[0]:
+            best = (score, ex, ey)
+    if best is None:
+        # Last resort: snap the anchor itself / classic standoff.
+        if robot_xy is not None:
+            rx, ry = float(robot_xy[0]), float(robot_xy[1])
+            dx, dy = ax - rx, ay - ry
+            dist = math.hypot(dx, dy)
+            if dist > 1e-6:
+                travel = dist if dist <= r_in else max(r_in, dist - r_in)
+                gx, gy = rx + (dx / dist) * travel, ry + (dy / dist) * travel
+                resolved = resolve_habitat_nav_goal(sim, gx, gy)
+                if resolved is not None:
+                    return resolved.effective_xy
+        resolved = resolve_habitat_nav_goal(sim, ax, ay)
+        if resolved is not None:
+            return resolved.effective_xy
+        return None
+    return (best[1], best[2])
+
+
 def navmesh_waypoints_to_xyt(path_pts: np.ndarray, *, max_waypoints: int = 24) -> list[np.ndarray]:
     """Convert Habitat navmesh ``(N,3)`` XYZ points to planar ``(x,z,yaw)`` trajectory."""
     pts = np.asarray(path_pts, dtype=np.float64)

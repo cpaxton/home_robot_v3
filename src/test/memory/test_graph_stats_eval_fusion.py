@@ -147,6 +147,25 @@ def test_add_observation_merges_label_drift():
     assert "coffee cup" in labels_l
 
 
+def test_spatial_merge_refreshes_candidate_rgb_and_revision():
+    """Stable obs_id must still pick up a better revisit frame for verify/EQA."""
+    mem = GraphEQAMemory(defer_llm_clients=True)
+    mem.spatial_merge_m = 0.45
+    rgb0 = np.zeros((8, 8, 3), dtype=np.uint8)
+    rgb1 = np.full((8, 8, 3), 200, dtype=np.uint8)
+    xyz = np.array([1.0, 2.0, 0.5], dtype=float)
+    oid = mem.add_observation(rgb0, xyz, ["wall clock"])
+    assert mem.obs_revision(oid) == 1
+    mem._obs_siglip_features[int(oid)] = np.array([1.0, 0.0], dtype=np.float32)
+    oid2 = mem.add_observation(rgb1, xyz + np.array([0.02, 0.0, 0.0]), ["wall clock"])
+    assert oid2 == oid
+    obs = mem._observation_by_id(oid)
+    assert obs is not None
+    assert int(obs.rgb[0, 0, 0]) == 200
+    assert mem.obs_revision(oid) == 2
+    assert int(oid) not in mem._obs_siglip_features
+
+
 def test_eqa_prompt_topk_caps_scene_graph_text():
     mem = GraphEQAMemory(defer_llm_clients=True)
     mem._relevant_objects = ["basket"]

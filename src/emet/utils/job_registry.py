@@ -1048,8 +1048,17 @@ def _load_trace_rows(path: Path | None) -> list[dict[str, Any]]:
     return rows
 
 
+def _xy2(xyz: Any) -> list[float] | None:
+    if not isinstance(xyz, (list, tuple)) or len(xyz) < 2:
+        return None
+    try:
+        return [round(float(xyz[0]), 2), round(float(xyz[1]), 2)]
+    except (TypeError, ValueError):
+        return None
+
+
 def analyze_agentic_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Derive verify/abstain/stale-view signals from an agentic trace."""
+    """Derive verify/abstain/investigate/explore signals from an agentic trace."""
     tool_counts: dict[str, int] = {}
     for r in rows:
         key = str(r.get("tool") or r.get("event") or "?")
@@ -1069,6 +1078,145 @@ def analyze_agentic_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
     seen: set[Any] = set()
     dup_verify_obs = sorted({o for o in verify_obs if o in seen or seen.add(o)})  # type: ignore[func-returns-value]
 
+    # First hyp board (evidence cards shown to the router).
+    hypotheses: list[dict[str, Any]] = []
+    for r in rows:
+        hyps = r.get("hypotheses")
+        if isinstance(hyps, list) and hyps:
+            for h in hyps[:12]:
+                if not isinstance(h, dict):
+                    continue
+                hypotheses.append(
+                    {
+                        "obs_id": h.get("obs_id"),
+                        "source": h.get("source"),
+                        "phrase": h.get("phrase"),
+                        "xy": _xy2(h.get("xyz")),
+                    }
+                )
+            break
+
+    # Router picks (VLM tool choices).
+    router_picks: list[str] = []
+    for r in rows:
+        if r.get("picked_by") != "vlm":
+            continue
+        calls = r.get("router_tool_calls")
+        if isinstance(calls, list) and calls:
+            tool = str(calls[0])
+        else:
+            tool = str(r.get("tool") or "?")
+        args = r.get("args") if isinstance(r.get("args"), dict) else {}
+        oid = args.get("obs_id")
+        toward = args.get("toward")
+        if oid is not None:
+            router_picks.append(f"{tool}(obs={oid})")
+        elif toward:
+            router_picks.append(f"{tool}(toward={toward!r})")
+        else:
+            router_picks.append(tool)
+
+    # Investigate / navigate outcomes (skip tool_pick rows; keep nav + station).
+    investigates: list[dict[str, Any]] = []
+    for r in rows:
+        if r.get("tool") != "investigate" and r.get("tool") != "navigate_to_obs":
+            continue
+        if r.get("event") == "tool_pick":
+            continue
+        entry: dict[str, Any] = {
+            "round": r.get("round"),
+            "obs_id": r.get("obs_id"),
+            "event": r.get("event"),
+            "ok": r.get("ok"),
+            "status": r.get("status"),
+            "nav_success": r.get("nav_success"),
+            "target_xy": _xy2(r.get("target_xyz")),
+            "closest_m": (
+                round(float(r["closest_m"]), 3)
+                if isinstance(r.get("closest_m"), (int, float))
+                else None
+            ),
+            "place_inspect": r.get("place_inspect"),
+            "station_obs_id": r.get("station_obs_id"),
+        }
+        investigates.append(entry)
+
+    explores: list[dict[str, Any]] = []
+    for r in rows:
+        if r.get("tool") != "explore_frontier" or r.get("event") == "tool_pick":
+            continue
+        explores.append(
+            {
+                "round": r.get("round"),
+                "ok": r.get("ok"),
+                "source": r.get("source"),
+                "xy": _xy2(r.get("frontier_xyz")),
+            }
+        )
+
+    assesses: list[dict[str, Any]] = []
+    for r in rows:
+        if r.get("tool") != "vlm_assess":
+            continue
+        assesses.append(
+            {
+                "round": r.get("round"),
+                "obs_id": r.get("obs_id"),
+                "present": r.get("present"),
+                "answerable": r.get("answerable"),
+                "phrase": r.get("phrase"),
+                "reason": (str(r.get("reason") or "")[:160] or None),
+            }
+        )
+
+    nav_loop_blocked = sum(
+        1
+        for r in rows
+        if str(r.get("status") or "") == "NAV_LOOP_BLOCKED"
+        or r.get("tool") == "nav_loop_redirect"
+    )
+    station_inspects = [e for e in investigates if e.get("event") == "station_inspect"]
+    closest_ms = [e["closest_m"] for e in station_inspects if e.get("closest_m") is not None]
+    place_ledger = [
+        str(e["place_inspect"])
+        for e in station_inspects
+        if e.get("place_inspect")
+    ]
+
+    salvage = next(
+        (
+            {
+                "letter": r.get("letter"),
+                "prior_answer": r.get("prior_answer"),
+                "n_images": r.get("n_images"),
+            }
+            for r in rows
+            if r.get("event") == "final_location_salvage"
+        ),
+        None,
+    )
+    summary = next((r for r in rows if r.get("tool") == "summary"), None)
+    summary_bits: dict[str, Any] | None = None
+    if summary is not None:
+        summary_bits = {
+            "final_answer": summary.get("final_answer"),
+            "confidence": summary.get("confidence"),
+            "verified": summary.get("verified"),
+            "n_rounds": summary.get("n_rounds"),
+            "n_nav": summary.get("n_nav"),
+            "n_explore": summary.get("n_explore"),
+            "budget_hit": summary.get("budget_hit"),
+        }
+
+    present_any = any(bool(a.get("present")) for a in assesses)
+    close_absent = any(
+        e.get("closest_m") is not None
+        and float(e["closest_m"]) <= 0.6
+        and isinstance(e.get("place_inspect"), str)
+        and "ABSENT" in e["place_inspect"]
+        for e in station_inspects
+    )
+
     return {
         "n_rows": len(rows),
         "tool_counts": tool_counts,
@@ -1081,6 +1229,21 @@ def analyze_agentic_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "duplicate_verify_obs": dup_verify_obs,
         "abstain_reasons": abstains,
         "fallback_submits": fallback_submits,
+        "hypotheses": hypotheses,
+        "router_picks": router_picks,
+        "investigates": investigates,
+        "explores": explores,
+        "assesses": assesses,
+        "n_investigate": sum(1 for e in investigates if e.get("event") != "station_inspect"),
+        "n_station_inspect": len(station_inspects),
+        "n_explore": len(explores),
+        "n_nav_loop_blocked": nav_loop_blocked,
+        "min_closest_m": min(closest_ms) if closest_ms else None,
+        "place_ledger": place_ledger,
+        "present_any": present_any,
+        "close_absent": close_absent,
+        "salvage": salvage,
+        "summary": summary_bits,
     }
 
 
@@ -1187,6 +1350,70 @@ def format_question_report(job: JobRecord, qid: int, arm: str | None = None) -> 
 
     lines.append("")
     lines.append(f"trace: {data['trace_path']}")
+    summ = trace.get("summary") or {}
+    if summ:
+        lines.append(
+            f"summary: answer={summ.get('final_answer')} conf={summ.get('confidence')} "
+            f"verified={summ.get('verified')} rounds={summ.get('n_rounds')} "
+            f"nav={summ.get('n_nav')} explore={summ.get('n_explore')} "
+            f"budget_hit={summ.get('budget_hit')}"
+        )
+    lines.append(
+        f"actions: investigate={trace.get('n_investigate', 0)} "
+        f"station={trace.get('n_station_inspect', 0)} "
+        f"explore={trace.get('n_explore', 0)} "
+        f"nav_loop_blocked={trace.get('n_nav_loop_blocked', 0)} "
+        f"min_closest_m={trace.get('min_closest_m')}"
+    )
+    if trace.get("hypotheses"):
+        hyp_bits = []
+        for h in trace["hypotheses"][:6]:
+            hyp_bits.append(
+                f"obs={h.get('obs_id')} {h.get('source')}:{h.get('phrase')!r} xy={h.get('xy')}"
+            )
+        lines.append("hyp: " + " | ".join(hyp_bits))
+    if trace.get("router_picks"):
+        picks = trace["router_picks"]
+        shown = picks if len(picks) <= 12 else picks[:10] + [f"…(+{len(picks) - 10})"]
+        lines.append(f"router: {' → '.join(shown)}")
+    if trace.get("investigates"):
+        for e in trace["investigates"]:
+            if e.get("event") == "station_inspect":
+                lines.append(
+                    f"  station r{e.get('round')} obs={e.get('obs_id')} "
+                    f"closest={e.get('closest_m')}m  {e.get('place_inspect')}"
+                )
+            elif e.get("status") == "NAV_LOOP_BLOCKED" or e.get("ok") is False:
+                lines.append(
+                    f"  investigate r{e.get('round')} obs={e.get('obs_id')} "
+                    f"BLOCKED status={e.get('status')}"
+                )
+            else:
+                lines.append(
+                    f"  investigate r{e.get('round')} obs={e.get('obs_id')} "
+                    f"nav={e.get('nav_success')} target={e.get('target_xy')}"
+                )
+    if trace.get("explores"):
+        ex = []
+        for e in trace["explores"][:8]:
+            ex.append(f"r{e.get('round')}:{e.get('source')}@{e.get('xy')}")
+        lines.append("explore: " + " | ".join(ex))
+    if trace.get("assesses"):
+        for a in trace["assesses"][:8]:
+            reason = a.get("reason") or ""
+            lines.append(
+                f"  assess r{a.get('round')} obs={a.get('obs_id')} "
+                f"present={a.get('present')} ans={a.get('answerable')}  {reason}"
+            )
+    if trace.get("place_ledger"):
+        lines.append("ledger: " + " || ".join(trace["place_ledger"][:4]))
+    if trace.get("salvage"):
+        s = trace["salvage"]
+        lines.append(
+            f"salvage: letter={s.get('letter')} prior={s.get('prior_answer')} "
+            f"n_images={s.get('n_images')}"
+        )
+
     lines.append(f"tools: {trace['tool_counts']}")
     if trace["phrases"]:
         lines.append(f"verify phrases: {trace['phrases']}")
@@ -1210,6 +1437,12 @@ def format_question_report(job: JobRecord, qid: int, arm: str | None = None) -> 
         w in trace["phrases"][0].lower() for w in ("already", "sets ", "how many")
     ):
         flags.append(f"suspect verify phrase {trace['phrases'][0]!r}")
+    if trace.get("n_nav_loop_blocked", 0) >= 2:
+        flags.append(f"nav-loop blocked x{trace['n_nav_loop_blocked']} (re-investigate same place)")
+    if trace.get("close_absent"):
+        flags.append("close look (≤0.6m) still ABSENT — VLM miss or wrong surface")
+    if trace.get("n_explore", 0) >= 3 and not trace.get("present_any"):
+        flags.append("explore-heavy with no present assess")
     if flags:
         lines.append("RED FLAGS: " + "; ".join(flags))
     else:
