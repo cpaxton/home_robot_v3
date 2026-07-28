@@ -117,6 +117,7 @@ Do **not** use `emet run dynagraph` on hardware for stationary mapping — it ma
 - Answer-only EQA skips robot head/posture I/O (`allow_navigation=False` → `skip_perception_prelude`).
 - Before EQA, [`release_zmq_ports`](../src/emet/utils/port_utils.py) kills MuJoCo **LISTEN** sockets on the session ports so EGL is not sharing the GPU with Qwen (must not use plain `lsof -i:PORT`, which also matches the dynagraph client and SIGTERMs it — exit 241).
 - `[vl] generate heartbeat` every 30 s (`EMET_VL_GENERATE_HEARTBEAT_S`) + `[vl] decode started` when prefill ends.
+- Hard VL generate timeout: `EMET_VL_GENERATE_TIMEOUT_S` (default **180 s**) raises `VlGenerateTimeoutError` instead of multi‑hour SDPA crawls; set `0` to disable, or lower if hangs return.
 - `EMET_EQA_ANSWER_MAX_NEW_TOKENS` (default `256`) caps answer-only decode length.
 - Improve smoke raises `EMET_DYNAMIC_EXPLORE_STALE_*` / `EMET_EQA_QUESTION_TIMEOUT_S`.
 - CUDA VL loads **require Flash-Attn 2** by default ([`attn_impl.py`](../src/emet/llms/attn_impl.py)); missing package raises instead of silent SDPA. Escape hatch: `EMET_ALLOW_SDPA_ATTN=1`.

@@ -56,6 +56,27 @@ class DecodeProgressStop(StoppingCriteria):
         return False
 
 
+class HardTimeStop(StoppingCriteria):
+    """Stop decode when wall-clock ``max_time_s`` is exceeded; sets ``fired``.
+
+    Only runs during autoregressive steps (not vision/text prefill). Pair with the
+    thread watchdog in ``qwen3_vl_client._generate_with_heartbeat`` for prefill hangs.
+    """
+
+    def __init__(self, max_time_s: float) -> None:
+        self.max_time_s = float(max_time_s)
+        self._t0 = time.monotonic()
+        self.fired = False
+
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs) -> bool:
+        if self.max_time_s <= 0:
+            return False
+        if time.monotonic() - self._t0 >= self.max_time_s:
+            self.fired = True
+            return True
+        return False
+
+
 class RepetitionStop(StoppingCriteria):
     """Stop generation when the generated tail is a short repeating cycle.
 

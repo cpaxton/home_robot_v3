@@ -1066,7 +1066,11 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         if gm is None and executor is not None and hasattr(executor, "agent"):
             gm = getattr(executor.agent, "graph_memory", None)
         if gm is not None and hasattr(gm, "get_nodes"):
-            nodes = [n for n in gm.get_nodes() if not getattr(n, "is_viewpoint", False)]
+            nodes = [
+                n
+                for n in gm.get_nodes()
+                if not getattr(n, "is_viewpoint", False) and not getattr(n, "is_frontier", False)
+            ]
             if nodes:
                 try:
                     from emet.memory.graph_eqa.pretty_print import format_scene_graph_pretty
@@ -1077,6 +1081,22 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                         return gm.to_string()
                     if hasattr(gm, "print_memory"):
                         return gm.print_memory()
+                    # Minimal dump when FakeGM / partial graph lacks pretty helpers.
+                    lines = ["Dynagraph / GraphEQA scene graph"]
+                    for n in nodes:
+                        labels = getattr(n, "labels", None) or []
+                        lab = ", ".join(str(x) for x in labels[:3]) or "(no labels)"
+                        xyz = getattr(n, "xyz", None)
+                        if xyz is not None:
+                            arr = np.asarray(xyz, dtype=float).reshape(-1)
+                            if arr.size >= 3:
+                                lines.append(
+                                    f"  [{getattr(n, 'node_id', '?')}] {lab} "
+                                    f"xyz=({arr[0]:.3f}, {arr[1]:.3f}, {arr[2]:.3f})"
+                                )
+                                continue
+                        lines.append(f"  [{getattr(n, 'node_id', '?')}] {lab}")
+                    return "\n".join(lines)
         if executor is None or not hasattr(executor, "agent"):
             return "Robot not connected."
         agent = executor.agent
