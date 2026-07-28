@@ -2,7 +2,9 @@
 
 Primary paper goal: reproduce GraphEQA-style metrics on HM-EQA and OpenEQA subsets.
 
-**Results vs prior art (tables, JSONL paths, planned sweeps):** **[habitat_eqa_results.md](habitat_eqa_results.md)**
+**Central index:** [experiments/README.md](README.md) (HM-EQA baselines + run commands).  
+**Results vs prior art:** [habitat_eqa_results.md](habitat_eqa_results.md)  
+**CLI flags:** [habitat/usage.md](../habitat/usage.md)
 
 **Deep docs:**
 
@@ -11,11 +13,17 @@ Primary paper goal: reproduce GraphEQA-style metrics on HM-EQA and OpenEQA subse
 - Parity appendix: `paper/sections/appendix/05_habitat_eqa_parity.tex`
 - Fix / debias history: [plans/fable5-dynagraph-habitat.md](../plans/fable5-dynagraph-habitat.md)
 
-## Branch note
+## Baselines (do not conflate)
 
-Habitat harness development on **`feature/eval-diagnostics-smoke`** (nav, grounding, diagnostics). Merge before final paper numbers.
+| Method | Profile | Role |
+|--------|---------|------|
+| `graph_eqa` | `graph_eqa_baseline` (0/0 merge) | Internal GraphEQA reimplementation |
+| `dynagraph` | `unified_eqa` (0.45 m) + tuned extras | Our method |
+| Published GraphEQA 63.5–67% | API VLM + full HM3D semantics | External prior art only |
 
-## Quick comparison (June 2026)
+Explore-off / MCQ-debias / agentic H2H are **ablations**, not method defaults.
+
+## Quick comparison (recorded)
 
 | Who | VLM | n | Accuracy |
 |-----|-----|---|----------|
@@ -25,7 +33,7 @@ Habitat harness development on **`feature/eval-diagnostics-smoke`** (nav, ground
 | **emet** dynagraph | Qwen2.5-VL-3B | 32 | 34.4% |
 | **emet** dynagraph (post-fix) | Qwen3-VL-8B | 8 hold-out | **50.0%** |
 
-We use **weaker local VLMs** and **partial** HM3D semantics vs the reference stack. Dynagraph consistently beats graph_eqa on matched slices. See [habitat_eqa_results.md](habitat_eqa_results.md) for full tables and planned experiments.
+We use **weaker local VLMs** and **partial** HM3D semantics vs the reference stack. See [habitat_eqa_results.md](habitat_eqa_results.md) for full tables and planned experiments.
 
 ## Metrics
 
@@ -35,24 +43,14 @@ MC accuracy, mean planning steps; GraphEQA vs Dynagraph vs ablations.
 
 ```bash
 ./scripts/install_habitat.sh
-.venv-habitat/bin/emet-habitat  # see habitat/usage.md for sweep scripts
+uv run emet eval recover --need-mib 12000
+uv run emet habitat safe-start
+uv run emet habitat run-episode --question-id 0 --method graph_eqa --mock-llm
+# Full 113: ./scripts/run_hmeqa_paper113_h2h.sh via emet jobs
+# Agentic H2H: uv run emet hmeqa overnight
 ```
 
-### Example sweeps
-
-```bash
-# Held-out random-8 (anti-overfit; excludes tuning Q3,14,17)
-TAG=holdout8_postfix_20260627 IDS=15,56,65,68,79,88,104,105 METHOD=dynagraph TIMEOUT=7200 \
-  ./scripts/run_habitat_iter_subset.sh
-
-# Full 113 (planned headline run)
-.venv-habitat/bin/emet-habitat run-batch \
-  --method dynagraph --paper-subset \
-  --question-start 0 --question-end 112 \
-  --eqa-vl-family qwen3_vl --eqa-hf-model-id Qwen/Qwen3-VL-8B-Instruct \
-  --device cuda --resume \
-  --output ~/.cache/habitat_eqa/results/full113_dynagraph_qwen3_vl_postfix.jsonl
-```
+Details: [experiments/README.md § HM-EQA baselines](README.md#hm-eqa-baselines), [habitat/usage.md](../habitat/usage.md).
 
 ## Frame / map diagnostics
 

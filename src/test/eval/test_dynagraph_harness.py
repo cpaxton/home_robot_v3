@@ -29,6 +29,18 @@ def test_habitat_eqa_harness_profile_and_flags():
     assert flags["siglip_grounding"] is True
 
 
+def test_habitat_eqa_graph_eqa_baseline_flags():
+    params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "graph_eqa")
+    assert params.get("dynagraph_merge_xy_m") == 0.0
+    assert params.get("dynagraph_staleness_horizon") == 0
+    assert (params.get("dynagraph_harness") or {}).get("profile") == "graph_eqa_baseline"
+    flags = dynagraph_harness_flags(params)
+    assert flags["memory_summary"] is False
+    assert flags["mcq_debias"] is False
+    assert flags["explore_when_uncovered"] == "off"
+    assert flags["siglip_grounding"] is False
+
+
 def test_enrich_episode_metrics_harness_fingerprint_merge_on():
     """Episode JSONL fingerprint must record merge-on unified_eqa defaults."""
     from types import SimpleNamespace

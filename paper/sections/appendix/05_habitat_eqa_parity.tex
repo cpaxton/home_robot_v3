@@ -57,11 +57,11 @@ Items marked \emph{partial} depend on downloaded HM3D semantic assets (only a su
     Exploration planner & TSDF + enriched frontiers & fluid voxel \texttt{sample\_frontier} (+ optional graph frontier nodes) & Partial \\
     Navigation execution & navmesh shortest path & \texttt{find\_path\_to\_xy} + trajectory follow; Image-$N$ viewpoint/standoff & Match \\
     MCQ prompt / grading & HM-EQA A--D & \texttt{hmeqa} prompt variant & Match \\
-    Graph memory config & static (no merge / staleness) & merge=0, staleness=0 on HM-EQA & Match \\
+    Graph memory config & static (no merge / staleness) & \texttt{graph\_eqa}: \texttt{graph\_eqa\_baseline} (0/0); \texttt{dynagraph}: \texttt{unified\_eqa} (0.45\,m / 256) & Match for GE row \\
     Batch logging & per-question JSON & JSONL + \texttt{--resume} & Match \\
     OpenEQA val split & supported & not wired (milestone) & Missing \\
     Detic fallback & real world & N/A in sim harness & N/A \\
-    VLM & GPT-4o / Gemini API & local Gemma-3-4b-it (default) & By design \\
+    VLM & GPT-4o / Gemini API & local Qwen3-VL-8B (default) & By design \\
     \bottomrule
   \end{tabular}
 \end{table}

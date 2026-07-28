@@ -120,12 +120,14 @@ print(grade_mcq_answer(extract_mcq_letter_from_raw_eqa(raw.read_text(), row['cho
 
 ## Methods
 
-| `--method` | Memory config | Paper baseline |
-|------------|---------------|----------------|
-| `graph_eqa` | `dynagraph_merge_xy_m=0`, `dynagraph_staleness_horizon=0` | GraphEQA paper settings |
-| `dynagraph` | Same graph settings as `graph_eqa` | Same EQA stack; exercises `DynagraphController` (rerun / `maintain()` noop here) |
+| `--method` | Profile | Controller | Paper role |
+|------------|---------|------------|------------|
+| `graph_eqa` | `graph_eqa_baseline` (merge=0, staleness=0; no Dynagraph extras) | `GraphEQAController` | Internal GraphEQA reimplementation |
+| `dynagraph` | `unified_eqa` (0.45 m merge / staleness 256) + memory on, debias off, explore conservative, SigLIP | `DynagraphController` | **Our method** |
 
-On HM-EQA both methods should give **the same accuracy** (within VLM sampling noise). Dynagraph is a regression check, not a competing benchmark config. Long-horizon merge/staleness (`0.45m` / `256` steps) is for real-robot Dynagraph runs, not this short Habitat harness.
+Config source: [`configs/benchmarks/dynagraph.yaml`](../../configs/benchmarks/dynagraph.yaml) via `apply_habitat_eqa_method_parameters`. Do **not** report Dynagraph under zero-merge / `smoke`. Cite episode **harness fingerprints** when quoting accuracy.
+
+**Compare-batch** runs both methods on the same question ids; accuracy need not match (different merge + extras).
 
 ## Navigation (Habitat-only)
 
