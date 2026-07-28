@@ -622,6 +622,7 @@ def eval_topdown_map_rgb(
         trajectory_xyt=path,
     )
     crop_ij = (0, 0)
+    crop_hw: tuple[int, int] | None = None
     if bbox is None:
         rgb = render_topdown_map_rgb(
             obstacles,
@@ -640,6 +641,7 @@ def eval_topdown_map_rgb(
                 grid_resolution,
                 full_shape_hw=(h, w),
             )
+        crop_hw = (int(rgb.shape[0]), int(rgb.shape[1]))
     else:
         i0, i1, j0, j1 = bbox
         crop_ij = (i0, j0)
@@ -651,6 +653,7 @@ def eval_topdown_map_rgb(
             if cr.shape[:2] == (h, w):
                 cell_c = cr[i0:i1, j0:j1]
         rgb = _compose_observed_topdown_rgb(obs_c, exp_c, cell_rgb=cell_c)
+        crop_hw = (int(rgb.shape[0]), int(rgb.shape[1]))
         if robot_xy is not None:
             ri, rj = world_xy_to_grid_ij(robot_xy, grid_origin_xy, grid_resolution, (h, w))
             ri -= i0
@@ -675,6 +678,8 @@ def eval_topdown_map_rgb(
                 crop_offset_ij=(i0, j0),
                 full_shape_hw=(h, w),
             )
+    # Resize first, then paint crisp room labels at export resolution onto topdown_map.
+    rgb = finalize_export_topdown_rgb(rgb, max_side=max_side, min_side=min_map_side)
     if room_clusters:
         from emet.memory.graph_eqa.room_clusters import paint_room_labels
 
@@ -685,8 +690,10 @@ def eval_topdown_map_rgb(
             grid_resolution=grid_resolution,
             full_shape_hw=(h, w),
             crop_offset_ij=crop_ij,
+            crop_shape_hw=crop_hw,
+            font_size=max(16, int(round(min(rgb.shape[0], rgb.shape[1]) / 40))),
         )
-    return finalize_export_topdown_rgb(rgb, max_side=max_side, min_side=min_map_side)
+    return rgb
 
 
 def _alpha_blend_rgb(base: np.ndarray, overlay: np.ndarray, alpha: float) -> np.ndarray:

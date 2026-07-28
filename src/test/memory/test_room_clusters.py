@@ -124,7 +124,43 @@ def test_estimate_room_at_xy_nearest_blob():
     assert estimate_room_at_xy(clusters, (100.0, 100.0), max_dist_m=3.0) == "unknown"
 
 
-def test_format_rooms_and_merge():
+def test_paint_room_labels_on_export_rgb():
+    from emet.memory.graph_eqa.room_clusters import RoomCluster, paint_room_labels
+
+    rgb = np.zeros((256, 256, 3), dtype=np.uint8)
+    rgb[:] = (40, 40, 50)
+    clusters = [
+        RoomCluster(
+            cluster_id=1,
+            node_ids=(1,),
+            labels=("stove",),
+            centroid_xy=(1.0, 1.0),
+            room_name="kitchen",
+        ),
+        RoomCluster(
+            cluster_id=2,
+            node_ids=(2,),
+            labels=("sofa",),
+            centroid_xy=(3.0, 1.0),
+            room_name="living_room",
+        ),
+    ]
+    # Full grid 40x40, crop is full, export is 256x256.
+    out = paint_room_labels(
+        rgb,
+        clusters,
+        grid_origin_xy=np.array([0.0, 0.0]),
+        grid_resolution=0.1,
+        full_shape_hw=(40, 40),
+        crop_offset_ij=(0, 0),
+        crop_shape_hw=(40, 40),
+        font_size=20,
+    )
+    # Yellow label fill should appear.
+    yellow = ((out[:, :, 0] > 230) & (out[:, :, 1] > 200) & (out[:, :, 2] < 120)).sum()
+    assert yellow > 50
+    assert not np.array_equal(out, rgb)
+
     nodes = [
         _node(1, 0.0, 0.0, labels=["kitchen"]),
         _node(2, 0.2, 0.0, labels=["stove"]),

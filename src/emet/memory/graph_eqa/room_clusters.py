@@ -339,8 +339,14 @@ def paint_room_labels(
     grid_resolution: float,
     full_shape_hw: tuple[int, int],
     crop_offset_ij: tuple[int, int] = (0, 0),
+    crop_shape_hw: tuple[int, int] | None = None,
+    font_size: int = 22,
 ) -> np.ndarray:
-    """Draw hypothesized room names at centroids on a cropped top-down RGB array."""
+    """Draw hypothesized room names at centroids on a top-down RGB (crop or export size).
+
+    When ``crop_shape_hw`` is the pre-resize crop and ``rgb`` is the finalized export,
+    centroids are mapped through crop → export scale so text stays crisp.
+    """
     from PIL import Image, ImageDraw, ImageFont
 
     from emet.visualization.map_snapshot import world_xy_to_grid_ij
@@ -350,23 +356,54 @@ def paint_room_labels(
         return arr
     img = Image.fromarray(arr[:, :, :3].copy(), mode="RGB")
     draw = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.load_default()
-    except Exception:
-        font = None
+    font = None
+    for path in (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+    ):
+        try:
+            font = ImageFont.truetype(path, int(font_size))
+            break
+        except Exception:
+            continue
+    if font is None:
+        try:
+            font = ImageFont.load_default()
+        except Exception:
+            font = None
     h_full, w_full = int(full_shape_hw[0]), int(full_shape_hw[1])
     i0, j0 = int(crop_offset_ij[0]), int(crop_offset_ij[1])
-    ch, cw = img.size[1], img.size[0]
+    eh, ew = img.size[1], img.size[0]
+    if crop_shape_hw is not None:
+        ch, cw = int(crop_shape_hw[0]), int(crop_shape_hw[1])
+    else:
+        ch, cw = eh, ew
+    scale_y = float(eh) / float(max(1, ch))
+    scale_x = float(ew) / float(max(1, cw))
     go = np.asarray(grid_origin_xy, dtype=float).reshape(-1)[:2]
     res = float(grid_resolution) or 0.1
     for c in clusters:
         ri, rj = world_xy_to_grid_ij(c.centroid_xy, go, res, (h_full, w_full))
-        py = ri - i0
-        px = rj - j0
-        if not (0 <= py < ch and 0 <= px < cw):
+        cy = (ri - i0) * scale_y
+        cx = (rj - j0) * scale_x
+        py, px = int(round(cy)), int(round(cx))
+        if not (0 <= py < eh and 0 <= px < ew):
             continue
         label = str(c.room_name if c.room_name != "unknown" else f"region_{c.cluster_id}").replace("_", " ")
-        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-            draw.text((px + dx, py + dy), label, fill=(0, 0, 0), font=font)
-        draw.text((px, py), label, fill=(255, 240, 80), font=font)
+        # Anchor roughly at centroid center.
+        try:
+            bbox = draw.textbbox((0, 0), label, font=font)
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        except Exception:
+            tw, th = 8 * len(label), int(font_size)
+        tx, ty = px - tw // 2, py - th // 2
+        # Opaque pill behind text for contrast on observed RGB.
+        pad = 3
+        draw.rectangle(
+            [tx - pad, ty - pad, tx + tw + pad, ty + th + pad],
+            fill=(20, 20, 24),
+            outline=(255, 220, 80),
+        )
+        draw.text((tx, ty), label, fill=(255, 240, 80), font=font)
     return np.asarray(img, dtype=np.uint8)
