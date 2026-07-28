@@ -29,6 +29,14 @@ State splits \textbf{Investigate} and \textbf{Explore} cards; Investigate lines 
 \texttt{navigate\_to\_obs} remains an alias of \texttt{investigate}.
 Optional \texttt{toward} on explore is coverage bias only---not a substitute for investigating a place card.
 
+\paragraph{Station observations are not place cards.}
+Automatic capture stations (\texttt{\_station\_obs\_ids}) appear in memory but are \emph{excluded} from Investigate cards and blocked as \texttt{investigate} targets (\texttt{STATION\_OBS\_NOT\_PLACE}).
+Chasing station obs along a patio (e.g.\ q105) burned the nav budget with zero \texttt{explore\_frontier} calls; the paper-router stack filters them so the router must pick real graph / SigLIP place cards or explore.
+
+\paragraph{Prefer explore after close ABSENT.}
+After a close approach that returns detector/VLM \texttt{ABSENT}, the executor sets \texttt{\_prefer\_explore} and forces one \texttt{explore\_frontier} (state nudge + fallback + run-loop redirect) instead of immediately re-investigating another nearby card.
+State also surfaces a short \textbf{Recent actions} history so the router sees prior ABSENT / explore outcomes within the episode.
+
 \subsection{Answer-mode tools}
 
 \begin{description}

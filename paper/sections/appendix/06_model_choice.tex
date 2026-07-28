@@ -17,10 +17,9 @@ votes (free-form answer matching with choice-rotation fallback). Grounding and
 open-vocabulary retrieval are \emph{not} VLM roles: they require a contrastive dual
 encoder, so SigLIP~\citep{zhai2023siglip} is retained regardless of VLM choice (loading
 it in bf16 halves its footprint to $\sim$1.75\,GB with pixel-feature cosine $>$0.999 vs.\
-fp32). The non-VLM stack (Habitat, voxel map, SigLIP) holds $\sim$7\,GB, leaving roughly
-13--15\,GB of headroom; 4-bit NF4 quantization~\citep{dettmers2023qlora} brings 8--9B-class
-VLMs comfortably inside it, while 27--32B-class models ($\sim$15--18\,GB at int4) do not fit
-alongside the simulator.
+fp32). The non-VLM stack (Habitat, voxel map, SigLIP) holds $\sim$7\,GB.
+On an RTX~4090 during live Qwen3-VL-8B int4 HM-EQA we measure $\sim$13\,GiB used / $\sim$11\,GiB free, so 8--9B-class models sit comfortably under 4-bit NF4~\citep{dettmers2023qlora}.
+A \textbf{32B int4} checkpoint (e.g.\ \texttt{Qwen3-VL-32B-Instruct}) is a \emph{candidate} with OOM risk rather than ruled out: peak VRAM must be measured with \texttt{scripts/smoke\_vl\_model.py} before any Habitat holdout (see \texttt{docs/habitat/vlm\_bakeoff.md}, ``Wave: larger VLM'').
 
 \subsection{Candidates}
 
