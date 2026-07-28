@@ -23,7 +23,7 @@ One skill library (`emet.agent.skills`); **two orchestrators**. Do not merge the
 ## Keep packs disjoint
 
 - **CHAT-only**: `describe_scene`, Discord `send_*`, emotes, `rotate_base`, `quit`, … (`CHAT_EXCLUSIVE_TOOL_NAMES`)
-- **EQA-only**: `navigate_to_obs`, `verify_siglip`, `submit_answer` / `finish`, `inspect_graph` (`EQA_EXCLUSIVE_TOOL_NAMES`)
+- **EQA-only**: `investigate` / `navigate_to_obs`, `verify_siglip`, `submit_answer` / `finish`, `inspect_graph` (`EQA_EXCLUSIVE_TOOL_NAMES`)
 - Membership tests: `src/test/agent/test_skill_packs.py`
 
 ## Common confusions

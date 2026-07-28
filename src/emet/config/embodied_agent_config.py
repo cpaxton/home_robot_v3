@@ -16,7 +16,16 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
+
+from emet.utils.logger import Logger
+
+logger = Logger(__name__)
+
+# Mutually exclusive object-graph plug-ins on the voxel map (``agent.memory_backend``).
+MEMORY_BACKENDS = ("dynamem", "open_vocab", "graph_eqa", "dynagraph")
+GRAPH_EQA_FAMILY_BACKENDS = frozenset({"graph_eqa", "dynagraph"})
 
 
 @dataclass
@@ -57,7 +66,11 @@ class GraphEQAMemoryConfig:
 
 @dataclass
 class EmbodiedAgentConfig:
-    """Defaults: open-vocab scene graph + GraphEQA memory off (opt in via YAML ``embodied_agent``)."""
+    """Defaults: open-vocab scene graph + GraphEQA memory off (opt in via YAML ``embodied_agent``).
+
+    Prefer selecting the plug-in via ``agent.memory_backend`` / ``--memory-backend``; nested
+    ``enabled`` flags are coerced from that enum so OV and GraphEQA are never both live.
+    """
 
     open_vocab_scene_graph: OpenVocabSceneGraphConfig = field(default_factory=OpenVocabSceneGraphConfig)
     graph_eqa_memory: GraphEQAMemoryConfig = field(default_factory=GraphEQAMemoryConfig)
@@ -70,6 +83,48 @@ def legacy_embodied_agent_off() -> EmbodiedAgentConfig:
         open_vocab_scene_graph=OpenVocabSceneGraphConfig(enabled=False),
         graph_eqa_memory=GraphEQAMemoryConfig(enabled=False),
     )
+
+
+def normalize_memory_backend(memory_backend: str | None) -> str:
+    """Return a canonical ``memory_backend`` value (default ``dynagraph``)."""
+    mb = str(memory_backend or "dynagraph").strip().lower().replace("-", "_")
+    if mb not in MEMORY_BACKENDS:
+        raise ValueError(
+            f"Unknown memory_backend={memory_backend!r}; expected one of {MEMORY_BACKENDS}"
+        )
+    return mb
+
+
+def coerce_embodied_agent_for_memory_backend(
+    overlay: EmbodiedAgentConfig | None,
+    memory_backend: str | None,
+) -> EmbodiedAgentConfig:
+    """Derive builder ``enabled`` flags from ``memory_backend`` (at most one graph plug-in).
+
+    Nested YAML still supplies tuning (instance graph, OV config name, fusion). Independent
+    dual ``enabled: true`` in Discord presets is coerced away with a warning.
+    """
+    mb = normalize_memory_backend(memory_backend)
+    base = deepcopy(overlay) if overlay is not None else EmbodiedAgentConfig()
+    ov_on = bool(base.open_vocab_scene_graph.enabled)
+    ge_on = bool(base.graph_eqa_memory.enabled)
+    if ov_on and ge_on:
+        logger.warning(
+            "embodied_agent has both open_vocab_scene_graph and graph_eqa_memory enabled; "
+            f"coercing to a single plug-in from memory_backend={mb!r}"
+        )
+
+    if mb == "open_vocab":
+        base.open_vocab_scene_graph.enabled = True
+        base.graph_eqa_memory.enabled = False
+    elif mb in GRAPH_EQA_FAMILY_BACKENDS:
+        base.open_vocab_scene_graph.enabled = False
+        base.graph_eqa_memory.enabled = True
+    else:
+        # dynamem: voxels only
+        base.open_vocab_scene_graph.enabled = False
+        base.graph_eqa_memory.enabled = False
+    return base
 
 
 def load_embodied_agent_overlay(config_path: str | None) -> EmbodiedAgentConfig:

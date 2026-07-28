@@ -10,10 +10,13 @@ agent:
   # Load Qwen3-VL captioner for describe_scene / memory QA (Discord “what do you see?”).
   eqa: true
   discord: true
+  # Single Dynagraph memory plug-in on the voxel map (not open_vocab + GraphEQA).
+  memory_backend: dynagraph
 
 embodied_agent:
+  # Builder flags are coerced from agent.memory_backend; keep OV off for Discord VRAM.
   open_vocab_scene_graph:
-    enabled: true
+    enabled: false
     config_name: default_scene_graph
   graph_eqa_memory:
     enabled: true

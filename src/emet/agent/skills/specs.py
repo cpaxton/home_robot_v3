@@ -503,9 +503,10 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="list_scene_relations",
         modes=frozenset({AgentMode.CHAT}),
         description=(
-            "List objects and spatial relations (near, on, on_floor). Prefers the open-vocabulary "
-            "3D scene graph; if that is empty after lifelong load, falls back to the GraphEQA graph. "
-            "Use for 'what objects are in the room' and structured connectivity questions."
+            "List objects and spatial relations (near, on, on_floor, supports). "
+            "Uses the Dynagraph / GraphEQA memory plug-in when present; otherwise the "
+            "open-vocab scene graph. Use for 'what objects are in the room' and "
+            "structured connectivity questions."
         ),
         parameters={
             "type": "object",

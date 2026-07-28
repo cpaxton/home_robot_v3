@@ -7,7 +7,8 @@ prompt: simple
 device: cuda
 # Tool-call JSON is short; 1024 made HF generate crawl when the model rambled.
 max_tokens: 256
-# Interactive memory stack: dynagraph (default), graph_eqa, or dynamem.
+# Interactive memory stack (mutually exclusive graph plug-in):
+# dynagraph (default), graph_eqa, open_vocab, or dynamem.
 memory_backend: dynagraph
 # Sim pick/place: teleport (GT body snap) or kinematic (IK + joint traj + attach).
 # Override with EMET_MANIP_MODE. Visual-servo Stretch still wins when enabled.

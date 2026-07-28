@@ -39,6 +39,10 @@ uv run emet run agent \
   --config configs/agent_innate_mars.yaml \
   --rerun \
   --name Herman
+# ``emet run`` does not inject a default ``--robot-ip``; ``--connection herman`` supplies the host.
+# Optional: ``export EMET_ALLOW_SDPA_ATTN=1`` if Qwen/flash-attn path is needed (see docs/environment_variables.md).
+# Prefer ``--onboard-da3`` on the bridge so workstation VRAM stays for the chat LLM + caption VLM.
+# Memory: ``agent.memory_backend: dynagraph`` (single Dynagraph plug-in; not open_vocab + GraphEQA).
 ```
 
 Preset enables Discord + EQA captions (`agent.eqa: true`). Optional: `--no-rerun` if you only care about Discord.

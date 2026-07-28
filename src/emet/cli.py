@@ -3144,12 +3144,11 @@ def run(
     """
     _require_repo_venv_when_in_repo()
     args = list(ctx.args)
-    if app != "graph-eqa-habitat":
+    # Do not inject wrapper defaults for ``--robot_ip`` / ``--robot``: they would override
+    # ``--connection`` host resolution and YAML ``robot:`` (same pattern for both).
+    if app != "graph-eqa-habitat" and ctx.get_parameter_source("robot_ip") != ParameterSource.DEFAULT:
         args.extend(["--robot_ip", robot_ip])
     if app in _EMET_RUN_APPS_WITH_ROBOT:
-        # Do not inject ``--robot stretch`` when the user omitted ``--robot`` on ``emet run``: the wrapper's
-        # default would override ``robot:`` from ``--agent-config`` (run_agent) or MolmoSpaces discovery
-        # (robot_backend=None). Forward ``--robot`` only when explicitly set (CLI or env).
         if ctx.get_parameter_source("robot") != ParameterSource.DEFAULT:
             args.extend(["--robot", robot])
     if port_offset:

@@ -35,7 +35,7 @@ FRAME_DEPTH_FILENAME = "depth.npy"  # legacy per-subdirectory name
 FRAME_POSE_FILENAME = "pose.npz"  # legacy per-subdirectory name
 GRAPH_FILENAME = "graph.json"
 SCENE_GRAPH_REPORT_TXT = "scene_graph_report.txt"
-# Open-vocab SceneGraphProcessor dump (coexists with GraphEQA graph.json in lifelong dirs).
+# Open-vocab SceneGraphProcessor dump (``memory_backend=open_vocab`` lifelong dirs).
 OPEN_VOCAB_SCENE_GRAPH_DIR = "open_vocab_scene_graph"
 SIM_GT_PLACEMENTS_FILENAME = "sim_object_placements.json"
 GT_ALIGNMENT_REPORT_TXT = "gt_alignment_report.txt"
