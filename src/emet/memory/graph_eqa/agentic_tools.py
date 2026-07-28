@@ -40,6 +40,8 @@ Rules:
   places look fruitless. toward= is weak coverage bias ONLY —
   never a substitute for investigate(obs_id).
 - Use Recent actions to avoid repeating a stuck investigate/explore loop.
+- After a close look verifies ABSENT, prefer explore_frontier once to grow
+  coverage before investigating a new capture-station card.
 - SigLIP/OWL are proposals in state — not proof. Trust Qwen assess for answerability.
 - Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.
 - One or two tool calls per turn.
@@ -47,8 +49,8 @@ Rules:
 # Examples
 State: Investigate obs_id=3 phrase='sink' source=graph investigated=0 approaches=0/4 coverage=open
 {"tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}
-State: Recent actions: r0 investigate obs=3 verify=ABSENT; Investigate still has approaches left
-{"tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}
+State: Recent actions: r0 investigate obs=3 verify=ABSENT; Prefer explore_frontier
+{"tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
 State: Recent actions: r0–r2 investigate same obs ABSENT; Explore frontiers available
 {"tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
 State: Last verify PRESENT; VLM assess answerable=true verified=true
@@ -148,6 +150,11 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     recent_actions = list(getattr(executor, "_recent_actions", None) or [])
     if recent_actions:
         lines.append("Recent actions: " + " | ".join(recent_actions))
+    if getattr(executor, "_prefer_explore", False):
+        lines.append(
+            "Prefer explore_frontier: last close look was ABSENT — grow coverage "
+            "before chasing a new capture station."
+        )
     if getattr(executor, "_last_capture_status", None):
         lines.append(f"Last capture: {executor._last_capture_status}")
     loop_flags = list(getattr(executor, "_nav_loop_flags", None) or [])

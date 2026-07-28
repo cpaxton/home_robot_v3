@@ -294,6 +294,10 @@ class AgenticEQAExecutor:
         self._nav_loop_flags: list[dict[str, Any]] = []
         # Per place-card investigate history for this question (count / closest / recent).
         self._place_inspect: dict[int, PlaceInspectRecord] = {}
+        # Capture stations from investigate — not place cards (avoids patio station-chase).
+        self._station_obs_ids: set[int] = set()
+        # After close+ABSENT, prefer one explore before the next investigate.
+        self._prefer_explore: bool = False
         self._last_capture_status: str | None = None
         self._collect_trace = bool(collect_trace) if collect_trace is not None else (
             env_eqa_collect_trace() or bool(_eqa_cfg(agent).get("collect_agentic_trace", False))
@@ -665,6 +669,8 @@ class AgenticEQAExecutor:
         }
         self._attach_gt(row, frontier_xyz)
         self._append_trace(row)
+        if ok:
+            self._prefer_explore = False
         return {
             "ok": ok,
             "capture": cap,
@@ -748,6 +754,12 @@ class AgenticEQAExecutor:
         rec.last_assess_answerable = visit.assess_answerable
         rec.last_suggested = suggested
         self._place_inspect[oid] = rec
+        # Close look disproved the stem object — grow the map before chasing new cards.
+        if dist <= 1.0 and (
+            verify_status.upper() == "ABSENT"
+            or visit.assess_present is False
+        ):
+            self._prefer_explore = True
         return rec
 
     def _place_approaches_exhausted(self, obs_id: int) -> bool:
@@ -976,6 +988,24 @@ class AgenticEQAExecutor:
             return {"ok": False, "error": "nav unavailable"}
         oid = int(obs_id)
         trace_tool = "investigate" if tool_name == "investigate" else "navigate_to_obs"
+        if oid in self._station_obs_ids:
+            self._append_trace(
+                {
+                    "tool": trace_tool,
+                    "ok": False,
+                    "obs_id": oid,
+                    "status": "STATION_OBS_NOT_PLACE",
+                }
+            )
+            return {
+                "ok": False,
+                "error": (
+                    f"obs_id={oid} is a capture station from a prior investigate — "
+                    "not a place card; use explore_frontier or investigate a listed place"
+                ),
+                "status": "STATION_OBS_NOT_PLACE",
+                "obs_id": oid,
+            }
         prior_visits = int(self._nav_to_obs_counts.get(oid, 0))
         next_ap = self._next_approach_index(oid, prefer=approach_index)
         # Exhausted orbit samples / stall — not bare "nav failed". Close+ABSENT alone
@@ -1112,6 +1142,7 @@ class AgenticEQAExecutor:
         # Only a successful capture advance counts as a new station view.
         if isinstance(cap, dict) and cap.get("ok") and cap.get("obs_id") is not None:
             station_oid = int(cap["obs_id"])
+            self._station_obs_ids.add(station_oid)
             self._fresh_obs_ids.add(station_oid)
             self._tried.pop(station_oid, None)
             scored = getattr(self._evidence_policy, "_globally_scored_obs_ids", None)
@@ -1410,6 +1441,9 @@ class AgenticEQAExecutor:
                 int(self._nav_to_obs_counts.get(oid, 0)) >= 1
                 or self._hypothesis_nav_blocked(oid)
             ):
+                continue
+            # Capture stations are verify views, not places to orbit next.
+            if str(h.source) in INVESTIGATE_SOURCES and oid in self._station_obs_ids:
                 continue
             filtered.append(h)
         # Anti-echo: untried / low visits first, then tried graph/siglip for context.
@@ -2725,6 +2759,9 @@ class AgenticEQAExecutor:
         frontiers_gone = (self._n_nav + self._n_explore) > 0 and self._frontier_count() == 0
         if need_more and budget_left and not frontiers_gone:
             return "explore_frontier", {}
+        # After a close ABSENT look, grow coverage before the next investigate.
+        if budget_left and not frontiers_gone and self._prefer_explore:
+            return "explore_frontier", {}
         # (2) move in to an untried hypothesis (verify is chained after nav)
         if budget_left:
             h = self._next_untried_hypothesis()
@@ -2807,6 +2844,8 @@ class AgenticEQAExecutor:
         self._frontier_pick_dir = None
         self.agent._explore_min_travel_m = 0.0
         self._recent_actions = []
+        self._station_obs_ids = set()
+        self._prefer_explore = False
         gm0 = self.graph_memory
         if gm0 is not None and hasattr(gm0, "clear_retracted_nav_claims"):
             gm0.clear_retracted_nav_claims()
@@ -2849,6 +2888,25 @@ class AgenticEQAExecutor:
                 final = out
                 break
             calls, picked_by, router_meta = self._route_tool_calls()
+            # Close+ABSENT → force one explore so the VLM cannot skip coverage growth.
+            if (
+                self._prefer_explore
+                and self.mode == "answer"
+                and calls
+                and calls[0][0] in ("investigate", "navigate_to_obs")
+                and self._n_nav + self._n_explore < self.max_nav_steps
+                and self._frontier_count() > 0
+            ):
+                self._append_trace(
+                    {
+                        "event": "prefer_explore_redirect",
+                        "from": calls[0][0],
+                        "from_args": calls[0][1],
+                        "to": "explore_frontier",
+                    }
+                )
+                calls = [("explore_frontier", {"toward": self.query_text})]
+                picked_by = f"{picked_by}+prefer_explore"
             self._append_trace(
                 {
                     "event": "tool_pick",
@@ -2876,11 +2934,12 @@ class AgenticEQAExecutor:
                 if not out.get("ok") and "budget" in str(out.get("error", "")):
                     # Budget gate rejected — stop dispatching the rest of this reply.
                     break
-                # Router re-picked a stalled hyp — force explore so we do not burn the round.
+                # Router re-picked a stalled hyp or a capture station — force explore.
                 if (
                     tool in ("navigate_to_obs", "investigate")
                     and not out.get("ok")
-                    and str(out.get("status") or "") == "NAV_LOOP_BLOCKED"
+                    and str(out.get("status") or "")
+                    in {"NAV_LOOP_BLOCKED", "STATION_OBS_NOT_PLACE"}
                     and self.mode == "answer"
                     and self._n_nav + self._n_explore < self.max_nav_steps
                 ):
@@ -2888,6 +2947,7 @@ class AgenticEQAExecutor:
                         {
                             "event": "nav_loop_redirect",
                             "from_obs_id": out.get("obs_id"),
+                            "status": out.get("status"),
                             "to": "explore_frontier",
                         }
                     )

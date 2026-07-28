@@ -56,7 +56,7 @@ correct agentic ``vlm_suggested`` letter could lose to truncated ``[salvage]``.
 | Call | Images | Graph / memory text |
 |------|--------|---------------------|
 | Classic ``query_answer`` | up to ``eqa_max_images`` (4) via ``_select_relevant_obs_ids`` | ``SCENE_GRAPH`` (~48 nodes) or spatial REGION blocks + Dynagraph ``CONFIRMED_MEMORY`` + HISTORY |
-| Agentic router ``build_state_message`` | none | counts + **evidence cards** (obs_id/phrase/source/xyz; optional siglip_sim); **Recent actions** (last ~6 investigate/explore outcomes) to avoid stuck loops; with spatial RAG, compact REGION text |
+| Agentic router ``build_state_message`` | none | counts + **evidence cards** (obs_id/phrase/source/xyz; optional siglip_sim); **Recent actions** (last ~6 investigate/explore outcomes); after close+ABSENT, **Prefer explore_frontier** nudge; capture stations excluded from Investigate cards; with spatial RAG, compact REGION text |
 | Agentic ``vlm_assess`` | 1 full-frame RGB | ≤12 inventory labels (no full SCENE_GRAPH) |
 | Agentic ``submit_answer`` → ``query_answer`` | verified obs forced as Image 1 when ``force_obs_ids`` set; fill remaining | same as classic |
 

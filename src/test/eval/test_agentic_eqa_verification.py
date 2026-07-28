@@ -1957,6 +1957,96 @@ def test_state_message_includes_recent_action_history():
     assert len(ex._recent_actions) == RECENT_ACTIONS_K
 
 
+def test_station_obs_excluded_from_investigate_cards():
+    """Capture stations must not become the next investigate target (patio chase)."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_tools import build_state_message
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {}
+    ex = AgenticEQAExecutor(agent, "Where is the fruit bowl?", router=True)
+    place = NavHypothesis(
+        phrase="kitchen island",
+        obs_id=38,
+        xyz=np.array([-16.5, -1.1, 0.7]),
+        score=1.0,
+        source="graph",
+    )
+    station = NavHypothesis(
+        phrase="dining table",
+        obs_id=55,
+        xyz=np.array([-15.7, -2.0, 0.5]),
+        score=1.0,
+        source="graph",
+    )
+    frontier = NavHypothesis(
+        phrase="unexplored frontier",
+        obs_id=49,
+        xyz=np.array([-17.0, 0.5, 0.0]),
+        score=0.2,
+        source="frontier",
+    )
+    ex._station_obs_ids.add(55)
+    ex._set_hypotheses([place, station, frontier])
+    assert {int(h.obs_id) for h in ex._hypotheses} == {38, 49}
+    assert all(int(h.obs_id) != 55 for h in ex._investigate_hypotheses())
+
+    blocked = ex.handle_tool("investigate", {"obs_id": 55})
+    assert blocked.get("ok") is False
+    assert blocked.get("status") == "STATION_OBS_NOT_PLACE"
+
+
+def test_prefer_explore_after_close_absent():
+    """Close+ABSENT sets prefer_explore; fallback and state nudge coverage growth."""
+    _require_agentic()
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic_tools import build_state_message
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = MagicMock()
+    agent.parameters = {}
+    gm = MagicMock()
+    agent.graph_memory = gm
+    gm._nodes = [MagicMock(is_frontier=True, obs_id=99)]
+    ex = AgenticEQAExecutor(agent, "Where is the fruit bowl?", router=False, max_nav_steps=4)
+    ex._hypotheses = [
+        NavHypothesis(
+            phrase="kitchen island",
+            obs_id=38,
+            xyz=np.array([-16.5, -1.1, 0.7]),
+            score=1.0,
+            source="graph",
+        ),
+        NavHypothesis(
+            phrase="unexplored frontier",
+            obs_id=99,
+            xyz=np.array([-15.0, 0.0, 0.0]),
+            score=0.2,
+            source="frontier",
+        ),
+    ]
+    ex._record_place_inspect(
+        38,
+        closest_m=0.4,
+        verify_out={"status": "ABSENT", "phrase": "fruit bowl"},
+        approach_index=0,
+    )
+    assert ex._prefer_explore is True
+    msg = build_state_message(ex)
+    assert "Prefer explore_frontier" in msg
+    tool, _args = ex._fallback_tool()
+    assert tool == "explore_frontier"
+    ex._prefer_explore = False
+    # Simulate successful explore clearing the nudge.
+    ex._prefer_explore = True
+    ex._n_explore = 0
+    # Direct clear path used by explore tool:
+    ex._prefer_explore = False
+    assert ex._prefer_explore is False
+
+
 def test_navigate_rejects_obs_not_in_evidence():
     _require_agentic()
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor

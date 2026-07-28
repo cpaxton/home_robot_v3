@@ -2430,6 +2430,9 @@ class GraphEQAMemory:
                     continue
                 if self._obs_is_frontier(oid):
                     continue
+                # Viewpoint-only / camera-station obs are not place cards.
+                if not self._obs_is_object_place(oid):
+                    continue
                 if any(label_matches_relevant_object(phrase, lab) for lab in (o.labels or [])):
                     seen.add(oid)
                     scored.append(
@@ -2468,6 +2471,8 @@ class GraphEQAMemory:
                 continue
             oid = int(oid)
             if oid in seen or self._obs_is_frontier(oid) or _claim_blocked(oid, phrase):
+                continue
+            if not self._obs_is_object_place(oid):
                 continue
             if sim >= SIGLIP_CONFIRM_THRESHOLD:
                 source = "confirmed"
@@ -3093,6 +3098,16 @@ class GraphEQAMemory:
         for n in self._nodes:
             if int(n.obs_id) == int(obs_id) and n.is_frontier:
                 return True
+        return False
+
+    def _obs_is_object_place(self, obs_id: int) -> bool:
+        """True when ``obs_id`` anchors a real object node (not frontier/viewpoint-only)."""
+        for n in self._nodes:
+            if int(n.obs_id) != int(obs_id):
+                continue
+            if n.is_frontier or n.is_viewpoint:
+                continue
+            return True
         return False
 
     def _get_image_descriptions_str(self, obs_ids: list[int]) -> str:
