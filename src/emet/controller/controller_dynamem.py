@@ -608,9 +608,7 @@ class DynamemController(BaseController):
             self.space,
             min_clearance_m=self._min_clearance_m,
             clearance_cost_weight=self._clearance_cost_weight,
-            start_escape_max_ring=int(
-                parameters.get("motion_planner/start_escape_max_ring", 8)
-            ),
+            start_escape_max_ring=int(parameters.get("motion_planner/start_escape_max_ring", 8)),
         )
         # Frontier / explore memory: mark goals blocked after waypoint timeout so
         # multi-goal A* skips stuck frontiers instead of re-picking them.
@@ -2835,12 +2833,23 @@ class DynamemController(BaseController):
                 logger.info(f"EQA habitat navmesh: {nav_res.note} dist={nav_res.dist_m:.2f}m")
             else:
                 logger.info(f"EQA habitat navmesh failed: {nav_res.note} (dist={nav_res.dist_m:.2f}m)")
+            self._last_nav_plan = {
+                "mode": "navigation",
+                "localize_source": "eqa_target",
+                "goal_xyt": [float(goal_xy[0]), float(goal_xy[1]), float(target_theta or 0.0)],
+                "method": "habitat_navmesh",
+                "note": nav_res.note,
+            }
             self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
-            blocked = getattr(self, "_habitat_blocked_goals", None)
-            if blocked is not None and (
-                nav_res.note.startswith("already_at_goal") or (not nav_res.finished and nav_res.dist_m < 0.08)
-            ):
-                blocked.add(goal_key_xy(goal_xy))
+            # Stuck / noop / no-progress: same blocked-goal memory as voxel timeout abort
+            # so uncover explore / multi-goal A* skip this frontier.
+            stuck = (
+                str(nav_res.note or "").startswith("already_at_goal")
+                or (not nav_res.finished and float(nav_res.dist_m) < 0.08)
+                or (not nav_res.success and float(nav_res.dist_m) < 0.12)
+            )
+            if stuck:
+                self._mark_nav_goal_blocked(reason=f"habitat_navmesh_{nav_res.note or 'stuck'}")
             return nav_res.finished
 
         target_pose = self.space.sample_navigation(start_pose, self.planner, original_target_pose)
@@ -2886,26 +2895,38 @@ class DynamemController(BaseController):
                 traj[-1][2] = target_theta
             traj, reject_reason, min_clr = self._filter_unsafe_nav_traj(traj, start_xyt=start_pose)
             if reject_reason is not None or not traj:
-                logger.warning(
-                    "navigate_to_target_pose rejected after safety filter: %s",
-                    reject_reason,
-                )
+                logger.warning(f"navigate_to_target_pose rejected after safety filter: {reject_reason}")
                 self._last_nav_plan = {
                     "mode": "navigation",
                     "localize_source": "eqa_target",
+                    "goal_xyt": list(np.asarray(target_pose, dtype=np.float64).reshape(-1)[:3])
+                    if target_pose is not None
+                    else [float(goal_xy[0]), float(goal_xy[1]), 0.0],
+                    "object_xyz": list(np.asarray(original_target_pose, dtype=np.float64).reshape(-1)[:3]),
                     "n_planned": n_planned,
                     "chunked": truncated,
                     "min_clearance_m": min_clr,
                     "outcome": reject_reason or "rejected_low_clearance",
                 }
-                traj = None
-            else:
-                logger.info(
-                    "navigate_to_target_pose: %d exec / %d planned waypoints (finished=%s)",
-                    len(traj),
-                    n_planned,
-                    finished,
+                reason = reject_reason or "rejected_low_clearance"
+                self._mark_nav_goal_blocked(reason=reason)
+                nav_res = NavAttemptResult(
+                    success=False,
+                    finished=False,
+                    dist_m=0.0,
+                    method="voxel_astar",
+                    note=reason,
+                    target_obs_id=target_obs_id,
                 )
+                self._last_nav_attempt = nav_res
+                self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
+                return False
+            logger.info(
+                "navigate_to_target_pose: %d exec / %d planned waypoints (finished=%s)",
+                len(traj),
+                n_planned,
+                finished,
+            )
         else:
             traj = None
 
@@ -2995,7 +3016,15 @@ class DynamemController(BaseController):
             )
         else:
             note = res.reason if res is not None else "sample_nav_failed"
-            logger.info("EQA voxel nav failed: %s", note)
+            logger.info(f"EQA voxel nav failed: {note}")
+            self._last_nav_plan = {
+                "mode": "navigation",
+                "localize_source": "eqa_target",
+                "goal_xyt": [float(goal_xy[0]), float(goal_xy[1]), 0.0],
+                "object_xyz": list(np.asarray(original_target_pose, dtype=np.float64).reshape(-1)[:3]),
+                "outcome": str(note),
+            }
+            self._mark_nav_goal_blocked(reason=str(note))
             nav_res = NavAttemptResult(
                 success=False,
                 finished=False,

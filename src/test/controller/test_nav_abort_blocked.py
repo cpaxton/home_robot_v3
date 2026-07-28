@@ -25,3 +25,19 @@ def test_mark_nav_goal_blocked_from_last_plan():
     assert key in agent._habitat_recent_goals
     assert agent._last_nav_plan.get("blocked_after_abort") is True
     assert agent._last_nav_plan.get("outcome") == "aborted_waypoint_timeout"
+
+
+def test_mark_nav_goal_blocked_habitat_navmesh_stuck_reason():
+    from emet.controller.controller_dynamem import DynamemController
+
+    agent = DynamemController.__new__(DynamemController)
+    agent._habitat_blocked_goals = set()
+    agent._habitat_recent_goals = []
+    agent._last_nav_plan = {
+        "goal_xyt": [2.0, 4.0, 0.0],
+        "method": "habitat_navmesh",
+    }
+    agent._mark_nav_goal_blocked(reason="habitat_navmesh_already_at_goal")
+    key = goal_key_xy((2.0, 4.0))
+    assert key in agent._habitat_blocked_goals
+    assert agent._last_nav_plan.get("outcome") == "habitat_navmesh_already_at_goal"
