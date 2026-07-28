@@ -29,9 +29,13 @@ _logger = Logger(__name__)
 _EQA_FORMAT_BLOCK = """\
 # Response format
 Respond with ONLY a JSON object (no other text):
-{"tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
+{"current_room": "<room>", "tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
 
 Rules:
+- Always set current_room to where the robot is NOW (from Investigate cards /
+  Recent labels / REGION text / Recent actions) — not the destination.
+  Prefer: patio, outdoor, kitchen, living_room, dining_room, bedroom, bathroom,
+  hallway, garage, unknown.
 - Each turn choose explicitly: INVESTIGATE a place card OR EXPLORE for coverage
   (then verify/assess runs at the station after investigate).
 - investigate(obs_id): closer look at a listed Investigate card (graph/confirmed/siglip).
@@ -42,26 +46,133 @@ Rules:
 - Use Recent actions to avoid repeating a stuck investigate/explore loop.
 - After a close look verifies ABSENT, prefer explore_frontier once to grow
   coverage before investigating a new capture-station card.
+- If Current room is patio/outdoor and the question is about an indoor object
+  (clock, kitchen, living room, …), prefer explore_frontier to leave outdoors.
 - SigLIP/OWL are proposals in state — not proof. Trust Qwen assess for answerability.
 - Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.
 - One or two tool calls per turn.
 
 # Examples
 State: Investigate obs_id=3 phrase='sink' source=graph investigated=0 approaches=0/4 coverage=open
-{"tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}
+{"current_room": "kitchen", "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}
 State: Recent actions: r0 investigate obs=3 verify=ABSENT; Prefer explore_frontier
-{"tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
+{"current_room": "patio", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
 State: Recent actions: r0–r2 investigate same obs ABSENT; Explore frontiers available
-{"tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
+{"current_room": "outdoor", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
 State: Last verify PRESENT; VLM assess answerable=true verified=true
-{"tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
+{"current_room": "living_room", "tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
 State: Investigate (none); Explore frontiers available
-{"tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}"""
+{"current_room": "unknown", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}"""
 
 _EQA_IDENTITY = """\
 You are a robot answering questions about a home. You maintain a 3D map and scene graph.
 Decide each turn: investigate a promising place for a closer look, or explore to grow
 coverage when places are exhausted or none look good. Do NOT output reasoning — only JSON."""
+
+# Canonical room labels for router current_room (aliases normalize into these).
+ROOM_CANONICAL = frozenset(
+    {
+        "patio",
+        "outdoor",
+        "kitchen",
+        "living_room",
+        "dining_room",
+        "bedroom",
+        "bathroom",
+        "hallway",
+        "garage",
+        "unknown",
+    }
+)
+_OUTDOOR_ROOMS = frozenset({"patio", "outdoor"})
+_OUTDOOR_ALIASES = frozenset(
+    {
+        "patio",
+        "outdoor",
+        "outdoors",
+        "outside",
+        "yard",
+        "deck",
+        "porch",
+        "garden",
+        "brick_patio",
+        "courtyard",
+    }
+)
+_INDOOR_QUESTION_CUES = frozenset(
+    {
+        "clock",
+        "wall clock",
+        "kitchen",
+        "living",
+        "living room",
+        "dining",
+        "bedroom",
+        "bathroom",
+        "bowl",
+        "fruit bowl",
+        "microwave",
+        "refrigerator",
+        "fridge",
+        "sofa",
+        "couch",
+        "fireplace",
+        "cabinet",
+        "indoor",
+        "inside",
+    }
+)
+
+
+def normalize_current_room(raw: Any) -> str:
+    """Map free-text router ``current_room`` onto a small vocabulary."""
+    if raw is None:
+        return "unknown"
+    s = str(raw).strip().lower().replace("-", " ").replace("/", " ")
+    s = "_".join(s.split())
+    if not s:
+        return "unknown"
+    if s in ROOM_CANONICAL:
+        return s
+    if s in _OUTDOOR_ALIASES or any(a in s for a in ("patio", "outdoor", "yard", "deck", "porch")):
+        return "outdoor" if "patio" not in s else "patio"
+    if "living" in s:
+        return "living_room"
+    if "dining" in s:
+        return "dining_room"
+    if "kitchen" in s:
+        return "kitchen"
+    if "bed" in s:
+        return "bedroom"
+    if "bath" in s:
+        return "bathroom"
+    if "hall" in s or "corridor" in s:
+        return "hallway"
+    if "garage" in s:
+        return "garage"
+    return "unknown"
+
+
+def room_is_outdoor(room: str) -> bool:
+    return normalize_current_room(room) in _OUTDOOR_ROOMS
+
+
+def question_implies_indoor(question: str) -> bool:
+    """True when the embodied question is likely about an indoor place/object."""
+    q = str(question or "").strip().lower()
+    if not q:
+        return False
+    if any(cue in q for cue in _INDOOR_QUESTION_CUES):
+        return True
+    # Location MCQ options often name rooms.
+    try:
+        from emet.memory.graph_eqa.graph_memory import location_mcq_landmark_phrases
+
+        landmarks = location_mcq_landmark_phrases(question)
+    except Exception:
+        landmarks = []
+    indoor_landmarks = ("kitchen", "living", "dining", "bedroom", "bathroom", "hall")
+    return any(any(tok in str(lm).lower() for tok in indoor_landmarks) for lm in landmarks)
 
 
 def build_agentic_eqa_tools(executor: AgenticEQAExecutor) -> list[Tool]:
@@ -93,7 +204,34 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     else:
         lines.append(f"Question: {executor.question}")
     lines.append(_graph_stats_line(gm))
+    graph_room = str(getattr(executor, "_graph_room_estimate", "") or "").strip()
     if gm is not None:
+        room_fn = getattr(gm, "graph_room_at_robot", None)
+        if callable(room_fn):
+            try:
+                xyt = None
+                robot_fn = getattr(executor, "_robot_xyt", None)
+                if callable(robot_fn):
+                    xyt = robot_fn()
+                graph_room = normalize_current_room(room_fn(xyt))
+                executor._graph_room_estimate = graph_room
+            except Exception as e:
+                _logger.warning(f"graph room for router state failed: {e}")
+    last_room = str(getattr(executor, "_last_room_estimate", "") or "").strip()
+    if graph_room:
+        lines.append(f"Current room (graph): {graph_room}")
+    if last_room:
+        lines.append(f"Current room (router): {last_room}")
+    if gm is not None:
+        rooms_fn = getattr(gm, "format_rooms_line", None)
+        if callable(rooms_fn):
+            try:
+                rooms_line = rooms_fn()
+            except Exception as e:
+                _logger.warning(f"room clusters for router state failed: {e}")
+                rooms_line = ""
+            if isinstance(rooms_line, str) and rooms_line.strip():
+                lines.append(rooms_line)
         used_spatial = False
         if getattr(gm, "_spatial_rag_enabled", lambda: False)():
             try:
@@ -151,10 +289,16 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     if recent_actions:
         lines.append("Recent actions: " + " | ".join(recent_actions))
     if getattr(executor, "_prefer_explore", False):
-        lines.append(
-            "Prefer explore_frontier: last close look was ABSENT — grow coverage "
-            "before chasing a new capture station."
-        )
+        if getattr(executor, "_prefer_explore_outdoor", False):
+            lines.append(
+                "Prefer explore_frontier: outdoor/patio looks ruled out for this "
+                "indoor question — leave outdoors and grow indoor coverage."
+            )
+        else:
+            lines.append(
+                "Prefer explore_frontier: last close look was ABSENT — grow coverage "
+                "before chasing a new capture station."
+            )
     if getattr(executor, "_last_capture_status", None):
         lines.append(f"Last capture: {executor._last_capture_status}")
     loop_flags = list(getattr(executor, "_nav_loop_flags", None) or [])
@@ -188,8 +332,10 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
             if isinstance(sim, (int, float)):
                 sim_bit = f" siglip_sim={float(sim):.3f}"
             rec = ledger.get(oid)
-            bits = rec.card_bits() if rec is not None else (
-                "investigated=0 closest=none approaches=0/4 coverage=unknown recent=none"
+            bits = (
+                rec.card_bits()
+                if rec is not None
+                else ("investigated=0 closest=none approaches=0/4 coverage=unknown recent=none")
             )
             tried = executor._tried.get(oid)
             if tried:

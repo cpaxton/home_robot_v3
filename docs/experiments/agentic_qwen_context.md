@@ -34,6 +34,16 @@ graph labels + SigLIP hits + frontiers
   a visited frontier is not a frontier anymore.
 - **Explore:** agentic `explore_frontier` prefers `_vlm_frontier_choice` (≤6 reachable
   frontier RGBs) before uncovered heuristics; `agentic_max_nav_steps` default 8.
+- **Router `current_room`:** each VLM routing turn must emit top-level
+  ``current_room`` (patio / outdoor / kitchen / living_room / … / unknown).
+  Normalized and shown as ``Current room (router): …`` in the next state.
+  Independently, object nodes are partitioned into room clusters
+  ([`room_clusters.py`](../../src/emet/memory/graph_eqa/room_clusters.py):
+  ``near`` edges + planar link radius) → ``Current room (graph): …`` and a
+  compact ``Rooms: …`` line. Merged estimate prefers a known graph label over
+  VLM ``unknown``. If outdoor/patio (graph or VLM) and the question looks indoor
+  (clock, kitchen, living, bowl, …), set ``prefer_explore`` so the fallback /
+  nudge leaves the patio (q104/q105-style rule-out) without a full Hydra room graph.
 - **Detectors** (SigLIP/OWL/YoloE): proposals in state only; do not unlock submit.
 - **Inspect episodes:** `uv run emet hmeqa inspect OUT --qid N [--open rgb]`.
 
@@ -56,7 +66,7 @@ correct agentic ``vlm_suggested`` letter could lose to truncated ``[salvage]``.
 | Call | Images | Graph / memory text |
 |------|--------|---------------------|
 | Classic ``query_answer`` | up to ``eqa_max_images`` (4) via ``_select_relevant_obs_ids`` | ``SCENE_GRAPH`` (~48 nodes) or spatial REGION blocks + Dynagraph ``CONFIRMED_MEMORY`` + HISTORY |
-| Agentic router ``build_state_message`` | none | counts + **evidence cards** (obs_id/phrase/source/xyz; optional siglip_sim); **Recent actions** (last ~6 investigate/explore outcomes); after close+ABSENT, **Prefer explore_frontier** nudge; capture stations excluded from Investigate cards; with spatial RAG, compact REGION text |
+| Agentic router ``build_state_message`` | none | counts + **evidence cards** (obs_id/phrase/source/xyz; optional siglip_sim); **Current room (graph)** + **Current room (router)** + compact ``Rooms:``; **Recent actions** (last ~6 investigate/explore outcomes); after close+ABSENT or outdoor+indoor-Q, **Prefer explore_frontier** nudge; capture stations excluded from Investigate cards; with spatial RAG, compact REGION text |
 | Agentic ``vlm_assess`` | 1 full-frame RGB | ≤12 inventory labels (no full SCENE_GRAPH) |
 | Agentic ``submit_answer`` → ``query_answer`` | verified obs forced as Image 1 when ``force_obs_ids`` set; fill remaining | same as classic |
 
