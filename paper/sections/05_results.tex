@@ -6,13 +6,15 @@ Habitat HM-EQA numbers are in Section~\ref{sec:hmeqa_results}; other tracks rema
 \subsection{Habitat HM-EQA (preliminary)}
 \label{sec:hmeqa_results}
 
-We report early Dynagraph numbers on HM-EQA in Habitat-Sim (\texttt{.venv-habitat/bin/emet-habitat}), using \texttt{Qwen/Qwen3-VL-8B-Instruct}, 20 planning iterations, navmesh navigation (\texttt{--habitat-perfect-nav}), graph frontier nodes, and (pre-tuning) MCQ debiasing plus SigLIP \texttt{CONFIRMED\_MEMORY}.
-Cross-environment harness tuning (\texttt{configs/benchmarks/dynagraph.yaml}, \texttt{feature/dynagraph-tuning}) disables MCQ debias for 8B HM-EQA and uses \texttt{explore\_when\_uncovered=conservative}; tuned sweep numbers are \textbf{pending}.
+We report early Dynagraph numbers on HM-EQA in Habitat-Sim (\texttt{.venv-habitat/bin/emet-habitat}), using \texttt{Qwen/Qwen3-VL-8B-Instruct}, 20 planning iterations, navmesh navigation (\texttt{--habitat-perfect-nav}), and graph frontier nodes.
+Cross-environment harness tuning (\texttt{configs/benchmarks/dynagraph.yaml}) sets HM-EQA \texttt{dynagraph} to \texttt{unified\_eqa} (0.45\,m merge), MCQ debias off, and \texttt{explore\_when\_uncovered=conservative}; HM-EQA \texttt{graph\_eqa} uses \texttt{graph\_eqa\_baseline} (merge/staleness off).
+Tuned full-113 numbers are \textbf{pending}.
 Table~\ref{tab:hmeqa_vs_prior} situates our numbers against GraphEQA paper baselines and our own full-benchmark reproduction; all \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless noted.
 
 \begin{table}[t]
   \centering
-  \caption{HM-EQA accuracy: prior art vs.\ \texttt{emet} harness (113-question benchmark unless noted).}
+  \caption{HM-EQA accuracy: prior art vs.\ \texttt{emet} harness (113-question benchmark unless noted).
+  Method rows use documented harness defaults; ablation rows are labeled as such.}
   \label{tab:hmeqa_vs_prior}
   \small
   \begin{tabular}{@{}llcc@{}}
@@ -28,18 +30,20 @@ Table~\ref{tab:hmeqa_vs_prior} situates our numbers against GraphEQA paper basel
     graph\_eqa repro & gemma-3-4b-it & 113 & 41.6\% \\
     dynagraph & Qwen2.5-VL-3B & 32 & 34.4\% \\
     graph\_eqa & Qwen2.5-VL-3B & 32 & 31.2\% \\
-    dynagraph + debias & Qwen2.5-VL-3B & 8 & 62.5\% \\
     dynagraph (post-fix) & Qwen3-VL-8B & 8 & 50.0\% \\
     graph\_eqa (July nav) & Qwen3-VL-8B & 8 & 87.5\% \\
-    dynagraph (July nav) & Qwen3-VL-8B & 8 & 37.5\% \\
-    dynagraph (tuned, explore off) & Qwen3-VL-8B & 8 & \textbf{100.0\%} \\
+    dynagraph (July nav, pre-tune) & Qwen3-VL-8B & 8 & 37.5\% \\
+    \midrule
+    \multicolumn{4}{@{}l@{}}{\textit{Ablations (not method defaults)}} \\
+    dynagraph + debias & Qwen2.5-VL-3B & 8 & 62.5\% \\
+    dynagraph (explore off) & Qwen3-VL-8B & 8 & 100.0\% \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 \noindent\textbf{Gap to prior art.}
 Our largest comparable run (gemma-3-4b, 113 questions) trails GraphEQA-GPT-4o by $\sim$22 percentage points---consistent with weaker local VLMs, incomplete GT semantics ($\sim$37/113 scenes at last audit), and a different scene-graph stack (Appendix~\ref{app:habitat_eqa_parity}).
-Dynagraph still beats our graph\_eqa baseline on matched slices (+3\,pp on letter-balanced 32) and reaches 50\% on a held-out random eight-question subset with Qwen3-VL-8B after June 2026 grounding fixes (Table~\ref{tab:hmeqa_preliminary}).
+On matched slices Dynagraph is competitive with our \texttt{graph\_eqa} baseline (+3\,pp on letter-balanced 32 at 3B); holdout-8 after July nav favored \texttt{graph\_eqa} until harness tuning (Table~\ref{tab:hmeqa_preliminary}).
 Full 113-question evaluation with the 8B model and current stack is \textbf{planned} (Section~\ref{sec:experiments}).
 
 These slices are \textbf{not} directly comparable to Table~\ref{tab:grapheqa_official_hmeqa} until semantics coverage and/or VLM tier align with the reference.
@@ -47,11 +51,11 @@ These slices are \textbf{not} directly comparable to Table~\ref{tab:grapheqa_off
 \textbf{Engineering fixes (June--July 2026).}
 Before hold-out evaluation we repaired Habitat navigation (compass/yaw, navmesh pathing, frontier deprioritization), graph-memory query failures (\texttt{KeyError} in observation indexing), and HM-EQA prompt grounding: phrase-level relevant objects, SigLIP retention through \texttt{prepare\_dynagraph\_vram\_for\_eqa}, and location-MCQ directives for ``did you see \ldots\ anywhere?'' questions where the VLM previously answered \texttt{No} instead of a place letter.
 In July 2026 we added Image-$N$ navigation waypoints (capture viewpoint or standoff toward object anchor, not raw centroid), navmesh trajectory execution with \texttt{already\_at\_goal} blocking, and frontier sorting by planar distance---reducing spin-in-place on search-style questions.
-Held-out random-8 numbers below include the July nav stack (\texttt{postfix\_nav20260705\_larger}); graph\_eqa reached 7/8 while legacy dynagraph extras (debias, aggressive frontier) scored 3/8---motivating per-harness tuning.
+Held-out random-8 numbers below include the July nav stack (\texttt{postfix\_nav20260705\_larger}); \texttt{graph\_eqa} reached 7/8 while legacy dynagraph extras (debias, aggressive frontier) scored 3/8---motivating per-harness tuning.
 
 \begin{table}[t]
   \centering
-  \caption{Preliminary HM-EQA accuracy (Dynagraph, Qwen3-VL-8B, RTX~4090, 20/10 step budget). Held-out ids exclude the smoke-tuning set $\{3,14,17\}$.}
+  \caption{Preliminary HM-EQA accuracy (Qwen3-VL-8B, RTX~4090, 20/10 step budget). Held-out ids exclude the smoke-tuning set $\{3,14,17\}$. Explore-off is an ablation, not the Dynagraph method default.}
   \label{tab:hmeqa_preliminary}
   \small
   \begin{tabular}{@{}llcc@{}}
@@ -61,7 +65,7 @@ Held-out random-8 numbers below include the July nav stack (\texttt{postfix\_nav
     Smoke (nav + EQA fixes) & 3, 14, 17 & 3 & 2/3 \\
     Q17 after phrase + location MCQ & 17 & 1 & 1/1 (gold D) \\
     Held-out random-8 (seed 20260627, July nav) & 15,\ldots,105 & 8 & graph 7/8; dyna 3/8 (pre-tune) \\
-    Held-out random-8 (tuned, explore off) & 15,\ldots,105 & 8 & dyna \textbf{8/8} \\
+    Held-out random-8 (\textbf{ablation}: explore off) & 15,\ldots,105 & 8 & dyna 8/8 \\
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{Reference (same harness, smaller VLMs): see Table~\ref{tab:habitat_interim_results}}} \\
     \bottomrule
@@ -93,7 +97,7 @@ Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
 \subsection{Classic vs.\ agentic verify (preliminary)}
 \label{sec:agentic_results}
 
-We compare the classic GraphEQA planning loop to the agentic tool loop on the same Dynagraph profile (Qwen3-VL-8B; \texttt{explore\_when\_uncovered=off}; Section~\ref{sec:agentic_h2h}).
+We compare the classic Dynagraph planning loop to the agentic tool loop on the same Dynagraph H2H profile (Qwen3-VL-8B; \texttt{explore\_when\_uncovered=off} ablation; Section~\ref{sec:agentic_h2h}).
 On the anti-overfit holdout-8 ($\{15,56,65,68,79,88,104,105\}$; agentic \textbf{router off}), agentic reaches \textbf{8/8} vs.\ classic \textbf{5/8}, with mean planning steps cut from 60.3 to 18.3 (Table~\ref{tab:agentic_h2h}; Figure~\ref{fig:hmeqa_agentic_h2h}).
 Agentic recovers all three classic misses (Q56, Q65, Q104).
 A earlier holdout-4 gate showed the same pattern (3/4$\rightarrow$4/4; 60$\rightarrow$19 steps).
@@ -102,7 +106,7 @@ On balanced-32 we report a \textbf{composite}: classic from the matched router-o
 Agentic reaches \textbf{16/32} vs.\ classic \textbf{9/32} with mean steps $48.7\rightarrow 32.7$ (Wilcoxon $p{\approx}2{\times}10^{-5}$); cross-policy McNemar on letters is $p{\approx}0.09$ (not significant at $\alpha{=}0.05$).
 \begin{table}[t]
   \centering
-  \caption{Classic vs.\ agentic-verify Dynagraph on HM-EQA (Qwen3-VL-8B; \texttt{explore\_when\_uncovered=off}).
+  \caption{Classic vs.\ agentic-verify Dynagraph on HM-EQA (Qwen3-VL-8B; explore-off H2H ablation).
   Holdout rows use matched router-off H2H; balanced-32 agentic is paper-router on (composite; see text).}
   \label{tab:agentic_h2h}
   \small

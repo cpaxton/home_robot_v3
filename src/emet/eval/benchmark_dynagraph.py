@@ -323,6 +323,11 @@ def apply_dynagraph_harness(
         for k, v in harness_controller_options(harness, method, path=path).items()
         if k != "profile"
     }
+    # YAML 1.1 parses bare on/off as bools; store the canonical string mode.
+    if "explore_when_uncovered" in method_opts:
+        method_opts["explore_when_uncovered"] = _normalize_explore_mode(
+            method_opts["explore_when_uncovered"]
+        )
     merged = dict(params.get("dynagraph_harness") or {})
     merged.update(method_opts)
     merged["harness"] = str(harness)
@@ -346,7 +351,9 @@ def apply_habitat_eqa_method_parameters(
     parameters: Parameters | dict[str, Any],
     method: str,
 ) -> Parameters:
-    """HM-EQA harness: graph_eqa baseline row or tuned dynagraph harness."""
+    """HM-EQA harness: ``graph_eqa`` → ``graph_eqa_baseline`` (merge/staleness off);
+    ``dynagraph`` → ``unified_eqa`` (0.45 m merge) + tuned EQA extras.
+    """
     if method not in ("graph_eqa", "dynagraph"):
         raise ValueError(f"Unknown method {method!r}; use graph_eqa or dynagraph")
     params = _as_parameters(parameters)

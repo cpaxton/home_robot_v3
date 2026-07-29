@@ -466,7 +466,8 @@ def compare_batch(
 ) -> None:
     """Run graph_eqa and dynagraph on the same questions; print side-by-side summary.
 
-    Both methods use identical graph-memory settings on HM-EQA; expect matching accuracy.
+    ``graph_eqa`` uses ``graph_eqa_baseline`` (merge/staleness off); ``dynagraph`` uses
+    ``unified_eqa`` (0.45 m merge) plus tuned extras. Accuracy need not match.
     """
     from emet_habitat.runner import run_hmeqa_compare
 
