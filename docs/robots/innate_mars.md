@@ -62,7 +62,8 @@ Prerequisites: project env with default groups (includes **dynamem** and **da3**
 
    ```bash
    export DISCORD_TOKEN=...
-   uv run emet run agent --connection herman --config configs/agent_innate_mars.yaml --name Herman
+   # Profile should store --config configs/agent_innate_mars.yaml (persona name in YAML).
+   uv run emet run agent --connection herman --rerun
    ```
 
 4. **Optional integration test** (slow; GPU recommended; caches weights after first run):
