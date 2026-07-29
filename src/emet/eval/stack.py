@@ -8,12 +8,17 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from emet.config.embodied_agent_config import (
+    GRAPH_EQA_FAMILY_BACKENDS,
+    coerce_embodied_agent_for_memory_backend,
+    normalize_memory_backend,
+)
 from emet.eval.benchmark_dynagraph import apply_dynagraph_harness
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
 
-MemoryBackendName = Literal["dynagraph", "graph_eqa", "dynamem"]
+MemoryBackendName = Literal["dynagraph", "graph_eqa", "dynamem", "open_vocab"]
 HarnessName = Literal[
     "interactive",
     "habitat_eqa",
@@ -54,14 +59,16 @@ def build_memory_agent(
     use_sensor_perception: bool | None = None,
     apply_harness_profile: bool = True,
 ) -> Any:
-    """Construct Dynamem / GraphEQA / Dynagraph controller with shared profile wiring.
+    """Construct Dynamem / GraphEQA / Dynagraph / open-vocab controller with shared profile wiring.
 
     Interactive agent and paper runners should call this so merge/staleness/EQA flags stay aligned.
+    At most one object-graph plug-in is attached (derived from ``backend``).
     """
-    backend_key = str(backend or "dynagraph").strip().lower()
+    backend_key = normalize_memory_backend(backend)
     harness_key = str(harness or "interactive").strip().lower()
+    embodied_agent = coerce_embodied_agent_for_memory_backend(embodied_agent, backend_key)
 
-    if apply_harness_profile and backend_key in ("dynagraph", "graph_eqa"):
+    if apply_harness_profile and backend_key in GRAPH_EQA_FAMILY_BACKENDS:
         method = "dynagraph" if backend_key == "dynagraph" else "graph_eqa"
         if harness_key == "interactive":
             from emet.eval.benchmark_dynagraph import apply_dynagraph_profile
@@ -70,7 +77,7 @@ def build_memory_agent(
         else:
             apply_dynagraph_harness(parameters, harness_key, method)  # type: ignore[arg-type]
 
-    if backend_key in ("dynagraph", "graph_eqa"):
+    if backend_key in GRAPH_EQA_FAMILY_BACKENDS:
         if isinstance(parameters, dict):
             parameters.setdefault("dynagraph_merge_xy_m", 0.45)
             parameters.setdefault("dynagraph_staleness_horizon", 256)
@@ -82,7 +89,7 @@ def build_memory_agent(
 
         inst = True if use_instance_graph is None else bool(use_instance_graph)
         sens = False if use_sensor_perception is None else bool(use_sensor_perception)
-        if embodied_agent is not None and getattr(embodied_agent, "graph_eqa_memory", None) is not None:
+        if getattr(embodied_agent, "graph_eqa_memory", None) is not None:
             gcfg = embodied_agent.graph_eqa_memory
             if getattr(gcfg, "enabled", False):
                 if use_instance_graph is None:
@@ -122,7 +129,11 @@ def build_memory_agent(
 
     from emet.controller.controller_dynamem import RobotAgent
 
-    logger.info(f"build_memory_agent: dynamem harness={harness_key} eqa={eqa}")
+    logger.info(
+        f"build_memory_agent: {backend_key} harness={harness_key} eqa={eqa} "
+        f"ov={embodied_agent.open_vocab_scene_graph.enabled} "
+        f"ge={embodied_agent.graph_eqa_memory.enabled}"
+    )
     return RobotAgent(
         robot,
         parameters,

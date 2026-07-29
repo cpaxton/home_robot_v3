@@ -74,6 +74,7 @@ def test_help_lists_memory_backend():
     r = runner.invoke(main, ["--help"])
     assert r.exit_code == 0
     assert "--memory-backend" in r.output
+    assert "open_vocab" in r.output
 
 
 def test_help_lists_lifelong_input_and_refine():

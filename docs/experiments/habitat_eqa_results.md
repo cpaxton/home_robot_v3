@@ -149,7 +149,7 @@ Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representa
 
 **In progress:** representative cross-benchmark sample `rep_sample_20260706` (OVMM, SQA3D, dynamic explore, figures). Full 113-question sweep next.
 
-**Merge policy (2026-07-11):** HM-EQA Dynagraph (`harness.habitat_eqa` → `unified_eqa`) uses **0.45 m merge / staleness 256**, matching interactive/agent memory. Earlier “no merge” HM-EQA rows were GraphEQA-parity leftovers and under-counted Dynagraph (Q17 basket instance fragmentation). Keep `smoke` / `graph_eqa_baseline` at true zero-merge for CI and GraphEQA comparison only — do not use them as the Dynagraph method default.
+**Merge policy (2026-07-11; clarified 2026-07-28):** HM-EQA **`dynagraph`** (`harness.habitat_eqa` → `unified_eqa`) uses **0.45 m merge / staleness 256**, matching interactive/agent memory. HM-EQA **`graph_eqa`** uses **`graph_eqa_baseline`** (merge/staleness **0**, Dynagraph extras off) — the GraphEQA comparison row. Keep `smoke` at true zero-merge for CI only — do not use it as a paper method default.
 
 **Memory-confirm (2026-07-13):** Dynagraph extras that used to lose GE-only wins (false `CONFIRMED_MEMORY`, dining-table Image‑1 for trash, nearest-furniture overriding a clear VLM letter) are gated in `GraphEQAMemory` + `emet_habitat.runner`: prefer boosted choice landmarks for Image‑1, never override a clear VLM A–D with nearest-furniture alone, abstain when the target is not in attached views, and require ≥2 grounded under-equipment options before geometric letters. Cite harness fingerprint + git commit (e.g. `f1478c9` memory-confirm). **Accept-vs-fix hard cases:** Q16 (pillow/sofa labeling) and exploration-limited Q18/Q31/Q57 can still flake; Dynagraph’s static HM-EQA claim is *no GE-only memory collapse*, not 100% on every search MCQ. True world-change wins stay on the Robocasa/Molmo dynamic-exploration track.
 
@@ -168,20 +168,22 @@ Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representa
 
 **Gate result (2026-07-12, `q17_gate_20260712_000543`):** **2/3** pass (t1 D/41 nodes, t2 D/44, t3 B/62 fail); fingerprint `merge=0.45` / `fallback=0.45` / `profile=unified_eqa` / `explore=conservative` / commit `fd43538` (+ loc-MCQ fixes on branch).
 
-## Classic vs agentic-verify Dynagraph (2026-07-23 → 2026-07-26)
+## Classic vs agentic-verify Dynagraph (2026-07-23 → 2026-07-27)
 
-Same Dynagraph memory / Habitat harness (`explore_when_uncovered=off`, no MCQ debias, memory-summary on, Qwen3-VL-8B). Agentic uses the tool loop; scored runs used **router off** (`EMET_EQA_AGENTIC_ROUTER=0`), owlv2 proposals, allow-unverified.
+Same Dynagraph memory / Habitat harness (`explore_when_uncovered=off`, no MCQ debias, memory-summary on, Qwen3-VL-8B). Holdout headline used **router off**; balanced-32 of-record agentic is **paper-router + explore** (composite classic from matched H2H).
 
 Entrypoint: prefer **`uv run emet hmeqa overnight`** / **`emet hmeqa h2h`** ([`scripts/run_hmeqa_agentic_h2h.sh`](../../scripts/run_hmeqa_agentic_h2h.sh)). Coverage figure: [`scripts/render_hmeqa_agentic_coverage_figure.py`](../../scripts/render_hmeqa_agentic_coverage_figure.py). Use distinct `--debug-run-tag` / `OUT/bundles/{arm}_qN` snapshots so arms do not overwrite `~/.cache/habitat_eqa/episodes/`.
 
 | Slice | Classic | Agentic | Mean steps (C → A) | Artifacts |
 |-------|---------|---------|--------------------|-----------|
 | Holdout-4 `{15,68,105,17}` | 3/4 (75%) | **4/4 (100%)** | 60.0 → **19.3** | `~/runs/emet/hmeqa_agentic_h2h_20260723_170804` |
-| Holdout-8 `{15,56,65,68,79,88,104,105}` | 5/8 (62.5%) | **8/8 (100%)** | 60.3 → **18.3** | `~/runs/emet/hmeqa_agentic_h2h8_20260723_174307` |
-| Balanced-32 (2026-07-26 r2) | 9/32 (28.1%) | **11/32 (34.4%)** | 48.7 → **17.8** | `~/runs/emet/hmeqa_agentic_bal32r2_20260726_105946` |
-| Balanced-32 overnight replicate | 10/32 (31.2%) | **12/32 (37.5%)** | 47.7 → **16.5** | `~/runs/emet/hmeqa_overnight_20260726_022227/bal32` |
+| Holdout-8 `{15,56,65,68,79,88,104,105}` (router off) | 5/8 (62.5%) | **8/8 (100%)** | 60.3 → **18.3** | `~/runs/emet/hmeqa_agentic_h2h8_20260723_174307` |
+| Holdout-8 paper-router variance | — | 5/8 (docs only) | — | `~/runs/emet/hmeqa_holdout8_explore_20260727_211505` |
+| Balanced-32 composite of-record | 9/32 (28.1%) | **16/32 (50.0%)** | 48.7 → **32.7** | classic `bal32r2` + agentic `hmeqa_bal32_explore_20260727_215036` |
+| Balanced-32 matched H2H (router off, archived) | 9/32 (28.1%) | 11/32 (34.4%) | 48.7 → 17.8 | `balanced32_router_off_agentic_archive.json` |
+| Balanced-32 overnight replicate (router off) | 10/32 (31.2%) | **12/32 (37.5%)** | 47.7 → **16.5** | `~/runs/emet/hmeqa_overnight_20260726_022227/bal32` |
 
-Holdout-8 classic misses recovered by agentic: **Q56** (A→C), **Q65** (C→A), **Q104** (A→D). Balanced-32: McNemar on letters **not significant** (p≈0.73); planning-step reduction is (Wilcoxon p≈4e-7). Paper: §Classic vs agentic verify; figures `paper/figs/hmeqa_agentic_h2h.png`, `paper/figs/hmeqa_agentic_coverage.png` (holdout-8 panels). Summaries: `paper/data/hmeqa_agentic_h2h/`.
+Holdout-8 classic misses recovered by agentic (router off): **Q56** (A→C), **Q65** (C→A), **Q104** (A→D). Balanced-32 composite: cross-policy McNemar p≈0.09; Wilcoxon steps p≈1.8e-5. Paper: §Classic vs agentic verify; figures `paper/figs/hmeqa_agentic_h2h.png`, `paper/figs/hmeqa_agentic_coverage.png` (holdout-8 panels), `hmeqa_agentic_h2h_bal32.png`. Summaries: `paper/data/hmeqa_agentic_h2h/`. Scale ladder / larger VLM: [`agentic_scale.md`](agentic_scale.md).
 
 ```bash
 uv run emet eval recover --need-mib 12000

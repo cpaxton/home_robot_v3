@@ -43,17 +43,19 @@ Paper harnesses do not fork ad-hoc merge values in runner code.
     \midrule
     \texttt{interactive} & 0.45 & 256 & live \texttt{emet run dynagraph} \\
     \texttt{eqa} & 0.45 & 256; nav cap 48 & SQA3D tuned \\
+    \texttt{unified\_eqa} & 0.45 & 256; nav cap 48 & HM-EQA \texttt{dynagraph} (method default) \\
     \texttt{find\_phase} & 0.15 & 256 & OVMM \texttt{dynagraph} / \texttt{ground\_truth} \\
-    \texttt{graph\_eqa\_baseline} & 0 & 0 & OVMM \texttt{graph\_eqa} \\
-    \texttt{smoke} & 0 & 0 & HM-EQA harness / SQA3D mock \\
-    \texttt{unified\_eqa} & 0 & 0; nav cap 48 & optional shared EQA profile \\
+    \texttt{graph\_eqa\_baseline} & 0 & 0 & HM-EQA / OVMM / dynamic-explore \texttt{graph\_eqa} \\
+    \texttt{smoke} & 0 & 0 & CI / mock-LLM only (not a paper method row) \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 Per-harness EQA flags (\texttt{memory\_summary}, \texttt{mcq\_debias}, \texttt{explore\_when\_uncovered}) live under \texttt{harness:} in the same YAML and are applied via \texttt{apply\_dynagraph\_harness()}.
-Tuned HM-EQA dynagraph: memory on, debias off, conservative explore.
+Tuned HM-EQA \texttt{dynagraph}: memory on, debias off, \texttt{explore\_when\_uncovered=conservative}.
+HM-EQA \texttt{graph\_eqa}: \texttt{graph\_eqa\_baseline} (merge/staleness off; no Dynagraph extras)---the internal GraphEQA reimplementation row.
 Paper figures: \texttt{render\_paper\_map\_figures.py}, \texttt{render\_graph\_retrieval\_panel.py}, \texttt{render\_dynagraph\_3d\_figure.py}, \texttt{render\_hmeqa\_qualitative\_figure.py}.
+Operator index: \texttt{docs/experiments/README.md}.
 
 \subsection{Benchmark configuration}
 
@@ -278,8 +280,9 @@ A \textbf{July 2026 navigation stack} (Image-$N$ viewpoint/standoff waypoints, n
 \label{sec:agentic_h2h}
 
 We treat the EQA \emph{controller} as a first-class ablation on top of a fixed Dynagraph memory profile (Section~\ref{sec:eqa_loops}).
-Both arms use \texttt{emet-habitat run-episode --method dynagraph} with the tuned HM-EQA harness (\texttt{explore\_when\_uncovered=off}, no MCQ debias, memory-summary on) and \texttt{Qwen/Qwen3-VL-8B-Instruct}.
-The only intentional difference is \texttt{EMET\_EQA\_AGENTIC\_VERIFY}: classic uses the inherited GraphEQA planning/\texttt{query\_answer} loop; agentic uses \texttt{AgenticEQAExecutor} with \texttt{EMET\_EQA\_AGENTIC\_ROUTER=0} (same tools, heuristic tool selection---no extra router VLM).
+Both arms use \texttt{emet-habitat run-episode --method dynagraph} with a fixed Dynagraph H2H profile (\texttt{explore\_when\_uncovered=off}, no MCQ debias, memory-summary on) and \texttt{Qwen/Qwen3-VL-8B-Instruct}.
+That explore-off setting is an \textbf{ablation} for the agentic comparison (not the HM-EQA Dynagraph method default, which is \texttt{explore\_when\_uncovered=conservative}).
+The only intentional arm difference is \texttt{EMET\_EQA\_AGENTIC\_VERIFY}: classic uses the Dynagraph planning/\texttt{query\_answer} loop; agentic uses \texttt{AgenticEQAExecutor} with \texttt{EMET\_EQA\_AGENTIC\_ROUTER=0} (same tools, heuristic tool selection---no extra router VLM).
 
 \textbf{Primary metrics:} letter accuracy and mean planning steps (search cost).
 \textbf{Slices:} holdout-4 gate $\{15,68,105,17\}$, then the anti-overfit holdout-8 $\{15,56,65,68,79,88,104,105\}$ (same ids as prior paper slices).

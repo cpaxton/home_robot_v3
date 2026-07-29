@@ -44,7 +44,7 @@ from emet.llms.prefix_kv_cache import (
     clone_past_key_values,
     system_prompt_cache_key,
 )
-from emet.llms.repetition_stop import repetition_stopping_criteria
+from emet.llms.repetition_stop import HardTimeStop, repetition_stopping_criteria
 from emet.llms.vl_image import downsample_rgb_hwc
 from emet.llms.vlm_device import (
     assert_cuda_placement,
@@ -59,6 +59,31 @@ _PREFIX_GENERATE_SOFT_TIMEOUT_S = float(os.environ.get("EMET_VL_PREFIX_GENERATE_
 # Heartbeat while ``model.generate`` runs (incl. long vision prefill) so eval harnesses
 # that watch log mtime do not STALE_KILL a live forward.
 _GENERATE_HEARTBEAT_S = float(os.environ.get("EMET_VL_GENERATE_HEARTBEAT_S", "30") or 30)
+# Hard wall-clock cap for one ``model.generate`` (default 3 min). ``0`` disables.
+_DEFAULT_GENERATE_TIMEOUT_S = 180.0
+
+
+class VlGenerateTimeoutError(TimeoutError):
+    """Raised when a VL ``model.generate`` exceeds ``EMET_VL_GENERATE_TIMEOUT_S``."""
+
+
+def resolve_vl_generate_timeout_s() -> float | None:
+    """Return hard generate timeout in seconds, or ``None`` if disabled.
+
+    Env ``EMET_VL_GENERATE_TIMEOUT_S`` (default ``180``). Set ``0`` to disable
+    (overnight Habitat paths that intentionally allow longer vision generates).
+    Tighten (e.g. ``120``) if multi-minute SDPA / wedged generates show up again.
+    """
+    raw = os.environ.get("EMET_VL_GENERATE_TIMEOUT_S", str(_DEFAULT_GENERATE_TIMEOUT_S))
+    if raw is None or str(raw).strip() == "":
+        return _DEFAULT_GENERATE_TIMEOUT_S
+    try:
+        val = float(raw)
+    except ValueError:
+        return _DEFAULT_GENERATE_TIMEOUT_S
+    if val <= 0:
+        return None
+    return val
 
 
 def _generate_with_heartbeat(
@@ -68,29 +93,79 @@ def _generate_with_heartbeat(
     max_new: int,
     has_vision: bool,
     heartbeat_s: float | None = None,
+    timeout_s: float | None = None,
 ) -> Any:
-    """Run ``generate_fn`` while printing periodic ``[vl] generate heartbeat`` lines."""
+    """Run ``generate_fn`` with periodic heartbeats and an optional hard wall-clock timeout.
+
+    When ``timeout_s`` is set, ``generate_fn`` runs on a worker thread. If it does not finish
+    in time, raises :class:`VlGenerateTimeoutError`. The worker may still be running CUDA work
+    after the raise (callers should treat the client/process as potentially wedged).
+    """
     interval = float(_GENERATE_HEARTBEAT_S if heartbeat_s is None else heartbeat_s)
-    if interval <= 0:
-        return generate_fn()
-    stop = threading.Event()
+    limit = float(timeout_s) if timeout_s is not None and timeout_s > 0 else None
     t0 = time.monotonic()
 
-    def _beat() -> None:
-        while not stop.wait(interval):
+    def _heartbeat_line() -> None:
+        print(
+            f"[vl] generate heartbeat elapsed={time.monotonic() - t0:.0f}s "
+            f"prompt={input_len} max_new={max_new} vision={has_vision}",
+            flush=True,
+        )
+
+    if limit is None:
+        if interval <= 0:
+            return generate_fn()
+        stop = threading.Event()
+
+        def _beat() -> None:
+            while not stop.wait(interval):
+                _heartbeat_line()
+
+        thr = threading.Thread(target=_beat, name="vl-generate-heartbeat", daemon=True)
+        thr.start()
+        try:
+            return generate_fn()
+        finally:
+            stop.set()
+            thr.join(timeout=1.0)
+
+    box: dict[str, Any] = {}
+
+    def _worker() -> None:
+        try:
+            box["result"] = generate_fn()
+        except BaseException as exc:  # noqa: BLE001 — re-raised on caller thread
+            box["error"] = exc
+
+    work = threading.Thread(target=_worker, name="vl-generate-worker", daemon=True)
+    work.start()
+    next_beat = t0 + interval if interval > 0 else None
+    while work.is_alive():
+        remaining = limit - (time.monotonic() - t0)
+        if remaining <= 0:
+            elapsed = time.monotonic() - t0
             print(
-                f"[vl] generate heartbeat elapsed={time.monotonic() - t0:.0f}s "
+                f"[vl] generate TIMEOUT after {elapsed:.1f}s "
+                f"(EMET_VL_GENERATE_TIMEOUT_S={limit:g}) "
                 f"prompt={input_len} max_new={max_new} vision={has_vision}",
                 flush=True,
             )
+            raise VlGenerateTimeoutError(
+                f"VL generate exceeded {limit:g}s "
+                f"(prompt={input_len} max_new={max_new} vision={has_vision}). "
+                "Failing loud instead of hanging. Set EMET_VL_GENERATE_TIMEOUT_S=0 to disable."
+            )
+        wait = remaining
+        if next_beat is not None:
+            wait = min(wait, max(0.05, next_beat - time.monotonic()))
+        work.join(timeout=wait)
+        if next_beat is not None and time.monotonic() >= next_beat:
+            _heartbeat_line()
+            next_beat = time.monotonic() + interval
 
-    thr = threading.Thread(target=_beat, name="vl-generate-heartbeat", daemon=True)
-    thr.start()
-    try:
-        return generate_fn()
-    finally:
-        stop.set()
-        thr.join(timeout=1.0)
+    if "error" in box:
+        raise box["error"]
+    return box["result"]
 
 
 class Qwen3VLClient(AbstractVLLMClient):
@@ -471,14 +546,29 @@ class Qwen3VLClient(AbstractVLLMClient):
             prefix_len = 0
             prompt_len_for_stop = input_len
 
+        criteria = repetition_stopping_criteria(prompt_len_for_stop)
+        hard_stop: HardTimeStop | None = None
+        timeout_s = resolve_vl_generate_timeout_s()
+        if timeout_s is not None:
+            hard_stop = HardTimeStop(timeout_s)
+            criteria.append(hard_stop)
         gen_kw: dict[str, Any] = {
             "max_new_tokens": max_new_tokens,
             "num_beams": self.num_beams,
-            "stopping_criteria": repetition_stopping_criteria(prompt_len_for_stop),
+            "stopping_criteria": criteria,
         }
         if pad_id is not None:
             gen_kw["pad_token_id"] = pad_id
-        return self.model.generate(**model_inputs, **gen_kw)
+        # HF also has max_time; HardTimeStop is authoritative and exposes ``fired``.
+        if timeout_s is not None:
+            gen_kw["max_time"] = float(timeout_s)
+        generated = self.model.generate(**model_inputs, **gen_kw)
+        if hard_stop is not None and hard_stop.fired:
+            raise VlGenerateTimeoutError(
+                f"VL generate decode stopped after {timeout_s:g}s "
+                f"(EMET_VL_GENERATE_TIMEOUT_S). Set 0 to disable."
+            )
+        return generated
 
     def _generate_ids_with_prefix_guard(
         self,
@@ -638,6 +728,7 @@ class Qwen3VLClient(AbstractVLLMClient):
             input_len=input_len,
             max_new=ntok,
             has_vision=has_vision,
+            timeout_s=resolve_vl_generate_timeout_s(),
         )
         gen_s = timeit.default_timer() - t_gen0
         print(f"[vl] generate finished in {gen_s:.1f}s", flush=True)

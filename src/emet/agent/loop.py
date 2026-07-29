@@ -41,7 +41,12 @@ from emet.agent.thinking_status import (
     short_llm_label,
 )
 from emet.agent.tools import Tool, get_tools
-from emet.config.embodied_agent_config import EmbodiedAgentConfig, load_embodied_agent_overlay
+from emet.config.embodied_agent_config import (
+    EmbodiedAgentConfig,
+    coerce_embodied_agent_for_memory_backend,
+    load_embodied_agent_overlay,
+    normalize_memory_backend,
+)
 from emet.controller.task.dynamem import DynamemTaskExecutor
 from emet.controller.zmq_client import StretchZmqClient
 from emet.controller.zmq_stream_control import paused_robot_streams
@@ -533,6 +538,8 @@ def run_agent_with_robot(
         parameters = get_parameters(agent_config, robot=robot)
     if embodied_overlay is None:
         embodied_overlay = load_embodied_agent_overlay(agent_config)
+    memory_backend = normalize_memory_backend(memory_backend)
+    embodied_overlay = coerce_embodied_agent_for_memory_backend(embodied_overlay, memory_backend)
     defer_eqa_vllm = bool(eqa and use_llm and share_memory_vllm)
     refine_start = bool(kwargs.pop("refine_start", False))
     from emet.agent.env_flags import env_confirm_nav
@@ -660,6 +667,7 @@ def run_agent_with_robot(
             executor.agent,
             input_path,
             refine_start=refine_start,
+            memory_backend=mb,
         )
         executor._last_memory_save_path = input_path
         refine = load_info.get("refine")

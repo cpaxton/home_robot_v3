@@ -10,8 +10,9 @@ Use these JSON files to rebuild tables/figures and to re-run the Habitat H2H.
 | `manifest.json` | Slice IDs, harness flags, git commit, reproduce entrypoints |
 | `holdout8_summary.json` | Scored holdout-8 letters / steps (paper Table) |
 | `holdout4_summary.json` | Earlier gate (n=4) |
-| `balanced32_summary.json` | Balanced-32 H2H (2026-07-26: classic 9/32, agentic 11/32; steps win) |
-| `balanced32_overnight_replicate.json` | Independent overnight bal-32 (classic 10/32, agentic 12/32) |
+| `balanced32_summary.json` | Composite of-record: classic 9/32 (router-off) + agentic **16/32** (paper-router+explore) |
+| `balanced32_router_off_agentic_archive.json` | Prior matched H2H agentic 11/32 (router off) |
+| `balanced32_overnight_replicate.json` | Independent overnight bal-32 (classic 10/32, agentic 12/32; router off) |
 | `failset104105_summary.json` | q104/q105 infra regression (empty pred / `n_object=0`) before vs after fix |
 | `coverage_panel_metrics.json` | Per-question metrics for `figs/hmeqa_agentic_coverage.png` |
 
@@ -55,17 +56,17 @@ diff -u paper/data/hmeqa_agentic_h2h/holdout8_summary.json \
 | Classic | 5/8 | 62.5% | 60.25 |
 | Agentic | 8/8 | 100% | 18.25 |
 
-### Balanced-32
+### Balanced-32 (composite of-record)
 
 See `hmeqa_agentic_h2h/balanced32_summary.json` and `hmeqa_agentic_h2h/README.md`.
 
-| Arm | Correct | Accuracy | Mean planning steps |
-|-----|---------|----------|---------------------|
-| Classic | 9/32 | 28.1% | 48.7 |
-| Agentic | 11/32 | 34.4% | 17.8 |
+| Arm | Correct | Accuracy | Mean planning steps | Policy |
+|-----|---------|----------|---------------------|--------|
+| Classic | 9/32 | 28.1% | 48.7 | router-off matched H2H |
+| Agentic | **16/32** | **50.0%** | **32.7** | paper-router on + explore (2026-07-27) |
 
-McNemar on letters is not significant (p≈0.73); planning-step reduction is (Wilcoxon p≈4e-7). Independent overnight replicate: classic 10/32, agentic 12/32. Historical salvage-bug Wave 1 (classic 12/32, agentic 9/32) is superseded — do not cite.
+Cross-policy McNemar p≈0.09 (n.s. at α=0.05); Wilcoxon steps p≈1.8e-5. Prior matched agentic (router off): 11/32 @ 17.8 steps (archived). Overnight replicate under router-off: classic 10/32, agentic 12/32. Holdout paper-router variance: agentic 5/8 (docs only; headline remains 8/8).
 
-VLM: `Qwen/Qwen3-VL-8B-Instruct`. Harness: Dynagraph, `explore_when_uncovered=off`, no MCQ debias, memory-summary on, agentic **router off**, owlv2 proposals, allow-unverified.
+VLM: `Qwen/Qwen3-VL-8B-Instruct`. Harness: Dynagraph, `explore_when_uncovered=off`, no MCQ debias, memory-summary on, owlv2 proposals, allow-unverified.
 
 More context: [docs/experiments/habitat_eqa_results.md](../../docs/experiments/habitat_eqa_results.md) (Classic vs agentic-verify section), [docs/experiments/agentic_scale.md](../../docs/experiments/agentic_scale.md).

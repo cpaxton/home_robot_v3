@@ -81,7 +81,7 @@ def test_default_hf_model_id_known_families():
 
 
 def test_supported_vllms_table_has_expected_keys():
-    for k in ("qwen3_vl", "qwen3_5", "qwen2_5_vl", "gemma4"):
+    for k in ("qwen3_vl", "qwen3_5", "qwen2_5_vl", "gemma4", "internvl"):
         assert k in SUPPORTED_VLLMS
         assert registry_entry(k) is not None
         assert registry_entry(k).supports_dedup is True

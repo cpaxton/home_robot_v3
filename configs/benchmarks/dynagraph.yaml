@@ -47,6 +47,7 @@ profiles:
 # ``parameters.dynagraph_harness`` for ``DynagraphController``.
 harness:
   habitat_eqa:
+    # Default profile for dynagraph method only; graph_eqa overrides below.
     profile: unified_eqa
     dynagraph:
       memory_summary: true
@@ -56,6 +57,12 @@ harness:
       use_instance_graph: false
       manipulation_only: true
     graph_eqa:
+      # GraphEQA paper reimplementation row: no merge/staleness, no Dynagraph extras.
+      profile: graph_eqa_baseline
+      memory_summary: false
+      mcq_debias: false
+      explore_when_uncovered: "off"
+      siglip_grounding: false
       use_instance_graph: false
       manipulation_only: true
   habitat_ovmm_find:
@@ -100,17 +107,17 @@ harness:
       sqa3d_allow_partial_graph: true
       memory_summary: false
       mcq_debias: false
-      explore_when_uncovered: off
+      explore_when_uncovered: "off"
       siglip_grounding: false
   dynamic_explore:
     dynagraph:
       profile: interactive
       memory_summary: true
       mcq_debias: true
-      explore_when_uncovered: on
+      explore_when_uncovered: "on"
       siglip_grounding: true
     graph_eqa:
       profile: graph_eqa_baseline
       memory_summary: false
       mcq_debias: false
-      explore_when_uncovered: off
+      explore_when_uncovered: "off"

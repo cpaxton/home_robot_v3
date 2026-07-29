@@ -120,6 +120,8 @@ def test_hmeqa_h2h_help_lists_evidence_policy_flags():
     assert "require-verified" in result.stdout
     assert "agentic-router" in result.stdout
     assert "paper-router" in result.stdout
+    assert "eqa-hf-model-id" in result.stdout
+    assert "eqa-vl-family" in result.stdout
 
 
 def test_hmeqa_overnight_help():

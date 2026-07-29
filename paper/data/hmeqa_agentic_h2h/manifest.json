@@ -1,27 +1,29 @@
 {
   "experiment": "hmeqa_classic_vs_agentic",
-  "git_commit": "8c9a388",
-  "date": "2026-07-26",
+  "git_commit": "e7d0eb20",
+  "date": "2026-07-27",
   "vlm": "Qwen/Qwen3-VL-8B-Instruct",
   "method": "dynagraph",
   "harness": {
     "explore_when_uncovered": "off",
     "mcq_debias": false,
     "memory_summary": true,
-    "agentic_router": false,
+    "agentic_router": "mixed (classic baseline router-off; agentic of-record paper-router on)",
     "agentic_verifier": "owlv2",
     "require_verified": false,
     "attn": "EMET_ALLOW_SDPA_ATTN=1 (Habitat flash-attn blocked)"
   },
   "arms": {
     "classic": {
-      "EMET_EQA_AGENTIC_VERIFY": "0"
+      "EMET_EQA_AGENTIC_VERIFY": "0",
+      "note": "from matched H2H bal32r2 2026-07-26"
     },
     "agentic": {
       "EMET_EQA_AGENTIC_VERIFY": "1",
-      "EMET_EQA_AGENTIC_ROUTER": "0",
+      "EMET_EQA_AGENTIC_ROUTER": "1",
       "EMET_EQA_AGENTIC_VERIFIER": "owlv2",
-      "EMET_EQA_AGENTIC_REQUIRE_VERIFIED": "0"
+      "EMET_EQA_AGENTIC_REQUIRE_VERIFIED": "0",
+      "note": "paper-router + station-filter + explore-after-ABSENT (2026-07-27)"
     }
   },
   "slices": {
@@ -90,10 +92,21 @@
         84
       ],
       "summary": "balanced32_summary.json",
-      "run_dir": "~/runs/emet/hmeqa_agentic_bal32r2_20260726_105946",
-      "job_id": "20260726_105950_99aa96",
+      "composite": true,
+      "classic_run_dir": "~/runs/emet/hmeqa_agentic_bal32r2_20260726_105946",
+      "classic_job_id": "20260726_105950_99aa96",
+      "agentic_run_dir": "~/runs/emet/hmeqa_bal32_explore_20260727_215036",
+      "agentic_job_id": "20260727_215142_5e4dd3",
+      "archive_matched_h2h": "balanced32_router_off_agentic_archive.json",
       "status": "complete",
-      "note": "classic 9/32 agentic 11/32; McNemar n.s.; steps Wilcoxon p~4e-7; router off despite paper-router CLI intent (H2H hardcoded until fix)"
+      "note": "COMPOSITE classic 9/32 (router off) + agentic 16/32 (paper-router+explore); McNemar cross-policy p~0.09; steps Wilcoxon p~2e-5; prior matched agentic 11/32 archived"
+    },
+    "holdout8_paper_router_variance": {
+      "ids": [15, 56, 65, 68, 79, 88, 104, 105],
+      "run_dir": "~/runs/emet/hmeqa_holdout8_explore_20260727_211505",
+      "job_id": "20260727_211611_a80503",
+      "status": "docs_only",
+      "note": "agentic 5/8 under paper-router+explore — not the paper headline (headline remains router-off 8/8)"
     },
     "failset104105": {
       "ids": [
@@ -129,9 +142,10 @@
     "notes": [
       "Prefer: uv run emet hmeqa overnight  or  emet hmeqa h2h --preset paper-router",
       "COPY_PAPER_FIGS=1 only when regenerating holdout-8 paper figures (default off).",
-      "EMET_EQA_AGENTIC_ROUTER is honored by H2H (default 0); scored bal-32 used router=0.",
+      "EMET_EQA_AGENTIC_ROUTER is honored by H2H (default 0); paper-router preset sets 1.",
+      "EQA_HF_MODEL_ID / EQA_VL_FAMILY pass through to emet-habitat --eqa-hf-model-id / --eqa-vl-family.",
       "Letter accuracy and planning_steps in *_summary.json are the scored H2H episodes.",
-      "Optional fig: paper/figs/hmeqa_agentic_h2h_bal32.png (bars from bal32r2; holdout figs remain hmeqa_agentic_h2h.png)."
+      "Bal-32 fig: paper/figs/hmeqa_agentic_h2h_bal32.png (composite 9/32 vs 16/32); holdout figs remain hmeqa_agentic_h2h.png."
     ]
   }
 }

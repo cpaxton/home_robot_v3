@@ -100,10 +100,33 @@ def test_habitat_eqa_method_parameters_use_unified_eqa_profile():
     assert resolve_harness_profile("habitat_eqa") == "unified_eqa"
     assert params.get("dynagraph_merge_xy_m") == unified["dynagraph_merge_xy_m"] == 0.45
     assert params.get("dynagraph_staleness_horizon") == unified["dynagraph_staleness_horizon"] == 256
+    assert (params.get("dynagraph_harness") or {}).get("profile") == "unified_eqa"
     flags = dynagraph_harness_flags(params)
     assert flags["mcq_debias"] is False
+    assert flags["explore_when_uncovered"] == "conservative"
     fusion = params.get("graph_object_fusion") or {}
     assert float(fusion.get("fallback_spatial_merge_xy_m", -1)) == 0.45
+
+
+def test_habitat_eqa_graph_eqa_uses_baseline_zero_merge():
+    """HM-EQA ``graph_eqa`` must be the GraphEQA paper row (merge/staleness off)."""
+    params = apply_habitat_eqa_method_parameters(get_parameters("dynav_config.yaml"), "graph_eqa")
+    baseline = profile_settings("graph_eqa_baseline")
+    assert params.get("dynagraph_merge_xy_m") == baseline["dynagraph_merge_xy_m"] == 0.0
+    assert params.get("dynagraph_staleness_horizon") == baseline["dynagraph_staleness_horizon"] == 0
+    block = params.get("dynagraph_harness") or {}
+    assert block.get("profile") == "graph_eqa_baseline"
+    assert block.get("memory_summary") is False
+    assert block.get("mcq_debias") is False
+    assert block.get("explore_when_uncovered") == "off"
+    assert block.get("siglip_grounding") is False
+    flags = dynagraph_harness_flags(params)
+    assert flags["memory_summary"] is False
+    assert flags["mcq_debias"] is False
+    assert flags["explore_when_uncovered"] == "off"
+    assert flags["siglip_grounding"] is False
+    fusion = params.get("graph_object_fusion") or {}
+    assert float(fusion.get("fallback_spatial_merge_xy_m", -1)) == 0.0
 
 
 def test_zero_merge_profiles_disable_fusion_fallback():

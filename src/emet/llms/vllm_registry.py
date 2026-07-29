@@ -59,6 +59,11 @@ SUPPORTED_VLLMS: dict[str, VLLMRegistryEntry] = {
         default_hf_model_id="google/gemma-4-E4B-it",
         supports_dedup=True,
     ),
+    "internvl": VLLMRegistryEntry(
+        family_key="internvl",
+        default_hf_model_id="OpenGVLab/InternVL3-14B-hf",
+        supports_dedup=True,
+    ),
 }
 
 
@@ -69,6 +74,8 @@ def normalize_vl_family(family: str) -> str:
         return "qwen2_5_vl"
     if f in ("qwen35", "qwen3_5_vl"):
         return "qwen3_5"
+    if f in ("intern_vl", "internvl3", "intern_vl3"):
+        return "internvl"
     return f
 
 

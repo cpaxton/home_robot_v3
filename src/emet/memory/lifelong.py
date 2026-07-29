@@ -816,6 +816,7 @@ def load_lifelong_checkpoint(
     *,
     refine_start: bool = False,
     refine_kwargs: dict[str, Any] | None = None,
+    memory_backend: str | None = None,
 ) -> dict[str, Any]:
     """Load graph (+ optional ``voxel_map.pkl``) and restore the staleness clock.
 
@@ -826,12 +827,18 @@ def load_lifelong_checkpoint(
     short scan before load) is used to estimate a local SE(2) fudge mapping the
     saved map into the live frame. If refine is skipped or rejected, the assumed
     pose is kept (identity).
+
+    ``memory_backend`` selects which object-graph sidecar to restore (``dynagraph`` /
+    ``graph_eqa`` → ``graph.json``; ``open_vocab`` → ``open_vocab_scene_graph/``).
+    Legacy dual directories load only the active plug-in.
     """
     from emet.memory.backend import get_memory_backend
 
     path_obj = Path(path)
     if not path_obj.is_dir() or not is_memory_directory(str(path_obj)):
         raise FileNotFoundError(f"Not a memory directory: {path}")
+
+    mb = str(memory_backend or "").strip().lower().replace("-", "_") or None
 
     gm = getattr(controller, "graph_memory", None)
     vm = None
@@ -855,9 +862,10 @@ def load_lifelong_checkpoint(
         "final_step": None,
         "saved_xyz": None,
         "refine": None,
+        "memory_backend": mb,
     }
 
-    if gm is not None:
+    if gm is not None and mb != "open_vocab":
         logger.info(f"lifelong: loading graph from {path_obj}")
         backend = get_memory_backend("graph_eqa", graph_memory=gm, voxel_map=vm)
         backend.load(str(path_obj))
@@ -872,11 +880,13 @@ def load_lifelong_checkpoint(
             if hasattr(gm, "set_graph_timestep"):
                 gm.set_graph_timestep(int(getattr(controller, "obs_count", final_step)))
         logger.info(f"lifelong: graph restore → {n_after} nodes, final_step={info.get('final_step')}")
-    elif vm is not None:
+    elif vm is not None and mb != "open_vocab":
         logger.info(f"lifelong: loading dynamem backend from {path_obj}")
         backend = get_memory_backend("dynamem", voxel_map=vm)
         backend.load(str(path_obj))
         info["graph_loaded"] = False
+        info["graph_nodes"] = 0
+    else:
         info["graph_nodes"] = 0
 
     voxel_pickle = path_obj / VOXEL_PICKLE_FILENAME
@@ -887,7 +897,16 @@ def load_lifelong_checkpoint(
         info["voxel_pickle_loaded"] = True
         logger.info("lifelong: voxel_map.pkl loaded")
 
-    info["open_vocab_loaded"] = load_open_vocab_scene_graph_sidecar(controller, path_obj)
+    want_ov = mb == "open_vocab" or (mb is None and gm is None)
+    ov_dir = path_obj / OPEN_VOCAB_SCENE_GRAPH_DIR
+    if want_ov:
+        info["open_vocab_loaded"] = load_open_vocab_scene_graph_sidecar(controller, path_obj)
+    elif ov_dir.is_dir():
+        logger.info(
+            f"lifelong: ignoring {OPEN_VOCAB_SCENE_GRAPH_DIR}/ "
+            f"(memory_backend={mb or 'graph/dynagraph'})"
+        )
+        info["open_vocab_loaded"] = False
 
     saved_xyz = voxel_semantic_xyz(vm)
     if saved_xyz is not None:
@@ -1011,9 +1030,24 @@ def refresh_rerun_after_memory_load(controller: Any) -> dict[str, Any]:
     return out
 
 
-def save_lifelong_checkpoint(controller: Any, path: str | Path, *, save_voxel_pickle: bool = True) -> str:
-    """Save graph + optional voxel pickle + ``final_step`` for later resume."""
+def save_lifelong_checkpoint(
+    controller: Any,
+    path: str | Path,
+    *,
+    save_voxel_pickle: bool = True,
+    memory_backend: str | None = None,
+) -> str:
+    """Save active graph plug-in + optional voxel pickle + ``final_step`` for later resume.
+
+    For ``dynagraph`` / ``graph_eqa``, writes ``graph.json`` (+ voxels) and does **not**
+    write an open-vocab sidecar. For ``open_vocab``, writes ``open_vocab_scene_graph/``.
+    When ``memory_backend`` is omitted, infer from the controller (graph_memory → graph
+    path; else OV if present).
+    """
+    import json
+
     from emet.memory.backend import get_memory_backend
+    from emet.memory.format import MANIFEST_FILENAME, MemoryManifest
     from emet.memory.headless_export import export_graph_eqa_dir
 
     path_obj = Path(path)
@@ -1025,6 +1059,27 @@ def save_lifelong_checkpoint(controller: Any, path: str | Path, *, save_voxel_pi
     elif hasattr(controller, "voxel_map"):
         vm = controller.voxel_map
     final_step = int(getattr(controller, "obs_count", 0) or 0)
+
+    mb = str(memory_backend or "").strip().lower().replace("-", "_") or None
+    if mb is None:
+        if gm is not None:
+            mb = "dynagraph"
+        elif open_vocab_scene_graph_from_controller(controller) is not None:
+            mb = "open_vocab"
+        else:
+            mb = "dynamem"
+
+    if mb == "open_vocab":
+        from dataclasses import asdict
+
+        man_path = path_obj / MANIFEST_FILENAME
+        if not man_path.is_file():
+            man = MemoryManifest(backend="open_vocab", has_open_vocab_scene_graph=False)
+            man_path.write_text(json.dumps(asdict(man), indent=2) + "\n", encoding="utf-8")
+        if save_voxel_pickle and vm is not None and hasattr(vm, "write_to_pickle"):
+            vm.write_to_pickle(str(path_obj / VOXEL_PICKLE_FILENAME))
+        save_open_vocab_scene_graph_sidecar(controller, path_obj)
+        return str(path_obj)
 
     if gm is not None:
         export_graph_eqa_dir(
@@ -1041,7 +1096,8 @@ def save_lifelong_checkpoint(controller: Any, path: str | Path, *, save_voxel_pi
             vm.write_to_pickle(str(path_obj / VOXEL_PICKLE_FILENAME))
     else:
         raise RuntimeError("Controller has no graph_memory or voxel_map to save")
-    save_open_vocab_scene_graph_sidecar(controller, path_obj)
+
+    _patch_manifest_open_vocab(path_obj, present=False)
     return str(path_obj)
 
 

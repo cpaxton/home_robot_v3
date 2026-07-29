@@ -1,7 +1,7 @@
 # Agentic HM-EQA scale experiments
 
-Results branch: **`exp/agentic-hmeqa-bal32-results`** (PR #81).
-Balanced-32 of record: `~/runs/emet/hmeqa_agentic_bal32r2_20260726_105946`.
+Paper of-record branch work landed on `main` (PR #87); results data on **`exp/agentic-hmeqa-bal32-results`** / `paper/data/hmeqa_agentic_h2h/`.
+Balanced-32 of record is a **composite**: classic from `~/runs/emet/hmeqa_agentic_bal32r2_20260726_105946`; agentic from `~/runs/emet/hmeqa_bal32_explore_20260727_215036`.
 
 Goal: test whether classic vs agentic-verify Dynagraph gains hold past holdout-8.
 
@@ -10,17 +10,29 @@ Goal: test whether classic vs agentic-verify Dynagraph gains hold past holdout-8
 | Wave | What | Status |
 |------|------|--------|
 | 0 | Flash-Attn in `.venv-habitat`; bundle-tag smoke; scale doc (#79) | done (SDPA fallback) |
-| 1 | **Balanced-32** classic vs agentic H2H (primary) | **DONE** — agentic **11/32** vs classic **9/32** (McNemar n.s.; steps win) |
-| 1b | Fail-set / explore / verify-gate fixes (q104/q105, carve, soft-recent) | done (landed on branch) |
-| 2 | Paper-20 **or** annotated-semantics H2H (one night) | optional — accuracy gap on n=32 is small |
-| 3 | Full 113 classic dynagraph + `graph_eqa`; agentic 113 only if claiming letter win | later (efficiency claim already supported) |
+| 1 | **Balanced-32** classic vs agentic H2H (primary) | **DONE** — composite agentic **16/32** vs classic **9/32** (cross-policy McNemar p≈0.09; steps win) |
+| 1b | Fail-set / explore / verify-gate fixes (q104/q105, carve, soft-recent) | done (PR #87: station-filter + explore-after-ABSENT) |
+| 1c | Paper-router + explore agentic-only bal-32 | **DONE** — 16/32 @ `e7d0eb20` |
+| 2 | Paper-20 **or** annotated-semantics H2H (one night) | optional |
+| 3 | Full 113 classic dynagraph + `graph_eqa`; agentic 113 only if claiming letter win | later |
+| larger VLM | 32B int4 smoke → holdout-4 agentic → optional holdout-8 / bal-32 | **recipe only** — see below; no GPU launch until smoke OK |
+
+## Policy timeline
+
+| Date | Agentic policy | Slice | Agentic | Classic | Notes |
+|------|----------------|-------|---------|---------|-------|
+| 2026-07-23 | router off | holdout-8 | **8/8** | 5/8 | Paper headline (matched H2H) |
+| 2026-07-26 | router off | bal-32 matched | 11/32 | 9/32 | Archived `balanced32_router_off_agentic_archive.json` |
+| 2026-07-26 | router off | bal-32 overnight | 12/32 | 10/32 | Replicate |
+| 2026-07-27 | paper-router + explore | holdout-8 | **5/8** | — | Docs/appendix variance (VLM/salvage); not headline |
+| 2026-07-27 | paper-router + explore | bal-32 agentic-only | **16/32** | 9/32 (kept) | Composite of-record |
 
 ## Harness (all Habitat H2Hs)
 
 - Method: `dynagraph`
-- VLM: `Qwen/Qwen3-VL-8B-Instruct`
+- VLM: `Qwen/Qwen3-VL-8B-Instruct` (override with `EQA_HF_MODEL_ID` / `emet hmeqa h2h --eqa-hf-model-id`)
 - `explore_when_uncovered=off`, `--no-mcq-debias`, `--memory-summary`
-- Agentic: `EMET_EQA_AGENTIC_VERIFY=1`; scored bal-32 used `EMET_EQA_AGENTIC_ROUTER=0` (H2H now honors env; default still 0)
+- Agentic: `EMET_EQA_AGENTIC_VERIFY=1`; paper-router preset sets router=1 + owlv2 + allow-unverified
 - Hyp recall: evidence cards (`EMET_EQA_HYP_RECALL_K`, default 6); visited frontiers retired from the graph — see [agentic_qwen_context.md](agentic_qwen_context.md#approach-current)
 - Classic: `EMET_EQA_AGENTIC_VERIFY=0`
 - Dogfood: `uv run emet hmeqa overnight` or `emet hmeqa h2h --preset paper-router`; inspect with `emet hmeqa inspect OUT --qid N`
@@ -39,6 +51,8 @@ SigLIP is a **high-recall / high-false-positive** open-vocab scorer that **suppo
 **Explicit evidence policy:** `SEARCH → APPROACH → VERIFY → ASSESS → REPLAN → ANSWER`. `VERIFY` accepts exactly one fresh observation produced by `APPROACH`; stale router requests are rejected. `EvidenceRecord` retains full-frame, dense, voxel, detector, detector-crop, graph-label, geometry, and optional VLM channels. Image SigLIP / OWLv2 `PRESENT` is only a **proposal**. Answerability is **VLM-first**: text Qwen picks `target_phrase` once; multimodal Qwen assess on fresh RGB + inventory sets `answerable` / `ANSWER`. Cheap fusion never opens the submit gate alone. Non-advancing captures (`NO_NEW_OBS`) and one VLM assess per `obs_id` block re-verify spam.
 
 **Region-aware exploration:** frontier clusters are navigation *regions*, ranked by expected area gain per unit travel (`frontier_regions.frontier_region_utility`) rather than nearest-cell distance, so a large room several meters away beats a sliver underfoot. Frontier `GraphNode`s carry `frontier_cell_count` and `frontier_keyword_score` from clustering. After two consecutive "target not visible" view assessments the executor sets an escape floor (`agent._explore_min_travel_m = 3 m`) that demotes nearby regions and disables SigLIP-guided frontier candidates, which otherwise re-aim at the area just rejected.
+
+**Station filter / explore-after-ABSENT (PR #87):** capture stations are not Investigate cards; after close ABSENT the executor prefers one `explore_frontier` before more investigate spam.
 
 **Do not:** treat ABSENT as proof of absence; use image-space 0.21 as a hard PRESENT bar (unreachable on HM-EQA RGB); force-submit after failed verifies and call that “verified”; open submit from OWL/SigLIP alone. Prefer `EMET_EQA_AGENTIC_REQUIRE_VERIFIED=1` while tuning so unverified exhaust **abstains**. Offline frame calib: `scripts/calibrate_agentic_verify_frames.py`; threshold sweeps: `scripts/tune_agentic_verify.py`.
 
@@ -81,16 +95,34 @@ uv run emet hmeqa resume "$OUT" --preset paper-router
 # After DONE: minimal paper data (+ significance)
 uv run emet hmeqa summarize "$OUT"
 uv run emet hmeqa significance "$OUT"
-cp "$OUT/h2h_summary.json" paper/data/hmeqa_agentic_h2h/balanced32_summary.json
+# Composite of-record: merge classic from bal32r2 + new agentic; do not blindly cp h2h_summary
+uv run emet hmeqa significance --from-summary paper/data/hmeqa_agentic_h2h/balanced32_summary.json
 ```
 
-## Go / no-go (after Wave 1)
+## Go / no-go (after Wave 1 / 1c)
 
-- **Result (2026-07-26, bal-32r2):** classic **9/32**, agentic **11/32**, mean steps **48.7 → 17.8**. McNemar p≈0.73 (letter gap n.s.); Wilcoxon steps p≈4e-7.
-- **Replicate (overnight bal-32):** classic **10/32**, agentic **12/32** — same pattern.
-- **Historical (2026-07-24 salvage bug):** classic 12/32, agentic 9/32 under forced 64-token answers — superseded; do not cite as current method.
-- **Go for efficiency claim** (agentic uses ~3× fewer planning steps on matched Dynagraph). **No-go for letter-accuracy claim** on n=32 without a larger / semantics-richer slice.
-- Wave 2/3 agentic-113 for *accuracy* remains optional until a clearer letter win; classic-113 for the paper baseline is still useful.
+- **Composite of-record (2026-07-27):** classic **9/32**, agentic **16/32**, mean steps **48.7 → 32.7**. Cross-policy McNemar p≈0.09 (n.s. at α=0.05); Wilcoxon steps p≈1.8e-5.
+- **Prior matched H2H (router off):** classic **9/32**, agentic **11/32**, steps **48.7 → 17.8** (archived).
+- **Replicate (overnight, router off):** classic **10/32**, agentic **12/32**.
+- **Holdout variance (paper-router):** agentic **5/8** vs headline **8/8** — appendix/docs only.
+- **Go for efficiency claim** (agentic fewer planning steps vs classic on bal-32; ~3× on matched holdout-8). **Soft go on letter gap** for paper-router composite (50% vs 28%) with explicit cross-policy footnote; keep matched holdout-8 as the clean letter win.
+- Wave 2/3 agentic-113 for *accuracy* remains optional; classic-113 for the paper baseline is still useful.
+
+## Wave: larger VLM (recipe only)
+
+Default first candidate: **Qwen3-VL-32B-Instruct int4**. During 8B int4 runs the 4090 shows ~13 GiB used / ~11 GiB free — 32B is a candidate with OOM risk, not ruled out.
+
+1. **Smoke (no Habitat):**  
+   `uv run python scripts/smoke_vl_model.py qwen3_vl Qwen/Qwen3-VL-32B-Instruct int4`  
+   Record peak VRAM. Abort on OOM. Fallback: larger `gemma4` HF id from the registry, or `qwen3_5` 27B only if `fla` kernels OK.
+2. **Holdout-4 agentic** (ids `15,68,105,17`):  
+   `uv run emet hmeqa h2h --preset paper-router --arms agentic --ids 15,68,105,17 \
+     --eqa-hf-model-id Qwen/Qwen3-VL-32B-Instruct`  
+   (or `EQA_HF_MODEL_ID=…` into `run_hmeqa_agentic_h2h.sh`).
+3. **Abort rules:** OOM / EGL fail streak / episode wall ≫ 2× 8B → stop; do **not** start bal-32.
+4. Optional holdout-8 only if holdout-4 looks healthy; bal-32 only after that.
+
+Details: [vlm_bakeoff.md](../habitat/vlm_bakeoff.md#wave-larger-vlm-32b-int4-candidate).
 
 ## Fail-set ablation (Wave 1b)
 
