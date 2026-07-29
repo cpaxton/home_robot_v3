@@ -46,6 +46,8 @@ uv run emet run agent --connection herman --rerun
 # Memory: ``agent.memory_backend: dynagraph`` (single Dynagraph plug-in; not open_vocab + GraphEQA).
 ```
 
+Profile ``config`` is shared: with herman **active**, bare ``emet run dynamem`` / ``emet stream`` (no ``--config``) also load ``agent_innate_mars.yaml``. Pass an explicit ``--config`` or use a profile without ``config`` when switching to Stretch/sim on the same machine — see [cli.md](../cli.md) (`emet connect`).
+
 Preset enables Discord + EQA captions (`agent.eqa: true`) and persona ``agent.name: Herman``. Optional: `--no-rerun` if you only care about Discord.
 
 | Prompt (in Discord) | Expected |

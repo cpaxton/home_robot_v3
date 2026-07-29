@@ -296,7 +296,15 @@ emet connect list
 emet connect show
 ```
 
-Used by `emet deploy`, `emet mars start`, `emet capture`, `emet stream`, `emet run agent`, and `emet preview-cameras` when `--ip` / `--host` is omitted (active profile, or `--connection NAME`). Profile `config` supplies the default `--config` for those apps when the CLI flag is not set explicitly.
+**Host / robot:** `emet deploy`, `emet mars start`, `emet capture`, `emet stream`, `emet run agent`, and `emet preview-cameras` use the active profile (or `--connection NAME`) when `--ip` / `--host` / `--robot-ip` is omitted.
+
+**Profile `config` (YAML path):** Not agent-only. Any app that resolves unified config through the shared CLI helper (`emet run agent`, `emet run dynamem`, `emet run dynagraph`, `emet stream`, `emet capture`, …) uses the profile’s `config` whenever **`--config` / `-C` is left at the Click default**:
+
+1. Explicit `--config` / `--agent-config` / `--dynav-config` wins.
+2. Else profile `config` for `--connection NAME`, or for the **active** profile when `--connection` is omitted.
+3. Else `EMET_CONFIG` / packaged default (`configs/emet/default.yaml`).
+
+So with herman active and `config=configs/agent_innate_mars.yaml`, a bare `emet run dynamem` (no `--config`) also loads that agent preset — usually fine on a Herman-only workstation (robot + Mars mapping defaults). For Stretch/sim on the same machine, pass an explicit `--config`, use a profile without `config`, or `--no-active` when saving the Mars profile.
 
 ---
 

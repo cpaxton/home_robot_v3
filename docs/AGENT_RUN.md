@@ -72,6 +72,7 @@ Geometric smoke (no GPU): `uv run python scripts/smoke_lifelong_pose_refine.py`.
 ## Config
 
 - **Default path**: [`configs/emet/default.yaml`](../configs/emet/default.yaml). Override with **`--config`** / **`-C`** or env **`EMET_CONFIG`**.
+- **Connection profile `config`**: when `--config` is omitted, the named (`--connection`) or **active** profile’s `config` path wins over `EMET_CONFIG` / the packaged default — for agent **and** dynamem / dynagraph / stream. See [cli.md](cli.md) (`emet connect`) and [emet_config.md](emet_config.md).
 - **Dot overrides**: **`--set mapping.depth_source=auto`** or **`-O agent.eqa=true`**. See [Unified EMET configuration](emet_config.md).
 - **Legacy alias**: **`--agent-config`** (deprecated; use `--config`).
 - **Robot**: **`--robot`** optional — resolved from CLI → config `robot:` → ZMQ discovery → connection profile → `stretch`. Must match `emet serve mujoco --robot` when both are explicit. ZMQ discovery is skipped when **`--start-sim`** spawns the sim first.
