@@ -1,174 +1,129 @@
-# Running Stretch AI on the NVIDIA Jetson
+# Running emet on the NVIDIA Jetson
 
-These are experimental instructions for running on the NVIDIA Jetson. These will guide you through how we can build a docker image and use it to run Stretch AI on the Jetson.
+Instructions for **Jetson AGX Orin** (and similar Tegra boards). Tested on JetPack 5.1.2 (L4T 35.4.1, Ubuntu 20.04, aarch64).
 
-In particular, they were tested on the NVIDIA Jetson Orin AGX dev kit.
+There are two options:
+
+1. **Native install on the Jetson** (recommended for development) — [below](#native-install-jetson-profile)
+2. **Docker image** — [Running in Docker](#running-emet-in-a-docker-container) (legacy Stretch AI image; rebuild for current emet)
 
 ## About Jetson
 
-Jetson is an embedded device for use on robots, build on the NVIDIA Tegra architecture. It's a powerful device that can run AI models on the edge, and is a popular choice for robotics applications.
+Jetson is an embedded NVIDIA Tegra platform. Trade-offs vs a workstation:
 
-However, using the Jetson comes with some trade-offs. In particular, it's not built opn the common `x86` architecture, so some software may not be compatible. Additionally, the Jetson has limited resources, so it may not be able to run all models.
+- **aarch64** — many PyPI packages ship x86_64-only wheels; emet uses PEP 508 markers and an older `open3d` pin on aarch64 so `uv sync` can resolve.
+- **Tegra CUDA ≠ server CUDA** — PyPI `torch` manylinux aarch64 wheels install, but they are **not** Jetson GPU builds. `torch.cuda.is_available()` is often `False` until you install an NVIDIA Jetson wheel or build PyTorch from source for this JetPack.
+- **Limited disk** — a full desktop `uv sync` (sim + SAM-2 + Molmo) can exceed eMMC. Prefer the **jetson** profile.
 
-Instead, you generally use Jetson with a custom version of Ubuntu, called `Jetpack`. This is a stripped-down version of Ubuntu that is optimized for the Jetson hardware.
+## Native install (jetson profile)
 
-There are two options:
-  - Download a docker container with Stretch AI [pre-installed](#running-stretch-ai-in-a-docker-container) (easy!)
-  - Install code on the jetson itself - [instructions](#installing-stretch-ai-on-the-jetson) (harder; work in progress)
+From the repo root on the Orin:
 
-## Running Stretch AI in a Docker Container
-
-We provide a Stretch AI docker image for the Jetson Orin, which you can use to run Stretch AI on your Jetson.
-
-*Why a docker image?* Many things - especially anything using CUDA - need to be rebuilt specifically for use on the Jetson, both to use Jetpack and to use the Arm-based Tegra architecture. This can be a pain to do manually, so we provide a docker image that has everything pre-built.
-
-You can also download the image [from Docker Hub](https://hub.docker.com/repository/docker/hellorobotinc/stretch-ai_jetson/general) and use it directly instead of building it. You can do this with:
-
+```bash
+./scripts/install_jetson.sh -y
+# equivalent:
+#   ./install.sh --profile=jetson -y
+#   EMET_INSTALL_PROFILE=jetson ./install.sh -y
+#   uv run emet install full -y --profile jetson   # after a bootstrap sync
 ```
+
+What this does:
+
+| Step | Behavior |
+|------|----------|
+| Profile | `--profile=jetson` → no Robocasa clone, no SAM-2, no MolmoSpaces |
+| Python | `UV_PYTHON=3.10` (system Python on JP5 is 3.8; emet needs ≥3.10) |
+| Sync | `uv sync --no-default-groups --group dev --group sim` (MuJoCo CLI paths; no SAM-2 / mediapipe / DA3) |
+| Deps | Skips `bitsandbytes` / Triton / FLA / `depth-anything-3` on `aarch64`; pins `open3d>=0.17,<0.19` |
+| Apt | Extra build packages for aarch64 sdists (`sophuspy`, `scikit-fmm`, `PyAudio`, …) |
+| Attn | Sets `EMET_ALLOW_SDPA_ATTN=1` (no flash-attn on Tegra) |
+
+Verify:
+
+```bash
+source .venv/bin/activate
+python -c "import emet, torch; print(emet.__file__); print('cuda', torch.cuda.is_available())"
+emet --help
+uv run emet test src/test/utils/test_platform_info.py -q
+```
+
+Optional onboard DA3 (Mars bridge): `depth-anything-3` is **not** installed on Linux aarch64 by default (its dependency `pycolmap` has no Tegra wheels). Prefer workstation DA3 via `depth_source: auto`, or build/install DA3 deps manually on the Orin.
+
+```bash
+# On x86 workstations only:
+uv sync --group da3
+```
+
+### Tegra CUDA PyTorch (optional)
+
+Official JP5 wheels target **Python 3.8**. For emet’s Python 3.10 venv you typically need to **build PyTorch from source** for this JetPack, or run inference in a container that already has a Tegra build. See:
+
+- [NVIDIA: Install PyTorch for Jetson](https://docs.nvidia.com/deeplearning/frameworks/install-pytorch-jetson-platform/index.html)
+- [PyTorch for Jetson forum thread](https://forums.developer.nvidia.com/t/pytorch-for-jetson/72048)
+
+System Python 3.8 on this Orin may already have `torch 2.0.0.nv23.05` with CUDA; that stack is separate from the emet `.venv`.
+
+### Serve a Qwen LLM for the LAN (workstation clients)
+
+```bash
+# On caliban — pick the largest qwen25-* that fits RAM (fp16 on CPU; no -Int4 without bitsandbytes):
+emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
+```
+
+On another PC:
+
+```bash
+export EMET_OPENAI_BASE_URL=http://caliban:8000/v1   # or this Orin's IP
+export EMET_OPENAI_MODEL=qwen25-14B
+emet run agent --llm openai
+# or: --llm 'openai@http://<orin-ip>:8000/v1#qwen25-14B'
+```
+
+Full API notes: [llm_serve.md](llm_serve.md).
+
+### Disk space
+
+Aim for **≥15 GB free** before sync. Stale Docker images are a common reclaim:
+
+```bash
+docker system df
+docker ps -a
+# only remove images you do not need:
+# docker rmi hellorobotinc/stretch-ai_jetson:latest
+```
+
+Enable swap if compiles OOM (this board ships `/mnt/4GB.swap`):
+
+```bash
+sudo swapon /mnt/4GB.swap
+```
+
+## Running emet in a Docker container
+
+We historically shipped a Stretch AI Jetson image. Pull/run:
+
+```bash
 ./scripts/run_stretch_ai_jetson.sh
 ```
 
-You can [look at the script](https://github.com/hello-robot/stretch_ai/blob/devel/scripts/run_stretch_ai_jetson.sh) to see how it works.
+Build locally:
 
-When you run it, you should see something like this:
-```
-cpaxton@caliban:~/src/emet_ai$ ./scripts/run_stretch_ai_jetson.sh
-====================================================
-Running Stretch AI docker container with GPU support
-$DISPLAY was not set. It has been set to :0 -- please verify that this is correct or GUI will not work!
-Reading version from /home/cpaxton/src/emet_ai/src/emet/version.py
-Source version: 0.2.6
-Docker image version: latest
-Running docker image hellorobotinc/stretch-ai_cuda-11.8:latest
-Running in non-dev mode, not mounting any directory
-====================================================
-Running docker container with GPU support
- - mounting data at /home/cpaxton/data
-User is in Docker group. Running command without sudo.
-root@caliban:/stretch_ai#
-```
-
-You can then run Stretch AI commands from the container. For example, you can run the LLM chat or ai_pickup:
-
-```
-root@caliban:/stretch_ai# python3 -m emet.app.chat --llm qwen25
-root@caliban:/stretch_ai# python3 -m emet.app.ai_pickup --use_llm
-```
-
-Make sure to use the `python3` command instead of `python`.
-
-## Building the Docker Image
-
-If you want to build the docker image yourself, you can do so with the following command:
-
-```
+```bash
 ./docker/build-jetson-docker.sh
 ```
 
-The Dockerfile is located [here](docker/Dockerfile.jetson), in the `docker` directory.
+Dockerfile: [`docker/Dockerfile.jetson`](../docker/Dockerfile.jetson). Base image must match your L4T (check `/etc/nv_tegra_release`). Prefer the **native jetson profile** for current emet unless you maintain a rebuilt image.
 
-Of particular note is this section at the beginning:
-```Dockerfile
-FROM dustynv/l4t-text-generation:r35.3.1
-```
+## Optional: `jtop`
 
-You can check your Jetpack version directly with:
+Tegra has no `nvidia-smi`:
+
 ```bash
-cpaxton@caliban:~/src/emet_ai$ cat /etc/nv_tegra_release
-# R35 (release), REVISION: 4.1, GCID: 33958178, BOARD: t186ref, EABI: aarch64, DATE: Tue Aug  1 19:57:35 UTC 2023
-```
-
-If it does not match, you might need to rebuild the docker image with the correct base image.
-
-## Installing Stretch AI on the Jetson
-
-If you want to manually install things, the process is more difficult. We do not recommend this unless you are comfortable with the process. These instructions are a work in progress and subject to change; you may need to adapt them to your specific setup.
-
-### Install System dependences
-
-Torch, torchvision, and torchaudio have multiple `apt` dependencies that need to be installed first.
-```
-sudo apt-get install -y  python3-pip libopenblas-dev
-
-# Torchaudio
-sudo apt install -y ffmpeg libavformat-dev libavcodec-dev libavutil-dev libavdevice-dev libavfilter-dev
-
-# Python pip dependences
-# These are necessary to build libraries like Torch Audio
-python -m pip install --upgrade cmake ninja
-```
-
-### Install PyTorch
-
-For NVIDIA tegra chips, you will need to use specific, pre-built wheels for certain versions of Pytorch.
-
-You should check the [official NVIDIA pytorch install instructions](https://docs.nvidia.com/deeplearning/frameworks/install-pytorch-jetson-platform/index.html#prereqs-install).
-
-#### Make sure pytorch installation worked
-
-Cuda should be available and you can put things on the device. Type `python` and try:
-
-```
->>> import torch
->>> torch.cuda.is_available()
-True
->>> r = torch.rand(3, 3).cuda()
->>> r
-tensor([[0.4269, 0.2103, 0.8359],
-        [0.4264, 0.1238, 0.7855],
-        [0.5410, 0.6966, 0.2426]], device='cuda:0')
->>> r * r
-tensor([[0.1822, 0.0442, 0.6987],
-        [0.1818, 0.0153, 0.6170],
-        [0.2927, 0.4852, 0.0589]], device='cuda:0')
-```
-
-### Optional: install `jtop`
-
-NVIDIA Tegra devices do not support `nvidia-smi`, so you probably want to install `jtop`:
-
-```
 sudo pip3 install -U jetson-stats
 ```
 
-The `jtop` tool requires superuser permissions; don't forget the `-U` flag to make sure you don't need superuser permissions at runtime.
+## Related
 
-### Install Detic
-
-Detic is an object-detection library that works fairly fast, and that we've had good luck with in [Stretch AI](https://github.com/hello-robot/stretch_ai/) projects. You can see it in the [llm_agent](llm_agent) docs and code.
-
-For this, it may be useful to install timm from [our timm fork](https://github.com/cpaxton/pytorch-image-models/tree/cpaxton/timm-no-torch) which removes the `pytorch` dependency, so that you don't accidentally override your "good" version of the pytorch library.
-
-```
-git clone https://github.com/cpaxton/pytorch-image-models.git --branch cpaxton/timm-no-torch
-cd pytorch-image-models
-python -m pip install -e .
-```
-
-### Install Stretch AI
-
-To install Stretch AI from source, add it to the `PYTHONPATH`:
-
-```
-git clone git@github.com:hello-robot/stretch_ai.git
-export PYTHONPATH=$PYTHONPATH:/path/to/stretch_ai
-```
-
-This is to make sure that you don't accidentally upgrade one of the very specific versions of the libraries that you need!
-
-After each step, make sure CUDA still works, and that you have the right versions of the libraries installed.
-
-Your torch version will look something like this:
-```
-cpaxton@caliban:~/src/emet_ai$ pip show torch
-Name: torch
-Version: 2.0.0.nv23.05
-Summary: Tensors and Dynamic neural networks in Python with strong GPU acceleration
-Home-page: https://pytorch.org/
-Author: PyTorch Team
-Author-email: packages@pytorch.org
-License: BSD-3
-Location: /usr/local/lib/python3.8/dist-packages
-Requires: filelock, jinja2, networkx, sympy, typing-extensions
-Required-by: torchaudio, torchvision, virgil
-```
+- Mars onboard DA3: [robots/innate_mars_hardware.md](robots/innate_mars_hardware.md)
+- Robot pip pins: `configs/robots/innate_mars_robot_requirements.txt`, `configs/robots/innate_mars_da3_requirements.txt`
+- Platform helper: `emet.utils.platform_info`
