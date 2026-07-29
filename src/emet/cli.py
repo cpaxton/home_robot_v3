@@ -2845,6 +2845,12 @@ def connect_cmd() -> None:
 @click.option("--name", "-n", default=None, help="Profile name (default: host)")
 @click.option("--robot", default=None, help="Emet robot id (e.g. innate_mars) stored in profile")
 @click.option(
+    "--config",
+    "profile_config",
+    default=None,
+    help="Default unified YAML for emet run agent / stream when --config is omitted (e.g. configs/agent_innate_mars.yaml)",
+)
+@click.option(
     "--workspace",
     default=None,
     help="Remote ROS2 workspace on robot (e.g. ~/innate-os/ros2_ws for innate-os Mars)",
@@ -2857,6 +2863,7 @@ def connect_save(
     password: str | None,
     name: str | None,
     robot: str | None,
+    profile_config: str | None,
     workspace: str | None,
     emet_dir: str | None,
     no_active: bool,
@@ -2878,8 +2885,14 @@ def connect_save(
         workspace=workspace,
         emet_dir=emet_dir,
         robot=robot,
+        config=profile_config,
     )
-    click.echo(f"Saved connection '{conn_name}' (host={host}, user={user}).")
+    bits = [f"host={host}", f"user={user}"]
+    if robot:
+        bits.append(f"robot={robot}")
+    if profile_config:
+        bits.append(f"config={profile_config}")
+    click.echo(f"Saved connection '{conn_name}' ({', '.join(bits)}).")
     if not no_active:
         click.echo("Set as active. Use: emet deploy, emet view-bridge (omit --robot-ip to use this).")
 
@@ -2887,7 +2900,7 @@ def connect_save(
 @connect_cmd.command("list", short_help="List saved connections")
 def connect_list() -> None:
     """List all saved connections and which is active."""
-    from emet.utils.connection import list_connections
+    from emet.utils.connection import get_connection, list_connections
 
     items = list_connections()
     if not items:
@@ -2895,7 +2908,10 @@ def connect_list() -> None:
         return
     for name, is_active in items:
         mark = " (active)" if is_active else ""
-        click.echo(f"  {name}{mark}")
+        conn = get_connection(name) or {}
+        cfg = conn.get("config")
+        extra = f"  config={cfg}" if cfg else ""
+        click.echo(f"  {name}{mark}{extra}")
 
 
 @connect_cmd.command("show", short_help="Show active connection")
@@ -2911,13 +2927,14 @@ def connect_show() -> None:
     click.echo(f"user: {conn.get('user', '')}")
     if conn.get("robot"):
         click.echo(f"robot: {conn.get('robot')}")
+    if conn.get("config"):
+        click.echo(f"config: {conn.get('config')}")
     if conn.get("workspace"):
         click.echo(f"workspace: {conn.get('workspace')}")
     if conn.get("emet_dir"):
         click.echo(f"emet_dir: {conn.get('emet_dir')}")
     if "password" in conn:
         click.echo("password: (set)")
-
 
 @main.group("mars", short_help="Innate Mars hardware bridge (innate-os + ZMQ)")
 def mars_cmd() -> None:

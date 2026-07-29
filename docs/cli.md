@@ -282,6 +282,7 @@ SSH / deploy **connection profiles** stored in ``~/.stretch/connection.json`` (f
 | `--password` / `-p` | `password` | Optional; else `EMET_ROBOT_PASSWORD` or SSH keys at runtime |
 | `--name` / `-n` | profile key | Default: hostname/IP |
 | `--robot` | `robot` | Emet robot id (e.g. `innate_mars`) for CLI defaults |
+| `--config` | `config` | Default unified YAML when apps leave `--config` at Click default (e.g. `configs/agent_innate_mars.yaml`) |
 | `--workspace` | `workspace` | Remote ROS2 workspace (Mars: `~/innate-os/ros2_ws`) |
 | `--emet-dir` | `emet_dir` | Remote emet install root (default `~/emet`) |
 | `--no-active` | — | Save without setting active or updating `robot_ip.txt` |
@@ -289,12 +290,13 @@ SSH / deploy **connection profiles** stored in ``~/.stretch/connection.json`` (f
 **Examples:**
 ```bash
 emet connect save herman --user jetson1 --name herman \
-  --robot innate_mars --workspace ~/innate-os/ros2_ws --emet-dir ~/emet
+  --robot innate_mars --workspace ~/innate-os/ros2_ws --emet-dir ~/emet \
+  --config configs/agent_innate_mars.yaml
 emet connect list
 emet connect show
 ```
 
-Used by `emet deploy`, `emet mars start`, `emet capture`, `emet stream`, and `emet preview-cameras` when `--ip` / `--host` is omitted (active profile, or `--connection NAME`).
+Used by `emet deploy`, `emet mars start`, `emet capture`, `emet stream`, `emet run agent`, and `emet preview-cameras` when `--ip` / `--host` is omitted (active profile, or `--connection NAME`). Profile `config` supplies the default `--config` for those apps when the CLI flag is not set explicitly.
 
 ---
 

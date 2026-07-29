@@ -583,6 +583,7 @@ def main(
         emet_config=emet_config,
         agent_config=agent_config,
         dynav_config=dynav_config,
+        connection=connection,
     )
     robot_from_cli = robot is not None and str(robot).strip() != ""
     runtime = None
@@ -630,6 +631,7 @@ def main(
             config_sets=config_sets,
             agent_config=agent_config,
             dynav_config=dynav_config,
+            connection=connection,
             robot_id=resolved_robot,
         )
     else:
@@ -647,6 +649,7 @@ def main(
         dynamem_eqa=dynamem_eqa,
         share_memory_vllm=share_memory_vllm,
         memory_backend=memory_backend,
+        agent_name=agent_name,
     )
     llm = agent_opts.llm
     prompt = agent_opts.prompt
@@ -656,6 +659,7 @@ def main(
     dynamem_eqa = agent_opts.eqa
     share_memory_vllm = agent_opts.share_memory_vllm
     memory_backend = str(agent_opts.memory_backend or "dynagraph").strip().lower()
+    agent_name = agent_opts.name
 
     sim_cli_used = any(
         [

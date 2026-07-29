@@ -34,18 +34,19 @@ Chat with the robot over **Discord** (text + photos/maps) while it explores. Voi
 # Discord extra once: uv sync  (discord group) or see docs/discord_bot.md
 export DISCORD_TOKEN=...
 
-uv run emet run agent \
-  --connection herman \
-  --config configs/agent_innate_mars.yaml \
-  --rerun \
-  --name Herman
-# ``emet run`` does not inject a default ``--robot-ip``; ``--connection herman`` supplies the host.
+# One-time: pin agent YAML on the profile (persona name lives in the YAML)
+emet connect save 192.168.1.43 --user jetson1 --name herman \
+  --robot innate_mars --workspace ~/innate-os/ros2_ws --emet-dir ~/emet \
+  --config configs/agent_innate_mars.yaml
+
+uv run emet run agent --connection herman --rerun
+# ``emet run`` does not inject a default ``--robot-ip``; ``--connection herman`` supplies host + config.
 # Optional: ``export EMET_ALLOW_SDPA_ATTN=1`` if Qwen/flash-attn path is needed (see docs/environment_variables.md).
 # Prefer ``--onboard-da3`` on the bridge so workstation VRAM stays for the chat LLM + caption VLM.
 # Memory: ``agent.memory_backend: dynagraph`` (single Dynagraph plug-in; not open_vocab + GraphEQA).
 ```
 
-Preset enables Discord + EQA captions (`agent.eqa: true`). Optional: `--no-rerun` if you only care about Discord.
+Preset enables Discord + EQA captions (`agent.eqa: true`) and persona ``agent.name: Herman``. Optional: `--no-rerun` if you only care about Discord.
 
 | Prompt (in Discord) | Expected |
 |---------------------|----------|

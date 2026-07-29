@@ -1,12 +1,15 @@
 # Innate Mars agent preset (unified nested config).
 # Discord house chat + explore: see docs/robots/innate_mars_hardware.md
 #   export DISCORD_TOKEN=...
-#   uv run emet run agent --connection herman --config configs/agent_innate_mars.yaml --name Herman
+#   # After: emet connect save … --name herman --config configs/agent_innate_mars.yaml
+#   uv run emet run agent --connection herman --rerun
 extends: configs/emet/default.yaml
 
 robot: innate_mars
+connection: herman
 
 agent:
+  name: Herman
   # Load Qwen3-VL captioner for describe_scene / memory QA (Discord “what do you see?”).
   eqa: true
   discord: true

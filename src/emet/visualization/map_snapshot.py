@@ -796,10 +796,16 @@ def share_topdown_map_rgb(
     grid_resolution: float,
     robot_xy: np.ndarray | tuple[float, float] | None,
     *,
-    max_side: int = 640,
+    max_side: int = 1024,
+    min_side: int = 512,
     margin_cells: int = 16,
 ) -> np.ndarray:
-    """Full-resolution render, crop to explored region, then downsample (Rerun / Discord / sharing)."""
+    """Full-resolution render, crop to explored region, then upscale/downsample for sharing.
+
+    Early exploration crops are often only a few dozen pixels; Discord posts those as
+    tiny thumbnails. ``min_side`` nearest-neighbor upscales so the attachment is readable;
+    ``max_side`` caps large maps.
+    """
     rgb_full = render_topdown_map_rgb(
         obstacles,
         explored,
@@ -816,7 +822,7 @@ def share_topdown_map_rgb(
         grid_resolution,
         margin_cells=margin_cells,
     )
-    return downsample_topdown_rgb_max_side(cropped, max_side)
+    return finalize_export_topdown_rgb(cropped, max_side=max_side, min_side=min_side)
 
 
 def discord_share_map_rgb(
@@ -826,7 +832,8 @@ def discord_share_map_rgb(
     grid_resolution: float,
     robot_xy: np.ndarray | tuple[float, float] | None,
     *,
-    max_side: int = 640,
+    max_side: int = 1024,
+    min_side: int = 512,
     margin_cells: int = 16,
 ) -> np.ndarray:
     """Alias for :func:`share_topdown_map_rgb` (Discord map posts)."""
@@ -837,6 +844,7 @@ def discord_share_map_rgb(
         grid_resolution,
         robot_xy,
         max_side=max_side,
+        min_side=min_side,
         margin_cells=margin_cells,
     )
 

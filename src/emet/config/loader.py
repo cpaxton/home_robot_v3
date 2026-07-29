@@ -309,6 +309,8 @@ class AgentSectionConfig:
     prompt: str = "simple"
     device: str = "cuda"
     max_tokens: int = 256
+    # Persona in system prompt / greetings (``emet run agent --name`` override).
+    name: str = ""
     # Interactive controller stack: dynagraph (default), graph_eqa, or dynamem.
     memory_backend: str = "dynagraph"
     # Sim pick/place: teleport (GT body snap) or kinematic (IK + joint traj + attach).
