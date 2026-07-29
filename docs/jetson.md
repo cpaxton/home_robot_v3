@@ -65,21 +65,23 @@ System Python 3.8 on this Orin may already have `torch 2.0.0.nv23.05` with CUDA;
 
 ### Serve a Qwen LLM for the LAN (workstation clients)
 
+**Preferred on JP5 (this Orin): Tegra-CUDA Docker** — uses NVIDIA Jetson PyTorch with working GPU:
+
 ```bash
-# On caliban — pick the largest qwen25-* that fits RAM (fp16 on CPU; no -Int4 without bitsandbytes):
-emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
+./scripts/run_jetson_llm_container.sh --build --detach --model Qwen/Qwen2.5-7B-Instruct
+# smoke / low disk: --model Qwen/Qwen2.5-0.5B-Instruct
+# larger if VRAM allows: Qwen/Qwen2.5-14B-Instruct
 ```
 
-On another PC:
+Then on another PC:
 
 ```bash
-export EMET_OPENAI_BASE_URL=http://caliban:8000/v1   # or this Orin's IP
-export EMET_OPENAI_MODEL=qwen25-14B
+export EMET_OPENAI_BASE_URL=http://caliban:8000/v1   # or 192.168.1.55:8000
+export EMET_OPENAI_MODEL=Qwen/Qwen2.5-7B-Instruct
 emet run agent --llm openai
-# or: --llm 'openai@http://<orin-ip>:8000/v1#qwen25-14B'
 ```
 
-Full API notes: [llm_serve.md](llm_serve.md).
+Native (CPU) path without Docker: `emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000` — slower; see [llm_serve.md](llm_serve.md).
 
 ### Disk space
 
