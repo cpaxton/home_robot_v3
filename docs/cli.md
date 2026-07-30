@@ -54,12 +54,13 @@ Backends: `mujoco` (default), `robocasa`, `molmospaces`, `habitat`, **`llm`**.
 
 ```bash
 emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
-# workstation:
+# workstation client (Herman preset already points here):
+#   see docs/llm_serve.md § Caliban — curl http://caliban:8000/health
 export EMET_OPENAI_BASE_URL=http://caliban:8000/v1
 emet run agent --llm openai
 ```
 
-Details: [llm_serve.md](llm_serve.md). Jetson notes: [jetson.md](jetson.md).
+Details: [llm_serve.md](llm_serve.md) (Caliban LAN host + Jetson container). Jetson install: [jetson.md](jetson.md).
 
 Start a simulation server.
 

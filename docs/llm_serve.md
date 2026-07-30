@@ -54,13 +54,59 @@ export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1
 emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
 ```
 
-## On the workstation (client)
+## Caliban (LAN LLM host)
+
+**caliban** (`192.168.1.55`, hostname `caliban`) runs the OpenAI-compatible server for workstation clients (Herman Discord agent tool-router, etc.). Caption / EQA **VLM** still loads on the workstation when `agent.eqa: true` — this HTTP path is **text chat** today (`openai_server` strips image blocks).
+
+### SSH from olympia
+
+Keys live under `~/caliban_ssk_keys/` (symlink `~/caliban_ssh_keys` → same). Add to `~/.ssh/config`:
+
+```
+Host caliban
+  HostName 192.168.1.55
+  User cpaxton
+  IdentityFile ~/caliban_ssk_keys/id_ed25519
+  IdentitiesOnly yes
+```
+
+If `ssh caliban` is still `Permission denied (publickey)`, install the pubkey once (console / password on the Orin):
 
 ```bash
-export EMET_OPENAI_BASE_URL=http://caliban:8000/v1   # or the Orin IP
-export EMET_OPENAI_MODEL=Qwen/Qwen2.5-7B-Instruct    # match container --model
+ssh-copy-id -i ~/caliban_ssk_keys/id_ed25519.pub cpaxton@caliban
+# or append the .pub line to ~/.ssh/authorized_keys on caliban
+```
+
+Then rebuild / bump the served model on the Orin:
+
+```bash
+ssh caliban 'cd ~/src/home_robot_v4 && ./scripts/run_jetson_llm_container.sh --detach --model Qwen/Qwen2.5-7B-Instruct'
+# larger if VRAM allows: Qwen/Qwen2.5-14B-Instruct
+# smoke: Qwen/Qwen2.5-0.5B-Instruct
+```
+
+### Workstation client (olympia)
+
+```bash
+# Health (no auth)
+curl -s http://caliban:8000/health
+# expect ready=true, cuda=true
+
+# Herman preset already sets agent.llm: openai@http://caliban:8000/v1
+export DISCORD_TOKEN=...
+uv run emet run agent --connection herman
+
+# Or any app:
+export EMET_OPENAI_BASE_URL=http://caliban:8000/v1
+export EMET_OPENAI_MODEL=Qwen/Qwen2.5-7B-Instruct   # label only; server uses its loaded weights
 emet run agent --llm openai ...
 # or: --llm 'openai@http://caliban:8000/v1#Qwen/Qwen2.5-7B-Instruct'
+```
+
+Smoke:
+
+```bash
+./scripts/smoke_caliban_llm.sh
 ```
 
 | Variable | Role |

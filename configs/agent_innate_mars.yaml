@@ -2,7 +2,8 @@
 # Discord house chat + explore: see docs/robots/innate_mars_hardware.md
 #   export DISCORD_TOKEN=...
 #   # After: emet connect save … --name herman --config configs/agent_innate_mars.yaml
-#   uv run emet run agent --connection herman --rerun
+#   # Chat router on caliban (OpenAI serve); caption VLM stays on this workstation (--eqa).
+#   uv run emet run agent --connection herman
 extends: configs/emet/default.yaml
 
 robot: innate_mars
@@ -10,6 +11,10 @@ connection: herman
 
 agent:
   name: Herman
+  # Tool-router LLM on caliban (``emet serve llm`` / Jetson container). Override with
+  # ``--llm qwen35-4B`` for local, or ``EMET_OPENAI_MODEL=…`` to label the remote id.
+  # Caption/EQA VLM still loads locally when eqa: true (not served over this HTTP path yet).
+  llm: openai@http://caliban:8000/v1
   # Load Qwen3-VL captioner for describe_scene / memory QA (Discord “what do you see?”).
   eqa: true
   discord: true

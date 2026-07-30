@@ -73,12 +73,13 @@ System Python 3.8 on this Orin may already have `torch 2.0.0.nv23.05` with CUDA;
 # larger if VRAM allows: Qwen/Qwen2.5-14B-Instruct
 ```
 
-Then on another PC:
+Then on another PC (e.g. olympia talking to **caliban**):
 
 ```bash
 export EMET_OPENAI_BASE_URL=http://caliban:8000/v1   # or 192.168.1.55:8000
 export EMET_OPENAI_MODEL=Qwen/Qwen2.5-7B-Instruct
 emet run agent --llm openai
+# Herman preset: agent.llm already points at caliban — see docs/llm_serve.md § Caliban
 ```
 
 Native (CPU) path without Docker: `emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000` — slower; see [llm_serve.md](llm_serve.md).

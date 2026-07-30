@@ -39,16 +39,18 @@ emet connect save 192.168.1.43 --user jetson1 --name herman \
   --robot innate_mars --workspace ~/innate-os/ros2_ws --emet-dir ~/emet \
   --config configs/agent_innate_mars.yaml
 
-uv run emet run agent --connection herman --rerun
+# Chat tool-router uses caliban OpenAI serve (see docs/llm_serve.md § Caliban).
+# Smoke: ./scripts/smoke_caliban_llm.sh
+uv run emet run agent --connection herman
+# Optional ``--rerun`` for live 3D; Discord alone is enough for chat + maps.
 # ``emet run`` does not inject a default ``--robot-ip``; ``--connection herman`` supplies host + config.
-# Optional: ``export EMET_ALLOW_SDPA_ATTN=1`` if Qwen/flash-attn path is needed (see docs/environment_variables.md).
-# Prefer ``--onboard-da3`` on the bridge so workstation VRAM stays for the chat LLM + caption VLM.
+# Prefer ``--onboard-da3`` on the bridge so workstation VRAM stays for the caption VLM (--eqa).
 # Memory: ``agent.memory_backend: dynagraph`` (single Dynagraph plug-in; not open_vocab + GraphEQA).
 ```
 
 Profile ``config`` is shared: with herman **active**, bare ``emet run dynamem`` / ``emet stream`` (no ``--config``) also load ``agent_innate_mars.yaml``. Pass an explicit ``--config`` or use a profile without ``config`` when switching to Stretch/sim on the same machine — see [cli.md](../cli.md) (`emet connect`).
 
-Preset enables Discord + EQA captions (`agent.eqa: true`) and persona ``agent.name: Herman``. Optional: `--no-rerun` if you only care about Discord.
+Preset enables Discord + EQA captions (`agent.eqa: true`), persona ``agent.name: Herman``, and ``agent.llm: openai@http://caliban:8000/v1`` (remote text router). Optional: `--rerun` for Rerun; `--llm qwen35-4B` to force a local router.
 
 | Prompt (in Discord) | Expected |
 |---------------------|----------|

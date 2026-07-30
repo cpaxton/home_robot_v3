@@ -269,6 +269,14 @@ def test_config_agent_name_when_cli_omitted(monkeypatch: pytest.MonkeyPatch) -> 
     assert captured == ["Herman"]
 
 
+def test_agent_innate_mars_routes_llm_to_caliban() -> None:
+    """Herman preset uses OpenAI-compatible caliban URL for the chat router."""
+    from emet.config.loader import load_config
+
+    cfg = load_config("configs/agent_innate_mars.yaml")
+    assert cfg.agent_section().llm.startswith("openai@http://caliban:8000/v1")
+
+
 def test_connection_profile_config_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     """When --config is default, connection profile config path wins."""
     import click
