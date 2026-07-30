@@ -46,6 +46,21 @@ If port 4401 is already in use: `uv run emet kill-mujoco-server` then retry, or 
 
 ### `emet serve [backend]`
 
+Start a simulation server **or** an OpenAI-compatible LLM HTTP API.
+
+Backends: `mujoco` (default), `robocasa`, `molmospaces`, `habitat`, **`llm`**.
+
+**LLM (LAN OpenAI API)** — load Qwen (or other `get_llm_client` text keys) on this host for a workstation to call:
+
+```bash
+emet serve llm --llm qwen25-14B --host 0.0.0.0 --port 8000
+# workstation:
+export EMET_OPENAI_BASE_URL=http://caliban:8000/v1
+emet run agent --llm openai
+```
+
+Details: [llm_serve.md](llm_serve.md). Jetson notes: [jetson.md](jetson.md).
+
 Start a simulation server.
 
 | Backend | Description |
@@ -628,11 +643,14 @@ emet install sim -d -a              # With assets and force-overwrite macros
 emet install full                   # Full install (uv, deps, sync; sim opt-in)
 emet install full -y --sim        # Non-interactive + simulation (Robocasa)
 emet install full -y --profile full   # Legacy: enable sim without --sim
+emet install full -y --profile jetson # Jetson Orin lean install (see docs/jetson.md)
 emet install full --cpu             # CPU-only (no SAM2)
 emet install menu                   # Rich plan wizard (needs dev extra / rich)
 emet install pre-commit             # Install git hooks (requires emet sync --dev)
 emet install pre-commit --run       # Install and run on all files
 ```
+
+Jetson Orin / Tegra: `./scripts/install_jetson.sh -y` or `emet install full -y --profile jetson` (no sim/SAM2/Molmo; Python 3.10 via uv). Details: [jetson.md](jetson.md).
 
 `emet install sim` runs `emet sync -e sim` afterward by default (use `--no-sync` to skip). The project’s `pyproject.toml` uses a uv override for numpy so that `sync -e sim -e dynamem` works; see [Simulation](simulation.md#troubleshooting).
 

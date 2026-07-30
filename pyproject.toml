@@ -65,13 +65,15 @@ dependencies = [
     "transformers>=5.5.0,<6.0.0",
     "retry",
     "qwen_vl_utils",
-    "bitsandbytes",
+    # bitsandbytes / Triton FLA kernels: x86_64 (and non-Tegra) only. Jetson aarch64 has no usable
+    # Tegra builds; Qwen/VLM paths fall back to SDPA (set EMET_ALLOW_SDPA_ATTN=1).
+    "bitsandbytes; platform_machine != 'aarch64'",
     # Qwen3.5 fast Gated DeltaNet kernels (Triton): fla-core ships fla.ops/fla.modules,
     # flash-linear-attention the fla.layers/models split. Without these, transformers
     # silently uses ~2x-slower PyTorch fallback ops for qwen3_5.
-    "fla-core>=0.5.0",
-    "flash-linear-attention>=0.5.0",
-    "triton>=2.3.1",
+    "fla-core>=0.5.0; platform_machine != 'aarch64'",
+    "flash-linear-attention>=0.5.0; platform_machine != 'aarch64'",
+    "triton>=2.3.1; platform_machine != 'aarch64'",
     "accelerate>=1.6.0",
     "einops",
     "protobuf",
@@ -84,8 +86,12 @@ dependencies = [
     "pydub",
     "simpleaudio",
     "scikit-fmm",
-    "open3d",
-    "depth-anything-3>=0.1.1",
+    # open3d 0.19+ dropped manylinux aarch64 wheels; keep 0.17–0.18 on Jetson/ARM Linux.
+    "open3d>=0.17.0,<0.19; platform_machine == 'aarch64'",
+    "open3d; platform_machine != 'aarch64'",
+    # depth-anything-3 pulls pycolmap/xformers with no Linux aarch64 wheels (Jetson).
+    # Install on x86 workstations by default; on Orin use workstation DA3 or a custom build.
+    "depth-anything-3>=0.1.1; platform_machine != 'aarch64'",
     "click>=8.1.8",
     "discord.py",
     "python-dotenv",
@@ -117,8 +123,9 @@ sim = [
     # robosuite and robocasa are installed editable from third_party by: emet install sim (or scripts/install_simulation.sh)
 ]
 hand_tracker = [
-    "mediapipe",
-    "webcam",
+    # mediapipe 0.10.19+ dropped manylinux aarch64 wheels; skip on Jetson/ARM Linux.
+    "mediapipe; platform_machine != 'aarch64'",
+    "webcam; platform_machine != 'aarch64'",
 ]
 dynamem = [
     "SAM-2",
@@ -158,14 +165,15 @@ sim = [
     # robosuite and robocasa are installed editable from third_party by: emet install sim (or scripts/install_simulation.sh)
 ]
 hand_tracker = [
-    "mediapipe",
-    "webcam",
+    # mediapipe 0.10.19+ dropped manylinux aarch64 wheels; skip on Jetson/ARM Linux.
+    "mediapipe; platform_machine != 'aarch64'",
+    "webcam; platform_machine != 'aarch64'",
 ]
 dynamem = [
     "SAM-2",
 ]
 da3 = [
-    "depth-anything-3>=0.1.1",
+    "depth-anything-3>=0.1.1; platform_machine != 'aarch64'",
 ]
 # Not in default-groups: `uv sync --group flash-attn` when the CUDA toolkit matches torch.
 flash-attn = [

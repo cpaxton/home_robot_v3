@@ -1,0 +1,56 @@
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+#
+# Tegra-CUDA LLM serve image for JetPack 5.1.x (L4T R35.4.x / AGX Orin).
+# Base includes NVIDIA Jetson PyTorch with working CUDA (unlike PyPI aarch64 wheels).
+#
+# Build (on the Orin):
+#   ./docker/build-jetson-llm-docker.sh
+# Run:
+#   ./scripts/run_jetson_llm_container.sh --llm Qwen/Qwen2.5-7B-Instruct
+
+ARG L4T_BASE=dustynv/l4t-pytorch:r35.4.1
+FROM ${L4T_BASE}
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=UTC \
+    DOCKER=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HF_HOME=/data/huggingface \
+    TRANSFORMERS_CACHE=/data/huggingface \
+    EMET_LLM_SERVE_HOST=0.0.0.0 \
+    EMET_LLM_SERVE_PORT=8000
+
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Minimal runtime deps for HF chat serve (base image already has torch+CUDA).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Prefer packages that already ship in dustynv images; upgrade transformers carefully.
+# pin versions that still work with Jetson torch 2.x / py3.8.
+RUN python3 -m pip install --upgrade pip setuptools wheel \
+ && python3 -m pip install --no-cache-dir \
+    "transformers>=4.37,<4.46" \
+    "accelerate>=0.27,<1.0" \
+    "sentencepiece" \
+    "protobuf" \
+    "safetensors" \
+    "huggingface_hub>=0.20,<0.28" \
+    "einops"
+
+WORKDIR /app
+COPY docker/jetson_llm_server.py /app/jetson_llm_server.py
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+  CMD curl -fsS "http://127.0.0.1:${EMET_LLM_SERVE_PORT}/health" || exit 1
+
+ENTRYPOINT ["python3", "/app/jetson_llm_server.py"]
+CMD ["--host", "0.0.0.0", "--port", "8000", "--model", "Qwen/Qwen2.5-7B-Instruct"]
