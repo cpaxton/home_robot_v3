@@ -2368,7 +2368,7 @@ def _hmeqa_launch(
     "--require-verified/--allow-unverified",
     default=True,
     show_default=True,
-    help="Abstain instead of force-submitting without fused evidence.",
+    help="Refuse submit_answer until evidence is fused; at exhaustion the forced-answer ladder still commits.",
 )
 @click.option(
     "--agentic-router/--no-agentic-router",
