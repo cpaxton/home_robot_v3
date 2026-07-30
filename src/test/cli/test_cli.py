@@ -122,6 +122,10 @@ def test_hmeqa_h2h_help_lists_evidence_policy_flags():
     assert "paper-router" in result.stdout
     assert "eqa-hf-model-id" in result.stdout
     assert "eqa-vl-family" in result.stdout
+    assert "--description" in result.stdout
+    # Paper-router / Click default is Qwen-first (none), OWL opt-in only.
+    assert "none" in result.stdout
+    assert "owlv2" in result.stdout
 
 
 def test_hmeqa_overnight_help():
@@ -134,7 +138,20 @@ def test_hmeqa_overnight_help():
     assert "skip-bal32" in result.stdout
     assert "gate-min-acc" in result.stdout
     assert "agentic-router" in result.stdout
+    assert "none" in result.stdout
     assert "owlv2" in result.stdout
+    assert "RESUME" in result.stdout or "resume" in result.stdout.lower()
+    assert "--base" in result.stdout
+
+
+def test_jobs_cancel_help():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "jobs", "cancel", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "JOB_ID" in result.stdout or "job" in result.stdout.lower()
 
 
 def test_status_group_help():
@@ -199,6 +216,17 @@ def test_jobs_run_help_lists_safety_flags():
     assert result.returncode == 0
     assert "cpu-safe" in result.stdout
     assert "gpu-exclusive" in result.stdout
+    assert "--description" in result.stdout
+
+
+def test_jobs_update_help_lists_description():
+    result = subprocess.run(
+        [sys.executable, "-m", "emet.cli", "jobs", "update", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "--description" in result.stdout
 
 
 def test_jobs_list_runs(tmp_path):

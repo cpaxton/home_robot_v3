@@ -284,10 +284,11 @@ def test_router_graph_patio_sets_prefer_explore_when_vlm_unknown():
     assert meta.get("current_room_graph") == "patio"
     assert meta.get("current_room_vlm") == "unknown"
     assert meta.get("current_room") == "patio"
-    assert meta.get("prefer_explore_room_mismatch") is True
-    assert ex._prefer_explore is True
-    assert ex._prefer_explore_reason == "room_mismatch"
+    assert meta.get("prefer_explore_room_mismatch") is None
+    assert meta.get("room_mismatch_diagnostic") is True
+    assert ex._prefer_explore is False
     msg = build_state_message(ex)
     assert "Current room (graph): patio" in msg
     assert "Rooms: patio(3)" in msg
-    assert "does not match rooms named" in msg
+    assert "does not match rooms named" not in msg
+    assert "room=" in msg or "Current room" in msg

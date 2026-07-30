@@ -24,27 +24,61 @@ def summarize(out: Path) -> dict:
         rows = [json.loads(l) for l in p.read_text().splitlines() if l.strip()] if p.exists() else []
         ok = sum(1 for r in rows if r.get("correct"))
         steps = [r.get("planning_steps") for r in rows if isinstance(r.get("planning_steps"), (int, float))]
-        summary[m] = {
+        per = []
+        salvage_fired = 0
+        with_salvage_ok = 0
+        for r in rows:
+            pred = r.get("predicted_answer") or r.get("parsed_answer_letter") or ""
+            salvage_pred = str(r.get("salvage_pred") or "").strip()
+            gold = str(r.get("gold_answer_letter") or "")
+            scored_ok = bool(r.get("correct"))
+            if salvage_pred:
+                salvage_fired += 1
+                if r.get("salvage_correct") is not None:
+                    salvage_ok = bool(r.get("salvage_correct"))
+                else:
+                    salvage_ok = bool(gold) and str(salvage_pred).upper()[:1] == gold.upper()[:1]
+                effective_ok = salvage_ok
+            else:
+                salvage_ok = False
+                effective_ok = scored_ok
+            if effective_ok:
+                with_salvage_ok += 1
+            per.append(
+                {
+                    "q": r.get("question_id"),
+                    "correct": r.get("correct"),
+                    "pred": pred,
+                    "gold": gold,
+                    "planning_steps": r.get("planning_steps"),
+                    "observations": r.get("observations"),
+                    "salvage_pred": salvage_pred,
+                    "salvage_correct": bool(salvage_ok) if salvage_pred else False,
+                    "scored_policy": r.get("scored_policy") or "",
+                }
+            )
+        block: dict = {
             "n": len(rows),
             "correct": ok,
             "accuracy": (ok / len(rows)) if rows else None,
             "mean_planning_steps": (sum(steps) / len(steps)) if steps else None,
-            "per": [
-                {
-                    "q": r.get("question_id"),
-                    "correct": r.get("correct"),
-                    "pred": r.get("predicted_answer"),
-                    "gold": r.get("gold_answer_letter"),
-                    "planning_steps": r.get("planning_steps"),
-                    "observations": r.get("observations"),
-                }
-                for r in rows
-            ],
+            "per": per,
         }
-        print(
-            f"{m}: {ok}/{len(rows)} acc={summary[m]['accuracy']} "
-            f"mean_steps={summary[m]['mean_planning_steps']}"
-        )
+        if m == "agentic" and rows:
+            block["accuracy_no_salvage"] = block["accuracy"]
+            block["accuracy_with_salvage"] = with_salvage_ok / len(rows)
+            block["correct_with_salvage"] = with_salvage_ok
+            block["salvage_fired"] = salvage_fired
+            print(
+                f"{m}: {ok}/{len(rows)} acc={block['accuracy']} "
+                f"no_salvage={ok}/{len(rows)}; "
+                f"with_salvage_cf={with_salvage_ok}/{len(rows)} "
+                f"(fired={salvage_fired}) "
+                f"mean_steps={block['mean_planning_steps']}"
+            )
+        else:
+            print(f"{m}: {ok}/{len(rows)} acc={block['accuracy']} mean_steps={block['mean_planning_steps']}")
+        summary[m] = block
     (out / "h2h_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     return summary
 

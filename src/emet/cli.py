@@ -1396,7 +1396,11 @@ def jobs_report(
 @click.option("--grace-sec", type=float, default=10.0, show_default=True)
 @click.option("--json", "as_json", is_flag=True, help="Emit full JSON record.")
 def jobs_cancel(job_id: str, grace_sec: float, as_json: bool) -> None:
-    from emet.utils.job_registry import cancel_job, format_job_detail
+    from emet.utils.job_registry import (
+        cancel_job,
+        format_job_detail,
+        scan_eval_processes,
+    )
 
     try:
         job = cancel_job(job_id, grace_s=grace_sec)
@@ -1408,6 +1412,26 @@ def jobs_cancel(job_id: str, grace_sec: float, as_json: bool) -> None:
     else:
         click.echo(f"cancelled {job.id}")
         click.echo(format_job_detail(job))
+        # Habitat grandchildren can briefly outlive the wrapper PID.
+        leftovers = scan_eval_processes()
+        if leftovers:
+            click.echo(
+                "WARNING: unmanaged eval processes still visible "
+                f"({len(leftovers)}). Re-check with `emet jobs` / "
+                "`emet eval status`; use `emet eval kill-stale` only if "
+                "nothing intentional is live.",
+                err=True,
+            )
+        if job.out_dir:
+            out = Path(job.out_dir)
+            # Overnight OUT is …/base/bal32; resume the overnight base when possible.
+            base = out.parent if out.name in {"bal32", "holdout8"} else out
+            click.echo(
+                f"resume hint: uv run emet hmeqa overnight --base {base} --job-name {job.name or 'hmeqa-overnight'}"
+                if (base / "gate.json").is_file() or (base / "holdout8").is_dir()
+                else f"resume hint: uv run emet hmeqa resume {out} --preset paper-router",
+                err=True,
+            )
 
 
 @jobs_group.command("logs", short_help="Tail a job log (log_path or out_dir/*.log)")
@@ -1446,6 +1470,12 @@ def jobs_logs(job_id: str, n_tail: int) -> None:
 
 @jobs_group.command("register", short_help="Register a job (for scripts)")
 @click.option("--name", required=True, help="Short job name.")
+@click.option(
+    "--description",
+    "-d",
+    default=None,
+    help="Human why/what for this run (shown in emet jobs list + status).",
+)
 @click.option("--cmd", default="", help="Command summary.")
 @click.option("--out-dir", type=click.Path(), default=None)
 @click.option("--log-path", type=click.Path(), default=None)
@@ -1459,6 +1489,7 @@ def jobs_logs(job_id: str, n_tail: int) -> None:
 )
 def jobs_register(
     name: str,
+    description: str | None,
     cmd: str,
     out_dir: str | None,
     log_path: str | None,
@@ -1479,6 +1510,7 @@ def jobs_register(
         wait_pids=list(wait_pid),
         pid=pid,
         status=status,  # type: ignore[arg-type]
+        description=description,
     )
     click.echo(job.id)
 
@@ -1500,6 +1532,12 @@ def jobs_register(
 @click.option("--phase", default=None, help="Current phase label (e.g. classic, agentic).")
 @click.option("--current-id", default=None, help="Current unit id (e.g. question id).")
 @click.option(
+    "--description",
+    "-d",
+    default=None,
+    help="Set/replace human why/what (shown in emet jobs list + status).",
+)
+@click.option(
     "--meta",
     multiple=True,
     help="Extra meta KEY=VALUE (repeatable). Progress keys also accepted here.",
@@ -1516,6 +1554,7 @@ def jobs_update(
     units_total: int | None,
     phase: str | None,
     current_id: str | None,
+    description: str | None,
     meta: tuple[str, ...],
 ) -> None:
     from emet.utils.job_registry import update_job
@@ -1542,6 +1581,7 @@ def jobs_update(
             units_total=units_total,
             phase=phase,
             current_id=current_id,
+            description=description,
         )
     except KeyError as e:
         click.echo(str(e), err=True)
@@ -1555,6 +1595,12 @@ def jobs_update(
     short_help="Register + nohup a command as a managed job",
 )
 @click.option("--name", required=True, help="Short job name.")
+@click.option(
+    "--description",
+    "-d",
+    default=None,
+    help="Human why/what for this run (shown in emet jobs list + status).",
+)
 @click.option("--out-dir", type=click.Path(), default=None, help="Artifact directory.")
 @click.option(
     "--wait-pid",
@@ -1583,6 +1629,7 @@ def jobs_update(
 def jobs_run(
     ctx: click.Context,
     name: str,
+    description: str | None,
     out_dir: str | None,
     wait_pid: tuple[int, ...],
     need_mib: int | None,
@@ -1594,7 +1641,7 @@ def jobs_run(
 
     \b
     Example:
-      emet jobs run --name improve-eqa --need-mib 14000 -- \\
+      emet jobs run --name improve-eqa -d "owlv2 + no confirm gate" --need-mib 14000 -- \\
         ./scripts/run_dynagraph_dynamic_improve_smokes.sh OUT
     """
     import shlex
@@ -1605,7 +1652,7 @@ def jobs_run(
     if cmd_args and cmd_args[0] == "--":
         cmd_args = cmd_args[1:]
     if not cmd_args:
-        click.echo("usage: emet jobs run --name NAME -- CMD [ARGS…]", err=True)
+        click.echo("usage: emet jobs run --name NAME [--description TEXT] -- CMD [ARGS…]", err=True)
         sys.exit(2)
 
     root = _project_root()
@@ -1632,9 +1679,12 @@ def jobs_run(
         repo=str(root),
         wait_pids=wait_pids,
         status="queued",
+        description=description,
     )
     click.echo(f"registered  {job.id}", err=True)
     click.echo(f"name        {name}", err=True)
+    if description and str(description).strip():
+        click.echo(f"why         {str(description).strip()}", err=True)
     click.echo(f"out_dir     {out}", err=True)
     click.echo(f"log         {log_path}", err=True)
 
@@ -2230,6 +2280,7 @@ def _hmeqa_launch(
     foreground: bool,
     eqa_hf_model_id: str | None = None,
     eqa_vl_family: str | None = None,
+    description: str | None = None,
 ) -> None:
     """Register H2H via ``emet jobs run`` (cpu-safe + gpu-exclusive defaults)."""
     import shlex
@@ -2270,6 +2321,8 @@ def _hmeqa_launch(
         "--out-dir",
         str(out),
     ]
+    if description and str(description).strip():
+        cmd.extend(["--description", str(description).strip()])
     if foreground:
         cmd.append("--foreground")
     cmd.extend(["--", "bash", "-lc", inner])
@@ -2327,7 +2380,7 @@ def _hmeqa_launch(
     "--preset",
     type=click.Choice(["paper-router"]),
     default=None,
-    help="paper-router: owlv2 + allow-unverified + agentic-router (explicit flags still win).",
+    help="paper-router: none verifier (Qwen vlm_assess gate) + allow-unverified + agentic-router (explicit flags still win).",
 )
 @click.option(
     "--eqa-hf-model-id",
@@ -2340,6 +2393,12 @@ def _hmeqa_launch(
     help="Override VL family (sets EQA_VL_FAMILY → emet-habitat --eqa-vl-family).",
 )
 @click.option("--job-name", default="hmeqa-h2h", show_default=True)
+@click.option(
+    "--description",
+    "-d",
+    default=None,
+    help="Human why/what for this run (stored on the job; shown in emet jobs).",
+)
 @click.option("--need-mib", type=int, default=12000, show_default=True)
 @click.option("--foreground", is_flag=True)
 @click.pass_context
@@ -2360,6 +2419,7 @@ def hmeqa_h2h(
     eqa_hf_model_id: str | None,
     eqa_vl_family: str | None,
     job_name: str,
+    description: str | None,
     need_mib: int,
     foreground: bool,
 ) -> None:
@@ -2396,6 +2456,7 @@ def hmeqa_h2h(
         foreground=foreground,
         eqa_hf_model_id=eqa_hf_model_id,
         eqa_vl_family=eqa_vl_family,
+        description=description,
     )
 
 
@@ -2419,7 +2480,7 @@ def hmeqa_h2h(
     "--preset",
     type=click.Choice(["paper-router"]),
     default=None,
-    help="paper-router: owlv2 + allow-unverified + agentic-router (explicit flags still win).",
+    help="paper-router: none verifier (Qwen vlm_assess gate) + allow-unverified + agentic-router (explicit flags still win).",
 )
 @click.option(
     "--eqa-hf-model-id",
@@ -2432,6 +2493,12 @@ def hmeqa_h2h(
     help="Override VL family (sets EQA_VL_FAMILY → emet-habitat --eqa-vl-family).",
 )
 @click.option("--job-name", default="hmeqa-h2h-resume", show_default=True)
+@click.option(
+    "--description",
+    "-d",
+    default=None,
+    help="Human why/what for this run (stored on the job; shown in emet jobs).",
+)
 @click.option("--need-mib", type=int, default=12000, show_default=True)
 @click.option("--foreground", is_flag=True)
 @click.pass_context
@@ -2451,6 +2518,7 @@ def hmeqa_resume(
     eqa_hf_model_id: str | None,
     eqa_vl_family: str | None,
     job_name: str,
+    description: str | None,
     need_mib: int,
     foreground: bool,
 ) -> None:
@@ -2500,6 +2568,7 @@ def hmeqa_resume(
         foreground=foreground,
         eqa_hf_model_id=eqa_hf_model_id,
         eqa_vl_family=eqa_vl_family,
+        description=description,
     )
 
 
@@ -2508,7 +2577,11 @@ def hmeqa_resume(
     "--base",
     "base_dir",
     default=None,
-    help="Overnight base dir (default: ~/runs/emet/hmeqa_overnight_<stamp>).",
+    help=(
+        "Overnight base dir (default: ~/runs/emet/hmeqa_overnight_<stamp>). "
+        "Re-pass the same --base after emet jobs cancel to resume: skips DONE "
+        "phases and RESUME=1 on partial H2H dirs."
+    ),
 )
 @click.option("--holdout-ids", default=None, help="Default: paper holdout-8.")
 @click.option("--bal32-ids", default=None, help="Default: balanced-32.")
@@ -2517,7 +2590,7 @@ def hmeqa_resume(
 @click.option(
     "--agentic-verifier",
     type=click.Choice(["none", "owlv2", "yoloe"]),
-    default="owlv2",
+    default="none",
     show_default=True,
 )
 @click.option(
@@ -2537,6 +2610,12 @@ def hmeqa_resume(
 @click.option("--streak-abort", type=int, default=2, show_default=True)
 @click.option("--egl-fail-abort", type=int, default=2, show_default=True)
 @click.option("--job-name", default="hmeqa-overnight", show_default=True)
+@click.option(
+    "--description",
+    "-d",
+    default=None,
+    help="Human why/what for this run (stored on the job; shown in emet jobs).",
+)
 @click.option("--need-mib", type=int, default=12000, show_default=True)
 @click.option("--foreground", is_flag=True)
 def hmeqa_overnight(
@@ -2553,6 +2632,7 @@ def hmeqa_overnight(
     streak_abort: int,
     egl_fail_abort: int,
     job_name: str,
+    description: str | None,
     need_mib: int,
     foreground: bool,
 ) -> None:
@@ -2560,6 +2640,9 @@ def hmeqa_overnight(
 
     When already inside ``emet jobs`` (``EMET_JOB_ID`` set), runs the orchestrator
     in-process so nested jobs are not created. Otherwise wraps one ``emet jobs run``.
+
+    Pause with ``emet jobs cancel JOB_ID``. Resume by re-running this command with
+    the same ``--base`` (skips ``DONE`` phases; keeps scored per-qid jsonl).
     """
     import shlex
 
@@ -2647,6 +2730,8 @@ def hmeqa_overnight(
         "--out-dir",
         str(base),
     ]
+    if description and str(description).strip():
+        cmd.extend(["--description", str(description).strip()])
     if foreground:
         cmd.append("--foreground")
     cmd.extend(["--", "bash", "-lc", " ".join(shlex.quote(p) for p in inner_parts)])

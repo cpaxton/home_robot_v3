@@ -151,7 +151,7 @@ uv run emet eval status
 # Track queued / running experiments (required for long GPU runs):
 uv run emet jobs                 # list + progress/ETA columns
 uv run emet jobs status JOB_ID   # detail + derived ETA
-uv run emet jobs cancel JOB_ID   # stop one managed job
+uv run emet jobs cancel JOB_ID   # pause/stop one managed job (then resume via overnight --base / hmeqa resume)
 
 # Launch (prefer over bare nohup):
 uv run emet jobs run --name my-eval --need-mib 12000 -- ./scripts/…
@@ -161,6 +161,24 @@ uv run emet jobs run --name my-eval --need-mib 12000 -- ./scripts/…
 NEED_MIB=12000 ./scripts/gpu_preflight.sh --wait
 NEED_MIB=14000 ./scripts/gpu_preflight.sh --check
 ```
+
+### Pause / resume HM-EQA overnight (official)
+
+There is **no** separate `emet pause` — cancel the managed job, then relaunch with the same tree:
+
+```bash
+uv run emet jobs cancel JOB_ID
+uv run emet jobs                 # confirm no unmanaged emet-habitat orphans
+uv run emet eval status          # GPU should clear (~no compute apps)
+
+# Resume the full holdout→bal32 ladder (skips DONE phases; RESUME=1 on partial H2H):
+uv run emet hmeqa overnight --base ~/runs/emet/hmeqa_overnight_<stamp> --job-name hmeqa-overnight
+
+# Or resume only the bal-32 / holdout H2H OUT:
+uv run emet hmeqa resume ~/runs/emet/hmeqa_overnight_<stamp>/bal32 --preset paper-router
+```
+
+Do **not** re-run overnight with a **new** `--base` if you want to keep scored episodes. Mid-episode cancel leaves an empty `*_qN.jsonl`; resume retries those. Prefer `emet jobs cancel` over raw `kill` / `emet eval kill-stale` while a managed job is the thing you want to stop. Details: [cli.md](cli.md#emet-jobs-queued--running-eval-experiments), [cli.md](cli.md#emet-hmeqa-hm-eqa-h2h).
 
 `kill-stale` SIGTERM→SIGKILL matching sim/eval/`uv run emet` trees (skips the caller ancestry; optional `EMET_GPU_PROTECT_PIDS`). Eval code should spawn via `emet.utils.process_tree` so timeouts reap GPU grandchildren — see [known_issues.md](known_issues.md#orphan--zombie-eval-processes-after-timeouts).
 

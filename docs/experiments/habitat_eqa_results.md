@@ -188,6 +188,7 @@ Holdout-8 classic misses recovered by agentic (router off): **Q56** (A→C), **Q
 ```bash
 uv run emet eval recover --need-mib 12000
 uv run emet hmeqa overnight
+# pause: emet jobs cancel JOB_ID → resume: emet hmeqa overnight --base …
 # probe:
 uv run emet hmeqa h2h ~/runs/emet/hmeqa_graph_probe --arms agentic \
   --ids 12,17,18,56 --agentic-verifier owlv2 --require-verified

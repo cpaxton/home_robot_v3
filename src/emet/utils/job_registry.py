@@ -70,6 +70,8 @@ class JobRecord:
     created_at: float = field(default_factory=_now)
     updated_at: float = field(default_factory=_now)
     meta: dict[str, Any] = field(default_factory=dict)
+    # Human “what / why” for queue visibility (``emet jobs`` list + status).
+    description: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -80,7 +82,30 @@ class JobRecord:
         kwargs = {k: v for k, v in data.items() if k in known}
         kwargs.setdefault("wait_pids", [])
         kwargs.setdefault("meta", {})
+        kwargs.setdefault("description", "")
+        # Legacy: some scripts stashed a note under meta.
+        if not str(kwargs.get("description") or "").strip():
+            meta = kwargs.get("meta") or {}
+            if isinstance(meta, dict):
+                for key in ("description", "note", "why"):
+                    val = meta.get(key)
+                    if isinstance(val, str) and val.strip():
+                        kwargs["description"] = val.strip()
+                        break
         return cls(**kwargs)
+
+
+def job_description(job: JobRecord) -> str:
+    """Resolved description for display (field, else legacy meta note)."""
+    text = str(job.description or "").strip()
+    if text:
+        return text
+    meta = job.meta or {}
+    for key in ("description", "note", "why"):
+        val = meta.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
 
 
 def _job_path(job_id: str) -> Path:
@@ -170,7 +195,12 @@ def register_job(
     status: JobStatus = "queued",
     meta: dict[str, Any] | None = None,
     job_id: str | None = None,
+    description: str | None = None,
 ) -> JobRecord:
+    desc = str(description or "").strip()
+    meta_dict = dict(meta or {})
+    if desc and "description" not in meta_dict:
+        meta_dict.setdefault("note", desc)
     job = JobRecord(
         id=job_id or _new_id(),
         name=str(name),
@@ -182,7 +212,8 @@ def register_job(
         log_path=str(log_path) if log_path is not None else None,
         repo=str(repo) if repo is not None else None,
         wait_pids=[int(p) for p in (wait_pids or [])],
-        meta=dict(meta or {}),
+        meta=meta_dict,
+        description=desc,
     )
     save_job(job)
     return job
@@ -203,10 +234,15 @@ def update_job(
     phase: str | None = None,
     current_id: str | None = None,
     write_progress_json: bool = True,
+    description: str | None = None,
 ) -> JobRecord:
     job = load_job(job_id)
     if job is None:
         raise KeyError(f"unknown job id: {job_id}")
+    if description is not None:
+        job.description = str(description).strip()
+        if job.description:
+            job.meta["note"] = job.description
     if status is not None:
         job.status = status
     if pid is not None:
@@ -513,9 +549,13 @@ def format_job_row(job: JobRecord) -> str:
     out = _ellipsize(job.out_dir or "-", 40)
     prog = format_progress_brief(compute_job_progress(job))
     prog_s = _ellipsize(prog, 28)
-    return (
+    line = (
         f"{job.id:<26}  {job.status:<10}  {pid_s:>8}  {_format_age(job.created_at):>6}  {name:<18}  {prog_s:<28}  {out}"
     )
+    desc = job_description(job)
+    if desc:
+        line = f"{line}\n  why: {_ellipsize(desc, 96)}"
+    return line
 
 
 @dataclass
@@ -613,12 +653,19 @@ def format_job_detail(job: JobRecord) -> str:
     lines = [
         f"id:        {job.id}",
         f"name:      {job.name}",
-        f"status:    {job.status}",
-        f"pid:       {job.pid if job.pid is not None else '-'}",
-        f"age:       {_format_age(job.created_at)}",
-        f"out_dir:   {job.out_dir or '-'}",
-        f"log_path:  {job.log_path or '-'}",
     ]
+    desc = job_description(job)
+    if desc:
+        lines.append(f"why:       {desc}")
+    lines.extend(
+        [
+            f"status:    {job.status}",
+            f"pid:       {job.pid if job.pid is not None else '-'}",
+            f"age:       {_format_age(job.created_at)}",
+            f"out_dir:   {job.out_dir or '-'}",
+            f"log_path:  {job.log_path or '-'}",
+        ]
+    )
     lines.extend(format_viz_artifact_lines(job.out_dir))
     if prog.source != "none":
         lines.append(f"progress:  {format_progress_brief(prog)}")
@@ -1229,12 +1276,28 @@ def analyze_agentic_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 "letter": r.get("letter"),
                 "prior_answer": r.get("prior_answer"),
                 "n_images": r.get("n_images"),
+                "applied": True,
             }
             for r in rows
             if r.get("event") == "final_location_salvage"
         ),
         None,
     )
+    if salvage is None:
+        salvage = next(
+            (
+                {
+                    "letter": r.get("letter"),
+                    "prior_answer": r.get("prior_answer"),
+                    "n_images": r.get("n_images"),
+                    "applied": False,
+                    "counterfactual": True,
+                }
+                for r in rows
+                if r.get("event") == "final_location_salvage_counterfactual"
+            ),
+            None,
+        )
     summary = next((r for r in rows if r.get("tool") == "summary"), None)
     summary_bits: dict[str, Any] | None = None
     if summary is not None:
@@ -1308,7 +1371,13 @@ def analyze_agentic_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
             rooms_line_latest = str(turn["rooms_line"])
             break
     merged_seq = [str(t.get("merged") or "unknown") for t in room_turns]
-    n_mismatch = sum(1 for t in room_turns if t.get("prefer_explore_reason") == "room_mismatch")
+    n_mismatch = sum(
+        1
+        for t in room_turns
+        if t.get("prefer_explore_reason") == "room_mismatch"
+        or t.get("room_mismatch_diagnostic")
+        or t.get("prefer_explore_room_mismatch")
+    )
     n_disagree = sum(
         1
         for t in room_turns
@@ -1676,8 +1745,9 @@ def format_question_report(
             lines.append("ledger: " + " || ".join(trace["place_ledger"][:4]))
         if trace.get("salvage"):
             s = trace["salvage"]
+            kind = "counterfactual" if s.get("counterfactual") or s.get("applied") is False else "applied"
             lines.append(
-                f"salvage: letter={s.get('letter')} prior={s.get('prior_answer')} n_images={s.get('n_images')}"
+                f"salvage({kind}): letter={s.get('letter')} prior={s.get('prior_answer')} n_images={s.get('n_images')}"
             )
 
     if "assess" in want and not brief:
@@ -1733,7 +1803,8 @@ def format_question_report(
             flags.append("explore-heavy with no present assess")
         rooms = trace.get("rooms") or {}
         if rooms.get("n_mismatch", 0) >= 2 and rooms.get("n_prefer_explore_redirect", 0) == 0:
-            flags.append("room_mismatch without explore redirect")
+            # Diagnostic only after Hydra-aligned rooms (no hard leave-wrong-room).
+            flags.append("room_mismatch diagnostic (informational; no hard redirect)")
         if rooms.get("n_vlm_graph_disagree", 0) >= 3:
             flags.append(f"vlm≠graph on {rooms['n_vlm_graph_disagree']} router turns")
         lines.append("")

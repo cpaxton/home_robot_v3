@@ -37,6 +37,9 @@ Rules:
   not the destination. Prefer: patio, outdoor, kitchen, living_room, dining_room,
   bedroom, bathroom, hallway, garage, unknown.
 - Grass / yard / outdoor furniture → outdoor or patio (never invent dining from chairs).
+- Hierarchical choice (GraphEQA-style): prefer an Investigate card whose room=
+  is relevant to the question; otherwise explore_frontier toward other rooms /
+  frontiers. Do not invent room aliases — use the room= tags on cards.
 - Each turn choose explicitly: INVESTIGATE a place card OR EXPLORE for coverage
   (then verify/assess runs at the station after investigate).
 - investigate(obs_id): closer look at a listed Investigate card (graph/confirmed/siglip).
@@ -45,31 +48,31 @@ Rules:
   places look fruitless. toward= is weak coverage bias ONLY —
   never a substitute for investigate(obs_id).
 - Use Recent actions to avoid repeating a stuck investigate/explore loop.
-- After a close look verifies ABSENT, prefer explore_frontier once to grow
-  coverage before investigating a new capture-station card.
-- If Current room does not match rooms named in the question / MCQ options
-  (e.g. you are in patio but options are kitchen / living / dining), prefer
-  explore_frontier to leave that room and grow coverage elsewhere.
-- SigLIP/OWL are proposals in state — not proof. Trust Qwen assess for answerability.
+- After a close look where VLM assess says present=false, prefer explore_frontier
+  once to grow coverage before investigating a new capture-station card.
+- SigLIP/OWL (if present) are proposals in state — not proof. Trust Qwen
+  vlm_assess for answerability (agentic verify). State verified= means VLM
+  answerable, not detector confirmation.
 - Pass MCQ letter (A–D) in submit_answer.arguments.answer when answerable.
 - One or two tool calls per turn.
 
 # Examples
-State: Investigate obs_id=3 phrase='sink' source=graph investigated=0 approaches=0/4 coverage=open
+State: Investigate obs_id=3 phrase='sink' room=kitchen source=graph investigated=0 approaches=0/4 coverage=open
 {"current_room": "kitchen", "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 3}}], "message": ""}
-State: Recent actions: r0 investigate obs=3 verify=ABSENT; Prefer explore_frontier
+State: Recent actions: r0 investigate obs=3 assess present=false; Prefer explore_frontier
 {"current_room": "kitchen", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
-State: Current room patio; question rooms kitchen/living/dining — Prefer explore_frontier
-{"current_room": "patio", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}
-State: Last verify PRESENT; VLM assess answerable=true verified=true
+State: Question about dining chairs; Investigate dining-table card room=kitchen available
+{"current_room": "kitchen", "tool_calls": [{"name": "investigate", "arguments": {"obs_id": 37}}], "message": ""}
+State: Last proposal PRESENT; VLM assess answerable=true (vlm_answerable)
 {"current_room": "living_room", "tool_calls": [{"name": "submit_answer", "arguments": {"answer": "B"}}], "message": ""}
 State: Investigate (none); Explore frontiers available
 {"current_room": "unknown", "tool_calls": [{"name": "explore_frontier", "arguments": {}}], "message": ""}"""
 
 _EQA_IDENTITY = """\
-You are a robot answering questions about a home. You maintain a 3D map and scene graph.
-Decide each turn: investigate a promising place for a closer look, or explore to grow
-coverage when places are exhausted or none look good. Do NOT output reasoning — only JSON."""
+You are a robot answering questions about a home. You maintain a 3D map and scene graph
+with room clusters (objects belong to rooms). Decide each turn: investigate a promising
+place for a closer look (prefer room-relevant cards), or explore to grow coverage when
+places are exhausted or none look good. Do NOT output reasoning — only JSON."""
 
 # Canonical room labels for router current_room (aliases normalize into these).
 ROOM_CANONICAL = frozenset(
@@ -290,23 +293,27 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     lines.append(
         f"Round {executor._round + 1}/{executor.max_rounds}; "
         f"nav used {executor._n_nav + executor._n_explore}/{executor.max_nav_steps}; "
-        f"verified={executor._verified}"
+        f"vlm_answerable={executor._verified}"
     )
+    pending = getattr(executor, "_pending_answerable", None) or None
+    if pending and not getattr(executor, "_verified", False):
+        letter = str(pending.get("letter") or "").strip() or "?"
+        lines.append(
+            f"pending_answer={letter} (need confirm — re-investigate another view or "
+            "wait for phrase corroboration; do not submit yet)"
+        )
     recent_actions = list(getattr(executor, "_recent_actions", None) or [])
     if recent_actions:
         lines.append("Recent actions: " + " | ".join(recent_actions))
     if getattr(executor, "_prefer_explore", False):
         reason = str(getattr(executor, "_prefer_explore_reason", "") or "")
-        if reason == "room_mismatch":
+        if reason == "absent":
             lines.append(
-                "Prefer explore_frontier: current room does not match rooms named "
-                "in the question — leave this room and grow coverage elsewhere."
+                "Prefer explore_frontier: last close look VLM assess present=false — "
+                "grow coverage before chasing a new capture station."
             )
         else:
-            lines.append(
-                "Prefer explore_frontier: last close look was ABSENT — grow coverage "
-                "before chasing a new capture station."
-            )
+            lines.append("Prefer explore_frontier: grow coverage before chasing a new capture station.")
     if getattr(executor, "_last_capture_status", None):
         lines.append(f"Last capture: {executor._last_capture_status}")
     loop_flags = list(getattr(executor, "_nav_loop_flags", None) or [])
@@ -317,8 +324,8 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
             f"status={last.get('status')} — pick another investigate card or explore_frontier"
         )
     lines.append(
-        "Choose: investigate(obs_id) for a closer look at a place, "
-        "OR explore_frontier if no place is worth it / places are exhausted."
+        "Choose: investigate(obs_id) for a closer look at a place (prefer room-relevant "
+        "cards), OR explore_frontier if no place is worth it / places are exhausted."
     )
     inv = [h for h in executor._hypotheses if str(h.source) in INVESTIGATE_SOURCES]
     exp = [h for h in executor._hypotheses if str(h.source) not in INVESTIGATE_SOURCES]
@@ -335,6 +342,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
                     pass
             labels = _hyp_labels(executor, oid)
             label_bit = f" labels={labels}" if labels else ""
+            room_bit = f" room={_hyp_room(executor, h)}"
             sim = getattr(h, "siglip_sim", None)
             sim_bit = ""
             if isinstance(sim, (int, float)):
@@ -351,7 +359,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
             lines.append(
                 f"- obs_id={oid} phrase={h.phrase!r} source={h.source} "
                 f"xyz=({float(h.xyz[0]):.1f},{float(h.xyz[1]):.1f})"
-                f"{label_bit}{sim_bit} {bits}"
+                f"{room_bit}{label_bit}{sim_bit} {bits}"
             )
     else:
         lines.append("Investigate: (none — explore or look_around first)")
@@ -359,18 +367,93 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         lines.append("Explore (frontiers — coverage only; not investigate targets):")
         for h in exp:
             oid = int(h.obs_id)
+            room_bit = f" room={_hyp_room(executor, h)}"
+            near = _frontier_nearby_labels(executor, h)
+            near_bit = f" near={near}" if near else ""
             lines.append(
                 f"- obs_id={oid} phrase={h.phrase!r} source={h.source} "
                 f"xyz=({float(h.xyz[0]):.1f},{float(h.xyz[1]):.1f})"
+                f"{room_bit}{near_bit}"
             )
     else:
         lines.append("Explore: (no frontier cards in recall)")
     if executor._last_verify is not None:
         lv = executor._last_verify
-        lines.append(f"Last verify: {lv.status} sim={float(lv.sim):.3f} obs_id={int(lv.obs_id)}")
+        lines.append(
+            f"Last proposal (verify_siglip): {lv.status} sim={float(lv.sim):.3f} "
+            f"obs_id={int(lv.obs_id)} — not VLM answerability"
+        )
     if executor.max_rounds - executor._round <= 2:
         lines.append("Budget nearly exhausted: answer/finish on your best evidence soon.")
     return "\n".join(lines)
+
+
+def _hyp_room(executor: AgenticEQAExecutor, hyp: Any) -> str:
+    """Nearest stamped/graph room name at hypothesis XY."""
+    gm = executor.graph_memory
+    if gm is None:
+        return "unknown"
+    try:
+        xyz = getattr(hyp, "xyz", None)
+        if xyz is None:
+            return "unknown"
+        xy = (float(xyz[0]), float(xyz[1]))
+    except Exception:
+        return "unknown"
+    room_fn = getattr(gm, "graph_room_at_robot", None)
+    if not callable(room_fn):
+        return "unknown"
+    try:
+        return normalize_current_room(room_fn(xy))
+    except Exception:
+        return "unknown"
+
+
+def _frontier_nearby_labels(executor: AgenticEQAExecutor, hyp: Any, *, limit: int = 3) -> list[str]:
+    """Top object labels near a frontier hyp (Hydra-lite semantic enrichment)."""
+    gm = executor.graph_memory
+    if gm is None:
+        return []
+    try:
+        xyz = getattr(hyp, "xyz", None)
+        if xyz is None:
+            return []
+        fxy = (float(xyz[0]), float(xyz[1]))
+    except Exception:
+        return []
+    scored: list[tuple[float, str]] = []
+    for node in list(getattr(gm, "_nodes", None) or []):
+        if getattr(node, "is_frontier", False):
+            continue
+        # Do not use ``a or b`` — numpy xyz arrays are ambiguous in boolean context.
+        nxyz = getattr(node, "xyz", None)
+        if nxyz is None:
+            nxyz = getattr(node, "centroid", None)
+        if nxyz is None:
+            continue
+        try:
+            nxy = (float(nxyz[0]), float(nxyz[1]))
+            dist = ((nxy[0] - fxy[0]) ** 2 + (nxy[1] - fxy[1]) ** 2) ** 0.5
+        except Exception:
+            continue
+        if dist > 3.0:
+            continue
+        for lab in list(getattr(node, "labels", None) or [])[:2]:
+            s = str(lab).strip()
+            if s and s.lower() != "frontier":
+                scored.append((dist, s))
+    scored.sort(key=lambda t: t[0])
+    out: list[str] = []
+    seen: set[str] = set()
+    for _, lab in scored:
+        key = lab.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(lab)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def _hyp_labels(executor: AgenticEQAExecutor, obs_id: int) -> list[str]:

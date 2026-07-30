@@ -81,6 +81,39 @@ def test_format_job_row_columns():
     assert " - " in row or row.count("-") >= 2
 
 
+def test_job_description_list_and_detail(tmp_path, monkeypatch):
+    monkeypatch.setenv("EMET_JOBS_DIR", str(tmp_path / "jobs"))
+    job = jr.register_job(
+        name="hmeqa-rooms",
+        status="queued",
+        description="owlv2 find; confirm gate off vs Jul27 salvage baseline",
+    )
+    assert job.description.startswith("owlv2")
+    loaded = jr.load_job(job.id)
+    assert loaded is not None
+    assert "confirm gate" in jr.job_description(loaded)
+    row = jr.format_job_row(loaded)
+    assert "why:" in row
+    assert "confirm gate" in row
+    detail = jr.format_job_detail(loaded)
+    assert "why:" in detail and "owlv2" in detail
+
+    # Legacy meta-only note still surfaces after from_dict
+    legacy = jr.JobRecord.from_dict(
+        {
+            "id": "legacy1",
+            "name": "old",
+            "status": "queued",
+            "meta": {"note": "from meta note"},
+        }
+    )
+    assert jr.job_description(legacy) == "from meta note"
+
+    updated = jr.update_job(job.id, description="retag: noconfirm arm")
+    assert updated.description == "retag: noconfirm arm"
+    assert updated.meta.get("note") == "retag: noconfirm arm"
+
+
 def test_compute_job_progress_eta_from_meta():
     now = 1_000_000.0
     job = jr.JobRecord(
@@ -367,6 +400,22 @@ def test_analyze_agentic_trace_flags_stale_and_phrase():
         {"tool": "abstain_unverified", "reason": "require_verified and no fused verification"},
     ]
     a = jr.analyze_agentic_trace(rows)
+    assert a["salvage"]["letter"] == "B"
+    assert a["salvage"].get("applied") is True
+
+    rows_cf = [
+        {
+            "event": "final_location_salvage_counterfactual",
+            "letter": "C",
+            "prior_answer": "Unknown",
+            "n_images": 2,
+            "applied": False,
+        }
+    ]
+    cf = jr.analyze_agentic_trace(rows_cf)
+    assert cf["salvage"]["letter"] == "C"
+    assert cf["salvage"].get("counterfactual") is True
+    assert cf["salvage"].get("applied") is False
     assert a["n_verify"] == 2
     assert a["answerable_any"] is False
     assert a["duplicate_verify_obs"] == [17]

@@ -38,6 +38,8 @@ uv run emet habitat run-episode --question-id 0 --method dynagraph --mock-llm
 
 # Classic vs agentic (Dynagraph H2H; explore-off ablation by script default)
 uv run emet hmeqa overnight
+# pause:  uv run emet jobs cancel JOB_ID
+# resume: uv run emet hmeqa overnight --base ~/runs/emet/hmeqa_overnight_… --job-name hmeqa-overnight
 uv run emet hmeqa h2h --out ~/runs/emet/hmeqa_probe --ids 15,68,105,17
 
 # Full GraphEQA-paper 113 (both methods; prefer emet jobs)

@@ -157,8 +157,7 @@ def apply_eval_affinity(
     }
     if leaked and fail_closed:
         raise RuntimeError(
-            f"CPU affinity still includes turbo CPUs {leaked}; "
-            f"wanted mask {compact} (exclude >={exclude_min_mhz} MHz)"
+            f"CPU affinity still includes turbo CPUs {leaked}; wanted mask {compact} (exclude >={exclude_min_mhz} MHz)"
         )
     return summary
 
@@ -366,9 +365,7 @@ def resolve_hmeqa_out(explicit: str | Path | None = None) -> Path:
         )
         if cands:
             return cands[0].resolve()
-    raise FileNotFoundError(
-        "Could not resolve HM-EQA OUT; pass an explicit path or set EMET_HMEQA_OUT"
-    )
+    raise FileNotFoundError("Could not resolve HM-EQA OUT; pass an explicit path or set EMET_HMEQA_OUT")
 
 
 def affinity_summary_dict() -> dict[str, Any]:
@@ -405,14 +402,11 @@ def settle_after_crash(
 
 DEFAULT_HOLDOUT8_IDS = "15,56,65,68,79,88,104,105"
 
-DEFAULT_BAL32_IDS = (
-    "2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,31,"
-    "32,33,34,38,39,40,41,43,44,47,48,49,57,76,80,84"
-)
+DEFAULT_BAL32_IDS = "2,6,8,11,12,14,15,16,17,18,21,25,27,28,29,31,32,33,34,38,39,40,41,43,44,47,48,49,57,76,80,84"
 
-# Paper-router overnight defaults (Dynagraph + Qwen router; OWL proposals only).
+# Paper-router overnight defaults (Dynagraph + Qwen router; VLM assess = verify gate).
 PAPER_ROUTER_PRESET: dict[str, Any] = {
-    "agentic_verifier": "owlv2",
+    "agentic_verifier": "none",
     "require_verified": False,
     "agentic_router": True,
 }
@@ -439,11 +433,7 @@ def evaluate_holdout_gate(
     if a_n < 6:
         need_retune = True
         reason = f"agentic under-scored n={a_n}"
-    elif (
-        a_acc is not None
-        and c_acc is not None
-        and float(a_acc) + 1e-9 < float(c_acc) - 0.125
-    ):
+    elif a_acc is not None and c_acc is not None and float(a_acc) + 1e-9 < float(c_acc) - 0.125:
         need_retune = True
         reason = f"agentic {float(a_acc):.3f} << classic {float(c_acc):.3f}"
     elif a_acc is not None and float(a_acc) < float(min_agentic_acc):

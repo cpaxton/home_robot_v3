@@ -5,6 +5,15 @@ Prefer::
 
     uv run emet hmeqa overnight
 
+Pause a live ladder with ``emet jobs cancel JOB_ID`` (then confirm
+``emet jobs`` shows no unmanaged Habitat orphans). Resume the same tree::
+
+    uv run emet hmeqa overnight --base ~/runs/emet/hmeqa_overnight_…
+
+Re-using ``--base`` skips phases that already have ``DONE``, and passes
+``RESUME=1`` into H2H so scored per-qid jsonl are kept (empty/incomplete
+units are retried).
+
 Inner phases call ``scripts/run_hmeqa_agentic_h2h.sh`` directly (no nested
 ``emet jobs``) so a single outer job owns the GPU mutex.
 """
@@ -69,9 +78,7 @@ def _status_note(
         f"    out:  {base}",
     ]
     if job:
-        lines.append(
-            f"    job:  {job}  (cd {_repo_root()} && uv run emet jobs status {job})"
-        )
+        lines.append(f"    job:  {job}  (cd {_repo_root()} && uv run emet jobs status {job})")
     lines.append(f"    what: {what}")
     lines.append(f"    next: {next_cmd}")
     record = "\n".join(lines) + "\n"
@@ -105,6 +112,29 @@ def _summarize(out: Path) -> None:
     )
 
 
+def _phase_done(out: Path) -> bool:
+    return (out / "DONE").is_file()
+
+
+def _has_scored_units(out: Path) -> bool:
+    """True if any non-empty per-qid jsonl exists (partial H2H progress)."""
+    try:
+        return any(p.is_file() and p.stat().st_size > 0 for p in out.glob("*_q*.jsonl"))
+    except OSError:
+        return False
+
+
+def _load_gate(base: Path) -> dict[str, Any]:
+    p = base / "gate.json"
+    if not p.is_file():
+        return {}
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def _run_h2h(
     out: Path,
     *,
@@ -118,6 +148,7 @@ def _run_h2h(
     streak_abort: int,
     skip_kill_stale: bool,
     egl_fail_abort: int,
+    resume: bool = False,
 ) -> int:
     script = _repo_root() / "scripts" / "run_hmeqa_agentic_h2h.sh"
     out.mkdir(parents=True, exist_ok=True)
@@ -135,6 +166,7 @@ def _run_h2h(
             "EGL_FAIL_ABORT": str(int(egl_fail_abort)),
             "ARMS": arms,
             "HOLDOUT_IDS": ids,
+            "RESUME": "1" if resume else "0",
             "SKIP_KILL_STALE": "1" if skip_kill_stale else "0",
             "SKIP_GPU_WAIT": "0",
         }
@@ -166,7 +198,7 @@ def run_overnight(
     bal32_ids: str = DEFAULT_BAL32_IDS,
     gate_min_acc: float = 0.25,
     skip_bal32: bool = False,
-    agentic_verifier: str = "owlv2",
+    agentic_verifier: str = "none",
     require_verified: bool = False,
     agentic_router: bool = True,
     cooldown: int = 20,
@@ -174,7 +206,12 @@ def run_overnight(
     streak_abort: int = 2,
     egl_fail_abort: int = 2,
 ) -> int:
-    """Run holdout-8 → optional retune → bal-32. Returns process exit code."""
+    """Run holdout-8 → optional retune → bal-32. Returns process exit code.
+
+    Re-invoking with the same ``base`` is the supported resume path after
+    ``emet jobs cancel``: phases with ``DONE`` are skipped; partial H2H dirs
+    get ``RESUME=1`` so scored per-qid jsonl are kept.
+    """
     base = base.expanduser().resolve()
     hold_out = base / "holdout8"
     bal_out = base / "bal32"
@@ -184,21 +221,20 @@ def run_overnight(
 
     head = ""
     try:
-        head = (
-            subprocess.check_output(
-                ["git", "rev-parse", "--short", "HEAD"],
-                cwd=str(_repo_root()),
-                text=True,
-            ).strip()
-        )
+        head = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(_repo_root()),
+            text=True,
+        ).strip()
     except (OSError, subprocess.CalledProcessError):
         head = "unknown"
 
+    resume_hint = f"uv run emet hmeqa overnight --base {base} --job-name hmeqa-overnight"
     _status_note(
         base,
         "RUNNING",
         f"overnight ladder: holdout-8 then gated bal-32 @ {head}",
-        "uv run emet jobs; uv run emet status tail — do not kill-stale while live",
+        f"uv run emet jobs; uv run emet status tail — pause: emet jobs cancel JOB_ID; resume: {resume_hint}",
         progress="holdout8 starting",
     )
 
@@ -212,64 +248,85 @@ def run_overnight(
         "egl_fail_abort": egl_fail_abort,
     }
 
-    _status_note(
-        base,
-        "RUNNING",
-        f"phase1 holdout-8 classic+agentic ids={holdout_ids} out={hold_out}",
-        f"uv run emet hmeqa status {hold_out}",
-        progress="holdout8 0/16",
-    )
-    rc1 = _run_h2h(
-        hold_out,
-        ids=holdout_ids,
-        arms="classic,agentic",
-        skip_kill_stale=False,
-        **h2h_kwargs,
-    )
-    _summarize(hold_out)
-
-    summary = _load_summary(hold_out)
-    gate = evaluate_holdout_gate(summary, min_agentic_acc=gate_min_acc)
-    gate["holdout_out"] = str(hold_out)
-    _write_gate(base, gate)
-    classic = gate.get("classic") or {}
-    agentic = gate.get("agentic") or {}
-    _append_gate_log(
-        base,
-        "GATE holdout "
-        f"classic=[acc={classic.get('accuracy')} n={classic.get('n')}] "
-        f"agentic=[acc={agentic.get('accuracy')} n={agentic.get('n')}] "
-        f"need_retune={gate.get('need_retune')} reason={gate.get('reason')}",
-    )
-    print(json.dumps(gate, indent=2), flush=True)
-
-    if gate.get("need_retune"):
-        hold_retune = Path(str(hold_out) + "_retune")
-        hold_retune.mkdir(parents=True, exist_ok=True)
+    hold_done = _phase_done(hold_out)
+    rc1 = 0
+    if hold_done:
         _status_note(
             base,
             "RUNNING",
-            "phase1b agentic-only retune on holdout-8 (paper-router)",
-            f"uv run emet hmeqa status {hold_retune}",
-            progress="holdout8 retune",
+            f"phase1 holdout-8 already DONE — skipping H2H (out={hold_out})",
+            f"uv run emet hmeqa status {hold_out}",
+            progress="holdout8 skipped",
         )
-        _run_h2h(
-            hold_retune,
+        _summarize(hold_out)
+        gate = _load_gate(base)
+        if not gate:
+            summary = _load_summary(hold_out)
+            gate = evaluate_holdout_gate(summary, min_agentic_acc=gate_min_acc)
+            gate["holdout_out"] = str(hold_out)
+            _write_gate(base, gate)
+        print(json.dumps(gate, indent=2), flush=True)
+    else:
+        _status_note(
+            base,
+            "RUNNING",
+            f"phase1 holdout-8 classic+agentic ids={holdout_ids} out={hold_out}",
+            f"uv run emet hmeqa status {hold_out}",
+            progress="holdout8 0/16",
+        )
+        rc1 = _run_h2h(
+            hold_out,
             ids=holdout_ids,
-            arms="agentic",
-            skip_kill_stale=True,
+            arms="classic,agentic",
+            skip_kill_stale=False,
+            resume=_has_scored_units(hold_out),
             **h2h_kwargs,
         )
-        _summarize(hold_retune)
-        retune_summary = _load_summary(hold_retune)
-        gate["retune_out"] = str(hold_retune)
-        gate["retune_agentic"] = retune_summary.get("agentic")
+        _summarize(hold_out)
+
+        summary = _load_summary(hold_out)
+        gate = evaluate_holdout_gate(summary, min_agentic_acc=gate_min_acc)
+        gate["holdout_out"] = str(hold_out)
         _write_gate(base, gate)
-        ra = gate.get("retune_agentic") or {}
+        classic = gate.get("classic") or {}
+        agentic = gate.get("agentic") or {}
         _append_gate_log(
             base,
-            f"RETUNE agentic=[acc={ra.get('accuracy')} n={ra.get('n')}] out={hold_retune}",
+            "GATE holdout "
+            f"classic=[acc={classic.get('accuracy')} n={classic.get('n')}] "
+            f"agentic=[acc={agentic.get('accuracy')} n={agentic.get('n')}] "
+            f"need_retune={gate.get('need_retune')} reason={gate.get('reason')}",
         )
+        print(json.dumps(gate, indent=2), flush=True)
+
+        if gate.get("need_retune"):
+            hold_retune = Path(str(hold_out) + "_retune")
+            hold_retune.mkdir(parents=True, exist_ok=True)
+            _status_note(
+                base,
+                "RUNNING",
+                "phase1b agentic-only retune on holdout-8 (paper-router)",
+                f"uv run emet hmeqa status {hold_retune}",
+                progress="holdout8 retune",
+            )
+            _run_h2h(
+                hold_retune,
+                ids=holdout_ids,
+                arms="agentic",
+                skip_kill_stale=True,
+                resume=_has_scored_units(hold_retune),
+                **h2h_kwargs,
+            )
+            _summarize(hold_retune)
+            retune_summary = _load_summary(hold_retune)
+            gate["retune_out"] = str(hold_retune)
+            gate["retune_agentic"] = retune_summary.get("agentic")
+            _write_gate(base, gate)
+            ra = gate.get("retune_agentic") or {}
+            _append_gate_log(
+                base,
+                f"RETUNE agentic=[acc={ra.get('accuracy')} n={ra.get('n')}] out={hold_retune}",
+            )
 
     if skip_bal32:
         _status_note(
@@ -281,26 +338,45 @@ def run_overnight(
         )
         return 0 if rc1 == 0 else int(rc1)
 
-    _status_note(
-        base,
-        "RUNNING",
-        f"phase2 bal-32 classic+agentic out={bal_out} ids={bal32_ids}",
-        f"uv run emet hmeqa status {bal_out}",
-        progress="bal32 starting",
-    )
-    rc2 = _run_h2h(
-        bal_out,
-        ids=bal32_ids,
-        arms="classic,agentic",
-        skip_kill_stale=True,
-        **h2h_kwargs,
-    )
-    _summarize(bal_out)
-    bal_summary = _load_summary(bal_out)
-    gate["bal32_out"] = str(bal_out)
-    gate["bal32_classic"] = bal_summary.get("classic")
-    gate["bal32_agentic"] = bal_summary.get("agentic")
-    _write_gate(base, gate)
+    if _phase_done(bal_out):
+        _status_note(
+            base,
+            "RUNNING",
+            f"phase2 bal-32 already DONE — skipping H2H (out={bal_out})",
+            f"uv run emet hmeqa status {bal_out}",
+            progress="bal32 skipped",
+        )
+        _summarize(bal_out)
+        bal_summary = _load_summary(bal_out)
+        gate["bal32_out"] = str(bal_out)
+        gate["bal32_classic"] = bal_summary.get("classic")
+        gate["bal32_agentic"] = bal_summary.get("agentic")
+        _write_gate(base, gate)
+        rc2 = 0
+    else:
+        # Keep scored classic/agentic units after pause/cancel (RESUME=1).
+        resume_bal = hold_done or _has_scored_units(bal_out)
+        _status_note(
+            base,
+            "RUNNING",
+            f"phase2 bal-32 classic+agentic out={bal_out} ids={bal32_ids} resume={int(resume_bal)}",
+            f"uv run emet hmeqa status {bal_out}",
+            progress="bal32 starting",
+        )
+        rc2 = _run_h2h(
+            bal_out,
+            ids=bal32_ids,
+            arms="classic,agentic",
+            skip_kill_stale=True,
+            resume=resume_bal,
+            **h2h_kwargs,
+        )
+        _summarize(bal_out)
+        bal_summary = _load_summary(bal_out)
+        gate["bal32_out"] = str(bal_out)
+        gate["bal32_classic"] = bal_summary.get("classic")
+        gate["bal32_agentic"] = bal_summary.get("agentic")
+        _write_gate(base, gate)
     print(
         json.dumps(
             {
@@ -316,11 +392,7 @@ def run_overnight(
         base,
         "DONE",
         f"overnight ladder finished holdout→bal32 under {base}",
-        (
-            f"uv run emet hmeqa summarize {hold_out}; "
-            f"uv run emet hmeqa summarize {bal_out}; "
-            f"cat {base / 'gate.json'}"
-        ),
+        (f"uv run emet hmeqa summarize {hold_out}; uv run emet hmeqa summarize {bal_out}; cat {base / 'gate.json'}"),
         progress="done",
     )
     print(f"DONE overnight ladder BASE={base}", flush=True)
@@ -341,7 +413,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--base",
         default=os.environ.get("OVERNIGHT_BASE", ""),
-        help="Overnight base dir (default: ~/runs/emet/hmeqa_overnight_<stamp>)",
+        help=(
+            "Overnight base dir (default: ~/runs/emet/hmeqa_overnight_<stamp>). "
+            "Re-pass after emet jobs cancel to resume (skips DONE; RESUME=1 on partial)."
+        ),
     )
     p.add_argument(
         "--holdout-ids",
@@ -364,7 +439,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--agentic-verifier",
         choices=["none", "owlv2", "yoloe"],
-        default=os.environ.get("EMET_EQA_AGENTIC_VERIFIER", "owlv2"),
+        default=os.environ.get("EMET_EQA_AGENTIC_VERIFIER", "none"),
     )
     verified = p.add_mutually_exclusive_group()
     verified.add_argument(

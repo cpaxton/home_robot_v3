@@ -32,7 +32,10 @@ def test_explicit_state_path_and_fused_evidence():
     assert assessment.answerable is False
     assert policy.state == AgenticState.REPLAN
     vlm = policy.apply_vlm_assessment(present=True, answerable=True)
-    assert vlm.answerable is True
+    assert vlm.answerable is True  # raw VLM claim
+    assert policy.state == AgenticState.REPLAN  # not unlocked yet
+    confirmed = policy.confirm_answerable()
+    assert confirmed.answerable is True
     assert policy.state == AgenticState.ANSWER
 
 
@@ -74,13 +77,25 @@ def test_owl_alone_cannot_open_answer_gate():
     cheap = policy.assess(relation_sufficient=True)
     assert cheap.answerable is False
     assert policy.state == AgenticState.REPLAN
-    deny = policy.apply_vlm_assessment(
-        present=True, answerable=False, need_more_views=True
-    )
+    deny = policy.apply_vlm_assessment(present=True, answerable=False, need_more_views=True)
     assert deny.answerable is False
     assert policy.state == AgenticState.REPLAN
     assert deny.verified is True  # present from VLM
 
+
+def test_confirm_answerable_opens_answer_gate():
+    policy = EvidencePolicy()
+    policy.register_hypothesis("view:1", "clock")
+    policy.choose("view:1")
+    policy.approached(5)
+    policy.add_evidence(EvidenceRecord(hypothesis_id="view:1", obs_id=5, phrase="clock", full_frame_sim=0.2))
+    policy.assess()
+    raw = policy.apply_vlm_assessment(present=True, answerable=True, need_more_views=False)
+    assert raw.answerable is True
+    assert policy.state == AgenticState.REPLAN
+    conf = policy.confirm_answerable()
+    assert conf.answerable is True
+    assert policy.state == AgenticState.ANSWER
 
 
 def test_stale_view_is_impossible_by_construction():
@@ -88,9 +103,7 @@ def test_stale_view_is_impossible_by_construction():
     policy.register_hypothesis("graph:7", "basket")
     policy.choose("graph:7")
     policy.approached(11)
-    policy.add_evidence(
-        EvidenceRecord(hypothesis_id="graph:7", obs_id=11, phrase="basket", voxel_sim=0.3)
-    )
+    policy.add_evidence(EvidenceRecord(hypothesis_id="graph:7", obs_id=11, phrase="basket", voxel_sim=0.3))
     policy.assess()
     policy.replan()
     policy.choose("graph:7")
