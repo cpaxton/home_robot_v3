@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Representative cross-benchmark sample (all paper tracks, subset sizes).
 #
-# Covers: Habitat HM-EQA (graph_eqa comparison), Habitat OVMM find, OVMM sim S0/S1/S2,
+# Covers: Habitat HM-EQA (static_graph comparison), Habitat OVMM find, OVMM sim S0/S1/S2,
 # SQA3D val q0-10, dynamic exploration smoke, backend localization figure.
 # Ingests completed dynagraph tuning matrix via build_representative_results_tables.py.
 #
@@ -11,7 +11,7 @@
 # Env:
 #   RUN_ID              default rep_sample_YYYYMMDD_HHMMSS
 #   TUNING_RUN_ID       dynagraph ablation run to ingest (default dynagraph_tune_20260706_110513)
-#   SKIP_HABITAT        1 to skip Habitat HM-EQA graph_eqa comparison runs
+#   SKIP_HABITAT        1 to skip Habitat HM-EQA static_graph comparison runs
 #   SKIP_OVMM           1 to skip sim + Habitat OVMM legs
 #   SKIP_SQA3D          1 to skip SQA3D val slice
 #   SKIP_DYNAMIC        1 to skip dynamic exploration smoke
@@ -42,29 +42,29 @@ gpu_step() {
 
 log "========== REPRESENTATIVE BENCHMARK SAMPLE run_id=${RUN_ID} tuning=${TUNING_RUN_ID} =========="
 
-# --- Habitat HM-EQA: graph_eqa comparison on fixed slices (dynagraph ablations from TUNING_RUN_ID) ---
+# --- Habitat HM-EQA: static_graph comparison on fixed slices (dynagraph ablations from TUNING_RUN_ID) ---
 if [[ "${SKIP_HABITAT:-0}" != "1" ]] && [[ -x "$HAB" ]]; then
   gpu_step
-  log "Track A: Habitat HM-EQA graph_eqa holdout-8"
+  log "Track A: Habitat HM-EQA static_graph holdout-8"
   timeout 14400 "$HAB" run-batch \
-    --method graph_eqa \
+    --method static_graph \
     --question-ids "$HOLDOUT_IDS" \
     --max-planning-steps 20 --max-movement-step 10 \
     --eqa-vl-family "$FAMILY" --eqa-hf-model-id "$HF_ID" \
     --device cuda --frontier-nodes --frontier-keyword-weight 2 --resume \
-    --output "${HAB_OUT}/subset_${RUN_ID}_holdout8_graph_eqa_${FAMILY}.jsonl" \
-    2>&1 | tee "${LOG_ROOT}/habitat_holdout8_graph_eqa.log" || true
+    --output "${HAB_OUT}/subset_${RUN_ID}_holdout8_static_graph_${FAMILY}.jsonl" \
+    2>&1 | tee "${LOG_ROOT}/habitat_holdout8_static_graph.log" || true
 
   gpu_step
-  log "Track A: Habitat HM-EQA graph_eqa canonical-8"
+  log "Track A: Habitat HM-EQA static_graph canonical-8"
   timeout 14400 "$HAB" run-batch \
-    --method graph_eqa \
+    --method static_graph \
     --question-ids "$CANONICAL_IDS" \
     --max-planning-steps 20 --max-movement-step 10 \
     --eqa-vl-family "$FAMILY" --eqa-hf-model-id "$HF_ID" \
     --device cuda --frontier-nodes --frontier-keyword-weight 2 --resume \
-    --output "${HAB_OUT}/subset_${RUN_ID}_canonical8_graph_eqa_${FAMILY}.jsonl" \
-    2>&1 | tee "${LOG_ROOT}/habitat_canonical8_graph_eqa.log" || true
+    --output "${HAB_OUT}/subset_${RUN_ID}_canonical8_static_graph_${FAMILY}.jsonl" \
+    2>&1 | tee "${LOG_ROOT}/habitat_canonical8_static_graph.log" || true
 
   gpu_step
   log "Track A: Habitat HM-EQA tuned dynagraph holdout-8 (harness default)"
@@ -83,9 +83,9 @@ fi
 # --- Habitat OVMM find ---
 if [[ "${SKIP_OVMM:-0}" != "1" ]] && [[ -x "$HAB" ]]; then
   gpu_step
-  log "Track B: Habitat OVMM find (dynagraph + graph_eqa)"
+  log "Track B: Habitat OVMM find (dynagraph + static_graph)"
   mkdir -p "${HOME}/runs/emet/ovmm_habitat/${RUN_ID}"
-  for backend in dynagraph graph_eqa; do
+  for backend in dynagraph static_graph; do
     timeout 3600 "$HAB" run-ovmm-find-episode \
       --episode-id hm3d_lamp_bed_00006 \
       --backend "$backend" --device cuda \
@@ -101,7 +101,7 @@ if [[ "${SKIP_OVMM:-0}" != "1" ]]; then
   log "Track C: OVMM sim S0 (all backends)"
   uv run python "${ROOT}/scripts/eval_ovmm_find_phases.py" \
     --tier S0 \
-    --backend dynamem --backend graph_eqa --backend dynagraph --backend ground_truth \
+    --backend dynamem --backend static_graph --backend dynagraph --backend ground_truth \
     --output-dir "${HOME}/runs/emet/ovmm_find_phase/${RUN_ID}_s0" \
     2>&1 | tee "${LOG_ROOT}/ovmm_s0.log" || true
 
@@ -138,13 +138,13 @@ if [[ "${SKIP_SQA3D:-0}" != "1" ]]; then
   done
 fi
 
-# --- Dynamic exploration smoke (dynagraph + graph_eqa) ---
+# --- Dynamic exploration smoke (dynagraph + static_graph) ---
 if [[ "${SKIP_DYNAMIC:-0}" != "1" ]]; then
   gpu_step
   log "Track E: dynamic exploration smoke"
   DYN_OUT="${HOME}/runs/emet/dynamic_exploration/${RUN_ID}_explore"
   mkdir -p "$DYN_OUT"
-  for backend in dynagraph graph_eqa; do
+  for backend in dynagraph static_graph; do
     timeout 7200 uv run python "${ROOT}/scripts/eval_dynamic_exploration.py" \
       --smoke --backend "$backend" \
       --output-dir "${DYN_OUT}/${backend}" \

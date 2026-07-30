@@ -3,6 +3,11 @@
 #
 # Interactive default (0.45 m merge, staleness 256) also lives in ``dynav_config.yaml`` so
 # ``get_parameters("dynav_config.yaml")`` matches ``emet run dynagraph``.
+#
+# Memory backends: dynamem (voxels) | static_graph (object graph, no lifecycle) |
+# dynagraph (merge + staleness + extras) | ground_truth (oracle).
+# Legacy method/backend id ``graph_eqa`` and profile ``graph_eqa_baseline`` alias to
+# ``static_graph`` (see ``emet.eval.memory_backends``).
 
 profiles:
   interactive:
@@ -11,7 +16,7 @@ profiles:
     dynagraph_staleness_horizon: 256
 
   smoke:
-    description: "No merge/staleness — fast CI regression vs GraphEQA paper row."
+    description: "No merge/staleness — fast CI regression (not a paper method row)."
     dynagraph_merge_xy_m: 0.0
     dynagraph_staleness_horizon: 0
 
@@ -26,7 +31,7 @@ profiles:
     description: >
       Shared Dynagraph EQA profile for Habitat HM-EQA (and aligned SQA3D when desired):
       same merge/staleness as interactive/eqa so long-horizon instance memory works.
-      Zero-merge is only for smoke CI and graph_eqa_baseline paper rows.
+      Zero-merge is only for smoke CI and static_graph paper rows.
     dynagraph_merge_xy_m: 0.45
     dynagraph_staleness_horizon: 256
     graph_eqa_extract:
@@ -37,8 +42,10 @@ profiles:
     dynagraph_merge_xy_m: 0.15
     dynagraph_staleness_horizon: 256
 
-  graph_eqa_baseline:
-    description: "GraphEQA comparison row — merge/staleness disabled."
+  static_graph:
+    description: >
+      Static object-graph baseline (GraphEQA-inspired reimplementation) —
+      merge/staleness disabled; no Dynagraph lifecycle extras.
     dynagraph_merge_xy_m: 0.0
     dynagraph_staleness_horizon: 0
 
@@ -47,7 +54,7 @@ profiles:
 # ``parameters.dynagraph_harness`` for ``DynagraphController``.
 harness:
   habitat_eqa:
-    # Default profile for dynagraph method only; graph_eqa overrides below.
+    # Default profile for dynagraph method only; static_graph overrides below.
     profile: unified_eqa
     dynagraph:
       memory_summary: true
@@ -56,9 +63,9 @@ harness:
       siglip_grounding: true
       use_instance_graph: false
       manipulation_only: true
-    graph_eqa:
-      # GraphEQA paper reimplementation row: no merge/staleness, no Dynagraph extras.
-      profile: graph_eqa_baseline
+    static_graph:
+      # GraphEQA-inspired static row: no merge/staleness, no Dynagraph extras.
+      profile: static_graph
       memory_summary: false
       mcq_debias: false
       explore_when_uncovered: "off"
@@ -71,8 +78,8 @@ harness:
       eqa: false
       use_instance_graph: true
       manipulation_only: false
-    graph_eqa:
-      profile: graph_eqa_baseline
+    static_graph:
+      profile: static_graph
       eqa: false
       use_instance_graph: true
       manipulation_only: false
@@ -87,8 +94,8 @@ harness:
       use_instance_graph: true
       manipulation_only: false
       eqa: false
-    graph_eqa:
-      profile: graph_eqa_baseline
+    static_graph:
+      profile: static_graph
       use_instance_graph: true
       manipulation_only: false
       eqa: false
@@ -116,8 +123,8 @@ harness:
       mcq_debias: true
       explore_when_uncovered: "on"
       siglip_grounding: true
-    graph_eqa:
-      profile: graph_eqa_baseline
+    static_graph:
+      profile: static_graph
       memory_summary: false
       mcq_debias: false
       explore_when_uncovered: "off"

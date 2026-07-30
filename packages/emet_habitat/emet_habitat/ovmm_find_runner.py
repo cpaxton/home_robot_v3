@@ -46,7 +46,7 @@ from emet_habitat.robot_client import HabitatRobotClient
 from emet_habitat.runner import _release_gpu_memory
 from emet_habitat.simulator import HabitatEQASimulator
 
-MemoryBackendName = Literal["dynamem", "graph_eqa", "dynagraph", "ground_truth"]
+MemoryBackendName = Literal["dynamem", "static_graph", "dynagraph", "ground_truth"]
 
 
 @dataclass(frozen=True)

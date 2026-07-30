@@ -69,7 +69,8 @@ def test_load_embodied_agent_overlay_resolves_extends():
 
     cfg = load_embodied_agent_overlay("configs/agent_innate_mars.yaml")
     assert cfg.graph_eqa_memory.enabled is True
-    assert cfg.open_vocab_scene_graph.enabled is True
+    # Single graph plug-in on the voxel map: the preset keeps open_vocab off.
+    assert cfg.open_vocab_scene_graph.enabled is False
 
 
 def test_extends_agent_preset():

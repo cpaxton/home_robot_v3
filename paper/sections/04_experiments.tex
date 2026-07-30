@@ -9,7 +9,7 @@ Maintainer index: \texttt{docs/experiments/README.md} (experiment matrix, smokes
 \begin{enumerate}
   \item \textbf{Habitat EQA (primary):} Reproduce GraphEQA-style metrics on HM-EQA (113 questions) and an OpenEQA val subset (\textbf{harness milestone; OpenEQA not yet wired}): success rate, mean planning steps, GraphEQA vs.\ Dynagraph vs.\ ablations (parity checklist and official baselines: Appendix~\ref{app:habitat_eqa_parity}); classic vs.\ agentic-verify controllers on matched Dynagraph profiles (Section~\ref{sec:agentic_h2h}).
   \item \textbf{SQA3D situated open QA:} Embodied ScanNet replay with EM@1 scoring (Section~\ref{sec:sqa3d_benchmark}); compare \texttt{dynamem} vs.\ \texttt{dynagraph} with \texttt{prompt\_variant: sqa3d}.
-  \item \textbf{OVMM-inspired find-phase:} FindObj / FindRec localization on Emet sim tiers S0--S2 and Habitat HM3D proxy episodes (Section~\ref{sec:ovmm_find_phase}); memory backends \texttt{dynamem}, \texttt{graph\_eqa}, \texttt{dynagraph}, and sim oracle \texttt{ground\_truth}.
+  \item \textbf{OVMM-inspired find-phase:} FindObj / FindRec localization on Emet sim tiers S0--S2 and Habitat HM3D proxy episodes (Section~\ref{sec:ovmm_find_phase}); memory backends \texttt{dynamem}, \texttt{static\_graph}, \texttt{dynagraph}, and sim oracle \texttt{ground\_truth}.
   \item \textbf{Emet sim (complementary):} Robocasa kitchens and MolmoSpaces iTHOR with Stretch, Galaxea R1 (rby1), and Innate Mars (Appendix~\ref{app:innate_mars}); depth-source policy in Appendix~\ref{app:da3}; GT-supervised object finding (Section~\ref{sec:gt_experiments}).
   \item \textbf{Dynamic exploration:} Active frontier exploration and world-change staleness on Robocasa / MolmoSpaces (Section~\ref{sec:dynamic_exploration}); metrics not comparable to OVMM or SQA3D.
 \end{enumerate}
@@ -20,7 +20,7 @@ Shared backend names (\texttt{src/emet/eval/memory\_backends.py}):
 
 \begin{itemize}
   \item \textbf{\texttt{dynamem}:} voxel semantic memory (+ optional EQA on SQA3D); no graph merge/staleness.
-  \item \textbf{\texttt{graph\_eqa}:} GraphEQA graph only; merge and staleness disabled (\texttt{emet run graph-eqa}; OVMM / ablations).
+  \item \textbf{\texttt{static\_graph}:} object graph only; merge and staleness disabled (GraphEQA-inspired baseline; legacy alias \texttt{graph\_eqa}; product CLI \texttt{emet run graph-eqa}).
   \item \textbf{\texttt{dynagraph}:} voxel + graph with merge/staleness; profile chosen per harness (below; \texttt{emet run dynagraph}).
   \item \textbf{\texttt{ground\_truth}:} sim oracle graph from \texttt{sim\_object\_placements} (OVMM / GT finding upper bound).
   \item \textbf{Ablations:} \texttt{--merge-xy-m 0}; \texttt{--staleness-horizon 0}; HM-EQA \textbf{frontier policy} (fluid voxel sampler vs.\ graph frontier nodes; Appendix~\ref{app:habitat_eqa_parity}); OK-Robot-style static prescanned map (optional).
@@ -45,7 +45,7 @@ Paper harnesses do not fork ad-hoc merge values in runner code.
     \texttt{eqa} & 0.45 & 256; nav cap 48 & SQA3D tuned \\
     \texttt{unified\_eqa} & 0.45 & 256; nav cap 48 & HM-EQA \texttt{dynagraph} (method default) \\
     \texttt{find\_phase} & 0.15 & 256 & OVMM \texttt{dynagraph} / \texttt{ground\_truth} \\
-    \texttt{graph\_eqa\_baseline} & 0 & 0 & HM-EQA / OVMM / dynamic-explore \texttt{graph\_eqa} \\
+    \texttt{static\_graph} & 0 & 0 & HM-EQA / OVMM / dynamic-explore \texttt{static\_graph} \\
     \texttt{smoke} & 0 & 0 & CI / mock-LLM only (not a paper method row) \\
     \bottomrule
   \end{tabular}
@@ -53,7 +53,7 @@ Paper harnesses do not fork ad-hoc merge values in runner code.
 
 Per-harness EQA flags (\texttt{memory\_summary}, \texttt{mcq\_debias}, \texttt{explore\_when\_uncovered}) live under \texttt{harness:} in the same YAML and are applied via \texttt{apply\_dynagraph\_harness()}.
 Tuned HM-EQA \texttt{dynagraph}: memory on, debias off, \texttt{explore\_when\_uncovered=conservative}.
-HM-EQA \texttt{graph\_eqa}: \texttt{graph\_eqa\_baseline} (merge/staleness off; no Dynagraph extras)---the internal GraphEQA reimplementation row.
+HM-EQA \texttt{static\_graph}: profile \texttt{static\_graph} (merge/staleness off; no Dynagraph extras)---the GraphEQA-inspired baseline row (legacy method id \texttt{graph\_eqa}).
 Paper figures: \texttt{render\_paper\_map\_figures.py}, \texttt{render\_graph\_retrieval\_panel.py}, \texttt{render\_dynagraph\_3d\_figure.py}, \texttt{render\_hmeqa\_qualitative\_figure.py}.
 Operator index: \texttt{docs/experiments/README.md}.
 
@@ -232,8 +232,8 @@ Pilot S0 fair-default runs (rotate only, voxel path) yield $\sim$0.08\,m object 
 \textbf{Protocol (sim).}
 \begin{enumerate}
   \item Smoke: \texttt{uv run python scripts/smoke\_ovmm\_benchmark.py --cpu-only}.
-  \item Batch: \texttt{uv run python scripts/eval\_ovmm\_find\_phases.py --tier S0 --backend dynamem --backend graph\_eqa --backend dynagraph --backend ground\_truth}.
-  \item Mapping fixed per episode; only memory backend and Dynagraph profile vary (\texttt{find\_phase} / \texttt{graph\_eqa\_baseline} in Table~\ref{tab:dynagraph_profiles}).
+  \item Batch: \texttt{uv run python scripts/eval\_ovmm\_find\_phases.py --tier S0 --backend dynamem --backend static\_graph --backend dynagraph --backend ground\_truth}.
+  \item Mapping fixed per episode; only memory backend and Dynagraph profile vary (\texttt{find\_phase} / \texttt{static\_graph} in Table~\ref{tab:dynagraph_profiles}).
   \item Do \textbf{not} pass \texttt{--not-rotate} for perception backends; oracle may use \texttt{--backend ground\_truth --not-rotate --cpu-only}.
   \item Aggregate CSV: \texttt{aggregate\_<backends>.csv} in output dir $\rightarrow$ Table~\ref{tab:ovmm_find_backend_tier}.
 \end{enumerate}
@@ -271,8 +271,8 @@ Molmo GT fixture scans may cap on large scenes; Robocasa layout $\neq$ HSSD; sta
 
 \textbf{Current status (July 2026).}
 The \texttt{emet-habitat} harness runs end-to-end on HM-EQA with local VLMs.
-Our best \textbf{full-benchmark} result is \textbf{41.6\%} (113 questions, graph\_eqa, gemma-3-4b-it) vs.\ \textbf{63.5--67.0\%} for GraphEQA with API VLMs (Table~\ref{tab:grapheqa_official_hmeqa}).
-Dynagraph beats our graph\_eqa baseline on matched slices (+3\,pp on letter-balanced 32 with Qwen2.5-VL-3B; +12.5\,pp on canonical-8 with MCQ debias).
+Our best \textbf{full-benchmark} result is \textbf{41.6\%} (113 questions, static\_graph, gemma-3-4b-it) vs.\ \textbf{63.5--67.0\%} for GraphEQA with API VLMs (Table~\ref{tab:grapheqa_official_hmeqa}).
+Dynagraph beats our static\_graph baseline on matched slices (+3\,pp on letter-balanced 32 with Qwen2.5-VL-3B; +12.5\,pp on canonical-8 with MCQ debias).
 Post-fix runs with Qwen3-VL-8B score 50\% on an eight-question held-out draw (seed 20260627, excluding tuning ids)---above chance but not yet a full-benchmark headline.
 A \textbf{July 2026 navigation stack} (Image-$N$ viewpoint/standoff waypoints, navmesh trajectory execution, frontier distance sorting) landed after that held-out run; headline sweeps should use the post-nav-fix stack (tag \texttt{\_postfix\_nav202607} in JSONL).
 
@@ -292,7 +292,7 @@ Preliminary numbers: Section~\ref{sec:agentic_results}; tool semantics: Appendix
 \textbf{Planned sweeps (priority).}
 \begin{enumerate}
   \item Full 113-question \texttt{dynagraph} with \texttt{Qwen/Qwen3-VL-8B-Instruct} and the July 2026 nav stack + June fix stack (phrase \texttt{CONFIRMED\_MEMORY}, location MCQ, debias).
-  \item Matched \texttt{graph\_eqa} baseline on the same 113 + VLM (isolate Dynagraph memory gains).
+  \item Matched \texttt{static\_graph} baseline on the same 113 + VLM (isolate Dynagraph memory gains).
   \item Classic vs.\ agentic verify on holdout-8 and balanced-32 (\textbf{done}; efficiency claim) / full 113 if claiming letter win; ongoing paper-router (\texttt{EMET\_EQA\_AGENTIC\_ROUTER=1}) ablations with evidence-card recall and frontier retirement.
   \item Held-out random-8 and balanced-32 \textbf{re-runs} at 8B with nav stack (compare to pre-nav-fix slices).
   \item HM3D semantics download + on/off ablation on Q0--19.

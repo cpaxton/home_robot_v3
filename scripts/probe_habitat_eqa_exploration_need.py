@@ -82,7 +82,7 @@ def main() -> None:
         default="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19",
         help="Comma-separated HM-EQA question ids",
     )
-    parser.add_argument("--method", default="dynagraph", choices=["dynagraph", "graph_eqa"])
+    parser.add_argument("--method", default="dynagraph", choices=["dynagraph", "static_graph", "graph_eqa"])
     parser.add_argument("--json", action="store_true", help="Print JSON array")
     args = parser.parse_args()
     ids = [int(x.strip()) for x in args.question_ids.split(",") if x.strip()]

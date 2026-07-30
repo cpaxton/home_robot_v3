@@ -363,19 +363,22 @@ def run_zmq_obs(run: ZmqObsRun) -> None:
     else:
         resolved_backend = resolve_stream_backend(backend=run.backend, cameras_only=run.cameras_only)
         if (run.no_sensor_perception or run.no_instance_graph) and resolved_backend not in (
+            "static_graph",
             "graph_eqa",
             "dynagraph",
             "ground_truth",
             None,
         ):
-            raise click.UsageError("--no-sensor-perception and --no-instance-graph apply to graph_eqa/dynagraph.")
+            raise click.UsageError(
+                "--no-sensor-perception and --no-instance-graph apply to static_graph/dynagraph."
+            )
         if run.compare_to_gt and resolved_backend != "dynagraph":
             raise click.UsageError("--compare-to-gt requires --backend dynagraph.")
         if resolved_backend is None and not run.cameras_only and not is_localhost_host(host):
             resolved_backend = "dynamem"
             click.echo(
                 f"Remote host {host!r}: defaulting to --backend dynamem "
-                "(pass --backend dynagraph|graph_eqa|svm|… or --cameras-only to override)."
+                "(pass --backend dynagraph|static_graph|svm|… or --cameras-only to override)."
             )
         mapping_max_steps = run.max_steps
         enable_rerun = True
@@ -414,8 +417,8 @@ def run_zmq_obs(run: ZmqObsRun) -> None:
 
 
 _BACKEND_HELP = (
-    "Memory backend: dynamem, voxel_only, dynagraph, graph_eqa, svm, scene_graph, ground_truth. "
-    "Full table in docs/zmq_obs.md."
+    "Memory backend: dynamem, voxel_only, dynagraph, static_graph (alias graph_eqa), "
+    "svm, scene_graph, ground_truth. Full table in docs/zmq_obs.md."
 )
 
 
@@ -561,8 +564,8 @@ def capture_main(
     show_default=True,
     help="Stop after N mapping updates (0 = run until Ctrl+C; 3 means exactly 3 updates then exit)",
 )
-@click.option("--no-sensor-perception", is_flag=True, help="graph_eqa/dynagraph: voxel labels only (no VLM)")
-@click.option("--no-instance-graph", is_flag=True, help="graph_eqa/dynagraph: disable YoloE instance masks")
+@click.option("--no-sensor-perception", is_flag=True, help="static_graph/dynagraph: voxel labels only (no VLM)")
+@click.option("--no-instance-graph", is_flag=True, help="static_graph/dynagraph: disable YoloE instance masks")
 @click.option("--compare-to-gt", is_flag=True, help="dynagraph: overlay sim GT reference layer")
 @click.option("--rerun-native", is_flag=True, help="Native Rerun desktop viewer instead of browser")
 @click.option("--rerun-show-panels", is_flag=True, help="Show Rerun blueprint/selection panel")

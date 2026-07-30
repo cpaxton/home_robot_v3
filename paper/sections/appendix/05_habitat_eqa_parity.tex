@@ -57,7 +57,7 @@ Items marked \emph{partial} depend on downloaded HM3D semantic assets (only a su
     Exploration planner & TSDF + enriched frontiers & fluid voxel \texttt{sample\_frontier} (+ optional graph frontier nodes) & Partial \\
     Navigation execution & navmesh shortest path & \texttt{find\_path\_to\_xy} + trajectory follow; Image-$N$ viewpoint/standoff & Match \\
     MCQ prompt / grading & HM-EQA A--D & \texttt{hmeqa} prompt variant & Match \\
-    Graph memory config & static (no merge / staleness) & \texttt{graph\_eqa}: \texttt{graph\_eqa\_baseline} (0/0); \texttt{dynagraph}: \texttt{unified\_eqa} (0.45\,m / 256) & Match for GE row \\
+    Graph memory config & static (no merge / staleness) & method \texttt{static\_graph} $\rightarrow$ profile \texttt{static\_graph} (0/0); method \texttt{dynagraph} $\rightarrow$ profile \texttt{unified\_eqa} (0.45\,m / 256) & Match for GE row \\
     Batch logging & per-question JSON & JSONL + \texttt{--resume} & Match \\
     OpenEQA val split & supported & not wired (milestone) & Missing \\
     Detic fallback & real world & N/A in sim harness & N/A \\
@@ -104,19 +104,19 @@ Numbers are \emph{not} comparable to Table~\ref{tab:grapheqa_official_hmeqa} unt
     Run (slice) & Method / VLM & $n$ & Accuracy \\
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{Full benchmark}} \\
-    Paper repro & graph\_eqa / gemma-3-4b-it & 113 & 41.6\% \\
+    Paper repro & static\_graph / gemma-3-4b-it & 113 & 41.6\% \\
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{Letter-balanced 32 (ids in \texttt{habitat\_eqa\_results.md})}} \\
     Balanced-32 & dynagraph / Qwen2.5-VL-3B & 32 & 34.4\% \\
-    Balanced-32 & graph\_eqa / Qwen2.5-VL-3B & 32 & 31.2\% \\
+    Balanced-32 & static\_graph / Qwen2.5-VL-3B & 32 & 31.2\% \\
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{Canonical-8 (3,14,17,28,31,35,81,94)}} \\
     Canonical-8 & dynagraph / Qwen2.5-VL-3B & 8 & 50.0\% \\
-    Canonical-8 & graph\_eqa / Qwen2.5-VL-3B & 8 & 37.5\% \\
+    Canonical-8 & static\_graph / Qwen2.5-VL-3B & 8 & 37.5\% \\
     Canonical-8 + debias & dynagraph / Qwen2.5-VL-3B & 8 & 62.5\% \\
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{Smaller slices (gemma / frontier ablations)}} \\
-    Paper repro & graph\_eqa / gemma-3-4b-it & 10 / 20 & 40\% / 40\% \\
+    Paper repro & static\_graph / gemma-3-4b-it & 10 / 20 & 40\% / 40\% \\
     Q0--9 & Qwen2.5-VL-3B & 10 & 50\% \\
     Q0--19 frontier v2 & gemma4 + graph nodes & 20 & 25\% \\
     \midrule
@@ -127,15 +127,15 @@ Numbers are \emph{not} comparable to Table~\ref{tab:grapheqa_official_hmeqa} unt
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{July 2026 nav stack (Qwen3-VL-8B)}} \\
     Smoke $\{3,14,17\}$ & both methods & 3 & 100\% \\
-    Held-out random-8 & graph\_eqa & 8 & 87.5\% \\
+    Held-out random-8 & static\_graph & 8 & 87.5\% \\
     Held-out random-8 & dynagraph & 8 & 37.5\% \\
-    Balanced-32 & graph\_eqa / dynagraph & 32 & 37.5\% / 40.6\% \\
-    Paper Q0--19 & graph\_eqa / dynagraph & 20 & 45.0\% / 50.0\% \\
+    Balanced-32 & static\_graph / dynagraph & 32 & 37.5\% / 40.6\% \\
+    Paper Q0--19 & static\_graph / dynagraph & 20 & 45.0\% / 50.0\% \\
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{Tuned harness (pending)}} \\
     Held-out random-8 & dynagraph tuned & 8 & pending \\
     Full paper set & dynagraph / Qwen3-VL-8B & 113 & pending \\
-    Full paper set & graph\_eqa / Qwen3-VL-8B & 113 & pending \\
+    Full paper set & static\_graph / Qwen3-VL-8B & 113 & pending \\
     Frontier ablation Q0--19 & Qwen2.5-VL-3B & 20 & pending \\
     \bottomrule
   \end{tabular}
@@ -143,7 +143,7 @@ Numbers are \emph{not} comparable to Table~\ref{tab:grapheqa_official_hmeqa} unt
 
 \noindent\textbf{Takeaway.}
 Official GraphEQA on HM-EQA is \textbf{63.5\%} (GPT-4o) to \textbf{67.0\%} (Gemini-2.5Pro) on all 113 questions with full GT semantics.
-Our harness reaches \textbf{41.6\%} on the full set with gemma-3-4b-it ($\sim$22\,pp below GPT-4o) and \textbf{34--50\%} on smaller slices with 3--8B local VLMs---above 25\% chance, with dynagraph consistently ahead of graph\_eqa on matched runs.
+Our harness reaches \textbf{41.6\%} on the full set with gemma-3-4b-it ($\sim$22\,pp below GPT-4o) and \textbf{34--50\%} on smaller slices with 3--8B local VLMs---above 25\% chance, with dynagraph consistently ahead of static\_graph on matched runs.
 The June 2026 grounding fixes (phrase \texttt{CONFIRMED\_MEMORY}, location MCQ, nav) lift search-style questions (e.g.\ Q17) without obvious overfit on an eight-question held-out draw (50\%).
 \textbf{More experiments are required} before claiming parity with Explore-EQA or GraphEQA: at minimum a full 113-question Qwen3-VL-8B sweep and semantics-coverage ablation (see \texttt{docs/experiments/habitat\_eqa\_results.md}).
 Mock GraphEQA vs.\ Dynagraph match at 100\% on Q0--5 (grading sanity).

@@ -37,7 +37,7 @@ run_method() {
     ./scripts/run_habitat_iter_subset.sh 2>&1 | tee "$OUT_DIR/${method}.log"
 }
 
-run_method graph_eqa
+run_method static_graph
 run_method dynagraph
 
 uv run python - <<PY | tee "$OUT_DIR/SUMMARY.txt"
@@ -47,7 +47,7 @@ from emet.habitat.metrics import episode_run_completed
 
 run_id = "${RUN_ID}"
 root = Path.home() / ".cache/habitat_eqa/results"
-for method in ("graph_eqa", "dynagraph"):
+for method in ("static_graph", "dynagraph"):
     tag = f"annotated37_{run_id}_{method}"
     p = root / f"subset_{tag}_qwen3_vl.jsonl"
     if not p.exists():

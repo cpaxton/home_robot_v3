@@ -22,7 +22,7 @@ class EpisodeMetrics:
 
     Attributes:
         dataset: Dataset name (e.g. ``hmeqa``).
-        method: Method label (e.g. ``graph_eqa``, ``dynagraph``).
+        method: Method label (e.g. ``static_graph``, ``dynagraph``).
         question_id: Zero-based question index in the CSV.
         scene: HM3D scene id.
         floor: Floor index for the episode.
@@ -467,10 +467,11 @@ def compare_method_results(
     graph_eqa: list[EpisodeMetrics],
     dynagraph: list[EpisodeMetrics],
 ) -> dict:
-    """Side-by-side summary for GraphEQA vs Dynagraph on the same question ids.
+    """Side-by-side summary for static_graph vs Dynagraph on the same question ids.
 
     Args:
-        graph_eqa: Episodes from a GraphEQA Habitat run.
+        graph_eqa: Episodes from a static_graph / GraphEQA-baseline Habitat run
+            (parameter name kept for call-site compatibility).
         dynagraph: Episodes from a Dynagraph Habitat run.
 
     Returns:
@@ -487,20 +488,20 @@ def compare_method_results(
             {
                 "question_id": qid,
                 "gold": (g or d).gold_answer_letter if (g or d) else "",
-                "graph_eqa_pred": g.parsed_answer_letter or g.predicted_answer[:1] if g else "",
-                "graph_eqa_correct": g.correct if g else False,
+                "static_graph_pred": g.parsed_answer_letter or g.predicted_answer[:1] if g else "",
+                "static_graph_correct": g.correct if g else False,
                 "dynagraph_pred": d.parsed_answer_letter or d.predicted_answer[:1] if d else "",
                 "dynagraph_correct": d.correct if d else False,
-                "graph_eqa_steps": g.planning_steps if g else 0,
+                "static_graph_steps": g.planning_steps if g else 0,
                 "dynagraph_steps": d.planning_steps if d else 0,
             }
         )
     return {
-        "graph_eqa": summarize_episodes(graph_eqa),
+        "static_graph": summarize_episodes(graph_eqa),
         "dynagraph": summarize_episodes(dynagraph),
-        "both_correct": sum(1 for r in rows if r["graph_eqa_correct"] and r["dynagraph_correct"]),
-        "graph_only": sum(1 for r in rows if r["graph_eqa_correct"] and not r["dynagraph_correct"]),
-        "dynagraph_only": sum(1 for r in rows if r["dynagraph_correct"] and not r["graph_eqa_correct"]),
-        "neither": sum(1 for r in rows if not r["graph_eqa_correct"] and not r["dynagraph_correct"]),
+        "both_correct": sum(1 for r in rows if r["static_graph_correct"] and r["dynagraph_correct"]),
+        "static_only": sum(1 for r in rows if r["static_graph_correct"] and not r["dynagraph_correct"]),
+        "dynagraph_only": sum(1 for r in rows if r["dynagraph_correct"] and not r["static_graph_correct"]),
+        "neither": sum(1 for r in rows if not r["static_graph_correct"] and not r["dynagraph_correct"]),
         "per_question": rows,
     }

@@ -58,7 +58,7 @@ MolmoSpaces requires `.venv-molmospaces` (`./install.sh --molmospaces -y`).
 |------|------|
 | `configs/benchmarks/dynamic_exploration.yaml` | Episodes, explore budgets, output path, world-change episodes |
 | `src/emet/config/benchmarks/dynagraph_questions.yaml` | Per-seed EQA questions + world-change pre/post |
-| `configs/benchmarks/dynagraph.yaml` | Profiles: `interactive` (Dynagraph) vs `graph_eqa_baseline` |
+| `configs/benchmarks/dynagraph.yaml` | Profiles: `interactive` (Dynagraph) vs `static_graph` |
 
 Default output: `~/runs/emet/dynamic_exploration` (override with `--output-dir` or `EMET_DYNAMIC_EXPLORE_OUTPUT`).
 
@@ -78,7 +78,7 @@ Per run: start sim → `emet run dynagraph` with optional `--explore-loop --expl
 | `eqa_accuracy` | eval `eqa` + question bank |
 | `episode_wall_s` | harness timer |
 
-Backends: `dynagraph` (interactive profile) vs `graph_eqa` (merge/staleness off via `graph_eqa_baseline`).
+Backends: `dynagraph` (interactive profile) vs `static_graph` (merge/staleness off via `static_graph`).
 Phase-1 subprocesses also pass `--benchmark-harness dynamic_explore --benchmark-method {backend}` so EQA flags (`memory_summary`, `mcq_debias`, `explore_when_uncovered`, `siglip_grounding`) match `configs/benchmarks/dynagraph.yaml`. Before the question bank, `emet run dynagraph` calls `prepare_dynagraph_vram_for_eqa` to free perception caches for Qwen3-VL.
 
 ## Phase 2 — World-change

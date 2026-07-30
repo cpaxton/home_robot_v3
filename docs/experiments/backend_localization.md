@@ -6,7 +6,7 @@ Shared-sim comparison of memory backends on one Robocasa scene: top-down map wit
 
 ## Purpose
 
-Qualitative and lightweight quantitative comparison of `dynamem`, `graph_eqa`, `dynagraph`, and `vlm_only` on the same Robocasa seed — useful for paper figures and debugging backend localization without a full OVMM find-phase sweep.
+Qualitative and lightweight quantitative comparison of `dynamem`, `static_graph`, `dynagraph`, and `vlm_only` on the same Robocasa seed — useful for paper figures and debugging backend localization without a full OVMM find-phase sweep.
 
 ## Metrics
 
@@ -26,13 +26,13 @@ uv run python scripts/smoke_backend_localization_figure.py \
   --output-dir ~/runs/emet/backend_localization_smoke
 ```
 
-`--quick` runs `graph_eqa` + `dynagraph` with `explore_steps=1`.
+`--quick` runs `static_graph` + `dynagraph` with `explore_steps=1`.
 
 ## Full backend row set
 
 ```bash
 uv run python scripts/smoke_backend_localization_figure.py \
-  --backends dynamem graph_eqa dynagraph vlm_only \
+  --backends dynamem static_graph dynagraph vlm_only \
   --explore-steps 0 \
   --output-dir ~/runs/emet/backend_localization_metrics
 ```
@@ -56,7 +56,7 @@ Development run packaged at `~/runs/emet/backend_localization_figures_20260617_f
 |---------|--------|--------|
 | dynamem | 0.14 m | HIT |
 | dynagraph | 0.14 m | HIT |
-| graph_eqa | miss | — |
+| static_graph | miss | — |
 | vlm_only | miss | — |
 
 GT target: `obj_main` (jar) at ~(0.57, -0.43).
